@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Modal } from '@orchard/graft-ui';
+	import { Button, Modal } from '@orchardlabs/graft-ui';
 	import { getGreenhouseApp } from './app.svelte';
 	import { acknowledgeJoin, guestDisclosure, joinAcknowledged } from './disclosure';
 

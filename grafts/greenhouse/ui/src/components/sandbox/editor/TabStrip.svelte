@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { X } from 'lucide-svelte';
-	import { magneticHighlight } from '@orchard/graft-ui/utils/motion.svelte';
+	import { magneticHighlight } from '@orchardlabs/graft-ui/utils/motion.svelte';
 	import type { StripTab } from './types';
 
 	let {

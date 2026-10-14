@@ -9,10 +9,10 @@
 		Plus,
 		Undo2
 	} from 'lucide-svelte';
-	import PopoverPanel from '@orchard/graft-ui/components/ui/PopoverPanel.svelte';
-	import { Button, Modal } from '@orchard/graft-ui';
+	import PopoverPanel from '@orchardlabs/graft-ui/components/ui/PopoverPanel.svelte';
+	import { Button, Modal } from '@orchardlabs/graft-ui';
 	import { untrack } from 'svelte';
-	import Skeleton from '@orchard/graft-ui/components/ui/Skeleton.svelte';
+	import Skeleton from '@orchardlabs/graft-ui/components/ui/Skeleton.svelte';
 	import TabStrip from '../sandbox/editor/TabStrip.svelte';
 	import type { StripTab } from '../sandbox/editor/types';
 	import { Lazy } from '../../lib/utils/lazy.svelte';

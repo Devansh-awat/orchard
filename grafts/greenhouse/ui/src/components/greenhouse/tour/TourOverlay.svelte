@@ -2,7 +2,7 @@
 	import { onMount, tick } from 'svelte';
 	import { animate } from 'motion';
 	import { ArrowLeft } from 'lucide-svelte';
-	import { motion, transition } from '@orchard/graft-ui/utils/motion.svelte';
+	import { motion, transition } from '@orchardlabs/graft-ui/utils/motion.svelte';
 	import Pip from '../mascot/Pip.svelte';
 	import { TOUR_BEATS, type TourStep } from './beats';
 

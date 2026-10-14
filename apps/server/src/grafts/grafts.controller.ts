@@ -6,7 +6,7 @@ import { GRAFT_DOORS, GRAFT_SDK_VERSION, platformVersion } from './host-api';
 import { PrismaService } from '../prisma/prisma.service';
 import { graftPoolSize, measureDbBudget } from './db-budget';
 import { GraftDbPools } from './db-pools';
-import { trustPolicyFromEnv } from './integrity';
+import { keyId, tapsFromEnv, trustPolicyFromEnv } from './integrity';
 
 @Controller()
 export class GraftsController {
@@ -27,6 +27,7 @@ export class GraftsController {
       database,
       sdk: GRAFT_SDK_VERSION,
       trust: trustPolicyFromEnv(),
+      taps: tapsFromEnv().map((t) => ({ name: t.name, url: t.url, keyId: keyId(t.key) })),
       doors: GRAFT_DOORS,
       grafts: graftRecords().map((r) => ({
         id: r.id,

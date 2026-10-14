@@ -1,4 +1,4 @@
-import type { AuthDoor, RequestAuthContext } from '@orchard/graft-sdk/server';
+import type { AuthDoor, RequestAuthContext } from '@orchardlabs/graft-sdk/server';
 
 export type { RequestAuthContext };
 

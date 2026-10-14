@@ -3,8 +3,8 @@
 	import { Github, Plus, Terminal, Trash2 } from 'lucide-svelte';
 	import { apiFetch, toasts } from '../../host/stores';
 	import { queryClient } from '../../host/query';
-	import { Button, Field, Input, Skeleton } from '@orchard/graft-ui';
-	import ConfirmModal from '@orchard/graft-ui/components/ConfirmModal.svelte';
+	import { Button, Field, Input, Skeleton } from '@orchardlabs/graft-ui';
+	import ConfirmModal from '@orchardlabs/graft-ui/components/ConfirmModal.svelte';
 	import { timeAgo } from '../../lib/utils/time';
 	import { sshIdentitiesQueryOptions } from '../../lib/queries/sandboxes';
 	import type { SshIdentity } from '../../lib/types/sandbox';

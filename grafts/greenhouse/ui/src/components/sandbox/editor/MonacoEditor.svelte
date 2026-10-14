@@ -1,8 +1,8 @@
 <script lang="ts">
 	import type * as Monaco from 'monaco-editor';
 	import { onDestroy, onMount, untrack } from 'svelte';
-	import Skeleton from '@orchard/graft-ui/components/ui/Skeleton.svelte';
-	import { effectiveAnimation } from '@orchard/graft-ui/stores/preferences';
+	import Skeleton from '@orchardlabs/graft-ui/components/ui/Skeleton.svelte';
+	import { effectiveAnimation } from '@orchardlabs/graft-ui/stores/preferences';
 	import { terminalDisplay } from '../../../lib/stores/terminal-display.svelte';
 	import { greenhousePrefs } from '../../greenhouse/prefs.svelte';
 	import { ensureTerminalFont, monoFontFor } from '../../../lib/terminal/font';

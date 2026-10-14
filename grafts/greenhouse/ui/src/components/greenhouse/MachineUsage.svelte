@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { getContext } from 'svelte';
 	import { ChevronRight } from 'lucide-svelte';
-	import Skeleton from '@orchard/graft-ui/components/ui/Skeleton.svelte';
+	import Skeleton from '@orchardlabs/graft-ui/components/ui/Skeleton.svelte';
 	import { getGreenhouseApp } from './app.svelte';
 	import { usageView } from './machine-usage';
 	import { UsagePoll, levelStatus } from './usage-live.svelte';

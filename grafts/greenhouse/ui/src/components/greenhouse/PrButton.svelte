@@ -10,8 +10,8 @@
 		Rocket,
 		Upload
 	} from 'lucide-svelte';
-	import Menu from '@orchard/graft-ui/components/ui/Menu.svelte';
-	import MenuItem from '@orchard/graft-ui/components/ui/MenuItem.svelte';
+	import Menu from '@orchardlabs/graft-ui/components/ui/Menu.svelte';
+	import MenuItem from '@orchardlabs/graft-ui/components/ui/MenuItem.svelte';
 	import { toasts } from '../../host/stores';
 	import { getGreenhouseApp } from './app.svelte';
 	import * as api from './api';

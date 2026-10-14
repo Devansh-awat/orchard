@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Check, MessageCircleQuestion } from 'lucide-svelte';
-	import { Button } from '@orchard/graft-ui';
+	import { Button } from '@orchardlabs/graft-ui';
 	import { answered, collectAnswers, type QuestionRequest } from '../pending';
 	import type { ChatSessionStore } from '../session-store.svelte';
 	import RequestCard from './RequestCard.svelte';

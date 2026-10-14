@@ -7,8 +7,8 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { ExternalLink, GitPullRequest, RefreshCw, Rocket, Trash2, Wand2 } from 'lucide-svelte';
-	import Skeleton from '@orchard/graft-ui/components/ui/Skeleton.svelte';
-	import StatusDot from '@orchard/graft-ui/components/ui/StatusDot.svelte';
+	import Skeleton from '@orchardlabs/graft-ui/components/ui/Skeleton.svelte';
+	import StatusDot from '@orchardlabs/graft-ui/components/ui/StatusDot.svelte';
 	import { previewStatus, statusMeta, type StatusMeta } from '../../lib/status';
 	import { getGreenhouseApp } from './app.svelte';
 	import * as api from './api';

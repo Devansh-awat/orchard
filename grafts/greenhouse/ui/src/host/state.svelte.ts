@@ -1,4 +1,4 @@
-import { matchScreenPath, type HostRoute } from '@orchard/graft-sdk/client';
+import { matchScreenPath, type HostRoute } from '@orchardlabs/graft-sdk/client';
 
 const PARAM_ROUTES = ['/sandboxes/:id'];
 

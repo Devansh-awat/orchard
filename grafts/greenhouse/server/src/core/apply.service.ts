@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Doors, type ApplyDoor, type ApplyItem } from '@orchard/graft-sdk/server';
+import { Doors, type ApplyDoor, type ApplyItem } from '@orchardlabs/graft-sdk/server';
 
 export type ApplyItemInput = ApplyItem;
 

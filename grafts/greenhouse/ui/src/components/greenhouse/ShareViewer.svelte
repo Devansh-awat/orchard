@@ -4,8 +4,8 @@
 	import { Eye, FileDiff, GitBranch, MessageSquare } from 'lucide-svelte';
 	import { goto } from '../../host/navigation';
 	import { page } from '../../host/state.svelte';
-	import EmptyState from '@orchard/graft-ui/components/ui/EmptyState.svelte';
-	import Skeleton from '@orchard/graft-ui/components/ui/Skeleton.svelte';
+	import EmptyState from '@orchardlabs/graft-ui/components/ui/EmptyState.svelte';
+	import Skeleton from '@orchardlabs/graft-ui/components/ui/Skeleton.svelte';
 	import { HumanMessage, TextPart } from '../sandbox/chat/index';
 	import { EditorWorkspace, MonacoDiff } from '../sandbox/editor/index';
 	import {

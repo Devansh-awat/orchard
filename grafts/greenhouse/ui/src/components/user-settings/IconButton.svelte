@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { springHover, iconAnimation } from '@orchard/graft-ui/utils/motion.svelte';
+	import { springHover, iconAnimation } from '@orchardlabs/graft-ui/utils/motion.svelte';
 
 	let {
 		variant = 'default',

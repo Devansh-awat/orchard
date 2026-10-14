@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { ChevronRight, CircleX, LoaderCircle } from 'lucide-svelte';
-	import { springRotate } from '@orchard/graft-ui/utils/motion.svelte';
+	import { springRotate } from '@orchardlabs/graft-ui/utils/motion.svelte';
 	import { slide } from '../../../../lib/utils/transitions';
 
 	let {

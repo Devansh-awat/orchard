@@ -1,5 +1,5 @@
 <script lang="ts">
-	import Avatar from '@orchard/graft-ui/components/ui/Avatar.svelte';
+	import Avatar from '@orchardlabs/graft-ui/components/ui/Avatar.svelte';
 	import { presenceColorVar } from './format';
 	import type { RosterUser } from './types';
 

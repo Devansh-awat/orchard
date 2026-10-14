@@ -1,7 +1,7 @@
 import { play, sounds, type SoundName } from 'cuelume';
 import { get } from 'svelte/store';
 import { browser } from '../../host/environment';
-import { soundCues } from '@orchard/graft-ui/stores/preferences';
+import { soundCues } from '@orchardlabs/graft-ui/stores/preferences';
 import { CueGate } from '../../lib/utils/sound-cues';
 import { greenhousePrefs, type SoundChoice, type SoundEvent } from './prefs.svelte';
 

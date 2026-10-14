@@ -1,4 +1,4 @@
-import type { MirrorListPage } from '@orchard/graft-sdk/server';
+import type { MirrorListPage } from '@orchardlabs/graft-sdk/server';
 
 export type MirrorEventType = 'add' | 'update' | 'delete';
 

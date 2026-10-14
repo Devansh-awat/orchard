@@ -1,4 +1,4 @@
-import { gzipSync } from 'node:zlib';
+import { gunzipSync, gzipSync } from 'node:zlib';
 
 const BLOCK = 512;
 
@@ -43,4 +43,52 @@ export function tarGz(files) {
   }
   chunks.push(Buffer.alloc(BLOCK * 2, 0));
   return gzipSync(Buffer.concat(chunks), { level: 9 });
+}
+
+function field(buf, start, length) {
+  const raw = buf.subarray(start, start + length);
+  const end = raw.indexOf(0);
+  return raw.subarray(0, end === -1 ? raw.length : end).toString('utf8');
+}
+
+function paxPath(body) {
+  let rest = body.toString('utf8');
+  let path = null;
+  while (rest.length) {
+    const space = rest.indexOf(' ');
+    const length = Number(rest.slice(0, space));
+    if (!length) break;
+    const record = rest.slice(space + 1, length - 1);
+    if (record.startsWith('path=')) path = record.slice(5);
+    rest = rest.slice(length);
+  }
+  return path;
+}
+
+export function untarGz(archive) {
+  const tar = gunzipSync(archive);
+  const files = [];
+  let offset = 0;
+  let longPath = null;
+  while (offset + BLOCK <= tar.length) {
+    const head = tar.subarray(offset, offset + BLOCK);
+    if (head.every((b) => b === 0)) break;
+    const size = parseInt(field(head, 124, 12).trim() || '0', 8);
+    const type = String.fromCharCode(head[156] || 48);
+    const prefix = field(head, 345, 155);
+    const name = longPath ?? (prefix ? `${prefix}/${field(head, 0, 100)}` : field(head, 0, 100));
+    const body = tar.subarray(offset + BLOCK, offset + BLOCK + size);
+    offset += BLOCK + Math.ceil(size / BLOCK) * BLOCK;
+    if (type === 'x') {
+      longPath = paxPath(body);
+      continue;
+    }
+    longPath = null;
+    if (type === '5') continue;
+    if (type !== '0') throw new Error(`archive entry ${name} is not a regular file`);
+    if (name.startsWith('/') || name.split('/').includes('..'))
+      throw new Error(`archive entry ${name} has an unsafe path`);
+    files.push({ path: name, content: Buffer.from(body) });
+  }
+  return files;
 }

@@ -13,8 +13,8 @@
     "live:vercel": "tsx scripts/sandbox-vercel-live.ts"
   },
   "dependencies": {
-    "@orchard/graft-sdk": "workspace:*",
-    "@orchard/graft-ui": "workspace:*",
+    "@orchardlabs/graft-sdk": "workspace:*",
+    "@orchardlabs/graft-ui": "workspace:*",
     "@kubernetes/client-node": "^0.21.0",
     "@prisma/adapter-pg": "^6.18.0",
     "@prisma/client": "^6.18.0",

@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { X } from 'lucide-svelte';
-	import Avatar from '@orchard/graft-ui/components/ui/Avatar.svelte';
-	import Button from '@orchard/graft-ui/components/ui/Button.svelte';
+	import Avatar from '@orchardlabs/graft-ui/components/ui/Avatar.svelte';
+	import Button from '@orchardlabs/graft-ui/components/ui/Button.svelte';
 	import { formatRelativeTime } from '../../../lib/utils/format';
 	import type { DiffComment } from './comments.svelte';
 	import { safeColorVar } from './styles';

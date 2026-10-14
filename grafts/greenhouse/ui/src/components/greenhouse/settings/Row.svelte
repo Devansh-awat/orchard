@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { ToggleRow } from '@orchard/graft-ui';
+	import { ToggleRow } from '@orchardlabs/graft-ui';
 
 	let {
 		title,

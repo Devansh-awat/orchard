@@ -82,8 +82,8 @@
 
 <script lang="ts">
 	import { Check, Copy, X } from 'lucide-svelte';
-	import { Button, Input } from '@orchard/graft-ui';
-	import SegmentedControl from '@orchard/graft-ui/components/ui/SegmentedControl.svelte';
+	import { Button, Input } from '@orchardlabs/graft-ui';
+	import SegmentedControl from '@orchardlabs/graft-ui/components/ui/SegmentedControl.svelte';
 	import { toasts } from '../../host/stores';
 	import { getGreenhouseApp } from './app.svelte';
 	import FormError from './FormError.svelte';

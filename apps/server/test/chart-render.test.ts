@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { resolve } from 'node:path';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { loadAll } from 'js-yaml';
 import {
   KubernetesSandboxRunner,
@@ -317,3 +319,63 @@ test('sandbox.install=false wins over sandbox.enabled', { skip: !helmAvailable()
   assert.doesNotMatch(out, /SANDBOX_NAMESPACE/);
   assert.ok(!parsed(out).some((d) => d.metadata?.name === 'sandbox-isolation'));
 });
+
+function renderValues(values: unknown): string {
+  const dir = mkdtempSync(join(tmpdir(), 'chart-values-'));
+  try {
+    const file = join(dir, 'values.json');
+    writeFileSync(file, JSON.stringify(values));
+    return execFileSync(
+      'helm',
+      ['template', 'orchard', chart, '--namespace', 'orchard', '-f', file],
+      {
+        encoding: 'utf8',
+        maxBuffer: 64 * 1024 * 1024
+      }
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test(
+  'graft taps render as ORCHARD_GRAFT_TAPS and roll the pods',
+  { skip: !helmAvailable() },
+  () => {
+    const tap = {
+      name: 'acme',
+      url: 'https://acme.dev/orchard',
+      key: 'jH19I0aB5AuJcCBeYDFRWaFXHXJjx6kSNVg06m4PCb4='
+    };
+    const values = (url: string) => ({
+      grafts: [{ id: 'notes', version: '1.2.0', digest: 'sha256:00', tap: 'acme' }],
+      graftSettings: { trust: 'taps', taps: [{ ...tap, url }] }
+    });
+    const workloads = (out: string) =>
+      parsed(out).filter((d) => d.kind === 'Deployment' && d.metadata?.name === 'server');
+    const envOf = (out: string, name: string) =>
+      workloads(out)[0].spec.template.spec.containers[0].env.find(
+        (e: { name: string }) => e.name === name
+      )?.value;
+    const initEnv = (out: string, name: string) =>
+      workloads(out)[0].spec.template.spec.initContainers[0].env.find(
+        (e: { name: string }) => e.name === name
+      )?.value;
+
+    const out = renderValues(values(tap.url));
+    assert.deepEqual(JSON.parse(envOf(out, 'ORCHARD_GRAFT_TAPS')), [tap]);
+    assert.deepEqual(JSON.parse(initEnv(out, 'ORCHARD_GRAFT_TAPS')), [tap]);
+    assert.equal(envOf(out, 'ORCHARD_GRAFT_TRUST'), 'taps');
+    assert.deepEqual(JSON.parse(envOf(out, 'ORCHARD_GRAFTS'))[0].tap, 'acme');
+
+    const hash = (o: string) =>
+      workloads(o)[0].spec.template.metadata.annotations['orchard.my/grafts'];
+    assert.notEqual(hash(out), hash(renderValues(values('https://mirror.acme.dev/orchard'))));
+
+    const plain = renderValues({
+      grafts: [{ id: 'notes', version: '1.2.0', digest: 'sha256:00' }]
+    });
+    assert.equal(envOf(plain, 'ORCHARD_GRAFT_TRUST'), 'listed');
+    assert.equal(envOf(plain, 'ORCHARD_GRAFT_TAPS'), undefined);
+  }
+);

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { CircleCheck, MessageSquare } from 'lucide-svelte';
-	import { Alert, Button, Skeleton } from '@orchard/graft-ui';
+	import { Alert, Button, Skeleton } from '@orchardlabs/graft-ui';
 	import { user } from '../../host/stores';
 	import { forgetUrlSecret } from '../../lib/utils/url-secrets';
 	import {

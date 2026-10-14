@@ -3,7 +3,7 @@
 	import { Bot } from 'lucide-svelte';
 	import { apiFetch, toasts } from '../../host/stores';
 	import { queryClient } from '../../host/query';
-	import { Button, Input, StatusBadge, statusMeta } from '@orchard/graft-ui';
+	import { Button, Input, StatusBadge, statusMeta } from '@orchardlabs/graft-ui';
 	import SettingsSection from '../user-settings/SettingsSection.svelte';
 	import { sandboxCredentialsQueryOptions } from '../../lib/queries/sandboxes';
 

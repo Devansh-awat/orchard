@@ -9,9 +9,9 @@
 		Zap
 	} from 'lucide-svelte';
 	import type { Component } from 'svelte';
-	import Menu from '@orchard/graft-ui/components/ui/Menu.svelte';
-	import MenuItem from '@orchard/graft-ui/components/ui/MenuItem.svelte';
-	import PopoverPanel from '@orchard/graft-ui/components/ui/PopoverPanel.svelte';
+	import Menu from '@orchardlabs/graft-ui/components/ui/Menu.svelte';
+	import MenuItem from '@orchardlabs/graft-ui/components/ui/MenuItem.svelte';
+	import PopoverPanel from '@orchardlabs/graft-ui/components/ui/PopoverPanel.svelte';
 	import { toasts } from '../../host/stores';
 	import { getGreenhouseApp } from './app.svelte';
 	import type { EditorTarget } from './types';

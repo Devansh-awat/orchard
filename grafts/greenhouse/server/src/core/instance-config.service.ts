@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Doors, type SettingsDoor } from '@orchard/graft-sdk/server';
+import { Doors, type SettingsDoor } from '@orchardlabs/graft-sdk/server';
 import type { SectionId } from './instance-config.sections';
 
 @Injectable()

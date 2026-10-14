@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Doors, type GitHubDoor } from '@orchard/graft-sdk/server';
+import { Doors, type GitHubDoor } from '@orchardlabs/graft-sdk/server';
 
 type IssueCommentHandler = Parameters<GitHubDoor['onIssueComment']>[0];
 

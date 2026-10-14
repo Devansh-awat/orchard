@@ -1,5 +1,5 @@
 import { Inject, Injectable, Module } from '@nestjs/common';
-import { Doors, type AuthDoor, type SettingsDoor } from '@orchard/graft-sdk/server';
+import { Doors, type AuthDoor, type SettingsDoor } from '@orchardlabs/graft-sdk/server';
 import { PrismaService } from '../prisma.service';
 import { AnalyticsService } from './analytics.service';
 import { ApplyExecutorService, ApplyQueueService } from './apply.service';

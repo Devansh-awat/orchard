@@ -12,7 +12,7 @@ import {
   UseGuards
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { Auth } from '@orchard/graft-sdk/server';
+import { Auth } from '@orchardlabs/graft-sdk/server';
 import { UsersService } from '../core/users.service';
 import { AnalyticsService } from '../core/analytics.service';
 import { SandboxEnabledGuard } from './sandbox-enabled.guard';

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Ban, Check, CornerDownRight } from 'lucide-svelte';
-	import { Avatar } from '@orchard/graft-ui';
+	import { Avatar } from '@orchardlabs/graft-ui';
 	import type { ChatAuthor, NoteEntry } from '../session-store.svelte';
 
 	let {

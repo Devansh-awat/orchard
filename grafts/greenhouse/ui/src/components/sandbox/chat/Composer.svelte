@@ -16,7 +16,7 @@
 		Square,
 		X
 	} from 'lucide-svelte';
-	import { Avatar, Menu, MenuItem } from '@orchard/graft-ui';
+	import { Avatar, Menu, MenuItem } from '@orchardlabs/graft-ui';
 	import { askNotificationPermission } from '../../greenhouse/agent-alerts';
 	import { modKey } from '../../greenhouse/format';
 	import { greenhousePrefs } from '../../greenhouse/prefs.svelte';

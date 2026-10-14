@@ -1,6 +1,6 @@
 import { mount, unmount, type Component } from 'svelte';
 import { get } from 'svelte/store';
-import type { HostApi, MountHandle } from '@orchard/graft-sdk/client';
+import type { HostApi, MountHandle } from '@orchardlabs/graft-sdk/client';
 import { bindHost } from './host/context';
 import { queryClient } from './host/query';
 import { page } from './host/state.svelte';

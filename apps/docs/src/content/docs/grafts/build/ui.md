@@ -13,7 +13,7 @@ without ever breaking a graft, and a graft can use any library it likes.
 
 ```ts
 import { mount, unmount } from 'svelte';
-import { defineGraft } from '@orchard/graft-sdk/client';
+import { defineGraft } from '@orchardlabs/graft-sdk/client';
 import Notes from './Notes.svelte';
 import NotesCard from './NotesCard.svelte';
 
@@ -62,7 +62,7 @@ Every mount function gets `host`, the graft's way to talk to Orchard's UI:
 
 ## Looking like Orchard
 
-`@orchard/graft-ui` is Orchard's own component kit (`Button`, `Alert`,
+`@orchardlabs/graft-ui` is Orchard's own component kit (`Button`, `Alert`,
 `SectionCard`, `Field`, `Input`, `Modal`, `Table`, `ConfirmModal` and the rest)
 packaged for grafts. Theme colours, fonts and spacing are CSS variables Orchard
 sets on the page, so `var(--text-muted)`, `var(--bg-surface)` and friends work

@@ -189,7 +189,10 @@ export type GraftVersion = {
 	manifest: string;
 	readme?: string;
 	publishedAt: string;
+	revoked?: boolean;
 };
+
+export type GraftTier = 'official' | 'community';
 
 export type GraftEntry = {
 	id: string;
@@ -200,7 +203,22 @@ export type GraftEntry = {
 	icon?: string;
 	latest: string;
 	versions: GraftVersion[];
+	tier?: GraftTier;
+	repo?: string;
+	publisherKeyId?: string;
 };
+
+export type GraftListing = {
+	id: string;
+	tier: 'community' | 'delisted';
+	publisher: string;
+	repo: string;
+	homepage?: string;
+};
+
+export function graftTier(entry: Pick<GraftEntry, 'tier'>): GraftTier {
+	return entry.tier === 'community' ? 'community' : 'official';
+}
 
 type GraftCatalog = { generatedAt: string; grafts: GraftEntry[]; revoked: string[] };
 
@@ -215,7 +233,7 @@ export async function graftCatalog(
 			const revoked = new Set(body.revoked ?? []);
 			return (Array.isArray(body.grafts) ? body.grafts : []).map((g) => ({
 				...g,
-				versions: g.versions.filter((v) => !revoked.has(v.digest))
+				versions: g.versions.filter((v) => !v.revoked && !revoked.has(v.digest))
 			}));
 		});
 		return { grafts: grafts.filter((g) => g.versions.length), error: false };
@@ -247,6 +265,7 @@ export type GraftPage = {
 	manifest: GraftManifestView;
 	readme: string | null;
 	revoked: boolean;
+	listing: GraftListing | null;
 };
 
 const GRAFT_ID = /^[a-z][a-z0-9-]{1,47}$/;
@@ -256,18 +275,24 @@ export async function graftPage(fetch: Fetch, id: string): Promise<GraftPage | n
 	return remember(`graft:${id}`, async () => {
 		const response = await fetchRegistry(fetch, `grafts/${id}/index.json`);
 		if (!response) return null;
-		const index = (await response.json()) as GraftEntry;
+		const body = (await response.json()) as GraftEntry;
+		const index = { ...body, versions: body.versions.filter((v) => !v.revoked) };
 		const latest = index.versions.find((v) => v.version === index.latest) ?? index.versions[0];
 		if (!latest) return null;
-		const [manifest, readme] = await Promise.all([
+		const [manifest, readme, listing] = await Promise.all([
 			fetchRegistry(fetch, latest.manifest).then((r) =>
 				r ? (r.json() as Promise<GraftManifestView>) : null
 			),
 			latest.readme
 				? fetchRegistry(fetch, latest.readme).then((r) => (r ? r.text() : null))
+				: Promise.resolve(null),
+			graftTier(index) === 'community'
+				? fetchRegistry(fetch, `grafts/${id}/listing.json`)
+						.then((r) => (r ? (r.json() as Promise<GraftListing>) : null))
+						.catch(() => null)
 				: Promise.resolve(null)
 		]);
-		if (!manifest) return null;
-		return { index, latest, manifest, readme, revoked: false };
+		if (!manifest || listing?.tier === 'delisted') return null;
+		return { index, latest, manifest, readme, revoked: false, listing };
 	});
 }

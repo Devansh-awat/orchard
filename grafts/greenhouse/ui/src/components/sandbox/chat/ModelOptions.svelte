@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Check } from 'lucide-svelte';
-	import { MenuItem } from '@orchard/graft-ui';
+	import { MenuItem } from '@orchardlabs/graft-ui';
 	import { ocShortModelName, type OcModel, type OcModelGroup } from '../opencode';
 
 	let {

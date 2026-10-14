@@ -77,25 +77,82 @@ Extension Marketplace; set it to an `https://` address to install from anywhere
 else. A graft with a cluster chart needs that chart installed as its own
 HelmRelease.
 
+## Where grafts come from
+
+Grafts come in three kinds, a bit like Homebrew's core formulae and taps:
+
+| Kind      | Who makes it                                      | How Orchard knows it is real                                                     | Shown as                  |
+| --------- | ------------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------- |
+| Official  | Orchard                                           | Signed with Orchard's key                                                        | Official                  |
+| Community | Someone else, listed in the Extension Marketplace | Signed with the author's key, which Orchard vouched for when it listed the graft | Community · by the author |
+| Tap       | Anyone, from a tap you added yourself             | Signed with the tap's key, which you trusted when you added the tap              | Tap: its name             |
+
+Community grafts are checked when they are first listed and every new version
+passes the same automated checks, but Orchard does not review every update by
+hand. Taps are not checked by Orchard at all: adding one means trusting whoever
+runs it.
+
 ## Trust
 
-`graftSettings.trust` decides which grafts may load:
+`graftSettings.trust` decides which kinds may load:
 
-| Policy             | Loads                                                                   |
-| ------------------ | ----------------------------------------------------------------------- |
-| `official`         | Only grafts signed by Orchard                                           |
-| `signed` (default) | Grafts signed by Orchard or by a publisher key in `graftSettings.keys`  |
-| `any`              | Unsigned grafts too. Anything that ends up in the grafts directory runs |
+| Policy             | Loads                                                                                |
+| ------------------ | ------------------------------------------------------------------------------------ |
+| `official`         | Only Orchard's own grafts                                                            |
+| `listed` (default) | Official and community grafts, plus anything signed by a key in `graftSettings.keys` |
+| `taps`             | All of the above, plus grafts from taps you added                                    |
+| `any`              | Unsigned grafts too. Anything that ends up in the grafts directory runs              |
 
-A publisher gives you their public key (a short base64 string from
-`graft keygen`). Add it to trust their grafts:
+`signed`, the old name for `listed`, still works.
+
+A publisher can also give you their public key directly (a short base64 string
+from `graft keygen`). Add it to trust grafts they share without a tap:
 
 ```sh
 sudo orchardctl config set graftSettings.keys '["2Cqg2XC6R3alKo0lU3kUHSQUZz6N8p2DgX2+Ei/bXjY="]' --apply
 ```
 
-The Extension Marketplace can revoke a version. Revoked versions are never
-offered, and `orchardctl` refuses to install one.
+The Extension Marketplace can revoke a version or delist a community graft.
+Revoked versions are never offered, `orchardctl` refuses to install one, and an
+instance that already has it refuses to load it on its next start.
+
+## Taps
+
+A tap is somebody's own catalogue of grafts: a folder of files on any https
+host. Add one, then install from it with its name in front:
+
+```sh
+sudo orchardctl graft tap add acme https://acme.dev/orchard
+sudo orchardctl graft search                 # tap grafts show their tap
+sudo orchardctl graft add acme/notes --apply
+```
+
+`tap add` shows the tap's signing key and asks you to confirm it. Every graft
+from that tap must be signed with that key. Taps only load when
+`graftSettings.trust` is `taps` or `any`; set it once:
+
+```sh
+sudo orchardctl config set graftSettings.trust taps --apply
+```
+
+With Helm values:
+
+```yaml
+graftSettings:
+  trust: taps
+  taps:
+    - name: acme
+      url: https://acme.dev/orchard
+      key: <the key tap add showed you>
+grafts:
+  - id: notes
+    version: 1.2.0
+    digest: sha256:...
+    tap: acme
+```
+
+An instance has one graft per id, whatever the source: installing `acme/notes`
+when a `notes` from somewhere else is installed is refused.
 
 ## Seeing what is installed
 
@@ -110,7 +167,8 @@ added them.
 | Value                          | Environment variable            | Default                                                                                                                              |
 | ------------------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `grafts`                       | `ORCHARD_GRAFTS`                | none                                                                                                                                 |
-| `graftSettings.trust`          | `ORCHARD_GRAFT_TRUST`           | `signed`                                                                                                                             |
+| `graftSettings.trust`          | `ORCHARD_GRAFT_TRUST`           | `listed`. One of `official`, `listed`, `taps`, `any`                                                                                 |
+| `graftSettings.taps`           | `ORCHARD_GRAFT_TAPS`            | none. Taps you added, each with `name`, `url` and `key`                                                                              |
 | `graftSettings.keys`           | `ORCHARD_GRAFT_KEYS`            | none                                                                                                                                 |
 | `graftSettings.marketplaceUrl` | `ORCHARD_GRAFT_MARKETPLACE_URL` | `https://assets.orchard.my/registry`                                                                                                 |
 | `graftSettings.strict`         | `ORCHARD_GRAFTS_STRICT`         | `false`. When true, a graft that fails stops the pod instead of being skipped, so a rollout halts and the previous pods keep serving |

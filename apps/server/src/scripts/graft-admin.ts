@@ -12,7 +12,13 @@ import {
   platformVersion,
   registerDoors
 } from '../grafts/host-api';
-import { publisherKeysFromEnv, trustPolicyFromEnv, verifyGraftDir } from '../grafts/integrity';
+import {
+  decideSignature,
+  enforceTrust,
+  graftTrustFromEnv,
+  verifyFileManifest,
+  type GraftSignature
+} from '../grafts/integrity';
 import { graftsDir } from '../grafts/loader';
 import { parseManifest, type GraftManifest } from '../grafts/manifest';
 import { applyMigrations, graftRole, graftSchema, readMigrations } from '../grafts/migrations';
@@ -21,7 +27,10 @@ import {
   artifactUrl,
   DEFAULT_MARKETPLACE_URL,
   fetchArtifact,
-  parseGraftSpecs
+  fetchRevoked,
+  parseGraftSpecs,
+  recordOrigin,
+  revocationProblem
 } from '../grafts/sync';
 import { extractTarGz } from '../grafts/untar';
 
@@ -97,8 +106,9 @@ async function check(rawSpec: string, dryRun: boolean) {
   const [spec] = parseGraftSpecs(`[${rawSpec}]`);
   const problems: string[] = [];
   const marketplace = process.env.ORCHARD_GRAFT_MARKETPLACE_URL || DEFAULT_MARKETPLACE_URL;
+  const trust = graftTrustFromEnv();
   const archive = await fetchArtifact(
-    artifactUrl(spec, marketplace),
+    artifactUrl(spec, marketplace, trust.taps),
     true,
     process.env.DATABASE_URL
   );
@@ -106,15 +116,23 @@ async function check(rawSpec: string, dryRun: boolean) {
   if (spec.digest && spec.digest.replace(/^sha256:/, '') !== digest.replace(/^sha256:/, '')) {
     throw new Error(`digest mismatch: expected ${spec.digest}, got ${digest}`);
   }
+  const { revoked, warning } = await fetchRevoked(marketplace, true);
+  const revokedProblem = revocationProblem(revoked, spec, digest);
+  if (revokedProblem) problems.push(revokedProblem);
   const dir = mkdtempSync(join(tmpdir(), 'graft-check-'));
   try {
     extractTarGz(archive, dir);
     const manifest = parseManifest(JSON.parse(readFileSync(join(dir, 'graft.json'), 'utf8')));
-    let signature: unknown = null;
+    const listingProblem = await recordOrigin(spec, dir, marketplace, true);
+    let signature: GraftSignature | null = null;
     try {
-      signature = verifyGraftDir(dir, trustPolicyFromEnv(), publisherKeysFromEnv());
+      verifyFileManifest(dir);
+      signature = decideSignature(dir, trust);
+      enforceTrust(signature, trust.policy);
     } catch (err) {
-      problems.push((err as Error).message);
+      problems.push(
+        listingProblem ? `${(err as Error).message} (${listingProblem})` : (err as Error).message
+      );
     }
     const platform = platformVersion();
     if (!satisfies(platform, manifest.engines.platform)) {
@@ -157,6 +175,8 @@ async function check(rawSpec: string, dryRun: boolean) {
       manifest,
       digest,
       signature,
+      trust: trust.policy,
+      warnings: warning ? [warning] : [],
       problems,
       shadowedClaims: shadowed,
       publicRoutes: manifest.public.routes,

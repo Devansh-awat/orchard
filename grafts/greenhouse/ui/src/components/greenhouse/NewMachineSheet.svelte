@@ -3,9 +3,9 @@
 	import { goto } from '../../host/navigation';
 	import { ChevronLeft } from 'lucide-svelte';
 	import GitHubRepoPicker from '../deployment/GitHubRepoPicker.svelte';
-	import { Button, Field, Input, Modal, Select } from '@orchard/graft-ui';
-	import SegmentedControl from '@orchard/graft-ui/components/ui/SegmentedControl.svelte';
-	import { motionStagger } from '@orchard/graft-ui/utils/motion.svelte';
+	import { Button, Field, Input, Modal, Select } from '@orchardlabs/graft-ui';
+	import SegmentedControl from '@orchardlabs/graft-ui/components/ui/SegmentedControl.svelte';
+	import { motionStagger } from '@orchardlabs/graft-ui/utils/motion.svelte';
 	import { sshIdentitiesQueryOptions } from '../../lib/queries/sandboxes';
 	import { queryClient } from '../../host/query';
 	import { apiFetch, toasts } from '../../host/stores';

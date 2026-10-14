@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Doors, type UsersDoor } from '@orchard/graft-sdk/server';
+import { Doors, type UsersDoor } from '@orchardlabs/graft-sdk/server';
 
 type Profile = Parameters<UsersDoor['resolve']>[1];
 

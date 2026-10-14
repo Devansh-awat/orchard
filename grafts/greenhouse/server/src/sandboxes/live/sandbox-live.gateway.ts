@@ -2,7 +2,7 @@ import * as http from 'http';
 import type { Duplex } from 'stream';
 import { Logger } from '@nestjs/common';
 import { WebSocketServer } from 'ws';
-import type { AuthDoor } from '@orchard/graft-sdk/server';
+import type { AuthDoor } from '@orchardlabs/graft-sdk/server';
 import { PrismaService } from '../../prisma.service';
 import { AnalyticsService } from '../../core/analytics.service';
 import { InstanceSettingsService } from '../../core/instance-settings.service';

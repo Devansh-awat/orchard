@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { createQuery } from '@tanstack/svelte-query';
-	import { PopoverPanel, Skeleton } from '@orchard/graft-ui';
+	import { PopoverPanel, Skeleton } from '@orchardlabs/graft-ui';
 	import { ocFmtTokens } from '../opencode';
 	import type { ContextMeter } from './session-store.svelte';
 	import { agentUsageQueryOptions, fmtResetTime, usageUnavailableText } from './agent-usage';

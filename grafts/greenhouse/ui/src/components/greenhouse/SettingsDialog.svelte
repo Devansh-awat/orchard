@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { BookOpen, X } from 'lucide-svelte';
-	import { Avatar, Button, Select } from '@orchard/graft-ui';
-	import { iconAnimation, motion, motionPopover } from '@orchard/graft-ui/utils/motion.svelte';
+	import { Avatar, Button, Select } from '@orchardlabs/graft-ui';
+	import { iconAnimation, motion, motionPopover } from '@orchardlabs/graft-ui/utils/motion.svelte';
 	import { getGreenhouseApp } from './app.svelte';
 	import { ago, runnerLabel } from './format';
 	import MachineUsagePanel from './MachineUsagePanel.svelte';

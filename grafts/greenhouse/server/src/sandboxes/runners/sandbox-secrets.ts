@@ -1,6 +1,6 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { createHash, createHmac } from 'crypto';
-import { Doors, type AuthDoor } from '@orchard/graft-sdk/server';
+import { Doors, type AuthDoor } from '@orchardlabs/graft-sdk/server';
 import { PrismaService } from '../../prisma.service';
 import { SecretCryptoService } from '../../core/secret-crypto.service';
 import { GitHubService } from '../../core/github.service';

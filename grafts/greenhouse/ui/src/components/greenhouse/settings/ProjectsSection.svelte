@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { get } from 'svelte/store';
-	import { Button } from '@orchard/graft-ui';
+	import { Button } from '@orchardlabs/graft-ui';
 	import { organizations, toasts } from '../../../host/stores';
 	import type { Sandbox } from '../../../lib/types/sandbox';
 	import { getGreenhouseApp } from '../app.svelte';

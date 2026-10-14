@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Doors, type AuthDoor } from '@orchard/graft-sdk/server';
+import { Doors, type AuthDoor } from '@orchardlabs/graft-sdk/server';
 
 @Injectable()
 export class SessionsService {

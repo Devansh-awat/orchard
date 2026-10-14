@@ -1,6 +1,14 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { ChevronDown, Loader2, Puzzle, ShieldCheck, ShieldAlert } from 'lucide-svelte';
+	import {
+		ChevronDown,
+		ExternalLink,
+		Loader2,
+		Puzzle,
+		ShieldAlert,
+		ShieldCheck,
+		ShieldX
+	} from 'lucide-svelte';
 	import { Alert, Badge, EmptyState, StatusBadge, statusMeta } from '$lib/components/ui';
 	import { apiFetch } from '$lib/stores';
 	import { springCollapse, springRotate, motionStagger } from '$lib/utils/motion.svelte';
@@ -30,7 +38,7 @@
 		permissions: Record<string, { label: string; defaultGrants: string[] }>;
 		coreReads: Record<string, string[]>;
 		adopts: string[];
-		signature: { signedBy: 'official' | 'publisher' | null; keyId: string | null } | null;
+		signature: Signature | null;
 		claims: Claim[];
 		routes: Route[];
 		migrationsApplied: string[];
@@ -39,6 +47,17 @@
 		dbPoolSize: { size: number; source: 'values' | 'graft' | 'default' } | null;
 		settings: { id: string; title: string }[];
 	};
+	type Tier = 'official' | 'community' | 'tap' | 'publisher';
+	type Signature = {
+		tier?: Tier | null;
+		keyId: string | null;
+		publisher?: string;
+		repo?: string;
+		tap?: string;
+		signedBy: 'official' | 'publisher' | null;
+	};
+	type Tap = { name: string; url: string; keyId: string };
+	type Trust = 'official' | 'listed' | 'taps' | 'any';
 	type DbBudget = {
 		usable: number;
 		inUse: number;
@@ -51,7 +70,8 @@
 	type Overview = {
 		platform: string;
 		sdk: string;
-		trust: 'official' | 'signed' | 'any';
+		trust: Trust | 'signed';
+		taps?: Tap[];
 		database: DbBudget | null;
 		grafts: Graft[];
 	};
@@ -79,17 +99,24 @@
 		}
 	});
 
-	const TRUST_BADGE = {
-		official: 'Orchard-signed only',
-		signed: 'Signed grafts only',
+	const TRUST_BADGE: Record<Trust, string> = {
+		official: 'Official grafts only',
+		listed: 'Official and listed grafts',
+		taps: 'Taps allowed',
 		any: 'Unsigned grafts allowed'
-	} as const;
+	};
 
-	const TRUST_COPY = {
+	const TRUST_COPY: Record<Trust, string> = {
 		official: 'Only grafts signed by Orchard can load.',
-		signed: 'Grafts must be signed by Orchard or a publisher key you added.',
+		listed:
+			'Official grafts, community grafts listed in the Extension Marketplace and grafts signed by a publisher key you added can load.',
+		taps: 'Official, listed and publisher-key grafts can load, plus grafts from the taps you added.',
 		any: 'Unsigned grafts can load. Anything placed in the grafts directory runs.'
-	} as const;
+	};
+
+	const trust = $derived<Trust>(
+		!overview || overview.trust === 'signed' ? 'listed' : overview.trust
+	);
 
 	function statusOf(g: Graft) {
 		if (g.status === 'failed') return statusMeta('error', `Failed during ${g.phase ?? 'load'}`);
@@ -97,12 +124,33 @@
 		return statusMeta('success', 'Running');
 	}
 
-	function signatureLabel(g: Graft): { tone: 'success' | 'info' | 'warning'; text: string } {
-		if (g.signature?.signedBy === 'official') return { tone: 'success', text: 'Signed by Orchard' };
-		if (g.signature?.signedBy === 'publisher')
-			return { tone: 'info', text: `Publisher key ${g.signature.keyId}` };
-		return { tone: 'warning', text: 'Unsigned' };
+	function tierOf(sig: Signature | null): Tier | null {
+		if (!sig) return null;
+		if (sig.tier !== undefined) return sig.tier;
+		return sig.signedBy;
 	}
+
+	function tierLabel(g: Graft): {
+		tone: 'success' | 'info' | 'warning' | 'error' | 'neutral';
+		text: string;
+	} {
+		const sig = g.signature;
+		switch (tierOf(sig)) {
+			case 'official':
+				return { tone: 'success', text: 'Official' };
+			case 'community':
+				return { tone: 'info', text: `Community · by ${sig?.publisher ?? 'unknown'}` };
+			case 'tap':
+				return { tone: 'warning', text: `Tap: ${sig?.tap ?? 'unknown'}` };
+			case 'publisher':
+				return { tone: 'neutral', text: `Publisher key ${sig?.keyId ?? ''}`.trim() };
+			default:
+				return { tone: 'error', text: 'Unsigned' };
+		}
+	}
+
+	const tapUrl = (name: string | undefined) =>
+		overview?.taps?.find((t) => t.name === name)?.url ?? null;
 
 	const publicRoutes = (g: Graft) => g.routes.filter((r) => r.classification === 'public');
 	const aliasClaims = (g: Graft) => g.claims.filter((c) => c.state !== 'own');
@@ -119,8 +167,8 @@
 				</p>
 			</div>
 			{#if overview}
-				<Badge tone={overview.trust === 'any' ? 'warning' : 'neutral'}>
-					{TRUST_BADGE[overview.trust]}
+				<Badge tone={trust === 'any' ? 'warning' : trust === 'taps' ? 'info' : 'neutral'}>
+					{TRUST_BADGE[trust]}
 				</Badge>
 			{/if}
 		</header>
@@ -150,7 +198,7 @@
 		<p class="grafts-meta">
 			{overview.grafts.length}
 			{overview.grafts.length === 1 ? 'graft' : 'grafts'} on Orchard {overview.platform}, graft SDK
-			{overview.sdk}. {TRUST_COPY[overview.trust]}
+			{overview.sdk}. {TRUST_COPY[trust]}
 		</p>
 		{#if overview.database}
 			{@const db = overview.database}
@@ -183,7 +231,7 @@
 		{/if}
 		<ul class="grafts-list">
 			{#each overview.grafts as g, i (g.id)}
-				{@const sig = signatureLabel(g)}
+				{@const sig = tierLabel(g)}
 				<li class="graft" {@attach motionStagger({ index: i })}>
 					<button
 						class="graft-row"
@@ -197,16 +245,22 @@
 								{#if g.version}<span class="graft-version">{g.version}</span>{/if}
 							</span>
 							<span class="graft-sub">
-								{g.description ?? g.id}{#if g.publisher}&nbsp;· by {g.publisher}{/if}
+								{g.description ??
+									g.id}{#if g.publisher && tierOf(g.signature) !== 'official' && tierOf(g.signature) !== 'community'}&nbsp;·
+									says it is by {g.publisher}{/if}
 							</span>
 						</span>
 						<span class="graft-badges">
-							<span class="graft-sig graft-sig--{sig.tone}">
-								{#if sig.tone === 'warning'}<ShieldAlert size={13} />{:else}<ShieldCheck
-										size={13}
-									/>{/if}
-								{sig.text}
-							</span>
+							<Badge tone={sig.tone}>
+								<span class="graft-tier">
+									{#if sig.tone === 'error'}<ShieldX
+											size={12}
+										/>{:else if sig.tone === 'warning'}<ShieldAlert size={12} />{:else}<ShieldCheck
+											size={12}
+										/>{/if}
+									{sig.text}
+								</span>
+							</Badge>
 							<StatusBadge meta={statusOf(g)} />
 						</span>
 						<span
@@ -225,6 +279,23 @@
 							{#each g.warnings as warning (warning)}
 								<Alert tone="warning">{warning}</Alert>
 							{/each}
+							{#if tierOf(g.signature) === 'tap'}
+								<Alert tone="warning" title="Third-party graft">
+									From the {g.signature?.tap} tap{#if tapUrl(g.signature?.tap)}&nbsp;at
+										<code>{tapUrl(g.signature?.tap)}</code>{/if}. Orchard has not checked anything
+									in this tap; you are trusting {g.signature?.tap}.
+								</Alert>
+							{:else if tierOf(g.signature) === 'community'}
+								<p class="graft-faint">
+									Published by {g.signature?.publisher}{#if g.signature?.repo}&nbsp;(<a
+											class="graft-link"
+											href="https://github.com/{g.signature.repo}"
+											target="_blank"
+											rel="noreferrer">github.com/{g.signature.repo}<ExternalLink size={11} /></a
+										>){/if}, not by Orchard. Orchard checked it when it was listed, but does not
+									review its updates.
+								</p>
+							{/if}
 
 							<div class="graft-facts">
 								<div class="graft-fact">
@@ -325,6 +396,30 @@
 				</li>
 			{/each}
 		</ul>
+	{/if}
+
+	{#if overview?.taps?.length}
+		<section class="grafts-section">
+			<div>
+				<h3 class="grafts-subtitle">Taps</h3>
+				<p class="grafts-meta">
+					Graft catalogues you added with <code>orchardctl graft tap add</code>. Orchard has not
+					checked them; grafts from a tap must be signed with its key{trust === 'taps' ||
+					trust === 'any'
+						? '.'
+						: ', and only load once the trust policy allows taps.'}
+				</p>
+			</div>
+			<ul class="grafts-taps">
+				{#each overview.taps as tap (tap.name)}
+					<li class="grafts-tap">
+						<span class="graft-name">{tap.name}</span>
+						<span class="graft-mono">{tap.url}</span>
+						<span class="graft-faint">key {tap.keyId}</span>
+					</li>
+				{/each}
+			</ul>
+		</section>
 	{/if}
 </div>
 
@@ -475,24 +570,60 @@
 		flex-shrink: 0;
 	}
 
-	.graft-sig {
+	.graft-tier {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.3rem;
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
+		white-space: nowrap;
 	}
 
-	.graft-sig--success {
-		color: var(--status-success);
+	.graft-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.2rem;
+		color: var(--text-muted);
+		text-decoration: underline;
+		text-underline-offset: 2px;
 	}
 
-	.graft-sig--info {
-		color: var(--status-info);
+	.graft-link:hover {
+		color: var(--text-default);
 	}
 
-	.graft-sig--warning {
-		color: var(--status-warning);
+	.grafts-subtitle {
+		margin: 0;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
+		color: var(--text-default);
+	}
+
+	.grafts-meta code {
+		font-family: var(--font-mono, monospace);
+		font-size: 0.85em;
+	}
+
+	.grafts-taps {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-md);
+		background: var(--bg-surface);
+	}
+
+	.grafts-tap {
+		display: grid;
+		grid-template-columns: minmax(6rem, auto) minmax(0, 1fr) auto;
+		align-items: baseline;
+		gap: 0.75rem;
+		padding: 0.6rem 0.85rem;
+	}
+
+	.grafts-tap + .grafts-tap {
+		border-top: 1px solid var(--border-default);
 	}
 
 	.graft-chevron {

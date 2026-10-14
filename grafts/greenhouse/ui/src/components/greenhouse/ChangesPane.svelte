@@ -7,9 +7,9 @@
 		LoaderCircle,
 		RefreshCw
 	} from 'lucide-svelte';
-	import Menu from '@orchard/graft-ui/components/ui/Menu.svelte';
-	import MenuItem from '@orchard/graft-ui/components/ui/MenuItem.svelte';
-	import Skeleton from '@orchard/graft-ui/components/ui/Skeleton.svelte';
+	import Menu from '@orchardlabs/graft-ui/components/ui/Menu.svelte';
+	import MenuItem from '@orchardlabs/graft-ui/components/ui/MenuItem.svelte';
+	import Skeleton from '@orchardlabs/graft-ui/components/ui/Skeleton.svelte';
 	import { goto } from '../../host/navigation';
 	import { toasts } from '../../host/stores';
 	import * as api from './api';

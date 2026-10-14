@@ -40,6 +40,13 @@ The catalogue is its own release-please package (tags `templates/vX.Y.Z`), so
 merges show up in a changelog and `templates/index.json` carries the catalogue
 version. Publishing does not wait for a release.
 
+## Listing a graft
+
+Grafts (Orchard's extensions) published by people outside Orchard are listed
+from `registry/community/`, one `<id>.json` file per graft. The graft itself
+stays in its author's GitHub repo and is picked up from their releases.
+`registry/community/README.md` explains how to get listed and what gets checked.
+
 ## Changing a template
 
 A published version never changes. Bump `metadata.version` when you edit the

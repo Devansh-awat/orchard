@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { Copy, Eye, EyeOff, Trash2 } from 'lucide-svelte';
-	import { Button, Skeleton } from '@orchard/graft-ui';
+	import { Button, Skeleton } from '@orchardlabs/graft-ui';
 	import { apiFetch, toasts } from '../../../host/stores';
 	import { formatBytes } from '../machine-usage';
 	import Block from './Block.svelte';

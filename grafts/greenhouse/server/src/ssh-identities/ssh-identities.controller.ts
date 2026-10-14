@@ -9,7 +9,7 @@ import {
   Post,
   Req
 } from '@nestjs/common';
-import { Auth } from '@orchard/graft-sdk/server';
+import { Auth } from '@orchardlabs/graft-sdk/server';
 import { UsersService } from '../core/users.service';
 import { AnalyticsService } from '../core/analytics.service';
 import { SshIdentitiesService } from './ssh-identities.service';

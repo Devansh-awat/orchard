@@ -11,7 +11,7 @@
 		StatusDot,
 		statusMeta,
 		type StatusMeta
-	} from '@orchard/graft-ui';
+	} from '@orchardlabs/graft-ui';
 	import {
 		ocMcpAdd,
 		ocMcpAuthFinish,

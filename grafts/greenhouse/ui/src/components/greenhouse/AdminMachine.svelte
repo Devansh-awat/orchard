@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { Lock, Play, RotateCw, Square, Trash2 } from 'lucide-svelte';
-	import { Button, Input, Modal } from '@orchard/graft-ui';
-	import EmptyState from '@orchard/graft-ui/components/ui/EmptyState.svelte';
-	import StatusDot from '@orchard/graft-ui/components/ui/StatusDot.svelte';
+	import { Button, Input, Modal } from '@orchardlabs/graft-ui';
+	import EmptyState from '@orchardlabs/graft-ui/components/ui/EmptyState.svelte';
+	import StatusDot from '@orchardlabs/graft-ui/components/ui/StatusDot.svelte';
 	import { sandboxStatus } from '../../lib/status';
 	import { queryClient } from '../../host/query';
 	import { toasts } from '../../host/stores';

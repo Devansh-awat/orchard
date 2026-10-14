@@ -1,5 +1,5 @@
 import * as k8s from '@kubernetes/client-node';
-import type { MirrorResource, MirrorShard } from '@orchard/graft-sdk/server';
+import type { MirrorResource, MirrorShard } from '@orchardlabs/graft-sdk/server';
 import { stripSecretData, toListResult, type K8sListBody } from '../core/mirror';
 import {
   CRD_API_VERSION,

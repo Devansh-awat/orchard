@@ -161,6 +161,7 @@
 								description={g.description}
 								icon={g.icon ? `${data.registry}/${g.icon}` : undefined}
 								href="/extensions/{g.id}"
+								badge={g.tier === 'community' ? 'Community' : 'Official'}
 								summary
 							/>
 						</a>

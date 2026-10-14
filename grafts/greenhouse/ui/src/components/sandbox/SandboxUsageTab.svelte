@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { createQuery } from '@tanstack/svelte-query';
 	import { ArrowRight, Sprout } from 'lucide-svelte';
-	import { Skeleton, StatusDot } from '@orchard/graft-ui';
+	import { Skeleton, StatusDot } from '@orchardlabs/graft-ui';
 	import { sandboxStatus } from '../../lib/status';
 	import { timeAgo } from '../../lib/utils/time';
 	import { SandboxDisabledError, sandboxesQueryOptions } from '../../lib/queries/sandboxes';

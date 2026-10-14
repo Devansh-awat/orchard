@@ -15,7 +15,7 @@ import {
   type AuditDoor,
   type DbDoor,
   type SettingsDoor
-} from '@orchard/graft-sdk/server';
+} from '@orchardlabs/graft-sdk/server';
 
 type Announcement = {
   id: string;

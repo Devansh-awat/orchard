@@ -14,7 +14,7 @@ import {
   Req,
   UseGuards
 } from '@nestjs/common';
-import { Auth } from '@orchard/graft-sdk/server';
+import { Auth } from '@orchardlabs/graft-sdk/server';
 import { requestAuthStorage } from '../../core/request-context';
 import { UsersService } from '../../core/users.service';
 import { AnalyticsService } from '../../core/analytics.service';

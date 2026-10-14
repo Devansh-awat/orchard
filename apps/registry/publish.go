@@ -392,10 +392,12 @@ func (p *publisher) putIfChanged(ctx context.Context, key string, body []byte, c
 	case existing.ETag == md5ETag(body):
 		return false, nil
 	case immutable:
-		return false, fmt.Errorf("%s is already published with different content; bump metadata.version instead of editing a released version", key)
+		return false, fmt.Errorf("%s is already published with different content; bump metadata.version instead of editing a released version: %w", key, errAlreadyPublished)
 	}
 	return true, p.bucket.Put(ctx, p.key(key), body, contentType, cacheControl)
 }
+
+var errAlreadyPublished = errors.New("a published version never changes")
 
 func (p *publisher) readIndex(ctx context.Context, name string) (*templateIndex, error) {
 	raw, err := p.bucket.ReadAll(ctx, p.key("templates/"+name+"/index.json"))

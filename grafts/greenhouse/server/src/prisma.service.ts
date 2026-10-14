@@ -1,6 +1,6 @@
 import { Inject, Injectable, OnModuleDestroy } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { Doors, type DbDoor } from '@orchard/graft-sdk/server';
+import { Doors, type DbDoor } from '@orchardlabs/graft-sdk/server';
 import type { Pool } from 'pg';
 import { PrismaClient } from './generated/prisma/client';
 

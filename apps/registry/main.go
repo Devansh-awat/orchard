@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
 	"errors"
 	"flag"
 	"fmt"
@@ -73,6 +74,8 @@ func usage() {
   registry validate [flags]            validate templates without touching the bucket
   registry publish-grafts [flags]      publish packed .graft files to the Extension Marketplace
   registry validate-grafts [flags]     check packed .graft files without touching the bucket
+  registry sync-community [flags]      publish community listings and their GitHub releases
+  registry validate-community [flags]  check community listing files without touching the bucket
 
 publish and validate flags:
   -templates DIR   directory of <name>.yaml templates (repeatable)
@@ -83,7 +86,16 @@ publish and validate flags:
   -authors FILE    map git emails to GitHub logins, one "email login" per line
   -icons URL       favicon service template with a %%s placeholder for the homepage host, or "default"; stored as icon.png per version
 
+sync-community and validate-community flags:
+  -listings DIR    directory of <id>.json community listings (default registry/community)
+  -official DIR    graft sources whose ids listings may not use, read from DIR/*/graft.json (validate only)
+  -public URL      public url the bucket is served from (default https://assets.orchard.my/registry)
+  -revoked FILE    revoked artifact digests merged into grafts/index.json
+  -github URL      GitHub API base url (default https://api.github.com)
+
 environment:
+  GRAFT_SIGNING_KEY  base64 of the Orchard PEM private key that signs listings (sync-community)
+  GITHUB_TOKEN       read-only token for the GitHub API rate limit (sync-community)
   REGISTRY_LISTEN  address for serve (default :8080)
   REGISTRY_PREFIX  key prefix inside the bucket (default none)
   R2_ENDPOINT      https://<account>.r2.cloudflarestorage.com (or set R2_ACCOUNT_ID)
@@ -158,7 +170,7 @@ func main() {
 			log.Fatal("at least one -grafts directory is required")
 		}
 		if command == "validate-grafts" {
-			if err := validateGrafts(dirs); err != nil {
+			if err := validateGrafts(os.Stdout, dirs, officialGraftKeys); err != nil {
 				log.Fatal(err)
 			}
 			return
@@ -186,6 +198,46 @@ func main() {
 			log.Fatal(err)
 		}
 		log.Printf("extension marketplace has %d grafts", len(cat.Grafts))
+	case "sync-community", "validate-community":
+		fs := flag.NewFlagSet(command, flag.ExitOnError)
+		listings := fs.String("listings", "registry/community", "directory of <id>.json community listings")
+		official := fs.String("official", "", "directory of official graft sources whose ids listings may not use")
+		publicBase := fs.String("public", "https://assets.orchard.my/registry", "public url the bucket is served from, recorded in each version's url")
+		revoked := fs.String("revoked", "", "file of revoked artifact digests, one per line")
+		githubAPI := fs.String("github", env("GITHUB_API_URL", "https://api.github.com"), "GitHub API base url")
+		fs.Parse(args)
+		if command == "validate-community" {
+			if err := validateCommunity(os.Stdout, *listings, *official); err != nil {
+				log.Fatal(err)
+			}
+			return
+		}
+		key, err := parseSigningKey(os.Getenv("GRAFT_SIGNING_KEY"))
+		if err != nil {
+			log.Fatal(err)
+		}
+		if !isOfficialKey(key.Public().(ed25519.PublicKey)) {
+			log.Printf("warning: GRAFT_SIGNING_KEY is not one of the Orchard keys servers trust, so they will reject these listings")
+		}
+		bucket, err := bucketFromEnv()
+		if err != nil {
+			log.Fatal(err)
+		}
+		s := &communitySync{
+			p:          &publisher{bucket: bucket, prefix: keyPrefix(), now: time.Now, log: log.Default()},
+			github:     &githubClient{base: *githubAPI, token: os.Getenv("GITHUB_TOKEN")},
+			key:        key,
+			publicBase: *publicBase,
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		defer cancel()
+		cat, err := s.run(ctx, *listings, *revoked)
+		if cat != nil {
+			log.Printf("extension marketplace has %d grafts", len(cat.Grafts))
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
 	case "version":
 		fmt.Println(Version)
 	case "help", "-h", "--help":

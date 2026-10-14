@@ -11,7 +11,7 @@ A graft's server code is a NestJS module, the default export of
 
 ```ts
 import { Controller, Get, Inject, Module, Param } from '@nestjs/common';
-import { Auth, Doors, GraftUserId, type AuthDoor, type DbDoor } from '@orchard/graft-sdk/server';
+import { Auth, Doors, GraftUserId, type AuthDoor, type DbDoor } from '@orchardlabs/graft-sdk/server';
 
 @Controller('notes')
 class NotesController {
@@ -86,7 +86,7 @@ Export a function from `mcp/src/index.ts` and add the `mcp` capability. Tools ru
 in Orchard's MCP server and call the graft's API as the signed-in user:
 
 ```ts
-import { defineMcp } from '@orchard/graft-sdk/server';
+import { defineMcp } from '@orchardlabs/graft-sdk/server';
 
 export default defineMcp((server, client, { apiBase }) => {
   server.registerTool('notes_list', { description: 'List notes' }, async () => ({

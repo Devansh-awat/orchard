@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { SegmentedControl, Select } from '@orchard/graft-ui';
+	import { SegmentedControl, Select } from '@orchardlabs/graft-ui';
 	import { isMac } from '../format';
 	import { greenhousePrefs, type FollowUp, type SendWith } from '../prefs.svelte';
 	import Card from './Card.svelte';

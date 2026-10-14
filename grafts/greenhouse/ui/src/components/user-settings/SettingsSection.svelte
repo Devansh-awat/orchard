@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { motionStagger, iconAnimation } from '@orchard/graft-ui/utils/motion.svelte';
+	import { motionStagger, iconAnimation } from '@orchardlabs/graft-ui/utils/motion.svelte';
 
 	let {
 		title,

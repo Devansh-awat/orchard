@@ -40,6 +40,7 @@ type graftSpec struct {
 	Version string `json:"version"`
 	Source  string `json:"source,omitempty"`
 	Digest  string `json:"digest,omitempty"`
+	Tap     string `json:"tap,omitempty"`
 }
 
 type graftManifest struct {
@@ -81,8 +82,12 @@ type graftCheck struct {
 }
 
 type graftSignature struct {
-	SignedBy *string `json:"signedBy"`
-	KeyID    *string `json:"keyId"`
+	Tier      *string `json:"tier"`
+	SignedBy  *string `json:"signedBy"`
+	KeyID     *string `json:"keyId"`
+	Publisher string  `json:"publisher"`
+	Repo      string  `json:"repo"`
+	Tap       string  `json:"tap"`
 }
 
 type graftInfo struct {
@@ -104,15 +109,20 @@ type marketVersion struct {
 	Signed      bool              `json:"signed"`
 	Engines     map[string]string `json:"engines"`
 	PublishedAt string            `json:"publishedAt"`
+	Revoked     bool              `json:"revoked"`
 }
 
 type marketGraft struct {
-	ID          string          `json:"id"`
-	Name        string          `json:"name"`
-	Description string          `json:"description"`
-	Publisher   string          `json:"publisher"`
-	Latest      string          `json:"latest"`
-	Versions    []marketVersion `json:"versions"`
+	ID             string          `json:"id"`
+	Name           string          `json:"name"`
+	Description    string          `json:"description"`
+	Publisher      string          `json:"publisher"`
+	Homepage       string          `json:"homepage"`
+	Tier           string          `json:"tier"`
+	Repo           string          `json:"repo"`
+	PublisherKeyID string          `json:"publisherKeyId"`
+	Latest         string          `json:"latest"`
+	Versions       []marketVersion `json:"versions"`
 }
 
 type marketIndex struct {
@@ -134,16 +144,22 @@ func Graft() *cli.Command {
 		Root:    true,
 		Usage: `orchardctl graft - install and manage grafts, Orchard's extensions
 
-  orchardctl graft search [term]             browse the Extension Marketplace
-  orchardctl graft info <id>                 versions, permissions and compatibility
+  orchardctl graft search [term]             browse the Extension Marketplace and your taps
+  orchardctl graft info <id>                 tier, publisher, versions and compatibility
   orchardctl graft list                      what is installed and how it is doing
   orchardctl graft add <id>[@version]        install from the Extension Marketplace
+  orchardctl graft add <tap>/<id>[@version]  install from a tap you added
   orchardctl graft add ./x.graft             install a file (works offline)
   orchardctl graft add https://.../x.graft   install from any https address, pinned by digest
   orchardctl graft upgrade [id]              move to the newest compatible version
   orchardctl graft remove <id> [--purge]     uninstall; --purge also deletes its data
   orchardctl graft rollback <id>             go back to the previous version and data
   orchardctl graft pool <id> [n|default]     database connections the graft may open per pod
+  orchardctl graft tap add <name> <url>      trust a third-party tap and its signing key
+  orchardctl graft tap list                  the taps you added and their keys
+  orchardctl graft tap remove <name>         stop trusting a tap
+  orchardctl graft trust [level]             show or set which grafts may load:
+                                             official, listed (default), taps or any
 
 Flags for add and upgrade:
   --yes        skip the confirmation prompt
@@ -151,6 +167,11 @@ Flags for add and upgrade:
   --apply      roll Orchard out afterwards (otherwise run orchardctl update)
 
 ` + graftTrustWarning + `
+
+Official grafts are made and signed by Orchard. Community grafts are listed in
+the Extension Marketplace and signed by their publisher; Orchard checked them
+when they were listed but does not review their updates. Taps are folders of
+grafts run by someone else; Orchard checks nothing in them.
 
 Every install and upgrade verifies the signature against your trust policy
 (graftSettings.trust), checks the graft against this Orchard version, and
@@ -175,14 +196,14 @@ func runGraft(c *cli.Context, args []string) error {
 		return graftSearch(c, strings.Join(positional, " "))
 	case "info":
 		if len(positional) != 1 {
-			return errors.New("usage: orchardctl graft info <id>")
+			return errors.New("usage: orchardctl graft info <id> | <tap>/<id>")
 		}
 		return graftDescribe(c, positional[0])
 	case "list":
 		return graftList(c)
 	case "add":
 		if len(positional) != 1 {
-			return errors.New("usage: orchardctl graft add <id>[@version] | <file.graft> | <https url>")
+			return errors.New("usage: orchardctl graft add <id>[@version] | <tap>/<id>[@version] | <file.graft> | <https url>")
 		}
 		return graftAdd(c, positional[0], flags, apply)
 	case "upgrade":
@@ -202,6 +223,10 @@ func runGraft(c *cli.Context, args []string) error {
 			return errors.New("usage: orchardctl graft rollback <id> [--apply]")
 		}
 		return graftRollback(c, positional[0], flags, apply)
+	case "tap":
+		return runGraftTap(c, positional, flags)
+	case "trust":
+		return graftTrustCommand(c, positional, apply)
 	default:
 		return fmt.Errorf("unknown graft command %q; run orchardctl graft for help", args[0])
 	}
@@ -232,10 +257,12 @@ func graftMarketURL(values *cli.Values) string {
 func graftTrustEnv(values *cli.Values) []string {
 	trust := "signed"
 	var keys []string
+	taps := "[]"
 	if values != nil {
-		if s, ok := values.Get(graftSettingsPath + ".trust").(string); ok && s != "" {
+		if s, ok := values.Get(graftTrustPath).(string); ok && s != "" {
 			trust = s
 		}
+		taps = graftTapsEnv(values)
 		for _, k := range values.List(graftSettingsPath + ".keys") {
 			if s, ok := k.(string); ok {
 				keys = append(keys, s)
@@ -246,6 +273,7 @@ func graftTrustEnv(values *cli.Values) []string {
 		"ORCHARD_GRAFT_TRUST=" + trust,
 		"ORCHARD_GRAFT_KEYS=" + strings.Join(keys, ","),
 		"ORCHARD_GRAFT_MARKETPLACE_URL=" + graftMarketURL(values),
+		"ORCHARD_GRAFT_TAPS=" + taps,
 	}
 }
 
@@ -328,6 +356,7 @@ func readGraftSpecs(values *cli.Values) []graftSpec {
 		spec.Version = fmt.Sprint(m["version"])
 		spec.Source, _ = m["source"].(string)
 		spec.Digest, _ = m["digest"].(string)
+		spec.Tap, _ = m["tap"].(string)
 		if spec.ID != "" {
 			specs = append(specs, spec)
 		}
@@ -344,6 +373,9 @@ func writeGraftSpecs(values *cli.Values, specs []graftSpec) {
 		}
 		if s.Source != "" {
 			entry["source"] = s.Source
+		}
+		if s.Tap != "" {
+			entry["tap"] = s.Tap
 		}
 		items = append(items, entry)
 	}
@@ -450,7 +482,7 @@ func newestCompatible(g marketGraft, platform string, index marketIndex) (market
 	var best marketVersion
 	found := false
 	for _, v := range g.Versions {
-		if index.revoked(v.Digest) || !satisfiesRange(platform, v.Engines["platform"]) {
+		if v.Revoked || index.revoked(v.Digest) || !satisfiesRange(platform, v.Engines["platform"]) {
 			continue
 		}
 		if !found || versionLess(best.Version, v.Version) {
@@ -462,34 +494,77 @@ func newestCompatible(g marketGraft, platform string, index marketIndex) (market
 
 func graftSearch(c *cli.Context, term string) error {
 	values, _ := cli.LoadValues(c.Env.Values)
-	index, err := loadMarket(values)
-	if err != nil {
-		return fmt.Errorf("could not reach the Extension Marketplace: %w", err)
-	}
 	term = strings.ToLower(term)
 	matched := 0
-	for _, g := range index.Grafts {
-		hay := strings.ToLower(g.ID + " " + g.Name + " " + g.Description + " " + g.Publisher)
+	show := func(g marketGraft, tap string) {
+		hay := strings.ToLower(g.ID + " " + g.Name + " " + g.Description + " " + g.Publisher + " " + tap)
 		if term != "" && !strings.Contains(hay, term) {
-			continue
+			return
 		}
 		matched++
-		c.Printf("%-24s %-10s %s\n", g.ID, g.Latest, g.Description)
+		id := g.ID
+		if tap != "" {
+			id = tap + "/" + g.ID
+		}
+		c.Printf("%-28s %-10s %-24s %s\n", id, g.Latest, tierLabel(g, tap), g.Description)
+	}
+	index, err := loadMarket(values)
+	if err != nil {
+		c.Warnf("could not reach the Extension Marketplace: %v\n", err)
+	}
+	for _, g := range index.Grafts {
+		show(g, "")
+	}
+	var taps []graftTap
+	if values != nil {
+		taps = readTaps(values)
+	}
+	for _, tap := range taps {
+		tapIndex, tapErr := loadTapIndex(tap)
+		if tapErr != nil {
+			c.Warnf("%v\n", tapErr)
+			continue
+		}
+		for _, g := range tapIndex.Grafts {
+			show(g, tap.Name)
+		}
+	}
+	if err != nil && len(taps) == 0 {
+		return fmt.Errorf("could not reach the Extension Marketplace: %w", err)
 	}
 	if matched == 0 {
 		c.Printf("no grafts match %q\n", term)
+	} else if len(taps) > 0 {
+		c.Printf("\ngrafts from taps are not checked by Orchard; install them with orchardctl graft add <tap>/<id>\n")
 	}
 	return nil
 }
 
-func graftDescribe(c *cli.Context, id string) error {
+func graftDescribe(c *cli.Context, ref string) error {
 	values, _ := cli.LoadValues(c.Env.Values)
-	index, err := loadMarket(values)
-	if err != nil {
+	var index marketIndex
+	var err error
+	tapName, id := "", ref
+	if m := tapRefRe.FindStringSubmatch(ref); m != nil && m[3] == "" {
+		tapName, id = m[1], m[2]
+		tap, ok := graftTap{}, false
+		if values != nil {
+			tap, ok = findTap(values, tapName)
+		}
+		if !ok {
+			return fmt.Errorf("there is no tap called %s", tapName)
+		}
+		if index, err = loadTapIndex(tap); err != nil {
+			return err
+		}
+	} else if index, err = loadMarket(values); err != nil {
 		return fmt.Errorf("could not reach the Extension Marketplace: %w", err)
 	}
 	g, ok := index.find(id)
 	if !ok {
+		if tapName != "" {
+			return fmt.Errorf("the %s tap has no graft %q", tapName, id)
+		}
 		return fmt.Errorf("no graft %q in the Extension Marketplace", id)
 	}
 	platform := ""
@@ -497,11 +572,27 @@ func graftDescribe(c *cli.Context, id string) error {
 		platform = info.Platform
 	}
 	c.Printf("%s (%s) by %s\n%s\n\n", g.Name, g.ID, g.Publisher, g.Description)
+	c.Printf("  tier:      %s\n", tierLabel(g, tapName))
+	c.Printf("  publisher: %s\n", g.Publisher)
+	if g.Repo != "" {
+		c.Printf("  repo:      github.com/%s\n", g.Repo)
+	}
+	if g.Homepage != "" {
+		c.Printf("  homepage:  %s\n", g.Homepage)
+	}
+	switch {
+	case tapName != "":
+		tap, _ := findTap(values, tapName)
+		c.Printf("\n  %s\n", tapTrustCopy(tapName, tap.URL))
+	case g.Tier == "community":
+		c.Printf("\n  %s\n", communityCopy(g.Publisher, g.Repo))
+	}
+	c.Printf("\n")
 	sort.Slice(g.Versions, func(i, j int) bool { return versionLess(g.Versions[j].Version, g.Versions[i].Version) })
 	for _, v := range g.Versions {
 		note := ""
 		switch {
-		case index.revoked(v.Digest):
+		case v.Revoked || index.revoked(v.Digest):
 			note = "revoked"
 		case platform != "" && !satisfiesRange(platform, v.Engines["platform"]):
 			note = "needs Orchard " + v.Engines["platform"]
@@ -542,7 +633,9 @@ func graftList(c *cli.Context) error {
 			state = "running " + v + ", update pending"
 		}
 		source := "marketplace"
-		if strings.HasPrefix(s.Source, "orchard://") {
+		if s.Tap != "" {
+			source = "tap:" + s.Tap
+		} else if strings.HasPrefix(s.Source, "orchard://") {
 			source = "uploaded file"
 		} else if s.Source != "" {
 			source = s.Source
@@ -644,6 +737,15 @@ func resolveSpec(c *cli.Context, values *cli.Values, arg string) (graftSpec, []b
 		}
 		return graftSpec{ID: manifest.ID, Version: manifest.Version, Digest: sha256Digest(archive), Source: arg}, archive, nil
 	}
+	if m := tapRefRe.FindStringSubmatch(arg); m != nil {
+		if _, err := os.Stat(arg); err != nil {
+			spec, err := resolveTapSpec(values, m[1], m[2], m[3], func() (string, error) {
+				info, err := instanceInfo(c)
+				return info.Platform, err
+			})
+			return spec, nil, err
+		}
+	}
 	if strings.HasSuffix(arg, ".graft") || strings.ContainsAny(arg, "/\\") {
 		archive, err := os.ReadFile(arg)
 		if err != nil {
@@ -676,29 +778,12 @@ func resolveSpec(c *cli.Context, values *cli.Values, arg string) (graftSpec, []b
 	if !ok {
 		return graftSpec{}, nil, fmt.Errorf("no graft %q in the Extension Marketplace", id)
 	}
-	var chosen marketVersion
-	if version == "" {
+	chosen, err := pickVersion(g, version, index, func() (string, error) {
 		info, err := instanceInfo(c)
-		if err != nil {
-			return graftSpec{}, nil, err
-		}
-		v, ok := newestCompatible(g, info.Platform, index)
-		if !ok {
-			return graftSpec{}, nil, fmt.Errorf("no version of %s works with Orchard %s", id, info.Platform)
-		}
-		chosen = v
-	} else {
-		for _, v := range g.Versions {
-			if v.Version == version {
-				chosen = v
-			}
-		}
-		if chosen.Version == "" {
-			return graftSpec{}, nil, fmt.Errorf("%s has no version %s", id, version)
-		}
-	}
-	if index.revoked(chosen.Digest) {
-		return graftSpec{}, nil, fmt.Errorf("%s %s has been revoked by the Extension Marketplace", id, chosen.Version)
+		return info.Platform, err
+	})
+	if err != nil {
+		return graftSpec{}, nil, err
 	}
 	spec := graftSpec{ID: id, Version: chosen.Version, Digest: chosen.Digest}
 	defaultURL := fmt.Sprintf("%s/grafts/%s/%s/%s-%s.graft", graftMarketURL(values), id, chosen.Version, id, chosen.Version)
@@ -718,7 +803,7 @@ func checkSpec(c *cli.Context, values *cli.Values, spec graftSpec) (graftCheck, 
 	return report, json.Unmarshal(out, &report)
 }
 
-func printCheck(c *cli.Context, report graftCheck, prev *graftSpec) {
+func printCheck(c *cli.Context, values *cli.Values, spec graftSpec, report graftCheck, prev *graftSpec) {
 	m := report.Manifest
 	verb := "Install"
 	if prev != nil {
@@ -729,13 +814,7 @@ func printCheck(c *cli.Context, report graftCheck, prev *graftSpec) {
 		c.Printf("  %s\n", m.Description)
 	}
 	c.Printf("\n  %s\n", graftTrustWarning)
-	if report.Signature == nil || report.Signature.SignedBy == nil {
-		c.Printf("  %s\n", graftUnsignedWarning)
-	} else if *report.Signature.SignedBy == "official" {
-		c.Printf("  Signed by Orchard.\n")
-	} else if report.Signature.KeyID != nil {
-		c.Printf("  Signed by publisher key %s.\n", *report.Signature.KeyID)
-	}
+	c.Printf("  %s\n", signatureCopy(values, spec, report.Signature))
 	if len(m.Capabilities) > 0 {
 		c.Printf("\n  asks for:        %s\n", strings.Join(m.Capabilities, ", "))
 	}
@@ -969,6 +1048,9 @@ func installSpec(c *cli.Context, values *cli.Values, spec graftSpec, archive []b
 			prev = &copied
 		}
 	}
+	if prev != nil && prev.Tap != spec.Tap {
+		return fmt.Errorf("%s is already installed from %s; remove it first with orchardctl graft remove %s", spec.ID, specOrigin(*prev), spec.ID)
+	}
 	if prev != nil && prev.Version == spec.Version && prev.Digest == spec.Digest {
 		c.Printf("%s %s is already in your values\n", spec.ID, spec.Version)
 		return nil
@@ -977,7 +1059,7 @@ func installSpec(c *cli.Context, values *cli.Values, spec graftSpec, archive []b
 	if err != nil {
 		return err
 	}
-	printCheck(c, report, prev)
+	printCheck(c, values, spec, report, prev)
 	if missing := checkCrds(c, report.Manifest.Requires.Kubernetes.Crds); len(missing) > 0 {
 		report.Problems = append(report.Problems, "missing CRDs: "+strings.Join(missing, ", "))
 		c.Printf("  problem: missing CRDs: %s\n", strings.Join(missing, ", "))
@@ -1003,6 +1085,9 @@ func installSpec(c *cli.Context, values *cli.Values, spec graftSpec, archive []b
 	}
 	if archive == nil && strings.TrimSpace(report.Digest) != "" {
 		url := spec.Source
+		if tap, ok := findTap(values, spec.Tap); ok && url == "" {
+			url = tapArtifactURL(tap, spec.ID, spec.Version)
+		}
 		if url == "" {
 			url = fmt.Sprintf("%s/grafts/%s/%s/%s-%s.graft", graftMarketURL(values), spec.ID, spec.Version, spec.ID, spec.Version)
 		}
@@ -1048,14 +1133,12 @@ func graftUpgrade(c *cli.Context, ids []string, flags map[string]bool, apply boo
 		c.Printf("no grafts installed\n")
 		return nil
 	}
-	index, err := loadMarket(values)
-	if err != nil {
-		return fmt.Errorf("could not reach the Extension Marketplace: %w", err)
-	}
+	index, marketErr := loadMarket(values)
 	info, err := instanceInfo(c)
 	if err != nil {
 		return err
 	}
+	tapIndexes := map[string]marketIndex{}
 	changed := false
 	for _, s := range specs {
 		if len(ids) > 0 && !contains(ids, s.ID) {
@@ -1065,16 +1148,37 @@ func graftUpgrade(c *cli.Context, ids []string, flags map[string]bool, apply boo
 			c.Printf("%s was installed from a file; upgrade it with orchardctl graft add <newer file>\n", s.ID)
 			continue
 		}
-		g, ok := index.find(s.ID)
+		source := index
+		if s.Tap != "" {
+			tapIndex, ok := tapIndexes[s.Tap]
+			if !ok {
+				tap, found := findTap(values, s.Tap)
+				if !found {
+					c.Warnf("%s comes from the %s tap, which is no longer configured\n", s.ID, s.Tap)
+					continue
+				}
+				loaded, err := loadTapIndex(tap)
+				if err != nil {
+					c.Warnf("%v\n", err)
+					continue
+				}
+				tapIndex = loaded
+				tapIndexes[s.Tap] = tapIndex
+			}
+			source = tapIndex
+		} else if marketErr != nil {
+			return fmt.Errorf("could not reach the Extension Marketplace: %w", marketErr)
+		}
+		g, ok := source.find(s.ID)
 		if !ok {
 			continue
 		}
-		v, ok := newestCompatible(g, info.Platform, index)
+		v, ok := newestCompatible(g, info.Platform, source)
 		if !ok || !versionLess(s.Version, v.Version) {
 			c.Printf("%s %s is up to date\n", s.ID, s.Version)
 			continue
 		}
-		next := graftSpec{ID: s.ID, Version: v.Version, Digest: v.Digest}
+		next := graftSpec{ID: s.ID, Version: v.Version, Digest: v.Digest, Tap: s.Tap}
 		if err := installSpec(c, values, next, nil, flags, false); err != nil {
 			return err
 		}
@@ -1233,4 +1337,16 @@ func graftRollback(c *cli.Context, id string, flags map[string]bool, apply bool)
 	}
 	c.Printf("%s is back to %s in your values\n", id, last.Spec.Version)
 	return maybeApply(c, apply)
+}
+
+func specOrigin(s graftSpec) string {
+	switch {
+	case s.Tap != "":
+		return "the " + s.Tap + " tap"
+	case strings.HasPrefix(s.Source, "orchard://"):
+		return "an uploaded file"
+	case s.Source != "":
+		return s.Source
+	}
+	return "the Extension Marketplace"
 }

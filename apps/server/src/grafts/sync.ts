@@ -3,7 +3,17 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync 
 import { join, resolve } from 'node:path';
 import { Client } from 'pg';
 import { z } from 'zod';
-import { publisherKeysFromEnv, trustPolicyFromEnv, verifyGraftDir } from './integrity';
+import {
+  graftTrustFromEnv,
+  LISTING_FILE,
+  LISTING_SIG_FILE,
+  ORIGIN_FILE,
+  signedByOrchard,
+  TAP_NAME,
+  verifyGraftDir,
+  type GraftOrigin,
+  type GraftTap
+} from './integrity';
 import { parseManifest } from './manifest';
 import { extractTarGz } from './untar';
 
@@ -15,7 +25,8 @@ const specSchema = z.array(
       id: z.string().regex(/^[a-z][a-z0-9-]{1,47}$/),
       version: z.string(),
       source: z.string().optional(),
-      digest: z.string().optional()
+      digest: z.string().optional(),
+      tap: z.string().regex(TAP_NAME).optional()
     })
     .strict()
 );
@@ -24,7 +35,7 @@ export type GraftSpec = z.infer<typeof specSchema>[number];
 
 export type SyncFailure = { id: string; reason: string };
 
-export type SyncResult = { synced: string[]; failed: SyncFailure[] };
+export type SyncResult = { synced: string[]; failed: SyncFailure[]; warnings: string[] };
 
 export const SYNC_STATUS_FILE = 'sync-status.json';
 
@@ -44,9 +55,31 @@ export function parseGraftSpecs(raw: string | undefined): GraftSpec[] {
   return parsed.data;
 }
 
-export function artifactUrl(spec: GraftSpec, marketplace: string): string {
+function trimBase(url: string): string {
+  return url.replace(/\/+$/, '');
+}
+
+export function graftOrigin(spec: GraftSpec): GraftOrigin {
+  if (spec.tap) return { source: 'tap', tap: spec.tap };
+  if (spec.source?.startsWith('orchard://')) return { source: 'stored' };
+  if (spec.source) return { source: 'url' };
+  return { source: 'marketplace' };
+}
+
+export function artifactUrl(spec: GraftSpec, marketplace: string, taps: GraftTap[] = []): string {
+  const file = `grafts/${spec.id}/${spec.version}/${spec.id}-${spec.version}.graft`;
+  if (spec.tap) {
+    if (spec.source) throw new Error('set either tap or source, not both');
+    const tap = taps.find((t) => t.name === spec.tap);
+    if (!tap) {
+      throw new Error(
+        `tap ${spec.tap} is not configured; add it with orchardctl graft tap add or graftSettings.taps`
+      );
+    }
+    return `${trimBase(tap.url)}/${file}`;
+  }
   if (spec.source) return spec.source;
-  return `${marketplace.replace(/\/+$/, '')}/grafts/${spec.id}/${spec.version}/${spec.id}-${spec.version}.graft`;
+  return `${trimBase(marketplace)}/${file}`;
 }
 
 function normaliseDigest(digest: string): string {
@@ -74,7 +107,8 @@ async function fetchStored(digest: string, databaseUrl: string | undefined): Pro
 export async function fetchArtifact(
   url: string,
   allowHttp: boolean,
-  databaseUrl?: string
+  databaseUrl?: string,
+  timeoutMs?: number
 ): Promise<Buffer> {
   if (url.startsWith('orchard://')) return fetchStored(url.slice('orchard://'.length), databaseUrl);
   if (url.startsWith('file://')) return readFileSync(new URL(url));
@@ -85,9 +119,74 @@ export async function fetchArtifact(
     throw new Error('plain http sources need ORCHARD_GRAFTS_ALLOW_HTTP=1');
   if (!url.startsWith('https://') && !url.startsWith('http://'))
     throw new Error(`unsupported graft source ${url}`);
-  const res = await fetch(url, { redirect: 'follow' });
+  const res = await fetch(url, {
+    redirect: 'follow',
+    ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {})
+  });
   if (!res.ok) throw new Error(`download failed: ${res.status} ${res.statusText} for ${url}`);
   return Buffer.from(await res.arrayBuffer());
+}
+
+const MARKETPLACE_TIMEOUT_MS = 15_000;
+
+export async function fetchRevoked(
+  marketplace: string,
+  allowHttp: boolean
+): Promise<{ revoked: Set<string> | null; warning?: string }> {
+  try {
+    const body = await fetchArtifact(
+      `${trimBase(marketplace)}/grafts/index.json`,
+      allowHttp,
+      undefined,
+      MARKETPLACE_TIMEOUT_MS
+    );
+    const revoked = (JSON.parse(body.toString('utf8')) as { revoked?: unknown }).revoked;
+    return {
+      revoked: new Set(
+        (Array.isArray(revoked) ? revoked : [])
+          .filter((d): d is string => typeof d === 'string')
+          .map((d) => `sha256:${normaliseDigest(d)}`)
+      )
+    };
+  } catch (err) {
+    return {
+      revoked: null,
+      warning: `could not read the Extension Marketplace catalog, so revoked versions were not checked: ${(err as Error).message}`
+    };
+  }
+}
+
+export function revocationProblem(
+  revoked: Set<string> | null,
+  spec: Pick<GraftSpec, 'id' | 'version'>,
+  digest: string
+): string | null {
+  if (!revoked?.has(`sha256:${normaliseDigest(digest)}`)) return null;
+  return `${spec.id} ${spec.version} (sha256:${normaliseDigest(digest)}) was revoked by the Extension Marketplace; install another version`;
+}
+
+export async function recordOrigin(
+  spec: GraftSpec,
+  dir: string,
+  marketplace: string,
+  allowHttp: boolean
+): Promise<string | null> {
+  const origin = graftOrigin(spec);
+  writeFileSync(join(dir, ORIGIN_FILE), JSON.stringify(origin));
+  if (origin.source !== 'marketplace' || !existsSync(join(dir, 'MANIFEST.sig'))) return null;
+  if (signedByOrchard(dir)) return null;
+  const base = `${trimBase(marketplace)}/grafts/${spec.id}/listing.json`;
+  try {
+    const [listing, signature] = await Promise.all([
+      fetchArtifact(base, allowHttp, undefined, MARKETPLACE_TIMEOUT_MS),
+      fetchArtifact(`${base}.sig`, allowHttp, undefined, MARKETPLACE_TIMEOUT_MS)
+    ]);
+    writeFileSync(join(dir, LISTING_FILE), listing);
+    writeFileSync(join(dir, LISTING_SIG_FILE), signature);
+    return null;
+  } catch (err) {
+    return `could not fetch its marketplace listing: ${(err as Error).message}`;
+  }
 }
 
 export async function syncGrafts(env: NodeJS.ProcessEnv = process.env): Promise<SyncResult> {
@@ -97,17 +196,20 @@ export async function syncGrafts(env: NodeJS.ProcessEnv = process.env): Promise<
   const dev = env.ORCHARD_GRAFTS_DEV === '1' || env.ORCHARD_GRAFTS_DEV === 'true';
   const allowHttp =
     dev || env.ORCHARD_GRAFTS_ALLOW_HTTP === '1' || env.ORCHARD_GRAFTS_ALLOW_HTTP === 'true';
-  const policy = trustPolicyFromEnv(env);
-  const keys = publisherKeysFromEnv(env);
+  const trust = graftTrustFromEnv(env);
   mkdirSync(dest, { recursive: true });
 
-  const result: SyncResult = { synced: [], failed: [] };
+  const result: SyncResult = { synced: [], failed: [], warnings: [] };
+  const { revoked, warning } = specs.length
+    ? await fetchRevoked(marketplace, allowHttp)
+    : { revoked: null };
+  if (warning) result.warnings.push(warning);
   for (const spec of specs) {
     const staging = join(dest, `.staging-${spec.id}`);
     rmSync(staging, { recursive: true, force: true });
     try {
       if (!spec.digest && !dev) throw new Error('digest is required (sha256 of the .graft file)');
-      const url = artifactUrl(spec, marketplace);
+      const url = artifactUrl(spec, marketplace, trust.taps);
       const archive = await fetchArtifact(url, allowHttp, env.DATABASE_URL);
       const actual = createHash('sha256').update(archive).digest('hex');
       if (spec.digest && normaliseDigest(spec.digest) !== actual) {
@@ -115,13 +217,22 @@ export async function syncGrafts(env: NodeJS.ProcessEnv = process.env): Promise<
           `digest mismatch: expected ${normaliseDigest(spec.digest)}, downloaded ${actual}`
         );
       }
+      const revokedProblem = revocationProblem(revoked, spec, actual);
+      if (revokedProblem) throw new Error(revokedProblem);
       extractTarGz(archive, staging);
       const manifest = parseManifest(JSON.parse(readFileSync(join(staging, 'graft.json'), 'utf8')));
       if (manifest.id !== spec.id)
         throw new Error(`artifact is graft ${manifest.id}, not ${spec.id}`);
       if (manifest.version !== spec.version)
         throw new Error(`artifact is version ${manifest.version}, not ${spec.version}`);
-      verifyGraftDir(staging, policy, keys);
+      const listingProblem = await recordOrigin(spec, staging, marketplace, allowHttp);
+      try {
+        verifyGraftDir(staging, trust);
+      } catch (err) {
+        throw new Error(
+          listingProblem ? `${(err as Error).message} (${listingProblem})` : (err as Error).message
+        );
+      }
       const target = join(dest, spec.id);
       rmSync(target, { recursive: true, force: true });
       renameSync(staging, target);

@@ -709,8 +709,21 @@ publicTls:
 grafts: []
 
 graftSettings:
-  trust: signed
+  # Which grafts may load: official (Orchard's own), listed (official,
+  # community grafts from the Extension Marketplace, and grafts signed by a key
+  # in `keys`), taps (listed plus grafts from the taps below) or any (unsigned
+  # too). `signed` is the old name for `listed` and still works.
+  trust: listed
+  # Raw ed25519 publisher keys (base64, as `graft keygen` prints them).
   keys: []
+  # Third-party graft catalogues, added with `orchardctl graft tap add`. Each
+  # needs a name, the https url of the folder holding tap.json, and the tap's
+  # public key. A graft entry with `tap: <name>` downloads from that tap and
+  # must be signed with its key. Taps only load when trust is taps or any.
+  #   - name: acme
+  #     url: https://acme.dev/orchard
+  #     key: <base64 ed25519 public key>
+  taps: []
   marketplaceUrl: ""
   strict: false
   safeMode: false

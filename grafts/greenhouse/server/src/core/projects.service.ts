@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { Doors, type ProjectsDoor } from '@orchard/graft-sdk/server';
+import { Doors, type ProjectsDoor } from '@orchardlabs/graft-sdk/server';
 
 type UserData = Record<string, unknown> | undefined;
 

@@ -21,9 +21,9 @@
 		SquareKanban,
 		X
 	} from 'lucide-svelte';
-	import Menu from '@orchard/graft-ui/components/ui/Menu.svelte';
-	import MenuItem from '@orchard/graft-ui/components/ui/MenuItem.svelte';
-	import StatusDot from '@orchard/graft-ui/components/ui/StatusDot.svelte';
+	import Menu from '@orchardlabs/graft-ui/components/ui/Menu.svelte';
+	import MenuItem from '@orchardlabs/graft-ui/components/ui/MenuItem.svelte';
+	import StatusDot from '@orchardlabs/graft-ui/components/ui/StatusDot.svelte';
 	import { sandboxStatus } from '../../lib/status';
 	import { toasts } from '../../host/stores';
 	import type { Sandbox } from '../../lib/types/sandbox';

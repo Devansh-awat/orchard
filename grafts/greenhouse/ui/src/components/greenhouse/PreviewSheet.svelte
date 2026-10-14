@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { ExternalLink, Trash2 } from 'lucide-svelte';
-	import { Button, Field, Modal, Select } from '@orchard/graft-ui';
-	import StatusDot from '@orchard/graft-ui/components/ui/StatusDot.svelte';
+	import { Button, Field, Modal, Select } from '@orchardlabs/graft-ui';
+	import StatusDot from '@orchardlabs/graft-ui/components/ui/StatusDot.svelte';
 	import { previewStatus } from '../../lib/status';
 	import { organizations, toasts } from '../../host/stores';
 	import * as api from './api';

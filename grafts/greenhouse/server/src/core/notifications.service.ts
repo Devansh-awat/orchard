@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Doors, type NotificationsDoor } from '@orchard/graft-sdk/server';
+import { Doors, type NotificationsDoor } from '@orchardlabs/graft-sdk/server';
 
 export const SANDBOX_NEEDS_INPUT_EVENT = 'sandbox.session.needs_input';
 

@@ -1,4 +1,4 @@
-import { defineGraft, type Mount, type MountHandle } from '@orchard/graft-sdk/client';
+import { defineGraft, type Mount, type MountHandle } from '@orchardlabs/graft-sdk/client';
 import { greenhouseAllowed } from './host/access';
 import { bindHost } from './host/context';
 import { rememberUrlSecret, type UrlSecretKind } from './lib/utils/url-secrets';

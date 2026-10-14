@@ -2,7 +2,7 @@
 	import type { Snippet } from 'svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { Unplug } from 'lucide-svelte';
-	import { Button, EmptyState } from '@orchard/graft-ui';
+	import { Button, EmptyState } from '@orchardlabs/graft-ui';
 	import { sandboxCredentialsQueryOptions } from '../../../lib/queries/sandboxes';
 	import type { ChatSessionStore, RemoteDraft } from './session-store.svelte';
 	import type { SlashCommand, SlashNotice, SlashOption } from './slash-commands';

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { ChevronDown, Plus, Link2 } from 'lucide-svelte';
-	import { PopoverPanel } from '@orchard/graft-ui';
+	import { PopoverPanel } from '@orchardlabs/graft-ui';
 
 	let {
 		accounts = [],

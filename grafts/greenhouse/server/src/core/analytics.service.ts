@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Doors, type FlagsDoor } from '@orchard/graft-sdk/server';
+import { Doors, type FlagsDoor } from '@orchardlabs/graft-sdk/server';
 
 @Injectable()
 export class AnalyticsService {

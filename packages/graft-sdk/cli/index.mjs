@@ -13,6 +13,7 @@ import {
 import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { keyId, tapAdd, tapInit } from './tap.mjs';
 import { tarGz } from './tar.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -274,7 +275,7 @@ function scaffold(dir, id) {
         private: true,
         type: 'module',
         scripts: { build: 'graft build', pack: 'graft pack', dev: 'graft dev' },
-        dependencies: { '@orchard/graft-sdk': '^1.0.0', '@orchard/graft-ui': '^1.0.0' },
+        dependencies: { '@orchardlabs/graft-sdk': '^1.0.0', '@orchardlabs/graft-ui': '^1.0.0' },
         devDependencies: {
           '@nestjs/common': '^11.0.0',
           '@nestjs/core': '^11.0.0',
@@ -304,7 +305,7 @@ function scaffold(dir, id) {
       2
     ),
     'server/src/index.ts': `import { Controller, Get, Inject, Module } from '@nestjs/common';
-import { Auth, Doors, GraftUserId, type ContextDoor } from '@orchard/graft-sdk/server';
+import { Auth, Doors, GraftUserId, type ContextDoor } from '@orchardlabs/graft-sdk/server';
 
 @Controller('hello')
 class HelloController {
@@ -321,7 +322,7 @@ class HelloController {
 export default class GraftModule {}
 `,
     'ui/src/client.ts': `import { mount, unmount } from 'svelte';
-import { defineGraft } from '@orchard/graft-sdk/client';
+import { defineGraft } from '@orchardlabs/graft-sdk/client';
 import Home from './Home.svelte';
 
 export default defineGraft({
@@ -337,8 +338,8 @@ export default defineGraft({
 });
 `,
     'ui/src/Home.svelte': `<script lang="ts">
-  import type { HostApi } from '@orchard/graft-sdk/client';
-  import { Button, SectionCard } from '@orchard/graft-ui';
+  import type { HostApi } from '@orchardlabs/graft-sdk/client';
+  import { Button, SectionCard } from '@orchardlabs/graft-ui';
 
   let { host }: { host: HostApi } = $props();
   const user = host.stores.user;
@@ -443,7 +444,11 @@ const HELP = `graft: build and package Orchard grafts (Orchard's extensions)
                              build, hash every file, sign, and write <id>-<version>.graft
   graft dev [dir]            rebuild on change into .graft-dev/ for a local Orchard
   graft doctor [dir]         check graft.json and migrations for common mistakes
-  graft keygen [file]        create an ed25519 signing key; prints the public key for graftKeys
+  graft keygen [file]        create an ed25519 signing key; prints the public key and its keyId
+  graft tap init <dir> --name <name> --key <pem|base64> [--description <text>]
+                             start a tap: a folder of grafts you host yourself
+  graft tap add <dir> <file.graft>
+                             check a graft is signed with the tap key and publish it in the tap
 
 Grafts run with the same access as Orchard. Only ship what you would install yourself.`;
 
@@ -453,6 +458,40 @@ function flag(args, name) {
   const value = args[i + 1];
   args.splice(i, 2);
   return value;
+}
+
+function tap(args) {
+  const sub = args.shift();
+  try {
+    if (sub === 'init') {
+      const name = flag(args, '--name');
+      const key = flag(args, '--key');
+      const description = flag(args, '--description');
+      if (!args[0] || !name || !key)
+        fail('usage: graft tap init <dir> --name <name> --key <pem|base64> [--description <text>]');
+      const result = tapInit(args[0], { name, privateKey: signingKey({ key }), description });
+      out(`created the ${result.name} tap in ${relative(process.cwd(), result.dir) || '.'}`);
+      out(`public key: ${result.publicKey}`);
+      out(`keyId: ${result.keyId}`);
+      out('');
+      out('serve this folder over https, then on an Orchard host:');
+      out(`  sudo orchardctl graft tap add ${result.name} <https url of this folder>`);
+      return;
+    }
+    if (sub === 'add') {
+      if (!args[0] || !args[1]) fail('usage: graft tap add <dir> <file.graft>');
+      const result = tapAdd(args[0], args[1]);
+      out(`added ${result.id} ${result.version} to the ${result.tap} tap`);
+      out(`digest ${result.digest}`);
+      out(`install with: sudo orchardctl graft add ${result.tap}/${result.id}@${result.version}`);
+      return;
+    }
+  } catch (err) {
+    fail(err.message);
+  }
+  fail(
+    'usage: graft tap init <dir> --name <name> --key <pem|base64> | graft tap add <dir> <file.graft>'
+  );
 }
 
 export async function run(argv) {
@@ -507,8 +546,11 @@ export async function run(argv) {
       const { publicKey } = keygen(args[0]);
       if (args[0]) out(`private key written to ${args[0]}; keep it secret`);
       out(`public key (add to graftSettings.keys): ${publicKey}`);
+      out(`keyId: ${keyId(publicKey)}`);
       return;
     }
+    case 'tap':
+      return tap(args);
     default:
       out(HELP);
       if (command && command !== 'help' && command !== '--help') process.exit(1);

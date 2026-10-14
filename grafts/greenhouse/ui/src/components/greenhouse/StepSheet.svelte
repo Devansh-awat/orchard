@@ -2,8 +2,8 @@
 	import { untrack, type Snippet } from 'svelte';
 	import { animate } from 'motion';
 	import { ArrowLeft } from 'lucide-svelte';
-	import { Modal } from '@orchard/graft-ui';
-	import { motion, motionEnabled, transition } from '@orchard/graft-ui/utils/motion.svelte';
+	import { Modal } from '@orchardlabs/graft-ui';
+	import { motion, motionEnabled, transition } from '@orchardlabs/graft-ui/utils/motion.svelte';
 	import { sheetScrollEdges } from './sheet';
 	import type { StepStack } from './steps.svelte';
 

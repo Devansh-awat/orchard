@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { Github, MessageSquare, SquareKanban } from 'lucide-svelte';
-	import { Button, Field, Input, Skeleton } from '@orchard/graft-ui';
+	import { Button, Field, Input, Skeleton } from '@orchardlabs/graft-ui';
 	import { toasts } from '../../../host/stores';
 	import {
 		connectLinear,

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Input } from '@orchard/graft-ui';
+	import { Input } from '@orchardlabs/graft-ui';
 	import { getGreenhouseApp } from '../app.svelte';
 	import { branchPrefixFor } from '../branch-prefix';
 	import { greenhousePrefs, type BranchPrefixMode } from '../prefs.svelte';

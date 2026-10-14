@@ -7,14 +7,14 @@ sidebar:
 
 A graft is a folder with a `graft.json`, and any of: a NestJS module for the API,
 a Svelte island for the UI, SQL migrations for its own tables and MCP tools for
-agents. The `graft` command in `@orchard/graft-sdk` builds, packs and signs it.
+agents. The `graft` command in `@orchardlabs/graft-sdk` builds, packs and signs it.
 The [announcements graft](https://github.com/hackclub/orchard/tree/main/grafts/announcements)
 in the Orchard repository uses every part and is the best example to copy.
 
 ## Scaffold
 
 ```sh
-npx graft init snippets
+npx -p @orchardlabs/graft-sdk graft init snippets
 cd snippets
 pnpm install
 ```

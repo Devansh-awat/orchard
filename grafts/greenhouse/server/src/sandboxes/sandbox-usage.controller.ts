@@ -1,5 +1,5 @@
 import { Controller, Get, Param, ParseUUIDPipe, Req, UseGuards } from '@nestjs/common';
-import { Auth, RequireScope } from '@orchard/graft-sdk/server';
+import { Auth, RequireScope } from '@orchardlabs/graft-sdk/server';
 import { UsersService } from '../core/users.service';
 import { AnalyticsService } from '../core/analytics.service';
 import { SandboxEnabledGuard } from './sandbox-enabled.guard';

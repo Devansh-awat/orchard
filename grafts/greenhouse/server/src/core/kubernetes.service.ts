@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { KubeConfig } from '@kubernetes/client-node';
-import { Doors, type KubeDoor } from '@orchard/graft-sdk/server';
+import { Doors, type KubeDoor } from '@orchardlabs/graft-sdk/server';
 
 @Injectable()
 export class KubernetesService {

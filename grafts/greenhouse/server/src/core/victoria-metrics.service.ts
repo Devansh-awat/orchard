@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Doors, type MetricsDoor } from '@orchard/graft-sdk/server';
+import { Doors, type MetricsDoor } from '@orchardlabs/graft-sdk/server';
 
 export function escapeLabel(s: string): string {
   return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');

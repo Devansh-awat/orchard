@@ -4,7 +4,7 @@ import {
   type AuthDoor,
   type OrgAccess,
   type ProjectAccess
-} from '@orchard/graft-sdk/server';
+} from '@orchardlabs/graft-sdk/server';
 
 @Injectable()
 export class AuthorizationService {

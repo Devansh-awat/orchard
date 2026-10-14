@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Modal } from '@orchard/graft-ui';
+	import { Button, Modal } from '@orchardlabs/graft-ui';
 	import GitHubRepoPicker, {
 		type PickedRepo
 	} from '../deployment/GitHubRepoPicker.svelte';

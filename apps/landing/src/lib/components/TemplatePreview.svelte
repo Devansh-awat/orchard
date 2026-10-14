@@ -13,7 +13,8 @@
 		icon,
 		href,
 		compact = false,
-		summary = false
+		summary = false,
+		badge
 	}: {
 		name: string;
 		displayName: string;
@@ -25,6 +26,7 @@
 		href?: string;
 		compact?: boolean;
 		summary?: boolean;
+		badge?: string;
 	} = $props();
 
 	const bakes = new Map<string, string | null>();
@@ -147,6 +149,9 @@
 				{/each}
 			</p>
 		</div>
+		{#if badge}
+			<span class="count">{badge}</span>
+		{/if}
 		{#if !summary}
 			<span class="count"><span class="led" aria-hidden="true"></span>{resources.length}</span>
 		{/if}

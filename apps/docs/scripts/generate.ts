@@ -413,7 +413,7 @@ never changes shape: a change ships as a new version next to the old one, which
 stays for at least one major release. \`graft pack\` records which doors a graft
 uses, and \`orchardctl graft add\` refuses a graft that needs a door this Orchard
 does not have. Inject a door with \`@Inject(Doors.<name>)\` from
-\`@orchard/graft-sdk/server\`.
+\`@orchardlabs/graft-sdk/server\`.
 
 ${doors.length} doors are available.
 

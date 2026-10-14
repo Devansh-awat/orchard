@@ -1,8 +1,20 @@
 {
-  "name": "@orchard/graft-ui",
+  "name": "@orchardlabs/graft-ui",
   "version": "1.0.0",
-  "private": true,
+  "description": "Orchard's UI components and design tokens for graft screens",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hackclub/orchard.git",
+    "directory": "packages/graft-ui"
+  },
+  "homepage": "https://orchard.my/extensions",
   "type": "module",
+  "files": [
+    "src"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "svelte": "./src/index.ts",
   "exports": {
     ".": {
@@ -16,7 +28,8 @@
   },
   "scripts": {
     "sync": "node scripts/sync.mjs",
-    "prepare": "node scripts/sync.mjs"
+    "prepare": "node scripts/sync.mjs",
+    "prepack": "node scripts/sync.mjs"
   },
   "dependencies": {
     "lucide-svelte": "^0.510.0",

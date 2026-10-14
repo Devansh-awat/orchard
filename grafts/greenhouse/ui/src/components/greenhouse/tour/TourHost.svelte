@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { motion } from '@orchard/graft-ui/utils/motion.svelte';
+	import { motion } from '@orchardlabs/graft-ui/utils/motion.svelte';
 
 	const SEEN = 'greenhouse-tour-seen';
 

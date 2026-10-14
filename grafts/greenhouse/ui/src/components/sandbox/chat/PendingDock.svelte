@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { SvelteSet } from 'svelte/reactivity';
-	import { Avatar } from '@orchard/graft-ui';
+	import { Avatar } from '@orchardlabs/graft-ui';
 	import { slide } from '../../../lib/utils/transitions';
 	import { planHandoff, waitingOn, type AgentRequest, type RequestAuthor } from './pending';
 	import type { ChatSessionStore, UserEntry } from './session-store.svelte';

@@ -82,7 +82,7 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
 	import { ChevronDown, Github, Loader2, X } from 'lucide-svelte';
-	import { Badge, Input, PopoverPanel } from '@orchard/graft-ui';
+	import { Badge, Input, PopoverPanel } from '@orchardlabs/graft-ui';
 	import RepoAccountPicker from './RepoAccountPicker.svelte';
 
 	interface Repository {

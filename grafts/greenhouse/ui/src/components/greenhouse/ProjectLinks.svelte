@@ -99,7 +99,7 @@
 
 <script lang="ts">
 	import { FolderGit2, X } from 'lucide-svelte';
-	import { Field, Select } from '@orchard/graft-ui';
+	import { Field, Select } from '@orchardlabs/graft-ui';
 	import { toasts } from '../../host/stores';
 	import { getGreenhouseApp } from './app.svelte';
 	import FormError from './FormError.svelte';

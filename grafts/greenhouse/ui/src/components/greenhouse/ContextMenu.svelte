@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import Menu from '@orchard/graft-ui/components/ui/Menu.svelte';
+	import Menu from '@orchardlabs/graft-ui/components/ui/Menu.svelte';
 
 	let {
 		open = $bindable(false),

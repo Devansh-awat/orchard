@@ -12,6 +12,7 @@
 	let { data }: PageProps = $props();
 
 	const m = $derived(data.manifest);
+	const community = $derived(data.tier === 'community');
 	const v = $derived(data.latest);
 	const caps = $derived(new Set(v.capabilities ?? m.capabilities ?? []));
 	const schema = $derived(`ext_${m.id.replaceAll('-', '_')}`);
@@ -117,18 +118,35 @@
 				<p class="title-in lead mt-5" style:animation-delay="0.2s">{m.description}</p>
 			{/if}
 			<div class="title-in facts mt-6" style:animation-delay="0.25s">
-				<span class="fact">by {m.publisher}</span>
+				{#if community}
+					<span class="fact fact-tier">Community · by {data.publisher}</span>
+				{:else}
+					<span class="fact fact-tier">Official</span>
+					<span class="fact">by {m.publisher}</span>
+				{/if}
 				<span class="fact">v{v.version}</span>
-				<span class="fact">{v.signed ? 'Signed' : 'Unsigned'}</span>
 				{#if m.engines?.platform}
 					<span class="fact">Orchard {m.engines.platform}</span>
 				{/if}
 			</div>
-			{#if m.homepage}
+			{#if community}
+				<p class="title-in note mt-6" style:animation-delay="0.28s">
+					Published by {data.publisher}{#if data.repo}&nbsp;(github.com/{data.repo}){/if}, not by
+					Orchard. Orchard checked it when it was listed, but does not review its updates.
+				</p>
+			{/if}
+			{#if m.homepage || data.repo}
 				<div class="title-in mt-8 flex flex-wrap gap-3" style:animation-delay="0.3s">
-					<a href={m.homepage} class="ghost-button">
-						Project site <ArrowUpRight size={16} aria-hidden="true" />
-					</a>
+					{#if data.repo}
+						<a href="https://github.com/{data.repo}" class="ghost-button">
+							Source on GitHub <ArrowUpRight size={16} aria-hidden="true" />
+						</a>
+					{/if}
+					{#if m.homepage && m.homepage !== `https://github.com/${data.repo}`}
+						<a href={m.homepage} class="ghost-button">
+							Project site <ArrowUpRight size={16} aria-hidden="true" />
+						</a>
+					{/if}
 				</div>
 			{/if}
 		</div>
@@ -152,7 +170,9 @@
 						<h3 class="font-semibold text-crimson-deep">Everything Orchard can reach</h3>
 						<p class="mt-1 text-pretty text-crimson-deep">
 							A graft runs inside Orchard with the same access Orchard has. The list above is what
-							it says it needs, not a sandbox. Install it if you trust {m.publisher}.
+							it says it needs, not a sandbox. Install it if you trust {community
+								? data.publisher
+								: m.publisher}.
 						</p>
 					</li>
 				</ul>
@@ -246,6 +266,20 @@
 		padding: 0.3rem 0.75rem;
 		background: rgb(255 255 255 / 0.14);
 		box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.3);
+	}
+
+	.fact-tier {
+		background: #fff;
+		color: var(--color-crimson-deep);
+		font-weight: 700;
+	}
+
+	.note {
+		max-width: 680px;
+		font-size: 0.95rem;
+		line-height: 1.5;
+		text-wrap: pretty;
+		opacity: 0.92;
 	}
 
 	.title-in {

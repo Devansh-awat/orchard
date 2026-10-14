@@ -24,7 +24,7 @@ import {
   rotateMachineSecrets,
   type McpRotationSessions
 } from './sandbox-member-offboarding';
-import { Doors } from '@orchard/graft-sdk/server';
+import { Doors } from '@orchardlabs/graft-sdk/server';
 
 export const PUBLIC_USER_SELECT = {
   id: true,

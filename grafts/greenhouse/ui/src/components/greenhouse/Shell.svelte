@@ -3,8 +3,8 @@
 	import './greenhouse.css';
 	import { tick, untrack } from 'svelte';
 	import { MessageSquare, GitCompare, PanelsTopLeft } from 'lucide-svelte';
-	import { Button, Input, Modal } from '@orchard/graft-ui';
-	import Skeleton from '@orchard/graft-ui/components/ui/Skeleton.svelte';
+	import { Button, Input, Modal } from '@orchardlabs/graft-ui';
+	import Skeleton from '@orchardlabs/graft-ui/components/ui/Skeleton.svelte';
 	import { toasts } from '../../host/stores';
 	import type { SandboxListResponse } from '../../lib/types/sandbox';
 	import * as api from './api';

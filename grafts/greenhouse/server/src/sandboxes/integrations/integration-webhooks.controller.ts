@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
-import { Public } from '@orchard/graft-sdk/server';
+import { Public } from '@orchardlabs/graft-sdk/server';
 import { LinearKickoffService } from './linear-kickoff.service';
 import { SlackKickoffService } from './slack-kickoff.service';
 

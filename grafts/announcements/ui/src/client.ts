@@ -1,5 +1,5 @@
 import { mount, unmount } from 'svelte';
-import { defineGraft, type HostApi, type Mount } from '@orchard/graft-sdk/client';
+import { defineGraft, type HostApi, type Mount } from '@orchardlabs/graft-sdk/client';
 import Banner from './Banner.svelte';
 import Manage from './Manage.svelte';
 

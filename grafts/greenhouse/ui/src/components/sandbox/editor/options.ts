@@ -1,5 +1,5 @@
 import type * as Monaco from 'monaco-editor';
-import type { EffectiveAnimationLevel } from '@orchard/graft-ui/stores/preferences';
+import type { EffectiveAnimationLevel } from '@orchardlabs/graft-ui/stores/preferences';
 import type { TerminalCursor } from '../../../lib/stores/terminal-display.svelte';
 import { monoFontFor } from '../../../lib/terminal/font';
 import type { MonacoApi } from './load';

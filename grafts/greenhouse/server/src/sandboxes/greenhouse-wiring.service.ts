@@ -8,7 +8,7 @@ import {
   type HttpDoor,
   type KubeDoor,
   type MirrorShard
-} from '@orchard/graft-sdk/server';
+} from '@orchardlabs/graft-sdk/server';
 import { PrismaService } from '../prisma.service';
 import { AnalyticsService } from '../core/analytics.service';
 import { AuditService } from '../core/audit.service';

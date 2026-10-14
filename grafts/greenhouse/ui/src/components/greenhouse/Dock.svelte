@@ -13,11 +13,11 @@
 		Wand2,
 		X
 	} from 'lucide-svelte';
-	import Menu from '@orchard/graft-ui/components/ui/Menu.svelte';
-	import MenuItem from '@orchard/graft-ui/components/ui/MenuItem.svelte';
-	import StatusDot from '@orchard/graft-ui/components/ui/StatusDot.svelte';
+	import Menu from '@orchardlabs/graft-ui/components/ui/Menu.svelte';
+	import MenuItem from '@orchardlabs/graft-ui/components/ui/MenuItem.svelte';
+	import StatusDot from '@orchardlabs/graft-ui/components/ui/StatusDot.svelte';
 	import { statusMeta } from '../../lib/status';
-	import { springRotate } from '@orchard/graft-ui/utils/motion.svelte';
+	import { springRotate } from '@orchardlabs/graft-ui/utils/motion.svelte';
 	import { whenIdle } from '../../lib/utils/idle';
 	import { Lazy } from '../../lib/utils/lazy.svelte';
 	import { getGreenhouseApp } from './app.svelte';

@@ -32,6 +32,8 @@ jobs:
       gateway_v: ${{ steps.rp1.outputs['apps/gateway--version'] || steps.rp2.outputs['apps/gateway--version'] || steps.rp3.outputs['apps/gateway--version'] }}
       cli: ${{ steps.rp1.outputs['apps/cli--release_created'] || steps.rp2.outputs['apps/cli--release_created'] || steps.rp3.outputs['apps/cli--release_created'] }}
       cli_v: ${{ steps.rp1.outputs['apps/cli--version'] || steps.rp2.outputs['apps/cli--version'] || steps.rp3.outputs['apps/cli--version'] }}
+      graft_sdk: ${{ steps.rp1.outputs['packages/graft-sdk--release_created'] || steps.rp2.outputs['packages/graft-sdk--release_created'] || steps.rp3.outputs['packages/graft-sdk--release_created'] }}
+      graft_ui: ${{ steps.rp1.outputs['packages/graft-ui--release_created'] || steps.rp2.outputs['packages/graft-ui--release_created'] || steps.rp3.outputs['packages/graft-ui--release_created'] }}
     steps:
       - uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
         id: app-token
@@ -173,6 +175,46 @@ jobs:
             apps/cli/dist/*.zip \
             apps/cli/dist/checksums.txt \
             --clobber --repo "$GITHUB_REPOSITORY"
+
+  # Publishes the graft SDK and UI kit to npm when release-please cuts them, so
+  # graft authors outside this repo can install them. npm trusted publishing
+  # (OIDC) authenticates this exact workflow file, so the step must stay in
+  # release.yml and the job must not move into a reusable workflow. Provenance
+  # is automatic. A version already on npm is left alone, so re-runs are safe.
+  npm-publish:
+    needs: release-please
+    if: needs.release-please.outputs.graft_sdk == 'true' || needs.release-please.outputs.graft_ui == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@latest
+      - name: Publish @orchardlabs/graft-sdk and @orchardlabs/graft-ui
+        env:
+          SDK_RELEASED: ${{ needs.release-please.outputs.graft_sdk }}
+          UI_RELEASED: ${{ needs.release-please.outputs.graft_ui }}
+        run: |
+          set -euo pipefail
+          publish() {
+            local dir="$1" released="$2" name version
+            [ "$released" = "true" ] || return 0
+            name=$(node -p "require('./$dir/package.json').name")
+            version=$(node -p "require('./$dir/package.json').version")
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "$name@$version is already on npm"
+              return 0
+            fi
+            (cd "$dir" && npm publish --access public)
+            echo "published $name@$version"
+          }
+          publish packages/graft-sdk "$SDK_RELEASED"
+          publish packages/graft-ui "$UI_RELEASED"
 
   # Runs after the (possibly-skipped) image jobs as long as none FAILED.
   publish-chart:

@@ -1,8 +1,8 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { ArrowDown } from 'lucide-svelte';
-	import { Skeleton } from '@orchard/graft-ui';
-	import { decorativeMotion } from '@orchard/graft-ui/utils/motion.svelte';
+	import { Skeleton } from '@orchardlabs/graft-ui';
+	import { decorativeMotion } from '@orchardlabs/graft-ui/utils/motion.svelte';
 	import { fade } from '../../../lib/utils/transitions';
 	import { commentTime, type ChatSessionStore } from './session-store.svelte';
 	import { buildChunks, railMarks, type ChunkRow } from './turns';

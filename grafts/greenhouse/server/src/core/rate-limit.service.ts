@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Doors, type RateLimitDoor, type RateLimitIdentifier } from '@orchard/graft-sdk/server';
+import { Doors, type RateLimitDoor, type RateLimitIdentifier } from '@orchardlabs/graft-sdk/server';
 
 const FIFTEEN_MINUTES = 15 * 60 * 1000;
 const FIVE_MINUTES = 5 * 60 * 1000;

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Field, Input, Modal } from '@orchard/graft-ui';
+	import { Button, Field, Input, Modal } from '@orchardlabs/graft-ui';
 	import { queryClient } from '../../host/query';
 	import { toasts } from '../../host/stores';
 	import * as api from './api';

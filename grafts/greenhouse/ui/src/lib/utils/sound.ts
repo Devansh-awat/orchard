@@ -1,7 +1,7 @@
 import { play, setEnabled } from 'cuelume';
 import { get } from 'svelte/store';
 import { browser } from '../../host/environment';
-import { soundCues } from '@orchard/graft-ui/stores/preferences';
+import { soundCues } from '@orchardlabs/graft-ui/stores/preferences';
 import { CueGate, cueForBuildEvent, type Cue } from './sound-cues';
 
 const gate = new CueGate();

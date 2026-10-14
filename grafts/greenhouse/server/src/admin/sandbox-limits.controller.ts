@@ -10,7 +10,7 @@ import {
   Put,
   Query
 } from '@nestjs/common';
-import { GraftUserId, SuperAdmin } from '@orchard/graft-sdk/server';
+import { GraftUserId, SuperAdmin } from '@orchardlabs/graft-sdk/server';
 import { PrismaService } from '../prisma.service';
 import { AuditService } from '../core/audit.service';
 

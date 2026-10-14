@@ -1,5 +1,5 @@
 import { derived, writable, type Readable } from 'svelte/store';
-import type { ApiInit, HostOrg, HostUser } from '@orchard/graft-sdk/client';
+import type { ApiInit, HostOrg, HostUser } from '@orchardlabs/graft-sdk/client';
 import { relay, useHost } from './context';
 
 export type IslandUser = HostUser;

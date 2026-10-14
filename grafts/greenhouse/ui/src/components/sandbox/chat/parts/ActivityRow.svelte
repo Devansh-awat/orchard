@@ -2,7 +2,7 @@
 	import { untrack } from 'svelte';
 	import { ChevronRight, CircleX, ListCollapse } from 'lucide-svelte';
 	import { greenhousePrefs } from '../../../greenhouse/prefs.svelte';
-	import { springRotate } from '@orchard/graft-ui/utils/motion.svelte';
+	import { springRotate } from '@orchardlabs/graft-ui/utils/motion.svelte';
 	import { fade, slide } from '../../../../lib/utils/transitions';
 	import type { ChatSessionStore } from '../session-store.svelte';
 	import { liveWindow, summarize, workedLabel, type AgentBlock } from '../turns';

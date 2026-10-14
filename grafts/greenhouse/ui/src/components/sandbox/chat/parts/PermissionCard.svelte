@@ -10,9 +10,9 @@
 		SquareTerminal,
 		Wrench
 	} from 'lucide-svelte';
-	import { Button } from '@orchard/graft-ui';
+	import { Button } from '@orchardlabs/graft-ui';
 	import { modKey } from '../../../greenhouse/format';
-	import { springRotate } from '@orchard/graft-ui/utils/motion.svelte';
+	import { springRotate } from '@orchardlabs/graft-ui/utils/motion.svelte';
 	import { slide } from '../../../../lib/utils/transitions';
 	import { describePermission, type PermissionIcon, type PermissionRequest } from '../pending';
 	import type { ChatSessionStore } from '../session-store.svelte';

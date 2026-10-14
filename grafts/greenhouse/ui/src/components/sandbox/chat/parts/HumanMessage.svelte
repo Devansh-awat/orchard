@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Bot, MessageCircle } from 'lucide-svelte';
-	import { Avatar } from '@orchard/graft-ui';
+	import { Avatar } from '@orchardlabs/graft-ui';
 	import { slide } from '../../../../lib/utils/transitions';
 	import type { OcAttachment } from '../../opencode';
 	import type { ChatAuthor } from '../session-store.svelte';

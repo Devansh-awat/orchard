@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Check } from 'lucide-svelte';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { Button, Field, Input, Select } from '@orchard/graft-ui';
+	import { Button, Field, Input, Select } from '@orchardlabs/graft-ui';
 	import { sshIdentitiesQueryOptions } from '../../../lib/queries/sandboxes';
 	import { getGreenhouseApp } from '../app.svelte';
 	import { toasts } from '../../../host/stores';

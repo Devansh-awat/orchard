@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button } from '@orchard/graft-ui';
+	import { Button } from '@orchardlabs/graft-ui';
 	import { toasts } from '../../../host/stores';
 	import type { Sandbox } from '../../../lib/types/sandbox';
 	import { hostOnly } from '../workspace.svelte';

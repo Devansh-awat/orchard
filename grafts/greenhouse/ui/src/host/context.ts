@@ -1,5 +1,5 @@
 import { writable, type Readable } from 'svelte/store';
-import type { HostApi } from '@orchard/graft-sdk/client';
+import type { HostApi } from '@orchardlabs/graft-sdk/client';
 
 let current: HostApi | null = null;
 const bound = writable<HostApi | null>(null);

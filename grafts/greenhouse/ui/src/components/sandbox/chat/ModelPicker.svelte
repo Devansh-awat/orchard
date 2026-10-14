@@ -12,8 +12,8 @@
 		Star
 	} from 'lucide-svelte';
 	import type { Placement } from '@floating-ui/dom';
-	import { PopoverPanel } from '@orchard/graft-ui';
-	import { motion } from '@orchard/graft-ui/utils/motion.svelte';
+	import { PopoverPanel } from '@orchardlabs/graft-ui';
+	import { motion } from '@orchardlabs/graft-ui/utils/motion.svelte';
 	import {
 		ocEffortLabel,
 		ocIsFast,

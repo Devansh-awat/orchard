@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Input, SegmentedControl, Select } from '@orchard/graft-ui';
+	import { Button, Input, SegmentedControl, Select } from '@orchardlabs/graft-ui';
 	import { useHost } from '../../../host/context';
 	import {
 		CODE_MAX,

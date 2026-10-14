@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { ArrowDownUp, Clock, Cpu, HardDrive, MemoryStick, Moon, Server } from 'lucide-svelte';
-	import EmptyState from '@orchard/graft-ui/components/ui/EmptyState.svelte';
-	import Skeleton from '@orchard/graft-ui/components/ui/Skeleton.svelte';
+	import EmptyState from '@orchardlabs/graft-ui/components/ui/EmptyState.svelte';
+	import Skeleton from '@orchardlabs/graft-ui/components/ui/Skeleton.svelte';
 	import { usageView, type ResourceKey } from './machine-usage';
 	import { UsagePoll, levelStatus } from './usage-live.svelte';
 	import type { Sandbox } from '../../lib/types/sandbox';

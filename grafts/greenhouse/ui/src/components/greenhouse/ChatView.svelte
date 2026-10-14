@@ -3,7 +3,7 @@
 	import { untrack } from 'svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { Eye, Play } from 'lucide-svelte';
-	import ConfirmModal from '@orchard/graft-ui/components/ConfirmModal.svelte';
+	import ConfirmModal from '@orchardlabs/graft-ui/components/ConfirmModal.svelte';
 	import { ChatPanel, PendingDock, Transcript } from '../sandbox/chat/index';
 	import NewChat from '../sandbox/chat/NewChat.svelte';
 	import {
@@ -13,7 +13,7 @@
 		type ContextPlan
 	} from '../sandbox/chat/context-attach';
 	import { isPlanFile, planLabel } from '../sandbox/chat/steps';
-	import Skeleton from '@orchard/graft-ui/components/ui/Skeleton.svelte';
+	import Skeleton from '@orchardlabs/graft-ui/components/ui/Skeleton.svelte';
 	import { sandboxBootQueryOptions } from '../../lib/queries/sandboxes';
 	import * as api from './api';
 	import { getGreenhouseApp } from './app.svelte';

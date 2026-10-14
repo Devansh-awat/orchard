@@ -9,8 +9,8 @@
     "dev": "graft dev"
   },
   "dependencies": {
-    "@orchard/graft-sdk": "workspace:*",
-    "@orchard/graft-ui": "workspace:*"
+    "@orchardlabs/graft-sdk": "workspace:*",
+    "@orchardlabs/graft-ui": "workspace:*"
   },
   "devDependencies": {
     "@nestjs/common": "^11.2.3",

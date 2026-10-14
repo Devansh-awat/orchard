@@ -4,6 +4,12 @@ import { dirname, join, relative, resolve } from 'node:path';
 const pkg = resolve(import.meta.dirname, '..');
 const lib = resolve(pkg, '../../apps/frontend/src/lib');
 const out = join(pkg, 'src');
+if (!existsSync(lib)) {
+  if (!existsSync(join(out, 'index.ts')))
+    throw new Error('graft-ui: apps/frontend/src/lib is missing; run this inside the Orchard repo');
+  process.stdout.write('graft-ui: no apps/frontend here; keeping the synced src\n');
+  process.exit(0);
+}
 const EXTRA = ['components/ConfirmModal.svelte'];
 const STATEMENT =
   /(?:import|export)\s+(type\s+)?[^'"]*?from\s*(['"])([^'"]+)\2|import\s*\(\s*(['"])([^'"]+)\4\s*\)|import\s+(['"])([^'"]+)\6/g;

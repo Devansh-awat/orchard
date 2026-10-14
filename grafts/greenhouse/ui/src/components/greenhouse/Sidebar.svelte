@@ -11,11 +11,11 @@
 		SmilePlus,
 		Trash2
 	} from 'lucide-svelte';
-	import ConfirmModal from '@orchard/graft-ui/components/ConfirmModal.svelte';
-	import Avatar from '@orchard/graft-ui/components/ui/Avatar.svelte';
-	import MenuItem from '@orchard/graft-ui/components/ui/MenuItem.svelte';
+	import ConfirmModal from '@orchardlabs/graft-ui/components/ConfirmModal.svelte';
+	import Avatar from '@orchardlabs/graft-ui/components/ui/Avatar.svelte';
+	import MenuItem from '@orchardlabs/graft-ui/components/ui/MenuItem.svelte';
 	import { user } from '../../host/stores';
-	import { springCollapse, springRotate } from '@orchard/graft-ui/utils/motion.svelte';
+	import { springCollapse, springRotate } from '@orchardlabs/graft-ui/utils/motion.svelte';
 	import { getGreenhouseApp } from './app.svelte';
 	import ContextMenu from './ContextMenu.svelte';
 	import MachineMenu from './MachineMenu.svelte';

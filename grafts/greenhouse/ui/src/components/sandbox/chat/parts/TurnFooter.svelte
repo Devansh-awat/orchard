@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Check, Copy, Ellipsis, GitFork, Undo2 } from 'lucide-svelte';
-	import { Menu, MenuItem } from '@orchard/graft-ui';
+	import { Menu, MenuItem } from '@orchardlabs/graft-ui';
 	import type { ResultEntry } from '../session-store.svelte';
 	import { fmtClock, fmtCost, fmtDuration } from '../format';
 

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Github, RotateCcw } from 'lucide-svelte';
-	import PopoverPanel from '@orchard/graft-ui/components/ui/PopoverPanel.svelte';
+	import PopoverPanel from '@orchardlabs/graft-ui/components/ui/PopoverPanel.svelte';
 	import RepoIcon from './RepoIcon.svelte';
 	import { REPO_EMOJI, REPO_ICON_LUCIDE, isRepoEmoji, repoIconLabel } from './repo-icon';
 	import type { GhRepo } from './types';

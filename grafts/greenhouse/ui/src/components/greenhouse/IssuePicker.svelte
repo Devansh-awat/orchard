@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { CircleDot, X } from 'lucide-svelte';
-	import PopoverPanel from '@orchard/graft-ui/components/ui/PopoverPanel.svelte';
-	import SegmentedControl from '@orchard/graft-ui/components/ui/SegmentedControl.svelte';
-	import Skeleton from '@orchard/graft-ui/components/ui/Skeleton.svelte';
+	import PopoverPanel from '@orchardlabs/graft-ui/components/ui/PopoverPanel.svelte';
+	import SegmentedControl from '@orchardlabs/graft-ui/components/ui/SegmentedControl.svelte';
+	import Skeleton from '@orchardlabs/graft-ui/components/ui/Skeleton.svelte';
 	import * as api from './api';
 	import { getGreenhouseApp } from './app.svelte';
 	import { linearIssues } from './integrations';

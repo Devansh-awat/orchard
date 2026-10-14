@@ -9,7 +9,7 @@
 		Pencil,
 		Trash2
 	} from 'lucide-svelte';
-	import MenuItem from '@orchard/graft-ui/components/ui/MenuItem.svelte';
+	import MenuItem from '@orchardlabs/graft-ui/components/ui/MenuItem.svelte';
 	import { toasts } from '../../host/stores';
 	import AvatarStack from './AvatarStack.svelte';
 	import ContextMenu from './ContextMenu.svelte';

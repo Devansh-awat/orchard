@@ -9,7 +9,7 @@
 		Modal,
 		PageHeader,
 		Skeleton
-	} from '@orchard/graft-ui';
+	} from '@orchardlabs/graft-ui';
 	import { isSuperAdmin, toasts } from '../host/stores';
 	import { useHost } from '../host/context';
 

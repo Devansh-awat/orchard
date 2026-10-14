@@ -1,0 +1,121 @@
+name: Release an Orchard graft
+description: >-
+  Packs a graft with your signing key and uploads <id>-<version>.graft to the
+  GitHub Release that triggered the workflow, where the Extension Marketplace
+  picks up new versions of listed community grafts.
+branding:
+  icon: package
+  color: red
+
+inputs:
+  key:
+    description: Your graft signing key, base64 of the PEM that `graft keygen` wrote. Keep it in a secret.
+    required: true
+  path:
+    description: The graft folder, the one holding graft.json.
+    required: false
+    default: .
+  node-version:
+    description: Node.js version used to build the graft.
+    required: false
+    default: '22'
+  sdk-version:
+    description: >-
+      Version of @orchardlabs/graft-sdk to pack with when the graft does not
+      install it itself. A graft that lists it in package.json uses its own.
+    required: false
+    default: latest
+
+outputs:
+  file:
+    description: Path of the packed .graft file.
+    value: ${{ steps.pack.outputs.file }}
+  digest:
+    description: sha256 digest of the packed .graft file.
+    value: ${{ steps.pack.outputs.digest }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check the trigger
+      shell: bash
+      env:
+        EVENT: ${{ github.event_name }}
+        TAG: ${{ github.event.release.tag_name }}
+        KEY: ${{ inputs.key }}
+      run: |
+        set -euo pipefail
+        if [ "$EVENT" != "release" ] || [ -z "$TAG" ]; then
+          echo "::error::graft-release uploads to the release that triggered the workflow; run it on: release (types: [published])."
+          exit 1
+        fi
+        if [ -z "$KEY" ]; then
+          echo "::error::the key input is empty. Community grafts must be signed; store the base64 PEM from graft keygen in a secret."
+          exit 1
+        fi
+
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    - name: Install dependencies
+      shell: bash
+      working-directory: ${{ inputs.path }}
+      run: |
+        set -euo pipefail
+        if [ -f pnpm-lock.yaml ]; then
+          corepack enable
+          pnpm install --frozen-lockfile
+        elif [ -f yarn.lock ]; then
+          corepack enable
+          yarn install
+        elif [ -f package-lock.json ]; then
+          npm ci
+        elif [ -f package.json ]; then
+          npm install
+        fi
+
+    - name: Pack and sign
+      id: pack
+      shell: bash
+      working-directory: ${{ inputs.path }}
+      env:
+        GRAFT_SIGNING_KEY: ${{ inputs.key }}
+        SDK_VERSION: ${{ inputs.sdk-version }}
+      run: |
+        set -euo pipefail
+        id=$(node -p "require('./graft.json').id")
+        version=$(node -p "require('./graft.json').version")
+        file="$RUNNER_TEMP/$id-$version.graft"
+        if [ -x node_modules/.bin/graft ]; then
+          graft=node_modules/.bin/graft
+        else
+          graft="npx --yes -p @orchardlabs/graft-sdk@$SDK_VERSION graft"
+        fi
+        $graft pack . --output "$file"
+        if ! tar -xzOf "$file" MANIFEST.sig >/dev/null 2>&1; then
+          echo "::error::the packed graft is not signed; check the key input."
+          exit 1
+        fi
+        digest="sha256:$(sha256sum "$file" | cut -d' ' -f1)"
+        echo "file=$file" >> "$GITHUB_OUTPUT"
+        echo "digest=$digest" >> "$GITHUB_OUTPUT"
+        echo "id=$id" >> "$GITHUB_OUTPUT"
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+
+    - name: Upload to the release
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TAG: ${{ github.event.release.tag_name }}
+        FILE: ${{ steps.pack.outputs.file }}
+        VERSION: ${{ steps.pack.outputs.version }}
+        DIGEST: ${{ steps.pack.outputs.digest }}
+      run: |
+        set -euo pipefail
+        case "$TAG" in
+          *"$VERSION") ;;
+          *) echo "::warning::release $TAG does not end in graft.json version $VERSION; the marketplace lists the version from graft.json." ;;
+        esac
+        gh release upload "$TAG" "$FILE" --repo "$GITHUB_REPOSITORY"
+        echo "uploaded $(basename "$FILE") ($DIGEST) to $TAG"

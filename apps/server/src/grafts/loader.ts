@@ -21,13 +21,7 @@ import {
   registerDoors
 } from './host-api';
 import { registerGraftSettings } from './settings';
-import {
-  listFiles,
-  publisherKeysFromEnv,
-  sha256File,
-  trustPolicyFromEnv,
-  verifyGraftDir
-} from './integrity';
+import { graftTrustFromEnv, listFiles, sha256File, verifyGraftDir } from './integrity';
 import { parseManifest } from './manifest';
 import { measureDbBudget, poolOverrides, type DbBudget } from './db-budget';
 import { applyMigrations, ensureGraftRole, readMigrations } from './migrations';
@@ -267,8 +261,7 @@ export async function loadGrafts(options: LoadOptions = {}): Promise<GraftRecord
     return [];
   }
   const dev = truthy(env.ORCHARD_GRAFTS_DEV);
-  const policy = trustPolicyFromEnv(env);
-  const keys = publisherKeysFromEnv(env);
+  const trust = graftTrustFromEnv(env);
   const platform = platformVersion();
   if (dev) logger.warn('ORCHARD_GRAFTS_DEV is set; graft integrity checks are skipped');
 
@@ -294,8 +287,8 @@ export async function loadGrafts(options: LoadOptions = {}): Promise<GraftRecord
     }
     try {
       record.signature = dev
-        ? { signedBy: null, keyId: null }
-        : verifyGraftDir(record.dir, policy, keys);
+        ? { tier: null, keyId: null, signedBy: null }
+        : verifyGraftDir(record.dir, trust);
     } catch (err) {
       failGraft(record, 'integrity', (err as Error).message);
       continue;

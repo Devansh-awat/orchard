@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type { HostApi } from '@orchard/graft-sdk/client';
-	import { Alert, Button, EmptyState, Field, Input, SegmentedControl } from '@orchard/graft-ui';
+	import type { HostApi } from '@orchardlabs/graft-sdk/client';
+	import { Alert, Button, EmptyState, Field, Input, SegmentedControl } from '@orchardlabs/graft-ui';
 	import {
 		createAnnouncement,
 		listAnnouncements,

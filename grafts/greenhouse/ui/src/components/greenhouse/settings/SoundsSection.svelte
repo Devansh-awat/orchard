@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { Play } from '@jis3r/icons';
-	import { Select } from '@orchard/graft-ui';
+	import { Select } from '@orchardlabs/graft-ui';
 	import IconButton from '../../user-settings/IconButton.svelte';
-	import { soundCues } from '@orchard/graft-ui/stores/preferences';
+	import { soundCues } from '@orchardlabs/graft-ui/stores/preferences';
 	import { previewCue } from '../../../lib/utils/sound';
 	import { greenhousePrefs, type SoundChoice, type SoundEvent } from '../prefs.svelte';
 	import { SOUND_NAMES, previewSound, soundLabel } from '../sounds';

@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { Check, ChevronDown, ChevronRight, Eye, Link, Users, X } from 'lucide-svelte';
-	import { Button, Input, Menu, MenuItem } from '@orchard/graft-ui';
-	import Avatar from '@orchard/graft-ui/components/ui/Avatar.svelte';
+	import { Button, Input, Menu, MenuItem } from '@orchardlabs/graft-ui';
+	import Avatar from '@orchardlabs/graft-ui/components/ui/Avatar.svelte';
 	import { toasts } from '../../host/stores';
 	import * as api from './api';
 	import { getGreenhouseApp } from './app.svelte';

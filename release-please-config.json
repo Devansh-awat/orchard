@@ -55,6 +55,14 @@
           "jsonpath": "$.version"
         }
       ]
+    },
+    "packages/graft-sdk": {
+      "release-type": "node",
+      "component": "graft-sdk"
+    },
+    "packages/graft-ui": {
+      "release-type": "node",
+      "component": "graft-ui"
     }
   }
 }

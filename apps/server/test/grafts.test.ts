@@ -8,10 +8,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { createServer } from 'node:net';
+import { createServer as createHttpServer } from 'node:http';
 import { Client } from 'pg';
 import { satisfies } from '../src/grafts/semver';
 import { resolveClaims, canUseName } from '../src/grafts/claims';
-import { verifyGraftDir, listFiles, sha256File } from '../src/grafts/integrity';
+import {
+  verifyGraftDir,
+  listFiles,
+  sha256File,
+  type GraftTrustPolicy
+} from '../src/grafts/integrity';
 import { createTar, extractTarGz } from '../src/grafts/untar';
 import { parseManifest } from '../src/grafts/manifest';
 import { loadGrafts } from '../src/grafts/loader';
@@ -135,6 +141,7 @@ describe('integrity and trust', () => {
     const root = tmp('graft-integrity');
     const { publicKey, privateKey } = generateKeyPairSync('ed25519');
     const key = rawPublicKey(publicKey);
+    const trust = (policy: GraftTrustPolicy, keys: string[]) => ({ policy, keys, taps: [] });
     const signed = writeGraft(
       root,
       'signed',
@@ -142,19 +149,19 @@ describe('integrity and trust', () => {
       baseManifest('signed')
     );
     seal(signed, privateKey);
-    assert.equal(verifyGraftDir(signed, 'signed', [key]).signedBy, 'publisher');
-    assert.throws(() => verifyGraftDir(signed, 'official', [key]), /official/);
-    assert.throws(() => verifyGraftDir(signed, 'signed', []), /does not verify/);
+    assert.equal(verifyGraftDir(signed, trust('listed', [key])).signedBy, 'publisher');
+    assert.throws(() => verifyGraftDir(signed, trust('official', [key])), /official/);
+    assert.throws(() => verifyGraftDir(signed, trust('listed', [])), /does not verify/);
 
     const unsigned = writeGraft(root, 'unsigned', { 'a.txt': 'x' }, baseManifest('unsigned'));
     seal(unsigned);
-    assert.throws(() => verifyGraftDir(unsigned, 'signed', [key]), /unsigned/);
-    assert.equal(verifyGraftDir(unsigned, 'any', []).signedBy, null);
+    assert.throws(() => verifyGraftDir(unsigned, trust('listed', [key])), /unsigned/);
+    assert.equal(verifyGraftDir(unsigned, trust('any', [])).signedBy, null);
 
     writeFileSync(join(signed, 'server/index.js'), 'module.exports={evil:true}');
-    assert.throws(() => verifyGraftDir(signed, 'signed', [key]), /does not match/);
+    assert.throws(() => verifyGraftDir(signed, trust('listed', [key])), /does not match/);
     writeFileSync(join(unsigned, 'extra.js'), '');
-    assert.throws(() => verifyGraftDir(unsigned, 'any', []), /not covered/);
+    assert.throws(() => verifyGraftDir(unsigned, trust('any', [])), /not covered/);
     rmSync(root, { recursive: true, force: true });
   });
 });
@@ -564,13 +571,16 @@ describe('sync', () => {
       ({
         ORCHARD_GRAFTS: JSON.stringify(grafts),
         ORCHARD_GRAFTS_DIR: dest,
-        ORCHARD_GRAFT_TRUST: 'any'
+        ORCHARD_GRAFT_TRUST: 'any',
+        ORCHARD_GRAFT_MARKETPLACE_URL: join(work, 'no-marketplace')
       }) as NodeJS.ProcessEnv;
 
     const ok = await syncGrafts(
       env([{ id: 'notes', version: '1.0.0', source: `file://${artifactPath}`, digest }])
     );
-    assert.deepEqual(ok, { synced: ['notes'], failed: [] });
+    assert.deepEqual(ok.synced, ['notes']);
+    assert.deepEqual(ok.failed, []);
+    assert.match(ok.warnings[0], /revoked versions were not checked/);
     assert.equal(readFileSync(join(dest, 'notes', 'server/readme.txt'), 'utf8'), 'hi');
 
     const bad = await syncGrafts(
@@ -594,6 +604,302 @@ describe('sync', () => {
     assert.equal(other.status, 'failed');
     assert.equal(other.phase, 'sync');
     rmSync(work, { recursive: true, force: true });
+  });
+});
+
+describe('trust tiers', () => {
+  type Pair = ReturnType<typeof generateKeyPairSync>;
+  const orchard = generateKeyPairSync('ed25519');
+  const orchardKey = rawPublicKey(orchard.publicKey);
+  const author = generateKeyPairSync('ed25519');
+  const authorKey = rawPublicKey(author.publicKey);
+  const stranger = generateKeyPairSync('ed25519');
+  const tapPair = generateKeyPairSync('ed25519');
+  const tapKey = rawPublicKey(tapPair.publicKey);
+  let integrity: typeof import('../src/grafts/integrity');
+
+  before(async () => {
+    integrity = await import('../src/grafts/integrity');
+    integrity.OFFICIAL_GRAFT_KEYS.push(orchardKey);
+  });
+
+  after(() => {
+    const at = integrity.OFFICIAL_GRAFT_KEYS.indexOf(orchardKey);
+    if (at !== -1) integrity.OFFICIAL_GRAFT_KEYS.splice(at, 1);
+  });
+
+  const trust = (policy: GraftTrustPolicy, extra: Record<string, unknown> = {}) => ({
+    policy,
+    keys: [] as string[],
+    taps: [] as { name: string; url: string; key: string }[],
+    ...extra
+  });
+
+  function listingBody(id: string, extra: Record<string, unknown> = {}) {
+    return Buffer.from(
+      JSON.stringify({
+        id,
+        tier: 'community',
+        publisher: 'acme',
+        repo: 'acme/orchard-notes',
+        homepage: 'https://github.com/acme/orchard-notes',
+        keys: [authorKey],
+        listedAt: '2026-10-14T00:00:00Z',
+        ...extra
+      })
+    );
+  }
+
+  function writeListing(dir: string, body: Buffer, signer: Pair['privateKey']) {
+    writeFileSync(join(dir, '.listing.json'), body);
+    writeFileSync(
+      join(dir, '.listing.json.sig'),
+      `${sign(null, body, signer).toString('base64')}\n`
+    );
+  }
+
+  function graft(root: string, id: string, signer?: Pair['privateKey'], origin?: object) {
+    const dir = writeGraft(root, id, { 'server/readme.txt': id }, baseManifest(id));
+    seal(dir, signer);
+    if (origin) writeFileSync(join(dir, '.origin.json'), JSON.stringify(origin));
+    return dir;
+  }
+
+  function artifact(dir: string): Buffer {
+    return gzipSync(
+      createTar(
+        listFiles(dir)
+          .filter((f) => !f.startsWith('.'))
+          .map((path) => ({ path, content: readFileSync(join(dir, path)) }))
+      )
+    );
+  }
+
+  const digestOf = (archive: Buffer) =>
+    `sha256:${createHash('sha256').update(archive).digest('hex')}`;
+
+  test('official grafts load under every policy', () => {
+    const root = tmp('graft-tier');
+    const dir = graft(root, 'core-thing', orchard.privateKey, { source: 'url' });
+    for (const policy of ['official', 'listed', 'taps', 'any'] as const) {
+      const sig = verifyGraftDir(dir, trust(policy));
+      assert.equal(sig.tier, 'official');
+      assert.equal(sig.signedBy, 'official');
+      assert.equal(sig.keyId, integrity.keyId(orchardKey));
+    }
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  test('community grafts need a listing Orchard signed for this id and key', () => {
+    const root = tmp('graft-tier');
+    const origin = { source: 'marketplace' };
+    const dir = graft(root, 'notes', author.privateKey, origin);
+    writeListing(dir, listingBody('notes'), orchard.privateKey);
+    const sig = verifyGraftDir(dir, trust('listed'));
+    assert.deepEqual(sig, {
+      tier: 'community',
+      keyId: integrity.keyId(authorKey),
+      publisher: 'acme',
+      repo: 'acme/orchard-notes',
+      signedBy: 'publisher'
+    });
+    assert.throws(() => verifyGraftDir(dir, trust('official')), /official/);
+
+    const forged = graft(root, 'forged', author.privateKey, origin);
+    writeListing(forged, listingBody('forged'), stranger.privateKey);
+    assert.throws(() => verifyGraftDir(forged, trust('any')), /not signed by Orchard/);
+
+    const delisted = graft(root, 'gone', author.privateKey, origin);
+    writeListing(delisted, listingBody('gone', { tier: 'delisted' }), orchard.privateKey);
+    assert.throws(() => verifyGraftDir(delisted, trust('any')), /delisted/);
+
+    const borrowed = graft(root, 'borrowed', author.privateKey, origin);
+    writeListing(borrowed, listingBody('notes'), orchard.privateKey);
+    assert.throws(() => verifyGraftDir(borrowed, trust('any')), /listing is for notes/);
+
+    const resigned = graft(root, 'resigned', stranger.privateKey, origin);
+    writeListing(resigned, listingBody('resigned'), orchard.privateKey);
+    assert.throws(() => verifyGraftDir(resigned, trust('any')), /not signed with the key acme/);
+
+    const elsewhere = graft(root, 'elsewhere', author.privateKey, { source: 'url' });
+    writeListing(elsewhere, listingBody('elsewhere'), orchard.privateKey);
+    assert.throws(() => verifyGraftDir(elsewhere, trust('any')), /does not verify/);
+
+    writeFileSync(join(dir, 'server/readme.txt'), 'tampered');
+    assert.throws(() => verifyGraftDir(dir, trust('listed')), /does not match/);
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  test('tap grafts need the tap configured with its key and a taps policy', () => {
+    const root = tmp('graft-tier');
+    const taps = [{ name: 'acme', url: 'https://acme.dev/orchard', key: tapKey }];
+    const dir = graft(root, 'notes', tapPair.privateKey, { source: 'tap', tap: 'acme' });
+    const sig = verifyGraftDir(dir, trust('taps', { taps }));
+    assert.deepEqual(sig, {
+      tier: 'tap',
+      keyId: integrity.keyId(tapKey),
+      tap: 'acme',
+      signedBy: 'publisher'
+    });
+    assert.equal(verifyGraftDir(dir, trust('any', { taps })).tier, 'tap');
+    assert.throws(() => verifyGraftDir(dir, trust('listed', { taps })), /set it to "taps"/);
+    assert.throws(() => verifyGraftDir(dir, trust('official', { taps })), /official/);
+    assert.throws(() => verifyGraftDir(dir, trust('any')), /tap acme is not configured/);
+    const otherKey = rawPublicKey(stranger.publicKey);
+    assert.throws(
+      () => verifyGraftDir(dir, trust('any', { taps: [{ ...taps[0], key: otherKey }] })),
+      /not signed with the key of the acme tap/
+    );
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  test('publisher keys load under listed, unsigned only under any', () => {
+    const root = tmp('graft-tier');
+    const keyed = graft(root, 'keyed', author.privateKey, { source: 'stored' });
+    const sig = verifyGraftDir(keyed, trust('listed', { keys: [authorKey] }));
+    assert.equal(sig.tier, 'publisher');
+    assert.equal(sig.keyId, integrity.keyId(authorKey));
+    assert.throws(() => verifyGraftDir(keyed, trust('listed')), /does not verify/);
+
+    const bare = graft(root, 'bare', undefined, { source: 'url' });
+    for (const policy of ['official', 'listed', 'taps'] as const) {
+      assert.throws(() => verifyGraftDir(bare, trust(policy)), /unsigned|official/);
+    }
+    assert.deepEqual(verifyGraftDir(bare, trust('any')), {
+      tier: null,
+      keyId: null,
+      signedBy: null
+    });
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  test('signed is listed, and taps come from the environment', () => {
+    assert.equal(integrity.trustPolicyFromEnv({ ORCHARD_GRAFT_TRUST: 'signed' }), 'listed');
+    assert.equal(integrity.trustPolicyFromEnv({}), 'listed');
+    assert.throws(() => integrity.trustPolicyFromEnv({ ORCHARD_GRAFT_TRUST: 'yolo' }), /taps/);
+    assert.deepEqual(
+      integrity.tapsFromEnv({
+        ORCHARD_GRAFT_TAPS: JSON.stringify([{ name: 'acme', url: 'https://a.dev/t/', key: tapKey }])
+      }),
+      [{ name: 'acme', url: 'https://a.dev/t', key: tapKey }]
+    );
+    assert.throws(
+      () => integrity.tapsFromEnv({ ORCHARD_GRAFT_TAPS: '[{"name":"A","url":"https://x"}]' }),
+      /invalid tap name/
+    );
+    assert.throws(
+      () =>
+        integrity.tapsFromEnv({
+          ORCHARD_GRAFT_TAPS: JSON.stringify([{ name: 'acme', url: 'https://x', key: 'nope' }])
+        }),
+      /ed25519/
+    );
+  });
+
+  test('sync records the origin, fetches listings, refuses revoked digests', async () => {
+    const { syncGrafts } = await import('../src/grafts/sync');
+    const work = tmp('graft-tier-sync');
+    const market = join(work, 'market');
+    const src = graft(join(work, 'src'), 'notes', author.privateKey);
+    const archive = artifact(src);
+    mkdirSync(join(market, 'grafts/notes/1.0.0'), { recursive: true });
+    writeFileSync(join(market, 'grafts/notes/1.0.0/notes-1.0.0.graft'), archive);
+    const listing = listingBody('notes');
+    writeFileSync(join(market, 'grafts/notes/listing.json'), listing);
+    writeFileSync(
+      join(market, 'grafts/notes/listing.json.sig'),
+      `${sign(null, listing, orchard.privateKey).toString('base64')}\n`
+    );
+    const catalog = (revoked: string[]) =>
+      writeFileSync(
+        join(market, 'grafts/index.json'),
+        JSON.stringify({ generatedAt: '', grafts: [], revoked })
+      );
+    catalog([]);
+    const dest = join(work, 'installed');
+    const env = (trustPolicy: string) =>
+      ({
+        ORCHARD_GRAFTS: JSON.stringify([
+          { id: 'notes', version: '1.0.0', digest: digestOf(archive) }
+        ]),
+        ORCHARD_GRAFTS_DIR: dest,
+        ORCHARD_GRAFT_TRUST: trustPolicy,
+        ORCHARD_GRAFT_MARKETPLACE_URL: market
+      }) as NodeJS.ProcessEnv;
+
+    const ok = await syncGrafts(env('signed'));
+    assert.deepEqual(ok, { synced: ['notes'], failed: [], warnings: [] });
+    assert.deepEqual(JSON.parse(readFileSync(join(dest, 'notes/.origin.json'), 'utf8')), {
+      source: 'marketplace'
+    });
+    assert.ok(existsSync(join(dest, 'notes/.listing.json.sig')));
+    const records = await loadGrafts({ dir: dest, env: env('listed'), migrate: false });
+    assert.equal(records[0].status, 'loaded');
+    assert.equal(records[0].signature?.tier, 'community');
+    assert.equal(records[0].signature?.publisher, 'acme');
+
+    const official = await syncGrafts(env('official'));
+    assert.match(official.failed[0].reason, /official/);
+
+    catalog([digestOf(archive).toUpperCase().replace('SHA256:', '')]);
+    const revoked = await syncGrafts(env('any'));
+    assert.deepEqual(revoked.synced, []);
+    assert.match(revoked.failed[0].reason, /revoked by the Extension Marketplace/);
+    rmSync(work, { recursive: true, force: true });
+  });
+
+  test('sync downloads tap grafts from the tap and checks them against its key', async () => {
+    const { syncGrafts } = await import('../src/grafts/sync');
+    const work = tmp('graft-tier-tap');
+    const tapRoot = join(work, 'tap');
+    const src = graft(join(work, 'src'), 'notes', tapPair.privateKey);
+    const archive = artifact(src);
+    mkdirSync(join(tapRoot, 'grafts/notes/1.0.0'), { recursive: true });
+    writeFileSync(join(tapRoot, 'grafts/notes/1.0.0/notes-1.0.0.graft'), archive);
+    const server = createHttpServer((req, res) => {
+      const path = join(tapRoot, decodeURIComponent((req.url ?? '/').split('?')[0]));
+      if (!path.startsWith(tapRoot) || !existsSync(path)) return res.writeHead(404).end();
+      res.writeHead(200).end(readFileSync(path));
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const url = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+    const dest = join(work, 'installed');
+    const env = (taps: unknown[], spec: Record<string, unknown>, policy = 'taps') =>
+      ({
+        ORCHARD_GRAFTS: JSON.stringify([
+          { id: 'notes', version: '1.0.0', digest: digestOf(archive), ...spec }
+        ]),
+        ORCHARD_GRAFTS_DIR: dest,
+        ORCHARD_GRAFT_TRUST: policy,
+        ORCHARD_GRAFT_TAPS: JSON.stringify(taps),
+        ORCHARD_GRAFTS_ALLOW_HTTP: '1',
+        ORCHARD_GRAFT_MARKETPLACE_URL: join(work, 'no-marketplace')
+      }) as NodeJS.ProcessEnv;
+    const tap = { name: 'acme', url, key: tapKey };
+    try {
+      const ok = await syncGrafts(env([tap], { tap: 'acme' }));
+      assert.deepEqual(ok.synced, ['notes']);
+      assert.deepEqual(JSON.parse(readFileSync(join(dest, 'notes/.origin.json'), 'utf8')), {
+        source: 'tap',
+        tap: 'acme'
+      });
+      const loaded = await loadGrafts({ dir: dest, env: env([tap], {}), migrate: false });
+      assert.equal(loaded[0].signature?.tier, 'tap');
+
+      const listed = await syncGrafts(env([tap], { tap: 'acme' }, 'listed'));
+      assert.match(listed.failed[0].reason, /set it to "taps"/);
+      const missing = await syncGrafts(env([], { tap: 'acme' }));
+      assert.match(missing.failed[0].reason, /tap acme is not configured/);
+      const wrongKey = await syncGrafts(
+        env([{ ...tap, key: rawPublicKey(stranger.publicKey) }], { tap: 'acme' })
+      );
+      assert.match(wrongKey.failed[0].reason, /not signed with the key of the acme tap/);
+      const both = await syncGrafts(env([tap], { tap: 'acme', source: `${url}/x.graft` }));
+      assert.match(both.failed[0].reason, /either tap or source/);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+      rmSync(work, { recursive: true, force: true });
+    }
   });
 });
 

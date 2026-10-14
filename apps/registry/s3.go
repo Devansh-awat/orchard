@@ -7,6 +7,7 @@ import (
 	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -280,4 +281,48 @@ func signRequest(req *http.Request, ak, sk, region, service, payloadSha string) 
 		"AWS4-HMAC-SHA256 Credential=%s/%s, SignedHeaders=%s, Signature=%s",
 		ak, scope, strings.Join(signed, ";"), sig,
 	))
+}
+
+func (b *Bucket) List(ctx context.Context, prefix string) ([]Object, error) {
+	var out []Object
+	token := ""
+	for {
+		query := url.Values{"list-type": {"2"}, "prefix": {prefix}}
+		if token != "" {
+			query.Set("continuation-token", token)
+		}
+		req, err := b.newRequest(ctx, http.MethodGet, "", query, nil)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := b.do(req, emptyPayloadSha)
+		if err != nil {
+			return nil, err
+		}
+		var page struct {
+			Contents []struct {
+				Key  string `xml:"Key"`
+				ETag string `xml:"ETag"`
+				Size int64  `xml:"Size"`
+			} `xml:"Contents"`
+			IsTruncated           bool   `xml:"IsTruncated"`
+			NextContinuationToken string `xml:"NextContinuationToken"`
+		}
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			return nil, fmt.Errorf("list %s: %s", prefix, resp.Status)
+		}
+		err = xml.NewDecoder(resp.Body).Decode(&page)
+		resp.Body.Close()
+		if err != nil {
+			return nil, fmt.Errorf("list %s: %w", prefix, err)
+		}
+		for _, c := range page.Contents {
+			out = append(out, Object{Key: c.Key, ETag: c.ETag, Size: c.Size})
+		}
+		if !page.IsTruncated || page.NextContinuationToken == "" {
+			return out, nil
+		}
+		token = page.NextContinuationToken
+	}
 }

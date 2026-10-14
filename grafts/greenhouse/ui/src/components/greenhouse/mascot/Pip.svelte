@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { decorativeMotion } from '@orchard/graft-ui/utils/motion.svelte';
+	import { decorativeMotion } from '@orchardlabs/graft-ui/utils/motion.svelte';
 	import { GRID, POSES, REST, TICK_MS, draw, type PipPose } from './pip';
 
 	let {

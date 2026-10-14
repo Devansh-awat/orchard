@@ -23,6 +23,14 @@ that is a sandbox. Install a graft only if you would be happy running its code a
 Orchard itself.
 :::
 
+## Official, community and taps
+
+Orchard makes some grafts itself (**Official**). Other people can list theirs in
+the [Extension Marketplace](https://orchard.my/extensions) (**Community**, with the
+author's name on it), or run their own catalogue that you add by hand (a
+**tap**). Each kind is labelled everywhere it appears, and your trust setting
+decides which kinds may load. See [Where grafts come from](/grafts/install/#where-grafts-come-from).
+
 ## What a graft is made of
 
 | Part          | Runs as                                                                             | Lives at                                                   |

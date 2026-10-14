@@ -1,8 +1,8 @@
-import { statusMeta, type StatusMeta } from '@orchard/graft-ui';
+import { statusMeta, type StatusMeta } from '@orchardlabs/graft-ui';
 import type { SandboxStatus } from './types/sandbox';
 
-export { previewStatus, statusMeta } from '@orchard/graft-ui';
-export type { PreviewDeployStatus, StatusKind, StatusMeta } from '@orchard/graft-ui';
+export { previewStatus, statusMeta } from '@orchardlabs/graft-ui';
+export type { PreviewDeployStatus, StatusKind, StatusMeta } from '@orchardlabs/graft-ui';
 
 export interface SandboxStatusContext {
   applying?: boolean;

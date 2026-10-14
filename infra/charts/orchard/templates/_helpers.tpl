@@ -436,9 +436,12 @@ random one that every template in this render sees.
 {{- define "orchard.graftEnv" }}
             - { name: ORCHARD_GRAFTS_DIR, value: /app/grafts }
             - { name: ORCHARD_GRAFTS, value: {{ toJson (default (list) .Values.grafts) | quote }} }
-            - { name: ORCHARD_GRAFT_TRUST, value: {{ .Values.graftSettings.trust | default "signed" | quote }} }
+            - { name: ORCHARD_GRAFT_TRUST, value: {{ .Values.graftSettings.trust | default "listed" | quote }} }
             {{- with .Values.graftSettings.keys }}
             - { name: ORCHARD_GRAFT_KEYS, value: {{ join "," . | quote }} }
+            {{- end }}
+            {{- with .Values.graftSettings.taps }}
+            - { name: ORCHARD_GRAFT_TAPS, value: {{ toJson . | quote }} }
             {{- end }}
             {{- with .Values.graftSettings.marketplaceUrl }}
             - { name: ORCHARD_GRAFT_MARKETPLACE_URL, value: {{ . | quote }} }

@@ -5,7 +5,7 @@ import {
   slide as slideBase
 } from 'svelte/transition';
 import type { FadeParams, FlyParams, ScaleParams, SlideParams } from 'svelte/transition';
-import { effectiveAnimationLevel } from '@orchard/graft-ui/stores/preferences';
+import { effectiveAnimationLevel } from '@orchardlabs/graft-ui/stores/preferences';
 
 /** Matches REDUCED_DURATION in `$lib/utils/motion.svelte`, in milliseconds. */
 const REDUCED_DURATION = 260;

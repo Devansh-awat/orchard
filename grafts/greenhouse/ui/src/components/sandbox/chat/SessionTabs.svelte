@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Check, Copy, Plus, X } from 'lucide-svelte';
-	import { StatusDot, statusMeta } from '@orchard/graft-ui';
-	import ConfirmModal from '@orchard/graft-ui/components/ConfirmModal.svelte';
+	import { StatusDot, statusMeta } from '@orchardlabs/graft-ui';
+	import ConfirmModal from '@orchardlabs/graft-ui/components/ConfirmModal.svelte';
 	import type { ChatSession, ChatSessionStore } from './session-store.svelte';
 	import { truncate } from './format';
 

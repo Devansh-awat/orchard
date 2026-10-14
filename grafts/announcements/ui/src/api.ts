@@ -1,4 +1,4 @@
-import type { HostApi } from '@orchard/graft-sdk/client';
+import type { HostApi } from '@orchardlabs/graft-sdk/client';
 
 export type Announcement = {
   id: string;

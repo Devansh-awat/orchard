@@ -1,8 +1,22 @@
 {
-  "name": "@orchard/graft-sdk",
+  "name": "@orchardlabs/graft-sdk",
   "version": "1.0.0",
-  "private": true,
+  "description": "Build, pack and sign Orchard grafts (Orchard's extensions)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hackclub/orchard.git",
+    "directory": "packages/graft-sdk"
+  },
+  "homepage": "https://orchard.my/extensions",
   "type": "module",
+  "files": [
+    "bin",
+    "cli",
+    "src"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     "./server": "./src/server/index.ts",
     "./client": "./src/client/index.ts",

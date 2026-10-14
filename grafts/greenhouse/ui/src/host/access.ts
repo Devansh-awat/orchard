@@ -1,5 +1,5 @@
 import { get } from 'svelte/store';
-import type { HostApi } from '@orchard/graft-sdk/client';
+import type { HostApi } from '@orchardlabs/graft-sdk/client';
 
 const KEY = 'greenhouse:access';
 const REFRESH_MS = 5 * 60_000;

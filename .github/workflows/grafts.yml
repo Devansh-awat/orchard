@@ -9,6 +9,7 @@ on:
       - 'apps/frontend/src/lib/components/ui/**'
       - 'apps/registry/**'
       - 'registry/grafts-revoked.txt'
+      - 'registry/community/**'
       - '.github/workflows/grafts.yml'
   push:
     branches: [main]
@@ -19,7 +20,11 @@ on:
       - 'apps/frontend/src/lib/components/ui/**'
       - 'apps/registry/**'
       - 'registry/grafts-revoked.txt'
+      - 'registry/community/**'
       - '.github/workflows/grafts.yml'
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
 
 concurrency:
   group: grafts-${{ github.ref }}
@@ -30,6 +35,7 @@ env:
 
 jobs:
   pack:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -44,6 +50,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Pack and validate every graft
         run: scripts/grafts-pack.sh "$RUNNER_TEMP/grafts" && go build -C apps/registry -o "$RUNNER_TEMP/registry" . && "$RUNNER_TEMP/registry" validate-grafts -grafts "$RUNNER_TEMP/grafts"
+      - name: Validate community listings
+        run: '"$RUNNER_TEMP/registry" validate-community -listings registry/community -official grafts'
 
   publish:
     needs: pack
@@ -78,5 +86,37 @@ jobs:
           go build -C apps/registry -o "$RUNNER_TEMP/registry" .
           "$RUNNER_TEMP/registry" publish-grafts \
             -grafts "$RUNNER_TEMP/grafts" \
+            -public https://assets.orchard.my/registry \
+            -revoked registry/grafts-revoked.txt
+
+  community:
+    needs: publish
+    if: ${{ !cancelled() && github.event_name != 'pull_request' && github.repository == 'hackclub/orchard' }}
+    runs-on: ubuntu-latest
+    environment: registry
+    permissions:
+      contents: read
+    env:
+      R2_ENDPOINT: ${{ secrets.REGISTRY_R2_ENDPOINT }}
+      R2_BUCKET: ${{ secrets.REGISTRY_R2_BUCKET }}
+      R2_ACCESS_KEY: ${{ secrets.REGISTRY_R2_ACCESS_KEY }}
+      R2_SECRET_KEY: ${{ secrets.REGISTRY_R2_SECRET_KEY }}
+      REGISTRY_PREFIX: registry
+      GRAFT_SIGNING_KEY: ${{ secrets.GRAFT_SIGNING_KEY }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: apps/registry/go.mod
+      - name: Sync community listings and their releases
+        run: |
+          if [ -z "$GRAFT_SIGNING_KEY" ]; then
+            echo "::warning::GRAFT_SIGNING_KEY is not set in the registry environment, so no community listings were published. Listings are never published unsigned."
+            exit 0
+          fi
+          go build -C apps/registry -o "$RUNNER_TEMP/registry" .
+          "$RUNNER_TEMP/registry" sync-community \
+            -listings registry/community \
             -public https://assets.orchard.my/registry \
             -revoked registry/grafts-revoked.txt

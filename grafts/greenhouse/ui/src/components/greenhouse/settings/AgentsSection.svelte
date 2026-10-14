@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { createQuery } from '@tanstack/svelte-query';
-	import { Button, StatusDot, statusMeta } from '@orchard/graft-ui';
+	import { Button, StatusDot, statusMeta } from '@orchardlabs/graft-ui';
 	import ProviderIcon from '../../sandbox/chat/ProviderIcon.svelte';
 	import {
 		agentUsageQueryOptions,

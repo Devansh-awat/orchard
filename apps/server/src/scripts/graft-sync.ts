@@ -2,6 +2,7 @@ import { syncGrafts } from '../grafts/sync';
 
 syncGrafts()
   .then((result) => {
+    for (const warning of result.warnings) console.warn(`[graft-sync] warning: ${warning}`);
     for (const id of result.synced) process.stdout.write(`[graft-sync] ${id} ready\n`);
     for (const failure of result.failed)
       console.error(`[graft-sync] ${failure.id} failed: ${failure.reason}`);

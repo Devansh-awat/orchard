@@ -498,10 +498,10 @@ importers:
 
   grafts/announcements:
     dependencies:
-      '@orchard/graft-sdk':
+      '@orchardlabs/graft-sdk':
         specifier: workspace:*
         version: link:../../packages/graft-sdk
-      '@orchard/graft-ui':
+      '@orchardlabs/graft-ui':
         specifier: workspace:*
         version: link:../../packages/graft-ui
     devDependencies:
@@ -529,10 +529,10 @@ importers:
       '@kubernetes/client-node':
         specifier: ^0.21.0
         version: 0.21.0
-      '@orchard/graft-sdk':
+      '@orchardlabs/graft-sdk':
         specifier: workspace:*
         version: link:../../packages/graft-sdk
-      '@orchard/graft-ui':
+      '@orchardlabs/graft-ui':
         specifier: workspace:*
         version: link:../../packages/graft-ui
       '@prisma/adapter-pg':

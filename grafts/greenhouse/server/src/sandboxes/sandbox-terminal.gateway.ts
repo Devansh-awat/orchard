@@ -1,4 +1,4 @@
-import type { TerminalAuth, Rejection } from '@orchard/graft-sdk/server';
+import type { TerminalAuth, Rejection } from '@orchardlabs/graft-sdk/server';
 import { PrismaService } from '../prisma.service';
 import { SessionsService } from '../core/sessions.service';
 import { AuditService } from '../core/audit.service';

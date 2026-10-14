@@ -13,10 +13,10 @@
 		SquareTerminal,
 		Trash2
 	} from 'lucide-svelte';
-	import MenuItem from '@orchard/graft-ui/components/ui/MenuItem.svelte';
-	import Skeleton from '@orchard/graft-ui/components/ui/Skeleton.svelte';
+	import MenuItem from '@orchardlabs/graft-ui/components/ui/MenuItem.svelte';
+	import Skeleton from '@orchardlabs/graft-ui/components/ui/Skeleton.svelte';
 	import { toasts } from '../../host/stores';
-	import { springRotate } from '@orchard/graft-ui/utils/motion.svelte';
+	import { springRotate } from '@orchardlabs/graft-ui/utils/motion.svelte';
 	import * as api from './api';
 	import ContextMenu from './ContextMenu.svelte';
 	import { VIEWER_ONLY, scopeOf, type MachineWorkspace } from './workspace.svelte';
