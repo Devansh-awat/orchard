@@ -1014,6 +1014,158 @@ module.exports = { default: Root };`;
     }
   });
 
+  test('the storage door keeps each graft inside its own folder', async () => {
+    const { Global, Module, Scope } = await import('@nestjs/common');
+    const { NestFactory } = await import('@nestjs/core');
+    const { createWithGrafts, graftImports } = await import('../src/grafts/boot');
+    const { graftRecords } = await import('../src/grafts/graft-registry');
+    const { StorageService } = await import('../src/organizations/storage.service');
+    const { StorageDoorV1 } = await import('../src/grafts/doors/storage.door');
+    const { doorToken } = await import('../src/grafts/doors/door');
+
+    const saved = { ...process.env };
+    Object.assign(process.env, {
+      R2_ACCESS_KEY_ID: 'key',
+      R2_SECRET_ACCESS_KEY: 'secret',
+      R2_BUCKET_NAME: 'bucket',
+      R2_ENDPOINT: 'https://r2.test',
+      R2_PUBLIC_URL: 'https://cdn.test'
+    });
+    const uploads: { folder: string; name: string; type: string; bytes: number }[] = [];
+    const deletes: string[] = [];
+    class TestDoors {}
+    Reflect.decorate(
+      [
+        Global(),
+        Module({
+          providers: [
+            {
+              provide: StorageService,
+              useValue: {
+                uploadFile: async (
+                  file: { originalname: string; mimetype: string; buffer: Buffer },
+                  folder: string
+                ) => {
+                  uploads.push({
+                    folder,
+                    name: file.originalname,
+                    type: file.mimetype,
+                    bytes: file.buffer.length
+                  });
+                  return `https://cdn.test/${folder}/uuid.${file.originalname.split('.').pop()}`;
+                },
+                deleteFile: async (url: string) => {
+                  deletes.push(url);
+                }
+              }
+            },
+            { provide: doorToken('storage', 1), useClass: StorageDoorV1, scope: Scope.TRANSIENT }
+          ],
+          exports: [doorToken('storage', 1)]
+        })
+      ],
+      TestDoors
+    );
+
+    const graftSource = (cls: string) => `
+const { Module, Injectable, Inject } = require('@nestjs/common');
+class ${cls} {
+  constructor(storage) { this.storage = storage; globalThis.__storageUsers = (globalThis.__storageUsers || []).concat(this); }
+}
+Reflect.decorate([Injectable()], ${cls});
+Inject(Symbol.for('orchard.graft.door.storage@1'))(${cls}, undefined, 0);
+class Root {}
+Reflect.decorate([Module({ providers: [${cls}] })], Root);
+module.exports = { default: Root };`;
+
+    const root = tmp('graft-storage');
+    writeGraft(
+      root,
+      'pics',
+      { 'server/index.js': graftSource('PicsService') },
+      baseManifest('pics', { entries: { server: 'server/index.js' }, capabilities: ['storage'] })
+    );
+    writeGraft(
+      root,
+      'grabby',
+      { 'server/index.js': graftSource('GrabbyService') },
+      baseManifest('grabby', { entries: { server: 'server/index.js' } })
+    );
+    await loadGrafts({
+      dir: root,
+      env: { ORCHARD_GRAFTS_DEV: '1' } as NodeJS.ProcessEnv,
+      migrate: false
+    });
+
+    class Core {}
+    Reflect.decorate([Module({ imports: [TestDoors] })], Core);
+    (globalThis as { __storageUsers?: unknown[] }).__storageUsers = [];
+    const app = await createWithGrafts((grafts) =>
+      NestFactory.create(
+        { module: Core, imports: graftImports(grafts) },
+        { logger: false, abortOnError: false }
+      )
+    );
+    try {
+      const grabby = graftRecords().find((r) => r.id === 'grabby')!;
+      assert.equal(grabby.status, 'failed');
+      assert.match(grabby.reason!, /does not declare the "storage" capability/);
+
+      const [pics] = (
+        globalThis as {
+          __storageUsers: {
+            storage: {
+              configured: boolean;
+              publicBase: string | null;
+              owns(url: string): boolean;
+              upload(file: {
+                data: Uint8Array;
+                contentType: string;
+                extension: string;
+              }): Promise<string>;
+              delete(url: string): Promise<void>;
+            };
+          }[];
+        }
+      ).__storageUsers;
+      const { storage } = pics;
+      assert.equal(storage.configured, true);
+      assert.equal(storage.publicBase, 'https://cdn.test/pics/');
+
+      const url = await storage.upload({
+        data: new Uint8Array([1, 2, 3]),
+        contentType: 'image/png',
+        extension: 'PNG'
+      });
+      assert.equal(url, 'https://cdn.test/pics/uuid.png');
+      assert.deepEqual(uploads, [
+        { folder: 'pics', name: 'upload.png', type: 'image/png', bytes: 3 }
+      ]);
+      await assert.rejects(
+        storage.upload({
+          data: new Uint8Array(),
+          contentType: 'text/html',
+          extension: 'html/../x'
+        }),
+        /invalid file extension/
+      );
+
+      assert.equal(storage.owns(url), true);
+      assert.equal(storage.owns('https://cdn.test/organizations/logo.png'), false);
+      assert.equal(storage.owns('https://cdn.test/pics/../organizations/logo.png'), false);
+      await storage.delete(url);
+      await assert.rejects(
+        storage.delete('https://cdn.test/organizations/logo.png'),
+        /can only delete its own files/
+      );
+      assert.deepEqual(deletes, [url]);
+    } finally {
+      await app.close();
+      rmSync(root, { recursive: true, force: true });
+      process.env = saved;
+    }
+  });
+
   test('graft-api.json matches the snapshot', async () => {
     const { describeDoors } = await import('../src/grafts/doors');
     const snapshotPath = join(__dirname, 'graft-api.snapshot.json');

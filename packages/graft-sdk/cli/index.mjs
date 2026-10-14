@@ -202,7 +202,8 @@ const DOOR_CAPABILITY = {
   notifications: 'notifications',
   rateLimit: 'rateLimit',
   metrics: 'metrics',
-  github: 'github'
+  github: 'github',
+  storage: 'storage'
 };
 
 function signingKey(options) {

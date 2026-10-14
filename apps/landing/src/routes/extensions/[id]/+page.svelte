@@ -66,7 +66,8 @@
 			['flags', 'feature flags'],
 			['mcp', 'tools for AI agents'],
 			['metrics', 'metrics'],
-			['rateLimit', 'rate limits']
+			['rateLimit', 'rate limits'],
+			['storage', 'file uploads']
 		];
 		const used = features.filter(([cap]) => caps.has(cap)).map(([, label]) => label);
 		if (used.length) rows.push({ title: 'Orchard features', body: `Uses ${list(used)}.` });

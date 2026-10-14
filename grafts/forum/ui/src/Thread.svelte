@@ -1,24 +1,33 @@
 <script lang="ts">
-	import { page } from '$app/stores';
-	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { ArrowLeft, ArrowUp, Lock, Pin, Trash2 } from 'lucide-svelte';
-	import { apiFetch, toasts, isSuperAdmin, user } from '$lib/stores';
-	import { Button, Dropdown, StatusBadge, Skeleton } from '$lib/components/ui';
-	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
-	import { timeAgo, projectSwatch } from '$lib/components/org-dashboard/helpers.svelte';
-	import { motionStagger } from '$lib/utils/motion.svelte';
+	import type { HostApi } from '@orchardlabs/graft-sdk/client';
 	import {
+		Avatar,
+		Button,
+		ConfirmModal,
+		Dropdown,
+		StatusBadge,
+		Skeleton
+	} from '@orchardlabs/graft-ui';
+	import { motionStagger } from '@orchardlabs/graft-ui/utils/motion.svelte';
+	import {
+		failure,
 		groveStatus,
 		grovePriority,
 		scopeLabel,
+		timeAgo,
+		toastError,
 		GROVE_STATUSES,
 		GROVE_PRIORITIES,
 		type GroveThread,
 		type GroveReply
-	} from '$lib/components/grove/grove';
-	import ImageAttach from '$lib/components/grove/ImageAttach.svelte';
-	import { avatarUrl } from '$lib/avatar';
+	} from './grove';
+	import ImageAttach from './ImageAttach.svelte';
+
+	let { host, threadId }: { host: HostApi; threadId: string } = $props();
+
+	const user = host.stores.user;
 
 	type FullThread = GroveThread & { body: string; replies: GroveReply[] };
 
@@ -35,8 +44,7 @@
 	let replyToDelete = $state<GroveReply | null>(null);
 	let confirmReplyDelete = $state(false);
 
-	const threadId = $derived($page.params.id ?? '');
-	const canModerate = $derived($isSuperAdmin);
+	const canModerate = $derived(!!$user?.isSuperAdmin);
 	const canDeleteThread = $derived(!!thread && (canModerate || thread.author.id === $user?.id));
 
 	function canDeleteReply(reply: GroveReply): boolean {
@@ -45,16 +53,11 @@
 
 	async function deleteThread() {
 		if (!thread) return;
-		const res = await apiFetch(`/apiv1/forum/threads/${thread.id}`, { method: 'DELETE' });
+		const res = await host.fetch(`/threads/${thread.id}`, { method: 'DELETE' });
 		if (res.ok) {
-			goto('/grove');
+			host.navigate('/grove');
 		} else {
-			const data = await res.json().catch(() => ({}));
-			toasts.add({
-				title: 'Error',
-				description: data?.message || 'Failed to delete',
-				color: 'error'
-			});
+			toastError(host, 'Error', await failure(res, 'Failed to delete'));
 		}
 	}
 
@@ -62,25 +65,20 @@
 		if (!thread || !replyToDelete) return;
 		const target = replyToDelete;
 		replyToDelete = null;
-		const res = await apiFetch(`/apiv1/forum/threads/${thread.id}/replies/${target.id}`, {
+		const res = await host.fetch(`/threads/${thread.id}/replies/${target.id}`, {
 			method: 'DELETE'
 		});
 		if (res.ok) {
 			thread.replies = thread.replies.filter((r) => r.id !== target.id);
 			thread.replyCount = Math.max(0, thread.replyCount - 1);
 		} else {
-			const data = await res.json().catch(() => ({}));
-			toasts.add({
-				title: 'Error',
-				description: data?.message || 'Failed to delete',
-				color: 'error'
-			});
+			toastError(host, 'Error', await failure(res, 'Failed to delete'));
 		}
 	}
 
 	async function fetchThread() {
 		loading = true;
-		const res = await apiFetch(`/apiv1/forum/threads/${threadId}`);
+		const res = await host.fetch(`/threads/${threadId}`);
 		if (res.ok) {
 			thread = await res.json();
 			adminStatus = thread?.status ?? 'open';
@@ -93,7 +91,7 @@
 
 	async function refreshThread() {
 		if (replying) return;
-		const res = await apiFetch(`/apiv1/forum/threads/${threadId}`);
+		const res = await host.fetch(`/threads/${threadId}`);
 		if (!res.ok || !thread) return;
 		const fresh: FullThread = await res.json();
 		thread.replies = fresh.replies;
@@ -111,7 +109,7 @@
 		const on = !thread.myVote;
 		thread.myVote = on;
 		thread.votes += on ? 1 : -1;
-		const res = await apiFetch(`/apiv1/forum/threads/${thread.id}/vote`, {
+		const res = await host.fetch(`/threads/${thread.id}/vote`, {
 			method: on ? 'POST' : 'DELETE'
 		});
 		if (res.ok) {
@@ -125,26 +123,19 @@
 		if (!thread || replying || replyBody.trim().length === 0) return;
 		replying = true;
 		try {
-			const res = await apiFetch(`/apiv1/forum/threads/${thread.id}/replies`, {
+			const res = await host.fetch(`/threads/${thread.id}/replies`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ body: replyBody, images: replyImages })
 			});
-			if (!res.ok) {
-				const data = await res.json().catch(() => ({}));
-				throw new Error(data?.message || 'Failed to reply');
-			}
+			if (!res.ok) throw new Error(await failure(res, 'Failed to reply'));
 			const reply = await res.json();
 			thread.replies.push(reply);
 			thread.replyCount += 1;
 			replyBody = '';
 			replyImages = [];
 		} catch (e) {
-			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to reply',
-				color: 'error'
-			});
+			toastError(host, 'Error', e instanceof Error ? e.message : 'Failed to reply');
 		} finally {
 			replying = false;
 		}
@@ -160,7 +151,7 @@
 	async function applyPriority() {
 		if (!thread || adminBusy) return;
 		adminBusy = true;
-		const res = await apiFetch(`/apiv1/forum/threads/${thread.id}/priority`, {
+		const res = await host.fetch(`/threads/${thread.id}/priority`, {
 			method: 'PATCH',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ priority: adminPriority })
@@ -172,7 +163,7 @@
 	async function applyStatus() {
 		if (!thread || adminBusy) return;
 		adminBusy = true;
-		const res = await apiFetch(`/apiv1/forum/threads/${thread.id}/status`, {
+		const res = await host.fetch(`/threads/${thread.id}/status`, {
 			method: 'PATCH',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ status: adminStatus })
@@ -184,7 +175,7 @@
 	async function togglePinned() {
 		if (!thread || adminBusy) return;
 		adminBusy = true;
-		const res = await apiFetch(`/apiv1/forum/threads/${thread.id}/pinned`, {
+		const res = await host.fetch(`/threads/${thread.id}/pinned`, {
 			method: 'PATCH',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ pinned: !thread.pinned })
@@ -196,7 +187,7 @@
 	async function toggleLocked() {
 		if (!thread || adminBusy) return;
 		adminBusy = true;
-		const res = await apiFetch(`/apiv1/forum/threads/${thread.id}/locked`, {
+		const res = await host.fetch(`/threads/${thread.id}/locked`, {
 			method: 'PATCH',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ locked: !thread.locked })
@@ -212,11 +203,9 @@
 	});
 </script>
 
-<svelte:head><title>{thread ? `${thread.title} · The Grove` : 'The Grove'}</title></svelte:head>
-
 <div class="gt-page">
 	<div class="gt-shell">
-		<a href="/grove" class="gt-back"><ArrowLeft class="h-3.5 w-3.5" /> The Grove</a>
+		<a href="/grove" class="gt-back"><ArrowLeft size={14} /> The Grove</a>
 
 		{#if loading}
 			<Skeleton height="12rem" />
@@ -237,13 +226,7 @@
 				</div>
 				<h1 class="gt-title">{thread.title}</h1>
 				<div class="gt-author-row">
-					<img
-						src={avatarUrl(thread.author)}
-						alt=""
-						class="gt-av"
-						loading="lazy"
-						decoding="async"
-					/>
+					<Avatar user={thread.author} class="gt-av" />
 					<span class="gt-author">{thread.author.username}</span>
 					<span class="gt-when" title={thread.createdAt}>{timeAgo(thread.createdAt)}</span>
 					<button
@@ -278,7 +261,7 @@
 					</div>
 				{/if}
 
-				{#if $isSuperAdmin}
+				{#if canModerate}
 					<div class="gt-admin">
 						<Dropdown
 							bind:value={adminStatus}
@@ -299,11 +282,11 @@
 							onchange={applyPriority}
 						/>
 						<Button variant="ghost" size="sm" disabled={adminBusy} onclick={togglePinned}>
-							<Pin class="h-3.5 w-3.5" />
+							<Pin size={14} />
 							{thread.pinned ? 'Unpin' : 'Pin'}
 						</Button>
 						<Button variant="ghost" size="sm" disabled={adminBusy} onclick={toggleLocked}>
-							<Lock class="h-3.5 w-3.5" />
+							<Lock size={14} />
 							{thread.locked ? 'Unlock' : 'Lock'}
 						</Button>
 					</div>
@@ -317,13 +300,7 @@
 				</h2>
 				{#each thread.replies as reply, i (reply.id)}
 					<div class="gt-reply" {@attach motionStagger({ index: i, from: { y: 8 } })}>
-						<img
-							src={avatarUrl(reply.author)}
-							alt=""
-							class="gt-av"
-							loading="lazy"
-							decoding="async"
-						/>
+						<Avatar user={reply.author} class="gt-av" />
 						<div class="gt-reply-main">
 							<div class="gt-reply-head">
 								<span class="gt-author">{reply.author.username}</span>
@@ -370,7 +347,7 @@
 							placeholder="Reply"
 							onkeydown={onComposerKeydown}></textarea>
 						<div class="gt-composer-actions">
-							<ImageAttach bind:images={replyImages} disabled={replying} />
+							<ImageAttach {host} bind:images={replyImages} disabled={replying} />
 							<Button
 								variant="primary"
 								size="sm"
@@ -494,7 +471,7 @@
 		margin: 0.75rem 0 0.875rem;
 	}
 
-	.gt-av {
+	:global(.gt-av) {
 		width: 1.375rem;
 		height: 1.375rem;
 		border-radius: var(--radius-pill);

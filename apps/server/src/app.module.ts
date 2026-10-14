@@ -41,7 +41,6 @@ import { GitModule } from './git/git.module';
 import { ScoreModule } from './score/score.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { JobsModule } from './jobs/jobs.module';
-import { ForumModule } from './forum/forum.module';
 import { CoordinationModule } from './coordination/coordination.module';
 import { MirrorModule } from './mirror/mirror.module';
 import { ApplyModule } from './apply/apply.module';
@@ -98,7 +97,6 @@ import { graftImports } from './grafts/boot';
     ScoreModule,
     NotificationsModule,
     JobsModule,
-    ForumModule,
     MirrorModule,
     GraftsModule,
     GraftDoorsModule

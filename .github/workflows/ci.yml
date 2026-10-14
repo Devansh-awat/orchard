@@ -266,6 +266,8 @@ jobs:
         run: pnpm --filter server test:analytics-flags
       - name: Greenhouse graft tests
         run: pnpm --filter @grafts/greenhouse test
+      - name: Forum graft tests
+        run: pnpm --filter @grafts/forum test
       # Managed-database tuning derived from the memory limit. Pins that a
       # derived shared_buffers can never be the whole cgroup (which OOMKilled
       # seven production databases during their own backups) and that a manual

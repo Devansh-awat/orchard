@@ -68,9 +68,6 @@ model User {
   tailscaleConnection        TailscaleConnection?
   createdJobs                Job[]                    @relation("JobCreator")
   triggeredJobRuns           JobRun[]                 @relation("JobRunTrigger")
-  forumThreads               ForumThread[]            @relation("ForumThreadAuthor")
-  forumReplies               ForumReply[]             @relation("ForumReplyAuthor")
-  forumVotes                 ForumVote[]              @relation("ForumVoteUser")
   notificationSettings       UserNotificationSetting[]
   notificationDestinations   UserNotificationDestination[]
   createdNotificationRules   NotificationRule[]       @relation("NotificationRuleCreator")
@@ -2315,72 +2312,6 @@ model McpOauthCode {
 
   @@index([expiresAt], map: "idx_mcp_oauth_codes_expires_at")
   @@map("mcp_oauth_codes")
-}
-
-model ForumCategory {
-  id          String   @id @default(uuid()) @db.Uuid
-  slug        String   @unique @db.VarChar(100)
-  name        String   @db.VarChar(100)
-  emoji       String   @db.VarChar(16)
-  description String?  @db.VarChar(300)
-  sortOrder   Int      @default(0) @map("sort_order")
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-
-  threads ForumThread[]
-
-  @@map("forum_categories")
-}
-
-model ForumThread {
-  id             String   @id @default(uuid()) @db.Uuid
-  number         Int      @unique @default(autoincrement())
-  categoryId     String   @map("category_id") @db.Uuid
-  authorId       String   @map("author_id") @db.Uuid
-  title          String   @db.VarChar(200)
-  body           String   @db.Text
-  status         String   @default("open") @db.VarChar(20)
-  priority       String   @default("none") @db.VarChar(20)
-  scope          String   @default("platform") @db.VarChar(30)
-  images         String[] @default([])
-  pinned         Boolean  @default(false)
-  locked         Boolean  @default(false)
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-  lastActivityAt DateTime @default(now()) @map("last_activity_at") @db.Timestamp(6)
-
-  category ForumCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  author   User          @relation("ForumThreadAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-  replies  ForumReply[]
-  votes    ForumVote[]
-
-  @@index([categoryId, lastActivityAt])
-  @@map("forum_threads")
-}
-
-model ForumReply {
-  id        String   @id @default(uuid()) @db.Uuid
-  threadId  String   @map("thread_id") @db.Uuid
-  authorId  String   @map("author_id") @db.Uuid
-  body      String   @db.Text
-  images    String[] @default([])
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-
-  thread ForumThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  author User        @relation("ForumReplyAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-
-  @@index([threadId, createdAt])
-  @@map("forum_replies")
-}
-
-model ForumVote {
-  threadId  String   @map("thread_id") @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-
-  thread ForumThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  user   User        @relation("ForumVoteUser", fields: [userId], references: [id], onDelete: Cascade)
-
-  @@id([threadId, userId])
-  @@map("forum_votes")
 }
 
 // Error groups are ingested server-side by a leader-elected sweep so history

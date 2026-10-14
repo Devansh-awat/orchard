@@ -56,6 +56,17 @@
         }
       ]
     },
+    "grafts/forum": {
+      "release-type": "node",
+      "component": "forum",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "graft.json",
+          "jsonpath": "$.version"
+        }
+      ]
+    },
     "packages/graft-sdk": {
       "release-type": "node",
       "component": "graft-sdk"

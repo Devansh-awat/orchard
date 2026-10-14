@@ -10,9 +10,8 @@ export interface ObjectStorage {
 }
 
 // Set by InstanceConfigService when stored config loads or changes. A module
-// variable rather than an injected service because two of the readers are not
-// injectable: forumImageBase() is a plain function, and ImageBuilderService
-// reads its S3 settings as class fields.
+// variable rather than an injected service because ImageBuilderService reads
+// its S3 settings as class fields.
 let stored: Partial<ObjectStorage> = {};
 let version = 0;
 

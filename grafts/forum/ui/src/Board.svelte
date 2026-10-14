@@ -1,22 +1,33 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { ArrowLeft, ArrowUp, ImageIcon, MessageSquare, Pin, Plus } from 'lucide-svelte';
-	import { apiFetch, toasts } from '$lib/stores';
-	import { Button, Modal, Dropdown, StatusBadge, EmptyState, Skeleton } from '$lib/components/ui';
-	import { timeAgo, projectSwatch } from '$lib/components/org-dashboard/helpers.svelte';
-	import { springHover, motionStagger } from '$lib/utils/motion.svelte';
+	import type { HostApi } from '@orchardlabs/graft-sdk/client';
 	import {
+		Avatar,
+		Button,
+		Modal,
+		Dropdown,
+		StatusBadge,
+		EmptyState,
+		Skeleton
+	} from '@orchardlabs/graft-ui';
+	import { springHover, motionStagger } from '@orchardlabs/graft-ui/utils/motion.svelte';
+	import {
+		failure,
 		groveStatus,
 		grovePriority,
 		scopeLabel,
+		swatch,
+		timeAgo,
+		toastError,
 		GROVE_STATUSES,
 		GROVE_SCOPES,
 		type GroveCategory,
 		type GroveThread
-	} from '$lib/components/grove/grove';
-	import ImageAttach from '$lib/components/grove/ImageAttach.svelte';
-	import { avatarUrl } from '$lib/avatar';
+	} from './grove';
+	import ImageAttach from './ImageAttach.svelte';
+
+	let { host }: { host: HostApi } = $props();
 
 	let categories = $state<GroveCategory[]>([]);
 	let threads = $state<GroveThread[]>([]);
@@ -34,7 +45,7 @@
 	let submitting = $state(false);
 
 	async function fetchCategories() {
-		const res = await apiFetch('/apiv1/forum/categories');
+		const res = await host.fetch('/categories');
 		if (res.ok) categories = await res.json();
 	}
 
@@ -46,7 +57,7 @@
 		if (scopeFilter) params.set('scope', scopeFilter);
 		if (sort === 'top') params.set('sort', 'top');
 		const qs = params.toString();
-		const res = await apiFetch(`/apiv1/forum/threads${qs ? `?${qs}` : ''}`);
+		const res = await host.fetch(`/threads${qs ? `?${qs}` : ''}`);
 		if (res.ok) threads = await res.json();
 		loading = false;
 	}
@@ -68,7 +79,7 @@
 		const on = !t.myVote;
 		t.myVote = on;
 		t.votes += on ? 1 : -1;
-		const res = await apiFetch(`/apiv1/forum/threads/${t.id}/vote`, {
+		const res = await host.fetch(`/threads/${t.id}/vote`, {
 			method: on ? 'POST' : 'DELETE'
 		});
 		if (res.ok) {
@@ -85,7 +96,7 @@
 		if (submitting) return;
 		submitting = true;
 		try {
-			const res = await apiFetch('/apiv1/forum/threads', {
+			const res = await host.fetch('/threads', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
@@ -96,22 +107,15 @@
 					images: composerImages
 				})
 			});
-			if (!res.ok) {
-				const data = await res.json().catch(() => ({}));
-				throw new Error(data?.message || 'Failed to create post');
-			}
+			if (!res.ok) throw new Error(await failure(res, 'Failed to create post'));
 			const created = await res.json();
 			composerOpen = false;
 			composerTitle = '';
 			composerBody = '';
 			composerImages = [];
-			goto(`/grove/${created.id}`);
+			host.navigate(`/grove/${created.id}`);
 		} catch (e) {
-			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to create post',
-				color: 'error'
-			});
+			toastError(host, 'Error', e instanceof Error ? e.message : 'Failed to create post');
 		} finally {
 			submitting = false;
 		}
@@ -123,11 +127,9 @@
 	});
 </script>
 
-<svelte:head><title>The Grove · Orchard</title></svelte:head>
-
 <div class="gv-page">
 	<div class="gv-shell">
-		<a href="/" class="gv-back"><ArrowLeft class="h-3.5 w-3.5" /> Orchard</a>
+		<a href="/" class="gv-back"><ArrowLeft size={14} /> Orchard</a>
 
 		<header class="gv-hero" {@attach motionStagger({ index: 0, from: { y: 10 } })}>
 			<div class="gv-hero-text">
@@ -135,11 +137,11 @@
 			</div>
 			<div class="gv-hero-sprites" aria-hidden="true">
 				{#each ['pome', 'drupe', 'berry', 'citrus'] as seed (seed)}
-					<span class="gv-sprite" style={projectSwatch(seed)}></span>
+					<span class="gv-sprite" style={swatch(seed)}></span>
 				{/each}
 			</div>
 			<Button variant="primary" onclick={() => (composerOpen = true)}>
-				<Plus class="h-4 w-4" /> New issue
+				<Plus size={16} /> New issue
 			</Button>
 		</header>
 
@@ -216,7 +218,7 @@
 		{:else if threads.length === 0}
 			<EmptyState title="No issues yet">
 				<Button variant="primary" onclick={() => (composerOpen = true)}>
-					<Plus class="h-4 w-4" /> New issue
+					<Plus size={16} /> New issue
 				</Button>
 			</EmptyState>
 		{:else}
@@ -241,7 +243,7 @@
 						<h2 class="gv-card-title">{t.title}</h2>
 						<p class="gv-card-snippet">{t.snippet}</p>
 						<div class="gv-card-foot">
-							<img src={avatarUrl(t.author)} alt="" class="gv-av" loading="lazy" decoding="async" />
+							<Avatar user={t.author} class="gv-av" />
 							<span class="gv-author">{t.author.username}</span>
 							<span class="gv-when">{timeAgo(t.lastActivityAt)}</span>
 							{#if t.images.length > 0}
@@ -314,7 +316,7 @@
 			maxlength={10000}
 			placeholder="Details"></textarea>
 		<div class="gv-form-actions">
-			<ImageAttach bind:images={composerImages} disabled={submitting} />
+			<ImageAttach {host} bind:images={composerImages} disabled={submitting} />
 			<div class="gv-form-buttons">
 				<Button variant="ghost" onclick={() => (composerOpen = false)}>Cancel</Button>
 				<Button
@@ -570,7 +572,7 @@
 		padding-top: 0.25rem;
 	}
 
-	.gv-av {
+	:global(.gv-av) {
 		width: 1.125rem;
 		height: 1.125rem;
 		border-radius: var(--radius-pill);

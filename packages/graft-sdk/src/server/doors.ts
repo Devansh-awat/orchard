@@ -22,7 +22,8 @@ export const Doors = {
   notifications: door('notifications', 1),
   rateLimit: door('rateLimit', 1),
   metrics: door('metrics', 1),
-  github: door('github', 1)
+  github: door('github', 1),
+  storage: door('storage', 1)
 } as const;
 
 export type OrgRole = 'owner' | 'admin' | 'member' | 'guest';
@@ -429,4 +430,12 @@ export interface GitHubDoor {
       | ((deliveryId: string | undefined, body: unknown) => Promise<Record<string, unknown>>)
       | null
   ): void;
+}
+
+export interface StorageDoor {
+  readonly configured: boolean;
+  readonly publicBase: string | null;
+  owns(url: string): boolean;
+  upload(file: { data: Uint8Array; contentType: string; extension: string }): Promise<string>;
+  delete(url: string): Promise<void>;
 }

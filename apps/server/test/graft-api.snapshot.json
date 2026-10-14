@@ -144,6 +144,7 @@
       "status": "stable",
       "capability": "projects.read",
       "methods": {
+        "createAutoIngressForDeployment": 0,
         "createDeploymentFromGitHub": 0,
         "createEnvironment": 0,
         "deleteEnvironment": 0,
@@ -196,6 +197,16 @@
         "value": 2
       },
       "properties": ["generation"]
+    },
+    "storage@1": {
+      "status": "stable",
+      "capability": "storage",
+      "methods": {
+        "delete": 1,
+        "owns": 1,
+        "upload": 1
+      },
+      "properties": ["configured", "publicBase"]
     },
     "users@1": {
       "status": "stable",

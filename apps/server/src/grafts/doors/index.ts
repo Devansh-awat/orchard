@@ -18,6 +18,7 @@ import { ProjectsDoorV1 } from './projects.door';
 import { RateLimitDoorV1 } from './rate-limit.door';
 import { SecretsDoorV1 } from './secrets.door';
 import { SettingsDoorV1 } from './settings.door';
+import { StorageDoorV1 } from './storage.door';
 import { UsersDoorV1 } from './users.door';
 
 type DoorClass = Type<unknown> & { meta: DoorMeta };
@@ -40,7 +41,8 @@ export const DOOR_CLASSES: DoorClass[] = [
   NotificationsDoorV1,
   RateLimitDoorV1,
   MetricsDoorV1,
-  GitHubDoorV1
+  GitHubDoorV1,
+  StorageDoorV1
 ];
 
 export function doorProviders(): Provider[] {

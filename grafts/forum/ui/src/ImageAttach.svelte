@@ -1,12 +1,14 @@
 <script lang="ts">
 	import { ImagePlus, X, Loader2 } from 'lucide-svelte';
-	import { toasts } from '$lib/stores';
-	import { uploadGroveImage } from './grove';
+	import type { HostApi } from '@orchardlabs/graft-sdk/client';
+	import { toastError, uploadGroveImage } from './grove';
 
 	let {
+		host,
 		images = $bindable([]),
 		disabled = false
 	}: {
+		host: HostApi;
 		images?: string[];
 		disabled?: boolean;
 	} = $props();
@@ -22,14 +24,10 @@
 		uploading = true;
 		for (const file of files) {
 			try {
-				const url = await uploadGroveImage(file);
+				const url = await uploadGroveImage(host, file);
 				images = [...images, url];
 			} catch (err) {
-				toasts.add({
-					title: 'Upload failed',
-					description: err instanceof Error ? err.message : 'Could not upload image',
-					color: 'error'
-				});
+				toastError(host, 'Upload failed', err instanceof Error ? err.message : 'Could not upload image');
 			}
 		}
 		uploading = false;

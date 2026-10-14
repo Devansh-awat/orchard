@@ -21,6 +21,7 @@ export const GRAFT_CAPABILITIES = [
   'rateLimit',
   'flags',
   'metrics',
+  'storage',
   'mcp'
 ] as const;
 

@@ -14,7 +14,7 @@ uses, and `orchardctl graft add` refuses a graft that needs a door this Orchard
 does not have. Inject a door with `@Inject(Doors.<name>)` from
 `@orchardlabs/graft-sdk/server`.
 
-18 doors are available.
+19 doors are available.
 
 | Door | Version | Capability | Status | Members |
 | --- | --- | --- | --- | --- |
@@ -31,8 +31,9 @@ does not have. Inject a door with `@Inject(Doors.<name>)` from
 | `Doors.kube` | 1 | `kube.read` | stable | `kc`, `kubernetes`, `databaseTlsHostname()`, `isLeader()`, `onLeaderAcquired()`, `registerMirrorShard()` |
 | `Doors.metrics` | 1 | `metrics` | stable | `configured`, `vm`, `escapeLabel()`, `queryInstant()` |
 | `Doors.notifications` | 1 | `notifications` | stable | `notifyAccount()`, `registerEvent()` |
-| `Doors.projects` | 1 | `projects.read` | stable | `createDeploymentFromGitHub()`, `createEnvironment()`, `deleteEnvironment()`, `deleteEnvironmentFromCluster()`, `deployments()`, `environments()`, `onEnvironmentEnvChanged()`, `rebuildDeployment()`, `requireWrite()`, `setDeploymentBranch()` |
+| `Doors.projects` | 1 | `projects.read` | stable | `createAutoIngressForDeployment()`, `createDeploymentFromGitHub()`, `createEnvironment()`, `deleteEnvironment()`, `deleteEnvironmentFromCluster()`, `deployments()`, `environments()`, `onEnvironmentEnvChanged()`, `rebuildDeployment()`, `requireWrite()`, `setDeploymentBranch()` |
 | `Doors.rateLimit` | 1 | `rateLimit` | stable | `limits`, `throttle`, `check()`, `consume()`, `define()` |
 | `Doors.secrets` | 1 | `secrets` | stable | `enabled`, `decrypt()`, `decryptForUser()`, `encrypt()`, `encryptForUser()`, `isEncrypted()`, `maybeDecrypt()`, `open()`, `seal()` |
 | `Doors.settings` | 1 | `settings` | stable | `generation`, `all()`, `flag()`, `isConfigured()`, `store()`, `storeIfAbsent()`, `stored()`, `validate()`, `value()` |
+| `Doors.storage` | 1 | `storage` | stable | `configured`, `publicBase`, `delete()`, `owns()`, `upload()` |
 | `Doors.users` | 1 | `users.read` | stable | `findByUsername()`, `get()`, `getMany()`, `resolve()` |

@@ -5,13 +5,11 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
-	import { env as publicEnv } from '$env/dynamic/public';
 	import GraftIcon from '$lib/grafts/GraftIcon.svelte';
 	import { graftHost } from '$lib/grafts/host.svelte';
 	import {
 		Leaf,
 		Zap,
-		Trees,
 		ChevronDown,
 		ChevronRight,
 		Palette,
@@ -120,17 +118,6 @@
 			icon: Activity,
 			active: $page.url.pathname.startsWith('/' + orgSlug + '/usage')
 		},
-		...(publicEnv.PUBLIC_GROVE_ENABLED === 'true'
-			? [
-					{
-						id: 'grove',
-						label: 'The Grove',
-						href: '/grove',
-						icon: Trees,
-						active: $page.url.pathname.startsWith('/grove')
-					}
-				]
-			: []),
 		...graftHost.slot('nav.primary').map(({ graftId, host, item }) => {
 			const href = item.href.replaceAll('{org}', orgSlug ?? '');
 			return {
