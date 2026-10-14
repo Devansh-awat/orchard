@@ -56,3 +56,33 @@ understand.
 Orchard records a checksum for every migration it applies. A graft version
 whose already-applied migration has changed is refused, so a republished graft
 cannot quietly rewrite history. Authors ship a new migration instead.
+
+## Following a version range from Git
+
+Values always pin an exact version and digest, so every pod runs the same graft
+and a revert is a rollback. To keep a pin moving without editing it by hand, mark
+the version with a range:
+
+```yaml
+grafts:
+  - id: greenhouse
+    version: 1.2.0 # {"$graftpolicy": "^1"}
+    digest: sha256:...
+```
+
+and run `graft bump` from the graft SDK in your GitOps repository:
+
+```sh
+npx -p @orchardlabs/graft-sdk graft bump values.yaml --platform 2.70.0
+```
+
+It moves each marked graft to the newest signed, unrevoked marketplace version
+inside its range and rewrites the digest with it. It never downgrades, and with
+`--platform` set to the Orchard version you run it holds back any release whose
+`engines.platform` that version does not satisfy, printing `held` instead, so a
+graft never lands on a server too old to load it. `--check` reports without
+writing and exits 2 when something would change.
+
+Run it when a graft is published and again when your Orchard version changes,
+then commit the result. Upgrades made this way go through Helm values, so the
+rehearsal and snapshot above do not apply.

@@ -13,6 +13,7 @@ import {
 import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { bumpFiles } from './bump.mjs';
 import { keyId, tapAdd, tapInit } from './tap.mjs';
 import { tarGz } from './tar.mjs';
 
@@ -450,6 +451,10 @@ const HELP = `graft: build and package Orchard grafts (Orchard's extensions)
                              start a tap: a folder of grafts you host yourself
   graft tap add <dir> <file.graft>
                              check a graft is signed with the tap key and publish it in the tap
+  graft bump <values.yaml...> [--platform <orchard version>] [--marketplace <url>] [--check]
+                             move every graft whose version carries a # {"$graftpolicy": "^1"}
+                             marker to the newest signed marketplace version the policy and
+                             --platform allow, updating its digest with it
 
 Grafts run with the same access as Orchard. Only ship what you would install yourself.`;
 
@@ -552,6 +557,30 @@ export async function run(argv) {
     }
     case 'tap':
       return tap(args);
+    case 'bump': {
+      const platform = flag(args, '--platform');
+      const marketplace = flag(args, '--marketplace');
+      const check = args.includes('--check');
+      const files = args.filter((a) => a !== '--check');
+      if (!files.length)
+        fail(
+          'usage: graft bump <values.yaml...> [--platform <version>] [--marketplace <url>] [--check]'
+        );
+      if (!platform) out('note: no --platform given, so engines.platform is not checked');
+      const reports = await bumpFiles(files, { platform, marketplace, check });
+      let changed = 0;
+      for (const report of reports) {
+        for (const c of report.changes) {
+          changed++;
+          out(`bumped ${c.id} ${c.from} -> ${c.to} (${relative(process.cwd(), report.file)})`);
+        }
+        for (const h of report.held) out(`held ${h.id} ${h.version}: needs Orchard ${h.needs}`);
+        for (const s of report.skipped) out(`skipped ${s.id}: ${s.reason}`);
+      }
+      if (!changed) out('every graft is already at the newest version its policy allows');
+      if (check && changed) process.exit(2);
+      return;
+    }
     default:
       out(HELP);
       if (command && command !== 'help' && command !== '--help') process.exit(1);

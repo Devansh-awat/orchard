@@ -1206,6 +1206,118 @@ module.exports = { default: Root };`;
   });
 });
 
+describe('graft bump', () => {
+  const values = [
+    'spec:',
+    '  values:',
+    '    grafts:',
+    '      - id: greenhouse',
+    '        version: 1.0.0 # {"$graftpolicy": "^1"}',
+    '        digest: sha256:aaa',
+    '      - id: forum',
+    '        version: \'1.1.0\' # {"$graftpolicy": "^1"}',
+    '        digest: "sha256:bbb"',
+    '      - version: 0.2.0 # {"$graftpolicy": ">=0.2.0 <1"}',
+    '        id: announcements',
+    '        digest: sha256:ccc',
+    '      - id: pinned',
+    '        version: 1.0.0',
+    '        digest: sha256:ddd',
+    '      - id: tapped',
+    '        tap: acme',
+    '        version: 1.0.0 # {"$graftpolicy": "^1"}',
+    '        digest: sha256:eee',
+    '    image:',
+    '      version: 9.9.9',
+    ''
+  ].join('\n');
+
+  const v = (version: string, platform: string, extra: Record<string, unknown> = {}) => ({
+    version,
+    digest: `sha256:${version.replace(/\./g, '')}`,
+    signed: true,
+    engines: { platform, sdk: '^1.0.0' },
+    ...extra
+  });
+
+  const listings: Record<string, unknown> = {
+    greenhouse: {
+      versions: [
+        v('1.1.0', '>=2.67.0 <3'),
+        v('1.2.0', '>=2.67.0 <3', { signed: false }),
+        v('1.3.0', '>=2.67.0 <3'),
+        v('2.0.0', '>=2.67.0 <3')
+      ]
+    },
+    forum: { versions: [v('1.2.0', '>=2.70.0 <3'), v('1.0.0', '>=2.69.0 <3')] },
+    announcements: { versions: [v('0.3.0', '>=2.67.0 <3'), v('0.4.0', '>=2.67.0 <3')] }
+  };
+
+  const listing = async (id: string) => {
+    if (!(id in listings)) throw new Error(`404 for ${id}`);
+    return listings[id];
+  };
+
+  test('follows each policy, skips unsigned and revoked, and leaves pins alone', async () => {
+    const { bumpText } = await import('../../../packages/graft-sdk/cli/bump.mjs');
+    const report = await bumpText(values, {
+      platform: '2.69.0',
+      listing,
+      revoked: new Set(['sha256:130'])
+    });
+    assert.deepEqual(
+      report.changes.map((c: { id: string; from: string; to: string }) => [c.id, c.from, c.to]),
+      [
+        ['greenhouse', '1.0.0', '1.1.0'],
+        ['announcements', '0.2.0', '0.4.0']
+      ]
+    );
+    assert.deepEqual(report.held, [{ id: 'forum', version: '1.2.0', needs: '>=2.70.0 <3' }]);
+    assert.deepEqual(report.skipped, [
+      { id: 'tapped', reason: 'only marketplace grafts can follow a policy' }
+    ]);
+    const lines = report.text.split('\n');
+    assert.equal(lines[4], '        version: 1.1.0 # {"$graftpolicy": "^1"}');
+    assert.equal(lines[5], '        digest: sha256:110');
+    assert.equal(lines[9], '      - version: 0.4.0 # {"$graftpolicy": ">=0.2.0 <1"}');
+    assert.equal(lines[11], '        digest: sha256:040');
+    assert.equal(lines[7], '        version: \'1.1.0\' # {"$graftpolicy": "^1"}');
+    assert.equal(lines[14], '        digest: sha256:ddd');
+    assert.equal(lines[20], '      version: 9.9.9');
+  });
+
+  test('a held version goes out once the platform catches up', async () => {
+    const { bumpText } = await import('../../../packages/graft-sdk/cli/bump.mjs');
+    const report = await bumpText(values, { platform: '2.70.0', listing, revoked: new Set() });
+    const forum = report.changes.find((c: { id: string }) => c.id === 'forum');
+    assert.deepEqual(forum, { id: 'forum', from: '1.1.0', to: '1.2.0', digest: 'sha256:120' });
+    assert.ok(report.text.includes(`        version: '1.2.0' # {"$graftpolicy": "^1"}`));
+    assert.ok(report.text.includes('        digest: "sha256:120"'));
+    assert.equal(report.held.length, 0);
+  });
+
+  test('never downgrades and rejects a malformed marker', async () => {
+    const { bumpText } = await import('../../../packages/graft-sdk/cli/bump.mjs');
+    const ahead = values.replace(
+      'version: 1.0.0 # {"$graftpolicy": "^1"}',
+      'version: 1.9.0 # {"$graftpolicy": "^1"}'
+    );
+    const report = await bumpText(ahead, { platform: '2.69.0', listing, revoked: new Set() });
+    assert.equal(
+      report.changes.some((c: { id: string }) => c.id === 'greenhouse'),
+      false
+    );
+    await assert.rejects(
+      bumpText('grafts:\n  - id: x\n    version: 1.0.0 # {"$graftpolicy": }\n', {
+        platform: '2.69.0',
+        listing,
+        revoked: new Set()
+      }),
+      /not valid JSON/
+    );
+  });
+});
+
 describe('mcp', () => {
   test('graft MCP tools register inside their namespace or claims only', async () => {
     const { loadMcpGrafts, registerGraftMcpTools } = await import('../src/grafts/mcp');
