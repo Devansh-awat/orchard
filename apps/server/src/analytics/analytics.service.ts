@@ -13,6 +13,7 @@ export interface CaptureInput {
 
 const FLAG_TTL_MS = 60_000;
 const FLAG_UNKNOWN_TTL_MS = 5_000;
+const COLD_FLAG_RETRY_MS = [250, 750];
 const FLAG_CACHE_MAX = 5_000;
 
 @Injectable()
@@ -116,7 +117,7 @@ export class AnalyticsService implements OnModuleDestroy {
   private refreshFlag(id: string, key: string, distinctId: string): Promise<boolean> {
     const running = this.flagInflight.get(id);
     if (running) return running;
-    const pending = this.evaluateFlag(key, distinctId).then((value) => {
+    const pending = this.evaluateColdAware(id, key, distinctId).then((value) => {
       this.flagInflight.delete(id);
       const previous = this.flagCache.get(id);
       if (value === null && previous) return previous.value;
@@ -132,6 +133,21 @@ export class AnalyticsService implements OnModuleDestroy {
     });
     this.flagInflight.set(id, pending);
     return pending;
+  }
+
+  private async evaluateColdAware(
+    id: string,
+    key: string,
+    distinctId: string
+  ): Promise<boolean | null> {
+    const first = await this.evaluateFlag(key, distinctId);
+    if (first !== null || this.flagCache.has(id)) return first;
+    for (const wait of COLD_FLAG_RETRY_MS) {
+      await new Promise((resolve) => setTimeout(resolve, wait));
+      const next = await this.evaluateFlag(key, distinctId);
+      if (next !== null) return next;
+    }
+    return null;
   }
 
   private async evaluateFlag(

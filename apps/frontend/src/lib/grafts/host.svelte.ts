@@ -144,13 +144,42 @@ function safeJson(text: string): unknown {
 	}
 }
 
+const IMPORT_ATTEMPTS = 3;
+const RELOAD_KEY = 'orchard:graft-reload-at';
+const RELOAD_WINDOW_MS = 60_000;
+
 async function importEntry(url: string): Promise<Record<string, unknown>> {
-	try {
-		return await import(/* @vite-ignore */ url);
-	} catch {
-		await new Promise((r) => setTimeout(r, 1000));
-		return await import(/* @vite-ignore */ url);
+	let last: unknown = null;
+	for (let attempt = 0; attempt < IMPORT_ATTEMPTS; attempt++) {
+		const target = attempt === 0 ? url : `${url}${url.includes('?') ? '&' : '?'}retry=${attempt}`;
+		try {
+			return await import(/* @vite-ignore */ target);
+		} catch (err) {
+			last = err;
+			if (attempt < IMPORT_ATTEMPTS - 1)
+				await new Promise((r) => setTimeout(r, 500 * 2 ** attempt));
+		}
 	}
+	throw last;
+}
+
+function reloadOnce(): boolean {
+	if (typeof window === 'undefined') return false;
+	try {
+		const at = Number(window.sessionStorage.getItem(RELOAD_KEY));
+		if (at && Date.now() - at < RELOAD_WINDOW_MS) return false;
+		window.sessionStorage.setItem(RELOAD_KEY, String(Date.now()));
+	} catch {
+		return false;
+	}
+	window.location.reload();
+	return true;
+}
+
+if (typeof window !== 'undefined') {
+	window.addEventListener('vite:preloadError', (event) => {
+		if (reloadOnce()) event.preventDefault();
+	});
 }
 
 class GraftHost {
@@ -200,6 +229,10 @@ class GraftHost {
 				loaded.push({ graft: r.graft, client: r.client, host: createHostApi(r.graft) });
 			else failed[r.graft.id] = r.error ?? 'unknown error';
 		}
+		const stale = results.some(
+			(r) => !('client' in r && r.client) && r.error !== 'the server did not load this graft'
+		);
+		if (stale && reloadOnce()) return;
 		this.loaded = loaded;
 		this.failed = failed;
 		this.ready = true;

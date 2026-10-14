@@ -42,14 +42,23 @@ test('a failed or empty refresh keeps the last known answer instead of turning t
   assert.ok(calls() >= 2);
 });
 
-test('an unknown first answer is false but retried soon, and other users are separate', async (t) => {
+test('a cold unknown answer is retried at once, so a new server pod does not flip the flag off', async () => {
   const { svc, calls } = serviceWith([undefined, true]);
-  assert.equal(await svc.isFeatureEnabled('greenhouse', 'u2'), false);
-  assert.equal(await svc.isFeatureEnabled('greenhouse', 'u2'), false);
-  assert.equal(calls(), 1);
-  t.mock.timers.enable({ apis: ['Date'], now: Date.now() + 6_000 });
-  await svc.isFeatureEnabled('greenhouse', 'u2');
-  await new Promise((r) => setImmediate(r));
   assert.equal(await svc.isFeatureEnabled('greenhouse', 'u2'), true);
   assert.equal(calls(), 2);
+  assert.equal(await svc.isFeatureEnabled('greenhouse', 'u2'), true);
+  assert.equal(calls(), 2);
+});
+
+test('an answer that stays unknown is false but retried soon, and other users are separate', async (t) => {
+  const { svc, calls } = serviceWith([undefined, undefined, undefined, true]);
+  assert.equal(await svc.isFeatureEnabled('greenhouse', 'u3'), false);
+  assert.equal(calls(), 3);
+  assert.equal(await svc.isFeatureEnabled('greenhouse', 'u3'), false);
+  assert.equal(calls(), 3);
+  t.mock.timers.enable({ apis: ['Date'], now: Date.now() + 6_000 });
+  await svc.isFeatureEnabled('greenhouse', 'u3');
+  await new Promise((r) => setImmediate(r));
+  assert.equal(await svc.isFeatureEnabled('greenhouse', 'u3'), true);
+  assert.equal(calls(), 4);
 });

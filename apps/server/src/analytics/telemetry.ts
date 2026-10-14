@@ -13,6 +13,8 @@ import { BatchLogRecordProcessor } from '@opentelemetry/sdk-logs';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { logs, SeverityNumber } from '@opentelemetry/api-logs';
 
+const SHUTDOWN_DEADLINE_MS = 30_000;
+
 let sdk: NodeSDK | null = null;
 
 export function startTelemetry(): void {
@@ -39,17 +41,23 @@ export function startTelemetry(): void {
 
   sdk.start();
 
-  // Graceful flush on shutdown so we don't lose the last batch of logs.
-  // IMPORTANT: registering a SIGTERM/SIGINT listener disables Node's default
-  // terminate-on-signal behavior, so we MUST exit ourselves once the flush
-  // finishes — otherwise the process ignores SIGTERM entirely and `nest
-  // start --watch` restarts hang forever on stale code.
+  // Flush on shutdown without racing Nest's own graceful close. Registering a
+  // SIGTERM listener disables Node's default exit, so the first signal flushes
+  // and arms a deadline, and the signal Nest re-sends once it has closed (or a
+  // second one from the user) exits for real.
+  let signalled = false;
   const shutdown = (signal: NodeJS.Signals) => {
-    const forceExit = setTimeout(() => process.exit(0), 3000);
+    const code = signal === 'SIGINT' ? 130 : 0;
+    if (signalled) {
+      process.exit(code);
+      return;
+    }
+    signalled = true;
+    const forceExit = setTimeout(() => process.exit(code), SHUTDOWN_DEADLINE_MS);
     forceExit.unref();
-    Promise.resolve(sdk?.shutdown())
-      .catch((err) => console.warn(`OTel shutdown failed: ${(err as Error).message}`))
-      .finally(() => process.exit(signal === 'SIGINT' ? 130 : 0));
+    void Promise.resolve(sdk?.shutdown()).catch((err) =>
+      console.warn(`OTel shutdown failed: ${(err as Error).message}`)
+    );
   };
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));

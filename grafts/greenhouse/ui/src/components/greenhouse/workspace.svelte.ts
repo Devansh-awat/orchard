@@ -43,6 +43,7 @@ export type SessionsMode = 'loading' | 'server' | 'legacy';
 export type Role = 'owner' | 'collaborator' | 'viewer' | 'admin';
 
 const PREPARING_POLL_MS = 4000;
+const LOAD_RETRIES = 5;
 
 export type SessionLaunch = {
   repo: string;
@@ -215,6 +216,7 @@ export class MachineWorkspace {
   readonly pendingPrompts = new SvelteMap<string, string>();
   readonly launches = new SvelteMap<string, SessionLaunch>();
   readonly #optimistic = new SvelteSet<string>();
+  #loadRetries = 0;
   retryLaunch = $state.raw<SessionLaunch | null>(null);
   readonly #hiddenChats = new SvelteSet<string>();
   pendingChat = $state<string | null>(null);
@@ -531,7 +533,17 @@ export class MachineWorkspace {
       this.sessions = [...kept, ...fresh];
       return;
     }
-    if (res.status === 404 || res.status === 405 || res.status === 0) {
+    if (untrack(() => this.mode) === 'server') return;
+    if (res.status === 0 || res.status >= 500) {
+      if (this.#loadRetries < LOAD_RETRIES) {
+        this.#loadRetries += 1;
+        setTimeout(() => {
+          if (!this.#disposed) void this.refreshSessions(repos);
+        }, 500 * this.#loadRetries);
+      }
+      return;
+    }
+    if (res.status === 404 || res.status === 405) {
       await repos;
       if (this.#disposed) return;
       this.mode = 'legacy';

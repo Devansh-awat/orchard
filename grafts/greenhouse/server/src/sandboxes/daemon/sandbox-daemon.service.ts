@@ -13,6 +13,7 @@ import { SANDBOX_AGENTD_PORT } from '../sandbox-bootstrap';
 import { DaemonConnection, DaemonRpcError, DaemonUnavailableError } from './daemon-connection';
 
 const MISS_RETRY_MS = 30_000;
+const MISS_BACKOFF_MS = [2_000, 5_000, 15_000, 30_000];
 const RESUBSCRIBE_MS = 1000;
 const EXEC_GRACE_MS = 5000;
 
@@ -47,6 +48,7 @@ export class SandboxDaemonService implements OnModuleDestroy {
   private readonly conns = new Map<string, Promise<DaemonConnection | null>>();
   private readonly live = new Map<string, DaemonConnection>();
   private readonly retryAt = new Map<string, number>();
+  private readonly misses = new Map<string, number>();
   private readonly refs = new Map<string, SandboxRef>();
   private readonly subs = new Map<string, Map<string, Subscription>>();
   readonly events = new EventEmitter();
@@ -81,6 +83,7 @@ export class SandboxDaemonService implements OnModuleDestroy {
     this.live.delete(sandboxId);
     this.conns.delete(sandboxId);
     this.retryAt.delete(sandboxId);
+    this.misses.delete(sandboxId);
   }
 
   async connection(ref: SandboxRef): Promise<DaemonConnection | null> {
@@ -127,11 +130,17 @@ export class SandboxDaemonService implements OnModuleDestroy {
         }
       });
       this.retryAt.delete(ref.id);
+      this.misses.delete(ref.id);
       this.live.set(ref.id, conn);
       this.events.emit('connect', ref.id);
       return conn;
     } catch (e: any) {
-      this.retryAt.set(ref.id, Date.now() + MISS_RETRY_MS);
+      const misses = (this.misses.get(ref.id) ?? 0) + 1;
+      this.misses.set(ref.id, misses);
+      this.retryAt.set(
+        ref.id,
+        Date.now() + MISS_BACKOFF_MS[Math.min(misses - 1, MISS_BACKOFF_MS.length - 1)]
+      );
       this.logger.debug(`daemon unavailable for ${ref.id}: ${e?.message}`);
       return null;
     }
@@ -256,7 +265,7 @@ export class SandboxDaemonService implements OnModuleDestroy {
     if (!conn) {
       setTimeout(() => {
         void this.resubscribe(sandboxId);
-      }, MISS_RETRY_MS).unref?.();
+      }, MISS_BACKOFF_MS[0]).unref?.();
       return;
     }
     for (const [chatId, sub] of chats) {

@@ -16,12 +16,12 @@
 	const query = createQuery(() => sandboxesQueryOptions($selectedOrganization?.id));
 
 	const listState = $derived(
-		query.error instanceof SandboxDisabledError
-			? 'disabled'
-			: query.isError
-				? 'error'
-				: query.data
-					? 'ready'
+		query.data
+			? 'ready'
+			: query.error instanceof SandboxDisabledError
+				? 'disabled'
+				: query.isError
+					? 'error'
 					: 'loading'
 	);
 

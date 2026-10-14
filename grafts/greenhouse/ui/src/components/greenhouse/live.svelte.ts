@@ -64,8 +64,9 @@ export interface LiveDraft {
   at: number;
 }
 
-const BACKOFF = [1000, 2000, 4000, 8000, 15000, 30000];
-const UNAVAILABLE_RETRY_MS = 60_000;
+const BACKOFF = [500, 1000, 2000, 4000, 8000, 15000];
+const RESTART_CODES = new Set([1001, 1012]);
+const RESTART_JITTER_MS = 750;
 const DRAFT_INTERVAL_MS = 100;
 const PING_MS = 25_000;
 const DRAFT_TTL_MS = 15_000;
@@ -108,9 +109,22 @@ export class LiveClient {
   #closed = false;
   readonly #rooms = new Map<string, LiveRoomSink>();
 
+  readonly #wake = () => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    if (this.#closed || !this.sid || this.#socket) return;
+    if (this.#retryTimer) clearTimeout(this.#retryTimer);
+    this.#retryTimer = null;
+    this.#attempt = 0;
+    this.#connect();
+  };
+
   constructor(sandboxId: string, transport: LiveTransport = wsTransport) {
     this.sandboxId = sandboxId;
     this.#transport = transport;
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', this.#wake);
+      document.addEventListener('visibilitychange', this.#wake);
+    }
   }
 
   join(sid: string | null) {
@@ -158,23 +172,24 @@ export class LiveClient {
           this.kicked = code === 4403 ? 'You no longer have access to this machine' : null;
           return;
         }
-        if (!opened && (code === 4404 || code === 1006) && this.#attempt >= 2) {
-          this.state = 'unavailable';
-          this.#schedule(UNAVAILABLE_RETRY_MS);
+        if (opened && RESTART_CODES.has(code)) {
+          this.#attempt = 0;
+          this.state = 'retrying';
+          this.#schedule(100 + Math.random() * RESTART_JITTER_MS, false);
           return;
         }
-        this.state = 'retrying';
+        this.state = !opened && this.#attempt >= 2 ? 'unavailable' : 'retrying';
         this.#schedule(BACKOFF[Math.min(this.#attempt, BACKOFF.length - 1)]);
       }
     });
     this.#socket = socket;
   }
 
-  #schedule(ms: number) {
+  #schedule(ms: number, count = true) {
     if (this.#retryTimer) clearTimeout(this.#retryTimer);
     this.#retryTimer = setTimeout(() => {
       this.#retryTimer = null;
-      this.#attempt += 1;
+      if (count) this.#attempt += 1;
       this.#connect();
     }, ms);
   }
@@ -392,6 +407,10 @@ export class LiveClient {
   close() {
     this.#closed = true;
     if (this.#draftTimer) clearTimeout(this.#draftTimer);
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('online', this.#wake);
+      document.removeEventListener('visibilitychange', this.#wake);
+    }
     this.#disconnect();
   }
 }

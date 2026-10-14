@@ -19,7 +19,11 @@ export class SandboxDisabledError extends Error {
 }
 
 function sandboxRetry(failureCount: number, error: Error) {
-  return !(error instanceof SandboxDisabledError) && failureCount < 1;
+  return failureCount < (error instanceof SandboxDisabledError ? 2 : 3);
+}
+
+function sandboxRetryDelay(attempt: number) {
+  return Math.min(500 * 2 ** attempt, 4000);
 }
 
 export function sandboxesQueryOptions(organizationId?: string) {
@@ -39,7 +43,8 @@ export function sandboxesQueryOptions(organizationId?: string) {
       const sandboxes = query.state.data?.sandboxes ?? [];
       return sandboxes.some((s) => isSandboxTransitional(s.status) || s.applying) ? 3_000 : 30_000;
     },
-    retry: sandboxRetry
+    retry: sandboxRetry,
+    retryDelay: sandboxRetryDelay
   };
 }
 
@@ -57,7 +62,8 @@ export function sandboxQueryOptions(id: string) {
       const sandbox = query.state.data;
       return sandbox && isSandboxTransitional(sandbox.status) ? 3_000 : 30_000;
     },
-    retry: sandboxRetry
+    retry: sandboxRetry,
+    retryDelay: sandboxRetryDelay
   };
 }
 
@@ -105,7 +111,8 @@ export function sandboxCredentialsQueryOptions() {
       if (!res.ok) throw new Error('Failed to fetch sandbox credentials');
       return res.json();
     },
-    retry: sandboxRetry
+    retry: sandboxRetry,
+    retryDelay: sandboxRetryDelay
   };
 }
 
@@ -119,6 +126,7 @@ export function sshIdentitiesQueryOptions() {
       const data: SshIdentitiesResponse = await res.json();
       return data.identities ?? [];
     },
-    retry: sandboxRetry
+    retry: sandboxRetry,
+    retryDelay: sandboxRetryDelay
   };
 }
