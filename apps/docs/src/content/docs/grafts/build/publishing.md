@@ -39,8 +39,13 @@ The [Extension Marketplace](https://orchard.my/extensions) publishes the grafts
 in the [`grafts/` directory](https://github.com/hackclub/orchard/tree/main/grafts)
 of the Orchard repository. Open a pull request adding yours. CI runs
 `graft doctor`, packs every graft, and on merge signs new versions with Orchard's
-key and publishes them. Published versions never change: bump `version` in
-`graft.json` to ship an update.
+key and publishes them. Published versions never change, so every update needs a
+new `version`. You don't bump it by hand: each graft is a release-please
+component, so `feat:` and `fix:` commits that touch it add it to the next
+release pull request, which bumps `package.json` and `graft.json` together.
+Merging that pull request publishes the new version. Add yours to
+`release-please-config.json` and `.release-please-manifest.json` the same way
+`grafts/greenhouse` is.
 
 Every version lists the Orchard versions it works with (`engines.platform`), and
 `orchardctl` installs the newest one that matches the instance, so older

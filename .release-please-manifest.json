@@ -5,5 +5,7 @@
   "apps/cli": "0.26.0",
   "apps/r2-proxy": "0.6.0",
   "apps/registry": "0.5.0",
-  "registry": "0.3.0"
+  "registry": "0.3.0",
+  "grafts/greenhouse": "1.0.0",
+  "grafts/announcements": "0.2.0"
 }

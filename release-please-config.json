@@ -33,6 +33,28 @@
     "registry": {
       "release-type": "simple",
       "component": "templates"
+    },
+    "grafts/greenhouse": {
+      "release-type": "node",
+      "component": "greenhouse",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "graft.json",
+          "jsonpath": "$.version"
+        }
+      ]
+    },
+    "grafts/announcements": {
+      "release-type": "node",
+      "component": "announcements",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "graft.json",
+          "jsonpath": "$.version"
+        }
+      ]
     }
   }
 }
