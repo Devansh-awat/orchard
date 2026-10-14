@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.28.1](https://github.com/hackclub/orchard/compare/cli/v0.28.0...cli/v0.28.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* **cli:** agentd is unix only so the windows release builds again ([681e17c](https://github.com/hackclub/orchard/commit/681e17c45716514474b4dcba0f3d6442e15cf5f9))
+
 ## [0.28.0](https://github.com/hackclub/orchard/compare/cli/v0.27.0...cli/v0.28.0) (2026-10-14)
 
 
