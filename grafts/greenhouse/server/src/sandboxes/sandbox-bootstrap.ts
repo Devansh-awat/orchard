@@ -23,7 +23,7 @@ export const SANDBOX_AGENTD_LOG = '/var/log/orchard-agentd.log';
 
 export const SANDBOX_DRIVE_MARKER = '.orchard-drive';
 
-export const SANDBOX_BRIDGE_CLI_VERSION = '0.23.0';
+export const SANDBOX_BRIDGE_CLI_VERSION = '0.28.1';
 
 const BRIDGE_RELEASES = 'https://github.com/LeafdTK/orchard-releases/releases/download';
 
