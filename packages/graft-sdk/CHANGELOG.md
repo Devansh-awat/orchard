@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.0](https://github.com/hackclub/orchard/compare/graft-sdk/v1.1.0...graft-sdk/v1.2.0) (2026-10-14)
+
+
+### Features
+
+* the grove moves out of core into the forum graft, grafts get a storage door ([f5a195b](https://github.com/hackclub/orchard/commit/f5a195b1cf1750e82e1f01bedfe4880d6fafa154))
+
+
+### Bug Fixes
+
+* graft-sdk keeps its graft bin on npm and the npm publish can be rerun by hand ([6984c47](https://github.com/hackclub/orchard/commit/6984c47941548d7ebd3d22de177a6a4726564682))
+
 ## [1.1.0](https://github.com/hackclub/orchard/compare/graft-sdk/v1.0.0...graft-sdk/v1.1.0) (2026-10-14)
 
 

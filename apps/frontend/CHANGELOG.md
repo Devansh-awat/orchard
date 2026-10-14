@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.66.0](https://github.com/hackclub/orchard/compare/frontend/v1.65.0...frontend/v1.66.0) (2026-10-14)
+
+
+### Features
+
+* the grove moves out of core into the forum graft, grafts get a storage door ([f5a195b](https://github.com/hackclub/orchard/commit/f5a195b1cf1750e82e1f01bedfe4880d6fafa154))
+
 ## [1.65.0](https://github.com/hackclub/orchard/compare/frontend/v1.64.0...frontend/v1.65.0) (2026-10-14)
 
 
