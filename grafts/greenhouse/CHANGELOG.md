@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.2](https://github.com/hackclub/orchard/compare/greenhouse/v1.3.1...greenhouse/v1.3.2) (2026-10-14)
+
+
+### Bug Fixes
+
+* greenhouse settings list every coding agent, claude usage survives anthropic rate limits, and existing kubernetes machines fetch the daemon ([a29a3d2](https://github.com/hackclub/orchard/commit/a29a3d2feac6522756682bcc9f8aaa5defca9a4d))
+
 ## [1.3.1](https://github.com/hackclub/orchard/compare/greenhouse/v1.3.0...greenhouse/v1.3.1) (2026-10-14)
 
 
