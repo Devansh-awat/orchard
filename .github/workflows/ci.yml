@@ -2,6 +2,8 @@ name: ci
 
 on:
   pull_request:
+  push:
+    branches: [main]
 
 permissions:
   contents: read
@@ -220,8 +222,10 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Generate Prisma client
-        run: pnpm --filter server prisma:generate
+      - name: Generate Prisma clients
+        run: |
+          pnpm --filter server prisma:generate
+          pnpm --filter @grafts/greenhouse prebuild
       - name: Build server
         run: pnpm --filter server build
       - name: Auth-coverage snapshot test
@@ -263,9 +267,7 @@ jobs:
       - name: Feature flag cache tests
         run: pnpm --filter server test:analytics-flags
       - name: Greenhouse graft tests
-        run: |
-          pnpm --filter @grafts/greenhouse prebuild
-          pnpm --filter @grafts/greenhouse test
+        run: pnpm --filter @grafts/greenhouse test
       # Managed-database tuning derived from the memory limit. Pins that a
       # derived shared_buffers can never be the whole cgroup (which OOMKilled
       # seven production databases during their own backups) and that a manual
@@ -576,7 +578,8 @@ jobs:
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
       - name: Build changed images (no push)
         run: |
-          build() { docker buildx build "$3" -f "$2" --build-arg VERSION=0.0.0-ci -t "ci/$1" --load=false; }
+          arch=$(dpkg --print-architecture)
+          build() { docker buildx build "$3" -f "$2" --build-arg VERSION=0.0.0-ci -t "ci/$1" --load=false --cache-from "type=registry,ref=ghcr.io/hackclub/orchard/$1:buildcache-$arch"; }
           if [ "${{ needs.changes.outputs.frontend }}" = "true" ]; then build frontend apps/frontend/Dockerfile .; fi
           if [ "${{ needs.changes.outputs.server }}" = "true" ]; then build server apps/server/Dockerfile .; build mcp apps/server/Dockerfile.mcp .; fi
           if [ "${{ needs.changes.outputs.r2_proxy }}" = "true" ]; then build r2-proxy apps/r2-proxy/Dockerfile apps/r2-proxy; fi
