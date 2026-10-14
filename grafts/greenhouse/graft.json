@@ -191,7 +191,23 @@
       "k8s_apply_queue": ["id", "status", "last_error", "sandbox_id", "updated_at"],
       "k8s_mirror_heartbeats": ["shard", "holder", "last_list_at", "healthy", "updated_at"]
     },
-    "pool": 10
+    "pool": 10,
+    "adopts": [
+      "sandboxes",
+      "sandbox_conversations",
+      "ssh_identities",
+      "sandbox_credentials",
+      "sandbox_members",
+      "sandbox_prompt_authors",
+      "sandbox_session_messages",
+      "sandbox_project_links",
+      "sandbox_share_links",
+      "user_integrations",
+      "slack_link_tokens",
+      "sandbox_integration_deliveries",
+      "slack_thread_links",
+      "user_context_items"
+    ]
   },
   "permissions": {
     "use": {

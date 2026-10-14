@@ -43,17 +43,20 @@ type graftSpec struct {
 }
 
 type graftManifest struct {
-	ID           string                                  `json:"id"`
-	Name         string                                  `json:"name"`
-	Version      string                                  `json:"version"`
-	Publisher    string                                  `json:"publisher"`
-	Description  string                                  `json:"description"`
-	Engines      map[string]string                       `json:"engines"`
-	Capabilities []string                                `json:"capabilities"`
-	Claims       map[string][]string                     `json:"claims"`
-	Database     struct{ CoreReads map[string][]string } `json:"database"`
-	Public       struct{ Routes []string }               `json:"public"`
-	Requires     struct {
+	ID           string              `json:"id"`
+	Name         string              `json:"name"`
+	Version      string              `json:"version"`
+	Publisher    string              `json:"publisher"`
+	Description  string              `json:"description"`
+	Engines      map[string]string   `json:"engines"`
+	Capabilities []string            `json:"capabilities"`
+	Claims       map[string][]string `json:"claims"`
+	Database     struct {
+		CoreReads map[string][]string `json:"coreReads"`
+		Adopts    []string            `json:"adopts"`
+	} `json:"database"`
+	Public   struct{ Routes []string } `json:"public"`
+	Requires struct {
 		Grafts     map[string]string `json:"grafts"`
 		Kubernetes struct {
 			Crds []string `json:"crds"`
@@ -743,6 +746,9 @@ func printCheck(c *cli.Context, report graftCheck, prev *graftSpec) {
 	if len(reads) > 0 {
 		sort.Strings(reads)
 		c.Printf("  reads:           %s\n", strings.Join(reads, "; "))
+	}
+	if len(m.Database.Adopts) > 0 {
+		c.Printf("  takes over:      %s (moved out of Orchard's own schema, kept readable under the old names)\n", strings.Join(m.Database.Adopts, ", "))
 	}
 	var aliases []string
 	for kind, list := range m.Claims {

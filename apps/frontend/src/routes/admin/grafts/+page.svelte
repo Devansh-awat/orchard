@@ -29,6 +29,7 @@
 		capabilities: string[];
 		permissions: Record<string, { label: string; defaultGrants: string[] }>;
 		coreReads: Record<string, string[]>;
+		adopts: string[];
 		signature: { signedBy: 'official' | 'publisher' | null; keyId: string | null } | null;
 		claims: Claim[];
 		routes: Route[];
@@ -246,6 +247,11 @@
 										{/each}
 									{:else}
 										<p class="graft-none">None</p>
+									{/if}
+									{#if g.adopts?.length}
+										<p class="graft-faint">
+											Took over {g.adopts.join(', ')} from Orchard; the old names still work as views
+										</p>
 									{/if}
 								</div>
 

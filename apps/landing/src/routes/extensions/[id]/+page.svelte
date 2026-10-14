@@ -38,7 +38,7 @@
 		if (caps.has('db')) {
 			rows.push({
 				title: 'Its own database tables',
-				body: `Kept in the ${schema} schema.${reads.length ? ` Reads ${list(reads.map(([t, c]) => `${t} (${c.join(', ')})`))} from Orchard.` : ''}`
+				body: `Kept in the ${schema} schema.${reads.length ? ` Reads ${list(reads.map(([t, c]) => `${t} (${c.join(', ')})`))} from Orchard.` : ''}${m.database?.adopts?.length ? ` Takes over ${list(m.database.adopts)}, which older Orchard versions kept in their own schema.` : ''}`
 			});
 		}
 		const kube = [

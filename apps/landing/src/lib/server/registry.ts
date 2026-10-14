@@ -233,7 +233,7 @@ export type GraftManifestView = {
 	homepage?: string;
 	capabilities?: string[];
 	engines?: Record<string, string>;
-	database?: { coreReads?: Record<string, string[]> };
+	database?: { coreReads?: Record<string, string[]>; adopts?: string[] };
 	ui?: { screens?: { id: string; path: string; title?: string }[] };
 	public?: { routes?: string[] };
 	claims?: Record<string, string[]>;

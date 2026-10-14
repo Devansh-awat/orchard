@@ -390,9 +390,16 @@ function doctor(dir) {
         sql
       )
     ) {
-      problems.push(
-        `${migration} changes the public schema; grafts may only reference core tables, not change them`
-      );
+      const adopts = manifest.database?.adopts ?? [];
+      if (adopts.length) {
+        notes.push(
+          `${migration} takes over core tables ${adopts.join(', ')}: they move into the graft's schema and keep a view with the old name`
+        );
+      } else {
+        problems.push(
+          `${migration} changes the public schema; grafts may only reference core tables, not change them (list tables it takes over in database.adopts)`
+        );
+      }
     }
   }
   return { manifest, problems, notes };

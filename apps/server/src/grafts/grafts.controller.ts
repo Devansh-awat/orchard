@@ -43,6 +43,7 @@ export class GraftsController {
         capabilities: r.manifest?.capabilities ?? [],
         permissions: r.manifest?.permissions ?? {},
         coreReads: r.manifest?.database.coreReads ?? {},
+        adopts: r.manifest?.database.adopts ?? [],
         signature: r.signature ?? null,
         claims: r.claims ?? [],
         routes: (r.routes ?? []).map((route) => ({
