@@ -406,10 +406,14 @@ export const READ_EXIT = {
   notFile: 8
 } as const;
 
-export const HOME_GUARD = [
-  `__home=$(realpath -e -- ${shellQuote(HOME_ROOT)} 2>/dev/null) || exit ${READ_EXIT.outside}`,
-  'home_ok() { case "$1/" in "$__home"/.worktrees/?*/?*) return 0 ;; "$__home"/.*) return 1 ;; esac; return 0; }'
-];
+function homeGuard(home: string): string[] {
+  return [
+    `__home=$(realpath -e -- ${shellQuote(home)} 2>/dev/null) || exit ${READ_EXIT.outside}`,
+    'home_ok() { case "$1/" in "$__home"/.worktrees/?*/?*) return 0 ;; "$__home"/.*) return 1 ;; esac; return 0; }'
+  ];
+}
+
+export const HOME_GUARD = homeGuard(HOME_ROOT);
 
 function confinedRoot(root: string): string[] {
   return [
@@ -454,8 +458,8 @@ export const FS_EXIT = {
   failed: 8
 } as const;
 
-const FS_PRELUDE = [
-  ...HOME_GUARD,
+const fsPrelude = (home: string) => [
+  ...homeGuard(home),
   'inside() { case "$1/" in "$__root"/*) home_ok "$1"; return $? ;; esac; return 1; }',
   'resolve_parent() { p=$(dirname -- "$1"); b=$(basename -- "$1"); rp=$(realpath -e -- "$p" 2>/dev/null) || return 1; inside "$rp" || return 1; home_ok "$rp/$b" || return 1; printf "%s/%s" "$rp" "$b"; }',
   'resolve_new() { r=$(realpath -m -- "$1" 2>/dev/null) || return 1; inside "$r" || return 1; [ "$r" != "$__root" ] || return 1; printf "%s" "$r"; }'
@@ -466,7 +470,8 @@ export function buildFsScript(
   root: string,
   guardRoot: string,
   path: string,
-  to?: string
+  to?: string,
+  home: string = HOME_ROOT
 ): string {
   const rel = normalizeRelativePath(path);
   if (!rel) throw new Error('invalid path');
@@ -474,7 +479,7 @@ export function buildFsScript(
     `__guard=$(realpath -e -- ${shellQuote(guardRoot)} 2>/dev/null) || exit ${FS_EXIT.outside}`,
     `__root=$(realpath -e -- ${shellQuote(root)} 2>/dev/null) || exit ${FS_EXIT.outside}`,
     `case "$__root/" in "$__guard"/*) ;; *) exit ${FS_EXIT.outside} ;; esac`,
-    ...FS_PRELUDE,
+    ...fsPrelude(home),
     `target="$__root"/${shellQuote(rel)}`
   ];
   if (op === 'mkdir') {

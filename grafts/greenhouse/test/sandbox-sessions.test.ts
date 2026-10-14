@@ -500,21 +500,36 @@ test('fs scripts resolve paths in the box and refuse to leave the workspace thro
     };
     const root = `${tmp}/home/ws`;
     const guard = `${tmp}/home`;
-    assert.equal(run(buildFsScript('mkdir', root, guard, 'src/new/dir')), 0);
+    assert.equal(run(buildFsScript('mkdir', root, guard, 'src/new/dir', undefined, guard)), 0);
     assert.equal(sh(`test -d ${root}/src/new/dir && echo yes`).trim(), 'yes');
-    assert.equal(run(buildFsScript('mkdir', root, guard, 'src/new/dir')), FS_EXIT.exists);
-    assert.equal(run(buildFsScript('mkdir', root, guard, 'link/escape')), FS_EXIT.outside);
     assert.equal(
-      run(buildFsScript('rename', root, guard, 'src/a.txt', 'link/a.txt')),
+      run(buildFsScript('mkdir', root, guard, 'src/new/dir', undefined, guard)),
+      FS_EXIT.exists
+    );
+    assert.equal(
+      run(buildFsScript('mkdir', root, guard, 'link/escape', undefined, guard)),
       FS_EXIT.outside
     );
-    assert.equal(run(buildFsScript('delete', root, guard, 'link/anything')), FS_EXIT.outside);
-    assert.equal(run(buildFsScript('rename', root, guard, 'src/a.txt', 'docs/b.txt')), 0);
+    assert.equal(
+      run(buildFsScript('rename', root, guard, 'src/a.txt', 'link/a.txt', guard)),
+      FS_EXIT.outside
+    );
+    assert.equal(
+      run(buildFsScript('delete', root, guard, 'link/anything', undefined, guard)),
+      FS_EXIT.outside
+    );
+    assert.equal(run(buildFsScript('rename', root, guard, 'src/a.txt', 'docs/b.txt', guard)), 0);
     assert.equal(sh(`cat ${root}/docs/b.txt`).trim(), 'x');
-    assert.equal(run(buildFsScript('delete', root, guard, 'link')), 0);
+    assert.equal(run(buildFsScript('delete', root, guard, 'link', undefined, guard)), 0);
     assert.equal(sh(`test -d ${tmp}/outside && echo kept`).trim(), 'kept');
-    assert.equal(run(buildFsScript('delete', root, guard, 'missing')), FS_EXIT.missing);
-    assert.equal(run(buildFsScript('delete', root, `${tmp}/elsewhere`, 'src')), FS_EXIT.outside);
+    assert.equal(
+      run(buildFsScript('delete', root, guard, 'missing', undefined, guard)),
+      FS_EXIT.missing
+    );
+    assert.equal(
+      run(buildFsScript('delete', root, `${tmp}/elsewhere`, 'src', undefined, guard)),
+      FS_EXIT.outside
+    );
   } finally {
     sh(`rm -rf ${tmp}`);
   }
