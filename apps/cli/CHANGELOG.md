@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.0](https://github.com/hackclub/orchard/compare/cli/v0.26.0...cli/v0.27.0) (2026-10-14)
+
+
+### Features
+
+* greenhouse runs as a graft ([7a808df](https://github.com/hackclub/orchard/commit/7a808df9cc102446361b5369d7ea0b01172e3e87))
+
 ## [0.26.0](https://github.com/hackclub/orchard/compare/cli/v0.25.0...cli/v0.26.0) (2026-10-09)
 
 

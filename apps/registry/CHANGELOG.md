@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/hackclub/orchard/compare/registry/v0.5.0...registry/v0.6.0) (2026-10-14)
+
+
+### Features
+
+* extension marketplace publishing and grafts ci ([8eb8e33](https://github.com/hackclub/orchard/commit/8eb8e334346ffd0507ea524d2c56bd18f2c888e5))
+
 ## [0.5.0](https://github.com/hackclub/orchard/compare/registry/v0.4.0...registry/v0.5.0) (2026-10-08)
 
 

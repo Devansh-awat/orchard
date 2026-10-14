@@ -1,7 +1,7 @@
 {
   "id": "announcements",
   "name": "Announcements",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "orchard",
   "description": "Post instance-wide notices that show up on every project and app page.",
   "engines": {

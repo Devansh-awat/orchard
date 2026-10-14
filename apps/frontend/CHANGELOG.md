@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.64.0](https://github.com/hackclub/orchard/compare/frontend/v1.63.2...frontend/v1.64.0) (2026-10-14)
+
+
+### Features
+
+* graft database pools are sized per graft and checked against the database limit ([b34981d](https://github.com/hackclub/orchard/commit/b34981d23c7b84ed1aa3572c0aca7a478a5a000e))
+* graft sdk, doors, frontend host, author cli and announcements example graft ([88ef3e1](https://github.com/hackclub/orchard/commit/88ef3e16f0f141cc83ecd549aea135ad4cfaa229))
+* graft settings render in instance configuration; announcements graft 0.2.0 ([bdcb745](https://github.com/hackclub/orchard/commit/bdcb7458ddbd1b54800002126f142f17e0674557))
+* grafts docs, generated graft api and slot reference, https sources in orchardctl ([5184e89](https://github.com/hackclub/orchard/commit/5184e89d891fc84d61120bd31a8afa20c83ba513))
+* greenhouse runs as a graft ([7a808df](https://github.com/hackclub/orchard/commit/7a808df9cc102446361b5369d7ea0b01172e3e87))
+
+
+### Bug Fixes
+
+* grafts declare the core tables they take over so greenhouse passes doctor ([8c1cb21](https://github.com/hackclub/orchard/commit/8c1cb2162d2b48fd82a37006786a7c173b88a220))
+
 ## [1.63.2](https://github.com/hackclub/orchard/compare/frontend/v1.63.1...frontend/v1.63.2) (2026-10-12)
 
 

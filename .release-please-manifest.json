@@ -1,11 +1,11 @@
 {
-  "apps/server": "2.67.3",
-  "apps/frontend": "1.63.2",
+  "apps/server": "2.68.0",
+  "apps/frontend": "1.64.0",
   "apps/gateway": "0.2.1",
-  "apps/cli": "0.26.0",
+  "apps/cli": "0.27.0",
   "apps/r2-proxy": "0.6.0",
-  "apps/registry": "0.5.0",
-  "registry": "0.3.0",
-  "grafts/greenhouse": "1.0.0",
-  "grafts/announcements": "0.2.0"
+  "apps/registry": "0.6.0",
+  "registry": "0.4.0",
+  "grafts/greenhouse": "1.1.0",
+  "grafts/announcements": "0.3.0"
 }

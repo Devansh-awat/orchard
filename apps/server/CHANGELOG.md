@@ -1,5 +1,26 @@
 # Changelog
 
+## [2.68.0](https://github.com/hackclub/orchard/compare/server/v2.67.3...server/v2.68.0) (2026-10-14)
+
+
+### Features
+
+* arm64 self-hosted installs ([c4c7bea](https://github.com/hackclub/orchard/commit/c4c7bea3a63bfc1ab88f327fb3011a2cb249d9c3))
+* graft database pools are sized per graft and checked against the database limit ([b34981d](https://github.com/hackclub/orchard/commit/b34981d23c7b84ed1aa3572c0aca7a478a5a000e))
+* graft sdk, doors, frontend host, author cli and announcements example graft ([88ef3e1](https://github.com/hackclub/orchard/commit/88ef3e16f0f141cc83ecd549aea135ad4cfaa229))
+* graft settings render in instance configuration; announcements graft 0.2.0 ([bdcb745](https://github.com/hackclub/orchard/commit/bdcb7458ddbd1b54800002126f142f17e0674557))
+* grafts docs, generated graft api and slot reference, https sources in orchardctl ([5184e89](https://github.com/hackclub/orchard/commit/5184e89d891fc84d61120bd31a8afa20c83ba513))
+* grafts host core with loader, safe migrations, artifact sync and chart wiring ([f85a974](https://github.com/hackclub/orchard/commit/f85a974d8d5c0ca6d5b8217478a4b29bd5f76a69))
+* grafts signed with the orchard key are trusted as official ([f29fdab](https://github.com/hackclub/orchard/commit/f29fdab279d61379a1978e0cffadc0487ae05fe0))
+* greenhouse runs as a graft ([7a808df](https://github.com/hackclub/orchard/commit/7a808df9cc102446361b5369d7ea0b01172e3e87))
+* orchardctl graft commands with offline artifacts, snapshots and rollback ([aa32969](https://github.com/hackclub/orchard/commit/aa32969c864a05fbbda9a235ec757ee853d4b095))
+
+
+### Bug Fixes
+
+* grafts declare the core tables they take over so greenhouse passes doctor ([8c1cb21](https://github.com/hackclub/orchard/commit/8c1cb2162d2b48fd82a37006786a7c173b88a220))
+* keep server typecheck scoped to src after grafts joined the tsconfig ([fbc26a1](https://github.com/hackclub/orchard/commit/fbc26a19a765a17c5d51a96ba88703a52a26bb03))
+
 ## [2.67.3](https://github.com/hackclub/orchard/compare/server/v2.67.2...server/v2.67.3) (2026-10-12)
 
 

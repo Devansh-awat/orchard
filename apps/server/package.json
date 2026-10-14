@@ -1,6 +1,6 @@
 {
   "name": "server",
-  "version": "2.67.3",
+  "version": "2.68.0",
   "type": "commonjs",
   "private": true,
   "scripts": {
