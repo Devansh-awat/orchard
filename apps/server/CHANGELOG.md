@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.72.1](https://github.com/hackclub/orchard/compare/server/v2.72.0...server/v2.72.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* rollouts drain gracefully and greenhouses reconnect at once instead of going unavailable for a minute ([b275cae](https://github.com/hackclub/orchard/commit/b275cae7f5a3455e26034369e7e20fb187c21537))
+
 ## [2.72.0](https://github.com/hackclub/orchard/compare/server/v2.71.0...server/v2.72.0) (2026-10-14)
 
 

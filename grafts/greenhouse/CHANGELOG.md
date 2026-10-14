@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.1](https://github.com/hackclub/orchard/compare/greenhouse/v1.3.0...greenhouse/v1.3.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* rollouts drain gracefully and greenhouses reconnect at once instead of going unavailable for a minute ([b275cae](https://github.com/hackclub/orchard/commit/b275cae7f5a3455e26034369e7e20fb187c21537))
+* vercel machines run the machine daemon from cli 0.28.1 ([a958fdc](https://github.com/hackclub/orchard/commit/a958fdcc554f2b7581c2869f0762373d77c73081))
+
 ## [1.3.0](https://github.com/hackclub/orchard/compare/greenhouse/v1.2.0...greenhouse/v1.3.0) (2026-10-14)
 
 
