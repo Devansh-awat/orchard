@@ -54,14 +54,7 @@
       "status": "stable",
       "capability": null,
       "methods": {},
-      "properties": [
-        "apiBase",
-        "id",
-        "manifest",
-        "role",
-        "schema",
-        "version"
-      ]
+      "properties": ["apiBase", "id", "manifest", "role", "schema", "version"]
     },
     "db@1": {
       "status": "stable",
@@ -70,10 +63,7 @@
         "pool": 0,
         "query": 2
       },
-      "properties": [
-        "role",
-        "schema"
-      ]
+      "properties": ["role", "schema"]
     },
     "events@1": {
       "status": "stable",
@@ -98,9 +88,7 @@
       "methods": {
         "isEnabled": 2
       },
-      "properties": [
-        "configured"
-      ]
+      "properties": ["configured"]
     },
     "github@1": {
       "status": "stable",
@@ -111,9 +99,7 @@
         "repoToken": 3,
         "userToken": 1
       },
-      "properties": [
-        "github"
-      ]
+      "properties": ["github"]
     },
     "http@1": {
       "status": "stable",
@@ -134,10 +120,7 @@
         "onLeaderAcquired": 1,
         "registerMirrorShard": 1
       },
-      "properties": [
-        "kc",
-        "kubernetes"
-      ]
+      "properties": ["kc", "kubernetes"]
     },
     "metrics@1": {
       "status": "stable",
@@ -146,10 +129,7 @@
         "escapeLabel": 1,
         "queryInstant": 1
       },
-      "properties": [
-        "configured",
-        "vm"
-      ]
+      "properties": ["configured", "vm"]
     },
     "notifications@1": {
       "status": "stable",
@@ -185,10 +165,7 @@
         "consume": 2,
         "define": 3
       },
-      "properties": [
-        "limits",
-        "throttle"
-      ]
+      "properties": ["limits", "throttle"]
     },
     "secrets@1": {
       "status": "stable",
@@ -203,9 +180,7 @@
         "open": 1,
         "seal": 1
       },
-      "properties": [
-        "enabled"
-      ]
+      "properties": ["enabled"]
     },
     "settings@1": {
       "status": "stable",
@@ -220,9 +195,7 @@
         "validate": 2,
         "value": 2
       },
-      "properties": [
-        "generation"
-      ]
+      "properties": ["generation"]
     },
     "users@1": {
       "status": "stable",

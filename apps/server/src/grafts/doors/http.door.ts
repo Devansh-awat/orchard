@@ -2,7 +2,12 @@ import { Inject, Injectable, Scope } from '@nestjs/common';
 import { INQUIRER } from '@nestjs/core';
 import { activeClaims } from '../claims';
 import type { GraftRecord } from '../graft-registry';
-import { GraftHttpRegistry, type HostRouter, type ListenHandler, type UpgradeHandler } from '../http-registry';
+import {
+  GraftHttpRegistry,
+  type HostRouter,
+  type ListenHandler,
+  type UpgradeHandler
+} from '../http-registry';
 import { bindGraft, type DoorMeta } from './door';
 
 @Injectable({ scope: Scope.TRANSIENT })

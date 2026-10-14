@@ -147,7 +147,10 @@ Events must be possible at the scope (a database cannot emit deploy events). Org
         channelId: z.string().describe('The destination channel UUID'),
         scopeType: z.enum(SCOPE_VALUES).describe('org, project, deployment, database, or job'),
         scopeId: z.string().optional().describe('The UUID of the scope (omit for scopeType=org)'),
-        events: z.array(z.string()).min(1).describe(`Events this rule matches, e.g. ${EVENT_NAMES}`),
+        events: z
+          .array(z.string())
+          .min(1)
+          .describe(`Events this rule matches, e.g. ${EVENT_NAMES}`),
         mode: z.enum(['deliver', 'mute']).optional().describe('deliver (default) or mute')
       }
     },
@@ -171,7 +174,11 @@ Events must be possible at the scope (a database cannot emit deploy events). Org
       inputSchema: {
         organizationId: z.string().describe('The organization UUID'),
         ruleId: z.string().describe('The notification rule UUID'),
-        events: z.array(z.string()).min(1).optional().describe(`Replace matched events, e.g. ${EVENT_NAMES}`),
+        events: z
+          .array(z.string())
+          .min(1)
+          .optional()
+          .describe(`Replace matched events, e.g. ${EVENT_NAMES}`),
         mode: z.enum(['deliver', 'mute']).optional().describe('deliver or mute'),
         enabled: z.boolean().optional().describe('false stops the rule matching')
       }

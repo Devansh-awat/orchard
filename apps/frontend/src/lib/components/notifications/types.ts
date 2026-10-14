@@ -4,7 +4,13 @@ export type CoreNotificationCategory = 'deploys' | 'health' | 'jobs' | 'data' | 
 
 export type NotificationCategory = CoreNotificationCategory | (string & {});
 
-export const CORE_CATEGORIES: CoreNotificationCategory[] = ['deploys', 'health', 'jobs', 'data', 'security'];
+export const CORE_CATEGORIES: CoreNotificationCategory[] = [
+	'deploys',
+	'health',
+	'jobs',
+	'data',
+	'security'
+];
 
 export type SettingValue = 'always' | 'subscribed' | 'never';
 
@@ -214,7 +220,6 @@ const SECURITY_LABELS: Partial<Record<SettingValue, { label: string; hint: strin
 	},
 	never: { label: 'Off', hint: 'No alerts when something signs in to your account' }
 };
-
 
 export function settingLabel(
 	category: NotificationCategory,

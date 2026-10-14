@@ -450,7 +450,7 @@ Everything here is also in the generated [configuration reference](/reference/co
 | Value                                                                            | Variable                                                           |
 | -------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
 | `sandbox.install`                                                                | the namespace, quota, NetworkPolicy, RBAC and `SANDBOX_*` settings |
-| `sandbox.enabled`                                                                | `install` unless that is set                                        |
+| `sandbox.enabled`                                                                | `install` unless that is set                                       |
 | `sandbox.namespace`                                                              | `SANDBOX_NAMESPACE`                                                |
 | `sandbox.image`                                                                  | `SANDBOX_IMAGE`                                                    |
 | `sandbox.runtimeClassName`                                                       | `SANDBOX_RUNTIME_CLASS`                                            |

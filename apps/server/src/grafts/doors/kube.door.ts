@@ -44,7 +44,9 @@ export class KubeDoorV1 {
 
   registerMirrorShard(build: MirrorShardBuilder): void {
     if (!this.graft.manifest!.capabilities.includes('kube.informers')) {
-      throw new Error(`graft ${this.graft.id} needs the "kube.informers" capability to watch resources`);
+      throw new Error(
+        `graft ${this.graft.id} needs the "kube.informers" capability to watch resources`
+      );
     }
     registerMirrorShard(async () => {
       const shard = await build();

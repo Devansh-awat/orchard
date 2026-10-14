@@ -45,7 +45,6 @@ export function createOrchardMcpServer(token?: string, actingUser?: ActingUser) 
   // Environments (namespaces per project) and their shared variables
   registerEnvironmentTools(server, client);
 
-
   registerGraftMcpTools(server, client);
 
   // Destructive operations (all deletes)

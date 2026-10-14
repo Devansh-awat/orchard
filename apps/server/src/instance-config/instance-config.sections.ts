@@ -1,4 +1,3 @@
-
 export interface ConfigField {
   name: string;
   env: string;

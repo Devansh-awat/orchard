@@ -23,7 +23,11 @@ export function denyToOrgScopedSessions(path: string): void {
   if (!ORG_SCOPED_DENY.includes(clean)) ORG_SCOPED_DENY.push(clean);
 }
 
-export function orgScopedDevice(prefix: string, organizationId: string | null | undefined, subject: string): string {
+export function orgScopedDevice(
+  prefix: string,
+  organizationId: string | null | undefined,
+  subject: string
+): string {
   return `${prefix}:${organizationId || 'personal'}:${subject}`;
 }
 

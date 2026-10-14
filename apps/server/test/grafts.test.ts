@@ -617,7 +617,11 @@ describe('doors', () => {
           providers: [
             {
               provide: AuditService,
-              useValue: { log: async (input: { action: string }) => void logged.push(input) }
+              useValue: {
+                log: async (input: { action: string }) => {
+                  logged.push(input);
+                }
+              }
             },
             { provide: doorToken('context', 1), useClass: ContextDoorV1, scope: Scope.TRANSIENT },
             { provide: doorToken('audit', 1), useClass: AuditDoorV1, scope: Scope.TRANSIENT }
@@ -775,7 +779,12 @@ describe('mcp', () => {
     try {
       await loadMcpGrafts();
       const registered: string[] = [];
-      const server = { registerTool: (name: string) => void registered.push(name), name: 'fake' };
+      const server = {
+        registerTool: (name: string) => {
+          registered.push(name);
+        },
+        name: 'fake'
+      };
       registerGraftMcpTools(server, {});
       assert.deepEqual(registered, ['notes_list', 'list_sandboxes']);
     } finally {

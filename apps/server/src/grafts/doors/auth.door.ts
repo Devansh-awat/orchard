@@ -97,7 +97,10 @@ export class AuthDoorV1 {
     return requestAuthStorage.run(ctx, fn);
   }
 
-  authenticateUpgrade(req: IncomingMessage, requiredScope: string): Promise<UpgradeIdentity | null> {
+  authenticateUpgrade(
+    req: IncomingMessage,
+    requiredScope: string
+  ): Promise<UpgradeIdentity | null> {
     return authenticateUpgrade(req, {
       prisma: this.prisma,
       sessions: this.sessions,

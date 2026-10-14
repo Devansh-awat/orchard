@@ -22,7 +22,9 @@ export function registerTelemetryCounter(name: string, count: TelemetryCounter):
 
 async function extensionTelemetry(): Promise<Record<string, number>> {
   const entries = await Promise.all(
-    [...extensionCounters].map(async ([name, count]) => [name, await count().catch(() => 0)] as const)
+    [...extensionCounters].map(
+      async ([name, count]) => [name, await count().catch(() => 0)] as const
+    )
   );
   return Object.fromEntries(entries);
 }

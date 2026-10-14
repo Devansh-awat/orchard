@@ -25,14 +25,14 @@ Orchard itself.
 
 ## What a graft is made of
 
-| Part | Runs as | Lives at |
-| --- | --- | --- |
-| Server module | A NestJS module loaded into the Orchard server | `/apiv1/<graft-id>/...` |
-| UI | An island: a bundle with its own copy of Svelte, mounted into pages Orchard renders | `/<graft-id>/...` and the [slots](/reference/graft-slots/) |
-| Migrations | SQL run by Orchard in a transaction | The graft's own schema, `ext_<graft_id>` |
-| MCP tools | Tools registered in the MCP server | Named `<graft_id>_...` |
-| Settings | Sections on Admin → Configuration | Stored like any other instance setting |
-| Cluster chart | An optional Helm chart for CRDs, namespaces and RBAC | Its own Helm release, `orchard-graft-<id>` |
+| Part          | Runs as                                                                             | Lives at                                                   |
+| ------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Server module | A NestJS module loaded into the Orchard server                                      | `/apiv1/<graft-id>/...`                                    |
+| UI            | An island: a bundle with its own copy of Svelte, mounted into pages Orchard renders | `/<graft-id>/...` and the [slots](/reference/graft-slots/) |
+| Migrations    | SQL run by Orchard in a transaction                                                 | The graft's own schema, `ext_<graft_id>`                   |
+| MCP tools     | Tools registered in the MCP server                                                  | Named `<graft_id>_...`                                     |
+| Settings      | Sections on Admin → Configuration                                                   | Stored like any other instance setting                     |
+| Cluster chart | An optional Helm chart for CRDs, namespaces and RBAC                                | Its own Helm release, `orchard-graft-<id>`                 |
 
 ## How grafts stay out of Orchard's way
 

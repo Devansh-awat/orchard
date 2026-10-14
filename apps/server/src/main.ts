@@ -194,8 +194,7 @@ async function bootstrap() {
       .catch(() => socket.destroy());
   });
   const isGraftUpgrade = (req: { url?: string; headers: { host?: string } }) =>
-    graftHttp.isHostRouted(req.headers.host) ||
-    graftHttp.claimsUpgradePath(req.url);
+    graftHttp.isHostRouted(req.headers.host) || graftHttp.claimsUpgradePath(req.url);
   execSessionEngine(httpServer, app, { skipUpgrade: isGraftUpgrade });
   attachTerminalWebSocket(httpServer, app);
   await graftHttp.listening(httpServer);

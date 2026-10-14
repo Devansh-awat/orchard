@@ -334,13 +334,35 @@ export interface ExecDoor {
 }
 
 export interface ProjectsDoor {
-  onEnvironmentEnvChanged(listener: (change: { environmentId: string; [key: string]: unknown }) => void): () => void;
-  createDeploymentFromGitHub(projectId: string, data: Record<string, unknown>, ...rest: unknown[]): Promise<any>;
-  rebuildDeployment(deploymentId: string, clerkId: string, userData?: Record<string, unknown>): Promise<any>;
-  createAutoIngressForDeployment(deploymentId: string, clerkId: string, userData?: Record<string, unknown>): Promise<any>;
+  onEnvironmentEnvChanged(
+    listener: (change: { environmentId: string; [key: string]: unknown }) => void
+  ): () => void;
+  createDeploymentFromGitHub(
+    projectId: string,
+    data: Record<string, unknown>,
+    ...rest: unknown[]
+  ): Promise<any>;
+  rebuildDeployment(
+    deploymentId: string,
+    clerkId: string,
+    userData?: Record<string, unknown>
+  ): Promise<any>;
+  createAutoIngressForDeployment(
+    deploymentId: string,
+    clerkId: string,
+    userData?: Record<string, unknown>
+  ): Promise<any>;
   setDeploymentBranch(deploymentId: string, branch: string): Promise<void>;
-  createEnvironment(projectId: string, input: { name: string; slug?: string }, userId: string): Promise<any>;
-  deleteEnvironment(environmentId: string, actor: { userId: string; email?: string }, confirmName: unknown): Promise<any>;
+  createEnvironment(
+    projectId: string,
+    input: { name: string; slug?: string },
+    userId: string
+  ): Promise<any>;
+  deleteEnvironment(
+    environmentId: string,
+    actor: { userId: string; email?: string },
+    confirmName: unknown
+  ): Promise<any>;
   deleteEnvironmentFromCluster(
     environmentId: string,
     cause: { reason: string; source: string; namespace: string }
@@ -403,6 +425,8 @@ export interface GitHubDoor {
   repoToken(userId: string, owner: string, repo: string): Promise<string | null>;
   installationToken(installationId: bigint): Promise<string>;
   onIssueComment(
-    handler: ((deliveryId: string | undefined, body: unknown) => Promise<Record<string, unknown>>) | null
+    handler:
+      | ((deliveryId: string | undefined, body: unknown) => Promise<Record<string, unknown>>)
+      | null
   ): void;
 }

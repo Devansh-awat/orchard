@@ -1,12 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { InstanceConfigService } from '../src/instance-config/instance-config.service';
-import {
-  STORAGE,
-  EMAIL,
-  NETWORK,
-  WILDCARD
-} from '../src/instance-config/instance-config.sections';
+import { STORAGE, EMAIL, NETWORK, WILDCARD } from '../src/instance-config/instance-config.sections';
 import { objectStorage } from '../src/instance-config/object-storage';
 
 class FakeSettings {

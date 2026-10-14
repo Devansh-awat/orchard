@@ -41,8 +41,13 @@ export function registerGraftSettings(record: GraftRecord): void {
       record.warnings.push(`settings section ${id} is already registered; skipped`);
       continue;
     }
-    if (section.storageKey && !canUseName(record.id, record.claims, 'settingKeys', section.storageKey)) {
-      record.warnings.push(`settings section ${section.id}: storageKey ${section.storageKey} is not claimed in settingKeys; using the graft's own key`);
+    if (
+      section.storageKey &&
+      !canUseName(record.id, record.claims, 'settingKeys', section.storageKey)
+    ) {
+      record.warnings.push(
+        `settings section ${section.id}: storageKey ${section.storageKey} is not claimed in settingKeys; using the graft's own key`
+      );
     }
     const storageKey =
       section.storageKey && canUseName(record.id, record.claims, 'settingKeys', section.storageKey)

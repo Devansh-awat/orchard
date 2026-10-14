@@ -21,7 +21,9 @@ const CORE_NOTIFICATION_EVENTS = [
   'security.app_authorized'
 ] as const;
 
-export type NotificationEventName = (typeof CORE_NOTIFICATION_EVENTS)[number] | `${string}.${string}`;
+export type NotificationEventName =
+  | (typeof CORE_NOTIFICATION_EVENTS)[number]
+  | `${string}.${string}`;
 
 export const NOTIFICATION_EVENTS: NotificationEventName[] = [...CORE_NOTIFICATION_EVENTS];
 

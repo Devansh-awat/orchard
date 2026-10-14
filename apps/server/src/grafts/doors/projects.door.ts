@@ -78,12 +78,16 @@ export class ProjectsDoorV1 {
   ): Promise<Awaited<ReturnType<AutoIngress>>> {
     this.requireWrite();
     const { IngressService } = await import('../../projects/ingress.service.js');
-    return this.moduleRef.get(IngressService, { strict: false }).createAutoIngressForDeployment(...args);
+    return this.moduleRef
+      .get(IngressService, { strict: false })
+      .createAutoIngressForDeployment(...args);
   }
 
   private requireWrite(): void {
     if (!this.graft.manifest!.capabilities.includes('projects.write')) {
-      throw new Error(`graft ${this.graft.id} needs the "projects.write" capability to change projects`);
+      throw new Error(
+        `graft ${this.graft.id} needs the "projects.write" capability to change projects`
+      );
     }
   }
 

@@ -28,5 +28,4 @@ export class InstanceSettingsController {
     await this.settings.setMcp(Boolean(body?.enabled));
     return this.settings.getMcpState();
   }
-
 }

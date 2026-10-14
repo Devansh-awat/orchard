@@ -37,16 +37,16 @@ changing anything:
 Answer yes and the graft is written into your values. `--apply` rolls Orchard
 out straight away; without it, run `sudo orchardctl update` when you are ready.
 
-| Command | Does |
-| --- | --- |
-| `orchardctl graft add <id>[@version]` | Install from the Extension Marketplace |
-| `orchardctl graft add ./file.graft` | Install a file. It is stored in Orchard's database, so this works with no internet and on clusters with several nodes |
-| `orchardctl graft add https://.../x.graft` | Install from any https address, pinned to the digest it had when you added it |
-| `orchardctl graft list` | What is installed, whether it is running, and the latest messages about grafts from the server |
-| `orchardctl graft upgrade [id]` | Move to the newest compatible version. See [upgrades](/grafts/upgrades/) |
-| `orchardctl graft remove <id>` | Uninstall. The graft's data stays |
-| `orchardctl graft remove <id> --purge --apply` | Uninstall and delete its schema, settings and stored files |
-| `orchardctl graft rollback <id>` | Go back to the previous version and its data |
+| Command                                        | Does                                                                                                                  |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `orchardctl graft add <id>[@version]`          | Install from the Extension Marketplace                                                                                |
+| `orchardctl graft add ./file.graft`            | Install a file. It is stored in Orchard's database, so this works with no internet and on clusters with several nodes |
+| `orchardctl graft add https://.../x.graft`     | Install from any https address, pinned to the digest it had when you added it                                         |
+| `orchardctl graft list`                        | What is installed, whether it is running, and the latest messages about grafts from the server                        |
+| `orchardctl graft upgrade [id]`                | Move to the newest compatible version. See [upgrades](/grafts/upgrades/)                                              |
+| `orchardctl graft remove <id>`                 | Uninstall. The graft's data stays                                                                                     |
+| `orchardctl graft remove <id> --purge --apply` | Uninstall and delete its schema, settings and stored files                                                            |
+| `orchardctl graft rollback <id>`               | Go back to the previous version and its data                                                                          |
 
 Flags: `--yes` skips the prompt, `--dry-run` runs every check and changes
 nothing, `--apply` rolls out afterwards.
@@ -81,11 +81,11 @@ HelmRelease.
 
 `graftSettings.trust` decides which grafts may load:
 
-| Policy | Loads |
-| --- | --- |
-| `official` | Only grafts signed by Orchard |
-| `signed` (default) | Grafts signed by Orchard or by a publisher key in `graftSettings.keys` |
-| `any` | Unsigned grafts too. Anything that ends up in the grafts directory runs |
+| Policy             | Loads                                                                   |
+| ------------------ | ----------------------------------------------------------------------- |
+| `official`         | Only grafts signed by Orchard                                           |
+| `signed` (default) | Grafts signed by Orchard or by a publisher key in `graftSettings.keys`  |
+| `any`              | Unsigned grafts too. Anything that ends up in the grafts directory runs |
 
 A publisher gives you their public key (a short base64 string from
 `graft keygen`). Add it to trust their grafts:
@@ -107,16 +107,16 @@ added them.
 
 ## All the settings
 
-| Value | Environment variable | Default |
-| --- | --- | --- |
-| `grafts` | `ORCHARD_GRAFTS` | none |
-| `graftSettings.trust` | `ORCHARD_GRAFT_TRUST` | `signed` |
-| `graftSettings.keys` | `ORCHARD_GRAFT_KEYS` | none |
-| `graftSettings.marketplaceUrl` | `ORCHARD_GRAFT_MARKETPLACE_URL` | `https://assets.orchard.my/registry` |
-| `graftSettings.strict` | `ORCHARD_GRAFTS_STRICT` | `false`. When true, a graft that fails stops the pod instead of being skipped, so a rollout halts and the previous pods keep serving |
-| `graftSettings.safeMode` | `ORCHARD_GRAFTS_SAFE_MODE` | `false`. When true, no grafts load at all. Use it to recover from a graft that misbehaves at runtime |
-| `graftSettings.pools` | `ORCHARD_GRAFT_POOLS` | none. Database connections per pod by graft id, e.g. `{ greenhouse: 15 }` |
-| | `ORCHARD_GRAFT_DB_POOL` | `3` database connections per pod for grafts that ask for no size |
+| Value                          | Environment variable            | Default                                                                                                                              |
+| ------------------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `grafts`                       | `ORCHARD_GRAFTS`                | none                                                                                                                                 |
+| `graftSettings.trust`          | `ORCHARD_GRAFT_TRUST`           | `signed`                                                                                                                             |
+| `graftSettings.keys`           | `ORCHARD_GRAFT_KEYS`            | none                                                                                                                                 |
+| `graftSettings.marketplaceUrl` | `ORCHARD_GRAFT_MARKETPLACE_URL` | `https://assets.orchard.my/registry`                                                                                                 |
+| `graftSettings.strict`         | `ORCHARD_GRAFTS_STRICT`         | `false`. When true, a graft that fails stops the pod instead of being skipped, so a rollout halts and the previous pods keep serving |
+| `graftSettings.safeMode`       | `ORCHARD_GRAFTS_SAFE_MODE`      | `false`. When true, no grafts load at all. Use it to recover from a graft that misbehaves at runtime                                 |
+| `graftSettings.pools`          | `ORCHARD_GRAFT_POOLS`           | none. Database connections per pod by graft id, e.g. `{ greenhouse: 15 }`                                                            |
+|                                | `ORCHARD_GRAFT_DB_POOL`         | `3` database connections per pod for grafts that ask for no size                                                                     |
 
 ## Database connections
 

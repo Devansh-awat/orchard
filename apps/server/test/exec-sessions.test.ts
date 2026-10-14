@@ -129,7 +129,10 @@ test('directory entries carry the target key, plus the legacy pod fields old rep
     container: 'app'
   });
   assert.deepEqual(
-    directoryEntry('replica-a', '10.0.0.1:3001', 'u1', { kind: 'greenhouse', key: 'sandbox:s/-/0/rw' }),
+    directoryEntry('replica-a', '10.0.0.1:3001', 'u1', {
+      kind: 'greenhouse',
+      key: 'sandbox:s/-/0/rw'
+    }),
     {
       replica: 'replica-a',
       addr: '10.0.0.1:3001',
