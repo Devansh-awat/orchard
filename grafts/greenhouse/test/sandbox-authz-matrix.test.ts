@@ -908,6 +908,7 @@ test('agent chat routes declare the contract minimum role', async () => {
   const c = new SandboxAgentChatsController(
     r.access as any,
     any,
+    any,
     r.users as any,
     r.analytics as any,
     any
@@ -915,6 +916,23 @@ test('agent chat routes declare the contract minimum role', async () => {
   const CID = 'acp_000000000000000000000000';
   const routes: Record<string, [Gate | null, () => Promise<unknown>]> = {
     'GET /sandboxes/:id/agents': [{ min: 'viewer' }, () => c.catalog(req(), SANDBOX)],
+    'GET /sandboxes/:id/agents/logins': [{ min: 'viewer' }, () => c.loginMethods(req(), SANDBOX)],
+    'POST /sandboxes/:id/agents/logins': [
+      { min: 'collaborator' },
+      () => c.startLogin(req(), SANDBOX, {})
+    ],
+    'GET /sandboxes/:id/agents/logins/:loginId': [
+      { min: 'collaborator' },
+      () => c.loginStatus(req(), SANDBOX, 'login')
+    ],
+    'POST /sandboxes/:id/agents/logins/:loginId/answer': [
+      { min: 'collaborator' },
+      () => c.answerLogin(req(), SANDBOX, 'login', {})
+    ],
+    'DELETE /sandboxes/:id/agents/logins/:loginId': [
+      { min: 'collaborator' },
+      () => c.cancelLogin(req(), SANDBOX, 'login')
+    ],
     'GET /sandboxes/:id/sessions/:sid/agent-chats': [
       { min: 'viewer' },
       () => c.list(req(), SANDBOX, SID)
@@ -969,6 +987,11 @@ test('agent chat routes declare the contract minimum role', async () => {
     'constructor',
     'access',
     'catalog',
+    'loginMethods',
+    'startLogin',
+    'loginStatus',
+    'answerLogin',
+    'cancelLogin',
     'list',
     'create',
     'events',

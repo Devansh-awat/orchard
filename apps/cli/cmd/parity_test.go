@@ -17,6 +17,8 @@ import (
 // map entry.
 const authSnapshotPath = "../../server/test/auth-coverage.snapshot.json"
 
+const graftManifests = "../../../grafts/*/graft.json"
+
 // routeCoverage maps snapshot routes ("METHOD /path", verbatim) to the CLI
 // command that drives them.
 var routeCoverage = map[string]string{
@@ -507,20 +509,37 @@ var routeExclusions = map[string]string{
 	"POST /github/link":        "GitHub OAuth code exchange for the browser flow (CLI opens GET /github/link)",
 	"POST /github/app/webhook": "webhook receiver for GitHub, not a client route",
 
-	"POST /integrations/linear/webhook":     "webhook receiver for Linear, signed with the instance webhook secret",
-	"POST /integrations/slack/commands":     "Slack slash command receiver, signed with the Slack app signing secret",
-	"POST /integrations/slack/events":       "Slack Events API receiver, signed with the Slack app signing secret",
-	"GET /sandboxes/:id/issues":             "web composer issue picker; the CLI passes an issue ref straight to session create",
-	"GET /integrations/linear/issues":       "web composer Linear issue picker",
-	"GET /users/me/integrations/linear":     "web user settings (Linear connection status); no CLI command yet",
-	"PUT /users/me/integrations/linear":     "web user settings (connect a Linear API key); no CLI command yet",
-	"DELETE /users/me/integrations/linear":  "web user settings (disconnect Linear); no CLI command yet",
-	"GET /users/me/integrations":            "web user settings (linked accounts list); no CLI command yet",
-	"POST /integrations/slack/link":         "browser confirmation page for the one-time link from /greenhouse link in Slack",
-	"POST /integrations/slack/link/preview": "web-only: shows the Slack account on the link confirm page",
-	"POST /sandboxes/:id/repos/init":        "web-only: start a session from an empty repository",
-	"GET /sandboxes/:id/agent/usage":        "web composer context popover (host Claude subscription limits)",
-	"DELETE /users/me/integrations/slack":   "web user settings (unlink Slack); /greenhouse unlink in Slack does the same",
+	"POST /integrations/linear/webhook":                             "webhook receiver for Linear, signed with the instance webhook secret",
+	"POST /integrations/slack/commands":                             "Slack slash command receiver, signed with the Slack app signing secret",
+	"POST /integrations/slack/events":                               "Slack Events API receiver, signed with the Slack app signing secret",
+	"GET /sandboxes/:id/issues":                                     "web composer issue picker; the CLI passes an issue ref straight to session create",
+	"GET /integrations/linear/issues":                               "web composer Linear issue picker",
+	"GET /users/me/integrations/linear":                             "web user settings (Linear connection status); no CLI command yet",
+	"PUT /users/me/integrations/linear":                             "web user settings (connect a Linear API key); no CLI command yet",
+	"DELETE /users/me/integrations/linear":                          "web user settings (disconnect Linear); no CLI command yet",
+	"GET /users/me/integrations":                                    "web user settings (linked accounts list); no CLI command yet",
+	"POST /integrations/slack/link":                                 "browser confirmation page for the one-time link from /greenhouse link in Slack",
+	"POST /integrations/slack/link/preview":                         "web-only: shows the Slack account on the link confirm page",
+	"POST /sandboxes/:id/repos/init":                                "web-only: start a session from an empty repository",
+	"GET /sandboxes/:id/agent/usage":                                "web composer context popover (host Claude subscription limits)",
+	"GET /sandboxes/:id/agents":                                     "web workspace: which coding agents the machine has; no CLI command yet",
+	"GET /sandboxes/:id/sessions/:sid/agent-chats":                  "web workspace agent chats (Claude Code, Codex, fx, opencode); no CLI command yet",
+	"POST /sandboxes/:id/sessions/:sid/agent-chats":                 "web workspace agent chats; no CLI command yet",
+	"PATCH /sandboxes/:id/sessions/:sid/agent-chats/:cid":           "web workspace agent chats (rename); no CLI command yet",
+	"DELETE /sandboxes/:id/sessions/:sid/agent-chats/:cid":          "web workspace agent chats (close); no CLI command yet",
+	"GET /sandboxes/:id/sessions/:sid/agent-chats/:cid/events":      "web workspace agent chats (history); no CLI command yet",
+	"GET /sandboxes/:id/sessions/:sid/agent-chats/:cid/stream":      "web workspace agent chats (live stream); no CLI command yet",
+	"POST /sandboxes/:id/sessions/:sid/agent-chats/:cid/prompt":     "web workspace agent chats (send); no CLI command yet",
+	"POST /sandboxes/:id/sessions/:sid/agent-chats/:cid/cancel":     "web workspace agent chats (stop); no CLI command yet",
+	"POST /sandboxes/:id/sessions/:sid/agent-chats/:cid/config":     "web workspace agent chats (model and mode); no CLI command yet",
+	"POST /sandboxes/:id/sessions/:sid/agent-chats/:cid/permission": "web workspace agent chats (answer a permission prompt); no CLI command yet",
+	"POST /sandboxes/:id/sessions/:sid/agent-chats/:cid/revert":     "web workspace agent chats (revert a turn); no CLI command yet",
+	"GET /sandboxes/:id/agents/logins":                              "web settings: agent sign-in methods; run the agent's own login in orchard sandbox ssh",
+	"POST /sandboxes/:id/agents/logins":                             "web settings: start an agent sign-in on the machine; run the agent's own login in orchard sandbox ssh",
+	"GET /sandboxes/:id/agents/logins/:loginId":                     "web settings: agent sign-in progress",
+	"POST /sandboxes/:id/agents/logins/:loginId/answer":             "web settings: paste a sign-in code or callback address",
+	"DELETE /sandboxes/:id/agents/logins/:loginId":                  "web settings: cancel an agent sign-in",
+	"DELETE /users/me/integrations/slack":                           "web user settings (unlink Slack); /greenhouse unlink in Slack does the same",
 
 	// server plumbing
 	"GET /health":                  "health probe",
@@ -641,7 +660,51 @@ func loadAuthSnapshot(t *testing.T) map[string]string {
 	if len(snapshot) < 200 {
 		t.Fatalf("snapshot has only %d routes; expected the full route table", len(snapshot))
 	}
-	return snapshot
+	return viaGraftAliases(t, snapshot)
+}
+
+func viaGraftAliases(t *testing.T, snapshot map[string]string) map[string]string {
+	t.Helper()
+	paths, err := filepath.Glob(filepath.FromSlash(graftManifests))
+	if err != nil {
+		t.Fatalf("find graft manifests: %v", err)
+	}
+	type alias struct{ prefix, alias string }
+	var aliases []alias
+	for _, path := range paths {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		var manifest struct {
+			ID     string `json:"id"`
+			Claims struct {
+				APIAliases []string `json:"apiAliases"`
+			} `json:"claims"`
+		}
+		if err := json.Unmarshal(raw, &manifest); err != nil {
+			t.Fatalf("parse %s: %v", path, err)
+		}
+		for _, a := range manifest.Claims.APIAliases {
+			a = strings.Trim(a, "/")
+			aliases = append(aliases, alias{prefix: "/" + manifest.ID + "/" + a, alias: "/" + a})
+		}
+	}
+	out := make(map[string]string, len(snapshot))
+	for route, auth := range snapshot {
+		method, path, ok := strings.Cut(route, " ")
+		if ok {
+			for _, a := range aliases {
+				if path == a.prefix || strings.HasPrefix(path, a.prefix+"/") {
+					path = a.alias + strings.TrimPrefix(path, a.prefix)
+					break
+				}
+			}
+			route = method + " " + path
+		}
+		out[route] = auth
+	}
+	return out
 }
 
 func sortedKeys[V any](m map[string]V) []string {
