@@ -242,6 +242,19 @@ postgres:
   resources:
     requests: { cpu: "200m", memory: "512Mi" }
     limits: { cpu: "2", memory: "2Gi" }
+  # PgBouncer in front of the database (a CNPG Pooler in transaction mode).
+  # Orchard's own queries go through it, so Postgres sees at most
+  # instances x defaultPoolSize connections from them however many server
+  # pods are running, including both sides of a rollout. Migrations and graft
+  # database pools keep connecting directly.
+  pooler:
+    enabled: false
+    instances: 2
+    defaultPoolSize: 20
+    maxClientConn: 1000
+    resources:
+      requests: { cpu: 50m, memory: 64Mi }
+      limits: { memory: 256Mi }
 
 # Traefik IngressRoute connecting frontend (/) and backend (/apiv1).
 ingress:

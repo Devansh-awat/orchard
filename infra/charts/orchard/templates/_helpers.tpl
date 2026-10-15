@@ -178,6 +178,7 @@ true
                 secretKeyRef:
                   name: {{ .Values.postgres.name }}-app
                   key: uri
+            {{- include "orchard.poolerEnv" . }}
             {{- end }}
             {{- if .Values.redis.enabled }}
             - name: REDIS_URL
@@ -413,6 +414,13 @@ One password for the proxy's postgres role, stable across upgrades: an
 explicit value wins, then whatever the secret already holds, then a fresh
 random one that every template in this render sees.
 */}}
+{{- define "orchard.poolerEnv" }}
+{{- if .Values.postgres.pooler.enabled }}
+            - { name: DATABASE_POOLER_HOST, value: {{ printf "%s-pooler-rw.%s.svc.cluster.local" .Values.postgres.name .Values.namespace | quote }} }
+            - { name: ORCHARD_DB_POOLER_CONNECTIONS, value: {{ mul .Values.postgres.pooler.instances .Values.postgres.pooler.defaultPoolSize | toString | quote }} }
+{{- end }}
+{{- end }}
+
 {{- define "orchard.r2ProxyDbPassword" -}}
 {{- if .Values.r2Proxy.databasePassword -}}
 {{- .Values.r2Proxy.databasePassword -}}

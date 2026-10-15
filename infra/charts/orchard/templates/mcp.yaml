@@ -39,6 +39,7 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.postgres.name }}-app
                   key: uri
+            {{- include "orchard.poolerEnv" . }}
             {{- end }}
             {{- /*
               Derived from what the operator already told the chart, and only

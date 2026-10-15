@@ -71,13 +71,14 @@ export function planDbBudget(
     server: positiveInt(env.ORCHARD_DB_SERVER_PODS) ?? 1,
     workers: positiveInt(env.ORCHARD_DB_WORKER_PODS) ?? 0
   };
-  const corePerPod = positiveInt(env.DATABASE_CONNECTION_LIMIT) ?? 10;
+  const pooled = positiveInt(env.ORCHARD_DB_POOLER_CONNECTIONS);
+  const corePerPod = pooled ? 0 : (positiveInt(env.DATABASE_CONNECTION_LIMIT) ?? 10);
   const grafts = records.filter(usesDatabase).map((r) => {
     const { size, source } = graftPoolSize(r, env);
     return { id: r.id, pool: size, source };
   });
   const perPod = corePerPod + grafts.reduce((sum, g) => sum + g.pool, 0);
-  const steadyPeak = perPod * (pods.server + pods.workers);
+  const steadyPeak = (pooled ?? 0) + perPod * (pods.server + pods.workers);
   const rolloutPeak = steadyPeak + perPod * pods.server;
   const usable = Math.max(0, server.maxConnections - server.reserved);
   const level: DbBudgetLevel =

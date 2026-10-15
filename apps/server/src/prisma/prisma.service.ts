@@ -7,16 +7,22 @@ const clientOptions = {
 
 type ClientOptions = typeof clientOptions & { datasourceUrl?: string };
 
-function buildDatasourceUrl(): string | undefined {
-  const base = process.env.DATABASE_URL;
+export function buildDatasourceUrl(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  const base = env.DATABASE_URL;
   if (!base) return undefined;
   try {
     const url = new URL(base);
+    const pooler = env.DATABASE_POOLER_HOST?.trim();
+    if (pooler) {
+      url.hostname = pooler;
+      url.port = env.DATABASE_POOLER_PORT?.trim() || '5432';
+      url.searchParams.set('pgbouncer', 'true');
+    }
     if (!url.searchParams.has('connection_limit')) {
-      url.searchParams.set('connection_limit', process.env.DATABASE_CONNECTION_LIMIT ?? '10');
+      url.searchParams.set('connection_limit', env.DATABASE_CONNECTION_LIMIT ?? '10');
     }
     if (!url.searchParams.has('pool_timeout')) {
-      url.searchParams.set('pool_timeout', process.env.DATABASE_POOL_TIMEOUT ?? '20');
+      url.searchParams.set('pool_timeout', env.DATABASE_POOL_TIMEOUT ?? '20');
     }
     return url.toString();
   } catch {

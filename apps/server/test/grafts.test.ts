@@ -1405,6 +1405,45 @@ describe('database connection budget', () => {
     assert.equal(budget.level, 'over');
   });
 
+  test('behind the pooler, core queries cost a fixed share however many pods run', async () => {
+    const { planDbBudget } = await import('../src/grafts/db-budget');
+    const budget = planDbBudget(
+      { maxConnections: 100, reserved: 3, inUse: 20 },
+      [record('greenhouse', { pool: 10 }), record('notes')],
+      {
+        ORCHARD_DB_SERVER_PODS: '2',
+        ORCHARD_DB_WORKER_PODS: '1',
+        DATABASE_CONNECTION_LIMIT: '10',
+        ORCHARD_DB_POOLER_CONNECTIONS: '40'
+      }
+    );
+    assert.equal(budget.corePerPod, 0);
+    assert.equal(budget.perPod, 13);
+    assert.equal(budget.steadyPeak, 79);
+    assert.equal(budget.rolloutPeak, 105);
+  });
+
+  test('the core client goes through the pooler while DATABASE_URL stays direct', async () => {
+    const { buildDatasourceUrl } = await import('../src/prisma/prisma.service');
+    const direct = 'postgresql://orchard:pw@orchard-db-rw.orchard:5432/orchard';
+    const pooled = new URL(
+      buildDatasourceUrl({
+        DATABASE_URL: direct,
+        DATABASE_POOLER_HOST: 'orchard-db-pooler-rw.orchard.svc.cluster.local'
+      })!
+    );
+    assert.equal(pooled.hostname, 'orchard-db-pooler-rw.orchard.svc.cluster.local');
+    assert.equal(pooled.port, '5432');
+    assert.equal(pooled.username, 'orchard');
+    assert.equal(pooled.password, 'pw');
+    assert.equal(pooled.pathname, '/orchard');
+    assert.equal(pooled.searchParams.get('pgbouncer'), 'true');
+    assert.equal(pooled.searchParams.get('connection_limit'), '10');
+    const plain = new URL(buildDatasourceUrl({ DATABASE_URL: direct })!);
+    assert.equal(plain.hostname, 'orchard-db-rw.orchard');
+    assert.equal(plain.searchParams.has('pgbouncer'), false);
+  });
+
   test('grafts without the db capability open no pool', async () => {
     const { planDbBudget } = await import('../src/grafts/db-budget');
     const noDb = {

@@ -1,0 +1,28 @@
+{{- if and .Values.postgres.enabled .Values.postgres.pooler.enabled }}
+apiVersion: postgresql.cnpg.io/v1
+kind: Pooler
+metadata:
+  name: {{ .Values.postgres.name }}-pooler-rw
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "postgres-pooler") | nindent 4 }}
+spec:
+  cluster:
+    name: {{ .Values.postgres.name }}
+  instances: {{ .Values.postgres.pooler.instances }}
+  type: rw
+  pgbouncer:
+    poolMode: transaction
+    parameters:
+      max_client_conn: {{ .Values.postgres.pooler.maxClientConn | toString | quote }}
+      default_pool_size: {{ .Values.postgres.pooler.defaultPoolSize | toString | quote }}
+  template:
+    metadata:
+      labels:
+        {{- include "orchard.labels" (dict "root" . "name" "postgres-pooler") | nindent 8 }}
+    spec:
+      containers:
+        - name: pgbouncer
+          resources:
+            {{- toYaml .Values.postgres.pooler.resources | nindent 12 }}
+{{- end }}
