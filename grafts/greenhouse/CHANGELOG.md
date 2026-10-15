@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.3](https://github.com/hackclub/orchard/compare/greenhouse/v1.3.2...greenhouse/v1.3.3) (2026-10-15)
+
+
+### Bug Fixes
+
+* existing vercel machines open the daemon port when they start or resync ([6425a17](https://github.com/hackclub/orchard/commit/6425a17fbc670371902489173bc0013499859f08))
+
 ## [1.3.2](https://github.com/hackclub/orchard/compare/greenhouse/v1.3.1...greenhouse/v1.3.2) (2026-10-14)
 
 
