@@ -42,6 +42,7 @@ export class GreenhouseApp {
   organizationId = $state<string | null>(null);
   sheet = $state<Sheet>(null);
   settingsSection = $state<string | null>(null);
+  agentSetup = $state<string | null>(null);
   mobilePane = $state<'sessions' | 'chat' | 'changes'>('chat');
   ws = $state.raw<MachineWorkspace | null>(null);
   lastMachine = $state<string | null>(null);
@@ -136,6 +137,11 @@ export class GreenhouseApp {
     this.sheet = 'settings';
   }
 
+  openAgentSetup(agent: string) {
+    this.agentSetup = agent;
+    this.openSettings('agents');
+  }
+
   goHome() {
     this.nav.go({ machine: this.machineId, session: null, tab: null });
   }
@@ -188,6 +194,10 @@ const KEY = Symbol('greenhouse-app');
 
 export function setGreenhouseApp(app: GreenhouseApp) {
   setContext(KEY, app);
+}
+
+export function findGreenhouseApp(): GreenhouseApp | null {
+  return getContext<GreenhouseApp | undefined>(KEY) ?? null;
 }
 
 export function getGreenhouseApp(): GreenhouseApp {

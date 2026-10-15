@@ -23,6 +23,7 @@ import { SandboxEnabledGuard } from '../sandbox-enabled.guard';
 import { SandboxAccessService } from '../sandbox-access.service';
 import { requireSandboxAccess, type SandboxAccessLevel } from '../sandbox-role-gate';
 import { SandboxAgentHostService } from './sandbox-agent-host.service';
+import { SandboxAgentAuthService } from './sandbox-agent-auth.service';
 
 const STREAM_PING_MS = 20_000;
 
@@ -38,6 +39,7 @@ export class SandboxAgentChatsController {
   constructor(
     private readonly accessService: SandboxAccessService,
     private readonly host: SandboxAgentHostService,
+    private readonly auth: SandboxAgentAuthService,
     private readonly usersService: UsersService,
     private readonly analytics: AnalyticsService,
     @Optional() private readonly rateLimit?: RateLimitService
@@ -65,6 +67,65 @@ export class SandboxAgentChatsController {
   ) {
     const { row } = await this.access(req, id, 'viewer');
     return this.host.catalog(row, refresh === '1');
+  }
+
+  @Get(':id/agents/logins')
+  async loginMethods(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    await this.access(req, id, 'viewer');
+    return this.auth.catalog();
+  }
+
+  @Post(':id/agents/logins')
+  @RequireScope('exec')
+  async startLogin(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { agent?: string; method?: string }
+  ) {
+    const { user, row } = await this.access(req, id, 'collaborator');
+    await this.rateLimit?.checkRateLimit(user.id, 'user', 'sandbox_prompt');
+    return this.auth.start(row, user.id, String(body?.agent ?? ''), String(body?.method ?? ''));
+  }
+
+  @Get(':id/agents/logins/:loginId')
+  @RequireScope('exec')
+  async loginStatus(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('loginId') loginId: string,
+    @Query('method') method?: string
+  ) {
+    const { user, row } = await this.access(req, id, 'collaborator');
+    return this.auth.status(row, user.id, loginId, String(method ?? ''));
+  }
+
+  @Post(':id/agents/logins/:loginId/answer')
+  @RequireScope('exec')
+  async answerLogin(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('loginId') loginId: string,
+    @Body() body: { method?: string; text?: string }
+  ) {
+    const { user, row } = await this.access(req, id, 'collaborator');
+    return this.auth.answer(
+      row as any,
+      user.id,
+      loginId,
+      String(body?.method ?? ''),
+      String(body?.text ?? '')
+    );
+  }
+
+  @Delete(':id/agents/logins/:loginId')
+  @RequireScope('exec')
+  async cancelLogin(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('loginId') loginId: string
+  ) {
+    const { user, row } = await this.access(req, id, 'collaborator');
+    return this.auth.cancel(row, user.id, loginId);
   }
 
   @Get(':id/sessions/:sid/agent-chats')

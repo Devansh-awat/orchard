@@ -40,6 +40,7 @@ type Daemon struct {
 	agents   *Registry
 	catalog  *Catalog
 	pool     *Pool
+	logins   *logins
 
 	chatsMu sync.Mutex
 	chats   map[string]*Chat
@@ -95,6 +96,7 @@ func New(opts Options) (*Daemon, error) {
 	d.agents = NewRegistry(opts.AgentsFile)
 	d.catalog = NewCatalog(d)
 	d.pool = NewPool(d)
+	d.logins = newLogins(d)
 	d.registerMethods()
 	return d, nil
 }
@@ -437,6 +439,57 @@ func (d *Daemon) registerMethods() {
 				return nil, err
 			}
 			return d.revert(ctx, p.ChatID, p.Commit, p.Author)
+		},
+		"auth.start": func(ctx context.Context, raw json.RawMessage) (any, error) {
+			p, err := decode[loginStartParams](raw)
+			if err != nil {
+				return nil, err
+			}
+			return d.logins.Start(ctx, p)
+		},
+		"auth.status": func(ctx context.Context, raw json.RawMessage) (any, error) {
+			p, err := decode[struct {
+				LoginID string `json:"loginId"`
+			}](raw)
+			if err != nil {
+				return nil, err
+			}
+			return d.logins.Status(p.LoginID)
+		},
+		"auth.input": func(ctx context.Context, raw json.RawMessage) (any, error) {
+			p, err := decode[struct {
+				LoginID string `json:"loginId"`
+				Text    string `json:"text"`
+			}](raw)
+			if err != nil {
+				return nil, err
+			}
+			if err := d.logins.Input(p.LoginID, p.Text); err != nil {
+				return nil, err
+			}
+			return map[string]bool{"ok": true}, nil
+		},
+		"auth.callback": func(ctx context.Context, raw json.RawMessage) (any, error) {
+			p, err := decode[struct {
+				LoginID string `json:"loginId"`
+				URL     string `json:"url"`
+			}](raw)
+			if err != nil {
+				return nil, err
+			}
+			return d.logins.Callback(ctx, p.LoginID, p.URL)
+		},
+		"auth.cancel": func(ctx context.Context, raw json.RawMessage) (any, error) {
+			p, err := decode[struct {
+				LoginID string `json:"loginId"`
+			}](raw)
+			if err != nil {
+				return nil, err
+			}
+			if err := d.logins.Cancel(p.LoginID); err != nil {
+				return nil, err
+			}
+			return map[string]bool{"ok": true}, nil
 		},
 		"activity.busy": func(ctx context.Context, _ json.RawMessage) (any, error) {
 			return map[string]bool{"busy": d.anyBusy()}, nil

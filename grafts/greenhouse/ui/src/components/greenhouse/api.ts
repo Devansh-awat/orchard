@@ -177,6 +177,77 @@ export function agentCatalog(sandboxId: string, refresh = false) {
   return get<GhAgentCatalog>(`${base(sandboxId)}/agents${refresh ? '?refresh=1' : ''}`);
 }
 
+export type AgentCredentialField = 'claudeToken' | 'openaiToken' | 'aiGatewayToken';
+
+export type AgentLoginMethod =
+  | {
+      kind: 'signin';
+      id: string;
+      label: string;
+      description: string;
+      step: 'none' | 'code' | 'callback';
+      saves?: AgentCredentialField;
+    }
+  | {
+      kind: 'key';
+      id: string;
+      label: string;
+      description: string;
+      field: AgentCredentialField;
+      placeholder: string;
+    };
+
+export type AgentLoginInfo = { agent: string; summary: string; methods: AgentLoginMethod[] };
+
+export type AgentLogin = {
+  loginId: string;
+  agent: string;
+  method: string;
+  step: 'none' | 'code' | 'callback';
+  state: 'running' | 'succeeded' | 'failed';
+  url: string | null;
+  code: string | null;
+  lines: string[];
+  saved: boolean;
+};
+
+export function agentLoginMethods(sandboxId: string) {
+  return get<{ agents: AgentLoginInfo[] }>(`${base(sandboxId)}/agents/logins`);
+}
+
+export function startAgentLogin(sandboxId: string, agent: string, method: string) {
+  return send<AgentLogin>(`${base(sandboxId)}/agents/logins`, 'POST', { agent, method });
+}
+
+export function agentLoginStatus(sandboxId: string, loginId: string, method: string) {
+  return get<AgentLogin>(
+    `${base(sandboxId)}/agents/logins/${encodeURIComponent(loginId)}?method=${encodeURIComponent(method)}`
+  );
+}
+
+export function answerAgentLogin(sandboxId: string, loginId: string, method: string, text: string) {
+  return send<AgentLogin>(
+    `${base(sandboxId)}/agents/logins/${encodeURIComponent(loginId)}/answer`,
+    'POST',
+    { method, text }
+  );
+}
+
+export function cancelAgentLogin(sandboxId: string, loginId: string) {
+  return send<{ ok: boolean }>(
+    `${base(sandboxId)}/agents/logins/${encodeURIComponent(loginId)}`,
+    'DELETE'
+  );
+}
+
+export function saveAgentCredential(field: AgentCredentialField, value: string | null) {
+  return send<{ claude: boolean; openai: boolean; aiGateway: boolean }>(
+    '/apiv1/sandboxes/credentials',
+    'PUT',
+    { [field]: value }
+  );
+}
+
 export function listAgentChats(sandboxId: string, sid: string) {
   return get<{ chats: GhAgentChat[] }>(`${base(sandboxId)}/sessions/${sid}/agent-chats`);
 }

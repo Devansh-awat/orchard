@@ -47,6 +47,7 @@ import { SandboxUsageController } from './sandbox-usage.controller';
 import { SandboxAgentChatsController } from './daemon/sandbox-agent-chats.controller';
 import { SandboxDaemonService } from './daemon/sandbox-daemon.service';
 import { SandboxAgentHostService } from './daemon/sandbox-agent-host.service';
+import { SandboxAgentAuthService } from './daemon/sandbox-agent-auth.service';
 import { SandboxMirrorConsumer } from './sandbox-mirror.consumer';
 import { GreenhouseWiring } from './greenhouse-wiring.service';
 
@@ -84,6 +85,7 @@ const REAPER_INTERVAL_MS = 60_000;
     SandboxRunnerRegistry,
     SandboxDaemonService,
     SandboxAgentHostService,
+    SandboxAgentAuthService,
     SandboxProbesService,
     SandboxChatService,
     SandboxWorkspaceService,

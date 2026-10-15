@@ -29,6 +29,8 @@
 	import { acpOptionValues, type AcpConfigOption } from './acp-reducer';
 	import { modelFavourites } from './model-favourites.svelte';
 	import ProviderIcon from './ProviderIcon.svelte';
+	import { findGreenhouseApp } from '../../greenhouse/app.svelte';
+	import { agentChoiceGroups, agentProviderKind } from './agent-models';
 
 	let {
 		store,
@@ -36,6 +38,7 @@
 		open = $bindable(false)
 	}: { store: ChatSessionStore; placement?: Placement; open?: boolean } = $props();
 	const uid = $props.id();
+	const app = findGreenhouseApp();
 
 	type View = 'main' | 'effort' | 'edit';
 
@@ -88,6 +91,16 @@
 		return acpOptionValues(option).filter(
 			(v) => !q || v.name.toLowerCase().includes(q) || agent.label.toLowerCase().includes(q)
 		);
+	}
+
+	function agentMatches(agent: AcpCatalogEntry, choices: AgentModel[]): boolean {
+		const q = query.trim().toLowerCase();
+		return !q || choices.length > 0 || agent.label.toLowerCase().includes(q);
+	}
+
+	function setUp(agent: AcpCatalogEntry) {
+		open = false;
+		app?.openAgentSetup(agent.id);
 	}
 
 	function currentAgentModel(agentId: string): string | null {
@@ -442,6 +455,7 @@
 						onkeydown={onSearchKey}
 					/>
 				</label>
+				<div class="mp-body">
 				<div class="mp-list" id="{uid}-list" role="listbox" aria-label="Models">
 					{#if models.length === 0}
 						<div class="mp-empty">
@@ -470,50 +484,75 @@
 						{#each agents as agent (agent.id)}
 							{@const choices = agentModels(agent)}
 							{@const current = currentAgentModel(agent.id)}
-							<div class="mp-group">{agent.label}</div>
-							{#if !agent.available}
-								<div class="mp-empty mp-agent-error" title={agent.error ?? ''}>
-									{agent.error ?? 'Not set up on this machine yet'}
-								</div>
-							{:else if choices.length === 0}
-								<div
-									class="mp-row mp-row--model mp-row--plain"
-									role="option"
-									tabindex="-1"
-									aria-selected={activeAgent === agent.id}
-									onpointerdown={(e) => e.preventDefault()}
-									onclick={() => pickAgent(agent, null)}
-									onkeydown={(e) => e.key === 'Enter' && pickAgent(agent, null)}
-								>
-									<span class="mp-name">{agent.label}</span>
-									<span class="mp-spacer"></span>
-									{#if activeAgent === agent.id}
-										<Check size={14} strokeWidth={1.75} class="mp-check" aria-label="Current agent" />
-									{/if}
-								</div>
-							{:else}
-								{#each choices as choice (choice.value)}
+							{#if agentMatches(agent, choices)}
+								{#if !agent.available}
 									<div
-										class="mp-row mp-row--model mp-row--plain"
+										class="mp-row mp-row--agent"
 										role="option"
 										tabindex="-1"
-										aria-selected={activeAgent === agent.id && current === choice.value}
+										aria-selected="false"
+										aria-disabled={!app}
+										title={agent.error ?? ''}
 										onpointerdown={(e) => e.preventDefault()}
-										onclick={() => pickAgent(agent, choice.value)}
-										onkeydown={(e) => e.key === 'Enter' && pickAgent(agent, choice.value)}
+										onclick={() => app && setUp(agent)}
+										onkeydown={(e) => e.key === 'Enter' && app && setUp(agent)}
 									>
-										<span class="mp-name">{choice.name}</span>
-										{#if choice.group}<span class="mp-meta">{choice.group}</span>{/if}
+										<ProviderIcon kind={agentProviderKind(agent.id)} />
+										<span class="mp-name">{agent.label}</span>
 										<span class="mp-spacer"></span>
-										{#if activeAgent === agent.id && current === choice.value}
-											<Check size={14} strokeWidth={1.75} class="mp-check" aria-label="Current model" />
+										<span class="mp-value">{app ? 'Set up' : 'Not set up'}</span>
+										{#if app}<ChevronRight size={16} strokeWidth={1.75} class="mp-chev" />{/if}
+									</div>
+								{:else if choices.length === 0}
+									<div
+										class="mp-row mp-row--agent"
+										role="option"
+										tabindex="-1"
+										aria-selected={activeAgent === agent.id}
+										onpointerdown={(e) => e.preventDefault()}
+										onclick={() => pickAgent(agent, null)}
+										onkeydown={(e) => e.key === 'Enter' && pickAgent(agent, null)}
+									>
+										<ProviderIcon kind={agentProviderKind(agent.id)} />
+										<span class="mp-name">{agent.label}</span>
+										<span class="mp-spacer"></span>
+										{#if activeAgent === agent.id}
+											<Check size={14} strokeWidth={1.75} class="mp-check" aria-label="Current agent" />
 										{/if}
 									</div>
-								{/each}
+								{:else}
+									<div class="mp-group mp-group--agent">
+										<ProviderIcon kind={agentProviderKind(agent.id)} />
+										<span>{agent.label}</span>
+									</div>
+									{#each agentChoiceGroups(choices, agent.label) as section (section.name)}
+										{#if section.name}<div class="mp-subgroup">{section.name}</div>{/if}
+										{#each section.items as choice (choice.value)}
+											<div
+												class="mp-row mp-row--model mp-row--plain mp-row--choice"
+												role="option"
+												tabindex="-1"
+												aria-selected={activeAgent === agent.id && current === choice.value}
+												title={choice.name}
+												onpointerdown={(e) => e.preventDefault()}
+												onclick={() => pickAgent(agent, choice.value)}
+												onkeydown={(e) => e.key === 'Enter' && pickAgent(agent, choice.value)}
+											>
+												<span class="mp-name">{choice.label}</span>
+												{#if choice.free}<span class="mp-badge">Free</span>{/if}
+												<span class="mp-spacer"></span>
+												{#if activeAgent === agent.id && current === choice.value}
+													<Check size={14} strokeWidth={1.75} class="mp-check" aria-label="Current model" />
+												{/if}
+											</div>
+										{/each}
+									{/each}
+								{/if}
 							{/if}
 						{/each}
 					</div>
 				{/if}
+				</div>
 				{#if activeAcp && modeOption(activeOptions)}
 					{@const mode = modeOption(activeOptions)!}
 					<div class="mp-sep"></div>
@@ -755,24 +794,64 @@
 		max-height: 24rem;
 	}
 
+	.mp-body {
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
+		max-height: 24rem;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+	}
+
+	.mp-body > .mp-list {
+		max-height: none;
+		overflow: visible;
+	}
+
 	.mp-group {
+		flex-shrink: 0;
 		padding: var(--space-2) var(--space-2) var(--space-1);
 		font-size: var(--text-caption);
 		line-height: 1rem;
 		color: var(--text-faint);
 	}
 
+	.mp-group--agent {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		font-weight: 600;
+		color: var(--text-muted);
+	}
+
+	.mp-subgroup {
+		flex-shrink: 0;
+		padding: var(--space-1) var(--space-2) 0 1.75rem;
+		font-size: var(--text-caption);
+		line-height: 1rem;
+		color: var(--text-faint);
+	}
+
 	.mp-empty {
+		flex-shrink: 0;
 		padding: var(--space-2);
 		font-size: var(--text-caption);
 		line-height: 1rem;
 		color: var(--text-muted);
 	}
 
-	.mp-agent-error {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+	.mp-row--choice {
+		padding-left: 1.75rem;
+	}
+
+	.mp-badge {
+		flex-shrink: 0;
+		padding: 0 var(--space-1);
+		border-radius: var(--radius-xs);
+		background: var(--fill-soft);
+		font-size: var(--text-caption);
+		line-height: 1rem;
+		color: var(--text-muted);
 	}
 
 	.mp-row {
