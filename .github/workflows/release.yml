@@ -328,14 +328,12 @@ jobs:
       - if: steps.publish.outputs.packed == 'true'
         uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
         id: kubeops-token
-        continue-on-error: true
         with:
           app-id: 1090304
           private-key: ${{ secrets.LEAFDBOT_PRIVATE_KEY }}
           owner: hackclub
           repositories: kubeops
-      - if: steps.publish.outputs.packed == 'true' && steps.kubeops-token.outcome == 'success'
-        continue-on-error: true
+      - if: steps.publish.outputs.packed == 'true'
         env:
           GH_TOKEN: ${{ steps.kubeops-token.outputs.token }}
         run: gh api repos/hackclub/kubeops/dispatches -f event_type=graft-published
