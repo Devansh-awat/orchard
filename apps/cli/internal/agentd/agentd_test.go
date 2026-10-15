@@ -59,6 +59,7 @@ func newHarness(t *testing.T, agents ...AgentSpec) *harness {
 	if err != nil {
 		t.Fatal(err)
 	}
+	d.pool.minFree = 0
 	ctx, cancel := context.WithCancel(context.Background())
 	srv := newTestServer(t, d)
 	go d.pool.Run(ctx)

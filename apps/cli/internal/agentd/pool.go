@@ -74,17 +74,18 @@ type spare struct {
 }
 
 type Pool struct {
-	d      *Daemon
-	mu     sync.Mutex
-	wants  map[string]*poolWant
-	spares map[string]*spare
-	busy   map[string]bool
-	kick   chan struct{}
-	off    bool
+	d       *Daemon
+	mu      sync.Mutex
+	wants   map[string]*poolWant
+	spares  map[string]*spare
+	busy    map[string]bool
+	kick    chan struct{}
+	off     bool
+	minFree uint64
 }
 
 func NewPool(d *Daemon) *Pool {
-	p := &Pool{d: d, wants: map[string]*poolWant{}, spares: map[string]*spare{}, busy: map[string]bool{}, kick: make(chan struct{}, 1)}
+	p := &Pool{d: d, wants: map[string]*poolWant{}, spares: map[string]*spare{}, busy: map[string]bool{}, kick: make(chan struct{}, 1), minFree: minFreeDiskPct}
 	p.load()
 	return p
 }
@@ -240,7 +241,7 @@ func (p *Pool) diskOK() bool {
 	if syscall.Statfs(p.d.id.Home, &st) != nil || st.Blocks == 0 {
 		return true
 	}
-	return st.Bavail*100/st.Blocks >= minFreeDiskPct
+	return st.Bavail*100/st.Blocks >= p.minFree
 }
 
 func (p *Pool) fill(ctx context.Context) {
