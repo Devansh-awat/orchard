@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.74.0](https://github.com/hackclub/orchard/compare/server/v2.73.0...server/v2.74.0) (2026-10-15)
+
+
+### Features
+
+* orchard can put pgbouncer in front of its database so rollouts stop multiplying connections ([31d194e](https://github.com/hackclub/orchard/commit/31d194ee6f0ae92c8485eedecb2d2ad54666bbb1))
+
 ## [2.73.0](https://github.com/hackclub/orchard/compare/server/v2.72.1...server/v2.73.0) (2026-10-15)
 
 
