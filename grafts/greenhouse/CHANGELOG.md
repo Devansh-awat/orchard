@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1](https://github.com/hackclub/orchard/compare/greenhouse/v1.4.0...greenhouse/v1.4.1) (2026-10-15)
+
+
+### Bug Fixes
+
+* machines run the agent host from cli 0.29.0 so agents can sign in from settings ([a180f5c](https://github.com/hackclub/orchard/commit/a180f5cf0dab8c054edf0312c25801108159a256))
+
 ## [1.4.0](https://github.com/hackclub/orchard/compare/greenhouse/v1.3.3...greenhouse/v1.4.0) (2026-10-15)
 
 
