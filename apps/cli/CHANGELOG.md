@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.29.0](https://github.com/hackclub/orchard/compare/cli/v0.28.1...cli/v0.29.0) (2026-10-15)
+
+
+### Features
+
+* greenhouse agents sign in from settings and the model picker lists agents cleanly ([0395d45](https://github.com/hackclub/orchard/commit/0395d45ca4d6c71c194974432eb5f940b9c97f26))
+
+
+### Bug Fixes
+
+* agentd pool tests no longer depend on how full the disk is ([1a2748a](https://github.com/hackclub/orchard/commit/1a2748ae06b05d2fcafcdc8b882b5be6de0d1b45))
+* cli parity follows graft route aliases and the agent sign-in routes are covered ([8adb384](https://github.com/hackclub/orchard/commit/8adb384bb2c1121225b6229c36661e33597bd3eb))
+
 ## [0.28.1](https://github.com/hackclub/orchard/compare/cli/v0.28.0...cli/v0.28.1) (2026-10-14)
 
 

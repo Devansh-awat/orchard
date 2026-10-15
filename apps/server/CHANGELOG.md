@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.73.0](https://github.com/hackclub/orchard/compare/server/v2.72.1...server/v2.73.0) (2026-10-15)
+
+
+### Features
+
+* greenhouse agents sign in from settings and the model picker lists agents cleanly ([0395d45](https://github.com/hackclub/orchard/commit/0395d45ca4d6c71c194974432eb5f940b9c97f26))
+
 ## [2.72.1](https://github.com/hackclub/orchard/compare/server/v2.72.0...server/v2.72.1) (2026-10-14)
 
 

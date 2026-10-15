@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.4.0](https://github.com/hackclub/orchard/compare/greenhouse/v1.3.3...greenhouse/v1.4.0) (2026-10-15)
+
+
+### Features
+
+* greenhouse agents sign in from settings and the model picker lists agents cleanly ([0395d45](https://github.com/hackclub/orchard/commit/0395d45ca4d6c71c194974432eb5f940b9c97f26))
+
+
+### Bug Fixes
+
+* cli parity follows graft route aliases and the agent sign-in routes are covered ([8adb384](https://github.com/hackclub/orchard/commit/8adb384bb2c1121225b6229c36661e33597bd3eb))
+
 ## [1.3.3](https://github.com/hackclub/orchard/compare/greenhouse/v1.3.2...greenhouse/v1.3.3) (2026-10-15)
 
 
