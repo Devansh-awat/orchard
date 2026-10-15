@@ -143,11 +143,8 @@ recognised. Anything without a default is optional unless the description says o
 | `SSO_ENFORCED` |  | Pins the "require single sign-on for everyone" switch in the admin panel. 'true' refuses email codes, passkeys and the superadmin password for every account that is not a superadmin; only the configured identity providers sign people in. Leave blank to let the switch decide. |
 | `MCP_SERVICE_TOKEN` |  | Shared with the MCP process. It authenticates to this API as a service and passes the consenting user's identity in headers, so a mismatch surfaces as every tool call failing rather than as anything failing to start. |
 | `SANDBOX_NAMESPACE` | `orchard-sandboxes` | Namespace the Kubernetes runner creates machines in. |
-| `SANDBOX_IMAGE` | `ghcr.io/hackclub/orchard/sandbox:latest` | Image new Kubernetes machines start from. It ships every agent and the machine daemon; on any other image a bootstrap script installs what is missing on first boot. |
-| `SANDBOX_DEFAULT_AGENT` | `opencode` | Agent new Greenhouse sessions use when nobody picks one, for example `acp:claude`. |
-| `SANDBOX_DAEMON` | | `off` makes the server use exec instead of the machine daemon. |
-| `SANDBOX_WARM_POOL` | | `off` stops machines keeping spare worktrees for instant sessions. |
-| `SANDBOX_RUNTIME_CLASS` |  | RuntimeClass for Kubernetes machines, usually kata. Empty runs them on the default runtime with a filesystem-mode home volume and no privileges. |
+| `SANDBOX_IMAGE` | `ghcr.io/hackclub/orchard/sandbox:latest` | Image new Kubernetes machines start from. The default ships every agent and the machine daemon; on other images the bootstrap installs what is missing. |
+| `SANDBOX_RUNTIME_CLASS` |  | Agent new sessions use when nobody picks one: opencode, acp:claude, acp:opencode, acp:fx, acp:codex SANDBOX_DEFAULT_AGENT=opencode off: talk to machines over exec only, never the in-machine daemon SANDBOX_DAEMON= off: do not keep spare worktrees for instant sessions SANDBOX_WARM_POOL= RuntimeClass for Kubernetes machines, usually kata. Empty runs them on the default runtime with a filesystem-mode home volume and no privileges. |
 | `SANDBOX_HOME_MODE` |  | Home volume mode: block, filesystem, or auto (block when a RuntimeClass is set). |
 | `SANDBOX_STORAGE_CLASS` |  | StorageClass for home volumes. Empty uses the cluster default. |
 | `SANDBOX_DISK_SIZE` |  | Size and limits for new Kubernetes machines. Defaults 10Gi, 2 CPUs, 4Gi. |

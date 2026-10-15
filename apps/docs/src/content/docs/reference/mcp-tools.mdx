@@ -534,7 +534,7 @@ Use `add_shared_env_vars` to change a few, `delete_shared_env_vars` to remove a 
 
 ### `create_sandbox_session`
 
-Start a new agent session on a running Greenhouse machine: creates a git worktree for `repo` on a fresh branch and an opencode chat in it. When `prompt` is given it is sent as your first prompt (attributed to you, like prompt_sandbox_session) and the agent starts working right away. Requires guest access or higher.
+Start a new agent session on a running Greenhouse machine: creates a git worktree for `repo` on a fresh branch and an agent chat in it. Pass `agent` to pick the coding agent: "opencode" (the default), or "acp:claude", "acp:opencode", "acp:fx", "acp:codex" for agents driven over the Agent Client Protocol. When `prompt` is given it is sent as your first prompt (attributed to you, like prompt_sandbox_session) and the agent starts working right away. Requires guest access or higher.
 
 ### `create_sandbox_session_pr`
 
@@ -562,7 +562,7 @@ Read the latest messages of a session's agent chat as plain text: your and your 
 
 **read-only · idempotent**
 
-List the agent sessions on a Greenhouse machine. Each session is a git worktree on its own branch (orchard/&lt;slug&gt;) with an opencode agent chat, plus its diffstat, ahead/behind, activity (idle, working, needs_input, done) and pull request.
+List the agent sessions on a Greenhouse machine. Each session is a git worktree on its own branch (orchard/&lt;slug&gt;) with an agent chat (opencode, Claude Code, fx or Codex), plus its agent, diffstat, ahead/behind, activity (idle, working, needs_input, done) and pull request.
 
 ### `list_sandboxes`
 
