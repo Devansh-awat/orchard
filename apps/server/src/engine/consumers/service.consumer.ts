@@ -12,6 +12,7 @@ interface ServiceRow {
   id: string;
   name: string;
   deploymentId: string;
+  type: string;
   port: number;
   targetPort: number;
   protocol: string;
@@ -40,6 +41,7 @@ const SELECT = {
   id: true,
   name: true,
   deploymentId: true,
+  type: true,
   port: true,
   targetPort: true,
   protocol: true,
@@ -74,6 +76,17 @@ interface ObservedPort {
   targetPort: number;
   protocol: string;
   nodePort: number | null;
+}
+
+export function observedServiceType(
+  svc: k8s.V1Service,
+  current: string
+): 'internal' | 'external' | null {
+  if (current !== 'internal' && current !== 'external') return null;
+  const type = svc.spec?.type;
+  if (type === 'ClusterIP') return 'internal';
+  if (type === 'NodePort' || type === 'LoadBalancer') return 'external';
+  return null;
 }
 
 function observedPorts(svc: k8s.V1Service): ObservedPort[] | null {
@@ -149,6 +162,11 @@ export class ServiceConsumer {
     if ((row.nodePort ?? null) !== primary.nodePort) serviceChanges.nodePort = primary.nodePort;
     if (svc.spec?.type === 'LoadBalancer' && (row.externalIp ?? null) !== externalIp) {
       serviceChanges.externalIp = externalIp;
+    }
+    const serviceType = observedServiceType(svc, row.type);
+    if (serviceType && serviceType !== row.type) {
+      serviceChanges.type = serviceType;
+      if (serviceType === 'internal' && row.externalIp !== null) serviceChanges.externalIp = null;
     }
 
     const key = (p: { port: number; protocol: string }) => `${p.protocol}/${p.port}`;
