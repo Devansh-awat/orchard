@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
 import { PrismaService } from '../../prisma/prisma.service';
+import { KubernetesService } from '../../kubernetes/kubernetes.service';
+import { LiveState, readLive } from './live-object';
 import { OrgEventsService } from '../../events/org-events.service';
 import { AuditService } from '../../audit/audit.service';
 import { observePvc } from '../../kubernetes/pvc-status';
@@ -40,8 +42,15 @@ export class StorageConsumer {
   constructor(
     private readonly prisma: PrismaService,
     private readonly orgEvents: OrgEventsService,
-    private readonly audit: AuditService
+    private readonly audit: AuditService,
+    private readonly kubernetes: KubernetesService
   ) {}
+
+  protected livePvc(namespace: string, name: string): Promise<LiveState> {
+    return readLive(this.kubernetes, this.logger, (kc) =>
+      kc.makeApiClient(k8s.CoreV1Api).readNamespacedPersistentVolumeClaim(name, namespace)
+    );
+  }
 
   async mapRefs(pvc: k8s.V1PersistentVolumeClaim): Promise<EngineRefs | null> {
     const rows = await this.volumeRows(pvc);
@@ -50,6 +59,15 @@ export class StorageConsumer {
   }
 
   async onEvent(type: EngineEventType, pvc: k8s.V1PersistentVolumeClaim): Promise<void> {
+    if (type === 'delete' && pvc.metadata?.namespace && pvc.metadata?.name) {
+      const state = await this.livePvc(pvc.metadata.namespace, pvc.metadata.name);
+      if (state === 'present') return;
+      if (state === 'unknown') {
+        throw new Error(
+          `pvc ${pvc.metadata.namespace}/${pvc.metadata.name} looks deleted but the apiserver could not confirm it`
+        );
+      }
+    }
     const rows = await this.volumeRows(pvc);
     if (rows.length === 0) return;
 

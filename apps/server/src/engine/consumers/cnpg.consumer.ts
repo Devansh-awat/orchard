@@ -641,6 +641,13 @@ export class CnpgConsumer implements OnModuleDestroy {
     if (!ctx) return;
 
     if (type === 'delete') {
+      const state = await this.liveCluster(ns, name);
+      if (state === 'present') return;
+      if (state === 'unknown') {
+        throw new Error(
+          `cluster ${ns}/${name} looks deleted but the apiserver could not confirm it`
+        );
+      }
       this.archivingState.delete(`${ns}/${name}`);
       await this.writebackStatus(ctx, { deleted: true });
       await this.writebackSnapshot(ctx, { ...clusterSnapshot(cluster), exists: false });

@@ -17,7 +17,10 @@ function volume(extra: Record<string, unknown> = {}) {
   };
 }
 
-function build(rows: ReturnType<typeof volume>[]) {
+function build(
+  rows: ReturnType<typeof volume>[],
+  live: 'present' | 'absent' | 'unknown' = 'absent'
+) {
   const updates: { id: string; data: any }[] = [];
   const emitted: any[] = [];
   const prisma = {
@@ -31,8 +34,10 @@ function build(rows: ReturnType<typeof volume>[]) {
   const consumer = new StorageConsumer(
     prisma as any,
     { emit: (e: any) => emitted.push(e) } as any,
-    { log: async () => {} } as any
+    { log: async () => {} } as any,
+    {} as any
   );
+  (consumer as any).livePvc = async () => live;
   return { consumer, updates, emitted };
 }
 
@@ -85,6 +90,18 @@ test('a delete leaves the size alone and only marks the volume missing', async (
   await consumer.onEvent('delete', pvc('20Gi'));
   assert.equal('storageSize' in updates[0].data, false);
   assert.equal(updates[0].data.phase, 'Missing');
+});
+
+test('a claim that only lost its label is not marked missing', async () => {
+  const { consumer, updates } = build([volume()], 'present');
+  await consumer.onEvent('delete', pvc('5Gi'));
+  assert.deepEqual(updates, []);
+});
+
+test('an apiserver that cannot answer never marks a volume missing', async () => {
+  const { consumer, updates } = build([volume()], 'unknown');
+  await assert.rejects(consumer.onEvent('delete', pvc('5Gi')));
+  assert.deepEqual(updates, []);
 });
 
 test('an unchanged claim emits nothing', async () => {

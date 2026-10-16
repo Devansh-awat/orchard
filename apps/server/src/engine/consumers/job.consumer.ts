@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
 import { PrismaService } from '../../prisma/prisma.service';
+import { KubernetesService } from '../../kubernetes/kubernetes.service';
+import { LiveState, readLive } from './live-object';
 import {
   JobsOrchestratorService,
   RunContext,
@@ -31,8 +33,15 @@ export class JobConsumer {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly orchestrator: JobsOrchestratorService
+    private readonly orchestrator: JobsOrchestratorService,
+    private readonly kubernetes: KubernetesService
   ) {}
+
+  protected liveJob(namespace: string, name: string): Promise<LiveState> {
+    return readLive(this.kubernetes, this.logger, (kc) =>
+      kc.makeApiClient(k8s.BatchV1Api).readNamespacedJob(name, namespace)
+    );
+  }
 
   async mapRefs(job: k8s.V1Job): Promise<EngineRefs> {
     const jobId = job.metadata?.labels?.[LABEL_JOB_ID];
@@ -42,6 +51,15 @@ export class JobConsumer {
   async onEvent(type: EngineEventType, job: k8s.V1Job): Promise<void> {
     const uid = job.metadata?.uid;
     if (!uid || this.processing.has(uid)) return;
+    if (type === 'delete' && job.metadata?.namespace && job.metadata?.name) {
+      const state = await this.liveJob(job.metadata.namespace, job.metadata.name);
+      if (state === 'present') return;
+      if (state === 'unknown') {
+        throw new Error(
+          `job ${job.metadata.namespace}/${job.metadata.name} looks deleted but the apiserver could not confirm it`
+        );
+      }
+    }
     this.processing.add(uid);
     try {
       await this.processJob(type === 'add' ? 'update' : type, job);
