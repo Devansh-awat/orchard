@@ -13,6 +13,12 @@ import { clusterSnapshot, WRITE_GUARD_ANNOTATION } from '../../kubernetes/cnpg-s
 import { storagePressure, storagePressureDetail } from '../../kubernetes/db-stats';
 import { dataVolumesOf, fullestVolume, writeGuardDecision } from '../../kubernetes/volume-stats';
 import { DatabasesService } from '../../projects/databases.service';
+import { QuotasService } from '../../quotas/quotas.service';
+import {
+  clusterSpecValues,
+  ResolvedResources,
+  specColumnUpdate
+} from '../../kubernetes/cnpg-spec-sync';
 
 const POSITIVE_TTL_MS = 10 * 60 * 1000;
 const NEGATIVE_TTL_MS = 60 * 1000;
@@ -477,7 +483,61 @@ export class CnpgMirrorConsumer implements OnModuleDestroy {
     await this.writebackStatus(ctx, { cluster });
     const snapshot = clusterSnapshot(cluster);
     await this.writebackSnapshot(ctx, snapshot);
+    await this.syncSpecColumns(ctx, ns, name, cluster);
     this.scheduleEmit(ctx, { cluster: snapshot.phase, readyInstances: snapshot.readyInstances });
+  }
+
+  private async syncSpecColumns(ctx: Ctx, ns: string, name: string, cluster: any) {
+    const row = await this.prisma.database.findUnique({
+      where: { id: ctx.databaseId },
+      select: {
+        status: true,
+        importBoosted: true,
+        storageSize: true,
+        replicas: true,
+        pgMajor: true,
+        sharedPreloadLibs: true,
+        cpuRequestMilli: true,
+        memoryRequestBytes: true
+      }
+    });
+    if (!row || row.status === 'deleting') return;
+    const update = specColumnUpdate(
+      row,
+      clusterSpecValues(cluster),
+      row.importBoosted
+        ? null
+        : await this.resolvedResources(ctx.projectId, row).catch((err) => {
+            this.logger.warn(
+              `resources for ${ns}/${name} not resolved: ${(err as Error)?.message ?? err}`
+            );
+            return null;
+          })
+    );
+    const fields = Object.keys(update);
+    if (fields.length === 0) return;
+    await this.prisma.database.update({ where: { id: ctx.databaseId }, data: update });
+    this.logger.log(`${ns}/${name}: took ${fields.join(', ')} from the cluster spec`);
+  }
+
+  private async resolvedResources(
+    projectId: string,
+    row: { cpuRequestMilli: number | null; memoryRequestBytes: bigint | null }
+  ): Promise<ResolvedResources | null> {
+    const quotas = this.moduleRef.get(QuotasService, { strict: false });
+    if (!quotas) return null;
+    const [current, defaults] = await Promise.all([
+      quotas.resolvePodResources(
+        projectId,
+        {
+          cpuRequestMilli: row.cpuRequestMilli,
+          memoryRequestBytes: row.memoryRequestBytes != null ? Number(row.memoryRequestBytes) : null
+        },
+        'postgres'
+      ),
+      quotas.resolvePodResources(projectId, {}, 'postgres')
+    ]);
+    return { current, defaults };
   }
 
   private async writebackSnapshot(ctx: Ctx, snapshot: ReturnType<typeof clusterSnapshot>) {

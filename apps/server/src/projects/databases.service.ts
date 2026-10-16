@@ -20,6 +20,7 @@ import { K8sNetworkService } from '../kubernetes/k8s-network.service';
 import { K8sCnpgService, normalizeBackupEndpointURL } from '../kubernetes/k8s-cnpg.service';
 import { k8sErrorMessage } from '../kubernetes/k8s-error';
 import { deriveDbTuning } from '../kubernetes/db-tuning';
+import { parameterDrift } from '../kubernetes/cnpg-spec-sync';
 import { R2ProxyService } from '../kubernetes/r2-proxy.service';
 import { UsersService } from '../users/users.service';
 import { AuthorizationService } from '../auth/authorization.service';
@@ -2562,17 +2563,28 @@ export class DatabasesService {
     }
     // Settings (pg_parameters / shared_preload_libs) are not credentials, no extra redaction needed.
     const parameters = (database.pgParameters as Record<string, string> | null) || {};
+    const tuning = await this.tuningFor(database);
+    const mirrored = await this.prisma.k8sObject.findFirst({
+      where: { shard: 'cnpg', kind: 'Cluster', databaseId: database.id },
+      select: { manifest: true }
+    });
     return {
       parameters,
       sharedPreloadLibraries: (database.sharedPreloadLibs as string[] | null) || [],
       backupCompression: database.backupCompression,
       // Recomputed on read, not stored, so a value that only became dangerous
       // because the memory limit shrank still shows up without anyone re-saving.
-      advisories: await this.tuningAdvisoriesFor(database)
+      advisories: tuning.advisories,
+      drift: parameterDrift(
+        parameters,
+        { max_connections: '100', shared_buffers: tuning.sharedBuffers },
+        (mirrored?.manifest as any)?.spec?.postgresql?.parameters,
+        Object.keys(this.PG_PARAM_BOUNDS)
+      )
     };
   }
 
-  private async tuningAdvisoriesFor(database: {
+  private async tuningFor(database: {
     projectId: string;
     cpuRequestMilli: number | null;
     memoryRequestBytes: bigint | null;
@@ -2594,7 +2606,7 @@ export class DatabasesService {
         sharedBuffers: (database.pgParameters as Record<string, string> | null)?.shared_buffers,
         backupCompression: database.backupCompression
       }
-    }).advisories;
+    });
   }
 
   async updateDatabaseSettings(

@@ -216,6 +216,7 @@
 	let settingsSaving = $state(false);
 	let settingsDirty = $state(false);
 	let settingsAdvisories = $state<{ key: string; message: string }[]>([]);
+	let settingsDrift = $state<Record<string, string | null>>({});
 	let settingsLoadedValues = $state<Record<string, string>>({});
 
 	// Terminal
@@ -972,6 +973,7 @@
 				settings = { ...(data.parameters || {}) };
 				settingsLoadedValues = { ...settings };
 				settingsAdvisories = data.advisories || [];
+				settingsDrift = data.drift || {};
 				settingsDirty = false;
 			}
 			settingsLoaded = true;
@@ -1629,6 +1631,7 @@
 						{settingsSaving}
 						{settingsDirty}
 						{settingsAdvisories}
+						{settingsDrift}
 						onFetchSettings={() => {
 							settingsLoaded = false;
 							fetchSettings();

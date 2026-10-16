@@ -11,6 +11,7 @@
 		settingsSaving,
 		settingsDirty,
 		settingsAdvisories = [],
+		settingsDrift = {},
 		onFetchSettings,
 		onSaveSettings,
 		paramValue,
@@ -23,6 +24,7 @@
 		settingsSaving: boolean;
 		settingsDirty: boolean;
 		settingsAdvisories?: { key: string; message: string }[];
+		settingsDrift?: Record<string, string | null>;
 		onFetchSettings: () => void;
 		onSaveSettings: () => void;
 		paramValue: (key: string) => string;
@@ -80,6 +82,16 @@
 								Default: <code class="db-inline-code">{p.defaultValue}</code>.
 							{/if}
 						</p>
+						{#if p.key in settingsDrift}
+							<p class="db-setting-drift">
+								{#if settingsDrift[p.key] == null}
+									The cluster isn't running this value. It was removed outside Orchard.
+								{:else}
+									The cluster is running <code class="db-inline-code">{settingsDrift[p.key]}</code>,
+									set outside Orchard.
+								{/if}
+							</p>
+						{/if}
 						{#if advisoryFor(p.key)}
 							<div class="db-setting-advisory">
 								<Alert tone="warning">{advisoryFor(p.key)?.message}</Alert>
@@ -128,6 +140,11 @@
 </SectionCard>
 
 <style>
+	.db-setting-drift {
+		margin: 0.375rem 0 0;
+		font-size: var(--text-caption);
+		color: var(--status-warning);
+	}
 	.db-setting-advisory {
 		margin-top: 0.5rem;
 		max-width: 46ch;
