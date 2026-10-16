@@ -142,7 +142,7 @@ test('a deployment removed right after it was created is a rollback, not a delet
 });
 
 test('a row that was renamed away from the deleted object is not touched', async () => {
-  const { consumer, removed } = build({ rows: [row('d1', 'web')] });
+  const { consumer } = build({ rows: [row('d1', 'web')] });
   assert.equal(await deleteEvent(consumer, dep('web')), 'pending');
   (consumer as any).ctxCache.set('acme/web', {
     ctx: { deploymentId: 'd1', orgId: 'o1', projectId: 'p1' },
