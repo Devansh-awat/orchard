@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.68.1](https://github.com/hackclub/orchard/compare/frontend/v1.68.0...frontend/v1.68.1) (2026-10-16)
+
+
+### Bug Fixes
+
+* **frontend:** popovers close in place and shared graft screens stay mounted ([83a605f](https://github.com/hackclub/orchard/commit/83a605f0acbafdcc92d451e7c7b3d838e23b1a80))
+
 ## [1.68.0](https://github.com/hackclub/orchard/compare/frontend/v1.67.1...frontend/v1.68.0) (2026-10-16)
 
 

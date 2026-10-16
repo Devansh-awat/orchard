@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.30.0](https://github.com/hackclub/orchard/compare/cli/v0.29.0...cli/v0.30.0) (2026-10-16)
+
+
+### Features
+
+* greenhouse opens folders anywhere, runs named commands and names sessions ([5043f0c](https://github.com/hackclub/orchard/commit/5043f0c27aa4c8603a22a97ca68683c2bcec742d))
+
 ## [0.29.0](https://github.com/hackclub/orchard/compare/cli/v0.28.1...cli/v0.29.0) (2026-10-15)
 
 
