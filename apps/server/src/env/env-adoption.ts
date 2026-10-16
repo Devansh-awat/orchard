@@ -2,11 +2,13 @@ import type * as k8s from '@kubernetes/client-node';
 import { isPullAuthEnvKey } from '../docker/registry-pull-auth';
 import { RESOURCE_REF_RE, SHARED_REF_RE, type EnvVar } from './env-resolver';
 
+const MASS_REMOVAL_MIN = 3;
+
 export const INJECTED_ENV: Readonly<Record<string, string>> = { HOST: '0.0.0.0', FORCE_COLOR: '1' };
 
 export interface EnvConflict {
   key: string;
-  reason: 'reference' | 'foreign-source' | 'orphan-secret-ref';
+  reason: 'reference' | 'foreign-source' | 'orphan-secret-ref' | 'removed-secret' | 'mass-removal';
 }
 
 export interface EnvAdoptionPlan {
@@ -66,10 +68,22 @@ export function planEnvAdoption(opts: {
     plan.upserts.push({ key, value, secret: Boolean(row.secret) });
   }
 
+  const removable: string[] = [];
   for (const row of opts.own) {
     if (seen.has(row.key) || isPullAuthEnvKey(row.key)) continue;
     if (!resolved.has(row.key)) continue;
-    plan.removals.push(row.key);
+    if (row.secret) {
+      plan.conflicts.push({ key: row.key, reason: 'removed-secret' });
+      continue;
+    }
+    removable.push(row.key);
+  }
+
+  const mass = removable.length >= MASS_REMOVAL_MIN && removable.length * 2 >= opts.own.length;
+  if (mass) {
+    for (const key of removable) plan.conflicts.push({ key, reason: 'mass-removal' });
+  } else {
+    plan.removals.push(...removable);
   }
 
   return plan;

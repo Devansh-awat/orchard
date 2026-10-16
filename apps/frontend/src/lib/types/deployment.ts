@@ -217,7 +217,15 @@ export interface Deployment {
 	effectiveImagePullPolicy?: 'Always' | 'IfNotPresent';
 	warnings?: { podName: string; message: string; timestamp: string }[];
 	envConflicts?:
-		| { key: string; reason: 'reference' | 'foreign-source' | 'orphan-secret-ref' }[]
+		| {
+				key: string;
+				reason:
+					| 'reference'
+					| 'foreign-source'
+					| 'orphan-secret-ref'
+					| 'removed-secret'
+					| 'mass-removal';
+		  }[]
 		| null;
 	project?: {
 		id: string;

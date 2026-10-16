@@ -754,7 +754,7 @@ export class CnpgConsumer implements OnModuleDestroy {
     const refused = plan?.refused.join(',') ?? '';
     if (refused && this.refusedSettings.get(key) !== refused) {
       this.logger.warn(
-        `database ${key}: not adopting ${refused} from the cluster, the value is out of range or unsafe for its memory`
+        `database ${key}: not adopting ${refused} from the cluster: out of range, unsafe for its memory, or removed together with every other setting`
       );
     }
     if (refused) this.refusedSettings.set(key, refused);

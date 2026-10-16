@@ -186,6 +186,7 @@ export function sharedBuffersStamp(
 }
 
 const ADOPTABLE_SHARED_BUFFERS_FRACTION = 0.4;
+const MASS_REMOVAL_MIN = 2;
 const SAFE_GZIP_MEMORY_BYTES = 512 * 1024 * 1024;
 
 export interface ParameterAdoption {
@@ -204,14 +205,21 @@ export function planParameterAdoption(
   const changed: string[] = [];
   const refused: string[] = [];
 
+  const storedKeys = Object.keys(stored).filter((key) => key !== 'shared_buffers');
+  const vanished = storedKeys.filter((key) => live[key] === undefined || live[key] === null);
+  const holdRemovals = vanished.length >= MASS_REMOVAL_MIN && vanished.length === storedKeys.length;
+
   for (const key of Object.keys(PG_PARAM_BOUNDS)) {
     if (key === 'shared_buffers') continue;
     const raw = live[key];
     if (raw === undefined || raw === null) {
-      if (key in next) {
-        delete next[key];
-        changed.push(key);
+      if (!(key in next)) continue;
+      if (holdRemovals) {
+        refused.push(key);
+        continue;
       }
+      delete next[key];
+      changed.push(key);
       continue;
     }
     const value = normalizePgParam(key, raw);

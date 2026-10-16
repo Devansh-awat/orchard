@@ -142,3 +142,9 @@ test('clearing a setting in orchard removes it from the cluster too', async () =
   assert.equal(patches[0].statement_timeout, null);
   assert.ok(patches[0].shared_buffers);
 });
+
+test('every stored setting vanishing at once is held, not adopted as removals', () => {
+  const plan = planParameterAdoption(cluster({}), { work_mem: '16MB', statement_timeout: '30000' });
+  assert.deepEqual(plan?.changed, []);
+  assert.deepEqual(plan?.refused.sort(), ['statement_timeout', 'work_mem']);
+});

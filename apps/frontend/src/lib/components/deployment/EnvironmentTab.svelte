@@ -48,7 +48,11 @@
 	const CONFLICT_REASONS: Record<string, string> = {
 		reference: 'was changed in Kubernetes, but its value comes from a reference. Edit it here.',
 		'foreign-source': 'is read from a ConfigMap or Secret Orchard does not manage.',
-		'orphan-secret-ref': 'points at a secret Orchard has no variable for.'
+		'orphan-secret-ref': 'points at a secret Orchard has no variable for.',
+		'removed-secret':
+			'is a secret that was removed in Kubernetes. Orchard kept its value; delete it here if that was intended.',
+		'mass-removal':
+			'disappeared from Kubernetes along with most other variables. Orchard kept it; delete it here if that was intended.'
 	};
 
 	type Pick = { kind: 'bound'; binding: Binding } | { kind: 'option'; option: BindingOption };

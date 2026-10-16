@@ -154,3 +154,28 @@ test('an Orchard env save moments ago holds adoption back', async () => {
   await assert.rejects(adopt(deploymentWith([{ name: 'A', value: '2' }], 'stale-hash')));
   assert.equal(calls.length, 0);
 });
+
+test('a secret removed with kubectl is kept and flagged, never deleted', () => {
+  const p = plan([], [{ key: 'TOKEN', value: 'abc', secret: true }]);
+  assert.deepEqual(p.removals, []);
+  assert.deepEqual(p.conflicts, [{ key: 'TOKEN', reason: 'removed-secret' }]);
+});
+
+test('most variables vanishing at once is held as a conflict, not deleted', () => {
+  const own = ['A', 'B', 'C', 'D'].map((key) => ({ key, value: '1', secret: false }));
+  const p = plan([{ name: 'D', value: '1' }], own);
+  assert.deepEqual(p.removals, []);
+  assert.deepEqual(
+    p.conflicts.map((c) => c.reason),
+    ['mass-removal', 'mass-removal', 'mass-removal']
+  );
+});
+
+test('removing one variable out of many is still adopted', () => {
+  const own = ['A', 'B', 'C', 'D'].map((key) => ({ key, value: '1', secret: false }));
+  const p = plan(
+    ['B', 'C', 'D'].map((name) => ({ name, value: '1' })),
+    own
+  );
+  assert.deepEqual(p.removals, ['A']);
+});
