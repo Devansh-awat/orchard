@@ -3292,6 +3292,7 @@
 							{bindings}
 							resourceOptions={bindingOptions}
 							onConnect={connectResource}
+							conflicts={deployment?.envConflicts ?? []}
 						/>
 					{:else if tab.id === 'network'}
 						<NetworkTab

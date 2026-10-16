@@ -11,7 +11,7 @@
 	} from 'lucide-svelte';
 	import { Eye, EyeOff, Trash2 } from '@jis3r/icons';
 	import { slide } from '$lib/utils/transitions';
-	import { Menu, MenuItem, SectionCard } from '$lib/components/ui';
+	import { Alert, Menu, MenuItem, SectionCard } from '$lib/components/ui';
 	import { envVarsToRaw, rawToEnvVarsKeepingSecrets } from './deployment-helpers';
 	import {
 		PRIMARY_FIELD,
@@ -32,7 +32,8 @@
 		onSave,
 		bindings = [],
 		resourceOptions = [],
-		onConnect
+		onConnect,
+		conflicts = []
 	}: {
 		envVars: Array<{ key: string; value: string; secret?: boolean }>;
 		isEditing?: boolean;
@@ -41,7 +42,14 @@
 		bindings?: Binding[];
 		resourceOptions?: BindingOption[];
 		onConnect?: (option: BindingOption) => Promise<Binding | null>;
+		conflicts?: { key: string; reason: string }[];
 	} = $props();
+
+	const CONFLICT_REASONS: Record<string, string> = {
+		reference: 'was changed in Kubernetes, but its value comes from a reference. Edit it here.',
+		'foreign-source': 'is read from a ConfigMap or Secret Orchard does not manage.',
+		'orphan-secret-ref': 'points at a secret Orchard has no variable for.'
+	};
 
 	type Pick = { kind: 'bound'; binding: Binding } | { kind: 'option'; option: BindingOption };
 
@@ -200,6 +208,20 @@
 			>
 		</div>
 	{/snippet}
+	{#if conflicts.length > 0}
+		<div class="env-conflicts">
+			<Alert tone="warning" title="Changed outside Orchard">
+				<ul class="env-conflict-list">
+					{#each conflicts as conflict (conflict.key)}
+						<li>
+							<code>{conflict.key}</code>
+							{CONFLICT_REASONS[conflict.reason] ?? 'differs from the running app.'}
+						</li>
+					{/each}
+				</ul>
+			</Alert>
+		</div>
+	{/if}
 	<div class="env-container">
 		{#if envViewMode === 'ui'}
 			{#each envVars as env, index (index)}
@@ -329,6 +351,21 @@
 </SectionCard>
 
 <style>
+	.env-conflicts {
+		margin-bottom: 0.75rem;
+	}
+	.env-conflict-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	.env-conflict-list code {
+		font-family: var(--font-mono);
+		font-weight: 600;
+	}
 	.env-val-col {
 		position: relative;
 		display: flex;

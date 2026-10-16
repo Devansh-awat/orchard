@@ -216,6 +216,9 @@ export interface Deployment {
 	imagePullPolicy?: 'Always' | 'IfNotPresent' | null;
 	effectiveImagePullPolicy?: 'Always' | 'IfNotPresent';
 	warnings?: { podName: string; message: string; timestamp: string }[];
+	envConflicts?:
+		| { key: string; reason: 'reference' | 'foreign-source' | 'orphan-secret-ref' }[]
+		| null;
 	project?: {
 		id: string;
 		name: string;
