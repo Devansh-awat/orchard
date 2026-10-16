@@ -13,9 +13,9 @@ import { K8sPodInformerService } from '../kubernetes/k8s-pod-informer.service';
 import { K8sCnpgInformerService } from '../kubernetes/k8s-cnpg-informer.service';
 import { K8sNodeInformerService } from '../kubernetes/k8s-node-informer.service';
 import { PodLogCaptureService } from '../kubernetes/pod-log-capture.service';
+import { engineDisabled } from '../engine/engine-disabled';
 
-const legacyInformers =
-  process.env.MIRROR_DISABLED === 'true' ? [K8sPodInformerService, K8sCnpgInformerService] : [];
+const legacyInformers = engineDisabled() ? [K8sPodInformerService, K8sCnpgInformerService] : [];
 
 @Global()
 @Module({

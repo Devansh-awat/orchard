@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
-import { Logger } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
+import { consoleLogger, EngineLogger } from './logger';
 
 export interface LeaseElectorOptions {
   namespace: string;
@@ -9,6 +9,7 @@ export interface LeaseElectorOptions {
   leaseDurationSeconds?: number;
   renewIntervalMs?: number;
   shouldAcquire?: () => boolean;
+  logger?: EngineLogger;
 }
 
 export interface Elector {
@@ -42,7 +43,7 @@ export class StaticElector extends EventEmitter implements Elector {
 }
 
 export class LeaseElector extends EventEmitter implements Elector {
-  private readonly logger: Logger;
+  private readonly logger: EngineLogger;
 
   private readonly api: k8s.CoordinationV1Api;
 
@@ -75,7 +76,7 @@ export class LeaseElector extends EventEmitter implements Elector {
     this.leaseDurationSeconds = opts.leaseDurationSeconds ?? 15;
     this.renewIntervalMs = opts.renewIntervalMs ?? 5_000;
     this.shouldAcquire = opts.shouldAcquire;
-    this.logger = new Logger(`LeaseElector:${opts.name}`);
+    this.logger = opts.logger ?? consoleLogger(`LeaseElector:${opts.name}`);
   }
 
   isHolder(): boolean {

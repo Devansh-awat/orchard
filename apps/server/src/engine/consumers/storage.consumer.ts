@@ -4,8 +4,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { OrgEventsService } from '../../events/org-events.service';
 import { AuditService } from '../../audit/audit.service';
 import { observePvc } from '../../kubernetes/pvc-status';
-import { MirrorEventType, MirrorRefs } from '../mirror-informer';
-import { K8S_DELETED_REASON } from './workload-mirror.consumer';
+import { EngineEventType, EngineRefs } from '../core/informer';
+import { K8S_DELETED_REASON } from './workload.consumer';
 
 const MISSING_PHASE = 'Missing';
 
@@ -21,8 +21,8 @@ interface VolumeRow {
 }
 
 @Injectable()
-export class StorageMirrorConsumer {
-  private readonly logger = new Logger(StorageMirrorConsumer.name);
+export class StorageConsumer {
+  private readonly logger = new Logger(StorageConsumer.name);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -30,13 +30,13 @@ export class StorageMirrorConsumer {
     private readonly audit: AuditService
   ) {}
 
-  async mapRefs(pvc: k8s.V1PersistentVolumeClaim): Promise<MirrorRefs | null> {
+  async mapRefs(pvc: k8s.V1PersistentVolumeClaim): Promise<EngineRefs | null> {
     const rows = await this.volumeRows(pvc);
     if (rows.length === 0) return null;
     return { deploymentId: rows[0].deploymentId, projectId: rows[0].deployment.projectId };
   }
 
-  async onEvent(type: MirrorEventType, pvc: k8s.V1PersistentVolumeClaim): Promise<void> {
+  async onEvent(type: EngineEventType, pvc: k8s.V1PersistentVolumeClaim): Promise<void> {
     const rows = await this.volumeRows(pvc);
     if (rows.length === 0) return;
 

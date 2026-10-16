@@ -2,95 +2,70 @@ import * as k8s from '@kubernetes/client-node';
 import { LABEL_JOB_ID } from '../jobs/jobs-orchestrator.service';
 import { BUILDER_NAMESPACE } from '../docker/builder-namespace';
 import {
-  MirrorListOptions,
-  MirrorListPage,
-  MirrorRefs,
-  MirrorResourceConfig
-} from './mirror-informer';
-import { PodMirrorConsumer } from './consumers/pod-mirror.consumer';
-import { CnpgMirrorConsumer } from './consumers/cnpg-mirror.consumer';
-import { JobMirrorConsumer } from './consumers/job-mirror.consumer';
-import { WorkloadMirrorConsumer } from './consumers/workload-mirror.consumer';
-import { IngressMirrorConsumer } from './consumers/ingress-mirror.consumer';
-import { StorageMirrorConsumer } from './consumers/storage-mirror.consumer';
-import { ServiceMirrorConsumer } from './consumers/service-mirror.consumer';
-import { NamespaceMirrorConsumer } from './consumers/namespace-mirror.consumer';
+  EngineListOptions,
+  EngineListPage,
+  EngineRefs,
+  EngineResource,
+  EngineShard,
+  K8sListBody,
+  toListResult
+} from './core';
+import { PodConsumer } from './consumers/pod.consumer';
+import { CnpgConsumer } from './consumers/cnpg.consumer';
+import { JobConsumer } from './consumers/job.consumer';
+import { WorkloadConsumer } from './consumers/workload.consumer';
+import { IngressConsumer } from './consumers/ingress.consumer';
+import { StorageConsumer } from './consumers/storage.consumer';
+import { ServiceConsumer } from './consumers/service.consumer';
+import { NamespaceConsumer } from './consumers/namespace.consumer';
 
 const ORCHARD_SELECTOR = 'app.kubernetes.io/managed-by=orchard';
 const INGRESS_SELECTOR = 'leaf.dev/managed=true';
 const CNPG_POD_SELECTOR = 'cnpg.io/cluster';
 const OUTSIDE_BUILDERS = `metadata.namespace!=${BUILDER_NAMESPACE}`;
 
-export interface MirrorShardDef {
-  name: string;
-  lease: string;
-  resources: MirrorResourceConfig[];
-}
-
-export interface MirrorShardDeps {
-  pods: PodMirrorConsumer;
-  cnpg: CnpgMirrorConsumer;
-  jobs: JobMirrorConsumer;
-  workloads: WorkloadMirrorConsumer;
-  ingresses: IngressMirrorConsumer;
-  storage: StorageMirrorConsumer;
-  services: ServiceMirrorConsumer;
-  namespaces: NamespaceMirrorConsumer;
+export interface EngineShardDeps {
+  pods: PodConsumer;
+  cnpg: CnpgConsumer;
+  jobs: JobConsumer;
+  workloads: WorkloadConsumer;
+  ingresses: IngressConsumer;
+  storage: StorageConsumer;
+  services: ServiceConsumer;
+  namespaces: NamespaceConsumer;
   // Whether cert-manager's CRDs are installed. Watching a kind the apiserver
   // does not serve fails the informer forever, so the resource is only built
   // when the definition exists.
   certManager: boolean;
-  namespaceRefs: (namespace: string) => Promise<MirrorRefs>;
+  namespaceRefs: (namespace: string) => Promise<EngineRefs>;
 }
 
-interface K8sListBody {
-  body: {
-    items?: any[];
-    metadata?: { resourceVersion?: string; _continue?: string; continue?: string };
-  };
-}
+export { stripSecretData, toListResult } from './core';
+export type { EngineShard } from './core';
 
-// The typed clients deserialize ListMeta.continue to `_continue`; CustomObjectsApi
-// hands back the raw JSON, where it stays `continue`.
-export function stripSecretData(obj: any): any {
-  if (!obj || typeof obj !== 'object') return obj;
-  delete obj.data;
-  delete obj.stringData;
-  return obj;
-}
+export type EngineShardBuilder = () => Promise<EngineShard | null>;
 
-export function toListResult(res: K8sListBody): MirrorListPage {
-  const meta = res.body.metadata ?? {};
-  return {
-    items: res.body.items ?? [],
-    resourceVersion: meta.resourceVersion ?? '',
-    continueToken: meta._continue ?? meta.continue ?? null
-  };
-}
+const extensionShards: EngineShardBuilder[] = [];
 
-export type MirrorShardBuilder = () => Promise<MirrorShardDef | null>;
-
-const extensionShards: MirrorShardBuilder[] = [];
-
-export function registerMirrorShard(build: MirrorShardBuilder): void {
+export function registerEngineShard(build: EngineShardBuilder): void {
   extensionShards.push(build);
 }
 
-export function registeredMirrorShards(): readonly MirrorShardBuilder[] {
+export function registeredEngineShards(): readonly EngineShardBuilder[] {
   return extensionShards;
 }
 
-export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
+export function buildEngineShards(deps: EngineShardDeps): EngineShard[] {
   const byNamespace = (obj: any) => deps.namespaceRefs(obj.metadata?.namespace ?? '');
 
   const core = (kc: k8s.KubeConfig) => kc.makeApiClient(k8s.CoreV1Api);
 
   const listPods = async (
     kc: k8s.KubeConfig,
-    opts: MirrorListOptions,
+    opts: EngineListOptions,
     labelSelector: string,
     fieldSelector?: string
-  ): Promise<MirrorListPage> =>
+  ): Promise<EngineListPage> =>
     toListResult(
       await core(kc).listPodForAllNamespaces(
         undefined,
@@ -101,7 +76,7 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
       )
     );
 
-  const shards: MirrorShardDef[] = [
+  const shards: EngineShard[] = [
     {
       name: 'pods',
       lease: 'orchard-mirror-pods',
@@ -299,7 +274,7 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
                 kind: 'Certificate',
                 apiVersion: 'cert-manager.io/v1',
                 watchPath: '/apis/cert-manager.io/v1/certificates',
-                list: async (kc: k8s.KubeConfig, opts: MirrorListOptions) =>
+                list: async (kc: k8s.KubeConfig, opts: EngineListOptions) =>
                   toListResult(
                     (await kc
                       .makeApiClient(k8s.CustomObjectsApi)
@@ -316,7 +291,7 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
                       )) as K8sListBody
                   ),
                 mapRefs: byNamespace
-              } satisfies MirrorResourceConfig
+              } satisfies EngineResource
             ]
           : [])
       ]

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { NamespaceMirrorConsumer } from '../src/mirror/consumers/namespace-mirror.consumer';
+import { NamespaceConsumer } from '../src/engine/consumers/namespace.consumer';
 
 const OLD = new Date(Date.now() - 60 * 60 * 1000);
 const YOUNG = new Date();
@@ -34,7 +34,7 @@ function build(opts: {
       token
     })
   };
-  const consumer = new NamespaceMirrorConsumer(prisma as any, {} as any, moduleRef as any);
+  const consumer = new NamespaceConsumer(prisma as any, {} as any, moduleRef as any);
   (consumer as any).confirmAfterMs = 0;
   (consumer as any).liveState = async (ns: string) => opts.live[ns] ?? 'absent';
   return { consumer, removed };

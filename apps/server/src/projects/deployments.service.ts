@@ -54,7 +54,7 @@ import { GitConnectionsService } from '../git/git-connections.service';
 import { ScoreService } from '../score/score.service';
 import { hostOf } from '../git/git-provider';
 import { parseRepoUrl } from '../docker/repo-url';
-import { computePodStatus } from '../mirror/pod-status';
+import { computePodStatus } from '../engine/pod-status';
 import { normalizeRootDirectory } from '../docker/build-config';
 import { applyEnvKeepRules, EnvVarWrite } from './env-write-rules';
 import { assertEnvSetStorable } from './environment-shared-vars.service';

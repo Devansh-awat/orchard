@@ -1,9 +1,10 @@
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { testPrismaClient } from './support/test-database';
-import { MirrorInformer } from '../src/mirror/mirror-informer';
-import { PodMirrorConsumer } from '../src/mirror/consumers/pod-mirror.consumer';
-import { computePodStatus } from '../src/mirror/pod-status';
+import { EngineInformer } from '../src/engine/core/informer';
+import { PrismaEngineStore } from '../src/engine/prisma-store';
+import { PodConsumer } from '../src/engine/consumers/pod.consumer';
+import { computePodStatus } from '../src/engine/pod-status';
 
 const prisma = testPrismaClient();
 
@@ -35,7 +36,7 @@ let refsMode: 'owned' | 'unowned' | 'unresolvable' = 'unowned';
 /** Names whose next handler call throws, standing in for a bad minute in the database. */
 let failHandlerFor = new Set<string>();
 
-function newInformer(): MirrorInformer {
+function newInformer(): EngineInformer {
   const config = {
     kind: KIND,
     apiVersion: API_VERSION,
@@ -60,17 +61,23 @@ function newInformer(): MirrorInformer {
       seenEvents.push({ type, name });
     }
   };
-  const informer = new MirrorInformer({} as never, prisma as never, SHARD, config as never, {
-    onListed: () => {},
-    onWatchEvent: () => {},
-    onHealthChange: () => {}
-  });
+  const informer = new EngineInformer(
+    {} as never,
+    new PrismaEngineStore(prisma as never),
+    SHARD,
+    config as never,
+    {
+      onListed: () => {},
+      onWatchEvent: () => {},
+      onHealthChange: () => {}
+    }
+  );
   // The tests drive list/sync directly rather than opening a real watch.
   (informer as unknown as { stopped: boolean }).stopped = false;
   return informer;
 }
 
-function listAndSync(informer: MirrorInformer) {
+function listAndSync(informer: EngineInformer) {
   return (
     informer as unknown as {
       listAndSync(count: boolean): Promise<{ resourceVersion: string; repairs: number }>;
@@ -79,15 +86,15 @@ function listAndSync(informer: MirrorInformer) {
 }
 
 /** The watch's own entry point: queues the event rather than awaiting it. */
-function dispatch(informer: MirrorInformer, phase: string, o: unknown) {
+function dispatch(informer: EngineInformer, phase: string, o: unknown) {
   (informer as unknown as { dispatch(phase: string, o: unknown): void }).dispatch(phase, o);
 }
 
-function drain(informer: MirrorInformer) {
+function drain(informer: EngineInformer) {
   return (informer as unknown as { drain(): Promise<void> }).drain();
 }
 
-function handle(informer: MirrorInformer, phase: string, o: unknown) {
+function handle(informer: EngineInformer, phase: string, o: unknown) {
   return (informer as unknown as { handle(phase: string, o: unknown): Promise<void> }).handle(
     phase,
     o
@@ -113,8 +120,8 @@ async function mirrored() {
 
 let notified: { deploymentId: string; state: string; detail?: string }[] = [];
 
-function newConsumer(): PodMirrorConsumer {
-  return new PodMirrorConsumer(
+function newConsumer(): PodConsumer {
+  return new PodConsumer(
     prisma as never,
     { emit: () => {} } as never,
     { capture: async () => {} } as never,
@@ -577,9 +584,9 @@ test('a pod row lost to a failed sync is restored while the pod sits still', asy
   const consumer = newConsumer();
   const pods: any[] = [podEvent('web-0', false)];
   let breakNext = true;
-  const informer = new MirrorInformer(
+  const informer = new EngineInformer(
     {} as never,
-    prisma as never,
+    new PrismaEngineStore(prisma as never),
     SHARD,
     {
       kind: 'Pod',

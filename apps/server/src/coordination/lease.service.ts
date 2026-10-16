@@ -2,7 +2,7 @@ import { Injectable, Logger, OnApplicationShutdown } from '@nestjs/common';
 import { hostname } from 'os';
 import { readFileSync } from 'fs';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
-import { Elector, LeaseElector, StaticElector } from './lease-elector';
+import { Elector, LeaseElector, StaticElector } from '../engine/core/lease-elector';
 
 export const GLOBAL_LEADER_LEASE = 'orchard-global-leader';
 
@@ -81,7 +81,8 @@ export class LeaseService implements OnApplicationShutdown {
         identity: this.identity,
         leaseDurationSeconds: opts?.leaseDurationSeconds,
         renewIntervalMs: opts?.renewIntervalMs,
-        shouldAcquire: opts?.shouldAcquire
+        shouldAcquire: opts?.shouldAcquire,
+        logger: new Logger(`LeaseElector:${name}`)
       });
     }
     this.electors.set(name, elector);

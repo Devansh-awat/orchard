@@ -94,7 +94,7 @@ export class SandboxReaperService {
   }
 
   private async syncWithoutMirror(): Promise<void> {
-    if (process.env.MIRROR_DISABLED !== 'true') return;
+    if (process.env.ENGINE_DISABLED !== 'true' && process.env.MIRROR_DISABLED !== 'true') return;
     const rows = await this.prisma.sandbox.findMany({
       where: {
         runner: 'kubernetes',

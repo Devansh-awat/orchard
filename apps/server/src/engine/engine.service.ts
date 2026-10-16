@@ -1,22 +1,24 @@
 import { Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
+import { engineDisabled } from './engine-disabled';
+import { PrismaEngineStore } from './prisma-store';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveNamespaceScope } from '../projects/namespace-scope';
 import { GLOBAL_LEADER_LEASE, LeaseService } from '../coordination/lease.service';
 import { OrgEventsService } from '../events/org-events.service';
-import { Elector } from '../coordination/lease-elector';
-import { Failure, lastingFailures, shardIsStale, UNHEALTHY_GRACE_MS } from './mirror-health';
-import { MirrorInformer, MirrorRefs } from './mirror-informer';
-import { MirrorShardDef, buildMirrorShards, registeredMirrorShards } from './mirror-shards';
-import { PodMirrorConsumer } from './consumers/pod-mirror.consumer';
-import { CnpgMirrorConsumer } from './consumers/cnpg-mirror.consumer';
-import { JobMirrorConsumer } from './consumers/job-mirror.consumer';
-import { WorkloadMirrorConsumer } from './consumers/workload-mirror.consumer';
-import { IngressMirrorConsumer } from './consumers/ingress-mirror.consumer';
-import { StorageMirrorConsumer } from './consumers/storage-mirror.consumer';
-import { ServiceMirrorConsumer } from './consumers/service-mirror.consumer';
-import { NamespaceMirrorConsumer } from './consumers/namespace-mirror.consumer';
+import { Elector } from './core/lease-elector';
+import { Failure, lastingFailures, shardIsStale, UNHEALTHY_GRACE_MS } from './core/health';
+import { EngineInformer, EngineRefs } from './core/informer';
+import { EngineShard, buildEngineShards, registeredEngineShards } from './shards';
+import { PodConsumer } from './consumers/pod.consumer';
+import { CnpgConsumer } from './consumers/cnpg.consumer';
+import { JobConsumer } from './consumers/job.consumer';
+import { WorkloadConsumer } from './consumers/workload.consumer';
+import { IngressConsumer } from './consumers/ingress.consumer';
+import { StorageConsumer } from './consumers/storage.consumer';
+import { ServiceConsumer } from './consumers/service.consumer';
+import { NamespaceConsumer } from './consumers/namespace.consumer';
 
 const PRESENCE_PREFIX = 'replica:';
 const PRESENCE_INTERVAL_MS = 10_000;
@@ -31,11 +33,12 @@ const CRASH_SWEEP_INTERVAL_MS = 5_000;
 const PRESENCE_FRESH_MS = 30_000;
 const TRANSITION_RETENTION_DAYS = 30;
 const NS_REF_TTL_MS = 10 * 60 * 1000;
+const NS_REF_NEGATIVE_TTL_MS = 30 * 1000;
 
 interface ShardRuntime {
-  def: MirrorShardDef;
+  def: EngineShard;
   elector: Elector;
-  informers: MirrorInformer[];
+  informers: EngineInformer[];
   activity: {
     lastListAt: Date | null;
     lastEventAt: Date | null;
@@ -61,12 +64,12 @@ export interface ShardHealth {
 }
 
 @Injectable()
-export class MirrorService implements OnApplicationBootstrap, OnModuleDestroy {
-  private readonly logger = new Logger(MirrorService.name);
+export class EngineService implements OnApplicationBootstrap, OnModuleDestroy {
+  private readonly logger = new Logger(EngineService.name);
 
   private readonly shards = new Map<string, ShardRuntime>();
 
-  private readonly nsRefCache = new Map<string, { refs: MirrorRefs; exp: number }>();
+  private readonly nsRefCache = new Map<string, { refs: EngineRefs; exp: number }>();
 
   private timers: ReturnType<typeof setInterval>[] = [];
 
@@ -76,24 +79,28 @@ export class MirrorService implements OnApplicationBootstrap, OnModuleDestroy {
 
   private enabled = false;
 
+  private readonly store: PrismaEngineStore;
+
   constructor(
     private readonly kubernetes: KubernetesService,
     private readonly prisma: PrismaService,
     private readonly lease: LeaseService,
     private readonly orgEvents: OrgEventsService,
-    private readonly podConsumer: PodMirrorConsumer,
-    private readonly cnpgConsumer: CnpgMirrorConsumer,
-    private readonly jobConsumer: JobMirrorConsumer,
-    private readonly workloadConsumer: WorkloadMirrorConsumer,
-    private readonly ingressConsumer: IngressMirrorConsumer,
-    private readonly storageConsumer: StorageMirrorConsumer,
-    private readonly serviceConsumer: ServiceMirrorConsumer,
-    private readonly namespaceConsumer: NamespaceMirrorConsumer
-  ) {}
+    private readonly podConsumer: PodConsumer,
+    private readonly cnpgConsumer: CnpgConsumer,
+    private readonly jobConsumer: JobConsumer,
+    private readonly workloadConsumer: WorkloadConsumer,
+    private readonly ingressConsumer: IngressConsumer,
+    private readonly storageConsumer: StorageConsumer,
+    private readonly serviceConsumer: ServiceConsumer,
+    private readonly namespaceConsumer: NamespaceConsumer
+  ) {
+    this.store = new PrismaEngineStore(prisma);
+  }
 
   async onApplicationBootstrap() {
-    if (process.env.MIRROR_DISABLED === 'true') {
-      this.logger.warn('MIRROR_DISABLED=true — legacy informers stay active, mirror is off');
+    if (engineDisabled()) {
+      this.logger.warn('ENGINE_DISABLED=true: legacy informers stay active, the engine is off');
       return;
     }
     if (!this.kubernetes.kc) {
@@ -112,7 +119,7 @@ export class MirrorService implements OnApplicationBootstrap, OnModuleDestroy {
     }
     this.enabled = true;
 
-    const defs = buildMirrorShards({
+    const defs = buildEngineShards({
       pods: this.podConsumer,
       cnpg: this.cnpgConsumer,
       jobs: this.jobConsumer,
@@ -124,7 +131,7 @@ export class MirrorService implements OnApplicationBootstrap, OnModuleDestroy {
       certManager: await this.certManagerInstalled(),
       namespaceRefs: (ns) => this.resolveNamespaceRefs(ns)
     });
-    for (const build of registeredMirrorShards()) {
+    for (const build of registeredEngineShards()) {
       try {
         const def = await build();
         if (def) defs.push(def);
@@ -302,33 +309,40 @@ export class MirrorService implements OnApplicationBootstrap, OnModuleDestroy {
     runtime.activity.unhealthy.clear();
     runtime.informers = runtime.def.resources.map(
       (config) =>
-        new MirrorInformer(this.kubernetes.kc!, this.prisma, runtime.def.name, config, {
-          onListed: (rv) => {
-            runtime.activity.lastListAt = new Date();
-            runtime.activity.resourceVersion = rv;
-          },
-          onWatchEvent: () => {
-            runtime.activity.lastEventAt = new Date();
-          },
-          onHealthChange: (healthy, error) => {
-            if (healthy) {
-              runtime.activity.unhealthy.delete(config.kind);
-              void this.writeHeartbeat(runtime, this.lease.replicaIdentity);
-              return;
+        new EngineInformer(
+          this.kubernetes.kc!,
+          this.store,
+          runtime.def.name,
+          config,
+          {
+            onListed: (rv) => {
+              runtime.activity.lastListAt = new Date();
+              runtime.activity.resourceVersion = rv;
+            },
+            onWatchEvent: () => {
+              runtime.activity.lastEventAt = new Date();
+            },
+            onHealthChange: (healthy, error) => {
+              if (healthy) {
+                runtime.activity.unhealthy.delete(config.kind);
+                void this.writeHeartbeat(runtime, this.lease.replicaIdentity);
+                return;
+              }
+              runtime.activity.unhealthy.set(config.kind, {
+                error: error ?? 'watch down',
+                since: Date.now()
+              });
+              if (runtime.graceTimer) clearTimeout(runtime.graceTimer);
+              runtime.graceTimer = setTimeout(() => {
+                runtime.graceTimer = undefined;
+                if (runtime.informers.length === 0) return;
+                void this.writeHeartbeat(runtime, this.lease.replicaIdentity);
+              }, UNHEALTHY_GRACE_MS + 500);
+              runtime.graceTimer.unref?.();
             }
-            runtime.activity.unhealthy.set(config.kind, {
-              error: error ?? 'watch down',
-              since: Date.now()
-            });
-            if (runtime.graceTimer) clearTimeout(runtime.graceTimer);
-            runtime.graceTimer = setTimeout(() => {
-              runtime.graceTimer = undefined;
-              if (runtime.informers.length === 0) return;
-              void this.writeHeartbeat(runtime, this.lease.replicaIdentity);
-            }, UNHEALTHY_GRACE_MS + 500);
-            runtime.graceTimer.unref?.();
-          }
-        })
+          },
+          new Logger(`Engine:${runtime.def.name}/${config.kind}`)
+        )
     );
     await this.writeHeartbeat(runtime, this.lease.replicaIdentity);
     for (const informer of runtime.informers) {
@@ -522,7 +536,7 @@ export class MirrorService implements OnApplicationBootstrap, OnModuleDestroy {
     }
   }
 
-  private async resolveNamespaceRefs(namespace: string): Promise<MirrorRefs> {
+  private async resolveNamespaceRefs(namespace: string): Promise<EngineRefs> {
     if (!namespace) return {};
     const cached = this.nsRefCache.get(namespace);
     if (cached && cached.exp > Date.now()) return cached.refs;
@@ -530,8 +544,11 @@ export class MirrorService implements OnApplicationBootstrap, OnModuleDestroy {
     // this namespace belongs to no project — for the next ten minutes, and for
     // as long afterwards as none of its objects changed.
     const scope = await resolveNamespaceScope(this.prisma, namespace);
-    const refs: MirrorRefs = scope ? { projectId: scope.projectId } : {};
-    this.nsRefCache.set(namespace, { refs, exp: Date.now() + NS_REF_TTL_MS });
+    const refs: EngineRefs = scope ? { projectId: scope.projectId } : {};
+    this.nsRefCache.set(namespace, {
+      refs,
+      exp: Date.now() + (scope ? NS_REF_TTL_MS : NS_REF_NEGATIVE_TTL_MS)
+    });
     return refs;
   }
 }

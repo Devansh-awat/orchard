@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
 import { KubernetesService } from './kubernetes.service';
-import { computePodStatus, latestTermination } from '../mirror/pod-status';
+import { computePodStatus, latestTermination } from '../engine/pod-status';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrgEventsService } from '../events/org-events.service';
 import { LeaderElectionService } from '../events/leader-election.service';

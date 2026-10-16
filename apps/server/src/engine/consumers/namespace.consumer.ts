@@ -5,8 +5,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { KubernetesService } from '../../kubernetes/kubernetes.service';
 import { EnvironmentsService } from '../../projects/environments.service';
 import { ProjectsService } from '../../projects/projects.service';
-import { MirrorEventType, MirrorObjectKey } from '../mirror-informer';
-import { K8S_DELETED_REASON } from './workload-mirror.consumer';
+import { EngineEventType, EngineObjectKey } from '../core/informer';
+import { K8S_DELETED_REASON } from './workload.consumer';
 
 const SETTLE_GRACE_MS = 5 * 60 * 1000;
 const CONFIRM_AFTER_MS = 90 * 1000;
@@ -20,8 +20,8 @@ interface PendingRemoval {
 }
 
 @Injectable()
-export class NamespaceMirrorConsumer implements OnModuleDestroy {
-  private readonly logger = new Logger(NamespaceMirrorConsumer.name);
+export class NamespaceConsumer implements OnModuleDestroy {
+  private readonly logger = new Logger(NamespaceConsumer.name);
 
   private readonly pending = new Map<string, PendingRemoval>();
 
@@ -38,7 +38,7 @@ export class NamespaceMirrorConsumer implements OnModuleDestroy {
     this.pending.clear();
   }
 
-  async onEvent(type: MirrorEventType, ns: k8s.V1Namespace): Promise<void> {
+  async onEvent(type: EngineEventType, ns: k8s.V1Namespace): Promise<void> {
     const name = ns.metadata?.name;
     if (!name) return;
     if (type !== 'delete') {
@@ -48,7 +48,7 @@ export class NamespaceMirrorConsumer implements OnModuleDestroy {
     await this.handleGone(name, 'watch');
   }
 
-  async pruneMissing(seen: MirrorObjectKey[]): Promise<void> {
+  async pruneMissing(seen: EngineObjectKey[]): Promise<void> {
     if (seen.length === 0) {
       this.logger.warn('skipping namespace prune: the list pass saw no namespaces');
       return;

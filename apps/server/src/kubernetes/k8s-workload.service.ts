@@ -28,7 +28,7 @@ import {
   disruptionBudgetManifest,
   normalizeMinAvailable
 } from './disruption-budget';
-import { computePodStatus } from '../mirror/pod-status';
+import { computePodStatus } from '../engine/pod-status';
 import { isPullAuthEnvKey } from '../env/reserved-env';
 import {
   ROLLOUT_GATE_POLL_MS,

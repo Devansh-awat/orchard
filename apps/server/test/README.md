@@ -6,7 +6,7 @@ database. A few write real rows and need Postgres:
 | Script                          | File                          |
 | ------------------------------- | ----------------------------- |
 | `pnpm test:apply-queue`         | `apply-queue.test.ts`         |
-| `pnpm test:mirror`              | `mirror-engine.test.ts`       |
+| `pnpm test:engine`              | `engine-informer.test.ts`     |
 | `pnpm test:repo-link`           | `github-repo-link.test.ts`    |
 | `pnpm test:rbac`                | `rbac.e2e.ts`                 |
 | `pnpm test:rate-limit-postgres` | `rate-limit-postgres.test.ts` |

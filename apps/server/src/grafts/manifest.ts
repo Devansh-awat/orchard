@@ -173,9 +173,14 @@ export const graftManifestSchema = z
         auditActions: z.array(z.string()).default([]),
         applyOps: z.array(z.string()).default([]),
         deviceNames: z.array(z.string()).default([]),
+        engineShards: z.array(z.string()).default([]),
         mirrorShards: z.array(z.string()).default([])
       })
-      .default({}),
+      .default({})
+      .transform(({ mirrorShards, ...claims }) => ({
+        ...claims,
+        engineShards: [...new Set([...claims.engineShards, ...mirrorShards])]
+      })),
     database: z
       .object({
         coreReads: z.record(z.string(), z.array(z.string())).default({}),

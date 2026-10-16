@@ -4,7 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { OrgEventsService } from '../../events/org-events.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { PodLogCaptureService } from '../../kubernetes/pod-log-capture.service';
-import { MirrorEventType, MirrorObjectKey, MirrorRefs } from '../mirror-informer';
+import { EngineEventType, EngineObjectKey, EngineRefs } from '../core/informer';
 import { computePodStatus, latestTermination } from '../pod-status';
 
 export { computePodStatus, latestTermination } from '../pod-status';
@@ -35,8 +35,8 @@ interface PendingEmit {
 }
 
 @Injectable()
-export class PodMirrorConsumer implements OnModuleDestroy {
-  private readonly logger = new Logger(PodMirrorConsumer.name);
+export class PodConsumer implements OnModuleDestroy {
+  private readonly logger = new Logger(PodConsumer.name);
 
   private readonly ctxCache = new Map<string, { ctx: Ctx | null; exp: number }>();
 
@@ -59,7 +59,7 @@ export class PodMirrorConsumer implements OnModuleDestroy {
     this.pending.clear();
   }
 
-  async pruneStalePods(seen: MirrorObjectKey[]): Promise<void> {
+  async pruneStalePods(seen: EngineObjectKey[]): Promise<void> {
     // One pod whose owner could not be resolved means this pass does not know
     // which deployment that pod belongs to, and pruning against a partial
     // picture would delete a live pod's row. The next pass prunes instead.
@@ -101,7 +101,7 @@ export class PodMirrorConsumer implements OnModuleDestroy {
     }
   }
 
-  async mapRefs(pod: k8s.V1Pod): Promise<MirrorRefs> {
+  async mapRefs(pod: k8s.V1Pod): Promise<EngineRefs> {
     const ns = pod.metadata?.namespace;
     const depName = pod.metadata?.labels?.['app.kubernetes.io/name'];
     if (!ns || !depName) return {};
@@ -109,7 +109,7 @@ export class PodMirrorConsumer implements OnModuleDestroy {
     return ctx ? { deploymentId: ctx.deploymentId, projectId: ctx.projectId } : {};
   }
 
-  async onEvent(type: MirrorEventType, pod: k8s.V1Pod): Promise<void> {
+  async onEvent(type: EngineEventType, pod: k8s.V1Pod): Promise<void> {
     const ns = pod.metadata?.namespace;
     const depName = pod.metadata?.labels?.['app.kubernetes.io/name'];
     if (!ns || !depName) return;
@@ -166,7 +166,7 @@ export class PodMirrorConsumer implements OnModuleDestroy {
     });
   }
 
-  private buildPayload(type: MirrorEventType, pod: k8s.V1Pod) {
+  private buildPayload(type: EngineEventType, pod: k8s.V1Pod) {
     const name = pod.metadata?.name;
     if (type === 'delete') return { deleted: true, name };
     const containerStatuses = pod.status?.containerStatuses ?? [];
@@ -185,7 +185,7 @@ export class PodMirrorConsumer implements OnModuleDestroy {
 
   /** Returns whether the pod's derived status changed (or the row appeared/vanished). */
   private async syncPod(
-    type: MirrorEventType,
+    type: EngineEventType,
     deploymentId: string,
     pod: k8s.V1Pod
   ): Promise<boolean> {

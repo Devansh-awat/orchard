@@ -5,7 +5,7 @@ import {
   shardIsStale,
   STALE_MS,
   UNHEALTHY_GRACE_MS
-} from '../src/mirror/mirror-health';
+} from '../src/engine/core/health';
 
 const now = 1_000_000;
 

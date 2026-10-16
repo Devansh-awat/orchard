@@ -12,9 +12,10 @@ import { JobsOrchestratorService } from './jobs-orchestrator.service';
 import { K8sJobInformerService } from './k8s-job-informer.service';
 import { JobsSyncService } from './jobs-sync.service';
 import { JobsController } from './jobs.controller';
-import { JobMirrorConsumer } from '../mirror/consumers/job-mirror.consumer';
+import { JobConsumer } from '../engine/consumers/job.consumer';
+import { engineDisabled } from '../engine/engine-disabled';
 
-const legacyInformers = process.env.MIRROR_DISABLED === 'true' ? [K8sJobInformerService] : [];
+const legacyInformers = engineDisabled() ? [K8sJobInformerService] : [];
 
 @Module({
   imports: [
@@ -30,11 +31,11 @@ const legacyInformers = process.env.MIRROR_DISABLED === 'true' ? [K8sJobInformer
   providers: [
     JobsService,
     JobsOrchestratorService,
-    JobMirrorConsumer,
+    JobConsumer,
     JobsSyncService,
     ...legacyInformers
   ],
   controllers: [JobsController],
-  exports: [JobsService, JobsOrchestratorService, JobMirrorConsumer]
+  exports: [JobsService, JobsOrchestratorService, JobConsumer]
 })
 export class JobsModule {}

@@ -442,7 +442,7 @@ export class SandboxUsageService {
   }
 
   private get mirrorDisabled(): boolean {
-    return process.env.MIRROR_DISABLED === 'true';
+    return process.env.ENGINE_DISABLED === 'true' || process.env.MIRROR_DISABLED === 'true';
   }
 
   private async mirrored(row: UsageRow, namespace: string) {

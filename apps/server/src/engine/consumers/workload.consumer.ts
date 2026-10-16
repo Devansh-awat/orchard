@@ -10,7 +10,7 @@ import { resolvePullPolicy } from '../../kubernetes/trusted-images';
 import { disruptionBudgetActive, readMinAvailable } from '../../kubernetes/disruption-budget';
 import { ApplyQueueService } from '../../apply/apply-queue.service';
 import { AuditService } from '../../audit/audit.service';
-import { MirrorEventType, MirrorRefs } from '../mirror-informer';
+import { EngineEventType, EngineRefs } from '../core/informer';
 
 export const K8S_DELETED_REASON = 'resource deleted in k8s';
 
@@ -31,8 +31,8 @@ interface PendingEmit {
 }
 
 @Injectable()
-export class WorkloadMirrorConsumer implements OnModuleDestroy {
-  private readonly logger = new Logger(WorkloadMirrorConsumer.name);
+export class WorkloadConsumer implements OnModuleDestroy {
+  private readonly logger = new Logger(WorkloadConsumer.name);
 
   private readonly ctxCache = new Map<string, { ctx: Ctx | null; exp: number }>();
 
@@ -52,14 +52,14 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
     this.pending.clear();
   }
 
-  async mapRefs(dep: k8s.V1Deployment): Promise<MirrorRefs> {
+  async mapRefs(dep: k8s.V1Deployment): Promise<EngineRefs> {
     const ctx = await this.resolveCtx(dep);
     return ctx ? { deploymentId: ctx.deploymentId, projectId: ctx.projectId } : {};
   }
 
   // A PodDisruptionBudget carries the deployment's name, so it resolves
   // through the same lookup.
-  async mapPdbRefs(pdb: k8s.V1PodDisruptionBudget): Promise<MirrorRefs> {
+  async mapPdbRefs(pdb: k8s.V1PodDisruptionBudget): Promise<EngineRefs> {
     const ctx = await this.resolveCtx(pdb);
     return ctx ? { deploymentId: ctx.deploymentId, projectId: ctx.projectId } : {};
   }
@@ -73,7 +73,7 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
    * say), and treating that as intent would erase the setting the user picked
    * and never restore it on the way back up.
    */
-  async onPdbEvent(type: MirrorEventType, pdb: k8s.V1PodDisruptionBudget): Promise<void> {
+  async onPdbEvent(type: EngineEventType, pdb: k8s.V1PodDisruptionBudget): Promise<void> {
     if (type === 'delete') return;
     const ctx = await this.resolveCtx(pdb);
     if (!ctx) return;
@@ -121,7 +121,7 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
     });
   }
 
-  async onEvent(type: MirrorEventType, dep: k8s.V1Deployment): Promise<void> {
+  async onEvent(type: EngineEventType, dep: k8s.V1Deployment): Promise<void> {
     const ctx = await this.resolveCtx(dep);
     if (!ctx) return;
 

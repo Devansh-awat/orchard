@@ -15,7 +15,7 @@ export type ClaimKind =
   | 'auditActions'
   | 'applyOps'
   | 'deviceNames'
-  | 'mirrorShards';
+  | 'engineShards';
 
 export const CLAIM_KINDS: ClaimKind[] = [
   'apiAliases',
@@ -32,7 +32,7 @@ export const CLAIM_KINDS: ClaimKind[] = [
   'auditActions',
   'applyOps',
   'deviceNames',
-  'mirrorShards'
+  'engineShards'
 ];
 
 const PATH_KINDS: ClaimKind[] = ['apiAliases', 'uiAliases', 'wsAliases'];

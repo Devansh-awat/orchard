@@ -3,8 +3,8 @@ import * as k8s from '@kubernetes/client-node';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrgEventsService } from '../../events/org-events.service';
 import { AuditService } from '../../audit/audit.service';
-import { MirrorEventType, MirrorObjectKey, MirrorRefs } from '../mirror-informer';
-import { K8S_DELETED_REASON } from './workload-mirror.consumer';
+import { EngineEventType, EngineObjectKey, EngineRefs } from '../core/informer';
+import { K8S_DELETED_REASON } from './workload.consumer';
 
 const PRUNE_GRACE_MS = 2 * 60 * 1000;
 
@@ -95,8 +95,8 @@ function observedPorts(svc: k8s.V1Service): ObservedPort[] | null {
 }
 
 @Injectable()
-export class ServiceMirrorConsumer {
-  private readonly logger = new Logger(ServiceMirrorConsumer.name);
+export class ServiceConsumer {
+  private readonly logger = new Logger(ServiceConsumer.name);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -104,13 +104,13 @@ export class ServiceMirrorConsumer {
     private readonly audit: AuditService
   ) {}
 
-  async mapRefs(svc: k8s.V1Service): Promise<MirrorRefs | null> {
+  async mapRefs(svc: k8s.V1Service): Promise<EngineRefs | null> {
     const row = await this.rowFor(svc.metadata?.namespace, svc.metadata?.name);
     if (!row) return null;
     return { deploymentId: row.deploymentId, projectId: row.deployment.projectId };
   }
 
-  async onEvent(type: MirrorEventType, svc: k8s.V1Service): Promise<void> {
+  async onEvent(type: EngineEventType, svc: k8s.V1Service): Promise<void> {
     const row = await this.rowFor(svc.metadata?.namespace, svc.metadata?.name);
     if (!row) return;
 
@@ -219,7 +219,7 @@ export class ServiceMirrorConsumer {
     this.emit(row, { service: row.name, adopted: true });
   }
 
-  async pruneStaleRows(seen: MirrorObjectKey[]): Promise<void> {
+  async pruneStaleRows(seen: EngineObjectKey[]): Promise<void> {
     if (seen.length === 0) {
       this.logger.warn('skipping service prune: the list pass saw no services');
       return;

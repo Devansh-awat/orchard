@@ -8,7 +8,7 @@ import {
   LABEL_RUN_ID,
   LABEL_STEP_ORDER
 } from '../../jobs/jobs-orchestrator.service';
-import { MirrorEventType, MirrorRefs } from '../mirror-informer';
+import { EngineEventType, EngineRefs } from '../core/informer';
 
 export function jobTerminalOutcome(job: k8s.V1Job): {
   terminal: boolean;
@@ -24,8 +24,8 @@ export function jobTerminalOutcome(job: k8s.V1Job): {
 }
 
 @Injectable()
-export class JobMirrorConsumer {
-  private readonly logger = new Logger(JobMirrorConsumer.name);
+export class JobConsumer {
+  private readonly logger = new Logger(JobConsumer.name);
 
   private readonly processing = new Set<string>();
 
@@ -34,12 +34,12 @@ export class JobMirrorConsumer {
     private readonly orchestrator: JobsOrchestratorService
   ) {}
 
-  async mapRefs(job: k8s.V1Job): Promise<MirrorRefs> {
+  async mapRefs(job: k8s.V1Job): Promise<EngineRefs> {
     const jobId = job.metadata?.labels?.[LABEL_JOB_ID];
     return jobId ? { jobId } : {};
   }
 
-  async onEvent(type: MirrorEventType, job: k8s.V1Job): Promise<void> {
+  async onEvent(type: EngineEventType, job: k8s.V1Job): Promise<void> {
     const uid = job.metadata?.uid;
     if (!uid || this.processing.has(uid)) return;
     this.processing.add(uid);

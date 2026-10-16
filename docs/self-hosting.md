@@ -943,7 +943,7 @@ runner off never strands machines already on it.
   secrets.
 
 **Everything is queued.** Machine changes go through the apply queue and the
-`sandboxes` mirror shard like deployments do. The queue drains only on servers
+`sandboxes` engine shard like deployments do. The queue drains only on servers
 that are members of the cluster, so a laptop pointed at production enqueues and
 never applies.
 

@@ -6,7 +6,7 @@ import { OrgEventsService } from '../events/org-events.service';
 import { LeaderElectionService } from '../events/leader-election.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PodLogCaptureService } from './pod-log-capture.service';
-import { computePodStatus } from '../mirror/pod-status';
+import { computePodStatus } from '../engine/pod-status';
 
 const CNPG_SELECTOR = 'cnpg.io/cluster';
 const POSITIVE_TTL_MS = 10 * 60 * 1000;

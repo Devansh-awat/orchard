@@ -17,7 +17,7 @@ seams.
 
 Design notes for individual subsystems live next to this file. The largest is
 [`ai-sandbox.md`](ai-sandbox.md): Greenhouse, the AI dev environment, with its
-pluggable sandbox runners (Kubernetes and Vercel), the apply-queue and mirror
+pluggable sandbox runners (Kubernetes and Vercel), the apply-queue and engine
 pipeline it shares with deployments, terminals, the multiplayer live gateway,
 previews and integrations.
 

@@ -16,6 +16,7 @@ import { SandboxMinRole, SandboxRoleOptions } from '../server/src/sandboxes/sand
 process.env.SANDBOX_IDLE_TIMEOUT_MINUTES = '60';
 process.env.SANDBOX_MAX_LIFETIME_HOURS = '168';
 delete process.env.MIRROR_DISABLED;
+delete process.env.ENGINE_DISABLED;
 
 const ID = '11111111-1111-4111-8111-111111111111';
 const NS = 'orchard-sandboxes';

@@ -1,11 +1,11 @@
 import { Controller, Get } from '@nestjs/common';
 import { Auth } from '../auth/decorators';
-import { MirrorService } from './mirror.service';
+import { EngineService } from './engine.service';
 
 @Auth()
 @Controller('engine')
-export class MirrorHealthController {
-  constructor(private readonly mirror: MirrorService) {}
+export class EngineHealthController {
+  constructor(private readonly mirror: EngineService) {}
 
   @Get('health')
   async health() {

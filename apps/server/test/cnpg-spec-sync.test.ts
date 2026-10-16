@@ -6,7 +6,7 @@ import {
   parameterDrift,
   specColumnUpdate
 } from '../src/kubernetes/cnpg-spec-sync';
-import { CnpgMirrorConsumer } from '../src/mirror/consumers/cnpg-mirror.consumer';
+import { CnpgConsumer } from '../src/engine/consumers/cnpg.consumer';
 
 const MiB = 1024 * 1024;
 const GiB = 1024 * MiB;
@@ -141,7 +141,7 @@ test('parameter drift names values the cluster runs that orchard did not set', (
 function consumerWith(dbRow: Record<string, unknown>, quotas: unknown) {
   const updates: any[] = [];
   const logs: string[] = [];
-  const svc = Object.create(CnpgMirrorConsumer.prototype) as any;
+  const svc = Object.create(CnpgConsumer.prototype) as any;
   Object.assign(svc, {
     logger: { log: (m: string) => logs.push(m), warn: (m: string) => logs.push(m) },
     prisma: {

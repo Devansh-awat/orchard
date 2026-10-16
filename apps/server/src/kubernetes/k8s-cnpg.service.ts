@@ -7,7 +7,7 @@ import {
   OnApplicationBootstrap
 } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
-import { computePodStatus } from '../mirror/pod-status';
+import { computePodStatus } from '../engine/pod-status';
 import {
   buildCnpgLiveStatus,
   clusterSnapshot,

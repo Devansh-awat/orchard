@@ -42,7 +42,7 @@ import { ScoreModule } from './score/score.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { JobsModule } from './jobs/jobs.module';
 import { CoordinationModule } from './coordination/coordination.module';
-import { MirrorModule } from './mirror/mirror.module';
+import { EngineModule } from './engine/engine.module';
 import { ApplyModule } from './apply/apply.module';
 import { GraftsModule } from './grafts/grafts.module';
 import { GraftDoorsModule } from './grafts/grafts-doors.module';
@@ -97,7 +97,7 @@ import { graftImports } from './grafts/boot';
     ScoreModule,
     NotificationsModule,
     JobsModule,
-    MirrorModule,
+    EngineModule,
     GraftsModule,
     GraftDoorsModule
   ],

@@ -216,7 +216,7 @@ resource selected by `orchard.my/instance=<id>`:
 `canTrustAbsence()` is true only when the shard's heartbeat has a holder, is
 healthy, has completed a list, and was updated in the last 60 s. Nothing acts on
 a resource being missing (stuck-transition errors, start rebuilds) unless that
-holds. With `MIRROR_DISABLED=true` the runner reads the API server directly and
+holds. With `ENGINE_DISABLED=true` the runner reads the API server directly and
 the reaper syncs Kubernetes rows itself.
 
 ### Connectivity
@@ -704,7 +704,7 @@ token's project restriction), like terminals.
 Leader only, every 60 s, when sandboxes are enabled:
 
 1. `syncPolledRunners` (Vercel).
-2. With `MIRROR_DISABLED`, observe Kubernetes rows directly.
+2. With `ENGINE_DISABLED`, observe Kubernetes rows directly.
 3. Rows `creating`/`starting` for 10 minutes (30 for a fork still carrying
    `runnerState.forkFrom`) become `error`, but only when the runner can trust
    absence.

@@ -1,58 +1,58 @@
-import { Logger } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import * as k8s from '@kubernetes/client-node';
-import { PrismaService } from '../prisma/prisma.service';
+import { consoleLogger, EngineLogger } from './logger';
+import { EngineRefs, EngineRow, EngineStore, sameRefs, StoredRow } from './store';
 
-export type MirrorEventType = 'add' | 'update' | 'delete';
+export type { EngineRefs } from './store';
 
-export interface MirrorRefs {
-  deploymentId?: string | null;
-  projectId?: string | null;
-  databaseId?: string | null;
-  jobId?: string | null;
-}
+export type EngineEventType = 'add' | 'update' | 'delete';
 
-export interface MirrorListOptions {
+export interface EngineListOptions {
   limit: number;
   continueToken?: string;
 }
 
-export interface MirrorListPage {
+export interface EngineListPage {
   items: any[];
   resourceVersion: string;
   continueToken?: string | null;
 }
 
-export interface MirrorObjectKey {
+export interface EngineObjectKey {
   namespace: string;
   name: string;
   // What this pass resolved the object's owners to, or null when resolution
   // failed. A pruner that sees a null knows its picture of the cluster is
   // incomplete and must not delete anything on the strength of it.
-  refs: MirrorRefs | null;
+  refs: EngineRefs | null;
 }
 
-export interface MirrorResourceConfig {
+export interface EngineResource {
   kind: string;
   apiVersion: string;
   watchPath: string;
   labelSelector?: string;
   fieldSelector?: string;
-  list(kc: k8s.KubeConfig, opts: MirrorListOptions): Promise<MirrorListPage>;
+  list(kc: k8s.KubeConfig, opts: EngineListOptions): Promise<EngineListPage>;
   // Resolve the Orchard rows an object belongs to. Returning `{}` means "it
   // belongs to nothing", which is a real answer and gets stored. Throwing means
   // "could not tell", which is not: the informer then leaves the row alone and
   // retries, rather than recording a mapping it does not actually have.
-  mapRefs?(obj: any): Promise<MirrorRefs>;
+  mapRefs?(obj: any): Promise<EngineRefs>;
   // Apply the object to whatever Orchard state derives from it. Must throw on
   // failure. A handler that swallows its own errors tells the informer the
   // version was applied when it was not, and nothing will ever come back for it.
-  onEvent?(type: MirrorEventType, obj: any): void | Promise<void>;
-  onListComplete?(seen: MirrorObjectKey[]): Promise<void>;
+  onEvent?(type: EngineEventType, obj: any): void | Promise<void>;
+  onListComplete?(seen: EngineObjectKey[]): Promise<void>;
   sanitize?(obj: any): any;
 }
 
-export interface MirrorInformerHooks {
+export interface EngineShard {
+  name: string;
+  lease: string;
+  resources: EngineResource[];
+}
+
+export interface EngineInformerHooks {
   onListed(resourceVersion: string): void;
   onWatchEvent(): void;
   onHealthChange(healthy: boolean, error: string | null): void;
@@ -63,8 +63,6 @@ export interface MirrorInformerHooks {
 // array of full manifests.
 const LIST_PAGE_SIZE = 500;
 
-// Rows written per INSERT ... ON CONFLICT. 14 params per row keeps a chunk well
-// under Postgres' 65535 bind-parameter ceiling.
 const WRITE_CHUNK = 100;
 
 // How many watch events may be in flight at once. Events for the same object
@@ -79,36 +77,11 @@ const EVENT_CONCURRENCY = 12;
 const REPAIR_DELAY_MS = 30_000;
 const REPAIR_MIN_SPACING_MS = 60_000;
 
-interface ObjectRow {
-  uid: string;
-  apiVersion: string;
-  kind: string;
-  namespace: string;
-  name: string;
-  resourceVersion: string;
-  derivedVersion: string | null;
-  shard: string;
-  manifest: unknown;
-  deploymentId: string | null;
-  projectId: string | null;
-  databaseId: string | null;
-  jobId: string | null;
-}
-
 // An object on its way into the mirror, carrying the refs already resolved for
 // it so nothing has to resolve them twice.
 interface PendingWrite {
   obj: any;
-  refs: MirrorRefs;
-}
-
-interface StoredRow {
-  resourceVersion: string;
-  derivedVersion: string | null;
-  deploymentId: string | null;
-  projectId: string | null;
-  databaseId: string | null;
-  jobId: string | null;
+  refs: EngineRefs;
 }
 
 class Semaphore {
@@ -150,8 +123,8 @@ function errorText(err: unknown): string {
   return String(message).slice(0, 300);
 }
 
-export class MirrorInformer {
-  private readonly logger: Logger;
+export class EngineInformer {
+  private readonly logger: EngineLogger;
 
   private req?: { abort(): void };
 
@@ -191,12 +164,13 @@ export class MirrorInformer {
 
   constructor(
     private readonly kc: k8s.KubeConfig,
-    private readonly prisma: PrismaService,
+    private readonly store: EngineStore,
     private readonly shard: string,
-    private readonly config: MirrorResourceConfig,
-    private readonly hooks: MirrorInformerHooks
+    private readonly config: EngineResource,
+    private readonly hooks: EngineInformerHooks,
+    logger?: EngineLogger
   ) {
-    this.logger = new Logger(`Mirror:${shard}/${config.kind}`);
+    this.logger = logger ?? consoleLogger(`Engine:${shard}/${config.kind}`);
   }
 
   async start(): Promise<void> {
@@ -287,22 +261,11 @@ export class MirrorInformer {
   ): Promise<{ resourceVersion: string; repairs: number }> {
     if (this.stopped) return { resourceVersion: this.resourceVersion, repairs: 0 };
 
-    const existingRows = await this.prisma.k8sObject.findMany({
-      where: { shard: this.shard, kind: this.config.kind },
-      select: {
-        uid: true,
-        resourceVersion: true,
-        derivedVersion: true,
-        deploymentId: true,
-        projectId: true,
-        databaseId: true,
-        jobId: true
-      }
-    });
+    const existingRows = await this.store.load(this.shard, this.config.kind);
     const existing = new Map(existingRows.map((r) => [r.uid, r]));
 
     const seenUids: string[] = [];
-    const seenKeys: MirrorObjectKey[] = [];
+    const seenKeys: EngineObjectKey[] = [];
     let repairs = 0;
     let deferred = 0;
     let resourceVersion = '';
@@ -402,21 +365,16 @@ export class MirrorInformer {
   private classify(
     prior: StoredRow | undefined,
     obj: any,
-    refs: MirrorRefs
+    refs: EngineRefs
   ): 'current' | 'underived' | 'stale' {
     if (!prior) return 'stale';
     const rv = String(obj.metadata.resourceVersion ?? '');
     if (prior.resourceVersion !== rv) return 'stale';
-    const sameRefs =
-      (prior.deploymentId ?? null) === (refs.deploymentId ?? null) &&
-      (prior.projectId ?? null) === (refs.projectId ?? null) &&
-      (prior.databaseId ?? null) === (refs.databaseId ?? null) &&
-      (prior.jobId ?? null) === (refs.jobId ?? null);
-    if (!sameRefs) return 'stale';
+    if (!sameRefs(prior.refs, refs)) return 'stale';
     return prior.derivedVersion === rv ? 'current' : 'underived';
   }
 
-  private async resolveRefs(obj: any): Promise<{ ok: boolean; refs: MirrorRefs }> {
+  private async resolveRefs(obj: any): Promise<{ ok: boolean; refs: EngineRefs }> {
     if (!this.config.mapRefs) return { ok: true, refs: {} };
     try {
       return { ok: true, refs: await this.config.mapRefs(obj) };
@@ -454,18 +412,8 @@ export class MirrorInformer {
     this.repairTimer.unref?.();
   }
 
-  // Delete everything this shard holds for this kind that the cluster no longer
-  // reports. `= ANY($1)` binds the whole set as a single array parameter — an
-  // `IN (...)` list would bind one parameter per object and fall off the
-  // 65535-parameter cliff on a large cluster.
   private async sweepStale(seenUids: string[], countRepairs: boolean): Promise<number> {
-    const stale = await this.prisma.$queryRaw<{ uid: string; manifest: any }[]>`
-      DELETE FROM "k8s_objects"
-      WHERE "shard" = ${this.shard}
-        AND "kind" = ${this.config.kind}
-        AND NOT ("uid" = ANY(${seenUids}::varchar[]))
-      RETURNING "uid", "manifest"
-    `;
+    const stale = await this.store.sweep(this.shard, this.config.kind, seenUids);
     if (this.config.onEvent) {
       for (const row of stale) {
         try {
@@ -517,7 +465,7 @@ export class MirrorInformer {
    * restarted.
    */
   private async derive(
-    type: MirrorEventType,
+    type: EngineEventType,
     entries: PendingWrite[],
     bounded = true
   ): Promise<void> {
@@ -532,7 +480,7 @@ export class MirrorInformer {
     await this.markDerived(ok);
   }
 
-  private async apply(type: MirrorEventType, entry: PendingWrite): Promise<PendingWrite | null> {
+  private async apply(type: EngineEventType, entry: PendingWrite): Promise<PendingWrite | null> {
     try {
       await this.config.onEvent!(type, entry.obj);
       return entry;
@@ -547,14 +495,7 @@ export class MirrorInformer {
     const uids = entries.map((e) => String(e.obj.metadata.uid));
     const versions = entries.map((e) => String(e.obj.metadata.resourceVersion ?? ''));
     try {
-      // Matching on resource_version too, so a newer manifest that landed while
-      // the handler ran is not credited with a derivation it never got.
-      await this.prisma.$executeRaw`
-        UPDATE "k8s_objects" AS o
-        SET "derived_version" = v."rv"
-        FROM unnest(${uids}::varchar[], ${versions}::varchar[]) AS v("uid", "rv")
-        WHERE o."uid" = v."uid" AND o."resource_version" = v."rv"
-      `;
+      await this.store.markDerived(uids.map((uid, i) => ({ uid, resourceVersion: versions[i] })));
     } catch (err) {
       this.logger.warn(`marking ${entries.length} object(s) derived failed: ${errorText(err)}`);
       this.scheduleRepair();
@@ -631,18 +572,12 @@ export class MirrorInformer {
 
     if (phase === 'DELETED') {
       try {
-        await this.prisma.k8sObject.delete({ where: { uid: obj.metadata.uid } });
+        await this.store.remove(obj.metadata.uid);
       } catch (err) {
-        // P2025 is "no such row", which is the state this was asking for.
-        // Anything else left the object in the mirror after the cluster
-        // dropped it, and the watch has already moved past the only event
-        // that would have removed it — a repair list is what clears it.
-        if ((err as { code?: string })?.code !== 'P2025') {
-          this.logger.warn(
-            `delete of ${obj.metadata.namespace}/${obj.metadata.name} failed: ${errorText(err)}`
-          );
-          this.scheduleRepair();
-        }
+        this.logger.warn(
+          `delete of ${obj.metadata.namespace}/${obj.metadata.name} failed: ${errorText(err)}`
+        );
+        this.scheduleRepair();
       }
       if (this.config.onEvent) await this.config.onEvent('delete', obj);
       return;
@@ -711,7 +646,7 @@ export class MirrorInformer {
     return this.config.sanitize ? (this.config.sanitize(obj) ?? obj) : obj;
   }
 
-  private toRow(obj: any, refs: MirrorRefs): ObjectRow {
+  private toRow(obj: any, refs: EngineRefs): EngineRow {
     const resourceVersion = String(obj.metadata.resourceVersion ?? '');
     return {
       uid: obj.metadata.uid,
@@ -725,89 +660,24 @@ export class MirrorInformer {
       derivedVersion: this.config.onEvent ? null : resourceVersion,
       shard: this.shard,
       manifest: obj,
-      deploymentId: refs.deploymentId ?? null,
-      projectId: refs.projectId ?? null,
-      databaseId: refs.databaseId ?? null,
-      jobId: refs.jobId ?? null
+      refs
     };
   }
 
-  private async writeRows(all: ObjectRow[]): Promise<void> {
+  private async writeRows(all: EngineRow[]): Promise<void> {
     if (all.length === 0) return;
-    // A LIST never repeats a uid, but dedupe anyway: two rows with the same uid
-    // in one statement makes ON CONFLICT fail with "cannot affect row a second
-    // time".
-    const byUid = new Map<string, ObjectRow>();
+    const byUid = new Map<string, EngineRow>();
     for (const row of all) byUid.set(row.uid, row);
     const rows = [...byUid.values()];
 
     try {
       for (let i = 0; i < rows.length; i += WRITE_CHUNK) {
-        await this.writeChunk(rows.slice(i, i + WRITE_CHUNK));
+        await this.store.write(rows.slice(i, i + WRITE_CHUNK));
       }
       this.setWriteHealth(true, null);
     } catch (err) {
       this.setWriteHealth(false, errorText(err));
       throw err;
     }
-  }
-
-  private async writeChunk(rows: ObjectRow[]): Promise<void> {
-    // `k8s_objects` is keyed by uid but also carries a unique index on the
-    // natural key. Deleting a resource and recreating it under the same name
-    // yields a new uid for the same natural key, so the upsert-by-uid alone
-    // would trip that index and wedge the informer. Clear the displaced row in
-    // the same transaction as the insert.
-    const naturalKeys = Prisma.join(
-      rows.map(
-        (r) =>
-          Prisma.sql`(${r.kind}::varchar, ${r.namespace}::varchar, ${r.name}::varchar, ${r.apiVersion}::varchar, ${r.uid}::varchar)`
-      )
-    );
-    const values = Prisma.join(
-      rows.map(
-        (r) => Prisma.sql`(
-          ${r.uid}::varchar, ${r.apiVersion}::varchar, ${r.kind}::varchar, ${r.namespace}::varchar,
-          ${r.name}::varchar, ${r.resourceVersion}::varchar, ${r.derivedVersion}::varchar,
-          ${r.shard}::varchar,
-          ${JSON.stringify(r.manifest)}::jsonb, ${r.deploymentId}::uuid, ${r.projectId}::uuid,
-          ${r.databaseId}::uuid, ${r.jobId}::uuid, (NOW() AT TIME ZONE 'UTC')
-        )`
-      )
-    );
-
-    await this.prisma.$transaction([
-      this.prisma.$executeRaw`
-        DELETE FROM "k8s_objects" AS o
-        USING (VALUES ${naturalKeys}) AS v("kind", "namespace", "name", "api_version", "uid")
-        WHERE o."kind" = v."kind"
-          AND o."namespace" = v."namespace"
-          AND o."name" = v."name"
-          AND o."api_version" = v."api_version"
-          AND o."uid" <> v."uid"
-      `,
-      this.prisma.$executeRaw`
-        INSERT INTO "k8s_objects" (
-          "uid", "api_version", "kind", "namespace", "name", "resource_version",
-          "derived_version", "shard",
-          "manifest", "deployment_id", "project_id", "database_id", "job_id", "synced_at"
-        )
-        VALUES ${values}
-        ON CONFLICT ("uid") DO UPDATE SET
-          "api_version" = EXCLUDED."api_version",
-          "kind" = EXCLUDED."kind",
-          "namespace" = EXCLUDED."namespace",
-          "name" = EXCLUDED."name",
-          "resource_version" = EXCLUDED."resource_version",
-          "derived_version" = EXCLUDED."derived_version",
-          "shard" = EXCLUDED."shard",
-          "manifest" = EXCLUDED."manifest",
-          "deployment_id" = EXCLUDED."deployment_id",
-          "project_id" = EXCLUDED."project_id",
-          "database_id" = EXCLUDED."database_id",
-          "job_id" = EXCLUDED."job_id",
-          "synced_at" = EXCLUDED."synced_at"
-      `
-    ]);
   }
 }

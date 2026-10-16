@@ -2,8 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
-import { MirrorEventType, MirrorObjectKey } from '../mirror-informer';
-import { K8S_DELETED_REASON } from './workload-mirror.consumer';
+import { EngineEventType, EngineObjectKey } from '../core/informer';
+import { K8S_DELETED_REASON } from './workload.consumer';
 
 const PRUNE_GRACE_MS = 2 * 60 * 1000;
 
@@ -30,15 +30,15 @@ const ORPHAN_SELECT = {
 } as const;
 
 @Injectable()
-export class IngressMirrorConsumer {
-  private readonly logger = new Logger(IngressMirrorConsumer.name);
+export class IngressConsumer {
+  private readonly logger = new Logger(IngressConsumer.name);
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService
   ) {}
 
-  async onEvent(type: MirrorEventType, ingress: k8s.V1Ingress): Promise<void> {
+  async onEvent(type: EngineEventType, ingress: k8s.V1Ingress): Promise<void> {
     if (type !== 'delete') return;
     const namespace = ingress.metadata?.namespace;
     const name = ingress.metadata?.name;
@@ -50,7 +50,7 @@ export class IngressMirrorConsumer {
     await this.removeRows(rows, 'watch');
   }
 
-  async pruneStaleRows(seen: MirrorObjectKey[]): Promise<void> {
+  async pruneStaleRows(seen: EngineObjectKey[]): Promise<void> {
     if (seen.length === 0) {
       this.logger.warn('skipping ingress prune: the list pass saw no ingresses');
       return;

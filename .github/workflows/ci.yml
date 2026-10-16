@@ -358,6 +358,8 @@ jobs:
         run: pnpm --filter server test:query-stats
       - name: Deployment lifecycle tests
         run: pnpm --filter server test:deployment-lifecycle
+      - name: Engine core tests
+        run: pnpm --filter server test:engine-core
       # The activity feed is five tables merged by timestamp with a composite
       # cursor. Two pod transitions landing in the same millisecond used to be
       # either served twice or skipped depending on which side of the page
@@ -447,10 +449,10 @@ jobs:
           cd apps/server && pnpm exec prisma migrate deploy
       - name: Build server
         run: pnpm --filter server build
-      # Mirror engine SQL (batch upsert, natural-key replacement, array-bound
-      # stale sweep) and the debounced crash/recovery state machine.
-      - name: Mirror engine tests
-        run: pnpm --filter server test:mirror
+      # Engine SQL (batch upsert, natural-key replacement, array-bound
+      # stale sweep, tombstones) and the debounced crash/recovery state machine.
+      - name: Engine tests
+        run: pnpm --filter server test:engine
       - name: Boot server + run RBAC e2e
         run: |
           (cd apps/server && node dist/main &)

@@ -11,7 +11,7 @@ import {
   runEnvSecretName,
   runScriptsConfigMapName
 } from './jobs-orchestrator.service';
-import { JobMirrorConsumer, jobTerminalOutcome } from '../mirror/consumers/job-mirror.consumer';
+import { JobConsumer, jobTerminalOutcome } from '../engine/consumers/job.consumer';
 import { RUN_ACTIVE_STATUSES } from './jobs.service';
 
 const SWEEP_INTERVAL_MS = 60_000;
@@ -30,7 +30,7 @@ export class JobsSyncService {
     private readonly kubernetes: KubernetesService,
     private readonly leader: LeaderElectionService,
     private readonly orchestrator: JobsOrchestratorService,
-    private readonly informer: JobMirrorConsumer
+    private readonly informer: JobConsumer
   ) {}
 
   private batchApi() {

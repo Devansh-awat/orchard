@@ -7,7 +7,7 @@ import {
   formatDbSize,
   type MirroredDbPod
 } from '../src/kubernetes/cnpg-status';
-import { CnpgMirrorConsumer } from '../src/mirror/consumers/cnpg-mirror.consumer';
+import { CnpgConsumer } from '../src/engine/consumers/cnpg.consumer';
 
 const NOW = Date.parse('2026-09-28T12:00:00Z');
 
@@ -173,7 +173,7 @@ test('the sampler writes the columns, emits once, and never runs twice inside th
     volumeCapacityBytes: 1000,
     walPendingSegments: 3
   };
-  const svc = Object.create(CnpgMirrorConsumer.prototype) as any;
+  const svc = Object.create(CnpgConsumer.prototype) as any;
   Object.assign(svc, {
     logger: { warn() {} },
     lastSample: new Map(),
@@ -237,7 +237,7 @@ test('a pod event writes the row with its primary flag and only reconciles crash
   let reconciled = 0;
   const captured: unknown[] = [];
   let existingStatus: string | null = null;
-  const svc = Object.create(CnpgMirrorConsumer.prototype) as any;
+  const svc = Object.create(CnpgConsumer.prototype) as any;
   Object.assign(svc, {
     logger: { warn() {} },
     ctxCache: new Map(),

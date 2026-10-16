@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { WorkloadMirrorConsumer } from '../src/mirror/consumers/workload-mirror.consumer';
+import { WorkloadConsumer } from '../src/engine/consumers/workload.consumer';
 import { DeploymentsService } from '../src/projects/deployments.service';
 
 describe('deployment lifecycle', () => {
@@ -17,7 +17,7 @@ describe('deployment lifecycle', () => {
 
   test('does not adopt zero replicas from a stopped workload', async () => {
     let update: any;
-    const consumer = Object.create(WorkloadMirrorConsumer.prototype) as any;
+    const consumer = Object.create(WorkloadConsumer.prototype) as any;
     consumer.prisma = {
       deployment: {
         findUnique: async () => ({

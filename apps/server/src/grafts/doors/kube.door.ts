@@ -4,7 +4,7 @@ import type { KubeConfig } from '@kubernetes/client-node';
 import { LeaderElectionService } from '../../events/leader-election.service';
 import { K8sCnpgService } from '../../kubernetes/k8s-cnpg.service';
 import { KubernetesService } from '../../kubernetes/kubernetes.service';
-import { registerMirrorShard, type MirrorShardBuilder } from '../../mirror/mirror-shards';
+import { registerEngineShard, type EngineShardBuilder } from '../../engine/shards';
 import type { GraftRecord } from '../graft-registry';
 import { assertClaimed, bindGraft, type DoorMeta } from './door';
 
@@ -42,18 +42,22 @@ export class KubeDoorV1 {
     this.leader.onAcquired(listener);
   }
 
-  registerMirrorShard(build: MirrorShardBuilder): void {
+  registerEngineShard(build: EngineShardBuilder): void {
     if (!this.graft.manifest!.capabilities.includes('kube.informers')) {
       throw new Error(
         `graft ${this.graft.id} needs the "kube.informers" capability to watch resources`
       );
     }
-    registerMirrorShard(async () => {
+    registerEngineShard(async () => {
       const shard = await build();
       if (!shard) return null;
-      assertClaimed(this.graft, 'mirrorShards', shard.name, 'mirror shard');
+      assertClaimed(this.graft, 'engineShards', shard.name, 'engine shard');
       return shard;
     });
+  }
+
+  registerMirrorShard(build: EngineShardBuilder): void {
+    this.registerEngineShard(build);
   }
 
   databaseTlsHostname(namespace: string, clusterName: string): string | null {

@@ -4,8 +4,8 @@ import * as k8s from '@kubernetes/client-node';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrgEventsService } from '../../events/org-events.service';
 import { NotificationsService } from '../../notifications/notifications.service';
-import { MirrorEventType, MirrorObjectKey, MirrorRefs } from '../mirror-informer';
-import { latestTermination } from './pod-mirror.consumer';
+import { EngineEventType, EngineObjectKey, EngineRefs } from '../core/informer';
+import { latestTermination } from './pod.consumer';
 import { computePodStatus } from '../pod-status';
 import { PodLogCaptureService } from '../../kubernetes/pod-log-capture.service';
 import { K8sCnpgService } from '../../kubernetes/k8s-cnpg.service';
@@ -41,8 +41,8 @@ interface PendingEmit {
 }
 
 @Injectable()
-export class CnpgMirrorConsumer implements OnModuleDestroy {
-  private readonly logger = new Logger(CnpgMirrorConsumer.name);
+export class CnpgConsumer implements OnModuleDestroy {
+  private readonly logger = new Logger(CnpgConsumer.name);
 
   private readonly ctxCache = new Map<string, { ctx: Ctx | null; exp: number }>();
 
@@ -75,7 +75,7 @@ export class CnpgMirrorConsumer implements OnModuleDestroy {
     this.pending.clear();
   }
 
-  async pruneStalePods(seen: MirrorObjectKey[]): Promise<void> {
+  async pruneStalePods(seen: EngineObjectKey[]): Promise<void> {
     if (seen.some((s) => s.refs === null)) {
       this.logger.warn('skipping database pod prune: this pass could not resolve every pod');
       return;
@@ -105,7 +105,7 @@ export class CnpgMirrorConsumer implements OnModuleDestroy {
     }
   }
 
-  async mapPodRefs(pod: k8s.V1Pod): Promise<MirrorRefs> {
+  async mapPodRefs(pod: k8s.V1Pod): Promise<EngineRefs> {
     const ns = pod.metadata?.namespace;
     const clusterName = pod.metadata?.labels?.['cnpg.io/cluster'];
     if (!ns || !clusterName) return {};
@@ -113,7 +113,7 @@ export class CnpgMirrorConsumer implements OnModuleDestroy {
     return ctx ? { databaseId: ctx.databaseId, projectId: ctx.projectId } : {};
   }
 
-  async mapClusterRefs(cluster: any): Promise<MirrorRefs> {
+  async mapClusterRefs(cluster: any): Promise<EngineRefs> {
     const ns = cluster.metadata?.namespace;
     const name = cluster.metadata?.name;
     if (!ns || !name) return {};
@@ -121,7 +121,7 @@ export class CnpgMirrorConsumer implements OnModuleDestroy {
     return ctx ? { databaseId: ctx.databaseId, projectId: ctx.projectId } : {};
   }
 
-  async onPodEvent(type: MirrorEventType, pod: k8s.V1Pod): Promise<void> {
+  async onPodEvent(type: EngineEventType, pod: k8s.V1Pod): Promise<void> {
     const ns = pod.metadata?.namespace;
     const clusterName = pod.metadata?.labels?.['cnpg.io/cluster'];
     if (!ns || !clusterName) return;
@@ -139,7 +139,7 @@ export class CnpgMirrorConsumer implements OnModuleDestroy {
     this.scheduleEmit(ctx, this.buildPodPayload(type, pod));
   }
 
-  private async syncPod(type: MirrorEventType, databaseId: string, pod: k8s.V1Pod) {
+  private async syncPod(type: EngineEventType, databaseId: string, pod: k8s.V1Pod) {
     const name = pod.metadata?.name;
     if (!name) return false;
     const existing = await this.prisma.databasePod.findUnique({
@@ -464,7 +464,7 @@ export class CnpgMirrorConsumer implements OnModuleDestroy {
     }
   }
 
-  async onClusterEvent(type: MirrorEventType, cluster: any): Promise<void> {
+  async onClusterEvent(type: EngineEventType, cluster: any): Promise<void> {
     const ns = cluster.metadata?.namespace;
     const name = cluster.metadata?.name;
     if (!ns || !name) return;
@@ -659,7 +659,7 @@ export class CnpgMirrorConsumer implements OnModuleDestroy {
     });
   }
 
-  private buildPodPayload(type: MirrorEventType, pod: k8s.V1Pod) {
+  private buildPodPayload(type: EngineEventType, pod: k8s.V1Pod) {
     const name = pod.metadata?.name;
     if (type === 'delete') return { deleted: true, pod: name };
     const containerStatuses = pod.status?.containerStatuses ?? [];

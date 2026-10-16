@@ -5,8 +5,11 @@ import assert from 'node:assert/strict';
 import { stripSecretData } from '../server/src/core/mirror';
 import { sandboxMirrorShard } from '../server/src/sandboxes/sandbox-mirror.shard';
 
-const { MirrorInformer } = require('../../../apps/server/src/mirror/mirror-informer') as {
-  MirrorInformer: new (...args: unknown[]) => unknown;
+const { EngineInformer } = require('../../../apps/server/src/engine/core/informer') as {
+  EngineInformer: new (...args: unknown[]) => unknown;
+};
+const { PrismaEngineStore } = require('../../../apps/server/src/engine/prisma-store') as {
+  PrismaEngineStore: new (prisma: unknown) => unknown;
 };
 import { SandboxMirrorConsumer } from '../server/src/sandboxes/sandbox-mirror.consumer';
 import { SandboxRunnerRegistry } from '../server/src/sandboxes/runners/sandbox-runner.registry';
@@ -48,7 +51,7 @@ function collectStrings(value: unknown, out: string[] = []): string[] {
   return out;
 }
 
-class FakeMirrorPrisma {
+class FakeEnginePrisma {
   written: string[] = [];
 
   k8sObject = { findMany: async () => [] };
@@ -77,10 +80,10 @@ const SECRET = {
   stringData: { 'claude-token': 'sk-ant-super-secret' }
 };
 
-function secretInformer(prisma: FakeMirrorPrisma, sanitize = true) {
-  const informer = new MirrorInformer(
+function secretInformer(prisma: FakeEnginePrisma, sanitize = true) {
+  const informer = new EngineInformer(
     {} as never,
-    prisma as never,
+    new PrismaEngineStore(prisma),
     'sandboxes',
     {
       kind: 'Secret',
@@ -100,7 +103,7 @@ function secretInformer(prisma: FakeMirrorPrisma, sanitize = true) {
 }
 
 test('a listed secret reaches k8s_objects without its data', async () => {
-  const prisma = new FakeMirrorPrisma();
+  const prisma = new FakeEnginePrisma();
   await (secretInformer(prisma) as any).runListAndSync(false);
   const manifest = prisma.written.find((s) => s.includes('"kind":"Secret"'));
   assert.ok(manifest, 'the secret manifest was written');
@@ -111,7 +114,7 @@ test('a listed secret reaches k8s_objects without its data', async () => {
 });
 
 test('a watched secret reaches k8s_objects without its data', async () => {
-  const prisma = new FakeMirrorPrisma();
+  const prisma = new FakeEnginePrisma();
   const informer = secretInformer(prisma) as any;
   informer.dispatch('ADDED', structuredClone(SECRET));
   await informer.drain();
@@ -122,7 +125,7 @@ test('a watched secret reaches k8s_objects without its data', async () => {
 });
 
 test('without the hook the data would have been stored, so the hook is what protects it', async () => {
-  const prisma = new FakeMirrorPrisma();
+  const prisma = new FakeEnginePrisma();
   await (secretInformer(prisma, false) as any).runListAndSync(false);
   const manifest = prisma.written.find((s) => s.includes('"kind":"Secret"'));
   assert.ok(manifest?.includes('sk-ant-super-secret'));
