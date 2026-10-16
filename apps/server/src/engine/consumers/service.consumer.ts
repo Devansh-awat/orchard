@@ -3,8 +3,10 @@ import * as k8s from '@kubernetes/client-node';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrgEventsService } from '../../events/org-events.service';
 import { AuditService } from '../../audit/audit.service';
+import { KubernetesService } from '../../kubernetes/kubernetes.service';
 import { EngineEventType, EngineObjectKey, EngineRefs } from '../core/informer';
 import { K8S_DELETED_REASON } from './workload.consumer';
+import { LiveState, readLive } from './live-object';
 
 const PRUNE_GRACE_MS = 2 * 60 * 1000;
 
@@ -114,7 +116,8 @@ export class ServiceConsumer {
   constructor(
     private readonly prisma: PrismaService,
     private readonly orgEvents: OrgEventsService,
-    private readonly audit: AuditService
+    private readonly audit: AuditService,
+    private readonly kubernetes: KubernetesService
   ) {}
 
   async mapRefs(svc: k8s.V1Service): Promise<EngineRefs | null> {
@@ -130,6 +133,16 @@ export class ServiceConsumer {
     if (type === 'delete') {
       if (row.updatedAt > this.graceCutoff()) return;
       if (!(await this.workloadExists(row.deploymentId))) return;
+      const state = await this.liveService(row.deployment.namespace, row.name);
+      if (state === 'unknown') {
+        throw new Error(
+          `service ${row.deployment.namespace}/${row.name} removal deferred: the apiserver could not confirm the delete`
+        );
+      }
+      if (state === 'present') {
+        this.keptUnlabeled(row);
+        return;
+      }
       await this.prune(row, 'watch');
       return;
     }
@@ -254,8 +267,23 @@ export class ServiceConsumer {
     for (const row of candidates) {
       if (live.has(`${row.deployment.namespace}/${row.name}`)) continue;
       if (!(await this.workloadExists(row.deploymentId))) continue;
+      const state = await this.liveService(row.deployment.namespace, row.name);
+      if (state === 'present') this.keptUnlabeled(row as ServiceRow);
+      if (state !== 'absent') continue;
       await this.prune(row as ServiceRow, 'list');
     }
+  }
+
+  protected async liveService(namespace: string, name: string): Promise<LiveState> {
+    return readLive(this.kubernetes, this.logger, (kc) =>
+      kc.makeApiClient(k8s.CoreV1Api).readNamespacedService(name, namespace)
+    );
+  }
+
+  private keptUnlabeled(row: ServiceRow): void {
+    this.logger.warn(
+      `service ${row.deployment.namespace}/${row.name} left the watch but still exists in the cluster; its app.kubernetes.io/managed-by label was probably removed, so the orchard row is kept`
+    );
   }
 
   private async workloadExists(deploymentId: string): Promise<boolean> {

@@ -2,8 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
+import { KubernetesService } from '../../kubernetes/kubernetes.service';
 import { EngineEventType, EngineObjectKey } from '../core/informer';
 import { K8S_DELETED_REASON } from './workload.consumer';
+import { LiveState, readLive } from './live-object';
 
 const PRUNE_GRACE_MS = 2 * 60 * 1000;
 
@@ -35,7 +37,8 @@ export class IngressConsumer {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly audit: AuditService
+    private readonly audit: AuditService,
+    private readonly kubernetes: KubernetesService
   ) {}
 
   async onEvent(type: EngineEventType, ingress: k8s.V1Ingress): Promise<void> {
@@ -47,6 +50,17 @@ export class IngressConsumer {
       where: { namespace, name, updatedAt: { lt: this.graceCutoff() } },
       select: ORPHAN_SELECT
     });
+    if (rows.length === 0) return;
+    const state = await this.liveIngress(namespace, name);
+    if (state === 'unknown') {
+      throw new Error(
+        `ingress ${namespace}/${name} removal deferred: the apiserver could not confirm the delete`
+      );
+    }
+    if (state === 'present') {
+      this.keptUnlabeled(namespace, name);
+      return;
+    }
     await this.removeRows(rows, 'watch');
   }
 
@@ -60,8 +74,31 @@ export class IngressConsumer {
       where: { updatedAt: { lt: this.graceCutoff() } },
       select: ORPHAN_SELECT
     });
-    const orphans = candidates.filter((row) => !live.has(`${row.namespace}/${row.name}`));
-    await this.removeRows(orphans, 'list');
+    const orphans = new Map<string, OrphanRow[]>();
+    for (const row of candidates) {
+      const key = `${row.namespace}/${row.name}`;
+      if (live.has(key)) continue;
+      orphans.set(key, [...(orphans.get(key) ?? []), row]);
+    }
+    for (const rows of orphans.values()) {
+      const { namespace, name } = rows[0];
+      const state = await this.liveIngress(namespace, name);
+      if (state === 'present') this.keptUnlabeled(namespace, name);
+      if (state !== 'absent') continue;
+      await this.removeRows(rows, 'list');
+    }
+  }
+
+  protected async liveIngress(namespace: string, name: string): Promise<LiveState> {
+    return readLive(this.kubernetes, this.logger, (kc) =>
+      kc.makeApiClient(k8s.NetworkingV1Api).readNamespacedIngress(name, namespace)
+    );
+  }
+
+  private keptUnlabeled(namespace: string, name: string): void {
+    this.logger.warn(
+      `ingress ${namespace}/${name} left the watch but still exists in the cluster; its leaf.dev/managed label was probably removed, so the orchard rows are kept`
+    );
   }
 
   private graceCutoff(): Date {

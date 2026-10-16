@@ -61,7 +61,8 @@ function build(row: ReturnType<typeof serviceRow>, pendingApply = 0) {
   const consumer = new ServiceConsumer(
     prisma as any,
     { emit: (e: any) => emitted.push(e) } as any,
-    { log: async () => {} } as any
+    { log: async () => {} } as any,
+    {} as any
   );
   return { consumer, updates, emitted };
 }
