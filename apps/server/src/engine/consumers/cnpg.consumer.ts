@@ -18,6 +18,7 @@ import { AuditService } from '../../audit/audit.service';
 import { K8S_DELETED_REASON } from './workload.consumer';
 import {
   clusterSpecValues,
+  hibernationTransition,
   ResolvedResources,
   scheduleCronUpdate,
   specColumnUpdate
@@ -648,6 +649,7 @@ export class CnpgConsumer implements OnModuleDestroy {
     }
 
     await this.trackArchiving(ctx, ns, name, cluster);
+    await this.adoptHibernation(ctx, ns, name, cluster);
     await this.writebackStatus(ctx, { cluster });
     const snapshot = clusterSnapshot(cluster);
     await this.writebackSnapshot(ctx, snapshot);
@@ -718,6 +720,49 @@ export class CnpgConsumer implements OnModuleDestroy {
   // Failures propagate: the informer holds the cluster object's derived_version
   // back and replays it, which is the only thing that would ever come back for
   // a database whose status write was lost.
+  private async adoptHibernation(ctx: Ctx, ns: string, name: string, cluster: any) {
+    const db = await this.prisma.database.findUnique({
+      where: { id: ctx.databaseId },
+      select: {
+        status: true,
+        name: true,
+        projectId: true,
+        backupScheduleDisabled: true,
+        project: { select: { organizationId: true } }
+      }
+    });
+    if (!db) return;
+    const next = hibernationTransition(cluster, db.status);
+    if (!next) return;
+    const updated = await this.prisma.database.updateMany({
+      where: { id: ctx.databaseId, status: db.status },
+      data: { status: next }
+    });
+    if (updated.count === 0) return;
+    const stopping = next === 'stopped';
+    if (stopping || !db.backupScheduleDisabled) {
+      await this.cnpg
+        .setScheduledBackupSuspended(ns, name, stopping)
+        .catch((e: any) =>
+          this.logger.warn(
+            `could not ${stopping ? 'suspend' : 'resume'} the backup schedule for ${ns}/${name}: ${e?.message ?? e}`
+          )
+        );
+    }
+    this.logger.log(
+      `database ${ns}/${name} was ${stopping ? 'hibernated' : 'woken'} in the cluster; status ${db.status} -> ${next}`
+    );
+    void this.audit.log({
+      action: stopping ? 'database.stopped' : 'database.started',
+      organizationId: db.project.organizationId,
+      projectId: db.projectId,
+      targetType: 'database',
+      targetId: ctx.databaseId,
+      targetLabel: db.name,
+      metadata: { reason: 'hibernation changed in k8s', source: 'engine.cnpg', namespace: ns }
+    });
+  }
+
   private async writebackStatus(
     ctx: Ctx,
     input: { cluster?: any; deleted?: boolean }

@@ -149,3 +149,18 @@ export function scheduleCronUpdate(row: ScheduleColumns, schedule: unknown): str
   }
   return cronFromSchedule(live);
 }
+
+export const HIBERNATION_ANNOTATION = 'cnpg.io/hibernation';
+
+const HIBERNATION_LEAVES_ALONE = new Set(['deleting', 'provisioning', 'restoring']);
+
+export function hibernationTransition(
+  cluster: any,
+  status: string
+): 'stopped' | 'restarting' | null {
+  if (HIBERNATION_LEAVES_ALONE.has(status)) return null;
+  const on = cluster?.metadata?.annotations?.[HIBERNATION_ANNOTATION] === 'on';
+  if (on && status !== 'stopped') return 'stopped';
+  if (!on && status === 'stopped') return 'restarting';
+  return null;
+}
