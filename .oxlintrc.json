@@ -79,6 +79,22 @@
       "rules": {
         "import/no-cycle": "off"
       }
+    },
+    {
+      "files": ["apps/server/src/engine/core/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["../*", "@nestjs/*", "@prisma/*"],
+                "message": "engine/core stays standalone: only @kubernetes/client-node and files inside engine/core"
+              }
+            ]
+          }
+        ]
+      }
     }
   ]
 }

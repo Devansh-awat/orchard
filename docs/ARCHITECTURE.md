@@ -21,6 +21,33 @@ pluggable sandbox runners (Kubernetes and Vercel), the apply-queue and engine
 pipeline it shares with deployments, terminals, the multiplayer live gateway,
 previews and integrations.
 
+## Orchard Engine
+
+Kubernetes is the source of truth. The engine (`apps/server/src/engine`) keeps a
+Postgres copy of every object Orchard manages (`k8s_objects`) and hands each
+change to a consumer, which adopts what someone changed with `kubectl` into
+Orchard's own rows instead of reverting it. Security objects (default-deny
+network policies, Cilium auth, the disk write-guard) are the one exception: the
+`guard` shard puts Orchard's version back and audits it.
+
+- **`engine/core`** is the standalone part: the list-then-watch informer,
+  tombstoned deletes, lease election, health. It imports nothing from the server
+  (only `@kubernetes/client-node`), which oxlint enforces, and talks to storage
+  through the `EngineStore` interface (`engine/prisma-store.ts` is the Postgres
+  one). It stays under `apps/server` so release-please and the server image
+  ship it with the server.
+- **`engine/consumers`** are Orchard-specific: one per kind, wired up in
+  `engine/shards.ts`. Grafts add shards through the kube door
+  (`registerEngineShard`).
+- **Nothing is ever removed on an error.** Only a live read answering 404 means
+  an object is gone; anything else means "unknown" and the consumer throws so the
+  engine retries. Removals that destroy Orchard state are confirmed twice, 90s
+  apart, and capped by a breaker.
+- **Adoption never echoes Orchard's own writes.** Consumers defer while a build
+  or a queued apply is in flight, and fields Orchard derives itself (env,
+  CronJob schedules, `shared_buffers`) carry an annotation recording what Orchard
+  last wrote, so only a value that differs from it counts as an outside edit.
+
 ## Splitting into services
 
 **Prerequisite — `packages/contracts`.** Before carving a module out, the
