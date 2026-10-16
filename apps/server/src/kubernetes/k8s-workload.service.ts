@@ -22,7 +22,14 @@ import {
 } from './port-utils';
 import { cpuMilliToK8s, cpuRequestFromLimitMilli, memoryBytesToK8s } from './quantity';
 import { isTrustedImage, trustedSecurityContext, hardenedSecurityContext } from './trusted-images';
-import { buildEnvReplacePatch, envListsEqual, secretDataEquals } from './env-patch';
+import {
+  buildEnvReplacePatch,
+  ENV_HASH_ANNOTATION,
+  envHash,
+  envHashAnnotationPatch,
+  envListsEqual,
+  secretDataEquals
+} from './env-patch';
 import {
   disruptionBudgetActive,
   disruptionBudgetManifest,
@@ -917,7 +924,8 @@ export class K8sWorkloadService {
       const deploymentBody: k8s.V1Deployment = {
         metadata: {
           name: cleanName,
-          labels
+          labels,
+          annotations: { [ENV_HASH_ANNOTATION]: envHash(envList) }
         },
         spec: {
           replicas,
@@ -1303,7 +1311,21 @@ export class K8sWorkloadService {
       // and rolls the deployment. Callers that re-assert the stored env on
       // every rebuild would otherwise restart pods a second time for nothing,
       // so a genuinely unchanged env is a no-op.
+      const hash = envHash(envList);
       if (envListsEqual(containers[containerIndex].env ?? [], envList) && !secretChanged) {
+        if (existing.body.metadata?.annotations?.[ENV_HASH_ANNOTATION] !== hash) {
+          await appsApi.patchNamespacedDeployment(
+            cleanName,
+            cleanNamespace,
+            [envHashAnnotationPatch(existing.body.metadata, hash)],
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            { headers: { 'Content-Type': 'application/json-patch+json' } }
+          );
+        }
         return {
           success: true,
           deployment: cleanName,
@@ -1315,12 +1337,15 @@ export class K8sWorkloadService {
 
       // JSON Patch, not strategic merge: a merge patch unions env by name and
       // can never remove a key. See buildEnvReplacePatch.
-      const patch = buildEnvReplacePatch({
-        containerIndex,
-        env: envList,
-        stamp: new Date().toISOString(),
-        templateMetadata: existing.body.spec?.template?.metadata
-      });
+      const patch = [
+        envHashAnnotationPatch(existing.body.metadata, hash),
+        ...buildEnvReplacePatch({
+          containerIndex,
+          env: envList,
+          stamp: new Date().toISOString(),
+          templateMetadata: existing.body.spec?.template?.metadata
+        })
+      ];
 
       await appsApi.patchNamespacedDeployment(
         cleanName,

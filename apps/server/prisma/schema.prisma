@@ -636,6 +636,8 @@ model Deployment {
   // GitHub builds get a unique v<timestamp> tag per build, so they derive to
   // IfNotPresent and re-pulling would be pure waste.
   imagePullPolicy      ImagePullPolicy?   @map("image_pull_policy")
+  envObservedHash      String?            @map("env_observed_hash") @db.VarChar(64)
+  envConflicts         Json?              @map("env_conflicts") @db.JsonB
   githubRepo           String?            @map("github_repo") @db.VarChar(500)
   // GitHub's numeric repository id — the only part of a repo that survives a
   // rename. Auto-deploy matches on this first and on `githubRepo` second, so

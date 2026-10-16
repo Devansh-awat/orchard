@@ -2,7 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as k8s from '@kubernetes/client-node';
 import { K8sWorkloadService } from '../src/kubernetes/k8s-workload.service';
-import { buildEnvReplacePatch, ENV_UPDATED_ANNOTATION } from '../src/kubernetes/env-patch';
+import {
+  buildEnvReplacePatch,
+  ENV_HASH_ANNOTATION,
+  ENV_UPDATED_ANNOTATION
+} from '../src/kubernetes/env-patch';
 
 /**
  * Removing an env var in Orchard used to update the database and nothing else:
@@ -81,6 +85,10 @@ function liveDeployment(env: k8s.V1EnvVar[]): k8s.V1Deployment {
       }
     }
   };
+}
+
+function rolls(calls: { body: any }[]): number {
+  return calls.filter((c) => JSON.stringify(c.body).includes('/spec/template')).length;
 }
 
 /** Stands in for the cluster: records patches and replays them onto the object. */
@@ -236,7 +244,7 @@ test('values still update in place', async () => {
 });
 
 test('re-asserting the same env does not roll the pods', async () => {
-  const { service, calls } = fakeCluster(
+  const { service, calls, state } = fakeCluster(
     liveDeployment([
       { name: 'HOST', value: '0.0.0.0' },
       { name: 'FORCE_COLOR', value: '1' },
@@ -251,7 +259,11 @@ test('re-asserting the same env does not roll the pods', async () => {
     env: [{ key: 'JOBS', value: '1' }]
   });
 
-  assert.equal(calls.length, 0, 'an unchanged env must not patch the pod template');
+  assert.equal(rolls(calls), 0, 'an unchanged env must not patch the pod template');
+  assert.ok(
+    state.deployment.metadata?.annotations?.[ENV_HASH_ANNOTATION],
+    'the env Orchard wrote is stamped on the Deployment'
+  );
 });
 
 test('ordering alone is not a change, but a changed value is', async () => {
@@ -268,14 +280,14 @@ test('ordering alone is not a change, but a changed value is', async () => {
     deploymentName: NAME,
     env: [{ key: 'JOBS', value: '1' }]
   });
-  assert.equal(calls.length, 0, 'reordering is not a change');
+  assert.equal(rolls(calls), 0, 'reordering is not a change');
 
   await service.updateDeploymentEnv({
     namespace: NAMESPACE,
     deploymentName: NAME,
     env: [{ key: 'JOBS', value: '2' }]
   });
-  assert.equal(calls.length, 1, 'a changed value must roll the pods');
+  assert.equal(rolls(calls), 1, 'a changed value must roll the pods');
 });
 
 test('a rotated secret rolls the pods even though the pod spec is identical', async () => {

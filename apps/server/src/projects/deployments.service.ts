@@ -12,6 +12,8 @@ import {
   HttpException
 } from '@nestjs/common';
 import { Prisma, ServiceType } from '@prisma/client';
+import type { V1EnvVar } from '@kubernetes/client-node';
+import { planEnvAdoption, type EnvAdoptionPlan } from '../env/env-adoption';
 import { PrismaService } from '../prisma/prisma.service';
 import { storageShrinks } from '../kubernetes/pvc-status';
 import { KubernetesService, CreateDeploymentOptions } from '../kubernetes/kubernetes.service';
@@ -492,6 +494,91 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         userData: { email: creator.email, username: creator.username ?? undefined }
       })
       .catch((e) => console.warn(`[Score] reconcile on push failed: ${(e as Error).message}`));
+  }
+
+  async adoptClusterEnv(
+    deploymentId: string,
+    live: V1EnvVar[],
+    observation: string
+  ): Promise<EnvAdoptionPlan | null> {
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: {
+        id: true,
+        name: true,
+        environmentId: true,
+        projectId: true,
+        project: { select: { organizationId: true } }
+      }
+    });
+    if (!deployment) return null;
+
+    const own = await this.readOwnEnvVars(deployment.id);
+    const shared = await this.loadSharedVarsForDeployment(deployment.id, deployment.environmentId);
+    const resources = await this.resourceBindings.valuesFor(deployment.id);
+    let resolved: EnvVar[];
+    try {
+      resolved = resolveEnvVars(own, shared, resources).resolved;
+    } catch (e) {
+      if (e instanceof UnresolvedResourceRefError) {
+        this.logger.warn(`[Env] not adopting env for ${deployment.name}: ${e.message}`);
+        return null;
+      }
+      throw e;
+    }
+
+    const plan = planEnvAdoption({ deploymentName: deployment.name, live, own, resolved });
+    const before = new Set(own.map((v) => v.key));
+    await this.prisma.$transaction(async (tx) => {
+      for (const entry of plan.upserts) {
+        const value = this.crypto.encryptIfSecret(entry.value, Boolean(entry.secret));
+        await tx.deploymentEnvVar.upsert({
+          where: { deploymentId_key: { deploymentId: deployment.id, key: entry.key } },
+          create: {
+            deploymentId: deployment.id,
+            key: entry.key,
+            value,
+            secret: Boolean(entry.secret)
+          },
+          update: { value, secret: Boolean(entry.secret) }
+        });
+      }
+      if (plan.removals.length > 0) {
+        await tx.deploymentEnvVar.deleteMany({
+          where: { deploymentId: deployment.id, key: { in: plan.removals } }
+        });
+      }
+      await tx.deployment.update({
+        where: { id: deployment.id },
+        data: {
+          envObservedHash: observation,
+          envConflicts: plan.conflicts.length > 0 ? (plan.conflicts as object[]) : Prisma.DbNull
+        }
+      });
+    });
+
+    if (plan.upserts.length > 0 || plan.removals.length > 0) {
+      const added = plan.upserts.filter((v) => !before.has(v.key)).map((v) => v.key);
+      const changed = plan.upserts.filter((v) => before.has(v.key)).map((v) => v.key);
+      void this.audit.log({
+        action: 'deployment.env.updated',
+        organizationId: deployment.project.organizationId,
+        projectId: deployment.projectId,
+        deploymentId: deployment.id,
+        targetType: 'deployment',
+        targetId: deployment.id,
+        targetLabel: deployment.name,
+        metadata: {
+          reason: 'edited in k8s',
+          source: 'engine.workloads',
+          added: added.join(',') || null,
+          changed: changed.join(',') || null,
+          removed: plan.removals.join(',') || null,
+          conflicts: plan.conflicts.map((c) => c.key).join(',') || null
+        }
+      });
+    }
+    return plan;
   }
 
   async getDeploymentEnvKeys(deploymentId: string): Promise<{ key: string; secret: boolean }[]> {

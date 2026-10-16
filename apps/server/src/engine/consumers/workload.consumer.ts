@@ -4,6 +4,7 @@ import * as k8s from '@kubernetes/client-node';
 import { PrismaService } from '../../prisma/prisma.service';
 import { KubernetesService } from '../../kubernetes/kubernetes.service';
 import { DeploymentsService } from '../../projects/deployments.service';
+import { ENV_HASH_ANNOTATION, envHash, envObservationKey } from '../../kubernetes/env-patch';
 import { OrgEventsService } from '../../events/org-events.service';
 import {
   cpuLimitMilliFromResources,
@@ -21,6 +22,7 @@ const POSITIVE_TTL_MS = 10 * 60 * 1000;
 const NEGATIVE_TTL_MS = 30 * 1000;
 const EMIT_COALESCE_MS = 500;
 const CONFIRM_AFTER_MS = 90 * 1000;
+const ENV_SETTLE_MS = 2 * 60 * 1000;
 const CREATION_GRACE_MS = 2 * 60 * 1000;
 const REMOVAL_WINDOW_MS = 10 * 60 * 1000;
 const MAX_REMOVALS_PER_WINDOW = 5;
@@ -211,7 +213,9 @@ export class WorkloadConsumer implements OnModuleDestroy {
         memoryRequestBytes: true,
         deployStrategy: true,
         imagePullPolicy: true,
-        buildStatus: true
+        buildStatus: true,
+        name: true,
+        envObservedHash: true
       }
     });
     if (!row) return;
@@ -303,6 +307,8 @@ export class WorkloadConsumer implements OnModuleDestroy {
       adopted.push(`pullPolicy=${pullPolicy}`);
     }
 
+    await this.adoptEnv(deploymentId, row.name, row.envObservedHash, dep);
+
     if (Object.keys(changes).length === 0) return;
     await this.prisma.deployment.update({
       where: { id: deploymentId },
@@ -316,6 +322,41 @@ export class WorkloadConsumer implements OnModuleDestroy {
     // that allows no disruptions and blocks every drain on those pods.
     if (changes.replicas != null || changes.stopped != null) {
       await this.queueBudgetReconcile(deploymentId);
+    }
+  }
+
+  private async adoptEnv(
+    deploymentId: string,
+    name: string,
+    observedHash: string | null,
+    dep: k8s.V1Deployment
+  ): Promise<void> {
+    const written = dep.metadata?.annotations?.[ENV_HASH_ANNOTATION];
+    if (!written) return;
+    const containers = dep.spec?.template?.spec?.containers ?? [];
+    const container = containers.find((c) => c.name === name) ?? containers[0];
+    if (!container) return;
+    const live = container.env ?? [];
+    const liveHash = envHash(live);
+    const observation = envObservationKey(written, liveHash);
+    if (liveHash === written || observation === observedHash) return;
+
+    const recent = await this.prisma.deploymentEnvVar.count({
+      where: { deploymentId, updatedAt: { gt: new Date(Date.now() - ENV_SETTLE_MS) } }
+    });
+    if (recent > 0) {
+      throw new Error(
+        `env adoption deferred for ${deploymentId}: env changed in Orchard moments ago`
+      );
+    }
+
+    const deployments = this.moduleRef.get(DeploymentsService, { strict: false });
+    const plan = await deployments.adoptClusterEnv(deploymentId, live, observation);
+    if (!plan) return;
+    if (plan.upserts.length > 0 || plan.removals.length > 0 || plan.conflicts.length > 0) {
+      this.logger.log(
+        `adopted external env for ${deploymentId}: ${plan.upserts.length} set, ${plan.removals.length} removed, ${plan.conflicts.length} in conflict`
+      );
     }
   }
 
