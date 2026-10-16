@@ -42,6 +42,7 @@ export interface CronJobOwner {
   enabled: boolean;
   concurrencyPolicy: string;
   cronJobName: string | null;
+  removedInClusterAt: Date | null;
   project: { namespace: string; organizationId: string };
 }
 
@@ -82,7 +83,37 @@ export class CronJobConsumer {
       return;
     }
     this.absentSince.delete(owner.id);
-    await this.adoptSchedule(owner, cronJob);
+    const current = await this.relinkReturned(owner, cronJob);
+    await this.adoptSchedule(current, cronJob);
+  }
+
+  private async relinkReturned(owner: CronJobOwner, cronJob: k8s.V1CronJob): Promise<CronJobOwner> {
+    if (owner.enabled || !owner.removedInClusterAt) return owner;
+    const name = cronJob.metadata?.name ?? '';
+    const result = await this.prisma.job.updateMany({
+      where: { id: owner.id, enabled: false, removedInClusterAt: { not: null } },
+      data: { enabled: true, cronJobName: name, removedInClusterAt: null }
+    });
+    if (result.count === 0) return owner;
+    this.logger.warn(
+      `cronjob ${owner.project.namespace}/${name} came back in the cluster; job ${owner.id} re-enabled`
+    );
+    void this.audit.log({
+      action: 'job.updated',
+      organizationId: owner.project.organizationId,
+      projectId: owner.projectId,
+      targetType: 'job',
+      targetId: owner.id,
+      targetLabel: owner.name,
+      metadata: {
+        reason: 'cronjob re-created in k8s',
+        source: 'engine.batch',
+        cronJob: `${owner.project.namespace}/${name}`,
+        enabled: [false, true]
+      }
+    });
+    this.jobs.emitJobChanged(owner.project.organizationId, owner.id, owner.projectId);
+    return { ...owner, enabled: true, cronJobName: name, removedInClusterAt: null };
   }
 
   private async confirmRemoval(owner: CronJobOwner, cronJob: k8s.V1CronJob): Promise<void> {
@@ -142,7 +173,7 @@ export class CronJobConsumer {
     this.absentSince.delete(owner.id);
     const result = await this.prisma.job.updateMany({
       where: { id: owner.id, cronJobName: name, enabled: true },
-      data: { enabled: false, cronJobName: null }
+      data: { enabled: false, cronJobName: null, removedInClusterAt: new Date() }
     });
     if (result.count === 0) return;
     this.removals.push(now);
@@ -219,6 +250,7 @@ export class CronJobConsumer {
         enabled: true,
         concurrencyPolicy: true,
         cronJobName: true,
+        removedInClusterAt: true,
         project: { select: { namespace: true, organizationId: true } }
       }
     });

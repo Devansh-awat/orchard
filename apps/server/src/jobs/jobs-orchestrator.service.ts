@@ -503,6 +503,7 @@ export class JobsOrchestratorService {
 
     const live = await this.readCronJob(namespace, name);
     if (live) this.cronJobsMissingSince.delete(job.id);
+    if (live && job.removedInClusterAt) return;
     if (!live) {
       const now = Date.now();
       const missingSince = this.cronJobsMissingSince.get(job.id) ?? now;

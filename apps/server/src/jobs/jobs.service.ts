@@ -303,7 +303,9 @@ export class JobsService {
         ...(input.description !== undefined ? { description: data.description } : {}),
         ...(input.scheduleCron !== undefined ? { scheduleCron: data.scheduleCron } : {}),
         ...(input.timeZone !== undefined ? { timeZone: data.timeZone } : {}),
-        ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
+        ...(input.enabled !== undefined
+          ? { enabled: input.enabled, removedInClusterAt: null }
+          : {}),
         ...(input.concurrencyPolicy !== undefined
           ? { concurrencyPolicy: input.concurrencyPolicy }
           : {}),

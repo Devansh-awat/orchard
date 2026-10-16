@@ -1505,6 +1505,7 @@ model Job {
   concurrencyPolicy String   @default("forbid") @map("concurrency_policy") @db.VarChar(20)
   runTimeoutSeconds Int      @default(21600) @map("run_timeout_seconds")
   cronJobName       String?  @map("cronjob_name") @db.VarChar(63)
+  removedInClusterAt DateTime? @map("removed_in_cluster_at") @db.Timestamp(6)
   runCounter        Int      @default(0) @map("run_counter")
   // Scheduling: friendly node pool + superadmin-only raw placement escape hatch.
   // Applied to every step Job's pod spec (affinity + tolerations).

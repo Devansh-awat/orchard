@@ -20,6 +20,7 @@ interface Row {
   enabled: boolean;
   concurrencyPolicy: string;
   cronJobName: string | null;
+  removedInClusterAt?: Date | null;
   project: { namespace: string; organizationId: string };
 }
 
@@ -55,7 +56,12 @@ function build(opts: {
         const row = state.row;
         if (!row || row.id !== where.id) return { count: 0 };
         for (const [key, value] of Object.entries(where)) {
-          if (key !== 'id' && (row as any)[key] !== value) return { count: 0 };
+          if (key === 'id') continue;
+          if (value && typeof value === 'object' && 'not' in value) {
+            if (((row as any)[key] ?? null) === (value as any).not) return { count: 0 };
+            continue;
+          }
+          if (((row as any)[key] ?? null) !== value) return { count: 0 };
         }
         Object.assign(row, data);
         return { count: 1 };
@@ -304,4 +310,32 @@ test('the sweep waits for the engine before recreating a cronjob that vanished',
   assert.equal(missingCronJobAction({ ...base, linked: false }), 'create');
   assert.equal(missingCronJobAction({ ...base, enabled: false }), 'unlink');
   assert.equal(missingCronJobAction({ ...base, enabled: false, linked: false }), 'skip');
+});
+
+test('a cronjob removed in k8s marks the job as removed by the cluster', async () => {
+  const row = baseRow();
+  const { consumer, state } = build({ row });
+  assert.equal(await deleteEvent(consumer, cronJob({}, null)), 'pending');
+  assert.equal(await deleteEvent(consumer, cronJob({}, null)), 'done');
+  assert.equal(state.row!.enabled, false);
+  assert.ok(state.row!.removedInClusterAt instanceof Date);
+});
+
+test('the same cronjob applied back re-enables and relinks the job', async () => {
+  const row = baseRow({ enabled: false, cronJobName: null, removedInClusterAt: new Date() });
+  const { consumer, state, audits, events } = build({ row });
+  await consumer.onEvent('add', cronJob({}, null));
+  assert.equal(state.row!.enabled, true);
+  assert.equal(state.row!.cronJobName, NAME);
+  assert.equal(state.row!.removedInClusterAt, null);
+  assert.equal(audits[0].metadata.reason, 'cronjob re-created in k8s');
+  assert.deepEqual(events, [['o1', JOB_ID, 'p1']]);
+});
+
+test('a job the user disabled is not re-enabled by a cronjob showing up', async () => {
+  const row = baseRow({ enabled: false, removedInClusterAt: null });
+  const { consumer, state, audits } = build({ row });
+  await consumer.onEvent('add', cronJob({ suspend: true }, null));
+  assert.equal(state.row!.enabled, false);
+  assert.equal(audits.length, 0);
 });
