@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
-import { EngineRefs, EngineRow, EngineStore, RemovedRow, StoredRow } from './core/store';
+import { EngineRefs, EngineRow, EngineStore, StoredRow, Tombstone } from './core/store';
 
 const REF_COLUMNS = ['deploymentId', 'projectId', 'databaseId', 'jobId'] as const;
 
@@ -60,6 +60,7 @@ export class PrismaEngineStore implements EngineStore {
         )`
       )
     );
+    const uids = rows.map((r) => r.uid);
 
     await this.prisma.$transaction([
       this.prisma.$executeRaw`
@@ -92,6 +93,9 @@ export class PrismaEngineStore implements EngineStore {
           "database_id" = EXCLUDED."database_id",
           "job_id" = EXCLUDED."job_id",
           "synced_at" = EXCLUDED."synced_at"
+      `,
+      this.prisma.$executeRaw`
+        DELETE FROM "k8s_object_tombstones" WHERE "uid" = ANY(${uids}::varchar[])
       `
     ]);
   }
@@ -110,20 +114,88 @@ export class PrismaEngineStore implements EngineStore {
     `;
   }
 
-  async remove(uid: string): Promise<void> {
-    await this.prisma.$executeRaw`DELETE FROM "k8s_objects" WHERE "uid" = ${uid}`;
+  async bury(
+    shard: string,
+    kind: string,
+    obj: { uid: string; manifest: unknown },
+    keepTombstone: boolean
+  ): Promise<void> {
+    const remove = this.prisma.$executeRaw`DELETE FROM "k8s_objects" WHERE "uid" = ${obj.uid}`;
+    if (!keepTombstone) {
+      await remove;
+      return;
+    }
+    await this.prisma.$transaction([
+      this.prisma.$executeRaw`
+        INSERT INTO "k8s_object_tombstones" ("uid", "shard", "kind", "manifest", "buried_at")
+        VALUES (
+          ${obj.uid}, ${shard}, ${kind}, ${JSON.stringify(obj.manifest)}::jsonb,
+          (NOW() AT TIME ZONE 'UTC')
+        )
+        ON CONFLICT ("uid") DO UPDATE SET "manifest" = EXCLUDED."manifest"
+      `,
+      remove
+    ]);
   }
 
   // `= ANY($1)` binds the whole set as a single array parameter — an
   // `IN (...)` list would bind one parameter per object and fall off the
   // 65535-parameter cliff on a large cluster.
-  async sweep(shard: string, kind: string, seenUids: string[]): Promise<RemovedRow[]> {
-    return this.prisma.$queryRaw<RemovedRow[]>`
-      DELETE FROM "k8s_objects"
-      WHERE "shard" = ${shard}
-        AND "kind" = ${kind}
-        AND NOT ("uid" = ANY(${seenUids}::varchar[]))
-      RETURNING "uid", "manifest"
-    `;
+  async buryMissing(
+    shard: string,
+    kind: string,
+    seenUids: string[],
+    keepTombstones: boolean,
+    retryAfterMs: number
+  ): Promise<Tombstone[]> {
+    if (!keepTombstones) {
+      return this.prisma.$queryRaw<Tombstone[]>`
+        DELETE FROM "k8s_objects"
+        WHERE "shard" = ${shard}
+          AND "kind" = ${kind}
+          AND NOT ("uid" = ANY(${seenUids}::varchar[]))
+        RETURNING "uid", "manifest"
+      `;
+    }
+    const retrySeconds = Math.max(0, Math.round(retryAfterMs / 1000));
+    const results = await this.prisma.$transaction([
+      this.prisma.$executeRaw`
+        INSERT INTO "k8s_object_tombstones" ("uid", "shard", "kind", "manifest", "buried_at")
+        SELECT "uid", "shard", "kind", "manifest", (NOW() AT TIME ZONE 'UTC')
+        FROM "k8s_objects"
+        WHERE "shard" = ${shard}
+          AND "kind" = ${kind}
+          AND NOT ("uid" = ANY(${seenUids}::varchar[]))
+        ON CONFLICT ("uid") DO NOTHING
+      `,
+      this.prisma.$executeRaw`
+        DELETE FROM "k8s_objects"
+        WHERE "shard" = ${shard}
+          AND "kind" = ${kind}
+          AND NOT ("uid" = ANY(${seenUids}::varchar[]))
+      `,
+      this.prisma.$executeRaw`
+        DELETE FROM "k8s_object_tombstones"
+        WHERE "shard" = ${shard}
+          AND "kind" = ${kind}
+          AND "uid" = ANY(${seenUids}::varchar[])
+      `,
+      this.prisma.$queryRaw<Tombstone[]>`
+        SELECT "uid", "manifest"
+        FROM "k8s_object_tombstones"
+        WHERE "shard" = ${shard}
+          AND "kind" = ${kind}
+          AND (
+            "buried_at" = (NOW() AT TIME ZONE 'UTC')
+            OR "buried_at" < (NOW() AT TIME ZONE 'UTC') - make_interval(secs => ${retrySeconds}::double precision)
+          )
+        ORDER BY "buried_at"
+      `
+    ]);
+    return results[3] as Tombstone[];
+  }
+
+  async forget(uid: string): Promise<void> {
+    await this.prisma.$executeRaw`DELETE FROM "k8s_object_tombstones" WHERE "uid" = ${uid}`;
   }
 }

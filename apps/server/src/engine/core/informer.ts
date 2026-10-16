@@ -413,18 +413,25 @@ export class EngineInformer {
   }
 
   private async sweepStale(seenUids: string[], countRepairs: boolean): Promise<number> {
-    const stale = await this.store.sweep(this.shard, this.config.kind, seenUids);
-    if (this.config.onEvent) {
-      for (const row of stale) {
-        try {
-          await this.config.onEvent('delete', row.manifest);
-        } catch (err) {
-          this.logger.warn(`delete handler failed for ${row.uid}: ${errorText(err)}`);
-          this.scheduleRepair();
-        }
+    const handler = this.config.onEvent;
+    const buried = await this.store.buryMissing(
+      this.shard,
+      this.config.kind,
+      seenUids,
+      Boolean(handler),
+      REPAIR_DELAY_MS
+    );
+    if (!handler) return countRepairs ? buried.length : 0;
+    for (const row of buried) {
+      try {
+        await handler('delete', row.manifest);
+        await this.store.forget(row.uid);
+      } catch (err) {
+        this.logger.warn(`delete handler failed for ${row.uid}: ${errorText(err)}`);
+        this.scheduleRepair();
       }
     }
-    return countRepairs ? stale.length : 0;
+    return countRepairs ? buried.length : 0;
   }
 
   private async flush(entries: PendingWrite[]): Promise<void> {
@@ -571,15 +578,24 @@ export class EngineInformer {
     if (this.stopped) return;
 
     if (phase === 'DELETED') {
+      const handler = this.config.onEvent;
       try {
-        await this.store.remove(obj.metadata.uid);
+        await this.store.bury(
+          this.shard,
+          this.config.kind,
+          { uid: obj.metadata.uid, manifest: obj },
+          Boolean(handler)
+        );
       } catch (err) {
         this.logger.warn(
           `delete of ${obj.metadata.namespace}/${obj.metadata.name} failed: ${errorText(err)}`
         );
         this.scheduleRepair();
+        return;
       }
-      if (this.config.onEvent) await this.config.onEvent('delete', obj);
+      if (!handler) return;
+      await handler('delete', obj);
+      await this.store.forget(obj.metadata.uid);
       return;
     }
 

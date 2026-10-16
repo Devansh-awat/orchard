@@ -182,6 +182,7 @@ async function ageCrashState(ms: number) {
 
 async function cleanup() {
   await prisma.k8sObject.deleteMany({ where: { shard: SHARD } });
+  await prisma.k8sObjectTombstone.deleteMany({ where: { shard: SHARD } });
   const org = await prisma.organization.findUnique({ where: { slug: SLUG } });
   if (org) await prisma.organization.delete({ where: { id: org.id } });
 }
@@ -212,6 +213,8 @@ after(async () => {
 
 beforeEach(async () => {
   await prisma.k8sObject.deleteMany({ where: { shard: SHARD } });
+  await prisma.k8sObjectTombstone.deleteMany({ where: { shard: SHARD } });
+  failHandlerFor = new Set();
   await prisma.deploymentCrashState.deleteMany({ where: { deploymentId } });
   await prisma.pod.deleteMany({
     where: { deploymentId: { in: [deploymentId, otherDeploymentId] } }
@@ -412,6 +415,28 @@ test('objects that leave the cluster are swept and reported as deletes', async (
     ['uid-a']
   );
   assert.deepEqual(seenEvents, [{ type: 'delete', name: 'ing-b' }]);
+  assert.equal(await prisma.k8sObjectTombstone.count({ where: { shard: SHARD } }), 0);
+});
+
+test('a delete whose handler threw is retried from its tombstone', async () => {
+  cluster = [obj('uid-a', 'ing-a'), obj('uid-b', 'ing-b')];
+  const informer = newInformer();
+  await listAndSync(informer);
+  seenEvents = [];
+
+  cluster = [obj('uid-a', 'ing-a')];
+  failHandlerFor = new Set(['ing-b']);
+  await listAndSync(informer);
+  assert.deepEqual(seenEvents, []);
+  assert.equal(await prisma.k8sObjectTombstone.count({ where: { uid: 'uid-b' } }), 1);
+
+  await prisma.k8sObjectTombstone.updateMany({
+    where: { uid: 'uid-b' },
+    data: { buriedAt: new Date(Date.now() - 10 * 60 * 1000) }
+  });
+  await listAndSync(informer);
+  assert.deepEqual(seenEvents, [{ type: 'delete', name: 'ing-b' }]);
+  assert.equal(await prisma.k8sObjectTombstone.count({ where: { shard: SHARD } }), 0);
 });
 
 test('the stale sweep survives an object count past the bind-parameter ceiling', async () => {

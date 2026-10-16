@@ -1142,6 +1142,17 @@ model K8sObject {
   @@map("k8s_objects")
 }
 
+model K8sObjectTombstone {
+  uid      String   @id @db.VarChar(64)
+  shard    String   @db.VarChar(40)
+  kind     String   @db.VarChar(60)
+  manifest Json     @db.JsonB
+  buriedAt DateTime @default(now()) @map("buried_at") @db.Timestamp(6)
+
+  @@index([shard, kind], map: "idx_k8s_object_tombstones_shard_kind")
+  @@map("k8s_object_tombstones")
+}
+
 model K8sMirrorHeartbeat {
   shard           String    @id @db.VarChar(40)
   holder          String?   @db.VarChar(120)

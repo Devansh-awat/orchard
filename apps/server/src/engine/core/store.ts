@@ -20,7 +20,7 @@ export interface StoredRow {
   refs: EngineRefs;
 }
 
-export interface RemovedRow {
+export interface Tombstone {
   uid: string;
   manifest: any;
 }
@@ -29,8 +29,20 @@ export interface EngineStore {
   load(shard: string, kind: string): Promise<StoredRow[]>;
   write(rows: EngineRow[]): Promise<void>;
   markDerived(entries: { uid: string; resourceVersion: string }[]): Promise<void>;
-  remove(uid: string): Promise<void>;
-  sweep(shard: string, kind: string, seenUids: string[]): Promise<RemovedRow[]>;
+  bury(
+    shard: string,
+    kind: string,
+    obj: { uid: string; manifest: unknown },
+    keepTombstone: boolean
+  ): Promise<void>;
+  buryMissing(
+    shard: string,
+    kind: string,
+    seenUids: string[],
+    keepTombstones: boolean,
+    retryAfterMs: number
+  ): Promise<Tombstone[]>;
+  forget(uid: string): Promise<void>;
 }
 
 export function sameRefs(a: EngineRefs, b: EngineRefs): boolean {
