@@ -378,7 +378,11 @@ export class WorkloadConsumer implements OnModuleDestroy {
     const deletedAt = dep.metadata?.deletionTimestamp
       ? new Date(dep.metadata.deletionTimestamp).getTime()
       : Date.now();
-    if (created && deletedAt - created < CREATION_GRACE_MS) {
+    const neverServed =
+      row.buildStatus === 'failed' &&
+      !(dep.status?.availableReplicas ?? 0) &&
+      !(dep.status?.readyReplicas ?? 0);
+    if ((created && deletedAt - created < CREATION_GRACE_MS) || neverServed) {
       this.absentSince.delete(ctx.deploymentId);
       this.logger.log(
         `deployment ${namespace}/${name} was removed right after it was created; treating it as an Orchard rollback, not a delete`

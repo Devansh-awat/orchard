@@ -165,3 +165,17 @@ test('many deletes in a short window trip the breaker', async () => {
   assert.deepEqual(outcomes.slice(5), ['pending', 'pending']);
   consumer.onModuleDestroy();
 });
+
+test('a failed first deploy that orchard cleaned up is never treated as a delete', async () => {
+  const { consumer, removed } = build({ rows: [row('d1', 'web', { buildStatus: 'failed' })] });
+  const neverServed = { ...dep('web'), status: { replicas: 1, availableReplicas: 0 } };
+  assert.equal(await deleteEvent(consumer, neverServed), 'done');
+  assert.equal(await deleteEvent(consumer, neverServed), 'done');
+  assert.deepEqual(removed, []);
+
+  const served = build({ rows: [row('d2', 'api', { buildStatus: 'failed' })] });
+  const live = { ...dep('api'), status: { availableReplicas: 2 } };
+  assert.equal(await deleteEvent(served.consumer, live), 'pending');
+  assert.equal(await deleteEvent(served.consumer, live), 'done');
+  assert.equal(served.removed.length, 1);
+});
