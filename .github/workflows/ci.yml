@@ -274,6 +274,8 @@ jobs:
       # value is passed through untouched rather than clamped.
       - name: Database tuning derivation tests
         run: pnpm --filter server test:db-tuning
+      - name: Database storage and backup tests
+        run: pnpm --filter server test:db-storage
       # The informer mirror is only correct if its reconcile pass actually runs.
       # Leadership is acquired asynchronously, so a subscriber has to be called
       # whether it registered before or after the lease landed.

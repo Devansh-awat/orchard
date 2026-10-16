@@ -121,6 +121,7 @@ export class BackupSyncService {
         namespace: true,
         clusterName: true,
         backupScheduleCron: true,
+        backupScheduleDisabled: true,
         _count: { select: { backups: true } }
       }
     });
@@ -128,6 +129,7 @@ export class BackupSyncService {
     let repaired = 0;
     for (const db of databases) {
       if (repaired >= MAX_SCHEDULES_PER_SWEEP) break;
+      if (db.backupScheduleDisabled) continue;
       if (!db.backupScheduleCron && db._count.backups > 0) continue;
       const namespace = db.namespace!;
       const clusterName = db.clusterName!;

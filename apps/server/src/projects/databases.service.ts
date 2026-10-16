@@ -1907,6 +1907,7 @@ export class DatabasesService {
         clusterName: true,
         r2ProxyAccessKey: true,
         backupScheduleCron: true,
+        backupScheduleDisabled: true,
         project: { select: { organizationId: true } }
       }
     });
@@ -1944,6 +1945,7 @@ export class DatabasesService {
       clusterName: string | null;
       r2ProxyAccessKey: string | null;
       backupScheduleCron: string | null;
+      backupScheduleDisabled: boolean;
       project: { organizationId: string };
     },
     orgs: Map<string, OrgR2 | null>
@@ -1966,6 +1968,7 @@ export class DatabasesService {
     if (!route) return out;
     const state = await this.k8sCnpg.getCnpgBackupState(namespace, clusterName);
     if (!state.configured) {
+      if (db.backupScheduleDisabled) return out;
       if (await this.ensureBackupsConfigured(db)) out.archived = true;
     } else if (this.backupTargetDrifted(state, route, db.r2ProxyAccessKey)) {
       await this.repointDatabaseBackups(db, org);
@@ -1974,12 +1977,16 @@ export class DatabasesService {
         `[DB/backup] re-pointed ${namespace}/${clusterName}: archiving target was ${state.endpointURL ?? 'unset'} with key ${state.secretAccessKeyId ?? 'missing'}, expected ${route.endpoint}`
       );
     }
+    if (db.backupScheduleDisabled) return out;
     if (!(await this.k8sCnpg.hasScheduledBackup(namespace, clusterName))) {
-      await this.k8sCnpg.upsertScheduledBackup(
-        namespace,
-        clusterName,
-        toQuartzCron(db.backupScheduleCron || DEFAULT_BACKUP_CRON)
-      );
+      const cron = db.backupScheduleCron || DEFAULT_BACKUP_CRON;
+      await this.k8sCnpg.upsertScheduledBackup(namespace, clusterName, toQuartzCron(cron));
+      if (!db.backupScheduleCron) {
+        await this.prisma.database.update({
+          where: { id: db.id },
+          data: { backupScheduleCron: cron }
+        });
+      }
       out.scheduled = true;
     }
     return out;
@@ -1996,6 +2003,7 @@ export class DatabasesService {
         clusterName: true,
         r2ProxyAccessKey: true,
         backupScheduleCron: true,
+        backupScheduleDisabled: true,
         project: { select: { organizationId: true } }
       }
     });
@@ -2166,7 +2174,7 @@ export class DatabasesService {
     });
     await this.prisma.database.update({
       where: { id: database.id },
-      data: { backupScheduleCron: cron }
+      data: { backupScheduleCron: cron, backupScheduleDisabled: false }
     });
     return { cron };
   }
@@ -2191,7 +2199,7 @@ export class DatabasesService {
     }
     await this.prisma.database.update({
       where: { id: database.id },
-      data: { backupScheduleCron: null }
+      data: { backupScheduleCron: null, backupScheduleDisabled: true }
     });
     return { success: true };
   }

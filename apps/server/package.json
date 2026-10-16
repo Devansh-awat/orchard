@@ -28,7 +28,7 @@
     "test:superadmin-password": "tsx --test test/superadmin-password.test.ts",
     "test:cpu-requests": "tsx --test test/cpu-requests.test.ts",
     "test:db-tuning": "tsx --test test/db-tuning.test.ts",
-    "test:db-storage": "tsx --test test/db-stats.test.ts test/cnpg-defaults.test.ts test/cnpg-status.test.ts test/volume-stats.test.ts test/cnpg-spec-sync.test.ts",
+    "test:db-storage": "tsx --test test/db-stats.test.ts test/cnpg-defaults.test.ts test/cnpg-status.test.ts test/volume-stats.test.ts test/cnpg-spec-sync.test.ts test/default-backups.test.ts test/backup-schedule-sweep.test.ts",
     "test:leader": "tsx --test test/leader-acquired.test.ts",
     "test:env-removal": "tsx --test test/env-removal.test.ts",
     "test:build-args": "tsx --test test/build-arg-injection.test.ts",

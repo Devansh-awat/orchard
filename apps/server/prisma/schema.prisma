@@ -1427,6 +1427,7 @@ model Database {
   sharedPreloadLibs   Json?   @map("shared_preload_libs")
   installedExtensions Json?   @map("installed_extensions")
   backupScheduleCron  String? @map("backup_schedule_cron") @db.VarChar(100)
+  backupScheduleDisabled Boolean @default(false) @map("backup_schedule_disabled")
   // Compression for the *base* backup, which barman streams through gzip inside
   // the postgres container's own cgroup. null means derive it from the memory
   // limit (see kubernetes/db-tuning.ts); 'gzip' or 'none' is the user overriding
