@@ -11,6 +11,7 @@ import { SANDBOX_REF_SELECT, refOf } from './runners/sandbox-runner';
 import { SandboxAccessService } from './sandbox-access.service';
 import { sandboxTerminalMode } from './sandbox-role-gate';
 import {
+  isScriptName,
   isScriptedTerminal,
   isTerminalIndex,
   isUuid,
@@ -82,7 +83,7 @@ export function parseSandboxTerminalQuery(params: URLSearchParams): SandboxTermi
   if (mode && mode !== 'rw' && mode !== 'ro') return null;
   if (!sid && n !== '0') return null;
   if (user && (!sid || !isUuid(user))) return null;
-  const scripted = n === 'setup' || n === 'run';
+  const scripted = isScriptName(n);
   return {
     sessionId: sid ? sid.toLowerCase() : null,
     index: n,

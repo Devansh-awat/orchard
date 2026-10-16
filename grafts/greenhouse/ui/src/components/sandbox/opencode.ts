@@ -1,7 +1,5 @@
 import { apiFetch } from '../../host/stores';
 
-export const OC_MODEL = { providerID: 'anthropic', modelID: 'claude-sonnet-4-5-20250929' };
-
 export type OcSession = {
   id: string;
   title: string;

@@ -59,8 +59,21 @@
 	const CenterPane = $derived(center.current);
 
 	$effect(() => {
-		if (!nav.sessionId() && !ws?.session) return;
-		untrack(() => center.preload());
+		if (!ws && !nav.sessionId()) return;
+		if (nav.sessionId() || ws?.session) {
+			untrack(() => center.preload());
+			return;
+		}
+		const idle =
+			typeof requestIdleCallback === 'function'
+				? requestIdleCallback(() => center.preload(), { timeout: 2000 })
+				: setTimeout(() => center.preload(), 600);
+		return () => {
+			if (typeof cancelIdleCallback === 'function' && typeof idle === 'number') {
+				cancelIdleCallback(idle);
+			}
+			clearTimeout(idle as ReturnType<typeof setTimeout>);
+		};
 	});
 
 	const sheets = {

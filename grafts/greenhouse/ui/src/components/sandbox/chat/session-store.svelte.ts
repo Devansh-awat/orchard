@@ -1,9 +1,10 @@
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+import { toolFiles, type ToolFile } from './tool-files';
+export type { ToolFile } from './tool-files';
 import { apiFetch, toasts } from '../../../host/stores';
 import {
   OC_ATTACH_MAX_BYTES,
   OC_ATTACH_MAX_COUNT,
-  OC_MODEL,
   ocBase,
   ocErrorMessage,
   ocFastSibling,
@@ -113,7 +114,13 @@ export type ToolEntry = {
   failed: boolean;
   expanded: boolean | null;
   time?: number;
+  files?: ToolFile[];
 };
+
+export interface FileOpener {
+  can(path: string): boolean;
+  open(path: string): void;
+}
 
 export type AgentEntry = {
   kind: 'agent';
@@ -286,6 +293,31 @@ function cachedModels(sandboxId: string): OcModel[] {
   }
 }
 
+const LAST_MODEL_PREFIX = 'oc-last-model:';
+
+function lastPickedModel(sandboxId: string): { providerID: string; modelID: string } | null {
+  try {
+    const raw = localStorage.getItem(`${LAST_MODEL_PREFIX}${sandboxId}`);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return parsed && typeof parsed.providerID === 'string' && typeof parsed.modelID === 'string'
+      ? { providerID: parsed.providerID, modelID: parsed.modelID }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function rememberPickedModel(sandboxId: string, model: OcModel) {
+  try {
+    localStorage.setItem(
+      `${LAST_MODEL_PREFIX}${sandboxId}`,
+      JSON.stringify({ providerID: model.providerID, modelID: model.modelID })
+    );
+  } catch {
+    return;
+  }
+}
+
 function cacheModels(sandboxId: string, models: OcModel[]) {
   try {
     localStorage.setItem(`${MODELS_CACHE_PREFIX}${sandboxId}`, JSON.stringify(models));
@@ -449,6 +481,16 @@ function toolEntryFromPart(part: OcPart): ToolEntry {
   } else if (typeof state?.output === 'string') {
     entry.output = state.output.slice(0, OUTPUT_CAP);
   }
+  const attachments = (state as { attachments?: unknown } | undefined)?.attachments;
+  if (Array.isArray(attachments)) {
+    const files = toolFiles(
+      attachments.map((a) => {
+        const item = (a ?? {}) as Record<string, unknown>;
+        return { src: item.url, mime: item.mime, name: item.filename };
+      })
+    );
+    if (files.length) entry.files = files;
+  }
   return entry;
 }
 
@@ -609,8 +651,8 @@ export class ChatSessionStore {
   onNativePick: (() => void) | null = null;
   #acpBusy = new Map<string, boolean>();
 
-  providerID = $state(OC_MODEL.providerID);
-  modelID = $state(OC_MODEL.modelID);
+  providerID = $state('');
+  modelID = $state('');
   variant = $state<string | null>(null);
   plan = $state(false);
   agent = $state<string | null>(null);
@@ -626,6 +668,7 @@ export class ChatSessionStore {
   isHost = $state.raw<() => boolean>(() => true);
   canAnswer = $state.raw<() => boolean>(() => true);
   autoAccept = $state.raw<() => boolean>(() => false);
+  fileOpener = $state.raw<FileOpener | null>(null);
   answerAuthorOf = $state.raw<(requestId: string) => ChatAuthor | null>(() => null);
   beforePrompt: SessionStoreOptions['beforePrompt'] | null = null;
   onDraftChange: ((text: string) => void) | null = null;
@@ -662,6 +705,11 @@ export class ChatSessionStore {
     this.#preferredSessionId = options.preferredSessionId ?? null;
     this.#autoSelect = options.autoSelect ?? true;
     this.models = cachedModels(sandboxId);
+    const last = lastPickedModel(sandboxId);
+    if (last) {
+      this.providerID = last.providerID;
+      this.modelID = last.modelID;
+    }
     this.directory = options.directory ?? null;
     this.self = options.self ?? null;
     this.onTurnDone = options.onTurnDone ?? null;
@@ -997,6 +1045,14 @@ export class ChatSessionStore {
       if (list.length === 0) return;
       this.models = list;
       cacheModels(this.sandboxId, list);
+      if (
+        this.modelID &&
+        !list.some((m) => m.providerID === this.providerID && m.modelID === this.modelID)
+      ) {
+        this.providerID = '';
+        this.modelID = '';
+        this.variant = null;
+      }
     });
     this.#openStream();
     try {
@@ -1036,6 +1092,7 @@ export class ChatSessionStore {
   pickModel(model: OcModel) {
     this.providerID = model.providerID;
     this.modelID = model.modelID;
+    rememberPickedModel(this.sandboxId, model);
     if (this.variant && !model.variants.includes(this.variant)) this.variant = null;
     this.#savePrefs();
   }
@@ -1468,7 +1525,7 @@ export class ChatSessionStore {
 
   canCompact(): boolean {
     const thread = this.#idle();
-    return !!thread && thread.entries.some((e) => e.kind === 'user');
+    return !!thread && !!this.modelID && thread.entries.some((e) => e.kind === 'user');
   }
 
   compact(): Promise<boolean> {
@@ -1506,7 +1563,7 @@ export class ChatSessionStore {
         command,
         arguments: args,
         agent: agentOf(choice),
-        model: `${choice.providerID}/${choice.modelID}`,
+        ...(choice.modelID ? { model: `${choice.providerID}/${choice.modelID}` } : {}),
         ...(choice.variant ? { variant: choice.variant } : {})
       },
       `Could not run /${command}`
@@ -1920,7 +1977,9 @@ export class ChatSessionStore {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...(assigned?.messageID ? { messageID: assigned.messageID } : {}),
-          model: { providerID: choice.providerID, modelID: choice.modelID },
+          ...(choice.modelID
+            ? { model: { providerID: choice.providerID, modelID: choice.modelID } }
+            : {}),
           ...(choice.variant ? { variant: choice.variant } : {}),
           agent: agentOf(choice),
           parts: [...files.map(ocFilePart), { type: 'text', text: entry.text }]

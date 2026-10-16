@@ -117,7 +117,7 @@ export class SandboxAgentHostService implements OnModuleInit, SessionAgentHost {
     private readonly prisma: PrismaService,
     private readonly daemon: SandboxDaemonService,
     @Optional() private readonly live?: SandboxLiveService,
-    @Optional() sessions?: SandboxSessionsService,
+    @Optional() private readonly sessions?: SandboxSessionsService,
     @Optional() attention?: SandboxAttentionService
   ) {
     sessions?.setAgentHost(this);
@@ -523,6 +523,7 @@ export class SandboxAgentHostService implements OnModuleInit, SessionAgentHost {
         : newMessageId();
     const author = await this.author(actorUserId);
     this.recordAuthor(sandbox.id, sessionId, chatId, messageId, actorUserId);
+    void this.sessions?.titleFromPrompt({ sandbox, sessionId, text }).catch(() => null);
     return this.daemon
       .call<{ messageId: string; seq: number; queued: boolean }>(
         refOf(sandbox),

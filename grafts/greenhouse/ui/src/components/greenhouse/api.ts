@@ -281,12 +281,44 @@ export function listRepos(sandboxId: string) {
   return get<{ repos: GhRepo[] }>(`${base(sandboxId)}/repos`);
 }
 
-export function addRepo(sandboxId: string, repoUrl: string) {
-  return send<{ name: string }>(`${base(sandboxId)}/repos`, 'POST', { repoUrl });
+export function addRepo(sandboxId: string, repoUrl: string, location?: string) {
+  return send<{ name: string }>(`${base(sandboxId)}/repos`, 'POST', {
+    repoUrl,
+    ...(location ? { location } : {})
+  });
 }
 
-export function initRepo(sandboxId: string, name: string) {
-  return send<{ name: string }>(`${base(sandboxId)}/repos/init`, 'POST', { name });
+export function initRepo(sandboxId: string, name: string, location?: string) {
+  return send<{ name: string }>(`${base(sandboxId)}/repos/init`, 'POST', {
+    name,
+    ...(location ? { location } : {})
+  });
+}
+
+export function linkRepo(sandboxId: string, path: string) {
+  return send<{ name: string; path: string }>(`${base(sandboxId)}/repos/link`, 'POST', { path });
+}
+
+export interface GhDirListing {
+  path: string;
+  parent: string | null;
+  git: boolean;
+  entries: Array<{ name: string; path: string; git: boolean }>;
+  truncated: boolean;
+}
+
+export function listDirs(sandboxId: string, path: string) {
+  return get<GhDirListing>(`${base(sandboxId)}/dirs?path=${encodeURIComponent(path)}`);
+}
+
+export function displayPath(path: string): string {
+  if (path === GH_HOME) return '~';
+  return path.startsWith(`${GH_HOME}/`) ? `~${path.slice(GH_HOME.length)}` : path;
+}
+
+export function isHomeLocation(path: string): boolean {
+  const trimmed = path.trim().replace(/\/+$/, '');
+  return trimmed === '' || trimmed === '~' || trimmed === GH_HOME;
 }
 
 export function removeRepo(sandboxId: string, repo: string) {
@@ -413,8 +445,16 @@ export function listChecks(sandboxId: string, sid: string) {
   return get<GhChecks>(`${base(sandboxId)}/sessions/${sid}/checks`);
 }
 
-export function runScript(sandboxId: string, sid: string, action: 'start' | 'stop') {
-  return send<{ ok: boolean }>(`${base(sandboxId)}/sessions/${sid}/run`, 'POST', { action });
+export function runScript(
+  sandboxId: string,
+  sid: string,
+  action: 'start' | 'stop',
+  command?: string
+) {
+  return send<{ ok: boolean }>(`${base(sandboxId)}/sessions/${sid}/run`, 'POST', {
+    action,
+    ...(command ? { command } : {})
+  });
 }
 
 export function gitIdentity(sandboxId: string) {

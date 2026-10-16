@@ -219,6 +219,39 @@ export function installFetch(role: HarnessRole) {
     ],
     [/\/repos$/, 'GET', (u) => ({ repos: u.pathname.includes('sbx-leaf') ? data.repos : [] })],
     [
+      /\/repos$/,
+      'POST',
+      (_u, init) => {
+        const body = JSON.parse(String(init.body ?? '{}')) as { repoUrl?: string };
+        const name = (body.repoUrl ?? '')
+          .replace(/\.git$/, '')
+          .split('/')
+          .filter(Boolean)
+          .pop();
+        return { name: name || 'repo' };
+      }
+    ],
+    [
+      /\/repos\/(init|link)$/,
+      'POST',
+      (u, init) => {
+        const body = JSON.parse(String(init.body ?? '{}')) as {
+          name?: string;
+          location?: string;
+          path?: string;
+        };
+        const linking = u.pathname.endsWith('/link');
+        const path = linking ? (body.path ?? '') : `${body.location ?? '~'}/${body.name ?? ''}`;
+        const name = linking ? path.split('/').filter(Boolean).pop() || 'project' : body.name || '';
+        if (data.repos.some((r) => r.name === name)) {
+          return json({ message: `${path} is already open as ${name}` }, 400);
+        }
+        data.repos.push({ name, branch: 'main', dirtyFiles: 0, github: null, icon: null });
+        return { name, path };
+      }
+    ],
+    [/\/dirs$/, 'GET', (u) => data.machineDirs(u.searchParams.get('path') ?? '~')],
+    [
       /\/repos\/[^/]+\/icon$/,
       'PUT',
       (u, init) => {
@@ -300,7 +333,11 @@ export function installFetch(role: HarnessRole) {
         run: 'pnpm dev',
         ports: [5173],
         setupState: 'done',
-        running: true
+        running: true,
+        commands: [
+          { id: 'dev', label: 'Dev server', icon: 'globe', running: true },
+          { id: 'db', label: 'Database', icon: 'database', running: false }
+        ]
       })
     ],
     [/\/comments$/, 'GET', () => ({ comments: [] })],

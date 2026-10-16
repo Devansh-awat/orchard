@@ -31,6 +31,7 @@
 		onReady?: (handle: TerminalHandle, predictor: PredictiveEcho) => void;
 	}
 
+	let connectWhenShown = false;
 	let {
 		podName = '',
 		namespace = '',
@@ -190,7 +191,8 @@
 			ready = true;
 			onReady?.(created, predictor);
 			currentHandle = sessionHandle ?? null;
-			connectWebSocket();
+			if (visible) connectWebSocket();
+			else connectWhenShown = true;
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load terminal';
 			console.error('[PodTerminal] init error:', e);
@@ -417,6 +419,10 @@
 				if (disposed) return;
 				fitNow();
 				claimFocus(appeared);
+				if (connectWhenShown) {
+					connectWhenShown = false;
+					connectWebSocket();
+				}
 			});
 		} else {
 			h.blur();

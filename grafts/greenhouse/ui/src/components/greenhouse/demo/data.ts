@@ -192,6 +192,58 @@ export const repos: {
   }
 ];
 
+const MACHINE_TREE: Record<string, Array<[string, boolean]>> = {
+  '/': [
+    ['persist', false],
+    ['srv', false],
+    ['tmp', false]
+  ],
+  '/persist': [['home', false]],
+  '/persist/home': [
+    ['docs', true],
+    ['orchard', true],
+    ['projects', false],
+    ['scratch', false]
+  ],
+  '/persist/home/projects': [
+    ['api', true],
+    ['landing', false],
+    ['mono', true]
+  ],
+  '/srv': [['work', false]],
+  '/srv/work': [
+    ['billing', true],
+    ['notes', false]
+  ]
+};
+
+export function machineDirs(raw: string) {
+  const path =
+    raw === '~' ? '/persist/home' : raw.startsWith('~/') ? `/persist/home${raw.slice(1)}` : raw;
+  const clean = path.length > 1 ? path.replace(/\/+$/, '') : path;
+  const entries = MACHINE_TREE[clean];
+  if (!entries) {
+    return new Response(JSON.stringify({ message: `${raw} does not exist` }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+  const parent = clean === '/' ? null : clean.slice(0, clean.lastIndexOf('/')) || '/';
+  const parentEntries = parent ? (MACHINE_TREE[parent] ?? []) : [];
+  const self = parentEntries.find(([n]) => `${parent === '/' ? '' : parent}/${n}` === clean);
+  return {
+    path: clean,
+    parent,
+    git: self?.[1] ?? false,
+    entries: entries.map(([name, git]) => ({
+      name,
+      path: `${clean === '/' ? '' : clean}/${name}`,
+      git
+    })),
+    truncated: false
+  };
+}
+
 export const changes: GhChanges = {
   isRepo: true,
   branch: 'orchard/fix-login',

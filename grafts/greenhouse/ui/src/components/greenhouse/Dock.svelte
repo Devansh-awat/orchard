@@ -2,16 +2,31 @@
 	import { untrack } from 'svelte';
 	import { SvelteMap } from 'svelte/reactivity';
 	import {
+		BookOpen,
+		Box,
+		Bug,
 		ChevronDown,
+		Cpu,
+		Database,
 		Eye,
+		FlaskConical,
 		Globe,
+		Hammer,
+		Layers,
+		Mail,
 		Play,
 		Plus,
 		Radio,
+		RefreshCw,
+		Rocket,
+		Server,
 		Sparkles,
 		Square,
+		SquareTerminal,
 		Wand2,
-		X
+		Wrench,
+		X,
+		Zap
 	} from 'lucide-svelte';
 	import Menu from '@orchardlabs/graft-ui/components/ui/Menu.svelte';
 	import MenuItem from '@orchardlabs/graft-ui/components/ui/MenuItem.svelte';
@@ -55,13 +70,47 @@
 
 	$effect(() => whenIdle(() => terminal.preload(), 1000));
 
+	type ScriptCommand = { id: string; label: string; icon: string | null; running: boolean };
+
 	type Scripts = {
 		setup: string | null;
 		run: string | null;
 		ports: number[];
 		setupState: 'none' | 'running' | 'done' | 'failed';
 		running: boolean;
+		commands?: ScriptCommand[];
 	};
+
+	const COMMAND_ICONS = {
+		play: Play,
+		server: Server,
+		database: Database,
+		globe: Globe,
+		'flask-conical': FlaskConical,
+		hammer: Hammer,
+		terminal: SquareTerminal,
+		zap: Zap,
+		box: Box,
+		bug: Bug,
+		rocket: Rocket,
+		'book-open': BookOpen,
+		layers: Layers,
+		radio: Radio,
+		cpu: Cpu,
+		wrench: Wrench,
+		eye: Eye,
+		sparkles: Sparkles,
+		'refresh-cw': RefreshCw,
+		mail: Mail
+	} as const;
+
+	function iconOf(name: string | null) {
+		return (name && COMMAND_ICONS[name as keyof typeof COMMAND_ICONS]) || Play;
+	}
+
+	function tabOf(id: string): DockTab {
+		return id === 'run' ? 'run' : `run-${id}`;
+	}
 
 	const terminals = new SvelteMap<string, string[]>();
 	const watching = new SvelteMap<string, string[]>();
@@ -98,9 +147,16 @@
 	);
 	const unwatched = $derived(others.filter((u) => !(watching.get(key) ?? []).includes(u.id)));
 	const publicMeta = statusMeta('warning', 'Public');
-	const runMeta = $derived(
-		scripts?.running ? statusMeta('success', 'Running', true) : statusMeta('neutral', 'Stopped')
+	const runMeta = statusMeta('success', 'Running', true);
+	const commands = $derived<ScriptCommand[]>(
+		scripts?.commands ??
+			(scripts?.run ? [{ id: 'run', label: 'Run', icon: null, running: scripts.running }] : [])
 	);
+	const commandTabs = $derived<ScriptCommand[]>(
+		commands.length > 0 ? commands : [{ id: 'run', label: 'Run', icon: null, running: false }]
+	);
+	const anyRunning = $derived(commands.some((c) => c.running));
+	let commandsOpen = $state(false);
 	const setupMeta = $derived.by(() => {
 		switch (scripts?.setupState) {
 			case 'running':
@@ -149,7 +205,7 @@
 		persist(scope);
 	}
 
-	function rememberScriptHandle(pane: 'setup' | 'run', handle: string) {
+	function rememberScriptHandle(pane: DockTab, handle: string) {
 		if (session) rememberHandle(session.id, pane, handle);
 	}
 
@@ -203,7 +259,7 @@
 		const prompt =
 			kind === 'setup'
 				? `Create or update ${CONFIG_PATH} in the repository root with a "setup" command that installs this project's dependencies (detect the package manager and language), a "run" command that starts its dev server if it has one, and "ports" listing the port that server listens on. Keep every command non-interactive.${portHint()} Show me the file when you are done.`
-				: `Add a "run" command to ${CONFIG_PATH} in the repository root that starts this project's dev server in the foreground, keep any "setup" already there, and list the port it listens on in "ports". Keep the command non-interactive.${portHint()} Show me the file when you are done.`;
+				: `Add "run" to ${CONFIG_PATH} in the repository root with the long-running commands this project needs, keeping any "setup" already there. Use a single string when there is just a dev server, or an object of named commands when there are several, like {"dev": {"run": "...", "label": "Dev server", "icon": "globe"}, "db": {"run": "...", "label": "Database", "icon": "database"}}. Icons can be play, server, database, globe, flask-conical, hammer, terminal, zap, box, bug, rocket, book-open, layers, radio, cpu, wrench, eye, sparkles, refresh-cw or mail. Run everything in the foreground, keep it non-interactive, and list the ports in "ports".${portHint()} Show me the file when you are done.`;
 		ws.pendingPrompts.set(session.id, prompt);
 		ws.host.openTab(ws.activeChatId ? chatTabId(ws.activeChatId) : null);
 	}
@@ -278,22 +334,30 @@
 		}
 	}
 
-	async function run(action: 'start' | 'stop') {
+	async function run(action: 'start' | 'stop', command?: ScriptCommand | 'setup') {
 		if (!session || runBusy) return;
 		runBusy = true;
+		const name = command === 'setup' ? 'setup' : command?.id;
+		const label = command === 'setup' ? 'setup' : (command?.label ?? 'run script');
 		try {
-			await api.runScript(ws.sandboxId, session.id, action);
+			await api.runScript(ws.sandboxId, session.id, action, name);
 			await loadScripts();
-			if (action === 'start') select('run');
+			if (action === 'start') select(command === 'setup' ? 'setup' : tabOf(command?.id ?? 'run'));
 		} catch (e) {
 			toasts.add({
-				title: action === 'start' ? 'Could not start the run script' : 'Could not stop it',
+				title: action === 'start' ? `Could not start ${label}` : `Could not stop ${label}`,
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
 		} finally {
 			runBusy = false;
 		}
+	}
+
+	async function runAll(action: 'start' | 'stop') {
+		commandsOpen = false;
+		const targets = commands.filter((c) => (action === 'start' ? !c.running : c.running));
+		for (const command of targets) await run(action, command);
 	}
 
 	export function focusTerminal() {
@@ -361,18 +425,23 @@
 							><StatusDot meta={setupMeta} size={6} /></span
 						>{/if}
 				</button>
-				<button
-					type="button"
-					role="tab"
-					class="gh-tab"
-					aria-selected={tab === 'run'}
-					onclick={() => select('run')}
-				>
-					<span class="gh-tl" data-label="Run">Run</span>
-					{#if scripts?.running}<span class="state" title="Run script running"
-							><StatusDot meta={runMeta} size={6} /></span
-						>{/if}
-				</button>
+				{#each commandTabs as command (command.id)}
+					{@const id = tabOf(command.id)}
+					{@const Icon = iconOf(command.icon)}
+					<button
+						type="button"
+						role="tab"
+						class="gh-tab"
+						aria-selected={tab === id}
+						onclick={() => select(id)}
+					>
+						{#if command.icon}<Icon size={14} strokeWidth={1.75} />{/if}
+						<span class="gh-tl" data-label={command.label}>{command.label}</span>
+						{#if command.running}<span class="state" title="{command.label} is running"
+								><StatusDot meta={runMeta} size={6} /></span
+							>{/if}
+					</button>
+				{/each}
 			{/if}
 			{#each list as n, i (n)}
 				{@const label = `Terminal${list.length > 1 ? ` ${n}` : ''}`}
@@ -480,14 +549,65 @@
 		</div>
 		<span class="grow"></span>
 		{#if scripted}
-			{#if scripts?.running}
+			{#if commands.length > 1}
+				<Menu bind:open={commandsOpen} placement="bottom-end">
+					{#snippet trigger(props, isOpen)}
+						<button
+							{...props}
+							type="button"
+							class="gh-ibtn run run--menu"
+							aria-label="Run commands"
+							title={ws.canEdit ? 'Run commands' : VIEWER_ONLY}
+							aria-expanded={isOpen}
+							disabled={!ws.canEdit || !ws.running}
+						>
+							<Play size={16} strokeWidth={1.75} />
+							{#if anyRunning}<span class="run-live"
+									><StatusDot meta={runMeta} size={6} /></span
+								>{/if}
+						</button>
+					{/snippet}
+					<div class="gh-menu-head">Commands</div>
+					{#each commands as command (command.id)}
+						{@const Icon = iconOf(command.icon)}
+						<MenuItem
+							disabled={runBusy}
+							onclick={() => {
+								commandsOpen = false;
+								void run(command.running ? 'stop' : 'start', command);
+							}}
+						>
+							<Icon size={14} />
+							<span class="cmd-label">{command.label}</span>
+							<span class="cmd-state">
+								{#if command.running}
+									<StatusDot meta={runMeta} size={6} /> Stop
+								{:else}
+									Start
+								{/if}
+							</span>
+						</MenuItem>
+					{/each}
+					<div class="gh-menu-sep" role="separator"></div>
+					{#if commands.some((c) => !c.running)}
+						<MenuItem disabled={runBusy} onclick={() => runAll('start')}>
+							<Play size={14} /> Start all
+						</MenuItem>
+					{/if}
+					{#if anyRunning}
+						<MenuItem disabled={runBusy} onclick={() => runAll('stop')}>
+							<Square size={14} /> Stop all
+						</MenuItem>
+					{/if}
+				</Menu>
+			{:else if commands[0]?.running}
 				<button
 					type="button"
 					class="gh-ibtn run"
-					aria-label="Stop the run script"
-					title="Stop the run script"
+					aria-label="Stop {commands[0].label}"
+					title="Stop {commands[0].label}"
 					disabled={!ws.canEdit || runBusy}
-					onclick={() => run('stop')}
+					onclick={() => run('stop', commands[0])}
 				>
 					<Square size={16} strokeWidth={1.75} />
 				</button>
@@ -495,14 +615,14 @@
 				<button
 					type="button"
 					class="gh-ibtn run"
-					aria-label="Start the run script"
-					disabled={!ws.canEdit || runBusy || !ws.running || (scripts !== null && !scripts.run)}
+					aria-label="Start {commands[0]?.label ?? 'the run script'}"
+					disabled={!ws.canEdit || runBusy || !ws.running || (scripts !== null && !commands[0])}
 					title={!ws.canEdit
 						? VIEWER_ONLY
-						: scripts && !scripts.run
-							? 'Add a "run" script to .orchard/greenhouse.json'
-							: `Start the run script${scripts?.run ? `: ${scripts.run}` : ''}`}
-					onclick={() => run('start')}
+						: scripts && !commands[0]
+							? 'Add a "run" command to .orchard/greenhouse.json'
+							: `Start ${commands[0]?.label ?? 'the run script'}${scripts?.run ? `: ${scripts.run}` : ''}`}
+					onclick={() => run('start', commands[0])}
 				>
 					<Play size={16} strokeWidth={1.75} />
 				</button>
@@ -536,6 +656,25 @@
 								<p class="note">Checking for a setup script…</p>
 							{:else if !scripts.setup && scripts.setupState === 'none'}
 								{@render missing('setup')}
+							{:else if scripts.setupState === 'none'}
+								<div class="empty">
+									<p class="empty-title">Setup has not run in this session</p>
+									<p class="empty-line">
+										It runs on its own for new sessions. Start it now to install what this one needs.
+									</p>
+									<div class="empty-actions">
+										<button
+											type="button"
+											class="gh-btn"
+											disabled={!ws.canEdit || runBusy}
+											title={ws.canEdit ? scripts.setup ?? undefined : VIEWER_ONLY}
+											onclick={() => run('start', 'setup')}
+										>
+											<Play size={14} strokeWidth={1.75} />
+											Run setup
+										</button>
+									</div>
+								</div>
 							{:else}
 								{#if PodTerminal}
 									<PodTerminal
@@ -551,33 +690,46 @@
 							{/if}
 						</div>
 					{/key}
-					{#key `${session.id}:run`}
-						<div class="pane" class:pane--on={tab === 'run'}>
-							{#if scripts?.running || tab === 'run'}
+					{#each commandTabs as command (`${session.id}:${command.id}`)}
+						{@const id = tabOf(command.id)}
+						<div class="pane" class:pane--on={tab === id}>
+							{#if command.running || tab === id}
 								{#if scripts === null && scriptsFailed}
 									{@render scriptsError()}
 								{:else if scripts === null}
-									<p class="note">Checking the run script…</p>
-								{:else if !scripts.running && !scripts.run}
+									<p class="note">Checking the run commands…</p>
+								{:else if !command.running && commands.length === 0}
 									{@render missing('run')}
-								{:else if !scripts.running}
-									<p class="note">The run script is stopped. Press Run to start it.</p>
-								{:else}
-									{#if PodTerminal}
-										<PodTerminal
-											fontSize={greenhousePrefs.codeSize}
-											fontFamily={greenhousePrefs.terminalStack(TERMINAL_FONT)}
-											onZoom={(s) => greenhousePrefs.stepCode(s)}
-											endpoint={endpoint('run', 'ro')}
-											visible={tab === 'run'}
-											sessionHandle={handleFor(session.id, 'run')}
-											onSession={(h) => rememberScriptHandle('run', h)}
-										/>
-									{/if}
+								{:else if !command.running}
+									<div class="empty">
+										<p class="empty-title">{command.label} is stopped</p>
+										<div class="empty-actions">
+											<button
+												type="button"
+												class="gh-btn"
+												disabled={!ws.canEdit || runBusy || !ws.running}
+												title={ws.canEdit ? undefined : VIEWER_ONLY}
+												onclick={() => run('start', command)}
+											>
+												<Play size={14} strokeWidth={1.75} />
+												Start {command.label}
+											</button>
+										</div>
+									</div>
+								{:else if PodTerminal}
+									<PodTerminal
+										fontSize={greenhousePrefs.codeSize}
+										fontFamily={greenhousePrefs.terminalStack(TERMINAL_FONT)}
+										onZoom={(s) => greenhousePrefs.stepCode(s)}
+										endpoint={endpoint(id, 'ro')}
+										visible={tab === id}
+										sessionHandle={handleFor(session.id, id)}
+										onSession={(h) => rememberScriptHandle(id, h)}
+									/>
 								{/if}
 							{/if}
 						</div>
-					{/key}
+					{/each}
 					<div class="pane pane--ports gh-scroll" class:pane--on={tab === 'ports'}>
 						{#if ports === null}
 							<p class="note">Looking for listening ports…</p>
@@ -753,6 +905,34 @@
 	}
 
 	.count {
+		color: var(--gh-faint);
+	}
+
+	.run--menu {
+		position: relative;
+	}
+
+	.run-live {
+		position: absolute;
+		top: 0.25rem;
+		right: 0.25rem;
+		display: inline-flex;
+	}
+
+	.cmd-label {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.cmd-state {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		margin-left: 1rem;
+		font-size: var(--gh-caption);
 		color: var(--gh-faint);
 	}
 

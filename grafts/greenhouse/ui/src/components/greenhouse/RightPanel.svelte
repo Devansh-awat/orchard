@@ -192,6 +192,12 @@
 			<div class="body">
 				{#if !session}
 					<p class="note">Pick a session to see its files and changes.</p>
+				{:else if ws.bootVisible && !ws.bootSettling}
+					<div class="boot-skel" aria-hidden="true">
+						{#each [62, 48, 74, 40] as width, i (i)}
+							<span class="boot-bar" style="width: {width}%"></span>
+						{/each}
+					</div>
 				{:else if tab === 'files'}
 					<FileTree
 						bind:this={tree}
@@ -243,6 +249,34 @@
 </aside>
 
 <style>
+	.boot-skel {
+		display: flex;
+		flex-direction: column;
+		gap: 0.625rem;
+		padding: 1rem var(--gh-edge, 0.75rem);
+	}
+
+	.boot-bar {
+		height: 0.625rem;
+		border-radius: 999px;
+		background: linear-gradient(
+			90deg,
+			var(--gh-hover) 0%,
+			var(--gh-selected) 50%,
+			var(--gh-hover) 100%
+		);
+		background-size: 200% 100%;
+		animation: boot-shimmer 1.4s ease-in-out infinite;
+	}
+
+	@keyframes boot-shimmer {
+		from {
+			background-position: 100% 0;
+		}
+		to {
+			background-position: -100% 0;
+		}
+	}
 	.right {
 		display: flex;
 		flex-direction: column;

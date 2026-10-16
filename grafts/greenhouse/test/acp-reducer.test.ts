@@ -287,3 +287,46 @@ test('tool kinds map onto the transcript tool names', () => {
   assert.equal(toolStatus('failed'), 'error');
   assert.equal(toolStatus('weird'), null);
 });
+
+test('images and documents a tool returns are kept so the chat can preview them', () => {
+  const png = Buffer.from('fake png').toString('base64');
+  const pdf = Buffer.from('%PDF-1.4').toString('base64');
+  const { r } = run([
+    { kind: 'turn.start' },
+    upd({
+      sessionUpdate: 'tool_call',
+      toolCallId: 't9',
+      title: 'Read shot.png',
+      kind: 'read',
+      status: 'in_progress',
+      rawInput: { file_path: `${CWD}/shot.png` }
+    }),
+    upd({
+      sessionUpdate: 'tool_call_update',
+      toolCallId: 't9',
+      status: 'completed',
+      content: [
+        { type: 'content', content: { type: 'text', text: 'Image read successfully' } },
+        { type: 'content', content: { type: 'image', data: png, mimeType: 'image/png' } },
+        {
+          type: 'content',
+          content: {
+            type: 'resource',
+            resource: { uri: 'file:///x/spec.pdf', mimeType: 'application/pdf', blob: pdf }
+          }
+        },
+        { type: 'content', content: { type: 'image', data: 42 } }
+      ]
+    })
+  ]);
+  const tool = r.tools.get('t9');
+  assert.deepEqual(tool?.files, [
+    { src: `data:image/png;base64,${png}`, mime: 'image/png', name: null },
+    {
+      src: `data:application/pdf;base64,${pdf}`,
+      mime: 'application/pdf',
+      name: 'file:///x/spec.pdf'
+    }
+  ]);
+  assert.equal(tool?.output, 'Image read successfully');
+});

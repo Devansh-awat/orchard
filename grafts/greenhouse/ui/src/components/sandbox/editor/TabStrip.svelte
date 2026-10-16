@@ -149,7 +149,7 @@
 		align-items: stretch;
 		height: 2.25rem;
 		min-width: 0;
-		border-bottom: 1px solid var(--border-default);
+		box-shadow: inset 0 -1px 0 var(--gh-line, var(--border-default));
 		background: var(--gh-editor, var(--bg-app));
 	}
 

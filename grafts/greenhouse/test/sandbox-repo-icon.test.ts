@@ -102,16 +102,52 @@ test('repo listing decodes every field, whatever characters they hold', () => {
       branch: 'main',
       dirtyFiles: 3,
       github: { owner: 'LeafdTK', name: 'orchard' },
-      icon: '🌱'
+      icon: '🌱',
+      path: null,
+      linked: false
     },
-    { name: 'a|b', branch: 'feat/x|y', dirtyFiles: 0, github: null, icon: 'lucide:rocket' },
-    { name: 'local', branch: null, dirtyFiles: 12, github: null, icon: null },
+    {
+      name: 'a|b',
+      branch: 'feat/x|y',
+      dirtyFiles: 0,
+      github: null,
+      icon: 'lucide:rocket',
+      path: null,
+      linked: false
+    },
+    {
+      name: 'local',
+      branch: null,
+      dirtyFiles: 12,
+      github: null,
+      icon: null,
+      path: null,
+      linked: false
+    },
     {
       name: 'junk',
       branch: 'main',
       dirtyFiles: 1,
       github: { owner: 'acme', name: 'junk' },
-      icon: null
+      icon: null,
+      path: null,
+      linked: false
     }
   ]);
+});
+
+test('repo listing reports where a linked repo really lives', () => {
+  const stdout = [
+    `${b64('api')}|${b64('main')}|0|||${b64('/srv/work/api')}|1`,
+    `${b64('docs')}|${b64('main')}|0|||${b64('/persist/home/docs')}|0`,
+    `${b64('odd')}|${b64('main')}|0|||${b64('relative/path')}|0`
+  ].join('\n');
+  assert.deepEqual(
+    parseRepoListing(stdout).map((r) => [r.name, r.path, r.linked]),
+    [
+      ['api', '/srv/work/api', true],
+      ['docs', '/persist/home/docs', false],
+      ['odd', null, false]
+    ]
+  );
 });

@@ -12,6 +12,7 @@ import type {
   UserEntry
 } from './session-store.svelte';
 import type { PermissionReply, PermissionRequest } from './pending';
+import { toolFiles, type ToolFile } from './tool-files';
 
 export type AcpEvent = {
   seq: number;
@@ -104,6 +105,29 @@ function contentText(content: unknown): string {
     }
   }
   return out.join('\n');
+}
+
+function contentFiles(content: unknown): ToolFile[] {
+  if (!Array.isArray(content)) return [];
+  const items: Array<{ src: unknown; mime: unknown; name?: unknown }> = [];
+  for (const raw of content) {
+    const item = rec(raw);
+    const inner = item.type === 'content' ? rec(item.content) : item;
+    if (inner.type === 'image' && typeof inner.data === 'string') {
+      const mime = typeof inner.mimeType === 'string' ? inner.mimeType : 'image/png';
+      items.push({ src: `data:${mime};base64,${inner.data}`, mime, name: inner.uri });
+    } else if (inner.type === 'resource') {
+      const res = rec(inner.resource);
+      if (typeof res.blob === 'string' && typeof res.mimeType === 'string') {
+        items.push({
+          src: `data:${res.mimeType};base64,${res.blob}`,
+          mime: res.mimeType,
+          name: res.uri
+        });
+      }
+    }
+  }
+  return toolFiles(items);
 }
 
 function firstDiff(
@@ -639,6 +663,8 @@ export class AcpReducer {
     const raw = typeof update.rawOutput === 'string' ? update.rawOutput : null;
     const output = text || raw;
     if (output) entry.output = output.slice(0, OUTPUT_CAP);
+    const files = contentFiles(update.content);
+    if (files.length) entry.files = files;
   }
 
   private plan(ev: AcpEvent, update: Record<string, unknown>) {

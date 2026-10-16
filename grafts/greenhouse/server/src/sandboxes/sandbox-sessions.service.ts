@@ -1,4 +1,11 @@
 import { EventEmitter } from 'events';
+import {
+  chatTitleFor,
+  isAgentTitle,
+  isGeneratedSessionName,
+  pickSessionName,
+  promptTitle
+} from './session-names';
 import { randomBytes, randomUUID } from 'crypto';
 import { posix } from 'path';
 import {
@@ -27,8 +34,11 @@ import {
   buildDiffstatBatchScript,
   buildPortsScript,
   buildRepoRemoveScript,
+  buildPoolSetupAdopt,
   buildScriptLaunch,
   buildScriptStop,
+  isScriptName,
+  scriptNameOf,
   buildScriptsProbe,
   buildWorktreeAddScript,
   buildWorktreeRemoveScript,
@@ -40,6 +50,7 @@ import {
   inWorktree,
   isValidSlug,
   isWorktreePath,
+  worktreeKeyOf,
   parseDiffstatBatch,
   parseGreenhouseConfig,
   parsePortsOutput,
@@ -106,9 +117,17 @@ export interface SessionDto {
   prepareError: string | null;
 }
 
-export interface SessionScriptsDto extends GreenhouseConfig {
+export interface SessionCommandDto {
+  id: string;
+  label: string;
+  icon: string | null;
+  running: boolean;
+}
+
+export interface SessionScriptsDto extends Omit<GreenhouseConfig, 'commands'> {
   setupState: SetupState;
   running: boolean;
+  commands: SessionCommandDto[];
 }
 
 export interface SessionCheckDto {
@@ -159,6 +178,7 @@ const MAX_FAILED_LOGS = 3;
 const LOG_EXCERPT_LINES = 60;
 const LOG_EXCERPT_BYTES = 6000;
 const MAX_TITLE = 120;
+const AGENT_TITLE_DELAYS_MS = [4_000, 8_000, 20_000, 40_000];
 const MAX_PROMPT = 32768;
 const GH_NAME_RE = /^[A-Za-z0-9_.-]{1,100}$/;
 const FAILED_CONCLUSIONS = new Set(['failure', 'timed_out', 'action_required', 'startup_failure']);
@@ -197,6 +217,7 @@ export interface PoolClaim {
   base?: string;
   commit?: string;
   setup?: string;
+  name?: string;
   chat?: { id: string; agent: string; activity: string; agentSessionId?: string } | null;
   warm?: boolean;
 }
@@ -780,7 +801,7 @@ export class SandboxSessionsService {
       body.title?.trim() ||
       issue?.title ||
       body.prompt?.trim().split('\n')[0] ||
-      'New session'
+      (await this.freeSessionName(sandbox.id))
     ).slice(0, MAX_TITLE);
 
     const id = requestedId ?? randomUUID();
@@ -950,6 +971,10 @@ export class SandboxSessionsService {
     if (claim.setup !== 'done') {
       void this.startScript(sandbox, created, 'setup', { onlyIfConfigured: true }).catch((e) =>
         this.logger.warn(`setup script failed to launch for ${created.id}: ${e?.message}`)
+      );
+    } else {
+      void this.devExec(sandbox, buildPoolSetupAdopt(created.id, claim.name ?? null), 15_000).catch(
+        (e) => this.logger.warn(`could not record pooled setup for ${created.id}: ${e?.message}`)
       );
     }
     void this.refillPool(sandbox, created, acp);
@@ -1273,7 +1298,7 @@ export class SandboxSessionsService {
     try {
       const res = await this.workspace.opencodeRequest(sandbox, 'POST', '/session', {
         directory,
-        body: { title },
+        body: chatTitleFor(title),
         timeoutMs: OPENCODE_CREATE_TIMEOUT_MS
       });
       const id = (res.body as { id?: unknown } | null)?.id;
@@ -1385,6 +1410,93 @@ export class SandboxSessionsService {
     } catch (e: any) {
       this.logger.warn(`session listener failed: ${e?.message}`);
     }
+  }
+
+  async titleFromPrompt(input: {
+    sandbox: WorkspaceSandbox;
+    sessionId?: string | null;
+    chatId?: string | null;
+    directory?: string | null;
+    text: string;
+    agentTitles?: boolean;
+  }): Promise<void> {
+    const or: Prisma.SandboxConversationWhereInput[] = [];
+    if (input.sessionId) or.push({ id: input.sessionId });
+    if (input.chatId) or.push({ opencodeSessionId: input.chatId });
+    if (input.directory) {
+      or.push({ worktreePath: input.directory });
+      const key = worktreeKeyOf(input.directory);
+      if (key) or.push(key);
+    }
+    if (or.length === 0) return;
+    const row = await this.prisma.sandboxConversation.findFirst({
+      where: { sandboxId: input.sandbox.id, archivedAt: null, OR: or },
+      select: { id: true, title: true }
+    });
+    if (!row || !isGeneratedSessionName(row.title)) return;
+    const title = promptTitle(input.text)?.slice(0, MAX_TITLE);
+    if (!title || !(await this.retitle(input.sandbox, row.id, row.title, title))) return;
+    if (input.agentTitles && input.chatId) {
+      this.adoptAgentTitle(input.sandbox, row.id, input.chatId, input.directory ?? null, title);
+    }
+  }
+
+  private async retitle(
+    sandbox: WorkspaceSandbox,
+    id: string,
+    from: string,
+    to: string
+  ): Promise<boolean> {
+    if (from === to) return false;
+    const { count } = await this.prisma.sandboxConversation.updateMany({
+      where: { id, title: from },
+      data: { title: to }
+    });
+    if (count === 0) return false;
+    const saved = await this.prisma.sandboxConversation.findUnique({
+      where: { id },
+      include: { createdBy: CREATOR_SELECT }
+    });
+    if (saved) {
+      const [dto] = await this.decorate(sandbox, [saved]);
+      this.emit(dto);
+    }
+    return true;
+  }
+
+  private adoptAgentTitle(
+    sandbox: WorkspaceSandbox,
+    id: string,
+    chatId: string,
+    directory: string | null,
+    current: string
+  ): void {
+    const look = async (): Promise<boolean> => {
+      const res = await this.workspace
+        .opencodeRequest(sandbox, 'GET', `/session/${encodeURIComponent(chatId)}`, {
+          directory
+        })
+        .catch(() => null);
+      const title = (res?.body as { title?: unknown } | null)?.title;
+      if (res?.status !== 200 || !isAgentTitle(title)) return false;
+      await this.retitle(sandbox, id, current, title.trim().slice(0, MAX_TITLE));
+      return true;
+    };
+    const run = async () => {
+      for (const delay of AGENT_TITLE_DELAYS_MS) {
+        await new Promise((resolve) => setTimeout(resolve, delay).unref?.());
+        if (await look()) return;
+      }
+    };
+    run().catch(() => null);
+  }
+
+  private async freeSessionName(sandboxId: string): Promise<string> {
+    const rows = await this.prisma.sandboxConversation.findMany({
+      where: { sandboxId, archivedAt: null },
+      select: { title: true }
+    });
+    return pickSessionName(rows.map((r) => r.title ?? ''));
   }
 
   async removeRepo(
@@ -1507,7 +1619,12 @@ export class SandboxSessionsService {
   private async probeScripts(
     sandbox: WorkspaceSandbox,
     row: SessionRow | SandboxConversation
-  ): Promise<{ config: GreenhouseConfig; setupStatus: string | null; runPaneDead: string | null }> {
+  ): Promise<{
+    config: GreenhouseConfig;
+    setupStatus: string | null;
+    runPaneDead: string | null;
+    running: string[];
+  }> {
     const nonce = randomBytes(6).toString('hex');
     const result = await this.devExec(
       sandbox,
@@ -1524,7 +1641,8 @@ export class SandboxSessionsService {
     return {
       config,
       setupStatus: probe.setupStatus,
-      runPaneDead: probe.runPaneDead
+      runPaneDead: probe.runPaneDead,
+      running: probe.running
     };
   }
 
@@ -1563,28 +1681,45 @@ export class SandboxSessionsService {
     const row = await this.activeRow(sandbox.id, sessionId);
     this.requireRunning(sandbox);
     const probe = await this.probeScripts(sandbox, row);
+    const live = new Set(probe.running);
+    const commands = probe.config.commands.map((c) => ({
+      id: c.id,
+      label: c.label,
+      icon: c.icon,
+      running: live.has(scriptNameOf(c.id))
+    }));
     return {
-      ...probe.config,
+      setup: probe.config.setup,
+      run: probe.config.run,
+      ports: probe.config.ports,
+      commands,
       setupState: setupStateOf(probe.setupStatus),
-      running: probe.runPaneDead === '0'
+      running: commands[0]?.running ?? false
     };
   }
 
   private async startScript(
     sandbox: WorkspaceSandbox,
     row: SessionRow | SandboxConversation,
-    name: 'setup' | 'run',
+    name: string,
     opts: { onlyIfConfigured?: boolean } = {}
   ): Promise<boolean> {
     if (!row.repo || !isWorktreePath(row.worktreePath)) return false;
     const probe = await this.probeScripts(sandbox, row);
-    const script = probe.config[name];
+    const command =
+      name === 'setup' ? null : probe.config.commands.find((c) => scriptNameOf(c.id) === name);
+    const script = name === 'setup' ? probe.config.setup : (command?.script ?? null);
     if (!script) {
       if (opts.onlyIfConfigured) return false;
-      throw new BadRequestException(`No ${name} script in .orchard/greenhouse.json`);
+      throw new BadRequestException(
+        name === 'setup'
+          ? 'No setup script in .orchard/greenhouse.json'
+          : 'That command is not in .orchard/greenhouse.json'
+      );
     }
     const launch = {
       name,
+      label: name === 'setup' ? 'setup script' : (command?.label ?? 'run script'),
       sessionId: row.id,
       worktreePath: row.worktreePath,
       repoPath: repoPathFor(row.repo)
@@ -1606,19 +1741,40 @@ export class SandboxSessionsService {
   async run(
     sandbox: WorkspaceSandbox,
     sessionId: string,
-    action: unknown
+    action: unknown,
+    command: unknown = 'run'
   ): Promise<SessionScriptsDto> {
     if (action !== 'start' && action !== 'stop') {
       throw new BadRequestException("action must be 'start' or 'stop'");
     }
+    if (command !== undefined && command !== null && typeof command !== 'string') {
+      throw new BadRequestException('command must be a string');
+    }
     const row = await this.activeRow(sandbox.id, sessionId);
     this.requireRunning(sandbox);
+    const name = await this.scriptNameFor(sandbox, row, command ?? null);
     if (action === 'start') {
-      await this.startScript(sandbox, row, 'run');
+      await this.startScript(sandbox, row, name);
     } else {
-      await this.devExec(sandbox, buildScriptStop(row.id, 'run'), 15_000);
+      await this.devExec(sandbox, buildScriptStop(row.id, name), 15_000);
     }
     return this.scripts(sandbox, sessionId);
+  }
+
+  private async scriptNameFor(
+    sandbox: WorkspaceSandbox,
+    row: SessionRow | SandboxConversation,
+    command: string | null
+  ): Promise<string> {
+    if (command === 'setup') return 'setup';
+    if (!command || command === 'run') {
+      const probe = await this.probeScripts(sandbox, row);
+      const first = probe.config.commands[0];
+      return first ? scriptNameOf(first.id) : 'run';
+    }
+    const name = scriptNameOf(command.trim().toLowerCase());
+    if (!isScriptName(name)) throw new BadRequestException('Unknown command');
+    return name;
   }
 
   async ports(

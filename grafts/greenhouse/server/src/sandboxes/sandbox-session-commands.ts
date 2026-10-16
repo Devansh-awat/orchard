@@ -21,7 +21,7 @@ const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const REF_CHAR_RE = /^[A-Za-z0-9._/+-]+$/;
 const PREFIX_CHAR_RE = /^[A-Za-z0-9._/-]+$/;
-const TERMINAL_INDEX_RE = /^(?:\d{1,2}|setup|run)$/;
+const TERMINAL_INDEX_RE = /^(?:\d{1,2}|setup|run|run-[a-z0-9][a-z0-9-]{0,23})$/;
 const SHORTSTAT_FILES_RE = /(\d+) files? changed/;
 const SHORTSTAT_ADD_RE = /(\d+) insertions?\(\+\)/;
 const SHORTSTAT_DEL_RE = /(\d+) deletions?\(-\)/;
@@ -108,6 +108,12 @@ export function repoPathFor(repo: string): string {
   return `${HOME_ROOT}/${repo}`;
 }
 
+export function worktreeKeyOf(directory: string): { repo: string; slug: string } | null {
+  const match = /\/\.worktrees\/([^/]+)\/([^/]+)\/?$/.exec(directory);
+  if (!match || !isValidRepoName(match[1]) || !isValidSlug(match[2])) return null;
+  return { repo: match[1], slug: match[2] };
+}
+
 export function isWorktreePath(path: unknown): path is string {
   if (typeof path !== 'string' || path.length > 500) return false;
   if (!path.startsWith(`${WORKTREES_ROOT}/`)) return false;
@@ -127,6 +133,24 @@ export function tmuxSessionName(sessionId: string, index: string): string {
 
 export function sessionStateDir(sessionId: string): string {
   return `${SESSION_STATE_ROOT}/${sessionId.toLowerCase()}`;
+}
+
+export const POOL_STATE_ROOT = `${HOME_ROOT}/.orchard/pool`;
+
+export function buildPoolSetupAdopt(sessionId: string, spareName: string | null): string {
+  const dir = sessionStateDir(sessionId);
+  const log = `${dir}/setup.log`;
+  const lines = [`mkdir -p ${shellQuote(dir)}`];
+  if (spareName && /^[A-Za-z0-9._-]{1,120}$/.test(spareName)) {
+    const pooled = `${POOL_STATE_ROOT}/${spareName}.setup.log`;
+    lines.push(
+      `if [ -f ${shellQuote(pooled)} ]; then cp -- ${shellQuote(pooled)} ${shellQuote(log)}; else printf '%s\\n' 'Setup ran before this session was opened.' > ${shellQuote(log)}; fi`
+    );
+  } else {
+    lines.push(`printf '%s\\n' 'Setup ran before this session was opened.' > ${shellQuote(log)}`);
+  }
+  lines.push(`printf 'done\\n' > ${shellQuote(`${dir}/setup.status`)}`);
+  return lines.join('\n');
 }
 
 export function isTerminalIndex(value: unknown): value is string {
@@ -244,8 +268,8 @@ export function buildRepoRemoveScript(repo: string): string {
   const worktrees = shellQuote(`${WORKTREES_ROOT}/${repo}`);
   return [
     `[ -e ${repoPath}/.git ] || exit 4`,
-    `rm -rf -- ${worktrees} ${repoPath}`,
-    `[ ! -e ${repoPath} ]`
+    `if [ -L ${repoPath} ]; then rm -rf -- ${worktrees}; git -C ${repoPath} worktree prune 2>/dev/null; rm -f -- ${repoPath}; else rm -rf -- ${worktrees} ${repoPath}; fi`,
+    `[ ! -e ${repoPath} ] && [ ! -L ${repoPath} ]`
   ].join('\n');
 }
 
@@ -254,13 +278,112 @@ export function killSessionTmuxScript(sessionId: string): string {
   return `command -v tmux >/dev/null 2>&1 && tmux ls -F '#{session_name}' 2>/dev/null | grep -F -- ${shellQuote(prefix)} | while read -r s; do case "$s" in ${shellQuote(prefix)}*) tmux kill-session -t "=$s" 2>/dev/null ;; esac; done; true`;
 }
 
+export const RUN_COMMAND_ICONS = [
+  'play',
+  'server',
+  'database',
+  'globe',
+  'flask-conical',
+  'hammer',
+  'terminal',
+  'zap',
+  'box',
+  'bug',
+  'rocket',
+  'book-open',
+  'layers',
+  'radio',
+  'cpu',
+  'wrench',
+  'eye',
+  'sparkles',
+  'refresh-cw',
+  'mail'
+] as const;
+
+export type RunCommandIcon = (typeof RUN_COMMAND_ICONS)[number];
+
+export interface RunCommand {
+  id: string;
+  label: string;
+  icon: RunCommandIcon | null;
+  script: string;
+}
+
 export interface GreenhouseConfig {
   setup: string | null;
   run: string | null;
+  commands: RunCommand[];
   ports: number[];
 }
 
-export const EMPTY_GREENHOUSE_CONFIG: GreenhouseConfig = { setup: null, run: null, ports: [] };
+export const MAX_RUN_COMMANDS = 8;
+const COMMAND_ID_RE = /^[a-z0-9][a-z0-9-]{0,23}$/;
+const MAX_COMMAND_LABEL = 40;
+
+export const EMPTY_GREENHOUSE_CONFIG: GreenhouseConfig = {
+  setup: null,
+  run: null,
+  commands: [],
+  ports: []
+};
+
+function emptyConfig(): GreenhouseConfig {
+  return { setup: null, run: null, commands: [], ports: [] };
+}
+
+export function scriptNameOf(commandId: string): string {
+  return commandId === 'run' ? 'run' : `run-${commandId}`;
+}
+
+export function isScriptName(value: unknown): value is string {
+  return (
+    value === 'setup' ||
+    value === 'run' ||
+    (typeof value === 'string' && value.startsWith('run-') && COMMAND_ID_RE.test(value.slice(4)))
+  );
+}
+
+function commandLabel(id: string, raw: unknown): string {
+  if (typeof raw === 'string') {
+    const label = raw.replace(/\s+/g, ' ').trim().slice(0, MAX_COMMAND_LABEL);
+    if (label) return label;
+  }
+  if (id === 'run') return 'Run';
+  const words = id.replace(/-+/g, ' ').trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+function commandIcon(raw: unknown): RunCommandIcon | null {
+  return typeof raw === 'string' && (RUN_COMMAND_ICONS as readonly string[]).includes(raw)
+    ? (raw as RunCommandIcon)
+    : null;
+}
+
+function runCommands(raw: unknown): RunCommand[] {
+  const single = scriptField(raw);
+  if (single) return [{ id: 'run', label: 'Run', icon: null, script: single }];
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return [];
+  const out: RunCommand[] = [];
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (out.length >= MAX_RUN_COMMANDS) break;
+    const id = key.trim().toLowerCase();
+    if (!COMMAND_ID_RE.test(id) || out.some((c) => c.id === id)) continue;
+    const spec =
+      value && typeof value === 'object' && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : null;
+    const script = scriptField(spec ? (spec.run ?? spec.command) : value);
+    if (!script) continue;
+    out.push({
+      id,
+      label: commandLabel(id, spec?.label),
+      icon: commandIcon(spec?.icon),
+      script
+    });
+  }
+  return out;
+}
 
 function scriptField(raw: unknown): string | null {
   let value = raw;
@@ -275,15 +398,15 @@ function scriptField(raw: unknown): string | null {
 }
 
 export function parseGreenhouseConfig(text: string | null | undefined): GreenhouseConfig {
-  if (!text || !text.trim()) return { ...EMPTY_GREENHOUSE_CONFIG, ports: [] };
+  if (!text || !text.trim()) return emptyConfig();
   let raw: unknown;
   try {
     raw = JSON.parse(text);
   } catch {
-    return { ...EMPTY_GREENHOUSE_CONFIG, ports: [] };
+    return emptyConfig();
   }
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return { ...EMPTY_GREENHOUSE_CONFIG, ports: [] };
+    return emptyConfig();
   }
   const obj = raw as Record<string, unknown>;
   const ports: number[] = [];
@@ -295,7 +418,8 @@ export function parseGreenhouseConfig(text: string | null | undefined): Greenhou
       if (ports.length >= MAX_CONFIG_PORTS) break;
     }
   }
-  return { setup: scriptField(obj.setup), run: scriptField(obj.run), ports };
+  const commands = runCommands(obj.run);
+  return { setup: scriptField(obj.setup), run: commands[0]?.script ?? null, commands, ports };
 }
 
 export interface DiffstatTarget {
@@ -411,10 +535,11 @@ export const READ_EXIT = {
   notFile: 8
 } as const;
 
-function homeGuard(home: string): string[] {
+export function homeGuard(home: string): string[] {
   return [
     `__home=$(realpath -e -- ${shellQuote(home)} 2>/dev/null) || exit ${READ_EXIT.outside}`,
-    'home_ok() { case "$1/" in "$__home"/.worktrees/?*/?*) return 0 ;; "$__home"/.*) return 1 ;; esac; return 0; }'
+    'home_ok() { case "$1/" in "$__home"/.worktrees/?*/?*) return 0 ;; "$__home"/.*) return 1 ;; esac; return 0; }',
+    'linked_ok() { [ -L "$1" ] && [ -e "$1/.git" ] && [ "$(realpath -e -- "$(dirname -- "$1")" 2>/dev/null)" = "$__home" ] || return 1; case "$2" in /|/proc|/proc/*|/sys|/sys/*|/dev|/dev/*|"$__home"|"$__home"/*) return 1 ;; esac; return 0; }'
   ];
 }
 
@@ -424,8 +549,7 @@ function confinedRoot(root: string): string[] {
   return [
     ...HOME_GUARD,
     `__root=$(realpath -e -- ${shellQuote(root)} 2>/dev/null) || exit ${READ_EXIT.outside}`,
-    `case "$__root/" in "$__home"/*) ;; *) exit ${READ_EXIT.outside} ;; esac`,
-    `home_ok "$__root" || exit ${READ_EXIT.outside}`
+    `case "$__root/" in "$__home"/*) home_ok "$__root" || exit ${READ_EXIT.outside} ;; *) linked_ok ${shellQuote(root)} "$__root" || exit ${READ_EXIT.outside} ;; esac`
   ];
 }
 
@@ -481,10 +605,10 @@ export function buildFsScript(
   const rel = normalizeRelativePath(path);
   if (!rel) throw new Error('invalid path');
   const lines = [
+    ...fsPrelude(home),
     `__guard=$(realpath -e -- ${shellQuote(guardRoot)} 2>/dev/null) || exit ${FS_EXIT.outside}`,
     `__root=$(realpath -e -- ${shellQuote(root)} 2>/dev/null) || exit ${FS_EXIT.outside}`,
-    `case "$__root/" in "$__guard"/*) ;; *) exit ${FS_EXIT.outside} ;; esac`,
-    ...fsPrelude(home),
+    `case "$__root/" in "$__guard"/*) ;; *) [ "$__guard" = "$__home" ] && linked_ok ${shellQuote(root)} "$__root" || exit ${FS_EXIT.outside} ;; esac`,
     `target="$__root"/${shellQuote(rel)}`
   ];
   if (op === 'mkdir') {
@@ -684,7 +808,8 @@ export function parsePortsOutput(stdout: string, worktreePath: string | null): S
 }
 
 export interface ScriptLaunch {
-  name: 'setup' | 'run';
+  name: string;
+  label?: string;
   sessionId: string;
   worktreePath: string;
   repoPath: string;
@@ -695,6 +820,7 @@ export function scriptFiles(launch: ScriptLaunch): {
   userPath: string;
   wrapper: string;
 } {
+  if (!isScriptName(launch.name)) throw new Error('invalid script name');
   const dir = sessionStateDir(launch.sessionId);
   const userPath = `${dir}/${launch.name}.user.sh`;
   const wrapperPath = `${dir}/${launch.name}.sh`;
@@ -706,17 +832,18 @@ export function scriptFiles(launch: ScriptLaunch): {
     `cd ${shellQuote(launch.worktreePath)} || exit 1`,
     `export ORCHARD_SESSION_ID=${shellQuote(launch.sessionId)} ORCHARD_WORKSPACE_PATH=${shellQuote(launch.worktreePath)} ORCHARD_ROOT_PATH=${shellQuote(launch.repoPath)}`,
     `printf 'running\\n' > ${shellQuote(status)}`,
-    `printf '\\033[2m$ %s script from ${GREENHOUSE_CONFIG_PATH}\\033[0m\\n' ${shellQuote(launch.name)}`,
+    `printf '\\033[2m$ %s from ${GREENHOUSE_CONFIG_PATH}\\033[0m\\n' ${shellQuote(launch.label ?? `${launch.name} script`)}`,
     `bash -l ${shellQuote(userPath)}`,
     'code=$?',
     `if [ "$code" -eq 0 ]; then printf 'done\\n' > ${shellQuote(status)}; else printf 'failed %s\\n' "$code" > ${shellQuote(status)}; fi`,
-    `printf '\\n\\033[2m[%s exited with code %s]\\033[0m\\n' ${shellQuote(launch.name)} "$code"`,
+    `printf '\\n\\033[2m[%s exited with code %s]\\033[0m\\n' ${shellQuote(launch.label ?? launch.name)} "$code"`,
     'exit "$code"'
   ];
   return { wrapperPath, userPath, wrapper: `${lines.join('\n')}\n` };
 }
 
 export function buildScriptLaunch(launch: ScriptLaunch): string {
+  if (!isScriptName(launch.name)) throw new Error('invalid script name');
   const dir = sessionStateDir(launch.sessionId);
   const name = tmuxSessionName(launch.sessionId, launch.name);
   const wrapper = `${dir}/${launch.name}.sh`;
@@ -728,12 +855,14 @@ export function buildScriptLaunch(launch: ScriptLaunch): string {
     `tmux kill-session -t ${shellQuote(`=${name}`)} 2>/dev/null`,
     `tmux new-session -d -s ${shellQuote(name)} -n ${shellQuote(launch.name)} -c ${shellQuote(launch.worktreePath)} ${shellQuote(`bash ${shellQuote(wrapper)}`)} || exit 1`,
     `tmux set-option -w -t ${shellQuote(`=${name}:${launch.name}`)} remain-on-exit on >/dev/null 2>&1`,
+    `tmux set-option -w -t ${shellQuote(`=${name}:${launch.name}`)} remain-on-exit-format '' >/dev/null 2>&1`,
     `tmux pipe-pane -t ${shellQuote(`=${name}:${launch.name}`)} ${shellQuote(`cat >> ${shellQuote(log)}`)} >/dev/null 2>&1`,
     `tmux wait-for -S ${shellQuote(channel)}`
   ].join('\n');
 }
 
-export function buildScriptStop(sessionId: string, name: 'setup' | 'run'): string {
+export function buildScriptStop(sessionId: string, name: string): string {
+  if (!isScriptName(name)) throw new Error('invalid script name');
   return `command -v tmux >/dev/null 2>&1 && tmux kill-session -t ${shellQuote(`=${tmuxSessionName(sessionId, name)}`)} 2>/dev/null; true`;
 }
 
@@ -741,6 +870,7 @@ export interface ScriptsProbe {
   configText: string | null;
   setupStatus: string | null;
   runPaneDead: string | null;
+  running: string[];
 }
 
 export function buildScriptsProbe(
@@ -750,7 +880,7 @@ export function buildScriptsProbe(
   nonce: string
 ): string {
   const dir = sessionStateDir(sessionId);
-  const runName = tmuxSessionName(sessionId, 'run');
+  const runPrefix = tmuxSessionName(sessionId, 'run');
   return [
     `cfg=${shellQuote(`${worktreePath}/${GREENHOUSE_CONFIG_PATH}`)}`,
     `[ -f "$cfg" ] || cfg=${shellQuote(`${repoPath}/${GREENHOUSE_CONFIG_PATH}`)}`,
@@ -759,7 +889,7 @@ export function buildScriptsProbe(
     `printf '\\n@@${nonce}:setup@@\\n'`,
     `cat ${shellQuote(`${dir}/setup.status`)} 2>/dev/null`,
     `printf '\\n@@${nonce}:run@@\\n'`,
-    `command -v tmux >/dev/null 2>&1 && tmux list-panes -t ${shellQuote(`=${runName}`)} -F '#{pane_dead}' 2>/dev/null | head -n 1`,
+    `command -v tmux >/dev/null 2>&1 && tmux list-panes -a -F '#{session_name} #{pane_dead}' 2>/dev/null | grep -F -- ${shellQuote(runPrefix)}`,
     'true'
   ].join('\n');
 }
@@ -769,15 +899,28 @@ export function parseScriptsProbe(stdout: string, nonce: string): ScriptsProbe {
   const setupAt = stdout.indexOf(`\n@@${nonce}:setup@@\n`);
   const runAt = stdout.indexOf(`\n@@${nonce}:run@@\n`);
   if (configAt < 0 || setupAt < 0 || runAt < 0) {
-    return { configText: null, setupStatus: null, runPaneDead: null };
+    return { configText: null, setupStatus: null, runPaneDead: null, running: [] };
   }
   const configText = stdout.slice(configAt + `@@${nonce}:config@@\n`.length, setupAt);
   const setupStatus = stdout.slice(setupAt + `\n@@${nonce}:setup@@\n`.length, runAt).trim();
-  const runPaneDead = stdout.slice(runAt + `\n@@${nonce}:run@@\n`.length).trim();
+  const panes = stdout
+    .slice(runAt + `\n@@${nonce}:run@@\n`.length)
+    .split('\n')
+    .map((line) => line.trim().split(/\s+/))
+    .filter((parts) => parts.length === 2);
+  const live = new Set<string>();
+  let runPaneDead: string | null = null;
+  for (const [session, dead] of panes) {
+    const match = /^orchard-[0-9a-f]{8}-(run(?:-[a-z0-9][a-z0-9-]{0,23})?)$/.exec(session);
+    if (!match) continue;
+    if (match[1] === 'run' && runPaneDead === null) runPaneDead = dead;
+    if (dead === '0') live.add(match[1]);
+  }
   return {
     configText: configText.trim() ? configText : null,
     setupStatus: setupStatus || null,
-    runPaneDead: runPaneDead || null
+    runPaneDead,
+    running: [...live]
   };
 }
 
@@ -804,7 +947,7 @@ export interface TerminalShellEnv {
 }
 
 export function isScriptedTerminal(target: { sessionId: string | null; index: string }): boolean {
-  return !!target.sessionId && (target.index === 'setup' || target.index === 'run');
+  return !!target.sessionId && isScriptName(target.index);
 }
 
 export function terminalTmuxName(target: SessionTerminalTarget, engineSessionId: string): string {

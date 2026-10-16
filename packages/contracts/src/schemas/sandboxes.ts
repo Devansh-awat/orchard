@@ -165,7 +165,17 @@ const sessionScripts = z.object({
   run: z.string().nullable(),
   ports: z.array(z.number().int()),
   setupState: z.enum(['none', 'running', 'done', 'failed']),
-  running: z.boolean().describe('Whether the run script is alive in its tmux window')
+  running: z.boolean().describe('Whether the first run command is alive in its tmux window'),
+  commands: z
+    .array(
+      z.object({
+        id: z.string(),
+        label: z.string(),
+        icon: z.string().nullable(),
+        running: z.boolean()
+      })
+    )
+    .describe('Every command under "run" in .orchard/greenhouse.json, in file order')
 });
 
 const fsRequest = z.object({
@@ -681,22 +691,45 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
           branch: z.string().nullable(),
           dirtyFiles: z.number().int(),
           github: z.object({ owner: z.string(), name: z.string() }).nullable(),
-          icon: z.string().nullable()
+          icon: z.string().nullable(),
+          path: z.string().nullable(),
+          linked: z.boolean()
         })
       )
     }),
     scope: 'exec'
   },
   'POST /sandboxes/:id/repos': {
-    summary: 'Clone another repository into the sandbox (background, uses your GitHub token)',
-    request: z.object({ repoUrl: z.string().url() }),
+    summary:
+      'Clone another repository into the sandbox (background, uses your GitHub token). With location, clones into that folder and links it into home',
+    request: z.object({ repoUrl: z.string().url(), location: z.string().max(1024).optional() }),
     response: z.object({ name: z.string() }),
     scope: 'deploy'
   },
   'POST /sandboxes/:id/repos/init': {
-    summary: 'Create an empty git repository with an initial commit in the sandbox',
-    request: z.object({ name: z.string().max(63) }),
+    summary:
+      'Create an empty git repository with an initial commit in the sandbox. A location (host only) creates it in that folder and links it into home',
+    request: z.object({ name: z.string().max(63), location: z.string().max(1024).optional() }),
     response: z.object({ name: z.string() }),
+    scope: 'exec'
+  },
+  'POST /sandboxes/:id/repos/link': {
+    summary:
+      'Open an existing folder on the machine as a repository: git-inits it if needed and links it into home under a free name',
+    request: z.object({ path: z.string().max(1024) }),
+    response: z.object({ name: z.string(), path: z.string() }),
+    scope: 'deploy'
+  },
+  'GET /sandboxes/:id/dirs': {
+    summary:
+      'List the folders inside a folder on the machine, for picking where a repository lives',
+    response: z.object({
+      path: z.string(),
+      parent: z.string().nullable(),
+      git: z.boolean(),
+      entries: z.array(z.object({ name: z.string(), path: z.string(), git: z.boolean() })),
+      truncated: z.boolean()
+    }),
     scope: 'exec'
   },
   'PUT /sandboxes/:id/repos/:name/icon': {
@@ -863,8 +896,12 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     scope: 'exec'
   },
   'POST /sandboxes/:id/sessions/:sid/run': {
-    summary: 'Start (or restart) or stop the run script in the tmux window `run`',
-    request: z.object({ action: z.enum(['start', 'stop']) }),
+    summary:
+      'Start (or restart) or stop a run command, or rerun setup with command "setup". Without command it acts on the first run command',
+    request: z.object({
+      action: z.enum(['start', 'stop']),
+      command: z.string().max(24).optional()
+    }),
     response: sessionScripts,
     scope: 'exec'
   },

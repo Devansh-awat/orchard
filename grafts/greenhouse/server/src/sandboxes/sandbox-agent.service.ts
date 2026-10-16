@@ -5,6 +5,7 @@ import {
   Injectable,
   Optional
 } from '@nestjs/common';
+import { chatTitleFor } from './session-names';
 import type { SandboxConversation } from '../generated/prisma/client';
 import { PrismaService } from '../prisma.service';
 import { SandboxWorkspaceService, type WorkspaceSandbox } from './sandbox-workspace.service';
@@ -91,7 +92,7 @@ export class SandboxAgentService {
     private readonly prisma: PrismaService,
     private readonly workspace: SandboxWorkspaceService,
     private readonly members: SandboxMembersService,
-    @Optional() sessions?: SandboxSessionsService,
+    @Optional() private readonly sessions?: SandboxSessionsService,
     @Optional() private readonly host?: SandboxAgentHostService
   ) {
     sessions?.setPromptRecorder((input) => this.members.recordPrompt(input));
@@ -109,7 +110,7 @@ export class SandboxAgentService {
     }
     const res = await this.workspace.opencodeRequest(sandbox, 'POST', '/session', {
       directory: session.worktreePath,
-      body: { title: session.title },
+      body: chatTitleFor(session.title),
       timeoutMs: OPENCODE_TIMEOUT_MS
     });
     const id = (res.body as { id?: unknown } | null)?.id;
@@ -175,6 +176,16 @@ export class SandboxAgentService {
     if (res.status < 200 || res.status >= 300) {
       throw new BadGatewayException(`The agent did not accept the prompt (${res.status})`);
     }
+    void this.sessions
+      ?.titleFromPrompt({
+        sandbox,
+        sessionId: session.id,
+        chatId,
+        directory: session.worktreePath,
+        text,
+        agentTitles: true
+      })
+      .catch(() => null);
     return { messageId, chatId, sessionId: session.id };
   }
 

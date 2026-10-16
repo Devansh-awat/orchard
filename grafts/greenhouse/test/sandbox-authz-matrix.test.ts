@@ -116,6 +116,15 @@ function sandboxesRoutes(
       { min: 'collaborator' },
       () => c.initRepo(req(), SANDBOX, { name: 'scratch' })
     ],
+    'POST /sandboxes/:id/repos/init (placed)': [
+      { min: 'owner' },
+      () => c.initRepo(req(), SANDBOX, { name: 'scratch', location: '/srv/work' })
+    ],
+    'POST /sandboxes/:id/repos/link': [
+      { min: 'owner' },
+      () => c.linkRepo(req(), SANDBOX, { path: '/srv/work/app' })
+    ],
+    'GET /sandboxes/:id/dirs': [{ min: 'owner' }, () => c.listDirs(req(), SANDBOX, '/srv')],
     'PUT /sandboxes/:id/repos/:name/icon': [
       { min: 'collaborator' },
       () => c.setRepoIcon(req(), SANDBOX, 'scratch', { icon: 'lucide:rocket' })
@@ -394,6 +403,8 @@ test('sandboxes controller routes declare the contract minimum role', async () =
     'listRepos',
     'addRepo',
     'initRepo',
+    'linkRepo',
+    'listDirs',
     'setRepoIcon',
     'listConversations',
     'createConversation',

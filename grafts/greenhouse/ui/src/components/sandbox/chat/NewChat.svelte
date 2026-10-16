@@ -2,6 +2,9 @@
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { Check, LoaderCircle, MessagesSquare, NotebookText } from 'lucide-svelte';
 	import { toasts } from '../../../host/stores';
+	import { GitBranch } from 'lucide-svelte';
+	import { motionStagger } from '@orchardlabs/graft-ui/utils/motion.svelte';
+	import Pip from '../../greenhouse/mascot/Pip.svelte';
 	import type { ContextChat, ContextPlan } from './context-attach';
 
 	const LIMIT = 4;
@@ -88,9 +91,18 @@
 {/snippet}
 
 <div class="new" data-align="content">
-	<p class="new-title">
-		{#if branch}New chat in <code class="new-branch">{branch}</code>.{:else}New chat.{/if}
-	</p>
+	<div class="new-hero" {@attach motionStagger({ index: 0 })}>
+		<span class="new-pip" aria-hidden="true"><Pip pose="wave" size={40} /></span>
+		<div class="new-head">
+			<p class="new-title">What should we work on?</p>
+			{#if branch}
+				<p class="new-where">
+					<GitBranch size={13} strokeWidth={1.75} />
+					<code class="new-branch">{branch}</code>
+				</p>
+			{/if}
+		</div>
+	</div>
 	{#if chats.length > 0}
 		<div class="new-group">
 			<p class="new-label" id="new-chat-transcripts">Add chat transcripts:</p>
@@ -131,6 +143,35 @@
 		min-width: 0;
 	}
 
+	.new-hero {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		min-width: 0;
+	}
+
+	.new-pip {
+		display: inline-grid;
+		place-items: center;
+		flex: none;
+	}
+
+	.new-head {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		min-width: 0;
+	}
+
+	.new-where {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		min-width: 0;
+		margin: 0;
+		color: var(--text-muted);
+	}
+
 	.new-title {
 		margin: 0;
 		font-size: var(--gh-reading, var(--text-body));
@@ -140,11 +181,12 @@
 	}
 
 	.new-branch {
-		padding: 0.125rem var(--space-2);
-		border-radius: var(--radius-xs);
-		background: var(--fill-soft);
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 		font-family: var(--gh-mono, var(--font-mono, monospace));
-		font-size: 0.9em;
+		font-size: var(--text-caption);
 		font-weight: 400;
 	}
 

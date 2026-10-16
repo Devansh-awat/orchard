@@ -1,6 +1,10 @@
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { isAcpChat } from '../sandbox/chat/acp-chat.svelte';
 import { untrack } from 'svelte';
+import {
+  isAgentDefaultTitle,
+  pickSessionName
+} from '../../../../server/src/sandboxes/session-names';
 import { goto } from '../../host/navigation';
 import { toasts } from '../../host/stores';
 import { queryClient } from '../../host/query';
@@ -215,6 +219,9 @@ export class MachineWorkspace {
   readonly changesError = new SvelteMap<string, string>();
   readonly pendingPrompts = new SvelteMap<string, string>();
   readonly launches = new SvelteMap<string, SessionLaunch>();
+  readonly booting = new SvelteSet<string>();
+  bootVisible = $state(false);
+  bootSettling = $state(false);
   readonly #optimistic = new SvelteSet<string>();
   #loadRetries = 0;
   retryLaunch = $state.raw<SessionLaunch | null>(null);
@@ -310,11 +317,18 @@ export class MachineWorkspace {
   readonly tabs = $derived.by((): CenterTab[] => {
     const session = this.session;
     if (!session) return [];
+    const primary = session.opencodeSessionId ?? this.chatList[0]?.id ?? null;
     const chats: CenterTab[] = this.chatList.map((chat) => ({
       kind: 'chat',
       id: chatTabId(chat.id),
       chatId: chat.id,
-      title: chat.title || 'Chat'
+      title: !chat.title
+        ? 'Chat'
+        : !isAgentDefaultTitle(chat.title)
+          ? chat.title
+          : chat.id === primary
+            ? session.title
+            : 'New chat'
     }));
     return [...chats, ...(this.openTabs.get(session.id) ?? [])];
   });
@@ -392,6 +406,13 @@ export class MachineWorkspace {
     this.store.isHost = () => this.isOwner;
     this.store.canAnswer = () => this.canEdit;
     this.store.autoAccept = () => greenhousePrefs.values.autoAcceptPermissions;
+    this.store.fileOpener = {
+      can: (path) => this.#worktreeRel(path) !== null,
+      open: (path) => {
+        const rel = this.#worktreeRel(path);
+        if (rel) this.openFile(rel);
+      }
+    };
     this.store.answerAuthorOf = (id: string): ChatAuthor | null => {
       const author = this.live.answerAuthors.get(id);
       return author
@@ -809,6 +830,21 @@ export class MachineWorkspace {
     this.host.openTab(tab.id);
   }
 
+  #worktreeRel(path: string): string | null {
+    const session = untrack(() => this.session);
+    if (!session || isLegacy(session)) return null;
+    const clean = toFsPath(path).replace(/\/+$/, '');
+    if (!clean) return null;
+    if (!clean.startsWith('/')) return clean.split('/').includes('..') ? null : clean;
+    const tail = session.worktreePath.startsWith(`${api.GH_HOME}/`)
+      ? session.worktreePath.slice(api.GH_HOME.length)
+      : session.worktreePath;
+    const at = clean.indexOf(`${tail}/`);
+    if (at < 0) return null;
+    const rel = clean.slice(at + tail.length + 1);
+    return rel && !rel.split('/').includes('..') ? rel : null;
+  }
+
   openFile(path: string) {
     const session = this.session;
     if (!session) return;
@@ -973,18 +1009,23 @@ export class MachineWorkspace {
     if (!this.canEdit) return null;
     const id = newSessionId();
     const choice = untrack(() => this.store.acpChoice);
-    const input =
-      !requested.agent && choice ? { ...requested, agent: `acp:${choice.agent}` } : requested;
+    const named =
+      requested.title?.trim() || requested.prompt?.trim() || requested.issue
+        ? requested
+        : { ...requested, title: pickSessionName(untrack(() => this.active).map((s) => s.title)) };
+    const input = !named.agent && choice ? { ...named, agent: `acp:${choice.agent}` } : named;
     const launch: SessionLaunch = { ...input, at: Date.now() };
     const legacyMode = untrack(() => this.mode) === 'legacy';
     if (!legacyMode) {
       this.#optimistic.add(id);
+      this.booting.add(id);
       this.upsert(placeholderSession(this.sandboxId, id, input, this.host.self()));
       this.launches.set(id, launch);
       this.host.openSession(id, null);
     }
     const rollback = () => {
       this.#optimistic.delete(id);
+      this.booting.delete(id);
       if (!untrack(() => this.sessions).some((s) => s.id === id)) return false;
       this.sessions = untrack(() => this.sessions).filter((s) => s.id !== id);
       this.launches.delete(id);

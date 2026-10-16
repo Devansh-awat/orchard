@@ -48,6 +48,8 @@ export interface GhRepo {
   dirtyFiles: number;
   github?: { owner: string; name: string } | null;
   icon?: string | null;
+  path?: string | null;
+  linked?: boolean;
 }
 
 export interface GhMember {
@@ -153,7 +155,13 @@ export type CenterTab =
 
 export type RightTab = 'files' | 'changes' | 'checks' | 'review';
 
-export type DockTab = 'setup' | 'run' | 'ports' | `term:${string}` | `watch:${string}`;
+export type DockTab =
+  | 'setup'
+  | 'run'
+  | 'ports'
+  | `run-${string}`
+  | `term:${string}`
+  | `watch:${string}`;
 
 export interface RosterUser {
   id: string;

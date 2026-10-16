@@ -521,6 +521,8 @@ var routeExclusions = map[string]string{
 	"POST /integrations/slack/link":                                 "browser confirmation page for the one-time link from /greenhouse link in Slack",
 	"POST /integrations/slack/link/preview":                         "web-only: shows the Slack account on the link confirm page",
 	"POST /sandboxes/:id/repos/init":                                "web-only: start a session from an empty repository",
+	"POST /sandboxes/:id/repos/link":                                "web-only: open a folder on the machine as a repository from the add repository sheet",
+	"GET /sandboxes/:id/dirs":                                       "web-only: folder browser in the add repository sheet",
 	"GET /sandboxes/:id/agent/usage":                                "web composer context popover (host Claude subscription limits)",
 	"GET /sandboxes/:id/agents":                                     "web workspace: which coding agents the machine has; no CLI command yet",
 	"GET /sandboxes/:id/sessions/:sid/agent-chats":                  "web workspace agent chats (Claude Code, Codex, fx, opencode); no CLI command yet",

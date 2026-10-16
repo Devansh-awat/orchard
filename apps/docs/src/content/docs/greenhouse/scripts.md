@@ -21,11 +21,11 @@ Commit it at `.orchard/greenhouse.json` in the repository root:
 }
 ```
 
-| Key     | Type                        | What it does                                                                                                                                                                                                                                                                                                            |
-| ------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `setup` | string, or array of strings | Runs once, automatically, when a session's worktree is created.                                                                                                                                                                                                                                                         |
-| `run`   | string, or array of strings | Runs when someone presses **Run** in the terminal dock.                                                                                                                                                                                                                                                                 |
-| `ports` | array of numbers            | Declares the ports your app serves on: up to 10, from 1024 to 65535, not 2222 or 4096. They show in the **Ports** tab before anything listens on them, and on Kubernetes machines they can be previewed even when they are not one of the standard preview ports. Listening ports are detected on their own either way. |
+| Key     | Type                                                  | What it does                                                                                                                                                                                                                                                                                                            |
+| ------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `setup` | string, or array of strings                           | Runs once, automatically, when a session's worktree is created.                                                                                                                                                                                                                                                         |
+| `run`   | string, array of strings, or object of named commands | Runs when someone presses **Run** in the terminal dock. An object holds up to 8 named commands, each started and stopped on its own; see [Several commands](#several-commands).                                                                                                                                         |
+| `ports` | array of numbers                                      | Declares the ports your app serves on: up to 10, from 1024 to 65535, not 2222 or 4096. They show in the **Ports** tab before anything listens on them, and on Kubernetes machines they can be previewed even when they are not one of the standard preview ports. Listening ports are detected on their own either way. |
 
 All keys are optional. An array is joined with newlines, so it reads as a
 multi-line script:
@@ -83,6 +83,38 @@ or higher; everyone can watch the output.
 The run script is the natural home for a dev server. Bind it to `0.0.0.0`, not
 `localhost`, on one of the preview ports, or a port you list under `ports`, so you
 can open it from the **Ports** tab; see [Previews and ports](/greenhouse/previews/).
+
+### Several commands
+
+When a project needs more than one long-running process, make `run` an object.
+Each key names a command, and each command gets its own tab in the dock and its
+own start and stop:
+
+```json
+{
+  "setup": "pnpm install --frozen-lockfile",
+  "run": {
+    "dev": { "run": "pnpm dev --host 0.0.0.0 --port 5173", "label": "Dev server", "icon": "globe" },
+    "db": { "run": "docker compose up db", "label": "Database", "icon": "database" },
+    "worker": "pnpm worker"
+  },
+  "ports": [5173]
+}
+```
+
+| Field   | What it does                                                                                                                                                                                                    |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| key     | The command's name: lowercase letters, digits and dashes, up to 24 characters.                                                                                                                                  |
+| `run`   | The script, a string or an array of lines. A command can also be just the string, like `"worker"` above.                                                                                                        |
+| `label` | What the tab and menu show. Defaults to the key.                                                                                                                                                                |
+| `icon`  | One of `play`, `server`, `database`, `globe`, `flask-conical`, `hammer`, `terminal`, `zap`, `box`, `bug`, `rocket`, `book-open`, `layers`, `radio`, `cpu`, `wrench`, `eye`, `sparkles`, `refresh-cw` or `mail`. |
+
+With more than one command, **Run** opens a menu to start or stop each one, or
+all of them at once. The first command is the one the API and CLI start when
+they do not name one.
+
+If a session never ran its setup, the **Setup** tab offers **Run setup** instead
+of waiting.
 
 ## Machine setup versus session setup
 

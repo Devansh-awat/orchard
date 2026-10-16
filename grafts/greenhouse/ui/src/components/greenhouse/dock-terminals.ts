@@ -3,7 +3,7 @@ import type { StoredTerminalTab, StoredTerminalTabs } from '../../lib/terminal/t
 export const DOCK_TERMINALS_KIND = 'sandbox';
 
 const TERMINAL_RE = /^\d{1,2}$/;
-const PANE_RE = /^(?:setup|run|term:\d{1,2}|watch:[0-9a-f-]{36})$/i;
+const PANE_RE = /^(?:setup|run|run-[a-z0-9][a-z0-9-]{0,23}|term:\d{1,2}|watch:[0-9a-f-]{36})$/i;
 
 export interface DockTerminals {
   terminals: Map<string, string[]>;

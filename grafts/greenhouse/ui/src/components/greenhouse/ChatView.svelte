@@ -18,6 +18,8 @@
 	import * as api from './api';
 	import { getGreenhouseApp } from './app.svelte';
 	import { GreenhouseCommands } from './chat-commands.svelte';
+	import { isGeneratedSessionName } from '../../../../server/src/sandboxes/session-names';
+	import SessionBoot, { type BootStep } from './SessionBoot.svelte';
 	import SessionPreparing from './SessionPreparing.svelte';
 	import { isPreparing, type MachineWorkspace } from './workspace.svelte';
 
@@ -98,8 +100,99 @@
 		if (!chatId || store.activeId !== chatId || !thread?.loaded) return false;
 		return thread.entries.some((e) => e.kind === 'user');
 	});
-	const preparing = $derived(!!session && (staged || !landed));
 	let retrying = $state(false);
+
+	const BOOT_MIN_MS = 700;
+	const BOOT_EXIT_MS = 520;
+	const AGENT_PATIENCE_MS = 20_000;
+
+	const tracked = $derived(!!session && ws.booting.has(session.id));
+	const failed = $derived(!!session?.prepareError);
+	const agentReady = $derived(store.connection === 'ready' && store.settled);
+	let agentTimedOut = $state(false);
+	const needsBoot = $derived(
+		!!session && !failed && (staged || tracked || (!!launchPrompt && !landed))
+	);
+	const bootComplete = $derived(
+		!staged && (agentReady || agentTimedOut) && (!launchPrompt || landed || agentTimedOut)
+	);
+	const bootSteps = $derived.by((): BootStep[] => {
+		const steps: BootStep[] = [
+			{
+				id: 'worktree',
+				label: 'Creating a branch and worktree',
+				state: staged ? 'active' : 'done'
+			},
+			{
+				id: 'agent',
+				label: 'Connecting to the agent',
+				state: staged ? 'pending' : agentReady || agentTimedOut ? 'done' : 'active'
+			}
+		];
+		if (launchPrompt) {
+			steps.push({
+				id: 'prompt',
+				label: 'Sending your prompt',
+				state: staged || !(agentReady || agentTimedOut) ? 'pending' : landed ? 'done' : 'active'
+			});
+		}
+		return steps;
+	});
+
+	let bootShown = $state(false);
+	let bootLeaving = $state(false);
+	let bootStart = $state(Date.now());
+	let bootFor: string | null = null;
+
+	$effect(() => {
+		const sid = session?.id ?? null;
+		const wanted = needsBoot && !bootComplete;
+		if (untrack(() => bootShown) && bootFor !== sid) {
+			bootShown = false;
+			bootLeaving = false;
+			bootFor = null;
+		}
+		if (wanted) {
+			if (!untrack(() => bootShown)) {
+				bootFor = sid;
+				bootStart = Date.now();
+				bootShown = true;
+				bootLeaving = false;
+			}
+			return;
+		}
+		if (!untrack(() => bootShown) || untrack(() => bootLeaving)) return;
+		const wait = Math.max(0, BOOT_MIN_MS - (Date.now() - untrack(() => bootStart)));
+		const leave = setTimeout(() => (bootLeaving = true), wait);
+		const gone = setTimeout(() => {
+			bootShown = false;
+			bootLeaving = false;
+			bootFor = null;
+			if (sid) ws.booting.delete(sid);
+		}, wait + BOOT_EXIT_MS);
+		return () => {
+			clearTimeout(leave);
+			clearTimeout(gone);
+		};
+	});
+
+	$effect(() => {
+		agentTimedOut = false;
+		if (!bootShown || staged) return;
+		const timer = setTimeout(() => (agentTimedOut = true), AGENT_PATIENCE_MS);
+		return () => clearTimeout(timer);
+	});
+
+	$effect(() => {
+		ws.bootVisible = bootShown;
+		ws.bootSettling = bootLeaving;
+	});
+
+	$effect(() => {
+		const sid = session?.id;
+		if (!sid || !tracked || !failed) return;
+		untrack(() => ws.booting.delete(sid));
+	});
 
 	$effect(() => {
 		const sid = session?.id;
@@ -191,7 +284,13 @@
 			}));
 		const seen = new Set<string | null>([active, ...own.map((chat) => chat.id)]);
 		const recent: ContextChat[] = store.sessions
-			.filter((s) => !s.pending && !seen.has(s.id) && !/^new (session|chat)\b/i.test(s.title))
+			.filter(
+				(s) =>
+					!s.pending &&
+					!seen.has(s.id) &&
+					!/^new (session|chat)\b/i.test(s.title) &&
+					!isGeneratedSessionName(s.title)
+			)
 			.sort((a, b) => b.updatedAt - a.updatedAt)
 			.map((s) => ({
 				id: s.id,
@@ -264,19 +363,41 @@
 				</button>
 			{/if}
 		</div>
-	{:else if preparing}
+	{:else if failed}
 		<SessionPreparing
 			prompt={launchPrompt}
 			author={ws.host.self()}
 			time={launch?.at ?? null}
-			phase={session?.preparing ? 'worktree' : 'agent'}
+			phase="worktree"
 			error={session?.prepareError ?? null}
 			canEdit={ws.canEdit}
 			busy={retrying}
 			onretry={retry}
 			onremove={remove}
 		/>
-	{:else if ws.canEdit}
+	{:else}
+		<div class="stage">
+			{#if !staged}
+				{@render conversation()}
+			{/if}
+			{#if bootShown || (needsBoot && !bootComplete)}
+				<div class="boot-layer">
+					<SessionBoot
+						headline={`Getting ${session?.repo ?? 'your session'} ready`}
+						branch={session?.branch || null}
+						steps={bootSteps}
+						prompt={launchPrompt}
+						startedAt={launch?.at ?? bootStart}
+						leaving={bootLeaving}
+					/>
+				</div>
+			{/if}
+		</div>
+	{/if}
+</div>
+
+{#snippet conversation()}
+	{#if ws.canEdit}
 		<ChatPanel
 			{store}
 			tabs={false}
@@ -309,7 +430,7 @@
 			</div>
 		</div>
 	{/if}
-</div>
+{/snippet}
 
 <ConfirmModal
 	bind:open={() => !!commands.creating, (v) => !v && (commands.creating = null)}
@@ -335,6 +456,22 @@
 
 	.chat--hidden {
 		display: none;
+	}
+
+	.stage {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+		min-height: 0;
+		min-width: 0;
+	}
+
+	.boot-layer {
+		position: absolute;
+		inset: 0;
+		z-index: 2;
+		display: flex;
 	}
 
 	.gate {

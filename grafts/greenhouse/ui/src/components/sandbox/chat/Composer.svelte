@@ -13,6 +13,7 @@
 		MessageCircle,
 		Paperclip,
 		Plus,
+		ShieldCheck,
 		Square,
 		X
 	} from 'lucide-svelte';
@@ -274,8 +275,17 @@
 		await pending;
 	}
 
+	function toggleAuto() {
+		greenhousePrefs.set('autoAcceptPermissions', !prefs.autoAcceptPermissions);
+	}
+
 	function onKey(e: KeyboardEvent) {
 		if (e.isComposing) return;
+		if (e.key === 'Tab' && e.shiftKey && listed === 0 && !e.altKey && !e.metaKey && !e.ctrlKey) {
+			e.preventDefault();
+			toggleAuto();
+			return;
+		}
 		if (listed > 0) {
 			if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
 				e.preventDefault();
@@ -598,6 +608,17 @@
 					{store.agent}
 				</button>
 			{/if}
+			{#if prefs.autoAcceptPermissions}
+				<button
+					type="button"
+					class="plan-chip auto-chip"
+					aria-pressed="true"
+					title="Auto mode: permission requests from turns you started are approved for you. Click or press Shift+Tab to ask again."
+					onclick={toggleAuto}
+				>
+					<ShieldCheck size={16} strokeWidth={1.75} /> Auto
+				</button>
+			{/if}
 			<span class="bar-spacer"></span>
 			<ContextRing
 				bind:open={contextOpen}
@@ -641,6 +662,12 @@
 					<ListChecks class="h-3.5 w-3.5" />
 					<span class="menu-label">Plan mode, read only</span>
 					{#if store.plan}<Check class="h-3 w-3" />{/if}
+				</MenuItem>
+				<MenuItem onclick={toggleAuto}>
+					<ShieldCheck class="h-3.5 w-3.5" />
+					<span class="menu-label">Auto-approve permissions</span>
+					<kbd class="menu-kbd">⇧Tab</kbd>
+					{#if prefs.autoAcceptPermissions}<Check class="h-3 w-3" />{/if}
 				</MenuItem>
 				{#if onComment}
 					<MenuItem
@@ -1029,6 +1056,19 @@
 
 	.plan-chip:hover {
 		background: var(--bg-hover);
+	}
+
+	.auto-chip {
+		border-color: color-mix(in srgb, var(--status-success) 45%, var(--border-default));
+		background: color-mix(in srgb, var(--status-success) 12%, transparent);
+	}
+
+	.menu-kbd {
+		margin-left: auto;
+		padding-left: var(--space-3);
+		font-family: inherit;
+		font-size: var(--text-caption);
+		color: var(--text-faint);
 	}
 
 	.icon {

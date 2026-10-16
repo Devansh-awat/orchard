@@ -195,10 +195,10 @@ export class SandboxSessionsController {
     @Req() req: any,
     @Param('id', ParseUUIDPipe) id: string,
     @Param('sid', ParseUUIDPipe) sid: string,
-    @Body() body: { action?: string }
+    @Body() body: { action?: string; command?: string }
   ) {
     const { row } = await this.access(req, id, 'collaborator');
-    return this.sessions.run(row, sid, body?.action);
+    return this.sessions.run(row, sid, body?.action, body?.command);
   }
 
   @Get(':id/sessions/:sid/ports')

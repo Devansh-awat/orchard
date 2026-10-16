@@ -94,7 +94,7 @@
 	}
 </script>
 
-<div class="pane" data-align="center">
+<div class="pane" class:pane--boot={ws.bootVisible && !ws.bootSettling} data-align="center">
 	<TabStrip
 		tabs={strip}
 		active={active?.id ?? null}
@@ -212,6 +212,15 @@
 		flex: 1;
 		min-height: 0;
 		min-width: 0;
+	}
+
+	.pane > :global(:first-child) {
+		transition: opacity 240ms ease;
+	}
+
+	.pane--boot > :global(:first-child) {
+		opacity: 0;
+		pointer-events: none;
 	}
 
 	.body {

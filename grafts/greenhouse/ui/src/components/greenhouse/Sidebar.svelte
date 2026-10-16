@@ -16,6 +16,7 @@
 	import MenuItem from '@orchardlabs/graft-ui/components/ui/MenuItem.svelte';
 	import { user } from '../../host/stores';
 	import { springCollapse, springRotate } from '@orchardlabs/graft-ui/utils/motion.svelte';
+	import * as api from './api';
 	import { getGreenhouseApp } from './app.svelte';
 	import ContextMenu from './ContextMenu.svelte';
 	import MachineMenu from './MachineMenu.svelte';
@@ -104,6 +105,10 @@
 	}
 
 	let doomedRepo = $state<string | null>(null);
+	const doomedLinked = $derived.by(() => {
+		const repo = doomedRepo ? ws?.repos.find((r) => r.name === doomedRepo) : null;
+		return repo?.linked && repo.path ? api.displayPath(repo.path) : null;
+	});
 	const doomedSessions = $derived(
 		doomedRepo ? (ws?.sessions.filter((s) => s.repo === doomedRepo).length ?? 0) : 0
 	);
@@ -345,9 +350,11 @@
 		<ConfirmModal
 			bind:open={removeOpen}
 			title="Remove {doomedRepo}?"
-			description={doomedSessions > 0
-				? `Deletes the clone and its ${doomedSessions} ${doomedSessions === 1 ? 'session' : 'sessions'} from this machine. Anything not pushed is lost.`
-				: 'Deletes the clone from this machine. Anything not pushed is lost.'}
+			description={doomedLinked
+				? `Removes it from Greenhouse${doomedSessions > 0 ? ` with its ${doomedSessions} ${doomedSessions === 1 ? 'session' : 'sessions'}` : ''}. The folder at ${doomedLinked} stays on this machine.`
+				: doomedSessions > 0
+					? `Deletes the clone and its ${doomedSessions} ${doomedSessions === 1 ? 'session' : 'sessions'} from this machine. Anything not pushed is lost.`
+					: 'Deletes the clone from this machine. Anything not pushed is lost.'}
 			confirmLabel="Remove"
 			danger
 			onconfirm={confirmRemove}

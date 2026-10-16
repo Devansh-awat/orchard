@@ -30,8 +30,12 @@ import {
   buildConfinedReadScript,
   buildDiffstatBatchScript,
   buildFsScript,
+  buildPoolSetupAdopt,
   buildScriptLaunch,
+  buildScriptStop,
   buildWorktreeAddScript,
+  isScriptName,
+  scriptNameOf,
   buildWorktreeRemoveScript,
   isTerminalIndex,
   isValidBranchPrefix,
@@ -375,12 +379,17 @@ test('.orchard/greenhouse.json parsing tolerates junk and bounds what it keeps',
     parseGreenhouseConfig(
       '{"setup":"pnpm i","run":["pnpm dev","echo hi"],"ports":[3000,"5173",0,70000,3000,"x",80,1023,22,2222,4096,1024,65535]}'
     ),
-    { setup: 'pnpm i', run: 'pnpm dev\necho hi', ports: [3000, 5173, 1024, 65535] }
+    {
+      setup: 'pnpm i',
+      run: 'pnpm dev\necho hi',
+      commands: [{ id: 'run', label: 'Run', icon: null, script: 'pnpm dev\necho hi' }],
+      ports: [3000, 5173, 1024, 65535]
+    }
   );
   for (const junk of [null, '', 'not json', '[]', '42', '{"setup":5,"ports":"3000"}']) {
     assert.deepEqual(
       parseGreenhouseConfig(junk),
-      { setup: null, run: null, ports: [] },
+      { setup: null, run: null, commands: [], ports: [] },
       String(junk)
     );
   }
@@ -392,18 +401,62 @@ test('.orchard/greenhouse.json parsing tolerates junk and bounds what it keeps',
   assert.equal(many.ports.length, 10);
 });
 
+test('run can be a map of named commands with labels and icons', () => {
+  const config = parseGreenhouseConfig(
+    JSON.stringify({
+      run: {
+        dev: 'pnpm dev',
+        DB: { run: ['docker compose up', 'db'], label: 'Database', icon: 'database' },
+        worker: { command: 'pnpm worker', icon: 'skull' },
+        'bad name!': 'x',
+        empty: '  ',
+        'test-api': { label: 'nope' }
+      }
+    })
+  );
+  assert.deepEqual(config.commands, [
+    { id: 'dev', label: 'Dev', icon: null, script: 'pnpm dev' },
+    { id: 'db', label: 'Database', icon: 'database', script: 'docker compose up\ndb' },
+    { id: 'worker', label: 'Worker', icon: null, script: 'pnpm worker' }
+  ]);
+  assert.equal(config.run, 'pnpm dev');
+  const lots = parseGreenhouseConfig(
+    JSON.stringify({
+      run: Object.fromEntries(Array.from({ length: 20 }, (_, i) => [`c${i}`, 'x']))
+    })
+  );
+  assert.equal(lots.commands.length, 8);
+  assert.equal(scriptNameOf('run'), 'run');
+  assert.equal(scriptNameOf('db'), 'run-db');
+  assert.ok(isScriptName('run-db'));
+  assert.ok(isScriptName('setup'));
+  for (const bad of ['run-', 'run-Bad', 'run-../x', 'build', 'run-a b', 42]) {
+    assert.equal(isScriptName(bad), false, String(bad));
+  }
+  assert.throws(() => buildScriptStop(SID, 'run-$(id)'));
+});
+
+test('a pooled setup is recorded so the setup tab shows its log instead of waiting', () => {
+  const script = buildPoolSetupAdopt(SID, 'spare-abc');
+  assert.match(script, /\.orchard\/pool\/spare-abc\.setup\.log/);
+  assert.match(script, /setup\.status/);
+  assert.doesNotMatch(buildPoolSetupAdopt(SID, '../../etc'), /etc/);
+});
+
 test('the scripts probe splits on a per-call nonce so config content cannot spoof sections', () => {
   const nonce = 'abc123';
-  const out = `@@${nonce}:config@@\n{"run":"echo @@x:setup@@"}\n@@${nonce}:setup@@\nfailed 2\n\n@@${nonce}:run@@\n0\n`;
+  const out = `@@${nonce}:config@@\n{"run":"echo @@x:setup@@"}\n@@${nonce}:setup@@\nfailed 2\n\n@@${nonce}:run@@\norchard-0b9f4c1e-run 0\norchard-0b9f4c1e-run-db 1\norchard-0b9f4c1e-run-api 0\nnot a pane\n`;
   assert.deepEqual(parseScriptsProbe(out, nonce), {
     configText: '{"run":"echo @@x:setup@@"}',
     setupStatus: 'failed 2',
-    runPaneDead: '0'
+    runPaneDead: '0',
+    running: ['run', 'run-api']
   });
   assert.deepEqual(parseScriptsProbe('garbage', nonce), {
     configText: null,
     setupStatus: null,
-    runPaneDead: null
+    runPaneDead: null,
+    running: []
   });
   assert.equal(setupStateOf(null), 'none');
   assert.equal(setupStateOf('running'), 'running');
@@ -736,6 +789,9 @@ test('terminal query parsing validates sid, index and mode', () => {
   assert.equal(q(`sid=${SID}&mode=admin`), null);
   assert.equal(q('n=3'), null);
   assert.equal(isTerminalIndex('setup'), true);
+  assert.equal(isTerminalIndex('run-db'), true);
+  assert.equal(isTerminalIndex('run-DB'), false);
+  assert.equal(isTerminalIndex('run-'), false);
   assert.equal(isTerminalIndex('x'), false);
 });
 
@@ -1253,6 +1309,7 @@ function preparingHarness(exec: (script: string) => Promise<any>) {
         return state;
       },
       findFirst: async () => ({ ...state, createdBy: null }),
+      findMany: async () => [],
       findUniqueOrThrow: async () => ({ ...state, createdBy: null }),
       update: async (args: any) => {
         state = { ...state, ...args.data };

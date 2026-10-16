@@ -13,6 +13,19 @@ import type { SandboxConversation } from '../generated/prisma/client';
 import { OPENCODE_RESPONSE_HEADERS, opencodeContentType } from './sandbox-opencode-policy';
 import { cloneErrorMessage, githubRepoOf, parseRepoUrl } from './sandbox-repo-url';
 import { normalizeRepoIcon, storedRepoIcon } from './sandbox-repo-icon';
+import {
+  MachineDirListing,
+  REPO_PATH_EXIT,
+  buildCloneToLocationScript,
+  buildInitAtLocationScript,
+  buildLinkFolderScript,
+  buildListDirsScript,
+  isProjectName,
+  normalizeMachinePath,
+  parseDirListing,
+  printedKey,
+  printedTop
+} from './sandbox-repo-paths';
 import { OPENCODE_LOCAL_AUTH, OPENCODE_LOCAL_CURL_AUTH } from './runners/sandbox-init-files';
 import { PrismaService } from '../prisma.service';
 import { SandboxRunnerRegistry } from './runners/sandbox-runner.registry';
@@ -134,6 +147,8 @@ export interface SandboxRepo {
   dirtyFiles: number;
   github: { owner: string; name: string } | null;
   icon: string | null;
+  path: string | null;
+  linked: boolean;
 }
 
 export const LIST_REPOS_SCRIPT = [
@@ -145,7 +160,9 @@ export const LIST_REPOS_SCRIPT = [
   '  n=$(git -C "$r" status --porcelain 2>/dev/null | wc -l | tr -d " ")',
   '  u=$(git -C "$r" config --get remote.origin.url 2>/dev/null)',
   '  i=$(git -C "$r" config --get orchard.icon 2>/dev/null)',
-  '  printf \'%s|%s|%s|%s|%s\\n\' "$(e "${r##*/}")" "$(e "$b")" "$n" "$(e "$u")" "$(e "$i")"',
+  '  p=$r; l=0',
+  '  [ -L "$r" ] && { l=1; p=$(realpath -e -- "$r" 2>/dev/null); }',
+  '  printf \'%s|%s|%s|%s|%s|%s|%s\\n\' "$(e "${r##*/}")" "$(e "$b")" "$n" "$(e "$u")" "$(e "$i")" "$(e "$p")" "$l"',
   'done'
 ].join('\n');
 
@@ -158,15 +175,18 @@ export function parseRepoListing(stdout: string): SandboxRepo[] {
   const repos: SandboxRepo[] = [];
   for (const line of stdout.split('\n')) {
     const parts = line.trim().split('|');
-    if (parts.length !== 5) continue;
+    if (parts.length !== 5 && parts.length !== 7) continue;
     const [name, branch, url, icon] = [parts[0], parts[1], parts[3], parts[4]].map(fromBase64);
     if (!name || name.includes('/') || branch === null || url === null || icon === null) continue;
+    const path = parts[5] ? fromBase64(parts[5]) : null;
     repos.push({
       name,
       branch: branch.trim() || null,
       dirtyFiles: Number(parts[2]) || 0,
       github: githubRepoOf(url),
-      icon: storedRepoIcon(icon)
+      icon: storedRepoIcon(icon),
+      path: path && path.startsWith('/') ? path : null,
+      linked: parts[6] === '1'
     });
   }
   return repos;
@@ -905,9 +925,11 @@ export class SandboxWorkspaceService {
   async addRepo(
     sandbox: WorkspaceSandbox,
     repoUrl: string,
-    actorUserId: string
+    actorUserId: string,
+    rawLocation?: unknown
   ): Promise<{ name: string }> {
     this.requireRunning(sandbox);
+    const location = this.locationOf(rawLocation);
     const parsed = parseRepoUrl(repoUrl);
     const name =
       parsed.pathname
@@ -922,6 +944,7 @@ export class SandboxWorkspaceService {
     const github = parsed.hostname === 'github.com';
     const token = github ? actor.token : null;
     const git = token ? `git ${gitAuthFlags()}` : 'git';
+    if (location) return this.cloneToLocation(sandbox, parsed, name, location, token, actor);
     const url = shellQuote(parsed.href);
     const target = shellQuote(`/persist/home/${name}`);
     const staging = shellQuote(`/persist/home/.orchard/clones/${name}`);
@@ -955,16 +978,150 @@ export class SandboxWorkspaceService {
     return { name };
   }
 
+  private locationOf(raw: unknown): string | null {
+    if (raw === undefined || raw === null || raw === '') return null;
+    const location = normalizeMachinePath(raw);
+    if (!location) throw new BadRequestException('Use an absolute folder path, like ~/projects');
+    return location === HOME_ROOT ? null : location;
+  }
+
+  private pathError(exitCode: number | null, path: string, stdout = ''): BadRequestException {
+    switch (exitCode) {
+      case REPO_PATH_EXIT.exists:
+        return new BadRequestException(`${path} already exists`);
+      case REPO_PATH_EXIT.forbidden:
+        return new BadRequestException(`Greenhouse cannot use ${path}`);
+      case REPO_PATH_EXIT.busy:
+        return new BadRequestException(`Something is already being cloned into ${path}`);
+      case REPO_PATH_EXIT.missing:
+        return new BadRequestException(`${path} does not exist`);
+      case REPO_PATH_EXIT.notDirectory:
+        return new BadRequestException(`${path} is not a folder`);
+      case REPO_PATH_EXIT.insideRepo:
+        return new BadRequestException(
+          `${path} is inside the repository at ${printedTop(stdout) ?? 'a parent folder'}. Open that folder instead`
+        );
+      case REPO_PATH_EXIT.notWritable:
+        return new BadRequestException(`You do not have permission to write to ${path}`);
+      default:
+        return new BadRequestException(
+          `Could not set up ${path}: ${gitOutput(stdout).trim().slice(0, 300) || 'git failed'}`
+        );
+    }
+  }
+
+  private async cloneToLocation(
+    sandbox: WorkspaceSandbox,
+    parsed: URL,
+    name: string,
+    location: string,
+    token: string | null,
+    actor: Awaited<ReturnType<SandboxGitActorService['resolve']>>
+  ): Promise<{ name: string }> {
+    if (!isProjectName(name)) {
+      throw new BadRequestException('Could not derive a folder name from that URL');
+    }
+    const github = parsed.hostname === 'github.com';
+    const git = token ? `git ${gitAuthFlags()}` : 'git';
+    const script = [
+      gitExecPrelude(actor.identity, !!token),
+      buildCloneToLocationScript({
+        location,
+        name,
+        git,
+        url: parsed.href,
+        preflightSeconds: CLONE_PREFLIGHT_SECONDS
+      })
+    ].join('\n');
+    const result = await this.registry
+      .for(sandbox)
+      .exec(refOf(sandbox), ['su', '-l', 'dev', '-c', script], {
+        timeoutMs: (CLONE_PREFLIGHT_SECONDS + 15) * 1000,
+        ...(token ? { stdin: gitTokenStdin(token) } : {})
+      });
+    const key = result.ok ? printedKey(result.stdout) : null;
+    if (key) return { name: key };
+    if (result.exitCode === 13 || result.ok) {
+      const label = parsed.pathname.replace(/^\/+/, '').replace(/\.git$/, '') || name;
+      throw new BadRequestException(
+        cloneErrorMessage(result.stdout, { label, github, withToken: !!token })
+      );
+    }
+    throw this.pathError(
+      result.exitCode,
+      result.exitCode === REPO_PATH_EXIT.exists ? `${location}/${name}` : location,
+      result.stdout
+    );
+  }
+
+  async linkFolder(
+    sandbox: WorkspaceSandbox,
+    rawPath: unknown,
+    actorUserId: string
+  ): Promise<{ name: string; path: string }> {
+    this.requireRunning(sandbox);
+    const path = normalizeMachinePath(rawPath);
+    if (!path) throw new BadRequestException('Use an absolute folder path, like ~/projects/app');
+    const actor = await this.actors().resolve(actorUserId);
+    const result = await this.registry
+      .for(sandbox)
+      .exec(
+        refOf(sandbox),
+        [
+          'su',
+          '-l',
+          'dev',
+          '-c',
+          `${gitExecPrelude(actor.identity, false)}\n${buildLinkFolderScript(path)}`
+        ],
+        { timeoutMs: 120_000 }
+      );
+    const key = printedKey(result.stdout);
+    if (result.ok && key) return { name: key, path };
+    if (result.exitCode === REPO_PATH_EXIT.alreadyProject && key) {
+      throw new BadRequestException(`${path} is already open as ${key}`);
+    }
+    throw this.pathError(result.exitCode, path, result.stdout);
+  }
+
+  async listDirs(sandbox: WorkspaceSandbox, rawPath: unknown): Promise<MachineDirListing> {
+    this.requireRunning(sandbox);
+    const path =
+      rawPath === undefined || rawPath === '' ? HOME_ROOT : normalizeMachinePath(rawPath);
+    if (!path) throw new BadRequestException('Use an absolute folder path');
+    const result = await this.devExec(sandbox, buildListDirsScript(path));
+    const listing = result.ok ? parseDirListing(result.stdout) : null;
+    if (!listing) throw this.pathError(result.exitCode, path, result.stdout);
+    return listing;
+  }
+
   async initRepo(
     sandbox: WorkspaceSandbox,
     rawName: string,
-    actorUserId: string
+    actorUserId: string,
+    rawLocation?: unknown
   ): Promise<{ name: string }> {
     this.requireRunning(sandbox);
     const name = (rawName || '').trim();
     if (!REPO_RE.test(name) || name.length > 63 || name.startsWith('.')) {
       throw new BadRequestException(
         'Use letters, numbers, dots, dashes or underscores for the repository name'
+      );
+    }
+    const location = this.locationOf(rawLocation);
+    if (location) {
+      if (!isProjectName(name)) throw new BadRequestException('Invalid repository name');
+      const actor = await this.actors().resolve(actorUserId);
+      const result = await this.devExec(
+        sandbox,
+        `${gitExecPrelude(actor.identity, false)}\n${buildInitAtLocationScript(location, name)}`
+      );
+      const key = result.ok ? printedKey(result.stdout) : null;
+      if (key) return { name: key };
+      throw this.pathError(
+        result.exitCode,
+        result.exitCode === REPO_PATH_EXIT.exists ? `${location}/${name}` : location,
+        result.stdout
       );
     }
     const target = `/persist/home/${name}`;

@@ -135,8 +135,9 @@
 		return name ? `${label} · ${name}` : label;
 	});
 
+	const unset = $derived(!acpModelLabel && !store.modelID);
 	const modelLabel = $derived(
-		acpModelLabel ?? ocShortModelName(store.model?.name ?? store.modelID)
+		acpModelLabel ?? (unset ? 'Select model' : ocShortModelName(store.model?.name ?? store.modelID))
 	);
 	const variantLabel = $derived(store.variant ? ocEffortLabel(store.variant) : null);
 	const fast = $derived(store.model ? ocIsFast(store.model) : false);
@@ -418,6 +419,7 @@
 			type="button"
 			class="model"
 			class:model--open={isOpen}
+			class:model--unset={unset}
 			aria-label="Model and effort"
 			title="Model and effort"
 			{...props}
@@ -689,6 +691,10 @@
 </PopoverPanel>
 
 <style>
+	.model--unset .model-name {
+		color: var(--text-muted);
+	}
+
 	:global(.ui-popover.mp-panel) {
 		width: 20rem;
 		padding: var(--space-1);

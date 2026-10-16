@@ -8,6 +8,7 @@ import {
   Get,
   HttpException,
   NotFoundException,
+  Optional,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -31,6 +32,7 @@ import { SandboxConnectService } from './sandbox-connect.service';
 import { requireSandboxAccess } from './sandbox-role-gate';
 import { SandboxAccessService } from './sandbox-access.service';
 import { SandboxMembersService } from './sandbox-members.service';
+import { SandboxSessionsService } from './sandbox-sessions.service';
 import { SandboxGitActorService } from './sandbox-git-identity';
 import {
   OPENCODE_MESSAGE_ID_RE,
@@ -55,7 +57,8 @@ export class SandboxesController {
     private readonly gitActors: SandboxGitActorService,
     private readonly connect: SandboxConnectService,
     private readonly access: SandboxAccessService,
-    private readonly members: SandboxMembersService
+    private readonly members: SandboxMembersService,
+    @Optional() private readonly sessions?: SandboxSessionsService
   ) {}
 
   private async resolveUser(req: any): Promise<{ id: string; email: string | null }> {
@@ -162,11 +165,11 @@ export class SandboxesController {
   async addRepo(
     @Req() req: any,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: { repoUrl?: string }
+    @Body() body: { repoUrl?: string; location?: string }
   ) {
     const user = await this.resolveUser(req);
     const row = await requireSandboxAccess(this.access, id, user.id, 'owner');
-    return this.workspace.addRepo(row, body?.repoUrl || '', user.id);
+    return this.workspace.addRepo(row, body?.repoUrl || '', user.id, body?.location);
   }
 
   @Post(':id/repos/init')
@@ -174,11 +177,41 @@ export class SandboxesController {
   async initRepo(
     @Req() req: any,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: { name?: string }
+    @Body() body: { name?: string; location?: string }
   ) {
     const user = await this.resolveUser(req);
-    const row = await requireSandboxAccess(this.access, id, user.id, 'collaborator');
-    return this.workspace.initRepo(row, body?.name || '', user.id);
+    const placed = body?.location !== undefined && body?.location !== null && body?.location !== '';
+    const row = await requireSandboxAccess(
+      this.access,
+      id,
+      user.id,
+      placed ? 'owner' : 'collaborator'
+    );
+    return this.workspace.initRepo(row, body?.name || '', user.id, body?.location);
+  }
+
+  @Post(':id/repos/link')
+  @RequireScope('deploy')
+  async linkRepo(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { path?: string }
+  ) {
+    const user = await this.resolveUser(req);
+    const row = await requireSandboxAccess(this.access, id, user.id, 'owner');
+    return this.workspace.linkFolder(row, body?.path, user.id);
+  }
+
+  @Get(':id/dirs')
+  @RequireScope('exec')
+  async listDirs(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('path') path?: string
+  ) {
+    const user = await this.resolveUser(req);
+    const row = await requireSandboxAccess(this.access, id, user.id, 'owner');
+    return this.workspace.listDirs(row, path);
   }
 
   @Put(':id/repos/:name/icon')
@@ -528,6 +561,20 @@ export class SandboxesController {
     }
     const reply = opencodeReplyTarget(req.method, suffix);
     await this.workspace.proxyOpencode(row, req, res);
+    if (prompt && prompt.kind !== 'command' && res.statusCode >= 200 && res.statusCode < 300) {
+      const text = promptText(req.body?.parts);
+      if (text) {
+        void this.sessions
+          ?.titleFromPrompt({
+            sandbox: row,
+            chatId: prompt.chatId,
+            directory: typeof req.query?.directory === 'string' ? req.query.directory : null,
+            text,
+            agentTitles: true
+          })
+          .catch(() => null);
+      }
+    }
     if (reply && res.statusCode >= 200 && res.statusCode < 300) {
       void this.members
         .recordAnswer({ sandboxId: row.id, userId: user.id, ...reply })
@@ -611,4 +658,13 @@ export class SandboxesController {
     await this.sandboxes.remove(id, user.id, user.email, access.sandbox);
     return { success: true };
   }
+}
+
+function promptText(parts: unknown): string {
+  if (!Array.isArray(parts)) return '';
+  return parts
+    .filter((p) => p && typeof p === 'object' && p.type === 'text' && typeof p.text === 'string')
+    .map((p) => p.text as string)
+    .join('\n')
+    .trim();
 }

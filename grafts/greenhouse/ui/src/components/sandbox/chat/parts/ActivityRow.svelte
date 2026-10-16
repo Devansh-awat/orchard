@@ -44,6 +44,12 @@
 		summary.steps > 0 ? `${summary.steps} ${summary.steps === 1 ? 'step' : 'steps'}` : ''
 	);
 	const lastStep = $derived(block.steps[block.steps.length - 1]?.entry ?? null);
+	const shots = $derived(
+		block.steps
+			.flatMap((step) => (step.entry.kind === 'tool' ? (step.entry.files ?? []) : []))
+			.filter((file) => file.mime.startsWith('image/'))
+			.slice(0, 6)
+	);
 </script>
 
 <div class="act" class:act--live={live}>
@@ -82,6 +88,20 @@
 				<ChevronRight size={16} strokeWidth={1.75} />
 			</span>
 		</button>
+	{/if}
+	{#if expandable && !open && shots.length > 0}
+		<div class="act-shots" data-align="content" transition:slide>
+			{#each shots as shot, i (i)}
+				<button
+					type="button"
+					class="act-shot"
+					title="Show the step that read this"
+					onclick={() => (toggled = true)}
+				>
+					<img src={shot.src} alt={shot.name ?? 'Image the agent read'} loading="lazy" />
+				</button>
+			{/each}
+		</div>
 	{/if}
 	{#if expandable && open}
 		<div class="act-steps" transition:slide>
@@ -194,6 +214,35 @@
 		display: inline-flex;
 		flex-shrink: 0;
 		color: var(--text-faint);
+	}
+
+	.act-shots {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2);
+		padding: var(--space-1) 0 var(--space-2);
+	}
+
+	.act-shot {
+		display: block;
+		padding: 0;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-md);
+		background: var(--bg-sunken);
+		overflow: hidden;
+		cursor: pointer;
+		transition: border-color var(--dur-fast);
+	}
+
+	.act-shot:hover {
+		border-color: var(--border-strong);
+	}
+
+	.act-shot img {
+		display: block;
+		height: 4.5rem;
+		max-width: 10rem;
+		object-fit: cover;
 	}
 
 	.act-steps {

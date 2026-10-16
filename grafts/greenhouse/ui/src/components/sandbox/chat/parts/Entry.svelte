@@ -46,7 +46,7 @@
 		</div>
 	</div>
 {:else if entry.kind === 'tool'}
-	<ToolPart {entry} {nested} />
+	<ToolPart {entry} {nested} opener={store.fileOpener} />
 {:else if entry.kind === 'agent'}
 	<SubagentPart {entry} {nested} ontoggle={(agent) => store.toggleAgent(agent)}>
 		{#each entry.entries as child, ci (child.key)}
