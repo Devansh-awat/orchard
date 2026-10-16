@@ -8,15 +8,18 @@ import { EngineEventType, EngineObjectKey, EngineRefs } from '../core/informer';
 import { latestTermination } from './pod.consumer';
 import { computePodStatus } from '../pod-status';
 import { PodLogCaptureService } from '../../kubernetes/pod-log-capture.service';
-import { K8sCnpgService } from '../../kubernetes/k8s-cnpg.service';
+import { cnpgScheduleName, K8sCnpgService } from '../../kubernetes/k8s-cnpg.service';
 import { clusterSnapshot, WRITE_GUARD_ANNOTATION } from '../../kubernetes/cnpg-status';
 import { storagePressure, storagePressureDetail } from '../../kubernetes/db-stats';
 import { dataVolumesOf, fullestVolume, writeGuardDecision } from '../../kubernetes/volume-stats';
 import { DatabasesService } from '../../projects/databases.service';
 import { QuotasService } from '../../quotas/quotas.service';
+import { AuditService } from '../../audit/audit.service';
+import { K8S_DELETED_REASON } from './workload.consumer';
 import {
   clusterSpecValues,
   ResolvedResources,
+  scheduleCronUpdate,
   specColumnUpdate
 } from '../../kubernetes/cnpg-spec-sync';
 
@@ -27,6 +30,12 @@ const FRESH_TRANSITION_MS = 10 * 60 * 1000;
 const CRASH_CONFIRM_MS = 30_000;
 const RECOVER_CONFIRM_MS = 60_000;
 const STATS_MIN_GAP_MS = 10 * 1000;
+const CONFIRM_AFTER_MS = 90 * 1000;
+const SETTLING_STATUSES = new Set(['deleting', 'restoring', 'provisioning', 'error']);
+
+type LiveState = 'present' | 'absent' | 'unknown';
+
+export class ScheduleRemovalPending extends Error {}
 
 interface Ctx {
   databaseId: string;
@@ -58,6 +67,10 @@ export class CnpgConsumer implements OnModuleDestroy {
 
   private readonly sampling = new Set<string>();
 
+  private readonly scheduleAbsentSince = new Map<string, number>();
+
+  protected confirmAfterMs = CONFIRM_AFTER_MS;
+
   private stopped = false;
 
   constructor(
@@ -66,7 +79,8 @@ export class CnpgConsumer implements OnModuleDestroy {
     private readonly notifications: NotificationsService,
     private readonly logCapture: PodLogCaptureService,
     private readonly cnpg: K8sCnpgService,
-    private readonly moduleRef: ModuleRef
+    private readonly moduleRef: ModuleRef,
+    private readonly audit: AuditService
   ) {}
 
   onModuleDestroy() {
@@ -119,6 +133,160 @@ export class CnpgConsumer implements OnModuleDestroy {
     if (!ns || !name) return {};
     const ctx = await this.resolveCtx(ns, name);
     return ctx ? { databaseId: ctx.databaseId, projectId: ctx.projectId } : {};
+  }
+
+  async mapScheduledBackupRefs(schedule: any): Promise<EngineRefs> {
+    const ns = schedule.metadata?.namespace;
+    const clusterName = schedule.spec?.cluster?.name;
+    if (!ns || !clusterName) return {};
+    const ctx = await this.resolveCtx(ns, clusterName);
+    return ctx ? { databaseId: ctx.databaseId, projectId: ctx.projectId } : {};
+  }
+
+  async onScheduledBackupEvent(type: EngineEventType, schedule: any): Promise<void> {
+    const ns = schedule.metadata?.namespace;
+    const name = schedule.metadata?.name;
+    const clusterName = schedule.spec?.cluster?.name;
+    if (!ns || !name || !clusterName || name !== cnpgScheduleName(clusterName)) return;
+    const ctx = await this.resolveCtx(ns, clusterName);
+    if (!ctx) return;
+    if (type === 'delete') {
+      await this.confirmScheduleRemoval(ctx, ns, clusterName, name);
+      return;
+    }
+    this.scheduleAbsentSince.delete(ctx.databaseId);
+    if (schedule.metadata?.deletionTimestamp) return;
+    await this.adoptSchedule(ctx, ns, clusterName, schedule);
+  }
+
+  private async adoptSchedule(ctx: Ctx, ns: string, clusterName: string, schedule: any) {
+    const row = await this.prisma.database.findUnique({
+      where: { id: ctx.databaseId },
+      select: { status: true, backupScheduleCron: true, backupScheduleDisabled: true }
+    });
+    if (!row || row.status === 'deleting') return;
+    const cron = scheduleCronUpdate(row, schedule.spec?.schedule);
+    if (cron === null) return;
+    if (row.backupScheduleDisabled) {
+      const live = await this.liveScheduledBackup(ns, clusterName);
+      if (live === 'unknown') {
+        throw new Error(
+          `schedule adoption for ${ns}/${clusterName} deferred: apiserver unreadable`
+        );
+      }
+      if (live === 'absent') return;
+    }
+    await this.prisma.database.update({
+      where: { id: ctx.databaseId },
+      data: { backupScheduleCron: cron, backupScheduleDisabled: false }
+    });
+    this.logger.log(`${ns}/${clusterName}: took backup schedule ${cron} from the cluster`);
+    this.scheduleEmit(ctx, { backupSchedule: cron });
+  }
+
+  private async confirmScheduleRemoval(
+    ctx: Ctx,
+    ns: string,
+    clusterName: string,
+    name: string
+  ): Promise<void> {
+    const row = await this.prisma.database.findUnique({
+      where: { id: ctx.databaseId },
+      select: {
+        name: true,
+        status: true,
+        namespace: true,
+        clusterName: true,
+        backupScheduleCron: true,
+        backupScheduleDisabled: true
+      }
+    });
+    if (
+      !row ||
+      row.namespace !== ns ||
+      row.clusterName !== clusterName ||
+      SETTLING_STATUSES.has(row.status) ||
+      (row.backupScheduleDisabled && !row.backupScheduleCron)
+    ) {
+      this.scheduleAbsentSince.delete(ctx.databaseId);
+      return;
+    }
+
+    const schedule = await this.liveScheduledBackup(ns, clusterName);
+    if (schedule === 'present') {
+      this.scheduleAbsentSince.delete(ctx.databaseId);
+      return;
+    }
+    if (schedule === 'unknown') {
+      throw new ScheduleRemovalPending(
+        `schedule removal for ${ns}/${name} deferred: the apiserver could not confirm the delete`
+      );
+    }
+    const cluster = await this.liveCluster(ns, clusterName);
+    if (cluster !== 'present') {
+      this.scheduleAbsentSince.delete(ctx.databaseId);
+      if (cluster === 'unknown') {
+        throw new ScheduleRemovalPending(
+          `schedule removal for ${ns}/${name} deferred: cluster unreadable`
+        );
+      }
+      return;
+    }
+
+    const now = Date.now();
+    const first = this.scheduleAbsentSince.get(ctx.databaseId);
+    if (first === undefined) {
+      this.scheduleAbsentSince.set(ctx.databaseId, now);
+      throw new ScheduleRemovalPending(`schedule removal for ${ns}/${name} awaiting confirmation`);
+    }
+    if (now - first < this.confirmAfterMs) {
+      throw new ScheduleRemovalPending(`schedule removal for ${ns}/${name} awaiting confirmation`);
+    }
+    this.scheduleAbsentSince.delete(ctx.databaseId);
+
+    const previousCron = row.backupScheduleCron;
+    await this.prisma.database.update({
+      where: { id: ctx.databaseId },
+      data: { backupScheduleCron: null, backupScheduleDisabled: true }
+    });
+    this.logger.warn(
+      `${ns}/${name} confirmed deleted in the cluster; scheduled backups for database ${ctx.databaseId} are now off`
+    );
+    await this.audit.log({
+      action: 'database.backup_schedule.deleted',
+      organizationId: ctx.orgId,
+      projectId: ctx.projectId,
+      targetType: 'database',
+      targetId: ctx.databaseId,
+      targetLabel: row.name,
+      metadata: {
+        reason: K8S_DELETED_REASON,
+        source: 'engine.cnpg',
+        namespace: ns,
+        scheduledBackup: name,
+        previousCron,
+        firstAbsentAt: new Date(first).toISOString(),
+        confirmedAbsentAt: new Date(now).toISOString()
+      }
+    });
+    this.scheduleEmit(ctx, { backupSchedule: null });
+  }
+
+  protected async liveScheduledBackup(ns: string, clusterName: string): Promise<LiveState> {
+    return this.liveRead(() => this.cnpg.hasScheduledBackup(ns, clusterName));
+  }
+
+  protected async liveCluster(ns: string, clusterName: string): Promise<LiveState> {
+    return this.liveRead(() => this.cnpg.hasCnpgCluster(ns, clusterName));
+  }
+
+  private async liveRead(read: () => Promise<boolean>): Promise<LiveState> {
+    try {
+      return (await read()) ? 'present' : 'absent';
+    } catch (err: any) {
+      this.logger.warn(`could not read from the apiserver: ${err?.message ?? err}`);
+      return 'unknown';
+    }
   }
 
   async onPodEvent(type: EngineEventType, pod: k8s.V1Pod): Promise<void> {

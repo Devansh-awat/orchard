@@ -49,6 +49,10 @@ import { LeaderElectionService } from '../events/leader-election.service';
 import { parseKubeletSummary, VolumeUsage } from './volume-stats';
 import { WRITE_GUARD_ANNOTATION } from './cnpg-status';
 
+export function cnpgScheduleName(clusterName: string): string {
+  return `${clusterName}-schedule`.substring(0, 63);
+}
+
 export function normalizeBackupEndpointURL(raw: string): string {
   const trimmed = raw.trim().replace(/\/+$/, '');
   return /^https?:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`;
@@ -2614,7 +2618,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
   }
 
   private scheduledBackupName(clusterName: string): string {
-    return `${clusterName}-schedule`.substring(0, 63);
+    return cnpgScheduleName(clusterName);
   }
 
   private r2SecretName(clusterName: string): string {
@@ -2790,6 +2794,24 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       undefined,
       { headers: { 'Content-Type': 'application/merge-patch+json' } }
     );
+  }
+
+  async hasCnpgCluster(namespace: string, clusterName: string): Promise<boolean> {
+    this.ensureKubeConfig();
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    try {
+      await customApi.getNamespacedCustomObject(
+        this.CNPG_GROUP,
+        this.CNPG_VERSION,
+        namespace,
+        this.CNPG_PLURAL,
+        clusterName
+      );
+      return true;
+    } catch (e: any) {
+      if (e.response?.statusCode === 404) return false;
+      throw e;
+    }
   }
 
   async hasScheduledBackup(namespace: string, clusterName: string): Promise<boolean> {

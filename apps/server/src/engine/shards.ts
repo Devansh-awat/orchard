@@ -132,6 +132,29 @@ export function buildEngineShards(deps: EngineShardDeps): EngineShard[] {
             ),
           mapRefs: (obj) => deps.cnpg.mapClusterRefs(obj),
           onEvent: (type, obj) => deps.cnpg.onClusterEvent(type, obj)
+        },
+        {
+          kind: 'ScheduledBackup',
+          apiVersion: 'postgresql.cnpg.io/v1',
+          watchPath: '/apis/postgresql.cnpg.io/v1/scheduledbackups',
+          list: async (kc, opts) =>
+            toListResult(
+              (await kc
+                .makeApiClient(k8s.CustomObjectsApi)
+                .listClusterCustomObject(
+                  'postgresql.cnpg.io',
+                  'v1',
+                  'scheduledbackups',
+                  undefined,
+                  undefined,
+                  opts.continueToken,
+                  undefined,
+                  undefined,
+                  opts.limit
+                )) as K8sListBody
+            ),
+          mapRefs: (obj) => deps.cnpg.mapScheduledBackupRefs(obj),
+          onEvent: (type, obj) => deps.cnpg.onScheduledBackupEvent(type, obj)
         }
       ]
     },

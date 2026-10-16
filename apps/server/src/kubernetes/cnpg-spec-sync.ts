@@ -1,4 +1,5 @@
 import { parseCpu, parseMemory } from './quantity';
+import { toQuartzCron } from '../projects/projects.utils';
 
 export interface ClusterSpecValues {
   storageSize: string | null;
@@ -123,4 +124,28 @@ export function parameterDrift(
     if (running !== undefined && running !== baseline[key]) drift[key] = running;
   }
   return drift;
+}
+
+export interface ScheduleColumns {
+  backupScheduleCron: string | null;
+  backupScheduleDisabled: boolean;
+}
+
+export function cronFromSchedule(schedule: string): string {
+  const parts = schedule.trim().split(/\s+/).filter(Boolean);
+  return parts.length === 6 && parts[0] === '0' ? parts.slice(1).join(' ') : parts.join(' ');
+}
+
+export function scheduleCronUpdate(row: ScheduleColumns, schedule: unknown): string | null {
+  if (typeof schedule !== 'string') return null;
+  const live = schedule.trim().split(/\s+/).filter(Boolean).join(' ');
+  if (!live) return null;
+  if (
+    !row.backupScheduleDisabled &&
+    row.backupScheduleCron &&
+    toQuartzCron(row.backupScheduleCron) === live
+  ) {
+    return null;
+  }
+  return cronFromSchedule(live);
 }
