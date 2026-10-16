@@ -275,35 +275,40 @@ export interface KubeConfigLike {
   [key: string]: unknown;
 }
 
-export interface MirrorListPage {
+export interface EngineListPage {
   items: unknown[];
   resourceVersion: string;
   continueToken: string | null;
 }
 
-export interface MirrorResource {
+export interface EngineResource {
   kind: string;
   apiVersion: string;
   watchPath: string;
   labelSelector?: string;
   fieldSelector?: string;
-  list(kc: never, opts: { continueToken?: string; limit?: number }): Promise<MirrorListPage>;
+  list(kc: never, opts: { continueToken?: string; limit?: number }): Promise<EngineListPage>;
   sanitize?(obj: unknown): unknown;
   onEvent?(type: string, obj: unknown): unknown;
   onListComplete?(seen: unknown): unknown;
 }
 
-export interface MirrorShard {
+export interface EngineShard {
   name: string;
   lease: string;
-  resources: MirrorResource[];
+  resources: EngineResource[];
 }
+
+export type MirrorListPage = EngineListPage;
+export type MirrorResource = EngineResource;
+export type MirrorShard = EngineShard;
 
 export interface KubeDoor {
   readonly kc: KubeConfigLike | null;
   isLeader(): boolean;
   onLeaderAcquired(listener: () => void): void;
-  registerMirrorShard(build: () => Promise<MirrorShard | null>): void;
+  registerEngineShard(build: () => Promise<EngineShard | null>): void;
+  registerMirrorShard(build: () => Promise<EngineShard | null>): void;
   databaseTlsHostname(namespace: string, clusterName: string): string | null;
 }
 
