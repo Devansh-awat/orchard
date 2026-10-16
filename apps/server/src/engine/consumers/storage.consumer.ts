@@ -4,15 +4,28 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { OrgEventsService } from '../../events/org-events.service';
 import { AuditService } from '../../audit/audit.service';
 import { observePvc } from '../../kubernetes/pvc-status';
+import { parseMemory } from '../../kubernetes/quantity';
 import { EngineEventType, EngineRefs } from '../core/informer';
 import { K8S_DELETED_REASON } from './workload.consumer';
 
 const MISSING_PHASE = 'Missing';
+const DEFAULT_STORAGE_SIZE = '1Gi';
+const STORAGE_SIZE_MAX_LENGTH = 20;
+
+export function grownStorageSize(stored: string | null, requested: string | null): string | null {
+  if (!requested || requested.length > STORAGE_SIZE_MAX_LENGTH) return null;
+  const next = parseMemory(requested);
+  if (next <= 0) return null;
+  const current = parseMemory(stored ?? DEFAULT_STORAGE_SIZE);
+  if (current <= 0) return null;
+  return next > current ? requested : null;
+}
 
 interface VolumeRow {
   id: string;
   name: string;
   deploymentId: string;
+  storageSize: string | null;
   observedCapacity: string | null;
   phase: string | null;
   resizeState: string | null;
@@ -40,30 +53,34 @@ export class StorageConsumer {
     const rows = await this.volumeRows(pvc);
     if (rows.length === 0) return;
 
-    const next =
-      type === 'delete'
-        ? { observedCapacity: null, phase: MISSING_PHASE, resizeState: null, resizeMessage: null }
-        : (() => {
-            const seen = observePvc(pvc);
-            return {
-              observedCapacity: seen.capacity,
-              phase: seen.phase,
-              resizeState: seen.resizeState,
-              resizeMessage: seen.message
-            };
-          })();
+    const seen = type === 'delete' ? null : observePvc(pvc);
+    const next = seen
+      ? {
+          observedCapacity: seen.capacity,
+          phase: seen.phase,
+          resizeState: seen.resizeState,
+          resizeMessage: seen.message
+        }
+      : { observedCapacity: null, phase: MISSING_PHASE, resizeState: null, resizeMessage: null };
 
     const touched = new Map<string, VolumeRow>();
     for (const row of rows) {
+      const grown = seen ? grownStorageSize(row.storageSize, seen.requested) : null;
       const changed =
+        grown !== null ||
         row.observedCapacity !== next.observedCapacity ||
         row.phase !== next.phase ||
         row.resizeState !== next.resizeState ||
         row.resizeMessage !== next.resizeMessage;
       await this.prisma.deploymentVolume.update({
         where: { id: row.id },
-        data: { ...next, observedAt: new Date() }
+        data: { ...next, ...(grown ? { storageSize: grown } : {}), observedAt: new Date() }
       });
+      if (grown) {
+        this.logger.log(
+          `adopted external storage size for volume ${row.name} on ${row.deploymentId}: ${row.storageSize ?? DEFAULT_STORAGE_SIZE} -> ${grown}`
+        );
+      }
       if (changed) touched.set(row.deploymentId, row);
     }
 
@@ -107,6 +124,7 @@ export class StorageConsumer {
         id: true,
         name: true,
         deploymentId: true,
+        storageSize: true,
         observedCapacity: true,
         phase: true,
         resizeState: true,
