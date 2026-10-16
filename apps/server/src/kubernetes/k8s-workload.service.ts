@@ -29,6 +29,7 @@ import {
   normalizeMinAvailable
 } from './disruption-budget';
 import { computePodStatus } from '../engine/pod-status';
+import { isExternalDeployment } from './external-deployment';
 import { isPullAuthEnvKey } from '../env/reserved-env';
 import {
   ROLLOUT_GATE_POLL_MS,
@@ -1806,15 +1807,24 @@ export class K8sWorkloadService {
 
       const deploymentList = await appsApi.listNamespacedDeployment(namespace);
 
+      let adoptedCount = 0;
       for (const k8sDeployment of deploymentList.body.items) {
+        if (!isExternalDeployment(k8sDeployment)) continue;
         const deploymentName = k8sDeployment.metadata.name;
+        const existingRecord = await this.prisma.deployment.findFirst({
+          where: { projectId: project.id, namespace, name: deploymentName },
+          select: { id: true }
+        });
+        if (existingRecord) continue;
+
         const image = k8sDeployment.spec.template.spec.containers[0]?.image;
-        const replicas = k8sDeployment.spec.replicas || 1;
-        const availableReplicas = k8sDeployment.status.availableReplicas || 0;
-        const unavailableReplicas = k8sDeployment.status.unavailableReplicas || 0;
+        const specReplicas = k8sDeployment.spec.replicas ?? 1;
+        const replicas = specReplicas > 0 ? specReplicas : 1;
+        const availableReplicas = k8sDeployment.status?.availableReplicas || 0;
+        const unavailableReplicas = k8sDeployment.status?.unavailableReplicas || 0;
 
         let status = 'pending';
-        if (replicas === 0) {
+        if (specReplicas === 0) {
           status = 'stopped';
         } else if (availableReplicas === replicas && replicas > 0) {
           status = 'running';
@@ -1826,65 +1836,47 @@ export class K8sWorkloadService {
           status = 'pending';
         }
 
-        const existingRecord = await this.prisma.deployment.findFirst({
-          where: { projectId: project.id, namespace, name: deploymentName }
+        // The namespace being synced belongs to one environment. Adopting
+        // its workloads into the default one would file them under the wrong
+        // namespace the moment anything writes the record back.
+        const defaultEnv = scope.environmentId
+          ? { id: scope.environmentId }
+          : await this.prisma.environment.findFirst({
+              where: { projectId: project.id, isDefault: true },
+              select: { id: true }
+            });
+        const deploymentRecord = await this.prisma.deployment.create({
+          data: {
+            projectId: project.id,
+            environmentId: defaultEnv?.id ?? null,
+            name: deploymentName,
+            namespace,
+            image,
+            replicas,
+            stopped: specReplicas === 0,
+            status
+          }
         });
-        let deploymentRecord;
-        if (existingRecord) {
-          deploymentRecord = await this.prisma.deployment.update({
-            where: { id: existingRecord.id },
-            data: { namespace, image, replicas, status }
-          });
-        } else {
-          // The namespace being synced belongs to one environment. Adopting
-          // its workloads into the default one would file them under the wrong
-          // namespace the moment anything writes the record back.
-          const defaultEnv = scope.environmentId
-            ? { id: scope.environmentId }
-            : await this.prisma.environment.findFirst({
-                where: { projectId: project.id, isDefault: true },
-                select: { id: true }
-              });
-          deploymentRecord = await this.prisma.deployment.create({
-            data: {
-              projectId: project.id,
-              environmentId: defaultEnv?.id ?? null,
-              name: deploymentName,
-              namespace,
-              image,
-              replicas,
-              status
-            }
-          });
-        }
+        adoptedCount += 1;
 
-        // Env belongs to the deployment record, never to the live pod spec, so
-        // this only seeds a Deployment we have just adopted from outside
-        // Orchard. Reading it back for a record we already own would rewrite the
-        // user's config from the cluster: the injected extras (HOST,
-        // FORCE_COLOR) would land as if they had typed them, and every secret
-        // var would be dropped, since those reach the container through a
-        // secretKeyRef and carry no inline value to read.
-        if (!existingRecord) {
-          const containerEnv = k8sDeployment.spec.template.spec.containers?.[0]?.env || [];
-          const adopted = containerEnv
-            .filter((envVar) => envVar?.name && envVar.value !== undefined && envVar.value !== null)
-            .map((envVar) => ({
-              deploymentId: deploymentRecord.id,
-              key: String(envVar.name),
-              value: String(envVar.value)
-            }));
-          if (adopted.length > 0) {
-            await this.prisma.deploymentEnvVar.createMany({ data: adopted, skipDuplicates: true });
-          }
-          const referenced = containerEnv.filter((envVar) => envVar?.name && envVar.valueFrom);
-          if (referenced.length > 0) {
-            this.logger.warn(
-              `[Sync] ${deploymentName}: ${referenced.length} env var(s) resolve through valueFrom and were not imported: ${referenced
-                .map((envVar) => envVar.name)
-                .join(', ')}`
-            );
-          }
+        const containerEnv = k8sDeployment.spec.template.spec.containers?.[0]?.env || [];
+        const adopted = containerEnv
+          .filter((envVar) => envVar?.name && envVar.value !== undefined && envVar.value !== null)
+          .map((envVar) => ({
+            deploymentId: deploymentRecord.id,
+            key: String(envVar.name),
+            value: String(envVar.value)
+          }));
+        if (adopted.length > 0) {
+          await this.prisma.deploymentEnvVar.createMany({ data: adopted, skipDuplicates: true });
+        }
+        const referenced = containerEnv.filter((envVar) => envVar?.name && envVar.valueFrom);
+        if (referenced.length > 0) {
+          this.logger.warn(
+            `[Sync] ${deploymentName}: ${referenced.length} env var(s) resolve through valueFrom and were not imported: ${referenced
+              .map((envVar) => envVar.name)
+              .join(', ')}`
+          );
         }
 
         try {
@@ -2029,48 +2021,14 @@ export class K8sWorkloadService {
         }
       }
 
-      const dbDeploymentNames = new Set(deploymentList.body.items.map((d) => d.metadata.name));
-
-      const dbDeployments = await this.prisma.deployment.findMany({
-        where: {
-          projectId: project.id,
-          namespace,
-          buildStatus: 'succeeded'
-        },
-        select: {
-          id: true,
-          name: true,
-          project: { select: { organizationId: true } }
-        }
-      });
-
-      for (const dbDeployment of dbDeployments) {
-        if (dbDeploymentNames.has(dbDeployment.name)) continue;
-        this.logger.warn(
-          `[Sync] ${namespace}: deployment "${dbDeployment.name}" (${dbDeployment.id}) built successfully but is absent from k8s; removing stale DB row`
-        );
-        await this.prisma.deployment.delete({
-          where: { id: dbDeployment.id }
-        });
-        void this.audit.log({
-          action: 'deployment.deleted',
-          organizationId: dbDeployment.project.organizationId,
-          projectId: project.id,
-          deploymentId: dbDeployment.id,
-          targetType: 'deployment',
-          targetId: dbDeployment.id,
-          targetLabel: dbDeployment.name,
-          metadata: { reason: 'resource eliminated in k8s', source: 'sync', namespace }
-        });
-      }
-
       console.log('[Sync] Successfully synced namespace:', namespace);
 
       return {
         success: true,
         namespace,
         projectId: project.id,
-        deploymentsCount: deploymentList.body.items.length
+        deploymentsCount: deploymentList.body.items.length,
+        adoptedCount
       };
     } catch (error) {
       console.error('[Sync] Error syncing namespace:', error);
