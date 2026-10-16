@@ -17,9 +17,17 @@ import {
   readAppliedSchedule,
   scheduleStateOf
 } from '../../jobs/cronjob-drift';
+import { KubernetesService } from '../../kubernetes/kubernetes.service';
 import { EngineEventType, EngineRefs } from '../core/informer';
+import { K8S_DELETED_REASON, RemovalPending } from './workload.consumer';
 
 export const K8S_SCHEDULE_ADOPTED_REASON = 'schedule edited in k8s';
+
+const CONFIRM_AFTER_MS = 90 * 1000;
+const REMOVAL_WINDOW_MS = 10 * 60 * 1000;
+const MAX_REMOVALS_PER_WINDOW = 5;
+
+type LiveState = 'present' | 'absent' | 'unknown';
 
 const JOB_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -43,8 +51,15 @@ export class CronJobConsumer {
 
   private readonly refused = new Map<string, string>();
 
+  private readonly absentSince = new Map<string, number>();
+
+  private removals: number[] = [];
+
+  protected confirmAfterMs = CONFIRM_AFTER_MS;
+
   constructor(
     private readonly prisma: PrismaService,
+    private readonly kubernetes: KubernetesService,
     private readonly audit: AuditService,
     private readonly jobs: JobsService,
     private readonly orchestrator: JobsOrchestratorService
@@ -57,9 +72,134 @@ export class CronJobConsumer {
 
   async onEvent(type: EngineEventType, cronJob: k8s.V1CronJob): Promise<void> {
     const owner = await this.ownerOf(cronJob);
-    if (!owner) return;
-    if (type === 'delete') return;
+    if (!owner) {
+      const jobId = cronJob.metadata?.labels?.[LABEL_JOB_ID];
+      if (jobId) this.absentSince.delete(jobId);
+      return;
+    }
+    if (type === 'delete') {
+      await this.confirmRemoval(owner, cronJob);
+      return;
+    }
+    this.absentSince.delete(owner.id);
     await this.adoptSchedule(owner, cronJob);
+  }
+
+  private async confirmRemoval(owner: CronJobOwner, cronJob: k8s.V1CronJob): Promise<void> {
+    const namespace = owner.project.namespace;
+    const name = cronJob.metadata?.name ?? '';
+    if (owner.cronJobName !== name || !owner.enabled) {
+      this.absentSince.delete(owner.id);
+      return;
+    }
+
+    const namespaceState = await this.liveNamespace(namespace);
+    if (namespaceState !== 'present') {
+      this.absentSince.delete(owner.id);
+      if (namespaceState === 'unknown') {
+        throw new RemovalPending(`removal of ${namespace}/${name} deferred: namespace unreadable`);
+      }
+      return;
+    }
+
+    const state = await this.liveCronJob(namespace, name);
+    if (state === 'present') {
+      if (this.absentSince.has(owner.id)) {
+        this.logger.warn(
+          `cronjob ${namespace}/${name} looked deleted but the apiserver still has it; false alarm, job ${owner.id} left enabled`
+        );
+      }
+      this.absentSince.delete(owner.id);
+      return;
+    }
+    if (state === 'unknown') {
+      throw new RemovalPending(
+        `removal of ${namespace}/${name} deferred: the apiserver could not confirm the delete`
+      );
+    }
+
+    const now = Date.now();
+    const first = this.absentSince.get(owner.id);
+    if (first === undefined) {
+      this.absentSince.set(owner.id, now);
+      this.logger.warn(
+        `cronjob ${namespace}/${name} is gone from the cluster; job ${owner.id} will be disabled if it is still gone in ${Math.round(this.confirmAfterMs / 1000)}s`
+      );
+      throw new RemovalPending(`removal of ${namespace}/${name} awaiting confirmation`);
+    }
+    if (now - first < this.confirmAfterMs) {
+      throw new RemovalPending(`removal of ${namespace}/${name} awaiting confirmation`);
+    }
+
+    this.removals = this.removals.filter((at) => now - at < REMOVAL_WINDOW_MS);
+    if (this.removals.length >= MAX_REMOVALS_PER_WINDOW) {
+      this.logger.error(
+        `${this.removals.length} jobs were disabled after cluster deletes in the last ${REMOVAL_WINDOW_MS / 60000} minutes; holding ${namespace}/${name} back. That is not what a manual delete looks like. It is retried once the window passes.`
+      );
+      throw new RemovalPending(`removal of ${namespace}/${name} held by the breaker`);
+    }
+
+    this.absentSince.delete(owner.id);
+    const result = await this.prisma.job.updateMany({
+      where: { id: owner.id, cronJobName: name, enabled: true },
+      data: { enabled: false, cronJobName: null }
+    });
+    if (result.count === 0) return;
+    this.removals.push(now);
+
+    this.logger.warn(
+      `cronjob ${namespace}/${name} confirmed deleted in the cluster; job ${owner.id} disabled, its runs kept`
+    );
+    void this.audit.log({
+      action: 'job.updated',
+      organizationId: owner.project.organizationId,
+      projectId: owner.projectId,
+      targetType: 'job',
+      targetId: owner.id,
+      targetLabel: owner.name,
+      metadata: {
+        reason: K8S_DELETED_REASON,
+        source: 'engine.batch',
+        cronJob: `${namespace}/${name}`,
+        enabled: [true, false],
+        firstAbsentAt: new Date(first).toISOString(),
+        confirmedAbsentAt: new Date(now).toISOString()
+      }
+    });
+    this.jobs.emitJobChanged(owner.project.organizationId, owner.id, owner.projectId);
+  }
+
+  protected async liveCronJob(namespace: string, name: string): Promise<LiveState> {
+    try {
+      this.kubernetes.ensureKubeConfig();
+      await this.kubernetes
+        .kc!.makeApiClient(k8s.BatchV1Api)
+        .readNamespacedCronJob(name, namespace);
+      return 'present';
+    } catch (err: any) {
+      const code = err?.response?.statusCode ?? err?.statusCode;
+      if (code === 404) return 'absent';
+      this.logger.warn(
+        `could not read cronjob ${namespace}/${name} from the apiserver (${code ?? 'no status'}): ${err?.message ?? err}`
+      );
+      return 'unknown';
+    }
+  }
+
+  protected async liveNamespace(namespace: string): Promise<LiveState> {
+    try {
+      this.kubernetes.ensureKubeConfig();
+      const { body } = await this.kubernetes
+        .kc!.makeApiClient(k8s.CoreV1Api)
+        .readNamespace(namespace);
+      if (body?.status?.phase === 'Terminating' || body?.metadata?.deletionTimestamp) {
+        return 'absent';
+      }
+      return 'present';
+    } catch (err: any) {
+      const code = err?.response?.statusCode ?? err?.statusCode;
+      return code === 404 ? 'absent' : 'unknown';
+    }
   }
 
   private async ownerOf(cronJob: k8s.V1CronJob): Promise<CronJobOwner | null> {

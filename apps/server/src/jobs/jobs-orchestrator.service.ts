@@ -24,9 +24,11 @@ import {
   ANNOTATION_APPLIED_SCHEDULE,
   appliedScheduleAnnotation,
   cronJobForReplace,
+  missingCronJobAction,
   readAppliedSchedule,
   scheduleStateOf
 } from './cronjob-drift';
+import { engineDisabled } from '../engine/engine-disabled';
 import { RegistryCredentialsService } from '../projects/registry-credentials.service';
 import { pullSecretsForImage } from '../projects/registry-credentials';
 import { pinToBuildArch } from '../docker/build-platform';
@@ -86,6 +88,8 @@ export class JobsOrchestratorService {
   private readonly logger = new Logger(JobsOrchestratorService.name);
 
   private readonly cronJobSyncs = new Map<string, number>();
+
+  private readonly cronJobsMissingSince = new Map<string, number>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -409,10 +413,10 @@ export class JobsOrchestratorService {
     return (this.cronJobSyncs.get(jobId) ?? 0) > 0;
   }
 
-  async syncCronJob(jobId: string): Promise<void> {
+  async syncCronJob(jobId: string, opts: { recreate?: boolean } = {}): Promise<void> {
     this.cronJobSyncs.set(jobId, (this.cronJobSyncs.get(jobId) ?? 0) + 1);
     try {
-      await this.writeCronJob(jobId);
+      await this.writeCronJob(jobId, opts);
     } finally {
       const left = (this.cronJobSyncs.get(jobId) ?? 1) - 1;
       if (left > 0) this.cronJobSyncs.set(jobId, left);
@@ -420,7 +424,7 @@ export class JobsOrchestratorService {
     }
   }
 
-  private async writeCronJob(jobId: string): Promise<void> {
+  private async writeCronJob(jobId: string, opts: { recreate?: boolean }): Promise<void> {
     const job = await this.prisma.job.findUnique({
       where: { id: jobId },
       include: {
@@ -498,7 +502,36 @@ export class JobsOrchestratorService {
     desired.metadata!.annotations![ANNOTATION_APPLIED_SCHEDULE] = applied;
 
     const live = await this.readCronJob(namespace, name);
+    if (live) this.cronJobsMissingSince.delete(job.id);
     if (!live) {
+      const now = Date.now();
+      const missingSince = this.cronJobsMissingSince.get(job.id) ?? now;
+      const action = missingCronJobAction({
+        enabled: job.enabled,
+        linked: job.cronJobName === name,
+        recreate: opts.recreate ?? false,
+        engineWatching: !engineDisabled(),
+        missingForMs: now - missingSince
+      });
+      if (action === 'wait') {
+        if (!this.cronJobsMissingSince.has(job.id)) {
+          this.cronJobsMissingSince.set(job.id, now);
+          this.logger.warn(
+            `CronJob ${namespace}/${name} is gone from the cluster; not recreating it while the engine confirms the delete`
+          );
+        }
+        return;
+      }
+      if (this.cronJobsMissingSince.delete(job.id) && action === 'create') {
+        this.logger.warn(
+          `CronJob ${namespace}/${name} was missing and job ${job.id} is still enabled; recreating it`
+        );
+      }
+      if (action === 'unlink') {
+        await this.prisma.job.update({ where: { id: job.id }, data: { cronJobName: null } });
+        return;
+      }
+      if (action === 'skip') return;
       await batch.createNamespacedCronJob(namespace, desired);
       this.logger.log(`Created CronJob ${namespace}/${name}`);
     } else if (live.metadata?.annotations?.[ANNOTATION_SPEC_HASH] === hash) {

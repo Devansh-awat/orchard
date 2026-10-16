@@ -2,7 +2,30 @@ import * as k8s from '@kubernetes/client-node';
 
 export const ANNOTATION_APPLIED_SCHEDULE = 'orchard/applied-schedule';
 
+export const RECREATE_MISSING_AFTER_MS = 10 * 60 * 1000;
+
 const ORCHARD_KEY_PREFIX = 'orchard/';
+
+export type MissingCronJobAction = 'skip' | 'unlink' | 'wait' | 'create';
+
+export function missingCronJobAction(input: {
+  enabled: boolean;
+  linked: boolean;
+  recreate: boolean;
+  engineWatching: boolean;
+  missingForMs: number;
+}): MissingCronJobAction {
+  if (!input.enabled) return input.linked ? 'unlink' : 'skip';
+  if (
+    input.linked &&
+    !input.recreate &&
+    input.engineWatching &&
+    input.missingForMs < RECREATE_MISSING_AFTER_MS
+  ) {
+    return 'wait';
+  }
+  return 'create';
+}
 
 export const SCHEDULE_FIELDS = ['schedule', 'timeZone', 'suspend', 'concurrencyPolicy'] as const;
 

@@ -102,7 +102,7 @@ export class JobsController {
       userId: user.id
     });
     const job = await this.jobs.createJob(projectId, body ?? ({} as JobInput), user.id);
-    await this.orchestrator.syncCronJob(job.id).catch(() => {});
+    await this.orchestrator.syncCronJob(job.id, { recreate: true }).catch(() => {});
     await this.audit.log({
       action: 'job.created',
       actorUserId: user.id,
@@ -130,7 +130,7 @@ export class JobsController {
       userId: user.id
     });
     const updated = await this.jobs.updateJob(id, body ?? {});
-    await this.orchestrator.syncCronJob(id).catch(() => {});
+    await this.orchestrator.syncCronJob(id, { recreate: true }).catch(() => {});
     await this.audit.log({
       action: 'job.updated',
       actorUserId: user.id,
@@ -151,7 +151,7 @@ export class JobsController {
   ) {
     const { job, user } = await this.assertJobEdit(id, req, 'update jobs');
     const updated = await this.jobs.replaceSteps(id, body?.steps ?? []);
-    await this.orchestrator.syncCronJob(id).catch(() => {});
+    await this.orchestrator.syncCronJob(id, { recreate: true }).catch(() => {});
     await this.audit.log({
       action: 'job.steps.updated',
       actorUserId: user.id,
