@@ -20,6 +20,7 @@ import { NodesService } from '../nodes/nodes.service';
 import { JobsService, RUN_ACTIVE_STATUSES } from './jobs.service';
 import { scriptRuntimeSpec, scriptFileName, ScriptRuntime } from './script-runtimes';
 import { decodeStepsSnapshot, encodeStepsSnapshot } from './steps-snapshot';
+import { cronJobForReplace } from './cronjob-drift';
 import { RegistryCredentialsService } from '../projects/registry-credentials.service';
 import { pullSecretsForImage } from '../projects/registry-credentials';
 import { pinToBuildArch } from '../docker/build-platform';
@@ -475,8 +476,11 @@ export class JobsOrchestratorService {
       const existing = await batch.readNamespacedCronJob(name, namespace);
       const existingHash = existing.body.metadata?.annotations?.[ANNOTATION_SPEC_HASH];
       if (existingHash === hash) return;
-      desired.metadata!.resourceVersion = existing.body.metadata?.resourceVersion;
-      await batch.replaceNamespacedCronJob(name, namespace, desired);
+      await batch.replaceNamespacedCronJob(
+        name,
+        namespace,
+        cronJobForReplace(desired, existing.body)
+      );
       this.logger.log(`Updated CronJob ${namespace}/${name}`);
     } catch (err: any) {
       if (err?.statusCode === 404 || err?.response?.statusCode === 404) {
