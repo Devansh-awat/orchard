@@ -19,10 +19,13 @@ import { IngressConsumer } from './consumers/ingress.consumer';
 import { StorageConsumer } from './consumers/storage.consumer';
 import { ServiceConsumer } from './consumers/service.consumer';
 import { NamespaceConsumer } from './consumers/namespace.consumer';
+import { GuardConsumer } from './consumers/guard.consumer';
 
 const ORCHARD_SELECTOR = 'app.kubernetes.io/managed-by=orchard';
 const INGRESS_SELECTOR = 'leaf.dev/managed=true';
 const CNPG_POD_SELECTOR = 'cnpg.io/cluster';
+const CILIUM_POLICY_SELECTOR = 'orchard.my/managed=true';
+const BASIC_AUTH_SELECTOR = 'orchard.my/type=basic-auth';
 const OUTSIDE_BUILDERS = `metadata.namespace!=${BUILDER_NAMESPACE}`;
 
 export interface EngineShardDeps {
@@ -39,6 +42,8 @@ export interface EngineShardDeps {
   // does not serve fails the informer forever, so the resource is only built
   // when the definition exists.
   certManager: boolean;
+  guard: GuardConsumer;
+  cilium: { networkPolicies: boolean; envoyConfigs: boolean };
   namespaceRefs: (namespace: string) => Promise<EngineRefs>;
 }
 
@@ -77,6 +82,25 @@ export function buildEngineShards(deps: EngineShardDeps): EngineShard[] {
         opts.limit
       )
     );
+
+  const listCilium =
+    (plural: string, labelSelector: string) =>
+    async (kc: k8s.KubeConfig, opts: EngineListOptions): Promise<EngineListPage> =>
+      toListResult(
+        (await kc
+          .makeApiClient(k8s.CustomObjectsApi)
+          .listClusterCustomObject(
+            'cilium.io',
+            'v2',
+            plural,
+            undefined,
+            undefined,
+            opts.continueToken,
+            undefined,
+            labelSelector,
+            opts.limit
+          )) as K8sListBody
+      );
 
   const shards: EngineShard[] = [
     {
@@ -369,6 +393,60 @@ export function buildEngineShards(deps: EngineShardDeps): EngineShard[] {
           mapRefs: async (obj) => (await deps.storage.mapRefs(obj)) ?? byNamespace(obj),
           onEvent: (type, obj) => deps.storage.onEvent(type, obj)
         }
+      ]
+    },
+    {
+      name: 'guard',
+      lease: 'orchard-mirror-guard',
+      resources: [
+        {
+          kind: 'NetworkPolicy',
+          apiVersion: 'networking.k8s.io/v1',
+          watchPath: '/apis/networking.k8s.io/v1/networkpolicies',
+          labelSelector: ORCHARD_SELECTOR,
+          list: async (kc, opts) =>
+            toListResult(
+              await kc
+                .makeApiClient(k8s.NetworkingV1Api)
+                .listNetworkPolicyForAllNamespaces(
+                  undefined,
+                  opts.continueToken,
+                  undefined,
+                  ORCHARD_SELECTOR,
+                  opts.limit
+                )
+            ),
+          mapRefs: byNamespace,
+          onEvent: (type, obj) => deps.guard.onEvent('NetworkPolicy', type, obj),
+          onListComplete: (seen) => deps.guard.sweep('NetworkPolicy', seen)
+        },
+        ...(deps.cilium.networkPolicies
+          ? [
+              {
+                kind: 'CiliumNetworkPolicy',
+                apiVersion: 'cilium.io/v2',
+                watchPath: '/apis/cilium.io/v2/ciliumnetworkpolicies',
+                labelSelector: CILIUM_POLICY_SELECTOR,
+                list: listCilium('ciliumnetworkpolicies', CILIUM_POLICY_SELECTOR),
+                mapRefs: byNamespace,
+                onEvent: (type, obj) => deps.guard.onEvent('CiliumNetworkPolicy', type, obj),
+                onListComplete: (seen) => deps.guard.sweep('CiliumNetworkPolicy', seen)
+              } satisfies EngineResource
+            ]
+          : []),
+        ...(deps.cilium.envoyConfigs
+          ? [
+              {
+                kind: 'CiliumEnvoyConfig',
+                apiVersion: 'cilium.io/v2',
+                watchPath: '/apis/cilium.io/v2/ciliumenvoyconfigs',
+                labelSelector: BASIC_AUTH_SELECTOR,
+                list: listCilium('ciliumenvoyconfigs', BASIC_AUTH_SELECTOR),
+                mapRefs: byNamespace,
+                onEvent: (type, obj) => deps.guard.onEvent('CiliumEnvoyConfig', type, obj)
+              } satisfies EngineResource
+            ]
+          : [])
       ]
     }
   ];

@@ -55,7 +55,7 @@
     "mcp:remote": "ts-node --swc src/mcp/main.ts",
     "test:protection": "tsx --test test/protection-proxy.test.ts test/protection-auth.test.ts test/protection-redirect.test.ts test/protection-password-throttle.test.ts",
     "test:engine": "tsx --test test/engine-informer.test.ts",
-    "test:engine-core": "tsx --test test/engine-core.test.ts test/engine-health.test.ts test/engine-namespace.test.ts test/engine-workload-delete.test.ts test/env-adoption.test.ts test/cronjob-drift.test.ts test/engine-cronjob.test.ts test/engine-service-adopt.test.ts test/engine-storage-adopt.test.ts test/engine-net-unlabeled.test.ts test/engine-ingress-adopt.test.ts",
+    "test:engine-core": "tsx --test test/engine-core.test.ts test/engine-health.test.ts test/engine-namespace.test.ts test/engine-workload-delete.test.ts test/env-adoption.test.ts test/cronjob-drift.test.ts test/engine-cronjob.test.ts test/engine-service-adopt.test.ts test/engine-storage-adopt.test.ts test/engine-net-unlabeled.test.ts test/engine-ingress-adopt.test.ts test/engine-guard.test.ts",
     "test:db-guard": "tsx --test test/test-database-guard.test.ts",
     "test:apply-queue": "tsx --test test/apply-queue.test.ts",
     "test:repo-link": "tsx --test test/github-repo-link.test.ts",

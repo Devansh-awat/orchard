@@ -11,6 +11,7 @@ import { IngressConsumer } from './consumers/ingress.consumer';
 import { StorageConsumer } from './consumers/storage.consumer';
 import { ServiceConsumer } from './consumers/service.consumer';
 import { NamespaceConsumer } from './consumers/namespace.consumer';
+import { GuardConsumer } from './consumers/guard.consumer';
 
 @Module({
   imports: [KubernetesModule, JobsModule],
@@ -23,7 +24,8 @@ import { NamespaceConsumer } from './consumers/namespace.consumer';
     IngressConsumer,
     StorageConsumer,
     ServiceConsumer,
-    NamespaceConsumer
+    NamespaceConsumer,
+    GuardConsumer
   ],
   controllers: [EngineHealthController]
 })

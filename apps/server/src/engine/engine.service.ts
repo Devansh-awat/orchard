@@ -20,6 +20,7 @@ import { IngressConsumer } from './consumers/ingress.consumer';
 import { StorageConsumer } from './consumers/storage.consumer';
 import { ServiceConsumer } from './consumers/service.consumer';
 import { NamespaceConsumer } from './consumers/namespace.consumer';
+import { GuardConsumer } from './consumers/guard.consumer';
 
 const PRESENCE_PREFIX = 'replica:';
 const PRESENCE_INTERVAL_MS = 10_000;
@@ -95,7 +96,8 @@ export class EngineService implements OnApplicationBootstrap, OnModuleDestroy {
     private readonly ingressConsumer: IngressConsumer,
     private readonly storageConsumer: StorageConsumer,
     private readonly serviceConsumer: ServiceConsumer,
-    private readonly namespaceConsumer: NamespaceConsumer
+    private readonly namespaceConsumer: NamespaceConsumer,
+    private readonly guardConsumer: GuardConsumer
   ) {
     this.store = new PrismaEngineStore(prisma);
   }
@@ -132,6 +134,8 @@ export class EngineService implements OnApplicationBootstrap, OnModuleDestroy {
       services: this.serviceConsumer,
       namespaces: this.namespaceConsumer,
       certManager: await this.certManagerInstalled(),
+      guard: this.guardConsumer,
+      cilium: await this.ciliumWatchable(),
       namespaceRefs: (ns) => this.resolveNamespaceRefs(ns)
     });
     for (const build of registeredEngineShards()) {
@@ -537,6 +541,42 @@ export class EngineService implements OnApplicationBootstrap, OnModuleDestroy {
       }
       return false;
     }
+  }
+
+  private async ciliumWatchable(): Promise<{ networkPolicies: boolean; envoyConfigs: boolean }> {
+    if (!(await this.kubernetes.isCiliumAvailable())) {
+      return { networkPolicies: false, envoyConfigs: false };
+    }
+    const probe = async (plural: string): Promise<boolean> => {
+      try {
+        await this.kubernetes
+          .kc!.makeApiClient(k8s.CustomObjectsApi)
+          .listClusterCustomObject(
+            'cilium.io',
+            'v2',
+            plural,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            1
+          );
+        return true;
+      } catch (e: any) {
+        const code = e?.response?.statusCode ?? e?.statusCode;
+        if (code !== 404) {
+          this.logger.warn(
+            `cannot watch ${plural}, the guard leaves them unwatched: ${e?.message}`
+          );
+        }
+        return false;
+      }
+    };
+    return {
+      networkPolicies: await probe('ciliumnetworkpolicies'),
+      envoyConfigs: await probe('ciliumenvoyconfigs')
+    };
   }
 
   private async resolveNamespaceRefs(namespace: string): Promise<EngineRefs> {

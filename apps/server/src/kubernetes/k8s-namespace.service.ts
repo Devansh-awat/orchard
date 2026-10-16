@@ -12,6 +12,7 @@ import {
   TENANT_NAMESPACE_LABEL_SELECTORS,
   ciliumIngressPolicy,
   cnpgApiserverPolicy,
+  namespaceHasProtectedIngress,
   projectDatabasePolicy,
   projectNamespaces,
   tenantDenyPolicy
@@ -539,7 +540,9 @@ export class K8sNamespaceService implements OnModuleInit {
     try {
       const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
 
-      const networkPolicyBody = tenantDenyPolicy(cleanNamespace);
+      const networkPolicyBody = tenantDenyPolicy(cleanNamespace, {
+        allowProtectionProxy: await namespaceHasProtectedIngress(this.prisma, cleanNamespace)
+      });
 
       // Replace on conflict: a namespace created before a configuration change
       // already has the old policy, and that is precisely the one that needs

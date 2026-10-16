@@ -44,6 +44,23 @@ export const CNPG_APISERVER_POLICY = 'allow-cnpg-apiserver';
 export const CNPG_OPERATOR_POLICY = 'allow-cnpg-operator';
 export const PROTECTION_PROXY_SOURCE_NAMESPACE = 'orchard';
 
+export const GUARDED_POLICY_LABELS = {
+  'orchard.my/managed': 'true',
+  'app.kubernetes.io/managed-by': 'orchard'
+} as const;
+
+export const PROTECTED_INGRESS_WHERE = {
+  OR: [{ protectionMode: { not: 'none' as const } }, { redirectTarget: { not: null } }]
+};
+
+export async function namespaceHasProtectedIngress(
+  prisma: { ingress: { count(args: { where: any }): Promise<number> } },
+  namespace: string
+): Promise<boolean> {
+  const count = await prisma.ingress.count({ where: { namespace, ...PROTECTED_INGRESS_WHERE } });
+  return count > 0;
+}
+
 export interface CiliumPolicy {
   apiVersion: 'cilium.io/v2';
   kind: 'CiliumNetworkPolicy' | 'CiliumEnvoyConfig';
@@ -66,9 +83,7 @@ export function tenantDenyPolicy(
     metadata: {
       name: TENANT_DENY_POLICY,
       namespace,
-      labels: {
-        'orchard.my/managed': 'true'
-      }
+      labels: { ...GUARDED_POLICY_LABELS }
     },
     spec: {
       podSelector: {},
@@ -169,7 +184,7 @@ export function projectDatabasePolicy(
     metadata: {
       name: PROJECT_DATABASES_POLICY,
       namespace,
-      labels: { 'orchard.my/managed': 'true' }
+      labels: { ...GUARDED_POLICY_LABELS }
     },
     spec: {
       podSelector: { matchExpressions: [{ key: 'cnpg.io/cluster', operator: 'Exists' }] },
