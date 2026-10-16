@@ -1,6 +1,9 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import * as k8s from '@kubernetes/client-node';
 import { PrismaService } from '../../prisma/prisma.service';
+import { KubernetesService } from '../../kubernetes/kubernetes.service';
+import { DeploymentsService } from '../../projects/deployments.service';
 import { OrgEventsService } from '../../events/org-events.service';
 import {
   cpuLimitMilliFromResources,
@@ -17,6 +20,14 @@ export const K8S_DELETED_REASON = 'resource deleted in k8s';
 const POSITIVE_TTL_MS = 10 * 60 * 1000;
 const NEGATIVE_TTL_MS = 30 * 1000;
 const EMIT_COALESCE_MS = 500;
+const CONFIRM_AFTER_MS = 90 * 1000;
+const CREATION_GRACE_MS = 2 * 60 * 1000;
+const REMOVAL_WINDOW_MS = 10 * 60 * 1000;
+const MAX_REMOVALS_PER_WINDOW = 5;
+
+type LiveState = 'present' | 'absent' | 'unknown';
+
+export class RemovalPending extends Error {}
 
 interface Ctx {
   deploymentId: string;
@@ -40,11 +51,19 @@ export class WorkloadConsumer implements OnModuleDestroy {
 
   private readonly pending = new Map<string, PendingEmit>();
 
+  private readonly absentSince = new Map<string, number>();
+
+  private removals: number[] = [];
+
+  protected confirmAfterMs = CONFIRM_AFTER_MS;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly orgEvents: OrgEventsService,
     private readonly applyQueue: ApplyQueueService,
-    private readonly audit: AuditService
+    private readonly audit: AuditService,
+    private readonly kubernetes: KubernetesService,
+    private readonly moduleRef: ModuleRef
   ) {}
 
   onModuleDestroy() {
@@ -133,24 +152,11 @@ export class WorkloadConsumer implements OnModuleDestroy {
       const removed = await this.prisma.k8sWorkload.deleteMany({
         where: { deploymentId: ctx.deploymentId }
       });
-      this.scheduleEmit(ctx, { workload: null, deleted: true });
-      if (removed.count > 0) {
-        this.logger.warn(
-          `deployment ${dep.metadata?.namespace}/${dep.metadata?.name} (${ctx.deploymentId}) was deleted in the cluster; the Orchard record stays and the next deploy recreates it`
-        );
-        void this.audit.log({
-          action: 'deployment.workload.deleted',
-          organizationId: ctx.orgId,
-          projectId: ctx.projectId,
-          deploymentId: ctx.deploymentId,
-          targetType: 'deployment',
-          targetId: ctx.deploymentId,
-          targetLabel: dep.metadata?.name ?? undefined,
-          metadata: { reason: K8S_DELETED_REASON, namespace: dep.metadata?.namespace ?? null }
-        });
-      }
+      if (removed.count > 0) this.scheduleEmit(ctx, { workload: null, deleted: true });
+      await this.confirmRemoval(ctx, dep);
       return;
     }
+    this.absentSince.delete(ctx.deploymentId);
 
     const specReplicas = dep.spec?.replicas ?? null;
     const data = {
@@ -310,6 +316,156 @@ export class WorkloadConsumer implements OnModuleDestroy {
     // that allows no disruptions and blocks every drain on those pods.
     if (changes.replicas != null || changes.stopped != null) {
       await this.queueBudgetReconcile(deploymentId);
+    }
+  }
+
+  private async confirmRemoval(ctx: Ctx, dep: k8s.V1Deployment): Promise<void> {
+    const namespace = dep.metadata?.namespace ?? '';
+    const name = dep.metadata?.name ?? '';
+    const row = await this.prisma.deployment.findUnique({
+      where: { id: ctx.deploymentId },
+      select: { name: true, namespace: true, buildStatus: true }
+    });
+    if (!row || row.name !== name || row.namespace !== namespace) {
+      this.absentSince.delete(ctx.deploymentId);
+      return;
+    }
+
+    const created = dep.metadata?.creationTimestamp
+      ? new Date(dep.metadata.creationTimestamp).getTime()
+      : 0;
+    const deletedAt = dep.metadata?.deletionTimestamp
+      ? new Date(dep.metadata.deletionTimestamp).getTime()
+      : Date.now();
+    if (created && deletedAt - created < CREATION_GRACE_MS) {
+      this.absentSince.delete(ctx.deploymentId);
+      this.logger.log(
+        `deployment ${namespace}/${name} was removed right after it was created; treating it as an Orchard rollback, not a delete`
+      );
+      return;
+    }
+
+    if (row.buildStatus === 'building') {
+      this.absentSince.delete(ctx.deploymentId);
+      throw new RemovalPending(`removal of ${namespace}/${name} deferred: build in flight`);
+    }
+    const pendingApply = await this.prisma.k8sApplyItem.count({
+      where: { deploymentId: ctx.deploymentId, status: { in: ['pending', 'applying'] } }
+    });
+    if (pendingApply > 0) {
+      this.absentSince.delete(ctx.deploymentId);
+      throw new RemovalPending(`removal of ${namespace}/${name} deferred: apply queued`);
+    }
+
+    const namespaceState = await this.liveNamespace(namespace);
+    if (namespaceState !== 'present') {
+      this.absentSince.delete(ctx.deploymentId);
+      if (namespaceState === 'unknown') {
+        throw new RemovalPending(`removal of ${namespace}/${name} deferred: namespace unreadable`);
+      }
+      return;
+    }
+
+    const state = await this.liveDeployment(namespace, name);
+    if (state === 'present') {
+      if (this.absentSince.has(ctx.deploymentId)) {
+        this.logger.warn(
+          `deployment ${namespace}/${name} looked deleted but the apiserver still has it; false alarm, nothing removed`
+        );
+      }
+      this.absentSince.delete(ctx.deploymentId);
+      return;
+    }
+    if (state === 'unknown') {
+      throw new RemovalPending(
+        `removal of ${namespace}/${name} deferred: the apiserver could not confirm the delete`
+      );
+    }
+
+    const now = Date.now();
+    const first = this.absentSince.get(ctx.deploymentId);
+    if (first === undefined) {
+      this.absentSince.set(ctx.deploymentId, now);
+      this.logger.warn(
+        `deployment ${namespace}/${name} is gone from the cluster; Orchard deployment ${ctx.deploymentId} will be removed if it is still gone in ${Math.round(this.confirmAfterMs / 1000)}s`
+      );
+      throw new RemovalPending(`removal of ${namespace}/${name} awaiting confirmation`);
+    }
+    if (now - first < this.confirmAfterMs) {
+      throw new RemovalPending(`removal of ${namespace}/${name} awaiting confirmation`);
+    }
+
+    this.removals = this.removals.filter((at) => now - at < REMOVAL_WINDOW_MS);
+    if (this.removals.length >= MAX_REMOVALS_PER_WINDOW) {
+      this.logger.error(
+        `${this.removals.length} deployments were removed after cluster deletes in the last ${REMOVAL_WINDOW_MS / 60000} minutes; holding ${namespace}/${name} back. That is not what a manual delete looks like. It is retried once the window passes.`
+      );
+      throw new RemovalPending(`removal of ${namespace}/${name} held by the breaker`);
+    }
+
+    this.absentSince.delete(ctx.deploymentId);
+    this.removals.push(now);
+    this.logger.warn(
+      `deployment ${namespace}/${name} confirmed deleted in the cluster; removing Orchard deployment ${ctx.deploymentId}`
+    );
+    const deployments = this.moduleRef.get(DeploymentsService, { strict: false });
+    await deployments.deleteDeploymentFromCluster(ctx.deploymentId, {
+      reason: K8S_DELETED_REASON,
+      source: 'engine.workloads',
+      namespace,
+      firstAbsentAt: new Date(first).toISOString(),
+      confirmedAbsentAt: new Date(now).toISOString()
+    });
+    this.ctxCache.delete(`${namespace}/${name}`);
+    this.orgEvents.emit({
+      organizationId: ctx.orgId,
+      type: 'deployment.changed',
+      id: ctx.deploymentId,
+      projectId: ctx.projectId,
+      payload: { removed: true, reason: K8S_DELETED_REASON }
+    });
+    this.orgEvents.emit({
+      organizationId: ctx.orgId,
+      type: 'project.changed',
+      id: ctx.projectId,
+      projectId: ctx.projectId
+    });
+  }
+
+  protected async liveDeployment(namespace: string, name: string): Promise<LiveState> {
+    return this.liveRead(() =>
+      this.kubernetes.kc!.makeApiClient(k8s.AppsV1Api).readNamespacedDeployment(name, namespace)
+    );
+  }
+
+  protected async liveNamespace(namespace: string): Promise<LiveState> {
+    try {
+      this.kubernetes.ensureKubeConfig();
+      const { body } = await this.kubernetes
+        .kc!.makeApiClient(k8s.CoreV1Api)
+        .readNamespace(namespace);
+      if (body?.status?.phase === 'Terminating' || body?.metadata?.deletionTimestamp) {
+        return 'absent';
+      }
+      return 'present';
+    } catch (err: any) {
+      const code = err?.response?.statusCode ?? err?.statusCode;
+      return code === 404 ? 'absent' : 'unknown';
+    }
+  }
+
+  private async liveRead(read: () => Promise<unknown>): Promise<LiveState> {
+    try {
+      this.kubernetes.ensureKubeConfig();
+      await read();
+      return 'present';
+    } catch (err: any) {
+      const code = err?.response?.statusCode ?? err?.statusCode;
+      if (code === 404) return 'absent';
+      this.logger.warn(
+        `could not read from the apiserver (${code ?? 'no status'}): ${err?.message ?? err}`
+      );
+      return 'unknown';
     }
   }
 

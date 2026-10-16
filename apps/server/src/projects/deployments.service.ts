@@ -1810,65 +1810,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       this.prisma.imageHistory.findMany({ where: { deploymentId }, select: { image: true } })
     ]);
 
-    // Delete all ingresses from Kubernetes
-    for (const ingress of ingresses) {
-      try {
-        await this.k8sNetwork.deleteIngress(ingress.namespace, ingress.name);
-      } catch (error) {
-        console.error(`Failed to delete ingress ${ingress.name} from Kubernetes:`, error);
-      }
-    }
-
-    // Delete all services from Kubernetes
-    for (const service of services) {
-      try {
-        await this.k8sNetwork.deleteService(deployment.namespace, service.name);
-      } catch (error) {
-        console.error(`Failed to delete service ${service.name} from Kubernetes:`, error);
-      }
-    }
-
-    // Delete all PVCs from Kubernetes
-    for (const volume of volumes) {
-      if (volume.type === 'pvc' && volume.pvcName) {
-        try {
-          await this.kubernetesService.deletePVC(deployment.namespace, volume.pvcName);
-        } catch (error) {
-          console.error(`Failed to delete PVC ${volume.pvcName} from Kubernetes:`, error);
-        }
-      }
-    }
-
-    try {
-      await this.k8sNetwork.unexposeAllDeploymentPortsPublic(deployment.namespace, deployment.name);
-    } catch (error) {
-      console.error(`Failed to unexpose public ports for ${deployment.name}:`, error);
-    }
-    try {
-      await this.k8sNetwork.deletePublicDeploymentNetworkPolicy(
-        deployment.namespace,
-        deployment.name
-      );
-    } catch (error) {
-      console.error(`Failed to delete public NetworkPolicy for ${deployment.name}:`, error);
-    }
-
-    // Clean up Tailscale sidecar if exposed
-    try {
-      await this.tailscaleService.cleanupDeployment(deployment);
-    } catch (error) {
-      console.error(
-        `[Projects] Failed to clean up Tailscale for deployment ${deployment.name}:`,
-        error
-      );
-    }
-
-    // Delete the K8s deployment itself
-    await this.k8sWorkload.deleteDeployment(deployment.name, deployment.namespace);
-
-    if (deployment.buildContextKey) {
-      this.storage.deleteBuildContext(deployment.buildContextKey).catch(() => {});
-    }
+    await this.teardownDeploymentResources(deployment, { ingresses, services, volumes }, true);
 
     // Delete the DB record (cascades to pods, services, envVars, ingresses, volumes, imageHistory).
     // ingresses only started cascading in 20260808060000; before that the FK was
@@ -1911,6 +1853,126 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       deploymentId,
       projectId: deployment.projectId
     };
+  }
+
+  async deleteDeploymentFromCluster(deploymentId: string, cause: Record<string, unknown>) {
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: { project: { select: { organizationId: true } } }
+    });
+    if (!deployment) return null;
+
+    const [ingresses, services, volumes] = await Promise.all([
+      this.prisma.ingress.findMany({ where: { deploymentId } }),
+      this.prisma.service.findMany({ where: { deploymentId } }),
+      this.prisma.deploymentVolume.findMany({ where: { deploymentId } })
+    ]);
+    await this.teardownDeploymentResources(deployment, { ingresses, services, volumes }, false);
+
+    try {
+      await this.prisma.deployment.delete({ where: { id: deploymentId } });
+    } catch (error) {
+      if ((error as { code?: string })?.code === 'P2025') return null;
+      throw error;
+    }
+
+    this.notifications
+      .purgeScope('deployment', deploymentId)
+      .catch((err) =>
+        console.error(`[Projects] Failed to purge notification scope for ${deploymentId}:`, err)
+      );
+
+    const keptVolumes = volumes
+      .filter((v) => v.type === 'pvc' && v.pvcName)
+      .map((v) => v.pvcName as string);
+    void this.audit.log({
+      action: 'deployment.deleted',
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId,
+      targetType: 'deployment',
+      targetId: deploymentId,
+      targetLabel: deployment.name,
+      metadata: { ...cause, keptVolumes }
+    });
+    return { deploymentId, keptVolumes };
+  }
+
+  private async teardownDeploymentResources(
+    deployment: {
+      id: string;
+      name: string;
+      namespace: string;
+      buildContextKey: string | null;
+      tailscaleExposed: boolean;
+    },
+    related: {
+      ingresses: { name: string; namespace: string }[];
+      services: { name: string }[];
+      volumes: { type: string; pvcName: string | null }[];
+    },
+    deleteVolumes: boolean
+  ) {
+    const { ingresses, services, volumes } = related;
+    // Delete all ingresses from Kubernetes
+    for (const ingress of ingresses) {
+      try {
+        await this.k8sNetwork.deleteIngress(ingress.namespace, ingress.name);
+      } catch (error) {
+        console.error(`Failed to delete ingress ${ingress.name} from Kubernetes:`, error);
+      }
+    }
+
+    // Delete all services from Kubernetes
+    for (const service of services) {
+      try {
+        await this.k8sNetwork.deleteService(deployment.namespace, service.name);
+      } catch (error) {
+        console.error(`Failed to delete service ${service.name} from Kubernetes:`, error);
+      }
+    }
+
+    // Delete all PVCs from Kubernetes
+    for (const volume of deleteVolumes ? volumes : []) {
+      if (volume.type === 'pvc' && volume.pvcName) {
+        try {
+          await this.kubernetesService.deletePVC(deployment.namespace, volume.pvcName);
+        } catch (error) {
+          console.error(`Failed to delete PVC ${volume.pvcName} from Kubernetes:`, error);
+        }
+      }
+    }
+
+    try {
+      await this.k8sNetwork.unexposeAllDeploymentPortsPublic(deployment.namespace, deployment.name);
+    } catch (error) {
+      console.error(`Failed to unexpose public ports for ${deployment.name}:`, error);
+    }
+    try {
+      await this.k8sNetwork.deletePublicDeploymentNetworkPolicy(
+        deployment.namespace,
+        deployment.name
+      );
+    } catch (error) {
+      console.error(`Failed to delete public NetworkPolicy for ${deployment.name}:`, error);
+    }
+
+    // Clean up Tailscale sidecar if exposed
+    try {
+      await this.tailscaleService.cleanupDeployment(deployment);
+    } catch (error) {
+      console.error(
+        `[Projects] Failed to clean up Tailscale for deployment ${deployment.name}:`,
+        error
+      );
+    }
+
+    // Delete the K8s deployment itself
+    await this.k8sWorkload.deleteDeployment(deployment.name, deployment.namespace);
+
+    if (deployment.buildContextKey) {
+      this.storage.deleteBuildContext(deployment.buildContextKey).catch(() => {});
+    }
   }
 
   async scaleDeployment(
