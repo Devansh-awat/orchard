@@ -40,7 +40,8 @@ function buildIngress(rows: ReturnType<typeof ingressRow>[], live: Record<string
   const consumer = new IngressConsumer(
     prisma as any,
     { log: async (entry: any) => audits.push(entry) } as any,
-    {} as any
+    {} as any,
+    { emit: () => {} } as any
   );
   (consumer as any).liveIngress = async (ns: string, name: string) => {
     reads.push(`${ns}/${name}`);
