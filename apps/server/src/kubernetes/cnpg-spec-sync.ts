@@ -1,4 +1,6 @@
 import { parseCpu, parseMemory } from './quantity';
+import { deriveDbTuning, MANAGED_DB_MIN_MEMORY_BYTES, parsePgMemory } from './db-tuning';
+import { normalizePgParam, ORCHARD_PG_DEFAULTS, PG_PARAM_BOUNDS } from './pg-params';
 import { toQuartzCron } from '../projects/projects.utils';
 
 export interface ClusterSpecValues {
@@ -163,4 +165,98 @@ export function hibernationTransition(
   if (on && status !== 'stopped') return 'stopped';
   if (!on && status === 'stopped') return 'restarting';
   return null;
+}
+
+export const APPLIED_SHARED_BUFFERS_ANNOTATION = 'orchard.my/applied-shared-buffers';
+
+export function appliedSharedBuffers(value: unknown): Record<string, string> | undefined {
+  return typeof value === 'string' && value
+    ? { [APPLIED_SHARED_BUFFERS_ANNOTATION]: value }
+    : undefined;
+}
+
+export function sharedBuffersStamp(
+  cluster: any,
+  tuningPatch: Record<string, any> | null
+): Record<string, string> | undefined {
+  const written = tuningPatch?.postgresql?.parameters?.shared_buffers;
+  if (written) return appliedSharedBuffers(written);
+  if (cluster?.metadata?.annotations?.[APPLIED_SHARED_BUFFERS_ANNOTATION]) return undefined;
+  return appliedSharedBuffers(cluster?.spec?.postgresql?.parameters?.shared_buffers);
+}
+
+const ADOPTABLE_SHARED_BUFFERS_FRACTION = 0.4;
+const SAFE_GZIP_MEMORY_BYTES = 512 * 1024 * 1024;
+
+export interface ParameterAdoption {
+  parameters: Record<string, string>;
+  changed: string[];
+  refused: string[];
+}
+
+export function planParameterAdoption(
+  cluster: any,
+  stored: Record<string, string>
+): ParameterAdoption | null {
+  const live: Record<string, unknown> = cluster?.spec?.postgresql?.parameters ?? {};
+  const limit = parseMemory(String(cluster?.spec?.resources?.limits?.memory ?? ''));
+  const next = { ...stored };
+  const changed: string[] = [];
+  const refused: string[] = [];
+
+  for (const key of Object.keys(PG_PARAM_BOUNDS)) {
+    if (key === 'shared_buffers') continue;
+    const raw = live[key];
+    if (raw === undefined || raw === null) {
+      if (key in next) {
+        delete next[key];
+        changed.push(key);
+      }
+      continue;
+    }
+    const value = normalizePgParam(key, raw);
+    if (value === null) {
+      refused.push(key);
+      continue;
+    }
+    if (value === stored[key]) continue;
+    if (stored[key] === undefined && ORCHARD_PG_DEFAULTS[key] === value) continue;
+    next[key] = value;
+    changed.push(key);
+  }
+
+  const stamp = cluster?.metadata?.annotations?.[APPLIED_SHARED_BUFFERS_ANNOTATION];
+  const liveBuffers = live.shared_buffers;
+  if (stamp && typeof liveBuffers === 'string' && liveBuffers !== stamp) {
+    const value = normalizePgParam('shared_buffers', liveBuffers);
+    const safe =
+      value !== null &&
+      (limit === 0 || parsePgMemory(value) <= limit * ADOPTABLE_SHARED_BUFFERS_FRACTION);
+    if (!safe) refused.push('shared_buffers');
+    else if (value !== stored.shared_buffers) {
+      next.shared_buffers = value;
+      changed.push('shared_buffers');
+    }
+  }
+
+  return changed.length > 0 || refused.length > 0 ? { parameters: next, changed, refused } : null;
+}
+
+export function planCompressionAdoption(
+  cluster: any,
+  stored: string | null
+): 'gzip' | 'none' | null {
+  const store = cluster?.spec?.backup?.barmanObjectStore;
+  if (!store) return null;
+  const live = store.data?.compression === 'gzip' ? 'gzip' : null;
+  const limit = parseMemory(String(cluster?.spec?.resources?.limits?.memory ?? ''));
+  const expected = deriveDbTuning({
+    memoryLimitBytes: Math.max(limit, MANAGED_DB_MIN_MEMORY_BYTES),
+    overrides: { backupCompression: stored }
+  }).dataCompression;
+  if (live === expected) return null;
+  if (live === 'gzip' && Math.max(limit, MANAGED_DB_MIN_MEMORY_BYTES) < SAFE_GZIP_MEMORY_BYTES) {
+    return null;
+  }
+  return live === 'gzip' ? 'gzip' : 'none';
 }

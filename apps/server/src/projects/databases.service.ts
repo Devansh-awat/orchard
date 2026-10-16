@@ -19,6 +19,7 @@ import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
 import { K8sNetworkService } from '../kubernetes/k8s-network.service';
 import { K8sCnpgService, normalizeBackupEndpointURL } from '../kubernetes/k8s-cnpg.service';
 import { k8sErrorMessage } from '../kubernetes/k8s-error';
+import { PG_PARAM_BOUNDS } from '../kubernetes/pg-params';
 import { deriveDbTuning } from '../kubernetes/db-tuning';
 import { parameterDrift } from '../kubernetes/cnpg-spec-sync';
 import { R2ProxyService } from '../kubernetes/r2-proxy.service';
@@ -2685,10 +2686,15 @@ export class DatabasesService {
     // rather than a no-op. The Prisma row still stores only what the user set,
     // so "is this overridden?" stays answerable.
     const existingPreload = (database.sharedPreloadLibs as string[] | null) || [];
+    const cleared = Object.fromEntries(
+      Object.keys((database.pgParameters as Record<string, string> | null) || {})
+        .filter((key) => !(key in sanitized) && key !== 'shared_buffers')
+        .map((key) => [key, null])
+    );
     await this.k8sCnpg.updateCnpgParameters(
       database.namespace,
       database.clusterName,
-      { ...sanitized, shared_buffers: tuning.sharedBuffers },
+      { ...cleared, ...sanitized, shared_buffers: tuning.sharedBuffers },
       existingPreload
     );
     if (backupCompression !== database.backupCompression) {
@@ -2856,20 +2862,7 @@ export class DatabasesService {
     return { enabled: false };
   }
 
-  private readonly PG_PARAM_BOUNDS: Record<string, any> = {
-    max_connections: { kind: 'int', min: 10, max: 500, requiresRestart: true },
-    shared_buffers: { kind: 'memory', requiresRestart: true },
-    work_mem: { kind: 'memory' },
-    maintenance_work_mem: { kind: 'memory' },
-    effective_cache_size: { kind: 'memory' },
-    log_min_duration_statement: { kind: 'int', min: -1, max: 600000 },
-    statement_timeout: { kind: 'int', min: 0, max: 3600000 },
-    idle_in_transaction_session_timeout: { kind: 'int', min: 0, max: 3600000 },
-    synchronous_commit: {
-      kind: 'string',
-      enum: ['on', 'off', 'local', 'remote_write', 'remote_apply']
-    }
-  };
+  private readonly PG_PARAM_BOUNDS: Record<string, any> = PG_PARAM_BOUNDS;
 }
 
 function clusterMirror(db: {

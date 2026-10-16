@@ -21,6 +21,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService, ResolvedPlacement } from './kubernetes.service';
 import { cpuMilliToK8s, cpuRequestFromLimitMilli, memoryBytesToK8s, parseMemory } from './quantity';
 import { deriveDbTuning, walSlotKeepSize } from './db-tuning';
+import { appliedSharedBuffers, sharedBuffersStamp } from './cnpg-spec-sync';
 import { optionalDomain } from '../env/platform-domains';
 import { syncTlsSecret } from './tls-secret-sync';
 import {
@@ -145,7 +146,8 @@ export class K8sCnpgService implements OnApplicationBootstrap {
         const capPatch = walCapPatchFor(cluster);
         const archivePatch = walArchivePatchFor(cluster);
         const tuningPatch = tuningPatchFor(cluster, row);
-        if (!capPatch && !archivePatch && !tuningPatch) continue;
+        const stamp = sharedBuffersStamp(cluster, tuningPatch);
+        if (!capPatch && !archivePatch && !tuningPatch && !stamp) continue;
         const spec: any = tuningPatch ? structuredClone(tuningPatch) : {};
         if (capPatch) {
           spec.postgresql = { parameters: { ...(spec.postgresql?.parameters ?? {}), ...capPatch } };
@@ -161,7 +163,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
           ns,
           this.CNPG_PLURAL,
           name,
-          { spec },
+          { ...(stamp ? { metadata: { annotations: stamp } } : {}), spec },
           undefined,
           undefined,
           undefined,
@@ -1616,7 +1618,12 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     const clusterBody: any = {
       apiVersion: `${this.CNPG_GROUP}/${this.CNPG_VERSION}`,
       kind: 'Cluster',
-      metadata: { name, namespace: ns, labels },
+      metadata: {
+        name,
+        namespace: ns,
+        labels,
+        annotations: appliedSharedBuffers(clusterSpec.postgresql?.parameters?.shared_buffers)
+      },
       spec: clusterSpec
     };
 
@@ -2241,7 +2248,8 @@ export class K8sCnpgService implements OnApplicationBootstrap {
         labels: {
           'app.kubernetes.io/managed-by': 'orchard',
           'orchard/restore-source': sourceClusterName
-        }
+        },
+        annotations: appliedSharedBuffers(spec.postgresql?.parameters?.shared_buffers)
       },
       spec
     };
@@ -2264,12 +2272,13 @@ export class K8sCnpgService implements OnApplicationBootstrap {
   async updateCnpgParameters(
     namespace: string,
     clusterName: string,
-    parameters: Record<string, string>,
+    parameters: Record<string, string | null>,
     sharedPreloadLibraries?: string[]
   ): Promise<void> {
     this.ensureKubeConfig();
     const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
     const patch: any = {
+      metadata: { annotations: appliedSharedBuffers(parameters.shared_buffers) },
       spec: {
         postgresql: {
           parameters,
@@ -2311,6 +2320,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
 
     const patch: any = {
+      metadata: { annotations: appliedSharedBuffers(tuning.sharedBuffers) },
       spec: {
         postgresql: { parameters: { shared_buffers: tuning.sharedBuffers } }
       }

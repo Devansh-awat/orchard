@@ -19,12 +19,15 @@ import { K8S_DELETED_REASON } from './workload.consumer';
 import {
   clusterSpecValues,
   hibernationTransition,
+  planCompressionAdoption,
+  planParameterAdoption,
   ResolvedResources,
   scheduleCronUpdate,
   specColumnUpdate
 } from '../../kubernetes/cnpg-spec-sync';
 
 const POSITIVE_TTL_MS = 10 * 60 * 1000;
+const SETTINGS_LEAVES_ALONE = new Set(['deleting', 'provisioning', 'restoring']);
 const NEGATIVE_TTL_MS = 60 * 1000;
 const EMIT_COALESCE_MS = 250;
 const FRESH_TRANSITION_MS = 10 * 60 * 1000;
@@ -61,6 +64,8 @@ export class CnpgConsumer implements OnModuleDestroy {
   private readonly pending = new Map<string, PendingEmit>();
 
   private readonly archivingState = new Map<string, boolean>();
+
+  private readonly refusedSettings = new Map<string, string>();
 
   private readonly storageState = new Map<string, boolean>();
 
@@ -661,6 +666,7 @@ export class CnpgConsumer implements OnModuleDestroy {
     const snapshot = clusterSnapshot(cluster);
     await this.writebackSnapshot(ctx, snapshot);
     await this.syncSpecColumns(ctx, ns, name, cluster);
+    await this.adoptSettings(ctx, ns, name, cluster);
     this.scheduleEmit(ctx, { cluster: snapshot.phase, readyInstances: snapshot.readyInstances });
   }
 
@@ -727,6 +733,66 @@ export class CnpgConsumer implements OnModuleDestroy {
   // Failures propagate: the informer holds the cluster object's derived_version
   // back and replays it, which is the only thing that would ever come back for
   // a database whose status write was lost.
+  private async adoptSettings(ctx: Ctx, ns: string, name: string, cluster: any) {
+    const db = await this.prisma.database.findUnique({
+      where: { id: ctx.databaseId },
+      select: {
+        status: true,
+        name: true,
+        projectId: true,
+        pgParameters: true,
+        backupCompression: true,
+        project: { select: { organizationId: true } }
+      }
+    });
+    if (!db || SETTINGS_LEAVES_ALONE.has(db.status)) return;
+    const stored = (db.pgParameters as Record<string, string> | null) ?? {};
+    const plan = planParameterAdoption(cluster, stored);
+    const compression = planCompressionAdoption(cluster, db.backupCompression);
+
+    const key = `${ns}/${name}`;
+    const refused = plan?.refused.join(',') ?? '';
+    if (refused && this.refusedSettings.get(key) !== refused) {
+      this.logger.warn(
+        `database ${key}: not adopting ${refused} from the cluster, the value is out of range or unsafe for its memory`
+      );
+    }
+    if (refused) this.refusedSettings.set(key, refused);
+    else this.refusedSettings.delete(key);
+
+    const data: Record<string, unknown> = {};
+    if (plan && plan.changed.length > 0) data.pgParameters = plan.parameters;
+    if (compression !== null && compression !== db.backupCompression) {
+      data.backupCompression = compression;
+    }
+    if (Object.keys(data).length === 0) return;
+
+    await this.prisma.database.update({ where: { id: ctx.databaseId }, data });
+    this.logger.log(
+      `adopted settings for ${key} from the cluster: ${[
+        ...(plan?.changed ?? []),
+        ...(data.backupCompression ? [`backupCompression=${String(data.backupCompression)}`] : [])
+      ].join(', ')}`
+    );
+    void this.audit.log({
+      action: 'database.settings.updated',
+      organizationId: db.project.organizationId,
+      projectId: db.projectId,
+      targetType: 'database',
+      targetId: ctx.databaseId,
+      targetLabel: db.name,
+      metadata: {
+        reason: 'edited in k8s',
+        source: 'engine.cnpg',
+        changed: plan?.changed.join(',') || null,
+        backupCompression:
+          data.backupCompression !== undefined
+            ? [db.backupCompression, data.backupCompression]
+            : null
+      }
+    });
+  }
+
   private async adoptHibernation(ctx: Ctx, ns: string, name: string, cluster: any) {
     const db = await this.prisma.database.findUnique({
       where: { id: ctx.databaseId },
