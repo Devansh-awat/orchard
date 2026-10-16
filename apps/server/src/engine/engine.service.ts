@@ -14,6 +14,7 @@ import { EngineShard, buildEngineShards, registeredEngineShards } from './shards
 import { PodConsumer } from './consumers/pod.consumer';
 import { CnpgConsumer } from './consumers/cnpg.consumer';
 import { JobConsumer } from './consumers/job.consumer';
+import { CronJobConsumer } from './consumers/cronjob.consumer';
 import { WorkloadConsumer } from './consumers/workload.consumer';
 import { IngressConsumer } from './consumers/ingress.consumer';
 import { StorageConsumer } from './consumers/storage.consumer';
@@ -89,6 +90,7 @@ export class EngineService implements OnApplicationBootstrap, OnModuleDestroy {
     private readonly podConsumer: PodConsumer,
     private readonly cnpgConsumer: CnpgConsumer,
     private readonly jobConsumer: JobConsumer,
+    private readonly cronJobConsumer: CronJobConsumer,
     private readonly workloadConsumer: WorkloadConsumer,
     private readonly ingressConsumer: IngressConsumer,
     private readonly storageConsumer: StorageConsumer,
@@ -123,6 +125,7 @@ export class EngineService implements OnApplicationBootstrap, OnModuleDestroy {
       pods: this.podConsumer,
       cnpg: this.cnpgConsumer,
       jobs: this.jobConsumer,
+      cronJobs: this.cronJobConsumer,
       workloads: this.workloadConsumer,
       ingresses: this.ingressConsumer,
       storage: this.storageConsumer,

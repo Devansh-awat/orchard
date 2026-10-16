@@ -13,6 +13,7 @@ import {
 import { PodConsumer } from './consumers/pod.consumer';
 import { CnpgConsumer } from './consumers/cnpg.consumer';
 import { JobConsumer } from './consumers/job.consumer';
+import { CronJobConsumer } from './consumers/cronjob.consumer';
 import { WorkloadConsumer } from './consumers/workload.consumer';
 import { IngressConsumer } from './consumers/ingress.consumer';
 import { StorageConsumer } from './consumers/storage.consumer';
@@ -28,6 +29,7 @@ export interface EngineShardDeps {
   pods: PodConsumer;
   cnpg: CnpgConsumer;
   jobs: JobConsumer;
+  cronJobs: CronJobConsumer;
   workloads: WorkloadConsumer;
   ingresses: IngressConsumer;
   storage: StorageConsumer;
@@ -220,7 +222,8 @@ export function buildEngineShards(deps: EngineShardDeps): EngineShard[] {
                   opts.limit
                 )
             ),
-          mapRefs: (obj) => deps.jobs.mapRefs(obj)
+          mapRefs: (obj) => deps.cronJobs.mapRefs(obj),
+          onEvent: (type, obj) => deps.cronJobs.onEvent(type, obj)
         }
       ]
     },

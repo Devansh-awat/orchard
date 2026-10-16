@@ -4,6 +4,7 @@ import { JobsModule } from '../jobs/jobs.module';
 import { EngineService } from './engine.service';
 import { EngineHealthController } from './engine-health.controller';
 import { PodConsumer } from './consumers/pod.consumer';
+import { CronJobConsumer } from './consumers/cronjob.consumer';
 import { CnpgConsumer } from './consumers/cnpg.consumer';
 import { WorkloadConsumer } from './consumers/workload.consumer';
 import { IngressConsumer } from './consumers/ingress.consumer';
@@ -16,6 +17,7 @@ import { NamespaceConsumer } from './consumers/namespace.consumer';
   providers: [
     EngineService,
     PodConsumer,
+    CronJobConsumer,
     CnpgConsumer,
     WorkloadConsumer,
     IngressConsumer,

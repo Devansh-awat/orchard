@@ -20,7 +20,13 @@ import { NodesService } from '../nodes/nodes.service';
 import { JobsService, RUN_ACTIVE_STATUSES } from './jobs.service';
 import { scriptRuntimeSpec, scriptFileName, ScriptRuntime } from './script-runtimes';
 import { decodeStepsSnapshot, encodeStepsSnapshot } from './steps-snapshot';
-import { cronJobForReplace } from './cronjob-drift';
+import {
+  ANNOTATION_APPLIED_SCHEDULE,
+  appliedScheduleAnnotation,
+  cronJobForReplace,
+  readAppliedSchedule,
+  scheduleStateOf
+} from './cronjob-drift';
 import { RegistryCredentialsService } from '../projects/registry-credentials.service';
 import { pullSecretsForImage } from '../projects/registry-credentials';
 import { pinToBuildArch } from '../docker/build-platform';
@@ -78,6 +84,8 @@ const stepSecretKey = (stepOrder: number, key: string) => `s${stepOrder}.${key}`
 @Injectable()
 export class JobsOrchestratorService {
   private readonly logger = new Logger(JobsOrchestratorService.name);
+
+  private readonly cronJobSyncs = new Map<string, number>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -397,7 +405,22 @@ export class JobsOrchestratorService {
 
   // ------------------------------------------------------------ cronjob sync
 
+  isSyncingCronJob(jobId: string): boolean {
+    return (this.cronJobSyncs.get(jobId) ?? 0) > 0;
+  }
+
   async syncCronJob(jobId: string): Promise<void> {
+    this.cronJobSyncs.set(jobId, (this.cronJobSyncs.get(jobId) ?? 0) + 1);
+    try {
+      await this.writeCronJob(jobId);
+    } finally {
+      const left = (this.cronJobSyncs.get(jobId) ?? 1) - 1;
+      if (left > 0) this.cronJobSyncs.set(jobId, left);
+      else this.cronJobSyncs.delete(jobId);
+    }
+  }
+
+  private async writeCronJob(jobId: string): Promise<void> {
     const job = await this.prisma.job.findUnique({
       where: { id: jobId },
       include: {
@@ -471,24 +494,31 @@ export class JobsOrchestratorService {
 
     const hash = createHash('sha256').update(JSON.stringify(desired)).digest('hex');
     desired.metadata!.annotations![ANNOTATION_SPEC_HASH] = hash;
+    const applied = appliedScheduleAnnotation(scheduleStateOf(desired.spec));
+    desired.metadata!.annotations![ANNOTATION_APPLIED_SCHEDULE] = applied;
 
-    try {
-      const existing = await batch.readNamespacedCronJob(name, namespace);
-      const existingHash = existing.body.metadata?.annotations?.[ANNOTATION_SPEC_HASH];
-      if (existingHash === hash) return;
-      await batch.replaceNamespacedCronJob(
-        name,
-        namespace,
-        cronJobForReplace(desired, existing.body)
-      );
-      this.logger.log(`Updated CronJob ${namespace}/${name}`);
-    } catch (err: any) {
-      if (err?.statusCode === 404 || err?.response?.statusCode === 404) {
-        await batch.createNamespacedCronJob(namespace, desired);
-        this.logger.log(`Created CronJob ${namespace}/${name}`);
-      } else {
-        throw err;
+    const live = await this.readCronJob(namespace, name);
+    if (!live) {
+      await batch.createNamespacedCronJob(namespace, desired);
+      this.logger.log(`Created CronJob ${namespace}/${name}`);
+    } else if (live.metadata?.annotations?.[ANNOTATION_SPEC_HASH] === hash) {
+      if (!readAppliedSchedule(live.metadata)) {
+        await batch.patchNamespacedCronJob(
+          name,
+          namespace,
+          { metadata: { annotations: { [ANNOTATION_APPLIED_SCHEDULE]: applied } } },
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          { headers: { 'Content-Type': 'application/merge-patch+json' } }
+        );
       }
+      return;
+    } else {
+      await batch.replaceNamespacedCronJob(name, namespace, cronJobForReplace(desired, live));
+      this.logger.log(`Updated CronJob ${namespace}/${name}`);
     }
 
     if (job.cronJobName !== name) {
@@ -543,6 +573,15 @@ export class JobsOrchestratorService {
       } else {
         throw err;
       }
+    }
+  }
+
+  private async readCronJob(namespace: string, name: string): Promise<k8s.V1CronJob | null> {
+    try {
+      return (await this.batchApi().readNamespacedCronJob(name, namespace)).body;
+    } catch (err: any) {
+      if (err?.statusCode === 404 || err?.response?.statusCode === 404) return null;
+      throw err;
     }
   }
 

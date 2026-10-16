@@ -87,6 +87,11 @@ export function isValidK8sCron(expr: string): boolean {
   }
 }
 
+export function isSupportedTimeZone(timeZone: string): boolean {
+  const supported = (Intl as any).supportedValuesOf?.('timeZone') as string[] | undefined;
+  return !supported || supported.includes(timeZone);
+}
+
 export function nextCronRun(expr: string, timeZone?: string | null): Date | null {
   try {
     return new CronTime(expr, timeZone || 'UTC').sendAt().toJSDate();
@@ -579,8 +584,7 @@ export class JobsService {
     let timeZone: string | null = null;
     if (input.timeZone != null && String(input.timeZone).trim() !== '') {
       timeZone = String(input.timeZone).trim();
-      const supported = (Intl as any).supportedValuesOf?.('timeZone') as string[] | undefined;
-      if (supported && !supported.includes(timeZone)) {
+      if (!isSupportedTimeZone(timeZone)) {
         throw new BadRequestException(`Unknown time zone: ${timeZone}`);
       }
     }
