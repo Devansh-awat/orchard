@@ -2,7 +2,7 @@
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import { Alert, Button, Field, Input } from '$lib/components/ui';
 	import type { DatabaseDetail } from './types';
-	import { storageExpansionError, totalAllocatedStorage } from './storage-size';
+	import { parseStorageBytes, storageExpansionError, totalAllocatedStorage } from './storage-size';
 
 	let {
 		database,
@@ -30,6 +30,14 @@
 	const canExpand = $derived(dirty && validationError == null && !saving);
 	const volume = $derived(database.liveStatus?.volume ?? null);
 	const walPending = $derived(database.liveStatus?.walPendingSegments ?? 0);
+	const resumeAt = $derived(
+		database.liveStatus?.writeGuard ? (database.liveStatus.resumeWritesAt ?? null) : null
+	);
+	const stillPaused = $derived.by(() => {
+		const requested = parseStorageBytes(value);
+		const needed = parseStorageBytes(resumeAt);
+		return requested != null && needed != null && requested < needed;
+	});
 	const fillTone = $derived(
 		volume == null ? 'ok' : volume.percent >= 85 ? 'critical' : volume.percent >= 70 ? 'warn' : 'ok'
 	);
@@ -77,12 +85,14 @@
 			label="New capacity"
 			for="database-storage-size"
 			error={validationError}
-			hint="Whole-number Mi, Gi, or Ti. Maximum 200Gi."
+			hint={resumeAt
+				? `Writes resume at ${resumeAt} or more. Whole-number Mi, Gi, or Ti. Maximum 200Gi.`
+				: 'Whole-number Mi, Gi, or Ti. Maximum 200Gi.'}
 		>
 			<Input
 				id="database-storage-size"
 				{value}
-				placeholder="10Gi"
+				placeholder={resumeAt ?? '10Gi'}
 				disabled={saving}
 				error={validationError != null}
 				oninput={(event: Event) => {
@@ -98,6 +108,12 @@
 				This will allocate {total} across {instances} {instances === 1 ? 'instance' : 'instances'}.
 			{/if}
 		</p>
+
+		{#if dirty && stillPaused && validationError == null}
+			<Alert tone="warning" title="Writes stay paused at {value}">
+				The volume has to be under 85% full before writes resume. Expand to at least {resumeAt}.
+			</Alert>
+		{/if}
 
 		{#if database.liveStatus?.archiving?.ok === false}
 			<Alert tone="warning" title="WAL archiving is failing">

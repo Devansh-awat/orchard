@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {
   dataVolumesOf,
   fullestVolume,
+  projectedFill,
+  sizeToResumeWrites,
   writeGuardDecision,
   parseKubeletSummary
 } from '../src/kubernetes/volume-stats';
@@ -64,4 +66,14 @@ test('the write guard engages at ninety-two percent and releases under eighty-fi
   assert.equal(writeGuardDecision(true, 18 * GI, 20 * GI), null);
   assert.equal(writeGuardDecision(true, 16.9 * GI, 20 * GI), 'off');
   assert.equal(writeGuardDecision(false, 1, 0), null);
+});
+
+test('a paused database names the smallest size that brings it under eighty-five percent', () => {
+  const hardware = { usedBytes: 27_905_277_952, capacityBytes: 31_593_590_784 };
+  assert.equal(sizeToResumeWrites(hardware, '30Gi'), '32Gi');
+  assert.ok(projectedFill(hardware, '30Gi', '31Gi')! >= 0.85);
+  assert.ok(projectedFill(hardware, '30Gi', '32Gi')! < 0.85);
+  assert.equal(sizeToResumeWrites({ usedBytes: 10 * GI, capacityBytes: 20 * GI }, '20Gi'), null);
+  assert.equal(sizeToResumeWrites({ usedBytes: 1, capacityBytes: 0 }, '20Gi'), null);
+  assert.equal(sizeToResumeWrites({ usedBytes: 1, capacityBytes: 1 }, 'nope'), null);
 });

@@ -1,4 +1,5 @@
 import { volumeFraction } from './db-stats';
+import { sizeToResumeWrites } from './volume-stats';
 
 export interface MirroredDbPod {
   status: string;
@@ -17,6 +18,7 @@ export const WRITE_GUARD_ANNOTATION = 'orchard.io/write-guard';
 export interface ClusterSnapshot {
   exists: boolean;
   writeGuard: boolean;
+  storageSize?: string | null;
   phase: string;
   instances: number;
   readyInstances: number;
@@ -63,6 +65,7 @@ export function clusterSnapshot(cluster: any): ClusterSnapshot {
     currentPrimary: status.currentPrimary ?? null,
     hibernated: cluster?.metadata?.annotations?.['cnpg.io/hibernation'] === 'on',
     writeGuard: cluster?.metadata?.annotations?.[WRITE_GUARD_ANNOTATION] === 'storage',
+    storageSize: cluster?.spec?.storage?.size ?? null,
     conditions: status.conditions || [],
     firstRecoverabilityPoint: status.firstRecoverabilityPoint || null,
     lastSuccessfulBackup: status.lastSuccessfulBackup || null,
@@ -150,6 +153,7 @@ export function buildCnpgLiveStatus(
   const folded = foldPods(pods, now);
   const ready = cluster.readyInstances >= cluster.instances && cluster.readyInstances > 0;
   const archivingCond: any = cluster.conditions.find((c: any) => c?.type === 'ContinuousArchiving');
+  const volume = volumeUsage(stats);
   return {
     exists: true,
     phase: cluster.phase,
@@ -158,7 +162,7 @@ export function buildCnpgLiveStatus(
     replicas: cluster.instances,
     currentPrimary: cluster.currentPrimary ?? undefined,
     size: formatDbSize(stats.sizeBytes),
-    volume: volumeUsage(stats),
+    volume,
     walPendingSegments: stats.walPendingSegments ?? undefined,
     connections: stats.connections ?? undefined,
     statsAt: stats.statsAt ? stats.statsAt.toISOString() : undefined,
@@ -175,6 +179,10 @@ export function buildCnpgLiveStatus(
     danglingPVC: cluster.danglingPVC,
     unusablePVC: cluster.unusablePVC,
     writeGuard: cluster.writeGuard,
+    resumeWritesAt:
+      cluster.writeGuard && volume && cluster.storageSize
+        ? sizeToResumeWrites(volume, cluster.storageSize)
+        : null,
     ...folded
   };
 }

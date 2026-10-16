@@ -295,3 +295,28 @@ test('a pod event writes the row with its primary flag and only reconciles crash
   assert.equal(upserts.length, 2);
   assert.equal(reconciled, 1);
 });
+
+test('a paused cluster says what size resumes writes, an unpaused one does not', () => {
+  const GiB = 1024 * 1024 * 1024;
+  const stats = {
+    sizeBytes: 26 * GiB,
+    connections: 1,
+    statsAt: new Date(NOW),
+    volumeUsedBytes: 27_905_277_952n,
+    volumeCapacityBytes: 31_593_590_784n
+  };
+  const paused = clusterSnapshot({
+    metadata: { annotations: { 'orchard.io/write-guard': 'storage' } },
+    spec: { instances: 1, storage: { size: '30Gi' } },
+    status: { phase: 'Cluster in healthy state', instances: 1, readyInstances: 1 }
+  });
+  assert.equal(buildCnpgLiveStatus(paused, [pod()], stats, NOW).resumeWritesAt, '32Gi');
+  assert.equal(
+    buildCnpgLiveStatus({ ...paused, writeGuard: false }, [pod()], stats, NOW).resumeWritesAt,
+    null
+  );
+  assert.equal(
+    buildCnpgLiveStatus({ ...paused, storageSize: undefined }, [pod()], stats, NOW).resumeWritesAt,
+    null
+  );
+});

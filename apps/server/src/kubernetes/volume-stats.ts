@@ -1,3 +1,5 @@
+import { parseMemory } from './quantity';
+
 export const WRITE_GUARD_ENTER = 0.92;
 
 export const WRITE_GUARD_EXIT = 0.85;
@@ -69,4 +71,37 @@ export function writeGuardDecision(
   if (!guardOn && fraction >= WRITE_GUARD_ENTER) return 'on';
   if (guardOn && fraction < WRITE_GUARD_EXIT) return 'off';
   return null;
+}
+
+const GI = 1024 ** 3;
+
+function filesystemBytesAt(
+  usage: { capacityBytes: number },
+  storageSize: string,
+  targetSize: string
+): number | null {
+  const current = parseMemory(storageSize);
+  const target = parseMemory(targetSize);
+  if (!(current > 0) || !(target > 0) || !(usage.capacityBytes > 0)) return null;
+  return target * Math.min(1, usage.capacityBytes / current);
+}
+
+export function projectedFill(
+  usage: { usedBytes: number; capacityBytes: number },
+  storageSize: string,
+  targetSize: string
+): number | null {
+  const capacity = filesystemBytesAt(usage, storageSize, targetSize);
+  if (capacity == null || usage.usedBytes < 0) return null;
+  return usage.usedBytes / capacity;
+}
+
+export function sizeToResumeWrites(
+  usage: { usedBytes: number; capacityBytes: number },
+  storageSize: string
+): string | null {
+  const perGi = filesystemBytesAt(usage, storageSize, '1Gi');
+  if (perGi == null || usage.usedBytes < 0) return null;
+  const gi = Math.floor(usage.usedBytes / WRITE_GUARD_EXIT / perGi) + 1;
+  return gi * GI > parseMemory(storageSize) ? `${gi}Gi` : null;
 }

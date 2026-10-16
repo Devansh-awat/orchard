@@ -269,8 +269,10 @@
 						>
 						<span class="dba-desc">
 							Orchard switched this database to read-only so it stays up instead of crashing on a
-							full disk. Reads and backups keep working. Expand storage or free space and writes
-							resume on their own.
+							full disk. Reads and backups keep working. Writes resume on their own once the volume
+							is under 85% full{database.liveStatus?.resumeWritesAt
+								? `: expand storage to at least ${database.liveStatus.resumeWritesAt} or free space.`
+								: '.'}
 						</span>
 					</div>
 					{#if onGoToResources}

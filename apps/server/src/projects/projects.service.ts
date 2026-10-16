@@ -39,6 +39,7 @@ import {
   assertDeleteConfirmation
 } from './projects.utils';
 import { parseMemory } from '../kubernetes/quantity';
+import { projectedFill, sizeToResumeWrites, WRITE_GUARD_EXIT } from '../kubernetes/volume-stats';
 import { deriveDbTuning } from '../kubernetes/db-tuning';
 
 @Injectable()
@@ -466,6 +467,20 @@ export class ProjectsService {
       warnings.push(
         `The cluster now asks for ${size}, but ${failedVolumes.join(', ')} could not be resized directly and will only grow once the operator reconciles it.`
       );
+    }
+    const writesPaused = (database.clusterStatus as { writeGuard?: boolean } | null)?.writeGuard;
+    if (writesPaused && database.volumeUsedBytes != null && database.volumeCapacityBytes != null) {
+      const usage = {
+        usedBytes: Number(database.volumeUsedBytes),
+        capacityBytes: Number(database.volumeCapacityBytes)
+      };
+      const resumeAt = sizeToResumeWrites(usage, previousSize);
+      const fill = projectedFill(usage, previousSize, size);
+      if (resumeAt && fill != null && fill >= WRITE_GUARD_EXIT) {
+        warnings.push(
+          `Writes stay paused until the volume is under ${WRITE_GUARD_EXIT * 100}% full, and at ${size} it is still about ${Math.round(fill * 100)}% full. Expand to at least ${resumeAt} to resume writes.`
+        );
+      }
     }
     if (archivingFailure) {
       warnings.push(
