@@ -2740,18 +2740,49 @@ export class K8sCnpgService implements OnApplicationBootstrap {
         'cnpg.io/cluster': clusterName
       }
     );
+    const dataCompression = await this.backupDataCompression(namespace, clusterName);
     await customApi.patchNamespacedCustomObject(
       this.CNPG_GROUP,
       this.CNPG_VERSION,
       namespace,
       this.CNPG_PLURAL,
       clusterName,
-      { spec: { backup: this.buildBackupSpec(namespace, clusterName, r2, secretName) } },
+      {
+        spec: {
+          backup: this.buildBackupSpec(namespace, clusterName, r2, secretName, dataCompression)
+        }
+      },
       undefined,
       undefined,
       undefined,
       { headers: { 'Content-Type': 'application/merge-patch+json' } }
     );
+  }
+
+  private async backupDataCompression(
+    namespace: string,
+    clusterName: string
+  ): Promise<'gzip' | null> {
+    const { body } = await this.kc
+      .makeApiClient(k8s.CustomObjectsApi)
+      .getNamespacedCustomObject(
+        this.CNPG_GROUP,
+        this.CNPG_VERSION,
+        namespace,
+        this.CNPG_PLURAL,
+        clusterName
+      );
+    const cluster = body as any;
+    const store = cluster?.spec?.backup?.barmanObjectStore;
+    if (store) return store.data?.compression === 'gzip' ? 'gzip' : null;
+    const row = await this.prisma.database.findFirst({
+      where: { namespace, clusterName },
+      select: { backupCompression: true }
+    });
+    return deriveDbTuning({
+      memoryLimitBytes: parseMemory(String(cluster?.spec?.resources?.limits?.memory ?? '')),
+      overrides: { backupCompression: row?.backupCompression }
+    }).dataCompression;
   }
 
   async disableCnpgBackup(namespace: string, clusterName: string): Promise<void> {
