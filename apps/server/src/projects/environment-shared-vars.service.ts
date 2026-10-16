@@ -83,10 +83,16 @@ export class EnvironmentSharedVarsService {
         const resolvedBefore = resolveEnvVars(own, before, resources).resolved;
         const resolvedAfter = resolveEnvVars(own, after, resources).resolved;
         if (JSON.stringify(resolvedBefore) === JSON.stringify(resolvedAfter)) return;
-        const exists = await this.k8sWorkload
-          .getKubernetesDeployment(dep.name, dep.namespace)
-          .then((d) => d !== null)
-          .catch(() => false);
+        let exists: boolean;
+        try {
+          exists =
+            (await this.k8sWorkload.getKubernetesDeployment(dep.name, dep.namespace)) !== null;
+        } catch (e) {
+          this.logger.warn(
+            `re-inject ${dep.name} skipped, the cluster could not be read: ${(e as Error)?.message ?? e}`
+          );
+          return;
+        }
         if (!exists) return;
         await this.k8sWorkload
           .updateDeploymentEnv({

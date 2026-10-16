@@ -309,8 +309,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     if (!deployment) return;
     const exists = await this.k8sWorkload
       .getKubernetesDeployment(deployment.name, deployment.namespace)
-      .then((d) => d !== null)
-      .catch(() => false);
+      .then((d) => d !== null);
     if (!exists) return;
     const volumes = deployment.volumes.map((vol) => ({
       name: vol.name,
@@ -342,8 +341,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     if (!deployment) return;
     const exists = await this.k8sWorkload
       .getKubernetesDeployment(deployment.name, deployment.namespace)
-      .then((d) => d !== null)
-      .catch(() => false);
+      .then((d) => d !== null);
     if (!exists) return;
     await this.applyExecutor.ssaApply({
       apiVersion: 'apps/v1',
@@ -383,8 +381,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     if (!deployment) return;
     const exists = await this.k8sWorkload
       .getKubernetesDeployment(deployment.name, deployment.namespace)
-      .then((d) => d !== null)
-      .catch(() => false);
+      .then((d) => d !== null);
     if (!exists) return;
     await this.k8sWorkload.applyPodDisruptionBudget({
       name: deployment.name,
@@ -426,8 +423,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     if (!deployment) return;
     const exists = await this.k8sWorkload
       .getKubernetesDeployment(deployment.name, deployment.namespace)
-      .then((d) => d !== null)
-      .catch(() => false);
+      .then((d) => d !== null);
     if (!exists) return;
     const envVars = await this.readOwnEnvVars(deployment.id);
     const sharedVars = await this.loadSharedVarsForDeployment(
@@ -944,10 +940,19 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     image: string
   ) {
     try {
-      const k8sExists = await this.k8sWorkload
-        .getKubernetesDeployment(deployment.name, deployment.namespace)
-        .then((d) => d !== null)
-        .catch(() => false);
+      let k8sExists: boolean;
+      try {
+        k8sExists =
+          (await this.k8sWorkload.getKubernetesDeployment(
+            deployment.name,
+            deployment.namespace
+          )) !== null;
+      } catch (error) {
+        this.logger.warn(
+          `[BuildRecovery] could not read ${deployment.namespace}/${deployment.name}, retrying later: ${(error as Error)?.message ?? error}`
+        );
+        return;
+      }
       if (k8sExists) {
         await this.prisma.deployment.update({
           where: { id: deployment.id },
@@ -2147,8 +2152,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       // Only push to K8s if the deployment exists in the cluster.
       const k8sExistsScale = await this.k8sWorkload
         .getKubernetesDeployment(deployment.name, deployment.namespace)
-        .then((d) => d !== null)
-        .catch(() => false);
+        .then((d) => d !== null);
 
       if (k8sExistsScale) {
         await this.k8sWorkload.scaleDeployment(
@@ -2547,8 +2551,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       // will be applied when the build completes and creates the K8s deployment.
       const k8sExists = await this.k8sWorkload
         .getKubernetesDeployment(deployment.name, deployment.namespace)
-        .then((d) => d !== null)
-        .catch(() => false);
+        .then((d) => d !== null);
 
       if (k8sExists) {
         // Resolve ${{shared.KEY}} against the environment's shared vars, then
@@ -3641,8 +3644,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     } else {
       const k8sExistsVol = await this.k8sWorkload
         .getKubernetesDeployment(deployment.name, deployment.namespace)
-        .then((d) => d !== null)
-        .catch(() => false);
+        .then((d) => d !== null);
 
       if (k8sExistsVol) {
         try {
@@ -6047,8 +6049,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const effective = resolvePullPolicy(policy, deployment.image);
     const k8sExists = await this.k8sWorkload
       .getKubernetesDeployment(deployment.name, deployment.namespace)
-      .then((d) => d !== null)
-      .catch(() => false);
+      .then((d) => d !== null);
     if (k8sExists) {
       await this.k8sWorkload.updateDeploymentPullPolicy(
         deployment.name,
@@ -6159,8 +6160,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     // Only push to K8s if the deployment exists in the cluster.
     const k8sExistsRes = await this.k8sWorkload
       .getKubernetesDeployment(deployment.name, deployment.namespace)
-      .then((d) => d !== null)
-      .catch(() => false);
+      .then((d) => d !== null);
 
     if (isUnlimited) {
       if (k8sExistsRes) {
