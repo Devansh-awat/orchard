@@ -8,7 +8,14 @@ import { resolveNamespaceScope } from '../projects/namespace-scope';
 import { GLOBAL_LEADER_LEASE, LeaseService } from '../coordination/lease.service';
 import { OrgEventsService } from '../events/org-events.service';
 import { Elector } from './core/lease-elector';
-import { Failure, lastingFailures, shardIsStale, UNHEALTHY_GRACE_MS } from './core/health';
+import {
+  Failure,
+  lastingFailures,
+  RESIGN_COOLDOWN_MS,
+  shardIsStale,
+  shouldHandOver,
+  UNHEALTHY_GRACE_MS
+} from './core/health';
 import { EngineInformer, EngineRefs } from './core/informer';
 import { EngineShard, buildEngineShards, registeredEngineShards } from './shards';
 import { PodConsumer } from './consumers/pod.consumer';
@@ -70,6 +77,8 @@ export class EngineService implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(EngineService.name);
 
   private readonly shards = new Map<string, ShardRuntime>();
+
+  private readonly cooldownUntil = new Map<string, number>();
 
   private readonly nsRefCache = new Map<string, { refs: EngineRefs; exp: number }>();
 
@@ -152,7 +161,8 @@ export class EngineService implements OnApplicationBootstrap, OnModuleDestroy {
         def,
         elector: this.lease.register(def.lease, {
           autoStart: false,
-          shouldAcquire: () => this.canAcquireMore()
+          shouldAcquire: () =>
+            this.canAcquireMore() && (this.cooldownUntil.get(def.name) ?? 0) <= Date.now()
         }),
         informers: [],
         activity: {
@@ -420,6 +430,19 @@ export class EngineService implements OnApplicationBootstrap, OnModuleDestroy {
   private async balance(): Promise<void> {
     if (!this.enabled) return;
     await this.refreshPresence();
+    const now = Date.now();
+    for (const runtime of this.shards.values()) {
+      if (!runtime.elector.isHolder()) continue;
+      if (!shouldHandOver(runtime.activity.unhealthy, now, this.presentReplicas)) continue;
+      const failures = lastingFailures(runtime.activity.unhealthy, now)
+        .map(([kind, error]) => `${kind}: ${error}`)
+        .join('; ');
+      this.logger.error(
+        `shard ${runtime.def.name} has been unhealthy on this replica for too long (${failures}); handing it to another replica`
+      );
+      this.cooldownUntil.set(runtime.def.name, now + RESIGN_COOLDOWN_MS);
+      await runtime.elector.resign().catch(() => {});
+    }
     const cap = Math.ceil(this.shards.size / Math.max(1, this.presentReplicas));
     const held = [...this.shards.values()].filter((r) => r.elector.isHolder());
     const excess = held.length - cap;

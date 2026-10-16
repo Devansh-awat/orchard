@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   lastingFailures,
   shardIsStale,
+  shouldHandOver,
   STALE_MS,
   UNHEALTHY_GRACE_MS
 } from '../src/engine/core/health';
@@ -44,4 +45,14 @@ test('watch failures only count once they have lasted the grace period', () => {
     ['pods', 'watch closed'],
     ['services', 'forbidden']
   ]);
+});
+
+test('a shard broken for long enough is handed to another replica, never by the last one', () => {
+  const now = 10 * 60_000;
+  const broken = new Map([['Pod', { error: 'watch down', since: now - 3 * 60_000 }]]);
+  const blip = new Map([['Pod', { error: 'watch down', since: now - 20_000 }]]);
+  assert.equal(shouldHandOver(broken, now, 2), true);
+  assert.equal(shouldHandOver(broken, now, 1), false);
+  assert.equal(shouldHandOver(blip, now, 3), false);
+  assert.equal(shouldHandOver(new Map(), now, 3), false);
 });
