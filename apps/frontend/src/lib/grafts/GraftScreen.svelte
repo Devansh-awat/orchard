@@ -33,7 +33,7 @@
 		description={graftHost.failed[match.graft.id]}
 	/>
 {:else if loaded && mount}
-	{#key `${match.graft.id}:${match.screen.id}`}
+	{#key mount}
 		<GraftMount
 			graftId={match.graft.id}
 			{mount}

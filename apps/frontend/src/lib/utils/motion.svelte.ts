@@ -653,9 +653,16 @@ export function overlayMotion(isOpen: () => boolean, opts: { origin?: string } =
 				unpin = pinInPlace(target, lastRect);
 			}
 		};
+		const track = () => {
+			if (!overlayOpen.get(target) || exiting) return;
+			const rect = target.getBoundingClientRect();
+			if (rect.width > 0) lastRect = rect;
+		};
+		const placed = new MutationObserver(track);
+		placed.observe(target, { attributes: true, attributeFilter: ['style'] });
 		const remember = (event: Event) => {
 			if ((event as ToggleEvent).newState !== 'closed') return;
-			lastRect = target.getBoundingClientRect();
+			if (!lastRect) lastRect = target.getBoundingClientRect();
 			queueMicrotask(pin);
 		};
 		target.addEventListener('beforetoggle', remember);
@@ -736,7 +743,10 @@ export function overlayMotion(isOpen: () => boolean, opts: { origin?: string } =
 				target.style.transform = '';
 			});
 		});
-		return () => target.removeEventListener('beforetoggle', remember);
+		return () => {
+			placed.disconnect();
+			target.removeEventListener('beforetoggle', remember);
+		};
 	};
 }
 
