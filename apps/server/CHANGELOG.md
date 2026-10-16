@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.75.0](https://github.com/hackclub/orchard/compare/server/v2.74.0...server/v2.75.0) (2026-10-16)
+
+
+### Features
+
+* databases pick up spec changes made straight in kubernetes ([a40edfe](https://github.com/hackclub/orchard/commit/a40edfe3d933c35c69783916f8d79200f46c939e))
+
+
+### Bug Fixes
+
+* a paused database says how big to grow it before writes come back ([5f0ef69](https://github.com/hackclub/orchard/commit/5f0ef69b9a06399c8fd65d5686b0977c8394e4b7))
+
 ## [2.74.0](https://github.com/hackclub/orchard/compare/server/v2.73.0...server/v2.74.0) (2026-10-15)
 
 
