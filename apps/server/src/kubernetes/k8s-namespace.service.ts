@@ -4,44 +4,25 @@ import { clusterPods, clusterServiceCounts } from './cluster-snapshot';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from './kubernetes.service';
 import { LeaseService } from '../coordination/lease.service';
-
-/**
- * Namespaces a tenant pod may be reached from, and reach.
- *
- * The ingress controller is the reason this is configurable rather than a
- * constant. This project runs HAProxy in `network`, so that was hardcoded; on
- * k3s Traefik lives in `traefik`, and on a cluster where it lives anywhere else
- * the tenant policy silently blocks it. The visible symptom is not "the site is
- * down" but a certificate that never issues: the ACME HTTP-01 solver is a pod
- * in the tenant namespace, the controller cannot reach it, and Let's Encrypt
- * gets a 502 instead of the token.
- */
-export function tenantIngressNamespaces(): string[] {
-  const configured = (process.env.TENANT_INGRESS_NAMESPACES || '')
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-  return configured.length ? configured : ['network', 'orchard'];
-}
-
-function namespacePeers(names: string[]): k8s.V1NetworkPolicyPeer[] {
-  return names.map((name) => ({
-    namespaceSelector: { matchLabels: { 'kubernetes.io/metadata.name': name } }
-  }));
-}
-
 import { tenantSecretsBinding, tenantSecretsRole } from './tenant-rbac';
 import { tenantQuotaFloor, tenantQuotaHard } from './tenant-quota';
+import {
+  PROJECT_DATABASES_POLICY,
+  TENANT_DENY_POLICY,
+  TENANT_NAMESPACE_LABEL_SELECTORS,
+  ciliumIngressPolicy,
+  cnpgApiserverPolicy,
+  projectDatabasePolicy,
+  projectNamespaces,
+  tenantDenyPolicy
+} from './security-policies';
 
-export const TENANT_NAMESPACE_LABELS = ['orchard.my/managed', 'orchard.dev/managed'] as const;
-
-export const TENANT_NAMESPACE_LABEL_SELECTORS = TENANT_NAMESPACE_LABELS.map(
-  (label) => `${label}=true`
-);
-
-export const TENANT_NAMESPACE_EGRESS_PEERS: k8s.V1NetworkPolicyPeer[] = TENANT_NAMESPACE_LABELS.map(
-  (key) => ({ namespaceSelector: { matchExpressions: [{ key, operator: 'Exists' }] } })
-);
+export {
+  TENANT_NAMESPACE_EGRESS_PEERS,
+  TENANT_NAMESPACE_LABELS,
+  TENANT_NAMESPACE_LABEL_SELECTORS,
+  tenantIngressNamespaces
+} from './security-policies';
 
 /**
  * Per-tenant namespace lifecycle: creation, deletion, ResourceQuota +
@@ -523,11 +504,9 @@ export class K8sNamespaceService implements OnModuleInit {
     });
     if (!project) return;
 
-    const namespaces = [
-      ...new Set([project.namespace, ...project.environments.map((env) => env.namespace)])
-    ].filter(Boolean);
+    const namespaces = projectNamespaces(project);
     const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
-    const name = 'allow-project-databases';
+    const name = PROJECT_DATABASES_POLICY;
 
     for (const namespace of namespaces) {
       if (namespaces.length < 2) {
@@ -537,19 +516,7 @@ export class K8sNamespaceService implements OnModuleInit {
         continue;
       }
 
-      const body: k8s.V1NetworkPolicy = {
-        metadata: { name, namespace, labels: { 'orchard.my/managed': 'true' } },
-        spec: {
-          podSelector: { matchExpressions: [{ key: 'cnpg.io/cluster', operator: 'Exists' }] },
-          policyTypes: ['Ingress'],
-          ingress: [
-            {
-              from: namespacePeers(namespaces),
-              ports: [{ protocol: 'TCP', port: 5432 }]
-            }
-          ]
-        }
-      };
+      const body = projectDatabasePolicy(namespace, namespaces);
 
       try {
         await networkingApi.createNamespacedNetworkPolicy(namespace, body);
@@ -572,96 +539,7 @@ export class K8sNamespaceService implements OnModuleInit {
     try {
       const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
 
-      const networkPolicyBody: k8s.V1NetworkPolicy = {
-        metadata: {
-          name: 'default-deny-all',
-          namespace: cleanNamespace,
-          labels: {
-            'orchard.my/managed': 'true'
-          }
-        },
-        spec: {
-          podSelector: {},
-          policyTypes: ['Ingress', 'Egress'],
-          ingress: [
-            {
-              from: namespacePeers([cleanNamespace, ...tenantIngressNamespaces()])
-            }
-          ],
-          // Egress is allow-listed. Pods may:
-          //   1. Talk to other pods in the same tenant namespace.
-          //   2. Resolve DNS via kube-dns in kube-system (UDP/TCP 53).
-          //   3. Talk to the `network` namespace (ingress controllers).
-          //   4. Reach the public internet — but NOT link-local / cloud
-          //      metadata (169.254.0.0/16) or the RFC1918 ranges the
-          //      platform's own infra lives on.
-          //   5. Reach other Orchard tenant namespaces. Those namespaces are
-          //      still default-deny on ingress, so this only lands on what a
-          //      tenant has explicitly published via an `-allow-public`
-          //      policy — the same surface the public internet already has.
-          // This blocks tenant pods from reaching the kube-apiserver,
-          // platform Postgres/Harbor/server, other tenants' unpublished
-          // services, and the cloud metadata IMDS.
-          egress: [
-            {
-              to: namespacePeers([cleanNamespace, ...tenantIngressNamespaces()])
-            },
-            {
-              to: [
-                {
-                  namespaceSelector: {
-                    matchLabels: {
-                      'kubernetes.io/metadata.name': 'kube-system'
-                    }
-                  },
-                  podSelector: {
-                    matchLabels: { 'k8s-app': 'kube-dns' }
-                  }
-                }
-              ],
-              ports: [
-                { protocol: 'UDP', port: 53 },
-                { protocol: 'TCP', port: 53 }
-              ]
-            },
-            {
-              to: [
-                {
-                  ipBlock: {
-                    cidr: '0.0.0.0/0',
-                    except: [
-                      '10.0.0.0/8',
-                      '172.16.0.0/12',
-                      '192.168.0.0/16',
-                      '169.254.0.0/16',
-                      '100.64.0.0/10'
-                    ]
-                  }
-                }
-              ]
-            },
-            {
-              to: TENANT_NAMESPACE_EGRESS_PEERS
-            },
-            // CNPG barman sidecars in tenant namespaces stream WAL/backups to
-            // r2-proxy, which lives at a ClusterIP in 10.x — blanket RFC1918
-            // egress would block backups entirely. Scope the exception to
-            // the r2-proxy namespace on port 9000.
-            {
-              to: [
-                {
-                  namespaceSelector: {
-                    matchLabels: {
-                      'kubernetes.io/metadata.name': 'orchard-r2-proxy'
-                    }
-                  }
-                }
-              ],
-              ports: [{ protocol: 'TCP', port: 9000 }]
-            }
-          ]
-        }
-      };
+      const networkPolicyBody = tenantDenyPolicy(cleanNamespace);
 
       // Replace on conflict: a namespace created before a configuration change
       // already has the old policy, and that is precisely the one that needs
@@ -671,7 +549,7 @@ export class K8sNamespaceService implements OnModuleInit {
       } catch (e: any) {
         if (e?.response?.statusCode !== 409) throw e;
         await networkingApi.replaceNamespacedNetworkPolicy(
-          'default-deny-all',
+          TENANT_DENY_POLICY,
           cleanNamespace,
           networkPolicyBody
         );
@@ -690,32 +568,7 @@ export class K8sNamespaceService implements OnModuleInit {
 
       const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
 
-      const allowCiliumIngress = {
-        apiVersion: 'cilium.io/v2',
-        kind: 'CiliumNetworkPolicy',
-        metadata: {
-          name: 'allow-cilium-ingress',
-          namespace: cleanNamespace,
-          labels: { 'orchard.my/managed': 'true' }
-        },
-        spec: {
-          endpointSelector: {},
-          ingress: [
-            { fromEntities: ['host', 'remote-node', 'ingress'] },
-            { fromEndpoints: [{ matchLabels: { 'kubernetes.io/metadata.name': 'orchard' } }] },
-            {
-              fromEndpoints: [
-                {
-                  matchLabels: {
-                    'kubernetes.io/metadata.name': 'network',
-                    'app.kubernetes.io/name': 'kubernetes-ingress'
-                  }
-                }
-              ]
-            }
-          ]
-        }
-      };
+      const allowCiliumIngress = ciliumIngressPolicy(cleanNamespace);
       try {
         await customApi.createNamespacedCustomObject(
           'cilium.io',
@@ -728,21 +581,7 @@ export class K8sNamespaceService implements OnModuleInit {
         if (e.response?.statusCode !== 409) throw e;
       }
 
-      const cnpgApiServerPolicy = {
-        apiVersion: 'cilium.io/v2',
-        kind: 'CiliumNetworkPolicy',
-        metadata: {
-          name: 'allow-cnpg-apiserver',
-          namespace: cleanNamespace,
-          labels: { 'orchard.my/managed': 'true' }
-        },
-        spec: {
-          endpointSelector: {
-            matchExpressions: [{ key: 'cnpg.io/cluster', operator: 'Exists' }]
-          },
-          egress: [{ toEntities: ['kube-apiserver'] }]
-        }
-      };
+      const cnpgApiServerPolicy = cnpgApiserverPolicy(cleanNamespace);
       try {
         await customApi.createNamespacedCustomObject(
           'cilium.io',

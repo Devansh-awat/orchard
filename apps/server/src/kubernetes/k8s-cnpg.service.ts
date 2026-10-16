@@ -48,6 +48,7 @@ import { LeaderElectionService } from '../events/leader-election.service';
  */
 import { parseKubeletSummary, VolumeUsage } from './volume-stats';
 import { WRITE_GUARD_ANNOTATION } from './cnpg-status';
+import { cnpgOperatorPolicy } from './security-policies';
 
 export function cnpgScheduleName(clusterName: string): string {
   return `${clusterName}-schedule`.substring(0, 63);
@@ -277,33 +278,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     // plain NetworkPolicy there, and its own operator rule already covers this.
     if (!(await this.kubernetes.isCiliumAvailable())) return;
     const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
-    const policy = {
-      apiVersion: 'cilium.io/v2',
-      kind: 'CiliumNetworkPolicy',
-      metadata: {
-        name: 'allow-cnpg-operator',
-        namespace,
-        labels: { 'orchard.my/managed': 'true' }
-      },
-      spec: {
-        endpointSelector: {
-          matchExpressions: [{ key: 'cnpg.io/cluster', operator: 'Exists' }]
-        },
-        ingress: [
-          {
-            fromEndpoints: [
-              {
-                matchLabels: {
-                  'app.kubernetes.io/name': 'cloudnative-pg',
-                  'io.kubernetes.pod.namespace': this.CNPG_OPERATOR_NAMESPACE
-                }
-              }
-            ],
-            toPorts: [{ ports: [{ port: '8000', protocol: 'TCP' }] }]
-          }
-        ]
-      }
-    };
+    const policy = cnpgOperatorPolicy(namespace, this.CNPG_OPERATOR_NAMESPACE);
     try {
       await customApi.createNamespacedCustomObject(
         'cilium.io',

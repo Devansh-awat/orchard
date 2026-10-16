@@ -6,7 +6,6 @@ import {
   OnModuleInit
 } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
-import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   KubernetesService,
@@ -23,6 +22,15 @@ import { k8sErrorMessage } from './k8s-error';
 import { syncTlsSecret } from './tls-secret-sync';
 import { LeaderElectionService } from '../events/leader-election.service';
 import { optionalDomain } from '../env/platform-domains';
+import {
+  basicAuthEnvoyConfig,
+  basicAuthEnvoyConfigName,
+  basicAuthHtpasswd,
+  publicDatabasePolicy,
+  publicDatabasePolicyName,
+  publicDeploymentPolicy,
+  publicDeploymentPolicyName
+} from './security-policies';
 
 export type ProtectionProxyResult = 'applied' | 'ingress-missing' | 'failed';
 
@@ -556,8 +564,7 @@ export class K8sNetworkService implements OnModuleInit {
       throw new BadRequestException('Username and password are required');
     }
 
-    const sha1Hash = crypto.createHash('sha1').update(password).digest('base64');
-    const authString = `${username}:{SHA}${sha1Hash}`;
+    const authString = basicAuthHtpasswd(username, password);
 
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
 
@@ -675,80 +682,15 @@ export class K8sNetworkService implements OnModuleInit {
 
     if (!cleanNamespace || !cleanName) return;
 
-    const sha1Hash = crypto.createHash('sha1').update(password).digest('base64');
-    const htpasswd = `${username}:{SHA}${sha1Hash}`;
-
     const customObjectsApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
 
-    const envoyConfigBody = {
-      apiVersion: 'cilium.io/v2',
-      kind: 'CiliumEnvoyConfig',
-      metadata: {
-        name: `${cleanName}-auth`,
-        namespace: cleanNamespace,
-        labels: {
-          'orchard.my/managed': 'true',
-          'orchard.my/type': 'basic-auth'
-        }
-      },
-      spec: {
-        services: [{ name: serviceName, namespace: cleanNamespace, ports: [servicePort] }],
-        resources: [
-          {
-            '@type': 'type.googleapis.com/envoy.config.listener.v3.Listener',
-            name: `${cleanName}-auth-listener`,
-            filter_chains: [
-              {
-                filters: [
-                  {
-                    name: 'envoy.filters.network.http_connection_manager',
-                    typed_config: {
-                      '@type':
-                        'type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager',
-                      stat_prefix: `${cleanName}-auth`,
-                      route_config: {
-                        name: `${cleanName}-auth-route`,
-                        virtual_hosts: [
-                          {
-                            name: 'default',
-                            domains: ['*'],
-                            routes: [
-                              {
-                                match: { prefix: '/' },
-                                route: {
-                                  cluster: `${cleanNamespace}:${serviceName}:${servicePort}`
-                                }
-                              }
-                            ]
-                          }
-                        ]
-                      },
-                      http_filters: [
-                        {
-                          name: 'envoy.filters.http.basic_auth',
-                          typed_config: {
-                            '@type':
-                              'type.googleapis.com/envoy.extensions.filters.http.basic_auth.v3.BasicAuth',
-                            users: { inline_string: htpasswd }
-                          }
-                        },
-                        {
-                          name: 'envoy.filters.http.router',
-                          typed_config: {
-                            '@type':
-                              'type.googleapis.com/envoy.extensions.filters.http.router.v3.Router'
-                          }
-                        }
-                      ]
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      }
-    };
+    const envoyConfigBody = basicAuthEnvoyConfig(
+      cleanNamespace,
+      cleanName,
+      basicAuthHtpasswd(username, password),
+      serviceName,
+      servicePort
+    );
 
     try {
       await customObjectsApi.createNamespacedCustomObject(
@@ -767,7 +709,7 @@ export class K8sNetworkService implements OnModuleInit {
           'v2',
           cleanNamespace,
           'ciliumenvoyconfigs',
-          `${cleanName}-auth`,
+          basicAuthEnvoyConfigName(cleanName),
           envoyConfigBody
         );
       } else {
@@ -829,7 +771,7 @@ export class K8sNetworkService implements OnModuleInit {
         'v2',
         cleanNamespace,
         'ciliumenvoyconfigs',
-        `${cleanName}-auth`
+        basicAuthEnvoyConfigName(cleanName)
       );
     } catch (error) {
       if (error.response?.statusCode !== 404) {
@@ -2384,40 +2326,11 @@ export class K8sNetworkService implements OnModuleInit {
     }
   }
 
-  private publicDatabaseNetworkPolicyName(clusterName: string): string {
-    return truncateK8sName(`${clusterName}-allow-public`, 63);
-  }
-
   async upsertPublicDatabaseNetworkPolicy(namespace: string, clusterName: string): Promise<void> {
     this.ensureKubeConfig();
     const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
-    const name = this.publicDatabaseNetworkPolicyName(clusterName);
-
-    const body: k8s.V1NetworkPolicy = {
-      metadata: {
-        name,
-        namespace,
-        labels: {
-          'app.kubernetes.io/managed-by': 'orchard',
-          'cnpg.io/cluster': clusterName
-        }
-      },
-      spec: {
-        // Target the CNPG primary pod of this cluster.
-        podSelector: {
-          matchLabels: {
-            'cnpg.io/cluster': clusterName
-          }
-        },
-        policyTypes: ['Ingress'],
-        ingress: [
-          {
-            from: [{ ipBlock: { cidr: '0.0.0.0/0' } }, { namespaceSelector: {} }],
-            ports: [{ protocol: 'TCP', port: 5432 }]
-          }
-        ]
-      }
-    };
+    const name = publicDatabasePolicyName(clusterName);
+    const body = publicDatabasePolicy(namespace, clusterName);
 
     try {
       await networkingApi.readNamespacedNetworkPolicy(name, namespace);
@@ -2434,7 +2347,7 @@ export class K8sNetworkService implements OnModuleInit {
   async deletePublicDatabaseNetworkPolicy(namespace: string, clusterName: string): Promise<void> {
     this.ensureKubeConfig();
     const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
-    const name = this.publicDatabaseNetworkPolicyName(clusterName);
+    const name = publicDatabasePolicyName(clusterName);
     try {
       await networkingApi.deleteNamespacedNetworkPolicy(name, namespace);
     } catch (e: any) {
@@ -2578,10 +2491,6 @@ export class K8sNetworkService implements OnModuleInit {
     }
   }
 
-  private publicDeploymentNetworkPolicyName(deploymentName: string): string {
-    return truncateK8sName(`${deploymentName}-allow-public`, 63);
-  }
-
   async upsertPublicDeploymentNetworkPolicy(
     namespace: string,
     deploymentName: string,
@@ -2589,38 +2498,14 @@ export class K8sNetworkService implements OnModuleInit {
   ): Promise<void> {
     this.ensureKubeConfig();
     const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
-    const name = this.publicDeploymentNetworkPolicyName(deploymentName);
+    const name = publicDeploymentPolicyName(deploymentName);
 
     if (ports.length === 0) {
       await this.deletePublicDeploymentNetworkPolicy(namespace, deploymentName);
       return;
     }
 
-    const body: k8s.V1NetworkPolicy = {
-      metadata: {
-        name,
-        namespace,
-        labels: {
-          'app.kubernetes.io/managed-by': 'orchard',
-          'app.kubernetes.io/name': deploymentName
-        }
-      },
-      spec: {
-        podSelector: {
-          matchLabels: { 'app.kubernetes.io/name': deploymentName }
-        },
-        policyTypes: ['Ingress'],
-        ingress: [
-          {
-            from: [{ ipBlock: { cidr: '0.0.0.0/0' } }, { namespaceSelector: {} }],
-            ports: ports.map((p) => ({
-              protocol: p.protocol.toUpperCase() === 'UDP' ? 'UDP' : 'TCP',
-              port: p.port
-            }))
-          }
-        ]
-      }
-    };
+    const body = publicDeploymentPolicy(namespace, deploymentName, ports);
 
     try {
       await networkingApi.readNamespacedNetworkPolicy(name, namespace);
@@ -2640,7 +2525,7 @@ export class K8sNetworkService implements OnModuleInit {
   ): Promise<void> {
     this.ensureKubeConfig();
     const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
-    const name = this.publicDeploymentNetworkPolicyName(deploymentName);
+    const name = publicDeploymentPolicyName(deploymentName);
     try {
       await networkingApi.deleteNamespacedNetworkPolicy(name, namespace);
     } catch (e: any) {

@@ -27,6 +27,7 @@ import { snapshotPublicPortState, publicPortKey } from '../kubernetes/port-utils
 import { resolvePullPolicy } from '../kubernetes/trusted-images';
 import { startArgsFor, resolveStartArgs } from '../kubernetes/start-command';
 import { disruptionBudgetActive } from '../kubernetes/disruption-budget';
+import { publicDeploymentPorts } from '../kubernetes/security-policies';
 import { UsersService } from '../users/users.service';
 import { DockerService } from '../docker/docker.service';
 import { BuildJobInformerService } from '../docker/build-job-informer.service';
@@ -5214,16 +5215,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       },
       select: { targetPort: true, protocol: true }
     });
-    const deduped = new Map<string, { port: number; protocol: string }>();
-    for (const p of publicPorts) {
-      const proto = p.protocol?.toUpperCase() === 'UDP' ? 'UDP' : 'TCP';
-      deduped.set(`${proto}:${p.targetPort}`, { port: p.targetPort, protocol: proto });
-    }
     try {
       await this.k8sNetwork.upsertPublicDeploymentNetworkPolicy(
         namespace,
         deploymentName,
-        Array.from(deduped.values())
+        publicDeploymentPorts(publicPorts)
       );
     } catch (e: any) {
       console.error(`[Deployment/public] Failed to sync NetworkPolicy: ${e?.message}`);
