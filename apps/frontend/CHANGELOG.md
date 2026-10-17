@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.69.0](https://github.com/hackclub/orchard/compare/frontend/v1.68.1...frontend/v1.69.0) (2026-10-17)
+
+
+### Features
+
+* **frontend:** env tab warns about variables changed outside orchard ([cce44f2](https://github.com/hackclub/orchard/commit/cce44f2bb4114429c2a9b8f8545733e336ebdacb))
+
+
+### Bug Fixes
+
+* **server:** kubectl edits never delete secrets or mass-remove env and settings ([e065bc8](https://github.com/hackclub/orchard/commit/e065bc8202e30dc7c275746b1077ea0e0d4adb9e))
+
 ## [1.68.1](https://github.com/hackclub/orchard/compare/frontend/v1.68.0...frontend/v1.68.1) (2026-10-16)
 
 

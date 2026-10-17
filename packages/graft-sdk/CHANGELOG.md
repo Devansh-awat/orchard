@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/hackclub/orchard/compare/graft-sdk/v1.3.0...graft-sdk/v1.4.0) (2026-10-17)
+
+
+### Features
+
+* **graft-sdk:** engine shard names, mirror names kept as aliases ([21fa16a](https://github.com/hackclub/orchard/commit/21fa16a1d1028368aa628fa4367d12a85185b124))
+
 ## [1.3.0](https://github.com/hackclub/orchard/compare/graft-sdk/v1.2.0...graft-sdk/v1.3.0) (2026-10-14)
 
 

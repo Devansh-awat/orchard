@@ -1,5 +1,42 @@
 # Changelog
 
+## [2.77.0](https://github.com/hackclub/orchard/compare/server/v2.76.0...server/v2.77.0) (2026-10-17)
+
+
+### Features
+
+* **server:** a cronjob applied back in k8s re-enables its job ([7e2d885](https://github.com/hackclub/orchard/commit/7e2d885ad1a088291a4f1f80c7e44c7f9b7dc110))
+* **server:** cronjob schedule edits in k8s are adopted into the job ([6b8ccf0](https://github.com/hackclub/orchard/commit/6b8ccf034fd59b2eb7b7611921c86f17533f94d9))
+* **server:** database hibernated or woken in k8s is adopted ([942cfd1](https://github.com/hackclub/orchard/commit/942cfd131966133e5c6bb2069bbb810f46bb054d))
+* **server:** database settings edited in k8s are adopted ([f0f8d7c](https://github.com/hackclub/orchard/commit/f0f8d7c86ee51c1ea08f5b8cda842919a08f52db))
+* **server:** deleting a deployment in k8s removes it from orchard ([ceee0bf](https://github.com/hackclub/orchard/commit/ceee0bf1031c5b3b6403ef8b5733281a02eef0f5))
+* **server:** deleting a job's cronjob in k8s disables the job ([7ede593](https://github.com/hackclub/orchard/commit/7ede593a1a1bc9d6fac2eac9710d539e2fe75dac))
+* **server:** env edited with kubectl is adopted, refs are flagged ([04a0263](https://github.com/hackclub/orchard/commit/04a0263d73fc6a7856dfb1124e1aeafa0a48eef8))
+* **server:** ingress edited with kubectl is adopted ([0464217](https://github.com/hackclub/orchard/commit/04642176414090a08a19622d40e6b7023aa50274))
+* **server:** orchard restores edited or deleted security policies ([d74093f](https://github.com/hackclub/orchard/commit/d74093fd27262d6b7240b81b399ed685a5b8529c))
+* **server:** scheduled backup edits and deletes in k8s are adopted ([0f7f2eb](https://github.com/hackclub/orchard/commit/0f7f2ebb1abe76d96b7baaea15326e93af1ba63e))
+* **server:** service type changed with kubectl is adopted ([3c6ab5b](https://github.com/hackclub/orchard/commit/3c6ab5becd8d9640414a8a0db490652475bc155d))
+* **server:** volume grown with kubectl is adopted ([b4e6472](https://github.com/hackclub/orchard/commit/b4e6472c0542958edabf5152f3e31c3f209dd3d5))
+
+
+### Bug Fixes
+
+* **server:** a failed cluster read is no longer treated as a missing deployment ([772981e](https://github.com/hackclub/orchard/commit/772981ebeb6f09b4f89f8c837017ed9f7b42544c))
+* **server:** a failed first deploy cleaned up by orchard never removes the app ([ea95079](https://github.com/hackclub/orchard/commit/ea9507950ac8db2bdd8cdaa3bf87021bf279a8ad))
+* **server:** a node that re-registers keeps its row and org assignments ([ce5a6cf](https://github.com/hackclub/orchard/commit/ce5a6cf578e7ca3b1b322011fcd7f11a509f598d))
+* **server:** a replica whose engine watch stays broken hands the shard over ([ee28d3f](https://github.com/hackclub/orchard/commit/ee28d3fe61ac7fd9b0108cb1d59c621437410981))
+* **server:** a service port edit never leaves the service deleted ([4495be8](https://github.com/hackclub/orchard/commit/4495be8a9eda8929d112ffdf711ead4ac483b65e))
+* **server:** backups turned off in orchard stay off ([dea45e9](https://github.com/hackclub/orchard/commit/dea45e9d47e43c793d280049bc8b1f6aa635785c))
+* **server:** build recovery defers when the build job cannot be read ([373677a](https://github.com/hackclub/orchard/commit/373677add9cb1e6b53a474c720a2174d0dbea64a))
+* **server:** cronjob resync keeps annotations and labels set outside orchard ([4f002a1](https://github.com/hackclub/orchard/commit/4f002a184210dc24553a9f08fecd934fc7807c46))
+* **server:** engine confirms deletes live, errors never count as gone ([7f77a08](https://github.com/hackclub/orchard/commit/7f77a08fad68f966ebb646c275811c00bd95abbd))
+* **server:** engine list passes never sweep or overwrite what the watch saw newer ([1bd9812](https://github.com/hackclub/orchard/commit/1bd9812e3bb4ee87cabb1fc9d059b1599f215f6e))
+* **server:** engine retries deletes whose handler failed ([a08bb8d](https://github.com/hackclub/orchard/commit/a08bb8d15d2b77221b90a23044d968e6b030bb1e))
+* **server:** kubectl edits never delete secrets or mass-remove env and settings ([e065bc8](https://github.com/hackclub/orchard/commit/e065bc8202e30dc7c275746b1077ea0e0d4adb9e))
+* **server:** namespace sync only adopts deployments orchard did not create ([d8dd60a](https://github.com/hackclub/orchard/commit/d8dd60a6845c242a51b842a8f87354d68b99dee4))
+* **server:** re-pointing backups keeps the data compression already set ([08f9c95](https://github.com/hackclub/orchard/commit/08f9c95063dfa2584ba73620953f2bdb5990fef9))
+* **server:** unlabeled ingresses and services keep their rows ([707067a](https://github.com/hackclub/orchard/commit/707067a5fe03150a3abfc94453da9382e779ee20))
+
 ## [2.76.0](https://github.com/hackclub/orchard/compare/server/v2.75.0...server/v2.76.0) (2026-10-16)
 
 
