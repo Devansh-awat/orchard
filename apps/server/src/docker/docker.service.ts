@@ -1742,11 +1742,7 @@ export class DockerService {
 
   async getBuildJobStatus(jobName: string) {
     if (!this.imageBuilderService) return null;
-    try {
-      return await this.imageBuilderService.getBuildJobStatus(jobName);
-    } catch {
-      return null;
-    }
+    return this.imageBuilderService.getBuildJobStatus(jobName);
   }
 
   async waitForBuildJob(

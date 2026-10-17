@@ -884,9 +884,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         !jobs.some((j) => j.jobName === recordedJobName) &&
         !this.buildJobInformer.hasSeen(recordedJobName)
       ) {
-        const direct = await this.dockerService
-          .getBuildJobStatus(recordedJobName)
-          .catch(() => null);
+        let direct: Awaited<ReturnType<DockerService['getBuildJobStatus']>>;
+        try {
+          direct = await this.dockerService.getBuildJobStatus(recordedJobName);
+        } catch {
+          return null;
+        }
         if (direct && isObservedJobStatus(direct.status)) {
           jobs.unshift({
             jobName: recordedJobName,
