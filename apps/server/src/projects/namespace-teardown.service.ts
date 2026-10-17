@@ -18,6 +18,7 @@ export interface TeardownScope {
   namespace: string;
   reason: TeardownReason;
   actor: { userId?: string; email?: string };
+  keepData?: boolean;
 }
 
 export interface TeardownSummary {
@@ -86,7 +87,7 @@ export class NamespaceTeardownService {
           fail(`cancel build for ${deployment.name}`, err);
         }
       }
-      const images = deployment.imageHistory.map((entry) => entry.image);
+      const images = scope.keepData ? [] : deployment.imageHistory.map((entry) => entry.image);
       if (images.length > 0) {
         try {
           await this.docker.deleteRepositoriesFromRegistry(images);
@@ -136,11 +137,17 @@ export class NamespaceTeardownService {
     });
     for (const database of databases) {
       summary.databases += 1;
-      try {
-        await databasesService.purgeBackupObjects(database);
-        if (database.namespace && database.clusterName) summary.backupPrefixes += 1;
-      } catch (err) {
-        fail(`purge backups for ${database.name}`, err);
+      if (scope.keepData) {
+        this.logger.warn(
+          `teardown of ${scope.namespace} keeps the backups of ${database.name}: the namespace was removed in the cluster, so they are the only way back`
+        );
+      } else {
+        try {
+          await databasesService.purgeBackupObjects(database);
+          if (database.namespace && database.clusterName) summary.backupPrefixes += 1;
+        } catch (err) {
+          fail(`purge backups for ${database.name}`, err);
+        }
       }
       if (database.r2ProxyAccessKey) {
         try {

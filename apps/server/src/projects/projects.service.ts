@@ -576,7 +576,8 @@ export class ProjectsService {
       organizationId: project.organizationId,
       namespace: project.namespace,
       reason: 'project.deleted',
-      actor: actor ?? { userId: undefined }
+      actor: actor ?? { userId: undefined },
+      keepData: actor === null
     });
 
     const namespaces = new Set<string>([

@@ -13,6 +13,26 @@ function refsOf(row: Record<(typeof REF_COLUMNS)[number], string | null>): Engin
 export class PrismaEngineStore implements EngineStore {
   constructor(private readonly prisma: PrismaService) {}
 
+  async listStart(): Promise<string> {
+    const rows = await this.prisma.$queryRaw<{ ts: string }[]>`
+      SELECT to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS.US') AS "ts"
+    `;
+    return rows[0]?.ts ?? '1970-01-01 00:00:00';
+  }
+
+  async current(entries: { uid: string; resourceVersion: string }[]): Promise<Set<string>> {
+    if (entries.length === 0) return new Set();
+    const uids = entries.map((e) => e.uid);
+    const versions = entries.map((e) => e.resourceVersion);
+    const rows = await this.prisma.$queryRaw<{ uid: string }[]>`
+      SELECT o."uid"
+      FROM "k8s_objects" AS o
+      JOIN unnest(${uids}::varchar[], ${versions}::varchar[]) AS v("uid", "rv")
+        ON o."uid" = v."uid" AND o."resource_version" = v."rv"
+    `;
+    return new Set(rows.map((r) => r.uid));
+  }
+
   async load(shard: string, kind: string): Promise<StoredRow[]> {
     const rows = await this.prisma.k8sObject.findMany({
       where: { shard, kind },
@@ -34,8 +54,9 @@ export class PrismaEngineStore implements EngineStore {
     }));
   }
 
-  async write(rows: EngineRow[]): Promise<void> {
+  async write(rows: EngineRow[], since?: string): Promise<void> {
     if (rows.length === 0) return;
+    const cutoff = since ? Prisma.sql`${since}::timestamp` : Prisma.sql`'infinity'::timestamp`;
     const ref = (r: EngineRow, key: (typeof REF_COLUMNS)[number]) => r.refs[key] ?? null;
     // `k8s_objects` is keyed by uid but also carries a unique index on the
     // natural key. Deleting a resource and recreating it under the same name
@@ -71,6 +92,7 @@ export class PrismaEngineStore implements EngineStore {
           AND o."name" = v."name"
           AND o."api_version" = v."api_version"
           AND o."uid" <> v."uid"
+          AND o."synced_at" < ${cutoff}
       `,
       this.prisma.$executeRaw`
         INSERT INTO "k8s_objects" (
@@ -78,7 +100,24 @@ export class PrismaEngineStore implements EngineStore {
           "derived_version", "shard",
           "manifest", "deployment_id", "project_id", "database_id", "job_id", "synced_at"
         )
-        VALUES ${values}
+        SELECT v.*
+        FROM (VALUES ${values}) AS v(
+          "uid", "api_version", "kind", "namespace", "name", "resource_version",
+          "derived_version", "shard",
+          "manifest", "deployment_id", "project_id", "database_id", "job_id", "synced_at"
+        )
+        WHERE NOT EXISTS (
+          SELECT 1 FROM "k8s_object_tombstones" AS t
+          WHERE t."uid" = v."uid" AND t."buried_at" >= ${cutoff}
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM "k8s_objects" AS o
+          WHERE o."kind" = v."kind"
+            AND o."namespace" = v."namespace"
+            AND o."name" = v."name"
+            AND o."api_version" = v."api_version"
+            AND o."uid" <> v."uid"
+        )
         ON CONFLICT ("uid") DO UPDATE SET
           "api_version" = EXCLUDED."api_version",
           "kind" = EXCLUDED."kind",
@@ -93,9 +132,11 @@ export class PrismaEngineStore implements EngineStore {
           "database_id" = EXCLUDED."database_id",
           "job_id" = EXCLUDED."job_id",
           "synced_at" = EXCLUDED."synced_at"
+        WHERE "k8s_objects"."synced_at" < ${cutoff}
       `,
       this.prisma.$executeRaw`
-        DELETE FROM "k8s_object_tombstones" WHERE "uid" = ANY(${uids}::varchar[])
+        DELETE FROM "k8s_object_tombstones"
+        WHERE "uid" = ANY(${uids}::varchar[]) AND "buried_at" < ${cutoff}
       `
     ]);
   }
@@ -120,7 +161,8 @@ export class PrismaEngineStore implements EngineStore {
     obj: { uid: string; manifest: unknown },
     keepTombstone: boolean
   ): Promise<void> {
-    const remove = this.prisma.$executeRaw`DELETE FROM "k8s_objects" WHERE "uid" = ${obj.uid}`;
+    const remove = this.prisma
+      .$executeRaw`DELETE FROM "k8s_objects" WHERE "uid" = ${obj.uid} AND "shard" = ${shard}`;
     if (!keepTombstone) {
       await remove;
       return;
@@ -146,7 +188,8 @@ export class PrismaEngineStore implements EngineStore {
     kind: string,
     seenUids: string[],
     keepTombstones: boolean,
-    retryAfterMs: number
+    retryAfterMs: number,
+    since: string
   ): Promise<Tombstone[]> {
     if (!keepTombstones) {
       return this.prisma.$queryRaw<Tombstone[]>`
@@ -154,6 +197,7 @@ export class PrismaEngineStore implements EngineStore {
         WHERE "shard" = ${shard}
           AND "kind" = ${kind}
           AND NOT ("uid" = ANY(${seenUids}::varchar[]))
+        AND "synced_at" < ${since}::timestamp
         RETURNING "uid", "manifest"
       `;
     }
@@ -166,6 +210,7 @@ export class PrismaEngineStore implements EngineStore {
         WHERE "shard" = ${shard}
           AND "kind" = ${kind}
           AND NOT ("uid" = ANY(${seenUids}::varchar[]))
+          AND "synced_at" < ${since}::timestamp
         ON CONFLICT ("uid") DO NOTHING
       `,
       this.prisma.$executeRaw`
@@ -173,6 +218,7 @@ export class PrismaEngineStore implements EngineStore {
         WHERE "shard" = ${shard}
           AND "kind" = ${kind}
           AND NOT ("uid" = ANY(${seenUids}::varchar[]))
+          AND "synced_at" < ${since}::timestamp
       `,
       this.prisma.$executeRaw`
         DELETE FROM "k8s_object_tombstones"

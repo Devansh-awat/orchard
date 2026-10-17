@@ -304,7 +304,8 @@ export class EnvironmentsService {
       environmentId: env.id,
       namespace: env.namespace,
       reason: 'environment.deleted',
-      actor: actor ?? { userId: undefined }
+      actor: actor ?? { userId: undefined },
+      keepData: actor === null
     });
     await this.k8sNamespace
       .deleteNamespace(env.namespace)

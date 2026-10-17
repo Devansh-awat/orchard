@@ -6,11 +6,29 @@ const SHARD = 'core-test';
 const KIND = 'Thing';
 
 class MemoryStore implements EngineStore {
-  rows = new Map<string, EngineRow>();
+  rows = new Map<string, EngineRow & { tick: number }>();
 
-  tombstones = new Map<string, { kind: string; shard: string; manifest: any; buriedAt: number }>();
+  tombstones = new Map<
+    string,
+    { kind: string; shard: string; manifest: any; buriedAt: number; tick: number }
+  >();
 
   now = 1_000_000;
+
+  tick = 0;
+
+  async listStart(): Promise<string> {
+    this.tick += 1;
+    return String(this.tick);
+  }
+
+  async current(entries: { uid: string; resourceVersion: string }[]): Promise<Set<string>> {
+    return new Set(
+      entries
+        .filter((e) => this.rows.get(e.uid)?.resourceVersion === e.resourceVersion)
+        .map((e) => e.uid)
+    );
+  }
 
   async load(shard: string, kind: string): Promise<StoredRow[]> {
     return [...this.rows.values()]
@@ -23,10 +41,16 @@ class MemoryStore implements EngineStore {
       }));
   }
 
-  async write(rows: EngineRow[]): Promise<void> {
+  async write(rows: EngineRow[], since?: string): Promise<void> {
+    const cutoff = since === undefined ? Infinity : Number(since);
     for (const row of rows) {
-      this.rows.set(row.uid, structuredClone(row));
-      this.tombstones.delete(row.uid);
+      const existing = this.rows.get(row.uid);
+      if (existing && existing.tick >= cutoff) continue;
+      const tomb = this.tombstones.get(row.uid);
+      if (tomb && tomb.tick >= cutoff) continue;
+      this.tick += 1;
+      this.rows.set(row.uid, { ...structuredClone(row), tick: this.tick });
+      if (tomb) this.tombstones.delete(row.uid);
     }
   }
 
@@ -43,9 +67,16 @@ class MemoryStore implements EngineStore {
     obj: { uid: string; manifest: unknown },
     keepTombstone: boolean
   ): Promise<void> {
-    this.rows.delete(obj.uid);
+    if (this.rows.get(obj.uid)?.shard === shard) this.rows.delete(obj.uid);
     if (keepTombstone) {
-      this.tombstones.set(obj.uid, { shard, kind, manifest: obj.manifest, buriedAt: this.now });
+      this.tick += 1;
+      this.tombstones.set(obj.uid, {
+        shard,
+        kind,
+        manifest: obj.manifest,
+        buriedAt: this.now,
+        tick: this.tick
+      });
     }
   }
 
@@ -54,16 +85,25 @@ class MemoryStore implements EngineStore {
     kind: string,
     seenUids: string[],
     keepTombstones: boolean,
-    retryAfterMs: number
+    retryAfterMs: number,
+    since: string
   ): Promise<Tombstone[]> {
     const seen = new Set(seenUids);
     const fresh: Tombstone[] = [];
     for (const row of [...this.rows.values()]) {
       if (row.shard !== shard || row.kind !== kind || seen.has(row.uid)) continue;
+      if (row.tick >= Number(since)) continue;
       this.rows.delete(row.uid);
       fresh.push({ uid: row.uid, manifest: row.manifest });
       if (keepTombstones && !this.tombstones.has(row.uid)) {
-        this.tombstones.set(row.uid, { shard, kind, manifest: row.manifest, buriedAt: this.now });
+        this.tick += 1;
+        this.tombstones.set(row.uid, {
+          shard,
+          kind,
+          manifest: row.manifest,
+          buriedAt: this.now,
+          tick: this.tick
+        });
       }
     }
     if (!keepTombstones) return fresh;
@@ -231,4 +271,82 @@ test('a kind nothing derives from keeps no tombstones', async () => {
   await watch(i, 'DELETED', obj('a', 'thing-a'));
   assert.equal(store.rows.size, 0);
   assert.equal(store.tombstones.size, 0);
+});
+
+test('an object created while a list is running is never swept as gone', async () => {
+  const i = informer();
+  cluster = [obj('a', 'thing-a')];
+  await list(i);
+  events = [];
+
+  const listed = structuredClone(cluster);
+  const config = (i as any).config;
+  const original = config.list;
+  config.list = async () => {
+    await watch(i, 'ADDED', obj('b', 'thing-b'));
+    return { items: listed, resourceVersion: '200', continueToken: null };
+  };
+  await list(i);
+  config.list = original;
+
+  assert.ok(store.rows.has('b'), 'the watch-written row survives the sweep');
+  assert.deepEqual(events, ['add:thing-b']);
+});
+
+test('a list never brings back an object the watch deleted while it ran', async () => {
+  const i = informer();
+  cluster = [obj('a', 'thing-a'), obj('b', 'thing-b')];
+  await list(i);
+  events = [];
+
+  const listed = structuredClone(cluster);
+  const config = (i as any).config;
+  config.list = async () => {
+    await watch(i, 'DELETED', obj('b', 'thing-b'));
+    return {
+      items: listed.map((o: any) => ({ ...o, metadata: { ...o.metadata, resourceVersion: '2' } })),
+      resourceVersion: '200',
+      continueToken: null
+    };
+  };
+  await list(i);
+
+  assert.equal(store.rows.has('b'), false, 'the deleted object stays deleted');
+  assert.deepEqual(events, ['delete:thing-b', 'update:thing-a']);
+});
+
+test('a list snapshot older than the watch does not overwrite newer state', async () => {
+  const i = informer();
+  cluster = [obj('a', 'thing-a', '5')];
+  await list(i);
+  events = [];
+
+  const config = (i as any).config;
+  config.list = async () => {
+    await watch(i, 'MODIFIED', obj('a', 'thing-a', '9'));
+    return { items: [obj('a', 'thing-a', '7')], resourceVersion: '200', continueToken: null };
+  };
+  await list(i);
+
+  assert.equal(store.rows.get('a')?.resourceVersion, '9');
+  assert.deepEqual(events, ['update:thing-a']);
+});
+
+test('a stopped informer does not sweep or prune', async () => {
+  let pruned = 0;
+  const i = informer();
+  (i as any).config.onListComplete = async () => {
+    pruned += 1;
+  };
+  cluster = [obj('a', 'thing-a')];
+  await list(i);
+  pruned = 0;
+  cluster = [];
+  (i as any).config.list = async () => {
+    (i as any).stopped = true;
+    return { items: [], resourceVersion: '200', continueToken: null };
+  };
+  await list(i);
+  assert.ok(store.rows.has('a'));
+  assert.equal(pruned, 0);
 });

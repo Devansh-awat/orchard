@@ -76,6 +76,7 @@ const EVENT_CONCURRENCY = 12;
 // every thirty seconds.
 const REPAIR_DELAY_MS = 30_000;
 const REPAIR_MIN_SPACING_MS = 60_000;
+const WATCH_DELETE_MEMORY_MS = 15 * 60_000;
 
 // An object on its way into the mirror, carrying the refs already resolved for
 // it so nothing has to resolve them twice.
@@ -152,6 +153,8 @@ export class EngineInformer {
 
   private connectedAt = 0;
 
+  private readonly watchDeletes = new Map<string, number>();
+
   private resourceVersion = '';
 
   private needsRelist = true;
@@ -190,6 +193,7 @@ export class EngineInformer {
     } catch {}
     this.req = undefined;
     await this.drain();
+    await this.syncChain.catch(() => {});
   }
 
   async resync(): Promise<number> {
@@ -261,6 +265,11 @@ export class EngineInformer {
   ): Promise<{ resourceVersion: string; repairs: number }> {
     if (this.stopped) return { resourceVersion: this.resourceVersion, repairs: 0 };
 
+    const startedAt = Date.now();
+    for (const [uid, at] of this.watchDeletes) {
+      if (startedAt - at > WATCH_DELETE_MEMORY_MS) this.watchDeletes.delete(uid);
+    }
+    const since = await this.store.listStart();
     const existingRows = await this.store.load(this.shard, this.config.kind);
     const existing = new Map(existingRows.map((r) => [r.uid, r]));
 
@@ -287,6 +296,7 @@ export class EngineInformer {
         const obj = this.normalize(raw);
         const uid = obj.metadata?.uid;
         if (!uid) continue;
+        if ((this.watchDeletes.get(uid) ?? 0) >= startedAt) continue;
         seenUids.push(uid);
 
         // Refs are re-derived every pass, not only when the manifest moved. A
@@ -316,24 +326,27 @@ export class EngineInformer {
           // to rewrite — only the state derived from it is missing.
           underived.push({ obj, refs: resolved.refs });
           if (underived.length >= WRITE_CHUNK) {
-            await this.derive('update', underived);
+            await this.deriveCurrent(underived);
             underived = [];
           }
           continue;
         }
         pending.push({ obj, refs: resolved.refs });
         if (pending.length >= WRITE_CHUNK) {
-          await this.flush(pending);
+          await this.flush(pending, since);
           pending = [];
         }
       }
+      if (this.stopped) return { resourceVersion: this.resourceVersion, repairs: 0 };
     } while (continueToken);
 
-    if (pending.length > 0) await this.flush(pending);
-    if (underived.length > 0) await this.derive('update', underived);
+    if (pending.length > 0) await this.flush(pending, since);
+    if (underived.length > 0) await this.deriveCurrent(underived);
 
-    repairs += await this.sweepStale(seenUids, countRepairs);
+    if (this.stopped) return { resourceVersion: this.resourceVersion, repairs: 0 };
+    repairs += await this.sweepStale(seenUids, countRepairs, since);
 
+    if (this.stopped) return { resourceVersion: this.resourceVersion, repairs: 0 };
     if (this.config.onListComplete) {
       await this.config.onListComplete(seenKeys).catch((err) => {
         this.logger.warn(`onListComplete failed: ${errorText(err)}`);
@@ -412,14 +425,19 @@ export class EngineInformer {
     this.repairTimer.unref?.();
   }
 
-  private async sweepStale(seenUids: string[], countRepairs: boolean): Promise<number> {
+  private async sweepStale(
+    seenUids: string[],
+    countRepairs: boolean,
+    since: string
+  ): Promise<number> {
     const handler = this.config.onEvent;
     const buried = await this.store.buryMissing(
       this.shard,
       this.config.kind,
       seenUids,
       Boolean(handler),
-      REPAIR_DELAY_MS
+      REPAIR_DELAY_MS,
+      since
     );
     if (!handler) return countRepairs ? buried.length : 0;
     for (const row of buried) {
@@ -434,9 +452,12 @@ export class EngineInformer {
     return countRepairs ? buried.length : 0;
   }
 
-  private async flush(entries: PendingWrite[]): Promise<void> {
+  private async flush(entries: PendingWrite[], since: string): Promise<void> {
     try {
-      await this.writeRows(entries.map((e) => this.toRow(e.obj, e.refs)));
+      await this.writeRows(
+        entries.map((e) => this.toRow(e.obj, e.refs)),
+        since
+      );
     } catch (err) {
       // A failed chunk leaves those rows behind rather than aborting the whole
       // list — the seen set is still complete, so the stale sweep downstream
@@ -446,7 +467,30 @@ export class EngineInformer {
       this.scheduleRepair();
       return;
     }
-    await this.derive('update', entries);
+    await this.deriveCurrent(entries);
+  }
+
+  private async deriveCurrent(entries: PendingWrite[]): Promise<void> {
+    if (entries.length === 0 || this.stopped) return;
+    let fresh: Set<string>;
+    try {
+      fresh = await this.store.current(
+        entries.map((e) => ({
+          uid: String(e.obj.metadata.uid),
+          resourceVersion: String(e.obj.metadata.resourceVersion ?? '')
+        }))
+      );
+    } catch (err) {
+      this.logger.warn(
+        `could not check ${entries.length} object(s) before deriving: ${errorText(err)}`
+      );
+      this.scheduleRepair();
+      return;
+    }
+    await this.derive(
+      'update',
+      entries.filter((e) => fresh.has(String(e.obj.metadata.uid)))
+    );
   }
 
   /**
@@ -578,6 +622,7 @@ export class EngineInformer {
     if (this.stopped) return;
 
     if (phase === 'DELETED') {
+      this.watchDeletes.set(String(obj.metadata.uid), Date.now());
       const handler = this.config.onEvent;
       try {
         await this.store.bury(
@@ -599,6 +644,7 @@ export class EngineInformer {
       return;
     }
 
+    this.watchDeletes.delete(String(obj.metadata.uid));
     const resolved = await this.resolveRefs(obj);
     if (!resolved.ok) {
       // Writing a row whose refs we could not resolve is worse than writing
@@ -680,7 +726,7 @@ export class EngineInformer {
     };
   }
 
-  private async writeRows(all: EngineRow[]): Promise<void> {
+  private async writeRows(all: EngineRow[], since?: string): Promise<void> {
     if (all.length === 0) return;
     const byUid = new Map<string, EngineRow>();
     for (const row of all) byUid.set(row.uid, row);
@@ -688,7 +734,7 @@ export class EngineInformer {
 
     try {
       for (let i = 0; i < rows.length; i += WRITE_CHUNK) {
-        await this.store.write(rows.slice(i, i + WRITE_CHUNK));
+        await this.store.write(rows.slice(i, i + WRITE_CHUNK), since);
       }
       this.setWriteHealth(true, null);
     } catch (err) {

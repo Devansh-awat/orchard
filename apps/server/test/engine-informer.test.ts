@@ -449,8 +449,10 @@ test('the stale sweep survives an object count past the bind-parameter ceiling',
   const seenUids = cluster.map((c) => c.metadata.uid);
 
   await (
-    informer as unknown as { sweepStale(uids: string[], count: boolean): Promise<number> }
-  ).sweepStale(seenUids, false);
+    informer as unknown as {
+      sweepStale(uids: string[], count: boolean, since: string): Promise<number>;
+    }
+  ).sweepStale(seenUids, false, '9999-01-01 00:00:00');
   // Nothing to assert beyond "it executed" — a parameter-per-uid query throws.
   assert.equal(await prisma.k8sObject.count({ where: { shard: SHARD } }), 0);
 });

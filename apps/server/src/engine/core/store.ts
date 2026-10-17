@@ -26,8 +26,10 @@ export interface Tombstone {
 }
 
 export interface EngineStore {
+  listStart(): Promise<string>;
   load(shard: string, kind: string): Promise<StoredRow[]>;
-  write(rows: EngineRow[]): Promise<void>;
+  write(rows: EngineRow[], since?: string): Promise<void>;
+  current(entries: { uid: string; resourceVersion: string }[]): Promise<Set<string>>;
   markDerived(entries: { uid: string; resourceVersion: string }[]): Promise<void>;
   bury(
     shard: string,
@@ -40,7 +42,8 @@ export interface EngineStore {
     kind: string,
     seenUids: string[],
     keepTombstones: boolean,
-    retryAfterMs: number
+    retryAfterMs: number,
+    since: string
   ): Promise<Tombstone[]>;
   forget(uid: string): Promise<void>;
 }
