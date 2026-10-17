@@ -5,6 +5,8 @@ import { LeaderElectionService } from '../events/leader-election.service';
 import { NodesService } from '../nodes/nodes.service';
 import { mapNodeToRow } from '../nodes/node-mapping';
 
+const NODE_REMOVE_AFTER_MS = 30 * 60_000;
+
 // Watches cluster nodes and mirrors their labels/taints/schedulable/capacity
 // into the `nodes` table, so all reads hit the DB instead of the kube-apiserver
 // (the "cache the kubeapi" path). Mirrors K8sPodInformerService: single-flight
@@ -21,6 +23,10 @@ export class K8sNodeInformerService implements OnModuleInit, OnModuleDestroy {
   private stopped = false;
 
   private restartTimer?: ReturnType<typeof setTimeout>;
+
+  private readonly pendingRemovals = new Map<string, ReturnType<typeof setTimeout>>();
+
+  protected removeAfterMs = NODE_REMOVE_AFTER_MS;
 
   constructor(
     private readonly kubernetes: KubernetesService,
@@ -56,6 +62,8 @@ export class K8sNodeInformerService implements OnModuleInit, OnModuleDestroy {
   async onModuleDestroy() {
     this.stopped = true;
     if (this.restartTimer) clearTimeout(this.restartTimer);
+    for (const timer of this.pendingRemovals.values()) clearTimeout(timer);
+    this.pendingRemovals.clear();
     try {
       await this.informer?.stop();
     } catch {}
@@ -88,12 +96,60 @@ export class K8sNodeInformerService implements OnModuleInit, OnModuleDestroy {
     if (!name) return;
     try {
       if (type === 'delete') {
-        await this.nodes.removeNodeByName(name);
+        this.scheduleRemoval(name);
         return;
       }
+      this.cancelRemoval(name);
       await this.nodes.upsertNodeRow(mapNodeToRow(node));
     } catch (err) {
       this.logger.warn(`node ${type} sync failed for ${name}: ${(err as Error)?.message ?? err}`);
+    }
+  }
+
+  private scheduleRemoval(name: string) {
+    if (this.pendingRemovals.has(name)) return;
+    this.logger.warn(
+      `node ${name} left the cluster; its row and org assignments are kept for ${Math.round(this.removeAfterMs / 60000)} minutes in case it re-registers`
+    );
+    const timer = setTimeout(() => {
+      this.pendingRemovals.delete(name);
+      void this.removeIfStillGone(name);
+    }, this.removeAfterMs);
+    timer.unref?.();
+    this.pendingRemovals.set(name, timer);
+  }
+
+  private cancelRemoval(name: string) {
+    const timer = this.pendingRemovals.get(name);
+    if (!timer) return;
+    clearTimeout(timer);
+    this.pendingRemovals.delete(name);
+    this.logger.log(`node ${name} came back; keeping its row and org assignments`);
+  }
+
+  protected async liveNode(name: string): Promise<'present' | 'absent' | 'unknown'> {
+    try {
+      await this.kubernetes.kc!.makeApiClient(k8s.CoreV1Api).readNode(name);
+      return 'present';
+    } catch (err: any) {
+      const code = err?.response?.statusCode ?? err?.statusCode;
+      return code === 404 ? 'absent' : 'unknown';
+    }
+  }
+
+  private async removeIfStillGone(name: string) {
+    if (this.stopped || !this.leader.isLeader()) return;
+    const state = await this.liveNode(name);
+    if (state === 'present') return;
+    if (state === 'unknown') {
+      this.scheduleRemoval(name);
+      return;
+    }
+    try {
+      await this.nodes.removeNodeByName(name);
+      this.logger.warn(`node ${name} has been gone from the cluster for a while; removed its row`);
+    } catch (err) {
+      this.logger.warn(`removing node ${name} failed: ${(err as Error)?.message ?? err}`);
     }
   }
 }
