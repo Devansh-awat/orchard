@@ -141,16 +141,20 @@ export class PrismaEngineStore implements EngineStore {
     ]);
   }
 
-  async markDerived(entries: { uid: string; resourceVersion: string }[]): Promise<void> {
+  async markDerived(
+    entries: { uid: string; resourceVersion: string; derivedVersion: string }[]
+  ): Promise<void> {
     if (entries.length === 0) return;
     const uids = entries.map((e) => e.uid);
     const versions = entries.map((e) => e.resourceVersion);
+    const marks = entries.map((e) => e.derivedVersion);
     // Matching on resource_version too, so a newer manifest that landed while
     // the handler ran is not credited with a derivation it never got.
     await this.prisma.$executeRaw`
       UPDATE "k8s_objects" AS o
-      SET "derived_version" = v."rv"
-      FROM unnest(${uids}::varchar[], ${versions}::varchar[]) AS v("uid", "rv")
+      SET "derived_version" = v."mark"
+      FROM unnest(${uids}::varchar[], ${versions}::varchar[], ${marks}::varchar[])
+        AS v("uid", "rv", "mark")
       WHERE o."uid" = v."uid" AND o."resource_version" = v."rv"
     `;
   }

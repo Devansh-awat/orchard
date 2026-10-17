@@ -30,7 +30,9 @@ export interface EngineStore {
   load(shard: string, kind: string): Promise<StoredRow[]>;
   write(rows: EngineRow[], since?: string): Promise<void>;
   current(entries: { uid: string; resourceVersion: string }[]): Promise<Set<string>>;
-  markDerived(entries: { uid: string; resourceVersion: string }[]): Promise<void>;
+  markDerived(
+    entries: { uid: string; resourceVersion: string; derivedVersion: string }[]
+  ): Promise<void>;
   bury(
     shard: string,
     kind: string,

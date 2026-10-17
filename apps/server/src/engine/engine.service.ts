@@ -240,7 +240,8 @@ export class EngineService implements OnApplicationBootstrap, OnModuleDestroy {
       this.prisma.$queryRaw<{ count: bigint }[]>`
         SELECT count(*)::bigint AS count
         FROM "k8s_objects"
-        WHERE "derived_version" IS DISTINCT FROM "resource_version"
+        WHERE "derived_version" IS NULL
+          OR split_part("derived_version", '#', 1) <> "resource_version"
       `
     ]);
     const now = Date.now();

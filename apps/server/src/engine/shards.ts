@@ -155,7 +155,8 @@ export function buildEngineShards(deps: EngineShardDeps): EngineShard[] {
                 )) as K8sListBody
             ),
           mapRefs: (obj) => deps.cnpg.mapClusterRefs(obj),
-          onEvent: (type, obj) => deps.cnpg.onClusterEvent(type, obj)
+          onEvent: (type, obj) => deps.cnpg.onClusterEvent(type, obj),
+          revision: '2'
         },
         {
           kind: 'ScheduledBackup',

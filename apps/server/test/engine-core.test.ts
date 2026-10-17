@@ -54,10 +54,12 @@ class MemoryStore implements EngineStore {
     }
   }
 
-  async markDerived(entries: { uid: string; resourceVersion: string }[]): Promise<void> {
+  async markDerived(
+    entries: { uid: string; resourceVersion: string; derivedVersion: string }[]
+  ): Promise<void> {
     for (const e of entries) {
       const row = this.rows.get(e.uid);
-      if (row && row.resourceVersion === e.resourceVersion) row.derivedVersion = e.resourceVersion;
+      if (row && row.resourceVersion === e.resourceVersion) row.derivedVersion = e.derivedVersion;
     }
   }
 
@@ -349,4 +351,20 @@ test('a stopped informer does not sweep or prune', async () => {
   await list(i);
   assert.ok(store.rows.has('a'));
   assert.equal(pruned, 0);
+});
+
+test('bumping a revision re-derives every object once, then settles', async () => {
+  const i = informer();
+  cluster = [obj('a', 'thing-a'), obj('b', 'thing-b')];
+  await list(i);
+  events = [];
+  await list(i);
+  assert.deepEqual(events, [], 'unchanged objects are skipped');
+
+  (i as any).config.revision = '2';
+  await list(i);
+  assert.deepEqual(events.sort(), ['update:thing-a', 'update:thing-b']);
+  events = [];
+  await list(i);
+  assert.deepEqual(events, [], 'once re-derived under the new revision they are skipped again');
 });

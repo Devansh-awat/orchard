@@ -43,6 +43,7 @@ export interface EngineResource {
   // version was applied when it was not, and nothing will ever come back for it.
   onEvent?(type: EngineEventType, obj: any): void | Promise<void>;
   onListComplete?(seen: EngineObjectKey[]): Promise<void>;
+  revision?: string;
   sanitize?(obj: any): any;
 }
 
@@ -384,7 +385,7 @@ export class EngineInformer {
     const rv = String(obj.metadata.resourceVersion ?? '');
     if (prior.resourceVersion !== rv) return 'stale';
     if (!sameRefs(prior.refs, refs)) return 'stale';
-    return prior.derivedVersion === rv ? 'current' : 'underived';
+    return prior.derivedVersion === this.derivedMark(rv) ? 'current' : 'underived';
   }
 
   private async resolveRefs(obj: any): Promise<{ ok: boolean; refs: EngineRefs }> {
@@ -541,12 +542,22 @@ export class EngineInformer {
     }
   }
 
+  private derivedMark(resourceVersion: string): string {
+    return this.config.revision ? `${resourceVersion}#${this.config.revision}` : resourceVersion;
+  }
+
   private async markDerived(entries: PendingWrite[]): Promise<void> {
     if (entries.length === 0) return;
     const uids = entries.map((e) => String(e.obj.metadata.uid));
     const versions = entries.map((e) => String(e.obj.metadata.resourceVersion ?? ''));
     try {
-      await this.store.markDerived(uids.map((uid, i) => ({ uid, resourceVersion: versions[i] })));
+      await this.store.markDerived(
+        uids.map((uid, i) => ({
+          uid,
+          resourceVersion: versions[i],
+          derivedVersion: this.derivedMark(versions[i])
+        }))
+      );
     } catch (err) {
       this.logger.warn(`marking ${entries.length} object(s) derived failed: ${errorText(err)}`);
       this.scheduleRepair();
