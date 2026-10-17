@@ -3971,6 +3971,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     } | null = null;
 
     if (portsPayload) {
+      await this.prisma.service.update({
+        where: { id: service.id },
+        data: { updatedAt: new Date() }
+      });
       updateResult = await this.k8sNetwork.updateServicePorts({
         namespace: service.deployment.namespace,
         deploymentName: service.deployment.name,

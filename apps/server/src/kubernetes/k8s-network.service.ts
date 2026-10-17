@@ -1766,6 +1766,19 @@ export class K8sNetworkService implements OnModuleInit {
       try {
         await coreApi.createNamespacedService(namespace, serviceBody);
       } catch (createError) {
+        const original: k8s.V1Service = {
+          metadata: {
+            name: serviceName,
+            labels: existingService.body.metadata?.labels,
+            annotations: existingService.body.metadata?.annotations
+          },
+          spec: existingService.body.spec
+        };
+        await coreApi.createNamespacedService(namespace, original).catch((restoreError) => {
+          this.logger.error(
+            `Service ${namespace}/${serviceName} could not be recreated with the new ports or restored as it was: ${restoreError?.message ?? restoreError}`
+          );
+        });
         throw new BadRequestException({
           error: 'Failed to recreate service',
           message: createError.response?.body?.message || createError.message,
