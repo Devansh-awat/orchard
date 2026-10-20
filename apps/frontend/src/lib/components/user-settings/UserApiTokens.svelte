@@ -14,7 +14,7 @@
 	} from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import RenameModal from '$lib/components/RenameModal.svelte';
-	import { Alert, Button, EmptyState, Input, Skeleton } from '$lib/components/ui';
+	import { Alert, Button, EmptyState, Input, SegmentedControl, Skeleton } from '$lib/components/ui';
 	import { motionStagger } from '$lib/utils/motion.svelte';
 
 	interface ApiToken {
@@ -31,6 +31,13 @@
 
 	let showCreate = $state(false);
 	let newTokenName = $state('');
+	let newTokenScope = $state<'read' | 'deploy' | 'exec'>('read');
+	const SCOPE_LADDER = ['read', 'deploy', 'exec'] as const;
+	const scopeOptions = [
+		{ value: 'read', label: 'Read' },
+		{ value: 'deploy', label: 'Deploy' },
+		{ value: 'exec', label: 'Exec' }
+	] as const;
 	let creating = $state(false);
 	let createdToken = $state<string | null>(null);
 	let copied = $state(false);
@@ -65,7 +72,10 @@
 			const response = await apiFetch('/apiv1/auth/tokens', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ name: newTokenName.trim() })
+				body: JSON.stringify({
+					name: newTokenName.trim(),
+					scopes: SCOPE_LADDER.slice(0, SCOPE_LADDER.indexOf(newTokenScope) + 1)
+				})
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
@@ -74,6 +84,7 @@
 			const data = await response.json();
 			createdToken = data.token;
 			newTokenName = '';
+			newTokenScope = 'read';
 			await fetchTokens();
 		} catch (e) {
 			toasts.add({
@@ -226,10 +237,10 @@
 		{#if showCreate}
 			<div class="settings-section-content">
 				<p class="settings-hint">
-					Tokens created here can read anything your account can, but cannot change anything. Use
-					them with the Orchard MCP server or API. For deploy or exec access, use
-					<code>orchard auth token create --scope deploy</code>.
+					Read tokens can see anything your account can but change nothing. Deploy tokens can also
+					create, update and delete. Exec tokens can also open shells in your pods and databases.
 				</p>
+				<SegmentedControl label="Token access" options={scopeOptions} bind:value={newTokenScope} />
 				<div class="token-create-form">
 					<Input
 						class="flex-1"
