@@ -23,6 +23,7 @@ module.exports = {
         'cli',
         'r2-proxy',
         'r2proxy',
+        'fc-builder',
         'registry',
         'templates',
         'sandbox',

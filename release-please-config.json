@@ -26,6 +26,10 @@
       "release-type": "go",
       "component": "r2-proxy"
     },
+    "apps/fc-builder": {
+      "release-type": "go",
+      "component": "fc-builder"
+    },
     "apps/registry": {
       "release-type": "go",
       "component": "registry"

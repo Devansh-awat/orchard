@@ -45,6 +45,7 @@ const COMPONENTS = [
   { id: 'orchardctl', name: 'orchardctl', dir: 'apps/server/hostctl', kind: 'go', goos: ['linux'] },
   { id: 'gateway', name: 'Gateway', dir: 'apps/gateway', kind: 'go', goos: ['linux'] },
   { id: 'r2-proxy', name: 'R2 proxy', dir: 'apps/r2-proxy', kind: 'go', goos: ['linux'] },
+  { id: 'fc-builder', name: 'Fast builder', dir: 'apps/fc-builder', kind: 'go', goos: ['linux'] },
   { id: 'registry', name: 'Template registry', dir: 'apps/registry', kind: 'go', goos: ['linux'] },
   { id: 'docs', name: 'Docs', dir: 'apps/docs', kind: 'astro', extra: ['pagefind'] },
   {
@@ -86,6 +87,11 @@ const NOTICES = [
     file: 'apps/r2-proxy/THIRD_PARTY_NOTICES.txt',
     title: 'the Orchard R2 proxy',
     in: ['r2-proxy']
+  },
+  {
+    file: 'apps/fc-builder/THIRD_PARTY_NOTICES.txt',
+    title: 'the Orchard fast builder',
+    in: ['fc-builder']
   },
   {
     file: 'apps/registry/THIRD_PARTY_NOTICES.txt',

@@ -20,13 +20,15 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       any: ${{ steps.rp1.outputs.releases_created || steps.rp2.outputs.releases_created || steps.rp3.outputs.releases_created }}
-      platform: ${{ steps.rp1.outputs['apps/frontend--release_created'] || steps.rp2.outputs['apps/frontend--release_created'] || steps.rp3.outputs['apps/frontend--release_created'] || steps.rp1.outputs['apps/server--release_created'] || steps.rp2.outputs['apps/server--release_created'] || steps.rp3.outputs['apps/server--release_created'] || steps.rp1.outputs['apps/gateway--release_created'] || steps.rp2.outputs['apps/gateway--release_created'] || steps.rp3.outputs['apps/gateway--release_created'] || steps.rp1.outputs['apps/cli--release_created'] || steps.rp2.outputs['apps/cli--release_created'] || steps.rp3.outputs['apps/cli--release_created'] || steps.rp1.outputs['apps/r2-proxy--release_created'] || steps.rp2.outputs['apps/r2-proxy--release_created'] || steps.rp3.outputs['apps/r2-proxy--release_created'] || steps.rp1.outputs['apps/registry--release_created'] || steps.rp2.outputs['apps/registry--release_created'] || steps.rp3.outputs['apps/registry--release_created'] }}
+      platform: ${{ steps.rp1.outputs['apps/frontend--release_created'] || steps.rp2.outputs['apps/frontend--release_created'] || steps.rp3.outputs['apps/frontend--release_created'] || steps.rp1.outputs['apps/server--release_created'] || steps.rp2.outputs['apps/server--release_created'] || steps.rp3.outputs['apps/server--release_created'] || steps.rp1.outputs['apps/gateway--release_created'] || steps.rp2.outputs['apps/gateway--release_created'] || steps.rp3.outputs['apps/gateway--release_created'] || steps.rp1.outputs['apps/cli--release_created'] || steps.rp2.outputs['apps/cli--release_created'] || steps.rp3.outputs['apps/cli--release_created'] || steps.rp1.outputs['apps/r2-proxy--release_created'] || steps.rp2.outputs['apps/r2-proxy--release_created'] || steps.rp3.outputs['apps/r2-proxy--release_created'] || steps.rp1.outputs['apps/registry--release_created'] || steps.rp2.outputs['apps/registry--release_created'] || steps.rp3.outputs['apps/registry--release_created'] || steps.rp1.outputs['apps/fc-builder--release_created'] || steps.rp2.outputs['apps/fc-builder--release_created'] || steps.rp3.outputs['apps/fc-builder--release_created'] }}
       frontend: ${{ steps.rp1.outputs['apps/frontend--release_created'] || steps.rp2.outputs['apps/frontend--release_created'] || steps.rp3.outputs['apps/frontend--release_created'] }}
       frontend_v: ${{ steps.rp1.outputs['apps/frontend--version'] || steps.rp2.outputs['apps/frontend--version'] || steps.rp3.outputs['apps/frontend--version'] }}
       server: ${{ steps.rp1.outputs['apps/server--release_created'] || steps.rp2.outputs['apps/server--release_created'] || steps.rp3.outputs['apps/server--release_created'] }}
       server_v: ${{ steps.rp1.outputs['apps/server--version'] || steps.rp2.outputs['apps/server--version'] || steps.rp3.outputs['apps/server--version'] }}
       r2_proxy: ${{ steps.rp1.outputs['apps/r2-proxy--release_created'] || steps.rp2.outputs['apps/r2-proxy--release_created'] || steps.rp3.outputs['apps/r2-proxy--release_created'] }}
       r2_proxy_v: ${{ steps.rp1.outputs['apps/r2-proxy--version'] || steps.rp2.outputs['apps/r2-proxy--version'] || steps.rp3.outputs['apps/r2-proxy--version'] }}
+      fc_builder: ${{ steps.rp1.outputs['apps/fc-builder--release_created'] || steps.rp2.outputs['apps/fc-builder--release_created'] || steps.rp3.outputs['apps/fc-builder--release_created'] }}
+      fc_builder_v: ${{ steps.rp1.outputs['apps/fc-builder--version'] || steps.rp2.outputs['apps/fc-builder--version'] || steps.rp3.outputs['apps/fc-builder--version'] }}
       registry: ${{ steps.rp1.outputs['apps/registry--release_created'] || steps.rp2.outputs['apps/registry--release_created'] || steps.rp3.outputs['apps/registry--release_created'] }}
       registry_v: ${{ steps.rp1.outputs['apps/registry--version'] || steps.rp2.outputs['apps/registry--version'] || steps.rp3.outputs['apps/registry--version'] }}
       gateway: ${{ steps.rp1.outputs['apps/gateway--release_created'] || steps.rp2.outputs['apps/gateway--release_created'] || steps.rp3.outputs['apps/gateway--release_created'] }}
@@ -133,6 +135,22 @@ jobs:
       dockerfile: apps/r2-proxy/Dockerfile
       context: apps/r2-proxy
       version: ${{ needs.release-please.outputs.r2_proxy_v }}
+
+  image-fc-builder:
+    needs: release-please
+    if: needs.release-please.outputs.fc_builder == 'true'
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/_image.yml
+    secrets: inherit
+    with:
+      service: fc-builder
+      dockerfile: apps/fc-builder/Dockerfile
+      context: apps/fc-builder
+      version: ${{ needs.release-please.outputs.fc_builder_v }}
 
   image-registry:
     needs: release-please
@@ -379,13 +397,14 @@ jobs:
 
   # Runs after the (possibly-skipped) image jobs as long as none FAILED.
   publish-chart:
-    needs: [release-please, image-frontend, image-server, image-mcp, image-r2-proxy]
+    needs: [release-please, image-frontend, image-server, image-mcp, image-r2-proxy, image-fc-builder]
     if: >-
       ${{ !cancelled() && needs.release-please.outputs.platform == 'true'
         && needs.image-frontend.result != 'failure'
         && needs.image-server.result != 'failure'
         && needs.image-mcp.result != 'failure'
-        && needs.image-r2-proxy.result != 'failure' }}
+        && needs.image-r2-proxy.result != 'failure'
+        && needs.image-fc-builder.result != 'failure' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -403,6 +422,7 @@ jobs:
           M=.release-please-manifest.json
           FRONTEND=$(jq -r '."apps/frontend"' "$M"); SERVER=$(jq -r '."apps/server"' "$M")
           R2=$(jq -r '."apps/r2-proxy"' "$M")
+          FCB=$(jq -r '."apps/fc-builder"' "$M")
           UMBRELLA=$(printf '%s\n' \
             "$(jq -r '."apps/frontend"' "$M")" "$(jq -r '."apps/server"' "$M")" \
             "$(jq -r '."apps/gateway"' "$M")" "$(jq -r '."apps/cli"' "$M")" \
@@ -413,6 +433,7 @@ jobs:
           yq -i ".server.image.tag   = \"$SERVER\""   infra/charts/orchard/values.yaml
           yq -i ".mcp.image.tag      = \"$SERVER\""   infra/charts/orchard/values.yaml
           yq -i ".r2Proxy.image.tag  = \"$R2\""       infra/charts/orchard/values.yaml
+          [ "$FCB" != "0.0.0" ] && yq -i ".fcBuilder.image.tag = \"$FCB\"" infra/charts/orchard/values.yaml
 
           echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
           helm package infra/charts/orchard -d dist
@@ -445,6 +466,7 @@ jobs:
           [ "${{ needs.release-please.outputs.server }}" = "true" ]   && mark server   "${{ needs.release-please.outputs.server_v }}"
           [ "${{ needs.release-please.outputs.server }}" = "true" ]   && mark mcp      "${{ needs.release-please.outputs.server_v }}"
           [ "${{ needs.release-please.outputs.r2_proxy }}" = "true" ] && mark r2-proxy "${{ needs.release-please.outputs.r2_proxy_v }}"
+          [ "${{ needs.release-please.outputs.fc_builder }}" = "true" ] && mark fc-builder "${{ needs.release-please.outputs.fc_builder_v }}"
           [ "${{ needs.release-please.outputs.registry }}" = "true" ] && mark registry "${{ needs.release-please.outputs.registry_v }}"
           [ "${{ needs.release-please.outputs.gateway }}" = "true" ]  && mark gateway  "${{ needs.release-please.outputs.gateway_v }}"
           [ "${{ needs.release-please.outputs.cli }}" = "true" ]      && mark cli      "${{ needs.release-please.outputs.cli_v }}"

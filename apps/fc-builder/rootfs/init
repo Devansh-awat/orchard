@@ -1,0 +1,36 @@
+#!/bin/sh
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin HOME=/root
+mount -t proc proc /proc
+mount -t sysfs sys /sys
+mountpoint -q /dev || mount -t devtmpfs dev /dev
+mkdir -p /dev/pts /dev/shm
+mount -t devpts devpts /dev/pts
+mount -t tmpfs tmpfs /dev/shm
+mount -t tmpfs tmpfs /run
+mount -t tmpfs tmpfs /tmp
+mount -t cgroup2 cgroup2 /sys/fs/cgroup
+echo 0 > /proc/sys/kernel/ctrl-alt-del
+for kv in $(cat /proc/cmdline); do
+  case "$kv" in
+    fc_ip=*) IP=${kv#fc_ip=} ;;
+    fc_gw=*) GW=${kv#fc_gw=} ;;
+    fc_dns=*) DNS=${kv#fc_dns=} ;;
+    fc_search=*) SEARCH=${kv#fc_search=} ;;
+    fc_mtu=*) MTU=${kv#fc_mtu=} ;;
+  esac
+done
+{
+  [ -n "$DNS" ] && echo "nameserver $DNS"
+  [ -n "$SEARCH" ] && echo "search $(echo "$SEARCH" | tr , ' ')"
+  echo "options ndots:2"
+} > /run/resolv.conf
+printf '127.0.0.1 localhost buildvm\n%s fc-registry\n' "$GW" > /run/hosts
+hostname buildvm
+ip link set lo up
+ip link set eth0 mtu "${MTU:-1400}"
+ip addr add "$IP" dev eth0
+ip link set eth0 up
+ip route add default via "$GW"
+e2fsck -p /dev/vdb > /dev/console 2>&1
+mount -o noatime /dev/vdb /cache || echo "fc-init: cache disk mount failed" > /dev/console
+exec /sbin/tini -- /usr/local/bin/fc-guest

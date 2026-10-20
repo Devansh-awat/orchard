@@ -23,6 +23,7 @@ jobs:
       cli: ${{ steps.filter.outputs.cli }}
       contracts: ${{ steps.filter.outputs.contracts }}
       r2_proxy: ${{ steps.filter.outputs.r2_proxy }}
+      fc_builder: ${{ steps.filter.outputs.fc_builder }}
       registry: ${{ steps.filter.outputs.registry }}
       chart: ${{ steps.filter.outputs.chart }}
       docs: ${{ steps.filter.outputs.docs }}
@@ -70,6 +71,9 @@ jobs:
               - '.github/workflows/**'
             r2_proxy:
               - 'apps/r2-proxy/**'
+              - '.github/workflows/**'
+            fc_builder:
+              - 'apps/fc-builder/**'
               - '.github/workflows/**'
             registry:
               - 'apps/registry/**'
@@ -515,6 +519,17 @@ jobs:
           go-version-file: apps/r2-proxy/go.mod
       - run: cd apps/r2-proxy && go vet ./... && go build ./...
 
+  go-fc-builder:
+    needs: changes
+    if: needs.changes.outputs.fc_builder == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: apps/fc-builder/go.mod
+      - run: cd apps/fc-builder && go vet ./... && go test -race ./...
+
   go-registry:
     needs: changes
     if: needs.changes.outputs.registry == 'true'
@@ -574,7 +589,7 @@ jobs:
 
   validate-images:
     needs: changes
-    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.server == 'true' || needs.changes.outputs.r2_proxy == 'true'
+    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.server == 'true' || needs.changes.outputs.r2_proxy == 'true' || needs.changes.outputs.fc_builder == 'true'
     strategy:
       matrix:
         runner: [ubuntu-24.04, ubuntu-24.04-arm]
@@ -591,3 +606,4 @@ jobs:
           if [ "${{ needs.changes.outputs.frontend }}" = "true" ]; then build frontend apps/frontend/Dockerfile .; fi
           if [ "${{ needs.changes.outputs.server }}" = "true" ]; then build server apps/server/Dockerfile .; build mcp apps/server/Dockerfile.mcp .; fi
           if [ "${{ needs.changes.outputs.r2_proxy }}" = "true" ]; then build r2-proxy apps/r2-proxy/Dockerfile apps/r2-proxy; fi
+          if [ "${{ needs.changes.outputs.fc_builder }}" = "true" ]; then build fc-builder apps/fc-builder/Dockerfile apps/fc-builder; fi
