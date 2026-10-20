@@ -250,6 +250,8 @@ jobs:
         run: pnpm --filter server test:setup-state
       - name: Build platform test
         run: pnpm --filter server test:build-platform
+      - name: Image builder cache and source preparation tests
+        run: pnpm --filter server test:image-builder-cache
       # The auth wall in front of every private domain. Covers the routing
       # layer (is the Ingress actually behind the proxy) and the decision layer
       # (token audience, type, expiry, bypass secret, redirect targets).

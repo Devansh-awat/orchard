@@ -282,6 +282,8 @@ export class ImageBuilderService {
 
   private readonly sidecarPushEnabled = process.env.BUILDER_SIDECAR_PUSH === 'true';
 
+  private readonly sourceCpuLimit = (process.env.BUILDER_SOURCE_CPU_LIMIT || '').trim() || '2';
+
   private readonly pusherImage =
     process.env.BUILDER_PUSHER_IMAGE || 'gcr.io/go-containerregistry/crane:latest';
 
@@ -1419,20 +1421,6 @@ exit $EXIT_CODE
     // Use deployment ID as cache key for multi-tenant isolation
     const cacheKey = deploymentId ? `orchard-${deploymentId.slice(0, 8)}` : undefined;
 
-    // Build the buildctl args. When using a persistent daemon, skip external
-    // cache args — the daemon's own content store is the cache.
-    const buildctlArgs = this.generateBuildctlArgs({
-      dockerfilePath,
-      fullImageName,
-      target,
-      buildFromRoot,
-      buildType,
-      envVars,
-      secretsHash,
-      cacheKey,
-      skipCache: persistentBuildCache && !!this.buildKitPool
-    });
-
     const injectGitSha = buildType !== 'railpack' && !('GIT_SHA' in envVars);
 
     const batchApi = this.kc!.makeApiClient(k8s.BatchV1Api);
@@ -1470,7 +1458,7 @@ ls -la /workspace
               memory: '256Mi'
             },
             limits: {
-              cpu: '500m',
+              cpu: this.sourceCpuLimit,
               memory: '512Mi'
             }
           }
@@ -1486,10 +1474,8 @@ MASKED_URL="$(printf '%s' "$CLONE_URL" | sed -E 's#://[^@/]+@#://***@#')"
 echo "Repository: $MASKED_URL"
 echo "Branch: ${branch}"
 
-# Enable git-lfs (best-effort) so LFS-tracked files are materialized instead of
-# left as pointer stubs. alpine/git doesn't bundle it.
 LFS_READY=0
-if apk add --no-cache git-lfs >/dev/null 2>&1 && git lfs install --skip-repo >/dev/null 2>&1; then
+if (git lfs version >/dev/null 2>&1 || apk add --no-cache git-lfs >/dev/null 2>&1) && git lfs install --skip-repo >/dev/null 2>&1; then
   LFS_READY=1
   echo "git-lfs: enabled"
 else
@@ -1543,7 +1529,7 @@ ls -la /workspace
               memory: '256Mi'
             },
             limits: {
-              cpu: '500m',
+              cpu: this.sourceCpuLimit,
               memory: '512Mi'
             }
           }
@@ -1777,6 +1763,18 @@ fi
         );
       }
     }
+
+    const buildctlArgs = this.generateBuildctlArgs({
+      dockerfilePath,
+      fullImageName,
+      target,
+      buildFromRoot,
+      buildType,
+      envVars,
+      secretsHash,
+      cacheKey,
+      skipCache: !!daemonIp
+    });
 
     // Runs first, and only when the cache volume is the real shared PVC — the
     // disableSharedCache fallback swaps in an emptyDir with nothing to evict,
@@ -2046,14 +2044,17 @@ exec skopeo copy --authfile /root/.docker/config.json --dest-tls-verify=false oc
       const innerScript = (buildkitContainer.args && buildkitContainer.args[0]) || '';
 
       const cacheExportArgs = buildctlArgs
-        .map((a) =>
-          typeof a === 'string' && a.includes('dest=/output/image.tar')
-            ? a.replace('dest=/output/image.tar', 'dest=/tmp/cache-export.tar')
-            : a
+        .filter(
+          (arg, index, args) =>
+            arg !== '--output' &&
+            arg !== '--import-cache' &&
+            (index === 0 ||
+              (args[index - 1] !== '--output' && args[index - 1] !== '--import-cache'))
         )
         .map(renderBuildctlArg)
         .join(' ');
-      const hasCacheExport = buildctlArgs.some((a) => a === '--export-cache');
+      const hasDeferredCacheExport =
+        !this.localCacheEnabled && buildctlArgs.includes('--export-cache');
 
       buildkitContainer.args = [
         `mkdir -p /output
@@ -2075,10 +2076,11 @@ done
 if [ "$rc" -eq 0 ]; then
   touch /output/.done
 ${
-  hasCacheExport
+  hasDeferredCacheExport
     ? `  echo "=== Exporting build cache ==="
-  buildctl ${cacheExportArgs} >/dev/null 2>&1 || echo "=== Cache export failed (non-critical) ==="
-  rm -f /tmp/cache-export.tar`
+  (
+${injectGitSha ? ImageBuilderService.GIT_SHA_PREAMBLE : ''}${buildDirPreamble}buildctl ${cacheExportArgs}${injectGitSha ? ImageBuilderService.GIT_SHA_BUILDCTL_OPT : ''}
+  ) >/dev/null 2>&1 || echo "=== Cache export failed (non-critical) ==="`
     : ''
 }
 else

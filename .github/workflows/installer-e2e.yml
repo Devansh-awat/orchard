@@ -89,7 +89,9 @@ jobs:
           sudo mkdir -p /var/lib/rancher/k3s/agent/images
           docker save ghcr.io/hackclub/orchard/server:e2e ghcr.io/hackclub/orchard/frontend:e2e \
             | sudo tee /var/lib/rancher/k3s/agent/images/orchard-e2e.tar >/dev/null
+          docker buildx prune --all --force
           docker system prune -af >/dev/null
+          df -h /var/lib
           sudo systemctl stop docker.socket docker
           sudo iptables -P FORWARD ACCEPT
 
@@ -166,7 +168,9 @@ jobs:
               esac
             done
             pending=("${still[@]}")
-            [ "${#pending[@]}" -gt 0 ] && sleep 5
+            if [ "${#pending[@]}" -gt 0 ]; then
+              sleep 5
+            fi
           done
 
       - name: Both builds ran on this architecture

@@ -1471,6 +1471,25 @@ EOF
   chmod 600 "$VALUES_FILE"
 }
 
+wait_for_cnpg_webhook() {
+  local deadline=$((SECONDS + 300)) remaining addresses
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    remaining=$((deadline - SECONDS))
+    [ "$remaining" -gt 0 ] || break
+    if addresses=$(kubectl -n cnpg-system get endpoints/cnpg-webhook-service \
+      -o jsonpath='{.subsets[*].addresses[*].ip}' \
+      --request-timeout="$((remaining < 5 ? remaining : 5))s") && [ -n "$addresses" ]; then
+      return 0
+    fi
+    remaining=$((deadline - SECONDS))
+    if [ "$remaining" -gt 0 ]; then
+      sleep "$((remaining < 2 ? remaining : 2))"
+    fi
+  done
+  printf 'Timed out waiting for the CloudNativePG webhook endpoint\n' >&2
+  return 1
+}
+
 install_orchard() {
   step
 
@@ -1481,6 +1500,7 @@ install_orchard() {
     -f "$VALUES_FILE" --timeout 20m)
   if [ -n "$ORCHARD_VERSION" ]; then args+=(--version "$ORCHARD_VERSION"); fi
 
+  run_step "CloudNativePG webhook" 1m wait_for_cnpg_webhook
   run_step "applying the chart" 40s helm "${args[@]}"
   run_step "postgres" 3m kubectl -n orchard wait --for=condition=Ready \
     cluster.postgresql.cnpg.io/orchard-db --timeout=10m

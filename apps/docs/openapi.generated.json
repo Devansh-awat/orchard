@@ -48983,6 +48983,91 @@
         ]
       }
     },
+    "/sandboxes/{id}/dirs": {
+      "get": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "entries": {
+                      "items": {
+                        "properties": {
+                          "git": {
+                            "type": "boolean"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "path": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "path",
+                          "git"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "git": {
+                      "type": "boolean"
+                    },
+                    "parent": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "parent",
+                    "git",
+                    "entries",
+                    "truncated"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "List the folders inside a folder on the machine, for picking where a repository lives",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
     "/sandboxes/{id}/file": {
       "get": {
         "description": "Auth: authenticated (scope: exec)",
@@ -51563,8 +51648,17 @@
                               "null"
                             ]
                           },
+                          "linked": {
+                            "type": "boolean"
+                          },
                           "name": {
                             "type": "string"
+                          },
+                          "path": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           }
                         },
                         "required": [
@@ -51572,7 +51666,9 @@
                           "branch",
                           "dirtyFiles",
                           "github",
-                          "icon"
+                          "icon",
+                          "path",
+                          "linked"
                         ],
                         "type": "object"
                       },
@@ -51619,6 +51715,10 @@
             "application/json": {
               "schema": {
                 "properties": {
+                  "location": {
+                    "maxLength": 1024,
+                    "type": "string"
+                  },
                   "repoUrl": {
                     "format": "uri",
                     "type": "string"
@@ -51660,7 +51760,7 @@
             "cookieAuth": []
           }
         ],
-        "summary": "Clone another repository into the sandbox (background, uses your GitHub token)",
+        "summary": "Clone another repository into the sandbox (background, uses your GitHub token). With location, clones into that folder and links it into home",
         "tags": [
           "sandboxes"
         ]
@@ -51815,6 +51915,10 @@
             "application/json": {
               "schema": {
                 "properties": {
+                  "location": {
+                    "maxLength": 1024,
+                    "type": "string"
+                  },
                   "name": {
                     "maxLength": 63,
                     "type": "string"
@@ -51856,7 +51960,76 @@
             "cookieAuth": []
           }
         ],
-        "summary": "Create an empty git repository with an initial commit in the sandbox",
+        "summary": "Create an empty git repository with an initial commit in the sandbox. A location (host only) creates it in that folder and links it into home",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/repos/link": {
+      "post": {
+        "description": "Auth: authenticated (scope: deploy)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "path": {
+                    "maxLength": 1024,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "path"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Open an existing folder on the machine as a repository: git-inits it if needed and links it into home under a free name",
         "tags": [
           "sandboxes"
         ]
@@ -54831,6 +55004,10 @@
                       "stop"
                     ],
                     "type": "string"
+                  },
+                  "command": {
+                    "maxLength": 24,
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -54847,6 +55024,36 @@
               "application/json": {
                 "schema": {
                   "properties": {
+                    "commands": {
+                      "description": "Every command under \"run\" in .orchard/greenhouse.json, in file order",
+                      "items": {
+                        "properties": {
+                          "icon": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "running": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "label",
+                          "icon",
+                          "running"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
                     "ports": {
                       "items": {
                         "type": "integer"
@@ -54860,7 +55067,7 @@
                       ]
                     },
                     "running": {
-                      "description": "Whether the run script is alive in its tmux window",
+                      "description": "Whether the first run command is alive in its tmux window",
                       "type": "boolean"
                     },
                     "setup": {
@@ -54884,7 +55091,8 @@
                     "run",
                     "ports",
                     "setupState",
-                    "running"
+                    "running",
+                    "commands"
                   ],
                   "type": "object"
                 }
@@ -54901,7 +55109,7 @@
             "cookieAuth": []
           }
         ],
-        "summary": "Start (or restart) or stop the run script in the tmux window `run`",
+        "summary": "Start (or restart) or stop a run command, or rerun setup with command \"setup\". Without command it acts on the first run command",
         "tags": [
           "sandboxes"
         ]
@@ -54934,6 +55142,36 @@
               "application/json": {
                 "schema": {
                   "properties": {
+                    "commands": {
+                      "description": "Every command under \"run\" in .orchard/greenhouse.json, in file order",
+                      "items": {
+                        "properties": {
+                          "icon": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "running": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "label",
+                          "icon",
+                          "running"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
                     "ports": {
                       "items": {
                         "type": "integer"
@@ -54947,7 +55185,7 @@
                       ]
                     },
                     "running": {
-                      "description": "Whether the run script is alive in its tmux window",
+                      "description": "Whether the first run command is alive in its tmux window",
                       "type": "boolean"
                     },
                     "setup": {
@@ -54971,7 +55209,8 @@
                     "run",
                     "ports",
                     "setupState",
-                    "running"
+                    "running",
+                    "commands"
                   ],
                   "type": "object"
                 }
