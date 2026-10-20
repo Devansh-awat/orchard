@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2](https://github.com/hackclub/orchard/compare/fc-builder/v1.0.1...fc-builder/v1.0.2) (2026-10-20)
+
+
+### Bug Fixes
+
+* **fc-builder:** stop oom-killing build vms by giving the host page cache room and reclaiming it early ([48bb56e](https://github.com/hackclub/orchard/commit/48bb56eb4602700a4f8f133ed2c7c5943d4a66dc))
+
 ## [1.0.1](https://github.com/hackclub/orchard/compare/fc-builder/v1.0.0...fc-builder/v1.0.1) (2026-10-20)
 
 
