@@ -51,6 +51,7 @@ type Hooks struct {
 	EnsureCache  func(tenant string) (string, error)
 	SetupSlot    func(slot netsetup.Slot, uid int) error
 	TeardownSlot func(slot netsetup.Slot)
+	HasRoom      func() bool
 }
 
 type Config struct {
@@ -139,7 +140,7 @@ func (m *Manager) Acquire(ctx context.Context, tenant string) (*VM, func(), erro
 			}
 			continue
 		}
-		if i := m.freeSlot(); i >= 0 {
+		if i := m.freeSlot(); i >= 0 && m.hasRoom() {
 			v := m.reserve(tenant, i)
 			m.mu.Unlock()
 			if err := m.boot(ctx, v); err != nil {
@@ -175,6 +176,10 @@ func (m *Manager) sleep(ctx context.Context, wait chan struct{}, deadline time.T
 	case <-t.C:
 	}
 	return nil
+}
+
+func (m *Manager) hasRoom() bool {
+	return m.hooks.HasRoom == nil || m.hooks.HasRoom()
 }
 
 func (m *Manager) freeSlot() int {

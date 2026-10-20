@@ -28,7 +28,16 @@ type FirecrackerLauncher struct {
 	LogDir      string
 	UseJailer   bool
 	Cgroups     bool
+	CgroupRoot  string
+	CgroupBase  string
 	IOEngine    string
+}
+
+func (l *FirecrackerLauncher) cgroupParent() string {
+	if l.CgroupBase == "" {
+		return "firecracker"
+	}
+	return l.CgroupBase
 }
 
 type fcInstance struct {
@@ -121,6 +130,7 @@ func (l *FirecrackerLauncher) launchJailed(spec Spec, out io.Writer) (*fcInstanc
 	if l.Cgroups {
 		args = append(args,
 			"--cgroup-version", "2",
+			"--parent-cgroup", l.cgroupParent(),
 			"--cgroup", fmt.Sprintf("cpu.max=%d 100000", spec.VCPUs*100000),
 			"--cgroup", fmt.Sprintf("memory.max=%d", (spec.MemMiB+256)*1024*1024),
 		)
@@ -140,7 +150,7 @@ func (l *FirecrackerLauncher) launchJailed(spec Spec, out io.Writer) (*fcInstanc
 		cleanup: func() {
 			os.RemoveAll(jailDir)
 			if l.Cgroups {
-				os.Remove(filepath.Join("/sys/fs/cgroup/firecracker", spec.ID))
+				os.Remove(filepath.Join(l.CgroupRoot, l.cgroupParent(), spec.ID))
 			}
 		},
 	}, nil

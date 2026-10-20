@@ -10,12 +10,14 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/hackclub/orchard/fc-builder/internal/api"
 	"github.com/hackclub/orchard/fc-builder/internal/builds"
 	"github.com/hackclub/orchard/fc-builder/internal/cache"
+	"github.com/hackclub/orchard/fc-builder/internal/cgroups"
 	"github.com/hackclub/orchard/fc-builder/internal/netsetup"
 	"github.com/hackclub/orchard/fc-builder/internal/proto"
 	"github.com/hackclub/orchard/fc-builder/internal/proxy"
@@ -141,6 +143,56 @@ func killStaleVMs(stateDir string) {
 	}
 }
 
+func nestCgroups(useCgroups bool, maxVMs int, perVM int64) (*cgroups.Tree, int) {
+	if !useCgroups {
+		return nil, maxVMs
+	}
+	self, err := cgroups.Own("/proc/self/cgroup")
+	if err != nil {
+		log.Fatalf("cgroup: %v", err)
+	}
+	tree := &cgroups.Tree{Mount: cgroups.Mount, Self: self}
+	if err := tree.Nest("cpu", "memory"); err != nil {
+		log.Fatalf("cgroup: %v", err)
+	}
+	limit, ok := tree.MemoryMax()
+	if !ok {
+		log.Printf("[fc-builder] pod has no memory limit, VMs are only capped individually")
+		return tree, maxVMs
+	}
+	fit := cgroups.FitVMs(maxVMs, limit, perVM, int64(envInt("FC_HOST_RESERVE_MIB", 2048))<<20)
+	if fit == 0 {
+		log.Fatalf("pod memory limit %d bytes cannot hold a single %d byte VM", limit, perVM)
+	}
+	if fit < maxVMs {
+		log.Printf("[fc-builder] pod memory limit holds %d VMs, not %d; capping", fit, maxVMs)
+	}
+	return tree, fit
+}
+
+func roomCheck(tree *cgroups.Tree, perVM, minFree int64) func() bool {
+	var short atomic.Bool
+	return func() bool {
+		avail, err := cgroups.MemAvailable("/proc/meminfo")
+		if err != nil {
+			return true
+		}
+		var pending int64
+		if tree != nil {
+			pending = tree.Uncommitted()
+		}
+		room := avail-pending-perVM >= minFree
+		if short.Swap(!room) != !room {
+			if room {
+				log.Printf("[fc-builder] node memory recovered, booting VMs again")
+			} else {
+				log.Printf("[fc-builder] node memory low (%d MiB available, %d MiB promised to running VMs), refusing new VMs", avail>>20, pending>>20)
+			}
+		}
+		return room
+	}
+}
+
 func main() {
 	log.SetPrefix("")
 	stateDir := env("FC_STATE_DIR", "/state")
@@ -152,6 +204,14 @@ func main() {
 	cacheSize := env("FC_CACHE_IMAGE_SIZE", "50G")
 
 	killStaleVMs(stateDir)
+	useCgroups := envBool("FC_USE_JAILER", true) && envBool("FC_JAILER_CGROUPS", true)
+	memMiB := envInt("FC_VM_MEM_MIB", 12288)
+	perVM := int64(memMiB+256) << 20
+	tree, maxVMs := nestCgroups(useCgroups, maxVMs, perVM)
+	cgroupBase := ""
+	if tree != nil {
+		cgroupBase = tree.VMParent()
+	}
 	assets := filepath.Join(stateDir, "assets", Version)
 	if err := os.MkdirAll(assets, 0o755); err != nil {
 		log.Fatal(err)
@@ -180,14 +240,16 @@ func main() {
 		WorkDir:     filepath.Join(stateDir, "vms"),
 		LogDir:      filepath.Join(stateDir, "vm-logs"),
 		UseJailer:   envBool("FC_USE_JAILER", true),
-		Cgroups:     envBool("FC_JAILER_CGROUPS", true),
+		Cgroups:     useCgroups,
+		CgroupRoot:  cgroups.Mount,
+		CgroupBase:  cgroupBase,
 		IOEngine:    env("FC_IO_ENGINE", "Async"),
 	}
 	cacheBytes := parseBytes(cacheSize)
 	manager := vm.NewManager(vm.Config{
 		MaxVMs:      maxVMs,
 		VCPUs:       envInt("FC_VM_VCPUS", 8),
-		MemMiB:      envInt("FC_VM_MEM_MIB", 12288),
+		MemMiB:      memMiB,
 		IdleTimeout: time.Duration(envInt("FC_VM_IDLE_SECONDS", 300)) * time.Second,
 		BootTimeout: time.Duration(envInt("FC_VM_BOOT_TIMEOUT_SECONDS", 60)) * time.Second,
 		AcquireWait: time.Duration(envInt("FC_ACQUIRE_WAIT_SECONDS", 20)) * time.Second,
@@ -201,8 +263,9 @@ func main() {
 			path, _, err := store.Ensure(tenant)
 			return path, err
 		},
-		SetupSlot: func(s netsetup.Slot, uid int) error { return netsetup.SetupTap(netsetup.Exec, s, uid, uid) },
+		SetupSlot:    func(s netsetup.Slot, uid int) error { return netsetup.SetupTap(netsetup.Exec, s, uid, uid) },
 		TeardownSlot: func(s netsetup.Slot) { netsetup.TeardownTap(netsetup.Exec, s) },
+		HasRoom:      roomCheck(tree, perVM, int64(envInt("FC_MIN_NODE_FREE_MIB", 32768))<<20),
 	})
 	runner, err := builds.NewRunner(filepath.Join(stateDir, "builds"), hostID, manager, px)
 	if err != nil {

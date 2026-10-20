@@ -153,6 +153,47 @@ func TestNoCapacityWhenAllBusy(t *testing.T) {
 	}
 }
 
+func TestNoRoomRefusesNewTenantsButReusesRunningVMs(t *testing.T) {
+	l := &fakeLauncher{}
+	m, _ := newTestManager(4, l)
+	var room atomic.Bool
+	room.Store(true)
+	m.hooks.HasRoom = room.Load
+	_, release, err := m.Acquire(context.Background(), "proj-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	room.Store(false)
+	if _, _, err := m.Acquire(context.Background(), "proj-b"); !errors.Is(err, ErrNoCapacity) {
+		t.Fatalf("got %v", err)
+	}
+	_, release2, err := m.Acquire(context.Background(), "proj-a")
+	if err != nil {
+		t.Fatalf("running VM refused: %v", err)
+	}
+	release2()
+	if n := l.count(); n != 1 {
+		t.Fatalf("launched %d VMs", n)
+	}
+}
+
+func TestNoRoomStopsIdleVMToMakeRoom(t *testing.T) {
+	l := &fakeLauncher{}
+	m, _ := newTestManager(4, l)
+	m.hooks.HasRoom = func() bool { return len(m.byTenant) == 0 }
+	_, release, _ := m.Acquire(context.Background(), "proj-a")
+	release()
+	v, release2, err := m.Acquire(context.Background(), "proj-b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release2()
+	if v.Tenant != "proj-b" || m.HasTenant("proj-a") {
+		t.Fatal("idle VM not stopped to make room")
+	}
+}
+
 func TestEvictsIdleLRUForNewTenant(t *testing.T) {
 	l := &fakeLauncher{}
 	m, teardowns := newTestManager(1, l)
