@@ -43,6 +43,7 @@
     "test:watch-paths": "tsx --test test/watch-paths.test.ts",
     "test:auto-deploy-match": "tsx --test test/auto-deploy-match.test.ts",
     "test:build-recovery": "tsx --test test/build-recovery.test.ts test/build-recovery-decision.test.ts test/build-job-informer-list.test.ts",
+    "test:fc-builder": "tsx --test test/fc-client.test.ts test/build-backend-router.test.ts test/firecracker-recovery.test.ts test/fc-follow.test.ts",
     "test:mcp-token": "tsx --test test/mcp-token-type.test.ts test/mcp-api-token.test.ts",
     "test:mcp-refresh-rotation": "tsx --test test/mcp-refresh-rotation.test.ts",
     "test:secret-crypto": "tsx --test test/secret-crypto-seal.test.ts",
