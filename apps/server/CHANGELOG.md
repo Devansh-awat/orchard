@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.78.1](https://github.com/hackclub/orchard/compare/server/v2.78.0...server/v2.78.1) (2026-10-20)
+
+
+### Bug Fixes
+
+* **server:** a malformed id in the url is a 404, not a 500 ([fbb8b30](https://github.com/hackclub/orchard/commit/fbb8b309f288154c9c6fae901e31a70b503ce522))
+
 ## [2.78.0](https://github.com/hackclub/orchard/compare/server/v2.77.0...server/v2.78.0) (2026-10-20)
 
 
