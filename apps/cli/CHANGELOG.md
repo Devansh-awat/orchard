@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.31.0](https://github.com/hackclub/orchard/compare/cli/v0.30.0...cli/v0.31.0) (2026-10-20)
+
+
+### Features
+
+* **server:** route builds to the firecracker builder behind a posthog flag ([7bdf7bc](https://github.com/hackclub/orchard/commit/7bdf7bc1ac59593d1a4e4d505d7ab47f69cb17d0))
+
 ## [0.30.0](https://github.com/hackclub/orchard/compare/cli/v0.29.0...cli/v0.30.0) (2026-10-16)
 
 

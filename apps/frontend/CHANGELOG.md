@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.70.0](https://github.com/hackclub/orchard/compare/frontend/v1.69.0...frontend/v1.70.0) (2026-10-20)
+
+
+### Features
+
+* **server:** route builds to the firecracker builder behind a posthog flag ([7bdf7bc](https://github.com/hackclub/orchard/commit/7bdf7bc1ac59593d1a4e4d505d7ab47f69cb17d0))
+
 ## [1.69.0](https://github.com/hackclub/orchard/compare/frontend/v1.68.1...frontend/v1.69.0) (2026-10-17)
 
 

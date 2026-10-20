@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.78.0](https://github.com/hackclub/orchard/compare/server/v2.77.0...server/v2.78.0) (2026-10-20)
+
+
+### Features
+
+* **server:** route builds to the firecracker builder behind a posthog flag ([7bdf7bc](https://github.com/hackclub/orchard/commit/7bdf7bc1ac59593d1a4e4d505d7ab47f69cb17d0))
+
+
+### Bug Fixes
+
+* **server:** engine re-derives a kind once when its consumer logic changes ([1d092d3](https://github.com/hackclub/orchard/commit/1d092d37fb99b3af6ba4c9a65115dd3a905c4ff5))
+* **server:** reduce build setup and cache export overhead ([#163](https://github.com/hackclub/orchard/issues/163)) ([7bae538](https://github.com/hackclub/orchard/commit/7bae53890ef8abf5c439bf10cf1626cae1726f66))
+
 ## [2.77.0](https://github.com/hackclub/orchard/compare/server/v2.76.0...server/v2.77.0) (2026-10-17)
 
 
