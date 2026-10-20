@@ -510,7 +510,7 @@ fcBuilder:
   terminationGracePeriodSeconds: 90
   resources:
     requests: { cpu: "12", memory: 48Gi }
-    limits: { cpu: "32", memory: 78Gi }
+    limits: { cpu: "32", memory: 84Gi }
   storage:
     # Holds every project's cache disk image. A node-local single-replica class
     # keeps VM disk I/O off the network.
@@ -523,6 +523,7 @@ fcBuilder:
     idleSeconds: 300
     cacheSize: 50G
     minNodeFreeMiB: 32768
+    memoryOverheadMiB: 1536
   jailer:
     enabled: true
     cgroups: true

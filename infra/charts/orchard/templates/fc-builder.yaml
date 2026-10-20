@@ -114,6 +114,7 @@ spec:
             - { name: FC_VM_MEM_MIB, value: {{ .Values.fcBuilder.vm.memoryMiB | quote }} }
             - { name: FC_VM_IDLE_SECONDS, value: {{ .Values.fcBuilder.vm.idleSeconds | quote }} }
             - { name: FC_CACHE_IMAGE_SIZE, value: {{ .Values.fcBuilder.vm.cacheSize | quote }} }
+            - { name: FC_VM_MEM_OVERHEAD_MIB, value: {{ .Values.fcBuilder.vm.memoryOverheadMiB | default 1536 | quote }} }
             - { name: FC_MIN_NODE_FREE_MIB, value: {{ .Values.fcBuilder.vm.minNodeFreeMiB | default 32768 | quote }} }
             - { name: FC_USE_JAILER, value: {{ .Values.fcBuilder.jailer.enabled | quote }} }
             - { name: FC_JAILER_CGROUPS, value: {{ .Values.fcBuilder.jailer.cgroups | quote }} }

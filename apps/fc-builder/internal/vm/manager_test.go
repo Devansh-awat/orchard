@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"strings"
 	"sync"
@@ -48,7 +49,7 @@ func (f *fakeInstance) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (f *fakeInstance) Kill()                  { f.once.Do(func() { close(f.done) }) }
+func (f *fakeInstance) Kill()                 { f.once.Do(func() { close(f.done) }) }
 func (f *fakeInstance) Done() <-chan struct{} { return f.done }
 
 type fakeLauncher struct {
@@ -267,4 +268,19 @@ func waitFor(t *testing.T, cond func() bool) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatal("condition not met")
+}
+
+func TestCgroupArgsLeaveRoomForHostPageCache(t *testing.T) {
+	l := &FirecrackerLauncher{CgroupBase: "kubepods/pod1/ctr/vms"}
+	args := strings.Join(l.cgroupArgs(Spec{VCPUs: 8, MemMiB: 12288}), " ")
+	for _, want := range []string{
+		"--parent-cgroup kubepods/pod1/ctr/vms",
+		"cpu.max=800000 100000",
+		fmt.Sprintf("memory.high=%d", int64(12288+768)<<20),
+		fmt.Sprintf("memory.max=%d", int64(12288+1536)<<20),
+	} {
+		if !strings.Contains(args, want) {
+			t.Errorf("missing %q in %s", want, args)
+		}
+	}
 }

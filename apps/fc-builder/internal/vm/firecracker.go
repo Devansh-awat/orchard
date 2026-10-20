@@ -30,7 +30,26 @@ type FirecrackerLauncher struct {
 	Cgroups     bool
 	CgroupRoot  string
 	CgroupBase  string
+	MemOverhead int
 	IOEngine    string
+}
+
+func MemoryLimits(memMiB, overheadMiB int) (high, max int64) {
+	if overheadMiB <= 0 {
+		overheadMiB = 1536
+	}
+	return int64(memMiB+overheadMiB/2) << 20, int64(memMiB+overheadMiB) << 20
+}
+
+func (l *FirecrackerLauncher) cgroupArgs(spec Spec) []string {
+	high, max := MemoryLimits(spec.MemMiB, l.MemOverhead)
+	return []string{
+		"--cgroup-version", "2",
+		"--parent-cgroup", l.cgroupParent(),
+		"--cgroup", fmt.Sprintf("cpu.max=%d 100000", spec.VCPUs*100000),
+		"--cgroup", fmt.Sprintf("memory.high=%d", high),
+		"--cgroup", fmt.Sprintf("memory.max=%d", max),
+	}
 }
 
 func (l *FirecrackerLauncher) cgroupParent() string {
@@ -128,12 +147,7 @@ func (l *FirecrackerLauncher) launchJailed(spec Spec, out io.Writer) (*fcInstanc
 		"--chroot-base-dir", l.JailBase,
 	}
 	if l.Cgroups {
-		args = append(args,
-			"--cgroup-version", "2",
-			"--parent-cgroup", l.cgroupParent(),
-			"--cgroup", fmt.Sprintf("cpu.max=%d 100000", spec.VCPUs*100000),
-			"--cgroup", fmt.Sprintf("memory.max=%d", (spec.MemMiB+256)*1024*1024),
-		)
+		args = append(args, l.cgroupArgs(spec)...)
 	}
 	args = append(args, "--", "--api-sock", "/api.sock", "--config-file", "/config.json")
 	cmd := exec.Command(l.Jailer, args...)

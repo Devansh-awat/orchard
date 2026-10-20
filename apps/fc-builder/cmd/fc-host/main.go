@@ -206,7 +206,8 @@ func main() {
 	killStaleVMs(stateDir)
 	useCgroups := envBool("FC_USE_JAILER", true) && envBool("FC_JAILER_CGROUPS", true)
 	memMiB := envInt("FC_VM_MEM_MIB", 12288)
-	perVM := int64(memMiB+256) << 20
+	memOverhead := envInt("FC_VM_MEM_OVERHEAD_MIB", 1536)
+	_, perVM := vm.MemoryLimits(memMiB, memOverhead)
 	tree, maxVMs := nestCgroups(useCgroups, maxVMs, perVM)
 	cgroupBase := ""
 	if tree != nil {
@@ -243,6 +244,7 @@ func main() {
 		Cgroups:     useCgroups,
 		CgroupRoot:  cgroups.Mount,
 		CgroupBase:  cgroupBase,
+		MemOverhead: memOverhead,
 		IOEngine:    env("FC_IO_ENGINE", "Async"),
 	}
 	cacheBytes := parseBytes(cacheSize)
