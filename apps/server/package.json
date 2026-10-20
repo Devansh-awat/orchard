@@ -73,6 +73,7 @@
     "test:auto-deploy-precondition": "tsx --test test/auto-deploy-precondition.test.ts",
     "test:claim-recovery": "tsx --test test/claim-recovery.test.ts",
     "test:build-summary": "tsx --test test/build-summary.test.ts",
+    "test:prisma-error": "tsx --test test/prisma-error.test.ts",
     "test:tenant-policy": "tsx --test test/tenant-policy.test.ts",
     "test:dockerfile-health-check": "tsx --test test/dockerfile-health-check.test.ts",
     "test:env-secret-write-only": "tsx --test test/env-secret-write-only.test.ts",

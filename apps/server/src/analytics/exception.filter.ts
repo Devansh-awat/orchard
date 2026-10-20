@@ -15,6 +15,7 @@ import { markSpanError } from './datadog';
 import { redactSensitivePath } from './url-redaction';
 import { getClientIp } from '../auth/client-ip';
 import { k8sHttpException } from '../kubernetes/k8s-error';
+import { prismaHttpException } from '../prisma/prisma-error';
 
 /**
  * Global filter that forwards every unhandled error to PostHog Error
@@ -40,7 +41,8 @@ export class AnalyticsExceptionFilter extends BaseExceptionFilter implements Exc
     // The k8s client's opaque 'HTTP request failed' would otherwise be what the
     // caller sees. Report the original (it carries the stack), respond with the
     // unwrapped one.
-    const normalized = k8sHttpException(exception) ?? exception;
+    const malformedId = prismaHttpException(exception);
+    const normalized = k8sHttpException(exception) ?? malformedId ?? exception;
 
     try {
       if (host.getType() === 'http') {
@@ -55,7 +57,7 @@ export class AnalyticsExceptionFilter extends BaseExceptionFilter implements Exc
             : HttpStatus.INTERNAL_SERVER_ERROR;
         // An unwrapped k8s error can land on a 4xx, but it is still a bug we
         // never handled, so it stays in Error Tracking.
-        if (status >= 500 || !(exception instanceof HttpException)) {
+        if (status >= 500 || (!(exception instanceof HttpException) && !malformedId)) {
           // Nest swallows the exception before express sees it, so without
           // this Datadog Error Tracking only gets a bare 500 status.
           markSpanError(exception);

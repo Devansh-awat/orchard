@@ -316,6 +316,8 @@ jobs:
         run: pnpm --filter server test:build-recovery
       - name: Fast builder routing, recovery and stream tests
         run: pnpm --filter server test:fc-builder
+      - name: Malformed id tests
+        run: pnpm --filter server test:prisma-error
       # Runtime configuration with an environment override: which value wins,
       # which fields lock, and that a toggle shipping on is not read as off on
       # an instance that has never stored a row for it.
