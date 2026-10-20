@@ -1671,6 +1671,7 @@
 
 	async function rebuild() {
 		rebuilding = true;
+		const previousStart = deployment?.buildStepTimestamps?.__start ?? null;
 		try {
 			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/rebuild`, {
 				method: 'POST'
@@ -1697,6 +1698,9 @@
 			showBuildModal = true;
 			showBuildCard = false;
 			startBuildPolling();
+			if ((deployment?.buildStepTimestamps?.__start ?? null) !== previousStart) {
+				syncBuildModalFromDeployment();
+			}
 		} catch (e) {
 			toasts.add({
 				title: 'Error',
