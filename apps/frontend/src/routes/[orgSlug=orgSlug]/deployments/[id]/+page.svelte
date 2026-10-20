@@ -233,6 +233,7 @@
 
 	type TabId = (typeof tabSections)[number]['id'] | `graft-${string}`;
 
+	let deployment = $state<Deployment | null>(null);
 	const isDockerImageDeployment = $derived(!deployment?.githubRepo);
 	const graftProps = $derived(
 		deployment?.project && $selectedOrganization
@@ -380,7 +381,6 @@
 	// Redeploy/Restart/Delete actions stay visible everywhere.
 	const headerCollapsed = $derived(tabs.value !== 'overview');
 
-	let deployment = $state<Deployment | null>(null);
 	let bindings = $state<Binding[]>([]);
 	let bindingOptions = $state<BindingOption[]>([]);
 	async function fetchBindingsForTab() {
