@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.70.2](https://github.com/hackclub/orchard/compare/frontend/v1.70.1...frontend/v1.70.2) (2026-10-20)
+
+
+### Bug Fixes
+
+* **frontend:** build modal stuck on app ready when a fast build reports before the rebuild request returns ([a07e719](https://github.com/hackclub/orchard/commit/a07e71933136f1e9d740f043f813e35b22ee4ad1))
+
 ## [1.70.1](https://github.com/hackclub/orchard/compare/frontend/v1.70.0...frontend/v1.70.1) (2026-10-20)
 
 
