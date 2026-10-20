@@ -1,0 +1,198 @@
+{{- if .Values.fcBuilder.enabled }}
+{{- $ns := .Values.fcBuilder.namespace }}
+{{- $token := include "orchard.fcBuilderToken" . }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $ns }}
+  labels:
+    app.kubernetes.io/managed-by: orchard
+    orchard.io/component: fc-builder
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/audit: privileged
+    pod-security.kubernetes.io/warn: privileged
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: fc-builder
+  namespace: {{ $ns }}
+  labels:
+    app.kubernetes.io/name: fc-builder
+type: Opaque
+stringData:
+  FC_BUILDER_TOKEN: {{ $token | quote }}
+  HARBOR_USERNAME: {{ default .Values.builders.harbor.username .Values.fcBuilder.registry.username | quote }}
+  HARBOR_PASSWORD: {{ default .Values.builders.harbor.password .Values.fcBuilder.registry.password | quote }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: fc-builder-token
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: fc-builder
+type: Opaque
+stringData:
+  token: {{ $token | quote }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fc-builder
+  namespace: {{ $ns }}
+  labels:
+    app.kubernetes.io/name: fc-builder
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/name: fc-builder
+  ports:
+    - { name: api, port: 8080, targetPort: 8080 }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: fc-builder
+  namespace: {{ $ns }}
+  labels:
+    app.kubernetes.io/name: fc-builder
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: orchard
+spec:
+  serviceName: fc-builder
+  replicas: {{ .Values.fcBuilder.replicas }}
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: fc-builder
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: fc-builder
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: {{ .Values.fcBuilder.terminationGracePeriodSeconds }}
+      {{- include "orchard.pullSecrets" . | nindent 6 }}
+      {{- with .Values.fcBuilder.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.fcBuilder.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: fc-builder
+      containers:
+        - name: fc-host
+          image: {{ include "orchard.image" (list . .Values.fcBuilder.image.name .Values.fcBuilder.image.tag .Values.fcBuilder.image.repository) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            privileged: true
+          envFrom:
+            - secretRef:
+                name: fc-builder
+          env:
+            - name: FC_HOST_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - { name: FC_STATE_DIR, value: /state }
+            - { name: FC_UPSTREAM_REGISTRY, value: {{ .Values.fcBuilder.registry.upstream | quote }} }
+            - { name: FC_MAX_VMS, value: {{ .Values.fcBuilder.vm.maxVms | quote }} }
+            - { name: FC_VM_VCPUS, value: {{ .Values.fcBuilder.vm.vcpus | quote }} }
+            - { name: FC_VM_MEM_MIB, value: {{ .Values.fcBuilder.vm.memoryMiB | quote }} }
+            - { name: FC_VM_IDLE_SECONDS, value: {{ .Values.fcBuilder.vm.idleSeconds | quote }} }
+            - { name: FC_CACHE_IMAGE_SIZE, value: {{ .Values.fcBuilder.vm.cacheSize | quote }} }
+            - { name: FC_USE_JAILER, value: {{ .Values.fcBuilder.jailer.enabled | quote }} }
+            - { name: FC_JAILER_CGROUPS, value: {{ .Values.fcBuilder.jailer.cgroups | quote }} }
+            - { name: BUILDKIT_CACHE_MAX_AGE_DAYS, value: {{ .Values.builders.localCache.evict.maxAgeDays | default 14 | quote }} }
+            - { name: BUILDKIT_CACHE_HIGH_PCT, value: {{ .Values.builders.localCache.evict.highPct | default 80 | quote }} }
+            - { name: BUILDKIT_CACHE_TARGET_PCT, value: {{ .Values.builders.localCache.evict.targetPct | default 60 | quote }} }
+          ports:
+            - { name: api, containerPort: 8080 }
+            - { name: push-proxy, containerPort: 5000 }
+          readinessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            periodSeconds: 20
+            failureThreshold: 6
+          resources:
+            {{- toYaml .Values.fcBuilder.resources | nindent 12 }}
+          volumeMounts:
+            - { name: state, mountPath: /state }
+  volumeClaimTemplates:
+    - metadata:
+        name: state
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with .Values.fcBuilder.storage.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.fcBuilder.storage.size }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: fc-builder
+  namespace: {{ $ns }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: fc-builder
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.namespace }}
+          podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: [server, server-worker]
+      ports:
+        - { port: 8080, protocol: TCP }
+  egress:
+    - ports:
+        - { port: 53, protocol: UDP }
+        - { port: 53, protocol: TCP }
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 100.64.0.0/10]
+      ports:
+        - { port: 443, protocol: TCP }
+        - { port: 80, protocol: TCP }
+{{- range .Values.fcBuilder.registryEgress }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .namespace }}
+          {{- with .podLabels }}
+          podSelector:
+            matchLabels:
+              {{- toYaml . | nindent 14 }}
+          {{- end }}
+      {{- with .ports }}
+      ports:
+        {{- range . }}
+        - { port: {{ .port }}, protocol: {{ .protocol | default "TCP" }} }
+        {{- end }}
+      {{- end }}
+{{- end }}
+{{- end }}

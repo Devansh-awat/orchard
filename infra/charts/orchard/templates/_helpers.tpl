@@ -341,6 +341,17 @@ true
             {{- end }}
             {{- end }}
             {{- end }}
+            {{- if .Values.fcBuilder.enabled }}
+            - { name: FC_BUILDER_ENABLED, value: {{ .Values.fcBuilder.serverEnabled | quote }} }
+            - name: FC_BUILDER_HOSTS
+              value: {{ include "orchard.fcBuilderHosts" . | quote }}
+            - name: FC_BUILDER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: fc-builder-token
+                  key: token
+            - { name: MAX_CONCURRENT_FC_BUILDS, value: {{ .Values.fcBuilder.maxConcurrentBuilds | quote }} }
+            {{- end }}
             {{- if .Values.r2Proxy.enabled }}
             - { name: BACKUP_PROXY_ENABLED, value: "true" }
             - name: BACKUP_PROXY_ENDPOINT
@@ -420,6 +431,31 @@ random one that every template in this render sees.
             - { name: ORCHARD_DB_POOLER_CONNECTIONS, value: {{ mul .Values.postgres.pooler.instances .Values.postgres.pooler.defaultPoolSize | toString | quote }} }
 {{- end }}
 {{- end }}
+
+{{- define "orchard.fcBuilderHosts" -}}
+{{- $ns := .Values.fcBuilder.namespace -}}
+{{- $hosts := list -}}
+{{- range $i := until (int .Values.fcBuilder.replicas) -}}
+{{- $hosts = append $hosts (printf "http://fc-builder-%d.fc-builder.%s.svc.cluster.local:8080" $i $ns) -}}
+{{- end -}}
+{{- join "," $hosts -}}
+{{- end -}}
+
+{{- define "orchard.fcBuilderToken" -}}
+{{- if .Values.fcBuilder.token -}}
+{{- .Values.fcBuilder.token -}}
+{{- else -}}
+{{- $existing := (lookup "v1" "Secret" .Values.fcBuilder.namespace "fc-builder") -}}
+{{- if and $existing $existing.data (index $existing.data "FC_BUILDER_TOKEN") -}}
+{{- index $existing.data "FC_BUILDER_TOKEN" | b64dec -}}
+{{- else -}}
+{{- if not (index .Values.fcBuilder "generatedToken") -}}
+{{- $_ := set .Values.fcBuilder "generatedToken" (randAlphaNum 48) -}}
+{{- end -}}
+{{- index .Values.fcBuilder "generatedToken" -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
 
 {{- define "orchard.r2ProxyDbPassword" -}}
 {{- if .Values.r2Proxy.databasePassword -}}

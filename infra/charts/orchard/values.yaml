@@ -483,6 +483,65 @@ certificates:
 # V4 signatures and re-signs upstream with the real key. See r2-proxy/ for the
 # Go service. Enabled by default — disable to fall back to handing the org's
 # R2 credentials directly to barman (the legacy, less-isolated behavior).
+fcBuilder:
+  # Experimental fast builder: one privileged fc-builder pod per node runs a
+  # Firecracker microVM per project, with that project's BuildKit cache on a
+  # persistent disk image. Deploying the hosts does nothing on its own; builds
+  # only route here when serverEnabled is true AND the PostHog flag
+  # `firecracker-builder` (or a superadmin per-deployment override) picks the
+  # project. Every other build keeps using the standard builder.
+  enabled: false
+  serverEnabled: false
+  namespace: orchard-fc-builders
+  replicas: 2
+  image:
+    name: fc-builder
+    tag: "latest"
+    repository: ""
+  # Shared secret for the server -> fc-builder API. Empty keeps the existing
+  # one, or mints one on first install.
+  token: ""
+  # Nodes that may host builder VMs. They need /dev/kvm; Talos nodes with the
+  # kata extension already have it. Label them in talconfig:
+  #   nodeLabels: { orchard-fc-builder: "true" }
+  nodeSelector:
+    orchard-fc-builder: "true"
+  tolerations: []
+  terminationGracePeriodSeconds: 90
+  resources:
+    requests: { cpu: "12", memory: 48Gi }
+    limits: { cpu: "40", memory: 96Gi }
+  storage:
+    # Holds every project's cache disk image. A node-local single-replica class
+    # keeps VM disk I/O off the network.
+    storageClass: longhorn-build-scratch
+    size: 1Ti
+  vm:
+    maxVms: 6
+    vcpus: 8
+    memoryMiB: 12288
+    idleSeconds: 300
+    cacheSize: 50G
+  jailer:
+    enabled: true
+    cgroups: true
+  # Queue slots for fast builds across all hosts.
+  maxConcurrentBuilds: 16
+  registry:
+    # Where the push proxy forwards guest pushes. The proxy is the only place
+    # registry credentials exist; guests never see them.
+    upstream: http://harbor-core.harbor.svc.cluster.local
+    username: ""
+    password: ""
+  # In-cluster egress besides DNS and the public internet. Harbor core only:
+  # nothing else in the harbor namespace (its database) is reachable.
+  registryEgress:
+    - namespace: harbor
+      podLabels:
+        component: core
+      ports:
+        - port: 8080
+
 r2Proxy:
   enabled: true
   namespace: orchard-r2-proxy
