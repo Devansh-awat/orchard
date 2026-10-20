@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.70.1](https://github.com/hackclub/orchard/compare/frontend/v1.70.0...frontend/v1.70.1) (2026-10-20)
+
+
+### Bug Fixes
+
+* **frontend:** deployment page crashed opening a tab from the url before the deployment state existed ([f4bd3fd](https://github.com/hackclub/orchard/commit/f4bd3fd531886cb27d92fce980b878cbe6684dc8))
+
 ## [1.70.0](https://github.com/hackclub/orchard/compare/frontend/v1.69.0...frontend/v1.70.0) (2026-10-20)
 
 
