@@ -1495,6 +1495,7 @@ export class DeploymentsController {
       buildFromRoot?: boolean;
       buildWithDepot?: boolean;
       persistentBuildCache?: boolean;
+      builderOverride?: 'firecracker' | 'kubernetes' | null;
       buildType?: 'dockerfile' | 'railpack';
       dockerfilePath?: string | null;
       dockerfileTarget?: string | null;

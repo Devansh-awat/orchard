@@ -6940,6 +6940,16 @@
                         "null"
                       ]
                     },
+                    "builderOverride": {
+                      "enum": [
+                        "firecracker",
+                        "kubernetes"
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "buildError": {
                       "type": [
                         "string",
@@ -8108,6 +8118,16 @@
                         "null"
                       ]
                     },
+                    "builderOverride": {
+                      "enum": [
+                        "firecracker",
+                        "kubernetes"
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "buildError": {
                       "type": [
                         "string",
@@ -9246,6 +9266,16 @@
                         "null"
                       ]
                     },
+                    "builderOverride": {
+                      "enum": [
+                        "firecracker",
+                        "kubernetes"
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "buildError": {
                       "type": [
                         "string",
@@ -10337,6 +10367,16 @@
                       "type": "array"
                     },
                     "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "builderOverride": {
+                      "enum": [
+                        "firecracker",
+                        "kubernetes"
+                      ],
                       "type": [
                         "string",
                         "null"
@@ -11476,6 +11516,16 @@
                         "null"
                       ]
                     },
+                    "builderOverride": {
+                      "enum": [
+                        "firecracker",
+                        "kubernetes"
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "buildError": {
                       "type": [
                         "string",
@@ -12584,6 +12634,16 @@
                       "type": "array"
                     },
                     "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "builderOverride": {
+                      "enum": [
+                        "firecracker",
+                        "kubernetes"
+                      ],
                       "type": [
                         "string",
                         "null"
@@ -13878,6 +13938,16 @@
                       "type": "number"
                     },
                     "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "builderOverride": {
+                      "enum": [
+                        "firecracker",
+                        "kubernetes"
+                      ],
                       "type": [
                         "string",
                         "null"
@@ -15270,6 +15340,16 @@
                         "null"
                       ]
                     },
+                    "builderOverride": {
+                      "enum": [
+                        "firecracker",
+                        "kubernetes"
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "buildError": {
                       "type": [
                         "string",
@@ -16377,6 +16457,16 @@
                       "type": "array"
                     },
                     "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "builderOverride": {
+                      "enum": [
+                        "firecracker",
+                        "kubernetes"
+                      ],
                       "type": [
                         "string",
                         "null"
@@ -17630,6 +17720,16 @@
                       "null"
                     ]
                   },
+                  "builderOverride": {
+                    "enum": [
+                      "firecracker",
+                      "kubernetes"
+                    ],
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "buildFromRoot": {
                     "type": "boolean"
                   },
@@ -17713,6 +17813,16 @@
                       "type": "number"
                     },
                     "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "builderOverride": {
+                      "enum": [
+                        "firecracker",
+                        "kubernetes"
+                      ],
                       "type": [
                         "string",
                         "null"
@@ -19280,6 +19390,16 @@
                         "null"
                       ]
                     },
+                    "builderOverride": {
+                      "enum": [
+                        "firecracker",
+                        "kubernetes"
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "buildError": {
                       "type": [
                         "string",
@@ -20591,6 +20711,16 @@
                         "null"
                       ]
                     },
+                    "builderOverride": {
+                      "enum": [
+                        "firecracker",
+                        "kubernetes"
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "buildError": {
                       "type": [
                         "string",
@@ -21880,6 +22010,16 @@
                         "null"
                       ]
                     },
+                    "builderOverride": {
+                      "enum": [
+                        "firecracker",
+                        "kubernetes"
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "buildError": {
                       "type": [
                         "string",
@@ -22551,6 +22691,16 @@
                       "type": "array"
                     },
                     "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "builderOverride": {
+                      "enum": [
+                        "firecracker",
+                        "kubernetes"
+                      ],
                       "type": [
                         "string",
                         "null"
@@ -24572,6 +24722,16 @@
                         "null"
                       ]
                     },
+                    "builderOverride": {
+                      "enum": [
+                        "firecracker",
+                        "kubernetes"
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "buildError": {
                       "type": [
                         "string",
@@ -24964,6 +25124,16 @@
                       "type": "array"
                     },
                     "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "builderOverride": {
+                      "enum": [
+                        "firecracker",
+                        "kubernetes"
+                      ],
                       "type": [
                         "string",
                         "null"
@@ -26120,6 +26290,16 @@
                         "null"
                       ]
                     },
+                    "builderOverride": {
+                      "enum": [
+                        "firecracker",
+                        "kubernetes"
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "buildError": {
                       "type": [
                         "string",
@@ -26639,6 +26819,16 @@
                       "type": "array"
                     },
                     "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "builderOverride": {
+                      "enum": [
+                        "firecracker",
+                        "kubernetes"
+                      ],
                       "type": [
                         "string",
                         "null"
@@ -27970,6 +28160,16 @@
                         "null"
                       ]
                     },
+                    "builderOverride": {
+                      "enum": [
+                        "firecracker",
+                        "kubernetes"
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "buildError": {
                       "type": [
                         "string",
@@ -28405,6 +28605,16 @@
                       "type": "array"
                     },
                     "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "builderOverride": {
+                      "enum": [
+                        "firecracker",
+                        "kubernetes"
+                      ],
                       "type": [
                         "string",
                         "null"
@@ -31853,6 +32063,16 @@
                           "type": "array"
                         },
                         "buildCommand": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "builderOverride": {
+                          "enum": [
+                            "firecracker",
+                            "kubernetes"
+                          ],
                           "type": [
                             "string",
                             "null"
@@ -40818,6 +41038,16 @@
                           "null"
                         ]
                       },
+                      "builderOverride": {
+                        "enum": [
+                          "firecracker",
+                          "kubernetes"
+                        ],
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
                       "buildError": {
                         "type": [
                           "string",
@@ -42046,6 +42276,16 @@
                       "type": "array"
                     },
                     "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "builderOverride": {
+                      "enum": [
+                        "firecracker",
+                        "kubernetes"
+                      ],
                       "type": [
                         "string",
                         "null"
@@ -43325,6 +43565,16 @@
                       "type": "array"
                     },
                     "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "builderOverride": {
+                      "enum": [
+                        "firecracker",
+                        "kubernetes"
+                      ],
                       "type": [
                         "string",
                         "null"

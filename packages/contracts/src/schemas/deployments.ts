@@ -266,6 +266,7 @@ const deploymentBase = z
     buildFromRoot: z.boolean().optional(),
     buildWithDepot: z.boolean().optional(),
     persistentBuildCache: z.boolean().optional(),
+    builderOverride: z.enum(['firecracker', 'kubernetes']).nullable().optional(),
     // The stage a multi-stage Dockerfile build stops at. Null builds the final
     // stage, which is Docker's own default.
     dockerfileTarget: z.string().nullable().optional(),
@@ -700,6 +701,7 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
       buildFromRoot: z.boolean().optional(),
       buildWithDepot: z.boolean().optional(),
       persistentBuildCache: z.boolean().optional(),
+      builderOverride: z.enum(['firecracker', 'kubernetes']).nullable().optional(),
       buildType: z.enum(['dockerfile', 'railpack']).optional(),
       // Multi-stage build target. Null builds the Dockerfile's final stage.
       // Takes effect on the next build, not on save.

@@ -30,6 +30,8 @@ import { disruptionBudgetActive } from '../kubernetes/disruption-budget';
 import { publicDeploymentPorts } from '../kubernetes/security-policies';
 import { UsersService } from '../users/users.service';
 import { DockerService } from '../docker/docker.service';
+import { FcUnavailableError } from '../docker/fc/fc-client';
+import { isBuilderOverride } from '../docker/fc/build-backend-router';
 import { BuildJobInformerService } from '../docker/build-job-informer.service';
 import { GitHubService } from '../github/github.service';
 import { parseDockerfileHealthCheck } from '../github/dockerfile-healthcheck';
@@ -95,6 +97,8 @@ import {
   type ObservedJobStatus,
   type RecoveryDeployment,
   type RecoveryJob,
+  type FirecrackerHostStatus,
+  firecrackerRecoveryJobs,
   type RecoveryReason,
   type RecoveryRun
 } from './build-recovery';
@@ -761,7 +765,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       expectedImage: (metadata.__image as string | undefined) ?? null
     };
 
-    const jobs = await this.listClusterBuildJobs(deployment.id, recoveryDeployment.jobName);
+    const isFirecracker = metadata.__builder === 'firecracker';
+    const jobs = isFirecracker
+      ? await this.listFirecrackerBuild(metadata)
+      : await this.listClusterBuildJobs(deployment.id, recoveryDeployment.jobName);
 
     // Only spend a registry round-trip on the one branch that turns on it.
     const imagePushed =
@@ -811,12 +818,18 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     switch (decision.action) {
       case 'adopt':
         await this.buildQueue.adoptRun(deployment.id);
-        if (decision.jobName) this.streamAdoptedBuildLogs(deployment.id, decision.jobName);
+        if (isFirecracker) {
+          this.followAdoptedFirecrackerBuild(deployment, metadata);
+        } else if (decision.jobName) {
+          this.streamAdoptedBuildLogs(deployment.id, decision.jobName);
+        }
         return;
 
       case 'finish':
         await this.finishRecoveredBuild(deployment, decision.image!);
-        if (decision.jobName) this.dockerService.deleteBuildJob(decision.jobName).catch(() => {});
+        if (decision.jobName && !isFirecracker) {
+          this.dockerService.deleteBuildJob(decision.jobName).catch(() => {});
+        }
         return;
 
       case 'requeue': {
@@ -835,7 +848,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
       case 'fail':
         await this.markBuildFailed(deployment.id, decision.detail!, decision.reason);
-        if (decision.jobName) this.dockerService.deleteBuildJob(decision.jobName).catch(() => {});
+        if (decision.jobName && !isFirecracker) {
+          this.dockerService.deleteBuildJob(decision.jobName).catch(() => {});
+        }
         return;
 
       default: {
@@ -912,6 +927,55 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         reason: null,
         image: j.image
       }));
+  }
+
+  private async listFirecrackerBuild(metadata: Record<string, any>): Promise<RecoveryJob[] | null> {
+    const hostId = metadata.__fcHost as string | undefined;
+    const buildId = metadata.__fcBuildId as string | undefined;
+    if (!hostId || !buildId) return [];
+    let status: FirecrackerHostStatus | null;
+    try {
+      status = await this.dockerService.firecrackerBuildStatus(hostId, buildId);
+    } catch {
+      status = null;
+    }
+    return firecrackerRecoveryJobs(
+      status,
+      buildId,
+      (metadata.__image as string | undefined) ?? null
+    );
+  }
+
+  private followAdoptedFirecrackerBuild(
+    deployment: { id: string; name: string; namespace: string },
+    metadata: Record<string, any>
+  ) {
+    if (this.adoptedLogPumps.has(deployment.id)) return;
+    const buildId = metadata.__fcBuildId as string;
+    const offsets = (metadata.__logOffsets ?? {}) as Record<string, unknown>;
+    const offset =
+      typeof offsets[`fc:${buildId}`] === 'number' ? (offsets[`fc:${buildId}`] as number) : 0;
+    this.adoptedLogPumps.add(deployment.id);
+    this.dockerService
+      .adoptFirecrackerBuild({
+        deploymentId: deployment.id,
+        hostId: metadata.__fcHost as string,
+        buildId,
+        pullRef: metadata.__image as string,
+        offset
+      })
+      .then((image) => this.finishRecoveredBuild(deployment, image))
+      .catch(async (error: Error) => {
+        if (error instanceof FcUnavailableError) {
+          const outcome = await this.requeueOrphanedBuild(deployment.id);
+          if (outcome === 'requeued' || outcome === 'superseded') return;
+        }
+        await this.markBuildFailed(deployment.id, error.message, 'build_error');
+      })
+      .catch((error: Error) =>
+        this.logger.error(`[BuildRecovery] adopted firecracker build ${buildId}: ${error.message}`)
+      )
+      .finally(() => this.adoptedLogPumps.delete(deployment.id));
   }
 
   private streamAdoptedBuildLogs(deploymentId: string, jobName: string) {
@@ -2676,6 +2740,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       buildFromRoot?: boolean;
       buildWithDepot?: boolean;
       persistentBuildCache?: boolean;
+      builderOverride?: 'firecracker' | 'kubernetes' | null;
       buildType?: 'dockerfile' | 'railpack';
       dockerfilePath?: string | null;
       dockerfileTarget?: string | null;
@@ -2720,13 +2785,24 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     const { buildWithDepot, persistentBuildCache, buildFromRoot } = body;
 
+    if (
+      'builderOverride' in body &&
+      body.builderOverride !== null &&
+      !isBuilderOverride(body.builderOverride)
+    ) {
+      throw new BadRequestException('builderOverride must be "firecracker", "kubernetes" or null');
+    }
+    const changesBuilderOverride =
+      'builderOverride' in body &&
+      (body.builderOverride ?? null) !== (deployment.builderOverride ?? null);
     const changesSuperAdminFlags =
       (buildWithDepot !== undefined && buildWithDepot !== (deployment.buildWithDepot ?? false)) ||
       (persistentBuildCache !== undefined &&
-        persistentBuildCache !== (deployment.persistentBuildCache ?? false));
+        persistentBuildCache !== (deployment.persistentBuildCache ?? false)) ||
+      changesBuilderOverride;
     if (changesSuperAdminFlags && !(await this.authz.isSuperAdmin(user.id))) {
       throw new ForbiddenException(
-        'Super builds and persistent build cache are superadmin-only settings'
+        'Super builds, persistent build cache and the builder override are superadmin-only settings'
       );
     }
 
@@ -2796,6 +2872,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         ...(buildFromRoot !== undefined && { buildFromRoot }),
         ...(buildWithDepot !== undefined && { buildWithDepot }),
         ...(persistentBuildCache !== undefined && { persistentBuildCache }),
+        ...('builderOverride' in body && { builderOverride: body.builderOverride ?? null }),
         ...(body.buildType !== undefined && { buildType: body.buildType }),
         // A Railpack build ignores the Dockerfile path, so clear a stale one on
         // switch; mirror the cross-nulling the create path already does.
@@ -2857,6 +2934,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         ...changed('buildFromRoot', deployment.buildFromRoot, buildFromRoot),
         ...changed('buildWithDepot', deployment.buildWithDepot, buildWithDepot),
         ...changed('persistentBuildCache', deployment.persistentBuildCache, persistentBuildCache),
+        ...('builderOverride' in body
+          ? changed('builderOverride', deployment.builderOverride, body.builderOverride ?? null)
+          : {}),
         ...changed('buildType', deployment.buildType, body.buildType),
         ...changed('dockerfilePath', deployment.dockerfilePath, body.dockerfilePath),
         ...changed('dockerfileTarget', deployment.dockerfileTarget, body.dockerfileTarget),
@@ -7911,6 +7991,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         localContextUrl = await this.storage.signBuildContextGet(data.localContextKey, 15 * 60);
       }
 
+      const builder = data.buildWithDepot
+        ? undefined
+        : ((await this.buildQueue.currentBuilder(deploymentId).catch(() => null)) ?? undefined);
+
       const image = await buildTrace.activate(() =>
         this.dockerService.buildAndPushFromGitHub({
           repoUrl: data.repoUrl,
@@ -7929,7 +8013,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           // Scope this build's slice of the shared buildkit-cache PVC to the
           // project namespace. Kata's mount surface ⇒ the build VM only sees
           // this directory and can't reach other tenants' cache entries.
-          cacheTenantKey: data.namespace
+          cacheTenantKey: data.namespace,
+          builder
         })
       );
 

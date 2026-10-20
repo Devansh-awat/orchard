@@ -12,7 +12,14 @@
 		Wifi
 	} from '@jis3r/icons';
 	import { isSuperAdmin } from '$lib/stores';
-	import { SectionCard, StatusBadge, statusMeta, Button, Input } from '$lib/components/ui';
+	import {
+		SectionCard,
+		StatusBadge,
+		statusMeta,
+		Button,
+		Input,
+		SegmentedControl
+	} from '$lib/components/ui';
 	import GitHubSourceCard from './GitHubSourceCard.svelte';
 	import NodePoolPicker from './NodePoolPicker.svelte';
 	import type {
@@ -41,6 +48,7 @@
 		buildFromRoot = $bindable(),
 		buildWithDepot = $bindable(),
 		persistentBuildCache = $bindable(),
+		builderOverride = $bindable(''),
 		buildOptionsDirty = $bindable(false),
 		savingAdvanced,
 		onSaveAdvanced,
@@ -93,6 +101,7 @@
 		buildFromRoot: boolean;
 		buildWithDepot: boolean;
 		persistentBuildCache: boolean;
+		builderOverride?: '' | 'firecracker' | 'kubernetes';
 		buildOptionsDirty?: boolean;
 		savingAdvanced: boolean;
 		onSaveAdvanced: () => void;
@@ -430,6 +439,25 @@
 							/>
 							<span class="adv-switch-track"></span>
 						</label>
+					</div>
+					<div class="adv-toggle-row">
+						<div class="adv-toggle-info">
+							<span class="adv-toggle-label">Fast builder</span>
+							<span class="adv-toggle-desc"
+								>Build in an isolated VM with a warm per-project cache. Auto follows the rollout
+								flag</span
+							>
+						</div>
+						<SegmentedControl
+							label="Fast builder"
+							options={[
+								{ value: '', label: 'Auto' },
+								{ value: 'firecracker', label: 'On' },
+								{ value: 'kubernetes', label: 'Off' }
+							]}
+							bind:value={builderOverride}
+							onchange={() => (buildOptionsDirty = true)}
+						/>
 					</div>
 				{/if}
 			{:else}

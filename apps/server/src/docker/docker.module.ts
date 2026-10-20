@@ -7,12 +7,28 @@ import { BuildJobInformerService } from './build-job-informer.service';
 import { AuthModule } from '../auth/auth.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { LeaderElectionService } from '../events/leader-election.service';
+import { FirecrackerClient } from './fc/fc-client';
+import { BuildBackendRouter } from './fc/build-backend-router';
 
 @Module({
   imports: [AuthModule, PrismaModule],
   controllers: [DockerController],
-  providers: [DockerService, ImageBuilderService, BuildKitPoolService, BuildJobInformerService],
-  exports: [DockerService, ImageBuilderService, BuildKitPoolService, BuildJobInformerService]
+  providers: [
+    DockerService,
+    ImageBuilderService,
+    BuildKitPoolService,
+    BuildJobInformerService,
+    FirecrackerClient,
+    BuildBackendRouter
+  ],
+  exports: [
+    DockerService,
+    ImageBuilderService,
+    BuildKitPoolService,
+    BuildJobInformerService,
+    FirecrackerClient,
+    BuildBackendRouter
+  ]
 })
 export class DockerModule implements OnModuleInit, OnModuleDestroy {
   private reaperInterval: ReturnType<typeof setInterval> | null = null;

@@ -674,7 +674,7 @@ func deployBuildConfigCmd() *cobra.Command {
 // why this reads Changed() rather than testing for "".
 func deployBuildConfigSetCmd() *cobra.Command {
 	var buildType, dockerfile, target, startCmd string
-	var rootDir, installCmd, buildCmd, outputDir string
+	var rootDir, installCmd, buildCmd, outputDir, builder string
 	c := &cobra.Command{
 		Use:   "set <id>",
 		Short: "Change build settings for a deployment",
@@ -722,6 +722,18 @@ so follow up with "orchard deploy rebuild <id>" to make it live.`,
 					body[key] = *val
 				}
 			}
+			if f.Changed("builder") {
+				switch strings.ToLower(builder) {
+				case "auto", "":
+					body["builderOverride"] = nil
+				case "fast", "firecracker":
+					body["builderOverride"] = "firecracker"
+				case "standard", "kubernetes":
+					body["builderOverride"] = "kubernetes"
+				default:
+					return fmt.Errorf("--builder must be auto, fast or standard")
+				}
+			}
 			if len(body) == 0 {
 				return fmt.Errorf("nothing to change: pass at least one flag")
 			}
@@ -740,6 +752,7 @@ so follow up with "orchard deploy rebuild <id>" to make it live.`,
 	c.Flags().StringVar(&installCmd, "install-cmd", "", "railpack: override the detected install command")
 	c.Flags().StringVar(&buildCmd, "build-cmd", "", "railpack: override the detected build command")
 	c.Flags().StringVar(&outputDir, "output-dir", "", "railpack: directory of built static files")
+	c.Flags().StringVar(&builder, "builder", "", "superadmin: auto|fast|standard, force or block the fast VM builder")
 	return c
 }
 

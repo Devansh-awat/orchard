@@ -181,6 +181,7 @@
 		buildFromRoot?: boolean;
 		buildWithDepot?: boolean;
 		persistentBuildCache?: boolean;
+		builderOverride?: 'firecracker' | 'kubernetes' | null;
 		buildLogs?: string;
 		buildError?: string;
 		buildStepTimestamps?: Record<string, number> | null;
@@ -579,6 +580,7 @@
 	let buildFromRoot = $state(false);
 	let buildWithDepot = $state(false);
 	let persistentBuildCache = $state(false);
+	let builderOverride = $state<'' | 'firecracker' | 'kubernetes'>('');
 
 	const tailscaleEnabled = featureFlag('tailscale-integration');
 	const tailscale = new TailscaleController({
@@ -1474,6 +1476,7 @@
 				}
 				buildWithDepot = data.buildWithDepot ?? false;
 				persistentBuildCache = data.persistentBuildCache ?? false;
+				builderOverride = data.builderOverride ?? '';
 			}
 
 			// Initialize health check state from deployment data
@@ -2205,7 +2208,12 @@
 			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/build-config`, {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ buildFromRoot, buildWithDepot, persistentBuildCache })
+				body: JSON.stringify({
+					buildFromRoot,
+					buildWithDepot,
+					persistentBuildCache,
+					builderOverride: builderOverride || null
+				})
 			});
 
 			if (!response.ok) {
@@ -3408,6 +3416,7 @@
 							bind:buildFromRoot
 							bind:buildWithDepot
 							bind:persistentBuildCache
+							bind:builderOverride
 							bind:buildOptionsDirty={isEditingBuildOptions}
 							{savingAdvanced}
 							onSaveAdvanced={saveAdvanced}

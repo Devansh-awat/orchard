@@ -6,13 +6,27 @@ import { DeploymentsService } from './deployments.service';
 import { GitHubService } from '../github/github.service';
 import { canTrustDeploymentStatus } from './build-recovery';
 import { LeaseService } from '../coordination/lease.service';
+import { BuildBackendRouter, BuilderKind } from '../docker/fc/build-backend-router';
+import { Prisma } from '@prisma/client';
 
 export interface QueueSnapshot {
   running: number;
   limit: number;
   waiting: number;
   blockedByOwnBuild: boolean;
-  pool: 'depot' | 'cluster';
+  pool: 'depot' | 'cluster' | 'firecracker';
+}
+
+function poolWhere(pool: BuilderKind, status: 'building' | 'scheduled'): Prisma.BuildRunWhereInput {
+  if (pool === 'firecracker') return { status, builder: 'firecracker' };
+  return {
+    status,
+    OR: [{ builder: pool }, { builder: null, deployment: { buildWithDepot: pool === 'depot' } }]
+  };
+}
+
+function snapshotPool(pool: BuilderKind): QueueSnapshot['pool'] {
+  return pool === 'kubernetes' ? 'cluster' : pool;
 }
 
 /**
@@ -66,6 +80,63 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
     1,
     parseInt(process.env.MAX_CONCURRENT_DEPOT_BUILDS || '4', 10) || 4
   );
+
+  private readonly maxConcurrentFc = Math.max(
+    1,
+    parseInt(process.env.MAX_CONCURRENT_FC_BUILDS || '16', 10) || 16
+  );
+
+  private limitFor(pool: BuilderKind): number {
+    if (pool === 'depot') return this.maxConcurrentDepot;
+    if (pool === 'firecracker') return this.maxConcurrentFc;
+    return this.maxConcurrent;
+  }
+
+  private async chooseBuilder(deploymentId: string): Promise<BuilderKind> {
+    const dep = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: {
+        buildWithDepot: true,
+        builderOverride: true,
+        projectId: true,
+        project: {
+          select: { slug: true, organizationId: true, organization: { select: { slug: true } } }
+        }
+      }
+    });
+    if (!dep) return 'kubernetes';
+    if (dep.buildWithDepot) return 'depot';
+    try {
+      const router = this.moduleRef.get(BuildBackendRouter, { strict: false });
+      return await router.pick({
+        buildWithDepot: dep.buildWithDepot,
+        builderOverride: dep.builderOverride,
+        projectId: dep.projectId,
+        projectSlug: dep.project.slug,
+        organizationId: dep.project.organizationId,
+        organizationSlug: dep.project.organization.slug
+      });
+    } catch (error) {
+      this.logger.warn(`builder choice failed for ${deploymentId}: ${(error as Error).message}`);
+      return 'kubernetes';
+    }
+  }
+
+  async setRunBuilder(deploymentId: string, builder: BuilderKind): Promise<void> {
+    await this.prisma.buildRun
+      .updateMany({ where: { deploymentId, status: 'building' }, data: { builder } })
+      .catch(() => {});
+  }
+
+  async currentBuilder(deploymentId: string): Promise<BuilderKind | null> {
+    const run = await this.prisma.buildRun.findFirst({
+      where: { deploymentId, status: 'building' },
+      orderBy: { startedAt: 'desc' },
+      select: { builder: true }
+    });
+    const b = run?.builder;
+    return b === 'kubernetes' || b === 'depot' || b === 'firecracker' ? b : null;
+  }
   private readonly LOCK_KEY = 528491;
   private readonly workerDisabled = process.env.BUILD_WORKER_DISABLED === 'true';
 
@@ -142,6 +213,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
     branch?: string | null;
     triggeredById?: string | null;
   }): Promise<{ startNow: boolean; runId: string; queue: QueueSnapshot }> {
+    const builder = await this.chooseBuilder(opts.deploymentId);
     const enqueued = await this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${this.LOCK_KEY})`;
 
@@ -175,11 +247,9 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
       const buildingForDep = await tx.buildRun.count({
         where: { deploymentId: opts.deploymentId, status: 'building' }
       });
-      const usesDepot = dep?.buildWithDepot === true;
-      const buildingInPool = await tx.buildRun.count({
-        where: { status: 'building', deployment: { buildWithDepot: usesDepot } }
-      });
-      const limit = usesDepot ? this.maxConcurrentDepot : this.maxConcurrent;
+      const pool: BuilderKind = dep?.buildWithDepot === true ? 'depot' : builder;
+      const buildingInPool = await tx.buildRun.count({ where: poolWhere(pool, 'building') });
+      const limit = this.limitFor(pool);
       const startNow =
         buildingForDep === 0 && dep?.buildStatus !== 'building' && buildingInPool < limit;
 
@@ -187,9 +257,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
       // build has not started. Without it a queued rebuild is indistinguishable
       // from one that silently did nothing, which is what it looked like to
       // every API client.
-      const waiting = await tx.buildRun.count({
-        where: { status: 'scheduled', deployment: { buildWithDepot: usesDepot } }
-      });
+      const waiting = await tx.buildRun.count({ where: poolWhere(pool, 'scheduled') });
 
       const now = new Date();
       const run = await tx.buildRun.create({
@@ -203,6 +271,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
           commitAuthorUsername: opts.commitAuthorUsername ?? null,
           branch: opts.branch ?? null,
           triggeredById: opts.triggeredById ?? null,
+          builder: pool,
           workerId: startNow ? this.workerId : null,
           startedAt: startNow ? now : null,
           heartbeatAt: startNow ? now : null
@@ -215,7 +284,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
         limit,
         waiting: startNow ? waiting : waiting + 1,
         blockedByOwnBuild: buildingForDep > 0 || dep?.buildStatus === 'building',
-        pool: usesDepot ? 'depot' : 'cluster'
+        pool: snapshotPool(pool)
       };
       return { startNow, runId: run.id, superseded: stale, deployment: dep, queue };
     }, this.txOpts);
@@ -429,7 +498,11 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async drain() {
-    for (let i = 0; i < this.maxConcurrent + this.maxConcurrentDepot + 4; i++) {
+    for (
+      let i = 0;
+      i < this.maxConcurrent + this.maxConcurrentDepot + this.maxConcurrentFc + 4;
+      i++
+    ) {
       const run = await this.claimOne().catch((e) => {
         this.logger.warn(`claim failed: ${e?.message ?? e}`);
         return null;
@@ -447,15 +520,13 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
         SELECT pg_try_advisory_xact_lock(${this.LOCK_KEY}) AS locked
       `;
       if (!locked) return null;
-      const buildingLocal = await tx.buildRun.count({
-        where: { status: 'building', deployment: { buildWithDepot: false } }
-      });
-      const buildingDepot = await tx.buildRun.count({
-        where: { status: 'building', deployment: { buildWithDepot: true } }
-      });
+      const buildingLocal = await tx.buildRun.count({ where: poolWhere('kubernetes', 'building') });
+      const buildingDepot = await tx.buildRun.count({ where: poolWhere('depot', 'building') });
+      const buildingFc = await tx.buildRun.count({ where: poolWhere('firecracker', 'building') });
       const localOpen = buildingLocal < this.maxConcurrent;
       const depotOpen = buildingDepot < this.maxConcurrentDepot;
-      if (!localOpen && !depotOpen) return null;
+      const fcOpen = buildingFc < this.maxConcurrentFc;
+      if (!localOpen && !depotOpen && !fcOpen) return null;
 
       const rows = await tx.$queryRaw<{ id: string }[]>`
         SELECT br.id
@@ -465,8 +536,9 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
             SELECT 1 FROM deployments d0
             WHERE d0.id = br.deployment_id
               AND (
-                (${localOpen}::boolean AND d0.build_with_depot = false)
-                OR (${depotOpen}::boolean AND d0.build_with_depot = true)
+                (${localOpen}::boolean AND COALESCE(br.builder, CASE WHEN d0.build_with_depot THEN 'depot' ELSE 'kubernetes' END) = 'kubernetes')
+                OR (${depotOpen}::boolean AND COALESCE(br.builder, CASE WHEN d0.build_with_depot THEN 'depot' ELSE 'kubernetes' END) = 'depot')
+                OR (${fcOpen}::boolean AND br.builder = 'firecracker')
               )
           )
           AND NOT EXISTS (

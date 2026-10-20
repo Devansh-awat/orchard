@@ -64,6 +64,7 @@ interface BuildOptions {
   // Presigned GET URL for an uploaded build-context tarball ("orchard up").
   // Kubernetes build mode only; the local Docker fallback cannot use it.
   localContextUrl?: string;
+  builder?: 'kubernetes' | 'depot' | 'firecracker';
 }
 
 @Injectable()
@@ -1503,7 +1504,8 @@ export class DockerService {
         buildWithDepot: options.buildWithDepot,
         cacheTenantKey: options.cacheTenantKey,
         persistentBuildCache: options.persistentBuildCache,
-        localContextUrl: options.localContextUrl
+        localContextUrl: options.localContextUrl,
+        builder: options.builder
       });
 
       console.log('[Docker Service] Build completed successfully:', result);
@@ -1729,10 +1731,30 @@ export class DockerService {
   /**
    * Cancel running build jobs for a deployment by deleting the Kubernetes Job and its pods.
    */
+  firecrackerBuildStatus(hostId: string, buildId: string) {
+    if (!this.imageBuilderService) return Promise.resolve('unknown_host' as const);
+    return this.imageBuilderService.firecrackerBuildStatus(hostId, buildId);
+  }
+
+  adoptFirecrackerBuild(opts: {
+    deploymentId: string;
+    hostId: string;
+    buildId: string;
+    pullRef: string;
+    offset: number;
+    buildType?: string;
+  }): Promise<string> {
+    if (!this.imageBuilderService) {
+      return Promise.reject(new Error('image builder unavailable'));
+    }
+    return this.imageBuilderService.adoptFirecrackerBuild(opts);
+  }
+
   async cancelBuildJobsByDeploymentId(deploymentId: string): Promise<void> {
     if (this.imageBuilderService) {
       console.log(`[Docker] Cancelling build jobs for deployment ${deploymentId}`);
       await this.imageBuilderService.cancelBuildJobsByDeploymentId(deploymentId);
+      await this.imageBuilderService.cancelFirecrackerBuilds(deploymentId);
     } else {
       console.warn(
         '[Docker] ImageBuilderService not available, cannot cancel Kubernetes build jobs'

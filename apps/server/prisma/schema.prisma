@@ -654,6 +654,7 @@ model Deployment {
   buildFromRoot        Boolean            @default(false) @map("build_from_root")
   buildWithDepot       Boolean            @default(false) @map("build_with_depot")
   persistentBuildCache Boolean            @default(false) @map("persistent_build_cache")
+  builderOverride      String?            @map("builder_override") @db.VarChar(20)
   // Zero-config build settings for `railpack` builds. Every one of these is
   // null by default, meaning "whatever Railpack detected" — a non-null value
   // becomes a RAILPACK_* override on the build. Railpack's own merge order
@@ -865,6 +866,7 @@ model BuildRun {
   // Which server process claimed this run, plus a liveness heartbeat. If the
   // heartbeat goes stale the reclaim sweep fails the run and frees its slot.
   workerId    String?   @map("worker_id") @db.VarChar(120)
+  builder     String?   @db.VarChar(20)
   heartbeatAt DateTime? @map("heartbeat_at") @db.Timestamp(6)
 
   // GitHub artifacts opened for this run, so the reclaim sweep can close

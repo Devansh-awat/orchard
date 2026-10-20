@@ -5,7 +5,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { BuildKitPoolService } from './buildkit-pool.service';
 import { loadKubeConfigFromPathOrBase64 } from '../kubernetes/kubeconfig';
 import { OrgEventsService } from '../events/org-events.service';
-import { startPhaseSpan, recordPhaseSpan, recordBuildOutcome } from '../analytics/datadog';
+import {
+  startPhaseSpan,
+  recordPhaseSpan,
+  recordBuildOutcome,
+  tagActiveSpan
+} from '../analytics/datadog';
 import { truncateK8sName } from '../projects/projects.utils';
 import {
   RAILPACK_INFO_MARKER,
@@ -30,7 +35,15 @@ import {
   transcodeRawjson,
   type RawjsonTranscoder
 } from './buildkit-rawjson';
-import { builderContainerEnv, buildSafeEnv } from '../env/reserved-env';
+import { BUILDER_RESERVED_ENV_KEYS, builderContainerEnv, buildSafeEnv } from '../env/reserved-env';
+import {
+  FcBuildRequest,
+  FcEvent,
+  FcStep,
+  FcStream,
+  FcUnavailableError,
+  FirecrackerClient
+} from './fc/fc-client';
 import {
   dockerConfigJson,
   hasRegistryAuths,
@@ -83,6 +96,7 @@ interface BuildJobOptions {
   // Set only by buildAndPush's own retry after a Kata sandbox start fault, so
   // an unlucky pod gets a second attempt and a broken node still fails fast.
   sandboxRetried?: boolean;
+  builder?: 'kubernetes' | 'depot' | 'firecracker';
 }
 
 export interface BuildJobStatus {
@@ -339,7 +353,8 @@ export class ImageBuilderService {
     private readonly prisma: PrismaService,
     private readonly orgEvents: OrgEventsService,
     @Optional() private readonly buildKitPool?: BuildKitPoolService,
-    @Optional() private readonly jobInformer?: BuildJobInformerService
+    @Optional() private readonly jobInformer?: BuildJobInformerService,
+    @Optional() private readonly firecracker?: FirecrackerClient
   ) {
     this.initKubeConfig();
   }
@@ -1582,137 +1597,11 @@ ls -la /workspace
 
     // For Railpack builds, add a second init container to run `railpack prepare`
     if (buildType === 'railpack') {
-      // Build the env args for railpack prepare
-      const envArgs = Object.keys(envVars)
-        .map((key, index) => ({ key, index, value: envVars[key] }))
-        .filter(({ value }) => value && typeof value === 'string')
-        .map(({ key, index }) => `--env "${key}=$${buildArgEnvName(index)}"`)
-        .join(' ');
-
-      // A railpack.json in the repo outranks env overrides, so the build
-      // settings are re-emitted as the config file to keep the UI authoritative.
-      // JSON.stringify never emits a raw newline, so the quoted heredoc below
-      // cannot be broken out of by a command containing quotes or $.
-      const overrideConfig = railpackConfigOverride(envVars);
-      const configOverrideJson = overrideConfig ? JSON.stringify(overrideConfig) : '';
-      const configFileArg = overrideConfig ? ` --config-file ${ORCHARD_RAILPACK_CONFIG}` : '';
-      const configOverrideBlock = overrideConfig
-        ? `
-echo "=== Applying Orchard build settings over the repository config ==="
-cat > /tmp/orchard-override.json <<'ORCHARD_RAILPACK_OVERRIDE'
-${configOverrideJson}
-ORCHARD_RAILPACK_OVERRIDE
-if [ -f railpack.json ] && command -v jq >/dev/null 2>&1; then
-  jq -s '.[0] * .[1]' railpack.json /tmp/orchard-override.json > ${ORCHARD_RAILPACK_CONFIG}
-elif [ -f railpack.json ]; then
-  echo "WARNING: jq unavailable; the build settings you set take precedence and railpack.json is ignored"
-  cp /tmp/orchard-override.json ${ORCHARD_RAILPACK_CONFIG}
-else
-  cp /tmp/orchard-override.json ${ORCHARD_RAILPACK_CONFIG}
-fi
-`
-        : '';
-
       initContainers.push({
         name: 'railpack-prepare',
         image: this.railpackMiseImage,
         command: ['/bin/sh', '-c'],
-        args: [
-          `set -ex
-echo "=== Installing curl ==="
-if command -v curl >/dev/null 2>&1${configOverrideJson ? ' && command -v jq >/dev/null 2>&1' : ''}; then
-  echo "curl already installed, skipping"
-elif command -v apt-get >/dev/null 2>&1; then
-  # Tolerate non-fatal apt cleanup errors (e.g. I/O error closing
-  # /var/lib/apt/extended_states) — verify curl exists after install.
-  apt-get update || true
-  apt-get install -y curl ${configOverrideJson ? 'jq' : ''} || true
-  command -v curl >/dev/null 2>&1 || { echo "curl install failed"; exit 1; }
-elif command -v apk >/dev/null 2>&1; then
-  apk add --no-cache curl ${configOverrideJson ? 'jq' : ''}
-elif command -v yum >/dev/null 2>&1; then
-  yum install -y curl ${configOverrideJson ? 'jq' : ''}
-fi
-
-echo "=== Installing Railpack ${this.railpackVersion} ==="
-case "$(uname -m)" in
-  x86_64) RAILPACK_TARGET=x86_64-unknown-linux-musl ;;
-  aarch64|arm64) RAILPACK_TARGET=arm64-unknown-linux-musl ;;
-  *) echo "unsupported architecture: $(uname -m)"; exit 1 ;;
-esac
-RAILPACK_ASSET=railpack-${this.railpackVersion}-$RAILPACK_TARGET.tar.gz
-RAILPACK_RELEASE=https://github.com/railwayapp/railpack/releases/download/${this.railpackVersion}
-RAILPACK_TMP=$(mktemp -d)
-cd "$RAILPACK_TMP"
-curl -fsSL --retry 3 --retry-all-errors -O "$RAILPACK_RELEASE/$RAILPACK_ASSET"
-curl -fsSL --retry 3 --retry-all-errors -O "$RAILPACK_RELEASE/checksums.txt"
-grep " $RAILPACK_ASSET$" checksums.txt | sha256sum -c -
-tar xzf "$RAILPACK_ASSET" railpack
-install -m 0755 railpack /usr/local/bin/railpack
-cd /
-rm -rf "$RAILPACK_TMP"
-export PATH="$PATH:/usr/local/bin"
-railpack --version
-
-echo "=== Selecting build directory ==="
-# Two monorepo shapes need opposite treatment:
-#   * A plain repo with frontend/ and backend/ — point Railpack straight at the
-#     subdirectory; it supports that natively via its app source dir.
-#   * A pnpm/npm/yarn workspace — the lockfile and shared packages live at the
-#     root, so building inside the subdirectory would fail to install. Stay at
-#     the root; the build/start commands are already scoped to the package and
-#     the output directory is already repo-relative.
-ORCHARD_ROOT_DIR=${JSON.stringify(rootDirectory ?? '')}
-ORCHARD_BUILD_DIR=/workspace
-if [ -n "$ORCHARD_ROOT_DIR" ]; then
-  if [ -f /workspace/pnpm-workspace.yaml ] || grep -q '"workspaces"' /workspace/package.json 2>/dev/null; then
-    echo "workspace detected: building from the repo root, scoped to $ORCHARD_ROOT_DIR"
-  elif [ -d "/workspace/$ORCHARD_ROOT_DIR" ]; then
-    ORCHARD_BUILD_DIR="/workspace/$ORCHARD_ROOT_DIR"
-    echo "building from $ORCHARD_BUILD_DIR"
-  else
-    echo "root directory '$ORCHARD_ROOT_DIR' not found in the repository"; exit 1
-  fi
-fi
-# The BuildKit container reads this back: its working directory has to match
-# the one the plan was generated for, and it is fixed in the pod spec before
-# any of the above is known.
-echo "$ORCHARD_BUILD_DIR" > ${BUILD_DIR_FILE}
-
-cd "$ORCHARD_BUILD_DIR"
-${configOverrideBlock}
-echo "=== Running Railpack prepare ==="
-# xtrace is off for exactly this command: --env carries every build-time
-# variable, secrets included, and this container's log is both shown to the user
-# and dumped verbatim into the build log when a build fails.
-set +x
-# --error-missing-start turns "no start command detected" from a warning
-# (validate.go:71) into a hard failure. Without it Railpack still writes a plan,
-# and buildkit/convert.go:65 bakes CMD ["/bin/bash"] into the image: the build
-# reports success and ships a container that exits 0 with no output at all.
-# Failing here costs a build and hands the user Railpack's own explanation of
-# what to set; the alternative is a green build and a silent CrashLoopBackOff.
-railpack prepare . --plan-out railpack-plan.json --info-out railpack-info.json --error-missing-start ${envArgs}${configFileArg}
-set -x
-
-echo "=== Railpack prepare completed ==="
-echo "Generated files:"
-ls -la railpack-plan.json railpack-info.json 2>/dev/null || echo "Warning: Some files may not have been generated"
-
-# Show build info for logging
-if [ -f railpack-info.json ]; then
-  echo "=== Build Info ==="
-  cat railpack-info.json
-  # Single-line copy behind a sentinel so the server can reconcile what
-  # Railpack actually detected against what the create form guessed. The
-  # pretty-printed dump above is for humans reading the build log.
-  # Container runtimes split log lines past ~16KB; if this info ever grows
-  # beyond that the parser simply finds no detection, which costs a label
-  # and never the build.
-  echo "${RAILPACK_INFO_MARKER}$(tr -d '\\n' < railpack-info.json)"
-fi
-`
-        ],
+        args: [this.railpackPrepareScript(envVars, rootDirectory, true)],
         workingDir: '/workspace',
         env: buildArgEnv,
         volumeMounts: [
@@ -2384,6 +2273,141 @@ exit $rc`
 
       throw new BadRequestException(`Failed to create build job: ${error.message}`);
     }
+  }
+
+  railpackPrepareScript(
+    envVars: Record<string, string>,
+    rootDirectory: string | undefined,
+    installRailpack: boolean
+  ): string {
+    // Build the env args for railpack prepare
+    const envArgs = Object.keys(envVars)
+      .map((key, index) => ({ key, index, value: envVars[key] }))
+      .filter(({ value }) => value && typeof value === 'string')
+      .map(({ key, index }) => `--env "${key}=$${buildArgEnvName(index)}"`)
+      .join(' ');
+
+    // A railpack.json in the repo outranks env overrides, so the build
+    // settings are re-emitted as the config file to keep the UI authoritative.
+    // JSON.stringify never emits a raw newline, so the quoted heredoc below
+    // cannot be broken out of by a command containing quotes or $.
+    const overrideConfig = railpackConfigOverride(envVars);
+    const configOverrideJson = overrideConfig ? JSON.stringify(overrideConfig) : '';
+    const configFileArg = overrideConfig ? ` --config-file ${ORCHARD_RAILPACK_CONFIG}` : '';
+    const configOverrideBlock = overrideConfig
+      ? `
+echo "=== Applying Orchard build settings over the repository config ==="
+cat > /tmp/orchard-override.json <<'ORCHARD_RAILPACK_OVERRIDE'
+${configOverrideJson}
+ORCHARD_RAILPACK_OVERRIDE
+if [ -f railpack.json ] && command -v jq >/dev/null 2>&1; then
+  jq -s '.[0] * .[1]' railpack.json /tmp/orchard-override.json > ${ORCHARD_RAILPACK_CONFIG}
+elif [ -f railpack.json ]; then
+  echo "WARNING: jq unavailable; the build settings you set take precedence and railpack.json is ignored"
+  cp /tmp/orchard-override.json ${ORCHARD_RAILPACK_CONFIG}
+else
+  cp /tmp/orchard-override.json ${ORCHARD_RAILPACK_CONFIG}
+fi
+`
+      : '';
+
+    const install = installRailpack
+      ? `echo "=== Installing curl ==="
+if command -v curl >/dev/null 2>&1${configOverrideJson ? ' && command -v jq >/dev/null 2>&1' : ''}; then
+  echo "curl already installed, skipping"
+elif command -v apt-get >/dev/null 2>&1; then
+  # Tolerate non-fatal apt cleanup errors (e.g. I/O error closing
+  # /var/lib/apt/extended_states) — verify curl exists after install.
+  apt-get update || true
+  apt-get install -y curl ${configOverrideJson ? 'jq' : ''} || true
+  command -v curl >/dev/null 2>&1 || { echo "curl install failed"; exit 1; }
+elif command -v apk >/dev/null 2>&1; then
+  apk add --no-cache curl ${configOverrideJson ? 'jq' : ''}
+elif command -v yum >/dev/null 2>&1; then
+  yum install -y curl ${configOverrideJson ? 'jq' : ''}
+fi
+
+echo "=== Installing Railpack ${this.railpackVersion} ==="
+case "$(uname -m)" in
+  x86_64) RAILPACK_TARGET=x86_64-unknown-linux-musl ;;
+  aarch64|arm64) RAILPACK_TARGET=arm64-unknown-linux-musl ;;
+  *) echo "unsupported architecture: $(uname -m)"; exit 1 ;;
+esac
+RAILPACK_ASSET=railpack-${this.railpackVersion}-$RAILPACK_TARGET.tar.gz
+RAILPACK_RELEASE=https://github.com/railwayapp/railpack/releases/download/${this.railpackVersion}
+RAILPACK_TMP=$(mktemp -d)
+cd "$RAILPACK_TMP"
+curl -fsSL --retry 3 --retry-all-errors -O "$RAILPACK_RELEASE/$RAILPACK_ASSET"
+curl -fsSL --retry 3 --retry-all-errors -O "$RAILPACK_RELEASE/checksums.txt"
+grep " $RAILPACK_ASSET$" checksums.txt | sha256sum -c -
+tar xzf "$RAILPACK_ASSET" railpack
+install -m 0755 railpack /usr/local/bin/railpack
+cd /
+rm -rf "$RAILPACK_TMP"
+export PATH="$PATH:/usr/local/bin"
+railpack --version
+`
+      : 'railpack --version\n';
+    return `set -ex
+${install}
+echo "=== Selecting build directory ==="
+# Two monorepo shapes need opposite treatment:
+#   * A plain repo with frontend/ and backend/ — point Railpack straight at the
+#     subdirectory; it supports that natively via its app source dir.
+#   * A pnpm/npm/yarn workspace — the lockfile and shared packages live at the
+#     root, so building inside the subdirectory would fail to install. Stay at
+#     the root; the build/start commands are already scoped to the package and
+#     the output directory is already repo-relative.
+ORCHARD_ROOT_DIR=${JSON.stringify(rootDirectory ?? '')}
+ORCHARD_BUILD_DIR=/workspace
+if [ -n "$ORCHARD_ROOT_DIR" ]; then
+  if [ -f /workspace/pnpm-workspace.yaml ] || grep -q '"workspaces"' /workspace/package.json 2>/dev/null; then
+    echo "workspace detected: building from the repo root, scoped to $ORCHARD_ROOT_DIR"
+  elif [ -d "/workspace/$ORCHARD_ROOT_DIR" ]; then
+    ORCHARD_BUILD_DIR="/workspace/$ORCHARD_ROOT_DIR"
+    echo "building from $ORCHARD_BUILD_DIR"
+  else
+    echo "root directory '$ORCHARD_ROOT_DIR' not found in the repository"; exit 1
+  fi
+fi
+# The BuildKit container reads this back: its working directory has to match
+# the one the plan was generated for, and it is fixed in the pod spec before
+# any of the above is known.
+echo "$ORCHARD_BUILD_DIR" > ${BUILD_DIR_FILE}
+
+cd "$ORCHARD_BUILD_DIR"
+${configOverrideBlock}
+echo "=== Running Railpack prepare ==="
+# xtrace is off for exactly this command: --env carries every build-time
+# variable, secrets included, and this container's log is both shown to the user
+# and dumped verbatim into the build log when a build fails.
+set +x
+# --error-missing-start turns "no start command detected" from a warning
+# (validate.go:71) into a hard failure. Without it Railpack still writes a plan,
+# and buildkit/convert.go:65 bakes CMD ["/bin/bash"] into the image: the build
+# reports success and ships a container that exits 0 with no output at all.
+# Failing here costs a build and hands the user Railpack's own explanation of
+# what to set; the alternative is a green build and a silent CrashLoopBackOff.
+railpack prepare . --plan-out railpack-plan.json --info-out railpack-info.json --error-missing-start ${envArgs}${configFileArg}
+set -x
+
+echo "=== Railpack prepare completed ==="
+echo "Generated files:"
+ls -la railpack-plan.json railpack-info.json 2>/dev/null || echo "Warning: Some files may not have been generated"
+
+# Show build info for logging
+if [ -f railpack-info.json ]; then
+  echo "=== Build Info ==="
+  cat railpack-info.json
+  # Single-line copy behind a sentinel so the server can reconcile what
+  # Railpack actually detected against what the create form guessed. The
+  # pretty-printed dump above is for humans reading the build log.
+  # Container runtimes split log lines past ~16KB; if this info ever grows
+  # beyond that the parser simply finds no detection, which costs a label
+  # and never the build.
+  echo "${RAILPACK_INFO_MARKER}$(tr -d '\\n' < railpack-info.json)"
+fi
+`;
   }
 
   private generateBuildctlArgsForDockerfile(options: {
@@ -3597,6 +3621,7 @@ exit $rc`
       envVarsCount: Object.keys(options.envVars || {}).length
     });
 
+    let firecrackerFailure = false;
     try {
       if (deploymentId) {
         const now = Date.now();
@@ -3616,7 +3641,34 @@ exit $rc`
         this.emitBuildChanged(deploymentId).catch(() => {});
       }
 
-      const jobName = await this.createBuildJob(options);
+      if (options.builder === 'firecracker') {
+        try {
+          return await this.buildWithFirecracker(options);
+        } catch (error) {
+          if (!(error instanceof FcUnavailableError)) {
+            firecrackerFailure = true;
+            throw error;
+          }
+          console.warn(
+            `[ImageBuilder] Firecracker builder unavailable, falling back: ${error.message}`
+          );
+          await this.appendLog(
+            deploymentId,
+            'The fast builder is unavailable right now, using the standard builder.',
+            'WARNING'
+          );
+          if (deploymentId) {
+            await this.prisma.buildRun
+              .updateMany({
+                where: { deploymentId, status: 'building' },
+                data: { builder: 'kubernetes' }
+              })
+              .catch(() => {});
+          }
+        }
+      }
+
+      const jobName = await this.createBuildJob({ ...options, builder: 'kubernetes' });
       console.log(`[ImageBuilder] Created build job: ${jobName}`);
 
       await this.waitForBuildJob(jobName, deploymentId, undefined, {
@@ -3655,7 +3707,11 @@ exit $rc`
       // hypervisor for reasons that have nothing to do with the repo being
       // built. Nothing ran, so there is nothing to report to the user beyond
       // a second attempt.
-      if (!options.sandboxRetried && isSandboxStartFault(error?.message ?? '')) {
+      if (
+        !firecrackerFailure &&
+        !options.sandboxRetried &&
+        isSandboxStartFault(error?.message ?? '')
+      ) {
         console.warn(
           `[ImageBuilder] Sandbox start fault for ${imageName}:${tag}, retrying: ${error.message}`
         );
@@ -3666,7 +3722,12 @@ exit $rc`
         return this.buildAndPush({ ...options, sandboxRetried: true });
       }
 
-      if (!options.disableSharedCache && this.localCacheEnabled && this.localCachePvc) {
+      if (
+        !firecrackerFailure &&
+        !options.disableSharedCache &&
+        this.localCacheEnabled &&
+        this.localCachePvc
+      ) {
         let logTail = '';
         if (deploymentId) {
           const dep = await this.prisma.deployment
@@ -3745,6 +3806,417 @@ exit $rc`
 
       throw error;
     }
+  }
+
+  private static readonly FC_PUSH_HOST = 'fc-registry:5000';
+
+  private static readonly FC_BUILDKIT_ADDR = 'unix:///run/buildkit/buildkitd.sock';
+
+  get firecrackerEnabled(): boolean {
+    return !!this.firecracker?.enabled;
+  }
+
+  async firecrackerBuildStatus(
+    hostId: string,
+    buildId: string
+  ): Promise<
+    | { status: 'running' | 'succeeded' | 'failed' | 'lost'; error?: string }
+    | 'not_found'
+    | 'unknown_host'
+  > {
+    const host = this.firecracker?.hostById(hostId);
+    if (!this.firecracker || !host) return 'unknown_host';
+    return this.firecracker.status(host, buildId);
+  }
+
+  async cancelFirecrackerBuilds(deploymentId: string): Promise<number> {
+    if (!this.firecracker?.enabled) return 0;
+    try {
+      return await this.firecracker.cancelDeployment(deploymentId);
+    } catch (error) {
+      console.warn(
+        `[ImageBuilder] firecracker cancel for ${deploymentId} failed: ${(error as Error).message}`
+      );
+      return 0;
+    }
+  }
+
+  private firecrackerRequest(options: BuildJobOptions): {
+    request: FcBuildRequest;
+    pullRef: string;
+  } {
+    const {
+      repoUrl,
+      branch,
+      dockerfilePath,
+      imageName,
+      tag = 'latest',
+      deploymentId,
+      accessToken,
+      target,
+      buildFromRoot = false,
+      buildType = 'dockerfile',
+      rootDirectory,
+      envVars: requestedEnvVars = {},
+      cacheTenantKey,
+      localContextUrl
+    } = options;
+
+    let appPullAuths: RegistryAuths = {};
+    try {
+      appPullAuths = pullAuthsFromEnv(requestedEnvVars);
+    } catch (error) {
+      if (error instanceof PullAuthError) throw new BadRequestException(error.message);
+      throw error;
+    }
+    const envVars = buildSafeEnv(requestedEnvVars);
+    const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+    for (const key of Object.keys(envVars)) {
+      if (!ENV_KEY_RE.test(key)) {
+        throw new BadRequestException(`Invalid environment variable key: ${key}`);
+      }
+    }
+
+    const parsedRepo = localContextUrl ? null : parseRepoUrl(repoUrl);
+    if (!localContextUrl && !parsedRepo) {
+      throw new BadRequestException('Repository URL must be a plain https:// URL');
+    }
+
+    const pushRef = `${ImageBuilderService.FC_PUSH_HOST}/${this.harborProject}/${imageName}:${tag}`;
+    const buildctlArgs = this.generateBuildctlArgs({
+      dockerfilePath,
+      fullImageName: pushRef,
+      target,
+      buildFromRoot,
+      buildType,
+      envVars,
+      secretsHash: this.computeSecretsHash(envVars),
+      cacheKey: deploymentId ? `orchard-${deploymentId.slice(0, 8)}` : undefined,
+      skipCache: true
+    });
+    const injectGitSha = buildType !== 'railpack' && !('GIT_SHA' in envVars);
+    const argEnv: Record<string, string> = Object.fromEntries(
+      Object.keys(envVars).map((key, index) => [buildArgEnvName(index), envVars[key]])
+    );
+    const secretEnv: Record<string, string> = Object.fromEntries(
+      Object.entries(envVars).filter(([key]) => !BUILDER_RESERVED_ENV_KEYS.has(key))
+    );
+
+    const steps: FcStep[] = [];
+    if (buildType === 'railpack') {
+      steps.push({
+        name: 'prepare',
+        script: this.railpackPrepareScript(envVars, rootDirectory, false),
+        env: argEnv
+      });
+    } else if (Object.keys(envVars).length > 0) {
+      steps.push({
+        name: 'prepare',
+        script: injectBuildArgsScript({ dockerfilePath, keys: Object.keys(envVars) })
+      });
+    }
+    const buildScript =
+      (injectGitSha ? ImageBuilderService.GIT_SHA_PREAMBLE : '') +
+      (buildType === 'railpack' ? ImageBuilderService.BUILD_DIR_PREAMBLE : '') +
+      `buildctl --addr ${ImageBuilderService.FC_BUILDKIT_ADDR} ${buildctlArgs.map(renderBuildctlArg).join(' ')}` +
+      (injectGitSha ? ImageBuilderService.GIT_SHA_BUILDCTL_OPT : '') +
+      '\n';
+    steps.push({
+      name: 'build',
+      script: buildScript,
+      env: buildType === 'railpack' ? secretEnv : { ...secretEnv, ...argEnv }
+    });
+
+    const request: FcBuildRequest = {
+      id: `${(deploymentId ?? imageName).slice(0, 40)}-${crypto.randomBytes(4).toString('hex')}`,
+      deploymentId: deploymentId ?? '',
+      tenant: cacheTenantKey || deploymentId || imageName,
+      repository: `${this.harborProject}/${imageName}`,
+      source: localContextUrl
+        ? { kind: 'context', contextUrl: localContextUrl }
+        : { kind: 'git', cloneUrl: withCloneCredentials(parsedRepo!, accessToken), branch },
+      steps,
+      dockerConfig: hasRegistryAuths(appPullAuths) ? dockerConfigJson(appPullAuths) : undefined,
+      timeoutSeconds: 1800
+    };
+    return {
+      request,
+      pullRef: `${this.harborRegistryPull}/${this.harborProject}/${imageName}:${tag}`
+    };
+  }
+
+  private async buildWithFirecracker(options: BuildJobOptions): Promise<string> {
+    if (!this.firecracker?.enabled) throw new FcUnavailableError('firecracker builder disabled');
+    const { request, pullRef } = this.firecrackerRequest(options);
+    if (hasRegistryAuths(pullAuthsFromEnv(options.envVars ?? {}))) {
+      this.appendLog(
+        options.deploymentId,
+        'Using registry credentials from the app environment to pull base images'
+      ).catch(() => {});
+    }
+    const label = options.buildType === 'railpack' ? 'Railpack' : 'Dockerfile';
+    await this.appendLog(options.deploymentId, `Starting fast build (${label}) in an isolated VM`);
+    tagActiveSpan({ 'build.builder': 'firecracker' });
+    const submittedAt = Date.now();
+    const stream = await this.firecracker.start(request);
+    return this.followFirecrackerBuild({
+      deploymentId: options.deploymentId,
+      stream,
+      buildId: request.id,
+      pullRef,
+      offset: 0,
+      buildType: options.buildType ?? 'dockerfile',
+      submittedAt
+    });
+  }
+
+  async adoptFirecrackerBuild(opts: {
+    deploymentId: string;
+    hostId: string;
+    buildId: string;
+    pullRef: string;
+    offset: number;
+    buildType?: string;
+  }): Promise<string> {
+    const host = this.firecracker?.hostById(opts.hostId);
+    if (!this.firecracker || !host) {
+      throw new FcUnavailableError(`firecracker host ${opts.hostId} is not configured`);
+    }
+    const stream = await this.firecracker.resume(host, opts.buildId, opts.offset);
+    return this.followFirecrackerBuild({
+      deploymentId: opts.deploymentId,
+      stream,
+      buildId: opts.buildId,
+      pullRef: opts.pullRef,
+      offset: opts.offset,
+      buildType: opts.buildType ?? 'dockerfile',
+      submittedAt: Date.now(),
+      adopted: true
+    });
+  }
+
+  private async followFirecrackerBuild(opts: {
+    deploymentId: string | undefined;
+    stream: FcStream;
+    buildId: string;
+    pullRef: string;
+    offset: number;
+    buildType: string;
+    submittedAt: number;
+    adopted?: boolean;
+  }): Promise<string> {
+    const { deploymentId, buildId, pullRef, buildType } = opts;
+    const key = `fc:${buildId}`;
+    const transcoder = createRawjsonTranscoder();
+    const marks: Record<string, number> = { submitted: opts.submittedAt };
+    let stream = opts.stream;
+    let offset = opts.offset;
+    let pending = '';
+    let buildRaw = '';
+    let sourceText = '';
+    let prepareText = '';
+    let prepareReported = false;
+    let buildingSeen = false;
+    let pushSeen = false;
+    let result: FcEvent | null = null;
+    let flushTimer: NodeJS.Timeout | null = null;
+
+    const flush = async () => {
+      if (flushTimer) {
+        clearTimeout(flushTimer);
+        flushTimer = null;
+      }
+      if (!pending || !deploymentId) {
+        pending = '';
+        return;
+      }
+      const chunk = pending;
+      pending = '';
+      await this.appendStreamedChunk(deploymentId, chunk, key, offset);
+      if (!buildingSeen && BUILDKIT_STEP_RE.test(chunk)) {
+        buildingSeen = true;
+        await this.setBuildStep(deploymentId, 'building');
+      }
+      if (!pushSeen && BUILDKIT_PUSH_PHASE_RE.test(chunk)) {
+        pushSeen = true;
+        marks.push = Date.now();
+        await this.setBuildStep(deploymentId, 'pushing');
+      }
+      this.emitBuildChanged(deploymentId).catch(() => {});
+    };
+
+    const reportPrepare = async () => {
+      if (prepareReported || !prepareText) return;
+      prepareReported = true;
+      if (buildType === 'railpack') {
+        await this.persistRailpackDetection(deploymentId, prepareText);
+        await this.appendRailpackPrepareLog(deploymentId, prepareText);
+      }
+    };
+
+    const handle = async (event: FcEvent) => {
+      switch (event.t) {
+        case 'accepted': {
+          marks.accepted = Date.now();
+          if (!deploymentId) return;
+          await this.stampBuildTime(deploymentId, 'submitted');
+          const meta = JSON.stringify({
+            __builder: 'firecracker',
+            __fcHost: stream.host.id,
+            __fcBuildId: buildId,
+            __jobName: buildId,
+            __image: pullRef
+          });
+          await this.prisma.$executeRaw`
+            UPDATE "deployments"
+            SET "build_step_timestamps" = COALESCE("build_step_timestamps", '{}'::jsonb) || ${meta}::jsonb
+            WHERE "id" = ${deploymentId}::uuid
+          `.catch(() => {});
+          const acquireMs = event.timings?.acquireMs ?? 0;
+          await this.appendLog(
+            deploymentId,
+            acquireMs > 200
+              ? `Started a build VM in ${(acquireMs / 1000).toFixed(1)}s`
+              : 'Using a warm build VM'
+          );
+          return;
+        }
+        case 'phase':
+          if (event.phase === 'ready') {
+            marks.ready = Date.now();
+            await this.stampBuildTime(deploymentId, 'scheduled');
+          } else if (event.phase === 'source') {
+            marks.source = Date.now();
+          } else if (event.phase === 'prepare') {
+            marks.prepare = Date.now();
+          } else if (event.phase === 'build') {
+            marks.build = Date.now();
+            await reportPrepare();
+          }
+          return;
+        case 'log': {
+          const data = event.data ?? '';
+          if (event.stream === 'build') {
+            buildRaw = (buildRaw + data).slice(-4_000_000);
+            pending += transcoder.feed(data);
+            if (pending.length > 64_000) {
+              await flush();
+            } else if (!flushTimer) {
+              flushTimer = setTimeout(() => {
+                flush().catch(() => {});
+              }, 400);
+              flushTimer.unref?.();
+            }
+          } else if (event.stream === 'prepare') {
+            prepareText = (prepareText + data).slice(-256_000);
+          } else if (deploymentId) {
+            sourceText = (sourceText + data).slice(-64_000);
+            await flush();
+            await this.appendStreamedChunk(deploymentId, data);
+            this.emitBuildChanged(deploymentId).catch(() => {});
+          }
+          return;
+        }
+        case 'result':
+          result = event;
+      }
+    };
+
+    for (let attempt = 0; !result; attempt++) {
+      try {
+        for await (const { event, offset: next } of stream.events) {
+          offset = next;
+          await handle(event);
+          if (result) break;
+        }
+      } catch (error) {
+        console.warn(
+          `[ImageBuilder] firecracker stream for ${buildId} broke: ${(error as Error).message}`
+        );
+      }
+      if (result) break;
+      if (attempt >= 30) {
+        throw new BadRequestException(
+          `Build failed: lost contact with build host ${stream.host.id} for too long`
+        );
+      }
+      await new Promise((r) => setTimeout(r, Math.min(1000 * (attempt + 1), 10_000)));
+      let status: Awaited<ReturnType<FirecrackerClient['status']>>;
+      try {
+        status = await this.firecracker!.status(stream.host, buildId);
+      } catch {
+        continue;
+      }
+      if (status === 'not_found' || status.status === 'lost') {
+        await flush();
+        throw new FcUnavailableError('the build host restarted during the build');
+      }
+      try {
+        stream = await this.firecracker!.resume(stream.host, buildId, offset);
+      } catch {
+        continue;
+      }
+    }
+
+    pending += transcoder.flush();
+    await flush();
+    await reportPrepare();
+    const end = Date.now();
+    const final = result as unknown as FcEvent;
+    const tags = {
+      'build.builder': 'firecracker',
+      'build.deployment_id': deploymentId ?? 'unknown',
+      'build.fc_host': stream.host.id
+    };
+    if (marks.accepted) recordPhaseSpan('build.vm', marks.submitted, marks.accepted, tags);
+    if (marks.source)
+      recordPhaseSpan('build.clone', marks.source, marks.prepare ?? marks.build ?? end, tags);
+    if (marks.build) recordPhaseSpan('build.image', marks.build, marks.push ?? end, tags);
+    if (marks.push) recordPhaseSpan('build.push', marks.push, end, tags);
+
+    if (final.ok) {
+      if (deploymentId && !pushSeen) await this.setBuildStep(deploymentId, 'pushing');
+      recordBuildOutcome({
+        outcome: 'succeeded',
+        source: opts.adopted ? 'resume' : 'watch',
+        deploymentId: deploymentId ?? 'unknown',
+        jobName: buildId,
+        buildType,
+        builder: 'firecracker',
+        durationMs: end - opts.submittedAt,
+        lastPhase: 'complete'
+      });
+      const imageRef = pullRef.split('/').slice(-1)[0] || pullRef;
+      this.appendLog(deploymentId, `Build and push completed successfully.`).catch(() => {});
+      this.appendLog(deploymentId, `Image: ${imageRef}`).catch(() => {});
+      this.emitBuildChanged(deploymentId).catch(() => {});
+      return pullRef;
+    }
+
+    const summary =
+      summarizeBuildFailure(
+        buildRaw ? transcodeRawjson(buildRaw) : `${sourceText}\n${prepareText}`,
+        undefined
+      ) ||
+      final.error ||
+      'unknown error';
+    recordBuildOutcome({
+      outcome: 'failed',
+      source: opts.adopted ? 'resume' : 'watch',
+      reason: 'build_error',
+      deploymentId: deploymentId ?? 'unknown',
+      jobName: buildId,
+      buildType,
+      builder: 'firecracker',
+      durationMs: end - opts.submittedAt,
+      lastPhase: marks.build ? 'build' : marks.prepare ? 'prepare' : 'source',
+      detail: final.error
+    });
+    throw new BadRequestException(
+      final.error === 'build cancelled'
+        ? 'Build failed: build cancelled'
+        : `Build failed: ${summary}`
+    );
   }
 
   async ensureServiceAccount(): Promise<void> {

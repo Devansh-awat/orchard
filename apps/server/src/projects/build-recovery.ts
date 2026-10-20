@@ -177,6 +177,27 @@ export function canTrustDeploymentStatus(opts: {
   return opts.now - opts.startedAt >= (opts.settleMs ?? CLAIM_SETTLE_MS);
 }
 
+export type FirecrackerHostStatus =
+  | { status: 'running' | 'succeeded' | 'failed' | 'lost'; error?: string }
+  | 'not_found'
+  | 'unknown_host';
+
+export function firecrackerRecoveryJobs(
+  status: FirecrackerHostStatus | null,
+  buildId: string,
+  image: string | null
+): RecoveryJob[] | null {
+  if (status === null) return null;
+  if (status === 'unknown_host' || status === 'not_found' || status.status === 'lost') return [];
+  if (status.status === 'running') {
+    return [{ jobName: buildId, phase: 'running', reason: null, image: null }];
+  }
+  if (status.status === 'succeeded') {
+    return [{ jobName: buildId, phase: 'succeeded', reason: null, image }];
+  }
+  return [{ jobName: buildId, phase: 'failed', reason: status.error ?? null, image: null }];
+}
+
 export function decideBuildRecovery(facts: RecoveryFacts): RecoveryDecision {
   const { now, deployment, run, jobs } = facts;
 

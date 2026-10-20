@@ -186,6 +186,14 @@ export function startPhaseSpan(
  * (e.g. build pod container timings reported by Kubernetes after the fact).
  * No-op for invalid/zero-length windows.
  */
+export function tagActiveSpan(tags: Record<string, string | number | boolean>): void {
+  try {
+    tracer.scope().active()?.addTags(tags);
+  } catch {
+    return;
+  }
+}
+
 export function recordPhaseSpan(
   name: string,
   startMs: number,
@@ -234,6 +242,7 @@ export function recordBuildOutcome(meta: {
   namespace?: string;
   jobName?: string;
   buildType?: string;
+  builder?: string;
   durationMs?: number;
   lastPhase?: string;
   suppressed?: boolean;
@@ -248,6 +257,7 @@ export function recordBuildOutcome(meta: {
       `reason:${reason}`,
       `last_phase:${lastPhase}`,
       `build_type:${meta.buildType ?? 'dockerfile'}`,
+      `builder:${meta.builder ?? 'kubernetes'}`,
       `suppressed:${!!meta.suppressed}`
     ];
     const statsd = (
