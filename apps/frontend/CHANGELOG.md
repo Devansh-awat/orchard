@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.71.0](https://github.com/hackclub/orchard/compare/frontend/v1.70.2...frontend/v1.71.0) (2026-10-20)
+
+
+### Features
+
+* **frontend:** create deploy and exec api tokens from settings, not just read ([349a76c](https://github.com/hackclub/orchard/commit/349a76c471a465d70219866504b8e5caf6bc8174))
+
 ## [1.70.2](https://github.com/hackclub/orchard/compare/frontend/v1.70.1...frontend/v1.70.2) (2026-10-20)
 
 
