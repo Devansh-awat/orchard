@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.79.2](https://github.com/hackclub/orchard/compare/server/v2.79.1...server/v2.79.2) (2026-10-21)
+
+
+### Bug Fixes
+
+* **server:** projects whose owner left the org deploy within the org default allowance instead of zero ([8f0e4c7](https://github.com/hackclub/orchard/commit/8f0e4c7e94323b2f2e55ace80562dd1df91d5685))
+
 ## [2.79.1](https://github.com/hackclub/orchard/compare/server/v2.79.0...server/v2.79.1) (2026-10-21)
 
 
