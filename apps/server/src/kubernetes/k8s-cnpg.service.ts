@@ -49,6 +49,7 @@ import { LeaderElectionService } from '../events/leader-election.service';
  */
 import { parseKubeletSummary, VolumeUsage } from './volume-stats';
 import { WRITE_GUARD_ANNOTATION } from './cnpg-status';
+import { stuckReplicas, type StuckReplica } from './cnpg-stuck-replicas';
 import { cnpgOperatorPolicy } from './security-policies';
 
 export function cnpgScheduleName(clusterName: string): string {
@@ -72,6 +73,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
   private readonly CNPG_OPERATOR_NAMESPACE = process.env.CNPG_OPERATOR_NAMESPACE || 'postgresql';
 
   private defaultsTimer?: ReturnType<typeof setInterval>;
+  private replicasTimer?: ReturnType<typeof setInterval>;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -87,10 +89,93 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       6 * 60 * 60_000
     );
     this.defaultsTimer.unref?.();
+    setTimeout(() => this.clearStuckReplicas().catch(() => {}), 120_000).unref?.();
+    this.replicasTimer = setInterval(() => this.clearStuckReplicas().catch(() => {}), 5 * 60_000);
+    this.replicasTimer.unref?.();
   }
 
   onModuleDestroy() {
     if (this.defaultsTimer) clearInterval(this.defaultsTimer);
+    if (this.replicasTimer) clearInterval(this.replicasTimer);
+  }
+
+  async clearStuckReplicas(): Promise<StuckReplica[] | null> {
+    if (!this.kc || !this.canRunClusterWide()) return null;
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+    const batchApi = this.kc.makeApiClient(k8s.BatchV1Api);
+    const rows = await this.prisma.database.findMany({
+      where: { mode: 'cnpg', namespace: { not: null }, clusterName: { not: null } },
+      select: { namespace: true, clusterName: true }
+    });
+    const ignore404 = async (p: Promise<unknown>) => {
+      try {
+        await p;
+      } catch (e: any) {
+        if (e?.response?.statusCode !== 404) throw e;
+      }
+    };
+    const cleared: StuckReplica[] = [];
+    for (const row of rows) {
+      const ns = row.namespace!;
+      const name = row.clusterName!;
+      const selector = `cnpg.io/cluster=${name}`;
+      try {
+        const [{ body: cluster }, { body: pvcs }, { body: jobs }, { body: pods }] =
+          await Promise.all([
+            customApi.getNamespacedCustomObject(
+              this.CNPG_GROUP,
+              this.CNPG_VERSION,
+              ns,
+              this.CNPG_PLURAL,
+              name
+            ),
+            coreApi.listNamespacedPersistentVolumeClaim(
+              ns,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              selector
+            ),
+            batchApi.listNamespacedJob(ns, undefined, undefined, undefined, undefined, selector),
+            coreApi.listNamespacedPod(ns, undefined, undefined, undefined, undefined, selector)
+          ]);
+        const stuck = stuckReplicas({
+          cluster: cluster as any,
+          pvcs: (pvcs.items ?? []) as any[],
+          jobs: (jobs.items ?? []) as any[],
+          pods: (pods.items ?? []) as any[],
+          now: Date.now()
+        });
+        for (const replica of stuck) {
+          this.logger.warn(
+            `clearing stuck replica ${ns}/${replica.instance} (${replica.reason}): jobs ${replica.jobs.join(',') || '-'}, volumes ${replica.pvcs.join(',')}`
+          );
+          for (const job of replica.jobs) {
+            await ignore404(
+              batchApi.deleteNamespacedJob(
+                job,
+                ns,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                'Background'
+              )
+            );
+          }
+          for (const pvc of replica.pvcs) {
+            await ignore404(coreApi.deleteNamespacedPersistentVolumeClaim(pvc, ns));
+          }
+          cleared.push(replica);
+        }
+      } catch (e: any) {
+        if (e?.response?.statusCode === 404) continue;
+        this.logger.warn(`stuck replica check for ${ns}/${name} skipped: ${e?.message || e}`);
+      }
+    }
+    return cleared;
   }
 
   private canRunClusterWide(): boolean {
