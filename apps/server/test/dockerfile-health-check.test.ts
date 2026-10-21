@@ -180,6 +180,24 @@ test('a HEALTHCHECK that only fetches a loopback URL becomes an http probe the k
   );
 });
 
+test('a shell PORT variable in the url probes the app port, never a guessed 80', () => {
+  const cq = [
+    '/bin/sh',
+    '-c',
+    'wget -q -T 5 -O /dev/null "http://127.0.0.1:${PORT:-3000}/healthz" || exit 1'
+  ];
+  assert.deepEqual(loopbackHttpProbe(cq, 3000), { path: '/healthz', port: 3000 });
+  assert.equal(loopbackHttpProbe(cq, null), null);
+  assert.deepEqual(
+    loopbackHttpProbe(['/bin/sh', '-c', 'curl -f http://localhost:$PORT/health || exit 1'], 8080),
+    { path: '/health', port: 8080 }
+  );
+  assert.deepEqual(loopbackHttpProbe(['/bin/sh', '-c', 'wget -qO- http://localhost/'], null), {
+    path: '/',
+    port: 80
+  });
+});
+
 test('anything that is not a plain loopback fetch stays an exec probe', () => {
   assert.equal(loopbackHttpProbe(CQ_HEALTHCHECK, null), null);
   assert.equal(loopbackHttpProbe(['/bin/sh', '-c', 'curl -s http://localhost:8080/health']), null);

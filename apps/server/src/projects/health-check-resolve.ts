@@ -70,7 +70,11 @@ export function coerceDockerfileHealthCheck(value: unknown): DockerfileHealthChe
 }
 
 const LOOPBACK = '(?:localhost|127\\.0\\.0\\.1|0\\.0\\.0\\.0|\\[::1\\])';
-const URL_LITERAL = new RegExp('http://' + LOOPBACK + '(?::(\\d+))?(/[^\\s\'"\\u0060)|;&\\\\]*)?');
+const URL_PATH = '(/[^\\s\'"\\u0060)|;&\\\\]*)?';
+const URL_LITERAL = new RegExp('http://' + LOOPBACK + '(?::(\\d+))?(?![:\\w.])' + URL_PATH);
+const SHELL_ENV_PORT = new RegExp(
+  'http://' + LOOPBACK + ':\\$\\{?[A-Za-z_][A-Za-z0-9_]*(?::?-[^}]*)?\\}?' + URL_PATH
+);
 const ENV_PORT_CONCAT = new RegExp(
   '([\'"\\u0060])http://' +
     LOOPBACK +
@@ -97,10 +101,12 @@ export function loopbackHttpProbe(
   if (tool !== 'fetch' && /&&|;/.test(script)) return null;
   if (tool === 'curl' && !CURL_FAIL.test(script)) return null;
   if (tool === 'fetch' && !/\.ok\b|\.status\b/.test(script)) return null;
-  const fromEnv = ENV_PORT_CONCAT.exec(script) ?? ENV_PORT_TEMPLATE.exec(script);
-  if (fromEnv) {
-    const path = fromEnv[3] ?? fromEnv[1];
-    return appPort ? { path: path || '/', port: appPort } : null;
+  const concat = ENV_PORT_CONCAT.exec(script);
+  const fromEnv = concat
+    ? concat[3]
+    : (ENV_PORT_TEMPLATE.exec(script)?.[1] ?? SHELL_ENV_PORT.exec(script)?.[1]);
+  if (concat || fromEnv !== undefined) {
+    return appPort ? { path: fromEnv || '/', port: appPort } : null;
   }
   const literal = URL_LITERAL.exec(script);
   if (!literal) return null;
