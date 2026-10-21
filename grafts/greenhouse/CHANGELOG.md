@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.1](https://github.com/hackclub/orchard/compare/greenhouse/v1.5.0...greenhouse/v1.5.1) (2026-10-21)
+
+
+### Bug Fixes
+
+* bump mcp sdk, sharp and patched transitive deps for open advisories ([d11e502](https://github.com/hackclub/orchard/commit/d11e502448535a0fbc7a9a17f07c2653da0b8014))
+
 ## [1.5.0](https://github.com/hackclub/orchard/compare/greenhouse/v1.4.1...greenhouse/v1.5.0) (2026-10-16)
 
 

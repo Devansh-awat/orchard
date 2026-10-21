@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.31.1](https://github.com/hackclub/orchard/compare/cli/v0.31.0...cli/v0.31.1) (2026-10-21)
+
+
+### Bug Fixes
+
+* build go binaries with go 1.26.10 and bump cli grpc and x/net for open advisories ([576c8ac](https://github.com/hackclub/orchard/commit/576c8ac59c882677d503ff0135c23495fed919c7))
+* bump cli grpc to 1.83.2 ([907da02](https://github.com/hackclub/orchard/commit/907da0237780ee81859fd5e6a2381e3071654ae6))
+
 ## [0.31.0](https://github.com/hackclub/orchard/compare/cli/v0.30.0...cli/v0.31.0) (2026-10-20)
 
 

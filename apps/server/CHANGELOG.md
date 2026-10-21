@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.79.4](https://github.com/hackclub/orchard/compare/server/v2.79.3...server/v2.79.4) (2026-10-21)
+
+
+### Bug Fixes
+
+* build go binaries with go 1.26.10 and bump cli grpc and x/net for open advisories ([576c8ac](https://github.com/hackclub/orchard/commit/576c8ac59c882677d503ff0135c23495fed919c7))
+* bump mcp sdk, sharp and patched transitive deps for open advisories ([d11e502](https://github.com/hackclub/orchard/commit/d11e502448535a0fbc7a9a17f07c2653da0b8014))
+* bump node to 22.23.4 for the october 2026 security releases ([2c2d032](https://github.com/hackclub/orchard/commit/2c2d03211a30db21df00998d332d2fe8c9bf1bac))
+
 ## [2.79.3](https://github.com/hackclub/orchard/compare/server/v2.79.2...server/v2.79.3) (2026-10-21)
 
 

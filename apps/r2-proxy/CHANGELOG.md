@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.2](https://github.com/hackclub/orchard/compare/r2-proxy/v0.6.1...r2-proxy/v0.6.2) (2026-10-21)
+
+
+### Bug Fixes
+
+* build go binaries with go 1.26.10 and bump cli grpc and x/net for open advisories ([576c8ac](https://github.com/hackclub/orchard/commit/576c8ac59c882677d503ff0135c23495fed919c7))
+
 ## [0.6.1](https://github.com/hackclub/orchard/compare/r2-proxy/v0.6.0...r2-proxy/v0.6.1) (2026-10-21)
 
 

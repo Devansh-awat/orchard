@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/hackclub/orchard/compare/gateway/v0.2.1...gateway/v0.2.2) (2026-10-21)
+
+
+### Bug Fixes
+
+* build go binaries with go 1.26.10 and bump cli grpc and x/net for open advisories ([576c8ac](https://github.com/hackclub/orchard/commit/576c8ac59c882677d503ff0135c23495fed919c7))
+
 ## [0.2.1](https://github.com/hackclub/orchard/compare/gateway/v0.2.0...gateway/v0.2.1) (2026-09-02)
 
 
