@@ -2269,6 +2269,16 @@ export class DatabasesService {
       database.namespace!,
       predictedNewClusterName
     );
+    if (restoreR2.r2ProxyAccessKey) {
+      await this.prisma.database.update({
+        where: { id: database.id },
+        data: {
+          r2RestoreAccessKey: restoreR2.r2ProxyAccessKey,
+          r2RestoreSecret: restoreR2.r2ProxySecret ?? null,
+          r2RestoreClusterName: predictedNewClusterName
+        }
+      });
+    }
     // The restore cluster used to be built with no resource block at all, which
     // left it on the namespace LimitRange default and gave the tuning below
     // nothing to derive from. Size it like the database it is replacing.
@@ -2282,6 +2292,12 @@ export class DatabasesService {
       'postgres'
     );
 
+    const clearRestoreCredentials = {
+      r2RestoreAccessKey: null,
+      r2RestoreSecret: null,
+      r2RestoreClusterName: null
+    };
+    let cutOver = false;
     (async () => {
       try {
         const { newClusterName, host, port } = await this.k8sCnpg.restoreCnpgCluster(
@@ -2332,9 +2348,11 @@ export class DatabasesService {
             port,
             status: 'ready',
             r2ProxyAccessKey: restoreR2.r2ProxyAccessKey ?? null,
-            r2ProxySecret: restoreR2.r2ProxySecret ?? null
+            r2ProxySecret: restoreR2.r2ProxySecret ?? null,
+            ...clearRestoreCredentials
           }
         });
+        cutOver = true;
         await this.followCredentialChange(database.id, 'restore');
 
         try {
@@ -2355,6 +2373,14 @@ export class DatabasesService {
         }
       } catch (e: any) {
         console.error(`[DB] Restore failed: ${e?.message}`);
+        if (cutOver) return;
+        try {
+          await this.k8sCnpg.deleteCnpgCluster(database.namespace!, predictedNewClusterName);
+        } catch (cleanupErr: any) {
+          console.warn(
+            `[DB] Failed to remove restore cluster ${predictedNewClusterName}: ${cleanupErr?.message}`
+          );
+        }
         if (restoreR2.r2ProxyAccessKey) {
           try {
             await this.r2Proxy.removeBinding(restoreR2.r2ProxyAccessKey);
@@ -2366,7 +2392,7 @@ export class DatabasesService {
         }
         await this.prisma.database.update({
           where: { id: database.id },
-          data: { status: 'error' }
+          data: { status: 'error', ...clearRestoreCredentials }
         });
       }
     })();

@@ -1449,6 +1449,9 @@ model Database {
   // Real R2 credentials never live in the cluster's namespace.
   r2ProxyAccessKey   String?  @map("r2_proxy_access_key") @db.VarChar(64)
   r2ProxySecret      String?  @map("r2_proxy_secret") @db.VarChar(128)
+  r2RestoreAccessKey String?  @map("r2_restore_access_key") @db.VarChar(64)
+  r2RestoreSecret    String?  @map("r2_restore_secret") @db.VarChar(128)
+  r2RestoreClusterName String? @map("r2_restore_cluster_name") @db.VarChar(100)
   createdBy          String?  @map("created_by") @db.Uuid
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
@@ -1473,6 +1476,7 @@ model Database {
   @@index([publicIp, publicPort], map: "idx_databases_public_endpoint")
   @@index([nodePoolId], map: "idx_databases_node_pool")
   @@index([r2ProxyAccessKey], map: "idx_databases_r2_proxy_access_key")
+  @@index([r2RestoreAccessKey], map: "idx_databases_r2_restore_access_key")
   @@map("databases")
 }
 
