@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.79.1](https://github.com/hackclub/orchard/compare/server/v2.79.0...server/v2.79.1) (2026-10-21)
+
+
+### Bug Fixes
+
+* **server:** clear database replicas stuck behind a failed join so the primary can come back ([f97592f](https://github.com/hackclub/orchard/commit/f97592fd843abc1ed87a3f16c45f71811ad0f7cc))
+* **server:** register restore credentials before the restore cluster starts and remove it when a restore fails ([86708bd](https://github.com/hackclub/orchard/commit/86708bd5a35ba8a7ec263a8f71ebf9a3e9cab507))
+* **server:** run dockerfile healthchecks that only fetch a loopback url as http probes ([d13ef51](https://github.com/hackclub/orchard/commit/d13ef51f28185152f8b754b1c2249f9e32368956))
+
 ## [2.79.0](https://github.com/hackclub/orchard/compare/server/v2.78.1...server/v2.79.0) (2026-10-21)
 
 

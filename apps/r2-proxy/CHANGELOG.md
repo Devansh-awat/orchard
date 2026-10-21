@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/hackclub/orchard/compare/r2-proxy/v0.6.0...r2-proxy/v0.6.1) (2026-10-21)
+
+
+### Bug Fixes
+
+* **r2-proxy:** resolve restore credentials so a restore cluster can archive into its own prefix ([9e8b804](https://github.com/hackclub/orchard/commit/9e8b8049bbe299940c8052cd11cd45c1fcd4ff54))
+
 ## [0.6.0](https://github.com/hackclub/orchard/compare/r2-proxy/v0.5.0...r2-proxy/v0.6.0) (2026-10-08)
 
 

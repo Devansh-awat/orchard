@@ -1,9 +1,9 @@
 {
-  "apps/server": "2.79.0",
+  "apps/server": "2.79.1",
   "apps/frontend": "1.71.0",
   "apps/gateway": "0.2.1",
   "apps/cli": "0.31.0",
-  "apps/r2-proxy": "0.6.0",
+  "apps/r2-proxy": "0.6.1",
   "apps/fc-builder": "1.0.2",
   "apps/registry": "0.7.0",
   "registry": "0.5.0",
