@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.79.0](https://github.com/hackclub/orchard/compare/server/v2.78.1...server/v2.79.0) (2026-10-21)
+
+
+### Features
+
+* **server:** report build pipeline duration, phase timings and cache hits to datadog ([2658845](https://github.com/hackclub/orchard/commit/2658845976b7c18778a7f01df59a53b2b529c206))
+
 ## [2.78.1](https://github.com/hackclub/orchard/compare/server/v2.78.0...server/v2.78.1) (2026-10-20)
 
 
