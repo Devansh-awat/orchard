@@ -69,7 +69,48 @@ export function coerceDockerfileHealthCheck(value: unknown): DockerfileHealthChe
   };
 }
 
-export function resolveHealthCheck(stored: StoredHealthCheck): ResolvedHealthCheck {
+const LOOPBACK = '(?:localhost|127\\.0\\.0\\.1|0\\.0\\.0\\.0|\\[::1\\])';
+const URL_LITERAL = new RegExp('http://' + LOOPBACK + '(?::(\\d+))?(/[^\\s\'"\\u0060)|;&\\\\]*)?');
+const ENV_PORT_CONCAT = new RegExp(
+  '([\'"\\u0060])http://' +
+    LOOPBACK +
+    ':\\1\\s*\\+\\s*\\(?\\s*process\\.env\\.PORT\\b[^+]*\\+\\s*([\'"\\u0060])(/[^\'"\\u0060]*)\\2'
+);
+const ENV_PORT_TEMPLATE = new RegExp(
+  '\\u0060http://' + LOOPBACK + ':\\$\\{[^}]*\\}(/[^\\u0060]*)\\u0060'
+);
+const CURL_FAIL = /(?:^|\s)(?:-[a-zA-Z]*f[a-zA-Z]*|--fail(?:-with-body)?)(?=\s|$)/;
+
+export function loopbackHttpProbe(
+  command: string[],
+  appPort?: number | null
+): { path: string; port: number } | null {
+  const script = command.join(' ');
+  const tool = /\bcurl\b/.test(script)
+    ? 'curl'
+    : /\bwget\b/.test(script)
+      ? 'wget'
+      : /\bfetch\s*\(/.test(script)
+        ? 'fetch'
+        : null;
+  if (!tool) return null;
+  if (tool !== 'fetch' && /&&|;/.test(script)) return null;
+  if (tool === 'curl' && !CURL_FAIL.test(script)) return null;
+  if (tool === 'fetch' && !/\.ok\b|\.status\b/.test(script)) return null;
+  const fromEnv = ENV_PORT_CONCAT.exec(script) ?? ENV_PORT_TEMPLATE.exec(script);
+  if (fromEnv) {
+    const path = fromEnv[3] ?? fromEnv[1];
+    return appPort ? { path: path || '/', port: appPort } : null;
+  }
+  const literal = URL_LITERAL.exec(script);
+  if (!literal) return null;
+  return { path: literal[2] || '/', port: literal[1] ? Number(literal[1]) : 80 };
+}
+
+export function resolveHealthCheck(
+  stored: StoredHealthCheck,
+  appPort?: number | null
+): ResolvedHealthCheck {
   const detected = stored.healthCheckOverride
     ? null
     : coerceDockerfileHealthCheck(stored.dockerfileHealthCheck);
@@ -85,15 +126,16 @@ export function resolveHealthCheck(stored: StoredHealthCheck): ResolvedHealthChe
     // counted. A startup probe is the same bargain — liveness and readiness
     // stay quiet until it passes.
     const startPeriod = detected.startPeriod ?? 0;
+    const http = loopbackHttpProbe(detected.command, appPort);
 
     return {
       enabled: true,
       source: 'dockerfile',
-      type: 'exec',
-      path: null,
-      port: null,
-      command: detected.command.join(' '),
-      execCommand: detected.command,
+      type: http ? 'http' : 'exec',
+      path: http?.path ?? null,
+      port: http?.port ?? null,
+      command: http ? null : detected.command.join(' '),
+      execCommand: http ? null : detected.command,
       livenessEnabled: true,
       readinessEnabled: true,
       startupEnabled: startPeriod > 0,

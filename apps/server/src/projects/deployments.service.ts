@@ -3520,11 +3520,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         healthCheckRetries: true,
         startupFailureThreshold: true,
         healthCheckOverride: true,
-        dockerfileHealthCheck: true
+        dockerfileHealthCheck: true,
+        services: { select: { port: true, targetPort: true }, take: 1 }
       }
     });
     if (!hc) return undefined;
-    return resolveHealthCheck(hc);
+    const service = hc.services[0];
+    return resolveHealthCheck(hc, service?.targetPort ?? service?.port ?? null);
   }
 
   async updateDeploymentVolumes(
