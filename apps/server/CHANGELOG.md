@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.79.3](https://github.com/hackclub/orchard/compare/server/v2.79.2...server/v2.79.3) (2026-10-21)
+
+
+### Bug Fixes
+
+* **server:** healthcheck urls with a shell PORT variable probe the app port instead of 80 ([c607cbe](https://github.com/hackclub/orchard/commit/c607cbe43f573004d394fa4a4e0efa151167e426))
+
 ## [2.79.2](https://github.com/hackclub/orchard/compare/server/v2.79.1...server/v2.79.2) (2026-10-21)
 
 
