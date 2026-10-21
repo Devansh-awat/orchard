@@ -19,7 +19,7 @@ COPY apps/server/hostctl ./
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /out/orchardctl-linux-amd64 . \
  && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o /out/orchardctl-linux-arm64 .
 
-FROM node:22-bookworm-slim AS base
+FROM node:22.23.4-bookworm-slim AS base
 
 # Disable apt's auto-cleanup so BuildKit cache mounts keep .deb files between builds.
 RUN rm -f /etc/apt/apt.conf.d/docker-clean \
