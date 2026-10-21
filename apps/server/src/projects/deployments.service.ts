@@ -87,6 +87,7 @@ import {
   recordRecoveryDecision,
   type BuildOutcomeReason
 } from '../analytics/datadog';
+import { pipelineOutcome, recordBuildPipeline } from '../analytics/build-metrics';
 import { createHash, randomUUID } from 'crypto';
 import {
   isObservedJobStatus,
@@ -1246,6 +1247,34 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     `.catch(() => {});
     this.buildQueue.kick();
     return 'requeued';
+  }
+
+  private async emitPipelineMetrics(deploymentId: string, succeeded: boolean, error?: string) {
+    try {
+      const [deployment, run] = await Promise.all([
+        this.prisma.deployment.findUnique({
+          where: { id: deploymentId },
+          select: { buildLogs: true, buildStepTimestamps: true, buildType: true }
+        }),
+        this.prisma.buildRun.findFirst({
+          where: { deploymentId },
+          orderBy: { createdAt: 'desc' },
+          select: { builder: true }
+        })
+      ]);
+      if (!deployment) return;
+      recordBuildPipeline({
+        outcome: pipelineOutcome(succeeded, error),
+        builder: run?.builder ?? 'kubernetes',
+        buildType: deployment.buildType ?? 'dockerfile',
+        logs: deployment.buildLogs,
+        stamps: deployment.buildStepTimestamps as Record<string, unknown> | null
+      });
+    } catch (err) {
+      this.logger.warn(
+        `build pipeline metrics failed for ${deploymentId}: ${(err as Error).message}`
+      );
+    }
   }
 
   private async markBuildFailed(
@@ -8486,6 +8515,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       }
 
       console.log(`[Projects] Deployment ${deploymentId} completed successfully`);
+      void this.emitPipelineMetrics(deploymentId, true);
 
       this.notifications
         .notifyDeploy(deploymentId, 'succeeded')
@@ -8652,6 +8682,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       };
 
       console.error(`[Projects] Build failed for deployment ${deploymentId}:`, errorDetails);
+      void this.emitPipelineMetrics(deploymentId, false, error?.message);
 
       try {
         const currentDeployment = await this.prisma.deployment.findUnique({
