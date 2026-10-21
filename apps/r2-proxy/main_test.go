@@ -76,3 +76,36 @@ func TestListingStaysInsidePrefix(t *testing.T) {
 		t.Fatal("listing multipart uploads must be refused")
 	}
 }
+
+func TestRestoreBindingReadsSourceButWritesOnlyItsOwnPrefix(t *testing.T) {
+	b := Binding{Prefix: "ns-a/db-rnew/", ReadPrefixes: []string{"ns-a/db/"}}
+	allow := func(method, target, key string, body []byte) bool {
+		_, _, ok := authorizeBinding(request(method, target, "", nil), key, b, body)
+		return ok
+	}
+	if !allow("GET", "/b/ns-a/db/db/base/x", "ns-a/db/db/base/x", nil) {
+		t.Fatal("restore could not read the source backups")
+	}
+	if !allow("HEAD", "/b/ns-a/db/db/wals/1", "ns-a/db/db/wals/1", nil) {
+		t.Fatal("restore could not stat the source wal")
+	}
+	if !allow("GET", "/b?list-type=2&prefix=ns-a/db/db/base/", "", nil) {
+		t.Fatal("restore could not list the source backups")
+	}
+	if !allow("PUT", "/b/ns-a/db-rnew/db-rnew/wals/1", "ns-a/db-rnew/db-rnew/wals/1", nil) {
+		t.Fatal("restore could not archive into its own prefix")
+	}
+	if allow("PUT", "/b/ns-a/db/db/wals/1", "ns-a/db/db/wals/1", nil) {
+		t.Fatal("restore wrote into the source prefix")
+	}
+	if allow("DELETE", "/b/ns-a/db/db/base/x", "ns-a/db/db/base/x", nil) {
+		t.Fatal("restore deleted from the source prefix")
+	}
+	src := `<Delete><Object><Key>ns-a/db/db/base/x</Key></Object></Delete>`
+	if allow("POST", "/b?delete", "", []byte(src)) {
+		t.Fatal("restore bulk-deleted from the source prefix")
+	}
+	if allow("GET", "/b/ns-b/other/base/x", "ns-b/other/base/x", nil) {
+		t.Fatal("restore read another database's backups")
+	}
+}

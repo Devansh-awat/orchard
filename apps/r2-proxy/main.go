@@ -29,13 +29,13 @@
 package main
 
 import (
-	"encoding/xml"
 	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -57,10 +57,11 @@ var Version = "dev"
 // ─────────────────────────── binding resolver ───────────────────────────
 
 type Binding struct {
-	AccessKey string
-	Secret    string
-	Bucket    string
-	Prefix    string
+	AccessKey    string
+	Secret       string
+	Bucket       string
+	Prefix       string
+	ReadPrefixes []string
 }
 
 type cacheEntry struct {
@@ -166,13 +167,47 @@ func (s *bindingStore) lookup(ak string) (Binding, bool, error) {
 	var ns, cluster string
 	err := s.db.QueryRowContext(ctx, q, ak, s.defaultBucket).Scan(&b.AccessKey, &b.Secret, &ns, &cluster, &b.Bucket)
 	if errors.Is(err, sql.ErrNoRows) {
-		return Binding{}, false, nil
+		return s.lookupRestore(ctx, ak)
 	}
 	if err != nil {
 		return Binding{}, false, err
 	}
 	// Trailing slash on the prefix so "ns/db1" doesn't accidentally match "ns/db10/...".
 	b.Prefix = ns + "/" + cluster + "/"
+	return b, true, nil
+}
+
+func (s *bindingStore) lookupRestore(ctx context.Context, ak string) (Binding, bool, error) {
+	const q = `
+		SELECT d.r2_restore_access_key,
+		       d.r2_restore_secret,
+		       d.namespace,
+		       d.r2_restore_cluster_name,
+		       d.cluster_name,
+		       COALESCE(o.backup_r2_bucket, NULLIF($2, ''))
+		FROM databases d
+		JOIN projects p      ON p.id = d.project_id
+		JOIN organizations o ON o.id = p.organization_id
+		WHERE d.r2_restore_access_key = $1
+		  AND d.r2_restore_secret       IS NOT NULL
+		  AND d.r2_restore_cluster_name IS NOT NULL
+		  AND d.namespace               IS NOT NULL
+		  AND d.cluster_name            IS NOT NULL
+		  AND COALESCE(o.backup_r2_bucket, NULLIF($2, '')) IS NOT NULL
+		LIMIT 1`
+
+	var b Binding
+	var ns, restoreCluster, sourceCluster string
+	err := s.db.QueryRowContext(ctx, q, ak, s.defaultBucket).Scan(&b.AccessKey, &b.Secret, &ns, &restoreCluster, &sourceCluster, &b.Bucket)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Binding{}, false, nil
+	}
+	if err != nil {
+		log.Printf("[r2-proxy] restore binding lookup ak=%s error: %v", ak, err)
+		return Binding{}, false, nil
+	}
+	b.Prefix = ns + "/" + restoreCluster + "/"
+	b.ReadPrefixes = []string{ns + "/" + sourceCluster + "/"}
 	return b, true, nil
 }
 
@@ -312,7 +347,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if code, msg, ok := authorizeOperation(r, key, binding.Prefix, body); !ok {
+	if code, msg, ok := authorizeBinding(r, key, binding, body); !ok {
 		denyAndLog(w, r, authz.AccessKey, code, msg)
 		return
 	}
@@ -655,6 +690,19 @@ type deleteObjectsBody struct {
 	Objects []struct {
 		Key string `xml:"Key"`
 	} `xml:"Object"`
+}
+
+func authorizeBinding(r *http.Request, key string, b Binding, body []byte) (code, msg string, ok bool) {
+	code, msg, ok = authorizeOperation(r, key, b.Prefix, body)
+	if ok || len(b.ReadPrefixes) == 0 || (r.Method != http.MethodGet && r.Method != http.MethodHead) {
+		return code, msg, ok
+	}
+	for _, prefix := range b.ReadPrefixes {
+		if _, _, readable := authorizeOperation(r, key, prefix, body); readable {
+			return "", "", true
+		}
+	}
+	return code, msg, ok
 }
 
 func authorizeOperation(r *http.Request, key, prefix string, body []byte) (code, msg string, ok bool) {
