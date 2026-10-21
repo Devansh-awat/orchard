@@ -170,8 +170,8 @@ const OVERRIDES = {
     why: 'The module ships no license file. This is the MIT license from its repository.'
   },
   '@img/sharp-libvips-*': {
-    version: '1.3.3',
-    url: 'https://github.com/lovell/sharp-libvips/tree/v1.3.3',
+    version: '1.3.4',
+    url: 'https://github.com/lovell/sharp-libvips/tree/v1.3.4',
     append: [
       'sharp-libvips.THIRD-PARTY-NOTICES.md',
       'versions.json',
@@ -181,7 +181,7 @@ const OVERRIDES = {
     why:
       'Prebuilt libvips and the libraries listed in THIRD-PARTY-NOTICES.md, which sharp loads as a shared library. ' +
       'The package ships no license text, so the upstream notices, the library versions and the LGPL are included here. ' +
-      'Corresponding source: the build recipe at https://github.com/lovell/sharp-libvips/tree/v1.3.3 fetches every library ' +
+      'Corresponding source: the build recipe at https://github.com/lovell/sharp-libvips/tree/v1.3.4 fetches every library ' +
       'from its upstream release at the versions in versions.json.'
   }
 };
