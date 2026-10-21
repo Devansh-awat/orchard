@@ -5,6 +5,7 @@ import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { K8sNamespaceService } from '../kubernetes/k8s-namespace.service';
 import { defaultPodResourcesForImage, minPodMemoryBytesForImage } from '../kubernetes/presets';
 import { formatBytes } from '../projects/projects.utils';
+import { ownerLeftAllowance } from './owner-allowance';
 
 export interface Caps {
   cpuLimitMilli: number | null;
@@ -520,6 +521,22 @@ export class QuotasService {
     return { cpuMilli: cpu, memoryBytes: mem, source: { cpu: cpuSource, memory: memSource } };
   }
 
+  async resolveOwnerAllowance(
+    organizationId: string,
+    ownerId: string
+  ): Promise<{ cpuMilli: number | null; memoryBytes: number | null }> {
+    const member = await this.prisma.organizationMember.findUnique({
+      where: { organizationId_userId: { organizationId, userId: ownerId } },
+      select: { userId: true }
+    });
+    if (member) return this.resolveMemberAllowance(organizationId, ownerId);
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { defaultMemberCpuMilli: true, defaultMemberMemoryBytes: true }
+    });
+    return ownerLeftAllowance(org);
+  }
+
   // Sum requested resources for everything owned by this user inside this org.
   async getMemberUsage(
     organizationId: string,
@@ -633,7 +650,7 @@ export class QuotasService {
     excludeDeploymentId?: string
   ) {
     if (!ownerId) return;
-    const allowance = await this.resolveMemberAllowance(organizationId, ownerId);
+    const allowance = await this.resolveOwnerAllowance(organizationId, ownerId);
     if (allowance.cpuMilli === null && allowance.memoryBytes === null) return;
     const usage = await this.getMemberUsage(organizationId, ownerId, excludeDeploymentId);
     if (allowance.cpuMilli !== null && usage.cpuMilli + requested.cpuMilli > allowance.cpuMilli) {

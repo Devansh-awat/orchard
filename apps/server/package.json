@@ -76,6 +76,7 @@
     "test:prisma-error": "tsx --test test/prisma-error.test.ts",
     "test:build-metrics": "tsx --test test/build-metrics.test.ts",
     "test:cnpg-stuck-replicas": "tsx --test test/cnpg-stuck-replicas.test.ts",
+    "test:owner-allowance": "tsx --test test/owner-allowance.test.ts",
     "test:tenant-policy": "tsx --test test/tenant-policy.test.ts",
     "test:dockerfile-health-check": "tsx --test test/dockerfile-health-check.test.ts",
     "test:env-secret-write-only": "tsx --test test/env-secret-write-only.test.ts",
