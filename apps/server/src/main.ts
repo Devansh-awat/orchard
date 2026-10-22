@@ -78,6 +78,14 @@ async function bootstrap() {
     }
   });
 
+  app.disable('x-powered-by');
+  app.use((_req, res, next) => {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    next();
+  });
+
   // Raise the body-parser limit above Express's 100kb default. GitHub App
   // webhooks (POST /apiv1/github/app/webhook) deliver push/installation
   // payloads that routinely exceed 100kb, and GitHub caps deliveries at 25MB.
