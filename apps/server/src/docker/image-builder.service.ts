@@ -4420,25 +4420,64 @@ fi
       const auth = this.getHarborAuth();
       if (!auth) return;
 
-      const deleteUrl = `${auth.registryUrl}/api/v2.0/projects/${this.harborProject}/repositories/${encodeURIComponent(repoName)}/artifacts/${encodeURIComponent(tag)}`;
+      const artifactsUrl = `${auth.registryUrl}/api/v2.0/projects/${this.harborProject}/repositories/${encodeURIComponent(repoName)}/artifacts`;
+      const headers = { Authorization: auth.authHeader };
 
-      const response = await fetch(deleteUrl, {
-        method: 'DELETE',
-        headers: { Authorization: auth.authHeader }
-      });
-
-      if (response.ok) {
-        console.log(
-          `[ImageBuilder] Deleted artifact from registry: ${this.harborProject}/${repoName}:${tag}`
-        );
-      } else if (response.status === 404) {
+      const lookup = await fetch(`${artifactsUrl}/${encodeURIComponent(tag)}`, { headers });
+      if (lookup.status === 404) {
         console.warn(
           `[ImageBuilder] Artifact not found in registry (already deleted?): ${this.harborProject}/${repoName}:${tag}`
+        );
+        return;
+      }
+      if (!lookup.ok) {
+        const body = await lookup.text();
+        console.error(
+          `[ImageBuilder] Failed to look up artifact: ${this.harborProject}/${repoName}:${tag}, status: ${lookup.status}, body: ${body}`
+        );
+        return;
+      }
+      const { digest } = (await lookup.json()) as { digest: string };
+
+      const untag = await fetch(
+        `${artifactsUrl}/${encodeURIComponent(digest)}/tags/${encodeURIComponent(tag)}`,
+        { method: 'DELETE', headers }
+      );
+      if (!untag.ok && untag.status !== 404) {
+        const body = await untag.text();
+        console.error(
+          `[ImageBuilder] Failed to delete tag: ${this.harborProject}/${repoName}:${tag}, status: ${untag.status}, body: ${body}`
+        );
+        return;
+      }
+      console.log(
+        `[ImageBuilder] Deleted tag from registry: ${this.harborProject}/${repoName}:${tag}`
+      );
+
+      const remaining = await fetch(`${artifactsUrl}/${encodeURIComponent(digest)}?with_tag=true`, {
+        headers
+      });
+      if (!remaining.ok) return;
+      const { tags } = (await remaining.json()) as { tags?: { name: string }[] | null };
+      if (tags && tags.length > 0) {
+        console.log(
+          `[ImageBuilder] Kept artifact ${this.harborProject}/${repoName}@${digest}, still tagged ${tags.map((t) => t.name).join(', ')}`
+        );
+        return;
+      }
+
+      const response = await fetch(`${artifactsUrl}/${encodeURIComponent(digest)}`, {
+        method: 'DELETE',
+        headers
+      });
+      if (response.ok || response.status === 404) {
+        console.log(
+          `[ImageBuilder] Deleted untagged artifact from registry: ${this.harborProject}/${repoName}@${digest}`
         );
       } else {
         const body = await response.text();
         console.error(
-          `[ImageBuilder] Failed to delete artifact: ${this.harborProject}/${repoName}:${tag}, status: ${response.status}, body: ${body}`
+          `[ImageBuilder] Failed to delete artifact: ${this.harborProject}/${repoName}@${digest}, status: ${response.status}, body: ${body}`
         );
       }
     } catch (error) {
