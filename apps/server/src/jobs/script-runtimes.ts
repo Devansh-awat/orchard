@@ -10,17 +10,17 @@ export interface ScriptRuntimeSpec {
 
 const DEFAULTS: Record<ScriptRuntime, ScriptRuntimeSpec> = {
   bash: {
-    image: 'debian:12-slim',
+    image: 'debian:12.15-slim',
     extension: 'sh',
     interpreter: ['bash']
   },
   python: {
-    image: 'python:3.12-slim',
+    image: 'python:3.12.15-slim',
     extension: 'py',
     interpreter: ['python']
   },
   node: {
-    image: 'node:22-slim',
+    image: 'node:22.23.4-slim',
     extension: 'js',
     interpreter: ['node']
   }

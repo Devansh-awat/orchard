@@ -166,7 +166,7 @@ protection:
 # enabled. The app degrades to local-only delivery + polling if it's absent.
 redis:
   enabled: true
-  image: redis:7-alpine
+  image: redis:7.4.11-alpine
   storage: 1Gi
   storageClass: ""
   # Override to point at an external/managed Redis; otherwise the in-cluster
