@@ -19,16 +19,9 @@ COPY apps/server/hostctl ./
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /out/orchardctl-linux-amd64 . \
  && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o /out/orchardctl-linux-arm64 .
 
-FROM node:22.23.4-bookworm-slim AS base
+FROM node:22.23.4-alpine AS base
 
-# Disable apt's auto-cleanup so BuildKit cache mounts keep .deb files between builds.
-RUN rm -f /etc/apt/apt.conf.d/docker-clean \
-    && echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
-
-# Install OpenSSL for Prisma (fixes libssl detection warnings)
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates
+RUN apk add --no-cache openssl ca-certificates
 
 RUN corepack enable && corepack prepare pnpm@10 --activate
 
@@ -64,19 +57,6 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NO_PROXY=178.156.144.127,harbor.1mp.dev,harbor-core.harbor.svc.cluster.local,localhost,127.0.0.1
 ENV no_proxy=178.156.144.127,harbor.1mp.dev,harbor-core.harbor.svc.cluster.local,localhost,127.0.0.1
-
-# Install Docker CLI for building images via mounted Docker socket
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && apt-get install -y --no-install-recommends \
-        git \
-        curl \
-        ca-certificates \
-        gnupg \
-    && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian bookworm stable" > /etc/apt/sources.list.d/docker.list \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends docker-ce-cli
 
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY --from=builder /app/apps/server/package.json ./apps/server/package.json
