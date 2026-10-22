@@ -397,6 +397,14 @@ export function recordRecoveryDecision(meta: {
  * the real error type/message/stack instead of a bare HTTP 500. Safe to call
  * when tracing is disabled (no active span → no-op).
  */
+export function setTraceUser(id: string, sessionId?: string): void {
+  try {
+    tracer.setUser({ id, ...(sessionId ? { session_id: sessionId } : {}) });
+  } catch {
+    return;
+  }
+}
+
 export function markSpanError(exception: unknown): void {
   try {
     const span = tracer.scope().active();

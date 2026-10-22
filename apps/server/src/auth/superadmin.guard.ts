@@ -21,6 +21,7 @@ import {
 import { hashApiToken } from './api-tokens.service';
 import { ORG_SCOPED_DENY, deviceOrgScope } from './org-scoped-devices';
 import { requestAuthStorage, RequestAuthContext } from './request-context';
+import { setTraceUser } from '../analytics/datadog';
 
 /**
  * Namespaces an organization-scoped session may never touch.
@@ -221,6 +222,7 @@ export class SuperAdminGuard implements CanActivate {
         ...(gatewayOrgScope ? { orgScope: gatewayOrgScope } : {})
       };
       publishAuthContext(gatewayOrgScope ? { sessionOrgId: gatewayOrgScope } : {});
+      setTraceUser(dbUserId, actingSessionId);
 
       const requiresSuperadminGw = this.reflector.getAllAndOverride<boolean>(
         REQUIRES_SUPERADMIN_KEY,
@@ -327,6 +329,7 @@ export class SuperAdminGuard implements CanActivate {
       // Session-auth: no token-scope restrictions to publish, but an org-scoped
       // session publishes its confinement so AuthorizationService can enforce it.
       publishAuthContext(orgScope ? { sessionOrgId: orgScope } : {});
+      setTraceUser(dbUserId, sessionId);
       authenticated = true;
     } catch {
       // JWT failed — try API token lookup
@@ -401,6 +404,7 @@ export class SuperAdminGuard implements CanActivate {
         name,
         externalAuthId: user.externalAuthId
       };
+      setTraceUser(user.id);
 
       // Update lastUsedAt in the background
       this.prisma.apiToken
