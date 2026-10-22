@@ -250,6 +250,8 @@ jobs:
         run: pnpm --filter server test:build-timing
       - name: Superadmin password test
         run: pnpm --filter server test:superadmin-password
+      - name: Passkey tests
+        run: pnpm --filter server exec tsx --test test/passkey.test.ts
       - name: Setup gate test
         run: pnpm --filter server test:setup-state
       - name: Build platform test
