@@ -25,14 +25,14 @@
 {#if hero}{@render hero()}{/if}
 <div class="frame frame--{width}" class:frame--hero={!!hero}>
 	{#if !hero}
-	<header class="head">
-		<div class="heading">
-			{#if eyebrow}<div class="eyebrow">{@render eyebrow()}</div>{/if}
-			<h1 class="title">{title}</h1>
-			{#if description}<p class="desc">{description}</p>{/if}
-		</div>
-		{#if actions}<div class="actions">{@render actions()}</div>{/if}
-	</header>
+		<header class="head">
+			<div class="heading">
+				{#if eyebrow}<div class="eyebrow">{@render eyebrow()}</div>{/if}
+				<h1 class="title">{title}</h1>
+				{#if description}<p class="desc">{description}</p>{/if}
+			</div>
+			{#if actions}<div class="actions">{@render actions()}</div>{/if}
+		</header>
 	{/if}
 	{#if aside}
 		<div class="split">
