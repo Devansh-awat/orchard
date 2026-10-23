@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { Box, Database, Timer } from 'lucide-svelte';
-	import AuraTile from './AuraTile.svelte';
 	import RemoteImg from './RemoteImg.svelte';
 
 	let {
@@ -17,7 +16,14 @@
 
 	const GLYPH = { deployment: Box, database: Database, job: Timer };
 	const Glyph = $derived(GLYPH[kind]);
-	const glyphSize = $derived({ xs: 11, sm: 13, md: 16, lg: 20 }[size]);
+	const glyphSize = $derived({ xs: 11, sm: 13, md: 17, lg: 21 }[size]);
+	const HUES = ['blue', 'green', 'amber', 'red', 'accent'] as const;
+	const hue = $derived(
+		HUES[
+			[...name].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0, 2166136261) %
+				HUES.length
+		]
+	);
 	let failed = $state(false);
 </script>
 
@@ -25,9 +31,9 @@
 	{#if icon && !failed}
 		<RemoteImg src={icon} class="img" onerror={() => (failed = true)} />
 	{:else}
-		<AuraTile {name} class="aura">
-			<span class="glyph"><Glyph size={glyphSize} strokeWidth={2} /></span>
-		</AuraTile>
+		<span class="glyph" style:--tile="var(--{hue}-solid)"
+			><Glyph size={glyphSize} strokeWidth={2} /></span
+		>
 	{/if}
 </span>
 
@@ -64,8 +70,7 @@
 		border-radius: calc(0.6875rem * var(--corner-scale));
 		corner-shape: var(--corner);
 	}
-	.icon :global(.img),
-	.icon :global(.aura) {
+	.icon :global(.img) {
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
@@ -74,6 +79,7 @@
 		display: grid;
 		place-items: center;
 		height: 100%;
-		color: var(--on-media);
+		background: var(--tile);
+		color: var(--on-solid);
 	}
 </style>
