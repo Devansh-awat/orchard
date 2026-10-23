@@ -1,13 +1,15 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { Search, ChevronsUpDown, ChevronRight, TriangleAlert, PanelLeft } from 'lucide-svelte';
+	import { ChevronsUpDown, ChevronRight, TriangleAlert, PanelLeft } from 'lucide-svelte';
 	import NavItem from '$lib/components/ui/NavItem.svelte';
 	import StatusDot from '$lib/components/ui/StatusDot.svelte';
 	import RemoteImg from '$lib/components/ui/RemoteImg.svelte';
-	import AuraTile from '$lib/components/ui/AuraTile.svelte';
 	import { resourceStatus } from '$lib/components/ui/status';
-	import type { SidebarSection } from './sidebar';
-	import { springRotate, springCollapse } from '$lib/utils/motion.svelte';
+	import type { FailingApp, SidebarSection } from './sidebar';
+	import SearchField from '$lib/components/ui/SearchField.svelte';
+	import PopoverPanel from '$lib/components/ui/PopoverPanel.svelte';
+	import AppIcon from '$lib/components/ui/AppIcon.svelte';
+	import RelativeTime from '$lib/components/ui/RelativeTime.svelte';
 
 	let {
 		org,
@@ -20,13 +22,13 @@
 		org: { name: string; plan?: string; avatar?: string | null };
 		user: { handle: string; avatar?: string | null };
 		sections?: SidebarSection[];
-		failing?: { label: string; href: string }[];
+		failing?: FailingApp[];
 		onSearch?: () => void;
 		children?: Snippet;
 	} = $props();
 
-	let failingOpen = $state(false);
 	const crashing = resourceStatus('crashing');
+	const failingNames = $derived(failing.map((f) => f.label).join(', '));
 </script>
 
 <nav class="panel" aria-label="Main">
@@ -41,38 +43,52 @@
 		<ChevronsUpDown size={14} class="org-chev" />
 	</button>
 
-	<div class="scroll">
-		<NavItem label="Search" icon={Search} onclick={onSearch}>
-			{#snippet trailing()}<kbd class="kbd">⌘K</kbd>{/snippet}
-		</NavItem>
+	<SearchField placeholder="Search" shortcut="⌘K" size="sm" onfocus={onSearch} />
 
+	{#if failing.length > 0 && !children}
+		<PopoverPanel placement="right-start">
+			{#snippet trigger(attrs, open)}
+				<button type="button" class="alert" class:alert--open={open} {...attrs}>
+					<span class="alert-icon"><TriangleAlert size={14} strokeWidth={2.25} /></span>
+					<span class="alert-text">
+						<span class="alert-title">{failing.length} failing</span>
+						<span class="alert-sub">{failingNames}</span>
+					</span>
+					<span class="alert-stack">
+						{#each failing.slice(0, 3) as f (f.label)}
+							<span class="alert-stack-item"
+								><AppIcon name={f.label} kind={f.kind} icon={f.icon} size="xs" /></span
+							>
+						{/each}
+					</span>
+					<ChevronRight size={14} class="alert-chev" />
+				</button>
+			{/snippet}
+			{#snippet children({ close })}
+				<div class="fail">
+					<p class="fail-head">Failing now</p>
+					{#each failing as f (f.label)}
+						<a class="fail-row" href={f.href} onclick={close}>
+							<span class="fail-icon">
+								<AppIcon name={f.label} kind={f.kind} icon={f.icon} size="sm" />
+								<span class="fail-dot"><StatusDot meta={crashing} size={7} /></span>
+							</span>
+							<span class="fail-text">
+								<span class="fail-name">{f.label}</span>
+								{#if f.reason}<span class="fail-reason">{f.reason}</span>{/if}
+							</span>
+							{#if f.at}<span class="fail-when"><RelativeTime date={f.at} /></span>{/if}
+						</a>
+					{/each}
+				</div>
+			{/snippet}
+		</PopoverPanel>
+	{/if}
+
+	<div class="scroll">
 		{#if children}
 			{@render children()}
 		{:else}
-			{#if failing.length > 0}
-				<NavItem
-					label="Failing"
-					icon={TriangleAlert}
-					tone="danger"
-					count={failing.length}
-					onclick={() => (failingOpen = !failingOpen)}
-				>
-					{#snippet trailing()}
-						<span class="chev" {@attach springRotate(() => failingOpen, { rest: 0, on: 90 })}
-							><ChevronRight size={14} /></span
-						>
-					{/snippet}
-				</NavItem>
-				<div {@attach springCollapse(() => !failingOpen)}>
-					<div class="nested">
-						{#each failing as f (f.label)}
-							<NavItem href={f.href} label={f.label}>
-								{#snippet leading()}<StatusDot meta={crashing} size={7} />{/snippet}
-							</NavItem>
-						{/each}
-					</div>
-				</div>
-			{/if}
 			{#each sections as section, si (si)}
 				{#if section.label}<p class="section">{section.label}</p>{/if}
 				{#each section.items as item (item.label)}
@@ -80,9 +96,7 @@
 						<NavItem href={item.href} label={item.label} active={item.active}>
 							{#snippet leading()}
 								<span class="app">
-									<AuraTile name={item.label} class="app-art">
-										<span class="app-letter">{item.label.charAt(0).toUpperCase()}</span>
-									</AuraTile>
+									<AppIcon name={item.label} size="sm" />
 									{#if item.status}<span class="app-dot"
 											><StatusDot meta={item.status} size={7} /></span
 										>{/if}
@@ -162,10 +176,8 @@
 		width: 2rem;
 		height: 2rem;
 		background: var(--accent-solid);
-		background-image: var(--solid-sheen);
 		color: var(--on-solid);
 		font-size: var(--text-headline);
-		box-shadow: inset 0 0 0 0.5px var(--solid-edge);
 	}
 	.org-avatar :global(.cover),
 	.me-avatar :global(.cover) {
@@ -213,27 +225,6 @@
 	.scroll > :global(*) {
 		flex-shrink: 0;
 	}
-	.kbd {
-		padding: 0.1875rem 0.375rem;
-		border-radius: calc(0.375rem * var(--corner-scale));
-		corner-shape: var(--corner);
-		background: color-mix(in oklab, var(--neutral-10) 7%, transparent);
-		color: var(--text-muted);
-		font-family: inherit;
-		font-size: var(--text-micro);
-		font-weight: var(--weight-medium);
-	}
-	.chev {
-		display: flex;
-		color: var(--text-faint);
-	}
-	.nested {
-		display: flex;
-		flex-direction: column;
-		gap: 0.125rem;
-		padding: 0.125rem 0 0.25rem 1.5rem;
-		--nav-row-h: 2.25rem;
-	}
 	.section {
 		padding: 0.875rem 0.5rem 0.25rem;
 		color: var(--text-faint);
@@ -245,21 +236,6 @@
 		display: block;
 		width: 1.5rem;
 		height: 1.5rem;
-	}
-	.app :global(.app-art) {
-		width: 100%;
-		height: 100%;
-		border-radius: calc(0.4375rem * var(--corner-scale));
-		corner-shape: var(--corner);
-		box-shadow: inset 0 0 0 0.5px var(--on-media-edge);
-	}
-	.app-letter {
-		display: grid;
-		place-items: center;
-		height: 100%;
-		color: var(--on-media);
-		font-size: var(--text-micro);
-		font-weight: var(--weight-semibold);
 	}
 	.app-dot {
 		position: absolute;
@@ -317,5 +293,148 @@
 		background: none;
 		color: var(--text-muted);
 		cursor: pointer;
+	}
+	.alert {
+		display: flex;
+		align-items: center;
+		gap: 0.625rem;
+		width: 100%;
+		min-height: 2.75rem;
+		padding: 0.375rem 0.5rem 0.375rem 0.4375rem;
+		border: none;
+		border-radius: calc(0.6875rem * var(--corner-scale));
+		corner-shape: var(--corner);
+		background: color-mix(in oklab, var(--red-solid) 8%, transparent);
+		box-shadow: inset 0 0 0 0.5px color-mix(in oklab, var(--red-solid) 22%, transparent);
+		color: var(--text-default);
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+		transition: background-color var(--dur-fast) ease;
+	}
+	.alert:hover,
+	.alert--open {
+		background: color-mix(in oklab, var(--red-solid) 12%, transparent);
+	}
+	.alert-icon {
+		display: grid;
+		place-items: center;
+		flex-shrink: 0;
+		width: 1.5rem;
+		height: 1.5rem;
+		border-radius: calc(0.375rem * var(--corner-scale));
+		corner-shape: var(--corner);
+		background: var(--red-solid);
+		color: var(--on-solid);
+	}
+	.alert-text {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		gap: 0.375rem;
+		min-width: 0;
+	}
+	.alert-title,
+	.alert-sub {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		text-box: trim-both cap alphabetic;
+		padding-block: 0.3em;
+		margin-block: -0.3em;
+	}
+	.alert-title {
+		color: var(--red-9);
+		font-size: var(--text-body);
+		font-weight: var(--weight-semibold);
+	}
+	.alert-sub {
+		color: var(--text-muted);
+		font-size: var(--text-caption);
+	}
+	.alert-stack {
+		display: flex;
+		flex-shrink: 0;
+	}
+	.alert-stack-item {
+		display: block;
+		margin-left: -0.375rem;
+		border-radius: calc(0.375rem * var(--corner-scale));
+		corner-shape: var(--corner);
+		box-shadow: 0 0 0 2px var(--bg-surface);
+	}
+	.alert-stack-item:first-child {
+		margin-left: 0;
+	}
+	.alert :global(.alert-chev) {
+		flex-shrink: 0;
+		color: var(--text-faint);
+	}
+	.fail {
+		display: flex;
+		flex-direction: column;
+		width: 18rem;
+	}
+	.fail-head {
+		padding: 0.375rem 0.5rem 0.5rem;
+		color: var(--text-muted);
+		font-size: var(--text-caption);
+		font-weight: var(--weight-semibold);
+	}
+	.fail-row {
+		display: flex;
+		align-items: center;
+		gap: 0.625rem;
+		padding: 0.5rem;
+		border-radius: calc(0.5rem * var(--corner-scale));
+		corner-shape: var(--corner);
+		color: inherit;
+		text-decoration: none;
+		transition: background-color var(--dur-fast) ease;
+	}
+	.fail-row:hover {
+		background: var(--bg-hover);
+	}
+	.fail-icon {
+		position: relative;
+		flex-shrink: 0;
+	}
+	.fail-dot {
+		position: absolute;
+		right: -0.1875rem;
+		bottom: -0.1875rem;
+		display: flex;
+		padding: 2px;
+		border-radius: 50%;
+		background: var(--bg-raised);
+	}
+	.fail-text {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		gap: 0.375rem;
+		min-width: 0;
+	}
+	.fail-name,
+	.fail-reason {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		text-box: trim-both cap alphabetic;
+		padding-block: 0.3em;
+		margin-block: -0.3em;
+	}
+	.fail-name {
+		font-size: var(--text-body);
+		font-weight: var(--weight-medium);
+	}
+	.fail-reason {
+		color: var(--text-muted);
+		font-size: var(--text-caption);
+	}
+	.fail-when {
+		flex-shrink: 0;
+		color: var(--text-faint);
+		font-size: var(--text-caption);
 	}
 </style>

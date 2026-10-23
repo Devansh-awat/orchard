@@ -2,6 +2,7 @@
 	import { Check, X, Hammer, Minus, ChevronRight } from 'lucide-svelte';
 	import RelativeTime from '$lib/components/ui/RelativeTime.svelte';
 	import AuraTile from '$lib/components/ui/AuraTile.svelte';
+	import AppIcon from '$lib/components/ui/AppIcon.svelte';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
 	import type { StatusKind } from '$lib/components/ui/status';
 	import type { BuildItem } from './builds';
@@ -65,9 +66,7 @@
 		</header>
 		{#if featured}
 			<a class="w-feature" href={featured.href}>
-				<AuraTile name={featured.app} image={featured.image} class="w-art">
-					<span class="w-art-letter">{featured.app.charAt(0).toUpperCase()}</span>
-				</AuraTile>
+				<AppIcon name={featured.app} kind={featured.kind} icon={featured.icon} size="lg" />
 				<span class="w-feature-text">
 					<span class="w-app">{featured.app}</span>
 					<span class="w-msg">{featured.message}</span>
@@ -105,9 +104,7 @@
 		<div class="s-list">
 			{#each builds.slice(0, 3) as b (b.id)}
 				<a class="note" href={b.href}>
-					<AuraTile name={b.app} image={b.image} class="note-icon">
-						<span class="note-letter">{b.app.charAt(0).toUpperCase()}</span>
-					</AuraTile>
+					<AppIcon name={b.app} kind={b.kind} icon={b.icon} size="md" />
 					<span class="note-body">
 						<span class="note-top">
 							<span class="note-app">{b.app}</span>
@@ -285,22 +282,6 @@
 		color: inherit;
 		text-decoration: none;
 	}
-	.w-feature :global(.w-art) {
-		flex-shrink: 0;
-		width: 2.75rem;
-		height: 2.75rem;
-		border-radius: calc(0.75rem * var(--corner-scale));
-		corner-shape: var(--corner);
-		box-shadow: inset 0 0 0 0.5px var(--on-media-edge);
-	}
-	.w-art-letter,
-	.note-letter {
-		display: grid;
-		place-items: center;
-		height: 100%;
-		color: var(--on-media);
-		font-weight: var(--weight-semibold);
-	}
 	.w-feature-text {
 		display: flex;
 		flex-direction: column;
@@ -329,7 +310,7 @@
 		display: block;
 		height: 100%;
 		border-radius: inherit;
-		background: linear-gradient(90deg, var(--amber-5), var(--amber-solid));
+		background: var(--amber-solid);
 		transform: translateX(calc((var(--p) - 1) * 100%));
 		transition: transform var(--spring-smooth-duration) var(--spring-smooth);
 	}
@@ -405,13 +386,6 @@
 	}
 	.note:hover {
 		transform: scale(1.015);
-	}
-	.note :global(.note-icon) {
-		flex-shrink: 0;
-		width: 2.25rem;
-		height: 2.25rem;
-		border-radius: calc(0.625rem * var(--corner-scale));
-		corner-shape: var(--corner);
 	}
 	.note-body {
 		display: flex;

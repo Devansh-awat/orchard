@@ -110,9 +110,14 @@ export const SIDEBAR = {
 	org: { name: 'YSWS', plan: 'Enterprise' },
 	user: { handle: 'seb' },
 	failing: [
-		{ label: 'terra-game-server', href: '#' },
-		{ label: 'terra-api', href: '#' },
-		{ label: 'worker', href: '#' }
+		{
+			label: 'terra-game-server',
+			href: '#',
+			reason: 'Crash loop · exit 137 out of memory',
+			at: ago(4)
+		},
+		{ label: 'terra-api', href: '#', reason: 'Health check failing on /healthz', at: ago(11) },
+		{ label: 'worker', href: '#', reason: 'Build failed · dependency install', at: ago(14) }
 	],
 	sections(active: string): SidebarSection[] {
 		return [

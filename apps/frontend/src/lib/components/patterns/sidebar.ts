@@ -10,3 +10,12 @@ export type SidebarItem = {
 };
 
 export type SidebarSection = { label?: string; items: SidebarItem[]; tiles?: boolean };
+
+export type FailingApp = {
+	label: string;
+	href: string;
+	reason?: string;
+	at?: string;
+	kind?: 'deployment' | 'database' | 'job';
+	icon?: string | null;
+};

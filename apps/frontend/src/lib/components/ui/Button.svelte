@@ -151,12 +151,8 @@
 
 	.button--primary {
 		background-color: var(--accent-solid);
-		background-image: var(--solid-sheen);
 		color: var(--on-solid);
-		box-shadow:
-			inset 0 0.5px 0 var(--solid-edge),
-			0 1px 2px color-mix(in oklab, var(--accent-solid) 30%, transparent),
-			0 4px 12px -4px color-mix(in oklab, var(--accent-solid) 55%, transparent);
+		box-shadow: 0 1px 2px color-mix(in oklab, var(--neutral-10) 14%, transparent);
 	}
 	.button--primary:hover:not(:disabled) {
 		background-color: var(--accent-solid-hover);
