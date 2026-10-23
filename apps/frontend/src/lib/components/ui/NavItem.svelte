@@ -62,6 +62,8 @@
 	}
 	.label {
 		text-box: trim-both cap alphabetic;
+		padding-block: 0.3em;
+		margin-block: -0.3em;
 		flex: 1;
 		min-width: 0;
 		overflow: hidden;

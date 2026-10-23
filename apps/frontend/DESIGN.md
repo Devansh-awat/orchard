@@ -1,99 +1,127 @@
-# Orchard Design System
+# Orchard UI 3.0
 
-The mini design system for `apps/frontend`. Tokens → primitives → patterns. Every screen
-is built from these; nothing is a one-off. The guardrail (`pnpm check:design`) ratchets
-debt down: it fails any change that adds hex colors, legacy tokens, or raw legacy classes
-to `.svelte` files.
+Everything a screen needs is in `src/lib/components/ui` (primitives) and
+`src/lib/components/patterns` (recipes). The living catalogue is `/dev/ui` (run
+`pnpm dev`, open `localhost:3000/dev/ui`). If a screen needs something that is not in the
+catalogue, add it to the kit and the catalogue first; never hand-roll it in a route.
 
-## Principles (Refactoring UI, house rules)
+## Constitution
 
-- Data drives design: decide what the data means before deciding how it looks.
-- Hierarchy via weight, contrast, and spacing, not size. Small muted section titles;
-  the content is the focus, never the label.
-- Labels are a last resort. Combine label into value ("3 replicas", "deployed 2m ago"),
-  or de-emphasize the label under a value-first display. Never "Name: foo" grids.
-- Progressive disclosure: frequent actions visible, rare actions behind menus,
-  accordions, or tabs.
-- Emphasize by de-emphasizing: mute the neighbors instead of shouting.
-- Fewer borders: prefer spacing and background shifts over boxes in boxes.
-- Status is never color alone: always a dot, icon, or label alongside the color.
-- Alerts and callouts: tinted same-hue background plus a subtle full border.
-  Never left-accent borders.
-- Empty states are deliberate: an invitation to act, not a shrug.
-- UI copy: sentence case, active voice, plain verbs, no filler, no em dashes.
-  Buttons say exactly what they do.
-- Authored code is comment-free.
+1. One way to do each thing. Every need maps to exactly one component.
+2. Space comes from the 4px grid: Tailwind `0.5 1 2 3 4 6 8 12 16` only. A container's
+   padding is at least 1.5x the gap between its children. Gaps between groups are about
+   2x the gaps inside a group.
+3. Hierarchy comes from weight and tone, not size. Three weights (450, 550, 650), three
+   text tones (`fg`, `muted`, `faint`).
+4. Colour means something. Neutral surfaces with the theme tint, one accent, status
+   colours only for status. Status is never colour alone.
+5. One representation per entity. A deployment, database or job always renders through
+   `EntityRow`. Everything else is progressive disclosure.
+6. Motion is physics, and only transform and opacity move. Named springs only.
+7. Glass is for floating chrome only (menus, popovers, toasts, command menu).
+8. Spend novelty on deploy moments and project identity (aura, toasts). Everything
+   else is quiet on purpose.
 
-## Tokens (`src/tokens.css`)
+## Why Apple UI looks expensive (do all of these)
 
-Semantic layer aliased over the legacy theme vocabulary. Components use ONLY these
-(plus `--color-primary-*` and fonts from `@theme`). The legacy names
-(`--center-channel-*`, `--sidebar-*`, `--surface-*`, `--control-*`, ...) are the private
-engine layer for `app.css`/`theme.ts` and must not appear in components.
+- **Optical alignment.** Icons centre on the text's cap height, not its line box. Text
+  that sits next to an icon, or inside a pill, uses `text-box: trim-both cap alphabetic`
+  so padding is measured from the ink. Verify with `/dev/ui` and the alignment audit
+  (`.context`-style script: icon centre vs cap centre, delta 0).
+- **Concentric corners.** Inner radius = outer radius minus inset. A circle inside a
+  capsule sits at an inset equal to `(height - circle) / 2`. Never nest equal radii.
+- **Hairlines, not borders.** 0.5px to 1px rings in `--border-default`, drawn once.
+  Elevation is a ring plus a soft layered shadow, never a hard 1px grey box.
+- **Light from above.** Raised controls get a faint top inner highlight
+  (`inset 0 1px 0 rgb(255 255 255 / 0.12)`) and a small drop shadow. Pressed controls
+  scale to 0.97.
+- **Restraint.** One primary button per view. Colour only where it means something.
+  Generous whitespace. Muted secondary text.
+- **Numbers are tabular** (`font-variant-numeric: tabular-nums`) everywhere they change.
+- **Every state is designed:** rest, hover, pressed, focus-visible, disabled, loading,
+  empty, error. Focus is a soft 3px accent ring, never the browser outline.
+- **Motion is interruptible and staged.** Shape first, content after. Closes settle
+  flat (no bounce). Nothing teleports: if a thing leaves a list, the gap closes with it.
 
-| Token                                                               | Meaning                                                                  |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `--bg-app`                                                          | page background                                                          |
-| `--bg-surface`                                                      | default component surface                                                |
-| `--bg-raised`                                                       | card surface                                                             |
-| `--bg-sunken`                                                       | inputs, wells                                                            |
-| `--bg-hover`                                                        | hover fill                                                               |
-| `--bg-overlay`                                                      | dropdowns, popovers                                                      |
-| `--text-default` / `--text-muted` / `--text-faint`                  | text hierarchy                                                           |
-| `--text-link` / `--text-on-accent`                                  | link text, text on accent fills                                          |
-| `--border-default` / `--border-strong`                              | borders                                                                  |
-| `--accent` / `--accent-subtle` / `--focus-ring`                     | brand crimson interactions                                               |
-| `--status-success/-warning/-error/-info/-neutral/-progress`         | status colors (each also has `-bg` and `-border` recipes)                |
-| `--hue-gray/-slate/-blue/-green/-emerald/-violet/-pink/-red/-amber` | decorative categorical palette (nav badges, env colors, brand-ish icons) |
+## Tokens (`src/lib/design/`)
 
-Tailwind utilities from the same layer: `text-fg`, `text-muted`, `text-faint`,
-`bg-surface`, `bg-raised`, `bg-sunken`, `border-edge`, `text-accent`. Prefer these over
-`style="color: var(...)"`.
+- `scales.css` is generated (`pnpm gen:design`) from the theme engine: `--neutral-*`,
+  `--accent-*`, `--red-*`, `--amber-*`, `--green-*`, `--blue-*`, steps 1 to 10, plus
+  `-contrast` (text on step 7). The theme store repaints them live.
+- Step meanings: 1 component bg, 2 hover bg, 3 active bg, 4 border, 5 hover border,
+  6 active border, 7 solid fill, 8 solid hover, 9 secondary text, 10 primary text.
+- Roles (`tokens.css`): `--bg-app` (tinted frame), `--bg-sheet` (content sheet),
+  `--bg-surface`, `--bg-raised`, `--bg-sunken`, `--bg-hover`, `--bg-active`,
+  `--text-default|muted|faint|link`, `--border-default|strong`, `--accent`,
+  `--status-{kind}` (text), `-solid`, `-bg`, `-border`, `--shadow-raised|floating|overlay`,
+  `--material-glass-*`, `--radius-control|card|panel`, `--weight-*`, `--z-*`,
+  `--page-narrow|default|wide`.
+- Tailwind utilities on top: `text-fg/muted/faint`, `bg-app/sheet/surface/raised/sunken/
+hover/active`, `border-edge`, `text-accent`, `bg-accent-soft`, `text-success` (and
+  `-soft` backgrounds), type roles `text-display|title-1|title-2|title-3|headline|body|
+callout|caption|micro`, `rounded-control|card|panel`.
+- Fonts: Plus Jakarta Sans (UI), JetBrains Mono (code, logs, IDs).
 
-Global status color classes: `.status--{success|warning|error|info|neutral|progress}`
-set `color:`; pair with `currentColor` backgrounds for tinted chips and dots.
+## Which component
 
-## Status (`src/lib/components/ui/status.ts`)
+| Need                       | Use                                                                          |
+| -------------------------- | ---------------------------------------------------------------------------- |
+| Page                       | `Page` (title, description, eyebrow, actions, aside, width)                  |
+| Group of content           | `SectionCard` (title, description, actions, footer, flush)                   |
+| Plain container            | `Card` (`href`/`onclick` makes it interactive)                               |
+| Rows of things             | `List` + `ListRow`; deployments/databases/jobs use `EntityRow`               |
+| Table of data              | `Table`                                                                      |
+| Numbers                    | `Metric`                                                                     |
+| Action                     | `Button` (primary, secondary, ghost, danger; `icon`, `iconRight`, `loading`) |
+| Actions on a thing         | `Menu` + `MenuItem`                                                          |
+| Pick a value               | `Select` (native), `Dropdown` (rich), `Combobox` (searchable)                |
+| Text entry                 | `Field` + `Input` / `Textarea`                                               |
+| On or off                  | `Switch`, `ToggleRow` for settings rows, `Checkbox` in lists                 |
+| One of few                 | `SegmentedControl`; one of many in a form: `RadioGroup`                      |
+| Sections of a page         | `Tabs`                                                                       |
+| Sidebar link               | `NavItem`                                                                    |
+| Project or org identity    | `Monogram`, `Avatar`, `Aura`                                                 |
+| Something happened         | `toasts.add()` (see Toasts)                                                  |
+| Something is wrong here    | `Alert`                                                                      |
+| Status                     | `StatusBadge`, `StatusDot` via `ui/status.ts` only                           |
+| Label that is not status   | `Badge`                                                                      |
+| Short hint                 | `Tooltip`                                                                    |
+| Floating panel             | `PopoverPanel`                                                               |
+| Dialog                     | `Modal`; destructive confirm: `ConfirmModal`                                 |
+| Side panel for create/edit | `Sheet`                                                                      |
+| Loading                    | `Skeleton`, `Spinner`, `Progress`                                            |
+| Nothing here               | `EmptyState` (always with an action)                                         |
+| Keys, code, IDs            | `Kbd`, `CopyButton`, `MiddleTruncate` (hashes and IDs only)                  |
+| Times                      | `RelativeTime`                                                               |
 
-The ONLY source of status → kind/label/icon mapping. Never hand-roll a status switch.
+## Toasts
 
-- `resourceStatus(status?, buildStatus?)`: deployments, databases, stacks, template
-  instances. Build in flight dominates.
-- `podStatus(phase?)`: pod phases.
-- `buildStatusMeta(buildStatus?)`: build rows.
-- `runStatus(status)`: job runs.
-- `statusMeta(kind, label, pulse?)`: custom cases (connected/not connected, etc).
+`toasts.add({ title, description?, color, action?, position? })` and
+`toasts.promise(work, { loading, success, error })`. Titles are short and past tense
+for results ("Changes saved"). Position follows context: results of something the user
+clicked go `bottom-right` (default); things that happened on their own (a build
+finishing, connection lost) go `top-center`.
 
-Render with `<StatusBadge meta={...} />` (tinted pill, dot + label) or
-`<StatusDot meta={...} size={n} />` (dot only, pulses when meta.pulse).
+## Truncation
 
-## Component decision trees
+Names and URLs truncate at the end. Middle truncation only for hashes, IDs and file
+paths, where the end is what tells two values apart.
 
-- Status indicator → `StatusBadge` / `StatusDot`. Taxonomy label (env name, plan,
-  build type) → `Badge` or a `--hue-*` tinted chip. Never `Badge` for status.
-- Action list on a trigger → `Menu` + `MenuItem`. Value picker → `Dropdown` / `Select`.
-  Free-form floating panel → `PopoverPanel`.
-- Dialog → `ui/Modal` (or `ConfirmModal` for confirmations). Never a bespoke overlay.
-- Section container → `SectionCard`. Loading → `ui/Skeleton`. Nothing → `ui/EmptyState`.
-- Buttons/inputs → `ui/Button`, `ui/Input`, `ui/Field`, `ui/Select`. The global
-  `.btn/.card/.badge/.input/.alert` classes are legacy: never in new markup.
+## Performance rules
+
+- Never `background-attachment: fixed`, never `backdrop-filter` on scrolling content.
+- Shadows never transition. Hover lift fades a pre-rendered shadow layer's opacity.
+- Lists past ~50 rows rely on `content-visibility` (built into `ListRow`).
+- Shaders run once per screen at most; lists use a baked still (`Aura` with `still`).
 
 ## Motion
 
-See CLAUDE.md Motion System. One canonical implementation per utility in
-`$lib/utils/motion.svelte.ts`; never redefine locally.
-
-Timing is never written at a call site. Pick one of four named springs
-(`smooth`, `snappy`, `bouncy`, `interactive`) and let `transition()` resolve it
-against the user animation level (Settings → Accessibility). No `stiffness`,
-`damping`, or `mass` in components.
-
-Every animation must respect the animation level: the motion utilities gate
-themselves; svelte transitions come from `$lib/utils/transitions` (never
-`svelte/transition` directly); one-off `animate()` calls take `transition(name)`
-as their options, or go through `motion()` to also drop transforms at `reduced`.
-CSS keyframes are killed below `full` by default, so a progress indicator that
-must keep spinning needs `data-motion="progress"`.
+Named springs in `src/lib/design/springs.ts` (`smooth`, `snappy`, `bouncy`,
+`interactive`, `morph`, `cinematic`), mirrored as CSS `linear()` tokens
+(`--spring-{name}`, `--spring-{name}-duration`) by `pnpm gen:design`. CSS transitions
+use the tokens; JS uses `transition(name)`, `motion()` or `SpringValue` from
+`$lib/utils/motion.svelte`. Never write stiffness, damping or raw durations in a
+component. See `CLAUDE.md` for the full motion system.
 
 ## Theme engine (`src/lib/theme/`)
 

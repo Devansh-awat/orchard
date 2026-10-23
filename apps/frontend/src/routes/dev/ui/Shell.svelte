@@ -14,7 +14,11 @@
 	import Monogram from '$lib/components/ui/Monogram.svelte';
 	import Kbd from '$lib/components/ui/Kbd.svelte';
 
-	let { active = 'apps', children }: { active?: string; children: Snippet } = $props();
+	let {
+		active = 'apps',
+		nav = undefined,
+		children
+	}: { active?: string; nav?: Snippet; children: Snippet } = $props();
 
 	const NAV = [
 		{ id: 'apps', label: 'Apps', icon: LayoutGrid },
@@ -42,20 +46,24 @@
 			<Kbd keys={['⌘', 'K']} />
 		</button>
 
-		<div class="group">
-			{#each NAV as item (item.id)}
-				<NavItem href="#" label={item.label} icon={item.icon} active={item.id === active} />
-			{/each}
-		</div>
+		{#if nav}
+			{@render nav()}
+		{:else}
+			<div class="group">
+				{#each NAV as item (item.id)}
+					<NavItem href="#" label={item.label} icon={item.icon} active={item.id === active} />
+				{/each}
+			</div>
 
-		<div class="group">
-			<p class="group-label">Projects</p>
-			{#each PROJECTS as name (name)}
-				<NavItem href="#" label={name}>
-					{#snippet leading()}<Monogram {name} size="sm" />{/snippet}
-				</NavItem>
-			{/each}
-		</div>
+			<div class="group">
+				<p class="group-label">Projects</p>
+				{#each PROJECTS as name (name)}
+					<NavItem href="#" label={name}>
+						{#snippet leading()}<Monogram {name} size="sm" />{/snippet}
+					</NavItem>
+				{/each}
+			</div>
+		{/if}
 
 		<div class="me">
 			<span class="avatar">S</span>
