@@ -20,7 +20,8 @@ import {
 } from '../src/kubernetes/postgres-image.service';
 
 const D = (c: string) => c.repeat(64);
-const img = (tag: string, digest = 'a') => `ghcr.io/cloudnative-pg/postgresql:${tag}@sha256:${D(digest)}`;
+const img = (tag: string, digest = 'a') =>
+  `ghcr.io/cloudnative-pg/postgresql:${tag}@sha256:${D(digest)}`;
 
 const CATALOG = `apiVersion: postgresql.cnpg.io/v1
 kind: ClusterImageCatalog
@@ -63,7 +64,10 @@ test('the compiled-in fallback is itself valid for every major orchard offers', 
 
 test('an env pin beats the channel, which beats the fallback, which beats the bare tag', () => {
   const channel = { images: { 17: img('17.12-x') }, source: 's', catalogDate: null, fetchedAt: '' };
-  assert.equal(resolvePostgresImage(17, channel, { POSTGRES_IMAGE_17: 'mirror/pg:17' }), 'mirror/pg:17');
+  assert.equal(
+    resolvePostgresImage(17, channel, { POSTGRES_IMAGE_17: 'mirror/pg:17' }),
+    'mirror/pg:17'
+  );
   assert.equal(resolvePostgresImage(17, channel, {}), img('17.12-x'));
   assert.equal(resolvePostgresImage(16, channel, {}), FALLBACK_POSTGRES_IMAGES[16]);
   assert.equal(resolvePostgresImage(99, null, {}), 'ghcr.io/cloudnative-pg/postgresql:99');
@@ -126,13 +130,30 @@ test('the batch skips unhealthy, hibernated, backing-up and non-C clusters and i
 test('a cluster has settled once healthy with every instance ready on the target image', () => {
   const target = img('17.11-system-trixie');
   const c = (status: any, instances = 1) => ({ spec: { instances }, status });
-  assert.ok(clusterSettled(c({ phase: 'Cluster in healthy state', readyInstances: 1, image: target }), target));
-  assert.ok(!clusterSettled(c({ phase: 'Upgrading cluster', readyInstances: 1, image: target }), target));
-  assert.ok(!clusterSettled(c({ phase: 'Cluster in healthy state', readyInstances: 1 }, 2), target));
-  assert.ok(!clusterSettled(c({ phase: 'Cluster in healthy state', readyInstances: 1, image: 'old' }), target));
+  assert.ok(
+    clusterSettled(
+      c({ phase: 'Cluster in healthy state', readyInstances: 1, image: target }),
+      target
+    )
+  );
+  assert.ok(
+    !clusterSettled(c({ phase: 'Upgrading cluster', readyInstances: 1, image: target }), target)
+  );
+  assert.ok(
+    !clusterSettled(c({ phase: 'Cluster in healthy state', readyInstances: 1 }, 2), target)
+  );
+  assert.ok(
+    !clusterSettled(
+      c({ phase: 'Cluster in healthy state', readyInstances: 1, image: 'old' }),
+      target
+    )
+  );
 });
 
-function liveCluster(name: string, opts: { image?: string; phase?: string; annotations?: any } = {}) {
+function liveCluster(
+  name: string,
+  opts: { image?: string; phase?: string; annotations?: any } = {}
+) {
   const image = opts.image ?? 'ghcr.io/cloudnative-pg/postgresql:17';
   return {
     metadata: { namespace: 'ns', name, annotations: opts.annotations ?? {} },
@@ -146,7 +167,10 @@ function liveCluster(name: string, opts: { image?: string; phase?: string; annot
   };
 }
 
-function rolloutHarness(clusters: any[], opts: { collation?: 'c' | 'other' | null; enabled?: boolean } = {}) {
+function rolloutHarness(
+  clusters: any[],
+  opts: { collation?: 'c' | 'other' | null; enabled?: boolean } = {}
+) {
   const settings = new Map<string, string>();
   const patched: string[] = [];
   const s = Object.create(PostgresImageService.prototype) as any;

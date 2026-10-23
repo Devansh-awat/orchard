@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.71.2](https://github.com/hackclub/orchard/compare/frontend/v1.71.1...frontend/v1.71.2) (2026-10-23)
+
+
+### Bug Fixes
+
+* **frontend:** stop the dashboard repainting the whole viewport on every scroll frame ([6e32aaa](https://github.com/hackclub/orchard/commit/6e32aaa3172634c712d5eba830c9602b7f6cc646))
+
 ## [1.71.1](https://github.com/hackclub/orchard/compare/frontend/v1.71.0...frontend/v1.71.1) (2026-10-21)
 
 

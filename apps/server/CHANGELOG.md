@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.80.0](https://github.com/hackclub/orchard/compare/server/v2.79.4...server/v2.80.0) (2026-10-23)
+
+
+### Features
+
+* **server:** tenant postgres follows cnpg's patched image catalog and rolls existing databases onto it a few at a time ([59878bc](https://github.com/hackclub/orchard/commit/59878bc53ee32be99dbf5e2c4bf272e4a7075769))
+
+
+### Bug Fixes
+
+* **chart:** pin patched victoriametrics, vmagent, kube-state-metrics, node-exporter and pgbouncer images ([a6f7bdb](https://github.com/hackclub/orchard/commit/a6f7bdb408122a6aeff4c55a23012492946586b1))
+* pin job runtime, buildkit and redis images so nodes pull patched layers ([7dbf1f6](https://github.com/hackclub/orchard/commit/7dbf1f6961af9e2aaf819e082040daf54f76cda9))
+* **server:** drop the void operator oxlint rejects in the postgres image tests ([b42201a](https://github.com/hackclub/orchard/commit/b42201a94e6f7db02358eca72a994558669181cf))
+* **server:** prune old image tags without deleting the manifest a newer tag still uses ([22422ec](https://github.com/hackclub/orchard/commit/22422ecbcbe677f604ed307b15dd7f5bb88361a6))
+* **server:** restore passkey verification and harden ceremonies ([#179](https://github.com/hackclub/orchard/issues/179)) ([882b5c5](https://github.com/hackclub/orchard/commit/882b5c55ab56c8752a3b17aebd56cd377bb9fbbf))
+* **server:** run server and mcp on node alpine and drop the unused git, curl and docker cli ([9482cb6](https://github.com/hackclub/orchard/commit/9482cb68c182e5cfbac3e3f38f401dde3c174bf1))
+* **server:** send hsts, frame and nosniff headers on api responses and drop x-powered-by ([0d4a1ac](https://github.com/hackclub/orchard/commit/0d4a1ac97214b1a4d12aec38d1219e5654d6b51e))
+* **server:** spread default nightly backups across 01-05 utc instead of every database at 03:00 ([1bdfe9b](https://github.com/hackclub/orchard/commit/1bdfe9b93d21039d910afe60aeddc7a18723f461))
+* **server:** tag apm traces with the authenticated user ([da82758](https://github.com/hackclub/orchard/commit/da827583b08e147b92cc8991bf6f0f58c848d631))
+
 ## [2.79.4](https://github.com/hackclub/orchard/compare/server/v2.79.3...server/v2.79.4) (2026-10-21)
 
 

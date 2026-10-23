@@ -70,11 +70,16 @@ export function resolvePostgresImage(
   const pinned = env[`POSTGRES_IMAGE_${major}`]?.trim();
   if (pinned) return pinned;
   return (
-    channel?.images[major] ?? FALLBACK_POSTGRES_IMAGES[major] ?? `${POSTGRES_IMAGE_REPOSITORY}:${major}`
+    channel?.images[major] ??
+    FALLBACK_POSTGRES_IMAGES[major] ??
+    `${POSTGRES_IMAGE_REPOSITORY}:${major}`
   );
 }
 
-export function parseHourWindow(raw: string | undefined, fallback: [number, number]): [number, number] {
+export function parseHourWindow(
+  raw: string | undefined,
+  fallback: [number, number]
+): [number, number] {
   const m = raw?.trim().match(/^(\d{1,2})-(\d{1,2})$/);
   if (!m) return fallback;
   const start = Number(m[1]);

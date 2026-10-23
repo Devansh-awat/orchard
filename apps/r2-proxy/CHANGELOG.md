@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.3](https://github.com/hackclub/orchard/compare/r2-proxy/v0.6.2...r2-proxy/v0.6.3) (2026-10-23)
+
+
+### Bug Fixes
+
+* **r2-proxy:** stream hashed and unsigned uploads to r2 instead of buffering every part in memory ([a2a78c1](https://github.com/hackclub/orchard/commit/a2a78c12b1cc45f0d23540a2bb4bdef659978d1e))
+
 ## [0.6.2](https://github.com/hackclub/orchard/compare/r2-proxy/v0.6.1...r2-proxy/v0.6.2) (2026-10-21)
 
 

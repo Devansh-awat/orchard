@@ -131,7 +131,9 @@ export class PostgresImageService implements OnApplicationBootstrap, OnModuleDes
       this.channel = next;
       if (!unchanged) {
         this.logger.log(
-          `postgres image channel now ${parsed.catalogDate ?? 'undated'} from ${url}: ${Object.entries(images)
+          `postgres image channel now ${parsed.catalogDate ?? 'undated'} from ${url}: ${Object.entries(
+            images
+          )
             .map(([m, i]) => `${m}=${i.split('@')[0].split(':').pop()}`)
             .join(' ')}`
         );
@@ -229,7 +231,10 @@ export class PostgresImageService implements OnApplicationBootstrap, OnModuleDes
     result.outdated = candidates.filter((c) => isOutdated(c)).length;
     gauge('orchard.cnpg.image_outdated', result.outdated);
 
-    const window = parseHourWindow(process.env.POSTGRES_IMAGE_ROLLOUT_WINDOW, DEFAULT_ROLLOUT_WINDOW);
+    const window = parseHourWindow(
+      process.env.POSTGRES_IMAGE_ROLLOUT_WINDOW,
+      DEFAULT_ROLLOUT_WINDOW
+    );
     if (!hourInWindow(now.getUTCHours(), window)) return result;
 
     const limit = this.rolloutBatchSize();

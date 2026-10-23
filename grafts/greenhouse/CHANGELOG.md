@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.2](https://github.com/hackclub/orchard/compare/greenhouse/v1.5.1...greenhouse/v1.5.2) (2026-10-23)
+
+
+### Bug Fixes
+
+* **server:** restore passkey verification and harden ceremonies ([#179](https://github.com/hackclub/orchard/issues/179)) ([882b5c5](https://github.com/hackclub/orchard/commit/882b5c55ab56c8752a3b17aebd56cd377bb9fbbf))
+
 ## [1.5.1](https://github.com/hackclub/orchard/compare/greenhouse/v1.5.0...greenhouse/v1.5.1) (2026-10-21)
 
 
