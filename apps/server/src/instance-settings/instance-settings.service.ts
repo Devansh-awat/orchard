@@ -10,6 +10,9 @@ const MCP_ENABLED_ENV = 'MCP_ENABLED';
 export const SSO_ENFORCED_KEY = 'sso_enforced';
 export const SSO_ENFORCED_ENV = 'SSO_ENFORCED';
 
+export const POSTGRES_AUTO_UPDATE_KEY = 'postgres_auto_update';
+export const POSTGRES_AUTO_UPDATE_ENV = 'POSTGRES_AUTO_UPDATE';
+
 export interface ToggleState {
   enabled: boolean;
   dbValue: boolean;
@@ -138,5 +141,18 @@ export class InstanceSettingsService {
   async setSsoEnforced(value: boolean): Promise<void> {
     this.assertUnlocked(SSO_ENFORCED_ENV);
     await this.setBool(SSO_ENFORCED_KEY, value);
+  }
+
+  isPostgresAutoUpdateEnabled(): Promise<boolean> {
+    return this.resolveBool(POSTGRES_AUTO_UPDATE_KEY, POSTGRES_AUTO_UPDATE_ENV, true);
+  }
+
+  getPostgresAutoUpdateState(): Promise<ToggleState> {
+    return this.toggleState(POSTGRES_AUTO_UPDATE_KEY, POSTGRES_AUTO_UPDATE_ENV, true);
+  }
+
+  async setPostgresAutoUpdate(value: boolean): Promise<void> {
+    this.assertUnlocked(POSTGRES_AUTO_UPDATE_ENV);
+    await this.setBool(POSTGRES_AUTO_UPDATE_KEY, value);
   }
 }

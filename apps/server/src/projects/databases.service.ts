@@ -4,7 +4,8 @@ import {
   BadRequestException,
   Inject,
   forwardRef,
-  Logger
+  Logger,
+  Optional
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { ModuleRef } from '@nestjs/core';
@@ -18,6 +19,8 @@ import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
 import { K8sNetworkService } from '../kubernetes/k8s-network.service';
 import { K8sCnpgService, normalizeBackupEndpointURL } from '../kubernetes/k8s-cnpg.service';
+import { PostgresImageService } from '../kubernetes/postgres-image.service';
+import { resolvePostgresImage } from '../kubernetes/postgres-images';
 import { k8sErrorMessage } from '../kubernetes/k8s-error';
 import { PG_PARAM_BOUNDS } from '../kubernetes/pg-params';
 import { deriveDbTuning } from '../kubernetes/db-tuning';
@@ -98,8 +101,13 @@ export class DatabasesService {
     private readonly instanceConfig: InstanceConfigService,
     private readonly moduleRef: ModuleRef,
     private readonly bindings: ResourceBindingsService,
-    private readonly crypto: SecretCryptoService
+    private readonly crypto: SecretCryptoService,
+    @Optional() private readonly postgresImages?: PostgresImageService
   ) {}
+
+  private postgresImageFor(major: number): string {
+    return this.postgresImages?.imageFor(major) ?? resolvePostgresImage(major, null);
+  }
 
   private revealPassword<T extends { dbPassword: string }>(row: T): T {
     return { ...row, dbPassword: this.crypto.open(row.dbPassword) };
@@ -587,7 +595,7 @@ export class DatabasesService {
         instances: replicas,
         placement: dbPlacement,
         importFrom,
-        imageName: `ghcr.io/cloudnative-pg/postgresql:${pgMajor}`
+        imageName: this.postgresImageFor(pgMajor)
       }));
     } catch (e) {
       if (r2ProxyAccessKey) {
@@ -2320,7 +2328,7 @@ export class DatabasesService {
             instances: database.replicas ?? 1,
             resources: restoreResources,
             backupCompression: database.backupCompression,
-            imageName: `ghcr.io/cloudnative-pg/postgresql:${database.pgMajor ?? 17}`
+            imageName: this.postgresImageFor(database.pgMajor ?? 17)
           }
         );
 

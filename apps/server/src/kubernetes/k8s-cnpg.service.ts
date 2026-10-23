@@ -51,6 +51,7 @@ import { parseKubeletSummary, VolumeUsage } from './volume-stats';
 import { WRITE_GUARD_ANNOTATION } from './cnpg-status';
 import { stuckReplicas, type StuckReplica } from './cnpg-stuck-replicas';
 import { cnpgOperatorPolicy } from './security-policies';
+import { resolvePostgresImage } from './postgres-images';
 
 export function cnpgScheduleName(clusterName: string): string {
   return `${clusterName}-schedule`.substring(0, 63);
@@ -178,7 +179,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     return cleared;
   }
 
-  private canRunClusterWide(): boolean {
+  canRunClusterWide(): boolean {
     try {
       const lease = this.moduleRef.get(LeaseService, { strict: false });
       const leader = this.moduleRef.get(LeaderElectionService, { strict: false });
@@ -1596,7 +1597,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
 
     const clusterSpec: any = {
       instances: Math.max(1, Math.trunc(options.instances || 1)),
-      imageName: options.imageName || 'ghcr.io/cloudnative-pg/postgresql:17',
+      imageName: options.imageName || resolvePostgresImage(17, null),
       primaryUpdateStrategy: 'unsupervised',
       storage: {
         size: options.storageSize || '1Gi',
@@ -2279,7 +2280,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
 
     const spec: any = {
       instances: Math.max(1, Math.trunc(options.instances || 1)),
-      imageName: options.imageName || 'ghcr.io/cloudnative-pg/postgresql:17',
+      imageName: options.imageName || resolvePostgresImage(17, null),
       storage: {
         size: options.storageSize || '1Gi',
         storageClass: process.env.K8S_STORAGE_CLASS || 'longhorn'
@@ -2629,7 +2630,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     return { success: r.success, output: r.stdout + r.stderr };
   }
 
-  private async annotateCnpgCluster(
+  async annotateCnpgCluster(
     namespace: string,
     clusterName: string,
     annotations: Record<string, string>
@@ -2913,6 +2914,47 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       if (e.response?.statusCode === 404) return false;
       throw e;
     }
+  }
+
+  async patchClusterImage(
+    namespace: string,
+    clusterName: string,
+    imageName: string,
+    annotations: Record<string, string> = {}
+  ): Promise<void> {
+    this.ensureKubeConfig();
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    await customApi.patchNamespacedCustomObject(
+      this.CNPG_GROUP,
+      this.CNPG_VERSION,
+      namespace,
+      this.CNPG_PLURAL,
+      clusterName,
+      {
+        ...(Object.keys(annotations).length ? { metadata: { annotations } } : {}),
+        spec: { imageName }
+      },
+      undefined,
+      undefined,
+      undefined,
+      { headers: { 'Content-Type': 'application/merge-patch+json' } }
+    );
+  }
+
+  async probeClusterCollation(namespace: string, cluster: any): Promise<'c' | 'other' | null> {
+    const pod = cluster?.status?.currentPrimary;
+    if (typeof pod !== 'string' || !pod) return null;
+    const r = await this.execInPod(namespace, pod, 'postgres', [
+      'psql',
+      '-U',
+      'postgres',
+      '-tAc',
+      "select count(*) from pg_database d where datallowconn and (datcollate <> 'C' or datctype <> 'C' or coalesce(to_jsonb(d)->>'datlocprovider', 'c') <> 'c')"
+    ]);
+    if (!r.success) return null;
+    const n = Number(r.stdout.trim());
+    if (!Number.isFinite(n)) return null;
+    return n === 0 ? 'c' : 'other';
   }
 
   async getScheduledBackupSchedule(namespace: string, clusterName: string): Promise<string | null> {
