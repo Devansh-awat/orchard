@@ -7,6 +7,8 @@ export type SidebarItem = {
 	icon?: Icon;
 	active?: boolean;
 	status?: StatusMeta;
+	count?: number;
+	alert?: boolean;
 };
 
 export type SidebarSection = { label?: string; items: SidebarItem[]; tiles?: boolean };
@@ -19,3 +21,5 @@ export type FailingApp = {
 	kind?: 'deployment' | 'database' | 'job';
 	icon?: string | null;
 };
+
+export type FailingStyle = 'row' | 'badge' | 'footer';

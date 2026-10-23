@@ -1,11 +1,11 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { ChevronsUpDown, ChevronRight, TriangleAlert, PanelLeft } from 'lucide-svelte';
+	import { ChevronsUpDown, ChevronUp, TriangleAlert, PanelLeft } from 'lucide-svelte';
 	import NavItem from '$lib/components/ui/NavItem.svelte';
 	import StatusDot from '$lib/components/ui/StatusDot.svelte';
 	import RemoteImg from '$lib/components/ui/RemoteImg.svelte';
 	import { resourceStatus } from '$lib/components/ui/status';
-	import type { FailingApp, SidebarSection } from './sidebar';
+	import type { FailingApp, FailingStyle, SidebarSection } from './sidebar';
 	import SearchField from '$lib/components/ui/SearchField.svelte';
 	import PopoverPanel from '$lib/components/ui/PopoverPanel.svelte';
 	import AppIcon from '$lib/components/ui/AppIcon.svelte';
@@ -16,6 +16,7 @@
 		user,
 		sections = [],
 		failing = [],
+		failingStyle = 'row',
 		onSearch = undefined,
 		children = undefined
 	}: {
@@ -23,13 +24,32 @@
 		user: { handle: string; avatar?: string | null };
 		sections?: SidebarSection[];
 		failing?: FailingApp[];
+		failingStyle?: FailingStyle;
 		onSearch?: () => void;
 		children?: Snippet;
 	} = $props();
 
 	const crashing = resourceStatus('crashing');
-	const failingNames = $derived(failing.map((f) => f.label).join(', '));
 </script>
+
+{#snippet failList(close: () => void)}
+	<div class="fail">
+		<p class="fail-head">Failing now</p>
+		{#each failing as f (f.label)}
+			<a class="fail-row" href={f.href} onclick={close}>
+				<span class="fail-icon">
+					<AppIcon name={f.label} kind={f.kind} icon={f.icon} size="sm" />
+					<span class="fail-dot"><StatusDot meta={crashing} size={7} /></span>
+				</span>
+				<span class="fail-text">
+					<span class="fail-name">{f.label}</span>
+					{#if f.reason}<span class="fail-reason">{f.reason}</span>{/if}
+				</span>
+				{#if f.at}<span class="fail-when"><RelativeTime date={f.at} /></span>{/if}
+			</a>
+		{/each}
+	</div>
+{/snippet}
 
 <nav class="panel" aria-label="Main">
 	<button type="button" class="org">
@@ -45,50 +65,25 @@
 
 	<SearchField placeholder="Search" shortcut="⌘K" size="sm" onfocus={onSearch} />
 
-	{#if failing.length > 0 && !children}
-		<PopoverPanel placement="right-start">
-			{#snippet trigger(attrs, open)}
-				<button type="button" class="alert" class:alert--open={open} {...attrs}>
-					<span class="alert-icon"><TriangleAlert size={14} strokeWidth={2.25} /></span>
-					<span class="alert-text">
-						<span class="alert-title">{failing.length} failing</span>
-						<span class="alert-sub">{failingNames}</span>
-					</span>
-					<span class="alert-stack">
-						{#each failing.slice(0, 3) as f (f.label)}
-							<span class="alert-stack-item"
-								><AppIcon name={f.label} kind={f.kind} icon={f.icon} size="xs" /></span
-							>
-						{/each}
-					</span>
-					<ChevronRight size={14} class="alert-chev" />
-				</button>
-			{/snippet}
-			{#snippet children({ close })}
-				<div class="fail">
-					<p class="fail-head">Failing now</p>
-					{#each failing as f (f.label)}
-						<a class="fail-row" href={f.href} onclick={close}>
-							<span class="fail-icon">
-								<AppIcon name={f.label} kind={f.kind} icon={f.icon} size="sm" />
-								<span class="fail-dot"><StatusDot meta={crashing} size={7} /></span>
-							</span>
-							<span class="fail-text">
-								<span class="fail-name">{f.label}</span>
-								{#if f.reason}<span class="fail-reason">{f.reason}</span>{/if}
-							</span>
-							{#if f.at}<span class="fail-when"><RelativeTime date={f.at} /></span>{/if}
-						</a>
-					{/each}
-				</div>
-			{/snippet}
-		</PopoverPanel>
-	{/if}
-
 	<div class="scroll">
 		{#if children}
 			{@render children()}
 		{:else}
+			{#if failingStyle === 'row' && failing.length > 0}
+				<PopoverPanel placement="right-start">
+					{#snippet trigger(attrs, open)}
+						<NavItem
+							label="Failing"
+							icon={TriangleAlert}
+							tone="danger"
+							count={failing.length}
+							active={open}
+							{...attrs}
+						/>
+					{/snippet}
+					{#snippet children({ close })}{@render failList(close)}{/snippet}
+				</PopoverPanel>
+			{/if}
 			{#each sections as section, si (si)}
 				{#if section.label}<p class="section">{section.label}</p>{/if}
 				{#each section.items as item (item.label)}
@@ -104,12 +99,34 @@
 							{/snippet}
 						</NavItem>
 					{:else}
-						<NavItem href={item.href} label={item.label} icon={item.icon} active={item.active} />
+						<NavItem
+							href={item.href}
+							label={item.label}
+							icon={item.icon}
+							active={item.active}
+							countTone={item.alert && failingStyle === 'badge' ? 'danger' : 'default'}
+							count={item.alert && failingStyle === 'badge' && failing.length > 0
+								? failing.length
+								: item.count}
+						/>
 					{/if}
 				{/each}
 			{/each}
 		{/if}
 	</div>
+
+	{#if failingStyle === 'footer' && failing.length > 0 && !children}
+		<PopoverPanel placement="top-start">
+			{#snippet trigger(attrs, open)}
+				<button type="button" class="status" class:status--open={open} {...attrs}>
+					<span class="status-dot"></span>
+					<span class="status-label">{failing.length} apps failing</span>
+					<ChevronUp size={14} class="status-chev" />
+				</button>
+			{/snippet}
+			{#snippet children({ close })}{@render failList(close)}{/snippet}
+		</PopoverPanel>
+	{/if}
 
 	<div class="foot">
 		<button type="button" class="me">
@@ -294,80 +311,44 @@
 		color: var(--text-muted);
 		cursor: pointer;
 	}
-	.alert {
+	.status {
 		display: flex;
 		align-items: center;
-		gap: 0.625rem;
+		gap: 0.5rem;
 		width: 100%;
-		min-height: 2.75rem;
-		padding: 0.375rem 0.5rem 0.375rem 0.4375rem;
+		height: 2rem;
+		padding: 0 0.625rem;
 		border: none;
-		border-radius: calc(0.6875rem * var(--corner-scale));
+		border-radius: calc(0.5625rem * var(--corner-scale));
 		corner-shape: var(--corner);
-		background: color-mix(in oklab, var(--red-solid) 8%, transparent);
-		box-shadow: inset 0 0 0 0.5px color-mix(in oklab, var(--red-solid) 22%, transparent);
-		color: var(--text-default);
-		font: inherit;
-		text-align: left;
-		cursor: pointer;
-		transition: background-color var(--dur-fast) ease;
-	}
-	.alert:hover,
-	.alert--open {
-		background: color-mix(in oklab, var(--red-solid) 12%, transparent);
-	}
-	.alert-icon {
-		display: grid;
-		place-items: center;
-		flex-shrink: 0;
-		width: 1.5rem;
-		height: 1.5rem;
-		border-radius: calc(0.375rem * var(--corner-scale));
-		corner-shape: var(--corner);
-		background: var(--red-solid);
-		color: var(--on-solid);
-	}
-	.alert-text {
-		display: flex;
-		flex: 1;
-		flex-direction: column;
-		gap: 0.375rem;
-		min-width: 0;
-	}
-	.alert-title,
-	.alert-sub {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		text-box: trim-both cap alphabetic;
-		padding-block: 0.3em;
-		margin-block: -0.3em;
-	}
-	.alert-title {
-		color: var(--red-9);
-		font-size: var(--text-body);
-		font-weight: var(--weight-semibold);
-	}
-	.alert-sub {
+		background: none;
 		color: var(--text-muted);
-		font-size: var(--text-caption);
+		font: inherit;
+		font-size: var(--text-callout);
+		cursor: pointer;
+		transition:
+			background-color var(--dur-fast) ease,
+			color var(--dur-fast) ease;
 	}
-	.alert-stack {
-		display: flex;
+	.status:hover,
+	.status--open {
+		background: color-mix(in oklab, var(--neutral-10) 6%, transparent);
+		color: var(--text-default);
+	}
+	.status-dot {
+		width: 7px;
+		height: 7px;
 		flex-shrink: 0;
+		border-radius: 50%;
+		background: var(--red-solid);
+		box-shadow: 0 0 0 3px color-mix(in oklab, var(--red-solid) 18%, transparent);
 	}
-	.alert-stack-item {
-		display: block;
-		margin-left: -0.375rem;
-		border-radius: calc(0.375rem * var(--corner-scale));
-		corner-shape: var(--corner);
-		box-shadow: 0 0 0 2px var(--bg-surface);
+	.status-label {
+		flex: 1;
+		text-align: left;
+		text-box: trim-both cap alphabetic;
 	}
-	.alert-stack-item:first-child {
-		margin-left: 0;
-	}
-	.alert :global(.alert-chev) {
-		flex-shrink: 0;
+	.status :global(.status-chev) {
 		color: var(--text-faint);
 	}
 	.fail {

@@ -124,7 +124,7 @@ export const SIDEBAR = {
 			{
 				label: 'Platform',
 				items: [
-					{ label: 'Your Apps', href: '#', icon: Sprout, active: active === 'apps' },
+					{ label: 'Your Apps', href: '#', icon: Sprout, active: active === 'apps', alert: true },
 					{ label: 'Jobs', href: '#', icon: Timer },
 					{ label: 'Usage', href: '#', icon: Gauge },
 					{ label: 'Greenhouse', href: '#', icon: Leaf },

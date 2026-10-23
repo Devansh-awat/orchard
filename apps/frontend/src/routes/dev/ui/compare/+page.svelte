@@ -47,6 +47,7 @@
 	import RecentBuilds from '$lib/components/patterns/RecentBuilds.svelte';
 
 	let screen = $state('home');
+	let failingStyle = $state<'row' | 'badge' | 'footer'>('row');
 	let feed = $state<'grouped' | 'widget' | 'stack' | 'shelf'>('grouped');
 	let tab = $state<'overview' | 'logs' | 'metrics' | 'env' | 'settings'>('overview');
 	let range = $state('day');
@@ -71,11 +72,26 @@
 			{ value: 'settings', label: 'Settings' }
 		]}
 	/>
+	<SegmentedControl
+		label="Failing style"
+		bind:value={failingStyle}
+		options={[
+			{ value: 'row', label: 'Row' },
+			{ value: 'badge', label: 'Badge' },
+			{ value: 'footer', label: 'Footer' }
+		]}
+	/>
 </div>
 
 <AppFrame>
 	{#snippet sidebar()}
-		<Sidebar org={SIDEBAR.org} user={SIDEBAR.user} failing={SIDEBAR.failing} {sections} />
+		<Sidebar
+			org={SIDEBAR.org}
+			user={SIDEBAR.user}
+			failing={SIDEBAR.failing}
+			{failingStyle}
+			{sections}
+		/>
 	{/snippet}
 	{#snippet backdrop()}
 		{#if screen === 'project'}<ProjectBackdrop name="terra" image={PROJECTS[1].background} />{/if}
@@ -318,6 +334,8 @@
 
 <style>
 	.switcher {
+		display: flex;
+		gap: 0.5rem;
 		position: fixed;
 		bottom: 1.375rem;
 		left: 1rem;

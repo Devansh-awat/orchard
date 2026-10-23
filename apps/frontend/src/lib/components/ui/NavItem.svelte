@@ -10,8 +10,10 @@
 		active = false,
 		tone = 'default',
 		count = undefined,
+		countTone = undefined,
 		leading = undefined,
-		trailing = undefined
+		trailing = undefined,
+		...rest
 	}: {
 		label: string;
 		href?: string;
@@ -20,8 +22,10 @@
 		active?: boolean;
 		tone?: 'default' | 'danger';
 		count?: number;
+		countTone?: 'default' | 'danger';
 		leading?: Snippet;
 		trailing?: Snippet;
+		[key: string]: unknown;
 	} = $props();
 </script>
 
@@ -33,16 +37,21 @@
 		<span class="tile tile--{tone}"><Glyph size={14} aria-hidden="true" /></span>
 	{/if}
 	<span class="label">{label}</span>
-	{#if count !== undefined}<span class="count count--{tone}">{count}</span>{/if}
+	{#if count !== undefined}<span class="count count--{countTone ?? tone}">{count}</span>{/if}
 	{#if trailing}{@render trailing()}{/if}
 {/snippet}
 
 {#if href}
-	<a {href} class="item" class:item--active={active} aria-current={active ? 'page' : undefined}
-		>{@render inner()}</a
+	<a
+		{href}
+		class="item"
+		class:item--active={active}
+		aria-current={active ? 'page' : undefined}
+		{...rest}>{@render inner()}</a
 	>
 {:else}
-	<button type="button" class="item" class:item--active={active} {onclick}>{@render inner()}</button
+	<button type="button" class="item" class:item--active={active} {onclick} {...rest}
+		>{@render inner()}</button
 	>
 {/if}
 
@@ -100,12 +109,16 @@
 			color var(--dur-fast) ease;
 	}
 	.tile--danger {
-		background: var(--red-solid);
-		color: var(--on-solid);
+		background: color-mix(in oklab, var(--red-solid) 12%, transparent);
+		color: var(--red-9);
 	}
 	.item--active .tile {
 		background: var(--accent-solid);
 		color: var(--on-solid);
+	}
+	.item--active .tile--danger {
+		background: color-mix(in oklab, var(--red-solid) 12%, transparent);
+		color: var(--red-9);
 	}
 	.lead {
 		display: grid;
@@ -139,7 +152,7 @@
 		font-variant-numeric: tabular-nums;
 	}
 	.count--danger {
-		background: color-mix(in oklab, var(--red-solid) 14%, transparent);
-		color: var(--red-9);
+		background: var(--red-solid);
+		color: var(--on-solid);
 	}
 </style>
