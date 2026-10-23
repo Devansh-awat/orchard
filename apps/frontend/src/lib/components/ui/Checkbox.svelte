@@ -84,6 +84,7 @@
 		height: 1rem;
 		margin: 0;
 		border-radius: 0.3125rem;
+		corner-shape: var(--corner);
 		background: var(--bg-raised);
 		box-shadow:
 			inset 0 0 0 1px var(--border-strong),

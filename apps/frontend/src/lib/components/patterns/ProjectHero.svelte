@@ -58,6 +58,7 @@
 		width: 4.5rem;
 		height: 4.5rem;
 		border-radius: 1.25rem;
+		corner-shape: var(--corner);
 		background: var(--bg-surface);
 		box-shadow:
 			0 0 0 0.5px var(--border-strong),

@@ -1,7 +1,6 @@
 <script lang="ts">
 	import {
 		Plus,
-		Search,
 		Ellipsis,
 		ExternalLink,
 		RotateCw,
@@ -15,6 +14,7 @@
 	import Card from '$lib/components/ui/Card.svelte';
 	import SectionCard from '$lib/components/ui/SectionCard.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
+	import SearchField from '$lib/components/ui/SearchField.svelte';
 	import Field from '$lib/components/ui/Field.svelte';
 	import Select from '$lib/components/ui/Select.svelte';
 	import ToggleRow from '$lib/components/ui/ToggleRow.svelte';
@@ -43,9 +43,11 @@
 	import EntityCard from '$lib/components/patterns/EntityCard.svelte';
 	import ProjectHero from '$lib/components/patterns/ProjectHero.svelte';
 	import ProjectBackdrop from '$lib/components/patterns/ProjectBackdrop.svelte';
-	import { PROJECTS, BUILDS, SIDEBAR } from '../fixtures';
+	import { PROJECTS, BUILDS, SIDEBAR, BUILD_FEED } from '../fixtures';
+	import RecentBuilds from '$lib/components/patterns/RecentBuilds.svelte';
 
 	let screen = $state('home');
+	let feed = $state<'grouped' | 'widget' | 'stack' | 'shelf'>('grouped');
 	let tab = $state<'overview' | 'logs' | 'metrics' | 'env' | 'settings'>('overview');
 	let range = $state('day');
 	let appName = $state('hackclub-site');
@@ -81,20 +83,24 @@
 	{#if screen === 'home'}
 		<Page title="Apps" width="wide">
 			{#snippet actions()}
-				<Input icon={Search} placeholder="Search apps" class="w-64" />
+				<SearchField placeholder="Search apps" shortcut="/" class="w-64" />
 				<Button variant="primary" icon={Plus}>New</Button>
 			{/snippet}
 			{#snippet aside()}
-				<div class="flex flex-col gap-3">
-					<SectionTitle title="Recent builds" />
-					<List>
-						{#each BUILDS as b (b.id)}
-							<ListRow title={b.commit} href="#">
-								{#snippet leading()}<StatusDot meta={b.status} />{/snippet}
-								{#snippet subtitle()}{b.name} · <RelativeTime date={b.at} />{/snippet}
-							</ListRow>
-						{/each}
-					</List>
+				<div class="flex flex-col gap-4">
+					<SegmentedControl
+						label="Recent builds style"
+						size="sm"
+						grow
+						bind:value={feed}
+						options={[
+							{ value: 'grouped', label: 'Grouped' },
+							{ value: 'widget', label: 'Widget' },
+							{ value: 'stack', label: 'Stack' },
+							{ value: 'shelf', label: 'Shelf' }
+						]}
+					/>
+					<RecentBuilds builds={BUILD_FEED} variant={feed} />
 				</div>
 			{/snippet}
 
@@ -151,17 +157,7 @@
 				</ProjectHero>
 			{/snippet}
 			{#snippet aside()}
-				<div class="flex flex-col gap-3">
-					<SectionTitle title="Recent builds" />
-					<List>
-						{#each BUILDS as b (b.id)}
-							<ListRow title={b.commit} href="#">
-								{#snippet leading()}<StatusDot meta={b.status} />{/snippet}
-								{#snippet subtitle()}{b.name} · <RelativeTime date={b.at} />{/snippet}
-							</ListRow>
-						{/each}
-					</List>
-				</div>
+				<RecentBuilds builds={BUILD_FEED} variant={feed} />
 			{/snippet}
 			<List label="Resources">
 				{#each PROJECTS[0].entities.concat(PROJECTS[1].entities) as e (e.name)}

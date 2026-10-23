@@ -54,6 +54,7 @@
 		min-width: 0;
 		margin: 0;
 		border-radius: var(--radius-card);
+		corner-shape: var(--corner);
 		background: var(--console-bg);
 		box-shadow: inset 0 0 0 1px var(--console-edge);
 		overflow: clip;
@@ -102,6 +103,7 @@
 		right: 0.25rem;
 		z-index: 1;
 		border-radius: 0.375rem;
+		corner-shape: var(--corner);
 		background: var(--console-bg);
 		opacity: 0;
 		transition: opacity var(--dur-fast) ease;

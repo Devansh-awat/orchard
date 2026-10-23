@@ -66,6 +66,7 @@
 		width: 2rem;
 		height: 2rem;
 		border-radius: var(--radius-control);
+		corner-shape: var(--corner);
 		background: linear-gradient(var(--bg-surface), var(--neutral-2));
 		box-shadow:
 			inset 0 0 0 0.5px var(--border-strong),
@@ -76,6 +77,7 @@
 		width: 1.25rem;
 		height: 1.25rem;
 		border-radius: 0.25rem;
+		corner-shape: var(--corner);
 	}
 	.dot {
 		position: absolute;

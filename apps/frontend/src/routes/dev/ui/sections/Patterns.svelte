@@ -25,7 +25,8 @@
 	import ProjectHero from '$lib/components/patterns/ProjectHero.svelte';
 	import ProjectBackdrop from '$lib/components/patterns/ProjectBackdrop.svelte';
 	import { resourceStatus } from '$lib/components/ui/status';
-	import { PROJECTS, SIDEBAR } from '../fixtures';
+	import { PROJECTS, SIDEBAR, BUILD_FEED } from '../fixtures';
+	import RecentBuilds from '$lib/components/patterns/RecentBuilds.svelte';
 
 	const terra = PROJECTS[1];
 	const site = PROJECTS[0];
@@ -142,6 +143,16 @@
 			</EntityCard>
 		{/each}
 	</ProjectGroup>
+</div>
+
+<div class="flex flex-col gap-3">
+	<SectionTitle title="Recent builds: grouped, widget, stack, shelf" />
+	<div class="grid grid-cols-4 items-start gap-4">
+		<RecentBuilds builds={BUILD_FEED} variant="grouped" />
+		<RecentBuilds builds={BUILD_FEED} variant="widget" />
+		<RecentBuilds builds={BUILD_FEED} variant="stack" />
+		<RecentBuilds builds={BUILD_FEED} variant="shelf" />
+	</div>
 </div>
 
 <div class="flex flex-col gap-3">

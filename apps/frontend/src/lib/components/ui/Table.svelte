@@ -192,6 +192,7 @@
 	}
 	.frame--inset {
 		border-radius: var(--radius-card);
+		corner-shape: var(--corner);
 		background: var(--bg-surface);
 		box-shadow: var(--shadow-raised);
 		overflow-x: auto;
@@ -321,6 +322,7 @@
 		padding: 0 0.375rem;
 		border: none;
 		border-radius: 0.375rem;
+		corner-shape: var(--corner);
 		background: none;
 		color: inherit;
 		font: inherit;

@@ -18,10 +18,10 @@
 	.frame {
 		position: relative;
 		display: grid;
-		grid-template-columns: 16.5rem minmax(0, 1fr);
-		gap: 0.5rem;
+		grid-template-columns: 16rem minmax(0, 1fr);
+		gap: 0.75rem;
 		height: 100dvh;
-		padding: 0.5rem;
+		padding: 0.625rem;
 		overflow: hidden;
 	}
 	.backdrop {
@@ -38,7 +38,7 @@
 	.content {
 		position: relative;
 		min-width: 0;
-		margin: -0.5rem -0.5rem -0.5rem 0;
+		margin: -0.625rem -0.625rem -0.625rem 0;
 		overflow-y: auto;
 	}
 	@media (max-width: 900px) {

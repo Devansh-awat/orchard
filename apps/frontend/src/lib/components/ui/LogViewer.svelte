@@ -162,6 +162,7 @@
 	.lv--dark {
 		background-color: var(--console-bg);
 		border-radius: var(--radius-card);
+		corner-shape: var(--corner);
 		box-shadow: inset 0 0 0 1px var(--console-edge);
 		padding: 0.5rem 0;
 	}
@@ -279,6 +280,7 @@
 		gap: 0.125rem;
 		padding: 0.125rem;
 		border-radius: 0.5rem;
+		corner-shape: var(--corner);
 		background: var(--material-glass-bg);
 		backdrop-filter: var(--material-glass-filter);
 		box-shadow: var(--shadow-floating);
@@ -297,6 +299,7 @@
 		padding: 0;
 		border: none;
 		border-radius: 0.375rem;
+		corner-shape: var(--corner);
 		background: none;
 		color: var(--text-muted);
 		cursor: pointer;

@@ -115,6 +115,7 @@
 		position: absolute;
 		inset: 0.375rem 0;
 		border-radius: 0.375rem;
+		corner-shape: var(--corner);
 		background: var(--bg-hover);
 		opacity: 0;
 		transition: opacity var(--dur-fast) ease;
@@ -146,6 +147,7 @@
 		left: 0.5rem;
 		height: 2px;
 		border-radius: 2px 2px 0 0;
+		corner-shape: var(--corner);
 		background: var(--text-default);
 	}
 	.bar[data-ready] {

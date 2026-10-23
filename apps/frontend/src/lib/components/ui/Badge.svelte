@@ -21,6 +21,7 @@
 		height: 1.25rem;
 		padding: 0 0.375rem;
 		border-radius: 0.375rem;
+		corner-shape: var(--corner);
 		font-size: var(--text-caption);
 		font-weight: var(--weight-medium);
 		line-height: 1;

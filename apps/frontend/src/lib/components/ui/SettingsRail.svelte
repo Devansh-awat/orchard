@@ -83,6 +83,7 @@
 		color: var(--text-muted);
 		text-decoration: none;
 		border-radius: var(--radius-sm);
+		corner-shape: var(--corner);
 		padding: 0 var(--space-2);
 		transition:
 			color var(--dur-fast),

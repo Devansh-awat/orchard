@@ -35,6 +35,7 @@
 		height: 1.75rem;
 		border: none;
 		border-radius: 0.375rem;
+		corner-shape: var(--corner);
 		background: none;
 		color: var(--text-muted);
 		cursor: pointer;

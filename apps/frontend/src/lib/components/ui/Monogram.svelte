@@ -21,6 +21,7 @@
 		place-items: center;
 		flex-shrink: 0;
 		border-radius: 0.375rem;
+		corner-shape: var(--corner);
 		background: var(--tone-bg);
 		color: var(--tone-fg);
 		box-shadow: inset 0 0 0 0.5px color-mix(in oklab, var(--tone-fg) 18%, transparent);
@@ -32,6 +33,7 @@
 		height: 1.125rem;
 		font-size: 0.625rem;
 		border-radius: 0.3125rem;
+		corner-shape: var(--corner);
 	}
 	.mono--md {
 		width: 1.5rem;

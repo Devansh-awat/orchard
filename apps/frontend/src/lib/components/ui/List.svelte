@@ -24,6 +24,7 @@
 	}
 	.list--inset {
 		border-radius: var(--radius-card);
+		corner-shape: var(--corner);
 		background: var(--bg-surface);
 		box-shadow: var(--shadow-raised);
 		overflow: clip;

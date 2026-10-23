@@ -37,6 +37,7 @@
 		padding: 0 2rem 0 0.625rem;
 		border: none;
 		border-radius: var(--radius-control);
+		corner-shape: var(--corner);
 		background: var(--bg-raised);
 		box-shadow: var(--shadow-raised);
 		color: var(--text-default);

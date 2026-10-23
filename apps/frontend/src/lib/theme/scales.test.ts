@@ -36,6 +36,10 @@ function assertScales(vars: ScaleVars, label: string) {
 			const r = ratio(vars, `--${h}-contrast`, `--${h}-${step}`);
 			assert.ok(r >= TEXT_TARGET, `${label}: --${h}-contrast on --${h}-${step} is ${r.toFixed(2)}`);
 		}
+		for (const step of ['solid', 'solid-hover']) {
+			const r = contrastOver('#ffffff', vars[`--${h}-${step}`]);
+			assert.ok(r >= TEXT_TARGET, `${label}: white on --${h}-${step} is ${r.toFixed(2)}`);
+		}
 		for (const n of NEUTRAL_SCALES) {
 			for (const ground of ['app', 'surface', 'raised']) {
 				const r = ratio(vars, `--${h}-9`, `--${n}-${ground}`);

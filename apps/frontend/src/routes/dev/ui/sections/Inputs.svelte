@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Search } from 'lucide-svelte';
 	import SectionCard from '$lib/components/ui/SectionCard.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
+	import SearchField from '$lib/components/ui/SearchField.svelte';
 	import Field from '$lib/components/ui/Field.svelte';
 	import Select from '$lib/components/ui/Select.svelte';
 	import Switch from '$lib/components/ui/Switch.svelte';
@@ -20,8 +20,8 @@
 		<Field label="App name" hint="Lowercase letters, numbers and dashes." for="g-name">
 			<Input id="g-name" bind:value={name} />
 		</Field>
-		<Field label="Search" for="g-search">
-			<Input id="g-search" icon={Search} placeholder="Search apps" />
+		<Field label="Search">
+			<SearchField placeholder="Search apps" shortcut="/" />
 		</Field>
 		<Field label="Domain" error="That domain is already taken." for="g-domain">
 			<Input id="g-domain" value="hackclub.com" error />

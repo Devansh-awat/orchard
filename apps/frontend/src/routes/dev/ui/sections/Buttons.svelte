@@ -22,6 +22,16 @@
 			<Button variant="ghost" icon={Ellipsis} label="More" />
 		</div>
 		<div class="flex flex-wrap items-center gap-2">
+			<Button size="lg" variant="primary" icon={Rocket}>Deploy now</Button>
+			<Button size="lg">Not now</Button>
+			<Button size="lg" variant="tinted" icon={Plus}>Add domain</Button>
+			<Button size="lg" icon={Settings} label="Settings" />
+		</div>
+		<div class="flex flex-wrap items-center gap-2">
+			<Button variant="tinted" icon={Plus}>New database</Button>
+			<Button variant="tinted" size="sm">Tinted small</Button>
+		</div>
+		<div class="flex flex-wrap items-center gap-2">
 			<Button size="sm" variant="primary" icon={Plus}>New</Button>
 			<Button size="sm" iconRight={ExternalLink}>Visit</Button>
 			<Button size="sm" variant="ghost">Ghost</Button>

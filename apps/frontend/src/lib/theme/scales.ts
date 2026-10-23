@@ -194,6 +194,10 @@ export function generateScales(spec: ThemeSpec, scheme: Scheme): ScaleVars {
 		scale['8'] = fitBackground(scale['8'], [{ hex: contrast }], TEXT_TARGET);
 		for (const [step, value] of Object.entries(scale)) vars[`--${name}-${step}`] = value;
 		vars[`--${name}-contrast`] = contrast;
+		const solid = fitBackground(scale['7'], [{ hex: '#ffffff' }], TEXT_TARGET);
+		const { l, c, h } = hexToOklch(solid);
+		vars[`--${name}-solid`] = solid;
+		vars[`--${name}-solid-hover`] = oklch(Math.max(0.05, l - 0.045), c, h);
 	}
 
 	return vars;

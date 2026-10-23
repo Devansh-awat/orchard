@@ -17,8 +17,8 @@
 		children,
 		...rest
 	}: {
-		variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'media';
-		size?: 'md' | 'sm';
+		variant?: 'primary' | 'secondary' | 'tinted' | 'ghost' | 'danger' | 'media';
+		size?: 'sm' | 'md' | 'lg';
 		href?: string;
 		type?: 'button' | 'submit';
 		loading?: boolean;
@@ -32,7 +32,7 @@
 	} = $props();
 
 	const iconOnly = $derived(!children && !!icon);
-	const iconSize = $derived(size === 'sm' ? 14 : 16);
+	const iconSize = $derived(size === 'sm' ? 14 : size === 'lg' ? 18 : 16);
 </script>
 
 {#snippet body()}
@@ -72,21 +72,27 @@
 
 <style>
 	.button {
+		position: relative;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
 		gap: 0.375rem;
 		flex-shrink: 0;
 		height: 2rem;
-		padding: 0 0.75rem;
+		padding: 0 0.8125rem;
+		border: none;
 		border-radius: var(--radius-control);
+		corner-shape: var(--corner);
+		font: inherit;
 		font-size: var(--text-body);
 		font-weight: var(--weight-medium);
+		letter-spacing: -0.005em;
 		line-height: 1;
 		white-space: nowrap;
 		text-decoration: none;
 		cursor: pointer;
 		user-select: none;
+		isolation: isolate;
 		transition:
 			background-color var(--dur-fast) ease,
 			color var(--dur-fast) ease,
@@ -94,20 +100,30 @@
 			transform var(--spring-interactive-duration) var(--spring-interactive);
 	}
 	.button:active:not(:disabled) {
-		transform: scale(0.97);
+		transform: scale(0.96);
 	}
 	.button:disabled {
 		cursor: default;
 		opacity: 0.4;
 	}
 	.button--loading:disabled {
-		opacity: 0.7;
+		opacity: 0.75;
 	}
 	.button--sm {
 		height: 1.75rem;
 		padding: 0 0.625rem;
+		border-radius: 0.5625rem;
+		corner-shape: var(--corner);
 		font-size: var(--text-callout);
-		gap: 0.25rem;
+		gap: 0.3125rem;
+	}
+	.button--lg {
+		height: 2.5rem;
+		padding: 0 1.125rem;
+		border-radius: 0.75rem;
+		corner-shape: var(--corner);
+		font-size: var(--text-headline);
+		gap: 0.5rem;
 	}
 	.button--icon {
 		width: 2rem;
@@ -115,6 +131,12 @@
 	}
 	.button--sm.button--icon {
 		width: 1.75rem;
+	}
+	.button--lg.button--icon {
+		width: 2.5rem;
+	}
+	.button > :global(svg) {
+		flex-shrink: 0;
 	}
 	.label {
 		display: block;
@@ -128,23 +150,32 @@
 	}
 
 	.button--primary {
-		background: var(--accent);
-		color: var(--text-on-accent);
+		background-color: var(--accent-solid);
+		background-image: var(--solid-sheen);
+		color: var(--on-solid);
 		box-shadow:
-			inset 0 1px 0 rgb(255 255 255 / 0.14),
-			0 1px 2px rgb(0 0 0 / 0.12);
+			inset 0 0.5px 0 var(--solid-edge),
+			0 1px 2px color-mix(in oklab, var(--accent-solid) 30%, transparent),
+			0 4px 12px -4px color-mix(in oklab, var(--accent-solid) 55%, transparent);
 	}
 	.button--primary:hover:not(:disabled) {
-		background: var(--accent-hover);
+		background-color: var(--accent-solid-hover);
 	}
 
 	.button--secondary {
-		background: var(--bg-raised);
+		background: color-mix(in oklab, var(--neutral-10) 7%, transparent);
 		color: var(--text-default);
-		box-shadow: var(--shadow-raised);
 	}
 	.button--secondary:hover:not(:disabled) {
-		background: var(--bg-hover);
+		background: color-mix(in oklab, var(--neutral-10) 11%, transparent);
+	}
+
+	.button--tinted {
+		background: color-mix(in oklab, var(--accent-solid) 13%, transparent);
+		color: var(--accent-9);
+	}
+	.button--tinted:hover:not(:disabled) {
+		background: color-mix(in oklab, var(--accent-solid) 19%, transparent);
 	}
 
 	.button--ghost {
@@ -152,17 +183,18 @@
 		color: var(--text-muted);
 	}
 	.button--ghost:hover:not(:disabled) {
-		background: var(--bg-hover);
+		background: color-mix(in oklab, var(--neutral-10) 7%, transparent);
 		color: var(--text-default);
 	}
 
 	.button--danger {
-		background: var(--red-3);
+		background: color-mix(in oklab, var(--red-solid) 12%, transparent);
 		color: var(--red-9);
 	}
 	.button--danger:hover:not(:disabled) {
-		background: var(--red-4);
+		background: color-mix(in oklab, var(--red-solid) 18%, transparent);
 	}
+
 	.button--media {
 		background: var(--on-media-fill);
 		color: var(--on-media);

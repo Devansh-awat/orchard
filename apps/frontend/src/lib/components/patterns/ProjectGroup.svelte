@@ -114,6 +114,7 @@
 		position: relative;
 		min-width: 0;
 		border-radius: var(--radius-panel);
+		corner-shape: var(--corner);
 		background: var(--bg-raised);
 		box-shadow: var(--shadow-raised);
 		overflow: clip;
@@ -232,6 +233,7 @@
 		width: 2.75rem;
 		height: 2.75rem;
 		border-radius: 0.75rem;
+		corner-shape: var(--corner);
 		background: var(--on-media-fill);
 		box-shadow: inset 0 0 0 0.5px var(--on-media-edge);
 		font-size: var(--text-title-3);

@@ -136,6 +136,7 @@
 		height: 2rem;
 		padding: 0.125rem;
 		border-radius: var(--radius-control);
+		corner-shape: var(--corner);
 		background: var(--bg-raised);
 		box-shadow: var(--shadow-raised);
 	}

@@ -1,6 +1,7 @@
 import { Sprout, Timer, Gauge, Leaf, TreeDeciduous } from 'lucide-svelte';
 import { resourceStatus, buildStatusMeta } from '$lib/components/ui/status';
 import type { SidebarSection } from '$lib/components/patterns/sidebar';
+import type { BuildItem } from '$lib/components/patterns/builds';
 
 const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
 
@@ -136,3 +137,56 @@ export const SIDEBAR = {
 		];
 	}
 };
+
+export const BUILD_FEED: BuildItem[] = [
+	{
+		id: 'f1',
+		app: 'api',
+		message: 'Bump prisma to 6.4',
+		status: buildStatusMeta('building'),
+		at: ago(0.5),
+		branch: 'main',
+		progress: 0.62,
+		href: '#'
+	},
+	{
+		id: 'f2',
+		app: 'web',
+		message: 'Fix navbar overflow on mobile',
+		status: buildStatusMeta('succeeded'),
+		at: ago(3),
+		branch: 'main',
+		duration: '41s',
+		href: '#'
+	},
+	{
+		id: 'f3',
+		app: 'worker',
+		message: 'Stream results instead of buffering',
+		status: buildStatusMeta('failed'),
+		at: ago(14),
+		branch: 'feat/stream',
+		duration: '1m 12s',
+		href: '#'
+	},
+	{
+		id: 'f4',
+		app: 'terra-client',
+		message: 'Add sponsors section',
+		status: buildStatusMeta('succeeded'),
+		at: ago(60 * 5),
+		branch: 'main',
+		duration: '58s',
+		image: 'https://assets.orchard.my/project-backgrounds/82672415-a9cd-437f-b2f8-f4571e5306fa.png',
+		href: '#'
+	},
+	{
+		id: 'f5',
+		app: 'docs',
+		message: 'Document the new CLI flags',
+		status: buildStatusMeta('canceled'),
+		at: ago(60 * 7),
+		branch: 'main',
+		href: '#'
+	}
+];

@@ -20,6 +20,7 @@
 		height: 1.25rem;
 		padding: 0 0.25rem;
 		border-radius: 0.3125rem;
+		corner-shape: var(--corner);
 		background: var(--bg-raised);
 		box-shadow:
 			inset 0 0 0 1px var(--border-default),

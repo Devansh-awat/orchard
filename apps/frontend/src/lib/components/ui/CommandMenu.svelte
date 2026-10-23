@@ -143,6 +143,7 @@
 		width: 100%;
 		max-width: 40rem;
 		border-radius: var(--radius-panel);
+		corner-shape: var(--corner);
 		background: var(--material-glass-bg);
 		backdrop-filter: var(--material-glass-filter);
 		box-shadow: var(--shadow-overlay);

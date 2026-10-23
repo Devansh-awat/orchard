@@ -55,6 +55,7 @@
 		min-height: 2.125rem;
 		padding: 0.1875rem 0.5rem 0.1875rem 0;
 		border-radius: var(--radius-sm);
+		corner-shape: var(--corner);
 		transition: background-color var(--dur-fast);
 	}
 	.ui-arow:hover {

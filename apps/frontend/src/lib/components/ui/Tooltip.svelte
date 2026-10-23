@@ -43,6 +43,7 @@
 		padding: 0.3125rem 0.5rem;
 		border: none;
 		border-radius: 0.375rem;
+		corner-shape: var(--corner);
 		background: var(--neutral-10);
 		color: var(--neutral-app);
 		font-size: var(--text-caption);

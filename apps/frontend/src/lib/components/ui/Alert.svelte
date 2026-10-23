@@ -43,6 +43,7 @@
 		gap: 0.625rem;
 		padding: 0.875rem;
 		border-radius: var(--radius-card);
+		corner-shape: var(--corner);
 		box-shadow: inset 0 0 0 1px var(--tone-border);
 		background: var(--tone-bg);
 		color: var(--text-default);

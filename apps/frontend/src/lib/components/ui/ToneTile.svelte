@@ -36,6 +36,7 @@
 		align-items: center;
 		justify-content: center;
 		border-radius: var(--radius-md);
+		corner-shape: var(--corner);
 		background: var(--fill-quiet);
 		color: var(--text-muted);
 		flex-shrink: 0;

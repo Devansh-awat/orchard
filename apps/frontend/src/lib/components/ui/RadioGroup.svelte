@@ -230,6 +230,7 @@
 		gap: 0.5rem;
 		padding: 0.875rem 1rem 1rem;
 		border-radius: var(--radius-card);
+		corner-shape: var(--corner);
 		background: var(--bg-raised);
 		box-shadow: var(--shadow-raised);
 		transition: transform var(--spring-interactive-duration) var(--spring-interactive);

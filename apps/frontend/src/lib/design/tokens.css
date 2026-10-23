@@ -72,9 +72,10 @@
 		0 0 0 1px var(--material-glass-edge), 0 12px 24px rgb(0 0 0 / 0.1),
 		0 32px 64px rgb(0 0 0 / 0.14);
 
-	--radius-control: 0.5rem;
-	--radius-card: 0.75rem;
-	--radius-panel: 1rem;
+	--radius-control: 0.625rem;
+	--radius-card: 0.875rem;
+	--radius-panel: 1.125rem;
+	--corner: squircle;
 
 	--weight-regular: 450;
 	--weight-medium: 550;
@@ -88,6 +89,18 @@
 	--z-toast: 900;
 	--z-tooltip: 1000;
 
+	--nav-active-bg: var(--bg-surface);
+	--nav-active-fg: var(--text-default);
+	--nav-active-shadow:
+		0 0 0 0.5px color-mix(in oklab, var(--neutral-10) 8%, transparent),
+		0 1px 2px color-mix(in oklab, var(--neutral-10) 8%, transparent),
+		0 6px 16px -6px color-mix(in oklab, var(--neutral-10) 22%, transparent);
+	--material-chrome-bg: color-mix(in oklab, var(--neutral-surface) 58%, transparent);
+	--material-chrome-filter: blur(28px) saturate(1.7);
+	--material-chrome-edge: color-mix(in oklab, var(--neutral-10) 9%, transparent);
+	--on-solid: oklch(1 0 0);
+	--solid-sheen: linear-gradient(oklch(1 0 0 / 0.16), oklch(1 0 0 / 0));
+	--solid-edge: oklch(1 0 0 / 0.28);
 	--on-media: oklch(1 0 0);
 	--on-media-muted: oklch(1 0 0 / 0.74);
 	--on-media-fill: oklch(1 0 0 / 0.16);
@@ -247,6 +260,8 @@ html.contrast-high .density-btn--active {
 }
 
 html.reduce-transparency {
+	--material-chrome-bg: var(--bg-raised);
+	--material-chrome-filter: none;
 	--material-glass-bg: var(--bg-raised);
 	--material-glass-filter: none;
 	--glass-bg: var(--bg-surface);
@@ -262,6 +277,10 @@ html.reduce-transparency *::after {
 }
 
 :root.dark {
+	--nav-active-bg: var(--neutral-10);
+	--nav-active-fg: var(--neutral-app);
+	--nav-active-shadow: 0 6px 16px -6px oklch(0 0 0 / 0.5);
+	--material-chrome-bg: color-mix(in oklab, var(--neutral-raised) 62%, transparent);
 	--toast-success: color-mix(in oklab, var(--green-7) 74%, black);
 	--toast-error: color-mix(in oklab, var(--red-7) 80%, black);
 	--toast-warning: color-mix(in oklab, var(--amber-7) 62%, black);
@@ -320,9 +339,9 @@ html.reduce-transparency *::after {
 	--font-weight-medium: 550;
 	--font-weight-semibold: 650;
 
-	--radius-control: 0.5rem;
-	--radius-card: 0.75rem;
-	--radius-panel: 1rem;
+	--radius-control: 0.625rem;
+	--radius-card: 0.875rem;
+	--radius-panel: 1.125rem;
 }
 
 @theme inline {

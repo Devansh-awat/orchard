@@ -171,6 +171,7 @@
 		padding: 0;
 		border: none;
 		border-radius: var(--radius-panel);
+		corner-shape: var(--corner);
 		background: var(--bg-raised);
 		color: var(--text-default);
 		box-shadow: var(--shadow-overlay);

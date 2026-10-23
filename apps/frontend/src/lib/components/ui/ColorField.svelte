@@ -120,6 +120,7 @@
 		gap: var(--space-3);
 		padding: 0.625rem var(--space-3);
 		border-radius: var(--radius-md);
+		corner-shape: var(--corner);
 		transition: background-color var(--dur-fast);
 	}
 	.cf-root:hover {
@@ -131,6 +132,7 @@
 		height: 2.25rem;
 		flex-shrink: 0;
 		border-radius: var(--radius-sm);
+		corner-shape: var(--corner);
 		border: none;
 		padding: 0;
 		cursor: pointer;
@@ -181,6 +183,7 @@
 		width: 5.5rem;
 		padding: 0.25rem var(--space-2);
 		border-radius: var(--radius-xs);
+		corner-shape: var(--corner);
 		border: 1px solid transparent;
 		background-color: transparent;
 		font-family: var(--font-mono, monospace);
@@ -214,6 +217,7 @@
 		width: 1.75rem;
 		height: 1.75rem;
 		border-radius: var(--radius-xs);
+		corner-shape: var(--corner);
 		border: none;
 		background: none;
 		color: var(--text-faint);

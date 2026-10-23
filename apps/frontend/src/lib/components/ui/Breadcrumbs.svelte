@@ -77,6 +77,7 @@
 		height: 1.75rem;
 		padding: 0 0.375rem;
 		border-radius: 0.375rem;
+		corner-shape: var(--corner);
 		color: var(--text-muted);
 		font-size: var(--text-body);
 		font-weight: var(--weight-regular);

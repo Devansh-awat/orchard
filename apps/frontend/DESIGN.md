@@ -28,6 +28,10 @@ catalogue, add it to the kit and the catalogue first; never hand-roll it in a ro
   that sits next to an icon, or inside a pill, uses `text-box: trim-both cap alphabetic`
   so padding is measured from the ink. Verify with `/dev/ui` and the alignment audit
   (`.context`-style script: icon centre vs cap centre, delta 0).
+- **Squircles, not circles.** Rounded rectangles use `corner-shape: var(--corner)`
+  (continuous corners) on top of `--radius-control|card|panel`. Circles only for status
+  dots, radios and the switch; capsules only for the toast.
+- **Dense, not big.** It is a developer tool: 32px controls, 36px nav rows, 14px body.
 - **Concentric corners.** Inner radius = outer radius minus inset. A circle inside a
   capsule sits at an inset equal to `(height - circle) / 2`. Never nest equal radii.
 - **Hairlines, not borders.** 0.5px to 1px rings in `--border-default`, drawn once.

@@ -52,6 +52,7 @@
 		border: none;
 		box-shadow: var(--elev-1);
 		border-radius: var(--radius-xl);
+		corner-shape: var(--corner);
 		padding: var(--space-2);
 	}
 	.ui-tabs-track {
@@ -96,6 +97,7 @@
 		outline: var(--focus-ring-width) solid var(--focus-ring-color);
 		outline-offset: -2px;
 		border-radius: var(--radius-sm);
+		corner-shape: var(--corner);
 	}
 
 	.ui-tab--underline {
@@ -111,6 +113,7 @@
 	.ui-tab--toolbar {
 		padding: var(--space-2) var(--space-3);
 		border-radius: var(--radius-md);
+		corner-shape: var(--corner);
 	}
 	.ui-tab--toolbar:hover {
 		background-color: var(--fill-quiet);
