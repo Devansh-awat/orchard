@@ -184,11 +184,11 @@
 	const ENV = [
 		{
 			name: 'DATABASE_URL',
-			value: 'postgres://orchard:Wq8zN2v@postgres.hackclub-site:5432/app',
+			value: 'postgres://orchard:example-password@postgres.hackclub-site:5432/app',
 			secret: true
 		},
 		{ name: 'REDIS_URL', value: 'redis://redis.hackclub-site:6379/0', secret: true, shared: true },
-		{ name: 'STRIPE_SECRET_KEY', value: 'sk_live_51Nf8u2Kc7dPq0xYz', secret: true },
+		{ name: 'STRIPE_SECRET_KEY', value: 'sk_test_example_not_a_real_key', secret: true },
 		{ name: 'NODE_ENV', value: 'production', secret: false },
 		{ name: 'PORT', value: '3000', secret: false },
 		{ name: 'SENTRY_DSN', value: '', secret: true }
@@ -233,7 +233,7 @@ health_check = "/healthz"`;
 		[
 			'14:02:24.513',
 			'error',
-			'Unhandled rejection: StripeAuthenticationError: Invalid API Key provided: sk_live_51Nf8u2K************************'
+			'Unhandled rejection: StripeAuthenticationError: Invalid API Key provided: sk_test_exa************************'
 		],
 		[
 			'14:02:24.514',
