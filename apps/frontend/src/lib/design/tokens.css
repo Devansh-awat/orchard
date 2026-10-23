@@ -92,9 +92,7 @@
 
 	--nav-active-bg: var(--bg-surface);
 	--nav-active-fg: var(--text-default);
-	--nav-active-shadow:
-		0 0 0 0.5px color-mix(in oklab, var(--neutral-10) 9%, transparent),
-		0 1px 1.5px color-mix(in oklab, var(--neutral-10) 7%, transparent);
+	--nav-active-shadow: 0 1px 3px color-mix(in oklab, var(--neutral-10) 8%, transparent);
 	--material-chrome-bg: color-mix(in oklab, var(--neutral-surface) 58%, transparent);
 	--material-chrome-edge: color-mix(in oklab, var(--neutral-10) 9%, transparent);
 	--on-solid: oklch(1 0 0);
