@@ -1,5 +1,7 @@
 @import 'tailwindcss';
-@import './tokens.css';
+@import './lib/design/scales.css';
+@import './lib/design/tokens.css';
+@import './lib/design/springs.css';
 @import './lib/components/setup/setup-step.css';
 
 @font-face {
@@ -192,11 +194,6 @@
 
 :root {
 	color-scheme: light;
-	--z-nav: 40;
-	--z-dropdown: 600;
-	--z-modal: 800;
-	--z-toast: 900;
-	--z-tooltip: 1000;
 	--sidebar-bg: #ffffff;
 	--sidebar-text: #302627;
 	--sidebar-unread-text: #161314;
@@ -325,8 +322,8 @@
 }
 
 body {
-	background-color: var(--center-channel-bg);
-	color: var(--center-channel-color);
+	background-color: var(--bg-app);
+	color: var(--text-default);
 	font-family: var(--font-sans);
 	@apply antialiased;
 	transition:
@@ -349,6 +346,7 @@ body::before {
 	will-change: transform;
 }
 
+html[data-look='quiet'] body::before,
 html.contrast-high body::before,
 html.contrast-high .deck-host--drawer {
 	background-image: none;
@@ -525,18 +523,22 @@ html {
 .ui-menu,
 .ui-popover {
 	margin: 0;
-	padding: 0.5rem;
-	border: 1px solid var(--dropdown-border, var(--surface-border));
-	border-radius: var(--radius-md);
-	background-color: var(--dropdown-bg, var(--surface-bg));
-	color: var(--center-channel-color);
-	box-shadow:
-		0 4px 12px rgb(0 0 0 / 0.08),
-		0 12px 32px rgb(0 0 0 / 0.12);
-	min-width: 10rem;
+	padding: 0.25rem;
+	border: none;
+	border-radius: var(--radius-card);
+	background: var(--material-glass-bg);
+	backdrop-filter: var(--material-glass-filter);
+	color: var(--text-default);
+	box-shadow: var(--shadow-floating);
+	min-width: 11rem;
 	max-height: min(60vh, var(--melt-popover-available-height, 60vh));
 	overflow-y: auto;
 	scrollbar-gutter: stable;
+}
+
+.ui-menu:focus-visible,
+.ui-popover:focus-visible {
+	outline: none;
 }
 
 .ui-popover {
@@ -568,40 +570,38 @@ html {
 	align-items: center;
 	gap: 0.5rem;
 	width: 100%;
-	padding: 0.5rem 0.75rem;
+	min-height: 2rem;
+	padding: 0.375rem 0.625rem;
 	border: none;
-	border-radius: var(--radius-sm);
+	border-radius: var(--radius-control);
 	background: transparent;
-	color: var(--center-channel-color);
-	font-size: var(--text-footnote);
-	line-height: var(--lh-footnote);
-	font-weight: 600;
+	color: var(--text-default);
+	font-size: var(--text-body);
+	line-height: var(--lh-body);
+	font-weight: var(--weight-regular);
 	text-align: left;
+	text-decoration: none;
 	cursor: pointer;
-	transition: background-color var(--dur-fast) ease;
 }
 
 .ui-menu-item:hover,
 .ui-menu-item:focus-visible {
-	background-color: var(--dropdown-hover-bg, var(--control-hover-bg));
-}
-
-.ui-menu-item:focus-visible {
-	outline: var(--focus-ring-width) solid var(--focus-ring-color);
-	outline-offset: var(--focus-ring-offset);
+	background-color: var(--bg-hover);
+	outline: none;
 }
 
 .ui-menu-item:disabled {
-	opacity: 0.5;
+	opacity: 0.4;
 	cursor: default;
 }
 
 .ui-menu-item--danger {
-	color: var(--error-text-color);
+	color: var(--status-error);
 }
 
-.ui-menu-item--danger:hover {
-	background-color: color-mix(in srgb, var(--error-text-color) 10%, transparent);
+.ui-menu-item--danger:hover,
+.ui-menu-item--danger:focus-visible {
+	background-color: var(--red-2);
 }
 
 .ui-modal {

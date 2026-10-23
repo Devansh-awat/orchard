@@ -1,3 +1,4 @@
+import { generateScales } from '$lib/theme/scales';
 import { writable, derived, get, type Readable } from 'svelte/store';
 import { browser } from '$app/environment';
 import {
@@ -313,6 +314,9 @@ export function buildCssText(state: ThemeState, scheme: Scheme): string {
 	const { colors } = composeColors(state.spec, scheme, state.overrides);
 	const chrome = generateChrome(state.spec, scheme);
 	const parts = VAR_MAP.map(([name, key]) => `${name}:${colors[key]}`);
+	for (const [name, value] of Object.entries(generateScales(state.spec, scheme))) {
+		parts.push(`${name}:${value}`);
+	}
 	parts.push(`--theme-chrome-image:${chrome.image}`);
 	parts.push(`--theme-grain:${chrome.grain}`);
 	parts.push(`--theme-accent-glow:${chrome.accentGlow}`);
@@ -342,6 +346,9 @@ function createThemeStore() {
 		const root = document.documentElement;
 		const { colors } = composeColors(next.spec, active, next.overrides);
 		for (const [name, key] of VAR_MAP) root.style.setProperty(name, colors[key]);
+		for (const [name, value] of Object.entries(generateScales(next.spec, active))) {
+			root.style.setProperty(name, value);
+		}
 
 		const chrome = generateChrome(next.spec, active);
 		root.style.setProperty('--theme-chrome-image', chrome.image);

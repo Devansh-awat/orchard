@@ -14,15 +14,47 @@
 	} = $props();
 </script>
 
-<div class="ui-empty">
-	{#if icon}
-		<div class="ui-empty-icon">{@render icon()}</div>
-	{/if}
-	<h3 class="ui-empty-title">{title}</h3>
-	{#if description}
-		<p class="ui-empty-desc">{description}</p>
-	{/if}
-	{#if children}
-		<div class="ui-empty-action">{@render children()}</div>
-	{/if}
+<div class="empty">
+	{#if icon}<div class="icon">{@render icon()}</div>{/if}
+	<h3 class="title">{title}</h3>
+	{#if description}<p class="desc">{description}</p>{/if}
+	{#if children}<div class="action">{@render children()}</div>{/if}
 </div>
+
+<style>
+	.empty {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.25rem;
+		padding: 3rem 1.5rem;
+		text-align: center;
+	}
+	.icon {
+		display: grid;
+		place-items: center;
+		width: 2.5rem;
+		height: 2.5rem;
+		margin-bottom: 0.5rem;
+		border-radius: var(--radius-card);
+		background: var(--bg-active);
+		color: var(--text-muted);
+	}
+	.title {
+		font-size: var(--text-headline);
+		line-height: var(--lh-headline);
+		font-weight: var(--weight-semibold);
+		color: var(--text-default);
+	}
+	.desc {
+		max-width: 44ch;
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
+		color: var(--text-muted);
+	}
+	.action {
+		display: flex;
+		gap: 0.5rem;
+		margin-top: 1rem;
+	}
+</style>

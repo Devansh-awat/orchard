@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { slidingIndicator } from './slide.svelte';
+
 	interface Option {
 		value: string;
 		label: string;
@@ -11,14 +13,18 @@
 		value = $bindable(''),
 		label,
 		onchange = undefined,
-		grow = false
+		grow = false,
+		size = 'md'
 	}: {
 		options: readonly Option[];
 		value: string;
 		label: string;
 		onchange?: (value: string) => void;
 		grow?: boolean;
+		size?: 'md' | 'sm';
 	} = $props();
+
+	const buttons: Record<string, HTMLButtonElement> = $state({});
 
 	function select(next: string) {
 		value = next;
@@ -26,15 +32,17 @@
 	}
 </script>
 
-<div class="ui-seg" class:ui-seg--grow={grow} role="radiogroup" aria-label={label}>
+<div class="seg seg--{size}" class:seg--grow={grow} role="radiogroup" aria-label={label}>
+	<span class="thumb" aria-hidden="true" {@attach slidingIndicator(() => buttons[value])}></span>
 	{#each options as opt (opt.value)}
 		<button
+			bind:this={buttons[opt.value]}
 			type="button"
 			role="radio"
 			aria-checked={value === opt.value}
 			aria-label={opt.hint}
-			class="ui-seg-btn {opt.optionClass ?? ''}"
-			class:ui-seg-btn--active={value === opt.value}
+			class="opt {opt.optionClass ?? ''}"
+			class:opt--active={value === opt.value}
 			onclick={() => select(opt.value)}
 		>
 			{opt.label}
@@ -43,51 +51,67 @@
 </div>
 
 <style>
-	.ui-seg {
+	.seg {
+		position: relative;
 		display: inline-flex;
 		align-items: center;
-		gap: 0.125rem;
-		padding: 0.25rem;
-		border-radius: var(--radius-md);
-		background-color: var(--bg-sunken);
-		border: 1px solid var(--border-default);
 		flex-shrink: 0;
+		width: fit-content;
+		padding: 0.125rem;
+		border-radius: var(--radius-control);
+		background: var(--bg-active);
 	}
-	.ui-seg--grow {
+	.seg--grow {
 		display: flex;
 		width: 100%;
 	}
-	.ui-seg--grow .ui-seg-btn {
+	.seg--grow .opt {
 		flex: 1;
 	}
-	.ui-seg-btn {
+	.thumb {
+		position: absolute;
+		top: 0;
+		left: 0;
+		border-radius: calc(var(--radius-control) - 0.125rem);
+		background: var(--bg-raised);
+		box-shadow:
+			0 0 0 0.5px rgb(0 0 0 / 0.06),
+			0 1px 2px rgb(0 0 0 / 0.1),
+			0 2px 6px rgb(0 0 0 / 0.04);
+		pointer-events: none;
+	}
+	.thumb[data-ready] {
+		transition:
+			transform var(--spring-snappy-duration) var(--spring-snappy),
+			width var(--spring-snappy-duration) var(--spring-snappy);
+	}
+	.opt {
+		position: relative;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
+		gap: 0.375rem;
+		height: 1.75rem;
 		min-width: 2rem;
+		padding: 0 0.75rem;
 		border: none;
+		border-radius: calc(var(--radius-control) - 0.125rem);
 		background: none;
-		padding: 0.3125rem var(--space-3);
-		border-radius: var(--radius-xs);
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		font-weight: 600;
 		color: var(--text-muted);
+		font: inherit;
+		font-size: var(--text-callout);
+		font-weight: var(--weight-medium);
+		white-space: nowrap;
 		cursor: pointer;
-		transition:
-			color var(--dur-fast) ease,
-			background-color var(--dur-fast) ease;
+		transition: color var(--dur-fast) ease;
 	}
-	.ui-seg-btn:hover {
+	.seg--sm .opt {
+		height: 1.5rem;
+		padding: 0 0.5rem;
+		font-size: var(--text-caption);
+	}
+	.opt:hover,
+	.opt--active {
 		color: var(--text-default);
-	}
-	.ui-seg-btn:focus-visible {
-		outline: 2px solid var(--accent);
-		outline-offset: 1px;
-	}
-	.ui-seg-btn--active {
-		background-color: var(--bg-surface);
-		color: var(--text-default);
-		box-shadow: var(--elev-1);
 	}
 </style>

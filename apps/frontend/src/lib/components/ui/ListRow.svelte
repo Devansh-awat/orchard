@@ -1,0 +1,179 @@
+<script lang="ts">
+	import type { Snippet } from 'svelte';
+
+	let {
+		title,
+		subtitle = undefined,
+		href = undefined,
+		onclick = undefined,
+		leading = undefined,
+		trailing = undefined,
+		actions = undefined,
+		titleSuffix = undefined
+	}: {
+		title: string;
+		subtitle?: string | Snippet;
+		href?: string;
+		onclick?: (e: MouseEvent) => void;
+		leading?: Snippet;
+		trailing?: Snippet;
+		actions?: Snippet;
+		titleSuffix?: Snippet;
+	} = $props();
+
+	const interactive = $derived(!!href || !!onclick);
+</script>
+
+<div class="row" class:row--interactive={interactive} role="listitem">
+	{#if href}
+		<a class="hit" {href} aria-label={title}></a>
+	{:else if onclick}
+		<button type="button" class="hit" {onclick} aria-label={title}></button>
+	{/if}
+	{#if leading}<div class="leading">{@render leading()}</div>{/if}
+	<div class="text">
+		<div class="title-line">
+			<span class="title">{title}</span>
+			{#if titleSuffix}{@render titleSuffix()}{/if}
+		</div>
+		{#if subtitle}
+			<div class="subtitle">
+				{#if typeof subtitle === 'string'}{subtitle}{:else}{@render subtitle()}{/if}
+			</div>
+		{/if}
+	</div>
+	{#if trailing || actions}
+		<div class="end">
+			{#if trailing}<div class="trailing">{@render trailing()}</div>{/if}
+			{#if actions}<div class="actions">{@render actions()}</div>{/if}
+		</div>
+	{/if}
+</div>
+
+<style>
+	.row {
+		position: relative;
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		min-height: 3.25rem;
+		padding: 0.625rem 1rem;
+		content-visibility: auto;
+		contain-intrinsic-size: auto 3.25rem;
+	}
+	.row:not(:first-child) {
+		box-shadow: inset 0 1px 0 var(--border-default);
+	}
+	.row--interactive {
+		transition: background-color var(--dur-fast) ease;
+	}
+	.row--interactive:hover {
+		background: var(--bg-hover);
+	}
+	.hit {
+		position: absolute;
+		inset: 0;
+		z-index: 0;
+		border: none;
+		background: none;
+		cursor: pointer;
+	}
+	.hit:focus-visible {
+		outline-offset: -2px;
+		border-radius: 0;
+	}
+	.leading,
+	.trailing,
+	.actions {
+		position: relative;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		flex-shrink: 0;
+		pointer-events: none;
+	}
+	.leading :global(*),
+	.trailing :global(*) {
+		pointer-events: none;
+	}
+	.end {
+		position: relative;
+		display: grid;
+		flex-shrink: 0;
+		justify-items: end;
+		align-items: center;
+	}
+	.end > * {
+		grid-area: 1 / 1;
+	}
+	.trailing {
+		transition: opacity var(--dur-fast) ease;
+	}
+	.actions {
+		z-index: 1;
+		pointer-events: none;
+		opacity: 0;
+		transition: opacity var(--dur-fast) ease;
+	}
+	.row:hover .actions,
+	.row:focus-within .actions,
+	.actions:has(:global([aria-expanded='true'])) {
+		pointer-events: auto;
+		opacity: 1;
+	}
+	.row:hover .end:has(.actions) .trailing,
+	.row:focus-within .end:has(.actions) .trailing,
+	.end:has(:global([aria-expanded='true'])) .trailing {
+		opacity: 0;
+	}
+	.text {
+		position: relative;
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		gap: 0.125rem;
+		min-width: 0;
+		pointer-events: none;
+	}
+	.title-line {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		min-width: 0;
+	}
+	.title {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
+		font-weight: var(--weight-medium);
+		color: var(--text-default);
+	}
+	.subtitle {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		min-width: 0;
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		color: var(--text-muted);
+	}
+	.trailing {
+		font-size: var(--text-callout);
+		color: var(--text-muted);
+		font-variant-numeric: tabular-nums;
+	}
+	@media (hover: none) {
+		.actions {
+			pointer-events: auto;
+			opacity: 1;
+		}
+		.end:has(.actions) .trailing {
+			display: none;
+		}
+	}
+</style>

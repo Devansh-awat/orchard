@@ -11,84 +11,74 @@
 	} = $props();
 </script>
 
-{#if variant === 'subtle'}
-	<span class="sb sb--subtle status--{meta.kind}">
-		<StatusDot {meta} size={6} />
-		{meta.label}
-	</span>
-{:else if variant === 'solid'}
-	<span class="sb sb--solid status--{meta.kind}">
-		<span class="sb-solid-inner">
-			<span class="sb-solid-dot" class:sb-solid-dot--pulse={meta.pulse} aria-hidden="true"></span>
-			{meta.label}
-		</span>
-	</span>
-{:else}
-	<span class="sb sb--plain">
-		<StatusDot {meta} size={6} />
-		{meta.label}
-	</span>
-{/if}
+<span class="sb sb--{variant} sb--{meta.kind}">
+	{#if variant !== 'solid'}<StatusDot {meta} size={6} />{/if}
+	{meta.label}
+</span>
 
 <style>
 	.sb {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.5rem;
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		font-weight: 600;
+		gap: 0.375rem;
 		flex-shrink: 0;
+		height: 1.375rem;
+		font-size: var(--text-caption);
+		font-weight: var(--weight-medium);
+		line-height: 1;
 		white-space: nowrap;
 	}
-
-	.sb--subtle {
-		padding: 0.25rem 0.75rem;
-		border-radius: var(--radius-2xl);
-		background-color: color-mix(in srgb, currentColor 10%, transparent);
+	.sb--subtle,
+	.sb--solid {
+		padding: 0 0.5rem;
+		border-radius: var(--radius-pill);
 	}
-
 	.sb--plain {
+		height: auto;
 		color: var(--text-default);
 	}
 
-	.sb--solid {
-		padding: 0.3125rem 0.75rem;
-		border-radius: var(--radius-2xl);
-		background-color: currentColor;
-		box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text-on-accent) 24%, transparent);
+	.sb--subtle.sb--success {
+		background: var(--green-2);
+		color: var(--green-9);
+	}
+	.sb--subtle.sb--warning,
+	.sb--subtle.sb--progress {
+		background: var(--amber-2);
+		color: var(--amber-9);
+	}
+	.sb--subtle.sb--error {
+		background: var(--red-2);
+		color: var(--red-9);
+	}
+	.sb--subtle.sb--info {
+		background: var(--blue-2);
+		color: var(--blue-9);
+	}
+	.sb--subtle.sb--neutral {
+		background: var(--bg-active);
+		color: var(--text-muted);
 	}
 
-	.sb-solid-inner {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.4rem;
-		color: var(--text-on-accent);
-		font-weight: 700;
-		letter-spacing: 0.02em;
+	.sb--solid.sb--success {
+		background: var(--green-7);
+		color: var(--green-contrast);
 	}
-
-	.sb-solid-dot {
-		width: 6px;
-		height: 6px;
-		border-radius: 50%;
-		background: currentColor;
-		opacity: 0.85;
+	.sb--solid.sb--warning,
+	.sb--solid.sb--progress {
+		background: var(--amber-7);
+		color: var(--amber-contrast);
 	}
-
-	.sb-solid-dot--pulse {
-		animation: sb-pulse 1.6s ease-in-out infinite;
+	.sb--solid.sb--error {
+		background: var(--red-7);
+		color: var(--red-contrast);
 	}
-
-	@keyframes sb-pulse {
-		0%,
-		100% {
-			opacity: 0.85;
-			transform: scale(1);
-		}
-		50% {
-			opacity: 0.45;
-			transform: scale(0.75);
-		}
+	.sb--solid.sb--info {
+		background: var(--blue-7);
+		color: var(--blue-contrast);
+	}
+	.sb--solid.sb--neutral {
+		background: var(--neutral-7);
+		color: var(--neutral-app);
 	}
 </style>

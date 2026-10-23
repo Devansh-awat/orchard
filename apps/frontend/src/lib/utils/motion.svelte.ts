@@ -14,39 +14,12 @@
  */
 import { animate } from 'motion';
 import { effectiveAnimationLevel } from '$lib/stores/preferences';
+import { EXIT_BOUNCE, EXIT_SCALE, SPRINGS, type SpringName } from '$lib/design/springs';
 
-export type SpringName = 'smooth' | 'snappy' | 'bouncy' | 'interactive' | 'cinematic';
+export type { SpringName };
 
 type Keyframes = Record<string, unknown>;
 type Options = Record<string, unknown>;
-
-/**
- * `visualDuration` is the time to first reach the target, which is how Apple's
- * `.spring(duration:bounce:)` reads, and `bounce` is the same 0..1 overshoot.
- *
- * Bounce is kept high and duration low. The bounce is what makes motion read as
- * alive — a zero-bounce spring asymptotes into place and feels sluggish however
- * short you make it — but the folder demo's 0.37s is sized for a full-screen
- * gesture. Application chrome opening a panel wants a fraction of that: enough
- * animation to see where things came from, not a performance.
- */
-const SPRINGS: Record<SpringName, { visualDuration: number; bounce: number }> = {
-	smooth: { visualDuration: 0.26, bounce: 0.2 },
-	snappy: { visualDuration: 0.19, bounce: 0.25 },
-	bouncy: { visualDuration: 0.28, bounce: 0.45 },
-	interactive: { visualDuration: 0.1, bounce: 0.2 },
-	// Full-viewport choreography, not chrome: the setup overture's closing move
-	// travels half the screen while shrinking to a third, and it is seen once.
-	// Measured off the build this was tuned on, that move ran about 0.75s to
-	// settle; the four springs above are all sized for a panel and turn it into
-	// a cut, which is what it had become. Low bounce because something this large overshooting reads as a
-	// wobble rather than as life. Do not reach for this for UI chrome.
-	cinematic: { visualDuration: 0.8, bounce: 0.14 }
-};
-
-/** Exits leave quicker and looser than entrances, the way the demo's do. */
-const EXIT_SCALE = 0.8;
-const EXIT_BOUNCE = 0.15;
 
 /**
  * The decay curve for an event marker. Deliberately much longer than any of the

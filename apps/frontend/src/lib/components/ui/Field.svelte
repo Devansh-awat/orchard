@@ -16,14 +16,35 @@
 	} = $props();
 </script>
 
-<div class="ui-field">
-	{#if label}
-		<label class="ui-field-label" for={htmlFor}>{label}</label>
-	{/if}
+<div class="field">
+	{#if label}<label class="label" for={htmlFor}>{label}</label>{/if}
 	{@render children()}
 	{#if error}
-		<p class="ui-field-error">{error}</p>
+		<p class="msg msg--error" role="alert">{error}</p>
 	{:else if hint}
-		<p class="ui-field-hint">{hint}</p>
+		<p class="msg">{hint}</p>
 	{/if}
 </div>
+
+<style>
+	.field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.375rem;
+		min-width: 0;
+	}
+	.label {
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		font-weight: var(--weight-medium);
+		color: var(--text-default);
+	}
+	.msg {
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-muted);
+	}
+	.msg--error {
+		color: var(--status-error);
+	}
+</style>

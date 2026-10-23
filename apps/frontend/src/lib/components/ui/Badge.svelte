@@ -1,13 +1,54 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import type { Tone } from './types';
 
 	let {
 		tone = 'neutral',
 		children
 	}: {
-		tone?: 'success' | 'warning' | 'error' | 'info' | 'neutral';
+		tone?: Tone | 'accent';
 		children: Snippet;
 	} = $props();
 </script>
 
-<span class="badge badge-{tone}">{@render children()}</span>
+<span class="pill pill--{tone}">{@render children()}</span>
+
+<style>
+	.pill {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		height: 1.25rem;
+		padding: 0 0.375rem;
+		border-radius: 0.375rem;
+		font-size: var(--text-caption);
+		font-weight: var(--weight-medium);
+		line-height: 1;
+		white-space: nowrap;
+		font-variant-numeric: tabular-nums;
+	}
+	.pill--neutral {
+		background: var(--bg-active);
+		color: var(--text-muted);
+	}
+	.pill--accent {
+		background: var(--accent-3);
+		color: var(--accent-9);
+	}
+	.pill--success {
+		background: var(--green-3);
+		color: var(--green-9);
+	}
+	.pill--warning {
+		background: var(--amber-3);
+		color: var(--amber-9);
+	}
+	.pill--error {
+		background: var(--red-3);
+		color: var(--red-9);
+	}
+	.pill--info {
+		background: var(--blue-3);
+		color: var(--blue-9);
+	}
+</style>
