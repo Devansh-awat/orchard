@@ -1,6 +1,6 @@
 import { AnsiUp } from 'ansi_up';
 import { clockOptions, logDisplay, logDisplaySignature } from '$lib/stores/log-display.svelte';
-import { clock } from './clock.svelte';
+import { elapsedSince } from './clock.svelte';
 
 const ansi = new AnsiUp();
 ansi.use_classes = true;
@@ -20,7 +20,7 @@ export function formatMemory(bytes: number | null | undefined): string {
 }
 
 export function formatRelativeTime(date: Date): string {
-	const diffMs = clock.now - date.getTime();
+	const diffMs = elapsedSince(date.getTime());
 	const diffS = Math.floor(diffMs / 1000);
 	if (diffS < 5) return 'just now';
 	if (diffS < 60) return `${diffS}s ago`;

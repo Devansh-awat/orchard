@@ -326,10 +326,6 @@
 
 body {
 	background-color: var(--center-channel-bg);
-	background-image: var(--theme-grain, none), var(--theme-chrome-image, none);
-	background-size: auto;
-	background-repeat: repeat;
-	background-attachment: fixed;
 	color: var(--center-channel-color);
 	font-family: var(--font-sans);
 	@apply antialiased;
@@ -341,8 +337,19 @@ body {
 	line-height: 1.5;
 }
 
-html.contrast-high body,
-html.contrast-high main,
+body::before {
+	content: '';
+	position: fixed;
+	inset: 0;
+	z-index: -1;
+	pointer-events: none;
+	background-image: var(--theme-grain, none), var(--theme-chrome-image, none);
+	background-size: auto;
+	background-repeat: repeat;
+	will-change: transform;
+}
+
+html.contrast-high body::before,
 html.contrast-high .deck-host--drawer {
 	background-image: none;
 }
@@ -368,15 +375,6 @@ html.contrast-high .deck-host--drawer {
 
 .dark .logo-dark {
 	display: inline;
-}
-
-main {
-	background-color: var(--center-channel-bg);
-	background-image: var(--theme-grain, none), var(--theme-chrome-image, none);
-	background-size: auto;
-	background-repeat: repeat;
-	background-attachment: fixed;
-	color: var(--center-channel-color);
 }
 
 /* While the sidebar is mid-resize, freeze hover/transition activity on the

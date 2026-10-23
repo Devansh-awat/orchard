@@ -28,6 +28,11 @@
 		}
 	});
 
+	let opened = $state(false);
+	$effect.pre(() => {
+		if (open) opened = true;
+	});
+
 	setContext('ui-menu', {
 		close: () => {
 			open = false;
@@ -49,5 +54,7 @@
 		origin: `${placement.startsWith('top') ? 'bottom' : 'top'} ${placement.endsWith('end') ? 'right' : 'left'}`
 	})}
 >
-	{@render children()}
+	{#if open || opened}
+		{@render children()}
+	{/if}
 </div>

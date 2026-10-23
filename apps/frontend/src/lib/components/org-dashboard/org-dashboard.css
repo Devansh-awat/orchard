@@ -346,29 +346,30 @@
 }
 :where(.org-dash) .proj-mesh--1 {
 	transform: translate(-50%, -50%) scale(1.1) rotate(0deg);
-	animation: proj-spin-a 28s linear infinite;
 }
 :where(.org-dash) .proj-card-backdrop--ready .proj-mesh--1 {
 	opacity: 0.9;
 }
 :where(.org-dash) .proj-mesh--2 {
 	transform: translate(-50%, -50%) scale(1.45) rotate(70deg);
-	animation: proj-spin-b 44s linear infinite;
 }
 :where(.org-dash) .proj-card-backdrop--ready .proj-mesh--2 {
 	opacity: 0.55;
 }
 :where(.org-dash) .proj-mesh--3 {
 	transform: translate(-50%, -50%) scale(1.8) rotate(140deg);
-	animation: proj-spin-c 60s linear infinite;
 }
 :where(.org-dash) .proj-card-backdrop--ready .proj-mesh--3 {
 	opacity: 0.4;
 }
-:where(.org-dash) .proj-mesh--1,
-:where(.org-dash) .proj-mesh--2,
-:where(.org-dash) .proj-mesh--3 {
-	animation-play-state: paused;
+:where(.org-dash) .proj-card--mesh-awake .proj-mesh--1 {
+	animation: proj-spin-a 28s linear infinite paused;
+}
+:where(.org-dash) .proj-card--mesh-awake .proj-mesh--2 {
+	animation: proj-spin-b 44s linear infinite paused;
+}
+:where(.org-dash) .proj-card--mesh-awake .proj-mesh--3 {
+	animation: proj-spin-c 60s linear infinite paused;
 }
 :where(.org-dash) .proj-card:hover .proj-mesh--1,
 :where(.org-dash) .proj-card:hover .proj-mesh--2,
@@ -400,9 +401,9 @@
 	}
 }
 @media (prefers-reduced-motion: reduce) {
-	:where(.org-dash) .proj-mesh--1,
-	:where(.org-dash) .proj-mesh--2,
-	:where(.org-dash) .proj-mesh--3 {
+	:where(.org-dash) .proj-card .proj-mesh--1,
+	:where(.org-dash) .proj-card .proj-mesh--2,
+	:where(.org-dash) .proj-card .proj-mesh--3 {
 		animation: none;
 	}
 }

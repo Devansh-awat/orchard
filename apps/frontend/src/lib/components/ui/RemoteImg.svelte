@@ -12,7 +12,7 @@
 		alt = '',
 		class: className = '',
 		style,
-		eager = true,
+		eager = false,
 		onerror
 	}: {
 		src: string;

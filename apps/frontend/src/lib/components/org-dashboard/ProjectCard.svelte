@@ -102,6 +102,8 @@
 	// of animating to it, so the rule would snap rather than draw.
 	const ruleAttachment = springScaleX(() => expanded);
 
+	let meshAwake = $state(false);
+
 	const bodyAttachment = bodyAttach(
 		group.id,
 		() => expanded,
@@ -115,6 +117,8 @@
 	class="proj-card"
 	class:proj-card--expanded={expanded}
 	class:proj-card--hasbg={!!meta?.backgroundImage && $projectGradientEnabled}
+	class:proj-card--mesh-awake={meshAwake}
+	onpointerenter={() => (meshAwake = true)}
 >
 	{#if meta?.backgroundImage && $projectGradientEnabled}
 		<div class="proj-card-backdrop" aria-hidden="true" {@attach meshBakedBg(meta.backgroundImage)}>

@@ -17,7 +17,7 @@
 		alt = '',
 		class: klass = '',
 		tint,
-		eager = true,
+		eager = false,
 		onerror,
 		fallback
 	}: {

@@ -688,7 +688,7 @@
 
 				{#if $dashboardDensity === 'compact'}
 					<CompactList
-						groups={projectGroups}
+						groups={visibleProjectGroups}
 						metas={projectMetas}
 						{favDeps}
 						{orgSlug}
@@ -698,6 +698,7 @@
 						onToggleExpand={toggleExpand}
 						onFavErr={favErr}
 					/>
+					{@render showMore()}
 					{#if projectGroups.length === 0 && favDeps.length === 0}
 						<p class="no-results">
 							{searchQuery ? `No results for "${searchQuery}"` : 'Nothing here yet'}
@@ -755,20 +756,7 @@
 								/>
 							</section>
 						{/each}
-						{#if hiddenProjectCount > 0}
-							<button
-								type="button"
-								class="show-more"
-								onclick={() => (visibleCount += PROJECTS_STEP)}
-							>
-								<ChevronDown size={14} />
-								Show {Math.min(hiddenProjectCount, PROJECTS_STEP)} more
-								{hiddenProjectCount === 1 ? 'project' : 'projects'}
-								<span class="show-more-count"
-									>{visibleProjectGroups.length} of {projectGroups.length}</span
-								>
-							</button>
-						{/if}
+						{@render showMore()}
 					{/if}
 					{#if projectGroups.length === 0 && favDeps.length === 0}
 						<p class="no-results">
@@ -789,3 +777,14 @@
 		/>
 	</div>
 </div>
+
+{#snippet showMore()}
+	{#if hiddenProjectCount > 0}
+		<button type="button" class="show-more" onclick={() => (visibleCount += PROJECTS_STEP)}>
+			<ChevronDown size={14} />
+			Show {Math.min(hiddenProjectCount, PROJECTS_STEP)} more
+			{hiddenProjectCount === 1 ? 'project' : 'projects'}
+			<span class="show-more-count">{visibleProjectGroups.length} of {projectGroups.length}</span>
+		</button>
+	{/if}
+{/snippet}
