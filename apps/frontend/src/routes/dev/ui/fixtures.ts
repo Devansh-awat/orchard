@@ -108,7 +108,18 @@ export const MORE_PROJECTS = [
 		counts: ['2 deployments', '1 database'],
 		image: null,
 		updatedAt: ago(26),
-		live: 2
+		live: 2,
+		entities: [
+			['site', 'deployment', 'mercury.hackclub.com'],
+			['mailer', 'deployment', 'Sends every 15 minutes'],
+			['postgres', 'database', 'Postgres 16 · 318 MB']
+		].map(([name, kind, detail], i) => ({
+			kind: kind as 'deployment' | 'database',
+			name,
+			status: resourceStatus('running'),
+			detail,
+			updatedAt: ago(26 + i * 97)
+		}))
 	}
 ];
 

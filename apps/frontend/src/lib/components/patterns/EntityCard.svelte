@@ -3,6 +3,7 @@
 	import { Box, Database, Timer } from 'lucide-svelte';
 	import RemoteImg from '$lib/components/ui/RemoteImg.svelte';
 	import RelativeTime from '$lib/components/ui/RelativeTime.svelte';
+	import Sparkline from '$lib/components/ui/Sparkline.svelte';
 	import { stateEcho } from '$lib/utils/motion.svelte';
 	import type { StatusMeta } from '$lib/components/ui/status';
 
@@ -15,6 +16,7 @@
 		metrics = undefined,
 		updatedAt = undefined,
 		image = undefined,
+		traffic = undefined,
 		actions = undefined
 	}: {
 		kind: 'deployment' | 'database' | 'job';
@@ -25,6 +27,7 @@
 		metrics?: string;
 		updatedAt?: string | null;
 		image?: string | null;
+		traffic?: { values: number[]; label: string };
 		actions?: Snippet;
 	} = $props();
 
@@ -55,7 +58,12 @@
 			></span>
 			<span class="label">{status.label}</span>
 		</span>
-		{#if metrics}<span class="metrics">{metrics}</span>{/if}
+		{#if traffic}
+			<span class="traffic">
+				<span class="spark"><Sparkline values={traffic.values} height={14} tone="neutral" /></span>
+				<span class="traffic-label">{traffic.label}</span>
+			</span>
+		{:else if metrics}<span class="metrics">{metrics}</span>{/if}
 		{#if updatedAt}<span class="when"><RelativeTime date={updatedAt} /></span>{/if}
 	</div>
 </div>
@@ -190,6 +198,20 @@
 	.label,
 	.metrics,
 	.when {
+		text-box: trim-both cap alphabetic;
+		white-space: nowrap;
+	}
+	.traffic {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-left: auto;
+		color: var(--text-faint);
+	}
+	.spark {
+		width: 3.5rem;
+	}
+	.traffic-label {
 		text-box: trim-both cap alphabetic;
 		white-space: nowrap;
 	}

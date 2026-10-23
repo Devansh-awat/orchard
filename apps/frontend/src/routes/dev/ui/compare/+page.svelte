@@ -14,7 +14,6 @@
 	import Card from '$lib/components/ui/Card.svelte';
 	import SectionCard from '$lib/components/ui/SectionCard.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
-	import SearchField from '$lib/components/ui/SearchField.svelte';
 	import Field from '$lib/components/ui/Field.svelte';
 	import Select from '$lib/components/ui/Select.svelte';
 	import ToggleRow from '$lib/components/ui/ToggleRow.svelte';
@@ -34,16 +33,16 @@
 	import EntityRow from '$lib/components/patterns/EntityRow.svelte';
 	import { resourceStatus } from '$lib/components/ui/status';
 	import DevBar from '../DevBar.svelte';
+	import HomeScreen from './HomeScreen.svelte';
+	import ExperimentsPanel from './ExperimentsPanel.svelte';
 	import AppFrame from '$lib/components/patterns/AppFrame.svelte';
 	import Sidebar from '$lib/components/patterns/Sidebar.svelte';
 	import SectionTitle from '$lib/components/ui/SectionTitle.svelte';
 	import Sparkline from '$lib/components/ui/Sparkline.svelte';
 	import MetaList from '$lib/components/ui/MetaList.svelte';
-	import ProjectGroup from '$lib/components/patterns/ProjectGroup.svelte';
-	import EntityCard from '$lib/components/patterns/EntityCard.svelte';
 	import ProjectHero from '$lib/components/patterns/ProjectHero.svelte';
 	import ProjectBackdrop from '$lib/components/patterns/ProjectBackdrop.svelte';
-	import { PROJECTS, BUILDS, SIDEBAR, BUILD_FEED, MORE_PROJECTS } from '../fixtures';
+	import { PROJECTS, BUILDS, SIDEBAR, BUILD_FEED } from '../fixtures';
 	import RecentBuilds from '$lib/components/patterns/RecentBuilds.svelte';
 	import NeedsAttention from '$lib/components/patterns/NeedsAttention.svelte';
 
@@ -55,14 +54,6 @@
 	let autoDeploy = $state(true);
 	let previews = $state(false);
 	let protectPreviews = $state(true);
-
-	function summarize(kinds: string[]) {
-		const failing = kinds.filter((k) => k === 'error').length;
-		const building = kinds.filter((k) => k === 'progress').length;
-		if (failing) return { tone: 'error' as const, label: `${failing} failing` };
-		if (building) return { tone: 'progress' as const, label: `${building} building` };
-		return { tone: 'success' as const, label: 'All running' };
-	}
 
 	const spark = [12, 18, 14, 22, 30, 26, 34, 28, 40, 36, 44, 38, 46, 52, 48, 56];
 	const sections = $derived(SIDEBAR.sections(screen === 'settings' ? 'settings' : 'apps'));
@@ -89,84 +80,7 @@
 		{#if screen === 'project'}<ProjectBackdrop name="terra" image={PROJECTS[1].background} />{/if}
 	{/snippet}
 	{#if screen === 'home'}
-		<Page title="Your Apps" width="wide">
-			{#snippet actions()}
-				<SearchField placeholder="Search apps" shortcut="/" />
-				<Button variant="primary" icon={Plus}>New</Button>
-			{/snippet}
-			{#snippet aside()}
-				<div class="flex flex-col gap-4">
-					<NeedsAttention items={SIDEBAR.failing} />
-					<RecentBuilds builds={BUILD_FEED} />
-				</div>
-			{/snippet}
-
-			{#each PROJECTS as project (project.id)}
-				<ProjectGroup
-					name={project.name}
-					href="#"
-					image={project.image}
-					background={project.background}
-					owner={project.owner}
-					counts={project.counts}
-					updatedAt={project.entities[0].updatedAt}
-					summary={summarize(project.entities.map((e) => e.status.kind))}
-					onNew={() => {}}
-					expanded={project.id === 'p1'}
-				>
-					{#each project.entities as e (e.name)}
-						<EntityCard
-							kind={e.kind}
-							name={e.name}
-							status={e.status}
-							detail={e.url ?? e.detail}
-							metrics={e.metrics}
-							updatedAt={e.updatedAt}
-							href="#"
-						>
-							{#snippet actions()}
-								<Menu>
-									{#snippet trigger(props)}<Button
-											{...props}
-											size="sm"
-											variant="ghost"
-											icon={Ellipsis}
-											label="Actions"
-										/>{/snippet}
-									<MenuItem>Redeploy</MenuItem>
-									<MenuItem>Copy URL</MenuItem>
-									<MenuItem danger>Delete</MenuItem>
-								</Menu>
-							{/snippet}
-						</EntityCard>
-					{/each}
-				</ProjectGroup>
-			{/each}
-			{#each MORE_PROJECTS as project (project.id)}
-				<ProjectGroup
-					name={project.name}
-					href="#"
-					image={project.image}
-					owner={project.owner}
-					counts={project.counts}
-					updatedAt={project.updatedAt}
-					summary={{ tone: 'success', label: 'All running' }}
-					onNew={() => {}}
-					expanded={false}
-				>
-					{#each project.entities ?? [] as e (e.name)}
-						<EntityCard
-							kind={e.kind}
-							name={e.name}
-							status={e.status}
-							detail={e.detail}
-							updatedAt={e.updatedAt}
-							href="#"
-						/>
-					{/each}
-				</ProjectGroup>
-			{/each}
-		</Page>
+		<HomeScreen />
 	{:else if screen === 'project'}
 		<Page title="terra" width="wide">
 			{#snippet hero()}
@@ -340,6 +254,7 @@
 </AppFrame>
 
 <DevBar />
+{#if screen === 'home'}<ExperimentsPanel />{/if}
 
 <style>
 	.switcher {

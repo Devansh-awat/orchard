@@ -75,7 +75,10 @@
 		grid-template-columns: minmax(0, 1fr) var(--aside-w);
 		gap: 2rem;
 	}
-	.head--split .actions > :global(:first-child) {
+	.head--split .actions {
+		justify-content: flex-end;
+	}
+	.head--split .actions > :global(:first-child:not(:last-child)) {
 		flex: 1;
 		min-width: 0;
 	}

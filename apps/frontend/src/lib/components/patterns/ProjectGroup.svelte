@@ -18,6 +18,7 @@
 		summary = undefined,
 		expanded = $bindable(true),
 		onNew = undefined,
+		layout = 'cards',
 		children
 	}: {
 		name: string;
@@ -30,6 +31,7 @@
 		summary?: { tone: 'success' | 'error' | 'progress' | 'neutral'; label: string };
 		expanded?: boolean;
 		onNew?: () => void;
+		layout?: 'cards' | 'rows' | 'dense';
 		children: Snippet;
 	} = $props();
 
@@ -106,7 +108,7 @@
 	</header>
 
 	<div class="body" {@attach folder(() => expanded, { origin: () => iconEl })}>
-		<div class="cards">{@render children()}</div>
+		<div class="cards cards--{layout}">{@render children()}</div>
 	</div>
 </section>
 
@@ -397,6 +399,17 @@
 		.cards {
 			grid-template-columns: repeat(3, minmax(0, 1fr));
 		}
+	}
+	.cards--dense {
+		grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+		gap: 0.5rem;
+		padding: 0.625rem;
+	}
+	.cards--rows {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 0;
+		padding: 0.375rem 0.5rem;
+		background: none;
 	}
 	@media (max-width: 720px) {
 		.cards {

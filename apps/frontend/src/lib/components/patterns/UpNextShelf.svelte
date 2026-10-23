@@ -1,0 +1,496 @@
+<script lang="ts" module>
+	export type UpNextTone = 'success' | 'progress' | 'error' | 'neutral';
+
+	export type UpNextItem = {
+		id: string;
+		app: string;
+		project: string;
+		href: string;
+		kind?: 'deployment' | 'database' | 'job';
+		icon?: string | null;
+		background?: string | null;
+		status: string;
+		tone: UpNextTone;
+		progress?: number;
+		at?: string;
+	};
+</script>
+
+<script lang="ts">
+	import { ChevronLeft, ChevronRight } from 'lucide-svelte';
+	import AppIcon from '$lib/components/ui/AppIcon.svelte';
+	import RelativeTime from '$lib/components/ui/RelativeTime.svelte';
+	import SectionTitle from '$lib/components/ui/SectionTitle.svelte';
+	import { bakeBlur } from '$lib/components/aura/aura';
+	import { decorativeMotion } from '$lib/utils/motion.svelte';
+
+	let {
+		items,
+		title = 'Up next',
+		seeAllHref = undefined
+	}: {
+		items: UpNextItem[];
+		title?: string;
+		seeAllHref?: string;
+	} = $props();
+
+	const HUES = ['blue', 'green', 'amber', 'neutral'] as const;
+
+	function hueOf(name: string) {
+		return HUES[
+			[...name].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0, 2166136261) %
+				HUES.length
+		];
+	}
+
+	function tintOf(name: string) {
+		const hue = hueOf(name);
+		return hue === 'neutral'
+			? 'var(--neutral-3)'
+			: `color-mix(in oklab, var(--${hue}-3) 55%, var(--bg-surface))`;
+	}
+
+	let baked = $state<Record<string, string | null>>({});
+
+	$effect(() => {
+		for (const item of items) {
+			const src = item.background ?? item.icon;
+			if (!src) continue;
+			bakeBlur(src).then((url) => {
+				if (url) baked[src] = url;
+			});
+		}
+	});
+
+	function artOf(item: UpNextItem) {
+		const src = item.background ?? item.icon;
+		return src ? (baked[src] ?? null) : null;
+	}
+
+	function percent(p: number) {
+		return Math.round(Math.min(1, Math.max(0, p)) * 100);
+	}
+
+	let scroller = $state<HTMLElement>();
+	let track = $state<HTMLElement>();
+	let canPrev = $state(false);
+	let canNext = $state(false);
+
+	function measure() {
+		const el = scroller;
+		if (!el) return;
+		const max = el.scrollWidth - el.clientWidth;
+		canPrev = el.scrollLeft > 2;
+		canNext = el.scrollLeft < max - 2;
+	}
+
+	function watch(el: HTMLElement) {
+		scroller = el;
+		measure();
+		const ro = new ResizeObserver(measure);
+		ro.observe(el);
+		if (el.firstElementChild) ro.observe(el.firstElementChild);
+		el.addEventListener('scroll', measure, { passive: true });
+		return () => {
+			ro.disconnect();
+			el.removeEventListener('scroll', measure);
+		};
+	}
+
+	function page(dir: 1 | -1) {
+		const el = scroller;
+		if (!el || !track) return;
+		const first = track.firstElementChild as HTMLElement | null;
+		const gap = parseFloat(getComputedStyle(track).columnGap) || 0;
+		const step = first ? first.offsetWidth + gap : el.clientWidth;
+		const per = Math.max(1, Math.floor((el.clientWidth + gap) / step));
+		el.scrollBy({ left: dir * per * step, behavior: decorativeMotion() ? 'smooth' : 'auto' });
+	}
+</script>
+
+<section class="shelf" aria-label={title}>
+	<SectionTitle {title} size="md">
+		{#snippet actions()}
+			{#if seeAllHref}<a class="see-all" href={seeAllHref}
+					><span class="see-all-label">See all</span><ChevronRight size={14} /></a
+				>{/if}
+			{#if canPrev || canNext}
+				<span class="pager">
+					<button
+						type="button"
+						class="page-btn"
+						aria-label="Previous"
+						disabled={!canPrev}
+						onclick={() => page(-1)}><ChevronLeft size={16} /></button
+					>
+					<button
+						type="button"
+						class="page-btn"
+						aria-label="Next"
+						disabled={!canNext}
+						onclick={() => page(1)}><ChevronRight size={16} /></button
+					>
+				</span>
+			{/if}
+		{/snippet}
+	</SectionTitle>
+
+	<div
+		class="scroller"
+		class:scroller--start={canPrev}
+		class:scroller--end={canNext}
+		{@attach watch}
+	>
+		<ul class="track" bind:this={track}>
+			{#each items as item (item.id)}
+				{@const art = artOf(item)}
+				{@const live = item.tone === 'progress' && item.progress != null}
+				<li class="slot">
+					<a class="tile tile--{item.tone}" href={item.href}>
+						<span class="art" class:art--media={!!art}>
+							<span class="art-clip" style:--tint={tintOf(item.app)}>
+								<span
+									class="art-mesh"
+									class:art-mesh--ready={!!art}
+									style:--mesh={art ? `url("${art}")` : 'none'}
+								></span>
+								<span class="art-veil"></span>
+								<span class="art-icon"
+									><AppIcon name={item.app} kind={item.kind} icon={item.icon} size="lg" /></span
+								>
+								{#if live}
+									<span class="bar" aria-hidden="true"
+										><span class="bar-fill" style:--p={percent(item.progress ?? 0) / 100}
+										></span></span
+									>
+								{/if}
+							</span>
+						</span>
+						<span class="caption">
+							<span class="caption-top">
+								<span class="app">{item.app}</span>
+								{#if item.at && !live}<span class="when"><RelativeTime date={item.at} /></span>{/if}
+							</span>
+							<span class="caption-meta">
+								<span class="project">{item.project}</span>
+								<span class="sep" aria-hidden="true"></span>
+								<span class="state"
+									>{item.status}{#if live}{` · ${percent(item.progress ?? 0)}%`}{/if}</span
+								>
+							</span>
+						</span>
+					</a>
+				</li>
+			{/each}
+		</ul>
+	</div>
+</section>
+
+<style>
+	.shelf {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+		min-width: 0;
+	}
+
+	.see-all {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.125rem;
+		height: 1.75rem;
+		padding: 0 0.375rem 0 0.625rem;
+		border-radius: var(--radius-pill);
+		color: var(--text-muted);
+		font-size: var(--text-callout);
+		font-weight: var(--weight-medium);
+		text-decoration: none;
+		transition:
+			background-color var(--dur-fast) ease,
+			color var(--dur-fast) ease;
+	}
+	.see-all:hover {
+		background: color-mix(in oklab, var(--neutral-10) 6%, transparent);
+		color: var(--text-default);
+	}
+	.see-all:focus-visible {
+		outline: none;
+		box-shadow: 0 0 0 3px var(--focus-ring);
+	}
+	.see-all-label {
+		text-box: trim-both cap alphabetic;
+	}
+
+	.pager {
+		display: inline-flex;
+		gap: 0.25rem;
+		opacity: 0;
+		transition: opacity var(--dur-fast) ease;
+	}
+	.shelf:hover .pager,
+	.shelf:focus-within .pager {
+		opacity: 1;
+	}
+	@media (hover: none) {
+		.pager {
+			opacity: 1;
+		}
+	}
+	.page-btn {
+		display: grid;
+		place-items: center;
+		width: 1.75rem;
+		height: 1.75rem;
+		padding: 0;
+		border: none;
+		border-radius: 50%;
+		background: color-mix(in oklab, var(--neutral-10) 6%, transparent);
+		color: var(--text-default);
+		cursor: pointer;
+		transition:
+			background-color var(--dur-fast) ease,
+			opacity var(--dur-fast) ease,
+			transform var(--spring-interactive-duration) var(--spring-interactive);
+	}
+	.page-btn:hover:not(:disabled) {
+		background: color-mix(in oklab, var(--neutral-10) 11%, transparent);
+	}
+	.page-btn:active:not(:disabled) {
+		transform: scale(0.94);
+	}
+	.page-btn:disabled {
+		opacity: 0.35;
+		cursor: default;
+	}
+	.page-btn:focus-visible {
+		outline: none;
+		box-shadow: 0 0 0 3px var(--focus-ring);
+	}
+
+	.scroller {
+		--fade-start: 0rem;
+		--fade-end: 0rem;
+		overflow-x: auto;
+		overscroll-behavior-x: contain;
+		scroll-snap-type: x mandatory;
+		scroll-padding-inline: 0.75rem;
+		scrollbar-width: none;
+		margin: -1rem -0.75rem -0.5rem;
+		padding: 1rem 0.75rem 0.5rem;
+		mask-image: linear-gradient(
+			to right,
+			transparent,
+			black var(--fade-start),
+			black calc(100% - var(--fade-end)),
+			transparent
+		);
+	}
+	.scroller::-webkit-scrollbar {
+		display: none;
+	}
+	.scroller--start {
+		--fade-start: 3rem;
+	}
+	.scroller--end {
+		--fade-end: 3rem;
+	}
+	.track {
+		display: flex;
+		gap: 1rem;
+		width: max-content;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	.slot {
+		flex: 0 0 15rem;
+		min-width: 0;
+		scroll-snap-align: start;
+	}
+
+	.tile {
+		display: flex;
+		flex-direction: column;
+		gap: 0.875rem;
+		color: inherit;
+		text-decoration: none;
+		-webkit-tap-highlight-color: transparent;
+	}
+	.tile:focus-visible {
+		outline: none;
+	}
+
+	.art {
+		position: relative;
+		display: block;
+		aspect-ratio: 16 / 9;
+		isolation: isolate;
+		transform-origin: 50% 60%;
+		transition: transform var(--spring-snappy-duration) var(--spring-snappy);
+	}
+	.art::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		z-index: -1;
+		border-radius: calc(var(--radius-card) * var(--corner-scale));
+		corner-shape: var(--corner);
+		box-shadow:
+			0 18px 32px -14px var(--on-media-pill),
+			0 6px 12px -6px color-mix(in oklab, var(--on-media-pill) 53%, transparent);
+		opacity: 0;
+		transition: opacity var(--dur-base) ease;
+	}
+	.tile:hover .art,
+	.tile:focus-visible .art {
+		transform: scale(1.03);
+	}
+	.tile:hover .art::before,
+	.tile:focus-visible .art::before {
+		opacity: 1;
+	}
+	.tile:active .art {
+		transform: scale(1.01);
+		transition-duration: var(--spring-interactive-duration);
+		transition-timing-function: var(--spring-interactive);
+	}
+
+	.art-clip {
+		position: absolute;
+		inset: 0;
+		display: grid;
+		place-items: center;
+		overflow: hidden;
+		border-radius: calc(var(--radius-card) * var(--corner-scale));
+		corner-shape: var(--corner);
+		background: var(--tint);
+		box-shadow:
+			inset 0 0 0 0.5px color-mix(in oklab, var(--neutral-10) 12%, transparent),
+			0 1px 2px color-mix(in oklab, var(--on-media-pill) 19%, transparent);
+	}
+	.tile:focus-visible .art-clip {
+		box-shadow:
+			inset 0 0 0 0.5px color-mix(in oklab, var(--neutral-10) 12%, transparent),
+			0 0 0 3px var(--focus-ring);
+	}
+	.art-mesh {
+		position: absolute;
+		inset: -30%;
+		background-image: var(--mesh);
+		background-size: cover;
+		background-position: center;
+		opacity: 0;
+		transition: opacity 500ms ease-out;
+	}
+	.art-mesh--ready {
+		opacity: 1;
+	}
+	.art-veil {
+		position: absolute;
+		inset: 0;
+		background: linear-gradient(180deg, transparent 45%, var(--on-media-pill));
+		opacity: 0;
+	}
+	.art--media .art-veil {
+		opacity: 1;
+	}
+	.art-icon {
+		position: relative;
+		display: flex;
+		zoom: 1.2727;
+		border-radius: calc(0.6875rem * var(--corner-scale));
+		corner-shape: var(--corner);
+		box-shadow:
+			0 6px 14px -4px color-mix(in oklab, var(--on-media-pill) 67%, transparent),
+			0 1px 3px color-mix(in oklab, var(--on-media-pill) 34%, transparent);
+	}
+
+	.bar {
+		--bar-track: color-mix(in oklab, var(--neutral-10) 14%, transparent);
+		--bar-fill: var(--text-default);
+		position: absolute;
+		right: 0.75rem;
+		bottom: 0.75rem;
+		left: 0.75rem;
+		height: 0.25rem;
+		overflow: hidden;
+		border-radius: var(--radius-pill);
+		background: var(--bar-track);
+	}
+	.art--media .bar {
+		--bar-track: var(--on-media-fill);
+		--bar-fill: var(--on-media);
+	}
+	.bar-fill {
+		display: block;
+		height: 100%;
+		border-radius: inherit;
+		background: var(--bar-fill);
+		transform: translateX(calc((var(--p) - 1) * 100%));
+		transition: transform var(--spring-smooth-duration) var(--spring-smooth);
+	}
+
+	.caption {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		min-width: 0;
+		padding-inline: 0.125rem;
+	}
+	.caption-top,
+	.caption-meta {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		min-width: 0;
+	}
+	.app,
+	.project,
+	.state,
+	.when {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		text-box: trim-both cap alphabetic;
+		padding-block: 0.3em;
+		margin-block: -0.3em;
+	}
+	.app {
+		flex: 1;
+		min-width: 0;
+		color: var(--text-default);
+		font-size: var(--text-body);
+		font-weight: var(--weight-semibold);
+		letter-spacing: -0.006em;
+	}
+	.when {
+		flex-shrink: 0;
+		color: var(--text-faint);
+		font-size: var(--text-caption);
+		font-variant-numeric: tabular-nums;
+	}
+	.caption-meta {
+		font-size: var(--text-caption);
+	}
+	.project {
+		min-width: 0;
+		color: var(--text-faint);
+	}
+	.sep {
+		width: 2px;
+		height: 2px;
+		flex-shrink: 0;
+		border-radius: 50%;
+		background: var(--text-faint);
+	}
+	.state {
+		flex-shrink: 0;
+		max-width: 75%;
+		color: var(--text-muted);
+		font-variant-numeric: tabular-nums;
+	}
+	.tile--error .state {
+		color: var(--status-error);
+		font-weight: var(--weight-medium);
+	}
+</style>
