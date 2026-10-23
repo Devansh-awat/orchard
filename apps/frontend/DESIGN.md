@@ -22,6 +22,22 @@ catalogue, add it to the kit and the catalogue first; never hand-roll it in a ro
 8. Spend novelty on deploy moments and project identity (aura, toasts). Everything
    else is quiet on purpose.
 
+## Avoiding AI tells
+
+AI-built UI averages its training data. These are the tells people notice, and the
+rule for each:
+
+- **Cards inside cards.** Nest only when elevation means something: a sunken tray holding
+  raised cards, never a bordered card inside a bordered card.
+- **The same chrome on every repeated item.** Show status in words ("1 failing"), and put
+  per-item actions on hover. One primary action per page.
+- **Decorative colour.** Red only means broken, amber only in progress, green only healthy.
+  Identity colours (app icons) never use red.
+- **One radius everywhere.** Containers 18, cards 12, controls 10, inner tiles 8.
+- **Fake people and fake art.** Use the real org logo, avatars and project icons; fall back
+  to a glyph, never a lone letter.
+- **Generic copy.** Say what is true right now ("Everything is running except 3 apps").
+
 ## Why Apple UI looks expensive (do all of these)
 
 - **Optical alignment.** Icons centre on the text's cap height, not its line box. Text

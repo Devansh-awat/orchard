@@ -68,10 +68,10 @@
 		gap: 0.875rem;
 		min-width: 0;
 		padding: 1rem;
-		border-radius: calc(0.875rem * var(--corner-scale));
+		border-radius: calc(0.75rem * var(--corner-scale));
 		corner-shape: var(--corner);
-		background: var(--bg-sunken);
-		box-shadow: inset 0 0 0 1px var(--border-default);
+		background: var(--bg-raised);
+		box-shadow: var(--shadow-raised);
 		transition:
 			background-color var(--dur-fast) ease,
 			transform var(--spring-snappy-duration) var(--spring-snappy);

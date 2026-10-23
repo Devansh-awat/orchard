@@ -56,6 +56,14 @@
 	let previews = $state(false);
 	let protectPreviews = $state(true);
 
+	function summarize(kinds: string[]) {
+		const failing = kinds.filter((k) => k === 'error').length;
+		const building = kinds.filter((k) => k === 'progress').length;
+		if (failing) return { tone: 'error' as const, label: `${failing} failing` };
+		if (building) return { tone: 'progress' as const, label: `${building} building` };
+		return { tone: 'success' as const, label: 'All running' };
+	}
+
 	const spark = [12, 18, 14, 22, 30, 26, 34, 28, 40, 36, 44, 38, 46, 52, 48, 56];
 	const sections = $derived(SIDEBAR.sections(screen === 'settings' ? 'settings' : 'apps'));
 </script>
@@ -106,7 +114,7 @@
 					owner={project.owner}
 					counts={project.counts}
 					updatedAt={project.entities[0].updatedAt}
-					live={project.entities.filter((e) => e.status.kind === 'success').length}
+					summary={summarize(project.entities.map((e) => e.status.kind))}
 					onNew={() => {}}
 					expanded={project.id === 'p1'}
 				>
@@ -146,7 +154,7 @@
 					owner={project.owner}
 					counts={project.counts}
 					updatedAt={project.updatedAt}
-					live={project.live}
+					summary={{ tone: 'success', label: 'All running' }}
 					onNew={() => {}}
 					expanded={false}
 				>

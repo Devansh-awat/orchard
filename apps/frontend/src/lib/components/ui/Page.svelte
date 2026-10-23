@@ -89,6 +89,7 @@
 	}
 	.desc {
 		max-width: 65ch;
+		text-wrap: pretty;
 		font-size: var(--text-headline);
 		line-height: 1.375rem;
 		color: var(--text-muted);

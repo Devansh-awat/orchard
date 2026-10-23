@@ -15,7 +15,7 @@
 		owner = undefined,
 		counts = [],
 		updatedAt = undefined,
-		live = undefined,
+		summary = undefined,
 		expanded = $bindable(true),
 		onNew = undefined,
 		children
@@ -27,7 +27,7 @@
 		owner?: string;
 		counts?: string[];
 		updatedAt?: string | null;
-		live?: number;
+		summary?: { tone: 'success' | 'error' | 'progress' | 'neutral'; label: string };
 		expanded?: boolean;
 		onNew?: () => void;
 		children: Snippet;
@@ -88,14 +88,18 @@
 				</span>
 			</span>
 		</a>
+		{#if summary}
+			<span class="summary summary--{summary.tone}"
+				><span class="summary-dot"></span><span class="summary-label">{summary.label}</span></span
+			>
+		{/if}
 		<div class="actions">
-			{#if live !== undefined}<span class="live"><span class="live-dot"></span>{live}</span>{/if}
 			{#if onNew}
-				<button type="button" class="pill" onclick={onNew}
-					><Plus size={14} /><span>New</span></button
+				<button type="button" class="round" onclick={onNew} aria-label="New in {name}"
+					><Plus size={15} /></button
 				>
 			{/if}
-			<a class="round" {href} aria-label="Open {name}"><ArrowRight size={14} /></a>
+			<a class="round" {href} aria-label="Open {name}"><ArrowRight size={15} /></a>
 		</div>
 	</header>
 
@@ -287,29 +291,51 @@
 	.actions {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: 0.375rem;
 		flex-shrink: 0;
+		opacity: 0;
+		transition: opacity var(--dur-fast) ease;
 	}
-	.live {
+	.project:hover .actions,
+	.head:focus-within .actions {
+		opacity: 1;
+	}
+	@media (hover: none) {
+		.actions {
+			opacity: 1;
+		}
+	}
+	.summary {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
-		height: 1.75rem;
-		padding: 0 0.625rem;
-		border-radius: var(--radius-pill);
-		background: var(--h-pill);
+		gap: 0.5rem;
+		flex-shrink: 0;
+		color: var(--h-muted);
 		font-size: var(--text-callout);
-		font-weight: var(--weight-semibold);
 		font-variant-numeric: tabular-nums;
 	}
-	.live-dot {
+	.summary-label {
+		text-box: trim-both cap alphabetic;
+	}
+	.summary-dot {
 		width: 6px;
 		height: 6px;
 		border-radius: 50%;
-		background: var(--green-6);
-		box-shadow: 0 0 6px var(--green-6);
+		background: var(--neutral-6);
 	}
-	.pill,
+	.summary--success .summary-dot {
+		background: var(--green-6);
+	}
+	.summary--progress .summary-dot {
+		background: var(--amber-6);
+	}
+	.summary--error .summary-dot {
+		background: var(--red-6);
+	}
+	.summary--error {
+		color: var(--h-fg);
+		font-weight: var(--weight-semibold);
+	}
 	.round {
 		display: inline-flex;
 		align-items: center;
@@ -327,16 +353,10 @@
 		cursor: pointer;
 		transition: background-color var(--dur-fast) ease;
 	}
-	.pill {
-		padding: 0 0.75rem 0 0.5rem;
-	}
-	.pill span {
-		text-box: trim-both cap alphabetic;
-	}
 	.round {
-		width: 1.75rem;
+		width: 2rem;
+		height: 2rem;
 	}
-	.pill:hover,
 	.round:hover {
 		background: var(--h-fill-hover);
 	}
@@ -348,7 +368,8 @@
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 0.75rem;
-		padding: 1rem;
+		padding: 0.875rem;
+		background: var(--bg-sunken);
 	}
 	@media (min-width: 100rem) {
 		.cards {

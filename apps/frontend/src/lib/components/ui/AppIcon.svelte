@@ -17,7 +17,7 @@
 	const GLYPH = { deployment: Box, database: Database, job: Timer, project: Sprout };
 	const Glyph = $derived(GLYPH[kind]);
 	const glyphSize = $derived({ xs: 11, sm: 13, md: 17, lg: 21 }[size]);
-	const HUES = ['blue', 'green', 'amber', 'red', 'accent'] as const;
+	const HUES = ['blue', 'green', 'amber', 'neutral'] as const;
 	const hue = $derived(
 		HUES[
 			[...name].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0, 2166136261) %
@@ -31,7 +31,9 @@
 	{#if icon && !failed}
 		<RemoteImg src={icon} class="img" onerror={() => (failed = true)} />
 	{:else}
-		<span class="glyph" style:--tile="var(--{hue}-solid)"
+		<span
+			class="glyph"
+			style:--tile={hue === 'neutral' ? 'var(--neutral-9)' : `var(--${hue}-solid)`}
 			><Glyph size={glyphSize} strokeWidth={2} /></span
 		>
 	{/if}

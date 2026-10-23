@@ -110,7 +110,7 @@
 		owner={terra.owner}
 		counts={terra.counts}
 		updatedAt={terra.entities[0].updatedAt}
-		live={1}
+		summary={{ tone: 'error', label: '1 failing' }}
 		onNew={() => {}}
 	>
 		{#each terra.entities.concat(site.entities.slice(0, 1)) as e (e.name)}
