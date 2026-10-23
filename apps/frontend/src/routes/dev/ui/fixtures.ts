@@ -6,6 +6,7 @@ export const PROJECTS = [
 	{
 		id: 'p1',
 		name: 'hackclub-site',
+		image: null as string | null,
 		entities: [
 			{
 				kind: 'deployment' as const,
@@ -35,6 +36,7 @@ export const PROJECTS = [
 	{
 		id: 'p2',
 		name: 'arcade-leaderboard',
+		image: '/1102d9e3945dc194989cac1ae5a80449508a0bc2.svg' as string | null,
 		entities: [
 			{
 				kind: 'deployment' as const,

@@ -35,7 +35,8 @@
 	import { resourceStatus } from '$lib/components/ui/status';
 	import DevBar from '../DevBar.svelte';
 	import Shell from '../Shell.svelte';
-	import Monogram from '$lib/components/ui/Monogram.svelte';
+	import ProjectGroup from '$lib/components/patterns/ProjectGroup.svelte';
+	import ProjectHero from '$lib/components/patterns/ProjectHero.svelte';
 	import { PROJECTS, BUILDS } from '../fixtures';
 
 	let screen = $state('home');
@@ -60,6 +61,7 @@
 		bind:value={screen}
 		options={[
 			{ value: 'home', label: 'Org home' },
+			{ value: 'project', label: 'Project' },
 			{ value: 'deployment', label: 'Deployment' },
 			{ value: 'settings', label: 'Settings' }
 		]}
@@ -88,16 +90,14 @@
 			{/snippet}
 
 			{#each PROJECTS as project (project.id)}
-				<section class="flex flex-col gap-3">
-					<div class="flex items-center justify-between">
-						<div class="flex items-center gap-2">
-							<Monogram name={project.name} />
-							<h2 class="text-headline text-fg">{project.name}</h2>
-							<span class="text-callout text-faint">{project.entities.length}</span>
-						</div>
-						<Button size="sm" variant="ghost" icon={Plus}>Add</Button>
-					</div>
-					<List label={project.name}>
+				<ProjectGroup
+					name={project.name}
+					href="#"
+					image={project.image}
+					meta="{project.entities.length} resources · updated 2m ago"
+					onNew={() => {}}
+				>
+					<List inset={false} label={project.name}>
 						{#each project.entities as e (e.name)}
 							<EntityRow {...e} href="#">
 								{#snippet actions()}
@@ -117,8 +117,38 @@
 							</EntityRow>
 						{/each}
 					</List>
-				</section>
+				</ProjectGroup>
 			{/each}
+		</Page>
+	{:else if screen === 'project'}
+		<Page title="summer-of-making" width="wide">
+			{#snippet hero()}
+				<ProjectHero name="summer-of-making" meta="3 apps · 1 database · 12 members">
+					{#snippet eyebrow()}Hack Club{/snippet}
+					{#snippet actions()}
+						<Button icon={Plus}>New</Button>
+						<Button variant="primary" iconRight={ExternalLink}>Visit</Button>
+					{/snippet}
+				</ProjectHero>
+			{/snippet}
+			{#snippet aside()}
+				<div class="flex flex-col gap-3">
+					<h2 class="text-callout font-medium text-muted">Recent builds</h2>
+					<List>
+						{#each BUILDS as b (b.id)}
+							<ListRow title={b.commit} href="#">
+								{#snippet leading()}<StatusDot meta={b.status} />{/snippet}
+								{#snippet subtitle()}{b.name} · <RelativeTime date={b.at} />{/snippet}
+							</ListRow>
+						{/each}
+					</List>
+				</div>
+			{/snippet}
+			<List label="Resources">
+				{#each PROJECTS[0].entities.concat(PROJECTS[1].entities) as e (e.name)}
+					<EntityRow {...e} href="#" />
+				{/each}
+			</List>
 		</Page>
 	{:else if screen === 'deployment'}
 		<Page title="worker" width="wide">

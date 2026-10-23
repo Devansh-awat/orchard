@@ -3,6 +3,7 @@
 
 	let {
 		title,
+		hero = undefined,
 		description = undefined,
 		width = 'default',
 		eyebrow = undefined,
@@ -11,6 +12,7 @@
 		children
 	}: {
 		title: string;
+		hero?: Snippet;
 		description?: string;
 		width?: 'narrow' | 'default' | 'wide';
 		eyebrow?: Snippet;
@@ -20,7 +22,9 @@
 	} = $props();
 </script>
 
-<div class="frame frame--{width}">
+{#if hero}{@render hero()}{/if}
+<div class="frame frame--{width}" class:frame--hero={!!hero}>
+	{#if !hero}
 	<header class="head">
 		<div class="heading">
 			{#if eyebrow}<div class="eyebrow">{@render eyebrow()}</div>{/if}
@@ -29,6 +33,7 @@
 		</div>
 		{#if actions}<div class="actions">{@render actions()}</div>{/if}
 	</header>
+	{/if}
 	{#if aside}
 		<div class="split">
 			<div class="main">{@render children()}</div>
@@ -44,6 +49,9 @@
 		width: 100%;
 		margin: 0 auto;
 		padding: 2rem 2rem 4rem;
+	}
+	.frame--hero {
+		padding-top: 0;
 	}
 	.frame--narrow {
 		max-width: calc(var(--page-narrow) + 4rem);

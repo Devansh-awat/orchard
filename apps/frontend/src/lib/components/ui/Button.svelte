@@ -17,7 +17,7 @@
 		children,
 		...rest
 	}: {
-		variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
+		variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'media';
 		size?: 'md' | 'sm';
 		href?: string;
 		type?: 'button' | 'submit';
@@ -162,5 +162,13 @@
 	}
 	.button--danger:hover:not(:disabled) {
 		background: var(--red-4);
+	}
+	.button--media {
+		background: var(--on-media-fill);
+		color: var(--on-media);
+		box-shadow: inset 0 0 0 0.5px var(--on-media-edge);
+	}
+	.button--media:hover:not(:disabled) {
+		background: var(--on-media-fill-hover);
 	}
 </style>

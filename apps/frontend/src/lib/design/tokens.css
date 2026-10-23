@@ -88,6 +88,19 @@
 	--z-toast: 900;
 	--z-tooltip: 1000;
 
+	--on-media: oklch(1 0 0);
+	--on-media-muted: oklch(1 0 0 / 0.74);
+	--on-media-fill: oklch(1 0 0 / 0.16);
+	--on-media-fill-hover: oklch(1 0 0 / 0.26);
+	--on-media-edge: oklch(1 0 0 / 0.22);
+	--on-media-shadow: 0 2px 8px oklch(0 0 0 / 0.18);
+	--media-scrim: linear-gradient(
+		100deg,
+		oklch(0 0 0 / 0.46) 0%,
+		oklch(0 0 0 / 0.22) 55%,
+		oklch(0 0 0 / 0.08) 100%
+	);
+
 	--toast-fill: var(--neutral-10);
 	--toast-muted: color-mix(in oklab, var(--neutral-app) 62%, transparent);
 	--toast-success: var(--green-7);
