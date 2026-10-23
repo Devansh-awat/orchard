@@ -5,7 +5,13 @@ import { K8sCnpgService } from '../kubernetes/k8s-cnpg.service';
 import { LeaderElectionService } from '../events/leader-election.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { k8sErrorMessage } from '../kubernetes/k8s-error';
-import { DEFAULT_BACKUP_CRON, toQuartzCron } from './projects.utils';
+import { cronFromSchedule } from '../kubernetes/cnpg-spec-sync';
+import {
+  defaultBackupCronFor,
+  isBackupSchedulePinned,
+  LEGACY_DEFAULT_BACKUP_CRON,
+  toQuartzCron
+} from './projects.utils';
 import { backupTransition, SUPERSEDED_MESSAGE, supersededBackups } from './backup-transition';
 import { backupFleetGauges } from './backup-telemetry';
 import { gauge } from '../analytics/datadog';
@@ -15,6 +21,7 @@ const INGEST_EVERY_N_TICKS = 5;
 const MAX_COMPLETED_BACKUPS = 10;
 const SCHEDULE_SWEEP_EVERY_N_TICKS = 30;
 const MAX_SCHEDULES_PER_SWEEP = 5;
+const MAX_RESPREADS_PER_SWEEP = 20;
 
 interface DatabaseRef {
   id: string;
@@ -73,6 +80,9 @@ export class BackupSyncService {
       if (this.tickCount % SCHEDULE_SWEEP_EVERY_N_TICKS === 1) {
         await this.ensureBackupSchedules().catch((e) => {
           this.logger.warn(`schedule sweep failed: ${e?.message ?? e}`);
+        });
+        await this.respreadLegacySchedules().catch((e) => {
+          this.logger.warn(`schedule respread failed: ${e?.message ?? e}`);
         });
       }
       if (ingest) {
@@ -139,7 +149,7 @@ export class BackupSyncService {
         if (!(await this.k8sCnpg.isCnpgBackupConfigured(namespace, clusterName))) continue;
         if (await this.k8sCnpg.hasScheduledBackup(namespace, clusterName)) continue;
 
-        const cron = db.backupScheduleCron || DEFAULT_BACKUP_CRON;
+        const cron = db.backupScheduleCron || defaultBackupCronFor(namespace, clusterName);
         await this.k8sCnpg.upsertScheduledBackup(namespace, clusterName, toQuartzCron(cron), {
           immediate: true
         });
@@ -159,6 +169,55 @@ export class BackupSyncService {
         );
       }
     }
+  }
+
+  async respreadLegacySchedules(): Promise<number> {
+    if (isBackupSchedulePinned()) return 0;
+    const databases = await this.prisma.database.findMany({
+      where: {
+        mode: 'cnpg',
+        namespace: { not: null },
+        clusterName: { not: null },
+        backupScheduleCron: LEGACY_DEFAULT_BACKUP_CRON,
+        backupScheduleDisabled: false,
+        status: { notIn: ['deleting', 'restoring', 'error'] }
+      },
+      select: { id: true, namespace: true, clusterName: true },
+      take: MAX_RESPREADS_PER_SWEEP
+    });
+
+    let moved = 0;
+    for (const db of databases) {
+      const namespace = db.namespace!;
+      const clusterName = db.clusterName!;
+      try {
+        const live = await this.k8sCnpg.getScheduledBackupSchedule(namespace, clusterName);
+        if (live !== null && live !== toQuartzCron(LEGACY_DEFAULT_BACKUP_CRON)) {
+          await this.prisma.database.update({
+            where: { id: db.id },
+            data: { backupScheduleCron: cronFromSchedule(live) }
+          });
+          continue;
+        }
+        const cron = defaultBackupCronFor(namespace, clusterName);
+        if (live !== null) {
+          await this.k8sCnpg.upsertScheduledBackup(namespace, clusterName, toQuartzCron(cron));
+        }
+        await this.prisma.database.update({
+          where: { id: db.id },
+          data: { backupScheduleCron: cron }
+        });
+        moved += 1;
+        this.logger.log(
+          `[DB/backup] spread backup schedule to ${cron} for ${namespace}/${clusterName}`
+        );
+      } catch (e: any) {
+        this.logger.warn(
+          `schedule respread failed for ${namespace}/${clusterName}: ${k8sErrorMessage(e)}`
+        );
+      }
+    }
+    return moved;
   }
 
   async reconcileDatabase(

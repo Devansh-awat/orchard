@@ -41,7 +41,7 @@ import {
   parseStorageSize,
   formatBytes,
   toQuartzCron,
-  DEFAULT_BACKUP_CRON,
+  defaultBackupCronFor,
   GIB
 } from './projects.utils';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -627,7 +627,7 @@ export class DatabasesService {
           port,
           createdBy: user.id,
           templateInstanceId: data.templateInstanceId ?? null,
-          backupScheduleCron: r2 ? DEFAULT_BACKUP_CRON : null,
+          backupScheduleCron: r2 ? defaultBackupCronFor(namespace, clusterName) : null,
           nodePoolId: data.nodePoolId ?? null,
           placementOverride: (data.placementOverride ?? undefined) as
             | Prisma.InputJsonValue
@@ -674,7 +674,11 @@ export class DatabasesService {
     // scheduled run is well inside the retention window.
     if (r2) {
       this.k8sCnpg
-        .upsertScheduledBackup(namespace, clusterName, toQuartzCron(DEFAULT_BACKUP_CRON))
+        .upsertScheduledBackup(
+          namespace,
+          clusterName,
+          toQuartzCron(defaultBackupCronFor(namespace, clusterName))
+        )
         .catch((e) => {
           this.logger.warn(
             `[DB/backup] default schedule for ${namespace}/${clusterName} failed: ${k8sErrorMessage(e)}`
@@ -1980,7 +1984,7 @@ export class DatabasesService {
     }
     if (db.backupScheduleDisabled) return out;
     if (!(await this.k8sCnpg.hasScheduledBackup(namespace, clusterName))) {
-      const cron = db.backupScheduleCron || DEFAULT_BACKUP_CRON;
+      const cron = db.backupScheduleCron || defaultBackupCronFor(namespace, clusterName);
       await this.k8sCnpg.upsertScheduledBackup(namespace, clusterName, toQuartzCron(cron));
       if (!db.backupScheduleCron) {
         await this.prisma.database.update({

@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { BadRequestException } from '@nestjs/common';
 /**
  * Pure helpers shared between ProjectsService, DatabasesService and friends.
@@ -220,7 +221,36 @@ export function formatBytes(bytes: number): string {
 // another one. Backups you have to remember to switch on are backups nobody
 // has, and an archiving cluster with no base backup grows without bound
 // because retention has nothing to expire against.
-export const DEFAULT_BACKUP_CRON = process.env.DEFAULT_DB_BACKUP_CRON || '0 3 * * *';
+export const LEGACY_DEFAULT_BACKUP_CRON = '0 3 * * *';
+
+const DEFAULT_BACKUP_WINDOW: [number, number] = [1, 5];
+
+export function parseBackupWindow(raw: string | undefined): [number, number] {
+  const m = raw?.trim().match(/^(\d{1,2})-(\d{1,2})$/);
+  if (!m) return DEFAULT_BACKUP_WINDOW;
+  const start = Number(m[1]);
+  const end = Number(m[2]);
+  if (start > 23 || end > 23 || end < start) return DEFAULT_BACKUP_WINDOW;
+  return [start, end];
+}
+
+export function defaultBackupCronFor(
+  namespace: string,
+  clusterName: string,
+  env: NodeJS.ProcessEnv = process.env
+): string {
+  const pinned = env.DEFAULT_DB_BACKUP_CRON?.trim();
+  if (pinned) return pinned;
+  const [start, end] = parseBackupWindow(env.DEFAULT_DB_BACKUP_WINDOW);
+  const slots = (end - start + 1) * 60;
+  const slot =
+    createHash('sha256').update(`${namespace}/${clusterName}`).digest().readUInt32BE(0) % slots;
+  return `${slot % 60} ${start + Math.floor(slot / 60)} * * *`;
+}
+
+export function isBackupSchedulePinned(env: NodeJS.ProcessEnv = process.env): boolean {
+  return !!env.DEFAULT_DB_BACKUP_CRON?.trim();
+}
 
 // CNPG schedules are quartz-style: the leading field is seconds, not minutes.
 // A plain 5-field cron pasted from anywhere else has to grow one.

@@ -2915,6 +2915,25 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     }
   }
 
+  async getScheduledBackupSchedule(namespace: string, clusterName: string): Promise<string | null> {
+    this.ensureKubeConfig();
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    try {
+      const res: any = await customApi.getNamespacedCustomObject(
+        this.CNPG_GROUP,
+        this.CNPG_VERSION,
+        namespace,
+        this.CNPG_SCHEDULED_BACKUP_PLURAL,
+        this.scheduledBackupName(clusterName)
+      );
+      const schedule = (res?.body ?? res)?.spec?.schedule;
+      return typeof schedule === 'string' ? schedule : null;
+    } catch (e: any) {
+      if (e.response?.statusCode === 404) return null;
+      throw e;
+    }
+  }
+
   async hasScheduledBackup(namespace: string, clusterName: string): Promise<boolean> {
     this.ensureKubeConfig();
     const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);

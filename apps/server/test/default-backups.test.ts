@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabasesService } from '../src/projects/databases.service';
+import { defaultBackupCronFor, toQuartzCron } from '../src/projects/projects.utils';
 
 function withPlatformBucket<T>(fn: () => Promise<T>): Promise<T> {
   const prev = { ...process.env };
@@ -332,12 +333,13 @@ test('a database that never had a schedule gets the default one, and the row rec
       scheduled: {}
     });
     await s.reconcileDefaultBackups();
+    const spread = defaultBackupCronFor('ns', 'pg-new');
     assert.deepEqual(calls, [
       'archive:pg-new',
-      'schedule:pg-new:0 0 3 * * *',
+      `schedule:pg-new:${toQuartzCron(spread)}`,
       'schedule:pg-set:0 0 4 * * *'
     ]);
-    assert.deepEqual(updates, [{ id: 'pg-new', data: { backupScheduleCron: '0 3 * * *' } }]);
+    assert.deepEqual(updates, [{ id: 'pg-new', data: { backupScheduleCron: spread } }]);
   });
 });
 
