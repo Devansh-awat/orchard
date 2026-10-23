@@ -562,8 +562,8 @@ r2Proxy:
     # registry path the other components have already moved off.
     repository: ""
   resources:
-    requests: { cpu: "50m", memory: "64Mi" }
-    limits: { cpu: "1", memory: "256Mi" }
+    requests: { cpu: "100m", memory: "256Mi" }
+    limits: { cpu: "2", memory: "1Gi" }
   # Upstream R2 credentials. The proxy needs ListBucket / ReadObject /
   # WriteObject / DeleteObject on the bucket(s) that orgs are configured to
   # back up to. If you'd rather provide these via External Secrets / SOPS,

@@ -76,6 +76,8 @@ const (
 	maxCacheSize = 4096
 	maxKeyLength = 128
 	maxBodyBytes = 1 << 30
+
+	maxControlBodyBytes = 8 << 20
 )
 
 // bindingStore resolves access keys to bindings, backed by orchard's Postgres.
@@ -340,14 +342,14 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
-	body, contentSha, err := readBodyForSigning(r)
+	payload, err := prepareUpstreamBody(w, r, key)
 	if err != nil {
 		s3Error(w, http.StatusRequestEntityTooLarge, "EntityTooLarge", "body too large or unreadable")
 		return
 	}
+	contentSha := payload.sha
 
-	if code, msg, ok := authorizeBinding(r, key, binding, body); !ok {
+	if code, msg, ok := authorizeBinding(r, key, binding, payload.inspect); !ok {
 		denyAndLog(w, r, authz.AccessKey, code, msg)
 		return
 	}
@@ -356,11 +358,12 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	upURL.Path = r.URL.Path
 	upURL.RawQuery = r.URL.RawQuery
 
-	outReq, err := http.NewRequestWithContext(r.Context(), r.Method, upURL.String(), bytes.NewReader(body))
+	outReq, err := http.NewRequestWithContext(r.Context(), r.Method, upURL.String(), payload.reader)
 	if err != nil {
 		s3Error(w, http.StatusInternalServerError, "InternalError", "upstream request build failed")
 		return
 	}
+	outReq.ContentLength = payload.length
 	// Carry through most headers but strip auth-related ones; we'll add fresh ones.
 	copyForwardHeaders(r.Header, outReq.Header)
 	outReq.Host = upURL.Host
@@ -777,24 +780,68 @@ func splitPathStyle(p string) (bucket, key string) {
 	return p[:i], p[i+1:]
 }
 
-// readBodyForSigning slurps the request body so we can compute its hash and
-// re-send it upstream. Large multipart parts are streamed by the SDK in
-// many MB chunks — for v1 we buffer; revisit if memory pressure becomes a
-// concern (parts are typically ≤16MB, capped by barman config).
-func readBodyForSigning(r *http.Request) (body []byte, contentSha string, err error) {
-	// If the client used UNSIGNED-PAYLOAD or streaming, propagate that
-	// without re-hashing. We still need to capture the body to forward it,
-	// since chunked encoding from a Go server isn't straightforward.
+type upstreamBody struct {
+	reader  io.Reader
+	length  int64
+	sha     string
+	inspect []byte
+}
+
+var errBodyTooLarge = errors.New("body too large")
+
+func prepareUpstreamBody(w http.ResponseWriter, r *http.Request, key string) (upstreamBody, error) {
 	clientHash := r.Header.Get("x-amz-content-sha256")
+	if key != "" && r.ContentLength >= 0 && isForwardablePayloadHash(clientHash) {
+		if r.ContentLength > maxBodyBytes {
+			return upstreamBody{}, errBodyTooLarge
+		}
+		if r.ContentLength == 0 {
+			return upstreamBody{reader: http.NoBody, sha: clientHash}, nil
+		}
+		return upstreamBody{
+			reader: http.MaxBytesReader(w, r.Body, maxBodyBytes),
+			length: r.ContentLength,
+			sha:    clientHash,
+		}, nil
+	}
+
+	limit := int64(maxBodyBytes)
+	if key == "" {
+		limit = maxControlBodyBytes
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
+	body, contentSha, err := readBodyForSigning(r)
+	if err != nil {
+		return upstreamBody{}, err
+	}
+	return upstreamBody{
+		reader:  bytes.NewReader(body),
+		length:  int64(len(body)),
+		sha:     contentSha,
+		inspect: body,
+	}, nil
+}
+
+func isForwardablePayloadHash(h string) bool {
+	if h == "UNSIGNED-PAYLOAD" {
+		return true
+	}
+	if len(h) != sha256.Size*2 {
+		return false
+	}
+	for i := 0; i < len(h); i++ {
+		c := h[i]
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+func readBodyForSigning(r *http.Request) (body []byte, contentSha string, err error) {
 	body, err = io.ReadAll(r.Body)
 	if err != nil {
 		return nil, "", err
-	}
-	if clientHash == "UNSIGNED-PAYLOAD" || strings.HasPrefix(clientHash, "STREAMING-") {
-		// Compute a real hash for the upstream request — R2 doesn't accept
-		// streaming signatures the same way every SDK sends them, but it
-		// always accepts a literal payload hash.
-		return body, hexSha256(body), nil
 	}
 	return body, hexSha256(body), nil
 }
