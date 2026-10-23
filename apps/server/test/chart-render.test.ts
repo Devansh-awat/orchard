@@ -379,3 +379,42 @@ test(
     assert.equal(envOf(plain, 'ORCHARD_GRAFT_TAPS'), undefined);
   }
 );
+
+test('the metrics stack runs on pinned images from values', { skip: !helmAvailable() }, () => {
+  const imageOf = (out: string, name: string) =>
+    parsed(out).find(
+      (d) =>
+        ['Deployment', 'StatefulSet', 'DaemonSet'].includes(d.kind) && d.metadata?.name === name
+    )?.spec.template.spec.containers[0].image;
+  const out = render([]);
+  for (const name of ['victoriametrics', 'vmagent', 'kube-state-metrics', 'node-exporter']) {
+    assert.match(imageOf(out, name), /:v\d+\.\d+\.\d+$/, `${name} is pinned to a release`);
+  }
+  assert.equal(
+    imageOf(out, 'vmagent').split(':')[1],
+    imageOf(out, 'victoriametrics').split(':')[1],
+    'vmagent matches victoriametrics'
+  );
+  const custom = render([
+    'metrics.vmagent.image=mirror.local/vmagent:v1',
+    'metrics.kubeStateMetrics.image=mirror.local/ksm:v2',
+    'metrics.nodeExporter.image=mirror.local/node-exporter:v3'
+  ]);
+  assert.equal(imageOf(custom, 'vmagent'), 'mirror.local/vmagent:v1');
+  assert.equal(imageOf(custom, 'kube-state-metrics'), 'mirror.local/ksm:v2');
+  assert.equal(imageOf(custom, 'node-exporter'), 'mirror.local/node-exporter:v3');
+});
+
+test('the pooler pins pgbouncer unless the image is cleared', { skip: !helmAvailable() }, () => {
+  const pgbouncer = (out: string) =>
+    parsed(out)
+      .find((d) => d.kind === 'Pooler')
+      ?.spec.template.spec.containers.find((c: { name: string }) => c.name === 'pgbouncer');
+  const pinned = pgbouncer(render(['postgres.pooler.enabled=true']));
+  assert.match(pinned.image, /^ghcr\.io\/cloudnative-pg\/pgbouncer:\d+\.\d+\.\d+$/);
+  const operatorDefault = pgbouncer(
+    render(['postgres.pooler.enabled=true', 'postgres.pooler.image='])
+  );
+  assert.equal(operatorDefault.image, undefined);
+  assert.ok(operatorDefault.resources, 'resources still render');
+});

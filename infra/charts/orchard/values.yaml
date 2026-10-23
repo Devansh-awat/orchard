@@ -252,6 +252,7 @@ postgres:
     instances: 2
     defaultPoolSize: 20
     maxClientConn: 1000
+    image: ghcr.io/cloudnative-pg/pgbouncer:1.26.1
     resources:
       requests: { cpu: 50m, memory: 64Mi }
       limits: { memory: 256Mi }
@@ -378,7 +379,7 @@ metrics:
   enabled: true
   namespace: orchard-metrics
   victoriametrics:
-    image: victoriametrics/victoria-metrics:v1.106.1
+    image: victoriametrics/victoria-metrics:v1.154.1
     retention: 30d
     # VictoriaMetrics sizes its cache as a share of the memory *limit*, so it
     # grows to fill whatever it's given. Lower the limit to lower idle RSS.
@@ -390,14 +391,17 @@ metrics:
       size: 5Gi
       storageClass: longhorn
   vmagent:
+    image: victoriametrics/vmagent:v1.154.1
     resources:
       requests: { cpu: "50m", memory: "128Mi" }
       limits: { cpu: "500m", memory: "512Mi" }
   kubeStateMetrics:
+    image: registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.20.0
     resources:
       requests: { cpu: "20m", memory: "64Mi" }
       limits: { cpu: "200m", memory: "256Mi" }
   nodeExporter:
+    image: prom/node-exporter:v1.12.1
     resources:
       requests: { cpu: "20m", memory: "32Mi" }
       limits: { cpu: "200m", memory: "128Mi" }

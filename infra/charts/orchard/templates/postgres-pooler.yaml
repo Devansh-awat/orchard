@@ -23,6 +23,9 @@ spec:
     spec:
       containers:
         - name: pgbouncer
+          {{- with .Values.postgres.pooler.image }}
+          image: {{ . }}
+          {{- end }}
           resources:
             {{- toYaml .Values.postgres.pooler.resources | nindent 12 }}
 {{- end }}

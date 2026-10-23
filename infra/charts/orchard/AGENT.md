@@ -160,6 +160,7 @@ The chart sets `TENANT_SECRETS_CLUSTER_ROLE` to `<release>-tenant-secrets`, the 
 | `postgres.storage.size` | `10Gi` | PVC size per instance. |
 | `postgres.storage.storageClass` | `longhorn` | StorageClass for the data PVC. |
 | `postgres.resources` | requests `200m/512Mi`, limits `2/2Gi` | Per-instance resources. |
+| `postgres.pooler.image` | `ghcr.io/cloudnative-pg/pgbouncer:1.26.1` | PgBouncer image for the CNPG `Pooler`. Empty = operator default, which lags behind PgBouncer security releases. |
 
 ### Ingress / Traefik (`ingress.*`)
 
@@ -300,19 +301,20 @@ sandbox:
 |---|---|---|
 | `metrics.enabled` | `true` | Install the orchard-metrics stack. |
 | `metrics.namespace` | `orchard-metrics` | Namespace for the metrics stack. Referenced inside the vmagent scrape config and remote-write URL. |
-| `metrics.victoriametrics.image` | `victoriametrics/victoria-metrics:v1.106.1` | VM image. |
+| `metrics.victoriametrics.image` | `victoriametrics/victoria-metrics:v1.154.1` | VM image. Keep it on the same version as `metrics.vmagent.image`. |
 | `metrics.victoriametrics.retention` | `30d` | `-retentionPeriod` flag. |
 | `metrics.victoriametrics.storage.size` | `5Gi` | StatefulSet PVC size. |
 | `metrics.victoriametrics.storage.storageClass` | `longhorn` | StorageClass for the VM data PVC. |
 | `metrics.victoriametrics.memoryAllowedPercent` | `60` | `-memory.allowedPercent`. VM sizes its cache off the memory *limit*, so it grows to fill whatever it is given — lower this and the limit together to shrink idle RSS. |
 | `metrics.victoriametrics.resources` | requests `100m/256Mi`, limits `1/1Gi` | Resource block. |
+| `metrics.vmagent.image` | `victoriametrics/vmagent:v1.154.1` | vmagent image. |
 | `metrics.vmagent.resources` | requests `50m/128Mi`, limits `500m/512Mi` | Resource block. |
+| `metrics.kubeStateMetrics.image` | `registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.20.0` | kube-state-metrics image. Each release tracks one Kubernetes client-go minor (v2.20 is v1.36), so bump it with the cluster. |
 | `metrics.kubeStateMetrics.resources` | requests `20m/64Mi`, limits `200m/256Mi` | Resource block. |
+| `metrics.nodeExporter.image` | `prom/node-exporter:v1.12.1` | node-exporter image. |
 | `metrics.nodeExporter.resources` | requests `20m/32Mi`, limits `200m/128Mi` | Resource block. |
 
 This stack is the largest idle cost in the chart. `metrics.enabled: false` empties the deployment metrics graphs and usage pages and leaves everything else working.
-
-`vmagent`, `kube-state-metrics`, and `node-exporter` versions are pinned inside the chart templates (not exposed). Edit the chart if you need to bump them.
 
 ### Gateway (`gateway.*`)
 
