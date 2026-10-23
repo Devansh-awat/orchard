@@ -50,12 +50,12 @@
 		display: flex;
 		align-items: center;
 		gap: 0.625rem;
-		height: 2rem;
-		padding: 0 0.625rem;
+		height: 1.75rem;
+		padding: 0 0.5rem;
 		border-radius: calc(0.5rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		color: var(--text-default);
-		font-size: var(--text-callout);
+		font-size: var(--text-caption);
 		text-decoration: none;
 		transition: background-color var(--dur-fast) ease;
 	}

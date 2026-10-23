@@ -3,6 +3,7 @@
 	import Page from '$lib/components/ui/Page.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import SearchField from '$lib/components/ui/SearchField.svelte';
+	import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
 	import Menu from '$lib/components/ui/Menu.svelte';
 	import MenuItem from '$lib/components/ui/MenuItem.svelte';
 	import ProjectGroup from '$lib/components/patterns/ProjectGroup.svelte';
@@ -85,6 +86,13 @@
 			label: perHour > 999 ? `${(perHour / 1000).toFixed(1)}k/h` : `${perHour}/h`
 		};
 	}
+
+	const DENSITY_KEY = 'orchard-dev-density';
+	let density = $state(
+		typeof localStorage !== 'undefined' && localStorage.getItem(DENSITY_KEY) === 'compact'
+			? 'compact'
+			: 'regular'
+	);
 
 	let crashed = $state<string[]>([]);
 	let arriving = $state<string[]>([]);
@@ -219,7 +227,7 @@
 
 {#snippet appCard(raw: Entity, pid: string)}
 	{@const e = crashed.includes(`${pid}/${raw.name}`) ? { ...raw, status: CRASHING } : raw}
-	{#if exp.density === 'compact'}
+	{#if density === 'compact'}
 		<EntityLine
 			kind={e.kind}
 			name={e.name}
@@ -268,6 +276,18 @@
 {/if}
 
 <Page title="Your Apps" width="wide" aside={sideColumn}>
+	{#snippet tools()}
+		<SegmentedControl
+			label="Project density"
+			size="sm"
+			bind:value={density}
+			options={[
+				{ value: 'regular', label: 'Expanded' },
+				{ value: 'compact', label: 'Compact' }
+			]}
+			onchange={(v) => localStorage.setItem(DENSITY_KEY, v)}
+		/>
+	{/snippet}
 	{#snippet actions()}
 		{#if exp.search === 'spotlight'}
 			<SpotlightSearch items={SEARCH_ITEMS} />
@@ -281,7 +301,7 @@
 		{/if}
 	{/snippet}
 
-	<div class="projects projects--{exp.density}">
+	<div class="projects projects--{density}">
 		{#each ALL as project (project.id)}
 			<ProjectGroup
 				name={project.name}
@@ -294,8 +314,8 @@
 				summary={summarize(project.entities.map((e) => e.status.kind))}
 				onNew={() => {}}
 				expanded={project.id === 'p1'}
-				density={exp.density as 'regular' | 'compact'}
-				layout={exp.density === 'compact' ? 'lines' : 'dense'}
+				density={density as 'regular' | 'compact'}
+				layout={density === 'compact' ? 'lines' : 'dense'}
 			>
 				{#each project.entities as e (e.name)}{@render appCard(e, project.id)}{/each}
 			</ProjectGroup>
@@ -315,6 +335,6 @@
 		gap: 1.5rem;
 	}
 	.projects--compact {
-		gap: 0.5rem;
+		gap: 0.375rem;
 	}
 </style>

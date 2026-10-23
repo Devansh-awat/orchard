@@ -8,6 +8,7 @@
 		width = 'default',
 		eyebrow = undefined,
 		actions = undefined,
+		tools = undefined,
 		aside = undefined,
 		children
 	}: {
@@ -17,6 +18,7 @@
 		width?: 'narrow' | 'default' | 'wide';
 		eyebrow?: Snippet;
 		actions?: Snippet;
+		tools?: Snippet;
 		aside?: Snippet;
 		children: Snippet;
 	} = $props();
@@ -26,10 +28,13 @@
 <div class="frame frame--{width}" class:frame--hero={!!hero}>
 	{#if !hero}
 		<header class="head" class:head--split={!!aside}>
-			<div class="heading">
-				{#if eyebrow}<div class="eyebrow">{@render eyebrow()}</div>{/if}
-				<h1 class="title">{title}</h1>
-				{#if description}<p class="desc">{description}</p>{/if}
+			<div class="heading-row">
+				<div class="heading">
+					{#if eyebrow}<div class="eyebrow">{@render eyebrow()}</div>{/if}
+					<h1 class="title">{title}</h1>
+					{#if description}<p class="desc">{description}</p>{/if}
+				</div>
+				{#if tools}<div class="tools">{@render tools()}</div>{/if}
 			</div>
 			{#if actions}<div class="actions">{@render actions()}</div>{/if}
 		</header>
@@ -81,6 +86,19 @@
 	.head--split .actions > :global(:first-child:not(:last-child)) {
 		flex: 1;
 		min-width: 0;
+	}
+	.heading-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		min-width: 0;
+	}
+	.tools {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		flex-shrink: 0;
 	}
 	.heading {
 		display: flex;

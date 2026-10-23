@@ -58,17 +58,6 @@ export const EXPERIMENTS: Experiment[] = [
 		group: 'Organic',
 		options: [off, { value: 'on', label: 'On' }],
 		initial: 'on'
-	},
-	{
-		id: 'density',
-		hint: 'Changes the project list',
-		label: 'Projects',
-		group: 'Layout',
-		options: [
-			{ value: 'regular', label: 'Folders' },
-			{ value: 'compact', label: 'Compact' }
-		],
-		initial: 'regular'
 	}
 ];
 

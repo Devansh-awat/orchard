@@ -83,7 +83,7 @@
 					{name}
 					kind="project"
 					icon={image}
-					size={density === 'compact' ? 'md' : 'lg'}
+					size={density === 'compact' ? 'sm' : 'lg'}
 				/></span
 			>
 			<span class="text">
@@ -138,21 +138,40 @@
 		isolation: isolate;
 	}
 	.project--compact {
-		--head-h: 3.5rem;
-		border-radius: calc(0.875rem * var(--corner-scale));
+		--head-h: 2.75rem;
+		border-radius: calc(0.75rem * var(--corner-scale));
 	}
 	.project--compact .text {
-		gap: 0.4375rem;
+		flex-direction: row;
+		align-items: center;
+		gap: 0.75rem;
 	}
 	.project--compact .name {
-		font-size: var(--text-body);
+		flex-shrink: 0;
+		font-size: var(--text-callout);
+		font-weight: var(--weight-medium);
+		letter-spacing: 0;
 	}
 	.project--compact .meta {
 		font-size: var(--text-caption);
 	}
 	.project--compact .head {
-		gap: 0.625rem;
-		padding-right: 1rem;
+		gap: 0.5rem;
+		padding: 0 0.875rem 0 0.375rem;
+	}
+	.project--compact .chev {
+		width: 1.5rem;
+		height: 1.5rem;
+	}
+	.project--compact .round {
+		width: 1.75rem;
+		height: 1.75rem;
+	}
+	.project--compact .owner {
+		color: var(--h-muted);
+	}
+	.project--compact .summary {
+		font-size: var(--text-caption);
 	}
 	.project--media {
 		--h-fg: var(--on-media);
@@ -430,8 +449,8 @@
 	}
 	.cards--lines {
 		grid-template-columns: minmax(0, 1fr);
-		gap: 0.125rem;
-		padding: 0.375rem;
+		gap: 0;
+		padding: 0.25rem 0.375rem;
 		background: none;
 	}
 	.cards--rows {
