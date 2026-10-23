@@ -2,7 +2,15 @@
 	import { FlaskConical, X } from 'lucide-svelte';
 	import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
-	import { EXPERIMENTS, exp, persist, picks, reset } from './experiments.svelte';
+	import {
+		ACTIONS,
+		EXPERIMENTS,
+		exp,
+		persist,
+		picks,
+		reset,
+		runAction
+	} from './experiments.svelte';
 
 	let open = $state(false);
 	let copied = $state(false);
@@ -42,6 +50,12 @@
 						</div>
 					{/each}
 				{/each}
+				<p class="group-label">Simulate</p>
+				<div class="actions">
+					{#each ACTIONS as a (a.id)}
+						<Button size="sm" onclick={() => runAction(a.id)}>{a.label}</Button>
+					{/each}
+				</div>
 			</div>
 			<footer class="foot">
 				<Button size="sm" variant="ghost" onclick={reset}>Reset</Button>
@@ -154,6 +168,12 @@
 	.label {
 		font-size: var(--text-callout);
 		white-space: nowrap;
+	}
+	.actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.375rem;
+		padding: 0.25rem 0.5rem 0.5rem;
 	}
 	.foot {
 		display: flex;

@@ -7,12 +7,16 @@
 	import MenuItem from '$lib/components/ui/MenuItem.svelte';
 	import ProjectGroup from '$lib/components/patterns/ProjectGroup.svelte';
 	import EntityCard from '$lib/components/patterns/EntityCard.svelte';
-	import EntityRow from '$lib/components/patterns/EntityRow.svelte';
 	import EntityLine from '$lib/components/patterns/EntityLine.svelte';
+	import LiquidNewButton from '$lib/components/patterns/LiquidNewButton.svelte';
+	import LiveIsland, { type IslandActivity } from '$lib/components/patterns/LiveIsland.svelte';
 	import NeedsAttention from '$lib/components/patterns/NeedsAttention.svelte';
 	import RecentBuilds from '$lib/components/patterns/RecentBuilds.svelte';
 	import { PROJECTS, SIDEBAR, BUILD_FEED, MORE_PROJECTS } from '../fixtures';
-	import { exp } from './experiments.svelte';
+	import { tick } from 'svelte';
+	import { resourceStatus } from '$lib/components/ui/status';
+	import { droplet } from '$lib/utils/motion.svelte';
+	import { exp, onAction } from './experiments.svelte';
 
 	type Entity = {
 		kind: 'deployment' | 'database' | 'job';
@@ -60,20 +64,139 @@
 		};
 	}
 
+	let crashed = $state<string[]>([]);
+	let arriving = $state<string[]>([]);
+	const CRASHING = resourceStatus('crashing');
+
+	const failing = $derived([
+		...crashed.map((key) => {
+			const name = key.split('/')[1];
+			return {
+				label: name,
+				href: '#',
+				reason: 'Crashed, exit code 1',
+				kind: 'deployment' as const
+			};
+		}),
+		...SIDEBAR.failing
+	]);
+
+	async function crash() {
+		const taken = new Set(failing.map((f) => f.label));
+		for (const project of ALL) {
+			const section = document.querySelector(`[aria-label="${project.name}"]`);
+			for (const e of project.entities) {
+				const key = `${project.id}/${e.name}`;
+				if (e.kind !== 'deployment' || e.status.kind !== 'success' || taken.has(e.name)) continue;
+				const el = section?.querySelector<HTMLElement>(`[data-entity="${e.name}"]`);
+				if (!el || el.getBoundingClientRect().height === 0) continue;
+				crashed = [...crashed, key];
+				arriving = [...arriving, e.name];
+				await tick();
+				const source = el.querySelector('.dot, .status-dot, [data-motion]') ?? el;
+				const target = document.querySelector(`[data-attention="${e.name}"]`);
+				const land = () => (arriving = arriving.filter((x) => x !== e.name));
+				if (exp.failDrop === 'on' && target) droplet(source, target, { onLand: land });
+				else land();
+				return;
+			}
+		}
+	}
+
+	const LADDER = [
+		{ id: 'queue', label: 'Queued' },
+		{ id: 'schedule', label: 'Scheduling' },
+		{ id: 'clone', label: 'Cloning' },
+		{ id: 'build', label: 'Building' },
+		{ id: 'push', label: 'Pushing' },
+		{ id: 'rollout', label: 'Rolling out' }
+	];
+
+	const BUILDS = [
+		{
+			app: 'api',
+			project: 'hackclub-site',
+			projectIcon: ALL[0].image,
+			message: 'Bump prisma to 6.4',
+			detail: 'main'
+		},
+		{
+			app: 'shipwright',
+			project: 'flavortown',
+			projectIcon: ALL[2]?.image ?? null,
+			message: 'Cache ship previews',
+			detail: 'main'
+		}
+	];
+
+	let activities = $state<IslandActivity[]>([]);
+	let seq = 0;
+
+	function startBuild(slot: number) {
+		const base = BUILDS[slot % BUILDS.length];
+		if (activities.some((a) => a.app === base.app && a.status === 'running')) return;
+		seq += 1;
+		activities.push({
+			id: `sim${seq}`,
+			...base,
+			phase: LADDER[0].label,
+			phaseId: LADDER[0].id,
+			progress: 0.04,
+			status: 'running',
+			phases: [{ id: LADDER[0].id, label: LADDER[0].label, ms: 1200, live: true }]
+		});
+	}
+
+	function finish(status: 'success' | 'error') {
+		const a = activities.find((x) => x.status === 'running');
+		if (!a) return;
+		a.phases = (a.phases ?? []).map((p) => ({ ...p, live: false }));
+		a.status = status;
+		if (status === 'success') a.progress = 1;
+		else a.message = 'npm ci exited with code 1';
+	}
+
 	$effect(() => {
-		document.documentElement.dataset.wallpaper = exp.wallpaper;
-		return () => delete document.documentElement.dataset.wallpaper;
+		const id = setInterval(() => {
+			for (const a of activities) {
+				if (a.status !== 'running') continue;
+				const live = a.phases?.find((p) => p.live);
+				if (!live) continue;
+				live.ms += 1000;
+				const i = LADDER.findIndex((x) => x.id === a.phaseId);
+				const next = LADDER[i + 1];
+				if (next && live.ms > 2600 + i * 900) {
+					live.live = false;
+					a.phases = [...(a.phases ?? []), { id: next.id, label: next.label, ms: 400, live: true }];
+					a.phase = next.label;
+					a.phaseId = next.id;
+					a.progress = (i + 2) / LADDER.length;
+				}
+			}
+		}, 1000);
+		return () => clearInterval(id);
 	});
+
+	$effect(() =>
+		onAction((id) => {
+			if (id === 'crash') crash();
+			else if (id === 'build') startBuild(0);
+			else if (id === 'build2') startBuild(activities.length ? 1 : 0);
+			else if (id === 'succeed') finish('success');
+			else if (id === 'fail-build') finish('error');
+		})
+	);
 </script>
 
 {#snippet sideColumn()}
 	<div class="side">
-		<NeedsAttention items={SIDEBAR.failing} />
+		<NeedsAttention items={failing} {arriving} />
 		<RecentBuilds builds={BUILD_FEED} />
 	</div>
 {/snippet}
 
-{#snippet appCard(e: Entity)}
+{#snippet appCard(raw: Entity, pid: string)}
+	{@const e = crashed.includes(`${pid}/${raw.name}`) ? { ...raw, status: CRASHING } : raw}
 	{#if exp.density === 'compact'}
 		<EntityLine
 			kind={e.kind}
@@ -81,17 +204,7 @@
 			status={e.status}
 			detail={e.url ?? e.detail}
 			metrics={e.metrics}
-			traffic={exp.cardMetrics === 'spark' && e.kind === 'deployment' ? traffic(e.name) : undefined}
-			updatedAt={e.updatedAt}
-			href="#"
-		/>
-	{:else if exp.appLayout === 'rows'}
-		<EntityRow
-			kind={e.kind}
-			name={e.name}
-			status={e.status}
-			url={e.url}
-			detail={e.url ? undefined : e.detail}
+			traffic={e.kind === 'deployment' ? traffic(e.name) : undefined}
 			updatedAt={e.updatedAt}
 			href="#"
 		/>
@@ -102,7 +215,7 @@
 			status={e.status}
 			detail={e.url ?? e.detail}
 			metrics={e.metrics}
-			traffic={exp.cardMetrics === 'spark' && e.kind === 'deployment' ? traffic(e.name) : undefined}
+			traffic={e.kind === 'deployment' ? traffic(e.name) : undefined}
 			updatedAt={e.updatedAt}
 			href="#"
 		>
@@ -124,10 +237,22 @@
 	{/if}
 {/snippet}
 
-<Page title="Your Apps" width="wide" aside={exp.aside === 'off' ? undefined : sideColumn}>
+{#if exp.island === 'on'}
+	<LiveIsland
+		{activities}
+		offsetLeft={278}
+		onDismiss={(id) => (activities = activities.filter((a) => a.id !== id))}
+	/>
+{/if}
+
+<Page title="Your Apps" width="wide" aside={sideColumn}>
 	{#snippet actions()}
 		<SearchField placeholder="Search apps" shortcut="/" />
-		<Button variant="primary" icon={Plus}>New</Button>
+		{#if exp.newButton === 'liquid'}
+			<LiquidNewButton />
+		{:else}
+			<Button variant="primary" icon={Plus}>New</Button>
+		{/if}
 	{/snippet}
 
 	<div class="projects projects--{exp.density}">
@@ -144,9 +269,9 @@
 				onNew={() => {}}
 				expanded={project.id === 'p1'}
 				density={exp.density as 'regular' | 'compact'}
-				layout={exp.density === 'compact' ? 'lines' : (exp.appLayout as 'cards' | 'dense' | 'rows')}
+				layout={exp.density === 'compact' ? 'lines' : 'dense'}
 			>
-				{#each project.entities as e (e.name)}{@render appCard(e)}{/each}
+				{#each project.entities as e (e.name)}{@render appCard(e, project.id)}{/each}
 			</ProjectGroup>
 		{/each}
 	</div>
@@ -165,11 +290,5 @@
 	}
 	.projects--compact {
 		gap: 0.5rem;
-	}
-	:global(html[data-wallpaper='off'] body::before) {
-		opacity: 0;
-	}
-	:global(html[data-wallpaper='rich'] body::before) {
-		opacity: 1;
 	}
 </style>

@@ -30,7 +30,7 @@
 	const loud = $derived(status.kind === 'error' || status.kind === 'progress');
 </script>
 
-<a class="line" {href}>
+<a class="line" data-entity={name} {href}>
 	<StatusDot meta={status} size={6} />
 	<span class="kind"><KindIcon size={14} /></span>
 	<span class="name">{name}</span>

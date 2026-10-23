@@ -3,14 +3,23 @@
 	import AppIcon from '$lib/components/ui/AppIcon.svelte';
 	import type { FailingApp } from './sidebar';
 
-	let { items, title = 'Needs attention' }: { items: FailingApp[]; title?: string } = $props();
+	let {
+		items,
+		title = 'Needs attention',
+		arriving = []
+	}: { items: FailingApp[]; title?: string; arriving?: string[] } = $props();
 </script>
 
 {#if items.length > 0}
 	<Widget {title}>
 		<div class="rows">
 			{#each items as item (item.label)}
-				<a class="row" href={item.href}>
+				<a
+					class="row"
+					class:row--arriving={arriving.includes(item.label)}
+					data-attention={item.label}
+					href={item.href}
+				>
 					<AppIcon name={item.label} kind={item.kind} icon={item.icon} size="sm" />
 					<span class="text">
 						<span class="name">{item.label}</span>
@@ -37,7 +46,15 @@
 		corner-shape: var(--corner);
 		color: inherit;
 		text-decoration: none;
-		transition: background-color var(--dur-fast) ease;
+		transition:
+			background-color var(--dur-fast) ease,
+			opacity var(--spring-smooth-duration) var(--spring-smooth),
+			transform var(--spring-bouncy-duration) var(--spring-bouncy);
+	}
+	.row--arriving {
+		opacity: 0;
+		transform: scale(0.92);
+		transition: none;
 	}
 	.row:hover {
 		background: var(--bg-hover);

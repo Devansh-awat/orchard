@@ -13,6 +13,7 @@
 		countTone = undefined,
 		leading = undefined,
 		trailing = undefined,
+		liquid = false,
 		...rest
 	}: {
 		label: string;
@@ -25,6 +26,7 @@
 		countTone?: 'default' | 'danger';
 		leading?: Snippet;
 		trailing?: Snippet;
+		liquid?: boolean;
 		[key: string]: unknown;
 	} = $props();
 </script>
@@ -46,12 +48,18 @@
 		{href}
 		class="item"
 		class:item--active={active}
+		class:item--liquid={liquid}
 		aria-current={active ? 'page' : undefined}
 		{...rest}>{@render inner()}</a
 	>
 {:else}
-	<button type="button" class="item" class:item--active={active} {onclick} {...rest}
-		>{@render inner()}</button
+	<button
+		type="button"
+		class="item"
+		class:item--active={active}
+		class:item--liquid={liquid}
+		{onclick}
+		{...rest}>{@render inner()}</button
 	>
 {/if}
 
@@ -94,6 +102,19 @@
 		color: var(--nav-active-fg);
 		box-shadow: var(--nav-active-shadow);
 	}
+	.item--liquid,
+	.item--liquid:hover,
+	.item--liquid.item--active,
+	.item--liquid.item--active:hover {
+		background: none;
+		box-shadow: none;
+	}
+	.item--liquid.item--active:not([data-on-pill]) {
+		color: var(--text-default);
+	}
+	.item--liquid[data-on-pill] {
+		color: var(--nav-active-fg);
+	}
 	.tile {
 		display: grid;
 		place-items: center;
@@ -110,6 +131,9 @@
 	}
 	.item--active .tile {
 		color: var(--accent-9);
+	}
+	.item--liquid.item--active:not([data-on-pill]) .tile {
+		color: var(--text-muted);
 	}
 	.lead {
 		display: grid;

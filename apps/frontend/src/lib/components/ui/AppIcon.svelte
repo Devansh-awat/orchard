@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Box, Database, Timer, Sprout } from 'lucide-svelte';
 	import RemoteImg from './RemoteImg.svelte';
+	import { identicon } from '$lib/utils/identicon';
 
 	let {
 		name,
@@ -30,6 +31,8 @@
 <span class="icon icon--{size}">
 	{#if icon && !failed}
 		<RemoteImg src={icon} class="img" onerror={() => (failed = true)} />
+	{:else if kind === 'project'}
+		<img class="pixels" src={identicon(name)} alt="" />
 	{:else}
 		<span
 			class="glyph"
@@ -40,6 +43,12 @@
 </span>
 
 <style>
+	.pixels {
+		display: block;
+		width: 100%;
+		height: 100%;
+		image-rendering: pixelated;
+	}
 	.icon {
 		position: relative;
 		display: block;

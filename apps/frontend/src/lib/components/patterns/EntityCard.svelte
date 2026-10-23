@@ -37,6 +37,7 @@
 </script>
 
 <div
+	data-entity={name}
 	class="entity entity--{status.kind} motion-echo echo--{status.kind}"
 	{@attach stateEcho(() => status.kind)}
 >

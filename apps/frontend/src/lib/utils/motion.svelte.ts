@@ -1249,3 +1249,121 @@ export function folder(
 		};
 	};
 }
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+let gooReady = false;
+
+function ensureGoo() {
+	if (gooReady || typeof document === 'undefined') return;
+	gooReady = true;
+	const svg = document.createElementNS(SVG_NS, 'svg');
+	svg.setAttribute('width', '0');
+	svg.setAttribute('height', '0');
+	svg.setAttribute('aria-hidden', 'true');
+	svg.style.position = 'absolute';
+	svg.innerHTML =
+		'<filter id="orchard-goo" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceGraphic" stdDeviation="3.5" result="b"/><feColorMatrix in="b" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -9" result="g"/><feComposite in="SourceGraphic" in2="g" operator="atop"/></filter>';
+	document.body.appendChild(svg);
+}
+
+function blob(size: number, color: string) {
+	const el = document.createElement('span');
+	el.style.cssText = `position:absolute;left:0;top:0;width:${size}px;height:${size}px;margin:${-size / 2}px 0 0 ${-size / 2}px;border-radius:50%;background:${color};will-change:transform`;
+	return el;
+}
+
+export function droplet(
+	from: Element,
+	to: Element,
+	opts: { color?: string; onLand?: () => void } = {}
+) {
+	if (!decorativeMotion()) {
+		opts.onLand?.();
+		return;
+	}
+	ensureGoo();
+	const color = opts.color ?? 'var(--red-solid)';
+	const a = centerOf(from);
+	const b = centerOf(to);
+	const size = 12;
+	const pad = 36;
+
+	const nest = document.createElement('div');
+	nest.style.cssText = `position:fixed;left:${a.x - pad}px;top:${a.y - pad}px;width:${pad * 2}px;height:${pad * 2}px;z-index:var(--z-toast);pointer-events:none;filter:url(#orchard-goo)`;
+	const source = blob(size, color);
+	const bud = blob(size, color);
+	source.style.left = source.style.top = bud.style.left = bud.style.top = `${pad}px`;
+	nest.append(source, bud);
+	document.body.appendChild(nest);
+
+	const swell = source.animate(
+		[
+			{ transform: 'scale(0.5)' },
+			{ transform: 'scale(1.15)', offset: 0.55 },
+			{ transform: 'scale(0)' }
+		],
+		{ duration: 360, easing: 'cubic-bezier(0.3, 0, 0.2, 1)', fill: 'forwards' }
+	);
+	const rise = bud.animate(
+		[
+			{ transform: 'translate(0, 0) scale(0.6)' },
+			{ transform: 'translate(0, -10px) scale(0.95, 1.15)', offset: 0.6 },
+			{ transform: 'translate(0, -22px) scale(1)' }
+		],
+		{ duration: 260, easing: 'cubic-bezier(0.4, 0, 0.6, 1)', fill: 'forwards' }
+	);
+
+	rise.onfinish = () => {
+		const flyer = blob(size, color);
+		const start = { x: a.x, y: a.y - 22 };
+		flyer.style.position = 'fixed';
+		flyer.style.left = `${start.x}px`;
+		flyer.style.top = `${start.y}px`;
+		flyer.style.zIndex = 'var(--z-toast)';
+		flyer.style.pointerEvents = 'none';
+		flyer.style.boxShadow = `0 4px 10px color-mix(in oklab, ${color} 45%, transparent)`;
+		document.body.appendChild(flyer);
+		bud.remove();
+
+		const dx = b.x - start.x;
+		const dy = b.y - start.y;
+		const lift = Math.min(160, 60 + Math.hypot(dx, dy) * 0.25);
+		const c = { x: dx * 0.5, y: Math.min(0, dy) - lift };
+		const frames: Keyframe[] = [];
+		const steps = 28;
+		let prev = { x: 0, y: 0 };
+		for (let i = 0; i <= steps; i++) {
+			const t = i / steps;
+			const u = 1 - t;
+			const x = 2 * u * t * c.x + t * t * dx;
+			const y = 2 * u * t * c.y + t * t * dy;
+			const vx = x - prev.x;
+			const vy = y - prev.y;
+			const speed = Math.hypot(vx, vy);
+			const angle = i === 0 ? -90 : (Math.atan2(vy, vx) * 180) / Math.PI;
+			const stretch = 1 + Math.min(0.9, speed / 22);
+			frames.push({
+				transform: `translate(${x}px, ${y}px) rotate(${angle}deg) scale(${stretch}, ${1 / Math.sqrt(stretch)})`
+			});
+			prev = { x, y };
+		}
+		const travel = Math.round(420 + Math.min(260, Math.hypot(dx, dy) * 0.35));
+		const flight = flyer.animate(frames, {
+			duration: travel,
+			easing: 'cubic-bezier(0.45, 0, 0.55, 1)',
+			fill: 'forwards'
+		});
+		flight.onfinish = () => {
+			const splat = flyer.animate(
+				[
+					{ transform: `translate(${dx}px, ${dy}px) scale(1.5, 0.55)`, opacity: 1 },
+					{ transform: `translate(${dx}px, ${dy}px) scale(2.6, 2.6)`, opacity: 0 }
+				],
+				{ duration: 280, easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)', fill: 'forwards' }
+			);
+			opts.onLand?.();
+			splat.onfinish = () => flyer.remove();
+		};
+	};
+	swell.onfinish = () => nest.remove();
+}

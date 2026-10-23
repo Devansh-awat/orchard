@@ -10,53 +10,83 @@ const off = { value: 'off', label: 'Off' };
 
 export const EXPERIMENTS: Experiment[] = [
 	{
+		id: 'island',
+		label: 'Live island',
+		group: 'Organic',
+		options: [off, { value: 'on', label: 'On' }],
+		initial: 'on'
+	},
+	{
+		id: 'newButton',
+		label: 'New button',
+		group: 'Organic',
+		options: [
+			{ value: 'plain', label: 'Plain' },
+			{ value: 'liquid', label: 'Liquid' }
+		],
+		initial: 'liquid'
+	},
+	{
+		id: 'liquidNav',
+		label: 'Sidebar highlight',
+		group: 'Organic',
+		options: [
+			{ value: 'off', label: 'Plain' },
+			{ value: 'on', label: 'Liquid' }
+		],
+		initial: 'on'
+	},
+	{
+		id: 'search',
+		label: 'Search',
+		group: 'Organic',
+		options: [
+			{ value: 'field', label: 'Field' },
+			{ value: 'spotlight', label: 'Spotlight' }
+		],
+		initial: 'spotlight'
+	},
+	{
+		id: 'failDrop',
+		label: 'Failure droplet',
+		group: 'Organic',
+		options: [off, { value: 'on', label: 'On' }],
+		initial: 'on'
+	},
+	{
 		id: 'density',
 		label: 'Projects',
-		group: 'Body',
+		group: 'Layout',
 		options: [
 			{ value: 'regular', label: 'Folders' },
 			{ value: 'compact', label: 'Compact' }
 		],
 		initial: 'regular'
-	},
-	{
-		id: 'appLayout',
-		label: 'Apps inside a project',
-		group: 'Body',
-		options: [
-			{ value: 'cards', label: 'Cards' },
-			{ value: 'dense', label: 'Dense' },
-			{ value: 'rows', label: 'Rows' }
-		],
-		initial: 'dense'
-	},
-	{
-		id: 'cardMetrics',
-		label: 'App detail',
-		group: 'Body',
-		options: [
-			{ value: 'text', label: 'Text' },
-			{ value: 'spark', label: 'Traffic' }
-		],
-		initial: 'spark'
-	},
-	{
-		id: 'aside',
-		label: 'Side column',
-		group: 'Side',
-		options: [off, { value: 'widgets', label: 'Widgets' }],
-		initial: 'widgets'
-	},
-	{
-		id: 'wallpaper',
-		label: 'Wallpaper tint',
-		group: 'Surface',
-		options: [off, { value: 'subtle', label: 'Subtle' }, { value: 'rich', label: 'Rich' }],
-		initial: 'subtle'
 	}
 ];
 
-const KEY = 'orchard-dev-experiments-v2';
+export type ExperimentAction = { id: string; label: string };
+
+export const ACTIONS: ExperimentAction[] = [
+	{ id: 'build', label: 'Start a build' },
+	{ id: 'build2', label: 'Second build' },
+	{ id: 'succeed', label: 'Build succeeds' },
+	{ id: 'fail-build', label: 'Build fails' },
+	{ id: 'crash', label: 'An app crashes' }
+];
+
+const listeners = new Set<(id: string) => void>();
+
+export function onAction(fn: (id: string) => void) {
+	listeners.add(fn);
+	return () => listeners.delete(fn);
+}
+
+export function runAction(id: string) {
+	for (const fn of listeners) fn(id);
+}
+
+const KEY = 'orchard-dev-experiments-v3';
 
 function load(): Record<string, string> {
 	const base = Object.fromEntries(EXPERIMENTS.map((e) => [e.id, e.initial]));

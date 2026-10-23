@@ -35,6 +35,7 @@
 	import DevBar from '../DevBar.svelte';
 	import HomeScreen from './HomeScreen.svelte';
 	import ExperimentsPanel from './ExperimentsPanel.svelte';
+	import { exp } from './experiments.svelte';
 	import AppFrame from '$lib/components/patterns/AppFrame.svelte';
 	import Sidebar from '$lib/components/patterns/Sidebar.svelte';
 	import SectionTitle from '$lib/components/ui/SectionTitle.svelte';
@@ -77,7 +78,7 @@
 
 <AppFrame>
 	{#snippet sidebar()}
-		<Sidebar org={SIDEBAR.org} user={SIDEBAR.user} {sections} />
+		<Sidebar org={SIDEBAR.org} user={SIDEBAR.user} {sections} liquid={exp.liquidNav === 'on'} />
 	{/snippet}
 	{#snippet backdrop()}
 		{#if screen === 'project'}<ProjectBackdrop name="terra" image={PROJECTS[1].background} />{/if}
