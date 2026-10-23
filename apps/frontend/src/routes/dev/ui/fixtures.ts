@@ -152,6 +152,8 @@ export const BUILD_FEED: BuildItem[] = [
 		at: ago(0.5),
 		branch: 'main',
 		progress: 0.62,
+		stage: 2,
+		eta: 'About 40s left',
 		href: '#'
 	},
 	{

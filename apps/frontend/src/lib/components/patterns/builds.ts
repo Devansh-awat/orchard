@@ -12,5 +12,9 @@ export type BuildItem = {
 	branch?: string;
 	duration?: string;
 	progress?: number;
+	stage?: number;
+	stages?: string[];
+	eta?: string;
+	elapsed?: string;
 	image?: string | null;
 };

@@ -48,7 +48,6 @@
 
 	let screen = $state('home');
 	let failingStyle = $state<'row' | 'badge' | 'footer'>('row');
-	let feed = $state<'grouped' | 'widget' | 'stack' | 'shelf'>('grouped');
 	let tab = $state<'overview' | 'logs' | 'metrics' | 'env' | 'settings'>('overview');
 	let range = $state('day');
 	let appName = $state('hackclub-site');
@@ -103,21 +102,7 @@
 				<Button variant="primary" icon={Plus}>New</Button>
 			{/snippet}
 			{#snippet aside()}
-				<div class="flex flex-col gap-4">
-					<SegmentedControl
-						label="Recent builds style"
-						size="sm"
-						grow
-						bind:value={feed}
-						options={[
-							{ value: 'grouped', label: 'Grouped' },
-							{ value: 'widget', label: 'Widget' },
-							{ value: 'stack', label: 'Stack' },
-							{ value: 'shelf', label: 'Shelf' }
-						]}
-					/>
-					<RecentBuilds builds={BUILD_FEED} variant={feed} />
-				</div>
+				<RecentBuilds builds={BUILD_FEED} />
 			{/snippet}
 
 			{#each PROJECTS as project (project.id)}
@@ -173,7 +158,7 @@
 				</ProjectHero>
 			{/snippet}
 			{#snippet aside()}
-				<RecentBuilds builds={BUILD_FEED} variant={feed} />
+				<RecentBuilds builds={BUILD_FEED} />
 			{/snippet}
 			<List label="Resources">
 				{#each PROJECTS[0].entities.concat(PROJECTS[1].entities) as e (e.name)}

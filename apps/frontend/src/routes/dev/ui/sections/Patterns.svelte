@@ -146,12 +146,10 @@
 </div>
 
 <div class="flex flex-col gap-3">
-	<SectionTitle title="Recent builds: grouped, widget, stack, shelf" />
-	<div class="grid grid-cols-4 items-start gap-4">
-		<RecentBuilds builds={BUILD_FEED} variant="grouped" />
-		<RecentBuilds builds={BUILD_FEED} variant="widget" />
-		<RecentBuilds builds={BUILD_FEED} variant="stack" />
-		<RecentBuilds builds={BUILD_FEED} variant="shelf" />
+	<SectionTitle title="Recent builds" />
+	<div class="grid grid-cols-3 items-start gap-4">
+		<RecentBuilds builds={BUILD_FEED} />
+		<RecentBuilds builds={BUILD_FEED.slice(1)} />
 	</div>
 </div>
 
