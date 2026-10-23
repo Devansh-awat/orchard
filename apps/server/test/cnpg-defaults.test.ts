@@ -211,7 +211,12 @@ test('the reconcile only patches what is missing and never runs off a non-member
           }
   };
   let member = true;
+  const tlsRefreshed: string[] = [];
   Object.assign(svc, {
+    syncPublicTlsSecret: async (ns: string) => {
+      tlsRefreshed.push(ns);
+      return true;
+    },
     logger: { warn() {}, log() {} },
     kubernetes: { kc, ensureKubeConfig() {} },
     prisma: {
@@ -238,9 +243,11 @@ test('the reconcile only patches what is missing and never runs off a non-member
     archiveParallel: 1,
     retuned: 0,
     volumesResized: 1,
+    tlsSynced: 1,
     caRepaired: 1,
     failed: 0
   });
+  assert.deepEqual(tlsRefreshed, ['ns-a']);
   assert.deepEqual(patches, [
     'ns-a/db-a:{"postgresql":{"parameters":{"max_slot_wal_keep_size":"2GB"}},"backup":{"barmanObjectStore":{"wal":{"maxParallel":4}}}}'
   ]);

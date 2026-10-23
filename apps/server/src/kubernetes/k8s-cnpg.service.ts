@@ -194,6 +194,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     archiveParallel: number;
     retuned: number;
     volumesResized: number;
+    tlsSynced: number;
     caRepaired: number;
     failed: number;
   } | null> {
@@ -208,6 +209,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     let archiveParallel = 0;
     let retuned = 0;
     let volumesResized = 0;
+    let tlsSynced = 0;
     let caRepaired = 0;
     let failed = 0;
     const namespaces = new Set<string>();
@@ -266,6 +268,12 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     }
     for (const ns of namespaces) {
       try {
+        if (await this.syncPublicTlsSecret(ns)) tlsSynced += 1;
+      } catch (e: any) {
+        failed += 1;
+        this.logger.warn(`public db certificate in ${ns} not refreshed: ${e?.message || e}`);
+      }
+      try {
         const { body: secret } = await coreApi.readNamespacedSecret(
           this.PUBLIC_TLS_LOCAL_SECRET,
           ns
@@ -292,12 +300,20 @@ export class K8sCnpgService implements OnApplicationBootstrap {
         this.logger.warn(`server ca bundle in ${ns} not repaired: ${e?.message || e}`);
       }
     }
-    if (walCapped || archiveParallel || retuned || volumesResized || caRepaired || failed) {
+    if (
+      walCapped ||
+      archiveParallel ||
+      retuned ||
+      volumesResized ||
+      tlsSynced ||
+      caRepaired ||
+      failed
+    ) {
       this.logger.log(
-        `cnpg defaults reconciled: ${walCapped} clusters capped, ${archiveParallel} archives parallelised, ${retuned} retuned, ${volumesResized} volumes resized, ${caRepaired} ca bundles completed, ${failed} failed`
+        `cnpg defaults reconciled: ${walCapped} clusters capped, ${archiveParallel} archives parallelised, ${retuned} retuned, ${volumesResized} volumes resized, ${tlsSynced} public certificates refreshed, ${caRepaired} ca bundles completed, ${failed} failed`
       );
     }
-    return { walCapped, archiveParallel, retuned, volumesResized, caRepaired, failed };
+    return { walCapped, archiveParallel, retuned, volumesResized, tlsSynced, caRepaired, failed };
   }
 
   // CNPG only pushes spec.storage.size down to the PVCs while it has a healthy

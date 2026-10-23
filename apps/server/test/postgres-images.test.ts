@@ -175,6 +175,7 @@ function rolloutHarness(
   const patched: string[] = [];
   const s = Object.create(PostgresImageService.prototype) as any;
   Object.assign(s, {
+    refresh: async () => null,
     logger: { warn() {}, log() {}, error() {} },
     channel: null,
     lastBatch: [],

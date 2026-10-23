@@ -161,6 +161,7 @@ export class PostgresImageService implements OnApplicationBootstrap, OnModuleDes
 
   private async rollout(now: Date): Promise<ImageRolloutResult | null> {
     if (!(await this.settings.isPostgresAutoUpdateEnabled())) return null;
+    if (!this.channel) await this.refresh();
     const halted = await this.settings.get(POSTGRES_IMAGE_ROLLOUT_HALT_KEY);
     gauge('orchard.cnpg.image_rollout_halted', halted ? 1 : 0);
     const result: ImageRolloutResult = { outdated: 0, patched: [], held: [], halted };
