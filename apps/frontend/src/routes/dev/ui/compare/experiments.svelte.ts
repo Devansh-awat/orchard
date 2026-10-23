@@ -4,6 +4,7 @@ export type Experiment = {
 	group: string;
 	options: { value: string; label: string }[];
 	initial: string;
+	hint?: string;
 };
 
 const off = { value: 'off', label: 'Off' };
@@ -11,6 +12,7 @@ const off = { value: 'off', label: 'Off' };
 export const EXPERIMENTS: Experiment[] = [
 	{
 		id: 'island',
+		hint: 'Press Simulate: Start a build, then Second build',
 		label: 'Live island',
 		group: 'Organic',
 		options: [off, { value: 'on', label: 'On' }],
@@ -18,6 +20,7 @@ export const EXPERIMENTS: Experiment[] = [
 	},
 	{
 		id: 'newButton',
+		hint: 'Click New in the top right',
 		label: 'New button',
 		group: 'Organic',
 		options: [
@@ -28,6 +31,7 @@ export const EXPERIMENTS: Experiment[] = [
 	},
 	{
 		id: 'liquidNav',
+		hint: 'Move the pointer down the sidebar, then click an item',
 		label: 'Sidebar highlight',
 		group: 'Organic',
 		options: [
@@ -38,6 +42,7 @@ export const EXPERIMENTS: Experiment[] = [
 	},
 	{
 		id: 'search',
+		hint: 'Press / or click the search field',
 		label: 'Search',
 		group: 'Organic',
 		options: [
@@ -48,6 +53,7 @@ export const EXPERIMENTS: Experiment[] = [
 	},
 	{
 		id: 'failDrop',
+		hint: 'Press Simulate: An app crashes',
 		label: 'Failure droplet',
 		group: 'Organic',
 		options: [off, { value: 'on', label: 'On' }],
@@ -55,6 +61,7 @@ export const EXPERIMENTS: Experiment[] = [
 	},
 	{
 		id: 'density',
+		hint: 'Changes the project list',
 		label: 'Projects',
 		group: 'Layout',
 		options: [

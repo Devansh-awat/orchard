@@ -39,7 +39,10 @@
 					<p class="group-label">{g}</p>
 					{#each EXPERIMENTS.filter((e) => e.group === g) as e (e.id)}
 						<div class="row" class:row--changed={exp[e.id] !== e.initial}>
-							<span class="label">{e.label}</span>
+							<span class="label-wrap">
+								<span class="label">{e.label}</span>
+								{#if e.hint}<span class="hint">{e.hint}</span>{/if}
+							</span>
 							<SegmentedControl
 								size="sm"
 								label={e.label}
@@ -165,9 +168,22 @@
 	.row--changed {
 		background: color-mix(in oklab, var(--accent-solid) 7%, transparent);
 	}
+	.label-wrap {
+		display: flex;
+		flex-direction: column;
+		gap: 0.375rem;
+		min-width: 0;
+		padding-block: 0.25rem;
+	}
 	.label {
 		font-size: var(--text-callout);
 		white-space: nowrap;
+		text-box: trim-both cap alphabetic;
+	}
+	.hint {
+		color: var(--text-faint);
+		font-size: var(--text-caption);
+		text-box: trim-both cap alphabetic;
 	}
 	.actions {
 		display: flex;
