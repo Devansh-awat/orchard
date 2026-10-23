@@ -64,7 +64,7 @@
 		height: 2rem;
 		padding: 0 0.6875rem;
 		border: none;
-		border-radius: var(--radius-control);
+		border-radius: calc(var(--radius-control) * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: color-mix(in oklab, var(--neutral-10) 6%, transparent);
 		box-shadow: inset 0 0 0 0.5px color-mix(in oklab, var(--neutral-10) 6%, transparent);
@@ -76,17 +76,17 @@
 			background-color var(--dur-fast) ease;
 	}
 	.control--capsule {
-		border-radius: var(--radius-control);
+		border-radius: calc(var(--radius-control) * var(--corner-scale));
 		corner-shape: var(--corner);
 	}
 	.control--sm {
 		height: 1.75rem;
-		border-radius: 0.5rem;
+		border-radius: calc(0.5rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		font-size: var(--text-callout);
 	}
 	.control--sm.control--capsule {
-		border-radius: 0.5rem;
+		border-radius: calc(0.5rem * var(--corner-scale));
 		corner-shape: var(--corner);
 	}
 	.control--lead {

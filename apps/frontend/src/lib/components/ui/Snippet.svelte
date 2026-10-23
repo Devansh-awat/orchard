@@ -33,7 +33,7 @@
 		min-width: 0;
 		height: 2.25rem;
 		padding: 0 0.25rem 0 0.75rem;
-		border-radius: var(--radius-md);
+		border-radius: calc(var(--radius-md) * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--console-bg);
 		box-shadow: inset 0 0 0 1px var(--console-edge);

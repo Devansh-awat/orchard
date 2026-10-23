@@ -168,7 +168,7 @@
 	}
 
 	.inset {
-		border-radius: var(--radius-card);
+		border-radius: calc(var(--radius-card) * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--bg-surface);
 		box-shadow: var(--shadow-raised);
@@ -203,7 +203,7 @@
 		flex-shrink: 0;
 		width: 1.5rem;
 		height: 1.5rem;
-		border-radius: 0.4375rem;
+		border-radius: calc(0.4375rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		color: var(--on-solid);
 		background: var(--neutral-7);
@@ -260,7 +260,7 @@
 		flex-direction: column;
 		gap: 0.875rem;
 		padding: 1rem;
-		border-radius: 1.375rem;
+		border-radius: calc(1.375rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--bg-surface);
 		box-shadow: var(--shadow-raised);
@@ -289,7 +289,7 @@
 		flex-shrink: 0;
 		width: 2.75rem;
 		height: 2.75rem;
-		border-radius: 0.75rem;
+		border-radius: calc(0.75rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		box-shadow: inset 0 0 0 0.5px var(--on-media-edge);
 	}
@@ -395,7 +395,7 @@
 		display: flex;
 		gap: 0.75rem;
 		padding: 0.75rem 0.875rem;
-		border-radius: 1.125rem;
+		border-radius: calc(1.125rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--bg-surface);
 		box-shadow: var(--shadow-floating);
@@ -410,7 +410,7 @@
 		flex-shrink: 0;
 		width: 2.25rem;
 		height: 2.25rem;
-		border-radius: 0.625rem;
+		border-radius: calc(0.625rem * var(--corner-scale));
 		corner-shape: var(--corner);
 	}
 	.note-body {
@@ -488,7 +488,7 @@
 	.sh-item :global(.sh-art) {
 		aspect-ratio: 16 / 9;
 		margin-bottom: 0.25rem;
-		border-radius: 0.875rem;
+		border-radius: calc(0.875rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		box-shadow: var(--shadow-raised);
 		transition: transform var(--spring-snappy-duration) var(--spring-snappy);

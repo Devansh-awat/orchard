@@ -142,7 +142,7 @@
 		flex-direction: column;
 		width: 100%;
 		max-width: 40rem;
-		border-radius: var(--radius-panel);
+		border-radius: calc(var(--radius-panel) * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--material-glass-bg);
 		backdrop-filter: var(--material-glass-filter);

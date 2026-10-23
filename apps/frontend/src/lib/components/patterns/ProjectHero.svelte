@@ -57,7 +57,7 @@
 		flex-shrink: 0;
 		width: 4.5rem;
 		height: 4.5rem;
-		border-radius: 1.25rem;
+		border-radius: calc(1.25rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--bg-surface);
 		box-shadow:

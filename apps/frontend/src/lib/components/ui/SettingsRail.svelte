@@ -82,7 +82,7 @@
 		letter-spacing: var(--track-body);
 		color: var(--text-muted);
 		text-decoration: none;
-		border-radius: var(--radius-sm);
+		border-radius: calc(var(--radius-sm) * var(--corner-scale));
 		corner-shape: var(--corner);
 		padding: 0 var(--space-2);
 		transition:

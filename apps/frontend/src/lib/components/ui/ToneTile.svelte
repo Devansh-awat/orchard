@@ -35,7 +35,7 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		border-radius: var(--radius-md);
+		border-radius: calc(var(--radius-md) * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--fill-quiet);
 		color: var(--text-muted);

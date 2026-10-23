@@ -161,7 +161,7 @@
 	}
 	.lv--dark {
 		background-color: var(--console-bg);
-		border-radius: var(--radius-card);
+		border-radius: calc(var(--radius-card) * var(--corner-scale));
 		corner-shape: var(--corner);
 		box-shadow: inset 0 0 0 1px var(--console-edge);
 		padding: 0.5rem 0;
@@ -279,7 +279,7 @@
 		display: flex;
 		gap: 0.125rem;
 		padding: 0.125rem;
-		border-radius: 0.5rem;
+		border-radius: calc(0.5rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--material-glass-bg);
 		backdrop-filter: var(--material-glass-filter);
@@ -298,7 +298,7 @@
 		height: 1.75rem;
 		padding: 0;
 		border: none;
-		border-radius: 0.375rem;
+		border-radius: calc(0.375rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: none;
 		color: var(--text-muted);

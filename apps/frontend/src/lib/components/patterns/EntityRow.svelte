@@ -65,7 +65,7 @@
 		place-items: center;
 		width: 2rem;
 		height: 2rem;
-		border-radius: var(--radius-control);
+		border-radius: calc(var(--radius-control) * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: linear-gradient(var(--bg-surface), var(--neutral-2));
 		box-shadow:
@@ -76,7 +76,7 @@
 	.tile :global(.tile-img) {
 		width: 1.25rem;
 		height: 1.25rem;
-		border-radius: 0.25rem;
+		border-radius: calc(0.25rem * var(--corner-scale));
 		corner-shape: var(--corner);
 	}
 	.dot {

@@ -75,7 +75,7 @@
 		min-height: 2rem;
 		padding: 0.375rem 0.625rem;
 		border: none;
-		border-radius: var(--radius-control);
+		border-radius: calc(var(--radius-control) * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--bg-raised);
 		box-shadow: inset 0 0 0 1px var(--border-default);

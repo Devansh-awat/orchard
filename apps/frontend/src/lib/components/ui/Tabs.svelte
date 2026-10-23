@@ -114,7 +114,7 @@
 		content: '';
 		position: absolute;
 		inset: 0.375rem 0;
-		border-radius: 0.375rem;
+		border-radius: calc(0.375rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--bg-hover);
 		opacity: 0;

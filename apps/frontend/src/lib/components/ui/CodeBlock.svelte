@@ -53,7 +53,7 @@
 		position: relative;
 		min-width: 0;
 		margin: 0;
-		border-radius: var(--radius-card);
+		border-radius: calc(var(--radius-card) * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--console-bg);
 		box-shadow: inset 0 0 0 1px var(--console-edge);
@@ -102,7 +102,7 @@
 		top: 0.25rem;
 		right: 0.25rem;
 		z-index: 1;
-		border-radius: 0.375rem;
+		border-radius: calc(0.375rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--console-bg);
 		opacity: 0;

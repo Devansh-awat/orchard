@@ -20,7 +20,7 @@
 		gap: 0.25rem;
 		height: 1.25rem;
 		padding: 0 0.375rem;
-		border-radius: 0.375rem;
+		border-radius: calc(0.375rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		font-size: var(--text-caption);
 		font-weight: var(--weight-medium);

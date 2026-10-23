@@ -81,7 +81,7 @@
 		height: 2rem;
 		padding: 0 0.8125rem;
 		border: none;
-		border-radius: var(--radius-control);
+		border-radius: calc(var(--radius-control) * var(--corner-scale));
 		corner-shape: var(--corner);
 		font: inherit;
 		font-size: var(--text-body);
@@ -112,7 +112,7 @@
 	.button--sm {
 		height: 1.75rem;
 		padding: 0 0.625rem;
-		border-radius: 0.5625rem;
+		border-radius: calc(0.5625rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		font-size: var(--text-callout);
 		gap: 0.3125rem;
@@ -120,7 +120,7 @@
 	.button--lg {
 		height: 2.5rem;
 		padding: 0 1.125rem;
-		border-radius: 0.75rem;
+		border-radius: calc(0.75rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		font-size: var(--text-headline);
 		gap: 0.5rem;

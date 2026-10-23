@@ -36,7 +36,7 @@
 		width: 2.5rem;
 		height: 2.5rem;
 		margin-bottom: 0.5rem;
-		border-radius: var(--radius-card);
+		border-radius: calc(var(--radius-card) * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--bg-active);
 		color: var(--text-muted);

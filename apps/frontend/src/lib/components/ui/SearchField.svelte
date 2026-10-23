@@ -39,7 +39,7 @@
 		min-width: 0;
 		height: 2rem;
 		padding: 0 0.375rem 0 0.6875rem;
-		border-radius: var(--radius-control);
+		border-radius: calc(var(--radius-control) * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: color-mix(in oklab, var(--neutral-10) 6%, transparent);
 		box-shadow: inset 0 0 0 0.5px color-mix(in oklab, var(--neutral-10) 6%, transparent);
@@ -96,7 +96,7 @@
 		height: 1.125rem;
 		margin-right: 0.25rem;
 		border: none;
-		border-radius: 0.3125rem;
+		border-radius: calc(0.3125rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--neutral-6);
 		color: var(--bg-surface);
@@ -105,7 +105,7 @@
 	.kbd {
 		flex-shrink: 0;
 		padding: 0.1875rem 0.375rem;
-		border-radius: 0.375rem;
+		border-radius: calc(0.375rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--bg-surface);
 		box-shadow: inset 0 0 0 0.5px var(--border-strong);

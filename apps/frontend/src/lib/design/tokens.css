@@ -75,7 +75,8 @@
 	--radius-control: 0.625rem;
 	--radius-card: 0.875rem;
 	--radius-panel: 1.125rem;
-	--corner: squircle;
+	--corner: round;
+	--corner-scale: 1;
 
 	--weight-regular: 450;
 	--weight-medium: 550;
@@ -456,4 +457,11 @@ html.motion-reduce .job-ring-spinner {
 html.motion-reduce .lds-ellipsis div {
 	animation-duration: 0.6s !important;
 	animation-iteration-count: infinite !important;
+}
+
+@supports (corner-shape: superellipse(1.4)) {
+	:root {
+		--corner: superellipse(1.4);
+		--corner-scale: 1.25;
+	}
 }

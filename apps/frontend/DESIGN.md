@@ -28,9 +28,14 @@ catalogue, add it to the kit and the catalogue first; never hand-roll it in a ro
   that sits next to an icon, or inside a pill, uses `text-box: trim-both cap alphabetic`
   so padding is measured from the ink. Verify with `/dev/ui` and the alignment audit
   (`.context`-style script: icon centre vs cap centre, delta 0).
-- **Squircles, not circles.** Rounded rectangles use `corner-shape: var(--corner)`
-  (continuous corners) on top of `--radius-control|card|panel`. Circles only for status
-  dots, radios and the switch; capsules only for the toast.
+- **Continuous corners, not circles.** Every rounded rectangle writes
+  `border-radius: calc(R * var(--corner-scale)); corner-shape: var(--corner);` where R is
+  the Apple-style nominal radius (`--radius-control` 10px, `--radius-card` 14px,
+  `--radius-panel` 18px). `--corner` is `superellipse(1.4)` and `--corner-scale` is 1.25,
+  fitted by pixel diff against Figma's 60% corner smoothing (the iOS curve); plain
+  `squircle` at the same radius reads boxy. Browsers without `corner-shape` fall back to
+  round corners at scale 1. Circles only for status dots, radios and the switch; capsules
+  only for the toast.
 - **Dense, not big.** It is a developer tool: 32px controls, 36px nav rows, 14px body.
 - **Concentric corners.** Inner radius = outer radius minus inset. A circle inside a
   capsule sits at an inset equal to `(height - circle) / 2`. Never nest equal radii.

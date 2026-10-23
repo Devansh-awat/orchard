@@ -43,7 +43,7 @@
 		justify-self: center;
 		width: 0.3125rem;
 		height: 0.3125rem;
-		border-radius: 1px;
+		border-radius: calc(1px * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--text-faint);
 		transform: rotate(45deg);

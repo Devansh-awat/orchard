@@ -34,7 +34,7 @@
 		width: 1.75rem;
 		height: 1.75rem;
 		border: none;
-		border-radius: 0.375rem;
+		border-radius: calc(0.375rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: none;
 		color: var(--text-muted);

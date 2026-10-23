@@ -229,7 +229,7 @@
 		flex-direction: column;
 		gap: 0.5rem;
 		padding: 0.875rem 1rem 1rem;
-		border-radius: var(--radius-card);
+		border-radius: calc(var(--radius-card) * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--bg-raised);
 		box-shadow: var(--shadow-raised);

@@ -113,7 +113,7 @@
 		--head-h: 5rem;
 		position: relative;
 		min-width: 0;
-		border-radius: var(--radius-panel);
+		border-radius: calc(var(--radius-panel) * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--bg-raised);
 		box-shadow: var(--shadow-raised);
@@ -232,7 +232,7 @@
 		flex-shrink: 0;
 		width: 2.75rem;
 		height: 2.75rem;
-		border-radius: 0.75rem;
+		border-radius: calc(0.75rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--on-media-fill);
 		box-shadow: inset 0 0 0 0.5px var(--on-media-edge);

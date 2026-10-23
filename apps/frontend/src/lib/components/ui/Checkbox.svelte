@@ -83,7 +83,7 @@
 		width: 1rem;
 		height: 1rem;
 		margin: 0;
-		border-radius: 0.3125rem;
+		border-radius: calc(0.3125rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--bg-raised);
 		box-shadow:

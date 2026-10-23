@@ -19,7 +19,7 @@
 		min-width: 1.25rem;
 		height: 1.25rem;
 		padding: 0 0.25rem;
-		border-radius: 0.3125rem;
+		border-radius: calc(0.3125rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--bg-raised);
 		box-shadow:

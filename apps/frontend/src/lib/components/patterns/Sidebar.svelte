@@ -119,7 +119,7 @@
 		gap: 0.625rem;
 		height: 100%;
 		padding: 0.5rem;
-		border-radius: var(--radius-panel);
+		border-radius: calc(var(--radius-panel) * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--material-chrome-bg);
 		backdrop-filter: var(--material-chrome-filter);
@@ -136,7 +136,7 @@
 		min-height: 2.75rem;
 		padding: 0 0.5rem 0 0.375rem;
 		border: none;
-		border-radius: 0.6875rem;
+		border-radius: calc(0.6875rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: none;
 		color: var(--text-default);
@@ -154,7 +154,7 @@
 		place-items: center;
 		flex-shrink: 0;
 		overflow: hidden;
-		border-radius: 0.5rem;
+		border-radius: calc(0.5rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		font-weight: var(--weight-semibold);
 	}
@@ -215,7 +215,7 @@
 	}
 	.kbd {
 		padding: 0.1875rem 0.375rem;
-		border-radius: 0.375rem;
+		border-radius: calc(0.375rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: color-mix(in oklab, var(--neutral-10) 7%, transparent);
 		color: var(--text-muted);
@@ -249,7 +249,7 @@
 	.app :global(.app-art) {
 		width: 100%;
 		height: 100%;
-		border-radius: 0.4375rem;
+		border-radius: calc(0.4375rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		box-shadow: inset 0 0 0 0.5px var(--on-media-edge);
 	}
@@ -283,7 +283,7 @@
 		height: 2.5rem;
 		padding: 0 0.375rem;
 		border: none;
-		border-radius: 0.6875rem;
+		border-radius: calc(0.6875rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: none;
 		color: var(--text-default);
@@ -312,7 +312,7 @@
 		width: 2.25rem;
 		height: 2.25rem;
 		border: none;
-		border-radius: 0.6875rem;
+		border-radius: calc(0.6875rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: none;
 		color: var(--text-muted);

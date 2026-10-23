@@ -42,7 +42,7 @@
 		margin: 0;
 		padding: 0.3125rem 0.5rem;
 		border: none;
-		border-radius: 0.375rem;
+		border-radius: calc(0.375rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--neutral-10);
 		color: var(--neutral-app);

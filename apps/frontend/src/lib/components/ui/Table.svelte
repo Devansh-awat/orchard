@@ -191,7 +191,7 @@
 		--row-h: 2.25rem;
 	}
 	.frame--inset {
-		border-radius: var(--radius-card);
+		border-radius: calc(var(--radius-card) * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--bg-surface);
 		box-shadow: var(--shadow-raised);
@@ -321,7 +321,7 @@
 		margin: 0 -0.375rem;
 		padding: 0 0.375rem;
 		border: none;
-		border-radius: 0.375rem;
+		border-radius: calc(0.375rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: none;
 		color: inherit;

@@ -163,7 +163,7 @@
 		height: 1.75rem;
 		padding: 0;
 		border: none;
-		border-radius: 0.375rem;
+		border-radius: calc(0.375rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: none;
 		color: var(--text-muted);

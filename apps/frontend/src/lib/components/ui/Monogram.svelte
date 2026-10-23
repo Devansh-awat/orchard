@@ -20,7 +20,7 @@
 		display: grid;
 		place-items: center;
 		flex-shrink: 0;
-		border-radius: 0.375rem;
+		border-radius: calc(0.375rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--tone-bg);
 		color: var(--tone-fg);
@@ -32,7 +32,7 @@
 		width: 1.125rem;
 		height: 1.125rem;
 		font-size: 0.625rem;
-		border-radius: 0.3125rem;
+		border-radius: calc(0.3125rem * var(--corner-scale));
 		corner-shape: var(--corner);
 	}
 	.mono--md {

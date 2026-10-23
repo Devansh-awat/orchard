@@ -68,7 +68,7 @@
 		gap: 0.875rem;
 		min-width: 0;
 		padding: 1rem;
-		border-radius: 0.875rem;
+		border-radius: calc(0.875rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--bg-sunken);
 		box-shadow: inset 0 0 0 1px var(--border-default);
@@ -115,7 +115,7 @@
 		flex-shrink: 0;
 		width: 2.75rem;
 		height: 2.75rem;
-		border-radius: 0.625rem;
+		border-radius: calc(0.625rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: linear-gradient(var(--bg-surface), var(--neutral-2));
 		box-shadow:

@@ -91,7 +91,7 @@
 		flex-shrink: 0;
 		width: 1.5rem;
 		height: 1.5rem;
-		border-radius: 0.4375rem;
+		border-radius: calc(0.4375rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: color-mix(in oklab, var(--neutral-10) 7%, transparent);
 		color: var(--text-muted);
@@ -130,7 +130,7 @@
 		min-width: 1.25rem;
 		height: 1.25rem;
 		padding: 0 0.375rem;
-		border-radius: 0.375rem;
+		border-radius: calc(0.375rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: color-mix(in oklab, var(--neutral-10) 8%, transparent);
 		color: var(--text-muted);

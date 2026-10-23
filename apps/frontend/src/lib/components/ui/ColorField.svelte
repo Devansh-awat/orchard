@@ -119,7 +119,7 @@
 		align-items: center;
 		gap: var(--space-3);
 		padding: 0.625rem var(--space-3);
-		border-radius: var(--radius-md);
+		border-radius: calc(var(--radius-md) * var(--corner-scale));
 		corner-shape: var(--corner);
 		transition: background-color var(--dur-fast);
 	}
@@ -131,7 +131,7 @@
 		width: 2.25rem;
 		height: 2.25rem;
 		flex-shrink: 0;
-		border-radius: var(--radius-sm);
+		border-radius: calc(var(--radius-sm) * var(--corner-scale));
 		corner-shape: var(--corner);
 		border: none;
 		padding: 0;
@@ -182,7 +182,7 @@
 	.cf-hex {
 		width: 5.5rem;
 		padding: 0.25rem var(--space-2);
-		border-radius: var(--radius-xs);
+		border-radius: calc(var(--radius-xs) * var(--corner-scale));
 		corner-shape: var(--corner);
 		border: 1px solid transparent;
 		background-color: transparent;
@@ -216,7 +216,7 @@
 		justify-content: center;
 		width: 1.75rem;
 		height: 1.75rem;
-		border-radius: var(--radius-xs);
+		border-radius: calc(var(--radius-xs) * var(--corner-scale));
 		corner-shape: var(--corner);
 		border: none;
 		background: none;

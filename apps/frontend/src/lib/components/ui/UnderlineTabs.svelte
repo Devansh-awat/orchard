@@ -51,7 +51,7 @@
 		background-color: var(--bg-raised);
 		border: none;
 		box-shadow: var(--elev-1);
-		border-radius: var(--radius-xl);
+		border-radius: calc(var(--radius-xl) * var(--corner-scale));
 		corner-shape: var(--corner);
 		padding: var(--space-2);
 	}
@@ -96,7 +96,7 @@
 	.ui-tab:focus-visible {
 		outline: var(--focus-ring-width) solid var(--focus-ring-color);
 		outline-offset: -2px;
-		border-radius: var(--radius-sm);
+		border-radius: calc(var(--radius-sm) * var(--corner-scale));
 		corner-shape: var(--corner);
 	}
 
@@ -112,7 +112,7 @@
 
 	.ui-tab--toolbar {
 		padding: var(--space-2) var(--space-3);
-		border-radius: var(--radius-md);
+		border-radius: calc(var(--radius-md) * var(--corner-scale));
 		corner-shape: var(--corner);
 	}
 	.ui-tab--toolbar:hover {

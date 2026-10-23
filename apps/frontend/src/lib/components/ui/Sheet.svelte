@@ -170,7 +170,7 @@
 		margin: 0;
 		padding: 0;
 		border: none;
-		border-radius: var(--radius-panel);
+		border-radius: calc(var(--radius-panel) * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--bg-raised);
 		color: var(--text-default);
