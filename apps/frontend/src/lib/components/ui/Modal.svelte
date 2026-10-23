@@ -27,6 +27,8 @@
 		footer?: Snippet;
 	} = $props();
 
+	const titleId = $props.id();
+
 	let dialogEl = $state<HTMLDialogElement | null>(null);
 	let rendered = $state(false);
 
@@ -66,6 +68,7 @@
 		class="ui-modal ui-modal--{size}"
 		class:ui-modal--viewport={align === 'viewport'}
 		class:ui-modal--closing={!open}
+		aria-labelledby={title && !header ? titleId : undefined}
 		onclick={handleBackdropClick}
 		oncancel={handleCancel}
 		onclose={() => {
@@ -83,7 +86,7 @@
 				{#if header}
 					{@render header()}
 				{:else if title}
-					<h2 class="ui-modal-title">{title}</h2>
+					<h2 class="ui-modal-title" id={titleId}>{title}</h2>
 				{/if}
 				{#if closable}
 					<button type="button" class="ui-modal-close" aria-label="Close" onclick={requestClose}>

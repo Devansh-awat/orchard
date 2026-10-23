@@ -1,0 +1,65 @@
+<script lang="ts">
+	import type { Snippet } from 'svelte';
+	import type { Icon } from './types';
+
+	type Item = { label: string; icon?: Icon; href?: string; mono?: boolean };
+
+	let { items, leading = undefined }: { items: Item[]; leading?: Snippet } = $props();
+</script>
+
+<div class="meta">
+	{#if leading}{@render leading()}{/if}
+	{#each items as item, i (i)}
+		{@const Glyph = item.icon}
+		{#if item.href}
+			<a class="item item--link" href={item.href}>
+				{#if Glyph}<Glyph size={14} aria-hidden="true" />{/if}
+				<span class="label" class:label--mono={item.mono}>{item.label}</span>
+			</a>
+		{:else}
+			<span class="item">
+				{#if Glyph}<Glyph size={14} aria-hidden="true" />{/if}
+				<span class="label" class:label--mono={item.mono}>{item.label}</span>
+			</span>
+		{/if}
+	{/each}
+</div>
+
+<style>
+	.meta {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem 1rem;
+		min-width: 0;
+		color: var(--text-muted);
+		font-size: var(--text-callout);
+	}
+	.item {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		min-width: 0;
+		color: inherit;
+		text-decoration: none;
+	}
+	.item--link:hover {
+		color: var(--text-default);
+	}
+	.item :global(svg) {
+		flex-shrink: 0;
+		color: var(--text-faint);
+	}
+	.label {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		text-box: trim-both cap alphabetic;
+		padding-block: 0.3em;
+		margin-block: -0.3em;
+	}
+	.label--mono {
+		font-family: var(--font-mono);
+		font-size: 0.95em;
+	}
+</style>

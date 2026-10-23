@@ -79,13 +79,13 @@
 	.control--lead {
 		padding-left: 2rem;
 	}
-	.input::placeholder {
+	.control::placeholder {
 		color: var(--text-faint);
 	}
-	.input:hover:not(:disabled) {
+	.control:hover:not(:disabled) {
 		box-shadow: inset 0 0 0 1px var(--border-strong);
 	}
-	.input:focus {
+	.control:focus {
 		outline: none;
 		box-shadow:
 			inset 0 0 0 1px var(--accent),
@@ -100,7 +100,7 @@
 			inset 0 0 0 1px var(--red-7),
 			0 0 0 3px color-mix(in oklab, var(--red-7) 24%, transparent);
 	}
-	.input:disabled {
+	.control:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
 	}

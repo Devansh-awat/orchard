@@ -13,36 +13,8 @@
 		const [a, b, c] = PALETTES[h % PALETTES.length];
 		return [`var(--${a}-6)`, `var(--${b}-5)`, `var(--${c}-7)`, `var(--${b}-6)`, `var(--${a}-4)`];
 	}
-</script>
 
-<script lang="ts">
-	import { onMount } from 'svelte';
-	import { effectiveAnimation } from '$lib/stores/preferences';
-	import { createRenderer, loadPalette, renderStill } from '$lib/components/aura/aura';
-
-	let {
-		src = undefined,
-		name = undefined,
-		colors = undefined,
-		seed = 0,
-		still = false,
-		class: className = ''
-	}: {
-		src?: string | null;
-		name?: string;
-		colors?: string[];
-		seed?: number;
-		still?: boolean;
-		class?: string;
-	} = $props();
-
-	let host = $state<HTMLElement>();
-	let canvas = $state<HTMLCanvasElement>();
-	let image = $state<string | null>(null);
-	let ready = $state(false);
-
-	function resolve(list: string[]): string[] {
-		if (!host) return list;
+	export function resolveColors(host: Element, list: string[]): string[] {
 		const probe = document.createElement('span');
 		host.appendChild(probe);
 		const out = list.map((c) => {
@@ -52,34 +24,36 @@
 		probe.remove();
 		return out;
 	}
+</script>
 
-	function source() {
-		const list = colors ?? (name ? auraColors(name) : auraColors('orchard'));
-		return { src, colors: resolve(list), seed };
-	}
+<script lang="ts">
+	import { onMount } from 'svelte';
+	import { effectiveAnimation } from '$lib/stores/preferences';
+	import { colorsImage, createRenderer, loadTexture } from '$lib/components/aura/aura';
+
+	let {
+		src = undefined,
+		name = 'orchard',
+		class: className = ''
+	}: {
+		src?: string | null;
+		name?: string;
+		class?: string;
+	} = $props();
+
+	let host = $state<HTMLElement>();
+	let canvas = $state<HTMLCanvasElement>();
+	let ready = $state(false);
 
 	onMount(() => {
-		if (!host) return;
+		if (!host || !canvas) return;
 		const el = host;
-
-		if (still) {
-			const rect = el.getBoundingClientRect();
-			const w = Math.max(1, Math.round(Math.min(rect.width, 960) / 2));
-			const h = Math.max(1, Math.round((rect.height / Math.max(rect.width, 1)) * w));
-			renderStill(source(), w, h).then((url) => {
-				image = url;
-				requestAnimationFrame(() => (ready = true));
-			});
-			return;
-		}
-
-		if (!canvas) return;
 		const renderer = createRenderer(canvas);
 		if (!renderer) return;
 
 		let raf = 0;
 		let last = 0;
-		let time = 0;
+		let frame = 0;
 		let visible = true;
 		let moving = true;
 		let alive = true;
@@ -87,35 +61,38 @@
 		const size = () => {
 			const r = el.getBoundingClientRect();
 			renderer.resize(Math.max(1, Math.round(r.width / 2)), Math.max(1, Math.round(r.height / 2)));
-			renderer.render(time, seed);
+			renderer.render(frame);
 		};
 
-		const frame = (now: number) => {
+		const tick = (now: number) => {
 			raf = 0;
 			if (!alive) return;
 			const dt = last ? Math.min(now - last, 100) : 0;
 			if (dt >= 33 || !last) {
-				time += dt / 1000;
+				frame += (dt / 1000) * 60;
 				last = now;
-				renderer.render(time, seed);
+				renderer.render(frame);
 			}
-			if (visible && moving && !document.hidden) raf = requestAnimationFrame(frame);
+			if (visible && moving && !document.hidden) raf = requestAnimationFrame(tick);
 		};
 
 		const play = () => {
-			if (!raf && visible && moving && !document.hidden) {
+			if (!raf && ready && visible && moving && !document.hidden) {
 				last = 0;
-				raf = requestAnimationFrame(frame);
+				raf = requestAnimationFrame(tick);
 			}
 		};
 
-		loadPalette(source()).then((palette) => {
-			if (!alive || !palette) return;
-			renderer.setPalette(palette);
-			size();
-			ready = true;
-			play();
-		});
+		const source = src || colorsImage(resolveColors(el, auraColors(name)));
+		if (source) {
+			loadTexture(source).then((img) => {
+				if (!alive || !img) return;
+				renderer.setImage(img);
+				size();
+				ready = true;
+				play();
+			});
+		}
 
 		const ro = new ResizeObserver(size);
 		ro.observe(el);
@@ -143,14 +120,8 @@
 	});
 </script>
 
-<div
-	bind:this={host}
-	class="aura {className}"
-	class:aura--ready={ready}
-	aria-hidden="true"
-	style:background-image={image ? `url("${image}")` : undefined}
->
-	{#if !still}<canvas bind:this={canvas}></canvas>{/if}
+<div bind:this={host} class="aura {className}" class:aura--ready={ready} aria-hidden="true">
+	<canvas bind:this={canvas}></canvas>
 </div>
 
 <style>
@@ -158,15 +129,13 @@
 		position: relative;
 		overflow: hidden;
 		background-color: var(--bg-active);
-		background-size: cover;
-		background-position: center;
 	}
 	.aura::after {
 		content: '';
 		position: absolute;
 		inset: 0;
 		background: var(--bg-active);
-		transition: opacity 600ms ease;
+		transition: opacity 700ms ease;
 	}
 	.aura--ready::after {
 		opacity: 0;

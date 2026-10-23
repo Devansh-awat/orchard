@@ -302,6 +302,24 @@ body {
 	line-height: 1.5;
 }
 
+body::before {
+	content: '';
+	position: fixed;
+	inset: 0;
+	z-index: -1;
+	pointer-events: none;
+	background-image: var(--theme-grain, none), var(--theme-chrome-image, none);
+	background-size: auto;
+	background-repeat: repeat;
+	opacity: 0.45;
+	will-change: transform;
+}
+
+html.dark body::before {
+	opacity: 0.7;
+}
+
+html.contrast-high body::before,
 html.contrast-high .deck-host--drawer {
 	background-image: none;
 }
@@ -483,11 +501,14 @@ html {
 	background: var(--material-glass-bg);
 	backdrop-filter: var(--material-glass-filter);
 	color: var(--text-default);
-	box-shadow: var(--shadow-floating);
-	min-width: 11rem;
+	box-shadow:
+		inset 0 0.5px 0 rgb(255 255 255 / 0.14),
+		var(--shadow-floating);
+	min-width: 12rem;
 	max-height: min(60vh, var(--melt-popover-available-height, 60vh));
 	overflow-y: auto;
-	scrollbar-gutter: stable;
+	overscroll-behavior: contain;
+	scrollbar-width: thin;
 }
 
 .ui-menu:focus-visible,
@@ -499,10 +520,8 @@ html {
 	padding: 0.75rem;
 }
 
-/* Option menus keep a fixed cap. Sizing purely off the available space made the
-   panel resize on every scroll frame and flip sides more or less at random. */
 .ui-popover--menu {
-	padding: 0.5rem;
+	padding: 0.25rem;
 	max-height: min(20rem, var(--melt-popover-available-height, 20rem));
 }
 
@@ -525,23 +544,39 @@ html {
 	gap: 0.5rem;
 	width: 100%;
 	min-height: 2rem;
-	padding: 0.375rem 0.625rem;
+	padding: 0.375rem 0.5rem;
 	border: none;
-	border-radius: var(--radius-control);
+	border-radius: calc(var(--radius-card) - 0.25rem);
 	background: transparent;
 	color: var(--text-default);
+	font: inherit;
 	font-size: var(--text-body);
 	line-height: var(--lh-body);
 	font-weight: var(--weight-regular);
 	text-align: left;
 	text-decoration: none;
 	cursor: pointer;
+	user-select: none;
+	outline: none;
 }
 
-.ui-menu-item:hover,
-.ui-menu-item:focus-visible {
-	background-color: var(--bg-hover);
-	outline: none;
+.ui-menu-item > svg {
+	flex-shrink: 0;
+	color: var(--text-muted);
+}
+
+.ui-menu-item:hover:not(:disabled),
+.ui-menu-item:focus,
+.ui-menu-item[data-highlighted] {
+	background: color-mix(in oklab, var(--neutral-10) 7%, transparent);
+}
+
+.ui-menu[data-nav='keys'] .ui-menu-item:hover:not(:focus) {
+	background: transparent;
+}
+
+.ui-menu-item:active:not(:disabled) {
+	background: color-mix(in oklab, var(--neutral-10) 11%, transparent);
 }
 
 .ui-menu-item:disabled {
@@ -549,31 +584,39 @@ html {
 	cursor: default;
 }
 
-.ui-menu-item--danger {
-	color: var(--status-error);
+.ui-menu-item--danger,
+.ui-menu-item--danger > svg {
+	color: var(--red-9);
 }
 
-.ui-menu-item--danger:hover,
-.ui-menu-item--danger:focus-visible {
-	background-color: var(--red-2);
+.ui-menu-item--danger:hover:not(:disabled),
+.ui-menu-item--danger:focus,
+.ui-menu-item--danger[data-highlighted] {
+	background: color-mix(in oklab, var(--red-7) 12%, transparent);
+}
+
+.ui-menu-item--danger:active:not(:disabled) {
+	background: color-mix(in oklab, var(--red-7) 18%, transparent);
 }
 
 .ui-modal {
-	/* Center within the content area (viewport minus the sidebar), not the
-	   whole screen. --app-sidebar-w is kept live by the sidebar. */
 	position: fixed;
 	inset: 0;
 	inset-inline-start: var(--app-sidebar-w, 0px);
 	margin: auto;
 	padding: 0;
-	border: 1px solid var(--surface-border);
-	border-radius: var(--radius-xl);
-	background-color: var(--surface-bg);
-	color: var(--center-channel-color);
-	box-shadow: 0 24px 64px rgb(0 0 0 / 0.24);
+	border: none;
+	border-radius: var(--radius-panel);
+	background: var(--bg-raised);
+	color: var(--text-default);
+	box-shadow:
+		inset 0 0.5px 0 rgb(255 255 255 / 0.1),
+		var(--shadow-overlay);
 	--modal-room: calc(100vw - var(--app-sidebar-w, 0px) - 2rem);
 	width: min(var(--modal-room), 28rem);
+	max-width: none;
 	max-height: min(85vh, 48rem);
+	overflow: hidden;
 	display: none;
 	flex-direction: column;
 }
@@ -607,9 +650,13 @@ html {
 }
 
 .ui-modal::backdrop {
-	background: rgb(0 0 0 / 0.5);
+	background: rgb(0 0 0 / 0.28);
 	opacity: 1;
-	transition: opacity var(--dur-fast) ease;
+	transition: opacity var(--spring-smooth-duration) var(--spring-smooth);
+}
+
+:root.dark .ui-modal::backdrop {
+	background: rgb(0 0 0 / 0.5);
 }
 
 @starting-style {
@@ -620,52 +667,82 @@ html {
 
 .ui-modal--closing::backdrop {
 	opacity: 0;
+	transition: opacity var(--spring-snappy-exit-duration) var(--spring-snappy-exit);
 }
 
 .ui-modal-header {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
 	gap: 0.75rem;
-	padding: 1.125rem 1.25rem 0;
+	min-height: 2.5rem;
+	padding: 0.5rem 0.5rem 0 1.25rem;
+}
+
+.ui-modal-header:not(:has(.ui-modal-close)) {
+	padding-right: 1.25rem;
+	min-height: 2.75rem;
+	padding-top: 1.25rem;
 }
 
 .ui-modal-title {
+	flex: 1;
+	min-width: 0;
 	font-size: var(--text-headline);
 	line-height: var(--lh-headline);
-	font-weight: 600;
-	letter-spacing: -0.01em;
+	font-weight: var(--weight-semibold);
+	letter-spacing: var(--track-headline);
+	color: var(--text-default);
+	text-box: trim-both cap alphabetic;
 }
 
 .ui-modal-close {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 1.75rem;
-	height: 1.75rem;
-	border: none;
-	border-radius: var(--radius-sm);
-	background: transparent;
-	color: var(--surface-muted);
-	cursor: pointer;
+	flex-shrink: 0;
+	width: 2rem;
+	height: 2rem;
 	margin-left: auto;
+	border: none;
+	border-radius: calc(var(--radius-panel) - 0.5rem);
+	background: transparent;
+	color: var(--text-muted);
+	cursor: pointer;
 	transition:
 		background-color var(--dur-fast) ease,
-		color var(--dur-fast) ease;
+		color var(--dur-fast) ease,
+		transform var(--spring-interactive-duration) var(--spring-interactive);
 }
 
 .ui-modal-close:hover {
-	background-color: var(--control-hover-bg);
-	color: var(--center-channel-color);
+	background: color-mix(in oklab, var(--neutral-10) 7%, transparent);
+	color: var(--text-default);
+}
+
+.ui-modal-close:active {
+	transform: scale(0.94);
+}
+
+.ui-modal-close:focus-visible {
+	outline: none;
+	box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .ui-modal-body {
-	padding: 1rem 1.25rem 1.25rem;
+	flex: 1 1 auto;
+	min-height: 0;
+	padding: 0.75rem 1.25rem 1.25rem;
 	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+
+.ui-modal-body:first-child {
+	padding-top: 1.25rem;
 }
 
 .ui-modal-footer {
 	display: flex;
+	align-items: center;
 	justify-content: flex-end;
 	gap: 0.5rem;
 	padding: 0 1.25rem 1.25rem;
@@ -780,46 +857,64 @@ html {
 }
 
 .ui-dropdown-trigger {
-	@apply w-full rounded-lg border text-sm focus:outline-none;
-	display: inline-flex;
+	display: flex;
 	align-items: center;
-	justify-content: space-between;
 	gap: 0.5rem;
-	padding: 0.75rem 0.75rem 0.75rem 0.875rem;
-	border-color: var(--surface-border);
-	background-color: var(--surface-bg);
-	color: var(--center-channel-color);
-	cursor: pointer;
+	width: 100%;
+	min-width: 0;
+	height: 2rem;
+	padding: 0 0.5rem 0 0.625rem;
+	border: none;
+	border-radius: var(--radius-control);
+	background: var(--bg-raised);
+	box-shadow: var(--shadow-raised);
+	color: var(--text-default);
+	font: inherit;
+	font-size: var(--text-body);
+	line-height: var(--lh-body);
 	text-align: left;
-	transition:
-		border-color var(--dur-fast) ease,
-		background-color var(--dur-fast) ease,
-		box-shadow var(--dur-fast) ease;
+	cursor: pointer;
+	transition: background-color var(--dur-fast) ease;
 }
 
-.ui-dropdown-trigger:hover:not(:disabled) {
-	background-color: var(--control-bg);
-}
-
-.ui-dropdown-trigger:focus-visible,
+.ui-dropdown-trigger:hover:not(:disabled),
 .ui-dropdown-trigger--open {
-	border-color: var(--button-bg);
-	box-shadow: 0 0 0 3px color-mix(in srgb, var(--button-bg) 18%, transparent);
+	background: var(--bg-hover);
+}
+
+.ui-dropdown-trigger:focus-visible {
+	outline: none;
+	box-shadow:
+		inset 0 0 0 1px var(--accent),
+		0 0 0 3px var(--focus-ring);
 }
 
 .ui-dropdown-trigger:disabled {
 	opacity: 0.5;
-	cursor: default;
+	cursor: not-allowed;
 }
 
 .ui-dropdown-value {
-	display: inline-flex;
+	display: flex;
+	flex: 1;
 	align-items: center;
 	gap: 0.5rem;
-	white-space: nowrap;
+	min-width: 0;
+}
+
+.ui-dropdown-text {
+	display: block;
+	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
-	min-width: 0;
+	white-space: nowrap;
+	text-box: trim-both cap alphabetic;
+	padding-block: 0.3em;
+	margin-block: -0.3em;
+}
+
+.ui-dropdown-value--placeholder {
+	color: var(--text-faint);
 }
 
 .ui-dropdown-icon {
@@ -827,79 +922,108 @@ html {
 	align-items: center;
 	justify-content: center;
 	flex-shrink: 0;
-	color: var(--surface-muted);
-}
-
-.ui-dropdown-value--placeholder {
-	color: var(--surface-muted);
+	min-width: 1rem;
+	height: 1rem;
+	color: var(--text-muted);
 }
 
 .ui-dropdown-chevron {
 	display: inline-flex;
-	color: var(--surface-muted);
 	flex-shrink: 0;
+	margin-left: auto;
+	color: var(--text-faint);
 }
 
-/* The panel is the only scroller. Scrolling here too gave the list its own
-   scrollbar inset by the panel's padding, on top of the panel's own. */
 .ui-dropdown-list {
 	display: flex;
 	flex-direction: column;
-	gap: 1px;
 }
 
 .ui-dropdown-option {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
-	gap: 0.6rem;
+	gap: 0.5rem;
 	width: 100%;
-	padding: 0.5rem 0.75rem;
-	border-radius: var(--radius-sm);
-	font-size: var(--text-footnote);
-	line-height: var(--lh-footnote);
-	color: var(--center-channel-color);
+	min-height: 2rem;
+	padding: 0.375rem 0.5rem;
+	border: none;
+	border-radius: calc(var(--radius-card) - 0.25rem);
+	background: transparent;
+	color: var(--text-default);
+	font: inherit;
+	font-size: var(--text-body);
+	line-height: var(--lh-body);
 	text-align: left;
 	cursor: pointer;
-	transition: background-color var(--dur-fast) ease;
+	user-select: none;
 }
 
-.ui-dropdown-option:hover {
-	background-color: var(--control-bg);
+.ui-dropdown-option--rich {
+	align-items: flex-start;
+	padding-block: 0.625rem;
 }
 
-.ui-dropdown-option--selected {
-	background-color: color-mix(in srgb, var(--button-bg) 8%, transparent);
-	font-weight: 600;
+.ui-dropdown-option--rich .ui-dropdown-icon,
+.ui-dropdown-option--rich .ui-dropdown-check {
+	margin-block: calc((1cap - 1rem) / 2);
+}
+
+.ui-dropdown-option[data-highlighted] {
+	background: color-mix(in oklab, var(--neutral-10) 7%, transparent);
+}
+
+.ui-dropdown-option:active:not(:disabled) {
+	background: color-mix(in oklab, var(--neutral-10) 11%, transparent);
+}
+
+.ui-dropdown-option:disabled {
+	opacity: 0.4;
+	cursor: default;
 }
 
 .ui-dropdown-option-main {
 	display: flex;
 	flex: 1;
 	flex-direction: column;
-	gap: 0.1rem;
+	gap: 0.5rem;
 	min-width: 0;
 }
 
-.ui-dropdown-option--selected .ui-dropdown-icon {
-	color: var(--center-channel-color);
+.ui-dropdown-option--selected .ui-dropdown-text {
+	font-weight: var(--weight-medium);
 }
 
 .ui-dropdown-option-desc {
-	font-size: var(--text-micro);
-	line-height: var(--lh-micro);
-	color: var(--surface-muted);
-	font-weight: 400;
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--text-caption);
+	line-height: var(--lh-caption);
+	color: var(--text-muted);
+	text-box: trim-both cap alphabetic;
+	padding-block: 0.3em;
+	margin-block: -0.3em;
 }
 
-.ui-dropdown-option .ui-dropdown-check {
-	color: var(--button-bg);
+.ui-dropdown-check {
+	display: inline-flex;
 	flex-shrink: 0;
+	width: 1rem;
+	color: var(--accent-9);
+}
+
+.ui-dropdown-empty {
+	padding: 0.75rem 0.5rem;
+	color: var(--text-muted);
+	font-size: var(--text-callout);
+	line-height: var(--lh-callout);
+	text-align: center;
 }
 
 .ui-dropdown-mono {
 	font-family: var(--font-mono, ui-monospace, monospace);
-	font-size: 0.78em;
+	font-size: 0.92em;
 }
 
 .section-card-head {

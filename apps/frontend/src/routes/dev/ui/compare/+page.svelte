@@ -34,10 +34,16 @@
 	import EntityRow from '$lib/components/patterns/EntityRow.svelte';
 	import { resourceStatus } from '$lib/components/ui/status';
 	import DevBar from '../DevBar.svelte';
-	import Shell from '../Shell.svelte';
+	import AppFrame from '$lib/components/patterns/AppFrame.svelte';
+	import Sidebar from '$lib/components/patterns/Sidebar.svelte';
+	import SectionTitle from '$lib/components/ui/SectionTitle.svelte';
+	import Sparkline from '$lib/components/ui/Sparkline.svelte';
+	import MetaList from '$lib/components/ui/MetaList.svelte';
 	import ProjectGroup from '$lib/components/patterns/ProjectGroup.svelte';
+	import EntityCard from '$lib/components/patterns/EntityCard.svelte';
 	import ProjectHero from '$lib/components/patterns/ProjectHero.svelte';
-	import { PROJECTS, BUILDS } from '../fixtures';
+	import ProjectBackdrop from '$lib/components/patterns/ProjectBackdrop.svelte';
+	import { PROJECTS, BUILDS, SIDEBAR } from '../fixtures';
 
 	let screen = $state('home');
 	let tab = $state<'overview' | 'logs' | 'metrics' | 'env' | 'settings'>('overview');
@@ -48,11 +54,8 @@
 	let previews = $state(false);
 	let protectPreviews = $state(true);
 
-	const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
 	const spark = [12, 18, 14, 22, 30, 26, 34, 28, 40, 36, 44, 38, 46, 52, 48, 56];
-	const sparkPath = spark
-		.map((v, i) => `${i === 0 ? 'M' : 'L'}${(i / (spark.length - 1)) * 100},${60 - v}`)
-		.join(' ');
+	const sections = $derived(SIDEBAR.sections(screen === 'settings' ? 'settings' : 'apps'));
 </script>
 
 <div class="switcher">
@@ -68,7 +71,13 @@
 	/>
 </div>
 
-<Shell active={screen === 'settings' ? 'settings' : 'apps'}>
+<AppFrame>
+	{#snippet sidebar()}
+		<Sidebar org={SIDEBAR.org} user={SIDEBAR.user} failing={SIDEBAR.failing} {sections} />
+	{/snippet}
+	{#snippet backdrop()}
+		{#if screen === 'project'}<ProjectBackdrop name="terra" image={PROJECTS[1].background} />{/if}
+	{/snippet}
 	{#if screen === 'home'}
 		<Page title="Apps" width="wide">
 			{#snippet actions()}
@@ -77,7 +86,7 @@
 			{/snippet}
 			{#snippet aside()}
 				<div class="flex flex-col gap-3">
-					<h2 class="text-callout font-medium text-muted">Recent builds</h2>
+					<SectionTitle title="Recent builds" />
 					<List>
 						{#each BUILDS as b (b.id)}
 							<ListRow title={b.commit} href="#">
@@ -94,36 +103,46 @@
 					name={project.name}
 					href="#"
 					image={project.image}
-					meta="{project.entities.length} resources · updated 2m ago"
+					background={project.background}
+					owner={project.owner}
+					counts={project.counts}
+					updatedAt={project.entities[0].updatedAt}
+					live={project.entities.filter((e) => e.status.kind === 'success').length}
 					onNew={() => {}}
 				>
-					<List inset={false} label={project.name}>
-						{#each project.entities as e (e.name)}
-							<EntityRow {...e} href="#">
-								{#snippet actions()}
-									<Menu>
-										{#snippet trigger(props)}<Button
-												{...props}
-												size="sm"
-												variant="ghost"
-												icon={Ellipsis}
-												label="Actions"
-											/>{/snippet}
-										<MenuItem>Redeploy</MenuItem>
-										<MenuItem>Copy URL</MenuItem>
-										<MenuItem danger>Delete</MenuItem>
-									</Menu>
-								{/snippet}
-							</EntityRow>
-						{/each}
-					</List>
+					{#each project.entities as e (e.name)}
+						<EntityCard
+							kind={e.kind}
+							name={e.name}
+							status={e.status}
+							detail={e.url ?? e.detail}
+							metrics={e.metrics}
+							updatedAt={e.updatedAt}
+							href="#"
+						>
+							{#snippet actions()}
+								<Menu>
+									{#snippet trigger(props)}<Button
+											{...props}
+											size="sm"
+											variant="ghost"
+											icon={Ellipsis}
+											label="Actions"
+										/>{/snippet}
+									<MenuItem>Redeploy</MenuItem>
+									<MenuItem>Copy URL</MenuItem>
+									<MenuItem danger>Delete</MenuItem>
+								</Menu>
+							{/snippet}
+						</EntityCard>
+					{/each}
 				</ProjectGroup>
 			{/each}
 		</Page>
 	{:else if screen === 'project'}
-		<Page title="summer-of-making" width="wide">
+		<Page title="terra" width="wide">
 			{#snippet hero()}
-				<ProjectHero name="summer-of-making" meta="3 apps · 1 database · 12 members">
+				<ProjectHero name="terra" image={PROJECTS[1].image} meta="12 apps · 4 members">
 					{#snippet eyebrow()}Hack Club{/snippet}
 					{#snippet actions()}
 						<Button icon={Plus}>New</Button>
@@ -133,7 +152,7 @@
 			{/snippet}
 			{#snippet aside()}
 				<div class="flex flex-col gap-3">
-					<h2 class="text-callout font-medium text-muted">Recent builds</h2>
+					<SectionTitle title="Recent builds" />
 					<List>
 						{#each BUILDS as b (b.id)}
 							<ListRow title={b.commit} href="#">
@@ -165,15 +184,16 @@
 			{/snippet}
 
 			<div class="flex flex-col gap-4">
-				<div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-callout text-muted">
-					<StatusBadge meta={resourceStatus('crashing')} />
-					<span class="flex items-center gap-1"
-						><Globe size={14} /> worker-arcade-leaderboard.orchard.my</span
-					>
-					<span class="flex items-center gap-1"><GitBranch size={14} /> main</span>
-					<span class="flex items-center gap-1"><GitCommitHorizontal size={14} /> 9c41e0b</span>
-					<span>Deployed <RelativeTime date={ago(12)} /></span>
-				</div>
+				<MetaList
+					items={[
+						{ icon: Globe, label: 'worker-arcade-leaderboard.orchard.my', href: '#' },
+						{ icon: GitBranch, label: 'main' },
+						{ icon: GitCommitHorizontal, label: '9c41e0b', mono: true },
+						{ label: 'Deployed 12m ago' }
+					]}
+				>
+					{#snippet leading()}<StatusBadge meta={resourceStatus('crashing')} />{/snippet}
+				</MetaList>
 				<Tabs
 					bind:value={tab}
 					tabs={[
@@ -191,19 +211,20 @@
 				{#snippet actions()}<Button size="sm">Raise to 1 GB</Button>{/snippet}
 			</Alert>
 
-			<div class="flex items-center justify-between">
-				<h2 class="text-headline text-fg">Usage</h2>
-				<SegmentedControl
-					label="Range"
-					size="sm"
-					bind:value={range}
-					options={[
-						{ value: 'hour', label: '1h' },
-						{ value: 'day', label: '24h' },
-						{ value: 'week', label: '7d' }
-					]}
-				/>
-			</div>
+			<SectionTitle title="Usage" size="md">
+				{#snippet actions()}
+					<SegmentedControl
+						label="Range"
+						size="sm"
+						bind:value={range}
+						options={[
+							{ value: 'hour', label: '1h' },
+							{ value: 'day', label: '24h' },
+							{ value: 'week', label: '7d' }
+						]}
+					/>
+				{/snippet}
+			</SectionTitle>
 			<div class="grid grid-cols-4 gap-3">
 				<Card><Metric label="CPU" value="0.18" unit="cores" detail="of 0.5" /></Card>
 				<Card
@@ -211,17 +232,7 @@
 				>
 				<Card>
 					<Metric label="Requests" value="3.1k" detail="last 24h">
-						{#snippet chart()}
-							<svg viewBox="0 0 100 60" preserveAspectRatio="none" class="h-8 w-full text-accent">
-								<path
-									d={sparkPath}
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									vector-effect="non-scaling-stroke"
-								/>
-							</svg>
-						{/snippet}
+						{#snippet chart()}<Sparkline values={spark} label="Requests over 24 hours" />{/snippet}
 					</Metric>
 				</Card>
 				<Card><Metric label="Replicas" value="0/1" detail="restarting" tone="warning" /></Card>
@@ -301,11 +312,11 @@
 				title="Danger zone"
 				description="Deleting web stops every replica and frees its domains."
 			>
-				<div class="flex justify-end"><Button variant="danger">Delete web</Button></div>
+				{#snippet footer()}<Button variant="danger" size="sm">Delete web</Button>{/snippet}
 			</SectionCard>
 		</Page>
 	{/if}
-</Shell>
+</AppFrame>
 
 <DevBar />
 

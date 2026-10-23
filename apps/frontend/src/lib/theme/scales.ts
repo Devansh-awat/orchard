@@ -17,7 +17,7 @@ type NeutralLadder = { steps: Tone[]; app: Tone; surface: Tone; raised: Tone };
 
 const NEUTRAL: Record<Scheme, NeutralLadder> = {
 	light: {
-		app: { l: 0.958, c: 0.016 },
+		app: { l: 0.972, c: 0.007 },
 		surface: { l: 0.997, c: 0.003 },
 		raised: { l: 0.999, c: 0.002 },
 		steps: [

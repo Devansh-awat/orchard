@@ -1,7 +1,8 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { Loader2, TriangleAlert, Terminal, ArrowDown } from 'lucide-svelte';
+	import { TriangleAlert, Terminal, ArrowDown, WrapText } from 'lucide-svelte';
 	import type { LogLine } from '$lib/utils/log-sources.svelte';
+	import Spinner from './Spinner.svelte';
 
 	let {
 		lines,
@@ -11,6 +12,8 @@
 		atStart = false,
 		scrolledUp = $bindable(false),
 		surface = 'inherit',
+		wrap = $bindable(true),
+		controls = false,
 		onLoadEarlier = undefined,
 		empty = undefined
 	}: {
@@ -21,15 +24,21 @@
 		atStart?: boolean;
 		scrolledUp?: boolean;
 		surface?: 'inherit' | 'dark';
+		wrap?: boolean;
+		controls?: boolean;
 		onLoadEarlier?: () => Promise<void> | void;
 		empty?: Snippet;
 	} = $props();
+
+	const LEVEL_LABEL = { debug: 'DBG', info: 'INF', warn: 'WRN', error: 'ERR' } as const;
 
 	let scroller = $state<HTMLDivElement | null>(null);
 	let newWhileScrolled = $state(false);
 	let prevCount = 0;
 	let prevTail = '';
 	let lastLoadMoreAt = 0;
+	const hasNumbers = $derived(lines.some((l) => l.lineNo != null));
+	const hasLevels = $derived(lines.some((l) => l.level));
 
 	$effect(() => {
 		const count = lines.length;
@@ -72,50 +81,66 @@
 	}
 </script>
 
-<div class="lv" class:lv--dark={surface === 'dark'}>
+<div
+	class="lv"
+	class:lv--dark={surface === 'dark'}
+	class:lv--nowrap={!wrap}
+	class:lv--numbered={hasNumbers}
+	class:lv--levels={hasLevels}
+>
 	{#if loading && lines.length === 0}
 		<div class="lv-empty">
-			<Loader2 class="h-4 w-4 animate-spin" />
-			<span>Loading logs...</span>
+			<Spinner size={16} />
+			<span>Loading logs</span>
 		</div>
 	{:else if lines.length}
 		<div class="lv-scroll" bind:this={scroller} onscroll={handleScroll}>
 			{#if loadingMore}
-				<div class="lv-more"><Loader2 class="h-3 w-3 animate-spin" /> Loading earlier logs…</div>
+				<div class="lv-more"><Spinner size={12} /> Loading earlier logs</div>
 			{:else if atStart}
-				<div class="lv-more lv-more--end">Start of available logs</div>
+				<div class="lv-more">Start of available logs</div>
 			{/if}
-			{#each lines as line (line.key)}
-				<span class="lv-line">
-					{#if line.lineNo != null}<span class="lv-no">{line.lineNo}</span>{/if}
-					{#if line.level}<span
-							class="lv-level status--{line.level === 'warn'
-								? 'warning'
-								: line.level === 'error'
-									? 'error'
-									: line.level === 'debug'
-										? 'neutral'
-										: 'info'}">{line.level}</span
-						>{/if}
-					{@html line.html}
-				</span>
-			{/each}
+			<div class="lv-body">
+				{#each lines as line (line.key)}
+					<div class="lv-line" data-level={line.level}>
+						{#if hasNumbers}<span class="lv-no">{line.lineNo ?? ''}</span>{/if}
+						{#if hasLevels}<span class="lv-level">{line.level ? LEVEL_LABEL[line.level] : ''}</span
+							>{/if}
+						<span class="lv-text">{@html line.html}</span>
+					</div>
+				{/each}
+			</div>
 		</div>
+		{#if controls}
+			<div class="lv-tools">
+				<button
+					type="button"
+					class="lv-tool"
+					class:lv-tool--on={wrap}
+					aria-pressed={wrap}
+					aria-label="Wrap lines"
+					title="Wrap lines"
+					onclick={() => (wrap = !wrap)}
+				>
+					<WrapText size={14} />
+				</button>
+			</div>
+		{/if}
 		{#if newWhileScrolled}
 			<button type="button" class="lv-newlogs" onclick={jumpToLatest}>
-				<ArrowDown size={12} /> New logs
+				<ArrowDown size={12} /><span class="lv-newlogs-label">New logs</span>
 			</button>
 		{/if}
 	{:else if error}
 		<div class="lv-empty lv-empty--error">
-			<TriangleAlert class="h-4 w-4" />
+			<TriangleAlert size={16} />
 			<span>{error}</span>
 		</div>
 	{:else if empty}
 		{@render empty()}
 	{:else}
 		<div class="lv-empty">
-			<Terminal size={16} class="h-4 w-4 opacity-30" />
+			<Terminal size={16} />
 			<span>No output yet</span>
 		</div>
 	{/if}
@@ -129,110 +154,204 @@
 		display: flex;
 		flex-direction: column;
 		font-family: var(--font-mono);
-		font-size: var(--text-micro);
-		line-height: 1.65;
-		font-weight: 400;
+		font-size: var(--text-caption);
+		line-height: 1.125rem;
+		font-weight: var(--weight-regular);
+		color: var(--console-text);
 	}
-
 	.lv--dark {
 		background-color: var(--console-bg);
-		color: var(--console-text);
-		border-radius: var(--radius-md);
-		padding: 0.75rem;
+		border-radius: var(--radius-card);
+		box-shadow: inset 0 0 0 1px var(--console-edge);
+		padding: 0.5rem 0;
 	}
-
 	.lv-scroll {
 		flex: 1;
 		min-height: 0;
-		overflow-y: auto;
-		margin: 0;
+		overflow: auto;
+		overscroll-behavior: contain;
+		scrollbar-width: thin;
+		scrollbar-color: color-mix(in srgb, var(--console-strong) 18%, transparent) transparent;
 	}
-
-	.lv-scroll::-webkit-scrollbar {
-		width: 6px;
+	.lv-body {
+		display: flex;
+		flex-direction: column;
+		min-width: 100%;
 	}
-
-	.lv-scroll::-webkit-scrollbar-track {
-		background: transparent;
+	.lv--nowrap .lv-body {
+		width: max-content;
 	}
-
-	.lv-scroll::-webkit-scrollbar-thumb {
-		background: color-mix(in srgb, var(--console-strong) 18%, transparent);
-		border-radius: var(--radius-xs);
-	}
-
-	.lv-scroll::-webkit-scrollbar-thumb:hover {
-		background: color-mix(in srgb, var(--console-strong) 30%, transparent);
-	}
-
 	.lv-line {
-		display: block;
-		min-height: 1.2em;
-		white-space: pre-wrap;
-		word-break: break-all;
+		display: flex;
+		align-items: baseline;
+		gap: 0.75rem;
+		min-height: 1.125rem;
+		transition: background-color 80ms ease;
 	}
-
+	.lv--dark .lv-line {
+		padding: 0 0.875rem;
+	}
+	.lv-line:hover {
+		background: var(--console-quiet);
+	}
+	.lv-line[data-level='error'] {
+		background: color-mix(in oklab, var(--red-7) 7%, transparent);
+	}
+	.lv-line[data-level='warn'] {
+		background: color-mix(in oklab, var(--amber-7) 6%, transparent);
+	}
+	.lv-line[data-level='error']:hover {
+		background: color-mix(in oklab, var(--red-7) 11%, transparent);
+	}
+	.lv-line[data-level='warn']:hover {
+		background: color-mix(in oklab, var(--amber-7) 10%, transparent);
+	}
 	.lv-no {
-		display: inline-block;
-		min-width: 2.5em;
-		margin-right: 0.5em;
+		flex-shrink: 0;
+		min-width: 3ch;
+		color: var(--console-faint);
 		text-align: right;
-		opacity: 0.35;
+		font-variant-numeric: tabular-nums;
 		user-select: none;
 	}
-
 	.lv-level {
-		display: inline-block;
-		margin-right: 0.5em;
-		padding: 0 0.35em;
-		border-radius: var(--radius-xs);
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		font-weight: 700;
-		text-transform: uppercase;
-		background-color: color-mix(in srgb, currentColor 12%, transparent);
+		flex-shrink: 0;
+		width: 3ch;
+		color: var(--console-faint);
+		font-weight: var(--weight-medium);
+		user-select: none;
 	}
-
+	.lv-line[data-level='info'] .lv-level {
+		color: var(--blue-8);
+	}
+	.lv-line[data-level='warn'] .lv-level {
+		color: var(--amber-9);
+	}
+	.lv-line[data-level='error'] .lv-level {
+		color: var(--red-9);
+	}
+	.lv-text {
+		flex: 1;
+		min-width: 0;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+	}
+	.lv--nowrap .lv-text {
+		flex: none;
+		white-space: pre;
+		overflow-wrap: normal;
+	}
+	.lv-text :global(.log-ts) {
+		display: inline-block;
+		margin: 0 0.75rem 0 0;
+		padding: 0;
+		border-radius: 0;
+		background: none;
+		color: var(--console-faint);
+		font-size: inherit;
+		font-weight: var(--weight-regular);
+		line-height: inherit;
+		letter-spacing: 0;
+		cursor: text;
+		user-select: none;
+		transition: color var(--dur-fast) ease;
+	}
+	.lv-line:hover :global(.log-ts) {
+		background: none;
+		color: var(--console-dim);
+	}
 	.lv-more {
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		gap: 0.5rem;
-		padding: 0.5rem 0;
+		padding: 0.375rem 0 0.625rem;
+		color: var(--console-faint);
+		font-family: var(--font-sans);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+	}
+	.lv-tools {
+		position: absolute;
+		top: 0.375rem;
+		right: 0.375rem;
+		display: flex;
+		gap: 0.125rem;
+		padding: 0.125rem;
+		border-radius: 0.5rem;
+		background: var(--material-glass-bg);
+		backdrop-filter: var(--material-glass-filter);
+		box-shadow: var(--shadow-floating);
+		opacity: 0;
+		transition: opacity var(--dur-fast) ease;
+	}
+	.lv:hover .lv-tools,
+	.lv-tools:focus-within {
+		opacity: 1;
+	}
+	.lv-tool {
+		display: grid;
+		place-items: center;
+		width: 1.75rem;
+		height: 1.75rem;
+		padding: 0;
+		border: none;
+		border-radius: 0.375rem;
+		background: none;
 		color: var(--text-muted);
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		opacity: 0.75;
+		cursor: pointer;
+		transition:
+			background-color var(--dur-fast) ease,
+			color var(--dur-fast) ease;
 	}
-
-	.lv-more--end {
-		opacity: 0.5;
-		font-style: italic;
+	.lv-tool:hover {
+		background: var(--bg-hover);
+		color: var(--text-default);
 	}
-
+	.lv-tool--on {
+		background: var(--accent-subtle);
+		color: var(--accent-9);
+	}
+	.lv-tool--on:hover {
+		background: var(--accent-3);
+		color: var(--accent-9);
+	}
 	.lv-newlogs {
 		position: absolute;
 		bottom: 0.75rem;
 		left: 50%;
-		transform: translateX(-50%);
 		display: inline-flex;
 		align-items: center;
-		gap: 0.5rem;
-		padding: 0.25rem 0.75rem;
-		border: 1px solid var(--console-edge);
+		gap: 0.375rem;
+		height: 1.75rem;
+		padding: 0 0.75rem 0 0.625rem;
+		border: none;
 		border-radius: var(--radius-pill);
-		background: var(--console-raised);
-		color: var(--console-text);
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		font-weight: 600;
+		background: var(--material-glass-bg);
+		backdrop-filter: var(--material-glass-filter);
+		box-shadow: var(--shadow-floating);
+		color: var(--text-default);
+		font-family: var(--font-sans);
+		font-size: var(--text-caption);
+		font-weight: var(--weight-medium);
 		cursor: pointer;
+		translate: -50% 0;
+		animation: lv-rise var(--spring-snappy-duration) var(--spring-snappy) both;
+		transition: transform var(--spring-interactive-duration) var(--spring-interactive);
 	}
-
-	.lv-newlogs:hover {
-		background: color-mix(in srgb, var(--console-raised) 88%, var(--console-strong));
+	.lv-newlogs:active {
+		transform: scale(0.96);
 	}
-
+	.lv-newlogs-label {
+		display: block;
+		text-box: trim-both cap alphabetic;
+	}
+	@keyframes lv-rise {
+		from {
+			opacity: 0;
+			transform: translateY(0.5rem) scale(0.94);
+		}
+	}
 	.lv-empty {
 		display: flex;
 		flex-direction: column;
@@ -240,13 +359,12 @@
 		justify-content: center;
 		gap: 0.5rem;
 		padding: 3rem 1rem;
-		opacity: 0.7;
+		color: var(--console-faint);
+		font-family: var(--font-sans);
 		font-size: var(--text-caption);
 		line-height: var(--lh-caption);
 	}
-
 	.lv-empty--error {
 		color: var(--status-error);
-		opacity: 1;
 	}
 </style>

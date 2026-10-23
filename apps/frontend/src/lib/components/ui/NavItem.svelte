@@ -36,7 +36,8 @@
 		display: flex;
 		align-items: center;
 		gap: 0.625rem;
-		height: 2rem;
+		flex-shrink: 0;
+		height: var(--nav-row-h, 2rem);
 		padding: 0 0.625rem;
 		border-radius: var(--radius-control);
 		color: var(--text-muted);
@@ -53,12 +54,14 @@
 	}
 	.item--active,
 	.item--active:hover {
-		background: var(--bg-sheet);
+		background: var(--nav-active-bg, var(--bg-sheet));
 		color: var(--text-default);
-		box-shadow:
+		box-shadow: var(
+			--nav-active-shadow,
 			0 0 0 0.5px color-mix(in oklab, var(--neutral-10) 8%, transparent),
 			0 1px 2px color-mix(in oklab, var(--neutral-10) 10%, transparent),
-			0 2px 8px -2px color-mix(in oklab, var(--neutral-10) 8%, transparent);
+			0 2px 8px -2px color-mix(in oklab, var(--neutral-10) 8%, transparent)
+		);
 	}
 	.label {
 		text-box: trim-both cap alphabetic;

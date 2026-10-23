@@ -20,11 +20,12 @@
 	} = $props();
 
 	let trackEl = $state<HTMLDivElement | null>(null);
-	let dragging = $state(false);
+	let pressed = $state(false);
+	let tracking = $state(false);
 	let dragStartValue = $state(value);
 
-	const span = $derived(Math.max(1, max - min));
-	const percent = $derived(((clamp(value) - min) / span) * 100);
+	const span = $derived(Math.max(step, max - min));
+	const ratio = $derived((clamp(value) - min) / span);
 	const tickValues = $derived(
 		ticks && span / step <= 20
 			? Array.from({ length: Math.floor(span / step) + 1 }, (_, i) => min + i * step)
@@ -37,41 +38,46 @@
 
 	function commit(next: number) {
 		const snapped = clamp(min + Math.round((next - min) / step) * step);
-		if (snapped === value) return;
-		value = snapped;
-		onchange?.(snapped);
+		const rounded = Number(snapped.toFixed(6));
+		if (rounded === value) return;
+		value = rounded;
+		onchange?.(rounded);
 	}
 
 	function valueAt(clientX: number) {
 		if (!trackEl) return value;
 		const rect = trackEl.getBoundingClientRect();
-		const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-		return min + ratio * span;
+		const inset = rect.height / 2;
+		const width = Math.max(1, rect.width - inset * 2);
+		const r = Math.max(0, Math.min(1, (clientX - rect.left - inset) / width));
+		return min + r * span;
 	}
 
 	function onPointerDown(event: PointerEvent) {
-		if (disabled || !trackEl) return;
-		dragging = true;
+		if (disabled || !trackEl || event.button !== 0) return;
+		pressed = true;
+		tracking = false;
 		dragStartValue = value;
 		trackEl.setPointerCapture(event.pointerId);
 		commit(valueAt(event.clientX));
 	}
 
 	function onPointerMove(event: PointerEvent) {
-		if (!dragging) return;
+		if (!pressed) return;
+		tracking = true;
 		commit(valueAt(event.clientX));
 	}
 
-	function onPointerUp(event: PointerEvent) {
-		if (!dragging || !trackEl) return;
-		dragging = false;
-		trackEl.releasePointerCapture(event.pointerId);
+	function release(event: PointerEvent) {
+		if (!pressed || !trackEl) return;
+		pressed = false;
+		tracking = false;
+		if (trackEl.hasPointerCapture(event.pointerId)) trackEl.releasePointerCapture(event.pointerId);
 	}
 
 	function onPointerCancel(event: PointerEvent) {
-		if (!dragging || !trackEl) return;
-		dragging = false;
-		trackEl.releasePointerCapture(event.pointerId);
+		if (!pressed) return;
+		release(event);
 		commit(dragStartValue);
 	}
 
@@ -102,11 +108,13 @@
 	}
 </script>
 
-<div class="ui-slider" class:ui-slider--disabled={disabled}>
+<div class="slider" class:slider--disabled={disabled}>
 	<div
 		bind:this={trackEl}
-		class="ui-slider-hit"
-		class:ui-slider-hit--dragging={dragging}
+		class="hit"
+		class:hit--pressed={pressed}
+		class:hit--tracking={tracking}
+		style:--ratio={ratio}
 		role="slider"
 		tabindex={disabled ? -1 : 0}
 		aria-label={label}
@@ -116,119 +124,136 @@
 		aria-disabled={disabled}
 		onpointerdown={onPointerDown}
 		onpointermove={onPointerMove}
-		onpointerup={onPointerUp}
+		onpointerup={release}
 		onpointercancel={onPointerCancel}
 		onkeydown={onKeyDown}
 	>
-		<div class="ui-slider-track">
-			<div class="ui-slider-fill" style="width: {percent}%;"></div>
+		<div class="groove">
+			<div class="travel">
+				<div class="mover">
+					<div class="fill"></div>
+				</div>
+			</div>
 		</div>
-		{#each tickValues as tick (tick)}
-			<span
-				class="ui-slider-tick"
-				class:ui-slider-tick--filled={tick <= value}
-				style="left: {((tick - min) / span) * 100}%;"
-			></span>
-		{/each}
-		<div
-			class="ui-slider-thumb"
-			class:ui-slider-thumb--dragging={dragging}
-			style="left: {percent}%;"
-		></div>
+		{#if tickValues.length}
+			<div class="travel" aria-hidden="true">
+				{#each tickValues as tick (tick)}
+					<span
+						class="tick"
+						class:tick--on={tick <= value}
+						style:left="{((tick - min) / span) * 100}%"
+					></span>
+				{/each}
+			</div>
+		{/if}
+		<div class="travel" aria-hidden="true">
+			<div class="mover">
+				<span class="knob"></span>
+			</div>
+		</div>
 	</div>
 </div>
 
 <style>
-	.ui-slider {
+	.slider {
 		width: 100%;
+		min-width: 0;
 	}
-
-	.ui-slider-hit {
+	.hit {
+		--knob: 1.25rem;
 		position: relative;
 		width: 100%;
-		height: 2rem;
+		height: var(--knob);
+		margin-block: 0.375rem;
+		border-radius: var(--radius-pill);
 		cursor: pointer;
 		outline: none;
 		touch-action: none;
 		user-select: none;
 	}
-
-	.ui-slider--disabled .ui-slider-hit {
+	.slider--disabled .hit {
 		cursor: not-allowed;
-		opacity: 0.5;
+		opacity: 0.45;
 	}
-
-	.ui-slider-track {
+	.groove {
 		position: absolute;
+		top: 50%;
 		left: 0;
 		right: 0;
-		top: 50%;
-		height: 0.375rem;
-		background-color: var(--bg-sunken);
-		border: 1px solid var(--border-default);
+		height: 0.25rem;
+		margin-top: -0.125rem;
 		border-radius: var(--radius-pill);
-		transform: translateY(-50%);
+		background: var(--bg-active);
+		box-shadow: inset 0 0.5px 1px color-mix(in oklab, var(--neutral-10) 10%, transparent);
 		overflow: hidden;
 	}
-
-	.ui-slider-fill {
+	.travel {
 		position: absolute;
-		inset: 0 auto 0 0;
-		background-color: var(--accent);
-		border-radius: var(--radius-pill);
-		transition: width var(--dur-fast) ease;
-	}
-
-	.ui-slider-hit--dragging .ui-slider-fill {
-		transition: none;
-	}
-
-	.ui-slider-tick {
-		position: absolute;
-		top: 50%;
-		width: 0.1875rem;
-		height: 0.1875rem;
-		border-radius: 50%;
-		background-color: var(--border-strong);
-		transform: translate(-50%, -50%);
+		inset: 0 calc(var(--knob) / 2);
 		pointer-events: none;
 	}
-
-	.ui-slider-tick--filled {
-		background-color: var(--text-on-accent);
-		opacity: 0.7;
-	}
-
-	.ui-slider-thumb {
+	.mover {
 		position: absolute;
-		top: 50%;
-		width: 1.125rem;
-		height: 1.125rem;
-		border-radius: 50%;
-		background-color: var(--bg-app);
-		border: 2px solid var(--accent);
-		box-shadow: var(--elev-2);
-		transform: translate(-50%, -50%);
-		pointer-events: none;
-		transition:
-			transform var(--dur-fast) ease,
-			box-shadow var(--dur-fast) ease,
-			left var(--dur-fast) ease;
+		inset: 0;
+		transform: translateX(calc(var(--ratio) * 100%));
+		transition: transform var(--spring-snappy-duration) var(--spring-snappy);
 	}
-
-	.ui-slider-hit:hover .ui-slider-thumb {
-		transform: translate(-50%, -50%) scale(1.1);
-		box-shadow: var(--elev-3);
-	}
-
-	.ui-slider-thumb--dragging {
-		transform: translate(-50%, -50%) scale(1.15);
-		box-shadow: var(--elev-4);
+	.hit--tracking .mover {
 		transition: none;
 	}
-
-	.ui-slider-hit:focus-visible .ui-slider-thumb {
-		outline: 2px solid var(--accent);
-		outline-offset: 2px;
+	.fill {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		right: 100%;
+		width: calc(100% + var(--knob));
+		background: var(--accent);
+	}
+	.tick {
+		position: absolute;
+		top: 50%;
+		width: 0.25rem;
+		height: 0.25rem;
+		margin: -0.125rem 0 0 -0.125rem;
+		border-radius: 50%;
+		background: var(--neutral-6);
+		transition: background-color var(--dur-fast) ease;
+	}
+	.tick--on {
+		background: color-mix(in oklab, var(--text-on-accent) 70%, transparent);
+	}
+	.knob {
+		position: absolute;
+		top: 50%;
+		left: 0;
+		width: var(--knob);
+		height: var(--knob);
+		margin: calc(var(--knob) / -2) 0 0 calc(var(--knob) / -2);
+		border-radius: 50%;
+		background: white;
+		box-shadow:
+			0 0 0 0.5px color-mix(in oklab, black 14%, transparent),
+			0 1px 2px color-mix(in oklab, black 14%, transparent),
+			0 3px 8px color-mix(in oklab, black 10%, transparent);
+		transition: transform var(--spring-bouncy-duration) var(--spring-bouncy);
+	}
+	.hit:hover:not([aria-disabled='true']) .knob {
+		transform: scale(1.06);
+	}
+	.hit--pressed .knob,
+	.hit--pressed:hover .knob {
+		transform: scale(1.18);
+	}
+	.knob::after {
+		content: '';
+		position: absolute;
+		inset: -3px;
+		border-radius: 50%;
+		box-shadow: 0 0 0 3px var(--focus-ring);
+		opacity: 0;
+		transition: opacity var(--dur-fast) ease;
+	}
+	.hit:focus-visible .knob::after {
+		opacity: 1;
 	}
 </style>

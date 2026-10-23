@@ -1,153 +1,274 @@
 <script lang="ts">
-	import { Check, SkipForward } from 'lucide-svelte';
-	import { springPop, motion } from '$lib/utils/motion.svelte';
-	import type { RailStep } from './steprail';
+	import { Check, X } from 'lucide-svelte';
+	import { springPop } from '$lib/utils/motion.svelte';
+	import { formatStepDuration, railStatus, type RailStep } from './steprail';
 
 	let {
 		steps,
-		current
+		current = undefined,
+		label = 'Build steps'
 	}: {
 		steps: RailStep[];
-		current: string;
+		current?: string;
+		label?: string;
 	} = $props();
 
-	const currentIndex = $derived(
-		Math.max(
-			0,
-			steps.findIndex((s) => s.id === current)
-		)
-	);
-	const settled = $derived(steps.filter((s) => s.done || s.skipped).length);
-	const progress = $derived(steps.length <= 1 ? 1 : settled / steps.length);
+	const STATE_LABEL = {
+		queued: 'Queued',
+		running: 'Running',
+		done: 'Done',
+		failed: 'Failed',
+		skipped: 'Skipped'
+	} as const;
 
-	let fillEl = $state<HTMLElement | undefined>();
-
-	$effect(() => {
-		const value = progress;
-		if (!fillEl) return;
-		motion(fillEl, { transform: `scaleX(${value})` }, 'smooth');
-	});
+	const states = $derived(steps.map((s) => railStatus(s, current)));
 </script>
 
-<div class="rail" role="list" aria-label="Setup progress">
-	<div class="rail-track" aria-hidden="true">
-		<div class="rail-fill" bind:this={fillEl}></div>
-	</div>
-
+<ol class="rail" aria-label={label}>
 	{#each steps as step, i (step.id)}
-		{@const state = step.done
-			? 'done'
-			: step.skipped
-				? 'skipped'
-				: i === currentIndex
-					? 'active'
-					: 'idle'}
-		<div class="rail-step" role="listitem" data-state={state}>
-			<div class="rail-dot" {@attach springPop(() => step.done)}>
-				{#if step.done}
-					<Check size={12} strokeWidth={3} />
-				{:else if step.skipped}
-					<SkipForward size={11} />
-				{:else}
-					<span class="rail-num">{i + 1}</span>
+		{@const state = states[i]}
+		{@const settled = state === 'done' || state === 'skipped'}
+		<li class="step" data-state={state} class:step--settled={settled}>
+			<span class="track" aria-hidden="true">
+				<span
+					class="seg seg--in"
+					class:seg--none={i === 0}
+					class:seg--lit={i > 0 && (states[i - 1] === 'done' || states[i - 1] === 'skipped')}
+				></span>
+				<span class="node" {@attach springPop(() => state === 'done' || state === 'failed')}>
+					<span class="mark mark--done"><Check size={10} strokeWidth={3.25} /></span>
+					<span class="mark mark--failed"><X size={10} strokeWidth={3.25} /></span>
+					<span class="mark mark--live" data-motion="progress"></span>
+				</span>
+				<span class="seg seg--out" class:seg--none={i === steps.length - 1} class:seg--lit={settled}
+				></span>
+			</span>
+			<span class="body">
+				<span class="head"><span class="label">{step.label}</span></span>
+				{#if step.detail}<span class="detail">{step.detail}</span>{/if}
+			</span>
+			<span class="meta">
+				<span class="sr">{STATE_LABEL[state]}</span>
+				{#if state === 'skipped'}
+					<span class="dur dur--quiet">Skipped</span>
+				{:else if state === 'queued'}
+					<span class="dur dur--quiet">Queued</span>
+				{:else if step.durationMs != null}
+					<span class="dur">{formatStepDuration(step.durationMs)}</span>
 				{/if}
-			</div>
-			<span class="rail-label">{step.label}</span>
-		</div>
+			</span>
+		</li>
 	{/each}
-</div>
+</ol>
 
 <style>
 	.rail {
-		position: relative;
+		--node: 1rem;
+		--pad: 0.5rem;
+		--line: 1.5px;
+		--gap: 0.25rem;
 		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
-		gap: 0.5rem;
-		padding: 0 0.5rem;
+		flex-direction: column;
+		margin: 0;
+		padding: 0;
+		list-style: none;
 	}
-
-	.rail-track {
-		position: absolute;
-		top: 0.8125rem;
-		left: 2.5rem;
-		right: 2.5rem;
-		height: 2px;
-		border-radius: 999px;
-		background: var(--border-default);
-		overflow: hidden;
+	.step {
+		display: grid;
+		grid-template-columns: var(--node) minmax(0, 1fr) auto;
+		column-gap: 0.75rem;
+		align-items: start;
+		padding: var(--pad) 0;
 	}
-
-	.rail-fill {
-		height: 100%;
-		width: 100%;
-		transform-origin: left center;
-		background: var(--status-success);
-		transform: scaleX(0);
-	}
-
-	.rail-step {
+	.track {
 		position: relative;
-		z-index: 1;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 0.5rem;
+		align-self: stretch;
+		margin-block: calc(var(--pad) * -1);
+	}
+	.seg {
+		position: relative;
+		width: var(--line);
+		background: var(--border-default);
+		overflow: hidden;
+	}
+	.seg::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background: var(--status-success-solid);
+		transform: scaleY(0);
+		transform-origin: top;
+		transition: transform var(--spring-smooth-duration) var(--spring-smooth);
+	}
+	.seg--lit::after {
+		transform: scaleY(1);
+	}
+	.seg--none {
+		visibility: hidden;
+	}
+	.seg--in {
+		flex-shrink: 0;
+		height: calc(var(--pad) - var(--gap));
+		margin-bottom: var(--gap);
+	}
+	.seg--out {
 		flex: 1;
+		min-height: var(--gap);
+		margin-top: var(--gap);
+	}
+	.node {
+		position: relative;
+		display: grid;
+		place-items: center;
+		flex-shrink: 0;
+		width: var(--node);
+		height: var(--node);
+		border-radius: 50%;
+		background: var(--bg-surface);
+		box-shadow: inset 0 0 0 1.5px var(--border-strong);
+		color: var(--text-on-accent);
+	}
+	.mark {
+		grid-area: 1 / 1;
+		display: flex;
+		opacity: 0;
+		transform: scale(0.4);
+		transition:
+			opacity 120ms ease,
+			transform var(--spring-bouncy-duration) var(--spring-bouncy);
+	}
+	.mark--live {
+		width: 0.375rem;
+		height: 0.375rem;
+		border-radius: 50%;
+		background: var(--status-progress-solid);
+	}
+	.mark--live::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border-radius: inherit;
+		background: inherit;
+		animation: rail-ripple 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+	}
+	@keyframes rail-ripple {
+		from {
+			transform: scale(1);
+			opacity: 0.55;
+		}
+		to {
+			transform: scale(2.8);
+			opacity: 0;
+		}
+	}
+	.step[data-state='done'] .node {
+		background: var(--status-success-solid);
+		box-shadow:
+			inset 0 1px 0 color-mix(in oklab, white 20%, transparent),
+			0 1px 2px color-mix(in oklab, var(--green-10) 20%, transparent);
+	}
+	.step[data-state='failed'] .node {
+		background: var(--status-error-solid);
+		box-shadow:
+			inset 0 1px 0 color-mix(in oklab, white 20%, transparent),
+			0 1px 2px color-mix(in oklab, var(--red-10) 20%, transparent);
+	}
+	.step[data-state='running'] .node {
+		background: var(--status-progress-bg);
+		box-shadow: inset 0 0 0 1.5px var(--status-progress-solid);
+	}
+	.step[data-state='skipped'] .node {
+		background: none;
+		box-shadow: none;
+		outline: 1.5px dashed var(--border-strong);
+		outline-offset: -1.5px;
+	}
+	.step[data-state='done'] .mark--done,
+	.step[data-state='failed'] .mark--failed,
+	.step[data-state='running'] .mark--live {
+		opacity: 1;
+		transform: none;
+	}
+	.body {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
 		min-width: 0;
 	}
-
-	.rail-dot {
+	.head {
 		display: flex;
 		align-items: center;
-		justify-content: center;
-		width: 1.625rem;
-		height: 1.625rem;
-		border-radius: 999px;
-		border: 1.5px solid var(--border-default);
-		background: var(--bg-surface);
-		color: var(--text-faint);
-		flex-shrink: 0;
+		min-width: 0;
+		height: var(--node);
 	}
-
-	.rail-num {
-		font-size: 0.75rem;
-		font-weight: 600;
-		line-height: 1;
-	}
-
-	.rail-label {
-		font-size: 0.75rem;
-		color: var(--text-faint);
-		text-align: center;
-		white-space: nowrap;
+	.label {
+		display: block;
+		min-width: 0;
 		overflow: hidden;
+		padding-block: 0.3em;
+		margin-block: -0.3em;
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
+		font-weight: var(--weight-medium);
+		color: var(--text-default);
+		white-space: nowrap;
 		text-overflow: ellipsis;
-		max-width: 100%;
+		text-box: trim-both cap alphabetic;
 	}
-
-	.rail-step[data-state='active'] .rail-dot {
-		border-color: var(--accent);
-		color: var(--accent);
-		background: var(--accent-subtle);
-	}
-
-	.rail-step[data-state='active'] .rail-label {
-		color: var(--text-fg);
-		font-weight: 500;
-	}
-
-	.rail-step[data-state='done'] .rail-dot {
-		border-color: var(--status-success);
-		background: var(--status-success);
-		color: var(--bg-surface);
-	}
-
-	.rail-step[data-state='done'] .rail-label {
+	.detail {
+		display: block;
+		min-width: 0;
+		overflow: hidden;
+		padding-block: 0.3em;
+		margin-block: -0.3em;
+		font-family: var(--font-mono);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--text-muted);
+		white-space: nowrap;
+		text-overflow: ellipsis;
+		text-box: trim-both cap alphabetic;
 	}
-
-	.rail-step[data-state='skipped'] .rail-dot {
-		border-style: dashed;
+	.step[data-state='queued'] .label,
+	.step[data-state='skipped'] .label {
+		color: var(--text-faint);
+		font-weight: var(--weight-regular);
+	}
+	.step[data-state='failed'] .label {
+		color: var(--status-error);
+	}
+	.step[data-state='failed'] .detail {
+		color: var(--status-error);
+		opacity: 0.85;
+	}
+	.meta {
+		display: flex;
+		align-items: center;
+		height: var(--node);
+	}
+	.dur {
+		display: block;
+		font-size: var(--text-callout);
+		line-height: 1;
+		color: var(--text-muted);
+		font-variant-numeric: tabular-nums;
+		text-box: trim-both cap alphabetic;
+	}
+	.step[data-state='running'] .dur {
+		color: var(--text-default);
+	}
+	.dur--quiet {
+		color: var(--text-faint);
+	}
+	.sr {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
 	}
 </style>

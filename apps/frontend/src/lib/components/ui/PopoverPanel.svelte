@@ -10,7 +10,8 @@
 		sameWidth = false,
 		class: className = '',
 		trigger,
-		children
+		children,
+		...rest
 	}: {
 		placement?: Placement;
 		open?: boolean;
@@ -18,6 +19,7 @@
 		class?: string;
 		trigger: Snippet<[Record<string, unknown>, boolean]>;
 		children: Snippet<[{ close: () => void }]>;
+		[key: string]: unknown;
 	} = $props();
 
 	const popover = new Popover({
@@ -29,15 +31,24 @@
 			offset: { mainAxis: 6 }
 		}
 	});
+
+	const origin = $derived.by(() => {
+		const [side, align] = placement.split('-');
+		if (side === 'left' || side === 'right') {
+			const x = side === 'left' ? 'right' : 'left';
+			return `${x} ${align === 'start' ? 'top' : align === 'end' ? 'bottom' : 'center'}`;
+		}
+		const y = side === 'top' ? 'bottom' : 'top';
+		return `${align === 'start' ? 'left' : align === 'end' ? 'right' : 'center'} ${y}`;
+	});
 </script>
 
 {@render trigger(popover.trigger, open)}
 <div
 	{...popover.content}
+	{...rest}
 	class="ui-popover{className ? ` ${className}` : ''}"
-	{@attach overlayMotion(() => open, {
-		origin: placement.startsWith('top') ? 'bottom center' : 'top center'
-	})}
+	{@attach overlayMotion(() => open, { origin })}
 >
 	{@render children({ close: () => (open = false) })}
 </div>

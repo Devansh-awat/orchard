@@ -58,10 +58,14 @@
 	// Handed to the library in its own vocabulary rather than as a boolean, so a
 	// profile header choosing continuous motion is choosing it by name.
 	const animate = $derived(alive === 'always' ? 'always' : alive ? 'hover' : false);
+	const cls = $derived(klass ? `ui-avatar ${klass}` : 'ui-avatar');
+	const sized = $derived(
+		size ? `width:${size}px;height:${size}px;${style ?? ''}` : (style ?? undefined)
+	);
 </script>
 
 {#if user?.imageUrl}
-	<RemoteImg src={user.imageUrl} {alt} class={klass} {style} eager={loading !== 'lazy'} />
+	<RemoteImg src={user.imageUrl} {alt} class={cls} style={sized} eager={loading !== 'lazy'} />
 {:else if animate}
 	<Blobatar
 		{name}
@@ -70,10 +74,20 @@
 		{expression}
 		{size}
 		title={alt || undefined}
-		class={klass}
+		class={cls}
 		{style}
 		{@attach eyes ?? noAttachment}
 	/>
 {:else}
-	<Blobatar {name} {...AVATAR_OPTIONS} {expression} {size} {alt} class={klass} {style} {loading} />
+	<Blobatar {name} {...AVATAR_OPTIONS} {expression} {size} {alt} class={cls} {style} {loading} />
 {/if}
+
+<style>
+	:global(:where(.ui-avatar)) {
+		flex-shrink: 0;
+		border-radius: 50%;
+		object-fit: cover;
+		outline: 0.5px solid color-mix(in oklab, var(--neutral-10) 12%, transparent);
+		outline-offset: -0.5px;
+	}
+</style>

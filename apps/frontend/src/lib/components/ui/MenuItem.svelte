@@ -1,11 +1,16 @@
 <script lang="ts">
 	import { getContext, type Snippet } from 'svelte';
+	import { Check } from 'lucide-svelte';
+	import type { Icon } from './types';
 
 	let {
 		onclick = undefined,
 		href = undefined,
 		danger = false,
 		disabled = false,
+		icon = undefined,
+		shortcut = undefined,
+		checked = undefined,
 		children,
 		...rest
 	}: {
@@ -13,11 +18,17 @@
 		href?: string;
 		danger?: boolean;
 		disabled?: boolean;
+		icon?: Icon;
+		shortcut?: string;
+		checked?: boolean;
 		children?: Snippet;
 		[key: string]: unknown;
 	} = $props();
 
 	const menu = getContext<{ close: () => void } | undefined>('ui-menu');
+
+	const structured = $derived(!!icon || !!shortcut || checked !== undefined);
+	const role = $derived(checked === undefined ? 'menuitem' : 'menuitemcheckbox');
 
 	function handleClick(e: MouseEvent) {
 		onclick?.(e);
@@ -25,27 +36,96 @@
 	}
 </script>
 
+{#snippet body()}
+	{#if structured}
+		{#if checked !== undefined}
+			<span class="check" aria-hidden="true">
+				{#if checked}<Check size={16} strokeWidth={2.25} />{/if}
+			</span>
+		{/if}
+		{#if icon}
+			{@const Glyph = icon}
+			<span class="icon" aria-hidden="true"><Glyph size={16} /></span>
+		{/if}
+		<span class="label">{@render children?.()}</span>
+		{#if shortcut}<kbd class="shortcut">{shortcut}</kbd>{/if}
+	{:else}
+		{@render children?.()}
+	{/if}
+{/snippet}
+
 {#if href && !disabled}
 	<a
 		{href}
 		class="ui-menu-item"
 		class:ui-menu-item--danger={danger}
-		role="menuitem"
+		{role}
+		aria-checked={checked}
+		tabindex="-1"
 		onclick={handleClick}
 		{...rest}
 	>
-		{@render children?.()}
+		{@render body()}
 	</a>
 {:else}
 	<button
 		type="button"
 		class="ui-menu-item"
 		class:ui-menu-item--danger={danger}
-		role="menuitem"
+		{role}
+		aria-checked={checked}
+		tabindex="-1"
 		{disabled}
 		onclick={handleClick}
 		{...rest}
 	>
-		{@render children?.()}
+		{@render body()}
 	</button>
 {/if}
+
+<style>
+	.check,
+	.icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		width: 1rem;
+		height: 1rem;
+	}
+	.check {
+		color: currentColor;
+	}
+	.icon {
+		color: var(--text-muted);
+	}
+	:global(.ui-menu-item--danger) .icon {
+		color: currentColor;
+	}
+	.label {
+		display: block;
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		text-box: trim-both cap alphabetic;
+		padding-block: 0.3em;
+		margin-block: -0.3em;
+	}
+	.shortcut {
+		flex-shrink: 0;
+		margin-left: auto;
+		padding-left: 1.5rem;
+		color: var(--text-faint);
+		font-family: inherit;
+		font-size: var(--text-callout);
+		font-weight: var(--weight-regular);
+		letter-spacing: 0.04em;
+		font-variant-numeric: tabular-nums;
+		text-box: trim-both cap alphabetic;
+	}
+	:global(.ui-menu-item--danger) .shortcut {
+		color: color-mix(in oklab, currentColor 60%, transparent);
+	}
+</style>

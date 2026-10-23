@@ -29,6 +29,8 @@
 	});
 
 	let opened = $state(false);
+	let nav = $state<'keys' | 'pointer'>('pointer');
+
 	$effect.pre(() => {
 		if (open) opened = true;
 	});
@@ -38,18 +40,61 @@
 			open = false;
 		}
 	});
+
+	const ITEM = '[role^="menuitem"]:not(:disabled):not([aria-disabled="true"])';
+
+	function items(panel: HTMLElement) {
+		return [...panel.querySelectorAll<HTMLElement>(ITEM)];
+	}
+
+	function onkeydown(e: KeyboardEvent) {
+		if ((e.target as HTMLElement).closest('input, textarea, select')) return;
+		const panel = e.currentTarget as HTMLElement;
+		const list = items(panel);
+		if (list.length === 0) return;
+		const at = list.indexOf(document.activeElement as HTMLElement);
+		let next = -1;
+		if (e.key === 'ArrowDown') next = at < 0 ? 0 : (at + 1) % list.length;
+		else if (e.key === 'ArrowUp')
+			next = at < 0 ? list.length - 1 : (at - 1 + list.length) % list.length;
+		else if (e.key === 'Home') next = 0;
+		else if (e.key === 'End') next = list.length - 1;
+		else if (e.key.length === 1 && /\S/.test(e.key)) {
+			const key = e.key.toLowerCase();
+			const order = [...list.slice(at + 1), ...list.slice(0, at + 1)];
+			const hit = order.find((el) => el.textContent?.trim().toLowerCase().startsWith(key));
+			if (hit) next = list.indexOf(hit);
+		}
+		if (next < 0) return;
+		e.preventDefault();
+		nav = 'keys';
+		list[next].focus({ preventScroll: false });
+	}
+
+	function onpointermove(e: PointerEvent) {
+		nav = 'pointer';
+		const item = (e.target as Element).closest<HTMLElement>(ITEM);
+		if (item && document.activeElement !== item) item.focus({ preventScroll: true });
+	}
+
+	function onpointerleave(e: PointerEvent) {
+		const panel = e.currentTarget as HTMLElement;
+		if (panel.contains(document.activeElement) && document.activeElement !== panel) {
+			panel.focus({ preventScroll: true });
+		}
+	}
 </script>
 
 {@render trigger(popover.trigger, open)}
-<!-- The panel renders in the top layer but keeps its DOM position, so clicks
-     inside it bubble to whatever hosts the trigger (e.g. an expandable card
-     header). Stop them at the panel boundary so host handlers can't hijack
-     item clicks or cancel link navigation. -->
 <div
 	{...popover.content}
 	class="ui-menu"
 	role="menu"
+	data-nav={nav}
 	onclick={(e: MouseEvent) => e.stopPropagation()}
+	{onkeydown}
+	{onpointermove}
+	{onpointerleave}
 	{@attach overlayMotion(() => open, {
 		origin: `${placement.startsWith('top') ? 'bottom' : 'top'} ${placement.endsWith('end') ? 'right' : 'left'}`
 	})}

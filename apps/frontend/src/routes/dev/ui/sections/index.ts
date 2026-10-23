@@ -14,6 +14,7 @@ import Overlays from './Overlays.svelte';
 import Forms from './Forms.svelte';
 import Data from './Data.svelte';
 import Progress from './Progress.svelte';
+import Patterns from './Patterns.svelte';
 
 export type Section = { id: string; title: string; group: string; component: Component };
 
@@ -37,5 +38,6 @@ export const SECTIONS: Section[] = [
 	{ id: 'feedback', title: 'Toasts and alerts', group: 'Feedback', component: Feedback },
 	{ id: 'progress', title: 'Progress and loading', group: 'Feedback', component: Progress },
 	{ id: 'overlays', title: 'Dialogs, sheets and popovers', group: 'Overlays', component: Overlays },
-	{ id: 'small', title: 'Small things', group: 'Details', component: Small }
+	{ id: 'small', title: 'Small things', group: 'Details', component: Small },
+	{ id: 'patterns', title: 'App patterns', group: 'Patterns', component: Patterns }
 ];

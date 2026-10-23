@@ -28,6 +28,8 @@
 		oncancel
 	}: Props = $props();
 
+	const uid = $props.id();
+
 	let typed = $state('');
 	let wasOpen = false;
 
@@ -50,38 +52,40 @@
 	}
 </script>
 
-<Modal bind:open size="sm" onclose={() => oncancel?.()}>
-	{#snippet header()}
-		<div class="cm-icon" class:cm-icon-danger={danger} class:cm-icon-neutral={!danger}>
-			<AlertTriangle size={20} />
+<Modal bind:open size="sm" closable={false} dismissable onclose={() => oncancel?.()}>
+	<div class="confirm">
+		<div class="tile" class:tile--danger={danger} aria-hidden="true">
+			{#if danger}<Trash2 size={18} />{:else}<AlertTriangle size={18} />{/if}
 		</div>
-	{/snippet}
-	<h2 class="cm-title">{title}</h2>
-	{#if html}
-		<p class="cm-desc">{@html description}</p>
-	{:else}
-		<p class="cm-desc">{description}</p>
-	{/if}
-	{#if confirmText}
-		<form
-			class="cm-confirm"
-			onsubmit={(e) => {
-				e.preventDefault();
-				handleConfirm();
-			}}
-		>
-			<label class="cm-confirm-label" for="cm-confirm-input">
-				Type <strong>{confirmText}</strong> to confirm
-			</label>
-			<Input
-				id="cm-confirm-input"
-				bind:value={typed}
-				placeholder={confirmText}
-				autocomplete="off"
-				spellcheck={false}
-			/>
-		</form>
-	{/if}
+		<div class="copy">
+			<h2 class="title">{title}</h2>
+			{#if html}
+				<p class="desc">{@html description}</p>
+			{:else}
+				<p class="desc">{description}</p>
+			{/if}
+		</div>
+		{#if confirmText}
+			<form
+				class="type"
+				onsubmit={(e) => {
+					e.preventDefault();
+					handleConfirm();
+				}}
+			>
+				<label class="type-label" for="{uid}-confirm">
+					Type <code class="type-code">{confirmText}</code> to confirm
+				</label>
+				<Input
+					id="{uid}-confirm"
+					bind:value={typed}
+					placeholder={confirmText}
+					autocomplete="off"
+					spellcheck={false}
+				/>
+			</form>
+		{/if}
+	</div>
 	{#snippet footer()}
 		<Button variant="secondary" onclick={handleCancel}>{cancelLabel}</Button>
 		<Button
@@ -89,70 +93,76 @@
 			disabled={!confirmReady}
 			onclick={handleConfirm}
 		>
-			{#if danger}
-				<Trash2 class="h-4 w-4" />
-			{/if}
 			{confirmLabel}
 		</Button>
 	{/snippet}
 </Modal>
 
 <style>
-	.cm-icon {
+	.confirm {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+	.tile {
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		width: 2.5rem;
 		height: 2.5rem;
-		border-radius: var(--radius-md);
+		border-radius: var(--radius-card);
+		background: var(--amber-3);
+		color: var(--amber-9);
+		box-shadow: inset 0 0 0 1px var(--amber-4);
 	}
-
-	.cm-icon-danger {
-		background-color: color-mix(in srgb, var(--status-error) 12%, transparent);
-		color: var(--status-error);
+	.tile--danger {
+		background: var(--red-3);
+		color: var(--red-9);
+		box-shadow: inset 0 0 0 1px var(--red-4);
 	}
-
-	.cm-icon-neutral {
-		background-color: color-mix(in srgb, var(--status-warning) 12%, transparent);
-		color: var(--status-warning);
-	}
-
-	.cm-title {
-		font-size: var(--text-headline);
-		line-height: var(--lh-headline);
-		font-weight: 600;
-		color: var(--text-default);
-		margin: 0 0 0.5rem;
-	}
-
-	.cm-desc {
-		font-size: var(--text-footnote);
-		color: var(--text-muted);
-		margin: 0;
-		line-height: 1.5;
-	}
-
-	.cm-desc :global(strong) {
-		color: var(--status-error);
-		font-weight: 600;
-	}
-
-	.cm-confirm {
+	.copy {
 		display: flex;
 		flex-direction: column;
-		gap: 0.4rem;
-		margin-top: 1rem;
+		gap: 0.5rem;
 	}
-
-	.cm-confirm-label {
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
+	.title {
+		font-size: var(--text-headline);
+		line-height: var(--lh-headline);
+		font-weight: var(--weight-semibold);
+		letter-spacing: var(--track-headline);
+		color: var(--text-default);
+	}
+	.desc {
+		font-size: var(--text-callout);
+		line-height: 1.25rem;
+		color: var(--text-muted);
+		text-wrap: pretty;
+	}
+	.desc :global(strong) {
+		color: var(--text-default);
+		font-weight: var(--weight-semibold);
+	}
+	.desc :global(code) {
+		font-family: var(--font-mono);
+		font-size: 0.92em;
+		color: var(--text-default);
+	}
+	.type {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+	.type-label {
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		color: var(--text-muted);
 	}
-
-	.cm-confirm-label strong {
+	.type-code {
+		padding: 0.0625rem 0.3125rem;
+		border-radius: 0.3125rem;
+		background: var(--bg-active);
 		color: var(--text-default);
-		font-weight: 600;
 		font-family: var(--font-mono);
+		font-size: 0.92em;
 	}
 </style>

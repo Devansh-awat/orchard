@@ -1,6 +1,5 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import Aura from '$lib/components/ui/Aura.svelte';
 	import RemoteImg from '$lib/components/ui/RemoteImg.svelte';
 
 	let {
@@ -21,8 +20,6 @@
 </script>
 
 <header class="hero">
-	<Aura class="field" src={image} {name} />
-	<div class="fade"></div>
 	<div class="identity">
 		<span class="avatar">
 			{#if image}<RemoteImg src={image} class="avatar-img" />{:else}{letter}{/if}
@@ -41,27 +38,9 @@
 		position: relative;
 		display: flex;
 		align-items: flex-end;
-		height: 15rem;
+		height: 13rem;
 		margin-bottom: 1.5rem;
 		isolation: isolate;
-	}
-	.hero :global(.field) {
-		position: absolute;
-		inset: 0;
-		z-index: -2;
-	}
-	.fade {
-		position: absolute;
-		inset: 0;
-		z-index: -1;
-		background: linear-gradient(
-			to bottom,
-			transparent 0%,
-			transparent 30%,
-			color-mix(in oklab, var(--bg-sheet) 55%, transparent) 58%,
-			color-mix(in oklab, var(--bg-sheet) 92%, transparent) 76%,
-			var(--bg-sheet) 86%
-		);
 	}
 	.identity {
 		display: flex;
@@ -81,7 +60,7 @@
 		border-radius: 1.25rem;
 		background: var(--bg-surface);
 		box-shadow:
-			0 0 0 4px var(--bg-sheet),
+			0 0 0 0.5px var(--border-strong),
 			var(--shadow-floating);
 		color: var(--text-default);
 		font-size: var(--text-title-1);

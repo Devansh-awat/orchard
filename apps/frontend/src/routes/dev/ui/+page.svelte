@@ -1,11 +1,22 @@
 <script lang="ts">
-	import NavItem from '$lib/components/ui/NavItem.svelte';
 	import DevBar from './DevBar.svelte';
-	import Shell from './Shell.svelte';
+	import AppFrame from '$lib/components/patterns/AppFrame.svelte';
+	import Sidebar from '$lib/components/patterns/Sidebar.svelte';
+	import { SIDEBAR } from './fixtures';
 	import { SECTIONS } from './sections';
 
 	const groups = [...new Set(SECTIONS.map((s) => s.group))];
 	let current = $state(SECTIONS[0].id);
+	const sections = $derived(
+		groups.map((group) => ({
+			label: group,
+			items: SECTIONS.filter((s) => s.group === group).map((s) => ({
+				label: s.title,
+				href: `#${s.id}`,
+				active: current === s.id
+			}))
+		}))
+	);
 
 	function track(node: HTMLElement) {
 		const io = new IntersectionObserver(
@@ -20,16 +31,9 @@
 	}
 </script>
 
-<Shell>
-	{#snippet nav()}
-		{#each groups as group (group)}
-			<div class="flex flex-col gap-0.5">
-				<p class="px-2.5 pb-1 text-caption font-medium text-faint">{group}</p>
-				{#each SECTIONS.filter((s) => s.group === group) as s (s.id)}
-					<NavItem href="#{s.id}" label={s.title} active={current === s.id} />
-				{/each}
-			</div>
-		{/each}
+<AppFrame>
+	{#snippet sidebar()}
+		<Sidebar org={SIDEBAR.org} user={SIDEBAR.user} {sections} />
 	{/snippet}
 
 	<div class="catalogue" {@attach track}>
@@ -47,7 +51,7 @@
 			</section>
 		{/each}
 	</div>
-</Shell>
+</AppFrame>
 
 <DevBar />
 

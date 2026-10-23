@@ -3,7 +3,10 @@
 
 	const HUES = ['accent', 'blue', 'green', 'amber', 'red'] as const;
 	const hue = $derived(
-		HUES[[...name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % HUES.length]
+		HUES[
+			[...name].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0, 2166136261) %
+				HUES.length
+		]
 	);
 	const letter = $derived(name.trim().charAt(0).toUpperCase());
 </script>
