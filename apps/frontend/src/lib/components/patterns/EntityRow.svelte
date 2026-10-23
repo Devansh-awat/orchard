@@ -3,7 +3,6 @@
 	import { Box, Database, Timer } from 'lucide-svelte';
 	import ListRow from '$lib/components/ui/ListRow.svelte';
 	import StatusDot from '$lib/components/ui/StatusDot.svelte';
-	import MiddleTruncate from '$lib/components/ui/MiddleTruncate.svelte';
 	import RelativeTime from '$lib/components/ui/RelativeTime.svelte';
 	import RemoteImg from '$lib/components/ui/RemoteImg.svelte';
 	import type { StatusMeta } from '$lib/components/ui/status';
@@ -50,7 +49,7 @@
 		{#if !quiet}<span class="state state--{status.kind}">{status.label}</span>{/if}
 	{/snippet}
 	{#snippet subtitle()}
-		{#if url}<MiddleTruncate text={url} tail={12} />{/if}
+		{#if url}<span class="url">{url}</span>{/if}
 		{#if url && detail}<span aria-hidden="true">·</span>{/if}
 		{#if detail}<span class="detail">{detail}</span>{/if}
 	{/snippet}
@@ -67,7 +66,10 @@
 		width: 2rem;
 		height: 2rem;
 		border-radius: var(--radius-control);
-		background: var(--bg-active);
+		background: linear-gradient(var(--bg-surface), var(--neutral-2));
+		box-shadow:
+			inset 0 0 0 0.5px var(--border-strong),
+			0 1px 2px color-mix(in oklab, var(--neutral-10) 8%, transparent);
 		color: var(--text-muted);
 	}
 	.tile :global(.tile-img) {
@@ -100,7 +102,15 @@
 	.state--info {
 		color: var(--status-info);
 	}
+	.url {
+		flex-shrink: 1;
+		min-width: 3rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
 	.detail {
+		flex-shrink: 10;
+		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}

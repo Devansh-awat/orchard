@@ -217,7 +217,7 @@
 
 		const draw = () => {
 			ctx.clearRect(0, 0, el.width, el.height);
-			ctx.font = '11px "Space Mono", monospace';
+			ctx.font = '11px "JetBrains Mono", monospace';
 			ctx.textBaseline = 'top';
 
 			const done = grown >= totalGrow;

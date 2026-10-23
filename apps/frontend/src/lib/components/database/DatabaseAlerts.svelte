@@ -483,7 +483,7 @@
 		font-size: var(--text-micro);
 		line-height: var(--lh-micro);
 		font-weight: 700;
-		font-family: var(--font-mono, 'Space Mono', monospace);
+		font-family: var(--font-mono);
 		letter-spacing: 0.04em;
 		background-color: color-mix(in srgb, currentColor 12%, transparent);
 		border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
@@ -527,7 +527,7 @@
 		letter-spacing: 0.18em;
 		text-transform: uppercase;
 		color: color-mix(in srgb, var(--error-text-color) 85%, transparent);
-		font-family: var(--font-mono, 'Space Mono', monospace);
+		font-family: var(--font-mono);
 	}
 
 	/* ---------- CrashLoop ---------- */
@@ -564,7 +564,7 @@
 
 	.dba-detail {
 		font-size: var(--text-micro);
-		font-family: var(--font-mono, 'Space Mono', monospace);
+		font-family: var(--font-mono);
 		opacity: 0.7;
 		line-height: 1.4;
 		overflow-wrap: anywhere;

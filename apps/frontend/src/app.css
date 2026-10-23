@@ -23,38 +23,6 @@
 }
 
 @font-face {
-	font-family: 'Space Mono';
-	src: url('./lib/assets/fonts/Space_Mono/SpaceMono-Regular.woff2') format('woff2');
-	font-weight: 400;
-	font-style: normal;
-	font-display: swap;
-}
-
-@font-face {
-	font-family: 'Space Mono';
-	src: url('./lib/assets/fonts/Space_Mono/SpaceMono-Bold.woff2') format('woff2');
-	font-weight: 700;
-	font-style: normal;
-	font-display: swap;
-}
-
-@font-face {
-	font-family: 'Space Mono';
-	src: url('./lib/assets/fonts/Space_Mono/SpaceMono-Italic.woff2') format('woff2');
-	font-weight: 400;
-	font-style: italic;
-	font-display: swap;
-}
-
-@font-face {
-	font-family: 'Space Mono';
-	src: url('./lib/assets/fonts/Space_Mono/SpaceMono-BoldItalic.woff2') format('woff2');
-	font-weight: 700;
-	font-style: italic;
-	font-display: swap;
-}
-
-@font-face {
 	font-family: 'JetBrains Mono';
 	src: url('./lib/assets/fonts/JetBrains_Mono/JetBrainsMono-Regular.woff2') format('woff2');
 	font-weight: 400;
@@ -176,7 +144,7 @@
 
 @theme {
 	--font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
-	--font-mono: 'Space Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+	--font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
 	--font-mono-terminal:
 		'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace;
 	--color-primary-50: #ffffff;
@@ -334,20 +302,6 @@ body {
 	line-height: 1.5;
 }
 
-body::before {
-	content: '';
-	position: fixed;
-	inset: 0;
-	z-index: -1;
-	pointer-events: none;
-	background-image: var(--theme-grain, none), var(--theme-chrome-image, none);
-	background-size: auto;
-	background-repeat: repeat;
-	will-change: transform;
-}
-
-html[data-look='quiet'] body::before,
-html.contrast-high body::before,
 html.contrast-high .deck-host--drawer {
 	background-image: none;
 }

@@ -1,4 +1,4 @@
-export type SpringName = 'smooth' | 'snappy' | 'bouncy' | 'interactive' | 'cinematic';
+export type SpringName = 'smooth' | 'snappy' | 'bouncy' | 'interactive' | 'morph' | 'cinematic';
 
 export type SpringSpec = { visualDuration: number; bounce: number };
 
@@ -7,6 +7,7 @@ export const SPRINGS: Record<SpringName, SpringSpec> = {
 	snappy: { visualDuration: 0.19, bounce: 0.25 },
 	bouncy: { visualDuration: 0.28, bounce: 0.45 },
 	interactive: { visualDuration: 0.1, bounce: 0.2 },
+	morph: { visualDuration: 0.34, bounce: 0.25 },
 	cinematic: { visualDuration: 0.8, bounce: 0.14 }
 };
 

@@ -40,7 +40,6 @@
 						(mode !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
 					document.documentElement.classList.toggle('dark', dark);
 					document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
-					document.documentElement.dataset.look = localStorage.getItem('orchard-look') || 'evolve';
 					var boot = JSON.parse(localStorage.getItem('orchard-theme-boot') || 'null');
 					var css = boot && (dark ? boot.dark : boot.light);
 					if (css) {

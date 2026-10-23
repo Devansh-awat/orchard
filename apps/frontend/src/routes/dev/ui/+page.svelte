@@ -41,6 +41,7 @@
 	import EntityRow from '$lib/components/patterns/EntityRow.svelte';
 	import { statusMeta, type StatusKind } from '$lib/components/ui/status';
 	import { toasts } from '$lib/stores';
+	import type { ToastInput, ToastPosition } from '$lib/stores/toast';
 	import DevBar from './DevBar.svelte';
 	import { PROJECTS } from './fixtures';
 
@@ -63,11 +64,27 @@
 	let modalOpen = $state(false);
 	let loading = $state(false);
 
+	const POSITIONS: ToastPosition[] = [
+		'top-left',
+		'top-center',
+		'top-right',
+		'bottom-left',
+		'bottom-center',
+		'bottom-right'
+	];
+	let toastPos = $state<ToastPosition>('bottom-right');
+
+	function fire(toast: Omit<ToastInput, 'position'>) {
+		toasts.add({ ...toast, position: toastPos });
+	}
+
 	function fakeDeploy() {
 		toasts.promise(new Promise((r) => setTimeout(r, 2200)), {
 			loading: 'Deploying web',
 			success: 'web is live',
-			error: 'Deploy failed'
+			error: 'Deploy failed',
+			description: 'hackclub-site.orchard.my now serves 4f2a9c1.',
+			position: toastPos
 		});
 	}
 </script>
@@ -149,23 +166,45 @@
 
 		<SectionCard title="Feedback">
 			<div class="flex flex-col gap-3">
+				<Select size="sm" bind:value={toastPos} aria-label="Toast position">
+					{#each POSITIONS as pos (pos)}<option value={pos}>{pos}</option>{/each}
+				</Select>
 				<div class="flex flex-wrap gap-2">
-					<Button
-						size="sm"
-						onclick={() => toasts.add({ title: 'Copied to clipboard', color: 'success' })}
-						>Simple toast</Button
+					<Button size="sm" onclick={() => fire({ title: 'Changes saved', color: 'success' })}
+						>Success</Button
 					>
 					<Button
 						size="sm"
 						onclick={() =>
-							toasts.add({
+							fire({
 								title: 'Build failed',
 								description: 'worker exited with code 137 while installing dependencies.',
-								color: 'error',
-								action: { label: 'View logs', onClick: () => {} }
-							})}>Rich toast</Button
+								color: 'error'
+							})}>Error</Button
 					>
-					<Button size="sm" onclick={fakeDeploy}>Promise toast</Button>
+					<Button
+						size="sm"
+						onclick={() =>
+							fire({
+								title: 'Memory is running low',
+								description: 'api has used 92% of its 512 MB limit for 10 minutes.',
+								color: 'warning'
+							})}>Warning</Button
+					>
+					<Button size="sm" onclick={() => fire({ title: 'Domain verified', color: 'info' })}
+						>Info</Button
+					>
+					<Button
+						size="sm"
+						onclick={() =>
+							fire({
+								title: 'Preview is ready',
+								description: 'feat/sponsors deployed to its own URL.',
+								color: 'info',
+								action: { label: 'Open preview', onClick: () => {} }
+							})}>Action</Button
+					>
+					<Button size="sm" onclick={fakeDeploy}>Promise</Button>
 				</div>
 				<Alert tone="warning" title="Memory is close to the limit"
 					>worker has used 92% of 512 MB for 10 minutes.</Alert

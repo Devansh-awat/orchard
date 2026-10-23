@@ -4,41 +4,9 @@
 	initial-value: 0px;
 }
 
-:root,
-[data-look='evolve'] {
-	--neutral-app: var(--tint-app);
-	--neutral-surface: var(--tint-surface);
-	--neutral-raised: var(--tint-raised);
-	--neutral-1: var(--tint-1);
-	--neutral-2: var(--tint-2);
-	--neutral-3: var(--tint-3);
-	--neutral-4: var(--tint-4);
-	--neutral-5: var(--tint-5);
-	--neutral-6: var(--tint-6);
-	--neutral-7: var(--tint-7);
-	--neutral-8: var(--tint-8);
-	--neutral-9: var(--tint-9);
-	--neutral-10: var(--tint-10);
-}
-
-[data-look='quiet'] {
-	--neutral-app: var(--gray-app);
-	--neutral-surface: var(--gray-surface);
-	--neutral-raised: var(--gray-raised);
-	--neutral-1: var(--gray-1);
-	--neutral-2: var(--gray-2);
-	--neutral-3: var(--gray-3);
-	--neutral-4: var(--gray-4);
-	--neutral-5: var(--gray-5);
-	--neutral-6: var(--gray-6);
-	--neutral-7: var(--gray-7);
-	--neutral-8: var(--gray-8);
-	--neutral-9: var(--gray-9);
-	--neutral-10: var(--gray-10);
-}
-
 :root {
 	--bg-app: var(--neutral-app);
+	--bg-sheet: var(--neutral-surface);
 	--bg-surface: var(--neutral-surface);
 	--bg-raised: var(--neutral-raised);
 	--bg-sunken: var(--neutral-1);
@@ -119,6 +87,14 @@
 	--z-modal: 800;
 	--z-toast: 900;
 	--z-tooltip: 1000;
+
+	--toast-fill: var(--neutral-10);
+	--toast-muted: color-mix(in oklab, var(--neutral-app) 62%, transparent);
+	--toast-success: var(--green-7);
+	--toast-error: var(--red-7);
+	--toast-warning: var(--amber-7);
+	--toast-info: var(--blue-7);
+	--toast-loading: var(--neutral-6);
 
 	--page-narrow: 44rem;
 	--page-default: 64rem;
@@ -270,6 +246,12 @@ html.reduce-transparency *::after {
 }
 
 :root.dark {
+	--toast-success: color-mix(in oklab, var(--green-7) 74%, black);
+	--toast-error: color-mix(in oklab, var(--red-7) 80%, black);
+	--toast-warning: color-mix(in oklab, var(--amber-7) 62%, black);
+	--toast-info: color-mix(in oklab, var(--blue-7) 80%, black);
+	--toast-loading: var(--neutral-5);
+
 	--shadow-raised: 0 0 0 1px var(--border-default), 0 1px 2px rgb(0 0 0 / 0.3);
 	--shadow-floating:
 		0 0 0 1px var(--material-glass-edge), 0 4px 12px rgb(0 0 0 / 0.3), 0 12px 32px rgb(0 0 0 / 0.4);
@@ -332,6 +314,7 @@ html.reduce-transparency *::after {
 	--color-muted: var(--text-muted);
 	--color-faint: var(--text-faint);
 	--color-app: var(--bg-app);
+	--color-sheet: var(--bg-sheet);
 	--color-surface: var(--bg-surface);
 	--color-raised: var(--bg-raised);
 	--color-sunken: var(--bg-sunken);

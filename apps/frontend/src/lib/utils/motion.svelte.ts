@@ -12,7 +12,7 @@
  *
  * Built on `motion` (motion.dev).
  */
-import { animate } from 'motion';
+import { animate, motionValue } from 'motion';
 import { effectiveAnimationLevel } from '$lib/stores/preferences';
 import { EXIT_BOUNCE, EXIT_SCALE, SPRINGS, type SpringName } from '$lib/design/springs';
 
@@ -1074,4 +1074,29 @@ export function magneticHighlight(
 			animate(pill, next as never, transition('snappy') as never);
 		});
 	};
+}
+
+export class SpringValue {
+	current = $state(0);
+	#value;
+
+	constructor(initial: number) {
+		this.current = initial;
+		this.#value = motionValue(initial);
+		this.#value.on('change', (v) => (this.current = v));
+	}
+
+	to(
+		target: number,
+		name: SpringName = 'smooth',
+		opts: { settle?: boolean; instant?: boolean } = {}
+	) {
+		if (opts.instant || effectiveAnimationLevel() === 'off') {
+			this.#value.jump(target);
+			this.current = target;
+			return;
+		}
+		const base = transition(name);
+		animate(this.#value, target, opts.settle && 'bounce' in base ? { ...base, bounce: 0 } : base);
+	}
 }

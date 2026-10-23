@@ -3,7 +3,7 @@ import { maxChroma, specNodes, type Scheme, type ThemeSpec } from './spec';
 
 export const STEPS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
 export const HUE_SCALES = ['accent', 'red', 'amber', 'green', 'blue'] as const;
-export const NEUTRAL_SCALES = ['gray', 'tint'] as const;
+export const NEUTRAL_SCALES = ['neutral'] as const;
 
 export type HueScale = (typeof HUE_SCALES)[number];
 export type NeutralScale = (typeof NEUTRAL_SCALES)[number];
@@ -12,24 +12,45 @@ export type ScaleVars = Record<string, string>;
 export const TEXT_TARGET = 4.5;
 export const FAINT_TARGET = 3;
 
-type NeutralLadder = { steps: number[]; app: number; surface: number; raised: number };
+type Tone = { l: number; c: number };
+type NeutralLadder = { steps: Tone[]; app: Tone; surface: Tone; raised: Tone };
 
 const NEUTRAL: Record<Scheme, NeutralLadder> = {
 	light: {
-		steps: [0.965, 0.945, 0.925, 0.905, 0.86, 0.78, 0.67, 0.6, 0.52, 0.23],
-		app: 0.975,
-		surface: 0.998,
-		raised: 0.999
+		app: { l: 0.958, c: 0.016 },
+		surface: { l: 0.997, c: 0.003 },
+		raised: { l: 0.999, c: 0.002 },
+		steps: [
+			{ l: 0.962, c: 0.008 },
+			{ l: 0.942, c: 0.01 },
+			{ l: 0.922, c: 0.011 },
+			{ l: 0.902, c: 0.011 },
+			{ l: 0.86, c: 0.011 },
+			{ l: 0.78, c: 0.01 },
+			{ l: 0.67, c: 0.01 },
+			{ l: 0.6, c: 0.01 },
+			{ l: 0.52, c: 0.012 },
+			{ l: 0.23, c: 0.01 }
+		]
 	},
 	dark: {
-		steps: [0.235, 0.26, 0.29, 0.31, 0.37, 0.47, 0.62, 0.58, 0.74, 0.95],
-		app: 0.165,
-		surface: 0.2,
-		raised: 0.235
+		app: { l: 0.16, c: 0.014 },
+		surface: { l: 0.205, c: 0.011 },
+		raised: { l: 0.24, c: 0.011 },
+		steps: [
+			{ l: 0.235, c: 0.012 },
+			{ l: 0.26, c: 0.013 },
+			{ l: 0.29, c: 0.014 },
+			{ l: 0.31, c: 0.014 },
+			{ l: 0.37, c: 0.014 },
+			{ l: 0.47, c: 0.013 },
+			{ l: 0.62, c: 0.012 },
+			{ l: 0.58, c: 0.012 },
+			{ l: 0.74, c: 0.012 },
+			{ l: 0.95, c: 0.008 }
+		]
 	}
 };
-
-const NEUTRAL_CHROMA_SHAPE = [1, 1, 1, 1, 0.9, 0.8, 0.6, 0.6, 0.5, 0.35];
 
 type HueLadder = { l: number[]; c: number[] };
 
@@ -55,9 +76,6 @@ const STATUS_HUE: Record<Exclude<HueScale, 'accent'>, number> = {
 	blue: 255
 };
 
-const QUIET_CHROMA: Record<Scheme, number> = { light: 0.004, dark: 0.006 };
-const TINT_CHROMA: Record<Scheme, number> = { light: 0.1, dark: 0.115 };
-
 function meanHue(hues: number[]): number {
 	if (hues.length === 1) return hues[0];
 	let sx = 0;
@@ -70,16 +88,15 @@ function meanHue(hues: number[]): number {
 	return ((Math.atan2(sy, sx) * 180) / Math.PI + 360) % 360;
 }
 
-function neutralScale(hue: number, chroma: number, scheme: Scheme): Record<string, string> {
+function neutralScale(hue: number, tint: number, scheme: Scheme): Record<string, string> {
 	const ladder = NEUTRAL[scheme];
-	const at = (l: number, shape: number) =>
-		oklch(l, Math.min(chroma * shape, maxChroma(hue, l)), hue);
+	const at = ({ l, c }: Tone) => oklch(l, Math.min(c * tint, maxChroma(hue, l)), hue);
 	const out: Record<string, string> = {
-		app: at(ladder.app, 1),
-		surface: at(ladder.surface, 0.6),
-		raised: at(ladder.raised, 0.6)
+		app: at(ladder.app),
+		surface: at(ladder.surface),
+		raised: at(ladder.raised)
 	};
-	ladder.steps.forEach((l, i) => (out[String(i + 1)] = at(l, NEUTRAL_CHROMA_SHAPE[i])));
+	ladder.steps.forEach((tone, i) => (out[String(i + 1)] = at(tone)));
 	return out;
 }
 
@@ -131,12 +148,11 @@ export function paletteHues(spec: ThemeSpec): {
 }
 
 export function generateScales(spec: ThemeSpec, scheme: Scheme): ScaleVars {
-	const { accent, vividness, neutral } = paletteHues(spec);
+	const { accent, vividness } = paletteHues(spec);
 	const colourfulness = Math.pow(clamp(vividness, 0, 1), 0.6);
 
 	const neutrals: Record<NeutralScale, Record<string, string>> = {
-		gray: neutralScale(accent, QUIET_CHROMA[scheme], scheme),
-		tint: neutralScale(neutral, spec.blend * TINT_CHROMA[scheme] * colourfulness, scheme)
+		neutral: neutralScale(accent, colourfulness, scheme)
 	};
 
 	const vars: ScaleVars = {};
