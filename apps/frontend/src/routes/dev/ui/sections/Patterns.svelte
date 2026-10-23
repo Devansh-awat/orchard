@@ -27,6 +27,7 @@
 	import { resourceStatus } from '$lib/components/ui/status';
 	import { PROJECTS, SIDEBAR, BUILD_FEED } from '../fixtures';
 	import RecentBuilds from '$lib/components/patterns/RecentBuilds.svelte';
+	import NeedsAttention from '$lib/components/patterns/NeedsAttention.svelte';
 
 	const terra = PROJECTS[1];
 	const site = PROJECTS[0];
@@ -38,12 +39,7 @@
 	<div class="flex flex-col gap-3">
 		<SectionTitle title="Sidebar" />
 		<div class="sidebar-demo">
-			<Sidebar
-				org={SIDEBAR.org}
-				user={SIDEBAR.user}
-				failing={SIDEBAR.failing}
-				sections={SIDEBAR.sections('apps')}
-			/>
+			<Sidebar org={SIDEBAR.org} user={SIDEBAR.user} sections={SIDEBAR.sections('apps')} />
 		</div>
 	</div>
 	<div class="col-span-2 flex flex-col gap-6">
@@ -146,8 +142,9 @@
 </div>
 
 <div class="flex flex-col gap-3">
-	<SectionTitle title="Recent builds" />
+	<SectionTitle title="Widgets: needs attention, recent builds" />
 	<div class="grid grid-cols-3 items-start gap-4">
+		<NeedsAttention items={SIDEBAR.failing} />
 		<RecentBuilds builds={BUILD_FEED} />
 		<RecentBuilds builds={BUILD_FEED.slice(1)} />
 	</div>

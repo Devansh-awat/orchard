@@ -75,6 +75,27 @@ export const PROJECTS = [
 	}
 ];
 
+export const MORE_PROJECTS = [
+	{
+		id: 'p3',
+		name: 'flavortown',
+		owner: 'msw',
+		counts: ['3 deployments', '5 databases'],
+		image: 'https://assets.orchard.my/project-icons/cbaa0fa9-462f-4ed5-a201-329af4792120.png',
+		updatedAt: ago(1),
+		live: 8
+	},
+	{
+		id: 'p4',
+		name: 'Mercury',
+		owner: 'dld',
+		counts: ['2 deployments', '1 database'],
+		image: null,
+		updatedAt: ago(26),
+		live: 2
+	}
+];
+
 export const BUILDS = [
 	{
 		id: 'b1',
@@ -107,8 +128,17 @@ export const BUILDS = [
 ];
 
 export const SIDEBAR = {
-	org: { name: 'YSWS', plan: 'Enterprise' },
-	user: { handle: 'seb' },
+	org: {
+		name: 'YSWS',
+		plan: 'Enterprise',
+		avatar:
+			'https://pub-6e404eda1f0844309753a4da3ef3ccca.r2.dev/organizations/6e7235cf-d703-4868-9346-84de39f66e8c.png'
+	},
+	user: {
+		handle: 'alfd',
+		avatar:
+			'https://pub-6e404eda1f0844309753a4da3ef3ccca.r2.dev/users/b0141f8d-69bb-43e2-a766-54d9a433c77e.webp'
+	},
 	failing: [
 		{
 			label: 'terra-game-server',
@@ -124,7 +154,7 @@ export const SIDEBAR = {
 			{
 				label: 'Platform',
 				items: [
-					{ label: 'Your Apps', href: '#', icon: Sprout, active: active === 'apps', alert: true },
+					{ label: 'Your Apps', href: '#', icon: Sprout, active: active === 'apps' },
 					{ label: 'Jobs', href: '#', icon: Timer },
 					{ label: 'Usage', href: '#', icon: Gauge },
 					{ label: 'Greenhouse', href: '#', icon: Leaf },

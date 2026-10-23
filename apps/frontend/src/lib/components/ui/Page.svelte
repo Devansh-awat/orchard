@@ -81,16 +81,16 @@
 		color: var(--text-muted);
 	}
 	.title {
-		font-size: var(--text-title-1);
-		line-height: var(--lh-title-1);
+		font-size: var(--text-display);
+		line-height: var(--lh-display);
 		font-weight: var(--weight-semibold);
-		letter-spacing: -0.018em;
+		letter-spacing: -0.024em;
 		color: var(--text-default);
 	}
 	.desc {
 		max-width: 65ch;
-		font-size: var(--text-body);
-		line-height: var(--lh-body);
+		font-size: var(--text-headline);
+		line-height: 1.375rem;
 		color: var(--text-muted);
 	}
 	.actions {

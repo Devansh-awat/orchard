@@ -43,11 +43,11 @@
 	import EntityCard from '$lib/components/patterns/EntityCard.svelte';
 	import ProjectHero from '$lib/components/patterns/ProjectHero.svelte';
 	import ProjectBackdrop from '$lib/components/patterns/ProjectBackdrop.svelte';
-	import { PROJECTS, BUILDS, SIDEBAR, BUILD_FEED } from '../fixtures';
+	import { PROJECTS, BUILDS, SIDEBAR, BUILD_FEED, MORE_PROJECTS } from '../fixtures';
 	import RecentBuilds from '$lib/components/patterns/RecentBuilds.svelte';
+	import NeedsAttention from '$lib/components/patterns/NeedsAttention.svelte';
 
 	let screen = $state('home');
-	let failingStyle = $state<'row' | 'badge' | 'footer'>('row');
 	let tab = $state<'overview' | 'logs' | 'metrics' | 'env' | 'settings'>('overview');
 	let range = $state('day');
 	let appName = $state('hackclub-site');
@@ -71,38 +71,30 @@
 			{ value: 'settings', label: 'Settings' }
 		]}
 	/>
-	<SegmentedControl
-		label="Failing style"
-		bind:value={failingStyle}
-		options={[
-			{ value: 'row', label: 'Row' },
-			{ value: 'badge', label: 'Badge' },
-			{ value: 'footer', label: 'Footer' }
-		]}
-	/>
 </div>
 
 <AppFrame>
 	{#snippet sidebar()}
-		<Sidebar
-			org={SIDEBAR.org}
-			user={SIDEBAR.user}
-			failing={SIDEBAR.failing}
-			{failingStyle}
-			{sections}
-		/>
+		<Sidebar org={SIDEBAR.org} user={SIDEBAR.user} {sections} />
 	{/snippet}
 	{#snippet backdrop()}
 		{#if screen === 'project'}<ProjectBackdrop name="terra" image={PROJECTS[1].background} />{/if}
 	{/snippet}
 	{#if screen === 'home'}
-		<Page title="Apps" width="wide">
+		<Page
+			title="Your Apps"
+			description="Good afternoon, alfd. Everything is running except 3 apps that need a look."
+			width="wide"
+		>
 			{#snippet actions()}
 				<SearchField placeholder="Search apps" shortcut="/" class="w-64" />
 				<Button variant="primary" icon={Plus}>New</Button>
 			{/snippet}
 			{#snippet aside()}
-				<RecentBuilds builds={BUILD_FEED} />
+				<div class="flex flex-col gap-4">
+					<NeedsAttention items={SIDEBAR.failing} />
+					<RecentBuilds builds={BUILD_FEED} />
+				</div>
 			{/snippet}
 
 			{#each PROJECTS as project (project.id)}
@@ -116,6 +108,7 @@
 					updatedAt={project.entities[0].updatedAt}
 					live={project.entities.filter((e) => e.status.kind === 'success').length}
 					onNew={() => {}}
+					expanded={project.id === 'p1'}
 				>
 					{#each project.entities as e (e.name)}
 						<EntityCard
@@ -145,6 +138,21 @@
 					{/each}
 				</ProjectGroup>
 			{/each}
+			{#each MORE_PROJECTS as project (project.id)}
+				<ProjectGroup
+					name={project.name}
+					href="#"
+					image={project.image}
+					owner={project.owner}
+					counts={project.counts}
+					updatedAt={project.updatedAt}
+					live={project.live}
+					onNew={() => {}}
+					expanded={false}
+				>
+					<span></span>
+				</ProjectGroup>
+			{/each}
 		</Page>
 	{:else if screen === 'project'}
 		<Page title="terra" width="wide">
@@ -158,7 +166,10 @@
 				</ProjectHero>
 			{/snippet}
 			{#snippet aside()}
-				<RecentBuilds builds={BUILD_FEED} />
+				<div class="flex flex-col gap-4">
+					<NeedsAttention items={SIDEBAR.failing} />
+					<RecentBuilds builds={BUILD_FEED} />
+				</div>
 			{/snippet}
 			<List label="Resources">
 				{#each PROJECTS[0].entities.concat(PROJECTS[1].entities) as e (e.name)}

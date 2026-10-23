@@ -2,6 +2,7 @@
 	import RelativeTime from '$lib/components/ui/RelativeTime.svelte';
 	import AppIcon from '$lib/components/ui/AppIcon.svelte';
 	import Ring from '$lib/components/ui/Ring.svelte';
+	import Widget from '$lib/components/ui/Widget.svelte';
 	import type { BuildItem } from './builds';
 
 	let {
@@ -25,11 +26,7 @@
 	const rest = $derived(builds.slice(1, 4));
 </script>
 
-<section class="widget">
-	<header class="w-head">
-		<span class="w-title">{title}</span>
-		<span class="w-meta">Today</span>
-	</header>
+<Widget {title} meta="Today">
 	{#if featured}
 		{@const stages = featured.stages ?? STAGES}
 		{@const kind = featured.status.kind}
@@ -85,32 +82,9 @@
 			</a>
 		{/each}
 	</div>
-</section>
+</Widget>
 
 <style>
-	.widget {
-		display: flex;
-		flex-direction: column;
-		gap: 0.875rem;
-		padding: 1rem;
-		border-radius: calc(1.375rem * var(--corner-scale));
-		corner-shape: var(--corner);
-		background: var(--bg-surface);
-		box-shadow: var(--shadow-raised);
-	}
-	.w-head {
-		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
-	}
-	.w-title {
-		font-size: var(--text-headline);
-		font-weight: var(--weight-semibold);
-	}
-	.w-meta {
-		color: var(--text-muted);
-		font-size: var(--text-caption);
-	}
 	.live {
 		display: flex;
 		flex-direction: column;

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Box, Database, Timer } from 'lucide-svelte';
+	import { Box, Database, Timer, Sprout } from 'lucide-svelte';
 	import RemoteImg from './RemoteImg.svelte';
 
 	let {
@@ -9,12 +9,12 @@
 		size = 'md'
 	}: {
 		name: string;
-		kind?: 'deployment' | 'database' | 'job';
+		kind?: 'deployment' | 'database' | 'job' | 'project';
 		icon?: string | null;
 		size?: 'xs' | 'sm' | 'md' | 'lg';
 	} = $props();
 
-	const GLYPH = { deployment: Box, database: Database, job: Timer };
+	const GLYPH = { deployment: Box, database: Database, job: Timer, project: Sprout };
 	const Glyph = $derived(GLYPH[kind]);
 	const glyphSize = $derived({ xs: 11, sm: 13, md: 17, lg: 21 }[size]);
 	const HUES = ['blue', 'green', 'amber', 'red', 'accent'] as const;

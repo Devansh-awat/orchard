@@ -73,42 +73,42 @@ callout|caption|micro`, `rounded-control|card|panel`.
 
 ## Which component
 
-| Need                               | Use                                                                                        |
-| ---------------------------------- | ------------------------------------------------------------------------------------------ |
-| App layout                         | `AppFrame` (sidebar, backdrop, content) + `Sidebar` (org, search, failing, sections, user) |
-| Page                               | `Page` (title, description, eyebrow, actions, aside, hero, width)                          |
-| Small heading above a group        | `SectionTitle` (title, count, actions, size)                                               |
-| Group of content                   | `SectionCard` (title, description, actions, footer, flush)                                 |
-| Plain container                    | `Card` (`href`/`onclick` makes it interactive)                                             |
-| A project and its resources        | `ProjectGroup` (baked aura header) + `EntityCard` grid                                     |
-| Project page header                | `ProjectHero` over `ProjectBackdrop` (live aura)                                           |
-| Rows of things                     | `List` + `ListRow`; dense resource lists use `EntityRow`                                   |
-| Table of data                      | `Table`                                                                                    |
-| Numbers                            | `Metric`, with `Sparkline` in its `chart` slot; gauges: `Ring`                             |
-| Inline facts (url, branch, commit) | `MetaList`                                                                                 |
-| Action                             | `Button` (primary, secondary, ghost, danger, media; `icon`, `iconRight`, `loading`)        |
-| Actions on a thing                 | `Menu` + `MenuItem` (+ `MenuLabel`, `MenuSeparator`)                                       |
-| Pick a value                       | `Select` (native), `Dropdown` (rich), `Combobox` (searchable)                              |
-| Text entry                         | `Field` + `Input` / `Textarea`; numbers: `Stepper`; ranges: `Slider`                       |
-| On or off                          | `Switch`, `ToggleRow` for settings rows, `Checkbox` in lists                               |
-| One of few                         | `SegmentedControl`; one of many in a form: `RadioGroup` (list or cards)                    |
-| Sections of a page                 | `Tabs`; location: `Breadcrumbs`                                                            |
-| Sidebar link                       | `NavItem`                                                                                  |
-| Identity                           | `Monogram`, `Avatar`, `AvatarStack`, `Aura`                                                |
-| Something happened                 | `toasts.add()` (see Toasts)                                                                |
-| Something is wrong here            | `Alert`                                                                                    |
-| Status                             | `StatusBadge`, `StatusDot` via `ui/status.ts` only                                         |
-| Label that is not status           | `Badge`                                                                                    |
-| Short hint                         | `Tooltip`                                                                                  |
-| Floating panel                     | `PopoverPanel`                                                                             |
-| Dialog                             | `Modal`; destructive confirm: `ConfirmModal`                                               |
-| Side panel for create/edit         | `Sheet`                                                                                    |
-| Command palette                    | `CommandMenu`                                                                              |
-| Loading                            | `Skeleton`, `Spinner`, `Progress`; build steps: `StepRail`                                 |
-| Nothing here                       | `EmptyState` (always with an action)                                                       |
-| Code and config                    | `CodeBlock`, `Snippet` (one command), `EnvVarRow`, `LogViewer`                             |
-| Keys, IDs                          | `Kbd`, `CopyButton`, `MiddleTruncate` (hashes and IDs only)                                |
-| Times                              | `RelativeTime`                                                                             |
+| Need                               | Use                                                                                 |
+| ---------------------------------- | ----------------------------------------------------------------------------------- |
+| App layout                         | `AppFrame` (sidebar, backdrop, content) + `Sidebar` (org, search, sections, user)   |
+| Page                               | `Page` (title, description, eyebrow, actions, aside, hero, width)                   |
+| Small heading above a group        | `SectionTitle` (title, count, actions, size)                                        |
+| Group of content                   | `SectionCard` (title, description, actions, footer, flush)                          |
+| Plain container                    | `Card` (`href`/`onclick` makes it interactive)                                      |
+| A project and its resources        | `ProjectGroup` (baked aura header) + `EntityCard` grid                              |
+| Project page header                | `ProjectHero` over `ProjectBackdrop` (live aura)                                    |
+| Rows of things                     | `List` + `ListRow`; dense resource lists use `EntityRow`                            |
+| Table of data                      | `Table`                                                                             |
+| Numbers                            | `Metric`, with `Sparkline` in its `chart` slot; gauges: `Ring`                      |
+| Inline facts (url, branch, commit) | `MetaList`                                                                          |
+| Action                             | `Button` (primary, secondary, ghost, danger, media; `icon`, `iconRight`, `loading`) |
+| Actions on a thing                 | `Menu` + `MenuItem` (+ `MenuLabel`, `MenuSeparator`)                                |
+| Pick a value                       | `Select` (native), `Dropdown` (rich), `Combobox` (searchable)                       |
+| Text entry                         | `Field` + `Input` / `Textarea`; numbers: `Stepper`; ranges: `Slider`                |
+| On or off                          | `Switch`, `ToggleRow` for settings rows, `Checkbox` in lists                        |
+| One of few                         | `SegmentedControl`; one of many in a form: `RadioGroup` (list or cards)             |
+| Sections of a page                 | `Tabs`; location: `Breadcrumbs`                                                     |
+| Sidebar link                       | `NavItem`                                                                           |
+| Identity                           | `Monogram`, `Avatar`, `AvatarStack`, `Aura`                                         |
+| Something happened                 | `toasts.add()` (see Toasts)                                                         |
+| Something is wrong here            | `Alert`                                                                             |
+| Status                             | `StatusBadge`, `StatusDot` via `ui/status.ts` only                                  |
+| Label that is not status           | `Badge`                                                                             |
+| Short hint                         | `Tooltip`                                                                           |
+| Floating panel                     | `PopoverPanel`                                                                      |
+| Dialog                             | `Modal`; destructive confirm: `ConfirmModal`                                        |
+| Side panel for create/edit         | `Sheet`                                                                             |
+| Command palette                    | `CommandMenu`                                                                       |
+| Loading                            | `Skeleton`, `Spinner`, `Progress`; build steps: `StepRail`                          |
+| Nothing here                       | `EmptyState` (always with an action)                                                |
+| Code and config                    | `CodeBlock`, `Snippet` (one command), `EnvVarRow`, `LogViewer`                      |
+| Keys, IDs                          | `Kbd`, `CopyButton`, `MiddleTruncate` (hashes and IDs only)                         |
+| Times                              | `RelativeTime`                                                                      |
 
 ## Class names
 

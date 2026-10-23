@@ -34,7 +34,7 @@
 		<span class="lead">{@render leading()}</span>
 	{:else if icon}
 		{@const Glyph = icon}
-		<span class="tile tile--{tone}"><Glyph size={14} aria-hidden="true" /></span>
+		<span class="tile tile--{tone}"><Glyph size={17} strokeWidth={1.75} aria-hidden="true" /></span>
 	{/if}
 	<span class="label">{label}</span>
 	{#if count !== undefined}<span class="count count--{countTone ?? tone}">{count}</span>{/if}
@@ -100,25 +100,16 @@
 		flex-shrink: 0;
 		width: 1.5rem;
 		height: 1.5rem;
-		border-radius: calc(0.4375rem * var(--corner-scale));
-		corner-shape: var(--corner);
-		background: color-mix(in oklab, var(--neutral-10) 7%, transparent);
 		color: var(--text-muted);
 		transition:
 			background-color var(--dur-fast) ease,
 			color var(--dur-fast) ease;
 	}
 	.tile--danger {
-		background: color-mix(in oklab, var(--red-solid) 12%, transparent);
 		color: var(--red-9);
 	}
 	.item--active .tile {
-		background: var(--accent-solid);
-		color: var(--on-solid);
-	}
-	.item--active .tile--danger {
-		background: color-mix(in oklab, var(--red-solid) 12%, transparent);
-		color: var(--red-9);
+		color: var(--accent-9);
 	}
 	.lead {
 		display: grid;

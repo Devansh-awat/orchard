@@ -2,10 +2,9 @@
 	import type { Snippet } from 'svelte';
 	import { onMount } from 'svelte';
 	import { Plus, ArrowRight, ChevronRight } from 'lucide-svelte';
-	import RemoteImg from '$lib/components/ui/RemoteImg.svelte';
+	import AppIcon from '$lib/components/ui/AppIcon.svelte';
 	import RelativeTime from '$lib/components/ui/RelativeTime.svelte';
-	import { auraColors, resolveColors } from '$lib/components/ui/Aura.svelte';
-	import { bakeBlur, colorsImage } from '$lib/components/aura/aura';
+	import { bakeBlur } from '$lib/components/aura/aura';
 	import { springCollapse, springRotate } from '$lib/utils/motion.svelte';
 
 	let {
@@ -37,32 +36,31 @@
 	let host = $state<HTMLElement>();
 	let mesh = $state<string | null>(null);
 	let awake = $state(false);
-	const letter = $derived(name.trim().charAt(0).toUpperCase());
 
 	onMount(() => {
 		if (!host) return;
-		const source = background || image || colorsImage(resolveColors(host, auraColors(name)));
-		if (source) bakeBlur(source).then((url) => (mesh = url));
+		if (background) bakeBlur(background).then((url) => (mesh = url));
 	});
 </script>
 
 <section
 	bind:this={host}
 	class="project"
+	class:project--media={!!background}
 	class:project--awake={awake}
 	aria-label={name}
 	onpointerenter={() => (awake = true)}
 >
-	<div
-		class="backdrop"
-		class:backdrop--ready={!!mesh}
-		style:--mesh={mesh ? `url("${mesh}")` : 'none'}
-	>
-		<div class="mesh mesh--1"></div>
-		<div class="mesh mesh--2"></div>
-		<div class="mesh mesh--3"></div>
-		<div class="veil"></div>
-	</div>
+	{#if background}<div
+			class="backdrop"
+			class:backdrop--ready={!!mesh}
+			style:--mesh={mesh ? `url("${mesh}")` : 'none'}
+		>
+			<div class="mesh mesh--1"></div>
+			<div class="mesh mesh--2"></div>
+			<div class="mesh mesh--3"></div>
+			<div class="veil"></div>
+		</div>{/if}
 
 	<header class="head">
 		<button
@@ -76,9 +74,7 @@
 			<ChevronRight size={16} />
 		</button>
 		<a class="identity" {href}>
-			<span class="avatar">
-				{#if image}<RemoteImg src={image} class="avatar-img" />{:else}{letter}{/if}
-			</span>
+			<AppIcon {name} kind="project" icon={image} size="lg" />
 			<span class="text">
 				<span class="name">{name}</span>
 				<span class="meta">
@@ -111,6 +107,12 @@
 <style>
 	.project {
 		--head-h: 5rem;
+		--h-fg: var(--text-default);
+		--h-muted: var(--text-muted);
+		--h-fill: color-mix(in oklab, var(--neutral-10) 6%, transparent);
+		--h-fill-hover: color-mix(in oklab, var(--neutral-10) 10%, transparent);
+		--h-edge: color-mix(in oklab, var(--neutral-10) 10%, transparent);
+		--h-pill: color-mix(in oklab, var(--neutral-10) 6%, transparent);
 		position: relative;
 		min-width: 0;
 		border-radius: calc(var(--radius-panel) * var(--corner-scale));
@@ -119,6 +121,17 @@
 		box-shadow: var(--shadow-raised);
 		overflow: clip;
 		isolation: isolate;
+	}
+	.project--media {
+		--h-fg: var(--on-media);
+		--h-muted: var(--on-media-muted);
+		--h-fill: var(--on-media-fill);
+		--h-fill-hover: var(--on-media-fill-hover);
+		--h-edge: var(--on-media-edge);
+		--h-pill: var(--on-media-pill);
+	}
+	.project:not(.project--media) .head {
+		box-shadow: inset 0 -1px 0 var(--border-default);
 	}
 	.backdrop {
 		position: absolute;
@@ -198,7 +211,7 @@
 		gap: 0.75rem;
 		height: var(--head-h);
 		padding: 0 1.25rem 0 0.75rem;
-		color: var(--on-media);
+		color: var(--h-fg);
 	}
 	.chev {
 		display: grid;
@@ -209,13 +222,13 @@
 		border: none;
 		border-radius: 50%;
 		background: none;
-		color: var(--on-media-muted);
+		color: var(--h-muted);
 		cursor: pointer;
 		transition: background-color var(--dur-fast) ease;
 	}
 	.chev:hover {
-		background: var(--on-media-fill);
-		color: var(--on-media);
+		background: var(--h-fill);
+		color: var(--h-fg);
 	}
 	.identity {
 		display: flex;
@@ -225,25 +238,6 @@
 		min-width: 0;
 		color: inherit;
 		text-decoration: none;
-	}
-	.avatar {
-		display: grid;
-		place-items: center;
-		flex-shrink: 0;
-		width: 2.75rem;
-		height: 2.75rem;
-		border-radius: calc(0.75rem * var(--corner-scale));
-		corner-shape: var(--corner);
-		background: var(--on-media-fill);
-		box-shadow: inset 0 0 0 0.5px var(--on-media-edge);
-		font-size: var(--text-title-3);
-		font-weight: var(--weight-semibold);
-		overflow: hidden;
-	}
-	.avatar :global(.avatar-img) {
-		width: 100%;
-		height: 100%;
-		object-fit: contain;
 	}
 	.text {
 		display: flex;
@@ -269,7 +263,7 @@
 		min-width: 0;
 		overflow: hidden;
 		white-space: nowrap;
-		color: var(--on-media-muted);
+		color: var(--h-muted);
 		font-size: var(--text-callout);
 		font-variant-numeric: tabular-nums;
 		mask-image: linear-gradient(90deg, black calc(100% - 1.5rem), transparent);
@@ -280,7 +274,7 @@
 		text-box: trim-both cap alphabetic;
 	}
 	.owner {
-		color: var(--on-media);
+		color: var(--h-fg);
 		font-weight: var(--weight-semibold);
 	}
 	.sep {
@@ -288,7 +282,7 @@
 		height: 2px;
 		flex-shrink: 0;
 		border-radius: 50%;
-		background: var(--on-media-muted);
+		background: var(--h-muted);
 	}
 	.actions {
 		display: flex;
@@ -303,7 +297,7 @@
 		height: 1.75rem;
 		padding: 0 0.625rem;
 		border-radius: var(--radius-pill);
-		background: var(--on-media-pill);
+		background: var(--h-pill);
 		font-size: var(--text-callout);
 		font-weight: var(--weight-semibold);
 		font-variant-numeric: tabular-nums;
@@ -324,8 +318,8 @@
 		height: 1.75rem;
 		border: none;
 		border-radius: var(--radius-pill);
-		background: var(--on-media-fill);
-		color: var(--on-media);
+		background: var(--h-fill);
+		color: var(--h-fg);
 		font: inherit;
 		font-size: var(--text-callout);
 		font-weight: var(--weight-semibold);
@@ -344,7 +338,7 @@
 	}
 	.pill:hover,
 	.round:hover {
-		background: var(--on-media-fill-hover);
+		background: var(--h-fill-hover);
 	}
 
 	.body {
