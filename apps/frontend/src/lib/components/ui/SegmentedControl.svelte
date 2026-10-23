@@ -81,7 +81,7 @@
 			0 2px 6px rgb(0 0 0 / 0.04);
 		pointer-events: none;
 	}
-	.thumb[data-ready] {
+	.thumb:global([data-ready]) {
 		transition:
 			transform var(--spring-snappy-duration) var(--spring-snappy),
 			width var(--spring-snappy-duration) var(--spring-snappy);

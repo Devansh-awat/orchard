@@ -119,8 +119,4 @@
 		opacity: 0.5;
 		cursor: not-allowed;
 	}
-	textarea.control {
-		height: auto;
-		padding: 0.5rem 0.75rem;
-	}
 </style>

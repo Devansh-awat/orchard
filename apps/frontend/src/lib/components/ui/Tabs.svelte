@@ -150,7 +150,7 @@
 		corner-shape: var(--corner);
 		background: var(--text-default);
 	}
-	.bar[data-ready] {
+	.bar:global([data-ready]) {
 		transition:
 			transform var(--spring-snappy-duration) var(--spring-snappy),
 			width var(--spring-snappy-duration) var(--spring-snappy);
