@@ -10,6 +10,9 @@
 	import EntityLine from '$lib/components/patterns/EntityLine.svelte';
 	import LiquidNewButton from '$lib/components/patterns/LiquidNewButton.svelte';
 	import LiveIsland, { type IslandActivity } from '$lib/components/patterns/LiveIsland.svelte';
+	import SpotlightSearch, {
+		type SpotlightItem
+	} from '$lib/components/patterns/SpotlightSearch.svelte';
 	import NeedsAttention from '$lib/components/patterns/NeedsAttention.svelte';
 	import RecentBuilds from '$lib/components/patterns/RecentBuilds.svelte';
 	import { PROJECTS, SIDEBAR, BUILD_FEED, MORE_PROJECTS } from '../fixtures';
@@ -41,6 +44,25 @@
 		updatedAt: string;
 		entities: Entity[];
 	}[];
+
+	const SEARCH_ITEMS: SpotlightItem[] = ALL.flatMap((p) => [
+		{
+			id: p.id,
+			label: p.name,
+			sublabel: p.counts.join(' · '),
+			kind: 'project' as const,
+			icon: p.image,
+			href: '#'
+		},
+		...p.entities.map((e) => ({
+			id: `${p.id}-${e.name}`,
+			label: e.name,
+			sublabel: p.name,
+			kind: e.kind,
+			status: e.status,
+			href: '#'
+		}))
+	]);
 
 	function summarize(kinds: string[]) {
 		const failing = kinds.filter((k) => k === 'error').length;
@@ -247,7 +269,11 @@
 
 <Page title="Your Apps" width="wide" aside={sideColumn}>
 	{#snippet actions()}
-		<SearchField placeholder="Search apps" shortcut="/" />
+		{#if exp.search === 'spotlight'}
+			<SpotlightSearch items={SEARCH_ITEMS} />
+		{:else}
+			<SearchField placeholder="Search apps" shortcut="/" />
+		{/if}
 		{#if exp.newButton === 'liquid'}
 			<LiquidNewButton />
 		{:else}
