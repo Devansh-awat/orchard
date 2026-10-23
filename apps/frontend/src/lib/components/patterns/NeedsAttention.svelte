@@ -60,7 +60,6 @@
 	}
 	.name {
 		font-size: var(--text-body);
-		font-weight: var(--weight-medium);
 	}
 	.reason {
 		color: var(--red-9);

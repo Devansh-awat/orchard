@@ -43,7 +43,7 @@
 	}
 	.title {
 		font-size: var(--text-headline);
-		font-weight: var(--weight-semibold);
+		font-weight: var(--weight-medium);
 		text-box: trim-both cap alphabetic;
 	}
 	.meta {

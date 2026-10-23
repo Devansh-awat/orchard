@@ -126,6 +126,21 @@ callout|caption|micro`, `rounded-control|card|panel`.
 | Keys, IDs                          | `Kbd`, `CopyButton`, `MiddleTruncate` (hashes and IDs only)                         |
 | Times                              | `RelativeTime`                                                                      |
 
+## Bold budget
+
+Semibold is spent, not sprinkled. A screen gets one or two semibold things: the page title, and anything that is genuinely wrong (a failing count, a crashed status). Everything else is regular or medium.
+
+- Widget and section titles: medium.
+- Names in lists, rows and cards: regular or medium, never semibold.
+- Status labels: regular when healthy, semibold only for failures.
+- Owners, counts and metadata: regular, coloured or muted instead of weighted.
+
+If a row looks flat without bold, fix it with size, tone or spacing first.
+
+## Highlights never touch
+
+Any list where one row can be selected while another is hovered (sidebar, settings rail, segmented lists) keeps at least `0.25rem` between rows. Two filled backgrounds touching read as one blob, and the hover looks like it is pushing into the selected row.
+
 ## Class names
 
 Scoped classes must not reuse legacy global names (`btn`, `card`, `badge`, `input`,

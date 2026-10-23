@@ -10,62 +10,14 @@ const off = { value: 'off', label: 'Off' };
 
 export const EXPERIMENTS: Experiment[] = [
 	{
-		id: 'eyebrow',
-		label: 'Date above title',
-		group: 'Header',
-		options: [off, { value: 'date', label: 'Date' }, { value: 'org', label: 'Org' }],
-		initial: 'off'
-	},
-	{
-		id: 'search',
-		label: 'Search',
-		group: 'Header',
-		options: [
-			{ value: 'header', label: 'Corner' },
-			{ value: 'wide', label: 'Wide' }
-		],
-		initial: 'header'
-	},
-	{
-		id: 'summary',
-		label: 'Fleet summary',
-		group: 'Header',
-		options: [
-			off,
-			{ value: 'sentence', label: 'Sentence' },
-			{ value: 'numbers', label: 'Numbers' },
-			{ value: 'rings', label: 'Rings' }
-		],
-		initial: 'off'
-	},
-	{
-		id: 'hero',
-		label: 'Featured project',
-		group: 'Top',
-		options: [
-			off,
-			{ value: 'spotlight', label: 'Spotlight' },
-			{ value: 'banner', label: 'Banner' }
-		],
-		initial: 'off'
-	},
-	{
-		id: 'upNext',
-		label: 'Up next',
-		group: 'Top',
-		options: [off, { value: 'shelf', label: 'Shelf' }, { value: 'dock', label: 'Dock' }],
-		initial: 'off'
-	},
-	{
-		id: 'projects',
+		id: 'density',
 		label: 'Projects',
 		group: 'Body',
 		options: [
-			{ value: 'groups', label: 'Folders' },
-			{ value: 'tiles', label: 'Tiles' },
-			{ value: 'list', label: 'List' }
+			{ value: 'regular', label: 'Folders' },
+			{ value: 'compact', label: 'Compact' }
 		],
-		initial: 'groups'
+		initial: 'regular'
 	},
 	{
 		id: 'appLayout',
@@ -76,34 +28,23 @@ export const EXPERIMENTS: Experiment[] = [
 			{ value: 'dense', label: 'Dense' },
 			{ value: 'rows', label: 'Rows' }
 		],
-		initial: 'cards'
-	},
-	{
-		id: 'sectionHeads',
-		label: 'Section titles',
-		group: 'Body',
-		options: [off, { value: 'on', label: 'On' }],
-		initial: 'off'
+		initial: 'dense'
 	},
 	{
 		id: 'cardMetrics',
-		label: 'App card detail',
+		label: 'App detail',
 		group: 'Body',
 		options: [
 			{ value: 'text', label: 'Text' },
 			{ value: 'spark', label: 'Traffic' }
 		],
-		initial: 'text'
+		initial: 'spark'
 	},
 	{
 		id: 'aside',
 		label: 'Side column',
 		group: 'Side',
-		options: [
-			off,
-			{ value: 'widgets', label: 'Widgets' },
-			{ value: 'resources', label: '+ Resources' }
-		],
+		options: [off, { value: 'widgets', label: 'Widgets' }],
 		initial: 'widgets'
 	},
 	{
@@ -115,7 +56,7 @@ export const EXPERIMENTS: Experiment[] = [
 	}
 ];
 
-const KEY = 'orchard-dev-experiments';
+const KEY = 'orchard-dev-experiments-v2';
 
 function load(): Record<string, string> {
 	const base = Object.fromEntries(EXPERIMENTS.map((e) => [e.id, e.initial]));

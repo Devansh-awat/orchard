@@ -36,7 +36,10 @@
 	let failed = $state(false);
 </script>
 
-<div class="entity motion-echo echo--{status.kind}" {@attach stateEcho(() => status.kind)}>
+<div
+	class="entity entity--{status.kind} motion-echo echo--{status.kind}"
+	{@attach stateEcho(() => status.kind)}
+>
 	<a class="hit" {href} aria-label={name}></a>
 	<div class="top">
 		<span class="tile">
@@ -71,6 +74,7 @@
 <style>
 	.entity {
 		position: relative;
+		container-type: inline-size;
 		display: flex;
 		flex-direction: column;
 		gap: 0.875rem;
@@ -156,7 +160,7 @@
 	.name {
 		color: var(--text-default);
 		font-size: var(--text-headline);
-		font-weight: var(--weight-semibold);
+		font-weight: var(--weight-medium);
 		letter-spacing: -0.01em;
 	}
 	.detail {
@@ -193,6 +197,9 @@
 		align-items: center;
 		gap: 0.5rem;
 		color: var(--text-muted);
+	}
+	.entity--error .status {
+		color: var(--red-9);
 		font-weight: var(--weight-semibold);
 	}
 	.label,
@@ -200,6 +207,11 @@
 	.when {
 		text-box: trim-both cap alphabetic;
 		white-space: nowrap;
+	}
+	@container (max-width: 17rem) {
+		.traffic + .when {
+			display: none;
+		}
 	}
 	.traffic {
 		display: inline-flex;

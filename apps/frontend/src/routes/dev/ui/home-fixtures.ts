@@ -1,109 +1,9 @@
-import type { UpNextItem } from '$lib/components/patterns/UpNextShelf.svelte';
-import type { AppDockItem } from '$lib/components/patterns/AppDock.svelte';
-import type { SpotlightItem } from '$lib/components/patterns/HomeSpotlight.svelte';
-import type { StatusMeta } from '$lib/components/ui/status';
+import type { SpotlightItem } from '$lib/components/patterns/ProjectSpotlight.svelte';
+import type { ShelfItem } from '$lib/components/patterns/Shelf.svelte';
 import { PROJECTS, MORE_PROJECTS, BUILD_FEED } from './fixtures';
 
-const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
-
-const [hackclub, terra] = PROJECTS;
-const [flavortown, mercury] = MORE_PROJECTS;
-
-export const UP_NEXT: UpNextItem[] = [
-	{
-		id: 'u1',
-		app: 'api',
-		project: hackclub.name,
-		href: '#',
-		icon: hackclub.image,
-		status: 'Building',
-		tone: 'progress',
-		progress: 0.62,
-		at: ago(0.5)
-	},
-	{
-		id: 'u2',
-		app: 'worker',
-		project: terra.name,
-		href: '#',
-		icon: terra.image,
-		background: terra.background,
-		status: 'Crashed · out of memory',
-		tone: 'error',
-		at: ago(12)
-	},
-	{
-		id: 'u3',
-		app: 'web',
-		project: flavortown.name,
-		href: '#',
-		icon: flavortown.image,
-		status: 'Deployed',
-		tone: 'success',
-		at: ago(2)
-	},
-	{
-		id: 'u4',
-		app: 'terra-client',
-		project: terra.name,
-		href: '#',
-		background: terra.background,
-		status: 'Deploying',
-		tone: 'progress',
-		progress: 0.18,
-		at: ago(1)
-	},
-	{
-		id: 'u5',
-		app: 'web',
-		project: hackclub.name,
-		href: '#',
-		status: 'Deployed',
-		tone: 'success',
-		at: ago(3)
-	},
-	{
-		id: 'u6',
-		app: 'postgres',
-		project: flavortown.name,
-		href: '#',
-		kind: 'database',
-		status: 'Backed up',
-		tone: 'success',
-		at: ago(48)
-	},
-	{
-		id: 'u7',
-		app: 'web',
-		project: mercury.name,
-		href: '#',
-		status: 'Deployed',
-		tone: 'success',
-		at: ago(26)
-	},
-	{
-		id: 'u8',
-		app: 'nightly-sync',
-		project: terra.name,
-		href: '#',
-		kind: 'job',
-		status: 'Next run at 03:00',
-		tone: 'neutral'
-	}
-];
-
-export const PINNED: AppDockItem[] = [
-	{ id: 'd1', label: 'hackclub-site', href: '#', icon: hackclub.image },
-	{ id: 'd2', label: 'api', href: '#', tone: 'progress', status: 'Building' },
-	{ id: 'd3', label: 'terra', href: '#', icon: terra.image, tone: 'error', status: 'Crashing' },
-	{ id: 'd4', label: 'flavortown', href: '#', icon: flavortown.image },
-	{ id: 'd5', label: 'shipwright', href: '#' },
-	{ id: 'd6', label: 'postgres', href: '#', kind: 'database' },
-	{ id: 'd7', label: 'Mercury', href: '#' },
-	{ id: 'd8', label: 'nightly-sync', href: '#', kind: 'job', tone: 'neutral' }
-];
-
-const [site] = PROJECTS;
+const [site, terra] = PROJECTS;
+const [flavortown] = MORE_PROJECTS;
 const building = BUILD_FEED[0];
 
 export const SPOTLIGHT: SpotlightItem[] = [
@@ -144,50 +44,217 @@ export const SPOTLIGHT: SpotlightItem[] = [
 	}
 ];
 
-type Entity = {
-	kind: 'deployment' | 'database' | 'job';
-	name: string;
-	status: StatusMeta;
-	detail?: string;
-	url?: string;
-	updatedAt?: string | null;
-};
-type Source = {
-	id: string;
-	name: string;
-	image?: string | null;
-	background?: string | null;
-	entities?: Entity[];
+const CATEGORY: Record<string, string> = {
+	automation: 'Automation',
+	cms: 'Publishing',
+	monitoring: 'Monitoring',
+	analytics: 'Analytics',
+	security: 'Security',
+	ai: 'AI',
+	docs: 'Docs',
+	games: 'Games',
+	database: 'Database',
+	backend: 'Backend',
+	developer: 'Developer'
 };
 
-function summarize(apps: { status: StatusMeta }[]) {
-	const failing = apps.filter((a) => a.status.kind === 'error').length;
-	const building = apps.filter((a) => a.status.kind === 'progress').length;
-	if (failing) return { tone: 'error' as const, label: `${failing} failing` };
-	if (building) return { tone: 'progress' as const, label: `${building} building` };
-	if (!apps.length) return { tone: 'neutral' as const, label: 'No apps yet' };
-	return { tone: 'success' as const, label: 'All running' };
-}
-
-const sources: Source[] = [...PROJECTS, ...MORE_PROJECTS];
-
-export const TILE_PROJECTS = sources.map((p) => {
-	const apps = (p.entities ?? []).map((e) => ({
-		name: e.name,
-		kind: e.kind,
-		status: e.status,
-		detail: e.detail,
-		url: e.url,
-		updatedAt: e.updatedAt,
-		href: '#'
-	}));
-	return {
-		id: p.id,
-		name: p.name,
-		href: '#',
-		image: p.image ?? null,
-		background: p.background ?? null,
-		summary: summarize(apps),
-		apps
-	};
+const tpl = (
+	id: string,
+	title: string,
+	description: string,
+	icon: string | null,
+	category: string
+): ShelfItem => ({
+	id,
+	title,
+	subtitle: CATEGORY[category] ?? category,
+	description,
+	href: '#',
+	icon
 });
+
+export const TEMPLATE_SHELVES: { title: string; items: ShelfItem[] }[] = [
+	{
+		title: 'Popular',
+		items: [
+			tpl(
+				'n8n',
+				'n8n',
+				'Workflow automation with a visual editor and hundreds of integrations.',
+				'https://assets.orchard.my/registry/templates/n8n/1.0.0/icon.jpg',
+				'automation'
+			),
+			tpl(
+				'ghost',
+				'Ghost Blog',
+				'Modern publishing platform powered by Ghost with PostgreSQL storage and public domain.',
+				'https://assets.orchard.my/registry/templates/ghost/1.0.0/icon.png',
+				'cms'
+			),
+			tpl(
+				'uptime-kuma',
+				'Uptime Kuma',
+				'Uptime monitoring with status pages and notifications to just about anything.',
+				'https://assets.orchard.my/registry/templates/uptime-kuma/1.0.0/icon.svg',
+				'monitoring'
+			),
+			tpl(
+				'plausible',
+				'Plausible',
+				'Lightweight, privacy-first web analytics. Ships with its own ClickHouse and Postgres.',
+				'https://assets.orchard.my/registry/templates/plausible/1.0.0/icon.png',
+				'analytics'
+			),
+			tpl(
+				'vaultwarden',
+				'Vaultwarden',
+				'A Bitwarden-compatible password server that runs in a few megabytes of RAM.',
+				'https://assets.orchard.my/registry/templates/vaultwarden/1.0.0/icon.svg',
+				'security'
+			),
+			tpl(
+				'open-webui',
+				'Open WebUI',
+				'A chat interface for any OpenAI-compatible API, with accounts, history and document uploads.',
+				'https://assets.orchard.my/registry/templates/open-webui/1.0.0/icon.png',
+				'ai'
+			),
+			tpl(
+				'outline',
+				'Outline',
+				'A team wiki with a fast editor. Needs an OpenID Connect provider to sign in, so pair it with Keycloak.',
+				'https://assets.orchard.my/registry/templates/outline/1.0.0/icon.jpg',
+				'docs'
+			),
+			tpl(
+				'minecraft',
+				'Minecraft Server',
+				'A Paper, Vanilla, Fabric, Forge or modpack server on a public port, with the world on a volume. Every server.properties knob is a parameter.',
+				null,
+				'games'
+			)
+		]
+	},
+	{
+		title: 'Databases',
+		items: [
+			tpl(
+				'redis',
+				'Valkey Cache',
+				'In-memory key-value cache, Redis-compatible. Internal-only, no public exposure.',
+				'https://assets.orchard.my/registry/templates/redis/1.1.0/icon.png',
+				'database'
+			),
+			tpl(
+				'mongo',
+				'MongoDB',
+				'A document database for the apps that need one. Internal-only, no public exposure.',
+				'https://assets.orchard.my/registry/templates/mongo/1.0.0/icon.jpg',
+				'database'
+			),
+			tpl(
+				'mariadb',
+				'MariaDB',
+				'A MySQL-compatible database for the apps that will not talk to Postgres. Internal-only, no public exposure.',
+				'https://assets.orchard.my/registry/templates/mariadb/1.0.0/icon.png',
+				'database'
+			),
+			tpl(
+				'clickhouse',
+				'ClickHouse',
+				'A column store for analytics at scale. Internal-only; what Plausible and Langfuse want underneath.',
+				'https://assets.orchard.my/registry/templates/clickhouse/1.0.0/icon.png',
+				'database'
+			),
+			tpl(
+				'qdrant',
+				'Qdrant',
+				'A vector database for embeddings and similarity search. Internal-only.',
+				'https://assets.orchard.my/registry/templates/qdrant/1.0.0/icon.png',
+				'database'
+			),
+			tpl(
+				'meilisearch',
+				'Meilisearch',
+				'A fast, typo-tolerant search engine with an easy API. Internal-only; front it from your app.',
+				'https://assets.orchard.my/registry/templates/meilisearch/1.0.0/icon.png',
+				'database'
+			),
+			tpl(
+				'typesense',
+				'Typesense',
+				'An open-source search engine built for instant results. Internal-only; front it from your app.',
+				'https://assets.orchard.my/registry/templates/typesense/1.0.0/icon.png',
+				'database'
+			),
+			tpl(
+				'pocketbase',
+				'PocketBase',
+				'A backend in one file: SQLite, realtime, auth and an admin UI. Create the first admin on first visit.',
+				'https://assets.orchard.my/registry/templates/pocketbase/1.0.0/icon.png',
+				'backend'
+			)
+		]
+	},
+	{
+		title: 'Developer tools',
+		items: [
+			tpl(
+				'code-server',
+				'code-server',
+				'VS Code in the browser, with your home directory on a volume.',
+				'https://assets.orchard.my/registry/templates/code-server/1.0.0/icon.png',
+				'developer'
+			),
+			tpl(
+				'forgejo',
+				'Forgejo',
+				'A community-run Git service with issues, pull requests and Actions. The Codeberg fork of Gitea.',
+				'https://assets.orchard.my/registry/templates/forgejo/1.0.0/icon.png',
+				'developer'
+			),
+			tpl(
+				'grafana',
+				'Grafana',
+				'Dashboards over Prometheus, Postgres, Loki and everything else. Config in Postgres so the pod is disposable.',
+				'https://assets.orchard.my/registry/templates/grafana/1.0.0/icon.jpg',
+				'monitoring'
+			),
+			tpl(
+				'mailpit',
+				'Mailpit',
+				'A fake SMTP server with a web inbox. Point your app at it and read every email it sends.',
+				'https://assets.orchard.my/registry/templates/mailpit/1.0.0/icon.svg',
+				'developer'
+			),
+			tpl(
+				'it-tools',
+				'IT Tools',
+				'A hundred small developer utilities on one page: encoders, hashes, converters, generators. No configuration.',
+				'https://assets.orchard.my/registry/templates/it-tools/1.0.0/icon.png',
+				'developer'
+			),
+			tpl(
+				'excalidraw',
+				'Excalidraw',
+				'A whiteboard with a hand-drawn feel. No accounts, drawings stay in the browser.',
+				'https://assets.orchard.my/registry/templates/excalidraw/1.0.0/icon.png',
+				'developer'
+			),
+			tpl(
+				'pgadmin',
+				'pgAdmin',
+				'The Postgres admin UI. Point it at your managed databases.',
+				'https://assets.orchard.my/registry/templates/pgadmin/1.0.0/icon.png',
+				'developer'
+			),
+			tpl(
+				'drawio',
+				'draw.io',
+				'Diagrams in the browser: flowcharts, architecture, UML. Export to PNG, SVG or PDF.',
+				'https://assets.orchard.my/registry/templates/drawio/1.0.0/icon.png',
+				'developer'
+			)
+		]
+	}
+];

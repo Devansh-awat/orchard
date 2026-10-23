@@ -177,7 +177,7 @@
 		display: flex;
 		flex: 1;
 		flex-direction: column;
-		gap: 0.125rem;
+		gap: 0.25rem;
 		min-height: 0;
 		overflow-y: auto;
 		scrollbar-width: none;

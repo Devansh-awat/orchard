@@ -1,16 +1,17 @@
 <script lang="ts" module>
-	export type UpNextTone = 'success' | 'progress' | 'error' | 'neutral';
+	export type ShelfTone = 'success' | 'progress' | 'error' | 'neutral';
 
-	export type UpNextItem = {
+	export type ShelfItem = {
 		id: string;
-		app: string;
-		project: string;
+		title: string;
+		subtitle?: string;
+		description?: string;
 		href: string;
 		kind?: 'deployment' | 'database' | 'job';
 		icon?: string | null;
 		background?: string | null;
-		status: string;
-		tone: UpNextTone;
+		status?: string;
+		tone?: ShelfTone;
 		progress?: number;
 		at?: string;
 	};
@@ -26,11 +27,11 @@
 
 	let {
 		items,
-		title = 'Up next',
+		title,
 		seeAllHref = undefined
 	}: {
-		items: UpNextItem[];
-		title?: string;
+		items: ShelfItem[];
+		title: string;
 		seeAllHref?: string;
 	} = $props();
 
@@ -62,7 +63,7 @@
 		}
 	});
 
-	function artOf(item: UpNextItem) {
+	function artOf(item: ShelfItem) {
 		const src = item.background ?? item.icon;
 		return src ? (baked[src] ?? null) : null;
 	}
@@ -144,11 +145,12 @@
 		<ul class="track" bind:this={track}>
 			{#each items as item (item.id)}
 				{@const art = artOf(item)}
-				{@const live = item.tone === 'progress' && item.progress != null}
+				{@const tone = item.tone ?? 'neutral'}
+				{@const live = tone === 'progress' && item.progress != null}
 				<li class="slot">
-					<a class="tile tile--{item.tone}" href={item.href}>
+					<a class="tile tile--{tone}" href={item.href}>
 						<span class="art" class:art--media={!!art}>
-							<span class="art-clip" style:--tint={tintOf(item.app)}>
+							<span class="art-clip" style:--tint={tintOf(item.title)}>
 								<span
 									class="art-mesh"
 									class:art-mesh--ready={!!art}
@@ -156,7 +158,7 @@
 								></span>
 								<span class="art-veil"></span>
 								<span class="art-icon"
-									><AppIcon name={item.app} kind={item.kind} icon={item.icon} size="lg" /></span
+									><AppIcon name={item.title} kind={item.kind} icon={item.icon} size="lg" /></span
 								>
 								{#if live}
 									<span class="bar" aria-hidden="true"
@@ -168,16 +170,20 @@
 						</span>
 						<span class="caption">
 							<span class="caption-top">
-								<span class="app">{item.app}</span>
+								<span class="app">{item.title}</span>
 								{#if item.at && !live}<span class="when"><RelativeTime date={item.at} /></span>{/if}
 							</span>
-							<span class="caption-meta">
-								<span class="project">{item.project}</span>
-								<span class="sep" aria-hidden="true"></span>
-								<span class="state"
-									>{item.status}{#if live}{` · ${percent(item.progress ?? 0)}%`}{/if}</span
-								>
-							</span>
+							{#if item.subtitle || item.status}
+								<span class="caption-meta">
+									{#if item.subtitle}<span class="project">{item.subtitle}</span>{/if}
+									{#if item.subtitle && item.status}<span class="sep" aria-hidden="true"
+										></span>{/if}
+									{#if item.status}<span class="state"
+											>{item.status}{#if live}{` · ${percent(item.progress ?? 0)}%`}{/if}</span
+										>{/if}
+								</span>
+							{/if}
+							{#if item.description}<span class="description">{item.description}</span>{/if}
 						</span>
 					</a>
 				</li>
@@ -187,6 +193,15 @@
 </section>
 
 <style>
+	.description {
+		display: -webkit-box;
+		overflow: hidden;
+		color: var(--text-muted);
+		font-size: var(--text-caption);
+		line-height: 1.35;
+		-webkit-line-clamp: 2;
+		-webkit-box-orient: vertical;
+	}
 	.shelf {
 		display: flex;
 		flex-direction: column;

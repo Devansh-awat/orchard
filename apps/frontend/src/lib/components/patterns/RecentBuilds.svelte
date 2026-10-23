@@ -1,9 +1,8 @@
 <script lang="ts">
 	import RelativeTime from '$lib/components/ui/RelativeTime.svelte';
 	import AppIcon from '$lib/components/ui/AppIcon.svelte';
-	import Ring from '$lib/components/ui/Ring.svelte';
 	import Widget from '$lib/components/ui/Widget.svelte';
-	import type { BuildItem } from './builds';
+	import type { BuildItem, BuildPhaseItem } from './builds';
 
 	let {
 		builds,
@@ -13,57 +12,75 @@
 		title?: string;
 	} = $props();
 
-	const STAGES = ['Queued', 'Build', 'Push', 'Deploy'];
-
-	function stageProgress(b: BuildItem) {
-		const stages = b.stages ?? STAGES;
-		const stage = b.stage ?? 1;
-		const span = 1 / stages.length;
-		return Math.min(1, Math.max(0.08, ((b.progress ?? 0) - stage * span) / span));
-	}
-
 	const featured = $derived(builds[0]);
 	const rest = $derived(builds.slice(1, 4));
+	const live = $derived(featured?.status.kind === 'progress');
+
+	let now = $state(Date.now());
+	let mountedAt = Date.now();
+
+	$effect(() => {
+		if (!live) return;
+		mountedAt = Date.now();
+		const id = setInterval(() => (now = Date.now()), 1000);
+		return () => clearInterval(id);
+	});
+
+	const phases = $derived.by((): BuildPhaseItem[] => {
+		const list = featured?.phases ?? [];
+		const extra = live ? Math.max(0, now - mountedAt) : 0;
+		return list.map((p) => (p.live ? { ...p, ms: p.ms + extra } : p));
+	});
+	const total = $derived(phases.reduce((sum, p) => sum + p.ms, 0));
+	const current = $derived(phases.find((p) => p.live) ?? phases[phases.length - 1]);
+
+	function clock(ms: number) {
+		const s = Math.floor(ms / 1000);
+		if (s < 60) return `${s}s`;
+		return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+	}
 </script>
 
 <Widget {title} meta="Today">
 	{#if featured}
-		{@const stages = featured.stages ?? STAGES}
-		{@const kind = featured.status.kind}
-		{@const live = kind === 'progress'}
-		{@const stage = featured.stage ?? (live ? 1 : stages.length - 1)}
-		<a class="live live--{kind}" href={featured.href}>
+		<a class="live live--{featured.status.kind}" href={featured.href}>
 			<span class="live-top">
-				<AppIcon name={featured.app} kind={featured.kind} icon={featured.icon} size="md" />
+				<AppIcon
+					name={featured.project ?? featured.app}
+					kind="project"
+					icon={featured.projectIcon}
+					size="md"
+				/>
 				<span class="live-text">
 					<span class="live-app">{featured.app}</span>
-					<span class="live-state"
-						>{live ? `${featured.status.label} · ${stages[stage]}` : featured.status.label}</span
-					>
+					<span class="live-state">
+						{#if live && current}
+							<span class="phase-dot phase--{current.id}"></span>
+							<span>{current.label}</span>
+						{:else}
+							<span>{featured.status.label}</span>
+						{/if}
+						{#if featured.project}<span class="faint">· {featured.project}</span>{/if}
+					</span>
 				</span>
-				{#if live}
-					<Ring
-						value={Math.round((featured.progress ?? 0) * 100)}
-						size={40}
-						thickness={3}
-						tone="warning"
-					/>
+				{#if total}
+					<span class="elapsed">{clock(total)}</span>
 				{:else if featured.duration}
-					<span class="live-took">{featured.duration}</span>
+					<span class="elapsed">{featured.duration}</span>
 				{/if}
 			</span>
-			<span class="track" aria-hidden="true">
-				{#each stages as label, i (label)}
-					<span
-						class="seg"
-						class:seg--done={i < stage || (!live && kind === 'success')}
-						class:seg--now={i === stage}
-					>
-						<span class="seg-fill" style:--p={i === stage && live ? stageProgress(featured) : 1}
+			{#if phases.length > 1 && total > 0}
+				<span class="phases" role="img" aria-label="Where the time went">
+					{#each phases as p (p.id)}
+						<span
+							class="seg phase--{p.id}"
+							class:seg--live={p.live}
+							style:flex-grow={Math.max(p.ms, total * 0.03)}
+							title="{p.label} {clock(p.ms)}"
 						></span>
-					</span>
-				{/each}
-			</span>
+					{/each}
+				</span>
+			{/if}
 			<span class="live-foot">
 				<span class="live-msg"
 					>{featured.branch ? `${featured.message} · ${featured.branch}` : featured.message}</span
@@ -72,13 +89,15 @@
 			</span>
 		</a>
 	{/if}
-	<div class="w-list">
+	<div class="list">
 		{#each rest as b (b.id)}
-			<a class="w-row" href={b.href}>
-				<span class="dot dot--{b.status.kind}"></span>
-				<span class="w-row-app">{b.app}</span>
-				<span class="w-row-msg">{b.message}</span>
-				<span class="w-row-when"><RelativeTime date={b.at} /></span>
+			<a class="row" href={b.href}>
+				<AppIcon name={b.project ?? b.app} kind="project" icon={b.projectIcon} size="xs" />
+				<span class="row-app">{b.app}</span>
+				<span class="row-msg" class:row-msg--error={b.status.kind === 'error'}
+					>{b.status.kind === 'error' ? 'Failed' : b.message}</span
+				>
+				<span class="row-when"><RelativeTime date={b.at} /></span>
 			</a>
 		{/each}
 	</div>
@@ -91,17 +110,6 @@
 		gap: 0.875rem;
 		color: inherit;
 		text-decoration: none;
-		--live: var(--neutral-7);
-	}
-	.live--progress,
-	.live--warning {
-		--live: var(--amber-solid);
-	}
-	.live--success {
-		--live: var(--green-solid);
-	}
-	.live--error {
-		--live: var(--red-solid);
 	}
 	.live-top {
 		display: flex;
@@ -116,7 +124,6 @@
 		min-width: 0;
 	}
 	.live-app,
-	.live-state,
 	.live-msg {
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -127,60 +134,81 @@
 	}
 	.live-app {
 		font-size: var(--text-headline);
-		font-weight: var(--weight-semibold);
+		font-weight: var(--weight-medium);
 		letter-spacing: -0.01em;
 	}
 	.live-state {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		min-width: 0;
+		overflow: hidden;
+		white-space: nowrap;
 		color: var(--text-muted);
 		font-size: var(--text-callout);
 	}
-	.live--progress .live-state {
-		color: var(--amber-9);
+	.live-state > :global(*) {
+		text-box: trim-both cap alphabetic;
 	}
 	.live--error .live-state {
 		color: var(--red-9);
 	}
-	.live--success .live-state {
-		color: var(--green-9);
+	.faint {
+		color: var(--text-faint);
 	}
-	.live-took {
+	.elapsed {
+		flex-shrink: 0;
 		color: var(--text-muted);
 		font-size: var(--text-callout);
 		font-variant-numeric: tabular-nums;
+		text-box: trim-both cap alphabetic;
 	}
-	.track {
-		display: grid;
-		grid-auto-flow: column;
-		grid-auto-columns: 1fr;
-		gap: 0.25rem;
+	.phases {
+		display: flex;
+		gap: 2px;
+		height: 0.375rem;
 	}
 	.seg {
-		height: 0.3125rem;
+		flex-basis: 0;
+		min-width: 3px;
 		border-radius: var(--radius-pill);
-		background: color-mix(in oklab, var(--neutral-10) 8%, transparent);
-		overflow: hidden;
+		background: var(--phase);
 	}
-	.seg-fill {
-		display: block;
-		height: 100%;
-		border-radius: inherit;
-		background: var(--live);
-		transform: translateX(-101%);
-		transition: transform var(--spring-smooth-duration) var(--spring-smooth);
-	}
-	.seg--done .seg-fill {
-		transform: none;
-	}
-	.seg--now .seg-fill {
-		transform: translateX(calc((var(--p) - 1) * 100%));
-	}
-	.live--progress .seg--now .seg-fill {
+	.seg--live {
 		animation: seg-breathe 1.6s ease-in-out infinite;
 	}
 	@keyframes seg-breathe {
 		50% {
 			opacity: 0.55;
 		}
+	}
+	.phase-dot {
+		width: 6px;
+		height: 6px;
+		flex-shrink: 0;
+		border-radius: 50%;
+		background: var(--phase);
+	}
+	.phase--queue {
+		--phase: var(--neutral-5);
+	}
+	.phase--schedule {
+		--phase: var(--amber-5);
+	}
+	.phase--start {
+		--phase: var(--amber-7);
+	}
+	.phase--clone {
+		--phase: var(--hue-violet, var(--blue-5));
+	}
+	.phase--build {
+		--phase: var(--blue-7);
+	}
+	.phase--push {
+		--phase: var(--green-7);
+	}
+	.phase--rollout {
+		--phase: var(--green-5);
 	}
 	.live-foot {
 		display: flex;
@@ -199,13 +227,13 @@
 		font-size: var(--text-caption);
 		font-variant-numeric: tabular-nums;
 	}
-	.w-list {
+	.list {
 		display: flex;
 		flex-direction: column;
 		padding-top: 0.75rem;
 		box-shadow: inset 0 0.5px 0 var(--border-strong);
 	}
-	.w-row {
+	.row {
 		display: grid;
 		grid-template-columns: auto auto minmax(0, 1fr) auto;
 		align-items: center;
@@ -215,38 +243,18 @@
 		font-size: var(--text-callout);
 		text-decoration: none;
 	}
-	.w-row-app {
-		font-weight: var(--weight-medium);
-	}
-	.w-row-msg {
+	.row-msg {
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		color: var(--text-muted);
 	}
-	.w-row-when {
+	.row-msg--error {
+		color: var(--red-9);
+	}
+	.row-when {
 		color: var(--text-faint);
 		font-size: var(--text-caption);
-	}
-
-	.dot {
-		width: 6px;
-		height: 6px;
-		flex-shrink: 0;
-		border-radius: 50%;
-		background: var(--neutral-6);
-	}
-	.dot--success {
-		background: var(--status-success-solid);
-	}
-	.dot--error {
-		background: var(--status-error-solid);
-	}
-	.dot--progress,
-	.dot--warning {
-		background: var(--status-progress-solid);
-	}
-	.dot--info {
-		background: var(--status-info-solid);
+		font-variant-numeric: tabular-nums;
 	}
 </style>

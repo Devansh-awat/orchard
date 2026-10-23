@@ -19,6 +19,7 @@
 		expanded = $bindable(true),
 		onNew = undefined,
 		layout = 'cards',
+		density = 'regular',
 		children
 	}: {
 		name: string;
@@ -31,7 +32,8 @@
 		summary?: { tone: 'success' | 'error' | 'progress' | 'neutral'; label: string };
 		expanded?: boolean;
 		onNew?: () => void;
-		layout?: 'cards' | 'rows' | 'dense';
+		layout?: 'cards' | 'rows' | 'dense' | 'lines';
+		density?: 'regular' | 'compact';
 		children: Snippet;
 	} = $props();
 
@@ -48,7 +50,7 @@
 
 <section
 	bind:this={host}
-	class="project"
+	class="project project--{density}"
 	class:project--media={!!background}
 	class:project--awake={awake}
 	aria-label={name}
@@ -77,7 +79,12 @@
 				><ChevronRight size={16} /></span
 			>
 			<span class="icon" bind:this={iconEl}
-				><AppIcon {name} kind="project" icon={image} size="lg" /></span
+				><AppIcon
+					{name}
+					kind="project"
+					icon={image}
+					size={density === 'compact' ? 'md' : 'lg'}
+				/></span
 			>
 			<span class="text">
 				<span class="name">{name}</span>
@@ -129,6 +136,23 @@
 		box-shadow: var(--shadow-raised);
 		overflow: clip;
 		isolation: isolate;
+	}
+	.project--compact {
+		--head-h: 3.5rem;
+		border-radius: calc(0.875rem * var(--corner-scale));
+	}
+	.project--compact .text {
+		gap: 0.4375rem;
+	}
+	.project--compact .name {
+		font-size: var(--text-body);
+	}
+	.project--compact .meta {
+		font-size: var(--text-caption);
+	}
+	.project--compact .head {
+		gap: 0.625rem;
+		padding-right: 1rem;
 	}
 	.project--media {
 		--h-fg: var(--on-media);
@@ -303,7 +327,6 @@
 	}
 	.owner {
 		color: var(--h-fg);
-		font-weight: var(--weight-semibold);
 	}
 	.sep {
 		width: 2px;
@@ -404,6 +427,12 @@
 		grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
 		gap: 0.5rem;
 		padding: 0.625rem;
+	}
+	.cards--lines {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 0.125rem;
+		padding: 0.375rem;
+		background: none;
 	}
 	.cards--rows {
 		grid-template-columns: minmax(0, 1fr);

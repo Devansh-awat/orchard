@@ -61,7 +61,7 @@
 	.ui-rail-group {
 		display: flex;
 		flex-direction: column;
-		gap: 0.125rem;
+		gap: 0.25rem;
 	}
 	.ui-rail-eyebrow {
 		font-size: var(--text-footnote);
@@ -112,7 +112,7 @@
 		.ui-rail-group {
 			flex-direction: row;
 			align-items: center;
-			gap: 0.125rem;
+			gap: 0.25rem;
 			flex-shrink: 0;
 		}
 		.ui-rail-eyebrow {

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import HomeSpotlight from '$lib/components/patterns/HomeSpotlight.svelte';
+	import ProjectSpotlight from '$lib/components/patterns/ProjectSpotlight.svelte';
 	import DevBar from '../../DevBar.svelte';
 	import { SPOTLIGHT as items } from '../../home-fixtures';
 </script>
@@ -7,15 +7,15 @@
 <div class="lab">
 	<section class="slot">
 		<h1 class="label">Spotlight</h1>
-		<HomeSpotlight {items} variant="spotlight" />
+		<ProjectSpotlight {items} variant="spotlight" />
 	</section>
 	<section class="slot">
 		<h1 class="label">Spotlight, no art</h1>
-		<HomeSpotlight items={[items[1]]} variant="spotlight" />
+		<ProjectSpotlight items={[items[1]]} variant="spotlight" />
 	</section>
 	<section class="slot">
 		<h1 class="label">Banner</h1>
-		<HomeSpotlight {items} variant="banner" />
+		<ProjectSpotlight {items} variant="banner" />
 	</section>
 </div>
 

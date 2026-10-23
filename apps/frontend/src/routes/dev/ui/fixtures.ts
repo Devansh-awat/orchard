@@ -204,18 +204,28 @@ export const BUILD_FEED: BuildItem[] = [
 	{
 		id: 'f1',
 		app: 'api',
+		project: 'hackclub-site',
+		projectIcon: 'https://assets.orchard.my/project-icons/0619ec20-62fc-44e0-9f97-17bb4a5da550.png',
 		message: 'Bump prisma to 6.4',
 		status: buildStatusMeta('building'),
 		at: ago(0.5),
 		branch: 'main',
-		progress: 0.62,
-		stage: 2,
+		startedAt: ago(1.15),
+		phases: [
+			{ id: 'queue', label: 'Queue', ms: 2100 },
+			{ id: 'schedule', label: 'Builder', ms: 4800 },
+			{ id: 'clone', label: 'Clone', ms: 3200 },
+			{ id: 'build', label: 'Build', ms: 41000 },
+			{ id: 'push', label: 'Push', ms: 8000, live: true }
+		],
 		eta: 'About 40s left',
 		href: '#'
 	},
 	{
 		id: 'f2',
 		app: 'web',
+		project: 'hackclub-site',
+		projectIcon: 'https://assets.orchard.my/project-icons/0619ec20-62fc-44e0-9f97-17bb4a5da550.png',
 		message: 'Fix navbar overflow on mobile',
 		status: buildStatusMeta('succeeded'),
 		at: ago(3),
@@ -226,6 +236,8 @@ export const BUILD_FEED: BuildItem[] = [
 	{
 		id: 'f3',
 		app: 'worker',
+		project: 'terra',
+		projectIcon: 'https://assets.orchard.my/project-icons/f01ab01c-3801-488b-8ad1-256d707f935d.gif',
 		message: 'Stream results instead of buffering',
 		status: buildStatusMeta('failed'),
 		at: ago(14),
@@ -236,6 +248,8 @@ export const BUILD_FEED: BuildItem[] = [
 	{
 		id: 'f4',
 		app: 'terra-client',
+		project: 'terra',
+		projectIcon: 'https://assets.orchard.my/project-icons/f01ab01c-3801-488b-8ad1-256d707f935d.gif',
 		message: 'Add sponsors section',
 		status: buildStatusMeta('succeeded'),
 		at: ago(60 * 5),

@@ -14,6 +14,7 @@
 </script>
 
 <script lang="ts">
+	import type { Icon } from '$lib/components/ui/types';
 	import { ArrowRight, ExternalLink } from 'lucide-svelte';
 	import Aura from '$lib/components/ui/Aura.svelte';
 	import RemoteImg from '$lib/components/ui/RemoteImg.svelte';
@@ -25,12 +26,15 @@
 
 	let {
 		items,
-		variant = 'spotlight'
+		variant = 'spotlight',
+		primary = undefined
 	}: {
 		items: SpotlightItem[];
 		variant?: 'spotlight' | 'banner';
+		primary?: { label: string; href?: string; icon?: Icon };
 	} = $props();
 
+	const PrimaryIcon = $derived(primary?.icon ?? ArrowRight);
 	let index = $state(0);
 	let prev = $state<number | null>(null);
 	let dir = $state(1);
@@ -157,8 +161,8 @@
 					</div>
 					{#if variant === 'spotlight'}
 						<div class="actions">
-							<a class="open" href={current.href}
-								><span class="open-label">Open project</span><ArrowRight
+							<a class="open" href={primary?.href ?? current.href}
+								><span class="open-label">{primary?.label ?? 'Open project'}</span><PrimaryIcon
 									size={16}
 									aria-hidden="true"
 								/></a

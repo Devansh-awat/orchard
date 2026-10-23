@@ -40,7 +40,9 @@
 	import SectionTitle from '$lib/components/ui/SectionTitle.svelte';
 	import Sparkline from '$lib/components/ui/Sparkline.svelte';
 	import MetaList from '$lib/components/ui/MetaList.svelte';
-	import ProjectHero from '$lib/components/patterns/ProjectHero.svelte';
+	import ProjectSpotlight from '$lib/components/patterns/ProjectSpotlight.svelte';
+	import Shelf from '$lib/components/patterns/Shelf.svelte';
+	import { SPOTLIGHT, TEMPLATE_SHELVES } from '../home-fixtures';
 	import ProjectBackdrop from '$lib/components/patterns/ProjectBackdrop.svelte';
 	import { PROJECTS, BUILDS, SIDEBAR, BUILD_FEED } from '../fixtures';
 	import RecentBuilds from '$lib/components/patterns/RecentBuilds.svelte';
@@ -66,6 +68,7 @@
 		options={[
 			{ value: 'home', label: 'Org home' },
 			{ value: 'project', label: 'Project' },
+			{ value: 'new', label: 'New' },
 			{ value: 'deployment', label: 'Deployment' },
 			{ value: 'settings', label: 'Settings' }
 		]}
@@ -84,13 +87,13 @@
 	{:else if screen === 'project'}
 		<Page title="terra" width="wide">
 			{#snippet hero()}
-				<ProjectHero name="terra" image={PROJECTS[1].image} meta="12 apps · 4 members">
-					{#snippet eyebrow()}Hack Club{/snippet}
-					{#snippet actions()}
-						<Button icon={Plus}>New</Button>
-						<Button variant="primary" iconRight={ExternalLink}>Visit</Button>
-					{/snippet}
-				</ProjectHero>
+				<div class="spotlight-wrap">
+					<ProjectSpotlight
+						items={[SPOTLIGHT[0]]}
+						variant="spotlight"
+						primary={{ label: 'New app', icon: Plus }}
+					/>
+				</div>
 			{/snippet}
 			{#snippet aside()}
 				<div class="flex flex-col gap-4">
@@ -103,6 +106,18 @@
 					<EntityRow {...e} href="#" />
 				{/each}
 			</List>
+		</Page>
+	{:else if screen === 'new'}
+		<Page title="New project" width="wide">
+			{#snippet actions()}
+				<Button icon={GitBranch}>Import a repository</Button>
+				<Button>Deploy an image</Button>
+			{/snippet}
+			<div class="shelves">
+				{#each TEMPLATE_SHELVES as shelf (shelf.title)}
+					<Shelf title={shelf.title} items={shelf.items} seeAllHref="#" />
+				{/each}
+			</div>
 		</Page>
 	{:else if screen === 'deployment'}
 		<Page title="worker" width="wide">
@@ -257,6 +272,16 @@
 {#if screen === 'home'}<ExperimentsPanel />{/if}
 
 <style>
+	.spotlight-wrap {
+		max-width: calc(var(--page-wide) + 4rem);
+		margin: 0 auto;
+		padding: 2rem 2rem 1.5rem;
+	}
+	.shelves {
+		display: flex;
+		flex-direction: column;
+		gap: 2.5rem;
+	}
 	.switcher {
 		display: flex;
 		gap: 0.5rem;
