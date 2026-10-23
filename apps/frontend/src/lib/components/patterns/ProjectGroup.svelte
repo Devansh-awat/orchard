@@ -5,7 +5,7 @@
 	import AppIcon from '$lib/components/ui/AppIcon.svelte';
 	import RelativeTime from '$lib/components/ui/RelativeTime.svelte';
 	import { bakeBlur } from '$lib/components/aura/aura';
-	import { springCollapse, springRotate } from '$lib/utils/motion.svelte';
+	import { folder } from '$lib/utils/motion.svelte';
 
 	let {
 		name,
@@ -34,6 +34,7 @@
 	} = $props();
 
 	let host = $state<HTMLElement>();
+	let iconEl = $state<HTMLElement>();
 	let mesh = $state<string | null>(null);
 	let awake = $state(false);
 
@@ -66,15 +67,17 @@
 		<button
 			type="button"
 			class="chev"
+			class:chev--open={expanded}
 			aria-label={expanded ? `Collapse ${name}` : `Expand ${name}`}
 			aria-expanded={expanded}
 			onclick={() => (expanded = !expanded)}
-			{@attach springRotate(() => expanded, { rest: 0, on: 90 })}
 		>
 			<ChevronRight size={16} />
 		</button>
 		<a class="identity" {href}>
-			<AppIcon {name} kind="project" icon={image} size="lg" />
+			<span class="icon" bind:this={iconEl}
+				><AppIcon {name} kind="project" icon={image} size="lg" /></span
+			>
 			<span class="text">
 				<span class="name">{name}</span>
 				<span class="meta">
@@ -103,7 +106,7 @@
 		</div>
 	</header>
 
-	<div class="body" {@attach springCollapse(() => !expanded)}>
+	<div class="body" {@attach folder(() => expanded, { origin: () => iconEl })}>
 		<div class="cards">{@render children()}</div>
 	</div>
 </section>
@@ -228,7 +231,12 @@
 		background: none;
 		color: var(--h-muted);
 		cursor: pointer;
-		transition: background-color var(--dur-fast) ease;
+		transition:
+			background-color var(--dur-fast) ease,
+			transform var(--spring-snappy-duration) var(--spring-snappy);
+	}
+	.chev--open {
+		transform: rotate(90deg);
 	}
 	.chev:hover {
 		background: var(--h-fill);
@@ -242,6 +250,10 @@
 		min-width: 0;
 		color: inherit;
 		text-decoration: none;
+	}
+	.icon {
+		display: flex;
+		flex-shrink: 0;
 	}
 	.text {
 		display: flex;
@@ -270,7 +282,6 @@
 		color: var(--h-muted);
 		font-size: var(--text-callout);
 		font-variant-numeric: tabular-nums;
-		mask-image: linear-gradient(90deg, black calc(100% - 1.5rem), transparent);
 		padding-block: 0.3em;
 		margin-block: -0.3em;
 	}
@@ -362,7 +373,7 @@
 	}
 
 	.body {
-		overflow: hidden;
+		overflow: clip;
 	}
 	.cards {
 		display: grid;

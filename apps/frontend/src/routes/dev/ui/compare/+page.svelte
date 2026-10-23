@@ -89,13 +89,9 @@
 		{#if screen === 'project'}<ProjectBackdrop name="terra" image={PROJECTS[1].background} />{/if}
 	{/snippet}
 	{#if screen === 'home'}
-		<Page
-			title="Your Apps"
-			description="Good afternoon, alfd. Everything is running except 3 apps that need a look."
-			width="wide"
-		>
+		<Page title="Your Apps" width="wide">
 			{#snippet actions()}
-				<SearchField placeholder="Search apps" shortcut="/" class="w-64" />
+				<SearchField placeholder="Search apps" shortcut="/" />
 				<Button variant="primary" icon={Plus}>New</Button>
 			{/snippet}
 			{#snippet aside()}
@@ -158,7 +154,16 @@
 					onNew={() => {}}
 					expanded={false}
 				>
-					<span></span>
+					{#each project.entities ?? [] as e (e.name)}
+						<EntityCard
+							kind={e.kind}
+							name={e.name}
+							status={e.status}
+							detail={e.detail}
+							updatedAt={e.updatedAt}
+							href="#"
+						/>
+					{/each}
 				</ProjectGroup>
 			{/each}
 		</Page>

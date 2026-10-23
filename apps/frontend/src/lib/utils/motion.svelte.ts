@@ -12,9 +12,17 @@
  *
  * Built on `motion` (motion.dev).
  */
+import { untrack } from 'svelte';
 import { animate, motionValue } from 'motion';
 import { effectiveAnimationLevel } from '$lib/stores/preferences';
-import { EXIT_BOUNCE, EXIT_SCALE, SPRINGS, type SpringName } from '$lib/design/springs';
+import {
+	EXIT_BOUNCE,
+	EXIT_SCALE,
+	SPRINGS,
+	exitSpec,
+	springCurve,
+	type SpringName
+} from '$lib/design/springs';
 
 export type { SpringName };
 
@@ -1099,4 +1107,144 @@ export class SpringValue {
 		const base = transition(name);
 		animate(this.#value, target, opts.settle && 'bounce' in base ? { ...base, bounce: 0 } : base);
 	}
+}
+
+const curveCache = new Map<string, { easing: string; durationMs: number }>();
+
+export function springTiming(
+	name: SpringName,
+	opts: { exit?: boolean; delay?: number; distance?: number } = {}
+): KeyframeAnimationOptions {
+	const level = effectiveAnimationLevel();
+	if (level === 'off') return { duration: 0 };
+	if (level === 'reduced') {
+		return { duration: REDUCED_DURATION * 1000, easing: 'cubic-bezier(0.33, 0, 0.2, 1)' };
+	}
+	const key = `${name}:${opts.exit ? 1 : 0}`;
+	let curve = curveCache.get(key);
+	if (!curve) {
+		curve = springCurve(opts.exit ? exitSpec(SPRINGS[name]) : SPRINGS[name]);
+		curveCache.set(key, curve);
+	}
+	return {
+		duration: curve.durationMs * distanceScale(opts.distance),
+		easing: curve.easing,
+		delay: Math.min(opts.delay ?? 0, MAX_STAGGER) * 1000
+	};
+}
+
+const FRAME_MS = 1000 / 60;
+const FOLDER_DRIFT = 0.35;
+const FOLDER_SHRINK = 0.85;
+
+type FolderTile = { el: HTMLElement; anim: Animation | null };
+
+export function folder(
+	open: () => boolean,
+	opts: { origin: () => Element | null | undefined; tiles?: string }
+) {
+	return (node: Element) => {
+		const body = node as HTMLElement;
+		const selector = opts.tiles ?? ':scope > * > *';
+		let shown = untrack(open);
+		let heightAnim: Animation | null = null;
+		let tiles: FolderTile[] = [];
+
+		body.style.overflow = 'clip';
+		if (!shown) {
+			body.style.height = '0px';
+			body.inert = true;
+		}
+
+		const live = (el: HTMLElement) => {
+			const cs = getComputedStyle(el);
+			return { transform: cs.transform === 'none' ? 'none' : cs.transform, opacity: cs.opacity };
+		};
+
+		const settleTiles = () => {
+			for (const t of tiles) t.anim?.cancel();
+			tiles = [];
+		};
+
+		const vectors = (els: HTMLElement[]) => {
+			const o = opts.origin();
+			if (!o) return els.map(() => ({ x: 0, y: 0 }));
+			const box = body.getBoundingClientRect();
+			const c = centerOf(o);
+			const ox = Math.min(Math.max(c.x, box.left), box.right);
+			const oy = Math.max(c.y, box.top);
+			return els.map((el) => {
+				const r = el.getBoundingClientRect();
+				return { x: ox - (r.left + r.width / 2), y: oy - (r.top + r.height / 2) };
+			});
+		};
+
+		const run = (opening: boolean) => {
+			const els = [...body.querySelectorAll<HTMLElement>(selector)];
+			const from = els.map((el) => {
+				const prev = tiles.find((t) => t.el === el);
+				return prev?.anim ? live(el) : null;
+			});
+			const fromH = body.getBoundingClientRect().height;
+			const interrupted = !!heightAnim;
+			heightAnim?.cancel();
+			settleTiles();
+
+			body.style.height = 'auto';
+			const toH = opening ? body.getBoundingClientRect().height : 0;
+			const v = vectors(els);
+			body.style.height = opening ? 'auto' : '0px';
+			body.inert = !opening;
+
+			if (!motionEnabled()) return;
+			const full = decorativeMotion();
+			const distance = Math.abs(toH - fromH);
+			heightAnim = body.animate(
+				[{ height: `${fromH}px` }, { height: `${toH}px` }],
+				springTiming('smooth', { distance, exit: !opening })
+			);
+			heightAnim.onfinish = () => (heightAnim = null);
+			if (interrupted) heightAnim.currentTime = FRAME_MS;
+
+			const count = els.length;
+			const stride = count > 1 ? Math.min(STAGGER_STRIDE, BURST_WINDOW / (count - 1)) : 0;
+			tiles = els.map((el, i) => {
+				const away = full ? `translate(${v[i].x}px, ${v[i].y}px) scale(${BURST_SCALE})` : 'none';
+				const near = full
+					? `translate(${v[i].x * FOLDER_DRIFT}px, ${v[i].y * FOLDER_DRIFT}px) scale(${FOLDER_SHRINK})`
+					: 'none';
+				const start = from[i] ?? (opening ? { transform: away, opacity: '0' } : null);
+				const frames: Keyframe[] = opening
+					? [start!, { transform: 'none', opacity: '1' }]
+					: [start ?? { transform: 'none', opacity: '1' }, { transform: near, opacity: '0' }];
+				const anim = el.animate(frames, {
+					...springTiming('snappy', {
+						exit: !opening,
+						delay: opening && !from[i] ? i * stride : 0
+					}),
+					fill: 'both'
+				});
+				if (from[i]) anim.currentTime = FRAME_MS;
+				const tile: FolderTile = { el, anim };
+				anim.onfinish = () => {
+					if (shown !== opening) return;
+					anim.cancel();
+					tile.anim = null;
+				};
+				return tile;
+			});
+		};
+
+		$effect(() => {
+			const next = open();
+			if (next === shown) return;
+			shown = next;
+			untrack(() => run(next));
+		});
+
+		return () => {
+			heightAnim?.cancel();
+			settleTiles();
+		};
+	};
 }

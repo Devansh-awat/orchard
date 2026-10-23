@@ -83,7 +83,23 @@ export const MORE_PROJECTS = [
 		counts: ['3 deployments', '5 databases'],
 		image: 'https://assets.orchard.my/project-icons/cbaa0fa9-462f-4ed5-a201-329af4792120.png',
 		updatedAt: ago(1),
-		live: 8
+		live: 8,
+		entities: [
+			['web', 'deployment', 'flavortown.hackclub.com'],
+			['api', 'deployment', 'api.flavortown.hackclub.com'],
+			['shipwright', 'deployment', 'shipwright.flavortown.hackclub.com'],
+			['postgres', 'database', 'Postgres 16 · 4.8 GB'],
+			['redis', 'database', 'Redis 7 · 212 MB'],
+			['analytics', 'database', 'Postgres 16 · 1.3 GB'],
+			['sessions', 'database', 'Redis 7 · 64 MB'],
+			['votes', 'database', 'Postgres 16 · 702 MB']
+		].map(([name, kind, detail], i) => ({
+			kind: kind as 'deployment' | 'database',
+			name,
+			status: resourceStatus('running'),
+			detail,
+			updatedAt: ago(7 + i * 41)
+		}))
 	},
 	{
 		id: 'p4',
@@ -143,11 +159,11 @@ export const SIDEBAR = {
 		{
 			label: 'terra-game-server',
 			href: '#',
-			reason: 'Crash loop · exit 137 out of memory',
+			reason: 'Out of memory',
 			at: ago(4)
 		},
-		{ label: 'terra-api', href: '#', reason: 'Health check failing on /healthz', at: ago(11) },
-		{ label: 'worker', href: '#', reason: 'Build failed · dependency install', at: ago(14) }
+		{ label: 'terra-api', href: '#', reason: 'Health check failing', at: ago(11) },
+		{ label: 'worker', href: '#', reason: 'Build failed', at: ago(14) }
 	],
 	sections(active: string): SidebarSection[] {
 		return [

@@ -25,7 +25,7 @@
 {#if hero}{@render hero()}{/if}
 <div class="frame frame--{width}" class:frame--hero={!!hero}>
 	{#if !hero}
-		<header class="head">
+		<header class="head" class:head--split={!!aside}>
 			<div class="heading">
 				{#if eyebrow}<div class="eyebrow">{@render eyebrow()}</div>{/if}
 				<h1 class="title">{title}</h1>
@@ -46,6 +46,7 @@
 
 <style>
 	.frame {
+		--aside-w: 18rem;
 		width: 100%;
 		margin: 0 auto;
 		padding: 2rem 2rem 4rem;
@@ -64,10 +65,19 @@
 	}
 	.head {
 		display: flex;
-		align-items: flex-end;
+		align-items: center;
 		justify-content: space-between;
 		gap: 1rem;
 		margin-bottom: 1.5rem;
+	}
+	.head--split {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) var(--aside-w);
+		gap: 2rem;
+	}
+	.head--split .actions > :global(:first-child) {
+		flex: 1;
+		min-width: 0;
 	}
 	.heading {
 		display: flex;
@@ -108,7 +118,7 @@
 	}
 	.split {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) 18rem;
+		grid-template-columns: minmax(0, 1fr) var(--aside-w);
 		gap: 2rem;
 		align-items: start;
 	}
@@ -123,6 +133,9 @@
 	@media (max-width: 1024px) {
 		.split {
 			grid-template-columns: minmax(0, 1fr);
+		}
+		.head--split {
+			display: flex;
 		}
 		.aside {
 			position: static;

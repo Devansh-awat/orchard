@@ -59,3 +59,20 @@ export function springEasing(spec: SpringSpec): {
 		}
 	};
 }
+
+export function springCurve(spec: SpringSpec, maxPoints = 40) {
+	const { points, durationMs } = sampleSpring(spec);
+	const stride = Math.max(1, Math.ceil(points.length / maxPoints));
+	const kept: string[] = [];
+	for (let i = 0; i < points.length; i += stride) {
+		const pct = ((i / (points.length - 1)) * 100).toFixed(1);
+		kept.push(`${Number(points[i].toFixed(4))} ${pct}%`);
+	}
+	kept[0] = '0';
+	kept.push('1');
+	return { easing: `linear(${kept.join(', ')})`, durationMs };
+}
+
+export function exitSpec(spec: SpringSpec): SpringSpec {
+	return { visualDuration: spec.visualDuration * EXIT_SCALE, bounce: spec.bounce + EXIT_BOUNCE };
+}
