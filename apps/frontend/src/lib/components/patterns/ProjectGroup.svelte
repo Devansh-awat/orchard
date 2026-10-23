@@ -66,15 +66,14 @@
 	<header class="head">
 		<button
 			type="button"
-			class="chev"
-			class:chev--open={expanded}
+			class="toggle"
 			aria-label={expanded ? `Collapse ${name}` : `Expand ${name}`}
 			aria-expanded={expanded}
 			onclick={() => (expanded = !expanded)}
 		>
-			<ChevronRight size={16} />
-		</button>
-		<a class="identity" {href}>
+			<span class="chev" class:chev--open={expanded} aria-hidden="true"
+				><ChevronRight size={16} /></span
+			>
 			<span class="icon" bind:this={iconEl}
 				><AppIcon {name} kind="project" icon={image} size="lg" /></span
 			>
@@ -90,7 +89,7 @@
 						/>{/if}
 				</span>
 			</span>
-		</a>
+		</button>
 		{#if summary}
 			<span class="summary summary--{summary.tone}"
 				><span class="summary-dot"></span><span class="summary-label">{summary.label}</span></span
@@ -238,18 +237,30 @@
 	.chev--open {
 		transform: rotate(90deg);
 	}
-	.chev:hover {
+	.toggle:hover .chev {
 		background: var(--h-fill);
 		color: var(--h-fg);
 	}
-	.identity {
+	.toggle {
 		display: flex;
 		flex: 1;
 		align-items: center;
-		gap: 0.875rem;
+		gap: 0.75rem;
+		align-self: stretch;
 		min-width: 0;
+		padding: 0;
+		border: none;
+		background: none;
 		color: inherit;
-		text-decoration: none;
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+	}
+	.toggle:focus-visible {
+		outline: none;
+	}
+	.toggle:focus-visible .chev {
+		box-shadow: 0 0 0 2px var(--accent-solid);
 	}
 	.icon {
 		display: flex;
