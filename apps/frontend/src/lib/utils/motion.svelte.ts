@@ -1204,7 +1204,8 @@ export function folder(
 				springTiming('smooth', { distance, exit: !opening })
 			);
 			heightAnim.onfinish = () => (heightAnim = null);
-			if (interrupted) heightAnim.currentTime = FRAME_MS;
+			const now = (document.timeline.currentTime as number | null) ?? performance.now();
+			heightAnim.startTime = interrupted ? now - FRAME_MS : now;
 
 			const count = els.length;
 			const stride = count > 1 ? Math.min(STAGGER_STRIDE, BURST_WINDOW / (count - 1)) : 0;
@@ -1224,7 +1225,7 @@ export function folder(
 					}),
 					fill: 'both'
 				});
-				if (from[i]) anim.currentTime = FRAME_MS;
+				anim.startTime = from[i] ? now - FRAME_MS : now;
 				const tile: FolderTile = { el, anim };
 				anim.onfinish = () => {
 					if (shown !== opening) return;
