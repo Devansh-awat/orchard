@@ -20,7 +20,8 @@
 	const H = 40;
 	const ROUND = 16;
 	const BLUR = ROUND * 0.5;
-	const PILL_PAD = 10;
+	const INSET = 8;
+	const TAIL = 14;
 	const MIN_OPEN = H * 2.25;
 	const SWIPE_MAX = 20;
 	const SWIPE_DISMISS = 30;
@@ -59,6 +60,32 @@
 		align === 'right' ? width - pillW : align === 'center' ? (width - pillW) / 2 : 0
 	);
 	const svgH = $derived(hasMore ? openH : H);
+	const pillH = $derived(H + p * BLUR * 3);
+	const pillR = $derived(H / 2 - p * (H / 2 - ROUND));
+	const bodyH = $derived(Math.max(0, p * (openH - H)));
+
+	const seams = $derived.by(() => {
+		const zones: { x: number; y: number; w: number; h: number }[] = [];
+		const left = pillX;
+		const right = pillX + pillW;
+		if (left < 0.5) zones.push({ x: 0, y: H - ROUND / 2, w: ROUND, h: ROUND * 2 });
+		else {
+			const x = Math.max(ROUND, left - ROUND * 2);
+			zones.push({ x, y: H - ROUND * 1.5, w: left + ROUND / 2 - x, h: ROUND * 2 });
+		}
+		if (right > width - 0.5)
+			zones.push({ x: width - ROUND, y: H - ROUND / 2, w: ROUND, h: ROUND * 2 });
+		else {
+			const end = Math.min(width - ROUND, right + ROUND * 2);
+			zones.push({
+				x: right - ROUND / 2,
+				y: H - ROUND * 1.5,
+				w: end - right + ROUND / 2,
+				h: ROUND * 2
+			});
+		}
+		return zones;
+	});
 	const sign = $derived(expand === 'bottom' ? 1 : -1);
 
 	$effect(() => {
@@ -95,7 +122,7 @@
 
 	function measurePill() {
 		if (!inner) return;
-		pill.to(inner.scrollWidth + 16 + PILL_PAD, 'morph', { instant: !ready });
+		pill.to(inner.scrollWidth + INSET + TAIL, 'morph', { instant: !ready });
 	}
 
 	$effect(() => {
@@ -172,6 +199,20 @@
 	<div class="drag" class:drag--live={dragging} style:transform="translateY({drag}px)">
 		<div class="canvas" data-edge={expand}>
 			<svg {width} height={svgH} viewBox="0 0 {width} {svgH}" aria-hidden="true">
+				{#snippet shapes()}
+					<rect class="shape" x={pillX} y="0" width={pillW} height={pillH} rx={pillR} />
+					{#if hasMore}
+						<rect
+							class="shape"
+							x="0"
+							y={H}
+							{width}
+							height={bodyH}
+							rx={Math.min(ROUND, bodyH / 2)}
+							opacity={Math.min(1, p * 3)}
+						/>
+					{/if}
+				{/snippet}
 				<defs>
 					<filter
 						id="goo-{uid}"
@@ -192,20 +233,17 @@
 						<feComposite in="SourceGraphic" in2="goo" operator="atop" />
 					</filter>
 				</defs>
-				<g filter="url(#goo-{uid})">
-					<rect class="shape" x={pillX} y="0" width={pillW} height={H + p * BLUR * 3} rx={ROUND} />
-					{#if hasMore}
-						<rect
-							class="shape"
-							x="0"
-							y={H}
-							{width}
-							height={Math.max(0, p * (openH - H))}
-							rx={ROUND}
-							opacity={Math.min(1, p * 3)}
-						/>
-					{/if}
-				</g>
+				{#if hasMore && p > 0.01}
+					<clipPath id="seam-{uid}">
+						{#each seams as z, i (i)}<rect x={z.x} y={z.y} width={z.w} height={z.h} />{/each}
+					</clipPath>
+					<g clip-path="url(#seam-{uid})">
+						<g filter="url(#goo-{uid})">
+							{@render shapes()}
+						</g>
+					</g>
+				{/if}
+				{@render shapes()}
 			</svg>
 		</div>
 
@@ -250,7 +288,7 @@
 </div>
 
 {#snippet face(layer: Layer)}
-	<span class="badge" data-tone={layer.color}>
+	<span class="glyph" data-tone={layer.color} data-icon={layer.color}>
 		{#if layer.color === 'loading'}
 			<Spinner size={14} />
 		{:else}
@@ -258,7 +296,7 @@
 			<Glyph size={14} strokeWidth={2.5} />
 		{/if}
 	</span>
-	<span class="title" data-tone={layer.color}>{layer.title}</span>
+	<span class="label" data-tone={layer.color}>{layer.title}</span>
 {/snippet}
 
 <style>
@@ -344,7 +382,7 @@
 		display: flex;
 		align-items: center;
 		height: 40px;
-		padding: 0.5rem;
+		padding: 0 14px 0 8px;
 		overflow: hidden;
 		transform-origin: center;
 	}
@@ -390,7 +428,7 @@
 		}
 	}
 
-	.badge {
+	.glyph {
 		display: grid;
 		place-items: center;
 		flex-shrink: 0;
@@ -400,11 +438,15 @@
 		color: var(--tone);
 		background: color-mix(in oklab, var(--tone) 22%, transparent);
 	}
-	.title {
+	.label {
+		text-box: trim-both cap alphabetic;
 		font-size: 0.8125rem;
 		line-height: 1rem;
 		font-weight: var(--weight-medium);
 		color: var(--tone);
+	}
+	.glyph[data-icon='warning'] :global(svg) {
+		transform: translateY(-0.5px);
 	}
 	[data-tone='success'] {
 		--tone: var(--toast-success);

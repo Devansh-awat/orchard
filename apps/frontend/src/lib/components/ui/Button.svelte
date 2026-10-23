@@ -117,9 +117,14 @@
 		width: 1.75rem;
 	}
 	.label {
-		display: inline-flex;
-		align-items: center;
-		gap: inherit;
+		display: block;
+		text-box: trim-both cap alphabetic;
+	}
+	.label :global(svg) {
+		position: relative;
+		top: calc(0.5ex - 0.5cap);
+		display: inline-block;
+		vertical-align: middle;
 	}
 
 	.button--primary {

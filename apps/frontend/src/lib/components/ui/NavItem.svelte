@@ -61,6 +61,7 @@
 			0 2px 8px -2px color-mix(in oklab, var(--neutral-10) 8%, transparent);
 	}
 	.label {
+		text-box: trim-both cap alphabetic;
 		flex: 1;
 		min-width: 0;
 		overflow: hidden;

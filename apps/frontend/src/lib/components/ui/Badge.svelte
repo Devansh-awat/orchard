@@ -26,6 +26,7 @@
 		line-height: 1;
 		white-space: nowrap;
 		font-variant-numeric: tabular-nums;
+		text-box: trim-both cap alphabetic;
 	}
 	.pill--neutral {
 		background: var(--bg-active);

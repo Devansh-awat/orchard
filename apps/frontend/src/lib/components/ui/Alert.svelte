@@ -41,7 +41,7 @@
 		display: flex;
 		align-items: flex-start;
 		gap: 0.625rem;
-		padding: 0.75rem 0.875rem;
+		padding: 0.875rem;
 		border-radius: var(--radius-card);
 		box-shadow: inset 0 0 0 1px var(--tone-border);
 		background: var(--tone-bg);
@@ -70,17 +70,22 @@
 	.icon {
 		display: flex;
 		flex-shrink: 0;
-		padding-top: 0.125rem;
+		margin-top: calc(0.5cap - 8px);
 		color: var(--tone-fg);
+		font-size: var(--text-body);
 	}
 	.content {
 		display: flex;
 		flex: 1;
 		flex-direction: column;
-		gap: 0.125rem;
+		gap: 0.5rem;
 		min-width: 0;
 		font-size: var(--text-body);
 		line-height: var(--lh-body);
+	}
+	.title,
+	.body {
+		text-box: trim-both cap alphabetic;
 	}
 	.title {
 		font-weight: var(--weight-semibold);
