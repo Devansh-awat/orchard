@@ -16,11 +16,49 @@
 		class?: string;
 		[key: string]: unknown;
 	} = $props();
+
+	let input = $state<HTMLInputElement>();
+
+	function editable(target: EventTarget | null) {
+		if (!(target instanceof HTMLElement)) return false;
+		return target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName);
+	}
+
+	function matches(e: KeyboardEvent) {
+		if (!shortcut) return false;
+		const mod = /^(⌘|Ctrl\+?)/.test(shortcut);
+		const key = shortcut.replace(/^(⌘|Ctrl\+?)/, '').toLowerCase();
+		if (mod) {
+			return (e.metaKey || e.ctrlKey) && !e.altKey && e.code === `Key${key.toUpperCase()}`;
+		}
+		if (e.metaKey || e.ctrlKey || e.altKey || editable(e.target)) return false;
+		return e.key.toLowerCase() === key;
+	}
+
+	function onkeydown(e: KeyboardEvent) {
+		if (!input || !matches(e)) return;
+		e.preventDefault();
+		input.focus();
+		input.select();
+	}
 </script>
+
+<svelte:window {onkeydown} />
 
 <label class="search search--{size} {className}">
 	<span class="icon" aria-hidden="true"><Search size={size === 'sm' ? 14 : 15} /></span>
-	<input type="search" class="field" {placeholder} bind:value aria-label={placeholder} {...rest} />
+	<input
+		bind:this={input}
+		type="search"
+		class="field"
+		{placeholder}
+		bind:value
+		onkeydown={(e) => {
+			if (e.key === 'Escape') input?.blur();
+		}}
+		aria-label={placeholder}
+		{...rest}
+	/>
 	{#if value}
 		<button type="button" class="clear" aria-label="Clear search" onclick={() => (value = '')}>
 			<X size={12} strokeWidth={2.5} />

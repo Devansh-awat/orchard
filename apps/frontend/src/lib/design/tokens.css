@@ -93,9 +93,8 @@
 	--nav-active-bg: var(--bg-surface);
 	--nav-active-fg: var(--text-default);
 	--nav-active-shadow:
-		0 0 0 0.5px color-mix(in oklab, var(--neutral-10) 8%, transparent),
-		0 1px 2px color-mix(in oklab, var(--neutral-10) 8%, transparent),
-		0 6px 16px -6px color-mix(in oklab, var(--neutral-10) 22%, transparent);
+		0 0 0 0.5px color-mix(in oklab, var(--neutral-10) 9%, transparent),
+		0 1px 1.5px color-mix(in oklab, var(--neutral-10) 7%, transparent);
 	--material-chrome-bg: color-mix(in oklab, var(--neutral-surface) 58%, transparent);
 	--material-chrome-edge: color-mix(in oklab, var(--neutral-10) 9%, transparent);
 	--on-solid: oklch(1 0 0);
@@ -278,7 +277,7 @@ html.reduce-transparency *::after {
 :root.dark {
 	--nav-active-bg: var(--neutral-10);
 	--nav-active-fg: var(--neutral-app);
-	--nav-active-shadow: 0 6px 16px -6px oklch(0 0 0 / 0.5);
+	--nav-active-shadow: 0 1px 1.5px oklch(0 0 0 / 0.3);
 	--material-chrome-bg: color-mix(in oklab, var(--neutral-raised) 62%, transparent);
 	--toast-success: color-mix(in oklab, var(--green-7) 74%, black);
 	--toast-error: color-mix(in oklab, var(--red-7) 80%, black);
