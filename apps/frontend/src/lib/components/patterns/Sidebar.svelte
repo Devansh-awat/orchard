@@ -94,7 +94,6 @@
 		border-radius: calc(var(--radius-panel) * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--material-chrome-bg);
-		backdrop-filter: var(--material-chrome-filter);
 		box-shadow:
 			inset 0 0 0 0.5px var(--material-chrome-edge),
 			0 1px 2px color-mix(in oklab, var(--neutral-10) 5%, transparent),

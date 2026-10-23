@@ -97,7 +97,6 @@
 		0 1px 2px color-mix(in oklab, var(--neutral-10) 8%, transparent),
 		0 6px 16px -6px color-mix(in oklab, var(--neutral-10) 22%, transparent);
 	--material-chrome-bg: color-mix(in oklab, var(--neutral-surface) 58%, transparent);
-	--material-chrome-filter: blur(28px) saturate(1.7);
 	--material-chrome-edge: color-mix(in oklab, var(--neutral-10) 9%, transparent);
 	--on-solid: oklch(1 0 0);
 	--solid-sheen: linear-gradient(oklch(1 0 0 / 0.16), oklch(1 0 0 / 0));
@@ -262,7 +261,6 @@ html.contrast-high .density-btn--active {
 
 html.reduce-transparency {
 	--material-chrome-bg: var(--bg-raised);
-	--material-chrome-filter: none;
 	--material-glass-bg: var(--bg-raised);
 	--material-glass-filter: none;
 	--glass-bg: var(--bg-surface);
