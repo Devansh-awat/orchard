@@ -165,7 +165,9 @@ function rolloutHarness(clusters: any[], opts: { collation?: 'c' | 'other' | nul
     settings: {
       isPostgresAutoUpdateEnabled: async () => opts.enabled ?? true,
       get: async (k: string) => settings.get(k) ?? null,
-      set: async (k: string, v: string) => void settings.set(k, v)
+      set: async (k: string, v: string) => {
+        settings.set(k, v);
+      }
     },
     k8sCnpg: {
       canRunClusterWide: () => true,
