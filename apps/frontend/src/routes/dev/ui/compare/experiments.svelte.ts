@@ -12,11 +12,11 @@ const off = { value: 'off', label: 'Off' };
 export const EXPERIMENTS: Experiment[] = [
 	{
 		id: 'island',
-		hint: 'Press Simulate: Start a build, then Second build',
-		label: 'Live island',
+		hint: 'Simulate a build, then show a toast while it runs',
+		label: 'Notifications',
 		group: 'Organic',
-		options: [off, { value: 'on', label: 'On' }],
-		initial: 'on'
+		options: [off, { value: 'on', label: 'Island' }, { value: 'unified', label: 'Unified' }],
+		initial: 'unified'
 	},
 	{
 		id: 'newButton',
@@ -68,7 +68,9 @@ export const ACTIONS: ExperimentAction[] = [
 	{ id: 'build2', label: 'Second build' },
 	{ id: 'succeed', label: 'Build succeeds' },
 	{ id: 'fail-build', label: 'Build fails' },
-	{ id: 'crash', label: 'An app crashes' }
+	{ id: 'crash', label: 'An app crashes' },
+	{ id: 'toast', label: 'Show a toast' },
+	{ id: 'toast-error', label: 'Show an error' }
 ];
 
 const listeners = new Set<(id: string) => void>();
@@ -82,7 +84,7 @@ export function runAction(id: string) {
 	for (const fn of listeners) fn(id);
 }
 
-const KEY = 'orchard-dev-experiments-v3';
+const KEY = 'orchard-dev-experiments-v4';
 
 function load(): Record<string, string> {
 	const base = Object.fromEntries(EXPERIMENTS.map((e) => [e.id, e.initial]));

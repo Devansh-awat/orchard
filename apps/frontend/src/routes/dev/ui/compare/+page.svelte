@@ -36,6 +36,9 @@
 	import HomeScreen from './HomeScreen.svelte';
 	import ExperimentsPanel from './ExperimentsPanel.svelte';
 	import { exp } from './experiments.svelte';
+	import CommandPalette from '$lib/components/patterns/CommandPalette.svelte';
+	import { PALETTE_ITEMS, paletteActions } from '../palette-fixtures';
+	import { toasts } from '$lib/stores/toast';
 	import AppFrame from '$lib/components/patterns/AppFrame.svelte';
 	import Sidebar from '$lib/components/patterns/Sidebar.svelte';
 	import SectionTitle from '$lib/components/ui/SectionTitle.svelte';
@@ -59,6 +62,12 @@
 	let protectPreviews = $state(true);
 
 	const spark = [12, 18, 14, 22, 30, 26, 34, 28, 40, 36, 44, 38, 46, 52, 48, 56];
+	let paletteOpen = $state(false);
+	let sideHost = $state<HTMLElement>();
+	const paletteOrigin = () =>
+		sideHost?.querySelector('input[type="search"]')?.closest('label') ?? null;
+	const actions = paletteActions((text) => () => toasts.add({ color: 'info', title: text }));
+
 	const sections = $derived(SIDEBAR.sections(screen === 'settings' ? 'settings' : 'apps'));
 </script>
 
@@ -78,7 +87,15 @@
 
 <AppFrame>
 	{#snippet sidebar()}
-		<Sidebar org={SIDEBAR.org} user={SIDEBAR.user} {sections} liquid={exp.liquidNav === 'on'} />
+		<div class="side-host" bind:this={sideHost}>
+			<Sidebar
+				org={SIDEBAR.org}
+				user={SIDEBAR.user}
+				{sections}
+				liquid={exp.liquidNav === 'on'}
+				onSearch={() => (paletteOpen = true)}
+			/>
+		</div>
 	{/snippet}
 	{#snippet backdrop()}
 		{#if screen === 'project'}<ProjectBackdrop name="terra" image={PROJECTS[1].background} />{/if}
@@ -269,10 +286,15 @@
 	{/if}
 </AppFrame>
 
+<CommandPalette bind:open={paletteOpen} origin={paletteOrigin} items={PALETTE_ITEMS} {actions} />
+
 <DevBar />
 {#if screen === 'home'}<ExperimentsPanel />{/if}
 
 <style>
+	.side-host {
+		height: 100%;
+	}
 	.spotlight-wrap {
 		max-width: calc(var(--page-wide) + 4rem);
 		margin: 0 auto;

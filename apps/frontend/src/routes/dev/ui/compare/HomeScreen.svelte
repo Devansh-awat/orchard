@@ -14,6 +14,9 @@
 	import SpotlightSearch, {
 		type SpotlightItem
 	} from '$lib/components/patterns/SpotlightSearch.svelte';
+	import Notifier from '$lib/components/patterns/Notifier.svelte';
+	import { activity } from '$lib/stores/activity';
+	import { toasts } from '$lib/stores/toast';
 	import NeedsAttention from '$lib/components/patterns/NeedsAttention.svelte';
 	import RecentBuilds from '$lib/components/patterns/RecentBuilds.svelte';
 	import { PROJECTS, SIDEBAR, BUILD_FEED, MORE_PROJECTS } from '../fixtures';
@@ -162,7 +165,26 @@
 	let activities = $state<IslandActivity[]>([]);
 	let seq = 0;
 
+	let unified: { id: string; step: number; at: number }[] = [];
+
+	function startUnified(slot: number) {
+		const base = BUILDS[slot % BUILDS.length];
+		const id = activity.start({
+			...base,
+			phase: LADDER[0].label,
+			phaseId: LADDER[0].id
+		});
+		unified.push({ id, step: 0, at: Date.now() });
+	}
+
+	function finishUnified(status: 'success' | 'error') {
+		const run = unified.shift();
+		if (!run) return;
+		activity.finish(run.id, status, status === 'error' ? 'npm ci exited with code 1' : undefined);
+	}
+
 	function startBuild(slot: number) {
+		if (exp.island === 'unified') return startUnified(slot);
 		const base = BUILDS[slot % BUILDS.length];
 		if (activities.some((a) => a.app === base.app && a.status === 'running')) return;
 		seq += 1;
@@ -178,6 +200,7 @@
 	}
 
 	function finish(status: 'success' | 'error') {
+		if (exp.island === 'unified') return finishUnified(status);
 		const a = activities.find((x) => x.status === 'running');
 		if (!a) return;
 		a.phases = (a.phases ?? []).map((p) => ({ ...p, live: false }));
@@ -188,6 +211,14 @@
 
 	$effect(() => {
 		const id = setInterval(() => {
+			const now = Date.now();
+			for (const run of unified) {
+				const next = LADDER[run.step + 1];
+				if (!next || now - run.at < 2600 + run.step * 900) continue;
+				run.step += 1;
+				run.at = now;
+				activity.update(run.id, { phase: next.label, phaseId: next.id });
+			}
 			for (const a of activities) {
 				if (a.status !== 'running') continue;
 				const live = a.phases?.find((p) => p.live);
@@ -211,7 +242,19 @@
 		onAction((id) => {
 			if (id === 'crash') crash();
 			else if (id === 'build') startBuild(0);
-			else if (id === 'build2') startBuild(activities.length ? 1 : 0);
+			else if (id === 'build2') startBuild(activities.length || unified.length ? 1 : 0);
+			else if (id === 'toast')
+				toasts.add({
+					color: 'success',
+					title: 'Changes saved',
+					description: 'Env vars updated on api'
+				});
+			else if (id === 'toast-error')
+				toasts.add({
+					color: 'error',
+					title: 'Replica restarted',
+					description: 'web ran out of memory'
+				});
 			else if (id === 'succeed') finish('success');
 			else if (id === 'fail-build') finish('error');
 		})
@@ -267,7 +310,9 @@
 	{/if}
 {/snippet}
 
-{#if exp.island === 'on'}
+{#if exp.island === 'unified'}
+	<Notifier takeOverToasts offsetLeft={278} shiftLeft={160} />
+{:else if exp.island === 'on'}
 	<LiveIsland
 		{activities}
 		offsetLeft={278}
