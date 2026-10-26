@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.32.0](https://github.com/hackclub/orchard/compare/cli/v0.31.1...cli/v0.32.0) (2026-10-26)
+
+
+### Features
+
+* share organization registry credentials across projects ([#162](https://github.com/hackclub/orchard/issues/162)) ([ec5a3c2](https://github.com/hackclub/orchard/commit/ec5a3c2340e8ab71aa95d1e6623291174d4b98db))
+
 ## [0.31.1](https://github.com/hackclub/orchard/compare/cli/v0.31.0...cli/v0.31.1) (2026-10-21)
 
 

@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.81.0](https://github.com/hackclub/orchard/compare/server/v2.80.0...server/v2.81.0) (2026-10-26)
+
+
+### Features
+
+* share organization registry credentials across projects ([#162](https://github.com/hackclub/orchard/issues/162)) ([ec5a3c2](https://github.com/hackclub/orchard/commit/ec5a3c2340e8ab71aa95d1e6623291174d4b98db))
+
+
+### Bug Fixes
+
+* **server:** preserve sessions when changing project member roles ([491e18e](https://github.com/hackclub/orchard/commit/491e18e199347300ed817fccc4cbc0f0ba494e1d))
+* **server:** refresh every public database's copy of the db wildcard cert in the 6h sweep, not only when someone opens the database ([edbbfa1](https://github.com/hackclub/orchard/commit/edbbfa111e332ea42a277a98bb266c1b3e52365e))
+
 ## [2.80.0](https://github.com/hackclub/orchard/compare/server/v2.79.4...server/v2.80.0) (2026-10-23)
 
 

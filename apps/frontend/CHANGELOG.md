@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.72.0](https://github.com/hackclub/orchard/compare/frontend/v1.71.2...frontend/v1.72.0) (2026-10-26)
+
+
+### Features
+
+* share organization registry credentials across projects ([#162](https://github.com/hackclub/orchard/issues/162)) ([ec5a3c2](https://github.com/hackclub/orchard/commit/ec5a3c2340e8ab71aa95d1e6623291174d4b98db))
+
 ## [1.71.2](https://github.com/hackclub/orchard/compare/frontend/v1.71.1...frontend/v1.71.2) (2026-10-23)
 
 
