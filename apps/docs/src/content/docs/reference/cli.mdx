@@ -15,7 +15,7 @@ brew install --cask leafdtk/tap/orchard-cli
 ```
 
 Every command accepts `-o json` for machine-readable output, and `--org` / `--env` to
-override the saved context. **373 commands** are available.
+override the saved context. **377 commands** are available.
 
 ## alert
 
@@ -2609,6 +2609,50 @@ orchard list
 ```
 
 Aliases: `ls`
+
+### `orchard org registry`
+
+Manage default registry credentials for the scoped organization
+
+```bash
+orchard registry
+```
+
+Aliases: `registries`, `pull-secret`
+
+### `orchard org registry list`
+
+List organization registry defaults
+
+```bash
+orchard list
+```
+
+Aliases: `ls`
+
+### `orchard org registry remove`
+
+Remove a registry credential
+
+```bash
+orchard remove <id>
+```
+
+Aliases: `rm`, `delete`
+
+### `orchard org registry set`
+
+Add or replace the credential for a registry (ghcr.io, docker.io, registry.gitlab.com, ...)
+
+```bash
+orchard set <registry>
+```
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `-p`, `--password` | string |  | password or access token |
+| `--password-stdin` | bool | `false` | read the password or token from stdin |
+| `-u`, `--username` | string |  | registry username |
 
 ### `orchard org update`
 

@@ -5,7 +5,16 @@
 	import { Button, Field, Input, SectionCard, Select, Skeleton } from '$lib/components/ui';
 	import { REGISTRY_PRESETS, registryHint, tokenLabel } from '$lib/utils/registry';
 
-	let { projectId, canEdit = false }: { projectId: string; canEdit?: boolean } = $props();
+	let {
+		projectId,
+		organizationId,
+		canEdit = false
+	}: { projectId?: string; organizationId?: string; canEdit?: boolean } = $props();
+	const endpoint = $derived(
+		organizationId
+			? `/apiv1/organizations/${organizationId}/registry-credentials`
+			: `/apiv1/projects/${projectId}/registry-credentials`
+	);
 
 	type Credential = {
 		id: string;
@@ -19,7 +28,7 @@
 	let saving = $state(false);
 	let removing = $state<string | null>(null);
 
-	let preset = $state('ghcr.io');
+	let preset = $state(organizationId ? 'dhi.io' : 'ghcr.io');
 	let customHost = $state('');
 	let username = $state('');
 	let password = $state('');
@@ -30,8 +39,14 @@
 	async function load() {
 		loading = true;
 		try {
-			const res = await apiFetch(`/apiv1/projects/${projectId}/registry-credentials`);
-			if (res.ok) credentials = await res.json();
+			const res = await apiFetch(endpoint);
+			if (!res.ok) throw new Error('Failed to load registry credentials');
+			credentials = await res.json();
+		} catch (e) {
+			toasts.add({
+				title: e instanceof Error ? e.message : 'Failed to load credentials',
+				color: 'error'
+			});
 		} finally {
 			loading = false;
 		}
@@ -41,7 +56,7 @@
 		if (!canSave) return;
 		saving = true;
 		try {
-			const res = await apiFetch(`/apiv1/projects/${projectId}/registry-credentials`, {
+			const res = await apiFetch(endpoint, {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ registry, username: username.trim(), password })
@@ -53,7 +68,9 @@
 			const saved: Credential = await res.json();
 			toasts.add({
 				title: 'Registry credential saved',
-				description: `Apps pulling from ${saved.registry} now authenticate as ${saved.username}`,
+				description: organizationId
+					? `Projects now inherit credentials for ${saved.registry}. Project and app overrides take precedence.`
+					: `Apps pulling from ${saved.registry} now authenticate as ${saved.username}`,
 				color: 'success'
 			});
 			username = '';
@@ -73,7 +90,7 @@
 	async function remove(cred: Credential) {
 		removing = cred.id;
 		try {
-			const res = await apiFetch(`/apiv1/projects/${projectId}/registry-credentials/${cred.id}`, {
+			const res = await apiFetch(`${endpoint}/${cred.id}`, {
 				method: 'DELETE'
 			});
 			if (!res.ok) {
@@ -97,7 +114,9 @@
 
 <SectionCard
 	title="Registry credentials"
-	description="Pull private images from GitHub Packages, Docker Hub, or any other registry. A credential is attached to every app and job in this project whose image lives on that registry."
+	description={organizationId
+		? 'Default Docker logins for every project in this organization, including builds, apps and jobs. Project credentials override these defaults. Build environment variables DHI_USERNAME and DHI_TOKEN, or DOCKER_AUTH_CONFIG, take precedence over both.'
+		: 'Docker logins for builds, apps and jobs in this project. These override organization defaults for the same registry.'}
 >
 	{#if loading}
 		<Skeleton class="h-10 w-full" />
@@ -125,7 +144,10 @@
 			{/each}
 		</ul>
 	{:else if !canEdit}
-		<p class="rc-empty">No private registries configured. Images are pulled anonymously.</p>
+		<p class="rc-empty">
+			No credentials configured here. Organization defaults and build environment credentials still
+			apply.
+		</p>
 	{/if}
 
 	{#if canEdit}

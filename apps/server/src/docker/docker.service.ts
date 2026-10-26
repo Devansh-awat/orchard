@@ -1,3 +1,4 @@
+import { RegistryCredentialsService } from '../projects/registry-credentials.service';
 import { Injectable, BadRequestException, Optional } from '@nestjs/common';
 import { spawn, exec } from 'child_process';
 import { promisify } from 'util';
@@ -102,7 +103,8 @@ export class DockerService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly secretCrypto: SecretCryptoService,
-    @Optional() private readonly imageBuilderService?: ImageBuilderService
+    @Optional() private readonly imageBuilderService?: ImageBuilderService,
+    @Optional() private readonly registryCredentials?: RegistryCredentialsService
   ) {}
 
   /**
@@ -205,7 +207,9 @@ export class DockerService {
   ): Promise<void> {
     let auths: RegistryAuths;
     try {
-      auths = pullAuthsFromEnv(envVars);
+      auths = this.registryCredentials
+        ? await this.registryCredentials.buildAuths(deploymentId, envVars)
+        : pullAuthsFromEnv(envVars);
     } catch (error) {
       if (error instanceof PullAuthError) {
         throw new BadRequestException(error.message);
@@ -214,10 +218,7 @@ export class DockerService {
     }
     if (!hasRegistryAuths(auths)) return;
 
-    await this.appendLog(
-      deploymentId,
-      'Using registry credentials from the app environment to pull base images'
-    );
+    await this.appendLog(deploymentId, 'Using registry credentials to pull base images');
     for (const [host, auth] of Object.entries(auths)) {
       await new Promise<void>((resolve, reject) => {
         const loginProcess = spawn(

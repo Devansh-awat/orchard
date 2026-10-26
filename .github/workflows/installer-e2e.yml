@@ -105,6 +105,8 @@ jobs:
             --chart ./infra/charts/orchard \
             --image-tag e2e \
             --image-pull-policy IfNotPresent
+          sudo rm -f /var/lib/rancher/k3s/agent/images/orchard-e2e.tar
+          df -h /var/lib/rancher
 
       - name: The install targets this machine's architecture
         run: |

@@ -46,3 +46,24 @@ nodes and node pools, and change instance settings.
 
 On a fresh install nobody is superadmin. The first one claims the instance with a
 single-use setup token; see [Install](/start/install/#claiming-the-instance).
+
+## Registry credentials
+
+Owners and admins can open **Organization settings → Registry credentials** to
+save a Docker registry hostname, username and token. Choose **Docker Hardened
+Images (dhi.io)** to share a DHI login across all projects. Tokens are encrypted
+at rest and are never returned by the API; the instance must have
+`SECRETS_ENCRYPTION_KEY` configured.
+
+The defaults apply to builds and to private images used by apps and jobs in
+existing and new projects. For each registry, a project credential overrides
+the organization credential. Builds can override both with `DOCKER_AUTH_CONFIG`
+or, for `dhi.io`, a complete `DHI_USERNAME` and `DHI_TOKEN` pair in their resolved
+build environment. Setting only one DHI variable is an error. Registry tokens
+are kept out of build arguments and Railpack application secrets.
+
+Replace a credential by saving another login for the same registry, or remove
+it with the trash button. Changes update project image-pull secrets and apply
+to subsequent builds and image pulls. Running builds keep the credentials they
+started with. Removing a project override restores the organization default;
+removing the organization default keeps project overrides intact.

@@ -1,4 +1,5 @@
 export const REGISTRY_PRESETS = [
+	{ value: 'dhi.io', label: 'Docker Hardened Images (dhi.io)' },
 	{ value: 'ghcr.io', label: 'GitHub Packages (ghcr.io)' },
 	{ value: 'docker.io', label: 'Docker Hub' },
 	{ value: 'registry.gitlab.com', label: 'GitLab (registry.gitlab.com)' },
@@ -7,6 +8,7 @@ export const REGISTRY_PRESETS = [
 ];
 
 export const REGISTRY_HINTS: Record<string, string> = {
+	'dhi.io': 'Your Docker username and access token for Docker Hardened Images.',
 	'ghcr.io':
 		'Your GitHub username and a personal access token (classic) with the read:packages scope. Fine-grained tokens cannot read packages.',
 	'docker.io': 'Your Docker Hub username and an access token from Account settings, Security.',

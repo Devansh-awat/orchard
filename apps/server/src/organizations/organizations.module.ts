@@ -1,3 +1,5 @@
+import { OrganizationRegistryCredentialsController } from './organization-registry-credentials.controller';
+import { RegistryCredentialsModule } from '../projects/registry-credentials.module';
 import { Module } from '@nestjs/common';
 import { OrganizationsController } from './organizations.controller';
 import { InvitationsController } from './invitations.controller';
@@ -9,8 +11,12 @@ import { StorageService } from './storage.service';
 import { TailscaleModule } from '../tailscale/tailscale.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, UsersModule, TailscaleModule],
-  controllers: [OrganizationsController, InvitationsController],
+  imports: [RegistryCredentialsModule, PrismaModule, AuthModule, UsersModule, TailscaleModule],
+  controllers: [
+    OrganizationRegistryCredentialsController,
+    OrganizationsController,
+    InvitationsController
+  ],
   providers: [OrganizationsService, StorageService],
   exports: [OrganizationsService, StorageService]
 })

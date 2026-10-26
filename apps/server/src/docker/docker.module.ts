@@ -1,3 +1,4 @@
+import { RegistryCredentialsModule } from '../projects/registry-credentials.module';
 import { Module, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { DockerController } from './docker.controller';
 import { DockerService } from './docker.service';
@@ -11,7 +12,7 @@ import { FirecrackerClient } from './fc/fc-client';
 import { BuildBackendRouter } from './fc/build-backend-router';
 
 @Module({
-  imports: [AuthModule, PrismaModule],
+  imports: [RegistryCredentialsModule, AuthModule, PrismaModule],
   controllers: [DockerController],
   providers: [
     DockerService,

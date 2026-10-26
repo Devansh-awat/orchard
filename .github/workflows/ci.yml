@@ -256,6 +256,8 @@ jobs:
         run: pnpm --filter server exec tsx --test test/project-member-role.test.ts
       - name: Setup gate test
         run: pnpm --filter server test:setup-state
+      - name: Registry credential inheritance tests
+        run: pnpm --filter server test:registry-pull-auth
       - name: Build platform test
         run: pnpm --filter server test:build-platform
       - name: Image builder cache and source preparation tests

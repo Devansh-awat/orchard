@@ -1,3 +1,4 @@
+import { RegistryCredentialsService } from './registry-credentials.service';
 import {
   Injectable,
   NotFoundException,
@@ -57,7 +58,8 @@ export class ProjectOrgTransferService {
     private readonly k8sNamespace: K8sNamespaceService,
     private readonly databases: DatabasesService,
     private readonly membershipCache: MembershipCacheService,
-    private readonly audit: AuditService
+    private readonly audit: AuditService,
+    private readonly registryCredentials: RegistryCredentialsService
   ) {}
 
   /** Authorize the move and load the project + destination org. */
@@ -319,6 +321,8 @@ export class ProjectOrgTransferService {
         })
         .catch((e) => this.logger.error(`Failed to tag namespace ${ns}: ${e?.message ?? e}`));
     }
+
+    await this.registryCredentials.syncProject(project.id);
 
     // Membership caches key on org; drop both so evicted/gained access resolves.
     this.membershipCache.invalidateOrg(sourceOrgId);

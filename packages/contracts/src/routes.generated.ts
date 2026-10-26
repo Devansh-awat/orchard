@@ -586,4 +586,7 @@ export const routes: GeneratedRoute[] = [
   { method: 'PUT', path: '/users/me/notification-settings/:scopeType/:scopeId', auth: 'authenticated' },
   { method: 'POST', path: '/webhooks/deploy', auth: 'public' },
   { method: 'POST', path: '/webhooks/deploy/:token', auth: 'public' },
+  { method: 'GET', path: '/organizations/:organizationId/registry-credentials', auth: 'authenticated' },
+  { method: 'PUT', path: '/organizations/:organizationId/registry-credentials', auth: 'authenticated' },
+  { method: 'DELETE', path: '/organizations/:organizationId/registry-credentials/:id', auth: 'authenticated' },
 ];

@@ -24,6 +24,7 @@ func orgCmd() *cobra.Command {
 		orgUpdateCmd(),
 		orgAvatarCmd(),
 		orgBackupSettingsCmd(),
+		orgRegistryCmd(),
 	)
 	return c
 }

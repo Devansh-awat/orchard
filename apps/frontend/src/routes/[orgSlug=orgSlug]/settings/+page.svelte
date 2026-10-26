@@ -9,6 +9,7 @@
 	import { env } from '$env/dynamic/public';
 	import { Loader2, ArrowLeft } from 'lucide-svelte';
 	import AuditLogList from '$lib/components/AuditLogList.svelte';
+	import RegistryCredentials from '$lib/components/project/RegistryCredentials.svelte';
 	import { SettingsRail } from '$lib/components/ui';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import {
@@ -195,6 +196,11 @@
 						id: 'database',
 						label: 'Database defaults',
 						href: `/${organizationSlug}/settings?tab=database`
+					},
+					{
+						id: 'registries',
+						label: 'Registry credentials',
+						href: `/${organizationSlug}/settings?tab=registries`
 					},
 					{ id: 'backups', label: 'Backups', href: `/${organizationSlug}/settings?tab=backups` },
 					{ id: 'status', label: 'Status page', href: `/${organizationSlug}/settings?tab=status` },
@@ -993,6 +999,13 @@
 						onCancelInvitation={cancelInvitation}
 					/>
 				{/if}
+				{#if activeTab === 'registries' && canEditOrg}
+					{#key organization.id}<RegistryCredentials
+							organizationId={organization.id}
+							canEdit={canEditOrg}
+						/>{/key}
+				{/if}
+
 				{#if activeTab === 'database'}
 					<OrgDatabaseTab
 						{canEditOrg}

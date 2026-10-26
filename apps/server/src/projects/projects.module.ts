@@ -1,3 +1,4 @@
+import { RegistryCredentialsModule } from '../projects/registry-credentials.module';
 import { Module, forwardRef } from '@nestjs/common';
 import { KubernetesModule } from '../kubernetes/kubernetes.module';
 import { UsersModule } from '../users/users.module';
@@ -38,12 +39,12 @@ import {
 import { EnvironmentsController } from './environments.controller';
 import { OverviewController } from './overview.controller';
 import { ProjectTransfersController } from './project-transfers.controller';
-import { RegistryCredentialsService } from './registry-credentials.service';
 import { RegistryCredentialsController } from './registry-credentials.controller';
 import { NamespaceTeardownService } from './namespace-teardown.service';
 
 @Module({
   imports: [
+    RegistryCredentialsModule,
     forwardRef(() => GitModule),
     forwardRef(() => ScoreModule),
     KubernetesModule,
@@ -75,7 +76,6 @@ import { NamespaceTeardownService } from './namespace-teardown.service';
     BuildQueueService,
     IngressService,
     FaviconService,
-    RegistryCredentialsService,
     NamespaceTeardownService
   ],
   controllers: [
@@ -90,6 +90,7 @@ import { NamespaceTeardownService } from './namespace-teardown.service';
     RegistryCredentialsController
   ],
   exports: [
+    RegistryCredentialsModule,
     ResourceBindingsService,
     ProjectsService,
     ProjectAccessService,
@@ -98,7 +99,6 @@ import { NamespaceTeardownService } from './namespace-teardown.service';
     DatabasesService,
     DeploymentsService,
     IngressService,
-    RegistryCredentialsService,
     NamespaceTeardownService
   ]
 })

@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { mergeRegistryAuths, pullAuthsFromEnv } from '../docker/registry-pull-auth';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
@@ -52,11 +53,40 @@ export class RegistryCredentialsService {
   }
 
   async registriesFor(projectId: string): Promise<string[]> {
-    const rows = await this.prisma.registryCredential.findMany({
-      where: { projectId },
-      select: { registry: true }
+    return Object.keys((await this.authsFor(projectId)) ?? {});
+  }
+
+  async listOrganization(organizationId: string): Promise<RegistryCredentialView[]> {
+    return this.prisma.organizationRegistryCredential.findMany({
+      where: { organizationId },
+      orderBy: { registry: 'asc' },
+      select: { id: true, registry: true, username: true, createdAt: true, updatedAt: true }
     });
-    return rows.map((r) => r.registry);
+  }
+
+  async syncOrganization(organizationId: string): Promise<void> {
+    const projects = await this.prisma.project.findMany({
+      where: { organizationId },
+      select: { id: true }
+    });
+    for (const project of projects) await this.syncProject(project.id);
+  }
+
+  async buildAuths(deploymentId: string | undefined, env: Record<string, string>) {
+    const overrides = registryAuthsFor(
+      Object.entries(pullAuthsFromEnv(env)).map(([host, auth]) => ({
+        registry: normalizeRegistryHost(host) ?? host,
+        username: auth.username,
+        password: auth.password
+      }))
+    );
+    if (!deploymentId) return overrides;
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: { projectId: true }
+    });
+    if (!deployment) throw new NotFoundException('Deployment not found');
+    return mergeRegistryAuths((await this.authsFor(deployment.projectId)) ?? {}, overrides);
   }
 
   async pullSecretsFor(projectId: string, image: string): Promise<{ name: string }[]> {
@@ -66,14 +96,17 @@ export class RegistryCredentialsService {
   async upsert(
     projectId: string,
     input: RegistryCredentialInput,
-    userId: string
+    userId: string,
+    organizationScope = false
   ): Promise<RegistryCredentialView> {
-    const registry = normalizeRegistryHost(input?.registry ?? '');
+    const registry = normalizeRegistryHost(
+      typeof input?.registry === 'string' ? input.registry : ''
+    );
     if (!registry) {
       throw new BadRequestException('Registry must be a hostname like ghcr.io or docker.io');
     }
-    const username = String(input?.username ?? '').trim();
-    const password = String(input?.password ?? '');
+    const username = typeof input?.username === 'string' ? input.username.trim() : '';
+    const password = typeof input?.password === 'string' ? input.password : '';
     if (!username || username.length > MAX_USERNAME_LEN) {
       throw new BadRequestException('Username is required');
     }
@@ -89,32 +122,48 @@ export class RegistryCredentialsService {
 
     await this.verify(registry, username, password);
 
-    const project = await this.prisma.project.findUnique({
-      where: { id: projectId },
-      select: { id: true, organizationId: true }
-    });
+    const project = organizationScope
+      ? { organizationId: projectId }
+      : await this.prisma.project.findUnique({
+          where: { id: projectId },
+          select: { id: true, organizationId: true }
+        });
     if (!project) throw new NotFoundException('Project not found');
 
-    const row = await this.prisma.registryCredential.upsert({
-      where: { projectId_registry: { projectId, registry } },
-      create: {
-        projectId,
-        registry,
-        username,
-        password: this.crypto.seal(password),
-        createdBy: userId
-      },
-      update: { username, password: this.crypto.seal(password) },
-      select: { id: true, registry: true, username: true, createdAt: true, updatedAt: true }
-    });
+    const row = organizationScope
+      ? await this.prisma.organizationRegistryCredential.upsert({
+          where: { organizationId_registry: { organizationId: projectId, registry } },
+          create: {
+            organizationId: projectId,
+            registry,
+            username,
+            password: this.crypto.encrypt(password),
+            createdBy: userId
+          },
+          update: { username, password: this.crypto.encrypt(password) },
+          select: { id: true, registry: true, username: true, createdAt: true, updatedAt: true }
+        })
+      : await this.prisma.registryCredential.upsert({
+          where: { projectId_registry: { projectId, registry } },
+          create: {
+            projectId,
+            registry,
+            username,
+            password: this.crypto.seal(password),
+            createdBy: userId
+          },
+          update: { username, password: this.crypto.seal(password) },
+          select: { id: true, registry: true, username: true, createdAt: true, updatedAt: true }
+        });
 
-    await this.syncProject(projectId);
+    if (organizationScope) await this.syncOrganization(projectId);
+    else await this.syncProject(projectId);
 
     void this.audit.log({
-      action: 'project.registry_credential.set',
+      action: organizationScope ? 'org.registry_credential.set' : 'project.registry_credential.set',
       actorUserId: userId,
       organizationId: project.organizationId,
-      projectId,
+      projectId: organizationScope ? undefined : projectId,
       targetType: 'registry_credential',
       targetId: row.id,
       targetLabel: registry,
@@ -147,6 +196,25 @@ export class RegistryCredentialsService {
       targetId: row.id,
       targetLabel: row.registry,
       metadata: { registry: row.registry, username: row.username }
+    });
+    return { success: true };
+  }
+
+  async removeOrganization(organizationId: string, id: string, userId: string) {
+    const row = await this.prisma.organizationRegistryCredential.findFirst({
+      where: { id, organizationId },
+      select: { id: true, registry: true }
+    });
+    if (!row) throw new NotFoundException('Registry credential not found');
+    await this.prisma.organizationRegistryCredential.delete({ where: { id: row.id } });
+    await this.syncOrganization(organizationId);
+    void this.audit.log({
+      action: 'org.registry_credential.removed',
+      actorUserId: userId,
+      organizationId,
+      targetType: 'registry_credential',
+      targetId: row.id,
+      targetLabel: row.registry
     });
     return { success: true };
   }
@@ -237,9 +305,18 @@ export class RegistryCredentialsService {
       where: { projectId },
       select: { registry: true, username: true, password: true }
     });
-    if (rows.length === 0) return null;
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { organizationId: true }
+    });
+    if (!project) throw new NotFoundException('Project not found');
+    const inherited = await this.prisma.organizationRegistryCredential.findMany({
+      where: { organizationId: project.organizationId },
+      select: { registry: true, username: true, password: true }
+    });
+    if (rows.length === 0 && inherited.length === 0) return null;
     return registryAuthsFor(
-      rows.map((r) => ({ ...r, password: this.crypto.open(r.password) ?? '' }))
+      [...inherited, ...rows].map((r) => ({ ...r, password: this.crypto.open(r.password) ?? '' }))
     );
   }
 

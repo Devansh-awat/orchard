@@ -1,3 +1,4 @@
+import { RegistryCredentialsService } from '../projects/registry-credentials.service';
 import { Injectable, BadRequestException, Optional } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
 import * as crypto from 'crypto';
@@ -354,7 +355,8 @@ export class ImageBuilderService {
     private readonly orgEvents: OrgEventsService,
     @Optional() private readonly buildKitPool?: BuildKitPoolService,
     @Optional() private readonly jobInformer?: BuildJobInformerService,
-    @Optional() private readonly firecracker?: FirecrackerClient
+    @Optional() private readonly firecracker?: FirecrackerClient,
+    @Optional() private readonly registryCredentials?: RegistryCredentialsService
   ) {
     this.initKubeConfig();
   }
@@ -1371,7 +1373,9 @@ exit $EXIT_CODE
     // container's own environment, and the container environment itself.
     let appPullAuths: RegistryAuths = {};
     try {
-      appPullAuths = pullAuthsFromEnv(requestedEnvVars);
+      appPullAuths = this.registryCredentials
+        ? await this.registryCredentials.buildAuths(deploymentId, requestedEnvVars)
+        : pullAuthsFromEnv(requestedEnvVars);
     } catch (error) {
       if (error instanceof PullAuthError) {
         throw new BadRequestException(error.message);
@@ -1409,10 +1413,9 @@ exit $EXIT_CODE
           : mergeRegistryAuths(this.harborAuths(), appPullAuths),
         { labels: { 'orchard.my/build-job': jobName } }
       );
-      this.appendLog(
-        deploymentId,
-        'Using registry credentials from the app environment to pull base images'
-      ).catch(() => {});
+      this.appendLog(deploymentId, 'Using registry credentials to pull base images').catch(
+        () => {}
+      );
     }
     const buildkitAuthSecret =
       jobDockerConfigSecret ?? (this.sidecarPushEnabled ? null : this.registrySecretName);
