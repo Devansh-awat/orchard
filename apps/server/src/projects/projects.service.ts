@@ -1295,10 +1295,6 @@ export class ProjectsService {
       }
     });
 
-    if (oldRole?.name !== role.name) {
-      await this.sessions.revokeUserSessions(member.userId).catch(() => {});
-    }
-
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
       select: { organizationId: true }
