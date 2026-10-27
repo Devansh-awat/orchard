@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.82.1](https://github.com/hackclub/orchard/compare/server/v2.82.0...server/v2.82.1) (2026-10-27)
+
+
+### Bug Fixes
+
+* keep compose services in place on redeploy so domains and volumes survive ([cc3b724](https://github.com/hackclub/orchard/commit/cc3b7241fb0ce64be8187e30039a82ed438638d3))
+
 ## [2.82.0](https://github.com/hackclub/orchard/compare/server/v2.81.1...server/v2.82.0) (2026-10-27)
 
 
