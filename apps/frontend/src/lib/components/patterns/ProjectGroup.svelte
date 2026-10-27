@@ -363,7 +363,7 @@
 		transition: opacity var(--dur-fast) ease;
 	}
 	.project:hover .actions,
-	.head:focus-within .actions {
+	.head:has(:focus-visible) .actions {
 		opacity: 1;
 	}
 	@media (hover: none) {

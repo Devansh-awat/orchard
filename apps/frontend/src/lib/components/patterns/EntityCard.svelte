@@ -235,7 +235,7 @@
 		margin-block: -0.3em;
 		mask-image: linear-gradient(90deg, black 100%, transparent 100%);
 	}
-	.entity:is(:hover, :focus-within) .text {
+	.entity:is(:hover, :has(:focus-visible)) .text {
 		mask-image: linear-gradient(90deg, black calc(100% - 5rem), transparent calc(100% - 3.5rem));
 	}
 	.name,
@@ -283,7 +283,7 @@
 			opacity var(--fade-out) var(--curve-in) calc((var(--back) * 50ms + 50ms) * var(--tempo));
 	}
 	.entity:hover .fan-item,
-	.entity:focus-within .fan-item,
+	.entity:has(:focus-visible) .fan-item,
 	.fan:has(:global([aria-expanded='true'])) .fan-item {
 		opacity: 1;
 		pointer-events: auto;
