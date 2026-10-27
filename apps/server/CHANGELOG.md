@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.81.1](https://github.com/hackclub/orchard/compare/server/v2.81.0...server/v2.81.1) (2026-10-27)
+
+
+### Bug Fixes
+
+* **server:** forward saved registry credentials to Firecracker builds ([#188](https://github.com/hackclub/orchard/issues/188)) ([c2bab3b](https://github.com/hackclub/orchard/commit/c2bab3b75e5c7207fedf6cdc9795d7a8f2f6a987))
+
 ## [2.81.0](https://github.com/hackclub/orchard/compare/server/v2.80.0...server/v2.81.0) (2026-10-26)
 
 
