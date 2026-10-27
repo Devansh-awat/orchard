@@ -174,6 +174,7 @@
 		color: var(--h-muted);
 	}
 	.project--compact .summary {
+		width: 5.75rem;
 		font-size: var(--text-caption);
 	}
 	.project--media {
@@ -377,8 +378,10 @@
 	.summary {
 		display: inline-flex;
 		align-items: center;
+		justify-content: flex-start;
 		gap: 0.5rem;
 		flex-shrink: 0;
+		width: 6.5rem;
 		color: var(--h-muted);
 		font-size: var(--text-callout);
 		font-variant-numeric: tabular-nums;
