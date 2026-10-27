@@ -4,6 +4,7 @@
 	import RemoteImg from '$lib/components/ui/RemoteImg.svelte';
 	import RelativeTime from '$lib/components/ui/RelativeTime.svelte';
 	import Sparkline from '$lib/components/ui/Sparkline.svelte';
+	import StatusDot from '$lib/components/ui/StatusDot.svelte';
 	import NumberRoll from '$lib/components/ui/NumberRoll.svelte';
 	import Tooltip from '$lib/components/ui/Tooltip.svelte';
 	import { stateEcho } from '$lib/utils/motion.svelte';
@@ -126,8 +127,7 @@
 	{/if}
 	<div class="bottom">
 		<span class="status">
-			<span class="dot dot--{status.kind}" class:dot--live={status.pulse} data-motion="progress"
-			></span>
+			<StatusDot meta={status} size={status.pulse ? 9 : 6} />
 			<span class="label">{status.label}</span>
 		</span>
 		{#if traffic}
@@ -389,48 +389,6 @@
 	}
 	.status + .when {
 		margin-left: auto;
-	}
-	.dot {
-		position: relative;
-		width: 6px;
-		height: 6px;
-		flex-shrink: 0;
-		border-radius: 50%;
-		background: var(--dot);
-		box-shadow: 0 0 5px color-mix(in oklab, var(--dot) 45%, transparent);
-	}
-	.dot--success {
-		--dot: var(--status-success-solid);
-	}
-	.dot--warning {
-		--dot: var(--status-warning-solid);
-	}
-	.dot--error {
-		--dot: var(--status-error-solid);
-	}
-	.dot--info {
-		--dot: var(--status-info-solid);
-	}
-	.dot--progress {
-		--dot: var(--status-progress-solid);
-	}
-	.dot--neutral {
-		--dot: var(--neutral-6);
-		box-shadow: none;
-	}
-	.dot--live::after {
-		content: '';
-		position: absolute;
-		inset: 0;
-		border-radius: inherit;
-		background: var(--dot);
-		animation: ripple 1.6s ease-out infinite;
-	}
-	@keyframes ripple {
-		to {
-			transform: scale(2.6);
-			opacity: 0;
-		}
 	}
 	@media (hover: none) {
 		.fan-item--menu {

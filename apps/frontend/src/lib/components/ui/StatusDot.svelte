@@ -40,22 +40,31 @@
 	.dot--progress {
 		--dot-color: var(--status-progress-solid);
 	}
+	.dot--live {
+		background: none;
+	}
+	.dot--live::before,
 	.dot--live::after {
 		content: '';
 		position: absolute;
-		inset: 0;
-		border-radius: inherit;
-		background: var(--dot-color);
-		animation: ripple 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+		border-radius: 50%;
 	}
-	@keyframes ripple {
-		from {
-			transform: scale(1);
-			opacity: 0.6;
-		}
+	.dot--live::before {
+		inset: 28%;
+		background: var(--dot-color);
+	}
+	.dot--live::after {
+		inset: 0;
+		background: conic-gradient(
+			var(--dot-color) 0 28%,
+			color-mix(in oklab, var(--dot-color) 22%, transparent) 28% 100%
+		);
+		mask: radial-gradient(farthest-side, transparent calc(100% - 1.5px), black calc(100% - 1.25px));
+		animation: orbit 0.9s linear infinite;
+	}
+	@keyframes orbit {
 		to {
-			transform: scale(2.6);
-			opacity: 0;
+			transform: rotate(1turn);
 		}
 	}
 </style>
