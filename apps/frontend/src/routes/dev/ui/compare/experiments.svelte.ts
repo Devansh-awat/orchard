@@ -11,6 +11,19 @@ const off = { value: 'off', label: 'Off' };
 
 export const EXPERIMENTS: Experiment[] = [
 	{
+		id: 'folderSpring',
+		hint: 'Open and close a project folder',
+		label: 'Folder spring',
+		group: 'Motion',
+		options: [
+			{ value: 'current', label: 'Old' },
+			{ value: 'snappy', label: 'Snappy' },
+			{ value: 'bouncy', label: 'Bouncy' },
+			{ value: 'crisp', label: 'Crisp' }
+		],
+		initial: 'crisp'
+	},
+	{
 		id: 'island',
 		hint: 'Simulate a build, then show a toast while it runs',
 		label: 'Notifications',

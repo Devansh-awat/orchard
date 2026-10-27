@@ -76,3 +76,46 @@ export function springCurve(spec: SpringSpec, maxPoints = 40) {
 export function exitSpec(spec: SpringSpec): SpringSpec {
 	return { visualDuration: spec.visualDuration * EXIT_SCALE, bounce: spec.bounce + EXIT_BOUNCE };
 }
+
+export type PhysicalSpring = { mass: number; stiffness: number; damping: number };
+export type AppleSpring = { duration: number; bounce: number };
+
+export function fromApple({ duration, bounce }: AppleSpring): PhysicalSpring {
+	const stiffness = ((2 * Math.PI) / duration) ** 2;
+	const damping =
+		bounce >= 0
+			? (4 * Math.PI * (1 - bounce)) / duration
+			: (4 * Math.PI) / (duration * (1 + bounce));
+	return { mass: 1, stiffness, damping };
+}
+
+export function physicsCurve({ mass, stiffness, damping }: PhysicalSpring, maxPoints = 48) {
+	const stepMs = 1000 / 120;
+	const dt = stepMs / 1000;
+	const points: number[] = [];
+	let x = 0;
+	let v = 0;
+	let t = 0;
+	while (t < 3) {
+		points.push(x);
+		for (let i = 0; i < 8; i++) {
+			const a = (-stiffness * (x - 1) - damping * v) / mass;
+			v += a * (dt / 8);
+			x += v * (dt / 8);
+		}
+		t += dt;
+		if (Math.abs(x - 1) < 0.0005 && Math.abs(v) < 0.005) break;
+	}
+	points.push(1);
+	const stride = Math.max(1, Math.ceil(points.length / maxPoints));
+	const kept: string[] = [];
+	for (let i = 0; i < points.length; i += stride) {
+		kept.push(`${Number(points[i].toFixed(4))} ${((i / (points.length - 1)) * 100).toFixed(1)}%`);
+	}
+	kept[0] = '0';
+	kept.push('1');
+	return {
+		easing: `linear(${kept.join(', ')})`,
+		durationMs: Math.round((points.length - 1) * stepMs)
+	};
+}

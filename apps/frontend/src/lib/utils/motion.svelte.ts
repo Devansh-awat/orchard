@@ -21,6 +21,9 @@ import {
 	SPRINGS,
 	exitSpec,
 	springCurve,
+	fromApple,
+	physicsCurve,
+	type PhysicalSpring,
 	type SpringName
 } from '$lib/design/springs';
 
@@ -1133,6 +1136,57 @@ export function springTiming(
 	};
 }
 
+type FolderMotion = {
+	open: PhysicalSpring;
+	tiles: PhysicalSpring;
+	close: PhysicalSpring;
+	closeTiles: PhysicalSpring;
+	window: number;
+};
+
+export const FOLDER_PRESETS: Record<string, FolderMotion | null> = {
+	current: null,
+	snappy: {
+		open: fromApple({ duration: 0.42, bounce: 0.15 }),
+		tiles: fromApple({ duration: 0.45, bounce: 0.2 }),
+		close: fromApple({ duration: 0.32, bounce: 0 }),
+		closeTiles: fromApple({ duration: 0.24, bounce: 0 }),
+		window: 0.07
+	},
+	bouncy: {
+		open: fromApple({ duration: 0.5, bounce: 0.3 }),
+		tiles: fromApple({ duration: 0.5, bounce: 0.3 }),
+		close: fromApple({ duration: 0.35, bounce: 0 }),
+		closeTiles: fromApple({ duration: 0.26, bounce: 0 }),
+		window: 0.08
+	},
+	crisp: {
+		open: fromApple({ duration: 0.34, bounce: 0.08 }),
+		tiles: fromApple({ duration: 0.36, bounce: 0.15 }),
+		close: fromApple({ duration: 0.26, bounce: 0 }),
+		closeTiles: fromApple({ duration: 0.2, bounce: 0 }),
+		window: 0.05
+	}
+};
+
+export const folderTuning = $state({ preset: 'crisp' });
+
+const physicsCache = new Map<PhysicalSpring, { easing: string; durationMs: number }>();
+
+function physicsTiming(spring: PhysicalSpring, delay = 0): KeyframeAnimationOptions {
+	const level = effectiveAnimationLevel();
+	if (level === 'off') return { duration: 0 };
+	if (level === 'reduced') {
+		return { duration: REDUCED_DURATION * 1000, easing: 'cubic-bezier(0.33, 0, 0.2, 1)' };
+	}
+	let curve = physicsCache.get(spring);
+	if (!curve) {
+		curve = physicsCurve(spring);
+		physicsCache.set(spring, curve);
+	}
+	return { duration: curve.durationMs, easing: curve.easing, delay: delay * 1000 };
+}
+
 const FRAME_MS = 1000 / 60;
 const FOLDER_DRIFT = 0.35;
 const FOLDER_SHRINK = 0.85;
@@ -1199,16 +1253,20 @@ export function folder(
 			if (!motionEnabled()) return;
 			const full = decorativeMotion();
 			const distance = Math.abs(toH - fromH);
+			const tune = FOLDER_PRESETS[folderTuning.preset];
 			heightAnim = body.animate(
 				[{ height: `${fromH}px` }, { height: `${toH}px` }],
-				springTiming('smooth', { distance, exit: !opening })
+				tune
+					? physicsTiming(opening ? tune.open : tune.close)
+					: springTiming('smooth', { distance, exit: !opening })
 			);
 			heightAnim.onfinish = () => (heightAnim = null);
 			const now = (document.timeline.currentTime as number | null) ?? performance.now();
 			heightAnim.startTime = interrupted ? now - FRAME_MS : now;
 
 			const count = els.length;
-			const stride = count > 1 ? Math.min(STAGGER_STRIDE, BURST_WINDOW / (count - 1)) : 0;
+			const windowS = tune?.window ?? BURST_WINDOW;
+			const stride = count > 1 ? Math.min(STAGGER_STRIDE, windowS / (count - 1)) : 0;
 			tiles = els.map((el, i) => {
 				const away = full ? `translate(${v[i].x}px, ${v[i].y}px) scale(${BURST_SCALE})` : 'none';
 				const near = full
@@ -1219,10 +1277,15 @@ export function folder(
 					? [start!, { transform: 'none', opacity: '1' }]
 					: [start ?? { transform: 'none', opacity: '1' }, { transform: near, opacity: '0' }];
 				const anim = el.animate(frames, {
-					...springTiming('snappy', {
-						exit: !opening,
-						delay: opening && !from[i] ? i * stride : 0
-					}),
+					...(tune
+						? physicsTiming(
+								opening ? tune.tiles : tune.closeTiles,
+								opening && !from[i] ? i * stride : 0
+							)
+						: springTiming('snappy', {
+								exit: !opening,
+								delay: opening && !from[i] ? i * stride : 0
+							})),
 					fill: 'both'
 				});
 				anim.startTime = from[i] ? now - FRAME_MS : now;
