@@ -24,6 +24,9 @@
 	const INSET = 8;
 	const TAIL = 14;
 	const MIN_OPEN = H * 2.25;
+	const TEXT_X = 40;
+	const TEXT_END = 16;
+	const OPEN_MAX = 300;
 	const SWIPE_MAX = 20;
 	const SWIPE_DISMISS = 30;
 
@@ -38,6 +41,7 @@
 	let inner = $state<HTMLElement>();
 	let content = $state<HTMLElement>();
 	let drag = $state(0);
+	let descNatural = $state(0);
 	let dragging = $state(false);
 
 	const progress = new SpringValue(0);
@@ -53,7 +57,9 @@
 		hasMore && !loading && !toast.exiting && (hovered || (auto && !stackHovered))
 	);
 
-	const openH = $derived(Math.max(MIN_OPEN, H + contentH));
+	const openH = $derived(
+		$toastLook !== 'tab' ? H + contentH : Math.max(MIN_OPEN, H + contentH)
+	);
 	const p = $derived(progress.current);
 	const height = $derived(H + p * (openH - H));
 	const pillW = $derived(Math.max(H, pill.current));
@@ -65,8 +71,14 @@
 	const pillR = $derived(H / 2 - p * (H / 2 - ROUND));
 	const bodyH = $derived(Math.max(0, p * (openH - H)));
 	const single = $derived($toastLook !== 'tab');
-	const shapeX = $derived(single ? pillX * (1 - p) : pillX);
-	const shapeW = $derived(single ? pillW + p * (width - pillW) : pillW);
+	const targetW = $derived(
+		Math.min(width, Math.min(OPEN_MAX, Math.max(pillW, descNatural + TEXT_X + TEXT_END)))
+	);
+	const targetX = $derived(
+		align === 'right' ? width - targetW : align === 'center' ? (width - targetW) / 2 : 0
+	);
+	const shapeW = $derived(single ? pillW + p * (targetW - pillW) : pillW);
+	const shapeX = $derived(single ? pillX + p * (targetX - pillX) : pillX);
 	const shapeR = $derived(single ? H / 2 - p * (H / 2 - ROUND) : pillR);
 	const flushL = $derived(pillX < 0.5);
 	const flushR = $derived(pillX + pillW > width - 0.5);
@@ -294,7 +306,19 @@
 		</div>
 
 		{#if hasMore}
-			<div class="content" data-edge={expand} data-visible={open || undefined}>
+			<div
+				class="content"
+				class:content--single={single}
+				data-edge={expand}
+				data-visible={open || undefined}
+				style:left={single ? `${targetX}px` : undefined}
+				style:width={single ? `${targetW}px` : undefined}
+			>
+				{#if single && toast.description}
+					<span class="measure" aria-hidden="true" bind:clientWidth={descNatural}
+						>{toast.description}</span
+					>
+				{/if}
 				<div class="description" bind:this={content}>
 					{#if toast.description}<p>{toast.description}</p>{/if}
 					{#if toast.action}
@@ -523,6 +547,23 @@
 		opacity: 1;
 		pointer-events: auto;
 		transition: opacity var(--fade-long) var(--curve-out) calc(180ms * var(--tempo));
+	}
+	.measure {
+		position: absolute;
+		display: inline-block;
+		visibility: hidden;
+		white-space: nowrap;
+		font-size: var(--text-callout);
+		pointer-events: none;
+	}
+	.content--single .description {
+		gap: 0.5rem;
+		padding: 0.75rem 1rem 0 2.5rem;
+		font-size: var(--text-callout);
+		line-height: 1.125rem;
+	}
+	.content--single[data-edge='bottom'] .description {
+		padding: 0 1rem 0.75rem 2.5rem;
 	}
 	.description {
 		display: flex;
