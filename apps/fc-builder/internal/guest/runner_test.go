@@ -128,6 +128,41 @@ func TestFailingStepReportsExitCode(t *testing.T) {
 	}
 }
 
+func TestDockerConfigReachesStepsAndIsRemoved(t *testing.T) {
+	_, url := makeRepo(t)
+	r := &Runner{CacheDir: t.TempDir()}
+	cfg := `{"auths":{"dhi.io":{"username":"u","password":"p","auth":"dTpw"}}}`
+	req := proto.BuildRequest{ID: "b", Source: proto.Source{Kind: proto.SourceGit, CloneURL: url, Branch: "main"},
+		DockerConfig: []byte(cfg),
+		Steps:        []proto.Step{{Name: "build", Script: `echo "dir=$DOCKER_CONFIG"; cat "$DOCKER_CONFIG/config.json"`}}}
+	c := &collector{}
+	if _, err := r.Run(context.Background(), req, c.emit); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	out := c.text("build")
+	if !strings.Contains(out, `"dhi.io"`) {
+		t.Fatalf("docker config not visible to step: %q", out)
+	}
+	dir := strings.TrimSpace(strings.SplitN(strings.TrimPrefix(out, "dir="), "\n", 2)[0])
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Fatalf("docker config dir %q left behind", dir)
+	}
+}
+
+func TestEmptyDockerConfigWhenNoneSent(t *testing.T) {
+	_, url := makeRepo(t)
+	r := &Runner{CacheDir: t.TempDir()}
+	req := proto.BuildRequest{ID: "b", Source: proto.Source{Kind: proto.SourceGit, CloneURL: url, Branch: "main"},
+		Steps: []proto.Step{{Name: "build", Script: `cat "$DOCKER_CONFIG/config.json"`}}}
+	c := &collector{}
+	if _, err := r.Run(context.Background(), req, c.emit); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if strings.TrimSpace(c.text("build")) != "{}" {
+		t.Fatalf("got %q", c.text("build"))
+	}
+}
+
 func TestBadBranchFailsCleanly(t *testing.T) {
 	_, url := makeRepo(t)
 	r := &Runner{CacheDir: t.TempDir()}
