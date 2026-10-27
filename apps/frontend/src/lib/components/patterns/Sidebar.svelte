@@ -7,6 +7,7 @@
 	import type { SidebarSection } from './sidebar';
 	import SearchField from '$lib/components/ui/SearchField.svelte';
 	import AppIcon from '$lib/components/ui/AppIcon.svelte';
+	import Menu from '$lib/components/ui/Menu.svelte';
 	import { effectiveAnimation } from '$lib/stores/preferences';
 	import { SPRINGS, physics, type SpringName } from '$lib/design/springs';
 
@@ -17,6 +18,11 @@
 		onSearch = undefined,
 		liquid = false,
 		collapsed = $bindable(false),
+		onToggle = undefined,
+		orgMenu = undefined,
+		userMenu = undefined,
+		userAvatar = undefined,
+		userBadge = 0,
 		children = undefined
 	}: {
 		org: { name: string; plan?: string; avatar?: string | null };
@@ -25,8 +31,18 @@
 		onSearch?: () => void;
 		liquid?: boolean;
 		collapsed?: boolean;
+		onToggle?: () => void;
+		orgMenu?: Snippet;
+		userMenu?: Snippet;
+		userAvatar?: Snippet;
+		userBadge?: number;
 		children?: Snippet;
 	} = $props();
+
+	function toggle() {
+		if (onToggle) onToggle();
+		else collapsed = !collapsed;
+	}
 
 	const liquidOn = $derived(liquid && !children && $effectiveAnimation === 'full');
 
@@ -264,13 +280,13 @@
 	onkeydown={(e) => {
 		if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.code === 'Backslash') {
 			e.preventDefault();
-			collapsed = !collapsed;
+			toggle();
 		}
 	}}
 />
 
 <nav class="panel" class:panel--collapsed={collapsed} aria-label="Main">
-	<button type="button" class="org">
+	{#snippet orgFace()}
 		<span class="org-avatar">
 			{#if org.avatar}<RemoteImg src={org.avatar} class="cover" />{:else}{org.name.charAt(0)}{/if}
 		</span>
@@ -279,7 +295,19 @@
 			{#if org.plan}<span class="org-plan">{org.plan}</span>{/if}
 		</span>
 		<ChevronsUpDown size={14} class="org-chev" />
-	</button>
+	{/snippet}
+	{#if orgMenu}
+		<Menu placement="bottom-start">
+			{#snippet trigger(attrs)}
+				<button type="button" class="org" title={collapsed ? org.name : undefined} {...attrs}
+					>{@render orgFace()}</button
+				>
+			{/snippet}
+			{@render orgMenu()}
+		</Menu>
+	{:else}
+		<button type="button" class="org">{@render orgFace()}</button>
+	{/if}
 
 	<SearchField placeholder="Search" shortcut="⌘K" size="sm" onfocus={onSearch} />
 
@@ -337,20 +365,39 @@
 	</div>
 
 	<div class="foot">
-		<button type="button" class="me">
-			<span class="me-avatar">
-				{#if user.avatar}<RemoteImg src={user.avatar} class="cover" />{:else}{user.handle
-						.charAt(0)
-						.toUpperCase()}{/if}
+		{#snippet meFace()}
+			<span class="me-pic">
+				<span class="me-avatar">
+					{#if userAvatar}{@render userAvatar()}{:else if user.avatar}<RemoteImg
+							src={user.avatar}
+							class="cover"
+						/>{:else}{user.handle.charAt(0).toUpperCase()}{/if}
+				</span>
+				{#if userBadge > 0}<span class="me-badge">{userBadge}</span>{/if}
 			</span>
 			<span class="me-name">@{user.handle}</span>
-		</button>
+		{/snippet}
+		{#if userMenu}
+			<Menu placement="top-start">
+				{#snippet trigger(attrs)}
+					<button
+						type="button"
+						class="me"
+						title={collapsed ? `@${user.handle}` : undefined}
+						{...attrs}>{@render meFace()}</button
+					>
+				{/snippet}
+				{@render userMenu()}
+			</Menu>
+		{:else}
+			<button type="button" class="me">{@render meFace()}</button>
+		{/if}
 		<button
 			type="button"
 			class="fold"
 			aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
 			aria-expanded={!collapsed}
-			onclick={() => (collapsed = !collapsed)}
+			onclick={toggle}
 		>
 			<PanelLeft size={16} />
 		</button>
@@ -358,6 +405,28 @@
 </nav>
 
 <style>
+	.me-pic {
+		position: relative;
+		display: inline-flex;
+		flex-shrink: 0;
+	}
+	.me-badge {
+		position: absolute;
+		top: -0.25rem;
+		right: -0.375rem;
+		display: grid;
+		place-items: center;
+		min-width: 1rem;
+		height: 1rem;
+		padding: 0 0.25rem;
+		border-radius: var(--radius-pill);
+		background: var(--accent-solid);
+		color: var(--on-solid);
+		font-size: 0.625rem;
+		font-weight: var(--weight-medium);
+		line-height: 1;
+		box-shadow: 0 0 0 1.5px var(--material-chrome-bg);
+	}
 	.panel :global(:focus-visible) {
 		outline-offset: -2px;
 	}
