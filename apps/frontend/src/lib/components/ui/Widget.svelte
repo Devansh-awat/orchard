@@ -28,9 +28,11 @@
 	.widget {
 		display: flex;
 		flex-direction: column;
+		--widget-r: 1.375rem;
+		--widget-pad: 1rem;
 		gap: 0.875rem;
-		padding: 1rem;
-		border-radius: calc(1.375rem * var(--corner-scale));
+		padding: var(--widget-pad);
+		border-radius: calc(var(--widget-r) * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--bg-surface);
 		box-shadow: var(--shadow-raised);

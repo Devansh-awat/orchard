@@ -159,7 +159,7 @@
 		gap: 0.875rem;
 		min-width: 0;
 		padding: 1rem;
-		border-radius: calc(0.75rem * var(--corner-scale));
+		border-radius: calc(var(--card-r, 0.75rem) * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--bg-raised);
 		box-shadow: var(--shadow-raised);

@@ -50,7 +50,7 @@
 
 <section
 	bind:this={host}
-	class="project project--{density}"
+	class="project project--{density} project--{layout}"
 	class:project--media={!!background}
 	class:project--awake={awake}
 	aria-label={name}
@@ -128,9 +128,12 @@
 		--h-fill-hover: color-mix(in oklab, var(--neutral-10) 10%, transparent);
 		--h-edge: color-mix(in oklab, var(--neutral-10) 10%, transparent);
 		--h-pill: color-mix(in oklab, var(--neutral-10) 6%, transparent);
+		--card-r: 0.75rem;
+		--tray-pad: 0.875rem;
+		--project-r: calc(var(--card-r) + var(--tray-pad));
 		position: relative;
 		min-width: 0;
-		border-radius: calc(var(--radius-panel) * var(--corner-scale));
+		border-radius: calc(var(--project-r) * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--bg-raised);
 		box-shadow: var(--shadow-raised);
@@ -139,7 +142,7 @@
 	}
 	.project--compact {
 		--head-h: 2.75rem;
-		border-radius: calc(0.75rem * var(--corner-scale));
+		--project-r: 0.75rem;
 	}
 	.project--compact .text {
 		flex-direction: row;
@@ -434,7 +437,7 @@
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 0.75rem;
-		padding: 0.875rem;
+		padding: var(--tray-pad);
 		background: var(--bg-sunken);
 	}
 	@media (min-width: 100rem) {
@@ -445,7 +448,13 @@
 	.cards--dense {
 		grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
 		gap: 0.5rem;
-		padding: 0.625rem;
+	}
+	.project--dense {
+		--tray-pad: 0.625rem;
+	}
+	.cards--lines :global(.line) {
+		border-radius: calc((var(--project-r) - 0.375rem) * var(--corner-scale));
+		corner-shape: var(--corner);
 	}
 	.cards--lines {
 		grid-template-columns: minmax(0, 1fr);

@@ -81,7 +81,7 @@
 	);
 	const shapeW = $derived(single ? pillW + p * (targetW - pillW) : pillW);
 	const shapeX = $derived(single ? pillX + p * (targetX - pillX) : pillX);
-	const shapeR = $derived(single ? H / 2 - p * (H / 2 - ROUND) : pillR);
+	const shapeR = $derived(single ? H / 2 - p * (H / 2 - (PAD + 12)) : pillR);
 	const flushL = $derived(pillX < 0.5);
 	const flushR = $derived(pillX + pillW > width - 0.5);
 	const filler = $derived(Math.min(ROUND, bodyH));

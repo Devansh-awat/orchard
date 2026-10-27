@@ -96,7 +96,8 @@
 		position: absolute;
 		top: 0;
 		left: 0;
-		border-radius: calc(var(--radius-control) - 0.125rem);
+		border-radius: calc((var(--radius-control) - 0.125rem) * var(--corner-scale));
+		corner-shape: var(--corner);
 		background: var(--bg-raised);
 		box-shadow:
 			0 0 0 0.5px rgb(0 0 0 / 0.06),
@@ -115,7 +116,8 @@
 		min-width: 2rem;
 		padding: 0 0.75rem;
 		border: none;
-		border-radius: calc(var(--radius-control) - 0.125rem);
+		border-radius: calc((var(--radius-control) - 0.125rem) * var(--corner-scale));
+		corner-shape: var(--corner);
 		background: none;
 		color: var(--text-muted);
 		font: inherit;

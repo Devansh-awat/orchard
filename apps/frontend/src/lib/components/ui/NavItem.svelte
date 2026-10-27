@@ -74,7 +74,7 @@
 		height: var(--nav-row-h, 2.25rem);
 		padding: 0 0.5rem 0 0.375rem;
 		border: none;
-		border-radius: var(--nav-radius, 0.6875rem);
+		border-radius: var(--nav-radius, calc(0.625rem * var(--corner-scale)));
 		corner-shape: var(--corner);
 		background: none;
 		color: var(--text-default);

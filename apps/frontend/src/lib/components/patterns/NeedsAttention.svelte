@@ -46,7 +46,7 @@
 		align-items: center;
 		gap: 0.625rem;
 		padding: 0.5rem;
-		border-radius: calc(0.625rem * var(--corner-scale));
+		border-radius: calc((var(--widget-r) - var(--widget-pad) + 0.5rem) * var(--corner-scale));
 		corner-shape: var(--corner);
 		color: inherit;
 		text-decoration: none;

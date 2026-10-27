@@ -137,6 +137,14 @@ Semibold is spent, not sprinkled. A screen gets one or two semibold things: the 
 
 If a row looks flat without bold, fix it with size, tone or spacing first.
 
+## Concentric corners
+
+A surface nested inside another, close to its corner, uses **inner radius = outer radius − the gap between them**, never its own number. Subtract first, then scale: `calc((var(--outer-r) - var(--gap)) * var(--corner-scale))`, with `corner-shape: var(--corner)`. Floor at `--radius-floor` (0.25rem) when the gap is larger than the radius.
+
+- Containers publish their radius and padding as variables (`--widget-r`/`--widget-pad`, `--project-r`/`--tray-pad`, the sidebar's `--nav-radius`, the palette's `--R`/`--inner`) and children derive from them.
+- When the padding is big, grow the outer radius from the inner one instead (`--project-r: calc(var(--card-r) + var(--tray-pad))`), so cards keep their shape.
+- App icons, avatars and status dots keep their own shape. The rule is for backgrounds: rows, cards, hover fills, thumbs, keycaps, nested panels.
+
 ## Highlights never touch
 
 Any list where one row can be selected while another is hovered (sidebar, settings rail, segmented lists) keeps at least `0.25rem` between rows. Two filled backgrounds touching read as one blob, and the hover looks like it is pushing into the selected row.

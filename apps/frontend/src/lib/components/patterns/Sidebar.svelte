@@ -404,6 +404,7 @@
 		gap: 0.625rem;
 		height: 100%;
 		padding: 0.5rem;
+		--nav-radius: calc((var(--radius-panel) - 0.5rem) * var(--corner-scale));
 		border-radius: calc(var(--radius-panel) * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--material-chrome-bg);
@@ -420,7 +421,7 @@
 		min-height: 2.75rem;
 		padding: 0 0.5rem 0 0.375rem;
 		border: none;
-		border-radius: calc(0.6875rem * var(--corner-scale));
+		border-radius: var(--nav-radius);
 		corner-shape: var(--corner);
 		background: none;
 		color: var(--text-default);
@@ -541,10 +542,10 @@
 		height: var(--blob-h);
 	}
 	.blob-cap--top {
-		border-radius: calc(0.6875rem * var(--corner-scale)) calc(0.6875rem * var(--corner-scale)) 0 0;
+		border-radius: var(--nav-radius) var(--nav-radius) 0 0;
 	}
 	.blob-cap--bot {
-		border-radius: 0 0 calc(0.6875rem * var(--corner-scale)) calc(0.6875rem * var(--corner-scale));
+		border-radius: 0 0 var(--nav-radius) var(--nav-radius);
 	}
 	.blob--hover {
 		--blob-ink: 0.06;
@@ -591,7 +592,7 @@
 		height: 2.5rem;
 		padding: 0 0.375rem;
 		border: none;
-		border-radius: calc(0.6875rem * var(--corner-scale));
+		border-radius: var(--nav-radius);
 		corner-shape: var(--corner);
 		background: none;
 		color: var(--text-default);
@@ -620,7 +621,7 @@
 		width: 2.25rem;
 		height: 2.25rem;
 		border: none;
-		border-radius: calc(0.6875rem * var(--corner-scale));
+		border-radius: var(--nav-radius);
 		corner-shape: var(--corner);
 		background: none;
 		color: var(--text-muted);

@@ -183,7 +183,7 @@
 		justify-content: space-between;
 		gap: 0.75rem;
 		padding: 0.3125rem 0.5rem;
-		border-radius: calc(0.5rem * var(--corner-scale));
+		border-radius: calc((var(--radius-panel) - 0.5rem) * var(--corner-scale));
 		corner-shape: var(--corner);
 	}
 	.row--changed {
