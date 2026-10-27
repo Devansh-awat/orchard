@@ -1,10 +1,13 @@
 <script lang="ts">
 	import { stretchIndicator } from './slide.svelte';
+	import Tooltip from './Tooltip.svelte';
+	import type { Icon } from './types';
 
 	interface Option {
 		value: string;
 		label: string;
 		hint?: string;
+		icon?: Icon;
 		optionClass?: string;
 	}
 
@@ -14,7 +17,8 @@
 		label,
 		onchange = undefined,
 		grow = false,
-		size = 'md'
+		size = 'md',
+		iconOnly = false
 	}: {
 		options: readonly Option[];
 		value: string;
@@ -22,6 +26,7 @@
 		onchange?: (value: string) => void;
 		grow?: boolean;
 		size?: 'md' | 'sm';
+		iconOnly?: boolean;
 	} = $props();
 
 	const buttons: Record<string, HTMLButtonElement> = $state({});
@@ -32,21 +37,39 @@
 	}
 </script>
 
-<div class="seg seg--{size}" class:seg--grow={grow} role="radiogroup" aria-label={label}>
+{#snippet option(opt: Option)}
+	<button
+		bind:this={buttons[opt.value]}
+		type="button"
+		role="radio"
+		aria-checked={value === opt.value}
+		aria-label={iconOnly ? opt.label : opt.hint}
+		class="opt {opt.optionClass ?? ''}"
+		class:opt--active={value === opt.value}
+		onclick={() => select(opt.value)}
+	>
+		{#if opt.icon}
+			{@const Glyph = opt.icon}
+			<Glyph size={size === 'sm' ? 14 : 16} strokeWidth={1.75} aria-hidden="true" />
+		{/if}
+		{#if !iconOnly}{opt.label}{/if}
+	</button>
+{/snippet}
+
+<div
+	class="seg seg--{size}"
+	class:seg--grow={grow}
+	class:seg--icons={iconOnly}
+	role="radiogroup"
+	aria-label={label}
+>
 	<span class="thumb" aria-hidden="true" {@attach stretchIndicator(() => buttons[value])}></span>
 	{#each options as opt (opt.value)}
-		<button
-			bind:this={buttons[opt.value]}
-			type="button"
-			role="radio"
-			aria-checked={value === opt.value}
-			aria-label={opt.hint}
-			class="opt {opt.optionClass ?? ''}"
-			class:opt--active={value === opt.value}
-			onclick={() => select(opt.value)}
-		>
-			{opt.label}
-		</button>
+		{#if iconOnly}
+			<Tooltip text={opt.hint ?? opt.label} placement="bottom">{@render option(opt)}</Tooltip>
+		{:else}
+			{@render option(opt)}
+		{/if}
 	{/each}
 </div>
 
@@ -114,6 +137,15 @@
 		height: 1.5rem;
 		padding: 0 0.5rem;
 		font-size: var(--text-caption);
+	}
+	.seg--icons .opt {
+		width: 2rem;
+		min-width: 0;
+		padding: 0;
+	}
+	.seg--icons.seg--sm .opt {
+		width: 1.75rem;
+		padding: 0;
 	}
 	.opt:hover,
 	.opt--active {

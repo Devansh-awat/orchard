@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Plus, Ellipsis, ExternalLink, RotateCw } from 'lucide-svelte';
+	import { Plus, Ellipsis, ExternalLink, RotateCw, LayoutGrid, List } from 'lucide-svelte';
 	import Page from '$lib/components/ui/Page.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import SearchField from '$lib/components/ui/SearchField.svelte';
@@ -363,9 +363,10 @@
 			label="Project density"
 			size="sm"
 			bind:value={density}
+			iconOnly
 			options={[
-				{ value: 'regular', label: 'Expanded' },
-				{ value: 'compact', label: 'Compact' }
+				{ value: 'regular', label: 'Cards', icon: LayoutGrid },
+				{ value: 'compact', label: 'List', icon: List }
 			]}
 			onchange={(v) => localStorage.setItem(DENSITY_KEY, v)}
 		/>
