@@ -2821,17 +2821,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     ) {
       throw new BadRequestException('builderOverride must be "firecracker", "kubernetes" or null');
     }
-    const changesBuilderOverride =
-      'builderOverride' in body &&
-      (body.builderOverride ?? null) !== (deployment.builderOverride ?? null);
     const changesSuperAdminFlags =
       (buildWithDepot !== undefined && buildWithDepot !== (deployment.buildWithDepot ?? false)) ||
       (persistentBuildCache !== undefined &&
-        persistentBuildCache !== (deployment.persistentBuildCache ?? false)) ||
-      changesBuilderOverride;
+        persistentBuildCache !== (deployment.persistentBuildCache ?? false));
     if (changesSuperAdminFlags && !(await this.authz.isSuperAdmin(user.id))) {
       throw new ForbiddenException(
-        'Super builds, persistent build cache and the builder override are superadmin-only settings'
+        'Super builds and persistent build cache are superadmin-only settings'
       );
     }
 

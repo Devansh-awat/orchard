@@ -492,7 +492,7 @@ fcBuilder:
   # Firecracker microVM per project, with that project's BuildKit cache on a
   # persistent disk image. Deploying the hosts does nothing on its own; builds
   # only route here when serverEnabled is true AND the PostHog flag
-  # `firecracker-builder` (or a superadmin per-deployment override) picks the
+  # `firecracker-builder` (or a per-deployment override) picks the
   # project. Every other build keeps using the standard builder.
   enabled: false
   serverEnabled: false

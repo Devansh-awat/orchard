@@ -96,7 +96,7 @@ recognised. Anything without a default is optional unless the description says o
 | `BUILD_NO_PROXY_EXTRA` |  |  |
 | `DEPOT_TOKEN` |  | Optional Depot remote builders |
 | `DEPOT_PROJECT_ID` |  |  |
-| `FC_BUILDER_ENABLED` |  | Experimental fast builder: per-project Firecracker microVMs run by the fc-builder service. Builds only route there when this is true AND the PostHog flag firecracker-builder (or a superadmin per-deployment override) picks the project; anything else uses the standard builder. |
+| `FC_BUILDER_ENABLED` |  | Experimental fast builder: per-project Firecracker microVMs run by the fc-builder service. Builds only route there when this is true AND the PostHog flag firecracker-builder (or a per-deployment override) picks the project; anything else uses the standard builder. |
 | `FC_BUILDER_HOSTS` |  | Comma-separated fc-builder host URLs, e.g. http://fc-builder-0.fc-builder.orchard-fc-builders.svc.cluster.local:8080 |
 | `FC_BUILDER_TOKEN` |  | Shared secret the server signs fc-builder API tokens with; must match the fc-builder pods. |
 | `MAX_CONCURRENT_FC_BUILDS` |  | Queue slots for fast builds (default 16), separate from MAX_CONCURRENT_BUILDS. |

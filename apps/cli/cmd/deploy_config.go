@@ -752,7 +752,7 @@ so follow up with "orchard deploy rebuild <id>" to make it live.`,
 	c.Flags().StringVar(&installCmd, "install-cmd", "", "railpack: override the detected install command")
 	c.Flags().StringVar(&buildCmd, "build-cmd", "", "railpack: override the detected build command")
 	c.Flags().StringVar(&outputDir, "output-dir", "", "railpack: directory of built static files")
-	c.Flags().StringVar(&builder, "builder", "", "superadmin: auto|fast|standard, force or block the fast VM builder")
+	c.Flags().StringVar(&builder, "builder", "", "auto|fast|standard, force or block the fast VM builder")
 	return c
 }
 

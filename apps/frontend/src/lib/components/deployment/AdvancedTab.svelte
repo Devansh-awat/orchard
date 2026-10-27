@@ -440,26 +440,25 @@
 							<span class="adv-switch-track"></span>
 						</label>
 					</div>
-					<div class="adv-toggle-row">
-						<div class="adv-toggle-info">
-							<span class="adv-toggle-label">Fast builder</span>
-							<span class="adv-toggle-desc"
-								>Build in an isolated VM with a warm per-project cache. Auto follows the rollout
-								flag</span
-							>
-						</div>
-						<SegmentedControl
-							label="Fast builder"
-							options={[
-								{ value: '', label: 'Auto' },
-								{ value: 'firecracker', label: 'On' },
-								{ value: 'kubernetes', label: 'Off' }
-							]}
-							bind:value={builderOverride}
-							onchange={() => (buildOptionsDirty = true)}
-						/>
-					</div>
 				{/if}
+				<div class="adv-toggle-row">
+					<div class="adv-toggle-info">
+						<span class="adv-toggle-label">Fast builder</span>
+						<span class="adv-toggle-desc"
+							>Build in an isolated VM with a warm per-project cache. Auto lets Orchard decide</span
+						>
+					</div>
+					<SegmentedControl
+						label="Fast builder"
+						options={[
+							{ value: '', label: 'Auto' },
+							{ value: 'firecracker', label: 'On' },
+							{ value: 'kubernetes', label: 'Off' }
+						]}
+						bind:value={builderOverride}
+						onchange={() => (buildOptionsDirty = true)}
+					/>
+				</div>
 			{:else}
 				<p class="text-xs" style="color: var(--surface-muted);">
 					Build settings are only available for apps deployed from GitHub.
