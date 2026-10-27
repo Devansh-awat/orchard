@@ -200,6 +200,9 @@ export function shellRoutes(r: Router, { store, hub, log }: MockContext) {
 				buildStartedAt: d.buildStepTimestamps?.queued
 					? new Date(d.buildStepTimestamps.queued).toISOString()
 					: null,
+				buildStepTimestamps: d.buildStepTimestamps
+					? { __start: d.buildStepTimestamps.queued, ...d.buildStepTimestamps }
+					: null,
 				updatedAt: d.updatedAt,
 				githubRepo: d.githubRepo,
 				githubBranch: d.githubBranch
@@ -217,6 +220,8 @@ export function shellRoutes(r: Router, { store, hub, log }: MockContext) {
 				isActive: b.isActive,
 				createdAt: b.createdAt,
 				commitMessage: b.commitMessage,
+				buildStartedAt: b.buildStartedAt,
+				buildCompletedAt: b.buildCompletedAt,
 				status: b.status,
 				deployment: { ...lite(byId.get(b.deploymentId)!), buildStatus: b.status }
 			}));

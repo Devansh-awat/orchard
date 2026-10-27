@@ -43,6 +43,7 @@ export interface ActiveBuild {
 	buildStatus: string;
 	buildStep: string | null;
 	buildStartedAt?: string | null;
+	buildStepTimestamps?: Record<string, number> | null;
 	updatedAt: string;
 	githubRepo?: string;
 	githubBranch?: string;
@@ -54,6 +55,10 @@ export interface ActiveBuild {
 export interface RecentBuild {
 	id: string;
 	commitSha: string | null;
+	commitMessage?: string | null;
+	buildStartedAt?: string | null;
+	buildCompletedAt?: string | null;
+	status?: string;
 	branch: string | null;
 	triggerType: string | null;
 	isActive: boolean;

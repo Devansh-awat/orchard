@@ -1504,9 +1504,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       select: {
         id: true,
         commitSha: true,
+        commitMessage: true,
         branch: true,
         triggerType: true,
         isActive: true,
+        buildStartedAt: true,
+        buildCompletedAt: true,
         createdAt: true,
         deployment: {
           select: {
@@ -1527,9 +1530,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     return {
       // The elapsed counter runs off `buildStartedAt`; `updatedAt` is only a
       // fallback for builds that predate step timestamps.
-      active: activeBuilds.map(({ buildStepTimestamps, ...d }) => ({
+      active: activeBuilds.map((d) => ({
         ...d,
-        buildStartedAt: buildStartedAtFrom(buildStepTimestamps),
+        buildStartedAt: buildStartedAtFrom(d.buildStepTimestamps),
         ingresses: d.ingresses.map(scrubIngress)
       })),
       recent: recentBuilds.map((b) =>

@@ -1,43 +1,70 @@
 <script lang="ts">
-	import '$lib/components/org-dashboard/org-dashboard.css';
 	import { createQuery } from '@tanstack/svelte-query';
+	import { goto } from '$app/navigation';
 	import {
 		apiFetch,
 		pinnedItems,
 		toasts,
 		subscribeOrgEvents,
 		sseStatusFor,
-		isSuperAdmin
+		isSuperAdmin,
+		dashboardDensity
 	} from '$lib/stores';
+	import { projectGradientEnabled } from '$lib/stores/preferences';
 	import { queryClient } from '$lib/query';
 	import { ingressUrl } from '$lib/ingress-url';
 	import { overviewQueryOptions, buildsQueryOptions } from '$lib/queries/overview';
-	import { Plus, Star, ChevronDown, Rocket, FolderPlus } from 'lucide-svelte';
+	import {
+		Box,
+		Database,
+		Timer,
+		FolderPlus,
+		Ellipsis,
+		ExternalLink,
+		RotateCw,
+		LayoutGrid,
+		List,
+		ChevronDown,
+		Sprout
+	} from 'lucide-svelte';
 	import { onDestroy, untrack } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
-	import { springHover, motionStagger, springRotate } from '$lib/utils/motion.svelte';
-	import type { PageData } from './$types';
+	import Page from '$lib/components/ui/Page.svelte';
+	import Button from '$lib/components/ui/Button.svelte';
+	import SearchField from '$lib/components/ui/SearchField.svelte';
+	import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
+	import Menu from '$lib/components/ui/Menu.svelte';
+	import MenuItem from '$lib/components/ui/MenuItem.svelte';
+	import EmptyState from '$lib/components/ui/EmptyState.svelte';
+	import Skeleton from '$lib/components/ui/Skeleton.svelte';
+	import { resourceStatus, buildStatusMeta } from '$lib/components/ui/status';
+	import ProjectGroup from '$lib/components/patterns/ProjectGroup.svelte';
+	import EntityCard from '$lib/components/patterns/EntityCard.svelte';
+	import EntityLine from '$lib/components/patterns/EntityLine.svelte';
+	import NeedsAttention from '$lib/components/patterns/NeedsAttention.svelte';
+	import RecentBuilds from '$lib/components/patterns/RecentBuilds.svelte';
+	import LiquidNewButton, {
+		type NewMenuItem
+	} from '$lib/components/patterns/LiquidNewButton.svelte';
+	import type { BuildItem } from '$lib/components/patterns/builds';
+	import type { FailingApp } from '$lib/components/patterns/sidebar';
+	import { buildPhases } from '$lib/components/deployment/build-phases';
+	import { humanizeStep } from '$lib/components/deployment/timeline-rows';
 	import {
-		SkeletonGrid,
-		EmptyState,
-		SearchBar,
-		DeploymentCard,
-		DatabaseCard,
-		ProjectCard,
-		BuildsSidebar,
-		CompactList
-	} from '$lib/components/org-dashboard';
-	import { dashboardDensity, type DashboardDensity } from '$lib/stores';
-	import { Menu, MenuItem } from '$lib/components/ui';
-	import { Rows3, Rows4 } from 'lucide-svelte';
+		IMG_ICONS,
+		knownIcon,
+		favUrl,
+		buildIcon
+	} from '$lib/components/org-dashboard/helpers.svelte';
 	import type {
 		DeploymentSummary,
 		DatabaseSummary,
 		ActiveBuild,
 		RecentBuild,
 		ProjectMeta,
-		ProjectGroup
+		ProjectGroup as Group
 	} from '$lib/components/org-dashboard';
+	import type { PageData } from './$types';
 
 	let { data } = $props<{ data: PageData }>();
 	const orgSlug = $derived(data.orgSlug);
@@ -55,6 +82,8 @@
 	let databases = $state<DatabaseSummary[]>([]);
 	const projectMetas = new SvelteMap<string, ProjectMeta>();
 	const liveMetrics = new SvelteMap<string, { cpuMilli: number; memoryBytes: number }>();
+	const cpuSeries = new SvelteMap<string, number[]>();
+	const SERIES = 24;
 	let activeBuilds = $state<ActiveBuild[]>([]);
 	let recentBuilds = $state<RecentBuild[]>([]);
 	let sseStatusValue = $state<'connecting' | 'connected' | 'disconnected'>('connecting');
@@ -303,6 +332,7 @@
 				recentBuilds.length = 0;
 				projectMetas.clear();
 				liveMetrics.clear();
+				cpuSeries.clear();
 			}
 			lastSlug = slug;
 		});
@@ -330,10 +360,12 @@
 			unsub = subscribeOrgEvents(id, (ev) => {
 				if (ev.type === 'deployment.metrics') {
 					if (ev.id && ev.payload) {
+						const cpuMilli = ev.payload.totalCpuUsage ?? 0;
 						liveMetrics.set(ev.id, {
-							cpuMilli: ev.payload.totalCpuUsage ?? 0,
+							cpuMilli,
 							memoryBytes: ev.payload.totalMemoryUsage ?? 0
 						});
+						cpuSeries.set(ev.id, [...(cpuSeries.get(ev.id) ?? []), cpuMilli].slice(-SERIES));
 					}
 					return;
 				}
@@ -371,157 +403,102 @@
 		if (buildsInvalidateTimer) clearTimeout(buildsInvalidateTimer);
 	});
 
-	// ── Expand state (persisted, scoped per density) ──
-	const expandKeyFor = (d: DashboardDensity) => `overview-expanded-projects:${d}`;
-	const readExpanded = (d: DashboardDensity): Set<string> => {
-		if (typeof localStorage === 'undefined') return new Set();
-		try {
-			return new Set(JSON.parse(localStorage.getItem(expandKeyFor(d)) ?? '[]'));
-		} catch {
-			return new Set();
-		}
-	};
-	let expandedProjects = $state<Set<string>>(readExpanded($dashboardDensity));
-	const projectBodyEls = new Map<string, HTMLElement>();
-	let renderedProjectBodies = $state<Set<string>>(new Set());
+	const compact = $derived($dashboardDensity === 'compact');
+
+	const expandKey = (slug: string) => `home-expanded:${slug}`;
+	let expandedIds = $state<Set<string> | null>(null);
 	$effect(() => {
-		const exp = expandedProjects;
+		const slug = orgSlug;
 		untrack(() => {
-			let changed = false;
-			const next = new Set(renderedProjectBodies);
-			for (const id of exp) {
-				if (!next.has(id)) {
-					next.add(id);
-					changed = true;
-				}
+			try {
+				const raw = localStorage.getItem(expandKey(slug));
+				expandedIds = raw ? new Set(JSON.parse(raw)) : null;
+			} catch {
+				expandedIds = null;
 			}
-			if (changed) renderedProjectBodies = next;
 		});
 	});
 
-	function toggleExpand(id: string, e: Event) {
-		e.preventDefault();
-		e.stopPropagation();
-		const next = new Set(expandedProjects);
-		if (next.has(id)) next.delete(id);
-		else next.add(id);
-		persistExpanded(next);
+	function isExpanded(id: string, index: number) {
+		return expandedIds ? expandedIds.has(id) : index === 0;
 	}
 
-	const DENSITY_OPTIONS: { value: DashboardDensity; icon: typeof Rows3; label: string }[] = [
-		{ value: 'compact', icon: Rows4, label: 'Compact' },
-		{ value: 'normal', icon: Rows3, label: 'Normal' }
-	];
-
-	function persistExpanded(next: Set<string>) {
-		expandedProjects = next;
-		if (typeof localStorage !== 'undefined') {
-			localStorage.setItem(expandKeyFor($dashboardDensity), JSON.stringify([...next]));
-		}
+	function setExpanded(id: string, open: boolean) {
+		const next = new Set(
+			expandedIds ?? (visibleProjectGroups[0] ? [visibleProjectGroups[0].id] : [])
+		);
+		if (open) next.add(id);
+		else next.delete(id);
+		expandedIds = next;
+		localStorage.setItem(expandKey(orgSlug), JSON.stringify([...next]));
 	}
 
-	function setDensity(value: DashboardDensity) {
-		if (value === $dashboardDensity) return;
-		dashboardDensity.set(value);
-		expandedProjects = readExpanded(value);
-	}
-
-	let newOpen = $state(false);
-
-	// ── Filtering ──
 	let searchQuery = $state('');
-	const favouriteIds = new SvelteSet<string>();
+	const pinnedIds = new SvelteSet<string>();
 	$effect(() => {
 		const next = new Set($pinnedItems.filter((i) => i.type === 'deployment').map((i) => i.id));
-		for (const id of favouriteIds) if (!next.has(id)) favouriteIds.delete(id);
-		for (const id of next) if (!favouriteIds.has(id)) favouriteIds.add(id);
+		for (const id of pinnedIds) if (!next.has(id)) pinnedIds.delete(id);
+		for (const id of next) if (!pinnedIds.has(id)) pinnedIds.add(id);
 	});
 
-	let filtered = $derived.by(() => {
-		let r = deployments;
+	const filtered = $derived.by(() => {
 		const q = searchQuery.trim().toLowerCase();
-		if (q)
-			r = r.filter(
-				(d) =>
-					d.name.toLowerCase().includes(q) ||
-					(d.displayName?.toLowerCase().includes(q) ?? false) ||
-					(d.project?.name?.toLowerCase().includes(q) ?? false) ||
-					(d.githubRepo?.toLowerCase().includes(q) ?? false) ||
-					d.ingresses.some((i) => i.host.toLowerCase().includes(q))
-			);
-		const byId = new Map(r.map((d) => [d.id, d]));
-		const ordered: DeploymentSummary[] = [];
-		for (const id of depOrder) {
-			const d = byId.get(id);
-			if (d) {
-				ordered.push(d);
+		const r = q
+			? deployments.filter(
+					(d) =>
+						d.name.toLowerCase().includes(q) ||
+						(d.displayName?.toLowerCase().includes(q) ?? false) ||
+						(d.project?.name?.toLowerCase().includes(q) ?? false) ||
+						(d.githubRepo?.toLowerCase().includes(q) ?? false) ||
+						d.ingresses.some((i) => i.host.toLowerCase().includes(q))
+				)
+			: deployments;
+		return ordered(r, depOrder);
+	});
+
+	const filteredDbs = $derived.by(() => {
+		const q = searchQuery.trim().toLowerCase();
+		const r = q
+			? databases.filter(
+					(d) =>
+						d.name.toLowerCase().includes(q) ||
+						d.dbName.toLowerCase().includes(q) ||
+						(d.project?.name?.toLowerCase().includes(q) ?? false)
+				)
+			: databases;
+		return ordered(r, dbOrder);
+	});
+
+	function ordered<T extends { id: string }>(items: T[], order: string[]) {
+		const byId = new Map(items.map((x) => [x.id, x]));
+		const out: T[] = [];
+		for (const id of order) {
+			const x = byId.get(id);
+			if (x) {
+				out.push(x);
 				byId.delete(id);
 			}
 		}
-		for (const d of byId.values()) ordered.push(d);
-		return ordered;
-	});
+		for (const x of byId.values()) out.push(x);
+		return out;
+	}
 
-	let favDeps = $derived(filtered.filter((d) => favouriteIds.has(d.id)));
-
-	let filteredDbs = $derived.by(() => {
-		const q = searchQuery.trim().toLowerCase();
-		let r = databases;
-		if (q)
-			r = r.filter(
-				(d) =>
-					d.name.toLowerCase().includes(q) ||
-					d.dbName.toLowerCase().includes(q) ||
-					(d.project?.name?.toLowerCase().includes(q) ?? false)
-			);
-		const byId = new Map(r.map((d) => [d.id, d]));
-		const ordered: DatabaseSummary[] = [];
-		for (const id of dbOrder) {
-			const d = byId.get(id);
-			if (d) {
-				ordered.push(d);
-				byId.delete(id);
-			}
-		}
-		for (const d of byId.values()) ordered.push(d);
-		return ordered;
-	});
-
-	let projectGroups = $derived.by(() => {
-		const nonFav = filtered.filter((d) => !favouriteIds.has(d.id));
-		const map = new Map<string, ProjectGroup>();
-		for (const d of nonFav) {
-			const p = d.project;
-			if (!p) continue;
-			if (!map.has(p.id)) {
+	const projectGroups = $derived.by(() => {
+		const map = new Map<string, Group>();
+		const group = (p: { id: string; name: string; slug: string }) => {
+			if (!map.has(p.id))
 				map.set(p.id, { id: p.id, name: p.name, slug: p.slug, deps: [], dbs: [] });
-			}
-			map.get(p.id)!.deps.push(d);
-		}
-		for (const db of filteredDbs) {
-			const p = db.project;
-			if (!p) continue;
-			if (!map.has(p.id)) {
-				map.set(p.id, { id: p.id, name: p.name, slug: p.slug, deps: [], dbs: [] });
-			}
-			map.get(p.id)!.dbs.push(db);
-		}
+			return map.get(p.id)!;
+		};
+		for (const d of filtered) if (d.project) group(d.project).deps.push(d);
+		for (const db of filteredDbs) if (db.project) group(db.project).dbs.push(db);
 		const q = searchQuery.trim().toLowerCase();
 		for (const p of projectMetas.values()) {
 			if (map.has(p.id)) continue;
 			if (q && !p.name.toLowerCase().includes(q) && !p.slug.toLowerCase().includes(q)) continue;
-			map.set(p.id, { id: p.id, name: p.name, slug: p.slug, deps: [], dbs: [] });
+			group(p);
 		}
-		const ordered: ProjectGroup[] = [];
-		for (const id of projOrder) {
-			const g = map.get(id);
-			if (g) {
-				ordered.push(g);
-				map.delete(id);
-			}
-		}
-		for (const g of map.values()) ordered.push(g);
-		return ordered;
+		return ordered([...map.values()], projOrder);
 	});
 
 	const PROJECTS_INITIAL = 12;
@@ -529,29 +506,168 @@
 	let visibleCount = $state(PROJECTS_INITIAL);
 	$effect(() => {
 		searchQuery;
-		untrack(() => {
-			visibleCount = PROJECTS_INITIAL;
-		});
+		untrack(() => (visibleCount = PROJECTS_INITIAL));
 	});
 	const visibleProjectGroups = $derived(projectGroups.slice(0, visibleCount));
 	const hiddenProjectCount = $derived(Math.max(0, projectGroups.length - visibleCount));
 
-	// ── Actions ──
-	let failedFav = $state<Set<string>>(new Set());
-	function favErr(id: string) {
-		failedFav = new Set(failedFav).add(id);
+	const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
+
+	function counts(g: Group) {
+		const out: string[] = [];
+		if (g.deps.length) out.push(plural(g.deps.length, 'app'));
+		if (g.dbs.length) out.push(plural(g.dbs.length, 'database'));
+		return out.length ? out : ['Nothing deployed yet'];
 	}
 
-	function toggleFav(dep: DeploymentSummary, e: Event) {
-		e.preventDefault();
-		e.stopPropagation();
+	function summary(g: Group) {
+		const kinds = [
+			...g.deps.map((d) => resourceStatus(d.status, d.buildStatus).kind),
+			...g.dbs.map((d) => resourceStatus(d.status).kind)
+		];
+		if (!kinds.length) return undefined;
+		const failing = kinds.filter((k) => k === 'error').length;
+		const building = kinds.filter((k) => k === 'progress' || k === 'warning').length;
+		if (failing) return { tone: 'error' as const, label: `${failing} failing` };
+		if (building) return { tone: 'progress' as const, label: `${building} building` };
+		return { tone: 'success' as const, label: 'All running' };
+	}
+
+	function latest(g: Group) {
+		let t = 0;
+		for (const x of [...g.deps, ...g.dbs]) t = Math.max(t, new Date(x.updatedAt).getTime());
+		return t ? new Date(t).toISOString() : null;
+	}
+
+	const isUrl = (v?: string | null) => !!v && /^(https?:)?\/\//.test(v);
+
+	let failedFav = $state<Set<string>>(new Set());
+
+	function depIcon(d: DeploymentSummary) {
+		const k = knownIcon(d.image);
+		if (k) return k;
+		if (failedFav.has(d.id)) return null;
+		return d.faviconUrl ?? (d.ingresses[0] ? favUrl(d.ingresses[0].host.split('/')[0]) : null);
+	}
+
+	function fmtCpu(milli: number) {
+		return milli < 1000 ? `${Math.round(milli)}m` : `${(milli / 1000).toFixed(1)} cores`;
+	}
+
+	function fmtMem(bytes: number) {
+		const mib = bytes / (1024 * 1024);
+		return mib < 1024 ? `${Math.round(mib)} MiB` : `${(mib / 1024).toFixed(1)} GiB`;
+	}
+
+	function cpuTraffic(id: string) {
+		const values = cpuSeries.get(id);
+		if (!values || values.length < 2) return undefined;
+		return {
+			values,
+			label: `${fmtCpu(values[values.length - 1])} CPU`,
+			format: (v: number) => `${fmtCpu(v)} CPU`
+		};
+	}
+
+	function metricsOf(id: string) {
+		const m = liveMetrics.get(id);
+		return m ? `${fmtCpu(m.cpuMilli)} · ${fmtMem(m.memoryBytes)}` : undefined;
+	}
+
+	const failing = $derived<FailingApp[]>(
+		deployments
+			.filter((d) => resourceStatus(d.status, d.buildStatus).kind === 'error')
+			.slice(0, 6)
+			.map((d) => ({
+				label: d.displayName || d.name,
+				href: `/${orgSlug}/deployments/${d.id}`,
+				reason: resourceStatus(d.status, d.buildStatus).label,
+				kind: 'deployment' as const,
+				icon: depIcon(d)
+			}))
+	);
+
+	function duration(from?: string | null, to?: string | null) {
+		if (!from || !to) return undefined;
+		const s = Math.max(0, Math.round((new Date(to).getTime() - new Date(from).getTime()) / 1000));
+		return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
+	}
+
+	const projectIconByName = $derived(
+		new Map(
+			[...projectMetas.values()].map((p) => [p.name, isUrl(p.icon) ? (p.icon ?? null) : null])
+		)
+	);
+	const projectIcon = (name?: string) => (name ? (projectIconByName.get(name) ?? null) : null);
+
+	const builds = $derived<BuildItem[]>([
+		...activeBuilds.map((b: ActiveBuild): BuildItem => ({
+			id: b.id,
+			app: b.displayName || b.name,
+			project: b.project?.name,
+			projectIcon: projectIcon(b.project?.name),
+			icon: buildIcon(b.image, b.ingresses, b.id, failedFav, b.faviconUrl),
+			message: b.buildStep ? humanizeStep(b.buildStep) : 'Queued',
+			status: buildStatusMeta('building'),
+			at: b.buildStartedAt ?? b.updatedAt,
+			startedAt: b.buildStartedAt ?? undefined,
+			href: `/${orgSlug}/deployments/${b.id}`,
+			branch: b.githubBranch,
+			phases: buildPhases(b.buildStepTimestamps, Date.now(), true)
+		})),
+		...recentBuilds.map((b: RecentBuild): BuildItem => ({
+			id: b.id,
+			app: b.deployment.displayName || b.deployment.name,
+			project: b.deployment.project?.name,
+			projectIcon: projectIcon(b.deployment.project?.name),
+			icon: buildIcon(
+				b.deployment.image,
+				b.deployment.ingresses,
+				b.deployment.id,
+				failedFav,
+				b.deployment.faviconUrl
+			),
+			message:
+				b.commitMessage ??
+				(b.commitSha
+					? b.commitSha.slice(0, 7)
+					: b.triggerType === 'manual'
+						? 'Manual deploy'
+						: 'Deploy'),
+			status: buildStatusMeta(b.status ?? b.deployment.buildStatus),
+			at: b.buildCompletedAt ?? b.createdAt,
+			href: `/${orgSlug}/deployments/${b.deployment.id}`,
+			branch: b.branch ?? undefined,
+			duration: duration(b.buildStartedAt, b.buildCompletedAt)
+		}))
+	]);
+
+	const NEW_ITEMS: NewMenuItem[] = [
+		{ id: 'deployment', label: 'App', description: 'From a repo or image', icon: Box },
+		{ id: 'database', label: 'Database', description: 'Postgres, Redis and more', icon: Database },
+		{ id: 'job', label: 'Job', description: 'Runs on a schedule', icon: Timer },
+		{ id: 'project', label: 'Project', description: 'A group for related apps', icon: FolderPlus }
+	];
+
+	function create(id: string) {
+		const to = {
+			deployment: `/${orgSlug}/new`,
+			database: `/${orgSlug}/new?type=database`,
+			job: `/${orgSlug}/jobs/new`,
+			project: `/${orgSlug}/projects/new`
+		}[id];
+		if (to) goto(to);
+	}
+
+	function togglePin(d: DeploymentSummary) {
 		pinnedItems.toggle({
-			id: dep.id,
-			name: dep.displayName || dep.name,
+			id: d.id,
+			name: d.displayName || d.name,
 			type: 'deployment',
-			href: `/${orgSlug}/deployments/${dep.id}`
+			href: `/${orgSlug}/deployments/${d.id}`
 		});
 	}
+
 	async function joinOrganization() {
 		if (!orgId || joiningOrg) return;
 		joiningOrg = true;
@@ -567,224 +683,223 @@
 				queryClient.invalidateQueries({ queryKey: ['overview', orgSlug] });
 			} else {
 				const body = await r.json().catch(() => null);
-				toasts.add({ title: body?.message || 'Failed to join', color: 'error' });
+				toasts.add({ title: body?.message || 'Could not join', color: 'error' });
 			}
 		} catch {
-			toasts.add({ title: 'Failed to join organization', color: 'error' });
+			toasts.add({ title: 'Could not join the organization', color: 'error' });
 		} finally {
 			joiningOrg = false;
 		}
 	}
-	async function restart(dep: DeploymentSummary, e: Event) {
-		e.preventDefault();
-		e.stopPropagation();
+
+	async function redeploy(d: DeploymentSummary) {
 		try {
-			const r = await apiFetch(`/apiv1/deployments/${dep.id}/restart`, { method: 'POST' });
+			const r = await apiFetch(`/apiv1/deployments/${d.id}/restart`, { method: 'POST' });
 			if (r.ok) {
-				toasts.add({ title: `Restarting ${dep.displayName || dep.name}...`, color: 'success' });
+				toasts.add({ title: `Restarting ${d.displayName || d.name}`, color: 'success' });
 				queryClient.invalidateQueries({ queryKey: ['overview', orgSlug] });
 			} else toasts.add({ title: 'Restart failed', color: 'error' });
 		} catch {
 			toasts.add({ title: 'Restart failed', color: 'error' });
 		}
 	}
-	function cpUrl(dep: DeploymentSummary, e: Event) {
-		e.preventDefault();
-		e.stopPropagation();
-		if (dep.ingresses.length) {
-			navigator.clipboard.writeText(ingressUrl(dep.ingresses[0]));
-			toasts.add({ title: 'Copied', color: 'success' });
-		}
-	}
-	function visit(dep: DeploymentSummary, e: Event) {
-		e.preventDefault();
-		e.stopPropagation();
-		if (dep.ingresses.length) window.open(ingressUrl(dep.ingresses[0]), '_blank');
+
+	function copyUrl(d: DeploymentSummary) {
+		if (!d.ingresses.length) return;
+		navigator.clipboard.writeText(ingressUrl(d.ingresses[0]));
+		toasts.add({ title: 'URL copied', color: 'success' });
 	}
 </script>
 
-<div class="page org-dash">
-	<!-- Header -->
-	<header class="header" {@attach motionStagger({ index: 0, from: { y: -6 } })}>
-		<h1 class="title">Your Apps</h1>
-		<div class="header-actions">
-			{#if $isSuperAdmin && isSyntheticMembership}
-				<button
-					class="btn-secondary"
-					onclick={joinOrganization}
-					disabled={joiningOrg}
-					{@attach springHover({ lift: -1 })}
-					>{joiningOrg ? 'Joining...' : 'Join Organization'}</button
-				>
-			{/if}
-			{#if canCreateProjects}
-				<Menu placement="bottom-end" bind:open={newOpen}>
-					{#snippet trigger(attrs, open)}
-						<button
-							type="button"
-							class="btn-primary"
-							aria-haspopup="menu"
-							aria-expanded={open}
-							{...attrs}
-						>
-							<Plus size={15} />
-							New
-							<span
-								class="btn-primary-caret"
-								{@attach springRotate(() => open, { rest: 0, on: 180 })}
-							>
-								<ChevronDown size={13} />
-							</span>
-						</button>
+<svelte:head><title>Your Apps</title></svelte:head>
+
+{#snippet side()}
+	<div class="side">
+		<NeedsAttention items={failing} />
+		{#if builds.length}<RecentBuilds {builds} />{/if}
+	</div>
+{/snippet}
+
+{#snippet deploymentCard(d: DeploymentSummary)}
+	{@const status = resourceStatus(d.status, d.buildStatus)}
+	{@const host = d.ingresses[0]?.host}
+	{#if compact}
+		<EntityLine
+			kind="deployment"
+			name={d.displayName || d.name}
+			{status}
+			detail={host ?? d.githubBranch}
+			metrics={metricsOf(d.id)}
+			traffic={cpuTraffic(d.id)}
+			updatedAt={d.updatedAt}
+			href="/{orgSlug}/deployments/{d.id}"
+		/>
+	{:else}
+		<EntityCard
+			kind="deployment"
+			name={d.displayName || d.name}
+			{status}
+			image={depIcon(d)}
+			detail={host ?? d.githubBranch}
+			metrics={metricsOf(d.id)}
+			traffic={cpuTraffic(d.id)}
+			updatedAt={d.updatedAt}
+			href="/{orgSlug}/deployments/{d.id}"
+			quick={[
+				...(d.ingresses[0]
+					? [{ label: 'Visit', icon: ExternalLink, href: ingressUrl(d.ingresses[0]) }]
+					: []),
+				{ label: 'Restart', icon: RotateCw, onclick: () => redeploy(d) }
+			]}
+		>
+			{#snippet actions()}
+				<Menu>
+					{#snippet trigger(props)}
+						<Button {...props} size="sm" variant="ghost" icon={Ellipsis} label="Actions" />
 					{/snippet}
-					<MenuItem href="/{orgSlug}/new">
-						<Rocket size={14} />
-						<span class="new-menu-text">
-							App
-							<span class="new-menu-desc">Deploy a repo, image, or database</span>
-						</span>
-					</MenuItem>
-					<MenuItem href="/{orgSlug}/projects/new">
-						<FolderPlus size={14} />
-						<span class="new-menu-text">
-							Project
-							<span class="new-menu-desc">A group to hold related apps</span>
-						</span>
+					<MenuItem href="/{orgSlug}/deployments/{d.id}?tab=deploys">View deploys</MenuItem>
+					{#if d.ingresses.length}<MenuItem onclick={() => copyUrl(d)}>Copy URL</MenuItem>{/if}
+					<MenuItem onclick={() => togglePin(d)}>
+						{pinnedIds.has(d.id) ? 'Unpin from sidebar' : 'Pin to sidebar'}
 					</MenuItem>
 				</Menu>
-			{/if}
-		</div>
-	</header>
-
-	<div class="layout">
-		<main class="main">
-			{#if loading}
-				<SkeletonGrid />
-			{:else if loadError}
-				<EmptyState variant="error" {canCreateProjects} {orgSlug} {loadError} />
-			{:else if deployments.length === 0 && databases.length === 0 && projectMetas.size === 0}
-				<EmptyState variant="empty" {canCreateProjects} {orgSlug} />
-			{:else}
-				<div class="list-toolbar">
-					<div class="list-toolbar-search"><SearchBar bind:searchQuery /></div>
-					<div class="density-seg" role="radiogroup" aria-label="List density">
-						{#each DENSITY_OPTIONS as opt (opt.value)}
-							{@const Icon = opt.icon}
-							<button
-								type="button"
-								role="radio"
-								aria-checked={$dashboardDensity === opt.value}
-								class="density-btn"
-								class:density-btn--active={$dashboardDensity === opt.value}
-								title={opt.label}
-								aria-label={opt.label}
-								onclick={() => setDensity(opt.value)}
-							>
-								<Icon size={14} />
-							</button>
-						{/each}
-					</div>
-				</div>
-
-				{#if $dashboardDensity === 'compact'}
-					<CompactList
-						groups={visibleProjectGroups}
-						metas={projectMetas}
-						{favDeps}
-						{orgSlug}
-						{liveMetrics}
-						{failedFav}
-						{expandedProjects}
-						onToggleExpand={toggleExpand}
-						onFavErr={favErr}
-					/>
-					{@render showMore()}
-					{#if projectGroups.length === 0 && favDeps.length === 0}
-						<p class="no-results">
-							{searchQuery ? `No results for "${searchQuery}"` : 'Nothing here yet'}
-						</p>
-					{/if}
-				{:else}
-					<!-- Favourites -->
-					{#if favDeps.length > 0}
-						<section class="section">
-							<h2 class="label"><Star size={11} /> Favourites</h2>
-							<div class="od-grid">
-								{#each favDeps as dep, i (dep.id)}
-									<div {@attach motionStagger({ index: i, from: { y: 10 } })}>
-										<DeploymentCard
-											{dep}
-											isFav={true}
-											{orgSlug}
-											isFavourite={favouriteIds.has(dep.id)}
-											{failedFav}
-											{liveMetrics}
-											onToggleFav={toggleFav}
-											onRestart={restart}
-											onCopyUrl={cpUrl}
-											onVisit={visit}
-											onFavErr={favErr}
-										/>
-									</div>
-								{/each}
-							</div>
-						</section>
-					{/if}
-
-					<!-- Project Groups -->
-					{#if projectGroups.length > 0}
-						{#each visibleProjectGroups as group, gi (group.id)}
-							<section class="section" {@attach motionStagger({ index: gi, from: { y: 14 } })}>
-								<ProjectCard
-									{group}
-									meta={projectMetas.get(group.id)}
-									{orgSlug}
-									expanded={expandedProjects.has(group.id)}
-									rendered={renderedProjectBodies.has(group.id)}
-									{favouriteIds}
-									{failedFav}
-									{liveMetrics}
-									{projectBodyEls}
-									getRenderedProjectBodies={() => renderedProjectBodies}
-									setRenderedProjectBodies={(s) => (renderedProjectBodies = s)}
-									onToggleExpand={toggleExpand}
-									onToggleFav={toggleFav}
-									onRestart={restart}
-									onCopyUrl={cpUrl}
-									onVisit={visit}
-									onFavErr={favErr}
-								/>
-							</section>
-						{/each}
-						{@render showMore()}
-					{/if}
-					{#if projectGroups.length === 0 && favDeps.length === 0}
-						<p class="no-results">
-							{searchQuery ? `No results for "${searchQuery}"` : 'Nothing here yet'}
-						</p>
-					{/if}
-				{/if}
-			{/if}
-		</main>
-
-		<BuildsSidebar
-			{activeBuilds}
-			{recentBuilds}
-			{buildsLoading}
-			{orgSlug}
-			{failedFav}
-			onFavErr={favErr}
-		/>
-	</div>
-</div>
-
-{#snippet showMore()}
-	{#if hiddenProjectCount > 0}
-		<button type="button" class="show-more" onclick={() => (visibleCount += PROJECTS_STEP)}>
-			<ChevronDown size={14} />
-			Show {Math.min(hiddenProjectCount, PROJECTS_STEP)} more
-			{hiddenProjectCount === 1 ? 'project' : 'projects'}
-			<span class="show-more-count">{visibleProjectGroups.length} of {projectGroups.length}</span>
-		</button>
+			{/snippet}
+		</EntityCard>
 	{/if}
 {/snippet}
+
+{#snippet databaseCard(db: DatabaseSummary)}
+	{@const status = resourceStatus(db.status)}
+	{#if compact}
+		<EntityLine
+			kind="database"
+			name={db.name}
+			{status}
+			detail={db.dbName}
+			updatedAt={db.updatedAt}
+			href="/{orgSlug}/databases/{db.id}"
+		/>
+	{:else}
+		<EntityCard
+			kind="database"
+			name={db.name}
+			{status}
+			image={IMG_ICONS.postgres}
+			detail={db.mode ? `${db.dbName} · ${db.mode}` : db.dbName}
+			updatedAt={db.updatedAt}
+			href="/{orgSlug}/databases/{db.id}"
+		/>
+	{/if}
+{/snippet}
+
+<Page title="Your Apps" width="wide" aside={loading || loadError ? undefined : side}>
+	{#snippet tools()}
+		<SegmentedControl
+			label="Project density"
+			size="sm"
+			iconOnly
+			value={compact ? 'compact' : 'normal'}
+			onchange={(v) => dashboardDensity.set(v as 'compact' | 'normal')}
+			options={[
+				{ value: 'normal', label: 'Cards', icon: LayoutGrid },
+				{ value: 'compact', label: 'List', icon: List }
+			]}
+		/>
+	{/snippet}
+	{#snippet actions()}
+		<SearchField placeholder="Search apps" shortcut="/" bind:value={searchQuery} />
+		{#if $isSuperAdmin && isSyntheticMembership}
+			<Button variant="secondary" loading={joiningOrg} onclick={joinOrganization}>
+				Join organization
+			</Button>
+		{/if}
+		{#if canCreateProjects}
+			<LiquidNewButton items={NEW_ITEMS} onSelect={create} />
+		{/if}
+	{/snippet}
+
+	{#if loading}
+		<div class="projects">
+			{#each [0, 1, 2, 3] as i (i)}<Skeleton height="4.5rem" rounded="1.125rem" />{/each}
+		</div>
+	{:else if loadError}
+		<EmptyState
+			title="Your apps did not load"
+			description={loadError.status === 403
+				? 'You are not a member of this organization.'
+				: loadError.message}
+		>
+			<Button
+				variant="secondary"
+				onclick={() => queryClient.invalidateQueries({ queryKey: ['overview', orgSlug] })}
+			>
+				Try again
+			</Button>
+		</EmptyState>
+	{:else if projectGroups.length === 0}
+		<EmptyState
+			title={searchQuery ? `Nothing matches “${searchQuery}”` : 'Nothing deployed yet'}
+			description={searchQuery
+				? 'Try a project, app or domain name.'
+				: 'Deploy a repo, an image or a database to get started.'}
+		>
+			{#snippet icon()}<Sprout size={22} />{/snippet}
+			{#if !searchQuery && canCreateProjects}
+				<Button variant="primary" href="/{orgSlug}/new">Deploy an app</Button>
+			{/if}
+		</EmptyState>
+	{:else}
+		<div class="projects" class:projects--compact={compact}>
+			{#each visibleProjectGroups as g, i (g.id)}
+				{@const meta = projectMetas.get(g.id)}
+				<ProjectGroup
+					name={g.name}
+					href="/{orgSlug}/projects/{g.slug}"
+					image={isUrl(meta?.icon) ? meta?.icon : null}
+					background={$projectGradientEnabled ? (meta?.backgroundImage ?? null) : null}
+					owner={meta?.owner?.username ?? undefined}
+					counts={counts(g)}
+					updatedAt={latest(g)}
+					summary={summary(g)}
+					onNew={canCreateProjects
+						? () => goto(`/${orgSlug}/new?projectSlug=${g.slug}`)
+						: undefined}
+					bind:expanded={() => isExpanded(g.id, i), (v) => setExpanded(g.id, v)}
+					density={compact ? 'compact' : 'regular'}
+					layout={compact ? 'lines' : 'dense'}
+				>
+					{#each g.deps as d (d.id)}{@render deploymentCard(d)}{/each}
+					{#each g.dbs as db (db.id)}{@render databaseCard(db)}{/each}
+				</ProjectGroup>
+			{/each}
+		</div>
+		{#if hiddenProjectCount > 0}
+			<div class="more">
+				<Button variant="ghost" icon={ChevronDown} onclick={() => (visibleCount += PROJECTS_STEP)}>
+					Show {Math.min(hiddenProjectCount, PROJECTS_STEP)} more
+				</Button>
+			</div>
+		{/if}
+	{/if}
+</Page>
+
+<style>
+	.side {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+	.projects {
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
+	}
+	.projects--compact {
+		gap: 0.375rem;
+	}
+	.more {
+		display: flex;
+		justify-content: center;
+		margin-top: 1rem;
+	}
+</style>
