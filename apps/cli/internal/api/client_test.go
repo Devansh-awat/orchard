@@ -233,3 +233,37 @@ func TestDoRequestShape(t *testing.T) {
 		t.Errorf("body = %q, want %q", g.body, `{"a":1}`)
 	}
 }
+
+func TestMutationsSendIdempotencyKey(t *testing.T) {
+	var got []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = append(got, r.Header.Get("Idempotency-Key"))
+		w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	cl := New(srv.URL, "tok")
+	if _, err := cl.Do(context.Background(), http.MethodGet, "/widgets", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cl.Do(context.Background(), http.MethodPost, "/widgets", []byte(`{}`)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cl.Do(context.Background(), http.MethodPost, "/widgets", []byte(`{}`)); err != nil {
+		t.Fatal(err)
+	}
+	if got[0] != "" {
+		t.Errorf("GET sent Idempotency-Key %q", got[0])
+	}
+	if !strings.HasPrefix(got[1], "cli-") || got[1] == got[2] {
+		t.Errorf("POST keys = %q, %q; want distinct cli- keys", got[1], got[2])
+	}
+
+	t.Setenv("ORCHARD_IDEMPOTENCY_KEY", "agent-retry-7")
+	if _, err := cl.Do(context.Background(), http.MethodPost, "/widgets", []byte(`{}`)); err != nil {
+		t.Fatal(err)
+	}
+	if got[3] != "agent-retry-7" {
+		t.Errorf("env key = %q, want agent-retry-7", got[3])
+	}
+}

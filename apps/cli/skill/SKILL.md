@@ -33,6 +33,7 @@ description: Deploy and manage apps, databases, scheduled jobs, domains, and log
 - On failure stderr gets `build.error` or each failing pod's reason plus a log tail. In JSON mode stdout gets `{deploymentId, releaseId, phase, url, build, pods, hint}`, also on exit 9/10.
 - `orchard deploy status <id>` answers "is it live, and if not why" once; `orchard up` waits by default when piped and keeps build logs on stderr in JSON mode.
 - Mutations return `rolloutSince`/`releaseId`; the CLI pins the wait to them so a restart can't read `live` off old pods.
+- Retrying a mutation after a timeout: reuse `ORCHARD_IDEMPOTENCY_KEY=<stable value>` for that command so the server replays instead of redoing it. `deploy rollback <id>` with no history id goes to the previous image.
 
 ## Common commands
 

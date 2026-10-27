@@ -1,3 +1,4 @@
+import { Idempotent } from '../idempotency/idempotency.interceptor';
 import { Throttle } from '@nestjs/throttler';
 import {
   Controller,
@@ -255,6 +256,7 @@ export class ProjectsController {
   }
 
   @Post()
+  @Idempotent()
   async createProject(
     @Body()
     body: {
@@ -542,6 +544,7 @@ export class ProjectsController {
   }
 
   @Post(':id/databases')
+  @Idempotent()
   async createDatabase(
     @Param('id') id: string,
     @Body() body: {
@@ -700,6 +703,7 @@ export class ProjectsController {
   }
 
   @Post(':id/deployments')
+  @Idempotent()
   async createDeployment(
     @Param('id') id: string,
     @Body()
@@ -859,6 +863,7 @@ export class ProjectsController {
   }
 
   @Post(':id/deployments/from-github')
+  @Idempotent()
   async createDeploymentFromGitHub(
     @Param('id') id: string,
     @Body()
@@ -1335,6 +1340,7 @@ export class DeploymentsController {
 
   @Post(':id/rebuild')
   @UseInterceptors(RolloutPinInterceptor)
+  @Idempotent()
   async rebuildDeployment(@Param('id') id: string, @Request() req) {
     return this.deployments.rebuildDeployment(id, req.user.sub, {
       email: req.user.email,
@@ -1395,6 +1401,7 @@ export class DeploymentsController {
 
   @Post(':id/restart')
   @UseInterceptors(RolloutPinInterceptor)
+  @Idempotent()
   async restartDeployment(@Param('id') id: string, @Request() req) {
     return this.deployments.restartDeployment(id, req.user.sub, {
       email: req.user.email,
@@ -1462,8 +1469,22 @@ export class DeploymentsController {
     return this.deployments.getImageHistoryLogs(id, imageHistoryId, req.user.sub);
   }
 
+  @Post(':id/rollback')
+  @UseInterceptors(RolloutPinInterceptor)
+  @Idempotent()
+  async rollbackToPrevious(@Param('id') id: string, @Request() req) {
+    return this.deployments.rollbackToPrevious(id, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
+  }
+
   @Post(':id/rollback/:imageHistoryId')
   @UseInterceptors(RolloutPinInterceptor)
+  @Idempotent()
   async rollbackToImage(
     @Param('id') id: string,
     @Param('imageHistoryId') imageHistoryId: string,
@@ -2158,6 +2179,7 @@ export class DatabasesController {
   }
 
   @Post(':id/restart')
+  @Idempotent()
   async restartDatabase(@Param('id') id: string, @Request() req) {
     return this.databases.restartDatabase(id, req.user.sub, {
       email: req.user.email,

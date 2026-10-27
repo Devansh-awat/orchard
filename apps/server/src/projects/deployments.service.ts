@@ -1,3 +1,4 @@
+import { pickPreviousImage } from './rollback-target';
 import {
   Injectable,
   NotFoundException,
@@ -9097,6 +9098,38 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     return { logs: entry.buildLogs || '' };
+  }
+
+  async rollbackToPrevious(
+    deploymentId: string,
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    await this.access.assertDeploymentView(deploymentId, clerkId);
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: { image: true }
+    });
+    if (!deployment) {
+      throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    }
+    const history = await this.prisma.imageHistory.findMany({
+      where: { deploymentId },
+      select: { id: true, image: true, isActive: true, createdAt: true },
+      orderBy: { createdAt: 'desc' }
+    });
+    const target = pickPreviousImage(history, deployment.image);
+    if (!target) {
+      throw new NotFoundException('No earlier image to roll back to');
+    }
+    const result = await this.rollbackToImage(deploymentId, target.id, clerkId, userData);
+    return { ...result, rolledBackTo: { imageHistoryId: target.id, image: target.image } };
   }
 
   async rollbackToImage(

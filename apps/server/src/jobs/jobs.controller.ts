@@ -1,3 +1,4 @@
+import { Idempotent } from '../idempotency/idempotency.interceptor';
 import {
   Controller,
   Get,
@@ -182,6 +183,7 @@ export class JobsController {
   }
 
   @Post('jobs/:id/runs')
+  @Idempotent()
   async runNow(
     @Param('id') id: string,
     @Body() body: { allowConcurrent?: boolean } | undefined,

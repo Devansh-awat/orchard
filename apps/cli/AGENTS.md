@@ -120,6 +120,20 @@ Every deployment `--wait` (and `up`, `import`) waits on `GET /deployments/:id/ro
 - One-off check: `orchard deploy status <id>` (add `--wait` to block). Raw: `orchard api GET '/deployments/<id>/rollout?wait=1&timeout=60'` long-polls server-side for up to 120s.
 - `orchard up` waits by default when stdout is not a TTY. In JSON mode the build log streams to stderr and stdout gets one object: `{deploymentId, releaseId, phase, url, ...}`.
 
+## Retrying mutations safely
+
+Create, deploy, rebuild, restart, rollback, database create and job run endpoints honour an `Idempotency-Key` header for 24 hours. The same key with the same body replays the first response (header `Idempotent-Replayed: true`) instead of doing the work twice. The same key with a different body is a 422, and a request still in flight with that key is a 409. The CLI sends a fresh key on every mutation; to make a retried command safe after a timeout or a dropped connection, set `ORCHARD_IDEMPOTENCY_KEY` to a value you reuse for that one command:
+
+```sh
+key=$(uuidgen)
+ORCHARD_IDEMPOTENCY_KEY=$key orchard deploy rebuild <deploymentId> --wait
+ORCHARD_IDEMPOTENCY_KEY=$key orchard deploy rebuild <deploymentId> --wait   # retry after a dropped connection: replays, no second build
+```
+
+Generate a new key for each intended action. Reusing one for a deliberate second rebuild within 24 hours replays the first response instead of rebuilding.
+
+`orchard deploy rollback <deploymentId>` with no history id rolls back to the previous image (`POST /deployments/:id/rollback`).
+
 ## Destructive commands and --yes
 
 Delete/revoke/restore style commands ask for confirmation. With stdin or stdout not a TTY the CLI never prompts: it fails immediately with exit 2 unless you pass `--yes` (`-y`). Always pass `--yes` explicitly when you intend a destructive operation.

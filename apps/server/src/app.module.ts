@@ -4,6 +4,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { ApiThrottlerGuard, apiThrottlerLimit } from './auth/api-throttler.guard';
 import { HealthModule } from './health/health.module';
+import { IdempotencyModule } from './idempotency/idempotency.module';
 import { KubernetesModule } from './kubernetes/kubernetes.module';
 import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -62,6 +63,7 @@ import { graftImports } from './grafts/boot';
     AuthModule,
     UsersModule,
     HealthModule,
+    IdempotencyModule,
     KubernetesModule,
     CoordinationModule,
     ApplyModule,

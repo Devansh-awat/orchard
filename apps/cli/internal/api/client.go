@@ -3,14 +3,17 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand/v2"
+	mrand "math/rand/v2"
 	"mime"
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -76,7 +79,7 @@ func retryDelay(e *APIError, attempt int) time.Duration {
 		return e.retryAfter
 	}
 	base := time.Second << attempt
-	return base + time.Duration(rand.Int64N(int64(base/2)))
+	return base + time.Duration(mrand.Int64N(int64(base/2)))
 }
 
 func (c *Client) once(ctx context.Context, method, path string, body []byte) ([]byte, error) {
@@ -85,6 +88,9 @@ func (c *Client) once(ctx context.Context, method, path string, body []byte) ([]
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if method != http.MethodGet && method != http.MethodHead {
+		req.Header.Set("Idempotency-Key", idempotencyKey())
+	}
 
 	res, err := c.http.Do(req)
 	if err != nil {
@@ -116,6 +122,17 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body io.Re
 	}
 	req.Header.Set("Accept", "application/json")
 	return req, nil
+}
+
+func idempotencyKey() string {
+	if k := strings.TrimSpace(os.Getenv("ORCHARD_IDEMPOTENCY_KEY")); k != "" {
+		return k
+	}
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("cli-%d", time.Now().UnixNano())
+	}
+	return "cli-" + hex.EncodeToString(b)
 }
 
 func bodyReader(body []byte) io.Reader {

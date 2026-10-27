@@ -112,7 +112,8 @@
     "test:exec": "tsx --test test/exec-protocol.test.ts test/exec-sessions.test.ts test/exec-screen.test.ts test/exec-session-engine.test.ts",
     "test:grafts": "tsx --test test/grafts.test.ts",
     "test:rollout": "tsx --test test/rollout-phase.test.ts test/rollout-status.test.ts",
-    "test:secrets": "tsx --test test/build-secrets.test.ts test/env-default-secret.test.ts test/job-step-secrets.test.ts test/secret-redaction.test.ts"
+    "test:secrets": "tsx --test test/build-secrets.test.ts test/env-default-secret.test.ts test/job-step-secrets.test.ts test/secret-redaction.test.ts",
+    "test:idempotency": "tsx --test test/idempotency.test.ts test/rollback-target.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
