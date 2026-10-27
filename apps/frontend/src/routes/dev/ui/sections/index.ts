@@ -1,4 +1,12 @@
 import type { Component } from 'svelte';
+import Principles from './Principles.svelte';
+import Motion from './Motion.svelte';
+import Corners from './Corners.svelte';
+import TypeWeight from './TypeWeight.svelte';
+import ColourStatus from './ColourStatus.svelte';
+import Layout from './Layout.svelte';
+import AiTells from './AiTells.svelte';
+import WhichComponent from './WhichComponent.svelte';
 import Foundations from './Foundations.svelte';
 import Type from './Type.svelte';
 import Buttons from './Buttons.svelte';
@@ -19,6 +27,14 @@ import Patterns from './Patterns.svelte';
 export type Section = { id: string; title: string; group: string; component: Component };
 
 export const SECTIONS: Section[] = [
+	{ id: 'principles', title: 'Principles', group: 'System', component: Principles },
+	{ id: 'motion', title: 'Motion', group: 'System', component: Motion },
+	{ id: 'corners', title: 'Corners', group: 'System', component: Corners },
+	{ id: 'type-weight', title: 'Type and weight', group: 'System', component: TypeWeight },
+	{ id: 'colour-status', title: 'Colour and status', group: 'System', component: ColourStatus },
+	{ id: 'layout', title: 'Layout and alignment', group: 'System', component: Layout },
+	{ id: 'ai-tells', title: 'AI tells', group: 'System', component: AiTells },
+	{ id: 'which-component', title: 'Which component', group: 'System', component: WhichComponent },
 	{
 		id: 'foundations',
 		title: 'Colour, radius, space',
