@@ -888,12 +888,15 @@
 
 			<div class="body" data-none={!hasBody || undefined}>
 				<div
+					class="well"
+					data-fade-top={edges.top || undefined}
+					data-fade-bottom={edges.bottom || undefined}
+				>
+				<div
 					class="scroller"
 					id={listId}
 					role="listbox"
 					aria-label="Results"
-					data-fade-top={edges.top || undefined}
-					data-fade-bottom={edges.bottom || undefined}
 					bind:this={scroller}
 					onscroll={syncEdges}
 				>
@@ -915,6 +918,7 @@
 							</div>
 						</div>
 					{/each}
+				</div>
 				</div>
 				<div class="foot">
 					<span class="count" aria-live="polite">{countLabel}</span>
@@ -1059,8 +1063,8 @@
 		overflow: hidden;
 		border-radius: var(--R);
 		corner-shape: var(--corner);
-		background: linear-gradient(var(--material-glass-bg) 0 0), var(--material-glass-bg);
-		backdrop-filter: var(--material-glass-filter);
+		--palette-bg: var(--neutral-raised);
+		background: var(--palette-bg);
 		box-shadow:
 			inset 0 0.5px 0 color-mix(in oklab, var(--on-solid) 14%, transparent),
 			var(--shadow-floating);
@@ -1127,9 +1131,39 @@
 	.body[data-none] {
 		display: none;
 	}
+	.well {
+		--edge: 1.25rem;
+		position: relative;
+		display: flex;
+		flex: 1 1 auto;
+		flex-direction: column;
+		min-height: 0;
+	}
+	.well::before,
+	.well::after {
+		content: '';
+		position: absolute;
+		right: 0;
+		left: 0;
+		z-index: 3;
+		height: var(--edge);
+		pointer-events: none;
+		opacity: 0;
+		transition: opacity var(--fade-in) var(--curve-out);
+	}
+	.well::before {
+		top: 0;
+		background: linear-gradient(var(--palette-bg), transparent);
+	}
+	.well::after {
+		bottom: 0;
+		background: linear-gradient(transparent, var(--palette-bg));
+	}
+	.well[data-fade-top]::before,
+	.well[data-fade-bottom]::after {
+		opacity: 1;
+	}
 	.scroller {
-		--fade-top: 0px;
-		--fade-bottom: 0px;
 		position: relative;
 		flex: 1 1 auto;
 		min-height: 0;
@@ -1138,19 +1172,6 @@
 		overflow-y: auto;
 		overscroll-behavior: contain;
 		scrollbar-width: none;
-		mask-image: linear-gradient(
-			to bottom,
-			transparent,
-			black var(--fade-top),
-			black calc(100% - var(--fade-bottom)),
-			transparent
-		);
-	}
-	.scroller[data-fade-top] {
-		--fade-top: 1.25rem;
-	}
-	.scroller[data-fade-bottom] {
-		--fade-bottom: 1.25rem;
 	}
 	.scroller::-webkit-scrollbar {
 		display: none;
