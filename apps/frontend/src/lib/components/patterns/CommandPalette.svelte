@@ -1032,6 +1032,9 @@
 		z-index: var(--z-modal);
 		visibility: hidden;
 		pointer-events: none;
+		isolation: isolate;
+		transform: translateZ(0);
+		will-change: transform;
 	}
 	.layer[data-floating] {
 		visibility: visible;
@@ -1044,6 +1047,7 @@
 	.scrim {
 		position: absolute;
 		inset: 0;
+		will-change: opacity;
 		background: color-mix(in oklab, var(--neutral-10) 12%, transparent);
 	}
 	:global(:root.dark) .scrim {
@@ -1172,6 +1176,8 @@
 		overflow-y: auto;
 		overscroll-behavior: contain;
 		scrollbar-width: none;
+		will-change: scroll-position;
+		background: var(--palette-bg);
 	}
 	.scroller::-webkit-scrollbar {
 		display: none;

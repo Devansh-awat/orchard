@@ -59,6 +59,8 @@
 	.viewport {
 		position: fixed;
 		z-index: var(--z-toast);
+		isolation: isolate;
+		will-change: transform;
 		display: flex;
 		gap: 0.75rem;
 		padding: 0.75rem;

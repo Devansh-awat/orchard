@@ -494,6 +494,7 @@ html {
 
 .ui-menu,
 .ui-popover {
+	will-change: transform, opacity;
 	margin: 0;
 	padding: 0.25rem;
 	border: none;
@@ -941,6 +942,7 @@ html {
 }
 
 .ui-dropdown-list {
+	will-change: transform, opacity;
 	display: flex;
 	flex-direction: column;
 }
