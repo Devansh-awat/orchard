@@ -94,7 +94,7 @@
 
 <SectionCard
 	title="Toast ink"
-	description="A toast title is never coloured. Status lives in the glyph, a solid fill with its contrast ink."
+	description="A toast title is never coloured. Status lives in the glyph, a solid fill with a white glyph."
 >
 	<div class="grid grid-cols-2 gap-4">
 		<Verdict kind="do" note="Ink title, solid glyph.">

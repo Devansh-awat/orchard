@@ -211,7 +211,7 @@ Space Mono, matching the vine on orchard.my. `AuthShell` places it. Live referen
 `toasts.add({ title, description?, color, action?, position? })` and
 `toasts.promise(work, { loading, success, error })`. Titles are short and past tense
 for results ("Changes saved"). Titles are never coloured: they use `--toast-ink` on the
-capsule, and status lives only in the glyph, a solid status fill with its `-contrast` ink.
+capsule, and status lives only in the glyph, a solid status fill with a white (`--on-solid`) glyph.
 Coloured text on a dark capsule fails contrast. Position follows context: results of something the user
 clicked go `bottom-right` (default); things that happened on their own (a build
 finishing, connection lost) go `top-center`.

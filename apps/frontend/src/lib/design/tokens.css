@@ -123,13 +123,13 @@
 	--toast-ink: var(--neutral-app);
 	--toast-muted: color-mix(in oklab, var(--neutral-app) 66%, transparent);
 	--toast-success: var(--green-solid);
-	--toast-success-on: var(--green-contrast);
+	--toast-success-on: var(--on-solid);
 	--toast-error: var(--red-solid);
-	--toast-error-on: var(--red-contrast);
+	--toast-error-on: var(--on-solid);
 	--toast-warning: var(--amber-solid);
-	--toast-warning-on: var(--amber-contrast);
+	--toast-warning-on: var(--on-solid);
 	--toast-info: var(--blue-solid);
-	--toast-info-on: var(--blue-contrast);
+	--toast-info-on: var(--on-solid);
 	--toast-loading: color-mix(in oklab, var(--neutral-app) 16%, transparent);
 	--toast-loading-on: var(--neutral-app);
 
