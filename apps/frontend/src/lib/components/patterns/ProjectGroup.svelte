@@ -354,7 +354,7 @@
 		padding-block: 0.3em;
 		margin-block: -0.3em;
 	}
-	.meta[data-overflow] {
+	.meta:global([data-overflow]) {
 		mask-image: linear-gradient(90deg, black calc(100% - 1.5rem), transparent);
 	}
 	.meta > :global(*) {
