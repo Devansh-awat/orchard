@@ -16,7 +16,7 @@ export const EXPERIMENTS: Experiment[] = [
 		label: 'Notifications',
 		group: 'Organic',
 		options: [off, { value: 'on', label: 'Island' }, { value: 'unified', label: 'Unified' }],
-		initial: 'unified'
+		initial: 'off'
 	},
 	{
 		id: 'newButton',
@@ -38,7 +38,7 @@ export const EXPERIMENTS: Experiment[] = [
 			{ value: 'off', label: 'Plain' },
 			{ value: 'on', label: 'Liquid' }
 		],
-		initial: 'on'
+		initial: 'off'
 	},
 	{
 		id: 'search',
@@ -49,7 +49,7 @@ export const EXPERIMENTS: Experiment[] = [
 			{ value: 'field', label: 'Field' },
 			{ value: 'spotlight', label: 'Spotlight' }
 		],
-		initial: 'spotlight'
+		initial: 'field'
 	},
 	{
 		id: 'failDrop',
@@ -57,7 +57,7 @@ export const EXPERIMENTS: Experiment[] = [
 		label: 'Failure droplet',
 		group: 'Organic',
 		options: [off, { value: 'on', label: 'On' }],
-		initial: 'on'
+		initial: 'off'
 	}
 ];
 
@@ -84,7 +84,7 @@ export function runAction(id: string) {
 	for (const fn of listeners) fn(id);
 }
 
-const KEY = 'orchard-dev-experiments-v6';
+const KEY = 'orchard-dev-experiments-v7';
 
 function load(): Record<string, string> {
 	const base = Object.fromEntries(EXPERIMENTS.map((e) => [e.id, e.initial]));
