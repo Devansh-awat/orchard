@@ -22,7 +22,7 @@
 	import { PROJECTS, SIDEBAR, BUILD_FEED, MORE_PROJECTS } from '../fixtures';
 	import { tick } from 'svelte';
 	import { resourceStatus } from '$lib/components/ui/status';
-	import { droplet } from '$lib/utils/motion.svelte';
+	import { backgroundHeld, droplet } from '$lib/utils/motion.svelte';
 	import { exp, onAction } from './experiments.svelte';
 
 	type Entity = {
@@ -111,6 +111,7 @@
 
 	$effect(() => {
 		const id = setInterval(() => {
+			if (backgroundHeld()) return;
 			for (const s of Object.values(series)) {
 				const last = s.values[s.values.length - 1];
 				s.phase += 0.35;

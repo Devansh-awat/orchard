@@ -462,3 +462,9 @@ html.motion-reduce .lds-ellipsis div {
 		--corner-scale: 1.25;
 	}
 }
+
+html[data-overlay] main *,
+html[data-overlay] main *::before,
+html[data-overlay] main *::after {
+	animation-play-state: paused !important;
+}

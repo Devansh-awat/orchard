@@ -662,6 +662,11 @@ export function overlayMotion(isOpen: () => boolean, opts: { origin?: string } =
 
 		if (!overlayOpen.has(target)) overlayOpen.set(target, isOpen());
 		$effect(() => {
+			if (!isOpen()) return;
+			holdBackground(true);
+			return () => holdBackground(false);
+		});
+		$effect(() => {
 			const open = isOpen();
 			if (open === overlayOpen.get(target)) return;
 			overlayOpen.set(target, open);
@@ -1120,6 +1125,17 @@ export class SpringValue {
 		animate(this.#value, target, base);
 	}
 }
+
+let overlays = 0;
+
+export function holdBackground(on: boolean) {
+	if (typeof document === 'undefined') return;
+	overlays = Math.max(0, overlays + (on ? 1 : -1));
+	document.documentElement.toggleAttribute('data-overlay', overlays > 0);
+}
+
+export const backgroundHeld = () =>
+	typeof document !== 'undefined' && document.documentElement.hasAttribute('data-overlay');
 
 const curveCache = new Map<string, { easing: string; durationMs: number }>();
 

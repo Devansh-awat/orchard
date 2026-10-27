@@ -114,7 +114,8 @@
 		fade,
 		motionEnabled,
 		springTiming,
-		staggerDelay
+		staggerDelay,
+		holdBackground
 	} from '$lib/utils/motion.svelte';
 
 	let {
@@ -454,6 +455,7 @@
 			batch = true;
 			if (!view) view = build(query);
 		}
+		if (phase === 'closed') holdBackground(true);
 		phase = 'open';
 		open = true;
 		flightGen++;
@@ -489,6 +491,7 @@
 	}
 
 	function land() {
+		if (phase !== 'closed') holdBackground(false);
 		phase = 'closed';
 		presentGen++;
 		heightAnim?.cancel();
@@ -505,6 +508,10 @@
 			if (phase === 'closed') batch = false;
 		});
 	}
+
+	$effect(() => () => {
+		if (untrack(() => phase) !== 'closed') holdBackground(false);
+	});
 
 	function rowIn(el: Element) {
 		if (entered.has(el)) return;
