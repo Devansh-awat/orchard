@@ -8,6 +8,8 @@
 		sublabel?: string;
 		kind: 'project' | 'deployment' | 'database' | 'job';
 		icon?: string | null;
+		project?: string;
+		projectIcon?: string | null;
 		status?: StatusMeta;
 		href: string;
 		url?: string;
@@ -965,7 +967,17 @@
 				<span class="lead lead--glyph"><Glyph size={15} strokeWidth={1.75} /></span>
 			{/if}
 			<span class="name">{@render marks(row.label)}</span>
-			{#if row.sub}<span class="sub">{@render marks(row.sub)}</span>{/if}
+			{#if row.sub && row.item.project}
+				<span class="owner">
+					<AppIcon
+						name={row.item.project}
+						kind="project"
+						icon={row.item.projectIcon}
+						size="xs"
+					/>
+					<span class="sub">{@render marks(row.sub)}</span>
+				</span>
+			{:else if row.sub}<span class="sub">{@render marks(row.sub)}</span>{/if}
 			{#if row.item.status}
 				<span class="trail">
 					{#if row.item.status.kind !== 'success'}
@@ -1220,6 +1232,18 @@
 		min-width: 0;
 		color: var(--text-muted);
 		font-size: var(--text-callout);
+	}
+	.owner {
+		display: flex;
+		flex: 1;
+		align-items: center;
+		gap: 0.4375rem;
+		min-width: 0;
+	}
+	.owner :global(.icon--xs) {
+		width: 1rem;
+		height: 1rem;
+		border-radius: calc(0.25rem * var(--corner-scale));
 	}
 	.hit {
 		background: none;

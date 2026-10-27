@@ -20,6 +20,8 @@ export const PALETTE_ITEMS: PaletteItem[] = ALL.flatMap((p) => [
 			id: `${p.id}-${e.name}`,
 			label: e.name,
 			sublabel: p.name,
+			project: p.name,
+			projectIcon: p.image,
 			kind: e.kind,
 			status: e.status,
 			href: `#${p.id}-${e.name}`,
