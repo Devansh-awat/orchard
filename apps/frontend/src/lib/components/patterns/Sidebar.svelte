@@ -358,6 +358,9 @@
 </nav>
 
 <style>
+	.panel :global(:focus-visible) {
+		outline-offset: -2px;
+	}
 	.panel--collapsed .section {
 		color: transparent;
 		transition: color var(--fade-out) var(--curve-in);

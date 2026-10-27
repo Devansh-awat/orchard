@@ -93,6 +93,9 @@
 	.item:hover {
 		background: color-mix(in oklab, var(--neutral-10) 6%, transparent);
 	}
+	.item:focus-visible {
+		outline-offset: -2px;
+	}
 	.item:active {
 		transform: scale(0.98);
 	}
