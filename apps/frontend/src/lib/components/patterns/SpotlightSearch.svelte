@@ -396,7 +396,9 @@
 
 	$effect(() => {
 		const next = results;
-		untrack(() => void present(next));
+		untrack(() => {
+			present(next);
+		});
 	});
 
 	function placeHighlight(v: View | null, index: number) {
