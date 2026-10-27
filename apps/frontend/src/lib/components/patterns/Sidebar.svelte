@@ -16,6 +16,7 @@
 		sections = [],
 		onSearch = undefined,
 		liquid = false,
+		collapsed = $bindable(false),
 		children = undefined
 	}: {
 		org: { name: string; plan?: string; avatar?: string | null };
@@ -23,6 +24,7 @@
 		sections?: SidebarSection[];
 		onSearch?: () => void;
 		liquid?: boolean;
+		collapsed?: boolean;
 		children?: Snippet;
 	} = $props();
 
@@ -258,7 +260,16 @@
 	}
 </script>
 
-<nav class="panel" aria-label="Main">
+<svelte:window
+	onkeydown={(e) => {
+		if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.code === 'Backslash') {
+			e.preventDefault();
+			collapsed = !collapsed;
+		}
+	}}
+/>
+
+<nav class="panel" class:panel--collapsed={collapsed} aria-label="Main">
 	<button type="button" class="org">
 		<span class="org-avatar">
 			{#if org.avatar}<RemoteImg src={org.avatar} class="cover" />{:else}{org.name.charAt(0)}{/if}
@@ -334,13 +345,45 @@
 			</span>
 			<span class="me-name">@{user.handle}</span>
 		</button>
-		<button type="button" class="fold" aria-label="Collapse sidebar">
+		<button
+			type="button"
+			class="fold"
+			aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+			aria-expanded={!collapsed}
+			onclick={() => (collapsed = !collapsed)}
+		>
 			<PanelLeft size={16} />
 		</button>
 	</div>
 </nav>
 
 <style>
+	.panel--collapsed .section {
+		color: transparent;
+		transition: color var(--fade-out) var(--curve-in);
+	}
+	.panel--collapsed .foot {
+		flex-direction: column-reverse;
+		align-items: stretch;
+	}
+	.panel--collapsed .me,
+	.panel--collapsed :global(.item) {
+		padding-left: 0.625rem;
+	}
+	.panel :global(.item),
+	.me {
+		transition-property: background-color, color, transform, padding;
+		transition-duration: var(--dur-fast), var(--dur-fast), var(--spring-press-duration),
+			var(--spring-snap-duration);
+		transition-timing-function: ease, ease, var(--spring-press), var(--spring-snap);
+	}
+	.panel--collapsed :global(.count),
+	.panel--collapsed :global(.kbd) {
+		visibility: hidden;
+	}
+	.panel--collapsed :global(.search) {
+		padding-left: 0.9375rem;
+	}
 	.panel {
 		display: flex;
 		flex-direction: column;

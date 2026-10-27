@@ -63,6 +63,13 @@
 
 	const spark = [12, 18, 14, 22, 30, 26, 34, 28, 40, 36, 44, 38, 46, 52, 48, 56];
 	let paletteOpen = $state(false);
+	const SIDE_KEY = 'orchard-dev-sidebar-collapsed';
+	let sideCollapsed = $state(
+		typeof localStorage !== 'undefined' && localStorage.getItem(SIDE_KEY) === '1'
+	);
+	$effect(() => {
+		localStorage.setItem(SIDE_KEY, sideCollapsed ? '1' : '0');
+	});
 	let sideHost = $state<HTMLElement>();
 	const paletteOrigin = () =>
 		sideHost?.querySelector('input[type="search"]')?.closest('label') ?? null;
@@ -85,7 +92,7 @@
 	/>
 </div>
 
-<AppFrame>
+<AppFrame collapsed={sideCollapsed}>
 	{#snippet sidebar()}
 		<div class="side-host" bind:this={sideHost}>
 			<Sidebar
@@ -93,6 +100,7 @@
 				user={SIDEBAR.user}
 				{sections}
 				liquid={exp.liquidNav === 'on'}
+				bind:collapsed={sideCollapsed}
 				onSearch={() => (paletteOpen = true)}
 			/>
 		</div>
