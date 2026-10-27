@@ -149,6 +149,28 @@ A surface nested inside another, close to its corner, uses **inner radius = oute
 
 Any list where one row can be selected while another is hovered (sidebar, settings rail, segmented lists) keeps at least `0.25rem` between rows. Two filled backgrounds touching read as one blob, and the hover looks like it is pushing into the selected row.
 
+## Alignment grid
+
+Lay a component out on an explicit grid before styling it, and check it with a reticule (measured offsets, not by eye):
+
+- One padding value all round inside a card (12px for toasts and compact cards).
+- A shared text column: every line of text in a block starts at the same x (toast: icon at 12, text at 44).
+- Read top to bottom: title first, detail under it, even when the surface grows upward from a bottom anchor.
+- Size to content: a one-line note gets a one-line card, not a fixed minimum.
+- Columns of status in a list share a fixed-width, left-aligned column so dots and labels line up.
+
+## Live status
+
+Something in progress shows a tiny activity ring (solid core, thin ring, a short arc orbiting it), never a radar ping or pulsing halo. Healthy dots are still. The ring keeps turning at reduced motion because it is a progress indicator.
+
+## Hover-revealed actions
+
+Actions that appear on hover (project + and →, the card's corner fan) show on `:hover` and on `:has(:focus-visible)`, never `:focus-within`, so a mouse click does not leave them stuck on screen. They stay open while their menu is open.
+
+## Focus rings
+
+Inside anything that scrolls or clips (sidebar, lists, panels), focus rings sit inside the element (`outline-offset: -2px`) so the scroll container never cuts them.
+
 ## Class names
 
 Scoped classes must not reuse legacy global names (`btn`, `card`, `badge`, `input`,

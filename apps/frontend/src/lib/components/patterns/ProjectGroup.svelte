@@ -37,6 +37,15 @@
 		children: Snippet;
 	} = $props();
 
+	function fadeOverflow(el: HTMLElement) {
+		const check = () => el.toggleAttribute('data-overflow', el.scrollWidth > el.clientWidth + 1);
+		const ro = new ResizeObserver(check);
+		ro.observe(el);
+		for (const child of el.children) ro.observe(child);
+		check();
+		return () => ro.disconnect();
+	}
+
 	let host = $state<HTMLElement>();
 	let iconEl = $state<HTMLElement>();
 	let mesh = $state<string | null>(null);
@@ -88,7 +97,7 @@
 			>
 			<span class="text">
 				<span class="name">{name}</span>
-				<span class="meta">
+				<span class="meta" {@attach fadeOverflow}>
 					{#if owner}<span class="owner">{owner}</span>{/if}
 					{#each counts as c, i (i)}
 						{#if owner || i > 0}<span class="sep" aria-hidden="true"></span>{/if}<span>{c}</span>
@@ -344,6 +353,9 @@
 		font-variant-numeric: tabular-nums;
 		padding-block: 0.3em;
 		margin-block: -0.3em;
+	}
+	.meta[data-overflow] {
+		mask-image: linear-gradient(90deg, black calc(100% - 1.5rem), transparent);
 	}
 	.meta > :global(*) {
 		text-box: trim-both cap alphabetic;
