@@ -1147,6 +1147,13 @@ type FolderMotion = {
 
 export const FOLDER_PRESETS: Record<string, FolderMotion | null> = {
 	current: null,
+	snap: {
+		open: fromResponse(0.22, 0.88),
+		tiles: fromResponse(0.24, 0.78),
+		close: fromResponse(0.17, 1),
+		closeTiles: fromResponse(0.14, 1),
+		window: 0.03
+	},
 	sheet: {
 		open: fromResponse(0.3, 0.8),
 		tiles: fromResponse(0.3, 0.8),
@@ -1161,29 +1168,33 @@ export const FOLDER_PRESETS: Record<string, FolderMotion | null> = {
 		closeTiles: fromResponse(0.16, 1),
 		window: 0.03
 	},
-	crisp: {
-		open: fromApple({ duration: 0.34, bounce: 0.08 }),
-		tiles: fromApple({ duration: 0.36, bounce: 0.15 }),
-		close: fromApple({ duration: 0.26, bounce: 0 }),
-		closeTiles: fromApple({ duration: 0.2, bounce: 0 }),
-		window: 0.05
-	}
 };
 
-export const folderTuning = $state({ preset: 'sheet' });
+export const folderTuning = $state({ preset: 'snap' });
 
-const physicsCache = new Map<PhysicalSpring, { easing: string; durationMs: number }>();
+const FOLDER_PACE_REFERENCE = 420;
+const FOLDER_PACE_MIN = 0.55;
+const FOLDER_FADE_IN = 90;
+const FOLDER_FADE_OUT = 110;
 
-function physicsTiming(spring: PhysicalSpring, delay = 0): KeyframeAnimationOptions {
+const physicsCache = new Map<string, { easing: string; durationMs: number }>();
+
+function physicsTiming(spring: PhysicalSpring, delay = 0, pace = 1): KeyframeAnimationOptions {
 	const level = effectiveAnimationLevel();
 	if (level === 'off') return { duration: 0 };
 	if (level === 'reduced') {
 		return { duration: REDUCED_DURATION * 1000, easing: 'cubic-bezier(0.33, 0, 0.2, 1)' };
 	}
-	let curve = physicsCache.get(spring);
+	const p = Math.round(pace * 20) / 20;
+	const key = `${spring.mass}|${spring.stiffness}|${spring.damping}|${p}`;
+	let curve = physicsCache.get(key);
 	if (!curve) {
-		curve = physicsCurve(spring);
-		physicsCache.set(spring, curve);
+		curve = physicsCurve({
+			mass: spring.mass,
+			stiffness: spring.stiffness / (p * p),
+			damping: spring.damping / p
+		});
+		physicsCache.set(key, curve);
 	}
 	return { duration: curve.durationMs, easing: curve.easing, delay: delay * 1000 };
 }
@@ -1192,7 +1203,7 @@ const FRAME_MS = 1000 / 60;
 const FOLDER_DRIFT = 0.35;
 const FOLDER_SHRINK = 0.85;
 
-type FolderTile = { el: HTMLElement; anim: Animation | null };
+type FolderTile = { el: HTMLElement; anim: Animation | null; fade: Animation | null };
 
 export function folder(
 	open: () => boolean,
@@ -1217,7 +1228,10 @@ export function folder(
 		};
 
 		const settleTiles = () => {
-			for (const t of tiles) t.anim?.cancel();
+			for (const t of tiles) {
+				t.anim?.cancel();
+				t.fade?.cancel();
+			}
 			tiles = [];
 		};
 
@@ -1255,10 +1269,14 @@ export function folder(
 			const full = decorativeMotion();
 			const distance = Math.abs(toH - fromH);
 			const tune = FOLDER_PRESETS[folderTuning.preset];
+			const pace = Math.min(
+				1,
+				Math.max(FOLDER_PACE_MIN, Math.sqrt(distance / FOLDER_PACE_REFERENCE))
+			);
 			heightAnim = body.animate(
 				[{ height: `${fromH}px` }, { height: `${toH}px` }],
 				tune
-					? physicsTiming(opening ? tune.open : tune.close)
+					? physicsTiming(opening ? tune.open : tune.close, 0, pace)
 					: springTiming('smooth', { distance, exit: !opening })
 			);
 			heightAnim.onfinish = () => (heightAnim = null);
@@ -1274,23 +1292,44 @@ export function folder(
 					? `translate(${v[i].x * FOLDER_DRIFT}px, ${v[i].y * FOLDER_DRIFT}px) scale(${FOLDER_SHRINK})`
 					: 'none';
 				const start = from[i] ?? (opening ? { transform: away, opacity: '0' } : null);
+				const delay = opening && !from[i] ? i * stride : 0;
+				if (tune) {
+					const motionFrames: Keyframe[] = opening
+						? [{ transform: start!.transform }, { transform: 'none' }]
+						: [{ transform: start?.transform ?? 'none' }, { transform: near }];
+					const anim = el.animate(motionFrames, {
+						...physicsTiming(opening ? tune.tiles : tune.closeTiles, delay, pace),
+						fill: 'both'
+					});
+					const fade = el.animate(
+						[{ opacity: start?.opacity ?? '1' }, { opacity: opening ? '1' : '0' }],
+						{
+							duration: opening ? FOLDER_FADE_IN : FOLDER_FADE_OUT,
+							easing: opening ? 'cubic-bezier(0.2, 0, 0, 1)' : 'cubic-bezier(0.4, 0, 1, 1)',
+							delay: delay * 1000,
+							fill: 'both'
+						}
+					);
+					anim.startTime = fade.startTime = from[i] ? now - FRAME_MS : now;
+					const tile: FolderTile = { el, anim, fade };
+					anim.onfinish = () => {
+						if (shown !== opening) return;
+						anim.cancel();
+						fade.cancel();
+						tile.anim = null;
+						tile.fade = null;
+					};
+					return tile;
+				}
 				const frames: Keyframe[] = opening
 					? [start!, { transform: 'none', opacity: '1' }]
 					: [start ?? { transform: 'none', opacity: '1' }, { transform: near, opacity: '0' }];
 				const anim = el.animate(frames, {
-					...(tune
-						? physicsTiming(
-								opening ? tune.tiles : tune.closeTiles,
-								opening && !from[i] ? i * stride : 0
-							)
-						: springTiming('snappy', {
-								exit: !opening,
-								delay: opening && !from[i] ? i * stride : 0
-							})),
+					...springTiming('snappy', { exit: !opening, delay }),
 					fill: 'both'
 				});
 				anim.startTime = from[i] ? now - FRAME_MS : now;
-				const tile: FolderTile = { el, anim };
+				const tile: FolderTile = { el, anim, fade: null };
 				anim.onfinish = () => {
 					if (shown !== opening) return;
 					anim.cancel();

@@ -17,11 +17,11 @@ export const EXPERIMENTS: Experiment[] = [
 		group: 'Motion',
 		options: [
 			{ value: 'current', label: 'Old' },
-			{ value: 'crisp', label: 'Crisp' },
 			{ value: 'sheet', label: 'Sheet' },
-			{ value: 'quick', label: 'Quick' }
+			{ value: 'quick', label: 'Quick' },
+			{ value: 'snap', label: 'Snap' }
 		],
-		initial: 'sheet'
+		initial: 'snap'
 	},
 	{
 		id: 'island',
@@ -97,7 +97,7 @@ export function runAction(id: string) {
 	for (const fn of listeners) fn(id);
 }
 
-const KEY = 'orchard-dev-experiments-v5';
+const KEY = 'orchard-dev-experiments-v6';
 
 function load(): Record<string, string> {
 	const base = Object.fromEntries(EXPERIMENTS.map((e) => [e.id, e.initial]));
