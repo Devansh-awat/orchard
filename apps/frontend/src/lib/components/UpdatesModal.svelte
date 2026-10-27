@@ -5,7 +5,7 @@
 	import { isSignedIn, isSuperAdmin, showOnboarding, telemetry, user } from '$lib/stores';
 	import { unseenUpdate, markUpdateSeen } from '$lib/stores/updates';
 	import { Modal, Button } from '$lib/components/ui';
-	import AsciiVine from '$lib/components/AsciiVine.svelte';
+	import AsciiVine from '$lib/components/ui/AsciiVine.svelte';
 	import { motionStagger } from '$lib/utils/motion.svelte';
 	import type { Update } from '$lib/updates';
 
@@ -24,7 +24,6 @@
 	let mounted = $state(false);
 	let open = $state(false);
 	let update = $state<Update | null>(null);
-	let vineTone = $state<'dark' | 'light'>('dark');
 	let presented = false;
 
 	onMount(() => {
@@ -44,7 +43,6 @@
 		if (!next) return;
 		presented = true;
 		update = next;
-		vineTone = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
 		open = true;
 	});
 
@@ -83,7 +81,7 @@
 	>
 		<div class="sheet">
 			<div class="sheet-hero">
-				<AsciiVine class="sheet-vine" tone={vineTone} seed={23} band={[0.25, 0.7]} />
+				<AsciiVine class="sheet-vine" seed={23} band={[0.25, 0.7]} />
 				<img src="/logo/logoiconcolor.svg" alt="" class="sheet-mark logo-light" />
 				<img src="/logo/logoicondm.svg" alt="" class="sheet-mark logo-dark" />
 			</div>

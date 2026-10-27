@@ -125,6 +125,9 @@ callout|caption|micro`, `rounded-control|card|panel`.
 | Code and config                    | `CodeBlock`, `Snippet` (one command), `EnvVarRow`, `LogViewer`                      |
 | Keys, IDs                          | `Kbd`, `CopyButton`, `MiddleTruncate` (hashes and IDs only)                         |
 | Times                              | `RelativeTime`                                                                      |
+| One-time code                      | `CodeInput` (one real input, six cells, submits itself, shakes on error)            |
+| Sign-in or other arrival screen    | `AuthShell` (field, vine, sheet that morphs its height) + `SignInFlow`              |
+| Ornament                           | `AsciiVine`, only where `The vine` allows                                           |
 
 ## Bold budget
 
@@ -178,6 +181,25 @@ Scoped classes must not reuse legacy global names (`btn`, `card`, `badge`, `inpu
 `ring`, `collapse`, `table`, `block`, `hidden`, `contents`, `container`, `border`,
 `shadow`, `rounded`, `truncate`, `static`, `fixed`, `sticky`, `relative`, `isolate`).
 Tailwind generates real CSS for any of those it sees in markup.
+
+## The vine
+
+`AsciiVine` is the only ornament in Orchard: a monospace vine drawn on a canvas at 14
+frames a second that grows, sways and blooms. It is the brand mark in motion, so it is
+rationed.
+
+- One per screen, and only on arrival screens: sign-in, the updates sheet, a first
+  empty project. Never on a screen people work in.
+- It threads behind solid surfaces. Copy always sits on a surface, never on the vine.
+- It grows once on arrival. `bloom` flowers it when the thing the person came for
+  worked (signing in), and nowhere else.
+- Its ink is `--accent-6` to `--accent-10`, so a brand colour recolours it. Never pass
+  it a colour.
+- It is decoration: below `full` motion it is drawn grown and still, and it stops
+  drawing off screen and in hidden tabs.
+
+`AuthShell` places it. Live reference at `/dev/ui#vine`; every sign-in state at
+`/dev/ui/lab/sign-in`.
 
 ## Toasts
 

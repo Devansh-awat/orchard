@@ -23,6 +23,7 @@ import Forms from './Forms.svelte';
 import Data from './Data.svelte';
 import Progress from './Progress.svelte';
 import Patterns from './Patterns.svelte';
+import Accents from './Accents.svelte';
 
 export type Section = { id: string; title: string; group: string; component: Component };
 
@@ -42,6 +43,7 @@ export const SECTIONS: Section[] = [
 		component: Foundations
 	},
 	{ id: 'type', title: 'Type', group: 'Foundations', component: Type },
+	{ id: 'vine', title: 'The vine', group: 'Foundations', component: Accents },
 	{ id: 'buttons', title: 'Buttons', group: 'Actions', component: Buttons },
 	{ id: 'menus', title: 'Menus', group: 'Actions', component: Menus },
 	{ id: 'inputs', title: 'Inputs', group: 'Forms', component: Inputs },

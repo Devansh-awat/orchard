@@ -1,19 +1,30 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { decorativeMotion } from '$lib/utils/motion.svelte';
 
 	let {
 		class: className = '',
-		tone = 'dark',
 		seed = 7,
-		band = [0.3, 0.75]
+		band = [0.3, 0.75],
+		bloom = false
 	}: {
 		class?: string;
-		tone?: 'dark' | 'light';
 		seed?: number;
 		band?: [number, number];
+		bloom?: boolean;
 	} = $props();
 
 	let canvas = $state<HTMLCanvasElement | null>(null);
+	let blooming = false;
+	let onBloom: (() => void) | null = null;
+
+	$effect(() => {
+		if (bloom && !blooming) {
+			blooming = true;
+			onBloom?.();
+		}
+		if (!bloom) blooming = false;
+	});
 
 	const RAMP = ' ·.:;+*&%@';
 	const CELL = 14;
@@ -21,31 +32,10 @@
 	const FPS = 14;
 	const PETALS = 5;
 	const GROW = 3.5;
+	const BLOOM_TICKS = 9;
+	const INKS = ['--vine-stem', '--vine-leaf', '--vine-petal-1', '--vine-petal-2', '--vine-petal-3'];
 
-	const PALETTES = {
-		dark: {
-			stem: [232, 116, 133],
-			stemAlpha: 0.58,
-			leaf: 'rgba(232, 116, 133, 0.45)',
-			tiers: [
-				[201, 58, 79],
-				[232, 116, 133],
-				[243, 168, 178]
-			],
-			alpha: (v: number) => 0.3 + v * 0.6
-		},
-		light: {
-			stem: [201, 58, 79],
-			stemAlpha: 0.4,
-			leaf: 'rgba(201, 58, 79, 0.32)',
-			tiers: [
-				[232, 116, 133],
-				[201, 58, 79],
-				[146, 28, 45]
-			],
-			alpha: (v: number) => 0.2 + v * 0.55
-		}
-	};
+	type Rgb = [number, number, number];
 
 	function mulberry32(seed: number) {
 		let a = seed | 0;
@@ -57,10 +47,33 @@
 		};
 	}
 
+	function readInks(el: HTMLElement): Rgb[] {
+		const probe = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+		const inks = INKS.map((name): Rgb => {
+			if (!probe) return [128, 128, 128];
+			el.style.color = `var(${name})`;
+			probe.clearRect(0, 0, 1, 1);
+			probe.fillStyle = getComputedStyle(el).color;
+			probe.fillRect(0, 0, 1, 1);
+			const [r, g, b] = probe.getImageData(0, 0, 1, 1).data;
+			return [r, g, b];
+		});
+		el.style.color = '';
+		return inks;
+	}
+
 	type Cell = { x: number; y: number; ch: string };
 	type Segment = { cells: Cell[]; startAt: number; depth: number };
 	type Leaf = { x: number; y: number; ch: string; at: number };
-	type Bloom = { x: number; y: number; radius: number; at: number; phase: number; dir: number };
+	type Bloom = {
+		x: number;
+		y: number;
+		radius: number;
+		at: number;
+		phase: number;
+		dir: number;
+		late?: boolean;
+	};
 
 	onMount(() => {
 		if (!canvas) return;
@@ -68,14 +81,17 @@
 		const ctx = el.getContext('2d');
 		if (!ctx) return;
 
-		const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-		const palette = PALETTES[tone];
+		let inks = readInks(el);
+		let font = '11px monospace';
 		let raf = 0;
 		let running = false;
 		let last = 0;
 		let t = 0;
 		let grown = 0;
 		let totalGrow = 0;
+		let burst = -1;
+		let w = 0;
+		let h = 0;
 
 		let segments: Segment[] = [];
 		let leaves: Leaf[] = [];
@@ -90,8 +106,6 @@
 		};
 
 		const build = () => {
-			const w = el.width;
-			const h = el.height;
 			const rng = mulberry32(seed);
 			segments = [];
 			leaves = [];
@@ -178,13 +192,38 @@
 				phase: rng() * Math.PI * 2,
 				dir: rng() > 0.5 ? 1 : -1
 			});
+
+			for (const leaf of leaves) {
+				if (rng() < 0.55) continue;
+				flowers.push({
+					x: leaf.x,
+					y: leaf.y,
+					radius: (1.6 + rng() * 1.4) * bloomScale,
+					at: Infinity,
+					phase: rng() * Math.PI * 2,
+					dir: rng() > 0.5 ? 1 : -1,
+					late: true
+				});
+			}
 		};
 
 		const resize = () => {
 			const rect = el.getBoundingClientRect();
-			el.width = Math.ceil(rect.width);
-			el.height = Math.ceil(rect.height);
+			const dpr = Math.min(2, window.devicePixelRatio || 1);
+			w = Math.ceil(rect.width);
+			h = Math.ceil(rect.height);
+			el.width = Math.ceil(w * dpr);
+			el.height = Math.ceil(h * dpr);
+			ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+			font = `11px ${getComputedStyle(el).getPropertyValue('--font-mono').trim() || 'monospace'}`;
 			build();
+			if (burst >= 0) for (const f of flowers) if (f.late) f.at = 0;
+		};
+
+		const ink = (i: number, alpha: number) => {
+			const [r, g, b] = inks[i];
+			ctx.fillStyle = `rgb(${r} ${g} ${b})`;
+			ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
 		};
 
 		const drawBloom = (b: Bloom, scale: number) => {
@@ -208,26 +247,25 @@
 					v = Math.min(1, v * 1.2);
 					v *= 0.92 + 0.08 * Math.sin(dist * 0.7 - t * 1.4 + petal * 2);
 					const idx = Math.min(RAMP.length - 1, Math.max(1, Math.ceil(v * (RAMP.length - 1))));
-					const tier = palette.tiers[v > 0.55 ? 2 : v > 0.28 ? 1 : 0];
-					ctx.fillStyle = `rgba(${tier[0]}, ${tier[1]}, ${tier[2]}, ${palette.alpha(v)})`;
+					ink(v > 0.55 ? 4 : v > 0.28 ? 3 : 2, 0.28 + v * 0.62);
 					ctx.fillText(RAMP[idx], c * CELL, r * CELL);
 				}
 			}
 		};
 
 		const draw = () => {
-			ctx.clearRect(0, 0, el.width, el.height);
-			ctx.font = '11px "JetBrains Mono", monospace';
+			ctx.clearRect(0, 0, w, h);
+			ctx.font = font;
 			ctx.textBaseline = 'top';
 
 			const done = grown >= totalGrow;
 			const sway = (x: number) => (done ? Math.sin(t * 0.7 + x * 0.018) * 1.5 : 0);
-			const [sr, sg, sb] = palette.stem;
+			const boost = burst < 0 ? 0 : Math.min(1, (t - burst) / (BLOOM_TICKS * 0.08));
 
 			for (const seg of segments) {
 				const visible = Math.max(0, Math.min(seg.cells.length, Math.floor(grown - seg.startAt)));
 				if (visible === 0) continue;
-				ctx.fillStyle = `rgba(${sr}, ${sg}, ${sb}, ${palette.stemAlpha * (seg.depth > 0 ? 0.85 : 1)})`;
+				ink(0, (seg.depth > 0 ? 0.5 : 0.6) + boost * 0.15);
 				for (let i = 0; i < visible; i++) {
 					const cell = seg.cells[i];
 					ctx.fillText(cell.ch, cell.x, cell.y + sway(cell.x));
@@ -238,7 +276,7 @@
 				}
 			}
 
-			ctx.fillStyle = palette.leaf;
+			ink(1, 0.5);
 			for (const leaf of leaves) {
 				if (leaf.at >= grown) continue;
 				ctx.fillText(leaf.ch, leaf.x, leaf.y + sway(leaf.x));
@@ -248,8 +286,10 @@
 				const a = Math.max(0, Math.min(1, (grown - b.at) / 30));
 				if (a === 0) continue;
 				const e = 1 - (1 - a) * (1 - a);
-				drawBloom(b, e * (1 + 0.12 * Math.sin(e * Math.PI)));
+				const lift = b.late ? 1 : 1 + 0.3 * Math.sin(boost * Math.PI) + 0.12 * boost;
+				drawBloom(b, e * (1 + 0.12 * Math.sin(e * Math.PI)) * lift);
 			}
+			ctx.globalAlpha = 1;
 		};
 
 		const tick = (now: number) => {
@@ -257,28 +297,12 @@
 			if (now - last < 1000 / FPS) return;
 			last = now;
 			t += 0.08;
-			grown += GROW;
+			grown += burst >= 0 ? GROW * 3 : GROW;
 			draw();
 		};
 
-		resize();
-
-		if (reduce) {
-			grown = totalGrow + 60;
-			draw();
-			const ro = new ResizeObserver(() => {
-				resize();
-				grown = totalGrow + 60;
-				draw();
-			});
-			ro.observe(el);
-			return () => ro.disconnect();
-		}
-
-		draw();
-
 		const start = () => {
-			if (running) return;
+			if (running || !decorativeMotion()) return;
 			running = true;
 			raf = requestAnimationFrame(tick);
 		};
@@ -286,6 +310,27 @@
 			running = false;
 			cancelAnimationFrame(raf);
 		};
+
+		const settle = () => {
+			grown = Math.max(grown, totalGrow + 60);
+		};
+
+		onBloom = () => {
+			if (!decorativeMotion()) {
+				for (const f of flowers) if (f.late) f.at = -60;
+				settle();
+				draw();
+				return;
+			}
+			if (grown < totalGrow) grown = totalGrow;
+			for (const f of flowers) if (f.late) f.at = grown;
+			burst = t;
+			start();
+		};
+
+		resize();
+		if (!decorativeMotion()) settle();
+		draw();
 
 		const io = new IntersectionObserver((entries) => {
 			if (entries.some((e) => e.isIntersecting) && !document.hidden) start();
@@ -301,17 +346,43 @@
 
 		const ro = new ResizeObserver(() => {
 			resize();
+			if (!decorativeMotion()) settle();
 			draw();
 		});
 		ro.observe(el);
 
+		const theme = new MutationObserver(() => {
+			inks = readInks(el);
+			draw();
+		});
+		theme.observe(document.documentElement, {
+			attributes: true,
+			attributeFilter: ['class', 'style', 'data-theme', 'data-look']
+		});
+
 		return () => {
 			stop();
+			onBloom = null;
 			io.disconnect();
 			ro.disconnect();
+			theme.disconnect();
 			document.removeEventListener('visibilitychange', onVisibility);
 		};
 	});
 </script>
 
-<canvas bind:this={canvas} class={className} aria-hidden="true"></canvas>
+<canvas bind:this={canvas} class="vine {className}" aria-hidden="true"></canvas>
+
+<style>
+	.vine {
+		--vine-stem: var(--accent-8);
+		--vine-leaf: var(--accent-7);
+		--vine-petal-1: var(--accent-6);
+		--vine-petal-2: var(--accent-8);
+		--vine-petal-3: var(--accent-10);
+		display: block;
+		width: 100%;
+		height: 100%;
+		pointer-events: none;
+	}
+</style>

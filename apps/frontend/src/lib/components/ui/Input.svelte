@@ -13,7 +13,7 @@
 		value?: string | number | null;
 		error?: boolean;
 		icon?: Icon;
-		size?: 'md' | 'sm';
+		size?: 'lg' | 'md' | 'sm';
 		shape?: 'rounded' | 'capsule';
 		class?: string;
 		[key: string]: unknown;
@@ -88,6 +88,13 @@
 	.control--sm.control--capsule {
 		border-radius: calc(0.5rem * var(--corner-scale));
 		corner-shape: var(--corner);
+	}
+	.control--lg {
+		height: 2.5rem;
+		padding: 0 0.875rem;
+		border-radius: calc(0.75rem * var(--corner-scale));
+		corner-shape: var(--corner);
+		font-size: var(--text-headline);
 	}
 	.control--lead {
 		padding-left: 2.125rem;

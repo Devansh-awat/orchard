@@ -1,11 +1,9 @@
 <script lang="ts">
 	import './home-page.css';
-	import '$lib/components/login/login.css';
-	import AsciiVine from '$lib/components/AsciiVine.svelte';
-	import { Button, Skeleton } from '$lib/components/ui';
-	import { EmailAuthPanel, ProviderButtons } from '$lib/components/login';
+	import AuthShell from '$lib/components/patterns/AuthShell.svelte';
+	import { SignInFlow } from '$lib/components/login';
 	import type { LoginProvider, DiscoveredOrg } from '$lib/components/login';
-	import { browser } from '$app/environment';
+	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { takeReturnTo } from '$lib/utils/url-secrets';
@@ -69,10 +67,8 @@
 		if (!u) return '';
 		return u.firstName || u.name || u.username || u.email?.split('@')[0] || '';
 	});
-	let blocked = $state<'private_beta' | 'signups_disabled' | null>(null);
-
-	const vineTone =
-		browser && document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+	let bloom = $state(false);
+	let landing = $state(false);
 
 	// Sign-in options come from the API: instance-wide identity providers an
 	// admin configured, plus the env-configured one when there is one. Nothing
@@ -83,10 +79,13 @@
 	let loginCode = $state('');
 	let discovered = $state<DiscoveredOrg | null>(null);
 	let ssoEnforced = $state<boolean | null>(null);
-	let adminSignIn = $state(false);
 
-	let emailPanelVisible = $derived(
-		ssoEnforced === false || adminSignIn || (providersLoaded && !providers.length)
+	const emailAccess = $derived(
+		ssoEnforced === false || (providersLoaded && !providers.length)
+			? 'open'
+			: ssoEnforced
+				? 'tucked'
+				: 'loading'
 	);
 
 	async function fetchProviders() {
@@ -250,7 +249,16 @@
 		}
 	}
 
-	async function handlePostAuth(message: string, signedInUser?: User) {
+	async function handlePostAuth(message: string, signedInUser?: User, settle?: Promise<void>) {
+		landing = true;
+		try {
+			await finishSignIn(message, signedInUser, settle);
+		} finally {
+			landing = false;
+		}
+	}
+
+	async function finishSignIn(message: string, signedInUser?: User, settle?: Promise<void>) {
 		if (signedInUser) {
 			user.set(signedInUser);
 		}
@@ -260,20 +268,19 @@
 		if (get(isSignedIn)) {
 			const currentUser = get(user);
 
-			// New user — redirect to setup
+			await settle;
 			if (currentUser?.setupCompleted === false) {
-				goto('/setup', { replaceState: true });
+				await goto('/setup', { replaceState: true });
 				return;
 			}
 
 			const back = takeReturnTo();
 			if (back) {
 				toasts.add({ title: message, color: 'success' });
-				goto(back, { replaceState: true });
+				await goto(back, { replaceState: true });
 				return;
 			}
 
-			// Existing user — check for pending invitations
 			const pending = await pendingInvitations.fetchPending();
 			if (pending.length > 0) {
 				showPendingInvitationsModal.show();
@@ -282,7 +289,7 @@
 			const slug = organizations.getDefaultSlug();
 			if (slug) {
 				toasts.add({ title: message, color: 'success' });
-				goto(`/${slug}`, { replaceState: true });
+				await goto(`/${slug}`, { replaceState: true });
 				return;
 			}
 		}
@@ -294,83 +301,38 @@
 	}
 </script>
 
-{#if !$isSignedIn}
-	<div class="lg2-page">
-		<div class="lg-vine" aria-hidden="true">
-			<AsciiVine class="lg-vine-canvas" tone={vineTone} seed={23} band={[0.25, 0.7]} />
-		</div>
-		<div class="lg2-grid">
-			<div class="lg2-hero">
-				<img src="/logo/logocolor.svg" alt="Orchard" class="lg2-logo logo-light" />
-				<img src="/logo/logocolordm.svg" alt="Orchard" class="lg2-logo logo-dark" />
-				<h1 class="lg2-headline">Welcome <em>back</em>.</h1>
-			</div>
-			<div class="lg2-card">
-				{#if blocked}
-					<div class="lg-beta">
-						<h2 class="lg-beta-title">
-							{blocked === 'signups_disabled' ? 'Signups disabled' : 'Private beta'}
-						</h2>
-						<p class="lg-beta-desc">
-							{blocked === 'signups_disabled'
-								? 'Signups are disabled on this Orchard instance. Contact your administrator for access.'
-								: 'Orchard is currently in private beta. You need an invitation from an existing organization to access the platform.'}
-						</p>
-						<Button
-							variant="primary"
-							class="lg-wide"
-							onclick={() => {
-								blocked = null;
-							}}
-						>
-							Back to sign in
-						</Button>
-					</div>
-				{:else}
-					{#if providers.length}
-						<ProviderButtons {providers} />
-						{#if ssoEnforced === null || emailPanelVisible}
-							<div class="lg-divider"><span>or</span></div>
-						{:else}
-							<p class="lg-policy">Single sign-on is required on this instance.</p>
-							<button
-								type="button"
-								class="lg-org-hint lg-admin-link"
-								onclick={() => {
-									adminSignIn = true;
-								}}
-							>
-								Sign in as an administrator
-							</button>
-						{/if}
-					{:else if !providersLoaded}
-						<Skeleton height="2.25rem" />
-						<div class="lg-divider"><span>or</span></div>
-					{/if}
+<svelte:head>
+	{#if !$isSignedIn}<title>Sign in to Orchard</title>{/if}
+</svelte:head>
 
-					{#if emailPanelVisible}
-						<EmailAuthPanel
-							bind:email={loginEmail}
-							initialCode={loginCode}
-							onAuthenticated={handlePostAuth}
-							onBlocked={(reason) => {
-								blocked = reason;
-							}}
-							onSsoRedirect={routeToOrgSso}
-						/>
-					{:else if ssoEnforced === null}
-						<Skeleton height="2.25rem" />
-					{/if}
+{#snippet orgHint()}
+	{#if discovered}
+		<a class="hint" href={discovered.loginUrl}>Sign in through {discovered.name} instead</a>
+	{/if}
+{/snippet}
 
-					{#if discovered && !discovered.enforced}
-						<a class="lg-org-hint" href={discovered.loginUrl}>
-							Sign in through {discovered.name} instead
-						</a>
-					{/if}
-				{/if}
-			</div>
-		</div>
-	</div>
+{#if !$isSignedIn || landing}
+	<AuthShell {bloom}>
+		<SignInFlow
+			title="Sign in to Orchard"
+			subtitle={$page.url.host}
+			{providers}
+			{providersLoaded}
+			{emailAccess}
+			revealLabel="Sign in as an administrator"
+			policy="This instance requires single sign-on."
+			bind:email={loginEmail}
+			bind:bloom
+			initialCode={loginCode}
+			onAuthenticated={handlePostAuth}
+			onSsoRedirect={routeToOrgSso}
+			aside={discovered && !discovered.enforced ? orgHint : undefined}
+		>
+			{#snippet mark()}
+				<img class="mark" src="/logo/logoiconcolor.svg" alt="Orchard" />
+			{/snippet}
+		</SignInFlow>
+	</AuthShell>
 {:else}
 	<!-- Dashboard for authenticated users -->
 	<div class="hp">
@@ -535,3 +497,24 @@
 		{/if}
 	</div>
 {/if}
+
+<style>
+	.mark {
+		display: block;
+		width: 2.5rem;
+		height: 2.5rem;
+		overflow: hidden;
+		border-radius: calc(0.625rem * var(--corner-scale));
+		corner-shape: var(--corner);
+		box-shadow: 0 0 0 0.5px var(--rule);
+	}
+	.hint {
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		color: var(--text-muted);
+		text-decoration: none;
+	}
+	.hint:hover {
+		color: var(--text-default);
+	}
+</style>

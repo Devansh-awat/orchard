@@ -48,3 +48,5 @@ export { default as Eyebrow } from './Eyebrow.svelte';
 export { default as ActivityRow } from './ActivityRow.svelte';
 export { default as ActivityGroup } from './ActivityGroup.svelte';
 export { default as ColorField } from './ColorField.svelte';
+export { default as AsciiVine } from './AsciiVine.svelte';
+export { default as CodeInput } from './CodeInput.svelte';

@@ -18,6 +18,7 @@
 	import ToastContainer from '$lib/components/Toast.svelte';
 	import OnboardingModal from '$lib/components/OnboardingModal.svelte';
 	import SidebarDeck from '$lib/components/SidebarDeck.svelte';
+	import { signingIn } from '$lib/components/login/signing-in';
 	import MobileTopBar from '$lib/components/MobileTopBar.svelte';
 	import LogTimestampTooltip from '$lib/components/LogTimestampTooltip.svelte';
 	import TelemetryPrompt from '$lib/components/telemetry/TelemetryPrompt.svelte';
@@ -248,7 +249,7 @@
 		}
 	});
 
-	const FULLSCREEN_PREFIXES = ['/setup', '/auth/protect'];
+	const FULLSCREEN_PREFIXES = ['/setup', '/auth/protect', '/dev/ui/lab/sign-in'];
 	const fullscreenPath = $derived(
 		FULLSCREEN_PREFIXES.some((prefix) => $page.url.pathname.startsWith(prefix)) ||
 			isFullscreenGraftPath($page.url.pathname)
@@ -277,9 +278,9 @@
 				<div></div>
 			</div>
 		</div>
-	{:else if $isSignedIn && (fullscreenPath || $page.route.id?.startsWith('/status'))}
+	{:else if $isSignedIn && !$signingIn && (fullscreenPath || $page.route.id?.startsWith('/status'))}
 		{@render children()}
-	{:else if $isSignedIn}
+	{:else if $isSignedIn && !$signingIn}
 		<div class="app-shell">
 			<SidebarDeck />
 			<div class="app-col">

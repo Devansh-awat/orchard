@@ -51,8 +51,14 @@ export function shellRoutes(r: Router, { store, hub, log }: MockContext) {
 	});
 	r.get('/auth/config', () => ({ turnstileSiteKey: null, ssoEnforced: false }));
 	r.get('/auth/methods', () => ({ passkey: false, password: false, superadmin: false }));
-	r.post('/auth/otp/request', () => ({ message: 'Mock mode: any 6-digit code works.' }));
-	r.post('/auth/otp/verify', () => ({ user: signIn() }));
+	r.post('/auth/otp/request', () => ({
+		message: 'Mock mode: any 6-digit code works except 000000.'
+	}));
+	r.post('/auth/otp/verify', ({ body }) =>
+		body?.code === '000000'
+			? reply(400, { statusCode: 400, message: 'That code is wrong or expired.' })
+			: { user: signIn() }
+	);
 	r.post('/auth/password', () => ({ user: signIn() }));
 	r.get('/sso/providers', () => [
 		{

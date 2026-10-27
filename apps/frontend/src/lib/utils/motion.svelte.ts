@@ -1410,3 +1410,47 @@ export function droplet(
 	};
 	swell.onfinish = () => nest.remove();
 }
+
+export function shake(el: Element, amplitude = 6) {
+	if (!decorativeMotion()) return;
+	const frames = Array.from({ length: 25 }, (_, i) => {
+		const t = i / 24;
+		const x = amplitude * Math.exp(-4.2 * t) * Math.sin(2 * Math.PI * 3 * t);
+		return { translate: `${x.toFixed(2)}px 0px` };
+	});
+	for (const a of el.getAnimations()) if (a.id === 'shake') a.cancel();
+	el.animate(frames, { ...springTiming('glide'), easing: 'linear' }).id = 'shake';
+}
+
+export function morphHeight(outer: HTMLElement) {
+	const inner = outer.firstElementChild as HTMLElement | null;
+	if (!inner) return;
+	let last = inner.offsetHeight;
+	let running: Animation | null = null;
+	const ro = new ResizeObserver(() => {
+		const next = inner.offsetHeight;
+		if (next === last) return;
+		const from = running ? outer.getBoundingClientRect().height : last;
+		last = next;
+		running?.cancel();
+		if (!functionalMotion()) return;
+		outer.dataset.morphing = '';
+		running = outer.animate(
+			[{ height: `${from}px` }, { height: `${next}px` }],
+			springTiming('glide', { distance: Math.abs(next - from) })
+		);
+		const mine = running;
+		mine.finished
+			.then(() => {
+				if (running !== mine) return;
+				running = null;
+				delete outer.dataset.morphing;
+			})
+			.catch(() => {});
+	});
+	ro.observe(inner);
+	return () => {
+		ro.disconnect();
+		running?.cancel();
+	};
+}
