@@ -22,6 +22,7 @@ import {
 	exitSpec,
 	springCurve,
 	fromApple,
+	fromResponse,
 	physicsCurve,
 	type PhysicalSpring,
 	type SpringName
@@ -1146,19 +1147,19 @@ type FolderMotion = {
 
 export const FOLDER_PRESETS: Record<string, FolderMotion | null> = {
 	current: null,
-	snappy: {
-		open: fromApple({ duration: 0.42, bounce: 0.15 }),
-		tiles: fromApple({ duration: 0.45, bounce: 0.2 }),
-		close: fromApple({ duration: 0.32, bounce: 0 }),
-		closeTiles: fromApple({ duration: 0.24, bounce: 0 }),
-		window: 0.07
+	sheet: {
+		open: fromResponse(0.3, 0.8),
+		tiles: fromResponse(0.3, 0.8),
+		close: fromResponse(0.25, 1),
+		closeTiles: fromResponse(0.2, 1),
+		window: 0.04
 	},
-	bouncy: {
-		open: fromApple({ duration: 0.5, bounce: 0.3 }),
-		tiles: fromApple({ duration: 0.5, bounce: 0.3 }),
-		close: fromApple({ duration: 0.35, bounce: 0 }),
-		closeTiles: fromApple({ duration: 0.26, bounce: 0 }),
-		window: 0.08
+	quick: {
+		open: fromResponse(0.25, 0.85),
+		tiles: fromResponse(0.25, 0.75),
+		close: fromResponse(0.2, 1),
+		closeTiles: fromResponse(0.16, 1),
+		window: 0.03
 	},
 	crisp: {
 		open: fromApple({ duration: 0.34, bounce: 0.08 }),
@@ -1169,7 +1170,7 @@ export const FOLDER_PRESETS: Record<string, FolderMotion | null> = {
 	}
 };
 
-export const folderTuning = $state({ preset: 'crisp' });
+export const folderTuning = $state({ preset: 'sheet' });
 
 const physicsCache = new Map<PhysicalSpring, { easing: string; durationMs: number }>();
 

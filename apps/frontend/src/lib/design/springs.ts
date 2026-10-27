@@ -119,3 +119,11 @@ export function physicsCurve({ mass, stiffness, damping }: PhysicalSpring, maxPo
 		durationMs: Math.round((points.length - 1) * stepMs)
 	};
 }
+
+export function fromResponse(response: number, dampingRatio: number): PhysicalSpring {
+	return {
+		mass: 1,
+		stiffness: ((2 * Math.PI) / response) ** 2,
+		damping: (4 * Math.PI * dampingRatio) / response
+	};
+}
