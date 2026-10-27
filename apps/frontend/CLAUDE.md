@@ -39,11 +39,11 @@ that adds hex colors, legacy tokens, or legacy classes to `.svelte` files.
 
 ## Motion System
 
-All interactive animation uses spring physics from `motion`, modelled on Apple's motion design. CSS `transition` is only for color/opacity on hover states. Any movement, scaling, or layout change must go through a Motion spring.
+All interactive animation uses spring physics from `motion`. CSS `transition` is only for color/opacity on hover states. Any movement, scaling, or layout change must go through a Motion spring.
 
 ### Orchard curves (one table, one tempo)
 
-Every curve in the app comes from `CURVES` in `src/lib/design/springs.ts`, described the way Apple's Fluid Interfaces talk does: a **response** (seconds, the spring's period) and a **damping ratio** (1 = no overshoot, lower = more bounce). `pnpm gen:design` turns the table into CSS tokens in `src/lib/design/springs.css`. **Never write stiffness, damping, mass, cubic-bezier or a millisecond duration for interaction motion in a component. Name a curve.**
+Every curve in the app comes from `CURVES` in `src/lib/design/springs.ts`, described as a **response** (seconds, the spring's period) and a **damping ratio** (1 = no overshoot, lower = more bounce). `pnpm gen:design` turns the table into CSS tokens in `src/lib/design/springs.css`. **Never write stiffness, damping, mass, cubic-bezier or a millisecond duration for interaction motion in a component. Name a curve.**
 
 | Name | response | damping | Use for |
 |---|---|---|---|
@@ -102,7 +102,7 @@ Two constraints come from these being native popovers:
 - the element is not in the top layer until the library calls `showPopover()`, which happens *after* the Svelte effect. Animating immediately runs against a non-rendered element and completes instantly, so the entrance is deferred one frame.
 - the library rewrites the element's `style` attribute while positioning it, so an inline "start hidden" seed is gone by the next frame. The closed state is seeded with the `.motion-entering` class instead, dropped once the animation owns the property.
 
-**Interruptibility** (WWDC18 *Designing Fluid Interfaces*): a fresh open passes explicit `[from, to]` keyframes, but an interrupted one passes **targets only**, so the spring continues from the live on-screen values instead of snapping back to the start. Reversing a half-open menu picks up where it actually is.
+**Interruptibility**: a fresh open passes explicit `[from, to]` keyframes, but an interrupted one passes **targets only**, so the spring continues from the live on-screen values instead of snapping back to the start. Reversing a half-open menu picks up where it actually is.
 
 ### Performance
 
@@ -144,8 +144,8 @@ import { springHover, motionStagger, springPop, springCollapse, springRotate, sp
 | `springWidth(active, opts)` | Interpolate width between two values | `{@attach springWidth(() => wide, { rest: 32, on: 200 })}` |
 | `motionPopover(opts)` | In/out lifecycle for modals/popovers | `{@attach motionPopover({ closing: () => !open, onClosed })}` |
 | `motionBackdrop(closing, onClosed)` | Backdrop fade paired with popover | `{@attach motionBackdrop(() => !open, onClosed)}` |
-| `magneticHighlight(target)` | One highlight that springs between items, iOS-pointer style | `{@attach magneticHighlight(() => activeEl)}` |
-| `originBurst(opts)` | Launch items out of a measured point and put them back, iOS-folder style | `{@attach originBurst({ origin, index: i, count, closing })}` |
+| `magneticHighlight(target)` | One highlight that springs between items like a pointer | `{@attach magneticHighlight(() => activeEl)}` |
+| `originBurst(opts)` | Launch items out of a measured point and put them back, like a folder opening | `{@attach originBurst({ origin, index: i, count, closing })}` |
 | `stateEcho(key)` | Instant arrival, decaying trail, for cluster-driven state | `{@attach stateEcho(() => m.kind)}` |
 | `overlayMotion(isOpen, opts?)` | Menus, popovers, dropdowns: spring in **and** out | `{@attach overlayMotion(() => open)}` |
 | `motionPanel(isActive)` | Entrance for a tab panel that stays mounted | `{@attach motionPanel(() => tabs.value === id)}` |

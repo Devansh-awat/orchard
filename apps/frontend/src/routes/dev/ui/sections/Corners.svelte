@@ -93,7 +93,7 @@
 <div class="grid grid-cols-2 gap-6">
 	<SectionCard
 		title="Continuous, not circular"
-		description="Every rounded rectangle uses the superellipse at 1.25x its nominal radius. It is the iOS curve: no visible point where the straight edge turns."
+		description="Every rounded rectangle uses the superellipse at 1.25x its nominal radius. There is no visible point where the straight edge turns."
 	>
 		<div class="grid grid-cols-3 gap-4">
 			<figure class="corner-spec">

@@ -1,13 +1,12 @@
 /**
  * Motion system.
  *
- * Modelled on Apple's motion design: a small set of named springs described by
- * perceptual duration and bounce (the SwiftUI `.smooth` / `.snappy` / `.bouncy`
- * vocabulary) rather than raw stiffness and damping, and three accessibility
+ * A small set of named curves from `src/lib/design/springs.ts`, described by
+ * response and damping rather than raw stiffness, and three accessibility
  * tiers that every animation in the app resolves through.
  *
  *   full     the named spring, transforms allowed
- *   reduced  a 120ms crossfade, transforms stripped (what iOS Reduce Motion does)
+ *   reduced  a crossfade, transforms stripped
  *   off      nothing moves, including ambient loops and gradients
  *
  * Built on `motion` (motion.dev).
@@ -204,7 +203,7 @@ export function motion(
  * snapping shut. Swapping in a bezier avoids that but loses the physics and
  * reads flat. Driving the spring ourselves and clamping each frame keeps real
  * spring dynamics: it arrives, sits closed through the invisible undershoot,
- * and settles — which is what Apple's disclosures actually do.
+ * and settles.
  */
 export function springToFloor(
 	el: HTMLElement,
@@ -359,7 +358,7 @@ export function centerOf(el: Element): Point {
 
 /**
  * Launches an element out of a measured page-space point and puts it back there
- * on close, the way an iOS folder throws its apps outward.
+ * on close, like a folder throwing its contents outward.
  *
  * The origin is a real point, not a generic offset, so every item gets its own
  * vector and the group reads as having come from somewhere. Opacity lags the
@@ -575,8 +574,7 @@ export function motionStagger(
  * opposing force and reads as a glitch, not a dismissal. And it is interruptible:
  * on re-open mid-dismiss the element already carries live transform values, so
  * only the targets are given and Motion continues from wherever it actually is,
- * per WWDC18's rule to animate from the presentation value rather than a fixed
- * start. Seeding the closed state only when nothing is running is what keeps a
+ * animating from the on-screen value rather than a fixed start. Seeding the closed state only when nothing is running is what keeps a
  * fresh open crisp without snapping an interrupted one backwards.
  */
 /**
@@ -1041,8 +1039,8 @@ export function pressSpringDelegate(root: HTMLElement, selector: string) {
 }
 
 /**
- * A single highlight element that springs between targets, the way the iOS
- * pointer snaps from control to control, instead of every item cross-fading its
+ * A single highlight element that springs between targets, snapping from
+ * control to control, instead of every item cross-fading its
  * own background. Call from an attachment on the highlight element.
  */
 export function magneticHighlight(

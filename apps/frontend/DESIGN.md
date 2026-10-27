@@ -38,7 +38,7 @@ rule for each:
   to a glyph, never a lone letter.
 - **Generic copy.** Say what is true right now ("Everything is running except 3 apps").
 
-## Why Apple UI looks expensive (do all of these)
+## Why it looks expensive (do all of these)
 
 - **Optical alignment.** Icons centre on the text's cap height, not its line box. Text
   that sits next to an icon, or inside a pill, uses `text-box: trim-both cap alphabetic`
@@ -46,9 +46,9 @@ rule for each:
   (`.context`-style script: icon centre vs cap centre, delta 0).
 - **Continuous corners, not circles.** Every rounded rectangle writes
   `border-radius: calc(R * var(--corner-scale)); corner-shape: var(--corner);` where R is
-  the Apple-style nominal radius (`--radius-control` 10px, `--radius-card` 14px,
+  the nominal radius (`--radius-control` 10px, `--radius-card` 14px,
   `--radius-panel` 18px). `--corner` is `superellipse(1.4)` and `--corner-scale` is 1.25,
-  fitted by pixel diff against Figma's 60% corner smoothing (the iOS curve); plain
+  fitted by pixel diff against Figma's 60% corner smoothing; plain
   `squircle` at the same radius reads boxy. Browsers without `corner-shape` fall back to
   round corners at scale 1. Circles only for status dots, radios and the switch; capsules
   only for the toast.
@@ -203,7 +203,7 @@ paths, where the end is what tells two values apart.
 
 One curve table, `CURVES` in `src/lib/design/springs.ts`: `snap` (opens), `pop` (appears),
 `settle` (closes), `glide` (moves and highlights), `press`, `morph` (shape changes), `bouncy`,
-`cinematic`. Each is an Apple-style response plus damping ratio, mirrored as CSS tokens
+`cinematic`. Each is a response plus damping ratio, mirrored as CSS tokens
 (`--spring-{name}`, `--spring-{name}-duration`, `--fade-in/out/long`, `--curve-out/in`) by
 `pnpm gen:design`. One `TEMPO` (CSS `--tempo`) scales them all. Never write stiffness, damping,
 cubic-bezier or raw durations for interaction motion in a component. See `CLAUDE.md`.
