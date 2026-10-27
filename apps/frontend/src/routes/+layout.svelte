@@ -51,45 +51,45 @@
 		untrack(() => updatesModal.preload());
 	});
 
-	const quickSearch = new Lazy(() => import('$lib/components/QuickSearch.svelte'));
-	const QuickSearch = $derived(quickSearch.current);
-	let quickSearchRef = $state<{ openSearch: () => void } | null>(null);
-	let stopQuickSearchBoot: (() => void) | null = null;
+	const palette = new Lazy(() => import('$lib/components/AppPalette.svelte'));
+	const Palette = $derived(palette.current);
+	let paletteRef = $state<{ openSearch: () => void } | null>(null);
+	let stopPaletteBoot: (() => void) | null = null;
 
-	async function bootQuickSearch(): Promise<boolean> {
-		const component = await quickSearch.preload();
+	async function bootPalette(): Promise<boolean> {
+		const component = await palette.preload();
 		if (!component) return false;
-		stopQuickSearchBoot?.();
-		stopQuickSearchBoot = null;
+		stopPaletteBoot?.();
+		stopPaletteBoot = null;
 		await tick();
 		return true;
 	}
 
-	function openQuickSearch() {
-		void bootQuickSearch().then((ready) => {
-			if (ready) quickSearchRef?.openSearch();
+	function openPalette() {
+		void bootPalette().then((ready) => {
+			if (ready) paletteRef?.openSearch();
 		});
 	}
 
 	onMount(() => {
-		window.addEventListener('open-quick-search', openQuickSearch);
+		window.addEventListener('open-quick-search', openPalette);
 		const unregister = registerShortcut({
 			id: 'palette',
 			key: 'k',
 			mod: true,
 			label: 'Search and actions',
 			allowInInputs: true,
-			run: openQuickSearch
+			run: openPalette
 		});
-		stopQuickSearchBoot = () => {
-			window.removeEventListener('open-quick-search', openQuickSearch);
+		stopPaletteBoot = () => {
+			window.removeEventListener('open-quick-search', openPalette);
 			unregister();
 		};
-		const cancelIdle = whenIdle(() => bootQuickSearch(), 5000);
+		const cancelIdle = whenIdle(() => bootPalette(), 5000);
 		return () => {
 			cancelIdle();
-			stopQuickSearchBoot?.();
-			stopQuickSearchBoot = null;
+			stopPaletteBoot?.();
+			stopPaletteBoot = null;
 		};
 	});
 
@@ -304,8 +304,8 @@
 			<UpdatesModal />
 		{/if}
 	{/if}
-	{#if QuickSearch}
-		<QuickSearch bind:this={quickSearchRef} />
+	{#if Palette}
+		<Palette bind:this={paletteRef} />
 	{/if}
 	<LogTimestampTooltip />
 	<GraftConfirmHost />

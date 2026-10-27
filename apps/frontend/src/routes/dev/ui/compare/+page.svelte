@@ -65,7 +65,7 @@
 	let paletteOpen = $state(false);
 	$effect(() => {
 		toastLook.set(exp.toastShape as 'tab' | 'capsule' | 'light');
-		return () => toastLook.set('tab');
+		return () => toastLook.set('capsule');
 	});
 	const SIDE_KEY = 'orchard-dev-sidebar-collapsed';
 	let sideCollapsed = $state(
