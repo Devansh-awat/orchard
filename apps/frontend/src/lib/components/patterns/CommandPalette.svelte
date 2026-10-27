@@ -1039,9 +1039,6 @@
 		z-index: var(--z-modal);
 		visibility: hidden;
 		pointer-events: none;
-		isolation: isolate;
-		transform: translateZ(0);
-		will-change: transform;
 	}
 	.layer[data-floating] {
 		visibility: visible;
@@ -1068,6 +1065,7 @@
 		margin-left: calc(var(--W) / -2);
 	}
 	.panel {
+		will-change: transform;
 		display: flex;
 		flex-direction: column;
 		max-height: calc(100vh - clamp(4rem, 16vh, 9rem) - 2rem);
@@ -1160,6 +1158,7 @@
 		height: var(--edge);
 		pointer-events: none;
 		opacity: 0;
+		will-change: opacity;
 		transition: opacity var(--fade-in) var(--curve-out);
 	}
 	.well::before {
