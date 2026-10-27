@@ -30,7 +30,7 @@
 		flex-direction: column;
 		--widget-r: 1.375rem;
 		--widget-pad: 1rem;
-		gap: 0.875rem;
+		gap: var(--widget-pad);
 		padding: var(--widget-pad);
 		border-radius: calc(var(--widget-r) * var(--corner-scale));
 		corner-shape: var(--corner);

@@ -154,7 +154,9 @@
 	<div class="list">
 		{#each rest as b (b.id)}
 			<a class="row" href={b.href} {@attach rise()}>
-				<AppIcon name={b.project ?? b.app} kind="project" icon={b.projectIcon} size="xs" />
+				<span class="row-icon"
+					><AppIcon name={b.project ?? b.app} kind="project" icon={b.projectIcon} size="sm" /></span
+				>
 				<span class="row-app">{b.app}</span>
 				<span class="row-msg" class:row-msg--error={b.status.kind === 'error'}
 					>{b.status.kind === 'error' ? 'Failed' : b.message}</span
@@ -315,18 +317,26 @@
 	.list {
 		display: flex;
 		flex-direction: column;
-		padding-top: 0.75rem;
+		margin-bottom: -0.25rem;
+		padding-top: 0.625rem;
 		box-shadow: inset 0 0.5px 0 var(--border-strong);
 	}
 	.row {
 		display: grid;
-		grid-template-columns: auto auto minmax(0, 1fr) auto;
+		grid-template-columns: 2.25rem auto minmax(0, 1fr) auto;
 		align-items: center;
 		gap: 0.5rem;
 		height: 2rem;
 		color: inherit;
 		font-size: var(--text-callout);
 		text-decoration: none;
+	}
+	.row-icon {
+		display: flex;
+		justify-content: center;
+	}
+	.row-app {
+		margin-left: 0.25rem;
 	}
 	.row-msg {
 		overflow: hidden;

@@ -45,6 +45,27 @@
 	let scrub = $state<number | null>(null);
 	let hit = $state<HTMLAnchorElement>();
 
+	const MENU_GRACE = 280;
+
+	function closeMenuOnLeave(card: HTMLElement) {
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const leave = () => {
+			clearTimeout(timer);
+			timer = setTimeout(() => {
+				const open = card.querySelector<HTMLElement>(':popover-open');
+				if (open && !card.matches(':hover')) open.hidePopover();
+			}, MENU_GRACE);
+		};
+		const enter = () => clearTimeout(timer);
+		card.addEventListener('pointerleave', leave);
+		card.addEventListener('pointerenter', enter);
+		return () => {
+			clearTimeout(timer);
+			card.removeEventListener('pointerleave', leave);
+			card.removeEventListener('pointerenter', enter);
+		};
+	}
+
 	const ARC_RADIUS = 48;
 	const ARC_CHORD = 2;
 
@@ -73,6 +94,7 @@
 	class="entity entity--{status.kind} motion-echo echo--{status.kind}"
 	class:entity--fan={fanCount > 0}
 	{@attach stateEcho(() => status.kind)}
+	{@attach closeMenuOnLeave}
 	{@attach crashShiver(() => status.kind)}
 >
 	<a class="hit" {href} aria-label={name} bind:this={hit}></a>
@@ -235,7 +257,7 @@
 		margin-block: -0.3em;
 		mask-image: linear-gradient(90deg, black 100%, transparent 100%);
 	}
-	.entity:is(:hover, :has(:focus-visible)) .text {
+	.entity:is(:hover, :has(:focus-visible), :has(:global(:popover-open))) .text {
 		mask-image: linear-gradient(90deg, black calc(100% - 5rem), transparent calc(100% - 3.5rem));
 	}
 	.name,
@@ -284,7 +306,8 @@
 	}
 	.entity:hover .fan-item,
 	.entity:has(:focus-visible) .fan-item,
-	.fan:has(:global([aria-expanded='true'])) .fan-item {
+	.fan:has(:global([aria-expanded='true'])) .fan-item,
+	.fan:has(:global(:popover-open)) .fan-item {
 		opacity: 1;
 		pointer-events: auto;
 		transform: translate(var(--fx), var(--fy));

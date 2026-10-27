@@ -24,7 +24,7 @@
 					href={item.href}
 					{@attach rise(() => arriving.includes(item.label))}
 				>
-					<AppIcon name={item.label} kind={item.kind} icon={item.icon} size="sm" />
+					<AppIcon name={item.label} kind={item.kind} icon={item.icon} size="md" />
 					<span class="text">
 						<span class="name">{item.label}</span>
 						{#if item.reason}<span class="reason">{item.reason}</span>{/if}
@@ -39,12 +39,12 @@
 	.rows {
 		display: flex;
 		flex-direction: column;
-		margin: 0 -0.5rem -0.5rem;
+		margin: -0.5rem;
 	}
 	.row {
 		display: flex;
 		align-items: center;
-		gap: 0.625rem;
+		gap: 0.75rem;
 		padding: 0.5rem;
 		border-radius: calc((var(--widget-r) - var(--widget-pad) + 0.5rem) * var(--corner-scale));
 		corner-shape: var(--corner);
