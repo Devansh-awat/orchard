@@ -2,11 +2,60 @@ const API_URL = process.env.ORCHARD_API_URL || 'http://localhost:3001';
 const API_TOKEN = process.env.ORCHARD_API_TOKEN || '';
 const SERVICE_TOKEN = process.env.MCP_SERVICE_TOKEN || '';
 
+export type McpScope = 'read' | 'deploy' | 'exec';
+
 export interface ActingUser {
   sub: string;
   email?: string;
   externalAuthId?: string;
   sessionId: string;
+  scope?: McpScope;
+}
+
+export type QueryValue = string | number | boolean | null | undefined;
+export type QueryInput = Record<string, QueryValue | QueryValue[]> | URLSearchParams;
+
+export function pathSegment(value: unknown): string {
+  const raw = String(value);
+  if (raw === '.' || raw === '..') {
+    throw new Error(`"${raw}" is not a valid path parameter`);
+  }
+  return encodeURIComponent(raw);
+}
+
+export function path(strings: TemplateStringsArray, ...values: unknown[]): string {
+  let out = strings[0];
+  values.forEach((value, index) => {
+    out += pathSegment(value) + strings[index + 1];
+  });
+  return out;
+}
+
+export function query(input?: QueryInput): string {
+  if (!input) return '';
+  if (input instanceof URLSearchParams) {
+    const qs = input.toString();
+    return qs ? `?${qs}` : '';
+  }
+  const params = new URLSearchParams();
+  for (const [key, raw] of Object.entries(input)) {
+    const values = Array.isArray(raw) ? raw : [raw];
+    for (const value of values) {
+      if (value === undefined || value === null || value === '') continue;
+      params.append(key, String(value));
+    }
+  }
+  const qs = params.toString();
+  return qs ? `?${qs}` : '';
+}
+
+export class OrchardApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly detail: string
+  ) {
+    super(`Orchard API error (${status}): ${detail}`);
+  }
 }
 
 export class OrchardClient {
@@ -22,12 +71,6 @@ export class OrchardClient {
     this.baseUrl = (baseUrl || API_URL).replace(/\/$/, '');
     this.actingUser = actingUser;
 
-    // Gateway mode: when the MCP server holds a shared service credential and
-    // we have a validated acting user from the MCP JWT, authenticate to the
-    // Orchard API as the service and pass the user identity in trusted
-    // headers. This keeps the M-2 invariant (a type='mcp' JWT can never be
-    // replayed at the first-party API) while still letting MCP tool calls
-    // act on behalf of the consenting user.
     if (actingUser && SERVICE_TOKEN) {
       this.token = SERVICE_TOKEN;
       this.usesServiceToken = true;
@@ -43,7 +86,11 @@ export class OrchardClient {
     }
   }
 
-  private async request<T = any>(method: string, path: string, body?: any): Promise<T> {
+  get apiBaseUrl(): string {
+    return this.baseUrl;
+  }
+
+  async request<T = any>(method: string, path: string, body?: any): Promise<T> {
     const url = `${this.baseUrl}/apiv1${path}`;
     const headers: Record<string, string> = {
       Authorization: `Bearer ${this.token}`,
@@ -53,6 +100,7 @@ export class OrchardClient {
     if (this.usesServiceToken && this.actingUser) {
       headers['X-Acting-User-Sub'] = this.actingUser.sub;
       headers['X-Acting-User-Session-Id'] = this.actingUser.sessionId;
+      headers['X-Acting-User-Scope'] = this.actingUser.scope ?? 'deploy';
       if (this.actingUser.email) {
         headers['X-Acting-User-Email'] = this.actingUser.email;
       }
@@ -64,7 +112,7 @@ export class OrchardClient {
     const res = await fetch(url, {
       method,
       headers,
-      body: body ? JSON.stringify(body) : undefined
+      body: body === undefined ? undefined : JSON.stringify(body)
     });
 
     if (!res.ok) {
@@ -73,15 +121,20 @@ export class OrchardClient {
       try {
         const json = JSON.parse(text);
         message = json.message || json.error || text;
+        if (Array.isArray(message)) message = message.join('; ');
       } catch {
         message = text;
       }
-      throw new Error(`Orchard API error (${res.status}): ${message}`);
+      throw new OrchardApiError(res.status, String(message));
     }
 
     const text = await res.text();
     if (!text) return undefined as T;
-    return JSON.parse(text);
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text as T;
+    }
   }
 
   get<T = any>(path: string) {

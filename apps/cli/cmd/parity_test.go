@@ -22,6 +22,8 @@ const graftManifests = "../../../grafts/*/graft.json"
 // routeCoverage maps snapshot routes ("METHOD /path", verbatim) to the CLI
 // command that drives them.
 var routeCoverage = map[string]string{
+	"GET /agent-spec.json": "api search / api describe / api <operationId> (cached spec)",
+
 	// auth: tokens + sessions + identity
 	"GET /auth/me":                   "auth status",
 	"GET /auth/tokens":               "auth token list",
@@ -551,6 +553,7 @@ var routeExclusions = map[string]string{
 
 	// server plumbing
 	"GET /health":                  "health probe",
+	"GET /openapi.json":            "full OpenAPI document for external tooling; the CLI reads the trimmed /agent-spec.json instead",
 	"POST /webhooks/deploy/:token": "CLI sends the token via the Authorization header on POST /webhooks/deploy instead (the URL form leaks the secret into proxy logs); deploy webhook-token create prints this URL for curl-only CI",
 
 	// web-UI-only conveniences

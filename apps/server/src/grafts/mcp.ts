@@ -56,8 +56,13 @@ function guard(server: object, record: GraftRecord): object {
   });
 }
 
-export function registerGraftMcpTools(server: object, client: unknown): void {
+export function registerGraftMcpTools(
+  server: object,
+  client: unknown,
+  include: (graftId: string) => boolean = () => true
+): void {
   for (const { record, register } of registrars) {
+    if (!include(record.id)) continue;
     try {
       register(guard(server, record), client, { graftId: record.id, apiBase: `/${record.id}` });
     } catch (err) {

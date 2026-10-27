@@ -21,7 +21,7 @@ function serviceWith(row: { userId: string; expiresAt: Date | null } | null) {
 test('a valid API token authenticates on the MCP endpoint', async () => {
   const { svc, lookups } = serviceWith({ userId: 'user-1', expiresAt: null });
   const result = await svc.validateApiToken(`Bearer ${TOKEN}`);
-  assert.deepEqual(result, { token: TOKEN, sub: 'user-1' });
+  assert.deepEqual(result, { token: TOKEN, sub: 'user-1', scope: 'read' });
   assert.deepEqual(lookups, [hashApiToken(TOKEN)]);
 });
 

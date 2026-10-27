@@ -1,9 +1,11 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod4';
-import { OrchardClient } from '../client';
-import { json, text } from './reply';
+import { OrchardClient, path, query as toQuery } from '../client';
+import { capText, json, paginate, structured, text } from './reply';
+import { pageInput } from './inputs';
+import { deploymentOutput, findOutput, pageOutput } from './outputs';
 
-const YAML_FORMAT_GUIDE = `
+export const YAML_FORMAT_GUIDE = `
 ## Leaf Template YAML Format
 
 Templates use \`apiVersion: leaf/v1\` and \`kind: Template\`.
@@ -210,7 +212,6 @@ export function registerQueryTools(server: McpServer, client: OrchardClient) {
     'get_current_user',
     {
       description: "Get the currently authenticated user's profile information",
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {}
     },
     async () => {
@@ -223,7 +224,6 @@ export function registerQueryTools(server: McpServer, client: OrchardClient) {
     'list_organizations',
     {
       description: 'List all organizations the authenticated user belongs to',
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {}
     },
     async () => {
@@ -240,7 +240,6 @@ export function registerQueryTools(server: McpServer, client: OrchardClient) {
       description: `Turn a name into a UUID. **Start here** whenever the user names something ("restart hackatime", "the leaf db") instead of walking list_organizations → list_projects → list_deployments.
 
 Searches organizations, projects, deployments and databases at once and returns compact matches with the ids every other tool wants. Matching is case-insensitive substring over names, slugs, GitHub repos and ingress hosts. Call it with no query to get an inventory of everything the user can see.`,
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
         query: z
           .string()
@@ -250,21 +249,30 @@ Searches organizations, projects, deployments and databases at once and returns 
           .array(z.enum(['organization', 'project', 'deployment', 'database']))
           .optional()
           .describe('Restrict the search to these kinds. Default: all four.'),
-        organizationId: z.string().optional().describe('Restrict the search to one organization')
-      }
+        organizationId: z.guid().optional().describe('Restrict the search to one organization')
+      },
+      outputSchema: findOutput
     },
     async ({ query, kinds, organizationId }) => {
       const wanted = new Set(kinds ?? ['organization', 'project', 'deployment', 'database']);
-      const orgQs = organizationId ? `?orgId=${encodeURIComponent(organizationId)}` : '';
+      const orgQs = toQuery({ orgId: organizationId });
       const needle = (query ?? '').trim().toLowerCase();
       const hit = (...fields: unknown[]) =>
         !needle || fields.some((f) => typeof f === 'string' && f.toLowerCase().includes(needle));
 
+      const errors: { kind: string; error: string }[] = [];
+      const fetchKind = (kind: string, route: string) =>
+        wanted.has(kind)
+          ? client.get(route).catch((err: unknown) => {
+              errors.push({ kind, error: err instanceof Error ? err.message : String(err) });
+              return [];
+            })
+          : Promise.resolve([]);
       const [orgs, projects, deployments, databases] = await Promise.all([
-        wanted.has('organization') ? client.get('/organizations/user').catch(() => []) : [],
-        wanted.has('project') ? client.get(`/projects${orgQs}`).catch(() => []) : [],
-        wanted.has('deployment') ? client.get(`/deployments${orgQs}`).catch(() => []) : [],
-        wanted.has('database') ? client.get(`/databases${orgQs}`).catch(() => []) : []
+        fetchKind('organization', '/organizations/user'),
+        fetchKind('project', `/projects${orgQs}`),
+        fetchKind('deployment', `/deployments${orgQs}`),
+        fetchKind('database', `/databases${orgQs}`)
       ]);
 
       const hostsOf = (d: any): string[] => [
@@ -328,7 +336,11 @@ Searches organizations, projects, deployments and databases at once and returns 
           }))
       ];
 
-      return json({ query: query ?? null, results });
+      return structured({
+        query: query ?? null,
+        results,
+        ...(errors.length ? { partial: true, errors } : {})
+      });
     }
   );
 
@@ -342,15 +354,14 @@ Searches organizations, projects, deployments and databases at once and returns 
 \`effectiveLimit\` is the number you want: the most that can go on a single deployment right now, already reduced to \`min(what this member has left, what the org has left)\`. A null means unlimited on that axis. \`allowance\` / \`usage\` / \`orgCap\` show the working.
 
 Units match the resource tools: \`cpuMilli\` in millicores, \`memoryBytes\` in bytes.`,
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
         organizationId: z
-          .string()
+          .guid()
           .describe('The organization UUID (from list_organizations, or find)')
       }
     },
     async ({ organizationId }) => {
-      const quota = await client.get(`/organizations/${organizationId}/quota/me`);
+      const quota = await client.get(path`/organizations/${organizationId}/quota/me`);
       return json(quota);
     }
   );
@@ -361,7 +372,6 @@ Units match the resource tools: \`cpuMilli\` in millicores, \`memoryBytes\` in b
       description: `Who changed what, and when. Pass a deploymentId for one app's history, or an organizationId for everything in the org (org admins only).
 
 This is how you answer "when did this break" and "who turned that off" — each entry records the actor, a timestamp, the action (\`deployment.env.updated\`, \`deployment.scaled\`, \`deployment.stopped\`, \`environment.sharedvars.updated\`, …) and a \`metadata\` object that usually carries the \`[before, after]\` of whatever moved. Paginated: feed \`nextCursor\` back as \`cursor\` for the next page.`,
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
         deploymentId: z.string().optional().describe("One deployment's history"),
         organizationId: z
@@ -377,13 +387,10 @@ This is how you answer "when did this break" and "who turned that off" — each 
       if (!deploymentId && !organizationId) {
         throw new Error('Pass either deploymentId or organizationId');
       }
-      const scope = deploymentId ? `deployment/${deploymentId}` : `organization/${organizationId}`;
-      const params = new URLSearchParams();
-      if (action) params.set('action', action);
-      if (limit) params.set('limit', String(limit));
-      if (cursor) params.set('cursor', cursor);
-      const qs = params.toString();
-      const logs = await client.get(`/audit-logs/${scope}${qs ? `?${qs}` : ''}`);
+      const base = deploymentId
+        ? path`/audit-logs/deployment/${deploymentId}`
+        : path`/audit-logs/organization/${organizationId}`;
+      const logs = await client.get(base + toQuery({ action, limit, cursor }));
       return json(logs);
     }
   );
@@ -394,7 +401,6 @@ This is how you answer "when did this break" and "who turned that off" — each 
       description: `List the node pools a deployment can be pinned to, for \`update_deployment_placement\` or \`create_deployment\`'s \`nodePoolId\`.
 
 Only pools an administrator marked user-selectable show up. On an instance that has not enabled userspace scheduling the call 404s, which just means placement is not a knob here — schedule anywhere and move on.`,
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {}
     },
     async () => {
@@ -410,15 +416,15 @@ Only pools an administrator marked user-selectable show up. On an instance that 
     {
       description:
         'List projects. With no arguments this returns every project the user can see across all their organizations, so you do not need to walk `list_organizations` first. Pass an organizationId only to narrow it.',
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        organizationId: z.string().optional().describe('Organization UUID to filter by (optional)')
-      }
+        organizationId: z.guid().optional().describe('Organization UUID to filter by (optional)'),
+        ...pageInput
+      },
+      outputSchema: pageOutput
     },
-    async ({ organizationId }) => {
-      const url = organizationId ? `/projects?orgId=${organizationId}` : '/projects';
-      const projects = await client.get(url);
-      return json(projects);
+    async ({ organizationId, limit, cursor }) => {
+      const projects = await client.get('/projects' + toQuery({ orgId: organizationId }));
+      return structured({ ...paginate(projects, { limit, cursor }) });
     }
   );
 
@@ -426,13 +432,12 @@ Only pools an administrator marked user-selectable show up. On an instance that 
     'get_project',
     {
       description: 'Get project details including deployments, databases, and ingresses',
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        projectId: z.string().describe('The project UUID')
+        projectId: z.guid().describe('The project UUID')
       }
     },
     async ({ projectId }) => {
-      const project = await client.get(`/projects/${projectId}`);
+      const project = await client.get(path`/projects/${projectId}`);
       return json(project);
     }
   );
@@ -445,24 +450,28 @@ Only pools an administrator marked user-selectable show up. On an instance that 
       description: `List deployments. Pass a projectId for one project's deployments, or nothing at all to get every deployment the user can see (optionally narrowed to one organization).
 
 Use \`find\` instead when you know the app by name and want its UUID.`,
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
         projectId: z
-          .string()
+          .guid()
           .optional()
           .describe('The project UUID. Omit to list across every project the user can see.'),
         organizationId: z
           .string()
           .optional()
-          .describe('Narrow the cross-project listing to one organization. Ignored with projectId.')
-      }
+          .describe(
+            'Narrow the cross-project listing to one organization. Ignored with projectId.'
+          ),
+        ...pageInput
+      },
+      outputSchema: pageOutput
     },
-    async ({ projectId, organizationId }) => {
-      const path = projectId
-        ? `/projects/${projectId}/deployments`
-        : `/deployments${organizationId ? `?orgId=${encodeURIComponent(organizationId)}` : ''}`;
-      const deployments = await client.get(path);
-      return json(deployments);
+    async ({ projectId, organizationId, limit, cursor }) => {
+      const deployments = await client.get(
+        projectId
+          ? path`/projects/${projectId}/deployments`
+          : '/deployments' + toQuery({ orgId: organizationId })
+      );
+      return structured({ ...paginate(deployments, { limit, cursor }) });
     }
   );
 
@@ -472,22 +481,19 @@ Use \`find\` instead when you know the app by name and want its UUID.`,
       description: `Get deployment details: status, image, replicas, env vars, services, ingresses, volumes, health check, build config, placement and recent image history.
 
 The build log is omitted here because it is often megabytes — read it with \`get_build_logs\`. Runtime logs are \`get_deployment_logs\`.`,
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID')
-      }
+        deploymentId: z.guid().describe('The deployment UUID')
+      },
+      outputSchema: deploymentOutput
     },
     async ({ deploymentId }) => {
-      const deployment = await client.get(`/deployments/${deploymentId}`);
-      // buildLogs is the raw BuildKit transcript and routinely dwarfs everything
-      // else on the record. Shipping it on every read burns the caller's context
-      // for something they did not ask for; get_build_logs exists for that.
+      const deployment = await client.get(path`/deployments/${deploymentId}`);
       const { buildLogs, ...rest } = deployment ?? {};
       const slim = {
         ...rest,
         ...(buildLogs ? { buildLogs: '<omitted — call get_build_logs>' } : {})
       };
-      return json(slim);
+      return structured(slim);
     }
   );
 
@@ -495,13 +501,12 @@ The build log is omitted here because it is often megabytes — read it with \`g
     'get_image_history',
     {
       description: 'Get the image version history for a deployment (for rollback purposes)',
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID')
+        deploymentId: z.guid().describe('The deployment UUID')
       }
     },
     async ({ deploymentId }) => {
-      const history = await client.get(`/deployments/${deploymentId}/image-history`);
+      const history = await client.get(path`/deployments/${deploymentId}/image-history`);
       return json(history);
     }
   );
@@ -514,13 +519,12 @@ The build log is omitted here because it is often megabytes — read it with \`g
       description: `Get the current environment variables for a deployment.
 
 Secret vars come back with \`secret: true\` and a null value — the value is write-only and never readable. To change one, use \`add_env_vars\`; you do not need to read it first.`,
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID')
+        deploymentId: z.guid().describe('The deployment UUID')
       }
     },
     async ({ deploymentId }) => {
-      const deployment = await client.get(`/deployments/${deploymentId}`);
+      const deployment = await client.get(path`/deployments/${deploymentId}`);
       const envVars = deployment.envVars || [];
       return json(envVars);
     }
@@ -532,13 +536,12 @@ Secret vars come back with \`secret: true\` and a null value — the value is wr
     'list_ingresses',
     {
       description: 'List all ingresses (public domains/routes) for a deployment',
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID')
+        deploymentId: z.guid().describe('The deployment UUID')
       }
     },
     async ({ deploymentId }) => {
-      const deployment = await client.get(`/deployments/${deploymentId}`);
+      const deployment = await client.get(path`/deployments/${deploymentId}`);
       const ingresses = deployment.ingresses || [];
       return json(ingresses);
     }
@@ -548,13 +551,12 @@ Secret vars come back with \`secret: true\` and a null value — the value is wr
     'get_ingress',
     {
       description: 'Get ingress details',
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        ingressId: z.string().describe('The ingress UUID')
+        ingressId: z.guid().describe('The ingress UUID')
       }
     },
     async ({ ingressId }) => {
-      const ingress = await client.get(`/ingresses/${ingressId}`);
+      const ingress = await client.get(path`/ingresses/${ingressId}`);
       return json(ingress);
     }
   );
@@ -564,10 +566,9 @@ Secret vars come back with \`secret: true\` and a null value — the value is wr
     {
       description:
         "Validate that a domain's DNS is correctly pointed to the Orchard cluster. Run this before creating an ingress.",
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
         projectId: z
-          .string()
+          .guid()
           .describe(
             'The project UUID the domain belongs to (from list_projects, or the projectId on get_deployment)'
           ),
@@ -584,13 +585,12 @@ Secret vars come back with \`secret: true\` and a null value — the value is wr
     'list_services',
     {
       description: 'List services for a deployment (internal networking, load balancers, etc.)',
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID')
+        deploymentId: z.guid().describe('The deployment UUID')
       }
     },
     async ({ deploymentId }) => {
-      const deployment = await client.get(`/deployments/${deploymentId}`);
+      const deployment = await client.get(path`/deployments/${deploymentId}`);
       const services = deployment.services || [];
       return json(services);
     }
@@ -602,34 +602,38 @@ Secret vars come back with \`secret: true\` and a null value — the value is wr
     'list_databases',
     {
       description:
-        "List PostgreSQL databases. Pass a projectId for one project's databases, or nothing at all to get every database the user can see (optionally narrowed to one organization).",
-      annotations: { readOnlyHint: true, destructiveHint: false },
+        "List PostgreSQL databases. Pass a projectId for one project's databases, or nothing at all to get every database the user can see (optionally narrowed to one organization). Passwords are never included; use get_database_connection for credentials.",
       inputSchema: {
         projectId: z
-          .string()
+          .guid()
           .optional()
           .describe('The project UUID. Omit to list across every project the user can see.'),
         organizationId: z
           .string()
           .optional()
-          .describe('Narrow the cross-project listing to one organization. Ignored with projectId.')
-      }
+          .describe(
+            'Narrow the cross-project listing to one organization. Ignored with projectId.'
+          ),
+        ...pageInput
+      },
+      outputSchema: pageOutput
     },
-    async ({ projectId, organizationId }) => {
-      const path = projectId
-        ? `/projects/${projectId}/databases`
-        : `/databases${organizationId ? `?orgId=${encodeURIComponent(organizationId)}` : ''}`;
-      const databases = await client.get(path);
-      return json(databases);
+    async ({ projectId, organizationId, limit, cursor }) => {
+      const databases = await client.get(
+        projectId
+          ? path`/projects/${projectId}/databases`
+          : '/databases' + toQuery({ orgId: organizationId })
+      );
+      return structured({ ...paginate(databases, { limit, cursor }) });
     }
   );
 
   server.registerTool(
     'get_database',
     {
-      description: `Get database details including connection information AND live cluster health.
+      description: `Get database details AND live cluster health. The password is never included: connection strings come back with it masked as ****. Call \`get_database_connection\` when you actually need credentials.
 
-Returns connection info (host, port, user, password, database name) plus a \`liveStatus\` object with real-time health from Kubernetes:
+Returns host, port, user and database name plus a \`liveStatus\` object with real-time health from Kubernetes:
 - \`ready\`: whether enough instances report ready
 - \`phase\`: CNPG cluster phase
 - \`replicas\` / \`readyReplicas\`: instance counts
@@ -641,13 +645,12 @@ Returns connection info (host, port, user, password, database name) plus a \`liv
 - \`size\`, \`connections\`: only present when reachable
 
 To diagnose an unhealthy database, check \`liveStatus.message\`, \`liveStatus.lastTerminationReason\`, and \`liveStatus.restartCount\` together. \`status: "ready"\` at the top level reflects only the provisioning state — it can say "ready" while the pod is actively OOM-cycling.`,
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        databaseId: z.string().describe('The database UUID')
+        databaseId: z.guid().describe('The database UUID')
       }
     },
     async ({ databaseId }) => {
-      const database = await client.get(`/databases/${databaseId}`);
+      const database = await client.get(path`/databases/${databaseId}`);
       return json(database);
     }
   );
@@ -662,9 +665,8 @@ To diagnose an unhealthy database, check \`liveStatus.message\`, \`liveStatus.la
 \`get_pod_logs\` is the lower-level escape hatch for when you need one specific pod (or its previous, crashed container). This one saves you the \`list_pods\` round trip and works across a rolling deploy.
 
 Filter with \`level\` to see only errors, or \`search\` to grep. Both are applied server-side, so narrowing costs you nothing. Levels are inferred from the line, so a line the parser could not classify has no level and is dropped by any \`level\` filter — drop the filter if a search comes back emptier than you expect.`,
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
+        deploymentId: z.guid().describe('The deployment UUID'),
         tailLines: z
           .number()
           .optional()
@@ -677,13 +679,9 @@ Filter with \`level\` to see only errors, or \`search\` to grep. Both are applie
       }
     },
     async ({ deploymentId, tailLines, level, search }) => {
-      const params = new URLSearchParams();
-      if (tailLines) params.set('tailLines', String(tailLines));
-      if (level) params.set('level', level);
-      if (search) params.set('search', search);
-      const qs = params.toString();
       const logs = await client.get(
-        `/observe/deployments/${deploymentId}/logs/structured${qs ? `?${qs}` : ''}`
+        path`/observe/deployments/${deploymentId}/logs/structured` +
+          toQuery({ tailLines, level, search })
       );
       return json(logs);
     }
@@ -695,22 +693,16 @@ Filter with \`level\` to see only errors, or \`search\` to grep. Both are applie
       description: `Request rate, average and max latency, and 5xx rate for a deployment, as served through its ingress. Latency is the load balancer's average and max, not a percentile.
 
 Answers "is it actually serving traffic", "did latency regress after that deploy", "how many 5xx". Defaults to the last hour at 30s resolution. Returns empty series when nothing fronts the deployment — check \`get_deployment.ingresses\` first if that surprises you.`,
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
+        deploymentId: z.guid().describe('The deployment UUID'),
         start: z.number().optional().describe('Window start (unix-ms). Default: end - 1h'),
         end: z.number().optional().describe('Window end (unix-ms). Default: now'),
         step: z.number().optional().describe('Sample step (ms). Default 30000, min 1000')
       }
     },
     async ({ deploymentId, start, end, step }) => {
-      const params = new URLSearchParams();
-      if (start) params.set('start', String(start));
-      if (end) params.set('end', String(end));
-      if (step) params.set('step', String(step));
-      const qs = params.toString();
       const metrics = await client.get(
-        `/observe/deployments/${deploymentId}/http-metrics${qs ? `?${qs}` : ''}`
+        path`/observe/deployments/${deploymentId}/http-metrics` + toQuery({ start, end, step })
       );
       return json(metrics);
     }
@@ -724,9 +716,8 @@ Answers "is it actually serving traffic", "did latency regress after that deploy
 Returns the **last** \`tailLines\` lines by default, because a build that failed failed at the end and the transcript of a large repo runs to hundreds of KB. Read \`buildError\` first — it is usually the whole answer. Raise \`tailLines\`, or pass \`full: true\`, only when you actually need earlier stages.
 
 For the running app's output use \`get_deployment_logs\`.`,
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
+        deploymentId: z.guid().describe('The deployment UUID'),
         tailLines: z
           .number()
           .int()
@@ -740,7 +731,7 @@ For the running app's output use \`get_deployment_logs\`.`,
       }
     },
     async ({ deploymentId, tailLines, full }) => {
-      const res = await client.get(`/deployments/${deploymentId}/logs`);
+      const res = await client.get(path`/deployments/${deploymentId}/logs`);
       // The API hands back the whole unbounded build_logs column. Trimming to
       // the tail here is what keeps a failed monorepo build from evicting the
       // rest of the caller's context; the failure is at the end anyway.
@@ -767,21 +758,21 @@ For the running app's output use \`get_deployment_logs\`.`,
     {
       description:
         'List all running pods for a deployment. The response includes the namespace which you should pass to get_pod_logs.',
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID')
+        deploymentId: z.guid().describe('The deployment UUID'),
+        ...pageInput
       }
     },
-    async ({ deploymentId }) => {
+    async ({ deploymentId, limit, cursor }) => {
       const [pods, deployment] = await Promise.all([
-        client.get(`/deployments/${deploymentId}/pods`),
-        client.get(`/deployments/${deploymentId}`)
+        client.get(path`/deployments/${deploymentId}/pods`),
+        client.get(path`/deployments/${deploymentId}`)
       ]);
-      const result = {
-        namespace: deployment?.namespace,
-        pods
-      };
-      return json(result);
+      const page = paginate(Array.isArray(pods) ? pods : (pods?.pods ?? pods?.items), {
+        limit,
+        cursor
+      });
+      return json({ namespace: deployment?.namespace, ...page });
     }
   );
 
@@ -790,7 +781,6 @@ For the running app's output use \`get_deployment_logs\`.`,
     {
       description:
         'Get runtime logs from a specific pod. Use list_pods first to get pod names. Pass previous=true to read the logs of the prior (terminated) container instance after a crash/OOM restart.',
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
         podName: z.string().describe('The pod name (from list_pods)'),
         namespace: z
@@ -806,10 +796,10 @@ For the running app's output use \`get_deployment_logs\`.`,
       }
     },
     async ({ podName, namespace, tailLines, previous }) => {
-      const params = new URLSearchParams({ namespace });
-      if (tailLines) params.set('tailLines', String(tailLines));
-      if (previous) params.set('previous', 'true');
-      const logs = await client.get(`/pods/${podName}/logs?${params.toString()}`);
+      const logs = await client.get(
+        path`/pods/${podName}/logs` +
+          toQuery({ namespace, tailLines, previous: previous ? 'true' : undefined })
+      );
       return typeof logs === 'string' ? text(logs) : json(logs);
     }
   );
@@ -819,14 +809,14 @@ For the running app's output use \`get_deployment_logs\`.`,
     {
       description:
         'List recently killed containers for a deployment (last 24h): pod, container, termination reason (e.g. OOMKilled), exit code, and when it died. Their pre-death logs are captured even if the pod no longer exists — pass an entryId to get_killed_container_logs to read them. Use this first when diagnosing crashes, OOMs, or restart loops.',
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID')
+        deploymentId: z.guid().describe('The deployment UUID'),
+        ...pageInput
       }
     },
-    async ({ deploymentId }) => {
-      const entries = await client.get(`/deployments/${deploymentId}/killed-containers`);
-      return json(entries);
+    async ({ deploymentId, limit, cursor }) => {
+      const entries = await client.get(path`/deployments/${deploymentId}/killed-containers`);
+      return json(Array.isArray(entries) ? paginate(entries, { limit, cursor }) : entries);
     }
   );
 
@@ -835,15 +825,14 @@ For the running app's output use \`get_deployment_logs\`.`,
     {
       description:
         'Get the captured logs a killed container printed before it died (last ~500 lines, retained 24h). Works even after the pod was deleted. Use list_killed_containers first to get the entryId.',
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
+        deploymentId: z.guid().describe('The deployment UUID'),
         entryId: z.string().describe('The killed-container entryId (from list_killed_containers)')
       }
     },
     async ({ deploymentId, entryId }) => {
       const entry = await client.get(
-        `/deployments/${deploymentId}/killed-containers/${encodeURIComponent(entryId)}/logs`
+        path`/deployments/${deploymentId}/killed-containers/${entryId}/logs`
       );
       return json(entry);
     }
@@ -854,15 +843,15 @@ For the running app's output use \`get_deployment_logs\`.`,
     {
       description:
         'List grouped application errors for a deployment, parsed from its logs and persisted across redeploys. Each group carries a stable fingerprint, occurrence count, triage status (unresolved/resolved/ignored), assignee, and deploy provenance: the commit it was first seen after, that commit message, the branch, and who deployed it. Use this to find what is broken, whether it is already triaged, and which release introduced it.',
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
+        deploymentId: z.guid().describe('The deployment UUID'),
         window: z.number().optional().describe('Look-back window in minutes (default 60, max 1440)')
       }
     },
     async ({ deploymentId, window }) => {
-      const qs = window ? `?window=${window}` : '';
-      const groups = await client.get(`/observe/deployments/${deploymentId}/errors${qs}`);
+      const groups = await client.get(
+        path`/observe/deployments/${deploymentId}/errors` + toQuery({ window })
+      );
       return json(groups);
     }
   );
@@ -872,9 +861,8 @@ For the running app's output use \`get_deployment_logs\`.`,
     {
       description:
         'Set the triage status of an error group, or assign it to a user. Status must be unresolved, resolved, or ignored. Resolving records who resolved it; if the error fires again after being resolved it automatically reopens. Get the fingerprint from list_deployment_errors.',
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
+        deploymentId: z.guid().describe('The deployment UUID'),
         fingerprint: z
           .string()
           .describe('The error group fingerprint (from list_deployment_errors)'),
@@ -883,7 +871,7 @@ For the running app's output use \`get_deployment_logs\`.`,
           .optional()
           .describe('New triage status'),
         assigneeId: z
-          .string()
+          .guid()
           .nullable()
           .optional()
           .describe('User UUID to assign, or null to unassign')
@@ -894,7 +882,7 @@ For the running app's output use \`get_deployment_logs\`.`,
       if (status) body.status = status;
       if (assigneeId !== undefined) body.assigneeId = assigneeId;
       const res = await client.patch(
-        `/observe/deployments/${deploymentId}/errors/${encodeURIComponent(fingerprint)}`,
+        path`/observe/deployments/${deploymentId}/errors/${fingerprint}`,
         body
       );
       return json(res);
@@ -906,7 +894,6 @@ For the running app's output use \`get_deployment_logs\`.`,
     {
       description:
         'Get detailed information about a specific pod including status, IP, node, and restart count',
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
         podName: z.string().describe('The pod name (from list_pods)'),
         namespace: z
@@ -915,8 +902,7 @@ For the running app's output use \`get_deployment_logs\`.`,
       }
     },
     async ({ podName, namespace }) => {
-      const params = new URLSearchParams({ namespace });
-      const pod = await client.get(`/pods/${podName}?${params.toString()}`);
+      const pod = await client.get(path`/pods/${podName}` + toQuery({ namespace }));
       return json(pod);
     }
   );
@@ -933,8 +919,9 @@ Use this to:
 
 The \`command\` arg can be a string (executed via /bin/sh -c) or a string array (exec'd directly with no shell — preferred when arguments contain special chars).
 Use \`list_pods\` first to get pod names and the namespace. If \`container\` is omitted, the first container in the pod spec is used.
-Not for long-running interactive sessions — the call times out (default 60s, max 5min).`,
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
+Not for long-running interactive sessions — the call times out (default 60s, max 5min). stdout and stderr are capped at the last 20,000 characters each.
+
+Needs an exec-scoped session: connect with the mcp:exec scope or an orch_ token with exec scope.`,
       inputSchema: {
         podName: z.string().describe('Pod name (from list_pods)'),
         namespace: z
@@ -956,13 +943,22 @@ Not for long-running interactive sessions — the call times out (default 60s, m
       }
     },
     async ({ podName, namespace, command, container, timeoutMs }) => {
-      const result = await client.post(`/pods/${podName}/exec`, {
+      const result = await client.post(path`/pods/${podName}/exec`, {
         namespace,
         command,
         ...(container && { container }),
         ...(timeoutMs && { timeoutMs })
       });
-      return json(result);
+      if (typeof result === 'string') return text(capText(result).text);
+      const capped: Record<string, unknown> = { ...(result ?? {}) };
+      for (const key of ['stdout', 'stderr', 'output']) {
+        const value = capped[key];
+        if (typeof value !== 'string') continue;
+        const { text: trimmed, truncated } = capText(value);
+        capped[key] = trimmed;
+        if (truncated) capped[`${key}Truncated`] = true;
+      }
+      return json(capped);
     }
   );
 
@@ -975,21 +971,17 @@ Useful for diagnosing performance issues, sizing resource requests, and answerin
 The result includes datapoints sampled at \`step\` ms intervals between \`start\` and \`end\` (both unix-ms). Defaults to the last hour at 30s resolution.
 
 Each series datapoint includes pod-level CPU (millicores) and memory (bytes). To get aggregate "is it near its limit" pressure, compare \`get_deployment.totalCpuUsage / (cpuRequestMilli × replicas)\` and the memory equivalent.`,
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
+        deploymentId: z.guid().describe('The deployment UUID'),
         start: z.number().optional().describe('Window start (unix-ms). Default: end - 1h'),
         end: z.number().optional().describe('Window end (unix-ms). Default: now'),
         step: z.number().optional().describe('Sample step (ms). Default 30000, min 1000')
       }
     },
     async ({ deploymentId, start, end, step }) => {
-      const params = new URLSearchParams();
-      if (start) params.set('start', String(start));
-      if (end) params.set('end', String(end));
-      if (step) params.set('step', String(step));
-      const qs = params.toString();
-      const metrics = await client.get(`/deployments/${deploymentId}/metrics${qs ? `?${qs}` : ''}`);
+      const metrics = await client.get(
+        path`/deployments/${deploymentId}/metrics` + toQuery({ start, end, step })
+      );
       return json(metrics);
     }
   );
@@ -1003,21 +995,17 @@ Useful for confirming OOM/restart suspicions (memory climbing to the limit befor
 The result includes datapoints sampled at \`step\` ms intervals between \`start\` and \`end\` (both unix-ms). Defaults to the last hour at 30s resolution.
 
 To diagnose an OOMKill, look for memory rising to the request/limit ceiling right before \`liveStatus.lastTerminationAt\` (from get_database). If memory plateaus near the limit, raise it with update_database_resources.`,
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        databaseId: z.string().describe('The database UUID'),
+        databaseId: z.guid().describe('The database UUID'),
         start: z.number().optional().describe('Window start (unix-ms). Default: end - 1h'),
         end: z.number().optional().describe('Window end (unix-ms). Default: now'),
         step: z.number().optional().describe('Sample step (ms). Default 30000, min 1000')
       }
     },
     async ({ databaseId, start, end, step }) => {
-      const params = new URLSearchParams();
-      if (start) params.set('start', String(start));
-      if (end) params.set('end', String(end));
-      if (step) params.set('step', String(step));
-      const qs = params.toString();
-      const metrics = await client.get(`/databases/${databaseId}/metrics${qs ? `?${qs}` : ''}`);
+      const metrics = await client.get(
+        path`/databases/${databaseId}/metrics` + toQuery({ start, end, step })
+      );
       return json(metrics);
     }
   );
@@ -1028,13 +1016,12 @@ To diagnose an OOMKill, look for memory rising to the request/limit ceiling righ
       description: `Snapshot the deployment's current resource pressure. Combines live aggregate CPU/memory usage with the configured per-pod requests and replica count to compute a usage ratio for each axis.
 Returns a per-deployment summary: cpu/memory current usage, request × replicas capacity, ratio, and a "near limit" flag (≥85%).
 Use this before suggesting scale-ups, or to confirm an unhealthy / OOM-looking deployment is actually starved.`,
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID')
+        deploymentId: z.guid().describe('The deployment UUID')
       }
     },
     async ({ deploymentId }) => {
-      const dep = await client.get(`/deployments/${deploymentId}`);
+      const dep = await client.get(path`/deployments/${deploymentId}`);
       const replicas = Number(dep.replicas ?? 1);
       const cpuReq = dep.cpuRequestMilli != null ? Number(dep.cpuRequestMilli) : null;
       const memReq = dep.memoryRequestBytes != null ? Number(dep.memoryRequestBytes) : null;
@@ -1084,13 +1071,12 @@ Use this before suggesting scale-ups, or to confirm an unhealthy / OOM-looking d
       description: `Get all volumes attached to a deployment, plus the deploy strategy that volumes drive.
 Volumes are returned with their full record (id, name, type, mountPath, pvcName, storageSize, hostPath, readOnly).
 The response also surfaces \`deployStrategy\` and a \`pvcCount\` so callers can sanity-check that PVCs they expected are actually attached — a 0 PVC count on what should be a stateful deployment usually means the last volumes update silently dropped a row (e.g. type=pvc without pvcName).`,
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID')
+        deploymentId: z.guid().describe('The deployment UUID')
       }
     },
     async ({ deploymentId }) => {
-      const deployment = await client.get(`/deployments/${deploymentId}`);
+      const deployment = await client.get(path`/deployments/${deploymentId}`);
       const volumes: any[] = Array.isArray(deployment?.volumes) ? deployment.volumes : [];
       const pvcCount = volumes.filter((v: any) => v?.type === 'pvc').length;
       const payload = {
@@ -1118,7 +1104,6 @@ The response also surfaces \`deployStrategy\` and a \`pvcCount\` so callers can 
     {
       description:
         "Check if the user's GitHub account is linked to Orchard. Required before deploying from GitHub repos.",
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {}
     },
     async () => {
@@ -1131,12 +1116,11 @@ The response also surfaces \`deployStrategy\` and a \`pvcCount\` so callers can 
     'list_github_repos',
     {
       description: `Autocomplete source for deploy_from_github. Lists repos that are BOTH (a) covered by an Orchard GitHub App installation the user has access to AND (b) accessible to the user's own GitHub account — i.e. the intersection. These are safe to suggest because the deploy will succeed for them. The user should never be shown repos they cannot access on GitHub.`,
-      annotations: { readOnlyHint: true, destructiveHint: false },
-      inputSchema: {}
+      inputSchema: { ...pageInput }
     },
-    async () => {
+    async ({ limit, cursor }) => {
       const repos = await client.get('/github/repositories');
-      return json(repos);
+      return json(Array.isArray(repos) ? paginate(repos, { limit, cursor }) : repos);
     }
   );
 
@@ -1144,14 +1128,13 @@ The response also surfaces \`deployStrategy\` and a \`pvcCount\` so callers can 
     'get_repo_branches',
     {
       description: 'Get branches for a GitHub repository',
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
         owner: z.string().describe('Repository owner (GitHub username or org)'),
         repo: z.string().describe('Repository name')
       }
     },
     async ({ owner, repo }) => {
-      const branches = await client.get(`/github/repositories/${owner}/${repo}/branches`);
+      const branches = await client.get(path`/github/repositories/${owner}/${repo}/branches`);
       return json(branches);
     }
   );
@@ -1161,14 +1144,13 @@ The response also surfaces \`deployStrategy\` and a \`pvcCount\` so callers can 
     {
       description:
         'Find Dockerfiles in a GitHub repository. Useful to determine if a repo can be deployed and which Dockerfile to use.',
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
         owner: z.string().describe('Repository owner'),
         repo: z.string().describe('Repository name')
       }
     },
     async ({ owner, repo }) => {
-      const dockerfiles = await client.get(`/github/repositories/${owner}/${repo}/dockerfiles`);
+      const dockerfiles = await client.get(path`/github/repositories/${owner}/${repo}/dockerfiles`);
       return json(dockerfiles);
     }
   );
@@ -1181,7 +1163,6 @@ The response also surfaces \`deployStrategy\` and a \`pvcCount\` so callers can 
 Returns the build type Orchard would pick, plus, for repos with no Dockerfile, an "apps" array describing every deployable app found: its directory, framework, install/build/start commands and output directory. An app with an outputDirectory is a static site. "workspace" reports whether the repo is a pnpm/npm/yarn workspace.
 
 Use this to answer "can I deploy this repo" and "which app in this monorepo did the user mean" before calling deploy_from_github. Everything it returns is a suggestion the deploy call can override.`,
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
         owner: z.string().describe('Repository owner'),
         repo: z.string().describe('Repository name'),
@@ -1192,8 +1173,9 @@ Use this to answer "can I deploy this repo" and "which app in this monorepo did 
       }
     },
     async ({ owner, repo, branch }) => {
-      const query = branch ? `?branch=${encodeURIComponent(branch)}` : '';
-      const detected = await client.get(`/github/repositories/${owner}/${repo}/detect${query}`);
+      const detected = await client.get(
+        path`/github/repositories/${owner}/${repo}/detect` + toQuery({ branch })
+      );
       return json(detected);
     }
   );
@@ -1203,14 +1185,13 @@ Use this to answer "can I deploy this repo" and "which app in this monorepo did 
     {
       description:
         'Get the file/directory listing of a GitHub repository. Useful to analyze what the app needs.',
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
         owner: z.string().describe('Repository owner'),
         repo: z.string().describe('Repository name')
       }
     },
     async ({ owner, repo }) => {
-      const contents = await client.get(`/github/repositories/${owner}/${repo}/contents`);
+      const contents = await client.get(path`/github/repositories/${owner}/${repo}/contents`);
       return json(contents);
     }
   );
@@ -1221,12 +1202,11 @@ Use this to answer "can I deploy this repo" and "which app in this monorepo did 
     'list_templates',
     {
       description: 'List all available templates (both built-in and custom)',
-      annotations: { readOnlyHint: true, destructiveHint: false },
-      inputSchema: {}
+      inputSchema: { ...pageInput }
     },
-    async () => {
+    async ({ limit, cursor }) => {
       const templates = await client.get('/templates');
-      return json(templates);
+      return json(Array.isArray(templates) ? paginate(templates, { limit, cursor }) : templates);
     }
   );
 
@@ -1234,13 +1214,12 @@ Use this to answer "can I deploy this repo" and "which app in this monorepo did 
     'get_template',
     {
       description: 'Get a template by ID, including its full YAML definition and parameter schema',
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        templateId: z.string().describe('The template UUID')
+        templateId: z.guid().describe('The template UUID')
       }
     },
     async ({ templateId }) => {
-      const template = await client.get(`/templates/${templateId}`);
+      const template = await client.get(path`/templates/${templateId}`);
       return json(template);
     }
   );
@@ -1249,14 +1228,14 @@ Use this to answer "can I deploy this repo" and "which app in this monorepo did 
     'list_template_instances',
     {
       description: 'List all template instances (deployed templates) in a project',
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        projectId: z.string().describe('The project UUID')
+        projectId: z.guid().describe('The project UUID'),
+        ...pageInput
       }
     },
-    async ({ projectId }) => {
-      const instances = await client.get(`/projects/${projectId}/template-instances`);
-      return json(instances);
+    async ({ projectId, limit, cursor }) => {
+      const instances = await client.get(path`/projects/${projectId}/template-instances`);
+      return json(Array.isArray(instances) ? paginate(instances, { limit, cursor }) : instances);
     }
   );
 
@@ -1264,13 +1243,12 @@ Use this to answer "can I deploy this repo" and "which app in this monorepo did 
     'get_template_instance',
     {
       description: 'Get details of a deployed template instance, including all created resources',
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        instanceId: z.string().describe('The template instance UUID')
+        instanceId: z.guid().describe('The template instance UUID')
       }
     },
     async ({ instanceId }) => {
-      const instance = await client.get(`/template-instances/${instanceId}`);
+      const instance = await client.get(path`/template-instances/${instanceId}`);
       return json(instance);
     }
   );
@@ -1279,8 +1257,7 @@ Use this to answer "can I deploy this repo" and "which app in this monorepo did 
     'get_template_yaml_guide',
     {
       description:
-        'Get the full YAML format guide for creating Leaf templates, including all resource types, parameter types, interpolation syntax, and a complete example.',
-      annotations: { readOnlyHint: true, destructiveHint: false },
+        'Get the full YAML format guide for creating Leaf templates, including all resource types, parameter types, interpolation syntax, and a complete example. Also published as the orchard://docs/template-yaml-guide resource.',
       inputSchema: {}
     },
     async () => ({ content: [{ type: 'text', text: YAML_FORMAT_GUIDE }] })

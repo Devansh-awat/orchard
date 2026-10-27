@@ -62,6 +62,7 @@ COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY --from=builder /app/apps/server/package.json ./apps/server/package.json
 COPY --from=builder /app/apps/server/dist ./apps/server/dist
 COPY --from=builder /app/apps/server/prisma ./apps/server/prisma
+COPY packages/contracts/openapi.json packages/contracts/agent-spec.json ./packages/contracts/
 
 # Use cache mount for faster production dependency installs
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \

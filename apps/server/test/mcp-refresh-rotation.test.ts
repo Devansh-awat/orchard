@@ -69,7 +69,8 @@ test('the refresh grant rotates the generation and issues the next one', async (
       calls.push('extend');
     }
   };
-  const svc = new McpOAuthService(sessions as any, {} as any);
+  const prisma = { mcpOauthClient: { findUnique: async () => null } };
+  const svc = new McpOAuthService(sessions as any, prisma as any);
   const refreshToken = await (svc as any).mintRefreshToken(
     { sub: 'user-1', sessionId: 'session-1', authMethod: 'otp' },
     'client-1',

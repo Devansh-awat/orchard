@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod4';
-import { OrchardClient } from '../client';
+import { OrchardClient, path } from '../client';
 import { json } from './reply';
 
 interface EnvVarInput {
@@ -23,9 +23,8 @@ export function registerConfigurationTools(server: McpServer, client: OrchardCli
 - Seeing what is there now → \`get_env_vars\`.
 
 Secrets read back with a null value, so you cannot round-trip them through this tool by hand: pass \`value: null\` with \`secret: true\` to keep the stored value, or omit the key entirely to delete the secret.`,
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
+        deploymentId: z.guid().describe('The deployment UUID'),
         envVars: z
           .array(
             z.object({
@@ -48,7 +47,7 @@ Secrets read back with a null value, so you cannot round-trip them through this 
       }
     },
     async ({ deploymentId, envVars }) => {
-      const result = await client.put(`/deployments/${deploymentId}/env`, { env: envVars });
+      const result = await client.put(path`/deployments/${deploymentId}/env`, { env: envVars });
       return json(result);
     }
   );
@@ -61,9 +60,8 @@ Secrets read back with a null value, so you cannot round-trip them through this 
 Fixing one typo'd value, adding a new key, flipping a var to secret — all of them are this tool. You do not need to read the current env first; the merge happens here.
 
 Related: \`delete_env_vars\` to remove keys, \`get_env_vars\` to read, \`set_env_vars\` only when you mean to replace the whole environment.`,
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
+        deploymentId: z.guid().describe('The deployment UUID'),
         envVars: z
           .array(
             z.object({
@@ -86,7 +84,7 @@ Related: \`delete_env_vars\` to remove keys, \`get_env_vars\` to read, \`set_env
       }
     },
     async ({ deploymentId, envVars }) => {
-      const deployment = await client.get(`/deployments/${deploymentId}`);
+      const deployment = await client.get(path`/deployments/${deploymentId}`);
       // A secret reads back with no value and its flag intact. Carrying both
       // over is what keeps this a merge: a null value tells the server to keep
       // what is stored, and dropping the flag would ask it to republish a
@@ -100,7 +98,7 @@ Related: \`delete_env_vars\` to remove keys, \`get_env_vars\` to read, \`set_env
       const newKeys = new Set(envVars.map((v) => v.key));
       const merged = [...existing.filter((v) => !newKeys.has(v.key)), ...envVars];
 
-      const result = await client.put(`/deployments/${deploymentId}/env`, { env: merged });
+      const result = await client.put(path`/deployments/${deploymentId}/env`, { env: merged });
       return json(result);
     }
   );
@@ -122,9 +120,8 @@ The three probes do different jobs:
 If the image's Dockerfile declares its own HEALTHCHECK, that wins unless you set \`healthCheckOverride: true\`.
 
 Applies immediately and rolls the pods.`,
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
+        deploymentId: z.guid().describe('The deployment UUID'),
         healthCheckEnabled: z.boolean().optional().describe('Master switch for probes'),
         healthCheckType: z
           .enum(['http', 'tcp', 'exec'])
@@ -189,7 +186,7 @@ Applies immediately and rolls the pods.`,
       // The API is a full replace across thirteen fields. Reading the current
       // record and merging here is what lets a caller flip one switch without
       // silently resetting the other twelve to defaults.
-      const current = await client.get(`/deployments/${deploymentId}`);
+      const current = await client.get(path`/deployments/${deploymentId}`);
       const pick = <T>(next: T | undefined, stored: T, fallback: T): T =>
         next !== undefined ? next : (stored ?? fallback);
 
@@ -213,7 +210,7 @@ Applies immediately and rolls the pods.`,
         healthCheckOverride: pick(patch.healthCheckOverride, current.healthCheckOverride, false)
       };
 
-      const result = await client.put(`/deployments/${deploymentId}/health-check`, body);
+      const result = await client.put(path`/deployments/${deploymentId}/health-check`, body);
       return json(result);
     }
   );
@@ -230,9 +227,8 @@ Supported volume types:
 - emptyDir: Temporary storage that is created when a pod is assigned to a node and deleted when the pod is removed.
 
 To remove all volumes, pass an empty array.`,
-      annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
+        deploymentId: z.guid().describe('The deployment UUID'),
         volumes: z
           .array(
             z.object({
@@ -257,7 +253,7 @@ To remove all volumes, pass an empty array.`,
       }
     },
     async ({ deploymentId, volumes }) => {
-      const result = await client.put(`/deployments/${deploymentId}/volumes`, { volumes });
+      const result = await client.put(path`/deployments/${deploymentId}/volumes`, { volumes });
       return json(result);
     }
   );
@@ -269,16 +265,15 @@ To remove all volumes, pass an empty array.`,
     {
       description: `Change the Docker image of an image-source deployment (one created from an image reference, not built from a GitHub repo). Pods will roll to pull the new image. If the image lives in a private registry, add the registry's credential to the project first with \`set_registry_credential\`; the pull secret is attached automatically whenever the image host matches.
 Only valid for non-GitHub deployments — for GitHub deployments use \`rebuild_deployment\` so the image is rebuilt from source. The backend rejects this on a GitHub-built deployment with a clear error.`,
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
+        deploymentId: z.guid().describe('The deployment UUID'),
         image: z
           .string()
           .describe('New Docker image reference (e.g. nginx:1.27, ghcr.io/org/app:v2.1.0)')
       }
     },
     async ({ deploymentId, image }) => {
-      const result = await client.patch(`/deployments/${deploymentId}/image`, { image });
+      const result = await client.patch(path`/deployments/${deploymentId}/image`, { image });
       return json(result);
     }
   );
@@ -292,16 +287,15 @@ Only valid for non-GitHub deployments — for GitHub deployments use \`rebuild_d
 - \`blueGreen\`: the new image runs beside the old one and takes traffic only once every pod is ready; if it never is, nothing moves.
 
 A deployment with a PVC attached only accepts \`recreate\`. Every strategy waits for the new pods to be ready and rolls back if they never are.`,
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
+        deploymentId: z.guid().describe('The deployment UUID'),
         strategy: z
           .enum(['rollingUpdate', 'recreate', 'blueGreen'])
           .describe('The new update strategy')
       }
     },
     async ({ deploymentId, strategy }) => {
-      const result = await client.patch(`/deployments/${deploymentId}/strategy`, { strategy });
+      const result = await client.patch(path`/deployments/${deploymentId}/strategy`, { strategy });
       return json(result);
     }
   );
@@ -321,9 +315,8 @@ Set it only to override that:
 An explicit value here survives an image change, which is the point: it is your call, not a guess.
 
 Changing this rolls the pods on its own; no separate restart is needed.`,
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
+        deploymentId: z.guid().describe('The deployment UUID'),
         imagePullPolicy: z
           .enum(['Always', 'IfNotPresent'])
           .nullable()
@@ -331,7 +324,7 @@ Changing this rolls the pods on its own; no separate restart is needed.`,
       }
     },
     async ({ deploymentId, imagePullPolicy }) => {
-      const result = await client.patch(`/deployments/${deploymentId}/pull-policy`, {
+      const result = await client.patch(path`/deployments/${deploymentId}/pull-policy`, {
         imagePullPolicy
       });
       return json(result);
@@ -346,13 +339,12 @@ Changing this rolls the pods on its own; no separate restart is needed.`,
       description: `List the container registries a project can pull private images from. Passwords and tokens are never returned, only the registry host and username.
 
 A deployment or job whose image comes from one of these registries (ghcr.io/org/app, docker.io/user/app, a bare \`user/app\` for Docker Hub) gets the credential attached automatically. Use this to work out why an image is stuck in ImagePullBackOff: if the registry is not listed, the pull is anonymous.`,
-      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
       inputSchema: {
-        projectId: z.string().describe('The project UUID')
+        projectId: z.guid().describe('The project UUID')
       }
     },
     async ({ projectId }) => {
-      const result = await client.get(`/projects/${projectId}/registry-credentials`);
+      const result = await client.get(path`/projects/${projectId}/registry-credentials`);
       return json(result);
     }
   );
@@ -370,9 +362,8 @@ What to pass per registry:
 - \`registry.gitlab.com\`: a deploy token (username starts with \`gitlab+deploy-token\`) or a personal access token with \`read_registry\`.
 - \`quay.io\`: a robot account name and token.
 - anything else that speaks the Docker registry v2 API with basic or bearer auth.`,
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
-        projectId: z.string().describe('The project UUID'),
+        projectId: z.guid().describe('The project UUID'),
         registry: z
           .string()
           .describe('Registry host such as ghcr.io, docker.io or registry.gitlab.com'),
@@ -381,7 +372,7 @@ What to pass per registry:
       }
     },
     async ({ projectId, registry, username, password }) => {
-      const result = await client.put(`/projects/${projectId}/registry-credentials`, {
+      const result = await client.put(path`/projects/${projectId}/registry-credentials`, {
         registry,
         username,
         password
@@ -394,15 +385,14 @@ What to pass per registry:
     'delete_registry_credential',
     {
       description: `Remove a registry credential from a project. Apps and jobs pulling from that registry lose the credential and roll; if their images are private the new pods will fail to pull.`,
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       inputSchema: {
-        projectId: z.string().describe('The project UUID'),
-        credentialId: z.string().describe('The credential UUID from list_registry_credentials')
+        projectId: z.guid().describe('The project UUID'),
+        credentialId: z.guid().describe('The credential UUID from list_registry_credentials')
       }
     },
     async ({ projectId, credentialId }) => {
       const result = await client.delete(
-        `/projects/${projectId}/registry-credentials/${credentialId}`
+        path`/projects/${projectId}/registry-credentials/${credentialId}`
       );
       return json(result);
     }
@@ -421,9 +411,8 @@ Every field is optional and only what you pass is changed, so you can set one th
 - \`rootDirectory\`, \`installCommand\`, \`buildCommand\`, \`outputDirectory\`: Railpack-only overrides; null hands the decision back to detection.
 
 Everything except \`startCommand\` applies on the next build, so follow up with \`rebuild_deployment\` if you want it live now.`,
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
+        deploymentId: z.guid().describe('The deployment UUID'),
         buildType: z
           .enum(['dockerfile', 'railpack'])
           .optional()
@@ -464,7 +453,7 @@ Everything except \`startCommand\` applies on the next build, so follow up with 
       }
     },
     async ({ deploymentId, ...body }) => {
-      const result = await client.put(`/deployments/${deploymentId}/build-config`, body);
+      const result = await client.put(path`/deployments/${deploymentId}/build-config`, body);
       return json(result);
     }
   );
@@ -476,18 +465,17 @@ Everything except \`startCommand\` applies on the next build, so follow up with 
     {
       description: `Create a public ingress (domain route) for a deployment. This makes the deployment accessible via a domain name with automatic TLS.
 The user must point their domain's DNS to the cluster before creating the ingress. Use validate_dns to check.`,
-      annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID to route traffic to'),
+        deploymentId: z.guid().describe('The deployment UUID to route traffic to'),
         host: z.string().describe('The domain name (e.g. myapp.example.com)'),
         path: z.string().optional().describe('URL path prefix (default: /)'),
         servicePort: z.number().optional().describe('The service port to route to (default: 80)')
       }
     },
-    async ({ deploymentId, host, path, servicePort }) => {
-      const ingress = await client.post(`/deployments/${deploymentId}/ingresses`, {
+    async ({ deploymentId, host, path: routePath, servicePort }) => {
+      const ingress = await client.post(path`/deployments/${deploymentId}/ingresses`, {
         host,
-        path: path ?? '/',
+        path: routePath ?? '/',
         servicePort: servicePort ?? 80
       });
       return json(ingress);
@@ -498,10 +486,9 @@ The user must point their domain's DNS to the cluster before creating the ingres
     'update_ingress',
     {
       description: 'Update an existing ingress configuration',
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
-        ingressId: z.string().describe('The ingress UUID to update'),
+        deploymentId: z.guid().describe('The deployment UUID'),
+        ingressId: z.guid().describe('The ingress UUID to update'),
         host: z.string().describe('The domain name (e.g. myapp.example.com)'),
         path: z.string().optional().describe('URL path prefix'),
         servicePort: z.number().optional().describe('The service port to route to'),
@@ -519,25 +506,28 @@ The user must point their domain's DNS to the cluster before creating the ingres
       deploymentId,
       ingressId,
       host,
-      path,
+      path: routePath,
       servicePort,
       redirectTarget,
       redirectStatus
     }) => {
       if (redirectTarget !== undefined || redirectStatus !== undefined) {
-        const current = (await client.get(`/ingresses/${ingressId}`)) as { projectId?: string };
+        const current = (await client.get(path`/ingresses/${ingressId}`)) as { projectId?: string };
         if (!current?.projectId) throw new Error('Ingress has no project');
         const body: Record<string, any> = { host };
         if (redirectTarget !== undefined) body.redirectTarget = redirectTarget;
         if (redirectStatus !== undefined) body.redirectStatus = redirectStatus;
         return json(
-          await client.put(`/projects/${current.projectId}/ingresses/${ingressId}`, body)
+          await client.put(path`/projects/${current.projectId}/ingresses/${ingressId}`, body)
         );
       }
       const body: Record<string, any> = { host };
-      if (path !== undefined) body.path = path;
+      if (routePath !== undefined) body.path = routePath;
       if (servicePort !== undefined) body.servicePort = servicePort;
-      const ingress = await client.put(`/deployments/${deploymentId}/ingresses/${ingressId}`, body);
+      const ingress = await client.put(
+        path`/deployments/${deploymentId}/ingresses/${ingressId}`,
+        body
+      );
       return json(ingress);
     }
   );
@@ -550,10 +540,9 @@ The user must point their domain's DNS to the cluster before creating the ingres
 \`ports\` is a full replace of that service's port list — a port you leave out is removed, so restate the ones you want to keep (read them off \`list_services\`). Pass \`domain: null\` to clear the internal domain. At least one of \`ports\` / \`domain\` is required.
 
 To make a service reachable from outside the cluster use \`set_service_exposure\`, not this.`,
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
-        serviceId: z.string().describe('The service UUID (from list_services)'),
+        deploymentId: z.guid().describe('The deployment UUID'),
+        serviceId: z.guid().describe('The service UUID (from list_services)'),
         ports: z
           .array(
             z.object({
@@ -580,7 +569,10 @@ To make a service reachable from outside the cluster use \`set_service_exposure\
       const body: Record<string, unknown> = {};
       if (ports !== undefined) body.ports = ports;
       if (domain !== undefined) body.domain = domain;
-      const result = await client.put(`/deployments/${deploymentId}/services/${serviceId}`, body);
+      const result = await client.put(
+        path`/deployments/${deploymentId}/services/${serviceId}`,
+        body
+      );
       return json(result);
     }
   );
@@ -590,16 +582,15 @@ To make a service reachable from outside the cluster use \`set_service_exposure\
     {
       description:
         'Flip a service between internal (ClusterIP, reachable only inside the cluster) and external (reachable from outside). This is the "make my app reachable" switch at the service layer; a custom domain on top of it is `create_ingress`.',
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
-        serviceId: z.string().describe('The service UUID (from list_services)'),
+        deploymentId: z.guid().describe('The deployment UUID'),
+        serviceId: z.guid().describe('The service UUID (from list_services)'),
         exposePublic: z.boolean().describe('true to expose externally, false for cluster-internal')
       }
     },
     async ({ deploymentId, serviceId, exposePublic }) => {
       const result = await client.patch(
-        `/deployments/${deploymentId}/services/${serviceId}/exposure`,
+        path`/deployments/${deploymentId}/services/${serviceId}/exposure`,
         { exposePublic }
       );
       return json(result);
@@ -611,17 +602,16 @@ To make a service reachable from outside the cluster use \`set_service_exposure\
     {
       description:
         'Expose or unexpose a single port on a service, for the case where a service carries several ports and only some should be reachable from outside. To expose the whole service use `set_service_exposure`.',
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
-        serviceId: z.string().describe('The service UUID (from list_services)'),
-        portId: z.string().describe('The port UUID (from list_services)'),
+        deploymentId: z.guid().describe('The deployment UUID'),
+        serviceId: z.guid().describe('The service UUID (from list_services)'),
+        portId: z.guid().describe('The port UUID (from list_services)'),
         public: z.boolean().describe('true to expose this port, false to take it private')
       }
     },
     async ({ deploymentId, serviceId, portId, public: isPublic }) => {
-      const path = `/deployments/${deploymentId}/services/${serviceId}/ports/${portId}/public`;
-      const result = isPublic ? await client.post(path) : await client.delete(path);
+      const route = path`/deployments/${deploymentId}/services/${serviceId}/ports/${portId}/public`;
+      const result = isPublic ? await client.post(route) : await client.delete(route);
       return json(result);
     }
   );
@@ -631,14 +621,15 @@ To make a service reachable from outside the cluster use \`set_service_exposure\
     {
       description:
         'Read the access protection on a domain: which mode is active, the basic-auth username if any, and the bypass secret that lets automated callers through a protected domain. Requires edit access on the project.',
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        projectId: z.string().describe('The project UUID that owns the ingress'),
-        ingressId: z.string().describe('The ingress UUID')
+        projectId: z.guid().describe('The project UUID that owns the ingress'),
+        ingressId: z.guid().describe('The ingress UUID')
       }
     },
     async ({ projectId, ingressId }) => {
-      const result = await client.get(`/projects/${projectId}/ingresses/${ingressId}/protection`);
+      const result = await client.get(
+        path`/projects/${projectId}/ingresses/${ingressId}/protection`
+      );
       return json(result);
     }
   );
@@ -657,10 +648,9 @@ Modes:
 \`bypassPaths\` stay reachable without auth, which is how you keep a webhook endpoint or \`/health\` working behind protection.
 
 Not available on redirect domains. Switching away from \`password\`/\`basic\` discards the stored credential, so re-enabling means setting a new one.`,
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
-        projectId: z.string().describe('The project UUID that owns the ingress'),
-        ingressId: z.string().describe('The ingress UUID'),
+        projectId: z.guid().describe('The project UUID that owns the ingress'),
+        ingressId: z.guid().describe('The ingress UUID'),
         mode: z.enum(['none', 'basic', 'password', 'orchard']).describe('Protection mode to apply'),
         username: z.string().optional().describe('Basic-auth username (required for `basic`)'),
         password: z.string().optional().describe('Password (required for `basic` and `password`)'),
@@ -671,12 +661,15 @@ Not available on redirect domains. Switching away from \`password\`/\`basic\` di
       }
     },
     async ({ projectId, ingressId, mode, username, password, bypassPaths }) => {
-      const result = await client.put(`/projects/${projectId}/ingresses/${ingressId}/protection`, {
-        mode,
-        ...(username !== undefined ? { username } : {}),
-        ...(password !== undefined ? { password } : {}),
-        ...(bypassPaths !== undefined ? { bypassPaths } : {})
-      });
+      const result = await client.put(
+        path`/projects/${projectId}/ingresses/${ingressId}/protection`,
+        {
+          mode,
+          ...(username !== undefined ? { username } : {}),
+          ...(password !== undefined ? { password } : {}),
+          ...(bypassPaths !== undefined ? { bypassPaths } : {})
+        }
+      );
       return json(result);
     }
   );
@@ -686,9 +679,8 @@ Not available on redirect domains. Switching away from \`password\`/\`basic\` di
     {
       description:
         'Create an internal or external service for a deployment to expose ports. Use `update_service` to change an existing one; creating a second service for the same port will not replace the first.',
-      annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
+        deploymentId: z.guid().describe('The deployment UUID'),
         name: z.string().describe('Service name'),
         type: z
           .enum(['internal', 'external'])
@@ -698,7 +690,7 @@ Not available on redirect domains. Switching away from \`password\`/\`basic\` di
       }
     },
     async ({ deploymentId, name, type, port, targetPort }) => {
-      const service = await client.post(`/deployments/${deploymentId}/services`, {
+      const service = await client.post(path`/deployments/${deploymentId}/services`, {
         name,
         exposePublic: type === 'external',
         ports: [

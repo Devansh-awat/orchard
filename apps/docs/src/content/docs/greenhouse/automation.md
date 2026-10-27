@@ -13,7 +13,9 @@ a read-only guest cannot.
 ## MCP tools
 
 An agent connected to Orchard's MCP server can work with Greenhouse through these
-tools. Full parameter lists are in the generated
+tools. They are not in the default toolsets: connect with `?toolsets=default,greenhouse`
+(or `?toolsets=all`) to see them. The agent inside a machine is connected with
+`?toolsets=default,databases,greenhouse` already. Full parameter lists are in the generated
 [MCP tools reference](/reference/mcp-tools/#sandboxes).
 
 | Tool                             | Does                                                                                                              | Needs             |

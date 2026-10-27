@@ -29,6 +29,7 @@ COPY --from=deps /app/apps/server/node_modules ./apps/server/node_modules
 COPY apps/server/package.json apps/server/tsconfig.json apps/server/.swcrc ./apps/server/
 COPY apps/server/src ./apps/server/src
 COPY apps/server/prisma ./apps/server/prisma
+COPY packages/contracts/agent-spec.json ./packages/contracts/
 COPY LICENSE apps/server/THIRD_PARTY_NOTICES.txt /app/
 
 WORKDIR /app/apps/server

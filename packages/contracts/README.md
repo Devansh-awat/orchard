@@ -69,3 +69,22 @@ pnpm --filter @orchard/contracts generate
 
 `bootstrap` rewrites `src/routes.generated.ts` from
 `apps/server/test/auth-coverage.snapshot.json`; commit both regenerated files.
+
+## Agent spec and search
+
+`generate` also writes `agent-spec.json`: the operations an API token can call
+(admin, setup, SCIM and sign-in routes dropped), each with its `operationId`,
+params, request and response schemas, scope, and the `x-orchard-sensitive` /
+`x-orchard-destructive` flags from `src/agent-flags.ts`. The server serves it
+at `GET /apiv1/agent-spec.json`, the CLI caches it for `orchard api search`,
+and the compact MCP searches it.
+
+Operation ids come from `src/operation-ids.ts`: the static path words, then a
+verb (`deployments_rollout_get`, `deployments_restart`, `deployments_env_set`).
+
+`src/agent-search.ts` is the keyword ranking. The server runs a copy at
+`apps/server/src/agent-spec/agent-search.ts` because it is CommonJS and this
+package is ESM; `generate` resyncs it and a server test fails if they differ.
+The Go port in `apps/cli/internal/agentspec` is checked against
+`test/fixtures/search-parity.json`; rerun `pnpm --filter @orchard/contracts
+search-fixture` after changing the ranking.

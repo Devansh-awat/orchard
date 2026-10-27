@@ -667,6 +667,14 @@ test('mcp is left out of opencode config when the box could not reach it', () =>
     opencodeConfigJson('tok', { mcpUrl: 'https://orchard.example.com/mcp', requireHttpsMcp: true })
   );
   assert.equal(pub.mcp.orchard.headers.Authorization, 'Bearer tok');
+  assert.equal(
+    pub.mcp.orchard.url,
+    'https://orchard.example.com/mcp?toolsets=default%2Cdatabases%2Cgreenhouse'
+  );
+  const pinned = JSON.parse(
+    opencodeConfigJson('tok', { mcpUrl: 'https://orchard.example.com/mcp?toolsets=all' })
+  );
+  assert.equal(pinned.mcp.orchard.url, 'https://orchard.example.com/mcp?toolsets=all');
   const files = stagedInitFiles(SECRETS, { mcpUrl: 'https://o.example/mcp' });
   assert.equal(files.authorized_keys, 'ssh-ed25519 AAAA owner\n');
   assert.equal(files['bootstrap.sh'], SANDBOX_BOOTSTRAP_SCRIPT);

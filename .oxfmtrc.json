@@ -19,6 +19,8 @@
     "**/*.generated.ts",
     "**/*.generated.json",
     "packages/contracts/openapi.json",
+    "packages/contracts/agent-spec.json",
+    "packages/contracts/test/fixtures/**",
     "**/*.astro",
     "**/*.mjml",
     "infra/**",

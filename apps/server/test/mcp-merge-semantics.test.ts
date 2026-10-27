@@ -4,6 +4,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { registerConfigurationTools } from '../src/mcp/tools/configuration';
 import { registerEnvironmentTools } from '../src/mcp/tools/environments';
 import { registerQueryTools } from '../src/mcp/tools/query';
+import { catalogServer, parseToolsets } from '../src/mcp/catalog';
 
 interface Call {
   method: string;
@@ -45,7 +46,10 @@ function harness(
       return respond(path);
     }
   };
-  register(server as any, client as any);
+  register(
+    catalogServer(server, { selection: parseToolsets('all'), scope: 'exec' }) as any,
+    client as any
+  );
   return { tools, calls };
 }
 

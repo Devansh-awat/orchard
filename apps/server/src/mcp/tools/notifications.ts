@@ -1,7 +1,8 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod4';
-import { OrchardClient } from '../client';
-import { json } from './reply';
+import { OrchardClient, path, query } from '../client';
+import { json, paginate } from './reply';
+import { pageInput } from './inputs';
 import { NOTIFICATION_EVENTS, RULE_SCOPE_TYPES } from '../../notifications/notification-events';
 
 // Sourced from the server's own list rather than redeclared, which is how the
@@ -16,23 +17,18 @@ export function registerNotificationTools(server: McpServer, client: OrchardClie
       description: `List notification destinations (Discord, Slack, email, or generic webhook). A channel is only a destination: what it receives is set by notification rules.
 Without a scope this is every destination in the org, with health, rule count and last delivery status, and needs org admin.
 With a scope it is what that project or resource may route to (its own destinations plus the ones it inherits), and needs only org membership.`,
-      annotations: { readOnlyHint: true },
       inputSchema: {
-        organizationId: z.string().describe('The organization UUID'),
+        organizationId: z.guid().describe('The organization UUID'),
         scopeType: z
           .enum(SCOPE_VALUES)
           .optional()
           .describe('org, project, deployment, database, or job'),
-        scopeId: z.string().optional().describe('The UUID of the scope (omit for scopeType=org)')
+        scopeId: z.guid().optional().describe('The UUID of the scope (omit for scopeType=org)')
       }
     },
     async ({ organizationId, scopeType, scopeId }) => {
-      const params = new URLSearchParams();
-      if (scopeType) params.set('scopeType', scopeType);
-      if (scopeId) params.set('scopeId', scopeId);
-      const query = params.toString();
       const result = await client.get(
-        `/organizations/${organizationId}/notification-channels${query ? `?${query}` : ''}`
+        path`/organizations/${organizationId}/notification-channels` + query({ scopeType, scopeId })
       );
       return json(result);
     }
@@ -45,9 +41,8 @@ With a scope it is what that project or resource may route to (its own destinati
 For discord/slack/webhook, pass the webhook URL in "url". For email, pass "recipients" (org members for an org-wide destination, the project's own people for a scoped one).
 For webhook channels the response includes a one-time signing secret — surface it to the user, it cannot be retrieved again.
 A destination belongs to a scope: org-wide (the default) needs org admin, and a project or resource scope needs admin on the owning project, which is how one app gets its own webhook without an org admin. Only rules at or below the owning scope can route to it.`,
-      annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
-        organizationId: z.string().describe('The organization UUID'),
+        organizationId: z.guid().describe('The organization UUID'),
         type: z.enum(['discord', 'slack', 'webhook', 'email']).describe('Channel type'),
         name: z.string().max(100).describe('Display name, e.g. "#deploys"'),
         url: z.string().optional().describe('Webhook URL (discord/slack/webhook types)'),
@@ -59,17 +54,20 @@ A destination belongs to a scope: org-wide (the default) needs org admin, and a 
           .enum(SCOPE_VALUES)
           .optional()
           .describe('Who owns this destination, default org'),
-        scopeId: z.string().optional().describe('The UUID of the scope (omit for scopeType=org)')
+        scopeId: z.guid().optional().describe('The UUID of the scope (omit for scopeType=org)')
       }
     },
     async ({ organizationId, type, name, url, recipients, scopeType, scopeId }) => {
-      const result = await client.post(`/organizations/${organizationId}/notification-channels`, {
-        type,
-        name,
-        config: type === 'email' ? { recipients: recipients ?? [] } : { url },
-        scopeType: scopeType ?? 'org',
-        scopeId: scopeId ?? null
-      });
+      const result = await client.post(
+        path`/organizations/${organizationId}/notification-channels`,
+        {
+          type,
+          name,
+          config: type === 'email' ? { recipients: recipients ?? [] } : { url },
+          scopeType: scopeType ?? 'org',
+          scopeId: scopeId ?? null
+        }
+      );
       return json(result);
     }
   );
@@ -78,10 +76,9 @@ A destination belongs to a scope: org-wide (the default) needs org admin, and a 
     'update_notification_channel',
     {
       description: `Update a notification destination's name, webhook URL, email recipients, or enabled state. Re-enabling a channel also clears its failure counter, so use this after fixing a broken webhook. Only provided fields change; the channel type cannot be changed. Requires admin on the scope that owns the channel: org admin for org-wide destinations, project admin for one an app owns.`,
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
-        organizationId: z.string().describe('The organization UUID'),
-        channelId: z.string().describe('The notification channel UUID'),
+        organizationId: z.guid().describe('The organization UUID'),
+        channelId: z.guid().describe('The notification channel UUID'),
         name: z.string().max(100).optional().describe('New display name'),
         url: z.string().optional().describe('New webhook URL (keeps the existing signing secret)'),
         recipients: z.array(z.string()).optional().describe('Replace email recipients'),
@@ -102,7 +99,7 @@ A destination belongs to a scope: org-wide (the default) needs org admin, and a 
         };
       }
       const result = await client.patch(
-        `/organizations/${organizationId}/notification-channels/${channelId}`,
+        path`/organizations/${organizationId}/notification-channels/${channelId}`,
         body
       );
       return json(result);
@@ -113,23 +110,18 @@ A destination belongs to a scope: org-wide (the default) needs org admin, and a 
     'list_notification_rules',
     {
       description: `List the notification rules that route events to channels. Pass a scope to see everything that applies there, including rules inherited from the project and the organization (each is flagged with "inherited"). Omit the scope to list every rule in the org.`,
-      annotations: { readOnlyHint: true },
       inputSchema: {
-        organizationId: z.string().describe('The organization UUID'),
+        organizationId: z.guid().describe('The organization UUID'),
         scopeType: z
           .enum(SCOPE_VALUES)
           .optional()
           .describe('org, project, deployment, database, or job'),
-        scopeId: z.string().optional().describe('The UUID of the scope (omit for scopeType=org)')
+        scopeId: z.guid().optional().describe('The UUID of the scope (omit for scopeType=org)')
       }
     },
     async ({ organizationId, scopeType, scopeId }) => {
-      const params = new URLSearchParams();
-      if (scopeType) params.set('scopeType', scopeType);
-      if (scopeId) params.set('scopeId', scopeId);
-      const query = params.toString();
       const result = await client.get(
-        `/organizations/${organizationId}/notification-rules${query ? `?${query}` : ''}`
+        path`/organizations/${organizationId}/notification-rules` + query({ scopeType, scopeId })
       );
       return json(result);
     }
@@ -141,12 +133,11 @@ A destination belongs to a scope: org-wide (the default) needs org admin, and a 
       description: `Route events to a channel at a given scope. Rules add up as you go outwards, so a deployment rule fires alongside the project and org rules that also match.
 Use mode="mute" to silence a specific channel for this scope: a mute at a narrower scope beats a deliver at a broader one, which is how you quieten one noisy deployment without touching the org-wide rule.
 Events must be possible at the scope (a database cannot emit deploy events). Org-scope rules need org admin; narrower scopes need admin on the owning project.`,
-      annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
-        organizationId: z.string().describe('The organization UUID'),
-        channelId: z.string().describe('The destination channel UUID'),
+        organizationId: z.guid().describe('The organization UUID'),
+        channelId: z.guid().describe('The destination channel UUID'),
         scopeType: z.enum(SCOPE_VALUES).describe('org, project, deployment, database, or job'),
-        scopeId: z.string().optional().describe('The UUID of the scope (omit for scopeType=org)'),
+        scopeId: z.guid().optional().describe('The UUID of the scope (omit for scopeType=org)'),
         events: z
           .array(z.string())
           .min(1)
@@ -155,7 +146,7 @@ Events must be possible at the scope (a database cannot emit deploy events). Org
       }
     },
     async ({ organizationId, channelId, scopeType, scopeId, events, mode }) => {
-      const result = await client.post(`/organizations/${organizationId}/notification-rules`, {
+      const result = await client.post(path`/organizations/${organizationId}/notification-rules`, {
         channelId,
         scopeType,
         scopeId: scopeId ?? null,
@@ -170,10 +161,9 @@ Events must be possible at the scope (a database cannot emit deploy events). Org
     'update_notification_rule',
     {
       description: `Change a rule's events, mode, or enabled state. The scope and channel are fixed at creation; delete and recreate to move a rule.`,
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
-        organizationId: z.string().describe('The organization UUID'),
-        ruleId: z.string().describe('The notification rule UUID'),
+        organizationId: z.guid().describe('The organization UUID'),
+        ruleId: z.guid().describe('The notification rule UUID'),
         events: z
           .array(z.string())
           .min(1)
@@ -189,7 +179,7 @@ Events must be possible at the scope (a database cannot emit deploy events). Org
       if (mode !== undefined) body.mode = mode;
       if (enabled !== undefined) body.enabled = enabled;
       const result = await client.patch(
-        `/organizations/${organizationId}/notification-rules/${ruleId}`,
+        path`/organizations/${organizationId}/notification-rules/${ruleId}`,
         body
       );
       return json(result);
@@ -200,15 +190,14 @@ Events must be possible at the scope (a database cannot emit deploy events). Org
     'delete_notification_rule',
     {
       description: `Delete a notification rule. The channel it pointed at is left alone.`,
-      annotations: { readOnlyHint: false, destructiveHint: true },
       inputSchema: {
-        organizationId: z.string().describe('The organization UUID'),
-        ruleId: z.string().describe('The notification rule UUID')
+        organizationId: z.guid().describe('The organization UUID'),
+        ruleId: z.guid().describe('The notification rule UUID')
       }
     },
     async ({ organizationId, ruleId }) => {
       const result = await client.delete(
-        `/organizations/${organizationId}/notification-rules/${ruleId}`
+        path`/organizations/${organizationId}/notification-rules/${ruleId}`
       );
       return json(result);
     }
@@ -218,15 +207,14 @@ Events must be possible at the scope (a database cannot emit deploy events). Org
     'test_notification_channel',
     {
       description: `Send a test notification through a channel to verify it is wired up correctly. Requires admin on the scope that owns the channel: org admin for org-wide destinations, project admin for one an app owns.`,
-      annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
-        organizationId: z.string().describe('The organization UUID'),
-        channelId: z.string().describe('The notification channel UUID')
+        organizationId: z.guid().describe('The organization UUID'),
+        channelId: z.guid().describe('The notification channel UUID')
       }
     },
     async ({ organizationId, channelId }) => {
       const result = await client.post(
-        `/organizations/${organizationId}/notification-channels/${channelId}/test`,
+        path`/organizations/${organizationId}/notification-channels/${channelId}/test`,
         {}
       );
       return json(result);
@@ -237,10 +225,9 @@ Events must be possible at the scope (a database cannot emit deploy events). Org
     'replay_notification_channel',
     {
       description: `Re-send everything a channel's rules would have matched over the last N hours. Use this after fixing a webhook that was down: the events were stored even though delivery failed. Only events the channel's own rules match are replayed. Requires admin on the scope that owns the channel: org admin for org-wide destinations, project admin for one an app owns.`,
-      annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
-        organizationId: z.string().describe('The organization UUID'),
-        channelId: z.string().describe('The notification channel UUID'),
+        organizationId: z.guid().describe('The organization UUID'),
+        channelId: z.guid().describe('The notification channel UUID'),
         sinceHours: z
           .number()
           .min(1)
@@ -251,7 +238,7 @@ Events must be possible at the scope (a database cannot emit deploy events). Org
     },
     async ({ organizationId, channelId, sinceHours }) => {
       const result = await client.post(
-        `/organizations/${organizationId}/notification-channels/${channelId}/replay`,
+        path`/organizations/${organizationId}/notification-channels/${channelId}/replay`,
         { sinceHours: sinceHours ?? 24 }
       );
       return json(result);
@@ -262,17 +249,17 @@ Events must be possible at the scope (a database cannot emit deploy events). Org
     'list_notification_deliveries',
     {
       description: `List recent delivery attempts for a notification channel, including attempt count, HTTP status, errors, when the next retry is due, and whether messages were coalesced into a digest. This is the place to look when a channel isn't receiving alerts. Requires admin on the scope that owns the channel: org admin for org-wide destinations, project admin for one an app owns.`,
-      annotations: { readOnlyHint: true },
       inputSchema: {
-        organizationId: z.string().describe('The organization UUID'),
-        channelId: z.string().describe('The notification channel UUID')
+        organizationId: z.guid().describe('The organization UUID'),
+        channelId: z.guid().describe('The notification channel UUID'),
+        ...pageInput
       }
     },
-    async ({ organizationId, channelId }) => {
+    async ({ organizationId, channelId, limit, cursor }) => {
       const result = await client.get(
-        `/organizations/${organizationId}/notification-channels/${channelId}/deliveries`
+        path`/organizations/${organizationId}/notification-channels/${channelId}/deliveries`
       );
-      return json(result);
+      return json(Array.isArray(result) ? paginate(result, { limit, cursor }) : result);
     }
   );
 }

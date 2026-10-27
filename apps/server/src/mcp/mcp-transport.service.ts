@@ -7,80 +7,98 @@ import {
   type McpHttpHandler
 } from '@modelcontextprotocol/server';
 import { toNodeHandler, type NodeMcpRequestHandler } from '@modelcontextprotocol/node';
-import { createOrchardMcpServer } from './server';
+import { createOrchardMcpServer, type McpMode } from './server';
 import { McpOAuthService } from './mcp-oauth.service';
+import type { McpScope } from './client';
+import { DEFAULT_MCP_SCOPE, mcpScopeClaim } from './mcp-scopes';
 
-// Identity we thread from the validated bearer to the per-request server via
-// AuthInfo.extra (pass-through — the handler never reads headers itself).
 interface McpAuthExtra {
   sub: string;
   email?: string;
   externalAuthId?: string;
   sessionId: string;
+  scope: McpScope;
   apiToken?: boolean;
+}
+
+function toolsetsFrom(request?: Request): string | null {
+  if (!request) return null;
+  try {
+    return new URL(request.url).searchParams.get('toolsets');
+  } catch {
+    return null;
+  }
 }
 
 @Injectable()
 export class McpTransportService implements OnModuleDestroy {
-  // 2026-07-28 stateless serving. createMcpHandler builds a fresh McpServer per
-  // request via the factory and holds nothing between requests: no session map,
-  // no Mcp-Session-Id, so restarts and multiple replicas can't strand a
-  // client. A 2025-era client (today's Claude) is still served through the
-  // handler's built-in legacy fallback, so this is drop-in for existing
-  // connections.
-  private readonly handler: McpHttpHandler = createMcpHandler((ctx) => this.buildServer(ctx));
+  private readonly handlers: Record<McpMode, McpHttpHandler> = {
+    normal: createMcpHandler((ctx) => this.buildServer(ctx, 'normal')),
+    compact: createMcpHandler((ctx) => this.buildServer(ctx, 'compact'))
+  };
 
-  // The handler does no auth of its own; we gate every request with our own
-  // bearer validation (which enforces session revocation) and pass the result
-  // through as AuthInfo. toNodeHandler bridges Express <-> web Request/Response,
-  // including SSE streaming.
-  private readonly nodeHandler: NodeMcpRequestHandler = toNodeHandler({
-    fetch: (request, options) => this.authenticateAndDispatch(request, options)
-  });
+  private readonly nodeHandlers: Record<McpMode, NodeMcpRequestHandler> = {
+    normal: toNodeHandler({
+      fetch: (request, options) => this.authenticateAndDispatch('normal', request, options)
+    }),
+    compact: toNodeHandler({
+      fetch: (request, options) => this.authenticateAndDispatch('compact', request, options)
+    })
+  };
 
   constructor(private readonly oauth: McpOAuthService) {}
 
-  async handle(req: ExpressRequest, res: ExpressResponse): Promise<void> {
-    await this.nodeHandler(req, res, req.body);
+  async handle(req: ExpressRequest, res: ExpressResponse, mode: McpMode = 'normal'): Promise<void> {
+    await this.nodeHandlers[mode](req, res, req.body);
   }
 
   async onModuleDestroy() {
-    await this.handler.close();
+    await Promise.all(Object.values(this.handlers).map((handler) => handler.close()));
   }
 
-  private buildServer(ctx: McpRequestContext) {
-    // authInfo is always present: authenticateAndDispatch refuses the request
-    // before calling handler.fetch when the bearer is missing or invalid.
+  private buildServer(ctx: McpRequestContext, mode: McpMode) {
     const extra = (ctx.authInfo?.extra ?? {}) as Partial<McpAuthExtra>;
+    const scope = extra.scope ?? DEFAULT_MCP_SCOPE;
+    const toolsets = toolsetsFrom(ctx.requestInfo);
     if (extra.apiToken) {
-      return createOrchardMcpServer(ctx.authInfo?.token);
+      return createOrchardMcpServer({ token: ctx.authInfo?.token, scope, toolsets, mode });
     }
-    return createOrchardMcpServer(ctx.authInfo?.token, {
-      sub: extra.sub as string,
-      email: extra.email,
-      externalAuthId: extra.externalAuthId,
-      sessionId: extra.sessionId as string
+    return createOrchardMcpServer({
+      token: ctx.authInfo?.token,
+      actingUser: {
+        sub: extra.sub as string,
+        email: extra.email,
+        externalAuthId: extra.externalAuthId,
+        sessionId: extra.sessionId as string,
+        scope
+      },
+      scope,
+      toolsets,
+      mode
     });
   }
 
   private async authenticateAndDispatch(
+    mode: McpMode,
     request: Request,
     options?: { parsedBody?: unknown }
   ): Promise<Response> {
-    // M-6: bind every dispatch to the bearer's `sub`. The per-request server
-    // built for this call holds an OrchardClient minted with this caller's
-    // identity, so validating here (and caching nothing) is what keeps one
-    // user's tool calls from ever running as another.
+    const handler = this.handlers[mode];
     const authHeader = request.headers.get('authorization') ?? undefined;
     const apiToken = await this.oauth.validateApiToken(authHeader);
     if (apiToken) {
-      return this.handler.fetch(request, {
+      return handler.fetch(request, {
         ...options,
         authInfo: {
           token: apiToken.token,
           clientId: '',
-          scopes: ['mcp:access'],
-          extra: { sub: apiToken.sub, sessionId: '', apiToken: true } satisfies McpAuthExtra
+          scopes: [mcpScopeClaim(apiToken.scope)],
+          extra: {
+            sub: apiToken.sub,
+            sessionId: '',
+            scope: apiToken.scope,
+            apiToken: true
+          } satisfies McpAuthExtra
         }
       });
     }
@@ -91,7 +109,7 @@ export class McpTransportService implements OnModuleDestroy {
         status: 401,
         headers: {
           'Content-Type': 'application/json',
-          'WWW-Authenticate': `Bearer resource_metadata="${this.oauth.resourceMetadataUrl}", scope="mcp:access"`
+          'WWW-Authenticate': `Bearer resource_metadata="${this.oauth.resourceMetadataUrl}", scope="${mcpScopeClaim(DEFAULT_MCP_SCOPE)}"`
         }
       });
     }
@@ -99,15 +117,16 @@ export class McpTransportService implements OnModuleDestroy {
     const authInfo: AuthInfo = {
       token: auth.token,
       clientId: '',
-      scopes: ['mcp:access'],
+      scopes: [mcpScopeClaim(auth.scope)],
       extra: {
         sub: auth.sub,
         email: auth.email,
         externalAuthId: auth.externalAuthId,
-        sessionId: auth.sessionId
+        sessionId: auth.sessionId,
+        scope: auth.scope
       } satisfies McpAuthExtra
     };
 
-    return this.handler.fetch(request, { ...options, authInfo });
+    return handler.fetch(request, { ...options, authInfo });
   }
 }

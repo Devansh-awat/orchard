@@ -33,6 +33,21 @@ export function opencodeAuthJson(claudeToken: string | null): string {
 
 export const OPENCODE_AUTH_PLUGIN = '@cortexkit/opencode-anthropic-auth@1.23.0';
 
+export const SANDBOX_MCP_TOOLSETS = 'default,databases,greenhouse';
+
+export function sandboxMcpUrl(url: string): string {
+  if (!url) return url;
+  try {
+    const parsed = new URL(url);
+    if (!parsed.searchParams.has('toolsets')) {
+      parsed.searchParams.set('toolsets', SANDBOX_MCP_TOOLSETS);
+    }
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
 export function opencodeConfigJson(
   mcpToken: string | null,
   opts: { mcpUrl?: string | null; requireHttpsMcp?: boolean } = {}
@@ -44,7 +59,7 @@ export function opencodeConfigJson(
     config.mcp = {
       orchard: {
         type: 'remote',
-        url,
+        url: sandboxMcpUrl(url),
         headers: { Authorization: `Bearer ${mcpToken}` },
         enabled: true
       }

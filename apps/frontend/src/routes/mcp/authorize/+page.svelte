@@ -13,6 +13,20 @@
 	let mcpServer = $derived($page.url.searchParams.get('mcp_server') || '');
 	let clientName = $derived($page.url.searchParams.get('client_name') || 'An application');
 	let redirectUri = $derived($page.url.searchParams.get('redirect_uri') || '');
+	let requestedScope = $derived.by((): 'read' | 'deploy' | 'exec' => {
+		const raw = ($page.url.searchParams.get('scope') || '').trim().toLowerCase();
+		if (raw === 'mcp:read') return 'read';
+		if (raw === 'mcp:exec') return 'exec';
+		return 'deploy';
+	});
+	let allowExec = $state(false);
+	let grantedScope = $derived(
+		requestedScope === 'read'
+			? 'mcp:read'
+			: requestedScope === 'exec' && allowExec
+				? 'mcp:exec'
+				: 'mcp:deploy'
+	);
 	let redirectHost = $derived.by(() => {
 		if (!redirectUri) return '';
 		try {
@@ -125,7 +139,8 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					mcp_state: mcpState,
-					session_token: token
+					session_token: token,
+					scope: grantedScope
 				})
 			});
 
@@ -271,6 +286,7 @@
 		if (browser) {
 			sessionStorage.setItem('mcp_authorize_state', mcpState);
 			sessionStorage.setItem('mcp_authorize_server', mcpServer);
+			sessionStorage.setItem('mcp_authorize_exec', allowExec ? '1' : '0');
 			user.signIn();
 		}
 	}
@@ -280,10 +296,13 @@
 
 		const savedState = sessionStorage.getItem('mcp_authorize_state');
 		const savedServer = sessionStorage.getItem('mcp_authorize_server');
+		const savedExec = sessionStorage.getItem('mcp_authorize_exec');
 
 		if ($isSignedIn && savedState && savedServer) {
 			sessionStorage.removeItem('mcp_authorize_state');
 			sessionStorage.removeItem('mcp_authorize_server');
+			sessionStorage.removeItem('mcp_authorize_exec');
+			allowExec = savedExec === '1';
 
 			if (mcpState && mcpServer && savedServer === mcpServer && mcpServerAllowed(savedServer)) {
 				await completeAuthorization();
@@ -317,8 +336,32 @@
 				<strong>{clientName}</strong> is requesting access to your Orchard account.
 			</p>
 
+			<div class="consent-details" {@attach motionStagger({ index: 3 })}>
+				<p class="consent-label">If you approve, it will be able to:</p>
+				<ul class="consent-grants">
+					<li>View your projects, deployments, and logs</li>
+					{#if requestedScope !== 'read'}
+						<li>Change and deploy your projects</li>
+					{/if}
+				</ul>
+				{#if requestedScope === 'exec'}
+					<label class="consent-exec">
+						<input type="checkbox" bind:checked={allowExec} />
+						<span>
+							<span class="consent-exec-label">
+								Also allow running commands inside containers
+							</span>
+							<span class="consent-exec-hint">
+								{clientName} asked for this too. Leave it off unless you want it to run shell commands
+								in your running apps.
+							</span>
+						</span>
+					</label>
+				{/if}
+			</div>
+
 			{#if redirectUri}
-				<div class="consent-details" {@attach motionStagger({ index: 3 })}>
+				<div class="consent-details" {@attach motionStagger({ index: 4 })}>
 					<p class="consent-label">After you approve, your authorization code will be sent to:</p>
 					<p class="consent-host">{redirectHost || redirectUri}</p>
 					<p class="consent-uri">{redirectUri}</p>
@@ -329,7 +372,7 @@
 				</div>
 			{/if}
 
-			<div class="consent-action" {@attach motionStagger({ index: 4 })}>
+			<div class="consent-action" {@attach motionStagger({ index: 5 })}>
 				{#if $isSignedIn}
 					<p class="consent-identity">Signed in as <strong>{$user?.email}</strong></p>
 					<Button
@@ -497,6 +540,61 @@
 		background: var(--bg-surface);
 		border: 1px solid var(--border-default);
 		text-align: left;
+	}
+
+	.consent-details + .consent-details {
+		margin-top: 0.75rem;
+	}
+
+	.consent-grants {
+		list-style: disc;
+		margin: 0;
+		padding-left: 1.25rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		color: var(--text-default);
+	}
+
+	.consent-exec {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.625rem;
+		margin-top: 0.75rem;
+		padding-top: 0.75rem;
+		border-top: 1px solid var(--border-default);
+		cursor: pointer;
+	}
+
+	.consent-exec input {
+		flex-shrink: 0;
+		width: 1rem;
+		height: 1rem;
+		margin: 0.125rem 0 0;
+		accent-color: var(--accent);
+		cursor: pointer;
+	}
+
+	.consent-exec > span {
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+		min-width: 0;
+	}
+
+	.consent-exec-label {
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
+		color: var(--text-default);
+	}
+
+	.consent-exec-hint {
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-muted);
 	}
 
 	.consent-label {

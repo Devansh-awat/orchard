@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod4';
-import { OrchardClient } from '../client';
+import { OrchardClient, path } from '../client';
 import { json } from './reply';
 
 interface SharedVar {
@@ -18,13 +18,12 @@ export function registerEnvironmentTools(server: McpServer, client: OrchardClien
       description: `List a project's environments — production, staging, preview and whatever else it has.
 
 Each environment is its own Kubernetes namespace with its own deployments, databases, ingresses and shared variables, so an environment id is what you pass to \`create_deployment\` / \`deploy_from_github\` to land an app somewhere other than production. Every project has at least one, marked \`isDefault\`.`,
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        projectId: z.string().describe('The project UUID')
+        projectId: z.guid().describe('The project UUID')
       }
     },
     async ({ projectId }) => {
-      const environments = await client.get(`/projects/${projectId}/environments`);
+      const environments = await client.get(path`/projects/${projectId}/environments`);
       return json(environments);
     }
   );
@@ -35,9 +34,8 @@ Each environment is its own Kubernetes namespace with its own deployments, datab
       description: `Create a new environment in a project, e.g. staging or preview.
 
 Provisions a fresh namespace. Nothing is copied from production: the new environment starts with no deployments, no databases and no shared variables.`,
-      annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
-        projectId: z.string().describe('The project UUID'),
+        projectId: z.guid().describe('The project UUID'),
         name: z.string().describe('Environment name, e.g. Staging'),
         slug: z
           .string()
@@ -46,7 +44,7 @@ Provisions a fresh namespace. Nothing is copied from production: the new environ
       }
     },
     async ({ projectId, name, slug }) => {
-      const environment = await client.post(`/projects/${projectId}/environments`, {
+      const environment = await client.post(path`/projects/${projectId}/environments`, {
         name,
         ...(slug && { slug })
       });
@@ -59,14 +57,13 @@ Provisions a fresh namespace. Nothing is copied from production: the new environ
     {
       description:
         'Rename an environment. The slug and namespace are frozen, so nothing that resolves by slug moves.',
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
-        environmentId: z.string().describe('The environment UUID (from list_environments)'),
+        environmentId: z.guid().describe('The environment UUID (from list_environments)'),
         name: z.string().describe('The new name')
       }
     },
     async ({ environmentId, name }) => {
-      const result = await client.patch(`/environments/${environmentId}`, { name });
+      const result = await client.patch(path`/environments/${environmentId}`, { name });
       return json(result);
     }
   );
@@ -76,13 +73,12 @@ Provisions a fresh namespace. Nothing is copied from production: the new environ
     {
       description:
         'Make an environment the project default — the one resources land in when a create call omits environmentId. Does not move anything that already exists.',
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
-        environmentId: z.string().describe('The environment UUID (from list_environments)')
+        environmentId: z.guid().describe('The environment UUID (from list_environments)')
       }
     },
     async ({ environmentId }) => {
-      const result = await client.post(`/environments/${environmentId}/set-default`);
+      const result = await client.post(path`/environments/${environmentId}/set-default`);
       return json(result);
     }
   );
@@ -97,13 +93,12 @@ Provisions a fresh namespace. Nothing is copied from production: the new environ
 **They are not injected automatically.** A deployment opts in by setting one of its own env vars to \`\${{shared.KEY}}\` (via \`add_env_vars\`); the reference is expanded when the pod spec and build args are built. Referencing a secret shared var makes the referencing var secret too, so it still routes through the Kubernetes Secret.
 
 Secrets come back here with a null value — they are write-only.`,
-      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        environmentId: z.string().describe('The environment UUID (from list_environments)')
+        environmentId: z.guid().describe('The environment UUID (from list_environments)')
       }
     },
     async ({ environmentId }) => {
-      const vars = await client.get(`/environments/${environmentId}/shared-vars`);
+      const vars = await client.get(path`/environments/${environmentId}/shared-vars`);
       return json(vars);
     }
   );
@@ -116,9 +111,8 @@ Secrets come back here with a null value — they are write-only.`,
 Deployments that reference a changed key via \`\${{shared.KEY}}\` are restarted; the rest are left running. Defining a var here does nothing on its own — point a deployment at it with \`add_env_vars\` and the value \`\${{shared.KEY}}\`.
 
 Related: \`delete_shared_env_vars\` to remove keys, \`set_shared_env_vars\` only when you mean to replace the whole set.`,
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
-        environmentId: z.string().describe('The environment UUID (from list_environments)'),
+        environmentId: z.guid().describe('The environment UUID (from list_environments)'),
         vars: z
           .array(
             z.object({
@@ -137,7 +131,9 @@ Related: \`delete_shared_env_vars\` to remove keys, \`set_shared_env_vars\` only
       }
     },
     async ({ environmentId, vars }) => {
-      const current: SharedVar[] = await client.get(`/environments/${environmentId}/shared-vars`);
+      const current: SharedVar[] = await client.get(
+        path`/environments/${environmentId}/shared-vars`
+      );
       // Same merge shape as add_env_vars: a secret reads back valueless, so it
       // has to be carried through as null-with-flag or the replace would either
       // blank it or ask the server to republish it in the clear.
@@ -149,7 +145,7 @@ Related: \`delete_shared_env_vars\` to remove keys, \`set_shared_env_vars\` only
       const incoming = new Set(vars.map((v) => v.key));
       const merged = [...existing.filter((v) => !incoming.has(v.key)), ...vars];
 
-      const result = await client.put(`/environments/${environmentId}/shared-vars`, {
+      const result = await client.put(path`/environments/${environmentId}/shared-vars`, {
         vars: merged
       });
       return json(result);
@@ -162,9 +158,8 @@ Related: \`delete_shared_env_vars\` to remove keys, \`set_shared_env_vars\` only
       description: `Replace an environment's ENTIRE shared variable set with the list you pass. Anything you leave out is deleted, and any deployment referencing it via \`\${{shared.KEY}}\` resolves it to an empty string.
 
 Use \`add_shared_env_vars\` to change a few, \`delete_shared_env_vars\` to remove a few. Secrets read back valueless, so pass \`value: null\` with \`secret: true\` to keep one through a replace.`,
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       inputSchema: {
-        environmentId: z.string().describe('The environment UUID (from list_environments)'),
+        environmentId: z.guid().describe('The environment UUID (from list_environments)'),
         vars: z
           .array(
             z.object({
@@ -183,7 +178,7 @@ Use \`add_shared_env_vars\` to change a few, \`delete_shared_env_vars\` to remov
       }
     },
     async ({ environmentId, vars }) => {
-      const result = await client.put(`/environments/${environmentId}/shared-vars`, { vars });
+      const result = await client.put(path`/environments/${environmentId}/shared-vars`, { vars });
       return json(result);
     }
   );
@@ -193,14 +188,15 @@ Use \`add_shared_env_vars\` to change a few, \`delete_shared_env_vars\` to remov
     {
       description:
         'Remove specific shared variables from an environment by key name, leaving the rest alone. Any deployment whose env references a removed key via `${{shared.KEY}}` resolves it to an empty string and restarts, so check `get_deployment.envVars` for references before removing one.',
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       inputSchema: {
-        environmentId: z.string().describe('The environment UUID (from list_environments)'),
+        environmentId: z.guid().describe('The environment UUID (from list_environments)'),
         keys: z.array(z.string()).describe('Variable names to delete')
       }
     },
     async ({ environmentId, keys }) => {
-      const current: SharedVar[] = await client.get(`/environments/${environmentId}/shared-vars`);
+      const current: SharedVar[] = await client.get(
+        path`/environments/${environmentId}/shared-vars`
+      );
       const existing = (current || []).map((v) => ({
         key: v.key,
         value: v.value ?? null,
@@ -212,7 +208,7 @@ Use \`add_shared_env_vars\` to change a few, \`delete_shared_env_vars\` to remov
       const removed = keys.filter((k) => existing.some((v) => v.key === k));
       const notFound = keys.filter((k) => !existing.some((v) => v.key === k));
 
-      const result = await client.put(`/environments/${environmentId}/shared-vars`, {
+      const result = await client.put(path`/environments/${environmentId}/shared-vars`, {
         vars: kept
       });
       return json({

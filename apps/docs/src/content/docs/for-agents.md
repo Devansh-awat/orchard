@@ -70,3 +70,26 @@ its own hostname, `mcp.<your orchard domain>`, and is documented under
 
 So: point your agent at Orchard's MCP to _operate_ the platform, and at
 `llms.txt` to _read_ about it.
+
+## Driving the API directly
+
+An agent that needs more than the MCP tools cover has more entry points,
+all described in [Code mode for agents](/agents-code-mode/):
+
+| Entry point                       | For                                                              |
+| --------------------------------- | ---------------------------------------------------------------- |
+| `GET /apiv1/agent-spec.json`      | A trimmed, searchable spec of every operation an agent can call  |
+| `GET /apiv1/openapi.json`         | The complete OpenAPI document                                    |
+| `orchard api search` / `describe` | The same spec from a shell, cached, with calls by `operationId`  |
+| `https://mcp.<domain>/compact`    | The whole API through three MCP tools, for clients with no shell |
+
+To find out whether a deploy worked, ask
+`GET /apiv1/deployments/:id/rollout?wait=1`. It answers with the phase, the
+URL when it is live, and the build error or crashing pod with a log tail when
+it is not.
+
+Agents retry. Send an `Idempotency-Key` header on create, deploy, rebuild,
+restart, rollback, database create and job run calls, and a retry with the
+same key and body replays the first response for 24 hours instead of doing the
+work twice. `POST /apiv1/deployments/:id/rollback` with no history id rolls
+back to the previous image.

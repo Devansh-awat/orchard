@@ -15,7 +15,7 @@ brew install --cask leafdtk/tap/orchard-cli
 ```
 
 Every command accepts `-o json` for machine-readable output, and `--org` / `--env` to
-override the saved context. **377 commands** are available.
+override the saved context. **381 commands** are available.
 
 ## alert
 
@@ -108,15 +108,42 @@ orchard update <ruleId>
 
 ### `orchard api`
 
-Make a raw authenticated request to the Orchard API
+Call any Orchard API operation, or search the API
 
 ```bash
-orchard api <METHOD> <path>
+orchard api <operationId | METHOD path>
 ```
 
 | Flag | Type | Default | Description |
 | --- | --- | --- | --- |
-| `-d`, `--data` | string |  | request body as JSON (use - to read from stdin) |
+| `-d`, `--data` | string |  | request body: JSON, @file, or - to read stdin |
+| `-p`, `--path-param` | stringArray | `[]` | path parameter as name=value (repeatable) |
+| `-q`, `--query` | stringArray | `[]` | query parameter as name=value (repeatable) |
+
+### `orchard api describe`
+
+Show an operation's params, body and response schema
+
+```bash
+orchard describe <operationId | METHOD path>
+```
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--refresh` | bool | `false` | revalidate the cached spec first |
+
+### `orchard api search`
+
+Find API operations by keywords
+
+```bash
+orchard search <query...>
+```
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--limit` | int | `10` | maximum results |
+| `--refresh` | bool | `false` | revalidate the cached spec first |
 
 ## audit
 
@@ -616,7 +643,7 @@ orchard set <id>
 
 ### `orchard db connection`
 
-Show connection details and credentials
+Show connection details and credentials (recorded in the audit log)
 
 ```bash
 orchard connection <id>
@@ -1358,10 +1385,10 @@ orchard restart <id>
 
 ### `orchard deploy rollback`
 
-Roll a deployment back to a previous image (see `deploy history`)
+Roll a deployment back to a previous image (default: the previous release)
 
 ```bash
-orchard rollback <id> <historyId>
+orchard rollback <id> [historyId]
 ```
 
 | Flag | Type | Default | Description |
@@ -1393,6 +1420,21 @@ orchard start <id>
 | Flag | Type | Default | Description |
 | --- | --- | --- | --- |
 | `--build` | bool | `false` | rebuild from source before starting |
+| `--timeout` | duration | `10m0s` | give up waiting after this long (exit 8) |
+| `--wait` | bool | `false` | block until the operation reaches a terminal state |
+
+### `orchard deploy status`
+
+Show whether a deployment is live, and if not, why
+
+```bash
+orchard status <id>
+```
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--release` | string |  | pin the evaluation to this release id |
+| `--since` | string |  | only count changes observed after this server timestamp (ISO) |
 | `--timeout` | duration | `10m0s` | give up waiting after this long (exit 8) |
 | `--wait` | bool | `false` | block until the operation reaches a terminal state |
 
@@ -2229,6 +2271,22 @@ orchard link
 | --- | --- | --- | --- |
 | `--no-gitignore` | bool | `false` | skip adding .orchard/ to the repo .gitignore |
 | `--status` | bool | `false` | show the link in effect for this directory |
+
+## logs
+
+### `orchard logs`
+
+Fetch or follow a deployment's logs (shortcut for `deploy logs`)
+
+```bash
+orchard logs <deploymentId>
+```
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--build` | bool | `false` | fetch build logs instead of runtime pod logs |
+| `-f`, `--follow` | bool | `false` | keep polling for new log lines until interrupted |
+| `--tail` | int | `100` | lines of recent logs per pod |
 
 ## member
 
@@ -4044,6 +4102,8 @@ orchard up [dir]
 | `--railpack` | bool | `false` | force a Railpack build even when a Dockerfile exists |
 | `--root` | string |  | directory of the app inside the repo (monorepos) |
 | `--start-cmd` | string |  | override the detected start command |
+| `--timeout` | duration | `10m0s` | give up waiting after this long (exit 8) |
+| `--wait` | bool | `false` | block until the deploy is live (default: on when stdout is not a terminal) |
 
 ## use
 

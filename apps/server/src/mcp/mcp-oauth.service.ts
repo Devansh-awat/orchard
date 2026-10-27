@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { randomBytes, createHash } from 'crypto';
 import { SignJWT, jwtVerify } from 'jose';
 import {
@@ -8,7 +8,23 @@ import {
 } from '../auth/sessions.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { hashApiToken } from '../auth/api-tokens.service';
-import { checkRefreshGeneration, oauthCodeKey } from './mcp-oauth.helpers';
+import {
+  checkRefreshGeneration,
+  hashClientSecret,
+  isHashedClientSecret,
+  oauthCodeKey,
+  verifyClientSecret
+} from './mcp-oauth.helpers';
+import { SecretCryptoService } from '../crypto/secret-crypto.service';
+import type { McpScope } from './client';
+import {
+  MCP_SCOPES_SUPPORTED,
+  mcpScopeClaim,
+  grantedScope,
+  parseRequestedScope,
+  scopeFromApiTokenScopes,
+  scopeFromClaim
+} from './mcp-scopes';
 
 interface OAuthClient {
   clientId: string;
@@ -33,6 +49,7 @@ interface McpTokenClaims {
   externalAuthId?: string;
   authMethod?: string;
   sessionId: string;
+  scope: McpScope;
 }
 
 const ACCESS_TOKEN_TTL = '1d';
@@ -47,8 +64,23 @@ export class McpOAuthService {
 
   constructor(
     private readonly sessions: SessionsService,
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
+    @Optional() private readonly crypto?: SecretCryptoService
   ) {}
+
+  private seal(value: string): string {
+    if (!value || !this.crypto?.enabled) return value;
+    return this.crypto.seal(value);
+  }
+
+  private unseal(value: string): string {
+    if (!value || !this.crypto) return value;
+    try {
+      return this.crypto.open(value);
+    } catch {
+      return '';
+    }
+  }
 
   // Auth codes and pending-authorize state live in Postgres (mcp_oauth_codes)
   // rather than process memory so the `/authorize` -> `/authorize/complete` ->
@@ -64,7 +96,7 @@ export class McpOAuthService {
       redirectUri: row.redirectUri,
       codeChallenge: row.codeChallenge ?? undefined,
       codeChallengeMethod: row.codeChallengeMethod ?? undefined,
-      orchardToken: row.orchardToken,
+      orchardToken: this.unseal(row.orchardToken),
       expiresAt: row.expiresAt.getTime()
     };
   }
@@ -75,7 +107,7 @@ export class McpOAuthService {
       redirectUri: entry.redirectUri,
       codeChallenge: entry.codeChallenge ?? null,
       codeChallengeMethod: entry.codeChallengeMethod ?? null,
-      orchardToken: entry.orchardToken,
+      orchardToken: this.seal(entry.orchardToken),
       expiresAt: new Date(entry.expiresAt)
     };
     const key = oauthCodeKey(id);
@@ -135,7 +167,7 @@ export class McpOAuthService {
     return {
       resource: this.baseUrl,
       authorization_servers: [this.baseUrl],
-      scopes_supported: ['mcp:access'],
+      scopes_supported: MCP_SCOPES_SUPPORTED,
       bearer_methods_supported: ['header']
     };
   }
@@ -150,7 +182,7 @@ export class McpOAuthService {
       grant_types_supported: ['authorization_code', 'refresh_token'],
       token_endpoint_auth_methods_supported: ['none', 'client_secret_post'],
       code_challenge_methods_supported: ['S256'],
-      scopes_supported: ['mcp:access']
+      scopes_supported: MCP_SCOPES_SUPPORTED
     };
   }
 
@@ -210,17 +242,18 @@ export class McpOAuthService {
         : undefined;
 
     const name = body.client_name || 'MCP Client';
+    const storedSecret = clientSecret ? hashClientSecret(clientSecret) : undefined;
     await this.prisma.mcpOauthClient.create({
       data: {
         id: clientId,
-        clientSecret: clientSecret ?? null,
+        clientSecret: storedSecret ?? null,
         name,
         redirectUris
       }
     });
     this.oauthClients.set(clientId, {
       clientId,
-      clientSecret,
+      clientSecret: storedSecret,
       redirectUris,
       name
     });
@@ -245,6 +278,7 @@ export class McpOAuthService {
     state?: string;
     code_challenge?: string;
     code_challenge_method?: string;
+    scope?: string;
   }): Promise<{ error?: string; error_description?: string; redirectUrl?: string }> {
     console.error(
       `[MCP OAuth] Authorize: client_id=${query.client_id}, redirect_uri=${query.redirect_uri}, state=${query.state}`
@@ -301,6 +335,13 @@ export class McpOAuthService {
       orchardToken: '',
       expiresAt: Date.now() + 10 * 60 * 1000
     });
+    const scope = parseRequestedScope(query.scope);
+    await this.putCode(`scope_${mcpState}`, {
+      clientId: scope,
+      redirectUri: '',
+      orchardToken: '',
+      expiresAt: Date.now() + 10 * 60 * 1000
+    });
 
     // Redirect to Orchard frontend login page with MCP state. client_name and
     // redirect_uri are passed for the consent screen to display — the actual
@@ -311,7 +352,8 @@ export class McpOAuthService {
       mcp_state: mcpState,
       mcp_server: this.baseUrl,
       client_name: client.name,
-      redirect_uri: query.redirect_uri
+      redirect_uri: query.redirect_uri,
+      scope: mcpScopeClaim(scope)
     });
 
     return {
@@ -322,16 +364,23 @@ export class McpOAuthService {
   async completeAuthorization(body: {
     mcp_state: string;
     session_token: string;
+    scope?: unknown;
   }): Promise<{ error?: string; redirectUrl?: string }> {
     const { mcp_state, session_token } = body;
     console.error(`[MCP OAuth] Complete authorization: mcp_state=${mcp_state}`);
 
     const pending = await this.getCode(`pending_${mcp_state}`);
     const clientStateEntry = await this.getCode(`client_state_${mcp_state}`);
+    const scopeEntry = await this.getCode(`scope_${mcp_state}`);
 
     if (!pending || pending.expiresAt < Date.now()) {
       console.error(`[MCP OAuth] Complete auth failed: pending not found or expired`);
       return { error: 'Authorization request expired' };
+    }
+
+    const scope = grantedScope(scopeFromClaim(scopeEntry?.clientId), body.scope);
+    if (!scope) {
+      return { error: 'Invalid scope' };
     }
 
     // Validate the Orchard session token (same JWT_SECRET)
@@ -375,7 +424,8 @@ export class McpOAuthService {
       name: payload.name,
       externalAuthId: payload.externalAuthId ?? payload.hackClubId,
       authMethod: payload.authMethod,
-      sessionId: mcpSessionId
+      sessionId: mcpSessionId,
+      scope
     });
 
     const mcpAuthCode = randomBytes(32).toString('hex');
@@ -391,6 +441,7 @@ export class McpOAuthService {
 
     await this.deleteCode(`pending_${mcp_state}`);
     await this.deleteCode(`client_state_${mcp_state}`);
+    await this.deleteCode(`scope_${mcp_state}`);
 
     const redirectUrl = new URL(pending.redirectUri);
     redirectUrl.searchParams.set('code', mcpAuthCode);
@@ -412,7 +463,8 @@ export class McpOAuthService {
       name: claims.name,
       externalAuthId: claims.externalAuthId,
       authMethod: claims.authMethod || 'otp',
-      sessionId: claims.sessionId
+      sessionId: claims.sessionId,
+      scope: mcpScopeClaim(claims.scope)
     })
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject(claims.sub)
@@ -435,6 +487,7 @@ export class McpOAuthService {
       externalAuthId: claims.externalAuthId,
       authMethod: claims.authMethod || 'otp',
       sessionId: claims.sessionId,
+      scope: mcpScopeClaim(claims.scope),
       clientId,
       gen
     })
@@ -456,7 +509,7 @@ export class McpOAuthService {
       token_type: 'Bearer',
       expires_in: ACCESS_TOKEN_TTL_SECONDS,
       refresh_token: await this.mintRefreshToken(claims, clientId, gen),
-      scope: 'mcp:access'
+      scope: mcpScopeClaim(claims.scope)
     };
   }
 
@@ -467,13 +520,39 @@ export class McpOAuthService {
       name: payload.name,
       externalAuthId: payload.externalAuthId ?? payload.hackClubId,
       authMethod: payload.authMethod,
-      sessionId: payload.sessionId
+      sessionId: payload.sessionId,
+      scope: scopeFromClaim(payload.scope)
     };
+  }
+
+  private async clientSecretAccepted(clientId: string, secret?: string): Promise<boolean> {
+    const client = await this.getClient(clientId);
+    if (!client) return true;
+    return (await this.authenticateClient(clientId, secret)) !== null;
+  }
+
+  private async authenticateClient(
+    clientId: string,
+    presentedSecret: string | undefined
+  ): Promise<OAuthClient | null> {
+    const client = await this.getClient(clientId);
+    if (!client) return null;
+    if (!client.clientSecret) return client;
+    if (!verifyClientSecret(client.clientSecret, presentedSecret)) return null;
+    if (!isHashedClientSecret(client.clientSecret)) {
+      const upgraded = hashClientSecret(presentedSecret as string);
+      await this.prisma.mcpOauthClient
+        .update({ where: { id: clientId }, data: { clientSecret: upgraded } })
+        .then(() => this.oauthClients.set(clientId, { ...client, clientSecret: upgraded }))
+        .catch(() => {});
+    }
+    return client;
   }
 
   private async refreshAccessToken(body: {
     refresh_token?: string;
     client_id: string;
+    client_secret?: string;
   }): Promise<{ error?: string; error_description?: string; token_response?: any }> {
     if (!body.refresh_token) {
       return { error: 'invalid_request', error_description: 'refresh_token required' };
@@ -496,6 +575,10 @@ export class McpOAuthService {
     if (!body.client_id || payload.clientId !== body.client_id) {
       console.error('[MCP OAuth] Refresh failed: client_id mismatch');
       return { error: 'invalid_client' };
+    }
+    if (!(await this.clientSecretAccepted(body.client_id, body.client_secret))) {
+      console.error('[MCP OAuth] Refresh failed: client authentication failed');
+      return { error: 'invalid_client', error_description: 'client authentication failed' };
     }
     if (!payload.sessionId || !payload.sub) {
       return { error: 'invalid_grant', error_description: 'malformed refresh token' };
@@ -536,6 +619,7 @@ export class McpOAuthService {
     code?: string;
     redirect_uri?: string;
     client_id: string;
+    client_secret?: string;
     code_verifier?: string;
     refresh_token?: string;
   }): Promise<{ error?: string; error_description?: string; token_response?: any }> {
@@ -568,9 +652,9 @@ export class McpOAuthService {
     // Re-check both that the exchange request's redirect_uri matches the one
     // bound to the auth code AND that it is still in the client's registered
     // list (defense against the registered list being mutated after authorize).
-    const client = await this.getClient(body.client_id);
+    const client = await this.authenticateClient(body.client_id, body.client_secret);
     if (!client) {
-      return { error: 'invalid_client' };
+      return { error: 'invalid_client', error_description: 'client authentication failed' };
     }
     if (authCode.redirectUri && authCode.redirectUri !== body.redirect_uri) {
       console.error(
@@ -633,12 +717,14 @@ export class McpOAuthService {
     return result?.token ?? null;
   }
 
-  async validateApiToken(authHeader?: string): Promise<{ token: string; sub: string } | null> {
+  async validateApiToken(
+    authHeader?: string
+  ): Promise<{ token: string; sub: string; scope: McpScope } | null> {
     if (!authHeader?.startsWith('Bearer orch_')) return null;
     const token = authHeader.substring(7);
     const apiToken = await this.prisma.apiToken.findUnique({
       where: { tokenHash: hashApiToken(token) },
-      select: { userId: true, expiresAt: true }
+      select: { userId: true, expiresAt: true, scopes: true }
     });
     if (!apiToken) {
       console.error('[MCP OAuth] API token rejected: unknown token');
@@ -648,7 +734,7 @@ export class McpOAuthService {
       console.error('[MCP OAuth] API token rejected: expired');
       return null;
     }
-    return { token, sub: apiToken.userId };
+    return { token, sub: apiToken.userId, scope: scopeFromApiTokenScopes(apiToken.scopes) };
   }
 
   /**
@@ -665,6 +751,7 @@ export class McpOAuthService {
     email?: string;
     externalAuthId?: string;
     sessionId: string;
+    scope: McpScope;
   } | null> {
     if (!authHeader?.startsWith('Bearer ')) {
       console.error('[MCP OAuth] No Bearer token in header');
@@ -719,7 +806,8 @@ export class McpOAuthService {
         externalAuthId: (result.payload.externalAuthId ?? result.payload.hackClubId) as
           | string
           | undefined,
-        sessionId
+        sessionId,
+        scope: scopeFromClaim(result.payload.scope)
       };
     } catch (err) {
       console.error(

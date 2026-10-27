@@ -252,3 +252,56 @@ Subscribe to org events (NDJSON, one event per line):
 ```sh
 ORCHARD_ORG=my-org orchard events tail --types deployment.changed --since-id <lastEventId>
 ```
+
+## Write a script
+
+For anything a wrapper command does not cover, or a job that chains several calls, discover the operation and call it by `operationId`. The spec comes from `/apiv1/agent-spec.json` and is cached in `~/.orchard/agent-spec.json` (ETag-revalidated at most hourly, used offline when the server is unreachable; `--refresh` forces a revalidation).
+
+```sh
+orchard api search "rollout status"              # ranked operationIds, -o json for jq
+orchard api describe deployments_rollout_get     # params, body + response schema, scope, flags
+orchard api deployments_rollout_get -p id=<uuid> -q wait=1 -q timeout=120
+orchard api deployments_env_set -p id=<uuid> -d @env.json --yes
+```
+
+- `-p name=value` fills path params, `-q name=value` adds query params (both repeatable), `-d` takes JSON, `@file` or `-` for stdin.
+- Operations flagged destructive (deletes, whole-list replaces like `deployments_env_set`, stops) need `--yes` off a TTY. Sensitive ones (`databases_connection_get`, webhook token creation) return secrets: keep them out of logs.
+- `orchard api METHOD /path` still works and skips the spec.
+
+Deploy and wait for it to be live:
+
+```sh
+release=$(orchard api deployments_rebuild -p id=$APP | jq -r .releaseId)
+orchard api deployments_rollout_get -p id=$APP -q wait=1 -q timeout=120 -q release=$release | jq '{phase,url,hint}'
+```
+
+Find crashing deployments across a project:
+
+```sh
+for id in $(orchard api projects_deployments_list -p id=$PROJECT | jq -r '.[].id'); do
+  orchard api deployments_rollout_get -p id=$id | jq -c --arg id $id 'select(.phase=="crashing" or .phase=="build_failed") | {id:$id,phase,hint}'
+done
+```
+
+Bulk env update that keeps every other var (secrets read back `null`, and `null` keeps the stored value):
+
+```sh
+for id in $(orchard api projects_deployments_list -p id=$PROJECT | jq -r '.[].id'); do
+  orchard api deployments_get -p id=$id \
+    | jq '{env: ([.envVars[] | {key,value,secret}] | map(select(.key!="LOG_LEVEL")) + [{key:"LOG_LEVEL",value:"info"}])}' \
+    | orchard api deployments_env_set -p id=$id -d - --yes
+done
+```
+
+From Node, with the same token:
+
+```js
+const base = process.env.ORCHARD_API_URL ?? 'https://orchard.infra.hackclub.com';
+const api = (p) => fetch(`${base}/apiv1${p}`, { headers: { Authorization: `Bearer ${process.env.ORCHARD_API_TOKEN}` } }).then((r) => r.json());
+for (const d of await api(`/projects/${process.env.PROJECT}/deployments`)) {
+  const r = await api(`/deployments/${d.id}/rollout`);
+  if (!['live', 'stopped'].includes(r.phase)) console.log(d.name, r.phase, r.hint);
+}
+```
+
+Agents without a shell get the same API through the compact MCP (`https://mcp.<domain>/compact`: `search_api`, `describe_operation`, `call_api`).

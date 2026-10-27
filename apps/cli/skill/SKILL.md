@@ -51,3 +51,24 @@ orchard db create --name pg --wait && orchard db connection <id>
 run_id=$(orchard job run <jobId> --wait | jq -r .id); orchard job-run logs "$run_id"
 orchard events tail --types deployment.changed,build.changed
 ```
+
+## Write a script
+
+Discover and call any operation by id (spec cached in `~/.orchard/agent-spec.json`, works offline once fetched):
+
+```sh
+orchard api search "deployment logs" -o json | jq -r '.[0].operationId'
+orchard api describe deployments_rollout_get          # params, schemas, scope, destructive/sensitive
+orchard api deployments_rollout_get -p id=<uuid> -q wait=1 -q timeout=120
+orchard api deployments_env_set -p id=<uuid> -d @env.json --yes   # destructive: --yes off a TTY
+```
+
+Chain with jq, e.g. every crashing deployment in a project:
+
+```sh
+for id in $(orchard api projects_deployments_list -p id=$PROJECT | jq -r '.[].id'); do
+  orchard api deployments_rollout_get -p id=$id | jq -c --arg id $id 'select(.phase=="crashing" or .phase=="build_failed") | {id:$id,phase,hint}'
+done
+```
+
+`-p` path params, `-q` query params, `-d` JSON / `@file` / `-`. `orchard api METHOD /path` still works.

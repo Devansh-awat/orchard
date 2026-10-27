@@ -8,6 +8,7 @@ import { writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
+import { assignOperationIds } from './operation-ids';
 import { registry as routeRegistry } from './registry';
 import type { Route } from './types';
 
@@ -68,11 +69,11 @@ openApiRegistry.registerComponent('securitySchemes', 'cookieAuth', {
   description: 'Browser session cookie'
 });
 
+const operationIds = assignOperationIds(routeRegistry);
+
 for (const route of routeRegistry) {
   openApiRegistry.registerPath({
-    // OpenAPI has no 'all' verb, but the wildcard passthrough routes genuinely
-    // accept every method and the generated document has always carried them
-    // that way. Keep the shape, drop the type error.
+    operationId: operationIds.get(`${route.method} ${route.path}`),
     method: route.method.toLowerCase() as Parameters<
       typeof openApiRegistry.registerPath
     >[0]['method'],

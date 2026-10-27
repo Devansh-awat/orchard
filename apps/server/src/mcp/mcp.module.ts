@@ -12,6 +12,7 @@ import { InstanceSettingsService } from '../instance-settings/instance-settings.
 import { AnalyticsModule } from '../analytics/analytics.module';
 import { AuditService } from '../audit/audit.service';
 import { SessionsService } from '../auth/sessions.service';
+import { SecretCryptoService } from '../crypto/secret-crypto.service';
 
 // AuditService and InstanceSettingsService are registered as providers here
 // rather than by importing their modules. AuditModule imports AuthModule (for
@@ -34,7 +35,8 @@ import { SessionsService } from '../auth/sessions.service';
     McpTransportService,
     SessionsService,
     AuditService,
-    InstanceSettingsService
+    InstanceSettingsService,
+    SecretCryptoService
   ]
 })
 export class McpModule {}

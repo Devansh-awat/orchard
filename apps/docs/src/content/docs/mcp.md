@@ -6,8 +6,16 @@ description: Connect Claude or any MCP client and let it deploy, provision and d
 Orchard ships a Model Context Protocol server, so an agent can operate the
 platform through the same API the dashboard uses.
 
-Every tool is listed in the **[MCP tools reference](/reference/mcp-tools/)**,
-generated from the server's own tool registry.
+There are two endpoints on the same server:
+
+| URL        | What it is                                                                                       |
+| ---------- | ------------------------------------------------------------------------------------------------ |
+| `/`        | The normal MCP: about 160 purpose-built tools, grouped into toolsets                             |
+| `/compact` | The compact MCP: three tools (`search_api`, `describe_operation`, `call_api`) over the whole API |
+
+Every normal tool is listed in the **[MCP tools reference](/reference/mcp-tools/)**,
+generated from the server's own tool registry. The compact MCP and the CLI
+scripting flow are covered in [Code mode for agents](/agents-code-mode/).
 
 ## Connecting
 
@@ -41,6 +49,24 @@ Add the URL with no credentials. On first use the client opens a browser, you
 sign in to Orchard and approve the connection, and the client stores and
 refreshes the token itself. Access tokens last a day and refresh without asking;
 a connection left unused for 30 days has to sign in again.
+
+An OAuth connection carries one of three scopes, the same ladder API tokens use:
+
+| Scope        | Lets the agent                                            |
+| ------------ | --------------------------------------------------------- |
+| `mcp:read`   | Read-only tools: list, get, logs, metrics, rollout status |
+| `mcp:deploy` | Everything `mcp:read` can, plus every change              |
+| `mcp:exec`   | Everything `mcp:deploy` can, plus `exec_in_pod`           |
+
+A client that asks for no scope gets `mcp:deploy`, which is also what the
+server suggests when it challenges an unauthenticated request. The older
+`mcp:access` scope means `mcp:deploy`, and connections made before scopes
+existed keep working as `mcp:deploy`. To give an agent a shell inside your
+pods, connect it with `mcp:exec` explicitly. The scope is enforced by the API
+itself, not just by which tools are listed.
+
+Clients that registered with `client_secret_post` must send their secret on
+every token request, including refreshes.
 
 ### API token (non-interactive)
 
@@ -80,8 +106,9 @@ apply to every tool call:
 | `deploy` | Everything `read` can, plus anything that changes state: deploy, scale, delete |
 | `exec`   | Everything `deploy` can, plus `exec_in_pod`                                    |
 
-Scopes nest, so `exec` covers `deploy` and `deploy` covers `read`. A tool that
-needs more than the token has fails with `Token lacks required scope: …`.
+Scopes nest, so `exec` covers `deploy` and `deploy` covers `read`. Tools the
+token cannot run are left out of the tool list, and anything that still needs
+more than the token has fails with `Token lacks required scope: …`.
 
 Tokens created in **Settings → API Tokens** get the `read` scope only. That is
 enough for diagnosis. For an agent that acts, create the token with the CLI:
@@ -110,14 +137,76 @@ instance setup and admin routes.
 The tools cover the same ground as the dashboard:
 
 - Deploy from GitHub or an image, scale, restart, roll back
+- Ask whether a deploy is live and, if not, why (`get_deployment_rollout`)
 - Create and manage databases, take and restore backups
 - Read pod logs, build logs, and the logs of containers that already died
 - Inspect metrics and triage a failing deployment
 - Manage environment variables, domains, jobs and notification channels
 
-Tools carry hints about their behaviour, `readOnlyHint`, `destructiveHint`,
-`idempotentHint`, so a well-behaved client can be cautious about the destructive
-ones without you configuring anything.
+### Toolsets
+
+Listing every tool costs an agent context before it has done anything, so the
+tools are split into toolsets and a connection only sees some of them:
+
+| Toolset         | Covers                                                                   |
+| --------------- | ------------------------------------------------------------------------ |
+| `core`          | Who am I, organizations, projects, `find`, deployments at a glance       |
+| `deployments`   | Create, build, scale, restart, roll back, rollout status, compose stacks |
+| `logs`          | Runtime and build logs, pods, killed containers, errors, metrics, exec   |
+| `env`           | Environment variables and environments                                   |
+| `databases`     | Databases, credentials, backups, extensions, settings                    |
+| `domains`       | Domains, services, DNS checks, domain protection                         |
+| `jobs`          | Scheduled and on-demand jobs and their runs                              |
+| `notifications` | Notification channels, rules and deliveries                              |
+| `templates`     | Templates and template instances                                         |
+| `dangerous`     | Every delete, plus restoring a database backup                           |
+
+The default is `core,deployments,logs,env`. Pick others with a query parameter
+on the server URL; `core` is always included:
+
+```
+https://mcp.your-orchard-domain/?toolsets=databases,domains
+https://mcp.your-orchard-domain/?toolsets=default,dangerous
+https://mcp.your-orchard-domain/?toolsets=all
+```
+
+Tools added by grafts appear with `all`, or when the graft's id is listed
+(`?toolsets=default,greenhouse`). The local stdio server reads the same list
+from `ORCHARD_MCP_TOOLSETS`.
+
+### Behaviour hints
+
+Every tool has a title and the full set of hints: `readOnlyHint`,
+`destructiveHint`, `idempotentHint` and `openWorldHint`. Tools that replace a
+whole list (`set_env_vars`, `update_deployment_volumes`, `update_service`,
+`update_database_settings`) are marked destructive, so a careful client asks
+before running them.
+
+The core read tools (`find`, `list_projects`, `list_deployments`,
+`get_deployment`, `get_deployment_rollout`) also return `structuredContent`
+with a declared `outputSchema`. The JSON text block is still there for clients
+that ignore structured output. List tools take `limit` and `cursor` and return
+`{ items, total, nextCursor }`.
+
+### Secrets
+
+Reads never return secret material. Database passwords, secret environment
+variables and job secrets come back masked. The handful of tools whose whole
+point is a secret say so: `get_database_connection`,
+`create_deploy_webhook_token`, `create_notification_channel`,
+`get_ingress_protection` and `exec_in_pod` end their description with
+`[sensitive]` and carry `_meta: { "orchard/sensitive": true }` on the tool and
+on every result, so a client can keep that output out of logs and transcripts.
+Revealing database credentials is recorded in the audit log.
+
+### Resources
+
+The server also publishes two read-only resources:
+
+| URI                                  | Contents                                       |
+| ------------------------------------ | ---------------------------------------------- |
+| `orchard://docs/template-yaml-guide` | The `leaf/v1` template format, with an example |
+| `orchard://docs/llms.txt`            | The index of these docs, fetched from the site |
 
 ## Revoking access
 
@@ -146,4 +235,5 @@ Give the agent a job, not the keys to everything:
 > not change anything."
 
 Then decide whether to let it act. The read-only tools are enough for diagnosis,
-which is where an agent is most useful and least dangerous.
+which is where an agent is most useful and least dangerous. Connecting it with
+`mcp:read` makes that a guarantee rather than a request.

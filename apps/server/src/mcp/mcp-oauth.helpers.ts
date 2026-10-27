@@ -1,4 +1,4 @@
-import { createHash } from 'crypto';
+import { createHash, timingSafeEqual } from 'crypto';
 
 export type RefreshGenerationCheck =
   | { ok: true; gen: number }
@@ -15,4 +15,24 @@ export function checkRefreshGeneration(claim: unknown, current: number): Refresh
 
 export function oauthCodeKey(id: string): string {
   return createHash('sha256').update(id).digest('hex');
+}
+
+const CLIENT_SECRET_PREFIX = 'sha256:';
+
+export function hashClientSecret(secret: string): string {
+  return `${CLIENT_SECRET_PREFIX}${createHash('sha256').update(secret).digest('hex')}`;
+}
+
+export function isHashedClientSecret(stored: string): boolean {
+  return stored.startsWith(CLIENT_SECRET_PREFIX);
+}
+
+function digest(value: string): Buffer {
+  return createHash('sha256').update(value).digest();
+}
+
+export function verifyClientSecret(stored: string, presented: string | undefined): boolean {
+  if (typeof presented !== 'string' || presented.length === 0) return false;
+  const expected = isHashedClientSecret(stored) ? stored : hashClientSecret(stored);
+  return timingSafeEqual(digest(expected), digest(hashClientSecret(presented)));
 }

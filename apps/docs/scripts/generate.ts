@@ -48,6 +48,8 @@ function esc(text: unknown): string {
 type Registered = {
   name: string;
   group: string;
+  toolset?: string;
+  sensitive?: boolean;
   description: string;
   annotations: Record<string, unknown>;
   input: Record<string, unknown> | null;
@@ -55,12 +57,18 @@ type Registered = {
 
 async function generateMcp() {
   const toolsDir = resolve(repoRoot, 'apps/server/src/mcp/tools');
+  const catalogModule = await import(resolve(repoRoot, 'apps/server/src/mcp/catalog.ts'));
+  const { TOOL_CATALOG, decorateToolConfig } = catalogModule.TOOL_CATALOG
+    ? catalogModule
+    : catalogModule.default;
   const collected: Registered[] = [];
   let group = '';
 
   // Stub that captures registerTool calls instead of serving them.
   const server = {
-    registerTool(name: string, config: any) {
+    registerTool(name: string, rawConfig: any) {
+      const spec = TOOL_CATALOG[name];
+      const config = spec ? decorateToolConfig(name, rawConfig, spec) : rawConfig;
       let input: Record<string, unknown> | null = null;
       if (config?.inputSchema) {
         try {
@@ -73,6 +81,8 @@ async function generateMcp() {
       collected.push({
         name,
         group,
+        toolset: spec?.toolset,
+        sensitive: spec?.sensitive,
         description: String(config?.description ?? '').trim(),
         annotations: config?.annotations ?? {},
         input
@@ -142,6 +152,11 @@ Orchard exposes **${collected.length} MCP tools** across ${groups.length} groups
 client at \`https://your-orchard/mcp\` and these are the calls it can make. Every tool
 runs as the user who authorised the connection, so the same permissions apply.
 
+Tools are grouped into toolsets. A connection lists \`core\`, \`deployments\`, \`logs\` and \`env\`
+by default; add \`?toolsets=databases,domains\` (or \`?toolsets=all\`) to the server URL for more.
+Tools the connection's scope cannot run are hidden. See [MCP](/mcp/) for details, or the
+[compact MCP](/agents-code-mode/) for the whole API in three tools.
+
 `;
 
   for (const g of groups) {
@@ -149,9 +164,12 @@ runs as the user who authorised the connection, so the same permissions apply.
     body += `## ${g}\n\n`;
     for (const t of tools) {
       const hints: string[] = [];
+      if (t.toolset) hints.push(`toolset: ${t.toolset}`);
       if (t.annotations.readOnlyHint) hints.push('read-only');
       if (t.annotations.destructiveHint) hints.push('destructive');
       if (t.annotations.idempotentHint) hints.push('idempotent');
+      if (t.annotations.openWorldHint) hints.push('open-world');
+      if (t.sensitive) hints.push('sensitive');
 
       body += `### \`${t.name}\`\n\n`;
       if (hints.length) body += `**${hints.join(' · ')}**\n\n`;

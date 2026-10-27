@@ -166,6 +166,7 @@ export default defineConfig({
           items: [
             { label: 'CLI', slug: 'cli' },
             { label: 'MCP for agents', slug: 'mcp' },
+            { label: 'Code mode for agents', slug: 'agents-code-mode' },
             { label: 'Docs for agents', slug: 'for-agents' }
           ]
         },

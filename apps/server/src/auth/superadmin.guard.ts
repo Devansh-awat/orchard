@@ -22,6 +22,7 @@ import { hashApiToken } from './api-tokens.service';
 import { ORG_SCOPED_DENY, deviceOrgScope } from './org-scoped-devices';
 import { requestAuthStorage, RequestAuthContext } from './request-context';
 import { setTraceUser } from '../analytics/datadog';
+import { scopeFromHeader } from '../mcp/mcp-scopes';
 
 /**
  * Namespaces an organization-scoped session may never touch.
@@ -73,12 +74,23 @@ function crossSiteMutation(request: Request): boolean {
   return false;
 }
 
-function deniedToApiToken(path: string): boolean {
-  const p = path
+const MCP_GATEWAY_DENY = [...API_TOKEN_DENY, 'auth/tokens'];
+
+function normalizedPath(path: string): string {
+  return path
     .toLowerCase()
     .replace(/^\/?(apiv1\/)?/, '')
     .replace(/\/+$/, '');
+}
+
+function deniedToApiToken(path: string): boolean {
+  const p = normalizedPath(path);
   return API_TOKEN_DENY.some((d) => p === d || p.startsWith(`${d}/`));
+}
+
+function deniedToMcpGateway(path: string): boolean {
+  const p = normalizedPath(path);
+  return MCP_GATEWAY_DENY.some((d) => p === d || p.startsWith(`${d}/`));
 }
 
 function deniedToOrgScopedSession(method: string, path: string): boolean {
@@ -169,6 +181,10 @@ export class SuperAdminGuard implements CanActivate {
       if (!actingSub || !actingSessionId) {
         throw new UnauthorizedException('MCP gateway request missing acting-user headers');
       }
+      if (deniedToMcpGateway(request.path)) {
+        throw new ForbiddenException('An MCP connection cannot reach this route; sign in instead');
+      }
+      const gatewayScope = scopeFromHeader(request.headers['x-acting-user-scope']);
 
       const sessionValid = await this.sessionsService.validateSession(actingSessionId);
       if (!sessionValid) {
@@ -211,8 +227,11 @@ export class SuperAdminGuard implements CanActivate {
       request['auth'] = {
         userId: dbUserId,
         viaMcpGateway: true,
+        mcpScoped: true,
+        tokenScopes: [gatewayScope],
         ...(gatewayOrgScope ? { sessionOrgId: gatewayOrgScope } : {})
       };
+      request['tokenScopes'] = [gatewayScope];
       request['user'] = {
         sub: dbUserId,
         email: actingEmail,
@@ -495,10 +514,11 @@ export class ScopeGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<Request>();
-    const auth = request['auth'] as { apiTokenId?: string; tokenScopes?: string[] } | undefined;
+    const auth = request['auth'] as
+      | { apiTokenId?: string; mcpScoped?: boolean; tokenScopes?: string[] }
+      | undefined;
 
-    // Session auth (no apiTokenId on the auth context) → scopes don't apply.
-    if (!auth || !auth.apiTokenId) {
+    if (!auth || (!auth.apiTokenId && !auth.mcpScoped)) {
       return true;
     }
 

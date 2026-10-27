@@ -8,6 +8,20 @@ import { McpOAuthService } from './mcp-oauth.service';
 const MAX_REGISTRATIONS_PER_WINDOW = 30;
 const REGISTRATION_WINDOW_MS = 60_000;
 
+function basicClientCredentials(
+  header: string | undefined,
+  body: { client_id?: string; client_secret?: string }
+): { client_id?: string; client_secret?: string } {
+  if (body?.client_secret || !header?.startsWith('Basic ')) return {};
+  const decoded = Buffer.from(header.slice(6), 'base64').toString('utf8');
+  const split = decoded.indexOf(':');
+  if (split < 0) return {};
+  const clientId = decodeURIComponent(decoded.slice(0, split));
+  const clientSecret = decodeURIComponent(decoded.slice(split + 1));
+  if (body?.client_id && body.client_id !== clientId) return {};
+  return { client_id: clientId, client_secret: clientSecret };
+}
+
 @Controller()
 export class McpOAuthController {
   private registrationHits: number[] = [];
@@ -56,7 +70,8 @@ export class McpOAuthController {
       response_type: query.response_type,
       state: query.state,
       code_challenge: query.code_challenge,
-      code_challenge_method: query.code_challenge_method
+      code_challenge_method: query.code_challenge_method,
+      scope: query.scope
     });
 
     if (result.error) {
@@ -74,7 +89,8 @@ export class McpOAuthController {
     try {
       const result = await this.oauthService.completeAuthorization({
         mcp_state: req.body.mcp_state,
-        session_token: req.body.session_token
+        session_token: req.body.session_token,
+        scope: req.body.scope
       });
 
       if (result.error) {
@@ -93,7 +109,10 @@ export class McpOAuthController {
     console.error(
       `[MCP OAuth] Token exchange: grant_type=${req.body.grant_type}, client_id=${req.body.client_id}, code_length=${req.body.code?.length || 0}`
     );
-    const result = await this.oauthService.exchangeToken(req.body);
+    const result = await this.oauthService.exchangeToken({
+      ...req.body,
+      ...basicClientCredentials(req.headers.authorization, req.body)
+    });
 
     if (result.error) {
       console.error(
