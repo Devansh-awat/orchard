@@ -5,8 +5,10 @@ import { defineConfig } from 'vite';
 
 const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'));
 
+const mock = process.env.ORCHARD_MOCK === '1' ? [(await import('./mock/plugin.ts')).mockApi()] : [];
+
 export default defineConfig({
-	plugins: [tailwindcss(), sveltekit()],
+	plugins: [...mock, tailwindcss(), sveltekit()],
 	define: {
 		__APP_VERSION__: JSON.stringify(pkg.version)
 	},

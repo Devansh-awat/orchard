@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "pnpm --parallel --stream --filter frontend --filter server --filter gateway dev",
     "dev:server": "pnpm --filter server dev",
+    "dev:mock": "pnpm --filter frontend dev:mock",
     "dev:gateway": "pnpm --filter gateway dev",
     "build": "pnpm --parallel run build",
     "build:server": "pnpm --filter server build",

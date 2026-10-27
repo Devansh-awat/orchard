@@ -1,0 +1,240 @@
+import type { MockContext } from '../plugin.ts';
+import { STREAMING, notFound, reply, type Router } from '../router.ts';
+import {
+	databaseSummary,
+	deploymentSummary,
+	me,
+	memberRow,
+	orgRow,
+	projectMeta
+} from '../serialize.ts';
+
+const unauthorized = () => reply(401, { statusCode: 401, message: 'Unauthorized' });
+
+export function shellRoutes(r: Router, { store, hub, log }: MockContext) {
+	const signIn = () => {
+		if (!store.state.signedIn) log('signed in');
+		store.state.signedIn = true;
+		return me(store, store.me()!);
+	};
+
+	const loginRedirect = () => {
+		signIn();
+		return reply(302, '', { location: '/' });
+	};
+
+	r.get('/auth/me', () => {
+		const u = store.me();
+		return u ? me(store, u) : unauthorized();
+	});
+	r.patch('/auth/me', ({ body }) => {
+		const u = store.me();
+		if (!u) return unauthorized();
+		for (const key of ['firstName', 'lastName', 'username', 'setupCompleted'] as const) {
+			if (body?.[key] !== undefined) (u as any)[key] = body[key];
+		}
+		return me(store, u);
+	});
+	r.post('/auth/me/seen-updates', ({ body }) => {
+		const u = store.me();
+		if (!u) return unauthorized();
+		if (body?.id && !u.seenUpdates.includes(body.id)) u.seenUpdates.push(body.id);
+		return { seenUpdates: u.seenUpdates };
+	});
+	r.get('/auth/login', loginRedirect);
+	r.get('/auth/mock-login', loginRedirect);
+	r.get('/sso/start/:slug', loginRedirect);
+	r.post('/auth/logout', () => {
+		store.state.signedIn = false;
+		log('signed out, /auth/me answers 401 until you sign back in');
+		return { ok: true };
+	});
+	r.get('/auth/config', () => ({ turnstileSiteKey: null, ssoEnforced: false }));
+	r.get('/auth/methods', () => ({ passkey: false, password: false, superadmin: false }));
+	r.post('/auth/otp/request', () => ({ message: 'Mock mode: any 6-digit code works.' }));
+	r.post('/auth/otp/verify', () => ({ user: signIn() }));
+	r.post('/auth/password', () => ({ user: signIn() }));
+	r.get('/sso/providers', () => [
+		{
+			id: 'mock',
+			slug: 'mock',
+			name: 'Mock sign-in',
+			preset: 'generic',
+			protocol: 'oauth2',
+			label: 'Continue as alfd (mock)',
+			iconUrl: null,
+			startUrl: '/apiv1/auth/mock-login',
+			source: 'env'
+		}
+	]);
+	r.post('/sso/discover', () => ({ organization: null }));
+	r.get('/sso/org/:slug', () => notFound('No single sign-on for this organization'));
+
+	r.get('/organizations/user', () =>
+		store.state.signedIn ? store.myOrgs().map((o) => orgRow(store, o)) : unauthorized()
+	);
+	r.get('/organizations', () => store.myOrgs().map((o) => orgRow(store, o)));
+	r.get('/invitations/pending', () => []);
+	r.get('/grafts', () => []);
+	r.get('/instance/features', () => ({ mcp: true, sandboxes: false, grafts: [] }));
+	r.get('/engine/health', () => ({
+		shards: ['workloads', 'pods', 'network', 'storage'].map((shard) => ({
+			shard,
+			holder: 'mock-0',
+			stale: false,
+			lastListAt: new Date(Date.now() - 40_000).toISOString(),
+			lastEventAt: new Date(Date.now() - 2_000).toISOString(),
+			lastResyncAt: new Date(Date.now() - 600_000).toISOString(),
+			resyncRepairs: 0
+		})),
+		replicas: ['mock-0'],
+		undelivered: 0
+	}));
+	r.get('/setup/checklist', () => [
+		{
+			id: 'mock',
+			title: 'You are running the mock API',
+			detail: 'Nothing here talks to a cluster. State resets when Vite restarts.',
+			done: true,
+			severity: 'normal'
+		}
+	]);
+	r.get('/setup/status', () => ({ setupCompleted: true, hasUsers: true, needsClaim: false }));
+	r.get('/admin/telemetry', () => ({
+		enabled: false,
+		consent: 'denied',
+		envOverride: null,
+		needsAnswer: false,
+		destination: 'https://telemetry.orchard.my'
+	}));
+	r.put('/admin/telemetry', ({ body }) => ({
+		enabled: Boolean(body?.enabled),
+		consent: body?.enabled ? 'granted' : 'denied',
+		envOverride: null,
+		needsAnswer: false,
+		destination: 'https://telemetry.orchard.my'
+	}));
+	r.get('/admin/stats', () => ({
+		userCount: store.state.users.length,
+		orgCount: store.state.orgs.length,
+		projectCount: store.state.projects.length,
+		deploymentCount: store.state.deployments.length
+	}));
+	r.get('/github/status', () => ({ linked: true, appConfigured: true, username: 'alfd' }));
+
+	r.get('/overview', () => {
+		const orgs = store.myOrgs();
+		const ids = new Set(orgs.map((o) => o.id));
+		const projects = store.state.projects.filter((p) => ids.has(p.organizationId));
+		const pids = new Set(projects.map((p) => p.id));
+		return {
+			organizations: orgs.map((o) => ({ id: o.id, slug: o.slug, name: o.name })),
+			projects: projects.map((p) => projectMeta(store, p)),
+			deployments: store.state.deployments
+				.filter((d) => pids.has(d.projectId))
+				.map((d) => deploymentSummary(store, d)),
+			databases: store.state.databases
+				.filter((d) => pids.has(d.projectId))
+				.map((d) => databaseSummary(store, d))
+		};
+	});
+
+	r.get('/overview/orgs/:slug', ({ params }) => {
+		const o = store.org(params.slug);
+		if (!o) return notFound('Organization not found');
+		const projects = store.projectsOf(o.id);
+		const pids = new Set(projects.map((p) => p.id));
+		const role = store.myRole(o.id);
+		const byUpdated = <T extends { updatedAt: string }>(a: T, b: T) =>
+			b.updatedAt.localeCompare(a.updatedAt);
+		return {
+			organization: { id: o.id, slug: o.slug, name: o.name },
+			currentMember: role ? { role, synthetic: false } : null,
+			projects: projects
+				.slice()
+				.sort(byUpdated)
+				.map((p) => projectMeta(store, p)),
+			deployments: store.state.deployments
+				.filter((d) => pids.has(d.projectId))
+				.sort(byUpdated)
+				.map((d) => deploymentSummary(store, d)),
+			databases: store.state.databases
+				.filter((d) => pids.has(d.projectId))
+				.sort(byUpdated)
+				.map((d) => databaseSummary(store, d))
+		};
+	});
+
+	r.get('/overview/orgs/:slug/builds', ({ params }) => {
+		const o = store.org(params.slug);
+		if (!o) return notFound('Organization not found');
+		const pids = new Set(store.projectsOf(o.id).map((p) => p.id));
+		const deps = store.state.deployments.filter((d) => pids.has(d.projectId));
+		const lite = (d: (typeof deps)[number]) => {
+			const s = deploymentSummary(store, d);
+			return {
+				id: s.id,
+				name: s.name,
+				displayName: s.displayName,
+				image: s.image,
+				buildStatus: s.buildStatus,
+				ingresses: s.ingresses,
+				project: { name: s.project.name },
+				faviconUrl: null
+			};
+		};
+		const active = deps
+			.filter((d) => d.buildStatus === 'building' || d.buildStatus === 'pending')
+			.map((d) => ({
+				...lite(d),
+				status: d.status,
+				buildStep: d.buildStep,
+				buildStartedAt: d.buildStepTimestamps?.queued
+					? new Date(d.buildStepTimestamps.queued).toISOString()
+					: null,
+				updatedAt: d.updatedAt,
+				githubRepo: d.githubRepo,
+				githubBranch: d.githubBranch
+			}));
+		const byId = new Map(deps.map((d) => [d.id, d]));
+		const recent = store.state.builds
+			.filter((b) => byId.has(b.deploymentId) && b.status !== 'building')
+			.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+			.slice(0, 8)
+			.map((b) => ({
+				id: b.id,
+				commitSha: b.commitSha,
+				branch: b.branch,
+				triggerType: b.triggerType,
+				isActive: b.isActive,
+				createdAt: b.createdAt,
+				commitMessage: b.commitMessage,
+				status: b.status,
+				deployment: { ...lite(byId.get(b.deploymentId)!), buildStatus: b.status }
+			}));
+		return { active, recent };
+	});
+
+	r.get('/events/orgs/:orgId', ({ params, query, req, res }) => {
+		const o = store.org(params.orgId);
+		if (!o) return notFound('Organization not found');
+		const header = req.headers['last-event-id'];
+		hub.subscribe(
+			o.id,
+			res,
+			(typeof header === 'string' ? header : null) ?? query.get('lastEventId')
+		);
+		return STREAMING;
+	});
+
+	r.get('/organizations/:orgId/members', ({ params }) => {
+		const o = store.org(params.orgId);
+		if (!o) return notFound();
+		return store.membersOf(o.id).map((m) => memberRow(store, m));
+	});
+	r.get('/organizations/:orgId/members/me', ({ params }) => {
+		const o = store.org(params.orgId);
+		const role = o ? store.myRole(o.id) : null;
+		return role ? { role, synthetic: false } : notFound();
+	});
+}

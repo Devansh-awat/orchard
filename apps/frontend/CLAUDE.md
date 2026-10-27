@@ -266,6 +266,36 @@ Three-level hierarchy: **Org cap** → **Member allowance** → **Deployment req
 - `humanizeWarning()` in `$lib/utils/format.ts` translates k8s events to plain English with severity levels
 - Header collapse uses spring physics (height eased, card scaleY bounce on collapse)
 
+## Running without a backend
+
+`pnpm dev:mock` (from here or the repo root) starts Vite with `ORCHARD_MOCK=1`, which mounts the
+`mockApi()` plugin from `mock/plugin.ts`. It answers every `/apiv1/*` request from an in-memory
+store, so the real app runs with no Nest server, Postgres, Redis, Kubernetes or gateway. You are
+signed in as `alfd`, with two orgs (`ysws`, `hq`), the projects from `src/routes/dev/ui/fixtures.ts`,
+and deployments, databases and jobs in mixed states (running, building, crashing, stopped,
+provisioning).
+
+- **Live:** the org SSE stream (`/apiv1/events/orgs/:id`) emits the same `{ type, id, projectId, payload, ts }`
+  events as the server, so redeploys, restarts, scaling, env edits, job runs and backups update the UI on
+  their own. A redeploy walks queued, cloning, building, pushing, deploying, running over about 20s.
+  The Observe log stream, build log stream and pod shell (`ws`, a toy shell) work too.
+- **Sign out** makes every non-auth route 401 until you click "Continue as alfd (mock)" on the login
+  page (any email and 6-digit code also work).
+- **Data** is seeded in `mock/seed.ts` (entity types in `mock/types.ts`). State lives in `mock/store.ts`,
+  which also owns the mutations and the build simulation. It resets whenever Vite restarts, and Vite
+  restarts whenever a file in `mock/` changes.
+- **Routes** live in `mock/routes/*.ts`, grouped by page. Add one with
+  `r.get('/things/:id', ({ params, query, body }) => ...)`: return a value for 200 JSON,
+  `reply(status, body)` or `notFound()` for anything else. Serialize through `mock/serialize.ts` so shapes
+  stay in step with the server (check `packages/contracts/src/schemas` and the Nest controller).
+  The most specific pattern wins, so registration order does not matter.
+- **Gaps:** an unhandled GET answers `[]` and an unhandled mutation answers `{ ok: true }`, and both are
+  logged once as `[mock] unhandled METHOD /apiv1/...` in the Vite console. That line is the to-do list.
+- `ORCHARD_MOCK_LATENCY=300` adds latency to every response. Mock mode uses its own Vite cache
+  (`node_modules/.vite-mock`) so switching between `dev` and `dev:mock` does not re-optimize deps.
+
+`mock/` is outside `src/`, so none of it ships.
+
 ## File organization
 
 - Routes: `src/routes/`
