@@ -297,7 +297,7 @@
 		<ChevronsUpDown size={14} class="org-chev" />
 	{/snippet}
 	{#if orgMenu}
-		<Menu placement="bottom-start">
+		<Menu placement="bottom-start" sameWidth={!collapsed}>
 			{#snippet trigger(attrs)}
 				<button type="button" class="org" title={collapsed ? org.name : undefined} {...attrs}
 					>{@render orgFace()}</button

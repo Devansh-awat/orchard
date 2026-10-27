@@ -25,7 +25,8 @@
 	} from 'lucide-svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { overviewQueryOptions } from '$lib/queries/overview';
-	import { resourceStatus, Avatar } from '$lib/components/ui';
+	import { resourceStatus, Avatar, IconTile } from '$lib/components/ui';
+	import Monogram from '$lib/components/ui/Monogram.svelte';
 	import Sidebar from '$lib/components/patterns/Sidebar.svelte';
 	import type { SidebarSection } from '$lib/components/patterns/sidebar';
 	import MenuItem from '$lib/components/ui/MenuItem.svelte';
@@ -117,9 +118,6 @@
 	}));
 
 	const orgDeps: OverviewDep[] = $derived(overviewQuery.data?.deployments ?? []);
-	const failingDeps = $derived(
-		orgDeps.filter((d) => resourceStatus(d.status, d.buildStatus).kind === 'error').slice(0, 4)
-	);
 	const pinnedDeps = $derived.by(() => {
 		const byId = new Map(orgDeps.map((d) => [d.id, d]));
 		return $pinnedItems
@@ -245,19 +243,6 @@
 	const sections = $derived<SidebarSection[]>(
 		orgSlug
 			? [
-					...(failingDeps.length
-						? [
-								{
-									label: 'Failing',
-									tiles: true,
-									items: failingDeps.map((d) => ({
-										label: d.displayName || d.name,
-										href: `/${orgSlug}/deployments/${d.id}`,
-										status: resourceStatus(d.status, d.buildStatus)
-									}))
-								}
-							]
-						: []),
 					{
 						label: 'Platform',
 						items: nav.map((n) => ({
@@ -333,16 +318,20 @@
 		userBadge={invitationCount + ($instanceChecklistWarnings.length > 0 ? 1 : 0)}
 	>
 		{#snippet orgMenu()}
-			{#if $organizations.length > 1}
-				<MenuLabel>Switch organization</MenuLabel>
-				{#each $organizations as org (org.id)}
-					<MenuItem checked={org.id === $selectedOrganization?.id} onclick={() => selectOrg(org)}
-						>{org.name}</MenuItem
-					>
-				{/each}
-				<MenuSeparator />
-			{/if}
+			{#each $organizations as org (org.id)}
+				{#if org.id !== $selectedOrganization?.id}
+					<MenuItem onclick={() => selectOrg(org)}>
+						{#snippet leading()}
+							<IconTile src={org.avatarUrl}>
+								{#snippet fallback()}<Monogram name={org.name} />{/snippet}
+							</IconTile>
+						{/snippet}
+						{org.name}
+					</MenuItem>
+				{/if}
+			{/each}
 			{#if canOpenOrgSettings}
+				{#if $organizations.length > 1}<MenuSeparator />{/if}
 				<MenuItem icon={Settings} href="/{orgSlug}/settings">Organization settings</MenuItem>
 			{/if}
 		{/snippet}

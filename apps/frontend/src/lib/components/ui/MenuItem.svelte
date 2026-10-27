@@ -11,6 +11,7 @@
 		icon = undefined,
 		shortcut = undefined,
 		checked = undefined,
+		leading = undefined,
 		children,
 		...rest
 	}: {
@@ -21,13 +22,14 @@
 		icon?: Icon;
 		shortcut?: string;
 		checked?: boolean;
+		leading?: Snippet;
 		children?: Snippet;
 		[key: string]: unknown;
 	} = $props();
 
 	const menu = getContext<{ close: () => void } | undefined>('ui-menu');
 
-	const structured = $derived(!!icon || !!shortcut || checked !== undefined);
+	const structured = $derived(!!icon || !!leading || !!shortcut || checked !== undefined);
 	const role = $derived(checked === undefined ? 'menuitem' : 'menuitemcheckbox');
 
 	function handleClick(e: MouseEvent) {
@@ -43,7 +45,9 @@
 				{#if checked}<Check size={16} strokeWidth={2.25} />{/if}
 			</span>
 		{/if}
-		{#if icon}
+		{#if leading}
+			<span class="leading" aria-hidden="true">{@render leading()}</span>
+		{:else if icon}
 			{@const Glyph = icon}
 			<span class="icon" aria-hidden="true"><Glyph size={16} /></span>
 		{/if}
@@ -84,6 +88,21 @@
 {/if}
 
 <style>
+	.leading {
+		display: inline-flex;
+		flex-shrink: 0;
+		width: 1.5rem;
+		height: 1.5rem;
+		margin-left: -0.125rem;
+		overflow: hidden;
+		border-radius: calc((var(--radius-card) - 0.5rem) * var(--corner-scale));
+		corner-shape: var(--corner);
+		box-shadow: inset 0 0 0 0.5px var(--rule);
+	}
+	.leading > :global(*) {
+		width: 100%;
+		height: 100%;
+	}
 	.check,
 	.icon {
 		display: inline-flex;
