@@ -26,6 +26,7 @@
 	import { ProviderIcon } from '$lib/components/login';
 	import { apiFetch, toasts } from '$lib/stores';
 	import SsoProviderModal from './SsoProviderModal.svelte';
+	import { removeProviderIcon, uploadProviderIcon } from './sso-icon';
 	import type {
 		ProviderDraft,
 		SsoDomain,
@@ -135,10 +136,58 @@
 		}
 	}
 
+	function providerUrl(id: string) {
+		return `/apiv1/organizations/${organization?.id}/sso/providers/${id}`;
+	}
+
+	function replaceProvider(updated: SsoProvider) {
+		if (overview) {
+			overview = {
+				...overview,
+				providers: overview.providers.map((p) => (p.id === updated.id ? updated : p))
+			};
+		}
+		if (editingProvider?.id === updated.id) editingProvider = updated;
+	}
+
+	async function sendIcon(id: string, file: File) {
+		try {
+			const updated = await uploadProviderIcon(providerUrl(id), file);
+			replaceProvider(updated);
+			return updated.iconUrl;
+		} catch (e) {
+			toasts.add({
+				title: 'Could not upload the icon',
+				description: e instanceof Error ? e.message : undefined,
+				color: 'error'
+			});
+			return null;
+		}
+	}
+
+	async function uploadIcon(file: File) {
+		return editingProvider ? sendIcon(editingProvider.id, file) : null;
+	}
+
+	async function removeIcon() {
+		if (!editingProvider) return;
+		try {
+			replaceProvider(await removeProviderIcon(providerUrl(editingProvider.id)));
+		} catch (e) {
+			toasts.add({
+				title: 'Could not remove the icon',
+				description: e instanceof Error ? e.message : undefined,
+				color: 'error'
+			});
+			throw e;
+		}
+	}
+
 	async function saveProvider(draft: ProviderDraft) {
 		if (!organization) return;
 		savingProvider = true;
 		providerError = null;
+		const pendingIcon = draft.pendingIcon ?? null;
 		try {
 			const base = `/apiv1/organizations/${organization.id}/sso/providers`;
 			const res = await apiFetch(editingProvider ? `${base}/${editingProvider.id}` : base, {
@@ -148,6 +197,7 @@
 			});
 			const data = await res.json().catch(() => ({}));
 			if (!res.ok) throw new Error(data?.message || 'Could not save the connection');
+			if (pendingIcon) await sendIcon((data as SsoProvider).id, pendingIcon);
 
 			showProviderModal = false;
 			editingProvider = null;
@@ -408,7 +458,13 @@
 					{#each providers as provider (provider.id)}
 						{@const status = providerStatus(provider)}
 						<li class="sso-item">
-							<span class="sso-item-icon"><ProviderIcon preset={provider.preset} size={18} /></span>
+							<span class="sso-item-icon"
+								><ProviderIcon
+									preset={provider.preset}
+									iconUrl={provider.iconUrl}
+									size={18}
+								/></span
+							>
 							<div class="sso-item-main">
 								<span class="sso-item-name">{provider.name}</span>
 								<span class="sso-item-meta">
@@ -628,6 +684,8 @@
 		saving={savingProvider}
 		error={providerError}
 		onSave={saveProvider}
+		onIconUpload={uploadIcon}
+		onIconRemove={removeIcon}
 		onClose={() => {
 			editingProvider = null;
 			providerError = null;

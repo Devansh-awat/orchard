@@ -3,7 +3,12 @@
 	import { Modal, Button, Field, Input, Select, ToggleRow, Alert } from '$lib/components/ui';
 	import { ProviderIcon } from '$lib/components/login';
 	import type { ProviderDraft, SsoProvider, SsoProviderPreset } from './sso-types';
-	import { emptyDraft, draftFromProvider } from './sso-types';
+	import {
+		emptyDraft,
+		draftFromProvider,
+		PROVIDER_ICON_MAX_BYTES,
+		PROVIDER_ICON_TYPES
+	} from './sso-types';
 
 	let {
 		open = $bindable(false),
@@ -12,7 +17,9 @@
 		saving = false,
 		error = null,
 		onSave,
-		onClose
+		onClose,
+		onIconUpload,
+		onIconRemove
 	}: {
 		open?: boolean;
 		presets: SsoProviderPreset[];
@@ -21,10 +28,29 @@
 		error?: string | null;
 		onSave: (draft: ProviderDraft) => void;
 		onClose: () => void;
+		onIconUpload?: (file: File) => Promise<string | null>;
+		onIconRemove?: () => Promise<void>;
 	} = $props();
 
 	let draft = $state<ProviderDraft | null>(null);
 	let copied = $state<string | null>(null);
+	let iconInput = $state<HTMLInputElement | null>(null);
+	let iconError = $state<string | null>(null);
+	let iconBusy = $state<'upload' | 'remove' | null>(null);
+	let pendingPreview = $state<string | null>(null);
+
+	const previewUrl = $derived(pendingPreview ?? draft?.iconUrl ?? null);
+
+	$effect(() => {
+		const file = draft?.pendingIcon ?? null;
+		if (!file) {
+			pendingPreview = null;
+			return;
+		}
+		const url = URL.createObjectURL(file);
+		pendingPreview = url;
+		return () => URL.revokeObjectURL(url);
+	});
 
 	// Editing jumps straight to the form; adding starts on the catalogue.
 	let step = $state<'preset' | 'form'>('preset');
@@ -37,6 +63,7 @@
 		wasOpen = open;
 		lastEditingId = id;
 		if (!open) return;
+		iconError = null;
 		if (editing) {
 			draft = draftFromProvider(editing);
 			step = 'form';
@@ -60,6 +87,55 @@
 
 	function has(field: string) {
 		return preset?.fields.includes(field) ?? false;
+	}
+
+	async function pickIcon(event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = '';
+		if (!file || !draft) return;
+		iconError = null;
+		if (!PROVIDER_ICON_TYPES.includes(file.type)) {
+			iconError = 'Use a PNG, JPG or WebP image.';
+			return;
+		}
+		if (file.size > PROVIDER_ICON_MAX_BYTES) {
+			iconError = 'That image is larger than 1 MB.';
+			return;
+		}
+		if (!editing || !onIconUpload) {
+			draft.pendingIcon = file;
+			return;
+		}
+		iconBusy = 'upload';
+		try {
+			const url = await onIconUpload(file);
+			if (url && draft) draft.iconUrl = url;
+		} finally {
+			iconBusy = null;
+		}
+	}
+
+	async function removeIcon() {
+		if (!draft) return;
+		iconError = null;
+		if (draft.pendingIcon) {
+			draft.pendingIcon = null;
+			return;
+		}
+		if (!editing || !onIconRemove) {
+			draft.iconUrl = null;
+			return;
+		}
+		iconBusy = 'remove';
+		try {
+			await onIconRemove();
+			if (draft) draft.iconUrl = null;
+		} catch {
+			return;
+		} finally {
+			iconBusy = null;
+		}
 	}
 
 	async function copy(value: string, key: string) {
@@ -102,7 +178,7 @@
 		{/if}
 
 		<div class="spm-head">
-			<ProviderIcon preset={draft.preset} size={20} />
+			<ProviderIcon preset={draft.preset} iconUrl={previewUrl} size={20} />
 			<div>
 				<p class="spm-head-name">{preset?.name ?? draft.preset}</p>
 				{#if preset?.hint}
@@ -119,6 +195,47 @@
 		<div class="spm-section">
 			<Field label="Display name" for="spm-name">
 				<Input id="spm-name" bind:value={draft.name} placeholder="Acme Okta" />
+			</Field>
+
+			<Field
+				label="Icon"
+				for="spm-icon"
+				hint="PNG, JPG or WebP, up to 1 MB. Shown on the sign-in button."
+				error={iconError}
+			>
+				<div class="spm-icon-row">
+					<span class="spm-icon-preview">
+						<ProviderIcon preset={draft.preset} iconUrl={previewUrl} size={20} />
+					</span>
+					<Button
+						variant="secondary"
+						size="sm"
+						loading={iconBusy === 'upload'}
+						disabled={iconBusy !== null}
+						onclick={() => iconInput?.click()}
+					>
+						Upload
+					</Button>
+					{#if previewUrl}
+						<Button
+							variant="ghost"
+							size="sm"
+							loading={iconBusy === 'remove'}
+							disabled={iconBusy !== null}
+							onclick={removeIcon}
+						>
+							Remove
+						</Button>
+					{/if}
+					<input
+						bind:this={iconInput}
+						id="spm-icon"
+						type="file"
+						accept="image/png,image/jpeg,image/webp"
+						hidden
+						onchange={pickIcon}
+					/>
+				</div>
 			</Field>
 
 			{#if has('tenant')}
@@ -298,7 +415,12 @@
 			Cancel
 		</Button>
 		{#if step === 'form' && draft}
-			<Button variant="primary" loading={saving} onclick={() => draft && onSave(draft)}>
+			<Button
+				variant="primary"
+				loading={saving}
+				disabled={iconBusy !== null}
+				onclick={() => draft && onSave(draft)}
+			>
 				{editing ? 'Save changes' : 'Add connection'}
 			</Button>
 		{/if}
@@ -421,6 +543,25 @@
 		line-height: var(--lh-footnote);
 		font-weight: 600;
 		margin: 0;
+	}
+
+	.spm-icon-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.spm-icon-preview {
+		display: grid;
+		place-items: center;
+		flex-shrink: 0;
+		width: 2rem;
+		height: 2rem;
+		border: 1px solid var(--border-subtle);
+		border-radius: calc(var(--radius-sm) * var(--corner-scale));
+		corner-shape: var(--corner);
+		background: var(--bg-surface);
+		color: var(--text-muted);
 	}
 
 	.spm-textarea {

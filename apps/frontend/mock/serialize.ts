@@ -9,10 +9,32 @@ import type {
 	MockMember,
 	MockOrg,
 	MockProject,
+	MockSsoProvider,
 	MockUser
 } from './types.ts';
 
 const UPDATES_DIR = fileURLToPath(new URL('../src/lib/updates/', import.meta.url));
+
+const SECRET_MASK = '••••••••';
+
+export function ssoProviderRow(p: MockSsoProvider) {
+	const usable =
+		p.protocol === 'saml'
+			? Boolean(p.samlEntryPoint && p.samlCertificate)
+			: p.protocol === 'oauth2'
+				? Boolean(p.clientId && p.authorizationUrl && p.tokenUrl && p.userinfoUrl)
+				: Boolean(p.issuerUrl && p.clientId);
+	return {
+		...p,
+		clientSecret: p.clientSecret ? SECRET_MASK : null,
+		samlCertificate: p.samlCertificate ? SECRET_MASK : null,
+		usable,
+		callbackUrl: `http://localhost:3000/apiv1/sso/callback/${p.id}`,
+		entityId: `orchard-sso-${p.organizationId ?? 'instance'}-${p.id}`,
+		metadataUrl:
+			p.protocol === 'saml' ? `http://localhost:3000/apiv1/sso/providers/${p.id}/metadata` : null
+	};
+}
 
 export function allUpdateIds(): string[] {
 	try {

@@ -105,7 +105,12 @@ export interface ProviderDraft {
 	defaultRole: 'admin' | 'member' | 'guest';
 	allowedDomains: string;
 	requireVerifiedEmail: boolean;
+	iconUrl: string | null;
+	pendingIcon?: File | null;
 }
+
+export const PROVIDER_ICON_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+export const PROVIDER_ICON_MAX_BYTES = 1024 * 1024;
 
 export function emptyDraft(preset: SsoProviderPreset): ProviderDraft {
 	return {
@@ -126,7 +131,9 @@ export function emptyDraft(preset: SsoProviderPreset): ProviderDraft {
 		jitProvisioning: true,
 		defaultRole: 'member',
 		allowedDomains: '',
-		requireVerifiedEmail: true
+		requireVerifiedEmail: true,
+		iconUrl: null,
+		pendingIcon: null
 	};
 }
 
@@ -149,7 +156,9 @@ export function draftFromProvider(provider: SsoProvider): ProviderDraft {
 		jitProvisioning: provider.jitProvisioning,
 		defaultRole: provider.defaultRole === 'owner' ? 'admin' : provider.defaultRole,
 		allowedDomains: provider.allowedDomains.join(', '),
-		requireVerifiedEmail: provider.requireVerifiedEmail
+		requireVerifiedEmail: provider.requireVerifiedEmail,
+		iconUrl: provider.iconUrl,
+		pendingIcon: null
 	};
 }
 
@@ -163,6 +172,7 @@ export function draftToPayload(draft: ProviderDraft) {
 		jitProvisioning: draft.jitProvisioning,
 		defaultRole: draft.defaultRole,
 		requireVerifiedEmail: draft.requireVerifiedEmail,
+		iconUrl: draft.iconUrl,
 		allowedDomains: draft.allowedDomains
 			.split(/[\s,]+/)
 			.map((d) => d.trim().replace(/^@/, ''))

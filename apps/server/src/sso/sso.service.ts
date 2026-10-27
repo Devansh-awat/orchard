@@ -14,6 +14,7 @@ import { InstanceSettingsService } from '../instance-settings/instance-settings.
 import { SsoCryptoService } from './sso-crypto.service';
 import { findPreset, resolveIssuerUrl } from './presets';
 import { OrgDomainsService } from './org-domains.service';
+import { StorageService } from '../organizations/storage.service';
 import {
   BlockedDestinationError,
   assertPublicUrl,
@@ -104,7 +105,8 @@ export class SsoService {
     private readonly audit: AuditService,
     private readonly domains: OrgDomainsService,
     private readonly sessions: SessionsService,
-    private readonly instanceSettings: InstanceSettingsService
+    private readonly instanceSettings: InstanceSettingsService,
+    private readonly storage: StorageService
   ) {
     this.backendUrl =
       process.env.BACKEND_URL || process.env.FRONTEND_URL || 'http://localhost:3001';
@@ -430,6 +432,24 @@ export class SsoService {
     });
   }
 
+  private iconUrl(raw: string | null | undefined, current: string | null): string | null {
+    const value = typeof raw === 'string' ? raw.trim() : null;
+    if (!value) return null;
+    if (value === current) return value;
+    if (value.length > 500) throw new BadRequestException('Icon URL is too long');
+    let url: URL;
+    try {
+      url = new URL(value);
+    } catch {
+      throw new BadRequestException('Icon URL must be a valid URL');
+    }
+    const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+    if (url.protocol !== 'https:' && !(url.protocol === 'http:' && local)) {
+      throw new BadRequestException('Icon URL must use https');
+    }
+    return value;
+  }
+
   private slugify(input: string): string {
     return input
       .toLowerCase()
@@ -483,7 +503,10 @@ export class SsoService {
       protocol,
       enabled: input.enabled ?? existing?.enabled ?? true,
       buttonLabel: input.buttonLabel ?? existing?.buttonLabel ?? null,
-      iconUrl: input.iconUrl ?? existing?.iconUrl ?? null,
+      iconUrl:
+        'iconUrl' in input
+          ? this.iconUrl(input.iconUrl, existing?.iconUrl ?? null)
+          : (existing?.iconUrl ?? null),
       sortOrder: input.sortOrder ?? existing?.sortOrder ?? 0,
       jitProvisioning: input.jitProvisioning ?? existing?.jitProvisioning ?? true,
       defaultRole: this.safeDefaultRole(input.defaultRole ?? existing?.defaultRole),
@@ -647,6 +670,7 @@ export class SsoService {
   ) {
     const existing = await this.requireProvider(id, organizationId);
     await this.prisma.identityProvider.delete({ where: { id } });
+    await this.discardIcon(existing.iconUrl);
 
     void this.audit.log({
       action: 'org.sso.provider.deleted',
@@ -659,6 +683,71 @@ export class SsoService {
     });
 
     return { success: true };
+  }
+
+  async uploadProviderIcon(
+    id: string,
+    organizationId: string | null,
+    file: Express.Multer.File,
+    actor: { userId: string; email?: string }
+  ) {
+    const existing = await this.requireProvider(id, organizationId);
+    const iconUrl = await this.storage.uploadFile(file, 'sso-icons');
+    const updated = await this.prisma.identityProvider.update({
+      where: { id },
+      data: { iconUrl }
+    });
+    await this.discardIcon(existing.iconUrl);
+
+    void this.audit.log({
+      action: 'org.sso.provider.icon_updated',
+      actorUserId: actor.userId,
+      actorEmail: actor.email,
+      organizationId: organizationId ?? undefined,
+      targetType: 'sso_provider',
+      targetId: updated.id,
+      targetLabel: updated.name,
+      metadata: { scope: organizationId ? 'organization' : 'instance' }
+    });
+
+    return this.adminProvider(updated);
+  }
+
+  async removeProviderIcon(
+    id: string,
+    organizationId: string | null,
+    actor: { userId: string; email?: string }
+  ) {
+    const existing = await this.requireProvider(id, organizationId);
+    const updated = await this.prisma.identityProvider.update({
+      where: { id },
+      data: { iconUrl: null }
+    });
+    await this.discardIcon(existing.iconUrl);
+
+    void this.audit.log({
+      action: 'org.sso.provider.icon_removed',
+      actorUserId: actor.userId,
+      actorEmail: actor.email,
+      organizationId: organizationId ?? undefined,
+      targetType: 'sso_provider',
+      targetId: updated.id,
+      targetLabel: updated.name,
+      metadata: { scope: organizationId ? 'organization' : 'instance' }
+    });
+
+    return this.adminProvider(updated);
+  }
+
+  private async discardIcon(url: string | null) {
+    if (!url) return;
+    try {
+      await this.storage.deleteFile(url);
+    } catch (err) {
+      this.logger.warn(
+        `Could not delete provider icon: ${err instanceof Error ? err.message : 'storage error'}`
+      );
+    }
   }
 
   // ========== Org settings ==========

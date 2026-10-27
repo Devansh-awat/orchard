@@ -6,6 +6,7 @@
 	import SsoProviderModal from '$lib/components/org-settings/SsoProviderModal.svelte';
 	import { ProviderIcon } from '$lib/components/login';
 	import { draftToPayload } from '$lib/components/org-settings/sso-types';
+	import { removeProviderIcon, uploadProviderIcon } from '$lib/components/org-settings/sso-icon';
 	import type {
 		ProviderDraft,
 		SsoProvider,
@@ -87,9 +88,52 @@
 		}
 	}
 
+	function providerUrl(id: string) {
+		return `/apiv1/admin/sso/providers/${id}`;
+	}
+
+	function replaceProvider(updated: SsoProvider) {
+		providers = providers.map((p) => (p.id === updated.id ? updated : p));
+		if (editing?.id === updated.id) editing = updated;
+	}
+
+	async function sendIcon(id: string, file: File) {
+		try {
+			const updated = await uploadProviderIcon(providerUrl(id), file);
+			replaceProvider(updated);
+			return updated.iconUrl;
+		} catch (e) {
+			toasts.add({
+				title: 'Could not upload the icon',
+				description: e instanceof Error ? e.message : undefined,
+				color: 'error'
+			});
+			return null;
+		}
+	}
+
+	async function uploadIcon(file: File) {
+		return editing ? sendIcon(editing.id, file) : null;
+	}
+
+	async function removeIcon() {
+		if (!editing) return;
+		try {
+			replaceProvider(await removeProviderIcon(providerUrl(editing.id)));
+		} catch (e) {
+			toasts.add({
+				title: 'Could not remove the icon',
+				description: e instanceof Error ? e.message : undefined,
+				color: 'error'
+			});
+			throw e;
+		}
+	}
+
 	async function saveProvider(draft: ProviderDraft) {
 		saving = true;
 		modalError = null;
+		const pendingIcon = draft.pendingIcon ?? null;
 		try {
 			const res = await apiFetch(
 				editing ? `/apiv1/admin/sso/providers/${editing.id}` : '/apiv1/admin/sso/providers',
@@ -101,6 +145,7 @@
 			);
 			const data = await res.json().catch(() => ({}));
 			if (!res.ok) throw new Error(data?.message || 'Could not save the provider');
+			if (pendingIcon) await sendIcon((data as SsoProvider).id, pendingIcon);
 			showModal = false;
 			editing = null;
 			toasts.add({ title: 'Provider saved', color: 'success' });
@@ -251,7 +296,13 @@
 					{#each providers as provider (provider.id)}
 						{@const status = statusOf(provider)}
 						<li class="asso-row">
-							<span class="asso-row-icon"><ProviderIcon preset={provider.preset} size={18} /></span>
+							<span class="asso-row-icon"
+								><ProviderIcon
+									preset={provider.preset}
+									iconUrl={provider.iconUrl}
+									size={18}
+								/></span
+							>
 							<div class="asso-row-main">
 								<span class="asso-row-name">{provider.name}</span>
 								<span class="asso-row-meta">
@@ -412,6 +463,8 @@
 	{saving}
 	error={modalError}
 	onSave={saveProvider}
+	onIconUpload={uploadIcon}
+	onIconRemove={removeIcon}
 	onClose={() => {
 		editing = null;
 		modalError = null;

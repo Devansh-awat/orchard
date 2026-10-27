@@ -7,9 +7,13 @@ import {
   Param,
   Body,
   Request,
-  NotFoundException
+  NotFoundException,
+  UploadedFile,
+  UseInterceptors
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { SsoService, ProviderInput, SettingsInput } from './sso.service';
+import { assertProviderIcon, PROVIDER_ICON_UPLOAD } from './provider-icon';
 import { SsoLoginService } from './sso-login.service';
 import { OrgDomainsService } from './org-domains.service';
 import { publicPresets } from './presets';
@@ -171,6 +175,28 @@ export class SsoAdminController {
   ) {
     const actor = await this.requireOwner(organizationId, req);
     return this.sso.deleteProvider(providerId, organizationId, actor);
+  }
+
+  @Post('providers/:providerId/icon')
+  @UseInterceptors(FileInterceptor('file', PROVIDER_ICON_UPLOAD))
+  async uploadProviderIcon(
+    @Param('id') organizationId: string,
+    @Param('providerId') providerId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Request() req
+  ) {
+    const actor = await this.requireOwner(organizationId, req);
+    return this.sso.uploadProviderIcon(providerId, organizationId, assertProviderIcon(file), actor);
+  }
+
+  @Delete('providers/:providerId/icon')
+  async removeProviderIcon(
+    @Param('id') organizationId: string,
+    @Param('providerId') providerId: string,
+    @Request() req
+  ) {
+    const actor = await this.requireOwner(organizationId, req);
+    return this.sso.removeProviderIcon(providerId, organizationId, actor);
   }
 
   @Post('providers/:providerId/test')

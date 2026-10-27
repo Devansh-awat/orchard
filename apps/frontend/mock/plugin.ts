@@ -10,12 +10,54 @@ const PREFIX = '/apiv1';
 const METHODS = new Set<Method>(['GET', 'POST', 'PATCH', 'PUT', 'DELETE']);
 const PUBLIC = /^\/(auth|sso|health|setup\/status|invitations\/[^/]+$)/;
 
+export interface MockUpload {
+	filename: string;
+	type: string;
+	data: Buffer;
+}
+
+function parseMultipart(raw: Buffer, boundary: string) {
+	const fields: Record<string, string> = {};
+	const files: Record<string, MockUpload> = {};
+	const delimiter = Buffer.from(`--${boundary}`);
+	let start = raw.indexOf(delimiter);
+	while (start !== -1) {
+		const next = raw.indexOf(delimiter, start + delimiter.length);
+		if (next === -1) break;
+		const part = raw.subarray(start + delimiter.length + 2, next - 2);
+		const split = part.indexOf('\r\n\r\n');
+		if (split !== -1) {
+			const head = part.subarray(0, split).toString('utf8');
+			const data = part.subarray(split + 4);
+			const name = /name="([^"]*)"/.exec(head)?.[1];
+			const filename = /filename="([^"]*)"/.exec(head)?.[1];
+			const type = /content-type:\s*([^\r\n]+)/i.exec(head)?.[1]?.trim();
+			if (name && filename !== undefined) {
+				files[name] = {
+					filename,
+					type: type ?? 'application/octet-stream',
+					data: Buffer.from(data)
+				};
+			} else if (name) {
+				fields[name] = data.toString('utf8');
+			}
+		}
+		start = next;
+	}
+	return { fields, files };
+}
+
 function readBody(req: IncomingMessage): Promise<any> {
 	return new Promise((resolve) => {
 		const chunks: Buffer[] = [];
 		req.on('data', (c: Buffer) => chunks.push(c));
 		req.on('end', () => {
-			const raw = Buffer.concat(chunks).toString('utf8');
+			const buffer = Buffer.concat(chunks);
+			const boundary = /multipart\/form-data;.*boundary=("?)([^";]+)\1/i.exec(
+				req.headers['content-type'] ?? ''
+			)?.[2];
+			if (boundary) return resolve(parseMultipart(buffer, boundary));
+			const raw = buffer.toString('utf8');
 			if (!raw) return resolve(undefined);
 			try {
 				resolve(JSON.parse(raw));

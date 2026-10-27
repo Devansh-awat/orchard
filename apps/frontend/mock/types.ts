@@ -249,6 +249,38 @@ export interface MockJobRun {
 	steps: MockJobRunStep[];
 }
 
+export interface MockSsoProvider {
+	id: string;
+	organizationId: string | null;
+	slug: string;
+	name: string;
+	preset: string;
+	protocol: 'oidc' | 'saml' | 'oauth2';
+	enabled: boolean;
+	buttonLabel: string | null;
+	iconUrl: string | null;
+	sortOrder: number;
+	issuerUrl: string | null;
+	clientId: string | null;
+	clientSecret: string | null;
+	scopes: string | null;
+	authorizationUrl: string | null;
+	tokenUrl: string | null;
+	userinfoUrl: string | null;
+	samlEntryPoint: string | null;
+	samlIssuer: string | null;
+	samlIdpEntityId: string | null;
+	samlCertificate: string | null;
+	samlMetadataUrl: string | null;
+	jitProvisioning: boolean;
+	defaultRole: 'admin' | 'member' | 'guest';
+	allowedDomains: string[];
+	requireVerifiedEmail: boolean;
+	lastUsedAt: string | null;
+	createdAt: string;
+	updatedAt: string;
+}
+
 export interface MockState {
 	signedIn: boolean;
 	meId: string;
@@ -262,5 +294,6 @@ export interface MockState {
 	databases: MockDatabase[];
 	jobs: MockJob[];
 	jobRuns: MockJobRun[];
+	ssoProviders: MockSsoProvider[];
 	pinned: { type: string; id: string }[];
 }

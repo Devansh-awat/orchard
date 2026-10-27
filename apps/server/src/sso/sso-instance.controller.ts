@@ -1,7 +1,20 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, Request } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  Request,
+  UploadedFile,
+  UseInterceptors
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { SsoService, ProviderInput } from './sso.service';
 import { SsoLoginService } from './sso-login.service';
 import { publicPresets } from './presets';
+import { assertProviderIcon, PROVIDER_ICON_UPLOAD } from './provider-icon';
 
 /**
  * Instance-wide SSO. Superadmin-only by default-deny: no @Auth()/@SuperAdmin()
@@ -76,6 +89,21 @@ export class SsoInstanceController {
   @Delete('providers/:providerId')
   deleteProvider(@Param('providerId') providerId: string, @Request() req) {
     return this.sso.deleteProvider(providerId, null, this.actor(req));
+  }
+
+  @Post('providers/:providerId/icon')
+  @UseInterceptors(FileInterceptor('file', PROVIDER_ICON_UPLOAD))
+  uploadProviderIcon(
+    @Param('providerId') providerId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Request() req
+  ) {
+    return this.sso.uploadProviderIcon(providerId, null, assertProviderIcon(file), this.actor(req));
+  }
+
+  @Delete('providers/:providerId/icon')
+  removeProviderIcon(@Param('providerId') providerId: string, @Request() req) {
+    return this.sso.removeProviderIcon(providerId, null, this.actor(req));
   }
 
   @Post('providers/:providerId/test')

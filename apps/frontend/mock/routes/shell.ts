@@ -68,7 +68,9 @@ export function shellRoutes(r: Router, { store, hub, log }: MockContext) {
 			preset: 'generic',
 			protocol: 'oauth2',
 			label: 'Continue as alfd (mock)',
-			iconUrl: null,
+			iconUrl:
+				store.state.ssoProviders.find((p) => p.organizationId === store.state.orgs[0]?.id)
+					?.iconUrl ?? null,
 			startUrl: '/apiv1/auth/mock-login',
 			source: 'env'
 		}

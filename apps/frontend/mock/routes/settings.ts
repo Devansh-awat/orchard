@@ -1,10 +1,112 @@
-import { freshId, sha, uid } from '../ids.ts';
-import type { MockContext } from '../plugin.ts';
-import { notFound, type Router } from '../router.ts';
-import { memberRow, orgRow, userRow } from '../serialize.ts';
+import { freshId, sha, slugify, uid } from '../ids.ts';
+import type { MockContext, MockUpload } from '../plugin.ts';
+import { notFound, reply, type Router } from '../router.ts';
+import { memberRow, orgRow, ssoProviderRow, userRow } from '../serialize.ts';
 import type { Store } from '../store.ts';
+import type { MockSsoProvider } from '../types.ts';
 
 const MIB = 1024 ** 2;
+
+const ICON_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
+
+const SSO_PRESETS = [
+	{
+		id: 'google',
+		name: 'Google Workspace',
+		protocol: 'oidc',
+		category: 'social',
+		buttonLabel: 'Continue with Google',
+		scopes: 'openid email profile',
+		fields: ['clientId', 'clientSecret'],
+		issuerUrl: 'https://accounts.google.com',
+		issuerTemplate: null,
+		docsUrl: 'https://console.cloud.google.com/apis/credentials',
+		hint: 'Create an OAuth 2.0 Web application credential and paste the client id and secret.'
+	},
+	{
+		id: 'github',
+		name: 'GitHub',
+		protocol: 'oauth2',
+		category: 'social',
+		buttonLabel: 'Continue with GitHub',
+		scopes: 'read:user user:email',
+		fields: ['clientId', 'clientSecret'],
+		issuerUrl: null,
+		issuerTemplate: null,
+		docsUrl: 'https://github.com/settings/developers',
+		hint: 'GitHub has no OIDC discovery, so we read the primary verified email from its API.'
+	},
+	{
+		id: 'generic',
+		name: 'OpenID Connect',
+		protocol: 'oidc',
+		category: 'custom',
+		buttonLabel: 'Continue with SSO',
+		scopes: 'openid email profile',
+		fields: ['issuerUrl', 'clientId', 'clientSecret', 'scopes'],
+		issuerUrl: null,
+		issuerTemplate: null,
+		docsUrl: null,
+		hint: 'Any spec-compliant IdP that publishes /.well-known/openid-configuration.'
+	},
+	{
+		id: 'saml',
+		name: 'SAML 2.0',
+		protocol: 'saml',
+		category: 'custom',
+		buttonLabel: 'Continue with SSO',
+		scopes: '',
+		fields: [],
+		issuerUrl: null,
+		issuerTemplate: null,
+		docsUrl: null,
+		hint: null
+	}
+];
+
+const PROVIDER_FIELDS = [
+	'name',
+	'preset',
+	'protocol',
+	'enabled',
+	'buttonLabel',
+	'iconUrl',
+	'sortOrder',
+	'issuerUrl',
+	'clientId',
+	'scopes',
+	'authorizationUrl',
+	'tokenUrl',
+	'userinfoUrl',
+	'samlEntryPoint',
+	'samlIssuer',
+	'samlIdpEntityId',
+	'samlMetadataUrl',
+	'jitProvisioning',
+	'defaultRole',
+	'allowedDomains',
+	'requireVerifiedEmail'
+] as const;
+
+function applyProviderInput(p: MockSsoProvider, body: any) {
+	for (const key of PROVIDER_FIELDS) {
+		if (body?.[key] !== undefined) (p as any)[key] = body[key];
+	}
+	if (body?.clientSecret) p.clientSecret = 'stored';
+	if (body?.samlCertificate) p.samlCertificate = 'stored';
+	p.updatedAt = new Date().toISOString();
+}
+
+function iconDataUrl(file: MockUpload | undefined) {
+	if (!file) return reply(400, { statusCode: 400, message: 'No file provided' });
+	if (!ICON_TYPES.has(file.type)) {
+		return reply(400, { statusCode: 400, message: 'Icons must be PNG, JPEG, or WebP' });
+	}
+	if (file.data.length > MIB) {
+		return reply(400, { statusCode: 400, message: 'Icons must be 1 MB or smaller' });
+	}
+	return `data:${file.type};base64,${file.data.toString('base64')}`;
+}
 
 function usageBreakdown(store: Store, orgId: string, userId?: string) {
 	const pids = new Set(store.projectsOf(orgId).map((p) => p.id));
@@ -144,6 +246,90 @@ export function settingsRoutes(r: Router, { store }: MockContext) {
 				project: store.project(d.projectId)!.name
 			}));
 	});
+	const orgProviders = (orgId: string) =>
+		store.state.ssoProviders
+			.filter((p) => p.organizationId === orgId)
+			.sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt));
+	const orgProvider = (orgId: string, providerId: string) =>
+		store.state.ssoProviders.find((p) => p.id === providerId && p.organizationId === orgId);
+
+	r.get('/organizations/:id/sso/providers', ({ params }) =>
+		orgProviders(params.id).map(ssoProviderRow)
+	);
+	r.post('/organizations/:id/sso/providers', ({ params, body }) => {
+		if (!org(params.id)) return notFound('Organization not found');
+		const name = String(body?.name ?? '').trim();
+		if (!name) return reply(400, { statusCode: 400, message: 'Provider name is required' });
+		const now = new Date().toISOString();
+		const p: MockSsoProvider = {
+			id: freshId(),
+			organizationId: params.id,
+			slug: slugify(body?.slug || name) || 'sso',
+			name,
+			preset: 'generic',
+			protocol: 'oidc',
+			enabled: true,
+			buttonLabel: null,
+			iconUrl: null,
+			sortOrder: orgProviders(params.id).length,
+			issuerUrl: null,
+			clientId: null,
+			clientSecret: null,
+			scopes: null,
+			authorizationUrl: null,
+			tokenUrl: null,
+			userinfoUrl: null,
+			samlEntryPoint: null,
+			samlIssuer: null,
+			samlIdpEntityId: null,
+			samlCertificate: null,
+			samlMetadataUrl: null,
+			jitProvisioning: true,
+			defaultRole: 'member',
+			allowedDomains: [],
+			requireVerifiedEmail: true,
+			lastUsedAt: null,
+			createdAt: now,
+			updatedAt: now
+		};
+		applyProviderInput(p, body);
+		store.state.ssoProviders.push(p);
+		return ssoProviderRow(p);
+	});
+	r.get('/organizations/:id/sso/providers/:providerId', ({ params }) => {
+		const p = orgProvider(params.id, params.providerId);
+		return p ? ssoProviderRow(p) : notFound('Identity provider not found');
+	});
+	r.patch('/organizations/:id/sso/providers/:providerId', ({ params, body }) => {
+		const p = orgProvider(params.id, params.providerId);
+		if (!p) return notFound('Identity provider not found');
+		applyProviderInput(p, body);
+		return ssoProviderRow(p);
+	});
+	r.delete('/organizations/:id/sso/providers/:providerId', ({ params }) => {
+		const p = orgProvider(params.id, params.providerId);
+		if (!p) return notFound('Identity provider not found');
+		store.state.ssoProviders = store.state.ssoProviders.filter((x) => x.id !== p.id);
+		return { success: true };
+	});
+	r.post('/organizations/:id/sso/providers/:providerId/icon', ({ params, body }) => {
+		const p = orgProvider(params.id, params.providerId);
+		if (!p) return notFound('Identity provider not found');
+		const url = iconDataUrl(body?.files?.file);
+		if (typeof url !== 'string') return url;
+		p.iconUrl = url;
+		p.updatedAt = new Date().toISOString();
+		return ssoProviderRow(p);
+	});
+	r.delete('/organizations/:id/sso/providers/:providerId/icon', ({ params }) => {
+		const p = orgProvider(params.id, params.providerId);
+		if (!p) return notFound('Identity provider not found');
+		p.iconUrl = null;
+		p.updatedAt = new Date().toISOString();
+		return ssoProviderRow(p);
+	});
+	r.post('/organizations/:id/sso/providers/:providerId/test', () => ({ success: true }));
+
 	r.get('/organizations/:id/sso', ({ params }) => ({
 		settings: {
 			organizationId: params.id,
@@ -156,9 +342,9 @@ export function settingsRoutes(r: Router, { store }: MockContext) {
 			loginWelcomeText: null,
 			loginTagline: null
 		},
-		providers: [],
+		providers: orgProviders(params.id).map(ssoProviderRow),
 		domains: [],
-		presets: [],
+		presets: SSO_PRESETS,
 		loginUrl: null
 	}));
 	r.get('/audit-logs/organization/:orgId', ({ params }) => {
