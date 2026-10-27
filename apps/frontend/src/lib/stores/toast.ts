@@ -137,3 +137,7 @@ function createToastStore() {
 }
 
 export const toasts = createToastStore();
+
+export type ToastLook = 'tab' | 'capsule' | 'light';
+
+export const toastLook = writable<ToastLook>('tab');

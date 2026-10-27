@@ -38,7 +38,7 @@
 	import { exp } from './experiments.svelte';
 	import CommandPalette from '$lib/components/patterns/CommandPalette.svelte';
 	import { PALETTE_ITEMS, paletteActions } from '../palette-fixtures';
-	import { toasts } from '$lib/stores/toast';
+	import { toasts, toastLook } from '$lib/stores/toast';
 	import AppFrame from '$lib/components/patterns/AppFrame.svelte';
 	import Sidebar from '$lib/components/patterns/Sidebar.svelte';
 	import SectionTitle from '$lib/components/ui/SectionTitle.svelte';
@@ -63,6 +63,10 @@
 
 	const spark = [12, 18, 14, 22, 30, 26, 34, 28, 40, 36, 44, 38, 46, 52, 48, 56];
 	let paletteOpen = $state(false);
+	$effect(() => {
+		toastLook.set(exp.toastShape as 'tab' | 'capsule' | 'light');
+		return () => toastLook.set('tab');
+	});
 	const SIDE_KEY = 'orchard-dev-sidebar-collapsed';
 	let sideCollapsed = $state(
 		typeof localStorage !== 'undefined' && localStorage.getItem(SIDE_KEY) === '1'

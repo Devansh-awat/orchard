@@ -4,7 +4,7 @@
 	import Spinner from '$lib/components/ui/Spinner.svelte';
 	import { FADE, SpringValue } from '$lib/utils/motion.svelte';
 	import { tempo } from '$lib/design/springs';
-	import { toasts, TOAST_DURATION, type Toast } from '$lib/stores/toast';
+	import { toasts, toastLook, TOAST_DURATION, type Toast } from '$lib/stores/toast';
 
 	let {
 		toast,
@@ -64,6 +64,13 @@
 	const pillH = $derived(H + p * BLUR * 3);
 	const pillR = $derived(H / 2 - p * (H / 2 - ROUND));
 	const bodyH = $derived(Math.max(0, p * (openH - H)));
+	const single = $derived($toastLook !== 'tab');
+	const shapeX = $derived(single ? pillX * (1 - p) : pillX);
+	const shapeW = $derived(single ? pillW + p * (width - pillW) : pillW);
+	const shapeR = $derived(single ? H / 2 - p * (H / 2 - ROUND) : pillR);
+	const flushL = $derived(pillX < 0.5);
+	const flushR = $derived(pillX + pillW > width - 0.5);
+	const filler = $derived(Math.min(ROUND, bodyH));
 
 	const seams = $derived.by(() => {
 		const zones: { x: number; y: number; w: number; h: number }[] = [];
@@ -185,6 +192,7 @@
 	data-ready={ready || undefined}
 	data-exiting={toast.exiting || undefined}
 	data-edge={expand}
+	data-look={$toastLook}
 	role={toast.color === 'error' ? 'alert' : 'status'}
 	tabindex="-1"
 	style:--w="{width}px"
@@ -202,6 +210,20 @@
 			<svg {width} height={svgH} viewBox="0 0 {width} {svgH}" aria-hidden="true">
 				{#snippet shapes()}
 					<rect class="shape" x={pillX} y="0" width={pillW} height={pillH} rx={pillR} />
+					{#if hasMore && filler > 0}
+						{#if flushL}
+							<rect class="shape" x="0" y={H - ROUND} width={ROUND} height={ROUND + filler} />
+						{/if}
+						{#if flushR}
+							<rect
+								class="shape"
+								x={width - ROUND}
+								y={H - ROUND}
+								width={ROUND}
+								height={ROUND + filler}
+							/>
+						{/if}
+					{/if}
 					{#if hasMore}
 						<rect
 							class="shape"
@@ -234,7 +256,9 @@
 						<feComposite in="SourceGraphic" in2="goo" operator="atop" />
 					</filter>
 				</defs>
-				{#if hasMore && p > 0.01}
+				{#if single}
+					<rect class="shape" x={shapeX} y="0" width={shapeW} height={height} rx={shapeR} />
+				{:else if hasMore && p > 0.01}
 					<clipPath id="seam-{uid}">
 						{#each seams as z, i (i)}<rect x={z.x} y={z.y} width={z.w} height={z.h} />{/each}
 					</clipPath>
@@ -244,16 +268,18 @@
 						</g>
 					</g>
 				{/if}
-				{@render shapes()}
+				{#if !single}{@render shapes()}{/if}
 			</svg>
 		</div>
 
 		<div
 			class="header"
 			data-edge={expand}
-			style:left="{pillX}px"
+			style:left="{single ? shapeX : pillX}px"
 			style:max-width="{pillW}px"
-			style:transform="translateY({p * 3 * sign}px) scale({1 - p * 0.1})"
+			style:transform={single
+				? `translateY(${p * 2 * sign}px)`
+				: `translateY(${p * 3 * sign}px) scale(${1 - p * 0.1})`}
 		>
 			<div class="stack">
 				{#key current.key}
@@ -375,6 +401,19 @@
 	}
 	.shape {
 		fill: var(--toast-fill);
+	}
+	.toast[data-look='light'] {
+		--toast-fill: var(--bg-raised);
+		--toast-muted: var(--text-muted);
+		--toast-success: var(--green-9);
+		--toast-error: var(--red-9);
+		--toast-warning: var(--amber-9);
+		--toast-info: var(--blue-9);
+		--toast-loading: var(--text-muted);
+	}
+	.toast[data-look='light'] .canvas {
+		filter: drop-shadow(0 0 0.5px color-mix(in oklab, var(--neutral-10) 30%, transparent))
+			drop-shadow(0 8px 20px color-mix(in oklab, var(--neutral-10) 14%, transparent));
 	}
 
 	.header {

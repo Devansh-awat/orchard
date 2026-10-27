@@ -11,6 +11,18 @@ const off = { value: 'off', label: 'Off' };
 
 export const EXPERIMENTS: Experiment[] = [
 	{
+		id: 'toastShape',
+		hint: 'Simulate: Show a toast',
+		label: 'Toast shape',
+		group: 'Toasts',
+		options: [
+			{ value: 'tab', label: 'Tab' },
+			{ value: 'capsule', label: 'Capsule' },
+			{ value: 'light', label: 'Light' }
+		],
+		initial: 'capsule'
+	},
+	{
 		id: 'island',
 		hint: 'Simulate a build, then show a toast while it runs',
 		label: 'Notifications',
@@ -84,7 +96,7 @@ export function runAction(id: string) {
 	for (const fn of listeners) fn(id);
 }
 
-const KEY = 'orchard-dev-experiments-v7';
+const KEY = 'orchard-dev-experiments-v8';
 
 function load(): Record<string, string> {
 	const base = Object.fromEntries(EXPERIMENTS.map((e) => [e.id, e.initial]));
