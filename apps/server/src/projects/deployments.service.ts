@@ -2174,7 +2174,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       firstName?: string;
       lastName?: string;
       imageUrl?: string;
-    }
+    },
+    options?: { fromComposeStack?: boolean }
   ) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
 
@@ -2196,7 +2197,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     if (!deployment) {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
-    this.assertNotComposeManaged(deployment, 'Scale');
+    if (!options?.fromComposeStack) this.assertNotComposeManaged(deployment, 'Scale');
 
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'scale deployments');
 
@@ -3543,7 +3544,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       firstName?: string;
       lastName?: string;
       imageUrl?: string;
-    }
+    },
+    options?: { fromComposeStack?: boolean }
   ) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
 
@@ -3565,7 +3567,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     if (!deployment) {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
-    this.assertNotComposeManaged(deployment, 'Update volumes');
+    if (!options?.fromComposeStack) this.assertNotComposeManaged(deployment, 'Update volumes');
 
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'update deployments');
 
@@ -6178,7 +6180,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  async updateDeploymentImage(deploymentId: string, image: string, userId?: string) {
+  async updateDeploymentImage(
+    deploymentId: string,
+    image: string,
+    userId?: string,
+    options?: { fromComposeStack?: boolean }
+  ) {
     const trimmed = (image ?? '').toString().trim();
     if (!trimmed) {
       throw new BadRequestException('Image cannot be empty');
@@ -6188,7 +6195,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       where: { id: deploymentId }
     });
     if (!deployment) throw new NotFoundException('Deployment not found');
-    this.assertNotComposeManaged(deployment, 'Change the image');
+    if (!options?.fromComposeStack) this.assertNotComposeManaged(deployment, 'Change the image');
 
     // Defense-in-depth: re-assert project-edit even though the controller already did.
     if (userId) {
@@ -6246,18 +6253,21 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   async updateDeploymentResources(
     deploymentId: string,
     data: { cpuRequestMilli: number | null; memoryRequestBytes: number | null },
-    userId?: string
+    userId?: string,
+    options?: { fromComposeStack?: boolean }
   ) {
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
       include: { project: true }
     });
     if (!deployment) throw new NotFoundException('Deployment not found');
-    this.assertNotComposeManaged(
-      deployment,
-      'Update resources',
-      'Set `deploy.resources.limits` on the service in your compose file, then redeploy the stack to apply it.'
-    );
+    if (!options?.fromComposeStack) {
+      this.assertNotComposeManaged(
+        deployment,
+        'Update resources',
+        'Set `deploy.resources.limits` on the service in your compose file, then redeploy the stack to apply it.'
+      );
+    }
 
     // Defense-in-depth: re-assert project-edit even though the controller already did.
     if (userId) {

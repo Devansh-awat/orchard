@@ -208,7 +208,7 @@ func composeDeployCmd() *cobra.Command {
 func composeRedeployCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "redeploy <stackId>",
-		Short: "Re-pull the compose file and recreate every service deployment",
+		Short: "Re-pull the compose file and apply it to the stack's services",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, _, err := client()

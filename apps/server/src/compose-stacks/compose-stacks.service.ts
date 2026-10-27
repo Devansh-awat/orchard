@@ -6,6 +6,7 @@ import {
   Logger
 } from '@nestjs/common';
 import * as yaml from 'js-yaml';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
 import { DeploymentsService } from '../projects/deployments.service';
@@ -77,6 +78,26 @@ function scrubComposeStackForViewer<
 >(stack: T): T {
   return { ...stack, composeYaml: '', buildLogs: '', lastError: null };
 }
+
+const CHILD_SELECT = {
+  id: true,
+  name: true,
+  composeServiceName: true,
+  githubRepo: true,
+  image: true,
+  replicas: true,
+  stopped: true,
+  cpuRequestMilli: true,
+  memoryRequestBytes: true,
+  startCommand: true,
+  dockerfilePath: true,
+  buildFromRoot: true,
+  envVars: { select: { key: true, value: true, secret: true } },
+  volumes: true,
+  services: { select: { id: true, name: true, ports: true } }
+} satisfies Prisma.DeploymentSelect;
+
+type ComposeChild = Prisma.DeploymentGetPayload<{ select: typeof CHILD_SELECT }>;
 
 interface PreservedEnv {
   key: string;
@@ -466,11 +487,10 @@ export class ComposeStacksService {
   }
 
   /**
-   * Re-pull compose from GitHub and recreate all child deployments. The
-   * existing per-deployment auto-deploy webhook handler will continue to
-   * rebuild individual services when commits land on the tracked branch; this
-   * method is for cases where the *compose file itself* changed (new services
-   * added, services removed, ports/env changed).
+   * Re-pull compose from GitHub and reconcile the child deployments against it.
+   * A service that still exists keeps its deployment, so everything attached
+   * to it survives: domains, volumes and their data, env edits, history. Only
+   * services added to or removed from the file are created or deleted.
    */
   async redeployFromGithub(stackId: string, clerkId: string, userData?: UserData) {
     const stack = await this.prisma.composeStack.findUnique({ where: { id: stackId } });
@@ -504,20 +524,26 @@ export class ComposeStacksService {
       throw e;
     }
 
-    const existingChildren = await this.prisma.deployment.findMany({
-      where: { composeStackId: stackId },
-      select: {
-        composeServiceName: true,
-        envVars: { select: { key: true, value: true, secret: true } }
-      }
+    const children = await this.loadChildren(stackId);
+    const wanted = new Map(services.map((svc) => [svc.name, svc]));
+    const replaced = children.filter((child) => {
+      const svc = child.composeServiceName ? wanted.get(child.composeServiceName) : undefined;
+      return !svc || Boolean(svc.build) !== Boolean(child.githubRepo);
     });
+    const kept = children.filter((child) => !replaced.includes(child));
+
     const preservedEnv = new Map<string, PreservedEnv[]>();
-    for (const child of existingChildren) {
+    for (const child of replaced) {
       if (child.composeServiceName) preservedEnv.set(child.composeServiceName, child.envVars);
     }
 
     try {
-      await this.deleteChildDeployments(stackId, clerkId, userData);
+      await this.deleteChildDeployments(
+        stackId,
+        clerkId,
+        userData,
+        replaced.map((child) => child.id)
+      );
     } catch (e: any) {
       await this.prisma.composeStack.update({
         where: { id: stackId },
@@ -532,7 +558,23 @@ export class ComposeStacksService {
     });
 
     try {
-      await this.deployChildren(stackId, services, clerkId, userData, preservedEnv);
+      for (const child of kept) {
+        await this.reconcileChild(
+          child,
+          wanted.get(child.composeServiceName!)!,
+          userId,
+          clerkId,
+          userData
+        );
+      }
+      const existing = new Set(kept.map((child) => child.composeServiceName));
+      await this.deployChildren(
+        stackId,
+        services.filter((svc) => !existing.has(svc.name)),
+        clerkId,
+        userData,
+        preservedEnv
+      );
       await this.prisma.composeStack.update({
         where: { id: stackId },
         data: { status: 'active', lastError: null }
@@ -545,6 +587,143 @@ export class ComposeStacksService {
       });
       throw new BadRequestException(`Compose stack redeploy failed: ${e.message}`);
     }
+  }
+
+  private loadChildren(stackId: string): Promise<ComposeChild[]> {
+    return this.prisma.deployment.findMany({
+      where: { composeStackId: stackId },
+      select: CHILD_SELECT
+    });
+  }
+
+  private async reconcileChild(
+    child: ComposeChild,
+    svc: ParsedComposeService,
+    userId: string,
+    clerkId: string,
+    userData?: UserData
+  ) {
+    const asCompose = { fromComposeStack: true };
+
+    const stored = new Map(child.envVars.map((e) => [e.key, e]));
+    const envChanged = svc.env.some((e) => {
+      const current = stored.get(e.key);
+      return !current || current.secret || current.value !== e.value;
+    });
+    if (envChanged) {
+      const composeKeys = new Set(svc.env.map((e) => e.key));
+      await this.deployments.updateDeploymentEnvVars(
+        child.id,
+        [
+          ...child.envVars
+            .filter((e) => !composeKeys.has(e.key))
+            .map((e) => ({ key: e.key, value: null, secret: e.secret })),
+          ...svc.env.map((e) => ({
+            key: e.key,
+            value: e.value,
+            secret: stored.get(e.key)?.secret ?? false
+          }))
+        ],
+        clerkId,
+        userData
+      );
+    }
+
+    const mounted = new Set(child.volumes.map((v) => v.name));
+    const addedVolumes = svc.volumes.filter((v) => !mounted.has(v.name));
+    if (addedVolumes.length > 0) {
+      await this.deployments.updateDeploymentVolumes(
+        child.id,
+        [
+          ...child.volumes.map((v) => ({
+            name: v.name,
+            type: v.type as 'pvc' | 'hostPath' | 'emptyDir',
+            mountPath: v.mountPath,
+            pvcName: v.pvcName ?? undefined,
+            storageSize: v.storageSize ?? undefined,
+            hostPath: v.hostPath ?? undefined,
+            readOnly: v.readOnly
+          })),
+          ...addedVolumes.map((v) => ({
+            name: v.name,
+            type: v.type,
+            mountPath: v.mountPath,
+            pvcName: v.name,
+            storageSize: v.storageSize
+          }))
+        ],
+        clerkId,
+        userData,
+        asCompose
+      );
+    }
+
+    const cpu = svc.cpuRequestMilli ?? null;
+    const memory = svc.memoryRequestBytes ?? null;
+    const storedMemory = child.memoryRequestBytes != null ? Number(child.memoryRequestBytes) : null;
+    if (cpu !== child.cpuRequestMilli || memory !== storedMemory) {
+      await this.deployments.updateDeploymentResources(
+        child.id,
+        { cpuRequestMilli: cpu, memoryRequestBytes: memory },
+        userId,
+        asCompose
+      );
+    }
+
+    if (!child.stopped && svc.replicas !== child.replicas) {
+      await this.deployments.scaleDeployment(child.id, svc.replicas, clerkId, userData, asCompose);
+    }
+
+    const primary = child.services.find((s) => s.name === child.name) ?? child.services[0];
+    if (primary && svc.ports.length > 0 && !this.samePorts(primary.ports, svc.ports)) {
+      await this.deployments.updateServiceConfiguration(
+        child.id,
+        primary.id,
+        { ports: svc.ports },
+        clerkId,
+        userData
+      );
+    }
+
+    const buildConfig: {
+      startCommand?: string | null;
+      dockerfilePath?: string;
+      buildFromRoot?: boolean;
+    } = {};
+    if ((svc.command ?? null) !== (child.startCommand ?? null)) {
+      buildConfig.startCommand = svc.command ?? null;
+    }
+    if (svc.build) {
+      const dockerfilePath = svc.build.dockerfile || 'Dockerfile';
+      const buildFromRoot =
+        !svc.build.context || svc.build.context === '.' || svc.build.context === './';
+      if (dockerfilePath !== child.dockerfilePath) buildConfig.dockerfilePath = dockerfilePath;
+      if (buildFromRoot !== child.buildFromRoot) buildConfig.buildFromRoot = buildFromRoot;
+    }
+    if (Object.keys(buildConfig).length > 0) {
+      await this.deployments.updateDeploymentBuildConfig(child.id, buildConfig, clerkId, userData);
+    }
+
+    if (svc.build) {
+      await this.deployments.rebuildDeployment(child.id, clerkId, userData);
+    } else if (svc.image && svc.image !== child.image) {
+      await this.deployments.updateDeploymentImage(child.id, svc.image, userId, asCompose);
+    } else if (!child.stopped) {
+      await this.deployments.restartDeployment(child.id, clerkId, userData);
+    }
+  }
+
+  private samePorts(
+    current: { port: number; targetPort: number; protocol: string }[],
+    wanted: ParsedComposeService['ports']
+  ) {
+    const key = (p: { servicePort: number; containerPort: number; protocol: string }) =>
+      `${p.servicePort}:${p.containerPort}/${p.protocol.toUpperCase()}`;
+    const have = current
+      .map((p) => key({ servicePort: p.port, containerPort: p.targetPort, protocol: p.protocol }))
+      .sort();
+    const want = wanted.map(key).sort();
+    return have.length === want.length && have.every((k, i) => k === want[i]);
   }
 
   async setAutoDeploy(stackId: string, enabled: boolean, clerkId: string, userData?: UserData) {
@@ -668,9 +847,14 @@ export class ComposeStacksService {
     return { success: true };
   }
 
-  private async deleteChildDeployments(stackId: string, clerkId: string, userData?: UserData) {
+  private async deleteChildDeployments(
+    stackId: string,
+    clerkId: string,
+    userData?: UserData,
+    onlyIds?: string[]
+  ) {
     const deployments = await this.prisma.deployment.findMany({
-      where: { composeStackId: stackId },
+      where: { composeStackId: stackId, ...(onlyIds && { id: { in: onlyIds } }) },
       select: { id: true }
     });
     const errors: string[] = [];
