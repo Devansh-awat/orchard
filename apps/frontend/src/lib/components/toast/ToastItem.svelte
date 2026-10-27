@@ -24,8 +24,10 @@
 	const INSET = 8;
 	const TAIL = 14;
 	const MIN_OPEN = H * 2.25;
-	const TEXT_X = 40;
-	const TEXT_END = 16;
+	const TEXT_X = 44;
+	const TEXT_END = 12;
+	const PAD = 12;
+	const DESC_TOP = 38;
 	const OPEN_MAX = 300;
 	const SWIPE_MAX = 20;
 	const SWIPE_DISMISS = 30;
@@ -58,7 +60,7 @@
 	);
 
 	const openH = $derived(
-		$toastLook !== 'tab' ? H + contentH : Math.max(MIN_OPEN, H + contentH)
+		$toastLook !== 'tab' ? DESC_TOP + contentH : Math.max(MIN_OPEN, H + contentH)
 	);
 	const p = $derived(progress.current);
 	const height = $derived(H + p * (openH - H));
@@ -72,7 +74,7 @@
 	const bodyH = $derived(Math.max(0, p * (openH - H)));
 	const single = $derived($toastLook !== 'tab');
 	const targetW = $derived(
-		Math.min(width, Math.min(OPEN_MAX, Math.max(pillW, descNatural + TEXT_X + TEXT_END)))
+		Math.min(width, Math.min(OPEN_MAX, Math.max(pillW, Math.ceil(descNatural) + TEXT_X + TEXT_END + 2)))
 	);
 	const targetX = $derived(
 		align === 'right' ? width - targetW : align === 'center' ? (width - targetW) / 2 : 0
@@ -286,11 +288,12 @@
 
 		<div
 			class="header"
+			class:header--single={single}
 			data-edge={expand}
 			style:left="{single ? shapeX : pillX}px"
 			style:max-width="{pillW}px"
 			style:transform={single
-				? `translateY(${p * 2 * sign}px)`
+				? `translate(${p * (PAD - 8)}px, ${p * (PAD - 8)}px)`
 				: `translateY(${p * 3 * sign}px) scale(${1 - p * 0.1})`}
 		>
 			<div class="stack">
@@ -556,14 +559,18 @@
 		font-size: var(--text-callout);
 		pointer-events: none;
 	}
+	.header--single[data-edge] {
+		top: 0;
+		bottom: auto;
+	}
+	.content--single[data-edge] {
+		top: 38px;
+	}
 	.content--single .description {
 		gap: 0.5rem;
-		padding: 0.75rem 1rem 0 2.5rem;
+		padding: 0 0.75rem 0.75rem 2.75rem;
 		font-size: var(--text-callout);
 		line-height: 1.125rem;
-	}
-	.content--single[data-edge='bottom'] .description {
-		padding: 0 1rem 0.75rem 2.5rem;
 	}
 	.description {
 		display: flex;
