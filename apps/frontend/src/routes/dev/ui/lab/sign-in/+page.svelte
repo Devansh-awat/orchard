@@ -35,7 +35,7 @@
 {/snippet}
 
 {#snippet pitch()}
-	{#if key === 'org'}sign in to <em>Northwind</em>.{:else}sign in to your <em>own</em> cloud.{/if}
+	{#if key === 'org'}sign in to <em>Northwind</em>.{:else}sign in to <em>Orchard</em>.{/if}
 {/snippet}
 
 {#snippet mark()}

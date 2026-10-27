@@ -150,7 +150,7 @@
 	.auth--hero {
 		--golden-minor: 38.2;
 		display: grid;
-		grid-template-columns: minmax(0, 61.8fr) minmax(26rem, 38.2fr);
+		grid-template-columns: minmax(22rem, 38.2fr) minmax(28rem, 61.8fr);
 	}
 	.field {
 		position: fixed;
@@ -196,15 +196,14 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
-		max-width: 34rem;
+		max-width: 26rem;
 	}
 	.headline {
 		margin: 0;
-		font-size: clamp(2rem, 3.6vw, 3.25rem);
+		font-size: clamp(1.75rem, 2.7vw, 2.625rem);
 		line-height: 1.18;
 		font-weight: var(--weight-medium);
 		letter-spacing: -0.025em;
-		text-transform: lowercase;
 		text-wrap: balance;
 		text-box: trim-both cap alphabetic;
 	}
