@@ -74,7 +74,10 @@
 	const bodyH = $derived(Math.max(0, p * (openH - H)));
 	const single = $derived($toastLook !== 'tab');
 	const targetW = $derived(
-		Math.min(width, Math.min(OPEN_MAX, Math.max(pillW, Math.ceil(descNatural) + TEXT_X + TEXT_END + 2)))
+		Math.min(
+			width,
+			Math.min(OPEN_MAX, Math.max(pillW, Math.ceil(descNatural) + TEXT_X + TEXT_END + 2))
+		)
 	);
 	const targetX = $derived(
 		align === 'right' ? width - targetW : align === 'center' ? (width - targetW) / 2 : 0
@@ -271,7 +274,7 @@
 					</filter>
 				</defs>
 				{#if single}
-					<rect class="shape" x={shapeX} y="0" width={shapeW} height={height} rx={shapeR} />
+					<rect class="shape" x={shapeX} y="0" width={shapeW} {height} rx={shapeR} />
 				{:else if hasMore && p > 0.01}
 					<clipPath id="seam-{uid}">
 						{#each seams as z, i (i)}<rect x={z.x} y={z.y} width={z.w} height={z.h} />{/each}
@@ -431,12 +434,10 @@
 	}
 	.toast[data-look='light'] {
 		--toast-fill: var(--bg-raised);
+		--toast-ink: var(--text-default);
 		--toast-muted: var(--text-muted);
-		--toast-success: var(--green-9);
-		--toast-error: var(--red-9);
-		--toast-warning: var(--amber-9);
-		--toast-info: var(--blue-9);
-		--toast-loading: var(--text-muted);
+		--toast-loading: color-mix(in oklab, var(--text-default) 10%, transparent);
+		--toast-loading-on: var(--text-default);
 	}
 	.toast[data-look='light'] .canvas {
 		filter: drop-shadow(0 0 0.5px color-mix(in oklab, var(--neutral-10) 30%, transparent))
@@ -502,33 +503,38 @@
 		width: 1.5rem;
 		height: 1.5rem;
 		border-radius: 50%;
-		color: var(--tone);
-		background: color-mix(in oklab, var(--tone) 22%, transparent);
+		color: var(--tone-on);
+		background: var(--tone);
 	}
 	.label {
 		text-box: trim-both cap alphabetic;
 		font-size: 0.8125rem;
 		line-height: 1rem;
 		font-weight: var(--weight-medium);
-		color: var(--tone);
+		color: var(--toast-ink);
 	}
 	.glyph[data-icon='warning'] :global(svg) {
 		transform: translateY(-0.5px);
 	}
 	[data-tone='success'] {
 		--tone: var(--toast-success);
+		--tone-on: var(--toast-success-on);
 	}
 	[data-tone='error'] {
 		--tone: var(--toast-error);
+		--tone-on: var(--toast-error-on);
 	}
 	[data-tone='warning'] {
 		--tone: var(--toast-warning);
+		--tone-on: var(--toast-warning-on);
 	}
 	[data-tone='info'] {
 		--tone: var(--toast-info);
+		--tone-on: var(--toast-info-on);
 	}
 	[data-tone='loading'] {
 		--tone: var(--toast-loading);
+		--tone-on: var(--toast-loading-on);
 	}
 
 	.content {
@@ -589,8 +595,8 @@
 		padding: 0 0.625rem;
 		border: none;
 		border-radius: var(--radius-pill);
-		background: color-mix(in oklab, var(--tone) 16%, transparent);
-		color: var(--tone);
+		background: color-mix(in oklab, var(--tone) 28%, transparent);
+		color: var(--toast-ink);
 		font: inherit;
 		font-size: var(--text-caption);
 		font-weight: var(--weight-medium);
@@ -598,6 +604,6 @@
 		transition: background-color var(--dur-fast) ease;
 	}
 	.action:hover {
-		background: color-mix(in oklab, var(--tone) 26%, transparent);
+		background: color-mix(in oklab, var(--tone) 40%, transparent);
 	}
 </style>

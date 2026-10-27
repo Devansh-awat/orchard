@@ -33,7 +33,13 @@
 	const PETALS = 5;
 	const GROW = 3.5;
 	const BLOOM_TICKS = 9;
-	const INKS = ['--vine-stem', '--vine-leaf', '--vine-petal-1', '--vine-petal-2', '--vine-petal-3'];
+	const INKS = [
+		['--vine-stem', '--accent-8'],
+		['--vine-leaf', '--accent-7'],
+		['--vine-petal-1', '--accent-6'],
+		['--vine-petal-2', '--accent-8'],
+		['--vine-petal-3', '--accent-10']
+	];
 
 	type Rgb = [number, number, number];
 
@@ -49,9 +55,9 @@
 
 	function readInks(el: HTMLElement): Rgb[] {
 		const probe = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
-		const inks = INKS.map((name): Rgb => {
+		const inks = INKS.map(([name, fallback]): Rgb => {
 			if (!probe) return [128, 128, 128];
-			el.style.color = `var(${name})`;
+			el.style.color = `var(${name}, var(${fallback}))`;
 			probe.clearRect(0, 0, 1, 1);
 			probe.fillStyle = getComputedStyle(el).color;
 			probe.fillRect(0, 0, 1, 1);
@@ -215,7 +221,16 @@
 			el.width = Math.ceil(w * dpr);
 			el.height = Math.ceil(h * dpr);
 			ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-			font = `11px ${getComputedStyle(el).getPropertyValue('--font-mono').trim() || 'monospace'}`;
+			const style = getComputedStyle(el);
+			const family =
+				style.getPropertyValue('--vine-font').trim() ||
+				style.getPropertyValue('--font-mono').trim() ||
+				'monospace';
+			font = `11px ${family}`;
+			document.fonts?.load(font).then(
+				() => draw(),
+				() => {}
+			);
 			build();
 			if (burst >= 0) for (const f of flowers) if (f.late) f.at = 0;
 		};
@@ -375,11 +390,6 @@
 
 <style>
 	.vine {
-		--vine-stem: var(--accent-8);
-		--vine-leaf: var(--accent-7);
-		--vine-petal-1: var(--accent-6);
-		--vine-petal-2: var(--accent-8);
-		--vine-petal-3: var(--accent-10);
 		display: block;
 		width: 100%;
 		height: 100%;

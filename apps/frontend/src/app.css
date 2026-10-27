@@ -23,6 +23,14 @@
 }
 
 @font-face {
+	font-family: 'Space Mono';
+	src: url('./lib/assets/fonts/Space_Mono/SpaceMono-Regular.woff2') format('woff2');
+	font-weight: 400;
+	font-style: normal;
+	font-display: swap;
+}
+
+@font-face {
 	font-family: 'JetBrains Mono';
 	src: url('./lib/assets/fonts/JetBrains_Mono/JetBrainsMono-Regular.woff2') format('woff2');
 	font-weight: 400;

@@ -1,7 +1,13 @@
 import type { LoginProvider } from '$lib/components/login';
 
-const provider = (id: string, preset: string, label: string): LoginProvider => ({
+const provider = (
+	id: string,
+	preset: string,
+	label: string,
+	iconUrl: string | null = null
+): LoginProvider => ({
 	id,
+	iconUrl,
 	slug: id,
 	name: label,
 	preset,
@@ -22,6 +28,7 @@ export const VARIANTS = {
 		label: 'Several providers',
 		title: 'Sign in to Orchard',
 		providers: [
+			provider('hackclub', 'generic', 'Continue with Hack Club', '/logo/logoiconcolor.svg'),
 			provider('github', 'github', 'Continue with GitHub'),
 			provider('google', 'google', 'Continue with Google')
 		],

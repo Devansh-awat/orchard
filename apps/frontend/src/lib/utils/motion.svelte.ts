@@ -1422,7 +1422,13 @@ export function shake(el: Element, amplitude = 6) {
 	el.animate(frames, { ...springTiming('glide'), easing: 'linear' }).id = 'shake';
 }
 
-export function morphHeight(outer: HTMLElement) {
+export const morphHeight = (outer: HTMLElement) => morphHeightOn(() => 'glide')(outer);
+
+export function morphHeightOn(curve: () => SpringName) {
+	return (outer: HTMLElement) => morphHeightWith(outer, curve);
+}
+
+function morphHeightWith(outer: HTMLElement, curve: () => SpringName) {
 	const inner = outer.firstElementChild as HTMLElement | null;
 	if (!inner) return;
 	let last = inner.offsetHeight;
@@ -1437,7 +1443,7 @@ export function morphHeight(outer: HTMLElement) {
 		outer.dataset.morphing = '';
 		running = outer.animate(
 			[{ height: `${from}px` }, { height: `${next}px` }],
-			springTiming('glide', { distance: Math.abs(next - from) })
+			springTiming(curve(), { distance: Math.abs(next - from) })
 		);
 		const mine = running;
 		mine.finished

@@ -15,7 +15,7 @@
 		fade as fadeTiming
 	} from '$lib/utils/motion.svelte';
 	import { fade } from '$lib/utils/transitions';
-	import ProviderIcon from './ProviderIcon.svelte';
+	import ProviderIcon, { hasProviderMark } from './ProviderIcon.svelte';
 	import { signingIn } from './signing-in';
 	import type { LoginProvider } from './types';
 
@@ -25,7 +25,7 @@
 	let {
 		title,
 		subtitle = undefined,
-		mark,
+		mark = undefined,
 		providers = [],
 		providersLoaded = true,
 		emailAccess = 'open',
@@ -36,13 +36,14 @@
 		email = $bindable(''),
 		initialCode = '',
 		bloom = $bindable(false),
+		landed = $bindable(false),
 		aside = undefined,
 		onAuthenticated,
 		onSsoRedirect = undefined
 	}: {
 		title: string;
 		subtitle?: string | Snippet;
-		mark: Snippet;
+		mark?: Snippet;
 		providers?: LoginProvider[];
 		providersLoaded?: boolean;
 		emailAccess?: EmailAccess;
@@ -53,6 +54,7 @@
 		email?: string;
 		initialCode?: string;
 		bloom?: boolean;
+		landed?: boolean;
 		aside?: Snippet;
 		onAuthenticated: (message: string, user: User | undefined, landing: Promise<void>) => unknown;
 		onSsoRedirect?: (email: string) => Promise<boolean>;
@@ -134,6 +136,7 @@
 	async function land(message: string, user?: User) {
 		go('done');
 		bloom = true;
+		landed = true;
 		signingIn.set(true);
 		const landing = new Promise<void>((resolve) =>
 			setTimeout(resolve, decorativeMotion() ? LANDING_MS : 0)
@@ -143,6 +146,7 @@
 		} catch {
 			signingIn.set(false);
 			bloom = false;
+			landed = false;
 			go('start');
 			fault = 'Signed in, but loading your account failed. Try again.';
 		}
@@ -350,15 +354,15 @@
 
 {#snippet head(heading: string, sub: string | Snippet | undefined, withBack: boolean)}
 	<header class="head">
-		<div class="lead">
-			{#if withBack}
+		{#if withBack}
+			<div class="lead">
 				<Button variant="ghost" size="sm" icon={ChevronLeft} class="back" onclick={back}
 					>Back</Button
 				>
-			{:else}
-				{@render mark()}
-			{/if}
-		</div>
+			</div>
+		{:else if mark}
+			<div class="lead">{@render mark()}</div>
+		{/if}
 		<h1 class="title">{heading}</h1>
 		{#if sub}
 			<p class="sub">
@@ -392,7 +396,9 @@
 								loading={starting === provider.id}
 								onclick={() => startProvider(provider)}
 							>
-								{#if starting !== provider.id}<ProviderIcon preset={provider.preset} />{/if}
+								{#if starting !== provider.id && hasProviderMark(provider.preset, provider.iconUrl)}
+									<ProviderIcon preset={provider.preset} iconUrl={provider.iconUrl} size={18} />
+								{/if}
 								{provider.label}
 							</Button>
 						{/each}
@@ -743,7 +749,12 @@
 		animation: badge-in var(--spring-bouncy-duration) var(--spring-bouncy);
 	}
 	.head--done {
+		align-items: center;
 		margin-bottom: 0;
+		text-align: center;
+	}
+	.head--done .lead {
+		margin-bottom: 1rem;
 	}
 	.aside {
 		display: flex;

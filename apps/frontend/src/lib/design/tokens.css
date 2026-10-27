@@ -82,6 +82,7 @@
 	--weight-regular: 450;
 	--weight-medium: 550;
 	--weight-semibold: 650;
+	--weight-display: 800;
 
 	--z-base: 0;
 	--z-sticky: 10;
@@ -115,13 +116,22 @@
 		linear-gradient(180deg, oklch(0 0 0 / 0.06) 0%, oklch(0 0 0 / 0.22) 100%);
 	--on-media-pill: oklch(0 0 0 / 0.26);
 
+	--brand-field: var(--accent-solid);
+	--on-brand: oklch(1 0 0);
+	--on-brand-muted: color-mix(in oklab, oklch(0.99 0.02 95) 80%, transparent);
 	--toast-fill: var(--neutral-10);
-	--toast-muted: color-mix(in oklab, var(--neutral-app) 62%, transparent);
-	--toast-success: var(--green-7);
-	--toast-error: var(--red-7);
-	--toast-warning: var(--amber-7);
-	--toast-info: var(--blue-7);
-	--toast-loading: var(--neutral-6);
+	--toast-ink: var(--neutral-app);
+	--toast-muted: color-mix(in oklab, var(--neutral-app) 66%, transparent);
+	--toast-success: var(--green-solid);
+	--toast-success-on: var(--green-contrast);
+	--toast-error: var(--red-solid);
+	--toast-error-on: var(--red-contrast);
+	--toast-warning: var(--amber-solid);
+	--toast-warning-on: var(--amber-contrast);
+	--toast-info: var(--blue-solid);
+	--toast-info-on: var(--blue-contrast);
+	--toast-loading: color-mix(in oklab, var(--neutral-app) 16%, transparent);
+	--toast-loading-on: var(--neutral-app);
 
 	--page-narrow: 44rem;
 	--page-default: 64rem;
@@ -278,11 +288,7 @@ html.reduce-transparency *::after {
 	--nav-active-fg: var(--neutral-app);
 	--nav-active-shadow: 0 1px 1.5px oklch(0 0 0 / 0.3);
 	--material-chrome-bg: color-mix(in oklab, var(--neutral-raised) 62%, transparent);
-	--toast-success: color-mix(in oklab, var(--green-7) 74%, black);
-	--toast-error: color-mix(in oklab, var(--red-7) 80%, black);
-	--toast-warning: color-mix(in oklab, var(--amber-7) 62%, black);
-	--toast-info: color-mix(in oklab, var(--blue-7) 80%, black);
-	--toast-loading: var(--neutral-5);
+	--brand-field: color-mix(in oklab, var(--accent-solid) 82%, black);
 
 	--shadow-raised: 0 0 0 1px var(--border-default), 0 1px 2px rgb(0 0 0 / 0.3);
 	--shadow-floating:

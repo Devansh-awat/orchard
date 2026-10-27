@@ -140,6 +140,10 @@ Semibold is spent, not sprinkled. A screen gets one or two semibold things: the 
 
 If a row looks flat without bold, fix it with size, tone or spacing first.
 
+One exception: the brand hero in `AuthShell` (sign-in) speaks like orchard.my, a lowercase
+medium headline with one italic word at `--weight-display` (800). That weight exists for
+that headline and nowhere else.
+
 ## Concentric corners
 
 A surface nested inside another, close to its corner, uses **inner radius = outer radius − the gap between them**, never its own number. Subtract first, then scale: `calc((var(--outer-r) - var(--gap)) * var(--corner-scale))`, with `corner-shape: var(--corner)`. Floor at `--radius-floor` (0.25rem) when the gap is larger than the radius.
@@ -198,14 +202,17 @@ rationed.
 - It is decoration: below `full` motion it is drawn grown and still, and it stops
   drawing off screen and in hidden tabs.
 
-`AuthShell` places it. Live reference at `/dev/ui#vine`; every sign-in state at
+On a brand field (the sign-in hero) its ink switches to cream and white and its glyphs to
+Space Mono, matching the vine on orchard.my. `AuthShell` places it. Live reference at `/dev/ui#vine`; every sign-in state at
 `/dev/ui/lab/sign-in`.
 
 ## Toasts
 
 `toasts.add({ title, description?, color, action?, position? })` and
 `toasts.promise(work, { loading, success, error })`. Titles are short and past tense
-for results ("Changes saved"). Position follows context: results of something the user
+for results ("Changes saved"). Titles are never coloured: they use `--toast-ink` on the
+capsule, and status lives only in the glyph, a solid status fill with its `-contrast` ink.
+Coloured text on a dark capsule fails contrast. Position follows context: results of something the user
 clicked go `bottom-right` (default); things that happened on their own (a build
 finishing, connection lost) go `top-center`.
 

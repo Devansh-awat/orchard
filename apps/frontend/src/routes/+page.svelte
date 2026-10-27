@@ -4,6 +4,7 @@
 	import { SignInFlow } from '$lib/components/login';
 	import type { LoginProvider, DiscoveredOrg } from '$lib/components/login';
 	import { page } from '$app/stores';
+	import { dev } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { takeReturnTo } from '$lib/utils/url-secrets';
@@ -68,6 +69,7 @@
 		return u.firstName || u.name || u.username || u.email?.split('@')[0] || '';
 	});
 	let bloom = $state(false);
+	let landed = $state(false);
 	let landing = $state(false);
 
 	// Sign-in options come from the API: instance-wide identity providers an
@@ -312,9 +314,13 @@
 {/snippet}
 
 {#if !$isSignedIn || landing}
-	<AuthShell {bloom}>
+	<AuthShell {bloom} {landed} guides={dev && $page.url.searchParams.has('guides')}>
+		{#snippet wordmark()}
+			<img src="/logo/logofulldm.svg" alt="Orchard" />
+		{/snippet}
+		{#snippet headline()}sign in to your <em>own</em> cloud.{/snippet}
 		<SignInFlow
-			title="Sign in to Orchard"
+			title="Sign in"
 			subtitle={$page.url.host}
 			{providers}
 			{providersLoaded}
@@ -323,15 +329,12 @@
 			policy="This instance requires single sign-on."
 			bind:email={loginEmail}
 			bind:bloom
+			bind:landed
 			initialCode={loginCode}
 			onAuthenticated={handlePostAuth}
 			onSsoRedirect={routeToOrgSso}
 			aside={discovered && !discovered.enforced ? orgHint : undefined}
-		>
-			{#snippet mark()}
-				<img class="mark" src="/logo/logoiconcolor.svg" alt="Orchard" />
-			{/snippet}
-		</SignInFlow>
+		/>
 	</AuthShell>
 {:else}
 	<!-- Dashboard for authenticated users -->
@@ -499,15 +502,6 @@
 {/if}
 
 <style>
-	.mark {
-		display: block;
-		width: 2.5rem;
-		height: 2.5rem;
-		overflow: hidden;
-		border-radius: calc(0.625rem * var(--corner-scale));
-		corner-shape: var(--corner);
-		box-shadow: 0 0 0 0.5px var(--rule);
-	}
 	.hint {
 		font-size: var(--text-callout);
 		line-height: var(--lh-callout);

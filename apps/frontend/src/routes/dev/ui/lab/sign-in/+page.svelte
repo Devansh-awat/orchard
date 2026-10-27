@@ -7,41 +7,67 @@
 
 	let key = $state<VariantKey>('instance');
 	let bloom = $state(false);
+	let landed = $state(false);
+	let hero = $state(true);
+	let guides = $state(false);
 	let run = $state(0);
 	const v = $derived(VARIANTS[key]);
 
 	function replay() {
 		bloom = false;
+		landed = false;
 		run++;
 	}
 
-	async function landed(_message: string, _user: unknown, settle: Promise<void>) {
+	async function landed_(_message: string, _user: unknown, settle: Promise<void>) {
 		await settle;
 		await new Promise((r) => setTimeout(r, 900));
 		replay();
 	}
 </script>
 
-{#key `${key}:${run}`}
-	<AuthShell {bloom} brand={v.brand}>
+{#snippet wordmark()}
+	{#if key === 'org'}
+		<span class="org">N</span><span class="org-name">Northwind</span>
+	{:else}
+		<img src="/logo/logofulldm.svg" alt="Orchard" />
+	{/if}
+{/snippet}
+
+{#snippet pitch()}
+	{#if key === 'org'}sign in to <em>Northwind</em>.{:else}sign in to your <em>own</em> cloud.{/if}
+{/snippet}
+
+{#snippet mark()}
+	{#if key === 'org'}
+		<span class="org">N</span>
+	{:else}
+		<img class="mark" src="/logo/logoiconcolor.svg" alt="Orchard" />
+	{/if}
+{/snippet}
+
+{#key `${key}:${run}:${hero}`}
+	<AuthShell
+		{bloom}
+		{landed}
+		{guides}
+		brand={v.brand}
+		headline={hero ? pitch : undefined}
+		wordmark={hero ? wordmark : undefined}
+		tagline={hero && key === 'org' ? 'Northwind engineering' : null}
+	>
 		<SignInFlow
-			title={v.title}
-			subtitle={key === 'org' ? 'Northwind engineering' : 'orchard.my'}
+			title={hero ? 'Sign in' : v.title}
+			subtitle="orchard.my"
+			mark={hero ? undefined : mark}
 			providers={[...v.providers]}
 			emailAccess={v.emailAccess}
 			revealLabel={key === 'org' ? 'Sign in with email instead' : 'Sign in as an administrator'}
 			policy={key === 'enforced' ? 'This instance requires single sign-on.' : undefined}
 			bind:bloom
-			onAuthenticated={landed}
-		>
-			{#snippet mark()}
-				{#if key === 'org'}
-					<span class="org">N</span>
-				{:else}
-					<img class="mark" src="/logo/logoiconcolor.svg" alt="Orchard" />
-				{/if}
-			{/snippet}
-		</SignInFlow>
+			bind:landed
+			onAuthenticated={landed_}
+		/>
 	</AuthShell>
 {/key}
 
@@ -52,6 +78,12 @@
 		bind:value={key}
 		options={Object.entries(VARIANTS).map(([value, x]) => ({ value, label: x.label }))}
 	/>
+	<Button size="sm" variant="ghost" onclick={() => (hero = !hero)}
+		>{hero ? 'No hero' : 'Hero'}</Button
+	>
+	<Button size="sm" variant={guides ? 'tinted' : 'ghost'} onclick={() => (guides = !guides)}
+		>Guides</Button
+	>
 	<Button size="sm" variant="secondary" onclick={() => (bloom = true)}>Bloom</Button>
 	<Button size="sm" variant="ghost" onclick={replay}>Replay</Button>
 </div>
@@ -83,8 +115,12 @@
 		corner-shape: var(--corner);
 		box-shadow: 0 0 0 0.5px var(--rule);
 	}
+	.org-name {
+		font-size: var(--text-headline);
+		font-weight: var(--weight-semibold);
+	}
 	.org {
-		background: var(--accent-solid);
+		background: color-mix(in oklab, var(--on-brand) 18%, var(--accent-solid));
 		color: var(--on-solid);
 		font-size: var(--text-title-3);
 		font-weight: var(--weight-semibold);

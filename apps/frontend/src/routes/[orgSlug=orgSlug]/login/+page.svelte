@@ -26,6 +26,7 @@
 
 	let error = $state<string | null>(null);
 	let bloom = $state(false);
+	let landed = $state(false);
 
 	onMount(() => {
 		const urlError = $page.url.searchParams.get('error');
@@ -64,30 +65,36 @@
 	<p class="enforced"><Lock size={13} /> {context.name} requires single sign-on</p>
 {/snippet}
 
-<AuthShell {bloom} brand={branding.primaryColor} ground={branding.bgColor}>
+<AuthShell
+	{bloom}
+	{landed}
+	brand={branding.primaryColor}
+	ground={branding.bgColor}
+	tagline={branding.tagline}
+>
+	{#snippet wordmark()}
+		{#if branding.logoUrl || context.avatarUrl}
+			<RemoteImg src={branding.logoUrl || context.avatarUrl} alt="" class="org-mark" />
+		{:else}
+			<span class="org-mark org-mark--letter" aria-hidden="true">{context.name.slice(0, 1)}</span>
+		{/if}
+		<span class="org-name">{context.name}</span>
+	{/snippet}
+	{#snippet headline()}
+		{#if branding.welcomeText}{branding.welcomeText}{:else}sign in to <em>{context.name}</em>.{/if}
+	{/snippet}
 	<SignInFlow
-		title={branding.welcomeText || `Sign in to ${context.name}`}
-		subtitle={branding.tagline || undefined}
+		title="Sign in"
+		subtitle={$page.url.host}
 		providers={context.providers}
 		emailAccess={context.enforced ? 'none' : 'tucked'}
 		{returnTo}
 		{error}
 		bind:bloom
+		bind:landed
 		onAuthenticated={handleAuthenticated}
 		aside={context.enforced ? enforcedNote : undefined}
-	>
-		{#snippet mark()}
-			{#if branding.logoUrl || context.avatarUrl}
-				<RemoteImg
-					src={branding.logoUrl || context.avatarUrl}
-					alt={context.name}
-					class="org-mark"
-				/>
-			{:else}
-				<span class="org-mark org-mark--letter" aria-hidden="true">{context.name.slice(0, 1)}</span>
-			{/if}
-		{/snippet}
-	</SignInFlow>
+	/>
 	{#snippet footer()}
 		Not part of {context.name}? <a href="/">Sign in to Orchard</a>
 	{/snippet}
@@ -97,20 +104,24 @@
 	:global(.org-mark) {
 		display: grid;
 		place-items: center;
-		width: 2.5rem;
-		height: 2.5rem;
+		width: 2rem;
+		height: 2rem;
 		overflow: hidden;
-		border-radius: calc(0.625rem * var(--corner-scale));
+		border-radius: calc(0.5rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		object-fit: cover;
 		box-shadow: 0 0 0 0.5px var(--rule);
 	}
 	.org-mark--letter {
-		background: color-mix(in oklab, var(--accent-solid) 14%, transparent);
-		color: var(--accent-9);
+		background: color-mix(in oklab, var(--on-brand) 18%, transparent);
+		color: var(--on-brand);
 		font-size: var(--text-title-3);
 		font-weight: var(--weight-semibold);
 		text-transform: uppercase;
+	}
+	.org-name {
+		font-size: var(--text-headline);
+		font-weight: var(--weight-semibold);
 	}
 	.enforced {
 		display: inline-flex;

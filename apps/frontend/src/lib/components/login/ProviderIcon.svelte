@@ -1,10 +1,27 @@
-<script lang="ts">
-	import { Building2, KeyRound, ShieldCheck } from 'lucide-svelte';
+<script module lang="ts">
+	const BRAND_MARKS = new Set(['google', 'github', 'microsoft', 'gitlab']);
 
-	let { preset = 'generic', size = 16 }: { preset?: string; size?: number } = $props();
+	export function hasProviderMark(preset?: string | null, iconUrl?: string | null) {
+		return !!iconUrl || BRAND_MARKS.has(preset ?? '');
+	}
 </script>
 
-{#if preset === 'google'}
+<script lang="ts">
+	import { Building2, KeyRound, ShieldCheck } from 'lucide-svelte';
+	import RemoteImg from '$lib/components/ui/RemoteImg.svelte';
+
+	let {
+		preset = 'generic',
+		size = 16,
+		iconUrl = null
+	}: { preset?: string; size?: number; iconUrl?: string | null } = $props();
+</script>
+
+{#if iconUrl}
+	<span class="tile" style:--size="{size}px">
+		<RemoteImg src={iconUrl} alt="" class="tile-img" />
+	</span>
+{:else if preset === 'google'}
 	<svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
 		<path
 			d="M12.24 10.29v3.62h5.05c-.22 1.3-1.6 3.8-5.05 3.8-3.04 0-5.52-2.5-5.52-5.59s2.48-5.59 5.52-5.59c1.73 0 2.89.73 3.55 1.36l2.42-2.32C16.66 3.99 14.63 3 12.24 3 7.3 3 3.3 6.98 3.3 12s4 9 8.94 9c5.16 0 8.58-3.6 8.58-8.68 0-.58-.06-1.03-.14-1.47z"
@@ -33,3 +50,21 @@
 {:else}
 	<Building2 {size} />
 {/if}
+
+<style>
+	.tile {
+		display: inline-grid;
+		flex-shrink: 0;
+		width: var(--size);
+		height: var(--size);
+		overflow: hidden;
+		border-radius: calc(var(--size) * 0.28);
+		corner-shape: var(--corner);
+		box-shadow: 0 0 0 0.5px color-mix(in oklab, currentColor 35%, transparent);
+	}
+	.tile :global(.tile-img) {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+</style>

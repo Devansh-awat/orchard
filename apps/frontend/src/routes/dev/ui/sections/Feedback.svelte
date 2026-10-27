@@ -6,6 +6,8 @@
 	import Spinner from '$lib/components/ui/Spinner.svelte';
 	import Skeleton from '$lib/components/ui/Skeleton.svelte';
 	import { toasts } from '$lib/stores';
+	import Verdict from './Verdict.svelte';
+	import { Check } from 'lucide-svelte';
 	import type { ToastInput, ToastPosition } from '$lib/stores/toast';
 
 	const POSITIONS: ToastPosition[] = [
@@ -89,3 +91,57 @@
 		</div>
 	</div>
 </SectionCard>
+
+<SectionCard
+	title="Toast ink"
+	description="A toast title is never coloured. Status lives in the glyph, a solid fill with its contrast ink."
+>
+	<div class="grid grid-cols-2 gap-4">
+		<Verdict kind="do" note="Ink title, solid glyph.">
+			<span class="pill">
+				<span class="dot dot--solid"><Check size={14} strokeWidth={2.5} /></span>
+				<span class="ink">Signed in with your email</span>
+			</span>
+		</Verdict>
+		<Verdict kind="dont" note="Status-coloured title on the capsule.">
+			<span class="pill">
+				<span class="dot dot--tint"><Check size={14} strokeWidth={2.5} /></span>
+				<span class="ink ink--tone">Signed in with your email</span>
+			</span>
+		</Verdict>
+	</div>
+</SectionCard>
+
+<style>
+	.pill {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.625rem;
+		padding: 0.625rem 1rem 0.625rem 0.625rem;
+		border-radius: var(--radius-pill);
+		background: var(--toast-fill);
+	}
+	.dot {
+		display: grid;
+		place-items: center;
+		width: 1.5rem;
+		height: 1.5rem;
+		border-radius: 50%;
+	}
+	.dot--solid {
+		background: var(--toast-success);
+		color: var(--toast-success-on);
+	}
+	.dot--tint {
+		background: color-mix(in oklab, var(--green-7) 22%, transparent);
+		color: var(--green-7);
+	}
+	.ink {
+		font-size: 0.8125rem;
+		font-weight: var(--weight-medium);
+		color: var(--toast-ink);
+	}
+	.ink--tone {
+		color: color-mix(in oklab, var(--green-7) 74%, black);
+	}
+</style>
