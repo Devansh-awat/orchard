@@ -3,6 +3,8 @@
 	import StatusDot from '$lib/components/ui/StatusDot.svelte';
 	import RelativeTime from '$lib/components/ui/RelativeTime.svelte';
 	import Sparkline from '$lib/components/ui/Sparkline.svelte';
+	import NumberRoll from '$lib/components/ui/NumberRoll.svelte';
+	import { trafficReading, type Traffic } from '$lib/components/ui/traffic';
 	import type { StatusMeta } from '$lib/components/ui/status';
 
 	let {
@@ -21,13 +23,15 @@
 		href: string;
 		detail?: string;
 		metrics?: string;
-		traffic?: { values: number[]; label: string };
+		traffic?: Traffic;
 		updatedAt?: string | null;
 	} = $props();
 
 	const KIND_ICON = { deployment: Box, database: Database, job: Timer };
 	const KindIcon = $derived(KIND_ICON[kind]);
 	const loud = $derived(status.kind === 'error' || status.kind === 'progress');
+	let scrub = $state<number | null>(null);
+	const reading = $derived(traffic ? trafficReading(traffic, scrub) : null);
 </script>
 
 <a class="line" data-entity={name} {href}>
@@ -38,8 +42,18 @@
 	<span class="detail">{detail ?? ''}</span>
 	{#if traffic}
 		<span class="traffic">
-			<span class="spark"><Sparkline values={traffic.values} height={12} tone="neutral" /></span>
-			<span class="num">{traffic.label}</span>
+			<span class="spark"
+				><Sparkline
+					values={traffic.values}
+					height={12}
+					tone="neutral"
+					interactive
+					onScrub={(i) => (scrub = i)}
+				/></span
+			>
+			<span class="num num--traffic" style:min-width="{reading?.width}ch">
+				{#if reading?.scrubbing}{reading.text}{:else}<NumberRoll value={traffic.label} />{/if}
+			</span>
 		</span>
 	{:else if metrics}<span class="num">{metrics}</span>{/if}
 	{#if updatedAt}<span class="when"><RelativeTime date={updatedAt} /></span>{/if}
@@ -60,6 +74,7 @@
 		transition: background-color var(--dur-fast) ease;
 	}
 	.line:hover {
+		--spark-ground: var(--bg-hover);
 		background: var(--bg-hover);
 	}
 	.kind {
@@ -112,6 +127,10 @@
 		color: var(--text-faint);
 		font-size: var(--text-caption);
 		font-variant-numeric: tabular-nums;
+	}
+	.num--traffic {
+		display: inline-flex;
+		justify-content: flex-end;
 	}
 	.when {
 		min-width: 3.25rem;

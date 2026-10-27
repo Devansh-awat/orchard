@@ -2,6 +2,8 @@
 	import RelativeTime from '$lib/components/ui/RelativeTime.svelte';
 	import AppIcon from '$lib/components/ui/AppIcon.svelte';
 	import Widget from '$lib/components/ui/Widget.svelte';
+	import NumberRoll from '$lib/components/ui/NumberRoll.svelte';
+	import { blurRiseList, glideX, sweepIn } from '$lib/components/ui/widgetMotion.svelte';
 	import type { BuildItem, BuildPhaseItem } from './builds';
 
 	let {
@@ -34,6 +36,53 @@
 	const total = $derived(phases.reduce((sum, p) => sum + p.ms, 0));
 	const current = $derived(phases.find((p) => p.live) ?? phases[phases.length - 1]);
 
+	const rise = blurRiseList();
+	const segs: Record<string, HTMLElement> = $state({});
+	let caret = $state<HTMLElement>();
+	let hovered = $state<string | null>(null);
+	let caretShown = false;
+	const focused = $derived(phases.find((p) => p.id === hovered));
+	const breakdown = $derived(phases.map((p) => `${p.label} ${clock(p.ms)}`).join(', '));
+
+	function pick(e: PointerEvent) {
+		let best: string | null = null;
+		let gap = Infinity;
+		for (const p of phases) {
+			const r = segs[p.id]?.getBoundingClientRect();
+			if (!r) continue;
+			const d = e.clientX < r.left ? r.left - e.clientX : Math.max(0, e.clientX - r.right);
+			if (d < gap) {
+				gap = d;
+				best = p.id;
+			}
+		}
+		hovered = best;
+	}
+
+	function hoverTrack(el: HTMLElement) {
+		const leave = () => (hovered = null);
+		el.addEventListener('pointermove', pick);
+		el.addEventListener('pointerleave', leave);
+		return () => {
+			el.removeEventListener('pointermove', pick);
+			el.removeEventListener('pointerleave', leave);
+		};
+	}
+
+	$effect(() => {
+		const seg = focused && segs[focused.id];
+		if (!caret) return;
+		if (!seg) {
+			caret.style.opacity = '0';
+			caretShown = false;
+			return;
+		}
+		void total;
+		glideX(caret, seg.offsetLeft + seg.offsetWidth / 2, !caretShown);
+		caret.style.opacity = '1';
+		caretShown = true;
+	});
+
 	function clock(ms: number) {
 		const s = Math.floor(ms / 1000);
 		if (s < 60) return `${s}s`;
@@ -64,26 +113,39 @@
 					</span>
 				</span>
 				{#if total}
-					<span class="elapsed">{clock(total)}</span>
+					<span class="elapsed"><NumberRoll value={clock(total)} /></span>
 				{:else if featured.duration}
 					<span class="elapsed">{featured.duration}</span>
 				{/if}
 			</span>
 			{#if phases.length > 1 && total > 0}
-				<span class="phases" role="img" aria-label="Where the time went">
-					{#each phases as p (p.id)}
-						<span
-							class="seg phase--{p.id}"
-							class:seg--live={p.live}
-							style:flex-grow={Math.max(p.ms, total * 0.03)}
-							title="{p.label} {clock(p.ms)}"
-						></span>
-					{/each}
+				<span class="phase-track" {@attach hoverTrack}>
+					<span
+						class="phases"
+						class:phases--focus={!!focused}
+						role="img"
+						aria-label="Where the time went: {breakdown}"
+						{@attach sweepIn}
+					>
+						{#each phases as p (p.id)}
+							<span
+								bind:this={segs[p.id]}
+								class="seg phase--{p.id}"
+								class:seg--live={p.live}
+								class:seg--on={p.id === hovered}
+								style:flex-grow={Math.max(p.ms, total * 0.03)}
+							></span>
+						{/each}
+					</span>
+					<span class="caret" aria-hidden="true" bind:this={caret}></span>
 				</span>
 			{/if}
 			<span class="live-foot">
 				<span class="live-msg"
-					>{featured.branch ? `${featured.message} · ${featured.branch}` : featured.message}</span
+					>{#if focused}{focused.label} · {clock(
+							focused.ms
+						)}{:else if featured.branch}{featured.message}
+						· {featured.branch}{:else}{featured.message}{/if}</span
 				>
 				{#if live && featured.eta}<span class="live-eta">{featured.eta}</span>{/if}
 			</span>
@@ -91,7 +153,7 @@
 	{/if}
 	<div class="list">
 		{#each rest as b (b.id)}
-			<a class="row" href={b.href}>
+			<a class="row" href={b.href} {@attach rise()}>
 				<AppIcon name={b.project ?? b.app} kind="project" icon={b.projectIcon} size="xs" />
 				<span class="row-app">{b.app}</span>
 				<span class="row-msg" class:row-msg--error={b.status.kind === 'error'}
@@ -163,6 +225,12 @@
 		font-variant-numeric: tabular-nums;
 		text-box: trim-both cap alphabetic;
 	}
+	.phase-track {
+		position: relative;
+		display: block;
+		padding-block: 0.5rem;
+		margin-block: -0.5rem;
+	}
 	.phases {
 		display: flex;
 		gap: 2px;
@@ -173,6 +241,23 @@
 		min-width: 3px;
 		border-radius: var(--radius-pill);
 		background: var(--phase);
+		transform-origin: left center;
+		transition: background-color var(--dur-fast) ease;
+	}
+	.phases--focus .seg:not(.seg--on) {
+		background: color-mix(in oklab, var(--phase), var(--bg-surface) 38%);
+	}
+	.caret {
+		position: absolute;
+		top: calc(0.5rem + 0.375rem + 3px);
+		left: -3px;
+		width: 6px;
+		height: 3px;
+		border-radius: var(--radius-pill);
+		background: var(--text-muted);
+		opacity: 0;
+		pointer-events: none;
+		transition: opacity var(--dur-fast) ease;
 	}
 	.seg--live {
 		animation: seg-breathe 1.6s ease-in-out infinite;

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Widget from '$lib/components/ui/Widget.svelte';
 	import AppIcon from '$lib/components/ui/AppIcon.svelte';
+	import { blurRiseList } from '$lib/components/ui/widgetMotion.svelte';
 	import type { FailingApp } from './sidebar';
 
 	let {
@@ -8,6 +9,8 @@
 		title = 'Needs attention',
 		arriving = []
 	}: { items: FailingApp[]; title?: string; arriving?: string[] } = $props();
+
+	const rise = blurRiseList();
 </script>
 
 {#if items.length > 0}
@@ -19,6 +22,7 @@
 					class:row--arriving={arriving.includes(item.label)}
 					data-attention={item.label}
 					href={item.href}
+					{@attach rise(() => arriving.includes(item.label))}
 				>
 					<AppIcon name={item.label} kind={item.kind} icon={item.icon} size="sm" />
 					<span class="text">
@@ -46,15 +50,10 @@
 		corner-shape: var(--corner);
 		color: inherit;
 		text-decoration: none;
-		transition:
-			background-color var(--dur-fast) ease,
-			opacity var(--spring-smooth-duration) var(--spring-smooth),
-			transform var(--spring-bouncy-duration) var(--spring-bouncy);
+		transition: background-color var(--dur-fast) ease;
 	}
 	.row--arriving {
 		opacity: 0;
-		transform: scale(0.92);
-		transition: none;
 	}
 	.row:hover {
 		background: var(--bg-hover);

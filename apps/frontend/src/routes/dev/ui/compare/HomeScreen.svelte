@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Plus, Ellipsis } from 'lucide-svelte';
+	import { Plus, Ellipsis, ExternalLink, RotateCw } from 'lucide-svelte';
 	import Page from '$lib/components/ui/Page.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import SearchField from '$lib/components/ui/SearchField.svelte';
@@ -76,19 +76,50 @@
 		return { tone: 'success' as const, label: 'All running' };
 	}
 
-	function traffic(name: string) {
+	function seedSeries(name: string) {
 		const seed = [...name].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 11);
 		let h = seed;
 		const values = Array.from({ length: 24 }, (_, i) => {
 			h = (h * 1103515245 + 12345) >>> 0;
 			return 40 + Math.sin(i / 3 + name.length) * 18 + (h % 23);
 		});
-		const perHour = Math.round(values.reduce((a, b) => a + b, 0) * ((seed % 40) / 7 + 0.2));
+		return { values, scale: (seed % 40) / 7 + 0.2, phase: name.length };
+	}
+
+	const series = $state<Record<string, ReturnType<typeof seedSeries>>>(
+		Object.fromEntries(
+			ALL.flatMap((p) => p.entities)
+				.filter((e) => e.kind === 'deployment')
+				.map((e) => [e.name, seedSeries(e.name)])
+		)
+	);
+
+	function perHour(v: number, scale: number) {
+		const n = Math.round(v * 24 * scale);
+		return n > 999 ? `${(n / 1000).toFixed(1)}k/h` : `${n}/h`;
+	}
+
+	function traffic(name: string) {
+		const s = series[name] ?? seedSeries(name);
+		const scale = s.scale;
 		return {
-			values,
-			label: perHour > 999 ? `${(perHour / 1000).toFixed(1)}k/h` : `${perHour}/h`
+			values: s.values,
+			label: perHour(s.values[s.values.length - 1], scale),
+			format: (v: number) => perHour(v, scale)
 		};
 	}
+
+	$effect(() => {
+		const id = setInterval(() => {
+			for (const s of Object.values(series)) {
+				const last = s.values[s.values.length - 1];
+				s.phase += 0.35;
+				const next = Math.max(12, last + Math.sin(s.phase) * 6 + (Math.random() - 0.5) * 9);
+				s.values = [...s.values.slice(1), next];
+			}
+		}, 4000);
+		return () => clearInterval(id);
+	});
 
 	const DENSITY_KEY = 'orchard-dev-density';
 	let density = $state(
@@ -291,6 +322,12 @@
 			traffic={e.kind === 'deployment' ? traffic(e.name) : undefined}
 			updatedAt={e.updatedAt}
 			href="#"
+			quick={e.kind === 'deployment'
+				? [
+						{ label: 'Visit', icon: ExternalLink, href: '#' },
+						{ label: 'Redeploy', icon: RotateCw }
+					]
+				: []}
 		>
 			{#snippet actions()}
 				<Menu>
@@ -301,7 +338,7 @@
 							icon={Ellipsis}
 							label="Actions"
 						/>{/snippet}
-					<MenuItem>Redeploy</MenuItem>
+					<MenuItem>View logs</MenuItem>
 					<MenuItem>Copy URL</MenuItem>
 					<MenuItem danger>Delete</MenuItem>
 				</Menu>

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { slidingIndicator } from './slide.svelte';
+	import { stretchIndicator } from './slide.svelte';
 
 	interface Option {
 		value: string;
@@ -33,7 +33,7 @@
 </script>
 
 <div class="seg seg--{size}" class:seg--grow={grow} role="radiogroup" aria-label={label}>
-	<span class="thumb" aria-hidden="true" {@attach slidingIndicator(() => buttons[value])}></span>
+	<span class="thumb" aria-hidden="true" {@attach stretchIndicator(() => buttons[value])}></span>
 	{#each options as opt (opt.value)}
 		<button
 			bind:this={buttons[opt.value]}
@@ -80,11 +80,7 @@
 			0 1px 2px rgb(0 0 0 / 0.1),
 			0 2px 6px rgb(0 0 0 / 0.04);
 		pointer-events: none;
-	}
-	.thumb:global([data-ready]) {
-		transition:
-			transform var(--spring-snappy-duration) var(--spring-snappy),
-			width var(--spring-snappy-duration) var(--spring-snappy);
+		will-change: transform;
 	}
 	.opt {
 		position: relative;
@@ -104,7 +100,15 @@
 		font-weight: var(--weight-medium);
 		white-space: nowrap;
 		cursor: pointer;
-		transition: color var(--dur-fast) ease;
+		transition:
+			color var(--dur-fast) ease,
+			transform var(--spring-interactive-duration) var(--spring-interactive);
+	}
+	.opt:active {
+		transform: scale(0.96);
+	}
+	:global(html.motion-reduce) .opt:active {
+		transform: none;
 	}
 	.seg--sm .opt {
 		height: 1.5rem;
