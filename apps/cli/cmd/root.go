@@ -94,6 +94,7 @@ func rootCmd() *cobra.Command {
 		useCmd(),
 		upCmd(),
 		importCmd(),
+		logsCmd(),
 		linkCmd(),
 		unlinkCmd(),
 		contextCmd(),

@@ -36,6 +36,7 @@ import { MetricsStoreError } from '../metrics/victoria-metrics.service';
 import { PodLogCaptureService } from '../kubernetes/pod-log-capture.service';
 import { GitHubService } from '../github/github.service';
 import { UsersService } from '../users/users.service';
+import { RolloutPinInterceptor } from './rollout.controller';
 
 @Auth()
 @Controller('projects')
@@ -1120,6 +1121,7 @@ export class DeploymentsController {
   }
 
   @Patch(':id/image')
+  @UseInterceptors(RolloutPinInterceptor)
   async updateDeploymentImage(
     @Param('id') id: string,
     @Body() body: { image: string },
@@ -1307,6 +1309,7 @@ export class DeploymentsController {
   }
 
   @Post(':id/build-context')
+  @UseInterceptors(RolloutPinInterceptor)
   @UseInterceptors(FileInterceptor('context', { limits: { fileSize: 100 * 1024 * 1024 } }))
   async uploadBuildContext(
     @Param('id') id: string,
@@ -1331,6 +1334,7 @@ export class DeploymentsController {
   }
 
   @Post(':id/rebuild')
+  @UseInterceptors(RolloutPinInterceptor)
   async rebuildDeployment(@Param('id') id: string, @Request() req) {
     return this.deployments.rebuildDeployment(id, req.user.sub, {
       email: req.user.email,
@@ -1342,6 +1346,7 @@ export class DeploymentsController {
   }
 
   @Post(':id/scale')
+  @UseInterceptors(RolloutPinInterceptor)
   async scaleDeployment(
     @Param('id') id: string,
     @Body() body: { replicas: number },
@@ -1368,6 +1373,7 @@ export class DeploymentsController {
   }
 
   @Post(':id/start')
+  @UseInterceptors(RolloutPinInterceptor)
   async startDeployment(
     @Param('id') id: string,
     @Body() body: { build?: boolean } | undefined,
@@ -1388,6 +1394,7 @@ export class DeploymentsController {
   }
 
   @Post(':id/restart')
+  @UseInterceptors(RolloutPinInterceptor)
   async restartDeployment(@Param('id') id: string, @Request() req) {
     return this.deployments.restartDeployment(id, req.user.sub, {
       email: req.user.email,
@@ -1456,6 +1463,7 @@ export class DeploymentsController {
   }
 
   @Post(':id/rollback/:imageHistoryId')
+  @UseInterceptors(RolloutPinInterceptor)
   async rollbackToImage(
     @Param('id') id: string,
     @Param('imageHistoryId') imageHistoryId: string,

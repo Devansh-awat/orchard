@@ -29,6 +29,7 @@ func deployCmd() *cobra.Command {
 	c.AddCommand(
 		deployListCmd(),
 		deployGetCmd(),
+		deployStatusCmd(),
 		deployCreateCmd(),
 		deployDeleteCmd(),
 		deployScaleCmd(),
@@ -361,22 +362,26 @@ func deployCreateCmd() *cobra.Command {
 			if u := str(raw["url"]); u != "" {
 				output.Successf("live at %s (visible to your org until made public)", u)
 			}
-			if fmtFlag() == output.FormatJSON {
-				if err := output.JSON(raw); err != nil {
-					return err
+			if !*wait || id == "" {
+				if fmtFlag() == output.FormatJSON {
+					return output.JSON(raw)
 				}
-			}
-			if *wait && id != "" {
-				spec := deployWaitRunning(id)
-				if github != "" {
-					spec = deployWaitBuild(id)
-				}
-				if werr := runWait(cmd.Context(), cl, spec, *timeout); werr != nil {
-					return werr
-				}
-				printDeploySuccess(cmd.Context(), cl, cfg.APIURL, id)
 				return nil
 			}
+			legacy := deployWaitRunning(id)
+			if github != "" || gitRepo != "" {
+				legacy = deployWaitBuild(id)
+			}
+			r, werr := waitRollout(cmd.Context(), cl, id, api.PinFrom(raw), *timeout, legacy)
+			if fmtFlag() == output.FormatJSON {
+				if err := output.JSON(mergeRollout(raw, r)); err != nil && werr == nil {
+					werr = err
+				}
+			}
+			if werr != nil {
+				return werr
+			}
+			printDeployFollowUp(cmd.Context(), cl, cfg.APIURL, id, r)
 			return nil
 		},
 	}
@@ -471,12 +476,13 @@ func deployScaleCmd() *cobra.Command {
 				return perr
 			}
 			body := map[string]any{"replicas": replicas}
-			if err := cl.Send(cmd.Context(), http.MethodPost, deployPath(args[0], "scale"), body, nil); err != nil {
+			var raw map[string]any
+			if err := cl.Send(cmd.Context(), http.MethodPost, deployPath(args[0], "scale"), body, &raw); err != nil {
 				return err
 			}
 			output.Successf("scaled %s to %d replicas", args[0], replicas)
 			if *wait {
-				return runWait(cmd.Context(), cl, deployWaitRunning(args[0]), *timeout)
+				return waitAndEmit(cmd, cl, args[0], api.PinFrom(raw), *timeout, deployWaitRunning(args[0]))
 			}
 			return nil
 		},
@@ -525,16 +531,15 @@ func deployStartCmd() *cobra.Command {
 			if err := cl.Send(cmd.Context(), http.MethodPost, deployPath(args[0], "start"), body, &raw); err != nil {
 				return err
 			}
+			legacy := deployWaitRunning(args[0])
 			if str(raw["started"]) == "building" {
 				output.Successf("building %s; it starts when the build lands", args[0])
-				if *wait {
-					return runWait(cmd.Context(), cl, deployWaitBuild(args[0]), *timeout)
-				}
-				return nil
+				legacy = deployWaitBuild(args[0])
+			} else {
+				output.Successf("started %s", args[0])
 			}
-			output.Successf("started %s", args[0])
 			if *wait {
-				return runWait(cmd.Context(), cl, deployWaitRunning(args[0]), *timeout)
+				return waitAndEmit(cmd, cl, args[0], api.PinFrom(raw), *timeout, legacy)
 			}
 			return nil
 		},
@@ -556,12 +561,13 @@ func deployRestartCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := cl.Send(cmd.Context(), http.MethodPost, deployPath(args[0], "restart"), nil, nil); err != nil {
+			var raw map[string]any
+			if err := cl.Send(cmd.Context(), http.MethodPost, deployPath(args[0], "restart"), nil, &raw); err != nil {
 				return err
 			}
 			output.Successf("restarted %s", args[0])
 			if *wait {
-				return runWait(cmd.Context(), cl, deployWaitRunning(args[0]), *timeout)
+				return waitAndEmit(cmd, cl, args[0], api.PinFrom(raw), *timeout, deployWaitRunning(args[0]))
 			}
 			return nil
 		},
@@ -582,12 +588,13 @@ func deployRebuildCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := cl.Send(cmd.Context(), http.MethodPost, deployPath(args[0], "rebuild"), nil, nil); err != nil {
+			var raw map[string]any
+			if err := cl.Send(cmd.Context(), http.MethodPost, deployPath(args[0], "rebuild"), nil, &raw); err != nil {
 				return err
 			}
 			output.Successf("triggered rebuild of %s", args[0])
 			if *wait {
-				return runWait(cmd.Context(), cl, deployWaitBuild(args[0]), *timeout)
+				return waitAndEmit(cmd, cl, args[0], api.PinFrom(raw), *timeout, deployWaitBuild(args[0]))
 			}
 			return nil
 		},
@@ -629,7 +636,7 @@ func deployLogsCmd() *cobra.Command {
 			}
 			if build {
 				if follow {
-					if err := followBuildLogsSSE(cmd.Context(), cl, args[0]); !errors.Is(err, errSSEUnsupported) {
+					if err := followBuildLogsSSE(cmd.Context(), cl, args[0], os.Stdout); !errors.Is(err, errSSEUnsupported) {
 						return err
 					}
 					fetch := func(ctx context.Context) (string, error) {

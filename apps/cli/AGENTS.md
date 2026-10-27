@@ -73,6 +73,8 @@ Format resolution, in order: explicit `-o json|table` flag, then `ORCHARD_JSON=1
 | 6    | rate limited (HTTP 429)                              |
 | 7    | server error (HTTP 5xx)                              |
 | 8    | `--wait` gave up after `--timeout`                   |
+| 9    | `deploy-failed`: the build failed during a wait      |
+| 10   | `deploy-crashing`: pods crash-loop or the rollout is unhealthy |
 | 130  | interrupted (Ctrl-C / SIGTERM)                       |
 
 ## Scoping
@@ -97,7 +99,26 @@ JSON output includes a `nextCursor` field when more pages remain; pass it back v
 
 ## --wait / --timeout
 
-Commands that start async work accept `--wait` (block until a terminal state) and `--timeout` (default 10m; hitting it exits 8): `deploy create|scale|restart|rebuild|rollback`, `deploy image set`, `db create`, `db backup create`, `job run`. Without `--wait` they return as soon as the API accepts the request. Progress while waiting goes to stderr; stdout still carries only the data payload.
+Commands that start async work accept `--wait` (block until a terminal state) and `--timeout` (default 10m; hitting it exits 8): `deploy create|scale|start|restart|rebuild|rollback`, `deploy image set`, `up`, `import`, `db create`, `db backup create`, `job run`. Without `--wait` they return as soon as the API accepts the request. Progress while waiting goes to stderr; stdout still carries only the data payload.
+
+## Rollout flow: is it live, and if not, why
+
+Every deployment `--wait` (and `up`, `import`) waits on `GET /deployments/:id/rollout`, which answers in one call:
+
+```json
+{"phase": "crashing", "terminal": true, "releaseId": "...", "url": "https://...",
+ "build": {"status": "succeeded", "step": "complete", "error": null, "logTail": []},
+ "pods": {"desired": 1, "ready": 0, "failing": [{"pod": "web-7c9", "reason": "CrashLoopBackOff",
+   "exitCode": 1, "restarts": 4, "logTail": ["Error: DATABASE_URL is not set"]}]},
+ "hint": "The app keeps exiting (exit code 1). ..."}
+```
+
+- Phases: `queued`, `building`, `deploying` (keep waiting), then one terminal phase: `live` or `stopped` (success), `build_failed` (exit 9), `crashing` or `unhealthy` (exit 10). `unhealthy` means new pods fail while old ones keep serving; it is a failure, not a timeout.
+- On failure the CLI prints `build.error` or each failing pod's reason, then the log tail, to stderr.
+- With `--wait` in JSON mode, stdout carries the rollout result (`deploymentId`, `releaseId`, `phase`, `url`, `build`, `pods`, `hint`), including on exit 9/10, so an agent can read the diagnosis without a second call. `deploy create --wait` and `import --wait` merge it into their create payload under `rollout` and set `url`.
+- Mutating deployment endpoints (rebuild, scale, start, restart, rollback, image set, build-context upload) return `rolloutSince` (and `releaseId` when the call recorded a release). Pass them back as `?since=` / `?release=` so a wait right after a restart can't read `live` off the old pods. The CLI does this for you.
+- One-off check: `orchard deploy status <id>` (add `--wait` to block). Raw: `orchard api GET '/deployments/<id>/rollout?wait=1&timeout=60'` long-polls server-side for up to 120s.
+- `orchard up` waits by default when stdout is not a TTY. In JSON mode the build log streams to stderr and stdout gets one object: `{deploymentId, releaseId, phase, url, ...}`.
 
 ## Destructive commands and --yes
 
@@ -105,7 +126,7 @@ Delete/revoke/restore style commands ask for confirmation. With stdin or stdout 
 
 ## Rate limits
 
-The API allows 200 requests per 60 seconds per IP. Exceeding it returns HTTP 429 (exit 6). Do not poll in a tight loop; subscribe instead:
+Requests authenticated with an `orch_` token get 600 requests per 60 seconds per token; everything else gets 200 per 60 seconds per IP. Exceeding it returns HTTP 429 (exit 6) with a `Retry-After` header in seconds; read-only CLI calls retry on their own after that delay. A long-polling `rollout?wait=1` call counts once however long it waits. Do not poll in a tight loop; long-poll or subscribe instead:
 
 ```sh
 orchard events tail --types deployment.changed,build.changed
@@ -133,11 +154,28 @@ One-shot import (creates the project, detects the build, deploys, returns the UR
 orchard import owner/repo --wait
 ```
 
-Deploy from GitHub and wait for it to come up:
+Deploy from GitHub and wait for it to come up (exit 9 if the build fails, 10 if it crashes):
 
 ```sh
 export ORCHARD_PROJECT=my-app
 orchard deploy create --name web --github owner/repo#main --port 3000 --wait --timeout 15m
+```
+
+Ship a fix and branch on the result:
+
+```sh
+orchard deploy rebuild <deploymentId> --wait -o json > rollout.json
+case $? in
+  0) jq -r .url rollout.json ;;
+  9) jq -r .build.error rollout.json ;;
+  10) jq -r '.pods.failing[] | .reason, .logTail[]' rollout.json ;;
+esac
+```
+
+Roll back to the previous release:
+
+```sh
+orchard deploy rollback <deploymentId> --yes --wait
 ```
 
 Deployments with a port get an auto-generated platform URL (org-protected;
@@ -148,6 +186,7 @@ Deploy a local directory (requires server-side build-context storage):
 ```sh
 orchard link --project my-app   # once per checkout; writes .orchard/project.json
 orchard up                      # pack, upload, build, follow logs
+orchard up --wait -o json | jq -r .url   # block until live; exit 9/10 on failure
 ```
 
 Pull environment variables into a local dotenv file (secrets come out as
@@ -155,11 +194,13 @@ commented placeholders, values are write-only):
 
 ```sh
 orchard env pull                # writes .env.orchard
+orchard env pull -o json        # prints [{key, value, secret}] instead; secrets have value null
 ```
 
 Tail logs:
 
 ```sh
+orchard logs <deploymentId> -f                       # shortcut for deploy logs
 orchard deploy logs <deploymentId> --follow          # runtime logs, all pods
 orchard deploy logs <deploymentId> --build --follow  # build logs
 orchard pod logs <podName> -f --tail 200             # one pod

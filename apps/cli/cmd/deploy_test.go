@@ -821,7 +821,7 @@ func TestDeployGithubDeployments(t *testing.T) {
 	}
 }
 
-func TestDeployRebuildWaitPollsBuildStatus(t *testing.T) {
+func TestDeployRebuildWaitFallsBackToBuildStatus(t *testing.T) {
 	var rebuilt bool
 	var polls int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -829,6 +829,9 @@ func TestDeployRebuildWaitPollsBuildStatus(t *testing.T) {
 		case r.Method == http.MethodPost && r.URL.Path == "/apiv1/deployments/d1/rebuild":
 			rebuilt = true
 			io.WriteString(w, `{}`)
+		case r.Method == http.MethodGet && r.URL.Path == "/apiv1/deployments/d1/rollout":
+			w.WriteHeader(404)
+			io.WriteString(w, `{"message":"Cannot GET /apiv1/deployments/d1/rollout"}`)
 		case r.Method == http.MethodGet && r.URL.Path == "/apiv1/deployments/d1":
 			polls++
 			io.WriteString(w, `{"id":"d1","buildStatus":"succeeded"}`)

@@ -41,6 +41,8 @@ import { OverviewController } from './overview.controller';
 import { ProjectTransfersController } from './project-transfers.controller';
 import { RegistryCredentialsController } from './registry-credentials.controller';
 import { NamespaceTeardownService } from './namespace-teardown.service';
+import { RolloutStatusService } from './rollout-status.service';
+import { RolloutController, RolloutPinInterceptor } from './rollout.controller';
 
 @Module({
   imports: [
@@ -76,7 +78,9 @@ import { NamespaceTeardownService } from './namespace-teardown.service';
     BuildQueueService,
     IngressService,
     FaviconService,
-    NamespaceTeardownService
+    NamespaceTeardownService,
+    RolloutStatusService,
+    RolloutPinInterceptor
   ],
   controllers: [
     ProjectsController,
@@ -87,7 +91,8 @@ import { NamespaceTeardownService } from './namespace-teardown.service';
     EnvironmentsController,
     OverviewController,
     ProjectTransfersController,
-    RegistryCredentialsController
+    RegistryCredentialsController,
+    RolloutController
   ],
   exports: [
     RegistryCredentialsModule,

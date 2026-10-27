@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hackclub/orchard/cli/internal/api"
 	"github.com/hackclub/orchard/cli/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -64,19 +65,29 @@ func importCmd() *cobra.Command {
 			if u := str(raw["url"]); u != "" {
 				output.Successf("will be live at %s (visible to your org until made public)", u)
 			}
-			if fmtFlag() == output.FormatJSON {
-				if err := output.JSON(raw); err != nil {
-					return err
-				}
-			}
-
 			id := str(raw["deploymentId"])
-			if *wait && id != "" {
-				if werr := runWait(cmd.Context(), cl, deployWaitBuild(id), *timeout); werr != nil {
-					return werr
+			if !*wait || id == "" {
+				if fmtFlag() == output.FormatJSON {
+					return output.JSON(raw)
 				}
-				printDeploySuccess(cmd.Context(), cl, cfg.APIURL, id)
+				return nil
 			}
+			r, werr := waitRollout(cmd.Context(), cl, id, api.RolloutPin{}, *timeout, deployWaitBuild(id))
+			if fmtFlag() == output.FormatJSON {
+				if r != nil {
+					raw["rollout"] = rolloutJSON(id, r)
+					if r.URL != "" {
+						raw["url"] = r.URL
+					}
+				}
+				if err := output.JSON(raw); err != nil && werr == nil {
+					werr = err
+				}
+			}
+			if werr != nil {
+				return werr
+			}
+			printDeployFollowUp(cmd.Context(), cl, cfg.APIURL, id, r)
 			return nil
 		},
 	}

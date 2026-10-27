@@ -99,6 +99,7 @@ var routeCoverage = map[string]string{
 	"GET /deployments":                               "deploy list",
 	"GET /projects/:id/deployments":                  "deploy list (project scope)",
 	"GET /deployments/:id":                           "deploy get",
+	"GET /deployments/:id/rollout":                   "deploy status, and every deploy --wait",
 	"POST /projects/:id/deployments":                 "deploy create --image",
 	"POST /projects/:id/deployments/from-github":     "deploy create --github",
 	"POST /projects/:id/deployments/from-local":      "up (local directory deploy)",

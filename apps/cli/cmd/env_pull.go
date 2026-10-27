@@ -30,7 +30,9 @@ func envPullCmd() *cobra.Command {
 			"development. Secret values are write-only on the server, so secret vars are\n" +
 			"emitted as commented placeholders to fill in locally. With --deployment, that\n" +
 			"deployment's own vars are merged on top with ${{shared.KEY}} references\n" +
-			"resolved where the target is not secret.",
+			"resolved where the target is not secret.\n\n" +
+			"With -o json the vars are printed to stdout instead of written, secrets as\n" +
+			"{key, secret: true, value: null}. Pass --out as well to write the file too.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, cfg, err := client()
@@ -97,6 +99,26 @@ func envPullCmd() *cobra.Command {
 			}
 			sort.Strings(keys)
 
+			explicitJSON := strings.EqualFold(outputFlag, "json") || (outputFlag == "" && os.Getenv("ORCHARD_JSON") == "1")
+			var vars []map[string]any
+			if fmtFlag() == output.FormatJSON {
+				vars = make([]map[string]any, 0, len(keys))
+				for _, k := range keys {
+					e := byKey[k]
+					v := map[string]any{"key": e.key, "secret": e.secret, "value": nil}
+					if !e.secret {
+						v["value"] = e.value
+					}
+					if e.note != "" {
+						v["note"] = e.note
+					}
+					vars = append(vars, v)
+				}
+				if explicitJSON && !cmd.Flags().Changed("out") {
+					return output.JSON(vars)
+				}
+			}
+
 			var b strings.Builder
 			fmt.Fprintf(&b, "%s\n# environment %s (%s)\n", pullHeader, pick(env, "name"), pick(env, "id"))
 			if deployment != "" {
@@ -134,6 +156,9 @@ func envPullCmd() *cobra.Command {
 				if note := ensureGitignored(cwd, out); note != "" {
 					output.Warnf("%s", note)
 				}
+			}
+			if vars != nil {
+				return output.JSON(vars)
 			}
 			return nil
 		},

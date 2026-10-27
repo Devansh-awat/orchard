@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -12,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hackclub/orchard/cli/internal/api"
 	"github.com/hackclub/orchard/cli/internal/buildctx"
 	"github.com/hackclub/orchard/cli/internal/config"
 	"github.com/hackclub/orchard/cli/internal/output"
@@ -24,7 +27,8 @@ func upCmd() *cobra.Command {
 	var name, dockerfile string
 	var rootDir, installCmd, buildCmd, startCmd, outputDir string
 	var port int
-	var railpack, detach bool
+	var railpack, detach, wait bool
+	var timeout time.Duration
 	c := &cobra.Command{
 		Use:     "up [dir]",
 		GroupID: groupCore,
@@ -33,7 +37,11 @@ func upCmd() *cobra.Command {
 			"and builds/deploys it on the platform. First run creates the deployment (with\n" +
 			"a protected URL) in the linked project; later runs just ship the new code.\n" +
 			"With a Dockerfile present it builds that; otherwise Railpack detects the\n" +
-			"language automatically. Requires the server to have local deploys enabled.",
+			"language automatically. Requires the server to have local deploys enabled.\n\n" +
+			"With --wait (the default when stdout is not a terminal) it blocks until the\n" +
+			"deploy is live and exits 9 if the build fails or 10 if the pods crash. In\n" +
+			"JSON mode build logs stream to stderr and stdout carries one result object:\n" +
+			"{deploymentId, releaseId, phase, url, ...}.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := "."
@@ -167,6 +175,15 @@ func upCmd() *cobra.Command {
 				}
 			}
 
+			if !cmd.Flags().Changed("wait") {
+				wait = !output.IsTTY()
+			}
+			jsonMode := fmtFlag() == output.FormatJSON
+			var logW io.Writer = os.Stdout
+			if jsonMode {
+				logW = os.Stderr
+			}
+
 			sp := output.NewSpinner("packing build context")
 			data, files, perr := buildctx.Pack(abs)
 			if perr != nil {
@@ -174,25 +191,60 @@ func upCmd() *cobra.Command {
 				return perr
 			}
 			sp.Update(fmt.Sprintf("uploading %.1fMB (%d files)", float64(len(data))/1024/1024, files))
-			_, uerr := cl.Upload(cmd.Context(), "/deployments/"+url.PathEscape(deploymentID)+"/build-context", "context", "context.tar.gz", bytes.NewReader(data))
+			uploaded, uerr := cl.Upload(cmd.Context(), "/deployments/"+url.PathEscape(deploymentID)+"/build-context", "context", "context.tar.gz", bytes.NewReader(data))
 			sp.Stop()
 			if uerr != nil {
 				return uerr
 			}
 			output.Successf("uploaded %.1fMB (%d files), build started", float64(len(data))/1024/1024, files)
+			var uploadRaw map[string]any
+			_ = json.Unmarshal(uploaded, &uploadRaw)
+			pin := api.PinFrom(uploadRaw)
 
 			if detach {
-				output.Warnf("follow the build with: orchard deploy logs %s --build -f", deploymentID)
+				output.Warnf("follow the build with: orchard logs %s --build -f", deploymentID)
+				if jsonMode {
+					return output.JSON(map[string]any{"deploymentId": deploymentID, "releaseId": nil, "phase": "building", "url": nil})
+				}
 				return nil
 			}
 
-			if err := followBuildLogsSSE(cmd.Context(), cl, deploymentID); err != nil {
-				if errors.Is(err, errSSEUnsupported) {
-					return runWait(cmd.Context(), cl, deployWaitBuild(deploymentID), 10*time.Minute)
-				}
-				return err
+			ferr := followBuildLogsSSE(cmd.Context(), cl, deploymentID, logW)
+			sseMissing := errors.Is(ferr, errSSEUnsupported)
+			if sseMissing {
+				ferr = nil
 			}
-			printDeploySuccess(cmd.Context(), cl, cfg.APIURL, deploymentID)
+			if ferr != nil {
+				if errors.Is(ferr, api.ErrDeployFailed) {
+					if r, gerr := cl.GetRollout(cmd.Context(), deploymentID, pin, 0); gerr == nil {
+						if r.Build.Error != "" {
+							output.Errorf("build failed")
+							fmt.Fprintln(os.Stderr, indent(r.Build.Error))
+						}
+						if jsonMode {
+							_ = output.JSON(rolloutJSON(deploymentID, r))
+						}
+					}
+				}
+				return ferr
+			}
+			if !wait {
+				if sseMissing {
+					return runWait(cmd.Context(), cl, deployWaitBuild(deploymentID), timeout)
+				}
+				printDeploySuccess(cmd.Context(), cl, cfg.APIURL, deploymentID)
+				return nil
+			}
+			r, werr := waitRollout(cmd.Context(), cl, deploymentID, pin, timeout, deployWaitBuild(deploymentID))
+			if jsonMode && r != nil {
+				if err := output.JSON(rolloutJSON(deploymentID, r)); err != nil && werr == nil {
+					werr = err
+				}
+			}
+			if werr != nil {
+				return werr
+			}
+			printDeployFollowUp(cmd.Context(), cl, cfg.APIURL, deploymentID, r)
 			return nil
 		},
 	}
@@ -201,6 +253,8 @@ func upCmd() *cobra.Command {
 	c.Flags().BoolVar(&railpack, "railpack", false, "force a Railpack build even when a Dockerfile exists")
 	c.Flags().IntVar(&port, "port", 0, "port the app listens on (default: EXPOSE or 3000)")
 	c.Flags().BoolVar(&detach, "detach", false, "start the build without following its logs")
+	c.Flags().BoolVar(&wait, "wait", false, "block until the deploy is live (default: on when stdout is not a terminal)")
+	c.Flags().DurationVar(&timeout, "timeout", 10*time.Minute, "give up waiting after this long (exit 8)")
 	c.Flags().StringVar(&rootDir, "root", "", "directory of the app inside the repo (monorepos)")
 	c.Flags().StringVar(&installCmd, "install-cmd", "", "override the detected install command")
 	c.Flags().StringVar(&buildCmd, "build-cmd", "", "override the detected build command")

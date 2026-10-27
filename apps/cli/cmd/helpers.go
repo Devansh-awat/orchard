@@ -105,11 +105,19 @@ func orgSlugOf(raw map[string]any) string {
 // follow-up pointers after a successful create/rebuild wait. Best-effort:
 // failures here never fail the command.
 func printDeploySuccess(ctx context.Context, cl *api.Client, apiURL, id string) {
+	printDeployDetails(ctx, cl, apiURL, id, true)
+}
+
+func printDeployFollowUp(ctx context.Context, cl *api.Client, apiURL, id string, r *api.Rollout) {
+	printDeployDetails(ctx, cl, apiURL, id, r == nil)
+}
+
+func printDeployDetails(ctx context.Context, cl *api.Client, apiURL, id string, withURL bool) {
 	var raw map[string]any
 	if err := cl.GetJSON(ctx, deployPath(id), &raw); err != nil {
 		return
 	}
-	if target := firstIngressURL(raw); target != "" {
+	if target := firstIngressURL(raw); target != "" && withURL {
 		output.Successf("live at %s", target)
 	}
 	if slug := orgSlugOf(raw); slug != "" {

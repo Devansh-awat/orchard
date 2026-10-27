@@ -163,10 +163,10 @@ func TestExitCodesRendersAllCodes(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &docs); err != nil {
 		t.Fatalf("exit-codes -o json is not valid JSON: %v\n%s", err, out)
 	}
-	if len(docs) != 10 {
-		t.Fatalf("exit-codes lists %d codes, want 10", len(docs))
+	if len(docs) != 12 {
+		t.Fatalf("exit-codes lists %d codes, want 12", len(docs))
 	}
-	want := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 130}
+	want := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 130}
 	for i, doc := range docs {
 		if doc.Code != want[i] {
 			t.Errorf("code[%d] = %d, want %d", i, doc.Code, want[i])
@@ -177,7 +177,7 @@ func TestExitCodesRendersAllCodes(t *testing.T) {
 	}
 
 	table := runForStdout(t, "exit-codes", "-o", "table")
-	for _, needle := range []string{"130", "rate-limited", "not-found", "interrupted"} {
+	for _, needle := range []string{"130", "rate-limited", "not-found", "interrupted", "deploy-failed", "deploy-crashing"} {
 		if !strings.Contains(table, needle) {
 			t.Errorf("exit-codes table output missing %q:\n%s", needle, table)
 		}

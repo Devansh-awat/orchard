@@ -1,5 +1,5 @@
 import { ExecutionContext, Injectable } from '@nestjs/common';
-import { ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerGuard, type ThrottlerLimitDetail } from '@nestjs/throttler';
 import { hashApiToken } from './api-tokens.service';
 
 export const IP_RATE_LIMIT = 200;
@@ -42,4 +42,26 @@ export class ApiThrottlerGuard extends ThrottlerGuard {
     }
     return super.getTracker(req);
   }
+
+  protected async throwThrottlingException(
+    context: ExecutionContext,
+    detail: ThrottlerLimitDetail
+  ): Promise<void> {
+    if (context.getType() === 'http') {
+      const res = context.switchToHttp().getResponse();
+      if (res && typeof res.setHeader === 'function' && !res.headersSent) {
+        res.setHeader('Retry-After', String(retryAfterSeconds(detail)));
+      }
+    }
+    return super.throwThrottlingException(context, detail);
+  }
+}
+
+export function retryAfterSeconds(detail: {
+  timeToBlockExpire?: number;
+  timeToExpire?: number;
+}): number {
+  const raw = Number(detail.timeToBlockExpire) > 0 ? detail.timeToBlockExpire : detail.timeToExpire;
+  const secs = Math.ceil(Number(raw));
+  return Number.isFinite(secs) && secs > 0 ? secs : 1;
 }

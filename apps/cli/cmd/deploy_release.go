@@ -1,12 +1,16 @@
 package cmd
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
+	"github.com/hackclub/orchard/cli/internal/api"
 	"github.com/hackclub/orchard/cli/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -15,29 +19,89 @@ func deployRollbackCmd() *cobra.Command {
 	var wait *bool
 	var timeout *time.Duration
 	c := &cobra.Command{
-		Use:   "rollback <id> <historyId>",
-		Short: "Roll a deployment back to a previous image (see `deploy history`)",
-		Args:  cobra.ExactArgs(2),
+		Use:   "rollback <id> [historyId]",
+		Short: "Roll a deployment back to a previous image (default: the previous release)",
+		Long: "Without a history id, rolls back to the release before the current one.\n" +
+			"Pass an id from `deploy history` to pick a specific image.",
+		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := output.Confirm(fmt.Sprintf("rollback deployment %s to image history entry %s", args[0], args[1]), yesFlag); err != nil {
+			target := "the previous release"
+			if len(args) == 2 {
+				target = "image history entry " + args[1]
+			}
+			if err := output.Confirm(fmt.Sprintf("rollback deployment %s to %s", args[0], target), yesFlag); err != nil {
 				return err
 			}
 			cl, _, err := client()
 			if err != nil {
 				return err
 			}
-			if err := cl.Send(cmd.Context(), http.MethodPost, deployPath(args[0], "rollback", url.PathEscape(args[1])), nil, nil); err != nil {
+			var raw map[string]any
+			if len(args) == 2 {
+				err = cl.Send(cmd.Context(), http.MethodPost, deployPath(args[0], "rollback", url.PathEscape(args[1])), nil, &raw)
+			} else {
+				raw, err = rollbackToPrevious(cmd.Context(), cl, args[0])
+			}
+			if err != nil {
 				return err
 			}
-			output.Successf("rolled back %s to %s", args[0], args[1])
+			output.Successf("rolled back %s to %s", args[0], target)
 			if *wait {
-				return runWait(cmd.Context(), cl, deployWaitRunning(args[0]), *timeout)
+				return waitAndEmit(cmd, cl, args[0], api.PinFrom(raw), *timeout, deployWaitRunning(args[0]))
 			}
 			return nil
 		},
 	}
 	wait, timeout = addWaitFlags(c)
 	return c
+}
+
+func rollbackToPrevious(ctx context.Context, cl *api.Client, id string) (map[string]any, error) {
+	var raw map[string]any
+	err := cl.Send(ctx, http.MethodPost, deployPath(id, "rollback"), nil, &raw)
+	var apiErr *api.APIError
+	if err == nil || !errors.As(err, &apiErr) || apiErr.Status != 404 {
+		return raw, err
+	}
+	historyID, err := previousImageHistoryID(ctx, cl, id)
+	if err != nil {
+		return nil, err
+	}
+	raw = nil
+	err = cl.Send(ctx, http.MethodPost, deployPath(id, "rollback", url.PathEscape(historyID)), nil, &raw)
+	return raw, err
+}
+
+func previousImageHistoryID(ctx context.Context, cl *api.Client, id string) (string, error) {
+	var listRaw any
+	if err := cl.GetJSON(ctx, deployPath(id, "image-history"), &listRaw); err != nil {
+		return "", err
+	}
+	entries := asList(listRaw)
+	sort.SliceStable(entries, func(i, j int) bool {
+		return str(entries[i]["createdAt"]) > str(entries[j]["createdAt"])
+	})
+	current := ""
+	activeAt := -1
+	for i, e := range entries {
+		if e["isActive"] == true {
+			current, activeAt = str(e["image"]), i
+			break
+		}
+	}
+	if activeAt < 0 {
+		var dep map[string]any
+		if err := cl.GetJSON(ctx, deployPath(id), &dep); err != nil {
+			return "", err
+		}
+		current = str(dep["image"])
+	}
+	for _, e := range entries[activeAt+1:] {
+		if str(e["id"]) != "" && str(e["image"]) != current {
+			return str(e["id"]), nil
+		}
+	}
+	return "", errors.New("no previous release to roll back to; see `orchard deploy history`")
 }
 
 func deployImageCmd() *cobra.Command {
@@ -62,12 +126,13 @@ func deployImageSetCmd() *cobra.Command {
 				return err
 			}
 			body := map[string]any{"image": args[1]}
-			if err := cl.Send(cmd.Context(), http.MethodPatch, deployPath(args[0], "image"), body, nil); err != nil {
+			var raw map[string]any
+			if err := cl.Send(cmd.Context(), http.MethodPatch, deployPath(args[0], "image"), body, &raw); err != nil {
 				return err
 			}
 			output.Successf("set image of %s to %s", args[0], args[1])
 			if *wait {
-				return runWait(cmd.Context(), cl, deployWaitRunning(args[0]), *timeout)
+				return waitAndEmit(cmd, cl, args[0], api.PinFrom(raw), *timeout, deployWaitRunning(args[0]))
 			}
 			return nil
 		},

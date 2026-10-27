@@ -32,6 +32,12 @@ func TestFromError(t *testing.T) {
 		{"wait timeout wrapped", fmt.Errorf("waiting for deploy: %w", api.ErrWaitTimeout), Deadline},
 		{"canceled", context.Canceled, Interrupted},
 		{"canceled wrapped", fmt.Errorf("ctrl-c: %w", context.Canceled), Interrupted},
+		{"deploy failed", api.ErrDeployFailed, DeployFailed},
+		{"deploy failed wrapped", fmt.Errorf("up: %w", api.ErrDeployFailed), DeployFailed},
+		{"deploy crashing", api.ErrDeployCrashing, DeployCrashing},
+		{"rollout error build", api.RolloutOutcome(&api.Rollout{Phase: "build_failed", Terminal: true}), DeployFailed},
+		{"rollout error crashing", api.RolloutOutcome(&api.Rollout{Phase: "crashing", Terminal: true}), DeployCrashing},
+		{"rollout error unhealthy", api.RolloutOutcome(&api.Rollout{Phase: "unhealthy", Terminal: true}), DeployCrashing},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

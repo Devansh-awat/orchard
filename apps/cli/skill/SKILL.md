@@ -17,21 +17,32 @@ description: Deploy and manage apps, databases, scheduled jobs, domains, and log
 - Piped output is JSON on stdout; status lines go to stderr. `ORCHARD_JSON=1` or `-o json` forces it.
 - `events tail` emits NDJSON; `--follow` log commands stream plain lines.
 - Errors in JSON mode: one stderr line `{"error":{"status":<http>,"code":<exit>,"message":"..."}}`.
-- Exit codes: 0 ok, 1 generic, 2 usage/refused prompt, 3 auth, 4 not found, 5 validation, 6 rate limited, 7 server, 8 wait timeout, 130 interrupted.
+- Exit codes: 0 ok, 1 generic, 2 usage/refused prompt, 3 auth, 4 not found, 5 validation, 6 rate limited, 7 server, 8 wait timeout, 9 deploy-failed (build failed), 10 deploy-crashing (pods crashing or rollout unhealthy), 130 interrupted.
 
 ## Rules
 
 - Destructive commands (delete/revoke/restore) need `--yes` when not a TTY; the CLI never prompts in a pipe (it exits 2 instead).
-- Async ops (`deploy create|scale|restart|rebuild|rollback`, `db create`, `db backup create`, `job run`) take `--wait --timeout 10m`; deadline exits 8.
+- Async ops (`deploy create|scale|start|restart|rebuild|rollback`, `deploy image set`, `up`, `import`, `db create`, `db backup create`, `job run`) take `--wait --timeout 10m`; deadline exits 8.
 - Paginated lists (`audit list`, `job runs`) take `--limit/--cursor/--all`; JSON includes `nextCursor`.
-- Rate limit is 200 req/60s per IP: prefer `orchard events tail --types ...` over polling.
+- Rate limit is 600 req/60s per `orch_` token (200 req/60s per IP otherwise); 429s carry `Retry-After`. Prefer `--wait` (server long-poll) or `orchard events tail --types ...` over polling.
 - Anything without a wrapper: `orchard api METHOD /path [--data JSON|-]`. Route list: `apps/server/test/auth-coverage.snapshot.json`.
+
+## Rollout flow
+
+- Deployment `--wait` long-polls `GET /deployments/:id/rollout` until a terminal phase: `live`/`stopped` exit 0, `build_failed` exits 9, `crashing`/`unhealthy` exit 10. `unhealthy` (new pods failing, old ones serving) is a failure.
+- On failure stderr gets `build.error` or each failing pod's reason plus a log tail. In JSON mode stdout gets `{deploymentId, releaseId, phase, url, build, pods, hint}`, also on exit 9/10.
+- `orchard deploy status <id>` answers "is it live, and if not why" once; `orchard up` waits by default when piped and keeps build logs on stderr in JSON mode.
+- Mutations return `rolloutSince`/`releaseId`; the CLI pins the wait to them so a restart can't read `live` off old pods.
 
 ## Common commands
 
 ```sh
 orchard deploy create --name web --github owner/repo#main --port 3000 --wait
-orchard deploy logs <id> --follow            # --build for build logs
+orchard up --wait -o json | jq -r .url       # local dir; exit 9 build failed, 10 crashing
+orchard deploy status <id>                   # phase + why; --wait to block
+orchard deploy rollback <id> --yes --wait    # back to the previous release
+orchard logs <id> -f                         # --build for build logs
+orchard env pull -o json                     # [{key, value, secret}], secrets value null
 orchard deploy scale <id> 3 --wait
 orchard env vars set --file .env             # --secret for write-only vars
 orchard deploy env set <id> KEY=VAL          # per-deployment, pods restart

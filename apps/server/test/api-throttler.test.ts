@@ -17,8 +17,10 @@ import {
   apiThrottlerLimit,
   bearerApiToken,
   API_TOKEN_RATE_LIMIT,
-  IP_RATE_LIMIT
+  IP_RATE_LIMIT,
+  retryAfterSeconds
 } from '../src/auth/api-throttler.guard';
+import { ThrottlerException } from '@nestjs/throttler';
 
 const PAT = 'orch_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 const OTHER_PAT = 'orch_ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff';
@@ -83,4 +85,66 @@ test('apiThrottlerLimit gives PAT buckets more headroom', () => {
   assert.equal(apiThrottlerLimit(httpContext(makeRequest(`Bearer ${PAT}`))), API_TOKEN_RATE_LIMIT);
   assert.equal(apiThrottlerLimit(httpContext(makeRequest())), IP_RATE_LIMIT);
   assert.equal(apiThrottlerLimit({ getType: () => 'ws' } as any), IP_RATE_LIMIT);
+});
+
+function responseContext(res: Record<string, any>) {
+  return {
+    getType: () => 'http',
+    switchToHttp: () => ({ getRequest: () => makeRequest(), getResponse: () => res })
+  } as any;
+}
+
+function fakeResponse() {
+  const headers: Record<string, string> = {};
+  return {
+    headers,
+    headersSent: false,
+    setHeader(name: string, value: string) {
+      headers[name] = value;
+    }
+  };
+}
+
+const blocked = {
+  limit: 600,
+  ttl: 60000,
+  key: 'k',
+  tracker: 't',
+  totalHits: 601,
+  isBlocked: true
+};
+
+test('429 responses carry Retry-After in whole seconds', async () => {
+  const guard = makeGuard();
+  const res = fakeResponse();
+  await assert.rejects(
+    (guard as any).throwThrottlingException(responseContext(res), {
+      ...blocked,
+      timeToExpire: 12,
+      timeToBlockExpire: 42
+    }),
+    ThrottlerException
+  );
+  assert.equal(res.headers['Retry-After'], '42');
+});
+
+test('Retry-After falls back to the window expiry and never drops below one second', () => {
+  assert.equal(retryAfterSeconds({ timeToBlockExpire: 0, timeToExpire: 7 }), 7);
+  assert.equal(retryAfterSeconds({ timeToBlockExpire: 2.2 }), 3);
+  assert.equal(retryAfterSeconds({}), 1);
+  assert.equal(retryAfterSeconds({ timeToBlockExpire: -5, timeToExpire: 0 }), 1);
+});
+
+test('Retry-After is skipped once headers are already sent', async () => {
+  const guard = makeGuard();
+  const res = { ...fakeResponse(), headersSent: true };
+  await assert.rejects(
+    (guard as any).throwThrottlingException(responseContext(res), {
+      ...blocked,
+      timeToExpire: 5,
+      timeToBlockExpire: 5
+    }),
+    ThrottlerException
+  );
+  assert.equal(res.headers['Retry-After'], undefined);
 });

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -65,7 +66,7 @@ func followRuntimeLogsSSE(ctx context.Context, cl *api.Client, deploymentID stri
 // returns once the build settles. Returns errSSEUnsupported when the server
 // predates the endpoint (404 before any data) so callers can fall back to the
 // polling tail.
-func followBuildLogsSSE(ctx context.Context, cl *api.Client, deploymentID string) error {
+func followBuildLogsSSE(ctx context.Context, cl *api.Client, deploymentID string, w io.Writer) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -83,17 +84,14 @@ func followBuildLogsSSE(ctx context.Context, cl *api.Client, deploymentID string
 				fmt.Fprintln(os.Stderr, output.Dim("· new build started, restarting tail"))
 			}
 			if ev.Chunk != "" {
-				fmt.Print(ev.Chunk)
+				fmt.Fprint(w, ev.Chunk)
 				needsNewline = !strings.HasSuffix(ev.Chunk, "\n")
 			}
 			if ev.Done {
 				if needsNewline {
-					fmt.Println()
+					fmt.Fprintln(w)
 				}
-				if ev.Status != "" {
-					output.Successf("build %s", ev.Status)
-				}
-				return nil
+				return buildDoneResult(ev.Status)
 			}
 		case err, ok := <-errs:
 			if !ok {
@@ -105,9 +103,33 @@ func followBuildLogsSSE(ctx context.Context, cl *api.Client, deploymentID string
 			}
 		case <-ctx.Done():
 			if needsNewline {
-				fmt.Println()
+				fmt.Fprintln(w)
 			}
 			return nil
 		}
 	}
+}
+
+type buildEndedError struct {
+	status string
+}
+
+func (e *buildEndedError) Error() string { return "build " + e.status }
+
+func (e *buildEndedError) Unwrap() error {
+	if e.status == "failed" {
+		return api.ErrDeployFailed
+	}
+	return nil
+}
+
+func buildDoneResult(status string) error {
+	switch strings.ToLower(status) {
+	case "", "succeeded", "success", "complete", "none":
+		if status != "" {
+			output.Successf("build %s", status)
+		}
+		return nil
+	}
+	return &buildEndedError{status: strings.ToLower(status)}
 }

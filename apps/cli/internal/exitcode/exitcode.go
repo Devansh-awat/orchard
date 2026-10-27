@@ -10,16 +10,18 @@ import (
 
 // Stable exit codes, documented in `orchard help exit-codes` and AGENTS.md.
 const (
-	OK          = 0
-	Generic     = 1
-	Usage       = 2
-	Auth        = 3
-	NotFound    = 4
-	Invalid     = 5
-	RateLimited = 6
-	Server      = 7
-	Deadline    = 8
-	Interrupted = 130
+	OK             = 0
+	Generic        = 1
+	Usage          = 2
+	Auth           = 3
+	NotFound       = 4
+	Invalid        = 5
+	RateLimited    = 6
+	Server         = 7
+	Deadline       = 8
+	DeployFailed   = 9
+	DeployCrashing = 10
+	Interrupted    = 130
 )
 
 // UsageError marks bad invocations (unknown flags, refused prompts) → exit 2.
@@ -41,6 +43,12 @@ func FromError(err error) int {
 	}
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, api.ErrWaitTimeout) {
 		return Deadline
+	}
+	if errors.Is(err, api.ErrDeployFailed) {
+		return DeployFailed
+	}
+	if errors.Is(err, api.ErrDeployCrashing) {
+		return DeployCrashing
 	}
 	var apiErr *api.APIError
 	if errors.As(err, &apiErr) {
