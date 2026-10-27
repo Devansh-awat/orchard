@@ -1,5 +1,5 @@
 <script lang="ts">
-	let { name, size = 'md' }: { name: string; size?: 'sm' | 'md' } = $props();
+	let { name, size = 'md' }: { name: string; size?: 'sm' | 'md' | 'lg' } = $props();
 
 	const HUES = ['accent', 'blue', 'green', 'amber', 'red'] as const;
 	const hue = $derived(
@@ -33,6 +33,13 @@
 		height: 1.125rem;
 		font-size: 0.625rem;
 		border-radius: calc(0.3125rem * var(--corner-scale));
+		corner-shape: var(--corner);
+	}
+	.mono--lg {
+		width: 2rem;
+		height: 2rem;
+		font-size: var(--text-body);
+		border-radius: calc(0.5rem * var(--corner-scale));
 		corner-shape: var(--corner);
 	}
 	.mono--md {

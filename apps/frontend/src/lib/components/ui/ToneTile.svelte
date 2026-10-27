@@ -10,7 +10,7 @@
 		label = undefined,
 		children
 	}: {
-		tone?: StatusKind;
+		tone?: StatusKind | 'accent';
 		size?: number;
 		solid?: boolean;
 		class?: string;
@@ -35,7 +35,7 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		border-radius: calc(var(--radius-md) * var(--corner-scale));
+		border-radius: calc(var(--tile-r, var(--radius-md)) * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--fill-quiet);
 		color: var(--text-muted);
@@ -60,6 +60,13 @@
 	.ui-tone-tile--progress {
 		background: var(--status-progress-bg);
 		color: var(--status-progress);
+	}
+	.ui-tone-tile--accent {
+		background: color-mix(in oklab, var(--accent-solid) 12%, transparent);
+		color: var(--accent-9);
+	}
+	.ui-tone-tile--solid.ui-tone-tile--accent {
+		background: var(--accent-solid);
 	}
 	.ui-tone-tile--solid {
 		color: var(--text-on-accent);

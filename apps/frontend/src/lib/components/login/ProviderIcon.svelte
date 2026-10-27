@@ -8,7 +8,7 @@
 
 <script lang="ts">
 	import { Building2, KeyRound, ShieldCheck } from 'lucide-svelte';
-	import RemoteImg from '$lib/components/ui/RemoteImg.svelte';
+	import IconTile from '$lib/components/ui/IconTile.svelte';
 
 	let {
 		preset = 'generic',
@@ -18,9 +18,7 @@
 </script>
 
 {#if iconUrl}
-	<span class="tile" style:--size="{size}px">
-		<RemoteImg src={iconUrl} alt="" class="tile-img" />
-	</span>
+	<span class="tile" style:--size="{size}px"><IconTile src={iconUrl} class="tile-img" /></span>
 {:else if preset === 'google'}
 	<svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
 		<path
@@ -65,6 +63,5 @@
 	.tile :global(.tile-img) {
 		width: 100%;
 		height: 100%;
-		object-fit: cover;
 	}
 </style>

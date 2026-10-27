@@ -125,6 +125,8 @@ callout|caption|micro`, `rounded-control|card|panel`.
 | Code and config                    | `CodeBlock`, `Snippet` (one command), `EnvVarRow`, `LogViewer`                      |
 | Keys, IDs                          | `Kbd`, `CopyButton`, `MiddleTruncate` (hashes and IDs only)                         |
 | Times                              | `RelativeTime`                                                                      |
+| Separator                          | `Divider` (`label="or"` between two ways to do one thing)                           |
+| Icon square                        | `ToneTile` (status tone or `accent`, `solid` for done states)                       |
 | One-time code                      | `CodeInput` (one real input, six cells, submits itself, shakes on error)            |
 | Sign-in or other arrival screen    | `AuthShell` (field, vine, sheet that morphs its height) + `SignInFlow`              |
 | Ornament                           | `AsciiVine`, only where `The vine` allows                                           |

@@ -50,3 +50,4 @@ export { default as ActivityGroup } from './ActivityGroup.svelte';
 export { default as ColorField } from './ColorField.svelte';
 export { default as AsciiVine } from './AsciiVine.svelte';
 export { default as CodeInput } from './CodeInput.svelte';
+export { default as Divider } from './Divider.svelte';

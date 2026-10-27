@@ -4,7 +4,8 @@
 	import { onMount } from 'svelte';
 	import { get } from 'svelte/store';
 	import { Lock } from 'lucide-svelte';
-	import { RemoteImg } from '$lib/components/ui';
+	import { Badge, IconTile } from '$lib/components/ui';
+	import Monogram from '$lib/components/ui/Monogram.svelte';
 	import AuthShell from '$lib/components/patterns/AuthShell.svelte';
 	import { SignInFlow } from '$lib/components/login';
 	import {
@@ -62,7 +63,7 @@
 </svelte:head>
 
 {#snippet enforcedNote()}
-	<p class="enforced"><Lock size={13} /> {context.name} requires single sign-on</p>
+	<Badge><Lock size={12} /> {context.name} requires single sign-on</Badge>
 {/snippet}
 
 <AuthShell
@@ -73,11 +74,9 @@
 	tagline={branding.tagline}
 >
 	{#snippet wordmark()}
-		{#if branding.logoUrl || context.avatarUrl}
-			<RemoteImg src={branding.logoUrl || context.avatarUrl} alt="" class="org-mark" />
-		{:else}
-			<span class="org-mark org-mark--letter" aria-hidden="true">{context.name.slice(0, 1)}</span>
-		{/if}
+		<IconTile src={branding.logoUrl || context.avatarUrl} alt="" class="org-mark">
+			{#snippet fallback()}<Monogram name={context.name} size="lg" />{/snippet}
+		</IconTile>
 		<span class="org-name">{context.name}</span>
 	{/snippet}
 	{#snippet headline()}
@@ -102,34 +101,13 @@
 
 <style>
 	:global(.org-mark) {
-		display: grid;
-		place-items: center;
 		width: 2rem;
 		height: 2rem;
-		overflow: hidden;
 		border-radius: calc(0.5rem * var(--corner-scale));
 		corner-shape: var(--corner);
-		object-fit: cover;
-		box-shadow: 0 0 0 0.5px var(--rule);
-	}
-	.org-mark--letter {
-		background: color-mix(in oklab, var(--on-brand) 18%, transparent);
-		color: var(--on-brand);
-		font-size: var(--text-title-3);
-		font-weight: var(--weight-semibold);
-		text-transform: uppercase;
 	}
 	.org-name {
 		font-size: var(--text-headline);
 		font-weight: var(--weight-semibold);
-	}
-	.enforced {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		margin: 0;
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		color: var(--text-muted);
 	}
 </style>

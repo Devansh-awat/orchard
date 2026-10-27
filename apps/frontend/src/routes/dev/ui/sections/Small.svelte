@@ -9,6 +9,10 @@
 	import MiddleTruncate from '$lib/components/ui/MiddleTruncate.svelte';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import { statusMeta } from '$lib/components/ui/status';
+	import Divider from '$lib/components/ui/Divider.svelte';
+	import ToneTile from '$lib/components/ui/ToneTile.svelte';
+	import Monogram from '$lib/components/ui/Monogram.svelte';
+	import { Check, KeyRound } from 'lucide-svelte';
 
 	let modalOpen = $state(false);
 </script>
@@ -39,3 +43,23 @@
 		<Button variant="danger" onclick={() => (modalOpen = false)}>Delete worker</Button>
 	{/snippet}
 </Modal>
+
+<SectionCard
+	title="Dividers and tiles"
+	description="Divider separates two ways to do the same thing; give it a label like or. ToneTile is a tinted or solid icon square for a status or the accent. Monogram stands in for a missing logo."
+>
+	<div class="flex flex-col gap-6">
+		<div class="flex max-w-sm flex-col gap-4">
+			<Divider />
+			<Divider label="or" />
+		</div>
+		<div class="flex items-center gap-3">
+			<ToneTile tone="accent" size={32}><KeyRound size={16} /></ToneTile>
+			<ToneTile tone="success" solid size={40}><Check size={18} strokeWidth={2.5} /></ToneTile>
+			<ToneTile tone="error" size={32}><KeyRound size={16} /></ToneTile>
+			<Monogram name="Northwind" size="sm" />
+			<Monogram name="Northwind" />
+			<Monogram name="Northwind" size="lg" />
+		</div>
+	</div>
+</SectionCard>

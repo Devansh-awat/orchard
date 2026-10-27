@@ -75,6 +75,10 @@
 			section: 'data'
 		},
 		{ need: 'Keys and IDs', use: ['Kbd', 'CopyButton', 'MiddleTruncate'], section: 'small' },
+		{ need: 'Separator', use: ['Divider'], note: 'label for "or"', section: 'small' },
+		{ need: 'Icon square', use: ['ToneTile'], note: 'status tones or accent', section: 'small' },
+		{ need: 'One-time code', use: ['CodeInput'], section: 'vine' },
+		{ need: 'Sign-in screen', use: ['AuthShell', 'SignInFlow'], section: 'vine' },
 		{ need: 'Times', use: ['RelativeTime'], section: 'data' }
 	];
 

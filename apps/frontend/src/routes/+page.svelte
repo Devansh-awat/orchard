@@ -1,6 +1,7 @@
 <script lang="ts">
 	import './home-page.css';
 	import AuthShell from '$lib/components/patterns/AuthShell.svelte';
+	import Button from '$lib/components/ui/Button.svelte';
 	import { SignInFlow } from '$lib/components/login';
 	import type { LoginProvider, DiscoveredOrg } from '$lib/components/login';
 	import { page } from '$app/stores';
@@ -309,7 +310,9 @@
 
 {#snippet orgHint()}
 	{#if discovered}
-		<a class="hint" href={discovered.loginUrl}>Sign in through {discovered.name} instead</a>
+		<Button variant="ghost" size="sm" href={discovered.loginUrl}>
+			Sign in through {discovered.name} instead
+		</Button>
 	{/if}
 {/snippet}
 
@@ -500,15 +503,3 @@
 		{/if}
 	</div>
 {/if}
-
-<style>
-	.hint {
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		color: var(--text-muted);
-		text-decoration: none;
-	}
-	.hint:hover {
-		color: var(--text-default);
-	}
-</style>

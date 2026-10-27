@@ -2,7 +2,16 @@
 	import { browser } from '$app/environment';
 	import { onDestroy, onMount, type Snippet } from 'svelte';
 	import { ChevronLeft, ChevronRight, KeyRound, Lock, Mail, Check, Sprout } from 'lucide-svelte';
-	import { Alert, Button, CodeInput, Field, Input, Skeleton } from '$lib/components/ui';
+	import {
+		Alert,
+		Button,
+		CodeInput,
+		Divider,
+		Field,
+		Input,
+		Skeleton,
+		ToneTile
+	} from '$lib/components/ui';
 	import List from '$lib/components/ui/List.svelte';
 	import ListRow from '$lib/components/ui/ListRow.svelte';
 	import Turnstile from '$lib/components/Turnstile.svelte';
@@ -377,7 +386,7 @@
 {/snippet}
 
 {#snippet faultLine()}
-	{#if fault}<p class="fault" role="alert">{fault}</p>{/if}
+	{#if fault}<Alert tone="error">{fault}</Alert>{/if}
 {/snippet}
 
 <div class="steps">
@@ -407,7 +416,7 @@
 					<Skeleton height="2.5rem" />
 				{/if}
 				{#if (providers.length || !providersLoaded) && emailAccess !== 'none'}
-					<div class="or"><span>or</span></div>
+					<Divider label="or" />
 				{/if}
 				{#if emailAccess === 'loading'}
 					<Skeleton height="2.5rem" />
@@ -450,7 +459,7 @@
 						{revealLabel}
 					</Button>
 				{/if}
-				{#if policy && !emailOpen}<p class="note">{policy}</p>{/if}
+				{#if policy && !emailOpen}<p class="text-center text-callout text-muted">{policy}</p>{/if}
 			{:else if step === 'choose'}
 				{@render head('Choose how to sign in', who, true)}
 				<List label="Sign-in methods">
@@ -463,13 +472,15 @@
 								signInWithPasskey();
 							}}
 						>
-							{#snippet leading()}<span class="glyph"><KeyRound size={16} /></span>{/snippet}
+							{#snippet leading()}<ToneTile tone="accent" size={32}><KeyRound size={16} /></ToneTile
+								>{/snippet}
 							{#snippet trailing()}<ChevronRight size={16} class="chev" />{/snippet}
 						</ListRow>
 					{/if}
 					{#if hasPassword}
 						<ListRow title="Password" onclick={() => go('password')}>
-							{#snippet leading()}<span class="glyph"><Lock size={16} /></span>{/snippet}
+							{#snippet leading()}<ToneTile tone="accent" size={32}><Lock size={16} /></ToneTile
+								>{/snippet}
 							{#snippet trailing()}<ChevronRight size={16} class="chev" />{/snippet}
 						</ListRow>
 					{/if}
@@ -478,7 +489,8 @@
 						subtitle="A 6-digit code, valid for 10 minutes"
 						onclick={() => sendCode()}
 					>
-						{#snippet leading()}<span class="glyph"><Mail size={16} /></span>{/snippet}
+						{#snippet leading()}<ToneTile tone="accent" size={32}><Mail size={16} /></ToneTile
+							>{/snippet}
 						{#snippet trailing()}<ChevronRight size={16} class="chev" />{/snippet}
 					</ListRow>
 				</List>
@@ -498,7 +510,7 @@
 				</Button>
 				{@render faultLine()}
 				{@render botCheck()}
-				<div class="alts">
+				<div class="-mt-1 flex flex-wrap justify-center gap-1">
 					{#if hasPassword}
 						<Button variant="ghost" size="sm" onclick={() => go('password')}>Use password</Button>
 					{/if}
@@ -518,7 +530,7 @@
 				>
 					<input
 						type="email"
-						class="hidden-user"
+						class="sr-only"
 						autocomplete="username"
 						value={address}
 						readonly
@@ -549,7 +561,7 @@
 						Sign in
 					</Button>
 				</form>
-				<div class="alts">
+				<div class="-mt-1 flex flex-wrap justify-center gap-1">
 					{#if hasPasskey}
 						<Button variant="ghost" size="sm" onclick={() => go('passkey')}>Use passkey</Button>
 					{/if}
@@ -568,15 +580,16 @@
 						verifyCode();
 					}}
 				>
-					<CodeInput
-						id="signin-code"
-						bind:value={code}
-						error={codeFault}
-						autofocus
-						disabled={busy === 'verify'}
-						oncomplete={() => verifyCode()}
-					/>
-					{@render faultLine()}
+					<Field for="signin-code" error={fault}>
+						<CodeInput
+							id="signin-code"
+							bind:value={code}
+							error={codeFault}
+							autofocus
+							disabled={busy === 'verify'}
+							oncomplete={() => verifyCode()}
+						/>
+					</Field>
 					{@render botCheck()}
 					<Button
 						type="submit"
@@ -589,7 +602,7 @@
 						Continue
 					</Button>
 				</form>
-				<div class="alts">
+				<div class="-mt-1 flex flex-wrap justify-center gap-1">
 					<Button
 						variant="ghost"
 						size="sm"
@@ -602,7 +615,7 @@
 				</div>
 			{:else if step === 'blocked'}
 				<header class="head">
-					<div class="lead"><span class="badge"><Sprout size={18} /></span></div>
+					<div class="lead"><ToneTile tone="accent" size={40}><Sprout size={18} /></ToneTile></div>
 					<h1 class="title">
 						{blocked === 'signups_disabled' ? 'Sign-ups are closed' : 'Orchard is invite-only'}
 					</h1>
@@ -618,7 +631,11 @@
 			{:else}
 				<header class="head head--done">
 					<div class="lead">
-						<span class="badge badge--done"><Check size={18} strokeWidth={2.5} /></span>
+						<span class="pop"
+							><ToneTile tone="success" solid size={40} label="Signed in"
+								><Check size={18} strokeWidth={2.5} /></ToneTile
+							></span
+						>
 					</div>
 					<h1 class="title">You're in</h1>
 					<p class="sub">Opening Orchard</p>
@@ -685,68 +702,8 @@
 	.step > :global(.wide) {
 		width: 100%;
 	}
-	.or {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		color: var(--text-faint);
-	}
-	.or::before,
-	.or::after {
-		content: '';
-		flex: 1;
-		height: 0.5px;
-		background: var(--rule-strong);
-	}
-	.note {
-		margin: 0;
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		color: var(--text-muted);
-		text-align: center;
-	}
-	.fault {
-		margin: 0;
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		color: var(--status-error);
-	}
-	.alts {
-		display: flex;
-		flex-wrap: wrap;
-		justify-content: center;
-		gap: 0.25rem;
-		margin-top: -0.25rem;
-	}
-	.glyph {
-		display: grid;
-		place-items: center;
-		width: 2rem;
-		height: 2rem;
-		border-radius: calc(0.5rem * var(--corner-scale));
-		corner-shape: var(--corner);
-		background: color-mix(in oklab, var(--accent-solid) 12%, transparent);
-		color: var(--accent-9);
-	}
 	.step :global(.chev) {
 		color: var(--text-faint);
-	}
-	.badge {
-		display: grid;
-		place-items: center;
-		width: 2.5rem;
-		height: 2.5rem;
-		border-radius: calc(0.75rem * var(--corner-scale));
-		corner-shape: var(--corner);
-		background: color-mix(in oklab, var(--accent-solid) 12%, transparent);
-		color: var(--accent-9);
-	}
-	.badge--done {
-		background: var(--green-solid);
-		color: var(--on-solid);
-		animation: badge-in var(--spring-bouncy-duration) var(--spring-bouncy);
 	}
 	.head--done {
 		align-items: center;
@@ -760,12 +717,9 @@
 		display: flex;
 		justify-content: center;
 	}
-	.hidden-user {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		opacity: 0;
-		pointer-events: none;
+	.pop {
+		display: inline-flex;
+		animation: badge-in var(--spring-bouncy-duration) var(--spring-bouncy);
 	}
 	@keyframes badge-in {
 		from {
