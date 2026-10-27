@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.82.0](https://github.com/hackclub/orchard/compare/server/v2.81.1...server/v2.82.0) (2026-10-27)
+
+
+### Features
+
+* let project members pick the builder ([0fc40e3](https://github.com/hackclub/orchard/commit/0fc40e31604c3a762be64200f593d2228c3c41fd))
+
 ## [2.81.1](https://github.com/hackclub/orchard/compare/server/v2.81.0...server/v2.81.1) (2026-10-27)
 
 

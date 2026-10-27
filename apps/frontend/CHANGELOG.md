@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.73.0](https://github.com/hackclub/orchard/compare/frontend/v1.72.0...frontend/v1.73.0) (2026-10-27)
+
+
+### Features
+
+* let project members pick the builder ([0fc40e3](https://github.com/hackclub/orchard/commit/0fc40e31604c3a762be64200f593d2228c3c41fd))
+
 ## [1.72.0](https://github.com/hackclub/orchard/compare/frontend/v1.71.2...frontend/v1.72.0) (2026-10-26)
 
 

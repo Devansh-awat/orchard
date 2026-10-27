@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.33.0](https://github.com/hackclub/orchard/compare/cli/v0.32.0...cli/v0.33.0) (2026-10-27)
+
+
+### Features
+
+* let project members pick the builder ([0fc40e3](https://github.com/hackclub/orchard/commit/0fc40e31604c3a762be64200f593d2228c3c41fd))
+
 ## [0.32.0](https://github.com/hackclub/orchard/compare/cli/v0.31.1...cli/v0.32.0) (2026-10-26)
 
 
