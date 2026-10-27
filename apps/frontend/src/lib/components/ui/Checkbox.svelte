@@ -73,7 +73,7 @@
 		place-items: center;
 		width: 1rem;
 		height: 1rem;
-		transition: transform var(--spring-interactive-duration) var(--spring-interactive);
+		transition: transform var(--spring-press-duration) var(--spring-press);
 	}
 	.choice:active:not(.choice--disabled) .control {
 		transform: scale(0.9);
@@ -142,8 +142,8 @@
 		opacity: 0;
 		transform: scale(0.4);
 		transition:
-			opacity 120ms ease,
-			transform var(--spring-bouncy-duration) var(--spring-bouncy);
+			opacity var(--fade-in) var(--curve-out),
+			transform var(--spring-pop-duration) var(--spring-pop);
 	}
 	.native:checked:not(:indeterminate) + .glyph .tick,
 	.native:indeterminate + .glyph .dash {

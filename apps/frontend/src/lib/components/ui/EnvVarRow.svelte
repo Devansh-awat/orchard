@@ -123,8 +123,8 @@
 		text-overflow: ellipsis;
 		text-box: trim-both cap alphabetic;
 		transition:
-			opacity 160ms ease,
-			transform var(--spring-snappy-duration) var(--spring-snappy);
+			opacity var(--fade-in) var(--curve-out),
+			transform var(--spring-glide-duration) var(--spring-glide);
 	}
 	.layer--value {
 		color: var(--text-muted);
@@ -186,8 +186,8 @@
 		grid-area: 1 / 1;
 		display: flex;
 		transition:
-			opacity 120ms ease,
-			transform var(--spring-snappy-duration) var(--spring-snappy);
+			opacity var(--fade-in) var(--curve-out),
+			transform var(--spring-pop-duration) var(--spring-pop);
 	}
 	.icon--hide {
 		opacity: 0;

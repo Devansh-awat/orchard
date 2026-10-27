@@ -1,13 +1,11 @@
 import { untrack } from 'svelte';
-import { decorativeMotion } from '$lib/utils/motion.svelte';
+import { tempo } from '$lib/design/springs';
+import { EASE, decorativeMotion } from '$lib/utils/motion.svelte';
 
 export const SPARK_SLACK = 3;
 
-const SWEEP: KeyframeAnimationOptions = {
-	duration: 600,
-	easing: 'cubic-bezier(0.22, 1, 0.36, 1)'
-};
-const SWEEP_FILL_DELAY = 120;
+const SWEEP_MS = 600;
+const SWEEP_FILL_DELAY_MS = 120;
 
 const SHIVER_AMPLITUDE = 5;
 const SHIVER_DECAY_MS = 190;
@@ -29,16 +27,18 @@ const SHIVER_FRAMES: Keyframe[] = Array.from({ length: SHIVER_STEPS + 1 }, (_, i
 
 export function sparkSweep(pane: HTMLElement) {
 	if (!untrack(decorativeMotion)) return;
-	pane.animate([{ transform: 'translateX(-100%)' }, { transform: 'none' }], SWEEP);
+	const scale = tempo();
+	const sweep: KeyframeAnimationOptions = { duration: SWEEP_MS * scale, easing: EASE.out };
+	pane.animate([{ transform: 'translateX(-100%)' }, { transform: 'none' }], sweep);
 	pane
 		.querySelector('[data-art]')
 		?.animate(
 			[{ transform: `translateX(calc(100% + ${SPARK_SLACK * 2}px))` }, { transform: 'none' }],
-			SWEEP
+			sweep
 		);
 	pane.querySelector('[data-fill]')?.animate([{ opacity: 0 }, { opacity: 1 }], {
-		...SWEEP,
-		delay: SWEEP_FILL_DELAY,
+		...sweep,
+		delay: SWEEP_FILL_DELAY_MS * scale,
 		fill: 'backwards'
 	});
 }
@@ -54,7 +54,7 @@ export function crashShiver(kind: () => string) {
 			if (next !== 'error' || prev === 'error') return;
 			if (!untrack(decorativeMotion)) return;
 			running?.cancel();
-			running = (el as HTMLElement).animate(SHIVER_FRAMES, { duration: SHIVER_MS });
+			running = (el as HTMLElement).animate(SHIVER_FRAMES, { duration: SHIVER_MS * tempo() });
 		});
 		return () => running?.cancel();
 	};

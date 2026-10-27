@@ -2,7 +2,8 @@
 	import { onMount, untrack } from 'svelte';
 	import { Check, CircleAlert, TriangleAlert, Info } from 'lucide-svelte';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
-	import { SpringValue } from '$lib/utils/motion.svelte';
+	import { FADE, SpringValue } from '$lib/utils/motion.svelte';
+	import { tempo } from '$lib/design/springs';
 	import { toasts, TOAST_DURATION, type Toast } from '$lib/stores/toast';
 
 	let {
@@ -97,7 +98,7 @@
 				previous = outgoing;
 				setTimeout(() => {
 					if (previous === outgoing) previous = null;
-				}, 420);
+				}, FADE.long * tempo());
 			}
 			current = next;
 		});
@@ -326,7 +327,7 @@
 		margin: 0;
 		transition:
 			transform var(--spring-morph-duration) var(--spring-morph),
-			opacity 220ms ease,
+			opacity var(--fade-long) var(--curve-out),
 			margin var(--spring-morph-duration) var(--spring-morph);
 	}
 	.toast[data-ready][data-exiting] {
@@ -334,9 +335,9 @@
 		transform: translateY(calc(6px * var(--enter-dir))) scale(0.95);
 		pointer-events: none;
 		transition:
-			transform 320ms var(--ease-out),
-			opacity 200ms ease,
-			margin 380ms var(--ease-out);
+			transform var(--spring-settle-duration) var(--spring-settle),
+			opacity var(--fade-out) var(--curve-in),
+			margin var(--spring-settle-duration) var(--spring-settle);
 	}
 	.toast[data-ready][data-exiting][data-edge='top'] {
 		margin-top: calc(-1 * (var(--h) + var(--gap)));
@@ -348,7 +349,7 @@
 	.drag {
 		position: absolute;
 		inset: 0;
-		transition: transform var(--spring-snappy-duration) var(--spring-snappy);
+		transition: transform var(--spring-glide-duration) var(--spring-glide);
 	}
 	.drag--live {
 		transition: none;
@@ -405,14 +406,14 @@
 		white-space: nowrap;
 	}
 	.layer--current {
-		animation: face-in 420ms var(--spring-smooth) both;
+		animation: face-in var(--fade-long) var(--curve-out) both;
 	}
 	.layer--previous {
 		position: absolute;
 		top: 0;
 		left: 0;
 		height: 100%;
-		animation: face-out 300ms ease forwards;
+		animation: face-out var(--fade-out) var(--curve-in) forwards;
 		pointer-events: none;
 	}
 	@keyframes face-in {
@@ -471,7 +472,7 @@
 		width: 100%;
 		opacity: 0;
 		pointer-events: none;
-		transition: opacity 50ms ease 25ms;
+		transition: opacity var(--fade-out) var(--curve-in);
 	}
 	.content[data-edge='bottom'] {
 		top: 40px;
@@ -482,7 +483,7 @@
 	.content[data-visible] {
 		opacity: 1;
 		pointer-events: auto;
-		transition: opacity 360ms ease 180ms;
+		transition: opacity var(--fade-long) var(--curve-out) calc(180ms * var(--tempo));
 	}
 	.description {
 		display: flex;

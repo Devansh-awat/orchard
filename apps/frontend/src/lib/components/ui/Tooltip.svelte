@@ -54,14 +54,19 @@
 		opacity: 0;
 		transform: scale(0.96);
 		transition:
-			opacity 120ms ease,
-			transform var(--spring-snappy-duration) var(--spring-snappy),
-			display 120ms allow-discrete,
-			overlay 120ms allow-discrete;
+			opacity var(--fade-out) var(--curve-in),
+			transform var(--spring-settle-duration) var(--spring-settle),
+			display var(--fade-out) allow-discrete,
+			overlay var(--fade-out) allow-discrete;
 	}
 	.tip:popover-open {
 		opacity: 1;
 		transform: none;
+		transition:
+			opacity var(--fade-in) var(--curve-out),
+			transform var(--spring-snap-duration) var(--spring-snap),
+			display var(--fade-in) allow-discrete,
+			overlay var(--fade-in) allow-discrete;
 	}
 	@starting-style {
 		.tip:popover-open {

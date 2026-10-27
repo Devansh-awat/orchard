@@ -49,8 +49,8 @@
 		if (!p) return;
 		const instant = snap || !decorativeMotion();
 		snap = false;
-		x.to((p[0] / W) * width, 'snappy', { instant });
-		y.to((p[1] / H) * height, 'snappy', { instant });
+		x.to((p[0] / W) * width, 'glide', { instant });
+		y.to((p[1] / H) * height, 'glide', { instant });
 	});
 
 	function scrub(ev: PointerEvent) {
@@ -71,7 +71,7 @@
 		if (index === null) return;
 		index = null;
 		onScrub?.(null);
-		x.to(width, 'snappy', { instant: !decorativeMotion() });
+		x.to(width, 'glide', { instant: !decorativeMotion() });
 	}
 </script>
 

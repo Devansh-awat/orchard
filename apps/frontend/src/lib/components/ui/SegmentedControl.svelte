@@ -102,7 +102,7 @@
 		cursor: pointer;
 		transition:
 			color var(--dur-fast) ease,
-			transform var(--spring-interactive-duration) var(--spring-interactive);
+			transform var(--spring-press-duration) var(--spring-press);
 	}
 	.opt:active {
 		transform: scale(0.96);

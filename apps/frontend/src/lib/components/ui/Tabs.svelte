@@ -152,7 +152,7 @@
 	}
 	.bar:global([data-ready]) {
 		transition:
-			transform var(--spring-snappy-duration) var(--spring-snappy),
-			width var(--spring-snappy-duration) var(--spring-snappy);
+			transform var(--spring-glide-duration) var(--spring-glide),
+			width var(--spring-glide-duration) var(--spring-glide);
 	}
 </style>

@@ -27,7 +27,7 @@
 		background: var(--skeleton-base);
 		overflow: hidden;
 		isolation: isolate;
-		animation: bone-in 180ms ease-out 160ms both;
+		animation: bone-in var(--fade-long) var(--curve-out) calc(160ms * var(--tempo)) both;
 	}
 	.bone::after {
 		content: '';

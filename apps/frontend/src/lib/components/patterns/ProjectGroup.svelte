@@ -203,7 +203,7 @@
 		background-size: cover;
 		background-position: center;
 		opacity: 0;
-		transition: opacity 500ms ease-out;
+		transition: opacity var(--fade-long) var(--curve-out);
 	}
 	.mesh--1 {
 		transform: translate(-50%, -50%) scale(1.1) rotate(0deg);
@@ -277,7 +277,7 @@
 		cursor: pointer;
 		transition:
 			background-color var(--dur-fast) ease,
-			transform var(--spring-snappy-duration) var(--spring-snappy);
+			transform var(--spring-snap-duration) var(--spring-snap);
 	}
 	.chev--open {
 		transform: rotate(90deg);

@@ -347,7 +347,7 @@
 		opacity: 0;
 		transition:
 			opacity var(--dur-fast) ease,
-			transform var(--spring-snappy-duration) var(--spring-snappy);
+			transform var(--spring-glide-duration) var(--spring-glide);
 	}
 	.sorter:hover .chev {
 		opacity: 1;

@@ -265,7 +265,7 @@
 		transition:
 			background-color var(--dur-fast) ease,
 			opacity var(--dur-fast) ease,
-			transform var(--spring-interactive-duration) var(--spring-interactive);
+			transform var(--spring-press-duration) var(--spring-press);
 	}
 	.page-btn:hover:not(:disabled) {
 		background: color-mix(in oklab, var(--neutral-10) 11%, transparent);
@@ -341,7 +341,7 @@
 		aspect-ratio: 16 / 9;
 		isolation: isolate;
 		transform-origin: 50% 60%;
-		transition: transform var(--spring-snappy-duration) var(--spring-snappy);
+		transition: transform var(--spring-glide-duration) var(--spring-glide);
 	}
 	.art::before {
 		content: '';
@@ -366,8 +366,8 @@
 	}
 	.tile:active .art {
 		transform: scale(1.01);
-		transition-duration: var(--spring-interactive-duration);
-		transition-timing-function: var(--spring-interactive);
+		transition-duration: var(--spring-press-duration);
+		transition-timing-function: var(--spring-press);
 	}
 
 	.art-clip {
@@ -395,7 +395,7 @@
 		background-size: cover;
 		background-position: center;
 		opacity: 0;
-		transition: opacity 500ms ease-out;
+		transition: opacity var(--fade-long) var(--curve-out);
 	}
 	.art-mesh--ready {
 		opacity: 1;
@@ -442,7 +442,7 @@
 		border-radius: inherit;
 		background: var(--bar-fill);
 		transform: translateX(calc((var(--p) - 1) * 100%));
-		transition: transform var(--spring-smooth-duration) var(--spring-smooth);
+		transition: transform var(--spring-glide-duration) var(--spring-glide);
 	}
 
 	.caption {

@@ -1,13 +1,12 @@
 import { untrack } from 'svelte';
-import { motionLevel, springTiming } from '$lib/utils/motion.svelte';
+import { tempo } from '$lib/design/springs';
+import { EASE, motionLevel, springTiming } from '$lib/utils/motion.svelte';
 
-const OUT_EXPO = 'cubic-bezier(.22, 1, .36, 1)';
 const SWEEP_MS = 600;
 const SWEEP_STRIDE_MS = 40;
-const RISE_MS = 300;
 
 function fade(el: HTMLElement) {
-	el.animate([{ opacity: 0 }, { opacity: 1 }], { ...springTiming('smooth'), fill: 'backwards' });
+	el.animate([{ opacity: 0 }, { opacity: 1 }], { ...springTiming('glide'), fill: 'backwards' });
 }
 
 export function sweepIn(bar: HTMLElement) {
@@ -15,12 +14,13 @@ export function sweepIn(bar: HTMLElement) {
 		const level = motionLevel();
 		if (level === 'off') return;
 		const segs = [...bar.children] as HTMLElement[];
+		const scale = tempo();
 		segs.forEach((seg, i) => {
 			if (level === 'reduced') return fade(seg);
 			seg.animate([{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }], {
-				duration: SWEEP_MS,
-				easing: OUT_EXPO,
-				delay: i * SWEEP_STRIDE_MS,
+				duration: SWEEP_MS * scale,
+				easing: EASE.out,
+				delay: i * SWEEP_STRIDE_MS * scale,
 				fill: 'backwards'
 			});
 		});
@@ -36,7 +36,7 @@ function rise(el: HTMLElement) {
 			{ opacity: 0, filter: 'blur(3px)', transform: 'translateY(45%) scale(.86)' },
 			{ opacity: 1, filter: 'blur(0)', transform: 'none' }
 		],
-		{ duration: RISE_MS, easing: OUT_EXPO }
+		springTiming('pop')
 	);
 }
 
@@ -67,6 +67,6 @@ export function glideX(el: HTMLElement, x: number, jump: boolean) {
 	for (const a of el.getAnimations()) if (a.id === GLIDE) a.cancel();
 	el.style.transform = to;
 	if (jump || from === 'none' || motionLevel() !== 'full') return;
-	const anim = el.animate([{ transform: from }, { transform: to }], springTiming('smooth'));
+	const anim = el.animate([{ transform: from }, { transform: to }], springTiming('glide'));
 	anim.id = GLIDE;
 }

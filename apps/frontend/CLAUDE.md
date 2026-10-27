@@ -41,29 +41,31 @@ that adds hex colors, legacy tokens, or legacy classes to `.svelte` files.
 
 All interactive animation uses spring physics from `motion`, modelled on Apple's motion design. CSS `transition` is only for color/opacity on hover states. Any movement, scaling, or layout change must go through a Motion spring.
 
-### Named springs
+### Orchard curves (one table, one tempo)
 
-Springs are described the way SwiftUI describes them, by perceptual duration and bounce, not by stiffness and damping. **Never write `stiffness`, `damping`, or `mass` in a component.** Pick a name:
+Every curve in the app comes from `CURVES` in `src/lib/design/springs.ts`, described the way Apple's Fluid Interfaces talk does: a **response** (seconds, the spring's period) and a **damping ratio** (1 = no overshoot, lower = more bounce). `pnpm gen:design` turns the table into CSS tokens in `src/lib/design/springs.css`. **Never write stiffness, damping, mass, cubic-bezier or a millisecond duration for interaction motion in a component. Name a curve.**
 
-| Name | visualDuration | bounce | Use for |
+| Name | response | damping | Use for |
 |---|---|---|---|
-| `smooth` | 0.26 | 0.2 | entrances, collapse, height and layout change |
-| `snappy` | 0.19 | 0.25 | the default. popovers, toggles, hover, chevrons, panel chrome |
-| `bouncy` | 0.28 | 0.45 | one-shot celebratory pops, sparingly |
-| `interactive` | 0.1 | 0.2 | press feedback and anything tracking the pointer |
-| `cinematic` | 0.6 | 0.14 | full-viewport choreography seen once, like the setup overture. Never chrome |
+| `snap` | 0.22 | 0.88 | anything that opens or expands: folders, dropdowns, menus, popovers, panels |
+| `pop` | 0.24 | 0.78 | things appearing: staggered rows, fan buttons, buds, badges |
+| `settle` | 0.17 | 1 | closing, exits, collapses (never bounces) |
+| `glide` | 0.28 | 0.92 | highlights, carets, scrubbers, sliding indicators, hover lift, height and position changes |
+| `press` | 0.12 | 1 | press feedback |
+| `morph` | 0.3 | 0.8 | shape morphs: toast, notifier island, liquid button and menu |
+| `bouncy` | 0.32 | 0.6 | rare celebratory one-shots |
+| `cinematic` | 0.7 | 0.86 | full-viewport choreography seen once |
 
-Keep bounce high and duration low. The bounce is what reads as alive; the duration is what reads as slow. The folder demo's 0.37s is sized for a full-screen gesture — application chrome opening a panel wants a fraction of that.
+`smooth`, `snappy` and `interactive` are aliases for `glide`, `snap` and `press`.
 
-Tuned against motion.dev's iOS app folder example, whose signature spring is `stiffness: 200, damping: 22` — 0.37s at 0.22 bounce. `smooth` is that spring.
+**Tempo.** `TEMPO` in `springs.ts` (CSS `--tempo`) scales every curve's time at once without changing its shape; `setTempo()` changes it at runtime (the Experiments panel has a slider). To make the whole app snappier or calmer, change that one number. To retune one kind of motion everywhere, change its row in `CURVES`.
 
-`visualDuration` is the time to first reach the target, so a spring reads as fast as its number says regardless of settle time. **Bounce is what makes motion feel fast.** A zero-bounce spring asymptotes into place and reads as sluggish however short you make it; a bouncy spring arrives early and overshoots, which reads as quick and physical. Never set bounce to 0 to "calm something down" — shorten it instead.
-
-Exits leave quicker and looser than entrances, as the demo's do: pass `{ exit: true }` to shorten by 20% and add 0.15 bounce.
-
-```ts
-motion(el, { opacity: 0, scale: 0.94 }, 'snappy', { exit: true });
-```
+**Using them.**
+- CSS: `transition: transform var(--spring-snap-duration) var(--spring-snap)`; exits use `--spring-<name>-exit(-duration)`.
+- Fades: `opacity var(--fade-in) var(--curve-out)`, `var(--fade-out) var(--curve-in)`, `var(--fade-long)`.
+- WAAPI: `el.animate(frames, springTiming('snap', { distance, delay, exit }))` and `fade('in' | 'out' | 'long', delay)`.
+- `motion` library: `transition('pop')` or `motion(el, kf, 'pop')`. Hand-rolled rAF springs: `physics(SPRINGS.glide)`.
+- Distance: pass `distance` (px) and the curve is paced by `pace()`, √(distance / 420) clamped to 0.55–1.6, so a small folder and a big one move at a similar speed.
 
 ### Coming from somewhere
 

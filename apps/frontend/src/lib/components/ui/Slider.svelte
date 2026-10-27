@@ -196,7 +196,7 @@
 		position: absolute;
 		inset: 0;
 		transform: translateX(calc(var(--ratio) * 100%));
-		transition: transform var(--spring-snappy-duration) var(--spring-snappy);
+		transition: transform var(--spring-glide-duration) var(--spring-glide);
 	}
 	.hit--tracking .mover {
 		transition: none;
@@ -235,7 +235,7 @@
 			0 0 0 0.5px color-mix(in oklab, black 14%, transparent),
 			0 1px 2px color-mix(in oklab, black 14%, transparent),
 			0 3px 8px color-mix(in oklab, black 10%, transparent);
-		transition: transform var(--spring-bouncy-duration) var(--spring-bouncy);
+		transition: transform var(--spring-press-duration) var(--spring-press);
 	}
 	.hit:hover:not([aria-disabled='true']) .knob {
 		transform: scale(1.06);

@@ -159,7 +159,7 @@
 			color var(--dur-fast) ease;
 	}
 	.step :global(svg) {
-		transition: transform var(--spring-interactive-duration) var(--spring-interactive);
+		transition: transform var(--spring-press-duration) var(--spring-press);
 	}
 	.step:hover:not(:disabled) {
 		background: var(--bg-hover);

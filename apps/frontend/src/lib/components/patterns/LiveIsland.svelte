@@ -28,6 +28,7 @@
 		motionLevel,
 		type SpringName
 	} from '$lib/utils/motion.svelte';
+	import { tempo } from '$lib/design/springs';
 
 	let {
 		activities,
@@ -58,6 +59,8 @@
 	const RISE = 28;
 	const SUCCESS_HOLD = 2500;
 	const SHAKE = 7;
+	const SWAP_LEAD = 0.04;
+	const SHEET_LEAD = 0.07;
 
 	const uid = $props.id();
 
@@ -178,7 +181,7 @@
 
 	$effect(() => {
 		const t = pillTarget;
-		untrack(() => drive(pillW, t, 'snappy'));
+		untrack(() => drive(pillW, t, 'morph'));
 	});
 
 	$effect(() => {
@@ -188,13 +191,13 @@
 
 	$effect(() => {
 		const t = budOut ? 1 : 0;
-		const name: SpringName = t ? 'bouncy' : expanded ? 'snappy' : 'morph';
+		const name: SpringName = t ? 'pop' : expanded ? 'settle' : 'morph';
 		untrack(() => drive(split, t, name));
 	});
 
 	$effect(() => {
 		const t = sheetH;
-		untrack(() => cardH.to(t, 'snappy', { instant: grow.current < 0.01 || !decorativeMotion() }));
+		untrack(() => cardH.to(t, 'glide', { instant: grow.current < 0.01 || !decorativeMotion() }));
 	});
 
 	$effect(() => {
@@ -202,7 +205,7 @@
 		void budOut;
 		untrack(() => {
 			if (!ready || !stage || motionLevel() !== 'reduced') return;
-			stage.animate({ opacity: [0, 1] }, springTiming('smooth'));
+			stage.animate({ opacity: [0, 1] }, springTiming('glide'));
 		});
 	});
 
@@ -280,7 +283,7 @@
 			const x = SHAKE * Math.exp(-4.2 * t) * Math.sin(2 * Math.PI * 3 * t);
 			return { transform: `translateX(${x.toFixed(2)}px)` };
 		});
-		shaker.animate(frames, { ...springTiming('smooth'), easing: 'linear' });
+		shaker.animate(frames, { ...springTiming('glide'), easing: 'linear' });
 	}
 
 	function open(id: string | undefined) {
@@ -327,7 +330,7 @@
 					transform: ['scale(0.96)', 'scale(1)']
 				}
 			: { opacity: [0, 1] };
-		return el.animate(kf, { ...springTiming('smooth', { delay }), fill: 'backwards' });
+		return el.animate(kf, { ...springTiming('pop', { delay }), fill: 'backwards' });
 	}
 
 	function faceMotion(key: string) {
@@ -339,13 +342,13 @@
 				untrack(() => {
 					if (current && !entered) {
 						entered = true;
-						if (many && ready) blurIn(el, 0.04);
+						if (many && ready) blurIn(el, SWAP_LEAD * tempo());
 						return;
 					}
 					if (current) return;
 					const anim = el.animate(
 						{ opacity: [1, 0], filter: ['blur(0px)', 'blur(6px)'] },
-						{ ...springTiming('snappy', { exit: true }), fill: 'forwards' }
+						{ ...springTiming('settle'), fill: 'forwards' }
 					);
 					anim.onfinish = () => (faces = faces.filter((f) => f.key !== key));
 				});
@@ -364,14 +367,14 @@
 			untrack(() => {
 				anim?.cancel();
 				if (shown) {
-					anim = blurIn(el, 0.07);
+					anim = blurIn(el, SHEET_LEAD * tempo());
 					return;
 				}
 				anim = el.animate(
 					decorativeMotion()
 						? { opacity: [1, 0], filter: ['blur(0px)', 'blur(6px)'] }
 						: { opacity: [1, 0] },
-					{ ...springTiming('snappy', { exit: true }), fill: 'forwards' }
+					{ ...springTiming('settle'), fill: 'forwards' }
 				);
 			});
 		});
@@ -686,7 +689,7 @@
 	}
 	.swell {
 		transform-origin: 50% 18px;
-		transition: transform var(--spring-snappy-duration) var(--spring-snappy);
+		transition: transform var(--spring-glide-duration) var(--spring-glide);
 	}
 	.swell[data-hover] {
 		transform: scale(1.04);

@@ -73,10 +73,10 @@
 		const w = travel(el);
 		if (decorativeMotion()) {
 			if (fresh) el.style.transform = `translateX(${w}px)`;
-			anim = animate(el, { x: fresh ? [w, 0] : 0 }, transition('smooth', { distance: w }) as never);
+			anim = animate(el, { x: fresh ? [w, 0] : 0 }, transition('snap', { distance: w }) as never);
 		} else {
 			if (fresh) el.style.opacity = '0';
-			anim = animate(el, { opacity: fresh ? [0, 1] : 1 }, transition('smooth') as never);
+			anim = animate(el, { opacity: fresh ? [0, 1] : 1 }, transition('snap') as never);
 		}
 	}
 
@@ -91,8 +91,8 @@
 		}
 		const w = travel(el);
 		anim = decorativeMotion()
-			? animate(el, { x: w }, transition('smooth', { exit: true, distance: w }) as never)
-			: animate(el, { opacity: 0 }, transition('smooth', { exit: true }) as never);
+			? animate(el, { x: w }, transition('settle', { distance: w }) as never)
+			: animate(el, { opacity: 0 }, transition('settle') as never);
 		anim.finished.then(() => {
 			if (phase === 'leaving') finish(el);
 		});
@@ -186,7 +186,7 @@
 	.sheet::backdrop {
 		background: color-mix(in oklab, black 22%, transparent);
 		opacity: 1;
-		transition: opacity var(--spring-smooth-duration) var(--spring-smooth);
+		transition: opacity var(--fade-long) var(--curve-out);
 	}
 	:global(:root.dark) .sheet::backdrop {
 		background: color-mix(in oklab, black 45%, transparent);
@@ -198,7 +198,7 @@
 	}
 	:global(.sheet--closing).sheet::backdrop {
 		opacity: 0;
-		transition: opacity var(--spring-smooth-exit-duration) var(--spring-smooth-exit);
+		transition: opacity var(--fade-long) var(--curve-in);
 	}
 	.sheet:focus-visible {
 		outline: none;
@@ -257,7 +257,7 @@
 		transition:
 			background-color var(--dur-fast) ease,
 			color var(--dur-fast) ease,
-			transform var(--spring-interactive-duration) var(--spring-interactive);
+			transform var(--spring-press-duration) var(--spring-press);
 	}
 	.close:hover {
 		background: color-mix(in oklab, var(--neutral-10) 7%, transparent);

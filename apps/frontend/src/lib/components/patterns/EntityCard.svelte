@@ -165,7 +165,7 @@
 		box-shadow: var(--shadow-raised);
 		transition:
 			background-color var(--dur-fast) ease,
-			transform var(--spring-snappy-duration) var(--spring-snappy);
+			transform var(--spring-glide-duration) var(--spring-glide);
 	}
 	.entity::after {
 		content: '';
@@ -278,9 +278,9 @@
 		opacity: 0;
 		transform: translate(0.5rem, -0.625rem) scale(0.82);
 		transition:
-			transform var(--spring-snappy-exit-duration) var(--spring-snappy-exit)
-				calc(var(--back) * 50ms),
-			opacity var(--dur-fast) ease calc(var(--back) * 50ms + 50ms);
+			transform var(--spring-settle-duration) var(--spring-settle)
+				calc(var(--back) * 50ms * var(--tempo)),
+			opacity var(--fade-out) var(--curve-in) calc((var(--back) * 50ms + 50ms) * var(--tempo));
 	}
 	.entity:hover .fan-item,
 	.entity:focus-within .fan-item,
@@ -289,8 +289,8 @@
 		pointer-events: auto;
 		transform: translate(var(--fx), var(--fy));
 		transition:
-			transform var(--spring-bouncy-duration) var(--spring-bouncy) calc(var(--k) * 50ms),
-			opacity var(--dur-fast) ease calc(var(--k) * 50ms);
+			transform var(--spring-pop-duration) var(--spring-pop) calc(var(--k) * 50ms * var(--tempo)),
+			opacity var(--fade-in) var(--curve-out) calc(var(--k) * 50ms * var(--tempo));
 	}
 	:global(html.motion-reduce) .entity .fan-item {
 		transform: translate(var(--fx), var(--fy));

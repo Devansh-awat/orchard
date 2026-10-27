@@ -2,6 +2,7 @@
 	import { FlaskConical, X } from 'lucide-svelte';
 	import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
+	import { TEMPO, setTempo } from '$lib/design/springs';
 	import {
 		ACTIONS,
 		EXPERIMENTS,
@@ -13,6 +14,7 @@
 	} from './experiments.svelte';
 
 	let open = $state(false);
+	let speed = $state(TEMPO);
 	let copied = $state(false);
 
 	const groups = [...new Set(EXPERIMENTS.map((e) => e.group))];
@@ -53,6 +55,25 @@
 						</div>
 					{/each}
 				{/each}
+				<p class="group-label">Motion</p>
+				<div class="row">
+					<span class="label-wrap">
+						<span class="label">Tempo</span>
+						<span class="hint">Scales every Orchard curve at once</span>
+					</span>
+					<span class="tempo">
+						<input
+							type="range"
+							min="0.5"
+							max="2"
+							step="0.05"
+							bind:value={speed}
+							oninput={() => setTempo(speed)}
+							aria-label="Tempo"
+						/>
+						<span class="tempo-value">{speed.toFixed(2)}×</span>
+					</span>
+				</div>
 				<p class="group-label">Simulate</p>
 				<div class="actions">
 					{#each ACTIONS as a (a.id)}
@@ -184,6 +205,22 @@
 		color: var(--text-faint);
 		font-size: var(--text-caption);
 		text-box: trim-both cap alphabetic;
+	}
+	.tempo {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+	.tempo input {
+		width: 8rem;
+		accent-color: var(--accent-solid);
+	}
+	.tempo-value {
+		min-width: 2.75rem;
+		color: var(--text-muted);
+		font-size: var(--text-caption);
+		font-variant-numeric: tabular-nums;
+		text-align: right;
 	}
 	.actions {
 		display: flex;

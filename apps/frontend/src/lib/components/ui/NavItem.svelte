@@ -88,7 +88,7 @@
 		transition:
 			background-color var(--dur-fast) ease,
 			color var(--dur-fast) ease,
-			transform var(--spring-interactive-duration) var(--spring-interactive);
+			transform var(--spring-press-duration) var(--spring-press);
 	}
 	.item:hover {
 		background: color-mix(in oklab, var(--neutral-10) 6%, transparent);

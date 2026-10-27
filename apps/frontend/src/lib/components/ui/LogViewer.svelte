@@ -339,8 +339,8 @@
 		font-weight: var(--weight-medium);
 		cursor: pointer;
 		translate: -50% 0;
-		animation: lv-rise var(--spring-snappy-duration) var(--spring-snappy) both;
-		transition: transform var(--spring-interactive-duration) var(--spring-interactive);
+		animation: lv-rise var(--spring-pop-duration) var(--spring-pop) both;
+		transition: transform var(--spring-press-duration) var(--spring-press);
 	}
 	.lv-newlogs:active {
 		transform: scale(0.96);

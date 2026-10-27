@@ -22,7 +22,7 @@
 	import { PROJECTS, SIDEBAR, BUILD_FEED, MORE_PROJECTS } from '../fixtures';
 	import { tick } from 'svelte';
 	import { resourceStatus } from '$lib/components/ui/status';
-	import { droplet, folderTuning } from '$lib/utils/motion.svelte';
+	import { droplet } from '$lib/utils/motion.svelte';
 	import { exp, onAction } from './experiments.svelte';
 
 	type Entity = {
@@ -267,10 +267,6 @@
 			}
 		}, 1000);
 		return () => clearInterval(id);
-	});
-
-	$effect(() => {
-		folderTuning.preset = exp.folderSpring;
 	});
 
 	$effect(() =>

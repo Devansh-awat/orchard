@@ -28,11 +28,11 @@
 
 	const liquidOn = $derived(liquid && !children && $effectiveAnimation === 'full');
 
-	const HOVER_LEAD: SpringName = 'interactive';
-	const HOVER_TRAIL: SpringName = 'smooth';
-	const PILL_LEAD: SpringName = 'snappy';
+	const HOVER_LEAD: SpringName = 'press';
+	const HOVER_TRAIL: SpringName = 'glide';
+	const PILL_LEAD: SpringName = 'snap';
 	const PILL_TRAIL: SpringName = 'morph';
-	const PRESENCE: SpringName = 'snappy';
+	const PRESENCE: SpringName = 'snap';
 	const THIN = 0.08;
 	const SHRINK = 0.3;
 	const FADE_SPAN = 0.45;

@@ -21,6 +21,7 @@
 	import { tick, untrack } from 'svelte';
 	import { Plus } from 'lucide-svelte';
 	import { SpringValue, motionLevel, springTiming } from '$lib/utils/motion.svelte';
+	import { tempo } from '$lib/design/springs';
 
 	let {
 		items = DEFAULT_ITEMS,
@@ -155,9 +156,9 @@
 						{ opacity: start?.opacity ?? 1, offset: 0.15 },
 						{ transform: away, opacity: 0 }
 					];
-			const delay = start ? 0 : opening ? LEAD + i * STRIDE : (n - 1 - i) * STRIDE;
+			const delay = start ? 0 : (opening ? LEAD + i * STRIDE : (n - 1 - i) * STRIDE) * tempo();
 			const anim = el.animate(frames, {
-				...springTiming('snappy', { exit: !opening, delay }),
+				...springTiming(opening ? 'pop' : 'settle', { delay }),
 				fill: 'both'
 			});
 			anim.onfinish = () => {
@@ -177,7 +178,7 @@
 		pop?.cancel();
 		const el = trigger;
 		const gulp = el.animate([{ transform: 'none' }, { transform: BULGE }], {
-			...springTiming('interactive'),
+			...springTiming('press'),
 			fill: 'forwards'
 		});
 		pop = gulp;
@@ -209,15 +210,15 @@
 	function drive(target: 0 | 1) {
 		clearTimeout(retract);
 		if (tier === 'full') {
-			fade.to(target, 'smooth', { instant: true });
+			fade.to(target, 'glide', { instant: true });
 			if (target) p.to(1, 'morph');
-			else retract = setTimeout(() => p.to(0, 'smooth'), RETRACT_LAG);
+			else retract = setTimeout(() => p.to(0, 'settle'), RETRACT_LAG * tempo());
 		} else if (tier === 'reduced') {
-			p.to(target, 'smooth', { instant: true });
-			fade.to(target, 'smooth');
+			p.to(target, 'glide', { instant: true });
+			fade.to(target, 'glide');
 		} else {
-			p.to(target, 'smooth', { instant: true });
-			fade.to(target, 'smooth', { instant: true });
+			p.to(target, 'glide', { instant: true });
+			fade.to(target, 'glide', { instant: true });
 		}
 	}
 
@@ -489,7 +490,7 @@
 		white-space: nowrap;
 		cursor: pointer;
 		user-select: none;
-		transition: transform var(--spring-interactive-duration) var(--spring-interactive);
+		transition: transform var(--spring-press-duration) var(--spring-press);
 	}
 	.trigger:active {
 		transform: scale(0.96);
@@ -532,7 +533,7 @@
 	}
 	.face :global(svg) {
 		flex-shrink: 0;
-		transition: transform var(--spring-snappy-duration) var(--spring-snappy);
+		transition: transform var(--spring-snap-duration) var(--spring-snap);
 	}
 	.trigger[data-spin] .face :global(svg) {
 		transform: rotate(45deg);

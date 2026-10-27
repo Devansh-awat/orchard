@@ -49,7 +49,7 @@ export function stretchIndicator(getActive: () => HTMLElement | null | undefined
 	return (indicator: HTMLElement) => {
 		const track = indicator.parentElement;
 		if (!track) return;
-		const { stiffness, damping } = physics(SPRINGS.snappy);
+		let spring = physics(SPRINGS.glide);
 		let x = 0;
 		let vx = 0;
 		let w = 0;
@@ -81,9 +81,9 @@ export function stretchIndicator(getActive: () => HTMLElement | null | undefined
 			const dt = Math.min(MAX_STEP, (now - last) / 1000) / SUBSTEPS;
 			last = now;
 			for (let i = 0; i < SUBSTEPS; i++) {
-				vx += (-stiffness * (x - tx) - damping * vx) * dt;
+				vx += (-spring.stiffness * (x - tx) - spring.damping * vx) * dt;
 				x += vx * dt;
-				vw += (-stiffness * (w - tw) - damping * vw) * dt;
+				vw += (-spring.stiffness * (w - tw) - spring.damping * vw) * dt;
 				w += vw * dt;
 			}
 			const rest =
@@ -116,9 +116,10 @@ export function stretchIndicator(getActive: () => HTMLElement | null | undefined
 			}
 			if (level === 'reduced') {
 				jump();
-				indicator.animate([{ opacity: 0 }, { opacity: 1 }], springTiming('snappy'));
+				indicator.animate([{ opacity: 0 }, { opacity: 1 }], springTiming('glide'));
 				return;
 			}
+			spring = physics(SPRINGS.glide);
 			if (frame) return;
 			last = performance.now();
 			frame = requestAnimationFrame(tick);

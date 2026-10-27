@@ -16,19 +16,18 @@ import { untrack } from 'svelte';
 import { animate, motionValue } from 'motion';
 import { effectiveAnimationLevel } from '$lib/stores/preferences';
 import {
-	EXIT_BOUNCE,
-	EXIT_SCALE,
+	EASE,
+	FADE,
 	SPRINGS,
 	exitSpec,
+	physics,
 	springCurve,
-	fromApple,
-	fromResponse,
-	physicsCurve,
-	type PhysicalSpring,
+	tempo,
 	type SpringName
 } from '$lib/design/springs';
 
 export type { SpringName };
+export { EASE, FADE };
 
 type Keyframes = Record<string, unknown>;
 type Options = Record<string, unknown>;
@@ -123,12 +122,23 @@ export const iconAnimation = (on: boolean) => on && decorativeMotion();
  * moves snappy while giving long ones enough frames to look continuous — which
  * is also just how physical objects behave.
  */
-const DISTANCE_REFERENCE = 260;
-const DISTANCE_MAX_SCALE = 1.9;
+const PACE_REFERENCE = 420;
+const PACE_MIN = 0.55;
+const PACE_MAX = 1.6;
 
-function distanceScale(distance?: number): number {
-	if (!distance || distance <= DISTANCE_REFERENCE) return 1;
-	return Math.min(Math.sqrt(distance / DISTANCE_REFERENCE), DISTANCE_MAX_SCALE);
+export function pace(distance?: number): number {
+	if (!distance) return 1;
+	return Math.min(PACE_MAX, Math.max(PACE_MIN, Math.sqrt(distance / PACE_REFERENCE)));
+}
+
+export function fade(direction: 'in' | 'out' | 'long', delay = 0): KeyframeAnimationOptions {
+	const level = effectiveAnimationLevel();
+	if (level === 'off') return { duration: 0 };
+	return {
+		duration: FADE[direction] * tempo(),
+		easing: direction === 'out' ? EASE.in : EASE.out,
+		delay: delay * 1000
+	};
 }
 
 export function transition(
@@ -145,13 +155,13 @@ export function transition(
 			delay: Math.min(delay, REDUCED_MAX_STAGGER)
 		};
 	}
-	const spring = SPRINGS[name];
-	const base = opts.exit ? spring.visualDuration * EXIT_SCALE : spring.visualDuration;
-	const duration = base * distanceScale(opts.distance);
+	const spec = opts.exit ? exitSpec(SPRINGS[name]) : SPRINGS[name];
+	const { stiffness, damping, mass } = physics(spec, tempo() * pace(opts.distance));
 	return {
 		type: 'spring',
-		visualDuration: duration,
-		bounce: opts.exit ? spring.bounce + EXIT_BOUNCE : spring.bounce,
+		stiffness,
+		damping,
+		mass,
 		delay: Math.min(delay, MAX_STAGGER)
 	};
 }
@@ -226,7 +236,7 @@ export function springToFloor(
 }
 
 export function staggerDelay(index: number, stride = STAGGER_STRIDE): number {
-	return Math.min(index * stride, MAX_STAGGER);
+	return Math.min(index * stride, MAX_STAGGER) * tempo();
 }
 
 /**
@@ -1108,8 +1118,8 @@ export class SpringValue {
 			this.current = target;
 			return;
 		}
-		const base = transition(name);
-		animate(this.#value, target, opts.settle && 'bounce' in base ? { ...base, bounce: 0 } : base);
+		const base = transition(opts.settle ? 'settle' : name);
+		animate(this.#value, target, base);
 	}
 }
 
@@ -1122,82 +1132,28 @@ export function springTiming(
 	const level = effectiveAnimationLevel();
 	if (level === 'off') return { duration: 0 };
 	if (level === 'reduced') {
-		return { duration: REDUCED_DURATION * 1000, easing: 'cubic-bezier(0.33, 0, 0.2, 1)' };
+		return { duration: REDUCED_DURATION * 1000, easing: EASE.inOut };
 	}
-	const key = `${name}:${opts.exit ? 1 : 0}`;
+	const scale = Math.round(tempo() * pace(opts.distance) * 20) / 20;
+	const key = `${name}:${opts.exit ? 1 : 0}:${scale}`;
 	let curve = curveCache.get(key);
 	if (!curve) {
-		curve = springCurve(opts.exit ? exitSpec(SPRINGS[name]) : SPRINGS[name]);
+		curve = springCurve(opts.exit ? exitSpec(SPRINGS[name]) : SPRINGS[name], 40, scale);
 		curveCache.set(key, curve);
 	}
 	return {
-		duration: curve.durationMs * distanceScale(opts.distance),
+		duration: curve.durationMs,
 		easing: curve.easing,
 		delay: Math.min(opts.delay ?? 0, MAX_STAGGER) * 1000
 	};
 }
 
-type FolderMotion = {
-	open: PhysicalSpring;
-	tiles: PhysicalSpring;
-	close: PhysicalSpring;
-	closeTiles: PhysicalSpring;
-	window: number;
-};
-
-export const FOLDER_PRESETS: Record<string, FolderMotion | null> = {
-	current: null,
-	snap: {
-		open: fromResponse(0.22, 0.88),
-		tiles: fromResponse(0.24, 0.78),
-		close: fromResponse(0.17, 1),
-		closeTiles: fromResponse(0.14, 1),
-		window: 0.03
-	},
-	sheet: {
-		open: fromResponse(0.3, 0.8),
-		tiles: fromResponse(0.3, 0.8),
-		close: fromResponse(0.25, 1),
-		closeTiles: fromResponse(0.2, 1),
-		window: 0.04
-	},
-	quick: {
-		open: fromResponse(0.25, 0.85),
-		tiles: fromResponse(0.25, 0.75),
-		close: fromResponse(0.2, 1),
-		closeTiles: fromResponse(0.16, 1),
-		window: 0.03
-	},
-};
-
-export const folderTuning = $state({ preset: 'snap' });
-
-const FOLDER_PACE_REFERENCE = 420;
-const FOLDER_PACE_MIN = 0.55;
-const FOLDER_FADE_IN = 90;
-const FOLDER_FADE_OUT = 110;
-
-const physicsCache = new Map<string, { easing: string; durationMs: number }>();
-
-function physicsTiming(spring: PhysicalSpring, delay = 0, pace = 1): KeyframeAnimationOptions {
-	const level = effectiveAnimationLevel();
-	if (level === 'off') return { duration: 0 };
-	if (level === 'reduced') {
-		return { duration: REDUCED_DURATION * 1000, easing: 'cubic-bezier(0.33, 0, 0.2, 1)' };
-	}
-	const p = Math.round(pace * 20) / 20;
-	const key = `${spring.mass}|${spring.stiffness}|${spring.damping}|${p}`;
-	let curve = physicsCache.get(key);
-	if (!curve) {
-		curve = physicsCurve({
-			mass: spring.mass,
-			stiffness: spring.stiffness / (p * p),
-			damping: spring.damping / p
-		});
-		physicsCache.set(key, curve);
-	}
-	return { duration: curve.durationMs, easing: curve.easing, delay: delay * 1000 };
-}
+export const FOLDER = {
+	open: 'snap',
+	tiles: 'pop',
+	close: 'settle',
+	window: 0.03
+} as const;
 
 const FRAME_MS = 1000 / 60;
 const FOLDER_DRIFT = 0.35;
@@ -1268,24 +1224,16 @@ export function folder(
 			if (!motionEnabled()) return;
 			const full = decorativeMotion();
 			const distance = Math.abs(toH - fromH);
-			const tune = FOLDER_PRESETS[folderTuning.preset];
-			const pace = Math.min(
-				1,
-				Math.max(FOLDER_PACE_MIN, Math.sqrt(distance / FOLDER_PACE_REFERENCE))
-			);
 			heightAnim = body.animate(
 				[{ height: `${fromH}px` }, { height: `${toH}px` }],
-				tune
-					? physicsTiming(opening ? tune.open : tune.close, 0, pace)
-					: springTiming('smooth', { distance, exit: !opening })
+				springTiming(opening ? FOLDER.open : FOLDER.close, { distance })
 			);
 			heightAnim.onfinish = () => (heightAnim = null);
 			const now = (document.timeline.currentTime as number | null) ?? performance.now();
 			heightAnim.startTime = interrupted ? now - FRAME_MS : now;
 
 			const count = els.length;
-			const windowS = tune?.window ?? BURST_WINDOW;
-			const stride = count > 1 ? Math.min(STAGGER_STRIDE, windowS / (count - 1)) : 0;
+			const stride = count > 1 ? Math.min(STAGGER_STRIDE, FOLDER.window / (count - 1)) : 0;
 			tiles = els.map((el, i) => {
 				const away = full ? `translate(${v[i].x}px, ${v[i].y}px) scale(${BURST_SCALE})` : 'none';
 				const near = full
@@ -1293,47 +1241,25 @@ export function folder(
 					: 'none';
 				const start = from[i] ?? (opening ? { transform: away, opacity: '0' } : null);
 				const delay = opening && !from[i] ? i * stride : 0;
-				if (tune) {
-					const motionFrames: Keyframe[] = opening
-						? [{ transform: start!.transform }, { transform: 'none' }]
-						: [{ transform: start?.transform ?? 'none' }, { transform: near }];
-					const anim = el.animate(motionFrames, {
-						...physicsTiming(opening ? tune.tiles : tune.closeTiles, delay, pace),
+				const anim = el.animate(
+					[{ transform: start?.transform ?? 'none' }, { transform: opening ? 'none' : near }],
+					{
+						...springTiming(opening ? FOLDER.tiles : FOLDER.close, { distance, delay }),
 						fill: 'both'
-					});
-					const fade = el.animate(
-						[{ opacity: start?.opacity ?? '1' }, { opacity: opening ? '1' : '0' }],
-						{
-							duration: opening ? FOLDER_FADE_IN : FOLDER_FADE_OUT,
-							easing: opening ? 'cubic-bezier(0.2, 0, 0, 1)' : 'cubic-bezier(0.4, 0, 1, 1)',
-							delay: delay * 1000,
-							fill: 'both'
-						}
-					);
-					anim.startTime = fade.startTime = from[i] ? now - FRAME_MS : now;
-					const tile: FolderTile = { el, anim, fade };
-					anim.onfinish = () => {
-						if (shown !== opening) return;
-						anim.cancel();
-						fade.cancel();
-						tile.anim = null;
-						tile.fade = null;
-					};
-					return tile;
-				}
-				const frames: Keyframe[] = opening
-					? [start!, { transform: 'none', opacity: '1' }]
-					: [start ?? { transform: 'none', opacity: '1' }, { transform: near, opacity: '0' }];
-				const anim = el.animate(frames, {
-					...springTiming('snappy', { exit: !opening, delay }),
-					fill: 'both'
-				});
-				anim.startTime = from[i] ? now - FRAME_MS : now;
-				const tile: FolderTile = { el, anim, fade: null };
+					}
+				);
+				const fadeAnim = el.animate(
+					[{ opacity: start?.opacity ?? '1' }, { opacity: opening ? '1' : '0' }],
+					{ ...fade(opening ? 'in' : 'out', delay), fill: 'both' }
+				);
+				anim.startTime = fadeAnim.startTime = from[i] ? now - FRAME_MS : now;
+				const tile: FolderTile = { el, anim, fade: fadeAnim };
 				anim.onfinish = () => {
 					if (shown !== opening) return;
 					anim.cancel();
+					fadeAnim.cancel();
 					tile.anim = null;
+					tile.fade = null;
 				};
 				return tile;
 			});
@@ -1405,7 +1331,7 @@ export function droplet(
 			{ transform: 'scale(1.15)', offset: 0.55 },
 			{ transform: 'scale(0)' }
 		],
-		{ duration: 360, easing: 'cubic-bezier(0.3, 0, 0.2, 1)', fill: 'forwards' }
+		{ duration: 360 * tempo(), easing: EASE.inOut, fill: 'forwards' }
 	);
 	const rise = bud.animate(
 		[
@@ -1413,7 +1339,7 @@ export function droplet(
 			{ transform: 'translate(0, -10px) scale(0.95, 1.15)', offset: 0.6 },
 			{ transform: 'translate(0, -22px) scale(1)' }
 		],
-		{ duration: 260, easing: 'cubic-bezier(0.4, 0, 0.6, 1)', fill: 'forwards' }
+		{ duration: 260 * tempo(), easing: EASE.inOut, fill: 'forwards' }
 	);
 
 	rise.onfinish = () => {
@@ -1450,10 +1376,10 @@ export function droplet(
 			});
 			prev = { x, y };
 		}
-		const travel = Math.round(420 + Math.min(260, Math.hypot(dx, dy) * 0.35));
+		const travel = Math.round((420 + Math.min(260, Math.hypot(dx, dy) * 0.35)) * tempo());
 		const flight = flyer.animate(frames, {
 			duration: travel,
-			easing: 'cubic-bezier(0.45, 0, 0.55, 1)',
+			easing: EASE.inOut,
 			fill: 'forwards'
 		});
 		flight.onfinish = () => {
@@ -1462,7 +1388,7 @@ export function droplet(
 					{ transform: `translate(${dx}px, ${dy}px) scale(1.5, 0.55)`, opacity: 1 },
 					{ transform: `translate(${dx}px, ${dy}px) scale(2.6, 2.6)`, opacity: 0 }
 				],
-				{ duration: 280, easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)', fill: 'forwards' }
+				{ duration: 280 * tempo(), easing: EASE.out, fill: 'forwards' }
 			);
 			opts.onLand?.();
 			splat.onfinish = () => flyer.remove();

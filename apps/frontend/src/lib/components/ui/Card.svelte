@@ -55,7 +55,7 @@
 	}
 	.panel--interactive {
 		cursor: pointer;
-		transition: transform var(--spring-snappy-duration) var(--spring-snappy);
+		transition: transform var(--spring-glide-duration) var(--spring-glide);
 	}
 	.panel--interactive::after {
 		content: '';

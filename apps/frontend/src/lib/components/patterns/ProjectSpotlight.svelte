@@ -20,7 +20,8 @@
 	import RemoteImg from '$lib/components/ui/RemoteImg.svelte';
 	import AppIcon from '$lib/components/ui/AppIcon.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
-	import { motion } from '$lib/utils/motion.svelte';
+	import { FADE, motion } from '$lib/utils/motion.svelte';
+	import { tempo } from '$lib/design/springs';
 	import { fade } from '$lib/utils/transitions';
 	import { effectiveAnimation } from '$lib/stores/preferences';
 
@@ -45,6 +46,8 @@
 	let mounted = false;
 	const PITCH = 13;
 	const STRETCH = 17;
+	const COPY_LEAD = 0.08;
+	const ART_HOLD = 1400;
 
 	const current = $derived(items[Math.min(index, items.length - 1)]);
 	const auto = $derived($effectiveAnimation === 'full' && items.length > 1);
@@ -71,7 +74,7 @@
 		prev = index;
 		index = target;
 		clearTimeout(settle);
-		settle = setTimeout(() => (prev = null), 1400);
+		settle = setTimeout(() => (prev = null), ART_HOLD * tempo());
 	}
 
 	function onKey(e: KeyboardEvent) {
@@ -107,7 +110,7 @@
 
 	function copyIn(el: HTMLElement) {
 		if (!mounted) return;
-		motion(el, { opacity: [0, 1], x: [24 * dir, 0] }, 'smooth', { delay: 0.08 });
+		motion(el, { opacity: [0, 1], x: [24 * dir, 0] }, 'pop', { delay: COPY_LEAD * tempo() });
 	}
 </script>
 
@@ -140,7 +143,7 @@
 
 		<div class="copy-stack" aria-live="polite">
 			{#key current.id}
-				<div class="copy" {@attach copyIn} out:fade={{ duration: 160 }}>
+				<div class="copy" {@attach copyIn} out:fade={{ duration: FADE.out * tempo() }}>
 					{#if variant === 'spotlight'}
 						<div class="byline">
 							<AppIcon name={current.name} kind="project" icon={current.image} size="sm" />
@@ -464,7 +467,7 @@
 		white-space: nowrap;
 		transition:
 			opacity var(--dur-fast) ease,
-			transform var(--spring-interactive-duration) var(--spring-interactive);
+			transform var(--spring-press-duration) var(--spring-press);
 	}
 	.open:hover {
 		opacity: 0.9;
@@ -548,7 +551,7 @@
 		background: none;
 		cursor: pointer;
 		transform: translateX(var(--x));
-		transition: transform var(--spring-snappy-duration) var(--spring-snappy);
+		transition: transform var(--spring-glide-duration) var(--spring-glide);
 	}
 	.pip::before {
 		content: '';
@@ -581,14 +584,14 @@
 	.cap {
 		width: var(--dot);
 		border-radius: 50%;
-		transition: transform var(--spring-snappy-duration) var(--spring-snappy);
+		transition: transform var(--spring-glide-duration) var(--spring-glide);
 	}
 	.bar {
 		left: calc(var(--dot) / 2);
 		width: var(--stretch);
 		transform: scaleX(0);
 		transform-origin: left center;
-		transition: transform var(--spring-snappy-duration) var(--spring-snappy);
+		transition: transform var(--spring-glide-duration) var(--spring-glide);
 	}
 	.pip--on .cap--end {
 		transform: translateX(var(--stretch));

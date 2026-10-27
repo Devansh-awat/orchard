@@ -9,7 +9,7 @@
 	import Spinner from '$lib/components/ui/Spinner.svelte';
 	import { activity, type ActivityPhase } from '$lib/stores/activity';
 	import { toasts, type Toast, type ToastColor } from '$lib/stores/toast';
-	import { SPRINGS, exitSpec, sampleSpring, type SpringSpec } from '$lib/design/springs';
+	import { SPRINGS, sampleSpring, tempo, type SpringSpec } from '$lib/design/springs';
 	import {
 		springTiming,
 		motionLevel,
@@ -98,6 +98,11 @@
 	const SWIPE_DISMISS = 30;
 	const SHAKE = 5;
 	const STEP = 1000 / 120;
+	const LEAVE_DELAY = 0.05;
+	const FACE_LEAD = 0.06;
+	const FACE_LEAD_ALONE = 0.09;
+	const SWAP_LEAD = 0.04;
+	const SHAKE_LEAD = 260;
 
 	const ICONS = { success: Check, error: CircleAlert, warning: TriangleAlert, info: Info };
 	const uid = $props.id();
@@ -537,14 +542,12 @@
 	}
 
 	const curves = new Map<string, number[]>();
-	function specFor(name: SpringName, exit: boolean) {
-		return exit ? exitSpec(SPRINGS[name]) : SPRINGS[name];
-	}
 	function pointsOf(spec: SpringSpec) {
-		const key = `${spec.visualDuration}:${spec.bounce}`;
+		const scale = Math.round(tempo() * 20) / 20;
+		const key = `${spec.response}:${spec.damping}:${scale}`;
 		let pts = curves.get(key);
 		if (!pts) {
-			pts = sampleSpring(spec, STEP).points;
+			pts = sampleSpring(spec, STEP, scale).points;
 			curves.set(key, pts);
 		}
 		return pts;
@@ -609,14 +612,14 @@
 		}
 	}
 
-	function fadeGroup(b: Blob, on: boolean, name: SpringName = 'snappy') {
+	function fadeGroup(b: Blob, on: boolean, name: SpringName = 'pop') {
 		const el = b.group;
 		if (!el) return undefined;
 		const cur = getComputedStyle(el).opacity;
 		stop(el, 'fade');
 		el.style.opacity = on ? '1' : '0';
 		if (!ready || motionLevel() === 'off') return undefined;
-		const an = el.animate({ opacity: [cur, on ? '1' : '0'] }, springTiming(name, { exit: !on }));
+		const an = el.animate({ opacity: [cur, on ? '1' : '0'] }, springTiming(on ? name : 'settle'));
 		an.id = 'fade';
 		return an;
 	}
@@ -639,7 +642,7 @@
 				? { opacity: [cur, 0], filter: ['blur(0px)', 'blur(4px)'] }
 				: { opacity: [cur, 0] };
 		const an = el.animate(kf, {
-			...springTiming(on ? 'smooth' : 'snappy', { exit: !on, delay: on ? delay : 0 }),
+			...(on ? springTiming('glide', { delay }) : springTiming('settle')),
 			fill: 'backwards'
 		});
 		an.id = 'fade';
@@ -695,12 +698,12 @@
 	}
 
 	function springFor(from: Rect, to: Rect, t: Target): SpringName {
-		if (t.leaving) return 'smooth';
+		if (t.leaving) return 'settle';
 		if (isDot(from) || isDot(to)) return 'morph';
 		if (to.h > from.h + 4) return 'morph';
-		if (to.h < from.h - 4) return 'smooth';
+		if (to.h < from.h - 4) return 'glide';
 		if (t.anchor && overlaps(from, t.anchor, t.axis) && !t.attached) return 'morph';
-		return 'smooth';
+		return 'glide';
 	}
 
 	function gone(id: string) {
@@ -730,7 +733,7 @@
 		const vanishing = isDot(to) && !isDot(from);
 		if (!ready || level !== 'full') {
 			if (ready && level === 'reduced' && (t.leaving || vanishing)) {
-				const an = fadeGroup(b, false, 'smooth');
+				const an = fadeGroup(b, false);
 				const finish = () => {
 					if (b.to === to || b.leaving) snap(b, to);
 				};
@@ -742,16 +745,15 @@
 			}
 			snap(b, to);
 			if (ready && level === 'reduced' && (appearing || start) && !isDot(to))
-				fadeGroup(b, true, 'smooth');
+				fadeGroup(b, true, 'glide');
 			else if (b.group) b.group.style.opacity = isDot(to) ? '0' : '1';
 			if (t.leaving) settleLeave(id, b);
 			return;
 		}
 		const name = springFor(from, to, t);
-		const exit = !!t.leaving;
-		const delay = t.leaving ? 0.05 : 0;
-		const timing = springTiming(name, { exit, delay });
-		const spec = specFor(name, exit);
+		const delay = t.leaving ? LEAVE_DELAY * tempo() : 0;
+		const timing = springTiming(name, { delay });
+		const spec = SPRINGS[name];
 		b.from = from;
 		b.to = to;
 		b.spec = spec;
@@ -779,8 +781,8 @@
 			});
 			an.id = 'shape';
 		}
-		if (appearing) fadeGroup(b, true, 'snappy');
-		if (vanishing) fadeGroup(b, false, 'snappy');
+		if (appearing) fadeGroup(b, true);
+		if (vanishing) fadeGroup(b, false);
 		neck(b, t, from, to, spec, b.delay);
 		if (t.leaving) settleLeave(id, b, b.anim);
 	}
@@ -794,7 +796,7 @@
 			const faded = isDot(birth) || (ready && motionLevel() === 'reduced');
 			if (b.group) b.group.style.opacity = faded ? '0' : '1';
 			if (!sameRect(birth, t.rect) || faded) move(id, b, t, birth);
-			if (t.tone === 'error' && ready) setTimeout(() => shake(id), 260);
+			if (t.tone === 'error' && ready) setTimeout(() => shake(id), SHAKE_LEAD * tempo());
 			return;
 		}
 		if (t.leaving && !b.leaving) {
@@ -814,7 +816,7 @@
 			if (b.faceIn) b.faceIn.style.opacity = '0';
 			if (b.face) b.face.inert = true;
 		}
-		if (t.face !== b.faceOn) fadeFace(b, t.face, b.group ? 0.06 : 0.09);
+		if (t.face !== b.faceOn) fadeFace(b, t.face, (b.group ? FACE_LEAD : FACE_LEAD_ALONE) * tempo());
 	}
 
 	function apply() {
@@ -837,7 +839,7 @@
 			const x = SHAKE * Math.exp(-4.2 * t) * Math.sin(2 * Math.PI * 3 * t);
 			return { translate: `${x.toFixed(2)}px 0px` };
 		});
-		const timing = { ...springTiming('smooth'), easing: 'linear' };
+		const timing = { ...springTiming('glide'), easing: 'linear' };
 		for (const el of [b.group, b.face]) {
 			if (!el) continue;
 			stop(el, 'shake');
@@ -886,7 +888,7 @@
 		const kf: PropertyIndexedKeyframes = decorativeMotion()
 			? { opacity: [0, 1], filter: ['blur(4px)', 'blur(0px)'] }
 			: { opacity: [0, 1] };
-		el.animate(kf, { ...springTiming('smooth', { delay }), fill: 'backwards' });
+		el.animate(kf, { ...springTiming('glide', { delay }), fill: 'backwards' });
 	}
 
 	function swapIn(el: HTMLElement) {
@@ -902,7 +904,7 @@
 				untrack(() => {
 					if (current && !entered) {
 						entered = true;
-						if (many) blurIn(el, 0.04);
+						if (many) blurIn(el, SWAP_LEAD * tempo());
 						return;
 					}
 					if (current) return;
@@ -912,7 +914,7 @@
 						decorativeMotion()
 							? { opacity: [1, 0], filter: ['blur(0px)', 'blur(4px)'] }
 							: { opacity: [1, 0] },
-						{ ...springTiming('snappy', { exit: true }), fill: 'forwards' }
+						{ ...springTiming('settle'), fill: 'forwards' }
 					);
 					an.onfinish = drop;
 				});
@@ -949,7 +951,7 @@
 		const b = blobs.get(`toast:${id}`);
 		if (shown && ready && motionLevel() === 'full') {
 			for (const el of [b?.group, b?.face]) {
-				el?.animate({ translate: [`0px ${px(shown)}`, '0px 0px'] }, springTiming('snappy'));
+				el?.animate({ translate: [`0px ${px(shown)}`, '0px 0px'] }, springTiming('snap'));
 			}
 		}
 		if (Math.abs(dy) > SWIPE_DISMISS) toasts.remove(id);
@@ -1531,12 +1533,12 @@
 		padding: 0.25rem 0.875rem 0.875rem 2.375rem;
 		opacity: 0;
 		pointer-events: none;
-		transition: opacity 90ms ease;
+		transition: opacity var(--fade-out) var(--curve-in);
 	}
 	.toast-face[data-open] .toast-more {
 		opacity: 1;
 		pointer-events: auto;
-		transition: opacity 240ms ease 140ms;
+		transition: opacity var(--fade-long) var(--curve-out) calc(140ms * var(--tempo));
 	}
 	.toast-desc {
 		margin: 0;

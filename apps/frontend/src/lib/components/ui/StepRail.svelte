@@ -101,7 +101,7 @@
 		background: var(--status-success-solid);
 		transform: scaleY(0);
 		transform-origin: top;
-		transition: transform var(--spring-smooth-duration) var(--spring-smooth);
+		transition: transform var(--spring-glide-duration) var(--spring-glide);
 	}
 	.seg--lit::after {
 		transform: scaleY(1);
@@ -137,8 +137,8 @@
 		opacity: 0;
 		transform: scale(0.4);
 		transition:
-			opacity 120ms ease,
-			transform var(--spring-bouncy-duration) var(--spring-bouncy);
+			opacity var(--fade-in) var(--curve-out),
+			transform var(--spring-pop-duration) var(--spring-pop);
 	}
 	.mark--live {
 		width: 0.375rem;

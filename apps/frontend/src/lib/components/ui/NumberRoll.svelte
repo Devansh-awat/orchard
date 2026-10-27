@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { decorativeMotion } from '$lib/utils/motion.svelte';
+	import { decorativeMotion, fade } from '$lib/utils/motion.svelte';
 
 	let { value, label = undefined }: { value: string; label?: string } = $props();
 
@@ -14,10 +14,7 @@
 				if (next === last) return;
 				last = next;
 				if (!decorativeMotion()) return;
-				(el as HTMLElement).animate([{ filter: 'blur(2px)' }, { filter: 'blur(0)' }], {
-					duration: 260,
-					easing: 'cubic-bezier(.22, 1, .36, 1)'
-				});
+				(el as HTMLElement).animate([{ filter: 'blur(2px)' }, { filter: 'blur(0)' }], fade('long'));
 			});
 		};
 	}
@@ -56,8 +53,8 @@
 		display: flex;
 		flex-direction: column;
 		transform: translateY(calc(var(--n) * -1.2em));
-		transition: transform 420ms cubic-bezier(0.24, 1.34, 0.38, 1);
-		transition-delay: calc(var(--i) * 35ms);
+		transition: transform var(--spring-pop-duration) var(--spring-pop);
+		transition-delay: calc(var(--i) * 35ms * var(--tempo));
 	}
 	.digit {
 		display: block;

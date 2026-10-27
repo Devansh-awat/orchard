@@ -126,7 +126,7 @@
 		border-radius: inherit;
 		background: var(--tone);
 		transform: translateX(calc((var(--ratio) - 1) * 50%));
-		transition: transform var(--spring-smooth-duration) var(--spring-smooth);
+		transition: transform var(--spring-glide-duration) var(--spring-glide);
 	}
 	.sweep {
 		position: absolute;

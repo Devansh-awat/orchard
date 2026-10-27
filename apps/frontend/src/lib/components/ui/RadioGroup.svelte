@@ -142,7 +142,7 @@
 		transition:
 			background-color var(--dur-fast) ease,
 			box-shadow var(--dur-fast) ease,
-			transform var(--spring-interactive-duration) var(--spring-interactive);
+			transform var(--spring-press-duration) var(--spring-press);
 	}
 	.dot::after {
 		content: '';
@@ -153,8 +153,8 @@
 		opacity: 0;
 		transform: scale(0.2);
 		transition:
-			opacity 120ms ease,
-			transform var(--spring-bouncy-duration) var(--spring-bouncy);
+			opacity var(--fade-in) var(--curve-out),
+			transform var(--spring-pop-duration) var(--spring-pop);
 	}
 	.opt:hover:not(.opt--off, .opt--on) .dot {
 		box-shadow:
@@ -233,7 +233,7 @@
 		corner-shape: var(--corner);
 		background: var(--bg-raised);
 		box-shadow: var(--shadow-raised);
-		transition: transform var(--spring-interactive-duration) var(--spring-interactive);
+		transition: transform var(--spring-press-duration) var(--spring-press);
 	}
 	.choices--cards .opt::before {
 		content: '';

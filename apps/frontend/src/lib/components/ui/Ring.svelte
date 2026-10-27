@@ -41,10 +41,10 @@
 		const next = ratio;
 		if (!seeded) {
 			seeded = true;
-			spring.to(next, 'smooth', { instant: true });
+			spring.to(next, 'glide', { instant: true });
 			return;
 		}
-		spring.to(next, 'smooth');
+		spring.to(next, 'glide');
 	});
 
 	const p = $derived(Math.max(0, spring.current));

@@ -113,6 +113,7 @@
 		springTiming,
 		staggerDelay
 	} from '$lib/utils/motion.svelte';
+	import { tempo } from '$lib/design/springs';
 
 	let {
 		open = $bindable(false),
@@ -155,6 +156,9 @@
 	const BUD = 28;
 	const FLIGHT_OVERLAP = 0.12;
 	const DRIP_LEAD = 0.13;
+	const SPREAD_LEAD = 0.1;
+	const SPREAD_TRAIL = 0.04;
+	const FALL_TRAIL = 0.08;
 	const OPEN_LEAD_MS = 150;
 	const COPIED_MS = 1600;
 	const SCOPE_LABEL: Record<Scope, string> = { all: '', actions: 'Actions', projects: 'Projects' };
@@ -503,7 +507,7 @@
 		layer.inert = false;
 		const distance = measure();
 		launchedAt = fresh && physical() ? performance.now() : 0;
-		const timing = springTiming('smooth', { distance });
+		const timing = springTiming('snap', { distance });
 		if (physical()) {
 			tween(layer, '--spot-t', '1', timing, fresh ? '0' : undefined);
 		} else {
@@ -518,7 +522,7 @@
 		phase = 'closing';
 		open = false;
 		const gen = ++flightGen;
-		const delay = drop === 'open' ? FLIGHT_OVERLAP : 0;
+		const delay = drop === 'open' ? FLIGHT_OVERLAP * tempo() : 0;
 		query = '';
 		copied = null;
 		const home = origin?.();
@@ -529,9 +533,9 @@
 		const distance = measure();
 		let anim: Animation | null;
 		if (physical()) {
-			anim = tween(layer, '--spot-t', '0', springTiming('smooth', { exit: true, delay, distance }));
+			anim = tween(layer, '--spot-t', '0', springTiming('settle', { delay, distance }));
 		} else {
-			anim = tween(layer, 'opacity', '0', springTiming('smooth', { delay }));
+			anim = tween(layer, 'opacity', '0', springTiming('settle', { delay }));
 		}
 		settled(anim).then(() => {
 			if (gen === flightGen && phase === 'closing') land();
@@ -565,7 +569,7 @@
 				]
 			: [{ opacity: 0 }, { opacity: 1 }];
 		(el as HTMLElement).animate(frames, {
-			...springTiming('smooth', { delay }),
+			...springTiming('pop', { delay }),
 			fill: 'backwards'
 		});
 	}
@@ -575,7 +579,7 @@
 		const rows = [...scroller.querySelectorAll('[data-row]')];
 		for (const [i, el] of rows.entries()) {
 			entered.add(el);
-			if (motionEnabled()) animateRow(el, DRIP_LEAD + staggerDelay(i));
+			if (motionEnabled()) animateRow(el, DRIP_LEAD * tempo() + staggerDelay(i));
 		}
 	}
 
@@ -589,23 +593,23 @@
 
 	function dripIn(height: number) {
 		enterAll();
-		placeHighlight(view, active, DRIP_LEAD);
+		placeHighlight(view, active, DRIP_LEAD * tempo());
 		if (physical()) {
 			set(layer, '--spot-o', '1');
-			ooze(tween(layer, '--spot-fall', '1', springTiming('smooth')));
-			tween(layer, '--spot-spread', '1', springTiming('smooth', { delay: 0.1 }));
+			ooze(tween(layer, '--spot-fall', '1', springTiming('morph')));
+			tween(layer, '--spot-spread', '1', springTiming('morph', { delay: SPREAD_LEAD * tempo() }));
 			tween(
 				layer,
 				'--spot-h',
 				`${height}`,
-				springTiming('smooth', { delay: DRIP_LEAD, distance: height })
+				springTiming('snap', { delay: DRIP_LEAD * tempo(), distance: height })
 			);
 			return;
 		}
 		set(layer, '--spot-fall', '1');
 		set(layer, '--spot-spread', '1');
 		set(layer, '--spot-h', `${height}`);
-		tween(layer, '--spot-o', '1', springTiming('smooth'), '0');
+		tween(layer, '--spot-o', '1', springTiming('snap'), '0');
 	}
 
 	function resize(height: number) {
@@ -616,13 +620,13 @@
 			layer,
 			'--spot-h',
 			`${height}`,
-			springTiming('smooth', { distance: Math.abs(height - now) })
+			springTiming('glide', { distance: Math.abs(height - now) })
 		);
 	}
 
 	function dripOut() {
 		if (!layer) return Promise.resolve(true);
-		if (!physical()) return settled(tween(layer, '--spot-o', '0', springTiming('smooth')));
+		if (!physical()) return settled(tween(layer, '--spot-o', '0', springTiming('settle')));
 		const rows = scroller ? [...scroller.querySelectorAll<HTMLElement>('[data-row]')] : [];
 		if (hl) rows.push(hl);
 		exits = rows.map((el, i) => {
@@ -635,21 +639,20 @@
 							{ opacity: 0, transform: 'translateY(-0.5rem) scale(0.96)' }
 						];
 			return el.animate(frames, {
-				...springTiming('snappy', {
-					exit: true,
+				...springTiming('settle', {
 					delay: el === hl ? 0 : staggerDelay(rows.length - 1 - i) / 2
 				}),
 				fill: 'forwards'
 			});
 		});
 		const now = parseFloat(getComputedStyle(layer).getPropertyValue('--spot-h')) || BUD;
-		tween(layer, '--spot-h', `${BUD}`, springTiming('smooth', { exit: true, distance: now - BUD }));
-		tween(layer, '--spot-spread', '0', springTiming('smooth', { exit: true, delay: 0.04 }));
+		tween(layer, '--spot-h', `${BUD}`, springTiming('settle', { distance: now - BUD }));
+		tween(layer, '--spot-spread', '0', springTiming('settle', { delay: SPREAD_TRAIL * tempo() }));
 		const fall = tween(
 			layer,
 			'--spot-fall',
 			'0',
-			springTiming('smooth', { exit: true, delay: 0.08 })
+			springTiming('settle', { delay: FALL_TRAIL * tempo() })
 		);
 		ooze(fall);
 		return settled(fall);
@@ -695,7 +698,7 @@
 			syncEdges();
 			const height = measureDrop();
 			if (drop === 'open') return resize(height);
-			const wait = launchedAt ? OPEN_LEAD_MS - (performance.now() - launchedAt) : 0;
+			const wait = launchedAt ? OPEN_LEAD_MS * tempo() - (performance.now() - launchedAt) : 0;
 			if (wait > 0) await sleep(wait);
 			if (gen !== dripGen) return;
 			launchedAt = 0;
@@ -747,14 +750,14 @@
 		}
 		const to = `translateY(${el.offsetTop}px)`;
 		if (hlPlaced && decorativeMotion()) {
-			tween(hl, 'transform', to, springTiming('snappy'));
+			tween(hl, 'transform', to, springTiming('glide'));
 			return;
 		}
 		set(hl, 'transform', to);
 		const first = !hlPlaced;
 		hlPlaced = true;
 		if (first && motionEnabled()) {
-			tween(hl, 'opacity', '1', springTiming('smooth', { delay }), '0');
+			tween(hl, 'opacity', '1', springTiming('pop', { delay }), '0');
 		} else set(hl, 'opacity', '1');
 	}
 

@@ -61,7 +61,7 @@
 		box-shadow:
 			0 1px 2px rgb(0 0 0 / 0.2),
 			0 2px 6px rgb(0 0 0 / 0.1);
-		transition: transform var(--spring-snappy-duration) var(--spring-snappy);
+		transition: transform var(--spring-glide-duration) var(--spring-glide);
 	}
 	.switch[aria-checked='true'] .thumb {
 		transform: translateX(0.875rem);

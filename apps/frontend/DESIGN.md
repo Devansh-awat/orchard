@@ -171,12 +171,12 @@ paths, where the end is what tells two values apart.
 
 ## Motion
 
-Named springs in `src/lib/design/springs.ts` (`smooth`, `snappy`, `bouncy`,
-`interactive`, `morph`, `cinematic`), mirrored as CSS `linear()` tokens
-(`--spring-{name}`, `--spring-{name}-duration`) by `pnpm gen:design`. CSS transitions
-use the tokens; JS uses `transition(name)`, `motion()` or `SpringValue` from
-`$lib/utils/motion.svelte`. Never write stiffness, damping or raw durations in a
-component. See `CLAUDE.md` for the full motion system.
+One curve table, `CURVES` in `src/lib/design/springs.ts`: `snap` (opens), `pop` (appears),
+`settle` (closes), `glide` (moves and highlights), `press`, `morph` (shape changes), `bouncy`,
+`cinematic`. Each is an Apple-style response plus damping ratio, mirrored as CSS tokens
+(`--spring-{name}`, `--spring-{name}-duration`, `--fade-in/out/long`, `--curve-out/in`) by
+`pnpm gen:design`. One `TEMPO` (CSS `--tempo`) scales them all. Never write stiffness, damping,
+cubic-bezier or raw durations for interaction motion in a component. See `CLAUDE.md`.
 
 ## Theme engine (`src/lib/theme/`)
 

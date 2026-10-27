@@ -97,7 +97,7 @@
 			background-color var(--dur-fast) ease,
 			color var(--dur-fast) ease,
 			opacity var(--dur-fast) ease,
-			transform var(--spring-interactive-duration) var(--spring-interactive);
+			transform var(--spring-press-duration) var(--spring-press);
 	}
 	.button:active:not(:disabled) {
 		transform: scale(0.96);

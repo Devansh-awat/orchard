@@ -1,34 +1,85 @@
-export type SpringName = 'smooth' | 'snappy' | 'bouncy' | 'interactive' | 'morph' | 'cinematic';
+export type CurveName =
+	| 'snap'
+	| 'pop'
+	| 'settle'
+	| 'glide'
+	| 'press'
+	| 'bouncy'
+	| 'morph'
+	| 'cinematic';
 
-export type SpringSpec = { visualDuration: number; bounce: number };
+export type SpringName = CurveName | 'smooth' | 'snappy' | 'interactive';
 
-export const SPRINGS: Record<SpringName, SpringSpec> = {
-	smooth: { visualDuration: 0.26, bounce: 0.2 },
-	snappy: { visualDuration: 0.19, bounce: 0.25 },
-	bouncy: { visualDuration: 0.28, bounce: 0.45 },
-	interactive: { visualDuration: 0.1, bounce: 0.2 },
-	morph: { visualDuration: 0.34, bounce: 0.25 },
-	cinematic: { visualDuration: 0.8, bounce: 0.14 }
+export type SpringSpec = { response: number; damping: number };
+
+export const TEMPO = 1;
+
+export const CURVES: Record<CurveName, SpringSpec> = {
+	snap: { response: 0.22, damping: 0.88 },
+	pop: { response: 0.24, damping: 0.78 },
+	settle: { response: 0.17, damping: 1 },
+	glide: { response: 0.28, damping: 0.92 },
+	press: { response: 0.12, damping: 1 },
+	bouncy: { response: 0.32, damping: 0.6 },
+	morph: { response: 0.3, damping: 0.8 },
+	cinematic: { response: 0.7, damping: 0.86 }
 };
 
-export const EXIT_SCALE = 0.8;
-export const EXIT_BOUNCE = 0.15;
+export const SPRINGS: Record<SpringName, SpringSpec> = {
+	...CURVES,
+	smooth: CURVES.glide,
+	snappy: CURVES.snap,
+	interactive: CURVES.press
+};
 
-export function physics({ visualDuration, bounce }: SpringSpec) {
-	const root = (2 * Math.PI) / (visualDuration * 1.2);
-	const stiffness = root * root;
-	const damping = 2 * Math.min(1, Math.max(0.05, 1 - bounce)) * Math.sqrt(stiffness);
-	return { stiffness, damping, mass: 1 };
+export const EASE = {
+	out: 'cubic-bezier(0.22, 1, 0.36, 1)',
+	in: 'cubic-bezier(0.4, 0, 1, 1)',
+	inOut: 'cubic-bezier(0.65, 0, 0.35, 1)'
+} as const;
+
+export const FADE = { in: 90, out: 110, long: 260 } as const;
+
+export const EXIT_SCALE = 0.8;
+
+let runtimeTempo = TEMPO;
+
+export function tempo() {
+	return runtimeTempo;
 }
 
-export function sampleSpring(spec: SpringSpec, stepMs = 1000 / 120) {
-	const { stiffness, damping, mass } = physics(spec);
+export function setTempo(value: number) {
+	runtimeTempo = value;
+	if (typeof document !== 'undefined') {
+		document.documentElement.style.setProperty('--tempo', String(value));
+	}
+}
+
+export type PhysicalSpring = { mass: number; stiffness: number; damping: number };
+
+export function fromResponse(response: number, dampingRatio: number): PhysicalSpring {
+	return {
+		mass: 1,
+		stiffness: ((2 * Math.PI) / response) ** 2,
+		damping: (4 * Math.PI * dampingRatio) / response
+	};
+}
+
+export function physics(spec: SpringSpec, scale = tempo()): PhysicalSpring {
+	return fromResponse(spec.response * scale, spec.damping);
+}
+
+export function exitSpec(spec: SpringSpec): SpringSpec {
+	return { response: spec.response * EXIT_SCALE, damping: Math.max(1, spec.damping) };
+}
+
+export function samplePhysics({ mass, stiffness, damping }: PhysicalSpring, stepMs = 1000 / 120) {
 	const dt = stepMs / 1000;
 	const points: number[] = [];
 	let x = 0;
 	let v = 0;
 	let t = 0;
-	while (t < 4) {
+	while (t < 3) {
 		points.push(x);
 		for (let i = 0; i < 8; i++) {
 			const a = (-stiffness * (x - 1) - damping * v) / mass;
@@ -36,10 +87,34 @@ export function sampleSpring(spec: SpringSpec, stepMs = 1000 / 120) {
 			x += v * (dt / 8);
 		}
 		t += dt;
-		if (Math.abs(x - 1) < 0.001 && Math.abs(v) < 0.01) break;
+		if (Math.abs(x - 1) < 0.0005 && Math.abs(v) < 0.005) break;
 	}
 	points.push(1);
 	return { points, durationMs: Math.round((points.length - 1) * stepMs) };
+}
+
+export function sampleSpring(spec: SpringSpec, stepMs = 1000 / 120, scale = tempo()) {
+	return samplePhysics(physics(spec, scale), stepMs);
+}
+
+function toLinear(points: number[], maxPoints: number) {
+	const stride = Math.max(1, Math.ceil(points.length / maxPoints));
+	const kept: string[] = [];
+	for (let i = 0; i < points.length; i += stride) {
+		kept.push(`${Number(points[i].toFixed(4))} ${((i / (points.length - 1)) * 100).toFixed(1)}%`);
+	}
+	kept[0] = '0';
+	kept.push('1');
+	return `linear(${kept.join(', ')})`;
+}
+
+export function physicsCurve(spring: PhysicalSpring, maxPoints = 48) {
+	const { points, durationMs } = samplePhysics(spring);
+	return { easing: toLinear(points, maxPoints), durationMs };
+}
+
+export function springCurve(spec: SpringSpec, maxPoints = 40, scale = tempo()) {
+	return physicsCurve(physics(spec, scale), maxPoints);
 }
 
 export function springEasing(spec: SpringSpec): {
@@ -57,73 +132,5 @@ export function springEasing(spec: SpringSpec): {
 			const i = Math.floor(x);
 			return points[i] + (points[i + 1] - points[i]) * (x - i);
 		}
-	};
-}
-
-export function springCurve(spec: SpringSpec, maxPoints = 40) {
-	const { points, durationMs } = sampleSpring(spec);
-	const stride = Math.max(1, Math.ceil(points.length / maxPoints));
-	const kept: string[] = [];
-	for (let i = 0; i < points.length; i += stride) {
-		const pct = ((i / (points.length - 1)) * 100).toFixed(1);
-		kept.push(`${Number(points[i].toFixed(4))} ${pct}%`);
-	}
-	kept[0] = '0';
-	kept.push('1');
-	return { easing: `linear(${kept.join(', ')})`, durationMs };
-}
-
-export function exitSpec(spec: SpringSpec): SpringSpec {
-	return { visualDuration: spec.visualDuration * EXIT_SCALE, bounce: spec.bounce + EXIT_BOUNCE };
-}
-
-export type PhysicalSpring = { mass: number; stiffness: number; damping: number };
-export type AppleSpring = { duration: number; bounce: number };
-
-export function fromApple({ duration, bounce }: AppleSpring): PhysicalSpring {
-	const stiffness = ((2 * Math.PI) / duration) ** 2;
-	const damping =
-		bounce >= 0
-			? (4 * Math.PI * (1 - bounce)) / duration
-			: (4 * Math.PI) / (duration * (1 + bounce));
-	return { mass: 1, stiffness, damping };
-}
-
-export function physicsCurve({ mass, stiffness, damping }: PhysicalSpring, maxPoints = 48) {
-	const stepMs = 1000 / 120;
-	const dt = stepMs / 1000;
-	const points: number[] = [];
-	let x = 0;
-	let v = 0;
-	let t = 0;
-	while (t < 3) {
-		points.push(x);
-		for (let i = 0; i < 8; i++) {
-			const a = (-stiffness * (x - 1) - damping * v) / mass;
-			v += a * (dt / 8);
-			x += v * (dt / 8);
-		}
-		t += dt;
-		if (Math.abs(x - 1) < 0.0005 && Math.abs(v) < 0.005) break;
-	}
-	points.push(1);
-	const stride = Math.max(1, Math.ceil(points.length / maxPoints));
-	const kept: string[] = [];
-	for (let i = 0; i < points.length; i += stride) {
-		kept.push(`${Number(points[i].toFixed(4))} ${((i / (points.length - 1)) * 100).toFixed(1)}%`);
-	}
-	kept[0] = '0';
-	kept.push('1');
-	return {
-		easing: `linear(${kept.join(', ')})`,
-		durationMs: Math.round((points.length - 1) * stepMs)
-	};
-}
-
-export function fromResponse(response: number, dampingRatio: number): PhysicalSpring {
-	return {
-		mass: 1,
-		stiffness: ((2 * Math.PI) / response) ** 2,
-		damping: (4 * Math.PI * dampingRatio) / response
 	};
 }

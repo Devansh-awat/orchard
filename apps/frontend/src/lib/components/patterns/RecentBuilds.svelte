@@ -257,7 +257,7 @@
 		background: var(--text-muted);
 		opacity: 0;
 		pointer-events: none;
-		transition: opacity var(--dur-fast) ease;
+		transition: opacity var(--fade-in) var(--curve-out);
 	}
 	.seg--live {
 		animation: seg-breathe 1.6s ease-in-out infinite;

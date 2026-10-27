@@ -51,8 +51,8 @@
 		grid-area: 1 / 1;
 		display: flex;
 		transition:
-			opacity 120ms ease,
-			transform var(--spring-bouncy-duration) var(--spring-bouncy);
+			opacity var(--fade-in) var(--curve-out),
+			transform var(--spring-pop-duration) var(--spring-pop);
 	}
 	.icon--check {
 		color: var(--status-success);

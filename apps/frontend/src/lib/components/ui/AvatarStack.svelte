@@ -75,7 +75,7 @@
 		border-radius: 50%;
 		background: var(--bg-surface);
 		box-shadow: 0 0 0 var(--gap) var(--bg-surface);
-		transition: transform var(--spring-snappy-duration) var(--spring-snappy);
+		transition: transform var(--spring-glide-duration) var(--spring-glide);
 	}
 	.stack:hover .slot {
 		transform: translateX(calc(var(--i) * var(--size) * 0.12));
