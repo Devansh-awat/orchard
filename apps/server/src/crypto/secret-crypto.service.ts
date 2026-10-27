@@ -24,8 +24,17 @@ export class SecretCryptoService {
     const secret = process.env.SECRETS_ENCRYPTION_KEY || process.env.SSO_ENCRYPTION_KEY;
     this.key = secret ? scryptSync(secret, 'orchard-env-secret', 32) : null;
     if (!this.key) {
-      this.logger.warn(
-        'SECRETS_ENCRYPTION_KEY not set — secret env values cannot be encrypted at rest.'
+      this.logger.error(
+        [
+          '',
+          '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!',
+          '!! SECRETS_ENCRYPTION_KEY is not set.',
+          '!! Secret env vars, shared vars, job step secrets and database passwords',
+          '!! are being stored in PLAINTEXT in Postgres.',
+          '!! Set SECRETS_ENCRYPTION_KEY to a long random string and restart; the',
+          '!! boot backfill then encrypts existing env vars and credentials.',
+          '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+        ].join('\n')
       );
     }
   }

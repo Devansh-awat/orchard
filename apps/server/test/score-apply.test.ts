@@ -123,8 +123,8 @@ test('a score file provisions the database, binds it, and writes live references
   assert.deepEqual(calls.bound, [{ resourceId: 'db-db', name: 'db' }]);
   assert.deepEqual(calls.env, [
     { key: 'SECRET_TOKEN', value: null, secret: true },
-    { key: 'DATABASE_URL', value: '${{resource.db.connection_string}}', secret: false },
-    { key: 'LOG_LEVEL', value: 'info', secret: false }
+    { key: 'DATABASE_URL', value: '${{resource.db.connection_string}}' },
+    { key: 'LOG_LEVEL', value: 'info' }
   ]);
   assert.deepEqual(calls.ports, {
     ports: [{ name: 'www', containerPort: 3000, servicePort: 8080, protocol: 'TCP' }]

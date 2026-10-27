@@ -139,7 +139,7 @@ export class ScoreService {
           .map((v) => ({ key: v.key, value: null, secret: v.secret }));
         await deployments.updateDeploymentEnvVars(
           deploymentId,
-          [...kept, ...plan.env.map((e) => ({ key: e.key, value: e.value, secret: false }))],
+          [...kept, ...plan.env.map((e) => ({ key: e.key, value: e.value }))],
           actor.clerkId,
           actor.userData
         );

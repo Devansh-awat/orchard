@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hackclub/orchard/cli/internal/api"
-	"github.com/hackclub/orchard/cli/internal/termsession"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/coder/websocket"
+	"github.com/hackclub/orchard/cli/internal/api"
+	"github.com/hackclub/orchard/cli/internal/termsession"
 )
 
 var dbTabs = []string{"Connection", "Backups", "Extensions", "Metrics", "Resources", "Settings"}
@@ -37,6 +37,7 @@ type databaseScreen struct {
 	prov      *dbProvisioning
 
 	reveal    bool
+	conn      *dbConnection
 	bakCursor int
 	extCursor int
 	setCursor int
@@ -196,6 +197,13 @@ func (s *databaseScreen) Update(msg tea.Msg) (screen, tea.Cmd) {
 			return s, errFlash(msg.err)
 		}
 		return s, s.refetchAll()
+	case dbConnectionMsg:
+		if msg.err != nil {
+			s.reveal = false
+			return s, errFlash(msg.err)
+		}
+		s.conn = msg.c
+		s.reveal = true
 	case tea.MouseMsg:
 		return s.updateMouse(msg)
 	case tea.KeyMsg:
@@ -271,8 +279,12 @@ func (s *databaseScreen) updateKey(msg tea.KeyMsg) (screen, tea.Cmd) {
 		return s, s.openShell()
 	case "r":
 		if s.tab == 0 {
-			s.reveal = !s.reveal
-			return s, nil
+			if s.reveal {
+				s.reveal = false
+				s.conn = nil
+				return s, nil
+			}
+			return s, fetchDBConnection(s.cl, s.id)
 		}
 		return s, s.refetchAll()
 	case "p":
@@ -473,8 +485,8 @@ func (s *databaseScreen) viewConnection() string {
 	row("User", d.DBUser)
 	pw := strings.Repeat("•", 12)
 	cs := dbMaskedConnStr(d)
-	if s.reveal {
-		pw, cs = d.DBPassword, d.ConnectionString
+	if s.reveal && s.conn != nil {
+		pw, cs = s.conn.Password, s.conn.ConnectionString
 	}
 	row("Password", pw)
 	row("URL", stMuted.Render(cs))
@@ -489,8 +501,8 @@ func (s *databaseScreen) viewConnection() string {
 		row("Public port", dbPortStr(d.PublicPort))
 		if d.PublicConnStr != "" {
 			pcs := dbMaskedPublicConnStr(d)
-			if s.reveal {
-				pcs = d.PublicConnStr
+			if s.reveal && s.conn != nil && s.conn.PublicConnectionString != "" {
+				pcs = s.conn.PublicConnectionString
 			}
 			row("Public URL", stMuted.Render(pcs))
 		}
@@ -621,17 +633,17 @@ func (s *databaseScreen) openShell() tea.Cmd {
 		}
 		return errFlash(fmt.Errorf("database has no running pod yet (status: %s)", status))
 	}
-	ex := &dbShellExec{cl: s.cl, pod: d.Pods[0].Name, namespace: d.Namespace, connString: d.ConnectionString}
+	ex := &dbShellExec{cl: s.cl, id: s.id, pod: d.Pods[0].Name, namespace: d.Namespace}
 	return tea.Exec(ex, func(err error) tea.Msg { return dbShellDoneMsg{err} })
 }
 
 // dbShellExec is the tea.ExecCommand that pumps the pod-exec websocket against
 // the real terminal while bubbletea is suspended.
 type dbShellExec struct {
-	cl                         *api.Client
-	pod, namespace, connString string
-	stdin                      io.Reader
-	stdout                     io.Writer
+	cl                             *api.Client
+	id, pod, namespace, connString string
+	stdin                          io.Reader
+	stdout                         io.Writer
 }
 
 func (e *dbShellExec) SetStdin(r io.Reader)  { e.stdin = r }
@@ -640,6 +652,13 @@ func (e *dbShellExec) SetStderr(io.Writer)   {}
 
 func (e *dbShellExec) Run() error {
 	ctx := context.Background()
+	if e.connString == "" && e.id != "" {
+		c, err := getDBConnection(ctx, e.cl, e.id)
+		if err != nil {
+			return err
+		}
+		e.connString = c.ConnectionString
+	}
 	conn, err := e.cl.DialExec(ctx, e.pod, e.namespace, "postgres")
 	if err != nil {
 		return err

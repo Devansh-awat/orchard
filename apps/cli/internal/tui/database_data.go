@@ -6,8 +6,8 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/hackclub/orchard/cli/internal/api"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/hackclub/orchard/cli/internal/api"
 )
 
 // dbDetail mirrors GET /databases/:id — the same fields cmd/db.go reads.
@@ -22,7 +22,6 @@ type dbDetail struct {
 	Port             flexNum `json:"port"`
 	DBName           string  `json:"dbName"`
 	DBUser           string  `json:"dbUser"`
-	DBPassword       string  `json:"dbPassword"`
 	ConnectionString string  `json:"connectionString"`
 	PublicEnabled    bool    `json:"publicEnabled"`
 	PublicIP         string  `json:"publicIp"`
@@ -120,7 +119,11 @@ type (
 		p   *dbProvisioning
 		err error
 	}
-	dbShellDoneMsg struct{ err error }
+	dbShellDoneMsg  struct{ err error }
+	dbConnectionMsg struct {
+		c   *dbConnection
+		err error
+	}
 	// dbChangedMsg is delivered to the database screen when a pushed form
 	// (schedule, extension install, resources, storage, settings) succeeds.
 	dbChangedMsg struct{ text string }
@@ -136,6 +139,27 @@ func fetchDBDetail(cl *api.Client, id string) tea.Cmd {
 			return dbDetailMsg{nil, err}
 		}
 		return dbDetailMsg{&d, nil}
+	}
+}
+
+type dbConnection struct {
+	Password               string `json:"password"`
+	ConnectionString       string `json:"connectionString"`
+	PublicConnectionString string `json:"publicConnectionString"`
+}
+
+func getDBConnection(ctx context.Context, cl *api.Client, id string) (*dbConnection, error) {
+	var c dbConnection
+	if err := cl.GetJSON(ctx, dbPath(id)+"/connection", &c); err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+func fetchDBConnection(cl *api.Client, id string) tea.Cmd {
+	return func() tea.Msg {
+		c, err := getDBConnection(context.Background(), cl, id)
+		return dbConnectionMsg{c, err}
 	}
 }
 

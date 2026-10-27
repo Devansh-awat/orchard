@@ -10,7 +10,7 @@ import {
   Query,
   Request
 } from '@nestjs/common';
-import { Auth } from '../auth/decorators';
+import { Auth, RequireScope } from '../auth/decorators';
 import { UsersService } from '../users/users.service';
 import { GitConnectionsService, type GitConnectionInput } from './git-connections.service';
 
@@ -50,6 +50,7 @@ export class GitConnectionsController {
   }
 
   @Get(':connectionId/webhook-secret')
+  @RequireScope('deploy')
   async webhookSecret(@Param('connectionId') connectionId: string, @Request() req) {
     const user = await this.me(req);
     return { secret: await this.connections.webhookSecret(user.id, connectionId) };

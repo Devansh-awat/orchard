@@ -7,6 +7,7 @@ import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { referencedSharedKeys, resolveEnvVars, EnvVar } from '../env/env-resolver';
 import { ResourceBindingsService } from './resource-bindings.service';
 import { signalEnvironmentEnvChanged } from '../env/env-change-signal';
+import { applyEnvKeepRules } from './env-write-rules';
 
 const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 // Generous ceilings — unreachable in normal use, but bound what a single env can
@@ -36,10 +37,8 @@ export function assertEnvSetStorable(env: { key: string; value: string }[]): voi
 
 export interface SharedVarInput {
   key: string;
-  // null = keep the currently stored value (secret values are write-only over GET,
-  // so read-modify-write clients can't echo them back).
   value: string | null;
-  secret?: boolean;
+  secret?: boolean | null;
 }
 
 @Injectable()
@@ -142,39 +141,25 @@ export class EnvironmentSharedVarsService {
     ).map((v) => this.crypto.maybeDecrypt(v));
     const beforeMap = new Map(before.map((v) => [v.key, v]));
 
-    // PUT is full-replace but secret values are write-only (GET returns null),
-    // so a read-modify-write client can never echo them back. The keep rules:
-    // value === null keeps the stored value for an existing key, and value === ''
-    // keeps it when the row is secret both before and after (the web editor shows
-    // untouched secrets as blank). Un-marking a secret without a value is rejected
-    // rather than silently publishing the plaintext. New keys with null/empty
-    // values are stored empty, as before.
-    const seen = new Map<string, { key: string; value: string; secret: boolean }>();
-    for (const raw of Array.isArray(input) ? input : []) {
-      const key = String(raw?.key ?? '').trim();
-      if (!key) continue;
+    const entries = (Array.isArray(input) ? input : []).filter(
+      (raw) => String(raw?.key ?? '').trim().length > 0
+    );
+    for (const raw of entries) {
+      const key = String(raw.key).trim();
       if (key.length > MAX_KEY_LEN) {
         throw new BadRequestException(`Environment variable key too long: ${key.slice(0, 32)}…`);
       }
       if (!ENV_KEY_RE.test(key)) {
         throw new BadRequestException(`Invalid environment variable key: ${key}`);
       }
-      const secret = Boolean(raw.secret);
-      const existing = beforeMap.get(key);
-      let value: string;
-      if (raw.value == null) {
-        if (existing?.secret && !secret) {
-          throw new BadRequestException(
-            `Cannot un-mark ${key} as secret without providing a value`
-          );
-        }
-        value = existing ? existing.value : '';
-      } else {
-        value = String(raw.value);
-        if (value === '' && secret && existing?.secret) value = existing.value;
-      }
-      assertEnvValueStorable(key, value);
-      seen.set(key, { key, value, secret });
+    }
+    const seen = new Map<string, { key: string; value: string; secret: boolean }>();
+    for (const entry of applyEnvKeepRules(
+      entries.map((raw) => ({ key: String(raw.key), value: raw.value, secret: raw.secret })),
+      beforeMap
+    )) {
+      assertEnvValueStorable(entry.key, entry.value);
+      seen.set(entry.key, entry);
     }
     if (seen.size > MAX_ENV_VARS) {
       throw new BadRequestException(`Too many variables (max ${MAX_ENV_VARS})`);

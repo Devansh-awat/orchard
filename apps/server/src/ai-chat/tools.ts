@@ -121,7 +121,7 @@ const TOOLS: ToolDef[] = [
   {
     name: 'get_database',
     description:
-      'Get database connection info (host, port, user, password, dbname) plus liveStatus with health: ready, phase, restartCount, message (e.g. "OOMKilled"), lastTerminationReason, lastTerminationExitCode, lastTerminationAt. Check liveStatus.message and liveStatus.lastTerminationReason to diagnose why a db is unhealthy — top-level status: "ready" only reflects provisioning state, not runtime health.',
+      'Get database info (host, port, user, dbname; the password is never included, connection strings show it as ****) plus liveStatus with health: ready, phase, restartCount, message (e.g. "OOMKilled"), lastTerminationReason, lastTerminationExitCode, lastTerminationAt. Check liveStatus.message and liveStatus.lastTerminationReason to diagnose why a db is unhealthy — top-level status: "ready" only reflects provisioning state, not runtime health.',
     parameters: {
       type: 'object' as const,
       properties: { databaseId: { type: 'string', description: 'The database UUID' } },
@@ -201,7 +201,7 @@ const TOOLS: ToolDef[] = [
   {
     name: 'add_env_vars',
     description:
-      'Add or update environment variables on a deployment (merges, does not remove existing)',
+      'Add or update environment variables on a deployment (merges, does not remove existing). Keys that look like credentials are stored as sealed secrets unless secret is false; a sealed variable can never be made visible again.',
     parameters: {
       type: 'object' as const,
       properties: {
@@ -210,7 +210,15 @@ const TOOLS: ToolDef[] = [
           type: 'array',
           items: {
             type: 'object',
-            properties: { key: { type: 'string' }, value: { type: 'string' } },
+            properties: {
+              key: { type: 'string' },
+              value: { type: 'string' },
+              secret: {
+                type: 'boolean',
+                description:
+                  'Store as a sealed secret (write-only). Omit to keep the current flag, or to default by key name for new variables.'
+              }
+            },
             required: ['key', 'value']
           },
           description: 'Environment variable key-value pairs to add/update'
@@ -326,6 +334,34 @@ export const TOOLS_OPENAI: OpenAI.Chat.Completions.ChatCompletionTool[] = TOOLS.
   }
 }));
 
+type CurrentEnvVar = { key: string; value?: string | null; secret?: boolean };
+type EnvVarPatch = { key: string; value: string; secret?: boolean };
+
+export function mergeEnvForPut(
+  current: CurrentEnvVar[],
+  patch: EnvVarPatch[]
+): { key: string; value: string | null; secret?: boolean }[] {
+  const merged = new Map<string, { key: string; value: string | null; secret?: boolean }>();
+  for (const v of current) {
+    if (!v || typeof v.key !== 'string') continue;
+    merged.set(v.key, {
+      key: v.key,
+      value: v.secret ? null : (v.value ?? null),
+      secret: Boolean(v.secret)
+    });
+  }
+  for (const v of patch) {
+    if (!v || typeof v.key !== 'string' || !v.key.trim()) continue;
+    const key = v.key.trim();
+    merged.set(key, {
+      key,
+      value: String(v.value ?? ''),
+      ...(typeof v.secret === 'boolean' ? { secret: v.secret } : {})
+    });
+  }
+  return Array.from(merged.values());
+}
+
 // ── Tool executor ────────────────────────────────────────────────────
 // Maps tool names to local API calls using the user's session token.
 
@@ -410,12 +446,14 @@ export async function executeTool(
       );
 
     // Configuration
-    case 'add_env_vars':
+    case 'add_env_vars': {
+      const dep = await apiFetch('GET', `/deployments/${input.deploymentId}`);
       return json(
-        await apiFetch('POST', `/deployments/${input.deploymentId}/env/merge`, {
-          envVars: input.envVars
+        await apiFetch('PUT', `/deployments/${input.deploymentId}/env`, {
+          env: mergeEnvForPut(dep?.envVars ?? [], input.envVars ?? [])
         })
       );
+    }
     case 'create_ingress':
       return json(
         await apiFetch('POST', `/deployments/${input.deploymentId}/ingresses`, {

@@ -3,9 +3,9 @@
 	import { rawToEnvVars } from '$lib/utils/format';
 
 	let {
-		envVars = $bindable([] as Array<{ key: string; value: string }>)
+		envVars = $bindable([] as Array<{ key: string; value: string | null; secret?: boolean }>)
 	}: {
-		envVars?: Array<{ key: string; value: string }>;
+		envVars?: Array<{ key: string; value: string | null; secret?: boolean }>;
 	} = $props();
 
 	function addRow() {
@@ -37,7 +37,12 @@
 				bind:value={row.key}
 				onpaste={(e) => onPaste(e, i)}
 			/>
-			<input class="input job-env-input font-mono" placeholder="value" bind:value={row.value} />
+			<input
+				class="input job-env-input font-mono"
+				type={row.secret ? 'password' : 'text'}
+				placeholder={row.secret ? 'Sealed, type to replace' : 'value'}
+				bind:value={row.value}
+			/>
 			<button
 				type="button"
 				class="job-env-remove"

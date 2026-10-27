@@ -18,6 +18,14 @@ import {
   RAILPACK_INFO_MARKER
 } from './build-config';
 import { ImageBuilderService } from './image-builder.service';
+import { localBuildArgs, redactBuildArgv } from './build-args';
+import {
+  maskSecretValues,
+  registryHostsOf,
+  sanitizeBuildLogMessage,
+  secretValuesToMask
+} from './build-log-redaction';
+import { buildSafeEnv } from '../env/reserved-env';
 import { BUILD_PLATFORM } from './build-platform';
 import {
   hasRegistryAuths,
@@ -42,6 +50,11 @@ function isSafeGitRef(ref: string): boolean {
 }
 
 type BuildType = 'dockerfile' | 'railpack';
+
+interface BuildEnv {
+  env: Record<string, string>;
+  secretKeys: string[];
+}
 type BuildMode = 'local' | 'kubernetes';
 
 interface BuildOptions {
@@ -83,6 +96,8 @@ export class DockerService {
   ].join(',');
 
   private activeBuilds = 0;
+
+  private readonly buildSecretValues = new Map<string, string[]>();
 
   private buildsSincePrune = 0;
 
@@ -145,8 +160,9 @@ export class DockerService {
   private async loadBuildEnv(
     deploymentId: string | undefined,
     buildType?: string
-  ): Promise<Record<string, string>> {
-    if (!deploymentId) return {};
+  ): Promise<BuildEnv> {
+    const empty: BuildEnv = { env: {}, secretKeys: [] };
+    if (!deploymentId) return empty;
 
     try {
       const deployment = await this.prisma.deployment.findUnique({
@@ -160,7 +176,7 @@ export class DockerService {
           envVars: { select: { key: true, value: true, secret: true } }
         }
       });
-      if (!deployment) return {};
+      if (!deployment) return empty;
 
       const sharedRows = deployment.environmentId
         ? await this.prisma.environmentSharedVar.findMany({
@@ -184,6 +200,7 @@ export class DockerService {
       }
 
       const env = Object.fromEntries(resolved.map((v) => [v.key, v.value]));
+      const secretKeys = resolved.filter((v) => v.secret).map((v) => v.key);
 
       // Only Railpack reads these; on a Dockerfile build they would just be
       // dead build args.
@@ -191,14 +208,30 @@ export class DockerService {
         Object.assign(env, railpackOverrideEnv(deployment));
       }
 
-      return env;
+      return { env, secretKeys };
     } catch (error) {
       console.error('[Docker Service] Failed to resolve build env vars:', {
         deploymentId,
         error: error.message
       });
-      return {};
+      return empty;
     }
+  }
+
+  private rememberBuildSecrets(deploymentId: string | undefined, buildEnv: BuildEnv): void {
+    if (!deploymentId) return;
+    const values = secretValuesToMask(buildEnv.env, buildEnv.secretKeys);
+    if (values.length > 0) this.buildSecretValues.set(deploymentId, values);
+  }
+
+  private redactBuildLog(deploymentId: string, message: string): string {
+    return maskSecretValues(
+      sanitizeBuildLogMessage(
+        message,
+        registryHostsOf([this.harborRegistryPush, this.harborRegistryPull])
+      ),
+      this.buildSecretValues.get(deploymentId)
+    );
   }
 
   private async loginPullRegistries(
@@ -268,7 +301,7 @@ export class DockerService {
 
       const currentLogs = deployment?.buildLogs || '';
       const timestamp = Date.now();
-      const formattedMessage = `[${timestamp}] [${level}] ${message}`;
+      const formattedMessage = `[${timestamp}] [${level}] ${this.redactBuildLog(deploymentId, message)}`;
       const newLogs = `${currentLogs + formattedMessage}\n`;
 
       await this.prisma.deployment.update({
@@ -313,9 +346,6 @@ export class DockerService {
 
         if (deployment?.envVars && Array.isArray(deployment.envVars)) {
           for (const envVar of deployment.envVars) {
-            // Masking works on what the build actually sees, so a secret has to
-            // be back in plaintext here or the log would leak the value this
-            // list exists to hide.
             const value = this.secretCrypto.maybeDecrypt(envVar).value;
             if (value && typeof value === 'string') {
               secrets.push(`${envVar.key}=${value}`);
@@ -550,7 +580,9 @@ export class DockerService {
       throw new BadRequestException(errorMsg);
     }
 
-    const envVars = await this.loadBuildEnv(deploymentId);
+    const buildEnv = await this.loadBuildEnv(deploymentId);
+    const envVars = buildEnv.env;
+    this.rememberBuildSecrets(deploymentId, buildEnv);
     await this.loginPullRegistries(envVars, deploymentId);
 
     await this.injectGitShaBuildArg(buildDir, envVars);
@@ -583,11 +615,8 @@ export class DockerService {
         buildArgs.push('--target', target);
       }
 
-      for (const [key, value] of Object.entries(envVars)) {
-        if (value !== undefined && value !== null && !isPullAuthEnvKey(key)) {
-          buildArgs.push('--build-arg', `${key}=${value}`);
-        }
-      }
+      const argSet = localBuildArgs(buildSafeEnv(envVars), buildEnv.secretKeys);
+      buildArgs.push(...argSet.args);
       if (!('BUILDKIT_DOCKERFILE_CHECK' in envVars)) {
         buildArgs.push('--build-arg', 'BUILDKIT_DOCKERFILE_CHECK=skip=SecretsUsedInArgOrEnv');
       }
@@ -599,6 +628,7 @@ export class DockerService {
         stdio: ['ignore', 'pipe', 'pipe'],
         env: {
           ...process.env,
+          ...argSet.env,
           DOCKER_HOST: process.env.DOCKER_HOST || 'unix:///var/run/docker.sock',
           NO_PROXY: `${process.env.NO_PROXY || ''},${this.registryNoProxy}`.replace(/^,/, ''),
           no_proxy: `${process.env.no_proxy || ''},${this.registryNoProxy}`.replace(/^,/, ''),
@@ -813,7 +843,9 @@ export class DockerService {
   ): Promise<void> {
     const fullImageName = `${this.harborRegistryPull}/${this.harborProject}/${imageName}`;
 
-    const envVars = await this.loadBuildEnv(deploymentId);
+    const buildEnv = await this.loadBuildEnv(deploymentId);
+    const envVars = buildEnv.env;
+    this.rememberBuildSecrets(deploymentId, buildEnv);
     await this.loginPullRegistries(envVars, deploymentId);
 
     await this.injectGitShaBuildArg(buildDir, envVars);
@@ -842,18 +874,15 @@ export class DockerService {
       if (target) {
         depotArgs.push('--target', target);
       }
-      for (const [key, value] of Object.entries(envVars)) {
-        if (value !== undefined && value !== null) {
-          depotArgs.push('--build-arg', `${key}=${value}`);
-        }
-      }
+      const argSet = localBuildArgs(buildSafeEnv(envVars), buildEnv.secretKeys);
+      depotArgs.push(...argSet.args);
       if (!('BUILDKIT_DOCKERFILE_CHECK' in envVars)) {
         depotArgs.push('--build-arg', 'BUILDKIT_DOCKERFILE_CHECK=skip=SecretsUsedInArgOrEnv');
       }
       depotArgs.push('.');
 
       console.log('[Docker Service] Running depot build:', {
-        args: depotArgs.map((a) => (a.startsWith('--build-arg') ? '--build-arg' : a)),
+        args: redactBuildArgv(depotArgs),
         cwd: buildContext
       });
 
@@ -862,6 +891,7 @@ export class DockerService {
         stdio: ['ignore', 'pipe', 'pipe'],
         env: {
           ...process.env,
+          ...argSet.env,
           DEPOT_TOKEN: process.env.DEPOT_TOKEN || '',
           DEPOT_PROJECT_ID: process.env.DEPOT_PROJECT_ID || '',
           PATH: process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
@@ -939,7 +969,9 @@ export class DockerService {
 
     await this.appendLog(deploymentId, 'Preparing build with Railpack...');
 
-    const envVars = await this.loadBuildEnv(deploymentId, 'railpack');
+    const buildEnv = await this.loadBuildEnv(deploymentId, 'railpack');
+    const envVars = buildEnv.env;
+    this.rememberBuildSecrets(deploymentId, buildEnv);
     await this.loginPullRegistries(envVars, deploymentId);
 
     try {
@@ -1480,7 +1512,9 @@ export class DockerService {
       `Using Kubernetes BuildKit builder for ${repoUrl}@${branch}`
     );
 
-    const envVars = await this.loadBuildEnv(deploymentId, buildType);
+    const buildEnv = await this.loadBuildEnv(deploymentId, buildType);
+    const { env: envVars, secretKeys: secretEnvKeys } = buildEnv;
+    this.rememberBuildSecrets(deploymentId, buildEnv);
     console.log(
       `[Docker Service] Loaded ${Object.keys(envVars).length} environment variables for deployment ${deploymentId}`
     );
@@ -1502,6 +1536,7 @@ export class DockerService {
         buildFromRoot,
         buildType,
         envVars,
+        secretEnvKeys,
         buildWithDepot: options.buildWithDepot,
         cacheTenantKey: options.cacheTenantKey,
         persistentBuildCache: options.persistentBuildCache,
@@ -1521,6 +1556,8 @@ export class DockerService {
         stack: error.stack
       });
       throw error;
+    } finally {
+      if (deploymentId) this.buildSecretValues.delete(deploymentId);
     }
   }
 
@@ -1607,6 +1644,7 @@ export class DockerService {
 
       throw error;
     } finally {
+      if (deploymentId) this.buildSecretValues.delete(deploymentId);
       this.activeBuilds = Math.max(0, this.activeBuilds - 1);
       if (buildDir) {
         await fs.rm(buildDir, { recursive: true, force: true }).catch((err) => {
@@ -1737,7 +1775,7 @@ export class DockerService {
     return this.imageBuilderService.firecrackerBuildStatus(hostId, buildId);
   }
 
-  adoptFirecrackerBuild(opts: {
+  async adoptFirecrackerBuild(opts: {
     deploymentId: string;
     hostId: string;
     buildId: string;
@@ -1746,9 +1784,14 @@ export class DockerService {
     buildType?: string;
   }): Promise<string> {
     if (!this.imageBuilderService) {
-      return Promise.reject(new Error('image builder unavailable'));
+      throw new Error('image builder unavailable');
     }
-    return this.imageBuilderService.adoptFirecrackerBuild(opts);
+    const buildEnv = await this.loadBuildEnv(opts.deploymentId, opts.buildType);
+    return this.imageBuilderService.adoptFirecrackerBuild({
+      ...opts,
+      envVars: buildEnv.env,
+      secretEnvKeys: buildEnv.secretKeys
+    });
   }
 
   async cancelBuildJobsByDeploymentId(deploymentId: string): Promise<void> {

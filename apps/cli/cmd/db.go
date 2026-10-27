@@ -278,39 +278,40 @@ func dbConnectionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:     "connection <id>",
 		Aliases: []string{"conn"},
-		Short:   "Show connection details and credentials",
+		Short:   "Show connection details and credentials (recorded in the audit log)",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, _, err := client()
 			if err != nil {
 				return err
 			}
-			raw, err := dbFetch(cmd.Context(), cl, args[0])
+			raw, err := dbConnectionFetch(cmd.Context(), cl, args[0])
 			if err != nil {
 				return err
 			}
 			if fmtFlag() == output.FormatJSON {
 				return output.JSON(raw)
 			}
-			pairs := [][2]string{
+			output.KV(dbTrimEmpty([][2]string{
 				{"host", pick(raw, "host")},
 				{"port", pick(raw, "port")},
-				{"database", pick(raw, "dbName")},
-				{"user", pick(raw, "dbUser")},
-				{"password", pick(raw, "dbPassword")},
+				{"database", pick(raw, "database")},
+				{"user", pick(raw, "user")},
+				{"password", pick(raw, "password")},
 				{"url", pick(raw, "connectionString")},
-			}
-			if pick(raw, "publicEnabled") == "true" {
-				pairs = append(pairs,
-					[2]string{"public host", pick(raw, "publicHostname", "publicIp")},
-					[2]string{"public port", pick(raw, "publicPort")},
-					[2]string{"public url", pick(raw, "publicConnectionString")},
-				)
-			}
-			output.KV(dbTrimEmpty(pairs))
+				{"public url", pick(raw, "publicConnectionString")},
+			}))
 			return nil
 		},
 	}
+}
+
+func dbConnectionFetch(ctx context.Context, cl *api.Client, id string) (map[string]any, error) {
+	var raw map[string]any
+	if err := cl.GetJSON(ctx, "/databases/"+url.PathEscape(id)+"/connection", &raw); err != nil {
+		return nil, err
+	}
+	return raw, nil
 }
 
 func dbMetricsCmd() *cobra.Command {
@@ -437,13 +438,17 @@ func dbPsqlCmd() *cobra.Command {
 			if namespace == "" || pod == "" {
 				return fmt.Errorf("database has no running pod yet (status: %s)", pick(db, "status"))
 			}
+			creds, err := dbConnectionFetch(cmd.Context(), cl, args[0])
+			if err != nil {
+				return err
+			}
 			conn, err := cl.DialExec(cmd.Context(), pod, namespace, "postgres")
 			if err != nil {
 				return err
 			}
 			// The exec gateway always spawns a shell; exec into psql so quitting
 			// psql ends the session.
-			if cs := str(db["connectionString"]); cs != "" {
+			if cs := str(creds["connectionString"]); cs != "" {
 				if err := conn.Write(cmd.Context(), websocket.MessageText, []byte("exec psql "+shellQuote(cs)+"\n")); err != nil {
 					return err
 				}
@@ -687,6 +692,7 @@ func dbPublicEnableCmd() *cobra.Command {
 				{"port", pick(raw, "port", "publicPort")},
 				{"url", pick(raw, "connectionString", "publicConnectionString")},
 			}))
+			output.Warnf("the password is masked; run `orchard db connection %s` to reveal it", args[0])
 			return nil
 		},
 	}

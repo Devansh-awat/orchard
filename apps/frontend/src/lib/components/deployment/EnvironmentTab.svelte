@@ -14,6 +14,11 @@
 	import { Alert, Menu, MenuItem, SectionCard } from '$lib/components/ui';
 	import { envVarsToRaw, rawToEnvVarsKeepingSecrets } from './deployment-helpers';
 	import {
+		SEALED_PLACEHOLDER,
+		autoSecretForKey,
+		type EditableEnvVar
+	} from '$lib/utils/env-secrets';
+	import {
 		PRIMARY_FIELD,
 		fieldLabel,
 		isResourceRef,
@@ -26,7 +31,7 @@
 	} from './bindings';
 
 	let {
-		envVars = $bindable<Array<{ key: string; value: string; secret?: boolean }>>(),
+		envVars = $bindable<EditableEnvVar[]>(),
 		isEditing = $bindable(false),
 		savingEnv,
 		onSave,
@@ -35,7 +40,7 @@
 		onConnect,
 		conflicts = []
 	}: {
-		envVars: Array<{ key: string; value: string; secret?: boolean }>;
+		envVars: EditableEnvVar[];
 		isEditing?: boolean;
 		savingEnv: boolean;
 		onSave: () => void;
@@ -98,15 +103,24 @@
 						...e,
 						key: e.key.trim() || suggestedKey(binding, PRIMARY_FIELD[binding.resourceType], taken),
 						value,
-						secret: false
+						secret: Boolean(e.sealed),
+						secretTouched: true
 					}
 				: e
 		);
 	}
 
 	function toggleSecret(index: number) {
+		if (envVars[index]?.sealed) return;
 		isEditing = true;
-		envVars = envVars.map((e, i) => (i === index ? { ...e, secret: !e.secret } : e));
+		envVars = envVars.map((e, i) =>
+			i === index ? { ...e, secret: !e.secret, secretTouched: true } : e
+		);
+	}
+
+	function setKey(index: number, key: string) {
+		isEditing = true;
+		envVars = envVars.map((e, i) => (i === index ? autoSecretForKey({ ...e, key }) : e));
 	}
 
 	let envViewMode = $state<'ui' | 'raw'>('ui');
@@ -146,7 +160,9 @@
 
 	function setValue(index: number, value: string) {
 		isEditing = true;
-		envVars = envVars.map((e, i) => (i === index ? { ...e, value, secret: false } : e));
+		envVars = envVars.map((e, i) =>
+			i === index ? { ...e, value, secret: Boolean(e.sealed), secretTouched: true } : e
+		);
 	}
 
 	function handleSave() {
@@ -231,7 +247,8 @@
 			{#each envVars as env, index (index)}
 				{@const isRevealed = revealedIndices.has(index)}
 				{@const hasKey = env.key.trim().length > 0}
-				{@const withheld = Boolean(env.secret) && env.value === ''}
+				{@const withheld = Boolean(env.sealed) && env.value === ''}
+				{@const masked = Boolean(env.secret) && !isRevealed}
 				{@const isRef = isResourceRef(env.value)}
 				{@const refText = isRef ? refLabel(env.value, bindings) : null}
 				{@const bound = isRef
@@ -242,7 +259,8 @@
 						<div class="env-key-col">
 							<input
 								type="text"
-								bind:value={env.key}
+								value={env.key}
+								oninput={(e) => setKey(index, e.currentTarget.value)}
 								placeholder="KEY"
 								class="env-key-input"
 								onfocus={() => (isEditing = true)}
@@ -272,10 +290,11 @@
 								</Menu>
 							{:else}
 								<input
-									type={isRevealed && !withheld ? 'text' : 'password'}
+									type={masked || withheld ? 'password' : 'text'}
 									bind:value={env.value}
-									placeholder={withheld ? 'Unchanged' : hasKey ? 'value' : ''}
+									placeholder={withheld ? 'Sealed, type to replace' : hasKey ? 'value' : ''}
 									class="env-val-input"
+									class:env-val-sealed={withheld}
 									onfocus={() => (isEditing = true)}
 								/>
 								{#if env.value === '' && !withheld && picks.length > 0}
@@ -292,7 +311,7 @@
 							{/if}
 						</div>
 						<div class="env-actions">
-							{#if !withheld && !isRef}
+							{#if env.secret && !withheld && !isRef && env.value !== ''}
 								<button
 									type="button"
 									onclick={() => toggleReveal(index)}
@@ -310,12 +329,18 @@
 								onclick={() => toggleSecret(index)}
 								class="env-action-btn"
 								class:env-action-secret={env.secret}
-								aria-label={env.secret
-									? 'Secret (write-only, stored in a Kubernetes Secret)'
-									: 'Mark as secret'}
-								title={env.secret
-									? 'Secret — write-only, stored in a Kubernetes Secret'
-									: 'Mark as secret'}
+								class:env-action-sealed={env.sealed}
+								aria-disabled={env.sealed}
+								aria-label={env.sealed
+									? 'Sealed. Delete and re-add the variable to make it visible'
+									: env.secret
+										? 'Secret, sealed on save'
+										: 'Mark as secret'}
+								title={env.sealed
+									? 'Sealed. Delete and re-add the variable to make it visible'
+									: env.secret
+										? 'Secret, sealed on save'
+										: 'Mark as secret'}
 							>
 								{#if env.secret}<Lock size={14} class="h-3.5 w-3.5" />{:else}<LockOpen
 										size={14}
@@ -343,8 +368,26 @@
 				placeholder="KEY1=value1&#10;KEY2=value2&#10;# Comments are ignored"
 				class="env-raw-textarea"
 				onfocus={() => (isEditing = true)}></textarea>
+			{#if envVars.some((e) => e.secret && e.key.trim())}
+				<p class="env-secret-note">
+					<Lock size={12} />
+					<span>
+						Secret values show as <code>{SEALED_PLACEHOLDER}</code>. Replace one to set a new value;
+						it stays sealed.
+					</span>
+				</p>
+			{/if}
 		{/if}
 	</div>
+	{#if envViewMode === 'ui' && envVars.some((e) => e.secret && e.key.trim())}
+		<p class="env-secret-note">
+			<Lock size={12} />
+			<span>
+				Secret values are sealed: write-only, encrypted at rest, and never shown again. Enter a new
+				value to replace one.
+			</span>
+		</p>
+	{/if}
 	<div class="env-footer">
 		<p class="env-footer-hint">Saving restarts pods.</p>
 		<button onclick={handleSave} disabled={savingEnv || !isEditing} class="btn btn-primary">
@@ -437,5 +480,27 @@
 	.env-action-secret {
 		color: var(--status-warning);
 		background: color-mix(in srgb, var(--status-warning) 12%, transparent);
+	}
+	.env-action-sealed {
+		cursor: default;
+	}
+	.env-val-sealed::placeholder {
+		font-style: italic;
+	}
+	.env-secret-note {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.4rem;
+		margin-top: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: 1.4;
+		color: var(--text-muted);
+	}
+	.env-secret-note :global(svg) {
+		flex-shrink: 0;
+		margin-top: 0.1rem;
+	}
+	.env-secret-note code {
+		font-family: var(--font-mono);
 	}
 </style>

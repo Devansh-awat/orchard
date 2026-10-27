@@ -61,25 +61,24 @@ test('a real value replaces a secret', () => {
   assert.deepEqual(out, [{ key: 'DATABASE_URL', value: 'postgres://new', secret: true }]);
 });
 
-// Otherwise the plaintext the flag was hiding gets republished as an inline env
-// var by a client that never knew it, which is the leak this all exists to stop.
-test('un-marking a secret without a value is refused', () => {
+test('un-marking a secret is refused, value or not', () => {
   assert.throws(
     () => applyEnvKeepRules([{ key: 'DATABASE_URL', value: null, secret: false }], BEFORE),
-    /Cannot un-mark DATABASE_URL as secret/
+    /DATABASE_URL is sealed/
   );
   assert.throws(
     () => applyEnvKeepRules([{ key: 'DATABASE_URL', secret: false }], BEFORE),
-    /Cannot un-mark DATABASE_URL as secret/
+    /DATABASE_URL is sealed/
+  );
+  assert.throws(
+    () => applyEnvKeepRules([{ key: 'DATABASE_URL', value: 'now-public', secret: false }], BEFORE),
+    /DATABASE_URL is sealed/
   );
 });
 
-test('un-marking a secret while supplying a value is allowed', () => {
-  const out = applyEnvKeepRules(
-    [{ key: 'DATABASE_URL', value: 'now-public', secret: false }],
-    BEFORE
-  );
-  assert.deepEqual(out, [{ key: 'DATABASE_URL', value: 'now-public', secret: false }]);
+test('omitting the flag on a sealed key keeps it sealed', () => {
+  const out = applyEnvKeepRules([{ key: 'DATABASE_URL', value: 'postgres://new' }], BEFORE);
+  assert.deepEqual(out, [{ key: 'DATABASE_URL', value: 'postgres://new', secret: true }]);
 });
 
 // A key the deployment has never seen has nothing to keep, so it stores empty

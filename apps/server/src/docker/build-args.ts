@@ -1,28 +1,7 @@
-/**
- * Orchard hands every deployment env var to the builder as a `--build-arg`, but
- * a Dockerfile only sees a build arg it declares with `ARG`. Asking users to
- * write `ARG DATABASE_URL` for each of their variables isn't reasonable, so the
- * build job rewrites the Dockerfile and declares them.
- *
- * It declares `ARG` and nothing else. `ARG X` already exposes X as an
- * environment variable to `RUN` inside the stage that declares it, which is the
- * entire reason this injection exists. The `ENV X=${X}` that used to be emitted
- * alongside it bought nothing at build time and wrote every value — API keys
- * included — into the image config, where anyone who can pull the image reads
- * it straight back out of `docker inspect`. It also meant a variable deleted
- * from the config kept shipping inside the image until the next rebuild.
- */
-
-/** `ARG` declarations for a set of env keys, one per line. */
 export function buildArgDeclarations(keys: string[]): string {
   return keys.map((key) => `ARG ${key}`).join('\n');
 }
 
-/**
- * The init-container script that inserts those declarations into the user's
- * Dockerfile. Reads `$WORKSPACE` so it can be exercised outside the cluster;
- * the build job leaves it unset and gets /workspace.
- */
 export function injectBuildArgsScript(opts: { dockerfilePath: string; keys: string[] }): string {
   return `set -ex
 echo "=== Injecting ARG declarations into Dockerfile ==="
@@ -59,4 +38,86 @@ rm -f "\${ARGS_FILE}"
 echo "=== Dockerfile updated with build args ==="
 head -n 20 "\${DOCKERFILE}"
 `;
+}
+
+export function injectableBuildArgKeys(
+  keys: readonly string[],
+  secretKeys: Iterable<string> | undefined
+): string[] {
+  const secret = new Set(secretKeys ?? []);
+  return keys.filter((key) => !secret.has(key));
+}
+
+export function secretBuildArgNotice(
+  keys: readonly string[],
+  secretKeys: Iterable<string> | undefined
+): string | null {
+  const secret = new Set(secretKeys ?? []);
+  const sealed = keys.filter((key) => secret.has(key));
+  if (sealed.length === 0) return null;
+  const example = sealed[0];
+  return (
+    `Secret variables are not declared as ARG automatically: ${sealed.join(', ')}. ` +
+    `If a build step needs one, add \`ARG ${example}\` to your Dockerfile, ` +
+    `or read it without baking it into the image with \`RUN --mount=type=secret,id=${example},env=${example} ...\`.`
+  );
+}
+
+export function buildSecretFlags(
+  keys: readonly string[],
+  secretKeys: Iterable<string> | undefined,
+  envNameFor: (key: string, index: number) => string = (key) => key
+): string[] {
+  const secret = new Set(secretKeys ?? []);
+  const flags: string[] = [];
+  keys.forEach((key, index) => {
+    if (secret.has(key)) flags.push(`id=${key},env=${envNameFor(key, index)}`);
+  });
+  return flags;
+}
+
+export interface LocalBuildArgs {
+  args: string[];
+  env: Record<string, string>;
+}
+
+const BUILDER_ENV_NAME =
+  /^(DOCKER_|BUILDX_|BUILDKIT_|DEPOT_|COMPOSE_|ORCHARD_BUILD_SECRET_)|^(HTTPS?_PROXY|NO_PROXY|ALL_PROXY|FTP_PROXY|SSL_CERT_FILE|SSL_CERT_DIR|PATH|HOME|TMPDIR|XDG_[A-Z_]+)$/i;
+
+export function isBuilderEnvName(key: string): boolean {
+  return BUILDER_ENV_NAME.test(key);
+}
+
+export function localBuildArgs(
+  envVars: Record<string, string>,
+  secretKeys: Iterable<string> | undefined,
+  skip: (key: string) => boolean = () => false
+): LocalBuildArgs {
+  const secret = new Set(secretKeys ?? []);
+  const args: string[] = [];
+  const env: Record<string, string> = {};
+  let index = 0;
+  for (const [key, value] of Object.entries(envVars)) {
+    if (value === undefined || value === null || skip(key)) continue;
+    if (!secret.has(key)) {
+      args.push('--build-arg', `${key}=${value}`);
+      continue;
+    }
+    const carrier = `ORCHARD_BUILD_SECRET_${index++}`;
+    env[carrier] = String(value);
+    args.push('--secret', `id=${key},env=${carrier}`);
+    if (!isBuilderEnvName(key)) {
+      env[key] = String(value);
+      args.push('--build-arg', key);
+    }
+  }
+  return { args, env };
+}
+
+export function redactBuildArgv(args: readonly string[]): string[] {
+  return args.map((arg, i) => {
+    if (args[i - 1] !== '--build-arg') return arg;
+    const eq = arg.indexOf('=');
+    return eq === -1 ? arg : `${arg.slice(0, eq)}=***`;
+  });
 }

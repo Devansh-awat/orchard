@@ -229,7 +229,15 @@ export class GitConnectionsService {
   }
 
   async webhookSecret(userId: string, connectionId: string): Promise<string> {
-    return this.crypto.open((await this.rowOrThrow(userId, connectionId)).webhookSecret);
+    const row = await this.rowOrThrow(userId, connectionId);
+    void this.audit.log({
+      action: 'git.connection.webhook_secret.revealed',
+      actorUserId: userId,
+      targetType: 'git_connection',
+      targetId: row.id,
+      targetLabel: row.name
+    });
+    return this.crypto.open(row.webhookSecret);
   }
 
   async create(userId: string, input: GitConnectionInput): Promise<GitConnectionView> {

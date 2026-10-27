@@ -360,10 +360,12 @@ func envVarsSetCmd() *cobra.Command {
 			vars := []map[string]any{}
 			carried := 0
 			existingSecret := map[string]bool{}
+			exists := map[string]bool{}
 			for _, v := range current {
 				k := str(v["key"])
 				b, _ := v["secret"].(bool)
 				existingSecret[k] = b
+				exists[k] = true
 				if _, updating := updates[k]; updating {
 					continue
 				}
@@ -373,11 +375,13 @@ func envVarsSetCmd() *cobra.Command {
 				vars = append(vars, v)
 			}
 			for k, val := range updates {
-				vars = append(vars, map[string]any{
-					"key":    k,
-					"value":  val,
-					"secret": secret || existingSecret[k],
-				})
+				entry := map[string]any{"key": k, "value": val}
+				if secret || existingSecret[k] {
+					entry["secret"] = true
+				} else if exists[k] {
+					entry["secret"] = false
+				}
+				vars = append(vars, entry)
 			}
 			return envPutVars(cmd, cl, env, vars, carried, fmt.Sprintf("set %d variable(s)", len(updates)))
 		},

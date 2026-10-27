@@ -35,7 +35,7 @@ import {
   formatSlug,
   redactDatabaseForViewer,
   scrubIngress,
-  stripR2ProxyCreds,
+  sealDatabaseCredentials,
   assertDeleteConfirmation
 } from './projects.utils';
 import { parseMemory } from '../kubernetes/quantity';
@@ -417,7 +417,7 @@ export class ProjectsService {
         status: 'restarting'
       }
     });
-    return stripR2ProxyCreds({ ...updated, dbPassword: this.crypto.open(updated.dbPassword) });
+    return sealDatabaseCredentials(updated);
   }
 
   async expandDatabaseStorage(databaseId: string, storageSize: string, userId?: string) {
@@ -2035,7 +2035,7 @@ export class ProjectsService {
       ? membersWithOrgRole
       : this.scrubMembersForViewer(membersWithOrgRole as any);
     const safeDatabases = access.canEdit
-      ? (reconciledDatabases as any[]).map((d) => stripR2ProxyCreds(d))
+      ? (reconciledDatabases as any[]).map((d) => sealDatabaseCredentials(d))
       : (reconciledDatabases as any[]).map((d) => redactDatabaseForViewer(d));
 
     // Pending email invitations targeted at this project — only revealed to

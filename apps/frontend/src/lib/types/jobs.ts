@@ -20,7 +20,7 @@ export interface JobStep {
 	command: string | null;
 	script: string | null;
 	scriptRuntime: ScriptRuntime | null;
-	envVars: { key: string; value: string }[];
+	envVars: { key: string; value: string | null; secret?: boolean }[];
 	cpuRequestMilli: number | null;
 	memoryRequestBytes: string | null;
 	timeoutSeconds: number;
@@ -35,7 +35,7 @@ export interface JobStepDraft {
 	command: string;
 	script: string;
 	scriptRuntime: ScriptRuntime;
-	envVars: { key: string; value: string }[];
+	envVars: { key: string; value: string | null; secret?: boolean }[];
 	cpuRequestMilli: number | null;
 	memoryRequestBytes: string | null;
 	timeoutSeconds: number;

@@ -14,6 +14,7 @@ import { EnvironmentsService } from '../projects/environments.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { UsersService } from '../users/users.service';
 import { GitHubService } from '../github/github.service';
+import { looksSecret } from '../projects/env-write-rules';
 
 interface UserData {
   email?: string;
@@ -393,16 +394,16 @@ export class ComposeStacksService {
     }
   }
 
-  // A preserved value keeps whatever the child was marked as: dropping the flag
-  // would republish a secret as an inline env var on the next apply, and its
-  // stored value is ciphertext that only the secret flag knows how to read.
   private mergeComposeEnv(
     composeEnv: { key: string; value: string }[],
     preserved?: PreservedEnv[]
   ): PreservedEnv[] {
     const merged = new Map<string, PreservedEnv>();
     for (const e of preserved ?? []) merged.set(e.key, e);
-    for (const e of composeEnv ?? []) merged.set(e.key, { ...e, secret: false });
+    for (const e of composeEnv ?? []) {
+      const kept = merged.get(e.key);
+      merged.set(e.key, { ...e, secret: Boolean(kept?.secret) || looksSecret(e.key) });
+    }
     return Array.from(merged.values());
   }
 
@@ -621,7 +622,7 @@ export class ComposeStacksService {
           ...svc.env.map((e) => ({
             key: e.key,
             value: e.value,
-            secret: stored.get(e.key)?.secret ?? false
+            secret: stored.get(e.key)?.secret
           }))
         ],
         clerkId,

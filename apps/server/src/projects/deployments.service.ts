@@ -61,7 +61,7 @@ import { hostOf } from '../git/git-provider';
 import { parseRepoUrl } from '../docker/repo-url';
 import { computePodStatus } from '../engine/pod-status';
 import { normalizeRootDirectory } from '../docker/build-config';
-import { applyEnvKeepRules, EnvVarWrite } from './env-write-rules';
+import { applyEnvKeepRules, defaultSecretFlag, EnvVarWrite } from './env-write-rules';
 import { assertEnvSetStorable } from './environment-shared-vars.service';
 import {
   coerceDockerfileHealthCheck,
@@ -6468,7 +6468,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           .map((entry) => ({
             key: entry.key.trim(),
             value: entry.value !== undefined && entry.value !== null ? String(entry.value) : '',
-            secret: Boolean((entry as any).secret)
+            secret: defaultSecretFlag(entry.key, (entry as any).secret)
           }))
           .filter((entry) => entry.key.length > 0)
       : [];
@@ -6997,7 +6997,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           .map((entry) => ({
             key: entry.key.trim(),
             value: entry.value !== undefined && entry.value !== null ? String(entry.value) : '',
-            secret: Boolean((entry as any).secret)
+            secret: defaultSecretFlag(entry.key, (entry as any).secret)
           }))
           .filter((entry) => entry.key.length > 0)
       : [];
@@ -7375,7 +7375,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           .map((entry) => ({
             key: entry.key.trim(),
             value: entry.value !== undefined && entry.value !== null ? String(entry.value) : '',
-            secret: Boolean((entry as any).secret)
+            secret: defaultSecretFlag(entry.key, (entry as any).secret)
           }))
           .filter((entry) => entry.key.length > 0)
       : [];

@@ -3050,13 +3050,27 @@ export class IngressService implements OnModuleInit {
     const ingress = await this.prisma.ingress.findFirst({
       where: { id: ingressId, projectId },
       select: {
+        host: true,
         protectionMode: true,
         protectionUsername: true,
-        protectionBypassSecret: true
+        protectionBypassSecret: true,
+        project: { select: { organizationId: true } }
       }
     });
 
     if (!ingress) throw new NotFoundException('Ingress not found');
+
+    if (ingress.protectionMode !== 'none' && ingress.protectionBypassSecret) {
+      void this.audit.log({
+        action: 'ingress.protection.secret.revealed',
+        actorUserId: userId,
+        organizationId: ingress.project.organizationId,
+        projectId,
+        targetType: 'ingress',
+        targetId: ingressId,
+        targetLabel: ingress.host
+      });
+    }
 
     return {
       protectionMode: ingress.protectionMode,

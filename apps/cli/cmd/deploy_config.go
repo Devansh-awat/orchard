@@ -112,7 +112,11 @@ func deployEnvSetCmd() *cobra.Command {
 			}
 			for _, k := range slices.Sorted(maps.Keys(updates)) {
 				if !seen[k] {
-					merged = append(merged, map[string]any{"key": k, "value": updates[k], "secret": secret})
+					entry := map[string]any{"key": k, "value": updates[k]}
+					if secret {
+						entry["secret"] = true
+					}
+					merged = append(merged, entry)
 				}
 			}
 			body := map[string]any{"env": merged}

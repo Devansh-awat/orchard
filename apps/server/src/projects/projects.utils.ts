@@ -98,48 +98,61 @@ export function truncateK8sName(name: string, max = 63): string {
   return name.substring(0, max).replace(/-+$/, '');
 }
 
-/**
- * Redact DB credentials from a database payload for viewers.
- * Nulls dbPassword, scrubs password out of connection strings.
- */
+export const MASKED_PASSWORD = '****';
+
+export function maskConnectionPassword<T extends string | null | undefined>(url: T): T {
+  if (typeof url !== 'string') return url;
+  return url.replace(/^([a-z][a-z0-9+.-]*:\/\/[^:@/\s]*:)[^@\s]*@/i, `$1${MASKED_PASSWORD}@`) as T;
+}
+
+type DatabaseSecrets = {
+  dbPassword?: string | null;
+  connectionString?: string | null;
+  publicConnectionString?: string | null;
+  r2ProxyAccessKey?: string | null;
+  r2ProxySecret?: string | null;
+  r2RestoreAccessKey?: string | null;
+  r2RestoreSecret?: string | null;
+};
+
 export function redactDatabaseForViewer<
-  T extends {
-    dbPassword?: string | null;
-    connectionString?: string | null;
-    publicConnectionString?: string | null;
-    r2ProxyAccessKey?: string | null;
-    r2ProxySecret?: string | null;
-    creator?: { email?: string | null } | null;
-  }
->(d: T): T {
+  T extends DatabaseSecrets & { creator?: { email?: string | null } | null }
+>(d: T): T & { passwordSet: boolean } {
   return {
-    ...d,
+    ...stripR2ProxyCreds(d),
     dbPassword: null,
+    passwordSet: Boolean(d.dbPassword),
     connectionString: null,
     publicConnectionString: null,
+    creator: d.creator ? { ...d.creator, email: null } : d.creator
+  } as T & { passwordSet: boolean };
+}
+
+export function stripR2ProxyCreds<T extends DatabaseSecrets>(d: T): T {
+  return {
+    ...d,
     r2ProxyAccessKey: null,
     r2ProxySecret: null,
-    creator: d.creator ? { ...d.creator, email: null } : d.creator
+    r2RestoreAccessKey: null,
+    r2RestoreSecret: null
   } as T;
 }
 
-/**
- * Strip R2 proxy backup credentials from a database payload.
- * These are infrastructure secrets — they should never leave the server
- * via user-facing APIs. The in-cluster CNPG provisioning path reads them
- * directly from prisma, so user-facing callers always go through here.
- */
-export function stripR2ProxyCreds<
-  T extends {
-    r2ProxyAccessKey?: string | null;
-    r2ProxySecret?: string | null;
-  }
->(d: T): T {
+export function sealDatabaseCredentials<T extends DatabaseSecrets>(
+  d: T
+): T & { passwordSet: boolean } {
+  const stripped = stripR2ProxyCreds(d);
   return {
-    ...d,
-    r2ProxyAccessKey: null,
-    r2ProxySecret: null
-  } as T;
+    ...stripped,
+    dbPassword: null,
+    passwordSet: Boolean(d.dbPassword),
+    ...('connectionString' in d
+      ? { connectionString: maskConnectionPassword(d.connectionString) }
+      : {}),
+    ...('publicConnectionString' in d
+      ? { publicConnectionString: maskConnectionPassword(d.publicConnectionString) }
+      : {})
+  } as T & { passwordSet: boolean };
 }
 
 /**

@@ -123,6 +123,7 @@
   "GET /databases/:id/anomalies": "authenticated",
   "GET /databases/:id/backup-schedule": "authenticated",
   "GET /databases/:id/backups": "authenticated",
+  "GET /databases/:id/connection": "authenticated",
   "GET /databases/:id/extensions": "authenticated",
   "GET /databases/:id/killed-containers": "authenticated",
   "GET /databases/:id/killed-containers/:entryId/logs": "authenticated",

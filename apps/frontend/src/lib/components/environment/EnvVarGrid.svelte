@@ -1,11 +1,13 @@
 <script lang="ts">
 	import { Eye, EyeOff, Lock, LockOpen, Trash2, Plus } from 'lucide-svelte';
-	import { rawToEnvVars } from '$lib/utils/format';
+	import { autoSecretForKey, mergeParsedEnv, parseEnvLines } from '$lib/utils/env-secrets';
 
 	export interface GridRow {
 		key: string;
 		value: string;
 		secret: boolean;
+		sealed?: boolean;
+		secretTouched?: boolean;
 	}
 
 	let {
@@ -31,53 +33,79 @@
 		rows = rows.filter((_, idx) => idx !== i);
 	}
 
+	function setKey(i: number, key: string) {
+		rows = rows.map((r, idx) => (idx === i ? autoSecretForKey({ ...r, key }) : r));
+	}
+
+	function toggleSecret(i: number) {
+		if (rows[i]?.sealed) return;
+		rows = rows.map((r, idx) => (idx === i ? { ...r, secret: !r.secret, secretTouched: true } : r));
+	}
+
 	function onPaste(e: ClipboardEvent, i: number) {
 		const text = e.clipboardData?.getData('text') ?? '';
 		if (!text.includes('\n') && !text.includes('=')) return;
-		const parsed = rawToEnvVars(text);
+		const parsed = parseEnvLines(text);
 		if (parsed.length === 0) return;
 		e.preventDefault();
-		const next = [...rows];
-		next.splice(i, 1, ...parsed.map((p) => ({ key: p.key, value: p.value, secret: false })));
+		const pastedKeys = new Set(parsed.map((p) => p.key));
+		const merged = mergeParsedEnv(parsed, rows).map((r) => ({ ...r, secret: Boolean(r.secret) }));
+		const next = rows.filter((r, idx) => idx !== i && !pastedKeys.has(r.key.trim()));
+		next.splice(Math.min(i, next.length), 0, ...merged);
 		rows = next;
 	}
 </script>
 
 <div class="envgrid">
 	{#each rows as row, i (i)}
+		{@const withheld = Boolean(row.sealed) && row.value === ''}
 		<div class="envgrid-row">
 			<div class="envgrid-key-col">
 				<input
 					class="envgrid-input envgrid-key"
 					placeholder="KEY"
-					bind:value={row.key}
+					value={row.key}
+					oninput={(e) => setKey(i, e.currentTarget.value)}
 					onpaste={(e) => onPaste(e, i)}
 				/>
 			</div>
 			<div class="envgrid-val-col">
 				<input
 					class="envgrid-input envgrid-val"
+					class:envgrid-val--sealed={withheld}
 					type={row.secret && !revealed.has(i) ? 'password' : 'text'}
-					placeholder={row.secret ? '••••••••' : 'value'}
+					placeholder={withheld ? 'Sealed, type to replace' : 'value'}
 					bind:value={row.value}
 				/>
 			</div>
 			<div class="envgrid-actions">
-				<button
-					type="button"
-					class="envgrid-action"
-					aria-label={revealed.has(i) ? 'Hide' : 'Reveal'}
-					onclick={() => toggleReveal(i)}
-				>
-					{#if revealed.has(i)}<EyeOff size={14} />{:else}<Eye size={14} />{/if}
-				</button>
+				{#if row.secret && !withheld && row.value !== ''}
+					<button
+						type="button"
+						class="envgrid-action"
+						aria-label={revealed.has(i) ? 'Hide' : 'Show'}
+						onclick={() => toggleReveal(i)}
+					>
+						{#if revealed.has(i)}<EyeOff size={14} />{:else}<Eye size={14} />{/if}
+					</button>
+				{/if}
 				<button
 					type="button"
 					class="envgrid-action"
 					class:envgrid-action--secret={row.secret}
-					aria-label={row.secret ? 'Secret (stored in a Kubernetes Secret)' : 'Mark as secret'}
-					title={row.secret ? 'Secret — stored in a Kubernetes Secret' : 'Mark as secret'}
-					onclick={() => (row.secret = !row.secret)}
+					class:envgrid-action--sealed={row.sealed}
+					aria-disabled={row.sealed}
+					aria-label={row.sealed
+						? 'Sealed. Delete and re-add the variable to make it visible'
+						: row.secret
+							? 'Secret, sealed on save'
+							: 'Mark as secret'}
+					title={row.sealed
+						? 'Sealed. Delete and re-add the variable to make it visible'
+						: row.secret
+							? 'Secret, sealed on save'
+							: 'Mark as secret'}
+					onclick={() => toggleSecret(i)}
 				>
 					{#if row.secret}<Lock size={14} />{:else}<LockOpen size={14} />{/if}
 				</button>
@@ -182,8 +210,14 @@
 		color: var(--center-channel-color);
 	}
 	.envgrid-action--secret {
-		color: #d97706;
-		background: color-mix(in srgb, #f59e0b 12%, transparent);
+		color: var(--status-warning);
+		background: color-mix(in srgb, var(--status-warning) 12%, transparent);
+	}
+	.envgrid-action--sealed {
+		cursor: default;
+	}
+	.envgrid-val--sealed::placeholder {
+		font-style: italic;
 	}
 	.envgrid-action--delete:hover {
 		color: var(--error-text-color, #ef4444);

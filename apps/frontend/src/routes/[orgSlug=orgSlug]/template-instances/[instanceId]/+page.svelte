@@ -298,7 +298,7 @@
 				{#each Object.entries(instance.parameters) as [key, value] (key)}
 					<div class="ti-param">
 						<span class="ti-param-key">{key}</span>
-						<span class="ti-param-value">{value}</span>
+						<span class="ti-param-value">{value ?? '••••••••'}</span>
 					</div>
 				{/each}
 			</div>

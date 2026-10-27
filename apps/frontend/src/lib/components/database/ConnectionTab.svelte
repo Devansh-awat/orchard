@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Copy, Check, Eye, EyeOff } from 'lucide-svelte';
-	import { selectedOrganization } from '$lib/stores';
+	import { apiFetch, selectedOrganization, toasts } from '$lib/stores';
 	import { Button, Badge, SectionCard, SegmentedControl } from '$lib/components/ui';
 	import type { DatabaseDetail } from './types';
 
@@ -34,31 +34,83 @@
 
 	let connFormat = $state<'uri' | 'psql' | 'env' | 'jdbc'>('uri');
 
+	type Credentials = {
+		password: string;
+		connectionString: string;
+		publicConnectionString: string | null;
+	};
+	const MASK = '••••••••';
+	let credentials = $state<Credentials | null>(null);
+	let credentialsFor = $state('');
+	let loadingCredentials = $state(false);
+	const credentialsKey = $derived(
+		`${database.id}:${database.publicEnabled ? 1 : 0}:${database.publicPort ?? ''}`
+	);
+	const creds = $derived(credentialsFor === credentialsKey ? credentials : null);
+
+	async function loadCredentials(): Promise<Credentials | null> {
+		if (creds) return creds;
+		loadingCredentials = true;
+		try {
+			const res = await apiFetch(`/apiv1/databases/${database.id}/connection`);
+			const data = await res.json().catch(() => ({}));
+			if (!res.ok) throw new Error(data.message || 'Could not load the credentials');
+			const next: Credentials = {
+				password: data.password ?? '',
+				connectionString: data.connectionString ?? '',
+				publicConnectionString: data.publicConnectionString ?? null
+			};
+			credentials = next;
+			credentialsFor = credentialsKey;
+			return next;
+		} catch (e) {
+			toasts.add({
+				title: e instanceof Error ? e.message : 'Could not load the credentials',
+				color: 'error'
+			});
+			return null;
+		} finally {
+			loadingCredentials = false;
+		}
+	}
+
+	async function toggleReveal(which: 'password' | 'connection' | 'public') {
+		const shown =
+			which === 'password'
+				? showPassword
+				: which === 'connection'
+					? showConnectionString
+					: showPublicConnectionString;
+		const next = shown ? false : Boolean(await loadCredentials());
+		if (which === 'password') showPassword = next;
+		else if (which === 'connection') showConnectionString = next;
+		else showPublicConnectionString = next;
+	}
+
+	async function copyCredential(field: string, build: (c: Credentials) => string) {
+		const c = await loadCredentials();
+		if (!c) return;
+		const text = build(c);
+		if (text) onCopy(text, field);
+	}
+
 	const maskedUri = $derived(
-		`postgresql://${database.dbUser}:••••••••@${database.host}:${database.port}/${database.dbName}`
+		`postgresql://${database.dbUser}:${MASK}@${database.host}:${database.port}/${database.dbName}`
 	);
 	const maskPassword = (uri: string | null | undefined) =>
-		(uri ?? '').replace(/^([a-z+]+:\/\/[^:/@]+):.*@/i, '$1:••••••••@');
-	const visibleUri = $derived(showConnectionString ? database.connectionString : maskedUri);
-	const snippet = $derived.by(() => {
-		const uri = visibleUri;
+		(uri ?? '').replace(/^([a-z+]+:\/\/[^:/@]+):.*@/i, `$1:${MASK}@`);
+	const revealedPassword = $derived(showConnectionString && creds ? creds.password : MASK);
+	const visibleUri = $derived(showConnectionString && creds ? creds.connectionString : maskedUri);
+
+	function snippetFor(uri: string, password: string) {
 		if (connFormat === 'psql') return `psql "${uri}"`;
 		if (connFormat === 'env') return `DATABASE_URL="${uri}"`;
 		if (connFormat === 'jdbc') {
-			const pw = showConnectionString ? database.dbPassword : '••••••••';
-			return `jdbc:postgresql://${database.host}:${database.port}/${database.dbName}?user=${database.dbUser}&password=${pw}`;
+			return `jdbc:postgresql://${database.host}:${database.port}/${database.dbName}?user=${database.dbUser}&password=${password}`;
 		}
 		return uri;
-	});
-	const copySnippet = $derived.by(() => {
-		const uri = database.connectionString;
-		if (connFormat === 'psql') return `psql "${uri}"`;
-		if (connFormat === 'env') return `DATABASE_URL="${uri}"`;
-		if (connFormat === 'jdbc') {
-			return `jdbc:postgresql://${database.host}:${database.port}/${database.dbName}?user=${database.dbUser}&password=${database.dbPassword}`;
-		}
-		return uri;
-	});
+	}
+	const snippet = $derived(snippetFor(visibleUri, revealedPassword));
 
 	const FORMATS = [
 		{ id: 'uri', label: 'URI' },
@@ -103,13 +155,8 @@
 		];
 	});
 
-	function endpointUri(host: string) {
-		const pw = showConnectionString ? database.dbPassword : '••••••••';
-		return `postgresql://${database.dbUser}:${pw}@${host}:${database.port}/${database.dbName}`;
-	}
-
-	function endpointCopyUri(host: string) {
-		return `postgresql://${database.dbUser}:${database.dbPassword}@${host}:${database.port}/${database.dbName}`;
+	function endpointUri(host: string, password: string) {
+		return `postgresql://${database.dbUser}:${password}@${host}:${database.port}/${database.dbName}`;
 	}
 
 	const dlRows = $derived([
@@ -120,8 +167,8 @@
 		{
 			key: 'password',
 			label: 'Password',
-			value: showPassword ? database.dbPassword : '••••••••',
-			copy: database.dbPassword
+			value: showPassword && creds ? creds.password : MASK,
+			copy: ''
 		}
 	]);
 </script>
@@ -144,7 +191,10 @@
 					<button
 						type="button"
 						class="dbc-dd-copy"
-						onclick={() => onCopy(row.copy, row.key)}
+						onclick={() =>
+							row.key === 'password'
+								? copyCredential('password', (c) => c.password)
+								: onCopy(row.copy, row.key)}
 						aria-label={`Copy ${row.label.toLowerCase()}`}
 					>
 						<span class="dbc-dd-value">{row.value}</span>
@@ -156,7 +206,8 @@
 						<button
 							type="button"
 							class="dbc-reveal"
-							onclick={() => (showPassword = !showPassword)}
+							disabled={loadingCredentials}
+							onclick={() => toggleReveal('password')}
 							aria-label={showPassword ? 'Hide password' : 'Show password'}
 						>
 							{#if showPassword}<EyeOff class="h-3 w-3" />{:else}<Eye class="h-3 w-3" />{/if}
@@ -179,7 +230,8 @@
 				<Button
 					variant="ghost"
 					size="sm"
-					onclick={() => (showConnectionString = !showConnectionString)}
+					disabled={loadingCredentials}
+					onclick={() => toggleReveal('connection')}
 					aria-label={showConnectionString ? 'Hide credentials' : 'Show credentials'}
 				>
 					{#if showConnectionString}<EyeOff class="h-3.5 w-3.5" />{:else}<Eye
@@ -189,7 +241,8 @@
 				<Button
 					variant="secondary"
 					size="sm"
-					onclick={() => onCopy(copySnippet, 'connstr')}
+					onclick={() =>
+						copyCredential('connstr', (c) => snippetFor(c.connectionString, c.password))}
 					aria-label="Copy connection string"
 				>
 					{#if copiedField === 'connstr'}<Check class="h-3.5 w-3.5" />{:else}<Copy
@@ -217,12 +270,13 @@
 							<code class="dbc-ep-suffix">-{ep.key}</code>
 						</div>
 						<div class="dbc-ep-row">
-							<code class="dbc-ep-uri">{endpointUri(ep.host)}</code>
+							<code class="dbc-ep-uri">{endpointUri(ep.host, revealedPassword)}</code>
 							<Button
 								variant="ghost"
 								size="sm"
 								class="shrink-0"
-								onclick={() => onCopy(endpointCopyUri(ep.host), `ep-${ep.key}`)}
+								onclick={() =>
+									copyCredential(`ep-${ep.key}`, (c) => endpointUri(ep.host, c.password))}
 								aria-label={`Copy ${ep.label.toLowerCase()} connection string`}
 							>
 								{#if copiedField === `ep-${ep.key}`}<Check class="h-3.5 w-3.5" />{:else}<Copy
@@ -301,15 +355,16 @@
 					</p>
 					<div class="db-connstr-card">
 						<code class="db-connstr-code"
-							>{showPublicConnectionString
-								? database.publicConnectionString
+							>{showPublicConnectionString && creds?.publicConnectionString
+								? creds.publicConnectionString
 								: maskPassword(database.publicConnectionString)}</code
 						>
 						<div class="flex gap-1 shrink-0">
 							<Button
 								variant="ghost"
 								size="sm"
-								onclick={() => (showPublicConnectionString = !showPublicConnectionString)}
+								disabled={loadingCredentials}
+								onclick={() => toggleReveal('public')}
 								aria-label={showPublicConnectionString ? 'Hide' : 'Show'}
 							>
 								{#if showPublicConnectionString}<EyeOff class="h-3.5 w-3.5" />{:else}<Eye
@@ -319,7 +374,7 @@
 							<Button
 								variant="ghost"
 								size="sm"
-								onclick={() => onCopy(database.publicConnectionString as string, 'pubConnStr')}
+								onclick={() => copyCredential('pubConnStr', (c) => c.publicConnectionString ?? '')}
 								aria-label="Copy public connection string"
 							>
 								{#if copiedField === 'pubConnStr'}<Check class="h-3.5 w-3.5" />{:else}<Copy

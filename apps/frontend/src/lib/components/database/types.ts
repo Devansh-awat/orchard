@@ -3,7 +3,8 @@ export interface DatabaseDetail {
 	name: string;
 	dbName: string;
 	dbUser: string;
-	dbPassword: string;
+	dbPassword: string | null;
+	passwordSet?: boolean;
 	host: string;
 	port: number;
 	status: string;

@@ -19,7 +19,7 @@ import { IngressService } from '../projects/ingress.service';
 import { scrubIngress } from '../projects/projects.utils';
 import { AuthorizationService } from '../auth/authorization.service';
 import { UsersService } from '../users/users.service';
-import { TemplateEngineService, ResolutionContext } from './template-engine.service';
+import { TemplateEngineService, ResolutionContext, ParameterDef } from './template-engine.service';
 
 const REGISTRY_SYNC_MS = 6 * 60 * 60 * 1000;
 const REGISTRY_FETCH_TIMEOUT_MS = 15_000;
@@ -34,6 +34,39 @@ interface RegistryEntry {
 function blankParameterValues(parameters: unknown): unknown {
   if (!parameters || typeof parameters !== 'object' || Array.isArray(parameters)) return parameters;
   return Object.fromEntries(Object.keys(parameters).map((key) => [key, null]));
+}
+
+export function redactSecretParameters(
+  parameters: unknown,
+  defs: Pick<ParameterDef, 'name' | 'type'>[]
+): unknown {
+  if (!parameters || typeof parameters !== 'object' || Array.isArray(parameters)) return parameters;
+  const secret = new Set(defs.filter((d) => d.type === 'secret').map((d) => d.name));
+  return Object.fromEntries(
+    Object.entries(parameters as Record<string, unknown>).map(([key, value]) => [
+      key,
+      secret.has(key) ? null : value
+    ])
+  );
+}
+
+export function secretParameterValues(
+  parameters: Record<string, unknown>,
+  defs: Pick<ParameterDef, 'name' | 'type'>[]
+): string[] {
+  return defs
+    .filter((d) => d.type === 'secret')
+    .map((d) => parameters[d.name])
+    .filter((v): v is string => typeof v === 'string' && v.length > 0);
+}
+
+export function sealTemplateEnv<T>(env: T, secretValues: readonly string[]): T {
+  if (!Array.isArray(env)) return env;
+  const values = secretValues.filter((v) => v.length > 0);
+  return env.map((entry) => {
+    if (!entry || typeof entry !== 'object' || typeof entry.value !== 'string') return entry;
+    return values.some((v) => entry.value.includes(v)) ? { ...entry, secret: true } : entry;
+  }) as T;
 }
 
 export const DEFAULT_REGISTRY_URL = 'https://assets.orchard.my/registry';
@@ -459,6 +492,7 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
       params: validatedParams,
       resources: {}
     };
+    const secretValues = secretParameterValues(validatedParams, parsed.parameters);
 
     try {
       for (const resource of parsed.resources) {
@@ -479,14 +513,16 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
               userData
             );
 
+            const connection = await this.databases.databaseConnection(db.id);
+            secretValues.push(connection.password);
             context.resources[resource.name] = {
               id: db.id,
               host: db.host,
               port: db.port,
               dbName: db.dbName,
               dbUser: db.dbUser,
-              dbPassword: db.dbPassword,
-              connectionString: `postgresql://${db.dbUser}:${db.dbPassword}@${db.host}:${db.port}/${db.dbName}`
+              dbPassword: connection.password,
+              connectionString: connection.connectionString
             };
             break;
           }
@@ -515,7 +551,7 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
                   replicas: config.replicas ? Number(config.replicas) : 1,
                   ports: config.ports,
                   port: config.port ? Number(config.port) : undefined,
-                  env: config.env,
+                  env: sealTemplateEnv(config.env, secretValues),
                   volumes: config.volumes,
                   exposePublic: config.exposePublic ?? false,
                   autoDeployEnabled: config.autoDeploy,
@@ -533,7 +569,7 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
                 image: config.image,
                 replicas: config.replicas ? Number(config.replicas) : 1,
                 ports: config.ports,
-                env: config.env,
+                env: sealTemplateEnv(config.env, secretValues),
                 volumes: config.volumes,
                 exposePublic: config.exposePublic ?? false,
                 templateInstanceId: instance.id,
@@ -685,6 +721,17 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
     return this.getTemplateInstance(instanceId, clerkId, userData);
   }
 
+  private editorParameters(parameters: unknown, yaml: string | null | undefined): unknown {
+    try {
+      return redactSecretParameters(
+        parameters,
+        this.templateEngine.parseTemplate(yaml ?? '').parameters
+      );
+    } catch {
+      return blankParameterValues(parameters);
+    }
+  }
+
   async getTemplateInstance(instanceId: string, clerkId: string, userData?: any) {
     const userId = await this.resolveUserId(clerkId, userData);
     const owner = await this.prisma.templateInstance.findUnique({
@@ -702,7 +749,8 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
             name: true,
             displayName: true,
             icon: true,
-            category: true
+            category: true,
+            yaml: true
           }
         },
         deployments: {
@@ -735,9 +783,13 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
     });
 
     if (!instance) throw new NotFoundException('Template instance not found');
+    const { yaml, ...template } = instance.template;
     return {
       ...instance,
-      parameters: access.canEdit ? instance.parameters : blankParameterValues(instance.parameters),
+      template,
+      parameters: access.canEdit
+        ? this.editorParameters(instance.parameters, yaml)
+        : blankParameterValues(instance.parameters),
       ingresses: instance.ingresses.map((ing) => scrubIngress(ing))
     };
   }
@@ -754,7 +806,8 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
             name: true,
             displayName: true,
             icon: true,
-            category: true
+            category: true,
+            yaml: true
           }
         },
         deployments: { select: { id: true } },
@@ -763,10 +816,12 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
       },
       orderBy: { createdAt: 'desc' }
     });
-    if (access.canEdit) return instances;
-    return instances.map((instance) => ({
+    return instances.map(({ template: { yaml, ...template }, ...instance }) => ({
       ...instance,
-      parameters: blankParameterValues(instance.parameters)
+      template,
+      parameters: access.canEdit
+        ? this.editorParameters(instance.parameters, yaml)
+        : blankParameterValues(instance.parameters)
     }));
   }
 

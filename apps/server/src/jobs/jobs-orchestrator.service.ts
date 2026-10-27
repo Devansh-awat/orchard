@@ -186,7 +186,7 @@ export class JobsOrchestratorService {
       memoryRequestBytes: step.memoryRequestBytes != null ? Number(step.memoryRequestBytes) : null
     });
 
-    const ownEnv = (step.envVars as EnvVar[]) ?? [];
+    const ownEnv = ((step.envVars as EnvVar[]) ?? []).map((e) => this.crypto.maybeDecrypt(e));
     const base = {
       stepOrder: step.stepOrder,
       name: step.name,

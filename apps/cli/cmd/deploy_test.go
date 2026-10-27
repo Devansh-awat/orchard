@@ -370,7 +370,7 @@ func TestDeployEnvSetMergesExisting(t *testing.T) {
 	}
 	want := []any{
 		map[string]any{"key": "OLD", "value": "1", "secret": true},
-		map[string]any{"key": "NEW", "value": "2", "secret": false},
+		map[string]any{"key": "NEW", "value": "2"},
 	}
 	if !reflect.DeepEqual(gotBody["env"], want) {
 		t.Errorf("env body = %v, want %v", gotBody["env"], want)

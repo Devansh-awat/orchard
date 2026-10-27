@@ -9,6 +9,7 @@
 	import { loadTerminalTabs, saveTerminalTabs, terminalTabsKey } from '$lib/terminal/tabs-store';
 	import { deploymentQueryOptions } from '$lib/queries/deployment';
 	import { mergeInto, syncListBy, shallowEq } from '$lib/utils/sync';
+	import { toEnvWrite, type EditableEnvVar } from '$lib/utils/env-secrets';
 	import { TailscaleController } from '$lib/components/deployment/tailscale.svelte';
 	import { ServicesController } from '$lib/components/deployment/services.svelte';
 	import {
@@ -999,9 +1000,7 @@
 
 	const sliderPercentage = $derived((scaleReplicas / 20) * 100);
 
-	let envVars = $state<Array<{ key: string; value: string; secret?: boolean }>>([
-		{ key: '', value: '' }
-	]);
+	let envVars = $state<EditableEnvVar[]>([{ key: '', value: '' }]);
 	let envViewMode = $state<'ui' | 'raw'>('ui');
 	let envRawText = $state('');
 	let revealedIndices = $state<Set<number>>(new Set());
@@ -1440,7 +1439,8 @@
 						...data.envVars.map((ev: { key: string; value: string; secret?: boolean }) => ({
 							key: ev.key || '',
 							value: ev.value || '',
-							secret: Boolean(ev.secret)
+							secret: Boolean(ev.secret),
+							sealed: Boolean(ev.secret)
 						})),
 						{ key: '', value: '' }
 					];
@@ -1751,11 +1751,10 @@
 				const parsed = rawToEnvVarsKeepingSecrets(envRawText, envVars);
 				envVars = [...parsed, { key: '', value: '' }];
 			}
-			const filteredEnv = envVars.filter((e) => e.key.trim());
 			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/env`, {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ env: filteredEnv })
+				body: JSON.stringify({ env: toEnvWrite(envVars) })
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));

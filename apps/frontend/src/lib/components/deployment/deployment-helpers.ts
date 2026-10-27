@@ -46,38 +46,11 @@ export function sanitizeLogs(logs: string): string {
 	return sanitized;
 }
 
-export function envVarsToRaw(vars: { key: string; value: string }[]): string {
-	return vars
-		.filter((e) => e.key.trim())
-		.map((e) => `${e.key}=${e.value}`)
-		.join('\n');
-}
-
-export function rawToEnvVars(raw: string): { key: string; value: string }[] {
-	const lines = raw.split('\n');
-	const parsed: { key: string; value: string }[] = [];
-	for (const line of lines) {
-		const trimmed = line.trim();
-		if (!trimmed || trimmed.startsWith('#')) continue;
-		const equalIndex = trimmed.indexOf('=');
-		if (equalIndex === -1) continue;
-		const key = trimmed.substring(0, equalIndex).trim();
-		const value = trimmed.substring(equalIndex + 1).trim();
-		if (key) parsed.push({ key, value });
-	}
-	return parsed;
-}
-
-export function rawToEnvVarsKeepingSecrets(
-	raw: string,
-	previous: { key: string; value: string; secret?: boolean }[]
-): { key: string; value: string; secret?: boolean }[] {
-	const before = new Map(previous.map((e) => [e.key, e]));
-	return rawToEnvVars(raw).map((e) => {
-		const old = before.get(e.key);
-		return old?.secret && e.value === '' ? { ...e, secret: true } : e;
-	});
-}
+export {
+	envVarsToSealedRaw as envVarsToRaw,
+	parseEnvLines as rawToEnvVars,
+	rawToEnvVarsKeepingSecrets
+} from '$lib/utils/env-secrets';
 
 export interface DetectedApp {
 	dir: string;

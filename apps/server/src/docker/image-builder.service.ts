@@ -22,8 +22,18 @@ import {
 } from './build-config';
 import { cacheEvictInitContainer } from './cache-evict';
 import { parseRepoUrl, withCloneCredentials } from './repo-url';
-import { redactUrlUserinfo } from '../git/clone-credential';
-import { injectBuildArgsScript } from './build-args';
+import {
+  injectBuildArgsScript,
+  injectableBuildArgKeys,
+  buildSecretFlags,
+  secretBuildArgNotice
+} from './build-args';
+import {
+  maskSecretValues,
+  registryHostsOf,
+  sanitizeBuildLogMessage,
+  secretValuesToMask
+} from './build-log-redaction';
 import { BUILDER_NAMESPACE } from './builder-namespace';
 import { BUILD_PLATFORM, buildArchNodeSelector } from './build-platform';
 import { BUILDKIT_IMAGE } from './buildkit-image';
@@ -76,6 +86,7 @@ interface BuildJobOptions {
    */
   rootDirectory?: string | null;
   envVars?: Record<string, string>;
+  secretEnvKeys?: string[];
   buildWithDepot?: boolean;
   // Presigned GET URL for an uploaded build-context tarball ("orchard up").
   // When set, the git-clone init container is replaced by a fetch-and-extract
@@ -157,6 +168,8 @@ export class ImageBuilderService {
   private buildkitTranscoders = new Map<string, RawjsonTranscoder>();
 
   private buildkitPushDetected = new Set<string>();
+
+  private buildSecretValues = new Map<string, string[]>();
 
   private buildkitBuildingDetected = new Set<string>();
 
@@ -424,45 +437,14 @@ export class ImageBuilderService {
     return `image-builder-${sanitized || 'image'}-${hash}`;
   }
 
-  private sanitizeLogMessage(message: string): string {
-    let sanitized = message;
-
-    sanitized = sanitized.replace(
-      /(x-access-token:|ghs_|ghp_|github_pat_|dckr_pat_)[a-zA-Z0-9_-]+/gi,
-      '***REDACTED***'
+  private sanitizeLogMessage(message: string, deploymentId?: string): string {
+    const sanitized = sanitizeBuildLogMessage(
+      message,
+      registryHostsOf([this.harborRegistryPush, this.harborRegistryPull])
     );
-
-    sanitized = redactUrlUserinfo(sanitized);
-    sanitized = sanitized.replace(
-      /https?:\/\/[^:@\s]+:[^@\s]+@github\.com/gi,
-      'https://***@github.com'
-    );
-
-    sanitized = sanitized.replace(/https?:\/\/[^@\s]+@github\.com/gi, 'https://***@github.com');
-
-    sanitized = sanitized.replace(
-      /(Bearer|Token|Authorization:)\s+[a-zA-Z0-9_\-.]+/gi,
-      '$1 ***REDACTED***'
-    );
-
-    sanitized = sanitized.replace(
-      /(password|passwd|pwd|secret|key|token)[\s]*[=:]['"]?([^\s'"]+)/gi,
-      '$1=***REDACTED***'
-    );
-
-    // Redact internal registry hostnames so the registry URL never leaks into user-visible logs.
-    const registryHosts = new Set<string>();
-    for (const reg of [this.harborRegistryPush, this.harborRegistryPull]) {
-      if (!reg) continue;
-      const host = reg.replace(/^https?:\/\//, '').split('/')[0];
-      if (host) registryHosts.add(host);
-    }
-    for (const host of registryHosts) {
-      const escaped = host.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      sanitized = sanitized.replace(new RegExp(escaped, 'g'), '***registry***');
-    }
-
-    return sanitized;
+    return deploymentId
+      ? maskSecretValues(sanitized, this.buildSecretValues.get(deploymentId))
+      : sanitized;
   }
 
   // BuildKit jobs run a `buildkit` container; super builds run `depot-build`
@@ -483,7 +465,7 @@ export class ImageBuilderService {
 
     try {
       const timestamp = Date.now();
-      const sanitizedMessage = this.sanitizeLogMessage(message);
+      const sanitizedMessage = this.sanitizeLogMessage(message, deploymentId);
       const line = `[${timestamp}] [${level}] ${sanitizedMessage}\n`;
 
       await this.prisma.$executeRaw`
@@ -595,7 +577,7 @@ export class ImageBuilderService {
     offsetValue?: number
   ) {
     try {
-      const sanitized = this.sanitizeLogMessage(chunk);
+      const sanitized = this.sanitizeLogMessage(chunk, deploymentId);
       if (offsetKey !== undefined && offsetValue !== undefined) {
         await this.prisma.$executeRaw`
           UPDATE "deployments"
@@ -990,6 +972,7 @@ ${registryConfigs}
     buildFromRoot: boolean;
     buildType: string;
     envVars: Record<string, string>;
+    secretEnvKeys?: string[];
     envSecretName: string;
   }): k8s.V1Container {
     const {
@@ -999,6 +982,7 @@ ${registryConfigs}
       buildFromRoot,
       buildType,
       envVars,
+      secretEnvKeys,
       envSecretName
     } = opts;
 
@@ -1049,9 +1033,12 @@ ${registryConfigs}
       key,
       envName: buildArgEnvName(index)
     }));
-    const buildArgLines = depotBuildArgs
-      .map(({ key, envName }) => `--build-arg "${key}=\${${envName}}"`)
-      .join(' ');
+    const buildArgLines = [
+      ...depotBuildArgs.map(({ key, envName }) => `--build-arg "${key}=\${${envName}}"`),
+      ...buildSecretFlags(Object.keys(envVars), secretEnvKeys, (_key, index) =>
+        buildArgEnvName(index)
+      ).map((flag) => `--secret "${flag}"`)
+    ].join(' ');
 
     // Same lint behavior as the BuildKit path: without this, a repo's
     // "# check=error=true" directive fails depot builds that pass locally.
@@ -1362,6 +1349,7 @@ exit $EXIT_CODE
       buildType = 'dockerfile',
       rootDirectory,
       envVars: requestedEnvVars = {},
+      secretEnvKeys = [],
       buildWithDepot = false,
       cacheTenantKey,
       persistentBuildCache = false,
@@ -1566,14 +1554,18 @@ ls -la /workspace
       }
     }
 
-    // For Dockerfile builds with env vars, declare them as ARG so RUN steps can
-    // read them. Deliberately not ENV — see build-args.ts.
-    if (buildType === 'dockerfile' && Object.keys(envVars).length > 0) {
+    const injectedArgKeys = injectableBuildArgKeys(Object.keys(envVars), secretEnvKeys);
+    const secretArgNotice =
+      buildType === 'dockerfile' ? secretBuildArgNotice(Object.keys(envVars), secretEnvKeys) : null;
+    if (secretArgNotice) {
+      this.appendLog(deploymentId, secretArgNotice, 'WARNING').catch(() => {});
+    }
+    if (buildType === 'dockerfile' && injectedArgKeys.length > 0) {
       initContainers.push({
         name: 'inject-build-args',
         image: 'alpine:latest',
         command: ['/bin/sh', '-c'],
-        args: [injectBuildArgsScript({ dockerfilePath, keys: Object.keys(envVars) })],
+        args: [injectBuildArgsScript({ dockerfilePath, keys: injectedArgKeys })],
         workingDir: '/workspace',
         volumeMounts: [
           {
@@ -1663,6 +1655,7 @@ ls -la /workspace
       buildFromRoot,
       buildType,
       envVars,
+      secretEnvKeys,
       secretsHash,
       cacheKey,
       skipCache: !!daemonIp
@@ -1929,6 +1922,7 @@ exec skopeo copy --authfile /root/.docker/config.json --dest-tls-verify=false oc
           buildFromRoot,
           buildType,
           envVars,
+          secretEnvKeys,
           envSecretName: buildEnvSecret
         })
       ];
@@ -2419,9 +2413,11 @@ fi
     target?: string;
     buildFromRoot: boolean;
     envVars: Record<string, string>;
+    secretEnvKeys?: string[];
     skipCache?: boolean;
   }): BuildctlArg[] {
-    const { dockerfilePath, fullImageName, target, buildFromRoot, envVars } = options;
+    const { dockerfilePath, fullImageName, target, buildFromRoot, envVars, secretEnvKeys } =
+      options;
 
     // Determine dockerfile location and context
     let dockerfileDir = '.';
@@ -2462,13 +2458,14 @@ fi
       args.push('--opt', `target=${target}`);
     }
 
-    // Pass environment variables as build-args
-    // Note: These will be available in the Dockerfile if declared with ARG
-    // For security, sensitive values should not be used in ways that bake them into layers
-    // The values are passed directly (not via shell expansion) to avoid exposure in process lists
     Object.keys(envVars).forEach((key, index) => {
       args.push('--opt', { shell: `build-arg:${key}="$${buildArgEnvName(index)}"` });
     });
+    for (const flag of buildSecretFlags(Object.keys(envVars), secretEnvKeys, (_key, index) =>
+      buildArgEnvName(index)
+    )) {
+      args.push('--secret', flag);
+    }
     if (!('BUILDKIT_DOCKERFILE_CHECK' in envVars)) {
       args.push('--opt', 'build-arg:BUILDKIT_DOCKERFILE_CHECK=skip=SecretsUsedInArgOrEnv');
     }
@@ -2573,6 +2570,7 @@ fi
     buildFromRoot: boolean;
     buildType: 'dockerfile' | 'railpack';
     envVars: Record<string, string>;
+    secretEnvKeys?: string[];
     secretsHash?: string;
     cacheKey?: string;
     skipCache?: boolean;
@@ -2581,6 +2579,7 @@ fi
       buildType,
       fullImageName,
       envVars,
+      secretEnvKeys,
       secretsHash,
       cacheKey,
       skipCache,
@@ -2601,6 +2600,7 @@ fi
       ...dockerfileOptions,
       fullImageName,
       envVars,
+      secretEnvKeys,
       skipCache
     });
   }
@@ -2777,7 +2777,7 @@ fi
 
     if (!body) return;
 
-    const block = `\n=== Railpack ===\n${this.sanitizeLogMessage(body)}\n\n`;
+    const block = `\n=== Railpack ===\n${this.sanitizeLogMessage(body, deploymentId)}\n\n`;
 
     try {
       await this.prisma.$executeRaw`
@@ -3601,6 +3601,26 @@ fi
   }
 
   async buildAndPush(options: BuildJobOptions): Promise<string> {
+    const owned = this.trackBuildSecrets(options);
+    try {
+      return await this.runBuildAndPush(options);
+    } finally {
+      if (owned && options.deploymentId) this.buildSecretValues.delete(options.deploymentId);
+    }
+  }
+
+  private trackBuildSecrets(
+    options: Pick<BuildJobOptions, 'deploymentId' | 'envVars' | 'secretEnvKeys'>
+  ): boolean {
+    const { deploymentId } = options;
+    if (!deploymentId || this.buildSecretValues.has(deploymentId)) return false;
+    const values = secretValuesToMask(options.envVars ?? {}, options.secretEnvKeys ?? []);
+    if (values.length === 0) return false;
+    this.buildSecretValues.set(deploymentId, values);
+    return true;
+  }
+
+  private async runBuildAndPush(options: BuildJobOptions): Promise<string> {
     const {
       imageName,
       tag = 'latest',
@@ -3628,7 +3648,7 @@ fi
     try {
       if (deploymentId) {
         const now = Date.now();
-        const logLine = `[${now}] [INFO] Starting BuildKit build for ${this.sanitizeLogMessage(repoUrl)}@${branch} (type: ${buildType})\n`;
+        const logLine = `[${now}] [INFO] Starting BuildKit build for ${this.sanitizeLogMessage(repoUrl, deploymentId)}@${branch} (type: ${buildType})\n`;
         await this.prisma.$executeRaw`
           UPDATE "deployments"
           SET "build_step" = 'cloning',
@@ -3861,6 +3881,7 @@ fi
       buildType = 'dockerfile',
       rootDirectory,
       envVars: requestedEnvVars = {},
+      secretEnvKeys = [],
       cacheTenantKey,
       localContextUrl
     } = options;
@@ -3895,6 +3916,7 @@ fi
       buildFromRoot,
       buildType,
       envVars,
+      secretEnvKeys,
       secretsHash: this.computeSecretsHash(envVars),
       cacheKey: deploymentId ? `orchard-${deploymentId.slice(0, 8)}` : undefined,
       skipCache: true
@@ -3914,11 +3936,18 @@ fi
         script: this.railpackPrepareScript(envVars, rootDirectory, false),
         env: argEnv
       });
-    } else if (Object.keys(envVars).length > 0) {
-      steps.push({
-        name: 'prepare',
-        script: injectBuildArgsScript({ dockerfilePath, keys: Object.keys(envVars) })
-      });
+    } else {
+      const injectedArgKeys = injectableBuildArgKeys(Object.keys(envVars), secretEnvKeys);
+      const secretArgNotice = secretBuildArgNotice(Object.keys(envVars), secretEnvKeys);
+      if (secretArgNotice && deploymentId) {
+        this.appendLog(deploymentId, secretArgNotice, 'WARNING').catch(() => {});
+      }
+      if (injectedArgKeys.length > 0) {
+        steps.push({
+          name: 'prepare',
+          script: injectBuildArgsScript({ dockerfilePath, keys: injectedArgKeys })
+        });
+      }
     }
     const buildScript =
       (injectGitSha ? ImageBuilderService.GIT_SHA_PREAMBLE : '') +
@@ -3981,22 +4010,33 @@ fi
     pullRef: string;
     offset: number;
     buildType?: string;
+    envVars?: Record<string, string>;
+    secretEnvKeys?: string[];
   }): Promise<string> {
     const host = this.firecracker?.hostById(opts.hostId);
     if (!this.firecracker || !host) {
       throw new FcUnavailableError(`firecracker host ${opts.hostId} is not configured`);
     }
-    const stream = await this.firecracker.resume(host, opts.buildId, opts.offset);
-    return this.followFirecrackerBuild({
+    const owned = this.trackBuildSecrets({
       deploymentId: opts.deploymentId,
-      stream,
-      buildId: opts.buildId,
-      pullRef: opts.pullRef,
-      offset: opts.offset,
-      buildType: opts.buildType ?? 'dockerfile',
-      submittedAt: Date.now(),
-      adopted: true
+      envVars: opts.envVars,
+      secretEnvKeys: opts.secretEnvKeys
     });
+    try {
+      const stream = await this.firecracker.resume(host, opts.buildId, opts.offset);
+      return await this.followFirecrackerBuild({
+        deploymentId: opts.deploymentId,
+        stream,
+        buildId: opts.buildId,
+        pullRef: opts.pullRef,
+        offset: opts.offset,
+        buildType: opts.buildType ?? 'dockerfile',
+        submittedAt: Date.now(),
+        adopted: true
+      });
+    } finally {
+      if (owned) this.buildSecretValues.delete(opts.deploymentId);
+    }
   }
 
   private async followFirecrackerBuild(opts: {

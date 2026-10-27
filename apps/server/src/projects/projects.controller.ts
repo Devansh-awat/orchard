@@ -30,7 +30,7 @@ import { IngressService } from './ingress.service';
 import { FaviconService } from './favicon.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { StorageService } from '../organizations/storage.service';
-import { Auth } from '../auth/decorators';
+import { Auth, RequireScope } from '../auth/decorators';
 import { MetricsService } from '../metrics/metrics.service';
 import { MetricsStoreError } from '../metrics/victoria-metrics.service';
 import { PodLogCaptureService } from '../kubernetes/pod-log-capture.service';
@@ -666,6 +666,7 @@ export class ProjectsController {
   }
 
   @Get(':id/ingresses/:ingressId/protection')
+  @RequireScope('deploy')
   async getIngressProtection(
     @Param('id') id: string,
     @Param('ingressId') ingressId: string,
@@ -1951,6 +1952,18 @@ export class DatabasesController {
   @Post(':id/rotate-password')
   async rotatePassword(@Param('id') id: string, @Request() req) {
     return this.databases.rotateDatabasePassword(id, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
+  }
+
+  @Get(':id/connection')
+  @RequireScope('deploy')
+  async getConnection(@Param('id') id: string, @Request() req) {
+    return this.databases.revealDatabaseConnection(id, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,

@@ -10,6 +10,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { OrgEventsService } from '../events/org-events.service';
 import { SCRIPT_RUNTIMES, ScriptRuntime } from './script-runtimes';
 import { NotificationsService } from '../notifications/notifications.service';
+import { SecretCryptoService } from '../crypto/secret-crypto.service';
+import { applyEnvKeepRules } from '../projects/env-write-rules';
 
 export const JOB_STEP_TYPES = ['app', 'image', 'script'] as const;
 export type JobStepType = (typeof JOB_STEP_TYPES)[number];
@@ -43,7 +45,7 @@ export interface JobStepInput {
   command?: string | null;
   script?: string | null;
   scriptRuntime?: ScriptRuntime | null;
-  envVars?: { key: string; value: string }[];
+  envVars?: { key: string; value?: string | null; secret?: boolean | null }[];
   cpuRequestMilli?: number | null;
   memoryRequestBytes?: number | string | null;
   timeoutSeconds?: number | null;
@@ -102,12 +104,32 @@ export function nextCronRun(expr: string, timeZone?: string | null): Date | null
 
 const IMAGE_REF_PATTERN = /^[a-z0-9]+(?:[._\-/:@][a-z0-9]+)*$/i;
 
+type StoredStepEnv = { key: string; value: string; secret: boolean };
+
+export function storedStepEnv(raw: unknown): StoredStepEnv[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((e) => e && typeof e.key === 'string')
+    .map((e) => ({ key: e.key, value: String(e.value ?? ''), secret: Boolean(e.secret) }));
+}
+
+export function redactStepEnv(
+  raw: unknown
+): { key: string; value: string | null; secret: boolean }[] {
+  return storedStepEnv(raw).map((e) => ({
+    key: e.key,
+    value: e.secret ? null : e.value,
+    secret: e.secret
+  }));
+}
+
 @Injectable()
 export class JobsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly orgEvents: OrgEventsService,
-    private readonly notifications: NotificationsService
+    private readonly notifications: NotificationsService,
+    private readonly crypto: SecretCryptoService
   ) {}
 
   async getJobOrThrow(jobId: string) {
@@ -220,10 +242,7 @@ export class JobsService {
     return {
       ...step,
       script: null,
-      envVars: (step.envVars as { key: string; value: string }[]).map(({ key }) => ({
-        key,
-        value: null
-      }))
+      envVars: step.envVars.map(({ key, secret }) => ({ key, value: null, secret }))
     };
   }
 
@@ -235,7 +254,7 @@ export class JobsService {
     if (!project) throw new NotFoundException('Project not found');
 
     const data = await this.validateJobInput(input, projectId);
-    const steps = await this.validateSteps(input.steps, projectId);
+    const steps = await this.validateSteps(input.steps, projectId, []);
 
     const defaultEnv = await this.prisma.environment.findFirst({
       where: { projectId, isDefault: true },
@@ -336,7 +355,11 @@ export class JobsService {
 
   async replaceSteps(jobId: string, stepInputs: JobStepInput[]) {
     const job = await this.getJobOrThrow(jobId);
-    const steps = await this.validateSteps(stepInputs, job.projectId);
+    const previous = await this.prisma.jobStep.findMany({
+      where: { jobId },
+      select: { name: true, stepOrder: true, envVars: true }
+    });
+    const steps = await this.validateSteps(stepInputs, job.projectId, previous);
 
     const updated = await this.prisma.$transaction(async (tx) => {
       await tx.jobStep.deleteMany({ where: { jobId } });
@@ -483,7 +506,7 @@ export class JobsService {
       command: (step.command as any)?.shell ?? null,
       script: step.script,
       scriptRuntime: step.scriptRuntime,
-      envVars: step.envVars ?? [],
+      envVars: redactStepEnv(step.envVars),
       cpuRequestMilli: step.cpuRequestMilli,
       memoryRequestBytes:
         step.memoryRequestBytes != null ? step.memoryRequestBytes.toString() : null,
@@ -623,7 +646,11 @@ export class JobsService {
     };
   }
 
-  private async validateSteps(stepInputs: JobStepInput[], projectId: string) {
+  private async validateSteps(
+    stepInputs: JobStepInput[],
+    projectId: string,
+    previous: { name: string; stepOrder: number; envVars: unknown }[]
+  ) {
     if (!Array.isArray(stepInputs) || stepInputs.length === 0) {
       throw new BadRequestException('At least one step is required');
     }
@@ -650,17 +677,31 @@ export class JobsService {
         throw new BadRequestException(`Step ${order}: invalid type "${raw.type}"`);
       }
 
-      const envVars = Array.isArray(raw.envVars)
-        ? raw.envVars
-            .filter((e) => e && typeof e.key === 'string' && e.key.trim())
-            .map((e) => ({ key: e.key.trim(), value: String(e.value ?? '') }))
-        : [];
-      if (envVars.length > 64) throw new BadRequestException(`Step ${order}: too many env vars`);
-      for (const e of envVars) {
+      const prior =
+        previous.find((p) => p.name === name) ?? previous.find((p) => p.stepOrder === order);
+      const before = new Map(
+        storedStepEnv(prior?.envVars).map((e) => {
+          const plain = this.crypto.maybeDecrypt(e);
+          return [plain.key, plain] as const;
+        })
+      );
+      const kept = applyEnvKeepRules(
+        Array.isArray(raw.envVars)
+          ? raw.envVars.filter((e) => e && typeof e.key === 'string' && e.key.trim())
+          : [],
+        before
+      );
+      if (kept.length > 64) throw new BadRequestException(`Step ${order}: too many env vars`);
+      for (const e of kept) {
         if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(e.key)) {
           throw new BadRequestException(`Step ${order}: invalid env var name "${e.key}"`);
         }
       }
+      const envVars = kept.map((e) => ({
+        key: e.key,
+        value: this.crypto.encryptIfSecret(e.value, e.secret),
+        secret: e.secret
+      }));
 
       let timeoutSeconds =
         raw.timeoutSeconds != null ? Math.floor(Number(raw.timeoutSeconds)) : 1800;

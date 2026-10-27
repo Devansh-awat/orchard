@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hackclub/orchard/cli/internal/api"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/hackclub/orchard/cli/internal/api"
 )
 
 func fakeDatabaseAPI(t *testing.T) (*api.Client, *capture) {
@@ -24,9 +24,12 @@ func fakeDatabaseAPI(t *testing.T) (*api.Client, *capture) {
 		case p == "/apiv1/databases/db1" && r.Method == "GET":
 			w.Write([]byte(`{"id":"db1","name":"main","status":"ready","mode":"cnpg","namespace":"proj-ns",
 				"storageSize":"1Gi","host":"db.internal","port":5432,"dbName":"maindb","dbUser":"admin",
-				"dbPassword":"sekret","connectionString":"postgresql://admin:sekret@db.internal:5432/maindb",
+				"dbPassword":null,"passwordSet":true,"connectionString":"postgresql://admin:****@db.internal:5432/maindb",
 				"publicEnabled":false,"cpuRequestMilli":250,"memoryRequestBytes":"268435456","backupsEnabled":true,
 				"pods":[{"name":"main-1"}],"liveStatus":{"ready":true,"connections":3,"size":"12 MB"}}`))
+		case p == "/apiv1/databases/db1/connection" && r.Method == "GET":
+			w.Write([]byte(`{"host":"db.internal","port":5432,"user":"admin","password":"sekret","database":"maindb",
+				"connectionString":"postgresql://admin:sekret@db.internal:5432/maindb","publicConnectionString":null}`))
 		case strings.HasSuffix(p, "/backups") && r.Method == "GET":
 			w.Write([]byte(`[{"id":"b1","label":"nightly","type":"full","status":"completed","sizeBytes":1048576,"createdAt":"2026-07-01"}]`))
 		case strings.HasSuffix(p, "/backup-schedule") && r.Method == "GET":
@@ -76,7 +79,8 @@ func TestDatabaseScreenTabsRender(t *testing.T) {
 	if strings.Contains(conn, "sekret") {
 		t.Fatalf("password should be masked by default:\n%s", conn)
 	}
-	s, _ = s.Update(dbKey("r")) // reveal
+	s, cmd := s.Update(dbKey("r"))
+	s, _ = s.Update(run(cmd))
 	if v := s.View(); !strings.Contains(v, "sekret") {
 		t.Fatalf("r should reveal the password:\n%s", v)
 	}

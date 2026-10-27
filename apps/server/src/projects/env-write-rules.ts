@@ -1,22 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
 
-/**
- * What a full-replace write to a deployment's environment actually stores.
- *
- * A secret value is write-only: it goes into the deployment's Kubernetes Secret
- * and no read ever hands it back, so a client that wants to change one variable
- * has no way to echo the others. The keep rules are what make a read-modify-
- * write round trip safe without that:
- *
- *   - `value === null` (or absent) keeps what is stored for an existing key
- *   - `value === ''` keeps it when the row is secret both before and after,
- *     which is the blank box the editor shows for a value it was never sent
- *   - un-marking a secret without supplying a value is refused, because the
- *     alternative is republishing in the clear the plaintext it was hiding
- *
- * A key that is new to the deployment has nothing to keep, so a null or blank
- * value stores an empty string, the same as it always did.
- */
 export interface StoredEnvVar {
   key: string;
   value: string;
@@ -26,7 +9,38 @@ export interface StoredEnvVar {
 export interface EnvVarWrite {
   key: string;
   value?: string | null;
-  secret?: boolean;
+  secret?: boolean | null;
+}
+
+export const DEFAULT_SECRET_KEY_RE =
+  /(SECRET|TOKEN|PASSWORD|PASSWD|PRIVATE_KEY|API_KEY|_KEY$|DATABASE_URL|DSN|CREDENTIALS?)/i;
+
+const PUBLIC_BUNDLE_PREFIX_RE =
+  /^(NEXT_PUBLIC_|VITE_|PUBLIC_|REACT_APP_|EXPO_PUBLIC_|NUXT_PUBLIC_|GATSBY_)/i;
+
+export function looksSecret(key: string): boolean {
+  const trimmed = key.trim();
+  if (PUBLIC_BUNDLE_PREFIX_RE.test(trimmed)) return false;
+  return DEFAULT_SECRET_KEY_RE.test(trimmed);
+}
+
+export function defaultSecretFlag(key: string, requested?: boolean | null): boolean {
+  if (typeof requested === 'boolean') return requested;
+  return looksSecret(key);
+}
+
+export function resolveSecretFlag(
+  key: string,
+  requested: boolean | null | undefined,
+  existing: { secret: boolean } | undefined
+): boolean {
+  if (!existing) return defaultSecretFlag(key, requested);
+  if (existing.secret && requested === false) {
+    throw new BadRequestException(
+      `${key} is sealed and cannot be made visible again. Delete it and add it back to change that.`
+    );
+  }
+  return typeof requested === 'boolean' ? requested : existing.secret;
 }
 
 export function applyEnvKeepRules(
@@ -38,13 +52,9 @@ export function applyEnvKeepRules(
     .map((entry) => {
       const key = entry.key.trim();
       const existing = before.get(key);
-      const secret = Boolean(entry.secret);
+      const secret = resolveSecretFlag(key, entry.secret, existing);
       const blankKeepsSecret = entry.value === '' && existing?.secret && secret;
       const keeps = entry.value === undefined || entry.value === null || blankKeepsSecret;
-
-      if (keeps && existing?.secret && !secret) {
-        throw new BadRequestException(`Cannot un-mark ${key} as secret without providing a value`);
-      }
 
       return {
         key,

@@ -180,6 +180,7 @@ var routeCoverage = map[string]string{
 	"DELETE /databases/:id":                  "db delete",
 	"GET /databases/:id/provisioning":        "db create --wait",
 	"GET /databases/:id/metrics":             "db metrics",
+	"GET /databases/:id/connection":          "db connection",
 	"GET /databases/:id/backups":             "db backup list",
 	"POST /databases/:id/backups":            "db backup create",
 	"POST /databases/:id/restore":            "db backup restore",

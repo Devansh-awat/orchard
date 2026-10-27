@@ -395,8 +395,8 @@
 				let text = '';
 				if (action.copyField === 'url' && item.ingressHost) text = `https://${item.ingressHost}`;
 				if (action.copyField === 'connectionString') {
-					const res = await apiFetch(`/apiv1/databases/${item.id}`);
-					if (!res.ok) throw new Error('Could not load the database');
+					const res = await apiFetch(`/apiv1/databases/${item.id}/connection`);
+					if (!res.ok) throw new Error('Could not load the database credentials');
 					const data = await res.json();
 					text = data.connectionString ?? '';
 				}

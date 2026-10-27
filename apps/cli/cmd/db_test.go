@@ -234,7 +234,7 @@ func TestDbConnection(t *testing.T) {
 	var gotMethod, gotPath string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotMethod, gotPath = r.Method, r.URL.Path
-		io.WriteString(w, `{"id":"db1","host":"db1.ns.svc","port":5432,"dbName":"app","dbUser":"app","dbPassword":"pw","connectionString":"postgresql://app:pw@db1.ns.svc:5432/app"}`)
+		io.WriteString(w, `{"host":"db1.ns.svc","port":5432,"database":"app","user":"app","password":"pw","connectionString":"postgresql://app:pw@db1.ns.svc:5432/app","publicConnectionString":null}`)
 	}))
 	defer srv.Close()
 
@@ -243,8 +243,8 @@ func TestDbConnection(t *testing.T) {
 	if err := root.Execute(); err != nil {
 		t.Fatalf("db connection: %v", err)
 	}
-	if gotMethod != http.MethodGet || gotPath != "/apiv1/databases/db1" {
-		t.Errorf("request = %s %s, want GET /apiv1/databases/db1", gotMethod, gotPath)
+	if gotMethod != http.MethodGet || gotPath != "/apiv1/databases/db1/connection" {
+		t.Errorf("request = %s %s, want GET /apiv1/databases/db1/connection", gotMethod, gotPath)
 	}
 }
 
