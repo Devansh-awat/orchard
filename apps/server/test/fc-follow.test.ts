@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { BadRequestException } from '@nestjs/common';
+import { PullAuthError, registryAuth } from '../src/docker/registry-pull-auth';
 import { ImageBuilderService } from '../src/docker/image-builder.service';
 import { ndjson, type FcEvent } from '../src/docker/fc/fc-client';
 
@@ -184,4 +186,102 @@ test('a cancelled build says so', async () => {
     }),
     /Build failed: build cancelled/
   );
+});
+
+test('Firecracker forwards saved registry credentials without exposing them to build steps', async () => {
+  const { ibs } = harness();
+  const auths = { 'dhi.io': registryAuth('saved-user', 'saved-token') };
+  const calls: unknown[] = [];
+  ibs.registryCredentials = {
+    buildAuths: async (...args: unknown[]) => {
+      calls.push(args);
+      return auths;
+    }
+  };
+  let request: any;
+  ibs.firecracker = {
+    enabled: true,
+    start: async (value: unknown) => {
+      request = value;
+      return {};
+    }
+  };
+  const logs: string[] = [];
+  ibs.appendLog = async (_id: string, message: string) => {
+    logs.push(message);
+  };
+  ibs.followFirecrackerBuild = async ({ pullRef }: any) => pullRef;
+  const envVars = { APP_MODE: 'test' };
+  await ibs.buildWithFirecracker({
+    repoUrl: 'https://github.com/example/app.git',
+    branch: 'main',
+    dockerfilePath: 'Dockerfile',
+    imageName: 'app',
+    deploymentId: 'deployment-a',
+    envVars
+  });
+  assert.deepEqual(calls, [['deployment-a', envVars]]);
+  assert.deepEqual(request.dockerConfig, { auths });
+  assert.ok(logs.includes('Using registry credentials to pull base images'));
+  assert.ok(!JSON.stringify(request.steps).includes('saved-user'));
+  assert.ok(!JSON.stringify(request.steps).includes('saved-token'));
+});
+
+test('Firecracker preserves environment pull auth and excludes it from build args and secrets', async () => {
+  const { ibs } = harness();
+  const { request } = await ibs.firecrackerRequest({
+    repoUrl: 'https://github.com/example/app.git',
+    branch: 'main',
+    dockerfilePath: 'Dockerfile',
+    imageName: 'app',
+    envVars: { DHI_USERNAME: 'env-user', DHI_TOKEN: 'env-token', APP_MODE: 'test' }
+  });
+  assert.deepEqual(request.dockerConfig, {
+    auths: { 'dhi.io': registryAuth('env-user', 'env-token') }
+  });
+  assert.ok(!JSON.stringify(request.steps).includes('DHI_USERNAME'));
+  assert.ok(!JSON.stringify(request.steps).includes('DHI_TOKEN'));
+  assert.ok(!JSON.stringify(request.steps).includes('env-token'));
+  assert.equal(request.steps.at(-1).env.APP_MODE, 'test');
+});
+
+test('Firecracker omits Docker auth when no credentials are configured', async () => {
+  const { ibs } = harness();
+  ibs.registryCredentials = { buildAuths: async () => ({}) };
+  const { request } = await ibs.firecrackerRequest({
+    repoUrl: 'https://github.com/example/app.git',
+    branch: 'main',
+    dockerfilePath: 'Dockerfile',
+    imageName: 'app'
+  });
+  assert.equal(request.dockerConfig, undefined);
+});
+
+test('Firecracker fails before VM submission when resolving pull credentials fails', async () => {
+  const { ibs } = harness();
+  let submissions = 0;
+  ibs.firecracker = {
+    enabled: true,
+    start: async () => {
+      submissions++;
+      throw new Error('Unexpected VM submission');
+    }
+  };
+  ibs.registryCredentials = {
+    buildAuths: async () => {
+      throw new PullAuthError('DHI_TOKEN is required');
+    }
+  };
+  await assert.rejects(
+    ibs.buildWithFirecracker({
+      repoUrl: 'https://github.com/example/app.git',
+      branch: 'main',
+      dockerfilePath: 'Dockerfile',
+      imageName: 'app',
+      deploymentId: 'deployment-a'
+    }),
+    (error: unknown) =>
+      error instanceof BadRequestException && error.message === 'DHI_TOKEN is required'
+  );
+  assert.equal(submissions, 0);
 });

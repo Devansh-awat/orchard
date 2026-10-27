@@ -3844,10 +3844,10 @@ fi
     }
   }
 
-  private firecrackerRequest(options: BuildJobOptions): {
+  private async firecrackerRequest(options: BuildJobOptions): Promise<{
     request: FcBuildRequest;
     pullRef: string;
-  } {
+  }> {
     const {
       repoUrl,
       branch,
@@ -3867,7 +3867,9 @@ fi
 
     let appPullAuths: RegistryAuths = {};
     try {
-      appPullAuths = pullAuthsFromEnv(requestedEnvVars);
+      appPullAuths = this.registryCredentials
+        ? await this.registryCredentials.buildAuths(deploymentId, requestedEnvVars)
+        : pullAuthsFromEnv(requestedEnvVars);
     } catch (error) {
       if (error instanceof PullAuthError) throw new BadRequestException(error.message);
       throw error;
@@ -3950,12 +3952,11 @@ fi
 
   private async buildWithFirecracker(options: BuildJobOptions): Promise<string> {
     if (!this.firecracker?.enabled) throw new FcUnavailableError('firecracker builder disabled');
-    const { request, pullRef } = this.firecrackerRequest(options);
-    if (hasRegistryAuths(pullAuthsFromEnv(options.envVars ?? {}))) {
-      this.appendLog(
-        options.deploymentId,
-        'Using registry credentials from the app environment to pull base images'
-      ).catch(() => {});
+    const { request, pullRef } = await this.firecrackerRequest(options);
+    if (request.dockerConfig) {
+      this.appendLog(options.deploymentId, 'Using registry credentials to pull base images').catch(
+        () => {}
+      );
     }
     const label = options.buildType === 'railpack' ? 'Railpack' : 'Dockerfile';
     await this.appendLog(options.deploymentId, `Starting fast build (${label}) in an isolated VM`);
