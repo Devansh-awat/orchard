@@ -146,6 +146,7 @@
 >
 	{#if showCreate}
 		<div {...combo.getOption(CREATE, createLabel(createText), create)} class="ui-dropdown-option">
+			<span class="ui-dropdown-check" aria-hidden="true"></span>
 			<span class="ui-dropdown-icon"><CornerDownLeft size={16} /></span>
 			<span class="ui-dropdown-option-main">
 				<span class="ui-dropdown-text">{createLabel(createText)}</span>
@@ -159,6 +160,9 @@
 			class:ui-dropdown-option--rich={!!option.description}
 			class:ui-dropdown-option--selected={combo.isSelected(option.value)}
 		>
+			<span class="ui-dropdown-check" aria-hidden="true">
+				{#if combo.isSelected(option.value)}<Check size={16} strokeWidth={2.25} />{/if}
+			</span>
 			{#if option.icon}
 				{@const Glyph = option.icon}
 				<span class="ui-dropdown-icon"><Glyph size={16} /></span>
@@ -173,9 +177,6 @@
 				{/if}
 			</span>
 			{#if trailing}<span class="trail">{@render trailing(option)}</span>{/if}
-			<span class="ui-dropdown-check" aria-hidden="true">
-				{#if combo.isSelected(option.value)}<Check size={16} strokeWidth={2.25} />{/if}
-			</span>
 		</div>
 	{:else}
 		{#if !showCreate}

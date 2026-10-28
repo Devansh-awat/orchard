@@ -174,15 +174,15 @@
 					}}
 					onclick={() => pick(option)}
 				>
+					<span class="ui-dropdown-check" aria-hidden="true">
+						{#if option.value === value}<Check size={16} strokeWidth={2.25} />{/if}
+					</span>
 					{@render glyph(option)}
 					<span class="ui-dropdown-option-main">
 						<span class="ui-dropdown-text">{@render text(option)}</span>
 						{#if option.description}
 							<span class="ui-dropdown-option-desc">{option.description}</span>
 						{/if}
-					</span>
-					<span class="ui-dropdown-check" aria-hidden="true">
-						{#if option.value === value}<Check size={16} strokeWidth={2.25} />{/if}
 					</span>
 				</button>
 			{/each}

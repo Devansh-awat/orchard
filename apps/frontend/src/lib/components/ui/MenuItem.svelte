@@ -97,7 +97,7 @@
 		height: 1.5rem;
 		margin-left: -0.125rem;
 		overflow: hidden;
-		border-radius: calc((var(--radius-card) - 0.5rem) * var(--corner-scale));
+		border-radius: calc((var(--radius-panel) - var(--float-pad) - 0.375rem) * var(--corner-scale));
 		corner-shape: var(--corner);
 		box-shadow: inset 0 0 0 0.5px var(--rule);
 	}
