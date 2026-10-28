@@ -126,13 +126,15 @@
 	}
 	.row:hover .actions,
 	.row:focus-within .actions,
-	.actions:has(:global([aria-expanded='true'])) {
+	.actions:has(:global([aria-expanded='true'])),
+	.actions:has(:global(:popover-open)) {
 		pointer-events: auto;
 		opacity: 1;
 	}
 	.row:hover .end:has(.actions) .trailing,
 	.row:focus-within .end:has(.actions) .trailing,
-	.end:has(:global([aria-expanded='true'])) .trailing {
+	.end:has(:global([aria-expanded='true'])) .trailing,
+	.end:has(:global(:popover-open)) .trailing {
 		opacity: 0;
 	}
 	.text {

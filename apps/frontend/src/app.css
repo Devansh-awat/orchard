@@ -518,6 +518,7 @@ html {
 .ui-menu,
 .ui-popover {
 	z-index: var(--z-dropdown);
+	pointer-events: auto;
 	will-change: transform, opacity;
 	margin: 0;
 	padding: var(--float-pad);
