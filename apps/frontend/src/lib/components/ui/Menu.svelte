@@ -8,6 +8,7 @@
 		placement = 'bottom-end',
 		open = $bindable(false),
 		sameWidth = false,
+		size = 'md',
 		inside,
 		trigger,
 		children
@@ -15,6 +16,7 @@
 		placement?: Placement;
 		open?: boolean;
 		sameWidth?: boolean;
+		size?: 'md' | 'lg';
 		inside?: (target: Element | Window | Document) => boolean;
 		trigger: Snippet<[Record<string, unknown>, boolean]>;
 		children: Snippet;
@@ -91,7 +93,7 @@
 {@render trigger(popover.trigger, open)}
 <div
 	{...popover.content}
-	class="ui-menu"
+	class="ui-menu ui-menu--{size}"
 	role="menu"
 	data-nav={nav}
 	onclick={(e: MouseEvent) => e.stopPropagation()}

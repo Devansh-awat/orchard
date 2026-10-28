@@ -25,12 +25,12 @@
 	} from 'lucide-svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { overviewQueryOptions } from '$lib/queries/overview';
-	import { resourceStatus, Avatar, IconTile } from '$lib/components/ui';
+	import { resourceStatus, Avatar, Badge, IconTile } from '$lib/components/ui';
 	import Monogram from '$lib/components/ui/Monogram.svelte';
 	import Sidebar from '$lib/components/patterns/Sidebar.svelte';
 	import type { SidebarSection } from '$lib/components/patterns/sidebar';
 	import MenuItem from '$lib/components/ui/MenuItem.svelte';
-	import MenuLabel from '$lib/components/ui/MenuLabel.svelte';
+	import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
 	import MenuSeparator from '$lib/components/ui/MenuSeparator.svelte';
 	import { motionEnabled, transition } from '$lib/utils/motion.svelte';
 	import { animate } from 'motion';
@@ -273,15 +273,14 @@
 		themeStore.setMode(mode === 'system' ? 'auto' : mode);
 	}
 
-	function isThemeActive(mode: 'light' | 'dark' | 'system') {
-		return themeMode === (mode === 'system' ? 'auto' : mode);
-	}
-
 	function depName(pin: { name: string; live: OverviewDep | null }) {
 		return pin.live?.displayName || pin.live?.name || pin.name;
 	}
 
 	const invitationCount = $derived($pendingInvitations.length);
+	const fullName = $derived(
+		[$user?.firstName, $user?.lastName].filter(Boolean).join(' ') || ($user?.username ?? 'You')
+	);
 
 	$effect(() => {
 		if ($isSuperAdmin) instanceChecklist.load();
@@ -337,35 +336,47 @@
 		{/snippet}
 		{#snippet userAvatar()}<Avatar user={$user} alive />{/snippet}
 		{#snippet userMenu()}
-			<MenuLabel>Theme</MenuLabel>
-			<MenuItem icon={Sun} checked={isThemeActive('light')} onclick={() => applyQuickTheme('light')}
-				>Light</MenuItem
-			>
-			<MenuItem icon={Moon} checked={isThemeActive('dark')} onclick={() => applyQuickTheme('dark')}
-				>Dark</MenuItem
-			>
-			<MenuItem
-				icon={Monitor}
-				checked={isThemeActive('system')}
-				onclick={() => applyQuickTheme('system')}>System</MenuItem
-			>
+			<div class="me-card">
+				<Avatar user={$user} size={36} />
+				<div class="me-text">
+					<p class="me-name">{fullName}</p>
+					<p class="me-sub">{$user?.email ?? `@${$user?.username ?? 'you'}`}</p>
+				</div>
+			</div>
+			<div class="theme-row">
+				<span>Theme</span>
+				<SegmentedControl
+					size="sm"
+					iconOnly
+					label="Theme"
+					value={themeMode === 'auto' ? 'system' : themeMode}
+					onchange={(v) => applyQuickTheme(v as 'light' | 'dark' | 'system')}
+					options={[
+						{ value: 'light', label: 'Light', icon: Sun },
+						{ value: 'dark', label: 'Dark', icon: Moon },
+						{ value: 'system', label: 'System', icon: Monitor }
+					]}
+				/>
+			</div>
 			<MenuSeparator />
+			<MenuItem icon={Settings} href="/user/settings">Account settings</MenuItem>
+			<MenuItem icon={Palette} href="/user/settings?tab=appearance">Appearance</MenuItem>
+			<MenuItem icon={KeyRound} href="/user/settings?tab=tokens">API tokens</MenuItem>
 			{#if invitationCount > 0}
-				<MenuItem icon={Mail} href="/user/settings?tab=profile"
-					>Invitations ({invitationCount})</MenuItem
-				>
-			{/if}
-			{#if $isSuperAdmin}
-				<MenuItem icon={Shield} href="/admin">
-					Instance admin{$instanceChecklistOutstanding.length
-						? ` (${$instanceChecklistOutstanding.length})`
-						: ''}
+				<MenuItem icon={Mail} href="/user/settings?tab=profile">
+					Invitations <Badge tone="accent">{invitationCount}</Badge>
 				</MenuItem>
 			{/if}
-			<MenuItem icon={Settings} href="/user/settings">Settings</MenuItem>
+			<MenuSeparator />
+			{#if $isSuperAdmin}
+				<MenuItem icon={Shield} href="/admin">
+					Instance admin
+					{#if $instanceChecklistOutstanding.length}<Badge tone="accent"
+							>{$instanceChecklistOutstanding.length}</Badge
+						>{/if}
+				</MenuItem>
+			{/if}
 			<MenuItem icon={SquareTerminal} onclick={() => (cliOpen = true)}>Command line</MenuItem>
-			<MenuItem icon={KeyRound} href="/user/settings?tab=tokens">API tokens</MenuItem>
-			<MenuItem icon={Palette} href="/user/settings?tab=appearance">Appearance</MenuItem>
 			<MenuItem icon={Scale} href="/third-party-notices.txt" target="_blank" rel="noopener"
 				>Open source licenses</MenuItem
 			>
@@ -379,6 +390,48 @@
 {/if}
 
 <style>
+	.me-card {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 0.75rem 0.75rem 0.875rem;
+	}
+	.me-card :global(img),
+	.me-card :global(svg) {
+		border-radius: 50%;
+	}
+	.me-text {
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+		min-width: 0;
+	}
+	.me-name {
+		margin: 0;
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
+		font-weight: var(--weight-medium);
+		color: var(--text-default);
+	}
+	.me-sub {
+		margin: 0;
+		overflow: hidden;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-muted);
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.theme-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		padding: 0.25rem 0.5rem 0.625rem 0.75rem;
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
+		color: var(--text-default);
+	}
 	.deck-host {
 		position: relative;
 		z-index: var(--z-nav);

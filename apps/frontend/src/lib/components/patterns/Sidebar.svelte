@@ -297,7 +297,7 @@
 		<ChevronsUpDown size={14} class="org-chev" />
 	{/snippet}
 	{#if orgMenu}
-		<Menu placement="bottom-start" sameWidth={!collapsed}>
+		<Menu placement="bottom-start" sameWidth={!collapsed} size="lg">
 			{#snippet trigger(attrs)}
 				<button type="button" class="org" title={collapsed ? org.name : undefined} {...attrs}
 					>{@render orgFace()}</button
@@ -378,7 +378,7 @@
 			<span class="me-name">@{user.handle}</span>
 		{/snippet}
 		{#if userMenu}
-			<Menu placement="top-start">
+			<Menu placement="top-start" size="lg">
 				{#snippet trigger(attrs)}
 					<button
 						type="button"
