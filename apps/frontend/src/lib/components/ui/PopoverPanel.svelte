@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Popover } from 'melt/builders';
+	import { PlacementLock } from './placement-lock.svelte';
 	import type { Snippet } from 'svelte';
 	import type { Placement } from '@floating-ui/dom';
 	import { overlayMotion } from '$lib/utils/motion.svelte';
@@ -22,14 +23,16 @@
 		[key: string]: unknown;
 	} = $props();
 
+	const lock = new PlacementLock(
+		() => placement,
+		() => open
+	);
+
 	const popover = new Popover({
 		open: () => open,
 		onOpenChange: (v) => (open = v),
 		sameWidth: false,
-		floatingConfig: {
-			computePosition: { placement },
-			offset: { mainAxis: 6 }
-		}
+		floatingConfig: () => lock.config()
 	});
 
 	const origin = $derived.by(() => {
@@ -46,6 +49,7 @@
 {@render trigger(popover.trigger, open)}
 <div
 	{...popover.content}
+	{@attach lock.attach}
 	{...rest}
 	class="ui-popover{sameWidth ? ' ui-popover--match' : ''}{className ? ` ${className}` : ''}"
 	{@attach overlayMotion(() => open, { origin })}
