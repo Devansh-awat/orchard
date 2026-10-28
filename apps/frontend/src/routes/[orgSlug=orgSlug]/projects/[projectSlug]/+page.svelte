@@ -175,7 +175,6 @@
 		(projectEnvQuery.data ?? []).find((e: any) => e.id === selectedEnvId) ?? null
 	);
 	const selectedEnvName = $derived(selectedEnvObj?.name ?? '');
-	const selectedEnvSlug = $derived(selectedEnvObj?.slug ?? '');
 
 	let filteredDeployments = $derived.by(() => {
 		const deployments = project?.deployments ?? [];
@@ -1007,7 +1006,6 @@
 							<SharedVarsEditor
 								environmentId={selectedEnvId}
 								envName={selectedEnvName}
-								envSlug={selectedEnvSlug}
 							/>
 						{:else}
 							<EmptyState title="Pick an environment to edit its variables" />
