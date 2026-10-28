@@ -10,6 +10,7 @@
 		actions = undefined,
 		tools = undefined,
 		aside = undefined,
+		footer = undefined,
 		children
 	}: {
 		title: string;
@@ -20,6 +21,7 @@
 		actions?: Snippet;
 		tools?: Snippet;
 		aside?: Snippet;
+		footer?: Snippet;
 		children: Snippet;
 	} = $props();
 </script>
@@ -47,9 +49,33 @@
 	{:else}
 		<div class="main">{@render children()}</div>
 	{/if}
+	{#if footer}
+		<footer class="footer"><div class="footer-bar">{@render footer()}</div></footer>
+	{/if}
 </div>
 
 <style>
+	.footer {
+		position: sticky;
+		bottom: 0;
+		z-index: var(--z-sticky);
+		margin: 1.5rem -1rem -2rem;
+		padding: 0.75rem 1rem 1rem;
+	}
+	.footer::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background: linear-gradient(to top, var(--bg-app) 55%, transparent);
+		pointer-events: none;
+	}
+	.footer-bar {
+		position: relative;
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 0.5rem;
+	}
 	.frame {
 		--aside-w: 18rem;
 		width: 100%;

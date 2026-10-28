@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import type { Icon } from './types';
 
 	let {
@@ -7,6 +8,7 @@
 		icon = undefined,
 		size = 'md',
 		shape = 'rounded',
+		suffix = undefined,
 		class: className = '',
 		...rest
 	}: {
@@ -15,22 +17,30 @@
 		icon?: Icon;
 		size?: 'lg' | 'md' | 'sm';
 		shape?: 'rounded' | 'capsule';
+		suffix?: string | Snippet;
 		class?: string;
 		[key: string]: unknown;
 	} = $props();
 </script>
 
-{#if icon}
+{#if icon || suffix}
 	{@const Leading = icon}
 	<span class="wrap {className}">
-		<span class="lead" aria-hidden="true"><Leading size={15} /></span>
+		{#if Leading}<span class="lead" aria-hidden="true"><Leading size={15} /></span>{/if}
 		<input
-			class="control control--{size} control--{shape} control--lead"
+			class="control control--{size} control--{shape}"
+			class:control--lead={!!icon}
+			class:control--suffix={!!suffix}
 			class:control--error={error}
 			aria-invalid={error || undefined}
 			bind:value
 			{...rest}
 		/>
+		{#if suffix}
+			<span class="suffix">
+				{#if typeof suffix === 'string'}{suffix}{:else}{@render suffix()}{/if}
+			</span>
+		{/if}
 	</span>
 {:else}
 	<input
@@ -95,6 +105,20 @@
 		border-radius: calc(0.75rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		font-size: var(--text-headline);
+	}
+	.suffix {
+		position: absolute;
+		top: 50%;
+		right: 0.625rem;
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		color: var(--text-muted);
+		font-size: var(--text-callout);
+		transform: translateY(-50%);
+	}
+	.control--suffix {
+		padding-right: 3rem;
 	}
 	.control--lead {
 		padding-left: 2.125rem;

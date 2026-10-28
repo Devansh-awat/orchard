@@ -6,25 +6,49 @@
 		hint = undefined,
 		error = undefined,
 		for: htmlFor = undefined,
+		required = false,
+		layout = 'stack',
 		children
 	}: {
 		label?: string;
-		hint?: string;
+		hint?: string | Snippet;
 		error?: string | null;
 		for?: string;
+		required?: boolean;
+		layout?: 'stack' | 'row';
 		children: Snippet;
 	} = $props();
 </script>
 
-<div class="field">
-	{#if label}<label class="label" for={htmlFor}>{label}</label>{/if}
-	{@render children()}
+{#snippet message()}
 	{#if error}
 		<p class="msg msg--error" role="alert">{error}</p>
 	{:else if hint}
-		<p class="msg">{hint}</p>
+		<p class="msg">
+			{#if typeof hint === 'string'}{hint}{:else}{@render hint()}{/if}
+		</p>
 	{/if}
-</div>
+{/snippet}
+
+{#if layout === 'row'}
+	<div class="field field--row">
+		<div class="row-text">
+			{#if label}<label class="label" for={htmlFor}
+					>{label}{#if required}<span class="req" aria-hidden="true">*</span>{/if}</label
+				>{/if}
+			{@render message()}
+		</div>
+		<div class="row-control">{@render children()}</div>
+	</div>
+{:else}
+	<div class="field">
+		{#if label}<label class="label" for={htmlFor}
+				>{label}{#if required}<span class="req" aria-hidden="true">*</span>{/if}</label
+			>{/if}
+		{@render children()}
+		{@render message()}
+	</div>
+{/if}
 
 <style>
 	.field {
@@ -37,6 +61,30 @@
 		font-size: var(--text-callout);
 		line-height: var(--lh-callout);
 		font-weight: var(--weight-medium);
+		color: var(--text-default);
+	}
+	.field--row {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+	.row-text {
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+		min-width: 0;
+	}
+	.row-control {
+		flex-shrink: 0;
+	}
+	.req {
+		margin-left: 0.125rem;
+		color: var(--status-error);
+	}
+	.msg :global(code) {
+		font-family: var(--font-mono);
+		font-size: 0.95em;
 		color: var(--text-default);
 	}
 	.msg {

@@ -134,7 +134,9 @@
 		height: 1.125rem;
 		margin-right: 0.25rem;
 		border: none;
-		border-radius: calc(max(var(--radius-floor), var(--radius-control) - 0.4375rem) * var(--corner-scale));
+		border-radius: calc(
+			max(var(--radius-floor), var(--radius-control) - 0.4375rem) * var(--corner-scale)
+		);
 		corner-shape: var(--corner);
 		background: var(--neutral-6);
 		color: var(--bg-surface);
@@ -143,7 +145,9 @@
 	.kbd {
 		flex-shrink: 0;
 		padding: 0.1875rem 0.375rem;
-		border-radius: calc(max(var(--radius-floor), var(--radius-control) - 0.375rem) * var(--corner-scale));
+		border-radius: calc(
+			max(var(--radius-floor), var(--radius-control) - 0.375rem) * var(--corner-scale)
+		);
 		corner-shape: var(--corner);
 		background: var(--bg-surface);
 		box-shadow: inset 0 0 0 0.5px var(--border-strong);
