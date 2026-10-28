@@ -2,7 +2,7 @@
 	import type { Snippet } from 'svelte';
 	import type { Icon } from './types';
 
-	type Item = { label: string; icon?: Icon; href?: string; mono?: boolean };
+	type Item = { label: string; icon?: Icon; href?: string; mono?: boolean; external?: boolean };
 
 	let { items, leading = undefined }: { items: Item[]; leading?: Snippet } = $props();
 </script>
@@ -12,7 +12,12 @@
 	{#each items as item, i (i)}
 		{@const Glyph = item.icon}
 		{#if item.href}
-			<a class="item item--link" href={item.href}>
+			<a
+				class="item item--link"
+				href={item.href}
+				target={item.external ? '_blank' : undefined}
+				rel={item.external ? 'noopener noreferrer' : undefined}
+			>
 				{#if Glyph}<Glyph size={14} aria-hidden="true" />{/if}
 				<span class="label" class:label--mono={item.mono}>{item.label}</span>
 			</a>

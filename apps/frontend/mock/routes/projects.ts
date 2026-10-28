@@ -24,6 +24,10 @@ type MockInvite = {
 };
 
 const INVITES = new Map<string, MockInvite[]>();
+const STACK_EDITS = new Map<
+	string,
+	{ name?: string; autoDeploy?: boolean; deleted?: boolean; redeployedAt?: number }
+>();
 
 import type { MockEnvironment, MockProject } from '../types.ts';
 
@@ -200,13 +204,17 @@ function composeYamlFor(s: MockStackSeed) {
 
 function composeStacks(store: Store, p: MockProject) {
 	const existing = store.deploymentsOf(p.id);
-	return (COMPOSE_STACKS[p.slug] ?? []).map((s) => {
+	return (COMPOSE_STACKS[p.slug] ?? []).flatMap((s) => {
 		const id = uid(`compose:${p.id}:${s.name}`);
+		const edit = STACK_EDITS.get(id) ?? {};
+		if (edit.deleted) return [];
+		const autoDeploy = edit.autoDeploy ?? s.autoDeploy ?? false;
+		const head = edit.redeployedAt ? `${id}:${edit.redeployedAt}` : `${id}:head`;
 		return {
 			id,
 			projectId: p.id,
 			environmentId: null,
-			name: s.name,
+			name: edit.name ?? s.name,
 			composeYaml: composeYamlFor(s),
 			status: s.status,
 			lastError: s.lastError ?? null,
@@ -214,9 +222,9 @@ function composeStacks(store: Store, p: MockProject) {
 			githubBranch: s.branch ?? null,
 			composePath: s.path ?? null,
 			githubInstallationId: null,
-			autoDeployEnabled: s.autoDeploy ?? false,
-			autoDeployBranch: s.autoDeploy ? (s.branch ?? null) : null,
-			lastCommitSha: s.repo ? sha(`${id}:head`) : null,
+			autoDeployEnabled: autoDeploy,
+			autoDeployBranch: autoDeploy ? (s.branch ?? null) : null,
+			lastCommitSha: s.repo ? sha(head) : null,
 			buildStatus: s.buildStatus,
 			buildLogs: '',
 			createdBy: p.ownerId,
@@ -329,12 +337,49 @@ export function projectRoutes(r: Router, { store }: MockContext) {
 		return { ok: true };
 	});
 
-	r.get('/compose-stacks/:id', ({ params }) => {
+	const stackById = (id: string) => {
 		for (const p of store.state.projects) {
-			const stack = composeStacks(store, p).find((s) => s.id === params.id);
+			const stack = composeStacks(store, p).find((s) => s.id === id);
 			if (stack) return stack;
 		}
-		return notFound('Compose stack not found');
+		return undefined;
+	};
+	const editStack = (id: string, change: NonNullable<ReturnType<typeof STACK_EDITS.get>>) => {
+		const stack = stackById(id);
+		if (!stack) return notFound('Compose stack not found');
+		STACK_EDITS.set(id, { ...STACK_EDITS.get(id), ...change });
+		store.emit('project.changed', stack.projectId, stack.projectId);
+		return stackById(id) ?? { ok: true };
+	};
+
+	r.get(
+		'/compose-stacks/:id',
+		({ params }) => stackById(params.id) ?? notFound('Compose stack not found')
+	);
+
+	r.post('/compose-stacks/:id/redeploy', ({ params }) => {
+		const stack = stackById(params.id);
+		if (!stack) return notFound('Compose stack not found');
+		if (!stack.githubRepo) {
+			return reply(400, { message: 'This stack is not linked to a GitHub source' });
+		}
+		return editStack(params.id, { redeployedAt: Date.now() });
+	});
+
+	r.put('/compose-stacks/:id/auto-deploy', ({ params, body }) =>
+		editStack(params.id, { autoDeploy: Boolean(body?.enabled) })
+	);
+
+	r.patch('/compose-stacks/:id/name', ({ params, body }) => {
+		const name = String(body?.name ?? '').trim();
+		if (!name) return reply(400, { message: 'Name is required' });
+		return editStack(params.id, { name });
+	});
+
+	r.delete('/compose-stacks/:id', ({ params }) => {
+		if (!stackById(params.id)) return notFound('Compose stack not found');
+		editStack(params.id, { deleted: true });
+		return { ok: true };
 	});
 
 	r.get('/projects/:id/compose-stacks', ({ params }) => {

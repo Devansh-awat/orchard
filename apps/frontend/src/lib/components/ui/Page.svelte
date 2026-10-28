@@ -8,6 +8,7 @@
 		description = undefined,
 		width = 'default',
 		eyebrow = undefined,
+		meta = undefined,
 		actions = undefined,
 		tools = undefined,
 		aside = undefined,
@@ -20,6 +21,7 @@
 		description?: string;
 		width?: 'narrow' | 'default' | 'wide';
 		eyebrow?: Snippet;
+		meta?: Snippet;
 		actions?: Snippet;
 		tools?: Snippet;
 		aside?: Snippet;
@@ -39,6 +41,7 @@
 					{#if eyebrow}<div class="eyebrow">{@render eyebrow()}</div>{/if}
 					<h1 class="title">{title}</h1>
 					{#if description}<p class="desc">{description}</p>{/if}
+					{#if meta}<div class="meta">{@render meta()}</div>{/if}
 				</div>
 				{#if tools}<div class="tools">{@render tools()}</div>{/if}
 			</div>
@@ -157,6 +160,14 @@
 		font-size: var(--text-headline);
 		line-height: 1.375rem;
 		color: var(--text-muted);
+	}
+	.meta {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem 0.75rem;
+		min-width: 0;
+		margin-top: 0.5rem;
 	}
 	.actions {
 		display: flex;
