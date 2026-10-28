@@ -22,7 +22,7 @@
 		leading?: Snippet;
 		open?: boolean;
 		loading?: boolean;
-		size?: 'sm' | 'md';
+		size?: 'sm' | 'md' | 'lg';
 		block?: boolean;
 		mono?: boolean;
 		onclear?: () => void;
@@ -94,6 +94,14 @@
 		padding: 0 0.4375rem 0 0.5rem;
 		border-radius: calc(0.5rem * var(--corner-scale));
 		font-size: var(--text-callout);
+	}
+	.trigger--lg {
+		gap: 0.625rem;
+		height: 2.5rem;
+		padding: 0 0.625rem 0 0.75rem;
+		border-radius: calc(0.75rem * var(--corner-scale));
+		font-size: var(--text-headline);
+		line-height: var(--lh-headline);
 	}
 	.trigger--clearable {
 		padding-right: 1.75rem;

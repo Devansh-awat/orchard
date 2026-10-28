@@ -1,8 +1,9 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
+	import SourcePath from '$lib/components/patterns/SourcePath.svelte';
 	import { GitBranch, Gitlab, Lock, Plus } from 'lucide-svelte';
 	import {
 		Alert,
-		Field,
 		Input,
 		Menu,
 		MenuItem,
@@ -26,7 +27,8 @@
 
 	let {
 		onSelect,
-		onDetect
+		onDetect,
+		details: extra = undefined
 	}: {
 		onSelect: (
 			sel: {
@@ -38,6 +40,7 @@
 			} | null
 		) => void;
 		onDetect: (det: Record<string, unknown>) => void;
+		details?: Snippet;
 	} = $props();
 
 	let connections = $state<GitConnection[]>([]);
@@ -204,99 +207,96 @@
 {/snippet}
 
 {#if !loaded}
-	<div class="gs-span gs-loading"><Spinner size={16} label="Loading git providers" /></div>
+	<div class="gs-loading"><Spinner size={16} label="Loading git providers" /></div>
 {:else if connections.length === 0}
-	<div class="gs-span">
-		<Alert tone="info" title="No git providers linked">
-			Link GitLab, Gitea, Codeberg, Bitbucket or any git host under
-			<a href="/user/settings?section=git">your settings</a>.
-		</Alert>
-	</div>
+	<Alert tone="info" title="No git providers linked">
+		Link GitLab, Gitea, Codeberg, Bitbucket or any git host under
+		<a href="/user/settings?section=git">your settings</a>.
+	</Alert>
 {:else}
-	<Field label="Provider">
-		<Menu placement="bottom-start" sameWidth>
-			{#snippet trigger(attrs, open)}
-				<SelectTrigger
-					{...attrs}
-					{open}
+	<SourcePath>
+		{#snippet owner()}
+			<Menu placement="bottom-start" size="lg">
+				{#snippet trigger(attrs, open)}
+					<SelectTrigger
+						{...attrs}
+						{open}
+						size="lg"
+						value={connection?.name}
+						placeholder="Provider"
+						aria-label="Git provider"
+					>
+						{#snippet leading()}{#if connection}{@render hostGlyph(connection)}{/if}{/snippet}
+					</SelectTrigger>
+				{/snippet}
+				{#each connections as c (c.id)}
+					<MenuItem
+						checked={c.id === connectionId}
+						description={c.host}
+						onclick={() => pickConnection(c.id)}
+					>
+						{#snippet leading()}{@render hostGlyph(c)}{/snippet}
+						{c.name}
+					</MenuItem>
+				{/each}
+				<MenuSeparator />
+				<MenuItem icon={Plus} href="/user/settings?section=git">Link a provider</MenuItem>
+			</Menu>
+		{/snippet}
+		{#snippet repo()}
+			{#if connection?.canList}
+				<SearchPicker
 					block
-					value={connection?.name}
-					placeholder="Provider"
-					aria-label="Git provider"
+					size="lg"
+					value={selectedRepo?.id ?? repoPath ?? ''}
+					bind:query={repoQuery}
+					options={repoOptions}
+					loading={loadingRepos}
+					placeholder="Choose a repository"
+					searchPlaceholder="Search or paste a URL"
+					creatable={isUrl(repoQuery.trim())}
+					createLabel={() => 'Use this URL'}
+					oncreate={(q) => useTypedUrl(q)}
+					onchange={(id) => {
+						const r = repos.find((x) => x.id === id);
+						if (r) pickRepo(r);
+					}}
+					onclear={clearRepo}
+					trailing={lock}
+				/>
+			{:else}
+				<Input
+					bind:value={repoUrl}
+					size="lg"
+					placeholder="https://{connection?.host}/team/app"
+					mono
+					oninput={onUrlInput}
+				/>
+			{/if}
+		{/snippet}
+		{#snippet details()}
+			{#if repoPath}
+				<SearchPicker
+					mono
+					size="sm"
+					value={branch}
+					options={branchOptions}
+					loading={loadingBranches || detecting}
+					placeholder="main"
+					searchPlaceholder="Search or type a branch"
+					creatable
+					createLabel={(q) => `Use ${q}`}
+					onchange={setBranch}
 				>
-					{#snippet leading()}{#if connection}{@render hostGlyph(connection)}{/if}{/snippet}
-				</SelectTrigger>
-			{/snippet}
-			{#each connections as c (c.id)}
-				<MenuItem
-					checked={c.id === connectionId}
-					description={c.host}
-					onclick={() => pickConnection(c.id)}
-				>
-					{#snippet leading()}{@render hostGlyph(c)}{/snippet}
-					{c.name}
-				</MenuItem>
-			{/each}
-			<MenuSeparator />
-			<MenuItem icon={Plus} href="/user/settings?section=git">Link a provider</MenuItem>
-		</Menu>
-	</Field>
-
-	<Field label="Repository">
-		{#if connection?.canList}
-			<SearchPicker
-				block
-				value={selectedRepo?.id ?? repoPath ?? ''}
-				bind:query={repoQuery}
-				options={repoOptions}
-				loading={loadingRepos}
-				placeholder="Choose a repository"
-				searchPlaceholder="Search or paste a URL"
-				creatable={isUrl(repoQuery.trim())}
-				createLabel={() => 'Use this URL'}
-				oncreate={(q) => useTypedUrl(q)}
-				onchange={(id) => {
-					const r = repos.find((x) => x.id === id);
-					if (r) pickRepo(r);
-				}}
-				onclear={clearRepo}
-				trailing={lock}
-			>
-				{#snippet leading()}{#if connection}{@render hostGlyph(connection)}{/if}{/snippet}
-			</SearchPicker>
-		{:else}
-			<Input
-				bind:value={repoUrl}
-				placeholder="https://{connection?.host}/team/app"
-				mono
-				oninput={onUrlInput}
-			/>
-		{/if}
-	</Field>
-
-	<Field label="Branch">
-		<SearchPicker
-			block
-			mono
-			value={branch}
-			options={branchOptions}
-			loading={loadingBranches || detecting}
-			disabled={!repoPath}
-			placeholder="main"
-			searchPlaceholder="Search or type a branch"
-			creatable
-			createLabel={(q) => `Use ${q}`}
-			onchange={setBranch}
-		>
-			{#snippet leading()}<GitBranch size={15} class="text-muted" />{/snippet}
-		</SearchPicker>
-	</Field>
+					{#snippet leading()}<GitBranch size={13} class="text-muted" />{/snippet}
+				</SearchPicker>
+				{@render extra?.()}
+			{/if}
+		{/snippet}
+	</SourcePath>
 {/if}
 
 <style>
-	.gs-span {
-		grid-column: 1 / -1;
-	}
 	.gs-loading {
 		display: flex;
 		align-items: center;

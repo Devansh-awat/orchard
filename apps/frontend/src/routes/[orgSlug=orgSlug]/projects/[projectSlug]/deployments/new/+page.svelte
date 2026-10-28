@@ -11,7 +11,16 @@
 		selectedOrganization,
 		type ProjectContext
 	} from '$lib/stores';
-	import { ArrowRight, Container, GitBranch, Github, Lock, Plus, Trash2 } from 'lucide-svelte';
+	import {
+		ArrowRight,
+		Container,
+		FolderOpen,
+		GitBranch,
+		Github,
+		Lock,
+		Plus,
+		Trash2
+	} from 'lucide-svelte';
 	import { formatCpu, formatMemory, rawToEnvVars } from '$lib/utils/format';
 	import { motionStagger } from '$lib/utils/motion.svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
@@ -21,6 +30,7 @@
 	import FrameworkIcon from '$lib/components/deployment/FrameworkIcon.svelte';
 	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
 	import ResourceList from '$lib/components/patterns/ResourceList.svelte';
+	import SourcePath from '$lib/components/patterns/SourcePath.svelte';
 	import {
 		Alert,
 		Badge,
@@ -141,7 +151,6 @@
 	let branch = $state('');
 	let buildType = $state<'dockerfile' | 'railpack'>('dockerfile');
 	let buildTypeTouched = false;
-	let envOpen = $state(false);
 	let detectedFramework = $state<string | null>(null);
 	let detectedApps = $state<DetectedApp[]>([]);
 	let isWorkspace = $state(false);
@@ -397,7 +406,6 @@
 		}
 		if (det.env.length > 0 && !envsManuallyEdited) {
 			envVars = det.env.map((e) => ({ key: e.key, value: e.value }));
-			if (det.env.some((e) => !e.value)) envOpen = true;
 		}
 	}
 
@@ -1027,11 +1035,11 @@
 	<SelectTrigger
 		{...props}
 		{open}
-		block
-		value={hasRepo && branch && !loadingDockerfiles ? picked?.label : null}
-		placeholder={loadingDockerfiles ? 'Detecting' : 'Detected from the repo'}
+		size="sm"
+		value={loadingDockerfiles ? null : picked?.label}
+		placeholder="Detecting"
 		loading={loadingDockerfiles}
-		disabled={!hasRepo || !branch}
+		aria-label="Build with"
 	>
 		{#snippet leading()}
 			<FrameworkIcon
@@ -1046,9 +1054,43 @@
 	open: boolean,
 	picked: DropdownOption | null
 )}
-	<SelectTrigger {...props} {open} block mono value={picked?.label} placeholder="Root">
-		{#snippet leading()}<FrameworkIcon framework={frameworkOfDir(rootDirectory)} />{/snippet}
+	<SelectTrigger
+		{...props}
+		{open}
+		size="sm"
+		mono
+		value={picked?.label}
+		placeholder="Root"
+		aria-label="App in this repository"
+	>
+		{#snippet leading()}<FolderOpen size={13} class="text-muted" />{/snippet}
 	</SelectTrigger>
+{/snippet}
+
+{#snippet buildDetails()}
+	<Dropdown
+		value={frameworkValue}
+		options={FRAMEWORK_OPTIONS}
+		onchange={onFrameworkPicked}
+		trigger={frameworkPicker}
+	>
+		{#snippet icon(value)}
+			<FrameworkIcon framework={value === DOCKERFILE_OPTION ? 'dockerfile' : value} />
+		{/snippet}
+	</Dropdown>
+	{#if buildType === 'railpack' && detectedApps.length > 1}
+		<Dropdown
+			value={rootDirectory}
+			options={rootDirectoryOptions}
+			onchange={(dir) => {
+				const app = detectedApps.find((a) => a.dir === dir);
+				if (app) selectRootDirectory(app);
+			}}
+			trigger={directoryPicker}
+		>
+			{#snippet icon(dir)}<FrameworkIcon framework={frameworkOfDir(dir)} />{/snippet}
+		</Dropdown>
+	{/if}
 {/snippet}
 
 {#snippet stagePicker(props: Record<string, unknown>, open: boolean, picked: DropdownOption | null)}
@@ -1134,18 +1176,16 @@
 
 				<Stack gap="lg">
 					{#key deploymentSource}
-						<div class="nd-grid" {@attach motionStagger({ index: 0, from: { y: 6 } })}>
+						<div {@attach motionStagger({ index: 0, from: { y: 6 } })}>
 							{#if deploymentSource === 'image'}
-								<div class="nd-span">
-									<Field label="Image">
-										<Input
-											bind:value={image}
-											placeholder="ghcr.io/org/app:latest"
-											mono
-											icon={Container}
-										/>
-									</Field>
-								</div>
+								<Input
+									bind:value={image}
+									size="lg"
+									placeholder="ghcr.io/org/app:latest"
+									mono
+									icon={Container}
+									aria-label="Image"
+								/>
 							{:else if deploymentSource === 'git'}
 								<GitSourcePane
 									onSelect={(sel) => {
@@ -1157,10 +1197,11 @@
 										}
 									}}
 									onDetect={(det) => applyDetection(det as DetectionResult)}
+									details={buildDetails}
 								/>
 							{:else}
-								{#if !githubLinked}
-									<div class="nd-span">
+								<Stack gap="md">
+									{#if !githubLinked}
 										<Alert tone="warning" title="GitHub not connected">
 											Paste owner/repo into the repository search to deploy a public repo.
 											{#snippet actions()}
@@ -1169,9 +1210,7 @@
 												>
 											{/snippet}
 										</Alert>
-									</div>
-								{:else if !hasGitHubApp && repositories.length === 0 && !loadingRepos}
-									<div class="nd-span">
+									{:else if !hasGitHubApp && repositories.length === 0 && !loadingRepos}
 										<Alert tone="warning" title="Install the GitHub App to list your repositories">
 											{#snippet actions()}
 												{#if githubAppInstallUrl}
@@ -1184,91 +1223,62 @@
 												{/if}
 											{/snippet}
 										</Alert>
-									</div>
-								{/if}
-								<Field label="Account">
-									<RepoAccountPicker
-										{accounts}
-										selected={selectedAccount}
-										onSelect={selectAccount}
-										installUrl={githubAppInstallUrl}
-									/>
-								</Field>
-								<Field label="Repository">
-									<SearchPicker
-										block
-										value={repoValue}
-										bind:query={repoQuery}
-										options={repoOptions}
-										filter={false}
-										loading={loadingRepos}
-										placeholder="Choose a repository"
-										searchPlaceholder="Search, or paste owner/repo"
-										creatable={!!parsedRepoInput && !parsedRepoIsListed}
-										createLabel={() =>
-											parsedRepoInput ? `Use ${parsedRepoInput.owner}/${parsedRepoInput.repo}` : ''}
-										onchange={pickRepoByName}
-										onclear={clearRepoSelection}
-										trailing={lock}
-										empty={repoEmpty}
-									>
-										{#snippet leading()}<Github size={15} class="text-muted" />{/snippet}
-									</SearchPicker>
-								</Field>
-								<Field label="Branch">
-									<SearchPicker
-										block
-										mono
-										value={branch}
-										options={branchOptions}
-										loading={loadingBranches}
-										disabled={!hasRepo}
-										placeholder="main"
-										searchPlaceholder="Search or type a branch"
-										creatable
-										createLabel={(q) => `Use ${q}`}
-										onchange={pickBranchByName}
-										trailing={defaultTag}
-									>
-										{#snippet leading()}<GitBranch size={15} class="text-muted" />{/snippet}
-									</SearchPicker>
-								</Field>
-							{/if}
-
-							{#if isRepoSource}
-								<Field label="Build with">
-									<Dropdown
-										value={frameworkValue}
-										options={FRAMEWORK_OPTIONS}
-										onchange={onFrameworkPicked}
-										trigger={frameworkPicker}
-									>
-										{#snippet icon(value)}
-											<FrameworkIcon
-												framework={value === DOCKERFILE_OPTION ? 'dockerfile' : value}
+									{/if}
+									<SourcePath>
+										{#snippet owner()}
+											<RepoAccountPicker
+												size="lg"
+												block={false}
+												{accounts}
+												selected={selectedAccount}
+												onSelect={selectAccount}
+												installUrl={githubAppInstallUrl}
 											/>
 										{/snippet}
-									</Dropdown>
-								</Field>
-								{#if buildType === 'railpack' && detectedApps.length > 1}
-									<div class="nd-span">
-										<Field label="App in this repository">
-											<Dropdown
-												value={rootDirectory}
-												options={rootDirectoryOptions}
-												onchange={(dir) => {
-													const app = detectedApps.find((a) => a.dir === dir);
-													if (app) selectRootDirectory(app);
-												}}
-												trigger={directoryPicker}
-											>
-												{#snippet icon(dir)}<FrameworkIcon
-														framework={frameworkOfDir(dir)}
-													/>{/snippet}
-											</Dropdown>
-										</Field>
-									</div>
-								{/if}
+										{#snippet repo()}
+											<SearchPicker
+												block
+												size="lg"
+												value={repoValue}
+												bind:query={repoQuery}
+												options={repoOptions}
+												filter={false}
+												loading={loadingRepos}
+												placeholder="Choose a repository"
+												searchPlaceholder="Search, or paste owner/repo"
+												creatable={!!parsedRepoInput && !parsedRepoIsListed}
+												createLabel={() =>
+													parsedRepoInput
+														? `Use ${parsedRepoInput.owner}/${parsedRepoInput.repo}`
+														: ''}
+												onchange={pickRepoByName}
+												onclear={clearRepoSelection}
+												trailing={lock}
+												empty={repoEmpty}
+											/>
+										{/snippet}
+										{#snippet details()}
+											{#if hasRepo}
+												<SearchPicker
+													mono
+													size="sm"
+													value={branch}
+													options={branchOptions}
+													loading={loadingBranches}
+													placeholder="main"
+													searchPlaceholder="Search or type a branch"
+													creatable
+													createLabel={(q) => `Use ${q}`}
+													onchange={pickBranchByName}
+													trailing={defaultTag}
+												>
+													{#snippet leading()}<GitBranch size={13} class="text-muted" />{/snippet}
+												</SearchPicker>
+												{@render buildDetails()}
+											{/if}
+										{/snippet}
+									</SourcePath>
+								</Stack>
 							{/if}
 						</div>
 					{/key}
@@ -1307,7 +1317,75 @@
 				</Stack>
 			</SectionCard>
 
-			<SectionCard title="Settings">
+			<SectionCard title="Environment variables">
+				{#snippet actions()}
+					<SegmentedControl
+						label="Editor mode"
+						size="sm"
+						options={ENV_MODE_OPTIONS}
+						bind:value={() => envViewMode, (v) => (envViewMode = v as typeof envViewMode)}
+						onchange={() => (envsManuallyEdited = true)}
+					/>
+				{/snippet}
+				<EnvVarEditor
+					bind:rows={envVars}
+					bind:mode={envViewMode}
+					bind:raw={envRawText}
+					minRows={1}
+					onedit={() => (envsManuallyEdited = true)}
+				/>
+			</SectionCard>
+
+			<SectionCard title="Networking">
+				<Stack gap="lg">
+					<Field label={ports.length > 1 ? 'Ports' : 'Port'}>
+						<Stack gap="sm">
+							{#each ports as port, index (index)}
+								<div class="nd-port">
+									<div class="nd-port-num">
+										<Input
+											type="number"
+											bind:value={port.containerPort}
+											oninput={() => (portsManuallyEdited = true)}
+											min="1"
+											placeholder="80"
+											aria-label="Port"
+											mono
+										/>
+									</div>
+									<SegmentedControl
+										label="Protocol"
+										size="sm"
+										options={PROTOCOL_OPTIONS}
+										bind:value={port.protocol}
+										onchange={() => (portsManuallyEdited = true)}
+									/>
+									{#if ports.length > 1}
+										<Button
+											variant="ghost"
+											size="sm"
+											icon={Trash2}
+											label="Remove port"
+											onclick={() => removePort(index)}
+										/>
+									{/if}
+									{#if index === ports.length - 1}
+										<Button size="sm" variant="ghost" icon={Plus} onclick={addPort}>Add port</Button
+										>
+									{/if}
+								</div>
+							{/each}
+						</Stack>
+					</Field>
+					<ToggleRow
+						bind:checked={autoUrl}
+						label="Generate a URL"
+						hint="Only people in your org can open it."
+					/>
+				</Stack>
+			</SectionCard>
+
+			<SectionCard title="Advanced">
 				<div class="nd-folds">
 					{#if isRepoSource}
 						<Disclosure title="Build" note={buildNote}>
@@ -1437,74 +1515,6 @@
 
 					<Divider />
 
-					<Disclosure title="Networking" note={networkNote}>
-						<ToggleRow
-							bind:checked={autoUrl}
-							label="Generate a URL"
-							hint="Only people in your org can open it."
-						/>
-						{#each ports as port, index (index)}
-							<div class="nd-port">
-								<div class="nd-port-num">
-									<Input
-										type="number"
-										bind:value={port.containerPort}
-										oninput={() => (portsManuallyEdited = true)}
-										min="1"
-										placeholder="80"
-										aria-label="Port"
-										mono
-									/>
-								</div>
-								<SegmentedControl
-									label="Protocol"
-									size="sm"
-									options={PROTOCOL_OPTIONS}
-									bind:value={port.protocol}
-									onchange={() => (portsManuallyEdited = true)}
-								/>
-								<Button
-									variant="ghost"
-									size="sm"
-									icon={Trash2}
-									label="Remove port"
-									disabled={ports.length <= 1}
-									onclick={() => removePort(index)}
-								/>
-							</div>
-						{/each}
-						<div>
-							<Button size="sm" variant="tinted" icon={Plus} onclick={addPort}>Add port</Button>
-						</div>
-					</Disclosure>
-
-					<Divider />
-
-					<Disclosure
-						title="Environment variables"
-						note={envCount ? `${envCount} ${envCount === 1 ? 'variable' : 'variables'}` : 'None'}
-						bind:open={envOpen}
-					>
-						<div class="nd-env-head">
-							<SegmentedControl
-								label="Editor mode"
-								size="sm"
-								options={ENV_MODE_OPTIONS}
-								bind:value={() => envViewMode, (v) => (envViewMode = v as typeof envViewMode)}
-								onchange={() => (envsManuallyEdited = true)}
-							/>
-						</div>
-						<EnvVarEditor
-							bind:rows={envVars}
-							bind:mode={envViewMode}
-							bind:raw={envRawText}
-							minRows={1}
-							onedit={() => (envsManuallyEdited = true)}
-						/>
-					</Disclosure>
-
-					<Divider />
-
 					<Disclosure
 						title="Storage"
 						note={volumes.length
@@ -1587,18 +1597,10 @@
 		grid-template-columns: minmax(0, 38.2fr) minmax(0, 61.8fr);
 		gap: var(--space-4) var(--space-3);
 	}
-	.nd-span {
-		grid-column: 1 / -1;
-	}
 	.nd-folds {
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-2);
-	}
-	.nd-env-head {
-		display: flex;
-		justify-content: flex-end;
-		margin-bottom: calc(var(--space-2) * -1);
 	}
 	.nd-port {
 		display: flex;

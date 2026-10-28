@@ -49,7 +49,7 @@
 		onchange?: (value: string) => void;
 		onclear?: () => void;
 		empty?: string | Snippet<[string]>;
-		size?: 'sm' | 'md';
+		size?: 'sm' | 'md' | 'lg';
 		disabled?: boolean;
 		mono?: boolean;
 		width?: string;

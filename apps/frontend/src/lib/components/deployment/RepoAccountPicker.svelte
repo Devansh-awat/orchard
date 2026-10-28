@@ -9,7 +9,9 @@
 		onSelect,
 		installUrl = null,
 		directLink = false,
-		onDirectLink
+		onDirectLink,
+		size = 'md',
+		block = true
 	}: {
 		accounts?: { login: string; count: number }[];
 		selected?: string | null;
@@ -17,6 +19,8 @@
 		installUrl?: string | null;
 		directLink?: boolean;
 		onDirectLink?: () => void;
+		size?: 'sm' | 'md' | 'lg';
+		block?: boolean;
 	} = $props();
 
 	const picture = (login: string) => ({
@@ -29,11 +33,11 @@
 	{#if directLink}
 		<Link2 size={14} class="text-muted" />
 	{:else if selected}
-		<Avatar user={picture(selected)} size={18} />
+		<Avatar user={picture(selected)} size={size === 'lg' ? 22 : 18} />
 	{/if}
 {/snippet}
 
-<Menu placement="bottom-start" sameWidth>
+<Menu placement="bottom-start" size="lg" sameWidth={block}>
 	{#snippet trigger(attrs, open)}
 		<SelectTrigger
 			{...attrs}
@@ -41,7 +45,8 @@
 			value={directLink ? 'Direct link' : selected}
 			placeholder="Account"
 			aria-label="GitHub account"
-			block
+			{block}
+			{size}
 			leading={directLink || selected ? who : undefined}
 		/>
 	{/snippet}
