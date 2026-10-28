@@ -24,7 +24,6 @@
 		ToneTile
 	} from '$lib/components/ui';
 	import AppIcon from '$lib/components/ui/AppIcon.svelte';
-	import IconTile from '$lib/components/ui/IconTile.svelte';
 	import ProductHeader from '$lib/components/patterns/ProductHeader.svelte';
 	import { templateCategory } from '$lib/utils/template-categories';
 
@@ -132,15 +131,6 @@
 	const KIND_LABEL = { deployment: 'App', database: 'Database', ingress: 'Public URL' } as const;
 
 	let revealed = $state<Record<string, boolean>>({});
-	let cta = $state<HTMLElement>();
-	let stuck = $state(false);
-
-	$effect(() => {
-		if (!cta) return;
-		const io = new IntersectionObserver(([entry]) => (stuck = !entry.isIntersecting));
-		io.observe(cta);
-		return () => io.disconnect();
-	});
 	let touched = $state<Record<string, boolean>>({});
 
 	const ORDER = { string: 0, select: 1, number: 2, boolean: 3, secret: 4 } as const;
@@ -296,205 +286,14 @@
 	{@const tpl = template}
 	<Page title={tpl.displayName} width="default">
 		{#snippet header()}{@render crumbs()}{/snippet}
-		{#snippet deployActions(size: 'md' | 'lg')}
-			<ProjectSwitcher
-				currentProjectName={project?.name || projectSlug}
-				pathSuffix={`/templates/deploy/${templateId}`}
-			/>
-			<Button {size} variant="primary" type="submit" form="deploy-template" loading={deploying}>
-				Deploy {tpl.displayName}
-			</Button>
-		{/snippet}
-
-		<div class="layout">
-			<div class="bar-slot" aria-hidden={!stuck}>
-				<div class="bar" class:bar--on={stuck} inert={!stuck}>
-					<span class="bar-icon">
-						<IconTile src={tpl.icon} class="bar-img" tint="var(--bg-raised)">
-							{#snippet fallback()}{tpl.displayName.charAt(0)}{/snippet}
-						</IconTile>
-					</span>
-					<span class="bar-name">{tpl.displayName}</span>
-					<span class="bar-actions">{@render deployActions('md')}</span>
-				</div>
-			</div>
-
-			<header class="hero">
-				<ProductHeader
-					title={tpl.displayName}
-					eyebrow={templateCategory(tpl.category)}
-					description={tpl.description}
-					icon={tpl.icon}
-				>
-					{#snippet meta()}
-						<Badge>v{tpl.version}</Badge>
-						{#each tpl.tags.slice(0, 3) as tag (tag)}<Badge>{tag}</Badge>{/each}
-					{/snippet}
-				</ProductHeader>
-				<div class="cta" bind:this={cta}>{@render deployActions('lg')}</div>
-			</header>
-
-			<form
-				id="deploy-template"
-				class="form main"
-				novalidate
-				onsubmit={(e) => {
-					e.preventDefault();
-					deploy();
-				}}
-			>
-				{#if error}<Alert tone="error">{error}</Alert>{/if}
-
-				{#if settings.length}
-					<SectionCard title="Configure">
-						<div class="fields">
-							{#each settings as param (param.name)}
-								{@const issue = touched[param.name] ? problems[param.name] : null}
-								{#if param.type === 'boolean'}
-									<ToggleRow
-										label={param.displayName}
-										hint={param.description ?? null}
-										bind:checked={paramValues[param.name]}
-										disabled={deploying}
-									/>
-								{:else if param.type === 'select'}
-									<Field
-										label={param.displayName}
-										hint={param.description}
-										for="p-{param.name}"
-										required={param.required}
-									>
-										{#if (param.options ?? []).length <= 4}
-											<SegmentedControl
-												label={param.displayName}
-												size="sm"
-												options={(param.options ?? []).map((o) => ({
-													value: o.value,
-													label: o.label
-												}))}
-												bind:value={paramValues[param.name]}
-											/>
-										{:else}
-											<Dropdown
-												id="p-{param.name}"
-												bind:value={paramValues[param.name]}
-												disabled={deploying}
-												options={(param.options ?? []).map((o) => ({
-													value: o.value,
-													label: o.label
-												}))}
-											/>
-										{/if}
-									</Field>
-								{:else if param.type === 'number'}
-									<Field
-										label={param.displayName}
-										hint={param.description}
-										error={issue}
-										for="p-{param.name}"
-										required={param.required}
-									>
-										<span class="short">
-											<Input
-												id="p-{param.name}"
-												type="number"
-												min={param.validation?.min}
-												max={param.validation?.max}
-												suffix={unitOf(param)}
-												error={!!issue}
-												bind:value={paramValues[param.name]}
-												disabled={deploying}
-												onblur={() => (touched[param.name] = true)}
-											/></span
-										>
-									</Field>
-								{:else}
-									<Field
-										label={param.displayName}
-										error={issue}
-										for="p-{param.name}"
-										required={param.required}
-									>
-										<Input
-											id="p-{param.name}"
-											placeholder={param.placeholder || ''}
-											error={!!issue}
-											bind:value={paramValues[param.name]}
-											disabled={deploying}
-											onblur={() => {
-												normalizeNameParam(param);
-												touched[param.name] = true;
-											}}
-										/>
-										{#snippet hint()}
-											{param.description ?? ''}
-											{#if isDomainParam(param) && suggestedDomain && paramValues[param.name] !== suggestedDomain}
-												<span class="suggest">
-													<Button
-														size="sm"
-														variant="tinted"
-														onclick={() => (paramValues[param.name] = suggestedDomain)}
-													>
-														Use {suggestedDomain}
-													</Button>
-												</span>
-											{/if}
-										{/snippet}
-									</Field>
-								{/if}
-							{/each}
-						</div>
-					</SectionCard>
-				{/if}
-
-				{#if secrets.length}
-					<SectionCard
-						title="Secrets"
-						description="Leave them empty and Orchard generates strong values on deploy."
-					>
-						<div class="fields">
-							{#each secrets as param (param.name)}
-								<Field label={param.displayName} for="p-{param.name}">
-									<Input
-										id="p-{param.name}"
-										type={revealed[param.name] ? 'text' : 'password'}
-										placeholder="Generated on deploy"
-										autocomplete="off"
-										class="secret"
-										bind:value={paramValues[param.name]}
-										disabled={deploying}
-									>
-										{#snippet suffix()}
-											<Button
-												size="sm"
-												variant="ghost"
-												icon={revealed[param.name] ? EyeOff : Eye}
-												label={revealed[param.name] ? 'Hide' : 'Show'}
-												onclick={() => (revealed[param.name] = !revealed[param.name])}
-											/>
-										{/snippet}
-									</Input>
-								</Field>
-							{/each}
-						</div>
-					</SectionCard>
-				{/if}
-
-				<SectionCard
-					title="Resources"
-					description="CPU and memory for every app and database it creates."
-				>
-					<Disclosure title="Set limits" note="Org defaults if you skip this">
-						<ResourcePicker
-							bind:cpuMilli={resourceCpuMilli}
-							bind:memoryBytes={resourceMemoryBytes}
-							disabled={deploying}
-						/>
-					</Disclosure>
+		{#snippet aside()}
+			<div class="side">
+				<SectionCard title="Deploy into">
+					<ProjectSwitcher
+						currentProjectName={project?.name || projectSlug}
+						pathSuffix={`/templates/deploy/${templateId}`}
+					/>
 				</SectionCard>
-			</form>
-
-			<aside class="side">
 				<SectionCard title="What gets created">
 					<ul class="creates">
 						{#each tpl.resources as resource (resource.name)}
@@ -510,8 +309,186 @@
 						{/each}
 					</ul>
 				</SectionCard>
-			</aside>
-		</div>
+			</div>
+		{/snippet}
+
+		<form
+			id="deploy-template"
+			class="form"
+			novalidate
+			onsubmit={(e) => {
+				e.preventDefault();
+				deploy();
+			}}
+		>
+			<ProductHeader
+				title={tpl.displayName}
+				eyebrow={templateCategory(tpl.category)}
+				description={tpl.description}
+				icon={tpl.icon}
+			>
+				{#snippet meta()}
+					<Badge>v{tpl.version}</Badge>
+					{#each tpl.tags.slice(0, 3) as tag (tag)}<Badge>{tag}</Badge>{/each}
+				{/snippet}
+			</ProductHeader>
+			{#if error}<Alert tone="error">{error}</Alert>{/if}
+
+			{#if settings.length}
+				<SectionCard title="Configure">
+					<div class="fields">
+						{#each settings as param (param.name)}
+							{@const issue = touched[param.name] ? problems[param.name] : null}
+							{#if param.type === 'boolean'}
+								<ToggleRow
+									label={param.displayName}
+									hint={param.description ?? null}
+									bind:checked={paramValues[param.name]}
+									disabled={deploying}
+								/>
+							{:else if param.type === 'select'}
+								<Field
+									label={param.displayName}
+									hint={param.description}
+									for="p-{param.name}"
+									required={param.required}
+								>
+									{#if (param.options ?? []).length <= 4}
+										<SegmentedControl
+											label={param.displayName}
+											size="sm"
+											options={(param.options ?? []).map((o) => ({
+												value: o.value,
+												label: o.label
+											}))}
+											bind:value={paramValues[param.name]}
+										/>
+									{:else}
+										<Dropdown
+											id="p-{param.name}"
+											bind:value={paramValues[param.name]}
+											disabled={deploying}
+											options={(param.options ?? []).map((o) => ({
+												value: o.value,
+												label: o.label
+											}))}
+										/>
+									{/if}
+								</Field>
+							{:else if param.type === 'number'}
+								<Field
+									label={param.displayName}
+									hint={param.description}
+									error={issue}
+									for="p-{param.name}"
+									required={param.required}
+								>
+									<span class="short">
+										<Input
+											id="p-{param.name}"
+											type="number"
+											min={param.validation?.min}
+											max={param.validation?.max}
+											suffix={unitOf(param)}
+											error={!!issue}
+											bind:value={paramValues[param.name]}
+											disabled={deploying}
+											onblur={() => (touched[param.name] = true)}
+										/></span
+									>
+								</Field>
+							{:else}
+								<Field
+									label={param.displayName}
+									error={issue}
+									for="p-{param.name}"
+									required={param.required}
+								>
+									<Input
+										id="p-{param.name}"
+										placeholder={param.placeholder || ''}
+										error={!!issue}
+										bind:value={paramValues[param.name]}
+										disabled={deploying}
+										onblur={() => {
+											normalizeNameParam(param);
+											touched[param.name] = true;
+										}}
+									/>
+									{#snippet hint()}
+										{param.description ?? ''}
+										{#if isDomainParam(param) && suggestedDomain && paramValues[param.name] !== suggestedDomain}
+											<span class="suggest">
+												<Button
+													size="sm"
+													variant="tinted"
+													onclick={() => (paramValues[param.name] = suggestedDomain)}
+												>
+													Use {suggestedDomain}
+												</Button>
+											</span>
+										{/if}
+									{/snippet}
+								</Field>
+							{/if}
+						{/each}
+					</div>
+				</SectionCard>
+			{/if}
+
+			{#if secrets.length}
+				<SectionCard
+					title="Secrets"
+					description="Leave them empty and Orchard generates strong values on deploy."
+				>
+					<div class="fields">
+						{#each secrets as param (param.name)}
+							<Field label={param.displayName} for="p-{param.name}">
+								<Input
+									id="p-{param.name}"
+									type={revealed[param.name] ? 'text' : 'password'}
+									placeholder="Generated on deploy"
+									autocomplete="off"
+									class="secret"
+									bind:value={paramValues[param.name]}
+									disabled={deploying}
+								>
+									{#snippet suffix()}
+										<Button
+											size="sm"
+											variant="ghost"
+											icon={revealed[param.name] ? EyeOff : Eye}
+											label={revealed[param.name] ? 'Hide' : 'Show'}
+											onclick={() => (revealed[param.name] = !revealed[param.name])}
+										/>
+									{/snippet}
+								</Input>
+							</Field>
+						{/each}
+					</div>
+				</SectionCard>
+			{/if}
+
+			<SectionCard
+				title="Resources"
+				description="CPU and memory for every app and database it creates."
+			>
+				<Disclosure title="Set limits" note="Org defaults if you skip this">
+					<ResourcePicker
+						bind:cpuMilli={resourceCpuMilli}
+						bind:memoryBytes={resourceMemoryBytes}
+						disabled={deploying}
+					/>
+				</Disclosure>
+			</SectionCard>
+
+			<div class="actions">
+				<Button variant="ghost" href={`/${orgSlug}/new?projectSlug=${projectSlug}`}>Cancel</Button>
+				<Button variant="primary" size="lg" type="submit" loading={deploying}>
+					Deploy {tpl.displayName}
+				</Button>
+			</div>
+		</form>
 	</Page>
 {:else}
 	<Page title="Template not found" width="narrow">
@@ -520,113 +497,19 @@
 {/if}
 
 <style>
-	.layout {
-		--gap: 2rem;
-		display: grid;
-		grid-template-columns: minmax(0, 61.8fr) minmax(15rem, 38.2fr);
-		gap: var(--gap);
-		align-items: start;
-	}
-	.bar-slot {
-		position: sticky;
-		top: 0;
-		z-index: var(--z-sticky);
-		grid-column: 1 / -1;
-		height: 0;
-		margin-bottom: calc(var(--gap) * -1);
-	}
-	.bar {
-		position: absolute;
-		top: 0.75rem;
-		right: 0;
-		left: 0;
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		padding: 0.5rem 0.5rem 0.5rem 0.625rem;
-		border-radius: calc((var(--radius-control) + 0.5rem) * var(--corner-scale));
-		corner-shape: var(--corner);
-		background: var(--material-glass-bg);
-		backdrop-filter: var(--material-glass-filter);
-		box-shadow: var(--shadow-floating);
-		opacity: 0;
-		transform: translateY(-0.5rem);
-		pointer-events: none;
-		transition:
-			opacity var(--fade-out) var(--curve-in),
-			transform var(--spring-settle-duration) var(--spring-settle);
-	}
-	.bar--on {
-		opacity: 1;
-		transform: none;
-		pointer-events: auto;
-		transition:
-			opacity var(--fade-in) var(--curve-out),
-			transform var(--spring-snap-duration) var(--spring-snap);
-	}
-	.bar-icon {
-		display: block;
-		width: 2rem;
-		height: 2rem;
-	}
-	.bar-icon :global(.bar-img) {
-		display: grid;
-		width: 100%;
-		height: 100%;
-		border-radius: calc(0.5rem * var(--corner-scale));
-		corner-shape: var(--corner);
-		box-shadow: 0 0 0 0.5px var(--rule);
-	}
-	.bar-name {
-		flex: 1;
-		min-width: 0;
-		overflow: hidden;
-		font-size: var(--text-headline);
-		font-weight: var(--weight-medium);
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.bar-actions {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-	}
-	.hero {
-		display: grid;
-		grid-template-columns: subgrid;
-		grid-column: 1 / -1;
-		align-items: center;
-	}
-	.cta {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		justify-content: flex-end;
-		gap: 0.625rem;
-	}
-	.main {
-		grid-column: 1;
-	}
 	.side {
 		position: sticky;
-		top: 5rem;
-		grid-column: 2;
+		top: 1.5rem;
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
 	}
-	@media (max-width: 60rem) {
-		.layout {
-			grid-template-columns: minmax(0, 1fr);
-		}
-		.hero {
-			grid-template-columns: minmax(0, 1fr);
-			gap: 1.25rem;
-		}
-		.cta {
-			justify-content: flex-start;
-		}
-		.side {
-			position: static;
-			grid-column: 1;
-		}
+	.actions {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 0.5rem;
+		padding-top: 0.5rem;
 	}
 	.loading {
 		display: flex;
