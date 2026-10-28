@@ -27,7 +27,7 @@
 	const popover = new Popover({
 		open: () => open,
 		onOpenChange: (v) => (open = v),
-		sameWidth: () => sameWidth,
+		sameWidth: false,
 		closeOnOutsideClick: (target: Element | Window | Document) => !inside?.(target),
 		floatingConfig: {
 			computePosition: { placement },
@@ -96,6 +96,7 @@
 <div
 	{...popover.content}
 	class="ui-menu ui-menu--{size}"
+	class:ui-popover--match={sameWidth && !width}
 	style:width={width ? `${width}px` : undefined}
 	style:min-width={width ? '0' : undefined}
 	role="menu"

@@ -243,7 +243,7 @@
 	:global(.ui-search-picker) {
 		display: flex;
 		flex-direction: column;
-		min-width: 18rem !important;
+		min-width: max(18rem, var(--melt-invoker-width, 0px));
 		max-height: min(24rem, max(14rem, var(--melt-popover-available-height, 24rem)));
 		overflow: hidden;
 	}

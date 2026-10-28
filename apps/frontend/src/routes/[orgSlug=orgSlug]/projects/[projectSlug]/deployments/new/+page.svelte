@@ -19,7 +19,9 @@
 		Github,
 		Globe,
 		Lock,
+		Network,
 		Radio,
+		ShieldCheck,
 		Plus,
 		Trash2
 	} from 'lucide-svelte';
@@ -78,24 +80,32 @@
 	];
 	const REACH_OPTIONS: DropdownOption[] = [
 		{
-			value: 'url',
-			label: 'Org URL',
-			description: 'An https address only your org can open',
+			value: 'link',
+			label: 'Private link',
+			description: 'HTTPS ingress behind Orchard sign-in',
+			icon: ShieldCheck
+		},
+		{
+			value: 'public-link',
+			label: 'Public link',
+			description: 'HTTPS ingress, open to anyone',
 			icon: Globe
 		},
 		{
-			value: 'tcp',
+			value: 'port',
 			label: 'Public port',
-			description: 'Open to the internet on a node port',
+			description: 'Raw TCP or UDP on a node port',
 			icon: Radio
 		},
 		{
-			value: 'private',
-			label: 'Private',
-			description: 'Only other apps in this project',
-			icon: Lock
+			value: 'internal',
+			label: 'Internal',
+			description: 'ClusterIP, only apps in this project',
+			icon: Network
 		}
 	];
+	const REACH_LABEL = Object.fromEntries(REACH_OPTIONS.map((o) => [o.value, o.label]));
+	const isLink = (reach: string) => reach === 'link' || reach === 'public-link';
 	const PROTOCOL_OPTIONS = [
 		{ value: 'TCP', label: 'TCP' },
 		{ value: 'UDP', label: 'UDP' }
@@ -113,7 +123,7 @@
 		private: boolean;
 	}
 
-	type Reach = 'url' | 'tcp' | 'private';
+	type Reach = 'link' | 'public-link' | 'port' | 'internal';
 
 	type PortRow = {
 		name: string;
@@ -129,7 +139,7 @@
 			containerPort: port,
 			servicePort: port,
 			protocol: 'TCP',
-			reach: index === 0 ? 'url' : 'private'
+			reach: index === 0 ? 'link' : 'internal'
 		};
 	}
 
@@ -668,12 +678,12 @@
 		portsManuallyEdited = true;
 		const port = ports[index];
 		port.protocol = protocol;
-		if (protocol === 'UDP' && port.reach === 'url') port.reach = 'private';
+		if (protocol === 'UDP' && isLink(port.reach)) port.reach = 'internal';
 	}
 
 	function reachOptions(protocol: string): DropdownOption[] {
 		return protocol === 'UDP'
-			? REACH_OPTIONS.map((o) => (o.value === 'url' ? { ...o, disabled: true } : o))
+			? REACH_OPTIONS.map((o) => (isLink(o.value) ? { ...o, disabled: true } : o))
 			: REACH_OPTIONS;
 	}
 
@@ -814,8 +824,8 @@
 				replicas,
 				ports: validPorts,
 				env: validEnv,
-				exposePublic: validPorts.some((p) => p.reach === 'tcp'),
-				autoUrl: validPorts.some((p) => p.reach === 'url'),
+				exposePublic: validPorts.some((p) => p.reach === 'port'),
+				autoUrl: validPorts.some((p) => isLink(p.reach)),
 				volumes: validVolumes,
 				cpuRequestMilli: resourceCpuMilli,
 				memoryRequestBytes: resourceMemoryBytes
@@ -1029,11 +1039,11 @@
 						: (frameworkLabel(detectedFramework) ?? 'App')
 		},
 		...ports
-			.filter((p) => p.containerPort > 0 && p.reach !== 'private')
+			.filter((p) => p.containerPort > 0 && p.reach !== 'internal')
 			.map((p) => ({
 				name: `Port ${p.containerPort}`,
 				type: 'ingress' as const,
-				note: p.reach === 'url' ? 'Org URL' : 'Public port'
+				note: REACH_LABEL[p.reach]
 			})),
 		...volumes
 			.filter((v) => v.pvcName?.trim())

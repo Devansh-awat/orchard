@@ -874,6 +874,12 @@ html {
 	color: var(--surface-muted);
 }
 
+.ui-popover--match {
+	width: max-content;
+	min-width: max(12rem, var(--melt-invoker-width, 0px));
+	max-width: max(var(--melt-invoker-width, 0px), 30rem);
+}
+
 .ui-dropdown-trigger {
 	display: flex;
 	align-items: center;

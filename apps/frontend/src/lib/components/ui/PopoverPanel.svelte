@@ -25,7 +25,7 @@
 	const popover = new Popover({
 		open: () => open,
 		onOpenChange: (v) => (open = v),
-		sameWidth: () => sameWidth,
+		sameWidth: false,
 		floatingConfig: {
 			computePosition: { placement },
 			offset: { mainAxis: 6 }
@@ -47,7 +47,7 @@
 <div
 	{...popover.content}
 	{...rest}
-	class="ui-popover{className ? ` ${className}` : ''}"
+	class="ui-popover{sameWidth ? ' ui-popover--match' : ''}{className ? ` ${className}` : ''}"
 	{@attach overlayMotion(() => open, { origin })}
 >
 	{@render children({ close: () => (open = false) })}
