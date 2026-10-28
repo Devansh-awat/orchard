@@ -92,7 +92,7 @@ callout|caption|micro`, `rounded-control|card|panel`.
 | Need                               | Use                                                                                 |
 | ---------------------------------- | ----------------------------------------------------------------------------------- |
 | App layout                         | `AppFrame` (sidebar, backdrop, content) + `Sidebar` (org, search, sections, user)   |
-| Page                               | `Page` (title, description, eyebrow, actions, aside, hero, width)                   |
+| Page                               | `Page` (title, description, eyebrow, actions, aside, hero, header, footer, width)   |
 | Small heading above a group        | `SectionTitle` (title, count, actions, size)                                        |
 | Group of content                   | `SectionCard` (title, description, actions, footer, flush)                          |
 | Plain container                    | `Card` (`href`/`onclick` makes it interactive)                                      |
@@ -125,6 +125,9 @@ callout|caption|micro`, `rounded-control|card|panel`.
 | Code and config                    | `CodeBlock`, `Snippet` (one command), `EnvVarRow`, `LogViewer`                      |
 | Keys, IDs                          | `Kbd`, `CopyButton`, `MiddleTruncate` (hashes and IDs only)                         |
 | Times                              | `RelativeTime`                                                                      |
+| Product or template page header    | `ProductHeader` (icon tile, eyebrow, title, description, meta and actions)          |
+| Optional settings in a form        | `Disclosure` (title, note, spring collapse)                                         |
+| Picker that shows its value        | `Menu` with a `SelectTrigger` (prefix, value, leading icon, clear)                  |
 | Featured banner                    | `FeatureHero` (rotating, icon-baked backdrop, one call to action)                   |
 | Ways to start something            | `Dock` (big source tiles in one tray, `busy` while routing)                         |
 | Row of things to pick              | `Shelf` (16:9 tiles, `onSelect` to run work before navigating)                      |

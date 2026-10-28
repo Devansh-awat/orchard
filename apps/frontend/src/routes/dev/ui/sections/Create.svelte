@@ -4,6 +4,10 @@
 	import FeatureHero from '$lib/components/patterns/FeatureHero.svelte';
 	import Dock, { type DockItem } from '$lib/components/patterns/Dock.svelte';
 	import Shelf from '$lib/components/patterns/Shelf.svelte';
+	import ProductHeader from '$lib/components/patterns/ProductHeader.svelte';
+	import Badge from '$lib/components/ui/Badge.svelte';
+	import Button from '$lib/components/ui/Button.svelte';
+	import Disclosure from '$lib/components/ui/Disclosure.svelte';
 	import { IMG_ICONS } from '$lib/components/org-dashboard/helpers.svelte';
 	import { TEMPLATE_SHELVES } from '../home-fixtures';
 
@@ -71,4 +75,28 @@
 	description="A horizontal row of 16:9 tiles with a tinted backdrop baked from each icon. onSelect lets a tile run work before navigating; cmd-click still opens the link."
 >
 	<Shelf title={TEMPLATE_SHELVES[1].title} items={TEMPLATE_SHELVES[1].items} />
+</SectionCard>
+
+<SectionCard
+	title="Product header"
+	description="The top of a template or product page: a big icon tile, what it is, and the one decision to make before going on."
+>
+	<ProductHeader
+		title={TEMPLATE_SHELVES[0].items[1].title}
+		eyebrow={TEMPLATE_SHELVES[0].items[1].subtitle}
+		description={TEMPLATE_SHELVES[0].items[1].description}
+		icon={TEMPLATE_SHELVES[0].items[1].icon}
+	>
+		{#snippet meta()}<Badge>v1.0.0</Badge><Badge>cms</Badge>{/snippet}
+		{#snippet actions()}<Button variant="primary">Deploy</Button>{/snippet}
+	</ProductHeader>
+</SectionCard>
+
+<SectionCard
+	title="Disclosure"
+	description="Optional settings that most people skip. Closed by default; the note says what happens if you leave it."
+>
+	<Disclosure title="Set limits" note="Org defaults if you skip this">
+		<p class="text-callout text-muted">CPU and memory pickers go here.</p>
+	</Disclosure>
 </SectionCard>

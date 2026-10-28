@@ -4,6 +4,7 @@
 	let {
 		title,
 		hero = undefined,
+		header = undefined,
 		description = undefined,
 		width = 'default',
 		eyebrow = undefined,
@@ -15,6 +16,7 @@
 	}: {
 		title: string;
 		hero?: Snippet;
+		header?: Snippet;
 		description?: string;
 		width?: 'narrow' | 'default' | 'wide';
 		eyebrow?: Snippet;
@@ -28,7 +30,9 @@
 
 {#if hero}{@render hero()}{/if}
 <div class="frame frame--{width}" class:frame--hero={!!hero}>
-	{#if !hero}
+	{#if header}
+		<div class="custom-head" class:head--split={!!aside}>{@render header()}</div>
+	{:else if !hero}
 		<header class="head" class:head--split={!!aside}>
 			<div class="heading-row">
 				<div class="heading">
@@ -55,6 +59,9 @@
 </div>
 
 <style>
+	.custom-head {
+		margin-bottom: 2rem;
+	}
 	.footer {
 		position: sticky;
 		bottom: 0;

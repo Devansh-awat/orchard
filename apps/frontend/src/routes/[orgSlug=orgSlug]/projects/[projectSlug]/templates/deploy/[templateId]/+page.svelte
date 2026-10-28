@@ -4,16 +4,34 @@
 	import { onMount } from 'svelte';
 	import { env } from '$env/dynamic/public';
 	import { apiFetch, toasts, fetchProjectContext, buildBasePath } from '$lib/stores';
-	import { Rocket, Database, Server, Globe, LayoutTemplate } from 'lucide-svelte';
+	import { Globe, Eye, EyeOff } from 'lucide-svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
 	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
-	import { Button, Input, Select } from '$lib/components/ui';
+	import {
+		Alert,
+		Badge,
+		Breadcrumbs,
+		Button,
+		Disclosure,
+		Field,
+		Input,
+		Page,
+		SectionCard,
+		SegmentedControl,
+		Select,
+		Skeleton,
+		ToggleRow,
+		ToneTile
+	} from '$lib/components/ui';
+	import AppIcon from '$lib/components/ui/AppIcon.svelte';
+	import ProductHeader from '$lib/components/patterns/ProductHeader.svelte';
+	import { templateCategory } from '$lib/utils/template-categories';
 
 	interface ParameterDef {
 		name: string;
 		displayName: string;
 		description?: string;
-		type: 'string' | 'number' | 'boolean' | 'select';
+		type: 'string' | 'number' | 'boolean' | 'select' | 'secret';
 		default?: any;
 		required?: boolean;
 		placeholder?: string;
@@ -22,6 +40,7 @@
 			message?: string;
 			min?: number;
 			max?: number;
+			bytes?: number;
 		};
 		options?: { label: string; value: string }[];
 	}
@@ -110,30 +129,47 @@
 			: null
 	);
 
-	function getResourceIcon(type: string) {
-		switch (type) {
-			case 'database':
-				return Database;
-			case 'deployment':
-				return Server;
-			case 'ingress':
-				return Globe;
-			default:
-				return LayoutTemplate;
+	const KIND_LABEL = { deployment: 'App', database: 'Database', ingress: 'Public URL' } as const;
+
+	let revealed = $state<Record<string, boolean>>({});
+	let touched = $state<Record<string, boolean>>({});
+
+	const ORDER = { string: 0, select: 1, number: 2, boolean: 3, secret: 4 } as const;
+	const settings = $derived(
+		(template?.parameters ?? [])
+			.filter((p) => p.type !== 'secret')
+			.toSorted((a, b) => ORDER[a.type] - ORDER[b.type])
+	);
+	const secrets = $derived((template?.parameters ?? []).filter((p) => p.type === 'secret'));
+
+	function problem(param: ParameterDef): string | null {
+		const v = paramValues[param.name];
+		const empty = v === undefined || v === null || v === '';
+		if (empty) return param.required ? `${param.displayName} is required` : null;
+		if (param.type === 'number') {
+			const n = Number(v);
+			if (Number.isNaN(n)) return 'Enter a number';
+			if (param.validation?.min !== undefined && n < param.validation.min)
+				return `At least ${param.validation.min}`;
+			if (param.validation?.max !== undefined && n > param.validation.max)
+				return `At most ${param.validation.max}`;
 		}
+		if (param.type === 'string' && param.validation?.pattern) {
+			if (!new RegExp(param.validation.pattern).test(String(v)))
+				return param.validation.message ?? 'This value is not valid';
+		}
+		return null;
 	}
 
-	function getResourceColor(type: string) {
-		switch (type) {
-			case 'database':
-				return 'var(--online-indicator)';
-			case 'deployment':
-				return 'var(--link-color)';
-			case 'ingress':
-				return 'var(--away-indicator)';
-			default:
-				return 'var(--surface-muted)';
-		}
+	const problems = $derived(
+		Object.fromEntries((template?.parameters ?? []).map((p) => [p.name, problem(p)]))
+	);
+	const blocked = $derived(Object.values(problems).some(Boolean));
+
+	function unitOf(param: ParameterDef) {
+		if (/gi$/i.test(param.name)) return 'GiB';
+		if (/interval|seconds/i.test(param.name)) return 'sec';
+		return undefined;
 	}
 
 	async function fetchTemplate() {
@@ -172,6 +208,8 @@
 
 	async function deploy() {
 		if (!project || !template) return;
+		touched = Object.fromEntries(template.parameters.map((p) => [p.name, true]));
+		if (blocked) return;
 
 		deploying = true;
 		error = null;
@@ -226,472 +264,297 @@
 	});
 </script>
 
-<div class="td-page">
-	{#if loading}
-		<div class="skeleton" style="height: 1.5rem; width: 14rem; margin-bottom: 1.5rem;"></div>
-		<div class="td-main-card">
-			<div style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
-				<div class="skeleton" style="height: 1rem; width: 10rem;"></div>
-				<div class="skeleton" style="height: 2.25rem; border-radius: var(--radius-sm);"></div>
-				<div class="skeleton" style="height: 2.25rem; border-radius: var(--radius-sm);"></div>
-			</div>
+<svelte:head><title>Deploy {template?.displayName ?? 'template'}</title></svelte:head>
+
+{#snippet crumbs()}
+	<Breadcrumbs
+		crumbs={[
+			{ label: 'Home', href: `/${orgSlug}` },
+			{ label: 'New', href: `/${orgSlug}/new?projectSlug=${projectSlug}` },
+			{ label: template?.displayName ?? 'Template' }
+		]}
+	/>
+{/snippet}
+
+{#if loading}
+	<Page title="Deploy template" width="default">
+		<div class="loading">
+			<Skeleton height="8rem" width="8rem" rounded="1.75rem" />
+			<Skeleton height="16rem" rounded="1.125rem" />
 		</div>
-	{:else if template}
-		<h1 class="td-page-title">Deploy template</h1>
-
-		<!-- Main card -->
-		<div class="td-main-card">
-			<!-- Template info header -->
-			<div class="td-info">
-				<div class="td-info-icon">
-					<LayoutTemplate size={20} />
-				</div>
-				<div class="td-info-text">
-					<span class="td-info-name">{template.displayName}</span>
-					{#if template.description}
-						<span class="td-info-desc">{template.description}</span>
-					{/if}
-				</div>
-				{#if template.category}
-					<span
-						class="td-info-badge"
-						style="background: color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent); color: var(--sidebar-text-active-border);"
-					>
-						{template.category}
-					</span>
-				{/if}
+	</Page>
+{:else if template}
+	{@const tpl = template}
+	<Page title={tpl.displayName} width="default">
+		{#snippet header()}
+			<div class="head">
+				{@render crumbs()}
+				<ProductHeader
+					title={tpl.displayName}
+					eyebrow={templateCategory(tpl.category)}
+					description={tpl.description}
+					icon={tpl.icon}
+				>
+					{#snippet meta()}
+						<Badge>v{tpl.version}</Badge>
+						{#each tpl.tags.slice(0, 3) as tag (tag)}<Badge>{tag}</Badge>{/each}
+					{/snippet}
+					{#snippet actions()}
+						<ProjectSwitcher
+							currentProjectName={project?.name || projectSlug}
+							pathSuffix={`/templates/deploy/${templateId}`}
+						/>
+					{/snippet}
+				</ProductHeader>
 			</div>
-
-			<!-- Project selector -->
-			<div class="td-project-row">
-				<ProjectSwitcher
-					currentProjectName={project?.name || projectSlug}
-					pathSuffix={`/templates/deploy/${templateId}`}
-				/>
-			</div>
-
-			<!-- Resources preview -->
-			<div class="td-resources">
-				<span class="td-resources-label">This template creates</span>
-				<div class="td-resources-list">
-					{#each template.resources as resource (resource.name)}
-						{@const Icon = getResourceIcon(resource.type)}
-						{@const color = getResourceColor(resource.type)}
-						<div class="td-resource-chip">
-							<div class="td-resource-dot" style="background: {color};"></div>
-							<span class="td-resource-name">{resource.name}</span>
-							<span class="td-resource-type">{resource.type}</span>
-						</div>
+		{/snippet}
+		{#snippet aside()}
+			<SectionCard title="What gets created" description="Everything lands in this project.">
+				<ul class="creates">
+					{#each tpl.resources as resource (resource.name)}
+						<li class="create">
+							{#if resource.type === 'ingress'}
+								<ToneTile tone="info" size={28}><Globe size={14} /></ToneTile>
+							{:else}
+								<AppIcon name={resource.name} kind={resource.type} size="sm" />
+							{/if}
+							<span class="create-name">{resource.name}</span>
+							<span class="create-kind">{KIND_LABEL[resource.type]}</span>
+						</li>
 					{/each}
-				</div>
-			</div>
-		</div>
+				</ul>
+			</SectionCard>
+		{/snippet}
+		{#snippet footer()}
+			<Button variant="ghost" href={basePath}>Cancel</Button>
+			<Button variant="primary" type="submit" form="deploy-template" loading={deploying}>
+				Deploy {tpl.displayName}
+			</Button>
+		{/snippet}
 
-		<!-- Configuration card -->
-		<div class="td-card">
-			<h2 class="td-card-title">Configuration</h2>
+		<form
+			id="deploy-template"
+			class="form"
+			novalidate
+			onsubmit={(e) => {
+				e.preventDefault();
+				deploy();
+			}}
+		>
+			{#if error}<Alert tone="error">{error}</Alert>{/if}
 
-			<form
-				onsubmit={(e) => {
-					e.preventDefault();
-					deploy();
-				}}
-				class="td-form"
-			>
-				{#each template.parameters as param (param.name)}
-					<div class="td-field">
-						{#if param.type === 'boolean'}
-							<label class="td-toggle-row">
-								<div class="td-toggle-info">
-									<span class="td-label">
-										{param.displayName}
-										{#if param.required}<span class="td-required">*</span>{/if}
-									</span>
-									{#if param.description}
-										<span class="td-hint">{param.description}</span>
+			{#if settings.length}
+				<SectionCard
+					title="Configure"
+					description="Applied when it deploys. You can change each app later."
+				>
+					<div class="fields">
+						{#each settings as param (param.name)}
+							{@const issue = touched[param.name] ? problems[param.name] : null}
+							{#if param.type === 'boolean'}
+								<ToggleRow
+									label={param.displayName}
+									hint={param.description ?? null}
+									bind:checked={paramValues[param.name]}
+									disabled={deploying}
+								/>
+							{:else if param.type === 'select'}
+								<Field
+									label={param.displayName}
+									hint={param.description}
+									for="p-{param.name}"
+									required={param.required}
+								>
+									{#if (param.options ?? []).length <= 4}
+										<SegmentedControl
+											label={param.displayName}
+											size="sm"
+											options={(param.options ?? []).map((o) => ({
+												value: o.value,
+												label: o.label
+											}))}
+											bind:value={paramValues[param.name]}
+										/>
+									{:else}
+										<Select
+											id="p-{param.name}"
+											bind:value={paramValues[param.name]}
+											disabled={deploying}
+										>
+											{#each param.options ?? [] as option (option.value)}
+												<option value={option.value}>{option.label}</option>
+											{/each}
+										</Select>
 									{/if}
-								</div>
-								<div class="td-toggle-switch">
-									<input
-										type="checkbox"
-										bind:checked={paramValues[param.name]}
+								</Field>
+							{:else if param.type === 'number'}
+								<Field
+									label={param.displayName}
+									hint={param.description}
+									error={issue}
+									for="p-{param.name}"
+									required={param.required}
+								>
+									<span class="short">
+										<Input
+											id="p-{param.name}"
+											type="number"
+											min={param.validation?.min}
+											max={param.validation?.max}
+											suffix={unitOf(param)}
+											error={!!issue}
+											bind:value={paramValues[param.name]}
+											disabled={deploying}
+											onblur={() => (touched[param.name] = true)}
+										/></span
+									>
+								</Field>
+							{:else}
+								<Field
+									label={param.displayName}
+									error={issue}
+									for="p-{param.name}"
+									required={param.required}
+								>
+									<Input
+										id="p-{param.name}"
+										placeholder={param.placeholder || ''}
+										error={!!issue}
+										bind:value={paramValues[param.name]}
 										disabled={deploying}
+										onblur={() => {
+											normalizeNameParam(param);
+											touched[param.name] = true;
+										}}
 									/>
-									<span class="td-toggle-slider"></span>
-								</div>
-							</label>
-						{:else}
-							<label for="p-{param.name}" class="td-label">
-								{param.displayName}
-								{#if param.required}<span class="td-required">*</span>{/if}
-							</label>
+									{#snippet hint()}
+										{param.description ?? ''}
+										{#if isDomainParam(param) && suggestedDomain && paramValues[param.name] !== suggestedDomain}
+											<span class="suggest">
+												<Button
+													size="sm"
+													variant="tinted"
+													onclick={() => (paramValues[param.name] = suggestedDomain)}
+												>
+													Use {suggestedDomain}
+												</Button>
+											</span>
+										{/if}
+									{/snippet}
+								</Field>
+							{/if}
+						{/each}
+					</div>
+				</SectionCard>
+			{/if}
 
-							{#if param.type === 'select'}
-								<Select
+			{#if secrets.length}
+				<SectionCard
+					title="Secrets"
+					description="Leave them empty and Orchard generates strong values on deploy."
+				>
+					<div class="fields">
+						{#each secrets as param (param.name)}
+							<Field label={param.displayName} for="p-{param.name}">
+								<Input
 									id="p-{param.name}"
+									type={revealed[param.name] ? 'text' : 'password'}
+									placeholder="Generated on deploy"
+									autocomplete="off"
+									class="secret"
 									bind:value={paramValues[param.name]}
 									disabled={deploying}
 								>
-									{#each param.options || [] as option (option.value)}
-										<option value={option.value}>{option.label}</option>
-									{/each}
-								</Select>
-							{:else if param.type === 'number'}
-								<input
-									id="p-{param.name}"
-									type="number"
-									class="input"
-									min={param.validation?.min}
-									max={param.validation?.max}
-									bind:value={paramValues[param.name]}
-									required={param.required}
-									disabled={deploying}
-								/>
-							{:else}
-								<Input
-									id="p-{param.name}"
-									placeholder={param.placeholder || ''}
-									bind:value={paramValues[param.name]}
-									required={param.required}
-									disabled={deploying}
-									onblur={() => normalizeNameParam(param)}
-								/>
-								{#if isDomainParam(param) && suggestedDomain && paramValues[param.name] !== suggestedDomain}
-									<button
-										type="button"
-										class="td-suggest"
-										onclick={() => (paramValues[param.name] = suggestedDomain)}
-									>
-										Use the free <strong>{suggestedDomain}</strong>
-									</button>
-								{/if}
-							{/if}
-
-							{#if param.description}
-								<p class="td-hint">{param.description}</p>
-							{/if}
-						{/if}
+									{#snippet suffix()}
+										<Button
+											size="sm"
+											variant="ghost"
+											icon={revealed[param.name] ? EyeOff : Eye}
+											label={revealed[param.name] ? 'Hide' : 'Show'}
+											onclick={() => (revealed[param.name] = !revealed[param.name])}
+										/>
+									{/snippet}
+								</Input>
+							</Field>
+						{/each}
 					</div>
-				{/each}
+				</SectionCard>
+			{/if}
 
-				<div class="td-field">
-					<span class="td-label">Resources</span>
-					<p class="td-hint" style="margin-top: 0;">
-						Applies to every deployment and database created by this template.
-					</p>
+			<SectionCard
+				title="Resources"
+				description="CPU and memory for every app and database it creates."
+			>
+				<Disclosure title="Set limits" note="Org defaults if you skip this">
 					<ResourcePicker
 						bind:cpuMilli={resourceCpuMilli}
 						bind:memoryBytes={resourceMemoryBytes}
 						disabled={deploying}
 					/>
-				</div>
-
-				{#if error}
-					<div class="td-error">{error}</div>
-				{/if}
-
-				<div class="td-actions">
-					<Button variant="ghost" href={basePath}>Cancel</Button>
-					<Button variant="primary" type="submit" loading={deploying}>
-						{#if !deploying}<Rocket class="h-4 w-4" />{/if}
-						Deploy
-					</Button>
-				</div>
-			</form>
-		</div>
-	{/if}
-</div>
+				</Disclosure>
+			</SectionCard>
+		</form>
+	</Page>
+{:else}
+	<Page title="Template not found" width="narrow">
+		<Alert tone="error">{error ?? 'This template does not exist or was removed.'}</Alert>
+	</Page>
+{/if}
 
 <style>
-	.td-page {
-		max-width: 44rem;
-		margin: 0 auto;
-		padding: 2.5rem 2.5rem 3rem;
-	}
-
-	.td-page-title {
-		font-size: var(--text-title-2);
-		line-height: var(--lh-title-2);
-		font-weight: 700;
-		color: var(--center-channel-color);
-		margin: 0 0 1.25rem;
-		letter-spacing: -0.02em;
-	}
-
-	/* Main card */
-	.td-main-card {
-		border: 1px solid var(--surface-border);
-		border-radius: var(--radius-md);
-		background-color: var(--surface-bg);
-		margin-bottom: 1.25rem;
-		overflow: hidden;
-	}
-
-	/* Template info header */
-	.td-info {
-		display: flex;
-		align-items: flex-start;
-		gap: 0.75rem;
-		padding: 1.25rem 1.5rem;
-		border-bottom: 1px solid var(--surface-border);
-	}
-
-	.td-info-icon {
-		width: 2.25rem;
-		height: 2.25rem;
-		border-radius: var(--radius-sm);
-		flex-shrink: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: color-mix(in srgb, var(--sidebar-text-active-border) 10%, transparent);
-		color: var(--sidebar-text-active-border);
-	}
-
-	.td-info-text {
-		flex: 1;
-		min-width: 0;
+	.head {
 		display: flex;
 		flex-direction: column;
-		gap: 0.125rem;
+		gap: 1.5rem;
 	}
-
-	.td-info-name {
-		font-size: var(--text-body);
-		line-height: var(--lh-body);
-		font-weight: 600;
-		color: var(--center-channel-color);
-	}
-
-	.td-info-desc {
-		font-size: var(--text-footnote);
-		color: var(--surface-muted);
-		line-height: 1.4;
-	}
-
-	.td-info-badge {
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		font-weight: 600;
-		padding: 0.125rem 0.5rem;
-		border-radius: var(--radius-pill);
-		text-transform: capitalize;
-		flex-shrink: 0;
-		margin-top: 0.125rem;
-	}
-
-	/* Project row */
-	.td-project-row {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		padding: 0.875rem 1.5rem;
-		border-bottom: 1px solid var(--surface-border);
-		background: color-mix(in srgb, var(--surface-border) 15%, transparent);
-	}
-
-	.td-suggest {
-		align-self: flex-start;
-		margin-top: 0.5rem;
-		padding: 0.25rem 0.75rem;
-		border: 1px dashed var(--border-default);
-		border-radius: var(--radius-pill);
-		background: none;
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		color: var(--text-muted);
-		cursor: pointer;
-		transition:
-			color var(--dur-fast) ease,
-			border-color var(--dur-fast) ease;
-	}
-
-	.td-suggest:hover {
-		color: var(--text-default);
-		border-color: var(--border-strong);
-	}
-
-	.td-suggest strong {
-		font-weight: 600;
-		font-family: var(--font-mono);
-	}
-
-	/* Resources preview */
-	.td-resources {
-		padding: 1rem 1.5rem;
-	}
-
-	.td-resources-label {
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
-		color: var(--surface-muted);
-		display: block;
-		margin-bottom: 0.75rem;
-	}
-
-	.td-resources-list {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.5rem;
-	}
-
-	.td-resource-chip {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.25rem 0.75rem;
-		border-radius: var(--radius-xs);
-		background: color-mix(in srgb, var(--surface-border) 30%, transparent);
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		color: var(--center-channel-color);
-	}
-
-	.td-resource-dot {
-		width: 0.375rem;
-		height: 0.375rem;
-		border-radius: 50%;
-		flex-shrink: 0;
-	}
-
-	.td-resource-name {
-		font-weight: 600;
-	}
-
-	.td-resource-type {
-		color: var(--surface-muted);
-	}
-
-	/* Configuration card */
-	.td-card {
-		border: 1px solid var(--surface-border);
-		border-radius: var(--radius-md);
-		background-color: var(--surface-bg);
-		padding: 1.25rem 1.5rem;
-		margin-bottom: 1.25rem;
+	.loading {
 		display: flex;
 		flex-direction: column;
-		gap: 1rem;
+		gap: 1.5rem;
 	}
-
-	.td-card-title {
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		font-weight: 600;
-		color: var(--center-channel-color);
-		margin: 0;
+	.form {
+		display: flex;
+		flex-direction: column;
+		gap: 1.25rem;
 	}
-
-	.td-form {
+	.fields {
 		display: flex;
 		flex-direction: column;
 		gap: 1.125rem;
 	}
-
-	/* Fields */
-	.td-field {
+	.short {
+		display: block;
+		max-width: 12rem;
+	}
+	.suggest {
+		display: block;
+		margin-top: 0.5rem;
+	}
+	.creates {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
-	}
-
-	.td-label {
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		font-weight: 600;
-		color: var(--center-channel-color);
-	}
-
-	.td-required {
-		color: var(--error-text-color);
-		margin-left: 0.125rem;
-	}
-
-	.td-hint {
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		color: var(--surface-muted);
+		gap: 0.625rem;
 		margin: 0;
+		padding: 0;
+		list-style: none;
 	}
-
-	/* Boolean toggle */
-	.td-toggle-row {
+	.create {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
-		gap: 1rem;
-		cursor: pointer;
-		padding: 0.5rem 0;
+		gap: 0.625rem;
+		min-width: 0;
 	}
-
-	.td-toggle-info {
-		display: flex;
-		flex-direction: column;
-		gap: 0.125rem;
+	.create-name {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		font-size: var(--text-body);
+		font-weight: var(--weight-medium);
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
-
-	.td-toggle-switch {
-		position: relative;
-		flex-shrink: 0;
-	}
-
-	.td-toggle-switch input {
-		position: absolute;
-		opacity: 0;
-		width: 0;
-		height: 0;
-	}
-
-	.td-toggle-slider {
-		display: block;
-		position: relative;
-		width: 2.25rem;
-		height: 1.25rem;
-		background-color: var(--surface-border);
-		border-radius: var(--radius-pill);
-		transition: background-color var(--dur-base);
-	}
-
-	.td-toggle-slider::after {
-		content: '';
-		position: absolute;
-		top: 0.1875rem;
-		left: 0.1875rem;
-		width: 0.875rem;
-		height: 0.875rem;
-		background-color: var(--button-color);
-		border-radius: 50%;
-		transition: transform var(--dur-base);
-		box-shadow: var(--elev-1);
-	}
-
-	.td-toggle-switch input:checked + .td-toggle-slider {
-		background-color: var(--sidebar-text-active-border);
-	}
-
-	.td-toggle-switch input:checked + .td-toggle-slider::after {
-		transform: translateX(1rem);
-	}
-
-	/* Error */
-	.td-error {
-		padding: 0.75rem 1rem;
-		border-radius: var(--radius-md);
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		background-color: color-mix(in srgb, var(--error-text-color) 10%, transparent);
-		color: var(--error-text-color);
-		border: 1px solid color-mix(in srgb, var(--error-text-color) 25%, transparent);
-	}
-
-	/* Actions */
-	.td-actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: 0.5rem;
-		padding-top: 0.25rem;
+	.create-kind {
+		font-size: var(--text-caption);
+		color: var(--text-muted);
 	}
 </style>

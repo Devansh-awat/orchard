@@ -18,6 +18,7 @@
 	import Dock, { type DockItem } from '$lib/components/patterns/Dock.svelte';
 	import Shelf, { type ShelfItem } from '$lib/components/patterns/Shelf.svelte';
 	import { IMG_ICONS } from '$lib/components/org-dashboard/helpers.svelte';
+	import { templateCategory } from '$lib/utils/template-categories';
 
 	interface Template {
 		id: string;
@@ -31,19 +32,6 @@
 
 	type Source = 'github' | 'image' | 'database';
 
-	const CATEGORY: Record<string, string> = {
-		automation: 'Automation',
-		cms: 'Publishing',
-		monitoring: 'Monitoring',
-		analytics: 'Analytics',
-		security: 'Security',
-		ai: 'AI',
-		docs: 'Docs',
-		games: 'Games',
-		database: 'Databases',
-		backend: 'Backend',
-		developer: 'Developer tools'
-	};
 	const FEATURED = ['n8n', 'ghost', 'uptime-kuma', 'plausible', 'open-webui'];
 	const POPULAR = 8;
 
@@ -59,7 +47,7 @@
 	let projectSlug = $state('');
 	const currentProject = $derived(projects.find((p) => p.slug === projectSlug));
 
-	const label = (t: Template) => CATEGORY[t.category ?? ''] ?? t.category ?? 'Template';
+	const label = (t: Template) => templateCategory(t.category);
 
 	let spotlight = $state<Template[]>([]);
 
