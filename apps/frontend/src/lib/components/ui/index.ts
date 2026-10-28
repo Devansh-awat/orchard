@@ -71,3 +71,4 @@ export { default as Stack } from './Stack.svelte';
 export { default as FormActions } from './FormActions.svelte';
 export { default as SecretInput } from './SecretInput.svelte';
 export { default as SearchPicker } from './SearchPicker.svelte';
+export { default as AmountSlider } from './AmountSlider.svelte';

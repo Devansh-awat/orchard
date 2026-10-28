@@ -10,7 +10,6 @@
 		Alert,
 		Badge,
 		Breadcrumbs,
-		Disclosure,
 		FormActions,
 		Button,
 		Page,
@@ -314,13 +313,11 @@
 				title="Resources"
 				description="CPU and memory for every app and database it creates."
 			>
-				<Disclosure title="Set limits" note="Org defaults if you skip this">
-					<ResourcePicker
-						bind:cpuMilli={resourceCpuMilli}
-						bind:memoryBytes={resourceMemoryBytes}
-						disabled={deploying}
-					/>
-				</Disclosure>
+				<ResourcePicker
+					bind:cpuMilli={resourceCpuMilli}
+					bind:memoryBytes={resourceMemoryBytes}
+					disabled={deploying}
+				/>
 			</SectionCard>
 
 			<FormActions>

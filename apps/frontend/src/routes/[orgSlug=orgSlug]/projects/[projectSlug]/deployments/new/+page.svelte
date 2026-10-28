@@ -25,14 +25,14 @@
 		Plus,
 		Trash2
 	} from 'lucide-svelte';
-	import { formatCpu, formatMemory, rawToEnvVars } from '$lib/utils/format';
+	import { rawToEnvVars } from '$lib/utils/format';
 	import { motionStagger } from '$lib/utils/motion.svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
 	import { EnvironmentSwitcher } from '$lib/components/environment';
 	import RepoAccountPicker from '$lib/components/deployment/RepoAccountPicker.svelte';
 	import GitSourcePane from '$lib/components/deployment/GitSourcePane.svelte';
 	import FrameworkIcon from '$lib/components/deployment/FrameworkIcon.svelte';
-	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
+	import ResourcePicker, { formatCpu, formatMemory } from '$lib/components/ResourcePicker.svelte';
 	import ResourceList from '$lib/components/patterns/ResourceList.svelte';
 	import SourcePath from '$lib/components/patterns/SourcePath.svelte';
 	import {
@@ -1027,8 +1027,8 @@
 	const resourcesNote = $derived(
 		resourceCpuMilli || resourceMemoryBytes
 			? [
-					resourceCpuMilli ? formatCpu(resourceCpuMilli) : null,
-					resourceMemoryBytes ? formatMemory(resourceMemoryBytes) : null
+					resourceMemoryBytes ? formatMemory(resourceMemoryBytes) : null,
+					resourceCpuMilli ? formatCpu(resourceCpuMilli) : null
 				]
 					.filter(Boolean)
 					.join(' · ')
