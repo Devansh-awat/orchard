@@ -251,7 +251,7 @@
 	{/if}
 
 	{#snippet footer()}
-		<Button onclick={() => (open = false)}>Cancel</Button>
+		<Button variant="ghost" onclick={() => (open = false)}>Cancel</Button>
 		{#if eligibleOrgs.length > 0}
 			<Button
 				variant={pausing ? 'danger' : 'primary'}

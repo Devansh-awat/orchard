@@ -81,7 +81,7 @@
 	</Stack>
 
 	{#snippet footer()}
-		<Button variant="secondary" onclick={() => (open = false)}>Cancel</Button>
+		<Button variant="ghost" onclick={() => (open = false)}>Cancel</Button>
 		<Button
 			variant="primary"
 			icon={Crown}

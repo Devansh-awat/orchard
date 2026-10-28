@@ -78,7 +78,7 @@
 				/>
 			</Field>
 
-			<Field label="Icon" hint="PNG, JPG or SVG, up to 2 MB" for="{uid}-icon">
+			<Field label="Icon" for="{uid}-icon">
 				<ImageField
 					id="{uid}-icon"
 					bind:value={iconValue}
@@ -92,7 +92,7 @@
 				</ImageField>
 			</Field>
 
-			<Field label="Background" hint="PNG, JPG or WebP, up to 8 MB" for="{uid}-bg">
+			<Field label="Background" for="{uid}-bg">
 				<ImageField
 					id="{uid}-bg"
 					shape="wide"
@@ -106,7 +106,7 @@
 	</form>
 
 	{#snippet footer()}
-		<Button onclick={() => (open = false)} disabled={saving}>Cancel</Button>
+		<Button variant="ghost" onclick={() => (open = false)} disabled={saving}>Cancel</Button>
 		<Button
 			type="submit"
 			form={uid}

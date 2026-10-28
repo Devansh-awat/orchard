@@ -221,7 +221,7 @@
 		</form>
 
 		{#snippet footer()}
-			<Button onclick={() => (editorOpen = false)}>Cancel</Button>
+			<Button variant="ghost" onclick={() => (editorOpen = false)}>Cancel</Button>
 			<Button type="submit" form={formId} variant="primary" loading={saving} disabled={!canSave}>
 				{replacing ? 'Replace credential' : 'Add credential'}
 			</Button>

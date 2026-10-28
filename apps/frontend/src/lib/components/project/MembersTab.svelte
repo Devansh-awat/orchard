@@ -215,20 +215,20 @@
 
 <Stack gap="lg">
 	<Stack gap="sm">
-		{#if members.length > 6 || canManageMembers}
-			<div class="bar">
+		<SectionTitle size="md" title="Members" count={members.length || undefined}>
+			{#snippet actions()}
 				{#if members.length > 6}
 					<div class="filter">
-						<SearchField placeholder="Filter members" size="sm" bind:value={filter} />
+						<SearchField placeholder="Filter" size="sm" bind:value={filter} />
 					</div>
 				{/if}
 				{#if canManageMembers}
-					<Button variant="primary" size="sm" icon={UserPlus} onclick={openInvite}
+					<Button variant="secondary" size="sm" icon={UserPlus} onclick={openInvite}
 						>Add people</Button
 					>
 				{/if}
-			</div>
-		{/if}
+			{/snippet}
+		</SectionTitle>
 
 		{#if shown.length > 0}
 			<List label="Members">
@@ -301,7 +301,7 @@
 
 	{#if canManageMembers && pendingInvitations.length > 0}
 		<Stack gap="sm">
-			<SectionTitle title="Invitations" count={pendingInvitations.length} />
+			<SectionTitle size="md" title="Invitations" count={pendingInvitations.length} />
 			<List label="Invitations">
 				{#each pendingInvitations as inv (inv.id)}
 					{#snippet controls()}
@@ -460,16 +460,8 @@
 />
 
 <style>
-	.bar {
-		display: flex;
-		align-items: center;
-		justify-content: flex-end;
-		gap: var(--space-2);
-	}
 	.filter {
-		flex: 1;
-		max-width: 18rem;
-		margin-right: auto;
+		width: 12rem;
 	}
 	.role {
 		display: flex;

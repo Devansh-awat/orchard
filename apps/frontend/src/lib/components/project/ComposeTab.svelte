@@ -100,7 +100,7 @@
 {:else}
 	<div class="stacks">
 		{#if canEdit}
-			<SectionTitle title="Stacks">
+			<SectionTitle size="md" title="Stacks" count={composeStacks.length || undefined}>
 				{#snippet actions()}
 					<Button href={newHref} variant="secondary" size="sm" icon={Plus}>New stack</Button>
 				{/snippet}

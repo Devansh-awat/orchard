@@ -6,7 +6,7 @@
 
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { Layers } from 'lucide-svelte';
+	import ResourceTile from './ResourceTile.svelte';
 	import ListRow from '$lib/components/ui/ListRow.svelte';
 	import RelativeTime from '$lib/components/ui/RelativeTime.svelte';
 
@@ -48,7 +48,7 @@
 
 <ListRow title={name} {href} {actions} {presence}>
 	{#snippet leading()}
-		<span class="tile"><Layers size={16} /></span>
+		<ResourceTile kind="stack" />
 	{/snippet}
 	{#snippet titleSuffix()}
 		{#if !quiet}<span class="state state--{status.kind}">{status.label}</span>{/if}
@@ -82,20 +82,6 @@
 </ListRow>
 
 <style>
-	.tile {
-		position: relative;
-		display: grid;
-		place-items: center;
-		width: 2rem;
-		height: 2rem;
-		border-radius: calc(var(--radius-control) * var(--corner-scale));
-		corner-shape: var(--corner);
-		background: linear-gradient(var(--bg-surface), var(--neutral-2));
-		box-shadow:
-			inset 0 0 0 0.5px var(--border-strong),
-			0 1px 2px color-mix(in oklab, var(--neutral-10) 8%, transparent);
-		color: var(--text-muted);
-	}
 	.state {
 		font-size: var(--text-caption);
 		font-weight: var(--weight-medium);

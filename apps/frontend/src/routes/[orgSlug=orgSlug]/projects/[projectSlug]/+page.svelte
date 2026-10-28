@@ -19,7 +19,6 @@
 		MenuItem,
 		Page,
 		SearchField,
-		SectionCard,
 		Skeleton,
 		Swap,
 		PageTabs
@@ -951,7 +950,7 @@
 					/>
 					<div class="bar-tools">
 						{#if activeTab === 'resources'}
-							<SearchField placeholder="Search" size="sm" bind:value={deploymentSearch} />
+							<SearchField placeholder="Search" bind:value={deploymentSearch} />
 						{/if}
 						{#if activeTab === 'resources' || activeTab === 'variables'}
 							<EnvironmentSwitcher
@@ -1050,13 +1049,11 @@
 						{/if}
 					</div>
 				{:else if activeTab === 'variables'}
-					<SectionCard>
-						{#if selectedEnvId}
-							<SharedVarsEditor environmentId={selectedEnvId} envName={selectedEnvName} />
-						{:else}
-							<EmptyState title="Pick an environment to edit its variables" />
-						{/if}
-					</SectionCard>
+					{#if selectedEnvId}
+						<SharedVarsEditor environmentId={selectedEnvId} envName={selectedEnvName} />
+					{:else}
+						<EmptyState title="Pick an environment to edit its variables" />
+					{/if}
 				{:else if activeTab === 'compose'}
 					<ComposeTab
 						{canEdit}

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Widget from '$lib/components/ui/Widget.svelte';
-	import AppIcon from '$lib/components/ui/AppIcon.svelte';
+	import ResourceTile from './ResourceTile.svelte';
 	import { blurRiseList } from '$lib/components/ui/widgetMotion.svelte';
 	import type { FailingApp } from './sidebar';
 
@@ -24,7 +24,7 @@
 					href={item.href}
 					{@attach rise(() => arriving.includes(item.label))}
 				>
-					<AppIcon name={item.label} kind={item.kind} icon={item.icon} size="md" />
+					<ResourceTile kind={item.kind ?? 'deployment'} image={item.icon} />
 					<span class="text">
 						<span class="name">{item.label}</span>
 						{#if item.reason}<span class="reason">{item.reason}</span>{/if}
