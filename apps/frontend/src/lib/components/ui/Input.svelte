@@ -4,6 +4,7 @@
 
 	let {
 		value = $bindable(''),
+		element = $bindable(null),
 		error = false,
 		icon = undefined,
 		size = 'md',
@@ -15,6 +16,7 @@
 		...rest
 	}: {
 		value?: string | number | null;
+		element?: HTMLInputElement | null;
 		error?: boolean;
 		icon?: Icon;
 		size?: 'lg' | 'md' | 'sm';
@@ -39,6 +41,7 @@
 			class:control--error={error}
 			aria-invalid={error || undefined}
 			bind:value
+			bind:this={element}
 			{...rest}
 		/>
 		{#if suffix}
@@ -55,6 +58,7 @@
 		class:control--error={error}
 		aria-invalid={error || undefined}
 		bind:value
+		bind:this={element}
 		{...rest}
 	/>
 {/if}

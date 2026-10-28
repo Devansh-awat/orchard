@@ -5,6 +5,11 @@
 	import Dropdown from '$lib/components/ui/Dropdown.svelte';
 	import Select from '$lib/components/ui/Select.svelte';
 	import Combobox from '$lib/components/ui/Combobox.svelte';
+	import SearchPicker from '$lib/components/ui/SearchPicker.svelte';
+	import SelectTrigger from '$lib/components/ui/SelectTrigger.svelte';
+	import Menu from '$lib/components/ui/Menu.svelte';
+	import MenuItem from '$lib/components/ui/MenuItem.svelte';
+	import MenuLabel from '$lib/components/ui/MenuLabel.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import type { DropdownOption } from '$lib/components/ui/dropdown';
 
@@ -99,6 +104,17 @@
 	let custom = $state('');
 	let customQuery = $state('');
 	let customBranches = $state<DropdownOption[]>(BRANCHES);
+
+	const PICK_REPOS: DropdownOption[] = [
+		'orpheus/hackclub-site',
+		'orpheus/terra',
+		'orpheus/flavortown',
+		'hackclub/mercury',
+		'hackclub/slack-bots',
+		'hackclub/arcade-leaderboard'
+	].map((r, i) => ({ value: r, label: r, description: i % 3 === 0 ? 'Private' : undefined }));
+	let pickRepo = $state('orpheus/terra');
+	let pickEnv = $state('production');
 </script>
 
 {#snippet defaultBadge(option: DropdownOption)}
@@ -204,3 +220,30 @@
 		</div>
 	</SectionCard>
 </div>
+
+<SectionCard
+	title="Pickers that look alike"
+	description="Choosing a project, an environment, an account or a repo is one kind of control: a SelectTrigger that opens the shared floating list. Long lists add a search field at the top of the same panel with SearchPicker."
+>
+	<div class="flex flex-wrap items-center gap-3">
+		<Menu placement="bottom-start" size="lg">
+			{#snippet trigger(attrs, open)}
+				<SelectTrigger {...attrs} {open} prefix="Environment" value={pickEnv} />
+			{/snippet}
+			<MenuLabel>Environment</MenuLabel>
+			{#each ['production', 'staging', 'preview'] as e (e)}
+				<MenuItem checked={pickEnv === e} onclick={() => (pickEnv = e)}>{e}</MenuItem>
+			{/each}
+		</Menu>
+		<SearchPicker
+			options={PICK_REPOS}
+			bind:value={pickRepo}
+			prefix="Repository"
+			searchPlaceholder="Search repositories"
+			creatable
+			width="22rem"
+		>
+			{#snippet optionLeading()}<Github size={15} />{/snippet}
+		</SearchPicker>
+	</div>
+</SectionCard>

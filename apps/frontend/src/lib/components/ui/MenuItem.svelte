@@ -13,6 +13,7 @@
 		checked = undefined,
 		leading = undefined,
 		keepOpen = false,
+		description = undefined,
 		children,
 		...rest
 	}: {
@@ -25,13 +26,16 @@
 		checked?: boolean;
 		leading?: Snippet;
 		keepOpen?: boolean;
+		description?: string;
 		children?: Snippet;
 		[key: string]: unknown;
 	} = $props();
 
 	const menu = getContext<{ close: () => void } | undefined>('ui-menu');
 
-	const structured = $derived(!!icon || !!leading || !!shortcut || checked !== undefined);
+	const structured = $derived(
+		!!icon || !!leading || !!shortcut || !!description || checked !== undefined
+	);
 	const role = $derived(checked === undefined ? 'menuitem' : 'menuitemcheckbox');
 
 	function handleClick(e: MouseEvent) {
@@ -53,7 +57,14 @@
 			{@const Glyph = icon}
 			<span class="icon" aria-hidden="true"><Glyph size={16} /></span>
 		{/if}
-		<span class="label">{@render children?.()}</span>
+		{#if description}
+			<span class="label label--stack">
+				<span class="label-main">{@render children?.()}</span>
+				<span class="desc">{description}</span>
+			</span>
+		{:else}
+			<span class="label">{@render children?.()}</span>
+		{/if}
 		{#if shortcut}<kbd class="shortcut">{shortcut}</kbd>{/if}
 	{:else}
 		{@render children?.()}
@@ -133,6 +144,25 @@
 		text-box: trim-both cap alphabetic;
 		padding-block: 0.3em;
 		margin-block: -0.3em;
+	}
+	.label--stack {
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+		text-box: normal;
+		padding-block: 0;
+		margin-block: 0;
+	}
+	.label-main {
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.desc {
+		overflow: hidden;
+		color: var(--text-muted);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		text-overflow: ellipsis;
 	}
 	.shortcut {
 		flex-shrink: 0;

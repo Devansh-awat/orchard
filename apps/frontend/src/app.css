@@ -896,6 +896,13 @@ html {
 	transition: background-color var(--dur-fast) ease;
 }
 
+.ui-dropdown-trigger--sm {
+	height: 1.75rem;
+	padding: 0 0.4375rem 0 0.5rem;
+	border-radius: calc(0.5rem * var(--corner-scale));
+	font-size: var(--text-callout);
+}
+
 .ui-dropdown-trigger:hover:not(:disabled),
 .ui-dropdown-trigger--open {
 	background: var(--bg-hover);

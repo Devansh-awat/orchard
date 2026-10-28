@@ -23,6 +23,7 @@
 		creatable = false,
 		createLabel = (q: string) => `Use “${q}”`,
 		trailing = undefined,
+		leading = undefined,
 		class: className = '',
 		onchange = undefined,
 		oncreate = undefined,
@@ -41,6 +42,7 @@
 		creatable?: boolean;
 		createLabel?: (query: string) => string;
 		trailing?: Snippet<[DropdownOption]>;
+		leading?: Snippet<[DropdownOption]>;
 		class?: string;
 		onchange?: (value: string) => void;
 		oncreate?: (query: string) => void;
@@ -163,7 +165,9 @@
 			<span class="ui-dropdown-check" aria-hidden="true">
 				{#if combo.isSelected(option.value)}<Check size={16} strokeWidth={2.25} />{/if}
 			</span>
-			{#if option.icon}
+			{#if leading}
+				<span class="ui-dropdown-icon">{@render leading(option)}</span>
+			{:else if option.icon}
 				{@const Glyph = option.icon}
 				<span class="ui-dropdown-icon"><Glyph size={16} /></span>
 			{/if}

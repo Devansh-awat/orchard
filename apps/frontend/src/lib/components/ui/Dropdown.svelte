@@ -14,6 +14,8 @@
 		class: className = '',
 		onchange = undefined,
 		icon = undefined,
+		trigger: custom = undefined,
+		size = 'md',
 		ariaLabelledby = undefined
 	}: {
 		value?: string;
@@ -25,6 +27,8 @@
 		class?: string;
 		onchange?: (value: string) => void;
 		icon?: Snippet<[string]>;
+		trigger?: Snippet<[Record<string, unknown>, boolean, DropdownOption | null]>;
+		size?: 'sm' | 'md';
 		ariaLabelledby?: string;
 	} = $props();
 
@@ -131,28 +135,42 @@
 	onkeydown={onListKeydown}
 >
 	{#snippet trigger(props, isOpen)}
-		<button
-			type="button"
-			id={base}
-			{disabled}
-			aria-labelledby={ariaLabelledby}
-			aria-haspopup="listbox"
-			aria-expanded={isOpen}
-			class="ui-dropdown-trigger{className ? ` ${className}` : ''}"
-			class:ui-dropdown-trigger--open={isOpen}
-			{...props}
-			onkeydown={onTriggerKeydown}
-		>
-			<span class="ui-dropdown-value" class:ui-dropdown-value--placeholder={!selected}>
-				{#if selected}
-					{@render glyph(selected)}
-					<span class="ui-dropdown-text">{@render text(selected)}</span>
-				{:else}
-					<span class="ui-dropdown-text">{placeholder}</span>
-				{/if}
-			</span>
-			<span class="ui-dropdown-chevron" aria-hidden="true"><ChevronsUpDown size={14} /></span>
-		</button>
+		{#if custom}
+			{@render custom(
+				{
+					...props,
+					id: base,
+					'aria-haspopup': 'listbox',
+					'aria-expanded': isOpen,
+					onkeydown: onTriggerKeydown
+				},
+				isOpen,
+				selected
+			)}
+		{:else}
+			<button
+				type="button"
+				id={base}
+				{disabled}
+				aria-labelledby={ariaLabelledby}
+				aria-haspopup="listbox"
+				aria-expanded={isOpen}
+				class="ui-dropdown-trigger ui-dropdown-trigger--{size}{className ? ` ${className}` : ''}"
+				class:ui-dropdown-trigger--open={isOpen}
+				{...props}
+				onkeydown={onTriggerKeydown}
+			>
+				<span class="ui-dropdown-value" class:ui-dropdown-value--placeholder={!selected}>
+					{#if selected}
+						{@render glyph(selected)}
+						<span class="ui-dropdown-text">{@render text(selected)}</span>
+					{:else}
+						<span class="ui-dropdown-text">{placeholder}</span>
+					{/if}
+				</span>
+				<span class="ui-dropdown-chevron" aria-hidden="true"><ChevronsUpDown size={14} /></span>
+			</button>
+		{/if}
 	{/snippet}
 	{#snippet children()}
 		<div class="ui-dropdown-list" role="presentation">
