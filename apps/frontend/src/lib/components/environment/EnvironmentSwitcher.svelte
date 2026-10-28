@@ -10,10 +10,12 @@
 
 	let {
 		projectId,
-		selectedEnvId = $bindable('')
+		selectedEnvId = $bindable(''),
+		block = false
 	}: {
 		projectId: string;
 		selectedEnvId?: string;
+		block?: boolean;
 	} = $props();
 
 	const envQuery = createQuery(() => ({
@@ -36,11 +38,12 @@
 	let manageOpen = $state(false);
 </script>
 
-<Menu placement="bottom-start" size="lg">
+<Menu placement="bottom-start" size="lg" sameWidth={block}>
 	{#snippet trigger(attrs, isOpen)}
 		<SelectTrigger
 			{...attrs}
 			open={isOpen}
+			{block}
 			value={selectedEnv?.name}
 			placeholder="Environment"
 			loading={envQuery.isLoading}

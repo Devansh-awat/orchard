@@ -41,7 +41,7 @@
 			value={directLink ? 'Direct link' : selected}
 			placeholder="Account"
 			aria-label="GitHub account"
-			style="width: 100%"
+			block
 			leading={directLink || selected ? who : undefined}
 		/>
 	{/snippet}

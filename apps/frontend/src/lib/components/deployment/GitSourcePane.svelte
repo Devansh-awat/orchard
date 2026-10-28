@@ -1,14 +1,16 @@
 <script lang="ts">
-	import { GitBranch } from 'lucide-svelte';
+	import { GitBranch, Gitlab, Lock, Plus } from 'lucide-svelte';
 	import {
 		Alert,
-		Badge,
-		Combobox,
 		Field,
 		Input,
-		Select,
+		Menu,
+		MenuItem,
+		SearchPicker,
+		SelectTrigger,
 		type DropdownOption
 	} from '$lib/components/ui';
+	import MenuSeparator from '$lib/components/ui/MenuSeparator.svelte';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
 	import {
 		detectGitRepo,
@@ -53,10 +55,10 @@
 	let detectRun = 0;
 
 	const connection = $derived(connections.find((c) => c.id === connectionId) ?? null);
-	const repoOptions = $derived(repos.map((r) => ({ value: r.id, label: r.fullName, mono: true })));
-	const branchOptions = $derived(
-		branches.map((b) => ({ value: b.name, label: b.name, mono: true }))
-	);
+	const repoOptions = $derived(repos.map((r) => ({ value: r.id, label: r.fullName })));
+	const branchOptions = $derived(branches.map((b) => ({ value: b.name, label: b.name })));
+	const glyphFor = (provider: GitConnection['provider']) =>
+		provider === 'gitlab' ? Gitlab : GitBranch;
 	const repoPath = $derived(
 		connection ? (selectedRepo ? selectedRepo.fullName : repoPathOn(connection, repoUrl)) : null
 	);
@@ -161,14 +163,6 @@
 		return /^https?:\/\//.test(text);
 	}
 
-	function onQuery(next: string) {
-		repoQuery = next;
-		if (isUrl(next)) {
-			repoUrl = next;
-			onUrlInput();
-		}
-	}
-
 	function useTypedUrl(text: string) {
 		repoUrl = text;
 		onUrlInput();
@@ -198,86 +192,111 @@
 	}
 </script>
 
-{#snippet busy()}<Spinner size={13} />{/snippet}
+{#snippet lock(option: DropdownOption)}
+	{#if repos.find((r) => r.id === option.value)?.private}
+		<Lock size={13} class="text-faint" aria-label="Private" />
+	{/if}
+{/snippet}
 
-{#snippet privateBadge(option: DropdownOption)}
-	{#if repos.find((r) => r.id === option.value)?.private}<Badge tone="neutral">Private</Badge>{/if}
+{#snippet hostGlyph(c: GitConnection)}
+	{@const Glyph = glyphFor(c.provider)}
+	<Glyph size={15} class="text-muted" />
 {/snippet}
 
 {#if !loaded}
-	<div class="gs-loading"><Spinner size={16} label="Loading git providers" /></div>
+	<div class="gs-span gs-loading"><Spinner size={16} label="Loading git providers" /></div>
 {:else if connections.length === 0}
-	<Alert tone="info" title="No git providers linked">
-		Link GitLab, Gitea, Codeberg, Bitbucket or any git host with your own token under
-		<a href="/user/settings?section=git">your settings</a>. GitHub works from the GitHub tab.
-	</Alert>
+	<div class="gs-span">
+		<Alert tone="info" title="No git providers linked">
+			Link GitLab, Gitea, Codeberg, Bitbucket or any git host under
+			<a href="/user/settings?section=git">your settings</a>.
+		</Alert>
+	</div>
 {:else}
 	<Field label="Provider">
-		<Select value={connectionId} onchange={(e) => pickConnection(e.currentTarget.value)}>
+		<Menu placement="bottom-start" sameWidth>
+			{#snippet trigger(attrs, open)}
+				<SelectTrigger
+					{...attrs}
+					{open}
+					block
+					value={connection?.name}
+					placeholder="Provider"
+					aria-label="Git provider"
+				>
+					{#snippet leading()}{#if connection}{@render hostGlyph(connection)}{/if}{/snippet}
+				</SelectTrigger>
+			{/snippet}
 			{#each connections as c (c.id)}
-				<option value={c.id}>{c.name} · {providerLabel(c.provider)}</option>
+				<MenuItem
+					checked={c.id === connectionId}
+					description={c.host}
+					onclick={() => pickConnection(c.id)}
+				>
+					{#snippet leading()}{@render hostGlyph(c)}{/snippet}
+					{c.name}
+				</MenuItem>
 			{/each}
-		</Select>
+			<MenuSeparator />
+			<MenuItem icon={Plus} href="/user/settings?section=git">Link a provider</MenuItem>
+		</Menu>
 	</Field>
 
-	{#if connection?.canList}
-		<Field label="Repository">
-			<Combobox
-				label="Repository"
-				value={selectedRepo?.id ?? ''}
-				bind:query={() => repoQuery, onQuery}
+	<Field label="Repository">
+		{#if connection?.canList}
+			<SearchPicker
+				block
+				value={selectedRepo?.id ?? repoPath ?? ''}
+				bind:query={repoQuery}
 				options={repoOptions}
 				loading={loadingRepos}
-				placeholder={loadingRepos ? 'Loading repositories' : 'Search or paste a URL'}
-				creatable={isUrl(repoQuery)}
+				placeholder="Choose a repository"
+				searchPlaceholder="Search or paste a URL"
+				creatable={isUrl(repoQuery.trim())}
 				createLabel={() => 'Use this URL'}
-				oncreate={useTypedUrl}
+				oncreate={(q) => useTypedUrl(q)}
 				onchange={(id) => {
 					const r = repos.find((x) => x.id === id);
 					if (r) pickRepo(r);
 				}}
 				onclear={clearRepo}
-				trailing={privateBadge}
-			/>
-		</Field>
-	{:else}
-		<Field label="Repository URL" hint="On {connection?.host}">
+				trailing={lock}
+			>
+				{#snippet leading()}{#if connection}{@render hostGlyph(connection)}{/if}{/snippet}
+			</SearchPicker>
+		{:else}
 			<Input
 				bind:value={repoUrl}
 				placeholder="https://{connection?.host}/team/app"
 				mono
 				oninput={onUrlInput}
 			/>
-		</Field>
-	{/if}
+		{/if}
+	</Field>
 
-	{#if repoPath}
-		<Field label="Branch">
-			{#if branches.length > 0}
-				<Combobox
-					label="Branch"
-					icon={GitBranch}
-					value={branch}
-					options={branchOptions}
-					loading={loadingBranches || detecting}
-					placeholder="Search branches"
-					onchange={setBranch}
-				/>
-			{:else}
-				<Input
-					value={branch}
-					oninput={(e: Event) => setBranch((e.currentTarget as HTMLInputElement).value)}
-					placeholder="main"
-					class="font-mono"
-					icon={GitBranch}
-					suffix={loadingBranches || detecting ? busy : undefined}
-				/>
-			{/if}
-		</Field>
-	{/if}
+	<Field label="Branch">
+		<SearchPicker
+			block
+			mono
+			value={branch}
+			options={branchOptions}
+			loading={loadingBranches || detecting}
+			disabled={!repoPath}
+			placeholder="main"
+			searchPlaceholder="Search or type a branch"
+			creatable
+			createLabel={(q) => `Use ${q}`}
+			onchange={setBranch}
+		>
+			{#snippet leading()}<GitBranch size={15} class="text-muted" />{/snippet}
+		</SearchPicker>
+	</Field>
 {/if}
 
 <style>
+	.gs-span {
+		grid-column: 1 / -1;
+	}
 	.gs-loading {
 		display: flex;
 		align-items: center;

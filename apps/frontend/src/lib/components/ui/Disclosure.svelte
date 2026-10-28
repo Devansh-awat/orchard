@@ -46,7 +46,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.375rem;
-		width: 100%;
+		width: calc(100% + 1rem);
 		min-height: 2rem;
 		margin: 0 -0.5rem;
 		padding: 0 0.5rem;

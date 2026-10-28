@@ -11,6 +11,8 @@
 		open = false,
 		loading = false,
 		size = 'md',
+		block = false,
+		mono = false,
 		onclear = undefined,
 		...rest
 	}: {
@@ -21,12 +23,14 @@
 		open?: boolean;
 		loading?: boolean;
 		size?: 'sm' | 'md';
+		block?: boolean;
+		mono?: boolean;
 		onclear?: () => void;
 		[key: string]: unknown;
 	} = $props();
 </script>
 
-<span class="wrap">
+<span class="wrap" class:wrap--block={block}>
 	<button
 		type="button"
 		class="trigger trigger--{size}"
@@ -36,7 +40,9 @@
 	>
 		{#if leading}<span class="leading">{@render leading()}</span>{/if}
 		{#if prefix}<span class="prefix">{prefix}</span>{/if}
-		<span class="value" class:value--empty={!value}>{value || placeholder}</span>
+		<span class="value" class:value--empty={!value} class:value--mono={mono && !!value}
+			>{value || placeholder}</span
+		>
 		{#if loading}
 			<Spinner size={13} />
 		{:else}
@@ -54,6 +60,13 @@
 		position: relative;
 		display: inline-flex;
 		min-width: 0;
+	}
+	.wrap--block {
+		display: flex;
+		width: 100%;
+	}
+	.wrap--block .trigger {
+		flex: 1;
 	}
 	.trigger {
 		display: inline-flex;
@@ -114,12 +127,18 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
+	.value--mono {
+		font-family: var(--font-mono);
+		font-size: 0.9em;
+		font-weight: var(--weight-regular);
+	}
 	.value--empty {
 		font-weight: var(--weight-regular);
 		color: var(--text-muted);
 	}
 	.trigger :global(.chev) {
 		flex-shrink: 0;
+		margin-left: auto;
 		color: var(--text-muted);
 	}
 	.clear {

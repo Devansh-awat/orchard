@@ -490,9 +490,6 @@ export function settingsRoutes(r: Router, { store }: MockContext) {
 		};
 	});
 
-	r.get('/github/app/install', () => ({
-		url: 'https://github.com/apps/orchard-mock/installations/new'
-	}));
 	r.get('/auth/passkeys', () => ({ passkeys: [] }));
 	r.get('/auth/sessions', () => ({
 		sessions: [
@@ -523,8 +520,6 @@ export function settingsRoutes(r: Router, { store }: MockContext) {
 		id: freshId(),
 		token: `orch_mock_${sha(String(Date.now())).slice(0, 32)}`
 	}));
-	r.get('/users/me/git-connections', () => []);
-	r.get('/users/me/git-connections/oauth', () => ({ gitlab: null, bitbucket: null }));
 	r.get('/users/me/notification-settings', () => ({
 		global: {
 			deploys: 'subscribed',

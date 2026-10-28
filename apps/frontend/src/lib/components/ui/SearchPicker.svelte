@@ -28,6 +28,7 @@
 		mono = false,
 		width = undefined,
 		placement = 'bottom-start',
+		block = false,
 		leading = undefined,
 		optionLeading = undefined,
 		trailing = undefined,
@@ -53,6 +54,7 @@
 		mono?: boolean;
 		width?: string;
 		placement?: 'bottom-start' | 'bottom-end';
+		block?: boolean;
 		leading?: Snippet;
 		optionLeading?: Snippet<[DropdownOption]>;
 		trailing?: Snippet<[DropdownOption]>;
@@ -157,6 +159,8 @@
 			{size}
 			{disabled}
 			{leading}
+			{block}
+			{mono}
 			value={shown}
 			open={isOpen}
 			loading={loading && !isOpen}
@@ -239,7 +243,7 @@
 	:global(.ui-search-picker) {
 		display: flex;
 		flex-direction: column;
-		min-width: 18rem;
+		min-width: 18rem !important;
 		max-height: min(24rem, var(--melt-popover-available-height, 24rem));
 		overflow: hidden;
 	}

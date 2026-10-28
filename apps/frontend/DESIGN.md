@@ -122,7 +122,8 @@ callout|caption|micro`, `rounded-control|card|panel`.
 | Inline facts (url, branch, commit) | `MetaList`                                                                                               |
 | Action                             | `Button` (primary, secondary, ghost, danger, media; `icon`, `iconRight`, `loading`)                      |
 | Actions on a thing                 | `Menu` + `MenuItem` (+ `MenuHeader`, `MenuLabel`, `MenuSeparator`; `size="lg"`)                          |
-| Pick a value                       | `Select` (native), `Dropdown` (rich), `Combobox` (searchable)                                            |
+| Pick a value                       | `Dropdown` (default), `SearchPicker` (long list with search), `Combobox` (type-to-filter field)          |
+| Very long plain list               | `Select` (native OS menu, only when nobody needs to search)                                              |
 | Text entry                         | `Field` + `Input` (`suffix`, `mono`, `width="short"`) / `Textarea`; numbers: `Stepper`; ranges: `Slider` |
 | On or off                          | `Switch`, `ToggleRow` for settings rows, `Checkbox` in lists                                             |
 | One of few                         | `SegmentedControl`; one of many in a form: `RadioGroup` (list or cards)                                  |
@@ -151,6 +152,7 @@ callout|caption|micro`, `rounded-control|card|panel`.
 | What something creates             | `ResourceList` (app, database, job, public URL rows)                                                     |
 | Optional settings in a form        | `Disclosure` (title, note, spring collapse)                                                              |
 | Picker that shows its value        | `Menu` with a `SelectTrigger` (prefix, value, leading icon, clear)                                       |
+| Pickers in a form grid or aside    | Every picker passes `block`, so account, repo, branch, project and environment fill their cell alike     |
 | Featured banner                    | `FeatureHero` (rotating, icon-baked backdrop, one call to action)                                        |
 | Ways to start something            | `Dock` (big source tiles in one tray, `busy` while routing)                                              |
 | Row of things to pick              | `Shelf` (16:9 tiles, `onSelect` to run work before navigating)                                           |

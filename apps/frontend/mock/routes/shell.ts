@@ -128,7 +128,6 @@ export function shellRoutes(r: Router, { store, hub, log }: MockContext) {
 		projectCount: store.state.projects.length,
 		deploymentCount: store.state.deployments.length
 	}));
-	r.get('/github/status', () => ({ linked: true, appConfigured: true, username: 'alfd' }));
 
 	r.get('/overview', () => {
 		const orgs = store.myOrgs();

@@ -15,13 +15,15 @@
 		pathSuffix: string;
 		pendingProjectName?: string | null;
 		onPendingProjectChange?: (name: string | null) => void;
+		block?: boolean;
 	}
 
 	let {
 		currentProjectName,
 		pathSuffix,
 		pendingProjectName = null,
-		onPendingProjectChange
+		onPendingProjectChange,
+		block = false
 	}: Props = $props();
 
 	const orgSlug = $derived($page.params.orgSlug ?? '');
@@ -120,6 +122,7 @@
 <Menu
 	placement="bottom-start"
 	size="lg"
+	sameWidth={block}
 	bind:open={() => open, setOpen}
 	inside={(target) => target instanceof Node && !target.isConnected}
 >
@@ -127,7 +130,8 @@
 		<SelectTrigger
 			{...attrs}
 			open={isOpen}
-			prefix="Project"
+			{block}
+			prefix={block ? undefined : 'Project'}
 			value={pendingProjectName || currentProjectName}
 			loading={!loaded && projectsQuery.isFetching}
 			onclear={pendingProjectName ? clearPending : undefined}

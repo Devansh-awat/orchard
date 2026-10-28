@@ -1,10 +1,10 @@
 <script lang="ts" module>
-	export type ResourceKind = 'deployment' | 'database' | 'job' | 'ingress';
-	export type ResourceListItem = { name: string; type: ResourceKind };
+	export type ResourceKind = 'deployment' | 'database' | 'job' | 'ingress' | 'volume';
+	export type ResourceListItem = { name: string; type: ResourceKind; note?: string };
 </script>
 
 <script lang="ts">
-	import { Globe } from 'lucide-svelte';
+	import { Globe, HardDrive } from 'lucide-svelte';
 	import AppIcon from '$lib/components/ui/AppIcon.svelte';
 	import ToneTile from '$lib/components/ui/ToneTile.svelte';
 
@@ -14,20 +14,23 @@
 		deployment: 'App',
 		database: 'Database',
 		job: 'Job',
-		ingress: 'Public URL'
+		ingress: 'Public URL',
+		volume: 'Storage'
 	};
 </script>
 
 <ul class="list">
-	{#each items as item (item.name)}
+	{#each items as item (`${item.type}:${item.name}`)}
 		<li class="row">
 			{#if item.type === 'ingress'}
 				<ToneTile tone="info" size={24}><Globe size={13} /></ToneTile>
+			{:else if item.type === 'volume'}
+				<ToneTile tone="neutral" size={24}><HardDrive size={13} /></ToneTile>
 			{:else}
 				<AppIcon name={item.name} kind={item.type} size="sm" />
 			{/if}
 			<span class="name">{item.name}</span>
-			<span class="kind">{KIND[item.type]}</span>
+			<span class="kind">{item.note ?? KIND[item.type]}</span>
 		</li>
 	{/each}
 </ul>
