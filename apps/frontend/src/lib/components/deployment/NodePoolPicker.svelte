@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { apiFetch, toasts, isSuperAdmin } from '$lib/stores';
-	import { SectionCard, Select, Button } from '$lib/components/ui';
+	import { SectionCard, Dropdown, Button } from '$lib/components/ui';
 
 	let {
 		deploymentId,
@@ -76,11 +76,12 @@
 		<p class="text-xs text-muted mb-2">
 			Route this app onto a specific set of nodes. Takes effect on the next deploy.
 		</p>
-		<Select bind:value={selected} class="w-full">
-			<option value="">Default (no pool)</option>
-			{#each pools as pool (pool.id)}
-				<option value={pool.id}>{pool.name}</option>
-			{/each}
-		</Select>
+		<Dropdown
+			bind:value={selected}
+			options={[
+				{ value: '', label: 'Default (no pool)' },
+				...pools.map((pool) => ({ value: pool.id, label: pool.name }))
+			]}
+		/>
 	</SectionCard>
 {/if}

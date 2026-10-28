@@ -15,7 +15,7 @@
 	import SectionCard from '$lib/components/ui/SectionCard.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
 	import Field from '$lib/components/ui/Field.svelte';
-	import Select from '$lib/components/ui/Select.svelte';
+	import Dropdown from '$lib/components/ui/Dropdown.svelte';
 	import ToggleRow from '$lib/components/ui/ToggleRow.svelte';
 	import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
 	import Tabs from '$lib/components/ui/Tabs.svelte';
@@ -258,10 +258,14 @@
 						<Input id="s-name" bind:value={appName} />
 					</Field>
 					<Field label="Production branch" for="s-branch">
-						<Select id="s-branch" bind:value={branch}>
-							<option value="main">main</option>
-							<option value="production">production</option>
-						</Select>
+						<Dropdown
+							id="s-branch"
+							bind:value={branch}
+							options={[
+								{ value: 'main', label: 'main' },
+								{ value: 'production', label: 'production' }
+							]}
+						/>
 					</Field>
 				</div>
 				{#snippet footer()}<Button variant="primary" size="sm">Save</Button>{/snippet}

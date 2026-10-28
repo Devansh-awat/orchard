@@ -1,6 +1,14 @@
 <script lang="ts">
 	import { Loader2 } from 'lucide-svelte';
-	import { Button, Input, Select, Badge, SectionCard, EmptyState, Alert } from '$lib/components/ui';
+	import {
+		Button,
+		Input,
+		Dropdown,
+		Badge,
+		SectionCard,
+		EmptyState,
+		Alert
+	} from '$lib/components/ui';
 	import type { DatabaseDetail, ParamMeta } from './types';
 
 	let {
@@ -120,17 +128,12 @@
 								placeholder={p.autoSized ? 'Automatic' : p.defaultValue}
 							/>
 						{:else if p.kind === 'string' && p.enum}
-							<Select
+							<Dropdown
 								id={`param-${p.key}`}
-								class="text-sm"
 								value={paramValue(p.key)}
-								onchange={(e: Event) =>
-									setParam(p.key, (e.currentTarget as HTMLSelectElement).value)}
-							>
-								{#each p.enum as opt (opt)}
-									<option value={opt}>{opt}</option>
-								{/each}
-							</Select>
+								options={p.enum.map((opt) => ({ value: opt, label: opt }))}
+								onchange={(v) => setParam(p.key, v)}
+							/>
 						{/if}
 					</div>
 				</div>

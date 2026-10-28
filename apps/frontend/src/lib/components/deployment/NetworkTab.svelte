@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { Loader2, Lock, Shield, Check, Network, PenLine } from 'lucide-svelte';
 	import { ChevronDown, Copy, Plus, RefreshCw, Settings, Trash2, Wifi, X } from '@jis3r/icons';
-	import { Button, SectionCard, Select, SegmentedControl } from '$lib/components/ui';
+	import { Button, Dropdown, SectionCard, SegmentedControl } from '$lib/components/ui';
+	import type { DropdownOption } from '$lib/components/ui';
 	import { slide } from '$lib/utils/transitions';
 	import { springRotate } from '$lib/utils/motion.svelte';
 	import { env } from '$env/dynamic/public';
@@ -10,6 +11,12 @@
 
 	const APP_DOMAIN = env.PUBLIC_APP_DOMAIN ?? '';
 	const INGRESS_CNAME = env.PUBLIC_INGRESS_CNAME ?? '';
+	const REDIRECT_STATUS_OPTIONS: DropdownOption[] = [
+		{ value: '307', label: '307 Temporary Redirect', description: 'Temporary' },
+		{ value: '302', label: '302 Found', description: 'Temporary' },
+		{ value: '308', label: '308 Permanent Redirect', description: 'Permanent' },
+		{ value: '301', label: '301 Moved Permanently', description: 'Permanent' }
+	];
 	const PUBLIC_DEPLOYMENT_DOMAIN = env.PUBLIC_DEPLOYMENT_DOMAIN ?? '';
 
 	let {
@@ -436,25 +443,23 @@
 					</div>
 					<div class="dom-row">
 						<span class="dom-row-label">Redirect type</span>
-						<Select bind:value={newDomainRedirectStatus} aria-label="Redirect type">
-							<optgroup label="Temporary">
-								<option value="307">307 Temporary Redirect</option>
-								<option value="302">302 Found</option>
-							</optgroup>
-							<optgroup label="Permanent">
-								<option value="308">308 Permanent Redirect</option>
-								<option value="301">301 Moved Permanently</option>
-							</optgroup>
-						</Select>
+						<Dropdown
+							bind:value={newDomainRedirectStatus}
+							options={REDIRECT_STATUS_OPTIONS}
+							ariaLabel="Redirect type"
+						/>
 					</div>
 				{:else if domainServiceOptions.length > 1}
 					<div class="dom-row">
 						<span class="dom-row-label">Forward to</span>
-						<Select bind:value={newDomainServiceKey} aria-label="Forward to">
-							{#each domainServiceOptions as option (option.key)}
-								<option value={option.key}>{option.label}</option>
-							{/each}
-						</Select>
+						<Dropdown
+							bind:value={newDomainServiceKey}
+							options={domainServiceOptions.map((option) => ({
+								value: option.key,
+								label: option.label
+							}))}
+							ariaLabel="Forward to"
+						/>
 					</div>
 				{/if}
 
@@ -691,16 +696,11 @@
 								</div>
 								<div class="dom-row">
 									<span class="dom-row-label">Redirect type</span>
-									<Select bind:value={redirectStatusEdit} aria-label="Redirect type">
-										<optgroup label="Temporary">
-											<option value="307">307 Temporary Redirect</option>
-											<option value="302">302 Found</option>
-										</optgroup>
-										<optgroup label="Permanent">
-											<option value="308">308 Permanent Redirect</option>
-											<option value="301">301 Moved Permanently</option>
-										</optgroup>
-									</Select>
+									<Dropdown
+										bind:value={redirectStatusEdit}
+										options={REDIRECT_STATUS_OPTIONS}
+										ariaLabel="Redirect type"
+									/>
 								</div>
 								<div class="flex justify-end gap-2 mt-3">
 									<Button

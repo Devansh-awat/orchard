@@ -13,7 +13,7 @@
 	} from 'lucide-svelte';
 	import PodTerminal from '$lib/components/PodTerminal.svelte';
 	import TerminalSettings from '$lib/components/TerminalSettings.svelte';
-	import { Button, TabBar, EmptyState, Select } from '$lib/components/ui';
+	import { Button, TabBar, EmptyState, Dropdown } from '$lib/components/ui';
 	import { explainExitCode, formatRelativeTime } from '$lib/utils/format';
 	import type { DatabaseDetail, TerminalTab as TerminalTabType } from './types';
 
@@ -138,18 +138,18 @@
 				{:else if activeConsoleTab === 'logs'}
 					{#if (database.pods?.length ?? 0) > 1}
 						<div class="tt-pod-select">
-							<Select
+							<Dropdown
 								value={logsPodName || pod?.name || ''}
-								aria-label="Pod to read logs from"
-								onchange={(e: Event) => {
-									logsPodName = (e.currentTarget as HTMLSelectElement).value;
+								ariaLabel="Pod to read logs from"
+								options={(database.pods ?? []).map((p) => ({
+									value: p.name,
+									label: podShortName(p.name)
+								}))}
+								onchange={(v) => {
+									logsPodName = v;
 									onFetchLogs();
 								}}
-							>
-								{#each database.pods ?? [] as p (p.name)}
-									<option value={p.name}>{podShortName(p.name)}</option>
-								{/each}
-							</Select>
+							/>
 						</div>
 					{/if}
 					<Button

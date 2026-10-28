@@ -3,7 +3,7 @@
 	import Input from '$lib/components/ui/Input.svelte';
 	import SearchField from '$lib/components/ui/SearchField.svelte';
 	import Field from '$lib/components/ui/Field.svelte';
-	import Select from '$lib/components/ui/Select.svelte';
+	import Dropdown from '$lib/components/ui/Dropdown.svelte';
 	import Switch from '$lib/components/ui/Switch.svelte';
 	import ToggleRow from '$lib/components/ui/ToggleRow.svelte';
 	import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
@@ -27,11 +27,15 @@
 			<Input id="g-domain" value="hackclub.com" error />
 		</Field>
 		<Field label="Region" for="g-region">
-			<Select id="g-region" bind:value={region}>
-				<option value="fsn1">Falkenstein</option>
-				<option value="hel1">Helsinki</option>
-				<option value="ash">Ashburn</option>
-			</Select>
+			<Dropdown
+				id="g-region"
+				bind:value={region}
+				options={[
+					{ value: 'fsn1', label: 'Falkenstein' },
+					{ value: 'hel1', label: 'Helsinki' },
+					{ value: 'ash', label: 'Ashburn' }
+				]}
+			/>
 		</Field>
 		<Field label="Range">
 			<SegmentedControl

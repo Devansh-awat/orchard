@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Plus, Trash2, Loader2, Copy, Check, Eye, GitBranch } from 'lucide-svelte';
-	import { Button, Chip, Field, Input, Select } from '$lib/components/ui';
+	import { Button, Chip, Dropdown, Field, Input } from '$lib/components/ui';
 	import SettingsSection from './SettingsSection.svelte';
 	import { motionStagger } from '$lib/utils/motion.svelte';
 	import { toasts } from '$lib/stores';
@@ -187,11 +187,11 @@
 		>
 			<div class="gp-grid">
 				<Field label="Provider">
-					<Select value={provider} onchange={(e) => pickProvider(e.currentTarget.value)}>
-						{#each PROVIDERS as p (p.kind)}
-							<option value={p.kind}>{p.label}</option>
-						{/each}
-					</Select>
+					<Dropdown
+						value={provider}
+						options={PROVIDERS.map((p) => ({ value: p.kind, label: p.label }))}
+						onchange={pickProvider}
+					/>
 				</Field>
 				<Field label="Name" hint="How it shows up when you pick a source">
 					<Input bind:value={name} placeholder="work gitlab" />

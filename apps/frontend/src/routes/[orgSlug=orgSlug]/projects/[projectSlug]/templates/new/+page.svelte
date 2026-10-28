@@ -12,7 +12,7 @@
 		ChevronUp
 	} from 'lucide-svelte';
 	import Breadcrumbs from '$lib/components/ui/Breadcrumbs.svelte';
-	import { Button, Field, Input, Select } from '$lib/components/ui';
+	import { Button, Dropdown, Field, Input } from '$lib/components/ui';
 
 	type ParamType = 'string' | 'number' | 'boolean' | 'select';
 	type ResourceType = 'deployment' | 'database' | 'ingress';
@@ -492,24 +492,32 @@ resources:
 				</Field>
 				<div class="nt-grid-3">
 					<Field label="Icon" for="meta-icon">
-						<Select id="meta-icon" bind:value={metaIcon}>
-							<option value="">None</option>
-							<option value="server">Server</option>
-							<option value="database">Database</option>
-							<option value="globe">Globe</option>
-							<option value="nodejs">Node.js</option>
-							<option value="wordpress">WordPress</option>
-							<option value="ghost">Ghost</option>
-						</Select>
+						<Dropdown
+							id="meta-icon"
+							bind:value={metaIcon}
+							options={[
+								{ value: '', label: 'None' },
+								{ value: 'server', label: 'Server' },
+								{ value: 'database', label: 'Database' },
+								{ value: 'globe', label: 'Globe' },
+								{ value: 'nodejs', label: 'Node.js' },
+								{ value: 'wordpress', label: 'WordPress' },
+								{ value: 'ghost', label: 'Ghost' }
+							]}
+						/>
 					</Field>
 					<Field label="Category" for="meta-cat">
-						<Select id="meta-cat" bind:value={metaCategory}>
-							<option value="">None</option>
-							<option value="backend">Backend</option>
-							<option value="frontend">Frontend</option>
-							<option value="cms">CMS</option>
-							<option value="database">Database</option>
-						</Select>
+						<Dropdown
+							id="meta-cat"
+							bind:value={metaCategory}
+							options={[
+								{ value: '', label: 'None' },
+								{ value: 'backend', label: 'Backend' },
+								{ value: 'frontend', label: 'Frontend' },
+								{ value: 'cms', label: 'CMS' },
+								{ value: 'database', label: 'Database' }
+							]}
+						/>
 					</Field>
 					<Field label="Version" for="meta-version">
 						<Input id="meta-version" bind:value={metaVersion} placeholder="1.0.0" />
@@ -565,12 +573,16 @@ resources:
 							</div>
 							<div class="nt-field">
 								<label class="nt-label-sm">Type</label>
-								<select class="nt-input nt-input-sm nt-select" bind:value={param.type}>
-									<option value="string">String</option>
-									<option value="number">Number</option>
-									<option value="boolean">Boolean</option>
-									<option value="select">Select</option>
-								</select>
+								<Dropdown
+									size="sm"
+									bind:value={param.type}
+									options={[
+										{ value: 'string', label: 'String' },
+										{ value: 'number', label: 'Number' },
+										{ value: 'boolean', label: 'Boolean' },
+										{ value: 'select', label: 'Select' }
+									]}
+								/>
 							</div>
 						</div>
 						<div class="nt-field">
@@ -721,15 +733,17 @@ resources:
 								bind:value={res.name}
 								placeholder="resource-name"
 							/>
-							<select
-								class="nt-input nt-input-sm nt-select"
-								style="max-width: 10rem"
-								bind:value={res.type}
-							>
-								<option value="deployment">App</option>
-								<option value="database">Database</option>
-								<option value="ingress">Ingress</option>
-							</select>
+							<div class="nt-res-type">
+								<Dropdown
+									size="sm"
+									bind:value={res.type}
+									options={[
+										{ value: 'deployment', label: 'App' },
+										{ value: 'database', label: 'Database' },
+										{ value: 'ingress', label: 'Ingress' }
+									]}
+								/>
+							</div>
 							<button class="nt-remove-btn" onclick={() => removeResource(ri)}>
 								<Trash2 class="h-3.5 w-3.5" />
 							</button>
@@ -803,10 +817,16 @@ resources:
 													bind:value={port.servicePort}
 													placeholder="service"
 												/>
-												<select class="nt-input nt-input-xs nt-select" bind:value={port.protocol}>
-													<option value="TCP">TCP</option>
-													<option value="UDP">UDP</option>
-												</select>
+												<div class="nt-port-protocol">
+													<Dropdown
+														size="sm"
+														bind:value={port.protocol}
+														options={[
+															{ value: 'TCP', label: 'TCP' },
+															{ value: 'UDP', label: 'UDP' }
+														]}
+													/>
+												</div>
 												<button class="nt-remove-btn-sm" onclick={() => removePort(ri, pi)}>
 													<Trash2 class="h-3 w-3" />
 												</button>
@@ -1135,8 +1155,13 @@ resources:
 	.nt-input-mono {
 		font-family: var(--font-mono);
 	}
-	.nt-select {
-		cursor: pointer;
+	.nt-res-type {
+		width: 10rem;
+		flex-shrink: 0;
+	}
+	.nt-port-protocol {
+		width: 5.5rem;
+		flex-shrink: 0;
 	}
 
 	.nt-check-label {

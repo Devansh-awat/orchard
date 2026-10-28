@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Button from '$lib/components/ui/Button.svelte';
 	import SectionCard from '$lib/components/ui/SectionCard.svelte';
-	import Select from '$lib/components/ui/Select.svelte';
+	import Dropdown from '$lib/components/ui/Dropdown.svelte';
 	import Alert from '$lib/components/ui/Alert.svelte';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
 	import Skeleton from '$lib/components/ui/Skeleton.svelte';
@@ -37,9 +37,12 @@
 
 <SectionCard title="Feedback">
 	<div class="flex flex-col gap-3">
-		<Select size="sm" bind:value={toastPos} aria-label="Toast position">
-			{#each POSITIONS as pos (pos)}<option value={pos}>{pos}</option>{/each}
-		</Select>
+		<Dropdown
+			size="sm"
+			bind:value={toastPos}
+			ariaLabel="Toast position"
+			options={POSITIONS.map((pos) => ({ value: pos, label: pos }))}
+		/>
 		<div class="flex flex-wrap gap-2">
 			<Button size="sm" onclick={() => fire({ title: 'Changes saved', color: 'success' })}
 				>Success</Button

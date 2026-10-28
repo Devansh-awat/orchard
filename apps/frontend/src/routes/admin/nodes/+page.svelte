@@ -3,7 +3,7 @@
 	import { apiFetch, toasts } from '$lib/stores';
 	import { formatCpuMilli, formatMemoryBytes } from '$lib/quantity';
 	import { Loader2, RefreshCw, Server, X, Trash2, Plus } from 'lucide-svelte';
-	import { Button, Badge, Field, Input, Select, EmptyState } from '$lib/components/ui';
+	import { Button, Badge, Dropdown, Field, Input, EmptyState } from '$lib/components/ui';
 	import NodePoolsPanel from '$lib/components/admin/NodePoolsPanel.svelte';
 
 	interface Taint {
@@ -388,12 +388,15 @@
 						<div class="flex items-center gap-2">
 							<Input bind:value={taint.key} placeholder="orchard.io/pool" class="flex-1 min-w-0" />
 							<Input bind:value={taint.value} placeholder="background" class="flex-1 min-w-0" />
-							<div class="w-44 shrink-0">
-								<Select bind:value={taint.effect}>
-									<option value="NoSchedule">NoSchedule</option>
-									<option value="PreferNoSchedule">PreferNoSchedule</option>
-									<option value="NoExecute">NoExecute</option>
-								</Select>
+							<div class="w-48 shrink-0">
+								<Dropdown
+									bind:value={taint.effect}
+									options={[
+										{ value: 'NoSchedule', label: 'NoSchedule' },
+										{ value: 'PreferNoSchedule', label: 'PreferNoSchedule' },
+										{ value: 'NoExecute', label: 'NoExecute' }
+									]}
+								/>
 							</div>
 							<Button
 								variant="ghost"
@@ -490,19 +493,23 @@
 					<div class="grid grid-cols-2 gap-2">
 						<div class="col-span-2">
 							<Field label="Organization" for="assign-org">
-								<Select id="assign-org" bind:value={addOrgId} class="w-full">
-									<option value="">Select org…</option>
-									{#each assignableOrgs as o (o.id)}
-										<option value={o.id}>{o.name}</option>
-									{/each}
-								</Select>
+								<Dropdown
+									id="assign-org"
+									bind:value={addOrgId}
+									placeholder="Select org…"
+									options={assignableOrgs.map((o) => ({ value: o.id, label: o.name }))}
+								/>
 							</Field>
 						</div>
 						<Field label="Mode" for="assign-mode">
-							<Select id="assign-mode" bind:value={addMode} class="w-full">
-								<option value="allow">allow</option>
-								<option value="deny">deny</option>
-							</Select>
+							<Dropdown
+								id="assign-mode"
+								bind:value={addMode}
+								options={[
+									{ value: 'allow', label: 'allow' },
+									{ value: 'deny', label: 'deny' }
+								]}
+							/>
 						</Field>
 						<Field label="Max services" for="assign-max-services">
 							<Input

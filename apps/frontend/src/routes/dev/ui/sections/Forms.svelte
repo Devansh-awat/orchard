@@ -3,7 +3,7 @@
 	import SectionCard from '$lib/components/ui/SectionCard.svelte';
 	import Field from '$lib/components/ui/Field.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
-	import Select from '$lib/components/ui/Select.svelte';
+	import Dropdown from '$lib/components/ui/Dropdown.svelte';
 	import ToggleRow from '$lib/components/ui/ToggleRow.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
@@ -267,11 +267,15 @@
 					<Input id="f-dom" bind:value={domain} error />
 				</Field>
 				<Field label="Region" for="f-region">
-					<Select id="f-region" bind:value={formRegion}>
-						<option value="fsn1">Falkenstein (fsn1)</option>
-						<option value="hel1">Helsinki (hel1)</option>
-						<option value="ash">Ashburn (ash)</option>
-					</Select>
+					<Dropdown
+						id="f-region"
+						bind:value={formRegion}
+						options={[
+							{ value: 'fsn1', label: 'Falkenstein (fsn1)' },
+							{ value: 'hel1', label: 'Helsinki (hel1)' },
+							{ value: 'ash', label: 'Ashburn (ash)' }
+						]}
+					/>
 				</Field>
 				<Field label="Replicas" hint="Each replica gets its own CPU and memory." for="f-rep">
 					<div>

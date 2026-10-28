@@ -7,7 +7,7 @@
 		Input,
 		EmptyState,
 		ToggleRow,
-		Select
+		Dropdown
 	} from '$lib/components/ui';
 	import { motionStagger } from '$lib/utils/motion.svelte';
 	import { slide } from '$lib/utils/transitions';
@@ -276,12 +276,14 @@
 				{/each}
 				{#if available.length}
 					<div class="st-add">
-						<Select bind:value={pick}>
-							<option value="">Add an app or database</option>
-							{#each available as o (`${o.kind}:${o.resourceId}`)}
-								<option value={`${o.kind}:${o.resourceId}`}>{o.name} · {o.project}</option>
-							{/each}
-						</Select>
+						<Dropdown
+							bind:value={pick}
+							placeholder="Add an app or database"
+							options={available.map((o) => ({
+								value: `${o.kind}:${o.resourceId}`,
+								label: `${o.name} · ${o.project}`
+							}))}
+						/>
 						<Button variant="secondary" size="sm" onclick={addPicked} disabled={!pick}>Add</Button>
 					</div>
 				{/if}

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Check, Copy, ExternalLink } from 'lucide-svelte';
-	import { Modal, Button, Field, Input, Select, ToggleRow, Alert } from '$lib/components/ui';
+	import { Modal, Button, Dropdown, Field, Input, ToggleRow, Alert } from '$lib/components/ui';
 	import { ProviderIcon } from '$lib/components/login';
 	import type { ProviderDraft, SsoProvider, SsoProviderPreset } from './sso-types';
 	import {
@@ -383,11 +383,15 @@
 				hint="Rejects sign-ins where the provider does not vouch for the address. Leave on unless your IdP omits the claim."
 			/>
 			<Field label="Role for new members" for="spm-role">
-				<Select id="spm-role" bind:value={draft.defaultRole}>
-					<option value="member">Member</option>
-					<option value="admin">Admin</option>
-					<option value="guest">Guest</option>
-				</Select>
+				<Dropdown
+					id="spm-role"
+					bind:value={draft.defaultRole}
+					options={[
+						{ value: 'member', label: 'Member' },
+						{ value: 'admin', label: 'Admin' },
+						{ value: 'guest', label: 'Guest' }
+					]}
+				/>
 			</Field>
 			<Field
 				label="Restrict to email domains"

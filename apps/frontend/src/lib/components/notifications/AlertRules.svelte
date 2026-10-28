@@ -3,7 +3,7 @@
 	import {
 		Button,
 		EmptyState,
-		Select,
+		Dropdown,
 		Input,
 		Field,
 		StatusBadge,
@@ -193,28 +193,29 @@
 		>
 			<div class="ar-form-row">
 				<Field label="Metric">
-					<Select value={formMetric} onchange={(e) => pickMetric(e.currentTarget.value)}>
-						{#each catalogue as m (m.id)}
-							<option value={m.id}>{m.label}</option>
-						{/each}
-					</Select>
+					<Dropdown
+						value={formMetric}
+						options={catalogue.map((m) => ({ value: m.id, label: m.label }))}
+						onchange={pickMetric}
+					/>
 				</Field>
 				<Field label="Is">
-					<Select bind:value={formComparator}>
-						{#each metric?.comparators ?? ['gt'] as c (c)}
-							<option value={c}>{c === 'gt' ? 'above' : 'below'}</option>
-						{/each}
-					</Select>
+					<Dropdown
+						bind:value={formComparator}
+						options={(metric?.comparators ?? ['gt']).map((c) => ({
+							value: c,
+							label: c === 'gt' ? 'above' : 'below'
+						}))}
+					/>
 				</Field>
 				<Field label={thresholdSuffix(metric)}>
 					<Input type="number" min="0" step="any" bind:value={formThreshold} />
 				</Field>
 				<Field label="For">
-					<Select bind:value={formFor}>
-						{#each WINDOW_OPTIONS as w (w)}
-							<option value={String(w)}>{windowLabel(w)}</option>
-						{/each}
-					</Select>
+					<Dropdown
+						bind:value={formFor}
+						options={WINDOW_OPTIONS.map((w) => ({ value: String(w), label: windowLabel(w) }))}
+					/>
 				</Field>
 				{#if metric?.requestRateGuard}
 					<Field label="Min req/s" hint="Skipped below this traffic">

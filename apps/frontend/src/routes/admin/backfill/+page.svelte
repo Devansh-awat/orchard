@@ -3,6 +3,7 @@
 	import { apiFetch, toasts } from '$lib/stores';
 	import { formatCpu, formatMemory, RESOURCE_PRESETS, matchPreset } from '$lib/presets';
 	import { Loader2, Gauge, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-svelte';
+	import { Dropdown } from '$lib/components/ui';
 
 	interface Recommendation {
 		cpuMilli: number;
@@ -228,21 +229,23 @@
 							{/if}
 						</td>
 						<td class="px-3 py-3">
-							<select
-								class="rounded-lg border px-2 py-1 text-sm"
-								style="border-color: var(--surface-border); background-color: var(--center-channel-bg); color: var(--center-channel-color);"
-								bind:value={choices[key]}
-							>
-								{#each RESOURCE_PRESETS as p (p.id)}
-									<option value={p.id}>
-										{p.label} — {formatCpu(p.cpuMilli)} · {formatMemory(p.memoryBytes)}
-										{#if r.recommendation?.presetId === p.id}
-											★ recommended{/if}
-									</option>
-								{/each}
-								<option value="custom">Custom…</option>
-								<option value="skip">Skip</option>
-							</select>
+							<div class="w-52">
+								<Dropdown
+									size="sm"
+									bind:value={choices[key]}
+									options={[
+										...RESOURCE_PRESETS.map((p) => ({
+											value: p.id,
+											label: p.label,
+											description: `${formatCpu(p.cpuMilli)} · ${formatMemory(p.memoryBytes)}${
+												r.recommendation?.presetId === p.id ? ' · recommended' : ''
+											}`
+										})),
+										{ value: 'custom', label: 'Custom…' },
+										{ value: 'skip', label: 'Skip' }
+									]}
+								/>
+							</div>
 							{#if choices[key] === 'custom'}
 								<div class="mt-2 flex gap-2">
 									<input

@@ -16,6 +16,7 @@
 		icon = undefined,
 		trigger: custom = undefined,
 		size = 'md',
+		ariaLabel = undefined,
 		ariaLabelledby = undefined
 	}: {
 		value?: string;
@@ -23,12 +24,13 @@
 		placeholder?: string;
 		id?: string;
 		disabled?: boolean;
-		placement?: 'bottom-start' | 'bottom-end';
+		placement?: 'bottom-start' | 'bottom-end' | 'top-start' | 'top-end';
 		class?: string;
 		onchange?: (value: string) => void;
 		icon?: Snippet<[string]>;
 		trigger?: Snippet<[Record<string, unknown>, boolean, DropdownOption | null]>;
 		size?: 'sm' | 'md';
+		ariaLabel?: string;
 		ariaLabelledby?: string;
 	} = $props();
 
@@ -127,9 +129,10 @@
 <PopoverPanel
 	bind:open
 	{placement}
-	sameWidth
+	sameWidth={!custom}
 	class="ui-popover--menu"
 	role="listbox"
+	aria-label={ariaLabel}
 	aria-labelledby={ariaLabelledby}
 	aria-activedescendant={open && active >= 0 ? optionId(active) : undefined}
 	onkeydown={onListKeydown}
@@ -152,6 +155,7 @@
 				type="button"
 				id={base}
 				{disabled}
+				aria-label={ariaLabel ? `${ariaLabel}: ${selected?.label ?? placeholder}` : undefined}
 				aria-labelledby={ariaLabelledby}
 				aria-haspopup="listbox"
 				aria-expanded={isOpen}

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Loader2, Mail, MessageSquare, Plus, Send, Slack, Trash2, Webhook } from 'lucide-svelte';
 	import { Bell } from '@jis3r/icons';
-	import { Badge, Button, EmptyState, Field, Input, Select } from '$lib/components/ui';
+	import { Badge, Button, Dropdown, EmptyState, Field, Input } from '$lib/components/ui';
 	import SettingsSection from './SettingsSection.svelte';
 	import { motionStagger } from '$lib/utils/motion.svelte';
 	import { formatRelativeTime } from '$lib/utils/format';
@@ -319,10 +319,14 @@
 			{#if addOpen}
 				<div class="un-add" {@attach motionStagger({ from: { y: 8 } })}>
 					<Field label="Type" for="un-dest-type">
-						<Select id="un-dest-type" bind:value={addType}>
-							<option value="slack">Slack</option>
-							<option value="discord">Discord</option>
-						</Select>
+						<Dropdown
+							id="un-dest-type"
+							bind:value={addType}
+							options={[
+								{ value: 'slack', label: 'Slack' },
+								{ value: 'discord', label: 'Discord' }
+							]}
+						/>
 					</Field>
 					<Field label="Webhook URL" for="un-dest-url">
 						<Input

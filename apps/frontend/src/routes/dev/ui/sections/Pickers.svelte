@@ -97,8 +97,9 @@
 	let size = $state('small');
 	let policy = $state('forbid');
 	let image = $state('');
-	let nativeRegion = $state('hel1');
-	let nativeSmall = $state('7d');
+	let range = $state('7d');
+	let timeZone = $state('Europe/Berlin');
+	const TIME_ZONES = Intl.supportedValuesOf('timeZone');
 	let repo = $state('hackclub/site');
 	let branch = $state('');
 	let custom = $state('');
@@ -140,6 +141,18 @@
 		</Field>
 		<Field label="Disabled">
 			<Dropdown value="fsn1" options={REGIONS} disabled />
+		</Field>
+		<Field label="Log range, small" for="pk-range">
+			<Dropdown
+				id="pk-range"
+				size="sm"
+				bind:value={range}
+				options={[
+					{ value: '1h', label: 'Last hour' },
+					{ value: '24h', label: 'Last 24 hours' },
+					{ value: '7d', label: 'Last 7 days' }
+				]}
+			/>
 		</Field>
 	</div>
 </SectionCard>
@@ -196,25 +209,14 @@
 		</div>
 	</SectionCard>
 
-	<SectionCard title="Select" description="Native. Use it for short, plain lists.">
+	<SectionCard
+		title="Select"
+		description="Native OS menu. Only for very long plain lists where nobody needs to search."
+	>
 		<div class="flex flex-col gap-4">
-			<Field label="Region" for="pk-region">
-				<Select id="pk-region" bind:value={nativeRegion}>
-					<option value="fsn1">Falkenstein</option>
-					<option value="hel1">Helsinki</option>
-					<option value="ash">Ashburn</option>
-				</Select>
-			</Field>
-			<Field label="Log range, small" for="pk-range">
-				<Select id="pk-range" size="sm" bind:value={nativeSmall}>
-					<option value="1h">Last hour</option>
-					<option value="24h">Last 24 hours</option>
-					<option value="7d">Last 7 days</option>
-				</Select>
-			</Field>
-			<Field label="Disabled" for="pk-disabled">
-				<Select id="pk-disabled" disabled value="fsn1">
-					<option value="fsn1">Falkenstein</option>
+			<Field label="Time zone" for="pk-tz" hint="{TIME_ZONES.length} zones in the OS list.">
+				<Select id="pk-tz" bind:value={timeZone}>
+					{#each TIME_ZONES as tz (tz)}<option value={tz}>{tz}</option>{/each}
 				</Select>
 			</Field>
 		</div>

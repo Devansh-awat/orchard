@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { BellOff, Loader2, Plus, Trash2, VolumeX } from 'lucide-svelte';
-	import { Badge, Button, EmptyState, Field, Input, Select } from '$lib/components/ui';
+	import { Badge, Button, Dropdown, EmptyState, Field, Input } from '$lib/components/ui';
 	import { motionStagger } from '$lib/utils/motion.svelte';
 	import { toasts } from '$lib/stores';
 	import {
@@ -293,27 +293,34 @@
 				</p>
 			{/if}
 			<Field label="Channel" for="nr-channel">
-				<Select id="nr-channel" bind:value={formChannelId} disabled={formMute}>
-					{#each channels as channel (channel.id)}
-						<option value={channel.id}>
-							{channel.name} ({CHANNEL_TYPE_META[channel.type].label}){channel.own
-								? ''
-								: ` from ${scopeNoun(channel.scopeType)}`}
-						</option>
-					{/each}
-					<option value={NEW_CHANNEL}>New destination…</option>
-				</Select>
+				<Dropdown
+					id="nr-channel"
+					bind:value={formChannelId}
+					disabled={formMute}
+					options={[
+						...channels.map((channel) => ({
+							value: channel.id,
+							label: `${channel.name} (${CHANNEL_TYPE_META[channel.type].label})${
+								channel.own ? '' : ` from ${scopeNoun(channel.scopeType)}`
+							}`
+						})),
+						{ value: NEW_CHANNEL, label: 'New destination…' }
+					]}
+				/>
 			</Field>
 
 			{#if creatingChannel}
 				<div class="nr-new">
 					<div class="nr-new-row">
 						<Field label="Type" for="nr-type">
-							<Select id="nr-type" bind:value={formType}>
-								{#each Object.entries(CHANNEL_TYPE_META) as [value, meta] (value)}
-									<option {value}>{meta.label}</option>
-								{/each}
-							</Select>
+							<Dropdown
+								id="nr-type"
+								bind:value={formType}
+								options={Object.entries(CHANNEL_TYPE_META).map(([value, meta]) => ({
+									value,
+									label: meta.label
+								}))}
+							/>
 						</Field>
 						<Field label="Name" for="nr-name">
 							<Input id="nr-name" bind:value={formName} placeholder="#deploys" maxlength={100} />

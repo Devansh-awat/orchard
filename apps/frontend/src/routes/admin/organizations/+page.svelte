@@ -12,7 +12,7 @@
 		ChevronRight,
 		Gauge
 	} from 'lucide-svelte';
-	import { Modal, Button, Field, Input, Select, EmptyState } from '$lib/components/ui';
+	import { Modal, Button, Dropdown, Field, Input, EmptyState } from '$lib/components/ui';
 	import { formatCpuMilli, formatMemoryBytes } from '$lib/quantity';
 
 	interface OrgItem {
@@ -636,12 +636,14 @@
 			/>
 		</Field>
 		<Field label="Plan (optional)" for="create-org-plan">
-			<Select id="create-org-plan" bind:value={createPlan} class="w-full">
-				<option value="">None</option>
-				{#each PLAN_OPTIONS as opt (opt)}
-					<option value={opt}>{opt}</option>
-				{/each}
-			</Select>
+			<Dropdown
+				id="create-org-plan"
+				bind:value={createPlan}
+				options={[
+					{ value: '', label: 'None' },
+					...PLAN_OPTIONS.map((opt) => ({ value: opt, label: opt }))
+				]}
+			/>
 		</Field>
 		<Field
 			label="Primary owner email (optional)"

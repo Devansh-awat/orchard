@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { KeyRound, Trash2 } from 'lucide-svelte';
 	import { apiFetch, toasts } from '$lib/stores';
-	import { Button, Field, Input, SectionCard, Select, Skeleton } from '$lib/components/ui';
+	import { Button, Dropdown, Field, Input, SectionCard, Skeleton } from '$lib/components/ui';
 	import { REGISTRY_PRESETS, registryHint, tokenLabel } from '$lib/utils/registry';
 
 	let {
@@ -160,11 +160,11 @@
 		>
 			<div class="rc-grid">
 				<Field label="Registry" for="rc-preset">
-					<Select id="rc-preset" bind:value={preset}>
-						{#each REGISTRY_PRESETS as p (p.value)}
-							<option value={p.value}>{p.label}</option>
-						{/each}
-					</Select>
+					<Dropdown
+						id="rc-preset"
+						bind:value={preset}
+						options={REGISTRY_PRESETS.map((p) => ({ value: p.value, label: p.label }))}
+					/>
 				</Field>
 				{#if preset === 'custom'}
 					<Field label="Host" for="rc-host">

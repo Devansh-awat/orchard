@@ -5,7 +5,7 @@
 		Button,
 		Field,
 		Input,
-		Select,
+		Dropdown,
 		StatusBadge,
 		statusMeta,
 		SectionCard,
@@ -77,12 +77,15 @@
 
 			<div class="grid gap-3 md:grid-cols-2">
 				<Field label="Run backups" for="backup-schedule-preset">
-					<Select id="backup-schedule-preset" bind:value={schedulePreset} disabled={scheduleSaving}>
-						<option value="none">Never (manual only)</option>
-						{#each schedulePresets as p (p.id)}
-							<option value={p.id}>{p.label}</option>
-						{/each}
-					</Select>
+					<Dropdown
+						id="backup-schedule-preset"
+						bind:value={schedulePreset}
+						disabled={scheduleSaving}
+						options={[
+							{ value: 'none', label: 'Never (manual only)' },
+							...schedulePresets.map((p) => ({ value: p.id, label: p.label }))
+						]}
+					/>
 				</Field>
 				{#if schedulePreset === 'custom'}
 					<Field label="Cron expression" for="backup-schedule-cron">

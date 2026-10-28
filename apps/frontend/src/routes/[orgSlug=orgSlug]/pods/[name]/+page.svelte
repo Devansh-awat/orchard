@@ -5,7 +5,7 @@
 	import { Loader2, RefreshCw, MoreVertical, Trash2, Terminal } from 'lucide-svelte';
 	import {
 		Button,
-		Select,
+		Dropdown,
 		Alert,
 		Menu,
 		MenuItem,
@@ -251,11 +251,16 @@
 		<div class="pod-logs">
 			<div class="pod-logs-toolbar">
 				{#if containers.length > 1}
-					<Select bind:value={selectedContainer}>
-						{#each containers as container (container.name)}
-							<option value={container.name}>{container.name}</option>
-						{/each}
-					</Select>
+					<div class="pod-logs-container">
+						<Dropdown
+							bind:value={selectedContainer}
+							ariaLabel="Container"
+							options={containers.map((container) => ({
+								value: container.name,
+								label: container.name
+							}))}
+						/>
+					</div>
 				{/if}
 				<div class="flex-1"></div>
 				<Button variant={live ? 'primary' : 'secondary'} size="sm" onclick={() => (live = !live)}>
@@ -367,6 +372,11 @@
 		align-items: center;
 		gap: 0.5rem;
 		margin-bottom: 0.75rem;
+	}
+
+	.pod-logs-container {
+		width: 14rem;
+		min-width: 0;
 	}
 
 	.pod-logs :global(.lv--dark) {

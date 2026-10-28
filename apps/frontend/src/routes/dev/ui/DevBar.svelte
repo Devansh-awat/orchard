@@ -4,7 +4,7 @@
 	import { animationLevel } from '$lib/stores/preferences';
 	import { PALETTE_PRESETS } from '$lib/theme/spec';
 	import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
-	import Select from '$lib/components/ui/Select.svelte';
+	import Dropdown from '$lib/components/ui/Dropdown.svelte';
 	import { FONTS } from './fonts';
 
 	let scheme = $state('light');
@@ -54,20 +54,29 @@
 		]}
 		onchange={(v) => animationLevel.set(v as 'full' | 'reduced')}
 	/>
-	<Select
-		size="sm"
-		bind:value={preset}
-		aria-label="Palette"
-		onchange={() => {
-			themeStore.applyPreset(preset);
-			localStorage.setItem('orchard-dev-preset', preset);
-		}}
-	>
-		{#each PALETTE_PRESETS as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
-	</Select>
-	<Select size="sm" bind:value={font} aria-label="Font" onchange={applyFonts}>
-		{#each FONTS as f (f.id)}<option value={f.id}>{f.label}</option>{/each}
-	</Select>
+	<div class="pick">
+		<Dropdown
+			size="sm"
+			placement="top-start"
+			bind:value={preset}
+			ariaLabel="Palette"
+			options={PALETTE_PRESETS.map((p) => ({ value: p.id, label: p.name }))}
+			onchange={(v) => {
+				themeStore.applyPreset(v);
+				localStorage.setItem('orchard-dev-preset', v);
+			}}
+		/>
+	</div>
+	<div class="pick">
+		<Dropdown
+			size="sm"
+			placement="top-start"
+			bind:value={font}
+			ariaLabel="Font"
+			options={FONTS.map((f) => ({ value: f.id, label: f.label }))}
+			onchange={applyFonts}
+		/>
+	</div>
 </div>
 
 <style>
@@ -86,7 +95,7 @@
 		box-shadow: var(--shadow-floating);
 		transform: translateX(-50%);
 	}
-	.bar :global(.wrap) {
+	.pick {
 		width: 9rem;
 	}
 </style>

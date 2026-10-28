@@ -6,7 +6,7 @@
 		Badge,
 		Field,
 		Input,
-		Select,
+		Dropdown,
 		Modal,
 		EmptyState,
 		ToggleRow
@@ -282,10 +282,14 @@
 		</Field>
 		<div class="grid grid-cols-2 gap-3">
 			<Field label="Affinity" for="pool-mode">
-				<Select id="pool-mode" bind:value={fAffinityMode} class="w-full">
-					<option value="preferred">preferred (soft)</option>
-					<option value="required">required (hard)</option>
-				</Select>
+				<Dropdown
+					id="pool-mode"
+					bind:value={fAffinityMode}
+					options={[
+						{ value: 'preferred', label: 'preferred (soft)' },
+						{ value: 'required', label: 'required (hard)' }
+					]}
+				/>
 			</Field>
 			<div class="flex items-end">
 				<ToggleRow bind:checked={fUserSelectable} label="User-selectable" />
@@ -302,13 +306,16 @@
 			{#each fSelectors as sel, i (i)}
 				<div class="flex items-center gap-2 mb-2">
 					<Input bind:value={sel.key} placeholder="orchard.io/pool" class="flex-1 min-w-0" />
-					<div class="w-32 shrink-0">
-						<Select bind:value={sel.operator}>
-							<option value="In">In</option>
-							<option value="NotIn">NotIn</option>
-							<option value="Exists">Exists</option>
-							<option value="DoesNotExist">DoesNotExist</option>
-						</Select>
+					<div class="w-40 shrink-0">
+						<Dropdown
+							bind:value={sel.operator}
+							options={[
+								{ value: 'In', label: 'In' },
+								{ value: 'NotIn', label: 'NotIn' },
+								{ value: 'Exists', label: 'Exists' },
+								{ value: 'DoesNotExist', label: 'DoesNotExist' }
+							]}
+						/>
 					</div>
 					<Input
 						bind:value={sel.values}
@@ -337,10 +344,13 @@
 				<div class="flex items-center gap-2 mb-2">
 					<Input bind:value={tol.key} placeholder="orchard.io/pool" class="flex-1 min-w-0" />
 					<div class="w-28 shrink-0">
-						<Select bind:value={tol.operator}>
-							<option value="Exists">Exists</option>
-							<option value="Equal">Equal</option>
-						</Select>
+						<Dropdown
+							bind:value={tol.operator}
+							options={[
+								{ value: 'Exists', label: 'Exists' },
+								{ value: 'Equal', label: 'Equal' }
+							]}
+						/>
 					</div>
 					<Input
 						bind:value={tol.value}
@@ -348,13 +358,16 @@
 						class="flex-1 min-w-0"
 						disabled={tol.operator !== 'Equal'}
 					/>
-					<div class="w-40 shrink-0">
-						<Select bind:value={tol.effect}>
-							<option value="">Any effect</option>
-							<option value="NoSchedule">NoSchedule</option>
-							<option value="PreferNoSchedule">PreferNoSchedule</option>
-							<option value="NoExecute">NoExecute</option>
-						</Select>
+					<div class="w-48 shrink-0">
+						<Dropdown
+							bind:value={tol.effect}
+							options={[
+								{ value: '', label: 'Any effect' },
+								{ value: 'NoSchedule', label: 'NoSchedule' },
+								{ value: 'PreferNoSchedule', label: 'PreferNoSchedule' },
+								{ value: 'NoExecute', label: 'NoExecute' }
+							]}
+						/>
 					</div>
 					<Button variant="ghost" size="sm" onclick={() => removeToleration(i)} aria-label="Remove">
 						<X class="h-4 w-4" />

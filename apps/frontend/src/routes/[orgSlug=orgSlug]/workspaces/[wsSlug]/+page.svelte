@@ -19,6 +19,7 @@
 		Users,
 		Boxes
 	} from 'lucide-svelte';
+	import { Combobox, Dropdown } from '$lib/components/ui';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import Breadcrumbs from '$lib/components/ui/Breadcrumbs.svelte';
 
@@ -713,27 +714,35 @@
 						{#if availableMembers.length === 0}
 							<p class="ws-field-hint">All organization members are already in this workspace.</p>
 						{:else}
-							<select class="ws-select" bind:value={selectedUserId} disabled={inviting}>
-								<option value="">Select a member...</option>
-								{#each availableMembers as orgMember (orgMember.user.id)}
-									<option value={orgMember.user.id}>
-										{orgMember.user.firstName}
-										{orgMember.user.lastName || ''} ({orgMember.user.email})
-									</option>
-								{/each}
-							</select>
+							<Combobox
+								bind:value={selectedUserId}
+								disabled={inviting}
+								placeholder="Select a member..."
+								label="Organization Member"
+								options={availableMembers.map((orgMember) => {
+									const name = [orgMember.user.firstName, orgMember.user.lastName]
+										.filter(Boolean)
+										.join(' ');
+									return {
+										value: orgMember.user.id,
+										label: name || orgMember.user.email,
+										description: name ? orgMember.user.email : undefined
+									};
+								})}
+							/>
 						{/if}
 					{/if}
 				</div>
 
 				<div class="ws-field">
 					<label class="ws-label">Role</label>
-					<select class="ws-select" bind:value={selectedRoleId} disabled={inviting}>
-						<option value="">Select a role...</option>
-						{#each roles as role (role.id)}
-							<option value={role.id}>{role.name}</option>
-						{/each}
-					</select>
+					<Dropdown
+						bind:value={selectedRoleId}
+						disabled={inviting}
+						placeholder="Select a role..."
+						ariaLabel="Role"
+						options={roles.map((role) => ({ value: role.id, label: role.name }))}
+					/>
 				</div>
 
 				<div class="ws-dialog-actions">
@@ -1275,21 +1284,5 @@
 		font-size: var(--text-footnote);
 		line-height: var(--lh-footnote);
 		color: var(--surface-muted);
-	}
-
-	.ws-select {
-		width: 100%;
-		padding: 0.5rem 0.75rem;
-		border-radius: var(--radius-sm);
-		border: 1px solid var(--surface-border);
-		background-color: var(--center-channel-bg);
-		color: var(--center-channel-color);
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-	}
-
-	.ws-select:focus {
-		outline: none;
-		border-color: var(--sidebar-text-active-border);
 	}
 </style>
