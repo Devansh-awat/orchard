@@ -8,7 +8,6 @@
 	import type { Snippet } from 'svelte';
 	import { Layers } from 'lucide-svelte';
 	import ListRow from '$lib/components/ui/ListRow.svelte';
-	import StatusDot from '$lib/components/ui/StatusDot.svelte';
 	import RelativeTime from '$lib/components/ui/RelativeTime.svelte';
 
 	let {
@@ -49,10 +48,7 @@
 
 <ListRow title={name} {href} {actions} {presence}>
 	{#snippet leading()}
-		<span class="tile">
-			<Layers size={16} />
-			<span class="dot"><StatusDot meta={status} size={8} /></span>
-		</span>
+		<span class="tile"><Layers size={16} /></span>
 	{/snippet}
 	{#snippet titleSuffix()}
 		{#if !quiet}<span class="state state--{status.kind}">{status.label}</span>{/if}
@@ -62,15 +58,13 @@
 			<span class="error">{error}</span>
 		{:else}
 			<span class="services">
-				{#each visible as s (s.id)}
+				{#each visible as s, i (s.id)}
 					{@const loud = s.status.kind !== 'success' && s.status.kind !== 'neutral'}
-					<span class="service">
-						<StatusDot meta={s.status} size={6} />
-						<span>{s.name}</span>
-						{#if loud}<span class="state state--{s.status.kind}"
+					<span class="service"
+						>{s.name}{#if loud}&nbsp;<span class="state state--{s.status.kind}"
 								>{s.status.label.toLowerCase()}</span
-							>{/if}
-					</span>
+							>{/if}{#if i < visible.length - 1 || hidden > 0},{/if}</span
+					>
 				{:else}
 					<span>No services</span>
 				{/each}
@@ -102,15 +96,6 @@
 			0 1px 2px color-mix(in oklab, var(--neutral-10) 8%, transparent);
 		color: var(--text-muted);
 	}
-	.dot {
-		position: absolute;
-		right: -0.1875rem;
-		bottom: -0.1875rem;
-		display: flex;
-		padding: 0.125rem;
-		border-radius: 50%;
-		background: var(--bg-surface);
-	}
 	.state {
 		font-size: var(--text-caption);
 		font-weight: var(--weight-medium);
@@ -130,14 +115,11 @@
 	.services {
 		display: flex;
 		flex-shrink: 0;
-		align-items: center;
-		gap: 0.625rem;
+		align-items: baseline;
+		gap: 0.3125rem;
 	}
 	.service {
-		display: inline-flex;
 		flex-shrink: 0;
-		align-items: center;
-		gap: 0.3125rem;
 	}
 	.more {
 		flex-shrink: 0;
