@@ -364,9 +364,15 @@
 		font-family: var(--font-mono);
 		font-size: var(--text-callout);
 	}
-	.cell:focus-visible {
+	.cell:focus-visible,
+	.key:has(.cell--key:focus-visible) {
 		outline: 2px solid var(--focus-ring);
-		outline-offset: -2px;
+		outline-offset: -4px;
+		border-radius: calc(0.5rem * var(--corner-scale));
+		corner-shape: var(--corner);
+	}
+	.key .cell--key:focus-visible {
+		outline: none;
 	}
 	.cell::placeholder {
 		color: var(--text-faint);
@@ -374,9 +380,11 @@
 	.key {
 		display: flex;
 		align-items: center;
+		align-self: stretch;
+		gap: 0.5rem;
 		flex: 2;
 		min-width: 0;
-		padding-right: 0.5rem;
+		padding-right: 0.75rem;
 	}
 	.cell--key {
 		flex: 1;
