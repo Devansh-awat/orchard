@@ -35,6 +35,7 @@
 
 	const BLUR = 8;
 	const NECK = 8;
+	const GAP = 6;
 	const DROP = 0.7;
 	const SWALLOW_AT = 0.05;
 	const BULGE = 'scale(1.03, 1.06)';
@@ -79,14 +80,15 @@
 		const drop = bw * DROP;
 		const spread = ramp(0.3, 0.95, s);
 		const hang = NECK * Math.sin(Math.PI * Math.min(1, s / 0.85));
+		const gap = GAP * ramp(0.2, 0.9, s);
 		const left = mix(cx - drop / 2, 0, spread) - over * w * 0.2;
 		const right = mix(cx + drop / 2, w, spread);
-		const top = bh + hang - bh * 0.6 * (1 - ramp(0.05, 0.35, s));
-		const bottom = bh + h * Math.pow(Math.min(s, 1), 1.25) + over * h * 0.3;
+		const top = bh + gap + hang - bh * 0.6 * (1 - ramp(0.05, 0.35, s));
+		const bottom = bh + gap + h * Math.pow(Math.min(s, 1), 1.25) + over * h * 0.3;
 		const width = Math.max(0, right - left);
 		const height = Math.max(0, bottom - top);
 		return {
-			tab: { x: w - bw, y: 0, w: bw, h: bh + (r + rt) * ramp(0.7, 0.95, s), r: rt },
+			tab: { x: w - bw, y: 0, w: bw, h: bh + (gap + r + rt) * ramp(0.7, 0.95, s), r: rt },
 			body: { x: left, y: top, w: width, h: height, r: Math.min(r, width / 2, height / 2) },
 			zone: { x: w - bw - r * 2, y: bh - r, w: bw + r * 2 + 2, h: NECK + r * 2.5 }
 		};
@@ -95,14 +97,14 @@
 	const clip = $derived.by(() => {
 		const { bh, w, h } = box;
 		const b = geo.body;
-		const t = Math.max(0, b.y - bh);
+		const t = Math.max(0, b.y - bh - GAP);
 		const l = Math.max(0, b.x);
 		const rr = Math.max(0, w - (b.x + b.w));
-		const bb = Math.max(0, bh + h - (b.y + b.h));
+		const bb = Math.max(0, bh + GAP + h - (b.y + b.h));
 		return `inset(${t}px ${rr}px ${bb}px ${l}px round ${b.r}px)`;
 	});
 
-	const svgH = $derived(box.bh + box.h * 1.4);
+	const svgH = $derived(box.bh + GAP + box.h * 1.4);
 
 	function measure() {
 		if (!trigger || !matter || !sheet || !root) return;
@@ -434,7 +436,7 @@
 			tabindex="-1"
 			aria-labelledby="{uid}-trigger"
 			inert={!open}
-			style:top="{box.bh}px"
+			style:top="{box.bh + GAP}px"
 			style:clip-path={drawn ? clip : undefined}
 			onkeydown={onSheetKey}
 			onpointermove={onSheetPointerMove}
