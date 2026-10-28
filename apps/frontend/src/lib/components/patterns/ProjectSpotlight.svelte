@@ -278,10 +278,18 @@
 		border-radius: calc(var(--radius-panel) * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--bg-active);
-		box-shadow:
-			0 0 0 0.5px var(--border-default),
-			var(--shadow-raised);
+		box-shadow: var(--shadow-glass);
 		color: var(--on-media);
+	}
+	.shelf::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		z-index: 3;
+		border-radius: inherit;
+		corner-shape: inherit;
+		box-shadow: var(--bevel-glass);
+		pointer-events: none;
 	}
 	.shelf--spotlight {
 		height: 22rem;

@@ -21,16 +21,15 @@
 		SectionCard,
 		Skeleton,
 		Swap,
-		UnderlineTabs
+		Tabs
 	} from '$lib/components/ui';
 	import EntityRow from '$lib/components/patterns/EntityRow.svelte';
 	import ProjectSpotlight, {
 		type SpotlightItem
 	} from '$lib/components/patterns/ProjectSpotlight.svelte';
 	import ProjectBackdrop from '$lib/components/patterns/ProjectBackdrop.svelte';
-	import NeedsAttention from '$lib/components/patterns/NeedsAttention.svelte';
 	import RecentBuilds from '$lib/components/patterns/RecentBuilds.svelte';
-	import type { FailingApp } from '$lib/components/patterns/sidebar';
+	import type { Anomaly } from '$lib/components/anomalies/anomalies';
 	import { resourceStatus } from '$lib/components/ui/status';
 	import { EnvironmentSwitcher } from '$lib/components/environment';
 	import { buildsQueryOptions } from '$lib/queries/overview';
@@ -64,7 +63,6 @@
 		OrgMember,
 		PendingInvitation
 	} from '$lib/components/project';
-
 
 	let { data } = $props<{ data: PageData }>();
 	const orgSlug = $derived(data.orgSlug);
@@ -679,7 +677,7 @@
 		PROJECT_TABS.filter((t) => t !== 'settings' || showSettings).map((t) => ({
 			id: t,
 			label: TAB_LABEL[t],
-			badge:
+			count:
 				t === 'resources'
 					? envFilteredDeployments.length +
 						envFilteredDatabases.length +
@@ -713,15 +711,19 @@
 		);
 	}
 
-	const failing = $derived<FailingApp[]>(
+	const failing = $derived<Anomaly[]>(
 		(project?.deployments ?? [])
 			.filter((d) => resourceStatus(d.status, d.buildStatus).kind === 'error')
 			.map((d) => ({
-				label: d.displayName || d.name,
+				id: `status-${d.id}`,
+				kind: 'status',
+				severity: 'error' as const,
+				resource: { kind: 'deployment' as const, id: d.id, name: d.displayName || d.name },
+				title: resourceStatus(d.status, d.buildStatus).label.toLowerCase(),
+				detail: depDetail(d) ?? '',
+				since: null,
 				href: `/${orgSlug}/deployments/${d.id}`,
-				reason: resourceStatus(d.status, d.buildStatus).label,
-				kind: 'deployment' as const,
-				icon: depIcon(d)
+				action: null
 			}))
 	);
 
@@ -762,14 +764,7 @@
 						background: project.backgroundImage ?? null,
 						owner: project.organization?.name,
 						status: heroStatus.label,
-						tone: heroStatus.tone,
-						apps: [
-							...(project.deployments ?? []).map((d) => ({
-								name: d.displayName || d.name,
-								kind: 'deployment' as const
-							})),
-							...databases.map((db) => ({ name: db.name, kind: 'database' as const }))
-						]
+						tone: heroStatus.tone
 					}
 				]
 			: []
@@ -822,8 +817,7 @@
 
 {#snippet side()}
 	<div class="side">
-		<NeedsAttention items={failing} />
-		{#if builds.length}<RecentBuilds {builds} />{/if}
+		<RecentBuilds {builds} />
 	</div>
 {/snippet}
 
@@ -872,7 +866,7 @@
 	<Page
 		title={project.name}
 		width="wide"
-		aside={activeTab === 'resources' && (failing.length || builds.length) ? side : undefined}
+		aside={activeTab === 'resources' && builds.length ? side : undefined}
 	>
 		{#snippet hero()}
 			<div class="hero">
@@ -897,11 +891,7 @@
 					{/snippet}
 				</ProjectSpotlight>
 				<div class="bar">
-					<UnderlineTabs
-						label="Project sections"
-						{tabs}
-						bind:value={() => activeTab, (v) => gotoTab(v as ProjectTab)}
-					/>
+					<Tabs label="Project sections" {tabs} value={activeTab} onchange={(v) => gotoTab(v)} />
 					<div class="bar-tools">
 						{#if activeTab === 'resources'}
 							<SearchField placeholder="Search" size="sm" bind:value={deploymentSearch} />
@@ -941,7 +931,7 @@
 			<Swap key={activeTab}>
 				{#if activeTab === 'resources'}
 					<div class="overview">
-						<Anomalies scope={{ kind: 'project', id: project.id }} />
+						<Anomalies scope={{ kind: 'project', id: project.id }} extra={failing} />
 						{#if envFilteredDeployments.length || envFilteredDatabases.length || envFilteredTemplateInstances.length}
 							<List label="Resources">
 								{#each envFilteredDeployments as d (d.id)}
@@ -1118,7 +1108,7 @@
 		align-items: flex-end;
 		gap: var(--space-4);
 	}
-	.bar > :global(.ui-tabs) {
+	.bar > :global(.tabs) {
 		flex: 1 1 auto;
 		min-width: 0;
 	}

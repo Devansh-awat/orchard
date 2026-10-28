@@ -110,6 +110,17 @@
 	.ui-tab:hover {
 		color: var(--text-default);
 	}
+	.ui-tab--underline:hover,
+	.ui-tab--underline:focus-visible {
+		border-color: transparent;
+		background: none;
+		box-shadow: none;
+	}
+	.ui-tab--underline:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: -2px;
+		border-radius: calc(0.375rem * var(--corner-scale));
+	}
 	.ui-tab:focus-visible {
 		outline: var(--focus-ring-width) solid var(--focus-ring-color);
 		outline-offset: -2px;

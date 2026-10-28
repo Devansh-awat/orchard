@@ -81,3 +81,4 @@ export { default as FieldGrid } from './FieldGrid.svelte';
 export { default as List } from './List.svelte';
 export { default as SearchField } from './SearchField.svelte';
 export { default as ListRow } from './ListRow.svelte';
+export { default as Tabs } from './Tabs.svelte';

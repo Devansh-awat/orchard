@@ -7,10 +7,12 @@
 	let {
 		scope,
 		hideResource = false,
+		extra = [],
 		onLoaded
 	}: {
 		scope: AnomalyScope;
 		hideResource?: boolean;
+		extra?: Anomaly[];
 		onLoaded?: (items: Anomaly[]) => void;
 	} = $props();
 
@@ -81,13 +83,21 @@
 		error_spike: TriangleAlert,
 		under_replicated: TriangleAlert
 	};
-	const worst = $derived(items[0]?.severity ?? 'warning');
+	const shown = $derived([
+		...items,
+		...extra.filter((e) => !items.some((a) => a.resource.id === e.resource.id))
+	]);
+	const worst = $derived(
+		shown.some((a) => a.severity === 'critical' || a.severity === 'error')
+			? 'error'
+			: (shown[0]?.severity ?? 'warning')
+	);
 </script>
 
-{#if loaded && items.length > 0}
-	<section class="anom anom--{worst}" aria-label="Anomalies">
+{#if loaded && shown.length > 0}
+	<section class="anom anom--{worst}" aria-label="Alerts">
 		<ul class="anom-list">
-			{#each items as a (a.id)}
+			{#each shown as a (a.id)}
 				{@const Icon = icons[a.kind] ?? (a.resource.kind === 'database' ? Database : TriangleAlert)}
 				<li class="anom-row anom-row--{a.severity}">
 					<span class="anom-icon"><Icon size={15} /></span>
