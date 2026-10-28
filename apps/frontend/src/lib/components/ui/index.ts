@@ -3,6 +3,7 @@ export { default as Menu } from './Menu.svelte';
 export { default as MenuItem } from './MenuItem.svelte';
 export { default as PopoverPanel } from './PopoverPanel.svelte';
 export { default as Modal } from './Modal.svelte';
+export { default as ModalIntro } from './ModalIntro.svelte';
 export { default as TabBar } from './TabBar.svelte';
 export { default as UnderlineTabs } from './UnderlineTabs.svelte';
 export { default as Field } from './Field.svelte';

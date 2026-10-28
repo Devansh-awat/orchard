@@ -11,6 +11,7 @@
 		closable = true,
 		dismissable = undefined,
 		onclose = undefined,
+		labelledby = undefined,
 		header = undefined,
 		children,
 		footer = undefined
@@ -22,6 +23,7 @@
 		closable?: boolean;
 		dismissable?: boolean;
 		onclose?: () => void;
+		labelledby?: string;
 		header?: Snippet;
 		children: Snippet;
 		footer?: Snippet;
@@ -68,7 +70,7 @@
 		class="ui-modal ui-modal--{size}"
 		class:ui-modal--viewport={align === 'viewport'}
 		class:ui-modal--closing={!open}
-		aria-labelledby={title && !header ? titleId : undefined}
+		aria-labelledby={labelledby ?? (title && !header ? titleId : undefined)}
 		onclick={handleBackdropClick}
 		oncancel={handleCancel}
 		onclose={() => {

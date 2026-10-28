@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { AlertTriangle, Trash2 } from 'lucide-svelte';
-	import { Modal, Button, Input } from '$lib/components/ui';
+	import { Modal, ModalIntro, Button, Input } from '$lib/components/ui';
 
 	interface Props {
 		open: boolean;
@@ -52,19 +52,27 @@
 	}
 </script>
 
-<Modal bind:open size="sm" closable={false} dismissable onclose={() => oncancel?.()}>
+<Modal
+	bind:open
+	size="sm"
+	closable={false}
+	dismissable
+	labelledby="{uid}-title"
+	onclose={() => oncancel?.()}
+>
 	<div class="confirm">
-		<div class="tile" class:tile--danger={danger} aria-hidden="true">
-			{#if danger}<Trash2 size={18} />{:else}<AlertTriangle size={18} />{/if}
-		</div>
-		<div class="copy">
-			<h2 class="title">{title}</h2>
+		<ModalIntro
+			id="{uid}-title"
+			icon={danger ? Trash2 : AlertTriangle}
+			tone={danger ? 'error' : 'warning'}
+			{title}
+		>
 			{#if html}
-				<p class="desc">{@html description}</p>
+				<p>{@html description}</p>
 			{:else}
-				<p class="desc">{description}</p>
+				<p>{description}</p>
 			{/if}
-		</div>
+		</ModalIntro>
 		{#if confirmText}
 			<form
 				class="type"
@@ -87,7 +95,7 @@
 		{/if}
 	</div>
 	{#snippet footer()}
-		<Button variant="secondary" onclick={handleCancel}>{cancelLabel}</Button>
+		<Button variant="ghost" onclick={handleCancel}>{cancelLabel}</Button>
 		<Button
 			variant={danger ? 'danger' : 'primary'}
 			disabled={!confirmReady}
@@ -104,49 +112,6 @@
 		flex-direction: column;
 		gap: 1rem;
 	}
-	.tile {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 2.5rem;
-		height: 2.5rem;
-		border-radius: var(--radius-card);
-		background: var(--amber-3);
-		color: var(--amber-9);
-		box-shadow: inset 0 0 0 1px var(--amber-4);
-	}
-	.tile--danger {
-		background: var(--red-3);
-		color: var(--red-9);
-		box-shadow: inset 0 0 0 1px var(--red-4);
-	}
-	.copy {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-	.title {
-		font-size: var(--text-headline);
-		line-height: var(--lh-headline);
-		font-weight: var(--weight-semibold);
-		letter-spacing: var(--track-headline);
-		color: var(--text-default);
-	}
-	.desc {
-		font-size: var(--text-callout);
-		line-height: 1.25rem;
-		color: var(--text-muted);
-		text-wrap: pretty;
-	}
-	.desc :global(strong) {
-		color: var(--text-default);
-		font-weight: var(--weight-semibold);
-	}
-	.desc :global(code) {
-		font-family: var(--font-mono);
-		font-size: 0.92em;
-		color: var(--text-default);
-	}
 	.type {
 		display: flex;
 		flex-direction: column;
@@ -159,7 +124,8 @@
 	}
 	.type-code {
 		padding: 0.0625rem 0.3125rem;
-		border-radius: 0.3125rem;
+		border-radius: calc(0.3125rem * var(--corner-scale));
+		corner-shape: var(--corner);
 		background: var(--bg-active);
 		color: var(--text-default);
 		font-family: var(--font-mono);
