@@ -137,17 +137,7 @@
 	onMount(load);
 </script>
 
-<SectionCard
-	title="Registry credentials"
-	description={organizationId
-		? 'Default Docker logins for every project in this organization, including builds, apps and jobs. Project credentials override these defaults. Build environment variables DHI_USERNAME and DHI_TOKEN, or DOCKER_AUTH_CONFIG, take precedence over both.'
-		: 'Docker logins for builds, apps and jobs in this project. These override organization defaults for the same registry.'}
->
-	{#snippet actions()}
-		{#if canEdit}
-			<Button size="sm" icon={Plus} onclick={() => openEditor()}>Add</Button>
-		{/if}
-	{/snippet}
+{#snippet list()}
 	{#if !loaded}
 		<Skeleton class="h-10 w-full" />
 	{:else if credentials.length > 0}
@@ -170,13 +160,18 @@
 				</div>
 			{/each}
 		</Stack>
-	{:else}
-		<p class="text-callout text-muted">
-			{organizationId
-				? 'None yet, so images pull anonymously unless a project adds its own.'
-				: 'None here, so organization defaults and build environment credentials apply.'}
-		</p>
 	{/if}
+{/snippet}
+
+<SectionCard
+	title="Registry credentials"
+	children={!loaded || credentials.length > 0 ? list : undefined}
+>
+	{#snippet actions()}
+		{#if canEdit}
+			<Button size="sm" icon={Plus} onclick={() => openEditor()}>Add</Button>
+		{/if}
+	{/snippet}
 </SectionCard>
 
 {#if canEdit}

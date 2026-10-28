@@ -32,35 +32,34 @@
 	<RegistryCredentials {projectId} {canEdit} />
 
 	{#if canTransferOwnership || canMoveToOrg || canDelete}
-		<SectionCard title="Danger zone">
+		<SectionCard title="Danger zone" tone="danger">
 			<Stack>
 				{#if canTransferOwnership}
 					<ActionRow
 						label="Transfer ownership"
-						hint={transferPending
-							? 'A transfer is waiting on the new owner to accept.'
-							: "Everything here counts against the new owner's allowance."}
+						hint={transferPending ? 'Waiting on the new owner to accept.' : null}
 					>
-						<Button size="sm" icon={Crown} disabled={transferPending} onclick={onTransferOwnership}>
+						<Button
+							variant="danger"
+							size="sm"
+							icon={Crown}
+							disabled={transferPending}
+							onclick={onTransferOwnership}
+						>
 							Transfer
 						</Button>
 					</ActionRow>
 				{/if}
 
 				{#if canMoveToOrg}
-					<ActionRow
-						label="Move to another organization"
-						hint="Members who are not in the other organization lose access."
-					>
-						<Button size="sm" icon={FolderInput} onclick={onMoveToOrg}>Move</Button>
+					<ActionRow label="Move to another organization">
+						<Button variant="danger" size="sm" icon={FolderInput} onclick={onMoveToOrg}>Move</Button
+						>
 					</ActionRow>
 				{/if}
 
 				{#if canDelete}
-					<ActionRow
-						label="Delete project"
-						hint="Deletes every environment, app, database, backup, domain and job in it. There is no undo."
-					>
+					<ActionRow label="Delete project">
 						<Button variant="danger" size="sm" icon={Trash2} loading={deleting} onclick={onDelete}>
 							Delete
 						</Button>
