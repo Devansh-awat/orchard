@@ -1,28 +1,49 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { onDestroy, onMount, tick, untrack } from 'svelte';
+	import { onDestroy, untrack } from 'svelte';
 	import GraftCards from '$lib/grafts/GraftCards.svelte';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { animate } from 'motion';
-	import { springPop, motionEnabled, transition } from '$lib/utils/motion.svelte';
 	import { apiFetch, toasts, subscribeOrgEvents, sseStatusFor, user } from '$lib/stores';
 	import { queryClient } from '$lib/query';
 	import type { PageData } from './$types';
-	import { SpatialMenu } from 'melt/builders';
-	import { Server, TriangleAlert, ChevronLeft } from 'lucide-svelte';
+	import { Ellipsis, ExternalLink, Palette, Plus, RotateCw } from 'lucide-svelte';
+	import {
+		Alert,
+		Breadcrumbs,
+		Button,
+		EmptyState,
+		List,
+		Menu,
+		MenuItem,
+		Page,
+		SearchField,
+		SectionCard,
+		Skeleton,
+		Swap,
+		UnderlineTabs
+	} from '$lib/components/ui';
+	import EntityRow from '$lib/components/patterns/EntityRow.svelte';
+	import ProjectSpotlight, {
+		type SpotlightItem
+	} from '$lib/components/patterns/ProjectSpotlight.svelte';
+	import ProjectBackdrop from '$lib/components/patterns/ProjectBackdrop.svelte';
+	import NeedsAttention from '$lib/components/patterns/NeedsAttention.svelte';
+	import RecentBuilds from '$lib/components/patterns/RecentBuilds.svelte';
+	import type { FailingApp } from '$lib/components/patterns/sidebar';
+	import { resourceStatus } from '$lib/components/ui/status';
+	import { EnvironmentSwitcher } from '$lib/components/environment';
+	import { buildsQueryOptions } from '$lib/queries/overview';
+	import { toBuildItems } from '$lib/components/org-dashboard/build-items';
+	import { IMG_ICONS, favUrl, knownIcon } from '$lib/components/org-dashboard/helpers.svelte';
+	import type { ActiveBuild, RecentBuild } from '$lib/components/org-dashboard';
+	import { ingressUrl } from '$lib/ingress-url';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
-	import NewResourceModal from '$lib/components/NewResourceModal.svelte';
 	import Anomalies from '$lib/components/anomalies/Anomalies.svelte';
-	import MeshGradient from '$lib/components/MeshGradient.svelte';
 	import { projectGradientEnabled } from '$lib/stores';
 
 	import {
-		ProjectHero,
-		ProjectHeader,
-		ProjectTabs,
 		ProjectSettingsTab,
-		ResourcesTab,
 		ComposeTab,
 		MembersTab,
 		CustomizeModal,
@@ -46,23 +67,6 @@
 
 	import '$lib/components/project/project.css';
 
-	// Disable native macOS rubber-band overscroll on this page only
-	onMount(() => {
-		const main = document.querySelector<HTMLElement>('main.flex-1');
-		if (!main) return;
-		const prev = main.style.overscrollBehavior;
-		main.style.overscrollBehavior = 'none';
-		return () => {
-			main.style.overscrollBehavior = prev;
-		};
-	});
-
-	const deploymentMenu = new SpatialMenu<Deployment>({
-		wrap: true,
-		crossAxis: true
-	});
-
-	// --- Props / page data ---
 	let { data } = $props<{ data: PageData }>();
 	const orgSlug = $derived(data.orgSlug);
 	const projectSlug = $derived(data.projectSlug);
@@ -79,10 +83,8 @@
 	let loading = $state(true);
 	let deleting = $state(false);
 	let error = $state<string | null>(null);
-	let heroImgReady = $state(false);
 	let showDeleteModal = $state(false);
 	let deploymentSearch = $state('');
-	let showNewResourceModal = $state(false);
 	let projectMembers = $state<ProjectMember[]>([]);
 	let pendingInvitations = $state<PendingInvitation[]>([]);
 	let revokingInviteId = $state<string | null>(null);
@@ -133,35 +135,6 @@
 	});
 	const composeStacks = $derived<ComposeStackSummary[]>(composeQuery.data ?? []);
 	const composeStacksLoading = $derived(!!project?.id && composeQuery.isPending);
-
-	// --- Hero/tab animation ---
-	let tabsRowEl = $state<HTMLElement | null>(null);
-	let firstTabRun = true;
-
-	$effect(() => {
-		const _tab = activeTab; // subscribe
-		if (firstTabRun) {
-			firstTabRun = false;
-			return;
-		}
-		if (!motionEnabled()) return;
-		tick().then(() => {
-			if (tabsRowEl) animate(tabsRowEl, { opacity: [0.72, 1] }, transition('smooth'));
-		});
-	});
-
-	let firstPanelMount = true;
-	// Transforms on an ancestor of a backdrop-filtered card re-resolve the
-	// backdrop root every frame, which reads as the glass snapping between
-	// solid and translucent. Fade instead.
-	function tabPanelEnter(node: HTMLElement) {
-		if (firstPanelMount) {
-			firstPanelMount = false;
-			return;
-		}
-		if (!motionEnabled()) return;
-		animate(node, { opacity: [0, 1] }, transition('smooth'));
-	}
 
 	// --- Org members for picker ---
 	let orgMembers = $state<OrgMember[]>([]);
@@ -587,18 +560,6 @@
 		return updated.backgroundImage;
 	}
 
-	// --- Navigation ---
-	function openDeployment(id: string) {
-		return goto(`/${orgSlug}/deployments/${id}`);
-	}
-
-	function handleDeploymentClick(event: MouseEvent, id: string) {
-		if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0)
-			return;
-		event.preventDefault();
-		openDeployment(id);
-	}
-
 	// --- Live updates: SSE connection health ---
 	let sseStatusValue = $state<'connecting' | 'connected' | 'disconnected'>('connecting');
 	const sseDisconnected = $derived(sseStatusValue === 'disconnected');
@@ -708,103 +669,261 @@
 		};
 	});
 
+	const TAB_LABEL: Record<ProjectTab, string> = {
+		resources: 'Overview',
+		variables: 'Variables',
+		compose: 'Compose',
+		members: 'Members',
+		settings: 'Settings'
+	};
+	const showSettings = $derived(canDelete || canTransferOwnership || canMoveToOrg || canEdit);
+	const tabs = $derived(
+		PROJECT_TABS.filter((t) => t !== 'settings' || showSettings).map((t) => ({
+			id: t,
+			label: TAB_LABEL[t],
+			badge:
+				t === 'resources'
+					? envFilteredDeployments.length +
+						envFilteredDatabases.length +
+						envFilteredTemplateInstances.length
+					: t === 'compose'
+						? composeStacks.length || undefined
+						: t === 'members'
+							? projectMembers.length
+							: undefined
+		}))
+	);
+
+	function depIcon(d: Deployment) {
+		const known = knownIcon(d.image);
+		if (known) return known;
+		if (favFailed.has(d.id)) return null;
+		const host = d.ingresses?.[0]?.host;
+		return host ? favUrl(host.split('/')[0]) : null;
+	}
+
+	function depDetail(d: Deployment) {
+		const host = d.ingresses?.[0]?.host;
+		const branch = d.githubBranch;
+		return [host, branch].filter(Boolean).join(' · ') || d.image || undefined;
+	}
+
+	function depUpdatedAt(d: Deployment) {
+		const h = d.imageHistory?.[0];
+		return (
+			(d as { updatedAt?: string }).updatedAt ?? h?.buildCompletedAt ?? h?.buildStartedAt ?? null
+		);
+	}
+
+	const failing = $derived<FailingApp[]>(
+		(project?.deployments ?? [])
+			.filter((d) => resourceStatus(d.status, d.buildStatus).kind === 'error')
+			.map((d) => ({
+				label: d.displayName || d.name,
+				href: `/${orgSlug}/deployments/${d.id}`,
+				reason: resourceStatus(d.status, d.buildStatus).label,
+				kind: 'deployment' as const,
+				icon: depIcon(d)
+			}))
+	);
+
+	const heroStatus = $derived.by(() => {
+		const deps = project?.deployments ?? [];
+		const kinds = deps.map((d) => resourceStatus(d.status, d.buildStatus).kind);
+		const errors = deps.filter((_, i) => kinds[i] === 'error');
+		if (errors.length === 1) {
+			const d = errors[0];
+			return {
+				tone: 'error' as const,
+				label: `${d.displayName || d.name} is ${resourceStatus(d.status, d.buildStatus).label.toLowerCase()}`
+			};
+		}
+		if (errors.length > 1)
+			return { tone: 'error' as const, label: `${errors.length} apps need attention` };
+		const building = kinds.filter((k) => k === 'progress' || k === 'warning').length;
+		if (building) return { tone: 'progress' as const, label: `${building} building` };
+		if (!deps.length && !databases.length)
+			return { tone: 'neutral' as const, label: 'Nothing deployed yet' };
+		return { tone: 'success' as const, label: 'All running' };
+	});
+
+	const visitUrl = $derived.by(() => {
+		const ing = (project?.deployments ?? []).flatMap((d) => d.ingresses ?? [])[0];
+		return ing ? ingressUrl(ing) : null;
+	});
+
+	const spotlight = $derived<SpotlightItem[]>(
+		project
+			? [
+					{
+						id: project.id,
+						name: project.name,
+						href: `/${orgSlug}/projects/${project.slug}`,
+						url: visitUrl,
+						image: project.icon ?? null,
+						background: project.backgroundImage ?? null,
+						owner: project.organization?.name,
+						status: heroStatus.label,
+						tone: heroStatus.tone,
+						apps: [
+							...(project.deployments ?? []).map((d) => ({
+								name: d.displayName || d.name,
+								kind: 'deployment' as const
+							})),
+							...databases.map((db) => ({ name: db.name, kind: 'database' as const }))
+						]
+					}
+				]
+			: []
+	);
+
+	const buildsQuery = createQuery(() => ({
+		...buildsQueryOptions(orgSlug ?? ''),
+		enabled: !!orgSlug && !!project
+	}));
+	const projectDeploymentIds = $derived(new Set((project?.deployments ?? []).map((d) => d.id)));
+	const builds = $derived(
+		toBuildItems(
+			(buildsQuery.data?.active ?? []) as ActiveBuild[],
+			(buildsQuery.data?.recent ?? []) as RecentBuild[],
+			{
+				orgSlug: orgSlug ?? '',
+				failedFav: favFailed,
+				only: (id) => projectDeploymentIds.has(id)
+			}
+		).slice(0, 6)
+	);
+
+	async function restart(d: Deployment) {
+		const res = await apiFetch(`/apiv1/deployments/${d.id}/restart`, { method: 'POST' });
+		if (res.ok) {
+			toasts.add({ title: `Restarting ${d.displayName || d.name}`, color: 'success' });
+			scheduleProjectRefetch();
+		} else toasts.add({ title: 'Restart failed', color: 'error' });
+	}
+
+	function copyUrl(d: Deployment) {
+		const ing = d.ingresses?.[0];
+		if (!ing) return;
+		navigator.clipboard.writeText(ingressUrl(ing));
+		toasts.add({ title: 'URL copied', color: 'success' });
+	}
+
 	onDestroy(() => {
 		if (refetchTimer) clearTimeout(refetchTimer);
 	});
 </script>
 
-<div class="pj-page" class:pj-page--hasbg={!!project?.backgroundImage && $projectGradientEnabled}>
-	{#if project?.backgroundImage && $projectGradientEnabled}
-		<div class="pj-mesh-bg" aria-hidden="true">
-			<MeshGradient src={project.backgroundImage} class="pj-mesh-canvas" />
-			<div class="pj-mesh-scrim"></div>
-			<div class="pj-treat pj-treat--aura"></div>
-		</div>
-	{/if}
+<svelte:head><title>{project?.name ?? 'Project'}</title></svelte:head>
 
-	<div class="pj-page-inner">
-		{#if sseDisconnected && !loading}
-			<div class="pj-sse-alert" role="alert">
-				<TriangleAlert class="h-4 w-4" style="flex-shrink: 0; margin-top: 0.0625rem;" />
-				<div class="pj-sse-alert-body">
-					<span class="pj-sse-alert-title">Live updates offline</span>
-					<span class="pj-sse-alert-hint"
-						>Real-time connection lost — reconnecting automatically. Data shown may be outdated.</span
+{#if project?.backgroundImage && $projectGradientEnabled}
+	<div class="backdrop" aria-hidden="true">
+		<ProjectBackdrop name={project.name} image={project.backgroundImage} />
+	</div>
+{/if}
+
+{#snippet side()}
+	<div class="side">
+		<NeedsAttention items={failing} />
+		{#if builds.length}<RecentBuilds {builds} />{/if}
+	</div>
+{/snippet}
+
+{#snippet deploymentRow(d: Deployment)}
+	<EntityRow
+		kind="deployment"
+		name={d.displayName || d.name}
+		status={resourceStatus(d.status, d.buildStatus)}
+		image={depIcon(d)}
+		detail={depDetail(d)}
+		updatedAt={depUpdatedAt(d)}
+		href="/{orgSlug}/deployments/{d.id}"
+	>
+		{#snippet actions()}
+			<Menu placement="bottom-end">
+				{#snippet trigger(props)}
+					<Button {...props} size="sm" variant="ghost" icon={Ellipsis} label="Actions" />
+				{/snippet}
+				{#if d.ingresses?.[0]}
+					<MenuItem icon={ExternalLink} href={ingressUrl(d.ingresses[0])} target="_blank"
+						>Visit</MenuItem
 					>
+					<MenuItem onclick={() => copyUrl(d)}>Copy URL</MenuItem>
+				{/if}
+				<MenuItem icon={RotateCw} onclick={() => restart(d)}>Restart</MenuItem>
+				<MenuItem href="/{orgSlug}/deployments/{d.id}?tab=deploys">View deploys</MenuItem>
+			</Menu>
+		{/snippet}
+	</EntityRow>
+{/snippet}
+
+{#if loading}
+	<Page title="Project" width="wide">
+		{#snippet hero()}
+			<div class="hero"><Skeleton height="21rem" rounded="1.5rem" /></div>
+		{/snippet}
+		<Skeleton height="16rem" rounded="1.125rem" />
+	</Page>
+{:else if error || !project}
+	<Page title="Project" width="default">
+		<EmptyState title="This project did not load" description={error ?? 'Project not found'}>
+			<Button variant="secondary" onclick={fetchProject}>Try again</Button>
+		</EmptyState>
+	</Page>
+{:else}
+	<Page
+		title={project.name}
+		width="wide"
+		aside={activeTab === 'resources' && (failing.length || builds.length) ? side : undefined}
+	>
+		{#snippet hero()}
+			<div class="hero">
+				<ProjectSpotlight
+					items={spotlight}
+					variant={activeTab === 'resources' ? 'spotlight' : 'banner'}
+					primary={{
+						label: 'New app',
+						href: `/${orgSlug}/new?projectSlug=${projectSlug}`,
+						icon: Plus
+					}}
+				>
+					{#snippet tools()}
+						{#if canEdit}
+							<Button
+								variant="media"
+								icon={Palette}
+								label="Customize"
+								onclick={() => (showCustomize = true)}
+							/>
+						{/if}
+					{/snippet}
+				</ProjectSpotlight>
+				<div class="bar">
+					<UnderlineTabs
+						label="Project sections"
+						{tabs}
+						bind:value={() => activeTab, (v) => gotoTab(v as ProjectTab)}
+					/>
+					<div class="bar-tools">
+						{#if activeTab === 'resources'}
+							<SearchField placeholder="Search" size="sm" bind:value={deploymentSearch} />
+						{/if}
+						{#if activeTab === 'resources' || activeTab === 'variables'}
+							<EnvironmentSwitcher projectId={project.id} bind:selectedEnvId />
+						{/if}
+					</div>
 				</div>
-				<button class="pj-sse-alert-action" onclick={() => location.reload()}>Reload</button>
 			</div>
-		{/if}
+		{/snippet}
 
-		{#if error}
-			<div class="pj-error">{error}</div>
-		{/if}
-
-		{#if loading}
-			<!-- Skeleton -->
-			<div class="skeleton" style="height: 0.8125rem; width: 6rem; margin-bottom: 1rem;"></div>
-			<div class="pj-header">
-				<div class="pj-header-top">
-					<div class="pj-header-info">
-						<div class="skeleton" style="height: 1.5rem; width: 40%; margin-bottom: 0.5rem;"></div>
-						<div class="skeleton" style="height: 0.875rem; width: 55%;"></div>
-					</div>
-					<div class="pj-header-actions">
-						<div
-							class="skeleton"
-							style="height: 2rem; width: 4.5rem; border-radius: var(--radius-sm);"
-						></div>
-						<div
-							class="skeleton"
-							style="height: 2rem; width: 5rem; border-radius: var(--radius-sm);"
-						></div>
-					</div>
-				</div>
-			</div>
-			<div class="pj-stats">
-				{#each Array(3) as _, i (i)}
-					<div
-						class="skeleton"
-						style="height: 1.75rem; width: 6rem; border-radius: var(--radius-sm);"
-					></div>
-				{/each}
-			</div>
-			<div class="pj-deployments-header">
-				<div class="skeleton" style="height: 1.125rem; width: 7rem;"></div>
-			</div>
-			<div class="pj-deployment-grid">
-				{#each Array(3) as _, i (i)}
-					<div class="pj-deployment-card" style="pointer-events: none;">
-						<div class="pj-deployment-card-top">
-							<div class="skeleton skeleton-icon"></div>
-							<div class="skeleton skeleton-badge"></div>
-						</div>
-						<div class="pj-deployment-card-body">
-							<div class="skeleton skeleton-title"></div>
-							<div class="skeleton skeleton-desc"></div>
-						</div>
-						<div class="pj-deployment-card-footer">
-							<div class="skeleton" style="height: 0.625rem; width: 3rem;"></div>
-						</div>
-					</div>
-				{/each}
-			</div>
-		{:else if project}
-			<a class="pj-back" href="/{orgSlug}">
-				<ChevronLeft size={15} />
-				Your Apps
-			</a>
-
-			<!-- Hero / Header -->
-			{#if project.backgroundImage}
-				<ProjectHero
-					{project}
-					{canEdit}
-					bind:heroImgReady
-					onCustomize={() => (showCustomize = true)}
-				/>
-			{:else}
-				<ProjectHeader {project} {canEdit} onCustomize={() => (showCustomize = true)} />
+		<div class="body">
+			{#if sseDisconnected}
+				<Alert tone="warning" title="Live updates offline">
+					Reconnecting. What you see may be out of date.
+					{#snippet actions()}
+						<Button variant="secondary" size="sm" onclick={() => location.reload()}>Reload</Button>
+					{/snippet}
+				</Alert>
 			{/if}
 
 			{#if pendingTransfer && $user}
@@ -821,61 +940,69 @@
 				/>
 			{/if}
 
-			<!-- Tab bar -->
-			<ProjectTabs
-				{activeTab}
-				onSelect={gotoTab}
-				resourceCount={envFilteredDeployments.length +
-					envFilteredDatabases.length +
-					envFilteredTemplateInstances.length}
-				composeCount={composeStacks.length}
-				membersCount={projectMembers.length}
-				repositoryUrl={project.repositoryUrl}
-				hasDeployments={!!project.deployments?.length}
-				bind:deploymentSearch
-				onNewResource={() => {
-					gotoTab('resources');
-					showNewResourceModal = true;
-				}}
-				bind:tabsRowEl
-				{deploymentMenu}
-				projectId={project.id}
-				bind:selectedEnvId
-				showSettings={canDelete || canTransferOwnership || canMoveToOrg}
-			/>
-
-			{#if activeTab === 'resources'}
-				<Anomalies scope={{ kind: 'project', id: project.id }} />
-				<div class="pj-tab-panel" {@attach tabPanelEnter}>
-					<ResourcesTab
-						filteredDeployments={envFilteredDeployments}
-						databases={envFilteredDatabases}
-						templateInstances={envFilteredTemplateInstances}
-						orgSlug={orgSlug ?? ''}
-						{deploymentSearch}
-						{deploymentMenu}
-						bind:favFailed
-						onDeploymentClick={handleDeploymentClick}
-						onNewResource={() => (showNewResourceModal = true)}
-						onOpenDeployment={openDeployment}
-					/>
-					{#if orgId}
-						<GraftCards
-							slot="project.overview.cards"
-							props={{
-								orgId,
-								orgSlug: orgSlug ?? '',
-								projectId: project.id,
-								projectSlug: project.slug
-							}}
-						/>
-					{/if}
-				</div>
-			{/if}
-
-			{#if activeTab === 'variables'}
-				<div class="pj-tab-panel" {@attach tabPanelEnter}>
-					<div class="pj-section-card pj-glass">
+			<Swap key={activeTab}>
+				{#if activeTab === 'resources'}
+					<div class="overview">
+						<Anomalies scope={{ kind: 'project', id: project.id }} />
+						{#if envFilteredDeployments.length || envFilteredDatabases.length || envFilteredTemplateInstances.length}
+							<List label="Resources">
+								{#each envFilteredDeployments as d (d.id)}
+									{@render deploymentRow(d)}
+								{/each}
+								{#each envFilteredDatabases as db (db.id)}
+									<EntityRow
+										kind="database"
+										name={db.name}
+										status={resourceStatus(db.status)}
+										image={IMG_ICONS.postgres}
+										detail={db.mode ? `${db.dbName} · ${db.mode}` : db.dbName}
+										updatedAt={db.createdAt}
+										href="/{orgSlug}/databases/{db.id}"
+									/>
+								{/each}
+								{#each envFilteredTemplateInstances as ti (ti.id)}
+									<EntityRow
+										kind="deployment"
+										name={ti.name}
+										status={resourceStatus(ti.status)}
+										image={ti.template.icon ?? null}
+										detail={ti.template.displayName}
+										updatedAt={ti.createdAt}
+										href="/{orgSlug}/template-instances/{ti.id}"
+									/>
+								{/each}
+							</List>
+						{:else}
+							<EmptyState
+								title={deploymentSearch
+									? `Nothing matches “${deploymentSearch}”`
+									: selectedEnvName
+										? `Nothing in ${selectedEnvName} yet`
+										: 'Nothing deployed yet'}
+							>
+								{#if !deploymentSearch && canEdit}
+									<Button
+										variant="primary"
+										icon={Plus}
+										href="/{orgSlug}/new?projectSlug={projectSlug}">New app</Button
+									>
+								{/if}
+							</EmptyState>
+						{/if}
+						{#if orgId}
+							<GraftCards
+								slot="project.overview.cards"
+								props={{
+									orgId,
+									orgSlug: orgSlug ?? '',
+									projectId: project.id,
+									projectSlug: project.slug
+								}}
+							/>
+						{/if}
+					</div>
+				{:else if activeTab === 'variables'}
+					<SectionCard>
 						{#if selectedEnvId}
 							<SharedVarsEditor
 								environmentId={selectedEnvId}
@@ -883,25 +1010,17 @@
 								envSlug={selectedEnvSlug}
 							/>
 						{:else}
-							<p class="pj-vars-empty">Select an environment to manage its variables.</p>
+							<EmptyState title="Pick an environment to edit its variables" />
 						{/if}
-					</div>
-				</div>
-			{/if}
-
-			{#if activeTab === 'compose'}
-				<div class="pj-tab-panel" {@attach tabPanelEnter}>
+					</SectionCard>
+				{:else if activeTab === 'compose'}
 					<ComposeTab
 						{composeStacks}
 						{composeStacksLoading}
 						orgSlug={orgSlug ?? ''}
 						projectSlug={projectSlug ?? ''}
 					/>
-				</div>
-			{/if}
-
-			{#if activeTab === 'members'}
-				<div class="pj-tab-panel" {@attach tabPanelEnter}>
+				{:else if activeTab === 'members'}
 					<MembersTab
 						{projectMembers}
 						{pendingInvitations}
@@ -923,11 +1042,7 @@
 						onRevokeInvitation={revokeInvitation}
 						onEnsureOrgMembersLoaded={ensureOrgMembersLoaded}
 					/>
-				</div>
-			{/if}
-
-			{#if activeTab === 'settings'}
-				<div class="pj-tab-panel" {@attach tabPanelEnter}>
+				{:else if activeTab === 'settings'}
 					<ProjectSettingsTab
 						projectId={project?.id ?? ''}
 						{canEdit}
@@ -940,18 +1055,11 @@
 						onTransferOwnership={() => (showTransferModal = true)}
 						onMoveToOrg={() => (showMoveModal = true)}
 					/>
-				</div>
-			{/if}
-		{/if}
-	</div>
-</div>
-
-<NewResourceModal
-	bind:open={showNewResourceModal}
-	orgSlug={orgSlug ?? ''}
-	projectSlug={projectSlug ?? ''}
-	{selectedEnvId}
-/>
+				{/if}
+			</Swap>
+		</div>
+	</Page>
+{/if}
 
 {#if project}
 	<ConfirmModal
@@ -992,73 +1100,45 @@
 {/if}
 
 <style>
-	.pj-vars-panel {
-		max-width: 46rem;
+	.backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 0;
+		pointer-events: none;
 	}
-	.pj-vars-empty {
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		color: var(--surface-muted);
-	}
-
-	.pj-sse-alert {
-		display: flex;
-		align-items: flex-start;
-		gap: 0.75rem;
-		padding: 0.75rem 1rem;
-		margin-bottom: 1rem;
-		border-radius: var(--radius-md);
-		border: 1px solid color-mix(in srgb, var(--warning-text) 18%, transparent);
-		background-color: color-mix(in srgb, var(--warning-text) 6%, transparent);
-		color: var(--warning-text);
-	}
-	.pj-sse-alert-body {
-		flex: 1;
-		min-width: 0;
+	.hero {
+		position: relative;
 		display: flex;
 		flex-direction: column;
-		gap: 0.125rem;
+		gap: var(--space-5);
+		max-width: calc(var(--page-wide) + 4rem);
+		margin: 0 auto;
+		padding: 2rem 2rem 1.5rem;
 	}
-	.pj-sse-alert-title {
-		font-size: var(--text-footnote);
-		font-weight: 600;
-		line-height: 1.3;
-	}
-	.pj-sse-alert-hint {
-		font-size: var(--text-caption);
-		opacity: 0.85;
-		line-height: 1.4;
-	}
-	.pj-sse-alert-action {
-		display: inline-flex;
-		align-items: center;
-		padding: 0.3125rem 0.75rem;
-		border-radius: var(--radius-xs);
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: 600;
-		border: 1px solid currentColor;
-		background: none;
-		color: inherit;
-		cursor: pointer;
-		white-space: nowrap;
-		flex-shrink: 0;
-		align-self: center;
-		opacity: 0.9;
-		transition:
-			opacity var(--dur-fast),
-			background-color var(--dur-fast);
-	}
-	.pj-sse-alert-action:hover {
-		opacity: 1;
-		background-color: color-mix(in srgb, currentColor 8%, transparent);
-	}
-
-	/* Stats skeleton only used in this page */
-	.pj-stats {
+	.bar {
+		position: relative;
 		display: flex;
-		flex-wrap: wrap;
-		gap: 0.5rem;
-		margin-bottom: 1.5rem;
+		align-items: flex-end;
+		gap: var(--space-4);
+	}
+	.bar > :global(.ui-tabs) {
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+	.bar-tools {
+		display: flex;
+		flex-shrink: 0;
+		align-items: center;
+		gap: var(--space-2);
+		padding-bottom: 0.375rem;
+	}
+	.body,
+	.overview,
+	.side {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+		min-width: 0;
 	}
 </style>

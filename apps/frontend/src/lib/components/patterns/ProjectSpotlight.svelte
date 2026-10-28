@@ -14,6 +14,7 @@
 </script>
 
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import type { Icon } from '$lib/components/ui/types';
 	import { ArrowRight, ExternalLink } from 'lucide-svelte';
 	import Aura from '$lib/components/ui/Aura.svelte';
@@ -28,11 +29,13 @@
 	let {
 		items,
 		variant = 'spotlight',
-		primary = undefined
+		primary = undefined,
+		tools = undefined
 	}: {
 		items: SpotlightItem[];
 		variant?: 'spotlight' | 'banner';
 		primary?: { label: string; href?: string; icon?: Icon };
+		tools?: Snippet;
 	} = $props();
 
 	const PrimaryIcon = $derived(primary?.icon ?? ArrowRight);
@@ -195,10 +198,16 @@
 			{/key}
 		</div>
 
+		{#if tools && variant === 'spotlight'}<div class="tools">{@render tools()}</div>{/if}
+
 		{#if variant === 'banner'}
 			<div class="side">
-				<a class="open" href={current.href}
-					><span class="open-label">Open</span><ArrowRight size={15} aria-hidden="true" /></a
+				{#if tools}{@render tools()}{/if}
+				<a class="open" href={primary?.href ?? current.href}
+					><span class="open-label">{primary?.label ?? 'Open'}</span><PrimaryIcon
+						size={15}
+						aria-hidden="true"
+					/></a
 				>
 				{#if current.url}
 					<Button
@@ -250,6 +259,15 @@
 {/if}
 
 <style>
+	.tools {
+		position: absolute;
+		top: 1.5rem;
+		right: 1.5rem;
+		z-index: 2;
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
 	.shelf {
 		--pad: 2rem;
 		position: relative;

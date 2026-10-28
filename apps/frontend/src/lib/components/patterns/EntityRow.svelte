@@ -33,14 +33,16 @@
 
 	const KIND_ICON = { deployment: Box, database: Database, job: Timer };
 	const KindIcon = $derived(KIND_ICON[kind]);
+	let failedSrc = $state<string | null>(null);
+	const showImage = $derived(!!image && failedSrc !== image);
 	const quiet = $derived(status.kind === 'success' || status.kind === 'neutral');
 </script>
 
 <ListRow title={name} {href} {actions} {presence}>
 	{#snippet leading()}
 		<span class="tile">
-			{#if image}
-				<RemoteImg src={image} class="tile-img" />
+			{#if showImage}
+				<RemoteImg src={image} class="tile-img" onerror={() => (failedSrc = image ?? null)} />
 			{:else}
 				<KindIcon size={16} />
 			{/if}

@@ -76,3 +76,6 @@ export { default as GitHostMark, gitHostOf } from './GitHostMark.svelte';
 export { default as DisclosureGroup } from './DisclosureGroup.svelte';
 export { default as RowList } from './RowList.svelte';
 export { default as FieldGrid } from './FieldGrid.svelte';
+export { default as List } from './List.svelte';
+export { default as SearchField } from './SearchField.svelte';
+export { default as ListRow } from './ListRow.svelte';

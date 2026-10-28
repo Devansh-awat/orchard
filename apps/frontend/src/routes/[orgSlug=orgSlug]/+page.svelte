@@ -37,7 +37,7 @@
 	import MenuItem from '$lib/components/ui/MenuItem.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import Skeleton from '$lib/components/ui/Skeleton.svelte';
-	import { resourceStatus, buildStatusMeta } from '$lib/components/ui/status';
+	import { resourceStatus } from '$lib/components/ui/status';
 	import ProjectGroup from '$lib/components/patterns/ProjectGroup.svelte';
 	import EntityCard from '$lib/components/patterns/EntityCard.svelte';
 	import EntityLine from '$lib/components/patterns/EntityLine.svelte';
@@ -47,14 +47,12 @@
 		type NewMenuItem
 	} from '$lib/components/patterns/LiquidNewButton.svelte';
 	import type { BuildItem } from '$lib/components/patterns/builds';
+	import { toBuildItems } from '$lib/components/org-dashboard/build-items';
 	import type { FailingApp } from '$lib/components/patterns/sidebar';
-	import { buildPhases } from '$lib/components/deployment/build-phases';
-	import { humanizeStep } from '$lib/components/deployment/timeline-rows';
 	import {
 		IMG_ICONS,
 		knownIcon,
-		favUrl,
-		buildIcon
+		favUrl
 	} from '$lib/components/org-dashboard/helpers.svelte';
 	import type {
 		DeploymentSummary,
@@ -587,12 +585,6 @@
 			}))
 	);
 
-	function duration(from?: string | null, to?: string | null) {
-		if (!from || !to) return undefined;
-		const s = Math.max(0, Math.round((new Date(to).getTime() - new Date(from).getTime()) / 1000));
-		return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
-	}
-
 	const projectIconByName = $derived(
 		new Map(
 			[...projectMetas.values()].map((p) => [p.name, isUrl(p.icon) ? (p.icon ?? null) : null])
@@ -600,47 +592,9 @@
 	);
 	const projectIcon = (name?: string) => (name ? (projectIconByName.get(name) ?? null) : null);
 
-	const builds = $derived<BuildItem[]>([
-		...activeBuilds.map((b: ActiveBuild): BuildItem => ({
-			id: b.id,
-			app: b.displayName || b.name,
-			project: b.project?.name,
-			projectIcon: projectIcon(b.project?.name),
-			icon: buildIcon(b.image, b.ingresses, b.id, failedFav, b.faviconUrl),
-			message: b.buildStep ? humanizeStep(b.buildStep) : 'Queued',
-			status: buildStatusMeta('building'),
-			at: b.buildStartedAt ?? b.updatedAt,
-			startedAt: b.buildStartedAt ?? undefined,
-			href: `/${orgSlug}/deployments/${b.id}`,
-			branch: b.githubBranch,
-			phases: buildPhases(b.buildStepTimestamps, Date.now(), true)
-		})),
-		...recentBuilds.map((b: RecentBuild): BuildItem => ({
-			id: b.id,
-			app: b.deployment.displayName || b.deployment.name,
-			project: b.deployment.project?.name,
-			projectIcon: projectIcon(b.deployment.project?.name),
-			icon: buildIcon(
-				b.deployment.image,
-				b.deployment.ingresses,
-				b.deployment.id,
-				failedFav,
-				b.deployment.faviconUrl
-			),
-			message:
-				b.commitMessage ??
-				(b.commitSha
-					? b.commitSha.slice(0, 7)
-					: b.triggerType === 'manual'
-						? 'Manual deploy'
-						: 'Deploy'),
-			status: buildStatusMeta(b.status ?? b.deployment.buildStatus),
-			at: b.buildCompletedAt ?? b.createdAt,
-			href: `/${orgSlug}/deployments/${b.deployment.id}`,
-			branch: b.branch ?? undefined,
-			duration: duration(b.buildStartedAt, b.buildCompletedAt)
-		}))
-	]);
+	const builds = $derived<BuildItem[]>(
+		toBuildItems(activeBuilds, recentBuilds, { orgSlug, failedFav, projectIcon })
+	);
 
 	const NEW_ITEMS: NewMenuItem[] = [
 		{ id: 'deployment', label: 'App', description: 'From a repo or image', icon: Box },
