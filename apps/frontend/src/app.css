@@ -515,7 +515,7 @@ html {
 		inset 0 0.5px 0 rgb(255 255 255 / 0.14),
 		var(--shadow-floating);
 	min-width: 12rem;
-	max-height: min(60vh, var(--melt-popover-available-height, 60vh));
+	max-height: min(60vh, max(12rem, var(--melt-popover-available-height, 60vh)));
 	overflow-y: auto;
 	overscroll-behavior: contain;
 	scrollbar-width: thin;
@@ -532,7 +532,7 @@ html {
 
 .ui-popover--menu {
 	padding: var(--float-pad);
-	max-height: min(20rem, var(--melt-popover-available-height, 20rem));
+	max-height: min(20rem, max(12rem, var(--melt-popover-available-height, 20rem)));
 }
 
 .ui-menu:not([data-open]),

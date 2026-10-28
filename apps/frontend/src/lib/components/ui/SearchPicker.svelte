@@ -244,7 +244,7 @@
 		display: flex;
 		flex-direction: column;
 		min-width: 18rem !important;
-		max-height: min(24rem, var(--melt-popover-available-height, 24rem));
+		max-height: min(24rem, max(14rem, var(--melt-popover-available-height, 24rem)));
 		overflow: hidden;
 	}
 	.head {
