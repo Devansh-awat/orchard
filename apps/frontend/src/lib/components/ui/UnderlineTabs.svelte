@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Component } from 'svelte';
+	import { slidingIndicator } from './slide.svelte';
 
 	type TabDef = { id: string; label: string; badge?: string | number; icon?: Component };
 
@@ -16,6 +17,8 @@
 		label?: string;
 		icons?: boolean;
 	} = $props();
+
+	const els: Record<string, HTMLElement> = $state({});
 </script>
 
 <nav
@@ -25,9 +28,15 @@
 	aria-label={label}
 >
 	<div class="ui-tabs-track">
+		<span
+			class="ui-tabs-ink ui-tabs-ink--{variant}"
+			aria-hidden="true"
+			{@attach slidingIndicator(() => els[value])}
+		></span>
 		{#each tabs as t (t.id)}
 			{@const Icon = icons ? t.icon : undefined}
 			<button
+				bind:this={els[t.id]}
 				type="button"
 				class="ui-tab ui-tab--{variant}"
 				class:ui-tab--active={value === t.id}
@@ -56,6 +65,7 @@
 		padding: var(--space-2);
 	}
 	.ui-tabs-track {
+		position: relative;
 		display: flex;
 		align-items: center;
 		gap: var(--space-1);
@@ -73,6 +83,7 @@
 	}
 
 	.ui-tab {
+		position: relative;
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-2);
@@ -107,7 +118,6 @@
 	}
 	.ui-tab--underline.ui-tab--active {
 		color: var(--text-default);
-		border-bottom-color: var(--accent);
 	}
 
 	.ui-tab--toolbar {
@@ -120,7 +130,34 @@
 	}
 	.ui-tab--toolbar.ui-tab--active {
 		color: var(--text-default);
+	}
+	.ui-tab--toolbar.ui-tab--active:hover {
+		background-color: transparent;
+	}
+	.ui-tabs-ink {
+		position: absolute;
+		top: 0;
+		left: 0;
+		pointer-events: none;
+	}
+	.ui-tabs-ink--underline::after {
+		content: '';
+		position: absolute;
+		right: 0;
+		bottom: 0;
+		left: 0;
+		height: 2px;
+		background: var(--accent);
+	}
+	.ui-tabs-ink--toolbar {
+		border-radius: calc(var(--radius-md) * var(--corner-scale));
+		corner-shape: var(--corner);
 		background-color: var(--fill-soft);
+	}
+	.ui-tabs-ink:global([data-ready]) {
+		transition:
+			transform var(--spring-glide-duration) var(--spring-glide),
+			width var(--spring-glide-duration) var(--spring-glide);
 	}
 
 	.ui-tab-badge {

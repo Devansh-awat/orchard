@@ -21,6 +21,7 @@
 	import { decorativeMotion, fade, pace, springTiming, stateEcho } from '$lib/utils/motion.svelte';
 	import { effectiveAnimation } from '$lib/stores/preferences';
 	import Verdict from './Verdict.svelte';
+	import MotionRule from './MotionRule.svelte';
 	import { curvePath, fadeTo, slide } from './system';
 
 	const USE: Record<CurveName, string> = {
@@ -425,6 +426,8 @@ el.animate(kf, springTiming('snap'));`;
 		</Verdict>
 	</div>
 </SectionCard>
+
+<MotionRule />
 
 <div class="grid grid-cols-2 gap-6">
 	<SectionCard

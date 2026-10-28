@@ -151,6 +151,7 @@ callout|caption|micro`, `rounded-control|card|panel`.
 | A template or schema parameter     | `ParamField` (picks the control from the parameter type, validates with `paramProblem`)                   |
 | What something creates             | `ResourceList` (app, database, job, public URL rows)                                                      |
 | Optional settings in a form        | `Disclosure` (title, note, spring collapse)                                                               |
+| Content that changes with a choice | `Swap` (`key` is the choice; new content rises in, the box morphs its height)                             |
 | Picker that shows its value        | `Menu` with a `SelectTrigger` (prefix, value, leading icon, clear)                                        |
 | Pickers in a form grid or aside    | Every picker passes `block`, so account, repo, branch, project and environment fill their cell alike      |
 | Where code comes from              | `SourcePath`: `owner / repo` at `lg` is the one decision, branch and framework sit under it as `sm` chips |
@@ -271,6 +272,43 @@ One curve table, `CURVES` in `src/lib/design/springs.ts`: `snap` (opens), `pop` 
 (`--spring-{name}`, `--spring-{name}-duration`, `--fade-in/out/long`, `--curve-out/in`) by
 `pnpm gen:design`. One `TEMPO` (CSS `--tempo`) scales them all. Never write stiffness, damping,
 cubic-bezier or raw durations for interaction motion in a component. See `CLAUDE.md`.
+
+### What moves, what doesn't
+
+Motion when the **user caused a spatial change**: something opens, appears, leaves, reorders,
+changes size, or gets pressed. Instant when **reality caused it** (the cluster, SSE, a refetch),
+when it is a **text or value edit while typing**, for **focus**, and for anything repeated fast
+enough that motion turns into latency. Every entrance has an exit. A removal animates out and its
+space closes on a height spring; nothing vanishes and no gap jumps shut.
+
+| Interaction                                                | Motion                                                                                      | Where it lives                                 |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Menu, dropdown, popover, search picker, combobox           | `snap` in from the side it opened on, `snap` out toward it                                  | `overlayMotion` (Menu, PopoverPanel, Combobox) |
+| Modal, sheet                                               | `snap` in, `settle` out, backdrop fades with it                                             | `Modal`, `Sheet`                               |
+| Highlight inside an open menu or listbox                   | instant, it follows pointer and keys and a spring would trail them                          | `.ui-menu-item`, `.ui-dropdown-option`         |
+| Selection moving (segmented control, tabs)                 | the indicator `glide`s to the new item, labels recolour                                     | `SegmentedControl`, `Tabs`, `UnderlineTabs`    |
+| Content swap (tab panel, segmented content, source switch) | old content leaves at once, new rises in on `glide`, the container morphs height on `glide` | `Swap`                                         |
+| Row the user adds (env var, port, volume, member)          | space opens on `glide`, content `pop`s in 50ms behind it                                    | `in:presence out:presence`, `ListRow presence` |
+| Row the user removes                                       | content fades on `settle`, space closes on `settle` 50ms behind it                          | same                                           |
+| Disclosure, collapsible section                            | height on `glide`, chevron rotates on `snap`, collapsed body is inert                       | `Disclosure`                                   |
+| Card or panel resizing after a user action                 | height `glide`                                                                              | `Swap`, `morphHeight`                          |
+| Validation error                                           | text instant; its line opens and closes with `presence`; hint to error swaps in place       | `Field`                                        |
+| Press on buttons, segments, steppers, checkboxes, cards    | `press` scale: 0.96 controls, 0.98 rows, 0.99 cards                                         | component CSS on `--spring-press`              |
+| Press on popover triggers, disclosure summary, menu rows   | tint only. The popover measures its trigger, and menu rows close on release                 | `SelectTrigger`, `Disclosure`, menu CSS        |
+| Switch, checkbox, radio                                    | thumb `glide`s, mark `pop`s                                                                 | `Switch`, `Checkbox`, `RadioGroup`             |
+| Toast                                                      | `morph`                                                                                     | `Notifier`                                     |
+| Status, build steps, pods, rows arriving from the cluster  | instant, with a `stateEcho` trail                                                           | `stateEcho`                                    |
+| Typing: filtering a list, search results, live validation  | instant. Rows never stagger per keystroke and the panel resizes without a spring            | `SearchPicker`, `Combobox`, `CommandMenu`      |
+| Focus ring                                                 | instant                                                                                     |                                                |
+| Repeated input (stepper clicks, arrow keys through tabs)   | the value is instant, only the indicator moves                                              |                                                |
+| Spinner in a trigger or button                             | instant swap with the chevron or label                                                      | `SelectTrigger`, `Button loading`              |
+| Skeleton to content                                        | the skeleton fades in late so fast loads never show it; content replaces it instantly       | `Skeleton`                                     |
+| First render of anything                                   | still. `presence` and `Swap` skip the first render; only arrival screens stagger in         |                                                |
+
+`presence` is opt-in on `ListRow`/`EntityRow` because the kit cannot tell a row the user added
+from a row a refetch delivered. Pass `presence` where the person on this screen adds or deletes
+the rows; leave it off for lists the cluster fills. A keyed `{#each}` needs a stable key (never
+the index) or the wrong row leaves.
 
 ## Theme engine (`src/lib/theme/`)
 

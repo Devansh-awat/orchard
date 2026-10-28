@@ -16,7 +16,8 @@
 		detail = undefined,
 		updatedAt = undefined,
 		image = undefined,
-		actions = undefined
+		actions = undefined,
+		presence = false
 	}: {
 		kind: 'deployment' | 'database' | 'job';
 		name: string;
@@ -27,6 +28,7 @@
 		updatedAt?: string | null;
 		image?: string | null;
 		actions?: Snippet;
+		presence?: boolean;
 	} = $props();
 
 	const KIND_ICON = { deployment: Box, database: Database, job: Timer };
@@ -34,7 +36,7 @@
 	const quiet = $derived(status.kind === 'success' || status.kind === 'neutral');
 </script>
 
-<ListRow title={name} {href} {actions}>
+<ListRow title={name} {href} {actions} {presence}>
 	{#snippet leading()}
 		<span class="tile">
 			{#if image}

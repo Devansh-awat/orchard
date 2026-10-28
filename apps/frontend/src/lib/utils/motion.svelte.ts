@@ -20,6 +20,7 @@ import {
 	SPRINGS,
 	exitSpec,
 	physics,
+	samplePhysics,
 	springCurve,
 	tempo,
 	type SpringName
@@ -232,6 +233,25 @@ export function springToFloor(
 			}
 		}
 	});
+}
+
+export function springProgress(
+	name: SpringName,
+	opts: { exit?: boolean; distance?: number } = {}
+): { duration: number; at: (ms: number) => number } {
+	const spec = opts.exit ? exitSpec(SPRINGS[name]) : SPRINGS[name];
+	const { points, durationMs } = samplePhysics(physics(spec, tempo() * pace(opts.distance)));
+	const step = durationMs / (points.length - 1);
+	return {
+		duration: durationMs,
+		at: (ms: number) => {
+			if (ms <= 0) return 0;
+			if (ms >= durationMs) return 1;
+			const x = ms / step;
+			const i = Math.floor(x);
+			return points[i] + (points[i + 1] - points[i]) * (x - i);
+		}
+	};
 }
 
 export function staggerDelay(index: number, stride = STAGGER_STRIDE): number {
@@ -622,11 +642,19 @@ function pinInPlace(el: HTMLElement, rect: DOMRect | null): (() => void) | null 
 	};
 }
 
+const OVERLAY_DRIFT = 6;
+
 export function overlayMotion(isOpen: () => boolean, opts: { origin?: string } = {}) {
-	const from = { opacity: 0, scale: 0.96, y: -6 };
 	return (el: Element) => {
 		const target = el as HTMLElement;
 		if (opts.origin) target.style.transformOrigin = opts.origin;
+		const away = () => {
+			const side = target.dataset.side;
+			const d = side === 'top' || side === 'left' ? OVERLAY_DRIFT : -OVERLAY_DRIFT;
+			return side === 'left' || side === 'right'
+				? { opacity: 0, scale: 0.96, x: d, y: 0 }
+				: { opacity: 0, scale: 0.96, x: 0, y: d };
+		};
 
 		// A class, not inline styles: the popover library rewrites this element's
 		// `style` attribute while positioning it, so an inline seed is gone by the
@@ -634,6 +662,7 @@ export function overlayMotion(isOpen: () => boolean, opts: { origin?: string } =
 		const seedClosed = () => target.classList.add('motion-entering');
 
 		let lastRect: DOMRect | null = null;
+		let openDisplay = 'block';
 		let exiting = false;
 		let unpin: (() => void) | null = null;
 		const release = () => {
@@ -649,7 +678,9 @@ export function overlayMotion(isOpen: () => boolean, opts: { origin?: string } =
 		const track = () => {
 			if (!overlayOpen.get(target) || exiting) return;
 			const rect = target.getBoundingClientRect();
-			if (rect.width > 0) lastRect = rect;
+			if (rect.width === 0) return;
+			lastRect = rect;
+			openDisplay = getComputedStyle(target).display;
 		};
 		const placed = new MutationObserver(track);
 		placed.observe(target, { attributes: true, attributeFilter: ['style'] });
@@ -701,11 +732,17 @@ export function overlayMotion(isOpen: () => boolean, opts: { origin?: string } =
 					// wipes any seeded inline values. An interrupted one passes targets
 					// only, so the spring continues from the live on-screen values
 					// instead of snapping back to the start.
+					const from = away();
 					motion(
 						target,
 						fresh
-							? { opacity: [from.opacity, 1], scale: [from.scale, 1], y: [from.y, 0] }
-							: { opacity: 1, scale: 1, y: 0 },
+							? {
+									opacity: [from.opacity, 1],
+									scale: [from.scale, 1],
+									x: [from.x, 0],
+									y: [from.y, 0]
+								}
+							: { opacity: 1, scale: 1, x: 0, y: 0 },
 						'snappy'
 					)?.finished.then(() => target.classList.remove('motion-entering'));
 				});
@@ -717,17 +754,13 @@ export function overlayMotion(isOpen: () => boolean, opts: { origin?: string } =
 			target.classList.remove('motion-entering');
 			// Outlive the `display: none` that CSS applies once the panel closes,
 			// otherwise there is nothing left on screen to animate.
-			target.style.display = 'block';
+			target.style.display = openDisplay;
 			exiting = true;
 			pin();
 			// Not exit-scaled: a menu that is already only 250ms reads as a blink if
 			// it is shortened further, and the dismissal is the half that has to be
 			// legible for the panel to feel like it went somewhere.
-			const exit = motion(
-				target,
-				{ opacity: from.opacity, scale: from.scale, y: from.y },
-				'snappy'
-			);
+			const exit = motion(target, away(), 'snappy');
 			if (!exit) {
 				release();
 				target.style.display = '';
@@ -831,7 +864,7 @@ export function motionBackdrop(closing: () => boolean, onClosed: () => void) {
 export function springCollapse(collapsed: () => boolean) {
 	return (el: Element) => {
 		const target = el as HTMLElement;
-		target.style.overflow = collapsed() ? 'clip' : 'visible';
+		target.style.overflow = untrack(collapsed) ? 'clip' : 'visible';
 		target.style.overflowClipMargin = '0.375rem';
 		const naturalMargin = parseFloat(getComputedStyle(target).marginTop) || 0;
 		const naturalHeight = () => {

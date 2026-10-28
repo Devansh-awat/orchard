@@ -32,7 +32,7 @@
 		<span class="title">{title}</span>
 		{#if note}<span class="note">{note}</span>{/if}
 	</button>
-	<div id="{uid}-body" {@attach springCollapse(() => !open)}>
+	<div id="{uid}-body" inert={!open} {@attach springCollapse(() => !open)}>
 		<div class="body">{@render children()}</div>
 	</div>
 </div>
@@ -64,6 +64,9 @@
 	}
 	.summary:hover {
 		background: color-mix(in oklab, var(--neutral-10) 5%, transparent);
+	}
+	.summary:active {
+		background: color-mix(in oklab, var(--neutral-10) 9%, transparent);
 	}
 	.summary:focus-visible {
 		outline: none;

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import { presence } from '$lib/utils/transitions';
 
 	let {
 		label = undefined,
@@ -21,12 +22,16 @@
 </script>
 
 {#snippet message()}
-	{#if error}
-		<p class="msg msg--error" role="alert">{error}</p>
-	{:else if hint}
-		<p class="msg">
-			{#if typeof hint === 'string'}{hint}{:else}{@render hint()}{/if}
-		</p>
+	{#if error || hint}
+		<div class="slot" in:presence={{ fade: false }} out:presence={{ fade: false }}>
+			{#if error}
+				<p class="msg msg--error" role="alert">{error}</p>
+			{:else if hint}
+				<p class="msg">
+					{#if typeof hint === 'string'}{hint}{:else}{@render hint()}{/if}
+				</p>
+			{/if}
+		</div>
 	{/if}
 {/snippet}
 
@@ -86,6 +91,9 @@
 		font-family: var(--font-mono);
 		font-size: 0.95em;
 		color: var(--text-default);
+	}
+	.slot {
+		min-width: 0;
 	}
 	.msg {
 		font-size: var(--text-caption);

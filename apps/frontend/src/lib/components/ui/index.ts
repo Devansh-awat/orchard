@@ -53,6 +53,7 @@ export { default as CodeInput } from './CodeInput.svelte';
 export { default as Divider } from './Divider.svelte';
 export { default as MenuHeader } from './MenuHeader.svelte';
 export { default as Disclosure } from './Disclosure.svelte';
+export { default as Swap } from './Swap.svelte';
 export { default as SelectTrigger } from './SelectTrigger.svelte';
 export { default as Page } from './Page.svelte';
 export { default as Breadcrumbs } from './Breadcrumbs.svelte';

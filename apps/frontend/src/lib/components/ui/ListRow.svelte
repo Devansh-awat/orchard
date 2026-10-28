@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import { presence as enterExit } from '$lib/utils/transitions';
 
 	let {
 		title,
@@ -9,7 +10,8 @@
 		leading = undefined,
 		trailing = undefined,
 		actions = undefined,
-		titleSuffix = undefined
+		titleSuffix = undefined,
+		presence = false
 	}: {
 		title: string;
 		subtitle?: string | Snippet;
@@ -19,12 +21,19 @@
 		trailing?: Snippet;
 		actions?: Snippet;
 		titleSuffix?: Snippet;
+		presence?: boolean;
 	} = $props();
 
 	const interactive = $derived(!!href || !!onclick);
 </script>
 
-<div class="row" class:row--interactive={interactive} role="listitem">
+<div
+	class="row"
+	class:row--interactive={interactive}
+	role="listitem"
+	in:enterExit={{ enabled: presence }}
+	out:enterExit={{ enabled: presence }}
+>
 	{#if href}
 		<a class="hit" {href} aria-label={title}></a>
 	{:else if onclick}

@@ -93,6 +93,16 @@ Wired to `DeploymentCard`, `DatabaseCard`, and build step rows. It never fires o
 
 **Use a named spring when the user caused the change. Use `stateEcho` when the cluster did.**
 
+### What moves, what doesn't
+
+The full table is in `DESIGN.md` (Motion). The rule behind it:
+
+- **Moves:** anything the user caused that changes space. Overlays open and close (`overlayMotion`, from the side they actually opened on). Selection indicators glide. Rows the user adds or removes go through `in:presence out:presence` (keyed `{#each}`, stable key, never the index): the space opens on `glide` with content popping in 50ms behind; on removal content fades and the space closes on `settle`. Content swaps go through `Swap` (old leaves at once, new rises in, the box morphs height). Disclosures collapse. Presses scale on `press`, except popover triggers, disclosure summaries and menu rows, which tint (a scaled trigger is what the popover measures).
+- **Instant:** reality-driven state (`stateEcho` trail only), typing and what it filters (no per-keystroke stagger, no spring on the panel height), focus rings, highlight inside an open menu, values in repeated input (stepper clicks, arrowing through tabs), spinners swapping in, content replacing a skeleton, and the first render of anything.
+- **Every entrance has an exit.** A row the user deleted never vanishes and its gap never jumps shut. In a swap the outgoing half is instant on purpose: two panels sharing the layout is the jump this rule forbids, and the height morph carries the continuity.
+- `presence` handles a flex-column parent's `gap` itself (it animates the edge margin from `-gap`), so a row leaving a `gap` stack does not leave a 6px step behind. It skips the first render because Svelte local transitions only run when their own block changes.
+- `ListRow`/`EntityRow` take `presence` as an opt-in: the kit cannot tell a row the user added from one a refetch delivered.
+
 ### Overlays
 
 Every transient surface — `Menu`, `PopoverPanel`, and anything built on them — goes through `overlayMotion`. It replaced a 130ms CSS keyframe that had **no exit at all**, because the same rule that hid the panel used `display: none`, so panels vanished rather than dismissed.
@@ -150,6 +160,9 @@ import { springHover, motionStagger, springPop, springCollapse, springRotate, sp
 | `overlayMotion(isOpen, opts?)` | Menus, popovers, dropdowns: spring in **and** out | `{@attach overlayMotion(() => open)}` |
 | `motionPanel(isActive)` | Entrance for a tab panel that stays mounted | `{@attach motionPanel(() => tabs.value === id)}` |
 | `centerOf(el)` | Page-space centre of an element, for an origin | `const origin = () => centerOf(avatarEl)` |
+| `springProgress(name, opts?)` | A named spring sampled as progress over time, for Svelte transitions | `springProgress('glide').at(ms)` |
+| `presence` (`$lib/utils/transitions`) | In-flow enter and exit that opens and closes its own space | `<div in:presence out:presence>` |
+| `swap` (`$lib/utils/transitions`) | Incoming half of a content swap; use the `Swap` component | `<Swap key={tab}>…</Swap>` |
 | `pressSpringDelegate(root, sel)` | Delegated hover/press for many children | Called imperatively in `onMount` |
 | `motionEnabled()` / `decorativeMotion()` | Tier predicates for imperative code | `if (!motionEnabled()) return;` |
 
@@ -174,6 +187,8 @@ import { springHover, motionStagger, springPop, springCollapse, springRotate, sp
 - **List of items appearing:** `motionStagger` with `index` — never pass `stride`, the 25ms default is the demo's
 - **`originBurst` on a group:** never pass `stride` either. It derives one from `BURST_WINDOW` so a 2-tile and an 11-tile group take the same time; a fixed per-item stride turns a long list into a slow top-to-bottom wave
 - **Expand/collapse content:** `springCollapse`
+- **Row the user adds or deletes:** `in:presence out:presence` on the keyed `{#each}` item, or `ListRow presence`
+- **Content that changes with a choice (tab, segment, source):** `Swap` with the choice as `key`
 - **Toggle indicator (chevron, arrow):** `springRotate`
 - **Modal/popover lifecycle:** `motionPopover` + `motionBackdrop` with render-flag pattern
 - **Selection moving between items (tabs, menus, segments):** `magneticHighlight`

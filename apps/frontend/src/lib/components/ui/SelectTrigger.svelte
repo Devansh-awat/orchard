@@ -110,6 +110,9 @@
 	.trigger--open {
 		background: var(--bg-hover);
 	}
+	.trigger:active:not(:disabled) {
+		background: var(--bg-active);
+	}
 	.trigger:focus-visible {
 		outline: none;
 		box-shadow:
