@@ -140,7 +140,7 @@
 			translate: 'none'
 		});
 		if (fromBottom) g.style.bottom = `${box.bottom - r.bottom}px`;
-		else g.style.top = `calc(50% + ${r.top - box.top - box.height / 2}px)`;
+		else g.style.top = `${r.top - box.top}px`;
 		return g;
 	}
 
@@ -169,12 +169,10 @@
 		const from = before;
 		before = null;
 		if (!from) return;
-		const timing = springTiming('morph');
-		holdAmbient(Number(timing.duration ?? 0) + 120);
-		el.animate(
-			[{ height: `${from.height}px` }, { height: `${el.getBoundingClientRect().height}px` }],
-			timing
-		);
+		const height = el.getBoundingClientRect().height;
+		const timing = springTiming('glide', { distance: Math.abs(height - from.height) });
+		holdAmbient(Number(timing.duration ?? 0) + 260);
+		el.animate([{ height: `${from.height}px` }, { height: `${height}px` }], timing);
 		for (const g of from.ghosts) {
 			el.append(g);
 			g.animate([{ opacity: 1 }, { opacity: 0 }], {
@@ -184,13 +182,10 @@
 		}
 		for (const part of el.querySelectorAll<HTMLElement>(MORPHING)) {
 			if (from.ghosts.includes(part)) continue;
-			part.animate(
-				[
-					{ opacity: 0, transform: 'translateY(0.375rem)' },
-					{ opacity: 1, transform: 'none' }
-				],
-				{ ...fadeTiming('in', 0.08), fill: 'backwards' }
-			);
+			part.animate([{ opacity: 0 }, { opacity: 1 }], {
+				...fadeTiming('long', 0.1),
+				fill: 'backwards'
+			});
 		}
 	});
 
