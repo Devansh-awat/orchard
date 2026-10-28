@@ -149,7 +149,46 @@ const COMPOSE_STACKS: Record<string, MockStackSeed[]> = {
 	]
 };
 
-function composeStacks(p: MockProject) {
+const SERVICE_IMAGES: Record<string, string> = {
+	redis: 'redis:7-alpine',
+	prometheus: 'prom/prometheus:v2.53.0',
+	grafana: 'grafana/grafana:11.9',
+	loki: 'grafana/loki:3.1.0',
+	promtail: 'grafana/promtail:3.1.0',
+	alertmanager: 'prom/alertmanager:v0.27.0',
+	'node-exporter': 'prom/node-exporter:v1.8.1'
+};
+
+function serviceImage(stack: string, service: string) {
+	return SERVICE_IMAGES[service] ?? `ghcr.io/hackclub/${stack}-${service}:latest`;
+}
+
+function composeYamlFor(s: MockStackSeed) {
+	const lines = ['services:'];
+	for (const [name] of s.services) {
+		lines.push(`  ${name}:`);
+		if (SERVICE_IMAGES[name]) lines.push(`    image: ${SERVICE_IMAGES[name]}`);
+		else lines.push('    build: .', `    command: pnpm start:${name}`);
+		if (name === 'web' || name === 'grafana') {
+			lines.push(
+				'    ports:',
+				`      - "${name === 'web' ? 3000 : 3001}:${name === 'web' ? 3000 : 3000}"`
+			);
+		}
+		if (!SERVICE_IMAGES[name]) {
+			lines.push(
+				'    environment:',
+				'      DATABASE_URL: ${DATABASE_URL}',
+				'      REDIS_URL: redis://redis:6379'
+			);
+		}
+		if (name === 'web' || name === 'api') lines.push('    depends_on:', '      - redis');
+	}
+	return lines.join('\n') + '\n';
+}
+
+function composeStacks(store: Store, p: MockProject) {
+	const existing = store.deploymentsOf(p.id);
 	return (COMPOSE_STACKS[p.slug] ?? []).map((s) => {
 		const id = uid(`compose:${p.id}:${s.name}`);
 		return {
@@ -157,7 +196,7 @@ function composeStacks(p: MockProject) {
 			projectId: p.id,
 			environmentId: null,
 			name: s.name,
-			composeYaml: '',
+			composeYaml: composeYamlFor(s),
 			status: s.status,
 			lastError: s.lastError ?? null,
 			githubRepo: s.repo ? `https://github.com/${s.repo}` : null,
@@ -172,12 +211,20 @@ function composeStacks(p: MockProject) {
 			createdBy: p.ownerId,
 			createdAt: ago(s.updated + 60 * 24 * 9),
 			updatedAt: ago(s.updated),
-			deployments: s.services.map(([name, status]) => ({
-				id: uid(`compose:${id}:${name}`),
-				name: `${s.name}-${name}`,
-				status,
-				composeServiceName: name
-			}))
+			deployments: s.services.map(([name, status]) => {
+				const linked = existing.find((d) => d.name === name);
+				return {
+					id: linked?.id ?? uid(`compose:${id}:${name}`),
+					name: linked?.name ?? `${s.name}-${name}`,
+					status,
+					image: serviceImage(s.name, name),
+					replicas: 1,
+					buildStatus: status === 'deploying' ? 'building' : 'succeeded',
+					buildStep: status === 'deploying' ? 'pushing' : null,
+					createdAt: ago(s.updated + 60 * 24 * 9),
+					composeServiceName: name
+				};
+			})
 		};
 	});
 }
@@ -271,9 +318,17 @@ export function projectRoutes(r: Router, { store }: MockContext) {
 		return { ok: true };
 	});
 
+	r.get('/compose-stacks/:id', ({ params }) => {
+		for (const p of store.state.projects) {
+			const stack = composeStacks(store, p).find((s) => s.id === params.id);
+			if (stack) return stack;
+		}
+		return notFound('Compose stack not found');
+	});
+
 	r.get('/projects/:id/compose-stacks', ({ params }) => {
 		const p = find(params.id);
-		return p ? composeStacks(p) : notFound();
+		return p ? composeStacks(store, p) : notFound();
 	});
 	r.get('/projects/:id/anomalies', ({ params }) => ({
 		anomalies: store
