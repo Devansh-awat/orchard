@@ -132,7 +132,7 @@
 <PopoverPanel
 	bind:open
 	{placement}
-	sameWidth={!custom}
+	sameWidth
 	class="ui-popover--menu"
 	role="listbox"
 	aria-label={ariaLabel}

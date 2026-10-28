@@ -228,7 +228,9 @@
 	let resourceMemoryBytes = $state<number | null>(null);
 	let ports = $state<PortRow[]>([portRow(80, 0)]);
 	let portsManuallyEdited = $state(false);
-	let envVars = $state([{ key: '', value: '' }]);
+	let envVars = $state<{ key: string; value: string; secret?: boolean }[]>([
+		{ key: '', value: '' }
+	]);
 	let envsManuallyEdited = $state(false);
 	let buildWithDepot = $state(false);
 	let envViewMode = $state<'grid' | 'raw'>('grid');
@@ -774,10 +776,15 @@
 			return;
 		}
 
+		const secretKeys = new Set(envVars.filter((e) => e.secret).map((e) => e.key.trim()));
 		const envSource = envViewMode === 'raw' ? rawToEnvVars(envRawText) : envVars;
 		const validEnv = envSource
 			.filter((e) => e.key.trim())
-			.map((e) => ({ key: e.key.trim(), value: e.value }));
+			.map((e) => ({
+				key: e.key.trim(),
+				value: e.value,
+				secret: secretKeys.has(e.key.trim())
+			}));
 
 		const validVolumes = volumes
 			.filter((v) => v.pvcName?.trim() && v.mountPath.trim())
@@ -1079,6 +1086,8 @@
 	<SelectTrigger
 		{...props}
 		{open}
+		block
+		size="lg"
 		value={loadingDockerfiles ? null : picked?.label}
 		placeholder="Detecting"
 		loading={loadingDockerfiles}
@@ -1100,6 +1109,8 @@
 	<SelectTrigger
 		{...props}
 		{open}
+		block
+		size="lg"
 		mono
 		value={picked?.label}
 		placeholder="Root"
@@ -1109,37 +1120,12 @@
 	</SelectTrigger>
 {/snippet}
 
-{#snippet buildDetails()}
-	<Dropdown
-		value={frameworkValue}
-		options={FRAMEWORK_OPTIONS}
-		onchange={onFrameworkPicked}
-		trigger={frameworkPicker}
-	>
-		{#snippet icon(value)}
-			<FrameworkIcon framework={value === DOCKERFILE_OPTION ? 'dockerfile' : value} />
-		{/snippet}
-	</Dropdown>
-	{#if buildType === 'railpack' && detectedApps.length > 1}
-		<Dropdown
-			value={rootDirectory}
-			options={rootDirectoryOptions}
-			onchange={(dir) => {
-				const app = detectedApps.find((a) => a.dir === dir);
-				if (app) selectRootDirectory(app);
-			}}
-			trigger={directoryPicker}
-		>
-			{#snippet icon(dir)}<FrameworkIcon framework={frameworkOfDir(dir)} />{/snippet}
-		</Dropdown>
-	{/if}
-{/snippet}
-
 {#snippet stagePicker(props: Record<string, unknown>, open: boolean, picked: DropdownOption | null)}
 	<SelectTrigger
 		{...props}
 		{open}
 		block
+		size="lg"
 		mono={!!selectedStage}
 		value={picked?.label}
 		loading={loadingStages}
@@ -1218,16 +1204,17 @@
 
 				<Stack gap="md">
 					{#key deploymentSource}
-						<div {@attach motionStagger({ index: 0, from: { y: 6 } })}>
+						<div class="nd-fields" {@attach motionStagger({ index: 0, from: { y: 6 } })}>
 							{#if deploymentSource === 'image'}
-								<Input
-									bind:value={image}
-									size="lg"
-									placeholder="ghcr.io/org/app:latest"
-									mono
-									icon={Container}
-									aria-label="Image"
-								/>
+								<Field label="Image">
+									<Input
+										bind:value={image}
+										size="lg"
+										placeholder="ghcr.io/org/app:latest"
+										mono
+										icon={Container}
+									/>
+								</Field>
 							{:else if deploymentSource === 'git'}
 								<GitSourcePane
 									onSelect={(sel) => {
@@ -1239,33 +1226,32 @@
 										}
 									}}
 									onDetect={(det) => applyDetection(det as DetectionResult)}
-									details={buildDetails}
 								/>
 							{:else}
-								<Stack gap="md">
-									{#if !githubLinked}
-										<Alert tone="warning" title="GitHub not connected">
-											Paste owner/repo into the repository search to deploy a public repo.
-											{#snippet actions()}
-												<Button variant="secondary" size="sm" href="/user/settings"
-													>Connect GitHub</Button
+								{#if !githubLinked}
+									<Alert tone="warning" title="GitHub not connected">
+										Paste owner/repo into the repository search to deploy a public repo.
+										{#snippet actions()}
+											<Button variant="secondary" size="sm" href="/user/settings"
+												>Connect GitHub</Button
+											>
+										{/snippet}
+									</Alert>
+								{:else if !hasGitHubApp && repositories.length === 0 && !loadingRepos}
+									<Alert tone="warning" title="Install the GitHub App to list your repositories">
+										{#snippet actions()}
+											{#if githubAppInstallUrl}
+												<Button
+													variant="secondary"
+													size="sm"
+													href={githubAppInstallUrl}
+													target="_blank">Install</Button
 												>
-											{/snippet}
-										</Alert>
-									{:else if !hasGitHubApp && repositories.length === 0 && !loadingRepos}
-										<Alert tone="warning" title="Install the GitHub App to list your repositories">
-											{#snippet actions()}
-												{#if githubAppInstallUrl}
-													<Button
-														variant="secondary"
-														size="sm"
-														href={githubAppInstallUrl}
-														target="_blank">Install</Button
-													>
-												{/if}
-											{/snippet}
-										</Alert>
-									{/if}
+											{/if}
+										{/snippet}
+									</Alert>
+								{/if}
+								<Field label="Repository">
 									<SourcePath>
 										{#snippet owner()}
 											<RepoAccountPicker
@@ -1299,30 +1285,221 @@
 												empty={repoEmpty}
 											/>
 										{/snippet}
-										{#snippet details()}
-											{#if hasRepo}
-												<SearchPicker
-													mono
-													value={branch}
-													options={branchOptions}
-													loading={loadingBranches}
-													placeholder="main"
-													searchPlaceholder="Search or type a branch"
-													creatable
-													createLabel={(q) => `Use ${q}`}
-													onchange={pickBranchByName}
-													trailing={defaultTag}
-												>
-													{#snippet leading()}<GitBranch size={15} class="text-muted" />{/snippet}
-												</SearchPicker>
-												{@render buildDetails()}
-											{/if}
-										{/snippet}
 									</SourcePath>
-								</Stack>
+								</Field>
+								<Field label="Branch">
+									<SearchPicker
+										block
+										size="lg"
+										mono
+										value={branch}
+										options={branchOptions}
+										loading={loadingBranches}
+										disabled={!hasRepo}
+										placeholder="main"
+										searchPlaceholder="Search or type a branch"
+										creatable
+										createLabel={(q) => `Use ${q}`}
+										onchange={pickBranchByName}
+										onclear={() => {
+											selectedBranch = null;
+											branch = '';
+										}}
+										trailing={defaultTag}
+									>
+										{#snippet leading()}<GitBranch size={15} class="text-muted" />{/snippet}
+									</SearchPicker>
+								</Field>
 							{/if}
 						</div>
 					{/key}
+
+					<Field label="Name" for="nd-name">
+						<Input
+							id="nd-name"
+							size="lg"
+							bind:value={name}
+							oninput={() => (nameTouched = true)}
+							placeholder="app-name"
+							mono
+						/>
+					</Field>
+
+					{#if isRepoSource}
+						<div class="nd-row">
+							<Field label="Build with" layout="row">
+								<div class="nd-row-control">
+									<Dropdown
+										value={frameworkValue}
+										options={FRAMEWORK_OPTIONS}
+										onchange={onFrameworkPicked}
+										trigger={frameworkPicker}
+									>
+										{#snippet icon(value)}
+											<FrameworkIcon
+												framework={value === DOCKERFILE_OPTION ? 'dockerfile' : value}
+											/>
+										{/snippet}
+									</Dropdown>
+								</div>
+							</Field>
+						</div>
+						{#if buildType === 'railpack' && detectedApps.length > 1}
+							<div class="nd-row">
+								<Field label="App in this repository" layout="row">
+									<div class="nd-row-control">
+										<Dropdown
+											value={rootDirectory}
+											options={rootDirectoryOptions}
+											onchange={(dir) => {
+												const app = detectedApps.find((a) => a.dir === dir);
+												if (app) selectRootDirectory(app);
+											}}
+											trigger={directoryPicker}
+										>
+											{#snippet icon(dir)}<FrameworkIcon
+													framework={frameworkOfDir(dir)}
+												/>{/snippet}
+										</Dropdown>
+									</div>
+								</Field>
+							</div>
+						{/if}
+					{/if}
+
+					<Divider />
+
+					{#if isRepoSource}
+						<Disclosure title="Build and output settings" note={buildNote}>
+							{#if buildType === 'dockerfile'}
+								<div class="nd-grid">
+									<Field label="Dockerfile">
+										{#if dockerfiles.length > 1}
+											<SearchPicker
+												size="lg"
+												block
+												mono
+												value={dockerfilePath}
+												options={dockerfileOptions}
+												searchPlaceholder="Search or type a path"
+												creatable
+												createLabel={(q) => `Use ${q}`}
+												onchange={selectDockerfile}
+											/>
+										{:else}
+											<Input
+												size="lg"
+												value={dockerfilePath}
+												oninput={(e: Event) =>
+													handleDockerfileInput((e.currentTarget as HTMLInputElement).value)}
+												placeholder="Dockerfile"
+												mono
+											/>
+										{/if}
+									</Field>
+									<Field label="Stage">
+										<Dropdown
+											bind:value={selectedStage}
+											options={stageOptions}
+											trigger={stagePicker}
+										/>
+									</Field>
+								</div>
+								<ToggleRow
+									bind:checked={buildFromRoot}
+									onchange={() => (buildFromRootTouched = true)}
+									label="Build from the repository root"
+									hint="For a Dockerfile that copies files from outside its own folder."
+								/>
+							{:else}
+								<div class="nd-grid">
+									<Field label="Install command">
+										<Input
+											size="lg"
+											value={installCommand}
+											oninput={(e: Event) => {
+												installCommand = (e.currentTarget as HTMLInputElement).value;
+												buildSettingsTouched = true;
+											}}
+											placeholder="Detected"
+											mono
+										/>
+									</Field>
+									<Field label="Build command">
+										<Input
+											size="lg"
+											value={buildCommand}
+											oninput={(e: Event) => {
+												buildCommand = (e.currentTarget as HTMLInputElement).value;
+												buildSettingsTouched = true;
+											}}
+											placeholder="Detected"
+											mono
+										/>
+									</Field>
+									<Field label="Start command">
+										<Input
+											size="lg"
+											value={startCommand}
+											oninput={(e: Event) => {
+												startCommand = (e.currentTarget as HTMLInputElement).value;
+												buildSettingsTouched = true;
+											}}
+											placeholder={outputDirectory ? 'Not used for a static site' : 'Detected'}
+											disabled={Boolean(outputDirectory)}
+											mono
+										/>
+									</Field>
+									<Field label="Output directory" hint="Serves the files as a static site.">
+										<Input
+											size="lg"
+											value={outputDirectory}
+											oninput={(e: Event) => {
+												outputDirectory = (e.currentTarget as HTMLInputElement).value;
+												buildSettingsTouched = true;
+											}}
+											placeholder="Detected"
+											mono
+										/>
+									</Field>
+								</div>
+							{/if}
+						</Disclosure>
+					{:else}
+						<Disclosure
+							title="Run settings"
+							note={imageStartCommand.trim() ? 'Custom command' : 'Image defaults'}
+						>
+							<Field label="Start command">
+								<Input size="lg" bind:value={imageStartCommand} placeholder="Image default" mono />
+							</Field>
+							<Field
+								label="Pull policy"
+								hint={imagePullPolicy === 'auto'
+									? isMutableTag(image)
+										? 'This tag can move, so every start re-pulls it.'
+										: 'Pinned tags reuse the copy already on the node.'
+									: imagePullPolicy === 'Always'
+										? 'Every start fetches the image again.'
+										: 'Starts reuse the copy already on the node.'}
+							>
+								<SegmentedControl
+									label="Image pull policy"
+									bind:value={imagePullPolicy}
+									options={[
+										{ value: 'auto', label: 'Automatic' },
+										{ value: 'IfNotPresent', label: 'Use cached' },
+										{ value: 'Always', label: 'Always re-pull' }
+									]}
+								/>
+							</Field>
+							{#if imagePullPolicy === 'IfNotPresent' && isMutableTag(image)}
+								<Alert tone="warning" title="This tag can move">
+									Pushing over it will not show up on a restart. Automatic handles this.
+								</Alert>
+							{/if}
+						</Disclosure>
+					{/if}
 
 					{#if detectedScore && isRepoSource}
 						<Alert tone="info" title="Configured by {detectedScore.file}">
@@ -1343,16 +1520,6 @@
 							{/if}
 						</Alert>
 					{/if}
-
-					<Field label="Name" for="nd-name">
-						<Input
-							id="nd-name"
-							bind:value={name}
-							oninput={() => (nameTouched = true)}
-							placeholder="app-name"
-							mono
-						/>
-					</Field>
 				</Stack>
 			</SectionCard>
 
@@ -1370,6 +1537,7 @@
 					bind:rows={envVars}
 					bind:mode={envViewMode}
 					bind:raw={envRawText}
+					secrets
 					minRows={1}
 					onedit={() => (envsManuallyEdited = true)}
 				/>
@@ -1426,134 +1594,6 @@
 
 			<SectionCard title="Advanced">
 				<div class="nd-folds">
-					{#if isRepoSource}
-						<Disclosure title="Build" note={buildNote}>
-							{#if buildType === 'dockerfile'}
-								<div class="nd-grid">
-									<Field label="Dockerfile">
-										{#if dockerfiles.length > 1}
-											<SearchPicker
-												block
-												mono
-												value={dockerfilePath}
-												options={dockerfileOptions}
-												searchPlaceholder="Search or type a path"
-												creatable
-												createLabel={(q) => `Use ${q}`}
-												onchange={selectDockerfile}
-											/>
-										{:else}
-											<Input
-												value={dockerfilePath}
-												oninput={(e: Event) =>
-													handleDockerfileInput((e.currentTarget as HTMLInputElement).value)}
-												placeholder="Dockerfile"
-												mono
-											/>
-										{/if}
-									</Field>
-									<Field label="Stage">
-										<Dropdown
-											bind:value={selectedStage}
-											options={stageOptions}
-											trigger={stagePicker}
-										/>
-									</Field>
-								</div>
-								<ToggleRow
-									bind:checked={buildFromRoot}
-									onchange={() => (buildFromRootTouched = true)}
-									label="Build from the repository root"
-									hint="For a Dockerfile that copies files from outside its own folder."
-								/>
-							{:else}
-								<div class="nd-grid">
-									<Field label="Install command">
-										<Input
-											value={installCommand}
-											oninput={(e: Event) => {
-												installCommand = (e.currentTarget as HTMLInputElement).value;
-												buildSettingsTouched = true;
-											}}
-											placeholder="Detected"
-											mono
-										/>
-									</Field>
-									<Field label="Build command">
-										<Input
-											value={buildCommand}
-											oninput={(e: Event) => {
-												buildCommand = (e.currentTarget as HTMLInputElement).value;
-												buildSettingsTouched = true;
-											}}
-											placeholder="Detected"
-											mono
-										/>
-									</Field>
-									<Field label="Start command">
-										<Input
-											value={startCommand}
-											oninput={(e: Event) => {
-												startCommand = (e.currentTarget as HTMLInputElement).value;
-												buildSettingsTouched = true;
-											}}
-											placeholder={outputDirectory ? 'Not used for a static site' : 'Detected'}
-											disabled={Boolean(outputDirectory)}
-											mono
-										/>
-									</Field>
-									<Field label="Output directory" hint="Serves the files as a static site.">
-										<Input
-											value={outputDirectory}
-											oninput={(e: Event) => {
-												outputDirectory = (e.currentTarget as HTMLInputElement).value;
-												buildSettingsTouched = true;
-											}}
-											placeholder="Detected"
-											mono
-										/>
-									</Field>
-								</div>
-							{/if}
-						</Disclosure>
-					{:else}
-						<Disclosure
-							title="Run"
-							note={imageStartCommand.trim() ? 'Custom command' : 'Image defaults'}
-						>
-							<Field label="Start command">
-								<Input bind:value={imageStartCommand} placeholder="Image default" mono />
-							</Field>
-							<Field
-								label="Pull policy"
-								hint={imagePullPolicy === 'auto'
-									? isMutableTag(image)
-										? 'This tag can move, so every start re-pulls it.'
-										: 'Pinned tags reuse the copy already on the node.'
-									: imagePullPolicy === 'Always'
-										? 'Every start fetches the image again.'
-										: 'Starts reuse the copy already on the node.'}
-							>
-								<SegmentedControl
-									label="Image pull policy"
-									bind:value={imagePullPolicy}
-									options={[
-										{ value: 'auto', label: 'Automatic' },
-										{ value: 'IfNotPresent', label: 'Use cached' },
-										{ value: 'Always', label: 'Always re-pull' }
-									]}
-								/>
-							</Field>
-							{#if imagePullPolicy === 'IfNotPresent' && isMutableTag(image)}
-								<Alert tone="warning" title="This tag can move">
-									Pushing over it will not show up on a restart. Automatic handles this.
-								</Alert>
-							{/if}
-						</Disclosure>
-					{/if}
-
-					<Divider />
-
 					<Disclosure
 						title="Storage"
 						note={volumes.length
@@ -1635,6 +1675,15 @@
 		display: grid;
 		grid-template-columns: minmax(0, 38.2fr) minmax(0, 61.8fr);
 		gap: var(--space-4) var(--space-3);
+	}
+	.nd-fields {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+	}
+	.nd-row :global(.row-control) {
+		flex: 0 0 61.8%;
+		min-width: 0;
 	}
 	.nd-folds {
 		display: flex;

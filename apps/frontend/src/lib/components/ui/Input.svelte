@@ -111,9 +111,9 @@
 		corner-shape: var(--corner);
 	}
 	.control--lg {
-		height: 2.5rem;
-		padding: 0 0.875rem;
-		border-radius: calc(0.75rem * var(--corner-scale));
+		height: 2.25rem;
+		padding: 0 0.75rem;
+		border-radius: calc(0.625rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		font-size: var(--text-headline);
 	}

@@ -54,5 +54,5 @@
 	class="ui-popover{sameWidth ? ' ui-popover--match' : ''}{className ? ` ${className}` : ''}"
 	{@attach overlayMotion(() => open, { origin })}
 >
-	{@render children({ close: () => (open = false) })}
+	<div class="ui-float-body">{@render children({ close: () => (open = false) })}</div>
 </div>

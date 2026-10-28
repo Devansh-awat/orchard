@@ -516,9 +516,24 @@ html {
 		var(--shadow-floating);
 	min-width: 12rem;
 	max-height: min(60vh, max(12rem, var(--melt-popover-available-height, 60vh)));
+	overflow: hidden;
+}
+
+.ui-menu[data-open],
+.ui-popover[data-open] {
+	display: flex;
+	flex-direction: column;
+}
+
+.ui-float-body {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	min-height: 0;
 	overflow-y: auto;
 	overscroll-behavior: contain;
 	scrollbar-width: thin;
+	scrollbar-color: color-mix(in oklab, var(--neutral-10) 22%, transparent) transparent;
 }
 
 .ui-menu:focus-visible,

@@ -113,7 +113,9 @@
 		origin: `${placement.startsWith('top') ? 'bottom' : 'top'} ${placement.endsWith('end') ? 'right' : 'left'}`
 	})}
 >
-	{#if open || opened}
-		{@render children()}
-	{/if}
+	<div class="ui-float-body">
+		{#if open || opened}
+			{@render children()}
+		{/if}
+	</div>
 </div>

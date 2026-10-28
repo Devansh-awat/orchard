@@ -1,9 +1,9 @@
 <script lang="ts">
-	import type { Snippet } from 'svelte';
 	import SourcePath from '$lib/components/patterns/SourcePath.svelte';
 	import { GitBranch, Gitlab, Lock, Plus } from 'lucide-svelte';
 	import {
 		Alert,
+		Field,
 		Input,
 		Menu,
 		MenuItem,
@@ -27,8 +27,7 @@
 
 	let {
 		onSelect,
-		onDetect,
-		details: extra = undefined
+		onDetect
 	}: {
 		onSelect: (
 			sel: {
@@ -40,7 +39,6 @@
 			} | null
 		) => void;
 		onDetect: (det: Record<string, unknown>) => void;
-		details?: Snippet;
 	} = $props();
 
 	let connections = $state<GitConnection[]>([]);
@@ -214,85 +212,86 @@
 		<a href="/user/settings?section=git">your settings</a>.
 	</Alert>
 {:else}
-	<SourcePath>
-		{#snippet owner()}
-			<Menu placement="bottom-start" size="lg">
-				{#snippet trigger(attrs, open)}
-					<SelectTrigger
-						{...attrs}
-						{open}
+	<Field label="Repository">
+		<SourcePath>
+			{#snippet owner()}
+				<Menu placement="bottom-start">
+					{#snippet trigger(attrs, open)}
+						<SelectTrigger
+							{...attrs}
+							{open}
+							value={connection?.name}
+							placeholder="Provider"
+							aria-label="Git provider"
+						>
+							{#snippet leading()}{#if connection}{@render hostGlyph(connection)}{/if}{/snippet}
+						</SelectTrigger>
+					{/snippet}
+					{#each connections as c (c.id)}
+						<MenuItem
+							checked={c.id === connectionId}
+							description={c.host}
+							onclick={() => pickConnection(c.id)}
+						>
+							{#snippet leading()}{@render hostGlyph(c)}{/snippet}
+							{c.name}
+						</MenuItem>
+					{/each}
+					<MenuSeparator />
+					<MenuItem icon={Plus} href="/user/settings?section=git">Link a provider</MenuItem>
+				</Menu>
+			{/snippet}
+			{#snippet repo()}
+				{#if connection?.canList}
+					<SearchPicker
+						block
 						size="lg"
-						value={connection?.name}
-						placeholder="Provider"
-						aria-label="Git provider"
-					>
-						{#snippet leading()}{#if connection}{@render hostGlyph(connection)}{/if}{/snippet}
-					</SelectTrigger>
-				{/snippet}
-				{#each connections as c (c.id)}
-					<MenuItem
-						checked={c.id === connectionId}
-						description={c.host}
-						onclick={() => pickConnection(c.id)}
-					>
-						{#snippet leading()}{@render hostGlyph(c)}{/snippet}
-						{c.name}
-					</MenuItem>
-				{/each}
-				<MenuSeparator />
-				<MenuItem icon={Plus} href="/user/settings?section=git">Link a provider</MenuItem>
-			</Menu>
-		{/snippet}
-		{#snippet repo()}
-			{#if connection?.canList}
-				<SearchPicker
-					block
-					size="lg"
-					value={selectedRepo?.id ?? repoPath ?? ''}
-					bind:query={repoQuery}
-					options={repoOptions}
-					loading={loadingRepos}
-					placeholder="Choose a repository"
-					searchPlaceholder="Search or paste a URL"
-					creatable={isUrl(repoQuery.trim())}
-					createLabel={() => 'Use this URL'}
-					oncreate={(q) => useTypedUrl(q)}
-					onchange={(id) => {
-						const r = repos.find((x) => x.id === id);
-						if (r) pickRepo(r);
-					}}
-					onclear={clearRepo}
-					trailing={lock}
-				/>
-			{:else}
-				<Input
-					bind:value={repoUrl}
-					size="lg"
-					placeholder="https://{connection?.host}/team/app"
-					mono
-					oninput={onUrlInput}
-				/>
-			{/if}
-		{/snippet}
-		{#snippet details()}
-			{#if repoPath}
-				<SearchPicker
-					mono
-					value={branch}
-					options={branchOptions}
-					loading={loadingBranches || detecting}
-					placeholder="main"
-					searchPlaceholder="Search or type a branch"
-					creatable
-					createLabel={(q) => `Use ${q}`}
-					onchange={setBranch}
-				>
-					{#snippet leading()}<GitBranch size={15} class="text-muted" />{/snippet}
-				</SearchPicker>
-				{@render extra?.()}
-			{/if}
-		{/snippet}
-	</SourcePath>
+						value={selectedRepo?.id ?? repoPath ?? ''}
+						bind:query={repoQuery}
+						options={repoOptions}
+						loading={loadingRepos}
+						placeholder="Choose a repository"
+						searchPlaceholder="Search or paste a URL"
+						creatable={isUrl(repoQuery.trim())}
+						createLabel={() => 'Use this URL'}
+						oncreate={(q) => useTypedUrl(q)}
+						onchange={(id) => {
+							const r = repos.find((x) => x.id === id);
+							if (r) pickRepo(r);
+						}}
+						onclear={clearRepo}
+						trailing={lock}
+					/>
+				{:else}
+					<Input
+						bind:value={repoUrl}
+						size="lg"
+						placeholder="https://{connection?.host}/team/app"
+						mono
+						oninput={onUrlInput}
+					/>
+				{/if}
+			{/snippet}
+		</SourcePath>
+	</Field>
+	<Field label="Branch">
+		<SearchPicker
+			block
+			size="lg"
+			disabled={!repoPath}
+			mono
+			value={branch}
+			options={branchOptions}
+			loading={loadingBranches || detecting}
+			placeholder="main"
+			searchPlaceholder="Search or type a branch"
+			creatable
+			createLabel={(q) => `Use ${q}`}
+			onchange={setBranch}
+		>
+			{#snippet leading()}<GitBranch size={15} class="text-muted" />{/snippet}
+		</SearchPicker>
+	</Field>
 {/if}
 
 <style>

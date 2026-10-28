@@ -133,31 +133,37 @@
 					oninput={edited}
 				/>
 				<div class="tools">
-					<Button
-						variant="ghost"
-						size="sm"
-						icon={revealed.has(i) ? EyeOff : Eye}
-						label={revealed.has(i) ? 'Hide value' : 'Show value'}
-						onclick={() => toggleReveal(i)}
-					/>
-					{#if secrets}
+					<span class="tool">
 						<Button
-							variant={row.secret ? 'tinted' : 'ghost'}
+							variant="ghost"
 							size="sm"
-							icon={row.secret ? Lock : LockOpen}
-							label={row.secret ? 'Secret, stored in a Kubernetes Secret' : 'Mark as secret'}
-							aria-pressed={!!row.secret}
-							onclick={() => toggleSecret(row)}
+							icon={revealed.has(i) ? EyeOff : Eye}
+							label={revealed.has(i) ? 'Hide value' : 'Show value'}
+							onclick={() => toggleReveal(i)}
 						/>
+					</span>
+					{#if secrets}
+						<span class="tool" class:tool--pinned={row.secret}>
+							<Button
+								variant={row.secret ? 'tinted' : 'ghost'}
+								size="sm"
+								icon={row.secret ? Lock : LockOpen}
+								label={row.secret ? 'Secret, stored in a Kubernetes Secret' : 'Mark as secret'}
+								aria-pressed={!!row.secret}
+								onclick={() => toggleSecret(row)}
+							/>
+						</span>
 					{/if}
-					<Button
-						variant="ghost"
-						size="sm"
-						icon={Trash2}
-						label="Remove variable"
-						disabled={rows.length <= minRows}
-						onclick={() => removeRow(i)}
-					/>
+					<span class="tool">
+						<Button
+							variant="ghost"
+							size="sm"
+							icon={Trash2}
+							label="Remove variable"
+							disabled={rows.length <= minRows}
+							onclick={() => removeRow(i)}
+						/>
+					</span>
 				</div>
 			</div>
 		{/each}
@@ -218,11 +224,15 @@
 		align-items: center;
 		gap: 0.125rem;
 		flex-shrink: 0;
+	}
+	.tool {
+		display: inline-flex;
 		opacity: 0;
 		transition: opacity var(--fade-out) var(--curve-in);
 	}
-	.row:hover .tools,
-	.row:has(:focus-visible) .tools {
+	.row:hover .tool,
+	.row:has(:focus-visible) .tool,
+	.tool--pinned {
 		opacity: 1;
 		transition: opacity var(--fade-in) var(--curve-out);
 	}
