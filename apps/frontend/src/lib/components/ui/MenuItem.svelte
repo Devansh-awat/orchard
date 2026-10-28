@@ -119,6 +119,8 @@
 	.leading--plain {
 		align-items: center;
 		justify-content: center;
+		width: 1rem;
+		height: 1rem;
 		margin-left: 0;
 		overflow: visible;
 		border-radius: 0;
