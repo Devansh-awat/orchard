@@ -1,4 +1,6 @@
+import { randomBytes } from 'node:crypto';
 import { TEMPLATES, templateRow } from '../templates.ts';
+import { templateSpec } from '../template-params.ts';
 import { freshId, slugify, uid } from '../ids.ts';
 import type { MockContext } from '../plugin.ts';
 import { notFound, reply, type Router } from '../router.ts';
@@ -295,7 +297,112 @@ export function projectRoutes(r: Router, { store }: MockContext) {
 	r.get('/templates/:id', ({ params }) => {
 		const i = TEMPLATES.findIndex((t) => `tpl_${t.name}` === params.id || t.name === params.id);
 		if (i < 0) return notFound('Template not found');
-		return { ...templateRow(TEMPLATES[i], i), parameters: [], resources: [] };
+		const spec = templateSpec(TEMPLATES[i]);
+		return {
+			...templateRow(TEMPLATES[i], i),
+			parameters: spec.parameters,
+			resources: spec.resources
+		};
+	});
+
+	const instances = new Map<string, TemplateInstance>();
+
+	const live = (inst: TemplateInstance): TemplateInstance => {
+		if (Date.now() - new Date(inst.createdAt).getTime() < 8000) return inst;
+		return {
+			...inst,
+			status: 'running',
+			deployments: inst.deployments.map((d) => ({ ...d, status: 'running' })),
+			databases: inst.databases.map((d) => ({ ...d, status: 'running' }))
+		};
+	};
+
+	r.post('/projects/:projectId/template-instances', ({ params, body }) => {
+		const t = TEMPLATES.find((x) => `tpl_${x.name}` === body?.templateId);
+		if (!t) return notFound('Template not found');
+		const spec = templateSpec(t);
+		const values: Record<string, unknown> = { ...(body?.parameters ?? {}) };
+		for (const p of spec.parameters) {
+			if (p.type === 'secret' && !values[p.name]) {
+				values[p.name] = randomBytes(p.validation?.bytes ?? 16).toString('hex');
+			}
+			if (p.required && (values[p.name] === undefined || values[p.name] === '')) {
+				return reply(400, { statusCode: 400, message: `${p.displayName} is required` });
+			}
+		}
+		const name = String(values.appName ?? t.name);
+		const host =
+			typeof values.domain === 'string' && values.domain ? values.domain : `${name}.orchard.my`;
+		const inst: TemplateInstance = {
+			id: freshId(),
+			name,
+			status: 'deploying',
+			projectId: params.projectId,
+			parameters: values,
+			createdAt: new Date().toISOString(),
+			template: {
+				id: `tpl_${t.name}`,
+				name: t.name,
+				displayName: t.displayName,
+				icon: t.icon ?? undefined,
+				category: t.category
+			},
+			deployments: spec.resources
+				.filter((x) => x.type === 'deployment')
+				.map((x) => ({
+					id: freshId(),
+					name: x.name,
+					status: 'deploying',
+					image: `${x.name}:latest`
+				})),
+			databases: spec.resources
+				.filter((x) => x.type === 'database')
+				.map((x) => ({
+					id: freshId(),
+					name: x.name,
+					status: 'provisioning',
+					dbName: x.name.replace(/-/g, '_')
+				})),
+			ingresses: spec.resources
+				.filter((x) => x.type === 'ingress')
+				.map((x) => ({ id: freshId(), name: x.name, host, path: '/' }))
+		};
+		instances.set(inst.id, inst);
+		return inst;
+	});
+
+	r.get('/projects/:projectId/template-instances', ({ params }) =>
+		[...instances.values()].filter((i) => i.projectId === params.projectId).map(live)
+	);
+
+	r.get('/template-instances/:id', ({ params }) => {
+		const inst = instances.get(params.id);
+		return inst ? live(inst) : notFound('Template instance not found');
+	});
+
+	r.patch('/template-instances/:id/name', ({ params, body }) => {
+		const inst = instances.get(params.id);
+		if (!inst) return notFound('Template instance not found');
+		if (typeof body?.name === 'string' && body.name.trim()) inst.name = body.name.trim();
+		return live(inst);
+	});
+
+	r.delete('/template-instances/:id', ({ params }) => {
+		instances.delete(params.id);
+		return { ok: true };
 	});
 	r.get('/sync/:namespace', () => ({ ok: true }));
 }
+
+type TemplateInstance = {
+	id: string;
+	name: string;
+	status: string;
+	projectId: string;
+	parameters: Record<string, unknown>;
+	createdAt: string;
+	template: { id: string; name: string; displayName: string; icon?: string; category?: string };
+	deployments: { id: string; name: string; status: string; image?: string }[];
+	databases: { id: string; name: string; status: string; dbName: string }[];
+	ingresses: { id: string; name: string; host: string; path: string }[];
+};
