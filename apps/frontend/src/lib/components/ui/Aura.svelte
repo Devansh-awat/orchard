@@ -27,6 +27,7 @@
 </script>
 
 <script lang="ts">
+	import { ambientHeld } from '$lib/utils/motion.svelte';
 	import { onMount } from 'svelte';
 	import { effectiveAnimation } from '$lib/stores/preferences';
 	import { colorsImage, createRenderer, loadTexture } from '$lib/components/aura/aura';
@@ -68,7 +69,7 @@
 			raf = 0;
 			if (!alive) return;
 			const dt = last ? Math.min(now - last, 100) : 0;
-			if (dt >= 33 || !last) {
+			if (!ambientHeld() && (dt >= 33 || !last)) {
 				frame += (dt / 1000) * 60;
 				last = now;
 				renderer.render(frame);

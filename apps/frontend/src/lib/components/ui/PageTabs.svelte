@@ -92,7 +92,7 @@
 		top: 0;
 		left: 0;
 		border-radius: var(--radius-pill);
-		background: var(--bg-raised);
+		background: color-mix(in oklab, var(--bg-raised), white 8%);
 		box-shadow:
 			0 0 0 0.5px rgb(0 0 0 / 0.06),
 			0 1px 2px rgb(0 0 0 / 0.1),

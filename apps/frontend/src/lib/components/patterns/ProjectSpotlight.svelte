@@ -25,6 +25,7 @@
 		FADE,
 		fade as fadeTiming,
 		functionalMotion,
+		holdAmbient,
 		motion,
 		springTiming
 	} from '$lib/utils/motion.svelte';
@@ -121,15 +122,37 @@
 
 	let shelfEl = $state<HTMLElement | null>(null);
 	let shownVariant: string | null = null;
-	let before: { height: number; name: DOMRect | null } | null = null;
+	let before: { height: number; ghosts: HTMLElement[] } | null = null;
+	const MORPHING = '.copy-stack, .tools, .side';
+
+	function ghost(node: HTMLElement, box: DOMRect, fromBottom: boolean) {
+		const r = node.getBoundingClientRect();
+		const g = node.cloneNode(true) as HTMLElement;
+		g.setAttribute('aria-hidden', 'true');
+		g.inert = true;
+		Object.assign(g.style, {
+			position: 'absolute',
+			zIndex: '4',
+			left: `${r.left - box.left}px`,
+			width: `${r.width}px`,
+			margin: '0',
+			pointerEvents: 'none',
+			translate: 'none'
+		});
+		if (fromBottom) g.style.bottom = `${box.bottom - r.bottom}px`;
+		else g.style.top = `calc(50% + ${r.top - box.top - box.height / 2}px)`;
+		return g;
+	}
 
 	$effect.pre(() => {
 		const next = variant;
-		if (!shelfEl || shownVariant === null || next === shownVariant) return;
-		const name = shelfEl.querySelector<HTMLElement>('.name');
+		const el = shelfEl;
+		if (!el || shownVariant === null || next === shownVariant || !functionalMotion()) return;
+		const box = el.getBoundingClientRect();
+		const fromBottom = shownVariant === 'spotlight';
 		before = {
-			height: shelfEl.getBoundingClientRect().height,
-			name: name?.getBoundingClientRect() ?? null
+			height: box.height,
+			ghosts: [...el.querySelectorAll<HTMLElement>(MORPHING)].map((n) => ghost(n, box, fromBottom))
 		};
 	});
 
@@ -145,29 +168,29 @@
 		shownVariant = next;
 		const from = before;
 		before = null;
-		if (!from || !functionalMotion()) return;
+		if (!from) return;
 		const timing = springTiming('morph');
-		const height = el.getBoundingClientRect().height;
-		el.animate([{ height: `${from.height}px` }, { height: `${height}px` }], timing);
-		const name = el.querySelector<HTMLElement>('.name');
-		if (name && from.name) {
-			const now = name.getBoundingClientRect();
-			const scale = from.name.height / (now.height || 1);
-			name.animate(
-				[
-					{
-						transformOrigin: 'left top',
-						transform: `translate(${from.name.left - now.left}px, ${from.name.top - now.top}px) scale(${scale})`
-					},
-					{ transformOrigin: 'left top', transform: 'none' }
-				],
-				timing
-			);
+		holdAmbient(Number(timing.duration ?? 0) + 120);
+		el.animate(
+			[{ height: `${from.height}px` }, { height: `${el.getBoundingClientRect().height}px` }],
+			timing
+		);
+		for (const g of from.ghosts) {
+			el.append(g);
+			g.animate([{ opacity: 1 }, { opacity: 0 }], {
+				...fadeTiming('out'),
+				fill: 'forwards'
+			}).finished.finally(() => g.remove());
 		}
-		for (const part of el.querySelectorAll<HTMLElement>(
-			'.byline, .lead, .actions, .side, .status, .tools'
-		)) {
-			part.animate([{ opacity: 0 }, { opacity: 1 }], { ...fadeTiming('in'), delay: 80 });
+		for (const part of el.querySelectorAll<HTMLElement>(MORPHING)) {
+			if (from.ghosts.includes(part)) continue;
+			part.animate(
+				[
+					{ opacity: 0, transform: 'translateY(0.375rem)' },
+					{ opacity: 1, transform: 'none' }
+				],
+				{ ...fadeTiming('in', 0.08), fill: 'backwards' }
+			);
 		}
 	});
 
@@ -202,7 +225,8 @@
 					</div>
 				{/if}
 			{/each}
-			<div class="veil"></div>
+			<div class="veil veil--spotlight"></div>
+			<div class="veil veil--banner"></div>
 		</div>
 
 		<div class="copy-stack" aria-live="polite">
@@ -342,6 +366,12 @@
 		box-shadow: var(--shadow-glass);
 		color: var(--on-media);
 	}
+	.shelf--lg {
+		--art-h: 22rem;
+	}
+	.shelf--md {
+		--art-h: 15.5rem;
+	}
 	.shelf--spotlight {
 		height: 22rem;
 	}
@@ -349,7 +379,7 @@
 		--pad: 1.75rem;
 		height: 15.5rem;
 	}
-	.shelf--spotlight.shelf--md .veil {
+	.shelf--md .veil--spotlight {
 		background: linear-gradient(
 			90deg,
 			oklch(0 0 0 / 0.5) 0%,
@@ -357,10 +387,10 @@
 			transparent 62%
 		);
 	}
-	.shelf--spotlight.shelf--md .art :global(.poster) {
+	.shelf--md .art :global(.poster) {
 		filter: saturate(1.15) brightness(1.04);
 	}
-	.shelf--spotlight.shelf--md .art :global(.poster--soft) {
+	.shelf--md .art :global(.poster--soft) {
 		filter: blur(28px) saturate(1.4);
 	}
 	.shelf--spotlight.shelf--md .copy {
@@ -376,7 +406,8 @@
 
 	.stage {
 		position: absolute;
-		inset: 0;
+		inset: 0 0 auto;
+		height: var(--art-h);
 		z-index: -1;
 		overflow: hidden;
 		contain: paint;
@@ -408,17 +439,25 @@
 	}
 	.veil {
 		position: absolute;
-		inset: 0;
+		inset: 0 0 auto;
+		height: var(--art-h);
 		z-index: 2;
+		transition: opacity var(--spring-morph-duration) var(--spring-morph);
+	}
+	.veil--spotlight {
 		background: linear-gradient(20deg, var(--on-media-pill) 0%, transparent 58%), var(--media-veil);
 	}
-	.shelf--banner .veil {
+	.veil--banner {
+		opacity: 0;
 		background:
 			linear-gradient(90deg, oklch(0 0 0 / 0.5) 0%, oklch(0 0 0 / 0.22) 40%, transparent 66%),
 			linear-gradient(270deg, oklch(0 0 0 / 0.32) 0%, transparent 38%);
 	}
-	.shelf--banner .art :global(.poster) {
-		filter: saturate(1.15) brightness(1.04);
+	.shelf--banner .veil--spotlight {
+		opacity: 0;
+	}
+	.shelf--banner .veil--banner {
+		opacity: 1;
 	}
 
 	.copy-stack {

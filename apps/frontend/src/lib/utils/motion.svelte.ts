@@ -86,6 +86,14 @@ const DECORATIVE_KEYS = new Set([
 
 export const motionLevel = () => effectiveAnimationLevel();
 export const motionEnabled = () => effectiveAnimationLevel() !== 'off';
+
+let ambientUntil = 0;
+
+export function holdAmbient(ms: number) {
+	ambientUntil = Math.max(ambientUntil, performance.now() + ms);
+}
+
+export const ambientHeld = () => performance.now() < ambientUntil;
 export const decorativeMotion = () => effectiveAnimationLevel() === 'full';
 export const functionalMotion = () => effectiveAnimationLevel() !== 'off';
 
