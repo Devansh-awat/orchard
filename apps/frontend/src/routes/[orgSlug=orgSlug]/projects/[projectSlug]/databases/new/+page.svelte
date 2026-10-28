@@ -10,11 +10,22 @@
 		type ProjectContext
 	} from '$lib/stores';
 	import { Database } from 'lucide-svelte';
-	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
 	import { EnvironmentSwitcher } from '$lib/components/environment';
 	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
-	import { Button, Field, Input, Select, Slider } from '$lib/components/ui';
+	import {
+		Alert,
+		Breadcrumbs,
+		Button,
+		Field,
+		Input,
+		Page,
+		SectionCard,
+		Select,
+		Skeleton,
+		Slider,
+		Stepper
+	} from '$lib/components/ui';
 
 	let project = $state<ProjectContext | null>(null);
 	let loading = $state(true);
@@ -27,8 +38,6 @@
 	let resourceCpuMilli = $state<number | null>(null);
 	let resourceMemoryBytes = $state<number | null>(null);
 	let restoreFromUrl = $state('');
-	// Environment the database is scoped to. Seeded from ?env= (the env the user
-	// was viewing); the switcher falls back to the project default.
 	let selectedEnvId = $state($page.url.searchParams.get('env') ?? '');
 	let replicas = $state(1);
 	let maxReplicas = $state(5);
@@ -78,7 +87,7 @@
 				replicas = Math.min(replicas, maxReplicas);
 			}
 		} catch {
-			// Non-fatal: the slider keeps the default ceiling and the API still validates.
+			return;
 		}
 	}
 
@@ -138,241 +147,171 @@
 	onMount(fetchLimits);
 </script>
 
-<div class="nd-page">
-	{#if loading}
-		<div class="skeleton" style="height: 0.8125rem; width: 6rem; margin-bottom: 1rem;"></div>
-		<div class="skeleton" style="height: 1.5rem; width: 12rem; margin-bottom: 1.5rem;"></div>
-		<div class="nd-card">
-			<div class="skeleton" style="height: 1rem; width: 8rem; margin-bottom: 1rem;"></div>
-			<div class="skeleton" style="height: 2.25rem; border-radius: var(--radius-sm);"></div>
-		</div>
-	{:else if project}
-		<Breadcrumb
+<Page
+	title="New database"
+	description="Create a PostgreSQL database on the shared cluster. Orchard generates a unique user and password for you."
+	width="narrow"
+>
+	{#snippet eyebrow()}
+		<Breadcrumbs
 			crumbs={[
 				{ label: 'Home', href: `/${orgSlug}` },
 				{ label: project?.name || projectSlug || '', href: basePath },
 				{ label: 'New database' }
 			]}
 		/>
+	{/snippet}
 
-		<div class="nd-header">
-			<div class="nd-header-top">
-				<h1 class="nd-title">New database</h1>
-				<ProjectSwitcher
-					currentProjectName={project?.name || projectSlug}
-					pathSuffix="/databases/new"
-				/>
-				{#if project?.id}
-					<EnvironmentSwitcher projectId={project.id} bind:selectedEnvId />
-				{/if}
-			</div>
-			<p class="nd-subtitle">
-				Create a PostgreSQL database on the shared cluster. Orchard generates a unique user and
-				password for you.
-			</p>
-		</div>
-
-		{#if error}
-			<div class="nd-error">{error}</div>
+	{#snippet actions()}
+		{#if project}
+			<ProjectSwitcher
+				currentProjectName={project.name || projectSlug}
+				pathSuffix="/databases/new"
+			/>
+			<EnvironmentSwitcher projectId={project.id} bind:selectedEnvId />
 		{/if}
+	{/snippet}
 
+	{#snippet footer()}
+		{#if project}
+			<Button variant="ghost" href={basePath}>Cancel</Button>
+			<Button
+				variant="primary"
+				type="submit"
+				form="new-database"
+				icon={Database}
+				loading={submitting}
+				disabled={submitting || !name.trim()}
+			>
+				Create database
+			</Button>
+		{/if}
+	{/snippet}
+
+	{#if error}
+		<div class="nd-alert">
+			<Alert tone="error">{error}</Alert>
+		</div>
+	{/if}
+
+	{#if loading}
+		<SectionCard>
+			<div class="nd-stack">
+				<Skeleton width="8rem" height="1rem" />
+				<Skeleton height="2rem" rounded="calc(var(--radius-control) * var(--corner-scale))" />
+				<Skeleton width="12rem" height="0.75rem" />
+				<Skeleton width="8rem" height="1rem" />
+				<Skeleton height="2rem" rounded="calc(var(--radius-control) * var(--corner-scale))" />
+			</div>
+		</SectionCard>
+	{:else if project}
 		<form
+			id="new-database"
+			class="nd-form"
 			onsubmit={(e) => {
 				e.preventDefault();
 				handleSubmit();
 			}}
 		>
-			<div class="nd-card">
-				<h2 class="nd-card-title">Database details</h2>
+			<SectionCard title="Database details">
+				<div class="nd-stack">
+					<Field label="Database name" for="db-name">
+						{#snippet hint()}
+							A slug-friendly name. The database is created as <code>{generatedDbName()}</code>
+						{/snippet}
+						<Input
+							id="db-name"
+							bind:value={name}
+							placeholder="my-app-db"
+							required
+							disabled={submitting}
+						/>
+					</Field>
 
-				<Field label="Database name" for="db-name">
-					<Input
-						id="db-name"
-						bind:value={name}
-						placeholder="my-app-db"
-						required
-						disabled={submitting}
-					/>
-					<p class="nd-hint">
-						A slug-friendly name. The database is created as <code class="font-mono"
-							>{generatedDbName()}</code
-						>
-					</p>
-				</Field>
+					<Field
+						label="PostgreSQL version"
+						for="db-pg-major"
+						hint="17 is the recommended default. Imports from a newer source automatically use the source's version."
+					>
+						<Select id="db-pg-major" bind:value={pgMajor} disabled={submitting}>
+							{#each PG_VERSIONS as v (v)}
+								<option value={v}>PostgreSQL {v}</option>
+							{/each}
+						</Select>
+					</Field>
 
-				<Field
-					label="Storage size (GiB)"
-					for="db-size"
-					hint="Persistent volume size for this database. Defaults to 1 GiB."
-				>
-					<input
-						id="db-size"
-						type="number"
-						min="1"
-						max="1024"
-						step="1"
-						bind:value={storageSizeGi}
-						class="input"
-						disabled={submitting}
-					/>
-				</Field>
+					<Field
+						label="Storage size"
+						for="db-size"
+						hint="Persistent volume size for this database. Defaults to 1 GiB."
+					>
+						<div>
+							<Stepper
+								id="db-size"
+								label="Storage size in GiB"
+								bind:value={storageSizeGi}
+								min={1}
+								max={1024}
+								suffix="GiB"
+								disabled={submitting}
+							/>
+						</div>
+					</Field>
 
-				<Field
-					label="PostgreSQL version"
-					for="db-pg-major"
-					hint="17 is the recommended default. Imports from a newer source automatically use the source's version."
-				>
-					<Select id="db-pg-major" bind:value={pgMajor} disabled={submitting}>
-						{#each PG_VERSIONS as v (v)}
-							<option value={v}>PostgreSQL {v}</option>
-						{/each}
-					</Select>
-				</Field>
+					<Field
+						label="Restore from existing database (optional)"
+						for="db-restore-url"
+						hint="If set, Orchard bootstraps the new database by importing data from this PostgreSQL connection URL. The source database must be reachable from the cluster."
+					>
+						<Input
+							id="db-restore-url"
+							bind:value={restoreFromUrl}
+							placeholder="postgresql://user:password@host:5432/dbname"
+							disabled={submitting}
+							autocomplete="off"
+							spellcheck="false"
+						/>
+					</Field>
+				</div>
+			</SectionCard>
 
-				<Field
-					label="Restore from existing database (optional)"
-					for="db-restore-url"
-					hint="If set, Orchard bootstraps the new database by importing data from this PostgreSQL connection URL. The source database must be reachable from the cluster."
-				>
-					<Input
-						id="db-restore-url"
-						bind:value={restoreFromUrl}
-						placeholder="postgresql://user:password@host:5432/dbname"
-						disabled={submitting}
-						autocomplete="off"
-						spellcheck="false"
-					/>
-				</Field>
-
-				<Field label="Instances" hint={replicaHint}>
-					<div class="nd-replicas">
+			<SectionCard title="Resources">
+				<div class="nd-stack">
+					<Field label="Instances" hint={replicaHint}>
 						<Slider
 							bind:value={replicas}
 							min={1}
 							max={maxReplicas}
 							label="PostgreSQL instances"
 							ticks
+							showValue
 							disabled={submitting}
 						/>
-						<span class="nd-replicas-value">{replicas}</span>
-					</div>
-				</Field>
+					</Field>
 
-				<Field label="Resources">
 					<ResourcePicker
 						bind:cpuMilli={resourceCpuMilli}
 						bind:memoryBytes={resourceMemoryBytes}
 						disabled={submitting}
 					/>
-				</Field>
-			</div>
-
-			<div class="nd-actions">
-				<Button variant="ghost" href={basePath}>Cancel</Button>
-				<Button
-					variant="primary"
-					type="submit"
-					loading={submitting}
-					disabled={submitting || !name.trim()}
-				>
-					{#if !submitting}<Database class="h-4 w-4" />{/if}
-					Create database
-				</Button>
-			</div>
+				</div>
+			</SectionCard>
 		</form>
 	{/if}
-</div>
+</Page>
 
 <style>
-	.nd-page {
-		max-width: 36rem;
-		margin: 0 auto;
-		padding: 2.5rem 2.5rem 3rem;
-	}
-
-	.nd-header {
-		margin-bottom: 1.5rem;
-	}
-
-	.nd-header-top {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.75rem;
-	}
-
-	.nd-title {
-		font-size: var(--text-title-3);
-		line-height: var(--lh-title-3);
-		font-weight: 700;
-		color: var(--center-channel-color);
-		margin: 0;
-		letter-spacing: -0.02em;
-	}
-
-	.nd-subtitle {
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		color: var(--surface-muted);
-		margin: 0.25rem 0 0;
-	}
-
-	.nd-card {
-		border: 1px solid var(--surface-border);
-		border-radius: var(--radius-lg);
-		background-color: var(--surface-bg);
-		padding: 1.25rem;
+	.nd-alert {
 		margin-bottom: 1rem;
+	}
+	.nd-form {
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
 	}
-
-	.nd-card-title {
-		font-size: var(--text-body);
-		line-height: var(--lh-body);
-		font-weight: 600;
-		color: var(--center-channel-color);
-		margin: 0;
-	}
-
-	.nd-replicas {
+	.nd-stack {
 		display: flex;
-		align-items: center;
-		gap: 0.875rem;
-	}
-
-	.nd-replicas-value {
-		font-family: var(--font-mono);
-		font-size: var(--text-headline);
-		font-weight: 600;
-		color: var(--text-default);
-		min-width: 1.25rem;
-		text-align: right;
-	}
-
-	.nd-hint {
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		color: var(--surface-muted);
-		margin: 0;
-	}
-
-	.nd-error {
-		padding: 0.75rem 1rem;
-		border-radius: var(--radius-md);
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		background-color: color-mix(in srgb, var(--error-text-color) 10%, transparent);
-		color: var(--error-text-color);
-		border: 1px solid color-mix(in srgb, var(--error-text-color) 25%, transparent);
-		margin-bottom: 1rem;
-	}
-
-	.nd-actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: 0.5rem;
-		margin-top: 0.5rem;
+		flex-direction: column;
+		gap: 1rem;
 	}
 </style>

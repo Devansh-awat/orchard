@@ -13,7 +13,7 @@
 	} from '$lib/stores';
 	import type { PageData } from './$types';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
-	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
+	import Breadcrumbs from '$lib/components/ui/Breadcrumbs.svelte';
 	import {
 		Loader2,
 		Key,
@@ -1388,20 +1388,22 @@
 				/oomkilled|out of memory|crashloopbackoff|back-?off|error/i.test(ls.message)) ||
 			(ls?.exists !== false && ls?.ready === false && database.status === 'ready')
 		)}
-		<Breadcrumb
-			crumbs={[
-				{ label: 'Home', href: `/${orgSlug}` },
-				...(database.project
-					? [
-							{
-								label: database.project.name || database.project.slug,
-								href: `/${orgSlug}/projects/${database.project.slug}`
-							}
-						]
-					: []),
-				{ label: database.name }
-			]}
-		/>
+		<div class="mb-4">
+			<Breadcrumbs
+				crumbs={[
+					{ label: 'Home', href: `/${orgSlug}` },
+					...(database.project
+						? [
+								{
+									label: database.project.name || database.project.slug,
+									href: `/${orgSlug}/projects/${database.project.slug}`
+								}
+							]
+						: []),
+					{ label: database.name }
+				]}
+			/>
+		</div>
 		<DatabaseHeader
 			{database}
 			{deleting}

@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { formatCpu, formatMemory } from '$lib/presets';
+	import { Field, Input, SegmentedControl } from '$lib/components/ui';
+	import Progress from '$lib/components/ui/Progress.svelte';
 
 	interface Props {
 		cpuMilli: number | null;
@@ -29,50 +31,69 @@
 		onchange
 	}: Props = $props();
 
-	// Display values — convert to user-friendly units
+	const uid = $props.id();
+
+	type CpuUnit = 'm' | 'cores';
+	type MemUnit = 'MiB' | 'GiB';
+
+	const CPU_UNITS = [
+		{ value: 'm', label: 'Millicores' },
+		{ value: 'cores', label: 'Cores' }
+	];
+	const MEM_UNITS = [
+		{ value: 'MiB', label: 'MiB' },
+		{ value: 'GiB', label: 'GiB' }
+	];
+
 	let cpuInput = $state('');
 	let memInput = $state('');
-	let cpuUnit = $state<'m' | 'cores'>('m');
-	let memUnit = $state<'MiB' | 'GiB'>('MiB');
-	// Sync from props on mount / external change
+	let cpuUnit = $state<CpuUnit>('m');
+	let memUnit = $state<MemUnit>('MiB');
+
+	function cpuText(milli: number, unit: CpuUnit) {
+		return unit === 'cores' ? String(milli / 1000) : String(milli);
+	}
+
+	function memText(bytes: number, unit: MemUnit) {
+		return unit === 'GiB'
+			? String(+(bytes / 1024 ** 3).toFixed(2))
+			: String(Math.round(bytes / (1024 * 1024)));
+	}
+
 	$effect(() => {
 		if (cpuMilli === null && memoryBytes === null) {
-			// Show org defaults as placeholder values
-			if (defaultCpuMilli != null) {
-				if (cpuUnit === 'cores') cpuInput = String(defaultCpuMilli / 1000);
-				else cpuInput = String(defaultCpuMilli);
-			}
-			if (defaultMemoryBytes != null) {
-				if (memUnit === 'GiB') memInput = String(+(defaultMemoryBytes / 1024 ** 3).toFixed(2));
-				else memInput = String(Math.round(defaultMemoryBytes / (1024 * 1024)));
-			}
+			if (defaultCpuMilli != null) cpuInput = cpuText(defaultCpuMilli, cpuUnit);
+			if (defaultMemoryBytes != null) memInput = memText(defaultMemoryBytes, memUnit);
 		} else {
-			if (cpuMilli != null) {
-				if (cpuUnit === 'cores') cpuInput = String(cpuMilli / 1000);
-				else cpuInput = String(cpuMilli);
-			}
-			if (memoryBytes != null) {
-				if (memUnit === 'GiB') memInput = String(+(memoryBytes / 1024 ** 3).toFixed(2));
-				else memInput = String(Math.round(memoryBytes / (1024 * 1024)));
-			}
+			if (cpuMilli != null) cpuInput = cpuText(cpuMilli, cpuUnit);
+			if (memoryBytes != null) memInput = memText(memoryBytes, memUnit);
 		}
 	});
 
+	function setCpuUnit(next: string) {
+		cpuUnit = next as CpuUnit;
+		if (cpuMilli != null) cpuInput = cpuText(cpuMilli, cpuUnit);
+	}
+
+	function setMemUnit(next: string) {
+		memUnit = next as MemUnit;
+		if (memoryBytes != null) memInput = memText(memoryBytes, memUnit);
+	}
+
 	function applyCpu() {
-		const v = parseFloat(cpuInput);
+		const v = parseFloat(String(cpuInput));
 		if (!Number.isFinite(v) || v <= 0) return;
 		cpuMilli = cpuUnit === 'cores' ? Math.round(v * 1000) : Math.round(v);
 		onchange?.({ cpuMilli, memoryBytes });
 	}
 
 	function applyMem() {
-		const v = parseFloat(memInput);
+		const v = parseFloat(String(memInput));
 		if (!Number.isFinite(v) || v <= 0) return;
 		memoryBytes = memUnit === 'GiB' ? Math.round(v * 1024 ** 3) : Math.round(v * 1024 * 1024);
 		onchange?.({ cpuMilli, memoryBytes });
 	}
 
-	// Usage percentages
 	function pct(usage: number | null, limit: number | null): number | null {
 		if (usage == null || limit == null || limit <= 0) return null;
 		return Math.min(100, Math.round((usage / limit) * 100));
@@ -81,286 +102,135 @@
 	const cpuPct = $derived(pct(currentCpuUsage, cpuMilli ?? defaultCpuMilli));
 	const memPct = $derived(pct(currentMemUsage, memoryBytes ?? defaultMemoryBytes));
 
-	// Limit warnings
 	const cpuOverLimit = $derived(maxCpuMilli != null && cpuMilli != null && cpuMilli > maxCpuMilli);
 	const memOverLimit = $derived(
 		maxMemoryBytes != null && memoryBytes != null && memoryBytes > maxMemoryBytes
 	);
 
-	function barColor(p: number): string {
-		if (p >= 90) return 'var(--error-text-color)';
-		if (p >= 70) return 'var(--away-indicator)';
-		return 'var(--online-indicator)';
+	const cpuError = $derived(
+		cpuOverLimit ? `Exceeds your org limit of ${formatCpu(maxCpuMilli!)}` : null
+	);
+	const memError = $derived(
+		memOverLimit ? `Exceeds your org limit of ${formatMemory(maxMemoryBytes!)}` : null
+	);
+	const cpuHint = $derived(
+		maxCpuMilli != null ? `Max allowed: ${formatCpu(maxCpuMilli)}` : undefined
+	);
+	const memHint = $derived(
+		maxMemoryBytes != null ? `Max allowed: ${formatMemory(maxMemoryBytes)}` : undefined
+	);
+
+	function usageTone(p: number) {
+		if (p >= 90) return 'error' as const;
+		if (p >= 70) return 'warning' as const;
+		return 'neutral' as const;
 	}
 </script>
 
 <div class="rp-root">
 	<div class="rp-fields">
-		<!-- CPU -->
-		<div class="rp-field">
-			<div class="rp-field-header">
-				<span class="rp-field-label">CPU</span>
-				<div class="rp-unit-toggle">
-					<button
-						type="button"
-						class="rp-unit-btn"
-						class:rp-unit-btn--active={cpuUnit === 'm'}
-						onclick={() => {
-							cpuUnit = 'm';
-							if (cpuMilli != null) cpuInput = String(cpuMilli);
-						}}
-						{disabled}>millicores</button
-					>
-					<button
-						type="button"
-						class="rp-unit-btn"
-						class:rp-unit-btn--active={cpuUnit === 'cores'}
-						onclick={() => {
-							cpuUnit = 'cores';
-							if (cpuMilli != null) cpuInput = String(cpuMilli / 1000);
-						}}
-						{disabled}>cores</button
-					>
-				</div>
-			</div>
-			<div class="rp-input-row">
-				<div class="rp-input-wrap">
-					<input
+		<Field label="CPU" for="{uid}-cpu" hint={cpuHint} error={cpuError}>
+			<div class="rp-control">
+				<span class="rp-input">
+					<Input
+						id="{uid}-cpu"
 						type="number"
 						min={cpuUnit === 'cores' ? '0.01' : '1'}
 						step={cpuUnit === 'cores' ? '0.01' : '1'}
 						bind:value={cpuInput}
 						oninput={applyCpu}
 						placeholder={cpuUnit === 'cores' ? '0.25' : '250'}
+						suffix={cpuUnit === 'cores' ? 'cores' : 'm'}
+						error={cpuOverLimit}
 						{disabled}
 					/>
-					<span class="rp-input-unit">{cpuUnit === 'cores' ? 'cores' : 'm'}</span>
-				</div>
+				</span>
+				<span class="rp-units" class:rp-units--off={disabled} inert={disabled}>
+					<SegmentedControl
+						size="sm"
+						label="CPU unit"
+						options={CPU_UNITS}
+						bind:value={() => cpuUnit, setCpuUnit}
+					/>
+				</span>
 			</div>
 			{#if cpuPct != null}
-				<div class="rp-bar-row">
-					<div class="rp-bar-track">
-						<div
-							class="rp-bar-fill"
-							style="width: {cpuPct}%; background-color: {barColor(cpuPct)};"
-						></div>
-					</div>
-					<span class="rp-bar-label" style="color: {barColor(cpuPct)};">{cpuPct}% used</span>
-				</div>
+				<Progress size="sm" value={cpuPct} tone={usageTone(cpuPct)} label="CPU in use" showValue />
 			{/if}
-			{#if cpuOverLimit}
-				<p class="rp-limit-warn">Exceeds your org limit of {formatCpu(maxCpuMilli!)}</p>
-			{:else if maxCpuMilli != null}
-				<p class="rp-limit-hint">Max allowed: {formatCpu(maxCpuMilli)}</p>
-			{/if}
-		</div>
+		</Field>
 
-		<!-- Memory -->
-		<div class="rp-field">
-			<div class="rp-field-header">
-				<span class="rp-field-label">Memory</span>
-				<div class="rp-unit-toggle">
-					<button
-						type="button"
-						class="rp-unit-btn"
-						class:rp-unit-btn--active={memUnit === 'MiB'}
-						onclick={() => {
-							memUnit = 'MiB';
-							if (memoryBytes != null) memInput = String(Math.round(memoryBytes / (1024 * 1024)));
-						}}
-						{disabled}>MiB</button
-					>
-					<button
-						type="button"
-						class="rp-unit-btn"
-						class:rp-unit-btn--active={memUnit === 'GiB'}
-						onclick={() => {
-							memUnit = 'GiB';
-							if (memoryBytes != null) memInput = String(+(memoryBytes / 1024 ** 3).toFixed(2));
-						}}
-						{disabled}>GiB</button
-					>
-				</div>
-			</div>
-			<div class="rp-input-row">
-				<div class="rp-input-wrap">
-					<input
+		<Field label="Memory" for="{uid}-mem" hint={memHint} error={memError}>
+			<div class="rp-control">
+				<span class="rp-input">
+					<Input
+						id="{uid}-mem"
 						type="number"
 						min={memUnit === 'GiB' ? '0.25' : '1'}
 						step={memUnit === 'GiB' ? '0.25' : '1'}
 						bind:value={memInput}
 						oninput={applyMem}
 						placeholder={memUnit === 'GiB' ? '0.5' : '512'}
+						suffix={memUnit}
+						error={memOverLimit}
 						{disabled}
 					/>
-					<span class="rp-input-unit">{memUnit}</span>
-				</div>
+				</span>
+				<span class="rp-units" class:rp-units--off={disabled} inert={disabled}>
+					<SegmentedControl
+						size="sm"
+						label="Memory unit"
+						options={MEM_UNITS}
+						bind:value={() => memUnit, setMemUnit}
+					/>
+				</span>
 			</div>
 			{#if memPct != null}
-				<div class="rp-bar-row">
-					<div class="rp-bar-track">
-						<div
-							class="rp-bar-fill"
-							style="width: {memPct}%; background-color: {barColor(memPct)};"
-						></div>
-					</div>
-					<span class="rp-bar-label" style="color: {barColor(memPct)};">{memPct}% used</span>
-				</div>
+				<Progress
+					size="sm"
+					value={memPct}
+					tone={usageTone(memPct)}
+					label="Memory in use"
+					showValue
+				/>
 			{/if}
-			{#if memOverLimit}
-				<p class="rp-limit-warn">Exceeds your org limit of {formatMemory(maxMemoryBytes!)}</p>
-			{:else if maxMemoryBytes != null}
-				<p class="rp-limit-hint">Max allowed: {formatMemory(maxMemoryBytes)}</p>
-			{/if}
-		</div>
+		</Field>
 	</div>
 </div>
 
 <style>
 	.rp-root {
-		display: flex;
-		flex-direction: column;
-		gap: 0.875rem;
+		container-type: inline-size;
 	}
-
-	/* Fields */
 	.rp-fields {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
-		gap: 1.25rem;
+		gap: 1rem 1.5rem;
 	}
-	.rp-field {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-	.rp-field-header {
+	.rp-control {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
 		gap: 0.5rem;
 	}
-	.rp-field-label {
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-		color: var(--center-channel-color);
-	}
-	.rp-unit-toggle {
-		display: flex;
-		border: 1px solid var(--surface-border);
-		border-radius: var(--radius-xs);
-		overflow: hidden;
-	}
-	.rp-unit-btn {
-		padding: 0.25rem 0.5rem;
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		font-weight: 600;
-		border: none;
-		background: none;
-		color: var(--surface-muted);
-		cursor: pointer;
-		transition: all var(--dur-fast);
-	}
-	.rp-unit-btn:not(:last-child) {
-		border-right: 1px solid var(--surface-border);
-	}
-	.rp-unit-btn--active {
-		background-color: var(--button-bg);
-		color: var(--button-color);
-	}
-
-	/* Input */
-	.rp-input-row {
-		display: flex;
-		gap: 0.5rem;
-	}
-	.rp-input-wrap {
-		position: relative;
-		display: flex;
-		align-items: center;
+	.rp-input {
 		flex: 1;
+		min-width: 0;
 	}
-	.rp-input-wrap input {
-		flex: 1;
-		width: 100%;
-		padding: 0.5rem 3rem 0.5rem 0.75rem;
-		border: 1px solid var(--surface-border);
-		background-color: var(--surface-bg);
-		color: var(--center-channel-color);
-		border-radius: var(--radius-sm);
-		font-size: var(--text-body);
-		line-height: var(--lh-body);
+	.rp-input :global(input) {
 		font-variant-numeric: tabular-nums;
-		font-family: var(--font-mono);
+		appearance: textfield;
 	}
-	.rp-input-wrap input:focus {
-		outline: none;
-		border-color: var(--button-bg);
-		box-shadow: 0 0 0 2px color-mix(in srgb, var(--button-bg) 15%, transparent);
+	.rp-input :global(input::-webkit-outer-spin-button),
+	.rp-input :global(input::-webkit-inner-spin-button) {
+		appearance: none;
+		margin: 0;
 	}
-	.rp-input-wrap input:disabled {
-		opacity: 0.5;
-	}
-	.rp-input-unit {
-		position: absolute;
-		right: 0.75rem;
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		font-weight: 600;
-		color: var(--surface-muted);
-		pointer-events: none;
-	}
-
-	/* Usage bar */
-	.rp-bar-row {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-	}
-	.rp-bar-track {
-		flex: 1;
-		height: 0.375rem;
-		border-radius: var(--radius-lg);
-		background-color: color-mix(in srgb, var(--surface-border) 50%, transparent);
-		overflow: hidden;
-	}
-	.rp-bar-fill {
-		height: 100%;
-		border-radius: var(--radius-lg);
-		transition:
-			width var(--dur-base) cubic-bezier(0.22, 1, 0.36, 1),
-			background-color var(--dur-base);
-		min-width: 2px;
-	}
-	.rp-bar-label {
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		font-weight: 600;
-		font-family: var(--font-mono);
-		white-space: nowrap;
+	.rp-units {
 		flex-shrink: 0;
 	}
-
-	/* Limit warnings */
-	.rp-limit-warn {
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		color: var(--error-text-color);
-		margin: 0;
-		font-weight: 600;
+	.rp-units--off {
+		opacity: 0.5;
 	}
-	.rp-limit-hint {
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		color: var(--surface-muted);
-		margin: 0;
-	}
-
-	@media (max-width: 540px) {
+	@container (max-width: 36rem) {
 		.rp-fields {
 			grid-template-columns: 1fr;
 		}

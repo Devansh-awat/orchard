@@ -565,3 +565,12 @@ export function envBadgeColor(slug: string): string {
 	if (s.startsWith('test') || s.startsWith('qa')) return 'var(--hue-violet)';
 	return 'var(--hue-slate)';
 }
+
+export function envDotColor(slug: string): string {
+	const s = (slug || '').toLowerCase();
+	if (s.startsWith('prod')) return 'var(--green-7)';
+	if (s.startsWith('stag')) return 'var(--amber-7)';
+	if (s.startsWith('dev')) return 'var(--blue-7)';
+	if (s.startsWith('test') || s.startsWith('qa')) return 'var(--accent-7)';
+	return 'var(--neutral-7)';
+}

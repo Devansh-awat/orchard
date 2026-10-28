@@ -20,7 +20,7 @@
 		Boxes
 	} from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
-	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
+	import Breadcrumbs from '$lib/components/ui/Breadcrumbs.svelte';
 
 	interface Project {
 		id: string;
@@ -452,7 +452,9 @@
 			</div>
 		</div>
 	{:else if workspace}
-		<Breadcrumb crumbs={[{ label: 'Home', href: `/${orgSlug}` }, { label: workspace.name }]} />
+		<div class="mb-4">
+			<Breadcrumbs crumbs={[{ label: 'Home', href: `/${orgSlug}` }, { label: workspace.name }]} />
+		</div>
 
 		<!-- Header -->
 		<div class="ws-header">

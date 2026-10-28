@@ -7,6 +7,7 @@
 		label,
 		disabled = false,
 		ticks = false,
+		showValue = false,
 		onchange = undefined
 	}: {
 		value: number;
@@ -16,6 +17,7 @@
 		label: string;
 		disabled?: boolean;
 		ticks?: boolean;
+		showValue?: boolean;
 		onchange?: (value: number) => void;
 	} = $props();
 
@@ -108,7 +110,7 @@
 	}
 </script>
 
-<div class="slider" class:slider--disabled={disabled}>
+<div class="slider" class:slider--disabled={disabled} class:slider--value={showValue}>
 	<div
 		bind:this={trackEl}
 		class="hit"
@@ -152,12 +154,32 @@
 			</div>
 		</div>
 	</div>
+	{#if showValue}<span class="readout" aria-hidden="true">{value}</span>{/if}
 </div>
 
 <style>
 	.slider {
 		width: 100%;
 		min-width: 0;
+	}
+	.slider--value {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+	}
+	.slider--value .hit {
+		flex: 1;
+		min-width: 0;
+	}
+	.readout {
+		flex-shrink: 0;
+		min-width: 2ch;
+		color: var(--text-default);
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
+		font-weight: var(--weight-medium);
+		font-variant-numeric: tabular-nums;
+		text-align: right;
 	}
 	.hit {
 		--knob: 1.25rem;

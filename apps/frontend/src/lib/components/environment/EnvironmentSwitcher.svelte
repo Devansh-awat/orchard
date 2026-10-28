@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { createQuery } from '@tanstack/svelte-query';
-	import { ChevronDown, Check, Settings2, Plus } from 'lucide-svelte';
+	import { Settings2, Plus } from 'lucide-svelte';
 	import { environmentsQueryOptions } from '$lib/queries/environments';
-	import { PopoverPanel } from '$lib/components/ui';
-	import { springRotate } from '$lib/utils/motion.svelte';
-	import { envBadgeColor } from '$lib/utils/format';
+	import { Badge, Menu, MenuItem, SelectTrigger } from '$lib/components/ui';
+	import MenuSeparator from '$lib/components/ui/MenuSeparator.svelte';
+	import { envDotColor } from '$lib/utils/format';
 	import type { Environment } from '$lib/types/environments';
 	import ManageEnvironmentsModal from './ManageEnvironmentsModal.svelte';
 
@@ -22,10 +22,6 @@
 	}));
 	const environments = $derived((envQuery.data ?? []) as Environment[]);
 
-	// Track which project we last defaulted for so switching projects (the same
-	// component instance is reused on the /new pages) re-defaults instead of
-	// leaving a stale env id from the previous project, which the server would
-	// reject as belonging to another project.
 	let defaultedFor: string | null = null;
 	$effect(() => {
 		if (environments.length === 0) return;
@@ -40,171 +36,67 @@
 	let manageOpen = $state(false);
 </script>
 
-<PopoverPanel placement="bottom-start">
-	{#snippet trigger(props, isOpen)}
-		<button
-			type="button"
-			class="env-pill"
-			class:env-pill--open={isOpen}
-			style="--env-c: {selectedEnv ? envBadgeColor(selectedEnv.slug) : 'var(--surface-muted)'}"
-			{...props}
+<Menu placement="bottom-start" size="lg">
+	{#snippet trigger(attrs, isOpen)}
+		<SelectTrigger
+			{...attrs}
+			open={isOpen}
+			value={selectedEnv?.name}
+			placeholder="Environment"
+			loading={envQuery.isLoading}
 		>
-			{#if selectedEnv}
-				<span class="env-pill-dot"></span>
-				<span class="env-pill-name">{selectedEnv.name}</span>
-			{:else}
-				<span class="env-pill-name env-pill-name--muted">Select…</span>
-			{/if}
-			<span class="env-pill-chev" {@attach springRotate(() => isOpen, { rest: 0, on: 180 })}
-				><ChevronDown size={14} /></span
-			>
-		</button>
+			{#snippet leading()}
+				<span
+					class="env-dot"
+					style:--env-c={selectedEnv ? envDotColor(selectedEnv.slug) : 'var(--neutral-6)'}
+				></span>
+			{/snippet}
+		</SelectTrigger>
 	{/snippet}
-	{#snippet children({ close })}
-		<div class="env-menu">
-			{#each environments as env (env.id)}
-				<button
-					type="button"
-					class="env-menu-item"
-					class:env-menu-item--active={env.id === selectedEnvId}
-					onclick={() => {
-						selectedEnvId = env.id;
-						close();
-					}}
+
+	{#each environments as env (env.id)}
+		<MenuItem checked={env.id === selectedEnvId} onclick={() => (selectedEnvId = env.id)}>
+			{#snippet leading()}
+				<span class="env-tile" style:--env-c={envDotColor(env.slug)}
+					><span class="env-dot"></span></span
 				>
-					<span class="env-pill-dot" style="background-color: {envBadgeColor(env.slug)}"></span>
-					<span class="env-menu-name">{env.name}</span>
-					{#if env.isDefault}<span class="env-menu-default">default</span>{/if}
-					{#if env.id === selectedEnvId}<Check size={14} class="env-menu-check" />{/if}
-				</button>
-			{/each}
-			<div class="env-menu-divider"></div>
-			<button
-				type="button"
-				class="env-menu-action"
-				onclick={() => {
-					manageOpen = true;
-					close();
-				}}
-			>
-				<Settings2 size={14} />
-				Manage environments
-			</button>
-			<button
-				type="button"
-				class="env-menu-action"
-				onclick={() => {
-					manageOpen = true;
-					close();
-				}}
-			>
-				<Plus size={14} />
-				New environment
-			</button>
-		</div>
-	{/snippet}
-</PopoverPanel>
+			{/snippet}
+			<span class="env-name">
+				<span class="env-label">{env.name}</span>
+				{#if env.isDefault}<Badge>Default</Badge>{/if}
+			</span>
+		</MenuItem>
+	{/each}
+	<MenuSeparator />
+	<MenuItem icon={Settings2} onclick={() => (manageOpen = true)}>Manage environments</MenuItem>
+	<MenuItem icon={Plus} onclick={() => (manageOpen = true)}>New environment</MenuItem>
+</Menu>
 
 <ManageEnvironmentsModal bind:open={manageOpen} {projectId} />
 
 <style>
-	.env-pill {
-		display: inline-flex;
+	.env-dot {
+		display: block;
+		flex-shrink: 0;
+		width: 0.5rem;
+		height: 0.5rem;
+		border-radius: 50%;
+		background: var(--env-c);
+	}
+	.env-tile {
+		display: grid;
+		place-items: center;
+		background: color-mix(in oklab, var(--env-c) 14%, transparent);
+	}
+	.env-name {
+		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		/* Fixed width so the tab bar layout never shifts with the env name;
-		   longer names truncate with an ellipsis. */
-		width: 9.5rem;
-		height: 2.125rem;
-		padding: 0 0.75rem 0 0.5rem;
-		border-radius: var(--radius-md);
-		border: 1px solid color-mix(in srgb, var(--env-c) 30%, var(--surface-border));
-		background: color-mix(in srgb, var(--env-c) 7%, var(--surface-bg));
-		color: var(--center-channel-color);
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		font-weight: 600;
-		transition:
-			background-color var(--dur-fast) cubic-bezier(0.32, 0.72, 0, 1),
-			border-color var(--dur-fast) cubic-bezier(0.32, 0.72, 0, 1);
+		min-width: 0;
 	}
-	.env-pill-name {
-		flex: 1;
+	.env-label {
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		white-space: nowrap;
-		text-align: left;
-	}
-	.env-pill-chev {
-		display: inline-flex;
-		flex-shrink: 0;
-	}
-	.env-pill:hover,
-	.env-pill--open {
-		background: color-mix(in srgb, var(--env-c) 12%, var(--surface-bg));
-		border-color: color-mix(in srgb, var(--env-c) 45%, var(--surface-border));
-	}
-	.env-pill-dot {
-		width: 9px;
-		height: 9px;
-		border-radius: var(--radius-pill);
-		background: var(--env-c);
-		box-shadow: 0 0 0 3px color-mix(in srgb, var(--env-c) 18%, transparent);
-		flex-shrink: 0;
-	}
-	.env-pill-name--muted {
-		color: var(--surface-muted);
-	}
-	.env-pill :global(svg) {
-		color: var(--surface-muted);
-	}
-	.env-menu {
-		display: flex;
-		flex-direction: column;
-		gap: 1px;
-		min-width: 13rem;
-	}
-	.env-menu-item,
-	.env-menu-action {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		width: 100%;
-		padding: 0.5rem 0.75rem;
-		border-radius: var(--radius-sm);
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		color: var(--center-channel-color);
-		text-align: left;
-	}
-	.env-menu-item:hover,
-	.env-menu-action:hover {
-		background: var(--control-bg);
-	}
-	.env-menu-item--active {
-		font-weight: 600;
-	}
-	.env-menu-name {
-		flex: 1;
-	}
-	.env-menu-default {
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--surface-muted);
-	}
-	.env-menu-item :global(.env-menu-check) {
-		color: var(--button-bg);
-	}
-	.env-menu-action {
-		color: var(--surface-muted);
-	}
-	.env-menu-divider {
-		height: 1px;
-		background: var(--surface-border);
-		margin: 0.25rem 0;
 	}
 </style>

@@ -11,7 +11,7 @@
 		ChevronDown,
 		ChevronUp
 	} from 'lucide-svelte';
-	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
+	import Breadcrumbs from '$lib/components/ui/Breadcrumbs.svelte';
 	import { Button, Field, Input, Select } from '$lib/components/ui';
 
 	type ParamType = 'string' | 'number' | 'boolean' | 'select';
@@ -417,13 +417,15 @@ resources:
 </script>
 
 <div class="nt-page">
-	<Breadcrumb
-		crumbs={[
-			{ label: 'Home', href: `/${orgSlug}` },
-			{ label: 'Templates', href: `${basePath}/templates` },
-			{ label: 'New template' }
-		]}
-	/>
+	<div class="mb-4">
+		<Breadcrumbs
+			crumbs={[
+				{ label: 'Home', href: `/${orgSlug}` },
+				{ label: 'Templates', href: `${basePath}/templates` },
+				{ label: 'New template' }
+			]}
+		/>
+	</div>
 
 	<div class="nt-header">
 		<LayoutTemplate class="h-6 w-6" style="color: var(--sidebar-text-active-border)" />

@@ -50,7 +50,7 @@
 		WifiOff,
 		RotateCw
 	} from 'lucide-svelte';
-	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
+	import Breadcrumbs from '$lib/components/ui/Breadcrumbs.svelte';
 	import {
 		ArrowLeft,
 		Bell,
@@ -3021,7 +3021,7 @@
 <div class="deployment-page dep-shell p-6 max-w-400 mx-auto">
 	{#if deployment?.project?.slug}
 		<div class="mb-4">
-			<Breadcrumb
+			<Breadcrumbs
 				crumbs={[
 					{ label: 'Home', href: `/${orgSlug}` },
 					{
@@ -3034,7 +3034,7 @@
 		</div>
 	{:else}
 		<div class="mb-4">
-			<Breadcrumb
+			<Breadcrumbs
 				crumbs={[{ label: 'Home', href: `/${orgSlug}` }, { label: deployment?.name || 'App' }]}
 			/>
 		</div>

@@ -12,6 +12,7 @@
 		shortcut = undefined,
 		checked = undefined,
 		leading = undefined,
+		keepOpen = false,
 		children,
 		...rest
 	}: {
@@ -23,6 +24,7 @@
 		shortcut?: string;
 		checked?: boolean;
 		leading?: Snippet;
+		keepOpen?: boolean;
 		children?: Snippet;
 		[key: string]: unknown;
 	} = $props();
@@ -34,7 +36,7 @@
 
 	function handleClick(e: MouseEvent) {
 		onclick?.(e);
-		menu?.close();
+		if (!keepOpen) menu?.close();
 	}
 </script>
 

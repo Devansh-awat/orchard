@@ -4,9 +4,9 @@
 	import { apiFetch, toasts } from '$lib/stores';
 	import { queryClient } from '$lib/query';
 	import { environmentsQueryOptions } from '$lib/queries/environments';
-	import { Modal, Button, Input } from '$lib/components/ui';
+	import { Modal, Button, Input, Badge } from '$lib/components/ui';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
-	import { envBadgeColor } from '$lib/utils/format';
+	import { envDotColor } from '$lib/utils/format';
 	import type { Environment } from '$lib/types/environments';
 
 	let {
@@ -136,11 +136,13 @@
 	<div class="env-modal-list">
 		{#each environments as env (env.id)}
 			<div class="env-row">
-				<span class="env-dot" style="background-color: {envBadgeColor(env.slug)}"></span>
+				<span class="env-dot" style:background={envDotColor(env.slug)}></span>
 				{#if editingId === env.id}
 					<span class="env-rename-input">
 						<Input
+							size="sm"
 							bind:value={editName}
+							aria-label="Environment name"
 							onkeydown={(e: KeyboardEvent) => {
 								if (e.key === 'Enter') saveRename(env);
 								if (e.key === 'Escape') editingId = null;
@@ -148,58 +150,53 @@
 						/>
 					</span>
 					<span class="env-row-actions">
-						<button
-							class="env-icon-btn"
-							title="Save"
-							aria-label="Save name"
+						<Button
+							variant="ghost"
+							size="sm"
+							icon={Check}
+							label="Save name"
 							disabled={savingRename}
 							onclick={() => saveRename(env)}
-						>
-							<Check size={14} />
-						</button>
-						<button
-							class="env-icon-btn"
-							title="Cancel"
-							aria-label="Cancel rename"
+						/>
+						<Button
+							variant="ghost"
+							size="sm"
+							icon={X}
+							label="Cancel rename"
 							disabled={savingRename}
 							onclick={() => (editingId = null)}
-						>
-							<X size={14} />
-						</button>
+						/>
 					</span>
 				{:else}
 					<span class="env-row-name">{env.name}</span>
-					{#if env.isDefault}<span class="env-default-pill">default</span>{/if}
+					{#if env.isDefault}<Badge>Default</Badge>{/if}
 					<code class="env-row-ns">{env.namespace}</code>
 					<span class="env-row-actions">
-						<button
-							class="env-icon-btn"
-							title="Rename"
-							aria-label="Rename"
+						<Button
+							variant="ghost"
+							size="sm"
+							icon={Pencil}
+							label="Rename"
 							onclick={() => startRename(env)}
-						>
-							<Pencil size={14} />
-						</button>
+						/>
 						{#if !env.isDefault}
-							<button
-								class="env-icon-btn"
-								title="Set as default"
-								aria-label="Set as default"
+							<Button
+								variant="ghost"
+								size="sm"
+								icon={Star}
+								label="Set as default"
 								onclick={() => setDefault(env)}
-							>
-								<Star size={14} />
-							</button>
-							<button
-								class="env-icon-btn env-icon-btn--danger"
-								title="Delete"
-								aria-label="Delete"
+							/>
+							<Button
+								variant="ghost"
+								size="sm"
+								icon={Trash2}
+								label="Delete"
 								onclick={() => {
 									toDelete = env;
 									showDelete = true;
 								}}
-							>
-								<Trash2 size={14} />
-							</button>
+							/>
 						{/if}
 					</span>
 				{/if}
@@ -209,13 +206,15 @@
 
 	{#snippet footer()}
 		<div class="env-modal-create">
-			<Input
-				placeholder="staging"
-				bind:value={newName}
-				onkeydown={(e: KeyboardEvent) => e.key === 'Enter' && create()}
-			/>
-			<Button variant="primary" size="sm" loading={creating} onclick={create}>
-				<Plus size={14} />
+			<span class="env-create-input">
+				<Input
+					placeholder="staging"
+					aria-label="New environment name"
+					bind:value={newName}
+					onkeydown={(e: KeyboardEvent) => e.key === 'Enter' && create()}
+				/>
+			</span>
+			<Button variant="primary" size="sm" icon={Plus} loading={creating} onclick={create}>
 				New environment
 			</Button>
 		</div>
@@ -241,71 +240,48 @@
 	.env-modal-list {
 		display: flex;
 		flex-direction: column;
-		gap: 0.4rem;
+		gap: 0.5rem;
 	}
 	.env-row {
 		display: flex;
 		align-items: center;
-		gap: 0.6rem;
-		padding: 0.5rem 0.7rem;
-		border: 1px solid var(--surface-border);
-		border-radius: var(--radius-md);
+		gap: 0.75rem;
+		min-height: 2.75rem;
+		padding: 0.375rem 0.375rem 0.375rem 0.75rem;
+		border-radius: calc(var(--radius-control) * var(--corner-scale));
+		corner-shape: var(--corner);
+		box-shadow: inset 0 0 0 1px var(--rule);
 	}
 	.env-dot {
-		width: 9px;
-		height: 9px;
-		border-radius: var(--radius-pill);
+		width: 0.5rem;
+		height: 0.5rem;
+		border-radius: 50%;
 		flex-shrink: 0;
 	}
 	.env-row-name {
 		font-size: var(--text-callout);
 		line-height: var(--lh-callout);
-		font-weight: 600;
-		color: var(--center-channel-color);
-	}
-	.env-default-pill {
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--surface-muted);
-		background: var(--control-bg);
-		padding: 0.1rem 0.4rem;
-		border-radius: var(--radius-pill);
+		font-weight: var(--weight-medium);
+		color: var(--text-default);
 	}
 	.env-row-ns {
-		font-family: var(--font-mono, ui-monospace, monospace);
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		color: var(--surface-muted);
 		margin-left: auto;
+		font-family: var(--font-mono);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-muted);
 	}
 	.env-row-actions {
 		display: flex;
 		gap: 0.25rem;
 		margin-left: auto;
 	}
+	.env-row-ns + .env-row-actions {
+		margin-left: 0;
+	}
 	.env-rename-input {
 		flex: 1;
 		min-width: 0;
-	}
-	.env-icon-btn {
-		display: inline-flex;
-		width: 28px;
-		height: 28px;
-		align-items: center;
-		justify-content: center;
-		border-radius: var(--radius-sm);
-		color: var(--surface-muted);
-	}
-	.env-icon-btn:hover {
-		background: var(--control-bg);
-		color: var(--center-channel-color);
-	}
-	.env-icon-btn--danger:hover {
-		color: var(--error-text-color);
-		background: color-mix(in srgb, var(--error-text-color) 10%, transparent);
 	}
 	.env-modal-create {
 		display: flex;
@@ -313,7 +289,8 @@
 		align-items: center;
 		width: 100%;
 	}
-	.env-modal-create :global(.input) {
+	.env-create-input {
 		flex: 1;
+		min-width: 0;
 	}
 </style>

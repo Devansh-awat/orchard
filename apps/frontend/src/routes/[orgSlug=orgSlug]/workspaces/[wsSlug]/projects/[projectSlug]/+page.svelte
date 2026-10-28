@@ -20,7 +20,7 @@
 	} from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import NewResourceModal from '$lib/components/NewResourceModal.svelte';
-	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
+	import Breadcrumbs from '$lib/components/ui/Breadcrumbs.svelte';
 
 	interface Deployment {
 		id: string;
@@ -374,21 +374,22 @@
 			{/each}
 		</div>
 	{:else if project}
-		<!-- Breadcrumb -->
-		<Breadcrumb
-			crumbs={[
-				{ label: 'Home', href: `/${orgSlug}` },
-				...(project.workspace?.slug
-					? [
-							{
-								label: project.workspace.name || project.workspace.slug,
-								href: `/${orgSlug}/workspaces/${project.workspace.slug}`
-							}
-						]
-					: []),
-				{ label: project.name }
-			]}
-		/>
+		<div class="mb-4">
+			<Breadcrumbs
+				crumbs={[
+					{ label: 'Home', href: `/${orgSlug}` },
+					...(project.workspace?.slug
+						? [
+								{
+									label: project.workspace.name || project.workspace.slug,
+									href: `/${orgSlug}/workspaces/${project.workspace.slug}`
+								}
+							]
+						: []),
+					{ label: project.name }
+				]}
+			/>
+		</div>
 
 		<!-- Header -->
 		<div class="pj-header">

@@ -10,7 +10,7 @@
 		type ProjectContext
 	} from '$lib/stores';
 	import { Loader2, FileText, Github, ChevronDown, X } from 'lucide-svelte';
-	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
+	import Breadcrumbs from '$lib/components/ui/Breadcrumbs.svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
 	import { EnvironmentSwitcher } from '$lib/components/environment';
 	import { Button, PopoverPanel, Field, Input, Badge } from '$lib/components/ui';
@@ -250,13 +250,15 @@
 			<p class="cs-warning-desc">{error}</p>
 		</div>
 	{:else if project}
-		<Breadcrumb
-			crumbs={[
-				{ label: 'Home', href: `/${orgSlug}` },
-				{ label: project?.name || projectSlug || '', href: basePath },
-				{ label: 'New Compose stack' }
-			]}
-		/>
+		<div class="mb-4">
+			<Breadcrumbs
+				crumbs={[
+					{ label: 'Home', href: `/${orgSlug}` },
+					{ label: project?.name || projectSlug || '', href: basePath },
+					{ label: 'New Compose stack' }
+				]}
+			/>
+		</div>
 
 		<div class="cs-hero">
 			<h1 class="cs-page-title">Deploy Compose from GitHub</h1>
