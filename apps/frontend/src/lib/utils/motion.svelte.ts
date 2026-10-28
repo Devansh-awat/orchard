@@ -831,7 +831,8 @@ export function motionBackdrop(closing: () => boolean, onClosed: () => void) {
 export function springCollapse(collapsed: () => boolean) {
 	return (el: Element) => {
 		const target = el as HTMLElement;
-		target.style.overflow = 'hidden';
+		target.style.overflow = collapsed() ? 'clip' : 'visible';
+		target.style.overflowClipMargin = '0.375rem';
 		const naturalMargin = parseFloat(getComputedStyle(target).marginTop) || 0;
 		const naturalHeight = () => {
 			const prev = target.style.height;
@@ -856,7 +857,9 @@ export function springCollapse(collapsed: () => boolean) {
 			if (isCollapsed === last) return;
 			last = isCollapsed;
 			target.style.marginTop = isCollapsed ? '0px' : `${naturalMargin}px`;
+			target.style.overflow = 'clip';
 			if (!motionEnabled()) {
+				target.style.overflow = isCollapsed ? 'clip' : 'visible';
 				target.style.height = isCollapsed ? '0px' : 'auto';
 				target.style.opacity = isCollapsed ? '0' : '1';
 				if (!isCollapsed) target.style.marginTop = '';
@@ -884,6 +887,7 @@ export function springCollapse(collapsed: () => boolean) {
 				if (!collapsed()) {
 					target.style.height = 'auto';
 					target.style.marginTop = '';
+					target.style.overflow = 'visible';
 				}
 			});
 		});
