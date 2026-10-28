@@ -54,7 +54,13 @@
 
 <style>
 	.ui-tabs {
+		display: block;
+		width: auto;
 		min-width: 0;
+		padding: 0;
+		border-radius: 0;
+		background: none;
+		overflow: visible;
 	}
 	.ui-tabs-card {
 		background-color: var(--bg-raised);
