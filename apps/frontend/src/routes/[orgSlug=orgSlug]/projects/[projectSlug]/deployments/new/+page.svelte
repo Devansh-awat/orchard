@@ -12,22 +12,17 @@
 		type ProjectContext
 	} from '$lib/stores';
 	import {
-		ArrowRight,
 		BookMarked,
 		Container,
-		FolderOpen,
 		GitBranch,
 		Github,
 		Globe,
 		Lock,
 		Network,
 		Radio,
-		ShieldCheck,
-		Plus,
-		Trash2
+		ShieldCheck
 	} from 'lucide-svelte';
 	import { rawToEnvVars } from '$lib/utils/format';
-	import { motionStagger } from '$lib/utils/motion.svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
 	import { EnvironmentSwitcher } from '$lib/components/environment';
 	import RepoAccountPicker from '$lib/components/deployment/RepoAccountPicker.svelte';
@@ -42,20 +37,23 @@
 		Breadcrumbs,
 		Button,
 		Disclosure,
+		DisclosureGroup,
 		Divider,
 		Dropdown,
 		EnvVarEditor,
 		Field,
+		FieldGrid,
 		FormActions,
 		Input,
 		Page,
+		RowList,
 		SearchPicker,
 		SectionCard,
 		SegmentedControl,
-		SelectTrigger,
 		Skeleton,
 		Stack,
 		Stepper,
+		Swap,
 		Switch,
 		ToggleRow,
 		type DropdownOption
@@ -126,7 +124,10 @@
 
 	type Reach = 'link' | 'public-link' | 'port' | 'internal';
 
+	let rowSeq = 0;
+
 	type PortRow = {
+		id: number;
 		name: string;
 		containerPort: number;
 		servicePort: number;
@@ -136,6 +137,7 @@
 
 	function portRow(port: number, index: number): PortRow {
 		return {
+			id: ++rowSeq,
 			name: `port-${index + 1}`,
 			containerPort: port,
 			servicePort: port,
@@ -238,6 +240,7 @@
 	let envRawText = $state('');
 	let volumes = $state<
 		Array<{
+			id: number;
 			name: string;
 			type: 'pvc' | 'hostPath' | 'emptyDir';
 			mountPath: string;
@@ -698,7 +701,10 @@
 	}
 
 	function addVolume() {
-		volumes = [...volumes, { name: '', type: 'pvc', mountPath: '', pvcName: '', readOnly: false }];
+		volumes = [
+			...volumes,
+			{ id: ++rowSeq, name: '', type: 'pvc', mountPath: '', pvcName: '', readOnly: false }
+		];
 	}
 
 	function removeVolume(index: number) {
@@ -1010,7 +1016,7 @@
 	const appName = $derived(name.trim() || 'app');
 	const stageOptions = $derived<DropdownOption[]>([
 		{ value: '', label: 'Final stage' },
-		...dockerfileStages.map((st) => ({ value: st, label: st }))
+		...dockerfileStages.map((st) => ({ value: st, label: st, mono: true }))
 	]);
 	const dockerfileOptions = $derived<DropdownOption[]>(
 		dockerfiles.map((df) => ({ value: df, label: df }))
@@ -1083,60 +1089,6 @@
 	{/if}
 {/snippet}
 
-{#snippet frameworkPicker(
-	props: Record<string, unknown>,
-	open: boolean,
-	picked: DropdownOption | null
-)}
-	<SelectTrigger
-		{...props}
-		{open}
-		block
-		size="lg"
-		value={loadingDockerfiles ? null : picked?.label}
-		placeholder="Detecting"
-		loading={loadingDockerfiles}
-		aria-label="Build with"
-	>
-		{#snippet leading()}
-			<FrameworkIcon
-				framework={picked?.value === DOCKERFILE_OPTION ? 'dockerfile' : (picked?.value ?? null)}
-			/>
-		{/snippet}
-	</SelectTrigger>
-{/snippet}
-
-{#snippet directoryPicker(
-	props: Record<string, unknown>,
-	open: boolean,
-	picked: DropdownOption | null
-)}
-	<SelectTrigger
-		{...props}
-		{open}
-		block
-		size="lg"
-		mono
-		value={picked?.label}
-		placeholder="Root"
-		aria-label="App in this repository"
-	>
-		{#snippet leading()}<FolderOpen size={15} class="text-muted" />{/snippet}
-	</SelectTrigger>
-{/snippet}
-
-{#snippet stagePicker(props: Record<string, unknown>, open: boolean, picked: DropdownOption | null)}
-	<SelectTrigger
-		{...props}
-		{open}
-		block
-		size="lg"
-		mono={!!selectedStage}
-		value={picked?.label}
-		loading={loadingStages}
-	/>
-{/snippet}
-
 <svelte:head><title>New app</title></svelte:head>
 
 <Page title="New app" width="default">
@@ -1188,377 +1140,384 @@
 		</Stack>
 	{:else if project || pendingProjectName}
 		<form
-			class="nd-form"
 			novalidate
 			onsubmit={(e) => {
 				e.preventDefault();
 				submit();
 			}}
 		>
-			<SectionCard title="Source">
-				{#snippet actions()}
-					<SegmentedControl
-						label="Source"
-						size="sm"
-						options={SOURCE_OPTIONS}
-						bind:value={
-							() => deploymentSource, (v) => (deploymentSource = v as typeof deploymentSource)
-						}
-					/>
-				{/snippet}
+			<Stack gap="lg">
+				<SectionCard title="Source">
+					{#snippet actions()}
+						<SegmentedControl
+							label="Source"
+							size="sm"
+							options={SOURCE_OPTIONS}
+							bind:value={
+								() => deploymentSource, (v) => (deploymentSource = v as typeof deploymentSource)
+							}
+						/>
+					{/snippet}
 
-				<Stack gap="md">
-					{#key deploymentSource}
-						<div class="nd-fields" {@attach motionStagger({ index: 0, from: { y: 6 } })}>
-							{#if deploymentSource === 'image'}
-								<Field label="Image">
-									<Input
-										bind:value={image}
-										size="lg"
-										placeholder="ghcr.io/org/app:latest"
-										mono
-										icon={Container}
-									/>
-								</Field>
-							{:else if deploymentSource === 'git'}
-								<GitSourcePane
-									onSelect={(sel) => {
-										gitSelection = sel;
-										if (sel) {
-											repoUrl = sel.repoUrl;
-											branch = sel.branch;
-											if (!nameTouched && !name.trim()) name = sel.repoPath.split('/').pop() ?? '';
-										}
-									}}
-									onDetect={(det) => applyDetection(det as DetectionResult)}
-								/>
-							{:else}
-								{#if !githubLinked}
-									<Alert tone="warning" title="GitHub not connected">
-										Paste owner/repo into the repository search to deploy a public repo.
-										{#snippet actions()}
-											<Button variant="secondary" size="sm" href="/user/settings"
-												>Connect GitHub</Button
-											>
-										{/snippet}
-									</Alert>
-								{:else if !hasGitHubApp && repositories.length === 0 && !loadingRepos}
-									<Alert tone="warning" title="Install the GitHub App to list your repositories">
-										{#snippet actions()}
-											{#if githubAppInstallUrl}
-												<Button
-													variant="secondary"
-													size="sm"
-													href={githubAppInstallUrl}
-													target="_blank">Install</Button
-												>
-											{/if}
-										{/snippet}
-									</Alert>
-								{/if}
-								<Field label="Repository">
-									<SourcePath>
-										{#snippet owner()}
-											<RepoAccountPicker
-												size="lg"
-												block={false}
-												{accounts}
-												selected={selectedAccount}
-												onSelect={selectAccount}
-												installUrl={githubAppInstallUrl}
-											/>
-										{/snippet}
-										{#snippet repo()}
-											<SearchPicker
-												block
-												size="lg"
-												value={repoValue}
-												bind:query={repoQuery}
-												options={repoOptions}
-												filter={false}
-												loading={loadingRepos}
-												placeholder="Choose a repository"
-												searchPlaceholder="Search, or paste owner/repo"
-												creatable={!!parsedRepoInput && !parsedRepoIsListed}
-												createLabel={() =>
-													parsedRepoInput
-														? `Use ${parsedRepoInput.owner}/${parsedRepoInput.repo}`
-														: ''}
-												onchange={pickRepoByName}
-												onclear={clearRepoSelection}
-												trailing={lock}
-												optionLeading={repoGlyph}
-												empty={repoEmpty}
-											/>
-										{/snippet}
-									</SourcePath>
-								</Field>
-								<Field label="Branch">
-									<SearchPicker
-										block
-										size="lg"
-										mono
-										value={branch}
-										options={branchOptions}
-										loading={loadingBranches}
-										disabled={!hasRepo}
-										placeholder="main"
-										searchPlaceholder="Search or type a branch"
-										creatable
-										createLabel={(q) => `Use ${q}`}
-										onchange={pickBranchByName}
-										onclear={() => {
-											selectedBranch = null;
-											branch = '';
+					<Stack gap="md">
+						<Swap key={deploymentSource}>
+							<Stack gap="md">
+								{#if deploymentSource === 'image'}
+									<Field label="Image">
+										<Input
+											bind:value={image}
+											size="lg"
+											placeholder="ghcr.io/org/app:latest"
+											mono
+											icon={Container}
+										/>
+									</Field>
+								{:else if deploymentSource === 'git'}
+									<GitSourcePane
+										onSelect={(sel) => {
+											gitSelection = sel;
+											if (sel) {
+												repoUrl = sel.repoUrl;
+												branch = sel.branch;
+												if (!nameTouched && !name.trim())
+													name = sel.repoPath.split('/').pop() ?? '';
+											}
 										}}
-										trailing={defaultTag}
+										onDetect={(det) => applyDetection(det as DetectionResult)}
+									/>
+								{:else}
+									{#if !githubLinked}
+										<Alert tone="warning" title="GitHub not connected">
+											Paste owner/repo into the repository search to deploy a public repo.
+											{#snippet actions()}
+												<Button variant="secondary" size="sm" href="/user/settings"
+													>Connect GitHub</Button
+												>
+											{/snippet}
+										</Alert>
+									{:else if !hasGitHubApp && repositories.length === 0 && !loadingRepos}
+										<Alert tone="warning" title="Install the GitHub App to list your repositories">
+											{#snippet actions()}
+												{#if githubAppInstallUrl}
+													<Button
+														variant="secondary"
+														size="sm"
+														href={githubAppInstallUrl}
+														target="_blank">Install</Button
+													>
+												{/if}
+											{/snippet}
+										</Alert>
+									{/if}
+									<Field label="Repository">
+										<SourcePath>
+											{#snippet owner()}
+												<RepoAccountPicker
+													size="lg"
+													block={false}
+													{accounts}
+													selected={selectedAccount}
+													onSelect={selectAccount}
+													installUrl={githubAppInstallUrl}
+												/>
+											{/snippet}
+											{#snippet repo()}
+												<SearchPicker
+													block
+													size="lg"
+													value={repoValue}
+													bind:query={repoQuery}
+													options={repoOptions}
+													filter={false}
+													loading={loadingRepos}
+													placeholder="Choose a repository"
+													searchPlaceholder="Search, or paste owner/repo"
+													creatable={!!parsedRepoInput && !parsedRepoIsListed}
+													createLabel={() =>
+														parsedRepoInput
+															? `Use ${parsedRepoInput.owner}/${parsedRepoInput.repo}`
+															: ''}
+													onchange={pickRepoByName}
+													onclear={clearRepoSelection}
+													trailing={lock}
+													optionLeading={repoGlyph}
+													empty={repoEmpty}
+												/>
+											{/snippet}
+										</SourcePath>
+									</Field>
+									<Field label="Branch">
+										<SearchPicker
+											block
+											size="lg"
+											mono
+											value={branch}
+											options={branchOptions}
+											loading={loadingBranches}
+											disabled={!hasRepo}
+											placeholder="main"
+											searchPlaceholder="Search or type a branch"
+											creatable
+											createLabel={(q) => `Use ${q}`}
+											onchange={pickBranchByName}
+											onclear={() => {
+												selectedBranch = null;
+												branch = '';
+											}}
+											trailing={defaultTag}
+										>
+											{#snippet leading()}<GitBranch size={15} class="text-muted" />{/snippet}
+										</SearchPicker>
+									</Field>
+								{/if}
+							</Stack>
+						</Swap>
+
+						<Field label="Name" for="nd-name">
+							<Input
+								id="nd-name"
+								size="lg"
+								bind:value={name}
+								oninput={() => (nameTouched = true)}
+								placeholder="app-name"
+								mono
+							/>
+						</Field>
+
+						{#if isRepoSource}
+							<Field label="Build with" layout="row" split>
+								<Dropdown
+									size="lg"
+									value={frameworkValue}
+									options={FRAMEWORK_OPTIONS}
+									onchange={onFrameworkPicked}
+									loading={loadingDockerfiles}
+									ariaLabel="Build with"
+								>
+									{#snippet icon(value)}
+										<FrameworkIcon framework={value === DOCKERFILE_OPTION ? 'dockerfile' : value} />
+									{/snippet}
+								</Dropdown>
+							</Field>
+							{#if buildType === 'railpack' && detectedApps.length > 1}
+								<Field label="App in this repository" layout="row" split>
+									<Dropdown
+										size="lg"
+										mono
+										ariaLabel="App in this repository"
+										value={rootDirectory}
+										options={rootDirectoryOptions}
+										onchange={(dir) => {
+											const app = detectedApps.find((a) => a.dir === dir);
+											if (app) selectRootDirectory(app);
+										}}
 									>
-										{#snippet leading()}<GitBranch size={15} class="text-muted" />{/snippet}
-									</SearchPicker>
+										{#snippet icon(dir)}<FrameworkIcon framework={frameworkOfDir(dir)} />{/snippet}
+									</Dropdown>
 								</Field>
 							{/if}
-						</div>
-					{/key}
-
-					<Field label="Name" for="nd-name">
-						<Input
-							id="nd-name"
-							size="lg"
-							bind:value={name}
-							oninput={() => (nameTouched = true)}
-							placeholder="app-name"
-							mono
-						/>
-					</Field>
-
-					{#if isRepoSource}
-						<div class="nd-row">
-							<Field label="Build with" layout="row">
-								<div class="nd-row-control">
-									<Dropdown
-										value={frameworkValue}
-										options={FRAMEWORK_OPTIONS}
-										onchange={onFrameworkPicked}
-										trigger={frameworkPicker}
-									>
-										{#snippet icon(value)}
-											<FrameworkIcon
-												framework={value === DOCKERFILE_OPTION ? 'dockerfile' : value}
-											/>
-										{/snippet}
-									</Dropdown>
-								</div>
-							</Field>
-						</div>
-						{#if buildType === 'railpack' && detectedApps.length > 1}
-							<div class="nd-row">
-								<Field label="App in this repository" layout="row">
-									<div class="nd-row-control">
-										<Dropdown
-											value={rootDirectory}
-											options={rootDirectoryOptions}
-											onchange={(dir) => {
-												const app = detectedApps.find((a) => a.dir === dir);
-												if (app) selectRootDirectory(app);
-											}}
-											trigger={directoryPicker}
-										>
-											{#snippet icon(dir)}<FrameworkIcon
-													framework={frameworkOfDir(dir)}
-												/>{/snippet}
-										</Dropdown>
-									</div>
-								</Field>
-							</div>
 						{/if}
-					{/if}
 
-					<Divider />
+						<Divider />
 
-					{#if isRepoSource}
-						<Disclosure title="Build and output settings" note={buildNote}>
-							{#if buildType === 'dockerfile'}
-								<div class="nd-grid">
-									<Field label="Dockerfile">
-										{#if dockerfiles.length > 1}
-											<SearchPicker
+						{#if isRepoSource}
+							<Disclosure title="Build and output settings" note={buildNote}>
+								{#if buildType === 'dockerfile'}
+									<FieldGrid ratio="golden">
+										<Field label="Dockerfile">
+											{#if dockerfiles.length > 1}
+												<SearchPicker
+													size="lg"
+													block
+													mono
+													value={dockerfilePath}
+													options={dockerfileOptions}
+													searchPlaceholder="Search or type a path"
+													creatable
+													createLabel={(q) => `Use ${q}`}
+													onchange={selectDockerfile}
+												/>
+											{:else}
+												<Input
+													size="lg"
+													value={dockerfilePath}
+													oninput={(e: Event) =>
+														handleDockerfileInput((e.currentTarget as HTMLInputElement).value)}
+													placeholder="Dockerfile"
+													mono
+												/>
+											{/if}
+										</Field>
+										<Field label="Stage">
+											<Dropdown
 												size="lg"
-												block
-												mono
-												value={dockerfilePath}
-												options={dockerfileOptions}
-												searchPlaceholder="Search or type a path"
-												creatable
-												createLabel={(q) => `Use ${q}`}
-												onchange={selectDockerfile}
+												bind:value={selectedStage}
+												options={stageOptions}
+												loading={loadingStages}
+												ariaLabel="Stage"
 											/>
-										{:else}
+										</Field>
+									</FieldGrid>
+									<ToggleRow
+										bind:checked={buildFromRoot}
+										onchange={() => (buildFromRootTouched = true)}
+										label="Build from the repository root"
+										hint="For a Dockerfile that copies files from outside its own folder."
+									/>
+								{:else}
+									<FieldGrid ratio="golden">
+										<Field label="Install command">
 											<Input
 												size="lg"
-												value={dockerfilePath}
-												oninput={(e: Event) =>
-													handleDockerfileInput((e.currentTarget as HTMLInputElement).value)}
-												placeholder="Dockerfile"
+												value={installCommand}
+												oninput={(e: Event) => {
+													installCommand = (e.currentTarget as HTMLInputElement).value;
+													buildSettingsTouched = true;
+												}}
+												placeholder="Detected"
 												mono
 											/>
-										{/if}
-									</Field>
-									<Field label="Stage">
-										<Dropdown
-											bind:value={selectedStage}
-											options={stageOptions}
-											trigger={stagePicker}
-										/>
-									</Field>
-								</div>
-								<ToggleRow
-									bind:checked={buildFromRoot}
-									onchange={() => (buildFromRootTouched = true)}
-									label="Build from the repository root"
-									hint="For a Dockerfile that copies files from outside its own folder."
-								/>
-							{:else}
-								<div class="nd-grid">
-									<Field label="Install command">
-										<Input
-											size="lg"
-											value={installCommand}
-											oninput={(e: Event) => {
-												installCommand = (e.currentTarget as HTMLInputElement).value;
-												buildSettingsTouched = true;
-											}}
-											placeholder="Detected"
-											mono
-										/>
-									</Field>
-									<Field label="Build command">
-										<Input
-											size="lg"
-											value={buildCommand}
-											oninput={(e: Event) => {
-												buildCommand = (e.currentTarget as HTMLInputElement).value;
-												buildSettingsTouched = true;
-											}}
-											placeholder="Detected"
-											mono
-										/>
-									</Field>
-									<Field label="Start command">
-										<Input
-											size="lg"
-											value={startCommand}
-											oninput={(e: Event) => {
-												startCommand = (e.currentTarget as HTMLInputElement).value;
-												buildSettingsTouched = true;
-											}}
-											placeholder={outputDirectory ? 'Not used for a static site' : 'Detected'}
-											disabled={Boolean(outputDirectory)}
-											mono
-										/>
-									</Field>
-									<Field label="Output directory" hint="Serves the files as a static site.">
-										<Input
-											size="lg"
-											value={outputDirectory}
-											oninput={(e: Event) => {
-												outputDirectory = (e.currentTarget as HTMLInputElement).value;
-												buildSettingsTouched = true;
-											}}
-											placeholder="Detected"
-											mono
-										/>
-									</Field>
-								</div>
-							{/if}
-						</Disclosure>
-					{:else}
-						<Disclosure
-							title="Run settings"
-							note={imageStartCommand.trim() ? 'Custom command' : 'Image defaults'}
-						>
-							<Field label="Start command">
-								<Input size="lg" bind:value={imageStartCommand} placeholder="Image default" mono />
-							</Field>
-							<Field
-								label="Pull policy"
-								hint={imagePullPolicy === 'auto'
-									? isMutableTag(image)
-										? 'This tag can move, so every start re-pulls it.'
-										: 'Pinned tags reuse the copy already on the node.'
-									: imagePullPolicy === 'Always'
-										? 'Every start fetches the image again.'
-										: 'Starts reuse the copy already on the node.'}
+										</Field>
+										<Field label="Build command">
+											<Input
+												size="lg"
+												value={buildCommand}
+												oninput={(e: Event) => {
+													buildCommand = (e.currentTarget as HTMLInputElement).value;
+													buildSettingsTouched = true;
+												}}
+												placeholder="Detected"
+												mono
+											/>
+										</Field>
+										<Field label="Start command">
+											<Input
+												size="lg"
+												value={startCommand}
+												oninput={(e: Event) => {
+													startCommand = (e.currentTarget as HTMLInputElement).value;
+													buildSettingsTouched = true;
+												}}
+												placeholder={outputDirectory ? 'Not used for a static site' : 'Detected'}
+												disabled={Boolean(outputDirectory)}
+												mono
+											/>
+										</Field>
+										<Field label="Output directory" hint="Serves the files as a static site.">
+											<Input
+												size="lg"
+												value={outputDirectory}
+												oninput={(e: Event) => {
+													outputDirectory = (e.currentTarget as HTMLInputElement).value;
+													buildSettingsTouched = true;
+												}}
+												placeholder="Detected"
+												mono
+											/>
+										</Field>
+									</FieldGrid>
+								{/if}
+							</Disclosure>
+						{:else}
+							<Disclosure
+								title="Run settings"
+								note={imageStartCommand.trim() ? 'Custom command' : 'Image defaults'}
 							>
-								<SegmentedControl
-									label="Image pull policy"
-									bind:value={imagePullPolicy}
-									options={[
-										{ value: 'auto', label: 'Automatic' },
-										{ value: 'IfNotPresent', label: 'Use cached' },
-										{ value: 'Always', label: 'Always re-pull' }
-									]}
-								/>
-							</Field>
-							{#if imagePullPolicy === 'IfNotPresent' && isMutableTag(image)}
-								<Alert tone="warning" title="This tag can move">
-									Pushing over it will not show up on a restart. Automatic handles this.
-								</Alert>
-							{/if}
-						</Disclosure>
-					{/if}
+								<Field label="Start command">
+									<Input
+										size="lg"
+										bind:value={imageStartCommand}
+										placeholder="Image default"
+										mono
+									/>
+								</Field>
+								<Field
+									label="Pull policy"
+									hint={imagePullPolicy === 'auto'
+										? isMutableTag(image)
+											? 'This tag can move, so every start re-pulls it.'
+											: 'Pinned tags reuse the copy already on the node.'
+										: imagePullPolicy === 'Always'
+											? 'Every start fetches the image again.'
+											: 'Starts reuse the copy already on the node.'}
+								>
+									<SegmentedControl
+										label="Image pull policy"
+										bind:value={imagePullPolicy}
+										options={[
+											{ value: 'auto', label: 'Automatic' },
+											{ value: 'IfNotPresent', label: 'Use cached' },
+											{ value: 'Always', label: 'Always re-pull' }
+										]}
+									/>
+								</Field>
+								{#if imagePullPolicy === 'IfNotPresent' && isMutableTag(image)}
+									<Alert tone="warning" title="This tag can move">
+										Pushing over it will not show up on a restart. Automatic handles this.
+									</Alert>
+								{/if}
+							</Disclosure>
+						{/if}
 
-					{#if detectedScore && isRepoSource}
-						<Alert tone="info" title="Configured by {detectedScore.file}">
-							{#if detectedScore.resources.filter((r) => r.type === 'postgres').length > 0}
-								Provisions {detectedScore.resources
-									.filter((r) => r.type === 'postgres')
-									.map((r) => `Postgres “${r.name}”`)
-									.join(', ')} and connects it.
-							{/if}
-							{#if detectedScore.ports.length > 0}
-								Ports {detectedScore.ports.join(', ')}.
-							{/if}
-							{#if detectedScore.domain}
-								Routes {detectedScore.domain}.
-							{/if}
-							{#if detectedScore.warnings.length > 0}
-								<p class="text-warning">{detectedScore.warnings[0]}</p>
-							{/if}
-						</Alert>
-					{/if}
-				</Stack>
-			</SectionCard>
+						{#if detectedScore && isRepoSource}
+							<Alert tone="info" title="Configured by {detectedScore.file}">
+								{#if detectedScore.resources.filter((r) => r.type === 'postgres').length > 0}
+									Provisions {detectedScore.resources
+										.filter((r) => r.type === 'postgres')
+										.map((r) => `Postgres “${r.name}”`)
+										.join(', ')} and connects it.
+								{/if}
+								{#if detectedScore.ports.length > 0}
+									Ports {detectedScore.ports.join(', ')}.
+								{/if}
+								{#if detectedScore.domain}
+									Routes {detectedScore.domain}.
+								{/if}
+								{#if detectedScore.warnings.length > 0}
+									<p class="text-warning">{detectedScore.warnings[0]}</p>
+								{/if}
+							</Alert>
+						{/if}
+					</Stack>
+				</SectionCard>
 
-			<SectionCard title="Environment variables">
-				{#snippet actions()}
-					<SegmentedControl
-						label="Editor mode"
-						size="sm"
-						options={ENV_MODE_OPTIONS}
-						bind:value={() => envViewMode, (v) => (envViewMode = v as typeof envViewMode)}
-						onchange={() => (envsManuallyEdited = true)}
+				<SectionCard title="Environment variables">
+					{#snippet actions()}
+						<SegmentedControl
+							label="Editor mode"
+							size="sm"
+							options={ENV_MODE_OPTIONS}
+							bind:value={() => envViewMode, (v) => (envViewMode = v as typeof envViewMode)}
+							onchange={() => (envsManuallyEdited = true)}
+						/>
+					{/snippet}
+					<EnvVarEditor
+						bind:rows={envVars}
+						bind:mode={envViewMode}
+						bind:raw={envRawText}
+						secrets
+						minRows={1}
+						onedit={() => (envsManuallyEdited = true)}
 					/>
-				{/snippet}
-				<EnvVarEditor
-					bind:rows={envVars}
-					bind:mode={envViewMode}
-					bind:raw={envRawText}
-					secrets
-					minRows={1}
-					onedit={() => (envsManuallyEdited = true)}
-				/>
-			</SectionCard>
+				</SectionCard>
 
-			<SectionCard title="Networking">
-				<div class="nd-ports" role="table" aria-label="Ports">
-					<div class="nd-ports-head" role="row">
-						<span role="columnheader">Port</span>
-						<span role="columnheader">Protocol</span>
-						<span role="columnheader">Reach</span>
-						<span></span>
-					</div>
-					{#each ports as port, index (index)}
-						<div class="nd-ports-row" role="row">
+				<SectionCard title="Networking">
+					<RowList
+						label="Ports"
+						items={ports}
+						key={(p) => p.id}
+						columns={[
+							{ label: 'Port', width: '8rem' },
+							{ label: 'Protocol', width: '5.25rem' },
+							{ label: 'Reach' }
+						]}
+						addLabel="Add port"
+						onadd={addPort}
+						onremove={removePort}
+						removeLabel={(p) => `Remove port ${p.containerPort}`}
+						minRows={1}
+					>
+						{#snippet row(port, index)}
 							<Input
 								type="number"
 								bind:value={port.containerPort}
@@ -1579,160 +1538,75 @@
 								options={reachOptions(port.protocol)}
 								ariaLabel="Reach for port {port.containerPort}"
 							/>
-							{#if ports.length > 1}
-								<Button
-									variant="ghost"
-									size="sm"
-									icon={Trash2}
-									label="Remove port {port.containerPort}"
-									onclick={() => removePort(index)}
-								/>
-							{:else}
-								<span></span>
-							{/if}
-						</div>
-					{/each}
-				</div>
-				<div class="nd-ports-add">
-					<Button size="sm" variant="ghost" icon={Plus} onclick={addPort}>Add port</Button>
-				</div>
-			</SectionCard>
+						{/snippet}
+					</RowList>
+				</SectionCard>
 
-			<SectionCard title="Advanced">
-				<div class="nd-folds">
-					<Disclosure
-						title="Storage"
-						note={volumes.length
-							? `${volumes.length} ${volumes.length === 1 ? 'volume' : 'volumes'}`
-							: 'None'}
-					>
-						{#each volumes as volume, index (index)}
-							<div class="nd-vol">
-								<Input bind:value={volume.pvcName} placeholder="Name" aria-label="Storage name" />
-								<ArrowRight size={14} class="text-faint" aria-hidden="true" />
-								<Input
-									bind:value={volume.mountPath}
-									placeholder="/data"
-									aria-label="Mount path"
-									mono
-								/>
-								<div class="nd-vol-ro">
-									<span class="text-callout text-muted">Read-only</span>
+				<SectionCard title="Advanced">
+					<DisclosureGroup>
+						<Disclosure
+							title="Storage"
+							note={volumes.length
+								? `${volumes.length} ${volumes.length === 1 ? 'volume' : 'volumes'}`
+								: 'None'}
+						>
+							<RowList
+								label="Volumes"
+								items={volumes}
+								key={(v) => v.id}
+								columns={[
+									{ label: 'Name' },
+									{ label: 'Mount path' },
+									{ label: 'Read-only', width: '4rem' }
+								]}
+								addLabel="Add volume"
+								onadd={addVolume}
+								onremove={removeVolume}
+								removeLabel={(v) => `Remove ${v.pvcName || 'volume'}`}
+							>
+								{#snippet row(volume)}
+									<Input bind:value={volume.pvcName} placeholder="data" aria-label="Volume name" />
+									<Input
+										bind:value={volume.mountPath}
+										placeholder="/data"
+										aria-label="Mount path"
+										mono
+									/>
 									<Switch bind:checked={volume.readOnly} label="Read-only" />
-								</div>
-								<Button
-									variant="ghost"
-									size="sm"
-									icon={Trash2}
-									label="Remove storage"
-									onclick={() => removeVolume(index)}
-								/>
-							</div>
-						{/each}
-						<div>
-							<Button size="sm" variant="tinted" icon={Plus} onclick={addVolume}>Add volume</Button>
-						</div>
-					</Disclosure>
+								{/snippet}
+							</RowList>
+						</Disclosure>
 
-					<Divider />
+						<Disclosure title="Resources" note={resourcesNote}>
+							<ResourcePicker
+								bind:cpuMilli={resourceCpuMilli}
+								bind:memoryBytes={resourceMemoryBytes}
+							/>
+						</Disclosure>
 
-					<Disclosure title="Resources" note={resourcesNote}>
-						<ResourcePicker
-							bind:cpuMilli={resourceCpuMilli}
-							bind:memoryBytes={resourceMemoryBytes}
-						/>
-					</Disclosure>
+						<Disclosure
+							title="Scaling"
+							note={`${replicas} ${replicas === 1 ? 'replica' : 'replicas'}`}
+						>
+							<Field label="Replicas" layout="row">
+								<Stepper bind:value={replicas} min={1} max={20} label="Replicas" />
+							</Field>
+							{#if $isSuperAdmin && isRepoSource}
+								<ToggleRow bind:checked={buildWithDepot} label="Orchard's super builds" />
+							{/if}
+						</Disclosure>
+					</DisclosureGroup>
+				</SectionCard>
 
-					<Divider />
+				{#if formError}
+					<Alert tone="error">{formError}</Alert>
+				{/if}
 
-					<Disclosure
-						title="Scaling"
-						note={`${replicas} ${replicas === 1 ? 'replica' : 'replicas'}`}
-					>
-						<Field label="Replicas" layout="row">
-							<Stepper bind:value={replicas} min={1} max={20} label="Replicas" />
-						</Field>
-						{#if $isSuperAdmin && isRepoSource}
-							<ToggleRow bind:checked={buildWithDepot} label="Orchard's super builds" />
-						{/if}
-					</Disclosure>
-				</div>
-			</SectionCard>
-
-			{#if formError}
-				<Alert tone="error">{formError}</Alert>
-			{/if}
-
-			<FormActions>
-				<Button variant="ghost" href={basePath}>Cancel</Button>
-				<Button variant="primary" size="lg" type="submit" loading={submitting}>Deploy</Button>
-			</FormActions>
+				<FormActions>
+					<Button variant="ghost" href={basePath}>Cancel</Button>
+					<Button variant="primary" size="lg" type="submit" loading={submitting}>Deploy</Button>
+				</FormActions>
+			</Stack>
 		</form>
 	{/if}
 </Page>
-
-<style>
-	.nd-form {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-6);
-	}
-	.nd-grid {
-		display: grid;
-		grid-template-columns: minmax(0, 38.2fr) minmax(0, 61.8fr);
-		gap: var(--space-4) var(--space-3);
-	}
-	.nd-fields {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-4);
-	}
-	.nd-row :global(.row-control) {
-		flex: 0 0 61.8%;
-		min-width: 0;
-	}
-	.nd-folds {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-	}
-	.nd-ports {
-		display: grid;
-		grid-template-columns: 8rem auto minmax(0, 1fr) 1.75rem;
-		align-items: center;
-		gap: var(--space-2) var(--space-3);
-	}
-	.nd-ports-head,
-	.nd-ports-row {
-		display: contents;
-	}
-	.nd-ports-head span {
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: var(--weight-medium);
-		color: var(--text-muted);
-	}
-	.nd-ports-add {
-		margin: var(--space-2) 0 0 calc(var(--space-2) * -1);
-	}
-	.nd-vol {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto auto;
-		align-items: center;
-		gap: var(--space-2);
-	}
-	.nd-vol-ro {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		padding-left: var(--space-2);
-	}
-	@media (max-width: 640px) {
-		.nd-grid {
-			grid-template-columns: minmax(0, 1fr);
-		}
-		.nd-vol {
-			grid-template-columns: minmax(0, 1fr) auto;
-		}
-	}
-</style>

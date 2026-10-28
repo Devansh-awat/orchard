@@ -9,6 +9,7 @@
 		for: htmlFor = undefined,
 		required = false,
 		layout = 'stack',
+		split = false,
 		children
 	}: {
 		label?: string;
@@ -17,6 +18,7 @@
 		for?: string;
 		required?: boolean;
 		layout?: 'stack' | 'row';
+		split?: boolean;
 		children: Snippet;
 	} = $props();
 </script>
@@ -36,7 +38,7 @@
 {/snippet}
 
 {#if layout === 'row'}
-	<div class="field field--row">
+	<div class="field field--row" class:field--split={split}>
 		<div class="row-text">
 			{#if label}<label class="label" for={htmlFor}
 					>{label}{#if required}<span class="req" aria-hidden="true">*</span>{/if}</label
@@ -82,6 +84,10 @@
 	}
 	.row-control {
 		flex-shrink: 0;
+	}
+	.field--split .row-control {
+		flex: 0 0 61.8%;
+		min-width: 0;
 	}
 	.req {
 		margin-left: 0.125rem;

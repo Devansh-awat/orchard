@@ -14,6 +14,20 @@
 	import ResourceList from '$lib/components/patterns/ResourceList.svelte';
 	import { IMG_ICONS } from '$lib/components/org-dashboard/helpers.svelte';
 	import { TEMPLATE_SHELVES } from '../home-fixtures';
+	import RowList from '$lib/components/ui/RowList.svelte';
+	import DisclosureGroup from '$lib/components/ui/DisclosureGroup.svelte';
+	import FieldGrid from '$lib/components/ui/FieldGrid.svelte';
+	import Field from '$lib/components/ui/Field.svelte';
+	import Input from '$lib/components/ui/Input.svelte';
+	import Switch from '$lib/components/ui/Switch.svelte';
+	import Dropdown from '$lib/components/ui/Dropdown.svelte';
+
+	let demoSeq = 2;
+	let demoVolumes = $state([
+		{ id: 1, name: 'uploads', path: '/app/uploads', readOnly: false },
+		{ id: 2, name: 'config', path: '/etc/app', readOnly: true }
+	]);
+	let demoStage = $state('');
 
 	const featured = TEMPLATE_SHELVES[0].items.slice(0, 4).map((t) => ({
 		id: t.id,
@@ -172,4 +186,53 @@
 			{ name: 'ghost-web', type: 'ingress' }
 		]}
 	/>
+</SectionCard>
+
+<SectionCard
+	title="Rows, folds and field grids"
+	description="RowList for rows people add and remove, DisclosureGroup for folded settings, FieldGrid for two fields side by side."
+>
+	<Stack gap="lg">
+		<RowList
+			label="Volumes"
+			items={demoVolumes}
+			key={(v) => v.id}
+			columns={[{ label: 'Name' }, { label: 'Mount path' }, { label: 'Read-only', width: '4rem' }]}
+			addLabel="Add volume"
+			onadd={() =>
+				(demoVolumes = [...demoVolumes, { id: ++demoSeq, name: '', path: '', readOnly: false }])}
+			onremove={(i) => (demoVolumes = demoVolumes.filter((_, n) => n !== i))}
+			removeLabel={(v) => `Remove ${v.name || 'volume'}`}
+		>
+			{#snippet row(volume)}
+				<Input bind:value={volume.name} placeholder="data" aria-label="Volume name" />
+				<Input bind:value={volume.path} placeholder="/data" aria-label="Mount path" mono />
+				<Switch bind:checked={volume.readOnly} label="Read-only" />
+			{/snippet}
+		</RowList>
+		<FieldGrid ratio="golden">
+			<Field label="Dockerfile"><Input size="lg" value="Dockerfile" mono /></Field>
+			<Field label="Stage">
+				<Dropdown
+					size="lg"
+					bind:value={demoStage}
+					options={[
+						{ value: '', label: 'Final stage' },
+						{ value: 'build', label: 'build', mono: true }
+					]}
+				/>
+			</Field>
+		</FieldGrid>
+		<DisclosureGroup>
+			<Disclosure title="Storage" note="2 volumes"
+				><p class="text-callout text-muted">Rows go here.</p></Disclosure
+			>
+			<Disclosure title="Resources" note="Org default"
+				><p class="text-callout text-muted">The resource picker goes here.</p></Disclosure
+			>
+			<Disclosure title="Scaling" note="1 replica"
+				><p class="text-callout text-muted">Replicas go here.</p></Disclosure
+			>
+		</DisclosureGroup>
+	</Stack>
 </SectionCard>

@@ -10,6 +10,7 @@
 	import { untrack } from 'svelte';
 	import { Eye, EyeOff, Lock, LockOpen, Plus, Trash2 } from 'lucide-svelte';
 	import { envVarsToRaw, rawToEnvVars } from '$lib/utils/format';
+	import { presence } from '$lib/utils/transitions';
 	import Button from './Button.svelte';
 	import Textarea from './Textarea.svelte';
 
@@ -30,6 +31,17 @@
 	} = $props();
 
 	let revealed = $state<Set<number>>(new Set());
+	const ids = new WeakMap<EnvVarEditorRow, number>();
+	let seq = 0;
+
+	function idOf(row: EnvVarEditorRow) {
+		let id = ids.get(row);
+		if (id == null) {
+			id = ++seq;
+			ids.set(row, id);
+		}
+		return id;
+	}
 	let shownMode = untrack(() => mode);
 
 	$effect.pre(() => {
@@ -55,10 +67,11 @@
 		onedit?.();
 	}
 
-	function toggleReveal(i: number) {
+	function toggleReveal(row: EnvVarEditorRow) {
+		const id = idOf(row);
 		const next = new Set(revealed);
-		if (next.has(i)) next.delete(i);
-		else next.add(i);
+		if (next.has(id)) next.delete(id);
+		else next.add(id);
 		revealed = next;
 	}
 
@@ -70,7 +83,6 @@
 	function removeRow(i: number) {
 		if (rows.length <= minRows) return;
 		rows = rows.filter((_, idx) => idx !== i);
-		revealed = new Set();
 		edited();
 	}
 
@@ -91,8 +103,8 @@
 		edited();
 	}
 
-	function masked(row: EnvVarEditorRow, i: number) {
-		if (revealed.has(i)) return false;
+	function masked(row: EnvVarEditorRow) {
+		if (revealed.has(idOf(row))) return false;
 		return secrets ? !!row.secret : true;
 	}
 </script>
@@ -110,8 +122,8 @@
 	/>
 {:else}
 	<div class="sheet" role="list">
-		{#each rows as row, i (i)}
-			<div class="row" role="listitem">
+		{#each rows as row, i (idOf(row))}
+			<div class="row" role="listitem" in:presence out:presence>
 				<input
 					class="cell cell--key"
 					placeholder="KEY"
@@ -124,7 +136,7 @@
 				/>
 				<input
 					class="cell cell--value"
-					type={masked(row, i) ? 'password' : 'text'}
+					type={masked(row) ? 'password' : 'text'}
 					placeholder={row.secret ? '••••••••' : row.key.trim() ? 'value' : ''}
 					aria-label={row.key ? `Value of ${row.key}` : 'Value'}
 					autocomplete="off"
@@ -137,9 +149,9 @@
 						<Button
 							variant="ghost"
 							size="sm"
-							icon={revealed.has(i) ? EyeOff : Eye}
-							label={revealed.has(i) ? 'Hide value' : 'Show value'}
-							onclick={() => toggleReveal(i)}
+							icon={revealed.has(idOf(row)) ? EyeOff : Eye}
+							label={revealed.has(idOf(row)) ? 'Hide value' : 'Show value'}
+							onclick={() => toggleReveal(row)}
 						/>
 					</span>
 					{#if secrets}

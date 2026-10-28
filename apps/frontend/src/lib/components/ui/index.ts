@@ -73,3 +73,6 @@ export { default as SecretInput } from './SecretInput.svelte';
 export { default as SearchPicker } from './SearchPicker.svelte';
 export { default as AmountSlider } from './AmountSlider.svelte';
 export { default as GitHostMark, gitHostOf } from './GitHostMark.svelte';
+export { default as DisclosureGroup } from './DisclosureGroup.svelte';
+export { default as RowList } from './RowList.svelte';
+export { default as FieldGrid } from './FieldGrid.svelte';

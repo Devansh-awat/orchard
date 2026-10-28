@@ -16,6 +16,8 @@
 		icon = undefined,
 		trigger: custom = undefined,
 		size = 'md',
+		loading = false,
+		mono = false,
 		ariaLabel = undefined,
 		ariaLabelledby = undefined
 	}: {
@@ -28,7 +30,9 @@
 		onchange?: (value: string) => void;
 		icon?: Snippet<[string]>;
 		trigger?: Snippet<[Record<string, unknown>, boolean, DropdownOption | null]>;
-		size?: 'sm' | 'md';
+		size?: 'sm' | 'md' | 'lg';
+		loading?: boolean;
+		mono?: boolean;
 		ariaLabel?: string;
 		ariaLabelledby?: string;
 	} = $props();
@@ -161,7 +165,8 @@
 				{size}
 				{disabled}
 				open={isOpen}
-				mono={selected?.mono}
+				{loading}
+				mono={mono || selected?.mono}
 				value={selected?.label}
 				{placeholder}
 				leading={selected && (icon || selected.icon) ? selectedGlyph : undefined}
