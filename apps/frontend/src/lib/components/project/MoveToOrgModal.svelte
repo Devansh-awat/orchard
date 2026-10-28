@@ -1,9 +1,19 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { Check, Loader2, ArrowLeft } from 'lucide-svelte';
-	import { Modal, Button, Alert, Field, Input } from '$lib/components/ui';
+	import { Building2 } from 'lucide-svelte';
+	import {
+		Alert,
+		Button,
+		Dropdown,
+		Field,
+		FieldGrid,
+		Input,
+		Modal,
+		RemoteImg,
+		Spinner,
+		Stack
+	} from '$lib/components/ui';
 	import { apiFetch, toasts, organizations } from '$lib/stores';
-	import { motionStagger } from '$lib/utils/motion.svelte';
 
 	type PreviewMember = { id: string; username: string };
 	type Preview = {
@@ -33,8 +43,9 @@
 		onmoved?: (result: { slug: string; destinationOrgSlug: string }) => void;
 	} = $props();
 
-	let step = $state<'destination' | 'review'>('destination');
-	let selectedOrgId = $state<string | null>(null);
+	const uid = $props.id();
+
+	let selectedOrgId = $state('');
 	let slug = $state('');
 	let preview = $state<Preview | null>(null);
 	let loadingPreview = $state(false);
@@ -45,13 +56,14 @@
 	const eligibleOrgs = $derived(
 		$organizations.filter((o) => o.id !== currentOrgId && o.myRole && o.myRole !== 'guest')
 	);
+	const orgOptions = $derived(eligibleOrgs.map((o) => ({ value: o.id, label: o.name })));
 	const selectedOrg = $derived(eligibleOrgs.find((o) => o.id === selectedOrgId) ?? null);
+	const destName = $derived(selectedOrg?.name ?? 'the new organization');
 
 	$effect(() => {
 		if (open && !wasOpen) {
 			wasOpen = true;
-			step = 'destination';
-			selectedOrgId = null;
+			selectedOrgId = '';
 			slug = currentSlug;
 			preview = null;
 			error = null;
@@ -92,10 +104,10 @@
 		slugDebounce = setTimeout(fetchPreview, 400);
 	}
 
-	async function goToReview() {
-		if (!selectedOrgId) return;
-		step = 'review';
-		await fetchPreview();
+	function onOrgPicked() {
+		clearTimeout(slugDebounce);
+		preview = null;
+		fetchPreview();
 	}
 
 	const pausing = $derived(Boolean(preview?.backups.willPause));
@@ -120,7 +132,7 @@
 			const result = await res.json();
 			toasts.add({
 				title: 'Project moved',
-				description: `${projectName} now lives in ${selectedOrg?.name ?? 'the new organization'}`,
+				description: `${projectName} now lives in ${destName}`,
 				color: 'success'
 			});
 			open = false;
@@ -133,132 +145,120 @@
 		}
 	}
 
-	function monogram(name: string) {
-		return name.trim().charAt(0).toUpperCase() || '?';
+	function plural(n: number, word: string) {
+		return `${n} ${word}${n === 1 ? '' : 's'}`;
 	}
 </script>
 
-<Modal bind:open size="sm" title="Move to organization">
-	{#if step === 'destination'}
-		<p class="mv-lead">
-			Move <strong>{projectName}</strong> to another organization you belong to. Everything running in
-			it comes along.
+<Modal bind:open title="Move {projectName}">
+	{#if eligibleOrgs.length === 0}
+		<p class="text-body text-muted">
+			You are not in another organization where you can create projects. Ask one of its owners to
+			add you.
 		</p>
-
-		{#if eligibleOrgs.length > 0}
-			<ul class="mv-list">
-				{#each eligibleOrgs as org, i (org.id)}
-					<li {@attach motionStagger({ index: i, axis: 'x', from: { y: -8 } })}>
-						<button
-							type="button"
-							class="mv-option"
-							class:is-selected={selectedOrgId === org.id}
-							aria-pressed={selectedOrgId === org.id}
-							onclick={() => (selectedOrgId = org.id)}
-						>
-							<span class="mv-mono" aria-hidden="true">
-								{#if org.avatarUrl}
-									<img src={org.avatarUrl} alt="" />
-								{:else}
-									{monogram(org.name)}
-								{/if}
-							</span>
-							<span class="mv-option-text">
-								<span class="mv-option-name">{org.name}</span>
-								<span class="mv-option-slug">{org.slug}</span>
-							</span>
-							<span class="mv-option-check">
-								{#if selectedOrgId === org.id}<Check size={14} />{/if}
-							</span>
-						</button>
-					</li>
-				{/each}
-			</ul>
-		{:else}
-			<p class="mv-empty">
-				You are not a member of any other organization where you can create projects. Ask an owner
-				to add you first.
-			</p>
-		{/if}
 	{:else}
-		<p class="mv-lead">
-			Moving <strong>{projectName}</strong> to <strong>{selectedOrg?.name}</strong>.
-		</p>
-
-		<Field
-			label="Project name in the new organization"
-			hint="This becomes the project's URL slug. Change it if the name is already taken."
-			error={preview?.slugCollision ? 'That name is already taken in this organization.' : null}
-		>
-			<Input bind:value={slug} oninput={onSlugInput} placeholder={currentSlug} class="font-mono" />
-		</Field>
-
-		{#if loadingPreview}
-			<div class="mv-loading">
-				<Loader2 class="h-4 w-4 animate-spin" data-motion="progress" />
-				Checking what will change
-			</div>
-		{:else if preview}
-			<div class="mv-summary">
-				{#if preview.membersLosingAccess.length > 0}
-					<Alert
-						tone="warning"
-						title={`${preview.membersLosingAccess.length} member${preview.membersLosingAccess.length === 1 ? '' : 's'} will lose access`}
+		<Stack>
+			<FieldGrid>
+				<Field label="Organization" for="{uid}-org">
+					<Dropdown
+						id="{uid}-org"
+						size="lg"
+						placeholder="Choose one"
+						bind:value={selectedOrgId}
+						options={orgOptions}
+						onchange={onOrgPicked}
 					>
-						{preview.membersLosingAccess.map((m) => m.username).join(', ')} will be removed because they
-						are not in {selectedOrg?.name}. {preview.membersKept} will keep access.
-					</Alert>
-				{/if}
+						{#snippet icon(id)}
+							{@const org = eligibleOrgs.find((o) => o.id === id)}
+							{#if org?.avatarUrl}
+								<span class="org-avatar"
+									><RemoteImg src={org.avatarUrl} class="org-avatar-img" /></span
+								>
+							{:else}
+								<Building2 size={16} />
+							{/if}
+						{/snippet}
+					</Dropdown>
+				</Field>
+				<Field
+					label="Slug"
+					for="{uid}-slug"
+					error={preview?.slugCollision ? `Already taken in ${destName}` : null}
+				>
+					<Input
+						id="{uid}-slug"
+						size="lg"
+						mono
+						bind:value={slug}
+						oninput={onSlugInput}
+						placeholder={currentSlug}
+						error={!!preview?.slugCollision}
+						autocomplete="off"
+						spellcheck="false"
+					/>
+				</Field>
+			</FieldGrid>
 
-				{#if preview.ownerReassignedToMover}
-					<Alert tone="info" title="You will become the owner">
-						The current owner is not in {selectedOrg?.name}, so the project's resource bill moves to
-						you.
-					</Alert>
-				{/if}
+			{#if loadingPreview && !preview}
+				<p class="flex items-center gap-2 text-callout text-muted">
+					<Spinner size={14} />
+					Checking what changes
+				</p>
+			{:else if preview}
+				<Stack gap="xs">
+					{#if preview.membersLosingAccess.length > 0}
+						<Alert
+							tone="warning"
+							title="{plural(preview.membersLosingAccess.length, 'member')} lose access"
+						>
+							{preview.membersLosingAccess.map((m) => m.username).join(', ')}
+							{preview.membersLosingAccess.length === 1 ? 'is' : 'are'} not in {destName}.
+							{plural(preview.membersKept, 'member')} keep access.
+						</Alert>
+					{/if}
 
-				{#if preview.quota?.willExceed}
-					<Alert tone="warning" title="Over the destination's quota">
-						This project's resources exceed what's left in {selectedOrg?.name}'s quota. The move
-						still works, but new deployments there may be blocked until there's room.
-					</Alert>
-				{/if}
+					{#if preview.ownerReassignedToMover}
+						<Alert tone="info" title="You become the owner">
+							The current owner is not in {destName}, so everything here counts against your
+							allowance.
+						</Alert>
+					{/if}
 
-				{#if pausing}
-					<Alert tone="error" title="New database backups will stop">
-						{selectedOrg?.name} has no backup storage set up. After the move your database keeps running
-						but takes no new backups until you configure R2 there. Existing backups stay restorable. Set
-						up backup storage first if you can.
-					</Alert>
-				{:else if preview.backups.willContinue}
-					<Alert tone="info" title="Backups keep running">
-						The {preview.backups.databaseCount} database{preview.backups.databaseCount === 1
-							? ''
-							: 's'}
-						start archiving to {selectedOrg?.name}'s storage. Existing backups stay restorable.
-					</Alert>
-				{/if}
-			</div>
-		{/if}
+					{#if preview.quota?.willExceed}
+						<Alert tone="warning" title="Over {destName}'s quota">
+							The move goes through, but new deploys there may be blocked until there is room.
+						</Alert>
+					{/if}
 
-		{#if error}
-			<Alert tone="error">{error}</Alert>
-		{/if}
+					{#if pausing}
+						<Alert tone="error" title="New database backups stop">
+							{destName} has no backup storage. Databases keep running but take no new backups until you
+							set up R2 there. Existing backups stay restorable.
+						</Alert>
+					{:else if preview.backups.willContinue}
+						<Alert tone="info" title="Backups keep running">
+							{plural(preview.backups.databaseCount, 'database')} start archiving to {destName}'s
+							storage. Existing backups stay restorable.
+						</Alert>
+					{/if}
+				</Stack>
+			{/if}
+
+			{#if error}
+				<Alert tone="error">{error}</Alert>
+			{/if}
+		</Stack>
 	{/if}
 
 	{#snippet footer()}
-		{#if step === 'destination'}
-			<Button variant="secondary" onclick={() => (open = false)}>Cancel</Button>
-			<Button variant="primary" disabled={!selectedOrgId} onclick={goToReview}>Continue</Button>
-		{:else}
-			<Button variant="secondary" onclick={() => (step = 'destination')}>
-				<ArrowLeft class="h-4 w-4" />
-				Back
-			</Button>
-			<Button variant={pausing ? 'danger' : 'primary'} disabled={!canSubmit} onclick={submit}>
-				{#if submitting}
-					<Loader2 class="h-4 w-4 animate-spin" data-motion="progress" />
-				{/if}
+		<Button onclick={() => (open = false)}>Cancel</Button>
+		{#if eligibleOrgs.length > 0}
+			<Button
+				variant={pausing ? 'danger' : 'primary'}
+				loading={submitting}
+				disabled={!canSubmit}
+				onclick={submit}
+			>
 				{pausing ? 'Move anyway' : 'Move project'}
 			</Button>
 		{/if}
@@ -266,108 +266,18 @@
 </Modal>
 
 <style>
-	.mv-lead {
-		margin: 0 0 var(--space-4);
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		color: var(--text-muted);
-	}
-	.mv-list {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-1);
-		max-height: 17rem;
-		overflow-y: auto;
-	}
-	.mv-option {
-		width: 100%;
-		display: flex;
-		align-items: center;
-		gap: var(--space-3);
-		padding: var(--space-2) var(--space-3);
-		border-radius: var(--radius-md);
-		border: 1px solid transparent;
-		background: transparent;
-		cursor: pointer;
-		text-align: left;
-		transition:
-			background-color var(--dur-fast),
-			border-color var(--dur-fast);
-	}
-	.mv-option:hover {
-		background: var(--bg-raised);
-	}
-	.mv-option.is-selected {
-		background: color-mix(in srgb, var(--accent) 10%, transparent);
-		border-color: color-mix(in srgb, var(--accent) 32%, transparent);
-	}
-	.mv-mono {
-		width: 1.75rem;
-		height: 1.75rem;
-		border-radius: var(--radius-sm);
-		flex-shrink: 0;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		background: var(--bg-sunken);
-		color: var(--text-muted);
-		font-size: var(--text-footnote);
-		font-weight: 600;
+	.org-avatar {
+		display: block;
+		width: 1rem;
+		height: 1rem;
 		overflow: hidden;
+		border-radius: calc(0.25rem * var(--corner-scale));
+		corner-shape: var(--corner);
 	}
-	.mv-mono img {
+	.org-avatar :global(.org-avatar-img) {
+		display: block;
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
-	}
-	.mv-option-text {
-		display: flex;
-		flex-direction: column;
-		min-width: 0;
-		flex: 1;
-	}
-	.mv-option-name {
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		font-weight: 600;
-		color: var(--text-default);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.mv-option-slug {
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		color: var(--text-muted);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.mv-option-check {
-		flex-shrink: 0;
-		color: var(--accent);
-	}
-	.mv-empty {
-		margin: 0;
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		color: var(--text-muted);
-	}
-	.mv-loading {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		margin-top: var(--space-4);
-		font-size: var(--text-footnote);
-		color: var(--text-muted);
-	}
-	.mv-summary {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-		margin-top: var(--space-4);
 	}
 </style>

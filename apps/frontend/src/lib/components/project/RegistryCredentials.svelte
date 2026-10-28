@@ -1,8 +1,21 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { KeyRound, Trash2 } from 'lucide-svelte';
+	import { Plus, Trash2 } from 'lucide-svelte';
+	import { presence } from '$lib/utils/transitions';
 	import { apiFetch, toasts } from '$lib/stores';
-	import { Button, Dropdown, Field, Input, SectionCard, Skeleton } from '$lib/components/ui';
+	import {
+		ActionRow,
+		Button,
+		Dropdown,
+		Field,
+		FieldGrid,
+		Input,
+		Modal,
+		SecretInput,
+		SectionCard,
+		Skeleton,
+		Stack
+	} from '$lib/components/ui';
 	import { REGISTRY_PRESETS, registryHint, tokenLabel } from '$lib/utils/registry';
 
 	let {
@@ -23,10 +36,14 @@
 		updatedAt: string;
 	};
 
+	const PRESET_OPTIONS = REGISTRY_PRESETS.map((p) => ({ value: p.value, label: p.label }));
+	const formId = $props.id();
+
 	let credentials = $state<Credential[]>([]);
-	let loading = $state(true);
+	let loaded = $state(false);
 	let saving = $state(false);
 	let removing = $state<string | null>(null);
+	let editorOpen = $state(false);
 
 	let preset = $state(organizationId ? 'dhi.io' : 'ghcr.io');
 	let customHost = $state('');
@@ -35,9 +52,9 @@
 
 	const registry = $derived(preset === 'custom' ? customHost.trim() : preset);
 	const canSave = $derived(!!registry && !!username.trim() && !!password);
+	const replacing = $derived(credentials.some((c) => c.registry === registry));
 
 	async function load() {
-		loading = true;
 		try {
 			const res = await apiFetch(endpoint);
 			if (!res.ok) throw new Error('Failed to load registry credentials');
@@ -48,12 +65,21 @@
 				color: 'error'
 			});
 		} finally {
-			loading = false;
+			loaded = true;
 		}
 	}
 
+	function openEditor(cred?: Credential) {
+		const known = cred && REGISTRY_PRESETS.some((p) => p.value === cred.registry);
+		preset = cred ? (known ? cred.registry : 'custom') : organizationId ? 'dhi.io' : 'ghcr.io';
+		customHost = cred && !known ? cred.registry : '';
+		username = cred?.username ?? '';
+		password = '';
+		editorOpen = true;
+	}
+
 	async function save() {
-		if (!canSave) return;
+		if (!canSave || saving) return;
 		saving = true;
 		try {
 			const res = await apiFetch(endpoint, {
@@ -69,13 +95,12 @@
 			toasts.add({
 				title: 'Registry credential saved',
 				description: organizationId
-					? `Projects now inherit credentials for ${saved.registry}. Project and app overrides take precedence.`
-					: `Apps pulling from ${saved.registry} now authenticate as ${saved.username}`,
+					? `Projects now inherit credentials for ${saved.registry ?? registry}. Project and app overrides take precedence.`
+					: `Apps pulling from ${saved.registry ?? registry} now sign in as ${saved.username ?? username.trim()}`,
 				color: 'success'
 			});
-			username = '';
+			editorOpen = false;
 			password = '';
-			customHost = '';
 			await load();
 		} catch (e) {
 			toasts.add({
@@ -97,8 +122,8 @@
 				const d = await res.json().catch(() => ({}));
 				throw new Error(d.message || 'Failed to remove credential');
 			}
+			credentials = credentials.filter((c) => c.id !== cred.id);
 			toasts.add({ title: `Removed ${cred.registry} credential`, color: 'success' });
-			await load();
 		} catch (e) {
 			toasts.add({
 				title: e instanceof Error ? e.message : 'Failed to remove credential',
@@ -118,58 +143,64 @@
 		? 'Default Docker logins for every project in this organization, including builds, apps and jobs. Project credentials override these defaults. Build environment variables DHI_USERNAME and DHI_TOKEN, or DOCKER_AUTH_CONFIG, take precedence over both.'
 		: 'Docker logins for builds, apps and jobs in this project. These override organization defaults for the same registry.'}
 >
-	{#if loading}
+	{#snippet actions()}
+		{#if canEdit}
+			<Button size="sm" icon={Plus} onclick={() => openEditor()}>Add</Button>
+		{/if}
+	{/snippet}
+	{#if !loaded}
 		<Skeleton class="h-10 w-full" />
 	{:else if credentials.length > 0}
-		<ul class="rc-list">
+		<Stack>
 			{#each credentials as cred (cred.id)}
-				<li class="rc-row">
-					<span class="rc-icon"><KeyRound size={14} /></span>
-					<span class="rc-main">
-						<span class="rc-registry">{cred.registry}</span>
-						<span class="rc-user">{cred.username}</span>
-					</span>
-					{#if canEdit}
-						<Button
-							variant="ghost"
-							size="sm"
-							loading={removing === cred.id}
-							onclick={() => remove(cred)}
-							aria-label={`Remove ${cred.registry} credential`}
-						>
-							<Trash2 class="h-3.5 w-3.5" />
-						</Button>
-					{/if}
-				</li>
+				<div in:presence out:presence>
+					<ActionRow label={cred.registry} hint={cred.username}>
+						{#if canEdit}
+							<Button size="sm" onclick={() => openEditor(cred)}>Replace</Button>
+							<Button
+								variant="ghost"
+								size="sm"
+								icon={Trash2}
+								label="Remove {cred.registry} credential"
+								loading={removing === cred.id}
+								onclick={() => remove(cred)}
+							/>
+						{/if}
+					</ActionRow>
+				</div>
 			{/each}
-		</ul>
-	{:else if !canEdit}
-		<p class="rc-empty">
-			No credentials configured here. Organization defaults and build environment credentials still
-			apply.
+		</Stack>
+	{:else}
+		<p class="text-callout text-muted">
+			{organizationId
+				? 'None yet, so images pull anonymously unless a project adds its own.'
+				: 'None here, so organization defaults and build environment credentials apply.'}
 		</p>
 	{/if}
+</SectionCard>
 
-	{#if canEdit}
+{#if canEdit}
+	<Modal
+		bind:open={editorOpen}
+		title={replacing ? 'Replace registry credential' : 'Add registry credential'}
+	>
 		<form
-			class="rc-form"
+			id={formId}
 			onsubmit={(e) => {
 				e.preventDefault();
 				save();
 			}}
 		>
-			<div class="rc-grid">
-				<Field label="Registry" for="rc-preset">
-					<Dropdown
-						id="rc-preset"
-						bind:value={preset}
-						options={REGISTRY_PRESETS.map((p) => ({ value: p.value, label: p.label }))}
-					/>
+			<Stack>
+				<Field label="Registry" for="{formId}-preset" hint={registryHint(preset)}>
+					<Dropdown id="{formId}-preset" size="lg" bind:value={preset} options={PRESET_OPTIONS} />
 				</Field>
 				{#if preset === 'custom'}
-					<Field label="Host" for="rc-host">
+					<Field label="Host" for="{formId}-host">
 						<Input
-							id="rc-host"
+							id="{formId}-host"
+							size="lg"
+							mono
 							bind:value={customHost}
 							placeholder="registry.example.com"
 							autocomplete="off"
@@ -177,112 +208,28 @@
 						/>
 					</Field>
 				{/if}
-				<Field label="Username" for="rc-username">
-					<Input id="rc-username" bind:value={username} autocomplete="off" spellcheck="false" />
-				</Field>
-				<Field label={tokenLabel(preset)} for="rc-password">
-					<Input
-						id="rc-password"
-						type="password"
-						bind:value={password}
-						autocomplete="new-password"
-					/>
-				</Field>
-			</div>
-			<p class="rc-hint">{registryHint(preset)}</p>
-			<div class="rc-actions">
-				<Button type="submit" variant="primary" size="sm" loading={saving} disabled={!canSave}>
-					{credentials.some((c) => c.registry === registry)
-						? 'Replace credential'
-						: 'Add credential'}
-				</Button>
-			</div>
+				<FieldGrid>
+					<Field label="Username" for="{formId}-username">
+						<Input
+							id="{formId}-username"
+							size="lg"
+							bind:value={username}
+							autocomplete="off"
+							spellcheck="false"
+						/>
+					</Field>
+					<Field label={tokenLabel(preset)} for="{formId}-password">
+						<SecretInput id="{formId}-password" size="lg" bind:value={password} />
+					</Field>
+				</FieldGrid>
+			</Stack>
 		</form>
-	{/if}
-</SectionCard>
 
-<style>
-	.rc-list {
-		display: flex;
-		flex-direction: column;
-		margin: 0;
-		padding: 0;
-		list-style: none;
-	}
-
-	.rc-row {
-		display: flex;
-		align-items: center;
-		gap: var(--space-3);
-		padding: var(--space-3) 0;
-	}
-
-	.rc-row + .rc-row {
-		box-shadow: inset 0 1px 0 var(--rule);
-	}
-
-	.rc-icon {
-		display: inline-flex;
-		flex-shrink: 0;
-		color: var(--text-muted);
-	}
-
-	.rc-main {
-		display: flex;
-		flex: 1;
-		min-width: 0;
-		flex-direction: column;
-		gap: 2px;
-	}
-
-	.rc-registry {
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		font-weight: 600;
-		letter-spacing: var(--track-headline);
-		color: var(--text-default);
-	}
-
-	.rc-user {
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		color: var(--text-muted);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.rc-empty,
-	.rc-hint {
-		margin: 0;
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		color: var(--text-muted);
-	}
-
-	.rc-form {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-3);
-		margin-top: var(--space-4);
-		padding-top: var(--space-4);
-		box-shadow: inset 0 1px 0 var(--rule);
-	}
-
-	.rc-grid {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: var(--space-3);
-	}
-
-	.rc-actions {
-		display: flex;
-		justify-content: flex-end;
-	}
-
-	@media (max-width: 640px) {
-		.rc-grid {
-			grid-template-columns: minmax(0, 1fr);
-		}
-	}
-</style>
+		{#snippet footer()}
+			<Button onclick={() => (editorOpen = false)}>Cancel</Button>
+			<Button type="submit" form={formId} variant="primary" loading={saving} disabled={!canSave}>
+				{replacing ? 'Replace credential' : 'Add credential'}
+			</Button>
+		{/snippet}
+	</Modal>
+{/if}

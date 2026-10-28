@@ -20,6 +20,7 @@ import Menus from './Menus.svelte';
 import Pickers from './Pickers.svelte';
 import Overlays from './Overlays.svelte';
 import Forms from './Forms.svelte';
+import Settings from './Settings.svelte';
 import Data from './Data.svelte';
 import Progress from './Progress.svelte';
 import Patterns from './Patterns.svelte';
@@ -49,6 +50,7 @@ export const SECTIONS: Section[] = [
 	{ id: 'menus', title: 'Menus', group: 'Actions', component: Menus },
 	{ id: 'inputs', title: 'Inputs', group: 'Forms', component: Inputs },
 	{ id: 'forms', title: 'Choices and forms', group: 'Forms', component: Forms },
+	{ id: 'settings', title: 'Settings rows and uploads', group: 'Forms', component: Settings },
 	{ id: 'pickers', title: 'Pickers', group: 'Forms', component: Pickers },
 	{ id: 'tabs', title: 'Tabs', group: 'Navigation', component: Tabs },
 	{ id: 'lists', title: 'Lists and cards', group: 'Data', component: Lists },

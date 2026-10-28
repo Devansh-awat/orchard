@@ -8,6 +8,7 @@
 		menus: 'Menus',
 		inputs: 'Inputs',
 		forms: 'Choices and forms',
+		settings: 'Settings rows and uploads',
 		pickers: 'Pickers',
 		tabs: 'Tabs',
 		lists: 'Lists and cards',
@@ -40,15 +41,34 @@
 		},
 		{ need: 'Project page header', use: ['ProjectHero', 'ProjectBackdrop'], section: 'patterns' },
 		{ need: 'Rows of things', use: ['List', 'ListRow', 'EntityRow'], section: 'lists' },
+		{
+			need: 'Things deployed together',
+			use: ['StackRow'],
+			note: 'compose stacks',
+			section: 'lists'
+		},
 		{ need: 'Table of data', use: ['Table'], section: 'data' },
 		{ need: 'Numbers', use: ['Metric', 'Sparkline', 'Ring'], section: 'lists' },
 		{ need: 'Inline facts', use: ['MetaList'], note: 'url, branch, commit', section: 'patterns' },
 		{ need: 'Action', use: ['Button'], note: 'one primary per view', section: 'buttons' },
 		{ need: 'Actions on a thing', use: ['Menu', 'MenuItem'], section: 'menus' },
 		{ need: 'Pick a value', use: ['Select', 'Dropdown', 'Combobox'], section: 'pickers' },
+		{
+			need: 'Add people',
+			use: ['Combobox', 'Avatar', 'Dropdown'],
+			note: 'creatable invite by email, role beside it',
+			section: 'pickers'
+		},
 		{ need: 'Text entry', use: ['Field', 'Input', 'Textarea'], section: 'inputs' },
 		{ need: 'Numbers and ranges', use: ['Stepper', 'Slider'], section: 'forms' },
 		{ need: 'On or off', use: ['Switch', 'ToggleRow', 'Checkbox'], section: 'inputs' },
+		{
+			need: 'A setting that is one action',
+			use: ['ActionRow'],
+			note: 'transfer, move, delete',
+			section: 'settings'
+		},
+		{ need: 'Upload an image', use: ['ImageField'], note: 'preview well', section: 'settings' },
 		{ need: 'One of few', use: ['SegmentedControl', 'RadioGroup'], section: 'inputs' },
 		{ need: 'Sections of a page', use: ['Tabs', 'Breadcrumbs'], section: 'tabs' },
 		{ need: 'Sidebar link', use: ['NavItem'], section: 'patterns' },

@@ -35,6 +35,8 @@ export { default as LogViewer } from './LogViewer.svelte';
 export { default as PageHeader } from './PageHeader.svelte';
 export { default as Table } from './Table.svelte';
 export { default as ToggleRow } from './ToggleRow.svelte';
+export { default as ActionRow } from './ActionRow.svelte';
+export { default as ImageField } from './ImageField.svelte';
 export { default as Stepper } from './Stepper.svelte';
 export { default as StepRail } from './StepRail.svelte';
 export type { RailStep } from './steprail';

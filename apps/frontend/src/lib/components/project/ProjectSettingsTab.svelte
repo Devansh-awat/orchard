@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Crown, FolderInput, Trash2 } from 'lucide-svelte';
-	import { Button, SectionCard } from '$lib/components/ui';
+	import { ActionRow, Button, SectionCard, Stack } from '$lib/components/ui';
 	import RegistryCredentials from './RegistryCredentials.svelte';
 
 	let {
@@ -28,105 +28,45 @@
 	} = $props();
 </script>
 
-<div class="ps-stack">
+<Stack>
 	<RegistryCredentials {projectId} {canEdit} />
 
-	<SectionCard title="Danger zone">
-		<div class="ps-rows">
-			{#if canTransferOwnership}
-				<div class="ps-row">
-					<span class="ps-name">Transfer ownership</span>
-					<Button
-						variant="secondary"
-						size="sm"
-						disabled={transferPending}
-						onclick={onTransferOwnership}
+	{#if canTransferOwnership || canMoveToOrg || canDelete}
+		<SectionCard title="Danger zone">
+			<Stack>
+				{#if canTransferOwnership}
+					<ActionRow
+						label="Transfer ownership"
+						hint={transferPending
+							? 'A transfer is waiting on the new owner to accept.'
+							: "Everything here counts against the new owner's allowance."}
 					>
-						<Crown class="h-3.5 w-3.5" />
-						{transferPending ? 'Transfer pending' : 'Transfer'}
-					</Button>
-				</div>
-			{/if}
+						<Button size="sm" icon={Crown} disabled={transferPending} onclick={onTransferOwnership}>
+							Transfer
+						</Button>
+					</ActionRow>
+				{/if}
 
-			{#if canMoveToOrg}
-				<div class="ps-row">
-					<span class="ps-name">Move to another organization</span>
-					<Button variant="secondary" size="sm" onclick={onMoveToOrg}>
-						<FolderInput class="h-3.5 w-3.5" />
-						Move
-					</Button>
-				</div>
-			{/if}
+				{#if canMoveToOrg}
+					<ActionRow
+						label="Move to another organization"
+						hint="Members who are not in the other organization lose access."
+					>
+						<Button size="sm" icon={FolderInput} onclick={onMoveToOrg}>Move</Button>
+					</ActionRow>
+				{/if}
 
-			{#if canDelete}
-				<div class="ps-row">
-					<span class="ps-text">
-						<span class="ps-name">Delete project</span>
-						<span class="ps-hint">
-							Permanently removes every environment, app, database, backup, domain and job in it.
-							You will be asked to type the project name.
-						</span>
-					</span>
-					<Button variant="danger" size="sm" loading={deleting} onclick={onDelete}>
-						<Trash2 class="h-3.5 w-3.5" />
-						Delete
-					</Button>
-				</div>
-			{/if}
-		</div>
-	</SectionCard>
-</div>
-
-<style>
-	.ps-stack {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-4);
-	}
-
-	.ps-rows {
-		display: flex;
-		flex-direction: column;
-	}
-
-	.ps-row {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: var(--space-5);
-		padding: var(--space-3) 0;
-	}
-
-	.ps-row + .ps-row {
-		box-shadow: inset 0 1px 0 var(--rule);
-	}
-
-	.ps-text {
-		display: flex;
-		flex-direction: column;
-		gap: 0.15rem;
-		min-width: 0;
-	}
-
-	.ps-hint {
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		color: var(--text-muted);
-	}
-
-	.ps-name {
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		font-weight: 600;
-		letter-spacing: var(--track-headline);
-		color: var(--text-default);
-	}
-
-	@media (max-width: 640px) {
-		.ps-row {
-			flex-direction: column;
-			align-items: flex-start;
-			gap: var(--space-2);
-		}
-	}
-</style>
+				{#if canDelete}
+					<ActionRow
+						label="Delete project"
+						hint="Deletes every environment, app, database, backup, domain and job in it. There is no undo."
+					>
+						<Button variant="danger" size="sm" icon={Trash2} loading={deleting} onclick={onDelete}>
+							Delete
+						</Button>
+					</ActionRow>
+				{/if}
+			</Stack>
+		</SectionCard>
+	{/if}
+</Stack>
