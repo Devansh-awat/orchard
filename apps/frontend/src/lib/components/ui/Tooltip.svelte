@@ -7,16 +7,18 @@
 		text,
 		placement = 'top',
 		shortcut = undefined,
+		delay = 450,
 		children
 	}: {
 		text: string;
 		placement?: Placement;
 		shortcut?: string;
+		delay?: number;
 		children: Snippet;
 	} = $props();
 
 	const tip = new Tooltip({
-		openDelay: 450,
+		openDelay: () => delay,
 		closeDelay: 0,
 		disableHoverableContent: true,
 		floatingConfig: { computePosition: { placement }, offset: { mainAxis: 6 } }

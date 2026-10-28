@@ -13,7 +13,7 @@
 
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { CircleAlert, Eye, EyeOff, Lock, LockOpen, Plus, Trash2 } from 'lucide-svelte';
+	import { Eye, EyeOff, Lock, LockOpen, Plus, Trash2, TriangleAlert, X } from 'lucide-svelte';
 	import { envVarsToRaw, rawToEnvVars } from '$lib/utils/format';
 	import { presence } from '$lib/utils/transitions';
 	import Button from './Button.svelte';
@@ -134,7 +134,9 @@
 
 	function keep(row: EnvVarEditorRow) {
 		row.value = '';
-		replacing = toggle(replacing, idOf(row));
+		const next = new Set(replacing);
+		next.delete(idOf(row));
+		replacing = next;
 		edited();
 	}
 
@@ -202,21 +204,29 @@
 						onpaste={(e) => onPaste(e, i)}
 					/>
 					{#if found.length}
-						<Tooltip text={found.map((f) => f.text).join(' ')}>
+						<Tooltip text={found.map((f) => f.text).join(' ')} delay={0}>
 							<span
 								class="issue issue--{tone}"
 								role="img"
 								aria-label={found.map((f) => f.text).join(' ')}
 							>
-								<CircleAlert size={14} strokeWidth={2.25} />
+								<TriangleAlert size={16} strokeWidth={2.25} />
 							</span>
 						</Tooltip>
 					{/if}
 				</div>
 				{#if sealed(row)}
 					<div class="cell--value value sealed">
-						<span class="sealed-label"><Lock size={13} aria-hidden="true" />Hidden</span>
-						<Button variant="ghost" size="sm" onclick={() => replace(row)}>Replace</Button>
+						<span class="sealed-label">
+							<Lock size={13} aria-hidden="true" />Hidden
+							<Button
+								variant="ghost"
+								size="sm"
+								icon={X}
+								label="Clear the hidden value of {key} and type a new one"
+								onclick={() => replace(row)}
+							/>
+						</span>
 					</div>
 				{:else}
 					<div class="cell--value value">
@@ -229,11 +239,14 @@
 							spellcheck={false}
 							bind:value={row.value}
 							oninput={edited}
+							onkeydown={(e) => {
+								if (e.key === 'Escape' && replacing.has(id)) keep(row);
+							}}
+							onblur={() => {
+								if (replacing.has(id) && row.value === '') keep(row);
+							}}
 							{@attach claimFocus(id)}
 						/>
-						{#if replacing.has(id)}
-							<Button variant="ghost" size="sm" onclick={() => keep(row)}>Keep current</Button>
-						{/if}
 					</div>
 				{/if}
 				<div class="tools" class:tools--wide={secrets}>
@@ -256,7 +269,7 @@
 						</span>
 					{/if}
 					{#if secrets}
-						<span class="tool" class:tool--pinned={row.secret}>
+						<span class="tool">
 							{#if row.secret || !confirmSecret}
 								<Button
 									variant={row.secret ? 'tinted' : 'ghost'}
@@ -373,7 +386,6 @@
 		display: grid;
 		place-items: center;
 		color: var(--status-warning);
-		cursor: help;
 	}
 	.issue--error {
 		color: var(--status-error);
@@ -396,7 +408,7 @@
 	.sealed-label {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: 0.375rem;
 		flex: 1;
 		padding-left: 0.75rem;
 		color: var(--text-muted);
@@ -419,8 +431,7 @@
 	}
 	.row:hover .tool,
 	.row:has(:focus-visible) .tool,
-	.tool:has(:popover-open),
-	.tool--pinned {
+	.tool:has(:popover-open) {
 		opacity: 1;
 		transition: opacity var(--fade-in) var(--curve-out);
 	}
