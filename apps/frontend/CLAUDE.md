@@ -277,11 +277,19 @@ Three-level hierarchy: **Org cap** → **Member allowance** → **Deployment req
 
 ## Deployment Page Architecture
 
-- Tabs: Overview, Environment, Resources, Storage, Network, Metrics, Deploys, Advanced
-- `DeploymentAlerts` — unified alert banner above tabs for build failures, pod crashes, resource pressure, SSE disconnect
-- SSE drives real-time updates; TanStack Query with adaptive polling as fallback
-- `humanizeWarning()` in `$lib/utils/format.ts` translates k8s events to plain English with severity levels
-- Header collapse uses spring physics (height eased, card scaleY bounce on collapse)
+- Tabs (`PageTabs`, `?tab=`): Overview, Variables, Activity (`deploys`), Observe, Network, Settings
+  (`SettingsRail`, `?s=`). Old ids (`metrics`, `environment`, `resources`, `volumes`, `build`,
+  `advanced`) still resolve.
+- Overview fills exactly one viewport at 64rem wide and 40rem tall or more (`dep-shell--fit`): the
+  console takes the height and scrolls inside, the rail is `UsageCard` (CPU and memory as `Metric`
+  with rolling digits and a `Sparkline` seeded from `/metrics` then extended by SSE) over `PodsCard`
+  (replica `Stepper`, pods as `ListRow`s that scroll inside the card). Below that size it scrolls.
+- Live values land instantly; motion is the decorative layer on top (`NumberRoll`, `stateEcho` on pod
+  status, the sparkline growing), never a tween that delays the number.
+- `NextSteps` is a "Set up" button with a progress ring in the header, opening a popover.
+- `DeploymentAlerts` renders kit `Alert`s above the panels for build failures, pod crashes, resource
+  pressure and SSE disconnect; `humanizeWarning()` in `$lib/utils/format.ts` writes the copy.
+- SSE drives real-time updates; TanStack Query with adaptive polling as fallback.
 
 ## Running without a backend
 

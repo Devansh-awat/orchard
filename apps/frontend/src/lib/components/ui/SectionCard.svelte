@@ -7,6 +7,7 @@
 		actions = undefined,
 		footer = undefined,
 		flush = false,
+		fill = false,
 		tone = 'default',
 		class: className = '',
 		children = undefined
@@ -16,13 +17,14 @@
 		actions?: Snippet;
 		footer?: Snippet;
 		flush?: boolean;
+		fill?: boolean;
 		tone?: 'default' | 'danger';
 		class?: string;
 		children?: Snippet;
 	} = $props();
 </script>
 
-<section class="section section--{tone} {className}">
+<section class="section section--{tone} {className}" class:section--fill={fill}>
 	{#if title || actions}
 		<header class="head">
 			<div class="heading">
@@ -46,6 +48,18 @@
 		background: var(--bg-surface);
 		box-shadow: var(--shadow-raised);
 		overflow: clip;
+	}
+	.section--fill {
+		display: flex;
+		flex: 1 1 auto;
+		flex-direction: column;
+		min-height: 0;
+	}
+	.section--fill .body {
+		flex: 1 1 auto;
+		min-height: 0;
+		overflow-y: auto;
+		overscroll-behavior: contain;
 	}
 	.section--danger {
 		background: color-mix(in oklab, var(--status-error) 5%, var(--bg-surface));

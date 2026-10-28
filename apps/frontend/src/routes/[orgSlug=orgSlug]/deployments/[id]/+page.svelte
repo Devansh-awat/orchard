@@ -51,39 +51,19 @@
 		RotateCw
 	} from 'lucide-svelte';
 	import Breadcrumbs from '$lib/components/ui/Breadcrumbs.svelte';
-	import {
-		ArrowLeft,
-		Bell,
-		Boxes,
-		Check,
-		ChevronDown,
-		CircleX,
-		ClipboardList,
-		Clock,
-		Copy,
-		Cpu,
-		Eye,
-		EyeOff,
-		HardDriveDownload,
-		History,
-		Maximize2,
-		Minimize2,
-		Play,
-		RefreshCw,
-		Rocket,
-		ServerCog,
-		Settings,
-		SlidersHorizontal,
-		Hammer,
-		Terminal,
-		Trash2,
-		TriangleAlert,
-		User,
-		Wifi
-	} from '@jis3r/icons';
+	import PageTabs from '$lib/components/ui/PageTabs.svelte';
+	import { Clock, Terminal } from '@jis3r/icons';
 	import { scale, fade, slide } from '$lib/utils/transitions';
 	import { animate } from 'motion';
-	import { MemoryStick, Puzzle } from 'lucide-svelte';
+	import {
+		Puzzle,
+		ServerCog as TabOverview,
+		Braces as TabVariables,
+		History as TabActivity,
+		Eye as TabObserve,
+		Globe as TabNetwork,
+		SlidersHorizontal as TabSettings
+	} from 'lucide-svelte';
 	import GraftMount from '$lib/grafts/GraftMount.svelte';
 	import GraftCards from '$lib/grafts/GraftCards.svelte';
 	import { graftHost } from '$lib/grafts/host.svelte';
@@ -101,12 +81,10 @@
 
 	// Extracted modules
 	import {
-		motionStagger,
 		motionPanel,
 		motionPopover,
 		motionBackdrop,
 		pressSpringDelegate,
-		functionalMotion,
 		decorativeMotion
 	} from '$lib/utils/motion.svelte';
 	import {
@@ -224,12 +202,12 @@
 	}
 
 	const tabSections = [
-		{ id: 'overview', label: 'Overview', icon: ServerCog },
-		{ id: 'variables', label: 'Variables', icon: Settings },
-		{ id: 'deploys', label: 'Activity', icon: History },
-		{ id: 'observe', label: 'Observe', icon: Eye },
-		{ id: 'network', label: 'Network', icon: Wifi },
-		{ id: 'settings', label: 'Settings', icon: SlidersHorizontal }
+		{ id: 'overview', label: 'Overview', icon: TabOverview },
+		{ id: 'variables', label: 'Variables', icon: TabVariables },
+		{ id: 'deploys', label: 'Activity', icon: TabActivity },
+		{ id: 'observe', label: 'Observe', icon: TabObserve },
+		{ id: 'network', label: 'Network', icon: TabNetwork },
+		{ id: 'settings', label: 'Settings', icon: TabSettings }
 	] as const;
 
 	type TabId = (typeof tabSections)[number]['id'] | `graft-${string}`;
@@ -356,18 +334,6 @@
 		untrack(() => gotoTab(tabs.value, view));
 	});
 
-	// movingicons.dev animations are gated on each icon's internal mouseenter. We want
-	// the animation to fire when the user hovers the parent button, not just the
-	// 14×14 icon target — so drive the icon's `animate` prop from button-level hover.
-	// Decorative, so it stays put below the `full` tier.
-	let tabIconAnim = $state<Record<string, boolean>>({});
-	function triggerTabIconAnim(id: string) {
-		if (tabIconAnim[id] || !decorativeMotion()) return;
-		tabIconAnim[id] = true;
-		setTimeout(() => {
-			tabIconAnim[id] = false;
-		}, 650);
-	}
 	let actionAnim = $state<Record<string, boolean>>({});
 	function triggerActionAnim(id: string) {
 		if (actionAnim[id] || !decorativeMotion()) return;
@@ -945,10 +911,6 @@
 	}
 
 	let scaleReplicas = $state(1);
-	let sliderRef = $state<HTMLDivElement | null>(null);
-	let isDragging = $state(false);
-	let dragStartX = $state(0);
-	let dragStartValue = $state(0);
 	// True while the slider holds an unapplied user edit. Server refetches only
 	// sync the slider when this is false, so a crash-looping pod (which refetches
 	// constantly) can't snap the value back before the user clicks Scale.
@@ -958,47 +920,6 @@
 		scaleReplicas = value;
 		scaleDirty = value !== (deployment?.replicas ?? value);
 	}
-
-	function getValueFromPosition(clientX: number): number {
-		if (!sliderRef) return scaleReplicas;
-		const rect = sliderRef.getBoundingClientRect();
-		const percentage = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-		return Math.round(percentage * 20);
-	}
-
-	function handlePointerDown(event: PointerEvent) {
-		if (!sliderRef) return;
-		isDragging = true;
-		dragStartX = event.clientX;
-		dragStartValue = scaleReplicas;
-		sliderRef.setPointerCapture(event.pointerId);
-		setScaleValue(getValueFromPosition(event.clientX));
-	}
-
-	function handlePointerMove(event: PointerEvent) {
-		if (!isDragging || !sliderRef) return;
-		setScaleValue(getValueFromPosition(event.clientX));
-	}
-
-	function handlePointerUp(event: PointerEvent) {
-		if (!sliderRef) return;
-		isDragging = false;
-		sliderRef.releasePointerCapture(event.pointerId);
-	}
-
-	function handlePointerCancel(event: PointerEvent) {
-		if (!sliderRef) return;
-		isDragging = false;
-		sliderRef.releasePointerCapture(event.pointerId);
-		setScaleValue(dragStartValue);
-	}
-
-	function handleTrackClick(event: MouseEvent) {
-		if (!sliderRef || isDragging) return;
-		setScaleValue(getValueFromPosition(event.clientX));
-	}
-
-	const sliderPercentage = $derived((scaleReplicas / 20) * 100);
 
 	let envVars = $state<EditableEnvVar[]>([{ key: '', value: '' }]);
 	let envViewMode = $state<'ui' | 'raw'>('ui');
@@ -1422,7 +1343,7 @@
 
 		if (!buildActive) {
 			seededFor = data.id;
-			if (!isDragging && !scaling && !scaleDirty) {
+			if (!scaling && !scaleDirty) {
 				if (data.replicas !== undefined && data.replicas !== null) {
 					scaleReplicas = data.replicas;
 				} else {
@@ -3006,19 +2927,12 @@
 		showBuildCard = false;
 		stopBuildPolling();
 	}
-
-	function handleSliderKeydown(e: KeyboardEvent) {
-		if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
-			e.preventDefault();
-			setScaleValue(Math.max(0, scaleReplicas - 1));
-		} else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
-			e.preventDefault();
-			setScaleValue(Math.min(20, scaleReplicas + 1));
-		}
-	}
 </script>
 
-<div class="deployment-page dep-shell p-6 max-w-400 mx-auto">
+<div
+	class="deployment-page dep-shell p-6 max-w-400 mx-auto"
+	class:dep-shell--fit={tabs.value === 'overview' && !!deployment}
+>
 	{#if deployment?.project?.slug}
 		<div class="mb-4">
 			<Breadcrumbs
@@ -3154,29 +3068,25 @@
 				{_activeBuild}
 				{_buildFailed}
 				{branch}
-			/>
+			>
+				{#snippet setup()}
+					<NextSteps
+						deploymentId={deployment?.id ?? ''}
+						ready={!!deployment && deployment.buildStatus !== 'building' && !noPodsReady}
+						onGoToTab={(t) => gotoTab(t as TabId)}
+						onGoToSettings={gotoSettings}
+					/>
+				{/snippet}
+			</DeploymentHeader>
 
-			<!-- Tab nav -->
-			<nav class="dep-toolbar" aria-label="App sections">
-				<div class="dep-toolbar-tabs" {...tabs.triggerList}>
-					{#each visibleTabs as tab, _ti (tab.id)}
-						{@const Icon = tab.icon}
-						<button
-							class="dep-toolbar-tab"
-							{...tabs.getTrigger(tab.id)}
-							{@attach motionStagger({ index: _ti, from: { y: -6 } })}
-							onmouseenter={() => triggerTabIconAnim(tab.id)}
-						>
-							{#if Icon}
-								<Icon class="dep-toolbar-icon" size={14} animate={tabIconAnim[tab.id] ?? false} />
-							{:else}
-								<Puzzle class="dep-toolbar-icon" size={14} />
-							{/if}
-							<span>{tab.label}</span>
-						</button>
-					{/each}
-				</div>
-			</nav>
+			<div class="dep-tabs-bar">
+				<PageTabs
+					label="App sections"
+					tabs={visibleTabs.map((t) => ({ id: t.id, label: t.label, icon: t.icon ?? Puzzle }))}
+					value={tabs.value}
+					onchange={(v) => gotoTab(v)}
+				/>
+			</div>
 
 			<!-- Unified alerts -->
 			<Anomalies
@@ -3252,14 +3162,12 @@
 							{consoleAnimating}
 							bind:consoleRef
 							{consoleInlineRect}
-							{isDragging}
-							bind:sliderRef
-							{sliderPercentage}
 							{scaling}
 							{deletingPod}
 							bind:activeConsoleTab
 							bind:terminalTabs
 							onScaleDeployment={scaleDeployment}
+							onScaleChange={setScaleValue}
 							onDeletePod={deletePod}
 							onToggleConsoleExpand={toggleConsoleExpand}
 							onOpenShell={openShell}
@@ -3268,29 +3176,12 @@
 							onTerminalBell={setTerminalBell}
 							onTerminalSession={setTerminalSession}
 							onSelectLogsPod={selectLogsPod}
-							onPointerDown={handlePointerDown}
-							onPointerMove={handlePointerMove}
-							onPointerUp={handlePointerUp}
-							onPointerCancel={handlePointerCancel}
-							onTrackClick={handleTrackClick}
 							onSetTabMetrics={() => {
 								observeView = 'metrics';
 								gotoTab('observe');
 							}}
-							onKeydownSlider={handleSliderKeydown}
 							{podLabel}
-						>
-							{#snippet aside()}
-								<NextSteps
-									deploymentId={deployment?.id ?? ''}
-									ready={!!deployment && deployment.buildStatus !== 'building' && !noPodsReady}
-									onGoToTab={(t) => {
-										tabs.value = t as TabId;
-									}}
-									onGoToSettings={gotoSettings}
-								/>
-							{/snippet}
-						</OverviewTab>
+						/>
 						{#if graftProps}
 							<GraftCards slot="deployment.overview.cards" props={graftProps} />
 						{/if}

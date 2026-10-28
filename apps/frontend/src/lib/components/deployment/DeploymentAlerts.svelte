@@ -7,6 +7,7 @@
 	import { motionStagger, motionEnabled, motion, transition } from '$lib/utils/motion.svelte';
 	import { humanizeWarning, type WarningSeverity } from '$lib/utils/format';
 	import type { AlertState } from '$lib/components/notifications/alerts';
+	import { Alert, Button } from '$lib/components/ui';
 
 	interface Warning {
 		podName: string;
@@ -277,63 +278,56 @@
 			transition('smooth', { delay: 0.03 })
 		).finished.then(() => dismissed.add(id));
 	}
+
+	const TONE: Record<WarningSeverity, 'error' | 'warning' | 'info'> = {
+		critical: 'error',
+		error: 'error',
+		warning: 'warning',
+		info: 'info'
+	};
 </script>
 
 {#if alerts.length > 0}
 	<div class="da-stack">
 		{#each alerts as alert, i (alert.id)}
 			{@const Icon = severityIcon(alert.severity)}
-			<div
-				class="da-alert da-alert--{alert.severity}"
-				{@attach motionStagger({
-					index: i,
-					from: { y: -8, opacity: 0 }
-				})}
-			>
-				<div class="da-alert-icon">
-					<Icon size={16} animate={alert.animateIcon ?? false} />
-				</div>
-				<div class="da-alert-body">
-					<span class="da-alert-title">{alert.title}</span>
-					<span class="da-alert-hint">{alert.hint}</span>
-				</div>
-				{#if alert.actions && alert.actions.length > 0}
-					<div class="da-alert-actions">
-						{#each alert.actions as act (act.label)}
-							{#if act.href}
-								<a
-									class="da-alert-action"
-									href={act.href}
-									target="_blank"
-									rel="noopener noreferrer"
-								>
-									{act.label}
-								</a>
-							{:else}
-								<button class="da-alert-action" onclick={act.onAction}>
-									{act.label}
-								</button>
-							{/if}
-						{/each}
-					</div>
-				{:else if alert.action && alert.onAction}
-					<button class="da-alert-action" onclick={alert.onAction}>
-						{alert.action}
-					</button>
-				{/if}
-				{#if alert.severity !== 'critical'}
-					<button
-						class="da-alert-dismiss"
-						onclick={(e) => {
-							const row = (e.currentTarget as HTMLElement).closest('.da-alert') as HTMLElement;
-							if (row) dismissWithAnimation(row, alert.id);
-							else dismissed.add(alert.id);
-						}}
-						title="Dismiss"
-					>
-						<X class="h-3.5 w-3.5" />
-					</button>
-				{/if}
+			<div class="da-alert" {@attach motionStagger({ index: i, from: { y: -8, opacity: 0 } })}>
+				<Alert tone={TONE[alert.severity] ?? 'warning'} title={alert.title}>
+					{#snippet icon()}<Icon size={16} animate={alert.animateIcon ?? false} />{/snippet}
+					{alert.hint}
+					{#snippet actions()}
+						{#if alert.actions && alert.actions.length > 0}
+							{#each alert.actions as act (act.label)}
+								{#if act.href}
+									<Button
+										variant="secondary"
+										size="sm"
+										href={act.href}
+										target="_blank"
+										rel="noopener noreferrer">{act.label}</Button
+									>
+								{:else}
+									<Button variant="secondary" size="sm" onclick={act.onAction}>{act.label}</Button>
+								{/if}
+							{/each}
+						{:else if alert.action && alert.onAction}
+							<Button variant="secondary" size="sm" onclick={alert.onAction}>{alert.action}</Button>
+						{/if}
+						{#if alert.severity !== 'critical'}
+							<Button
+								variant="ghost"
+								size="sm"
+								icon={X}
+								label="Dismiss"
+								onclick={(e: MouseEvent) => {
+									const row = (e.currentTarget as HTMLElement).closest('.da-alert') as HTMLElement;
+									if (row) dismissWithAnimation(row, alert.id);
+									else dismissed.add(alert.id);
+								}}
+							/>
+						{/if}
+					{/snippet}
+				</Alert>
 			</div>
 		{/each}
 	</div>
@@ -343,115 +337,9 @@
 	.da-stack {
 		display: flex;
 		flex-direction: column;
-	}
-	.da-stack > :global(.da-alert:not(:last-child)) {
-		margin-bottom: var(--space-2);
+		gap: 0.5rem;
 	}
 	.da-alert {
-		--da-tone: var(--warning-text);
-		display: flex;
-		align-items: flex-start;
-		gap: 0.75rem;
-		padding: 0.75rem 1rem;
-		border-radius: var(--radius-md);
-		border: 1px solid color-mix(in srgb, var(--da-tone) 22%, var(--surface-border));
-		background-color: color-mix(in srgb, var(--da-tone) 6%, var(--surface-bg));
-		color: var(--center-channel-color);
-	}
-	.da-alert--critical,
-	.da-alert--error {
-		--da-tone: var(--error-text-color);
-	}
-	.da-alert--critical {
-		border-color: color-mix(in srgb, var(--da-tone) 32%, var(--surface-border));
-		background-color: color-mix(in srgb, var(--da-tone) 9%, var(--surface-bg));
-	}
-	.da-alert-icon {
-		display: flex;
-		align-items: center;
-		flex-shrink: 0;
-		margin-top: 0.0625rem;
-		color: color-mix(in srgb, var(--da-tone) 80%, var(--center-channel-color));
-	}
-	.da-alert-body {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.125rem;
-	}
-	.da-alert-title {
-		font-size: var(--text-footnote);
-		font-weight: 600;
-		line-height: 1.3;
-		color: var(--da-tone);
-	}
-	.da-alert-hint {
-		font-size: var(--text-caption);
-		line-height: 1.4;
-		opacity: 0.75;
-	}
-	.da-alert-actions {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		flex-shrink: 0;
-		align-self: center;
-		flex-wrap: wrap;
-		justify-content: flex-end;
-	}
-	.da-alert-action {
-		display: inline-flex;
-		align-items: center;
-		padding: 0.3125rem 0.75rem;
-		border-radius: var(--radius-xs);
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: 600;
-		border: 1px solid color-mix(in srgb, var(--da-tone) 35%, var(--surface-border));
-		background-color: var(--surface-bg);
-		color: var(--da-tone);
-		cursor: pointer;
-		white-space: nowrap;
-		flex-shrink: 0;
-		transition: background-color var(--dur-fast);
-		align-self: center;
-		text-decoration: none;
-	}
-	.da-alert-action:hover {
-		background-color: color-mix(in srgb, var(--da-tone) 10%, var(--surface-bg));
-	}
-	.da-alert-dismiss {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 1.5rem;
-		height: 1.5rem;
-		border-radius: var(--radius-xs);
-		border: none;
-		background: none;
-		color: inherit;
-		cursor: pointer;
-		opacity: 0.45;
-		flex-shrink: 0;
-		transition: opacity var(--dur-fast);
-		align-self: flex-start;
-	}
-	.da-alert-dismiss:hover {
-		opacity: 1;
-	}
-	@media (max-width: 640px) {
-		.da-alert {
-			flex-wrap: wrap;
-		}
-		.da-alert-actions {
-			width: 100%;
-			margin-top: 0.25rem;
-		}
-		.da-alert-action {
-			flex: 1;
-			justify-content: center;
-			margin-top: 0.25rem;
-		}
+		overflow: hidden;
 	}
 </style>

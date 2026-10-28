@@ -1,10 +1,11 @@
 <script lang="ts">
-	import { Loader2, ExternalLink, EllipsisVertical, Pencil, Square, Trash2 } from 'lucide-svelte';
+	import type { Snippet } from 'svelte';
+	import { Loader2, ExternalLink, Ellipsis, Pencil, Square, Trash2 } from 'lucide-svelte';
 	import { Play, RefreshCw } from '@jis3r/icons';
 	import { motionStagger, springCollapse } from '$lib/utils/motion.svelte';
 	import { formatRelativeTime } from '$lib/utils/format';
 	import { ingressUrl } from '$lib/ingress-url';
-	import { StatusBadge, Button, Menu, MenuItem } from '$lib/components/ui';
+	import { Badge, StatusBadge, Button, Menu, MenuItem } from '$lib/components/ui';
 	import type { StatusMeta } from '$lib/components/ui';
 
 	let {
@@ -34,7 +35,8 @@
 		_commitLeadMono,
 		_activeBuild,
 		_buildFailed,
-		branch
+		branch,
+		setup = undefined
 	}: {
 		deployment: any;
 		headerCollapsed: boolean;
@@ -63,6 +65,7 @@
 		_activeBuild: any;
 		_buildFailed: boolean;
 		branch: string | undefined;
+		setup?: Snippet;
 	} = $props();
 
 	const pendingPush = $derived(deployment?.pendingPush ?? null);
@@ -98,9 +101,7 @@
 			<StatusBadge meta={buildStatusChip} />
 		{/if}
 		{#if deployment.environment}
-			<span class="dh-env-chip" title="Environment: {deployment.environment.name}">
-				{deployment.environment.name}
-			</span>
+			<Badge>{deployment.environment.name}</Badge>
 		{/if}
 		{#each debugChips as chip (chip.label)}
 			<StatusBadge meta={chip} />
@@ -110,6 +111,7 @@
 
 {#snippet actions()}
 	<div class="dh-actions">
+		{#if setup}{@render setup()}{/if}
 		{#if repoUrl}
 			<Button
 				variant={stopped ? 'secondary' : 'primary'}
@@ -150,16 +152,8 @@
 			</Button>
 		{/if}
 		<Menu placement="bottom-end">
-			{#snippet trigger(props, open)}
-				<button
-					{...props}
-					class="dh-more"
-					class:dh-more--open={open}
-					aria-label="More actions"
-					title="More actions"
-				>
-					<EllipsisVertical size={16} />
-				</button>
+			{#snippet trigger(props)}
+				<Button {...props} variant="ghost" size="sm" icon={Ellipsis} label="More actions" />
 			{/snippet}
 			{#if onRename}
 				<MenuItem icon={Pencil} onclick={onRename}>Rename</MenuItem>
@@ -252,11 +246,11 @@
 
 <style>
 	.dh-card {
-		background-color: var(--bg-raised);
-		border: none;
-		box-shadow: var(--elev-1);
-		border-radius: var(--radius-xl);
-		padding: var(--space-5) var(--space-6);
+		background: var(--bg-surface);
+		box-shadow: var(--shadow-raised);
+		border-radius: calc(var(--radius-panel) * var(--corner-scale));
+		corner-shape: var(--corner);
+		padding: 1.125rem 1.5rem;
 	}
 	.dh-top {
 		display: flex;
@@ -287,53 +281,22 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.dh-env-chip {
-		display: inline-flex;
-		align-items: center;
-		padding: 0.25rem 0.75rem;
-		border-radius: var(--radius-pill);
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		font-weight: 600;
-		white-space: nowrap;
-		color: var(--text-muted);
-		border: 1px solid var(--rule-strong);
-		background: transparent;
-	}
 	.dh-actions {
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
 		flex-shrink: 0;
 	}
-	.dh-more {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 2rem;
-		height: 2rem;
-		border-radius: var(--radius-md);
-		border: none;
-		background: transparent;
-		color: var(--text-muted);
-		cursor: pointer;
-		transition:
-			background-color var(--dur-fast) var(--ease-out),
-			color var(--dur-fast) var(--ease-out);
-	}
-	.dh-more:hover,
-	.dh-more--open {
-		background-color: var(--fill-soft);
-		color: var(--text-default);
-	}
 	.dh-body {
 		overflow: hidden;
 	}
 	.dh-body-inner {
 		display: flex;
-		flex-direction: column;
-		gap: var(--space-3);
-		padding-top: var(--space-3);
+		align-items: center;
+		justify-content: space-between;
+		flex-wrap: wrap;
+		gap: 0.5rem 1.5rem;
+		padding-top: 0.625rem;
 	}
 	.dh-meta {
 		display: flex;

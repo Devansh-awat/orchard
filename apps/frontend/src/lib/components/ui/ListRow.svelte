@@ -12,7 +12,8 @@
 		actions = undefined,
 		titleSuffix = undefined,
 		presence = false,
-		pinned = false
+		pinned = false,
+		selected = false
 	}: {
 		title: string;
 		subtitle?: string | Snippet;
@@ -24,6 +25,7 @@
 		titleSuffix?: Snippet;
 		presence?: boolean;
 		pinned?: boolean;
+		selected?: boolean;
 	} = $props();
 
 	const interactive = $derived(!!href || !!onclick);
@@ -33,6 +35,8 @@
 	class="row"
 	class:row--interactive={interactive}
 	class:row--pinned={pinned}
+	class:row--selected={selected}
+	aria-current={selected ? 'true' : undefined}
 	role="listitem"
 	in:enterExit={{ enabled: presence }}
 	out:enterExit={{ enabled: presence }}
@@ -81,6 +85,10 @@
 	}
 	.row--interactive:hover {
 		background: var(--bg-hover);
+	}
+	.row--selected,
+	.row--selected.row--interactive:hover {
+		background: var(--bg-active);
 	}
 	.hit {
 		position: absolute;

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import NumberRoll from './NumberRoll.svelte';
 
 	let {
 		label,
@@ -7,7 +8,8 @@
 		unit = undefined,
 		detail = undefined,
 		tone = 'neutral',
-		chart = undefined
+		chart = undefined,
+		roll = false
 	}: {
 		label: string;
 		value: string | number;
@@ -15,13 +17,16 @@
 		detail?: string;
 		tone?: 'neutral' | 'success' | 'warning' | 'error';
 		chart?: Snippet;
+		roll?: boolean;
 	} = $props();
 </script>
 
 <div class="metric">
 	<span class="label">{label}</span>
 	<span class="value-line">
-		<span class="value">{value}</span>
+		<span class="value"
+			>{#if roll}<NumberRoll value={String(value)} />{:else}{value}{/if}</span
+		>
 		{#if unit}<span class="unit">{unit}</span>{/if}
 	</span>
 	{#if detail}<span class="detail detail--{tone}">{detail}</span>{/if}

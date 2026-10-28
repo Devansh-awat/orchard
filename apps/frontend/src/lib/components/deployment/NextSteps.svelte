@@ -1,10 +1,9 @@
 <script lang="ts">
-	import { X, ChevronRight, Zap, Globe, Gauge, Bell, HeartPulse, Terminal } from 'lucide-svelte';
-	import { motionStagger } from '$lib/utils/motion.svelte';
-	import { slide } from '$lib/utils/transitions';
+	import { X, Zap, Globe, Gauge, Bell, HeartPulse, Terminal } from 'lucide-svelte';
 	import { apiFetch } from '$lib/stores';
 	import { dismissedSteps, dismissStep, dismissAllSteps } from '$lib/stores/checklist';
-	import { SectionCard, Eyebrow } from '$lib/components/ui';
+	import { Button, List, ListRow, PopoverPanel, ToneTile } from '$lib/components/ui';
+	import Ring from '$lib/components/ui/Ring.svelte';
 	import CliModal from '$lib/components/CliModal.svelte';
 
 	let {
@@ -76,6 +75,9 @@
 	const visible = $derived(
 		steps.filter((s) => s.applicable && !s.done && !dismissed.includes(s.id) && COPY[s.id])
 	);
+	const applicable = $derived(steps.filter((s) => s.applicable && COPY[s.id]));
+	const total = $derived(applicable.length);
+	const done = $derived(total - visible.length);
 
 	$effect(() => {
 		if (!ready || !deploymentId || fetchedFor === deploymentId) return;
@@ -119,169 +121,71 @@
 </script>
 
 {#if visible.length > 0}
-	<SectionCard class="ns">
-		<div class="ns-head">
-			<Eyebrow>Next up</Eyebrow>
-			<button class="ns-dismiss-all" type="button" onclick={hideAll}>Dismiss all</button>
-		</div>
-		<ul class="ns-list">
-			{#each visible as step, i (step.id)}
-				{@const copy = COPY[step.id]}
-				<li
-					class="ns-item"
-					transition:slide={{ duration: 160 }}
-					{@attach motionStagger({ index: i, from: { y: 6 } })}
-				>
-					<button class="ns-row" type="button" onclick={() => act(step)}>
-						<span class="ns-icon" aria-hidden="true"><copy.icon class="h-4 w-4" /></span>
-						<span class="ns-text">
-							<span class="ns-title">{copy.title}</span>
-							<span class="ns-hint">{copy.hint}</span>
-						</span>
-						<ChevronRight class="ns-chevron h-3.5 w-3.5" />
-					</button>
-					<button
-						class="ns-hide"
-						type="button"
-						onclick={() => hide(step.id)}
-						aria-label={`Dismiss ${copy.title}`}
+	<PopoverPanel placement="bottom-end" class="ns">
+		{#snippet trigger(attrs)}
+			<Button {...attrs} variant="ghost" aria-label="Set up, {visible.length} left">
+				<Ring value={done} max={total} size={16} thickness={2.5} tone="success" showValue={false} />
+				<span>Set up</span>
+				<span class="ns-count">{visible.length}</span>
+			</Button>
+		{/snippet}
+		{#snippet children({ close })}
+			<div class="ns-head">
+				<span class="ns-heading">Finish setting up</span>
+				<Button variant="ghost" size="sm" onclick={hideAll}>Dismiss all</Button>
+			</div>
+			<List inset={false} label="Setup steps">
+				{#each visible as step (step.id)}
+					{@const copy = COPY[step.id]}
+					<ListRow
+						title={copy.title}
+						subtitle={copy.hint}
+						presence
+						onclick={() => {
+							close();
+							act(step);
+						}}
 					>
-						<X class="h-3 w-3" />
-					</button>
-				</li>
-			{/each}
-		</ul>
-	</SectionCard>
+						{#snippet leading()}
+							<ToneTile tone="neutral" size={32}><copy.icon size={16} /></ToneTile>
+						{/snippet}
+						{#snippet actions()}
+							<Button
+								variant="ghost"
+								size="sm"
+								icon={X}
+								label="Dismiss {copy.title}"
+								onclick={() => hide(step.id)}
+							/>
+						{/snippet}
+					</ListRow>
+				{/each}
+			</List>
+		{/snippet}
+	</PopoverPanel>
 {/if}
 
 <CliModal bind:open={cliOpen} />
 
 <style>
 	:global(.ns) {
-		padding: var(--space-3) !important;
-		flex-shrink: 0;
+		width: 22rem;
+		padding: 0.5rem 0 0.25rem;
 	}
 	.ns-head {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: var(--space-2);
-		padding: 0 var(--space-2) var(--space-2);
+		gap: 0.5rem;
+		padding: 0.25rem 0.5rem 0.5rem 1rem;
 	}
-	.ns-dismiss-all {
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		color: var(--text-faint);
-		background: none;
-		border: none;
-		cursor: pointer;
-		padding: 0;
-	}
-	.ns-dismiss-all:hover {
-		color: var(--text-muted);
-	}
-	.ns-list {
-		display: flex;
-		flex-direction: column;
-		gap: 0.125rem;
-		list-style: none;
-		margin: 0;
-		padding: 0;
-	}
-	.ns-item {
-		position: relative;
-		display: flex;
-		align-items: center;
-	}
-	.ns-row {
-		flex: 1;
-		display: flex;
-		align-items: center;
-		gap: var(--space-3);
-		min-width: 0;
-		padding: 0.375rem var(--space-2);
-		border: none;
-		background: none;
-		border-radius: var(--radius-md);
-		text-align: left;
-		cursor: pointer;
-		color: var(--text-default);
-		transition: background-color var(--dur-fast);
-	}
-	.ns-row:hover,
-	.ns-row:focus-visible {
-		background-color: var(--bg-hover);
-	}
-	.ns-icon {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 1.75rem;
-		height: 1.75rem;
-		flex-shrink: 0;
-		color: var(--text-muted);
-		transition: color var(--dur-fast);
-	}
-	.ns-row:hover .ns-icon {
+	.ns-heading {
+		font-size: var(--text-headline);
+		font-weight: var(--weight-medium);
 		color: var(--text-default);
 	}
-	.ns-text {
-		display: flex;
-		flex-direction: column;
-		gap: 0.0625rem;
-		min-width: 0;
-		flex: 1;
-	}
-	.ns-title {
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		font-weight: 600;
-		letter-spacing: var(--track-body);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-	.ns-hint {
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
+	.ns-count {
 		color: var(--text-muted);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-	.ns-row :global(.ns-chevron) {
-		color: var(--text-faint);
-		flex-shrink: 0;
-		transition:
-			transform var(--dur-fast),
-			color var(--dur-fast);
-	}
-	.ns-row:hover :global(.ns-chevron) {
-		color: var(--text-muted);
-		transform: translateX(2px);
-	}
-	.ns-hide {
-		position: absolute;
-		right: 0.375rem;
-		top: 50%;
-		transform: translateY(-50%);
-		display: inline-flex;
-		align-items: center;
-		color: var(--text-faint);
-		background: var(--bg-raised);
-		border: none;
-		cursor: pointer;
-		padding: 0.25rem;
-		border-radius: var(--radius-sm);
-		opacity: 0;
-		transition: opacity var(--dur-fast);
-	}
-	.ns-item:hover .ns-hide,
-	.ns-hide:focus-visible {
-		opacity: 1;
-	}
-	.ns-hide:hover {
-		color: var(--text-default);
-		background-color: var(--fill-soft);
+		font-variant-numeric: tabular-nums;
 	}
 </style>
