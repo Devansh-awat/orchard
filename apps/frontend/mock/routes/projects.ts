@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { TEMPLATES, templateRow } from '../templates.ts';
 import { templateSpec } from '../template-params.ts';
-import { freshId, slugify, uid } from '../ids.ts';
+import { ago, freshId, sha, slugify, uid } from '../ids.ts';
 import type { MockContext } from '../plugin.ts';
 import { notFound, reply, type Router } from '../router.ts';
 import {
@@ -82,6 +82,104 @@ function projectDetail(store: Store, p: MockProject) {
 		pendingTransfer: null,
 		currentUserRole: access(store, p)
 	};
+}
+
+type MockStackService = [name: string, status: string];
+
+type MockStackSeed = {
+	name: string;
+	status: string;
+	buildStatus: string;
+	repo: string | null;
+	branch?: string;
+	path?: string;
+	autoDeploy?: boolean;
+	lastError?: string;
+	updated: number;
+	services: MockStackService[];
+};
+
+const COMPOSE_STACKS: Record<string, MockStackSeed[]> = {
+	terra: [
+		{
+			name: 'arcade',
+			status: 'active',
+			buildStatus: 'succeeded',
+			repo: 'hackclub/arcade',
+			branch: 'main',
+			path: 'docker-compose.yml',
+			autoDeploy: true,
+			updated: 42,
+			services: [
+				['web', 'running'],
+				['api', 'running'],
+				['redis', 'running']
+			]
+		},
+		{
+			name: 'leaderboard',
+			status: 'updating',
+			buildStatus: 'building',
+			repo: 'hackclub/terra-leaderboard',
+			branch: 'next',
+			path: 'deploy/compose.yaml',
+			updated: 1,
+			services: [
+				['web', 'deploying'],
+				['worker', 'running'],
+				['scheduler', 'running']
+			]
+		},
+		{
+			name: 'metrics',
+			status: 'failed',
+			buildStatus: 'none',
+			repo: null,
+			lastError: 'grafana: image grafana/grafana:11.9 not found',
+			updated: 60 * 26,
+			services: [
+				['prometheus', 'running'],
+				['grafana', 'failed'],
+				['loki', 'running'],
+				['promtail', 'running'],
+				['alertmanager', 'running'],
+				['node-exporter', 'running']
+			]
+		}
+	]
+};
+
+function composeStacks(p: MockProject) {
+	return (COMPOSE_STACKS[p.slug] ?? []).map((s) => {
+		const id = uid(`compose:${p.id}:${s.name}`);
+		return {
+			id,
+			projectId: p.id,
+			environmentId: null,
+			name: s.name,
+			composeYaml: '',
+			status: s.status,
+			lastError: s.lastError ?? null,
+			githubRepo: s.repo ? `https://github.com/${s.repo}` : null,
+			githubBranch: s.branch ?? null,
+			composePath: s.path ?? null,
+			githubInstallationId: null,
+			autoDeployEnabled: s.autoDeploy ?? false,
+			autoDeployBranch: s.autoDeploy ? (s.branch ?? null) : null,
+			lastCommitSha: s.repo ? sha(`${id}:head`) : null,
+			buildStatus: s.buildStatus,
+			buildLogs: '',
+			createdBy: p.ownerId,
+			createdAt: ago(s.updated + 60 * 24 * 9),
+			updatedAt: ago(s.updated),
+			deployments: s.services.map(([name, status]) => ({
+				id: uid(`compose:${id}:${name}`),
+				name: `${s.name}-${name}`,
+				status,
+				composeServiceName: name
+			}))
+		};
+	});
 }
 
 export function projectRoutes(r: Router, { store }: MockContext) {
@@ -173,7 +271,10 @@ export function projectRoutes(r: Router, { store }: MockContext) {
 		return { ok: true };
 	});
 
-	r.get('/projects/:id/compose-stacks', () => []);
+	r.get('/projects/:id/compose-stacks', ({ params }) => {
+		const p = find(params.id);
+		return p ? composeStacks(p) : notFound();
+	});
 	r.get('/projects/:id/anomalies', ({ params }) => ({
 		anomalies: store
 			.deploymentsOf(params.id)

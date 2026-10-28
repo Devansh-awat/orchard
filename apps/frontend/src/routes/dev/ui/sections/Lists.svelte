@@ -10,7 +10,39 @@
 	import Menu from '$lib/components/ui/Menu.svelte';
 	import MenuItem from '$lib/components/ui/MenuItem.svelte';
 	import EntityRow from '$lib/components/patterns/EntityRow.svelte';
+	import StackRow from '$lib/components/patterns/StackRow.svelte';
+	import { resourceStatus } from '$lib/components/ui/status';
 	import { PROJECTS } from '../fixtures';
+
+	const svc = (name: string, status: string) => ({
+		id: name,
+		name,
+		status: resourceStatus(status)
+	});
+	const hour = 3600_000;
+	const STACKS = [
+		{
+			name: 'arcade',
+			status: resourceStatus('active'),
+			services: [svc('web', 'running'), svc('api', 'running'), svc('redis', 'running')],
+			source: 'hackclub/arcade · main · docker-compose.yml',
+			updatedAt: new Date(Date.now() - hour).toISOString()
+		},
+		{
+			name: 'leaderboard',
+			status: resourceStatus('updating', 'building'),
+			services: [svc('worker', 'running'), svc('web', 'deploying'), svc('scheduler', 'running')],
+			source: 'hackclub/terra-leaderboard · next',
+			updatedAt: new Date(Date.now() - 60_000).toISOString()
+		},
+		{
+			name: 'metrics',
+			status: resourceStatus('failed'),
+			services: [svc('prometheus', 'running'), svc('grafana', 'failed')],
+			error: 'grafana: image grafana/grafana:11.9 not found',
+			updatedAt: new Date(Date.now() - 26 * hour).toISOString()
+		}
+	];
 </script>
 
 <div class="grid grid-cols-2 gap-6">
@@ -34,6 +66,11 @@
 						</Menu>
 					{/snippet}
 				</EntityRow>
+			{/each}
+		</List>
+		<List label="Compose stacks">
+			{#each STACKS as s (s.name)}
+				<StackRow {...s} href="#" />
 			{/each}
 		</List>
 		<List>
