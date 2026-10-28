@@ -249,7 +249,7 @@
 		}
 	});
 
-	const FULLSCREEN_PREFIXES = ['/setup', '/auth/protect', '/dev/ui/lab/sign-in'];
+	const FULLSCREEN_PREFIXES = ['/setup', '/auth/protect', '/dev/ui'];
 	const fullscreenPath = $derived(
 		FULLSCREEN_PREFIXES.some((prefix) => $page.url.pathname.startsWith(prefix)) ||
 			isFullscreenGraftPath($page.url.pathname)

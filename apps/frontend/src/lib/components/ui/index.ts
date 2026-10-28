@@ -66,3 +66,6 @@ export type { EnvVarEditorRow } from './EnvVarEditor.svelte';
 export { default as MenuSeparator } from './MenuSeparator.svelte';
 export { default as MenuLabel } from './MenuLabel.svelte';
 export { default as Spinner } from './Spinner.svelte';
+export { default as Stack } from './Stack.svelte';
+export { default as FormActions } from './FormActions.svelte';
+export { default as SecretInput } from './SecretInput.svelte';

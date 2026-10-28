@@ -12,6 +12,7 @@
 	import MenuLabel from '$lib/components/ui/MenuLabel.svelte';
 	import AppIcon from '$lib/components/ui/AppIcon.svelte';
 	import Skeleton from '$lib/components/ui/Skeleton.svelte';
+	import Stack from '$lib/components/ui/Stack.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import SectionTitle from '$lib/components/ui/SectionTitle.svelte';
 	import FeatureHero, { type FeatureItem } from '$lib/components/patterns/FeatureHero.svelte';
@@ -342,17 +343,17 @@
 			</EmptyState>
 		{/if}
 	{:else}
-		<div class="hub">
+		<Stack gap="xl">
 			{#if loading}
 				<Skeleton height="18rem" rounded="1.875rem" />
 			{:else if featured.length}
 				<FeatureHero items={featured} columns={4} onSelect={(item) => openTemplate(item.id)} />
 			{/if}
 
-			<section class="start">
+			<Stack gap="md">
 				<SectionTitle title="Start from scratch" size="md" />
 				<Dock label="Start from scratch" items={dock} columns={4} {busy} onSelect={openSource} />
-			</section>
+			</Stack>
 
 			{#if loading}
 				<Skeleton height="12rem" rounded="1.25rem" />
@@ -361,21 +362,11 @@
 					<Shelf title={shelf.title} items={shelf.items} columns={4} plain onSelect={pick} />
 				{/each}
 			{/if}
-		</div>
+		</Stack>
 	{/if}
 </Page>
 
 <style>
-	.hub {
-		display: flex;
-		flex-direction: column;
-		gap: 2.625rem;
-	}
-	.start {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-	}
 	.into {
 		color: var(--text-muted);
 	}

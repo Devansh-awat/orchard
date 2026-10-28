@@ -8,6 +8,10 @@
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Disclosure from '$lib/components/ui/Disclosure.svelte';
+	import Stack from '$lib/components/ui/Stack.svelte';
+	import FormActions from '$lib/components/ui/FormActions.svelte';
+	import ParamField, { type ParamDef } from '$lib/components/patterns/ParamField.svelte';
+	import ResourceList from '$lib/components/patterns/ResourceList.svelte';
 	import { IMG_ICONS } from '$lib/components/org-dashboard/helpers.svelte';
 	import { TEMPLATE_SHELVES } from '../home-fixtures';
 
@@ -46,6 +50,48 @@
 	];
 
 	let busy = $state<string | null>(null);
+
+	const PARAMS: ParamDef[] = [
+		{
+			name: 'appName',
+			displayName: 'App name',
+			type: 'string',
+			required: true,
+			description: 'Used for its internal hostname.'
+		},
+		{
+			name: 'serverType',
+			displayName: 'Server type',
+			type: 'select',
+			options: [
+				{ label: 'Paper', value: 'paper' },
+				{ label: 'Vanilla', value: 'vanilla' },
+				{ label: 'Fabric', value: 'fabric' }
+			]
+		},
+		{
+			name: 'timezone',
+			displayName: 'Timezone',
+			type: 'select',
+			options: ['New York', 'London', 'Berlin', 'Tokyo', 'UTC'].map((l) => ({ label: l, value: l }))
+		},
+		{ name: 'storageGi', displayName: 'Storage', type: 'number', validation: { min: 1, max: 200 } },
+		{
+			name: 'members',
+			displayName: 'Enable memberships',
+			type: 'boolean',
+			description: 'Let readers sign up.'
+		},
+		{ name: 'secret', displayName: 'Encryption key', type: 'secret' }
+	];
+	let values = $state<Record<string, any>>({
+		appName: 'ghost',
+		serverType: 'paper',
+		timezone: 'UTC',
+		storageGi: 10,
+		members: true,
+		secret: ''
+	});
 </script>
 
 <SectionCard
@@ -99,4 +145,31 @@
 	<Disclosure title="Set limits" note="Org defaults if you skip this">
 		<p class="text-callout text-muted">CPU and memory pickers go here.</p>
 	</Disclosure>
+</SectionCard>
+
+<SectionCard
+	title="Template parameters"
+	description="ParamField picks the control from the parameter type: text, a segmented choice up to four options and a dropdown beyond, a short number with its unit, a toggle, or a secret that reveals on demand."
+>
+	<Stack gap="lg">
+		{#each PARAMS as param (param.name)}
+			<ParamField {param} bind:value={values[param.name]} />
+		{/each}
+		<FormActions
+			><Button variant="ghost">Cancel</Button><Button variant="primary">Deploy</Button></FormActions
+		>
+	</Stack>
+</SectionCard>
+
+<SectionCard
+	title="Resource list"
+	description="What a template or stack creates, in the app's own icon language."
+>
+	<ResourceList
+		items={[
+			{ name: 'ghost', type: 'deployment' },
+			{ name: 'ghost-db', type: 'database' },
+			{ name: 'ghost-web', type: 'ingress' }
+		]}
+	/>
 </SectionCard>

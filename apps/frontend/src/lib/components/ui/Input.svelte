@@ -10,6 +10,7 @@
 		shape = 'rounded',
 		suffix = undefined,
 		mono = false,
+		width = 'full',
 		class: className = '',
 		...rest
 	}: {
@@ -20,6 +21,7 @@
 		shape?: 'rounded' | 'capsule';
 		suffix?: string | Snippet;
 		mono?: boolean;
+		width?: 'full' | 'short';
 		class?: string;
 		[key: string]: unknown;
 	} = $props();
@@ -27,7 +29,7 @@
 
 {#if icon || suffix}
 	{@const Leading = icon}
-	<span class="wrap {className}">
+	<span class="wrap {className}" class:wrap--short={width === 'short'}>
 		{#if Leading}<span class="lead" aria-hidden="true"><Leading size={15} /></span>{/if}
 		<input
 			class="control control--{size} control--{shape}"
@@ -48,6 +50,7 @@
 {:else}
 	<input
 		class="control control--{size} control--{shape} {className}"
+		class:control--short={width === 'short'}
 		class:control--mono={mono}
 		class:control--error={error}
 		aria-invalid={error || undefined}
@@ -109,6 +112,10 @@
 		border-radius: calc(0.75rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		font-size: var(--text-headline);
+	}
+	.wrap--short,
+	.control--short {
+		max-width: 12rem;
 	}
 	.control--mono {
 		font-family: var(--font-mono);

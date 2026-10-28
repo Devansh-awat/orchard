@@ -4,46 +4,27 @@
 	import { onMount } from 'svelte';
 	import { env } from '$env/dynamic/public';
 	import { apiFetch, toasts, fetchProjectContext } from '$lib/stores';
-	import { Globe, Eye, EyeOff } from 'lucide-svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
 	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
 	import {
 		Alert,
 		Badge,
 		Breadcrumbs,
-		Button,
 		Disclosure,
-		Field,
-		Input,
+		FormActions,
+		Button,
 		Page,
 		SectionCard,
-		SegmentedControl,
-		Dropdown,
 		Skeleton,
-		ToggleRow,
-		ToneTile
+		Stack
 	} from '$lib/components/ui';
-	import AppIcon from '$lib/components/ui/AppIcon.svelte';
+	import ParamField, {
+		paramProblem,
+		type ParamDef
+	} from '$lib/components/patterns/ParamField.svelte';
+	import ResourceList from '$lib/components/patterns/ResourceList.svelte';
 	import ProductHeader from '$lib/components/patterns/ProductHeader.svelte';
 	import { templateCategory } from '$lib/utils/template-categories';
-
-	interface ParameterDef {
-		name: string;
-		displayName: string;
-		description?: string;
-		type: 'string' | 'number' | 'boolean' | 'select' | 'secret';
-		default?: any;
-		required?: boolean;
-		placeholder?: string;
-		validation?: {
-			pattern?: string;
-			message?: string;
-			min?: number;
-			max?: number;
-			bytes?: number;
-		};
-		options?: { label: string; value: string }[];
-	}
 
 	interface ResourceSummary {
 		name: string;
@@ -59,7 +40,7 @@
 		version: string;
 		category?: string;
 		tags: string[];
-		parameters: ParameterDef[];
+		parameters: ParamDef[];
 		resources: ResourceSummary[];
 	}
 
@@ -79,13 +60,13 @@
 
 	const APP_DOMAIN = env.PUBLIC_APP_DOMAIN ?? '';
 
-	function isDomainParam(param: ParameterDef): boolean {
+	function isDomainParam(param: ParamDef): boolean {
 		if (param.type !== 'string') return false;
 		const tokens = param.name.split(/(?=[A-Z])|[_\s-]/).map((t) => t.toLowerCase());
 		return tokens.some((t) => t === 'domain' || t === 'host' || t === 'hostname');
 	}
 
-	function isNameParam(param: ParameterDef): boolean {
+	function isNameParam(param: ParamDef): boolean {
 		if (param.type !== 'string') return false;
 		if (isDomainParam(param)) return false;
 		const tokens = param.name.split(/(?=[A-Z])|[_\s-]/).map((t) => t.toLowerCase());
@@ -101,7 +82,7 @@
 			.replace(/-+$/, '');
 	}
 
-	function normalizeNameParam(param: ParameterDef) {
+	function normalizeNameParam(param: ParamDef) {
 		if (!isNameParam(param)) return;
 		const raw = paramValues[param.name];
 		if (typeof raw !== 'string' || !raw.trim()) return;
@@ -128,9 +109,6 @@
 			: null
 	);
 
-	const KIND_LABEL = { deployment: 'App', database: 'Database', ingress: 'Public URL' } as const;
-
-	let revealed = $state<Record<string, boolean>>({});
 	let touched = $state<Record<string, boolean>>({});
 
 	const ORDER = { string: 0, select: 1, number: 2, boolean: 3, secret: 4 } as const;
@@ -141,35 +119,12 @@
 	);
 	const secrets = $derived((template?.parameters ?? []).filter((p) => p.type === 'secret'));
 
-	function problem(param: ParameterDef): string | null {
-		const v = paramValues[param.name];
-		const empty = v === undefined || v === null || v === '';
-		if (empty) return param.required ? `${param.displayName} is required` : null;
-		if (param.type === 'number') {
-			const n = Number(v);
-			if (Number.isNaN(n)) return 'Enter a number';
-			if (param.validation?.min !== undefined && n < param.validation.min)
-				return `At least ${param.validation.min}`;
-			if (param.validation?.max !== undefined && n > param.validation.max)
-				return `At most ${param.validation.max}`;
-		}
-		if (param.type === 'string' && param.validation?.pattern) {
-			if (!new RegExp(param.validation.pattern).test(String(v)))
-				return param.validation.message ?? 'This value is not valid';
-		}
-		return null;
-	}
-
 	const problems = $derived(
-		Object.fromEntries((template?.parameters ?? []).map((p) => [p.name, problem(p)]))
+		Object.fromEntries(
+			(template?.parameters ?? []).map((p) => [p.name, paramProblem(p, paramValues[p.name])])
+		)
 	);
 	const blocked = $derived(Object.values(problems).some(Boolean));
-
-	function unitOf(param: ParameterDef) {
-		if (/gi$/i.test(param.name)) return 'GiB';
-		if (/interval|seconds/i.test(param.name)) return 'sec';
-		return undefined;
-	}
 
 	async function fetchTemplate() {
 		try {
@@ -277,17 +232,17 @@
 
 {#if loading}
 	<Page title="Deploy template" width="default">
-		<div class="loading">
+		<Stack gap="lg">
 			<Skeleton height="8rem" width="8rem" rounded="1.75rem" />
 			<Skeleton height="16rem" rounded="1.125rem" />
-		</div>
+		</Stack>
 	</Page>
 {:else if template}
 	{@const tpl = template}
 	<Page title={tpl.displayName} width="default">
 		{#snippet header()}{@render crumbs()}{/snippet}
 		{#snippet aside()}
-			<div class="side">
+			<Stack sticky>
 				<SectionCard title="Deploy into">
 					<ProjectSwitcher
 						currentProjectName={project?.name || projectSlug}
@@ -295,21 +250,9 @@
 					/>
 				</SectionCard>
 				<SectionCard title="What gets created">
-					<ul class="creates">
-						{#each tpl.resources as resource (resource.name)}
-							<li class="create">
-								{#if resource.type === 'ingress'}
-									<ToneTile tone="info" size={28}><Globe size={14} /></ToneTile>
-								{:else}
-									<AppIcon name={resource.name} kind={resource.type} size="sm" />
-								{/if}
-								<span class="create-name">{resource.name}</span>
-								<span class="create-kind">{KIND_LABEL[resource.type]}</span>
-							</li>
-						{/each}
-					</ul>
+					<ResourceList items={tpl.resources} />
 				</SectionCard>
-			</div>
+			</Stack>
 		{/snippet}
 
 		<form
@@ -336,103 +279,21 @@
 
 			{#if settings.length}
 				<SectionCard title="Configure">
-					<div class="fields">
+					<Stack gap="lg">
 						{#each settings as param (param.name)}
-							{@const issue = touched[param.name] ? problems[param.name] : null}
-							{#if param.type === 'boolean'}
-								<ToggleRow
-									label={param.displayName}
-									hint={param.description ?? null}
-									bind:checked={paramValues[param.name]}
-									disabled={deploying}
-								/>
-							{:else if param.type === 'select'}
-								<Field
-									label={param.displayName}
-									hint={param.description}
-									for="p-{param.name}"
-									required={param.required}
-								>
-									{#if (param.options ?? []).length <= 4}
-										<SegmentedControl
-											label={param.displayName}
-											size="sm"
-											options={(param.options ?? []).map((o) => ({
-												value: o.value,
-												label: o.label
-											}))}
-											bind:value={paramValues[param.name]}
-										/>
-									{:else}
-										<Dropdown
-											id="p-{param.name}"
-											bind:value={paramValues[param.name]}
-											disabled={deploying}
-											options={(param.options ?? []).map((o) => ({
-												value: o.value,
-												label: o.label
-											}))}
-										/>
-									{/if}
-								</Field>
-							{:else if param.type === 'number'}
-								<Field
-									label={param.displayName}
-									hint={param.description}
-									error={issue}
-									for="p-{param.name}"
-									required={param.required}
-								>
-									<span class="short">
-										<Input
-											id="p-{param.name}"
-											type="number"
-											min={param.validation?.min}
-											max={param.validation?.max}
-											suffix={unitOf(param)}
-											error={!!issue}
-											bind:value={paramValues[param.name]}
-											disabled={deploying}
-											onblur={() => (touched[param.name] = true)}
-										/></span
-									>
-								</Field>
-							{:else}
-								<Field
-									label={param.displayName}
-									error={issue}
-									for="p-{param.name}"
-									required={param.required}
-								>
-									<Input
-										id="p-{param.name}"
-										placeholder={param.placeholder || ''}
-										error={!!issue}
-										bind:value={paramValues[param.name]}
-										disabled={deploying}
-										onblur={() => {
-											normalizeNameParam(param);
-											touched[param.name] = true;
-										}}
-									/>
-									{#snippet hint()}
-										{param.description ?? ''}
-										{#if isDomainParam(param) && suggestedDomain && paramValues[param.name] !== suggestedDomain}
-											<span class="suggest">
-												<Button
-													size="sm"
-													variant="tinted"
-													onclick={() => (paramValues[param.name] = suggestedDomain)}
-												>
-													Use {suggestedDomain}
-												</Button>
-											</span>
-										{/if}
-									{/snippet}
-								</Field>
-							{/if}
+							<ParamField
+								{param}
+								bind:value={paramValues[param.name]}
+								error={touched[param.name] ? problems[param.name] : null}
+								disabled={deploying}
+								suggestion={isDomainParam(param) ? suggestedDomain : null}
+								onblur={() => {
+									normalizeNameParam(param);
+									touched[param.name] = true;
+								}}
+							/>
 						{/each}
-					</div>
+					</Stack>
 				</SectionCard>
 			{/if}
 
@@ -441,31 +302,11 @@
 					title="Secrets"
 					description="Leave them empty and Orchard generates strong values on deploy."
 				>
-					<div class="fields">
+					<Stack gap="lg">
 						{#each secrets as param (param.name)}
-							<Field label={param.displayName} for="p-{param.name}">
-								<Input
-									id="p-{param.name}"
-									type={revealed[param.name] ? 'text' : 'password'}
-									placeholder="Generated on deploy"
-									autocomplete="off"
-									class="secret"
-									bind:value={paramValues[param.name]}
-									disabled={deploying}
-								>
-									{#snippet suffix()}
-										<Button
-											size="sm"
-											variant="ghost"
-											icon={revealed[param.name] ? EyeOff : Eye}
-											label={revealed[param.name] ? 'Hide' : 'Show'}
-											onclick={() => (revealed[param.name] = !revealed[param.name])}
-										/>
-									{/snippet}
-								</Input>
-							</Field>
+							<ParamField {param} bind:value={paramValues[param.name]} disabled={deploying} />
 						{/each}
-					</div>
+					</Stack>
 				</SectionCard>
 			{/if}
 
@@ -482,12 +323,12 @@
 				</Disclosure>
 			</SectionCard>
 
-			<div class="actions">
+			<FormActions>
 				<Button variant="ghost" href={`/${orgSlug}/new?projectSlug=${projectSlug}`}>Cancel</Button>
 				<Button variant="primary" size="lg" type="submit" loading={deploying}>
 					Deploy {tpl.displayName}
 				</Button>
-			</div>
+			</FormActions>
 		</form>
 	</Page>
 {:else}
@@ -497,68 +338,9 @@
 {/if}
 
 <style>
-	.side {
-		position: sticky;
-		top: 1.5rem;
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-	}
-	.actions {
-		display: flex;
-		align-items: center;
-		justify-content: flex-end;
-		gap: 0.5rem;
-		padding-top: 0.5rem;
-	}
-	.loading {
-		display: flex;
-		flex-direction: column;
-		gap: 1.5rem;
-	}
 	.form {
 		display: flex;
 		flex-direction: column;
-		gap: 1.5rem;
-	}
-	.fields {
-		display: flex;
-		flex-direction: column;
-		gap: 1.125rem;
-	}
-	.short {
-		display: block;
-		max-width: 12rem;
-	}
-	.suggest {
-		display: block;
-		margin-top: 0.5rem;
-	}
-	.creates {
-		display: flex;
-		flex-direction: column;
-		gap: 0.625rem;
-		margin: 0;
-		padding: 0;
-		list-style: none;
-	}
-	.create {
-		display: flex;
-		align-items: center;
-		gap: 0.625rem;
-		min-width: 0;
-	}
-	.create-name {
-		flex: 1;
-		min-width: 0;
-		overflow: hidden;
-		font-size: var(--text-body);
-		font-weight: var(--weight-medium);
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.create-kind {
-		font-size: var(--text-caption);
-		color: var(--text-muted);
+		gap: var(--space-6);
 	}
 </style>
