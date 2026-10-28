@@ -87,7 +87,6 @@
 	let projectMembers = $state<ProjectMember[]>([]);
 	let pendingInvitations = $state<PendingInvitation[]>([]);
 	let revokingInviteId = $state<string | null>(null);
-	let newMemberRole = $state<'member' | 'admin' | 'viewer'>('member');
 	let addingMember = $state(false);
 	let favFailed = $state<Set<string>>(new Set());
 	let showCustomize = $state(false);
@@ -101,7 +100,6 @@
 	const viewerIsTransferRecipient = $derived(
 		!!pendingTransfer && !!$user?.id && pendingTransfer.to.id === $user.id
 	);
-	let openRoleMenuId = $state<string | null>(null);
 	const PROJECT_TABS: ProjectTab[] = ['resources', 'variables', 'compose', 'members', 'settings'];
 	function tabFromUrl(url: URL): ProjectTab {
 		const t = url.searchParams.get('tab');
@@ -315,41 +313,44 @@
 		}
 	}
 
-	async function addMember(email: string) {
-		if (!project || !email) return;
+	async function addMembers(emails: string[], role: 'admin' | 'member' | 'viewer') {
+		if (!project || emails.length === 0) return false;
 		addingMember = true;
-		try {
-			const response = await apiFetch(`/apiv1/projects/${project.id}/members`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ email, role: newMemberRole })
-			});
-			if (!response.ok) {
-				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to add member');
-			}
-			const result = await response.json().catch(() => ({}));
-			if (result.invited) {
-				toasts.add({
-					title: 'Invitation sent',
-					description: `${email} will join this project as a guest once they accept`,
-					color: 'success'
+		let added = 0;
+		let invited = 0;
+		const failed: string[] = [];
+		for (const email of emails) {
+			try {
+				const response = await apiFetch(`/apiv1/projects/${project.id}/members`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ email, role })
 				});
-			} else {
-				toasts.add({ title: 'Member added', color: 'success' });
+				if (!response.ok) throw new Error();
+				const result = await response.json().catch(() => ({}));
+				if (result.invited) invited++;
+				else added++;
+			} catch {
+				failed.push(email);
 			}
-			memberSearch = '';
-			newMemberRole = 'member';
+		}
+		addingMember = false;
+		if (added || invited) {
+			const parts = [
+				added ? `${added} added` : '',
+				invited ? `${invited} invited as ${invited === 1 ? 'a guest' : 'guests'}` : ''
+			].filter(Boolean);
+			toasts.add({ title: parts.join(', '), color: 'success' });
 			await fetchProject();
-		} catch (e) {
+		}
+		if (failed.length) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to add member',
+				title: `Couldn't add ${failed.join(', ')}`,
 				color: 'error'
 			});
-		} finally {
-			addingMember = false;
 		}
+		memberSearch = '';
+		return failed.length === 0;
 	}
 
 	async function updateMemberRole(memberId: string, role: string, prevRole: string) {
@@ -1074,14 +1075,12 @@
 						transferPending={!!pendingTransfer}
 						ownerId={project.ownerId ?? null}
 						bind:memberSearch
-						bind:newMemberRole
 						{filteredOrgMembers}
 						{addingMember}
 						{removingMemberId}
 						{updatingMemberId}
 						{revokingInviteId}
-						bind:openRoleMenuId
-						onAddMember={addMember}
+						onAddMembers={addMembers}
 						onUpdateMemberRole={updateMemberRole}
 						onRemoveMember={removeMember}
 						onRevokeInvitation={revokeInvitation}

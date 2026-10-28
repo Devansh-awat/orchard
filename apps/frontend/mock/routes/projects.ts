@@ -14,6 +14,17 @@ import {
 	userRow
 } from '../serialize.ts';
 import type { Store } from '../store.ts';
+
+type MockInvite = {
+	id: string;
+	email: string;
+	createdAt: string;
+	expiresAt: string;
+	projectRole: { name: string };
+};
+
+const INVITES = new Map<string, MockInvite[]>();
+
 import type { MockEnvironment, MockProject } from '../types.ts';
 
 function projectDetail(store: Store, p: MockProject) {
@@ -78,7 +89,7 @@ function projectDetail(store: Store, p: MockProject) {
 			.deploymentsOf(p.id)
 			.flatMap(ingress)
 			.map((i) => ({ id: i.id, name: i.name, host: i.host, tlsSecretName: i.tlsSecretName })),
-		pendingInvitations: [],
+		pendingInvitations: INVITES.get(p.id) ?? [],
 		pendingTransfer: null,
 		currentUserRole: access(store, p)
 	};
@@ -358,10 +369,31 @@ export function projectRoutes(r: Router, { store }: MockContext) {
 		const p = find(params.id);
 		if (!p) return notFound();
 		const u = store.state.users.find((x) => x.email === body?.email);
-		if (!u) return { invited: true };
+		if (!u) {
+			const list = INVITES.get(p.id) ?? [];
+			if (!list.some((i) => i.email === body?.email)) {
+				list.push({
+					id: freshId(),
+					email: String(body?.email),
+					createdAt: new Date().toISOString(),
+					expiresAt: new Date(Date.now() + 7 * 864e5).toISOString(),
+					projectRole: { name: String(body?.role ?? 'member') }
+				});
+				INVITES.set(p.id, list);
+			}
+			store.emit('membership.changed', p.id, '');
+			return { invited: true };
+		}
 		if (!p.memberIds.includes(u.id)) p.memberIds.push(u.id);
 		store.emit('membership.changed', p.id, u.id);
 		return { invited: false };
+	});
+	r.delete('/projects/:id/invitations/:invitationId', ({ params }) => {
+		INVITES.set(
+			params.id,
+			(INVITES.get(params.id) ?? []).filter((i) => i.id !== params.invitationId)
+		);
+		return { ok: true };
 	});
 	r.delete('/projects/:id/members/:memberId', ({ params }) => {
 		const p = find(params.id);

@@ -19,6 +19,7 @@
 		icon = Search,
 		disabled = false,
 		loading = false,
+		size = 'md',
 		empty = 'No matches',
 		creatable = false,
 		createLabel = (q: string) => `Use “${q}”`,
@@ -38,6 +39,7 @@
 		icon?: Icon;
 		disabled?: boolean;
 		loading?: boolean;
+		size?: 'md' | 'lg';
 		empty?: string | Snippet<[string]>;
 		creatable?: boolean;
 		createLabel?: (query: string) => string;
@@ -104,10 +106,10 @@
 	}
 </script>
 
-<div class="field {className}" class:field--open={combo.open} class:field--disabled={disabled}>
+<div class="field field--{size} {className}" class:field--open={combo.open} class:field--disabled={disabled}>
 	{#if icon}
 		{@const Lead = icon}
-		<span class="lead" aria-hidden="true"><Lead size={14} /></span>
+		<span class="lead" aria-hidden="true"><Lead size={size === 'lg' ? 16 : 14} /></span>
 	{/if}
 	<input
 		{...combo.input}
@@ -229,6 +231,17 @@
 		transition:
 			box-shadow var(--fade-in) var(--curve-out),
 			background-color var(--fade-in) var(--curve-out);
+	}
+	.field--lg .control {
+		height: 2.75rem;
+		padding-left: 2.375rem;
+		font-size: var(--text-body);
+	}
+	.field--lg .lead {
+		left: 0.8125rem;
+	}
+	.field--lg .control--bare {
+		padding-left: 0.875rem;
 	}
 	.control--bare {
 		padding-left: 0.6875rem;
