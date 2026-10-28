@@ -4,21 +4,33 @@
 		value: string;
 		secret?: boolean;
 	}
+
+	export interface EnvVarIssue {
+		tone: 'error' | 'warning';
+		text: string;
+	}
 </script>
 
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { Eye, EyeOff, Lock, LockOpen, Plus, Trash2 } from 'lucide-svelte';
+	import { CircleAlert, Eye, EyeOff, Lock, LockOpen, Plus, Trash2 } from 'lucide-svelte';
 	import { envVarsToRaw, rawToEnvVars } from '$lib/utils/format';
 	import { presence } from '$lib/utils/transitions';
 	import Button from './Button.svelte';
+	import CopyButton from './CopyButton.svelte';
+	import PopoverPanel from './PopoverPanel.svelte';
 	import Textarea from './Textarea.svelte';
+	import Tooltip from './Tooltip.svelte';
 
 	let {
 		rows = $bindable([] as EnvVarEditorRow[]),
 		mode = $bindable('grid'),
 		raw = $bindable(''),
 		secrets = false,
+		stored = new Set<string>(),
+		issues = new Map<string, EnvVarIssue[]>(),
+		reference = undefined,
+		confirmSecret = false,
 		minRows = 0,
 		onedit = undefined
 	}: {
@@ -26,11 +38,17 @@
 		mode?: 'grid' | 'raw';
 		raw?: string;
 		secrets?: boolean;
+		stored?: ReadonlySet<string>;
+		issues?: ReadonlyMap<string, EnvVarIssue[]>;
+		reference?: (key: string) => string;
+		confirmSecret?: boolean;
 		minRows?: number;
 		onedit?: () => void;
 	} = $props();
 
 	let revealed = $state<Set<number>>(new Set());
+	let replacing = $state<Set<number>>(new Set());
+	let focusId: number | null = null;
 	const ids = new WeakMap<EnvVarEditorRow, number>();
 	let seq = 0;
 
@@ -59,6 +77,13 @@
 		});
 	});
 
+	$effect.pre(() => {
+		void stored;
+		untrack(() => {
+			if (replacing.size) replacing = new Set();
+		});
+	});
+
 	function blank(key = '', value = '', secret = false): EnvVarEditorRow {
 		return secrets ? { key, value, secret } : { key, value };
 	}
@@ -67,12 +92,11 @@
 		onedit?.();
 	}
 
-	function toggleReveal(row: EnvVarEditorRow) {
-		const id = idOf(row);
-		const next = new Set(revealed);
+	function toggle(set: Set<number>, id: number) {
+		const next = new Set(set);
 		if (next.has(id)) next.delete(id);
 		else next.add(id);
-		revealed = next;
+		return next;
 	}
 
 	function addRow() {
@@ -86,9 +110,40 @@
 		edited();
 	}
 
-	function toggleSecret(row: EnvVarEditorRow) {
-		row.secret = !row.secret;
+	function hasStored(row: EnvVarEditorRow) {
+		return stored.has(row.key.trim());
+	}
+
+	function sealed(row: EnvVarEditorRow) {
+		return (
+			secrets && !!row.secret && hasStored(row) && row.value === '' && !replacing.has(idOf(row))
+		);
+	}
+
+	function setSecret(row: EnvVarEditorRow, secret: boolean) {
+		row.secret = secret;
+		if (!secret && hasStored(row) && row.value === '') focusId = idOf(row);
 		edited();
+	}
+
+	function replace(row: EnvVarEditorRow) {
+		const id = idOf(row);
+		replacing = new Set(replacing).add(id);
+		focusId = id;
+	}
+
+	function keep(row: EnvVarEditorRow) {
+		row.value = '';
+		replacing = toggle(replacing, idOf(row));
+		edited();
+	}
+
+	function claimFocus(id: number) {
+		return (el: HTMLInputElement) => {
+			if (focusId !== id) return;
+			focusId = null;
+			el.focus();
+		};
 	}
 
 	function onPaste(e: ClipboardEvent, i: number) {
@@ -107,6 +162,13 @@
 		if (revealed.has(idOf(row))) return false;
 		return secrets ? !!row.secret : true;
 	}
+
+	function placeholder(row: EnvVarEditorRow) {
+		if (secrets && hasStored(row) && row.value === '') {
+			return row.secret ? 'New value' : 'Type a new value';
+		}
+		return row.key.trim() ? 'value' : '';
+	}
 </script>
 
 {#if mode === 'raw'}
@@ -123,47 +185,121 @@
 {:else}
 	<div class="sheet" role="list">
 		{#each rows as row, i (idOf(row))}
+			{@const id = idOf(row)}
+			{@const key = row.key.trim()}
+			{@const found = (key && issues.get(key)) || []}
+			{@const tone = found.some((f) => f.tone === 'error') ? 'error' : 'warning'}
 			<div class="row" role="listitem" in:presence out:presence>
-				<input
-					class="cell cell--key"
-					placeholder="KEY"
-					aria-label="Variable name"
-					autocomplete="off"
-					spellcheck={false}
-					bind:value={row.key}
-					oninput={edited}
-					onpaste={(e) => onPaste(e, i)}
-				/>
-				<input
-					class="cell cell--value"
-					type={masked(row) ? 'password' : 'text'}
-					placeholder={row.secret ? '••••••••' : row.key.trim() ? 'value' : ''}
-					aria-label={row.key ? `Value of ${row.key}` : 'Value'}
-					autocomplete="off"
-					spellcheck={false}
-					bind:value={row.value}
-					oninput={edited}
-				/>
-				<div class="tools">
-					<span class="tool">
-						<Button
-							variant="ghost"
-							size="sm"
-							icon={revealed.has(idOf(row)) ? EyeOff : Eye}
-							label={revealed.has(idOf(row)) ? 'Hide value' : 'Show value'}
-							onclick={() => toggleReveal(row)}
+				<div class="key">
+					<input
+						class="cell cell--key"
+						placeholder="KEY"
+						aria-label="Variable name"
+						autocomplete="off"
+						spellcheck={false}
+						bind:value={row.key}
+						oninput={edited}
+						onpaste={(e) => onPaste(e, i)}
+					/>
+					{#if found.length}
+						<Tooltip text={found.map((f) => f.text).join(' ')}>
+							<span
+								class="issue issue--{tone}"
+								role="img"
+								aria-label={found.map((f) => f.text).join(' ')}
+							>
+								<CircleAlert size={14} strokeWidth={2.25} />
+							</span>
+						</Tooltip>
+					{/if}
+				</div>
+				{#if sealed(row)}
+					<div class="cell--value value sealed">
+						<span class="sealed-label"><Lock size={13} aria-hidden="true" />Hidden</span>
+						<Button variant="ghost" size="sm" onclick={() => replace(row)}>Replace</Button>
+					</div>
+				{:else}
+					<div class="cell--value value">
+						<input
+							class="cell"
+							type={masked(row) ? 'password' : 'text'}
+							placeholder={placeholder(row)}
+							aria-label={row.key ? `Value of ${row.key}` : 'Value'}
+							autocomplete="off"
+							spellcheck={false}
+							bind:value={row.value}
+							oninput={edited}
+							{@attach claimFocus(id)}
 						/>
-					</span>
+						{#if replacing.has(id)}
+							<Button variant="ghost" size="sm" onclick={() => keep(row)}>Keep current</Button>
+						{/if}
+					</div>
+				{/if}
+				<div class="tools" class:tools--wide={secrets}>
+					{#if (secrets ? row.secret : true) && !sealed(row)}
+						<span class="tool">
+							<Button
+								variant="ghost"
+								size="sm"
+								icon={revealed.has(id) ? EyeOff : Eye}
+								label={revealed.has(id) ? 'Hide value' : 'Show value'}
+								onclick={() => (revealed = toggle(revealed, id))}
+							/>
+						</span>
+					{/if}
+					{#if reference && key}
+						<span class="tool">
+							<Tooltip text="Copy {reference(key)}">
+								<CopyButton value={reference(key)} label="Copy reference to {key}" />
+							</Tooltip>
+						</span>
+					{/if}
 					{#if secrets}
 						<span class="tool" class:tool--pinned={row.secret}>
-							<Button
-								variant={row.secret ? 'tinted' : 'ghost'}
-								size="sm"
-								icon={row.secret ? Lock : LockOpen}
-								label={row.secret ? 'Secret, stored in a Kubernetes Secret' : 'Mark as secret'}
-								aria-pressed={!!row.secret}
-								onclick={() => toggleSecret(row)}
-							/>
+							{#if row.secret || !confirmSecret}
+								<Button
+									variant={row.secret ? 'tinted' : 'ghost'}
+									size="sm"
+									icon={row.secret ? Lock : LockOpen}
+									label={row.secret ? 'Make plain' : 'Make secret'}
+									aria-pressed={!!row.secret}
+									onclick={() => setSecret(row, !row.secret)}
+								/>
+							{:else}
+								<PopoverPanel placement="bottom-end">
+									{#snippet trigger(attrs)}
+										<Button
+											{...attrs}
+											variant="ghost"
+											size="sm"
+											icon={LockOpen}
+											label="Make secret"
+											aria-pressed={false}
+										/>
+									{/snippet}
+									{#snippet children({ close })}
+										<div class="confirm">
+											<p class="confirm-title">Make {key || 'this value'} secret?</p>
+											<p class="confirm-text">
+												Once saved, nobody can read it again. You can still replace it.
+											</p>
+											<div class="confirm-actions">
+												<Button variant="ghost" size="sm" onclick={close}>Cancel</Button>
+												<Button
+													variant="primary"
+													size="sm"
+													icon={Lock}
+													onclick={() => {
+														setSecret(row, true);
+														close();
+													}}>Make secret</Button
+												>
+											</div>
+										</div>
+									{/snippet}
+								</PopoverPanel>
+							{/if}
 						</span>
 					{/if}
 					<span class="tool">
@@ -222,20 +358,59 @@
 	.cell::placeholder {
 		color: var(--text-faint);
 	}
-	.cell--key {
+	.key {
+		display: flex;
+		align-items: center;
 		flex: 2;
+		min-width: 0;
+		padding-right: 0.5rem;
+	}
+	.cell--key {
+		flex: 1;
 		font-weight: var(--weight-medium);
+	}
+	.issue {
+		display: grid;
+		place-items: center;
+		color: var(--status-warning);
+		cursor: help;
+	}
+	.issue--error {
+		color: var(--status-error);
 	}
 	.cell--value {
 		flex: 3;
+		min-width: 0;
+		align-self: stretch;
 		border-left: 1px solid var(--rule);
+	}
+	.value {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+	}
+	.value .cell {
+		flex: 1;
 		color: var(--text-muted);
+	}
+	.sealed-label {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		flex: 1;
+		padding-left: 0.75rem;
+		color: var(--text-muted);
+		font-size: var(--text-callout);
 	}
 	.tools {
 		display: flex;
 		align-items: center;
+		justify-content: flex-end;
 		gap: 0.125rem;
 		flex-shrink: 0;
+	}
+	.tools--wide {
+		width: 7.5rem;
 	}
 	.tool {
 		display: inline-flex;
@@ -244,11 +419,34 @@
 	}
 	.row:hover .tool,
 	.row:has(:focus-visible) .tool,
+	.tool:has(:popover-open),
 	.tool--pinned {
 		opacity: 1;
 		transition: opacity var(--fade-in) var(--curve-out);
 	}
 	.add {
 		padding: 0.25rem;
+	}
+	.confirm {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		max-width: 17rem;
+		padding: var(--space-3);
+	}
+	.confirm-title {
+		font-weight: var(--weight-medium);
+		color: var(--text-default);
+	}
+	.confirm-text {
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		color: var(--text-muted);
+	}
+	.confirm-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: var(--space-2);
+		margin-top: var(--space-2);
 	}
 </style>

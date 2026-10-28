@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { KeyRound, Lock, Plus } from 'lucide-svelte';
+	import { KeyRound, Plus } from 'lucide-svelte';
 	import { apiFetch, toasts } from '$lib/stores';
 	import { envVarsToRaw, rawToEnvVars } from '$lib/utils/format';
 	import { presence } from '$lib/utils/transitions';
@@ -15,7 +15,8 @@
 		Skeleton,
 		Stack,
 		Swap,
-		type EnvVarEditorRow
+		type EnvVarEditorRow,
+		type EnvVarIssue
 	} from '$lib/components/ui';
 	import type { SharedVar, SharedVarWarning } from '$lib/types/environments';
 
@@ -68,35 +69,54 @@
 			fingerprint(saved.map((v) => ({ key: v.key, value: v.value ?? '', secret: v.secret })))
 	);
 
-	const problems = $derived.by(() => {
-		const out: string[] = [];
+	const issues = $derived.by(() => {
+		const out = new Map<string, EnvVarIssue[]>();
+		const add = (key: string, issue: EnvVarIssue) => {
+			const list = out.get(key) ?? [];
+			if (!list.some((i) => i.text === issue.text)) out.set(key, [...list, issue]);
+		};
+		const defined = new Set(draft.map((v) => v.key));
 		const seen = new Set<string>();
-		const repeated = new Set<string>();
 		for (const v of draft) {
 			if (!KEY_RE.test(v.key)) {
-				out.push(
-					`${v.key} can only use letters, digits and underscores, and cannot start with a digit`
-				);
+				add(v.key, {
+					tone: 'error',
+					text: 'Use letters, digits and underscores, and do not start with a digit.'
+				});
 			}
-			if (seen.has(v.key)) repeated.add(v.key);
+			if (seen.has(v.key)) add(v.key, { tone: 'error', text: 'This name is set more than once.' });
 			seen.add(v.key);
 			if (!v.secret && v.value === '' && storedSecrets.has(v.key)) {
-				out.push(`Type a value for ${v.key} to make it plain again`);
+				add(v.key, {
+					tone: 'error',
+					text: 'The old value stays hidden, so type a new one to make it plain.'
+				});
+			}
+			for (const m of v.value.matchAll(REF_RE)) {
+				if (!defined.has(m[1])) add(v.key, missing(m[1]));
 			}
 		}
-		for (const key of repeated) out.push(`${key} is set more than once`);
+		for (const w of serverWarnings) {
+			if (!defined.has(w.missingRef) && defined.has(w.key)) add(w.key, missing(w.missingRef));
+		}
 		return out;
 	});
 
-	const unresolved = $derived.by(() => {
-		const defined = new Set(draft.map((v) => v.key));
-		const missing = new Set<string>();
-		for (const v of draft) {
-			for (const m of v.value.matchAll(REF_RE)) if (!defined.has(m[1])) missing.add(m[1]);
-		}
-		for (const w of serverWarnings) if (!defined.has(w.missingRef)) missing.add(w.missingRef);
-		return [...missing];
-	});
+	const blocking = $derived([...issues.values()].flat().filter((i) => i.tone === 'error').length);
+	const listed = $derived(
+		[...issues].flatMap(([key, list]) => list.map((i) => ({ ...i, text: `${key}: ${i.text}` })))
+	);
+
+	function missing(ref: string): EnvVarIssue {
+		return {
+			tone: 'warning',
+			text: `\${{shared.${ref}}} is not defined in ${place}, so it resolves to an empty string.`
+		};
+	}
+
+	function reference(key: string) {
+		return `\${{shared.${key}}}`;
+	}
 
 	const empty = $derived(saved.length === 0 && !started && mode === 'grid');
 	const view = $derived(empty ? 'empty' : mode);
@@ -224,9 +244,6 @@
 				{/if}
 			{/snippet}
 		</SectionTitle>
-		<p class="hint">
-			Reference one from any app in {place} with <code>{'${{shared.KEY}}'}</code>
-		</p>
 	</div>
 
 	{#if loading}
@@ -245,35 +262,25 @@
 					<Button variant="primary" icon={Plus} onclick={addFirst}>Add variable</Button>
 				</EmptyState>
 			{:else}
-				<EnvVarEditor bind:rows bind:raw {mode} secrets />
+				<EnvVarEditor
+					bind:rows
+					bind:raw
+					{mode}
+					secrets
+					stored={storedSecrets}
+					{issues}
+					{reference}
+					confirmSecret
+				/>
 			{/if}
 		</Swap>
 
-		{#if !empty && draft.some((v) => v.secret)}
-			<p class="note" in:presence out:presence>
-				<Lock size={12} />
-				<span>Secret values are never shown again. Leave one blank to keep it.</span>
-			</p>
-		{/if}
-
-		{#if problems.length > 0}
+		{#if mode === 'raw' && listed.length > 0}
 			<div in:presence out:presence>
-				<Alert tone="error">
+				<Alert tone={blocking > 0 ? 'error' : 'warning'}>
 					<ul class="problems">
-						{#each problems as problem (problem)}<li>{problem}</li>{/each}
+						{#each listed as issue (issue.text)}<li>{issue.text}</li>{/each}
 					</ul>
-				</Alert>
-			</div>
-		{/if}
-
-		{#if unresolved.length > 0}
-			<div in:presence out:presence>
-				<Alert tone="warning">
-					{#each unresolved as ref, i (ref)}{#if i > 0},
-						{/if}<code>{`\${{shared.${ref}}}`}</code>{/each}
-					{unresolved.length === 1
-						? `is not defined in ${place}, so it resolves to an empty string.`
-						: `are not defined in ${place}, so they resolve to empty strings.`}
 				</Alert>
 			</div>
 		{/if}
@@ -285,7 +292,7 @@
 					<Button
 						variant="primary"
 						loading={saving}
-						disabled={!dirty || problems.length > 0}
+						disabled={!dirty || blocking > 0}
 						onclick={save}>Save</Button
 					>
 				</FormActions>
@@ -299,28 +306,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-1);
-	}
-	.hint {
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		color: var(--text-muted);
-	}
-	code {
-		font-family: var(--font-mono);
-	}
-	.hint code {
-		color: var(--text-default);
-	}
-	.note {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		color: var(--text-faint);
-	}
-	.note :global(svg) {
-		flex-shrink: 0;
 	}
 	.problems {
 		display: flex;

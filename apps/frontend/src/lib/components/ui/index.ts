@@ -65,7 +65,7 @@ export { default as SectionTitle } from './SectionTitle.svelte';
 export { default as Card } from './Card.svelte';
 export { default as Combobox } from './Combobox.svelte';
 export { default as EnvVarEditor } from './EnvVarEditor.svelte';
-export type { EnvVarEditorRow } from './EnvVarEditor.svelte';
+export type { EnvVarEditorRow, EnvVarIssue } from './EnvVarEditor.svelte';
 export { default as MenuSeparator } from './MenuSeparator.svelte';
 export { default as MenuLabel } from './MenuLabel.svelte';
 export { default as Spinner } from './Spinner.svelte';
