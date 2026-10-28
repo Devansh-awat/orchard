@@ -51,6 +51,7 @@
 	{...popover.content}
 	{@attach lock.attach}
 	{...rest}
+	style={[popover.content.style, rest.style].filter(Boolean).join('; ')}
 	class="ui-popover{sameWidth ? ' ui-popover--match' : ''}{className ? ` ${className}` : ''}"
 	{@attach overlayMotion(() => open, { origin })}
 >

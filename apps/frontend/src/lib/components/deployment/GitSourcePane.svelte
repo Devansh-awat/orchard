@@ -1,9 +1,11 @@
 <script lang="ts">
 	import SourcePath from '$lib/components/patterns/SourcePath.svelte';
-	import { GitBranch, Gitlab, Lock, Plus } from 'lucide-svelte';
+	import { BookMarked, GitBranch, Lock, Plus } from 'lucide-svelte';
 	import {
 		Alert,
 		Field,
+		GitHostMark,
+		gitHostOf,
 		Input,
 		Menu,
 		MenuItem,
@@ -58,8 +60,6 @@
 	const connection = $derived(connections.find((c) => c.id === connectionId) ?? null);
 	const repoOptions = $derived(repos.map((r) => ({ value: r.id, label: r.fullName })));
 	const branchOptions = $derived(branches.map((b) => ({ value: b.name, label: b.name })));
-	const glyphFor = (provider: GitConnection['provider']) =>
-		provider === 'gitlab' ? Gitlab : GitBranch;
 	const repoPath = $derived(
 		connection ? (selectedRepo ? selectedRepo.fullName : repoPathOn(connection, repoUrl)) : null
 	);
@@ -200,8 +200,11 @@
 {/snippet}
 
 {#snippet hostGlyph(c: GitConnection)}
-	{@const Glyph = glyphFor(c.provider)}
-	<Glyph size={15} class="text-muted" />
+	<GitHostMark host={gitHostOf(c.provider, c.host)} />
+{/snippet}
+
+{#snippet repoGlyph()}
+	<BookMarked size={15} class="text-muted" />
 {/snippet}
 
 {#if !loaded}
@@ -261,6 +264,7 @@
 						}}
 						onclear={clearRepo}
 						trailing={lock}
+						optionLeading={repoGlyph}
 					/>
 				{:else}
 					<Input

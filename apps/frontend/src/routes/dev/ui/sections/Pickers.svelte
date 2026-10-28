@@ -12,6 +12,18 @@
 	import MenuLabel from '$lib/components/ui/MenuLabel.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import type { DropdownOption } from '$lib/components/ui/dropdown';
+	import AmountSlider from '$lib/components/ui/AmountSlider.svelte';
+	import { formatMemory, parseMemory } from '$lib/components/ResourcePicker.svelte';
+
+	const MB = 1024 ** 2;
+	const MEMORY = [
+		128, 256, 384, 512, 768, 1024, 1536, 2048, 3072, 4096, 6144, 8192, 12288, 16384, 24576, 32768
+	].map((m) => m * MB);
+	let memOpen = $state<number | null>(null);
+	let memTight = $state<number | null>(null);
+	let memOver = $state<number | null>(3072 * MB);
+	let memWide = $state<number | null>(2048 * MB);
+	let memNone = $state<number | null>(null);
 
 	const REGIONS: DropdownOption[] = [
 		{ value: 'fsn1', label: 'Falkenstein', description: 'fsn1 · Germany', icon: Globe },
@@ -249,3 +261,73 @@
 		</SearchPicker>
 	</div>
 </SectionCard>
+
+<SectionCard
+	title="Amount slider"
+	description="The scale fits what you can still use: it ends at your limit, or keeps doubling past 32 GB when you have more."
+>
+	<div class="amounts">
+		<AmountSlider
+			label="No limit"
+			bind:value={memOpen}
+			stops={MEMORY}
+			format={formatMemory}
+			parse={parseMemory}
+			fallback={512 * MB}
+		/>
+		<AmountSlider
+			label="2 GB left"
+			bind:value={memTight}
+			stops={MEMORY}
+			format={formatMemory}
+			parse={parseMemory}
+			fallback={512 * MB}
+			limit={2048 * MB}
+		/>
+		<AmountSlider
+			label="Default bigger than what is left"
+			bind:value={memNone}
+			stops={MEMORY}
+			format={formatMemory}
+			parse={parseMemory}
+			fallback={1024 * MB}
+			limit={768 * MB}
+		/>
+		<AmountSlider
+			label="Already over"
+			bind:value={memOver}
+			stops={MEMORY}
+			format={formatMemory}
+			parse={parseMemory}
+			fallback={512 * MB}
+			limit={1536 * MB}
+		/>
+		<AmountSlider
+			label="Lots of room, with usage"
+			bind:value={memWide}
+			stops={MEMORY}
+			format={formatMemory}
+			parse={parseMemory}
+			fallback={512 * MB}
+			limit={96 * 1024 * MB}
+			usage={1300 * MB}
+		/>
+		<AmountSlider
+			label="Nothing left"
+			value={null}
+			stops={MEMORY}
+			format={formatMemory}
+			parse={parseMemory}
+			fallback={512 * MB}
+			limit={0}
+		/>
+	</div>
+</SectionCard>
+
+<style>
+	.amounts {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: var(--space-6) var(--space-8);
+	}
+</style>

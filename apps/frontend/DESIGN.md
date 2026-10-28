@@ -107,63 +107,65 @@ callout|caption|micro`, `rounded-control|card|panel`.
 
 ## Which component
 
-| Need                               | Use                                                                                                       |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| App layout                         | `AppFrame` (sidebar, backdrop, content) + `Sidebar` (org, search, sections, user)                         |
-| Page                               | `Page` (title, description, eyebrow, actions, aside, hero, header, footer, width)                         |
-| Small heading above a group        | `SectionTitle` (title, count, actions, size)                                                              |
-| Group of content                   | `SectionCard` (title, description, actions, footer, flush)                                                |
-| Plain container                    | `Card` (`href`/`onclick` makes it interactive)                                                            |
-| A project and its resources        | `ProjectGroup` (baked aura header) + `EntityCard` grid                                                    |
-| Project page header                | `ProjectHero` over `ProjectBackdrop` (live aura)                                                          |
-| Rows of things                     | `List` + `ListRow`; dense resource lists use `EntityRow`                                                  |
-| Table of data                      | `Table`                                                                                                   |
-| Numbers                            | `Metric`, with `Sparkline` in its `chart` slot; gauges: `Ring`                                            |
-| Inline facts (url, branch, commit) | `MetaList`                                                                                                |
-| Action                             | `Button` (primary, secondary, ghost, danger, media; `icon`, `iconRight`, `loading`)                       |
-| Actions on a thing                 | `Menu` + `MenuItem` (+ `MenuHeader`, `MenuLabel`, `MenuSeparator`; `size="lg"`)                           |
-| Pick a value                       | `Dropdown` (default), `SearchPicker` (long list with search), `Combobox` (type-to-filter field)           |
-| Very long plain list               | `Select` (native OS menu, only when nobody needs to search)                                               |
-| Text entry                         | `Field` + `Input` (`suffix`, `mono`, `width="short"`) / `Textarea`; numbers: `Stepper`; ranges: `Slider`  |
-| On or off                          | `Switch`, `ToggleRow` for settings rows, `Checkbox` in lists                                              |
-| One of few                         | `SegmentedControl`; one of many in a form: `RadioGroup` (list or cards)                                   |
-| Sections of a page                 | `Tabs`; location: `Breadcrumbs`                                                                           |
-| Sidebar link                       | `NavItem`                                                                                                 |
-| Identity                           | `Monogram`, `Avatar`, `AvatarStack`, `Aura`                                                               |
-| Something happened                 | `toasts.add()` (see Toasts)                                                                               |
-| Something is wrong here            | `Alert`                                                                                                   |
-| Status                             | `StatusBadge`, `StatusDot` via `ui/status.ts` only                                                        |
-| Label that is not status           | `Badge`                                                                                                   |
-| Short hint                         | `Tooltip`                                                                                                 |
-| Floating panel                     | `PopoverPanel`                                                                                            |
-| Dialog                             | `Modal`; destructive confirm: `ConfirmModal`                                                              |
-| Side panel for create/edit         | `Sheet`                                                                                                   |
-| Command palette                    | `CommandMenu`                                                                                             |
-| Loading                            | `Skeleton`, `Spinner`, `Progress`; build steps: `StepRail`                                                |
-| Nothing here                       | `EmptyState` (always with an action)                                                                      |
-| Code and config                    | `CodeBlock`, `Snippet` (one command), `EnvVarRow`, `LogViewer`                                            |
-| Keys, IDs                          | `Kbd`, `CopyButton`, `MiddleTruncate` (hashes and IDs only)                                               |
-| Times                              | `RelativeTime`                                                                                            |
-| Product or template page header    | `ProductHeader` (icon tile, eyebrow, title, description, meta and actions)                                |
-| Vertical rhythm                    | `Stack` (gap `xs` to `xl` on the space scale, `sticky` for side columns)                                  |
-| End of a form                      | `FormActions` (Cancel, then the primary action, right-aligned)                                            |
-| Password or key field              | `SecretInput` (masked, reveal toggle, mono when shown)                                                    |
-| A template or schema parameter     | `ParamField` (picks the control from the parameter type, validates with `paramProblem`)                   |
-| What something creates             | `ResourceList` (app, database, job, public URL rows)                                                      |
-| Optional settings in a form        | `Disclosure` (title, note, spring collapse)                                                               |
-| Content that changes with a choice | `Swap` (`key` is the choice; new content rises in, the box morphs its height)                             |
-| Picker that shows its value        | `Menu` with a `SelectTrigger` (prefix, value, leading icon, clear)                                        |
-| Pickers in a form grid or aside    | Every picker passes `block`, so account, repo, branch, project and environment fill their cell alike      |
-| Where code comes from              | `SourcePath`: `owner / repo` at `lg` is the one decision, branch and framework sit under it as `sm` chips |
-| Settings in a create flow          | Open card for what people set every time, `Disclosure` with a value note under **Advanced** for the rest  |
-| Featured banner                    | `FeatureHero` (rotating, icon-baked backdrop, one call to action)                                         |
-| Ways to start something            | `Dock` (big source tiles in one tray, `busy` while routing)                                               |
-| Row of things to pick              | `Shelf` (16:9 tiles, `onSelect` to run work before navigating)                                            |
-| Separator                          | `Divider` (`label="or"` between two ways to do one thing)                                                 |
-| Icon square                        | `ToneTile` (status tone or `accent`, `solid` for done states)                                             |
-| One-time code                      | `CodeInput` (one real input, six cells, submits itself, shakes on error)                                  |
-| Sign-in or other arrival screen    | `AuthShell` (field, vine, sheet that morphs its height) + `SignInFlow`                                    |
-| Ornament                           | `AsciiVine`, only where `The vine` allows                                                                 |
+| Need                               | Use                                                                                                                                                    |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| App layout                         | `AppFrame` (sidebar, backdrop, content) + `Sidebar` (org, search, sections, user)                                                                      |
+| Page                               | `Page` (title, description, eyebrow, actions, aside, hero, header, footer, width)                                                                      |
+| Small heading above a group        | `SectionTitle` (title, count, actions, size)                                                                                                           |
+| Group of content                   | `SectionCard` (title, description, actions, footer, flush)                                                                                             |
+| Plain container                    | `Card` (`href`/`onclick` makes it interactive)                                                                                                         |
+| A project and its resources        | `ProjectGroup` (baked aura header) + `EntityCard` grid                                                                                                 |
+| Project page header                | `ProjectHero` over `ProjectBackdrop` (live aura)                                                                                                       |
+| Rows of things                     | `List` + `ListRow`; dense resource lists use `EntityRow`                                                                                               |
+| Table of data                      | `Table`                                                                                                                                                |
+| Numbers                            | `Metric`, with `Sparkline` in its `chart` slot; gauges: `Ring`                                                                                         |
+| Inline facts (url, branch, commit) | `MetaList`                                                                                                                                             |
+| Action                             | `Button` (primary, secondary, ghost, danger, media; `icon`, `iconRight`, `loading`)                                                                    |
+| Actions on a thing                 | `Menu` + `MenuItem` (+ `MenuHeader`, `MenuLabel`, `MenuSeparator`; `size="lg"`)                                                                        |
+| Pick a value                       | `Dropdown` (default), `SearchPicker` (long list with search), `Combobox` (type-to-filter field)                                                        |
+| Very long plain list               | `Select` (native OS menu, only when nobody needs to search)                                                                                            |
+| Text entry                         | `Field` + `Input` (`suffix`, `mono`, `width="short"`) / `Textarea`; numbers: `Stepper`; ranges: `Slider`                                               |
+| On or off                          | `Switch`, `ToggleRow` for settings rows, `Checkbox` in lists                                                                                           |
+| One of few                         | `SegmentedControl`; one of many in a form: `RadioGroup` (list or cards)                                                                                |
+| Sections of a page                 | `Tabs`; location: `Breadcrumbs`                                                                                                                        |
+| Sidebar link                       | `NavItem`                                                                                                                                              |
+| Identity                           | `Monogram`, `Avatar`, `AvatarStack`, `Aura`                                                                                                            |
+| Something happened                 | `toasts.add()` (see Toasts)                                                                                                                            |
+| Something is wrong here            | `Alert`                                                                                                                                                |
+| Status                             | `StatusBadge`, `StatusDot` via `ui/status.ts` only                                                                                                     |
+| Label that is not status           | `Badge`                                                                                                                                                |
+| Short hint                         | `Tooltip`                                                                                                                                              |
+| Floating panel                     | `PopoverPanel`                                                                                                                                         |
+| Dialog                             | `Modal`; destructive confirm: `ConfirmModal`                                                                                                           |
+| Side panel for create/edit         | `Sheet`                                                                                                                                                |
+| Command palette                    | `CommandMenu`                                                                                                                                          |
+| Loading                            | `Skeleton`, `Spinner`, `Progress`; build steps: `StepRail`                                                                                             |
+| Nothing here                       | `EmptyState` (always with an action)                                                                                                                   |
+| Code and config                    | `CodeBlock`, `Snippet` (one command), `EnvVarRow`, `LogViewer`                                                                                         |
+| Keys, IDs                          | `Kbd`, `CopyButton`, `MiddleTruncate` (hashes and IDs only)                                                                                            |
+| Times                              | `RelativeTime`                                                                                                                                         |
+| Product or template page header    | `ProductHeader` (icon tile, eyebrow, title, description, meta and actions)                                                                             |
+| Vertical rhythm                    | `Stack` (gap `xs` to `xl` on the space scale, `sticky` for side columns)                                                                               |
+| End of a form                      | `FormActions` (Cancel, then the primary action, right-aligned)                                                                                         |
+| Password or key field              | `SecretInput` (masked, reveal toggle, mono when shown)                                                                                                 |
+| A template or schema parameter     | `ParamField` (picks the control from the parameter type, validates with `paramProblem`)                                                                |
+| What something creates             | `ResourceList` (app, database, job, public URL rows)                                                                                                   |
+| Optional settings in a form        | `Disclosure` (title, note, spring collapse)                                                                                                            |
+| Content that changes with a choice | `Swap` (`key` is the choice; new content rises in, the box morphs its height)                                                                          |
+| Picker that shows its value        | `Menu` with a `SelectTrigger` (prefix, value, leading icon, clear)                                                                                     |
+| Pickers in a form grid or aside    | Every picker passes `block`, so account, repo, branch, project and environment fill their cell alike                                                   |
+| An amount with a budget            | `AmountSlider`: doubling scale that ends at the limit, typed amounts, org default and usage on the track                                               |
+| A git host                         | `GitHostMark` with `gitHostOf(provider, host)`; brand colours are `--mark-*` tokens. Menu rows showing a glyph pass `plain` so no avatar tile is drawn |
+| Where code comes from              | `SourcePath`: `owner / repo` at `lg` is the one decision, branch and framework sit under it as `sm` chips                                              |
+| Settings in a create flow          | Open card for what people set every time, `Disclosure` with a value note under **Advanced** for the rest                                               |
+| Featured banner                    | `FeatureHero` (rotating, icon-baked backdrop, one call to action)                                                                                      |
+| Ways to start something            | `Dock` (big source tiles in one tray, `busy` while routing)                                                                                            |
+| Row of things to pick              | `Shelf` (16:9 tiles, `onSelect` to run work before navigating)                                                                                         |
+| Separator                          | `Divider` (`label="or"` between two ways to do one thing)                                                                                              |
+| Icon square                        | `ToneTile` (status tone or `accent`, `solid` for done states)                                                                                          |
+| One-time code                      | `CodeInput` (one real input, six cells, submits itself, shakes on error)                                                                               |
+| Sign-in or other arrival screen    | `AuthShell` (field, vine, sheet that morphs its height) + `SignInFlow`                                                                                 |
+| Ornament                           | `AsciiVine`, only where `The vine` allows                                                                                                              |
 
 ## Bold budget
 

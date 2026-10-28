@@ -184,7 +184,7 @@
 				{onkeydown}
 			/>
 		</div>
-		<div class="list" id="{uid}-list" role="listbox">
+		<div class="list" class:list--unpicked={!selected} id="{uid}-list" role="listbox">
 			{#if loading}
 				<div class="ui-dropdown-empty"><Spinner size={14} /></div>
 			{:else}
@@ -256,6 +256,9 @@
 		overflow-y: auto;
 		overscroll-behavior: contain;
 		scrollbar-width: thin;
+	}
+	.list--unpicked :global(.ui-dropdown-check:empty) {
+		display: none;
 	}
 	.trail {
 		display: inline-flex;

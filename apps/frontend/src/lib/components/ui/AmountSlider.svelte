@@ -7,7 +7,7 @@
 		label,
 		value = $bindable(null),
 		stops,
-		marks,
+		marks = undefined,
 		format,
 		parse,
 		fallback = null,
@@ -21,7 +21,7 @@
 		label: string;
 		value?: number | null;
 		stops: number[];
-		marks: number[];
+		marks?: number[];
 		format: (n: number) => string;
 		parse: (text: string) => number | null;
 		fallback?: number | null;
@@ -34,8 +34,6 @@
 	} = $props();
 
 	const uid = $props.id();
-	const lo = $derived(Math.log(stops[0]));
-	const hi = $derived(Math.log(stops[stops.length - 1]));
 
 	let dragging = $state(false);
 	let editing = $state(false);
@@ -43,14 +41,54 @@
 
 	const shown = $derived(value ?? fallback);
 	const isDefault = $derived(value == null);
-	const over = $derived(value != null && limit != null && value > limit);
-	const usable = $derived(limit == null ? stops : stops.filter((s) => s <= limit));
+	const exhausted = $derived(limit != null && limit <= 0);
+	const ceiling = $derived(limit != null && limit > 0 ? limit : null);
+	const over = $derived(shown != null && ceiling != null && shown > ceiling);
+	const near = (a: number, b: number) => Math.abs(Math.log(a) - Math.log(b)) < Math.log(1.25);
+
+	const scale = $derived.by(() => {
+		const base = [...stops].sort((x, y) => x - y);
+		if (ceiling == null) return base;
+		const list = base.filter((n) => n < ceiling && !near(n, ceiling));
+		let top = base[base.length - 1];
+		while (top * 2 < ceiling) {
+			top *= 2;
+			if (!near(top, ceiling)) list.push(top);
+		}
+		list.push(ceiling);
+		if (shown != null && shown > ceiling) list.push(shown);
+		return list.length > 1 ? list : [ceiling / 2, ceiling];
+	});
+	const usable = $derived(ceiling == null ? scale : scale.filter((n) => n <= ceiling));
+	const lo = $derived(Math.log(scale[0]));
+	const hi = $derived(Math.log(scale[scale.length - 1]));
+
+	const autoMarks = $derived.by(() => {
+		const ends = usable.length ? usable : scale;
+		const first = ends[0];
+		const last = ends[ends.length - 1];
+		const count = 5;
+		const picked: number[] = [first];
+		for (let k = 1; k < count - 1; k++) {
+			const target = Math.exp(
+				Math.log(first) + ((Math.log(last) - Math.log(first)) * k) / (count - 1)
+			);
+			const candidate = ends[nearestIndex(target, ends)];
+			const gap = (Math.log(candidate) - Math.log(picked[picked.length - 1])) / (hi - lo || 1);
+			const tail = (Math.log(last) - Math.log(candidate)) / (hi - lo || 1);
+			if (gap > 0.14 && tail > 0.14) picked.push(candidate);
+		}
+		if (last !== first) picked.push(last);
+		return picked;
+	});
+	const shownMarks = $derived(marks ?? autoMarks);
 
 	function pos(n: number) {
+		if (hi === lo) return 1;
 		return Math.min(1, Math.max(0, (Math.log(n) - lo) / (hi - lo)));
 	}
 
-	function nearestIndex(n: number, list = stops) {
+	function nearestIndex(n: number, list: number[]) {
 		let best = 0;
 		for (let i = 1; i < list.length; i++) {
 			if (Math.abs(Math.log(list[i]) - Math.log(n)) < Math.abs(Math.log(list[best]) - Math.log(n)))
@@ -67,12 +105,12 @@
 
 	function fromTrack(p: number) {
 		const n = Math.exp(lo + p * (hi - lo));
-		const list = usable.length ? usable : stops;
+		const list = usable.length ? usable : scale;
 		commit(list[nearestIndex(n, list)]);
 	}
 
 	function step(dir: 1 | -1) {
-		const list = usable.length ? usable : stops;
+		const list = usable.length ? usable : scale;
 		const at = nearestIndex(shown ?? list[0], list);
 		const current = list[at];
 		let i = at;
@@ -85,8 +123,8 @@
 	function onkeydown(e: KeyboardEvent) {
 		if (e.key === 'ArrowRight' || e.key === 'ArrowUp') step(1);
 		else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') step(-1);
-		else if (e.key === 'Home') commit((usable.length ? usable : stops)[0]);
-		else if (e.key === 'End') commit((usable.length ? usable : stops).at(-1)!);
+		else if (e.key === 'Home') commit((usable.length ? usable : scale)[0]);
+		else if (e.key === 'End') commit((usable.length ? usable : scale).at(-1)!);
 		else return;
 		e.preventDefault();
 	}
@@ -106,7 +144,7 @@
 	}
 </script>
 
-<div class="amount" class:amount--off={disabled}>
+<div class="amount" class:amount--off={disabled || exhausted}>
 	<div class="head">
 		<label class="label" for="{uid}-value">{label}</label>
 		<div class="readout">
@@ -127,7 +165,7 @@
 				class:value--default={isDefault}
 				class:value--over={over}
 				value={editing ? draft : shown != null ? format(shown) : fallbackLabel}
-				{disabled}
+				disabled={disabled || exhausted}
 				spellcheck="false"
 				autocomplete="off"
 				aria-describedby="{uid}-note"
@@ -152,11 +190,11 @@
 		class="track"
 		class:track--dragging={dragging}
 		style:--at={shown != null ? pos(shown) : 0}
-		style:--limit={limit != null ? pos(limit) : 1}
+		style:--limit={ceiling != null ? pos(ceiling) : 1}
 		style:--used={usage != null ? pos(usage) : 0}
 	>
 		<div class="rail">
-			{#if limit != null && pos(limit) < 1}<span class="beyond"></span>{/if}
+			{#if ceiling != null && pos(ceiling) < 1}<span class="beyond"></span>{/if}
 			{#if usage != null}<span class="used"></span>{/if}
 			{#if shown != null}<span class="fill" class:fill--default={isDefault}></span>{/if}
 		</div>
@@ -172,7 +210,7 @@
 			value={shown != null ? Math.round(pos(shown) * 1000) : 0}
 			aria-label={label}
 			aria-valuetext={shown != null ? format(shown) : fallbackLabel}
-			{disabled}
+			disabled={disabled || exhausted}
 			oninput={(e) => fromTrack(Number((e.currentTarget as HTMLInputElement).value) / 1000)}
 			onpointerdown={() => (dragging = true)}
 			onpointerup={() => (dragging = false)}
@@ -182,20 +220,28 @@
 	</div>
 
 	<div class="marks" aria-hidden="true">
-		{#each marks as mark (mark)}
-			<span class="mark" class:mark--beyond={limit != null && mark > limit} style:--p={pos(mark)}
-				>{format(mark)}</span
+		{#each shownMarks as mark (mark)}
+			<span
+				class="mark"
+				class:mark--beyond={ceiling != null && mark > ceiling}
+				style:--p={pos(mark)}>{format(mark)}</span
 			>
 		{/each}
 	</div>
 
 	<p class="note" id="{uid}-note">
-		{#if over}
-			<span class="note--over">Over {limitLabel.toLowerCase()} of {format(limit!)}</span>
+		{#if exhausted}
+			<span class="note--over">Nothing left in your allowance</span>
+		{:else if over && isDefault}
+			<span class="note--over"
+				>{fallbackLabel} is more than the {format(ceiling!)} you have left</span
+			>
+		{:else if over}
+			<span class="note--over">Over {limitLabel.toLowerCase()} of {format(ceiling!)}</span>
 		{:else if usage != null}
 			Using {format(usage)} right now
-		{:else if limit != null}
-			{format(limit)} available
+		{:else if ceiling != null}
+			{format(ceiling)} available
 		{/if}
 	</p>
 </div>

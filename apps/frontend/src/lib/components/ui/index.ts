@@ -72,3 +72,4 @@ export { default as FormActions } from './FormActions.svelte';
 export { default as SecretInput } from './SecretInput.svelte';
 export { default as SearchPicker } from './SearchPicker.svelte';
 export { default as AmountSlider } from './AmountSlider.svelte';
+export { default as GitHostMark, gitHostOf } from './GitHostMark.svelte';

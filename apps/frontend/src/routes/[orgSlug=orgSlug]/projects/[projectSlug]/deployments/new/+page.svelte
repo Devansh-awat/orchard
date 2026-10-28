@@ -13,6 +13,7 @@
 	} from '$lib/stores';
 	import {
 		ArrowRight,
+		BookMarked,
 		Container,
 		FolderOpen,
 		GitBranch,
@@ -1064,6 +1065,10 @@
 	{/if}
 {/snippet}
 
+{#snippet repoGlyph()}
+	<BookMarked size={15} class="text-muted" />
+{/snippet}
+
 {#snippet defaultTag(option: DropdownOption)}
 	{#if option.value === defaultBranch}<Badge>Default</Badge>{/if}
 {/snippet}
@@ -1282,6 +1287,7 @@
 												onchange={pickRepoByName}
 												onclear={clearRepoSelection}
 												trailing={lock}
+												optionLeading={repoGlyph}
 												empty={repoEmpty}
 											/>
 										{/snippet}

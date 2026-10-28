@@ -127,6 +127,11 @@
 	--brand-field: var(--accent-solid);
 	--on-brand: oklch(1 0 0);
 	--on-brand-muted: color-mix(in oklab, oklch(0.99 0.02 95) 80%, transparent);
+	--mark-github: var(--text-default);
+	--mark-gitlab: #fc6d26;
+	--mark-codeberg: #2185d0;
+	--mark-gitea: #609926;
+	--mark-bitbucket: #2684ff;
 	--toast-fill: var(--neutral-10);
 	--toast-ink: var(--neutral-app);
 	--toast-muted: color-mix(in oklab, var(--neutral-app) 66%, transparent);

@@ -12,6 +12,7 @@
 		shortcut = undefined,
 		checked = undefined,
 		leading = undefined,
+		plain = false,
 		keepOpen = false,
 		description = undefined,
 		children,
@@ -25,6 +26,7 @@
 		shortcut?: string;
 		checked?: boolean;
 		leading?: Snippet;
+		plain?: boolean;
 		keepOpen?: boolean;
 		description?: string;
 		children?: Snippet;
@@ -52,7 +54,9 @@
 			</span>
 		{/if}
 		{#if leading}
-			<span class="leading" aria-hidden="true">{@render leading()}</span>
+			<span class="leading" class:leading--plain={plain} aria-hidden="true"
+				>{@render leading()}</span
+			>
 		{:else if icon}
 			{@const Glyph = icon}
 			<span class="icon" aria-hidden="true"><Glyph size={16} /></span>
@@ -112,7 +116,19 @@
 		corner-shape: var(--corner);
 		box-shadow: inset 0 0 0 0.5px var(--rule);
 	}
-	.leading > :global(*) {
+	.leading--plain {
+		align-items: center;
+		justify-content: center;
+		margin-left: 0;
+		overflow: visible;
+		border-radius: 0;
+		box-shadow: none;
+	}
+	.leading--plain > :global(*) {
+		width: auto;
+		height: auto;
+	}
+	.leading:not(.leading--plain) > :global(*) {
 		width: 100%;
 		height: 100%;
 	}

@@ -70,9 +70,7 @@
 	const MEMORY_STOPS = [
 		128, 256, 384, 512, 768, 1024, 1536, 2048, 3072, 4096, 6144, 8192, 12288, 16384, 24576, 32768
 	].map((m) => m * MIB);
-	const MEMORY_MARKS = [128, 512, 2048, 8192, 32768].map((m) => m * MIB);
 	const CPU_STOPS = [100, 250, 500, 750, 1000, 1500, 2000, 3000, 4000, 6000, 8000, 12000, 16000];
-	const CPU_MARKS = [250, 1000, 4000, 16000];
 
 	const orgId = $derived($selectedOrganization?.id ?? null);
 	const needsQuota = $derived(
@@ -112,7 +110,6 @@
 		label="Memory"
 		bind:value={() => memoryBytes, (v) => (memoryBytes = v)}
 		stops={MEMORY_STOPS}
-		marks={MEMORY_MARKS}
 		format={formatMemory}
 		parse={parseMemory}
 		fallback={memDefault}
@@ -125,7 +122,6 @@
 		label="CPU"
 		bind:value={() => cpuMilli, (v) => (cpuMilli = v)}
 		stops={CPU_STOPS}
-		marks={CPU_MARKS}
 		format={formatCpu}
 		parse={parseCpu}
 		fallback={cpuDefault}
