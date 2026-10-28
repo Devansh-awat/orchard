@@ -28,12 +28,20 @@
 	let {
 		items,
 		title,
-		seeAllHref = undefined
+		seeAllHref = undefined,
+		onSelect = undefined
 	}: {
 		items: ShelfItem[];
 		title: string;
 		seeAllHref?: string;
+		onSelect?: (item: ShelfItem) => void;
 	} = $props();
+
+	function choose(e: MouseEvent, item: ShelfItem) {
+		if (!onSelect || e.metaKey || e.ctrlKey || e.shiftKey) return;
+		e.preventDefault();
+		onSelect(item);
+	}
 
 	const HUES = ['blue', 'green', 'amber', 'neutral'] as const;
 
@@ -148,7 +156,7 @@
 				{@const tone = item.tone ?? 'neutral'}
 				{@const live = tone === 'progress' && item.progress != null}
 				<li class="slot">
-					<a class="tile tile--{tone}" href={item.href}>
+					<a class="tile tile--{tone}" href={item.href} onclick={(e) => choose(e, item)}>
 						<span class="art" class:art--media={!!art}>
 							<span class="art-clip" style:--tint={tintOf(item.title)}>
 								<span

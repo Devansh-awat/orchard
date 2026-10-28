@@ -75,6 +75,9 @@
 			section: 'data'
 		},
 		{ need: 'Keys and IDs', use: ['Kbd', 'CopyButton', 'MiddleTruncate'], section: 'small' },
+		{ need: 'Featured banner', use: ['FeatureHero'], section: 'create' },
+		{ need: 'Ways to start', use: ['Dock'], note: 'big tiles in one tray', section: 'create' },
+		{ need: 'Row of things to pick', use: ['Shelf'], section: 'create' },
 		{ need: 'Separator', use: ['Divider'], note: 'label for "or"', section: 'small' },
 		{ need: 'Icon square', use: ['ToneTile'], note: 'status tones or accent', section: 'small' },
 		{ need: 'One-time code', use: ['CodeInput'], section: 'vine' },

@@ -2,595 +2,348 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
+	import { Github, Container, LayoutTemplate } from 'lucide-svelte';
 	import { apiFetch, selectedOrganization, toasts, user } from '$lib/stores';
-	import {
-		Loader2,
-		Github,
-		Container,
-		Database,
-		Globe,
-		Ghost,
-		Slack,
-		Newspaper,
-		LayoutTemplate,
-		Search
-	} from 'lucide-svelte';
-	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
-	import { Badge, SectionHeader, Skeleton } from '$lib/components/ui';
-	import { springHover, motionStagger } from '$lib/utils/motion.svelte';
-
-	const orgSlug = $derived($page.params.orgSlug);
-	const selectedOrgId = $derived($selectedOrganization?.id ?? '');
-
-	const preselectedType = $derived($page.url.searchParams.get('type') as ResourceType | null);
-	const preselectedProjectSlug = $derived($page.url.searchParams.get('projectSlug'));
+	import Page from '$lib/components/ui/Page.svelte';
+	import SearchField from '$lib/components/ui/SearchField.svelte';
+	import Select from '$lib/components/ui/Select.svelte';
+	import Skeleton from '$lib/components/ui/Skeleton.svelte';
+	import EmptyState from '$lib/components/ui/EmptyState.svelte';
+	import SectionTitle from '$lib/components/ui/SectionTitle.svelte';
+	import FeatureHero, { type FeatureItem } from '$lib/components/patterns/FeatureHero.svelte';
+	import Dock, { type DockItem } from '$lib/components/patterns/Dock.svelte';
+	import Shelf, { type ShelfItem } from '$lib/components/patterns/Shelf.svelte';
+	import { IMG_ICONS } from '$lib/components/org-dashboard/helpers.svelte';
 
 	interface Template {
 		id: string;
 		name: string;
 		displayName: string;
 		description?: string;
-		icon?: string;
+		icon?: string | null;
 		category?: string;
 		tags: string[];
 	}
 
-	let projects = $state<Array<{ id: string; name: string; slug: string }>>([]);
+	type Source = 'github' | 'image' | 'database';
+
+	const CATEGORY: Record<string, string> = {
+		automation: 'Automation',
+		cms: 'Publishing',
+		monitoring: 'Monitoring',
+		analytics: 'Analytics',
+		security: 'Security',
+		ai: 'AI',
+		docs: 'Docs',
+		games: 'Games',
+		database: 'Databases',
+		backend: 'Backend',
+		developer: 'Developer tools'
+	};
+	const FEATURED = ['n8n', 'ghost', 'uptime-kuma', 'plausible', 'open-webui'];
+	const POPULAR = 8;
+
+	const orgSlug = $derived($page.params.orgSlug);
+	const orgId = $derived($selectedOrganization?.id ?? '');
+	const preselectedProject = $page.url.searchParams.get('projectSlug');
+
+	let projects = $state<{ id: string; name: string; slug: string }[]>([]);
 	let templates = $state<Template[]>([]);
 	let loading = $state(true);
-	let navigating = $state(false);
-	let templateSearch = $state('');
+	let busy = $state<string | null>(null);
+	let query = $state('');
+	let projectSlug = $state('');
 
-	type ResourceType = 'deployment-github' | 'deployment-image' | 'database';
-	let selectedResource = $state<ResourceType | null>(null);
+	const label = (t: Template) => CATEGORY[t.category ?? ''] ?? t.category ?? 'Template';
 
-	const sources: Array<{
-		id: ResourceType;
-		label: string;
-		desc: string;
-		icon: typeof Github;
-		hue: string;
-		featured?: boolean;
-	}> = [
+	const featured = $derived.by<FeatureItem[]>(() => {
+		const picked = FEATURED.map((n) => templates.find((t) => t.name === n)).filter(
+			(t): t is Template => !!t
+		);
+		const list = picked.length ? picked : templates.slice(0, 5);
+		return list.map((t) => ({
+			id: t.id,
+			title: t.displayName,
+			eyebrow: label(t),
+			description: t.description,
+			icon: t.icon,
+			href: templateHref(t)
+		}));
+	});
+
+	const redis = $derived(templates.find((t) => t.name === 'redis'));
+
+	const dock = $derived<DockItem[]>([
 		{
-			id: 'deployment-github',
+			id: 'github',
 			label: 'GitHub repo',
-			desc: 'Deploy straight from your code',
+			hint: 'Deploy straight from your code',
 			icon: Github,
-			hue: 'violet',
-			featured: true
+			tone: 'ink',
+			badge: 'Fastest',
+			href: sourceHref('github')
 		},
 		{
-			id: 'deployment-image',
+			id: 'image',
 			label: 'Docker image',
-			desc: 'Deploy a published container',
+			hint: 'Run a published container',
 			icon: Container,
-			hue: 'blue'
+			tone: 'blue',
+			href: sourceHref('image')
 		},
 		{
 			id: 'database',
-			label: 'Database',
-			desc: 'Managed PostgreSQL',
-			icon: Database,
-			hue: 'amber'
+			label: 'PostgreSQL',
+			hint: 'Managed, with backups',
+			image: IMG_ICONS.postgres,
+			href: sourceHref('database')
+		},
+		...(redis
+			? [
+					{
+						id: `template:${redis.id}`,
+						label: 'Redis',
+						hint: 'Valkey cache, Redis-compatible',
+						image: IMG_ICONS.redis,
+						href: templateHref(redis)
+					}
+				]
+			: [])
+	]);
+
+	const shelves = $derived.by(() => {
+		const toItem = (t: Template): ShelfItem => ({
+			id: t.id,
+			title: t.displayName,
+			subtitle: label(t),
+			description: t.description,
+			icon: t.icon,
+			href: templateHref(t)
+		});
+		const popular = [
+			...FEATURED.map((n) => templates.find((t) => t.name === n)).filter((t): t is Template => !!t),
+			...templates.filter((t) => !FEATURED.includes(t.name))
+		].slice(0, POPULAR);
+		const groups = new Map<string, Template[]>();
+		for (const t of templates) {
+			const key = label(t);
+			groups.set(key, [...(groups.get(key) ?? []), t]);
 		}
-	];
-
-	const CATEGORY_HUE: Record<string, string> = {
-		cms: 'violet',
-		bot: 'emerald',
-		backend: 'blue',
-		database: 'amber',
-		frontend: 'pink'
-	};
-
-	const CATEGORY_LABELS: Record<string, string> = {
-		cms: 'CMS',
-		backend: 'Backend',
-		frontend: 'Frontend',
-		database: 'Database'
-	};
-
-	const TECH_ART: Record<string, string> = {
-		nodejs: 'nodejs-original',
-		node: 'nodejs-original',
-		redis: 'redis-original',
-		postgres: 'postgresql-original',
-		postgresql: 'postgresql-original',
-		nginx: 'nginx-original',
-		python: 'python-original',
-		go: 'go-original',
-		rust: 'rust-original',
-		mongodb: 'mongodb-original',
-		mysql: 'mysql-original',
-		grafana: 'grafana-original'
-	};
-
-	const BRAND_GLYPHS: Record<string, typeof Github> = {
-		ghost: Ghost,
-		slack: Slack,
-		wordpress: Newspaper
-	};
-
-	const GENERIC_GLYPHS: Record<string, typeof Github> = {
-		globe: Globe,
-		database: Database
-	};
-
-	function formatCategory(category: string) {
-		return CATEGORY_LABELS[category] ?? category.charAt(0).toUpperCase() + category.slice(1);
-	}
-
-	function templateArt(t: Template): string | null {
-		const icon = t.icon?.toLowerCase() ?? '';
-		if (BRAND_GLYPHS[icon]) return null;
-		for (const key of [icon, t.name, ...t.tags]) {
-			const art = key && TECH_ART[key.toLowerCase()];
-			if (art) return `/icons/tech/${art}.svg`;
-		}
-		return null;
-	}
-
-	function templateGlyph(t: Template) {
-		const icon = t.icon?.toLowerCase() ?? '';
-		return BRAND_GLYPHS[icon] ?? GENERIC_GLYPHS[icon] ?? LayoutTemplate;
-	}
-
-	const filteredTemplates = $derived.by(() => {
-		const q = templateSearch.trim().toLowerCase();
-		if (!q) return templates;
-		return templates.filter(
-			(t) =>
-				t.displayName.toLowerCase().includes(q) ||
-				t.description?.toLowerCase().includes(q) ||
-				t.tags.some((tag) => tag.toLowerCase().includes(q))
-		);
+		const sorted = [...groups.entries()].sort((a, b) => {
+			if (a[0] === 'Databases') return -1;
+			if (b[0] === 'Databases') return 1;
+			return b[1].length - a[1].length;
+		});
+		const big = sorted.filter(([, list]) => list.length >= 3);
+		const rest = sorted.filter(([, list]) => list.length < 3).flatMap(([, list]) => list);
+		return [
+			{ title: 'Popular', items: popular.map(toItem) },
+			...big.map(([title, list]) => ({ title, items: list.map(toItem) })),
+			...(rest.length ? [{ title: 'More templates', items: rest.map(toItem) }] : [])
+		];
 	});
 
-	async function fetchProjects() {
-		loading = true;
+	const results = $derived.by<ShelfItem[]>(() => {
+		const q = query.trim().toLowerCase();
+		if (!q) return [];
+		return templates
+			.filter(
+				(t) =>
+					t.displayName.toLowerCase().includes(q) ||
+					(t.description?.toLowerCase().includes(q) ?? false) ||
+					t.tags.some((tag) => tag.toLowerCase().includes(q))
+			)
+			.map((t) => ({
+				id: t.id,
+				title: t.displayName,
+				subtitle: label(t),
+				description: t.description,
+				icon: t.icon,
+				href: templateHref(t)
+			}));
+	});
+
+	function base() {
+		return projectSlug ? `/${orgSlug}/projects/${projectSlug}` : null;
+	}
+
+	function templateHref(t: Template) {
+		const b = base();
+		return b ? `${b}/templates/deploy/${t.id}` : '#';
+	}
+
+	function sourceHref(source: Source) {
+		const b = base();
+		if (!b) {
+			if (source === 'database') return '#';
+			return `/${orgSlug}/deployments/new?source=${source}&project=${encodeURIComponent(defaultProjectName())}`;
+		}
+		return source === 'database' ? `${b}/databases/new` : `${b}/deployments/new?source=${source}`;
+	}
+
+	function defaultProjectName() {
+		const u = $user;
+		const name = u?.username?.trim() || u?.firstName?.trim() || u?.name?.trim() || 'My';
+		return `${name}'s Project`;
+	}
+
+	async function ensureProject(): Promise<string> {
+		if (projectSlug) return projectSlug;
+		const res = await apiFetch('/apiv1/projects', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ name: defaultProjectName(), organizationId: orgId })
+		});
+		if (!res.ok) {
+			const d = await res.json().catch(() => ({}));
+			throw new Error(d.message || 'Could not create a project');
+		}
+		const p = await res.json();
+		projects = [...projects, { id: p.id, name: p.name, slug: p.slug }];
+		projectSlug = p.slug;
+		return p.slug;
+	}
+
+	async function go(id: string, to: (slug: string) => string) {
+		busy = id;
+		try {
+			const slug = await ensureProject();
+			await goto(to(slug));
+		} catch (e) {
+			toasts.add({
+				title: 'Could not start',
+				description: e instanceof Error ? e.message : 'Something went wrong',
+				color: 'error'
+			});
+			busy = null;
+		}
+	}
+
+	function openTemplate(id: string) {
+		go(id, (slug) => `/${orgSlug}/projects/${slug}/templates/deploy/${id}`);
+	}
+
+	function openSource(item: DockItem) {
+		if (item.id.startsWith('template:')) return openTemplate(item.id.slice('template:'.length));
+		const source = item.id as Source;
+		if (!projectSlug && source !== 'database') {
+			busy = item.id;
+			goto(sourceHref(source));
+			return;
+		}
+		go(item.id, (slug) =>
+			source === 'database'
+				? `/${orgSlug}/projects/${slug}/databases/new`
+				: `/${orgSlug}/projects/${slug}/deployments/new?source=${source}`
+		);
+	}
+
+	onMount(async () => {
 		try {
 			const [projRes, tplRes] = await Promise.all([
-				apiFetch(selectedOrgId ? `/apiv1/projects?orgId=${selectedOrgId}` : '/apiv1/projects'),
+				apiFetch(orgId ? `/apiv1/projects?orgId=${orgId}` : '/apiv1/projects'),
 				apiFetch('/apiv1/templates')
 			]);
-
 			if (projRes.ok) {
-				projects = (await projRes.json()).map((p: any) => ({
+				projects = (await projRes.json()).map((p: { id: string; name: string; slug: string }) => ({
 					id: p.id,
 					name: p.name,
 					slug: p.slug
 				}));
 			}
-			if (tplRes.ok) {
-				templates = await tplRes.json();
-			}
-
-			if (preselectedType && sources.find((r) => r.id === preselectedType)) {
-				selectedResource = preselectedType;
-			}
-		} catch {
-			/* */
+			if (tplRes.ok) templates = await tplRes.json();
+			projectSlug =
+				preselectedProject && projects.some((p) => p.slug === preselectedProject)
+					? preselectedProject
+					: (projects[0]?.slug ?? '');
 		} finally {
 			loading = false;
 		}
-	}
-
-	async function createProject(name: string): Promise<string> {
-		// Server auto-suffixes on slug collisions, so we just send the name.
-		const projRes = await apiFetch('/apiv1/projects', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ name, organizationId: selectedOrgId })
-		});
-		if (!projRes.ok) {
-			const d = await projRes.json().catch(() => ({}));
-			throw new Error(d.message || 'Failed to create project');
-		}
-		const proj = await projRes.json();
-		return proj.slug;
-	}
-
-	function defaultProjectName(): string {
-		const u = $user;
-		const display = u?.username?.trim() || u?.firstName?.trim() || u?.name?.trim() || 'My';
-		return `${display}'s Project`;
-	}
-
-	async function resolveProjectSlug(): Promise<string> {
-		if (preselectedProjectSlug && projects.some((p) => p.slug === preselectedProjectSlug)) {
-			return preselectedProjectSlug;
-		}
-		if (projects.length === 0) {
-			return createProject(defaultProjectName());
-		}
-		return projects[0].slug;
-	}
-
-	async function selectResourceAndGo(type: ResourceType) {
-		selectedResource = type;
-		navigating = true;
-
-		try {
-			// Deploying is the one flow that can name a project without creating it:
-			// the form materializes it at submit, next to the deployment. Picking a
-			// card is not a commitment, so an org with no projects yet gets the
-			// name carried in the query rather than an empty project it never asked
-			// for. Databases and templates still need one up front.
-			const deploying = type === 'deployment-github' || type === 'deployment-image';
-			if (deploying && projects.length === 0 && !preselectedProjectSlug) {
-				const source = type === 'deployment-github' ? 'github' : 'image';
-				goto(
-					`/${orgSlug}/deployments/new?source=${source}&project=${encodeURIComponent(defaultProjectName())}`
-				);
-				return;
-			}
-
-			const projSlug = await resolveProjectSlug();
-			const base = `/${orgSlug}/projects/${projSlug}`;
-			switch (type) {
-				case 'deployment-github':
-					goto(`${base}/deployments/new?source=github`);
-					break;
-				case 'deployment-image':
-					goto(`${base}/deployments/new?source=image`);
-					break;
-				case 'database':
-					goto(`${base}/databases/new`);
-					break;
-			}
-		} catch (e) {
-			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Something went wrong',
-				color: 'error'
-			});
-			navigating = false;
-		}
-	}
-
-	async function deployTemplate(templateId: string) {
-		navigating = true;
-		try {
-			const projSlug = await resolveProjectSlug();
-			goto(`/${orgSlug}/projects/${projSlug}/templates/deploy/${templateId}`);
-		} catch (e) {
-			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Something went wrong',
-				color: 'error'
-			});
-			navigating = false;
-		}
-	}
-
-	onMount(fetchProjects);
+	});
 </script>
 
-<div class="nw-page">
-	<Breadcrumb crumbs={[{ label: 'Home', href: `/${orgSlug}` }, { label: 'New' }]} />
-	<h1 class="nw-pagetitle">Add something new</h1>
+<svelte:head><title>New</title></svelte:head>
 
-	<section class="nw-row" {@attach motionStagger({ index: 1, from: { y: 8 } })}>
-		<SectionHeader title="Start from scratch" />
-		<div class="nw-sources">
-			{#each sources as source (source.id)}
-				{@const Icon = source.icon}
-				<button
-					class="nw-card nw-source"
-					class:nw-card--featured={source.featured}
-					disabled={navigating}
-					onclick={() => selectResourceAndGo(source.id)}
-					{@attach springHover({ lift: -2 })}
-				>
-					<span class="nw-ic">
-						{#if navigating && selectedResource === source.id}
-							<Loader2 size={18} class="animate-spin" />
-						{:else}
-							<Icon size={18} />
-						{/if}
-					</span>
-					<span class="nw-card-text">
-						<span class="nw-card-name">
-							{source.label}
-							{#if source.featured}<Badge tone="info">Fastest</Badge>{/if}
-						</span>
-						<span class="nw-card-sub">{source.desc}</span>
-					</span>
-				</button>
-			{/each}
-		</div>
-	</section>
+<Page title="New" width="wide">
+	{#snippet tools()}
+		{#if projects.length > 1}
+			<label class="into">
+				<span>Into</span>
+				<span class="into-select">
+					<Select size="sm" bind:value={projectSlug} aria-label="Project">
+						{#each projects as p (p.id)}<option value={p.slug}>{p.name}</option>{/each}
+					</Select>
+				</span>
+			</label>
+		{/if}
+	{/snippet}
+	{#snippet actions()}
+		<SearchField placeholder="Search templates" shortcut="/" bind:value={query} />
+	{/snippet}
 
-	{#if loading}
-		<section class="nw-row">
-			<SectionHeader title="Templates" />
-			<div class="nw-grid">
-				{#each Array(5) as _, i (i)}
-					<div class="nw-card nw-card--skel">
-						<Skeleton width="2.25rem" height="2.25rem" rounded="var(--radius-sm)" />
-						<Skeleton height="0.85rem" width="70%" />
-						<Skeleton height="0.7rem" width="45%" />
-					</div>
-				{/each}
-			</div>
-		</section>
-	{:else if templates.length > 0}
-		<section class="nw-row" {@attach motionStagger({ index: 2, from: { y: 8 } })}>
-			<SectionHeader title="Templates" count={templates.length}>
-				{#snippet actions()}
-					{#if templates.length > 6}
-						<div class="nw-search">
-							<Search size={14} />
-							<input
-								type="search"
-								placeholder="Search templates"
-								aria-label="Search templates"
-								bind:value={templateSearch}
-							/>
-						</div>
-					{/if}
-				{/snippet}
-			</SectionHeader>
-
-			{#if filteredTemplates.length === 0}
-				<p class="nw-empty">No templates match that search</p>
-			{:else}
-				<div class="nw-grid">
-					{#each filteredTemplates as template (template.id)}
-						{@const art = templateArt(template)}
-						{@const Glyph = templateGlyph(template)}
-						<button
-							class="nw-card nw-tpl"
-							style="--tile-hue: var(--hue-{CATEGORY_HUE[template.category ?? ''] ?? 'slate'});"
-							disabled={navigating}
-							onclick={() => deployTemplate(template.id)}
-							{@attach springHover({ lift: -2 })}
-						>
-							<span class="nw-tpl-top">
-								<span class="nw-ic nw-ic--tpl">
-									{#if art}
-										<img src={art} alt="" loading="lazy" />
-									{:else}
-										<Glyph size={18} />
-									{/if}
-								</span>
-								{#if template.category}
-									<span class="nw-tpl-cat">{formatCategory(template.category)}</span>
-								{/if}
-							</span>
-							<span class="nw-card-text">
-								<span class="nw-card-name">{template.displayName}</span>
-								<span class="nw-card-sub">{template.tags.slice(0, 3).join(' · ')}</span>
-							</span>
-						</button>
-					{/each}
-				</div>
+	{#if query.trim()}
+		{#if results.length}
+			<Shelf
+				title="Templates matching “{query.trim()}”"
+				items={results}
+				onSelect={(item) => openTemplate(item.id)}
+			/>
+		{:else}
+			<EmptyState
+				title="No templates match “{query.trim()}”"
+				description="Try a name like Ghost or Postgres, or start from a repo or an image."
+			>
+				{#snippet icon()}<LayoutTemplate size={22} />{/snippet}
+			</EmptyState>
+		{/if}
+	{:else}
+		<div class="hub">
+			{#if loading}
+				<Skeleton height="18rem" rounded="1.875rem" />
+			{:else if featured.length}
+				<FeatureHero items={featured} onSelect={(item) => openTemplate(item.id)} />
 			{/if}
-		</section>
+
+			<section class="start">
+				<SectionTitle title="Start from scratch" size="md" />
+				<Dock label="Start from scratch" items={dock} {busy} onSelect={openSource} />
+			</section>
+
+			{#if loading}
+				<Skeleton height="12rem" rounded="1.25rem" />
+			{:else}
+				{#each shelves as shelf (shelf.title)}
+					<Shelf
+						title={shelf.title}
+						items={shelf.items}
+						onSelect={(item) => openTemplate(item.id)}
+					/>
+				{/each}
+			{/if}
+		</div>
 	{/if}
-</div>
+</Page>
 
 <style>
-	.nw-page {
-		--gutter: 2.5rem;
-		max-width: 72rem;
-		margin: 0 auto;
-		padding: var(--space-8) var(--gutter) var(--space-12);
-	}
-
-	.nw-pagetitle {
-		margin: var(--space-4) 0 var(--space-6);
-		font-size: var(--text-title-2);
-		line-height: var(--lh-title-2);
-		font-weight: 650;
-		letter-spacing: var(--track-title);
-		color: var(--text-default);
-	}
-
-	.nw-row {
-		margin-top: var(--space-8);
-	}
-
-	.nw-search {
+	.hub {
 		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		padding: 0.3125rem var(--space-3);
-		border-radius: var(--radius-sm);
-		background-color: var(--bg-sunken);
-		box-shadow: inset 0 0 0 1px var(--rule);
-		color: var(--text-faint);
-	}
-
-	.nw-search input {
-		border: 0;
-		outline: none;
-		background: transparent;
-		color: var(--text-default);
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		width: 9rem;
-	}
-
-	.nw-arrows {
-		display: flex;
-		gap: var(--space-1);
-	}
-
-	.nw-arrows button {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 1.75rem;
-		height: 1.75rem;
-		border-radius: var(--radius-sm);
-		background-color: var(--bg-raised);
-		box-shadow: inset 0 0 0 1px var(--rule);
-		color: var(--text-muted);
-		cursor: pointer;
-		transition:
-			opacity var(--dur-fast) ease,
-			background-color var(--dur-fast) ease;
-	}
-
-	.nw-arrows button:hover:not(:disabled) {
-		background-color: var(--bg-hover);
-	}
-
-	.nw-arrows button:disabled {
-		opacity: 0.4;
-		cursor: default;
-	}
-
-	.nw-card {
-		position: relative;
-		display: flex;
-		align-items: center;
-		gap: var(--space-3);
-		padding: var(--space-4);
-		border-radius: var(--radius-lg);
-		background-color: var(--bg-raised);
-		box-shadow: var(--elev-1);
-		text-align: left;
-		color: var(--text-default);
-		cursor: pointer;
-	}
-
-	.nw-card::after {
-		content: '';
-		position: absolute;
-		inset: 0;
-		border-radius: inherit;
-		box-shadow:
-			0 2px 4px rgb(0 0 0 / 0.06),
-			0 8px 22px rgb(0 0 0 / 0.09);
-		opacity: 0;
-		transition: opacity var(--dur-fast) ease;
-		pointer-events: none;
-	}
-
-	.nw-card:hover:not(:disabled)::after {
-		opacity: 1;
-	}
-
-	.nw-card:disabled {
-		opacity: 0.6;
-		cursor: wait;
-	}
-
-	.nw-card--featured {
-		box-shadow:
-			0 0 0 1.5px color-mix(in srgb, var(--accent) 40%, transparent),
-			0 1px 2px rgb(0 0 0 / 0.04),
-			0 3px 8px rgb(0 0 0 / 0.03);
-	}
-
-	.nw-card--skel {
 		flex-direction: column;
-		align-items: stretch;
-		gap: var(--space-2);
-		pointer-events: none;
+		gap: 2.5rem;
 	}
-
-	.nw-ic {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 2.375rem;
-		height: 2.375rem;
-		flex-shrink: 0;
-		border-radius: var(--radius-sm);
-		background-color: var(--fill-soft);
-		box-shadow: inset 0 0 0 1px var(--rule);
-		color: var(--text-muted);
-	}
-
-	.nw-ic--tpl {
-		color: var(--tile-hue);
-	}
-
-	.nw-ic img {
-		width: 1.375rem;
-		height: 1.375rem;
-		object-fit: contain;
-	}
-
-	.nw-card-text {
-		display: block;
-		flex: 1;
-		min-width: 0;
-	}
-
-	.nw-card-name {
+	.start {
 		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		font-size: var(--text-headline);
-		line-height: var(--lh-headline);
-		font-weight: 600;
-		letter-spacing: var(--track-headline);
-		color: var(--text-default);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.nw-card-sub {
-		display: block;
-		margin-top: 0.125rem;
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		color: var(--text-faint);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.nw-sources {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
-		gap: var(--space-3);
-	}
-
-	.nw-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
-		gap: var(--space-3);
-	}
-
-	.nw-tpl {
 		flex-direction: column;
-		align-items: stretch;
-		gap: var(--space-3);
-		min-height: 7.5rem;
-		justify-content: space-between;
+		gap: 0.75rem;
 	}
-
-	.nw-tpl-top {
+	.into {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
-		gap: var(--space-2);
-	}
-
-	.nw-tpl-cat {
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: 600;
-		color: var(--text-faint);
-	}
-
-	.nw-empty {
+		gap: 0.5rem;
 		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
 		color: var(--text-muted);
-		margin: 0;
 	}
-
-	@media (max-width: 720px) {
-		.nw-page {
-			--gutter: 1.25rem;
-		}
+	.into-select {
+		display: block;
+		width: 11rem;
 	}
 </style>

@@ -125,6 +125,9 @@ callout|caption|micro`, `rounded-control|card|panel`.
 | Code and config                    | `CodeBlock`, `Snippet` (one command), `EnvVarRow`, `LogViewer`                      |
 | Keys, IDs                          | `Kbd`, `CopyButton`, `MiddleTruncate` (hashes and IDs only)                         |
 | Times                              | `RelativeTime`                                                                      |
+| Featured banner                    | `FeatureHero` (rotating, icon-baked backdrop, one call to action)                   |
+| Ways to start something            | `Dock` (big source tiles in one tray, `busy` while routing)                         |
+| Row of things to pick              | `Shelf` (16:9 tiles, `onSelect` to run work before navigating)                      |
 | Separator                          | `Divider` (`label="or"` between two ways to do one thing)                           |
 | Icon square                        | `ToneTile` (status tone or `accent`, `solid` for done states)                       |
 | One-time code                      | `CodeInput` (one real input, six cells, submits itself, shakes on error)            |

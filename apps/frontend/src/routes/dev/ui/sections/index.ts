@@ -24,6 +24,7 @@ import Data from './Data.svelte';
 import Progress from './Progress.svelte';
 import Patterns from './Patterns.svelte';
 import Accents from './Accents.svelte';
+import Create from './Create.svelte';
 
 export type Section = { id: string; title: string; group: string; component: Component };
 
@@ -57,5 +58,6 @@ export const SECTIONS: Section[] = [
 	{ id: 'progress', title: 'Progress and loading', group: 'Feedback', component: Progress },
 	{ id: 'overlays', title: 'Dialogs, sheets and popovers', group: 'Overlays', component: Overlays },
 	{ id: 'small', title: 'Small things', group: 'Details', component: Small },
-	{ id: 'patterns', title: 'App patterns', group: 'Patterns', component: Patterns }
+	{ id: 'patterns', title: 'App patterns', group: 'Patterns', component: Patterns },
+	{ id: 'create', title: 'Create and templates', group: 'Patterns', component: Create }
 ];

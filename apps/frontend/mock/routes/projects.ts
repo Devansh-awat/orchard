@@ -1,3 +1,4 @@
+import { TEMPLATES, templateRow } from '../templates.ts';
 import { freshId, slugify, uid } from '../ids.ts';
 import type { MockContext } from '../plugin.ts';
 import { notFound, reply, type Router } from '../router.ts';
@@ -290,6 +291,11 @@ export function projectRoutes(r: Router, { store }: MockContext) {
 		return { warnings: [] };
 	});
 
-	r.get('/templates', () => []);
+	r.get('/templates', () => TEMPLATES.map(templateRow));
+	r.get('/templates/:id', ({ params }) => {
+		const i = TEMPLATES.findIndex((t) => `tpl_${t.name}` === params.id || t.name === params.id);
+		if (i < 0) return notFound('Template not found');
+		return { ...templateRow(TEMPLATES[i], i), parameters: [], resources: [] };
+	});
 	r.get('/sync/:namespace', () => ({ ok: true }));
 }
