@@ -33,7 +33,7 @@
 	{#if directLink}
 		<Link2 size={14} class="text-muted" />
 	{:else if selected}
-		<Avatar user={picture(selected)} size={size === 'lg' ? 22 : 18} />
+		<Avatar user={picture(selected)} size={size === 'lg' ? 20 : 18} />
 	{/if}
 {/snippet}
 

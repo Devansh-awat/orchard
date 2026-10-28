@@ -96,10 +96,10 @@
 		font-size: var(--text-callout);
 	}
 	.trigger--lg {
-		gap: 0.625rem;
-		height: 2.5rem;
-		padding: 0 0.625rem 0 0.75rem;
-		border-radius: calc(0.75rem * var(--corner-scale));
+		gap: 0.5rem;
+		height: 2.25rem;
+		padding: 0 0.5625rem 0 0.6875rem;
+		border-radius: calc(0.625rem * var(--corner-scale));
 		font-size: var(--text-headline);
 		line-height: var(--lh-headline);
 	}

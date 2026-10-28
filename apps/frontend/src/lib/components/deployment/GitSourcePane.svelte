@@ -278,7 +278,6 @@
 			{#if repoPath}
 				<SearchPicker
 					mono
-					size="sm"
 					value={branch}
 					options={branchOptions}
 					loading={loadingBranches || detecting}
@@ -288,7 +287,7 @@
 					createLabel={(q) => `Use ${q}`}
 					onchange={setBranch}
 				>
-					{#snippet leading()}<GitBranch size={13} class="text-muted" />{/snippet}
+					{#snippet leading()}<GitBranch size={15} class="text-muted" />{/snippet}
 				</SearchPicker>
 				{@render extra?.()}
 			{/if}

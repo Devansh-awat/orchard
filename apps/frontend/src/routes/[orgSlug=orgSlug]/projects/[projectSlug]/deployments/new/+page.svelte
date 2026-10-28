@@ -1035,7 +1035,6 @@
 	<SelectTrigger
 		{...props}
 		{open}
-		size="sm"
 		value={loadingDockerfiles ? null : picked?.label}
 		placeholder="Detecting"
 		loading={loadingDockerfiles}
@@ -1057,13 +1056,12 @@
 	<SelectTrigger
 		{...props}
 		{open}
-		size="sm"
 		mono
 		value={picked?.label}
 		placeholder="Root"
 		aria-label="App in this repository"
 	>
-		{#snippet leading()}<FolderOpen size={13} class="text-muted" />{/snippet}
+		{#snippet leading()}<FolderOpen size={15} class="text-muted" />{/snippet}
 	</SelectTrigger>
 {/snippet}
 
@@ -1174,7 +1172,7 @@
 					/>
 				{/snippet}
 
-				<Stack gap="lg">
+				<Stack gap="md">
 					{#key deploymentSource}
 						<div {@attach motionStagger({ index: 0, from: { y: 6 } })}>
 							{#if deploymentSource === 'image'}
@@ -1261,7 +1259,6 @@
 											{#if hasRepo}
 												<SearchPicker
 													mono
-													size="sm"
 													value={branch}
 													options={branchOptions}
 													loading={loadingBranches}
@@ -1272,7 +1269,7 @@
 													onchange={pickBranchByName}
 													trailing={defaultTag}
 												>
-													{#snippet leading()}<GitBranch size={13} class="text-muted" />{/snippet}
+													{#snippet leading()}<GitBranch size={15} class="text-muted" />{/snippet}
 												</SearchPicker>
 												{@render buildDetails()}
 											{/if}
@@ -1302,8 +1299,6 @@
 							{/if}
 						</Alert>
 					{/if}
-
-					<Divider />
 
 					<Field label="Name" for="nd-name">
 						<Input

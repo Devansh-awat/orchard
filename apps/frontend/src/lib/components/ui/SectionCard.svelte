@@ -55,8 +55,10 @@
 	.heading {
 		display: flex;
 		flex-direction: column;
+		justify-content: center;
 		gap: 0.125rem;
 		min-width: 0;
+		min-height: 1.75rem;
 	}
 	.title {
 		font-size: var(--text-headline);
@@ -72,6 +74,7 @@
 	.actions {
 		display: flex;
 		align-items: center;
+		min-height: 1.75rem;
 		gap: 0.5rem;
 		flex-shrink: 0;
 	}
