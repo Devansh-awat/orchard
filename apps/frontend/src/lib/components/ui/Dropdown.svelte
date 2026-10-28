@@ -1,7 +1,8 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { Check, ChevronsUpDown } from 'lucide-svelte';
+	import { Check } from 'lucide-svelte';
 	import PopoverPanel from './PopoverPanel.svelte';
+	import SelectTrigger from './SelectTrigger.svelte';
 	import type { DropdownOption } from './dropdown';
 
 	let {
@@ -11,7 +12,6 @@
 		id = undefined,
 		disabled = false,
 		placement = 'bottom-start',
-		class: className = '',
 		onchange = undefined,
 		icon = undefined,
 		trigger: custom = undefined,
@@ -25,7 +25,6 @@
 		id?: string;
 		disabled?: boolean;
 		placement?: 'bottom-start' | 'bottom-end' | 'top-start' | 'top-end';
-		class?: string;
 		onchange?: (value: string) => void;
 		icon?: Snippet<[string]>;
 		trigger?: Snippet<[Record<string, unknown>, boolean, DropdownOption | null]>;
@@ -122,6 +121,10 @@
 	{/if}
 {/snippet}
 
+{#snippet selectedGlyph()}
+	{#if selected}{@render glyph(selected)}{/if}
+{/snippet}
+
 {#snippet text(option: DropdownOption)}
 	{#if option.mono}<code class="ui-dropdown-mono">{option.label}</code>{:else}{option.label}{/if}
 {/snippet}
@@ -151,29 +154,23 @@
 				selected
 			)}
 		{:else}
-			<button
-				type="button"
+			<SelectTrigger
+				{...props}
 				id={base}
+				block
+				{size}
 				{disabled}
+				open={isOpen}
+				mono={selected?.mono}
+				value={selected?.label}
+				{placeholder}
+				leading={selected && (icon || selected.icon) ? selectedGlyph : undefined}
 				aria-label={ariaLabel ? `${ariaLabel}: ${selected?.label ?? placeholder}` : undefined}
 				aria-labelledby={ariaLabelledby}
 				aria-haspopup="listbox"
 				aria-expanded={isOpen}
-				class="ui-dropdown-trigger ui-dropdown-trigger--{size}{className ? ` ${className}` : ''}"
-				class:ui-dropdown-trigger--open={isOpen}
-				{...props}
 				onkeydown={onTriggerKeydown}
-			>
-				<span class="ui-dropdown-value" class:ui-dropdown-value--placeholder={!selected}>
-					{#if selected}
-						{@render glyph(selected)}
-						<span class="ui-dropdown-text">{@render text(selected)}</span>
-					{:else}
-						<span class="ui-dropdown-text">{placeholder}</span>
-					{/if}
-				</span>
-				<span class="ui-dropdown-chevron" aria-hidden="true"><ChevronsUpDown size={14} /></span>
-			</button>
+			/>
 		{/if}
 	{/snippet}
 	{#snippet children()}

@@ -141,7 +141,6 @@
 			{#if projectOptions.length > 1}
 				<Dropdown
 					bind:value={projectFilter}
-					class="jobs-project-filter"
 					placement="bottom-end"
 					options={[
 						{ value: 'all', label: 'All projects' },
