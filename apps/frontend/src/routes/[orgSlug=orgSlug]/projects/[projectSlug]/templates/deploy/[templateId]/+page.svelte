@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { env } from '$env/dynamic/public';
-	import { apiFetch, toasts, fetchProjectContext, buildBasePath } from '$lib/stores';
+	import { apiFetch, toasts, fetchProjectContext } from '$lib/stores';
 	import { Globe, Eye, EyeOff } from 'lucide-svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
 	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
@@ -18,7 +18,7 @@
 		Page,
 		SectionCard,
 		SegmentedControl,
-		Select,
+		Dropdown,
 		Skeleton,
 		ToggleRow,
 		ToneTile
@@ -76,7 +76,6 @@
 	const projectSlug = $derived($page.params.projectSlug ?? '');
 	const wsSlug = $derived($page.params.wsSlug);
 	const templateId = $derived($page.params.templateId ?? '');
-	const basePath = $derived(buildBasePath({ orgSlug, projectSlug, wsSlug }));
 
 	const APP_DOMAIN = env.PUBLIC_APP_DOMAIN ?? '';
 
@@ -286,50 +285,44 @@
 {:else if template}
 	{@const tpl = template}
 	<Page title={tpl.displayName} width="default">
-		{#snippet header()}
-			<div class="head">
-				{@render crumbs()}
-				<ProductHeader
-					title={tpl.displayName}
-					eyebrow={templateCategory(tpl.category)}
-					description={tpl.description}
-					icon={tpl.icon}
-				>
-					{#snippet meta()}
-						<Badge>v{tpl.version}</Badge>
-						{#each tpl.tags.slice(0, 3) as tag (tag)}<Badge>{tag}</Badge>{/each}
-					{/snippet}
-					{#snippet actions()}
+		{#snippet header()}{@render crumbs()}{/snippet}
+		{#snippet aside()}
+			<div class="side">
+				<SectionCard title="Deploy into">
+					<div class="deploy">
 						<ProjectSwitcher
 							currentProjectName={project?.name || projectSlug}
 							pathSuffix={`/templates/deploy/${templateId}`}
 						/>
-					{/snippet}
-				</ProductHeader>
+						<Button
+							variant="primary"
+							size="lg"
+							type="submit"
+							form="deploy-template"
+							loading={deploying}
+							class="deploy-btn"
+						>
+							Deploy {tpl.displayName}
+						</Button>
+						<p class="deploy-note">Takes about a minute. Everything stays editable afterwards.</p>
+					</div>
+				</SectionCard>
+				<SectionCard title="What gets created">
+					<ul class="creates">
+						{#each tpl.resources as resource (resource.name)}
+							<li class="create">
+								{#if resource.type === 'ingress'}
+									<ToneTile tone="info" size={28}><Globe size={14} /></ToneTile>
+								{:else}
+									<AppIcon name={resource.name} kind={resource.type} size="sm" />
+								{/if}
+								<span class="create-name">{resource.name}</span>
+								<span class="create-kind">{KIND_LABEL[resource.type]}</span>
+							</li>
+						{/each}
+					</ul>
+				</SectionCard>
 			</div>
-		{/snippet}
-		{#snippet aside()}
-			<SectionCard title="What gets created" description="Everything lands in this project.">
-				<ul class="creates">
-					{#each tpl.resources as resource (resource.name)}
-						<li class="create">
-							{#if resource.type === 'ingress'}
-								<ToneTile tone="info" size={28}><Globe size={14} /></ToneTile>
-							{:else}
-								<AppIcon name={resource.name} kind={resource.type} size="sm" />
-							{/if}
-							<span class="create-name">{resource.name}</span>
-							<span class="create-kind">{KIND_LABEL[resource.type]}</span>
-						</li>
-					{/each}
-				</ul>
-			</SectionCard>
-		{/snippet}
-		{#snippet footer()}
-			<Button variant="ghost" href={basePath}>Cancel</Button>
-			<Button variant="primary" type="submit" form="deploy-template" loading={deploying}>
-				Deploy {tpl.displayName}
-			</Button>
 		{/snippet}
 
 		<form
@@ -341,6 +334,17 @@
 				deploy();
 			}}
 		>
+			<ProductHeader
+				title={tpl.displayName}
+				eyebrow={templateCategory(tpl.category)}
+				description={tpl.description}
+				icon={tpl.icon}
+			>
+				{#snippet meta()}
+					<Badge>v{tpl.version}</Badge>
+					{#each tpl.tags.slice(0, 3) as tag (tag)}<Badge>{tag}</Badge>{/each}
+				{/snippet}
+			</ProductHeader>
 			{#if error}<Alert tone="error">{error}</Alert>{/if}
 
 			{#if settings.length}
@@ -376,15 +380,15 @@
 											bind:value={paramValues[param.name]}
 										/>
 									{:else}
-										<Select
+										<Dropdown
 											id="p-{param.name}"
 											bind:value={paramValues[param.name]}
 											disabled={deploying}
-										>
-											{#each param.options ?? [] as option (option.value)}
-												<option value={option.value}>{option.label}</option>
-											{/each}
-										</Select>
+											options={(param.options ?? []).map((o) => ({
+												value: o.value,
+												label: o.label
+											}))}
+										/>
 									{/if}
 								</Field>
 							{:else if param.type === 'number'}
@@ -502,10 +506,26 @@
 {/if}
 
 <style>
-	.head {
+	.side {
+		position: sticky;
+		top: 1.5rem;
 		display: flex;
 		flex-direction: column;
-		gap: 1.5rem;
+		gap: 1rem;
+	}
+	.deploy {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+	.deploy :global(.deploy-btn) {
+		width: 100%;
+	}
+	.deploy-note {
+		margin: 0;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-muted);
 	}
 	.loading {
 		display: flex;
@@ -515,7 +535,7 @@
 	.form {
 		display: flex;
 		flex-direction: column;
-		gap: 1.25rem;
+		gap: 1.5rem;
 	}
 	.fields {
 		display: flex;

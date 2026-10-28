@@ -21,7 +21,7 @@
 		Input,
 		Page,
 		SectionCard,
-		Select,
+		Dropdown,
 		Skeleton,
 		Slider,
 		Stepper
@@ -233,11 +233,12 @@
 						for="db-pg-major"
 						hint="17 is the recommended default. Imports from a newer source automatically use the source's version."
 					>
-						<Select id="db-pg-major" bind:value={pgMajor} disabled={submitting}>
-							{#each PG_VERSIONS as v (v)}
-								<option value={v}>PostgreSQL {v}</option>
-							{/each}
-						</Select>
+						<Dropdown
+							id="db-pg-major"
+							bind:value={() => String(pgMajor), (v) => (pgMajor = Number(v))}
+							disabled={submitting}
+							options={PG_VERSIONS.map((v) => ({ value: String(v), label: `PostgreSQL ${v}` }))}
+						/>
 					</Field>
 
 					<Field
