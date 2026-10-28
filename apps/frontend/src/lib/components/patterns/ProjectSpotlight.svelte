@@ -283,6 +283,8 @@
 			{/if}
 		</div>
 
+		<span class="rim-proxy" aria-hidden="true"></span>
+
 		{#if items.length > 1}
 			<div class="dots" role="group" aria-label="Choose project" style:--count={items.length}>
 				{#each items as item, i (item.id)}
@@ -804,12 +806,39 @@
 	:global(html.vt-hero) .shelf::after {
 		display: none;
 	}
+	.rim-proxy {
+		display: none;
+	}
+	:global(html.vt-hero) .rim-proxy {
+		display: block;
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		view-transition-name: hero-rim;
+	}
 	:global(html.vt-hero::view-transition-group(hero)) {
 		overflow: clip;
 		border-radius: calc(var(--radius-panel) * var(--corner-scale));
+		corner-shape: var(--corner);
 		box-shadow: var(--shadow-glass);
-		outline: 1px solid rgb(255 255 255 / 0.2);
-		outline-offset: -1px;
+	}
+	:global(html.vt-hero::view-transition-image-pair(hero-rim)) {
+		box-sizing: border-box;
+		padding: 1.25px;
+		border-radius: calc(var(--radius-panel) * var(--corner-scale));
+		corner-shape: var(--corner);
+		background: var(--rim-glass);
+		mask:
+			linear-gradient(#000 0 0) content-box exclude,
+			linear-gradient(#000 0 0);
+	}
+	:global(html.vt-hero::view-transition-old(hero-rim)),
+	:global(html.vt-hero::view-transition-new(hero-rim)) {
+		display: none;
+	}
+	:global(html.vt-hero::view-transition-old(hero)),
+	:global(html.vt-hero::view-transition-new(hero)) {
+		mix-blend-mode: normal;
 	}
 	:global(html.vt-hero::view-transition-old(hero)) {
 		z-index: 1;
