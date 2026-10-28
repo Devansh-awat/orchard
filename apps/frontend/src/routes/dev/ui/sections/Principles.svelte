@@ -32,6 +32,11 @@
 			detail: 'Menus, popovers, toasts and the command menu. Nothing that scrolls.'
 		},
 		{
+			rule: 'Every word earns its place',
+			detail:
+				'Cut copy that changes nothing someone does or knows. Keep consequences and specifics.'
+		},
+		{
 			rule: 'Spend novelty on deploy moments',
 			detail: 'Project identity and toasts get the flourish. Everything else is quiet on purpose.'
 		}

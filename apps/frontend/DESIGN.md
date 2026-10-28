@@ -21,6 +21,24 @@ catalogue, add it to the kit and the catalogue first; never hand-roll it in a ro
 7. Glass is for floating chrome only (menus, popovers, toasts, command menu).
 8. Spend novelty on deploy moments and project identity (aura, toasts). Everything
    else is quiet on purpose.
+9. Every word earns its place. Copy that does not change what someone does or knows
+   is cut, not toned down.
+
+## Copy that earns its place
+
+Before adding a subtitle, hint or note, ask what someone would do differently after
+reading it. If the answer is nothing, delete it.
+
+- **Cut reassurance.** "Takes about a minute. Everything stays editable afterwards."
+  The progress UI shows how long it takes; editability is assumed.
+- **Cut restated titles.** A "Configure" card does not need "Applied when it deploys".
+  A "What gets created" list does not need "Everything lands in this project".
+- **Keep consequences.** "Leave them empty and Orchard generates strong values" changes
+  behaviour, so it stays. So does "Org defaults if you skip this".
+- **Keep the specific.** A hint that names a real value (`ysws_hackclub_site_name`,
+  "17 is the recommended default") beats one that describes the field.
+- One line, sentence case, no trailing marketing. If a hint needs two sentences, the
+  field probably needs a better label or a default.
 
 ## Avoiding AI tells
 
