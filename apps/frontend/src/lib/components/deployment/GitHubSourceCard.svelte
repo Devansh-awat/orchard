@@ -1,15 +1,7 @@
 <script lang="ts">
-	import { Loader2, X, ChevronDown, Github } from 'lucide-svelte';
+	import { Github } from 'lucide-svelte';
 	import { apiFetch, toasts } from '$lib/stores';
-	import {
-		SectionCard,
-		Field,
-		Input,
-		Button,
-		Badge,
-		PopoverPanel,
-		Alert
-	} from '$lib/components/ui';
+	import { SectionCard, Button, Badge, Alert, SearchPicker } from '$lib/components/ui';
 
 	interface Repository {
 		id: number;
@@ -44,47 +36,24 @@
 	let reposError = $state<string | null>(null);
 	let reposFetched = false;
 
-	let repoOpen = $state(false);
 	let repoQuery = $state('');
 	let selectedRepo = $state<Repository | null>(null);
 	let manualRepo = $state<{ owner: string; repo: string } | null>(null);
 
 	let branches = $state<Branch[]>([]);
 	let loadingBranches = $state(false);
-	let branchOpen = $state(false);
 	let branchQuery = $state('');
 	let branchValue = $state('');
 
 	let dockerfiles = $state<string[]>([]);
 	let loadingDockerfiles = $state(false);
-	let dockerfileOpen = $state(false);
 	let dockerfileQuery = $state('');
 	let dockerfileValue = $state('Dockerfile');
-
-	$effect(() => {
-		if (repoOpen) repoQuery = '';
-	});
-	$effect(() => {
-		if (branchOpen) branchQuery = '';
-	});
-	$effect(() => {
-		if (dockerfileOpen) dockerfileQuery = '';
-	});
 
 	const needsDockerfile = $derived(deployment?.buildType !== 'railpack');
 
 	const currentRepoName = $derived(
 		String(deployment?.githubRepo || '').replace(/^https?:\/\/github\.com\//, '')
-	);
-
-	const filteredRepos = $derived(
-		repositories.filter((r) => r.full_name.toLowerCase().includes(repoQuery.toLowerCase()))
-	);
-	const filteredBranches = $derived(
-		branches.filter((b) => b.name.toLowerCase().includes(branchQuery.toLowerCase()))
-	);
-	const filteredDockerfiles = $derived(
-		dockerfiles.filter((d) => d.toLowerCase().includes(dockerfileQuery.toLowerCase()))
 	);
 
 	function parseRepoInput(value: string): { owner: string; repo: string } | null {
@@ -106,6 +75,23 @@
 			)
 	);
 
+	const repoNeedle = $derived(
+		(parsedRepoInput
+			? `${parsedRepoInput.owner}/${parsedRepoInput.repo}`
+			: repoQuery.trim()
+		).toLowerCase()
+	);
+	const repoOptions = $derived(
+		repositories
+			.filter((r) => r.full_name.toLowerCase().includes(repoNeedle))
+			.map((r) => ({ value: r.full_name, label: r.full_name }))
+	);
+	const privateRepos = $derived(
+		new Set(repositories.filter((r) => r.private).map((r) => r.full_name))
+	);
+	const branchOptions = $derived(branches.map((b) => ({ value: b.name, label: b.name })));
+	const dockerfileOptions = $derived(dockerfiles.map((d) => ({ value: d, label: d })));
+
 	const chosenRepo = $derived(
 		selectedRepo
 			? { owner: selectedRepo.full_name.split('/')[0], repo: selectedRepo.full_name.split('/')[1] }
@@ -113,17 +99,6 @@
 	);
 
 	const repoLabel = $derived(chosenRepo ? `${chosenRepo.owner}/${chosenRepo.repo}` : '');
-
-	const customBranch = $derived.by(() => {
-		const typed = branchQuery.trim();
-		if (!typed || branches.some((b) => b.name === typed)) return null;
-		return typed;
-	});
-	const customDockerfile = $derived.by(() => {
-		const typed = dockerfileQuery.trim();
-		if (!typed || dockerfiles.includes(typed)) return null;
-		return typed;
-	});
 
 	const canSave = $derived(
 		!!chosenRepo && !!branchValue.trim() && (!needsDockerfile || !!dockerfileValue.trim())
@@ -230,6 +205,16 @@
 		loadBranches(parsed.owner, parsed.repo);
 	}
 
+	function pickRepo(value: string) {
+		const listed = repositories.find((r) => r.full_name === value);
+		if (listed) {
+			selectRepo(listed);
+			return;
+		}
+		const parsed = parseRepoInput(value);
+		if (parsed) useManualRepo(parsed);
+	}
+
 	function selectBranch(name: string) {
 		branchValue = name;
 		if (needsDockerfile && chosenRepo) {
@@ -237,8 +222,7 @@
 		}
 	}
 
-	function clearRepoSelection(e: Event) {
-		e.stopPropagation();
+	function clearRepoSelection() {
 		selectedRepo = null;
 		manualRepo = null;
 		repoQuery = '';
@@ -335,243 +319,69 @@
 		{/if}
 	{:else}
 		<div class="src-form">
-			<Field label="Repository">
-				<PopoverPanel sameWidth bind:open={repoOpen}>
-					{#snippet trigger(attrs, open)}
-						<div class="src-picker-wrap">
-							<button type="button" class="src-picker-trigger" {...attrs}>
-								<Github class="h-4 w-4 shrink-0" />
-								{#if repoLabel}
-									<span class="src-picker-value">{repoLabel}</span>
-								{:else}
-									<span class="src-picker-placeholder">owner/repo or GitHub URL</span>
-								{/if}
-							</button>
-							{#if loadingRepos || loadingBranches}
-								<span class="src-picker-suffix"><Loader2 class="h-4 w-4 animate-spin" /></span>
-							{:else if selectedRepo || manualRepo}
-								<button
-									type="button"
-									class="src-picker-suffix src-picker-clear"
-									aria-label="Clear repository"
-									onclick={clearRepoSelection}
-								>
-									<X size={15} />
-								</button>
-							{:else}
-								<span
-									class="src-picker-suffix src-picker-chevron"
-									class:src-picker-chevron--open={open}
-								>
-									<ChevronDown size={15} />
-								</span>
-							{/if}
-						</div>
+			<div class="src-pickers">
+				<SearchPicker
+					options={repoOptions}
+					bind:value={() => repoLabel, pickRepo}
+					bind:query={repoQuery}
+					prefix="Repository"
+					placeholder="owner/repo or GitHub URL"
+					searchPlaceholder="Search repos, or paste owner/repo"
+					filter={false}
+					loading={loadingRepos && !repoQuery.trim()}
+					creatable={!!parsedRepoInput && !parsedRepoIsListed}
+					createLabel={() => `Use ${parsedRepoInput?.owner}/${parsedRepoInput?.repo}`}
+					onclear={clearRepoSelection}
+					width="24rem"
+				>
+					{#snippet leading()}<Github size={15} />{/snippet}
+					{#snippet optionLeading()}<Github size={15} />{/snippet}
+					{#snippet trailing(option)}
+						{#if privateRepos.has(option.value)}<Badge tone="neutral">Private</Badge>{/if}
 					{/snippet}
-					{#snippet children({ close })}
-						<Input
-							value={repoQuery}
-							oninput={(e: Event) => (repoQuery = (e.target as HTMLInputElement).value)}
-							placeholder="Search repos, or paste owner/repo"
-						/>
-						<div class="src-picker-list">
-							{#if parsedRepoInput && !parsedRepoIsListed}
-								<button
-									type="button"
-									class="src-picker-option"
-									onclick={() => {
-										useManualRepo(parsedRepoInput);
-										close();
-									}}
-								>
-									<Github class="h-4 w-4 shrink-0" />
-									<span class="src-picker-option-text">
-										Use <strong>{parsedRepoInput.owner}/{parsedRepoInput.repo}</strong>
-									</span>
-								</button>
-							{/if}
-							{#if loadingRepos}
-								<div class="src-picker-empty">
-									<Loader2 class="h-4 w-4 animate-spin" /> Loading your repositories
-								</div>
-							{:else}
-								{#each filteredRepos as repo (repo.full_name)}
-									<button
-										type="button"
-										class="src-picker-option"
-										onclick={() => {
-											selectRepo(repo);
-											close();
-										}}
-									>
-										<Github class="h-4 w-4 shrink-0" />
-										<span class="src-picker-option-text">{repo.full_name}</span>
-										{#if repo.private}<Badge tone="neutral">Private</Badge>{/if}
-									</button>
-								{:else}
-									{#if reposError}
-										<div class="src-picker-empty">{reposError}</div>
-									{:else if !parsedRepoInput}
-										<div class="src-picker-empty">
-											Search your repos, or paste owner/repo or a GitHub URL
-										</div>
-									{/if}
-								{/each}
-							{/if}
-						</div>
+					{#snippet empty()}
+						{#if loadingRepos}
+							Loading your repositories
+						{:else if reposError}
+							{reposError}
+						{:else}
+							Search your repos, or paste owner/repo or a GitHub URL
+						{/if}
 					{/snippet}
-				</PopoverPanel>
-			</Field>
+				</SearchPicker>
 
-			<Field label="Branch">
-				<PopoverPanel sameWidth bind:open={branchOpen}>
-					{#snippet trigger(attrs, open)}
-						<div class="src-picker-wrap">
-							<button type="button" class="src-picker-trigger font-mono" {...attrs}>
-								{#if branchValue}
-									<span class="src-picker-value">{branchValue}</span>
-								{:else}
-									<span class="src-picker-placeholder">main</span>
-								{/if}
-							</button>
-							{#if loadingBranches}
-								<span class="src-picker-suffix"><Loader2 class="h-4 w-4 animate-spin" /></span>
-							{:else}
-								<span
-									class="src-picker-suffix src-picker-chevron"
-									class:src-picker-chevron--open={open}
-								>
-									<ChevronDown size={15} />
-								</span>
-							{/if}
-						</div>
-					{/snippet}
-					{#snippet children({ close })}
-						<Input
-							value={branchQuery}
-							oninput={(e: Event) => (branchQuery = (e.target as HTMLInputElement).value)}
-							placeholder="Search branches"
-							class="font-mono"
-						/>
-						<div class="src-picker-list">
-							{#if customBranch}
-								<button
-									type="button"
-									class="src-picker-option font-mono"
-									onclick={() => {
-										selectBranch(customBranch);
-										close();
-									}}
-								>
-									<span class="src-picker-option-text">Use <strong>{customBranch}</strong></span>
-								</button>
-							{/if}
-							{#if loadingBranches}
-								<div class="src-picker-empty">
-									<Loader2 class="h-4 w-4 animate-spin" /> Loading branches
-								</div>
-							{:else}
-								{#each filteredBranches as b (b.name)}
-									<button
-										type="button"
-										class="src-picker-option font-mono"
-										onclick={() => {
-											selectBranch(b.name);
-											close();
-										}}
-									>
-										<span class="src-picker-option-text">{b.name}</span>
-									</button>
-								{:else}
-									{#if !customBranch}
-										<div class="src-picker-empty">
-											{branches.length
-												? 'No matching branches'
-												: 'No branches found. Type a name to use anyway.'}
-										</div>
-									{/if}
-								{/each}
-							{/if}
-						</div>
-					{/snippet}
-				</PopoverPanel>
-			</Field>
+				<SearchPicker
+					options={branchOptions}
+					bind:value={() => branchValue, selectBranch}
+					bind:query={branchQuery}
+					prefix="Branch"
+					placeholder="main"
+					searchPlaceholder="Search branches"
+					width="18rem"
+					mono
+					creatable
+					loading={loadingBranches}
+					empty={branches.length
+						? 'No matching branches'
+						: 'No branches found. Type a name to use anyway.'}
+				/>
 
-			{#if needsDockerfile}
-				<Field label="Dockerfile">
-					<PopoverPanel sameWidth bind:open={dockerfileOpen}>
-						{#snippet trigger(attrs, open)}
-							<div class="src-picker-wrap">
-								<button type="button" class="src-picker-trigger font-mono" {...attrs}>
-									{#if dockerfileValue}
-										<span class="src-picker-value">{dockerfileValue}</span>
-									{:else}
-										<span class="src-picker-placeholder">Dockerfile</span>
-									{/if}
-								</button>
-								{#if loadingDockerfiles}
-									<span class="src-picker-suffix"><Loader2 class="h-4 w-4 animate-spin" /></span>
-								{:else}
-									<span
-										class="src-picker-suffix src-picker-chevron"
-										class:src-picker-chevron--open={open}
-									>
-										<ChevronDown size={15} />
-									</span>
-								{/if}
-							</div>
-						{/snippet}
-						{#snippet children({ close })}
-							<Input
-								value={dockerfileQuery}
-								oninput={(e: Event) => (dockerfileQuery = (e.target as HTMLInputElement).value)}
-								placeholder="Search paths"
-								class="font-mono"
-							/>
-							<div class="src-picker-list">
-								{#if customDockerfile}
-									<button
-										type="button"
-										class="src-picker-option font-mono"
-										onclick={() => {
-											dockerfileValue = customDockerfile;
-											close();
-										}}
-									>
-										<span class="src-picker-option-text">
-											Use <strong>{customDockerfile}</strong>
-										</span>
-									</button>
-								{/if}
-								{#if loadingDockerfiles}
-									<div class="src-picker-empty">
-										<Loader2 class="h-4 w-4 animate-spin" /> Loading Dockerfiles
-									</div>
-								{:else}
-									{#each filteredDockerfiles as df (df)}
-										<button
-											type="button"
-											class="src-picker-option font-mono"
-											onclick={() => {
-												dockerfileValue = df;
-												close();
-											}}
-										>
-											<span class="src-picker-option-text">{df}</span>
-										</button>
-									{:else}
-										{#if !customDockerfile}
-											<div class="src-picker-empty">
-												No Dockerfiles found on this branch. Type a path to use anyway.
-											</div>
-										{/if}
-									{/each}
-								{/if}
-							</div>
-						{/snippet}
-					</PopoverPanel>
-				</Field>
-			{/if}
+				{#if needsDockerfile}
+					<SearchPicker
+						options={dockerfileOptions}
+						bind:value={dockerfileValue}
+						bind:query={dockerfileQuery}
+						prefix="Dockerfile"
+						placeholder="Dockerfile"
+						searchPlaceholder="Search paths"
+						width="18rem"
+						mono
+						creatable
+						loading={loadingDockerfiles}
+						empty="No Dockerfiles found on this branch. Type a path to use anyway."
+					/>
+				{/if}
+			</div>
 
 			<p class="src-note">
 				The app keeps running from its current build. Rebuild after saving to deploy from the new
@@ -637,122 +447,10 @@
 		margin: 0;
 	}
 
-	.src-picker-wrap {
-		position: relative;
-	}
-
-	.src-picker-trigger {
+	.src-pickers {
 		display: flex;
-		align-items: center;
+		flex-wrap: wrap;
 		gap: 0.5rem;
-		width: 100%;
-		padding: 0.75rem 2.25rem 0.75rem 0.875rem;
-		border-radius: var(--radius-sm);
-		border: 1px solid var(--border-default);
-		background-color: var(--bg-surface);
-		color: var(--text-default);
-		font-size: var(--text-callout);
-		line-height: 1.5;
-		text-align: left;
-		cursor: pointer;
-		transition:
-			border-color var(--dur-fast) ease,
-			box-shadow var(--dur-fast) ease;
-	}
-
-	.src-picker-trigger:focus-visible {
-		outline: var(--focus-ring-width) solid var(--focus-ring-color);
-		outline-offset: var(--focus-ring-offset);
-		border-color: var(--accent);
-		box-shadow: 0 0 0 3px var(--focus-ring);
-	}
-
-	.src-picker-value {
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
 		min-width: 0;
-	}
-
-	.src-picker-placeholder {
-		color: var(--text-faint);
-	}
-
-	.src-picker-suffix {
-		position: absolute;
-		right: 0.75rem;
-		top: 50%;
-		transform: translateY(-50%);
-		display: flex;
-		align-items: center;
-		color: var(--text-muted);
-	}
-
-	.src-picker-clear {
-		background: none;
-		border: none;
-		cursor: pointer;
-		padding: 0;
-	}
-
-	.src-picker-clear:hover {
-		color: var(--text-default);
-	}
-
-	.src-picker-chevron {
-		pointer-events: none;
-		transition: transform var(--dur-fast) ease;
-	}
-
-	.src-picker-chevron--open {
-		transform: translateY(-50%) rotate(180deg);
-	}
-
-	.src-picker-list {
-		display: flex;
-		flex-direction: column;
-		margin-top: 0.5rem;
-		max-height: 12rem;
-		overflow-y: auto;
-		scrollbar-gutter: stable;
-	}
-
-	.src-picker-option {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		width: 100%;
-		border-radius: var(--radius-sm);
-		padding: 0.5rem 0.75rem;
-		text-align: left;
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		border: none;
-		background: none;
-		color: var(--text-default);
-		cursor: pointer;
-		transition: background-color var(--dur-fast);
-	}
-
-	.src-picker-option:hover {
-		background-color: var(--bg-hover);
-	}
-
-	.src-picker-option-text {
-		flex: 1;
-		min-width: 0;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.src-picker-empty {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.75rem 0.75rem;
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		color: var(--text-muted);
 	}
 </style>

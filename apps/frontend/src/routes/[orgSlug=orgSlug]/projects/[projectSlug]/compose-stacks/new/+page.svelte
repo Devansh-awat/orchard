@@ -9,11 +9,11 @@
 		buildBasePath,
 		type ProjectContext
 	} from '$lib/stores';
-	import { Loader2, FileText, Github, ChevronDown, X } from 'lucide-svelte';
+	import { Loader2, FileText, Github } from 'lucide-svelte';
 	import Breadcrumbs from '$lib/components/ui/Breadcrumbs.svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
 	import { EnvironmentSwitcher } from '$lib/components/environment';
-	import { Button, PopoverPanel, Field, Input, Badge } from '$lib/components/ui';
+	import { Button, Field, Input, Badge, SearchPicker } from '$lib/components/ui';
 
 	interface Repository {
 		id: number;
@@ -47,7 +47,6 @@
 	let repoSearch = $state('');
 	let branchSearch = $state('');
 	let branchQuery = $state('');
-	let branchPickerOpen = $state(false);
 
 	let name = $state('');
 	let composePath = $state('docker-compose.yml');
@@ -137,7 +136,6 @@
 
 	function selectRepo(repo: Repository) {
 		selectedRepo = repo;
-		repoSearch = repo.full_name;
 		if (!name) name = repo.full_name.split('/')[1] ?? '';
 		fetchBranches(repo);
 	}
@@ -165,21 +163,24 @@
 		branchSearch = branchName;
 	}
 
-	const filteredRepos = $derived(
-		repositories.filter((r) => r.full_name.toLowerCase().includes(repoSearch.toLowerCase()))
+	const repoOptions = $derived(
+		repositories.map((r) => ({ value: r.full_name, label: r.full_name }))
 	);
-	const filteredBranches = $derived(
-		branches.filter((b) => b.name.toLowerCase().includes(branchQuery.toLowerCase()))
+	const privateRepos = $derived(
+		new Set(repositories.filter((r) => r.private).map((r) => r.full_name))
 	);
-	const customBranch = $derived.by(() => {
-		const typed = branchQuery.trim();
-		if (!typed || branches.some((b) => b.name === typed)) return null;
-		return typed;
-	});
+	const branchOptions = $derived(branches.map((b) => ({ value: b.name, label: b.name })));
 
-	$effect(() => {
-		if (branchPickerOpen) branchQuery = '';
-	});
+	function pickRepo(fullName: string) {
+		const repo = repositories.find((r) => r.full_name === fullName);
+		if (repo) selectRepo(repo);
+	}
+
+	function pickBranch(branchName: string) {
+		const listed = branches.find((b) => b.name === branchName);
+		if (listed) selectBranch(listed);
+		else useCustomBranch(branchName);
+	}
 
 	onMount(() => {
 		fetchProjectData();
@@ -301,154 +302,55 @@
 						</div>
 					</div>
 				{:else}
-					<Field label="Repository">
-						<PopoverPanel sameWidth>
-							{#snippet trigger(attrs, open)}
-								<div class="picker-wrap">
-									<button type="button" class="picker-trigger" {...attrs}>
-										{#if selectedRepo}
-											<Github class="h-4 w-4 shrink-0" />
-											<span class="picker-value">{selectedRepo.full_name}</span>
-										{:else if repoSearch}
-											<span class="picker-value">{repoSearch}</span>
-										{:else}
-											<span class="picker-placeholder">owner/repo</span>
-										{/if}
-									</button>
-									{#if loadingRepos || loadingBranches}
-										<span class="picker-suffix"><Loader2 class="h-4 w-4 animate-spin" /></span>
-									{:else if selectedRepo}
-										<button
-											type="button"
-											class="picker-suffix picker-clear"
-											aria-label="Clear repository"
-											onclick={clearRepoSelection}
-										>
-											<X size={15} />
-										</button>
-									{:else}
-										<span class="picker-suffix picker-chevron" class:picker-chevron--open={open}
-											><ChevronDown size={15} /></span
-										>
-									{/if}
-								</div>
+					<div class="cs-pickers">
+						<SearchPicker
+							options={repoOptions}
+							bind:value={() => selectedRepo?.full_name ?? '', pickRepo}
+							bind:query={repoSearch}
+							prefix="Repository"
+							placeholder="owner/repo"
+							searchPlaceholder="Search repositories"
+							loading={loadingRepos}
+							onclear={clearRepoSelection}
+							width="24rem"
+						>
+							{#snippet leading()}<Github size={15} />{/snippet}
+							{#snippet optionLeading()}<Github size={15} />{/snippet}
+							{#snippet trailing(option)}
+								{#if privateRepos.has(option.value)}<Badge tone="neutral">Private</Badge>{/if}
 							{/snippet}
-							{#snippet children({ close })}
-								<Input
-									bind:value={repoSearch}
-									placeholder="owner/repo"
-									readonly={selectedRepo !== null}
-								/>
-								<div class="picker-list">
-									{#if loadingRepos}
-										<div class="picker-empty">
-											<Loader2 class="h-4 w-4 animate-spin" /> Loading repositories
-										</div>
-									{:else}
-										{#each filteredRepos as repo (repo.full_name)}
-											<button
-												type="button"
-												class="picker-option"
-												onclick={() => {
-													selectRepo(repo);
-													close();
-												}}
-											>
-												<Github class="h-4 w-4 shrink-0" />
-												<span class="picker-option-text">{repo.full_name}</span>
-												{#if repo.private}<Badge tone="neutral">Private</Badge>{/if}
-											</button>
-										{:else}
-											{#if reposError}
-												<div class="picker-note">
-													{reposError}
-													<a href="/user/settings">Connect GitHub</a>
-												</div>
-											{:else}
-												<div class="picker-empty">No matching repositories</div>
-											{/if}
-										{/each}
-									{/if}
-								</div>
+							{#snippet empty(typed)}
+								{#if reposError}
+									<span class="cs-picker-note">
+										{reposError}
+										<a href="/user/settings">Connect GitHub</a>
+									</span>
+								{:else}
+									No matching repositories{#if typed}&nbsp;for “{typed}”{/if}
+								{/if}
 							{/snippet}
-						</PopoverPanel>
-					</Field>
+						</SearchPicker>
 
-					{#if selectedRepo}
-						<Field label="Branch">
-							<PopoverPanel sameWidth bind:open={branchPickerOpen}>
-								{#snippet trigger(attrs, open)}
-									<div class="picker-wrap">
-										<button
-											type="button"
-											class="picker-trigger"
-											disabled={loadingBranches}
-											{...attrs}
-										>
-											{#if branchSearch}
-												<span class="picker-value">{branchSearch}</span>
-											{:else}
-												<span class="picker-placeholder">main</span>
-											{/if}
-										</button>
-										{#if loadingBranches}
-											<span class="picker-suffix"><Loader2 class="h-4 w-4 animate-spin" /></span>
-										{:else if selectedBranch}
-											<button
-												type="button"
-												class="picker-suffix picker-clear"
-												aria-label="Clear branch"
-												onclick={clearBranchSelection}
-											>
-												<X size={15} />
-											</button>
-										{:else}
-											<span class="picker-suffix picker-chevron" class:picker-chevron--open={open}
-												><ChevronDown size={15} /></span
-											>
-										{/if}
-									</div>
-								{/snippet}
-								{#snippet children({ close })}
-									<Input bind:value={branchQuery} placeholder="Search branches" />
-									<div class="picker-list">
-										{#if customBranch}
-											<button
-												type="button"
-												class="picker-option"
-												onclick={() => {
-													useCustomBranch(customBranch);
-													close();
-												}}
-											>
-												<span class="picker-option-text">Use <strong>{customBranch}</strong></span>
-											</button>
-										{/if}
-										{#each filteredBranches as b (b.name)}
-											<button
-												type="button"
-												class="picker-option"
-												onclick={() => {
-													selectBranch(b);
-													close();
-												}}
-											>
-												<span class="picker-option-text">{b.name}</span>
-											</button>
-										{:else}
-											{#if !customBranch}
-												<div class="picker-empty">
-													{branches.length
-														? 'No matching branches'
-														: 'No branches found. Type a name to use anyway.'}
-												</div>
-											{/if}
-										{/each}
-									</div>
-								{/snippet}
-							</PopoverPanel>
-						</Field>
-					{/if}
+						{#if selectedRepo}
+							<SearchPicker
+								options={branchOptions}
+								bind:value={() => branchSearch, pickBranch}
+								bind:query={branchQuery}
+								prefix="Branch"
+								placeholder="main"
+								searchPlaceholder="Search branches"
+								width="18rem"
+								mono
+								creatable
+								loading={loadingBranches}
+								disabled={loadingBranches}
+								onclear={selectedBranch ? clearBranchSelection : undefined}
+								empty={branches.length
+									? 'No matching branches'
+									: 'No branches found. Type a name to use anyway.'}
+							/>
+						{/if}
+					</div>
 
 					<Field label="Path to docker-compose.yml" for="cs-compose-path">
 						<Input
@@ -617,142 +519,14 @@
 		gap: 1rem;
 	}
 
-	/* Pickers */
-	.picker-wrap {
-		position: relative;
-	}
-
-	.picker-trigger {
+	.cs-pickers {
 		display: flex;
-		align-items: center;
+		flex-wrap: wrap;
 		gap: 0.5rem;
-		width: 100%;
-		padding: 0.75rem 2.25rem 0.75rem 0.875rem;
-		border-radius: var(--radius-sm);
-		border: 1px solid var(--surface-border);
-		background-color: var(--surface-bg);
-		color: var(--center-channel-color);
-		font-size: var(--text-callout);
-		line-height: 1.5;
-		text-align: left;
-		cursor: pointer;
-		transition:
-			border-color var(--dur-fast) ease,
-			box-shadow var(--dur-fast) ease;
-	}
-
-	.picker-trigger:focus-visible {
-		outline: var(--focus-ring-width) solid var(--focus-ring-color);
-		outline-offset: var(--focus-ring-offset);
-		border-color: var(--sidebar-text-active-border);
-		box-shadow: 0 0 0 3px color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent);
-	}
-
-	.picker-trigger:disabled {
-		opacity: 0.5;
-		cursor: default;
-	}
-
-	.picker-value {
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
 		min-width: 0;
 	}
 
-	.picker-placeholder {
-		color: color-mix(in srgb, var(--surface-muted) 65%, transparent);
-	}
-
-	.picker-suffix {
-		position: absolute;
-		right: 0.75rem;
-		top: 50%;
-		transform: translateY(-50%);
-		display: flex;
-		align-items: center;
-		color: var(--surface-muted);
-	}
-
-	.picker-clear {
-		background: none;
-		border: none;
-		cursor: pointer;
-		padding: 0;
-	}
-
-	.picker-clear:hover {
-		color: var(--center-channel-color);
-	}
-
-	.picker-chevron {
-		pointer-events: none;
-		transition: transform var(--dur-fast) ease;
-	}
-
-	.picker-chevron--open {
-		transform: translateY(-50%) rotate(180deg);
-	}
-
-	.picker-list {
-		display: flex;
-		flex-direction: column;
-		margin-top: 0.5rem;
-		max-height: 14rem;
-		overflow-y: auto;
-	}
-
-	.picker-option {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		width: 100%;
-		border-radius: var(--radius-sm);
-		padding: 0.5rem 0.75rem;
-		text-align: left;
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		border: none;
-		background: none;
-		color: var(--center-channel-color);
-		cursor: pointer;
-		transition: background-color var(--dur-fast);
-	}
-
-	.picker-option:hover {
-		background-color: color-mix(in srgb, var(--surface-border) 40%, transparent);
-	}
-
-	.picker-option-text {
-		flex: 1;
-		min-width: 0;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.picker-empty {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.75rem 0.75rem;
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		color: var(--surface-muted);
-	}
-
-	.picker-note {
-		padding: 0.75rem 0.75rem;
-		font-size: var(--text-caption);
-		line-height: 1.5;
-		color: var(--text-muted);
-		background-color: var(--status-warning-bg);
-		border: 1px solid var(--status-warning-border);
-		border-radius: var(--radius-sm);
-		margin: 0.25rem;
-	}
-
-	.picker-note a {
+	.cs-picker-note a {
 		color: var(--text-link);
 		font-weight: 600;
 		text-decoration: underline;
