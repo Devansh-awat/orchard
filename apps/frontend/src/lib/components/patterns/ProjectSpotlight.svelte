@@ -21,7 +21,13 @@
 	import RemoteImg from '$lib/components/ui/RemoteImg.svelte';
 	import AppIcon from '$lib/components/ui/AppIcon.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
-	import { FADE, motion } from '$lib/utils/motion.svelte';
+	import {
+		FADE,
+		fade as fadeTiming,
+		functionalMotion,
+		motion,
+		springTiming
+	} from '$lib/utils/motion.svelte';
 	import { tempo } from '$lib/design/springs';
 	import { fade } from '$lib/utils/transitions';
 	import { effectiveAnimation } from '$lib/stores/preferences';
@@ -113,6 +119,58 @@
 		};
 	}
 
+	let shelfEl = $state<HTMLElement | null>(null);
+	let shownVariant: string | null = null;
+	let before: { height: number; name: DOMRect | null } | null = null;
+
+	$effect.pre(() => {
+		const next = variant;
+		if (!shelfEl || shownVariant === null || next === shownVariant) return;
+		const name = shelfEl.querySelector<HTMLElement>('.name');
+		before = {
+			height: shelfEl.getBoundingClientRect().height,
+			name: name?.getBoundingClientRect() ?? null
+		};
+	});
+
+	$effect(() => {
+		const next = variant;
+		const el = shelfEl;
+		if (!el) return;
+		if (shownVariant === null) {
+			shownVariant = next;
+			return;
+		}
+		if (next === shownVariant) return;
+		shownVariant = next;
+		const from = before;
+		before = null;
+		if (!from || !functionalMotion()) return;
+		const timing = springTiming('morph');
+		const height = el.getBoundingClientRect().height;
+		el.animate([{ height: `${from.height}px` }, { height: `${height}px` }], timing);
+		const name = el.querySelector<HTMLElement>('.name');
+		if (name && from.name) {
+			const now = name.getBoundingClientRect();
+			const scale = from.name.height / (now.height || 1);
+			name.animate(
+				[
+					{
+						transformOrigin: 'left top',
+						transform: `translate(${from.name.left - now.left}px, ${from.name.top - now.top}px) scale(${scale})`
+					},
+					{ transformOrigin: 'left top', transform: 'none' }
+				],
+				timing
+			);
+		}
+		for (const part of el.querySelectorAll<HTMLElement>(
+			'.byline, .lead, .actions, .side, .status, .tools'
+		)) {
+			part.animate([{ opacity: 0 }, { opacity: 1 }], { ...fadeTiming('in'), delay: 80 });
+		}
+	});
+
 	function copyIn(el: HTMLElement) {
 		if (!mounted) return;
 		motion(el, { opacity: [0, 1], x: [24 * dir, 0] }, 'pop', { delay: COPY_LEAD * tempo() });
@@ -121,6 +179,7 @@
 
 {#if current}
 	<section
+		bind:this={shelfEl}
 		class="shelf shelf--{variant} shelf--{size} ui-glass-rim"
 		aria-roledescription="carousel"
 		aria-label="Recent projects"
@@ -313,8 +372,6 @@
 	.shelf--banner {
 		height: 9rem;
 		--pad: 1.5rem;
-		background: var(--bg-raised);
-		color: var(--text-default);
 	}
 
 	.stage {
@@ -323,10 +380,6 @@
 		z-index: -1;
 		overflow: hidden;
 		contain: paint;
-	}
-	.shelf--banner .stage {
-		left: 34%;
-		mask-image: linear-gradient(90deg, transparent, var(--on-media) 46%);
 	}
 	.art {
 		position: absolute;
@@ -361,11 +414,11 @@
 	}
 	.shelf--banner .veil {
 		background:
-			linear-gradient(270deg, var(--on-media-pill) 10%, transparent 55%),
-			linear-gradient(270deg, var(--on-media-pill), transparent 80%);
+			linear-gradient(90deg, oklch(0 0 0 / 0.5) 0%, oklch(0 0 0 / 0.22) 40%, transparent 66%),
+			linear-gradient(270deg, oklch(0 0 0 / 0.32) 0%, transparent 38%);
 	}
-	.shelf--banner .art :global(.poster--soft) {
-		display: none;
+	.shelf--banner .art :global(.poster) {
+		filter: saturate(1.15) brightness(1.04);
 	}
 
 	.copy-stack {
@@ -436,7 +489,6 @@
 	.shelf--banner .name {
 		font-size: var(--text-title-1);
 		letter-spacing: -0.018em;
-		text-shadow: none;
 	}
 
 	.status {
@@ -451,7 +503,6 @@
 		margin-block: -0.3em;
 	}
 	.shelf--banner .status {
-		color: var(--text-muted);
 		font-size: var(--text-callout);
 	}
 	.status-label {
@@ -481,9 +532,6 @@
 	.status--error {
 		color: var(--on-media);
 		font-weight: var(--weight-medium);
-	}
-	.shelf--banner .status--error {
-		color: var(--status-error);
 	}
 
 	.actions {
