@@ -232,6 +232,7 @@
 					{/snippet}
 					{#each connections as c (c.id)}
 						<MenuItem
+							plain
 							checked={c.id === connectionId}
 							description={c.host}
 							onclick={() => pickConnection(c.id)}

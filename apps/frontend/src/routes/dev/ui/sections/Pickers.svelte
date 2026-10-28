@@ -13,6 +13,8 @@
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import type { DropdownOption } from '$lib/components/ui/dropdown';
 	import AmountSlider from '$lib/components/ui/AmountSlider.svelte';
+	import GitHostMark, { type GitHost } from '$lib/components/ui/GitHostMark.svelte';
+	const HOSTS: GitHost[] = ['github', 'gitlab', 'codeberg', 'gitea', 'bitbucket', 'generic'];
 	import { formatMemory, parseMemory } from '$lib/components/ResourcePicker.svelte';
 
 	const MB = 1024 ** 2;
@@ -324,7 +326,34 @@
 	</div>
 </SectionCard>
 
+<SectionCard
+	title="Git hosts"
+	description="GitHostMark. Brand colours come from the --mark-* tokens."
+>
+	<div class="hosts">
+		{#each HOSTS as host (host)}
+			<div class="host">
+				<GitHostMark {host} />
+				<GitHostMark {host} size={32} />
+				<span>{host}</span>
+			</div>
+		{/each}
+	</div>
+</SectionCard>
+
 <style>
+	.hosts {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-6);
+	}
+	.host {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		font-size: var(--text-callout);
+		color: var(--text-muted);
+	}
 	.amounts {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
