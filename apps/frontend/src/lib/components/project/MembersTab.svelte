@@ -475,7 +475,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 0 0.625rem;
+		padding: 0 0.75rem;
 		color: var(--text-muted);
 		font-size: var(--text-callout);
 	}
@@ -492,8 +492,18 @@
 	.role-slot > :global(:not([popover])) {
 		width: 100%;
 	}
+	.role-slot :global(.trigger) {
+		padding-left: 0.75rem;
+	}
 	.role-slot > :global([popover]) {
 		min-width: var(--melt-invoker-width);
+	}
+	.role-slot > :global([popover] .ui-dropdown-check) {
+		display: none;
+	}
+	.role-slot > :global([popover] .ui-dropdown-option) {
+		gap: 0.5rem;
+		padding-left: 0.375rem;
 	}
 	.icon-slot {
 		display: flex;
