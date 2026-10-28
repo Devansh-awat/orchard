@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { Box, Database, Timer } from 'lucide-svelte';
+	import { Box, Database, Layers, Timer } from 'lucide-svelte';
 	import ListRow from '$lib/components/ui/ListRow.svelte';
 	import StatusDot from '$lib/components/ui/StatusDot.svelte';
 	import RelativeTime from '$lib/components/ui/RelativeTime.svelte';
@@ -17,6 +17,7 @@
 		updatedAt = undefined,
 		image = undefined,
 		actions = undefined,
+		stack = undefined,
 		presence = false
 	}: {
 		kind: 'deployment' | 'database' | 'job';
@@ -28,6 +29,7 @@
 		updatedAt?: string | null;
 		image?: string | null;
 		actions?: Snippet;
+		stack?: string;
 		presence?: boolean;
 	} = $props();
 
@@ -50,6 +52,11 @@
 		</span>
 	{/snippet}
 	{#snippet titleSuffix()}
+		{#if stack}
+			<span class="stack" title="Part of the {stack} compose stack"
+				><Layers size={11} strokeWidth={2.25} aria-hidden="true" />{stack}</span
+			>
+		{/if}
 		{#if !quiet}<span class="state state--{status.kind}">{status.label}</span>{/if}
 	{/snippet}
 	{#snippet subtitle()}
@@ -119,5 +126,18 @@
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
+	}
+	.stack {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		height: 1.125rem;
+		padding: 0 0.375rem;
+		border-radius: var(--radius-pill);
+		background: var(--bg-active);
+		color: var(--text-muted);
+		font-size: var(--text-caption);
+		font-weight: var(--weight-medium);
+		white-space: nowrap;
 	}
 </style>

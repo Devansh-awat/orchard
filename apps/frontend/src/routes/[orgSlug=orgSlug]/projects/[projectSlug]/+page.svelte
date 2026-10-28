@@ -156,6 +156,9 @@
 	});
 	const composeStacks = $derived<ComposeStackSummary[]>(composeQuery.data ?? []);
 	const composeStacksLoading = $derived(!!project?.id && composeQuery.isPending);
+	const stackOf = $derived(
+		new Map(composeStacks.flatMap((s) => (s.deployments ?? []).map((d) => [d.id, s.name] as const)))
+	);
 
 	// --- Org members for picker ---
 	let orgMembers = $state<OrgMember[]>([]);
@@ -875,6 +878,7 @@
 		image={depIcon(d)}
 		detail={depDetail(d)}
 		updatedAt={depUpdatedAt(d)}
+		stack={stackOf.get(d.id)}
 		href="/{orgSlug}/deployments/{d.id}"
 	>
 		{#snippet actions()}
