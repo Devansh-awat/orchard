@@ -1003,10 +1003,7 @@
 				{:else if activeTab === 'variables'}
 					<SectionCard>
 						{#if selectedEnvId}
-							<SharedVarsEditor
-								environmentId={selectedEnvId}
-								envName={selectedEnvName}
-							/>
+							<SharedVarsEditor environmentId={selectedEnvId} envName={selectedEnvName} />
 						{:else}
 							<EmptyState title="Pick an environment to edit its variables" />
 						{/if}
@@ -1026,6 +1023,7 @@
 						{canManageMembers}
 						{canEdit}
 						{canTransferOwnership}
+						transferPending={!!pendingTransfer}
 						ownerId={project.ownerId ?? null}
 						bind:memberSearch
 						bind:newMemberRole
@@ -1040,6 +1038,7 @@
 						onRemoveMember={removeMember}
 						onRevokeInvitation={revokeInvitation}
 						onEnsureOrgMembersLoaded={ensureOrgMembersLoaded}
+						onTransferOwnership={() => (showTransferModal = true)}
 					/>
 				{:else if activeTab === 'settings'}
 					<ProjectSettingsTab

@@ -1,16 +1,21 @@
 <script lang="ts">
-	import { Users, Loader2, Trash2, ChevronsUpDown, Mail, UserPlus, Crown } from 'lucide-svelte';
-	import { motionStagger } from '$lib/utils/motion.svelte';
+	import { Crown, Eye, Pencil, ShieldCheck, Trash2, UserPlus } from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import RelativeTime from '$lib/components/ui/RelativeTime.svelte';
 	import type { ProjectMember, OrgMember, PendingInvitation } from './types';
 	import { ROLE_OPTIONS } from './types';
 	import { user } from '$lib/stores';
 	import {
 		Avatar,
 		Badge,
+		Button,
 		Combobox,
 		Dropdown,
-		SelectTrigger,
+		EmptyState,
+		List,
+		ListRow,
+		SectionTitle,
+		Stack,
 		type DropdownOption
 	} from '$lib/components/ui';
 
@@ -21,6 +26,8 @@
 		pendingInvitations = [],
 		canManageMembers = false,
 		canEdit = false,
+		canTransferOwnership = false,
+		transferPending = false,
 		ownerId = null,
 		memberSearch = $bindable(''),
 		newMemberRole = $bindable<Role>('member'),
@@ -29,17 +36,20 @@
 		removingMemberId = null as string | null,
 		updatingMemberId = null as string | null,
 		revokingInviteId = null as string | null,
-		openRoleMenuId = $bindable<string | null>(null),
+		openRoleMenuId: _openRoleMenuId = $bindable<string | null>(null),
 		onAddMember,
 		onUpdateMemberRole,
 		onRemoveMember,
 		onRevokeInvitation,
-		onEnsureOrgMembersLoaded
+		onEnsureOrgMembersLoaded,
+		onTransferOwnership = undefined
 	}: {
 		projectMembers: ProjectMember[];
 		pendingInvitations?: PendingInvitation[];
 		canManageMembers?: boolean;
 		canEdit?: boolean;
+		canTransferOwnership?: boolean;
+		transferPending?: boolean;
 		ownerId?: string | null;
 		memberSearch?: string;
 		newMemberRole?: Role;
@@ -54,13 +64,20 @@
 		onRemoveMember: (memberId: string) => void;
 		onRevokeInvitation?: (invitationId: string) => void;
 		onEnsureOrgMembersLoaded: () => void;
+		onTransferOwnership?: () => void;
 	} = $props();
+
+	const ROLE_ICONS = { admin: ShieldCheck, member: Pencil, viewer: Eye };
 
 	const roleOptions: DropdownOption[] = ROLE_OPTIONS.map((o) => ({
 		value: o.value,
 		label: o.label,
-		description: o.desc
+		description: o.desc,
+		icon: ROLE_ICONS[o.value]
 	}));
+
+	const canRemove = $derived(canManageMembers && canEdit);
+	const canTransfer = $derived(canTransferOwnership && !transferPending && !!onTransferOwnership);
 
 	const searchEmail = $derived(memberSearch.trim().toLowerCase());
 	const searchIsEmail = $derived(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(searchEmail));
@@ -87,15 +104,34 @@
 	);
 
 	let picked = $state('');
+	let requestedRole = $state<Record<string, string>>({});
 
 	let memberToRemove = $state<ProjectMember | null>(null);
 	let showRemoveModal = $state(false);
 	let inviteToRevoke = $state<PendingInvitation | null>(null);
 	let showRevokeModal = $state(false);
 
-	function memberDisplayName(m: ProjectMember) {
+	function displayName(m: ProjectMember) {
 		const name = [m.user.firstName, m.user.lastName].filter(Boolean).join(' ');
 		return name || m.user.email;
+	}
+
+	function roleLabel(role: string | undefined) {
+		return ROLE_OPTIONS.find((o) => o.value === role)?.label ?? 'Member';
+	}
+
+	function shownRole(m: ProjectMember) {
+		return (updatingMemberId === m.id && requestedRole[m.id]) || m.role.name;
+	}
+
+	function changeRole(m: ProjectMember, role: string) {
+		if (role === m.role.name) return;
+		requestedRole[m.id] = role;
+		onUpdateMemberRole(m.id, role, m.role.name);
+	}
+
+	function expiry(date: string) {
+		return new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 	}
 
 	function add(email: string) {
@@ -105,37 +141,17 @@
 	}
 </script>
 
-<div class="pj-members-section">
-	<div class="pj-members-card pj-glass">
-		<div class="pj-members-head">
-			<div class="pj-members-title">
-				<Users size={16} />
-				<span>Members</span>
-				<span class="pj-members-count">{projectMembers.length}</span>
-			</div>
-			{#if canManageMembers}
-				<div class="pj-add-member-controls">
-					<Dropdown
-						bind:value={() => newMemberRole, (v) => (newMemberRole = v as Role)}
-						options={roleOptions}
-						placement="bottom-end"
-						ariaLabel="Role for new project member"
-					>
-						{#snippet icon(value)}
-							<span class="pj-role-dot pj-role-dot--{value}" aria-hidden="true"></span>
-						{/snippet}
-						{#snippet trigger(attrs, open, selected)}
-							<SelectTrigger {...attrs} {open} value={selected?.label} />
-						{/snippet}
-					</Dropdown>
-				</div>
-				<div class="pj-picker" onfocusin={onEnsureOrgMembersLoaded}>
+<Stack gap="lg">
+	<Stack gap="sm">
+		{#if canManageMembers}
+			<div class="add">
+				<div class="add-search" onfocusin={onEnsureOrgMembersLoaded}>
 					<Combobox
 						bind:value={picked}
 						bind:query={memberSearch}
 						options={memberOptions}
 						icon={UserPlus}
-						placeholder="Add a member"
+						placeholder="Add people by name or email"
 						label="Add a member"
 						loading={addingMember}
 						disabled={addingMember}
@@ -163,171 +179,124 @@
 						{/snippet}
 					</Combobox>
 				</div>
-			{/if}
-		</div>
+				<div class="add-role">
+					<Dropdown
+						bind:value={() => newMemberRole, (v) => (newMemberRole = v as Role)}
+						options={roleOptions}
+						placement="bottom-end"
+						ariaLabel="Role for new members"
+					/>
+				</div>
+			</div>
+		{/if}
 
 		{#if projectMembers.length > 0}
-			<ul class="pj-members-list">
-				{#each projectMembers as m, i (m.id)}
-					<li
-						class="pj-member"
-						{@attach motionStagger({
-							index: i,
-							axis: 'x',
-							from: { y: -10 }
-						})}
-					>
-						<Avatar
-							user={m.user}
-							alive
-							mood={m.user.id === $user?.id ? 'wink' : 'idle'}
-							class="pj-member-avatar"
+			<List label="Members">
+				{#each projectMembers as m (m.id)}
+					{@const name = displayName(m)}
+					{@const isOwner = m.user.id === ownerId}
+					{#snippet memberActions()}
+						<Dropdown
+							bind:value={() => shownRole(m), (v) => changeRole(m, v)}
+							options={roleOptions}
+							size="sm"
+							placement="bottom-end"
+							ariaLabel="Role for {name}"
+							loading={updatingMemberId === m.id}
+							disabled={updatingMemberId === m.id}
 						/>
-						<div class="pj-member-info">
-							<span class="pj-member-name">
-								{#if m.user.firstName}{m.user.firstName}{#if m.user.lastName}&nbsp;{m.user
-											.lastName}{/if}{:else}{m.user.email}{/if}
-								{#if m.user.id === ownerId}
-									<span
-										class="owner-pill"
-										title="Everything running in this project is billed against the owner's resource allowance"
-									>
-										<Crown size={9} />
-										Owner
-									</span>
-								{/if}
-								{#if m.orgRole === 'guest'}
-									<span
-										class="guest-pill"
-										title="Guests are only members of specific projects, not the whole organization"
-										>Guest</span
-									>
-								{/if}
-							</span>
-							<span class="pj-member-email">{m.user.email}</span>
-						</div>
-						{#if canManageMembers}
-							<Dropdown
-								bind:value={() => m.role.name, (v) => onUpdateMemberRole(m.id, v, m.role.name)}
-								options={roleOptions}
-								placement="bottom-end"
-								ariaLabel="Role for {m.user.firstName ?? m.user.email}"
-								disabled={updatingMemberId === m.id}
-							>
-								{#snippet icon(value)}
-									<span class="pj-role-dot pj-role-dot--{value}" aria-hidden="true"></span>
-								{/snippet}
-								{#snippet trigger(attrs, open)}
-									<button
-										type="button"
-										class="pj-role-chip pj-role-chip--{m.role.name} pj-role-trigger"
-										aria-label="Change role for {m.user.firstName ?? m.user.email}"
-										disabled={updatingMemberId === m.id}
-										{...attrs}
-										data-open={open || undefined}
-									>
-										{#if updatingMemberId === m.id}
-											<Loader2 class="h-3 w-3 animate-spin" />
-										{:else}
-											<span>{m.role.name}</span>
-											<ChevronsUpDown size={12} class="pj-role-caret" />
-										{/if}
-									</button>
-								{/snippet}
-							</Dropdown>
-						{:else}
-							<span class="pj-role-chip pj-role-chip--{m.role.name}">{m.role.name}</span>
+						{#if isOwner && canTransfer}
+							<Button variant="ghost" size="sm" icon={Crown} onclick={onTransferOwnership}>
+								Transfer
+							</Button>
 						{/if}
-						{#if canEdit}
-							<button
-								class="pj-member-remove"
-								title="Remove member"
-								aria-label="Remove {m.user.firstName ?? m.user.email}"
+						{#if canRemove}
+							<Button
+								variant="ghost"
+								size="sm"
+								icon={Trash2}
+								label="Remove {name}"
+								loading={removingMemberId === m.id}
 								onclick={() => {
 									memberToRemove = m;
 									showRemoveModal = true;
 								}}
-								disabled={removingMemberId === m.id}
-							>
-								{#if removingMemberId === m.id}
-									<Loader2 class="h-3.5 w-3.5 animate-spin" />
-								{:else}
-									<Trash2 class="h-3.5 w-3.5" />
-								{/if}
-							</button>
+							/>
 						{/if}
-					</li>
-				{/each}
-			</ul>
-		{:else}
-			<div class="pj-members-empty">
-				No members yet. Add someone from your organization above, or type an email to invite a
-				guest.
-			</div>
-		{/if}
-
-		{#if canManageMembers && pendingInvitations.length > 0}
-			<div class="pj-invites-head">
-				<Mail size={13} />
-				<span>Pending invitations</span>
-				<span class="pj-members-count">{pendingInvitations.length}</span>
-			</div>
-			<ul class="pj-members-list">
-				{#each pendingInvitations as inv, i (inv.id)}
-					<li
-						class="pj-member pj-member--pending"
-						{@attach motionStagger({
-							index: i,
-							axis: 'x',
-							from: { y: -10 }
-						})}
-					>
-						<Avatar seed={inv.email} mood="sleepy" class="pj-member-avatar" />
-						<div class="pj-member-info">
-							<span class="pj-member-name">
-								{inv.email}
-								<span
-									class="guest-pill"
-									title="They'll join as a guest once they accept the email invitation"
-									>Invited</span
-								>
-							</span>
-							<span class="pj-member-email"
-								>Expires {new Date(inv.expiresAt).toLocaleDateString()}</span
-							>
-						</div>
-						<span class="pj-role-chip pj-role-chip--{inv.projectRole?.name ?? 'member'}"
-							>{inv.projectRole?.name ?? 'member'}</span
-						>
-						<button
-							class="pj-member-remove"
-							title="Revoke invitation"
-							aria-label="Revoke invitation for {inv.email}"
-							onclick={() => {
-								inviteToRevoke = inv;
-								showRevokeModal = true;
-							}}
-							disabled={revokingInviteId === inv.id}
-						>
-							{#if revokingInviteId === inv.id}
-								<Loader2 class="h-3.5 w-3.5 animate-spin" />
-							{:else}
-								<Trash2 class="h-3.5 w-3.5" />
+					{/snippet}
+					<ListRow title={name} presence actions={canManageMembers ? memberActions : undefined}>
+						{#snippet leading()}
+							<Avatar user={m.user} mood={m.user.id === $user?.id ? 'wink' : 'idle'} size={32} />
+						{/snippet}
+						{#snippet titleSuffix()}
+							{#if isOwner}<Badge>Owner</Badge>{/if}
+							{#if m.orgRole === 'guest'}<Badge>Guest</Badge>{/if}
+						{/snippet}
+						{#snippet subtitle()}
+							<span class="clip">{m.user.email}</span>
+							{#if isOwner}
+								<span aria-hidden="true">·</span>
+								<span class="clip">Pays for this project</span>
 							{/if}
-						</button>
-					</li>
+						{/snippet}
+						{#snippet trailing()}
+							{roleLabel(shownRole(m))}
+						{/snippet}
+					</ListRow>
 				{/each}
-			</ul>
+			</List>
+		{:else}
+			<EmptyState
+				title="No members yet"
+				description={canManageMembers
+					? 'Add someone from your organization, or type an email to invite a guest.'
+					: undefined}
+			/>
 		{/if}
-	</div>
-</div>
+	</Stack>
+
+	{#if canManageMembers && pendingInvitations.length > 0}
+		<Stack gap="sm">
+			<SectionTitle title="Pending invitations" count={pendingInvitations.length} />
+			<List label="Pending invitations">
+				{#each pendingInvitations as inv (inv.id)}
+					<ListRow title={inv.email} presence>
+						{#snippet leading()}
+							<Avatar seed={inv.email} mood="sleepy" size={32} />
+						{/snippet}
+						{#snippet subtitle()}
+							<span>Sent <RelativeTime date={inv.createdAt} /></span>
+							<span aria-hidden="true">·</span>
+							<span class="clip">Expires {expiry(inv.expiresAt)}</span>
+						{/snippet}
+						{#snippet trailing()}
+							{roleLabel(inv.projectRole?.name)}
+						{/snippet}
+						{#snippet actions()}
+							<Button
+								variant="ghost"
+								size="sm"
+								loading={revokingInviteId === inv.id}
+								aria-label="Revoke the invitation for {inv.email}"
+								onclick={() => {
+									inviteToRevoke = inv;
+									showRevokeModal = true;
+								}}
+							>
+								Revoke
+							</Button>
+						{/snippet}
+					</ListRow>
+				{/each}
+			</List>
+		</Stack>
+	{/if}
+</Stack>
 
 <ConfirmModal
 	bind:open={showRemoveModal}
 	title="Remove member"
-	description={memberToRemove
-		? `Remove ${memberDisplayName(memberToRemove)} from this project?`
-		: ''}
+	description={memberToRemove ? `${displayName(memberToRemove)} loses access to this project.` : ''}
 	confirmLabel="Remove"
 	onconfirm={() => {
 		if (memberToRemove) onRemoveMember(memberToRemove.id);
@@ -339,7 +308,7 @@
 	bind:open={showRevokeModal}
 	title="Revoke invitation"
 	description={inviteToRevoke
-		? `Revoke the invitation for ${inviteToRevoke.email}? They won't be able to join with it anymore.`
+		? `${inviteToRevoke.email} won't be able to join with this invitation.`
 		: ''}
 	confirmLabel="Revoke"
 	onconfirm={() => {
@@ -347,3 +316,24 @@
 	}}
 	oncancel={() => {}}
 />
+
+<style>
+	.add {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+	.add-search {
+		flex: 1;
+		min-width: 0;
+	}
+	.add-role {
+		flex-shrink: 0;
+		width: 8.5rem;
+	}
+	.clip {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+</style>
