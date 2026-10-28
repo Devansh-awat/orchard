@@ -11,7 +11,8 @@
 		trailing = undefined,
 		actions = undefined,
 		titleSuffix = undefined,
-		presence = false
+		presence = false,
+		pinned = false
 	}: {
 		title: string;
 		subtitle?: string | Snippet;
@@ -22,6 +23,7 @@
 		actions?: Snippet;
 		titleSuffix?: Snippet;
 		presence?: boolean;
+		pinned?: boolean;
 	} = $props();
 
 	const interactive = $derived(!!href || !!onclick);
@@ -30,6 +32,7 @@
 <div
 	class="row"
 	class:row--interactive={interactive}
+	class:row--pinned={pinned}
 	role="listitem"
 	in:enterExit={{ enabled: presence }}
 	out:enterExit={{ enabled: presence }}
@@ -124,6 +127,7 @@
 		opacity: 0;
 		transition: opacity var(--dur-fast) ease;
 	}
+	.row--pinned .actions,
 	.row:hover .actions,
 	.row:focus-within .actions,
 	.actions:has(:global([aria-expanded='true'])),

@@ -106,7 +106,11 @@
 	}
 </script>
 
-<div class="field field--{size} {className}" class:field--open={combo.open} class:field--disabled={disabled}>
+<div
+	class="field field--{size} {className}"
+	class:field--open={combo.open}
+	class:field--disabled={disabled}
+>
 	{#if icon}
 		{@const Lead = icon}
 		<span class="lead" aria-hidden="true"><Lead size={size === 'lg' ? 16 : 14} /></span>
@@ -150,7 +154,7 @@
 >
 	{#if showCreate}
 		<div {...combo.getOption(CREATE, createLabel(createText), create)} class="ui-dropdown-option">
-			<span class="ui-dropdown-check" aria-hidden="true"></span>
+			{#if value}<span class="ui-dropdown-check" aria-hidden="true"></span>{/if}
 			<span class="ui-dropdown-icon"><CornerDownLeft size={16} /></span>
 			<span class="ui-dropdown-option-main">
 				<span class="ui-dropdown-text">{createLabel(createText)}</span>
@@ -164,9 +168,11 @@
 			class:ui-dropdown-option--rich={!!option.description}
 			class:ui-dropdown-option--selected={combo.isSelected(option.value)}
 		>
-			<span class="ui-dropdown-check" aria-hidden="true">
-				{#if combo.isSelected(option.value)}<Check size={16} strokeWidth={2.25} />{/if}
-			</span>
+			{#if value}
+				<span class="ui-dropdown-check" aria-hidden="true">
+					{#if combo.isSelected(option.value)}<Check size={16} strokeWidth={2.25} />{/if}
+				</span>
+			{/if}
 			{#if leading}
 				<span class="ui-dropdown-icon">{@render leading(option)}</span>
 			{:else if option.icon}

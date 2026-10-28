@@ -1,10 +1,9 @@
 <script lang="ts">
-	import { Check, Crown, Eye, Pencil, ShieldCheck, Trash2, UserPlus, X } from 'lucide-svelte';
+	import { Crown, Eye, Pencil, ShieldCheck, Trash2, UserPlus, X } from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import type { ProjectMember, OrgMember, PendingInvitation } from './types';
 	import { ROLE_OPTIONS } from './types';
 	import { user } from '$lib/stores';
-	import { presence } from '$lib/utils/transitions';
 	import {
 		Avatar,
 		Badge,
@@ -16,31 +15,20 @@
 		SearchField,
 		Stack,
 		Swap,
-		Table,
+		List,
+		ListRow,
+		SectionTitle,
 		type DropdownOption
 	} from '$lib/components/ui';
 	import RadioGroup from '$lib/components/ui/RadioGroup.svelte';
-	import type { TableColumn, TableSort } from '$lib/components/ui/Table.svelte';
 
 	type Role = 'admin' | 'member' | 'viewer';
-	type Access = 'view' | 'deploy' | 'members' | 'delete';
 	type Pick = {
 		email: string;
 		name: string | null;
 		user: OrgMember['user'] | null;
 		guest: boolean;
 	};
-	type Entry =
-		| { id: string; kind: 'member'; name: string; email: string; role: string; m: ProjectMember }
-		| {
-				id: string;
-				kind: 'invite';
-				name: string;
-				email: string;
-				role: string;
-				inv: PendingInvitation;
-		  };
-
 	let {
 		projectMembers,
 		pendingInvitations = [],
@@ -84,17 +72,6 @@
 	} = $props();
 
 	const ROLE_ICONS = { admin: ShieldCheck, member: Pencil, viewer: Eye };
-	const GRANTS: Record<Role, Access[]> = {
-		admin: ['view', 'deploy', 'members', 'delete'],
-		member: ['view', 'deploy'],
-		viewer: ['view']
-	};
-	const ACCESS: { id: Access; label: string }[] = [
-		{ id: 'view', label: 'View' },
-		{ id: 'deploy', label: 'Deploy' },
-		{ id: 'members', label: 'Members' },
-		{ id: 'delete', label: 'Delete' }
-	];
 
 	const roleOptions: DropdownOption[] = ROLE_OPTIONS.map((o) => ({
 		value: o.value,
@@ -106,7 +83,6 @@
 	const canTransfer = $derived(canTransferOwnership && !transferPending && !!onTransferOwnership);
 
 	let filter = $state('');
-	let sort = $state<TableSort | null>(null);
 	let requestedRole = $state<Record<string, string>>({});
 
 	let inviting = $state(false);
@@ -120,49 +96,22 @@
 	let inviteToRevoke = $state<PendingInvitation | null>(null);
 	let showRevokeModal = $state(false);
 
-	const columns = $derived<TableColumn<Entry>[]>([
-		{ id: 'member', label: 'Member', sortable: true, sortValue: (e) => e.name.toLowerCase() },
-		{
-			id: 'role',
-			label: 'Role',
-			width: '9.5rem',
-			sortable: true,
-			sortValue: (e) => ['admin', 'member', 'viewer'].indexOf(e.role)
-		},
-		...ACCESS.map((a) => ({ id: a.id, label: a.label, width: '5rem' })),
-		{ id: 'actions', width: canManageMembers ? '5rem' : '0', align: 'end' as const }
-	]);
-
-	const entries = $derived<Entry[]>([
-		...[...projectMembers]
-			.sort(
-				(a, b) =>
-					Number(b.user.id === ownerId) - Number(a.user.id === ownerId) ||
-					displayName(a).localeCompare(displayName(b))
-			)
-			.map((m) => ({
-				id: m.id,
-				kind: 'member' as const,
-				name: displayName(m),
-				email: m.user.email,
-				role: shownRole(m),
-				m
-			})),
-		...(canManageMembers ? pendingInvitations : []).map((inv) => ({
-			id: inv.id,
-			kind: 'invite' as const,
-			name: inv.email,
-			email: inv.email,
-			role: inv.projectRole?.name ?? 'member',
-			inv
-		}))
-	]);
-
+	const members = $derived(
+		[...projectMembers].sort(
+			(x, y) =>
+				Number(y.user.id === ownerId) - Number(x.user.id === ownerId) ||
+				displayName(x).localeCompare(displayName(y))
+		)
+	);
 	const query = $derived(filter.trim().toLowerCase());
 	const shown = $derived(
 		query
-			? entries.filter((e) => e.name.toLowerCase().includes(query) || e.email.includes(query))
-			: entries
+			? members.filter(
+					(m) =>
+						displayName(m).toLowerCase().includes(query) ||
+						m.user.email.toLowerCase().includes(query)
+				)
+			: members
 	);
 
 	const known = $derived(
@@ -204,10 +153,6 @@
 
 	function shownRole(m: ProjectMember) {
 		return (updatingMemberId === m.id && requestedRole[m.id]) || m.role.name;
-	}
-
-	function grants(r: string, access: Access) {
-		return (GRANTS[r as Role] ?? GRANTS.viewer).includes(access);
 	}
 
 	function roleLabel(r: string) {
@@ -263,120 +208,136 @@
 	}
 </script>
 
-<Stack gap="md">
-	{#if entries.length > 6 || canManageMembers}
-		<div class="bar">
-			{#if entries.length > 6}
-				<div class="filter">
-					<SearchField placeholder="Filter members" size="sm" bind:value={filter} />
-				</div>
-			{/if}
-			{#if canManageMembers}
-				<Button variant="primary" size="sm" icon={UserPlus} onclick={openInvite}>Add people</Button>
-			{/if}
-		</div>
-	{/if}
+{#snippet roleText(r: string)}
+	{@const RoleIcon = ROLE_ICONS[r as Role] ?? Pencil}
+	<span class="role"><RoleIcon size={14} aria-hidden="true" />{roleLabel(r)}</span>
+{/snippet}
 
-	{#if entries.length > 0}
-		<Table
-			{columns}
-			rows={shown}
-			bind:sort
-			label="Members"
-			rowKey={(e) => e.id}
-			emptyText="Nobody matches “{filter}”"
-		>
-			{#snippet cell(e, col)}
-				{#if col.id === 'member'}
-					<span class="who">
-						{#if e.kind === 'member'}
-							<Avatar
-								user={e.m.user}
-								mood={e.m.user.id === $user?.id ? 'wink' : 'idle'}
-								size={28}
-							/>
-						{:else}
-							<Avatar seed={e.email} mood="sleepy" size={28} />
-						{/if}
-						<span class="who-text">
-							<span class="who-name">
-								<span class="clip">{e.name}</span>
-								{#if e.kind === 'member' && e.m.user.id === ownerId}<Badge>Owner</Badge>{/if}
-								{#if e.kind === 'member' && e.m.orgRole === 'guest'}<Badge>Guest</Badge>{/if}
-								{#if e.kind === 'invite'}<Badge>Invited</Badge>{/if}
+<Stack gap="lg">
+	<Stack gap="sm">
+		{#if members.length > 6 || canManageMembers}
+			<div class="bar">
+				{#if members.length > 6}
+					<div class="filter">
+						<SearchField placeholder="Filter members" size="sm" bind:value={filter} />
+					</div>
+				{/if}
+				{#if canManageMembers}
+					<Button variant="primary" size="sm" icon={UserPlus} onclick={openInvite}
+						>Add people</Button
+					>
+				{/if}
+			</div>
+		{/if}
+
+		{#if shown.length > 0}
+			<List label="Members">
+				{#each shown as m (m.id)}
+					{@const name = displayName(m)}
+					{@const isOwner = m.user.id === ownerId}
+					{#snippet controls()}
+						<span class="controls">
+							<span class="role-slot">
+								{#if canManageMembers}
+									<Dropdown
+										bind:value={() => shownRole(m), (v) => changeRole(m, v)}
+										options={roleOptions}
+										size="sm"
+										placement="bottom-end"
+										ariaLabel="Role for {name}"
+										loading={updatingMemberId === m.id}
+										disabled={updatingMemberId === m.id}
+									/>
+								{:else}
+									{@render roleText(shownRole(m))}
+								{/if}
 							</span>
-							<span class="who-sub clip">
-								{e.kind === 'invite' ? `Expires ${expiry(e.inv.expiresAt)}` : e.email}
-							</span>
-						</span>
-					</span>
-				{:else if col.id === 'role'}
-					{#if e.kind === 'member' && canManageMembers}
-						<Dropdown
-							bind:value={() => e.role, (v) => changeRole(e.m, v)}
-							options={roleOptions}
-							size="sm"
-							placement="bottom-start"
-							ariaLabel="Role for {e.name}"
-							loading={updatingMemberId === e.id}
-							disabled={updatingMemberId === e.id}
-						/>
-					{:else}
-						<span class="role">{roleLabel(e.role)}</span>
-					{/if}
-				{:else if col.id === 'actions'}
-					<span class="acts">
-						{#if e.kind === 'member'}
-							{#if e.m.user.id === ownerId && canTransfer}
-								<Button
-									variant="ghost"
-									size="sm"
-									icon={Crown}
-									label="Transfer ownership"
-									onclick={onTransferOwnership}
-								/>
+							{#if canManageMembers}
+								<span class="icon-slot">
+									{#if isOwner}
+										{#if canTransfer}
+											<Button
+												variant="ghost"
+												size="sm"
+												icon={Crown}
+												label="Transfer ownership"
+												onclick={onTransferOwnership}
+											/>
+										{/if}
+									{:else if canRemove}
+										<Button
+											variant="ghost"
+											size="sm"
+											icon={Trash2}
+											label="Remove {name}"
+											loading={removingMemberId === m.id}
+											onclick={() => {
+												memberToRemove = m;
+												showRemoveModal = true;
+											}}
+										/>
+									{/if}
+								</span>
 							{/if}
-							{#if canRemove && e.m.user.id !== ownerId}
+						</span>
+					{/snippet}
+					<ListRow title={name} subtitle={m.user.email} presence pinned actions={controls}>
+						{#snippet leading()}
+							<Avatar user={m.user} mood={m.user.id === $user?.id ? 'wink' : 'idle'} size={32} />
+						{/snippet}
+						{#snippet titleSuffix()}
+							{#if isOwner}<Badge>Owner</Badge>{/if}
+							{#if m.orgRole === 'guest'}<Badge>Guest</Badge>{/if}
+						{/snippet}
+					</ListRow>
+				{/each}
+			</List>
+		{:else if members.length > 0}
+			<EmptyState title="Nobody matches “{filter}”" />
+		{:else}
+			<EmptyState title="No members yet" />
+		{/if}
+	</Stack>
+
+	{#if canManageMembers && pendingInvitations.length > 0}
+		<Stack gap="sm">
+			<SectionTitle title="Invitations" count={pendingInvitations.length} />
+			<List label="Invitations">
+				{#each pendingInvitations as inv (inv.id)}
+					{#snippet controls()}
+						<span class="controls">
+							<span class="role-slot">
+								{@render roleText(inv.projectRole?.name ?? 'member')}
+							</span>
+							<span class="icon-slot">
 								<Button
 									variant="ghost"
 									size="sm"
-									icon={Trash2}
-									label="Remove {e.name}"
-									loading={removingMemberId === e.id}
+									icon={X}
+									label="Revoke the invitation for {inv.email}"
+									loading={revokingInviteId === inv.id}
 									onclick={() => {
-										memberToRemove = e.m;
-										showRemoveModal = true;
+										inviteToRevoke = inv;
+										showRevokeModal = true;
 									}}
 								/>
-							{/if}
-						{:else}
-							<Button
-								variant="ghost"
-								size="sm"
-								icon={X}
-								label="Revoke the invitation for {e.email}"
-								loading={revokingInviteId === e.id}
-								onclick={() => {
-									inviteToRevoke = e.inv;
-									showRevokeModal = true;
-								}}
-							/>
-						{/if}
-					</span>
-				{:else}
-					{@const on = grants(e.role, col.id as Access)}
-					<span class="grant" class:grant--on={on}>
-						{#if on}
-							<Check size={15} strokeWidth={2.5} aria-label="Yes" />
-						{:else}
-							<span class="none" aria-label="No"></span>
-						{/if}
-					</span>
-				{/if}
-			{/snippet}
-		</Table>
-	{:else}
-		<EmptyState title="No members yet" />
+							</span>
+						</span>
+					{/snippet}
+					<ListRow
+						title={inv.email}
+						subtitle="Expires {expiry(inv.expiresAt)}"
+						presence
+						pinned
+						actions={controls}
+					>
+						{#snippet leading()}
+							<Avatar seed={inv.email} mood="sleepy" size={32} />
+						{/snippet}
+					</ListRow>
+				{/each}
+			</List>
+		</Stack>
 	{/if}
 </Stack>
 
@@ -414,17 +375,9 @@
 						{/snippet}
 					</Combobox>
 					{#if picks.length > 0}
-						<ul class="picks">
+						<List label="People to add">
 							{#each picks as p (p.email)}
-								<li class="pick" in:presence out:presence>
-									<Avatar user={p.user ?? undefined} seed={p.email} size={28} />
-									<span class="who-text">
-										<span class="who-name">
-											<span class="clip">{p.name ?? p.email}</span>
-											{#if p.guest}<Badge>Guest</Badge>{/if}
-										</span>
-										{#if p.name}<span class="who-sub clip">{p.email}</span>{/if}
-									</span>
+								{#snippet unpickAction()}
 									<Button
 										variant="ghost"
 										size="sm"
@@ -432,9 +385,23 @@
 										label="Remove {p.name ?? p.email}"
 										onclick={() => unpick(p.email)}
 									/>
-								</li>
+								{/snippet}
+								<ListRow
+									title={p.name ?? p.email}
+									subtitle={p.name ? p.email : undefined}
+									presence
+									pinned
+									actions={unpickAction}
+								>
+									{#snippet leading()}
+										<Avatar user={p.user ?? undefined} seed={p.email} size={28} />
+									{/snippet}
+									{#snippet titleSuffix()}
+										{#if p.guest}<Badge>Guest</Badge>{/if}
+									{/snippet}
+								</ListRow>
 							{/each}
-						</ul>
+						</List>
 					{/if}
 				</Stack>
 			{:else}
@@ -446,21 +413,10 @@
 					options={ROLE_OPTIONS.map((o) => ({
 						value: o.value,
 						label: o.label,
+						description: o.desc,
 						icon: ROLE_ICONS[o.value]
 					}))}
-				>
-					{#snippet extra(opt)}
-						<span class="checklist">
-							{#each ACCESS as a (a.id)}
-								{@const on = grants(opt.value, a.id)}
-								<span class="check" class:check--on={on}>
-									{#if on}<Check size={13} strokeWidth={2.5} />{:else}<X size={13} />{/if}
-									{a.label}
-								</span>
-							{/each}
-						</span>
-					{/snippet}
-				</RadioGroup>
+				></RadioGroup>
 			{/if}
 		</Swap>
 		{#snippet footer()}
@@ -515,91 +471,30 @@
 		max-width: 18rem;
 		margin-right: auto;
 	}
-	.who {
+	.role {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
-		min-width: 0;
-	}
-	.who-text {
-		display: flex;
-		flex: 1;
-		flex-direction: column;
-		min-width: 0;
-	}
-	.who-name {
-		display: flex;
-		align-items: center;
-		gap: 0.375rem;
-		min-width: 0;
-		color: var(--text-default);
-		font-weight: var(--weight-medium);
-	}
-	.who-sub {
+		gap: 0.5rem;
+		padding: 0 0.625rem;
 		color: var(--text-muted);
 		font-size: var(--text-callout);
 	}
-	.clip {
-		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.role {
-		color: var(--text-muted);
-	}
-	.grant {
+	.controls {
 		display: flex;
 		align-items: center;
-		color: var(--text-faint);
+		gap: 0.25rem;
 	}
-	.grant--on {
-		color: var(--status-success);
-	}
-	.none {
-		width: 0.625rem;
-		height: 1.5px;
-		border-radius: 1px;
-		background: currentColor;
-	}
-	.acts {
+	.role-slot {
 		display: flex;
 		justify-content: flex-end;
-		gap: 0.125rem;
+		width: 8.5rem;
 	}
-	.picks {
+	.role-slot > :global(*) {
+		width: 100%;
+	}
+	.icon-slot {
 		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-		max-height: 18rem;
-		overflow-y: auto;
-	}
-	.pick {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		padding: 0.375rem 0.25rem 0.375rem 0.5rem;
-		border-radius: calc(var(--radius-control) * var(--corner-scale));
-		corner-shape: var(--corner);
-		background: var(--bg-sunken);
-	}
-	.checklist {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.25rem 0.75rem;
-		margin-top: 0.25rem;
-	}
-	.check {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.25rem;
-		color: var(--text-faint);
-		font-size: var(--text-caption);
-	}
-	.check--on {
-		color: var(--text-default);
-	}
-	.check--on :global(svg) {
-		color: var(--status-success);
+		justify-content: center;
+		width: 2rem;
 	}
 </style>

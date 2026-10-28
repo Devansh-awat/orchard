@@ -33,7 +33,7 @@
 
 	{#if canTransferOwnership || canMoveToOrg || canDelete}
 		<SectionCard title="Danger zone" tone="danger">
-			<Stack>
+			<Stack gap="sm">
 				{#if canTransferOwnership}
 					<ActionRow
 						label="Transfer ownership"
