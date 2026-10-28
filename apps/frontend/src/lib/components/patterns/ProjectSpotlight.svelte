@@ -23,7 +23,6 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import {
 		FADE,
-		fade as fadeTiming,
 		functionalMotion,
 		holdAmbient,
 		motion,
@@ -122,38 +121,13 @@
 
 	let shelfEl = $state<HTMLElement | null>(null);
 	let shownVariant: string | null = null;
-	let before: { height: number; ghosts: HTMLElement[] } | null = null;
-	const MORPHING = '.copy-stack, .tools, .side';
-
-	function ghost(node: HTMLElement, box: DOMRect, fromBottom: boolean) {
-		const r = node.getBoundingClientRect();
-		const g = node.cloneNode(true) as HTMLElement;
-		g.setAttribute('aria-hidden', 'true');
-		g.inert = true;
-		Object.assign(g.style, {
-			position: 'absolute',
-			zIndex: '4',
-			left: `${r.left - box.left}px`,
-			width: `${r.width}px`,
-			margin: '0',
-			pointerEvents: 'none',
-			translate: 'none'
-		});
-		if (fromBottom) g.style.bottom = `${box.bottom - r.bottom}px`;
-		else g.style.top = `${r.top - box.top}px`;
-		return g;
-	}
+	let before: number | null = null;
 
 	$effect.pre(() => {
 		const next = variant;
 		const el = shelfEl;
 		if (!el || shownVariant === null || next === shownVariant || !functionalMotion()) return;
-		const box = el.getBoundingClientRect();
-		const fromBottom = shownVariant === 'spotlight';
-		before = {
-			height: box.height,
-			ghosts: [...el.querySelectorAll<HTMLElement>(MORPHING)].map((n) => ghost(n, box, fromBottom))
-		};
+		before = el.getBoundingClientRect().height;
 	});
 
 	$effect(() => {
@@ -168,25 +142,11 @@
 		shownVariant = next;
 		const from = before;
 		before = null;
-		if (!from) return;
+		if (from === null) return;
 		const height = el.getBoundingClientRect().height;
-		const timing = springTiming('glide', { distance: Math.abs(height - from.height) });
-		holdAmbient(Number(timing.duration ?? 0) + 260);
-		el.animate([{ height: `${from.height}px` }, { height: `${height}px` }], timing);
-		for (const g of from.ghosts) {
-			el.append(g);
-			g.animate([{ opacity: 1 }, { opacity: 0 }], {
-				...fadeTiming('out'),
-				fill: 'forwards'
-			}).finished.finally(() => g.remove());
-		}
-		for (const part of el.querySelectorAll<HTMLElement>(MORPHING)) {
-			if (from.ghosts.includes(part)) continue;
-			part.animate([{ opacity: 0 }, { opacity: 1 }], {
-				...fadeTiming('long', 0.1),
-				fill: 'backwards'
-			});
-		}
+		const timing = springTiming('glide', { distance: Math.abs(height - from) });
+		holdAmbient(Number(timing.duration ?? 0) + 400);
+		el.animate([{ height: `${from}px` }, { height: `${height}px` }], timing);
 	});
 
 	function copyIn(el: HTMLElement) {
@@ -226,26 +186,24 @@
 
 		<div class="copy-stack" aria-live="polite">
 			{#key current.id}
-				<div class="copy" {@attach copyIn} out:fade={{ duration: FADE.out * tempo() }}>
-					{#if variant === 'spotlight'}
+				<div class="copy-layers" {@attach copyIn} out:fade={{ duration: FADE.out * tempo() }}>
+					<div
+						class="copy copy--spotlight"
+						class:copy--on={variant === 'spotlight'}
+						inert={variant !== 'spotlight'}
+					>
 						<div class="byline">
 							<AppIcon name={current.name} kind="project" icon={current.image} size="sm" />
 							{#if current.owner}<span class="owner">{current.owner}</span>{/if}
 						</div>
-					{:else}
-						<span class="lead"
-							><AppIcon name={current.name} kind="project" icon={current.image} size="lg" /></span
-						>
-					{/if}
-					<div class="text">
-						<h2 class="name">{current.name}</h2>
-						<p class="status status--{current.tone}">
-							<span class="dot" aria-hidden="true"></span><span class="status-label"
-								>{current.status}</span
-							>
-						</p>
-					</div>
-					{#if variant === 'spotlight'}
+						<div class="text">
+							<h2 class="name">{current.name}</h2>
+							<p class="status status--{current.tone}">
+								<span class="dot" aria-hidden="true"></span><span class="status-label"
+									>{current.status}</span
+								>
+							</p>
+						</div>
 						<div class="actions">
 							<a class="open" href={primary?.href ?? current.href}
 								><span class="open-label">{primary?.label ?? 'Open project'}</span><PrimaryIcon
@@ -273,35 +231,54 @@
 								</span>
 							{/if}
 						</div>
-					{/if}
+					</div>
+					<div
+						class="copy copy--banner"
+						class:copy--on={variant === 'banner'}
+						inert={variant !== 'banner'}
+					>
+						<span class="lead"
+							><AppIcon name={current.name} kind="project" icon={current.image} size="lg" /></span
+						>
+						<div class="text">
+							<p class="name" aria-hidden={variant !== 'banner'}>{current.name}</p>
+							<p class="status status--{current.tone}">
+								<span class="dot" aria-hidden="true"></span><span class="status-label"
+									>{current.status}</span
+								>
+							</p>
+						</div>
+					</div>
 				</div>
 			{/key}
 		</div>
 
-		{#if tools && variant === 'spotlight'}<div class="tools">{@render tools()}</div>{/if}
-
-		{#if variant === 'banner'}
-			<div class="side">
-				{#if tools}{@render tools()}{/if}
-				<a class="open" href={primary?.href ?? current.href}
-					><span class="open-label">{primary?.label ?? 'Open'}</span><PrimaryIcon
-						size={15}
-						aria-hidden="true"
-					/></a
-				>
-				{#if current.url}
-					<Button
-						variant="media"
-						size="sm"
-						href={current.url}
-						icon={ExternalLink}
-						label="Visit {current.name}"
-						target="_blank"
-						rel="noreferrer"
-					/>
-				{/if}
+		{#if tools}
+			<div class="tools" class:layer--on={variant === 'spotlight'} inert={variant !== 'spotlight'}>
+				{@render tools()}
 			</div>
 		{/if}
+
+		<div class="side" class:layer--on={variant === 'banner'} inert={variant !== 'banner'}>
+			{#if tools}{@render tools()}{/if}
+			<a class="open" href={primary?.href ?? current.href}
+				><span class="open-label">{primary?.label ?? 'Open'}</span><PrimaryIcon
+					size={15}
+					aria-hidden="true"
+				/></a
+			>
+			{#if current.url}
+				<Button
+					variant="media"
+					size="sm"
+					href={current.url}
+					icon={ExternalLink}
+					label="Visit {current.name}"
+					target="_blank"
+					rel="noreferrer"
+				/>
+			{/if}
+		</div>
 
 		{#if items.length > 1}
 			<div class="dots" role="group" aria-label="Choose project" style:--count={items.length}>
@@ -388,10 +365,10 @@
 	.shelf--md .art :global(.poster--soft) {
 		filter: blur(28px) saturate(1.4);
 	}
-	.shelf--spotlight.shelf--md .copy {
+	.shelf--md .copy--spotlight {
 		gap: 1rem;
 	}
-	.shelf--spotlight.shelf--md .name {
+	.shelf--md .copy--spotlight .name {
 		font-size: calc(var(--text-display) * 1.15);
 	}
 	.shelf--banner {
@@ -457,11 +434,34 @@
 
 	.copy-stack {
 		display: grid;
+		grid-template-rows: minmax(0, 1fr);
 		flex: 1;
 		min-width: 0;
+		min-height: 0;
+	}
+	.copy-layers {
+		grid-area: 1 / 1;
+		display: grid;
+		grid-template-rows: minmax(0, 1fr);
+		min-width: 0;
+		min-height: 0;
+	}
+	.copy,
+	.tools,
+	.side {
+		opacity: 0;
+		pointer-events: none;
+		transition: opacity var(--fade-out) var(--curve-in);
+	}
+	.copy--on,
+	.layer--on {
+		opacity: 1;
+		pointer-events: auto;
+		transition: opacity var(--fade-long) var(--curve-out) var(--fade-out);
 	}
 	.copy {
 		grid-area: 1 / 1;
+		min-height: 0;
 		display: flex;
 		flex-direction: column;
 		justify-content: flex-end;
@@ -470,7 +470,7 @@
 		padding: var(--pad);
 		padding-right: 8rem;
 	}
-	.shelf--banner .copy {
+	.copy--banner {
 		flex-direction: row;
 		align-items: center;
 		justify-content: flex-start;
@@ -504,7 +504,7 @@
 		gap: 1.125rem;
 		min-width: 0;
 	}
-	.shelf--banner .text {
+	.copy--banner .text {
 		gap: 0.75rem;
 	}
 	.name {
@@ -520,7 +520,7 @@
 		padding-block: 0.3em;
 		margin-block: -0.3em;
 	}
-	.shelf--banner .name {
+	.copy--banner .name {
 		font-size: var(--text-title-1);
 		letter-spacing: -0.018em;
 	}
@@ -536,7 +536,7 @@
 		padding-block: 0.3em;
 		margin-block: -0.3em;
 	}
-	.shelf--banner .status {
+	.copy--banner .status {
 		font-size: var(--text-callout);
 	}
 	.status-label {
