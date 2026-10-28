@@ -65,7 +65,6 @@
 		PendingInvitation
 	} from '$lib/components/project';
 
-	import '$lib/components/project/project.css';
 
 	let { data } = $props<{ data: PageData }>();
 	const orgSlug = $derived(data.orgSlug);
