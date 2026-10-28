@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { goto, onNavigate } from '$app/navigation';
+	import { decorativeMotion, holdAmbient } from '$lib/utils/motion.svelte';
 	import { page } from '$app/stores';
 	import { onDestroy, untrack } from 'svelte';
 	import GraftCards from '$lib/grafts/GraftCards.svelte';
@@ -107,6 +108,28 @@
 		return t && (PROJECT_TABS as string[]).includes(t) ? (t as ProjectTab) : 'resources';
 	}
 	const activeTab = $derived(tabFromUrl($page.url));
+
+	let heroMorph = 0;
+	onNavigate((nav) => {
+		if (!nav.from || !nav.to || nav.from.url.pathname !== nav.to.url.pathname) return;
+		const wasOverview = tabFromUrl(nav.from.url) === 'resources';
+		if (wasOverview === (tabFromUrl(nav.to.url) === 'resources')) return;
+		if (!document.startViewTransition || !decorativeMotion()) return;
+		const html = document.documentElement;
+		const token = ++heroMorph;
+		html.classList.add('vt-hero');
+		html.classList.toggle('vt-hero--shrink', wasOverview);
+		holdAmbient(900);
+		return new Promise((resolve) => {
+			const vt = document.startViewTransition(async () => {
+				resolve();
+				await nav.complete;
+			});
+			vt.finished.finally(() => {
+				if (token === heroMorph) html.classList.remove('vt-hero', 'vt-hero--shrink');
+			});
+		});
+	});
 	function gotoTab(tab: ProjectTab) {
 		const url = new URL(window.location.href);
 		if (tab === 'resources') url.searchParams.delete('tab');
@@ -1139,6 +1162,30 @@
 		display: flex;
 		align-items: center;
 		gap: var(--space-4);
+	}
+	:global(html.vt-hero) .bar {
+		view-transition-name: page-bar;
+	}
+	:global(html.vt-hero) :global(.frame) {
+		view-transition-name: page-body;
+	}
+	:global(html.vt-hero::view-transition-group(*)) {
+		animation-duration: var(--spring-glide-duration);
+		animation-timing-function: var(--spring-glide);
+	}
+	:global(html.vt-hero::view-transition-old(root)),
+	:global(html.vt-hero::view-transition-old(page-bar)) {
+		display: none;
+	}
+	:global(html.vt-hero::view-transition-new(root)),
+	:global(html.vt-hero::view-transition-new(page-bar)) {
+		animation: none;
+	}
+	:global(html.vt-hero::view-transition-new(page-body)) {
+		animation: vt-fade-in var(--fade-long) var(--curve-out) var(--fade-out) both;
+	}
+	:global(html.vt-hero::view-transition-old(page-body)) {
+		animation: vt-fade-out var(--fade-out) var(--curve-in) both;
 	}
 	.bar > :global(.capsule) {
 		flex: 0 1 auto;

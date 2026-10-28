@@ -95,7 +95,11 @@
 			});
 		}
 
-		const ro = new ResizeObserver(size);
+		let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+		const ro = new ResizeObserver(() => {
+			clearTimeout(resizeTimer);
+			resizeTimer = setTimeout(size, 140);
+		});
 		ro.observe(el);
 		const io = new IntersectionObserver((entries) => {
 			visible = entries.some((e) => e.isIntersecting);
@@ -112,6 +116,7 @@
 		return () => {
 			alive = false;
 			cancelAnimationFrame(raf);
+			clearTimeout(resizeTimer);
 			ro.disconnect();
 			io.disconnect();
 			unsub();

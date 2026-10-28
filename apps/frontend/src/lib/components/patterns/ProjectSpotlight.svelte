@@ -127,6 +127,7 @@
 		const next = variant;
 		const el = shelfEl;
 		if (!el || shownVariant === null || next === shownVariant || !functionalMotion()) return;
+		if (document.documentElement.classList.contains('vt-hero')) return;
 		before = el.getBoundingClientRect().height;
 	});
 
@@ -142,7 +143,7 @@
 		shownVariant = next;
 		const from = before;
 		before = null;
-		if (from === null) return;
+		if (from === null || document.documentElement.classList.contains('vt-hero')) return;
 		const height = el.getBoundingClientRect().height;
 		const timing = springTiming('glide', { distance: Math.abs(height - from) });
 		holdAmbient(Number(timing.duration ?? 0) + 400);
@@ -193,7 +194,9 @@
 						inert={variant !== 'spotlight'}
 					>
 						<div class="byline">
-							<AppIcon name={current.name} kind="project" icon={current.image} size="sm" />
+							<span class="byline-icon"
+								><AppIcon name={current.name} kind="project" icon={current.image} size="sm" /></span
+							>
 							{#if current.owner}<span class="owner">{current.owner}</span>{/if}
 						</div>
 						<div class="text">
@@ -378,8 +381,11 @@
 
 	.stage {
 		position: absolute;
-		inset: 0 0 auto;
+		top: 0;
+		left: 50%;
+		width: min(100vw, var(--page-wide));
 		height: var(--art-h);
+		translate: -50% 0;
 		z-index: -1;
 		overflow: hidden;
 		contain: paint;
@@ -765,6 +771,69 @@
 		}
 		.dots {
 			bottom: var(--pad);
+		}
+	}
+
+	.byline-icon {
+		display: flex;
+	}
+	.copy .name,
+	.copy .status {
+		width: fit-content;
+		max-width: 100%;
+	}
+
+	:global(html.vt-hero) .shelf {
+		view-transition-name: hero;
+	}
+	:global(html.vt-hero) .copy--on .name {
+		view-transition-name: hero-name;
+	}
+	:global(html.vt-hero) .copy--on .status {
+		view-transition-name: hero-status;
+	}
+	:global(html.vt-hero) .copy--on .byline-icon,
+	:global(html.vt-hero) .copy--on .lead {
+		view-transition-name: hero-icon;
+	}
+	:global(html.vt-hero) .copy,
+	:global(html.vt-hero) .tools,
+	:global(html.vt-hero) .side {
+		transition: none;
+	}
+	:global(html.vt-hero) .shelf::after {
+		display: none;
+	}
+	:global(html.vt-hero::view-transition-group(hero)) {
+		overflow: clip;
+		border-radius: calc(var(--radius-panel) * var(--corner-scale));
+		box-shadow: var(--shadow-glass);
+		outline: 1px solid rgb(255 255 255 / 0.2);
+		outline-offset: -1px;
+	}
+	:global(html.vt-hero::view-transition-old(hero)) {
+		z-index: 1;
+		animation: vt-fade-out var(--fade-long) var(--curve-out) both;
+	}
+	:global(html.vt-hero::view-transition-new(hero)) {
+		animation: none;
+	}
+	:global(html.vt-hero--shrink::view-transition-old(hero)) {
+		z-index: auto;
+		animation: none;
+	}
+	:global(html.vt-hero--shrink::view-transition-new(hero)) {
+		z-index: 1;
+		animation: vt-fade-in var(--fade-long) var(--curve-out) both;
+	}
+	@keyframes -global-vt-fade-out {
+		to {
+			opacity: 0;
+		}
+	}
+	@keyframes -global-vt-fade-in {
+		from {
+			opacity: 0;
 		}
 	}
 </style>
