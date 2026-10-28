@@ -123,6 +123,17 @@
 			: [])
 	]);
 
+	const MANAGED_PG = 'managed-postgres';
+
+	const managedPostgres = $derived<ShelfItem>({
+		id: MANAGED_PG,
+		title: 'PostgreSQL',
+		subtitle: 'Managed by Orchard',
+		description: 'Postgres 13 to 18, run for you. Pick a version and get a connection string.',
+		icon: IMG_ICONS.postgres,
+		href: sourceHref('database')
+	});
+
 	const shelves = $derived.by(() => {
 		const toItem = (t: Template): ShelfItem => ({
 			id: t.id,
@@ -152,9 +163,13 @@
 			.filter(([, list]) => list.length < 3)
 			.flatMap(([, list]) => list)
 			.filter((t) => !shown.has(t.id));
+		const withManaged = (title: string, items: ShelfItem[]) =>
+			title === 'Databases' ? [managedPostgres, ...items] : items;
+		const hasDatabases = big.some(([title]) => title === 'Databases');
 		return [
 			{ title: 'Popular', items: popular.map(toItem) },
-			...big.map(([title, list]) => ({ title, items: list.map(toItem) })),
+			...(hasDatabases ? [] : [{ title: 'Databases', items: [managedPostgres] }]),
+			...big.map(([title, list]) => ({ title, items: withManaged(title, list.map(toItem)) })),
 			...(rest.length ? [{ title: 'More templates', items: rest.map(toItem) }] : [])
 		];
 	});
@@ -162,7 +177,14 @@
 	const results = $derived.by<ShelfItem[]>(() => {
 		const q = query.trim().toLowerCase();
 		if (!q) return [];
-		return templates
+		const managed =
+			q.length >= 2 &&
+			['postgres', 'postgresql', 'database', 'sql', 'managed'].some(
+				(k) => k.includes(q) || q.includes(k)
+			)
+				? [managedPostgres]
+				: [];
+		const found = templates
 			.filter(
 				(t) =>
 					t.displayName.toLowerCase().includes(q) ||
@@ -177,6 +199,7 @@
 				icon: t.icon,
 				href: templateHref(t)
 			}));
+		return [...managed, ...found];
 	});
 
 	function base() {
@@ -233,6 +256,14 @@
 			});
 			busy = null;
 		}
+	}
+
+	function pick(item: ShelfItem) {
+		if (item.id === MANAGED_PG) {
+			openSource({ id: 'database', label: 'PostgreSQL' });
+			return;
+		}
+		openTemplate(item.id);
 	}
 
 	function openTemplate(id: string) {
@@ -312,7 +343,7 @@
 				items={results}
 				columns={4}
 				plain
-				onSelect={(item) => openTemplate(item.id)}
+				onSelect={pick}
 			/>
 		{:else}
 			<EmptyState
@@ -339,13 +370,7 @@
 				<Skeleton height="12rem" rounded="1.25rem" />
 			{:else}
 				{#each shelves as shelf (shelf.title)}
-					<Shelf
-						title={shelf.title}
-						items={shelf.items}
-						columns={4}
-						plain
-						onSelect={(item) => openTemplate(item.id)}
-					/>
+					<Shelf title={shelf.title} items={shelf.items} columns={4} plain onSelect={pick} />
 				{/each}
 			{/if}
 		</div>

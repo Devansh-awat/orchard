@@ -50,14 +50,16 @@
 			aria-disabled={busy !== null && busy !== item.id ? 'true' : undefined}
 			onclick={(e) => choose(e, item)}
 		>
-			<span class="icon icon--{item.tone ?? 'paper'}">
-				{#if busy === item.id}
-					<Spinner size={28} />
-				{:else if item.image}
-					<img src={item.image} alt="" />
-				{:else if Glyph}
-					<Glyph strokeWidth={1.5} />
-				{/if}
+			<span class="art">
+				<span class="glyph glyph--{item.tone ?? 'paper'}">
+					{#if busy === item.id}
+						<Spinner size={22} />
+					{:else if item.image}
+						<img src={item.image} alt="" />
+					{:else if Glyph}
+						<Glyph size={26} strokeWidth={1.75} />
+					{/if}
+				</span>
 				{#if item.badge}<span class="badge"><Badge tone="accent">{item.badge}</Badge></span>{/if}
 			</span>
 			<span class="text">
@@ -83,10 +85,8 @@
 	.tile {
 		display: flex;
 		flex-direction: column;
-		align-items: center;
 		gap: 0.875rem;
 		color: inherit;
-		text-align: center;
 		text-decoration: none;
 		outline: none;
 	}
@@ -94,22 +94,21 @@
 		opacity: 0.5;
 		pointer-events: none;
 	}
-	.icon {
+	.art {
 		position: relative;
 		display: grid;
 		place-items: center;
-		width: 61.8%;
-		aspect-ratio: 1;
+		aspect-ratio: 1.618;
 		isolation: isolate;
-		border-radius: 22.37%;
+		border-radius: calc(var(--radius-card) * var(--corner-scale));
 		corner-shape: var(--corner);
+		background: var(--bg-surface);
 		box-shadow:
-			inset 0 0 0 0.5px color-mix(in oklab, var(--neutral-10) 10%, transparent),
-			0 1px 2px color-mix(in oklab, var(--neutral-10) 8%, transparent),
-			0 14px 28px -16px color-mix(in oklab, var(--neutral-10) 40%, transparent);
+			inset 0 0 0 0.5px color-mix(in oklab, var(--neutral-10) 12%, transparent),
+			0 1px 2px color-mix(in oklab, var(--neutral-10) 5%, transparent);
 		transition: transform var(--spring-glide-duration) var(--spring-glide);
 	}
-	.icon::before {
+	.art::before {
 		content: '';
 		position: absolute;
 		inset: 0;
@@ -119,70 +118,77 @@
 		opacity: 0;
 		transition: opacity var(--dur-base) ease;
 	}
-	.tile:hover .icon,
-	.tile:focus-visible .icon {
-		transform: scale(1.04);
+	.tile:hover .art,
+	.tile:focus-visible .art {
+		transform: scale(1.03);
 	}
-	.tile:hover .icon::before,
-	.tile:focus-visible .icon::before {
+	.tile:hover .art::before,
+	.tile:focus-visible .art::before {
 		opacity: 1;
 	}
-	.tile:active .icon {
+	.tile:active .art {
 		transform: scale(1.01);
 		transition-duration: var(--spring-press-duration);
 		transition-timing-function: var(--spring-press);
 	}
-	.tile:focus-visible .icon {
-		outline: 3px solid var(--focus-ring);
-		outline-offset: 3px;
+	.tile:focus-visible .art {
+		box-shadow:
+			inset 0 0 0 0.5px color-mix(in oklab, var(--neutral-10) 12%, transparent),
+			0 0 0 3px var(--focus-ring);
 	}
-	.icon > :global(svg) {
-		width: 40%;
-		height: 40%;
+	.glyph {
+		display: grid;
+		place-items: center;
+		width: 3.5rem;
+		height: 3.5rem;
+		border-radius: calc(0.875rem * var(--corner-scale));
+		corner-shape: var(--corner);
+		box-shadow:
+			0 6px 14px -6px color-mix(in oklab, var(--neutral-10) 30%, transparent),
+			inset 0 0 0 0.5px color-mix(in oklab, var(--neutral-10) 10%, transparent);
 	}
-	.icon img {
-		width: 56%;
-		height: 56%;
+	.glyph img {
+		width: 2.25rem;
+		height: 2.25rem;
 		object-fit: contain;
 	}
-	.icon--ink {
+	.glyph--ink {
 		background: var(--neutral-10);
 		color: var(--neutral-app);
 	}
-	.icon--blue {
+	.glyph--blue {
 		background: var(--blue-solid);
 		color: var(--on-solid);
 	}
-	.icon--green {
+	.glyph--green {
 		background: var(--green-solid);
 		color: var(--on-solid);
 	}
-	.icon--amber {
+	.glyph--amber {
 		background: var(--amber-solid);
 		color: var(--on-solid);
 	}
-	.icon--red {
+	.glyph--red {
 		background: var(--red-solid);
 		color: var(--on-solid);
 	}
-	.icon--accent {
+	.glyph--accent {
 		background: var(--accent-solid);
 		color: var(--on-solid);
 	}
-	.icon--paper {
+	.glyph--paper {
 		background: var(--bg-raised);
 		color: var(--text-default);
 	}
 	.badge {
 		position: absolute;
-		top: -0.375rem;
-		right: -0.75rem;
+		top: 0.625rem;
+		right: 0.625rem;
 	}
 	.text {
 		display: flex;
 		flex-direction: column;
 		gap: 0.125rem;
-		max-width: 100%;
 		min-width: 0;
 	}
 	.label {
