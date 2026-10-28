@@ -39,6 +39,9 @@
 		children?: Snippet;
 	} = $props();
 
+	let panelW = $state(0);
+	const menuW = $derived(collapsed || !panelW ? undefined : panelW - 16);
+
 	function toggle() {
 		if (onToggle) onToggle();
 		else collapsed = !collapsed;
@@ -285,7 +288,7 @@
 	}}
 />
 
-<nav class="panel" class:panel--collapsed={collapsed} aria-label="Main">
+<nav class="panel" class:panel--collapsed={collapsed} aria-label="Main" bind:clientWidth={panelW}>
 	{#snippet orgFace()}
 		<span class="org-avatar">
 			{#if org.avatar}<RemoteImg src={org.avatar} class="cover" />{:else}{org.name.charAt(0)}{/if}
@@ -297,7 +300,7 @@
 		<ChevronsUpDown size={14} class="org-chev" />
 	{/snippet}
 	{#if orgMenu}
-		<Menu placement="bottom-start" sameWidth={!collapsed} size="lg">
+		<Menu placement="bottom-start" size="lg" width={menuW}>
 			{#snippet trigger(attrs)}
 				<button type="button" class="org" title={collapsed ? org.name : undefined} {...attrs}
 					>{@render orgFace()}</button
@@ -378,7 +381,7 @@
 			<span class="me-name">@{user.handle}</span>
 		{/snippet}
 		{#if userMenu}
-			<Menu placement="top-start" size="lg">
+			<Menu placement="top-start" size="lg" width={menuW}>
 				{#snippet trigger(attrs)}
 					<button
 						type="button"

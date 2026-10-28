@@ -9,6 +9,7 @@
 		open = $bindable(false),
 		sameWidth = false,
 		size = 'md',
+		width = undefined,
 		inside,
 		trigger,
 		children
@@ -17,6 +18,7 @@
 		open?: boolean;
 		sameWidth?: boolean;
 		size?: 'md' | 'lg';
+		width?: number;
 		inside?: (target: Element | Window | Document) => boolean;
 		trigger: Snippet<[Record<string, unknown>, boolean]>;
 		children: Snippet;
@@ -94,6 +96,8 @@
 <div
 	{...popover.content}
 	class="ui-menu ui-menu--{size}"
+	style:width={width ? `${width}px` : undefined}
+	style:min-width={width ? '0' : undefined}
 	role="menu"
 	data-nav={nav}
 	onclick={(e: MouseEvent) => e.stopPropagation()}

@@ -25,7 +25,7 @@
 	} from 'lucide-svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { overviewQueryOptions } from '$lib/queries/overview';
-	import { resourceStatus, Avatar, Badge, IconTile } from '$lib/components/ui';
+	import { resourceStatus, Avatar, Badge, IconTile, MenuHeader } from '$lib/components/ui';
 	import Monogram from '$lib/components/ui/Monogram.svelte';
 	import Sidebar from '$lib/components/patterns/Sidebar.svelte';
 	import type { SidebarSection } from '$lib/components/patterns/sidebar';
@@ -317,32 +317,45 @@
 		userBadge={invitationCount + ($instanceChecklistWarnings.length > 0 ? 1 : 0)}
 	>
 		{#snippet orgMenu()}
-			{#each $organizations as org (org.id)}
-				{#if org.id !== $selectedOrganization?.id}
-					<MenuItem onclick={() => selectOrg(org)}>
-						{#snippet leading()}
-							<IconTile src={org.avatarUrl}>
-								{#snippet fallback()}<Monogram name={org.name} />{/snippet}
-							</IconTile>
-						{/snippet}
-						{org.name}
-					</MenuItem>
-				{/if}
-			{/each}
+			{#if $selectedOrganization}
+				<MenuHeader
+					title={$selectedOrganization.name}
+					subtitle={$selectedOrganization.plan ?? 'Organization'}
+				>
+					{#snippet media()}
+						<IconTile src={$selectedOrganization?.avatarUrl}>
+							{#snippet fallback()}<Monogram
+									name={$selectedOrganization?.name ?? '?'}
+									size="lg"
+								/>{/snippet}
+						</IconTile>
+					{/snippet}
+				</MenuHeader>
+			{/if}
 			{#if canOpenOrgSettings}
-				{#if $organizations.length > 1}<MenuSeparator />{/if}
 				<MenuItem icon={Settings} href="/{orgSlug}/settings">Organization settings</MenuItem>
+			{/if}
+			{#if $organizations.length > 1}
+				<MenuSeparator />
+				{#each $organizations as org (org.id)}
+					{#if org.id !== $selectedOrganization?.id}
+						<MenuItem onclick={() => selectOrg(org)}>
+							{#snippet leading()}
+								<IconTile src={org.avatarUrl}>
+									{#snippet fallback()}<Monogram name={org.name} />{/snippet}
+								</IconTile>
+							{/snippet}
+							{org.name}
+						</MenuItem>
+					{/if}
+				{/each}
 			{/if}
 		{/snippet}
 		{#snippet userAvatar()}<Avatar user={$user} alive />{/snippet}
 		{#snippet userMenu()}
-			<div class="me-card">
-				<Avatar user={$user} size={36} />
-				<div class="me-text">
-					<p class="me-name">{fullName}</p>
-					<p class="me-sub">{$user?.email ?? `@${$user?.username ?? 'you'}`}</p>
-				</div>
-			</div>
+			<MenuHeader title={fullName} subtitle={$user?.email ?? `@${$user?.username ?? 'you'}`}>
+				{#snippet media()}<Avatar user={$user} size={32} />{/snippet}
+			</MenuHeader>
 			<div class="theme-row">
 				<span>Theme</span>
 				<SegmentedControl
@@ -390,44 +403,12 @@
 {/if}
 
 <style>
-	.me-card {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		padding: 0.75rem 0.75rem 0.875rem;
-	}
-	.me-card :global(img),
-	.me-card :global(svg) {
-		border-radius: 50%;
-	}
-	.me-text {
-		display: flex;
-		flex-direction: column;
-		gap: 0.125rem;
-		min-width: 0;
-	}
-	.me-name {
-		margin: 0;
-		font-size: var(--text-body);
-		line-height: var(--lh-body);
-		font-weight: var(--weight-medium);
-		color: var(--text-default);
-	}
-	.me-sub {
-		margin: 0;
-		overflow: hidden;
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		color: var(--text-muted);
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
 	.theme-row {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: 0.75rem;
-		padding: 0.25rem 0.5rem 0.625rem 0.75rem;
+		padding: 0 0.125rem 0.375rem 0.5rem;
 		font-size: var(--text-body);
 		line-height: var(--lh-body);
 		color: var(--text-default);

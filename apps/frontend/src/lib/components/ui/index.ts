@@ -51,3 +51,4 @@ export { default as ColorField } from './ColorField.svelte';
 export { default as AsciiVine } from './AsciiVine.svelte';
 export { default as CodeInput } from './CodeInput.svelte';
 export { default as Divider } from './Divider.svelte';
+export { default as MenuHeader } from './MenuHeader.svelte';

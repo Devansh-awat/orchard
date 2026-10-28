@@ -103,7 +103,7 @@ callout|caption|micro`, `rounded-control|card|panel`.
 | Numbers                            | `Metric`, with `Sparkline` in its `chart` slot; gauges: `Ring`                      |
 | Inline facts (url, branch, commit) | `MetaList`                                                                          |
 | Action                             | `Button` (primary, secondary, ghost, danger, media; `icon`, `iconRight`, `loading`) |
-| Actions on a thing                 | `Menu` + `MenuItem` (+ `MenuLabel`, `MenuSeparator`)                                |
+| Actions on a thing                 | `Menu` + `MenuItem` (+ `MenuHeader`, `MenuLabel`, `MenuSeparator`; `size="lg"`)     |
 | Pick a value                       | `Select` (native), `Dropdown` (rich), `Combobox` (searchable)                       |
 | Text entry                         | `Field` + `Input` / `Textarea`; numbers: `Stepper`; ranges: `Slider`                |
 | On or off                          | `Switch`, `ToggleRow` for settings rows, `Checkbox` in lists                        |
