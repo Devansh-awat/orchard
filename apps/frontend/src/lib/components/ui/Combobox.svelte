@@ -1,36 +1,63 @@
 <script lang="ts">
+	import { untrack, type Snippet } from 'svelte';
 	import { Combobox } from 'melt/builders';
-	import { Check, ChevronsUpDown, Search } from 'lucide-svelte';
+	import { Check, ChevronsUpDown, CornerDownLeft, Search, X } from 'lucide-svelte';
 	import type { DropdownOption } from './dropdown';
+	import type { Icon } from './types';
+	import Spinner from './Spinner.svelte';
 	import { overlayMotion } from '$lib/utils/motion.svelte';
+
+	const CREATE = '__ui-combobox-create__';
 
 	let {
 		value = $bindable(''),
+		query = $bindable(''),
 		options,
 		placeholder = 'Search',
 		label = undefined,
 		ariaLabelledby = undefined,
+		icon = Search,
 		disabled = false,
+		loading = false,
 		empty = 'No matches',
+		creatable = false,
+		createLabel = (q: string) => `Use “${q}”`,
+		trailing = undefined,
 		class: className = '',
-		onchange = undefined
+		onchange = undefined,
+		oncreate = undefined,
+		onclear = undefined
 	}: {
 		value?: string;
+		query?: string;
 		options: DropdownOption[];
 		placeholder?: string;
 		label?: string;
 		ariaLabelledby?: string;
+		icon?: Icon;
 		disabled?: boolean;
-		empty?: string;
+		loading?: boolean;
+		empty?: string | Snippet<[string]>;
+		creatable?: boolean;
+		createLabel?: (query: string) => string;
+		trailing?: Snippet<[DropdownOption]>;
 		class?: string;
 		onchange?: (value: string) => void;
+		oncreate?: (query: string) => void;
+		onclear?: () => void;
 	} = $props();
 
 	const combo = new Combobox<string>({
 		value: () => value || undefined,
 		onValueChange: (next) => {
+			if (next === CREATE) return;
 			value = next ?? '';
-			onchange?.(value);
+			if (!value && onclear) onclear();
+			else onchange?.(value);
+		},
+		inputValue: () => query,
+		onInputValueChange: (next) => {
+			query = next;
 		},
 		floatingConfig: {
 			computePosition: { placement: 'bottom-start' },
@@ -42,44 +69,74 @@
 
 	$effect(() => {
 		const text = selectedLabel;
-		if (!combo.open) combo.inputValue = text;
+		const open = combo.open;
+		untrack(() => {
+			if (open) return;
+			if (!text && creatable) return;
+			if (combo.inputValue !== text) combo.inputValue = text;
+		});
 	});
 
-	const query = $derived(combo.touched ? combo.inputValue.trim().toLowerCase() : '');
+	const typed = $derived(combo.touched ? combo.inputValue.trim() : '');
+	const needle = $derived(typed.toLowerCase());
 	const filtered = $derived(
-		query
+		needle
 			? options.filter(
 					(o) =>
-						o.label.toLowerCase().includes(query) ||
-						o.value.toLowerCase().includes(query) ||
-						o.description?.toLowerCase().includes(query)
+						o.label.toLowerCase().includes(needle) ||
+						o.value.toLowerCase().includes(needle) ||
+						o.description?.toLowerCase().includes(needle)
 				)
 			: options
 	);
+	const createText = $derived(query.trim());
+	const showCreate = $derived(
+		creatable && !!createText && !options.some((o) => o.value === createText)
+	);
+	const clearable = $derived(!!onclear && !!(value || query) && !loading && !disabled);
+
+	function create() {
+		const text = createText;
+		combo.open = false;
+		oncreate?.(text);
+	}
 </script>
 
 <div class="field {className}" class:field--open={combo.open} class:field--disabled={disabled}>
-	<span class="lead" aria-hidden="true"><Search size={14} /></span>
+	{#if icon}
+		{@const Lead = icon}
+		<span class="lead" aria-hidden="true"><Lead size={14} /></span>
+	{/if}
 	<input
 		{...combo.input}
 		class="control"
+		class:control--bare={!icon}
 		{placeholder}
 		{disabled}
 		aria-label={label}
 		aria-labelledby={ariaLabelledby}
+		aria-busy={loading || undefined}
 		autocomplete="off"
 		spellcheck={false}
 	/>
-	<button
-		{...combo.trigger}
-		type="button"
-		class="chevron"
-		tabindex="-1"
-		aria-label="Show options"
-		{disabled}
-	>
-		<ChevronsUpDown size={14} />
-	</button>
+	{#if loading}
+		<span class="end end--static" aria-hidden="true"><Spinner size={13} /></span>
+	{:else if clearable}
+		<button type="button" class="end" aria-label="Clear" onclick={() => onclear?.()}>
+			<X size={14} />
+		</button>
+	{:else}
+		<button
+			{...combo.trigger}
+			type="button"
+			class="end"
+			tabindex="-1"
+			aria-label="Show options"
+			{disabled}
+		>
+			<ChevronsUpDown size={14} />
+		</button>
+	{/if}
 </div>
 
 <div
@@ -87,6 +144,14 @@
 	class="ui-popover ui-popover--menu"
 	{@attach overlayMotion(() => combo.open, { origin: 'center top' })}
 >
+	{#if showCreate}
+		<div {...combo.getOption(CREATE, createLabel(createText), create)} class="ui-dropdown-option">
+			<span class="ui-dropdown-icon"><CornerDownLeft size={16} /></span>
+			<span class="ui-dropdown-option-main">
+				<span class="ui-dropdown-text">{createLabel(createText)}</span>
+			</span>
+		</div>
+	{/if}
 	{#each filtered as option (option.value)}
 		<div
 			{...combo.getOption(option.value, option.label)}
@@ -107,16 +172,23 @@
 					<span class="ui-dropdown-option-desc">{option.description}</span>
 				{/if}
 			</span>
+			{#if trailing}<span class="trail">{@render trailing(option)}</span>{/if}
 			<span class="ui-dropdown-check" aria-hidden="true">
 				{#if combo.isSelected(option.value)}<Check size={16} strokeWidth={2.25} />{/if}
 			</span>
 		</div>
 	{:else}
-		<div class="ui-dropdown-empty" role="presentation">
-			<span class="empty-text"
-				>{empty}{#if query}&nbsp;for “{combo.inputValue.trim()}”{/if}</span
-			>
-		</div>
+		{#if !showCreate}
+			<div class="ui-dropdown-empty" role="presentation">
+				{#if typeof empty === 'string'}
+					<span class="empty-text"
+						>{empty}{#if typed}&nbsp;for “{typed}”{/if}</span
+					>
+				{:else}
+					{@render empty(typed)}
+				{/if}
+			</div>
+		{/if}
 	{/each}
 </div>
 
@@ -150,8 +222,11 @@
 		font: inherit;
 		font-size: var(--text-body);
 		transition:
-			box-shadow var(--dur-fast) ease,
-			background-color var(--dur-fast) ease;
+			box-shadow var(--fade-in) var(--curve-out),
+			background-color var(--fade-in) var(--curve-out);
+	}
+	.control--bare {
+		padding-left: 0.6875rem;
 	}
 	.control::placeholder {
 		color: var(--text-faint);
@@ -165,7 +240,7 @@
 			inset 0 0 0 1px var(--accent),
 			0 0 0 3px var(--focus-ring);
 	}
-	.chevron {
+	.end {
 		position: absolute;
 		top: 0.25rem;
 		right: 0.25rem;
@@ -175,24 +250,38 @@
 		width: 1.5rem;
 		height: 1.5rem;
 		border: none;
-		border-radius: calc(var(--radius-control) - 0.25rem);
+		border-radius: calc((var(--radius-control) - 0.25rem) * var(--corner-scale));
+		corner-shape: var(--corner);
 		background: transparent;
 		color: var(--text-faint);
 		cursor: pointer;
 		transition:
-			background-color var(--dur-fast) ease,
-			color var(--dur-fast) ease;
+			background-color var(--fade-in) var(--curve-out),
+			color var(--fade-in) var(--curve-out);
 	}
-	.chevron:hover:not(:disabled),
-	.field--open .chevron {
+	.end--static {
+		cursor: default;
+		pointer-events: none;
+	}
+	.end:hover:not(:disabled):not(.end--static),
+	.field--open .end:not(.end--static) {
 		background: color-mix(in oklab, var(--neutral-10) 7%, transparent);
 		color: var(--text-default);
+	}
+	.end:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: -2px;
+	}
+	.trail {
+		display: inline-flex;
+		align-items: center;
+		flex-shrink: 0;
 	}
 	.field--disabled {
 		opacity: 0.5;
 	}
 	.field--disabled .control,
-	.field--disabled .chevron {
+	.field--disabled .end {
 		cursor: not-allowed;
 	}
 	.empty-text {

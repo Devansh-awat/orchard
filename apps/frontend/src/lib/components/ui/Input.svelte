@@ -9,6 +9,7 @@
 		size = 'md',
 		shape = 'rounded',
 		suffix = undefined,
+		mono = false,
 		class: className = '',
 		...rest
 	}: {
@@ -18,6 +19,7 @@
 		size?: 'lg' | 'md' | 'sm';
 		shape?: 'rounded' | 'capsule';
 		suffix?: string | Snippet;
+		mono?: boolean;
 		class?: string;
 		[key: string]: unknown;
 	} = $props();
@@ -31,6 +33,7 @@
 			class="control control--{size} control--{shape}"
 			class:control--lead={!!icon}
 			class:control--suffix={!!suffix}
+			class:control--mono={mono}
 			class:control--error={error}
 			aria-invalid={error || undefined}
 			bind:value
@@ -45,6 +48,7 @@
 {:else}
 	<input
 		class="control control--{size} control--{shape} {className}"
+		class:control--mono={mono}
 		class:control--error={error}
 		aria-invalid={error || undefined}
 		bind:value
@@ -105,6 +109,10 @@
 		border-radius: calc(0.75rem * var(--corner-scale));
 		corner-shape: var(--corner);
 		font-size: var(--text-headline);
+	}
+	.control--mono {
+		font-family: var(--font-mono);
+		font-size: var(--text-callout);
 	}
 	.suffix {
 		position: absolute;

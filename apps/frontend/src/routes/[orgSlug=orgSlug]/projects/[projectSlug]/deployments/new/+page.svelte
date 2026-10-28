@@ -2,7 +2,6 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { slide } from '$lib/utils/transitions';
 	import {
 		apiFetch,
 		toasts,
@@ -13,20 +12,17 @@
 		type ProjectContext
 	} from '$lib/stores';
 	import {
-		GitBranch,
-		Loader2,
+		ArrowRight,
 		Container,
+		GitBranch,
 		Github,
+		HardDrive,
 		Plus,
 		Trash2,
-		Eye,
-		EyeOff,
-		ChevronDown,
 		X
 	} from 'lucide-svelte';
-	import { envVarsToRaw, rawToEnvVars } from '$lib/utils/format';
-	import { motionStagger, springRotate } from '$lib/utils/motion.svelte';
-	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
+	import { rawToEnvVars } from '$lib/utils/format';
+	import { motionStagger } from '$lib/utils/motion.svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
 	import { EnvironmentSwitcher } from '$lib/components/environment';
 	import RepoAccountPicker from '$lib/components/deployment/RepoAccountPicker.svelte';
@@ -34,18 +30,29 @@
 	import FrameworkIcon from '$lib/components/deployment/FrameworkIcon.svelte';
 	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
 	import {
+		Alert,
+		Badge,
+		Breadcrumbs,
 		Button,
-		PopoverPanel,
+		Card,
+		Combobox,
+		Disclosure,
 		Dropdown,
+		EmptyState,
+		EnvVarEditor,
 		Field,
 		Input,
+		Page,
+		SectionCard,
+		SegmentedControl,
 		Select,
-		Badge,
 		Skeleton,
-		ToggleRow,
 		Stepper,
-		SegmentedControl
+		Switch,
+		ToggleRow,
+		type DropdownOption
 	} from '$lib/components/ui';
+	import Spinner from '$lib/components/ui/Spinner.svelte';
 	import {
 		frameworkLabel,
 		appDirLabel,
@@ -59,6 +66,19 @@
 	const FRAMEWORK_OPTIONS = [
 		{ value: DOCKERFILE_OPTION, label: 'Dockerfile' },
 		...FRAMEWORK_CHOICES.map((fw) => ({ value: fw, label: frameworkLabel(fw) ?? fw }))
+	];
+	const SOURCE_OPTIONS = [
+		{ value: 'image', label: 'Image', icon: Container },
+		{ value: 'github', label: 'GitHub', icon: Github },
+		{ value: 'git', label: 'Git', icon: GitBranch }
+	];
+	const PROTOCOL_OPTIONS = [
+		{ value: 'TCP', label: 'TCP' },
+		{ value: 'UDP', label: 'UDP' }
+	];
+	const ENV_MODE_OPTIONS = [
+		{ value: 'grid', label: 'Editor' },
+		{ value: 'raw', label: 'Raw' }
 	];
 
 	interface Repository {
@@ -82,7 +102,6 @@
 	let pendingProjectName = $state<string | null>(null);
 	let seededPendingProject = false;
 
-	// Deployment source — read from ?source= query param, default to 'image'
 	const initialSource = $derived(
 		$page.url.searchParams.get('source') === 'github'
 			? ('github' as const)
@@ -98,9 +117,6 @@
 		branch: string;
 		externalRepoId: string | null;
 	} | null>(null);
-	// Environment the deployment lands in. Seeded from ?env= (the env the user
-	// was viewing when they opened this form); the switcher falls back to the
-	// project default when absent or invalid.
 	let selectedEnvId = $state($page.url.searchParams.get('env') ?? '');
 	let githubLinked = $state(false);
 	let hasGitHubApp = $state(false);
@@ -119,7 +135,6 @@
 	let repoSearch = $state('');
 	let branchSearch = $state('');
 	let branchQuery = $state('');
-	let branchPickerOpen = $state(false);
 	let dockerfileSearch = $state('Dockerfile');
 	let dockerfileStages = $state<string[]>([]);
 	let loadingStages = $state(false);
@@ -127,12 +142,9 @@
 	let dockerfileInputTimeout: ReturnType<typeof setTimeout> | null = null;
 	let repoInputTimeout: ReturnType<typeof setTimeout> | null = null;
 
-	// Form state
 	let name = $state('');
 	let image = $state('');
 	let imagePullPolicy = $state<'Always' | 'IfNotPresent' | 'auto'>('auto');
-	// Deliberately not `startCommand`: that one is prefilled by repo detection,
-	// and an image deployment must not inherit a command detected for a repo.
 	let imageStartCommand = $state('');
 	let repoUrl = $state('');
 	let branch = $state('');
@@ -176,18 +188,8 @@
 	let envVars = $state([{ key: '', value: '' }]);
 	let envsManuallyEdited = $state(false);
 	let buildWithDepot = $state(false);
-	let envViewMode = $state<'ui' | 'raw'>('ui');
+	let envViewMode = $state<'grid' | 'raw'>('grid');
 	let envRawText = $state('');
-	let revealedIndices = $state<Set<number>>(new Set());
-
-	function toggleReveal(index: number) {
-		revealedIndices = new Set(revealedIndices);
-		if (revealedIndices.has(index)) {
-			revealedIndices.delete(index);
-		} else {
-			revealedIndices.add(index);
-		}
-	}
 	let volumes = $state<
 		Array<{
 			name: string;
@@ -199,8 +201,6 @@
 		}>
 	>([]);
 
-	// Smart monorepo detection: a Dockerfile inside a subfolder usually needs the
-	// repo root as its build context so it can reach shared files.
 	let buildFromRootTouched = false;
 	const dockerfileInSubdir = $derived(
 		dockerfilePath
@@ -242,7 +242,6 @@
 					fetchRepositories();
 				}
 			}
-			// Also fetch app install URL for the prompt
 			const installRes = await apiFetch('/apiv1/github/app/install');
 			if (installRes.ok) {
 				const data = await installRes.json();
@@ -260,7 +259,6 @@
 			const response = await apiFetch('/apiv1/github/repositories');
 			if (response.ok) {
 				const data = await response.json();
-				// Handle both new format { repositories, installations, source } and legacy array format
 				repositories = Array.isArray(data) ? data : (data.repositories ?? []);
 				if (data.source === 'app') {
 					hasGitHubApp = true;
@@ -286,9 +284,6 @@
 		dockerfileSearch = 'Dockerfile';
 		buildFromRoot = false;
 
-		// Detection is the slow half and it only needs a ref, so it runs against
-		// the repo's default branch straight away instead of waiting for the
-		// branch list to come back.
 		if (repo.default_branch) fetchDockerfiles(repo, repo.default_branch);
 
 		try {
@@ -422,8 +417,6 @@
 	}
 
 	async function fetchDockerfiles(repo: Repository, branchName: string) {
-		// Detection starts before the branch list lands, so two runs can overlap.
-		// Only the newest one is allowed to write to the form.
 		const run = ++detectRun;
 		loadingDockerfiles = true;
 		dockerfiles = [];
@@ -501,11 +494,9 @@
 					stages: string[];
 				} = await response.json();
 
-				// Set stages
 				dockerfileStages = info.stages;
 				selectedStage = '';
 
-				// Auto-fill ports from EXPOSE directives (only if user hasn't edited them)
 				if (info.exposedPorts.length > 0 && !portsManuallyEdited) {
 					ports = info.exposedPorts.map((p, i) => ({
 						name: `port-${i + 1}`,
@@ -515,7 +506,6 @@
 					}));
 				}
 
-				// Auto-fill env vars from ENV directives (only if user hasn't edited them)
 				if (info.envVars.length > 0 && !envsManuallyEdited) {
 					envVars = info.envVars.map((e) => ({ key: e.key, value: e.value }));
 				}
@@ -528,13 +518,6 @@
 	}
 
 	let nameTouched = false;
-	let repoPickerOpen = $state(false);
-
-	$effect(() => {
-		if (!repoPickerOpen) return;
-		const t = setTimeout(() => document.getElementById('nd-repo-search')?.focus(), 30);
-		return () => clearTimeout(t);
-	});
 
 	function suggestName(repoFullName: string) {
 		if (nameTouched || name) return;
@@ -557,7 +540,6 @@
 	function useDirectLink() {
 		clearRepoSelection();
 		directLinkMode = true;
-		repoPickerOpen = false;
 	}
 
 	function selectRepo(repo: Repository) {
@@ -585,6 +567,7 @@
 		selectedBranch = null;
 		branch = '';
 		branchSearch = '';
+		branchQuery = '';
 		dockerfiles = [];
 		dockerfilePath = 'Dockerfile';
 		dockerfileSearch = 'Dockerfile';
@@ -594,14 +577,12 @@
 	}
 
 	function parseRepoInput(value: string): { owner: string; repo: string; url: string } | null {
-		// Match full GitHub URL: https://github.com/owner/repo(.git)
 		const urlMatch = value.match(/(?:https?:\/\/)?github\.com\/([^/\s]+)\/([^/\s#?.]+)/);
 		if (urlMatch) {
 			const owner = urlMatch[1];
 			const repo = urlMatch[2].replace(/\.git$/, '');
 			return { owner, repo, url: `https://github.com/${owner}/${repo}.git` };
 		}
-		// Match owner/repo shorthand
 		const shortMatch = value.match(/^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/);
 		if (shortMatch) {
 			return {
@@ -627,7 +608,6 @@
 			if (response.ok) {
 				branches = await response.json();
 				if (branches.length > 0) {
-					// Try to find main/master, otherwise use first branch
 					const defaultBranch =
 						branches.find((b) => b.name === 'main') ??
 						branches.find((b) => b.name === 'master') ??
@@ -635,7 +615,6 @@
 					selectedBranch = defaultBranch;
 					branch = defaultBranch.name;
 					branchSearch = defaultBranch.name;
-					// Fetch dockerfiles using owner/repo directly
 					const dfResponse = await apiFetch(
 						`/apiv1/github/repositories/${owner}/${repoName}/dockerfiles?branch=${encodeURIComponent(defaultBranch.name)}`
 					);
@@ -645,7 +624,6 @@
 				}
 			}
 		} catch (e) {
-			// Repo doesn't exist or no access — that's fine, user can still proceed with manual branch
 			console.error('Failed to fetch branches:', e);
 		} finally {
 			loadingBranches = false;
@@ -660,11 +638,9 @@
 			clearTimeout(repoInputTimeout);
 		}
 
-		// Set repoUrl from manual input (owner/repo or full URL)
 		const parsed = parseRepoInput(value.trim());
 		if (parsed) {
 			repoUrl = parsed.url;
-			// Debounce fetching branches for the manually entered repo
 			repoInputTimeout = setTimeout(() => {
 				fetchBranchesManual(parsed.owner, parsed.repo);
 			}, 500);
@@ -717,30 +693,6 @@
 		if (ports.length > 1) {
 			ports = ports.filter((_, i) => i !== index);
 		}
-	}
-
-	function addEnvVar() {
-		envsManuallyEdited = true;
-		envVars = [...envVars, { key: '', value: '' }];
-	}
-
-	function removeEnvVar(index: number) {
-		envsManuallyEdited = true;
-		if (envVars.length > 1) {
-			envVars = envVars.filter((_, i) => i !== index);
-		}
-	}
-
-	function switchEnvView(mode: 'ui' | 'raw') {
-		if (mode === envViewMode) return;
-		envsManuallyEdited = true;
-		if (mode === 'raw') {
-			envRawText = envVarsToRaw(envVars);
-		} else {
-			const parsed = rawToEnvVars(envRawText);
-			envVars = parsed.length ? [...parsed, { key: '', value: '' }] : [{ key: '', value: '' }];
-		}
-		envViewMode = mode;
 	}
 
 	function addVolume() {
@@ -802,7 +754,6 @@
 				formError = 'Branch is required';
 				return;
 			}
-			// Dockerfile path is only required for dockerfile builds
 			if (buildType === 'dockerfile' && !dockerfilePath.trim()) {
 				formError = 'Dockerfile path is required for Dockerfile builds';
 				return;
@@ -842,9 +793,6 @@
 		formError = null;
 
 		try {
-			// Materialize pending project first, so we don't leave orphan projects
-			// behind if the deployment form fails validation. By this point we've
-			// already validated every deployment-side field above.
 			let targetProjectId = project?.id;
 			if (pendingProjectName) {
 				const created = await createPendingProject();
@@ -938,7 +886,6 @@
 				color: 'success'
 			});
 
-			// Redirect to progress page for repository deployments, main page for image deployments
 			if (deploymentSource !== 'image') {
 				goto(`/${orgSlug}/deployments/${deployment.id}/progress`);
 			} else {
@@ -951,9 +898,11 @@
 		}
 	}
 
+	let reposRequested = false;
 	$effect(() => {
-		if (deploymentSource === 'github' && githubLinked && repositories.length === 0) {
-			fetchRepositories();
+		if (deploymentSource === 'github' && githubLinked && !reposRequested) {
+			reposRequested = true;
+			if (repositories.length === 0) fetchRepositories();
 		}
 	});
 
@@ -963,7 +912,6 @@
 	});
 
 	$effect(() => {
-		// Re-run whenever the route params change so the UI matches the new project
 		orgSlug;
 		projectSlug;
 		wsSlug;
@@ -971,10 +919,6 @@
 			fetchProjectData();
 			return;
 		}
-		// Reached without a project: the org has none yet, so the name travels in
-		// the query and the project is created at submit alongside the deployment.
-		// Nothing to fetch, and loading starts true, so clear it or the form never
-		// renders.
 		if (!seededPendingProject) {
 			seededPendingProject = true;
 			pendingProjectName = $page.url.searchParams.get('project');
@@ -1006,7 +950,7 @@
 
 	const filteredRepos = $derived(
 		repositories.filter((r) => {
-			const q = repoSearch.toLowerCase();
+			const q = selectedRepo ? '' : repoSearch.toLowerCase();
 			const matchesText =
 				r.full_name.toLowerCase().includes(q) ||
 				r.full_name.split('/')[1].toLowerCase().includes(q);
@@ -1024,38 +968,77 @@
 					`${parsedRepoInput.owner}/${parsedRepoInput.repo}`.toLowerCase()
 			)
 	);
-	const filteredBranches = $derived(
-		branches.filter((b) => b.name.toLowerCase().includes(branchQuery.toLowerCase()))
+	const repoOptions = $derived<DropdownOption[]>(
+		filteredRepos.map((r) => {
+			const [owner, repoName] = r.full_name.split('/');
+			return { value: r.full_name, label: owner === selectedAccount ? repoName : r.full_name };
+		})
 	);
 	const customBranch = $derived.by(() => {
 		const typed = branchQuery.trim();
 		if (!typed || branches.some((b) => b.name === typed)) return null;
 		return typed;
 	});
+	const branchOptions = $derived<DropdownOption[]>([
+		...(branch && !branches.some((b) => b.name === branch)
+			? [{ value: branch, label: branch, mono: true }]
+			: []),
+		...branches.map((b) => ({ value: b.name, label: b.name, mono: true }))
+	]);
 
-	$effect(() => {
-		if (branchPickerOpen) branchQuery = '';
-	});
+	function onRepoQuery(next: string) {
+		if (selectedRepo) {
+			repoSearch = next;
+			return;
+		}
+		handleRepoSearchInput(next);
+	}
+
+	function pickRepoByName(fullName: string) {
+		const repo = repositories.find((r) => r.full_name === fullName);
+		if (repo) selectRepo(repo);
+	}
+
+	function pickBranchByName(name: string) {
+		const match = branches.find((b) => b.name === name);
+		if (match) selectBranch(match);
+		else useCustomBranch(name);
+	}
 </script>
 
-<div class="nd-page">
-	{#if error}
-		<div class="nd-error">{error}</div>
-	{/if}
+{#snippet busy()}<Spinner size={13} />{/snippet}
 
-	{#if loading}
-		<!-- Skeleton -->
-		<div class="skeleton" style="height: 0.8125rem; width: 6rem; margin-bottom: 1rem;"></div>
-		<div class="skeleton" style="height: 1.5rem; width: 12rem; margin-bottom: 1.5rem;"></div>
-		<div class="nd-card">
-			<div class="skeleton" style="height: 1rem; width: 8rem; margin-bottom: 1rem;"></div>
-			<div class="nd-grid-2">
-				<div class="skeleton" style="height: 2.25rem; border-radius: var(--radius-sm);"></div>
-				<div class="skeleton" style="height: 2.25rem; border-radius: var(--radius-sm);"></div>
-			</div>
-		</div>
-	{:else if project || pendingProjectName}
-		<Breadcrumb
+{#snippet clearDirectLink()}
+	<Button
+		variant="ghost"
+		size="sm"
+		icon={X}
+		label="Clear repository"
+		onclick={clearRepoSelection}
+	/>
+{/snippet}
+
+{#snippet privateBadge(option: DropdownOption)}
+	{#if repositories.find((r) => r.full_name === option.value)?.private}
+		<Badge tone="neutral">Private</Badge>
+	{/if}
+{/snippet}
+
+{#snippet repoEmpty()}
+	{#if loadingRepos}
+		Loading your repositories
+	{:else if reposError}
+		{reposError} <a class="text-link" href="/user/settings">Connect GitHub</a>
+	{:else if !repoSearch}
+		Search your repos, or paste owner/repo or a GitHub URL
+	{:else if !parsedRepoInput}
+		No matches. Paste owner/repo or a GitHub URL to deploy any public repo.
+	{/if}
+{/snippet}
+
+<Page title="New app" description="Configure and launch a new service." width="narrow">
+	{#snippet eyebrow()}
+		<Breadcrumbs
 			crumbs={[
 				{ label: 'Home', href: `/${orgSlug}` },
 				...(project || projectSlug
@@ -1064,50 +1047,51 @@
 				{ label: 'New app' }
 			]}
 		/>
+	{/snippet}
 
-		<div class="nd-hero" {@attach motionStagger({ index: 0, from: { y: 12 } })}>
-			<h1 class="nd-page-title">New app</h1>
-			<p class="nd-page-subtitle">Configure and launch a new service.</p>
-		</div>
+	{#snippet footer()}
+		{#if !loading && (project || pendingProjectName)}
+			<Button variant="ghost" href={basePath}>Cancel</Button>
+			<Button variant="primary" onclick={submit} loading={submitting}>Deploy</Button>
+		{/if}
+	{/snippet}
 
-		<!-- ═══ Source card ═══ -->
-		<div class="nd-main-card" {@attach motionStagger({ index: 1, from: { y: 14 } })}>
-			<div class="nd-source-picker">
-				<span class="nd-source-label">Source</span>
-				<div class="nd-pill-group">
-					<button
-						class="nd-pill"
-						class:nd-pill-active={deploymentSource === 'image'}
-						onclick={() => (deploymentSource = 'image')}
-					>
-						<Container class="h-3.5 w-3.5" /> Image
-					</button>
-					<button
-						class="nd-pill"
-						class:nd-pill-active={deploymentSource === 'github'}
-						onclick={() => (deploymentSource = 'github')}
-					>
-						<Github class="h-3.5 w-3.5" /> GitHub
-					</button>
-					<button
-						class="nd-pill"
-						class:nd-pill-active={deploymentSource === 'git'}
-						onclick={() => (deploymentSource = 'git')}
-					>
-						<GitBranch class="h-3.5 w-3.5" /> Git
-					</button>
+	{#if error}
+		<Alert tone="error">{error}</Alert>
+	{/if}
+
+	{#if loading}
+		<SectionCard>
+			<div class="nd-stack">
+				<Skeleton width="8rem" height="1rem" />
+				<div class="nd-pair">
+					<Skeleton height="2rem" rounded="calc(var(--radius-control) * var(--corner-scale))" />
+					<Skeleton height="2rem" rounded="calc(var(--radius-control) * var(--corner-scale))" />
 				</div>
 			</div>
+		</SectionCard>
+	{:else if project || pendingProjectName}
+		<SectionCard title="Source">
+			{#snippet actions()}
+				<SegmentedControl
+					label="Source"
+					size="sm"
+					options={SOURCE_OPTIONS}
+					bind:value={
+						() => deploymentSource, (v) => (deploymentSource = v as typeof deploymentSource)
+					}
+				/>
+			{/snippet}
 
-			<div class="nd-card-body">
+			<div class="nd-stack">
 				{#key deploymentSource}
-					<div class="nd-source-pane" {@attach motionStagger({ index: 0, from: { y: 8 } })}>
+					<div class="nd-stack" {@attach motionStagger({ index: 0, from: { y: 8 } })}>
 						{#if deploymentSource === 'image'}
 							<Field
 								label="Docker image"
 								hint="Include the registry and tag. Public images work out of the box."
 							>
-								<Input bind:value={image} placeholder="ghcr.io/org/app:latest" class="font-mono" />
+								<Input bind:value={image} placeholder="ghcr.io/org/app:latest" mono />
 							</Field>
 							<Field
 								label="Pull policy"
@@ -1130,13 +1114,10 @@
 								/>
 							</Field>
 							{#if imagePullPolicy === 'IfNotPresent' && isMutableTag(image)}
-								<div class="nd-warning" style="margin-top: 0.75rem;">
-									<p class="nd-warning-title">This tag can move</p>
-									<p class="nd-warning-desc">
-										Pinning to the cached image means pushing over this tag will not show up on a
-										restart. Automatic handles this for you.
-									</p>
-								</div>
+								<Alert tone="warning" title="This tag can move">
+									Pinning to the cached image means pushing over this tag will not show up on a
+									restart. Automatic handles this for you.
+								</Alert>
 							{/if}
 							<Field
 								label="Start command"
@@ -1145,7 +1126,7 @@
 								<Input
 									bind:value={imageStartCommand}
 									placeholder="Whatever the image starts"
-									class="font-mono"
+									mono
 								/>
 							</Field>
 						{:else if deploymentSource === 'git'}
@@ -1162,35 +1143,34 @@
 							/>
 						{:else}
 							{#if !githubLinked}
-								<div class="nd-warning" style="margin-bottom: 0.75rem;">
-									<p class="nd-warning-title">GitHub not connected</p>
-									<p class="nd-warning-desc">
-										You can deploy any public repository by entering its slug (e.g. <code
-											>owner/repo</code
-										>) or URL below. <a href="/user/settings">Connect GitHub</a> to also access your private
-										repos.
-									</p>
-								</div>
-							{:else if !hasGitHubApp && repositories.length === 0 && !loadingRepos}
-								<div class="nd-warning" style="margin-bottom: 0.75rem;">
-									<p class="nd-warning-title">Install the GitHub App for better access</p>
-									<p class="nd-warning-desc">
-										The GitHub App lets you choose exactly which repos and orgs to grant access to,
-										with minimal permissions.
-									</p>
-									{#if githubAppInstallUrl}
-										<Button
-											variant="secondary"
-											size="sm"
-											href={githubAppInstallUrl}
-											target="_blank"
-											style="margin-top: 0.5rem;">Install GitHub App</Button
+								<Alert tone="warning" title="GitHub not connected">
+									You can deploy any public repository by entering its slug (like <code
+										class="font-mono">owner/repo</code
+									>) or URL below. Connect GitHub to also access your private repos.
+									{#snippet actions()}
+										<Button variant="secondary" size="sm" href="/user/settings"
+											>Connect GitHub</Button
 										>
-									{/if}
-								</div>
+									{/snippet}
+								</Alert>
+							{:else if !hasGitHubApp && repositories.length === 0 && !loadingRepos}
+								<Alert tone="warning" title="Install the GitHub App for better access">
+									The GitHub App lets you choose exactly which repos and orgs to grant access to,
+									with minimal permissions.
+									{#snippet actions()}
+										{#if githubAppInstallUrl}
+											<Button
+												variant="secondary"
+												size="sm"
+												href={githubAppInstallUrl}
+												target="_blank">Install GitHub App</Button
+											>
+										{/if}
+									{/snippet}
+								</Alert>
 							{/if}
 							<Field label="Repository">
-								<div class="nd-repo-split">
+								<div class="nd-repo">
 									<RepoAccountPicker
 										{accounts}
 										selected={selectedAccount}
@@ -1200,1686 +1180,474 @@
 										onDirectLink={useDirectLink}
 									/>
 									{#if directLinkMode}
-										<div class="picker-wrap">
-											<Input
-												value={repoSearch}
-												oninput={(e: Event) =>
-													handleRepoSearchInput((e.target as HTMLInputElement).value)}
-												placeholder="https://github.com/owner/repo"
-												class="font-mono pr-9"
-											/>
-											{#if loadingBranches}
-												<span class="picker-suffix"><Loader2 class="h-4 w-4 animate-spin" /></span>
-											{:else if repoSearch}
-												<button
-													type="button"
-													class="picker-suffix picker-clear"
-													aria-label="Clear repository"
-													onclick={clearRepoSelection}
-												>
-													<X size={15} />
-												</button>
-											{/if}
-										</div>
+										<Input
+											value={repoSearch}
+											oninput={(e: Event) =>
+												handleRepoSearchInput((e.target as HTMLInputElement).value)}
+											placeholder="https://github.com/owner/repo"
+											aria-label="Repository URL"
+											class="font-mono"
+											suffix={loadingBranches ? busy : repoSearch ? clearDirectLink : undefined}
+										/>
 									{:else}
-										<PopoverPanel sameWidth bind:open={repoPickerOpen}>
-											{#snippet trigger(attrs, open)}
-												<div class="picker-wrap">
-													<button
-														type="button"
-														class="picker-trigger"
-														class:picker-trigger--locked={!!selectedRepo}
-														{...attrs}
-														disabled={!!selectedRepo}
-													>
-														{#if selectedRepo}
-															<Github class="h-4 w-4 shrink-0" />
-															<span class="picker-value">{selectedRepo.full_name}</span>
-														{:else if repoSearch}
-															<span class="picker-value">{repoSearch}</span>
-														{:else}
-															<span class="picker-placeholder">Search your repositories</span>
-														{/if}
-													</button>
-													{#if loadingRepos || loadingBranches}
-														<span class="picker-suffix"
-															><Loader2 class="h-4 w-4 animate-spin" /></span
-														>
-													{:else if selectedRepo}
-														<button
-															type="button"
-															class="picker-suffix picker-clear"
-															aria-label="Clear repository"
-															onclick={clearRepoSelection}
-														>
-															<X size={15} />
-														</button>
-													{:else}
-														<span
-															class="picker-suffix picker-chevron"
-															class:picker-chevron--open={open}><ChevronDown size={15} /></span
-														>
-													{/if}
-												</div>
-											{/snippet}
-											{#snippet children({ close })}
-												<Input
-													id="nd-repo-search"
-													value={repoSearch}
-													oninput={(e: Event) =>
-														handleRepoSearchInput((e.target as HTMLInputElement).value)}
-													placeholder="owner/repo or GitHub URL"
-													readonly={selectedRepo !== null}
-												/>
-												<div class="picker-list">
-													{#if parsedRepoInput && !parsedRepoIsListed}
-														<button
-															type="button"
-															class="picker-option picker-option--manual"
-															onclick={() => {
-																confirmManualRepo(parsedRepoInput);
-																close();
-															}}
-														>
-															<Github class="h-4 w-4 shrink-0" />
-															<span class="picker-option-text"
-																>Use <strong>{parsedRepoInput.owner}/{parsedRepoInput.repo}</strong
-																></span
-															>
-														</button>
-													{/if}
-													{#if loadingRepos}
-														<div class="picker-empty">
-															<Loader2 class="h-4 w-4 animate-spin" /> Loading your repositories
-														</div>
-													{:else}
-														{#each filteredRepos as repo (repo.full_name)}
-															<button
-																type="button"
-																class="picker-option"
-																onclick={() => {
-																	selectRepo(repo);
-																	close();
-																}}
-															>
-																<Github class="h-4 w-4 shrink-0" />
-																<span class="picker-option-text">
-																	{repo.full_name.split('/')[0] === selectedAccount
-																		? repo.full_name.split('/')[1]
-																		: repo.full_name}
-																</span>
-																{#if repo.private}<Badge tone="neutral">Private</Badge>{/if}
-															</button>
-														{:else}
-															{#if reposError}
-																<div class="picker-note">
-																	{reposError}
-																	<a href="/user/settings">Connect GitHub</a>
-																</div>
-															{:else if !repoSearch}
-																<div class="picker-empty">
-																	Search your repos, or paste owner/repo or a GitHub URL
-																</div>
-															{:else if !parsedRepoInput}
-																<div class="picker-empty">
-																	No matches. Paste owner/repo or a GitHub URL to deploy any public
-																	repo.
-																</div>
-															{/if}
-														{/each}
-													{/if}
-												</div>
-											{/snippet}
-										</PopoverPanel>
+										<Combobox
+											label="Repository"
+											icon={Github}
+											value={selectedRepo?.full_name ?? ''}
+											bind:query={() => repoSearch, onRepoQuery}
+											options={repoOptions}
+											loading={loadingRepos || loadingBranches}
+											placeholder="Search your repositories"
+											creatable={!!parsedRepoInput && !parsedRepoIsListed}
+											createLabel={() =>
+												parsedRepoInput
+													? `Use ${parsedRepoInput.owner}/${parsedRepoInput.repo}`
+													: ''}
+											oncreate={() => parsedRepoInput && confirmManualRepo(parsedRepoInput)}
+											onchange={pickRepoByName}
+											onclear={clearRepoSelection}
+											trailing={privateBadge}
+											empty={repoEmpty}
+										/>
 									{/if}
 								</div>
 							</Field>
 
 							{#if selectedRepo || repoUrl}
 								<Field label="Branch">
-									<PopoverPanel sameWidth bind:open={branchPickerOpen}>
-										{#snippet trigger(attrs, open)}
-											<div class="picker-wrap">
-												<button
-													type="button"
-													class="picker-trigger"
-													disabled={loadingBranches}
-													{...attrs}
-												>
-													{#if branchSearch}
-														<span class="picker-value">{branchSearch}</span>
-													{:else}
-														<span class="picker-placeholder">main</span>
-													{/if}
-												</button>
-												{#if loadingBranches}
-													<span class="picker-suffix"><Loader2 class="h-4 w-4 animate-spin" /></span
-													>
-												{:else if selectedBranch}
-													<button
-														type="button"
-														class="picker-suffix picker-clear"
-														aria-label="Clear branch"
-														onclick={clearBranchSelection}
-													>
-														<X size={15} />
-													</button>
-												{:else}
-													<span
-														class="picker-suffix picker-chevron"
-														class:picker-chevron--open={open}><ChevronDown size={15} /></span
-													>
-												{/if}
-											</div>
-										{/snippet}
-										{#snippet children({ close })}
-											<Input
-												value={branchQuery}
-												oninput={(e: Event) => (branchQuery = (e.target as HTMLInputElement).value)}
-												placeholder="Search branches"
-											/>
-											<div class="picker-list">
-												{#if customBranch}
-													<button
-														type="button"
-														class="picker-option"
-														onclick={() => {
-															useCustomBranch(customBranch);
-															close();
-														}}
-													>
-														<span class="picker-option-text">
-															Use <strong>{customBranch}</strong>
-														</span>
-													</button>
-												{/if}
-												{#each filteredBranches as b (b.name)}
-													<button
-														type="button"
-														class="picker-option"
-														onclick={() => {
-															selectBranch(b);
-															close();
-														}}
-													>
-														<span class="picker-option-text">{b.name}</span>
-													</button>
-												{:else}
-													{#if !customBranch}
-														<div class="picker-empty">
-															{branches.length
-																? 'No matching branches'
-																: 'No branches found. Type a name to use anyway.'}
-														</div>
-													{/if}
-												{/each}
-											</div>
-										{/snippet}
-									</PopoverPanel>
+									<Combobox
+										label="Branch"
+										icon={GitBranch}
+										value={branch}
+										bind:query={branchQuery}
+										options={branchOptions}
+										loading={loadingBranches}
+										disabled={loadingBranches}
+										placeholder="main"
+										creatable={!!customBranch}
+										createLabel={(q) => `Use ${q}`}
+										oncreate={(q) => useCustomBranch(customBranch ?? q)}
+										onchange={pickBranchByName}
+										onclear={clearBranchSelection}
+										empty={branches.length
+											? 'No matching branches'
+											: 'No branches found. Type a name to use anyway.'}
+									/>
 								</Field>
 							{/if}
 
 							{#if selectedBranch || branch}
-								<div class="nd-cfg">
-									<div class="nd-cfg-row">
-										<span class="nd-cfg-label" id="nd-framework-label">Build with</span>
-										<div class="nd-cfg-val">
-											{#if loadingDockerfiles}
-												<Skeleton height="2.625rem" rounded="0.5rem" />
-											{:else}
+								<Field label="Build with" layout="row" for="nd-framework">
+									<div class="nd-cfg-val">
+										{#if loadingDockerfiles}
+											<Skeleton
+												height="2rem"
+												rounded="calc(var(--radius-control) * var(--corner-scale))"
+											/>
+										{:else}
+											<Dropdown
+												id="nd-framework"
+												value={frameworkValue}
+												options={FRAMEWORK_OPTIONS}
+												onchange={onFrameworkPicked}
+											>
+												{#snippet icon(value)}
+													<FrameworkIcon
+														framework={value === DOCKERFILE_OPTION ? 'dockerfile' : value}
+													/>
+												{/snippet}
+											</Dropdown>
+										{/if}
+									</div>
+								</Field>
+
+								{#if !loadingDockerfiles}
+									{#if buildType === 'railpack' && detectedApps.length > 1}
+										<Field label="Root directory" layout="row" for="nd-root">
+											<div class="nd-cfg-val">
 												<Dropdown
-													id="nd-framework"
-													ariaLabelledby="nd-framework-label"
-													value={frameworkValue}
-													options={FRAMEWORK_OPTIONS}
-													onchange={onFrameworkPicked}
+													id="nd-root"
+													value={rootDirectory}
+													options={rootDirectoryOptions}
+													onchange={(dir) => {
+														const app = detectedApps.find((a) => a.dir === dir);
+														if (app) selectRootDirectory(app);
+													}}
 												>
-													{#snippet icon(value)}
-														<FrameworkIcon
-															framework={value === DOCKERFILE_OPTION ? 'dockerfile' : value}
-														/>
+													{#snippet icon(dir)}
+														<FrameworkIcon framework={frameworkOfDir(dir)} />
 													{/snippet}
 												</Dropdown>
-											{/if}
-										</div>
-									</div>
-
-									{#if !loadingDockerfiles}
-										{#if buildType === 'railpack' && detectedApps.length > 1}
-											<div class="nd-cfg-row">
-												<span class="nd-cfg-label" id="nd-root-label">Root directory</span>
-												<div class="nd-cfg-val">
-													<Dropdown
-														id="nd-root"
-														ariaLabelledby="nd-root-label"
-														value={rootDirectory}
-														options={rootDirectoryOptions}
-														onchange={(dir) => {
-															const app = detectedApps.find((a) => a.dir === dir);
-															if (app) selectRootDirectory(app);
-														}}
-													>
-														{#snippet icon(dir)}
-															<FrameworkIcon framework={frameworkOfDir(dir)} />
-														{/snippet}
-													</Dropdown>
-												</div>
 											</div>
-										{/if}
+										</Field>
+									{/if}
 
-										<details class="nd-fold" bind:open={buildFoldOpen}>
-											<summary class="nd-fold-summary">
-												<span
-													class="nd-fold-chevron"
-													{@attach springRotate(() => buildFoldOpen, { rest: 0, on: 180 })}
-													><ChevronDown size={15} /></span
-												>
-												Build and output settings
-												<span class="nd-fold-note">Optional</span>
-											</summary>
-											<div class="nd-fold-body">
-												{#if buildType === 'dockerfile'}
-													<Field label="Dockerfile path">
-														{#if dockerfiles.length > 1}
-															<Select
-																value={dockerfilePath}
-																onchange={(e: Event) =>
-																	selectDockerfile((e.currentTarget as HTMLSelectElement).value)}
-															>
-																{#each dockerfiles as df (df)}
-																	<option value={df}>{df}</option>
-																{/each}
-															</Select>
-														{:else}
-															<Input
-																value={dockerfilePath}
-																oninput={(e: Event) =>
-																	handleDockerfileInput(
-																		(e.currentTarget as HTMLInputElement).value
-																	)}
-																placeholder="Dockerfile"
-																class="font-mono"
-															/>
-														{/if}
-													</Field>
-													{#if dockerfileStages.length > 0}
-														<Field
-															label="Build stage"
-															hint="Which stage to stop at. The final stage is the image the Dockerfile produces on its own."
+									<Disclosure
+										title="Build and output settings"
+										note="Optional"
+										bind:open={buildFoldOpen}
+									>
+										<div class="nd-stack">
+											{#if buildType === 'dockerfile'}
+												<Field label="Dockerfile path">
+													{#if dockerfiles.length > 1}
+														<Select
+															value={dockerfilePath}
+															onchange={(e: Event) =>
+																selectDockerfile((e.currentTarget as HTMLSelectElement).value)}
 														>
-															<Select bind:value={selectedStage}>
-																<option value="">Final stage</option>
-																{#each dockerfileStages as stage (stage)}
-																	<option value={stage}>{stage}</option>
-																{/each}
-															</Select>
-														</Field>
+															{#each dockerfiles as df (df)}
+																<option value={df}>{df}</option>
+															{/each}
+														</Select>
+													{:else}
+														<Input
+															value={dockerfilePath}
+															oninput={(e: Event) =>
+																handleDockerfileInput((e.currentTarget as HTMLInputElement).value)}
+															placeholder="Dockerfile"
+															class="font-mono"
+														/>
 													{/if}
-													<ToggleRow
-														bind:checked={buildFromRoot}
-														onchange={() => (buildFromRootTouched = true)}
-														label="Build from the repository root"
-														hint="Turn this on if your Dockerfile copies files from outside its own folder."
-													/>
-												{:else}
-													<p class="nd-fold-hint">
-														Leave a field empty to use what we detect. Anything you set here
-														overrides a <code>railpack.json</code> in the repository.
-													</p>
-													<Field label="Install command">
-														<Input
-															value={installCommand}
-															oninput={(e: Event) => {
-																installCommand = (e.currentTarget as HTMLInputElement).value;
-																buildSettingsTouched = true;
-															}}
-															placeholder="Detected automatically"
-															class="font-mono"
-														/>
-													</Field>
-													<Field label="Build command">
-														<Input
-															value={buildCommand}
-															oninput={(e: Event) => {
-																buildCommand = (e.currentTarget as HTMLInputElement).value;
-																buildSettingsTouched = true;
-															}}
-															placeholder="Detected automatically"
-															class="font-mono"
-														/>
-													</Field>
+												</Field>
+												{#if dockerfileStages.length > 0}
 													<Field
-														label="Output directory"
-														hint="Set this to serve the built files as a static site instead of running a server."
+														label="Build stage"
+														hint="Which stage to stop at. The final stage is the image the Dockerfile produces on its own."
 													>
-														<Input
-															value={outputDirectory}
-															oninput={(e: Event) => {
-																outputDirectory = (e.currentTarget as HTMLInputElement).value;
-																buildSettingsTouched = true;
-															}}
-															placeholder="Detected automatically"
-															class="font-mono"
-														/>
-													</Field>
-													<Field label="Start command">
-														<Input
-															value={startCommand}
-															oninput={(e: Event) => {
-																startCommand = (e.currentTarget as HTMLInputElement).value;
-																buildSettingsTouched = true;
-															}}
-															placeholder={outputDirectory
-																? 'Not used for a static site'
-																: 'Detected automatically'}
-															disabled={Boolean(outputDirectory)}
-															class="font-mono"
-														/>
+														<Select bind:value={selectedStage}>
+															<option value="">Final stage</option>
+															{#each dockerfileStages as stage (stage)}
+																<option value={stage}>{stage}</option>
+															{/each}
+														</Select>
 													</Field>
 												{/if}
-											</div>
-										</details>
-									{/if}
-								</div>
+												<ToggleRow
+													bind:checked={buildFromRoot}
+													onchange={() => (buildFromRootTouched = true)}
+													label="Build from the repository root"
+													hint="Turn this on if your Dockerfile copies files from outside its own folder."
+												/>
+											{:else}
+												<p class="text-callout text-muted">
+													Leave a field empty to use what we detect. Anything you set here overrides
+													a
+													<code class="font-mono text-fg">railpack.json</code> in the repository.
+												</p>
+												<Field label="Install command">
+													<Input
+														value={installCommand}
+														oninput={(e: Event) => {
+															installCommand = (e.currentTarget as HTMLInputElement).value;
+															buildSettingsTouched = true;
+														}}
+														placeholder="Detected automatically"
+														class="font-mono"
+													/>
+												</Field>
+												<Field label="Build command">
+													<Input
+														value={buildCommand}
+														oninput={(e: Event) => {
+															buildCommand = (e.currentTarget as HTMLInputElement).value;
+															buildSettingsTouched = true;
+														}}
+														placeholder="Detected automatically"
+														class="font-mono"
+													/>
+												</Field>
+												<Field
+													label="Output directory"
+													hint="Set this to serve the built files as a static site instead of running a server."
+												>
+													<Input
+														value={outputDirectory}
+														oninput={(e: Event) => {
+															outputDirectory = (e.currentTarget as HTMLInputElement).value;
+															buildSettingsTouched = true;
+														}}
+														placeholder="Detected automatically"
+														class="font-mono"
+													/>
+												</Field>
+												<Field label="Start command">
+													<Input
+														value={startCommand}
+														oninput={(e: Event) => {
+															startCommand = (e.currentTarget as HTMLInputElement).value;
+															buildSettingsTouched = true;
+														}}
+														placeholder={outputDirectory
+															? 'Not used for a static site'
+															: 'Detected automatically'}
+														disabled={Boolean(outputDirectory)}
+														class="font-mono"
+													/>
+												</Field>
+											{/if}
+										</div>
+									</Disclosure>
+								{/if}
 							{/if}
 						{/if}
 					</div>
 				{/key}
+
 				{#if detectedScore && deploymentSource !== 'image'}
-					<div class="nd-score">
-						<span class="nd-score-file">{detectedScore.file}</span>
-						<span class="nd-score-text">
-							{#if detectedScore.resources.filter((r) => r.type === 'postgres').length > 0}
-								Provisions {detectedScore.resources
-									.filter((r) => r.type === 'postgres')
-									.map((r) => `Postgres “${r.name}”`)
-									.join(', ')} and connects it.
-							{/if}
-							{#if detectedScore.ports.length > 0}
-								Ports {detectedScore.ports.join(', ')}.
-							{/if}
-							{#if detectedScore.domain}
-								Routes {detectedScore.domain}.
-							{/if}
-						</span>
-						{#if detectedScore.warnings.length > 0}
-							<span class="nd-score-warn">{detectedScore.warnings[0]}</span>
+					<Alert tone="info" title="Configured by {detectedScore.file}">
+						{#if detectedScore.resources.filter((r) => r.type === 'postgres').length > 0}
+							Provisions {detectedScore.resources
+								.filter((r) => r.type === 'postgres')
+								.map((r) => `Postgres “${r.name}”`)
+								.join(', ')} and connects it.
 						{/if}
+						{#if detectedScore.ports.length > 0}
+							Ports {detectedScore.ports.join(', ')}.
+						{/if}
+						{#if detectedScore.domain}
+							Routes {detectedScore.domain}.
+						{/if}
+						{#if detectedScore.warnings.length > 0}
+							<p class="text-warning">{detectedScore.warnings[0]}</p>
+						{/if}
+					</Alert>
+				{/if}
+			</div>
+
+			{#snippet footer()}
+				<div class="nd-owner">
+					<ProjectSwitcher
+						currentProjectName={project?.name || projectSlug}
+						pathSuffix={`/deployments/new?source=${deploymentSource}`}
+						{pendingProjectName}
+						onPendingProjectChange={(n) => (pendingProjectName = n)}
+					/>
+					{#if project?.id && !pendingProjectName}
+						<EnvironmentSwitcher projectId={project.id} bind:selectedEnvId />
+					{/if}
+					<span class="nd-slash" aria-hidden="true">/</span>
+					<div class="nd-name font-mono">
+						<Input
+							bind:value={name}
+							oninput={() => (nameTouched = true)}
+							placeholder="app-name"
+							aria-label="App name"
+							size="sm"
+						/>
 					</div>
-				{/if}
-			</div>
-
-			<div class="nd-owner-row nd-owner-row--after">
-				<ProjectSwitcher
-					currentProjectName={project?.name || projectSlug}
-					pathSuffix={`/deployments/new?source=${deploymentSource}`}
-					{pendingProjectName}
-					onPendingProjectChange={(n) => (pendingProjectName = n)}
-				/>
-				{#if project?.id && !pendingProjectName}
-					<EnvironmentSwitcher projectId={project.id} bind:selectedEnvId />
-				{/if}
-				<span class="nd-slash">/</span>
-				<input
-					type="text"
-					bind:value={name}
-					oninput={() => (nameTouched = true)}
-					placeholder="app-name"
-					class="nd-name-input"
-				/>
-			</div>
-		</div>
-
-		<!-- ═══ Networking ═══ -->
-		<div class="nd-card" {@attach motionStagger({ index: 2, from: { y: 14 } })}>
-			<div class="nd-card-header">
-				<div>
-					<h2 class="nd-card-title">Ports</h2>
-					<p class="nd-hint" style="margin-top: 0.125rem;">
-						The port your app listens on inside the container.
-					</p>
 				</div>
-				<Button variant="secondary" size="sm" onclick={addPort}
-					><Plus class="h-4 w-4" /> Add port</Button
-				>
-			</div>
+			{/snippet}
+		</SectionCard>
+
+		<SectionCard title="Ports" description="The port your app listens on inside the container.">
+			{#snippet actions()}
+				<Button size="sm" variant="secondary" icon={Plus} onclick={addPort}>Add port</Button>
+			{/snippet}
 			<div class="nd-stack">
 				{#each ports as port, index (index)}
-					<div class="nd-port-row-simple">
-						<div style="flex: 1; min-width: 80px; max-width: 120px;">
-							<input
+					<div class="nd-port">
+						<div class="nd-port-num">
+							<Input
 								type="number"
+								size="sm"
 								bind:value={port.containerPort}
 								oninput={() => (portsManuallyEdited = true)}
 								min="1"
 								placeholder="80"
-								class="input"
+								aria-label="Container port"
+								class="font-mono"
 							/>
 						</div>
-						<div class="nd-protocol-toggle">
-							<button
-								type="button"
-								class="nd-proto-btn"
-								class:nd-proto-active={port.protocol === 'TCP'}
-								onclick={() => {
-									port.protocol = 'TCP';
-									portsManuallyEdited = true;
-								}}>TCP</button
-							>
-							<button
-								type="button"
-								class="nd-proto-btn"
-								class:nd-proto-active={port.protocol === 'UDP'}
-								onclick={() => {
-									port.protocol = 'UDP';
-									portsManuallyEdited = true;
-								}}>UDP</button
-							>
-						</div>
-						<button
-							onclick={() => removePort(index)}
+						<SegmentedControl
+							label="Protocol"
+							size="sm"
+							options={PROTOCOL_OPTIONS}
+							bind:value={port.protocol}
+							onchange={() => (portsManuallyEdited = true)}
+						/>
+						<Button
+							variant="ghost"
+							size="sm"
+							icon={Trash2}
+							label="Remove port"
 							disabled={ports.length <= 1}
-							class="nd-icon-btn nd-icon-btn-danger"
-						>
-							<Trash2 class="h-4 w-4" />
-						</button>
+							onclick={() => removePort(index)}
+						/>
 					</div>
 				{/each}
-
-				<div class="nd-url-toggle">
+				<Card padding="sm">
 					<ToggleRow
 						bind:checked={autoUrl}
 						label="Generate a URL"
 						hint="An org-only https address, live the moment it deploys. Skip for workers."
 					/>
-				</div>
+				</Card>
 			</div>
-		</div>
+		</SectionCard>
 
-		<!-- ═══ Environment Variables ═══ -->
-		<div class="nd-card" {@attach motionStagger({ index: 3, from: { y: 14 } })}>
-			<div class="nd-card-header">
-				<h2 class="nd-card-title">Environment variables</h2>
-				<div class="nd-pill-group">
-					<button
-						type="button"
-						class="nd-pill"
-						class:nd-pill-active={envViewMode === 'ui'}
-						onclick={() => switchEnvView('ui')}>Editor</button
-					>
-					<button
-						type="button"
-						class="nd-pill"
-						class:nd-pill-active={envViewMode === 'raw'}
-						onclick={() => switchEnvView('raw')}>Raw</button
-					>
-				</div>
-			</div>
+		<SectionCard title="Environment variables">
+			{#snippet actions()}
+				<SegmentedControl
+					label="Editor mode"
+					size="sm"
+					options={ENV_MODE_OPTIONS}
+					bind:value={() => envViewMode, (v) => (envViewMode = v as typeof envViewMode)}
+					onchange={() => (envsManuallyEdited = true)}
+				/>
+			{/snippet}
+			<EnvVarEditor
+				bind:rows={envVars}
+				bind:mode={envViewMode}
+				bind:raw={envRawText}
+				minRows={1}
+				onedit={() => (envsManuallyEdited = true)}
+			/>
+		</SectionCard>
 
-			<div class="env-container">
-				{#if envViewMode === 'ui'}
-					{#each envVars as env, index (index)}
-						{@const isRevealed = revealedIndices.has(index)}
-						{@const hasKey = env.key.trim().length > 0}
-						<div class="env-row" transition:slide={{ duration: 150 }}>
-							<div class="env-row-inner">
-								<div class="env-key-col">
-									<input
-										type="text"
-										bind:value={env.key}
-										oninput={() => (envsManuallyEdited = true)}
-										placeholder="KEY"
-										class="env-key-input"
-									/>
-								</div>
-								<div class="env-val-col">
-									<input
-										type={isRevealed ? 'text' : 'password'}
-										bind:value={env.value}
-										oninput={() => (envsManuallyEdited = true)}
-										placeholder={hasKey ? 'value' : ''}
-										class="env-val-input"
-									/>
-								</div>
-								<div class="env-actions">
-									<button
-										type="button"
-										onclick={() => toggleReveal(index)}
-										class="env-action-btn"
-										aria-label={isRevealed ? 'Hide value' : 'Show value'}
-									>
-										{#if isRevealed}<EyeOff class="h-3.5 w-3.5" />{:else}<Eye
-												class="h-3.5 w-3.5"
-											/>{/if}
-									</button>
-									<button
-										type="button"
-										onclick={() => removeEnvVar(index)}
-										class="env-action-btn env-action-delete"
-										aria-label="Remove"
-									>
-										<Trash2 class="h-3.5 w-3.5" />
-									</button>
-								</div>
-							</div>
-						</div>
-					{/each}
-					<button type="button" onclick={addEnvVar} class="env-add-btn">
-						<Plus class="h-4 w-4" /> <span>Add variable</span>
-					</button>
-				{:else}
-					<textarea
-						bind:value={envRawText}
-						oninput={() => (envsManuallyEdited = true)}
-						placeholder="KEY1=value1&#10;KEY2=value2&#10;# Comments are ignored"
-						class="env-raw-textarea"></textarea>
+		<SectionCard
+			title="Persistent storage"
+			description="Attach storage that persists across restarts."
+		>
+			{#snippet actions()}
+				{#if volumes.length > 0}
+					<Button size="sm" variant="secondary" icon={Plus} onclick={addVolume}>Add storage</Button>
 				{/if}
-			</div>
-		</div>
-
-		<!-- ═══ Storage ═══ -->
-		<div class="nd-card" {@attach motionStagger({ index: 4, from: { y: 14 } })}>
-			<div class="nd-card-header">
-				<div>
-					<h2 class="nd-card-title">Persistent storage</h2>
-					<p class="nd-hint" style="margin-top: 0.125rem;">
-						Attach storage that persists across restarts.
-					</p>
-				</div>
-				<Button variant="secondary" size="sm" onclick={addVolume}
-					><Plus class="h-4 w-4" /> Add storage</Button
+			{/snippet}
+			{#if volumes.length === 0}
+				<EmptyState
+					title="No storage attached"
+					description="Add persistent storage to keep files across restarts."
 				>
-			</div>
-			<div class="nd-stack">
-				{#each volumes as volume, index (index)}
-					<div class="nd-vol-card">
-						<div class="nd-vol-row">
-							<div class="nd-vol-num">{index + 1}</div>
-							<div class="nd-vol-fields">
-								<div class="nd-vol-field">
-									<input
-										type="text"
-										bind:value={volume.pvcName}
-										placeholder="Storage name"
-										class="nd-vol-input"
-									/>
-								</div>
-								<span class="nd-vol-arrow">→</span>
-								<div class="nd-vol-field">
-									<input
-										type="text"
-										bind:value={volume.mountPath}
-										placeholder="/data"
-										class="nd-vol-input font-mono"
-									/>
-								</div>
+					{#snippet icon()}<HardDrive size={18} />{/snippet}
+					<Button size="sm" variant="secondary" icon={Plus} onclick={addVolume}>Add storage</Button>
+				</EmptyState>
+			{:else}
+				<div class="nd-stack">
+					{#each volumes as volume, index (index)}
+						<div class="nd-vol">
+							<Input
+								size="sm"
+								bind:value={volume.pvcName}
+								placeholder="Storage name"
+								aria-label="Storage name"
+							/>
+							<ArrowRight size={14} class="text-faint" aria-hidden="true" />
+							<Input
+								size="sm"
+								bind:value={volume.mountPath}
+								placeholder="/data"
+								aria-label="Mount path"
+								mono
+							/>
+							<div class="nd-vol-ro">
+								<span class="text-callout text-muted">Read-only</span>
+								<Switch bind:checked={volume.readOnly} label="Read-only" />
 							</div>
-							<div class="nd-vol-actions">
-								<label class="nd-vol-toggle">
-									<span class="nd-vol-toggle-label">Read-only</span>
-									<input type="checkbox" class="nd-toggle-input" bind:checked={volume.readOnly} />
-									<span class="nd-toggle-track"><span class="nd-toggle-thumb"></span></span>
-								</label>
-								<button onclick={() => removeVolume(index)} class="nd-icon-btn nd-vol-remove"
-									><Trash2 class="h-3.5 w-3.5" /></button
-								>
-							</div>
-						</div>
-					</div>
-				{:else}
-					<div class="nd-vol-empty">
-						<p class="nd-vol-empty-title">No storage attached</p>
-						<p class="nd-hint">Add persistent storage to keep files across restarts.</p>
-					</div>
-				{/each}
-			</div>
-		</div>
-
-		<!-- ═══ Resources ═══ -->
-		<div class="nd-card" {@attach motionStagger({ index: 5, from: { y: 14 } })}>
-			<div class="nd-card-title">Resources</div>
-			<p class="nd-hint" style="margin-top:-0.25rem; margin-bottom:0.75rem;">
-				Pick a size for the container. Requests = limits, so what you pick is what it gets.
-			</p>
-			<ResourcePicker bind:cpuMilli={resourceCpuMilli} bind:memoryBytes={resourceMemoryBytes} />
-		</div>
-
-		<!-- ═══ Advanced ═══ -->
-		<div class="nd-card" {@attach motionStagger({ index: 6, from: { y: 14 } })}>
-			<details>
-				<summary class="nd-card-title nd-summary">Advanced</summary>
-				<div class="nd-advanced-body">
-					<div class="nd-adv-row">
-						<div class="nd-adv-info">
-							<span class="nd-adv-label">Replicas</span>
-							<span class="nd-adv-hint">Copies of your app running at once</span>
-						</div>
-						<Stepper bind:value={replicas} min={1} max={20} />
-					</div>
-					{#if $isSuperAdmin && deploymentSource === 'github'}
-						<div class="nd-adv-row">
-							<ToggleRow
-								bind:checked={buildWithDepot}
-								label="Orchard's super builds"
-								hint="Faster builds on hosted high-performance builders"
+							<Button
+								variant="ghost"
+								size="sm"
+								icon={Trash2}
+								label="Remove storage"
+								onclick={() => removeVolume(index)}
 							/>
 						</div>
+					{/each}
+				</div>
+			{/if}
+		</SectionCard>
+
+		<SectionCard
+			title="Resources"
+			description="Pick a size for the container. Requests = limits, so what you pick is what it gets."
+		>
+			<ResourcePicker bind:cpuMilli={resourceCpuMilli} bind:memoryBytes={resourceMemoryBytes} />
+		</SectionCard>
+
+		<SectionCard>
+			<Disclosure title="Advanced" note="Optional">
+				<div class="nd-stack">
+					<Field label="Replicas" hint="Copies of your app running at once" layout="row">
+						<Stepper bind:value={replicas} min={1} max={20} label="Replicas" />
+					</Field>
+					{#if $isSuperAdmin && deploymentSource === 'github'}
+						<ToggleRow
+							bind:checked={buildWithDepot}
+							label="Orchard's super builds"
+							hint="Faster builds on hosted high-performance builders"
+						/>
 					{/if}
 				</div>
-			</details>
-		</div>
+			</Disclosure>
+		</SectionCard>
 
 		{#if formError}
-			<div class="nd-error">{formError}</div>
+			<Alert tone="error">{formError}</Alert>
 		{/if}
-
-		<div class="nd-actions">
-			<Button variant="ghost" href={basePath}>Cancel</Button>
-			<Button variant="primary" onclick={submit} loading={submitting}>Deploy</Button>
-		</div>
 	{/if}
-</div>
+</Page>
 
 <style>
-	.nd-page {
-		max-width: 40rem;
-		margin: 0 auto;
-		padding: 2.5rem 2.5rem 0;
-	}
-
-	/* Hero header */
-	.nd-hero {
-		padding: 0 0 2rem;
-	}
-
-	.nd-page-title {
-		font-size: var(--text-title-1);
-		font-weight: 700;
-		color: var(--center-channel-color);
-		margin: 0;
-		letter-spacing: -0.03em;
-		line-height: 1.1;
-	}
-
-	.nd-page-subtitle {
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		color: var(--surface-muted);
-		margin: 0.5rem 0 0;
-	}
-
-	/* Main card */
-	.nd-main-card {
-		border: 1px solid color-mix(in srgb, var(--surface-border) 70%, transparent);
-		border-radius: var(--radius-lg);
-		background-color: var(--surface-bg);
-		margin-bottom: 1.5rem;
-		display: flex;
-		flex-direction: column;
-		box-shadow:
-			0 1px 2px rgb(0 0 0 / 0.04),
-			0 8px 20px -6px rgb(0 0 0 / 0.06);
-	}
-
-	/* Source picker */
-	.nd-source-picker {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 0.875rem 1.5rem;
-		border-bottom: 1px solid var(--surface-border);
-	}
-
-	.nd-source-label {
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: 600;
-		color: var(--surface-muted);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-	}
-
-	.nd-pill-group {
-		display: flex;
-		border-radius: var(--radius-sm);
-		padding: 0.25rem;
-		background-color: color-mix(in srgb, var(--surface-border) 30%, transparent);
-	}
-
-	.nd-pill {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.3125rem 0.75rem;
-		border-radius: var(--radius-xs);
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: 600;
-		border: none;
-		cursor: pointer;
-		background: transparent;
-		color: var(--surface-muted);
-		transition: all var(--dur-fast);
-	}
-
-	.nd-pill:hover {
-		color: var(--center-channel-color);
-	}
-
-	.nd-pill-active {
-		background-color: var(--surface-bg);
-		color: var(--center-channel-color);
-		box-shadow: var(--elev-1);
-	}
-
-	/* Owner / Name row */
-	.nd-owner-row {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 1.25rem 1.5rem;
-		border-bottom: 1px solid var(--surface-border);
-	}
-
-	.nd-owner-row--after {
-		border-bottom: none;
-		border-top: 1px solid var(--border-default);
-		background: var(--bg-raised);
-		border-radius: 0 0 0.875rem 0.875rem;
-		padding: 0.875rem 1.5rem;
-	}
-
-	.nd-owner-row :global(.ps-trigger) {
-		height: 2.25rem;
-		align-items: center;
-	}
-
-	.nd-owner-row .nd-name-input {
-		height: 2.25rem;
-		padding-top: 0;
-		padding-bottom: 0;
-	}
-
-	.nd-url-toggle {
-		margin-top: 0.25rem;
-		padding: 0.75rem 0.75rem;
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-sm);
-		background: var(--bg-raised);
-	}
-
-	.nd-repo-split {
-		display: grid;
-		grid-template-columns: minmax(9rem, 13rem) 1fr;
-		gap: 0.5rem;
-	}
-
-	.nd-repo-split :global(.acct-trigger),
-	.nd-repo-split :global(.picker-trigger) {
-		height: 2.75rem;
-	}
-
-	@media (max-width: 640px) {
-		.nd-repo-split {
-			grid-template-columns: 1fr;
-		}
-	}
-
-	/* Card body */
-	.nd-card-body {
-		padding: 1.25rem 1.5rem 1.5rem;
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-	}
-
-	.nd-source-pane {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-	}
-	.nd-slash {
-		font-size: var(--text-title-3);
-		line-height: var(--lh-title-3);
-		font-weight: 300;
-		color: var(--surface-muted);
-		user-select: none;
-	}
-
-	.nd-name-input {
-		flex: 1;
-		padding: 0.5rem 0.75rem;
-		border-radius: var(--radius-sm);
-		border: 1px solid var(--surface-border);
-		background-color: var(--center-channel-bg);
-		color: var(--center-channel-color);
-		font-size: var(--text-body);
-		line-height: var(--lh-body);
-		font-weight: 600;
-		letter-spacing: -0.01em;
-		transition: border-color var(--dur-fast);
-	}
-
-	.nd-name-input::placeholder {
-		color: var(--surface-muted);
-		font-weight: 400;
-	}
-
-	.nd-name-input:focus {
-		outline: none;
-		border-color: var(--sidebar-text-active-border);
-		box-shadow: 0 0 0 2px color-mix(in srgb, var(--sidebar-text-active-border) 15%, transparent);
-	}
-
-	/* Cards */
-	.nd-card {
-		border: 1px solid color-mix(in srgb, var(--surface-border) 70%, transparent);
-		border-radius: var(--radius-lg);
-		background-color: var(--surface-bg);
-		padding: 1.5rem;
-		margin-bottom: 1.5rem;
-		display: flex;
-		flex-direction: column;
-		gap: 1.25rem;
-		box-shadow:
-			0 1px 2px rgb(0 0 0 / 0.04),
-			0 8px 20px -6px rgb(0 0 0 / 0.06);
-	}
-
-	.nd-card-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-	}
-
-	.nd-card-title {
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		font-weight: 600;
-		color: var(--center-channel-color);
-		margin: 0;
-	}
-
-	.nd-hint {
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		color: var(--surface-muted);
-		margin: 0;
-	}
-
-	.nd-source-hint {
-		margin-top: -0.25rem;
-	}
-
-	/* Grid */
-	.nd-grid-2 {
-		display: grid;
-		grid-template-columns: repeat(2, 1fr);
-		gap: 0.75rem;
-	}
-
-	/* Pickers */
-	.picker-wrap {
-		position: relative;
-	}
-
-	.picker-trigger {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		width: 100%;
-		padding: 0.75rem 2.25rem 0.75rem 0.875rem;
-		border-radius: var(--radius-sm);
-		border: 1px solid var(--surface-border);
-		background-color: var(--surface-bg);
-		color: var(--center-channel-color);
-		font-size: var(--text-callout);
-		line-height: 1.5;
-		text-align: left;
-		cursor: pointer;
-		transition:
-			border-color var(--dur-fast) ease,
-			box-shadow var(--dur-fast) ease;
-	}
-
-	.picker-trigger:focus-visible {
-		outline: var(--focus-ring-width) solid var(--focus-ring-color);
-		outline-offset: var(--focus-ring-offset);
-		border-color: var(--sidebar-text-active-border);
-		box-shadow: 0 0 0 3px color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent);
-	}
-
-	.picker-trigger:disabled {
-		opacity: 0.5;
-		cursor: default;
-	}
-
-	.picker-trigger--locked:disabled {
-		opacity: 1;
-		cursor: default;
-	}
-
-	.picker-value {
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		min-width: 0;
-	}
-
-	.picker-placeholder {
-		color: color-mix(in srgb, var(--surface-muted) 65%, transparent);
-	}
-
-	.picker-suffix {
-		position: absolute;
-		right: 0.75rem;
-		top: 50%;
-		transform: translateY(-50%);
-		display: flex;
-		align-items: center;
-		color: var(--surface-muted);
-	}
-
-	.picker-clear {
-		background: none;
-		border: none;
-		cursor: pointer;
-		padding: 0;
-	}
-
-	.picker-clear:hover {
-		color: var(--center-channel-color);
-	}
-
-	.picker-chevron {
-		pointer-events: none;
-		transition: transform var(--dur-fast) ease;
-	}
-
-	.picker-chevron--open {
-		transform: translateY(-50%) rotate(180deg);
-	}
-
-	.picker-list {
-		display: flex;
-		flex-direction: column;
-		margin-top: 0.5rem;
-		max-height: 12rem;
-		overflow-y: auto;
-		scrollbar-gutter: stable;
-	}
-
-	.picker-option {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		width: 100%;
-		border-radius: var(--radius-sm);
-		padding: 0.5rem 0.75rem;
-		text-align: left;
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		border: none;
-		background: none;
-		color: var(--center-channel-color);
-		cursor: pointer;
-		transition: background-color var(--dur-fast);
-	}
-
-	.picker-option:hover {
-		background-color: color-mix(in srgb, var(--surface-border) 40%, transparent);
-	}
-
-	.picker-option-text {
-		flex: 1;
-		min-width: 0;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.picker-empty {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.75rem 0.75rem;
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		color: var(--surface-muted);
-	}
-
-	.picker-note {
-		padding: 0.75rem 0.75rem;
-		font-size: var(--text-caption);
-		line-height: 1.5;
-		color: var(--text-muted);
-		background-color: var(--status-warning-bg);
-		border: 1px solid var(--status-warning-border);
-		border-radius: var(--radius-sm);
-		margin: 0.25rem;
-	}
-
-	.picker-note a {
-		color: var(--text-link);
-		font-weight: 600;
-		text-decoration: underline;
-	}
-
-	.picker-option--manual {
-		border-bottom: 1px solid var(--border-default);
-		border-radius: 0;
-	}
-
-	.picker-option--manual strong {
-		font-weight: 600;
-	}
-	.nd-cfg {
-		display: flex;
-		flex-direction: column;
-		gap: 0.875rem;
-	}
-
-	.nd-cfg-row {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 1.5rem;
-		min-height: 2.625rem;
-	}
-
-	.nd-cfg-label {
-		flex: 1;
-		min-width: 0;
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		font-weight: 600;
-		color: var(--text-default);
-	}
-
-	.nd-cfg-val {
-		width: 18rem;
-		max-width: 60%;
-		flex-shrink: 0;
-	}
-
-	.nd-fold {
-		border-top: 1px solid var(--border-default);
-		padding-top: 0.875rem;
-	}
-
-	.nd-fold-summary {
-		cursor: pointer;
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		font-weight: 600;
-		color: var(--text-default);
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		list-style: none;
-	}
-
-	.nd-fold-chevron {
-		display: inline-flex;
-		color: var(--text-muted);
-	}
-
-	.nd-fold-summary::-webkit-details-marker {
-		display: none;
-	}
-
-	.nd-fold-note {
-		margin-left: auto;
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: 600;
-		color: var(--text-muted);
-	}
-
-	.nd-fold-body {
-		display: flex;
-		flex-direction: column;
-		gap: 0.875rem;
-		padding-top: 0.875rem;
-	}
-
-	.nd-fold-hint {
-		margin: 0;
-		font-size: var(--text-caption);
-		line-height: 1.5;
-		color: var(--text-muted);
-	}
-
-	.nd-fold-hint code {
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		padding: 0.0625rem 0.25rem;
-		border-radius: var(--radius-xs);
-		background: var(--bg-raised);
-		color: var(--text-default);
-	}
-	@media (max-width: 640px) {
-		.nd-cfg-row {
-			flex-direction: column;
-			gap: 0.5rem;
-		}
-
-		.nd-cfg-val {
-			width: 100%;
-		}
-	}
-	/* Warning */
-	.nd-warning {
-		padding: 1rem;
-		border-radius: var(--radius-md);
-		background-color: color-mix(in srgb, var(--away-indicator) 8%, transparent);
-		border: 1px solid color-mix(in srgb, var(--away-indicator) 25%, transparent);
-	}
-
-	.nd-warning-title {
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		font-weight: 600;
-		color: var(--center-channel-color);
-		margin: 0;
-	}
-
-	.nd-warning-desc {
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		color: var(--surface-muted);
-		margin: 0.25rem 0 0;
-	}
-
-	/* Ports */
 	.nd-stack {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: 1rem;
 	}
-
-	.nd-port-row-simple {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-	}
-
-	.nd-protocol-toggle {
-		display: flex;
-		border-radius: var(--radius-sm);
-		overflow: hidden;
-		border: 1px solid var(--surface-border);
-	}
-
-	.nd-proto-btn {
-		padding: 0.5rem 0.75rem;
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: 600;
-		background: transparent;
-		color: var(--surface-muted);
-		border: none;
-		cursor: pointer;
-		transition: all var(--dur-fast);
-	}
-
-	.nd-proto-btn:first-child {
-		border-right: 1px solid var(--surface-border);
-	}
-
-	.nd-proto-active {
-		background-color: var(--sidebar-text-active-border);
-		color: var(--button-color);
-	}
-
-	/* Volumes — inline card style */
-	.nd-vol-card {
-		padding: 0.875rem 1rem;
-		border-radius: var(--radius-md);
-		background-color: color-mix(in srgb, var(--surface-border) 15%, transparent);
-		border: 1px solid var(--surface-border);
-		transition: border-color var(--dur-fast);
-	}
-
-	.nd-vol-card:hover {
-		border-color: color-mix(in srgb, var(--surface-border) 60%, var(--center-channel-color));
-	}
-
-	.nd-vol-row {
-		display: flex;
-		align-items: center;
+	.nd-pair {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 0.75rem;
 	}
-
-	.nd-vol-num {
-		flex-shrink: 0;
-		width: 1.5rem;
-		height: 1.5rem;
-		border-radius: var(--radius-xs);
-		background: var(--sidebar-text-active-border);
-		color: var(--button-color);
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		font-weight: 600;
-		display: flex;
-		align-items: center;
-		justify-content: center;
+	.nd-repo {
+		display: grid;
+		grid-template-columns: minmax(9rem, 13rem) minmax(0, 1fr);
+		gap: 0.5rem;
 	}
-
-	.nd-vol-fields {
+	.nd-cfg-val {
+		width: clamp(12rem, 40vw, 18rem);
+	}
+	.nd-owner {
+		display: flex;
 		flex: 1;
-		display: flex;
 		align-items: center;
 		gap: 0.5rem;
 		min-width: 0;
-		flex-wrap: wrap;
 	}
-
-	.nd-vol-field {
+	.nd-slash {
+		flex-shrink: 0;
+		color: var(--text-faint);
+	}
+	.nd-name {
 		flex: 1;
-		min-width: 100px;
-	}
-
-	.nd-vol-arrow {
-		color: var(--surface-muted);
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		flex-shrink: 0;
-	}
-
-	.nd-vol-input {
-		width: 100%;
-		padding: 0.5rem 0.75rem;
-		border-radius: var(--radius-sm);
-		border: 1px solid var(--surface-border);
-		background-color: var(--surface-bg);
-		color: var(--center-channel-color);
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		transition: border-color var(--dur-fast);
-		outline: none;
-	}
-
-	.nd-vol-input:focus {
-		border-color: var(--sidebar-text-active-border);
-		box-shadow: 0 0 0 2px color-mix(in srgb, var(--sidebar-text-active-border) 15%, transparent);
-	}
-
-	.nd-vol-input::placeholder {
-		color: var(--surface-muted);
-	}
-
-	.nd-vol-actions {
-		display: flex;
-		align-items: center;
-		gap: 0.25rem;
-		flex-shrink: 0;
-	}
-
-	.nd-vol-toggle {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.25rem 0.5rem;
-		border-radius: var(--radius-xs);
-		cursor: pointer;
-	}
-
-	.nd-vol-toggle-label {
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		color: var(--surface-muted);
-		white-space: nowrap;
-	}
-
-	.nd-vol-remove {
-		opacity: 0.4;
-		transition: opacity var(--dur-fast);
-	}
-
-	.nd-vol-card:hover .nd-vol-remove {
-		opacity: 1;
-	}
-
-	/* Toggle switch */
-	.nd-toggle-input {
-		position: absolute;
-		opacity: 0;
-		width: 0;
-		height: 0;
-		pointer-events: none;
-	}
-
-	.nd-toggle-track {
-		position: relative;
-		flex-shrink: 0;
-		width: 2.25rem;
-		height: 1.25rem;
-		border-radius: var(--radius-md);
-		background-color: color-mix(in srgb, var(--surface-border) 80%, var(--center-channel-color));
-		transition: background-color var(--dur-base);
-	}
-
-	.nd-toggle-input:checked + .nd-toggle-track {
-		background-color: var(--sidebar-text-active-border);
-	}
-
-	.nd-toggle-thumb {
-		position: absolute;
-		top: 0.125rem;
-		left: 0.125rem;
-		width: 1rem;
-		height: 1rem;
-		border-radius: 50%;
-		background-color: var(--button-color);
-		box-shadow: var(--elev-1);
-		transition: transform var(--dur-base);
-	}
-
-	.nd-toggle-input:checked + .nd-toggle-track .nd-toggle-thumb {
-		transform: translateX(1rem);
-	}
-
-	.nd-toggle-input:focus-visible + .nd-toggle-track {
-		outline: 2px solid var(--sidebar-text-active-border);
-		outline-offset: 2px;
-	}
-
-	/* Empty state */
-	.nd-vol-empty {
-		text-align: center;
-		padding: 2rem 0;
-	}
-
-	.nd-vol-empty-title {
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		font-weight: 600;
-		color: var(--center-channel-color);
-		margin: 0 0 0.25rem;
-	}
-
-	/* Env editor — matches deployment Environment tab */
-	.env-container {
-		border: 1px solid var(--surface-border);
-		border-radius: var(--radius-md);
-		overflow: hidden;
-		background-color: var(--control-bg);
-	}
-
-	.env-row {
-		border-bottom: 1px solid var(--surface-border);
-		transition: background-color var(--dur-fast);
-	}
-
-	.env-row:hover,
-	.env-row:focus-within {
-		background-color: color-mix(in srgb, var(--surface-border) 20%, transparent);
-	}
-
-	.env-row-inner {
-		display: flex;
-		align-items: center;
-		gap: 0;
-		min-height: 2.75rem;
-	}
-
-	.env-key-col {
-		flex: 2;
 		min-width: 0;
 	}
-
-	.env-val-col {
-		flex: 3;
-		min-width: 0;
-		border-left: 1px solid var(--surface-border);
-	}
-
-	.env-key-input,
-	.env-val-input {
-		width: 100%;
-		padding: 0.5rem 0.75rem;
-		font-family: var(--font-mono);
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		background: transparent;
-		border: none;
-		outline: none;
-		color: var(--center-channel-color);
-	}
-
-	.env-key-input {
-		font-weight: 600;
-		letter-spacing: 0.01em;
-	}
-
-	.env-val-input {
-		color: var(--surface-muted);
-	}
-
-	.env-key-input::placeholder {
-		color: var(--surface-muted);
-		opacity: 0.5;
-		font-weight: 400;
-	}
-
-	.env-val-input::placeholder {
-		color: var(--surface-muted);
-		opacity: 0.4;
-	}
-
-	.env-actions {
-		display: flex;
-		align-items: center;
-		gap: 0;
-		flex-shrink: 0;
-		padding-right: 0.25rem;
-		opacity: 0;
-		transition: opacity var(--dur-fast);
-	}
-
-	.env-row:hover .env-actions,
-	.env-row:focus-within .env-actions {
-		opacity: 1;
-	}
-
-	.env-action-btn {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 2rem;
-		height: 2rem;
-		border-radius: var(--radius-xs);
-		background: transparent;
-		border: none;
-		color: var(--surface-muted);
-		cursor: pointer;
-		transition:
-			color var(--dur-fast),
-			background-color var(--dur-fast);
-	}
-
-	.env-action-btn:hover {
-		background-color: color-mix(in srgb, var(--surface-border) 50%, transparent);
-		color: var(--center-channel-color);
-	}
-
-	.env-action-delete:hover {
-		color: var(--error-text-color);
-		background-color: color-mix(in srgb, var(--error-text-color) 8%, transparent);
-	}
-
-	.env-add-btn {
+	.nd-port {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		width: 100%;
-		padding: 0.75rem 0.75rem;
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		font-weight: 600;
-		color: var(--surface-muted);
-		background: transparent;
-		border: none;
-		border-top: 1px dashed var(--surface-border);
-		cursor: pointer;
-		transition:
-			color var(--dur-fast),
-			background-color var(--dur-fast);
 	}
-
-	.env-add-btn:hover {
-		color: var(--sidebar-text-active-border);
-		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 6%, transparent);
+	.nd-port-num {
+		width: 7.5rem;
 	}
-
-	.env-raw-textarea {
-		display: block;
-		width: 100%;
-		min-height: 220px;
-		padding: 0.75rem;
-		font-family: var(--font-mono);
-		font-size: var(--text-footnote);
-		line-height: 1.7;
-		color: var(--center-channel-color);
-		background: transparent;
-		border: none;
-		outline: none;
-		resize: vertical;
-	}
-
-	.env-raw-textarea::placeholder {
-		color: var(--surface-muted);
-		opacity: 0.5;
-	}
-
-	/* Advanced body */
-	.nd-advanced-body {
-		display: flex;
-		flex-direction: column;
-		margin-top: 0.75rem;
-	}
-
-	.nd-adv-row {
-		display: flex;
+	.nd-vol {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto auto;
 		align-items: center;
-		justify-content: space-between;
-		gap: 1rem;
-		padding: 0.75rem 0;
-	}
-
-	.nd-adv-row + .nd-adv-row {
-		border-top: 1px solid var(--border-default);
-	}
-
-	.nd-adv-row :global(.toggle-row) {
-		flex: 1;
-	}
-
-	.nd-adv-info {
-		display: flex;
-		flex-direction: column;
-		gap: 0.125rem;
-		min-width: 0;
-	}
-
-	.nd-adv-label {
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		font-weight: 600;
-		color: var(--text-default);
-	}
-
-	.nd-adv-hint {
-		font-size: var(--text-caption);
-		line-height: 1.4;
-		color: var(--text-muted);
-	}
-
-	.nd-summary {
-		cursor: pointer;
-	}
-
-	.nd-icon-btn {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 2rem;
-		height: 2rem;
-		border-radius: var(--radius-xs);
-		border: none;
-		background: none;
-		color: var(--surface-muted);
-		cursor: pointer;
-		transition:
-			color var(--dur-fast),
-			background-color var(--dur-fast);
-		flex-shrink: 0;
-	}
-
-	.nd-icon-btn:hover {
-		color: var(--center-channel-color);
-		background-color: color-mix(in srgb, var(--surface-border) 50%, transparent);
-	}
-
-	.nd-icon-btn:disabled {
-		opacity: 0.3;
-		cursor: not-allowed;
-	}
-
-	.nd-icon-btn-danger:hover:not(:disabled) {
-		color: var(--error-text-color);
-		background-color: color-mix(in srgb, var(--error-text-color) 12%, transparent);
-	}
-
-	/* Actions footer — sticky so Deploy is always reachable */
-	.nd-actions {
-		position: sticky;
-		bottom: 0;
-		z-index: 10;
-		display: flex;
-		align-items: center;
-		justify-content: flex-end;
 		gap: 0.5rem;
-		margin: 0.5rem -2.5rem 0;
-		padding: 1rem 2.5rem;
-		background: color-mix(in srgb, var(--center-channel-bg) 88%, transparent);
-		backdrop-filter: blur(8px);
-		-webkit-backdrop-filter: blur(8px);
-		border-top: 1px solid color-mix(in srgb, var(--surface-border) 70%, transparent);
 	}
-
-	/* Error */
-	.nd-error {
-		padding: 0.75rem 1rem;
-		border-radius: var(--radius-md);
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		background-color: color-mix(in srgb, var(--error-text-color) 10%, transparent);
-		color: var(--error-text-color);
-		border: 1px solid color-mix(in srgb, var(--error-text-color) 25%, transparent);
-		margin-bottom: 1rem;
-	}
-	.nd-score {
+	.nd-vol-ro {
 		display: flex;
-		flex-wrap: wrap;
-		align-items: baseline;
+		align-items: center;
 		gap: 0.5rem;
-		margin-top: 0.75rem;
-		padding: 0.625rem 0.875rem;
-		border-radius: var(--radius-md);
-		background: color-mix(in srgb, var(--accent) 8%, transparent);
-		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
-		font-size: var(--text-caption);
-		color: var(--text-muted);
+		padding-left: 0.5rem;
 	}
-	.nd-score-file {
-		font-family: var(--font-mono);
-		font-weight: 600;
-		color: var(--accent);
-	}
-	.nd-score-warn {
-		flex-basis: 100%;
-		color: var(--status-warning);
+	@media (max-width: 640px) {
+		.nd-repo,
+		.nd-pair {
+			grid-template-columns: minmax(0, 1fr);
+		}
+		.nd-vol {
+			grid-template-columns: minmax(0, 1fr) auto;
+		}
 	}
 </style>

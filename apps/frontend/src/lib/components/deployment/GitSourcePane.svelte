@@ -1,6 +1,15 @@
 <script lang="ts">
-	import { Loader2, GitBranch, Lock, Search } from 'lucide-svelte';
-	import { Field, Input, Select } from '$lib/components/ui';
+	import { GitBranch } from 'lucide-svelte';
+	import {
+		Alert,
+		Badge,
+		Combobox,
+		Field,
+		Input,
+		Select,
+		type DropdownOption
+	} from '$lib/components/ui';
+	import Spinner from '$lib/components/ui/Spinner.svelte';
 	import {
 		detectGitRepo,
 		fetchGitBranches,
@@ -44,10 +53,9 @@
 	let detectRun = 0;
 
 	const connection = $derived(connections.find((c) => c.id === connectionId) ?? null);
-	const filteredRepos = $derived(
-		repoQuery.trim()
-			? repos.filter((r) => r.fullName.toLowerCase().includes(repoQuery.trim().toLowerCase()))
-			: repos
+	const repoOptions = $derived(repos.map((r) => ({ value: r.id, label: r.fullName, mono: true })));
+	const branchOptions = $derived(
+		branches.map((b) => ({ value: b.name, label: b.name, mono: true }))
 	);
 	const repoPath = $derived(
 		connection ? (selectedRepo ? selectedRepo.fullName : repoPathOn(connection, repoUrl)) : null
@@ -143,10 +151,37 @@
 			const det = await detectGitRepo(connection.id, repoPath, branch);
 			if (run === detectRun) onDetect(det);
 		} catch {
-			/* detection is a convenience */
+			return;
 		} finally {
 			if (run === detectRun) detecting = false;
 		}
+	}
+
+	function isUrl(text: string) {
+		return /^https?:\/\//.test(text);
+	}
+
+	function onQuery(next: string) {
+		repoQuery = next;
+		if (isUrl(next)) {
+			repoUrl = next;
+			onUrlInput();
+		}
+	}
+
+	function useTypedUrl(text: string) {
+		repoUrl = text;
+		onUrlInput();
+	}
+
+	function clearRepo() {
+		if (urlTimer) clearTimeout(urlTimer);
+		selectedRepo = null;
+		repoUrl = '';
+		repoQuery = '';
+		branches = [];
+		branch = '';
+		onSelect(null);
 	}
 
 	let urlTimer: ReturnType<typeof setTimeout> | null = null;
@@ -163,16 +198,19 @@
 	}
 </script>
 
+{#snippet busy()}<Spinner size={13} />{/snippet}
+
+{#snippet privateBadge(option: DropdownOption)}
+	{#if repos.find((r) => r.id === option.value)?.private}<Badge tone="neutral">Private</Badge>{/if}
+{/snippet}
+
 {#if !loaded}
-	<div class="gs-empty"><Loader2 class="h-4 w-4 animate-spin" data-motion="progress" /></div>
+	<div class="gs-loading"><Spinner size={16} label="Loading git providers" /></div>
 {:else if connections.length === 0}
-	<div class="nd-warning">
-		<p class="nd-warning-title">No git providers linked</p>
-		<p class="nd-warning-desc">
-			Link GitLab, Gitea, Codeberg, Bitbucket or any git host with your own token under
-			<a href="/user/settings?section=git">your settings</a>. GitHub works from the GitHub tab.
-		</p>
-	</div>
+	<Alert tone="info" title="No git providers linked">
+		Link GitLab, Gitea, Codeberg, Bitbucket or any git host with your own token under
+		<a href="/user/settings?section=git">your settings</a>. GitHub works from the GitHub tab.
+	</Alert>
 {:else}
 	<Field label="Provider">
 		<Select value={connectionId} onchange={(e) => pickConnection(e.currentTarget.value)}>
@@ -184,40 +222,30 @@
 
 	{#if connection?.canList}
 		<Field label="Repository">
-			<div class="gs-search">
-				<Search size={14} class="gs-search-icon" />
-				<input
-					class="gs-search-input"
-					bind:value={repoQuery}
-					placeholder={loadingRepos ? 'Loading repositories' : 'Search or paste a URL'}
-					oninput={() => {
-						if (/^https?:\/\//.test(repoQuery)) {
-							repoUrl = repoQuery;
-							onUrlInput();
-						}
-					}}
-				/>
-				{#if loadingRepos}<Loader2 class="h-4 w-4 animate-spin" data-motion="progress" />{/if}
-			</div>
-			{#if !selectedRepo && filteredRepos.length > 0 && !/^https?:\/\//.test(repoQuery)}
-				<ul class="gs-repos">
-					{#each filteredRepos.slice(0, 8) as r (r.id)}
-						<li>
-							<button type="button" class="gs-repo" onclick={() => pickRepo(r)}>
-								<span class="gs-repo-name">{r.fullName}</span>
-								{#if r.private}<Lock size={12} class="gs-repo-lock" />{/if}
-							</button>
-						</li>
-					{/each}
-				</ul>
-			{/if}
+			<Combobox
+				label="Repository"
+				value={selectedRepo?.id ?? ''}
+				bind:query={() => repoQuery, onQuery}
+				options={repoOptions}
+				loading={loadingRepos}
+				placeholder={loadingRepos ? 'Loading repositories' : 'Search or paste a URL'}
+				creatable={isUrl(repoQuery)}
+				createLabel={() => 'Use this URL'}
+				oncreate={useTypedUrl}
+				onchange={(id) => {
+					const r = repos.find((x) => x.id === id);
+					if (r) pickRepo(r);
+				}}
+				onclear={clearRepo}
+				trailing={privateBadge}
+			/>
 		</Field>
 	{:else}
 		<Field label="Repository URL" hint="On {connection?.host}">
 			<Input
 				bind:value={repoUrl}
 				placeholder="https://{connection?.host}/team/app"
-				class="font-mono"
+				mono
 				oninput={onUrlInput}
 			/>
 		</Field>
@@ -225,99 +253,35 @@
 
 	{#if repoPath}
 		<Field label="Branch">
-			<div class="gs-branch">
-				<GitBranch size={14} class="gs-branch-icon" />
-				{#if branches.length > 0}
-					<Select value={branch} onchange={(e) => setBranch(e.currentTarget.value)}>
-						{#each branches as b (b.name)}
-							<option value={b.name}>{b.name}</option>
-						{/each}
-					</Select>
-				{:else}
-					<Input
-						value={branch}
-						oninput={(e) => setBranch(e.currentTarget.value)}
-						placeholder="main"
-						class="font-mono"
-					/>
-				{/if}
-				{#if loadingBranches || detecting}
-					<Loader2 class="h-4 w-4 animate-spin" data-motion="progress" />
-				{/if}
-			</div>
+			{#if branches.length > 0}
+				<Combobox
+					label="Branch"
+					icon={GitBranch}
+					value={branch}
+					options={branchOptions}
+					loading={loadingBranches || detecting}
+					placeholder="Search branches"
+					onchange={setBranch}
+				/>
+			{:else}
+				<Input
+					value={branch}
+					oninput={(e: Event) => setBranch((e.currentTarget as HTMLInputElement).value)}
+					placeholder="main"
+					class="font-mono"
+					icon={GitBranch}
+					suffix={loadingBranches || detecting ? busy : undefined}
+				/>
+			{/if}
 		</Field>
 	{/if}
 {/if}
 
 <style>
-	.gs-empty {
+	.gs-loading {
 		display: flex;
 		align-items: center;
-		color: var(--text-faint);
-		padding: var(--space-2) 0;
-	}
-	.gs-search {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0 0.625rem;
-		border-radius: var(--radius-md);
-		background: var(--bg-raised);
-		box-shadow: inset 0 0 0 1px var(--rule);
-		color: var(--text-faint);
-	}
-	.gs-search-input {
-		flex: 1;
-		min-width: 0;
 		padding: 0.5rem 0;
-		border: 0;
-		background: none;
-		outline: none;
-		font-size: var(--text-callout);
-		color: var(--text-default);
-	}
-	.gs-repos {
-		list-style: none;
-		margin: 0.375rem 0 0;
-		padding: 0.25rem;
-		border-radius: var(--radius-md);
-		background: var(--bg-raised);
-		box-shadow: var(--elev-1);
-		max-height: 16rem;
-		overflow: auto;
-	}
-	.gs-repo {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		width: 100%;
-		padding: 0.375rem 0.5rem;
-		border: 0;
-		border-radius: var(--radius-sm);
-		background: none;
-		text-align: left;
-		cursor: pointer;
-		color: var(--text-default);
-		font-size: var(--text-callout);
-	}
-	.gs-repo:hover {
-		background: var(--fill-quiet);
-	}
-	.gs-repo-name {
-		flex: 1;
-		font-family: var(--font-mono);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.gs-branch {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
 		color: var(--text-faint);
-	}
-	.gs-branch > :global(.ui-select-wrap),
-	.gs-branch > :global(.ui-input) {
-		flex: 1;
 	}
 </style>

@@ -3,8 +3,7 @@
 	import { KeyRound, Lock } from 'lucide-svelte';
 	import { apiFetch, toasts } from '$lib/stores';
 	import { envBadgeColor } from '$lib/utils/format';
-	import { Button, Alert } from '$lib/components/ui';
-	import EnvVarGrid, { type GridRow } from './EnvVarGrid.svelte';
+	import { Button, Alert, EnvVarEditor, type EnvVarEditorRow } from '$lib/components/ui';
 	import { toEnvWrite } from '$lib/utils/env-secrets';
 	import type { SharedVarWarning } from '$lib/types/environments';
 
@@ -18,7 +17,7 @@
 		envSlug?: string;
 	} = $props();
 
-	let rows = $state<GridRow[]>([]);
+	let rows = $state<EnvVarEditorRow[]>([]);
 	let loading = $state(true);
 	let saving = $state(false);
 	let warnings = $state<SharedVarWarning[]>([]);
@@ -91,7 +90,7 @@
 			<span class="sharedvars-empty-title">Add a shared variable</span>
 		</button>
 	{:else}
-		<EnvVarGrid bind:rows />
+		<EnvVarEditor bind:rows secrets />
 	{/if}
 
 	{#if !loading && rows.some((r) => r.secret)}

@@ -5,6 +5,7 @@
 	import Dropdown from '$lib/components/ui/Dropdown.svelte';
 	import Select from '$lib/components/ui/Select.svelte';
 	import Combobox from '$lib/components/ui/Combobox.svelte';
+	import Badge from '$lib/components/ui/Badge.svelte';
 	import type { DropdownOption } from '$lib/components/ui/dropdown';
 
 	const REGIONS: DropdownOption[] = [
@@ -95,7 +96,14 @@
 	let nativeSmall = $state('7d');
 	let repo = $state('hackclub/site');
 	let branch = $state('');
+	let custom = $state('');
+	let customQuery = $state('');
+	let customBranches = $state<DropdownOption[]>(BRANCHES);
 </script>
+
+{#snippet defaultBadge(option: DropdownOption)}
+	{#if option.value === 'main'}<Badge tone="neutral">Default</Badge>{/if}
+{/snippet}
 
 <SectionCard
 	title="Dropdown"
@@ -138,6 +146,33 @@
 					label="Branch"
 					placeholder="Search branches"
 				/>
+			</Field>
+			<Field label="Creatable" hint="Type a branch that is not listed to use it anyway.">
+				<Combobox
+					bind:value={custom}
+					bind:query={customQuery}
+					options={customBranches}
+					label="Creatable"
+					icon={GitBranch}
+					placeholder="main"
+					creatable
+					createLabel={(q) => `Use ${q}`}
+					oncreate={(q) => {
+						customBranches = [
+							{ value: q, label: q, mono: true, icon: GitBranch },
+							...customBranches
+						];
+						custom = q;
+					}}
+					onclear={() => {
+						custom = '';
+						customQuery = '';
+					}}
+					trailing={defaultBadge}
+				/>
+			</Field>
+			<Field label="Loading">
+				<Combobox value="" options={[]} label="Loading" loading empty="Loading branches" />
 			</Field>
 			<Field label="Disabled">
 				<Combobox value="main" options={BRANCHES} label="Disabled" disabled />
