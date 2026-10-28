@@ -246,6 +246,15 @@
 	.field--lg .lead {
 		left: 0.8125rem;
 	}
+	.field--lg .control {
+		padding-right: 2.75rem;
+	}
+	.field--lg .end {
+		right: 0.5rem;
+		width: 1.75rem;
+		height: 1.75rem;
+		border-radius: calc((var(--radius-control) - 0.375rem) * var(--corner-scale));
+	}
 	.field--lg .control--bare {
 		padding-left: 0.875rem;
 	}
@@ -266,8 +275,9 @@
 	}
 	.end {
 		position: absolute;
-		top: 0.25rem;
+		top: 50%;
 		right: 0.25rem;
+		translate: 0 -50%;
 		display: flex;
 		align-items: center;
 		justify-content: center;
