@@ -52,7 +52,7 @@
 	let sheet = $state<HTMLElement>();
 	let open = $state(false);
 	let tier = $state<'full' | 'reduced' | 'off'>('full');
-	let box = $state({ bw: 72, bh: 32, w: 256, h: 200, rt: 10, r: 14 });
+	let box = $state({ bw: 72, bh: 32, w: 256, h: 200, rt: 10, r: 18 });
 
 	const p = new SpringValue(0);
 	const fade = new SpringValue(0);
@@ -110,13 +110,14 @@
 		if (!trigger || !matter || !sheet || !root) return;
 		const cs = getComputedStyle(root);
 		const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+		const scale = parseFloat(cs.getPropertyValue('--corner-scale')) || 1;
 		box = {
 			bw: trigger.offsetWidth,
 			bh: trigger.offsetHeight,
 			w: matter.offsetWidth,
 			h: sheet.offsetHeight,
 			rt: parseFloat(cs.getPropertyValue('--radius-control')) * rem || 10,
-			r: parseFloat(cs.getPropertyValue('--radius-card')) * rem || 14
+			r: parseFloat(getComputedStyle(sheet).borderTopLeftRadius) / scale || 18
 		};
 	}
 
@@ -588,8 +589,8 @@
 		flex-direction: column;
 		gap: 0.125rem;
 		width: 100%;
-		padding: 0.25rem;
-		border-radius: calc(var(--radius-card) * var(--corner-scale));
+		padding: var(--float-pad);
+		border-radius: var(--float-r);
 		corner-shape: var(--corner);
 		outline: none;
 	}
@@ -604,7 +605,7 @@
 		width: 100%;
 		padding: 0.375rem;
 		border: none;
-		border-radius: calc(var(--radius-control) * var(--corner-scale));
+		border-radius: var(--float-item-r);
 		corner-shape: var(--corner);
 		background: transparent;
 		color: var(--text-default);
@@ -614,11 +615,12 @@
 		outline: none;
 		transition: background-color var(--dur-fast) ease;
 	}
+	.option:hover,
 	.option:focus {
-		background: color-mix(in oklab, var(--neutral-10) 7%, transparent);
+		background: var(--float-hover);
 	}
 	.option:active {
-		background: color-mix(in oklab, var(--neutral-10) 11%, transparent);
+		background: var(--float-press);
 	}
 
 	.tile {
@@ -627,7 +629,7 @@
 		flex-shrink: 0;
 		width: 2rem;
 		height: 2rem;
-		border-radius: calc(0.5rem * var(--corner-scale));
+		border-radius: calc((var(--radius-panel) - var(--float-pad) - 0.375rem) * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: color-mix(in oklab, var(--neutral-10) 6%, transparent);
 		color: var(--text-default);

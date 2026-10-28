@@ -1482,7 +1482,7 @@ select.input:focus {
 	letter-spacing: 0.02em;
 }
 
-/* Collapsed-mode variants for WorkspacesMenu and UserMenu */
+/* Collapsed-mode variants for UserMenu */
 .sidebar-team-bar.is-collapsed {
 	padding: 0.5rem;
 }
@@ -1550,27 +1550,6 @@ select.input:focus {
 
 .sidebar-search-trigger:hover .sidebar-search-kbd {
 	background-color: color-mix(in srgb, var(--sidebar-text) 15%, transparent);
-}
-
-/* Dropdown styles — two-part shadow for natural depth */
-.dropdown {
-	@apply absolute z-50 mt-1.5 max-h-60 w-full overflow-auto rounded-xl border p-1;
-	background-color: var(--surface-bg);
-	border-color: var(--surface-border);
-	color: var(--center-channel-color);
-	box-shadow:
-		0 4px 6px rgb(0 0 0 / 0.04),
-		0 12px 32px rgb(0 0 0 / 0.1);
-}
-
-.dropdown-item {
-	@apply w-full px-3 py-2.5 text-left text-sm rounded-lg;
-	color: inherit;
-	transition: background-color var(--dur-fast) ease;
-}
-
-.dropdown-item:hover {
-	background-color: var(--control-hover-bg);
 }
 
 /* Animation utilities */

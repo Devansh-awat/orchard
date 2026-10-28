@@ -161,7 +161,7 @@ export interface OrgMember {
 
 export const ROLE_OPTIONS: { value: 'admin' | 'member' | 'viewer'; label: string; desc: string }[] =
 	[
-		{ value: 'admin', label: 'Admin', desc: 'Full access — manage members & resources' },
+		{ value: 'admin', label: 'Admin', desc: 'Manage members and all resources' },
 		{ value: 'member', label: 'Member', desc: 'Create & edit project resources' },
 		{ value: 'viewer', label: 'Viewer', desc: 'Read-only access' }
 	];

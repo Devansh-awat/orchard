@@ -179,7 +179,7 @@
 	}
 	.list {
 		max-height: 22rem;
-		padding: 0.5rem;
+		padding: var(--float-pad);
 		overflow-y: auto;
 		overscroll-behavior: contain;
 		scrollbar-width: thin;
@@ -201,12 +201,13 @@
 		gap: 0.75rem;
 		height: 2.5rem;
 		padding: 0 0.75rem;
-		border-radius: calc(var(--radius-panel) - 0.5rem);
+		border-radius: var(--float-item-r);
+		corner-shape: var(--corner);
 		cursor: pointer;
 		user-select: none;
 	}
 	.item--active {
-		background: color-mix(in oklab, var(--neutral-10) 7%, transparent);
+		background: var(--float-hover);
 	}
 	.item-icon {
 		display: flex;

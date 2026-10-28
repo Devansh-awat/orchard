@@ -18,7 +18,7 @@
 		podLabel,
 		humanizeWarning
 	} from '$lib/utils/format';
-	import { Avatar, Button, Select, SegmentedControl, Menu, MenuItem } from '$lib/components/ui';
+	import { Avatar, Button, Dropdown, SegmentedControl, Menu, MenuItem } from '$lib/components/ui';
 	import DeploymentMetrics from '$lib/components/DeploymentMetrics.svelte';
 	import { slide } from '$lib/utils/transitions';
 	import type { Mood } from '$lib/avatar';
@@ -35,6 +35,7 @@
 		Loader2,
 		ChevronDown,
 		UserPlus,
+		UserRound,
 		ChevronRight,
 		CheckCircle2,
 		Terminal as TerminalIcon,
@@ -307,6 +308,10 @@
 		{ id: '24h', ms: 24 * 60 * 60 * 1000 },
 		{ id: '7d', ms: 7 * 24 * 60 * 60 * 1000 }
 	];
+	const METRIC_RANGE_OPTIONS = METRIC_RANGES.map((r) => ({
+		value: String(r.ms),
+		label: `Last ${r.id}`
+	}));
 	let expandedErrors = $state(new Set<string>());
 	let Line: any = $state(null);
 	let chartReady = $state(false);
@@ -1005,16 +1010,15 @@
 						]}
 					/>
 				{/if}
-				<Select
-					value={String(metricsWindowMs)}
-					class="ov-range-select"
-					aria-label="Metrics time range"
-					onchange={(e) => (metricsWindowMs = Number((e.currentTarget as HTMLSelectElement).value))}
-				>
-					{#each METRIC_RANGES as r (r.id)}
-						<option value={String(r.ms)}>Last {r.id}</option>
-					{/each}
-				</Select>
+				<div class="ov-range-pick">
+					<Dropdown
+						bind:value={() => String(metricsWindowMs), (v) => (metricsWindowMs = Number(v))}
+						options={METRIC_RANGE_OPTIONS}
+						size="sm"
+						placement="bottom-end"
+						ariaLabel="Metrics time range"
+					/>
+				</div>
 				<Button
 					size="sm"
 					variant="secondary"
@@ -1396,9 +1400,7 @@
 									{#snippet trigger(attrs, _open)}
 										<button class="eg-assign" type="button" {...attrs}>
 											{#if group.assignee}
-												<span class="eg-avatar">
-													<Avatar user={group.assignee} alive mood={assigneeMood(status)} />
-												</span>
+												<Avatar user={group.assignee} alive mood={assigneeMood(status)} size={18} />
 												<span>@{group.assignee.username}</span>
 											{:else}
 												<UserPlus class="h-3 w-3" />
@@ -1407,15 +1409,21 @@
 											<ChevronDown class="h-3 w-3 eg-assign-caret" />
 										</button>
 									{/snippet}
-									<MenuItem onclick={() => assignError(group, null)}>
-										<span class="eg-menu-row">Unassigned</span>
+									<MenuItem checked={!group.assignee} onclick={() => assignError(group, null)}>
+										{#snippet leading()}
+											<span class="eg-nobody"><UserRound size={14} /></span>
+										{/snippet}
+										Unassigned
 									</MenuItem>
 									{#each orgMembers as m (m.id)}
-										<MenuItem onclick={() => assignError(group, m.id)}>
-											<span class="eg-avatar">
-												<Avatar user={m} alive />
-											</span>
-											<span class="eg-menu-row">@{m.username}</span>
+										<MenuItem
+											checked={group.assignee?.id === m.id}
+											onclick={() => assignError(group, m.id)}
+										>
+											{#snippet leading()}
+												<Avatar user={m} size={24} />
+											{/snippet}
+											@{m.username}
 										</MenuItem>
 									{/each}
 								</Menu>
@@ -2484,27 +2492,9 @@
 		}
 	}
 
-	:global(.ov-range-select) {
-		width: auto;
+	.ov-range-pick {
+		width: 7.5rem;
 		flex: none;
-	}
-	:global(.ov-range-select .ui-select) {
-		height: 2.4375rem;
-		padding: 0 2rem 0 0.75rem;
-		border-radius: var(--radius-md);
-		border-color: var(--border-default);
-		background-color: var(--bg-sunken);
-		color: var(--text-default);
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		font-weight: 550;
-	}
-	:global(.ov-range-select .ui-select:hover) {
-		color: var(--text-default);
-		border-color: var(--rule-strong, var(--border-default));
-	}
-	:global(.ov-range-select .ui-select-chevron) {
-		color: var(--text-muted);
 	}
 
 	.lg-filters {
@@ -2845,29 +2835,11 @@
 	.eg-assign-caret {
 		opacity: 0.5;
 	}
-	.eg-avatar {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 1.125rem;
-		height: 1.125rem;
-		flex-shrink: 0;
-		border-radius: var(--radius-pill);
-		overflow: hidden;
-		background-color: var(--fill-soft);
+	.eg-nobody {
+		display: grid;
+		place-items: center;
+		background: var(--bg-active);
 		color: var(--text-muted);
-		font-size: var(--text-micro);
-		line-height: 1;
-		font-weight: 600;
-	}
-	.eg-avatar :global(img),
-	.eg-avatar :global(svg) {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-	}
-	.eg-menu-row {
-		white-space: nowrap;
 	}
 	.eg-issue-link {
 		display: inline-flex;

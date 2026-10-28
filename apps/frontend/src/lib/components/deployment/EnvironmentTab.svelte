@@ -6,12 +6,13 @@
 		LockOpen,
 		Link2,
 		ChevronDown,
+		Pencil,
 		Database,
 		Boxes
 	} from 'lucide-svelte';
 	import { Eye, EyeOff, Trash2 } from '@jis3r/icons';
 	import { slide } from '$lib/utils/transitions';
-	import { Alert, Menu, MenuItem, SectionCard } from '$lib/components/ui';
+	import { Alert, Menu, MenuItem, MenuLabel, SectionCard } from '$lib/components/ui';
 	import { envVarsToRaw, rawToEnvVarsKeepingSecrets } from './deployment-helpers';
 	import {
 		SEALED_PLACEHOLDER,
@@ -177,26 +178,26 @@
 
 {#snippet resourceMenu(onPick: (p: Pick) => void)}
 	{#if databasePicks.length > 0}
-		<div class="env-menu-label">Databases</div>
+		<MenuLabel>Databases</MenuLabel>
 		{#each databasePicks as p (p.kind === 'bound' ? p.binding.id : p.option.resourceId)}
-			<MenuItem onclick={() => onPick(p)}>
-				<Database size={14} />
-				<span class="env-pick">
-					<span>{pickName(p)}</span>
-					{#if pickEndpoint(p)}<span class="env-pick-sub">{pickEndpoint(p)}</span>{/if}
-				</span>
+			<MenuItem
+				icon={Database}
+				description={pickEndpoint(p) ?? undefined}
+				onclick={() => onPick(p)}
+			>
+				{pickName(p)}
 			</MenuItem>
 		{/each}
 	{/if}
 	{#if appPicks.length > 0}
-		<div class="env-menu-label">Apps on this project</div>
+		<MenuLabel>Apps on this project</MenuLabel>
 		{#each appPicks as p (p.kind === 'bound' ? p.binding.id : p.option.resourceId)}
-			<MenuItem onclick={() => onPick(p)}>
-				<Boxes size={14} />
-				<span class="env-pick">
-					<span>{pickName(p)}</span>
-					<span class="env-pick-sub">{pickEndpoint(p) ?? 'No port exposed yet'}</span>
-				</span>
+			<MenuItem
+				icon={Boxes}
+				description={pickEndpoint(p) ?? 'No port exposed yet'}
+				onclick={() => onPick(p)}
+			>
+				{pickName(p)}
 			</MenuItem>
 		{/each}
 	{/if}
@@ -277,15 +278,18 @@
 										</button>
 									{/snippet}
 									{#if bound}
-										<div class="env-menu-label">Read from {bound.resource?.name ?? bound.name}</div>
+										<MenuLabel>Read from {bound.resource?.name ?? bound.name}</MenuLabel>
 										{#each bound.fields as field (field)}
-											<MenuItem onclick={() => setValue(index, refFor(bound.name, field))}>
-												<span>{fieldLabel(field)}</span>
+											<MenuItem
+												checked={env.value === refFor(bound.name, field)}
+												onclick={() => setValue(index, refFor(bound.name, field))}
+											>
+												{fieldLabel(field)}
 											</MenuItem>
 										{/each}
 									{/if}
-									<MenuItem onclick={() => setValue(index, '')}>
-										<span>Type a value instead</span>
+									<MenuItem icon={Pencil} onclick={() => setValue(index, '')}>
+										Type a value instead
 									</MenuItem>
 								</Menu>
 							{:else}
@@ -457,25 +461,6 @@
 	.env-use:hover {
 		background: var(--fill-quiet);
 		color: var(--text-muted);
-	}
-	.env-pick {
-		display: flex;
-		flex-direction: column;
-		min-width: 0;
-	}
-	.env-pick-sub {
-		font-family: var(--font-mono);
-		font-size: var(--text-micro);
-		color: var(--text-faint);
-	}
-	.env-menu-label {
-		padding: 0.375rem 0.75rem 0.125rem;
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		font-weight: 600;
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
-		color: var(--text-faint);
 	}
 	.env-action-secret {
 		color: var(--status-warning);

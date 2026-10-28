@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { Loader2, UserPlus, Trash2, ChevronDown, Check, Mail, X, Search } from 'lucide-svelte';
+	import { Loader2, UserPlus, Trash2, ChevronDown, Mail, X, Search } from 'lucide-svelte';
 	import { UsersRound, MailCheck } from '@jis3r/icons';
 	import { motionStagger, springHover } from '$lib/utils/motion.svelte';
-	import { Avatar, Button, Badge, Menu, MenuItem, PopoverPanel } from '$lib/components/ui';
+	import { Avatar, Button, Badge, Dropdown, PopoverPanel } from '$lib/components/ui';
 	import SettingsSection from '$lib/components/user-settings/SettingsSection.svelte';
 	import { user } from '$lib/stores';
 
@@ -84,11 +84,17 @@
 		index?: number;
 	} = $props();
 
-	const roleOptions: Array<{ value: 'member' | 'admin' | 'owner'; label: string }> = [
+	type OrgRole = 'member' | 'admin' | 'owner';
+
+	const roleOptions: Array<{ value: OrgRole; label: string }> = [
 		{ value: 'member', label: 'Member' },
 		{ value: 'admin', label: 'Admin' },
 		{ value: 'owner', label: 'Owner' }
 	];
+
+	function setRole(member: Member, role: string) {
+		if (role !== member.role) onUpdateMemberRole(member.id, role as OrgRole);
+	}
 
 	function formatRole(role: string) {
 		return role.charAt(0).toUpperCase() + role.slice(1);
@@ -211,24 +217,15 @@
 							bind:value={newMemberEmail}
 						/>
 						<div class="om-invite-row">
-							<Menu placement="bottom-start">
-								{#snippet trigger(attrs, _open)}
-									<button type="button" class="om-role-trigger" {...attrs}>
-										<span
-											>{roleOptions.find((r) => r.value === newMemberRole)?.label || 'Role'}</span
-										>
-										<ChevronDown class="h-3.5 w-3.5" />
-									</button>
-								{/snippet}
-								{#each roleOptions as option (option.value)}
-									<MenuItem onclick={() => (newMemberRole = option.value)}>
-										<span class="om-option-label">{option.label}</span>
-										{#if newMemberRole === option.value}<Check
-												class="h-3.5 w-3.5 om-check-icon"
-											/>{/if}
-									</MenuItem>
-								{/each}
-							</Menu>
+							<div class="om-role-pick">
+								<Dropdown
+									bind:value={() => newMemberRole, (v) => (newMemberRole = v as OrgRole)}
+									options={roleOptions}
+									size="sm"
+									placeholder="Role"
+									ariaLabel="Role for the invite"
+								/>
+							</div>
 							<Button
 								variant="primary"
 								size="sm"
@@ -302,22 +299,14 @@
 					</div>
 					<div class="om-td">
 						{#if isOwner && member.role !== 'guest'}
-							<Menu placement="bottom-start">
-								{#snippet trigger(attrs, _open)}
-									<button type="button" class="om-role-trigger" {...attrs}>
-										<span>{formatRole(member.role)}</span>
-										<ChevronDown class="h-3.5 w-3.5" />
-									</button>
-								{/snippet}
-								{#each roleOptions as option (option.value)}
-									<MenuItem onclick={() => onUpdateMemberRole(member.id, option.value)}>
-										<span class="om-option-label">{option.label}</span>
-										{#if member.role === option.value}<Check
-												class="h-3.5 w-3.5 om-check-icon"
-											/>{/if}
-									</MenuItem>
-								{/each}
-							</Menu>
+							<div class="om-role-pick">
+								<Dropdown
+									bind:value={() => member.role, (v) => setRole(member, v)}
+									options={roleOptions}
+									size="sm"
+									ariaLabel="Role for {memberName(member) || member.user.email}"
+								/>
+							</div>
 						{:else if member.role === 'guest'}
 							<span
 								class="om-guest-wrap"
@@ -443,8 +432,8 @@
 		font-size: var(--text-micro);
 		line-height: var(--lh-micro);
 		font-weight: 600;
-		background-color: color-mix(in srgb, var(--button-bg) 10%, transparent);
-		color: var(--button-bg);
+		background-color: var(--accent-3);
+		color: var(--accent-9);
 	}
 
 	.om-invite-bar {
@@ -452,7 +441,7 @@
 		align-items: center;
 		gap: 0.5rem;
 		padding-bottom: 1rem;
-		border-bottom: 1px solid color-mix(in srgb, var(--surface-border) 40%, transparent);
+		border-bottom: 1px solid var(--border-default);
 		margin-bottom: 0.25rem;
 	}
 
@@ -461,51 +450,26 @@
 		min-width: 0;
 		padding: 0.5rem 0.75rem;
 		border-radius: var(--radius-sm);
-		border: 1px solid var(--surface-border);
-		background-color: var(--center-channel-bg);
-		color: var(--center-channel-color);
+		border: 1px solid var(--border-default);
+		background-color: var(--bg-raised);
+		color: var(--text-default);
 		font-size: var(--text-footnote);
 		line-height: var(--lh-footnote);
 		outline: none;
-		transition: border-color var(--dur-fast);
+		transition: border-color var(--fade-in) var(--curve-out);
 	}
 
 	.om-invite-input:focus {
-		border-color: var(--button-bg);
+		border-color: var(--accent);
 	}
 
 	.om-invite-input::placeholder {
-		color: var(--surface-muted);
+		color: var(--text-faint);
 	}
 
-	.om-role-trigger {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.5rem 0.75rem;
-		border-radius: var(--radius-sm);
-		border: 1px solid var(--surface-border);
-		background-color: var(--center-channel-bg);
-		color: var(--center-channel-color);
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		font-weight: 600;
-		cursor: pointer;
-		transition: border-color var(--dur-fast);
-		white-space: nowrap;
-	}
-
-	.om-role-trigger:hover {
-		border-color: color-mix(in srgb, var(--center-channel-color) 30%, transparent);
-	}
-
-	.om-option-label {
-		flex: 1;
-		text-align: left;
-	}
-
-	:global(.om-check-icon) {
-		color: var(--button-bg);
+	.om-role-pick {
+		width: 7rem;
+		flex-shrink: 0;
 	}
 
 	.om-member-list {
@@ -521,7 +485,7 @@
 	}
 
 	.om-member + .om-member {
-		border-top: 1px solid color-mix(in srgb, var(--surface-border) 40%, transparent);
+		border-top: 1px solid var(--border-default);
 	}
 
 	.om-member-left {
@@ -557,7 +521,7 @@
 		font-size: var(--text-callout);
 		line-height: var(--lh-callout);
 		font-weight: 600;
-		color: var(--center-channel-color);
+		color: var(--text-default);
 		margin: 0;
 		display: flex;
 		align-items: center;
@@ -574,7 +538,7 @@
 	.om-member-email {
 		font-size: var(--text-micro);
 		line-height: var(--lh-micro);
-		color: var(--surface-muted);
+		color: var(--text-muted);
 		margin: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;

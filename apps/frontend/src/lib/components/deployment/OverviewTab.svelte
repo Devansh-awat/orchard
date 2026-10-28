@@ -335,17 +335,21 @@
 									{@const isCrash =
 										selectedPod === pod.name && selectedContainer === cont.name && showPreviousLogs}
 									{@const crashed = !!cont.lastTermination?.reason || (cont.restartCount ?? 0) > 0}
-									<MenuItem onclick={() => openCurrentLogs(pod, cont.name)}>
-										<Boxes size={14} class="shrink-0 opacity-40" />
-										<span class:font-semibold={isCur}>{podLabel(pod.name)} / {cont.name}</span>
+									<MenuItem
+										icon={Boxes}
+										checked={isCur}
+										onclick={() => openCurrentLogs(pod, cont.name)}
+									>
+										{podLabel(pod.name)} / {cont.name}
 									</MenuItem>
 									{#if crashed}
-										<MenuItem onclick={() => openCrashLogs(pod, cont.name)}>
-											<Terminal size={14} class="shrink-0 opacity-40" />
-											<span class:font-semibold={isCrash}
-												>{podLabel(pod.name)} / {cont.name}
-												<span class="console-src-tag">crashed</span></span
-											>
+										<MenuItem
+											icon={Terminal}
+											checked={isCrash}
+											onclick={() => openCrashLogs(pod, cont.name)}
+										>
+											{podLabel(pod.name)} / {cont.name}
+											<span class="console-src-tag">crashed</span>
 										</MenuItem>
 									{/if}
 								{/each}
@@ -402,8 +406,7 @@
 						{/snippet}
 						{#each deployment.pods ?? [] as pod (pod.name)}
 							{#each pod.containers ?? [] as cont (cont.name)}
-								<MenuItem onclick={() => onOpenShell(pod.name, cont.name)}>
-									<Terminal size={14} class="shrink-0 opacity-40" />
+								<MenuItem icon={Terminal} onclick={() => onOpenShell(pod.name, cont.name)}>
 									{podLabel(pod.name)} / {cont.name}
 								</MenuItem>
 							{/each}

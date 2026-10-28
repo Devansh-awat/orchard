@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { Loader2, ExternalLink, EllipsisVertical, Pencil, Square } from 'lucide-svelte';
-	import { Play, RefreshCw, Trash2 } from '@jis3r/icons';
+	import { Loader2, ExternalLink, EllipsisVertical, Pencil, Square, Trash2 } from 'lucide-svelte';
+	import { Play, RefreshCw } from '@jis3r/icons';
 	import { motionStagger, springCollapse } from '$lib/utils/motion.svelte';
 	import { formatRelativeTime } from '$lib/utils/format';
 	import { ingressUrl } from '$lib/ingress-url';
@@ -162,14 +162,10 @@
 				</button>
 			{/snippet}
 			{#if onRename}
-				<MenuItem onclick={onRename}>
-					<Pencil size={14} />
-					<span>Rename</span>
-				</MenuItem>
+				<MenuItem icon={Pencil} onclick={onRename}>Rename</MenuItem>
 			{/if}
-			<MenuItem danger disabled={deleting} onclick={onShowDeleteModal}>
-				<Trash2 size={14} />
-				<span>Delete app</span>
+			<MenuItem icon={Trash2} danger disabled={deleting} onclick={onShowDeleteModal}>
+				Delete app
 			</MenuItem>
 		</Menu>
 	</div>

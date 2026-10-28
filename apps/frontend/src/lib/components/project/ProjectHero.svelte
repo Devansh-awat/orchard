@@ -69,10 +69,7 @@
 							<Ellipsis class="h-4 w-4" />
 						</button>
 					{/snippet}
-					<MenuItem onclick={() => onCustomize?.()}>
-						<Palette size={14} />
-						Customize appearance
-					</MenuItem>
+					<MenuItem icon={Palette} onclick={() => onCustomize?.()}>Customize appearance</MenuItem>
 				</Menu>
 			{/if}
 		</div>

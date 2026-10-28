@@ -115,19 +115,12 @@
 				</button>
 			{/snippet}
 			{#if job.scheduleCron}
-				<MenuItem onclick={() => onTogglePause(job)}>
-					<Pause size={13} />
+				<MenuItem icon={job.enabled ? Pause : Play} onclick={() => onTogglePause(job)}>
 					{job.enabled ? 'Pause schedule' : 'Resume schedule'}
 				</MenuItem>
 			{/if}
-			<MenuItem href="/{orgSlug}/jobs/{job.id}?tab=settings">
-				<Pencil size={13} />
-				Edit
-			</MenuItem>
-			<MenuItem danger onclick={() => onDelete(job)}>
-				<Trash2 size={13} />
-				Delete
-			</MenuItem>
+			<MenuItem icon={Pencil} href="/{orgSlug}/jobs/{job.id}?tab=settings">Edit</MenuItem>
+			<MenuItem icon={Trash2} danger onclick={() => onDelete(job)}>Delete</MenuItem>
 		</Menu>
 	</div>
 </div>

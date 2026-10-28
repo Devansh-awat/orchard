@@ -1,6 +1,5 @@
 export { default as ToastContainer } from './Toast.svelte';
 export { default as ErrorPage } from './ErrorPage.svelte';
-export { default as WorkspacesMenu } from './WorkspacesMenu.svelte';
 export { default as CliModal } from './CliModal.svelte';
 export { default as PendingInvitationsModal } from './PendingInvitationsModal.svelte';
 export { default as OnboardingModal } from './OnboardingModal.svelte';
