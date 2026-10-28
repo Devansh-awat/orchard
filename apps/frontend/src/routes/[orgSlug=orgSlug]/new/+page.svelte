@@ -2,11 +2,15 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { Github, Container, LayoutTemplate } from 'lucide-svelte';
+	import { Github, Container, LayoutTemplate, ChevronsUpDown } from 'lucide-svelte';
 	import { apiFetch, selectedOrganization, toasts, user } from '$lib/stores';
 	import Page from '$lib/components/ui/Page.svelte';
 	import SearchField from '$lib/components/ui/SearchField.svelte';
-	import Select from '$lib/components/ui/Select.svelte';
+	import Button from '$lib/components/ui/Button.svelte';
+	import Menu from '$lib/components/ui/Menu.svelte';
+	import MenuItem from '$lib/components/ui/MenuItem.svelte';
+	import MenuLabel from '$lib/components/ui/MenuLabel.svelte';
+	import AppIcon from '$lib/components/ui/AppIcon.svelte';
 	import Skeleton from '$lib/components/ui/Skeleton.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import SectionTitle from '$lib/components/ui/SectionTitle.svelte';
@@ -53,25 +57,33 @@
 	let busy = $state<string | null>(null);
 	let query = $state('');
 	let projectSlug = $state('');
+	const currentProject = $derived(projects.find((p) => p.slug === projectSlug));
 
 	const label = (t: Template) => CATEGORY[t.category ?? ''] ?? t.category ?? 'Template';
 
-	const featured = $derived.by<FeatureItem[]>(() => {
-		const picked = FEATURED.map((n) => templates.find((t) => t.name === n)).filter(
-			(t): t is Template => !!t
-		);
-		const list = picked.length ? picked : templates.slice(0, 5);
-		return list.map((t) => ({
+	let spotlight = $state<Template[]>([]);
+
+	function shuffle<T>(list: T[]) {
+		const out = [...list];
+		for (let i = out.length - 1; i > 0; i--) {
+			const j = Math.floor(Math.random() * (i + 1));
+			[out[i], out[j]] = [out[j], out[i]];
+		}
+		return out;
+	}
+
+	const featured = $derived<FeatureItem[]>(
+		spotlight.map((t) => ({
 			id: t.id,
 			title: t.displayName,
 			eyebrow: label(t),
 			description: t.description,
 			icon: t.icon,
 			href: templateHref(t)
-		}));
-	});
+		}))
+	);
 
-	const redis = $derived(templates.find((t) => t.name === 'redis'));
+	const redis = $derived(templates.find((t) => t.name === 'redis-oss'));
 
 	const dock = $derived<DockItem[]>([
 		{
@@ -103,7 +115,7 @@
 					{
 						id: `template:${redis.id}`,
 						label: 'Redis',
-						hint: 'Valkey cache, Redis-compatible',
+						hint: 'Cache, queues and sessions',
 						image: IMG_ICONS.redis,
 						href: templateHref(redis)
 					}
@@ -135,7 +147,11 @@
 			return b[1].length - a[1].length;
 		});
 		const big = sorted.filter(([, list]) => list.length >= 3);
-		const rest = sorted.filter(([, list]) => list.length < 3).flatMap(([, list]) => list);
+		const shown = new Set(popular.map((t) => t.id));
+		const rest = sorted
+			.filter(([, list]) => list.length < 3)
+			.flatMap(([, list]) => list)
+			.filter((t) => !shown.has(t.id));
 		return [
 			{ title: 'Popular', items: popular.map(toItem) },
 			...big.map(([title, list]) => ({ title, items: list.map(toItem) })),
@@ -251,7 +267,11 @@
 					slug: p.slug
 				}));
 			}
-			if (tplRes.ok) templates = await tplRes.json();
+			if (tplRes.ok) {
+				templates = await tplRes.json();
+				const withIcons = templates.filter((t) => t.icon);
+				spotlight = shuffle(withIcons.length >= 3 ? withIcons : templates).slice(0, 5);
+			}
 			projectSlug =
 				preselectedProject && projects.some((p) => p.slug === preselectedProject)
 					? preselectedProject
@@ -265,19 +285,23 @@
 <svelte:head><title>New</title></svelte:head>
 
 <Page title="New" width="wide">
-	{#snippet tools()}
-		{#if projects.length > 1}
-			<label class="into">
-				<span>Into</span>
-				<span class="into-select">
-					<Select size="sm" bind:value={projectSlug} aria-label="Project">
-						{#each projects as p (p.id)}<option value={p.slug}>{p.name}</option>{/each}
-					</Select>
-				</span>
-			</label>
-		{/if}
-	{/snippet}
 	{#snippet actions()}
+		{#if projects.length > 1}
+			<Menu placement="bottom-end" size="lg">
+				{#snippet trigger(attrs)}
+					<Button {...attrs} variant="secondary" iconRight={ChevronsUpDown}>
+						<span class="into">Into <strong>{currentProject?.name ?? 'a project'}</strong></span>
+					</Button>
+				{/snippet}
+				<MenuLabel>Deploy into</MenuLabel>
+				{#each projects as p (p.id)}
+					<MenuItem checked={p.slug === projectSlug} onclick={() => (projectSlug = p.slug)}>
+						{#snippet leading()}<AppIcon name={p.name} kind="project" size="sm" />{/snippet}
+						{p.name}
+					</MenuItem>
+				{/each}
+			</Menu>
+		{/if}
 		<SearchField placeholder="Search templates" shortcut="/" bind:value={query} />
 	{/snippet}
 
@@ -286,6 +310,8 @@
 			<Shelf
 				title="Templates matching “{query.trim()}”"
 				items={results}
+				columns={4}
+				plain
 				onSelect={(item) => openTemplate(item.id)}
 			/>
 		{:else}
@@ -301,12 +327,12 @@
 			{#if loading}
 				<Skeleton height="18rem" rounded="1.875rem" />
 			{:else if featured.length}
-				<FeatureHero items={featured} onSelect={(item) => openTemplate(item.id)} />
+				<FeatureHero items={featured} columns={4} onSelect={(item) => openTemplate(item.id)} />
 			{/if}
 
 			<section class="start">
 				<SectionTitle title="Start from scratch" size="md" />
-				<Dock label="Start from scratch" items={dock} {busy} onSelect={openSource} />
+				<Dock label="Start from scratch" items={dock} columns={4} {busy} onSelect={openSource} />
 			</section>
 
 			{#if loading}
@@ -316,6 +342,8 @@
 					<Shelf
 						title={shelf.title}
 						items={shelf.items}
+						columns={4}
+						plain
 						onSelect={(item) => openTemplate(item.id)}
 					/>
 				{/each}
@@ -328,22 +356,18 @@
 	.hub {
 		display: flex;
 		flex-direction: column;
-		gap: 2.5rem;
+		gap: 2.625rem;
 	}
 	.start {
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
+		gap: 1rem;
 	}
 	.into {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-size: var(--text-callout);
 		color: var(--text-muted);
 	}
-	.into-select {
-		display: block;
-		width: 11rem;
+	.into strong {
+		font-weight: var(--weight-medium);
+		color: var(--text-default);
 	}
 </style>

@@ -69,6 +69,14 @@ export const TEMPLATES: MockTemplate[] = [
 		category: 'games'
 	},
 	{
+		name: 'redis-oss',
+		displayName: 'Redis',
+		description:
+			'In-memory data store for caches, queues and sessions. Internal-only, no public exposure.',
+		icon: 'https://github.com/redis.png?size=256',
+		category: 'database'
+	},
+	{
 		name: 'redis',
 		displayName: 'Valkey Cache',
 		description: 'In-memory key-value cache, Redis-compatible. Internal-only, no public exposure.',

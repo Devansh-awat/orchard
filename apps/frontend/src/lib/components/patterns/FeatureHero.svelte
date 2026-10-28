@@ -13,36 +13,26 @@
 	import { ArrowRight } from 'lucide-svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import IconTile from '$lib/components/ui/IconTile.svelte';
-	import { bakeBlur } from '$lib/components/aura/aura';
 	import { decorativeMotion, fade, springTiming } from '$lib/utils/motion.svelte';
 
 	let {
 		items,
 		cta = 'Deploy',
+		columns = 4,
 		onSelect = undefined,
 		interval = 7000
 	}: {
 		items: FeatureItem[];
 		cta?: string;
+		columns?: number;
 		onSelect?: (item: FeatureItem) => void;
 		interval?: number;
 	} = $props();
 
 	let index = $state(0);
 	let paused = $state(false);
-	let baked = $state<Record<string, string>>({});
 
 	const current = $derived(items[Math.min(index, items.length - 1)]);
-
-	$effect(() => {
-		for (const item of items) {
-			if (!item.icon || baked[item.icon]) continue;
-			const src = item.icon;
-			bakeBlur(src).then((url) => {
-				if (url) baked[src] = url;
-			});
-		}
-	});
 
 	$effect(() => {
 		if (paused || items.length < 2 || !decorativeMotion()) return;
@@ -58,7 +48,10 @@
 
 	function enter(el: HTMLElement) {
 		if (!decorativeMotion()) return;
-		el.animate([{ transform: 'translateY(0.5rem)' }, { transform: 'none' }], springTiming('glide'));
+		el.animate(
+			[{ transform: 'translateY(0.375rem)' }, { transform: 'none' }],
+			springTiming('glide')
+		);
 		el.animate([{ opacity: 0 }, { opacity: 1 }], { ...fade('in'), fill: 'backwards' });
 	}
 
@@ -70,135 +63,90 @@
 </script>
 
 {#if current}
-	<section
-		class="hero"
-		aria-roledescription="carousel"
-		aria-label="Featured"
-		onpointerenter={() => (paused = true)}
-		onpointerleave={() => (paused = false)}
-		onfocusin={() => (paused = true)}
-		onfocusout={() => (paused = false)}
-		onkeydown={(e) => {
-			if (e.key === 'ArrowRight') go(index + 1);
-			if (e.key === 'ArrowLeft') go(index - 1);
-		}}
-	>
-		<div class="backdrop" aria-hidden="true">
-			{#each items as item, i (item.id)}
-				<span
-					class="mesh"
-					class:mesh--on={i === index}
-					style:--mesh={item.icon && baked[item.icon] ? `url("${baked[item.icon]}")` : 'none'}
-				></span>
-			{/each}
-			<span class="veil"></span>
-		</div>
-		{#key current.id}
-			<div class="copy" {@attach enter}>
-				{#if current.eyebrow}<p class="eyebrow">{current.eyebrow}</p>{/if}
-				<h2 class="title">{current.title}</h2>
-				{#if current.description}<p class="description">{current.description}</p>{/if}
-				<div class="actions">
-					<Button
-						variant="media"
-						size="lg"
-						href={current.href}
-						iconRight={ArrowRight}
-						onclick={choose}>{cta}</Button
-					>
+	<div class="frame" style:--cols={columns}>
+		<section
+			class="hero"
+			aria-roledescription="carousel"
+			aria-label="Featured"
+			onpointerenter={() => (paused = true)}
+			onpointerleave={() => (paused = false)}
+			onfocusin={() => (paused = true)}
+			onfocusout={() => (paused = false)}
+			onkeydown={(e) => {
+				if (e.key === 'ArrowRight') go(index + 1);
+				if (e.key === 'ArrowLeft') go(index - 1);
+			}}
+		>
+			{#key current.id}
+				<div class="copy" {@attach enter}>
+					{#if current.eyebrow}<p class="eyebrow">{current.eyebrow}</p>{/if}
+					<h2 class="title">{current.title}</h2>
+					{#if current.description}<p class="description">{current.description}</p>{/if}
+					<div class="actions">
+						<Button variant="primary" href={current.href} iconRight={ArrowRight} onclick={choose}
+							>{cta}</Button
+						>
+					</div>
 				</div>
-			</div>
-			<div class="poster" {@attach enter} aria-hidden="true">
-				<IconTile src={current.icon} class="poster-tile" tint="var(--bg-raised)">
-					{#snippet fallback()}<span class="poster-letter">{current.title.charAt(0)}</span
-						>{/snippet}
-				</IconTile>
-			</div>
-		{/key}
-		{#if items.length > 1}
-			<div class="dots" role="tablist" aria-label="Featured items">
-				{#each items as item, i (item.id)}
-					<button
-						type="button"
-						role="tab"
-						class="dot"
-						class:dot--on={i === index}
-						aria-selected={i === index}
-						aria-label={item.title}
-						onclick={() => go(i)}
-					></button>
-				{/each}
-			</div>
-		{/if}
-	</section>
+				<div class="poster" aria-hidden="true">
+					<span class="poster-tile" {@attach enter}>
+						<IconTile src={current.icon} class="poster-img" tint="var(--bg-raised)">
+							{#snippet fallback()}<span class="poster-letter">{current.title.charAt(0)}</span
+								>{/snippet}
+						</IconTile>
+					</span>
+				</div>
+			{/key}
+			{#if items.length > 1}
+				<div class="dots" role="tablist" aria-label="Featured items">
+					{#each items as item, i (item.id)}
+						<button
+							type="button"
+							role="tab"
+							class="dot"
+							class:dot--on={i === index}
+							aria-selected={i === index}
+							aria-label={item.title}
+							onclick={() => go(i)}
+						></button>
+					{/each}
+				</div>
+			{/if}
+		</section>
+	</div>
 {/if}
 
 <style>
+	.frame {
+		container-type: inline-size;
+	}
 	.hero {
-		--hero-r: calc(1.5rem * var(--corner-scale));
+		--gap: 1rem;
+		--col: calc((100cqi - (var(--cols) - 1) * var(--gap)) / var(--cols));
+		--inset: calc(var(--col) * 0.191);
 		position: relative;
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) auto;
-		align-items: end;
-		gap: 2rem;
-		min-height: 18rem;
-		padding: 2rem 2.5rem 2.25rem;
-		overflow: hidden;
-		isolation: isolate;
-		border-radius: var(--hero-r);
+		grid-template-columns: minmax(0, 1fr) var(--col);
+		min-height: max(15rem, var(--col));
+		border-radius: calc(var(--radius-panel) * 1.25 * var(--corner-scale));
 		corner-shape: var(--corner);
-		background: var(--neutral-10);
-		color: var(--on-media);
+		background: var(--bg-surface);
 		box-shadow: var(--shadow-raised);
 	}
-	.backdrop {
-		position: absolute;
-		inset: 0;
-		z-index: -1;
-	}
-	.mesh {
-		position: absolute;
-		inset: -20%;
-		background-image: var(--mesh);
-		background-size: cover;
-		background-position: center;
-		filter: saturate(1.35);
-		opacity: 0;
-		transform: scale(1.08);
-		transition:
-			opacity var(--fade-long) var(--curve-in-out),
-			transform var(--spring-cinematic-duration) var(--spring-cinematic);
-	}
-	.mesh--on {
-		opacity: 1;
-		transform: none;
-	}
-	.veil {
-		position: absolute;
-		inset: 0;
-		background:
-			linear-gradient(
-				100deg,
-				oklch(0 0 0 / 0.55) 0%,
-				oklch(0 0 0 / 0.3) 45%,
-				oklch(0 0 0 / 0.05) 100%
-			),
-			linear-gradient(0deg, oklch(0 0 0 / 0.35), transparent 60%);
-	}
 	.copy {
-		grid-column: 1;
-		grid-row: 1;
 		display: flex;
 		flex-direction: column;
+		justify-content: center;
 		gap: 0.5rem;
-		max-width: 32rem;
+		max-width: 34rem;
+		padding: 1.5rem 0 1.5rem var(--inset);
 	}
 	.eyebrow {
 		margin: 0;
 		font-size: var(--text-callout);
 		line-height: var(--lh-callout);
 		font-weight: var(--weight-medium);
-		color: var(--on-media-muted);
+		color: var(--text-muted);
 	}
 	.title {
 		margin: 0;
@@ -214,7 +162,7 @@
 		overflow: hidden;
 		font-size: var(--text-headline);
 		line-height: var(--lh-headline);
-		color: var(--on-media-muted);
+		color: var(--text-muted);
 		-webkit-line-clamp: 2;
 		-webkit-box-orient: vertical;
 		text-wrap: pretty;
@@ -223,32 +171,38 @@
 		margin-top: 1rem;
 	}
 	.poster {
-		grid-column: 2;
-		grid-row: 1;
-		align-self: center;
-	}
-	.poster :global(.poster-tile) {
 		display: grid;
-		width: 8.5rem;
-		height: 8.5rem;
-		border-radius: calc(2rem * var(--corner-scale));
+		place-items: center;
+	}
+	.poster-tile {
+		display: block;
+		width: calc(var(--col) * 0.618);
+		aspect-ratio: 1;
+	}
+	.poster-tile :global(.poster-img) {
+		display: grid;
+		width: 100%;
+		height: 100%;
+		border-radius: calc(var(--col) * 0.618 * 0.225);
 		corner-shape: var(--corner);
-		background: var(--bg-raised);
 		box-shadow:
-			0 0 0 0.5px var(--on-media-edge),
-			0 18px 40px -12px oklch(0 0 0 / 0.45);
+			0 0 0 0.5px var(--rule),
+			0 1px 2px color-mix(in oklab, var(--neutral-10) 6%, transparent),
+			0 18px 40px -18px color-mix(in oklab, var(--neutral-10) 28%, transparent);
 	}
 	.poster-letter {
-		font-size: 3rem;
+		font-size: calc(var(--col) * 0.25);
 		font-weight: var(--weight-semibold);
 		color: var(--text-muted);
 	}
 	.dots {
 		position: absolute;
-		right: 2.5rem;
-		bottom: 1.25rem;
+		right: 0;
+		bottom: calc(var(--inset) / 2 - 0.21875rem);
 		display: flex;
+		justify-content: center;
 		gap: 0.375rem;
+		width: var(--col);
 	}
 	.dot {
 		width: 0.4375rem;
@@ -256,27 +210,30 @@
 		padding: 0;
 		border: none;
 		border-radius: var(--radius-pill);
-		background: var(--on-media-edge);
+		background: var(--neutral-5);
 		cursor: pointer;
-		transition:
-			width var(--spring-glide-duration) var(--spring-glide),
-			background-color var(--fade-in) var(--curve-out);
+		transition: background-color var(--fade-in) var(--curve-out);
 	}
 	.dot--on {
-		width: 1.25rem;
-		background: var(--on-media);
+		background: var(--text-default);
 	}
 	.dot:focus-visible {
-		outline: 2px solid var(--on-media);
+		outline: 2px solid var(--accent-solid);
 		outline-offset: 2px;
 	}
-	@media (max-width: 44rem) {
+	@container (max-width: 40rem) {
 		.hero {
 			grid-template-columns: minmax(0, 1fr);
+		}
+		.copy {
 			padding: 1.5rem;
 		}
 		.poster {
 			display: none;
+		}
+		.dots {
+			right: 1.5rem;
+			width: auto;
 		}
 	}
 </style>

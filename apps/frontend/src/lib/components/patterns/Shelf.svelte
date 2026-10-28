@@ -29,11 +29,15 @@
 		items,
 		title,
 		seeAllHref = undefined,
+		columns = undefined,
+		plain = false,
 		onSelect = undefined
 	}: {
 		items: ShelfItem[];
 		title: string;
 		seeAllHref?: string;
+		columns?: number;
+		plain?: boolean;
 		onSelect?: (item: ShelfItem) => void;
 	} = $props();
 
@@ -62,6 +66,7 @@
 	let baked = $state<Record<string, string | null>>({});
 
 	$effect(() => {
+		if (plain) return;
 		for (const item of items) {
 			const src = item.background ?? item.icon;
 			if (!src) continue;
@@ -117,7 +122,13 @@
 	}
 </script>
 
-<section class="shelf" aria-label={title}>
+<section
+	class="shelf"
+	class:shelf--plain={plain}
+	class:shelf--grid={!!columns}
+	style:--cols={columns}
+	aria-label={title}
+>
 	<SectionTitle {title} size="md">
 		{#snippet actions()}
 			{#if seeAllHref}<a class="see-all" href={seeAllHref}
@@ -324,6 +335,18 @@
 		margin: 0;
 		padding: 0;
 		list-style: none;
+	}
+	.shelf--grid .scroller {
+		container-type: inline-size;
+	}
+	.shelf--grid .slot {
+		flex-basis: calc((100cqi - (var(--cols) - 1) * 1rem) / var(--cols));
+	}
+	.shelf--grid .art {
+		aspect-ratio: 1.618;
+	}
+	.shelf--plain .art-clip {
+		background: var(--bg-surface);
 	}
 	.slot {
 		flex: 0 0 15rem;

@@ -17,15 +17,18 @@
 
 <script lang="ts">
 	import Spinner from '$lib/components/ui/Spinner.svelte';
+	import Badge from '$lib/components/ui/Badge.svelte';
 
 	let {
 		items,
 		label,
+		columns = 4,
 		busy = null,
 		onSelect = undefined
 	}: {
 		items: DockItem[];
 		label: string;
+		columns?: number;
 		busy?: string | null;
 		onSelect?: (item: DockItem) => void;
 	} = $props();
@@ -37,7 +40,7 @@
 	}
 </script>
 
-<nav class="dock" aria-label={label}>
+<nav class="dock" aria-label={label} style:--cols={columns}>
 	{#each items as item (item.id)}
 		{@const Glyph = item.icon}
 		<a
@@ -47,15 +50,15 @@
 			aria-disabled={busy !== null && busy !== item.id ? 'true' : undefined}
 			onclick={(e) => choose(e, item)}
 		>
-			<span class="art art--{item.tone ?? 'paper'}">
+			<span class="icon icon--{item.tone ?? 'paper'}">
 				{#if busy === item.id}
 					<Spinner size={28} />
 				{:else if item.image}
-					<img src={item.image} alt="" class="art-img" />
+					<img src={item.image} alt="" />
 				{:else if Glyph}
-					<Glyph size={34} strokeWidth={1.75} />
+					<Glyph strokeWidth={1.5} />
 				{/if}
-				{#if item.badge}<span class="badge">{item.badge}</span>{/if}
+				{#if item.badge}<span class="badge"><Badge tone="accent">{item.badge}</Badge></span>{/if}
 			</span>
 			<span class="text">
 				<span class="label">{item.label}</span>
@@ -67,109 +70,119 @@
 
 <style>
 	.dock {
-		--dock-pad: 0.75rem;
-		--tile-r: 1.125rem;
+		--gap: 1rem;
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
-		gap: var(--dock-pad);
-		padding: var(--dock-pad);
-		border-radius: calc((var(--tile-r) + var(--dock-pad)) * var(--corner-scale));
-		corner-shape: var(--corner);
-		background: var(--bg-surface);
-		box-shadow: var(--shadow-raised);
+		grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+		gap: var(--gap);
+	}
+	@media (max-width: 52rem) {
+		.dock {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
 	}
 	.tile {
 		display: flex;
 		flex-direction: column;
-		gap: 0.625rem;
-		padding-bottom: 0.25rem;
+		align-items: center;
+		gap: 0.875rem;
 		color: inherit;
+		text-align: center;
 		text-decoration: none;
-		border-radius: calc(var(--tile-r) * var(--corner-scale));
-		corner-shape: var(--corner);
 		outline: none;
 	}
 	.tile[aria-disabled='true'] {
 		opacity: 0.5;
 		pointer-events: none;
 	}
-	.art {
+	.icon {
 		position: relative;
 		display: grid;
 		place-items: center;
-		aspect-ratio: 16 / 10;
-		border-radius: calc(var(--tile-r) * var(--corner-scale));
+		width: 61.8%;
+		aspect-ratio: 1;
+		isolation: isolate;
+		border-radius: 22.37%;
 		corner-shape: var(--corner);
-		box-shadow: inset 0 0 0 0.5px var(--rule);
-		transition:
-			transform var(--spring-glide-duration) var(--spring-glide),
-			box-shadow var(--fade-in) var(--curve-out);
-	}
-	.tile:hover .art,
-	.tile:focus-visible .art {
-		transform: translateY(-2px) scale(1.025);
 		box-shadow:
-			inset 0 0 0 0.5px var(--rule),
-			var(--shadow-floating);
+			inset 0 0 0 0.5px color-mix(in oklab, var(--neutral-10) 10%, transparent),
+			0 1px 2px color-mix(in oklab, var(--neutral-10) 8%, transparent),
+			0 14px 28px -16px color-mix(in oklab, var(--neutral-10) 40%, transparent);
+		transition: transform var(--spring-glide-duration) var(--spring-glide);
 	}
-	.tile:active .art {
-		transform: scale(0.98);
+	.icon::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		z-index: -1;
+		border-radius: inherit;
+		box-shadow: var(--shadow-floating);
+		opacity: 0;
+		transition: opacity var(--dur-base) ease;
+	}
+	.tile:hover .icon,
+	.tile:focus-visible .icon {
+		transform: scale(1.04);
+	}
+	.tile:hover .icon::before,
+	.tile:focus-visible .icon::before {
+		opacity: 1;
+	}
+	.tile:active .icon {
+		transform: scale(1.01);
 		transition-duration: var(--spring-press-duration);
+		transition-timing-function: var(--spring-press);
 	}
-	.tile:focus-visible .art {
-		outline: 2px solid var(--accent-solid);
-		outline-offset: 2px;
+	.tile:focus-visible .icon {
+		outline: 3px solid var(--focus-ring);
+		outline-offset: 3px;
 	}
-	.art--ink {
+	.icon > :global(svg) {
+		width: 40%;
+		height: 40%;
+	}
+	.icon img {
+		width: 56%;
+		height: 56%;
+		object-fit: contain;
+	}
+	.icon--ink {
 		background: var(--neutral-10);
 		color: var(--neutral-app);
 	}
-	.art--blue {
+	.icon--blue {
 		background: var(--blue-solid);
 		color: var(--on-solid);
 	}
-	.art--green {
+	.icon--green {
 		background: var(--green-solid);
 		color: var(--on-solid);
 	}
-	.art--amber {
+	.icon--amber {
 		background: var(--amber-solid);
 		color: var(--on-solid);
 	}
-	.art--red {
+	.icon--red {
 		background: var(--red-solid);
 		color: var(--on-solid);
 	}
-	.art--accent {
+	.icon--accent {
 		background: var(--accent-solid);
 		color: var(--on-solid);
 	}
-	.art--paper {
+	.icon--paper {
 		background: var(--bg-raised);
 		color: var(--text-default);
 	}
-	.art-img {
-		width: 2.75rem;
-		height: 2.75rem;
-		object-fit: contain;
-	}
 	.badge {
 		position: absolute;
-		top: 0.5rem;
-		right: 0.5rem;
-		padding: 0.125rem 0.4375rem;
-		border-radius: var(--radius-pill);
-		background: var(--on-media-pill);
-		color: var(--on-media);
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		font-weight: var(--weight-medium);
+		top: -0.375rem;
+		right: -0.75rem;
 	}
 	.text {
 		display: flex;
 		flex-direction: column;
-		gap: 0.0625rem;
-		padding: 0 0.25rem;
+		gap: 0.125rem;
+		max-width: 100%;
 		min-width: 0;
 	}
 	.label {

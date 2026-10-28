@@ -1,0 +1,58 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: redis-oss
+  displayName: Redis
+  description: In-memory data store for caches, queues and sessions. Internal-only, no public exposure.
+  icon: https://github.com/redis.png?size=256
+  version: '1.0.0'
+  category: database
+  tags: ['redis', 'cache', 'memory', 'key-value']
+  keywords: ['redis', 'cache', 'key-value', 'in-memory', 'queue', 'session store']
+  homepage: https://redis.io
+  license: AGPL-3.0-only
+
+parameters:
+  - name: appName
+    displayName: App Name
+    description: Name for the Redis deployment
+    type: string
+    default: redis
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: Must be lowercase alphanumeric with hyphens, 3-60 chars
+
+  - name: image
+    displayName: Image
+    type: string
+    default: 'redis:8-alpine'
+
+  - name: maxMemory
+    displayName: Max Memory
+    description: Maximum memory Redis can use
+    type: select
+    default: '64mb'
+    options:
+      - label: '64 MB'
+        value: '64mb'
+      - label: '128 MB'
+        value: '128mb'
+      - label: '256 MB'
+        value: '256mb'
+      - label: '512 MB'
+        value: '512mb'
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: '{{ params.image }}'
+      startCommand: 'redis-server --maxmemory {{ params.maxMemory }} --maxmemory-policy allkeys-lru'
+      replicas: 1
+      ports:
+        - name: redis
+          containerPort: 6379
+          servicePort: 6379
+          protocol: TCP
