@@ -17,7 +17,9 @@
 		FolderOpen,
 		GitBranch,
 		Github,
+		Globe,
 		Lock,
+		Radio,
 		Plus,
 		Trash2
 	} from 'lucide-svelte';
@@ -74,6 +76,26 @@
 		{ value: 'github', label: 'GitHub', icon: Github },
 		{ value: 'git', label: 'Git', icon: GitBranch }
 	];
+	const REACH_OPTIONS: DropdownOption[] = [
+		{
+			value: 'url',
+			label: 'Org URL',
+			description: 'An https address only your org can open',
+			icon: Globe
+		},
+		{
+			value: 'tcp',
+			label: 'Public port',
+			description: 'Open to the internet on a node port',
+			icon: Radio
+		},
+		{
+			value: 'private',
+			label: 'Private',
+			description: 'Only other apps in this project',
+			icon: Lock
+		}
+	];
 	const PROTOCOL_OPTIONS = [
 		{ value: 'TCP', label: 'TCP' },
 		{ value: 'UDP', label: 'UDP' }
@@ -89,6 +111,26 @@
 		clone_url: string;
 		default_branch: string;
 		private: boolean;
+	}
+
+	type Reach = 'url' | 'tcp' | 'private';
+
+	type PortRow = {
+		name: string;
+		containerPort: number;
+		servicePort: number;
+		protocol: string;
+		reach: Reach;
+	};
+
+	function portRow(port: number, index: number): PortRow {
+		return {
+			name: `port-${index + 1}`,
+			containerPort: port,
+			servicePort: port,
+			protocol: 'TCP',
+			reach: index === 0 ? 'url' : 'private'
+		};
 	}
 
 	interface Branch {
@@ -172,11 +214,9 @@
 	let dockerfilePath = $state('Dockerfile');
 	let buildFromRoot = $state(false);
 	let replicas = $state(1);
-	let exposePublic = $state(false);
-	let autoUrl = $state(true);
 	let resourceCpuMilli = $state<number | null>(null);
 	let resourceMemoryBytes = $state<number | null>(null);
-	let ports = $state([{ name: 'http', containerPort: 80, servicePort: 80, protocol: 'TCP' }]);
+	let ports = $state<PortRow[]>([portRow(80, 0)]);
 	let portsManuallyEdited = $state(false);
 	let envVars = $state([{ key: '', value: '' }]);
 	let envsManuallyEdited = $state(false);
@@ -333,9 +373,7 @@
 		if (preset && !buildSettingsTouched) {
 			outputDirectory = preset.outputDirectory ?? '';
 			if (!portsManuallyEdited) {
-				ports = [
-					{ name: 'port-1', containerPort: preset.port, servicePort: preset.port, protocol: 'TCP' }
-				];
+				ports = [portRow(preset.port, 0)];
 			}
 		}
 	}
@@ -397,12 +435,7 @@
 			selectedStage = '';
 		}
 		if (det.ports.length > 0 && !portsManuallyEdited) {
-			ports = det.ports.map((p, i) => ({
-				name: `port-${i + 1}`,
-				containerPort: p,
-				servicePort: p,
-				protocol: 'TCP'
-			}));
+			ports = det.ports.map((p, i) => portRow(p, i));
 		}
 		if (det.env.length > 0 && !envsManuallyEdited) {
 			envVars = det.env.map((e) => ({ key: e.key, value: e.value }));
@@ -491,12 +524,7 @@
 				selectedStage = '';
 
 				if (info.exposedPorts.length > 0 && !portsManuallyEdited) {
-					ports = info.exposedPorts.map((p, i) => ({
-						name: `port-${i + 1}`,
-						containerPort: p,
-						servicePort: p,
-						protocol: 'TCP'
-					}));
+					ports = info.exposedPorts.map((p, i) => portRow(p, i));
 				}
 
 				if (info.envVars.length > 0 && !envsManuallyEdited) {
@@ -633,10 +661,20 @@
 
 	function addPort() {
 		portsManuallyEdited = true;
-		ports = [
-			...ports,
-			{ name: `port-${ports.length + 1}`, containerPort: 80, servicePort: 80, protocol: 'TCP' }
-		];
+		ports = [...ports, portRow(ports.length === 0 ? 80 : 8080, ports.length)];
+	}
+
+	function setProtocol(index: number, protocol: string) {
+		portsManuallyEdited = true;
+		const port = ports[index];
+		port.protocol = protocol;
+		if (protocol === 'UDP' && port.reach === 'url') port.reach = 'private';
+	}
+
+	function reachOptions(protocol: string): DropdownOption[] {
+		return protocol === 'UDP'
+			? REACH_OPTIONS.map((o) => (o.value === 'url' ? { ...o, disabled: true } : o))
+			: REACH_OPTIONS;
 	}
 
 	function removePort(index: number) {
@@ -717,7 +755,8 @@
 				name: `port-${i + 1}`,
 				containerPort: Number(p.containerPort),
 				servicePort: Number(p.containerPort),
-				protocol: p.protocol
+				protocol: p.protocol,
+				reach: p.reach
 			}));
 
 		if (validPorts.length === 0) {
@@ -775,8 +814,8 @@
 				replicas,
 				ports: validPorts,
 				env: validEnv,
-				exposePublic,
-				autoUrl,
+				exposePublic: validPorts.some((p) => p.reach === 'tcp'),
+				autoUrl: validPorts.some((p) => p.reach === 'url'),
 				volumes: validVolumes,
 				cpuRequestMilli: resourceCpuMilli,
 				memoryRequestBytes: resourceMemoryBytes
@@ -968,17 +1007,6 @@
 				? 'Custom commands'
 				: 'Detected'
 	);
-	const networkNote = $derived(
-		[
-			ports
-				.filter((p) => p.containerPort > 0)
-				.map((p) => (p.protocol === 'UDP' ? `${p.containerPort}/udp` : String(p.containerPort)))
-				.join(', ') || 'No port',
-			autoUrl ? 'URL' : null
-		]
-			.filter(Boolean)
-			.join(' · ')
-	);
 	const resourcesNote = $derived(
 		resourceCpuMilli || resourceMemoryBytes
 			? [
@@ -1000,7 +1028,13 @@
 						? 'Dockerfile'
 						: (frameworkLabel(detectedFramework) ?? 'App')
 		},
-		...(autoUrl ? [{ name: 'Org URL', type: 'ingress' as const, note: 'https' }] : []),
+		...ports
+			.filter((p) => p.containerPort > 0 && p.reach !== 'private')
+			.map((p) => ({
+				name: `Port ${p.containerPort}`,
+				type: 'ingress' as const,
+				note: p.reach === 'url' ? 'Org URL' : 'Public port'
+			})),
 		...volumes
 			.filter((v) => v.pvcName?.trim())
 			.map((v) => ({ name: v.pvcName!.trim(), type: 'volume' as const }))
@@ -1332,52 +1366,52 @@
 			</SectionCard>
 
 			<SectionCard title="Networking">
-				<Stack gap="lg">
-					<Field label={ports.length > 1 ? 'Ports' : 'Port'}>
-						<Stack gap="sm">
-							{#each ports as port, index (index)}
-								<div class="nd-port">
-									<div class="nd-port-num">
-										<Input
-											type="number"
-											bind:value={port.containerPort}
-											oninput={() => (portsManuallyEdited = true)}
-											min="1"
-											placeholder="80"
-											aria-label="Port"
-											mono
-										/>
-									</div>
-									<SegmentedControl
-										label="Protocol"
-										size="sm"
-										options={PROTOCOL_OPTIONS}
-										bind:value={port.protocol}
-										onchange={() => (portsManuallyEdited = true)}
-									/>
-									{#if ports.length > 1}
-										<Button
-											variant="ghost"
-											size="sm"
-											icon={Trash2}
-											label="Remove port"
-											onclick={() => removePort(index)}
-										/>
-									{/if}
-									{#if index === ports.length - 1}
-										<Button size="sm" variant="ghost" icon={Plus} onclick={addPort}>Add port</Button
-										>
-									{/if}
-								</div>
-							{/each}
-						</Stack>
-					</Field>
-					<ToggleRow
-						bind:checked={autoUrl}
-						label="Generate a URL"
-						hint="Only people in your org can open it."
-					/>
-				</Stack>
+				<div class="nd-ports" role="table" aria-label="Ports">
+					<div class="nd-ports-head" role="row">
+						<span role="columnheader">Port</span>
+						<span role="columnheader">Protocol</span>
+						<span role="columnheader">Reach</span>
+						<span></span>
+					</div>
+					{#each ports as port, index (index)}
+						<div class="nd-ports-row" role="row">
+							<Input
+								type="number"
+								bind:value={port.containerPort}
+								oninput={() => (portsManuallyEdited = true)}
+								min="1"
+								placeholder="80"
+								aria-label="Port"
+								mono
+							/>
+							<SegmentedControl
+								label="Protocol"
+								size="sm"
+								options={PROTOCOL_OPTIONS}
+								bind:value={() => port.protocol, (v) => setProtocol(index, v)}
+							/>
+							<Dropdown
+								bind:value={() => port.reach, (v) => (port.reach = v as Reach)}
+								options={reachOptions(port.protocol)}
+								ariaLabel="Reach for port {port.containerPort}"
+							/>
+							{#if ports.length > 1}
+								<Button
+									variant="ghost"
+									size="sm"
+									icon={Trash2}
+									label="Remove port {port.containerPort}"
+									onclick={() => removePort(index)}
+								/>
+							{:else}
+								<span></span>
+							{/if}
+						</div>
+					{/each}
+				</div>
+				<div class="nd-ports-add">
+					<Button size="sm" variant="ghost" icon={Plus} onclick={addPort}>Add port</Button>
+				</div>
 			</SectionCard>
 
 			<SectionCard title="Advanced">
@@ -1597,13 +1631,24 @@
 		flex-direction: column;
 		gap: var(--space-2);
 	}
-	.nd-port {
-		display: flex;
+	.nd-ports {
+		display: grid;
+		grid-template-columns: 8rem auto minmax(0, 1fr) 1.75rem;
 		align-items: center;
-		gap: var(--space-2);
+		gap: var(--space-2) var(--space-3);
 	}
-	.nd-port-num {
-		width: 9rem;
+	.nd-ports-head,
+	.nd-ports-row {
+		display: contents;
+	}
+	.nd-ports-head span {
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: var(--weight-medium);
+		color: var(--text-muted);
+	}
+	.nd-ports-add {
+		margin: var(--space-2) 0 0 calc(var(--space-2) * -1);
 	}
 	.nd-vol {
 		display: grid;
