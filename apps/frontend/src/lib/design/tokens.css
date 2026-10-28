@@ -66,9 +66,16 @@
 
 	--shadow-raised: 0 0 0 1px var(--border-default), 0 1px 2px rgb(0 0 0 / 0.04);
 	--shadow-glass: 0 1px 2px rgb(0 0 0 / 0.06), 0 20px 44px -22px rgb(0 0 0 / 0.32);
-	--bevel-glass:
-		inset 0 1px 0 rgb(255 255 255 / 0.32), inset 0 0 0 0.5px rgb(255 255 255 / 0.14),
-		inset 0 -1px 0 rgb(0 0 0 / 0.1);
+	--bevel-glass: inset 0 1px 14px rgb(255 255 255 / 0.08);
+	--rim-glass: linear-gradient(
+		135deg,
+		rgb(255 255 255 / 0.95) 0%,
+		rgb(255 255 255 / 0.45) 12%,
+		rgb(255 255 255 / 0.2) 32%,
+		rgb(255 255 255 / 0.14) 55%,
+		rgb(255 255 255 / 0.3) 82%,
+		rgb(255 255 255 / 0.8) 100%
+	);
 	--shadow-floating:
 		0 0 0 1px var(--material-glass-edge), 0 4px 12px rgb(0 0 0 / 0.06),
 		0 12px 32px rgb(0 0 0 / 0.08);
@@ -107,7 +114,7 @@
 	--nav-active-bg: var(--bg-surface);
 	--nav-active-fg: var(--text-default);
 	--nav-active-shadow: 0 1px 3px color-mix(in oklab, var(--neutral-10) 8%, transparent);
-	--material-chrome-bg: color-mix(in oklab, var(--neutral-surface) 58%, transparent);
+	--material-chrome-bg: color-mix(in oklab, var(--neutral-surface) 84%, transparent);
 	--material-chrome-edge: color-mix(in oklab, var(--neutral-10) 9%, transparent);
 	--on-solid: oklch(1 0 0);
 	--solid-sheen: linear-gradient(oklch(1 0 0 / 0.16), oklch(1 0 0 / 0));
@@ -306,14 +313,21 @@ html.reduce-transparency *::after {
 	--nav-active-bg: var(--neutral-10);
 	--nav-active-fg: var(--neutral-app);
 	--nav-active-shadow: 0 1px 1.5px oklch(0 0 0 / 0.3);
-	--material-chrome-bg: color-mix(in oklab, var(--neutral-raised) 62%, transparent);
+	--material-chrome-bg: color-mix(in oklab, var(--neutral-raised) 86%, transparent);
 	--brand-field: color-mix(in oklab, var(--accent-solid) 82%, black);
 
 	--shadow-raised: 0 0 0 1px var(--border-default), 0 1px 2px rgb(0 0 0 / 0.3);
 	--shadow-glass: 0 1px 2px rgb(0 0 0 / 0.4), 0 24px 52px -20px rgb(0 0 0 / 0.65);
-	--bevel-glass:
-		inset 0 1px 0 rgb(255 255 255 / 0.16), inset 0 0 0 0.5px rgb(255 255 255 / 0.08),
-		inset 0 -1px 0 rgb(0 0 0 / 0.3);
+	--bevel-glass: inset 0 1px 16px rgb(255 255 255 / 0.05);
+	--rim-glass: linear-gradient(
+		135deg,
+		rgb(255 255 255 / 0.6) 0%,
+		rgb(255 255 255 / 0.28) 12%,
+		rgb(255 255 255 / 0.12) 32%,
+		rgb(255 255 255 / 0.08) 55%,
+		rgb(255 255 255 / 0.18) 82%,
+		rgb(255 255 255 / 0.45) 100%
+	);
 	--shadow-floating:
 		0 0 0 1px var(--material-glass-edge), 0 4px 12px rgb(0 0 0 / 0.3), 0 12px 32px rgb(0 0 0 / 0.4);
 	--shadow-overlay:

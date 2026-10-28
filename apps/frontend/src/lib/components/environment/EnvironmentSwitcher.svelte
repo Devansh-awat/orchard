@@ -11,11 +11,13 @@
 	let {
 		projectId,
 		selectedEnvId = $bindable(''),
-		block = false
+		block = false,
+		placement = 'bottom-start'
 	}: {
 		projectId: string;
 		selectedEnvId?: string;
 		block?: boolean;
+		placement?: 'bottom-start' | 'bottom-end';
 	} = $props();
 
 	const envQuery = createQuery(() => ({
@@ -38,7 +40,7 @@
 	let manageOpen = $state(false);
 </script>
 
-<Menu placement="bottom-start" size="lg" sameWidth={block}>
+<Menu {placement} size="lg" sameWidth={block}>
 	{#snippet trigger(attrs, isOpen)}
 		<SelectTrigger
 			{...attrs}

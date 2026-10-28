@@ -500,8 +500,24 @@ html {
 
 /* ── UI primitives (lib/components/ui) ─────────────────────────────── */
 
+.ui-glass-rim::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	z-index: 3;
+	padding: 1.25px;
+	border-radius: inherit;
+	corner-shape: inherit;
+	background: var(--rim-glass);
+	mask:
+		linear-gradient(#000 0 0) content-box exclude,
+		linear-gradient(#000 0 0);
+	pointer-events: none;
+}
+
 .ui-menu,
 .ui-popover {
+	z-index: var(--z-dropdown);
 	will-change: transform, opacity;
 	margin: 0;
 	padding: var(--float-pad);

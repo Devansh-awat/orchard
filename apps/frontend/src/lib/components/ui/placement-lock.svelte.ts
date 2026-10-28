@@ -14,6 +14,7 @@ export class PlacementLock {
 	config = () => ({
 		computePosition: { placement: this.locked ?? this.#base() },
 		offset: { mainAxis: 6 },
+		shift: { padding: 12 },
 		flip: this.locked ? { mainAxis: false, crossAxis: false } : {}
 	});
 

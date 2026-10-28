@@ -30,12 +30,14 @@
 		items,
 		variant = 'spotlight',
 		primary = undefined,
-		tools = undefined
+		tools = undefined,
+		size = 'lg'
 	}: {
 		items: SpotlightItem[];
 		variant?: 'spotlight' | 'banner';
 		primary?: { label: string; href?: string; icon?: Icon };
 		tools?: Snippet;
+		size?: 'lg' | 'md';
 	} = $props();
 
 	const PrimaryIcon = $derived(primary?.icon ?? ArrowRight);
@@ -119,7 +121,7 @@
 
 {#if current}
 	<section
-		class="shelf shelf--{variant}"
+		class="shelf shelf--{variant} shelf--{size} ui-glass-rim"
 		aria-roledescription="carousel"
 		aria-label="Recent projects"
 		onpointerenter={() => (hovered = true)}
@@ -281,18 +283,32 @@
 		box-shadow: var(--shadow-glass);
 		color: var(--on-media);
 	}
-	.shelf::after {
-		content: '';
-		position: absolute;
-		inset: 0;
-		z-index: 3;
-		border-radius: inherit;
-		corner-shape: inherit;
-		box-shadow: var(--bevel-glass);
-		pointer-events: none;
-	}
 	.shelf--spotlight {
 		height: 22rem;
+	}
+	.shelf--spotlight.shelf--md {
+		--pad: 1.75rem;
+		height: 15.5rem;
+	}
+	.shelf--spotlight.shelf--md .veil {
+		background: linear-gradient(
+			90deg,
+			oklch(0 0 0 / 0.5) 0%,
+			oklch(0 0 0 / 0.26) 34%,
+			transparent 62%
+		);
+	}
+	.shelf--spotlight.shelf--md .art :global(.poster) {
+		filter: saturate(1.15) brightness(1.04);
+	}
+	.shelf--spotlight.shelf--md .art :global(.poster--soft) {
+		filter: blur(28px) saturate(1.4);
+	}
+	.shelf--spotlight.shelf--md .copy {
+		gap: 1rem;
+	}
+	.shelf--spotlight.shelf--md .name {
+		font-size: calc(var(--text-display) * 1.15);
 	}
 	.shelf--banner {
 		height: 9rem;

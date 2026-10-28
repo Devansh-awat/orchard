@@ -21,7 +21,7 @@
 		SectionCard,
 		Skeleton,
 		Swap,
-		Tabs
+		PageTabs
 	} from '$lib/components/ui';
 	import EntityRow from '$lib/components/patterns/EntityRow.svelte';
 	import ProjectSpotlight, {
@@ -29,7 +29,9 @@
 	} from '$lib/components/patterns/ProjectSpotlight.svelte';
 	import ProjectBackdrop from '$lib/components/patterns/ProjectBackdrop.svelte';
 	import RecentBuilds from '$lib/components/patterns/RecentBuilds.svelte';
-	import type { Anomaly } from '$lib/components/anomalies/anomalies';
+	import { fetchAnomalies } from '$lib/components/anomalies/anomalies';
+	import NeedsAttention from '$lib/components/patterns/NeedsAttention.svelte';
+	import type { FailingApp } from '$lib/components/patterns/sidebar';
 	import { resourceStatus } from '$lib/components/ui/status';
 	import { EnvironmentSwitcher } from '$lib/components/environment';
 	import { buildsQueryOptions } from '$lib/queries/overview';
@@ -38,7 +40,6 @@
 	import type { ActiveBuild, RecentBuild } from '$lib/components/org-dashboard';
 	import { ingressUrl } from '$lib/ingress-url';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
-	import Anomalies from '$lib/components/anomalies/Anomalies.svelte';
 	import { projectGradientEnabled } from '$lib/stores';
 
 	import {
@@ -569,6 +570,7 @@
 		refetchTimer = setTimeout(() => {
 			refetchTimer = null;
 			queryClient.invalidateQueries({ queryKey: ['project-detail', orgSlug, projectSlug] });
+			queryClient.invalidateQueries({ queryKey: ['anomalies', 'project'] });
 		}, 350);
 	}
 
@@ -711,21 +713,41 @@
 		);
 	}
 
-	const failing = $derived<Anomaly[]>(
-		(project?.deployments ?? [])
-			.filter((d) => resourceStatus(d.status, d.buildStatus).kind === 'error')
-			.map((d) => ({
-				id: `status-${d.id}`,
-				kind: 'status',
-				severity: 'error' as const,
-				resource: { kind: 'deployment' as const, id: d.id, name: d.displayName || d.name },
-				title: resourceStatus(d.status, d.buildStatus).label.toLowerCase(),
-				detail: depDetail(d) ?? '',
-				since: null,
-				href: `/${orgSlug}/deployments/${d.id}`,
-				action: null
-			}))
-	);
+	const anomaliesQuery = createQuery(() => ({
+		queryKey: ['anomalies', 'project', project?.id ?? ''],
+		enabled: !!project?.id,
+		queryFn: () => fetchAnomalies({ kind: 'project', id: project!.id }),
+		refetchInterval: 60_000
+	}));
+
+	const attention = $derived.by<FailingApp[]>(() => {
+		const deps = project?.deployments ?? [];
+		const iconFor = (id: string) => {
+			const d = deps.find((x) => x.id === id);
+			return d ? depIcon(d) : null;
+		};
+		const anomalies = anomaliesQuery.data ?? [];
+		const covered = new Set(anomalies.map((a) => a.resource.id));
+		return [
+			...anomalies.map((a) => ({
+				label: a.resource.name,
+				href: a.href,
+				reason: a.title.replace(/^[a-z]/, (c) => c.toUpperCase()),
+				kind: a.resource.kind,
+				icon: a.resource.kind === 'deployment' ? iconFor(a.resource.id) : IMG_ICONS.postgres
+			})),
+			...deps
+				.filter((d) => !covered.has(d.id))
+				.filter((d) => resourceStatus(d.status, d.buildStatus).kind === 'error')
+				.map((d) => ({
+					label: d.displayName || d.name,
+					href: `/${orgSlug}/deployments/${d.id}`,
+					reason: resourceStatus(d.status, d.buildStatus).label,
+					kind: 'deployment' as const,
+					icon: depIcon(d)
+				}))
+		];
+	});
 
 	const heroStatus = $derived.by(() => {
 		const deps = project?.deployments ?? [];
@@ -817,7 +839,8 @@
 
 {#snippet side()}
 	<div class="side">
-		<RecentBuilds {builds} />
+		{#if attention.length}<NeedsAttention items={attention} />{/if}
+		{#if builds.length}<RecentBuilds {builds} />{/if}
 	</div>
 {/snippet}
 
@@ -866,13 +889,14 @@
 	<Page
 		title={project.name}
 		width="wide"
-		aside={activeTab === 'resources' && builds.length ? side : undefined}
+		aside={activeTab === 'resources' && (attention.length || builds.length) ? side : undefined}
 	>
 		{#snippet hero()}
 			<div class="hero">
 				<ProjectSpotlight
 					items={spotlight}
 					variant={activeTab === 'resources' ? 'spotlight' : 'banner'}
+					size="md"
 					primary={{
 						label: 'New app',
 						href: `/${orgSlug}/new?projectSlug=${projectSlug}`,
@@ -891,13 +915,22 @@
 					{/snippet}
 				</ProjectSpotlight>
 				<div class="bar">
-					<Tabs label="Project sections" {tabs} value={activeTab} onchange={(v) => gotoTab(v)} />
+					<PageTabs
+						label="Project sections"
+						{tabs}
+						value={activeTab}
+						onchange={(v) => gotoTab(v)}
+					/>
 					<div class="bar-tools">
 						{#if activeTab === 'resources'}
 							<SearchField placeholder="Search" size="sm" bind:value={deploymentSearch} />
 						{/if}
 						{#if activeTab === 'resources' || activeTab === 'variables'}
-							<EnvironmentSwitcher projectId={project.id} bind:selectedEnvId />
+							<EnvironmentSwitcher
+								projectId={project.id}
+								placement="bottom-end"
+								bind:selectedEnvId
+							/>
 						{/if}
 					</div>
 				</div>
@@ -931,7 +964,6 @@
 			<Swap key={activeTab}>
 				{#if activeTab === 'resources'}
 					<div class="overview">
-						<Anomalies scope={{ kind: 'project', id: project.id }} extra={failing} />
 						{#if envFilteredDeployments.length || envFilteredDatabases.length || envFilteredTemplateInstances.length}
 							<List label="Resources">
 								{#each envFilteredDeployments as d (d.id)}
@@ -1105,19 +1137,19 @@
 	.bar {
 		position: relative;
 		display: flex;
-		align-items: flex-end;
+		align-items: center;
 		gap: var(--space-4);
 	}
-	.bar > :global(.tabs) {
-		flex: 1 1 auto;
+	.bar > :global(.capsule) {
+		flex: 0 1 auto;
 		min-width: 0;
 	}
 	.bar-tools {
 		display: flex;
 		flex-shrink: 0;
+		margin-left: auto;
 		align-items: center;
 		gap: var(--space-2);
-		padding-bottom: 0.375rem;
 	}
 	.body,
 	.overview,
