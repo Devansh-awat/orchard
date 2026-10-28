@@ -1013,6 +1013,7 @@
 					</SectionCard>
 				{:else if activeTab === 'compose'}
 					<ComposeTab
+						{canEdit}
 						{composeStacks}
 						{composeStacksLoading}
 						orgSlug={orgSlug ?? ''}
