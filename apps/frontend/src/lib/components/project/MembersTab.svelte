@@ -489,8 +489,11 @@
 		justify-content: flex-end;
 		width: 8.5rem;
 	}
-	.role-slot > :global(*) {
+	.role-slot > :global(:not([popover])) {
 		width: 100%;
+	}
+	.role-slot > :global([popover]) {
+		min-width: var(--melt-invoker-width);
 	}
 	.icon-slot {
 		display: flex;
