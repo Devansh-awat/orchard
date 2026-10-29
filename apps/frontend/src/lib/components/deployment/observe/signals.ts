@@ -80,3 +80,15 @@ export function clock(t: number): string {
 		hour12: false
 	});
 }
+
+export function clockOrDay(t: number, now = Date.now()): string {
+	const day = (ms: number) => new Date(ms).toDateString();
+	if (day(t) === day(now)) return clock(t);
+	if (day(t) === day(now + 24 * 60 * 60_000)) return `tomorrow ${clock(t)}`;
+	return new Date(t).toLocaleString(undefined, {
+		weekday: 'short',
+		hour: '2-digit',
+		minute: '2-digit',
+		hour12: false
+	});
+}

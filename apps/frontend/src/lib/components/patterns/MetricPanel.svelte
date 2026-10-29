@@ -91,21 +91,23 @@
 	const hasData = $derived(series.some((s) => s.points.some((p) => p.y !== 0)));
 
 	const rows = $derived<SeriesRow[]>(
-		series.map((s) => {
-			const stats = seriesStats(s.points);
-			const total = s.points.reduce((a, p) => a + p.y, 0);
-			return {
-				id: s.id,
-				label: s.label ?? s.id,
-				color: seriesColor(s),
-				dashed: s.dashed,
-				avg: sum ? total : (stats?.avg ?? null),
-				min: stats?.min ?? null,
-				max: stats?.max ?? null,
-				value: hover === null ? (stats?.last ?? null) : valueAt(s.points, hover, step * 0.75),
-				finding: findings.find((f) => f.seriesId === s.id)?.label ?? null
-			};
-		})
+		series
+			.filter((s) => !s.projected)
+			.map((s) => {
+				const stats = seriesStats(s.points);
+				const total = s.points.reduce((a, p) => a + p.y, 0);
+				return {
+					id: s.id,
+					label: s.label ?? s.id,
+					color: seriesColor(s),
+					dashed: s.dashed,
+					avg: sum ? total : (stats?.avg ?? null),
+					min: stats?.min ?? null,
+					max: stats?.max ?? null,
+					value: hover === null ? (stats?.last ?? null) : valueAt(s.points, hover, step * 0.75),
+					finding: findings.find((f) => f.seriesId === s.id)?.label ?? null
+				};
+			})
 	);
 
 	const valueLabel = $derived(hover === null ? 'Now' : chartTime(hover, to - from));

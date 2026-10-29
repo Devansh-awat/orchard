@@ -8,6 +8,7 @@ export type ChartSeries = {
 	tone?: ChartTone;
 	color?: string;
 	dashed?: boolean;
+	projected?: boolean;
 };
 export type ChartEvent = {
 	t: number;

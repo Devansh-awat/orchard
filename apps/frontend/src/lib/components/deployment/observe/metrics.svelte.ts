@@ -76,6 +76,14 @@ export type ServerFinding = {
 	at: number;
 	kind: 'error-rate' | 'p95' | 'memory-step' | 'restart-burst' | 'throttling' | string;
 };
+export type MemoryForecast = {
+	pod: string;
+	hitsLimitAt: number;
+	slopeBytesPerHour: number;
+	confidence: number;
+	limitBytes: number;
+	projection: ChartPoint[];
+};
 export type BuildPhase = { id: string; label: string; ms: number };
 export type BuildRun = {
 	id: string;
@@ -154,6 +162,7 @@ export class MetricsState {
 	changes = $state<Change[] | null>(null);
 	findings = $state<ServerFinding[] | null>(null);
 	throttle = $state<ChartPoint[]>([]);
+	forecast = $state<MemoryForecast | null>(null);
 
 	events = $derived<ChartEvent[]>([
 		...(this.changes
@@ -355,6 +364,7 @@ export class MetricsState {
 			const body = await res.json();
 			if (seq !== this.#seq) return;
 			this.throttle = Array.isArray(body?.throttle) ? body.throttle : [];
+			this.forecast = body?.forecast?.hitsLimitAt ? body.forecast : null;
 			if (body?.groupBy === 'pod' && body?.grouped) {
 				this.pods = body.grouped;
 				this.resources = {

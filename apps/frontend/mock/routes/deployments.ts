@@ -765,7 +765,22 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 						y: +Math.max(0, Math.min(100, (pt.y / d.cpuRequestMilli - 0.45) * 160)).toFixed(1)
 					}))
 				: [];
-			if (query.get('groupBy') !== 'pod') return { ...base, throttle };
+			const last = base.data.mem.at(-1);
+			const forecast =
+				d.name === 'game-server' && last
+					? {
+							pod: podsOf(store, d)[0]?.name ?? d.name,
+							hitsLimitAt: Date.now() + 5 * 3_600_000,
+							slopeBytesPerHour: ((d.memoryRequestBytes - last.y * MIB) / 5) | 0,
+							confidence: 0.93,
+							limitBytes: d.memoryRequestBytes,
+							projection: [
+								{ x: last.x, y: last.y * MIB },
+								{ x: Date.now() + 5 * 3_600_000, y: d.memoryRequestBytes }
+							]
+						}
+					: null;
+			if (query.get('groupBy') !== 'pod') return { ...base, throttle, forecast };
 			const pods = podsOf(store, d);
 			const split = (key: 'cpu' | 'mem' | 'rx' | 'tx') =>
 				pods.map((p, i) => ({
@@ -781,7 +796,8 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 				step: base.step,
 				groupBy: 'pod',
 				grouped: { cpu: split('cpu'), mem: split('mem'), rx: split('rx'), tx: split('tx') },
-				throttle
+				throttle,
+				forecast
 			};
 		})
 	);
@@ -1066,6 +1082,14 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 								evidence: [`throttling:${now - 80 * 60_000}`],
 								at: now - 80 * 60_000,
 								kind: 'throttling'
+							},
+							{
+								symptomId: 'memory-forecast:game-server',
+								causeId: null,
+								sentence: `Memory has climbed about 230 MiB an hour since ${at(now - 6 * 3_600_000)} and reaches its limit around ${at(now + 5 * 3_600_000)}.`,
+								evidence: ['memory-forecast:game-server'],
+								at: Math.max(start, now - 6 * 3_600_000),
+								kind: 'memory-forecast'
 							}
 						]
 					: d.name === 'api'

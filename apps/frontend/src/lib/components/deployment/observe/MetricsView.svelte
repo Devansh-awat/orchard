@@ -33,7 +33,7 @@
 	import { anomalies } from './findings';
 	import { entryLine, type LogEntry } from './logs.svelte';
 	import { runtimeName, uptime, type DetectedRuntime } from './runtime';
-	import { bucketSize, clock, runsAbove, stackByKey } from './signals';
+	import { bucketSize, clock, clockOrDay, runsAbove, stackByKey } from './signals';
 	import {
 		STATUS_CLASSES,
 		type BuildRun,
@@ -194,6 +194,40 @@
 		deployment?.memoryRequestBytes ? Number(deployment.memoryRequestBytes) / MIB : null
 	);
 	const cpuTotal = $derived(cpuPod ? cpuPod * pods : null);
+	const forecastEnd = $derived.by(() => {
+		const f = metrics.forecast;
+		if (!f || !metrics.live || split) return null;
+		const span = metrics.to - metrics.from;
+		return Math.min(f.hitsLimitAt, metrics.to + span * 0.25);
+	});
+	const memSeries = $derived.by<ChartSeries[]>(() => {
+		const f = metrics.forecast;
+		if (!f || forecastEnd == null) return series.mem;
+		const last = metrics.resources.mem.at(-1);
+		if (!last) return series.mem;
+		const perMs = f.slopeBytesPerHour / MIB / 3_600_000;
+		return [
+			...series.mem,
+			{
+				id: 'forecast',
+				label: 'Projected',
+				points: [last, { x: forecastEnd, y: last.y + perMs * (forecastEnd - last.x) }],
+				tone: 'warning',
+				dashed: true,
+				projected: true
+			}
+		];
+	});
+	const memHeadline = $derived.by(() => {
+		const f = metrics.forecast;
+		if (f && !split) {
+			return {
+				value: `Reaches its limit around ${clockOrDay(f.hitsLimitAt)}`,
+				tone: 'warning' as const
+			};
+		}
+		return usage(metrics.resources.mem, memTotal, mem);
+	});
 	const THROTTLE_ZONE = 25;
 	const throttleSeries = $derived<ChartSeries[]>([
 		{ id: 'throttle', label: 'Throttled', points: metrics.throttle, tone: 'neutral' }
@@ -904,13 +938,13 @@
 				<MetricPanel
 					title="Memory"
 					info="Memory used against the limit. At the limit the container is killed (OOMKilled)."
-					series={series.mem}
+					series={memSeries}
 					from={metrics.from}
-					to={metrics.to}
+					to={forecastEnd ?? metrics.to}
 					format={mem}
 					bind:hover={metrics.hover}
 					bind:mode={() => metrics.modes.mem ?? 'lines', (m) => (metrics.modes.mem = m)}
-					headline={usage(metrics.resources.mem, memTotal, mem)}
+					headline={memHeadline}
 					thresholds={limitZones(split ? memPod : memTotal, mem)}
 					events={metrics.events}
 					findings={findings.mem}
