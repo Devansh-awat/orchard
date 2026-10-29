@@ -66,7 +66,7 @@
 	]);
 </script>
 
-<SectionCard title="Usage" size="sm" flush>
+<SectionCard title="Usage" size="sm" flush class="usage-card">
 	{#snippet actions()}
 		<Button variant="ghost" size="sm" onclick={onopen}>Details</Button>
 	{/snippet}
@@ -203,5 +203,13 @@
 		border-radius: inherit;
 		background: var(--tone);
 		transition: width var(--spring-glide-duration) var(--spring-glide);
+	}
+	@media (max-height: 54rem) {
+		.row {
+			padding: 0.5rem 1.25rem 0.625rem;
+		}
+		.bar {
+			margin-top: 0.375rem;
+		}
 	}
 </style>

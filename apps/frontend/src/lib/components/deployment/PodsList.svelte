@@ -1,6 +1,5 @@
 <script lang="ts">
 	import {
-		ChevronDown,
 		Copy,
 		FileText,
 		RotateCcw,
@@ -9,16 +8,8 @@
 		Trash2,
 		TriangleAlert
 	} from 'lucide-svelte';
-	import {
-		Button,
-		PopoverPanel,
-		SectionCard,
-		StatusDot,
-		Stepper,
-		statusMeta
-	} from '$lib/components/ui';
+	import { Button, Dropdown, SectionCard, StatusDot, statusMeta } from '$lib/components/ui';
 	import type { StatusMeta } from '$lib/components/ui';
-	import Tooltip from '$lib/components/ui/Tooltip.svelte';
 	import { toasts } from '$lib/stores';
 	import { stateEcho } from '$lib/utils/motion.svelte';
 	import { formatCpu, formatMemory, humanizeWarning } from '$lib/utils/format';
@@ -201,7 +192,11 @@
 			.sort((a, b) => (RANK[a.state.meta.kind] ?? 5) - (RANK[b.state.meta.kind] ?? 5))
 	);
 
-	const pending = $derived(scaleReplicas !== replicas);
+	type Row = (typeof rows)[number];
+	const replicaOptions = Array.from({ length: 21 }, (_, n) => ({
+		value: String(n),
+		label: n === 0 ? 'Stopped' : `${n} ${n === 1 ? 'replica' : 'replicas'}`
+	}));
 	const problems = $derived.by(() => {
 		const counts = new Map<string, number>();
 		for (const r of rows) {
@@ -210,7 +205,14 @@
 		}
 		return [...counts].map(([label, n]) => `${n} ${label.toLowerCase()}`);
 	});
-	let openPod = $state<string | null>(null);
+	let openPods = $state(new Set<string>());
+
+	function toggle(name: string, on: boolean) {
+		const next = new Set(openPods);
+		if (on) next.add(name);
+		else next.delete(name);
+		openPods = next;
+	}
 
 	function toneOf(kind: StatusMeta['kind']): 'ok' | 'warn' | 'bad' {
 		if (kind === 'error') return 'bad';
@@ -222,62 +224,45 @@
 		await navigator.clipboard.writeText(name);
 		toasts.add({ title: 'Pod name copied', color: 'success' });
 	}
-
-	function reset() {
-		scaleReplicas = replicas;
-		onChange(replicas);
-	}
 </script>
 
-<SectionCard title="Pods" size="sm" flush class="pods">
+{#snippet podFace(r: Row, tone: 'ok' | 'warn' | 'bad')}
+	<span class="glyph" {@attach stateEcho(() => r.state.meta.kind)}>
+		{#if tone === 'ok'}
+			<span class="ok-dot"></span>
+		{:else}
+			<TriangleAlert size={15} strokeWidth={2.25} aria-hidden="true" />
+		{/if}
+	</span>
+	<span class="pid">{r.name}</span>
+	{#if r.pod.name === selectedPod}<span class="logs-tag">Logs</span>{/if}
+	<span class="face-end" class:face-end--tone={tone !== 'ok'}>
+		{#if tone === 'ok'}
+			{r.pod.cpuUsage
+				? `${formatCpu(r.pod.cpuUsage)} · ${formatMemory(r.pod.memoryUsage)}`
+				: r.state.label}
+		{:else}
+			{r.state.label}{#if r.restarts}
+				· {r.restarts}×{/if}
+		{/if}
+	</span>
+{/snippet}
+
+<SectionCard title="Pods" size="sm" flush fill class="pods">
 	{#snippet actions()}
-		<PopoverPanel placement="bottom-end" class="scale">
-			{#snippet trigger(attrs)}
-				<Button {...attrs} variant="secondary" size="sm" iconRight={ChevronDown}
-					>{replicas} {replicas === 1 ? 'replica' : 'replicas'}</Button
-				>
-			{/snippet}
-			{#snippet children({ close })}
-				<div class="scale-body">
-					<div class="scale-copy">
-						<span class="scale-title">Replicas</span>
-						<span class="scale-hint">How many pods to keep running</span>
-					</div>
-					<div class="scale-row">
-						<Stepper
-							bind:value={scaleReplicas}
-							min={0}
-							max={20}
-							label="Replicas"
-							disabled={scaling}
-							onchange={onChange}
-						/>
-						<span class="scale-now">{pending ? `${replicas} now` : 'Current'}</span>
-					</div>
-					<div class="scale-actions">
-						<Button
-							variant="ghost"
-							size="sm"
-							disabled={scaling}
-							onclick={() => {
-								reset();
-								close();
-							}}>Cancel</Button
-						>
-						<Button
-							variant="primary"
-							size="sm"
-							disabled={!pending}
-							loading={scaling}
-							onclick={() => {
-								onScale();
-								close();
-							}}>{scaleReplicas === 0 ? 'Stop all pods' : `Scale to ${scaleReplicas}`}</Button
-						>
-					</div>
-				</div>
-			{/snippet}
-		</PopoverPanel>
+		<Dropdown
+			size="sm"
+			placement="bottom-end"
+			options={replicaOptions}
+			value={String(replicas)}
+			disabled={scaling}
+			ariaLabel="Replicas"
+			onchange={(v) => {
+				scaleReplicas = Number(v);
+				onChange(Number(v));
+				onScale();
+			}}
+		/>
 		{#if __ORCHARD_MOCK__}
 			<PodSimulator {deploymentId} {podLabel} onchange={onSimulated} />
 		{/if}
@@ -290,101 +275,93 @@
 					{@const tone = toneOf(r.state.meta.kind)}
 					<li>
 						<IslandPill
-							bind:open={() => openPod === r.pod.name, (v) => (openPod = v ? r.pod.name : null)}
+							bind:open={() => openPods.has(r.pod.name), (v) => toggle(r.pod.name, v)}
 							{tone}
 							label="{r.name}, {r.state.label}"
 						>
 							{#snippet face()}
-								<span class="glyph" {@attach stateEcho(() => r.state.meta.kind)}>
-									{#if tone === 'ok'}
-										<span class="ok-dot"></span>
-									{:else}
-										<TriangleAlert size={15} strokeWidth={2.25} aria-hidden="true" />
-									{/if}
-								</span>
-								<span class="pid">{r.name}</span>
-								{#if r.pod.name === selectedPod}<span class="logs-tag">Logs</span>{/if}
-								<span class="face-end" class:face-end--tone={tone !== 'ok'}>
-									{#if tone === 'ok'}
-										{r.pod.cpuUsage
-											? `${formatCpu(r.pod.cpuUsage)} · ${formatMemory(r.pod.memoryUsage)}`
-											: r.state.label}
-									{:else}
-										{r.state.label}{#if r.restarts}
-											· {r.restarts}×{/if}
-									{/if}
-								</span>
+								{@render podFace(r, tone)}
 							{/snippet}
-							<div class="detail">
-								<dl class="kv">
-									<div>
-										<dt>Uptime</dt>
-										<dd>{uptime(r.pod.startTime) ?? '—'}</dd>
-									</div>
-									<div>
-										<dt>Restarts</dt>
-										<dd>{r.restarts}</dd>
-									</div>
-									{#if r.exit}<div>
-											<dt>Last exit</dt>
-											<dd class="kv-tone">{r.exit}</dd>
-										</div>{/if}
-									<div>
-										<dt>CPU</dt>
-										<dd>{r.pod.cpuUsage ? formatCpu(r.pod.cpuUsage) : '—'}</dd>
-									</div>
-									<div>
-										<dt>Memory</dt>
-										<dd>{r.pod.cpuUsage ? formatMemory(r.pod.memoryUsage) : '—'}</dd>
-									</div>
-								</dl>
-								<div class="acts">
-									<Button
-										variant="secondary"
-										size="sm"
-										icon={FileText}
-										onclick={() => onSelect(r.pod)}>Logs</Button
-									>
-									{#if r.pod.containers?.some((c) => c.lastTermination)}
+							{#snippet children({ close })}
+								<button
+									type="button"
+									class="sheet-head"
+									aria-label="Close {r.name}"
+									onclick={close}
+								>
+									{@render podFace(r, tone)}
+								</button>
+								<div class="detail">
+									<dl class="kv">
+										<div>
+											<dt>Uptime</dt>
+											<dd>{uptime(r.pod.startTime) ?? '—'}</dd>
+										</div>
+										<div>
+											<dt>Restarts</dt>
+											<dd>{r.restarts}</dd>
+										</div>
+										{#if r.exit}<div>
+												<dt>Last exit</dt>
+												<dd class="kv-tone">{r.exit}</dd>
+											</div>{/if}
+										<div>
+											<dt>CPU</dt>
+											<dd>{r.pod.cpuUsage ? formatCpu(r.pod.cpuUsage) : '—'}</dd>
+										</div>
+										<div>
+											<dt>Memory</dt>
+											<dd>{r.pod.cpuUsage ? formatMemory(r.pod.memoryUsage) : '—'}</dd>
+										</div>
+									</dl>
+									<div class="acts">
 										<Button
-											variant="ghost"
+											variant="secondary"
 											size="sm"
-											icon={RotateCcw}
-											onclick={() => onCrashLogs(r.pod)}>Before crash</Button
+											icon={FileText}
+											onclick={() => onSelect(r.pod)}>Logs</Button
 										>
-									{/if}
-									<Button
-										variant="ghost"
-										size="sm"
-										icon={SquareTerminal}
-										disabled={r.pod.status?.toLowerCase() !== 'ready' || !container}
-										onclick={() => onShell(r.pod.name, container)}>Shell</Button
-									>
-									<span class="acts-end">
+										{#if r.pod.containers?.some((c) => c.lastTermination)}
+											<Button
+												variant="ghost"
+												size="sm"
+												icon={RotateCcw}
+												onclick={() => onCrashLogs(r.pod)}>Before crash</Button
+											>
+										{/if}
 										<Button
 											variant="ghost"
 											size="sm"
-											icon={Copy}
-											label="Copy pod name"
-											onclick={() => copyName(r.pod.name)}
-										/>
-										<Button
-											variant="ghost"
-											size="sm"
-											icon={SquareArrowOutUpRight}
-											label="Pod details"
-											href={podHref(r.pod.name)}
-										/>
-										<Button
-											variant="ghost"
-											size="sm"
-											icon={Trash2}
-											label="Delete pod, Kubernetes starts a fresh one"
-											onclick={() => onDelete(r.pod.name)}
-										/>
-									</span>
+											icon={SquareTerminal}
+											disabled={r.pod.status?.toLowerCase() !== 'ready' || !container}
+											onclick={() => onShell(r.pod.name, container)}>Shell</Button
+										>
+										<span class="acts-end">
+											<Button
+												variant="ghost"
+												size="sm"
+												icon={Copy}
+												label="Copy pod name"
+												onclick={() => copyName(r.pod.name)}
+											/>
+											<Button
+												variant="ghost"
+												size="sm"
+												icon={SquareArrowOutUpRight}
+												label="Pod details"
+												href={podHref(r.pod.name)}
+											/>
+											<Button
+												variant="ghost"
+												size="sm"
+												icon={Trash2}
+												label="Delete pod, Kubernetes starts a fresh one"
+												onclick={() => onDelete(r.pod.name)}
+											/>
+										</span>
+									</div>
 								</div>
-							</div>
+							{/snippet}
 						</IslandPill>
 					</li>
 				{/each}
@@ -398,6 +375,9 @@
 <style>
 	.pods-body {
 		padding: 0.25rem 1.25rem 1.25rem;
+	}
+	.islands {
+		scroll-padding-block: 0.5rem;
 	}
 	.islands {
 		display: flex;
@@ -503,43 +483,21 @@
 		font-size: var(--text-callout);
 		color: var(--text-muted);
 	}
-	:global(.scale) {
-		width: 17rem;
-		padding: 1rem;
-	}
-	.scale-body {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-	}
-	.scale-copy {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-	}
-	.scale-title {
-		font-size: var(--text-headline);
-		font-weight: var(--weight-medium);
-		color: var(--text-default);
-	}
-	.scale-hint {
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		color: var(--text-muted);
-		text-wrap: pretty;
-	}
-	.scale-row {
+	.sheet-head {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
+		gap: 0.625rem;
+		width: 100%;
+		margin: -0.25rem 0 0.75rem;
+		padding: 0;
+		border: none;
+		background: none;
+		color: inherit;
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
 	}
-	.scale-now {
-		font-size: var(--text-footnote);
-		color: var(--text-muted);
-	}
-	.scale-actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: 0.5rem;
+	.sheet-head .pid {
+		font-size: var(--text-callout);
 	}
 </style>

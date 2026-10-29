@@ -11,9 +11,8 @@
 </script>
 
 <script lang="ts">
-	import { ChevronDown, CircleAlert, Info, TriangleAlert, X } from 'lucide-svelte';
+	import { CircleAlert, Info, TriangleAlert, X } from 'lucide-svelte';
 	import Button from '$lib/components/ui/Button.svelte';
-	import { morphHeight } from '$lib/utils/motion.svelte';
 
 	let {
 		alerts,
@@ -25,148 +24,214 @@
 
 	const ICON = { error: CircleAlert, warning: TriangleAlert, info: Info };
 	const RANK = { error: 0, warning: 1, info: 2 };
+	const CARD = 44;
+	const GAP = 8;
+	const PEEK = 7;
+	const LIMIT = 5;
 
-	let open = $state(false);
+	let hovering = $state(false);
+	let pinned = $state(false);
+	let focused = $state(false);
+	let leaveTimer: ReturnType<typeof setTimeout> | undefined;
 
-	const sorted = $derived([...alerts].sort((a, b) => RANK[a.tone] - RANK[b.tone]));
-	const lead = $derived(sorted[0]);
-	const shown = $derived(open ? sorted : sorted.slice(0, 1));
-	const hidden = $derived(sorted.length - 1);
+	const all = $derived([...alerts].sort((a, b) => RANK[a.tone] - RANK[b.tone]));
+	const sorted = $derived.by((): StackAlert[] => {
+		if (all.length <= LIMIT) return all;
+		const rest = all.slice(LIMIT - 1);
+		return [
+			...all.slice(0, LIMIT - 1),
+			{
+				id: '__more',
+				tone: rest[0].tone,
+				title: `${rest.length} more`,
+				hint: rest.map((a) => a.title).join(' · ')
+			}
+		];
+	});
+	const many = $derived(sorted.length > 1);
+	const open = $derived(many && (hovering || pinned || focused));
+	const counts = $derived(
+		(['error', 'warning', 'info'] as const)
+			.map((tone) => ({ tone, n: all.filter((a) => a.tone === tone).length }))
+			.filter((c) => c.n > 0)
+	);
+	const fullHeight = $derived(sorted.length * CARD + (sorted.length - 1) * GAP);
 
 	$effect(() => {
-		if (sorted.length < 2) open = false;
+		if (!many) pinned = false;
 	});
+
+	function enter() {
+		clearTimeout(leaveTimer);
+		hovering = true;
+	}
+
+	function leave() {
+		clearTimeout(leaveTimer);
+		leaveTimer = setTimeout(() => (hovering = false), 160);
+	}
+
+	function place(i: number) {
+		if (open) return `translate3d(0, ${i * (CARD + GAP)}px, 0)`;
+		const depth = Math.min(i, 2);
+		return `translate3d(0, ${depth * PEEK}px, 0) scale(${1 - depth * 0.025})`;
+	}
 </script>
 
-{#if lead}
-	<div class="wrap" class:wrap--stacked={!open && hidden > 0} data-tone={lead.tone}>
-		<section class="stack" aria-label="Problems" {@attach morphHeight}>
-			<div class="inner">
-				{#each shown as alert, i (alert.id)}
-					{@const Glyph = ICON[alert.tone]}
-					<div class="row row--{alert.tone}" class:row--open={open}>
-						<span class="icon"><Glyph size={16} aria-hidden="true" /></span>
-						<p class="text">
-							<span class="title">{alert.title}</span>
-							{#if alert.hint}<span class="hint">{alert.hint}</span>{/if}
-						</p>
-						<span class="acts">
-							{#each alert.actions ?? [] as act (act.label)}
-								{#if act.href}
-									<Button
-										variant="secondary"
-										size="sm"
-										href={act.href}
-										target="_blank"
-										rel="noopener noreferrer">{act.label}</Button
-									>
-								{:else}
-									<Button variant="secondary" size="sm" onclick={act.onclick}>{act.label}</Button>
-								{/if}
-							{/each}
-							{#if alert.dismissible && ondismiss}
-								<Button
-									variant="ghost"
-									size="sm"
-									icon={X}
-									label="Dismiss {alert.title}"
-									onclick={() => ondismiss(alert.id)}
-								/>
-							{/if}
-							{#if i === 0 && hidden > 0}
-								<button
-									type="button"
-									class="more"
-									aria-expanded={open}
-									onclick={() => (open = !open)}
+{#if sorted.length}
+	<section
+		class="alerts"
+		class:alerts--open={open}
+		class:alerts--many={many}
+		aria-label="Problems"
+		style:--card="{CARD}px"
+		style:--full="{fullHeight}px"
+		onpointerenter={enter}
+		onpointerleave={leave}
+		onfocusin={() => (focused = true)}
+		onfocusout={(e) => {
+			if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) focused = false;
+		}}
+	>
+		<span class="pad" aria-hidden="true"></span>
+		{#each sorted as alert, i (alert.id)}
+			{@const Glyph = ICON[alert.tone]}
+			<div
+				class="card card--{alert.tone}"
+				class:card--back={!open && i > 0}
+				class:card--gone={!open && i > 2}
+				style:transform={place(i)}
+				style:z-index={sorted.length - i}
+				style:transition-delay="{open ? i * 24 : (sorted.length - 1 - i) * 12}ms"
+				aria-hidden={!open && i > 0 ? 'true' : undefined}
+				inert={!open && i > 0}
+			>
+				<span class="icon"><Glyph size={16} aria-hidden="true" /></span>
+				<p class="text" title={alert.hint}>
+					<span class="title">{alert.title}</span>
+					{#if alert.hint}<span class="hint">{alert.hint}</span>{/if}
+				</p>
+				<span class="acts">
+					{#each alert.actions ?? [] as act (act.label)}
+						{#if act.href}
+							<Button
+								variant="secondary"
+								size="sm"
+								href={act.href}
+								target="_blank"
+								rel="noopener noreferrer">{act.label}</Button
+							>
+						{:else}
+							<Button variant="secondary" size="sm" onclick={act.onclick}>{act.label}</Button>
+						{/if}
+					{/each}
+					{#if i === 0 && many}
+						<button
+							type="button"
+							class="counts"
+							aria-expanded={open}
+							aria-label="{all.length} problems, {pinned ? 'unpin' : 'pin open'}"
+							onclick={() => (pinned = !pinned)}
+						>
+							{#each counts as c (c.tone)}
+								{@const CountGlyph = ICON[c.tone]}
+								<span class="count count--{c.tone}"
+									><CountGlyph size={13} strokeWidth={2.25} aria-hidden="true" />{c.n}</span
 								>
-									{open ? 'Less' : `+${hidden} more`}
-									<span class="chev" class:chev--open={open}><ChevronDown size={14} /></span>
-								</button>
-							{/if}
-						</span>
-					</div>
-				{/each}
+							{/each}
+						</button>
+					{:else if alert.dismissible && ondismiss}
+						<Button
+							variant="ghost"
+							size="sm"
+							icon={X}
+							label="Dismiss {alert.title}"
+							onclick={() => ondismiss(alert.id)}
+						/>
+					{/if}
+				</span>
 			</div>
-		</section>
-	</div>
+		{/each}
+	</section>
 {/if}
 
 <style>
-	.wrap {
-		--tone-bg: var(--status-error-bg);
-		--tone-edge: color-mix(in oklab, var(--status-error) 22%, var(--border-default));
-		--tone-fg: var(--status-error);
+	.alerts {
 		position: relative;
-		isolation: isolate;
+		height: var(--card);
+		z-index: calc(var(--z-dropdown) - 1);
 	}
-	.wrap[data-tone='warning'] {
-		--tone-bg: var(--status-warning-bg);
-		--tone-edge: color-mix(in oklab, var(--status-warning) 26%, var(--border-default));
-		--tone-fg: var(--status-warning);
+	.alerts {
+		flex-shrink: 0;
+		margin-bottom: 1rem;
 	}
-	.wrap[data-tone='info'] {
-		--tone-bg: var(--status-info-bg);
-		--tone-edge: color-mix(in oklab, var(--status-info) 22%, var(--border-default));
-		--tone-fg: var(--status-info);
+	.alerts--many {
+		margin-bottom: 1.5rem;
 	}
-	.wrap--stacked {
-		margin-bottom: 0.5rem;
-	}
-	.wrap--stacked::before,
-	.wrap--stacked::after {
-		content: '';
+	.pad {
 		position: absolute;
-		z-index: -1;
-		height: 1rem;
-		border-radius: 0 0 calc(var(--radius-card) * var(--corner-scale))
-			calc(var(--radius-card) * var(--corner-scale));
-		corner-shape: var(--corner);
-		background: color-mix(in oklab, var(--tone-bg) 70%, var(--bg-surface));
-		box-shadow: inset 0 0 0 1px var(--tone-edge);
+		inset: 0 0 auto;
+		height: var(--card);
+		pointer-events: none;
 	}
-	.wrap--stacked::before {
-		inset: auto 0.625rem -0.3125rem;
+	.alerts--open .pad {
+		height: calc(var(--full) + 0.5rem);
+		pointer-events: auto;
 	}
-	.wrap--stacked::after {
-		z-index: -2;
-		inset: auto 1.25rem -0.5625rem;
-		opacity: 0.6;
-	}
-	.stack {
-		overflow: clip;
-		border-radius: calc(var(--radius-card) * var(--corner-scale));
-		corner-shape: var(--corner);
-		background: color-mix(in oklab, var(--tone-bg) 100%, var(--bg-surface));
-		box-shadow:
-			inset 0 0 0 1px var(--tone-edge),
-			0 1px 2px color-mix(in oklab, var(--neutral-10) 6%, transparent);
-	}
-	.inner {
-		display: flex;
-		flex-direction: column;
-	}
-	.row {
-		--row-fg: var(--status-error);
+	.card {
+		--tone: var(--status-error);
+		--tint: var(--status-error-bg);
+		position: absolute;
+		inset: 0 0 auto;
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
-		min-height: 2.75rem;
-		padding: 0.375rem 0.375rem 0.375rem 0.875rem;
+		height: var(--card);
+		padding: 0 0.5rem 0 0.875rem;
+		border-radius: calc(var(--radius-card) * var(--corner-scale));
+		corner-shape: var(--corner);
+		background: linear-gradient(var(--tint), var(--tint)), var(--bg-surface);
+		box-shadow:
+			inset 0 0 0 0.5px color-mix(in oklab, var(--tone) 28%, var(--border-default)),
+			0 1px 2px color-mix(in oklab, var(--neutral-10) 6%, transparent);
+		transform-origin: 50% 0;
+		transition:
+			transform var(--spring-glide-duration) var(--spring-glide),
+			opacity var(--fade-in) var(--curve-out),
+			box-shadow var(--fade-in) var(--curve-out);
 	}
-	.row + .row {
-		box-shadow: inset 0 1px 0 var(--tone-edge);
+	.card--warning {
+		--tone: var(--status-warning);
+		--tint: var(--status-warning-bg);
 	}
-	.row--warning {
-		--row-fg: var(--status-warning);
+	.card--info {
+		--tone: var(--status-info);
+		--tint: var(--status-info-bg);
 	}
-	.row--info {
-		--row-fg: var(--status-info);
+	.alerts--open .card {
+		box-shadow:
+			inset 0 0 0 0.5px color-mix(in oklab, var(--tone) 28%, var(--border-default)),
+			var(--shadow-floating);
+	}
+	.card--back > * {
+		opacity: 0;
+	}
+	.card--back {
+		background: linear-gradient(var(--tint), var(--tint)), var(--bg-sunken);
+		box-shadow:
+			inset 0 0 0 0.5px color-mix(in oklab, var(--tone) 22%, var(--border-default)),
+			0 1px 2px color-mix(in oklab, var(--neutral-10) 8%, transparent);
+	}
+	.card--gone {
+		opacity: 0;
+	}
+	.card > * {
+		transition: opacity var(--fade-in) var(--curve-out);
 	}
 	.icon {
 		display: flex;
 		flex-shrink: 0;
-		color: var(--row-fg);
+		color: var(--tone);
 	}
 	.text {
 		display: flex;
@@ -190,54 +255,49 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.row--open.row--warning {
-		background: var(--status-warning-bg);
-	}
-	.row--open.row--info {
-		background: var(--status-info-bg);
-	}
-	.row--open.row--error {
-		background: var(--status-error-bg);
-	}
-	.row--open .text {
-		flex-direction: column;
-		gap: 0.125rem;
-		padding-block: 0.25rem;
-	}
-	.row--open .hint {
-		white-space: normal;
-	}
 	.acts {
 		display: flex;
 		align-items: center;
-		gap: 0.25rem;
+		gap: 0.375rem;
 		flex-shrink: 0;
 	}
-	.more {
+	.counts {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.625rem;
+		height: 1.75rem;
+		padding: 0 0.625rem;
+		border: none;
+		border-radius: calc(0.5625rem * var(--corner-scale));
+		corner-shape: var(--corner);
+		background: color-mix(in oklab, var(--tone) 10%, transparent);
+		cursor: pointer;
+	}
+	.counts:hover,
+	.counts[aria-expanded='true'] {
+		background: color-mix(in oklab, var(--tone) 16%, transparent);
+	}
+	.count {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.25rem;
-		height: 1.75rem;
-		padding: 0 0.5rem 0 0.625rem;
-		border: none;
-		border-radius: calc(0.5rem * var(--corner-scale));
-		corner-shape: var(--corner);
-		background: color-mix(in oklab, var(--tone-fg) 10%, transparent);
-		color: var(--tone-fg);
 		font-size: var(--text-footnote);
-		font-weight: var(--weight-medium);
+		font-weight: var(--weight-semibold);
 		font-variant-numeric: tabular-nums;
-		white-space: nowrap;
-		cursor: pointer;
 	}
-	.more:hover {
-		background: color-mix(in oklab, var(--tone-fg) 16%, transparent);
+	.count--error {
+		color: var(--status-error);
 	}
-	.chev {
-		display: flex;
-		transition: transform var(--spring-snap-duration) var(--spring-snap);
+	.count--warning {
+		color: var(--status-warning);
 	}
-	.chev--open {
-		transform: rotate(180deg);
+	.count--info {
+		color: var(--status-info);
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.card,
+		.card > * {
+			transition: none;
+		}
 	}
 </style>

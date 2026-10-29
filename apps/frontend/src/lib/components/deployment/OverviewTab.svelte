@@ -433,9 +433,21 @@
 		gap: 1rem;
 		min-width: 0;
 		min-height: 0;
+		margin: -2px;
+		padding: 2px;
+		overflow-y: auto;
+		scrollbar-width: thin;
 	}
 	.side > :global(.pods) {
-		overflow: visible;
+		flex: 0 1 auto;
+		min-height: 6rem;
+	}
+	.side > :global(.usage-card) {
+		flex: 0 0 auto;
+	}
+	.side > :global(.errors) {
+		flex: 1 1 0;
+		min-height: 6.5rem;
 	}
 
 	.bar {

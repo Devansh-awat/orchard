@@ -899,33 +899,33 @@
 					data-fade-top={edges.top || undefined}
 					data-fade-bottom={edges.bottom || undefined}
 				>
-				<div
-					class="scroller"
-					id={listId}
-					role="listbox"
-					aria-label="Results"
-					bind:this={scroller}
-					onscroll={syncEdges}
-				>
-					<span class="hl" aria-hidden="true" bind:this={hl}></span>
-					{#if view?.empty}
-						<p class="none" {@attach rowIn}>
-							<span class="none-text">No matches for “{view.empty}”</span>
-						</p>
-					{/if}
-					{#each view?.sections ?? [] as section (section.key)}
-						<div class="set" role="group" aria-labelledby="{uid}-{section.key}">
-							<div class="heading" id="{uid}-{section.key}" {@attach rowIn}>
-								{section.title}
+					<div
+						class="scroller"
+						id={listId}
+						role="listbox"
+						aria-label="Results"
+						bind:this={scroller}
+						onscroll={syncEdges}
+					>
+						<span class="hl" aria-hidden="true" bind:this={hl}></span>
+						{#if view?.empty}
+							<p class="none" {@attach rowIn}>
+								<span class="none-text">No matches for “{view.empty}”</span>
+							</p>
+						{/if}
+						{#each view?.sections ?? [] as section (section.key)}
+							<div class="set" role="group" aria-labelledby="{uid}-{section.key}">
+								<div class="heading" id="{uid}-{section.key}" {@attach rowIn}>
+									{section.title}
+								</div>
+								<div class="rows">
+									{#each section.rows as row, i (row.key)}
+										{@render option(row, section.offset + i)}
+									{/each}
+								</div>
 							</div>
-							<div class="rows">
-								{#each section.rows as row, i (row.key)}
-									{@render option(row, section.offset + i)}
-								{/each}
-							</div>
-						</div>
-					{/each}
-				</div>
+						{/each}
+					</div>
 				</div>
 				<div class="foot">
 					<span class="count" aria-live="polite">{countLabel}</span>
@@ -980,12 +980,7 @@
 			<span class="name">{@render marks(row.label)}</span>
 			{#if row.sub && row.item.project}
 				<span class="owner">
-					<AppIcon
-						name={row.item.project}
-						kind="project"
-						icon={row.item.projectIcon}
-						size="xs"
-					/>
+					<AppIcon name={row.item.project} kind="project" icon={row.item.projectIcon} size="xs" />
 					<span class="sub">{@render marks(row.sub)}</span>
 				</span>
 			{:else if row.sub}<span class="sub">{@render marks(row.sub)}</span>{/if}

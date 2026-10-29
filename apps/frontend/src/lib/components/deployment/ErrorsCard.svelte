@@ -55,7 +55,7 @@
 		<div class="body body--{tone}">
 			<div class="reading">
 				<span class="value"><NumberRoll value={shown.toFixed(2)} />%</span>
-				<span class="of">of requests failed{scrub === null ? ', now' : ''}</span>
+				<span class="of">of requests failed{scrub === null ? ' · last 30 min' : ''}</span>
 			</div>
 			<div class="chart" bind:clientHeight={chartHeight}>
 				{#if chartHeight > 0}
@@ -69,7 +69,6 @@
 					/>
 				{/if}
 			</div>
-			<span class="window">Last 30 minutes</span>
 		</div>
 	{:else if rates}
 		<p class="none">This app is not serving web traffic, so there is no rate to show.</p>
@@ -112,16 +111,12 @@
 	.chart {
 		position: relative;
 		flex: 1 1 0;
-		min-height: 2.5rem;
+		min-height: 0;
 		overflow: hidden;
 	}
 	.chart > :global(*) {
 		position: absolute;
 		inset: 0;
-	}
-	.window {
-		font-size: var(--text-caption);
-		color: var(--text-faint);
 	}
 	.none {
 		padding: 0.25rem 1.25rem 1rem;
