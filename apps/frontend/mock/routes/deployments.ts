@@ -1176,6 +1176,37 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 		}))
 	);
 	r.get(
+		'/deployments/:id/dependencies',
+		withDep((d) => {
+			const dbs = store.state.databases.filter((db) => db.projectId === d.projectId).slice(0, 1);
+			const apps = store.state.deployments
+				.filter((x) => x.projectId === d.projectId && x.id !== d.id)
+				.slice(0, 1);
+			return {
+				dependencies: [
+					...dbs.map((db, i) => ({
+						kind: 'database',
+						id: db.id,
+						name: db.name,
+						binding: 'DATABASE_URL',
+						status: i === 0 ? 'warning' : 'healthy',
+						lines: i === 0 ? [{ tone: 'warning', text: 'Last backup 3 days ago' }] : [],
+						restarts: []
+					})),
+					...apps.map((a) => ({
+						kind: 'deployment',
+						id: a.id,
+						name: a.name,
+						binding: 'API_URL',
+						status: a.crash ? 'error' : 'healthy',
+						lines: a.crash ? [{ tone: 'error', text: 'Crashing' }] : [],
+						restarts: []
+					}))
+				]
+			};
+		})
+	);
+	r.get(
 		'/deployments/:id/rightsizing',
 		withDep((d) => {
 			const MiB = 1024 * 1024;
