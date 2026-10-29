@@ -8,6 +8,7 @@ export type ScanState =
   | 'not_scanned'
   | 'failed'
   | 'unsupported'
+  | 'off'
   | 'error';
 
 export type ScanReason =

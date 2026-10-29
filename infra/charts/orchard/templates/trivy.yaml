@@ -1,0 +1,205 @@
+{{- if .Values.trivy.enabled }}
+{{- $ns := .Values.trivy.namespace }}
+{{- $token := include "orchard.trivyToken" . }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $ns }}
+  labels:
+    app.kubernetes.io/managed-by: orchard
+    orchard.io/component: image-scans
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: trivy-server-token
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "trivy") | nindent 4 }}
+type: Opaque
+stringData:
+  token: {{ $token | quote }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: trivy-server-token
+  namespace: {{ $ns }}
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "trivy") | nindent 4 }}
+type: Opaque
+stringData:
+  token: {{ $token | quote }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: trivy-cache
+  namespace: {{ $ns }}
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "trivy") | nindent 4 }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- with .Values.trivy.storage.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.trivy.storage.size }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trivy
+  namespace: {{ $ns }}
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "trivy") | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: trivy
+  template:
+    metadata:
+      labels:
+        {{- include "orchard.labels" (dict "root" . "name" "trivy") | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: trivy
+          image: {{ .Values.trivy.image }}
+          args: ["server", "--listen", "0.0.0.0:4954"]
+          env:
+            - { name: TRIVY_CACHE_DIR, value: /cache }
+            - { name: HOME, value: /tmp }
+            - name: TRIVY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: trivy-server-token
+                  key: token
+            {{- with .Values.trivy.dbRepository }}
+            - { name: TRIVY_DB_REPOSITORY, value: {{ . | quote }} }
+            {{- end }}
+            {{- with .Values.trivy.javaDbRepository }}
+            - { name: TRIVY_JAVA_DB_REPOSITORY, value: {{ . | quote }} }
+            {{- end }}
+          ports:
+            - { name: http, containerPort: 4954 }
+          startupProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+            failureThreshold: 60
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.trivy.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: cache, mountPath: /cache }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: cache
+          persistentVolumeClaim:
+            claimName: trivy-cache
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trivy
+  namespace: {{ $ns }}
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "trivy") | nindent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/name: trivy
+  ports:
+    - { name: http, port: 4954, targetPort: http }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-server-image-scans
+  namespace: {{ $ns }}
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "server") | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "create", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-server-image-scans
+  namespace: {{ $ns }}
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "server") | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ .Release.Name }}-server-image-scans
+subjects:
+  - kind: ServiceAccount
+    name: orchard-server
+    namespace: {{ .Values.namespace }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: trivy-server
+  namespace: {{ $ns }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: trivy
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: image-scan
+      ports:
+        - { port: 4954, protocol: TCP }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: image-scan-jobs
+  namespace: {{ $ns }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: image-scan
+  policyTypes: ["Ingress", "Egress"]
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector: {}
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 169.254.0.0/16
+{{- end }}

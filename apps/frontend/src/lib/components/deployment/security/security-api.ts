@@ -11,6 +11,8 @@ export type ScanReason =
 	| 'unauthorized'
 	| 'unreachable';
 
+export type ScanProvider = 'off' | 'harbor' | 'trivy';
+
 export interface Vulnerability {
 	id: string;
 	package: string;
@@ -51,6 +53,8 @@ export interface DeploymentSecurity {
 		finishedAt: string | null;
 		scanner: { name: string; version: string | null } | null;
 		canRescan: boolean;
+		provider: ScanProvider;
+		error: string | null;
 	};
 	vulnerabilities: Vulnerability[] | null;
 	truncated: number;

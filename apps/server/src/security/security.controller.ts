@@ -74,7 +74,7 @@ export class SecurityController {
       throw new ForbiddenException('Your role does not allow you to scan this app');
     }
     try {
-      return await this.security.rescan(id);
+      return await this.security.rescan(id, req.user.sub ?? null);
     } catch (err) {
       if (err instanceof ScanNotPossibleError) throw new BadRequestException(err.message);
       if (err instanceof HarborScanError) {

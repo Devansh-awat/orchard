@@ -358,6 +358,21 @@ true
             {{- if and .Values.logs.enabled (not (include "orchard.serverEnvHas" (dict "root" . "key" "VICTORIALOGS_URL"))) }}
             - { name: VICTORIALOGS_URL, value: {{ printf "http://victorialogs.%s.svc.cluster.local:9428" .Values.metrics.namespace | quote }} }
             {{- end }}
+            {{- if .Values.trivy.enabled }}
+            - { name: TRIVY_SERVER_URL, value: {{ printf "http://trivy.%s.svc.cluster.local:4954" .Values.trivy.namespace | quote }} }
+            - { name: TRIVY_SCAN_NAMESPACE, value: {{ .Values.trivy.namespace | quote }} }
+            - { name: TRIVY_IMAGE, value: {{ .Values.trivy.image | quote }} }
+            - { name: TRIVY_MAX_CONCURRENT_SCANS, value: {{ .Values.trivy.maxConcurrentScans | quote }} }
+            - { name: TRIVY_SCAN_TIMEOUT_SECONDS, value: {{ .Values.trivy.scanTimeoutSeconds | quote }} }
+            - name: TRIVY_SERVER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: trivy-server-token
+                  key: token
+            {{- if not (include "orchard.serverEnvHas" (dict "root" . "key" "ORCHARD_INTERNAL_URL")) }}
+            - { name: ORCHARD_INTERNAL_URL, value: {{ printf "http://server.%s.svc.cluster.local:%v" .Values.namespace .Values.server.service.port | quote }} }
+            {{- end }}
+            {{- end }}
             {{- if .Values.r2Proxy.enabled }}
             - { name: BACKUP_PROXY_ENABLED, value: "true" }
             - name: BACKUP_PROXY_ENDPOINT
@@ -554,3 +569,19 @@ random one that every template in this render sees.
         - name: grafts
           emptyDir: { sizeLimit: 2Gi }
 {{- end }}
+
+{{- define "orchard.trivyToken" -}}
+{{- if .Values.trivy.token -}}
+{{- .Values.trivy.token -}}
+{{- else -}}
+{{- $existing := (lookup "v1" "Secret" .Values.namespace "trivy-server-token") -}}
+{{- if and $existing $existing.data (index $existing.data "token") -}}
+{{- index $existing.data "token" | b64dec -}}
+{{- else -}}
+{{- if not (index .Values.trivy "generatedToken") -}}
+{{- $_ := set .Values.trivy "generatedToken" (randAlphaNum 48) -}}
+{{- end -}}
+{{- index .Values.trivy "generatedToken" -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}

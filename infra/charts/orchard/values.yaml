@@ -515,6 +515,34 @@ certificates:
 # V4 signatures and re-signs upstream with the real key. See r2-proxy/ for the
 # Go service. Enabled by default — disable to fall back to handing the org's
 # R2 credentials directly to barman (the legacy, less-isolated behavior).
+# Orchard's own image scanner: a Trivy server that keeps the vulnerability
+# database, plus one short-lived scan Job per request in its own namespace.
+# Deploying it does not turn scanning on. A superadmin still has to pick
+# "Orchard scanner" in Admin -> Instance -> Image scanning (or pin it with
+# the IMAGE_SCANNER server env var). Harbor's own scanner is the other option
+# and needs none of this.
+trivy:
+  enabled: false
+  namespace: orchard-scans
+  image: ghcr.io/aquasecurity/trivy:0.76.1
+  # Shared secret between the scan jobs and the Trivy server. Generated and
+  # kept across upgrades when empty.
+  token: ""
+  # Scans running at once across the instance; extra requests are refused
+  # until one finishes.
+  maxConcurrentScans: 3
+  scanTimeoutSeconds: 900
+  # Offline or mirrored database sources. Empty uses Trivy's defaults
+  # (mirror.gcr.io, then ghcr.io).
+  dbRepository: ""
+  javaDbRepository: ""
+  resources:
+    requests: { cpu: "100m", memory: "512Mi" }
+    limits: { cpu: "2", memory: "2Gi" }
+  storage:
+    size: 5Gi
+    storageClass: ""
+
 fcBuilder:
   # Experimental fast builder: one privileged fc-builder pod per node runs a
   # Firecracker microVM per project, with that project's BuildKit cache on a

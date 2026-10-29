@@ -29,6 +29,7 @@ import { ServiceConsumer } from './consumers/service.consumer';
 import { NamespaceConsumer } from './consumers/namespace.consumer';
 import { GuardConsumer } from './consumers/guard.consumer';
 import { EventConsumer } from './consumers/event.consumer';
+import { ScanJobConsumer } from './consumers/scan-job.consumer';
 
 const PRESENCE_PREFIX = 'replica:';
 const PRESENCE_INTERVAL_MS = 10_000;
@@ -109,7 +110,8 @@ export class EngineService implements OnApplicationBootstrap, OnModuleDestroy {
     private readonly serviceConsumer: ServiceConsumer,
     private readonly namespaceConsumer: NamespaceConsumer,
     private readonly guardConsumer: GuardConsumer,
-    private readonly eventConsumer: EventConsumer
+    private readonly eventConsumer: EventConsumer,
+    private readonly scanJobConsumer: ScanJobConsumer
   ) {
     this.store = new PrismaEngineStore(prisma);
   }
@@ -148,6 +150,7 @@ export class EngineService implements OnApplicationBootstrap, OnModuleDestroy {
       certManager: await this.certManagerInstalled(),
       guard: this.guardConsumer,
       events: this.eventConsumer,
+      scans: this.scanJobConsumer,
       cilium: await this.ciliumWatchable(),
       namespaceRefs: (ns) => this.resolveNamespaceRefs(ns)
     });

@@ -13,6 +13,7 @@ import { ServiceConsumer } from './consumers/service.consumer';
 import { NamespaceConsumer } from './consumers/namespace.consumer';
 import { GuardConsumer } from './consumers/guard.consumer';
 import { EventConsumer } from './consumers/event.consumer';
+import { ScanJobConsumer } from './consumers/scan-job.consumer';
 
 @Module({
   imports: [KubernetesModule, JobsModule],
@@ -27,7 +28,8 @@ import { EventConsumer } from './consumers/event.consumer';
     ServiceConsumer,
     NamespaceConsumer,
     GuardConsumer,
-    EventConsumer
+    EventConsumer,
+    ScanJobConsumer
   ],
   controllers: [EngineHealthController]
 })

@@ -13,6 +13,22 @@ export const SSO_ENFORCED_ENV = 'SSO_ENFORCED';
 export const POSTGRES_AUTO_UPDATE_KEY = 'postgres_auto_update';
 export const POSTGRES_AUTO_UPDATE_ENV = 'POSTGRES_AUTO_UPDATE';
 
+export const IMAGE_SCANNER_KEY = 'image_scanner';
+export const IMAGE_SCANNER_ENV = 'IMAGE_SCANNER';
+export const IMAGE_SCANNERS = ['off', 'harbor', 'trivy'] as const;
+export type ImageScannerChoice = (typeof IMAGE_SCANNERS)[number];
+
+export interface ChoiceState<T extends string> {
+  value: T;
+  dbValue: T;
+  envOverride: T | null;
+}
+
+export function parseImageScanner(raw: string | null | undefined): ImageScannerChoice | null {
+  const v = (raw ?? '').trim().toLowerCase();
+  return (IMAGE_SCANNERS as readonly string[]).includes(v) ? (v as ImageScannerChoice) : null;
+}
+
 export interface ToggleState {
   enabled: boolean;
   dbValue: boolean;
@@ -154,5 +170,24 @@ export class InstanceSettingsService {
   async setPostgresAutoUpdate(value: boolean): Promise<void> {
     this.assertUnlocked(POSTGRES_AUTO_UPDATE_ENV);
     await this.setBool(POSTGRES_AUTO_UPDATE_KEY, value);
+  }
+
+  async getImageScannerState(): Promise<ChoiceState<ImageScannerChoice>> {
+    const envOverride = parseImageScanner(process.env[IMAGE_SCANNER_ENV]);
+    const dbValue = parseImageScanner(await this.getRaw(IMAGE_SCANNER_KEY)) ?? 'off';
+    return { value: envOverride ?? dbValue, dbValue, envOverride };
+  }
+
+  async imageScanner(): Promise<ImageScannerChoice> {
+    return (await this.getImageScannerState()).value;
+  }
+
+  async setImageScanner(value: ImageScannerChoice): Promise<void> {
+    if (parseImageScanner(process.env[IMAGE_SCANNER_ENV]) !== null) {
+      throw new ConflictException(
+        `This is pinned by the ${IMAGE_SCANNER_ENV} environment variable. Unset it to change this here.`
+      );
+    }
+    await this.set(IMAGE_SCANNER_KEY, value);
   }
 }

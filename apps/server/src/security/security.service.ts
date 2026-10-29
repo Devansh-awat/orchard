@@ -2,8 +2,13 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ingressTlsEnabled } from '../projects/projects.utils';
 import { isMutableImageTag } from '../kubernetes/trusted-images';
+import {
+  InstanceSettingsService,
+  type ImageScannerChoice
+} from '../instance-settings/instance-settings.service';
 import { HarborScanClient } from './harbor-scan.client';
 import { ImageScanCache, type ImageScan } from './image-scan-cache';
+import { ScanQueueFullError, TrivyScanService } from './trivy-scan.service';
 import {
   blankSummary,
   harborImageRef,
@@ -27,7 +32,11 @@ export interface DeploymentSecurity {
     commitMessage: string | null;
     builtAt: string | null;
   };
-  scan: ScanSummary & { canRescan: boolean };
+  scan: ScanSummary & {
+    canRescan: boolean;
+    provider: ImageScannerChoice;
+    error: string | null;
+  };
   vulnerabilities: Vulnerability[] | null;
   truncated: number;
   posture: PostureFinding[];
@@ -35,6 +44,17 @@ export interface DeploymentSecurity {
 }
 
 export class ScanNotPossibleError extends Error {}
+
+type Scan = ImageScan & { error?: string | null };
+
+export interface ScannerOption {
+  value: ImageScannerChoice;
+  available: boolean;
+  reason: string | null;
+}
+
+const OFF_MESSAGE =
+  'Image scanning is off for this instance. A superadmin can turn it on in Admin, Instance.';
 
 type Loaded = NonNullable<Awaited<ReturnType<SecurityService['loadDeployment']>>>;
 
@@ -44,7 +64,9 @@ export class SecurityService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly harbor: HarborScanClient
+    private readonly harbor: HarborScanClient,
+    private readonly trivy: TrivyScanService,
+    private readonly settings: InstanceSettingsService
   ) {
     this.cache = new ImageScanCache(harbor);
   }
@@ -78,9 +100,32 @@ export class SecurityService {
     return 'external';
   }
 
-  private async scanFor(source: ImageSource, ref: HarborImageRef | null): Promise<ImageScan> {
+  scannerOptions(): ScannerOption[] {
+    const harbor = this.harbor.configured
+      ? null
+      : 'Harbor is not configured. Set HARBOR_USERNAME, HARBOR_PASSWORD and DOCKER_REGISTRY_PULL (or HARBOR_API_URL).';
+    const trivy = this.trivy.unavailableReason();
+    return [
+      { value: 'off', available: true, reason: null },
+      { value: 'harbor', available: !harbor, reason: harbor },
+      { value: 'trivy', available: !trivy, reason: trivy }
+    ];
+  }
+
+  private async scanFor(
+    provider: ImageScannerChoice,
+    dep: Loaded,
+    source: ImageSource,
+    ref: HarborImageRef | null
+  ): Promise<Scan> {
     const empty = { vulnerabilities: null, truncated: 0, digest: null, pushedAt: null };
     if (source === 'none') return { ...empty, summary: blankSummary('unsupported', 'no_image') };
+    if (provider === 'off') return { ...empty, summary: blankSummary('off') };
+    if (provider === 'trivy') {
+      if (!this.trivy.configured || !dep.image)
+        return { ...empty, summary: blankSummary('error', 'not_configured') };
+      return this.trivy.latest(dep.image);
+    }
     if (source === 'external')
       return { ...empty, summary: blankSummary('unsupported', 'external_image') };
     if (!ref || !this.harbor.configured)
@@ -88,9 +133,21 @@ export class SecurityService {
     return this.cache.get(ref);
   }
 
+  private scannable(
+    provider: ImageScannerChoice,
+    dep: Loaded,
+    source: ImageSource,
+    ref: HarborImageRef | null
+  ) {
+    if (provider === 'trivy') return this.trivy.configured && !!dep.image;
+    if (provider === 'harbor') return source === 'orchard' && !!ref && this.harbor.configured;
+    return false;
+  }
+
   private async build(
     dep: Loaded,
-    scan: ImageScan,
+    scan: Scan,
+    provider: ImageScannerChoice,
     source: ImageSource,
     ref: HarborImageRef | null,
     canEdit: boolean
@@ -110,9 +167,7 @@ export class SecurityService {
     const s = scan.summary;
     const canRescan =
       canEdit &&
-      source === 'orchard' &&
-      this.harbor.configured &&
-      !!ref &&
+      this.scannable(provider, dep, source, ref) &&
       s.state !== 'scanning' &&
       s.state !== 'error' &&
       s.state !== 'unsupported';
@@ -127,7 +182,7 @@ export class SecurityService {
         commitMessage: history?.commitMessage ?? null,
         builtAt: (history?.buildCompletedAt ?? history?.createdAt)?.toISOString() ?? null
       },
-      scan: { ...s, canRescan },
+      scan: { ...s, canRescan, provider, error: scan.error ?? null },
       vulnerabilities: scan.vulnerabilities,
       truncated: scan.truncated,
       posture: postureFindings({
@@ -147,23 +202,40 @@ export class SecurityService {
   async report(deploymentId: string, canEdit: boolean): Promise<DeploymentSecurity> {
     const dep = await this.loadDeployment(deploymentId);
     if (!dep) throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    const provider = await this.settings.imageScanner();
     const ref = this.refFor(dep);
     const source = this.sourceOf(dep, ref);
-    return this.build(dep, await this.scanFor(source, ref), source, ref, canEdit);
+    const scan = await this.scanFor(provider, dep, source, ref);
+    return this.build(dep, scan, provider, source, ref, canEdit);
   }
 
-  async rescan(deploymentId: string): Promise<DeploymentSecurity> {
+  async rescan(deploymentId: string, userId: string | null): Promise<DeploymentSecurity> {
     const dep = await this.loadDeployment(deploymentId);
     if (!dep) throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    const provider = await this.settings.imageScanner();
     const ref = this.refFor(dep);
     const source = this.sourceOf(dep, ref);
+    if (provider === 'off') throw new ScanNotPossibleError(OFF_MESSAGE);
+    if (!dep.image) throw new ScanNotPossibleError('This app has no image to scan yet');
+    if (provider === 'trivy') {
+      if (!this.trivy.configured) {
+        throw new ScanNotPossibleError('The Orchard scanner is not set up on this instance');
+      }
+      try {
+        const scan = await this.trivy.start(dep.image, { deploymentId, userId });
+        return this.build(dep, scan, provider, source, ref, true);
+      } catch (err) {
+        if (err instanceof ScanQueueFullError) throw new ScanNotPossibleError(err.message);
+        throw err;
+      }
+    }
     if (source !== 'orchard' || !ref) {
-      throw new ScanNotPossibleError('Only images Orchard builds can be scanned');
+      throw new ScanNotPossibleError('Harbor can only scan images Orchard builds');
     }
     if (!this.harbor.configured) {
-      throw new ScanNotPossibleError('Image scanning is not configured on this instance');
+      throw new ScanNotPossibleError('Harbor scanning is not configured on this instance');
     }
     const scan = await this.cache.rescan(ref);
-    return this.build(dep, scan, source, ref, true);
+    return this.build(dep, scan, provider, source, ref, true);
   }
 }

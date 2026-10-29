@@ -532,9 +532,10 @@ var routeExclusions = map[string]string{
 	"ALL /scim/v2/{*splat}":                                    "SCIM protocol endpoint for IdPs",
 
 	// github plumbing
-	"GET /github/callback":     "GitHub OAuth callback, browser only",
-	"POST /github/link":        "GitHub OAuth code exchange for the browser flow (CLI opens GET /github/link)",
-	"POST /github/app/webhook": "webhook receiver for GitHub, not a client route",
+	"GET /github/callback":                  "GitHub OAuth callback, browser only",
+	"POST /github/link":                     "GitHub OAuth code exchange for the browser flow (CLI opens GET /github/link)",
+	"POST /github/app/webhook":              "webhook receiver for GitHub, not a client route",
+	"POST /internal/image-scans/:id/result": "result callback for in-cluster scan jobs, not a client route",
 
 	"POST /integrations/linear/webhook":                             "webhook receiver for Linear, signed with the instance webhook secret",
 	"POST /integrations/slack/commands":                             "Slack slash command receiver, signed with the Slack app signing secret",

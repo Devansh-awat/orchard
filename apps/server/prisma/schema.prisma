@@ -1211,6 +1211,26 @@ model PodTransition {
   @@map("pod_transitions")
 }
 
+model ImageScan {
+  id          String    @id @default(uuid()) @db.Uuid
+  image       String    @db.VarChar(500)
+  scanner     String    @db.VarChar(20)
+  status      String    @db.VarChar(20)
+  jobName     String?   @map("job_name") @db.VarChar(100)
+  tokenHash   String?   @map("token_hash") @db.VarChar(64)
+  digest      String?   @db.VarChar(100)
+  report      Json?     @db.JsonB
+  error       String?   @db.VarChar(1000)
+  requestedBy String?   @map("requested_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  startedAt   DateTime? @map("started_at") @db.Timestamp(6)
+  finishedAt  DateTime? @map("finished_at") @db.Timestamp(6)
+
+  @@index([image, createdAt(sort: Desc)], map: "idx_image_scans_image_created")
+  @@index([status], map: "idx_image_scans_status")
+  @@map("image_scans")
+}
+
 model ClusterEvent {
   id           String   @id @default(uuid()) @db.Uuid
   key          String   @unique @db.VarChar(255)

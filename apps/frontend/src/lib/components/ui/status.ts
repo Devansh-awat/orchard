@@ -191,6 +191,7 @@ export type ScanState =
 	| 'not_scanned'
 	| 'failed'
 	| 'unsupported'
+	| 'off'
 	| 'error';
 
 export function scanStatus(state: ScanState, worst?: string | null): StatusMeta {
@@ -207,6 +208,8 @@ export function scanStatus(state: ScanState, worst?: string | null): StatusMeta 
 			return meta('error', 'Scan failed');
 		case 'error':
 			return meta('warning', 'Scanner unavailable');
+		case 'off':
+			return meta('neutral', 'Scanning off');
 		case 'unsupported':
 		case 'not_scanned':
 		default:

@@ -21,6 +21,8 @@ import { ServiceConsumer } from './consumers/service.consumer';
 import { NamespaceConsumer } from './consumers/namespace.consumer';
 import { GuardConsumer } from './consumers/guard.consumer';
 import { EventConsumer, sanitizeEvent } from './consumers/event.consumer';
+import { ScanJobConsumer } from './consumers/scan-job.consumer';
+import { SCAN_LABEL } from '../security/trivy-job';
 
 const ORCHARD_SELECTOR = 'app.kubernetes.io/managed-by=orchard';
 const INGRESS_SELECTOR = 'leaf.dev/managed=true';
@@ -46,6 +48,7 @@ export interface EngineShardDeps {
   certManager: boolean;
   guard: GuardConsumer;
   events: EventConsumer;
+  scans: ScanJobConsumer;
   cilium: { networkPolicies: boolean; envoyConfigs: boolean };
   namespaceRefs: (namespace: string) => Promise<EngineRefs>;
 }
@@ -417,6 +420,32 @@ export function buildEngineShards(deps: EngineShardDeps): EngineShard[] {
           mapRefs: byNamespace,
           sanitize: (obj) => sanitizeEvent(obj),
           onEvent: (type, obj) => deps.events.onEvent(type, obj)
+        }
+      ]
+    },
+    {
+      name: 'scans',
+      lease: 'orchard-mirror-scans',
+      resources: [
+        {
+          kind: 'Job',
+          apiVersion: 'batch/v1',
+          watchPath: '/apis/batch/v1/jobs',
+          labelSelector: SCAN_LABEL,
+          list: async (kc, opts) =>
+            toListResult(
+              await kc
+                .makeApiClient(k8s.BatchV1Api)
+                .listJobForAllNamespaces(
+                  undefined,
+                  opts.continueToken,
+                  undefined,
+                  SCAN_LABEL,
+                  opts.limit
+                )
+            ),
+          mapRefs: () => deps.scans.mapRefs(),
+          onEvent: (type, obj) => deps.scans.onEvent(type, obj)
         }
       ]
     },

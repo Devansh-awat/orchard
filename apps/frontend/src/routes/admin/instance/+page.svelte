@@ -12,6 +12,7 @@
 	} from '$lib/components/ui';
 	import { motionStagger } from '$lib/utils/motion.svelte';
 	import McpToggle from '$lib/components/admin/McpToggle.svelte';
+	import ImageScanning from '$lib/components/admin/ImageScanning.svelte';
 	import TelemetryToggle from '$lib/components/admin/TelemetryToggle.svelte';
 
 	type Section = {
@@ -272,6 +273,10 @@
 	</div>
 
 	<div {@attach motionStagger({ index: sections.length + 1 })}>
+		<ImageScanning />
+	</div>
+
+	<div {@attach motionStagger({ index: sections.length + 2 })}>
 		<TelemetryToggle />
 	</div>
 {/if}

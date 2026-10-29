@@ -157,6 +157,7 @@ export default defineConfig({
             { label: 'Upgrades', slug: 'operate/upgrades' },
             { label: 'Going to production', slug: 'operate/production' },
             { label: 'Security and isolation', slug: 'operate/security' },
+            { label: 'Image scanning', slug: 'operate/image-scanning' },
             { label: 'Troubleshooting', slug: 'operate/troubleshooting' },
             { label: 'Licenses', slug: 'operate/licenses' }
           ]

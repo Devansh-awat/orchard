@@ -29,7 +29,8 @@
 		scanning: 'Scanning',
 		not_scanned: 'Not scanned yet',
 		failed: 'The last scan failed',
-		external_image: 'Scanning covers images Orchard builds',
+		off: 'Image scanning is off',
+		external_image: 'Harbor only scans images Orchard builds',
 		no_image: 'No image to scan yet',
 		not_scannable: 'This image cannot be scanned',
 		not_configured: 'Scanning is not set up on this instance',
@@ -39,14 +40,34 @@
 	};
 
 	const DETAILS: Record<string, string> = {
-		external_image: 'Build from a repository and every release gets scanned.',
+		off: 'A superadmin can turn on Harbor or the Orchard scanner in Admin, Instance.',
+		external_image: 'Build from a repository, or switch the instance to the Orchard scanner.',
 		not_found: 'Redeploy to build and scan it again.'
+	};
+
+	const NOT_CONFIGURED: Record<string, string> = {
+		harbor: 'Harbor is the chosen scanner, but its API credentials are missing.',
+		trivy: 'The Orchard scanner is chosen, but its Trivy server is not deployed.'
+	};
+
+	const PROVIDERS: Record<string, string> = {
+		harbor: 'Harbor',
+		trivy: 'Orchard scanner'
 	};
 
 	const scan = $derived(data?.scan ?? null);
 	const state = $derived(scan?.state ?? null);
 	const key = $derived(
 		state === 'unsupported' || state === 'error' ? (scan?.reason ?? 'unreachable') : state
+	);
+	const detail = $derived(
+		state === 'failed'
+			? (scan?.error ?? null)
+			: key === 'not_configured'
+				? (NOT_CONFIGURED[scan?.provider ?? ''] ?? null)
+				: key
+					? (DETAILS[key] ?? null)
+					: null
 	);
 	const status = $derived(
 		loadError
@@ -64,27 +85,29 @@
 		state !== 'error' &&
 			(!!scan?.canRescan ||
 				(!!scan && requesting) ||
-				(state === 'scanning' && data?.image.source === 'orchard'))
+				(state === 'scanning' && scan?.provider !== 'off'))
 	);
 
 	const facts = $derived.by(() => {
 		if (!data) return [];
 		const img = data.image;
-		if (img.source !== 'orchard') return img.ref ? [{ icon: Box, label: img.ref, mono: true }] : [];
 		const out: { icon: typeof Box; label: string; mono?: boolean }[] = [];
-		if (img.commitSha) out.push({ icon: GitCommit, label: img.commitSha.slice(0, 7), mono: true });
-		else if (img.tag) out.push({ icon: Tag, label: img.tag, mono: true });
+		if (img.source !== 'orchard') {
+			if (img.ref) out.push({ icon: Box, label: img.ref, mono: true });
+		} else if (img.commitSha) {
+			out.push({ icon: GitCommit, label: img.commitSha.slice(0, 7), mono: true });
+		} else if (img.tag) out.push({ icon: Tag, label: img.tag, mono: true });
 		if (img.digest)
 			out.push({
 				icon: Fingerprint,
 				label: img.digest.replace(/^sha256:/, '').slice(0, 12),
 				mono: true
 			});
-		if (data.scan.scanner)
-			out.push({
-				icon: ScanLine,
-				label: [data.scan.scanner.name, data.scan.scanner.version].filter(Boolean).join(' ')
-			});
+		if (data.scan.scanner && data.scan.provider !== 'off') {
+			const engine = [data.scan.scanner.name, data.scan.scanner.version].filter(Boolean).join(' ');
+			const via = PROVIDERS[data.scan.provider];
+			out.push({ icon: ScanLine, label: via ? `${via} · ${engine}` : engine });
+		}
 		return out;
 	});
 </script>
@@ -142,8 +165,8 @@
 					label="Scan progress"
 					labelHidden
 				/>
-			{:else if key && DETAILS[key]}
-				<p class="detail">{DETAILS[key]}</p>
+			{:else if detail}
+				<p class="detail">{detail}</p>
 			{/if}
 
 			{#if facts.length > 0}

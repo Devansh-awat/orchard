@@ -343,8 +343,29 @@ function digestOf(d: MockDeployment) {
 
 type Sec = { scenario: Scenario; scanStartedAt: number | null; finishedAt: number };
 
+type Provider = 'off' | 'harbor' | 'trivy';
+
+const PROVIDERS: Provider[] = ['off', 'harbor', 'trivy'];
+
 export function securityRoutes(r: Router, { store }: MockContext) {
 	const state = new Map<string, Sec>();
+	let provider: Provider = 'trivy';
+
+	const scanning = () => ({
+		value: provider,
+		dbValue: provider,
+		envOverride: null,
+		options: PROVIDERS.map((value) => ({ value, available: true, reason: null }))
+	});
+
+	r.get('/admin/instance-settings/image-scanning', () => scanning());
+
+	r.patch('/admin/instance-settings/image-scanning', ({ body }) => {
+		if (!PROVIDERS.includes(body?.value))
+			return reply(400, { message: 'value must be one of off, harbor, trivy', statusCode: 400 });
+		provider = body.value;
+		return scanning();
+	});
 
 	const defaultScenario = (d: MockDeployment): Scenario => {
 		const n = parseInt(sha(`${d.name}:security`).slice(0, 2), 16) % 3;
@@ -374,10 +395,10 @@ export function securityRoutes(r: Router, { store }: MockContext) {
 		const build = store.buildsOf(d.id)[0];
 		const tag = external ? null : (d.image.split(':').pop() ?? null);
 		const s = stateOf(d);
-		const scanning = s.scanStartedAt !== null || s.scenario === 'scanning';
+		const inProgress = s.scanStartedAt !== null || s.scenario === 'scanning';
 		const finishedAt = new Date(s.finishedAt).toISOString();
 		const startedAt = new Date(s.finishedAt - 41_000).toISOString();
-		const scanner = { name: 'Trivy', version: 'v0.56.2' };
+		const scanner = { name: 'Trivy', version: provider === 'trivy' ? '0.76.1' : 'v0.56.2' };
 		const base = {
 			image: {
 				ref: d.image || null,
@@ -403,6 +424,8 @@ export function securityRoutes(r: Router, { store }: MockContext) {
 			finishedAt: null,
 			scanner: null,
 			canRescan,
+			provider,
+			error: null,
 			...over
 		});
 
@@ -412,20 +435,23 @@ export function securityRoutes(r: Router, { store }: MockContext) {
 				scan: scan({ state: 'unsupported', reason: 'no_image' }, false),
 				vulnerabilities: null
 			};
-		if (external)
+		if (provider === 'off')
+			return { ...base, scan: scan({ state: 'off' }, false), vulnerabilities: null };
+		if (external && provider === 'harbor')
 			return {
 				...base,
 				scan: scan({ state: 'unsupported', reason: 'external_image' }, false),
 				vulnerabilities: null
 			};
-		if (scanning) {
+		if (inProgress) {
 			const elapsed = s.scanStartedAt ? Date.now() - s.scanStartedAt : SCAN_MS * 0.4;
 			return {
 				...base,
 				scan: scan(
 					{
 						state: 'scanning',
-						progress: Math.min(99, Math.round((elapsed / SCAN_MS) * 100)),
+						progress:
+							provider === 'trivy' ? null : Math.min(99, Math.round((elapsed / SCAN_MS) * 100)),
 						startedAt: new Date(s.scanStartedAt ?? Date.now()).toISOString(),
 						scanner
 					},
@@ -446,7 +472,16 @@ export function securityRoutes(r: Router, { store }: MockContext) {
 			case 'failed':
 				return {
 					...base,
-					scan: scan({ state: 'failed', startedAt, finishedAt, scanner }),
+					scan: scan({
+						state: 'failed',
+						startedAt,
+						finishedAt,
+						scanner,
+						error:
+							provider === 'trivy'
+								? 'unable to find the image: GET https://ghcr.io/v2/acme/web/manifests/latest: UNAUTHORIZED'
+								: null
+					}),
 					vulnerabilities: null
 				};
 			case 'unreachable':
@@ -524,8 +559,16 @@ export function securityRoutes(r: Router, { store }: MockContext) {
 	r.post('/deployments/:id/security/scan', ({ params }) => {
 		const d = store.deployment(params.id);
 		if (!d) return notFound('Deployment not found');
-		if (!d.githubRepo || !d.image)
-			return reply(400, { message: 'Only images Orchard builds can be scanned', statusCode: 400 });
+		if (provider === 'off')
+			return reply(400, {
+				message:
+					'Image scanning is off for this instance. A superadmin can turn it on in Admin, Instance.',
+				statusCode: 400
+			});
+		if (!d.image)
+			return reply(400, { message: 'This app has no image to scan yet', statusCode: 400 });
+		if (!d.githubRepo && provider === 'harbor')
+			return reply(400, { message: 'Harbor can only scan images Orchard builds', statusCode: 400 });
 		const s = stateOf(d);
 		if (s.scenario === 'not_configured')
 			return reply(400, {

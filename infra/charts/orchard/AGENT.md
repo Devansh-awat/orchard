@@ -77,6 +77,7 @@ metrics:
 | `orchard`          | `frontend` / `server` Deployments + Services, Traefik `IngressRoute`, CNPG `Cluster` (`orchard-db`) |
 | `orchard-builders` | SA, RBAC, Harbor + R2 secrets, BuildKit ConfigMap, ResourceQuota, LimitRange, NetworkPolicy |
 | `orchard-metrics`  | VictoriaMetrics StatefulSet, vmagent, kube-state-metrics, node-exporter DaemonSet, VictoriaLogs StatefulSet, Vector DaemonSet |
+| `orchard-scans`    | Only with `trivy.enabled`: Trivy server Deployment + Service + cache PVC, the scan jobs, server Role for their Secrets, NetworkPolicies |
 | cluster-scoped     | `ClusterRole`/`ClusterRoleBinding` for builder management and metrics scraping |
 
 The server deployment gets `DATABASE_URL` injected automatically from the
@@ -342,6 +343,40 @@ Access logs need the controller to log JSON:
 - **HAProxy** (haproxytech kubernetes-ingress): set `controller.config.log-format` to a `%{+json}o` format with the field names above (`ts_ms`, `host`, `method`, `path`, `status`, `duration_ms`, `bytes`, `client_ip`, `user_agent`, `backend`, `server`) and capture host and UA into `txn.host`/`txn.ua` from `frontend-config-snippet`. The backend `<ns>_svc_<service>_<port>` gives namespace and service. Lines are capped at the log target's length (1024 bytes by default), so a very long path or UA truncates the JSON and that request is dropped.
 - **Traefik**: `logs.access.enabled=true`, `logs.access.format=json` and `logs.access.fields.headers.names.User-Agent=keep` (the installer sets these). `ServiceName` (`<ns>-<service>-<port>@kubernetes`) does not mark where the namespace ends, so Vector matches its prefixes against tenant namespaces it has seen logs from in the last 7 days; access lines for an app whose namespace has logged nothing in that window are dropped.
 
+### Image scanning (`trivy.*`)
+
+The Orchard scanner, one of the two backends behind the app Security tab (the
+other is Harbor's own scanner). Deploying it does **not** turn scanning on: a
+superadmin still picks a scanner in Admin, Instance, Image scanning, or pins it
+with `IMAGE_SCANNER` in `server.env`. Default is off.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `trivy.enabled` | `false` | Install the Trivy server in `trivy.namespace` and inject `TRIVY_SERVER_URL`, `TRIVY_SCAN_NAMESPACE`, `TRIVY_IMAGE`, `TRIVY_SERVER_TOKEN`, `TRIVY_MAX_CONCURRENT_SCANS`, `TRIVY_SCAN_TIMEOUT_SECONDS` and `ORCHARD_INTERNAL_URL` (`http://server.<namespace>.svc.cluster.local:<server.service.port>`, unless `server.env` sets it) into the server. |
+| `trivy.namespace` | `orchard-scans` | Namespace for the server and the scan jobs. Created by the chart, Pod Security `restricted`. |
+| `trivy.image` | `ghcr.io/aquasecurity/trivy:0.76.1` | Used for both the server and the jobs. Keep it the Alpine-based upstream image: jobs run `sh` and `wget`. |
+| `trivy.token` | generated | Shared secret between the jobs and the server, kept across upgrades in `trivy-server-token`. |
+| `trivy.maxConcurrentScans` | `3` | Scans running at once; a scan request past this is refused with a "try again" message. |
+| `trivy.scanTimeoutSeconds` | `900` | `activeDeadlineSeconds` of each scan job. Trivy's own timeout is a minute less. |
+| `trivy.dbRepository` / `javaDbRepository` | Trivy defaults | Point at a mirror for air-gapped instances. |
+| `trivy.resources` | requests `100m/512Mi`, limits `2/2Gi` | Trivy server resources. Scan jobs use requests `100m/256Mi`, limits `1/1536Mi`. |
+| `trivy.storage.size` / `storageClass` | `5Gi` / cluster default | Vulnerability database cache. |
+
+How a scan runs: the API server creates a Job labelled `orchard.my/image-scan`
+plus a Secret it owns (registry credentials and a one-time result token). The
+Job pulls the image with Trivy in client mode, asks the server for matches and
+POSTs the JSON report to `ORCHARD_INTERNAL_URL/apiv1/internal/image-scans/<id>/result`.
+The engine's `scans` shard watches those Jobs and marks a scan failed when its
+Job fails, times out or is removed. Jobs are cleaned up 10 minutes after they
+finish. Images in Orchard's own registry are pulled through `DOCKER_REGISTRY_PUSH`
+(the in-cluster address), so the pull-only names kubelets use, such as the
+installer's `registry.orchard.local`, still work.
+
+Network: scan jobs accept no traffic and may reach any in-cluster pod and the
+public internet except `169.254.0.0/16`. If your registry or the server
+namespace has an ingress policy of its own, allow `orchard-scans`. The Trivy
+server needs egress to download its database (`mirror.gcr.io`, `ghcr.io`).
+
 ### Gateway (`gateway.*`)
 
 Renders the shared Gateway API `Gateway` objects and `ReferenceGrant`s that used to live in `k8s/gateway-api/`.
@@ -456,6 +491,7 @@ metrics:   { enabled: false }
 logs:      { enabled: false }
 ingress:   { enabled: false }
 mcp:       { enabled: false }   # also pins the admin panel's MCP toggle off
+trivy:     { enabled: true }    # off by default; enables the Orchard image scanner
 ```
 
 If `postgres.enabled: false`, supply `DATABASE_URL` via `server.env` or
