@@ -97,9 +97,9 @@
 		{#each sorted as alert, i (alert.id)}
 			{@const Glyph = ICON[alert.tone]}
 			<div
-				class="card card--{alert.tone}"
-				class:card--back={!open && i > 0}
-				class:card--gone={!open && i > 2}
+				class="note note--{alert.tone}"
+				class:note--back={!open && i > 0}
+				class:note--gone={!open && i > 2}
 				style:transform={place(i)}
 				style:z-index={sorted.length - i}
 				style:transition-delay="{open ? i * 24 : (sorted.length - 1 - i) * 12}ms"
@@ -178,7 +178,7 @@
 		height: calc(var(--full) + 0.5rem);
 		pointer-events: auto;
 	}
-	.card {
+	.note {
 		--tone: var(--status-error);
 		--tint: var(--status-error-bg);
 		position: absolute;
@@ -200,32 +200,32 @@
 			opacity var(--fade-in) var(--curve-out),
 			box-shadow var(--fade-in) var(--curve-out);
 	}
-	.card--warning {
+	.note--warning {
 		--tone: var(--status-warning);
 		--tint: var(--status-warning-bg);
 	}
-	.card--info {
+	.note--info {
 		--tone: var(--status-info);
 		--tint: var(--status-info-bg);
 	}
-	.alerts--open .card {
+	.alerts--open .note {
 		box-shadow:
 			inset 0 0 0 0.5px color-mix(in oklab, var(--tone) 28%, var(--border-default)),
 			var(--shadow-floating);
 	}
-	.card--back > * {
+	.note--back > * {
 		opacity: 0;
 	}
-	.card--back {
+	.note--back {
 		background: linear-gradient(var(--tint), var(--tint)), var(--bg-sunken);
 		box-shadow:
 			inset 0 0 0 0.5px color-mix(in oklab, var(--tone) 22%, var(--border-default)),
 			0 1px 2px color-mix(in oklab, var(--neutral-10) 8%, transparent);
 	}
-	.card--gone {
+	.note--gone {
 		opacity: 0;
 	}
-	.card > * {
+	.note > * {
 		transition: opacity var(--fade-in) var(--curve-out);
 	}
 	.icon {
@@ -295,8 +295,8 @@
 		color: var(--status-info);
 	}
 	@media (prefers-reduced-motion: reduce) {
-		.card,
-		.card > * {
+		.note,
+		.note > * {
 			transition: none;
 		}
 	}
