@@ -68,6 +68,14 @@ const MARKER_TONE: Record<ChangeTone, 'deploy' | 'neutral' | 'platform' | 'error
 	platform: 'platform',
 	error: 'error'
 };
+export type ServerFinding = {
+	symptomId: string;
+	causeId: string | null;
+	sentence: string;
+	evidence: string[];
+	at: number;
+	kind: 'error-rate' | 'p95' | 'memory-step' | 'restart-burst' | 'throttling' | string;
+};
 export type BuildPhase = { id: string; label: string; ms: number };
 export type BuildRun = {
 	id: string;
@@ -144,6 +152,7 @@ export class MetricsState {
 	volumes = $state<VolumeFill[]>([]);
 	builds = $state<BuildRun[]>([]);
 	changes = $state<Change[] | null>(null);
+	findings = $state<ServerFinding[] | null>(null);
 	throttle = $state<ChartPoint[]>([]);
 
 	events = $derived<ChartEvent[]>([
@@ -257,6 +266,7 @@ export class MetricsState {
 			this.volumes = [];
 			this.builds = [];
 			this.changes = null;
+			this.findings = null;
 			return;
 		}
 		const get = (url: string) =>
@@ -264,7 +274,8 @@ export class MetricsState {
 				.then((r) => (r.ok ? r.json() : null))
 				.catch(() => null);
 		const base = `/apiv1/observe/deployments/${encodeURIComponent(id)}`;
-		const [timeline, killed, live, errors, logs, volumes, builds, changes] = await Promise.all([
+		const tz = encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone);
+		const [timeline, killed, live, errors, logs, volumes, builds, findings] = await Promise.all([
 			get(`${base}/timeline?kinds=release,build&limit=60`),
 			get(`/apiv1/deployments/${encodeURIComponent(id)}/killed-containers`),
 			get(`/apiv1/deployments/${encodeURIComponent(id)}/pods-live`),
@@ -272,7 +283,7 @@ export class MetricsState {
 			get(`${base}/logs/structured?tailLines=2000`),
 			get(`${base}/volumes`),
 			get(`${base}/builds?limit=30`),
-			get(`${base}/changes?start=${this.from}&end=${this.to}`)
+			get(`${base}/findings?start=${this.from}&end=${this.to}&tz=${tz}`)
 		]);
 		const time = (v: unknown) => (v ? new Date(v as string).getTime() || null : null);
 		this.releases = ((timeline?.entries ?? []) as any[]).flatMap((e) => {
@@ -297,7 +308,8 @@ export class MetricsState {
 		this.logTail = entries;
 		this.volumes = Array.isArray(volumes?.volumes) ? volumes.volumes : [];
 		this.builds = Array.isArray(builds?.builds) ? builds.builds : [];
-		this.changes = Array.isArray(changes?.changes) ? changes.changes : null;
+		this.changes = Array.isArray(findings?.changes) ? findings.changes : null;
+		this.findings = Array.isArray(findings?.findings) ? findings.findings : null;
 	}
 
 	async load(id: string, opts: { http: boolean; demo: boolean }) {

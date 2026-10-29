@@ -1,7 +1,17 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { Boxes, Clock, Code, GitCommitHorizontal, Info, TriangleAlert } from 'lucide-svelte';
-	import { Button, Disclosure, EmptyState, LogViewer, Modal, Table } from '$lib/components/ui';
+	import {
+		ActivityGroup,
+		ActivityRow,
+		Button,
+		Disclosure,
+		EmptyState,
+		LogViewer,
+		Modal,
+		Table,
+		ToneTile
+	} from '$lib/components/ui';
 	import MetaList from '$lib/components/ui/MetaList.svelte';
 	import Skeleton from '$lib/components/ui/Skeleton.svelte';
 	import Tooltip from '$lib/components/ui/Tooltip.svelte';
@@ -253,7 +263,28 @@
 				]
 	} as Record<ChartId, ChartSeries[]>);
 
-	function findingsFor(list: ChartSeries[], format: (v: number) => string): ChartFinding[] {
+	const SYMPTOM_CHART: Record<string, ChartId> = {
+		'error-rate': 'err',
+		p95: 'lat',
+		'memory-step': 'mem',
+		throttling: 'throttle'
+	};
+
+	function serverFindings(chart: ChartId, list: ChartSeries[]): ChartFinding[] {
+		const target = chart === 'lat' ? (list.find((s) => s.id === 'p95') ?? list[0]) : list[0];
+		if (!target) return [];
+		return (metrics.findings ?? [])
+			.filter((f) => SYMPTOM_CHART[f.kind] === chart)
+			.map((f) => ({ t: f.at, seriesId: target.id, label: f.sentence }));
+	}
+
+	function findingsFor(
+		list: ChartSeries[],
+		format: (v: number) => string,
+		chart?: ChartId
+	): ChartFinding[] {
+		if (metrics.findings && chart) return serverFindings(chart, list);
+		if (metrics.findings) return [];
 		return list.flatMap((s) =>
 			anomalies(s.points, { format, events: metrics.events }).map((a) => ({
 				t: a.t,
@@ -265,10 +296,11 @@
 
 	const findings = $derived({
 		req: findingsFor(series.req, rate),
-		err: findingsFor(series.err, percent),
-		lat: findingsFor(series.lat, ms),
+		err: findingsFor(series.err, percent, 'err'),
+		lat: findingsFor(series.lat, ms, 'lat'),
 		cpu: findingsFor(series.cpu, cpu),
-		mem: findingsFor(series.mem, mem),
+		throttle: findingsFor(throttleSeries, share, 'throttle'),
+		mem: findingsFor(series.mem, mem, 'mem'),
 		net: findingsFor(series.net, net)
 	} as Record<ChartId, ChartFinding[]>);
 
@@ -680,6 +712,33 @@
 			{/each}
 		</div>
 	{:else}
+		{#if metrics.findings?.length}
+			<Widget title="Findings">
+				<ActivityGroup>
+					{#each metrics.findings as f (f.symptomId)}
+						<ActivityRow tone="warning">
+							{#snippet tile()}
+								<ToneTile tone="warning" size={28}>
+									<TriangleAlert size={14} aria-hidden="true" />
+								</ToneTile>
+							{/snippet}
+							{#snippet title()}<span class="finding" title={f.sentence}>{f.sentence}</span
+								>{/snippet}
+							{#snippet actions()}
+								<Button
+									variant="ghost"
+									size="sm"
+									onclick={() =>
+										metrics.zoom(f.at - 15 * 60_000, Math.min(Date.now(), f.at + 15 * 60_000))}
+									>Show</Button
+								>
+							{/snippet}
+						</ActivityRow>
+					{/each}
+				</ActivityGroup>
+			</Widget>
+		{/if}
+
 		{#if metrics.error}
 			<p class="stale" role="status">
 				Metrics aren't updating: {metrics.error}
@@ -836,6 +895,7 @@
 							{ value: THROTTLE_ZONE, tone: 'warning', label: `${THROTTLE_ZONE}% throttled` }
 						]}
 						events={metrics.events}
+						findings={findings.throttle}
 						bands={incidents}
 						empty="No throttling samples in this range"
 						onZoom={(a, b) => metrics.zoom(a, b)}
@@ -1119,6 +1179,12 @@
 	.board > :global(.meta) {
 		padding-inline: 0.25rem;
 		font-size: var(--text-footnote);
+	}
+	.finding {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		font-weight: var(--weight-regular);
 	}
 	.grid {
 		display: grid;

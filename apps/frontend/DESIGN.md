@@ -40,6 +40,23 @@ reading it. If the answer is nothing, delete it.
 - One line, sentence case, no trailing marketing. If a hint needs two sentences, the
   field probably needs a better label or a default.
 
+### Correlation sentences
+
+Findings, deploy verdicts and anything else that explains what happened to an app are
+written by the server (`observability/correlate.ts`, `observability/verdict.ts`) and follow
+the same rules everywhere, including over MCP:
+
+- **Observation first, then the cause, with numbers and times.** "Errors went from 0.2% to
+  4.1% at 14:02, two minutes after v7 went live." "Memory has climbed about 40 MB an hour
+  since 09:10 and reaches its limit around 17:30."
+- **Never hedge.** No "It appears", "may indicate", "seems", "potentially", "likely" or "AI".
+  No exclamation marks, no em dashes.
+- **Weak evidence means no sentence.** No finding beats a vague one.
+- **Name what the user named:** the version, the domain, the env var key. Never a pod hash
+  unless pods differ.
+- **Past tense for events, present tense for current state.**
+- Each sentence links to its moment (`?at=` permalink).
+
 ## Avoiding AI tells
 
 AI-built UI averages its training data. These are the tells people notice, and the

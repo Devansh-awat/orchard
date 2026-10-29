@@ -211,6 +211,59 @@ function service(store: Store, d: MockDeployment) {
 	};
 }
 
+function mockChanges(store: Store, d: MockDeployment, start: number, end: number) {
+	const seb = store.user(store.state.meId);
+	const actor = seb
+		? { id: seb.id, name: [seb.firstName, seb.lastName].filter(Boolean).join(' ') }
+		: null;
+	const deploys = store
+		.buildsOf(d.id)
+		.filter((b) => b.status === 'succeeded')
+		.map((b) => ({
+			id: `release:${b.id}`,
+			t: new Date(b.buildCompletedAt ?? b.createdAt).getTime(),
+			kind: 'deploy',
+			tone: 'deploy',
+			label: `${b.commitSha ? b.commitSha.slice(0, 7) : b.image.split(':').at(-1)} went live`,
+			detail: b.commitMessage?.split('\n')[0] ?? null,
+			actor
+		}));
+	const now = Date.now();
+	const extra = [
+		{
+			id: `audit:${d.id}:resources`,
+			t: now - 3 * 3_600_000,
+			kind: 'resources',
+			tone: 'config',
+			label: 'Resources changed',
+			detail: 'memory 2 GB → 4 GB',
+			actor
+		},
+		{
+			id: `audit:${d.id}:env`,
+			t: now - 95 * 60_000,
+			kind: 'env',
+			tone: 'config',
+			label: 'Environment variables updated',
+			detail: null,
+			actor
+		},
+		{
+			id: `cluster:${d.id}:evicted`,
+			t: now - 5 * 3_600_000 - 12 * 60_000,
+			kind: 'eviction',
+			tone: 'platform',
+			label: 'Pod evicted',
+			detail: 'The node was low on resource: memory. · on house',
+			actor: null
+		}
+	];
+	const changes = [...deploys, ...extra]
+		.filter((c) => c.t >= start && c.t <= end)
+		.sort((a, b) => a.t - b.t);
+	return { changes, truncated: false };
+}
+
 function mockVerdict(store: Store, d: MockDeployment) {
 	if (d.name !== 'api') return null;
 	const live = store.buildsOf(d.id).find((b) => b.isActive);
@@ -995,60 +1048,47 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 		})
 	);
 	r.get(
+		'/observe/deployments/:id/findings',
+		withDep((d, { query }) => {
+			const end = Number(query.get('end')) || Date.now();
+			const start = Number(query.get('start')) || end - 86_400_000;
+			const { changes } = mockChanges(store, d, start, end);
+			const at = (ms: number) =>
+				new Date(ms).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+			const now = Date.now();
+			const findings =
+				d.name === 'game-server'
+					? [
+							{
+								symptomId: `throttling:${now - 80 * 60_000}`,
+								causeId: `audit:${d.id}:env`,
+								sentence: `Throttled 29% of the time since ${at(now - 80 * 60_000)}; the CPU limit is the bottleneck.`,
+								evidence: [`throttling:${now - 80 * 60_000}`],
+								at: now - 80 * 60_000,
+								kind: 'throttling'
+							}
+						]
+					: d.name === 'api'
+						? [
+								{
+									symptomId: `error-rate:${now - 34 * 60_000}`,
+									causeId: 'release:x',
+									sentence: `Errors went from 0.2% to 4.1% at ${at(now - 34 * 60_000)}, two minutes after 6c29231 went live.`,
+									evidence: [`error-rate:${now - 34 * 60_000}`, 'release:x'],
+									at: now - 34 * 60_000,
+									kind: 'error-rate'
+								}
+							]
+						: [];
+			return { findings: findings.filter((f) => f.at >= start && f.at <= end), changes };
+		})
+	);
+	r.get(
 		'/observe/deployments/:id/changes',
 		withDep((d, { query }) => {
 			const end = Number(query.get('end')) || Date.now();
 			const start = Number(query.get('start')) || end - 86_400_000;
-			const seb = store.user(store.state.meId);
-			const actor = seb
-				? { id: seb.id, name: [seb.firstName, seb.lastName].filter(Boolean).join(' ') }
-				: null;
-			const deploys = store
-				.buildsOf(d.id)
-				.filter((b) => b.status === 'succeeded')
-				.map((b) => ({
-					id: `release:${b.id}`,
-					t: new Date(b.buildCompletedAt ?? b.createdAt).getTime(),
-					kind: 'deploy',
-					tone: 'deploy',
-					label: `${b.commitSha ? b.commitSha.slice(0, 7) : b.image.split(':').at(-1)} went live`,
-					detail: b.commitMessage?.split('\n')[0] ?? null,
-					actor
-				}));
-			const now = Date.now();
-			const extra = [
-				{
-					id: `audit:${d.id}:resources`,
-					t: now - 3 * 3_600_000,
-					kind: 'resources',
-					tone: 'config',
-					label: 'Resources changed',
-					detail: 'memory 2 GB → 4 GB',
-					actor
-				},
-				{
-					id: `audit:${d.id}:env`,
-					t: now - 95 * 60_000,
-					kind: 'env',
-					tone: 'config',
-					label: 'Environment variables updated',
-					detail: null,
-					actor
-				},
-				{
-					id: `cluster:${d.id}:evicted`,
-					t: now - 5 * 3_600_000 - 12 * 60_000,
-					kind: 'eviction',
-					tone: 'platform',
-					label: 'Pod evicted',
-					detail: 'The node was low on resource: memory. · on house',
-					actor: null
-				}
-			];
-			const changes = [...deploys, ...extra]
-				.filter((c) => c.t >= start && c.t <= end)
-				.sort((a, b) => a.t - b.t);
-			return { changes, truncated: false };
+			return mockChanges(store, d, start, end);
 		})
 	);
 	r.get(
