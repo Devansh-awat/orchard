@@ -95,6 +95,8 @@ function isWildcardTlsSecret(name: string | null): boolean {
 
 import { ingressLimitReached, ingressLimits } from './ingress-limits';
 
+export type DnsRecordHint = { type: 'CNAME' | 'A'; name: string; value: string };
+
 @Injectable()
 export class IngressService implements OnModuleInit {
   private readonly logger = new Logger(IngressService.name);
@@ -215,7 +217,23 @@ export class IngressService implements OnModuleInit {
     }, 10_000);
   }
 
-  async validateIngressDns(domain: string): Promise<{ valid: boolean; message: string }> {
+  async dnsRecordsFor(domain: string): Promise<DnsRecordHint[]> {
+    const target = (this.instanceConfig.value(INGRESS, 'cname') || '')
+      .toLowerCase()
+      .replace(/\.$/, '');
+    const host = domain.trim().toLowerCase().replace(/\.$/, '');
+    if (!target || !host) return [];
+    const labels = host.split('.');
+    if (labels.length > 2) {
+      return [{ type: 'CNAME', name: labels.slice(0, -2).join('.'), value: target }];
+    }
+    const ips = await promisify(dns.resolve4)(target).catch(() => [] as string[]);
+    return ips.map((ip) => ({ type: 'A' as const, name: '@', value: ip }));
+  }
+
+  async validateIngressDns(
+    domain: string
+  ): Promise<{ valid: boolean; message: string; records: DnsRecordHint[] }> {
     const expectedCname = this.instanceConfig.value(INGRESS, 'cname') || '';
     const appDomain = process.env.APP_DOMAIN || '';
     const domainToCheck = domain.trim().toLowerCase();
@@ -223,48 +241,52 @@ export class IngressService implements OnModuleInit {
     // Generic failure message — do NOT echo resolved DNS records back to the
     // caller. Returning resolved CNAME / A records turns this endpoint into a
     // DNS oracle for arbitrary internet domains.
+    const records = await this.dnsRecordsFor(domainToCheck);
     const genericFailure = {
       valid: false,
-      message: 'DNS records do not point to the configured target.'
+      message: 'DNS records do not point to the configured target.',
+      records
     };
 
     if (!domainToCheck) {
-      return { valid: false, message: 'Domain is required' };
+      return { valid: false, message: 'Domain is required', records };
     }
 
     if (appDomain && domainToCheck.endsWith(`.${appDomain}`)) {
-      return { valid: true, message: 'Auto-generated domain is ready to use' };
+      return { valid: true, message: 'Auto-generated domain is ready to use', records: [] };
     }
 
     if (!expectedCname) {
       return {
         valid: false,
-        message: 'This instance has no custom-domain CNAME target configured (INGRESS_CNAME).'
+        message: 'This instance has no custom-domain CNAME target configured (INGRESS_CNAME).',
+        records
       };
     }
 
-    try {
-      const resolveCname = promisify(dns.resolveCname);
-      const records = await resolveCname(domainToCheck);
-
-      const normalizedExpected = expectedCname.toLowerCase().replace(/\.$/, '');
-      const hasValidCname = records.some((record) => {
-        const normalizedRecord = record.toLowerCase().replace(/\.$/, '');
-        return (
-          normalizedRecord === normalizedExpected ||
-          normalizedRecord.endsWith(`.${normalizedExpected}`)
-        );
-      });
-
-      if (hasValidCname) {
-        return { valid: true, message: 'CNAME record is correctly configured' };
-      }
-      return genericFailure;
-    } catch (error: any) {
-      // Swallow lookup errors (ENOTFOUND/ENODATA/etc) into the same generic
-      // failure to avoid leaking DNS state of arbitrary domains.
-      return genericFailure;
+    const normalizedExpected = expectedCname.toLowerCase().replace(/\.$/, '');
+    const cnames = await promisify(dns.resolveCname)(domainToCheck).catch(() => [] as string[]);
+    const hasValidCname = cnames.some((record) => {
+      const normalizedRecord = record.toLowerCase().replace(/\.$/, '');
+      return (
+        normalizedRecord === normalizedExpected ||
+        normalizedRecord.endsWith(`.${normalizedExpected}`)
+      );
+    });
+    if (hasValidCname) {
+      return { valid: true, message: 'CNAME record is correctly configured', records };
     }
+
+    const expectedIps = new Set(records.filter((r) => r.type === 'A').map((r) => r.value));
+    if (expectedIps.size === 0) {
+      const ips = await promisify(dns.resolve4)(normalizedExpected).catch(() => [] as string[]);
+      ips.forEach((ip) => expectedIps.add(ip));
+    }
+    const addresses = await promisify(dns.resolve4)(domainToCheck).catch(() => [] as string[]);
+    if (addresses.length > 0 && addresses.every((ip) => expectedIps.has(ip))) {
+      return { valid: true, message: 'A records are correctly configured', records };
+    }
+    return genericFailure;
   }
 
   async createDeploymentIngress(
