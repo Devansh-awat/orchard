@@ -250,6 +250,7 @@
   "GET /observe/deployments/:id/build-logs/stream": "authenticated",
   "GET /observe/deployments/:id/builds": "authenticated",
   "GET /observe/deployments/:id/capabilities": "authenticated",
+  "GET /observe/deployments/:id/changes": "authenticated",
   "GET /observe/deployments/:id/errors": "authenticated",
   "GET /observe/deployments/:id/http-metrics": "authenticated",
   "GET /observe/deployments/:id/logs/stream": "authenticated",

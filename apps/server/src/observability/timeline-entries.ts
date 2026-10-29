@@ -169,6 +169,12 @@ const AUDIT_TITLES: Record<string, string> = {
   'deployment.autodeploy.enabled': 'Auto deploy enabled',
   'deployment.autodeploy.disabled': 'Auto deploy disabled',
   'deployment.volumes.updated': 'Volumes updated',
+  'deployment.resources.updated': 'Resources changed',
+  'deployment.image.updated': 'Image changed',
+  'deployment.strategy.updated': 'Deploy strategy changed',
+  'deployment.pull_policy.updated': 'Pull policy changed',
+  'deployment.placement.updated': 'Placement changed',
+  'deployment.disruption_budget.updated': 'Disruption budget changed',
   'deployment.volume.rejected': 'Volume rejected',
   'deployment.webhook_triggered': 'Deploy webhook triggered',
   'ingress.created': 'Domain added',
@@ -191,15 +197,46 @@ function formatMetaValue(v: unknown): string {
 
 const NOISY_META_KEYS = new Set(['repo', 'repoUrl', 'githubRepo', 'namespace', 'deploymentId']);
 
+function unitOf(key: string): { name: string; format: (v: unknown) => string } {
+  if (/Bytes$/.test(key)) {
+    return {
+      name: key.replace(/Bytes$/, ''),
+      format: (v) => {
+        if (v == null) return 'default';
+        if (typeof v !== 'number') return formatMetaValue(v);
+        if (v === 0) return 'unlimited';
+        const mb = v / (1024 * 1024);
+        return mb >= 1024
+          ? `${(mb / 1024).toFixed(mb % 1024 === 0 ? 0 : 1)} GB`
+          : `${Math.round(mb)} MB`;
+      }
+    };
+  }
+  if (/Milli$/.test(key)) {
+    return {
+      name: key.replace(/Milli$/, ''),
+      format: (v) => {
+        if (v == null) return 'default';
+        if (typeof v !== 'number') return formatMetaValue(v);
+        if (v === 0) return 'unlimited';
+        return v >= 1000 ? `${v / 1000} CPU` : `${v}m`;
+      }
+    };
+  }
+  return { name: key, format: formatMetaValue };
+}
+
 export function describeAuditMetadata(metadata: unknown): string | null {
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
   const parts: string[] = [];
   for (const [key, value] of Object.entries(metadata as Record<string, unknown>)) {
     if (NOISY_META_KEYS.has(key)) continue;
+    const { name, format } = unitOf(key);
     if (Array.isArray(value) && value.length === 2) {
-      parts.push(`${key} ${formatMetaValue(value[0])} → ${formatMetaValue(value[1])}`);
+      if (value[0] === value[1]) continue;
+      parts.push(`${name} ${format(value[0])} → ${format(value[1])}`);
     } else if (value !== null && value !== undefined && value !== '') {
-      parts.push(`${key} ${formatMetaValue(value)}`);
+      parts.push(`${name} ${format(value)}`);
     }
   }
   return parts.length ? clip(parts.join(' · ')) : null;

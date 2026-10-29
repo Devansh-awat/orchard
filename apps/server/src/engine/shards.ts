@@ -20,6 +20,7 @@ import { StorageConsumer } from './consumers/storage.consumer';
 import { ServiceConsumer } from './consumers/service.consumer';
 import { NamespaceConsumer } from './consumers/namespace.consumer';
 import { GuardConsumer } from './consumers/guard.consumer';
+import { EventConsumer, sanitizeEvent } from './consumers/event.consumer';
 
 const ORCHARD_SELECTOR = 'app.kubernetes.io/managed-by=orchard';
 const INGRESS_SELECTOR = 'leaf.dev/managed=true';
@@ -27,6 +28,7 @@ const CNPG_POD_SELECTOR = 'cnpg.io/cluster';
 const CILIUM_POLICY_SELECTOR = 'orchard.my/managed=true';
 const BASIC_AUTH_SELECTOR = 'orchard.my/type=basic-auth';
 const OUTSIDE_BUILDERS = `metadata.namespace!=${BUILDER_NAMESPACE}`;
+const POD_EVENTS = `involvedObject.kind=Pod,${OUTSIDE_BUILDERS}`;
 
 export interface EngineShardDeps {
   pods: PodConsumer;
@@ -43,6 +45,7 @@ export interface EngineShardDeps {
   // when the definition exists.
   certManager: boolean;
   guard: GuardConsumer;
+  events: EventConsumer;
   cilium: { networkPolicies: boolean; envoyConfigs: boolean };
   namespaceRefs: (namespace: string) => Promise<EngineRefs>;
 }
@@ -389,6 +392,31 @@ export function buildEngineShards(deps: EngineShardDeps): EngineShard[] {
           mapRefs: (obj) => deps.namespaceRefs(obj.metadata?.name ?? ''),
           onEvent: (type, obj) => deps.namespaces.onEvent(type, obj),
           onListComplete: (seen) => deps.namespaces.pruneMissing(seen)
+        }
+      ]
+    },
+    {
+      name: 'events',
+      lease: 'orchard-mirror-events',
+      resources: [
+        {
+          kind: 'Event',
+          apiVersion: 'v1',
+          watchPath: '/api/v1/events',
+          fieldSelector: POD_EVENTS,
+          list: async (kc, opts) =>
+            toListResult(
+              await core(kc).listEventForAllNamespaces(
+                undefined,
+                opts.continueToken,
+                POD_EVENTS,
+                undefined,
+                opts.limit
+              )
+            ),
+          mapRefs: byNamespace,
+          sanitize: (obj) => sanitizeEvent(obj),
+          onEvent: (type, obj) => deps.events.onEvent(type, obj)
         }
       ]
     },

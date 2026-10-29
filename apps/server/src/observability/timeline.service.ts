@@ -16,6 +16,16 @@ import {
   entryId,
   mergeTimeline
 } from './timeline-entries';
+import {
+  ChangeEntry,
+  auditChange,
+  buildChange,
+  clusterEventChange,
+  mergeChanges,
+  releaseChange
+} from './changes';
+
+const CHANGES_LIMIT = 500;
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
@@ -265,8 +275,115 @@ export class TimelineService {
     return mergeTimeline(hydrated, { limit, cursor });
   }
 
+  async changes(
+    deploymentId: string,
+    opts: { start: number; end: number; canEdit: boolean }
+  ): Promise<{ changes: ChangeEntry[]; truncated: boolean }> {
+    const range = { gte: new Date(opts.start), lte: new Date(opts.end) };
+    const take = CHANGES_LIMIT + 1;
+    const [audits, releases, runs, events] = await Promise.all([
+      this.prisma.auditLog.findMany({
+        where: { deploymentId, createdAt: range },
+        orderBy: { createdAt: 'desc' },
+        take,
+        select: {
+          id: true,
+          action: true,
+          createdAt: true,
+          targetType: true,
+          targetLabel: true,
+          metadata: true,
+          actorUserId: true
+        }
+      }),
+      this.prisma.release.findMany({
+        where: { deploymentId, promotedAt: range },
+        orderBy: { promotedAt: 'desc' },
+        take,
+        select: {
+          id: true,
+          promotedAt: true,
+          status: true,
+          reason: true,
+          image: true,
+          createdById: true,
+          imageHistory: { select: { tag: true, commitSha: true, commitMessage: true } }
+        }
+      }),
+      this.prisma.buildRun.findMany({
+        where: { deploymentId, status: 'failed', createdAt: range },
+        orderBy: { createdAt: 'desc' },
+        take,
+        select: {
+          id: true,
+          status: true,
+          createdAt: true,
+          detail: true,
+          commitMessage: true,
+          triggeredById: true
+        }
+      }),
+      this.prisma.clusterEvent.findMany({
+        where: { deploymentId, at: range },
+        orderBy: { at: 'desc' },
+        take,
+        select: {
+          id: true,
+          kind: true,
+          reason: true,
+          message: true,
+          nodeName: true,
+          count: true,
+          at: true
+        }
+      })
+    ]);
+
+    const pending: { entry: Omit<ChangeEntry, 'actor'>; actorUserId: string | null }[][] = [
+      audits.flatMap((row) => {
+        const change = auditChange(row);
+        return change ? [{ entry: change, actorUserId: row.actorUserId }] : [];
+      }),
+      releases.flatMap((row) =>
+        row.promotedAt
+          ? [
+              {
+                entry: releaseChange({ ...row, promotedAt: row.promotedAt }),
+                actorUserId: row.createdById
+              }
+            ]
+          : []
+      ),
+      runs.flatMap((row) => {
+        const change = buildChange(row);
+        return change ? [{ entry: change, actorUserId: row.triggeredById }] : [];
+      }),
+      events.map((row) => ({ entry: clusterEventChange(row), actorUserId: null }))
+    ];
+    const actors = await this.loadActors(pending, opts.canEdit);
+    const lists = pending.map((list) =>
+      list.map(({ entry, actorUserId }) => {
+        const actor = actorUserId ? actors.get(actorUserId) : null;
+        return {
+          ...entry,
+          actor: actor
+            ? {
+                id: actor.id,
+                name:
+                  [actor.firstName, actor.lastName].filter(Boolean).join(' ') ||
+                  actor.username ||
+                  'Someone'
+              }
+            : null
+        };
+      })
+    );
+    const truncated = [audits, releases, runs, events].some((l) => l.length > CHANGES_LIMIT);
+    return { changes: mergeChanges(lists, CHANGES_LIMIT), truncated };
+  }
+
   private async loadActors(
-    sources: Pending[][],
+    sources: { actorUserId: string | null }[][],
     canEdit: boolean
   ): Promise<Map<string, TimelineActor>> {
     const ids = new Set<string>();

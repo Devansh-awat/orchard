@@ -50,6 +50,23 @@ export class ObservabilityController {
     });
   }
 
+  @Get('deployments/:id/changes')
+  async getChanges(
+    @Param('id') id: string,
+    @Request() req,
+    @Query('start') startStr?: string,
+    @Query('end') endStr?: string
+  ) {
+    const { access } = await this.assertAccess(id, req);
+    const end = Number(endStr) || Date.now();
+    const start = Number(startStr) || end - 24 * 60 * 60 * 1000;
+    if (end <= start) throw new BadRequestException('end must be > start');
+    if (end - start > 31 * 24 * 60 * 60 * 1000) {
+      throw new BadRequestException('range must be 31 days or less');
+    }
+    return this.timeline.changes(id, { start, end, canEdit: access.canEdit });
+  }
+
   @Get('deployments/:id/capabilities')
   async getCapabilities(@Param('id') id: string, @Request() req) {
     await this.assertAccess(id, req);

@@ -417,6 +417,22 @@ export class ProjectsService {
         status: 'restarting'
       }
     });
+    void this.audit.log({
+      action: 'database.resources.updated',
+      actorUserId: userId ?? null,
+      organizationId: database.project.organizationId,
+      projectId: database.projectId,
+      targetType: 'database',
+      targetId: databaseId,
+      targetLabel: database.name,
+      metadata: {
+        cpuMilli: [database.cpuRequestMilli ?? null, data.cpuRequestMilli],
+        memoryBytes: [
+          database.memoryRequestBytes != null ? Number(database.memoryRequestBytes) : null,
+          data.memoryRequestBytes
+        ]
+      }
+    });
     return sealDatabaseCredentials(updated);
   }
 

@@ -8,14 +8,16 @@ export type MetricId =
   | 'request_rate'
   | 'error_rate'
   | 'latency_avg_ms'
-  | 'latency_max_ms';
+  | 'latency_max_ms'
+  | 'cpu_throttled_percent'
+  | 'memory_forecast_hours';
 
 export type Comparator = 'gt' | 'lt';
 
 export interface MetricDef {
   id: MetricId;
   label: string;
-  unit: '%' | 'req/s' | 'ms';
+  unit: '%' | 'req/s' | 'ms' | 'h';
   comparators: Comparator[];
   needsIngress: boolean;
   needsLimits: boolean;
@@ -94,6 +96,30 @@ export const METRIC_CATALOGUE: readonly MetricDef[] = [
     requestRateGuard: true,
     defaultThreshold: 2000,
     defaultForSeconds: 300
+  },
+  {
+    id: 'cpu_throttled_percent',
+    label: 'CPU throttling',
+    unit: '%',
+    comparators: ['gt'],
+    needsIngress: false,
+    needsLimits: true,
+    requestRateGuard: false,
+    defaultThreshold: 25,
+    defaultForSeconds: 600,
+    maxThreshold: 100
+  },
+  {
+    id: 'memory_forecast_hours',
+    label: 'Hours until out of memory',
+    unit: 'h',
+    comparators: ['lt'],
+    needsIngress: false,
+    needsLimits: true,
+    requestRateGuard: false,
+    defaultThreshold: 6,
+    defaultForSeconds: 1800,
+    maxThreshold: 168
   }
 ];
 
@@ -166,6 +192,25 @@ export function buildMetricQuery(id: MetricId, target: MetricTarget): MetricQuer
     case 'latency_max_ms':
       if (!target.ingress) return { kind: 'inapplicable', reason: 'no ingress' };
       return { kind: 'query', promql: target.ingress.latencyMaxMs(RATE_WINDOW) };
+    case 'cpu_throttled_percent': {
+      if (!target.cpuLimitMilli || target.cpuLimitMilli <= 0) {
+        return { kind: 'inapplicable', reason: 'no CPU limit to throttle against' };
+      }
+      return {
+        kind: 'query',
+        promql: `100 * sum(rate(container_cpu_cfs_throttled_periods_total{${podSelector(target)}}[${RATE_WINDOW}])) / sum(rate(container_cpu_cfs_periods_total{${podSelector(target)}}[${RATE_WINDOW}]))`
+      };
+    }
+    case 'memory_forecast_hours': {
+      if (!target.memoryLimitBytes || target.memoryLimitBytes <= 0) {
+        return { kind: 'inapplicable', reason: 'no memory limit to run out of' };
+      }
+      const series = `container_memory_working_set_bytes{${podSelector(target)}}`;
+      return {
+        kind: 'query',
+        promql: `clamp_min(min((${target.memoryLimitBytes} - ${series}) / clamp_min(deriv(${series}[6h]), 1) / 3600), 0)`
+      };
+    }
     default:
       return { kind: 'inapplicable', reason: 'unknown metric' };
   }

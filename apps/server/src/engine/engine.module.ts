@@ -12,6 +12,7 @@ import { StorageConsumer } from './consumers/storage.consumer';
 import { ServiceConsumer } from './consumers/service.consumer';
 import { NamespaceConsumer } from './consumers/namespace.consumer';
 import { GuardConsumer } from './consumers/guard.consumer';
+import { EventConsumer } from './consumers/event.consumer';
 
 @Module({
   imports: [KubernetesModule, JobsModule],
@@ -25,7 +26,8 @@ import { GuardConsumer } from './consumers/guard.consumer';
     StorageConsumer,
     ServiceConsumer,
     NamespaceConsumer,
-    GuardConsumer
+    GuardConsumer,
+    EventConsumer
   ],
   controllers: [EngineHealthController]
 })

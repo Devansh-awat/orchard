@@ -28,6 +28,7 @@ import { StorageConsumer } from './consumers/storage.consumer';
 import { ServiceConsumer } from './consumers/service.consumer';
 import { NamespaceConsumer } from './consumers/namespace.consumer';
 import { GuardConsumer } from './consumers/guard.consumer';
+import { EventConsumer } from './consumers/event.consumer';
 
 const PRESENCE_PREFIX = 'replica:';
 const PRESENCE_INTERVAL_MS = 10_000;
@@ -41,6 +42,7 @@ const POD_ROWS_REBUILD_INTERVAL_MS = 10 * 60 * 1000;
 const CRASH_SWEEP_INTERVAL_MS = 5_000;
 const PRESENCE_FRESH_MS = 30_000;
 const TRANSITION_RETENTION_DAYS = 30;
+const CLUSTER_EVENT_RETENTION_DAYS = 30;
 const NS_REF_TTL_MS = 10 * 60 * 1000;
 const NS_REF_NEGATIVE_TTL_MS = 30 * 1000;
 
@@ -106,7 +108,8 @@ export class EngineService implements OnApplicationBootstrap, OnModuleDestroy {
     private readonly storageConsumer: StorageConsumer,
     private readonly serviceConsumer: ServiceConsumer,
     private readonly namespaceConsumer: NamespaceConsumer,
-    private readonly guardConsumer: GuardConsumer
+    private readonly guardConsumer: GuardConsumer,
+    private readonly eventConsumer: EventConsumer
   ) {
     this.store = new PrismaEngineStore(prisma);
   }
@@ -144,6 +147,7 @@ export class EngineService implements OnApplicationBootstrap, OnModuleDestroy {
       namespaces: this.namespaceConsumer,
       certManager: await this.certManagerInstalled(),
       guard: this.guardConsumer,
+      events: this.eventConsumer,
       cilium: await this.ciliumWatchable(),
       namespaceRefs: (ns) => this.resolveNamespaceRefs(ns)
     });
@@ -542,6 +546,7 @@ export class EngineService implements OnApplicationBootstrap, OnModuleDestroy {
     if (!this.lease.isHolder(GLOBAL_LEADER_LEASE)) return;
     const cutoff = new Date(Date.now() - TRANSITION_RETENTION_DAYS * 24 * 60 * 60 * 1000);
     await this.prisma.podTransition.deleteMany({ where: { at: { lt: cutoff } } }).catch(() => {});
+    await this.eventConsumer.prune(CLUSTER_EVENT_RETENTION_DAYS).catch(() => {});
     const presenceCutoff = new Date(Date.now() - 60 * 60 * 1000);
     await this.prisma.k8sMirrorHeartbeat
       .deleteMany({

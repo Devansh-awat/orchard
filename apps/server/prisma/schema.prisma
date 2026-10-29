@@ -788,6 +788,7 @@ model Deployment {
   crashState        DeploymentCrashState?
   releases          Release[]
   resourceBindings  ResourceBinding[]
+  clusterEvents     ClusterEvent[]
   gitConnection     GitConnection?           @relation(fields: [gitConnectionId], references: [id], onDelete: SetNull)
 
   @@unique([environmentId, name])
@@ -940,6 +941,9 @@ model Release {
   createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamp(6)
   promotedAt          DateTime?          @map("promoted_at") @db.Timestamp(6)
   supersededAt        DateTime?          @map("superseded_at") @db.Timestamp(6)
+  settledAt           DateTime?          @map("settled_at") @db.Timestamp(6)
+  verdict             Json?              @db.JsonB
+  verdictAt           DateTime?          @map("verdict_at") @db.Timestamp(6)
 
   deployment   Deployment    @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
   imageHistory ImageHistory? @relation(fields: [imageHistoryId], references: [id], onDelete: SetNull)
@@ -1205,6 +1209,27 @@ model PodTransition {
 
   @@index([deploymentId, at(sort: Desc)], map: "idx_pod_transitions_deployment_at")
   @@map("pod_transitions")
+}
+
+model ClusterEvent {
+  id           String   @id @default(uuid()) @db.Uuid
+  key          String   @unique @db.VarChar(255)
+  deploymentId String?  @map("deployment_id") @db.Uuid
+  namespace    String   @db.VarChar(255)
+  kind         String   @db.VarChar(30)
+  reason       String   @db.VarChar(100)
+  objectName   String   @map("object_name") @db.VarChar(255)
+  nodeName     String?  @map("node_name") @db.VarChar(255)
+  message      String?  @db.VarChar(1000)
+  count        Int      @default(1)
+  at           DateTime @default(now()) @db.Timestamp(6)
+  lastAt       DateTime @default(now()) @map("last_at") @db.Timestamp(6)
+
+  deployment Deployment? @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+
+  @@index([deploymentId, at(sort: Desc)], map: "idx_cluster_events_deployment_at")
+  @@index([at], map: "idx_cluster_events_at")
+  @@map("cluster_events")
 }
 
 model K8sWorkload {

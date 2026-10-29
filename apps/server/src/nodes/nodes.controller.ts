@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, Request } from '@nestjs/common';
 import { NodesService } from './nodes.service';
 
 @Controller('admin')
@@ -37,11 +37,13 @@ export class NodesController {
   @Patch('nodes/:id/taints')
   async setTaints(
     @Param('id') id: string,
-    @Body() body: { taints: { key: string; value?: string | null; effect: string }[] }
+    @Body() body: { taints: { key: string; value?: string | null; effect: string }[] },
+    @Request() req
   ) {
     return this.nodes.setNodeTaints(
       id,
-      (body.taints ?? []).map((t) => ({ key: t.key, value: t.value ?? null, effect: t.effect }))
+      (body.taints ?? []).map((t) => ({ key: t.key, value: t.value ?? null, effect: t.effect })),
+      req?.user?.email ?? null
     );
   }
 

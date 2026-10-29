@@ -424,6 +424,7 @@ var routeExclusions = map[string]string{
 	"GET /observe/deployments/:id/pod-health": "dashboard series; CLI command to follow",
 	"GET /observe/deployments/:id/volumes":    "dashboard series; CLI command to follow",
 	"GET /observe/deployments/:id/builds":     "dashboard series; CLI command to follow",
+	"GET /observe/deployments/:id/changes":    "dashboard chart markers; exposed to agents over MCP",
 	"GET /sandboxes/:id/connect":              "UI-only open-in-editor readiness; the CLI writes ssh config itself",
 
 	"GET /share/sandbox/:token":                          "share link viewer, web UI only",

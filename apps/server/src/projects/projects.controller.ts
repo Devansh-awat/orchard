@@ -1031,25 +1031,21 @@ export class DeploymentsController {
     }
 
     try {
-      if (groupBy === 'pod') {
-        const grouped = await this.metricsService.fetchDeploymentMetricsByPod({
-          namespace: dep.namespace,
-          deploymentName: dep.name,
-          startMs: start,
-          endMs: end,
-          stepMs: step
-        });
-        return { start, end, step, groupBy: 'pod', grouped };
-      }
-
-      const data = await this.metricsService.fetchDeploymentMetrics({
+      const args = {
         namespace: dep.namespace,
         deploymentName: dep.name,
         startMs: start,
         endMs: end,
         stepMs: step
-      });
-      return { start, end, step, data };
+      };
+      const throttle = this.metricsService.fetchDeploymentThrottle(args).catch(() => []);
+      if (groupBy === 'pod') {
+        const grouped = await this.metricsService.fetchDeploymentMetricsByPod(args);
+        return { start, end, step, groupBy: 'pod', grouped, throttle: await throttle };
+      }
+
+      const data = await this.metricsService.fetchDeploymentMetrics(args);
+      return { start, end, step, data, throttle: await throttle };
     } catch (err) {
       if (err instanceof MetricsStoreError) throw new ServiceUnavailableException(err.message);
       throw err;

@@ -42,7 +42,7 @@ import { QuotasService } from '../quotas/quotas.service';
 import { TailscaleService } from '../tailscale/tailscale.service';
 import { MembershipCacheService } from '../auth/membership-cache.service';
 import { AuthorizationService } from '../auth/authorization.service';
-import { AuditService } from '../audit/audit.service';
+import { AuditService, type AuditMetadataValue } from '../audit/audit.service';
 import { InstanceConfigService } from '../instance-config/instance-config.service';
 import { LeaderElectionService } from '../events/leader-election.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -5645,7 +5645,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       placementOverride: data.placementOverride,
       userId: user.id
     });
-    return this.prisma.deployment.update({
+    const placed = await this.prisma.deployment.update({
       where: { id: deploymentId },
       data: {
         nodePoolId: data.nodePoolId ?? null,
@@ -5654,6 +5654,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           | typeof Prisma.DbNull
       }
     });
+    this.auditDeploymentChange(deployment, 'deployment.placement.updated', user.id, {
+      nodePoolId: [deployment.nodePoolId ?? null, data.nodePoolId ?? null],
+      override: data.placementOverride != null
+    });
+    return placed;
   }
 
   async resolvePlacementForProject(projectId: string): Promise<{
@@ -5995,6 +6000,30 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     return mapped;
   }
 
+  private auditDeploymentChange(
+    deployment: { id: string; name: string; projectId: string },
+    action: string,
+    userId: string | undefined | null,
+    metadata: Record<string, AuditMetadataValue>
+  ) {
+    void this.prisma.project
+      .findUnique({ where: { id: deployment.projectId }, select: { organizationId: true } })
+      .then((project) =>
+        this.audit.log({
+          action,
+          actorUserId: userId ?? null,
+          organizationId: project?.organizationId ?? null,
+          projectId: deployment.projectId,
+          deploymentId: deployment.id,
+          targetType: 'deployment',
+          targetId: deployment.id,
+          targetLabel: deployment.name,
+          metadata
+        })
+      )
+      .catch(() => undefined);
+  }
+
   async updateDeploymentStrategy(deploymentId: string, strategy: DeployStrategy, userId?: string) {
     if (strategy !== 'rollingUpdate' && strategy !== 'recreate' && strategy !== 'blueGreen') {
       throw new BadRequestException('Invalid deploy strategy');
@@ -6027,10 +6056,14 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       strategy
     );
 
-    return this.prisma.deployment.update({
+    const updatedStrategy = await this.prisma.deployment.update({
       where: { id: deploymentId },
       data: { deployStrategy: strategy }
     });
+    this.auditDeploymentChange(deployment, 'deployment.strategy.updated', userId, {
+      strategy: [deployment.deployStrategy ?? null, strategy]
+    });
+    return updatedStrategy;
   }
 
   /**
@@ -6070,6 +6103,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const updated = await this.prisma.deployment.update({
       where: { id: deploymentId },
       data: { pdbMinAvailable: parsed }
+    });
+    this.auditDeploymentChange(deployment, 'deployment.disruption_budget.updated', userId, {
+      minAvailable: [deployment.pdbMinAvailable ?? null, parsed]
     });
 
     // Deliberately not swallowed here: this is the one path where the user is
@@ -6211,10 +6247,14 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       );
     }
 
-    return this.prisma.deployment.update({
+    const updatedPolicy = await this.prisma.deployment.update({
       where: { id: deploymentId },
       data: { imagePullPolicy: policy }
     });
+    this.auditDeploymentChange(deployment, 'deployment.pull_policy.updated', userId, {
+      pullPolicy: [deployment.imagePullPolicy ?? null, policy]
+    });
+    return updatedPolicy;
   }
 
   async updateDeploymentImage(
@@ -6283,6 +6323,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           });
       }
     }
+
+    this.auditDeploymentChange(deployment, 'deployment.image.updated', userId, {
+      image: [deployment.image ?? null, trimmed]
+    });
 
     return this.prisma.deployment.findUnique({ where: { id: deploymentId } });
   }
@@ -6385,13 +6429,21 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    return this.prisma.deployment.update({
+    const updatedResources = await this.prisma.deployment.update({
       where: { id: deploymentId },
       data: {
         cpuRequestMilli: data.cpuRequestMilli,
         memoryRequestBytes: data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null
       }
     });
+    this.auditDeploymentChange(deployment, 'deployment.resources.updated', userId, {
+      cpuMilli: [deployment.cpuRequestMilli ?? null, data.cpuRequestMilli],
+      memoryBytes: [
+        deployment.memoryRequestBytes != null ? Number(deployment.memoryRequestBytes) : null,
+        data.memoryRequestBytes
+      ]
+    });
+    return updatedResources;
   }
 
   async createDeployment(

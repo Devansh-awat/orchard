@@ -214,6 +214,26 @@ export class MetricsService {
     };
   }
 
+  async fetchDeploymentThrottle(args: {
+    namespace: string;
+    deploymentName: string;
+    startMs: number;
+    endMs: number;
+    stepMs: number;
+  }): Promise<SeriesPoint[]> {
+    const sel = `namespace="${escapeLabel(args.namespace)}",pod=~"${deploymentPodRegex(args.deploymentName)}",container="",image=""`;
+    const stepSec = Math.max(1, Math.round(args.stepMs / 1000));
+    const rateWin = Math.max(60, stepSec * 2);
+    const query = `100 * sum(rate(container_cpu_cfs_throttled_periods_total{${sel}}[${rateWin}s])) / sum(rate(container_cpu_cfs_periods_total{${sel}}[${rateWin}s]))`;
+    const points = await this.vm.queryRange(
+      query,
+      Math.floor(args.startMs / 1000),
+      Math.floor(args.endMs / 1000),
+      stepSec
+    );
+    return points.filter((p) => Number.isFinite(p.y));
+  }
+
   async fetchDatabaseMetrics(args: {
     namespace: string;
     podPrefix: string;

@@ -11,7 +11,9 @@ import { AuthorizationService } from '../auth/authorization.service';
 import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import { parseCpu, parseMemory } from '../kubernetes/quantity';
 import { mapNodeToRow, NodeTaint } from './node-mapping';
+import { nodeTransitions, type NodeTransition } from './node-transitions';
 import type { PoolPlacement, PlacementOverride } from '../kubernetes/kubernetes.service';
+import { AuditService } from '../audit/audit.service';
 
 const TAINT_EFFECTS = new Set(['NoSchedule', 'PreferNoSchedule', 'NoExecute']);
 
@@ -28,7 +30,8 @@ export class NodesService {
     private readonly prisma: PrismaService,
     private readonly k8s: KubernetesService,
     private readonly authz: AuthorizationService,
-    private readonly settings: InstanceSettingsService
+    private readonly settings: InstanceSettingsService,
+    private readonly audit: AuditService
   ) {}
 
   /**
@@ -74,6 +77,10 @@ export class NodesService {
   // overwritten from the cluster (measured); admin caps live in updateNode.
   async upsertNodeRow(row: ReturnType<typeof mapNodeToRow>, seenAt = new Date()) {
     if (!row) return;
+    const previous = await this.prisma.node.findUnique({
+      where: { name: row.name },
+      select: { schedulable: true, taints: true }
+    });
     await this.prisma.node.upsert({
       where: { name: row.name },
       create: {
@@ -94,6 +101,52 @@ export class NodesService {
         lastSeenAt: seenAt
       }
     });
+    const transitions = nodeTransitions(
+      row.name,
+      previous
+        ? {
+            schedulable: previous.schedulable,
+            taints: (previous.taints as unknown as NodeTaint[] | null) ?? []
+          }
+        : null,
+      { schedulable: row.schedulable, taints: row.taints }
+    );
+    if (transitions.length > 0) await this.recordNodeTransitions(row.name, transitions, seenAt);
+  }
+
+  private async recordNodeTransitions(nodeName: string, transitions: NodeTransition[], at: Date) {
+    const pods = await this.prisma.pod.findMany({
+      where: { nodeName },
+      select: { deploymentId: true, name: true, deployment: { select: { namespace: true } } }
+    });
+    const byDeployment = new Map<string, { namespace: string; pod: string }>();
+    for (const pod of pods) {
+      if (!byDeployment.has(pod.deploymentId)) {
+        byDeployment.set(pod.deploymentId, { namespace: pod.deployment.namespace, pod: pod.name });
+      }
+    }
+    for (const t of transitions) {
+      for (const [deploymentId, ref] of byDeployment) {
+        await this.prisma.clusterEvent
+          .upsert({
+            where: { key: `node:${nodeName}:${t.reason}:${deploymentId}:${at.getTime()}` },
+            create: {
+              key: `node:${nodeName}:${t.reason}:${deploymentId}:${at.getTime()}`,
+              deploymentId,
+              namespace: ref.namespace,
+              kind: 'node',
+              reason: t.reason,
+              objectName: ref.pod,
+              nodeName,
+              message: t.message,
+              at,
+              lastAt: at
+            },
+            update: {}
+          })
+          .catch(() => undefined);
+      }
+    }
   }
 
   // A node object was removed from the cluster. Drop the row; its per-org
@@ -335,7 +388,7 @@ export class NodesService {
 
   // Replace a node's taints (spec.taints). The informer reflects the result
   // back into the DB, so we don't dual-write the row here.
-  async setNodeTaints(id: string, taints: NodeTaint[]) {
+  async setNodeTaints(id: string, taints: NodeTaint[], actorEmail: string | null = null) {
     const node = await this.prisma.node.findUnique({ where: { id } });
     if (!node) throw new NotFoundException('Node not found');
     if (!Array.isArray(taints)) throw new BadRequestException('taints must be an array');
@@ -349,6 +402,17 @@ export class NodesService {
       return { key: t.key, ...(t.value ? { value: t.value } : {}), effect: t.effect };
     });
     await this.k8s.patchNode(node.name, { spec: { taints: clean } });
+    void this.audit.log({
+      action: 'node.taints.updated',
+      actorEmail,
+      targetType: 'node',
+      targetId: node.id,
+      targetLabel: node.name,
+      metadata: {
+        taints:
+          clean.map((t) => `${t.key}${t.value ? `=${t.value}` : ''}:${t.effect}`).join(', ') || null
+      }
+    });
     return { success: true };
   }
 
