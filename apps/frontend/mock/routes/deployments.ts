@@ -883,6 +883,52 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 		})
 	);
 	r.get(
+		'/observe/deployments/:id/requests',
+		withDep((d, { query }) => {
+			const end = Number(query.get('end')) || Date.now();
+			const start = Number(query.get('start')) || end - 3_600_000;
+			const limit = Math.min(Number(query.get('limit') ?? 100), 500);
+			const pods = podsOf(store, d).map((p) => p.name);
+			const host = d.host ?? `${d.name}.orchard.app`;
+			const requests = since(d, pods, Math.max(start, end - 3 * 3_600_000), end)
+				.flatMap((l) => {
+					const m = /^(GET|POST|PATCH|PUT|DELETE) (\S+) (\d{3}) (\d+)ms/.exec(l.message);
+					if (!m) return [];
+					const n = Date.parse(l.ts);
+					return [
+						{
+							t: l.ts,
+							method: m[1],
+							host,
+							path: m[2],
+							route: m[2].replace(/\/\d+/g, '/:id').split('?')[0],
+							status: Number(m[3]),
+							durationMs: Number(m[4]),
+							bytes: 512 + (n % 4096),
+							clientIp: `203.0.113.${n % 200}`,
+							userAgent: 'Mozilla/5.0',
+							pod: l.pod
+						}
+					];
+				})
+				.reverse()
+				.slice(0, limit);
+			return { requests };
+		})
+	);
+	r.get(
+		'/observe/deployments/:id/requests/stream',
+		withDep((_d, { res }) => {
+			openStream(res);
+			const heartbeat = setInterval(
+				() => writeMessage(res, { type: 'heartbeat', ts: Date.now() }),
+				15_000
+			);
+			res.on('close', () => clearInterval(heartbeat));
+			return STREAMING;
+		})
+	);
+	r.get(
 		'/observe/deployments/:id/logs/context',
 		withDep((d, { query }) => {
 			const at = Number(query.get('at')) || Date.now();

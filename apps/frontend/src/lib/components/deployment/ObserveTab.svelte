@@ -32,10 +32,11 @@
 	import { EventsState } from './observe/events.svelte';
 	import MetricsView from './observe/MetricsView.svelte';
 	import LogsView from './observe/LogsView.svelte';
+	import RequestsView from './observe/RequestsView.svelte';
 	import ErrorsView from './observe/ErrorsView.svelte';
 	import EventsView from './observe/EventsView.svelte';
 
-	type View = 'metrics' | 'logs' | 'errors' | 'events';
+	type View = 'metrics' | 'logs' | 'requests' | 'errors' | 'events';
 
 	let {
 		deployment,
@@ -47,9 +48,10 @@
 		activeTab?: string;
 	} = $props();
 
-	const VIEWS: { value: View; label: string }[] = [
+	const ALL_VIEWS: { value: View; label: string }[] = [
 		{ value: 'metrics', label: 'Metrics' },
 		{ value: 'logs', label: 'Logs' },
+		{ value: 'requests', label: 'Requests' },
 		{ value: 'errors', label: 'Errors' },
 		{ value: 'events', label: 'Events' }
 	];
@@ -61,13 +63,14 @@
 
 	const demo = $derived($page.url.searchParams.has('demo'));
 	const hasIngress = $derived(demo || (deployment?.ingresses?.length ?? 0) > 0);
+	const VIEWS = $derived(ALL_VIEWS.filter((v) => v.value !== 'requests' || hasIngress));
 	const view = $derived<View>(
 		VIEWS.some((v) => v.value === activeTab) ? (activeTab as View) : 'metrics'
 	);
 
 	$effect(() => {
 		const tab = activeTab;
-		if (VIEWS.some((v) => v.value === tab)) return;
+		if (!deployment || VIEWS.some((v) => v.value === tab)) return;
 		untrack(() => {
 			activeTab = tab === 'killed' ? 'events' : 'metrics';
 		});
@@ -162,7 +165,7 @@
 		/>
 
 		<div class="controls">
-			{#if view === 'metrics' || view === 'logs'}
+			{#if view === 'metrics' || view === 'logs' || view === 'requests'}
 				{#if view === 'metrics'}
 					<SegmentedControl
 						label="Split"
@@ -227,7 +230,7 @@
 						label={metrics.live ? 'Pause' : 'Follow live'}
 						onclick={() => metrics.togglePause()}
 					/>
-				{:else}
+				{:else if view === 'logs'}
 					<Button
 						variant="ghost"
 						icon={logs.paused ? Play : Pause}
@@ -285,6 +288,13 @@
 					{logs}
 					deploymentId={deployment?.id}
 					deploymentName={deployment?.name}
+					{active}
+					windowMs={metrics.windowMs}
+					custom={metrics.custom}
+				/>
+			{:else if view === 'requests'}
+				<RequestsView
+					deploymentId={deployment?.id}
 					{active}
 					windowMs={metrics.windowMs}
 					custom={metrics.custom}

@@ -213,3 +213,17 @@ export function scanStatus(state: ScanState, worst?: string | null): StatusMeta 
 			return meta('neutral', 'Not scanned');
 	}
 }
+
+export function httpStatus(code: number): StatusMeta {
+	const kind: StatusKind =
+		code >= 500
+			? 'error'
+			: code >= 400
+				? 'warning'
+				: code >= 300
+					? 'info'
+					: code >= 200
+						? 'success'
+						: 'neutral';
+	return statusMeta(kind, code ? String(code) : 'No response');
+}
