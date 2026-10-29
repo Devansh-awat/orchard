@@ -13,7 +13,6 @@
 
 	const APP_DOMAIN = env.PUBLIC_APP_DOMAIN ?? '';
 	const INGRESS_CNAME = env.PUBLIC_INGRESS_CNAME ?? '';
-	const PUBLIC_DEPLOYMENT_DOMAIN = env.PUBLIC_DEPLOYMENT_DOMAIN ?? '';
 
 	let {
 		deployment,
@@ -231,7 +230,6 @@
 			{entries}
 			{services}
 			appDomain={APP_DOMAIN}
-			publicDomain={PUBLIC_DEPLOYMENT_DOMAIN}
 			canAddDomain={!!deployment.project?.id}
 			canProtect={!!onUpdateProtection}
 			canEditRedirect={!!onUpdateRedirect}

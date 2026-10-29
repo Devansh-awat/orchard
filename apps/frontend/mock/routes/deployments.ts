@@ -200,8 +200,9 @@ function service(store: Store, d: MockDeployment) {
 				targetPort: d.port,
 				protocol: 'TCP',
 				nodePort: null,
-				publicEnabled: false,
-				publicPort: null,
+				publicEnabled: d.name === 'game-server',
+				publicPort: d.name === 'game-server' ? 30565 : null,
+				publicAddress: d.name === 'game-server' ? 'tcp.orchard.my:30565' : null,
 				internalUrl: `http://${internalHost}`
 			}
 		],
@@ -819,13 +820,135 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 				}
 				return out;
 			};
+			const traefik = _d.name === 'web';
+			const host = _d.host ?? `${_d.name}.orchard.app`;
 			return {
+				source: traefik ? 'traefik' : 'haproxy',
 				requestRate: pts(14, 6),
 				errorRate: pts(0.4, 0.3),
 				latencyAvg: pts(38, 12),
-				latencyMax: pts(220, 90)
+				latencyMax: pts(220, 90),
+				latency: traefik ? { p50: pts(24, 6), p95: pts(140, 40), p99: pts(320, 110) } : null,
+				statusRates: {
+					'2xx': pts(11.5, 5),
+					'3xx': pts(1.8, 0.8),
+					'4xx': pts(0.6, 0.4),
+					'5xx': pts(0.06, 0.05)
+				},
+				routes: [
+					{
+						id: _d.name,
+						label: host,
+						service: _d.name,
+						requestRate: 12.4,
+						errorRate: 0.05,
+						errorPercent: 0.4,
+						latencyMs: 36
+					},
+					{
+						id: `${_d.name}-api`,
+						label: `${host}/api`,
+						service: `${_d.name}-api`,
+						requestRate: 3.1,
+						errorRate: 0.21,
+						errorPercent: 6.8,
+						latencyMs: 182
+					},
+					{
+						id: 'orchard-protection-proxy',
+						label: `admin.${host}`,
+						service: 'orchard-protection-proxy',
+						requestRate: 0.4,
+						errorRate: 0,
+						errorPercent: 0,
+						latencyMs: 61
+					}
+				]
 			};
 		})
+	);
+	r.get(
+		'/observe/deployments/:id/pod-health',
+		withDep((d, { query }) => {
+			const { start, end, step } = metricsWindow(query);
+			const series = (fn: (t: number, i: number) => number) => {
+				const out: { x: number; y: number }[] = [];
+				let i = 0;
+				for (let t = start - (start % step); t <= end; t += step) out.push({ x: t, y: fn(t, i++) });
+				return out;
+			};
+			const crashing =
+				d.crash !== null || Object.values(d.podScenarios ?? {}).some((v) => v !== 'healthy');
+			const burst = (t: number) => (Math.floor(t / 900_000) % 5 === 3 ? 1 : 0);
+			return {
+				available: true,
+				restarts: [
+					{ key: 'Error', points: series((t) => (crashing ? 1 : burst(t))) },
+					{ key: 'OOMKilled', points: series((t, i) => (i % 17 === 9 ? 1 : 0)) }
+				],
+				waiting: crashing
+					? [{ key: 'CrashLoopBackOff', points: series(() => 1) }]
+					: [{ key: 'ContainerCreating', points: series((t) => burst(t)) }],
+				notReady: series((t) => (crashing ? 1 : burst(t)))
+			};
+		})
+	);
+	r.get(
+		'/observe/deployments/:id/volumes',
+		withDep((d) => ({
+			volumes: d.volumes
+				.filter((v) => v.type === 'pvc')
+				.map((v, i) => {
+					const gi = parseFloat(v.storageSize ?? '1') || 1;
+					const capacity = gi * 1024 ** 3;
+					const used = capacity * [0.42, 0.87, 0.97][i % 3];
+					return {
+						name: v.name,
+						claim: v.name,
+						mountPath: v.mountPath,
+						requested: v.storageSize,
+						usedBytes: Math.round(used),
+						capacityBytes: capacity,
+						availableBytes: Math.round(capacity - used)
+					};
+				})
+		}))
+	);
+	r.get(
+		'/observe/deployments/:id/builds',
+		withDep((d) => ({
+			builds: store
+				.buildsOf(d.id)
+				.slice(0, 30)
+				.map((b, i) => {
+					const started = Date.parse(b.buildStartedAt);
+					const finished = b.buildCompletedAt ? Date.parse(b.buildCompletedAt) : null;
+					const total = finished ? finished - started : null;
+					const queueMs = 2_000 + (i % 4) * 9_000;
+					const split = total
+						? [
+								{ id: 'clone', label: 'Clone', ms: Math.round(total * 0.12) },
+								{ id: 'build', label: 'Build', ms: Math.round(total * 0.58) },
+								{ id: 'push', label: 'Push', ms: Math.round(total * 0.18) },
+								{ id: 'rollout', label: 'Apply', ms: Math.round(total * 0.12) }
+							]
+						: [];
+					return {
+						id: b.id,
+						status: b.status,
+						builder: i % 3 === 0 ? 'firecracker' : 'kubernetes',
+						trigger: b.triggerType,
+						commitSha: b.commitSha,
+						title: b.commitMessage?.split('\n')[0] ?? null,
+						scheduledAt: new Date(started - queueMs).toISOString(),
+						startedAt: b.buildStartedAt,
+						finishedAt: b.buildCompletedAt,
+						queueMs,
+						durationMs: total,
+						phases: [{ id: 'queue', label: 'Queue', ms: queueMs }, ...split]
+					};
+				})
+		}))
 	);
 	r.get(
 		'/observe/deployments/:id/timeline',

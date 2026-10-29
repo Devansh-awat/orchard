@@ -28,6 +28,7 @@
 		bands = [],
 		peaks = 0,
 		integer = false,
+		sparse = false,
 		onZoom = undefined
 	}: {
 		series: ChartSeries[];
@@ -45,6 +46,7 @@
 		bands?: ChartBand[];
 		peaks?: number;
 		integer?: boolean;
+		sparse?: boolean;
 		onZoom?: (from: number, to: number) => void;
 	} = $props();
 
@@ -76,6 +78,7 @@
 	const bottom = $derived(Math.max(TOP + 1, h - AXIS));
 
 	const step = $derived.by(() => {
+		if (sparse) return span / 40;
 		const p = series.find((s) => s.points.length > 1)?.points;
 		return p ? (p[p.length - 1].x - p[0].x) / (p.length - 1) : span / 60;
 	});
@@ -87,7 +90,7 @@
 	}
 
 	const stacks = $derived.by(() => {
-		if (display !== 'stacked') return null;
+		if (display !== 'stacked' && display !== 'stackedAreas') return null;
 		const base = new Map<number, number>();
 		return series.map((s) =>
 			s.points.map((p) => {
@@ -132,20 +135,18 @@
 	const sy = (v: number) => bottom - (v / yScale.max) * (bottom - TOP);
 	const tAt = (px: number) => from + (px / plotW) * span;
 
-	function segments(pts: [number, number][], xs: number[]) {
-		const out: [number, number][][] = [];
-		const bridges: [number, number, number, number][] = [];
-		let current: [number, number][] = [];
-		for (let i = 0; i < pts.length; i++) {
-			if (i > 0 && xs[i] - xs[i - 1] > step * 2.5) {
-				out.push(current);
-				bridges.push([pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]]);
-				current = [];
-			}
-			current.push(pts[i]);
+	function runs(xs: number[]): [number, number][] {
+		if (!xs.length) return [];
+		if (sparse) return [[0, xs.length - 1]];
+		const out: [number, number][] = [];
+		let start = 0;
+		for (let i = 1; i < xs.length; i++) {
+			if (xs[i] - xs[i - 1] <= step * 2.5) continue;
+			out.push([start, i - 1]);
+			start = i;
 		}
-		if (current.length) out.push(current);
-		return { out, bridges };
+		out.push([start, xs.length - 1]);
+		return out;
 	}
 
 	function monotone(pts: [number, number][]): string {
@@ -178,37 +179,58 @@
 
 	const barW = $derived(Math.max(1, (step / span) * plotW * 0.72));
 
+	function areaPath(
+		ranges: [number, number][],
+		top: [number, number][],
+		floor: [number, number][] | null
+	) {
+		return ranges
+			.filter(([a, b]) => b > a)
+			.map(([a, b]) => {
+				const seg = top.slice(a, b + 1);
+				const base = floor
+					? `L${monotone(floor.slice(a, b + 1).reverse()).slice(1)}`
+					: `L${seg[seg.length - 1][0]},${bottom}L${seg[0][0]},${bottom}`;
+				return `${monotone(seg)}${base}Z`;
+			})
+			.join('');
+	}
+
 	const drawn = $derived(
 		series.map((s, i) => {
-			const pts = s.points.map((p) => [sx(p.x), sy(p.y)] as [number, number]);
+			const layered = display === 'stackedAreas' && stacks ? stacks[i] : null;
+			const pts = layered
+				? layered.map((p) => [sx(p.x), sy(p.y1)] as [number, number])
+				: s.points.map((p) => [sx(p.x), sy(p.y)] as [number, number]);
 			const flat = display === 'bars' || display === 'stacked';
-			const parts = flat
-				? { out: [], bridges: [] }
-				: segments(
-						pts,
-						s.points.map((p) => p.x)
-					);
-			const line = parts.out.map(monotone).join('');
+			const ranges = flat ? [] : runs(s.points.map((p) => p.x));
+			const out = ranges.map(([a, b]) => pts.slice(a, b + 1));
+			const bridges = ranges.slice(1).map(([a], k) => {
+				const prev = pts[ranges[k][1]];
+				return [prev[0], prev[1], pts[a][0], pts[a][1]] as [number, number, number, number];
+			});
+			const line = out.map(monotone).join('');
 			const area =
 				display === 'areas'
-					? parts.out
-							.filter((seg) => seg.length > 1)
-							.map(
-								(seg) =>
-									`${monotone(seg)}L${seg[seg.length - 1][0]},${bottom}L${seg[0][0]},${bottom}Z`
+					? areaPath(ranges, pts, null)
+					: layered
+						? areaPath(
+								ranges,
+								pts,
+								layered.map((p) => [sx(p.x), sy(p.y0)] as [number, number])
 							)
-							.join('')
-					: '';
-			const blocks = stacks
-				? stacks[i].map((p) => ({ x: sx(p.x), top: sy(p.y1), bottom: sy(p.y0) }))
-				: [];
+						: '';
+			const blocks =
+				stacks && display === 'stacked'
+					? stacks[i].map((p) => ({ x: sx(p.x), top: sy(p.y1), bottom: sy(p.y0) }))
+					: [];
 			return {
 				...s,
 				pts,
 				line,
 				area,
 				blocks,
-				bridges: parts.bridges,
+				bridges,
 				color: seriesColor(s),
 				index: i
 			};
@@ -235,7 +257,7 @@
 	);
 
 	const peakMarks = $derived.by(() => {
-		if (!peaks || display === 'bars' || display === 'stacked') return [];
+		if (!peaks || (display !== 'lines' && display !== 'areas')) return [];
 		const s = drawn.find((d) => d.points.length > 4);
 		if (!s) return [];
 		const ys = s.points.map((p) => p.y);
@@ -272,6 +294,7 @@
 	});
 
 	const gaps = $derived.by(() => {
+		if (sparse) return [];
 		if (!extent) return [{ x: 0, w: plotW }];
 		const out: { x: number; w: number }[] = [];
 		if (extent.lo - from > span * 0.02) out.push({ x: 0, w: sx(extent.lo) });
@@ -356,14 +379,25 @@
 		};
 	}
 
+	function snap(t: number): number {
+		if (!sparse) {
+			const primary = series.find((s) => s.points.length > 0);
+			return primary ? (nearestPoint(primary.points, t)?.x ?? t) : t;
+		}
+		let best: number | null = null;
+		for (const s of series) {
+			const p = nearestPoint(s.points, t);
+			if (p && (best === null || Math.abs(p.x - t) < Math.abs(best - t))) best = p.x;
+		}
+		return best !== null && Math.abs(best - t) <= step * 0.75 ? best : t;
+	}
+
 	function move(ev: PointerEvent) {
 		if (ev.pointerType === 'touch') return;
 		const p = local(ev);
 		pointer = p;
 		if (drag) drag = { ...drag, to: p.x };
-		const primary = series.find((s) => s.points.length > 0);
-		const snapped = primary ? nearestPoint(primary.points, tAt(p.x)) : null;
-		hover = snapped ? snapped.x : tAt(p.x);
+		hover = snap(tAt(p.x));
 		if (series.length > 1) emphasis = nearest?.id ?? null;
 	}
 
@@ -502,7 +536,11 @@
 								/>
 							{/each}
 						{:else}
-							{#if s.area}<path d={s.area} fill="url(#fill-{uid}-{s.index})" />{/if}
+							{#if s.area && display === 'stackedAreas'}
+								<path class="layer" d={s.area} fill={s.color} />
+							{:else if s.area}
+								<path d={s.area} fill="url(#fill-{uid}-{s.index})" />
+							{/if}
 							{#each s.bridges as b, i (i)}
 								<line class="bridge" x1={b[0]} y1={b[1]} x2={b[2]} y2={b[3]} stroke={s.color} />
 							{/each}
@@ -691,6 +729,9 @@
 	}
 	.bar {
 		opacity: 0.85;
+	}
+	.layer {
+		opacity: 0.3;
 	}
 	.event {
 		stroke-width: 1;

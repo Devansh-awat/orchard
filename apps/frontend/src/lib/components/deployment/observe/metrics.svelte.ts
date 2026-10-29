@@ -25,6 +25,48 @@ export type ChartId = 'req' | 'err' | 'lat' | 'cpu' | 'mem' | 'net';
 export type ChartMode = ChartDisplay | 'top';
 export type ResourceId = 'cpu' | 'mem' | 'rx' | 'tx';
 export type PodSeries = { key: string; points: ChartPoint[] };
+export type StatusClass = '2xx' | '3xx' | '4xx' | '5xx';
+export const STATUS_CLASSES: StatusClass[] = ['2xx', '3xx', '4xx', '5xx'];
+export type HttpRoute = {
+	id: string;
+	label: string;
+	service: string;
+	requestRate: number | null;
+	errorRate: number | null;
+	errorPercent: number | null;
+	latencyMs: number | null;
+};
+export type Percentiles = { p50: ChartPoint[]; p95: ChartPoint[]; p99: ChartPoint[] };
+export type PodHealth = {
+	available: boolean;
+	restarts: PodSeries[];
+	waiting: PodSeries[];
+	notReady: ChartPoint[];
+};
+export type VolumeFill = {
+	name: string;
+	claim: string;
+	mountPath: string;
+	requested: string | null;
+	usedBytes: number | null;
+	capacityBytes: number | null;
+	availableBytes: number | null;
+};
+export type BuildPhase = { id: string; label: string; ms: number };
+export type BuildRun = {
+	id: string;
+	status: string;
+	builder: string | null;
+	trigger: string | null;
+	commitSha: string | null;
+	title: string | null;
+	scheduledAt: string;
+	startedAt: string | null;
+	finishedAt: string | null;
+	queueMs: number | null;
+	durationMs: number | null;
+	phases: BuildPhase[];
+};
 
 export const RANGES = [
 	{ id: '5m', label: 'Last 5 minutes', short: 'Last 5m', ms: 5 * 60_000 },
@@ -52,10 +94,14 @@ const EMPTY_RESOURCES = (): Record<ResourceId, ChartPoint[]> => ({
 });
 const EMPTY_PODS = (): Record<ResourceId, PodSeries[]> => ({ cpu: [], mem: [], rx: [], tx: [] });
 const EMPTY_HTTP = () => ({
+	source: null as string | null,
 	req: [] as ChartPoint[],
 	err: [] as ChartPoint[],
 	lat: [] as ChartPoint[],
-	latmax: [] as ChartPoint[]
+	latmax: [] as ChartPoint[],
+	latency: null as Percentiles | null,
+	status: {} as Partial<Record<StatusClass, ChartPoint[]>>,
+	routes: [] as HttpRoute[]
 });
 
 function merge(groups: PodSeries[] | undefined): ChartPoint[] {
@@ -78,6 +124,9 @@ export class MetricsState {
 	releases = $state<Release[]>([]);
 	errorGroups = $state<ErrorGroup[]>([]);
 	logTail = $state<LogEntry[]>([]);
+	podHealth = $state<PodHealth | null>(null);
+	volumes = $state<VolumeFill[]>([]);
+	builds = $state<BuildRun[]>([]);
 
 	events = $derived<ChartEvent[]>([
 		...this.releases
@@ -179,6 +228,8 @@ export class MetricsState {
 			this.killed = demoKilled();
 			this.warnings = flatten(opts.pods);
 			this.errorGroups = demoErrors(minutes) as ErrorGroup[];
+			this.volumes = [];
+			this.builds = [];
 			return;
 		}
 		const get = (url: string) =>
@@ -186,12 +237,14 @@ export class MetricsState {
 				.then((r) => (r.ok ? r.json() : null))
 				.catch(() => null);
 		const base = `/apiv1/observe/deployments/${encodeURIComponent(id)}`;
-		const [timeline, killed, live, errors, logs] = await Promise.all([
+		const [timeline, killed, live, errors, logs, volumes, builds] = await Promise.all([
 			get(`${base}/timeline?kinds=release,build&limit=60`),
 			get(`/apiv1/deployments/${encodeURIComponent(id)}/killed-containers`),
 			get(`/apiv1/deployments/${encodeURIComponent(id)}/pods-live`),
 			get(`${base}/errors?window=${minutes}`),
-			get(`${base}/logs/structured?tailLines=2000`)
+			get(`${base}/logs/structured?tailLines=2000`),
+			get(`${base}/volumes`),
+			get(`${base}/builds?limit=30`)
 		]);
 		const time = (v: unknown) => (v ? new Date(v as string).getTime() || null : null);
 		this.releases = ((timeline?.entries ?? []) as any[]).flatMap((e) => {
@@ -214,6 +267,8 @@ export class MetricsState {
 		this.errorGroups = errors?.errors ?? [];
 		const entries: LogEntry[] = logs?.entries ?? [];
 		this.logTail = entries;
+		this.volumes = Array.isArray(volumes?.volumes) ? volumes.volumes : [];
+		this.builds = Array.isArray(builds?.builds) ? builds.builds : [];
 	}
 
 	async load(id: string, opts: { http: boolean; demo: boolean }) {
@@ -226,7 +281,14 @@ export class MetricsState {
 				? { cpu: merge(g.cpu), mem: merge(g.mem), rx: merge(g.rx), tx: merge(g.tx) }
 				: demoResourceSeries(from, to, step);
 			const h = demoHttpMetrics(from, to, step);
-			this.http = { req: h.requestRate, err: h.errorRate, lat: h.latencyAvg, latmax: h.latencyMax };
+			this.http = {
+				...EMPTY_HTTP(),
+				req: h.requestRate,
+				err: h.errorRate,
+				lat: h.latencyAvg,
+				latmax: h.latencyMax
+			};
+			this.podHealth = null;
 			this.error = null;
 			this.loaded = true;
 			return;
@@ -234,11 +296,11 @@ export class MetricsState {
 		if (!this.loaded) this.loading = true;
 		const query = `start=${from}&end=${to}&step=${step}`;
 		try {
-			const [res, httpRes] = await Promise.all([
+			const base = `/apiv1/observe/deployments/${encodeURIComponent(id)}`;
+			const [res, httpRes, healthRes] = await Promise.all([
 				apiFetch(`/apiv1/deployments/${encodeURIComponent(id)}/metrics?${query}&groupBy=pod`),
-				opts.http
-					? apiFetch(`/apiv1/observe/deployments/${encodeURIComponent(id)}/http-metrics?${query}`)
-					: Promise.resolve(null)
+				opts.http ? apiFetch(`${base}/http-metrics?${query}`) : Promise.resolve(null),
+				apiFetch(`${base}/pod-health?${query}`).catch(() => null)
 			]);
 			if (seq !== this.#seq) return;
 			if (!res.ok) {
@@ -267,12 +329,19 @@ export class MetricsState {
 				const h = await httpRes.json();
 				if (seq !== this.#seq) return;
 				this.http = {
+					source: typeof h?.source === 'string' ? h.source : null,
 					req: h?.requestRate ?? [],
 					err: h?.errorRate ?? [],
 					lat: h?.latencyAvg ?? [],
-					latmax: h?.latencyMax ?? []
+					latmax: h?.latencyMax ?? [],
+					latency: h?.latency ?? null,
+					status: h?.statusRates ?? {},
+					routes: Array.isArray(h?.routes) ? h.routes : []
 				};
 			}
+			const health = healthRes?.ok ? await healthRes.json().catch(() => null) : null;
+			if (seq !== this.#seq) return;
+			this.podHealth = health && typeof health.available === 'boolean' ? health : null;
 			this.error = null;
 			this.loaded = true;
 		} catch (err) {

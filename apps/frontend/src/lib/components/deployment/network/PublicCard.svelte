@@ -40,7 +40,6 @@
 		entries,
 		services,
 		appDomain,
-		publicDomain,
 		canAddDomain,
 		canProtect,
 		canEditRedirect,
@@ -58,7 +57,6 @@
 		entries: PortEntry[];
 		services: any[];
 		appDomain: string;
-		publicDomain: string;
 		canAddDomain: boolean;
 		canProtect: boolean;
 		canEditRedirect: boolean;
@@ -97,9 +95,7 @@
 	}
 
 	function endpointOf(entry: PortEntry): string {
-		return publicDomain
-			? `${publicDomain}:${entry.port.publicPort}`
-			: `Public port ${entry.port.publicPort}`;
+		return entry.port.publicAddress ?? `Public port ${entry.port.publicPort}`;
 	}
 
 	function isCustom(ingress: any) {
@@ -220,7 +216,10 @@
 				>
 					{#snippet actions()}
 						<span class="acts">
-							{#if publicDomain}<CopyButton value={endpoint} label="Copy address" />{/if}
+							{#if entry.port.publicAddress}<CopyButton
+									value={endpoint}
+									label="Copy address"
+								/>{/if}
 							<Menu placement="bottom-end">
 								{#snippet trigger(props)}
 									<Button

@@ -1,6 +1,6 @@
 export type ChartPoint = { x: number; y: number };
 export type ChartTone = 'neutral' | 'accent' | 'warning' | 'error' | 'faint';
-export type ChartDisplay = 'lines' | 'areas' | 'bars' | 'stacked';
+export type ChartDisplay = 'lines' | 'areas' | 'bars' | 'stacked' | 'stackedAreas';
 export type ChartSeries = {
 	id: string;
 	label?: string;

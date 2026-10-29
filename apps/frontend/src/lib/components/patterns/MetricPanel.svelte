@@ -41,6 +41,7 @@
 		empty = 'No data in this range',
 		table = true,
 		sum = false,
+		sparse = false,
 		height = 168,
 		onZoom = undefined,
 		note = undefined
@@ -63,6 +64,7 @@
 		empty?: string;
 		table?: boolean;
 		sum?: boolean;
+		sparse?: boolean;
 		height?: number;
 		onZoom?: (from: number, to: number) => void;
 		note?: Snippet;
@@ -73,6 +75,7 @@
 	const ALL = [
 		{ value: 'lines', label: 'Lines', icon: ChartLine },
 		{ value: 'areas', label: 'Areas', icon: ChartArea },
+		{ value: 'stackedAreas', label: 'Stacked areas', icon: ChartArea },
 		{ value: 'bars', label: 'Bars', icon: ChartColumn },
 		{ value: 'stacked', label: 'Stacked bars', icon: ChartColumn },
 		{ value: 'top', label: 'Top list', icon: ChartBarDecreasing }
@@ -80,6 +83,7 @@
 	const options = $derived(ALL.filter((o) => modes.includes(o.value as Mode)));
 
 	const step = $derived.by(() => {
+		if (sparse) return (to - from) / 40;
 		const p = series.find((s) => s.points.length > 1)?.points;
 		return p ? (p[p.length - 1].x - p[0].x) / (p.length - 1) : (to - from) / 60;
 	});
@@ -160,6 +164,7 @@
 					{bands}
 					{peaks}
 					integer={sum}
+					{sparse}
 					{onZoom}
 				/>
 				{#if !hasData}

@@ -19,6 +19,7 @@ export type ServicePort = {
 	nodePort?: number | null;
 	publicEnabled?: boolean;
 	publicPort?: number | null;
+	publicAddress?: string | null;
 	internalUrl?: string;
 };
 

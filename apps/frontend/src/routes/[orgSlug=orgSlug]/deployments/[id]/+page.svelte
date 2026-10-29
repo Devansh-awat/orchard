@@ -133,7 +133,6 @@
 
 	const APP_DOMAIN = env.PUBLIC_APP_DOMAIN ?? '';
 	const INGRESS_CNAME = env.PUBLIC_INGRESS_CNAME ?? '';
-	const PUBLIC_DEPLOYMENT_DOMAIN = env.PUBLIC_DEPLOYMENT_DOMAIN ?? '';
 
 	interface Deployment {
 		id: string;
@@ -3268,7 +3267,7 @@
 						/>
 					{:else if tab.id === 'security'}
 						<SecurityTab
-							deploymentId={deploymentId}
+							{deploymentId}
 							image={deployment?.image ?? null}
 							active={tabs.value === 'security'}
 						/>

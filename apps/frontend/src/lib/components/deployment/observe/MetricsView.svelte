@@ -7,6 +7,7 @@
 	import Tooltip from '$lib/components/ui/Tooltip.svelte';
 	import TopList from '$lib/components/ui/TopList.svelte';
 	import Widget from '$lib/components/ui/Widget.svelte';
+	import CapacityList, { capacityTone } from '$lib/components/ui/CapacityList.svelte';
 	import MetricPanel from '$lib/components/patterns/MetricPanel.svelte';
 	import {
 		SERIES_COLORS,
@@ -14,7 +15,8 @@
 		type ChartFinding,
 		type ChartPoint,
 		type ChartSeries,
-		type ChartThreshold
+		type ChartThreshold,
+		type ChartTone
 	} from '$lib/components/ui/time-chart';
 	import { selectedOrganization, subscribeOrgEvents } from '$lib/stores';
 	import { podLabel } from '$lib/utils/format';
@@ -22,7 +24,16 @@
 	import { entryLine, type LogEntry } from './logs.svelte';
 	import { runtimeName, uptime, type DetectedRuntime } from './runtime';
 	import { bucketSize, clock, runsAbove, stackByKey } from './signals';
-	import type { ChartId, MetricsState, ResourceId } from './metrics.svelte';
+	import {
+		STATUS_CLASSES,
+		type BuildRun,
+		type ChartId,
+		type ChartMode,
+		type MetricsState,
+		type PodSeries,
+		type ResourceId,
+		type StatusClass
+	} from './metrics.svelte';
 
 	let {
 		metrics,
@@ -56,6 +67,11 @@
 	const count = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
 	const minutes = (v: number) =>
 		v >= 60 ? `${Math.floor(v / 60)}m ${Math.round(v % 60)}s` : `${Math.round(v)}s`;
+	const bytes = (v: number) => {
+		const gb = v / 1024 ** 3;
+		if (gb >= 1) return `${gb >= 100 ? Math.round(gb) : Math.round(gb * 10) / 10} GB`;
+		return `${Math.round(v / 1024 ** 2)} MB`;
+	};
 
 	const REASON_COLORS: Record<string, string> = {
 		OOMKilled: 'var(--status-error-solid)',
@@ -68,8 +84,56 @@
 		error: 'var(--status-error-solid)',
 		warn: 'var(--status-warning-solid)',
 		failed: 'var(--status-error-solid)',
-		succeeded: 'var(--status-success-solid)'
+		succeeded: 'var(--status-success-solid)',
+		building: 'var(--status-warning-solid)'
 	};
+
+	const RESTART_COLORS: Record<string, string> = {
+		OOMKilled: 'var(--status-error-solid)',
+		Error: 'var(--red-6)',
+		ContainerCannotRun: 'var(--red-8)',
+		DeadlineExceeded: 'var(--amber-7)',
+		Evicted: 'var(--amber-9)',
+		Completed: 'var(--neutral-7)',
+		restart: 'var(--neutral-8)'
+	};
+
+	const WAITING_COLORS: Record<string, string> = {
+		CrashLoopBackOff: 'var(--status-error-solid)',
+		ImagePullBackOff: 'var(--red-6)',
+		ErrImagePull: 'var(--red-5)',
+		InvalidImageName: 'var(--red-8)',
+		CreateContainerConfigError: 'var(--red-10)',
+		CreateContainerError: 'var(--red-10)',
+		ContainerCreating: 'var(--amber-7)',
+		PodInitializing: 'var(--amber-5)'
+	};
+
+	const STATUS_SERIES: Record<StatusClass, { label: string; tone?: ChartTone; color?: string }> = {
+		'2xx': { label: '2xx OK', tone: 'neutral' },
+		'3xx': { label: '3xx Redirect', color: 'var(--blue-7)' },
+		'4xx': { label: '4xx Client error', tone: 'warning' },
+		'5xx': { label: '5xx Server error', tone: 'error' }
+	};
+
+	const SOURCES: Record<string, string> = { haproxy: 'HAProxy', traefik: 'Traefik' };
+
+	const OUTCOMES: Record<string, { label: string; tone: ChartTone }> = {
+		succeeded: { label: 'Succeeded', tone: 'neutral' },
+		failed: { label: 'Failed', tone: 'error' },
+		building: { label: 'Building', tone: 'warning' }
+	};
+
+	const PHASE_COLORS: Record<string, string> = {
+		queue: 'var(--neutral-6)',
+		schedule: 'var(--neutral-7)',
+		start: 'var(--neutral-8)',
+		clone: 'var(--blue-5)',
+		build: 'var(--blue-7)',
+		push: 'var(--blue-9)',
+		rollout: 'var(--status-deploy-solid)'
+	};
+	const PHASE_ORDER = Object.keys(PHASE_COLORS);
 
 	let open = $state({ red: true, use: true, pods: true, logs: true, deploys: true });
 	let picked = $state<LogEntry | null>(null);
@@ -121,13 +185,47 @@
 	const cpuTotal = $derived(cpuPod ? cpuPod * pods : null);
 	const memTotal = $derived(memPod ? memPod * pods : null);
 
+	const source = $derived(
+		metrics.http.source ? (SOURCES[metrics.http.source] ?? metrics.http.source) : null
+	);
+
+	const statusSeries = $derived<ChartSeries[]>(
+		STATUS_CLASSES.flatMap((c) => {
+			const points = metrics.http.status[c] ?? [];
+			return points.length ? [{ id: c, points, ...STATUS_SERIES[c] }] : [];
+		})
+	);
+	const reqModes = $derived<ChartMode[]>(
+		statusSeries.length ? ['stackedAreas', 'lines', 'stacked'] : ['areas', 'lines', 'bars']
+	);
+	const reqMode = $derived(
+		metrics.modes.req && reqModes.includes(metrics.modes.req) ? metrics.modes.req : reqModes[0]
+	);
+
+	const percentiles = $derived(metrics.http.latency);
+	const typicalLatency = $derived(latest(percentiles ? percentiles.p50 : metrics.http.lat));
+
 	const series = $derived({
-		req: [{ id: 'req', label: 'Per second', points: metrics.http.req, tone: 'neutral' }],
+		req: statusSeries.length
+			? statusSeries
+			: [{ id: 'req', label: 'Per second', points: metrics.http.req, tone: 'neutral' }],
 		err: [{ id: 'err', label: '5xx share', points: metrics.http.err, tone: 'error' }],
-		lat: [
-			{ id: 'avg', label: 'Average', points: metrics.http.lat, tone: 'neutral' },
-			{ id: 'max', label: 'Slowest', points: metrics.http.latmax, tone: 'faint', dashed: true }
-		],
+		lat: percentiles
+			? [
+					{ id: 'p50', label: 'Typical (p50)', points: percentiles.p50, tone: 'neutral' },
+					{ id: 'p95', label: 'Slow (p95)', points: percentiles.p95, color: SERIES_COLORS[0] },
+					{
+						id: 'p99',
+						label: 'Worst (p99)',
+						points: percentiles.p99,
+						tone: 'faint',
+						dashed: true
+					}
+				]
+			: [
+					{ id: 'avg', label: 'Average', points: metrics.http.lat, tone: 'neutral' },
+					{ id: 'max', label: 'Slowest', points: metrics.http.latmax, tone: 'faint', dashed: true }
+				],
 		cpu: split
 			? byPod('cpu')
 			: [{ id: 'cpu', label: 'All pods', points: metrics.resources.cpu, tone: 'neutral' }],
@@ -205,7 +303,26 @@
 		return out;
 	});
 
-	const restarts = $derived(
+	const health = $derived(metrics.podHealth);
+	const kube = $derived(health?.available === true);
+	const noHistory = $derived(
+		health ? 'Pod history needs kube-state-metrics' : "Pod history couldn't be loaded"
+	);
+
+	function podSeries(
+		groups: PodSeries[],
+		colors: Record<string, string>,
+		label: (key: string) => string = (k) => k
+	): ChartSeries[] {
+		return groups.map((g, i) => ({
+			id: g.key,
+			label: label(g.key),
+			points: g.points,
+			color: colors[g.key] ?? SERIES_COLORS[i % SERIES_COLORS.length]
+		}));
+	}
+
+	const stopped = $derived(
 		stackByKey(
 			metrics.killed.flatMap((k) =>
 				k.finishedAt ? [{ t: new Date(k.finishedAt).getTime(), key: k.reason }] : []
@@ -214,6 +331,18 @@
 			metrics.to,
 			{ size: bucket, colors: REASON_COLORS }
 		)
+	);
+
+	const restarts = $derived(
+		kube && health
+			? podSeries(health.restarts, RESTART_COLORS, (k) => (k === 'restart' ? 'Restarts' : k))
+			: stopped
+	);
+	const waiting = $derived(kube && health ? podSeries(health.waiting, WAITING_COLORS) : []);
+	const notReady = $derived<ChartSeries[]>(
+		kube && health
+			? [{ id: 'not-ready', label: 'Not ready', points: health.notReady, tone: 'warning' }]
+			: []
 	);
 
 	const warnings = $derived(
@@ -266,9 +395,74 @@
 			.reverse()
 	);
 
+	const buildAt = (b: BuildRun) => new Date(b.startedAt ?? b.scheduledAt).getTime();
+
+	const ranged = $derived(
+		metrics.builds
+			.map((b) => ({ b, t: buildAt(b) }))
+			.filter(({ t }) => Number.isFinite(t) && t >= metrics.from && t <= metrics.to)
+			.sort((a, z) => a.t - z.t)
+	);
+
+	function median(values: number[]) {
+		if (!values.length) return null;
+		const sorted = [...values].sort((a, b) => a - b);
+		return sorted[sorted.length >> 1];
+	}
+
+	function typical(values: number[]) {
+		const m = median(values);
+		return m == null ? undefined : { value: `${minutes(m)} typical` };
+	}
+
+	const buildTimes = $derived.by<ChartSeries[]>(() => {
+		const groups = new Map<string, ChartPoint[]>();
+		for (const { b, t } of ranged) {
+			if (b.durationMs == null) continue;
+			groups.set(b.status, [...(groups.get(b.status) ?? []), { x: t, y: b.durationMs / 1000 }]);
+		}
+		return [...groups].map(([status, points]) => ({
+			id: status,
+			label: OUTCOMES[status]?.label ?? status,
+			tone: OUTCOMES[status]?.tone ?? 'faint',
+			points
+		}));
+	});
+
+	const queueWait = $derived<ChartSeries[]>([
+		{
+			id: 'queue',
+			label: 'Waiting for a builder',
+			tone: 'neutral',
+			points: ranged.flatMap(({ b, t }) =>
+				b.queueMs == null ? [] : [{ x: t, y: b.queueMs / 1000 }]
+			)
+		}
+	]);
+
+	const phases = $derived.by<ChartSeries[]>(() => {
+		const labels = new Map<string, string>();
+		for (const { b } of ranged) for (const p of b.phases ?? []) labels.set(p.id, p.label);
+		const rank = (id: string) => {
+			const i = PHASE_ORDER.indexOf(id);
+			return i < 0 ? PHASE_ORDER.length : i;
+		};
+		return [...labels.keys()]
+			.sort((a, z) => rank(a) - rank(z))
+			.map((id, i) => ({
+				id,
+				label: labels.get(id) ?? id,
+				color: PHASE_COLORS[id] ?? SERIES_COLORS[i % SERIES_COLORS.length],
+				points: ranged.flatMap(({ b, t }) => {
+					const p = (b.phases ?? []).find((x) => x.id === id);
+					return p ? [{ x: t, y: p.ms / 1000 }] : [];
+				})
+			}));
+	});
+
 	const deploys = $derived(
 		stackByKey(
-			metrics.releases.map((r) => ({ t: r.at, key: r.status || 'unknown' })),
+			metrics.builds.map((b) => ({ t: buildAt(b), key: b.status || 'unknown' })),
 			metrics.from,
 			metrics.to,
 			{
@@ -279,16 +473,36 @@
 		)
 	);
 
-	const builds = $derived(
-		metrics.releases
-			.filter((r) => r.startedAt && r.completedAt)
-			.slice(0, 12)
-			.map((r) => ({
-				id: `${r.tag}-${r.at}`,
-				label: `${r.tag}${r.title ? ` ${r.title}` : ''}`,
-				value: ((r.completedAt ?? 0) - (r.startedAt ?? 0)) / 1000,
-				color: r.status === 'failed' ? 'var(--status-error-solid)' : undefined
-			}))
+	function routeRank(
+		pick: (r: (typeof metrics.http.routes)[number]) => number | null,
+		color?: string
+	) {
+		return metrics.http.routes.flatMap((r) => {
+			const value = pick(r);
+			return value == null ? [] : [{ id: r.id, label: r.label, value, color }];
+		});
+	}
+
+	const busiest = $derived(routeRank((r) => r.requestRate));
+	const slowest = $derived(routeRank((r) => r.latencyMs));
+	const failing = $derived(
+		routeRank(
+			(r) => ((r.errorRate ?? 0) > 0 || (r.errorPercent ?? 0) > 0 ? (r.errorPercent ?? 0) : null),
+			'var(--status-error-solid)'
+		)
+	);
+
+	const disks = $derived(
+		metrics.volumes.map((v) => ({
+			id: v.claim || v.name,
+			label: v.name,
+			detail: v.mountPath,
+			value: v.usedBytes,
+			max: v.capacityBytes
+		}))
+	);
+	const fullest = $derived(
+		Math.max(-1, ...disks.flatMap((d) => (d.value != null && d.max ? [d.value / d.max] : [])))
 	);
 
 	const podsByMemory = $derived(
@@ -412,6 +626,16 @@
 	</Widget>
 {/snippet}
 
+{#snippet diskMeta()}
+	{#if fullest >= 0}
+		<span class="headline headline--{capacityTone(fullest)}">{Math.round(fullest * 100)}% full</span
+		>
+	{/if}
+	{@render infoTip(
+		'How full each volume is right now, from the kubelet. Amber from 80%, red from 90%.'
+	)}
+{/snippet}
+
 {#snippet errorsMeta()}
 	{@render infoTip('The newest error lines. Open one to read the lines around it.')}
 {/snippet}
@@ -451,18 +675,24 @@
 		{/if}
 
 		{#if hasIngress}
-			<Disclosure title="Traffic and errors" bind:open={open.red}>
+			<Disclosure
+				title="Traffic and errors"
+				note={source ? `Measured at the ${source} ingress` : undefined}
+				bind:open={open.red}
+			>
 				<div class="grid">
 					<MetricPanel
 						title="Requests"
-						info="Requests per second reaching this app through its domains."
+						info={statusSeries.length
+							? 'Requests per second reaching this app through its domains, by status class.'
+							: 'Requests per second reaching this app through its domains.'}
 						series={series.req}
 						from={metrics.from}
 						to={metrics.to}
 						format={rate}
 						bind:hover={metrics.hover}
-						bind:mode={() => metrics.modes.req ?? 'areas', (m) => (metrics.modes.req = m)}
-						modes={['areas', 'lines', 'bars']}
+						bind:mode={() => reqMode, (m) => (metrics.modes.req = m)}
+						modes={reqModes}
 						headline={latest(metrics.http.req) != null
 							? { value: rate(latest(metrics.http.req)!) }
 							: undefined}
@@ -506,7 +736,9 @@
 					/>
 					<MetricPanel
 						title="Response time"
-						info="Average and slowest response per interval. Percentiles (p50, p95, p99) are not measured yet."
+						info={percentiles
+							? 'Half of requests finish faster than typical; 1 in 20 is slower than slow, 1 in 100 slower than worst.'
+							: 'Average and slowest response per interval; this ingress does not record percentiles.'}
 						series={series.lat}
 						from={metrics.from}
 						to={metrics.to}
@@ -514,8 +746,8 @@
 						bind:hover={metrics.hover}
 						bind:mode={() => metrics.modes.lat ?? 'lines', (m) => (metrics.modes.lat = m)}
 						modes={['lines', 'areas']}
-						headline={latest(metrics.http.lat) != null
-							? { value: `${ms(latest(metrics.http.lat)!)} average` }
+						headline={typicalLatency != null
+							? { value: `${ms(typicalLatency)} ${percentiles ? 'typical' : 'average'}` }
 							: undefined}
 						peaks={2}
 						events={metrics.events}
@@ -524,6 +756,27 @@
 						empty="No requests to time in this range"
 						onZoom={(a, b) => metrics.zoom(a, b)}
 					/>
+					{@render rank(
+						'Slowest routes',
+						'Average response time of each domain and path over this range.',
+						slowest,
+						ms,
+						'No requests to time in this range'
+					)}
+					{@render rank(
+						'Busiest routes',
+						'Requests per second to each domain and path over this range.',
+						busiest,
+						rate,
+						'No requests reached this app in this range'
+					)}
+					{@render rank(
+						'Routes throwing errors',
+						"Share of each route's requests that returned a 5xx over this range.",
+						failing,
+						percent,
+						'No route is returning errors'
+					)}
 					{@render rank(
 						'Most frequent errors',
 						'Exceptions grouped by fingerprint, ranked by how often they happened in this range.',
@@ -587,9 +840,28 @@
 					empty="No network samples in this range"
 					onZoom={(a, b) => metrics.zoom(a, b)}
 				/>
+				{@render rank(
+					'Pods by memory',
+					'Memory each pod is using right now, largest first.',
+					podsByMemory,
+					mem,
+					'No per-pod memory samples yet'
+				)}
+				{#if disks.length}
+					<Widget title="Disk" meta={diskMeta} class="metric-panel">
+						<CapacityList label="Disk" items={disks} format={bytes} />
+					</Widget>
+				{/if}
+			</div>
+		</Disclosure>
+
+		<Disclosure title="Pods" bind:open={open.pods}>
+			<div class="grid">
 				<MetricPanel
 					title="Restarts and out-of-memory kills"
-					info="Containers that stopped, per interval, by the reason Kubernetes gave."
+					info={kube
+						? 'Container restarts per interval, by the reason the container last stopped.'
+						: 'Containers that stopped, per interval, by the reason Kubernetes gave.'}
 					series={restarts}
 					from={metrics.from}
 					to={metrics.to}
@@ -600,21 +872,43 @@
 					sum
 					events={metrics.events}
 					bands={incidents}
-					empty="No container stopped in this range"
+					empty={kube
+						? 'No container restarted in this range'
+						: health
+							? 'No container stopped recently. Pod history needs kube-state-metrics'
+							: 'No container stopped in this range'}
 					onZoom={(a, b) => metrics.zoom(a, b)}
 				/>
-				{@render rank(
-					'Pods by memory',
-					'Memory each pod is using right now, largest first.',
-					podsByMemory,
-					mem,
-					'No per-pod memory samples yet'
-				)}
-			</div>
-		</Disclosure>
-
-		<Disclosure title="Pods" bind:open={open.pods}>
-			<div class="grid">
+				<MetricPanel
+					title="Waiting containers by reason"
+					info="Containers waiting to run per interval, by the reason Kubernetes gave (crash back-off, image pull, still creating)."
+					series={waiting}
+					from={metrics.from}
+					to={metrics.to}
+					format={count}
+					bind:hover={metrics.hover}
+					mode="stacked"
+					modes={['stacked']}
+					events={metrics.events}
+					bands={incidents}
+					empty={kube ? 'No container was stuck waiting in this range' : noHistory}
+					onZoom={(a, b) => metrics.zoom(a, b)}
+				/>
+				<MetricPanel
+					title="Pods not ready"
+					info="Pods that were running but not ready to take traffic, per interval."
+					series={notReady}
+					from={metrics.from}
+					to={metrics.to}
+					format={count}
+					bind:hover={metrics.hover}
+					mode="bars"
+					modes={['bars']}
+					events={metrics.events}
+					bands={incidents}
+					empty={kube ? 'Every pod was ready in this range' : noHistory}
+					onZoom={(a, b) => metrics.zoom(a, b)}
+				/>
 				<MetricPanel
 					title="Kubernetes warnings"
 					info="Warnings Kubernetes recorded for this app's pods (failed probes, back-off, scheduling), by reason."
@@ -695,13 +989,56 @@
 					empty="Nothing was deployed in this range"
 					onZoom={(a, b) => metrics.zoom(a, b)}
 				/>
-				{@render rank(
-					'Build time',
-					'How long each recent build took, slowest first. Failed builds are red.',
-					builds,
-					minutes,
-					'No finished builds yet'
-				)}
+				<MetricPanel
+					title="Build time"
+					info="How long each build took from start to finish, by outcome."
+					series={buildTimes}
+					from={metrics.from}
+					to={metrics.to}
+					format={minutes}
+					bind:hover={metrics.hover}
+					mode="bars"
+					modes={['bars']}
+					sparse
+					headline={typical(buildTimes.flatMap((s) => s.points.map((p) => p.y)))}
+					events={metrics.events}
+					bands={incidents}
+					empty="Nothing was built in this range"
+					onZoom={(a, b) => metrics.zoom(a, b)}
+				/>
+				<MetricPanel
+					title="Queue wait"
+					info="How long each build waited for a builder before it started."
+					series={queueWait}
+					from={metrics.from}
+					to={metrics.to}
+					format={minutes}
+					bind:hover={metrics.hover}
+					mode="bars"
+					modes={['bars']}
+					sparse
+					headline={typical(queueWait[0].points.map((p) => p.y))}
+					events={metrics.events}
+					bands={incidents}
+					empty="Nothing was built in this range"
+					onZoom={(a, b) => metrics.zoom(a, b)}
+				/>
+				<MetricPanel
+					title="Where build time goes"
+					info="Each build split into its steps, from waiting in the queue to applying the new version."
+					series={phases}
+					from={metrics.from}
+					to={metrics.to}
+					format={minutes}
+					bind:hover={metrics.hover}
+					mode="stacked"
+					modes={['stacked']}
+					sparse
+					events={metrics.events}
+					bands={incidents}
+					empty="Nothing was built in this range"
+					onZoom={(a, b) => metrics.zoom(a, b)}
+				/>
 			</div>
 		</Disclosure>
 	{/if}
@@ -770,6 +1107,19 @@
 		margin: 0;
 		color: var(--text-faint);
 		font-size: var(--text-callout);
+	}
+	.headline {
+		margin-right: 0.25rem;
+		color: var(--text-default);
+		font-size: var(--text-callout);
+		font-weight: var(--weight-medium);
+		font-variant-numeric: tabular-nums;
+	}
+	.headline--warning {
+		color: var(--status-warning);
+	}
+	.headline--error {
+		color: var(--status-error);
 	}
 	.info {
 		display: grid;

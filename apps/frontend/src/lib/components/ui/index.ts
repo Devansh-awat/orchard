@@ -90,6 +90,7 @@ export { default as DnsRecord } from './DnsRecord.svelte';
 export { default as TimeChart } from './TimeChart.svelte';
 export { default as SeriesTable } from './SeriesTable.svelte';
 export { default as TopList } from './TopList.svelte';
+export { default as CapacityList } from './CapacityList.svelte';
 export { default as SeverityMeter } from './SeverityMeter.svelte';
 export { default as SeverityBar } from './SeverityBar.svelte';
 export {

@@ -6,6 +6,7 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import SeverityMeter from '$lib/components/ui/SeverityMeter.svelte';
 	import SeverityBar from '$lib/components/ui/SeverityBar.svelte';
+	import CapacityList from '$lib/components/ui/CapacityList.svelte';
 	import { SEVERITIES } from '$lib/components/ui/severity';
 	import { statusMeta, type StatusKind } from '$lib/components/ui/status';
 
@@ -105,6 +106,18 @@
 		<div class="severity-demo">
 			<SeverityBar counts={{ critical: 3, high: 6, medium: 4, low: 3 }} />
 			<SeverityBar counts={{}} />
+		</div>
+		<div class="severity-demo" data-testid="capacity">
+			<CapacityList
+				label="Volumes"
+				format={(v) => `${v} GB`}
+				items={[
+					{ id: 'data', label: 'data', detail: '/var/lib/data', value: 4, max: 10 },
+					{ id: 'cache', label: 'cache', detail: '/cache', value: 8.5, max: 10 },
+					{ id: 'uploads', label: 'uploads', detail: '/uploads', value: 9.6, max: 10 },
+					{ id: 'tmp', label: 'tmp', detail: '/tmp', value: null, max: 5 }
+				]}
+			/>
 		</div>
 	</div>
 </SectionCard>
