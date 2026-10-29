@@ -224,3 +224,92 @@ export function selectorPointsAt(
   const want = slotSelector(name, slot)[NAME_LABEL];
   return service.spec?.selector?.[NAME_LABEL] === want;
 }
+
+export type RolloutRevision = {
+  hash: string;
+  number: number;
+  image: string | null;
+  createdAt: string | null;
+  replicas: number;
+  ready: number;
+};
+
+export type RolloutSummary = {
+  currentRevision: string | null;
+  revisions: RolloutRevision[];
+  desired: number;
+  updated: number;
+  ready: number;
+  available: number;
+  state: 'stable' | 'progressing' | 'failed';
+  reason: string | null;
+};
+
+export function revisionOf(obj: { metadata?: k8s.V1ObjectMeta } | undefined): string | null {
+  return obj?.metadata?.labels?.['pod-template-hash'] ?? null;
+}
+
+export function summarizeRollout(
+  dep: k8s.V1Deployment,
+  replicaSets: readonly k8s.V1ReplicaSet[]
+): RolloutSummary {
+  const revisions = replicaSets
+    .map((rs): RolloutRevision | null => {
+      const hash = revisionOf(rs);
+      if (!hash) return null;
+      return {
+        hash,
+        number: Number(rs.metadata?.annotations?.['deployment.kubernetes.io/revision'] ?? 0),
+        image: rs.spec?.template?.spec?.containers?.[0]?.image ?? null,
+        createdAt: rs.metadata?.creationTimestamp
+          ? new Date(rs.metadata.creationTimestamp).toISOString()
+          : null,
+        replicas: rs.status?.replicas ?? 0,
+        ready: rs.status?.readyReplicas ?? 0
+      };
+    })
+    .filter((r): r is RolloutRevision => r !== null)
+    .sort((a, b) => b.number - a.number);
+
+  const current = revisions[0] ?? null;
+  const live = revisions.filter((r) => r === current || r.replicas > 0);
+  const desired = dep.spec?.replicas ?? 0;
+  const status = dep.status ?? {};
+  const updated = status.updatedReplicas ?? 0;
+  const ready = status.readyReplicas ?? 0;
+  const available = status.availableReplicas ?? 0;
+  const total = status.replicas ?? 0;
+
+  let state: RolloutSummary['state'] = 'stable';
+  let reason: string | null = null;
+  for (const condition of status.conditions ?? []) {
+    if (
+      condition.type === 'Progressing' &&
+      condition.status === 'False' &&
+      condition.reason === 'ProgressDeadlineExceeded'
+    ) {
+      state = 'failed';
+      reason = 'ProgressDeadlineExceeded';
+    }
+    if (condition.type === 'ReplicaFailure' && condition.status === 'True') {
+      state = 'failed';
+      reason = condition.message || 'ReplicaFailure';
+    }
+  }
+  if (state !== 'failed') {
+    const behind = (dep.metadata?.generation ?? 0) > (status.observedGeneration ?? 0);
+    const settled = updated >= desired && available >= desired && total <= desired;
+    if (behind || !settled || live.length > 1) state = 'progressing';
+  }
+
+  return {
+    currentRevision: current?.hash ?? null,
+    revisions: live,
+    desired,
+    updated,
+    ready,
+    available,
+    state,
+    reason
+  };
+}

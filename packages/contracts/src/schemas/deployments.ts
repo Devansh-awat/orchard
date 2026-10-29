@@ -150,6 +150,26 @@ const volumeRecord = z
   })
   .passthrough();
 
+const rolloutSummary = z.object({
+  currentRevision: z.string().nullable(),
+  revisions: z.array(
+    z.object({
+      hash: z.string(),
+      number: z.number(),
+      image: z.string().nullable(),
+      createdAt: z.string().nullable(),
+      replicas: z.number(),
+      ready: z.number()
+    })
+  ),
+  desired: z.number(),
+  updated: z.number(),
+  ready: z.number(),
+  available: z.number(),
+  state: z.enum(['stable', 'progressing', 'failed']),
+  reason: z.string().nullable()
+});
+
 const podRecord = z
   .object({
     id: z.string().optional(),
@@ -158,6 +178,7 @@ const podRecord = z
     ip: z.string().nullable().optional(),
     podIp: z.string().nullable().optional(),
     nodeName: z.string().nullable().optional(),
+    revision: z.string().nullable().optional(),
     restartCount: z.number().optional(),
     startTime: z.string().nullable().optional(),
     createdAt: z.string().nullable().optional(),
@@ -785,6 +806,7 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
       .object({
         pods: z.array(podRecord),
         warnings: z.array(podWarning),
+        rollout: rolloutSummary.nullable().optional(),
         availableReplicas: z.number(),
         totalCpuUsage: z.number().nullable(),
         totalMemoryUsage: z.number().nullable()

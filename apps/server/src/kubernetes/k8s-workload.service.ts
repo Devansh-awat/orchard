@@ -52,7 +52,10 @@ import {
   selectorPointsAt,
   slotSelector,
   type DeployStrategy,
-  type RolloutAssessment
+  type RolloutAssessment,
+  revisionOf,
+  summarizeRollout,
+  type RolloutSummary
 } from './rollout-strategy';
 import { k8sErrorMessage, k8sHttpException } from './k8s-error';
 import { livenessProbe, probesFor, readinessProbe, startupProbe } from './probes';
@@ -3222,6 +3225,7 @@ export class K8sWorkloadService {
             status: computedStatus,
             restartCount: totalRestartCount,
             createdAt: pod.metadata?.creationTimestamp,
+            revision: revisionOf(pod),
             containers,
             // 5 was enough when nothing rendered these; the Events panel in
             // ObserveTab shows the real history, and a crash loop generates
@@ -3301,9 +3305,25 @@ export class K8sWorkloadService {
       const totalMemoryUsage = podsWithMetrics.reduce((sum, p) => sum + (p.memoryUsage ?? 0), 0);
       const hasMetrics = metricsMap.size > 0;
 
+      let rollout: RolloutSummary | null = null;
+      try {
+        const replicaSets = await appsApi.listNamespacedReplicaSet(
+          cleanNamespace,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          labelSelector
+        );
+        rollout = summarizeRollout(k8sDeployment.body, replicaSets.body.items);
+      } catch (error) {
+        console.warn('[API] listNamespacedReplicaSet failed:', error?.message ?? error);
+      }
+
       return {
         deployment: cleanDeploymentName,
         namespace: cleanNamespace,
+        rollout,
         podCount: podsWithMetrics.length,
         pods: podsWithMetrics,
         warnings: warnings.slice(0, 10),

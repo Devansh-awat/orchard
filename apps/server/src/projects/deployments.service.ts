@@ -1832,6 +1832,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     let totalCpuUsage: number | null = null;
     let totalMemoryUsage: number | null = null;
     let meteredPods: number | null = null;
+    let rollout: unknown = null;
 
     if (deployment.name && deployment.namespace) {
       try {
@@ -1844,6 +1845,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         totalCpuUsage = livePods?.totalCpuUsage ?? null;
         totalMemoryUsage = livePods?.totalMemoryUsage ?? null;
         meteredPods = livePods?.meteredPods ?? null;
+        rollout = livePods?.rollout ?? null;
 
         try {
           const k8sDeployment = await this.k8sWorkload.getKubernetesDeployment(
@@ -1864,7 +1866,15 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    return { pods, warnings, availableReplicas, totalCpuUsage, totalMemoryUsage, meteredPods };
+    return {
+      pods,
+      warnings,
+      rollout,
+      availableReplicas,
+      totalCpuUsage,
+      totalMemoryUsage,
+      meteredPods
+    };
   }
 
   async cancelDeploymentBuild(
@@ -5658,6 +5668,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         ip: pod.status?.podIP ?? null,
         podIp: pod.status?.podIP ?? null,
         nodeName: pod.spec?.nodeName ?? null,
+        revision: pod.metadata?.labels?.['pod-template-hash'] ?? null,
         restartCount,
         startTime: createdAt,
         createdAt,
@@ -5714,6 +5725,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       ip: pod.podIp,
       podIp: pod.podIp,
       nodeName: pod.nodeName,
+      revision: pod.revision ?? null,
       restartCount: typeof pod.restartCount === 'number' ? pod.restartCount : 0,
       startTime: pod.createdAt,
       createdAt: pod.createdAt,
