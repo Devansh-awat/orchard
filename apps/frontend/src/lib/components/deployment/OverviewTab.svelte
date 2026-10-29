@@ -468,7 +468,7 @@
 		justify-content: space-between;
 		gap: 0.75rem;
 		min-height: 2.75rem;
-		padding: 0.375rem 0.5rem 0.375rem 0.375rem;
+		padding: 0.5rem;
 		border-bottom: 1px solid var(--console-edge);
 	}
 	.sessions {
@@ -476,6 +476,8 @@
 		align-items: center;
 		gap: 0.25rem;
 		min-width: 0;
+		margin-block: -0.25rem;
+		padding-block: 0.25rem;
 		overflow-x: auto;
 		scrollbar-width: none;
 	}
@@ -484,10 +486,9 @@
 		align-items: center;
 		flex-shrink: 0;
 		height: 1.75rem;
-		padding: 0 0.625rem;
+		padding: 0 0.75rem;
 		border: none;
-		border-radius: calc(0.5rem * var(--corner-scale));
-		corner-shape: var(--corner);
+		border-radius: 999px;
 		background: transparent;
 		color: var(--console-dim);
 		font-size: var(--text-footnote);
@@ -504,12 +505,12 @@
 		background: var(--bg-surface);
 		color: var(--console-text);
 		box-shadow:
-			0 0 0 0.5px var(--border-strong),
+			inset 0 0 0 0.5px var(--border-strong),
 			0 1px 2px color-mix(in oklab, var(--neutral-10) 8%, transparent);
 	}
 	.session--term {
 		gap: 0.125rem;
-		padding: 0 0.25rem 0 0.5rem;
+		padding: 0 0.25rem 0 0.75rem;
 	}
 	.session--bell .session-hit {
 		color: var(--status-warning);
@@ -536,8 +537,7 @@
 		width: 1.25rem;
 		height: 1.25rem;
 		border: none;
-		border-radius: calc(0.3125rem * var(--corner-scale));
-		corner-shape: var(--corner);
+		border-radius: 50%;
 		background: none;
 		color: var(--console-faint);
 		cursor: pointer;
@@ -557,10 +557,9 @@
 		align-items: center;
 		gap: 0.375rem;
 		height: 1.75rem;
-		padding: 0 0.625rem;
+		padding: 0 0.75rem;
 		border: none;
-		border-radius: calc(0.5rem * var(--corner-scale));
-		corner-shape: var(--corner);
+		border-radius: 999px;
 		background: transparent;
 		color: var(--console-dim);
 		font-size: var(--text-footnote);
