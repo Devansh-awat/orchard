@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Snippet } from 'svelte';
+	import { untrack, type Snippet } from 'svelte';
 	import {
 		ArrowDown,
 		Check,
@@ -45,6 +45,7 @@
 		onFilters = undefined,
 		onExport = undefined,
 		caption = null,
+		initial = null,
 		empty = undefined
 	}: {
 		lines: LogLine[];
@@ -63,6 +64,7 @@
 		onFilters?: (filters: LogFilters) => void;
 		onExport?: (format: 'text' | 'ndjson') => void;
 		caption?: string | null;
+		initial?: Partial<LogFilters> | null;
 		empty?: Snippet;
 	} = $props();
 
@@ -90,12 +92,12 @@
 	let prevTail = '';
 	let lastLoadMoreAt = 0;
 
-	let query = $state('');
-	let level = $state<LevelFilter>('all');
+	let query = $state(untrack(() => initial?.query ?? ''));
+	let level = $state<LevelFilter>(untrack(() => initial?.level ?? 'all'));
 	let preset = $state<Preset>('all');
 	let fromText = $state('');
 	let toText = $state('');
-	let source = $state<string | null>(null);
+	let source = $state<string | null>(untrack(() => initial?.source ?? null));
 	let copied = $state(false);
 	let errorCursor = $state(-1);
 	let copyTimer: ReturnType<typeof setTimeout> | undefined;

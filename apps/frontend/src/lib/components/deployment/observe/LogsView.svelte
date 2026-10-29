@@ -1,11 +1,14 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import { SquareTerminal } from 'lucide-svelte';
 	import { Button, LogViewer } from '$lib/components/ui';
 	import StatusDot from '$lib/components/ui/StatusDot.svelte';
 	import { statusMeta } from '$lib/components/ui/status';
 	import type { LogFilters } from '$lib/utils/log-lines';
 	import { queryFrom, type LogsState } from './logs.svelte';
+	import { filtersFromUrl, writeFilters } from './permalink';
 
 	let {
 		logs,
@@ -23,7 +26,16 @@
 		custom?: { from: number; to: number } | null;
 	} = $props();
 
-	let filters = $state<LogFilters | null>(null);
+	const initial = untrack(() => filtersFromUrl($page.url));
+	let filters = $state<LogFilters | null>(initial);
+
+	function setFilters(next: LogFilters) {
+		filters = next;
+		const url = writeFilters(new URL(window.location.href), next);
+		if (url.href !== window.location.href) {
+			goto(url, { replaceState: true, noScroll: true, keepFocus: true });
+		}
+	}
 
 	const caption = $derived(
 		logs.source === 'store'
@@ -119,7 +131,8 @@
 		filename="{deploymentName}-logs"
 		sourceLabel="Pod"
 		onLoadEarlier={() => logs.loadEarlier(deploymentId)}
-		onFilters={(f) => (filters = f)}
+		onFilters={setFilters}
+		{initial}
 		onExport={exportLogs}
 		{caption}
 	>

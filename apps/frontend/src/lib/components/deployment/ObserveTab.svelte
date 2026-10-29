@@ -63,7 +63,6 @@
 	let restored = false;
 	let restoring = true;
 	let pendingMoment: { at: number | null; panel: string | null } | null = null;
-	let link = $state('');
 
 	$effect(() => {
 		if (restored) return;
@@ -103,7 +102,6 @@
 			url.searchParams.delete('panel');
 		}
 		restoring = false;
-		link = url.toString();
 		if (url.href !== window.location.href) {
 			goto(url, { replaceState: true, noScroll: true, keepFocus: true });
 		}
@@ -233,7 +231,7 @@
 
 		<div class="controls">
 			{#if view === 'metrics' || view === 'logs' || view === 'requests'}
-				<CopyButton value={link || $page.url.toString()} label="Copy a link to this view" />
+				<CopyButton value={$page.url.toString()} label="Copy a link to this view" />
 			{/if}
 			{#if view === 'metrics' || view === 'logs' || view === 'requests'}
 				{#if view === 'metrics'}

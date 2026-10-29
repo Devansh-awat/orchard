@@ -312,6 +312,7 @@
 		if (v !== 'settings') url.searchParams.delete('s');
 		if (wantView) url.searchParams.set('view', wantView);
 		else url.searchParams.delete('view');
+		if (wantView !== 'logs') for (const k of ['q', 'levels', 'pod']) url.searchParams.delete(k);
 		if (url.href !== window.location.href) {
 			goto(url, { replaceState: true, keepFocus: true, noScroll: true });
 		}

@@ -49,3 +49,35 @@ export function readMoment(url: URL): {
 		panel: url.searchParams.get('panel')
 	};
 }
+
+type Filters = {
+	query: string;
+	level: 'all' | 'warn' | 'error';
+	window: [number, number | null] | null;
+	source: string | null;
+};
+
+export function filtersFromUrl(url: URL): Filters | null {
+	const q = url.searchParams.get('q') ?? '';
+	const levels = (url.searchParams.get('levels') ?? '').split(',').filter(Boolean);
+	const pod = url.searchParams.get('pod');
+	if (!q && !levels.length && !pod) return null;
+	const level =
+		levels.includes('info') || levels.includes('debug') || !levels.length
+			? 'all'
+			: levels.includes('warn')
+				? 'warn'
+				: 'error';
+	return { query: q, level, window: null, source: pod || null };
+}
+
+export function writeFilters(url: URL, f: Filters): URL {
+	const next = new URL(url);
+	if (f.query) next.searchParams.set('q', f.query);
+	else next.searchParams.delete('q');
+	if (f.level === 'all') next.searchParams.delete('levels');
+	else next.searchParams.set('levels', f.level === 'warn' ? 'warn,error' : 'error');
+	if (f.source) next.searchParams.set('pod', f.source);
+	else next.searchParams.delete('pod');
+	return next;
+}
