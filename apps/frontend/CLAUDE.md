@@ -277,7 +277,7 @@ Three-level hierarchy: **Org cap** → **Member allowance** → **Deployment req
 
 ## Deployment Page Architecture
 
-- Tabs (`PageTabs`, `?tab=`): Overview, Variables, Activity (`deploys`), Observe, Network, Settings
+- Tabs (`PageTabs`, `?tab=`): Overview, Variables, Activity (`deploys`), Observe, Network, Security, Settings
   (`SettingsRail`, `?s=`). Old ids (`metrics`, `environment`, `resources`, `volumes`, `build`,
   `advanced`) still resolve.
 - Overview fills exactly one viewport at 64rem wide and 40rem tall or more (`dep-shell--fit`): the
@@ -305,6 +305,23 @@ Three-level hierarchy: **Org cap** → **Member allowance** → **Deployment req
   by ReplicaSet changes) refetches the detail, which carries `rollout`. `/pods-live` lists pods, events
   and metrics from the Kubernetes API itself, so it runs once on load and after a scale, never per event.
   The detail query polls every 60s only as a backstop while SSE is up.
+- Activity: the live release (`ReleaseCard`) above `HistoryTab` (`ActivityRow`s, capsule filter); webhooks for
+  image apps in `WebhooksTab`.
+- Observe (`ObserveTab` + `deployment/observe/`): Metrics, Logs, Errors, Events. Metrics is a dashboard of
+  `MetricPanel`s in collapsible sections (traffic and errors, resources, pods, logs, deploys) with one shared
+  time range, a synced crosshair, brush zoom, deploy and kill markers, incident bands and findings
+  (`observe/findings.ts`). `?demo` feeds it synthetic data. Series the server does not record yet (latency
+  percentiles, status classes, per-route stats, volume fill, not-ready history) are left out, not faked.
+- Network (`NetworkTab` + `deployment/network/`): Public and Private `Widget`s; dialogs for domains,
+  protection, redirects, ports and DNS.
+- Security (`SecurityTab`): scan card and Configuration card at 1.618 : 1, then the vulnerability table only
+  when there are findings. Reads `GET /deployments/:id/security`, rescans with `POST .../security/scan`, polls
+  every 3s only while scanning. Only images in Orchard's registry are scanned. Mock states:
+  `POST /apiv1/__mock/deployments/:id/security {scenario}`.
+- Settings (`AppSettings` + `SettingsRail`): every section is a `SectionCard` of `SettingsList` rows;
+  `BuilderOptions`, `UpdatesCard`, `AutoDeployCard`, `HealthChecks`, `ImageSource` replaced `AdvancedTab`.
+- Logs: see Logs in `DESIGN.md`. Build logs are one `LogViewer` stream (step = source); `BuildSteps` is gone. The
+  console keeps the pod you picked; when it disappears, `podGone`/`replacementPod` show a capsule instead of swapping.
 - `computeHealth` takes `now`; the page ticks it every 5s so a grace window can expire without new data.
 - The console's logs follow by default: the deployment log stream (`/observe/.../logs/stream`) wakes a
   refetch whenever the selected pod writes a line. There is no Live toggle, only Pause. If the stream stays

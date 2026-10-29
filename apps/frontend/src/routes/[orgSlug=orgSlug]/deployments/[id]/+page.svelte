@@ -19,7 +19,7 @@
 		formatBuildElapsed,
 		sanitizeLogs
 	} from '$lib/components/deployment/deployment-helpers';
-	import { resourceStatus, statusMeta } from '$lib/components/ui';
+	import { LogViewer, Modal, resourceStatus, statusMeta } from '$lib/components/ui';
 	import {
 		apiFetch,
 		toasts,
@@ -37,10 +37,8 @@
 	import { registerShortcut } from '$lib/utils/shortcuts';
 	import type { PageData } from './$types';
 	import {
-		Loader2,
 		Plus,
 		Scale,
-		X,
 		ExternalLink,
 		Lock,
 		Webhook,
@@ -52,7 +50,7 @@
 	import Breadcrumbs from '$lib/components/ui/Breadcrumbs.svelte';
 	import PageTabs from '$lib/components/ui/PageTabs.svelte';
 	import GoldenReticle from '$lib/components/ui/GoldenReticle.svelte';
-	import { Clock, Terminal } from '@jis3r/icons';
+	import { Clock } from '@jis3r/icons';
 	import { scale, fade, slide } from '$lib/utils/transitions';
 	import { animate } from 'motion';
 	import {
@@ -62,8 +60,10 @@
 		History as TabActivity,
 		Eye as TabObserve,
 		Globe as TabNetwork,
+		Shield as TabSecurity,
 		SlidersHorizontal as TabSettings
 	} from 'lucide-svelte';
+	import SecurityTab from '$lib/components/deployment/SecurityTab.svelte';
 	import GraftMount from '$lib/grafts/GraftMount.svelte';
 	import GraftCards from '$lib/grafts/GraftCards.svelte';
 	import { graftHost } from '$lib/grafts/host.svelte';
@@ -76,14 +76,12 @@
 	import DeploymentProgress from '$lib/components/DeploymentProgress.svelte';
 	import CircleAlertIcon from '$lib/components/icons/CircleAlertIcon.svelte';
 	import TriangleAlertIcon from '$lib/components/icons/TriangleAlertIcon.svelte';
-	import BuildSteps from '$lib/components/BuildSteps.svelte';
+	import { ansiBuildLines } from '$lib/utils/log-sources.svelte';
 	import PodTerminal from '$lib/components/PodTerminal.svelte';
 
 	// Extracted modules
 	import {
 		motionPanel,
-		motionPopover,
-		motionBackdrop,
 		pressSpringDelegate,
 		decorativeMotion,
 		functionalMotion
@@ -209,6 +207,7 @@
 		{ id: 'deploys', label: 'Activity', icon: TabActivity },
 		{ id: 'observe', label: 'Observe', icon: TabObserve },
 		{ id: 'network', label: 'Network', icon: TabNetwork },
+		{ id: 'security', label: 'Security', icon: TabSecurity },
 		{ id: 'settings', label: 'Settings', icon: TabSettings }
 	] as const;
 
@@ -900,8 +899,15 @@
 	}
 
 	let selectedPod = $state<string>('');
+	const selectedPodGone = $derived(
+		!!selectedPod &&
+			Array.isArray(deployment?.pods) &&
+			!deployment.pods.some((p) => p.name === selectedPod)
+	);
+	const replacementPod = $derived(
+		selectedPodGone ? (getNewestPod(deployment?.pods ?? [])?.name ?? null) : null
+	);
 	let selectedContainer = $state<string>('');
-	let manualPodSelection = $state(false);
 	let buildLogs = $state<string>('');
 	let buildLogsLoading = $state(false);
 
@@ -946,7 +952,6 @@
 		selectedPod = podName;
 		const pod = (deployment?.pods ?? []).find((p) => p.name === podName);
 		selectedContainer = containerName || pod?.containers?.[0]?.name || '';
-		manualPodSelection = true;
 	}
 
 	let scaleReplicas = $state(1);
@@ -1091,7 +1096,6 @@
 		if (deployment.buildStatus === 'succeeded') {
 			stopBuildPolling();
 			setTimeout(() => {
-				showBuildModal = false;
 				showBuildCard = false;
 				fetchDeployment();
 			}, 1500);
@@ -1441,28 +1445,11 @@
 			// Org quota defaults are fetched lazily when the resources tab is opened.
 		}
 
-		if (data.pods?.length) {
-			if (!manualPodSelection) {
-				const newest = getNewestPod(data.pods);
-				if (newest && newest.name !== selectedPod) {
-					selectedPod = newest.name;
-					selectedContainer = newest.containers?.[0]?.name || '';
-				}
-			} else if (!selectedPod) {
-				// First load, no manual selection yet
-				const newest = getNewestPod(data.pods);
-				if (newest) {
-					selectedPod = newest.name;
-					selectedContainer = newest.containers?.[0]?.name || '';
-				}
-			} else if (!data.pods.find((p: Pod) => p.name === selectedPod)) {
-				// Selected pod was deleted, fall back to newest
-				manualPodSelection = false;
-				const newest = getNewestPod(data.pods);
-				if (newest) {
-					selectedPod = newest.name;
-					selectedContainer = newest.containers?.[0]?.name || '';
-				}
+		if (data.pods?.length && !selectedPod) {
+			const newest = getNewestPod(data.pods);
+			if (newest) {
+				selectedPod = newest.name;
+				selectedContainer = newest.containers?.[0]?.name || '';
 			}
 		}
 		loading = false;
@@ -1729,7 +1716,6 @@
 
 	async function deleteIngress(ingressId: string) {
 		if (!deployment?.project?.id) return;
-		if (!confirm('Remove this domain? This cannot be undone.')) return;
 
 		deletingIngressId = ingressId;
 		try {
@@ -1759,7 +1745,8 @@
 		ingressId: string,
 		mode: string,
 		password?: string,
-		bypassPaths?: string[]
+		bypassPaths?: string[],
+		username?: string
 	) {
 		if (!deployment?.project?.id) return;
 		protectionUpdatingId = ingressId;
@@ -1769,7 +1756,7 @@
 				{
 					method: 'PUT',
 					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ mode, password, bypassPaths })
+					body: JSON.stringify({ mode, password, bypassPaths, username })
 				}
 			);
 			if (!response.ok) {
@@ -1787,6 +1774,7 @@
 				description: e instanceof Error ? e.message : 'Failed to update protection',
 				color: 'error'
 			});
+			throw e;
 		} finally {
 			protectionUpdatingId = null;
 		}
@@ -1983,15 +1971,16 @@
 	}
 
 	let logModalId = $state<string | null>(null);
-	let logModalRender = $state(false);
-	$effect(() => {
-		if (logModalId) logModalRender = true;
-	});
 	let logModalContent = $state<string | null>(null);
 	let logModalLoading = $state(false);
+	let logModalError = $state<string | null>(null);
+	const logModalLines = $derived(
+		ansiBuildLines(logModalContent ? sanitizeLogs(logModalContent) : '')
+	);
 
 	async function openLogModal(historyId: string) {
 		logModalId = historyId;
+		logModalError = null;
 		logModalContent = buildLogCache[historyId] ?? null;
 		if (logModalContent) return;
 		logModalLoading = true;
@@ -2001,13 +1990,11 @@
 			);
 			if (!response.ok) throw new Error('Failed to fetch deployment logs');
 			const data = await response.json();
-			const logs = data.logs || 'No logs available.';
+			const logs = data.logs || '';
 			buildLogCache[historyId] = logs;
 			logModalContent = logs;
 		} catch {
-			const fallback = 'Failed to load deployment logs.';
-			buildLogCache[historyId] = fallback;
-			logModalContent = fallback;
+			logModalError = "Couldn't load the build logs.";
 		} finally {
 			logModalLoading = false;
 		}
@@ -2017,6 +2004,7 @@
 		logModalId = null;
 		logModalContent = null;
 		logModalLoading = false;
+		logModalError = null;
 	}
 
 	let rollingBackId = $state<string | null>(null);
@@ -2606,7 +2594,6 @@
 		lastQueryData = null;
 		selectedPod = '';
 		selectedContainer = '';
-		manualPodSelection = false;
 		buildLogs = '';
 		accumulatedBuildLogs = null;
 		autoDeployFetched = false;
@@ -3144,6 +3131,8 @@
 							{activePods}
 							{resourcePressure}
 							bind:selectedPod
+							podGone={selectedPodGone}
+							{replacementPod}
 							bind:selectedContainer
 							bind:scaleReplicas
 							{consoleExpanded}
@@ -3214,14 +3203,7 @@
 							bind:isEditingServices={services.isEditing}
 							onCreateService={() => services.create()}
 							onSaveServicePorts={(id) => services.savePorts(id)}
-							onDeleteService={(id) => {
-								if (
-									confirm(
-										'Remove this service? Its ports and any routing through them will stop working immediately.'
-									)
-								)
-									services.delete(id);
-							}}
+							onDeleteService={(id) => services.delete(id)}
 							onToggleServiceEdit={(svc) => services.toggleEdit(svc)}
 							onTogglePortPublic={(s, p, e) => services.togglePortPublic(s, p, e)}
 							onResetNewServiceForm={() => services.resetNewForm()}
@@ -3283,6 +3265,12 @@
 								createWebhookToken();
 							}}
 							onDeleteToken={deleteWebhookToken}
+						/>
+					{:else if tab.id === 'security'}
+						<SecurityTab
+							deploymentId={deploymentId}
+							image={deployment?.image ?? null}
+							active={tabs.value === 'security'}
 						/>
 					{:else if tab.id === 'settings'}
 						<AppSettings
@@ -3425,7 +3413,7 @@
 	<ConfirmModal
 		bind:open={showDeleteModal}
 		title={`Delete "${deployment.displayName || deployment.name}"?`}
-		description="This will permanently <strong>delete this app</strong> and all its associated services and ingresses. This cannot be undone."
+		description="This permanently deletes <strong>this app</strong>, its pods, domains and build history. Attached volumes and their data are deleted too. This cannot be undone."
 		html
 		confirmLabel="Delete App"
 		onconfirm={deleteDeployment}
@@ -3446,48 +3434,16 @@
 	/>
 {/if}
 
-{#if logModalRender}
-	<div
-		class="log-modal-backdrop"
-		onclick={closeLogModal}
-		{@attach motionBackdrop(
-			() => !logModalId,
-			() => {}
-		)}
-	>
-		<div
-			class="log-modal"
-			onclick={(e) => e.stopPropagation()}
-			{@attach motionPopover({
-				closing: () => !logModalId,
-				onClosed: () => {
-					logModalRender = false;
-				},
-				from: { y: 12, scale: 0.96, opacity: 0 }
-			})}
-		>
-			<div class="log-modal-header">
-				<div class="log-modal-header-left">
-					<Terminal
-						size={16}
-						class="h-4 w-4"
-						style="color: var(--sidebar-text, #e0e0e0); opacity: 0.5;"
-					/>
-					<p class="log-modal-title">Deployment Logs</p>
-				</div>
-				<button class="log-modal-close" onclick={closeLogModal}>
-					<X class="h-4 w-4" />
-				</button>
-			</div>
-			<div class="log-modal-body">
-				{#if logModalLoading}
-					<div class="log-modal-loading">
-						<Loader2 class="h-5 w-5 animate-spin" style="color: rgba(255,255,255,0.3);" />
-					</div>
-				{:else if logModalContent}
-					<BuildSteps logs={logModalContent} fill />
-				{/if}
-			</div>
-		</div>
+<Modal bind:open={() => !!logModalId, (v) => !v && closeLogModal()} title="Build logs" size="xl">
+	<div class="build-log-body">
+		<LogViewer
+			lines={logModalLines}
+			loading={logModalLoading}
+			error={logModalError}
+			surface="dark"
+			toolbar
+			sourceLabel="Step"
+			filename="{deployment?.name ?? 'app'}-build"
+		/>
 	</div>
-{/if}
+</Modal>

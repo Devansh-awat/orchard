@@ -187,7 +187,13 @@
 <!-- Build Progress Modal -->
 <Modal
 	bind:open={showBuildModal}
-	title="Redeploying {deployment?.name ?? 'app'}"
+	title={canCancelBuild
+		? `Redeploying ${deployment?.name ?? 'app'}`
+		: buildModalStatus === 'failed'
+			? 'Build failed'
+			: buildModalStatus === 'canceled' || buildModalStatus === 'cancelled'
+				? 'Build canceled'
+				: 'Build finished'}
 	size="lg"
 	onclose={onMinimizeBuildModal}
 >
@@ -212,9 +218,9 @@
 	/>
 
 	{#snippet footer()}
-		{#if buildModalStatus === 'failed'}
+		{#if !canCancelBuild}
 			<Button variant="secondary" onclick={onCloseBuildModal}>Close</Button>
-		{:else if canCancelBuild}
+		{:else}
 			<Button variant="danger" loading={cancelingBuild} onclick={onCancelBuild}>
 				{#if cancelingBuild}
 					Cancelling...

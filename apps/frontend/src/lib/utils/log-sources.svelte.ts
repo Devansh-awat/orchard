@@ -1,22 +1,17 @@
 import { apiFetch } from '$lib/stores';
-import { ansiToHtmlLines } from '$lib/utils/format';
+import { ansiToHtmlLines } from './format';
+import { buildLogLines, textLogLines, type LogLine } from './log-lines';
 
-export interface LogLine {
-	key: string;
-	html: string;
-	level?: 'debug' | 'info' | 'warn' | 'error';
-	detail?: string[];
-	lineNo?: number;
-}
+export type { LogLine } from './log-lines';
+
+export const ansiLine = (line: string) => ansiToHtmlLines(line)[0];
 
 export function ansiLogLines(text: string): LogLine[] {
-	if (!text) return [];
-	const seen = new Map<string, number>();
-	return ansiToHtmlLines(text).map((html) => {
-		const n = seen.get(html) ?? 0;
-		seen.set(html, n + 1);
-		return { key: n ? `${html}#${n}` : html, html };
-	});
+	return textLogLines(text, ansiLine);
+}
+
+export function ansiBuildLines(raw: string | null | undefined): LogLine[] {
+	return buildLogLines(raw, ansiLine);
 }
 
 const LOG_PAGE_SIZE = 500;

@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { buildPhases, formatPhase } from '$lib/components/deployment/build-phases';
-	import { Loader2, Check, X, ChevronDown, ChevronUp, Github, Container } from 'lucide-svelte';
+	import { Loader2, Check, X, Github, Container } from 'lucide-svelte';
 	import { flip } from 'svelte/animate';
 	import { backOut } from 'svelte/easing';
-	import BuildSteps from './BuildSteps.svelte';
+	import LogViewer from './ui/LogViewer.svelte';
+	import { ansiBuildLines } from '$lib/utils/log-sources.svelte';
 	import { Alert } from '$lib/components/ui';
 
 	interface Props {
@@ -81,20 +82,7 @@
 
 	const sanitizedBuildLogs = $derived(sanitizeGrowing(buildLogs));
 
-	let showLogs = $state(true); // Default to showing logs
-	let failureShown = false;
-	$effect(() => {
-		if (buildStatus === 'failed') {
-			if (!failureShown) {
-				failureShown = true;
-				showLogs = true;
-			}
-		} else {
-			failureShown = false;
-		}
-	});
-	let logsPanel: HTMLDivElement | undefined = $state();
-	let previousLogsLength = $state(0);
+	const buildLines = $derived(ansiBuildLines(sanitizedBuildLogs));
 	let currentTime = $state(Date.now());
 
 	$effect(() => {
@@ -109,19 +97,6 @@
 	function getStepTimestamp(stepId: string): number | null {
 		return buildStepTimestamps?.[stepId] ?? null;
 	}
-
-	// Auto-scroll to bottom when new logs arrive
-	$effect(() => {
-		if (sanitizedBuildLogs && logsPanel && sanitizedBuildLogs.length > previousLogsLength) {
-			// Use setTimeout to ensure DOM has updated
-			setTimeout(() => {
-				if (logsPanel) {
-					logsPanel.scrollTop = logsPanel.scrollHeight;
-				}
-			}, 0);
-		}
-		previousLogsLength = sanitizedBuildLogs?.length ?? 0;
-	});
 
 	// Define steps for GitHub deployments
 	const githubSteps = [
@@ -167,7 +142,10 @@
 			return 'pending';
 		}
 		if (index < currentStepIndex) return 'completed';
-		if (index === currentStepIndex) return 'current';
+		if (index === currentStepIndex) {
+			const finished = steps[index]?.id === 'complete' && buildStatus !== 'building';
+			return finished ? 'completed' : 'current';
+		}
 		return 'pending';
 	}
 
@@ -325,30 +303,19 @@
 	{/if}
 
 	{#if buildLogs}
-		<div class="mt-4">
-			<button
-				onclick={() => (showLogs = !showLogs)}
-				class="logs-toggle flex items-center gap-2 text-sm font-medium transition-colors"
-			>
-				{#if showLogs}
-					<ChevronUp class="h-4 w-4" />
-					{buildStatus === 'failed' ? 'Hide last deployment logs' : 'Hide logs'}
-				{:else}
-					<ChevronDown class="h-4 w-4" />
-					{buildStatus === 'failed' ? 'Show last deployment logs' : 'Show logs'}
-				{/if}
-			</button>
-
-			{#if showLogs}
-				<div bind:this={logsPanel} class="mt-2">
-					<BuildSteps logs={sanitizedBuildLogs} />
-				</div>
-			{/if}
+		<div class="build-log">
+			<LogViewer lines={buildLines} surface="dark" toolbar sourceLabel="Step" filename="build" />
 		</div>
 	{/if}
 </div>
 
 <style>
+	.build-log {
+		display: flex;
+		flex-direction: column;
+		height: 26rem;
+		margin-top: 1rem;
+	}
 	.deployment-progress {
 		color: var(--center-channel-color);
 	}

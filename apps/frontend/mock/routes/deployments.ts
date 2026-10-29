@@ -354,8 +354,18 @@ export function deploymentDetail(store: Store, d: MockDeployment) {
 			updatedAt: d.updatedAt
 		})),
 		imageHistory: imageHistory(store, d),
-		creator: creator(store.user(d.creatorId))
+		creator: creator(store.user(d.creatorId)),
+		...settingsOf(d)
 	};
+}
+
+function settingsOf(d: MockDeployment): Record<string, unknown> {
+	return (d as MockDeployment & { settings?: Record<string, unknown> }).settings ?? {};
+}
+
+function remember(d: MockDeployment, patch: Record<string, unknown>) {
+	const held = d as MockDeployment & { settings?: Record<string, unknown> };
+	held.settings = { ...held.settings, ...patch };
 }
 
 function timeline(store: Store, d: MockDeployment) {
@@ -625,7 +635,7 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 		withDep((d) => ({
 			enabled: d.autoDeployEnabled,
 			branch: d.githubBranch ?? 'main',
-			paths: [],
+			paths: (settingsOf(d).autoDeployPaths as string[] | undefined) ?? [],
 			appInstalled: true,
 			linked: true,
 			deliverable: true,
@@ -1031,6 +1041,7 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 			withDep((d, { body }) => {
 				if (body?.buildType) d.buildType = body.buildType;
 				if (body?.framework !== undefined) d.framework = body.framework;
+				remember(d, body ?? {});
 				changed(d);
 				return { ...deploymentDetail(store, d), ...(body ?? {}) };
 			})
@@ -1039,7 +1050,11 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 	for (const path of ['strategy', 'disruption-budget', 'pull-policy']) {
 		r.patch(
 			`/deployments/:id/${path}`,
-			withDep((d) => {
+			withDep((d, { body }) => {
+				if (body?.strategy) remember(d, { deployStrategy: body.strategy });
+				if (body?.minAvailable !== undefined) remember(d, { pdbMinAvailable: body.minAvailable });
+				if (body && 'imagePullPolicy' in body)
+					remember(d, { imagePullPolicy: body.imagePullPolicy });
 				changed(d);
 				return { ok: true };
 			})
@@ -1050,6 +1065,7 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 		withDep((d, { body }) => {
 			d.autoDeployEnabled = true;
 			if (body?.branch) d.githubBranch = String(body.branch);
+			remember(d, { autoDeployPaths: body?.paths ?? [] });
 			changed(d);
 			return { ...deploymentDetail(store, d), autoDeployPaths: body?.paths ?? [] };
 		})

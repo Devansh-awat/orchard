@@ -22,6 +22,8 @@
 		activePods,
 		resourcePressure,
 		selectedPod = $bindable(),
+		podGone = false,
+		replacementPod = null,
 		selectedContainer = $bindable(),
 		scaleReplicas = $bindable(),
 		consoleExpanded,
@@ -57,6 +59,8 @@
 			memRatio: number | null;
 		};
 		selectedPod: string;
+		podGone?: boolean;
+		replacementPod?: string | null;
 		selectedContainer: string;
 		scaleReplicas: number;
 		consoleExpanded: boolean;
@@ -115,11 +119,19 @@
 
 	let crashLogsFor: string | null = null;
 
+	function backingOff(pod: string, container: string) {
+		const found = (deployment.pods ?? []).find((p: Pod) => p.name === pod) as
+			| (Pod & { containers?: { name: string; reason?: string | null }[] })
+			| undefined;
+		return found?.containers?.find((c) => c.name === container)?.reason === 'CrashLoopBackOff';
+	}
+
 	$effect(() => {
 		const pod = selectedPod;
 		const container = selectedContainer;
 		if (!pod || !container) return;
-		const wantsCrash = crashLogsFor === `${pod}/${container}`;
+		const wantsCrash =
+			crashLogsFor === `${pod}/${container}` || untrack(() => backingOff(pod, container));
 		crashLogsFor = null;
 		untrack(() => {
 			showPreviousLogs = wantsCrash;
@@ -134,7 +146,11 @@
 		const id = deployment?.id;
 		const pod = selectedPod;
 		const following =
-			!logsPaused && !showPreviousLogs && activeConsoleTab === 'logs' && visibility === 'visible';
+			!logsPaused &&
+			!podGone &&
+			!showPreviousLogs &&
+			activeConsoleTab === 'logs' &&
+			visibility === 'visible';
 		if (!following || !id || !pod || !selectedContainer) return;
 		let wake: ReturnType<typeof setTimeout> | null = null;
 		let down: ReturnType<typeof setTimeout> | null = null;
@@ -377,6 +393,8 @@
 				{#if activeConsoleTab === 'logs'}
 					<div class="logs">
 						<LogViewer
+							toolbar
+							filename={selectedPod || 'logs'}
 							lines={logSource.lines}
 							loading={logSource.loading}
 							loadingMore={logSource.loadingMore}
@@ -392,9 +410,20 @@
 								</div>
 							{/snippet}
 						</LogViewer>
-						{#if selectedPod && !showPreviousLogs && (logsPaused || logStream === 'down')}
+						{#if selectedPod && !showPreviousLogs && (podGone || logsPaused || logStream === 'down')}
 							<div class="logs-notice" role="status">
-								{#if logsPaused}
+								{#if podGone}
+									<StatusDot meta={statusMeta('neutral', 'Gone')} size={8} />
+									<span>{podLabel(selectedPod)} is gone</span>
+									{#if replacementPod}
+										<Button
+											variant="secondary"
+											size="sm"
+											onclick={() => replacementPod && onSelectLogsPod(replacementPod)}
+											>Show {podLabel(replacementPod)}</Button
+										>
+									{/if}
+								{:else if logsPaused}
 									<StatusDot meta={statusMeta('neutral', 'Paused')} size={8} />
 									<span>Paused</span>
 									<Button variant="secondary" size="sm" onclick={() => (logsPaused = false)}

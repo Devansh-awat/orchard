@@ -280,6 +280,8 @@
 			</div>
 			<LogViewer
 				surface="dark"
+				toolbar
+				filename={podName}
 				lines={logSource.lines}
 				loading={logSource.loading}
 				loadingMore={logSource.loadingMore}
