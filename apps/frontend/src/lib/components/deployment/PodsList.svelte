@@ -1,6 +1,13 @@
 <script lang="ts">
-	import { RotateCcw } from 'lucide-svelte';
-	import { Button, SectionCard, StatusDot, Stepper, statusMeta } from '$lib/components/ui';
+	import { ChevronDown } from 'lucide-svelte';
+	import {
+		Button,
+		PopoverPanel,
+		SectionCard,
+		StatusDot,
+		Stepper,
+		statusMeta
+	} from '$lib/components/ui';
 	import type { StatusMeta } from '$lib/components/ui';
 	import Tooltip from '$lib/components/ui/Tooltip.svelte';
 	import { toasts } from '$lib/stores';
@@ -171,7 +178,10 @@
 					: restarts
 						? `restarted ${restarts} ${restarts === 1 ? 'time' : 'times'}`
 						: null;
-				return { pod, name: podLabel(pod.name), state, restarts, detail };
+				const tip = [state.hint, detail && detail[0].toUpperCase() + detail.slice(1)]
+					.filter(Boolean)
+					.join('. ');
+				return { pod, name: podLabel(pod.name), state, restarts, detail, tip };
 			})
 			.sort((a, b) => (RANK[a.state.meta.kind] ?? 5) - (RANK[b.state.meta.kind] ?? 5))
 	);
@@ -196,43 +206,61 @@
 	}
 </script>
 
-{#snippet replicaBar()}
-	<div class="replicas">
-		<div class="replicas-copy">
-			<span class="replicas-label" id="{deploymentId}-replicas">Replicas</span>
-			<span class="replicas-hint"
-				>{pending ? `Running ${replicas} now` : 'How many pods to keep running'}</span
-			>
-		</div>
-		<div class="replicas-controls">
-			{#if pending}
-				<Button
-					variant="ghost"
-					size="sm"
-					icon={RotateCcw}
-					label="Undo"
-					disabled={scaling}
-					onclick={reset}
-				/>
-			{/if}
-			<Stepper
-				bind:value={scaleReplicas}
-				min={0}
-				max={20}
-				label="Replicas"
-				disabled={scaling}
-				onchange={onChange}
-			/>
-			{#if pending}
-				<Button variant="primary" size="sm" loading={scaling} onclick={onScale}>Apply</Button>
-			{/if}
-		</div>
-	</div>
-{/snippet}
-
-<SectionCard title="Pods" size="sm" flush class="pods" footer={replicaBar}>
+<SectionCard title="Pods" size="sm" flush fill class="pods">
 	{#snippet actions()}
-		<span class="summary" class:summary--bad={ready < rows.length}>{summary}</span>
+		{#if ready < rows.length || drift?.stopped}
+			<span class="summary">{summary}</span>
+		{/if}
+		<PopoverPanel placement="bottom-end" class="scale">
+			{#snippet trigger(attrs)}
+				<Button {...attrs} variant="secondary" size="sm" iconRight={ChevronDown}
+					>{replicas} {replicas === 1 ? 'replica' : 'replicas'}</Button
+				>
+			{/snippet}
+			{#snippet children({ close })}
+				<div class="scale-body">
+					<div class="scale-copy">
+						<span class="scale-title">Replicas</span>
+						<span class="scale-hint"
+							>How many pods to keep running. More pods share the load and keep the app up if one
+							crashes.</span
+						>
+					</div>
+					<div class="scale-row">
+						<Stepper
+							bind:value={scaleReplicas}
+							min={0}
+							max={20}
+							label="Replicas"
+							disabled={scaling}
+							onchange={onChange}
+						/>
+						<span class="scale-now">{pending ? `${replicas} now` : 'Current'}</span>
+					</div>
+					<div class="scale-actions">
+						<Button
+							variant="ghost"
+							size="sm"
+							disabled={scaling}
+							onclick={() => {
+								reset();
+								close();
+							}}>Cancel</Button
+						>
+						<Button
+							variant="primary"
+							size="sm"
+							disabled={!pending}
+							loading={scaling}
+							onclick={() => {
+								onScale();
+								close();
+							}}>{scaleReplicas === 0 ? 'Stop all pods' : `Scale to ${scaleReplicas}`}</Button
+						>
+					</div>
+				</div>
+			{/snippet}
+		</PopoverPanel>
 		{#if __ORCHARD_MOCK__}
 			<PodSimulator {deploymentId} {podLabel} onchange={onSimulated} />
 		{/if}
@@ -262,25 +290,16 @@
 					<span class="dot" {@attach stateEcho(() => r.state.meta.kind)}>
 						<StatusDot meta={r.state.meta} size={8} />
 					</span>
-					<span class="text">
-						{#if r.state.hint}
-							<Tooltip text={r.state.hint} delay={200}>
-								<span class="state state--{r.state.meta.kind}">{r.state.label}</span>
-							</Tooltip>
-						{:else}
-							<span class="state state--{r.state.meta.kind}">{r.state.label}</span>
-						{/if}
-						<span class="sub">
-							<span class="mono">{r.name}</span>{#if r.detail}<span class="sep">·</span
-								>{r.detail}{/if}
-						</span>
-					</span>
-					<span class="usage" aria-label="CPU and memory">
-						{#if r.pod.cpuUsage}
-							<span>{formatCpu(r.pod.cpuUsage)}</span>
-							<span>{formatMemory(r.pod.memoryUsage)}</span>
-						{/if}
-					</span>
+					<Tooltip text={r.tip || r.state.label} delay={200}>
+						<span class="state state--{r.state.meta.kind}"
+							>{r.state.label}{#if r.restarts && r.state.meta.kind !== 'success'}<span
+									class="restarts">{r.restarts}×</span
+								>{/if}</span
+						>
+					</Tooltip>
+					<span class="id">{r.name}</span>
+					<span class="num">{r.pod.cpuUsage ? formatCpu(r.pod.cpuUsage) : '—'}</span>
+					<span class="num">{r.pod.cpuUsage ? formatMemory(r.pod.memoryUsage) : '—'}</span>
 					<span class="menu">
 						<PodMenu
 							bind:this={menus[r.pod.name]}
@@ -306,34 +325,23 @@
 <style>
 	.summary {
 		font-size: var(--text-footnote);
-		color: var(--text-muted);
-		font-variant-numeric: tabular-nums;
-	}
-	.summary--bad {
 		color: var(--status-warning);
+		font-variant-numeric: tabular-nums;
 	}
 	.list {
 		margin: 0;
-		padding: 0;
+		padding: 0 0 0.5rem;
 		list-style: none;
 	}
 	.pod {
 		position: relative;
 		display: grid;
-		grid-template-columns: 0.5rem minmax(0, 1fr) auto 1.75rem;
+		grid-template-columns: 0.5rem minmax(0, 1fr) 3.25rem 3rem 3.75rem 1.75rem;
 		align-items: center;
-		column-gap: 0.75rem;
-		min-height: 3.25rem;
-		padding: 0.5rem 0.8125rem 0.5rem 1.25rem;
-	}
-	.pod + .pod::before {
-		content: '';
-		position: absolute;
-		top: 0;
-		left: 1.25rem;
-		right: 1.25rem;
-		height: 1px;
-		background: var(--border-default);
+		column-gap: 0.625rem;
+		height: 2.25rem;
+		padding: 0 0.8125rem 0 1.25rem;
+		cursor: pointer;
 	}
 	.pod:hover {
 		background: var(--bg-hover);
@@ -341,12 +349,6 @@
 	.pod--selected,
 	.pod--selected:hover {
 		background: var(--bg-active);
-	}
-	.pod:hover::before,
-	.pod:hover + .pod::before,
-	.pod--selected::before,
-	.pod--selected + .pod::before {
-		opacity: 0;
 	}
 	.hit {
 		position: absolute;
@@ -360,13 +362,11 @@
 		outline-offset: -2px;
 	}
 	.dot,
-	.text,
-	.usage,
+	.state,
+	.id,
+	.num,
 	.menu {
 		position: relative;
-	}
-	.pod {
-		cursor: pointer;
 	}
 	.dot {
 		display: grid;
@@ -375,22 +375,17 @@
 		height: 0.5rem;
 		border-radius: 50%;
 	}
-	.text {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-		min-width: 0;
-	}
 	.state {
-		width: fit-content;
-		max-width: 100%;
+		display: flex;
+		align-items: baseline;
+		gap: 0.375rem;
+		min-width: 0;
 		overflow: hidden;
 		font-size: var(--text-callout);
 		line-height: var(--lh-callout);
-		font-weight: var(--weight-medium);
 		color: var(--text-default);
-		text-overflow: ellipsis;
 		white-space: nowrap;
+		text-overflow: ellipsis;
 	}
 	.state--error {
 		color: var(--status-error);
@@ -402,70 +397,72 @@
 	.state--progress {
 		color: var(--status-progress);
 	}
-	.sub {
-		display: flex;
-		align-items: baseline;
-		gap: 0.375rem;
-		overflow: hidden;
+	.restarts {
+		font-family: var(--font-mono);
 		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		color: var(--text-muted);
+		font-weight: var(--weight-regular);
+		opacity: 0.85;
+	}
+	.id,
+	.num {
+		font-family: var(--font-mono);
+		font-size: var(--text-caption);
+		font-variant-numeric: tabular-nums;
 		white-space: nowrap;
 	}
-	.mono {
-		font-family: var(--font-mono);
-	}
-	.sep {
+	.id {
 		color: var(--text-faint);
 	}
-	.usage {
-		display: flex;
-		flex-direction: column;
-		align-items: flex-end;
-		gap: 0.25rem;
-		font-family: var(--font-mono);
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
+	.num {
+		text-align: right;
 		color: var(--text-muted);
-		font-variant-numeric: tabular-nums;
 	}
 	.menu {
 		display: flex;
 		justify-content: flex-end;
 	}
 	.empty {
-		padding: 1.5rem 1.25rem;
+		padding: 1rem 1.25rem 1.25rem;
 		font-size: var(--text-callout);
 		color: var(--text-muted);
-		text-align: center;
 	}
-	.replicas {
-		display: flex;
-		flex: 1 1 auto;
-		align-items: center;
-		justify-content: space-between;
-		gap: 1rem;
-		min-width: 0;
+	:global(.scale) {
+		width: 17rem;
+		padding: 1rem;
 	}
-	.replicas-copy {
+	.scale-body {
 		display: flex;
 		flex-direction: column;
-		gap: 0.125rem;
-		min-width: 0;
+		gap: 1rem;
 	}
-	.replicas-label {
-		font-size: var(--text-callout);
+	.scale-copy {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+	.scale-title {
+		font-size: var(--text-headline);
 		font-weight: var(--weight-medium);
 		color: var(--text-default);
 	}
-	.replicas-hint {
-		font-size: var(--text-caption);
+	.scale-hint {
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--text-muted);
+		text-wrap: pretty;
 	}
-	.replicas-controls {
+	.scale-row {
 		display: flex;
 		align-items: center;
+		gap: 0.75rem;
+	}
+	.scale-now {
+		font-size: var(--text-footnote);
+		color: var(--text-muted);
+	}
+	.scale-actions {
+		display: flex;
+		justify-content: flex-end;
 		gap: 0.5rem;
-		flex-shrink: 0;
 	}
 </style>

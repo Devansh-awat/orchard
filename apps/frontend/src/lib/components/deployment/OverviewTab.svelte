@@ -434,6 +434,10 @@
 		min-width: 0;
 		min-height: 0;
 	}
+	.side > :global(.pods) {
+		flex: 0 1 auto;
+		max-height: 16.5rem;
+	}
 	.bar {
 		display: flex;
 		align-items: center;

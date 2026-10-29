@@ -52,6 +52,7 @@
 	} from 'lucide-svelte';
 	import Breadcrumbs from '$lib/components/ui/Breadcrumbs.svelte';
 	import PageTabs from '$lib/components/ui/PageTabs.svelte';
+	import GoldenReticle from '$lib/components/ui/GoldenReticle.svelte';
 	import { Clock, Terminal } from '@jis3r/icons';
 	import { scale, fade, slide } from '$lib/utils/transitions';
 	import { animate } from 'motion';
@@ -2928,6 +2929,8 @@
 		stopBuildPolling();
 	}
 </script>
+
+{#if $page.url.searchParams.has('guides')}<GoldenReticle />{/if}
 
 <div
 	class="deployment-page dep-shell p-6 max-w-400 mx-auto"

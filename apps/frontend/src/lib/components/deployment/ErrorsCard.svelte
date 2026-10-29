@@ -2,6 +2,8 @@
 	import { CircleCheck } from 'lucide-svelte';
 	import { Button, SectionCard } from '$lib/components/ui';
 	import RelativeTime from '$lib/components/ui/RelativeTime.svelte';
+	import Sparkline from '$lib/components/ui/Sparkline.svelte';
+	import NumberRoll from '$lib/components/ui/NumberRoll.svelte';
 	import { apiFetch } from '$lib/stores';
 
 	type ErrorGroup = {
@@ -22,6 +24,7 @@
 	} = $props();
 
 	let groups = $state<ErrorGroup[] | null>(null);
+	let rates = $state<number[]>([]);
 
 	async function load(id: string) {
 		try {
@@ -36,26 +39,53 @@
 		}
 	}
 
+	async function loadRate(id: string) {
+		const end = Date.now();
+		try {
+			const res = await apiFetch(
+				`/apiv1/observe/deployments/${encodeURIComponent(id)}/http-metrics?start=${end - 30 * 60_000}&end=${end}&step=60000`
+			);
+			if (!res.ok) return;
+			const body = await res.json();
+			rates = ((body?.errorRate ?? []) as { y: number }[]).map((p) => p.y);
+		} catch {
+			return;
+		}
+	}
+
 	$effect(() => {
 		const id = deploymentId;
 		if (!id) return;
 		load(id);
+		loadRate(id);
 		const timer = setInterval(() => {
-			if (!document.hidden) load(id);
+			if (document.hidden) return;
+			load(id);
+			loadRate(id);
 		}, 60_000);
 		return () => clearInterval(timer);
 	});
 
-	const total = $derived((groups ?? []).reduce((sum, g) => sum + g.count, 0));
+	const rate = $derived(rates.length ? rates[rates.length - 1] : null);
+	const tone = $derived(
+		rate == null ? 'neutral' : rate >= 5 ? 'error' : rate >= 1 ? 'warning' : 'neutral'
+	);
 </script>
 
 <SectionCard title="Errors" size="sm" flush fill class="errors">
 	{#snippet actions()}
-		{#if groups?.length}
-			<span class="total">{total.toLocaleString()} total</span>
-		{/if}
 		<Button variant="ghost" size="sm" onclick={onopen}>All errors</Button>
 	{/snippet}
+	{#if rate != null}
+		<div class="rate rate--{tone}">
+			<span class="rate-label">Error rate</span>
+			<span class="rate-value"><NumberRoll value={rate.toFixed(2)} />%</span>
+			<span class="rate-of">of requests</span>
+			<span class="rate-trend">
+				<Sparkline values={rates} height={24} {tone} label="Error rate over the last 30 minutes" />
+			</span>
+		</div>
+	{/if}
 	{#if groups && groups.length === 0}
 		<p class="clear"><CircleCheck size={16} aria-hidden="true" />No new errors</p>
 	{:else if groups}
@@ -79,10 +109,40 @@
 </SectionCard>
 
 <style>
-	.total {
+	.rate {
+		display: grid;
+		grid-template-columns: 4rem auto minmax(0, 1fr) 5rem;
+		align-items: center;
+		column-gap: 0.75rem;
+		padding: 0.625rem 1.25rem;
+		box-shadow: inset 0 -1px 0 var(--border-default);
+	}
+	.rate-label {
 		font-size: var(--text-footnote);
 		color: var(--text-muted);
+		white-space: nowrap;
+	}
+	.rate-value {
+		display: inline-flex;
+		align-items: baseline;
+		font-size: var(--text-headline);
+		line-height: var(--lh-headline);
+		font-weight: var(--weight-semibold);
 		font-variant-numeric: tabular-nums;
+		color: var(--text-default);
+	}
+	.rate--warning .rate-value {
+		color: var(--status-warning);
+	}
+	.rate--error .rate-value {
+		color: var(--status-error);
+	}
+	.rate-of {
+		font-size: var(--text-caption);
+		color: var(--text-muted);
+	}
+	.rate-trend {
+		min-width: 0;
 	}
 	.list {
 		margin: 0;

@@ -284,7 +284,8 @@ Three-level hierarchy: **Org cap** → **Member allowance** → **Deployment req
   console takes the main column at full height; the side column (1.618 : 1) stacks `PodsList` (state
   in words, `PodMenu` per row, a Replicas footer), `UsageCard` (CPU and memory against their limits,
   sparklines seeded from `/metrics` then extended by SSE) and `ErrorsCard` (top error groups from
-  `/observe/.../errors`, works for apps with no web traffic). Below that size it scrolls. Nodes and
+  `/observe/.../errors`, led by the 5xx error rate when the app serves HTTP). Add `?guides=1` to
+  draw the golden-ratio `GoldenReticle` over the page when checking alignment. Below that size it scrolls. Nodes and
   other infrastructure stay hidden.
 - Problems show as one `AlertStack` line above the panels; it expands to the full list.
 - Live values land instantly; motion is the decorative layer on top (`NumberRoll`, `stateEcho` on pod

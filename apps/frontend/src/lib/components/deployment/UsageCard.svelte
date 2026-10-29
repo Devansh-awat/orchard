@@ -3,6 +3,8 @@
 	import NumberRoll from '$lib/components/ui/NumberRoll.svelte';
 	import Sparkline from '$lib/components/ui/Sparkline.svelte';
 	import { formatCpu, formatMemory } from '$lib/utils/format';
+
+	const MIB = 1024 * 1024;
 	import type { UsageHistory } from './usage-history.svelte';
 
 	let {
@@ -27,6 +29,8 @@
 
 	type Tone = 'neutral' | 'warning' | 'error';
 
+	let scrub = $state<{ id: string; index: number } | null>(null);
+
 	function pressure(ratio: number | null): Tone {
 		if (ratio == null) return 'neutral';
 		if (ratio >= 0.95) return 'error';
@@ -39,6 +43,9 @@
 			id: 'cpu',
 			label: 'CPU',
 			value: formatCpu(cpu ?? 0),
+			at: (v: number) => formatCpu(Math.round(v)),
+			limitRaw: cpuLimit,
+			scale: 1,
 			limit: cpuLimit != null ? formatCpu(cpuLimit) : null,
 			ratio: cpuRatio,
 			tone: pressure(cpuRatio),
@@ -48,6 +55,9 @@
 			id: 'mem',
 			label: 'Memory',
 			value: formatMemory(mem ?? 0),
+			at: (v: number) => formatMemory(v * MIB),
+			limitRaw: memLimit,
+			scale: MIB,
 			limit: memLimit != null ? formatMemory(memLimit) : null,
 			ratio: memRatio,
 			tone: pressure(memRatio),
@@ -62,11 +72,18 @@
 	{/snippet}
 	<ul class="rows">
 		{#each rows as row (row.id)}
+			{@const point = scrub?.id === row.id ? row.values[scrub.index] : undefined}
 			<li class="row row--{row.tone}">
 				<span class="label">{row.label}</span>
-				<span class="value"><NumberRoll value={row.value} /></span>
+				<span class="value"
+					>{#if point !== undefined}{row.at(point)}{:else}<NumberRoll
+							value={row.value}
+						/>{/if}</span
+				>
 				<span class="share">
-					{#if row.ratio != null && row.limit}
+					{#if point !== undefined && row.limitRaw}
+						{Math.round(((point * row.scale) / row.limitRaw) * 100)}% of {row.limit}
+					{:else if row.ratio != null && row.limit}
 						{Math.round(Math.min(row.ratio, 9.99) * 100)}% of {row.limit}
 					{:else}
 						No limit
@@ -78,6 +95,8 @@
 						height={24}
 						tone={row.tone}
 						label="{row.label} over the last 30 minutes"
+						interactive
+						onScrub={(i) => (scrub = i === null ? null : { id: row.id, index: i })}
 					/>
 				</span>
 				{#if row.ratio != null}
@@ -99,7 +118,7 @@
 <style>
 	.rows {
 		margin: 0;
-		padding: 0 0 0.125rem;
+		padding: 0 0 0.5rem;
 		list-style: none;
 	}
 	.row {
