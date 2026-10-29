@@ -421,6 +421,8 @@ export const routes: GeneratedRoute[] = [
   { method: 'GET', path: '/observe/deployments/:id/logs/structured', auth: 'authenticated' },
   { method: 'GET', path: '/observe/deployments/:id/overview', auth: 'authenticated' },
   { method: 'GET', path: '/observe/deployments/:id/pod-health', auth: 'authenticated' },
+  { method: 'GET', path: '/observe/deployments/:id/requests', auth: 'authenticated' },
+  { method: 'GET', path: '/observe/deployments/:id/requests/stream', auth: 'authenticated' },
   { method: 'GET', path: '/observe/deployments/:id/runtime', auth: 'authenticated' },
   { method: 'GET', path: '/observe/deployments/:id/timeline', auth: 'authenticated' },
   { method: 'GET', path: '/observe/deployments/:id/volumes', auth: 'authenticated' },

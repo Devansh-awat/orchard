@@ -34,7 +34,7 @@ export interface AccessOptions extends TimeWindow {
 export interface ContextOptions {
   namespace: string;
   app: string;
-  pod: string;
+  pod?: string | null;
   at: TimeInput;
   beforeMs: number;
   afterMs: number;
@@ -185,6 +185,19 @@ export function buildClients(opts: AccessOptions, n = 10): { ips: string; agents
   };
 }
 
+export function buildLatencySeries(opts: AccessOptions, stepMs: number): string {
+  const step = Math.max(1, Math.round(stepMs / 1000));
+  return (
+    `${accessScope(opts)} | stats by (_time:${step}s) count() requests, count() if (status:>=500) errors, ` +
+    'quantile(0.5, duration_ms) p50, quantile(0.95, duration_ms) p95, quantile(0.99, duration_ms) p99' +
+    ' | sort by (_time)'
+  );
+}
+
+export function buildRecent(opts: AccessOptions, n = 100): string {
+  return `${accessScope(opts)} | sort by (_time desc) | limit ${count('n', n, 2000)}`;
+}
+
 export function buildSlowest(opts: AccessOptions, n = 20): string {
   return `${accessScope(opts)} | sort by (duration_ms desc) | limit ${count('n', n, 1000)}`;
 }
@@ -200,9 +213,10 @@ export function buildContext(opts: ContextOptions): string {
   const at = toTime(opts.at, 'at').getTime();
   const start = at - windowMs('beforeMs', opts.beforeMs);
   const end = at + windowMs('afterMs', opts.afterMs);
+  const pod = opts.pod ? ` pod:=${quote(opts.pod)}` : '';
   return (
-    `${scope({ namespace: opts.namespace, app: opts.app, kind: 'app' })} ${timeRange(start, end)} ` +
-    `pod:=${quote(requireValue('pod', opts.pod))} | sort by (_time)${limitPipe(opts.limit)}`
+    `${scope({ namespace: opts.namespace, app: opts.app, kind: 'app' })} ${timeRange(start, end)}` +
+    `${pod} | sort by (_time)${limitPipe(opts.limit)}`
   );
 }
 

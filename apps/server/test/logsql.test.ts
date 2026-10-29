@@ -247,10 +247,10 @@ test('buildContext reads one pod around a moment, oldest first', () => {
   );
 });
 
-test('buildContext validates its span and pod', () => {
+test('buildContext validates its span and quotes the pod', () => {
   const base = { namespace: 'ns', app: 'web', pod: 'p', at: span.start, beforeMs: 0, afterMs: 0 };
   assert.ok(buildContext({ ...base, pod: 'x") | delete' }).includes('pod:="x\\") | delete"'));
-  assert.throws(() => buildContext({ ...base, pod: '' }), LogQueryError);
+  assert.ok(!buildContext({ ...base, pod: null }).includes('pod:='));
   assert.throws(() => buildContext({ ...base, beforeMs: -1 }), LogQueryError);
   assert.throws(() => buildContext({ ...base, afterMs: Number.POSITIVE_INFINITY }), LogQueryError);
   assert.throws(() => buildContext({ ...base, afterMs: 7 * 60 * 60 * 1000 }), LogQueryError);

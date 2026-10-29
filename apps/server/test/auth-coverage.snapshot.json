@@ -263,6 +263,8 @@
   "GET /observe/deployments/:id/logs/structured": "authenticated",
   "GET /observe/deployments/:id/overview": "authenticated",
   "GET /observe/deployments/:id/pod-health": "authenticated",
+  "GET /observe/deployments/:id/requests": "authenticated",
+  "GET /observe/deployments/:id/requests/stream": "authenticated",
   "GET /observe/deployments/:id/runtime": "authenticated",
   "GET /observe/deployments/:id/timeline": "authenticated",
   "GET /observe/deployments/:id/volumes": "authenticated",

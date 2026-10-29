@@ -3,12 +3,19 @@ import {
   Controller,
   ForbiddenException,
   Get,
+  MessageEvent,
   Param,
   Query,
   Request,
-  Res
+  Res,
+  ServiceUnavailableException,
+  Sse
 } from '@nestjs/common';
 import type { Response } from 'express';
+import { Observable, finalize, from, interval, startWith, switchMap, filter, map } from 'rxjs';
+import { SseStreamLimiter } from '../events/sse-stream-limiter';
+import { RequestsService, type RequestRow } from './requests.service';
+import { LogsStoreError } from './victoria-logs.service';
 import { Auth } from '../auth/decorators';
 import { ProjectAccessService } from '../projects/project-access.service';
 import { LogsService, type SearchParams } from './logs.service';
@@ -35,8 +42,82 @@ export function parseRange(startStr?: string, endStr?: string, fallbackMs = 60 *
 export class LogsController {
   constructor(
     private readonly logs: LogsService,
-    private readonly projectAccess: ProjectAccessService
+    private readonly requests: RequestsService,
+    private readonly projectAccess: ProjectAccessService,
+    private readonly streams: SseStreamLimiter
   ) {}
+
+  @Get('deployments/:id/requests')
+  async getRequests(
+    @Param('id') id: string,
+    @Request() req,
+    @Query('view') view?: string,
+    @Query('start') startStr?: string,
+    @Query('end') endStr?: string,
+    @Query('limit') limitStr?: string
+  ) {
+    await this.assertLogAccess(id, req);
+    if (!this.requests.available) {
+      throw new ServiceUnavailableException(
+        'No log store is configured, so requests are not recorded'
+      );
+    }
+    const { start, end } = parseRange(startStr, endStr);
+    const n = Math.min(Math.max(Number(limitStr) || 0, 1), 500);
+    try {
+      switch (view ?? 'routes') {
+        case 'routes':
+          return { routes: await this.requests.routes(id, start, end, Number(limitStr) ? n : 50) };
+        case 'slowest':
+          return {
+            requests: await this.requests.slowest(id, start, end, Number(limitStr) ? n : 20)
+          };
+        case 'recent':
+          return {
+            requests: await this.requests.recent(id, start, end, Number(limitStr) ? n : 100)
+          };
+        case 'clients':
+          return await this.requests.clients(id, start, end, Number(limitStr) ? n : 10);
+        default:
+          throw new BadRequestException('view must be routes, slowest, recent or clients');
+      }
+    } catch (err) {
+      if (err instanceof LogsStoreError) throw new ServiceUnavailableException(err.message);
+      throw err;
+    }
+  }
+
+  @Sse('deployments/:id/requests/stream')
+  async streamRequests(@Param('id') id: string, @Request() req): Promise<Observable<MessageEvent>> {
+    await this.assertLogAccess(id, req);
+    if (!this.requests.available) {
+      throw new ServiceUnavailableException(
+        'No log store is configured, so requests are not recorded'
+      );
+    }
+    const release = this.streams.acquire(req.user.sub, `requests:${id}`);
+    let since = Date.now() - 60_000;
+    let seen = new Set<string>();
+    const key = (r: RequestRow) => `${r.t}|${r.method}|${r.path}|${r.clientIp}|${r.status}`;
+    return interval(2_000).pipe(
+      startWith(0),
+      switchMap(() =>
+        from(this.requests.recent(id, since, Date.now(), 200).catch(() => [] as RequestRow[]))
+      ),
+      map((rows) => {
+        const fresh = rows.filter((r) => !seen.has(key(r))).reverse();
+        if (rows.length) {
+          const newest = Date.parse(rows[0].t);
+          if (Number.isFinite(newest)) since = Math.max(since, newest - 5_000);
+          seen = new Set(rows.map(key));
+        }
+        return fresh;
+      }),
+      filter((fresh) => fresh.length > 0),
+      map((fresh) => ({ data: { requests: fresh } }) as MessageEvent),
+      finalize(release)
+    );
+  }
 
   @Get('deployments/:id/logs/search')
   async search(

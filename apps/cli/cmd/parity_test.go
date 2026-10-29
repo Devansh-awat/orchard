@@ -430,6 +430,8 @@ var routeExclusions = map[string]string{
 	"GET /observe/deployments/:id/logs/levels":         "dashboard series; CLI command to follow",
 	"GET /observe/deployments/:id/logs/context":        "log context; exposed to agents over MCP",
 	"GET /observe/deployments/:id/logs/export":         "browser download; CLI pipes observe logs",
+	"GET /observe/deployments/:id/requests":            "request data from access logs; exposed to agents over MCP",
+	"GET /observe/deployments/:id/requests/stream":     "live request tail (SSE); dashboard only",
 	"GET /deployments/:id/releases/:releaseId/verdict": "deploy verdict; shown in deploy releases and over MCP",
 	"GET /sandboxes/:id/connect":                       "UI-only open-in-editor readiness; the CLI writes ssh config itself",
 

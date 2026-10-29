@@ -1,3 +1,4 @@
+import { RequestsService } from '../logs/requests.service';
 import { Injectable, Logger } from '@nestjs/common';
 import { createHash } from 'crypto';
 import {
@@ -82,8 +83,10 @@ export interface HttpMetricsSeries {
   latencyAvg: SeriesPoint[];
   latencyMax: SeriesPoint[];
   latency: { p50: SeriesPoint[]; p95: SeriesPoint[]; p99: SeriesPoint[] } | null;
+  latencySource?: 'ingress' | 'access-logs' | null;
   statusRates: Record<StatusClass, SeriesPoint[]>;
   routes: HttpRoute[];
+  routesSource?: 'ingress' | 'access-logs';
 }
 
 const FLAVOR_TTL_MS = 10 * 60_000;
@@ -168,7 +171,8 @@ export class ObservabilityService {
     private readonly prisma: PrismaService,
     private readonly k8sWorkload: K8sWorkloadService,
     private readonly orgEvents: OrgEventsService,
-    private readonly vm: VictoriaMetricsService
+    private readonly vm: VictoriaMetricsService,
+    private readonly requests: RequestsService
   ) {}
 
   /**
@@ -444,18 +448,30 @@ export class ObservabilityService {
         ...STATUS_CLASSES.map((cls) => range(queries.statusRate(cls, w)))
       ]);
 
+    const [logged, loggedLatency] = this.requests.available
+      ? await Promise.all([
+          this.requests.routes(deploymentId, startMs, endMs).catch(() => []),
+          queries.percentiles
+            ? Promise.resolve(null)
+            : this.requests.latency(deploymentId, startMs, endMs, stepMs).catch(() => null)
+        ])
+      : [[], null];
+    const fromLogs = loggedLatency && loggedLatency.p95.length > 0 ? loggedLatency : null;
+
     return {
       source: flavor,
       requestRate,
       errorRate,
       latencyAvg,
       latencyMax,
-      latency: queries.percentiles ? { p50, p95, p99 } : null,
+      latency: queries.percentiles ? { p50, p95, p99 } : fromLogs,
+      latencySource: queries.percentiles ? 'ingress' : fromLogs ? 'access-logs' : null,
       statusRates: Object.fromEntries(STATUS_CLASSES.map((cls, i) => [cls, classes[i]])) as Record<
         StatusClass,
         SeriesPoint[]
       >,
-      routes
+      routes: logged.length ? logged : routes,
+      routesSource: logged.length ? 'access-logs' : 'ingress'
     };
   }
 
