@@ -137,3 +137,15 @@ export function domainKeyOf(entry: PortEntry): string | null {
 	if ((entry.port.protocol ?? 'TCP').toUpperCase() === 'UDP') return null;
 	return `${entry.service.id}::${entry.port.port ?? entry.service.port}`;
 }
+
+export type Reach = 'anyone' | 'devices' | 'project';
+
+export const REACH_LABELS: Record<Reach, string> = {
+	anyone: 'Anyone',
+	devices: 'Your devices',
+	project: 'Only your apps'
+};
+
+export function bareAddress(url: string | null): string | null {
+	return url ? url.replace(/^[a-z]+:\/\//i, '') : null;
+}

@@ -649,18 +649,18 @@ html {
 .ui-modal {
 	position: fixed;
 	inset: 0;
-	inset-inline-start: var(--app-sidebar-w, 0px);
 	margin: auto;
 	padding: 0;
 	border: none;
-	border-radius: calc(var(--radius-panel) * var(--corner-scale));
+	border-radius: calc(var(--radius-sheet) * var(--corner-scale));
 	corner-shape: var(--corner);
 	background: var(--bg-raised);
 	color: var(--text-default);
 	box-shadow:
 		inset 0 0.5px 0 rgb(255 255 255 / 0.1),
 		var(--shadow-overlay);
-	--modal-room: calc(100vw - var(--app-sidebar-w, 0px) - 2rem);
+	--modal-room: calc(100vw - 2rem);
+	--modal-pad: 1.5rem;
 	width: min(var(--modal-room), 28rem);
 	max-width: none;
 	max-height: min(85vh, 48rem);
@@ -669,16 +669,11 @@ html {
 	flex-direction: column;
 }
 
-@media (max-width: 899px) {
-	.ui-modal {
-		inset-inline-start: 0;
-		--modal-room: calc(100vw - 2rem);
+@media (min-width: 900px) {
+	.ui-modal--content {
+		inset-inline-start: var(--app-sidebar-w, 0px);
+		--modal-room: calc(100vw - var(--app-sidebar-w, 0px) - 2rem);
 	}
-}
-
-.ui-modal--viewport {
-	inset-inline-start: 0;
-	--modal-room: calc(100vw - 2rem);
 }
 
 .ui-modal[open] {
@@ -723,13 +718,13 @@ html {
 	align-items: center;
 	gap: 0.75rem;
 	min-height: 2.5rem;
-	padding: 0.5rem 0.5rem 0 1.25rem;
+	padding: 0.75rem 0.75rem 0 var(--modal-pad);
 }
 
 .ui-modal-header:not(:has(.ui-modal-close)) {
-	padding-right: 1.25rem;
+	padding-right: var(--modal-pad);
 	min-height: 2.75rem;
-	padding-top: 1.25rem;
+	padding-top: var(--modal-pad);
 }
 
 .ui-modal-title {
@@ -752,7 +747,7 @@ html {
 	height: 2rem;
 	margin-left: auto;
 	border: none;
-	border-radius: calc(var(--radius-panel) - 0.5rem);
+	border-radius: 999px;
 	background: transparent;
 	color: var(--text-muted);
 	cursor: pointer;
@@ -779,13 +774,13 @@ html {
 .ui-modal-body {
 	flex: 1 1 auto;
 	min-height: 0;
-	padding: 0.75rem 1.25rem 1.25rem;
+	padding: 0.75rem var(--modal-pad) var(--modal-pad);
 	overflow-y: auto;
 	overscroll-behavior: contain;
 }
 
 .ui-modal-body:first-child {
-	padding-top: 1.25rem;
+	padding-top: var(--modal-pad);
 }
 
 .ui-modal-footer {
@@ -793,7 +788,12 @@ html {
 	align-items: center;
 	justify-content: flex-end;
 	gap: 0.5rem;
-	padding: 0 1.25rem 1.25rem;
+	padding: 0 var(--modal-pad) var(--modal-pad);
+}
+
+.ui-modal-footer .button.button {
+	border-radius: 999px;
+	corner-shape: round;
 }
 
 .ui-tabs {

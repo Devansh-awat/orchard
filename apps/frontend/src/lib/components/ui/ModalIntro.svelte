@@ -8,6 +8,7 @@
 		id = undefined,
 		icon,
 		tone = 'accent',
+		solid = false,
 		title,
 		description = undefined,
 		children = undefined
@@ -15,6 +16,7 @@
 		id?: string;
 		icon: Icon;
 		tone?: StatusKind | 'accent';
+		solid?: boolean;
 		title: string;
 		description?: string;
 		children?: Snippet;
@@ -24,7 +26,7 @@
 </script>
 
 <div class="intro">
-	<ToneTile {tone} size={40}><Glyph size={18} /></ToneTile>
+	<ToneTile {tone} {solid} size={44}><Glyph size={20} strokeWidth={solid ? 2.25 : 2} /></ToneTile>
 	<div class="copy">
 		<h2 class="title" {id}>{title}</h2>
 		{#if description}<p class="desc">{description}</p>{/if}
@@ -44,7 +46,7 @@
 		gap: 0.5rem;
 	}
 	.title {
-		font-size: var(--text-headline);
+		font-size: calc(var(--text-headline) * 1.125);
 		line-height: var(--lh-headline);
 		font-weight: var(--weight-semibold);
 		letter-spacing: var(--track-headline);

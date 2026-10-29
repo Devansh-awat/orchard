@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tick, untrack } from 'svelte';
-	import { Globe, Shuffle } from 'lucide-svelte';
+	import { ChevronRight, Globe, Link, MonitorSmartphone, Plug, Shuffle } from 'lucide-svelte';
 	import {
 		Alert,
 		Badge,
@@ -10,10 +10,13 @@
 		Field,
 		FieldGrid,
 		Input,
+		List,
+		ListRow,
 		Modal,
 		ModalIntro,
 		Swap,
-		ToggleRow
+		ToggleRow,
+		ToneTile
 	} from '$lib/components/ui';
 	import DnsSetup from './DnsSetup.svelte';
 	import { REDIRECT_STATUS_OPTIONS } from './network';
@@ -36,6 +39,10 @@
 		redirectStatus = $bindable(),
 		advanced = $bindable(),
 		portLocked = false,
+		target = null,
+		kinds = { web: true, raw: false, tailnet: false, tailnetLinked: false },
+		onOpenRaw = () => {},
+		onJoinTailnet = () => {},
 		deploymentId,
 		projectRoutes,
 		appDomain,
@@ -60,6 +67,10 @@
 		redirectStatus: string;
 		advanced: boolean;
 		portLocked?: boolean;
+		target?: { port: number; protocol: string; public: boolean } | null;
+		kinds?: { web: boolean; raw: boolean; tailnet: boolean; tailnetLinked: boolean };
+		onOpenRaw?: () => void;
+		onJoinTailnet?: () => void;
 		deploymentId: string;
 		projectRoutes: ProjectRoute[];
 		appDomain: string;
@@ -77,19 +88,39 @@
 
 	const uid = $props.id();
 
-	let step = $state<'address' | 'dns'>('address');
+	type Step = 'choose' | 'address' | 'raw' | 'dns';
+
+	let step = $state<Step>('address');
+	let chose = $state(false);
 	let created = $state('');
 	let wasOpen = false;
+
+	const choiceCount = $derived([kinds.web, kinds.raw, kinds.tailnet].filter(Boolean).length);
 
 	$effect(() => {
 		const isOpen = open;
 		if (isOpen && !wasOpen) {
-			step = 'address';
+			chose = choiceCount > 1;
+			step = chose ? 'choose' : kinds.raw && !kinds.web ? 'raw' : 'address';
 			created = '';
 			if (appDomain && !host) onGenerate();
 		}
 		wasOpen = isOpen;
 	});
+
+	function pick(next: Step) {
+		step = next;
+	}
+
+	function joinTailnet() {
+		onJoinTailnet();
+		close();
+	}
+
+	function openRaw() {
+		onOpenRaw();
+		close();
+	}
 
 	const onAppDomain = $derived(!!appDomain && normalizedHost.endsWith(`.${appDomain}`));
 	const address = $derived(host + (path && path !== '/' ? path : ''));
@@ -196,11 +227,86 @@
 
 <Modal bind:open size="md" closable={false} dismissable labelledby="{uid}-title" onclose={onReset}>
 	<Swap key={step}>
-		{#if step === 'dns'}
+		{#if step === 'choose'}
 			<div class="form">
 				<ModalIntro
 					id="{uid}-title"
 					icon={Globe}
+					tone="info"
+					solid
+					title={target?.public
+						? `Another way into port ${target.port}`
+						: `Make port ${target?.port ?? ''} public`}
+					description="Choose how people will reach it."
+				/>
+				<List label="Ways to reach it">
+					{#if kinds.web}
+						<ListRow
+							title="Web address"
+							subtitle="A link anyone can open, with HTTPS"
+							onclick={() => pick('address')}
+						>
+							{#snippet leading()}
+								<ToneTile tone="info" solid size={32}
+									><Globe size={16} strokeWidth={2.25} /></ToneTile
+								>
+							{/snippet}
+							{#snippet trailing()}<ChevronRight size={16} />{/snippet}
+						</ListRow>
+					{/if}
+					{#if kinds.raw}
+						<ListRow
+							title="Public port"
+							subtitle="For games and apps that don't use the web"
+							onclick={() => pick('raw')}
+						>
+							{#snippet leading()}
+								<ToneTile tone="success" solid size={32}
+									><Plug size={16} strokeWidth={2.25} /></ToneTile
+								>
+							{/snippet}
+							{#snippet trailing()}<ChevronRight size={16} />{/snippet}
+						</ListRow>
+					{/if}
+					{#if kinds.tailnet}
+						<ListRow
+							title="Your devices"
+							subtitle={kinds.tailnetLinked
+								? 'Only devices on your Tailscale'
+								: 'Link Tailscale in your settings first'}
+							href={kinds.tailnetLinked ? undefined : '/user/settings'}
+							onclick={kinds.tailnetLinked ? joinTailnet : undefined}
+						>
+							{#snippet leading()}
+								<ToneTile tone="neutral" solid size={32}
+									><MonitorSmartphone size={16} strokeWidth={2.25} /></ToneTile
+								>
+							{/snippet}
+							{#snippet trailing()}<ChevronRight size={16} />{/snippet}
+						</ListRow>
+					{/if}
+				</List>
+			</div>
+		{:else if step === 'raw'}
+			<div class="form">
+				<ModalIntro
+					id="{uid}-title"
+					icon={Plug}
+					tone="success"
+					solid
+					title={target ? `Open port ${target.port} to the internet` : 'Open a public port'}
+				>
+					Anyone on the internet will be able to connect to it directly over
+					{target?.protocol ?? 'TCP'}. You get the address as soon as it opens.
+				</ModalIntro>
+			</div>
+		{:else if step === 'dns'}
+			<div class="form">
+				<ModalIntro
+					id="{uid}-title"
+					icon={Globe}
+					tone="info"
+					solid
 					title="Point your DNS"
 					description={cname ? `Add this record where ${created} is registered.` : created}
 				/>
@@ -217,18 +323,22 @@
 				<ModalIntro
 					id="{uid}-title"
 					icon={Globe}
-					title="Add a domain"
+					tone="info"
+					solid
+					title="Add a web address"
 					description={portLocked && serviceOptions.length > 1
-						? `Sends traffic to ${portLabel.toLowerCase()}.`
-						: undefined}
+						? `Visitors reach ${portLabel.toLowerCase()}.`
+						: appDomain
+							? 'Use a domain you own, or pick a free one.'
+							: 'Use a domain you own.'}
 				/>
-
 				<div class="address">
 					<Input
 						id="{uid}-host"
 						aria-label="Domain"
 						placeholder="app.example.com"
-						mono
+						size="lg"
+						icon={Link}
 						autocomplete="off"
 						spellcheck={false}
 						bind:value={() => draft, setAddress}
@@ -317,11 +427,21 @@
 	{#snippet footer()}
 		{#if step === 'dns'}
 			<Button variant="primary" onclick={close}>Done</Button>
+		{:else if step === 'choose'}
+			<Button variant="ghost" onclick={close}>Cancel</Button>
 		{:else}
-			<Button variant="ghost" disabled={creating} onclick={close}>Cancel</Button>
-			<Button variant="primary" loading={creating} disabled={!canCreate} onclick={submit}
-				>Add</Button
-			>
+			{#if chose}
+				<Button variant="ghost" disabled={creating} onclick={() => pick('choose')}>Back</Button>
+			{:else}
+				<Button variant="ghost" disabled={creating} onclick={close}>Cancel</Button>
+			{/if}
+			{#if step === 'raw'}
+				<Button variant="primary" onclick={openRaw}>Open port</Button>
+			{:else}
+				<Button variant="primary" loading={creating} disabled={!canCreate} onclick={submit}
+					>Add address</Button
+				>
+			{/if}
 		{/if}
 	{/snippet}
 </Modal>

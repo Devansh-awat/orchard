@@ -7,7 +7,7 @@
 		open = $bindable(false),
 		title = undefined,
 		size = 'md',
-		align = 'content',
+		align = 'viewport',
 		closable = true,
 		dismissable = undefined,
 		onclose = undefined,
@@ -68,7 +68,7 @@
 	<dialog
 		bind:this={dialogEl}
 		class="ui-modal ui-modal--{size}"
-		class:ui-modal--viewport={align === 'viewport'}
+		class:ui-modal--content={align === 'content'}
 		class:ui-modal--closing={!open}
 		aria-labelledby={labelledby ?? (title && !header ? titleId : undefined)}
 		onclick={handleBackdropClick}
