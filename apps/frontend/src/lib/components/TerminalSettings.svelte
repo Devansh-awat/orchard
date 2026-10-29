@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Settings2, Minus, Plus } from 'lucide-svelte';
-	import { PopoverPanel, SegmentedControl, ToggleRow } from '$lib/components/ui';
+	import { Button, PopoverPanel, SegmentedControl, ToggleRow } from '$lib/components/ui';
 	import {
 		terminalDisplay,
 		setTerminalDisplay,
@@ -28,16 +28,8 @@
 </script>
 
 <PopoverPanel placement="bottom-end" class="terminal-settings">
-	{#snippet trigger(attrs, open)}
-		<button
-			class="console-btn console-btn--icon"
-			class:console-btn--active={open}
-			title="Terminal settings"
-			aria-label="Terminal settings"
-			{...attrs}
-		>
-			<Settings2 size={14} class="h-3.5 w-3.5" />
-		</button>
+	{#snippet trigger(attrs)}
+		<Button {...attrs} variant="ghost" size="sm" icon={Settings2} label="Terminal settings" />
 	{/snippet}
 	{#snippet children()}
 		<div class="ts-body">

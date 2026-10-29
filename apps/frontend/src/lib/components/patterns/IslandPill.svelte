@@ -22,7 +22,6 @@
 	bind:this={el}
 	type="button"
 	class="pill pill--{tone}"
-	class:pill--away={expanded}
 	aria-label={label}
 	aria-expanded={expanded}
 	{onclick}
@@ -68,8 +67,5 @@
 	}
 	.pill--bad {
 		--island-tone: var(--status-error);
-	}
-	.pill--away {
-		visibility: hidden;
 	}
 </style>

@@ -552,6 +552,13 @@
 		gap: 0.25rem;
 		flex-shrink: 0;
 	}
+	.bar :global(:is(.button, .trigger)) {
+		border-radius: 999px;
+		corner-shape: round;
+	}
+	.bar :global(.trigger--sm) {
+		padding-inline: 0.75rem 0.5rem;
+	}
 	.live {
 		display: inline-flex;
 		align-items: center;

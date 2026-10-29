@@ -656,12 +656,6 @@ a.dep-meta-lead-link:hover {
 	position: fixed;
 	z-index: 100;
 	border: none;
-	transition:
-		top var(--dur-base) cubic-bezier(0.4, 0, 0.2, 1),
-		left var(--dur-base) cubic-bezier(0.4, 0, 0.2, 1),
-		width var(--dur-base) cubic-bezier(0.4, 0, 0.2, 1),
-		height var(--dur-base) cubic-bezier(0.4, 0, 0.2, 1),
-		border-radius var(--dur-base) cubic-bezier(0.4, 0, 0.2, 1);
 }
 .console-panel.console-at-fullscreen {
 	top: 0 !important;
@@ -677,12 +671,6 @@ a.dep-meta-lead-link:hover {
 .console-panel.console-expanded .console-output {
 	max-height: none;
 	height: 100%;
-}
-
-@media (prefers-reduced-motion: reduce) {
-	.console-panel.console-expanded {
-		transition: none;
-	}
 }
 
 .console-toolbar {
@@ -3350,4 +3338,40 @@ a.dep-meta-lead-link:hover {
 	height: 0.35rem;
 	border-radius: 9999px;
 	background: var(--status-warning);
+}
+
+html.vt-console::view-transition-group(console) {
+	animation-duration: var(--spring-morph-duration);
+	animation-timing-function: var(--spring-morph);
+}
+html.vt-console::view-transition-image-pair(console) {
+	overflow: clip;
+}
+html.vt-console::view-transition-old(console),
+html.vt-console::view-transition-new(console) {
+	width: 100%;
+	height: 100%;
+	object-fit: none;
+	object-position: left top;
+	mix-blend-mode: normal;
+}
+html.vt-console::view-transition-old(console) {
+	animation: console-vt-out var(--fade-out) var(--curve-in) both;
+}
+html.vt-console::view-transition-new(console) {
+	animation: console-vt-in var(--fade-in) var(--curve-out) both;
+}
+html.vt-console::view-transition-old(root),
+html.vt-console::view-transition-new(root) {
+	animation: none;
+}
+@keyframes console-vt-in {
+	from {
+		opacity: 0;
+	}
+}
+@keyframes console-vt-out {
+	to {
+		opacity: 0;
+	}
 }

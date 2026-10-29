@@ -9,6 +9,8 @@
 		disabled = false,
 		label = undefined,
 		suffix = undefined,
+		size = 'md',
+		shape = 'rounded',
 		id = undefined,
 		onchange = undefined
 	}: {
@@ -19,6 +21,8 @@
 		disabled?: boolean;
 		label?: string;
 		suffix?: string;
+		size?: 'sm' | 'md';
+		shape?: 'rounded' | 'capsule';
 		id?: string;
 		onchange?: (value: number) => void;
 	} = $props();
@@ -81,7 +85,12 @@
 	}
 </script>
 
-<div class="stepper" class:stepper--disabled={disabled} role="group" aria-label={label}>
+<div
+	class="stepper stepper--{size} stepper--{shape}"
+	class:stepper--disabled={disabled}
+	role="group"
+	aria-label={label}
+>
 	<button
 		type="button"
 		class="step"
@@ -139,6 +148,24 @@
 		corner-shape: var(--corner);
 		background: var(--bg-raised);
 		box-shadow: var(--shadow-raised);
+	}
+	.stepper--sm {
+		height: 1.75rem;
+	}
+	.stepper--sm .step {
+		width: 1.5rem;
+		height: 1.5rem;
+	}
+	.stepper--capsule {
+		border-radius: 999px;
+		corner-shape: round;
+	}
+	.stepper--capsule .step {
+		border-radius: 50%;
+	}
+	.stepper--sm .num,
+	.stepper--sm .suffix {
+		font-size: var(--text-footnote);
 	}
 	.stepper--disabled {
 		opacity: 0.45;

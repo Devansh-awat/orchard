@@ -9,7 +9,7 @@
 		TriangleAlert,
 		X
 	} from 'lucide-svelte';
-	import { Button, Dropdown, StatusDot, statusMeta } from '$lib/components/ui';
+	import { Button, Stepper, StatusDot, statusMeta } from '$lib/components/ui';
 	import Widget from '$lib/components/ui/Widget.svelte';
 	import type { StatusMeta } from '$lib/components/ui';
 	import { toasts } from '$lib/stores';
@@ -196,10 +196,18 @@
 	);
 
 	type Row = (typeof rows)[number];
-	const replicaOptions = Array.from({ length: 21 }, (_, n) => ({
-		value: String(n),
-		label: n === 0 ? 'Stopped' : `${n} ${n === 1 ? 'replica' : 'replicas'}`
-	}));
+	let scaleTimer: ReturnType<typeof setTimeout> | undefined;
+
+	function queueScale(value: number) {
+		onChange(value);
+		clearTimeout(scaleTimer);
+		scaleTimer = setTimeout(() => {
+			if (value !== replicas) onScale();
+		}, 700);
+	}
+
+	$effect(() => () => clearTimeout(scaleTimer));
+
 	const problems = $derived.by(() => {
 		const counts = new Map<string, number>();
 		for (const r of rows) {
@@ -251,18 +259,16 @@
 {/snippet}
 
 {#snippet controls()}
-	<Dropdown
+	<Stepper
+		bind:value={scaleReplicas}
+		min={0}
+		max={20}
 		size="sm"
-		placement="bottom-end"
-		options={replicaOptions}
-		value={String(replicas)}
+		shape="capsule"
+		suffix={scaleReplicas === 1 ? 'replica' : 'replicas'}
+		label="Replicas"
 		disabled={scaling}
-		ariaLabel="Replicas"
-		onchange={(v) => {
-			scaleReplicas = Number(v);
-			onChange(Number(v));
-			onScale();
-		}}
+		onchange={queueScale}
 	/>
 	{#if __ORCHARD_MOCK__}
 		<PodSimulator {deploymentId} {podLabel} onchange={onSimulated} />

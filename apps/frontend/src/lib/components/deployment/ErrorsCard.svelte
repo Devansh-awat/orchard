@@ -49,7 +49,7 @@
 </script>
 
 {#snippet headRight()}
-	{#if latest != null}<span class="mini mini--{tone}">{latest.toFixed(2)}%</span>{/if}
+	{#if shown != null}<span class="mini mini--{tone}">{shown.toFixed(2)}%</span>{/if}
 	<Button variant="ghost" size="sm" onclick={onopen}>All errors</Button>
 {/snippet}
 
@@ -57,7 +57,11 @@
 	{#if shown != null && rates}
 		<div class="body body--{tone}">
 			<div class="reading">
-				<span class="value"><NumberRoll value={shown.toFixed(2)} />%</span>
+				<span class="value"
+					>{#if scrub === null}<NumberRoll value={shown.toFixed(2)} />{:else}{shown.toFixed(
+							2
+						)}{/if}%</span
+				>
 				<span class="of">of requests failed{scrub === null ? ' · last 30 min' : ''}</span>
 			</div>
 			<div class="chart" bind:clientHeight={chartHeight}>

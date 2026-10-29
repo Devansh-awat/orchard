@@ -2,7 +2,7 @@
 	import './deployment-page.css';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { onMount, onDestroy, untrack } from 'svelte';
+	import { onMount, onDestroy, tick, untrack } from 'svelte';
 	import { Tabs } from 'melt/builders';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { queryClient } from '$lib/query';
@@ -86,7 +86,8 @@
 		motionPopover,
 		motionBackdrop,
 		pressSpringDelegate,
-		decorativeMotion
+		decorativeMotion,
+		functionalMotion
 	} from '$lib/utils/motion.svelte';
 	import {
 		portal,
@@ -976,32 +977,26 @@
 	} | null>(null);
 
 	function toggleConsoleExpand() {
-		if (consoleAnimating) return;
-
-		if (!consoleExpanded) {
-			// Expanding: capture current inline rect, then animate to fullscreen
-			if (consoleRef) {
-				const r = consoleRef.getBoundingClientRect();
-				consoleInlineRect = { top: r.top, left: r.left, width: r.width, height: r.height };
-			}
-			consoleAnimating = true;
-			// Force a frame so the starting position renders before we transition
-			requestAnimationFrame(() => {
-				consoleExpanded = true;
-				// Clear animating after transition ends
-				setTimeout(() => {
-					consoleAnimating = false;
-				}, 300);
-			});
-		} else {
-			// Collapsing: animate back to inline rect, then remove fixed
-			consoleAnimating = true;
-			consoleExpanded = false;
-			setTimeout(() => {
-				consoleInlineRect = null;
-				consoleAnimating = false;
-			}, 300);
+		const next = !consoleExpanded;
+		const apply = () => {
+			consoleExpanded = next;
+			consoleInlineRect = null;
+			return tick();
+		};
+		const el = consoleRef;
+		if (!el || !document.startViewTransition || !functionalMotion()) {
+			void apply();
+			return;
 		}
+		el.style.viewTransitionName = 'console';
+		document.documentElement.classList.add('vt-console');
+		consoleAnimating = true;
+		const vt = document.startViewTransition(apply);
+		vt.finished.finally(() => {
+			el.style.viewTransitionName = '';
+			document.documentElement.classList.remove('vt-console');
+			consoleAnimating = false;
+		});
 	}
 	let showBuildCard = $state(false);
 	let showBuildCardRender = $state(false);
