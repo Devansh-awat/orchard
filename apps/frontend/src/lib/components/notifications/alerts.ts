@@ -7,14 +7,16 @@ export type AlertMetricId =
 	| 'request_rate'
 	| 'error_rate'
 	| 'latency_avg_ms'
-	| 'latency_max_ms';
+	| 'latency_max_ms'
+	| 'cpu_throttled_percent'
+	| 'memory_forecast_hours';
 
 export type AlertComparator = 'gt' | 'lt';
 
 export interface AlertMetric {
 	id: AlertMetricId;
 	label: string;
-	unit: '%' | 'req/s' | 'ms';
+	unit: '%' | 'req/s' | 'ms' | 'h';
 	comparators: AlertComparator[];
 	needsIngress: boolean;
 	requestRateGuard: boolean;

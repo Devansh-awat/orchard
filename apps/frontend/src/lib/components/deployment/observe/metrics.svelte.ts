@@ -21,7 +21,7 @@ export type Release = {
 };
 
 export type MetricId = 'req' | 'err' | 'lat' | 'cpu' | 'mem' | 'rx' | 'tx';
-export type ChartId = 'req' | 'err' | 'lat' | 'cpu' | 'mem' | 'net';
+export type ChartId = 'req' | 'err' | 'lat' | 'cpu' | 'throttle' | 'mem' | 'net';
 export type ChartMode = ChartDisplay | 'top';
 export type ResourceId = 'cpu' | 'mem' | 'rx' | 'tx';
 export type PodSeries = { key: string; points: ChartPoint[] };
@@ -51,6 +51,22 @@ export type VolumeFill = {
 	usedBytes: number | null;
 	capacityBytes: number | null;
 	availableBytes: number | null;
+};
+export type ChangeTone = 'deploy' | 'config' | 'platform' | 'error';
+export type Change = {
+	id: string;
+	t: number;
+	kind: string;
+	tone: ChangeTone;
+	label: string;
+	detail: string | null;
+	actor: { id: string; name: string } | null;
+};
+const MARKER_TONE: Record<ChangeTone, 'deploy' | 'neutral' | 'platform' | 'error'> = {
+	deploy: 'deploy',
+	config: 'neutral',
+	platform: 'platform',
+	error: 'error'
 };
 export type BuildPhase = { id: string; label: string; ms: number };
 export type BuildRun = {
@@ -127,15 +143,25 @@ export class MetricsState {
 	podHealth = $state<PodHealth | null>(null);
 	volumes = $state<VolumeFill[]>([]);
 	builds = $state<BuildRun[]>([]);
+	changes = $state<Change[] | null>(null);
+	throttle = $state<ChartPoint[]>([]);
 
 	events = $derived<ChartEvent[]>([
-		...this.releases
-			.filter((r) => r.status === 'succeeded')
-			.map((r) => ({
-				t: r.at,
-				label: `deploy ${r.tag}${r.title ? ` (${r.title})` : ''}`,
-				tone: 'deploy' as const
-			})),
+		...(this.changes
+			? this.changes.map((c) => ({
+					t: c.t,
+					label: c.label,
+					detail: c.detail,
+					actor: c.actor?.name ?? null,
+					tone: MARKER_TONE[c.tone] ?? 'neutral'
+				}))
+			: this.releases
+					.filter((r) => r.status === 'succeeded')
+					.map((r) => ({
+						t: r.at,
+						label: `deploy ${r.tag}${r.title ? ` (${r.title})` : ''}`,
+						tone: 'deploy' as const
+					}))),
 		...this.killed.flatMap((k) =>
 			k.finishedAt
 				? [
@@ -230,6 +256,7 @@ export class MetricsState {
 			this.errorGroups = demoErrors(minutes) as ErrorGroup[];
 			this.volumes = [];
 			this.builds = [];
+			this.changes = null;
 			return;
 		}
 		const get = (url: string) =>
@@ -237,14 +264,15 @@ export class MetricsState {
 				.then((r) => (r.ok ? r.json() : null))
 				.catch(() => null);
 		const base = `/apiv1/observe/deployments/${encodeURIComponent(id)}`;
-		const [timeline, killed, live, errors, logs, volumes, builds] = await Promise.all([
+		const [timeline, killed, live, errors, logs, volumes, builds, changes] = await Promise.all([
 			get(`${base}/timeline?kinds=release,build&limit=60`),
 			get(`/apiv1/deployments/${encodeURIComponent(id)}/killed-containers`),
 			get(`/apiv1/deployments/${encodeURIComponent(id)}/pods-live`),
 			get(`${base}/errors?window=${minutes}`),
 			get(`${base}/logs/structured?tailLines=2000`),
 			get(`${base}/volumes`),
-			get(`${base}/builds?limit=30`)
+			get(`${base}/builds?limit=30`),
+			get(`${base}/changes?start=${this.from}&end=${this.to}`)
 		]);
 		const time = (v: unknown) => (v ? new Date(v as string).getTime() || null : null);
 		this.releases = ((timeline?.entries ?? []) as any[]).flatMap((e) => {
@@ -269,6 +297,7 @@ export class MetricsState {
 		this.logTail = entries;
 		this.volumes = Array.isArray(volumes?.volumes) ? volumes.volumes : [];
 		this.builds = Array.isArray(builds?.builds) ? builds.builds : [];
+		this.changes = Array.isArray(changes?.changes) ? changes.changes : null;
 	}
 
 	async load(id: string, opts: { http: boolean; demo: boolean }) {
@@ -313,6 +342,7 @@ export class MetricsState {
 			}
 			const body = await res.json();
 			if (seq !== this.#seq) return;
+			this.throttle = Array.isArray(body?.throttle) ? body.throttle : [];
 			if (body?.groupBy === 'pod' && body?.grouped) {
 				this.pods = body.grouped;
 				this.resources = {

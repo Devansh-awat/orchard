@@ -59,6 +59,7 @@
 	const EVENT_TONE = {
 		deploy: 'var(--status-deploy-solid)',
 		error: 'var(--status-error-solid)',
+		platform: 'var(--status-warning-solid)',
 		neutral: 'var(--neutral-8)'
 	};
 	const TIME_STEPS = [
@@ -644,7 +645,14 @@
 				{#each nearMarks as m, i (i)}
 					<span class="tip-row tip-row--note">
 						<span class="tip-swatch tip-swatch--event" style:background={m.color}></span>
-						<span class="tip-note">{m.label}</span>
+						<span class="tip-note">
+							{m.label}
+							{#if m.detail || m.actor}
+								<span class="tip-detail"
+									>{[m.detail, m.actor ? `by ${m.actor}` : null].filter(Boolean).join(' · ')}</span
+								>
+							{/if}
+						</span>
 					</span>
 				{/each}
 				{#each nearBands as b, i (i)}
@@ -881,6 +889,10 @@
 	}
 	.tip-note {
 		color: var(--text-default);
+	}
+	.tip-detail {
+		display: block;
+		color: var(--text-muted);
 	}
 	.hit {
 		position: absolute;

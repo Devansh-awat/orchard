@@ -683,7 +683,13 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 		'/deployments/:id/metrics',
 		withDep((d, { query }) => {
 			const base = metricSeries(query, d.cpuUsageMilli, Math.round(d.memoryUsageBytes / MIB));
-			if (query.get('groupBy') !== 'pod') return base;
+			const throttle = d.cpuRequestMilli
+				? base.data.cpu.map((pt) => ({
+						x: pt.x,
+						y: +Math.max(0, Math.min(100, (pt.y / d.cpuRequestMilli - 0.45) * 160)).toFixed(1)
+					}))
+				: [];
+			if (query.get('groupBy') !== 'pod') return { ...base, throttle };
 			const pods = podsOf(store, d);
 			const split = (key: 'cpu' | 'mem' | 'rx' | 'tx') =>
 				pods.map((p, i) => ({
@@ -698,7 +704,8 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 				end: base.end,
 				step: base.step,
 				groupBy: 'pod',
-				grouped: { cpu: split('cpu'), mem: split('mem'), rx: split('rx'), tx: split('tx') }
+				grouped: { cpu: split('cpu'), mem: split('mem'), rx: split('rx'), tx: split('tx') },
+				throttle
 			};
 		})
 	);
@@ -949,6 +956,63 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 					};
 				})
 		}))
+	);
+	r.get(
+		'/observe/deployments/:id/changes',
+		withDep((d, { query }) => {
+			const end = Number(query.get('end')) || Date.now();
+			const start = Number(query.get('start')) || end - 86_400_000;
+			const seb = store.user(store.state.meId);
+			const actor = seb
+				? { id: seb.id, name: [seb.firstName, seb.lastName].filter(Boolean).join(' ') }
+				: null;
+			const deploys = store
+				.buildsOf(d.id)
+				.filter((b) => b.status === 'succeeded')
+				.map((b) => ({
+					id: `release:${b.id}`,
+					t: new Date(b.buildCompletedAt ?? b.createdAt).getTime(),
+					kind: 'deploy',
+					tone: 'deploy',
+					label: `${b.commitSha ? b.commitSha.slice(0, 7) : b.image.split(':').at(-1)} went live`,
+					detail: b.commitMessage?.split('\n')[0] ?? null,
+					actor
+				}));
+			const now = Date.now();
+			const extra = [
+				{
+					id: `audit:${d.id}:resources`,
+					t: now - 3 * 3_600_000,
+					kind: 'resources',
+					tone: 'config',
+					label: 'Resources changed',
+					detail: 'memory 2 GB → 4 GB',
+					actor
+				},
+				{
+					id: `audit:${d.id}:env`,
+					t: now - 95 * 60_000,
+					kind: 'env',
+					tone: 'config',
+					label: 'Environment variables updated',
+					detail: null,
+					actor
+				},
+				{
+					id: `cluster:${d.id}:evicted`,
+					t: now - 5 * 3_600_000 - 12 * 60_000,
+					kind: 'eviction',
+					tone: 'platform',
+					label: 'Pod evicted',
+					detail: 'The node was low on resource: memory. · on house',
+					actor: null
+				}
+			];
+			const changes = [...deploys, ...extra]
+				.filter((c) => c.t >= start && c.t <= end)
+				.sort((a, b) => a.t - b.t);
+			return { changes, truncated: false };
+		})
 	);
 	r.get(
 		'/observe/deployments/:id/timeline',

@@ -63,6 +63,7 @@
 	const rate = (v: number) =>
 		v >= 1000 ? `${(v / 1000).toFixed(1)}k/s` : `${v.toFixed(v >= 10 ? 0 : 1)}/s`;
 	const percent = (v: number) => `${v.toFixed(2)}%`;
+	const share = (v: number) => `${v === 0 || v >= 10 ? Math.round(v) : v.toFixed(1)}%`;
 	const ms = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(2)} s` : `${Math.round(v)} ms`);
 	const count = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
 	const minutes = (v: number) =>
@@ -183,6 +184,18 @@
 		deployment?.memoryRequestBytes ? Number(deployment.memoryRequestBytes) / MIB : null
 	);
 	const cpuTotal = $derived(cpuPod ? cpuPod * pods : null);
+	const THROTTLE_ZONE = 25;
+	const throttleSeries = $derived<ChartSeries[]>([
+		{ id: 'throttle', label: 'Throttled', points: metrics.throttle, tone: 'neutral' }
+	]);
+	const throttleHeadline = $derived.by(() => {
+		const v = latest(metrics.throttle);
+		if (v == null) return undefined;
+		return {
+			value: `${share(v)} of the time`,
+			tone: v >= THROTTLE_ZONE ? ('warning' as const) : ('neutral' as const)
+		};
+	});
 	const memTotal = $derived(memPod ? memPod * pods : null);
 
 	const source = $derived(
@@ -807,6 +820,27 @@
 					empty="No CPU samples in this range"
 					onZoom={(a, b) => metrics.zoom(a, b)}
 				/>
+				{#if metrics.throttle.length > 0}
+					<MetricPanel
+						title="CPU throttling"
+						info="Share of scheduling periods where the CPU limit held the app back. Above 25% the limit is the bottleneck."
+						series={throttleSeries}
+						from={metrics.from}
+						to={metrics.to}
+						format={share}
+						bind:hover={metrics.hover}
+						bind:mode={() => metrics.modes.throttle ?? 'areas', (m) => (metrics.modes.throttle = m)}
+						modes={['areas', 'lines']}
+						headline={throttleHeadline}
+						thresholds={[
+							{ value: THROTTLE_ZONE, tone: 'warning', label: `${THROTTLE_ZONE}% throttled` }
+						]}
+						events={metrics.events}
+						bands={incidents}
+						empty="No throttling samples in this range"
+						onZoom={(a, b) => metrics.zoom(a, b)}
+					/>
+				{/if}
 				<MetricPanel
 					title="Memory"
 					info="Memory used against the limit. At the limit the container is killed (OOMKilled)."

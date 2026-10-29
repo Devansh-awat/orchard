@@ -9,7 +9,13 @@ export type ChartSeries = {
 	color?: string;
 	dashed?: boolean;
 };
-export type ChartEvent = { t: number; label: string; tone?: 'deploy' | 'error' | 'neutral' };
+export type ChartEvent = {
+	t: number;
+	label: string;
+	detail?: string | null;
+	actor?: string | null;
+	tone?: 'deploy' | 'error' | 'neutral' | 'platform';
+};
 export type ChartFinding = { t: number; seriesId: string; label: string };
 export type ChartThreshold = { value: number; tone: 'warning' | 'error'; label: string };
 export type ChartBand = { from: number; to: number; label: string; tone?: 'warning' | 'error' };
