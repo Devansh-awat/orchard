@@ -64,13 +64,14 @@ export class VictoriaMetricsService {
     process.env.VICTORIAMETRICS_URL ??
     'http://victoriametrics.orchard-metrics.svc.cluster.local:8428';
 
-  async queryInstant(promql: string): Promise<number | null> {
-    const result = await this.queryInstantStrict(promql);
+  async queryInstant(promql: string, timeSec?: number): Promise<number | null> {
+    const result = await this.queryInstantStrict(promql, timeSec);
     return result.ok ? result.value : null;
   }
 
-  async queryInstantStrict(promql: string): Promise<InstantResult> {
+  async queryInstantStrict(promql: string, timeSec?: number): Promise<InstantResult> {
     const params = new URLSearchParams({ query: promql });
+    if (timeSec != null) params.set('time', String(timeSec));
     const url = `${this.base}/api/v1/query?${params}`;
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(QUERY_TIMEOUT_MS) });

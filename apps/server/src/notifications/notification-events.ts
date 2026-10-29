@@ -1,6 +1,7 @@
 const CORE_NOTIFICATION_EVENTS = [
   'deploy.succeeded',
   'deploy.failed',
+  'deploy.regressed',
   'pod.crashing',
   'pod.recovered',
   'alert.firing',
@@ -50,6 +51,7 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [...CORE_NOTIFICA
 export const EVENT_CATEGORY: Record<string, NotificationCategory> = {
   'deploy.succeeded': 'deploys',
   'deploy.failed': 'deploys',
+  'deploy.regressed': 'deploys',
   'pod.crashing': 'health',
   'pod.recovered': 'health',
   'alert.firing': 'health',
@@ -93,6 +95,7 @@ export type ResourceScopeType = 'deployment' | 'database' | 'job' | 'user';
 export const EVENT_RESOURCE_SCOPE: Record<string, ResourceScopeType> = {
   'deploy.succeeded': 'deployment',
   'deploy.failed': 'deployment',
+  'deploy.regressed': 'deployment',
   'pod.crashing': 'deployment',
   'pod.recovered': 'deployment',
   'alert.firing': 'deployment',

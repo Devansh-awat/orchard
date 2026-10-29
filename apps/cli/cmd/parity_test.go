@@ -418,14 +418,15 @@ var routeCoverage = map[string]string{
 var routeExclusions = map[string]string{
 	// dashboard affordance: returns booleans that drive a dismissible card, and
 	// every underlying setting already has its own CLI command
-	"GET /deployments/:id/next-steps":         "UI-only checklist card",
-	"GET /deployments/:id/security":           "web security tab first; CLI command to follow",
-	"POST /deployments/:id/security/scan":     "web security tab first; CLI command to follow",
-	"GET /observe/deployments/:id/pod-health": "dashboard series; CLI command to follow",
-	"GET /observe/deployments/:id/volumes":    "dashboard series; CLI command to follow",
-	"GET /observe/deployments/:id/builds":     "dashboard series; CLI command to follow",
-	"GET /observe/deployments/:id/changes":    "dashboard chart markers; exposed to agents over MCP",
-	"GET /sandboxes/:id/connect":              "UI-only open-in-editor readiness; the CLI writes ssh config itself",
+	"GET /deployments/:id/next-steps":                  "UI-only checklist card",
+	"GET /deployments/:id/security":                    "web security tab first; CLI command to follow",
+	"POST /deployments/:id/security/scan":              "web security tab first; CLI command to follow",
+	"GET /observe/deployments/:id/pod-health":          "dashboard series; CLI command to follow",
+	"GET /observe/deployments/:id/volumes":             "dashboard series; CLI command to follow",
+	"GET /observe/deployments/:id/builds":              "dashboard series; CLI command to follow",
+	"GET /observe/deployments/:id/changes":             "dashboard chart markers; exposed to agents over MCP",
+	"GET /deployments/:id/releases/:releaseId/verdict": "deploy verdict; shown in deploy releases and over MCP",
+	"GET /sandboxes/:id/connect":                       "UI-only open-in-editor readiness; the CLI writes ssh config itself",
 
 	"GET /share/sandbox/:token":                          "share link viewer, web UI only",
 	"GET /share/sandbox/:token/sessions/:sid/transcript": "share link viewer, web UI only",

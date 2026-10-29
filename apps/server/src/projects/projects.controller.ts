@@ -991,6 +991,22 @@ export class DeploymentsController {
     return this.deployments.listReleases(id, Number(limitStr) || 20);
   }
 
+  @Get(':id/releases/:releaseId/verdict')
+  async getReleaseVerdict(
+    @Param('id') id: string,
+    @Param('releaseId') releaseId: string,
+    @Request() req
+  ) {
+    await this.projectAccess.assertDeploymentView(id, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
+    return this.deployments.getReleaseVerdict(id, releaseId);
+  }
+
   @Get(':id/build-runs/:runId/logs')
   async getBuildRunLogs(@Param('id') id: string, @Param('runId') runId: string, @Request() req) {
     const { access } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {

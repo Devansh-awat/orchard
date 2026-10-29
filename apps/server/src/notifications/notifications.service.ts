@@ -109,6 +109,45 @@ export class NotificationsService {
     });
   }
 
+  async notifyDeployRegressed(deploymentId: string, releaseId: string, summary: string) {
+    const dep = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: {
+        id: true,
+        name: true,
+        displayName: true,
+        createdBy: true,
+        project: {
+          select: {
+            id: true,
+            name: true,
+            organizationId: true,
+            organization: { select: { slug: true } }
+          }
+        }
+      }
+    });
+    if (!dep) return;
+    const label = dep.displayName || dep.name;
+    await this.emit({
+      organizationId: dep.project.organizationId,
+      scopeType: 'deployment',
+      scopeId: dep.id,
+      actorUserId: dep.createdBy,
+      dedupeKey: `deploy.regressed:${releaseId}`,
+      message: {
+        event: 'deploy.regressed',
+        title: `Deploy got worse: ${label}`,
+        body: truncate(summary, 400) ?? summary,
+        url: `${this.frontendUrl}/${dep.project.organization.slug}/deployments/${dep.id}?tab=deploys`,
+        projectId: dep.project.id,
+        projectName: dep.project.name,
+        targetId: dep.id,
+        targetName: label
+      }
+    });
+  }
+
   async notifyPodState(deploymentId: string, state: 'crashing' | 'recovered', detail?: string) {
     const dep = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },

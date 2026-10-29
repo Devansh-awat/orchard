@@ -157,6 +157,7 @@
   "GET /deployments/:id/pods": "authenticated",
   "GET /deployments/:id/pods-live": "authenticated",
   "GET /deployments/:id/releases": "authenticated",
+  "GET /deployments/:id/releases/:releaseId/verdict": "authenticated",
   "GET /deployments/:id/rollout": "authenticated",
   "GET /deployments/:id/security": "authenticated",
   "GET /deployments/:id/webhook-tokens": "authenticated",

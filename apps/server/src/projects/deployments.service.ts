@@ -1791,6 +1791,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       observedAt: workload?.updatedAt ?? null,
       warnings,
       rollout: await this.mirroredRollout(deployment),
+      latestVerdict: await this.latestVerdict(deployment.id),
       totalCpuUsage,
       totalMemoryUsage,
       status: computedStatus,
@@ -3480,6 +3481,37 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   // command is already baked into the image.
   async listReleases(deploymentId: string, limit: number) {
     return this.releases.list(deploymentId, limit);
+  }
+
+  async getReleaseVerdict(deploymentId: string, releaseId: string) {
+    const row = await this.prisma.release.findFirst({
+      where: { id: releaseId, deploymentId },
+      select: { id: true, verdict: true, verdictAt: true, settledAt: true, promotedAt: true }
+    });
+    if (!row) throw new NotFoundException('Release not found');
+    return {
+      releaseId: row.id,
+      verdict: row.verdict ?? null,
+      at: row.verdictAt?.toISOString() ?? null,
+      settledAt: row.settledAt?.toISOString() ?? null,
+      pending: !row.verdict && !!row.promotedAt
+    };
+  }
+
+  private async latestVerdict(deploymentId: string) {
+    const row = await this.prisma.release.findFirst({
+      where: { deploymentId, verdictAt: { not: null } },
+      orderBy: { verdictAt: 'desc' },
+      select: { id: true, imageHistoryId: true, verdict: true, verdictAt: true }
+    });
+    return row?.verdict
+      ? {
+          releaseId: row.id,
+          imageHistoryId: row.imageHistoryId,
+          at: row.verdictAt!.toISOString(),
+          ...(row.verdict as object)
+        }
+      : null;
   }
 
   // What a rollout of this app is patched with besides the image. Shared by

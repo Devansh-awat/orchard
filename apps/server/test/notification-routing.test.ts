@@ -167,6 +167,7 @@ test('resource scopes only accept events that can happen there', () => {
     'alert.firing',
     'alert.resolved',
     'deploy.failed',
+    'deploy.regressed',
     'deploy.succeeded',
     'pod.crashing',
     'pod.recovered'

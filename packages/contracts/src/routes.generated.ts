@@ -195,6 +195,7 @@ export const routes: GeneratedRoute[] = [
   { method: 'PATCH', path: '/deployments/:id/pull-policy', auth: 'authenticated' },
   { method: 'POST', path: '/deployments/:id/rebuild', auth: 'authenticated' },
   { method: 'GET', path: '/deployments/:id/releases', auth: 'authenticated' },
+  { method: 'GET', path: '/deployments/:id/releases/:releaseId/verdict', auth: 'authenticated' },
   { method: 'PATCH', path: '/deployments/:id/resources', auth: 'authenticated' },
   { method: 'POST', path: '/deployments/:id/restart', auth: 'authenticated' },
   { method: 'POST', path: '/deployments/:id/retry-apply', auth: 'authenticated' },

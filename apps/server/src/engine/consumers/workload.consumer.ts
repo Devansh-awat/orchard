@@ -89,7 +89,32 @@ export class WorkloadConsumer implements OnModuleDestroy {
 
   async onReplicaSetEvent(_type: EngineEventType, rs: k8s.V1ReplicaSet): Promise<void> {
     const ctx = await this.resolveReplicaSet(rs);
-    if (ctx) this.scheduleEmit(ctx, { rollout: true });
+    if (!ctx) return;
+    this.scheduleEmit(ctx, { rollout: true });
+    await this.markSettled(ctx.deploymentId);
+  }
+
+  private async markSettled(deploymentId: string): Promise<void> {
+    const release = await this.prisma.release.findFirst({
+      where: { deploymentId, status: 'live', settledAt: null, promotedAt: { not: null } },
+      orderBy: { promotedAt: 'desc' },
+      select: { id: true, image: true }
+    });
+    if (!release) return;
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: { id: true, name: true, namespace: true }
+    });
+    if (!deployment) return;
+    const deployments = this.moduleRef.get(DeploymentsService, { strict: false });
+    const rollout = await deployments.mirroredRollout(deployment);
+    if (rollout?.state !== 'stable') return;
+    const current = rollout.revisions.find((r) => r.hash === rollout.currentRevision);
+    if (current?.image && current.image !== release.image) return;
+    await this.prisma.release.updateMany({
+      where: { id: release.id, settledAt: null },
+      data: { settledAt: new Date() }
+    });
   }
 
   private resolveReplicaSet(rs: k8s.V1ReplicaSet): Promise<Ctx | null> {
@@ -210,6 +235,8 @@ export class WorkloadConsumer implements OnModuleDestroy {
     if (changed) {
       this.scheduleEmit(ctx, { workload: data });
     }
+
+    await this.markSettled(ctx.deploymentId);
 
     // Last, because it is the only part of this handler allowed to defer. The
     // mirrored row and the event above are correct either way and clients read
