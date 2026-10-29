@@ -150,6 +150,7 @@ export class MetricsState {
 	byPod = $state(false);
 	now = $state(Date.now());
 	hover = $state<number | null>(null);
+	focus = $state<{ panel: string; key: number } | null>(null);
 	modes = $state<Partial<Record<ChartId, ChartMode>>>({});
 	killed = $state<KilledContainer[]>([]);
 	warnings = $state<(PodEvent & { pod: string })[]>([]);

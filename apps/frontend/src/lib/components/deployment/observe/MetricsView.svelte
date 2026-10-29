@@ -1,5 +1,8 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { page } from '$app/stores';
+	import CopyButton from '$lib/components/ui/CopyButton.svelte';
+	import { SYMPTOM_PANELS, momentLink } from './permalink';
 	import { Boxes, Clock, Code, GitCommitHorizontal, Info, TriangleAlert } from 'lucide-svelte';
 	import {
 		ActivityGroup,
@@ -768,6 +771,10 @@
 							{#snippet title()}<span class="finding" title={f.sentence}>{f.sentence}</span
 								>{/snippet}
 							{#snippet actions()}
+								<CopyButton
+									value={momentLink($page.url, { at: f.at, panel: SYMPTOM_PANELS[f.kind] })}
+									label="Copy a link to this moment"
+								/>
 								<Button
 									variant="ghost"
 									size="sm"
@@ -797,6 +804,7 @@
 			>
 				<div class="grid">
 					<MetricPanel
+						focus={metrics.focus}
 						title="Requests"
 						info={statusSeries.length
 							? 'Requests per second reaching this app through its domains, by status class.'
@@ -819,6 +827,7 @@
 						note={sharedHttp ? shared : undefined}
 					/>
 					<MetricPanel
+						focus={metrics.focus}
 						title="Error rate"
 						info="Share of requests that returned a 5xx. Amber from 1%, red from 5%."
 						series={series.err}
@@ -850,6 +859,7 @@
 						onZoom={(a, b) => metrics.zoom(a, b)}
 					/>
 					<MetricPanel
+						focus={metrics.focus}
 						title="Response time"
 						info={percentiles
 							? 'Half of requests finish faster than typical; 1 in 20 is slower than slow, 1 in 100 slower than worst.'
@@ -906,6 +916,7 @@
 		<Disclosure title="Resources" bind:open={open.use}>
 			<div class="grid">
 				<MetricPanel
+					focus={metrics.focus}
 					title="CPU"
 					info="CPU used against the limit. Amber from 80% of the limit, red at the limit, where the app gets throttled."
 					series={series.cpu}
@@ -924,6 +935,7 @@
 				/>
 				{#if metrics.throttle.length > 0}
 					<MetricPanel
+						focus={metrics.focus}
 						title="CPU throttling"
 						info="Share of scheduling periods where the CPU limit held the app back. Above 25% the limit is the bottleneck."
 						series={throttleSeries}
@@ -945,6 +957,7 @@
 					/>
 				{/if}
 				<MetricPanel
+					focus={metrics.focus}
 					title="Memory"
 					info="Memory used against the limit. At the limit the container is killed (OOMKilled)."
 					series={memSeries}
@@ -962,6 +975,7 @@
 					onZoom={(a, b) => metrics.zoom(a, b)}
 				/>
 				<MetricPanel
+					focus={metrics.focus}
 					title="Network"
 					info="Bytes per second received (in) and sent (out) by the app's pods."
 					series={series.net}
@@ -995,6 +1009,7 @@
 		<Disclosure title="Pods" bind:open={open.pods}>
 			<div class="grid">
 				<MetricPanel
+					focus={metrics.focus}
 					title="Restarts and out-of-memory kills"
 					info={kube
 						? 'Container restarts per interval, by the reason the container last stopped.'
@@ -1017,6 +1032,7 @@
 					onZoom={(a, b) => metrics.zoom(a, b)}
 				/>
 				<MetricPanel
+					focus={metrics.focus}
 					title="Waiting containers by reason"
 					info="Containers waiting to run per interval, by the reason Kubernetes gave (crash back-off, image pull, still creating)."
 					series={waiting}
@@ -1032,6 +1048,7 @@
 					onZoom={(a, b) => metrics.zoom(a, b)}
 				/>
 				<MetricPanel
+					focus={metrics.focus}
 					title="Pods not ready"
 					info="Pods that were running but not ready to take traffic, per interval."
 					series={notReady}
@@ -1047,6 +1064,7 @@
 					onZoom={(a, b) => metrics.zoom(a, b)}
 				/>
 				<MetricPanel
+					focus={metrics.focus}
 					title="Kubernetes warnings"
 					info="Warnings Kubernetes recorded for this app's pods (failed probes, back-off, scheduling), by reason."
 					series={warnings}
@@ -1068,6 +1086,7 @@
 		<Disclosure title="Logs" bind:open={open.logs}>
 			<div class="grid">
 				<MetricPanel
+					focus={metrics.focus}
 					title="Error and warning lines"
 					info={storedLevelItems
 						? 'Log lines at error or warning level per interval, from the stored logs.'
@@ -1112,6 +1131,7 @@
 		<Disclosure title="Deploys" bind:open={open.deploys}>
 			<div class="grid">
 				<MetricPanel
+					focus={metrics.focus}
 					title="Deploys"
 					info="Builds started for this app per interval, by outcome."
 					series={deploys}
@@ -1128,6 +1148,7 @@
 					onZoom={(a, b) => metrics.zoom(a, b)}
 				/>
 				<MetricPanel
+					focus={metrics.focus}
 					title="Build time"
 					info="How long each build took from start to finish, by outcome."
 					series={buildTimes}
@@ -1145,6 +1166,7 @@
 					onZoom={(a, b) => metrics.zoom(a, b)}
 				/>
 				<MetricPanel
+					focus={metrics.focus}
 					title="Queue wait"
 					info="How long each build waited for a builder before it started."
 					series={queueWait}
@@ -1162,6 +1184,7 @@
 					onZoom={(a, b) => metrics.zoom(a, b)}
 				/>
 				<MetricPanel
+					focus={metrics.focus}
 					title="Where build time goes"
 					info="Each build split into its steps, from waiting in the queue to applying the new version."
 					series={phases}

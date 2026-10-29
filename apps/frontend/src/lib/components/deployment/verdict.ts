@@ -15,7 +15,23 @@ export type ReleaseVerdict = {
 	version?: string;
 	lines: VerdictLine[];
 	newErrorGroups?: number;
+	after?: { from: number; to: number };
 };
+
+const DIMENSION_PANELS: Record<VerdictLine['dimension'], string> = {
+	p95: 'panel-response-time',
+	errors: 'panel-error-rate',
+	restarts: 'panel-restarts-and-out-of-memory-kills',
+	memory: 'panel-memory'
+};
+
+export function verdictMoment(v: ReleaseVerdict): { at: number; panel: string | null } | null {
+	const at = v.after?.from ?? (v.at ? Date.parse(v.at) : NaN);
+	if (!Number.isFinite(at)) return null;
+	const line =
+		v.lines.find((l) => l.status === 'regressed') ?? v.lines.find((l) => l.status === 'improved');
+	return { at, panel: line ? DIMENSION_PANELS[line.dimension] : null };
+}
 
 const REGRESSED: Record<VerdictLine['dimension'], string> = {
 	p95: 'Slower',

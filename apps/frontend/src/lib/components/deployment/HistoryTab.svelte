@@ -32,7 +32,16 @@
 	import Widget from '$lib/components/ui/Widget.svelte';
 	import type { Deployment } from '$lib/types/deployment';
 	import ReleaseCard from './ReleaseCard.svelte';
-	import { verdictBadge, verdictText, worthShowing, type ReleaseVerdict } from './verdict';
+	import {
+		verdictBadge,
+		verdictMoment,
+		verdictText,
+		worthShowing,
+		type ReleaseVerdict
+	} from './verdict';
+	import { page } from '$app/stores';
+	import CopyButton from '$lib/components/ui/CopyButton.svelte';
+	import { momentLink } from './observe/permalink';
 	import {
 		DEFAULT_FILTER,
 		TIMELINE_FILTERS,
@@ -351,6 +360,13 @@
 									{/snippet}
 									{#snippet time()}<RelativeTime date={entry.at} />{/snippet}
 									{#snippet actions()}
+										{@const moment = verdict ? verdictMoment(verdict) : null}
+										{#if moment}
+											<CopyButton
+												value={momentLink($page.url, moment)}
+												label="Copy a link to this deploy's moment"
+											/>
+										{/if}
 										{#if imageHistoryId}
 											{#if !entry.meta.isActive}
 												<Button

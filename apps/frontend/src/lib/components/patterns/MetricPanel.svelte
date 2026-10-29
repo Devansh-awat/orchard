@@ -2,6 +2,7 @@
 	import type { Snippet } from 'svelte';
 	import { ChartArea, ChartBarDecreasing, ChartColumn, ChartLine, Info } from 'lucide-svelte';
 	import Widget from '$lib/components/ui/Widget.svelte';
+	import { stateEcho } from '$lib/utils/motion.svelte';
 	import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
 	import Tooltip from '$lib/components/ui/Tooltip.svelte';
 	import TimeChart from '$lib/components/ui/TimeChart.svelte';
@@ -44,7 +45,8 @@
 		sparse = false,
 		height = 168,
 		onZoom = undefined,
-		note = undefined
+		note = undefined,
+		focus = null
 	}: {
 		title: string;
 		info?: string;
@@ -68,7 +70,15 @@
 		height?: number;
 		onZoom?: (from: number, to: number) => void;
 		note?: Snippet;
+		focus?: { panel: string; key: number } | null;
 	} = $props();
+
+	const anchor = $derived(
+		`panel-${title
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, '-')
+			.replace(/^-|-$/g, '')}`
+	);
 
 	let emphasis = $state<string | null>(null);
 
@@ -134,61 +144,78 @@
 	{/if}
 {/snippet}
 
-<Widget {title} {meta} class="metric-panel">
-	<div class="body">
-		<div class="view" style:height="{height}px">
-			{#if mode === 'top'}
-				<TopList
-					label="{title} ranked by {hover === null ? 'average' : `value at ${valueLabel}`}"
-					items={rows.map((r) => ({
-						id: r.id,
-						label: r.label,
-						color: r.color,
-						value: hover === null ? r.avg : r.value
-					}))}
-					{format}
-					bind:emphasis
-				/>
-			{:else}
-				<TimeChart
-					{series}
-					{from}
-					{to}
-					formatY={format}
-					{height}
-					label="{title} over time"
-					display={mode}
-					bind:hover
-					bind:emphasis
-					{events}
-					{findings}
-					{thresholds}
-					{bands}
-					{peaks}
-					integer={sum}
-					{sparse}
-					{onZoom}
-				/>
-				{#if !hasData}
-					<p class="empty">{empty}</p>
+<div
+	class="anchor motion-echo"
+	id={anchor}
+	{@attach stateEcho(() => (focus?.panel === anchor ? focus.key : null))}
+>
+	<Widget {title} {meta} class="metric-panel">
+		<div class="body">
+			<div class="view" style:height="{height}px">
+				{#if mode === 'top'}
+					<TopList
+						label="{title} ranked by {hover === null ? 'average' : `value at ${valueLabel}`}"
+						items={rows.map((r) => ({
+							id: r.id,
+							label: r.label,
+							color: r.color,
+							value: hover === null ? r.avg : r.value
+						}))}
+						{format}
+						bind:emphasis
+					/>
+				{:else}
+					<TimeChart
+						{series}
+						{from}
+						{to}
+						formatY={format}
+						{height}
+						label="{title} over time"
+						display={mode}
+						bind:hover
+						bind:emphasis
+						{events}
+						{findings}
+						{thresholds}
+						{bands}
+						{peaks}
+						integer={sum}
+						{sparse}
+						{onZoom}
+					/>
+					{#if !hasData}
+						<p class="empty">{empty}</p>
+					{/if}
 				{/if}
+			</div>
+			{#if table && hasData}
+				<SeriesTable
+					{rows}
+					{format}
+					{valueLabel}
+					avgLabel={sum ? 'Total' : 'Avg'}
+					label="{title} series"
+					bind:emphasis
+				/>
 			{/if}
+			{#if note}<div class="note">{@render note()}</div>{/if}
 		</div>
-		{#if table && hasData}
-			<SeriesTable
-				{rows}
-				{format}
-				{valueLabel}
-				avgLabel={sum ? 'Total' : 'Avg'}
-				label="{title} series"
-				bind:emphasis
-			/>
-		{/if}
-		{#if note}<div class="note">{@render note()}</div>{/if}
-	</div>
-</Widget>
+	</Widget>
+</div>
 
 <style>
+	.anchor {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+		border-radius: calc(var(--radius-widget) * var(--corner-scale));
+		corner-shape: var(--corner);
+		scroll-margin-top: 1rem;
+	}
+	.anchor > :global(.widget) {
+		flex: 1;
+	}
 	.body {
 		display: flex;
 		flex-direction: column;

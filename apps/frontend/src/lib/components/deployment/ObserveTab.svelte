@@ -10,7 +10,10 @@
 		ZoomOut
 	} from 'lucide-svelte';
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import { apiFetch } from '$lib/stores';
+	import CopyButton from '$lib/components/ui/CopyButton.svelte';
+	import { readMoment } from './observe/permalink';
 	import {
 		Button,
 		Dropdown,
@@ -57,6 +60,70 @@
 	];
 
 	const metrics = new MetricsState();
+	let restored = false;
+	let restoring = true;
+	let pendingMoment: { at: number | null; panel: string | null } | null = null;
+	let link = $state('');
+
+	$effect(() => {
+		if (restored) return;
+		restored = true;
+		untrack(() => {
+			const m = readMoment($page.url);
+			if (m.from != null && m.to != null) metrics.zoom(m.from, m.to);
+			else if (m.range) {
+				const r = RANGES.find((x) => x.id === m.range);
+				if (r) metrics.setRange(r.ms);
+			}
+			if (m.at != null || m.panel) pendingMoment = { at: m.at, panel: m.panel };
+		});
+	});
+
+	$effect(() => {
+		const custom = metrics.custom;
+		const ms = metrics.windowMs;
+		untrack(() => writeRange(custom, ms));
+	});
+
+	function writeRange(custom: { from: number; to: number } | null, ms: number) {
+		const url = new URL(window.location.href);
+		if (custom) {
+			url.searchParams.set('from', String(custom.from));
+			url.searchParams.set('to', String(custom.to));
+			url.searchParams.delete('range');
+		} else {
+			url.searchParams.delete('from');
+			url.searchParams.delete('to');
+			const r = RANGES.find((x) => x.ms === ms);
+			if (r && r.id !== '1h') url.searchParams.set('range', r.id);
+			else url.searchParams.delete('range');
+		}
+		if (!restoring) {
+			url.searchParams.delete('at');
+			url.searchParams.delete('panel');
+		}
+		restoring = false;
+		link = url.toString();
+		if (url.href !== window.location.href) {
+			goto(url, { replaceState: true, noScroll: true, keepFocus: true });
+		}
+	}
+
+	$effect(() => {
+		const loaded = metrics.loaded;
+		if (!loaded || !pendingMoment || view !== 'metrics') return;
+		const moment = pendingMoment;
+		pendingMoment = null;
+		untrack(() => {
+			if (moment.at != null) metrics.hover = moment.at;
+			if (moment.panel) {
+				requestAnimationFrame(() => {
+					document.getElementById(moment.panel!)?.scrollIntoView({ block: 'center' });
+					metrics.focus = { panel: moment.panel!, key: Date.now() };
+				});
+			}
+		});
+	});
 	const logs = new LogsState();
 	const errors = new ErrorsState();
 	const events = new EventsState();
@@ -165,6 +232,9 @@
 		/>
 
 		<div class="controls">
+			{#if view === 'metrics' || view === 'logs' || view === 'requests'}
+				<CopyButton value={link || $page.url.toString()} label="Copy a link to this view" />
+			{/if}
 			{#if view === 'metrics' || view === 'logs' || view === 'requests'}
 				{#if view === 'metrics'}
 					<SegmentedControl
