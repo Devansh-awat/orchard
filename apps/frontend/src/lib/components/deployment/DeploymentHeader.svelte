@@ -1,13 +1,10 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import {
-		Clock,
 		Ellipsis,
-		GitBranch,
 		GitCommitHorizontal,
 		Github,
 		Globe,
-		Layers,
 		Loader2,
 		Pencil,
 		Square,
@@ -17,8 +14,8 @@
 	import { motionStagger, springCollapse } from '$lib/utils/motion.svelte';
 	import { formatRelativeTime } from '$lib/utils/format';
 	import { ingressUrl } from '$lib/ingress-url';
-	import { StatusBadge, Button, Menu, MenuItem, MenuSeparator } from '$lib/components/ui';
-	import MetaList from '$lib/components/ui/MetaList.svelte';
+	import { Badge, StatusBadge, Button, Menu, MenuItem, MenuSeparator } from '$lib/components/ui';
+	import Tooltip from '$lib/components/ui/Tooltip.svelte';
 	import type { StatusMeta } from '$lib/components/ui';
 
 	let {
@@ -103,48 +100,19 @@
 	);
 	const when = $derived(
 		_activeBuild
-			? `${formatRelativeTime(new Date(_activeBuild.createdAt))}${
+			? `Deployed ${formatRelativeTime(new Date(_activeBuild.createdAt))}${
 					_activeBuild.triggerType === 'manual' && _activeBuild.triggeredBy
 						? ` by @${_activeBuild.triggeredBy.username}`
 						: ''
 				}`
 			: null
 	);
-	const factItems = $derived(
-		[
-			deployment.ingresses?.[0]
-				? {
-						label:
-							deployment.ingresses[0].host +
-							(deployment.ingresses.length > 1 ? ` +${deployment.ingresses.length - 1}` : ''),
-						icon: Globe,
-						href: ingressUrl(deployment.ingresses[0]),
-						external: true
-					}
-				: null,
-			deployment.environment ? { label: deployment.environment.name, icon: Layers } : null,
-			repoLabel
-				? {
-						label: repoLabel,
-						icon: Github,
-						href: deployment.githubRepo.replace(/\.git$/, ''),
-						external: true
-					}
-				: null,
-			_activeBuild?.branch || branch
-				? { label: _activeBuild?.branch || branch, icon: GitBranch, mono: true }
-				: null,
-			_commitLead
-				? {
-						label: _commitLead,
-						icon: GitCommitHorizontal,
-						href: commitUrl ?? undefined,
-						external: !!commitUrl,
-						mono: _commitLeadMono
-					}
-				: null,
-			when ? { label: when, icon: Clock } : null
-		].filter((x) => x !== null)
+	const primaryDomain = $derived(deployment.ingresses?.[0] ?? null);
+	const extraDomains = $derived(Math.max(0, (deployment.ingresses?.length ?? 0) - 1));
+	const shortSha = $derived(_activeBuild?.commitSha ? _activeBuild.commitSha.slice(0, 7) : null);
+	const sourceTitle = $derived(
+		[repoLabel, _commitLead && repoLabel ? `“${_commitLead}”` : null].filter(Boolean).join('  ') ||
+			'Source'
 	);
 </script>
 
@@ -158,6 +126,9 @@
 		{#if buildStatusChip}
 			<StatusBadge meta={buildStatusChip} />
 		{/if}
+		{#if deployment.environment}
+			<Badge>{deployment.environment.name}</Badge>
+		{/if}
 		{#each debugChips as chip (chip.label)}
 			<StatusBadge meta={chip} />
 		{/each}
@@ -168,20 +139,19 @@
 	<div class="dh-actions">
 		{#if setup}{@render setup()}{/if}
 		{#if stopped}
-			<Button variant="primary" size="sm" onclick={onStart} disabled={starting || _isBuilding}>
-				{#if starting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Play size={14} />{/if}
+			<Button variant="primary" onclick={onStart} disabled={starting || _isBuilding}>
+				{#if starting}<Loader2 size={16} class="animate-spin" />{:else}<Play size={16} />{/if}
 				<span>{pendingPush ? 'Build and start' : 'Start'}</span>
 			</Button>
 		{:else}
 			<Button
 				variant="secondary"
-				size="sm"
 				onclick={onRestart}
 				disabled={restarting || stopping}
 				onmouseenter={() => onTriggerActionAnim('restart')}
 			>
-				{#if restarting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Play
-						size={14}
+				{#if restarting}<Loader2 size={16} class="animate-spin" />{:else}<Play
+						size={16}
 						animate={actionAnim.restart ?? false}
 					/>{/if}
 				<span>Restart</span>
@@ -189,13 +159,12 @@
 			{#if repoUrl}
 				<Button
 					variant="primary"
-					size="sm"
 					onclick={onRebuild}
 					disabled={rebuilding || _isBuilding}
 					onmouseenter={() => onTriggerActionAnim('redeploy')}
 				>
-					{#if rebuilding}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw
-							size={14}
+					{#if rebuilding}<Loader2 size={16} class="animate-spin" />{:else}<RefreshCw
+							size={16}
 							animate={actionAnim.redeploy ?? false}
 						/>{/if}
 					<span>Redeploy</span>
@@ -204,7 +173,7 @@
 		{/if}
 		<Menu placement="bottom-end">
 			{#snippet trigger(props)}
-				<Button {...props} variant="ghost" size="sm" icon={Ellipsis} label="More actions" />
+				<Button {...props} variant="ghost" icon={Ellipsis} label="More actions" />
 			{/snippet}
 			{#if stopped && repoUrl}
 				<MenuItem icon={RefreshCw} disabled={rebuilding || _isBuilding} onclick={onRebuild}
@@ -227,7 +196,40 @@
 
 {#snippet facts()}
 	<div class="dh-facts">
-		<MetaList items={factItems} />
+		{#if primaryDomain}
+			<a
+				class="dh-domain"
+				href={ingressUrl(primaryDomain)}
+				target="_blank"
+				rel="noopener noreferrer"
+			>
+				<Globe size={14} aria-hidden="true" />
+				<span class="dh-domain-host">{primaryDomain.host}</span>
+				{#if extraDomains}<span class="dh-more-domains">+{extraDomains}</span>{/if}
+			</a>
+		{/if}
+		{#if repoLabel || _commitLead}
+			<Tooltip text={sourceTitle} delay={200}>
+				<a
+					class="dh-source"
+					href={commitUrl ?? deployment.githubRepo?.replace(/\.git$/, '') ?? undefined}
+					target="_blank"
+					rel="noopener noreferrer"
+				>
+					{#if repoLabel}<Github size={14} aria-hidden="true" />{/if}
+					{#if _activeBuild?.branch || branch}
+						<span class="dh-mono">{_activeBuild?.branch || branch}</span>
+					{/if}
+					{#if shortSha}
+						<GitCommitHorizontal size={14} aria-hidden="true" />
+						<span class="dh-mono">{shortSha}</span>
+					{:else if _commitLead && !repoLabel}
+						<span class="dh-mono dh-image">{_commitLead}</span>
+					{/if}
+				</a>
+			</Tooltip>
+		{/if}
+		{#if when}<span class="dh-when">{when}</span>{/if}
 		{#if _buildFailed && (deployment.buildLogs || deployment.buildError)}
 			<Button variant="ghost" size="sm" onclick={onViewBuildLogs}>View deployment logs</Button>
 		{/if}
@@ -248,14 +250,74 @@
 
 <style>
 	.dh-card {
-		padding: 0.25rem 0 0;
+		padding: 1.25rem 1.5rem;
+		border-radius: calc(var(--radius-panel) * var(--corner-scale));
+		corner-shape: var(--corner);
+		background: var(--bg-surface);
+		box-shadow: var(--shadow-raised);
 	}
 	.dh-facts {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem 1rem;
 		flex-wrap: wrap;
+		gap: 0.5rem 1.5rem;
 		min-width: 0;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+	}
+	.dh-domain,
+	.dh-source {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		min-width: 0;
+		text-decoration: none;
+	}
+	.dh-domain {
+		color: var(--text-default);
+		font-weight: var(--weight-medium);
+	}
+	.dh-domain :global(svg),
+	.dh-source :global(svg) {
+		flex-shrink: 0;
+		color: var(--text-faint);
+	}
+	.dh-domain:hover .dh-domain-host {
+		text-decoration: underline;
+		text-underline-offset: 0.2em;
+	}
+	.dh-domain-host {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		text-box: trim-both cap alphabetic;
+	}
+	.dh-more-domains {
+		color: var(--text-muted);
+		font-weight: var(--weight-regular);
+	}
+	.dh-source {
+		color: var(--text-muted);
+	}
+	.dh-source:hover {
+		color: var(--text-default);
+	}
+	.dh-mono {
+		font-family: var(--font-mono);
+		font-size: var(--text-footnote);
+		text-box: trim-both cap alphabetic;
+	}
+	.dh-source .dh-mono + :global(svg) {
+		margin-left: 0.375rem;
+	}
+	.dh-image {
+		max-width: 18rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.dh-when {
+		color: var(--text-faint);
 	}
 	.dh-top {
 		display: flex;
@@ -296,12 +358,7 @@
 		overflow: hidden;
 	}
 	.dh-body-inner {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		flex-wrap: wrap;
-		gap: 0.5rem 1.5rem;
-		padding-top: 0.625rem;
+		padding-top: 0.75rem;
 	}
 	@media (max-width: 640px) {
 		.dh-card {

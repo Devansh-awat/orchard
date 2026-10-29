@@ -8,6 +8,7 @@
 		footer = undefined,
 		flush = false,
 		fill = false,
+		size = 'md',
 		tone = 'default',
 		class: className = '',
 		children = undefined
@@ -18,13 +19,14 @@
 		footer?: Snippet;
 		flush?: boolean;
 		fill?: boolean;
+		size?: 'sm' | 'md';
 		tone?: 'default' | 'danger';
 		class?: string;
 		children?: Snippet;
 	} = $props();
 </script>
 
-<section class="section section--{tone} {className}" class:section--fill={fill}>
+<section class="section section--{tone} section--{size} {className}" class:section--fill={fill}>
 	{#if title || actions}
 		<header class="head">
 			<div class="heading">
@@ -114,6 +116,26 @@
 	}
 	.head + .body--flush {
 		padding-top: 0.75rem;
+	}
+	.section--sm .head {
+		align-items: center;
+		padding: 0.75rem 1.25rem 0;
+	}
+	.section--sm .head:last-child {
+		padding-bottom: 0.75rem;
+	}
+	.section--sm .title {
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+	}
+	.section--sm .head + .body--flush {
+		padding-top: 0.25rem;
+	}
+	.section--sm .actions > :global(.button--ghost:last-of-type) {
+		margin-right: -0.625rem;
+	}
+	.section--sm .actions > :global(.button--ghost.button--icon:last-of-type) {
+		margin-right: -0.4375rem;
 	}
 	.foot {
 		display: flex;

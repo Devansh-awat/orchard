@@ -281,10 +281,11 @@ Three-level hierarchy: **Org cap** → **Member allowance** → **Deployment req
   (`SettingsRail`, `?s=`). Old ids (`metrics`, `environment`, `resources`, `volumes`, `build`,
   `advanced`) still resolve.
 - Overview fills exactly one viewport at 64rem wide and 40rem tall or more (`dep-shell--fit`): the
-  console takes the left column at full height; the right column is `MetricsRail` (CPU, memory,
-  requests and error rate as small `Metric` tiles with sparklines seeded from `/metrics` and
-  `/http-metrics`) over `PodsTable` (compact sortable `Table`, replica `Stepper`, a `PodMenu` per row
-  that also opens on right-click). Below that size it scrolls. Nodes and other infrastructure stay hidden.
+  console takes the main column at full height; the side column (1.618 : 1) stacks `PodsList` (state
+  in words, `PodMenu` per row, a Replicas footer), `UsageCard` (CPU and memory against their limits,
+  sparklines seeded from `/metrics` then extended by SSE) and `ErrorsCard` (top error groups from
+  `/observe/.../errors`, works for apps with no web traffic). Below that size it scrolls. Nodes and
+  other infrastructure stay hidden.
 - Problems show as one `AlertStack` line above the panels; it expands to the full list.
 - Live values land instantly; motion is the decorative layer on top (`NumberRoll`, `stateEcho` on pod
   status, the sparkline growing), never a tween that delays the number.

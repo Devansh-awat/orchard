@@ -1,0 +1,164 @@
+<script lang="ts">
+	import { Button, SectionCard } from '$lib/components/ui';
+	import NumberRoll from '$lib/components/ui/NumberRoll.svelte';
+	import Sparkline from '$lib/components/ui/Sparkline.svelte';
+	import { formatCpu, formatMemory } from '$lib/utils/format';
+	import type { UsageHistory } from './usage-history.svelte';
+
+	let {
+		cpu,
+		mem,
+		cpuLimit,
+		memLimit,
+		cpuRatio,
+		memRatio,
+		history,
+		onopen
+	}: {
+		cpu: number | null | undefined;
+		mem: number | null | undefined;
+		cpuLimit: number | null;
+		memLimit: number | null;
+		cpuRatio: number | null;
+		memRatio: number | null;
+		history: UsageHistory;
+		onopen: () => void;
+	} = $props();
+
+	type Tone = 'neutral' | 'warning' | 'error';
+
+	function pressure(ratio: number | null): Tone {
+		if (ratio == null) return 'neutral';
+		if (ratio >= 0.95) return 'error';
+		if (ratio >= 0.85) return 'warning';
+		return 'neutral';
+	}
+
+	const rows = $derived([
+		{
+			id: 'cpu',
+			label: 'CPU',
+			value: formatCpu(cpu ?? 0),
+			limit: cpuLimit != null ? formatCpu(cpuLimit) : null,
+			ratio: cpuRatio,
+			tone: pressure(cpuRatio),
+			values: history.cpu
+		},
+		{
+			id: 'mem',
+			label: 'Memory',
+			value: formatMemory(mem ?? 0),
+			limit: memLimit != null ? formatMemory(memLimit) : null,
+			ratio: memRatio,
+			tone: pressure(memRatio),
+			values: history.mem
+		}
+	]);
+</script>
+
+<SectionCard title="Usage" size="sm" flush>
+	{#snippet actions()}
+		<Button variant="ghost" size="sm" onclick={onopen}>Details</Button>
+	{/snippet}
+	<ul class="rows">
+		{#each rows as row (row.id)}
+			<li class="row row--{row.tone}">
+				<span class="label">{row.label}</span>
+				<span class="value"><NumberRoll value={row.value} /></span>
+				<span class="share">
+					{#if row.ratio != null && row.limit}
+						{Math.round(Math.min(row.ratio, 9.99) * 100)}% of {row.limit}
+					{:else}
+						No limit
+					{/if}
+				</span>
+				<span class="trend">
+					<Sparkline
+						values={row.values}
+						height={24}
+						tone={row.tone}
+						label="{row.label} over the last 30 minutes"
+					/>
+				</span>
+				{#if row.ratio != null}
+					<span
+						class="bar"
+						role="meter"
+						aria-label="{row.label} used"
+						aria-valuemin={0}
+						aria-valuemax={100}
+						aria-valuenow={Math.round(Math.min(row.ratio, 1) * 100)}
+						><span class="fill" style:width="{Math.min(row.ratio, 1) * 100}%"></span></span
+					>
+				{/if}
+			</li>
+		{/each}
+	</ul>
+</SectionCard>
+
+<style>
+	.rows {
+		margin: 0;
+		padding: 0 0 0.125rem;
+		list-style: none;
+	}
+	.row {
+		--tone: var(--neutral-7);
+		display: grid;
+		grid-template-columns: 4rem auto minmax(0, 1fr) 5rem;
+		align-items: center;
+		column-gap: 0.75rem;
+		row-gap: 0.5rem;
+		padding: 0.625rem 1.25rem;
+	}
+	.row + .row {
+		box-shadow: inset 0 1px 0 var(--border-default);
+	}
+	.row--warning {
+		--tone: var(--status-warning-solid);
+	}
+	.row--error {
+		--tone: var(--status-error-solid);
+	}
+	.label {
+		font-size: var(--text-footnote);
+		color: var(--text-muted);
+	}
+	.value {
+		font-size: var(--text-headline);
+		line-height: var(--lh-headline);
+		font-weight: var(--weight-semibold);
+		font-variant-numeric: tabular-nums;
+		color: var(--text-default);
+	}
+	.share {
+		overflow: hidden;
+		font-size: var(--text-caption);
+		color: var(--text-muted);
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.row--warning .share {
+		color: var(--status-warning);
+	}
+	.row--error .share {
+		color: var(--status-error);
+	}
+	.trend {
+		min-width: 0;
+	}
+	.bar {
+		grid-column: 1 / -1;
+		height: 0.25rem;
+		overflow: hidden;
+		border-radius: 999px;
+		background: var(--bg-active);
+	}
+	.fill {
+		display: block;
+		height: 100%;
+		border-radius: inherit;
+		background: var(--tone);
+		transition: width var(--spring-glide-duration) var(--spring-glide);
+	}
+</style>

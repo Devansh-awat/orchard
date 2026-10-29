@@ -124,9 +124,17 @@
 	<PopoverPanel placement="bottom-end" class="ns">
 		{#snippet trigger(attrs)}
 			<Button {...attrs} variant="ghost" aria-label="Set up, {visible.length} left">
-				<Ring value={done} max={total} size={16} thickness={2.5} tone="success" showValue={false} />
-				<span>Set up</span>
-				<span class="ns-count">{visible.length}</span>
+				{#snippet leading()}
+					<Ring
+						value={done}
+						max={total}
+						size={16}
+						thickness={2.5}
+						tone="success"
+						showValue={false}
+					/>
+				{/snippet}
+				Set up <span class="ns-count">{visible.length}</span>
 			</Button>
 		{/snippet}
 		{#snippet children({ close })}

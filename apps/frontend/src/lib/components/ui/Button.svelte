@@ -12,6 +12,7 @@
 		disabled = false,
 		icon = undefined,
 		iconRight = undefined,
+		leading = undefined,
 		label = undefined,
 		class: className = '',
 		children,
@@ -25,6 +26,7 @@
 		disabled?: boolean;
 		icon?: Icon;
 		iconRight?: Icon;
+		leading?: Snippet;
 		label?: string;
 		class?: string;
 		children?: Snippet;
@@ -41,6 +43,8 @@
 	{:else if icon}
 		{@const Leading = icon}
 		<Leading size={iconSize} aria-hidden="true" />
+	{:else if leading}
+		<span class="leading" aria-hidden="true">{@render leading()}</span>
 	{/if}
 	{#if children}<span class="label">{@render children()}</span>{/if}
 	{#if iconRight && !loading}
@@ -136,6 +140,10 @@
 		width: 2.5rem;
 	}
 	.button > :global(svg) {
+		flex-shrink: 0;
+	}
+	.leading {
+		display: flex;
 		flex-shrink: 0;
 	}
 	.label {

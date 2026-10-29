@@ -3,8 +3,9 @@
 	import { untrack } from 'svelte';
 	import { page } from '$app/stores';
 	import { Button, Menu, MenuItem, LogViewer, SelectTrigger } from '$lib/components/ui';
-	import MetricsRail from './MetricsRail.svelte';
-	import PodsTable from './PodsTable.svelte';
+	import UsageCard from './UsageCard.svelte';
+	import ErrorsCard from './ErrorsCard.svelte';
+	import PodsList from './PodsList.svelte';
 	import { UsageHistory } from './usage-history.svelte';
 	import { animate } from 'motion';
 	import { decorativeMotion } from '$lib/utils/motion.svelte';
@@ -74,7 +75,7 @@
 		onTerminalBell?: (id: string) => void;
 		onTerminalSession?: (id: string, handle: string) => void;
 		onSelectLogsPod: (podName: string, containerName?: string) => void;
-		onSetTabMetrics: (view?: 'metrics' | 'http') => void;
+		onSetTabMetrics: (view?: 'metrics' | 'errors') => void;
 		onRefreshPods: () => void;
 		podLabel: (podName: string) => string;
 	} = $props();
@@ -372,17 +373,7 @@
 	</div>
 
 	<div class="side">
-		<MetricsRail
-			cpu={deployment.totalCpuUsage}
-			mem={deployment.totalMemoryUsage}
-			cpuLimit={resourcePressure?.cpuLimit ?? null}
-			memLimit={resourcePressure?.memLimit ?? null}
-			cpuRatio={resourcePressure?.cpuRatio ?? null}
-			memRatio={resourcePressure?.memRatio ?? null}
-			history={usage}
-			onopen={onSetTabMetrics}
-		/>
-		<PodsTable
+		<PodsList
 			deploymentId={deployment.id}
 			pods={activePods}
 			warnings={deployment.warnings ?? []}
@@ -402,13 +393,24 @@
 			onDelete={onDeletePod}
 			onSimulated={onRefreshPods}
 		/>
+		<UsageCard
+			cpu={deployment.totalCpuUsage}
+			mem={deployment.totalMemoryUsage}
+			cpuLimit={resourcePressure?.cpuLimit ?? null}
+			memLimit={resourcePressure?.memLimit ?? null}
+			cpuRatio={resourcePressure?.cpuRatio ?? null}
+			memRatio={resourcePressure?.memRatio ?? null}
+			history={usage}
+			onopen={() => onSetTabMetrics('metrics')}
+		/>
+		<ErrorsCard deploymentId={deployment.id} onopen={() => onSetTabMetrics('errors')} />
 	</div>
 </div>
 
 <style>
 	.overview-board {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) 24rem;
+		grid-template-columns: minmax(0, 1.618fr) minmax(21rem, 1fr);
 		gap: 1rem;
 		height: 100%;
 		min-height: 0;
@@ -428,7 +430,7 @@
 	.side {
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
+		gap: 1rem;
 		min-width: 0;
 		min-height: 0;
 	}
