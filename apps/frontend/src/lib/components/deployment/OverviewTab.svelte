@@ -7,7 +7,6 @@
 	import StatusDot from '$lib/components/ui/StatusDot.svelte';
 	import { statusMeta } from '$lib/components/ui/status';
 	import ErrorsCard from './ErrorsCard.svelte';
-	import DependsOnCard from './DependsOnCard.svelte';
 	import PodsList from './PodsList.svelte';
 	import { UsageHistory } from './usage-history.svelte';
 	import { animate } from 'motion';
@@ -490,7 +489,6 @@
 			history={usage}
 			onopen={() => onSetTabMetrics('metrics')}
 		/>
-		<DependsOnCard deploymentId={deployment.id} />
 		<ErrorsCard deploymentId={deployment.id} onopen={() => onSetTabMetrics('errors')} />
 	</div>
 </div>

@@ -318,8 +318,6 @@ This stack is the largest idle cost in the chart. `metrics.enabled: false` empti
 
 The server gets `VICTORIAMETRICS_URL` built from `metrics.namespace` (port 8428) whenever the stack is on, so moving the namespace no longer leaves it pointing at `orchard-metrics`. Set it in `server.env` to point somewhere else; a value only in `server.envFrom` is shadowed by the chart's.
 
-The vmagent config also scrapes CNPG's per-instance exporter (pods labelled `cnpg.io/cluster`, port `metrics`) for backends, replication lag, database size and WAL archiver series, with `namespace`, `pod` and `cluster` labels. That job sets `honor_labels` so the CNPG cluster name survives the global `cluster` external label.
-
 ### Logs (`logs.*`)
 
 VictoriaLogs plus a Vector DaemonSet, in `metrics.namespace` but toggled independently (the namespace is created here when `metrics.enabled` is false). Vector tails pods in namespaces labelled `orchard.my/managed=true` (and the legacy `orchard.dev/managed=true`) and the ingress controller's pods (`app.kubernetes.io/name in (kubernetes-ingress,traefik)`), and ships them to `/insert/jsonline` with `namespace,app,kind` as stream fields.

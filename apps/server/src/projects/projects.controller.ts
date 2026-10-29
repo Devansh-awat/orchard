@@ -34,7 +34,6 @@ import { StorageService } from '../organizations/storage.service';
 import { Auth, RequireScope } from '../auth/decorators';
 import { MetricsService } from '../metrics/metrics.service';
 import { RightsizingService } from '../rightsizing/rightsizing.service';
-import { DependenciesService } from '../databases/dependencies.service';
 import { MetricsStoreError } from '../metrics/victoria-metrics.service';
 import { PodLogCaptureService } from '../kubernetes/pod-log-capture.service';
 import { GitHubService } from '../github/github.service';
@@ -967,8 +966,7 @@ export class DeploymentsController {
     private readonly faviconService: FaviconService,
     private readonly metricsService: MetricsService,
     private readonly logCapture: PodLogCaptureService,
-    private readonly rightsizing: RightsizingService,
-    private readonly dependencies: DependenciesService
+    private readonly rightsizing: RightsizingService
   ) {}
 
   @Get(':id/build-runs')
@@ -993,18 +991,6 @@ export class DeploymentsController {
       imageUrl: req.user.imageUrl
     });
     return this.deployments.listReleases(id, Number(limitStr) || 20);
-  }
-
-  @Get(':id/dependencies')
-  async getDependencies(@Param('id') id: string, @Request() req) {
-    await this.projectAccess.assertDeploymentView(id, req.user.sub, {
-      email: req.user.email,
-      username: req.user.username,
-      firstName: req.user.firstName,
-      lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl
-    });
-    return this.dependencies.list(id);
   }
 
   @Get(':id/rightsizing')

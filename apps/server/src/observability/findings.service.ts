@@ -3,7 +3,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MetricsService } from '../metrics/metrics.service';
 import { ObservabilityService } from './observability.service';
 import { TimelineService } from './timeline.service';
-import { DependenciesService } from '../databases/dependencies.service';
 import {
   correlate,
   formatBytes,
@@ -88,22 +87,6 @@ export function toCauses(changes: ChangeEntry[]): Change[] {
   });
 }
 
-export function dependencyCauses(
-  deps: { kind: string; id: string; name: string; restarts: { t: number; pod: string }[] }[]
-): Change[] {
-  return deps.flatMap((d) =>
-    d.kind === 'database'
-      ? d.restarts.map((r) => ({
-          id: `database:${d.id}:${r.t}`,
-          t: r.t,
-          kind: 'database' as const,
-          label: `the database ${d.name}`,
-          phrase: `the database ${d.name} restarted`
-        }))
-      : []
-  );
-}
-
 function sumGroups(groups: { points: Point[] }[]): Point[] {
   const acc = new Map<number, number>();
   for (const g of groups) for (const p of g.points) acc.set(p.x, (acc.get(p.x) ?? 0) + p.y);
@@ -116,8 +99,7 @@ export class FindingsService {
     private readonly prisma: PrismaService,
     private readonly metrics: MetricsService,
     private readonly observability: ObservabilityService,
-    private readonly timeline: TimelineService,
-    private readonly dependencies: DependenciesService
+    private readonly timeline: TimelineService
   ) {}
 
   async findings(
@@ -139,14 +121,13 @@ export class FindingsService {
       endMs: opts.end,
       stepMs: step
     };
-    const [http, resources, throttle, health, changes, forecast, deps] = await Promise.all([
+    const [http, resources, throttle, health, changes, forecast] = await Promise.all([
       this.observability.getHttpMetrics(deploymentId, from, opts.end, step).catch(() => null),
       this.metrics.fetchDeploymentMetrics(args).catch(() => null),
       this.metrics.fetchDeploymentThrottle(args).catch(() => []),
       this.observability.getPodHealth(deploymentId, from, opts.end, step).catch(() => null),
       this.timeline.changes(deploymentId, { start: from, end: opts.end, canEdit: opts.canEdit }),
-      live ? this.metrics.forecastDeploymentMemory(deployment).catch(() => null) : null,
-      this.dependencies.list(deploymentId).catch(() => ({ dependencies: [] }))
+      live ? this.metrics.forecastDeploymentMemory(deployment).catch(() => null) : null
     ]);
     const symptoms = detectSymptoms({
       errorPct: http?.errorRate.map((p) => ({ x: p.x, y: p.y })),
@@ -158,7 +139,6 @@ export class FindingsService {
     const findings = correlate({
       symptoms,
       changes: toCauses(changes.changes),
-      dependencies: dependencyCauses(deps.dependencies),
       formatTime: clockFor(opts.tz)
     });
     const kinds = new Map(symptoms.map((s) => [s.id, s.kind]));
