@@ -645,6 +645,7 @@ model Deployment {
   // app has leaves zero allowed disruptions and blocks the drain forever,
   // which is why the chart's own PDBs are gated on replicas > 1 too.
   pdbMinAvailable      Int                @default(1) @map("pdb_min_available")
+  rateLimit            Json?              @map("rate_limit") @db.JsonB
   // null means "derive it from the image tag": Always for a tag that can move
   // (`latest`, `main`, a floating major), IfNotPresent otherwise. A concrete
   // value is the user overriding that and is never recomputed.

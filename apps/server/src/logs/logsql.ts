@@ -198,6 +198,26 @@ export function buildRecent(opts: AccessOptions, n = 100): string {
   return `${accessScope(opts)} | sort by (_time desc) | limit ${count('n', n, 2000)}`;
 }
 
+const SUSPICIOUS_PATH =
+  '(?i)(\\.env|wp-admin|wp-login|\\.git/|phpmyadmin|vendor/phpunit|cgi-bin|\\.aws|server-status|\\.\\./|\\.\\.%2f|%2e%2e|<script|%3cscript|\\$\\{jndi|union[ +%20]+select|%27|\\x27|\\bor[ +%20]+1=1)';
+const SCANNER_AGENT = '(?i)(sqlmap|nikto|nuclei|masscan|zgrab)';
+
+export function buildSuspicious(opts: AccessOptions, n = 20_000): string {
+  return (
+    `${accessScope(opts)} (status:>=400 or path:~${quote(SUSPICIOUS_PATH)} or user_agent:~${quote(SCANNER_AGENT)})` +
+    ` | fields _time, client_ip, method, path, status, user_agent, host | limit ${count('n', n, 50_000)}`
+  );
+}
+
+export function buildIpCounts(opts: AccessOptions, n = 5_000): string {
+  return `${accessScope(opts)} | stats by (client_ip) count() requests | sort by (requests desc) | limit ${count('n', n, 20_000)}`;
+}
+
+export function buildIpSeries(opts: AccessOptions, ips: readonly string[], stepMs: number): string {
+  const step = Math.max(1, Math.round(stepMs / 1000));
+  return `${accessScope(opts)} ${inList('client_ip', ips)} | stats by (_time:${step}s) count() requests | sort by (_time)`;
+}
+
 export function buildSlowest(opts: AccessOptions, n = 20): string {
   return `${accessScope(opts)} | sort by (duration_ms desc) | limit ${count('n', n, 1000)}`;
 }

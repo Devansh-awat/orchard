@@ -24,11 +24,17 @@ export interface IngressQueries {
   routeService(raw: string): string | null;
 }
 
+export interface RateLimit {
+  requests: number;
+  periodSeconds: number;
+}
+
 export interface IngressAdapter {
   id: string;
   label: string;
   matchesIngressClass(ingressClass: string): boolean;
   queries(target: IngressTarget): IngressQueries | null;
+  rateLimitAnnotations?(limit: RateLimit | null): Record<string, string | null>;
 }
 
 export function escapeRegex(s: string): string {

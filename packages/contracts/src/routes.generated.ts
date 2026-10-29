@@ -206,6 +206,8 @@ export const routes: GeneratedRoute[] = [
   { method: 'GET', path: '/deployments/:id/rollout', auth: 'authenticated' },
   { method: 'POST', path: '/deployments/:id/scale', auth: 'authenticated' },
   { method: 'GET', path: '/deployments/:id/security', auth: 'authenticated' },
+  { method: 'GET', path: '/deployments/:id/security/attacks', auth: 'authenticated' },
+  { method: 'POST', path: '/deployments/:id/security/rate-limit', auth: 'authenticated' },
   { method: 'POST', path: '/deployments/:id/security/scan', auth: 'authenticated' },
   { method: 'POST', path: '/deployments/:id/start', auth: 'authenticated' },
   { method: 'POST', path: '/deployments/:id/stop', auth: 'authenticated' },

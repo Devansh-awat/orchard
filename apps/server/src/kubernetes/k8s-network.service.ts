@@ -1472,6 +1472,27 @@ export class K8sNetworkService implements OnModuleInit {
    * a full re-apply, so a reconcile cannot disturb paths, backends or the
    * protection-proxy wiring that live on the same object.
    */
+  async patchIngressAnnotations(
+    namespace: string,
+    ingressName: string,
+    annotations: Record<string, string | null>
+  ): Promise<void> {
+    this.ensureKubeConfig();
+    await this.kc
+      .makeApiClient(k8s.NetworkingV1Api)
+      .patchNamespacedIngress(
+        ingressName,
+        namespace,
+        { metadata: { annotations } },
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { headers: { 'Content-Type': 'application/merge-patch+json' } }
+      );
+  }
+
   async patchIngressTls(
     namespace: string,
     ingressName: string,
