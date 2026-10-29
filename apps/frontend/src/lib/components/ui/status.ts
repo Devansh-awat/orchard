@@ -183,3 +183,33 @@ export function podStatus(phase?: string): StatusMeta {
 			return meta('neutral', capitalize(p));
 	}
 }
+
+export type ScanState =
+	| 'clean'
+	| 'vulnerable'
+	| 'scanning'
+	| 'not_scanned'
+	| 'failed'
+	| 'unsupported'
+	| 'error';
+
+export function scanStatus(state: ScanState, worst?: string | null): StatusMeta {
+	switch (state) {
+		case 'clean':
+			return meta('success', 'No known vulnerabilities');
+		case 'vulnerable':
+			return worst === 'critical' || worst === 'high'
+				? meta('error', 'Vulnerable')
+				: meta('warning', 'Vulnerable');
+		case 'scanning':
+			return meta('progress', 'Scanning', true);
+		case 'failed':
+			return meta('error', 'Scan failed');
+		case 'error':
+			return meta('warning', 'Scanner unavailable');
+		case 'unsupported':
+		case 'not_scanned':
+		default:
+			return meta('neutral', 'Not scanned');
+	}
+}

@@ -4,6 +4,9 @@
 	import SectionCard from '$lib/components/ui/SectionCard.svelte';
 	import StatusDot from '$lib/components/ui/StatusDot.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
+	import SeverityMeter from '$lib/components/ui/SeverityMeter.svelte';
+	import SeverityBar from '$lib/components/ui/SeverityBar.svelte';
+	import { SEVERITIES } from '$lib/components/ui/severity';
 	import { statusMeta, type StatusKind } from '$lib/components/ui/status';
 
 	let running = $state(true);
@@ -96,6 +99,13 @@
 			<Badge tone="error">3 errors</Badge>
 			<Badge tone="info">Beta</Badge>
 		</div>
+		<div class="flex flex-wrap gap-4" data-testid="severity">
+			{#each SEVERITIES as sev (sev)}<SeverityMeter severity={sev} label />{/each}
+		</div>
+		<div class="severity-demo">
+			<SeverityBar counts={{ critical: 3, high: 6, medium: 4, low: 3 }} />
+			<SeverityBar counts={{}} />
+		</div>
 	</div>
 </SectionCard>
 
@@ -106,6 +116,12 @@
 		align-items: center;
 		gap: 1.25rem;
 		padding: 0.75rem 0 0.25rem;
+	}
+	.severity-demo {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 22rem));
+		gap: 2rem;
+		padding-top: 0.5rem;
 	}
 	.dot-cell {
 		display: inline-flex;
