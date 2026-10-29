@@ -657,7 +657,7 @@
 				{/if}
 				{#if hit.item.status}
 					<span class="state">
-						<StatusDot meta={hit.item.status} size={7} />
+						<StatusDot meta={hit.item.status} size={8} />
 						<span class="state-label">{hit.item.status.label}</span>
 					</span>
 				{/if}

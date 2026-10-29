@@ -239,7 +239,7 @@
 					>
 						<StatusDot
 							meta={statusMeta(cs?.ready ? 'success' : 'error', cs?.ready ? 'Ready' : 'Not ready')}
-							size={6}
+							size={8}
 						/>
 						<span class="pod-container-name">{container.name}</span>
 						<span class="pod-container-image" title={container.image}>{container.image}</span>

@@ -3,6 +3,7 @@
 	import { env } from '$env/dynamic/public';
 	import { Loader2 } from 'lucide-svelte';
 	import { StatusBadge, statusMeta } from '$lib/components/ui';
+	import StatusDot from '$lib/components/ui/StatusDot.svelte';
 	import { motionStagger, stateEcho } from '$lib/utils/motion.svelte';
 	import { formatRelativeTime } from '$lib/utils/format';
 	import {
@@ -74,7 +75,7 @@
 			{@attach stateEcho(() => page?.overall)}
 			{@attach motionStagger({ index: 1, from: { y: 8 } })}
 		>
-			<span class="sp-overall-dot" aria-hidden="true"></span>
+			<StatusDot meta={statusMeta(overall.tone, overall.label)} size={8} />
 			<span class="sp-overall-label">{overall.label}</span>
 			<span class="sp-overall-when">checked {formatRelativeTime(new Date(page.updatedAt))}</span>
 		</section>
@@ -211,14 +212,6 @@
 	}
 	.sp-overall--error {
 		--sp-tone: var(--status-error);
-	}
-	.sp-overall-dot {
-		width: 0.625rem;
-		height: 0.625rem;
-		border-radius: 50%;
-		background: var(--sp-tone);
-		box-shadow: 0 0 0 4px color-mix(in srgb, var(--sp-tone) 20%, transparent);
-		flex-shrink: 0;
 	}
 	.sp-overall-label {
 		font-size: var(--text-headline);

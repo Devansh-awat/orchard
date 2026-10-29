@@ -4,6 +4,8 @@
 	import { page } from '$app/stores';
 	import { Button, Menu, MenuItem, LogViewer, SelectTrigger } from '$lib/components/ui';
 	import UsageCard from './UsageCard.svelte';
+	import StatusDot from '$lib/components/ui/StatusDot.svelte';
+	import { statusMeta } from '$lib/components/ui/status';
 	import ErrorsCard from './ErrorsCard.svelte';
 	import PodsList from './PodsList.svelte';
 	import { UsageHistory } from './usage-history.svelte';
@@ -43,6 +45,7 @@
 		onSelectLogsPod,
 		onSetTabMetrics,
 		onRefreshPods,
+		podVersions = [],
 		podLabel
 	}: {
 		deployment: any;
@@ -77,6 +80,7 @@
 		onSelectLogsPod: (podName: string, containerName?: string) => void;
 		onSetTabMetrics: (view?: 'metrics' | 'errors') => void;
 		onRefreshPods: () => void;
+		podVersions?: import('./health').ClassifiedPod[];
 		podLabel: (podName: string) => string;
 	} = $props();
 
@@ -293,7 +297,10 @@
 							title={liveLogs ? 'Stop following new logs' : 'Follow new logs as they arrive'}
 							onclick={() => (liveLogs = !liveLogs)}
 						>
-							<span class="live-dot" aria-hidden="true"></span>Live
+							<StatusDot
+								meta={statusMeta(liveLogs ? 'success' : 'neutral', 'Live', liveLogs)}
+								size={8}
+							/>Live
 						</button>
 					{/if}
 
@@ -374,6 +381,7 @@
 
 	<div class="side">
 		<PodsList
+			versions={podVersions}
 			deploymentId={deployment.id}
 			pods={activePods}
 			warnings={deployment.warnings ?? []}
@@ -577,19 +585,9 @@
 		background: var(--console-hover);
 		color: var(--console-text);
 	}
-	.live-dot {
-		width: 0.4375rem;
-		height: 0.4375rem;
-		border-radius: 50%;
-		background: var(--console-faint);
-	}
 	.live--on {
 		background: var(--status-success-bg);
 		color: var(--status-success);
-	}
-	.live--on .live-dot {
-		background: var(--status-success);
-		box-shadow: 0 0 0 3px color-mix(in oklab, var(--status-success) 22%, transparent);
 	}
 	.console-empty {
 		display: flex;

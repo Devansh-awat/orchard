@@ -15,7 +15,6 @@
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import Breadcrumbs from '$lib/components/ui/Breadcrumbs.svelte';
 	import {
-		Loader2,
 		Key,
 		Archive,
 		Terminal as TerminalIcon,
@@ -26,6 +25,8 @@
 		Timer
 	} from 'lucide-svelte';
 	import { UnderlineTabs, Skeleton, EmptyState } from '$lib/components/ui';
+	import StatusDot from '$lib/components/ui/StatusDot.svelte';
+	import { statusMeta } from '$lib/components/ui/status';
 	import DatabaseProvisioning from '$lib/components/DatabaseProvisioning.svelte';
 	import DeploymentMetrics from '$lib/components/DeploymentMetrics.svelte';
 	import ResourceLimits from '$lib/components/ResourceLimits.svelte';
@@ -1450,13 +1451,17 @@
 						<div class="db-stat db-stat-pod">
 							<span class="db-stat-label">Pod State</span>
 							<div class="db-pod-state-row">
-								<span class="db-pod-dot db-pod-dot-{state.kind}" aria-hidden="true"></span>
+								<StatusDot
+									meta={state.kind === 'ready'
+										? statusMeta('success', state.label)
+										: state.kind === 'error'
+											? statusMeta('error', state.label)
+											: statusMeta('progress', state.label, true)}
+									size={8}
+								/>
 								<span class="db-stat-value" title={database.liveStatus.message ?? ''}
 									>{state.label}</span
 								>
-								{#if state.kind === 'pending'}
-									<Loader2 class="h-3.5 w-3.5 animate-spin db-pod-spinner" />
-								{/if}
 							</div>
 							{#if typeof database.liveStatus.readyReplicas === 'number' && typeof database.liveStatus.replicas === 'number'}
 								<span class="db-pod-sub"
@@ -1826,28 +1831,6 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-	}
-
-	.db-pod-dot {
-		width: 0.5rem;
-		height: 0.5rem;
-		border-radius: var(--radius-pill);
-		flex-shrink: 0;
-	}
-
-	.db-pod-dot-ready {
-		background-color: var(--online-indicator);
-		box-shadow: 0 0 0 3px color-mix(in srgb, var(--online-indicator) 20%, transparent);
-	}
-
-	.db-pod-dot-pending {
-		background-color: var(--away-indicator);
-		box-shadow: 0 0 0 3px color-mix(in srgb, var(--away-indicator) 20%, transparent);
-	}
-
-	.db-pod-dot-error {
-		background-color: var(--error-text-color);
-		box-shadow: 0 0 0 3px color-mix(in srgb, var(--error-text-color) 20%, transparent);
 	}
 
 	.db-pod-sub {

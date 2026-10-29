@@ -1,15 +1,10 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
-	import { humanizeWarning, type WarningSeverity } from '$lib/utils/format';
+	import type { WarningSeverity } from '$lib/utils/format';
 	import type { AlertState } from '$lib/components/notifications/alerts';
 	import AlertStack, { type StackAlert } from '$lib/components/patterns/AlertStack.svelte';
-
-	interface Warning {
-		podName: string;
-		message: string;
-		timestamp?: string;
-	}
+	import type { Problem } from './health';
 
 	interface ResourcePressure {
 		cpuRatio: number | null;
@@ -24,8 +19,9 @@
 		buildError = '',
 		applyError = '',
 		onRetryApply,
-		noPodsReady = false,
-		podWarnings = [],
+		problems = [],
+		serving = 0,
+		onPodLogs,
 		resourcePressure = {
 			cpuRatio: null,
 			memRatio: null,
@@ -45,8 +41,9 @@
 		buildError?: string;
 		applyError?: string;
 		onRetryApply?: () => void;
-		noPodsReady?: boolean;
-		podWarnings?: Warning[];
+		problems?: Problem[];
+		serving?: number;
+		onPodLogs?: (podName: string) => void;
 		resourcePressure?: ResourcePressure;
 		onViewLogs?: () => void;
 		onGoToResources?: () => void;
@@ -74,62 +71,40 @@
 		animateIcon?: boolean;
 	}
 
-	// Pod warnings are keyed by condition kind (humanized title), not by pod
-	// instance. A crash-looping pod that gets recreated keeps the same alert row
-	// instead of flapping. Each kind lingers for a short grace window after the
-	// underlying events disappear, smoothing the gap while a replacement pod
-	// spins up; once the grace expires the alert clears for real.
-	const POD_KIND_GRACE_MS = 60_000;
-	const podKindCache = new Map<string, { item: AlertItem; lastSeen: number }>();
-	let graceTick = $state(0);
+	const isGithubAuth = $derived(
+		buildFailed &&
+			/github authentication failed|could not read username|terminal prompts disabled|repository not found/i.test(
+				buildError
+			)
+	);
 
-	$effect(() => {
-		const interval = setInterval(() => {
-			if (podKindCache.size > 0) graceTick += 1;
-		}, 15_000);
-		return () => clearInterval(interval);
-	});
-
-	const podAlerts = $derived.by(() => {
-		void graceTick;
-		const now = Date.now();
-		const seen = new Set<string>();
-		for (const w of podWarnings) {
-			const humanized = humanizeWarning(w.message);
-			if (humanized?.severity === 'info') continue;
-			const id = humanized ? `pw:${humanized.title}` : `pw:raw:${w.message.slice(0, 120)}`;
-			if (seen.has(id)) continue;
-			seen.add(id);
-			podKindCache.set(id, {
-				lastSeen: now,
-				item: humanized
-					? {
-							id,
-							severity: humanized.severity,
-							title: humanized.title,
-							hint: humanized.hint,
-							action: humanized.action,
-							onAction:
-								humanized.action === 'View logs'
-									? onViewLogs
-									: humanized.action === 'Increase memory' || humanized.action === 'Check resources'
-										? onGoToResources
-										: undefined,
-							animateIcon: humanized.severity === 'critical'
-						}
-					: {
-							id,
-							severity: 'warning',
-							title: `Pod ${w.podName}`,
-							hint: w.message.slice(0, 200)
-						}
-			});
-		}
-		for (const [id, entry] of podKindCache) {
-			if (!seen.has(id) && now - entry.lastSeen > POD_KIND_GRACE_MS) podKindCache.delete(id);
-		}
-		return [...podKindCache.values()].map((e) => e.item);
-	});
+	const healthAlerts = $derived(
+		problems
+			.filter((p) => p.scope !== 'build' || !isGithubAuth)
+			.map((p): AlertItem => {
+				const pod = p.pods?.[0];
+				const actions: AlertAction[] = [];
+				if (p.scope === 'build') {
+					if (onViewLogs) actions.push({ label: 'Build logs', onAction: onViewLogs });
+				} else if (p.problem === 'out-of-memory') {
+					if (onGoToResources) actions.push({ label: 'Raise memory', onAction: onGoToResources });
+					if (pod && onPodLogs) actions.push({ label: 'Logs', onAction: () => onPodLogs(pod) });
+				} else if (p.problem === 'unschedulable') {
+					if (onGoToResources) actions.push({ label: 'Resources', onAction: onGoToResources });
+				} else if (pod && onPodLogs) {
+					actions.push({ label: 'Logs', onAction: () => onPodLogs(pod) });
+				}
+				const firstLine = buildError ? buildError.split('\n')[0].slice(0, 160) : '';
+				return {
+					id: `health:${p.id}:${p.problem ?? ''}`,
+					severity: p.tone === 'error' ? (p.scope === 'app' ? 'critical' : 'error') : 'warning',
+					title: p.title,
+					hint: p.scope === 'build' && firstLine ? `${firstLine} ${p.hint}` : p.hint,
+					actions,
+					animateIcon: p.tone === 'error'
+				};
+			})
+	);
 
 	const candidates = $derived.by(() => {
 		const items: AlertItem[] = [];
@@ -147,41 +122,23 @@
 			});
 		}
 
-		if (buildFailed) {
-			const isGithubAuth =
-				/github authentication failed|could not read username|terminal prompts disabled|repository not found/i.test(
-					buildError
-				);
-			if (isGithubAuth) {
-				const actions: AlertAction[] = [];
-				const repo = githubRepoUrl.replace(/\.git$/, '');
-				if (repo) actions.push({ label: 'Check repo access', href: repo });
-				if (canReconnectGithub && onReconnectGithub)
-					actions.push({ label: 'Reconnect GitHub', onAction: onReconnectGithub });
-				if (onViewLogs) actions.push({ label: 'View logs', onAction: onViewLogs });
-				items.push({
-					id: 'build-failed-github-auth',
-					severity: 'critical',
-					title: 'Cannot access the GitHub repository',
-					hint: canReconnectGithub
-						? 'The build could not read this repository. Confirm you can open it on GitHub, or reconnect your GitHub account if your access changed.'
-						: 'The build could not read this repository. Confirm you can open it on GitHub, or ask the deployment owner to reconnect their GitHub account.',
-					actions,
-					animateIcon: true
-				});
-			} else {
-				items.push({
-					id: `build-failed:${buildError.slice(0, 80)}`,
-					severity: 'critical',
-					title: 'Deployment failed',
-					hint: buildError
-						? buildError.split('\n')[0].slice(0, 200)
-						: 'The last deployment did not complete successfully.',
-					action: 'View deployment logs',
-					onAction: onViewLogs,
-					animateIcon: true
-				});
-			}
+		if (isGithubAuth) {
+			const actions: AlertAction[] = [];
+			const repo = githubRepoUrl.replace(/\.git$/, '');
+			if (repo) actions.push({ label: 'Check repo access', href: repo });
+			if (canReconnectGithub && onReconnectGithub)
+				actions.push({ label: 'Reconnect GitHub', onAction: onReconnectGithub });
+			if (onViewLogs) actions.push({ label: 'Build logs', onAction: onViewLogs });
+			items.push({
+				id: 'build-failed-github-auth',
+				severity: serving > 0 ? 'error' : 'critical',
+				title: "Build failed: can't read the GitHub repository",
+				hint: canReconnectGithub
+					? 'Confirm you can open it on GitHub, or reconnect your GitHub account.'
+					: 'Confirm you can open it on GitHub, or ask the owner to reconnect their account.',
+				actions,
+				animateIcon: true
+			});
 		}
 
 		if (applyError) {
@@ -192,18 +149,6 @@
 				hint: applyError.split('\n')[0].slice(0, 200),
 				action: onRetryApply ? 'Retry' : undefined,
 				onAction: onRetryApply,
-				animateIcon: true
-			});
-		}
-
-		if (noPodsReady) {
-			items.push({
-				id: 'app-down',
-				severity: 'critical',
-				title: 'App is down',
-				hint: 'No pod has been ready for over a minute. Your app is not serving traffic.',
-				action: 'View logs',
-				onAction: onViewLogs,
 				animateIcon: true
 			});
 		}
@@ -224,7 +169,7 @@
 			});
 		}
 
-		items.push(...podAlerts);
+		items.push(...healthAlerts);
 
 		const order: Record<WarningSeverity, number> = { critical: 0, error: 1, warning: 2, info: 3 };
 		items.sort((a, b) => order[a.severity] - order[b.severity]);

@@ -21,6 +21,8 @@
 		Play,
 		CalendarRange
 	} from 'lucide-svelte';
+	import StatusDot from '$lib/components/ui/StatusDot.svelte';
+	import { statusMeta } from '$lib/components/ui/status';
 
 	type Props = {
 		kind: 'deployment' | 'database';
@@ -991,7 +993,8 @@
 
 {#snippet stateBadge()}
 	{#if isLive}
-		<span class="metrics-badge metrics-badge--live"><span class="metrics-live-dot"></span>live</span
+		<span class="metrics-badge metrics-badge--live"
+			><StatusDot meta={statusMeta('success', 'Live', true)} size={8} />live</span
 		>
 	{:else if isCustom}
 		<span class="metrics-badge metrics-badge--custom">custom</span>
@@ -1402,24 +1405,6 @@
 	.metrics-badge--custom {
 		background-color: var(--status-info-bg);
 		color: var(--status-info);
-	}
-	.metrics-live-dot {
-		width: 0.375rem;
-		height: 0.375rem;
-		border-radius: 50%;
-		background-color: var(--status-success);
-		animation: metrics-pulse 1.6s ease-out infinite;
-	}
-	@keyframes metrics-pulse {
-		0% {
-			box-shadow: 0 0 0 0 color-mix(in srgb, var(--status-success) 55%, transparent);
-		}
-		70% {
-			box-shadow: 0 0 0 8px transparent;
-		}
-		100% {
-			box-shadow: 0 0 0 0 transparent;
-		}
 	}
 
 	.metrics-rangepick {

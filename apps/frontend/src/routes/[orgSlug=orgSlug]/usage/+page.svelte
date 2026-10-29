@@ -13,6 +13,8 @@
 	import GraftMount from '$lib/grafts/GraftMount.svelte';
 	import { graftHost } from '$lib/grafts/host.svelte';
 	import { TabBar, SectionCard, EmptyState, Alert, PageHeader, Button } from '$lib/components/ui';
+	import StatusDot from '$lib/components/ui/StatusDot.svelte';
+	import { statusMeta, type StatusKind } from '$lib/components/ui/status';
 
 	const formatPods = (n: number) => `${n}`;
 	import type { PageData } from './$types';
@@ -980,7 +982,10 @@
 							<ul class="health-list">
 								{#each [{ id: 'ok', label: 'Right-sized', n: provisioningSummary.counts.ok, tone: 'success' }, { id: 'over', label: 'Over-provisioned', n: provisioningSummary.counts.over, tone: 'warning' }, { id: 'under', label: 'Under-provisioned', n: provisioningSummary.counts.under, tone: 'error' }, { id: 'unknown', label: 'No data yet', n: provisioningSummary.counts.unknown, tone: 'neutral' }] as bucket (bucket.id)}
 									<li class="health-row">
-										<span class="health-dot health-dot--{bucket.tone}"></span>
+										<StatusDot
+											meta={statusMeta(bucket.tone as StatusKind, bucket.label)}
+											size={8}
+										/>
 										<span class="health-label">{bucket.label}</span>
 										<span class="health-count">{bucket.n}</span>
 										<span
@@ -1312,12 +1317,6 @@
 		align-items: center;
 		gap: 0.375rem 0.5rem;
 	}
-	.health-dot {
-		grid-area: dot;
-		width: 0.5rem;
-		height: 0.5rem;
-		border-radius: 50%;
-	}
 	.health-label {
 		grid-area: label;
 		font-size: var(--text-caption);
@@ -1348,36 +1347,20 @@
 		border-radius: var(--radius-pill);
 		background-color: currentColor;
 	}
-	.health-dot--success,
 	.health-bar--success {
 		color: var(--status-success);
-		background-color: var(--status-success);
-	}
-	.health-bar--success {
 		background-color: var(--bg-sunken);
 	}
-	.health-dot--warning,
 	.health-bar--warning {
 		color: var(--status-warning);
-		background-color: var(--status-warning);
-	}
-	.health-bar--warning {
 		background-color: var(--bg-sunken);
 	}
-	.health-dot--error,
 	.health-bar--error {
 		color: var(--status-error);
-		background-color: var(--status-error);
-	}
-	.health-bar--error {
 		background-color: var(--bg-sunken);
 	}
-	.health-dot--neutral,
 	.health-bar--neutral {
 		color: var(--status-neutral);
-		background-color: var(--status-neutral);
-	}
-	.health-bar--neutral {
 		background-color: var(--bg-sunken);
 	}
 	.grid-cell {

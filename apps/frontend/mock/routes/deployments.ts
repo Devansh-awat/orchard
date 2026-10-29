@@ -21,15 +21,47 @@ function namespaceOf(store: Store, d: MockDeployment) {
 	return store.state.environments.find((e) => e.id === d.environmentId)?.namespace ?? 'default';
 }
 
+type PodPlan = { seed: string; index: number; scenario: PodScenario; booting?: boolean };
+
+function planPods(store: Store, d: MockDeployment): PodPlan[] {
+	const ro = d.rollout;
+	const all = Array.from({ length: d.replicas }, (_, i) => i);
+	if (!ro) return all.map((i) => ({ seed: d.podSeed, index: i, scenario: scenarioOf(d, i) }));
+	const elapsed = Date.now() - ro.startedAt;
+	const plans: PodPlan[] = [];
+	if (ro.outcome === 'healthy') {
+		const started = Math.min(d.replicas, 1 + Math.floor(elapsed / 4_000));
+		const lastAge = elapsed - (started - 1) * 4_000;
+		const ready = lastAge >= 2_500 ? started : started - 1;
+		for (let i = 0; i < d.replicas - ready; i++) {
+			plans.push({ seed: ro.prev, index: i, scenario: scenarioOf(d, i) });
+		}
+		for (let i = 0; i < started; i++) {
+			plans.push({ seed: ro.next, index: i, scenario: 'healthy', booting: i >= ready });
+		}
+	} else {
+		for (const i of all) plans.push({ seed: ro.prev, index: i, scenario: scenarioOf(d, i) });
+		plans.push({ seed: ro.next, index: 0, scenario: ro.outcome });
+	}
+	if (ro.middle) plans.push({ seed: ro.middle, index: 0, scenario: 'terminating' });
+	return plans;
+}
+
 export function podsOf(store: Store, d: MockDeployment) {
 	if (d.stopped || d.replicas === 0) return [];
 	const count = d.replicas;
-	return Array.from({ length: count }, (_, i) => {
-		const name = store.podName(d, i);
-		const shape = podShape(d, name, scenarioOf(d, i));
+	return planPods(store, d).map(({ seed, index: i, scenario, booting }) => {
+		const name = store.podName(d, i, seed);
+		const base = podShape(d, name, scenario);
+		const shape = booting ? { ...base, status: 'starting', warnings: [], events: [] } : base;
 		const share = 1 / count;
 		const jitter = 0.85 + (parseInt(sha(name).slice(0, 4), 16) % 30) / 100;
 		const ip = shape.scheduled ? `10.42.${1 + i}.${(d.name.length * 13 + i * 7) % 250}` : null;
+		const startedAt =
+			seed === d.podSeed
+				? d.podStartedAt
+				: new Date(d.rollout?.startedAt ?? Date.now()).toISOString();
+		const image = store.revisionsOf(d).find((r) => r.seed === seed)?.image ?? d.image;
 		return {
 			id: uid(`pod:${name}`),
 			name,
@@ -37,15 +69,16 @@ export function podsOf(store: Store, d: MockDeployment) {
 			ip,
 			podIp: ip,
 			nodeName: shape.scheduled ? ['house', 'barn', 'shed'][i % 3] : null,
+			revision: seed.slice(0, 9),
 			restartCount: shape.restarts,
-			startTime: shape.scheduled ? d.podStartedAt : null,
-			createdAt: d.podStartedAt,
-			cpuUsage: shape.running ? Math.round(d.cpuUsageMilli * share * jitter) : 0,
+			startTime: shape.scheduled ? startedAt : null,
+			createdAt: startedAt,
+			cpuUsage: shape.running && !booting ? Math.round(d.cpuUsageMilli * share * jitter) : 0,
 			memoryUsage: shape.running ? Math.round(d.memoryUsageBytes * share * jitter) : 0,
 			containers: [
 				{
 					name: d.name,
-					image: d.image,
+					image,
 					ready: shape.status === 'ready',
 					restartCount: shape.restarts,
 					lastTermination: shape.termination
@@ -64,6 +97,38 @@ export function podsOf(store: Store, d: MockDeployment) {
 			warningLines: shape.warnings
 		};
 	});
+}
+
+export function rolloutOf(store: Store, d: MockDeployment) {
+	const pods = podsOf(store, d);
+	const current = (d.rollout ? d.rollout.next : d.podSeed).slice(0, 9);
+	const revisions = store
+		.revisionsOf(d)
+		.map((r) => {
+			const hash = r.seed.slice(0, 9);
+			const mine = pods.filter((p) => p.revision === hash);
+			return {
+				hash,
+				number: r.number,
+				image: r.image,
+				createdAt: r.createdAt,
+				replicas: mine.length,
+				ready: mine.filter((p) => p.status === 'ready').length
+			};
+		})
+		.filter((r) => r.hash === current || r.replicas > 0)
+		.sort((a, b) => b.number - a.number);
+	const ready = pods.filter((p) => p.status === 'ready').length;
+	return {
+		currentRevision: current,
+		revisions,
+		desired: d.stopped ? 0 : d.replicas,
+		updated: pods.filter((p) => p.revision === current).length,
+		ready,
+		available: ready,
+		state: d.rollout ? (d.rollout.failed ? 'failed' : 'progressing') : 'stable',
+		reason: d.rollout?.failed ? 'ProgressDeadlineExceeded' : null
+	};
 }
 
 function warnings(store: Store, d: MockDeployment) {
@@ -372,6 +437,7 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 			return {
 				pods: pods.map(stripMock),
 				warnings: warnings(store, d),
+				rollout: rolloutOf(store, d),
 				availableReplicas: pods.filter((p) => p.status === 'ready').length,
 				totalCpuUsage: pods.reduce((a, p) => a + (p.cpuUsage ?? 0), 0),
 				totalMemoryUsage: pods.reduce((a, p) => a + (p.memoryUsage ?? 0), 0),
@@ -412,6 +478,20 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 			}
 			store.emit('deployment.changed', d.projectId, d.id);
 			return { scenarios: d.podScenarios };
+		})
+	);
+	r.post(
+		'/__mock/deployments/:id/rollout',
+		withDep((d, { body }) => {
+			if (body?.cancel) {
+				store.cancelRollout(d.id);
+				return { ok: true };
+			}
+			const outcome = POD_SCENARIOS.includes(body?.outcome)
+				? (body.outcome as PodScenario)
+				: 'healthy';
+			store.startRollout(d.id, outcome, Boolean(body?.twice));
+			return { ok: true };
 		})
 	);
 	r.get(

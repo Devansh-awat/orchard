@@ -288,7 +288,10 @@ Three-level hierarchy: **Org cap** → **Member allowance** → **Deployment req
   its trend from `/observe/.../http-metrics`, when the app serves HTTP). Add `?guides=1` to
   draw the golden-ratio `GoldenReticle` over the page when checking alignment. Below that size it scrolls. Nodes and
   other infrastructure stay hidden.
-- Problems show as one `AlertStack` line above the panels; it expands to the full list.
+- Problems show as one `AlertStack` line above the panels; it expands to the full list. They come from
+  `computeHealth` in `deployment/health.ts` (app vs deploy vs build, current state only, unit tested in
+  `health.test.ts`); the server's `summarizeRollout` (`kubernetes/rollout-strategy.ts`) feeds it via
+  `rollout` on `/pods-live`.
 - Live values land instantly; motion is the decorative layer on top (`NumberRoll`, `stateEcho` on pod
   status, the sparkline growing), never a tween that delays the number.
 - `NextSteps` is a "Set up" button with a progress ring in the header, opening a popover.
@@ -313,7 +316,9 @@ provisioning).
   failure, missing secret, unschedulable, failing readiness, terminating, evicted) from the flask
   button on an app's Pods card, or `POST /apiv1/__mock/deployments/:id/pods` with `{ scenario, index? }`.
   `mock/scenarios.ts` produces the same status, termination, warnings and events the server does, so
-  alerts and pod labels behave as they will in production. `__ORCHARD_MOCK__` is true only in mock mode.
+  alerts and pod labels behave as they will in production. `POST /apiv1/__mock/deployments/:id/rollout`
+  with `{ outcome, twice? }` simulates a rolling deploy whose new version has that outcome (`twice` deploys
+  again a second later), and `{ cancel: true }` ends it. `__ORCHARD_MOCK__` is true only in mock mode.
 - **Sign out** makes every non-auth route 401 until you click "Continue as alfd (mock)" on the login
   page (any email and 6-digit code also work).
 - **Data** is seeded in `mock/seed.ts` (entity types in `mock/types.ts`). State lives in `mock/store.ts`,

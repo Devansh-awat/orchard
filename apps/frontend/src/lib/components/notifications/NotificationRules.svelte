@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { BellOff, Loader2, Plus, Trash2, VolumeX } from 'lucide-svelte';
 	import { Badge, Button, Dropdown, EmptyState, Field, Input } from '$lib/components/ui';
+	import StatusDot from '$lib/components/ui/StatusDot.svelte';
+	import { statusMeta } from '$lib/components/ui/status';
 	import { motionStagger } from '$lib/utils/motion.svelte';
 	import { toasts } from '$lib/stores';
 	import {
@@ -357,7 +359,13 @@
 										aria-pressed={active}
 										onclick={() => toggleEvent(opt.value)}
 									>
-										<span class="nr-chip-dot"></span>
+										<StatusDot
+											meta={statusMeta(
+												active ? (opt.tone === 'ok' ? 'success' : 'error') : 'neutral',
+												opt.label
+											)}
+											size={8}
+										/>
 										{opt.label}
 									</button>
 								{/each}
@@ -595,21 +603,6 @@
 
 	.nr-chip:hover {
 		color: var(--text-fg);
-	}
-
-	.nr-chip-dot {
-		width: 0.4rem;
-		height: 0.4rem;
-		border-radius: 50%;
-		background: var(--text-faint);
-	}
-
-	.nr-chip-ok.nr-chip-active .nr-chip-dot {
-		background: var(--status-success);
-	}
-
-	.nr-chip-fail.nr-chip-active .nr-chip-dot {
-		background: var(--status-error);
 	}
 
 	.nr-chip-active {

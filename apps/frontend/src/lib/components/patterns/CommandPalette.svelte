@@ -989,7 +989,7 @@
 					{#if row.item.status.kind !== 'success'}
 						<span class="state">{row.item.status.label}</span>
 					{/if}
-					<StatusDot meta={row.item.status} size={6} />
+					<StatusDot meta={row.item.status} size={8} />
 				</span>
 			{/if}
 		{:else if row.type === 'action'}

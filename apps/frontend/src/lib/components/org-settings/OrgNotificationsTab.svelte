@@ -12,6 +12,8 @@
 	} from 'lucide-svelte';
 	import { Bell } from '@jis3r/icons';
 	import { Button, Field, Input, Badge, EmptyState } from '$lib/components/ui';
+	import StatusDot from '$lib/components/ui/StatusDot.svelte';
+	import { statusMeta, type StatusKind } from '$lib/components/ui/status';
 	import SettingsSection from '$lib/components/user-settings/SettingsSection.svelte';
 	import {
 		CHANNEL_TYPE_META,
@@ -179,6 +181,13 @@
 		if (channel.lastDelivery) return channel.lastDelivery.status === 'sent' ? 'ok' : 'fail';
 		return 'none';
 	}
+
+	const HEALTH_KIND: Record<ReturnType<typeof healthTone>, StatusKind> = {
+		ok: 'success',
+		fail: 'error',
+		warn: 'warning',
+		none: 'neutral'
+	};
 </script>
 
 <SettingsSection
@@ -278,7 +287,10 @@
 									· <span
 										class="nc-delivery nc-delivery-{tone}"
 										title={channel.lastDelivery?.error || undefined}
-										><span class="nc-dot"></span>{summary}</span
+										><StatusDot
+											meta={statusMeta(HEALTH_KIND[tone], summary)}
+											size={8}
+										/>{summary}</span
 									>
 								{/if}
 							</p>
@@ -532,25 +544,6 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.3rem;
-	}
-
-	.nc-dot {
-		width: 0.4rem;
-		height: 0.4rem;
-		border-radius: 50%;
-		background: var(--text-faint);
-	}
-
-	.nc-delivery-ok .nc-dot {
-		background: var(--status-success);
-	}
-
-	.nc-delivery-fail .nc-dot {
-		background: var(--status-error);
-	}
-
-	.nc-delivery-warn .nc-dot {
-		background: var(--status-warning);
 	}
 
 	.nc-item-actions {

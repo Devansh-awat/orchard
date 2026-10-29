@@ -1,4 +1,6 @@
 <script lang="ts">
+	import StatusDot from '$lib/components/ui/StatusDot.svelte';
+	import { statusMeta as dotMeta } from '$lib/components/ui/status';
 	import { Loader2, ExternalLink, TriangleAlert, Copy, Eye } from 'lucide-svelte';
 	import { fetchWebhookSecret } from '$lib/components/user-settings/git-connections';
 	import {
@@ -235,6 +237,12 @@
 			set: (v: boolean) => (startupEnabled = v)
 		}
 	]);
+	function ghDot(status: string) {
+		if (status === 'success') return dotMeta('success', 'Success');
+		if (status === 'failure' || status === 'error') return dotMeta('error', 'Failed');
+		if (status === 'in_progress') return dotMeta('progress', 'In progress', true);
+		return dotMeta('neutral', status);
+	}
 </script>
 
 <div class="space-y-5">
@@ -721,27 +729,7 @@
 									style="background-color: var(--control-bg);"
 								>
 									<div class="flex items-center gap-2">
-										{#if ghDeployment.status === 'success'}
-											<div
-												class="h-1.5 w-1.5 rounded-full"
-												style="background-color: var(--online-indicator);"
-											></div>
-										{:else if ghDeployment.status === 'failure' || ghDeployment.status === 'error'}
-											<div
-												class="h-1.5 w-1.5 rounded-full"
-												style="background-color: var(--error-text-color);"
-											></div>
-										{:else if ghDeployment.status === 'in_progress'}
-											<div
-												class="h-1.5 w-1.5 rounded-full animate-pulse"
-												style="background-color: var(--away-indicator);"
-											></div>
-										{:else}
-											<div
-												class="h-1.5 w-1.5 rounded-full"
-												style="background-color: var(--surface-muted);"
-											></div>
-										{/if}
+										<StatusDot meta={ghDot(ghDeployment.status)} size={8} />
 										<code class="text-[11px] font-mono"
 											>{ghDeployment.commitSha.substring(0, 7)}</code
 										>

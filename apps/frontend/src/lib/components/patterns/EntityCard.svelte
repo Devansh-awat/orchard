@@ -149,7 +149,7 @@
 	{/if}
 	<div class="bottom">
 		<span class="status">
-			<StatusDot meta={status} size={status.pulse ? 9 : 6} />
+			<StatusDot meta={status} size={8} />
 			<span class="label">{status.label}</span>
 		</span>
 		{#if traffic}

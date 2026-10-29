@@ -12,6 +12,7 @@
 	import { toEnvWrite, type EditableEnvVar } from '$lib/utils/env-secrets';
 	import { TailscaleController } from '$lib/components/deployment/tailscale.svelte';
 	import { ServicesController } from '$lib/components/deployment/services.svelte';
+	import { computeHealth, type Rollout } from '$lib/components/deployment/health';
 	import {
 		podLabel,
 		getNewestPod,
@@ -201,6 +202,7 @@
 		tailscaleExposed?: boolean;
 		tailscaleHostname?: string | null;
 		envVars?: Array<{ key: string; value: string }>;
+		rollout?: Rollout | null;
 	}
 
 	const tabSections = [
@@ -490,16 +492,49 @@
 	});
 	const noPodsReady = $derived(debugAlerts || noPodsReadyConfirmed);
 
+	const health = $derived(
+		computeHealth({
+			pods: (deployment?.pods ?? []).filter((pod) => pod.status?.toLowerCase() !== 'succeeded'),
+			warnings: deployment?.warnings ?? [],
+			rollout: deployment?.rollout ?? null,
+			replicas: deployment?.replicas ?? 0,
+			stopped: !!deployment?.stopped,
+			buildStatus: debugStatus === 'building' ? 'building' : deployment?.buildStatus
+		})
+	);
+	const APP_CHIP = {
+		healthy: () => statusMeta('success', 'Running'),
+		degraded: () => statusMeta('warning', 'Degraded'),
+		down: () => statusMeta('error', 'Down'),
+		starting: () => statusMeta('progress', 'Starting', true),
+		stopped: () => statusMeta('neutral', 'Stopped'),
+		unknown: () => statusMeta('neutral', 'Unknown')
+	} as const;
 	const deploymentStatusChip = $derived.by(() => {
 		const forced = debugStatus;
 		if (forced && forced !== 'building') return resourceStatus(forced);
-		return resourceStatus(deployment?.status ?? '');
+		if (!deployment?.pods) return resourceStatus(deployment?.status ?? '');
+		return APP_CHIP[health.app]();
+	});
+	const deployChip = $derived.by(() => {
+		if (!health.deploy) return null;
+		const v = health.current ? ` v${health.current.number}` : '';
+		if (health.deploy === 'failed') return { meta: statusMeta('error', 'Deploy failed') };
+		const fresh = health.pods.filter((p) => p.version === 'new');
+		const steps = Array.from({ length: Math.max(1, health.desired) }, (_, i) => {
+			const pod = fresh[i];
+			if (!pod) return 'pending' as const;
+			if (pod.state === 'running') return 'done' as const;
+			if (pod.state === 'failing') return 'failed' as const;
+			return 'active' as const;
+		});
+		if (health.deploy === 'stuck')
+			return { meta: statusMeta('warning', `Deploy stuck${v}`), steps };
+		return { meta: statusMeta('progress', `Deploying${v}`, true), tone: 'deploy' as const, steps };
 	});
 	const buildStatusChip = $derived.by(() => {
-		const bs =
-			debugStatus === 'building' ? 'building' : (deployment?.buildStatus?.toLowerCase() ?? '');
-		if (bs === 'building' || bs === 'pending') return statusMeta('progress', 'Building', true);
-		if (bs === 'failed') return statusMeta('error', 'Build failed');
+		if (health.build === 'building') return statusMeta('progress', 'Building', true);
+		if (health.build === 'failed') return statusMeta('error', 'Build failed');
 		return null;
 	});
 	const activePods = $derived(
@@ -1271,6 +1306,9 @@
 			}
 			if (data.availableReplicas !== undefined) {
 				deployment.availableReplicas = data.availableReplicas;
+			}
+			if (data.rollout !== undefined && !shallowEq(deployment.rollout, data.rollout)) {
+				deployment.rollout = data.rollout;
 			}
 			if (data.totalCpuUsage !== undefined) deployment.totalCpuUsage = data.totalCpuUsage;
 			if (data.totalMemoryUsage !== undefined) deployment.totalMemoryUsage = data.totalMemoryUsage;
@@ -3044,6 +3082,7 @@
 				{headerCollapsed}
 				{deploymentStatusChip}
 				{buildStatusChip}
+				{deployChip}
 				debugChips={debugAlerts ? DEBUG_CHIPS : []}
 				{repoUrl}
 				{rebuilding}
@@ -3107,8 +3146,9 @@
 						? 'Build failed: ERROR: GitHub authentication failed.'
 						: 'Build failed: process "/bin/sh -c npm ci" did not complete successfully: exit code 1'
 					: (deployment?.buildError ?? '')}
-				{noPodsReady}
-				podWarnings={activePodWarnings}
+				problems={health.problems}
+				serving={health.serving}
+				onPodLogs={(name) => selectLogsPod(name)}
 				{resourcePressure}
 				onViewLogs={handleViewBuildLogs}
 				onGoToResources={() => {
@@ -3183,6 +3223,7 @@
 								queryClient.invalidateQueries({ queryKey: ['deployment', deploymentId] });
 								refreshPodsLive();
 							}}
+							podVersions={health.pods}
 							{podLabel}
 						/>
 						{#if graftProps}

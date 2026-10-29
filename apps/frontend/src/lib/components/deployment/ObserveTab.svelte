@@ -1,4 +1,6 @@
 <script lang="ts">
+	import StatusDot from '$lib/components/ui/StatusDot.svelte';
+	import { statusMeta as dotMeta } from '$lib/components/ui/status';
 	import { onDestroy, untrack, tick } from 'svelte';
 	import { browser } from '$app/environment';
 	import { watchLiveLogActivity } from '$lib/utils/live-log-activity';
@@ -1053,7 +1055,7 @@
 					aria-label={liveTail ? 'Pause live logs' : 'Resume live logs'}
 				>
 					{#if liveTail}
-						<span class="observe-tail-dot"></span>
+						<StatusDot meta={dotMeta('success', 'Live', true)} size={8} />
 					{/if}
 					{livePauseReason ? 'Resume' : 'Live'}
 				</Button>
@@ -1818,14 +1820,6 @@
 
 	.observe-log-search-input::placeholder {
 		color: var(--text-faint);
-	}
-
-	.observe-tail-dot {
-		width: 6px;
-		height: 6px;
-		border-radius: 50%;
-		background: currentColor;
-		animation: observe-pulse 1.6s ease-out infinite;
 	}
 
 	@keyframes observe-pulse {

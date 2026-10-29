@@ -1,4 +1,4 @@
-import { podShape, scenarioOf } from './scenarios.ts';
+import { podShape, scenarioOf, type PodScenario } from './scenarios.ts';
 import type { EventHub, OrgEventType } from './events.ts';
 import { ago, freshId, sha, uid } from './ids.ts';
 import { seed } from './seed.ts';
@@ -210,8 +210,90 @@ export class Store {
 		d.updatedAt = new Date().toISOString();
 	}
 
-	podName(d: MockDeployment, i: number) {
-		return `${d.name}-${d.podSeed.slice(0, 9)}-${sha(`${d.podSeed}:${i}`).slice(0, 5)}`;
+	podName(d: MockDeployment, i: number, seed = d.podSeed) {
+		return `${d.name}-${seed.slice(0, 9)}-${sha(`${seed}:${i}`).slice(0, 5)}`;
+	}
+
+	revisionsOf(d: MockDeployment) {
+		d.revisions ??= [];
+		if (!d.revisions.some((r) => r.seed === d.podSeed)) {
+			const number = Math.max(0, ...d.revisions.map((r) => r.number)) + 1;
+			d.revisions.push({ seed: d.podSeed, number, image: d.image, createdAt: d.podStartedAt });
+		}
+		return d.revisions;
+	}
+
+	addRevision(d: MockDeployment) {
+		const list = this.revisionsOf(d);
+		const seed = sha(`${d.id}:${Date.now()}:${list.length}`).slice(0, 10);
+		const number = Math.max(...list.map((r) => r.number)) + 1;
+		list.push({
+			seed,
+			number,
+			image: `${d.image.split(':')[0]}:${seed.slice(0, 7)}`,
+			createdAt: new Date().toISOString()
+		});
+		return seed;
+	}
+
+	startRollout(deploymentId: string, outcome: PodScenario, twice = false) {
+		const d = this.deployment(deploymentId);
+		if (!d || d.stopped) return;
+		this.revisionsOf(d);
+		this.cancel(`rollout:${d.id}`);
+		const prev = d.rollout ? d.rollout.prev : d.podSeed;
+		const first = this.addRevision(d);
+		d.rollout = { prev, next: first, outcome, startedAt: Date.now() };
+		d.status = 'deploying';
+		this.touch(d);
+		this.emit('deployment.changed', d.projectId, d.id);
+		if (twice) {
+			this.schedule(`rollout:${d.id}`, 1_000, () => {
+				const second = this.addRevision(d);
+				d.rollout = { prev, middle: first, next: second, outcome, startedAt: Date.now() };
+				this.touch(d);
+				this.emit('deployment.changed', d.projectId, d.id);
+				this.emit('pod.changed', d.projectId, d.id, this.podPayload(d));
+				this.stepRollout(d);
+			});
+		} else {
+			this.stepRollout(d);
+		}
+	}
+
+	private stepRollout(d: MockDeployment) {
+		const ro = d.rollout;
+		if (!ro) return;
+		const healthy = ro.outcome === 'healthy';
+		const tick = () => {
+			if (d.rollout !== ro) return;
+			const elapsed = Date.now() - ro.startedAt;
+			if (ro.middle && elapsed > 2_500) ro.middle = undefined;
+			if (healthy && elapsed >= d.replicas * 4_000 + 1_500) {
+				d.podSeed = ro.next;
+				d.podStartedAt = new Date().toISOString();
+				d.rollout = null;
+				d.status = d.crash ? 'crashing' : 'running';
+			} else if (!healthy && elapsed >= 45_000) {
+				ro.failed = true;
+			} else {
+				this.schedule(`rollout:${d.id}`, 2_000, tick);
+			}
+			this.touch(d);
+			this.emit('deployment.changed', d.projectId, d.id);
+			this.emit('pod.changed', d.projectId, d.id, this.podPayload(d));
+		};
+		this.schedule(`rollout:${d.id}`, 2_000, tick);
+	}
+
+	cancelRollout(deploymentId: string) {
+		const d = this.deployment(deploymentId);
+		if (!d?.rollout) return;
+		this.cancel(`rollout:${d.id}`);
+		d.rollout = null;
+		d.status = d.crash ? 'crashing' : 'running';
+		this.touch(d);
+		this.emit('deployment.changed', d.projectId, d.id);
 	}
 
 	podPayload(d: MockDeployment) {
@@ -376,7 +458,8 @@ export class Store {
 		d.stopped = false;
 		if (d.replicas === 0) d.replicas = 1;
 		d.status = 'running';
-		d.podSeed = sha(`${d.id}:${Date.now()}`).slice(0, 10);
+		this.revisionsOf(d);
+		d.podSeed = this.addRevision(d);
 		d.podStartedAt = new Date().toISOString();
 		this.appendLog(d, b, ['Deployment is live']);
 		this.touch(d);

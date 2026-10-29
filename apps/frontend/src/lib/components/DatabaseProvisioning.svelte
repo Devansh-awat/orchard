@@ -3,6 +3,8 @@
 	import { Check, X, Loader2, Database, ChevronDown } from 'lucide-svelte';
 	import TriangleAlertIcon from '$lib/components/icons/TriangleAlertIcon.svelte';
 	import { apiFetch, selectedOrganization, subscribeOrgEvents } from '$lib/stores';
+	import StatusDot from '$lib/components/ui/StatusDot.svelte';
+	import { statusMeta } from '$lib/components/ui/status';
 
 	type StepStatus = 'pending' | 'running' | 'done' | 'error';
 	interface Step {
@@ -322,7 +324,7 @@
 						{:else if step.status === 'running'}
 							<Loader2 class="h-3.5 w-3.5 animate-spin" />
 						{:else}
-							<span class="prov-step-dot"></span>
+							<StatusDot meta={statusMeta('neutral', 'Pending')} size={8} />
 						{/if}
 					</div>
 					<div class="prov-step-body">
@@ -592,14 +594,6 @@
 	}
 	.prov-step-icon[data-status='pending'] {
 		background-color: transparent;
-	}
-
-	.prov-step-dot {
-		width: 0.5rem;
-		height: 0.5rem;
-		border-radius: var(--radius-pill);
-		background-color: var(--surface-muted);
-		opacity: 0.5;
 	}
 
 	.prov-step-label {

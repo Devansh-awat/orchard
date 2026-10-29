@@ -239,9 +239,26 @@ Lay a component out on an explicit grid before styling it, and check it with a r
 - Size to content: a one-line note gets a one-line card, not a fixed minimum.
 - Columns of status in a list share a fixed-width, left-aligned column so dots and labels line up.
 
-## Live status
+## Status dots (one language)
 
-Something in progress shows a tiny activity ring (solid core, thin ring, a short arc orbiting it), never a radar ping or pulsing halo. Healthy dots are still. The ring keeps turning at reduced motion because it is a progress indicator.
+Every status indicator is `StatusDot`. Nothing else draws a coloured status circle.
+
+- **The nucleus never changes.** The core is 8px everywhere (lists, badges, headers, pods); only the ring around it varies, like an atom. The ring draws outside the dot's box, so a dot starting or finishing work never moves the layout.
+- **Colour is the main status:** green healthy, amber in progress, red broken, blue queued, grey stopped, and violet (`tone="deploy"`, `--status-deploy-*`) for a new version rolling out.
+- **Full ring** (`meta.pulse`): work with no known steps. One arc orbits the core.
+- **Speedometer** (`steps`): work with known steps. A 270° gauge split into one segment per step: done light, active in the main colour and breathing, failed red, pending faint. Switching from the full ring unrolls the segments into place.
+- **Landing:** when the work ends the ring shrinks and fades while the core pops once into its final colour.
+- `StatusBadge` passes `tone` and `steps` through, so a header chip and a pod share the exact same dot.
+
+## App, deploy and build are three different things
+
+`deployment/health.ts` (`computeHealth`) is the only place that decides what is wrong, from what is true right now. It never keeps history: a pod that crashed and recovered raises nothing.
+
+- **Build:** did the image get made. A failed build changes nothing that is running.
+- **Deploy:** is the new version (the newest ReplicaSet, `rollout.currentRevision`) coming up. A new version that crashes, can't pull, misses a secret, has no room or never gets ready is a deploy problem, and the app keeps serving the previous version.
+- **App:** is anything serving traffic. Down only when no pod is ready and none is still starting.
+
+Pods carry `revision` (`pod-template-hash`); `/pods-live` returns `rollout` (revisions with numbers, current, state). During a deploy pods are tagged "v6 new", "v1", or "v4 replaced" when a second deploy superseded the first.
 
 ## Hover-revealed actions
 

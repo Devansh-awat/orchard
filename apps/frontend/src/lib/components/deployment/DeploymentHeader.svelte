@@ -17,12 +17,14 @@
 	import { Badge, StatusBadge, Button, Menu, MenuItem, MenuSeparator } from '$lib/components/ui';
 	import Tooltip from '$lib/components/ui/Tooltip.svelte';
 	import type { StatusMeta } from '$lib/components/ui';
+	import type { DotStep } from '$lib/components/ui/StatusDot.svelte';
 
 	let {
 		deployment,
 		headerCollapsed,
 		deploymentStatusChip,
 		buildStatusChip = null,
+		deployChip = null,
 		debugChips = [],
 		repoUrl,
 		rebuilding,
@@ -52,6 +54,7 @@
 		headerCollapsed: boolean;
 		deploymentStatusChip: StatusMeta;
 		buildStatusChip?: StatusMeta | null;
+		deployChip?: { meta: StatusMeta; tone?: 'deploy'; steps?: DotStep[] } | null;
 		debugChips?: StatusMeta[];
 		repoUrl: string | undefined;
 		rebuilding: boolean;
@@ -125,6 +128,9 @@
 		{/if}
 		{#if buildStatusChip}
 			<StatusBadge meta={buildStatusChip} />
+		{/if}
+		{#if deployChip}
+			<StatusBadge meta={deployChip.meta} tone={deployChip.tone} steps={deployChip.steps} />
 		{/if}
 		{#if deployment.environment}
 			<Badge>{deployment.environment.name}</Badge>

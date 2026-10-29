@@ -1,18 +1,22 @@
 <script lang="ts">
 	import type { StatusMeta } from './status';
-	import StatusDot from './StatusDot.svelte';
+	import StatusDot, { type DotStep } from './StatusDot.svelte';
 
 	let {
 		meta,
-		variant = 'subtle'
+		variant = 'subtle',
+		tone = undefined,
+		steps = undefined
 	}: {
 		meta: StatusMeta;
 		variant?: 'subtle' | 'plain' | 'solid';
+		tone?: 'deploy';
+		steps?: DotStep[];
 	} = $props();
 </script>
 
-<span class="sb sb--{variant} sb--{meta.kind}">
-	{#if variant !== 'solid'}<StatusDot {meta} size={6} />{/if}
+<span class="sb sb--{variant} sb--{tone ?? meta.kind}">
+	{#if variant !== 'solid'}<StatusDot {meta} {tone} {steps} size={8} />{/if}
 	{meta.label}
 </span>
 
@@ -50,6 +54,10 @@
 	.sb--subtle.sb--error {
 		background: var(--red-2);
 		color: var(--red-9);
+	}
+	.sb--subtle.sb--deploy {
+		background: var(--status-deploy-bg);
+		color: var(--status-deploy);
 	}
 	.sb--subtle.sb--info {
 		background: var(--blue-2);

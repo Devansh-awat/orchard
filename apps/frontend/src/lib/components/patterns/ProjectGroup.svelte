@@ -1,4 +1,6 @@
 <script lang="ts">
+	import StatusDot from '$lib/components/ui/StatusDot.svelte';
+	import { statusMeta } from '$lib/components/ui/status';
 	import type { Snippet } from 'svelte';
 	import { onMount } from 'svelte';
 	import { Plus, ArrowRight, ChevronRight } from 'lucide-svelte';
@@ -110,7 +112,10 @@
 		</button>
 		{#if summary}
 			<span class="summary summary--{summary.tone}"
-				><span class="summary-dot"></span><span class="summary-label">{summary.label}</span></span
+				><StatusDot
+					meta={statusMeta(summary.tone, summary.label, summary.tone === 'progress')}
+					size={8}
+				/><span class="summary-label">{summary.label}</span></span
 			>
 		{/if}
 		<div class="actions">
@@ -400,21 +405,6 @@
 	}
 	.summary-label {
 		text-box: trim-both cap alphabetic;
-	}
-	.summary-dot {
-		width: 6px;
-		height: 6px;
-		border-radius: 50%;
-		background: var(--neutral-6);
-	}
-	.summary--success .summary-dot {
-		background: var(--green-6);
-	}
-	.summary--progress .summary-dot {
-		background: var(--amber-6);
-	}
-	.summary--error .summary-dot {
-		background: var(--red-6);
 	}
 	.summary--error {
 		color: var(--h-fg);

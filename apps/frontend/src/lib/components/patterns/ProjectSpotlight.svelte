@@ -14,6 +14,8 @@
 </script>
 
 <script lang="ts">
+	import StatusDot from '$lib/components/ui/StatusDot.svelte';
+	import { statusMeta } from '$lib/components/ui/status';
 	import type { Snippet } from 'svelte';
 	import type { Icon } from '$lib/components/ui/types';
 	import { ArrowRight, ExternalLink } from 'lucide-svelte';
@@ -202,9 +204,10 @@
 						<div class="text">
 							<h2 class="name">{current.name}</h2>
 							<p class="status status--{current.tone}">
-								<span class="dot" aria-hidden="true"></span><span class="status-label"
-									>{current.status}</span
-								>
+								<StatusDot
+									meta={statusMeta(current.tone, current.status, current.tone === 'progress')}
+									size={8}
+								/><span class="status-label">{current.status}</span>
 							</p>
 						</div>
 						<div class="actions">
@@ -246,9 +249,10 @@
 						<div class="text">
 							<p class="name" aria-hidden={variant !== 'banner'}>{current.name}</p>
 							<p class="status status--{current.tone}">
-								<span class="dot" aria-hidden="true"></span><span class="status-label"
-									>{current.status}</span
-								>
+								<StatusDot
+									meta={statusMeta(current.tone, current.status, current.tone === 'progress')}
+									size={8}
+								/><span class="status-label">{current.status}</span>
 							</p>
 						</div>
 					</div>
@@ -554,22 +558,6 @@
 		text-box: trim-both cap alphabetic;
 		padding-block: 0.3em;
 		margin-block: -0.3em;
-	}
-	.dot {
-		flex-shrink: 0;
-		width: 7px;
-		height: 7px;
-		border-radius: 50%;
-		background: var(--neutral-6);
-	}
-	.status--success .dot {
-		background: var(--green-7);
-	}
-	.status--progress .dot {
-		background: var(--amber-7);
-	}
-	.status--error .dot {
-		background: var(--red-7);
 	}
 	.status--error {
 		color: var(--on-media);

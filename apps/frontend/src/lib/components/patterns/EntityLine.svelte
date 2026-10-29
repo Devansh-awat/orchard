@@ -35,7 +35,7 @@
 </script>
 
 <a class="line" data-entity={name} {href}>
-	<StatusDot meta={status} size={6} />
+	<StatusDot meta={status} size={8} />
 	<span class="kind"><KindIcon size={14} /></span>
 	<span class="name">{name}</span>
 	{#if loud}<span class="state state--{status.kind}">{status.label}</span>{/if}

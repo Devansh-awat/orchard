@@ -6,7 +6,6 @@
 		SquareArrowOutUpRight,
 		SquareTerminal,
 		Trash2,
-		TriangleAlert,
 		X
 	} from 'lucide-svelte';
 	import { Button, Stepper, StatusDot, statusMeta } from '$lib/components/ui';
@@ -18,6 +17,7 @@
 	import type { Pod } from '$lib/types/deployment';
 	import PodSimulator from './PodSimulator.svelte';
 	import IslandPill from '$lib/components/patterns/IslandPill.svelte';
+	import type { ClassifiedPod } from './health';
 	import IslandSheet from '$lib/components/patterns/IslandSheet.svelte';
 
 	type PodWarning = { podName?: string; message: string };
@@ -39,7 +39,8 @@
 		onCrashLogs,
 		onShell,
 		onDelete,
-		onSimulated
+		onSimulated,
+		versions = []
 	}: {
 		deploymentId: string;
 		pods: Pod[];
@@ -58,6 +59,7 @@
 		onShell: (podName: string, container: string) => void;
 		onDelete: (name: string) => void;
 		onSimulated: () => void;
+		versions?: ClassifiedPod[];
 	} = $props();
 
 	type PodState = { label: string; hint: string | null; meta: StatusMeta };
@@ -196,6 +198,8 @@
 	);
 
 	type Row = (typeof rows)[number];
+	const versionMap = $derived(new Map(versions.map((v) => [v.name, v])));
+	const versionOf = (name: string) => versionMap.get(name) ?? null;
 	let scaleTimer: ReturnType<typeof setTimeout> | undefined;
 
 	function queueScale(value: number) {
@@ -238,14 +242,24 @@
 </script>
 
 {#snippet podFace(r: Row, tone: 'ok' | 'warn' | 'bad')}
+	{@const v = versionOf(r.pod.name)}
 	<span class="glyph" {@attach stateEcho(() => r.state.meta.kind)}>
-		{#if tone === 'ok'}
-			<span class="ok-dot"></span>
-		{:else}
-			<TriangleAlert size={15} strokeWidth={2.25} aria-hidden="true" />
-		{/if}
+		<StatusDot
+			meta={r.state.meta}
+			size={8}
+			tone={v?.version === 'new' && r.state.meta.kind === 'progress' ? 'deploy' : undefined}
+		/>
 	</span>
 	<span class="pid">{r.name}</span>
+	{#if v?.version && v.revision}
+		<span class="ver ver--{v.version}"
+			>v{v.revision}{v.version === 'new'
+				? ' new'
+				: v.version === 'replaced'
+					? ' replaced'
+					: ''}</span
+		>
+	{/if}
 	{#if r.pod.name === selectedPod}<span class="logs-tag">Logs</span>{/if}
 	<span class="face-end" class:face-end--tone={tone !== 'ok'}>
 		{#if tone === 'ok'}
@@ -404,18 +418,32 @@
 		border-radius: 50%;
 		color: var(--island-tone);
 	}
-	.ok-dot {
-		width: 0.5rem;
-		height: 0.5rem;
-		border-radius: 50%;
-		background: var(--island-ok);
-		box-shadow: 0 0 0 3px color-mix(in oklab, var(--island-ok) 22%, transparent);
-	}
 	.pid {
 		font-family: var(--font-mono);
 		font-size: var(--text-footnote);
 		font-weight: var(--weight-medium);
 		text-box: trim-both cap alphabetic;
+	}
+	.ver {
+		padding: 0.125rem 0.375rem;
+		border-radius: calc(0.3125rem * var(--corner-scale));
+		corner-shape: var(--corner);
+		font-family: var(--font-mono);
+		font-size: var(--text-micro);
+		font-weight: var(--weight-medium);
+		white-space: nowrap;
+	}
+	.ver--new {
+		background: var(--status-deploy-bg);
+		color: var(--status-deploy);
+	}
+	.ver--old {
+		background: var(--bg-active);
+		color: var(--text-muted);
+	}
+	.ver--replaced {
+		color: var(--text-faint);
+		text-decoration: line-through;
 	}
 	.logs-tag {
 		padding: 0.125rem 0.375rem;

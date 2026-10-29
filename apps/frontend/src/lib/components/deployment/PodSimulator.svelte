@@ -39,6 +39,18 @@
 		}));
 	}
 
+	let outcome = $state('healthy');
+
+	async function rollout(body: Record<string, unknown>) {
+		const res = await apiFetch(`/apiv1/__mock/deployments/${deploymentId}/rollout`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(body)
+		});
+		if (!res.ok) toasts.add({ title: 'Simulation failed', color: 'error' });
+		onchange();
+	}
+
 	async function apply(scenario: string, index?: number) {
 		const res = await apiFetch(`/apiv1/__mock/deployments/${deploymentId}/pods`, {
 			method: 'POST',
@@ -100,8 +112,25 @@
 				</Select>
 			{/each}
 		</div>
+		<div class="head head--sub">
+			<span class="title">Simulate a deploy</span>
+		</div>
+		<div class="grid">
+			<span class="name name--all">New version</span>
+			<Select size="sm" bind:value={outcome} aria-label="What the new version does">
+				{#each options as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
+			</Select>
+		</div>
 		<div class="foot">
-			<Button variant="ghost" size="sm" onclick={() => apply('healthy')}>Reset all</Button>
+			<Button variant="ghost" size="sm" onclick={() => rollout({ cancel: true })}>End deploy</Button
+			>
+			<Button variant="ghost" size="sm" onclick={() => rollout({ outcome, twice: true })}
+				>Deploy twice</Button
+			>
+			<Button variant="secondary" size="sm" onclick={() => rollout({ outcome })}>Deploy</Button>
+		</div>
+		<div class="foot">
+			<Button variant="ghost" size="sm" onclick={() => apply('healthy')}>Reset pods</Button>
 		</div>
 	{/snippet}
 </PopoverPanel>
@@ -143,9 +172,13 @@
 		font-family: inherit;
 		color: var(--text-default);
 	}
+	.head--sub {
+		padding-top: 1rem;
+	}
 	.foot {
 		display: flex;
 		justify-content: flex-end;
+		gap: 0.25rem;
 		padding-top: 0.75rem;
 	}
 </style>

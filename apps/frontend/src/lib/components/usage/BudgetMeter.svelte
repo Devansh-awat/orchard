@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { motionStagger } from '$lib/utils/motion.svelte';
+	import StatusDot from '$lib/components/ui/StatusDot.svelte';
+	import { statusMeta } from '$lib/components/ui/status';
 
 	let {
 		label,
@@ -64,7 +66,10 @@
 		<div class="bm-foot">
 			<span class="bm-caption">{caption}</span>
 			<span class="bm-pct bm-pct--{pressure}">
-				{#if pressureLabel}<span class="bm-dot"></span>{pressureLabel} &middot;
+				{#if pressureLabel}<StatusDot
+						meta={statusMeta(pressure === 'error' ? 'error' : 'warning', pressureLabel)}
+						size={8}
+					/>{pressureLabel} &middot;
 				{/if}{percent}%
 			</span>
 		</div>
@@ -154,11 +159,5 @@
 	}
 	.bm-pct--error {
 		color: var(--status-error);
-	}
-	.bm-dot {
-		width: 0.375rem;
-		height: 0.375rem;
-		border-radius: 50%;
-		background-color: currentColor;
 	}
 </style>
