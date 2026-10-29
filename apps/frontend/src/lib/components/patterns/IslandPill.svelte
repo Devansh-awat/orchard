@@ -55,7 +55,6 @@
 		font: inherit;
 		text-align: left;
 		cursor: pointer;
-		transition: opacity var(--fade-out) var(--curve-in);
 	}
 	.pill:hover {
 		background: color-mix(in oklab, var(--neutral-10) 3%, var(--bg-surface));
@@ -71,6 +70,6 @@
 		--island-tone: var(--status-error);
 	}
 	.pill--away {
-		opacity: 0;
+		visibility: hidden;
 	}
 </style>

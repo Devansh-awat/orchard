@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { tick, type Snippet } from 'svelte';
-	import { springTiming, functionalMotion } from '$lib/utils/motion.svelte';
+	import { untrack, type Snippet } from 'svelte';
+	import { SpringValue, functionalMotion } from '$lib/utils/motion.svelte';
 
 	let {
 		origin,
@@ -16,50 +16,58 @@
 
 	const PILL_R = 18;
 
+	type Edges = { t: number; r: number; b: number; l: number; radius: number };
+
 	let sheet = $state<HTMLElement>();
-	let closing = false;
+	let from = $state<Edges>({ t: 0, r: 0, b: 0, l: 0, radius: 0 });
+	let full = $state(0);
+	let closing = $state(false);
+	const progress = new SpringValue(0);
 
-	function insetFrom(): string | null {
-		if (!sheet || !origin) return null;
-		const box = sheet.getBoundingClientRect();
-		const o = origin.getBoundingClientRect();
-		if (!o.width) return null;
-		const scale = parseFloat(getComputedStyle(sheet).getPropertyValue('--corner-scale')) || 1;
-		const r = PILL_R * scale;
-		return `inset(${o.top - box.top}px ${box.right - o.right}px ${box.bottom - o.bottom}px ${o.left - box.left}px round ${r}px)`;
-	}
-
-	function fullInset(): string {
-		const r = sheet ? getComputedStyle(sheet).borderTopLeftRadius : '0px';
-		return `inset(0px 0px 0px 0px round ${r})`;
+	function measure() {
+		const el = sheet;
+		const pill = origin;
+		if (!el || !pill) return;
+		const box = el.getBoundingClientRect();
+		const o = pill.getBoundingClientRect();
+		if (!o.width) return;
+		const style = getComputedStyle(el);
+		const scale = parseFloat(style.getPropertyValue('--corner-scale')) || 1;
+		from = {
+			t: o.top - box.top,
+			r: box.right - o.right,
+			b: box.bottom - o.bottom,
+			l: o.left - box.left,
+			radius: Math.min(PILL_R * scale, o.height / 2)
+		};
+		full = parseFloat(style.borderTopLeftRadius) || 0;
 	}
 
 	$effect(() => {
-		const el = sheet;
-		if (!el) return;
-		void tick().then(() => {
-			const from = insetFrom();
-			if (!from || !functionalMotion()) return;
-			el.animate([{ clipPath: from }, { clipPath: fullInset() }], springTiming('morph'));
+		if (!sheet) return;
+		untrack(() => {
+			measure();
+			progress.to(1, 'morph', { instant: !functionalMotion() });
 		});
 	});
 
-	export async function close() {
+	$effect(() => {
+		if (closing && progress.current <= 0.02) untrack(onclose);
+	});
+
+	export function close() {
 		if (closing) return;
 		closing = true;
-		const el = sheet;
-		const to = insetFrom();
-		if (el && to && functionalMotion()) {
-			el.dataset.closing = '';
-			await el
-				.animate([{ clipPath: fullInset() }, { clipPath: to }], {
-					...springTiming('morph', { exit: true }),
-					fill: 'forwards'
-				})
-				.finished.catch(() => {});
-		}
-		onclose();
+		measure();
+		progress.to(0, 'morph', { settle: true, instant: !functionalMotion() });
 	}
+
+	const k = $derived(progress.current);
+	const along = (a: number) => a * (1 - k);
+	const clip = $derived(
+		`inset(${along(from.t)}px ${along(from.r)}px ${along(from.b)}px ${along(from.l)}px round ${from.radius + (full - from.radius) * Math.min(1, Math.max(0, k))}px)`
+	);
+	const reveal = $derived(Math.min(1, Math.max(0, (k - 0.45) / 0.45)));
 </script>
 
 <div
@@ -68,6 +76,7 @@
 	role="dialog"
 	aria-modal="false"
 	tabindex="-1"
+	style:clip-path={clip}
 	onkeydown={(e) => {
 		if (e.key === 'Escape') {
 			e.stopPropagation();
@@ -75,7 +84,14 @@
 		}
 	}}
 >
-	<div class="content">{@render children()}</div>
+	<div
+		class="content"
+		style:opacity={reveal}
+		style:filter={reveal < 1 ? `blur(${(1 - reveal) * 6}px)` : undefined}
+		inert={closing}
+	>
+		{@render children()}
+	</div>
 </div>
 
 <style>
@@ -94,11 +110,10 @@
 		border-radius: calc(var(--radius-widget) * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--bg-surface);
-		box-shadow:
-			inset 0 0 0 0.5px var(--border-strong),
-			var(--shadow-raised);
+		box-shadow: inset 0 0 0 0.5px var(--border-strong);
 		color: var(--island-fg);
 		outline: none;
+		will-change: clip-path;
 	}
 	.sheet--warn {
 		--island-tone: var(--status-warning);
@@ -113,27 +128,5 @@
 		min-height: 0;
 		padding: 1rem;
 		overflow-y: auto;
-		animation: content-in var(--fade-long) var(--curve-out) 90ms both;
-	}
-	.sheet[data-closing] .content {
-		animation: content-out var(--fade-out) var(--curve-in) forwards;
-	}
-	@keyframes content-in {
-		from {
-			opacity: 0;
-			filter: blur(6px);
-		}
-	}
-	@keyframes content-out {
-		to {
-			opacity: 0;
-			filter: blur(6px);
-		}
-	}
-	@media (prefers-reduced-motion: reduce) {
-		.content,
-		.sheet[data-closing] .content {
-			animation: none;
-		}
 	}
 </style>
