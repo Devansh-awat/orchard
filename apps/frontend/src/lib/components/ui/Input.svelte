@@ -27,6 +27,8 @@
 		class?: string;
 		[key: string]: unknown;
 	} = $props();
+
+	let suffixWidth = $state(0);
 </script>
 
 {#if icon || suffix}
@@ -40,12 +42,15 @@
 			class:control--mono={mono}
 			class:control--error={error}
 			aria-invalid={error || undefined}
+			style:padding-right={suffix && suffixWidth
+				? `max(3rem, calc(${suffixWidth}px + 1rem))`
+				: undefined}
 			bind:value
 			bind:this={element}
 			{...rest}
 		/>
 		{#if suffix}
-			<span class="suffix">
+			<span class="suffix" bind:offsetWidth={suffixWidth}>
 				{#if typeof suffix === 'string'}{suffix}{:else}{@render suffix()}{/if}
 			</span>
 		{/if}

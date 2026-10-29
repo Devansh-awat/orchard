@@ -13,7 +13,8 @@
 		titleSuffix = undefined,
 		presence = false,
 		pinned = false,
-		selected = false
+		selected = false,
+		flush = false
 	}: {
 		title: string;
 		subtitle?: string | Snippet;
@@ -26,6 +27,7 @@
 		presence?: boolean;
 		pinned?: boolean;
 		selected?: boolean;
+		flush?: boolean;
 	} = $props();
 
 	const interactive = $derived(!!href || !!onclick);
@@ -36,6 +38,7 @@
 	class:row--interactive={interactive}
 	class:row--pinned={pinned}
 	class:row--selected={selected}
+	class:row--flush={flush}
 	aria-current={selected ? 'true' : undefined}
 	role="listitem"
 	in:enterExit={{ enabled: presence }}
@@ -79,6 +82,9 @@
 	}
 	.row:not(:first-child) {
 		box-shadow: inset 0 1px 0 var(--border-default);
+	}
+	.row--flush {
+		padding: 0.75rem 0;
 	}
 	.row--interactive {
 		transition: background-color var(--dur-fast) ease;
