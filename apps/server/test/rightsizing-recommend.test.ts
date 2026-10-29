@@ -7,6 +7,7 @@ import {
   formatCpu,
   quantile,
   recommendResources,
+  classifyFromPeaks,
   roundCpu,
   roundMemory,
   type RightsizingInput,
@@ -87,21 +88,23 @@ test('dailyPeaks buckets by 24 hour intervals ending at now', () => {
   assert.deepEqual(peaks, [8, 3, 9]);
 });
 
-test('roundMemory snaps to presets and then to 64 MiB steps', () => {
+test('roundMemory takes the nearer of the next preset and the next 64 MiB step', () => {
   assert.equal(roundMemory(64 * MiB), 64 * MiB);
   assert.equal(roundMemory(65 * MiB), 128 * MiB);
-  assert.equal(roundMemory(130 * MiB), 512 * MiB);
+  assert.equal(roundMemory(130 * MiB), 192 * MiB);
+  assert.equal(roundMemory(470 * MiB), 512 * MiB);
   assert.equal(roundMemory(1024 * MiB), 1024 * MiB);
-  assert.equal(roundMemory(3000 * MiB), 4096 * MiB);
+  assert.equal(roundMemory(3000 * MiB), 3008 * MiB);
   assert.equal(roundMemory(4097 * MiB), 4160 * MiB);
   assert.equal(roundMemory(4600 * MiB), 4608 * MiB);
 });
 
-test('roundCpu snaps to presets and then to 100m steps', () => {
+test('roundCpu takes the nearer of the next preset and the next 100m step', () => {
   assert.equal(roundCpu(50), 50);
   assert.equal(roundCpu(100), 100);
-  assert.equal(roundCpu(101), 250);
-  assert.equal(roundCpu(690), 1000);
+  assert.equal(roundCpu(101), 200);
+  assert.equal(roundCpu(230), 250);
+  assert.equal(roundCpu(690), 700);
   assert.equal(roundCpu(2000), 2000);
   assert.equal(roundCpu(2001), 2100);
   assert.equal(roundCpu(2240), 2300);
@@ -181,7 +184,7 @@ test('an OOM kill bumps memory by at least 20% or 100 MiB', () => {
       oomKilled: true
     })
   );
-  assert.equal(result.memory.recommended, 1024 * MiB);
+  assert.equal(result.memory.recommended, 640 * MiB);
   assert.equal(result.memory.change, 'raise');
   assert.equal(
     result.memory.reason,
@@ -213,7 +216,7 @@ test('an OOM kill raises memory even after a restart in the last 24 hours', () =
     })
   );
   assert.equal(result.memory.change, 'raise');
-  assert.equal(result.memory.recommended, 1024 * MiB);
+  assert.equal(result.memory.recommended, 640 * MiB);
 });
 
 test('a database image keeps its memory floor', () => {
@@ -224,7 +227,7 @@ test('a database image keeps its memory floor', () => {
       current: { cpuLimitMilli: 500, memoryBytes: 2048 * MiB }
     })
   );
-  assert.equal(result.memory.recommended, 512 * MiB);
+  assert.equal(result.memory.recommended, 256 * MiB);
   assert.equal(result.memory.change, 'lower');
   assert.equal(
     result.memory.reason,
@@ -254,7 +257,7 @@ test('cpu limit follows p95 times 1.5 when usage is steady', () => {
   );
   assert.equal(result.cpu.p95, 200);
   assert.equal(result.cpu.p99, 200);
-  assert.equal(result.cpu.recommended, 500);
+  assert.equal(result.cpu.recommended, 300);
   assert.equal(result.cpu.change, 'lower');
   assert.equal(result.cpu.throttledP95, null);
   assert.equal(result.cpu.reason, 'Usage was 200m at p95 and 200m at p99 over 14 days.');
@@ -270,7 +273,7 @@ test('cpu limit follows p99 times 1.15 when usage spikes', () => {
   );
   assert.equal(result.cpu.p95, 100);
   assert.equal(result.cpu.p99, 600);
-  assert.equal(result.cpu.recommended, 1000);
+  assert.equal(result.cpu.recommended, 700);
   assert.equal(result.cpu.change, 'lower');
 });
 
@@ -293,7 +296,7 @@ test('throttling raises the cpu limit by the throttled share', () => {
     })
   );
   assert.equal(result.cpu.throttledP95, 40);
-  assert.equal(result.cpu.recommended, 1000);
+  assert.equal(result.cpu.recommended, 700);
   assert.equal(result.cpu.change, 'raise');
   assert.equal(
     result.cpu.reason,
@@ -404,9 +407,9 @@ test('a restart in the last 24 hours still allows raising', () => {
     })
   );
   assert.equal(result.memory.change, 'raise');
-  assert.equal(result.memory.recommended, 2048 * MiB);
+  assert.equal(result.memory.recommended, 1088 * MiB);
   assert.equal(result.cpu.change, 'raise');
-  assert.equal(result.cpu.recommended, 1000);
+  assert.equal(result.cpu.recommended, 900);
 });
 
 test('confidence depends on history length and restarts', () => {
@@ -428,7 +431,7 @@ test('samples older than 14 days are ignored', () => {
   );
   assert.equal(result.historyDays, 14);
   assert.equal(result.memory.peak, 300 * MiB);
-  assert.equal(result.memory.recommended, 512 * MiB);
+  assert.equal(result.memory.recommended, 384 * MiB);
   assert.equal(result.memory.reason, 'Peak was 300 MB over 14 days.');
 });
 
@@ -445,15 +448,15 @@ test('freedPerMonth reports the reserved cpu and memory that a lowering frees', 
       current: { cpuLimitMilli: 2000, memoryBytes: 2048 * MiB }
     })
   );
-  assert.equal(result.memory.recommended, 512 * MiB);
-  assert.equal(result.cpu.recommended, 500);
-  assert.deepEqual(result.freedPerMonth, { cpuMilli: 150, memoryBytes: 1536 * MiB });
+  assert.equal(result.memory.recommended, 384 * MiB);
+  assert.equal(result.cpu.recommended, 300);
+  assert.deepEqual(result.freedPerMonth, { cpuMilli: 150, memoryBytes: 1664 * MiB });
 });
 
 test('no freedPerMonth when nothing is lowered', () => {
   const result = recommendResources(
     input({
-      samples: samples(14, { memory: () => 300 * MiB, cpu: () => 100 }),
+      samples: samples(14, { memory: () => 400 * MiB, cpu: () => 100 }),
       current: { cpuLimitMilli: 250, memoryBytes: 512 * MiB }
     })
   );
@@ -471,4 +474,36 @@ test('missing throttle samples report null and missing cpu values are skipped', 
   );
   assert.equal(result.cpu.throttledP95, null);
   assert.equal(result.cpu.p95, 200);
+});
+
+test('org classification agrees with the recommender', () => {
+  const current = { cpuLimitMilli: 2000, memoryBytes: 2048 * MiB };
+  assert.equal(
+    classifyFromPeaks({ cpuP95: 200, cpuP99: 200, memoryPeak: 300 * MiB, current, image: null }),
+    'over'
+  );
+  assert.equal(
+    classifyFromPeaks({
+      cpuP95: 1900,
+      cpuP99: 2000,
+      memoryPeak: 300 * MiB,
+      current,
+      image: null
+    }),
+    'under'
+  );
+  assert.equal(
+    classifyFromPeaks({
+      cpuP95: 1200,
+      cpuP99: 1700,
+      memoryPeak: 1700 * MiB,
+      current,
+      image: null
+    }),
+    'ok'
+  );
+  assert.equal(
+    classifyFromPeaks({ cpuP95: null, cpuP99: null, memoryPeak: null, current, image: null }),
+    'unknown'
+  );
 });

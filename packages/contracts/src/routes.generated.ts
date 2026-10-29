@@ -199,6 +199,7 @@ export const routes: GeneratedRoute[] = [
   { method: 'PATCH', path: '/deployments/:id/resources', auth: 'authenticated' },
   { method: 'POST', path: '/deployments/:id/restart', auth: 'authenticated' },
   { method: 'POST', path: '/deployments/:id/retry-apply', auth: 'authenticated' },
+  { method: 'GET', path: '/deployments/:id/rightsizing', auth: 'authenticated' },
   { method: 'POST', path: '/deployments/:id/rollback', auth: 'authenticated' },
   { method: 'POST', path: '/deployments/:id/rollback/:imageHistoryId', auth: 'authenticated' },
   { method: 'GET', path: '/deployments/:id/rollout', auth: 'authenticated' },

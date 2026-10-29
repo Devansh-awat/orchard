@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { deploymentPodRegex } from './pod-selector';
 import { forecastMemoryLimit, linearFit, projection } from './forecast';
+import { classifyFromPeaks } from '../rightsizing/recommend';
 import { parseMemory } from '../kubernetes/quantity';
 import {
   VictoriaMetricsService,
@@ -60,7 +61,8 @@ export class MetricsService {
             namespace: true,
             cpuRequestMilli: true,
             memoryRequestBytes: true,
-            replicas: true
+            replicas: true,
+            image: true
           }
         },
         databases: {
@@ -102,16 +104,27 @@ export class MetricsService {
           (d.memoryRequestBytes ? Number(d.memoryRequestBytes) : 0) * (d.replicas ?? 1);
         tasks.push(
           (async () => {
-            const [cpu, mem] = await Promise.all([
+            const sel = `namespace="${escapeLabel(ns)}",pod=~"${deploymentPodRegex(d.name)}",container="",image=""`;
+            const [cpu, mem, cpuPodP95, cpuPodP99, memPodPeak] = await Promise.all([
               this.vm.queryInstant(
-                `quantile_over_time(0.95, (sum(rate(container_cpu_usage_seconds_total{namespace="${escapeLabel(ns)}",pod=~"${deploymentPodRegex(d.name)}",container="",image=""}[60s])) * 1000)[${rangeSeconds}s:60s])`
+                `quantile_over_time(0.95, (sum(rate(container_cpu_usage_seconds_total{${sel}}[60s])) * 1000)[${rangeSeconds}s:60s])`
               ),
               this.vm.queryInstant(
-                `quantile_over_time(0.95, sum(container_memory_working_set_bytes{namespace="${escapeLabel(ns)}",pod=~"${deploymentPodRegex(d.name)}",container="",image=""})[${rangeSeconds}s:60s])`
+                `quantile_over_time(0.95, sum(container_memory_working_set_bytes{${sel}})[${rangeSeconds}s:60s])`
+              ),
+              this.vm.queryInstant(
+                `quantile_over_time(0.95, (max(sum by (pod) (rate(container_cpu_usage_seconds_total{${sel}}[5m]))) * 1000)[${rangeSeconds}s:300s])`
+              ),
+              this.vm.queryInstant(
+                `quantile_over_time(0.99, (max(sum by (pod) (rate(container_cpu_usage_seconds_total{${sel}}[5m]))) * 1000)[${rangeSeconds}s:300s])`
+              ),
+              this.vm.queryInstant(
+                `max_over_time(max(sum by (pod) (container_memory_working_set_bytes{${sel}}))[${rangeSeconds}s:300s])`
               )
             ]);
             const cpuUtil = requestedCpu > 0 && cpu !== null ? cpu / requestedCpu : null;
             const memUtil = requestedMem > 0 && mem !== null ? mem / requestedMem : null;
+            const unlimited = d.cpuRequestMilli === 0;
             rows.push({
               kind: 'deployment',
               id: d.id,
@@ -125,7 +138,19 @@ export class MetricsService {
               actualMemoryBytesP95: mem,
               cpuUtilization: cpuUtil,
               memoryUtilization: memUtil,
-              verdict: classify(cpuUtil, memUtil)
+              verdict: unlimited
+                ? 'unknown'
+                : classifyFromPeaks({
+                    cpuP95: cpuPodP95,
+                    cpuP99: cpuPodP99,
+                    memoryPeak: memPodPeak,
+                    current: {
+                      cpuLimitMilli: d.cpuRequestMilli,
+                      memoryBytes:
+                        d.memoryRequestBytes != null ? Number(d.memoryRequestBytes) : null
+                    },
+                    image: d.image
+                  })
             });
           })()
         );

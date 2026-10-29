@@ -12,6 +12,7 @@ import { TailscaleModule } from '../tailscale/tailscale.module';
 import { AuthModule } from '../auth/auth.module';
 import { EventsModule } from '../events/events.module';
 import { MetricsModule } from '../metrics/metrics.module';
+import { RightsizingService } from '../rightsizing/rightsizing.service';
 import { ProjectsService } from './projects.service';
 import { ProjectAccessService } from './project-access.service';
 import { EnvironmentsService } from './environments.service';
@@ -63,6 +64,7 @@ import { RolloutController, RolloutPinInterceptor } from './rollout.controller';
     MetricsModule
   ],
   providers: [
+    RightsizingService,
     ProjectsService,
     ProjectAccessService,
     EnvironmentsService,

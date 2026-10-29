@@ -95,16 +95,14 @@ export function dailyPeaks(points: { t: number; v: number }[], now: number): num
 
 export function roundMemory(bytes: number): number {
   const steps = RESOURCE_PRESETS.map((p) => p.memoryBytes).sort((a, b) => a - b);
-  const step = steps.find((s) => s >= bytes);
-  if (step !== undefined) return step;
-  return Math.ceil(bytes / MEMORY_STEP_BYTES) * MEMORY_STEP_BYTES;
+  const preset = steps.find((s) => s >= bytes) ?? Infinity;
+  return Math.min(preset, Math.ceil(bytes / MEMORY_STEP_BYTES) * MEMORY_STEP_BYTES);
 }
 
 export function roundCpu(milli: number): number {
   const steps = RESOURCE_PRESETS.map((p) => p.cpuMilli).sort((a, b) => a - b);
-  const step = steps.find((s) => s >= milli);
-  if (step !== undefined) return step;
-  return Math.ceil(milli / CPU_STEP_MILLI) * CPU_STEP_MILLI;
+  const preset = steps.find((s) => s >= milli) ?? Infinity;
+  return Math.min(preset, Math.ceil(milli / CPU_STEP_MILLI) * CPU_STEP_MILLI);
 }
 
 export function formatBytes(bytes: number): string {
@@ -297,4 +295,30 @@ export function recommendResources(input: RightsizingInput): RightsizingRecommen
     result.freedPerMonth = { cpuMilli: freedCpu, memoryBytes: freedMemory };
   }
   return result;
+}
+
+export function classifyFromPeaks(input: {
+  cpuP95: number | null;
+  cpuP99: number | null;
+  memoryPeak: number | null;
+  current: { cpuLimitMilli: number | null; memoryBytes: number | null };
+  image: string | null;
+}): 'over' | 'under' | 'ok' | 'unknown' {
+  const changes: ResourceChange[] = [];
+  const { cpuLimitMilli, memoryBytes } = input.current;
+  if (input.memoryPeak != null && memoryBytes) {
+    const floor = Math.max(MEMORY_FLOOR_BYTES, minPodMemoryBytesForImage(input.image));
+    const recommended = roundMemory(Math.max(input.memoryPeak * MEMORY_HEADROOM, floor));
+    changes.push(changeFor(memoryBytes, recommended, MEMORY_CHANGE_MIN_BYTES, false));
+  }
+  if (input.cpuP95 != null && input.cpuP99 != null && cpuLimitMilli) {
+    const recommended = roundCpu(
+      Math.max(input.cpuP99 * CPU_P99_HEADROOM, input.cpuP95 * CPU_P95_HEADROOM, CPU_FLOOR_MILLI)
+    );
+    changes.push(changeFor(cpuLimitMilli, recommended, CPU_CHANGE_MIN_MILLI, false));
+  }
+  if (changes.length === 0) return 'unknown';
+  if (changes.includes('raise')) return 'under';
+  if (changes.includes('lower')) return 'over';
+  return 'ok';
 }
