@@ -989,12 +989,13 @@
 			return;
 		}
 		el.style.viewTransitionName = 'console';
-		document.documentElement.classList.add('vt-console');
+		const dir = next ? 'vt-console-open' : 'vt-console-close';
+		document.documentElement.classList.add('vt-console', dir);
 		consoleAnimating = true;
 		const vt = document.startViewTransition(apply);
 		vt.finished.finally(() => {
 			el.style.viewTransitionName = '';
-			document.documentElement.classList.remove('vt-console');
+			document.documentElement.classList.remove('vt-console', dir);
 			consoleAnimating = false;
 		});
 	}

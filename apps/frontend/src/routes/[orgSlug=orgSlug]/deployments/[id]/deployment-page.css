@@ -3346,6 +3346,14 @@ html.vt-console::view-transition-group(console) {
 }
 html.vt-console::view-transition-image-pair(console) {
 	overflow: clip;
+	background: var(--console-bg);
+	animation: var(--spring-morph-duration) var(--spring-morph) both;
+}
+html.vt-console-open::view-transition-image-pair(console) {
+	animation-name: console-vt-square;
+}
+html.vt-console-close::view-transition-image-pair(console) {
+	animation-name: console-vt-round;
 }
 html.vt-console::view-transition-old(console),
 html.vt-console::view-transition-new(console) {
@@ -3355,15 +3363,26 @@ html.vt-console::view-transition-new(console) {
 	object-position: left top;
 	mix-blend-mode: normal;
 }
-html.vt-console::view-transition-old(console) {
-	animation: console-vt-out var(--fade-out) var(--curve-in) both;
+html.vt-console-open::view-transition-old(console) {
+	animation: console-vt-out 70ms var(--curve-in) both;
 }
-html.vt-console::view-transition-new(console) {
-	animation: console-vt-in var(--fade-in) var(--curve-out) both;
+html.vt-console-open::view-transition-new(console) {
+	animation: console-vt-in 120ms var(--curve-out) 70ms both;
+}
+html.vt-console-close::view-transition-old(console) {
+	animation: console-vt-out 90ms var(--curve-in) calc(var(--spring-morph-duration) * 0.34) both;
+}
+html.vt-console-close::view-transition-new(console) {
+	animation: console-vt-in 140ms var(--curve-out) calc(var(--spring-morph-duration) * 0.52) both;
 }
 html.vt-console::view-transition-old(root),
 html.vt-console::view-transition-new(root) {
 	animation: none;
+	mix-blend-mode: normal;
+}
+html.vt-console-open::view-transition-new(root),
+html.vt-console-close::view-transition-old(root) {
+	display: none;
 }
 @keyframes console-vt-in {
 	from {
@@ -3373,5 +3392,21 @@ html.vt-console::view-transition-new(root) {
 @keyframes console-vt-out {
 	to {
 		opacity: 0;
+	}
+}
+@keyframes console-vt-square {
+	from {
+		border-radius: calc(var(--radius-widget) * var(--corner-scale));
+	}
+	to {
+		border-radius: 0;
+	}
+}
+@keyframes console-vt-round {
+	from {
+		border-radius: 0;
+	}
+	to {
+		border-radius: calc(var(--radius-widget) * var(--corner-scale));
 	}
 }

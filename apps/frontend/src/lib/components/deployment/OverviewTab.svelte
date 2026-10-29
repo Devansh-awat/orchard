@@ -193,7 +193,7 @@
 		<div
 			bind:this={consoleRef}
 			class="console-panel"
-			class:console-expanded={consoleExpanded || consoleAnimating}
+			class:console-expanded={consoleExpanded}
 			class:console-animating={consoleAnimating}
 			class:console-at-fullscreen={consoleExpanded}
 			style={consoleInlineRect && !consoleExpanded
