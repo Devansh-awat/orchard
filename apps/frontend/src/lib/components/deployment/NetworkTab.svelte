@@ -2,14 +2,24 @@
 	import { env } from '$env/dynamic/public';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import type { Service, ServiceFormState, ServicePortForm } from '$lib/types/deployment';
-	import PublicCard from './network/PublicCard.svelte';
-	import PrivateCard from './network/PrivateCard.svelte';
+	import { EthernetPort, Plus } from 'lucide-svelte';
+	import { Button, EmptyState, List, SectionTitle } from '$lib/components/ui';
+	import Widget from '$lib/components/ui/Widget.svelte';
+	import PortCard from './network/PortCard.svelte';
+	import DomainRow from './network/DomainRow.svelte';
 	import DomainModal from './network/DomainModal.svelte';
 	import ProtectionModal from './network/ProtectionModal.svelte';
 	import RedirectModal from './network/RedirectModal.svelte';
 	import DnsModal from './network/DnsModal.svelte';
 	import PortModal from './network/PortModal.svelte';
-	import { displayHost, portEntries, type PortEntry, type ProtectionMode } from './network/network';
+	import {
+		displayHost,
+		domainKeyOf,
+		domainsByPort,
+		portEntries,
+		type PortEntry,
+		type ProtectionMode
+	} from './network/network';
 
 	const APP_DOMAIN = env.PUBLIC_APP_DOMAIN ?? '';
 	const INGRESS_CNAME = env.PUBLIC_INGRESS_CNAME ?? '';
@@ -142,6 +152,16 @@
 	const ingresses = $derived<any[]>(deployment.ingresses ?? []);
 	const services = $derived<any[]>(deployment.services ?? []);
 	const entries = $derived(portEntries(deployment.services));
+	const layout = $derived(domainsByPort(ingresses, entries));
+	const tailnet = $derived({
+		enabled: tailscaleFeatureEnabled,
+		linked: tailscaleLinked,
+		exposed: !!deployment.tailscaleExposed,
+		busy: tailscaleExposing || tailscaleUnexposing,
+		host: tailscaleDns || tailscaleIp || null,
+		onExpose: onExposeTailscale,
+		onUnexpose: onUnexposeTailscale
+	});
 
 	let protectionOpen = $state(false);
 	let protectionFor = $state<any | null>(null);
@@ -189,8 +209,33 @@
 		if (service && serviceEditForms[service.id]) onToggleServiceEdit(service);
 	}
 
-	function openAddDomain() {
-		showDomainForm = true;
+	function domainAdder(entry: PortEntry) {
+		const key = domainKeyOf(entry);
+		if (!key || !domainServiceOptions.some((o) => o.key === key)) return null;
+		return () => {
+			newDomainServiceKey = key;
+			showDomainForm = true;
+		};
+	}
+
+	function openProtection(ingress: any) {
+		protectionFor = ingress;
+		protectionOpen = true;
+	}
+
+	function openRedirect(ingress: any) {
+		redirectFor = ingress;
+		redirectOpen = true;
+	}
+
+	function openDns(ingress: any) {
+		dnsFor = ingress;
+		dnsOpen = true;
+	}
+
+	function askRemoveDomain(ingress: any) {
+		removeDomainFor = ingress;
+		removeDomainOpen = true;
 	}
 
 	async function saveProtection(
@@ -223,61 +268,75 @@
 	}
 </script>
 
-<div class="network-frame">
-	<div class="network">
-		<PublicCard
-			{ingresses}
-			{entries}
-			{services}
-			appDomain={APP_DOMAIN}
-			canAddDomain={!!deployment.project?.id}
-			canProtect={!!onUpdateProtection}
-			canEditRedirect={!!onUpdateRedirect}
-			busyPortId={portPublicBusyId}
-			{deletingIngressId}
-			onAddDomain={openAddDomain}
-			onExpose={(entry) => onTogglePortPublic(entry.service.id, entry.port.id!, false)}
-			onUnexpose={(entry) => {
-				unexposeFor = entry;
-				unexposeOpen = true;
-			}}
-			onProtection={(ingress) => {
-				protectionFor = ingress;
-				protectionOpen = true;
-			}}
-			onRedirect={(ingress) => {
-				redirectFor = ingress;
-				redirectOpen = true;
-			}}
-			onDns={(ingress) => {
-				dnsFor = ingress;
-				dnsOpen = true;
-			}}
-			onRemove={(ingress) => {
-				removeDomainFor = ingress;
-				removeDomainOpen = true;
-			}}
-		/>
-		<PrivateCard
-			{entries}
-			deletingServiceId={serviceDeletingId}
-			tailscale={{
-				enabled: tailscaleFeatureEnabled,
-				linked: tailscaleLinked,
-				exposed: !!deployment.tailscaleExposed,
-				busy: tailscaleExposing || tailscaleUnexposing,
-				host: tailscaleDns || tailscaleIp || null,
-				onExpose: onExposeTailscale,
-				onUnexpose: onUnexposeTailscale
-			}}
-			onAddPort={openAddPort}
-			onEditPort={openEditPort}
-			onRemovePort={(entry) => {
-				removePortFor = entry;
-				removePortOpen = true;
-			}}
-		/>
-	</div>
+<div class="network">
+	<SectionTitle title="Ports">
+		{#snippet actions()}
+			{#if entries.length > 0}
+				<Button variant="ghost" size="sm" icon={Plus} class="net-add" onclick={openAddPort}
+					>Add port</Button
+				>
+			{/if}
+		{/snippet}
+	</SectionTitle>
+
+	{#if entries.length === 0}
+		<Widget>
+			<EmptyState title="No ports" description="Add the port your app listens on to reach it.">
+				{#snippet icon()}<EthernetPort size={18} />{/snippet}
+				<Button variant="secondary" icon={Plus} onclick={openAddPort}>Add port</Button>
+			</EmptyState>
+		</Widget>
+	{:else}
+		{#each entries as entry (entry.key)}
+			<PortCard
+				{entry}
+				domains={layout.byPort.get(entry.key) ?? []}
+				appDomain={APP_DOMAIN}
+				canAddDomain={!!deployment.project?.id}
+				canProtect={!!onUpdateProtection}
+				canEditRedirect={!!onUpdateRedirect}
+				busy={!!entry.port.id && portPublicBusyId === entry.port.id}
+				removing={serviceDeletingId === entry.service.id}
+				{deletingIngressId}
+				{tailnet}
+				onAddDomain={domainAdder(entry)}
+				onExpose={() => entry.port.id && onTogglePortPublic(entry.service.id, entry.port.id, false)}
+				onUnexpose={() => {
+					unexposeFor = entry;
+					unexposeOpen = true;
+				}}
+				onEditPort={() => openEditPort(entry)}
+				onRemovePort={() => {
+					removePortFor = entry;
+					removePortOpen = true;
+				}}
+				onProtection={openProtection}
+				onRedirect={openRedirect}
+				onDns={openDns}
+				onRemoveDomain={askRemoveDomain}
+			/>
+		{/each}
+	{/if}
+
+	{#if layout.redirects.length > 0}
+		<Widget title="Redirects">
+			<List inset={false} label="Redirects">
+				{#each layout.redirects as ingress (ingress.id)}
+					<DomainRow
+						{ingress}
+						appDomain={APP_DOMAIN}
+						canProtect={!!onUpdateProtection}
+						canEditRedirect={!!onUpdateRedirect}
+						deleting={deletingIngressId === ingress.id}
+						onProtection={openProtection}
+						onRedirect={openRedirect}
+						onDns={openDns}
+						onRemove={askRemoveDomain}
+					/>
+				{/each}
+			</List>
+		</Widget>
+	{/if}
 </div>
 
 <DomainModal
@@ -379,24 +438,15 @@
 />
 
 <style>
-	.network-frame {
-		container-type: inline-size;
-		min-width: 0;
-	}
 	.network {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		align-items: stretch;
+		display: flex;
+		flex-direction: column;
 		gap: 1rem;
+		min-width: 0;
 	}
 	.network :global(.net-add) {
 		margin-right: -0.625rem;
 		border-radius: 999px;
 		corner-shape: round;
-	}
-	@container (max-width: 48rem) {
-		.network {
-			grid-template-columns: minmax(0, 1fr);
-		}
 	}
 </style>

@@ -411,12 +411,18 @@
 	const domainServiceOptions = $derived.by(() => {
 		const opts: Array<{ key: string; label: string; serviceName: string; port: number }> = [];
 		for (const s of deployment?.services ?? []) {
-			opts.push({
-				key: `${s.id}::${s.port}`,
-				label: `Port ${s.port}`,
-				serviceName: s.name,
-				port: s.port
-			});
+			const ports = s.ports?.length
+				? s.ports
+				: [{ port: s.port, targetPort: s.targetPort, protocol: s.protocol }];
+			for (const p of ports) {
+				if (String(p.protocol ?? 'TCP').toUpperCase() === 'UDP') continue;
+				opts.push({
+					key: `${s.id}::${p.port}`,
+					label: `Port ${p.targetPort ?? p.port}`,
+					serviceName: s.name,
+					port: p.port
+				});
+			}
 		}
 		return opts;
 	});

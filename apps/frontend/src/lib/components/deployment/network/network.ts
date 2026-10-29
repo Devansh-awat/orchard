@@ -103,3 +103,34 @@ export function dnsRecordName(host: string): string {
 	const parts = host.split('.').filter(Boolean);
 	return parts.length > 2 ? parts.slice(0, -2).join('.') : '@';
 }
+
+export function portKeyOf(ingress: any, entries: PortEntry[]): string | null {
+	if (ingress.redirectTarget) return null;
+	const route = ingress.routes?.[0];
+	const name = route?.serviceName ?? ingress.service?.name;
+	const port = Number(route?.servicePort ?? ingress.service?.port);
+	const match =
+		entries.find(
+			(e) => e.service.name === name && Number(e.port.port ?? e.service.port) === port
+		) ?? entries.find((e) => e.service.name === name);
+	return (match ?? entries[0])?.key ?? null;
+}
+
+export function domainsByPort(ingresses: any[], entries: PortEntry[]) {
+	const byPort = new Map<string, any[]>();
+	const redirects: any[] = [];
+	for (const ingress of ingresses) {
+		const key = portKeyOf(ingress, entries);
+		if (!key) {
+			redirects.push(ingress);
+			continue;
+		}
+		byPort.set(key, [...(byPort.get(key) ?? []), ingress]);
+	}
+	return { byPort, redirects };
+}
+
+export function domainKeyOf(entry: PortEntry): string | null {
+	if ((entry.port.protocol ?? 'TCP').toUpperCase() === 'UDP') return null;
+	return `${entry.service.id}::${entry.port.port ?? entry.service.port}`;
+}

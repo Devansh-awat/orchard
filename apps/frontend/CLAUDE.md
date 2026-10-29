@@ -312,8 +312,11 @@ Three-level hierarchy: **Org cap** → **Member allowance** → **Deployment req
   time range, a synced crosshair, brush zoom, deploy and kill markers, incident bands and findings
   (`observe/findings.ts`). `?demo` feeds it synthetic data. Series the server does not record yet (latency
   percentiles, status classes, per-route stats, volume fill, not-ready history) are left out, not faked.
-- Network (`NetworkTab` + `deployment/network/`): Public and Private `Widget`s; dialogs for domains,
-  protection, redirects, ports and DNS.
+- Network (`NetworkTab` + `deployment/network/`): one `PortCard` per port, because every way in is built
+  on a private port. The private address is the first row; domains, the public TCP/UDP port and the tailnet
+  stack under it on a spine, each added from that port's Add menu (`domainsByPort` assigns domains by route
+  `serviceName`/`servicePort`). Redirects point at no port, so they get their own card. Dialogs for
+  domains, protection, redirects, ports and DNS.
 - Security (`SecurityTab`): scan card and Configuration card at 1.618 : 1, then the vulnerability table only
   when there are findings. Reads `GET /deployments/:id/security`, rescans with `POST .../security/scan`, polls
   every 3s only while scanning. The scanner is an instance choice (`scan.provider`: `off` by default, `harbor`,
