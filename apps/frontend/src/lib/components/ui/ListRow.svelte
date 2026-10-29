@@ -79,6 +79,7 @@
 		padding: 0.625rem 1rem;
 		content-visibility: auto;
 		contain-intrinsic-size: auto 3.25rem;
+		overflow-clip-margin: 0.75rem;
 	}
 	.row:not(:first-child) {
 		box-shadow: inset 0 1px 0 var(--border-default);
