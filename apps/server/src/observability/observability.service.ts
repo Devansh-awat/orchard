@@ -21,6 +21,18 @@ import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
 import { OrgEventsService } from '../events/org-events.service';
 import { k8sErrorMessage } from '../kubernetes/k8s-error';
 import { deploymentPodRegex } from '../metrics/pod-selector';
+import { volumeKey } from '../kubernetes/volume-stats';
+import { buildPhases } from './build-phases';
+import {
+  INGRESS_ADAPTERS,
+  STATUS_CLASSES,
+  configuredAdapter,
+  guessedAdapter,
+  ingressQueries,
+  type IngressQueries,
+  type IngressTarget,
+  type StatusClass
+} from '../metrics/ingress';
 import {
   VictoriaMetricsService,
   escapeLabel,
@@ -53,11 +65,40 @@ interface RuntimeLogMessage {
 
 export type { SeriesPoint };
 
+export interface HttpRoute {
+  id: string;
+  label: string;
+  service: string;
+  requestRate: number;
+  errorRate: number;
+  errorPercent: number;
+  latencyMs: number | null;
+}
+
 export interface HttpMetricsSeries {
+  source: string | null;
   requestRate: SeriesPoint[];
   errorRate: SeriesPoint[];
   latencyAvg: SeriesPoint[];
   latencyMax: SeriesPoint[];
+  latency: { p50: SeriesPoint[]; p95: SeriesPoint[]; p99: SeriesPoint[] } | null;
+  statusRates: Record<StatusClass, SeriesPoint[]>;
+  routes: HttpRoute[];
+}
+
+const FLAVOR_TTL_MS = 10 * 60_000;
+
+function emptyHttpMetrics(source: string | null): HttpMetricsSeries {
+  return {
+    source,
+    requestRate: [],
+    errorRate: [],
+    latencyAvg: [],
+    latencyMax: [],
+    latency: null,
+    statusRates: { '2xx': [], '3xx': [], '4xx': [], '5xx': [] },
+    routes: []
+  };
 }
 
 export interface LogEntry {
@@ -374,33 +415,181 @@ export class ObservabilityService {
     endMs: number,
     stepMs: number
   ): Promise<HttpMetricsSeries> {
-    const selector = await this.buildHaproxySelector(deploymentId);
-    if (!selector) {
-      return { requestRate: [], errorRate: [], latencyAvg: [], latencyMax: [] };
-    }
+    const resolved = await this.ingressTarget(deploymentId);
+    if (!resolved) return emptyHttpMetrics(null);
+    const flavor = await this.flavorFor(resolved.target);
+    const queries = ingressQueries(flavor, resolved.target);
+    if (!queries) return emptyHttpMetrics(null);
 
     const startSec = Math.floor(startMs / 1000);
     const endSec = Math.floor(endMs / 1000);
     const stepSec = Math.max(1, Math.round(stepMs / 1000));
-    const rateWin = Math.max(60, stepSec * 2);
-
-    // HAProxy ingress exposes per-backend response counters and response-time
-    // gauges (no native histogram), so latency is avg + max, not p50/p95.
-    const queries = {
-      requestRate: `sum(rate(haproxy_backend_http_responses_total{${selector}}[${rateWin}s]))`,
-      errorRate: `100 * (sum(rate(haproxy_backend_http_responses_total{${selector},code="5xx"}[${rateWin}s])) or vector(0)) / clamp_min(sum(rate(haproxy_backend_http_responses_total{${selector}}[${rateWin}s])), 1e-9)`,
-      latencyAvg: `max(haproxy_backend_response_time_average_seconds{${selector}}) * 1000`,
-      latencyMax: `max(haproxy_backend_max_response_time_seconds{${selector}}) * 1000`
+    const w = `${Math.max(60, stepSec * 2)}s`;
+    const range = (q: string) => this.vm.queryRange(q, startSec, endSec, stepSec);
+    const quantile = (q: number) => {
+      const promql = queries.latencyQuantileMs(q, w);
+      return promql ? range(promql) : Promise.resolve([]);
     };
 
-    const [requestRate, errorRate, latencyAvg, latencyMax] = await Promise.all([
-      this.vm.queryRange(queries.requestRate, startSec, endSec, stepSec),
-      this.vm.queryRange(queries.errorRate, startSec, endSec, stepSec),
-      this.vm.queryRange(queries.latencyAvg, startSec, endSec, stepSec),
-      this.vm.queryRange(queries.latencyMax, startSec, endSec, stepSec)
-    ]);
+    const [requestRate, errorRate, latencyAvg, latencyMax, p50, p95, p99, routes, ...classes] =
+      await Promise.all([
+        range(queries.requestRate(w)),
+        range(queries.errorPercent(w)),
+        range(queries.latencyAvgMs(w)),
+        range(queries.latencyMaxMs(w)),
+        quantile(0.5),
+        quantile(0.95),
+        quantile(0.99),
+        this.routesFor(queries, resolved.hosts, endSec - startSec),
+        ...STATUS_CLASSES.map((cls) => range(queries.statusRate(cls, w)))
+      ]);
 
-    return { requestRate, errorRate, latencyAvg, latencyMax };
+    return {
+      source: flavor,
+      requestRate,
+      errorRate,
+      latencyAvg,
+      latencyMax,
+      latency: queries.percentiles ? { p50, p95, p99 } : null,
+      statusRates: Object.fromEntries(STATUS_CLASSES.map((cls, i) => [cls, classes[i]])) as Record<
+        StatusClass,
+        SeriesPoint[]
+      >,
+      routes
+    };
+  }
+
+  async getPodHealth(deploymentId: string, startMs: number, endMs: number, stepMs: number) {
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: { name: true, namespace: true }
+    });
+    if (!deployment?.namespace)
+      return { available: false, restarts: [], waiting: [], notReady: [] };
+    const sel = `namespace="${escapeLabel(deployment.namespace)}",pod=~"${deploymentPodRegex(deployment.name)}"`;
+    const startSec = Math.floor(startMs / 1000);
+    const endSec = Math.floor(endMs / 1000);
+    const stepSec = Math.max(30, Math.round(stepMs / 1000));
+    const w = `${stepSec}s`;
+    const present = await this.vm.queryInstant(
+      `count(last_over_time(kube_pod_status_ready{${sel}}[${Math.max(3600, endSec - startSec)}s]))`
+    );
+    if (!present) return { available: false, restarts: [], waiting: [], notReady: [] };
+    const [byReason, total, waiting, notReady] = await Promise.all([
+      this.vm.queryRangeGrouped(
+        `sum by (reason) (increase(kube_pod_container_status_restarts_total{${sel}}[${w}]) * on (namespace, pod, container) group_left (reason) max by (namespace, pod, container, reason) (kube_pod_container_status_last_terminated_reason{${sel}}))`,
+        startSec,
+        endSec,
+        stepSec,
+        'reason'
+      ),
+      this.vm.queryRange(
+        `sum(increase(kube_pod_container_status_restarts_total{${sel}}[${w}]))`,
+        startSec,
+        endSec,
+        stepSec
+      ),
+      this.vm.queryRangeGrouped(
+        `sum by (reason) (max_over_time(kube_pod_container_status_waiting_reason{${sel}}[${w}]))`,
+        startSec,
+        endSec,
+        stepSec,
+        'reason'
+      ),
+      this.vm.queryRange(
+        `sum(max_over_time(kube_pod_status_ready{${sel},condition="false"}[${w}]))`,
+        startSec,
+        endSec,
+        stepSec
+      )
+    ]);
+    return {
+      available: true,
+      restarts: byReason.length
+        ? byReason
+        : total.length
+          ? [{ key: 'restart', points: total }]
+          : [],
+      waiting,
+      notReady
+    };
+  }
+
+  async getVolumes(deploymentId: string) {
+    const [deployment, volumes, pods] = await Promise.all([
+      this.prisma.deployment.findUnique({
+        where: { id: deploymentId },
+        select: { namespace: true }
+      }),
+      this.prisma.deploymentVolume.findMany({
+        where: { deploymentId, type: 'pvc' },
+        select: {
+          name: true,
+          pvcName: true,
+          mountPath: true,
+          storageSize: true,
+          observedCapacity: true
+        }
+      }),
+      this.prisma.pod.findMany({ where: { deploymentId }, select: { nodeName: true } })
+    ]);
+    if (!deployment?.namespace || volumes.length === 0) return { volumes: [] };
+    const nodes = pods.map((p) => p.nodeName).filter((n): n is string => !!n);
+    const usage = nodes.length ? await this.k8sWorkload.volumeUsageOnNodes(nodes) : new Map();
+    return {
+      volumes: volumes.map((v) => {
+        const claim = v.pvcName?.trim() || v.name;
+        const u = usage.get(volumeKey(deployment.namespace!, claim));
+        return {
+          name: v.name,
+          claim,
+          mountPath: v.mountPath,
+          requested: v.storageSize ?? v.observedCapacity ?? null,
+          usedBytes: u?.usedBytes ?? null,
+          capacityBytes: u?.capacityBytes ?? null,
+          availableBytes: u?.availableBytes ?? null
+        };
+      })
+    };
+  }
+
+  async getBuildHistory(deploymentId: string, limit = 30) {
+    const runs = await this.prisma.buildRun.findMany({
+      where: { deploymentId, status: { in: ['succeeded', 'failed', 'building'] } },
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(100, Math.max(1, limit)),
+      select: {
+        id: true,
+        status: true,
+        builder: true,
+        triggerType: true,
+        commitSha: true,
+        commitMessage: true,
+        scheduledAt: true,
+        startedAt: true,
+        finishedAt: true,
+        stepTimestamps: true
+      }
+    });
+    return {
+      builds: runs.map((r) => ({
+        id: r.id,
+        status: r.status,
+        builder: r.builder,
+        trigger: r.triggerType,
+        commitSha: r.commitSha,
+        title: r.commitMessage?.split('\n')[0] ?? null,
+        scheduledAt: r.scheduledAt.toISOString(),
+        startedAt: r.startedAt?.toISOString() ?? null,
+        finishedAt: r.finishedAt?.toISOString() ?? null,
+        queueMs: r.startedAt ? Math.max(0, r.startedAt.getTime() - r.scheduledAt.getTime()) : null,
+        durationMs:
+          r.startedAt && r.finishedAt
+            ? Math.max(0, r.finishedAt.getTime() - r.startedAt.getTime())
+            : null,
+        phases: buildPhases(r.stepTimestamps)
+      }))
+    };
   }
 
   async getStructuredLogs(
@@ -522,20 +711,13 @@ export class ObservabilityService {
     let httpErrorRate: number | null = null;
     let httpAvgLatency: number | null = null;
 
-    const selector = await this.buildHaproxySelector(deploymentId);
-    if (selector) {
-      const rateWin = 60;
-
+    const ingress = await this.ingressFor(deploymentId);
+    if (ingress) {
+      const w = '60s';
       [httpRequestRate, httpErrorRate, httpAvgLatency] = await Promise.all([
-        this.vm.queryInstant(
-          `sum(rate(haproxy_backend_http_responses_total{${selector}}[${rateWin}s]))`
-        ),
-        this.vm.queryInstant(
-          `100 * (sum(rate(haproxy_backend_http_responses_total{${selector},code="5xx"}[${rateWin}s])) or vector(0)) / clamp_min(sum(rate(haproxy_backend_http_responses_total{${selector}}[${rateWin}s])), 1e-9)`
-        ),
-        this.vm.queryInstant(
-          `max(haproxy_backend_response_time_average_seconds{${selector}}) * 1000`
-        )
+        this.vm.queryInstant(ingress.requestRate(w)),
+        this.vm.queryInstant(ingress.errorPercent(w)),
+        this.vm.queryInstant(ingress.latencyAvgMs(w))
       ]);
     }
 
@@ -694,11 +876,11 @@ export class ObservabilityService {
     return { errors };
   }
 
-  // HAProxy ingress names each backend `<namespace>_svc_<service>_<portname>`.
-  // Build a `proxy=~` selector covering every service the deployment exposes
-  // through an ingress (namespace and service names are DNS-safe, so `_` is an
-  // unambiguous delimiter and `.+` captures any port suffix).
-  async buildHaproxySelector(deploymentId: string): Promise<string | null> {
+  private readonly flavorCache = new Map<string, { flavor: string; at: number }>();
+
+  private async ingressTarget(
+    deploymentId: string
+  ): Promise<{ target: IngressTarget; hosts: Map<string, string[]> } | null> {
     const [deployment, services, ingresses] = await Promise.all([
       this.prisma.deployment.findUnique({
         where: { id: deploymentId },
@@ -710,22 +892,93 @@ export class ObservabilityService {
       }),
       this.prisma.ingress.findMany({
         where: { deploymentId },
-        select: { protectionMode: true, redirectTarget: true, service: { select: { name: true } } }
+        select: {
+          host: true,
+          path: true,
+          protectionMode: true,
+          redirectTarget: true,
+          service: { select: { name: true } }
+        }
       })
     ]);
 
     if (!deployment?.namespace) return null;
 
     const names = new Set<string>();
+    const hosts = new Map<string, string[]>();
     for (const s of services) names.add(s.name);
-    for (const i of ingresses) if (i.service?.name) names.add(i.service.name);
+    for (const i of ingresses) {
+      const svc =
+        i.protectionMode !== 'none' || i.redirectTarget
+          ? PROTECTION_PROXY_SERVICE
+          : i.service?.name;
+      if (i.service?.name) names.add(i.service.name);
+      if (!svc) continue;
+      const label = `${i.host}${i.path && i.path !== '/' ? i.path : ''}`;
+      hosts.set(svc, [...(hosts.get(svc) ?? []), label]);
+    }
     if (ingresses.some((i) => i.protectionMode !== 'none' || i.redirectTarget)) {
       names.add(PROTECTION_PROXY_SERVICE);
     }
     if (names.size === 0) return null;
+    return { target: { namespace: deployment.namespace, services: [...names] }, hosts };
+  }
 
-    const alt = [...names].map(escapeRegex).join('|');
-    return `proxy=~"${escapeRegex(deployment.namespace)}_svc_(${alt})_.+"`;
+  private async flavorFor(target: IngressTarget): Promise<string> {
+    const configured = configuredAdapter();
+    if (configured) return configured.id;
+    const cached = this.flavorCache.get(target.namespace);
+    if (cached && Date.now() - cached.at < FLAVOR_TTL_MS) return cached.flavor;
+    const candidates = INGRESS_ADAPTERS.map((a) => a.queries(target)).filter(
+      (q): q is IngressQueries => q !== null
+    );
+    const counts = await Promise.all(
+      candidates.map((q) => this.vm.queryInstant(`count(last_over_time(${q.presence}[6h]))`))
+    );
+    const found = candidates.find((_, i) => (counts[i] ?? 0) > 0)?.flavor;
+    if (found) this.flavorCache.set(target.namespace, { flavor: found, at: Date.now() });
+    return found ?? guessedAdapter().id;
+  }
+
+  async ingressFor(deploymentId: string): Promise<IngressQueries | null> {
+    const resolved = await this.ingressTarget(deploymentId);
+    if (!resolved) return null;
+    return ingressQueries(await this.flavorFor(resolved.target), resolved.target);
+  }
+
+  private async routesFor(
+    queries: IngressQueries,
+    hosts: Map<string, string[]>,
+    windowSec: number
+  ): Promise<HttpRoute[]> {
+    const w = `${Math.max(60, Math.round(windowSec))}s`;
+    const [requests, errors, latency] = await Promise.all([
+      this.vm.queryInstantGrouped(queries.routeRequests(w), queries.routeLabel),
+      this.vm.queryInstantGrouped(queries.routeErrors(w), queries.routeLabel),
+      this.vm.queryInstantGrouped(queries.routeLatencyMs(w), queries.routeLabel)
+    ]);
+    const routes = new Map<string, HttpRoute>();
+    for (const [raw, rate] of requests) {
+      const service = queries.routeService(raw) ?? raw;
+      const prev = routes.get(service);
+      const errorRate = errors.get(raw) ?? 0;
+      const latencyMs = latency.get(raw) ?? null;
+      routes.set(service, {
+        id: service,
+        label: (hosts.get(service) ?? []).join(', ') || service,
+        service,
+        requestRate: (prev?.requestRate ?? 0) + rate,
+        errorRate: (prev?.errorRate ?? 0) + errorRate,
+        errorPercent: 0,
+        latencyMs: latencyMs ?? prev?.latencyMs ?? null
+      });
+    }
+    return [...routes.values()]
+      .map((r) => ({
+        ...r,
+        errorPercent: r.requestRate > 0 ? (100 * r.errorRate) / r.requestRate : 0
+      }))
+      .sort((a, b) => b.requestRate - a.requestRate);
   }
 }
 

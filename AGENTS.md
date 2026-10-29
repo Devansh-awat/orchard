@@ -23,6 +23,13 @@
 - Server env surface is documented in `.env.example` (copy to `apps/server/.env`). Frontend `PUBLIC_*` vars in `apps/frontend/.env.example`.
 - Local deps come from `docker-compose.dev.yml` (Postgres 16 + Redis). Postgres is required at boot; Redis and Kubernetes are optional and degrade.
 - Cluster-specific knobs (storage class, ingress class, registry, wildcard cert domains) are env vars, not literals: keep it that way when touching k8s/build code.
+- App HTTP metrics come from the ingress controller through adapters in `apps/server/src/metrics/ingress/`
+  (one file per controller, registered in `index.ts`). An adapter turns a namespace and its services into
+  PromQL for requests, status classes, error %, latency (percentiles only if the controller has
+  histograms) and per-route stats; observability, the Observe dashboard and HTTP alerts all go through it.
+  To support another controller: add `<name>.ts` implementing `IngressAdapter`, register it, add a scrape
+  job for its metrics in `infra/charts/orchard/templates/metrics.yaml`, and extend `ingress-metrics.test.ts`.
+  The server detects the adapter per app from the metrics store; `INGRESS_METRICS` forces one.
 
 ## Conventions
 

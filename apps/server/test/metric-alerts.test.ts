@@ -11,6 +11,8 @@ import {
   type AlertClock,
   type MetricTarget
 } from '../src/alerts/metric-catalogue';
+import { haproxy } from '../src/metrics/ingress/haproxy';
+import { traefik } from '../src/metrics/ingress/traefik';
 
 const target: MetricTarget = {
   namespace: 'proj-ns',
@@ -18,7 +20,7 @@ const target: MetricTarget = {
   replicas: 2,
   cpuLimitMilli: 500,
   memoryLimitBytes: 256 * 1024 * 1024,
-  haproxySelector: 'proxy=~"proj-ns_svc_(crescent)_.+"'
+  ingress: haproxy.queries({ namespace: 'proj-ns', services: ['crescent'] })
 };
 
 const at = (iso: string) => new Date(iso);
@@ -40,7 +42,7 @@ test("cpu and memory are a percent of the limit across every replica, and only t
 });
 
 test('a rule that cannot be asked of a target is inapplicable, never zero', () => {
-  const noIngress = { ...target, haproxySelector: null };
+  const noIngress = { ...target, ingress: null };
   for (const id of ['request_rate', 'error_rate', 'latency_avg_ms', 'latency_max_ms'] as const) {
     assert.equal(buildMetricQuery(id, noIngress).kind, 'inapplicable', id);
   }
@@ -65,6 +67,19 @@ test('latency alerts read the load balancer averages and maxima, since no histog
     /haproxy_backend_max_response_time_seconds.*\* 1000$/
   );
   assert.match((buildMetricQuery('error_rate', target) as any).promql, /clamp_min/);
+});
+
+test('on traefik the same alerts read its own metrics, with p99 as the slowest requests', () => {
+  const t = {
+    ...target,
+    ingress: traefik.queries({ namespace: 'proj-ns', services: ['crescent'] })
+  };
+  assert.match(
+    (buildMetricQuery('request_rate', t) as any).promql,
+    /traefik_service_requests_total/
+  );
+  assert.match((buildMetricQuery('error_rate', t) as any).promql, /code=~"5\.\."/);
+  assert.match((buildMetricQuery('latency_max_ms', t) as any).promql, /histogram_quantile\(0\.99/);
 });
 
 test('a breach has to hold for the whole window before it fires, and fires once', () => {

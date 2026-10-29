@@ -1,4 +1,5 @@
 import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
+import { parseKubeletSummary, type VolumeUsage } from './volume-stats';
 import * as k8s from '@kubernetes/client-node';
 import * as https from 'https';
 import { PassThrough } from 'stream';
@@ -135,6 +136,26 @@ export class K8sWorkloadService {
 
   private createPVC(namespace: string, name: string, storageSize = '1Gi') {
     return this.kubernetes.createPVC(namespace, name, storageSize);
+  }
+
+  async volumeUsageOnNodes(nodeNames: string[]): Promise<Map<string, VolumeUsage>> {
+    this.ensureKubeConfig();
+    const usage = new Map<string, VolumeUsage>();
+    if (!this.kc) return usage;
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+    await Promise.all(
+      [...new Set(nodeNames)].map(async (name) => {
+        try {
+          const res: any = await coreApi.connectGetNodeProxyWithPath(name, 'stats/summary');
+          const raw = res?.body;
+          const summary = typeof raw === 'string' ? JSON.parse(raw) : raw;
+          for (const [key, value] of parseKubeletSummary(summary)) usage.set(key, value);
+        } catch (e: any) {
+          this.logger.warn(`volume stats for node ${name} unavailable: ${e?.message ?? e}`);
+        }
+      })
+    );
+    return usage;
   }
 
   async updateDeploymentResources(

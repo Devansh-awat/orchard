@@ -14,7 +14,10 @@ export type InstantResult = { ok: true; value: number | null } | { ok: false; re
 
 interface PromVector {
   status: string;
-  data?: { resultType: string; result: { value: [number, string] }[] };
+  data?: {
+    resultType: string;
+    result: { metric?: Record<string, string>; value: [number, string] }[];
+  };
 }
 
 interface PromMatrix {
@@ -88,6 +91,34 @@ export class VictoriaMetricsService {
       this.logger.warn(`VM query failed: ${reason}`);
       return { ok: false, reason: `metrics store unreachable: ${reason}` };
     }
+  }
+
+  async queryInstantGrouped(promql: string, label: string): Promise<Map<string, number>> {
+    const params = new URLSearchParams({ query: promql });
+    const url = `${this.base}/api/v1/query?${params}`;
+    let res: Response;
+    try {
+      res = await fetch(url, { signal: AbortSignal.timeout(QUERY_TIMEOUT_MS) });
+    } catch (err) {
+      const reason = (err as Error).message;
+      this.logger.warn(`VM query failed: ${reason}`);
+      throw new MetricsStoreError(`metrics store unreachable: ${reason}`);
+    }
+    if (!res.ok) {
+      this.logger.warn(`VM query ${res.status}: ${await res.text()}`);
+      throw new MetricsStoreError(`metrics store answered ${res.status}`);
+    }
+    const body = (await res.json()) as PromVector;
+    if (body.status !== 'success') {
+      throw new MetricsStoreError(`metrics store returned ${body.status}`);
+    }
+    const out = new Map<string, number>();
+    for (const r of body.data?.result ?? []) {
+      const key = r.metric?.[label];
+      const v = Number(r.value[1]);
+      if (key && Number.isFinite(v)) out.set(key, v);
+    }
+    return out;
   }
 
   async queryRange(

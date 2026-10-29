@@ -9,6 +9,7 @@ import { Interval } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { VictoriaMetricsService } from '../metrics/victoria-metrics.service';
 import { ObservabilityService } from '../observability/observability.service';
+import type { IngressQueries } from '../metrics/ingress';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationRulesService } from '../notifications/notification-rules.service';
 import { scopeChain, type ResolvedScope } from '../notifications/notification-scope';
@@ -27,7 +28,7 @@ import {
   formatValue,
   metricDef,
   recoverSecondsFor,
-  requestRateQuery,
+  RATE_WINDOW,
   type AlertClock,
   type Comparator,
   type MetricId,
@@ -333,7 +334,7 @@ export class MetricAlertsService {
         orderBy: { createdAt: 'asc' }
       });
       let budget = MAX_EVALUATIONS_PER_PASS;
-      const selectorCache = new Map<string, string | null>();
+      const selectorCache = new Map<string, IngressQueries | null>();
       for (const rule of rules) {
         if (budget <= 0) {
           this.logger.warn(
@@ -356,7 +357,7 @@ export class MetricAlertsService {
 
   private async evaluateRule(
     rule: RuleRow,
-    selectorCache: Map<string, string | null>,
+    selectorCache: Map<string, IngressQueries | null>,
     budget: number
   ): Promise<number> {
     const def = metricDef(rule.metric);
@@ -372,9 +373,7 @@ export class MetricAlertsService {
       if (used >= budget) break;
       let selector = selectorCache.get(target.id);
       if (selector === undefined) {
-        selector = def.needsIngress
-          ? await this.observability.buildHaproxySelector(target.id)
-          : null;
+        selector = def.needsIngress ? await this.observability.ingressFor(target.id) : null;
         selectorCache.set(target.id, selector);
       }
       const ctx: MetricTarget = {
@@ -390,7 +389,7 @@ export class MetricAlertsService {
             target.project.organization.defaultPodMemoryBytes ??
             FALLBACK_MEMORY_BYTES
         ),
-        haproxySelector: selector
+        ingress: selector
       };
       const query = buildMetricQuery(def.id, ctx);
       if (query.kind === 'inapplicable') continue;
@@ -408,8 +407,8 @@ export class MetricAlertsService {
     ctx: MetricTarget
   ): Promise<Sample> {
     const def = metricDef(metric)!;
-    if (def.requestRateGuard && ctx.haproxySelector) {
-      const rate = await this.vm.queryInstantStrict(requestRateQuery(ctx.haproxySelector));
+    if (def.requestRateGuard && ctx.ingress) {
+      const rate = await this.vm.queryInstantStrict(ctx.ingress.requestRate(RATE_WINDOW));
       if (rate.ok === false) return { kind: 'unknown', reason: rate.reason };
       const floor = rule.minRequestRate ?? DEFAULT_MIN_REQUEST_RATE;
       if ((rate.value ?? 0) < floor) return { kind: 'ok', value: null };

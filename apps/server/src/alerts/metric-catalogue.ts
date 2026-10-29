@@ -1,3 +1,4 @@
+import type { IngressQueries } from '../metrics/ingress';
 import { deploymentPodRegex } from '../metrics/pod-selector';
 import { escapeLabel } from '../metrics/victoria-metrics.service';
 
@@ -106,7 +107,7 @@ export const MIN_FOR_SECONDS = 60;
 export const MAX_FOR_SECONDS = 24 * 60 * 60;
 export const DEFAULT_MIN_REQUEST_RATE = 0.2;
 
-const RATE_WINDOW = '2m';
+export const RATE_WINDOW = '2m';
 
 export interface MetricTarget {
   namespace: string;
@@ -114,7 +115,7 @@ export interface MetricTarget {
   replicas: number;
   cpuLimitMilli: number | null;
   memoryLimitBytes: number | null;
-  haproxySelector: string | null;
+  ingress: IngressQueries | null;
 }
 
 export type MetricQuery =
@@ -123,10 +124,6 @@ export type MetricQuery =
 
 function podSelector(target: MetricTarget): string {
   return `namespace="${escapeLabel(target.namespace)}",pod=~"${deploymentPodRegex(target.name)}",container="",image=""`;
-}
-
-export function requestRateQuery(selector: string): string {
-  return `sum(rate(haproxy_backend_http_responses_total{${selector}}[${RATE_WINDOW}]))`;
 }
 
 /**
@@ -158,26 +155,17 @@ export function buildMetricQuery(id: MetricId, target: MetricTarget): MetricQuer
       };
     }
     case 'request_rate':
-      if (!target.haproxySelector) return { kind: 'inapplicable', reason: 'no ingress' };
-      return { kind: 'query', promql: requestRateQuery(target.haproxySelector) };
+      if (!target.ingress) return { kind: 'inapplicable', reason: 'no ingress' };
+      return { kind: 'query', promql: target.ingress.requestRate(RATE_WINDOW) };
     case 'error_rate':
-      if (!target.haproxySelector) return { kind: 'inapplicable', reason: 'no ingress' };
-      return {
-        kind: 'query',
-        promql: `100 * (sum(rate(haproxy_backend_http_responses_total{${target.haproxySelector},code="5xx"}[${RATE_WINDOW}])) or vector(0)) / clamp_min(sum(rate(haproxy_backend_http_responses_total{${target.haproxySelector}}[${RATE_WINDOW}])), 1e-9)`
-      };
+      if (!target.ingress) return { kind: 'inapplicable', reason: 'no ingress' };
+      return { kind: 'query', promql: target.ingress.errorPercent(RATE_WINDOW) };
     case 'latency_avg_ms':
-      if (!target.haproxySelector) return { kind: 'inapplicable', reason: 'no ingress' };
-      return {
-        kind: 'query',
-        promql: `max(haproxy_backend_response_time_average_seconds{${target.haproxySelector}}) * 1000`
-      };
+      if (!target.ingress) return { kind: 'inapplicable', reason: 'no ingress' };
+      return { kind: 'query', promql: target.ingress.latencyAvgMs(RATE_WINDOW) };
     case 'latency_max_ms':
-      if (!target.haproxySelector) return { kind: 'inapplicable', reason: 'no ingress' };
-      return {
-        kind: 'query',
-        promql: `max(haproxy_backend_max_response_time_seconds{${target.haproxySelector}}) * 1000`
-      };
+      if (!target.ingress) return { kind: 'inapplicable', reason: 'no ingress' };
+      return { kind: 'query', promql: target.ingress.latencyMaxMs(RATE_WINDOW) };
     default:
       return { kind: 'inapplicable', reason: 'unknown metric' };
   }

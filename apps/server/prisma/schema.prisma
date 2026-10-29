@@ -896,6 +896,8 @@ model BuildRun {
 
   logs String? @db.Text
 
+  stepTimestamps Json? @map("step_timestamps") @db.JsonB
+
   scheduledAt DateTime  @default(now()) @map("scheduled_at") @db.Timestamp(6)
   startedAt   DateTime? @map("started_at") @db.Timestamp(6)
   finishedAt  DateTime? @map("finished_at") @db.Timestamp(6)

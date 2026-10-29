@@ -77,6 +77,43 @@ export class ObservabilityController {
     }
   }
 
+  @Get('deployments/:id/pod-health')
+  async getPodHealth(
+    @Param('id') id: string,
+    @Request() req,
+    @Query('start') startStr?: string,
+    @Query('end') endStr?: string,
+    @Query('step') stepStr?: string
+  ) {
+    await this.assertAccess(id, req);
+    const end = Number(endStr) || Date.now();
+    const start = Number(startStr) || end - 60 * 60 * 1000;
+    const step = Math.max(30_000, Number(stepStr) || 60_000);
+    if (end <= start) throw new BadRequestException('end must be > start');
+    try {
+      return await this.observability.getPodHealth(id, start, end, step);
+    } catch (err) {
+      if (err instanceof MetricsStoreError) throw new ServiceUnavailableException(err.message);
+      throw err;
+    }
+  }
+
+  @Get('deployments/:id/volumes')
+  async getVolumes(@Param('id') id: string, @Request() req) {
+    await this.assertAccess(id, req);
+    return this.observability.getVolumes(id);
+  }
+
+  @Get('deployments/:id/builds')
+  async getBuildHistory(
+    @Param('id') id: string,
+    @Request() req,
+    @Query('limit') limitStr?: string
+  ) {
+    await this.assertAccess(id, req);
+    return this.observability.getBuildHistory(id, Number(limitStr) || 30);
+  }
+
   @Sse('deployments/:id/build-logs/stream')
   async streamBuildLogs(
     @Param('id') id: string,

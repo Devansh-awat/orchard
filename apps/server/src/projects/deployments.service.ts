@@ -5852,7 +5852,16 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  addInternalUrlsToServices(services: any[], namespace: string) {
+  publicPortHost(deployment: any): string | null {
+    return (
+      this.k8sNetwork.publicDeploymentBaseDomain() ||
+      (deployment?.project?.organization?.databasePublicIp ?? '').trim() ||
+      this.instanceConfig.defaultPublicIp() ||
+      null
+    );
+  }
+
+  addInternalUrlsToServices(services: any[], namespace: string, publicHost: string | null = null) {
     if (!Array.isArray(services) || !namespace) {
       return services;
     }
@@ -5867,7 +5876,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       // built any other way would otherwise be advertised on an unroutable port.
       const portsWithUrls = ports.map((port: any) => ({
         ...port,
-        internalUrl: `${host}:${port.port || port.targetPort || service.port || 80}`
+        internalUrl: `${host}:${port.port || port.targetPort || service.port || 80}`,
+        publicAddress:
+          port.publicEnabled && port.publicPort && publicHost
+            ? `${publicHost}:${port.publicPort}`
+            : null
       }));
 
       const internalUrls = portsWithUrls.map((p: any) => p.internalUrl);
@@ -5891,7 +5904,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const result = { ...deployment };
 
     if (result.namespace && result.services && Array.isArray(result.services)) {
-      result.services = this.addInternalUrlsToServices(result.services, result.namespace);
+      result.services = this.addInternalUrlsToServices(
+        result.services,
+        result.namespace,
+        this.publicPortHost(result)
+      );
     }
 
     if (result.ingresses && Array.isArray(result.ingresses)) {

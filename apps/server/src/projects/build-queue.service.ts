@@ -469,7 +469,8 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
         SET "status" = ${ok ? 'succeeded' : 'failed'},
             "finished_at" = (NOW() AT TIME ZONE 'UTC'),
             "worker_id" = NULL,
-            "logs" = d."build_logs"
+            "logs" = d."build_logs",
+            "step_timestamps" = d."build_step_timestamps"
         FROM "deployments" d
         WHERE d."id" = br."deployment_id"
           AND br."deployment_id" = ${deploymentId}::uuid
@@ -691,7 +692,8 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
           SET "status" = ${dep.buildStatus === 'succeeded' ? 'succeeded' : 'failed'},
               "finished_at" = (NOW() AT TIME ZONE 'UTC'),
               "worker_id" = NULL,
-              "logs" = COALESCE(br."logs", d."build_logs")
+              "logs" = COALESCE(br."logs", d."build_logs"),
+              "step_timestamps" = COALESCE(br."step_timestamps", d."build_step_timestamps")
           FROM "deployments" d
           WHERE d."id" = br."deployment_id"
             AND br."id" = ${run.id}::uuid
