@@ -480,6 +480,53 @@ export function securityRoutes(r: Router, { store }: MockContext) {
 		}
 	};
 
+	const limits = new Map<string, { requests: number; periodSeconds: number } | null>();
+	r.get('/deployments/:id/security/attacks', ({ params, query }) => {
+		const d = store.deployment(params.id);
+		if (!d) return notFound('Deployment not found');
+		if (!d.host) return reply(503, { message: 'This app has no domain, so there are no requests' });
+		const end = Number(query.get('end')) || Date.now();
+		const start = Number(query.get('start')) || end - 86_400_000;
+		const step = Math.max(60_000, Math.round((end - start) / 60));
+		const series: ({ t: number } & Record<string, number>)[] = [];
+		for (let t = start - (start % step); t < end; t += step) {
+			const i = Math.floor(t / step);
+			series.push({
+				t,
+				scanner: i % 7 === 2 ? 40 + (i % 13) : i % 3 === 0 ? 3 : 0,
+				injection: i % 11 === 5 ? 12 : 0,
+				'auth-bruteforce': i % 19 === 9 ? 64 : 0,
+				flood: i % 29 === 14 ? 900 : 0
+			});
+		}
+		const sum = (k: string) => series.reduce((n, b) => n + (b[k] ?? 0), 0);
+		return {
+			byKind: {
+				scanner: sum('scanner'),
+				injection: sum('injection'),
+				'auth-bruteforce': sum('auth-bruteforce'),
+				flood: sum('flood')
+			},
+			series,
+			topSources: [
+				{ ip: '45.148.10.0/24', count: 2700, kinds: ['flood'] },
+				{ ip: '185.220.101.0/24', count: 412, kinds: ['scanner', 'injection'] },
+				{ ip: '193.32.162.0/24', count: 192, kinds: ['auth-bruteforce'] },
+				{ ip: '94.102.61.0/24', count: 88, kinds: ['scanner'] }
+			],
+			samples: [],
+			rateLimit: limits.get(d.id) ?? null,
+			rateLimitSupported: true
+		};
+	});
+	r.post('/deployments/:id/security/rate-limit', ({ params, body }) => {
+		const b = (body ?? {}) as { requests?: number; periodSeconds?: number; off?: boolean };
+		const limit = b.off
+			? null
+			: { requests: Number(b.requests), periodSeconds: Number(b.periodSeconds) };
+		limits.set(params.id, limit);
+		return { rateLimit: limit, applied: 1, unsupported: 0 };
+	});
 	r.get('/deployments/:id/security', ({ params }) => {
 		const d = store.deployment(params.id);
 		return d ? report(d) : notFound('Deployment not found');

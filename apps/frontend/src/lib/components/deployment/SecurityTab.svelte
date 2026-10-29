@@ -5,6 +5,7 @@
 	import ScanSummary from './security/ScanSummary.svelte';
 	import PostureCard from './security/PostureCard.svelte';
 	import VulnerabilityList from './security/VulnerabilityList.svelte';
+	import AttacksCard from './security/AttacksCard.svelte';
 	import { fetchSecurity, requestScan, type DeploymentSecurity } from './security/security-api';
 
 	let {
@@ -72,6 +73,7 @@
 		<ScanSummary {data} {loadError} {requesting} onScan={scan} onRetry={retry} />
 		<PostureCard findings={data?.posture ?? null} failed={!!loadError} />
 	</div>
+	<AttacksCard {deploymentId} {active} />
 	{#if listed}
 		<VulnerabilityList
 			vulnerabilities={listed.vulnerabilities}
