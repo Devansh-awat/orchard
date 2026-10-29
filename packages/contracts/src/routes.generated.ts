@@ -202,6 +202,8 @@ export const routes: GeneratedRoute[] = [
   { method: 'POST', path: '/deployments/:id/rollback/:imageHistoryId', auth: 'authenticated' },
   { method: 'GET', path: '/deployments/:id/rollout', auth: 'authenticated' },
   { method: 'POST', path: '/deployments/:id/scale', auth: 'authenticated' },
+  { method: 'GET', path: '/deployments/:id/security', auth: 'authenticated' },
+  { method: 'POST', path: '/deployments/:id/security/scan', auth: 'authenticated' },
   { method: 'POST', path: '/deployments/:id/start', auth: 'authenticated' },
   { method: 'POST', path: '/deployments/:id/stop', auth: 'authenticated' },
   { method: 'PATCH', path: '/deployments/:id/strategy', auth: 'authenticated' },

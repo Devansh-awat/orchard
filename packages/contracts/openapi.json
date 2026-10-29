@@ -28524,6 +28524,748 @@
         ]
       }
     },
+    "/deployments/{id}/security": {
+      "get": {
+        "description": "Auth: authenticated (scope: read)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "checkedAt": {
+                      "type": "string"
+                    },
+                    "image": {
+                      "properties": {
+                        "builtAt": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "commitMessage": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "commitSha": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "digest": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "pushedAt": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "ref": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "source": {
+                          "description": "Only images Orchard builds live in its registry and get scanned.",
+                          "enum": [
+                            "orchard",
+                            "external",
+                            "none"
+                          ],
+                          "type": "string"
+                        },
+                        "tag": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "ref",
+                        "source",
+                        "tag",
+                        "digest",
+                        "pushedAt",
+                        "commitSha",
+                        "commitMessage",
+                        "builtAt"
+                      ],
+                      "type": "object"
+                    },
+                    "posture": {
+                      "items": {
+                        "properties": {
+                          "kind": {
+                            "enum": [
+                              "plain-secret",
+                              "mutable-tag",
+                              "no-tls"
+                            ],
+                            "type": "string"
+                          },
+                          "severity": {
+                            "enum": [
+                              "high",
+                              "medium",
+                              "low"
+                            ],
+                            "type": "string"
+                          },
+                          "subjects": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "severity",
+                          "subjects"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "scan": {
+                      "properties": {
+                        "canRescan": {
+                          "type": "boolean"
+                        },
+                        "counts": {
+                          "properties": {
+                            "critical": {
+                              "type": "integer"
+                            },
+                            "fixable": {
+                              "type": "integer"
+                            },
+                            "high": {
+                              "type": "integer"
+                            },
+                            "low": {
+                              "type": "integer"
+                            },
+                            "medium": {
+                              "type": "integer"
+                            },
+                            "total": {
+                              "type": "integer"
+                            },
+                            "unknown": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "critical",
+                            "high",
+                            "medium",
+                            "low",
+                            "unknown",
+                            "total",
+                            "fixable"
+                          ],
+                          "type": "object"
+                        },
+                        "finishedAt": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "progress": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        },
+                        "reason": {
+                          "description": "Why the state is unsupported or error. An error never means no vulnerabilities.",
+                          "enum": [
+                            "external_image",
+                            "no_image",
+                            "not_scannable",
+                            "not_configured",
+                            "not_found",
+                            "unauthorized",
+                            "unreachable"
+                          ],
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "scanner": {
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "version": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "version"
+                          ],
+                          "type": [
+                            "object",
+                            "null"
+                          ]
+                        },
+                        "severity": {
+                          "anyOf": [
+                            {
+                              "enum": [
+                                "critical",
+                                "high",
+                                "medium",
+                                "low",
+                                "unknown"
+                              ],
+                              "type": "string"
+                            },
+                            {
+                              "enum": [
+                                "none"
+                              ],
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "startedAt": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "state": {
+                          "enum": [
+                            "clean",
+                            "vulnerable",
+                            "scanning",
+                            "not_scanned",
+                            "failed",
+                            "unsupported",
+                            "error"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "reason",
+                        "severity",
+                        "counts",
+                        "progress",
+                        "startedAt",
+                        "finishedAt",
+                        "scanner",
+                        "canRescan"
+                      ],
+                      "type": "object"
+                    },
+                    "truncated": {
+                      "description": "Findings left out after the first 500.",
+                      "type": "integer"
+                    },
+                    "vulnerabilities": {
+                      "description": "Worst first. Null when the list could not be loaded or there is no finished scan.",
+                      "items": {
+                        "properties": {
+                          "cvss": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "description": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "fixVersion": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "package": {
+                            "type": "string"
+                          },
+                          "severity": {
+                            "enum": [
+                              "critical",
+                              "high",
+                              "medium",
+                              "low",
+                              "unknown"
+                            ],
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "version": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "package",
+                          "version",
+                          "fixVersion",
+                          "severity",
+                          "description",
+                          "url",
+                          "cvss"
+                        ],
+                        "type": "object"
+                      },
+                      "type": [
+                        "array",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "image",
+                    "scan",
+                    "vulnerabilities",
+                    "truncated",
+                    "posture",
+                    "checkedAt"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Vulnerability scan of the running image and configuration findings",
+        "tags": [
+          "deployments"
+        ]
+      }
+    },
+    "/deployments/{id}/security/scan": {
+      "post": {
+        "description": "Auth: authenticated (scope: deploy)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "checkedAt": {
+                      "type": "string"
+                    },
+                    "image": {
+                      "properties": {
+                        "builtAt": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "commitMessage": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "commitSha": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "digest": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "pushedAt": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "ref": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "source": {
+                          "description": "Only images Orchard builds live in its registry and get scanned.",
+                          "enum": [
+                            "orchard",
+                            "external",
+                            "none"
+                          ],
+                          "type": "string"
+                        },
+                        "tag": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "ref",
+                        "source",
+                        "tag",
+                        "digest",
+                        "pushedAt",
+                        "commitSha",
+                        "commitMessage",
+                        "builtAt"
+                      ],
+                      "type": "object"
+                    },
+                    "posture": {
+                      "items": {
+                        "properties": {
+                          "kind": {
+                            "enum": [
+                              "plain-secret",
+                              "mutable-tag",
+                              "no-tls"
+                            ],
+                            "type": "string"
+                          },
+                          "severity": {
+                            "enum": [
+                              "high",
+                              "medium",
+                              "low"
+                            ],
+                            "type": "string"
+                          },
+                          "subjects": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "severity",
+                          "subjects"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "scan": {
+                      "properties": {
+                        "canRescan": {
+                          "type": "boolean"
+                        },
+                        "counts": {
+                          "properties": {
+                            "critical": {
+                              "type": "integer"
+                            },
+                            "fixable": {
+                              "type": "integer"
+                            },
+                            "high": {
+                              "type": "integer"
+                            },
+                            "low": {
+                              "type": "integer"
+                            },
+                            "medium": {
+                              "type": "integer"
+                            },
+                            "total": {
+                              "type": "integer"
+                            },
+                            "unknown": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "critical",
+                            "high",
+                            "medium",
+                            "low",
+                            "unknown",
+                            "total",
+                            "fixable"
+                          ],
+                          "type": "object"
+                        },
+                        "finishedAt": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "progress": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        },
+                        "reason": {
+                          "description": "Why the state is unsupported or error. An error never means no vulnerabilities.",
+                          "enum": [
+                            "external_image",
+                            "no_image",
+                            "not_scannable",
+                            "not_configured",
+                            "not_found",
+                            "unauthorized",
+                            "unreachable"
+                          ],
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "scanner": {
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "version": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "version"
+                          ],
+                          "type": [
+                            "object",
+                            "null"
+                          ]
+                        },
+                        "severity": {
+                          "anyOf": [
+                            {
+                              "enum": [
+                                "critical",
+                                "high",
+                                "medium",
+                                "low",
+                                "unknown"
+                              ],
+                              "type": "string"
+                            },
+                            {
+                              "enum": [
+                                "none"
+                              ],
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "startedAt": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "state": {
+                          "enum": [
+                            "clean",
+                            "vulnerable",
+                            "scanning",
+                            "not_scanned",
+                            "failed",
+                            "unsupported",
+                            "error"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "reason",
+                        "severity",
+                        "counts",
+                        "progress",
+                        "startedAt",
+                        "finishedAt",
+                        "scanner",
+                        "canRescan"
+                      ],
+                      "type": "object"
+                    },
+                    "truncated": {
+                      "description": "Findings left out after the first 500.",
+                      "type": "integer"
+                    },
+                    "vulnerabilities": {
+                      "description": "Worst first. Null when the list could not be loaded or there is no finished scan.",
+                      "items": {
+                        "properties": {
+                          "cvss": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "description": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "fixVersion": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "package": {
+                            "type": "string"
+                          },
+                          "severity": {
+                            "enum": [
+                              "critical",
+                              "high",
+                              "medium",
+                              "low",
+                              "unknown"
+                            ],
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "version": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "package",
+                          "version",
+                          "fixVersion",
+                          "severity",
+                          "description",
+                          "url",
+                          "cvss"
+                        ],
+                        "type": "object"
+                      },
+                      "type": [
+                        "array",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "image",
+                    "scan",
+                    "vulnerabilities",
+                    "truncated",
+                    "posture",
+                    "checkedAt"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Scan the running image again",
+        "tags": [
+          "deployments"
+        ]
+      }
+    },
     "/deployments/{id}/start": {
       "post": {
         "description": "Auth: authenticated (scope: deploy)",

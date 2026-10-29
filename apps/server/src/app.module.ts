@@ -39,6 +39,7 @@ import { ObservabilityModule } from './observability/observability.module';
 import { AlertsModule } from './alerts/alerts.module';
 import { StatusPagesModule } from './status-pages/status-pages.module';
 import { AnomaliesModule } from './anomalies/anomalies.module';
+import { SecurityModule } from './security/security.module';
 import { GitModule } from './git/git.module';
 import { ScoreModule } from './score/score.module';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -97,6 +98,7 @@ import { graftImports } from './grafts/boot';
     AlertsModule,
     StatusPagesModule,
     AnomaliesModule,
+    SecurityModule,
     GitModule,
     ScoreModule,
     NotificationsModule,

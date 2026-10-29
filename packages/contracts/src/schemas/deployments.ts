@@ -513,6 +513,85 @@ const projectIngressCreateRequest = z
     ])
   );
 
+const severity = z.enum(['critical', 'high', 'medium', 'low', 'unknown']);
+
+const deploymentSecurity = z.object({
+  image: z.object({
+    ref: z.string().nullable(),
+    source: z
+      .enum(['orchard', 'external', 'none'])
+      .describe('Only images Orchard builds live in its registry and get scanned.'),
+    tag: z.string().nullable(),
+    digest: z.string().nullable(),
+    pushedAt: z.string().nullable(),
+    commitSha: z.string().nullable(),
+    commitMessage: z.string().nullable(),
+    builtAt: z.string().nullable()
+  }),
+  scan: z.object({
+    state: z.enum([
+      'clean',
+      'vulnerable',
+      'scanning',
+      'not_scanned',
+      'failed',
+      'unsupported',
+      'error'
+    ]),
+    reason: z
+      .enum([
+        'external_image',
+        'no_image',
+        'not_scannable',
+        'not_configured',
+        'not_found',
+        'unauthorized',
+        'unreachable'
+      ])
+      .nullable()
+      .describe('Why the state is unsupported or error. An error never means no vulnerabilities.'),
+    severity: z.union([severity, z.literal('none')]).nullable(),
+    counts: z.object({
+      critical: z.number().int(),
+      high: z.number().int(),
+      medium: z.number().int(),
+      low: z.number().int(),
+      unknown: z.number().int(),
+      total: z.number().int(),
+      fixable: z.number().int()
+    }),
+    progress: z.number().int().nullable(),
+    startedAt: z.string().nullable(),
+    finishedAt: z.string().nullable(),
+    scanner: z.object({ name: z.string(), version: z.string().nullable() }).nullable(),
+    canRescan: z.boolean()
+  }),
+  vulnerabilities: z
+    .array(
+      z.object({
+        id: z.string(),
+        package: z.string(),
+        version: z.string(),
+        fixVersion: z.string().nullable(),
+        severity,
+        description: z.string().nullable(),
+        url: z.string().nullable(),
+        cvss: z.number().nullable()
+      })
+    )
+    .nullable()
+    .describe('Worst first. Null when the list could not be loaded or there is no finished scan.'),
+  truncated: z.number().int().describe('Findings left out after the first 500.'),
+  posture: z.array(
+    z.object({
+      kind: z.enum(['plain-secret', 'mutable-tag', 'no-tls']),
+      severity: z.enum(['high', 'medium', 'low']),
+      subjects: z.array(z.string())
+    })
+  ),
+  checkedAt: z.string()
+});
+
 export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
   'GET /deployments': {
     summary: 'List deployments visible to the caller (summary shape)',
@@ -678,6 +757,16 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     scope: 'deploy',
     request: z.object({ strategy: z.enum(['rollingUpdate', 'recreate', 'blueGreen']) }),
     response: deploymentBase
+  },
+  'GET /deployments/:id/security': {
+    summary: 'Vulnerability scan of the running image and configuration findings',
+    scope: 'read',
+    response: deploymentSecurity
+  },
+  'POST /deployments/:id/security/scan': {
+    summary: 'Scan the running image again',
+    scope: 'deploy',
+    response: deploymentSecurity
   },
   'GET /deployments/:id/next-steps': {
     summary: 'What is still worth configuring on this deployment',
