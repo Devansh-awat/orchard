@@ -72,10 +72,11 @@ type LogEntry = {
   metadata?: { pod?: string };
 };
 
+const LEADING_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\s*/;
+
 export function logLine(e: LogEntry): string {
-  return [e.timestamp ?? '', e.metadata?.pod ?? '', e.level ?? '', e.raw ?? e.message ?? '']
-    .filter(Boolean)
-    .join(' ');
+  const body = (e.raw ?? e.message ?? '').replace(LEADING_TIME, '');
+  return [e.timestamp ?? '', e.metadata?.pod ?? '', e.level ?? '', body].filter(Boolean).join(' ');
 }
 
 export function cursorBefore(timestamp: string | undefined): string | null {

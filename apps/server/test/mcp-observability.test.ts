@@ -109,3 +109,18 @@ test('diagnose_deployment reads the diagnosis endpoint with the zone', async () 
     '/deployments/00000000-0000-4000-8000-000000000000/diagnosis?tz=Europe%2FLondon'
   );
 });
+
+test('a line keeps one timestamp even when the raw text starts with its own', () => {
+  const line = capLines(
+    [
+      {
+        timestamp: '2026-10-29T07:47:21.635760109Z',
+        level: 'INFO',
+        raw: '2026-10-29T07:47:21.635760109Z Completed 200 OK',
+        metadata: { pod: 'attend-1' }
+      }
+    ],
+    null
+  ).lines[0];
+  assert.equal(line, '2026-10-29T07:47:21.635760109Z attend-1 INFO Completed 200 OK');
+});
