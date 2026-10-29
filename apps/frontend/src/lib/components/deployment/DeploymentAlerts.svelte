@@ -4,7 +4,7 @@
 	import type { WarningSeverity } from '$lib/utils/format';
 	import type { AlertState } from '$lib/components/notifications/alerts';
 	import AlertStack, { type StackAlert } from '$lib/components/patterns/AlertStack.svelte';
-	import type { Problem } from './health';
+	import type { PodProblem, Problem } from './health';
 
 	interface ResourcePressure {
 		cpuRatio: number | null;
@@ -71,6 +71,14 @@
 		animateIcon?: boolean;
 	}
 
+	const LOGGED: ReadonlySet<PodProblem> = new Set([
+		'crash-loop',
+		'liveness',
+		'exited',
+		'not-ready',
+		'stuck-terminating'
+	]);
+
 	const isGithubAuth = $derived(
 		buildFailed &&
 			/github authentication failed|could not read username|terminal prompts disabled|repository not found/i.test(
@@ -91,7 +99,7 @@
 					if (pod && onPodLogs) actions.push({ label: 'Logs', onAction: () => onPodLogs(pod) });
 				} else if (p.problem === 'unschedulable') {
 					if (onGoToResources) actions.push({ label: 'Resources', onAction: onGoToResources });
-				} else if (pod && onPodLogs) {
+				} else if (pod && onPodLogs && p.problem && LOGGED.has(p.problem)) {
 					actions.push({ label: 'Logs', onAction: () => onPodLogs(pod) });
 				}
 				const firstLine = buildError ? buildError.split('\n')[0].slice(0, 160) : '';

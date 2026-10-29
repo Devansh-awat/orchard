@@ -22,7 +22,11 @@
 		unschedulable: { label: 'Unschedulable', description: 'Pending, insufficient memory' },
 		'not-ready': { label: 'Failing readiness', description: 'Readiness probe returns 503' },
 		terminating: { label: 'Terminating', description: 'Being shut down' },
-		evicted: { label: 'Evicted', description: 'Node ran low on memory' }
+		evicted: { label: 'Evicted', description: 'Node ran low on memory, replaced' },
+		liveness: { label: 'Liveness kill', description: 'Liveness probe fails, exit 137' },
+		'sidecar-crash': { label: 'Sidecar crash', description: 'The proxy container crash loops' },
+		'init-crash': { label: 'Init crash', description: 'The migrate step fails before start' },
+		'node-lost': { label: 'Node lost', description: 'Its node stopped reporting' }
 	};
 
 	let pods = $state<{ name: string; scenario: string }[]>([]);

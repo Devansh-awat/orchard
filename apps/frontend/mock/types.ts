@@ -114,6 +114,7 @@ export interface MockDeployment {
 	volumes: MockVolume[];
 	crash: MockCrash | null;
 	podScenarios?: Record<number, import('./scenarios.ts').PodScenario>;
+	podScenarioAt?: Record<number, number>;
 	revisions?: { seed: string; number: number; image: string; createdAt: string }[];
 	rollout?: {
 		prev: string;

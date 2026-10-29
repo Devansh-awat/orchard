@@ -456,9 +456,6 @@
 			debugAlerts ||
 			(deployment?.buildStatus === 'failed' && !!(deployment?.buildError || deployment?.buildLogs))
 	);
-	const activePodWarnings = $derived.by(() =>
-		debugAlerts ? DEBUG_POD_WARNINGS : (deployment?.warnings ?? [])
-	);
 	// "App is down" only fires once no pod has been ready for a continuous
 	// minute: pods flapping through restarts or a slow rollout shouldn't scream
 	// that the app is offline, but a sustained zero-ready state must.
@@ -492,14 +489,20 @@
 	});
 	const noPodsReady = $derived(debugAlerts || noPodsReadyConfirmed);
 
+	let healthNow = $state(Date.now());
+	$effect(() => {
+		const tick = setInterval(() => (healthNow = Date.now()), 5_000);
+		return () => clearInterval(tick);
+	});
 	const health = $derived(
 		computeHealth({
-			pods: (deployment?.pods ?? []).filter((pod) => pod.status?.toLowerCase() !== 'succeeded'),
-			warnings: deployment?.warnings ?? [],
+			pods: deployment?.pods ?? [],
 			rollout: deployment?.rollout ?? null,
 			replicas: deployment?.replicas ?? 0,
 			stopped: !!deployment?.stopped,
-			buildStatus: debugStatus === 'building' ? 'building' : deployment?.buildStatus
+			strategy: strategyValue,
+			buildStatus: debugStatus === 'building' ? 'building' : deployment?.buildStatus,
+			now: healthNow
 		})
 	);
 	const APP_CHIP = {
@@ -537,9 +540,10 @@
 		if (health.build === 'failed') return statusMeta('error', 'Build failed');
 		return null;
 	});
-	const activePods = $derived(
-		deployment?.pods?.filter((pod) => pod.status?.toLowerCase() !== 'succeeded') ?? []
-	);
+	const activePods = $derived.by(() => {
+		const shown = new Set(health.pods.map((p) => p.name));
+		return deployment?.pods?.filter((pod) => shown.has(pod.name)) ?? [];
+	});
 
 	let deletingPod = $state<string | null>(null);
 
@@ -1204,24 +1208,6 @@
 		resourceStatus('deleting'),
 		resourceStatus('')
 	];
-	const DEBUG_POD_WARNINGS = [
-		{
-			podName: 'heist-7f9c8b6d4-xk2lp',
-			message: 'Back-off restarting failed container app in pod',
-			timestamp: new Date().toISOString()
-		},
-		{
-			podName: 'heist-7f9c8b6d4-mq81z',
-			message:
-				'0/6 nodes are available: 3 Insufficient memory, 3 Insufficient cpu. preemption: not eligible.',
-			timestamp: new Date().toISOString()
-		},
-		{
-			podName: 'heist-7f9c8b6d4-xk2lp',
-			message: 'OOMKilled: container exceeded its memory limit',
-			timestamp: new Date().toISOString()
-		}
-	];
 
 	// ── TanStack Query: deployment data ──
 	const TRANSIENT_DEPLOYMENT_STATUSES = new Set([
@@ -1239,10 +1225,8 @@
 			const buildSt = (deployment?.buildStatus ?? '').toLowerCase();
 			const transient = TRANSIENT_DEPLOYMENT_STATUSES.has(status) || buildSt === 'building';
 			const sseUp = sseStatusValue === 'connected';
-			if (transient) return sseUp ? 15_000 : 3_000;
-			if (!sseUp) return 10_000;
-			if (activePodWarnings.length > 0) return 15_000;
-			return 30_000;
+			if (sseUp) return 60_000;
+			return transient ? 3_000 : 10_000;
 		})(),
 		refetchIntervalInBackground: true
 	}));
@@ -1256,20 +1240,23 @@
 	}
 
 	function applyPodDelta(payload: any) {
-		if (!deployment?.pods || !payload?.name) return;
+		if (!deployment || !payload) return;
+		const batch: any[] = Array.isArray(payload.pods) ? payload.pods : [payload];
+		if (!Array.isArray(deployment.pods)) deployment.pods = [];
 		const pods = deployment.pods as any[];
-		const idx = pods.findIndex((p) => p.name === payload.name);
-		if (payload.deleted) {
-			if (idx >= 0) pods.splice(idx, 1);
-			return;
-		}
-		if (idx < 0) return;
-		const pod = pods[idx];
-		pod.status = payload.status ?? pod.status;
-		pod.restartCount = payload.restartCount ?? pod.restartCount;
-		for (const c of pod.containers ?? []) {
-			c.ready = payload.ready ?? c.ready;
-			c.lastTermination = payload.lastTermination ?? c.lastTermination ?? null;
+		for (const next of batch) {
+			if (!next?.name) continue;
+			const idx = pods.findIndex((p) => p.name === next.name);
+			if (next.deleted) {
+				if (idx >= 0) pods.splice(idx, 1);
+				continue;
+			}
+			if (idx < 0) {
+				pods.push({ cpuUsage: null, memoryUsage: null, ...next });
+				continue;
+			}
+			const { cpuUsage: _cpu, memoryUsage: _mem, ...facts } = next;
+			mergeInto(pods[idx], facts);
 		}
 	}
 
@@ -2722,7 +2709,6 @@
 					if (ev.id === currentId) applyMetricsDelta(ev.payload);
 				} else if (ev.type === 'pod.changed' && ev.id === currentId) {
 					applyPodDelta(ev.payload);
-					refreshPodsLive();
 				} else {
 					queryClient.invalidateQueries({ queryKey: ['deployment', currentId] });
 				}

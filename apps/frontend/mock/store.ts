@@ -296,20 +296,24 @@ export class Store {
 		this.emit('deployment.changed', d.projectId, d.id);
 	}
 
+	podsFor: (d: MockDeployment) => Record<string, unknown>[] = () => [];
+	private seenPods = new Map<string, Set<string>>();
+
+	notePods(deploymentId: string, names: string[]) {
+		const seen = this.seenPods.get(deploymentId) ?? new Set<string>();
+		for (const n of names) seen.add(n);
+		this.seenPods.set(deploymentId, seen);
+	}
+
 	podPayload(d: MockDeployment) {
-		return {
-			name: this.podName(d, 0),
-			status: d.crash ? 'crashing' : 'ready',
-			ready: !d.crash,
-			restartCount: d.restarts,
-			lastTermination: d.crash
-				? {
-						reason: d.crash.reason,
-						exitCode: d.crash.exitCode,
-						finishedAt: new Date().toISOString()
-					}
-				: null
-		};
+		const pods = this.podsFor(d);
+		const names = new Set(pods.map((p) => String(p.name)));
+		const gone = [...(this.seenPods.get(d.id) ?? [])]
+			.filter((n) => !names.has(n))
+			.map((name) => ({ name, deleted: true }));
+		this.seenPods.set(d.id, names);
+		const batch = [...pods, ...gone];
+		return { ...batch[batch.length - 1], pods: batch };
 	}
 
 	private pushMetrics() {

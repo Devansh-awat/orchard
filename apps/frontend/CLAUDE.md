@@ -290,14 +290,19 @@ Three-level hierarchy: **Org cap** → **Member allowance** → **Deployment req
   other infrastructure stay hidden.
 - Problems show as one `AlertStack` line above the panels; it expands to the full list. They come from
   `computeHealth` in `deployment/health.ts` (app vs deploy vs build, current state only, unit tested in
-  `health.test.ts`); the server's `summarizeRollout` (`kubernetes/rollout-strategy.ts`) feeds it via
-  `rollout` on `/pods-live`.
+  `health.test.ts`), fed by pod facts and `rollout` (the server's `summarizeRollout` in
+  `kubernetes/rollout-strategy.ts`, read from the informer mirror).
 - Live values land instantly; motion is the decorative layer on top (`NumberRoll`, `stateEcho` on pod
   status, the sparkline growing), never a tween that delays the number.
 - `NextSteps` is a "Set up" button with a progress ring in the header, opening a popover.
-- `DeploymentAlerts` feeds `AlertStack` with build failures, pod crashes, resource pressure and SSE
-  disconnect; `humanizeWarning()` in `$lib/utils/format.ts` writes the copy.
-- SSE drives real-time updates; TanStack Query with adaptive polling as fallback.
+- `DeploymentAlerts` maps those problems, plus GitHub auth, apply errors, resource pressure and metric
+  alerts, onto `AlertStack`.
+- Pods arrive from the informer, never from polling. `pod.changed` carries `payload.pods`, a batch of full
+  pod records (or `{ name, deleted: true }`), and the page upserts them. `deployment.changed` (also fired
+  by ReplicaSet changes) refetches the detail, which carries `rollout`. `/pods-live` lists pods, events
+  and metrics from the Kubernetes API itself, so it runs once on load and after a scale, never per event.
+  The detail query polls every 60s only as a backstop while SSE is up.
+- `computeHealth` takes `now`; the page ticks it every 5s so a grace window can expire without new data.
 
 ## Running without a backend
 
@@ -312,11 +317,12 @@ provisioning).
   events as the server, so redeploys, restarts, scaling, env edits, job runs and backups update the UI on
   their own. A redeploy walks queued, cloning, building, pushing, deploying, running over about 20s.
   The Observe log stream, build log stream and pod shell (`ws`, a toy shell) work too.
-- **Pod states:** every pod can be put into a Kubernetes scenario (crash loop, out of memory, image pull
-  failure, missing secret, unschedulable, failing readiness, terminating, evicted) from the flask
+- **Pod states:** every pod can be put into a Kubernetes scenario (crash loop, out of memory, liveness kill,
+  image pull failure, missing secret, unschedulable, failing readiness, terminating, evicted, sidecar crash,
+  init crash, node lost) from the flask
   button on an app's Pods card, or `POST /apiv1/__mock/deployments/:id/pods` with `{ scenario, index? }`.
-  `mock/scenarios.ts` produces the same status, termination, warnings and events the server does, so
-  alerts and pod labels behave as they will in production. `POST /apiv1/__mock/deployments/:id/rollout`
+  `mock/scenarios.ts` produces the same status and pod facts (`podFacts`) the server does, timed from the
+  moment you set the scenario, so grace windows play out as they will in production. `POST /apiv1/__mock/deployments/:id/rollout`
   with `{ outcome, twice? }` simulates a rolling deploy whose new version has that outcome (`twice` deploys
   again a second later), and `{ cancel: true }` ends it. `__ORCHARD_MOCK__` is true only in mock mode.
 - **Sign out** makes every non-auth route 401 until you click "Continue as alfd (mock)" on the login

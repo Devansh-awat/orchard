@@ -258,7 +258,26 @@ Every status indicator is `StatusDot`. Nothing else draws a coloured status circ
 - **Deploy:** is the new version (the newest ReplicaSet, `rollout.currentRevision`) coming up. A new version that crashes, can't pull, misses a secret, has no room or never gets ready is a deploy problem, and the app keeps serving the previous version.
 - **App:** is anything serving traffic. Down only when no pod is ready and none is still starting.
 
-Pods carry `revision` (`pod-template-hash`); `/pods-live` returns `rollout` (revisions with numbers, current, state). During a deploy pods are tagged "v6 new", "v1", or "v4 replaced" when a second deploy superseded the first.
+Pods carry `revision` (`pod-template-hash`) and the detail returns `rollout` (revisions with numbers, current, previous, state). A rollout is in progress only while Kubernetes says so (`Progressing` is not `NewReplicaSetAvailable`, or two ReplicaSets have pods), so a crash after a finished deploy is an app problem, not a deploy one. During a deploy pods are tagged "v6 new", "v1", or "v4 replaced" when a second deploy superseded the first. A replaced pod never alerts.
+
+### Only real problems, and only while they are happening
+
+Normal Kubernetes behaviour never alerts: a pod starting, pulling, waiting for a node, a drain, a single out-of-memory kill it recovered from. Each signal waits as long as Kubernetes itself usually needs before it is worth a person's attention, the same idea as the `for:` windows in [kubernetes-mixin](https://github.com/kubernetes-monitoring/kubernetes-mixin) and the 15s schedule window in [kstatus](https://github.com/kubernetes-sigs/cli-utils/tree/master/pkg/kstatus). The thresholds live in `PATIENCE` in `health.ts`.
+
+| Signal | Alerts after | Why |
+|---|---|---|
+| `CrashLoopBackOff` | at once | Kubernetes already waited through a crash and a restart |
+| restarts ≥ 2 with the last one under 10 minutes ago | at once | flapping between running and back-off |
+| `CreateContainerConfigError` | 20s | the secret may still be syncing |
+| unschedulable | 30s | the autoscaler or a finishing pod may free room |
+| `ImagePullBackOff` | 60s | registries hiccup; `InvalidImageName` is at once |
+| node stopped reporting (pod not ready, containers still say ready) | 60s | a blip in the kubelet heartbeat |
+| terminating past its deadline | 60s | grace periods run long |
+| running but not ready | 2 minutes from start or from going unready | apps boot slowly; a startup probe owns slow starts |
+| stuck creating | 5 minutes | big images on a cold node |
+| evicted | 2 in 10 minutes | one eviction is the node doing its job; the leftover pod is history and hidden |
+
+One alert per kind, never per pod. The cause comes from the container itself: the exit code (127 command not found, 126 not executable, 137 with a liveness probe is the liveness check), the registry message (rate limit, login, missing tag), the missing secret's name, or the scheduler's shortage. A failing init container or sidecar is named, since it is not the user's app. A quota rejection (`ReplicaFailure`) is its own alert.
 
 ## Hover-revealed actions
 

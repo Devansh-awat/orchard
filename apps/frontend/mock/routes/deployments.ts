@@ -8,6 +8,7 @@ import type { Store } from '../store.ts';
 import type { MockDeployment } from '../types.ts';
 import {
 	POD_SCENARIOS,
+	podFacts,
 	podShape,
 	scenarioOf,
 	statusFromPods,
@@ -21,12 +22,24 @@ function namespaceOf(store: Store, d: MockDeployment) {
 	return store.state.environments.find((e) => e.id === d.environmentId)?.namespace ?? 'default';
 }
 
-type PodPlan = { seed: string; index: number; scenario: PodScenario; booting?: boolean };
+type PodPlan = {
+	seed: string;
+	index: number;
+	scenario: PodScenario;
+	booting?: boolean;
+	slot?: number;
+};
 
 function planPods(store: Store, d: MockDeployment): PodPlan[] {
 	const ro = d.rollout;
 	const all = Array.from({ length: d.replicas }, (_, i) => i);
-	if (!ro) return all.map((i) => ({ seed: d.podSeed, index: i, scenario: scenarioOf(d, i) }));
+	if (!ro)
+		return all.flatMap((i): PodPlan[] => {
+			const scenario = scenarioOf(d, i);
+			const plan = { seed: d.podSeed, index: i, scenario };
+			if (scenario !== 'evicted') return [plan];
+			return [plan, { seed: d.podSeed, index: i, scenario: 'healthy', slot: i + 100 }];
+		});
 	const elapsed = Date.now() - ro.startedAt;
 	const plans: PodPlan[] = [];
 	if (ro.outcome === 'healthy') {
@@ -50,8 +63,8 @@ function planPods(store: Store, d: MockDeployment): PodPlan[] {
 export function podsOf(store: Store, d: MockDeployment) {
 	if (d.stopped || d.replicas === 0) return [];
 	const count = d.replicas;
-	return planPods(store, d).map(({ seed, index: i, scenario, booting }) => {
-		const name = store.podName(d, i, seed);
+	const pods = planPods(store, d).map(({ seed, index: i, scenario, booting, slot }) => {
+		const name = store.podName(d, slot ?? i, seed);
 		const base = podShape(d, name, scenario);
 		const shape = booting ? { ...base, status: 'starting', warnings: [], events: [] } : base;
 		const share = 1 / count;
@@ -62,6 +75,16 @@ export function podsOf(store: Store, d: MockDeployment) {
 				? d.podStartedAt
 				: new Date(d.rollout?.startedAt ?? Date.now()).toISOString();
 		const image = store.revisionsOf(d).find((r) => r.seed === seed)?.image ?? d.image;
+		const fromRollout = seed !== d.podSeed;
+		const since = fromRollout
+			? startedAt
+			: new Date(d.podScenarioAt?.[i] ?? Date.parse(d.podStartedAt)).toISOString();
+		const facts = podFacts(d, slot ? 'healthy' : scenario, shape, {
+			since,
+			startedAt,
+			image,
+			booting
+		});
 		return {
 			id: uid(`pod:${name}`),
 			name,
@@ -72,23 +95,9 @@ export function podsOf(store: Store, d: MockDeployment) {
 			revision: seed.slice(0, 9),
 			restartCount: shape.restarts,
 			startTime: shape.scheduled ? startedAt : null,
-			createdAt: startedAt,
 			cpuUsage: shape.running && !booting ? Math.round(d.cpuUsageMilli * share * jitter) : 0,
 			memoryUsage: shape.running ? Math.round(d.memoryUsageBytes * share * jitter) : 0,
-			containers: [
-				{
-					name: d.name,
-					image,
-					ready: shape.status === 'ready',
-					restartCount: shape.restarts,
-					lastTermination: shape.termination
-						? {
-								...shape.termination,
-								finishedAt: new Date(Date.now() - 40_000).toISOString()
-							}
-						: null
-				}
-			],
+			...facts,
 			events: shape.events.map((e) => ({
 				...e,
 				firstTimestamp: d.updatedAt,
@@ -97,6 +106,11 @@ export function podsOf(store: Store, d: MockDeployment) {
 			warningLines: shape.warnings
 		};
 	});
+	store.notePods(
+		d.id,
+		pods.map((p) => p.name)
+	);
+	return pods;
 }
 
 export function rolloutOf(store: Store, d: MockDeployment) {
@@ -119,9 +133,23 @@ export function rolloutOf(store: Store, d: MockDeployment) {
 		.filter((r) => r.hash === current || r.replicas > 0)
 		.sort((a, b) => b.number - a.number);
 	const ready = pods.filter((p) => p.status === 'ready').length;
+	const previous =
+		store
+			.revisionsOf(d)
+			.filter((r) => r.seed.slice(0, 9) !== current)
+			.sort((a, b) => b.number - a.number)
+			.map((r) => ({
+				hash: r.seed.slice(0, 9),
+				number: r.number,
+				image: r.image,
+				createdAt: r.createdAt,
+				replicas: 0,
+				ready: 0
+			}))[0] ?? null;
 	return {
 		currentRevision: current,
 		revisions,
+		previous: revisions.find((r) => r.hash !== current && r.ready > 0) ?? previous,
 		desired: d.stopped ? 0 : d.replicas,
 		updated: pods.filter((p) => p.revision === current).length,
 		ready,
@@ -294,6 +322,7 @@ export function deploymentDetail(store: Store, d: MockDeployment) {
 		nodePoolId: null,
 		pods: pods.map(stripMock),
 		warnings: warnings(store, d),
+		rollout: rolloutOf(store, d),
 		services: [svc],
 		ingresses: ingress(d).map((i) => ({
 			...i,
@@ -413,6 +442,7 @@ function errorGroups(d: MockDeployment) {
 }
 
 export function deploymentRoutes(r: Router, { store }: MockContext) {
+	store.podsFor = (d) => podsOf(store, d).map(stripMock);
 	const find = (id: string) => store.deployment(id);
 	const changed = (d: MockDeployment) => {
 		store.touch(d);
@@ -460,6 +490,8 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 				if (scenario === 'healthy') delete d.podScenarios[i];
 				else d.podScenarios[i] = scenario;
 			}
+			d.podScenarioAt = { ...d.podScenarioAt };
+			for (const i of indexes) d.podScenarioAt[i] = Date.now();
 			if (scenario === 'healthy' && typeof body?.index !== 'number') d.crash = null;
 			const pods = podsOf(store, d);
 			d.status = statusFromPods(
@@ -467,15 +499,7 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 				pods.map((p) => p.status)
 			);
 			store.touch(d);
-			for (const p of pods) {
-				store.emit('pod.changed', d.projectId, d.id, {
-					name: p.name,
-					status: p.status,
-					ready: p.status === 'ready',
-					restartCount: p.restartCount,
-					lastTermination: p.containers[0].lastTermination
-				});
-			}
+			store.emit('pod.changed', d.projectId, d.id, store.podPayload(d));
 			store.emit('deployment.changed', d.projectId, d.id);
 			return { scenarios: d.podScenarios };
 		})
