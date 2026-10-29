@@ -113,6 +113,7 @@ export interface MockDeployment {
 	envVars: MockEnvVar[];
 	volumes: MockVolume[];
 	crash: MockCrash | null;
+	podScenarios?: Record<number, import('./scenarios.ts').PodScenario>;
 	podSeed: string;
 	podStartedAt: string;
 	restarts: number;

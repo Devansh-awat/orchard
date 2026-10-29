@@ -28,12 +28,15 @@
 		rowHref = undefined,
 		onRowClick = undefined,
 		rowLabel = undefined,
+		rowSelected = undefined,
+		onRowContextMenu = undefined,
 		sort = $bindable(null),
 		onsort = undefined,
 		empty = undefined,
 		emptyText = 'Nothing here yet',
 		maxHeight = undefined,
 		dense = false,
+		compact = false,
 		inset = true,
 		label = undefined
 	}: {
@@ -45,12 +48,15 @@
 		rowHref?: (item: T) => string;
 		onRowClick?: (item: T) => void;
 		rowLabel?: (item: T) => string;
+		rowSelected?: (item: T) => boolean;
+		onRowContextMenu?: (item: T, event: MouseEvent) => void;
 		sort?: TableSort | null;
 		onsort?: (sort: TableSort | null) => void;
 		empty?: Snippet;
 		emptyText?: string;
 		maxHeight?: string;
 		dense?: boolean;
+		compact?: boolean;
 		inset?: boolean;
 		label?: string;
 	} = $props();
@@ -104,6 +110,7 @@
 	class="frame"
 	class:frame--inset={inset}
 	class:frame--dense={dense}
+	class:frame--compact={compact}
 	class:frame--scroll={!!maxHeight}
 	style:max-height={maxHeight}
 >
@@ -142,7 +149,13 @@
 		{/if}
 		<tbody class="tbody">
 			{#each sorted as item, i (rowKey(item, i))}
-				<tr class="tr" class:tr--interactive={interactive}>
+				<tr
+					class="tr"
+					class:tr--interactive={interactive}
+					class:tr--selected={rowSelected?.(item) ?? false}
+					aria-selected={rowSelected ? rowSelected(item) : undefined}
+					oncontextmenu={onRowContextMenu ? (e) => onRowContextMenu(item, e) : undefined}
+				>
 					{#if row}
 						{@render row(item, i)}
 					{:else}
@@ -189,6 +202,10 @@
 	}
 	.frame--dense {
 		--row-h: 2.25rem;
+	}
+	.frame--compact {
+		--pad-x: 0.75rem;
+		--cell-x: 0.375rem;
 	}
 	.frame--inset {
 		border-radius: calc(var(--radius-card) * var(--corner-scale));
@@ -261,6 +278,15 @@
 	.tr--interactive:has(.hit:focus-visible)::after {
 		opacity: 1;
 	}
+	.tr--selected::after,
+	.tr--selected.tr--interactive:hover::after {
+		opacity: 1;
+		background: var(--bg-active);
+	}
+	.tr--selected::before,
+	.tr--selected + .tr::before {
+		opacity: 0;
+	}
 	.tr--interactive:active::after {
 		background: var(--bg-active);
 	}
@@ -277,7 +303,7 @@
 		gap: 0.5rem;
 		min-width: 0;
 		height: 100%;
-		padding: 0 0.75rem;
+		padding: 0 var(--cell-x, 0.75rem);
 		text-align: start;
 	}
 	.th:first-child,

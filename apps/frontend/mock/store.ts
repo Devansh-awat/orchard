@@ -1,3 +1,4 @@
+import { podShape, scenarioOf } from './scenarios.ts';
 import type { EventHub, OrgEventType } from './events.ts';
 import { ago, freshId, sha, uid } from './ids.ts';
 import { seed } from './seed.ts';
@@ -240,8 +241,9 @@ export class Store {
 				let cpu = 0;
 				let mem = 0;
 				for (let i = 0; i < d.replicas; i++) {
-					const c = d.crash ? 0 : Math.round((d.cpuUsageMilli / d.replicas) * wobble());
-					const m = Math.round((d.memoryUsageBytes / d.replicas) * wobble());
+					const running = podShape(d, this.podName(d, i), scenarioOf(d, i)).running;
+					const c = running ? Math.round((d.cpuUsageMilli / d.replicas) * wobble()) : 0;
+					const m = running ? Math.round((d.memoryUsageBytes / d.replicas) * wobble()) : 0;
 					pods[this.podName(d, i)] = { cpuUsage: c, memoryUsage: m };
 					cpu += c;
 					mem += m;

@@ -1,13 +1,9 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
-	import { X } from 'lucide-svelte';
-	import { ShieldAlert, TriangleAlert, CircleAlert } from '@jis3r/icons';
-	import { animate } from 'motion';
-	import { motionStagger, motionEnabled, motion, transition } from '$lib/utils/motion.svelte';
 	import { humanizeWarning, type WarningSeverity } from '$lib/utils/format';
 	import type { AlertState } from '$lib/components/notifications/alerts';
-	import { Alert, Button } from '$lib/components/ui';
+	import AlertStack, { type StackAlert } from '$lib/components/patterns/AlertStack.svelte';
 
 	interface Warning {
 		podName: string;
@@ -251,95 +247,27 @@
 
 	const alerts = $derived(candidates.filter((a) => !dismissed.has(a.id)));
 
-	function severityIcon(s: WarningSeverity) {
-		if (s === 'critical') return CircleAlert;
-		if (s === 'error') return ShieldAlert;
-		return TriangleAlert;
-	}
-
-	function dismissWithAnimation(el: HTMLElement, id: string) {
-		if (!motionEnabled()) {
-			dismissed.add(id);
-			return;
-		}
-		el.style.height = `${el.getBoundingClientRect().height}px`;
-		el.style.overflow = 'hidden';
-		motion(el, { opacity: 0, scale: 0.97, x: 16 }, 'smooth');
-		animate(
-			el,
-			{
-				height: 0,
-				paddingTop: 0,
-				paddingBottom: 0,
-				marginBottom: 0,
-				borderTopWidth: 0,
-				borderBottomWidth: 0
-			},
-			transition('smooth', { delay: 0.03 })
-		).finished.then(() => dismissed.add(id));
-	}
-
 	const TONE: Record<WarningSeverity, 'error' | 'warning' | 'info'> = {
 		critical: 'error',
 		error: 'error',
 		warning: 'warning',
 		info: 'info'
 	};
+
+	const stackAlerts = $derived<StackAlert[]>(
+		alerts.map((alert) => ({
+			id: alert.id,
+			tone: TONE[alert.severity] ?? 'warning',
+			title: alert.title.split(' — ')[0],
+			hint: alert.hint,
+			dismissible: alert.severity !== 'critical',
+			actions: alert.actions?.length
+				? alert.actions.map((act) => ({ label: act.label, href: act.href, onclick: act.onAction }))
+				: alert.action && alert.onAction
+					? [{ label: alert.action, onclick: alert.onAction }]
+					: []
+		}))
+	);
 </script>
 
-{#if alerts.length > 0}
-	<div class="da-stack">
-		{#each alerts as alert, i (alert.id)}
-			{@const Icon = severityIcon(alert.severity)}
-			<div class="da-alert" {@attach motionStagger({ index: i, from: { y: -8, opacity: 0 } })}>
-				<Alert tone={TONE[alert.severity] ?? 'warning'} title={alert.title}>
-					{#snippet icon()}<Icon size={16} animate={alert.animateIcon ?? false} />{/snippet}
-					{alert.hint}
-					{#snippet actions()}
-						{#if alert.actions && alert.actions.length > 0}
-							{#each alert.actions as act (act.label)}
-								{#if act.href}
-									<Button
-										variant="secondary"
-										size="sm"
-										href={act.href}
-										target="_blank"
-										rel="noopener noreferrer">{act.label}</Button
-									>
-								{:else}
-									<Button variant="secondary" size="sm" onclick={act.onAction}>{act.label}</Button>
-								{/if}
-							{/each}
-						{:else if alert.action && alert.onAction}
-							<Button variant="secondary" size="sm" onclick={alert.onAction}>{alert.action}</Button>
-						{/if}
-						{#if alert.severity !== 'critical'}
-							<Button
-								variant="ghost"
-								size="sm"
-								icon={X}
-								label="Dismiss"
-								onclick={(e: MouseEvent) => {
-									const row = (e.currentTarget as HTMLElement).closest('.da-alert') as HTMLElement;
-									if (row) dismissWithAnimation(row, alert.id);
-									else dismissed.add(alert.id);
-								}}
-							/>
-						{/if}
-					{/snippet}
-				</Alert>
-			</div>
-		{/each}
-	</div>
-{/if}
-
-<style>
-	.da-stack {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-	.da-alert {
-		overflow: hidden;
-	}
-</style>
+<AlertStack alerts={stackAlerts} ondismiss={(id) => dismissed.add(id)} />

@@ -7,27 +7,48 @@ const MIB = 1024 * 1024;
 
 type Point = { x: number; y: number };
 
+const ys = (points: Point[] | undefined) => (points ?? []).map((p) => p.y);
+
 export class UsageHistory {
 	cpu = $state<number[]>([]);
 	mem = $state<number[]>([]);
+	requests = $state<number[]>([]);
+	errors = $state<number[]>([]);
 	#loadedFor = '';
+
+	#window() {
+		const end = Date.now();
+		return `start=${end - WINDOW_MS}&end=${end}&step=${STEP_MS}`;
+	}
 
 	async load(deploymentId: string) {
 		if (!deploymentId || this.#loadedFor === deploymentId) return;
 		this.#loadedFor = deploymentId;
-		const end = Date.now();
-		const start = end - WINDOW_MS;
 		try {
 			const res = await apiFetch(
-				`/apiv1/deployments/${encodeURIComponent(deploymentId)}/metrics?start=${start}&end=${end}&step=${STEP_MS}`
+				`/apiv1/deployments/${encodeURIComponent(deploymentId)}/metrics?${this.#window()}`
 			);
 			if (!res.ok) return;
 			const body = await res.json();
-			const ys = (points: Point[] | undefined) => (points ?? []).map((p) => p.y);
 			this.cpu = [...ys(body?.data?.cpu), ...this.cpu].slice(-MAX_POINTS);
 			this.mem = [...ys(body?.data?.mem), ...this.mem].slice(-MAX_POINTS);
 		} catch {
 			this.#loadedFor = '';
+		}
+		await this.loadHttp(deploymentId);
+	}
+
+	async loadHttp(deploymentId: string) {
+		try {
+			const res = await apiFetch(
+				`/apiv1/observe/deployments/${encodeURIComponent(deploymentId)}/http-metrics?${this.#window()}`
+			);
+			if (!res.ok) return;
+			const body = await res.json();
+			this.requests = ys(body?.requestRate).slice(-MAX_POINTS);
+			this.errors = ys(body?.errorRate).slice(-MAX_POINTS);
+		} catch {
+			return;
 		}
 	}
 

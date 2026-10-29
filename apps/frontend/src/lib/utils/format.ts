@@ -301,7 +301,7 @@ export function humanizeWarning(msg: string): HumanizedWarning | null {
 			action: count >= 5 ? 'View logs' : undefined
 		};
 	}
-	if (/imagepullbackoff|errimagepull|failed to pull image/i.test(m)) {
+	if (/imagepullbackoff|errimagepull|failed to pull image|back-?off pulling image/i.test(m)) {
 		return {
 			title: "Can't pull container image",
 			hint: 'The image name or tag may be wrong, or the registry requires authentication.',

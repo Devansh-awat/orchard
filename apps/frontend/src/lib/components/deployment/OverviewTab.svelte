@@ -3,8 +3,8 @@
 	import { untrack } from 'svelte';
 	import { page } from '$app/stores';
 	import { Button, Menu, MenuItem, LogViewer, SelectTrigger } from '$lib/components/ui';
-	import UsageCard from './UsageCard.svelte';
-	import PodsCard from './PodsCard.svelte';
+	import MetricsRail from './MetricsRail.svelte';
+	import PodsTable from './PodsTable.svelte';
 	import { UsageHistory } from './usage-history.svelte';
 	import { animate } from 'motion';
 	import { decorativeMotion } from '$lib/utils/motion.svelte';
@@ -41,6 +41,7 @@
 		onTerminalSession,
 		onSelectLogsPod,
 		onSetTabMetrics,
+		onRefreshPods,
 		podLabel
 	}: {
 		deployment: any;
@@ -73,7 +74,8 @@
 		onTerminalBell?: (id: string) => void;
 		onTerminalSession?: (id: string, handle: string) => void;
 		onSelectLogsPod: (podName: string, containerName?: string) => void;
-		onSetTabMetrics: () => void;
+		onSetTabMetrics: (view?: 'metrics' | 'http') => void;
+		onRefreshPods: () => void;
 		podLabel: (podName: string) => string;
 	} = $props();
 
@@ -186,207 +188,209 @@
 </script>
 
 <div class="overview-board">
-	<div
-		bind:this={consoleRef}
-		class="console-panel"
-		class:console-expanded={consoleExpanded || consoleAnimating}
-		class:console-animating={consoleAnimating}
-		class:console-at-fullscreen={consoleExpanded}
-		style={consoleInlineRect && !consoleExpanded
-			? `top:${consoleInlineRect.top}px;left:${consoleInlineRect.left}px;width:${consoleInlineRect.width}px;height:${consoleInlineRect.height}px;`
-			: ''}
-	>
-		<div class="bar">
-			<div class="sessions" role="tablist" aria-label="Console">
-				<button
-					type="button"
-					role="tab"
-					class="session"
-					aria-selected={activeConsoleTab === 'logs'}
-					onclick={() => (activeConsoleTab = 'logs')}>Logs</button
-				>
-				{#each terminalTabs as ttab (ttab.id)}
-					<span
-						class="session session--term"
-						class:session--bell={ttab.bell && activeConsoleTab !== ttab.id}
+	<div class="main">
+		<div
+			bind:this={consoleRef}
+			class="console-panel"
+			class:console-expanded={consoleExpanded || consoleAnimating}
+			class:console-animating={consoleAnimating}
+			class:console-at-fullscreen={consoleExpanded}
+			style={consoleInlineRect && !consoleExpanded
+				? `top:${consoleInlineRect.top}px;left:${consoleInlineRect.left}px;width:${consoleInlineRect.width}px;height:${consoleInlineRect.height}px;`
+				: ''}
+		>
+			<div class="bar">
+				<div class="sessions" role="tablist" aria-label="Console">
+					<button
+						type="button"
+						role="tab"
+						class="session"
+						aria-selected={activeConsoleTab === 'logs'}
+						onclick={() => (activeConsoleTab = 'logs')}>Logs</button
 					>
-						<button
-							type="button"
-							role="tab"
-							class="session-hit"
-							aria-selected={activeConsoleTab === ttab.id}
-							title={ttab.title || ttab.label}
-							onclick={() => {
-								ttab.bell = false;
-								activeConsoleTab = ttab.id;
-							}}
+					{#each terminalTabs as ttab (ttab.id)}
+						<span
+							class="session session--term"
+							class:session--bell={ttab.bell && activeConsoleTab !== ttab.id}
 						>
-							<SquareTerminal size={13} aria-hidden="true" />
-							<span class="session-title">{ttab.title || ttab.label}</span>
-						</button>
-						<button
-							type="button"
-							class="session-close"
-							aria-label="Close {ttab.title || ttab.label}"
-							onclick={() => onCloseTerminalTab(ttab.id)}
-						>
-							<X size={12} />
-						</button>
-					</span>
-				{/each}
-			</div>
+							<button
+								type="button"
+								role="tab"
+								class="session-hit"
+								aria-selected={activeConsoleTab === ttab.id}
+								title={ttab.title || ttab.label}
+								onclick={() => {
+									ttab.bell = false;
+									activeConsoleTab = ttab.id;
+								}}
+							>
+								<SquareTerminal size={13} aria-hidden="true" />
+								<span class="session-title">{ttab.title || ttab.label}</span>
+							</button>
+							<button
+								type="button"
+								class="session-close"
+								aria-label="Close {ttab.title || ttab.label}"
+								onclick={() => onCloseTerminalTab(ttab.id)}
+							>
+								<X size={12} />
+							</button>
+						</span>
+					{/each}
+				</div>
 
-			<div class="tools">
-				{#if activeConsoleTab === 'logs'}
-					<Menu placement="bottom-end">
-						{#snippet trigger(attrs, isOpen)}
-							<SelectTrigger
-								{...attrs}
-								open={isOpen}
-								size="sm"
-								mono
-								value={sourceLabel}
-								placeholder="Pick a pod"
-							/>
-						{/snippet}
-						{#each deployment.pods ?? [] as pod (pod.name)}
-							{#each pod.containers ?? [] as cont (cont.name)}
-								{@const here = selectedPod === pod.name && selectedContainer === cont.name}
-								{@const crashed = !!cont.lastTermination?.reason || (cont.restartCount ?? 0) > 0}
-								<MenuItem
-									icon={Boxes}
-									checked={here && !showPreviousLogs}
-									onclick={() => openCurrentLogs(pod, cont.name)}
-								>
-									{podLabel(pod.name)} / {cont.name}
-								</MenuItem>
-								{#if crashed}
+				<div class="tools">
+					{#if activeConsoleTab === 'logs'}
+						<Menu placement="bottom-end">
+							{#snippet trigger(attrs, isOpen)}
+								<SelectTrigger
+									{...attrs}
+									open={isOpen}
+									size="sm"
+									mono
+									value={sourceLabel}
+									placeholder="Pick a pod"
+								/>
+							{/snippet}
+							{#each deployment.pods ?? [] as pod (pod.name)}
+								{#each pod.containers ?? [] as cont (cont.name)}
+									{@const here = selectedPod === pod.name && selectedContainer === cont.name}
+									{@const crashed = !!cont.lastTermination?.reason || (cont.restartCount ?? 0) > 0}
 									<MenuItem
-										icon={SquareTerminal}
-										checked={here && showPreviousLogs}
-										description="Output from before the last crash"
-										onclick={() => openCrashLogs(pod, cont.name)}
+										icon={Boxes}
+										checked={here && !showPreviousLogs}
+										onclick={() => openCurrentLogs(pod, cont.name)}
 									>
 										{podLabel(pod.name)} / {cont.name}
 									</MenuItem>
-								{/if}
+									{#if crashed}
+										<MenuItem
+											icon={SquareTerminal}
+											checked={here && showPreviousLogs}
+											description="Output from before the last crash"
+											onclick={() => openCrashLogs(pod, cont.name)}
+										>
+											{podLabel(pod.name)} / {cont.name}
+										</MenuItem>
+									{/if}
+								{/each}
 							{/each}
+						</Menu>
+						<Button
+							variant="ghost"
+							size="sm"
+							icon={RefreshCw}
+							label="Refresh logs"
+							loading={logSource.loading}
+							onclick={() => logSource.refresh()}
+						/>
+						<button
+							type="button"
+							class="live"
+							class:live--on={liveLogs}
+							aria-pressed={liveLogs}
+							title={liveLogs ? 'Stop following new logs' : 'Follow new logs as they arrive'}
+							onclick={() => (liveLogs = !liveLogs)}
+						>
+							<span class="live-dot" aria-hidden="true"></span>Live
+						</button>
+					{/if}
+
+					<Menu placement="bottom-end">
+						{#snippet trigger(attrs)}
+							<Button
+								{...attrs}
+								variant="secondary"
+								size="sm"
+								icon={SquareTerminal}
+								disabled={shellCombos.length === 0}
+								onclick={(e: MouseEvent) => {
+									if (shellCombos.length === 1) {
+										onOpenShell(shellCombos[0].podName, shellCombos[0].container);
+										return;
+									}
+									(attrs as { onclick?: (e: Event) => void }).onclick?.(e);
+								}}>Shell</Button
+							>
+						{/snippet}
+						{#each shellCombos as combo (`${combo.podName}/${combo.container}`)}
+							<MenuItem
+								icon={SquareTerminal}
+								onclick={() => onOpenShell(combo.podName, combo.container)}
+							>
+								{podLabel(combo.podName)} / {combo.container}
+							</MenuItem>
 						{/each}
 					</Menu>
+
+					<TerminalSettings />
+
 					<Button
 						variant="ghost"
 						size="sm"
-						icon={RefreshCw}
-						label="Refresh logs"
-						loading={logSource.loading}
-						onclick={() => logSource.refresh()}
+						icon={consoleExpanded ? Minimize2 : Maximize2}
+						label={consoleExpanded ? 'Collapse console' : 'Expand console'}
+						onclick={onToggleConsoleExpand}
 					/>
-					<button
-						type="button"
-						class="live"
-						class:live--on={liveLogs}
-						aria-pressed={liveLogs}
-						title={liveLogs ? 'Stop following new logs' : 'Follow new logs as they arrive'}
-						onclick={() => (liveLogs = !liveLogs)}
-					>
-						<span class="live-dot" aria-hidden="true"></span>Live
-					</button>
-				{/if}
-
-				<Menu placement="bottom-end">
-					{#snippet trigger(attrs)}
-						<Button
-							{...attrs}
-							variant="secondary"
-							size="sm"
-							icon={SquareTerminal}
-							disabled={shellCombos.length === 0}
-							onclick={(e: MouseEvent) => {
-								if (shellCombos.length === 1) {
-									onOpenShell(shellCombos[0].podName, shellCombos[0].container);
-									return;
-								}
-								(attrs as { onclick?: (e: Event) => void }).onclick?.(e);
-							}}>Shell</Button
-						>
-					{/snippet}
-					{#each shellCombos as combo (`${combo.podName}/${combo.container}`)}
-						<MenuItem
-							icon={SquareTerminal}
-							onclick={() => onOpenShell(combo.podName, combo.container)}
-						>
-							{podLabel(combo.podName)} / {combo.container}
-						</MenuItem>
-					{/each}
-				</Menu>
-
-				<TerminalSettings />
-
-				<Button
-					variant="ghost"
-					size="sm"
-					icon={consoleExpanded ? Minimize2 : Maximize2}
-					label={consoleExpanded ? 'Collapse console' : 'Expand console'}
-					onclick={onToggleConsoleExpand}
-				/>
+				</div>
 			</div>
-		</div>
 
-		<div class="console-body">
-			{#if activeConsoleTab === 'logs'}
-				<LogViewer
-					lines={logSource.lines}
-					loading={logSource.loading}
-					loadingMore={logSource.loadingMore}
-					error={logSource.error}
-					atStart={logSource.atStart}
-					bind:scrolledUp={logsScrolledUp}
-					onLoadEarlier={() => logSource.loadEarlier()}
-				>
-					{#snippet empty()}
-						<div class="console-empty">
-							<SquareTerminal size={16} aria-hidden="true" />
-							<span>{selectedPod ? 'No output yet' : 'Pick a pod to read its logs'}</span>
-						</div>
-					{/snippet}
-				</LogViewer>
-			{/if}
-			{#each terminalTabs as ttab (ttab.id)}
-				<PodTerminal
-					podName={ttab.podName}
-					namespace={deployment.namespace || 'default'}
-					container={ttab.container}
-					visible={consoleVisible && activeConsoleTab === ttab.id}
-					resizeFrozen={consoleAnimating}
-					sessionHandle={ttab.sessionHandle}
-					onTitle={(title) => onTerminalTitle?.(ttab.id, title)}
-					onBell={() => onTerminalBell?.(ttab.id)}
-					onSession={(handle) => onTerminalSession?.(ttab.id, handle)}
-				/>
-			{/each}
+			<div class="console-body">
+				{#if activeConsoleTab === 'logs'}
+					<LogViewer
+						lines={logSource.lines}
+						loading={logSource.loading}
+						loadingMore={logSource.loadingMore}
+						error={logSource.error}
+						atStart={logSource.atStart}
+						bind:scrolledUp={logsScrolledUp}
+						onLoadEarlier={() => logSource.loadEarlier()}
+					>
+						{#snippet empty()}
+							<div class="console-empty">
+								<SquareTerminal size={16} aria-hidden="true" />
+								<span>{selectedPod ? 'No output yet' : 'Pick a pod to read its logs'}</span>
+							</div>
+						{/snippet}
+					</LogViewer>
+				{/if}
+				{#each terminalTabs as ttab (ttab.id)}
+					<PodTerminal
+						podName={ttab.podName}
+						namespace={deployment.namespace || 'default'}
+						container={ttab.container}
+						visible={consoleVisible && activeConsoleTab === ttab.id}
+						resizeFrozen={consoleAnimating}
+						sessionHandle={ttab.sessionHandle}
+						onTitle={(title) => onTerminalTitle?.(ttab.id, title)}
+						onBell={() => onTerminalBell?.(ttab.id)}
+						onSession={(handle) => onTerminalSession?.(ttab.id, handle)}
+					/>
+				{/each}
+			</div>
 		</div>
 	</div>
 
-	<div class="rail">
-		<UsageCard
+	<div class="side">
+		<MetricsRail
 			cpu={deployment.totalCpuUsage}
 			mem={deployment.totalMemoryUsage}
 			cpuLimit={resourcePressure?.cpuLimit ?? null}
 			memLimit={resourcePressure?.memLimit ?? null}
 			cpuRatio={resourcePressure?.cpuRatio ?? null}
 			memRatio={resourcePressure?.memRatio ?? null}
-			cpuHistory={usage.cpu}
-			memHistory={usage.mem}
+			history={usage}
 			onopen={onSetTabMetrics}
 		/>
-		<PodsCard
+		<PodsTable
+			deploymentId={deployment.id}
 			pods={activePods}
+			warnings={deployment.warnings ?? []}
 			replicas={deployment.replicas ?? 0}
 			bind:scaleReplicas
 			{scaling}
 			{drift}
 			{selectedPod}
-			{deletingPod}
 			{podLabel}
 			podHref={(name) =>
 				`/${$page.params.orgSlug}/pods/${name}?namespace=${deployment?.namespace ?? 'default'}`}
@@ -394,7 +398,9 @@
 			onChange={onScaleChange}
 			onSelect={(pod) => openCurrentLogs(pod)}
 			onCrashLogs={(pod) => openCrashLogs(pod)}
+			onShell={onOpenShell}
 			onDelete={onDeletePod}
+			onSimulated={onRefreshPods}
 		/>
 	</div>
 </div>
@@ -402,19 +408,28 @@
 <style>
 	.overview-board {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) 20rem;
+		grid-template-columns: minmax(0, 1fr) 24rem;
 		gap: 1rem;
 		height: 100%;
 		min-height: 0;
 	}
-	.overview-board > .console-panel {
-		height: auto;
-		min-height: 0;
-	}
-	.rail {
+	.main {
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
+		min-width: 0;
+		min-height: 0;
+	}
+	.main > .console-panel {
+		flex: 1 1 0;
+		height: auto;
+		min-height: 14rem;
+	}
+	.side {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		min-width: 0;
 		min-height: 0;
 	}
 	.bar {
@@ -554,7 +569,8 @@
 			grid-template-columns: minmax(0, 1fr);
 			height: auto;
 		}
-		.overview-board > .console-panel {
+		.main > .console-panel {
+			flex: none;
 			height: 32rem;
 		}
 	}

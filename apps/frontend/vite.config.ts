@@ -10,7 +10,8 @@ const mock = process.env.ORCHARD_MOCK === '1' ? [(await import('./mock/plugin.ts
 export default defineConfig({
 	plugins: [...mock, tailwindcss(), sveltekit()],
 	define: {
-		__APP_VERSION__: JSON.stringify(pkg.version)
+		__APP_VERSION__: JSON.stringify(pkg.version),
+		__ORCHARD_MOCK__: JSON.stringify(mock.length > 0)
 	},
 	server: {
 		port: 3000,

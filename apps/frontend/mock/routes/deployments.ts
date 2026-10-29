@@ -6,6 +6,13 @@ import { openStream, writeMessage } from '../events.ts';
 import { creator, deploymentSummary, ingress } from '../serialize.ts';
 import type { Store } from '../store.ts';
 import type { MockDeployment } from '../types.ts';
+import {
+	POD_SCENARIOS,
+	podShape,
+	scenarioOf,
+	statusFromPods,
+	type PodScenario
+} from '../scenarios.ts';
 import { metricSeries, metricsWindow } from './databases.ts';
 
 const MIB = 1024 ** 2;
@@ -17,74 +24,61 @@ function namespaceOf(store: Store, d: MockDeployment) {
 export function podsOf(store: Store, d: MockDeployment) {
 	if (d.stopped || d.replicas === 0) return [];
 	const count = d.replicas;
-	const status = d.crash
-		? 'crashing'
-		: d.status === 'restarting' || d.status === 'scaling'
-			? 'starting'
-			: 'ready';
 	return Array.from({ length: count }, (_, i) => {
 		const name = store.podName(d, i);
+		const shape = podShape(d, name, scenarioOf(d, i));
 		const share = 1 / count;
 		const jitter = 0.85 + (parseInt(sha(name).slice(0, 4), 16) % 30) / 100;
+		const ip = shape.scheduled ? `10.42.${1 + i}.${(d.name.length * 13 + i * 7) % 250}` : null;
 		return {
 			id: uid(`pod:${name}`),
 			name,
-			status,
-			ip: `10.42.${1 + i}.${(d.name.length * 13 + i * 7) % 250}`,
-			podIp: `10.42.${1 + i}.${(d.name.length * 13 + i * 7) % 250}`,
-			nodeName: ['house', 'barn', 'shed'][i % 3],
-			restartCount: d.restarts,
-			startTime: d.podStartedAt,
+			status: shape.status,
+			ip,
+			podIp: ip,
+			nodeName: shape.scheduled ? ['house', 'barn', 'shed'][i % 3] : null,
+			restartCount: shape.restarts,
+			startTime: shape.scheduled ? d.podStartedAt : null,
 			createdAt: d.podStartedAt,
-			cpuUsage: status === 'ready' ? Math.round(d.cpuUsageMilli * share * jitter) : 0,
-			memoryUsage: Math.round(d.memoryUsageBytes * share * jitter),
+			cpuUsage: shape.running ? Math.round(d.cpuUsageMilli * share * jitter) : 0,
+			memoryUsage: shape.running ? Math.round(d.memoryUsageBytes * share * jitter) : 0,
 			containers: [
 				{
 					name: d.name,
 					image: d.image,
-					ready: status === 'ready',
-					restartCount: d.restarts,
-					lastTermination: d.crash
+					ready: shape.status === 'ready',
+					restartCount: shape.restarts,
+					lastTermination: shape.termination
 						? {
-								reason: d.crash.reason,
-								exitCode: d.crash.exitCode,
+								...shape.termination,
 								finishedAt: new Date(Date.now() - 40_000).toISOString()
 							}
 						: null
 				}
 			],
-			events: d.crash
-				? [
-						{
-							type: 'Warning',
-							reason: 'BackOff',
-							message: `Back-off restarting failed container ${d.name} in pod ${name}`,
-							count: d.restarts,
-							firstTimestamp: d.updatedAt,
-							lastTimestamp: new Date(Date.now() - 30_000).toISOString()
-						}
-					]
-				: [
-						{
-							type: 'Normal',
-							reason: 'Started',
-							message: `Started container ${d.name}`,
-							count: 1,
-							firstTimestamp: d.podStartedAt,
-							lastTimestamp: d.podStartedAt
-						}
-					]
+			events: shape.events.map((e) => ({
+				...e,
+				firstTimestamp: d.updatedAt,
+				lastTimestamp: new Date(Date.now() - 30_000).toISOString()
+			})),
+			warningLines: shape.warnings
 		};
 	});
 }
 
 function warnings(store: Store, d: MockDeployment) {
-	if (!d.crash) return [];
-	return podsOf(store, d).map((p) => ({
-		podName: p.name,
-		message: `Back-off restarting failed container ${d.name}: ${d.crash!.reason} (exit ${d.crash!.exitCode})`,
-		timestamp: new Date(Date.now() - 30_000).toISOString()
-	}));
+	return podsOf(store, d).flatMap((p) =>
+		p.warningLines.map((message) => ({
+			podName: p.name,
+			message,
+			timestamp: new Date(Date.now() - 30_000).toISOString()
+		}))
+	);
+}
+
+function stripMock<T extends { warningLines?: string[] }>(pod: T) {
+	const { warningLines: _, ...rest } = pod;
+	return rest;
 }
 
 function service(store: Store, d: MockDeployment) {
@@ -233,7 +227,7 @@ export function deploymentDetail(store: Store, d: MockDeployment) {
 			: null,
 		project: { id: p.id, name: p.name, slug: p.slug, backgroundImage: p.backgroundImage },
 		nodePoolId: null,
-		pods,
+		pods: pods.map(stripMock),
 		warnings: warnings(store, d),
 		services: [svc],
 		ingresses: ingress(d).map((i) => ({
@@ -376,7 +370,7 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 		withDep((d) => {
 			const pods = podsOf(store, d);
 			return {
-				pods,
+				pods: pods.map(stripMock),
 				warnings: warnings(store, d),
 				availableReplicas: pods.filter((p) => p.status === 'ready').length,
 				totalCpuUsage: pods.reduce((a, p) => a + (p.cpuUsage ?? 0), 0),
@@ -384,6 +378,48 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 				meteredPods: pods.length
 			};
 		})
+	);
+	r.post(
+		'/__mock/deployments/:id/pods',
+		withDep((d, { body }) => {
+			const scenario = POD_SCENARIOS.includes(body?.scenario)
+				? (body.scenario as PodScenario)
+				: 'healthy';
+			const indexes =
+				typeof body?.index === 'number'
+					? [body.index]
+					: Array.from({ length: d.replicas }, (_, i) => i);
+			d.podScenarios = { ...d.podScenarios };
+			for (const i of indexes) {
+				if (scenario === 'healthy') delete d.podScenarios[i];
+				else d.podScenarios[i] = scenario;
+			}
+			if (scenario === 'healthy' && typeof body?.index !== 'number') d.crash = null;
+			const pods = podsOf(store, d);
+			d.status = statusFromPods(
+				d,
+				pods.map((p) => p.status)
+			);
+			store.touch(d);
+			for (const p of pods) {
+				store.emit('pod.changed', d.projectId, d.id, {
+					name: p.name,
+					status: p.status,
+					ready: p.status === 'ready',
+					restartCount: p.restartCount,
+					lastTermination: p.containers[0].lastTermination
+				});
+			}
+			store.emit('deployment.changed', d.projectId, d.id);
+			return { scenarios: d.podScenarios };
+		})
+	);
+	r.get(
+		'/__mock/deployments/:id/pods',
+		withDep((d) => ({
+			options: POD_SCENARIOS,
+			pods: podsOf(store, d).map((p, i) => ({ name: p.name, scenario: scenarioOf(d, i) }))
+		}))
 	);
 	r.get(
 		'/deployments/:id/build-logs',

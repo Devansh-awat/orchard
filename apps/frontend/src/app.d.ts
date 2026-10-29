@@ -1,6 +1,7 @@
 // See https://svelte.dev/docs/kit/types#app.d.ts
 // for information about these interfaces
 declare const __APP_VERSION__: string;
+declare const __ORCHARD_MOCK__: boolean;
 
 declare global {
 	namespace App {

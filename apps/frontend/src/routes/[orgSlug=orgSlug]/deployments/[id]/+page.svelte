@@ -3176,9 +3176,13 @@
 							onTerminalBell={setTerminalBell}
 							onTerminalSession={setTerminalSession}
 							onSelectLogsPod={selectLogsPod}
-							onSetTabMetrics={() => {
-								observeView = 'metrics';
+							onSetTabMetrics={(view) => {
+								observeView = view ?? 'metrics';
 								gotoTab('observe');
+							}}
+							onRefreshPods={() => {
+								queryClient.invalidateQueries({ queryKey: ['deployment', deploymentId] });
+								refreshPodsLive();
 							}}
 							{podLabel}
 						/>

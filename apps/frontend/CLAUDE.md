@@ -281,14 +281,16 @@ Three-level hierarchy: **Org cap** → **Member allowance** → **Deployment req
   (`SettingsRail`, `?s=`). Old ids (`metrics`, `environment`, `resources`, `volumes`, `build`,
   `advanced`) still resolve.
 - Overview fills exactly one viewport at 64rem wide and 40rem tall or more (`dep-shell--fit`): the
-  console takes the height and scrolls inside, the rail is `UsageCard` (CPU and memory as `Metric`
-  with rolling digits and a `Sparkline` seeded from `/metrics` then extended by SSE) over `PodsCard`
-  (replica `Stepper`, pods as `ListRow`s that scroll inside the card). Below that size it scrolls.
+  console takes the left column at full height; the right column is `MetricsRail` (CPU, memory,
+  requests and error rate as small `Metric` tiles with sparklines seeded from `/metrics` and
+  `/http-metrics`) over `PodsTable` (compact sortable `Table`, replica `Stepper`, a `PodMenu` per row
+  that also opens on right-click). Below that size it scrolls. Nodes and other infrastructure stay hidden.
+- Problems show as one `AlertStack` line above the panels; it expands to the full list.
 - Live values land instantly; motion is the decorative layer on top (`NumberRoll`, `stateEcho` on pod
   status, the sparkline growing), never a tween that delays the number.
 - `NextSteps` is a "Set up" button with a progress ring in the header, opening a popover.
-- `DeploymentAlerts` renders kit `Alert`s above the panels for build failures, pod crashes, resource
-  pressure and SSE disconnect; `humanizeWarning()` in `$lib/utils/format.ts` writes the copy.
+- `DeploymentAlerts` feeds `AlertStack` with build failures, pod crashes, resource pressure and SSE
+  disconnect; `humanizeWarning()` in `$lib/utils/format.ts` writes the copy.
 - SSE drives real-time updates; TanStack Query with adaptive polling as fallback.
 
 ## Running without a backend
@@ -304,6 +306,11 @@ provisioning).
   events as the server, so redeploys, restarts, scaling, env edits, job runs and backups update the UI on
   their own. A redeploy walks queued, cloning, building, pushing, deploying, running over about 20s.
   The Observe log stream, build log stream and pod shell (`ws`, a toy shell) work too.
+- **Pod states:** every pod can be put into a Kubernetes scenario (crash loop, out of memory, image pull
+  failure, missing secret, unschedulable, failing readiness, terminating, evicted) from the flask
+  button on an app's Pods card, or `POST /apiv1/__mock/deployments/:id/pods` with `{ scenario, index? }`.
+  `mock/scenarios.ts` produces the same status, termination, warnings and events the server does, so
+  alerts and pod labels behave as they will in production. `__ORCHARD_MOCK__` is true only in mock mode.
 - **Sign out** makes every non-auth route 401 until you click "Continue as alfd (mock)" on the login
   page (any email and 6-digit code also work).
 - **Data** is seeded in `mock/seed.ts` (entity types in `mock/types.ts`). State lives in `mock/store.ts`,

@@ -9,7 +9,9 @@
 		detail = undefined,
 		tone = 'neutral',
 		chart = undefined,
-		roll = false
+		roll = false,
+		stretch = false,
+		size = 'md'
 	}: {
 		label: string;
 		value: string | number;
@@ -18,10 +20,12 @@
 		tone?: 'neutral' | 'success' | 'warning' | 'error';
 		chart?: Snippet;
 		roll?: boolean;
+		stretch?: boolean;
+		size?: 'sm' | 'md';
 	} = $props();
 </script>
 
-<div class="metric">
+<div class="metric metric--{size}" class:metric--stretch={stretch}>
 	<span class="label">{label}</span>
 	<span class="value-line">
 		<span class="value"
@@ -58,6 +62,15 @@
 		color: var(--text-default);
 		font-variant-numeric: tabular-nums;
 	}
+	.metric--sm .value {
+		font-size: var(--text-title-3);
+		line-height: var(--lh-title-3);
+	}
+	.metric--sm .detail {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
 	.unit {
 		font-size: var(--text-callout);
 		color: var(--text-muted);
@@ -79,5 +92,12 @@
 	}
 	.chart {
 		margin-top: 0.5rem;
+	}
+	.metric--stretch {
+		height: 100%;
+	}
+	.metric--stretch .chart {
+		margin-top: auto;
+		padding-top: 0.5rem;
 	}
 </style>
