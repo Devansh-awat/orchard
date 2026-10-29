@@ -1,0 +1,430 @@
+{{- define "orchard.vectorConfig" -}}
+data_dir: /var/lib/vector
+
+api:
+  enabled: true
+  address: 0.0.0.0:8686
+
+enrichment_tables:
+  tenant_namespaces:
+    type: memory
+    ttl: 604800
+    flush_interval: 10
+    inputs: [tenant_namespace_marker]
+
+sources:
+  tenant:
+    type: kubernetes_logs
+    extra_namespace_label_selector: "orchard.my/managed=true"
+    glob_minimum_cooldown_ms: 1000
+  tenant_legacy:
+    type: kubernetes_logs
+    extra_namespace_label_selector: "orchard.dev/managed=true,!orchard.my/managed"
+    glob_minimum_cooldown_ms: 1000
+  ingress:
+    type: kubernetes_logs
+    extra_label_selector: "app.kubernetes.io/name in (kubernetes-ingress,traefik)"
+    glob_minimum_cooldown_ms: 1000
+
+transforms:
+  tenant_shape:
+    type: remap
+    inputs: [tenant, tenant_legacy]
+    drop_on_error: true
+    source: |
+      labels = object(.kubernetes.pod_labels) ?? {}
+      msg = to_string(.message) ?? ""
+      app = string(labels."orchard.my/app") ?? string(labels."app.kubernetes.io/name") ?? string(labels.app) ?? string(.kubernetes.container_name) ?? ""
+
+      level = null
+      if starts_with(msg, "{") {
+        parsed, err = parse_json(msg)
+        if err == null && is_object(parsed) {
+          raw = parsed.level || parsed.severity || parsed.lvl || parsed.loglevel || parsed."log.level"
+          if is_integer(raw) || is_float(raw) {
+            n = to_int(raw) ?? 30
+            level = if n >= 50 { "error" } else if n >= 40 { "warn" } else if n >= 30 { "info" } else { "debug" }
+          } else if is_string(raw) {
+            level = downcase(string!(raw))
+          }
+        }
+      }
+      if level == null {
+        kv = parse_regex(msg, r'(?i)\b(?:level|lvl|severity)=["]?(?P<level>[a-z]+)') ?? {}
+        level = if exists(kv.level) { downcase(string!(kv.level)) } else { null }
+      }
+      if level == null {
+        head = slice(msg, 0, 240) ?? msg
+        level = if match(head, r'\b(FATAL|PANIC|CRITICAL|CRIT|ERROR|ERR)\b') || match(head, r'(?i)^\W*(\S+\s+){0,3}\[?(error|fatal|panic|critical)\b') || starts_with(head, "Traceback (most recent call last)") {
+          "error"
+        } else if match(head, r'\b(WARN|WARNING)\b') || match(head, r'(?i)^\W*(\S+\s+){0,3}\[?(warn|warning)\b') {
+          "warn"
+        } else if match(head, r'\b(DEBUG|TRACE)\b') {
+          "debug"
+        } else {
+          "info"
+        }
+      }
+      level = string(level) ?? "info"
+      level = if includes(["err", "fatal", "panic", "critical", "crit", "alert", "emerg", "emergency", "severe"], level) {
+        "error"
+      } else if includes(["warning"], level) {
+        "warn"
+      } else if includes(["trace", "verbose", "silly"], level) {
+        "debug"
+      } else if includes(["notice", "information", "informational"], level) {
+        "info"
+      } else if includes(["error", "warn", "info", "debug"], level) {
+        level
+      } else {
+        "info"
+      }
+
+      . = compact({
+        "timestamp": .timestamp,
+        "message": msg,
+        "namespace": .kubernetes.pod_namespace,
+        "pod": .kubernetes.pod_name,
+        "container": .kubernetes.container_name,
+        "node": .kubernetes.pod_node_name,
+        "app": app,
+        "slot": labels."orchard.my/slot",
+        "stream": .stream,
+        "kind": "app",
+        "level": level
+      })
+
+  tenant_namespace_marker:
+    type: remap
+    inputs: [tenant_shape]
+    drop_on_error: true
+    source: |
+      . = set!({}, [string!(.namespace)], true)
+
+  ingress_shape:
+    type: remap
+    inputs: [ingress]
+    drop_on_error: true
+    drop_on_abort: true
+    source: |
+      msg = to_string(.message) ?? ""
+      if !starts_with(msg, "{") { abort }
+      p, err = parse_json(msg)
+      if err != null || !is_object(p) { abort }
+
+      nullish = ["", "-"]
+      text = {}
+      status = 0
+      duration_ms = 0.0
+      bytes = 0
+      ts = .timestamp
+      namespace = null
+      service = ""
+      if exists(p.RequestMethod) || exists(p.ServiceName) {
+        text.host = string(p.RequestHost) ?? ""
+        text.method = string(p.RequestMethod) ?? ""
+        text.path = string(p.RequestPath) ?? ""
+        text.client_ip = string(p.ClientHost) ?? ""
+        text.user_agent = string(p."request_User-Agent") ?? ""
+        text.backend = string(p.ServiceName) ?? ""
+        status = to_int(p.DownstreamStatus) ?? 0
+        duration_ms = (to_float(p.Duration) ?? 0.0) / 1000000.0
+        bytes = to_int(p.DownstreamContentSize) ?? 0
+        ts = parse_timestamp(string(p.StartUTC) ?? "", "%+") ?? .timestamp
+
+        name = text.backend
+        at = int(find(name, "@")) ?? -1
+        if at >= 0 { name = slice!(name, 0, at) }
+        parts = split(name, "-")
+        acc = ""
+        namespace = null
+        for_each(parts) -> |i, part| {
+          acc = if i == 0 { part } else { acc + "-" + part }
+          _, missing = get_enrichment_table_record("tenant_namespaces", {"key": acc})
+          if missing == null && i < length(parts) - 2 { namespace = acc }
+        }
+        if namespace == null { abort }
+        rest = slice!(name, length(string!(namespace)) + 1)
+        m = parse_regex(rest, r'^(?P<svc>.+)-[^-]*$') ?? {}
+        service = string(m.svc) ?? rest
+      } else {
+        text.host = string(p.host) ?? ""
+        text.method = string(p.method) ?? ""
+        text.path = string(p.path) ?? ""
+        text.client_ip = string(p.client_ip) ?? ""
+        text.user_agent = string(p.user_agent) ?? ""
+        text.backend = string(p.backend) ?? ""
+        text.server = string(p.server) ?? ""
+        status = to_int(p.status) ?? 0
+        duration_ms = to_float(p.duration_ms) ?? 0.0
+        bytes = to_int(p.bytes) ?? 0
+        ms = to_int(p.ts_ms) ?? 0
+        if ms > 0 { ts = from_unix_timestamp(ms, unit: "milliseconds") ?? .timestamp }
+
+        marker = int(find(text.backend, "_svc_")) ?? -1
+        if marker <= 0 { abort }
+        namespace = slice!(text.backend, 0, marker)
+        rest = slice!(text.backend, marker + 5)
+        m = parse_regex(rest, r'^(?P<svc>.+)_[^_]*$') ?? {}
+        service = string(m.svc) ?? rest
+      }
+
+      text = map_values(text) -> |v| { if includes(nullish, v) { null } else { v } }
+      path = string(text.path) ?? "/"
+      q = int(find(path, "?")) ?? -1
+      if q >= 0 { path = slice!(path, 0, q) }
+      h = int(find(path, "#")) ?? -1
+      if h >= 0 { path = slice!(path, 0, h) }
+      if path == "" { path = "/" }
+      segments = map_values(split(path, "/")) -> |s| {
+        if match(s, r'^\d+$') ||
+          match(s, r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$') ||
+          match(s, r'^[0-9a-fA-F]{16,}$') ||
+          (match(s, r'^[A-Za-z0-9_-]{20,}$') && match(s, r'\d')) ||
+          (match(s, r'^[A-Za-z0-9]{8,}$') && match(s, r'\d.*\d.*\d')) {
+          ":id"
+        } else {
+          s
+        }
+      }
+      route = join(segments, "/")
+
+      level = if status >= 500 { "error" } else if status >= 400 { "warn" } else { "info" }
+      method = string(text.method) ?? "-"
+      host = string(text.host) ?? ""
+      line = method + " " + host + path + " " + to_string(status) + " " + to_string(round(duration_ms, 1)) + "ms"
+
+      . = compact({
+        "timestamp": ts,
+        "message": line,
+        "namespace": namespace,
+        "app": replace(service, r'--green$', ""),
+        "service": service,
+        "kind": "access",
+        "level": level,
+        "host": text.host,
+        "method": text.method,
+        "path": path,
+        "route": route,
+        "status": status,
+        "duration_ms": duration_ms,
+        "bytes": bytes,
+        "client_ip": text.client_ip,
+        "user_agent": text.user_agent,
+        "backend": text.backend,
+        "server": text.server,
+        "ingress_pod": .kubernetes.pod_name
+      })
+
+sinks:
+  victorialogs:
+    type: http
+    inputs: [tenant_shape, ingress_shape]
+    uri: http://victorialogs.{{ .Values.metrics.namespace }}.svc.cluster.local:9428/insert/jsonline?_stream_fields=namespace,app,kind&_msg_field=message&_time_field=timestamp
+    method: post
+    compression: gzip
+    encoding:
+      codec: json
+    framing:
+      method: newline_delimited
+    healthcheck:
+      enabled: false
+    batch:
+      max_bytes: 4194304
+      timeout_secs: 2
+    buffer:
+      type: memory
+      max_events: {{ .Values.logs.vector.bufferEvents }}
+      when_full: drop_newest
+    request:
+      retry_attempts: 10
+{{- end -}}
+{{- if .Values.logs.enabled }}
+{{- $ns := .Values.metrics.namespace -}}
+{{- if not .Values.metrics.enabled }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $ns }}
+  labels:
+    app.kubernetes.io/part-of: orchard-metrics
+    pod-security.kubernetes.io/enforce: privileged
+---
+{{- end }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: victorialogs
+  namespace: {{ $ns }}
+  labels:
+    app: victorialogs
+spec:
+  type: ClusterIP
+  ports:
+    - { name: http, port: 9428, targetPort: 9428, protocol: TCP }
+  selector:
+    app: victorialogs
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: victorialogs
+  namespace: {{ $ns }}
+  labels:
+    app: victorialogs
+spec:
+  serviceName: victorialogs
+  replicas: 1
+  selector:
+    matchLabels:
+      app: victorialogs
+  template:
+    metadata:
+      labels:
+        app: victorialogs
+    spec:
+      securityContext:
+        fsGroup: 1000
+      containers:
+        - name: victorialogs
+          image: {{ .Values.logs.victorialogs.image }}
+          args:
+            - "-storageDataPath=/data"
+            - "-retentionPeriod={{ .Values.logs.retention }}"
+            - "-retention.maxDiskSpaceUsageBytes={{ .Values.logs.maxDiskSpaceUsage }}"
+            - "-httpListenAddr=:9428"
+            - "-search.maxQueryDuration=30s"
+            - "-loggerLevel=INFO"
+          ports:
+            - { name: http, containerPort: 9428 }
+          volumeMounts:
+            - { name: data, mountPath: /data }
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.logs.victorialogs.resources | nindent 12 }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: {{ .Values.logs.victorialogs.storage.storageClass }}
+        resources:
+          requests:
+            storage: {{ .Values.logs.victorialogs.storage.size }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vector
+  namespace: {{ $ns }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Name }}-vector
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "namespaces", "nodes"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Name }}-vector
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Release.Name }}-vector
+subjects:
+  - kind: ServiceAccount
+    name: vector
+    namespace: {{ $ns }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vector-config
+  namespace: {{ $ns }}
+data:
+  vector.yaml: |
+    {{- include "orchard.vectorConfig" . | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: vector
+  namespace: {{ $ns }}
+  labels:
+    app: vector
+spec:
+  selector:
+    matchLabels:
+      app: vector
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: vector
+      annotations:
+        checksum/config: {{ include "orchard.vectorConfig" . | sha256sum }}
+    spec:
+      serviceAccountName: vector
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: vector
+          image: {{ .Values.logs.vector.image }}
+          args: ["--config-dir", "/etc/vector/"]
+          env:
+            - name: VECTOR_SELF_NODE_NAME
+              valueFrom:
+                fieldRef: { fieldPath: spec.nodeName }
+            - name: VECTOR_SELF_POD_NAME
+              valueFrom:
+                fieldRef: { fieldPath: metadata.name }
+            - name: VECTOR_SELF_POD_NAMESPACE
+              valueFrom:
+                fieldRef: { fieldPath: metadata.namespace }
+            - { name: VECTOR_LOG, value: info }
+          ports:
+            - { name: api, containerPort: 8686 }
+          readinessProbe:
+            httpGet: { path: /health, port: api }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: api }
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          volumeMounts:
+            - { name: config,   mountPath: /etc/vector, readOnly: true }
+            - { name: data,     mountPath: /var/lib/vector }
+            - { name: var-log,  mountPath: /var/log, readOnly: true }
+          resources:
+            {{- toYaml .Values.logs.vector.resources | nindent 12 }}
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+              add: ["DAC_READ_SEARCH"]
+      volumes:
+        - name: config
+          configMap: { name: vector-config }
+        - name: data
+          hostPath: { path: {{ .Values.logs.vector.dataDir }}, type: DirectoryOrCreate }
+        - name: var-log
+          hostPath: { path: /var/log }
+{{- end }}

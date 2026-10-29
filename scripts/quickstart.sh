@@ -41,6 +41,9 @@ helm upgrade --install traefik traefik/traefik \
   --namespace traefik --create-namespace \
   --set providers.kubernetesGateway.enabled=true \
   --set gateway.enabled=false \
+  --set accessLog.enabled=true \
+  --set accessLog.format=json \
+  --set accessLog.fields.headers.names.User-Agent=keep \
   --wait
 
 step "Installing CloudNativePG operator"

@@ -352,6 +352,12 @@ true
                   key: token
             - { name: MAX_CONCURRENT_FC_BUILDS, value: {{ .Values.fcBuilder.maxConcurrentBuilds | quote }} }
             {{- end }}
+            {{- if and .Values.metrics.enabled (not (include "orchard.serverEnvHas" (dict "root" . "key" "VICTORIAMETRICS_URL"))) }}
+            - { name: VICTORIAMETRICS_URL, value: {{ printf "http://victoriametrics.%s.svc.cluster.local:8428" .Values.metrics.namespace | quote }} }
+            {{- end }}
+            {{- if and .Values.logs.enabled (not (include "orchard.serverEnvHas" (dict "root" . "key" "VICTORIALOGS_URL"))) }}
+            - { name: VICTORIALOGS_URL, value: {{ printf "http://victorialogs.%s.svc.cluster.local:9428" .Values.metrics.namespace | quote }} }
+            {{- end }}
             {{- if .Values.r2Proxy.enabled }}
             - { name: BACKUP_PROXY_ENABLED, value: "true" }
             - name: BACKUP_PROXY_ENDPOINT

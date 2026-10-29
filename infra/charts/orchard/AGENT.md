@@ -76,7 +76,7 @@ metrics:
 |--------------------|-----------|
 | `orchard`          | `frontend` / `server` Deployments + Services, Traefik `IngressRoute`, CNPG `Cluster` (`orchard-db`) |
 | `orchard-builders` | SA, RBAC, Harbor + R2 secrets, BuildKit ConfigMap, ResourceQuota, LimitRange, NetworkPolicy |
-| `orchard-metrics`  | VictoriaMetrics StatefulSet, vmagent, kube-state-metrics, node-exporter DaemonSet |
+| `orchard-metrics`  | VictoriaMetrics StatefulSet, vmagent, kube-state-metrics, node-exporter DaemonSet, VictoriaLogs StatefulSet, Vector DaemonSet |
 | cluster-scoped     | `ClusterRole`/`ClusterRoleBinding` for builder management and metrics scraping |
 
 The server deployment gets `DATABASE_URL` injected automatically from the
@@ -316,6 +316,34 @@ sandbox:
 
 This stack is the largest idle cost in the chart. `metrics.enabled: false` empties the deployment metrics graphs and usage pages and leaves everything else working.
 
+The server gets `VICTORIAMETRICS_URL` built from `metrics.namespace` (port 8428) whenever the stack is on, so moving the namespace no longer leaves it pointing at `orchard-metrics`. Set it in `server.env` to point somewhere else; a value only in `server.envFrom` is shadowed by the chart's.
+
+The vmagent config also scrapes CNPG's per-instance exporter (pods labelled `cnpg.io/cluster`, port `metrics`) for backends, replication lag, database size and WAL archiver series, with `namespace`, `pod` and `cluster` labels. That job sets `honor_labels` so the CNPG cluster name survives the global `cluster` external label.
+
+### Logs (`logs.*`)
+
+VictoriaLogs plus a Vector DaemonSet, in `metrics.namespace` but toggled independently (the namespace is created here when `metrics.enabled` is false). Vector tails pods in namespaces labelled `orchard.my/managed=true` (and the legacy `orchard.dev/managed=true`) and the ingress controller's pods (`app.kubernetes.io/name in (kubernetes-ingress,traefik)`), and ships them to `/insert/jsonline` with `namespace,app,kind` as stream fields.
+
+| Key | Default | Description |
+|---|---|---|
+| `logs.enabled` | `true` | Install VictoriaLogs + Vector and inject `VICTORIALOGS_URL` (`http://victorialogs.<metrics.namespace>.svc.cluster.local:9428`) into the server. |
+| `logs.retention` | `14d` | `-retentionPeriod`. |
+| `logs.maxDiskSpaceUsage` | `16GiB` | `-retention.maxDiskSpaceUsageBytes`. Oldest days are dropped past this whatever the retention says. Keep it below the PVC size. |
+| `logs.victorialogs.image` | `victoriametrics/victoria-logs:v1.53.0` | VictoriaLogs image. |
+| `logs.victorialogs.storage.size` / `storageClass` | `20Gi` / `longhorn` | StatefulSet PVC. |
+| `logs.victorialogs.resources` | requests `100m/256Mi`, limits `1/1Gi` | Resource block. |
+| `logs.vector.image` | `timberio/vector:0.60.0-distroless-libc` | Vector image. |
+| `logs.vector.dataDir` | `/var/lib/vector-orchard` | Host directory for file checkpoints, so a restarted pod resumes instead of re-shipping. |
+| `logs.vector.bufferEvents` | `20000` | In-memory sink buffer. When VictoriaLogs is down this fills and the newest events are dropped rather than back-pressuring the tail. |
+| `logs.vector.resources` | requests `50m/128Mi`, limits `500m/512Mi` | Resource block. |
+
+Each record carries `namespace`, `app` (pod label `orchard.my/app`, then `app.kubernetes.io/name`, then `app`), `kind` and `level` (`error`/`warn`/`info`/`debug`, read from JSON `level`/`severity` including pino numbers, then `level=` logfmt, then keywords). App logs (`kind=app`) also carry `pod`, `container`, `node`, `stream` and `slot` (`orchard.my/slot`, blue/green). Access logs (`kind=access`) carry `host`, `method`, `path` (query stripped), `route` (ids collapsed to `:id`, same rules as `normalizeRoute` in `apps/server/src/logs/logsql.ts`), `status`, `duration_ms`, `bytes`, `client_ip`, `user_agent`, `backend`, `service`, `server` and `ingress_pod`.
+
+Access logs need the controller to log JSON:
+
+- **HAProxy** (haproxytech kubernetes-ingress): set `controller.config.log-format` to a `%{+json}o` format with the field names above (`ts_ms`, `host`, `method`, `path`, `status`, `duration_ms`, `bytes`, `client_ip`, `user_agent`, `backend`, `server`) and capture host and UA into `txn.host`/`txn.ua` from `frontend-config-snippet`. The backend `<ns>_svc_<service>_<port>` gives namespace and service. Lines are capped at the log target's length (1024 bytes by default), so a very long path or UA truncates the JSON and that request is dropped.
+- **Traefik**: `logs.access.enabled=true`, `logs.access.format=json` and `logs.access.fields.headers.names.User-Agent=keep` (the installer sets these). `ServiceName` (`<ns>-<service>-<port>@kubernetes`) does not mark where the namespace ends, so Vector matches its prefixes against tenant namespaces it has seen logs from in the last 7 days; access lines for an app whose namespace has logged nothing in that window are dropped.
+
 ### Gateway (`gateway.*`)
 
 Renders the shared Gateway API `Gateway` objects and `ReferenceGrant`s that used to live in `k8s/gateway-api/`.
@@ -427,6 +455,7 @@ Disable any component you don't want:
 postgres:  { enabled: false }   # if you bring your own DB; then set server.env.DATABASE_URL
 builders:  { enabled: false }
 metrics:   { enabled: false }
+logs:      { enabled: false }
 ingress:   { enabled: false }
 mcp:       { enabled: false }   # also pins the admin panel's MCP toggle off
 ```

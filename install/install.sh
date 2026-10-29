@@ -991,6 +991,9 @@ install_operators() {
     --set service.spec.type="$traefik_service" \
     --set ports.web.exposedPort="$HTTP_PORT" \
     --set ports.websecure.exposedPort="$HTTPS_PORT" \
+    --set accessLog.enabled=true \
+    --set accessLog.format=json \
+    --set accessLog.fields.headers.names.User-Agent=keep \
     --wait --timeout 10m
 
   run_step "CloudNativePG" 1m helm upgrade --install cnpg cnpg/cloudnative-pg \

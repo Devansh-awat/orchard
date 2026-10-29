@@ -406,6 +406,34 @@ metrics:
       requests: { cpu: "20m", memory: "32Mi" }
       limits: { cpu: "200m", memory: "128Mi" }
 
+# In-app log store: VictoriaLogs (single node) fed by a Vector DaemonSet that
+# tails tenant pods and the ingress controller's JSON access log. Lives in
+# metrics.namespace but is toggled on its own. Powers the Logs tab search and
+# per-route HTTP stats; live tailing still reads the pod log stream directly.
+logs:
+  enabled: true
+  retention: 14d
+  # Oldest daily partitions are dropped once the store exceeds this, whatever
+  # the retention says. Keep it under storage.size.
+  maxDiskSpaceUsage: 16GiB
+  victorialogs:
+    image: victoriametrics/victoria-logs:v1.53.0
+    resources:
+      requests: { cpu: "100m", memory: "256Mi" }
+      limits: { cpu: "1", memory: "1Gi" }
+    storage:
+      size: 20Gi
+      storageClass: longhorn
+  vector:
+    image: timberio/vector:0.60.0-distroless-libc
+    # Host directory for file checkpoints, so a restarted pod resumes where it
+    # left off instead of re-shipping every file.
+    dataDir: /var/lib/vector-orchard
+    bufferEvents: 20000
+    resources:
+      requests: { cpu: "50m", memory: "128Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
+
 # Shared L7 Gateway API gateway for app HTTP/HTTPS traffic.
 # Replaces the raw manifest that used to live at k8s/gateway-api/10-http-gateway.yaml.
 # Custom-domain HTTPS listeners are appended at runtime by the server

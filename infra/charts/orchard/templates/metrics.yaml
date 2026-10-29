@@ -344,7 +344,7 @@ data:
             target_label: node
         metric_relabel_configs:
           - source_labels: [__name__]
-            regex: 'container_(cpu_usage_seconds_total|memory_working_set_bytes|memory_rss|memory_usage_bytes|network_receive_bytes_total|network_transmit_bytes_total|network_receive_packets_dropped_total|network_transmit_packets_dropped_total|fs_usage_bytes|fs_limit_bytes)'
+            regex: 'container_(cpu_usage_seconds_total|cpu_cfs_throttled_periods_total|cpu_cfs_periods_total|memory_working_set_bytes|memory_rss|memory_usage_bytes|network_receive_bytes_total|network_transmit_bytes_total|network_receive_packets_dropped_total|network_transmit_packets_dropped_total|fs_usage_bytes|fs_limit_bytes)'
             action: keep
           - source_labels: [__name__, container]
             regex: 'container_(cpu|memory|fs)_.*;POD'
@@ -458,6 +458,27 @@ data:
         metric_relabel_configs:
           - source_labels: [__name__]
             regex: 'traefik_service_(requests_total|request_duration_seconds_(bucket|sum|count))'
+            action: keep
+
+      - job_name: cnpg
+        honor_labels: true
+        kubernetes_sd_configs: [{ role: pod }]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_cnpg_io_cluster]
+            regex: .+
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_container_port_name]
+            regex: metrics
+            action: keep
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+          - source_labels: [__meta_kubernetes_pod_label_cnpg_io_cluster]
+            target_label: cluster
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: 'cnpg_(backends_total|pg_replication_lag|pg_database_size_bytes|collector_.*|pg_stat_archiver_.*)'
             action: keep
 ---
 apiVersion: v1
