@@ -137,7 +137,8 @@ export const EVENT_GROUPS: {
 		category: 'deploys',
 		options: [
 			{ value: 'deploy.succeeded', label: 'Succeeded', tone: 'ok' },
-			{ value: 'deploy.failed', label: 'Failed', tone: 'fail' }
+			{ value: 'deploy.failed', label: 'Failed', tone: 'fail' },
+			{ value: 'deploy.regressed', label: 'Got worse', tone: 'fail' }
 		]
 	},
 	{
@@ -236,6 +237,7 @@ const SCOPE_EVENTS: Record<NotificationScopeType, string[] | null> = {
 	deployment: [
 		'deploy.succeeded',
 		'deploy.failed',
+		'deploy.regressed',
 		'pod.crashing',
 		'pod.recovered',
 		'alert.firing',

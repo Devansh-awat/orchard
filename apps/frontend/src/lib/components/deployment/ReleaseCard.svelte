@@ -23,6 +23,7 @@
 	import Tooltip from '$lib/components/ui/Tooltip.svelte';
 	import Widget from '$lib/components/ui/Widget.svelte';
 	import type { Deployment } from '$lib/types/deployment';
+	import { verdictBadge, verdictText, worthShowing } from './verdict';
 	import {
 		buildStartedAt,
 		humanizeStep,
@@ -70,6 +71,15 @@
 	const previousRef = $derived(shortRef(previous));
 	const buildError = $derived(deployment.buildError?.split('\n')[0]?.trim() || null);
 	const titled = $derived(!!live && live.title !== shortRef(live));
+	const verdict = $derived(
+		deployment.latestVerdict &&
+			liveId &&
+			deployment.latestVerdict.imageHistoryId === liveId &&
+			worthShowing(deployment.latestVerdict)
+			? deployment.latestVerdict
+			: null
+	);
+	const badge = $derived(verdict ? verdictBadge(verdict) : null);
 	const liveFacts = $derived.by(() => {
 		if (!live) return [];
 		const sha = str(live.meta.commitSha);
@@ -158,9 +168,18 @@
 					{#snippet title()}
 						<span class="name" class:name--mono={!titled} title={live.title}>{live.title}</span>
 						<StatusBadge meta={statusMeta('success', 'Live')} />
+						{#if badge}<StatusBadge meta={badge} />{/if}
 					{/snippet}
 					{#snippet meta()}
-						<MetaList items={liveFacts} />
+						{#if verdict}
+							<span
+								class="verdict"
+								class:verdict--worse={verdict.status === 'regressed'}
+								title={verdictText(verdict)}>{verdictText(verdict)}</span
+							>
+						{:else}
+							<MetaList items={liveFacts} />
+						{/if}
 						<span class="who">{originLabel(live)} · <RelativeTime date={live.at} /></span>
 					{/snippet}
 					{#snippet actions()}
@@ -234,6 +253,15 @@
 	.timer :global(svg) {
 		width: 14px;
 		height: 14px;
+	}
+	.verdict {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		color: var(--text-default);
+	}
+	.verdict--worse {
+		color: var(--status-warning);
 	}
 	.error {
 		min-width: 0;

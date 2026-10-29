@@ -211,6 +211,28 @@ function service(store: Store, d: MockDeployment) {
 	};
 }
 
+function mockVerdict(store: Store, d: MockDeployment) {
+	if (d.name !== 'api') return null;
+	const live = store.buildsOf(d.id).find((b) => b.isActive);
+	if (!live) return null;
+	const version = live.commitSha
+		? live.commitSha.slice(0, 7)
+		: (live.image.split(':').at(-1) ?? '');
+	return {
+		releaseId: `release:${live.id}`,
+		imageHistoryId: live.id,
+		at: new Date(Date.now() - 40 * 60_000).toISOString(),
+		status: 'regressed',
+		summary: `${version}: responses 38% slower (p95 180 → 248 ms); errors unchanged`,
+		version,
+		lines: [
+			{ dimension: 'p95', status: 'regressed', text: 'Responses 38% slower (p95 180 → 248 ms)' },
+			{ dimension: 'errors', status: 'unchanged', text: 'Errors unchanged' }
+		],
+		newErrorGroups: 0
+	};
+}
+
 function imageHistory(store: Store, d: MockDeployment) {
 	return store
 		.buildsOf(d.id)
@@ -324,6 +346,7 @@ export function deploymentDetail(store: Store, d: MockDeployment) {
 		pods: pods.map(stripMock),
 		warnings: warnings(store, d),
 		rollout: rolloutOf(store, d),
+		latestVerdict: mockVerdict(store, d),
 		services: [svc],
 		ingresses: ingress(d).map((i) => ({
 			...i,
@@ -956,6 +979,20 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 					};
 				})
 		}))
+	);
+	r.get(
+		'/deployments/:id/releases',
+		withDep((d) => {
+			const verdict = mockVerdict(store, d);
+			return store.buildsOf(d.id).map((b) => ({
+				id: `release:${b.id}`,
+				imageHistoryId: b.id,
+				image: b.image,
+				status: b.isActive ? 'live' : 'superseded',
+				promotedAt: b.buildCompletedAt ?? b.createdAt,
+				verdict: verdict && verdict.imageHistoryId === b.id ? verdict : null
+			}));
+		})
 	);
 	r.get(
 		'/observe/deployments/:id/changes',

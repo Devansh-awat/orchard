@@ -18,6 +18,8 @@
 	import Tooltip from '$lib/components/ui/Tooltip.svelte';
 	import type { StatusMeta } from '$lib/components/ui';
 	import type { DotStep } from '$lib/components/ui/StatusDot.svelte';
+	import { statusMeta } from '$lib/components/ui/status';
+	import { headerVerdict } from './verdict';
 
 	let {
 		deployment,
@@ -110,6 +112,10 @@
 				}`
 			: null
 	);
+	const verdictChip = $derived.by(() => {
+		const label = headerVerdict(deployment.latestVerdict, Date.now());
+		return label ? statusMeta('warning', label) : null;
+	});
 	const primaryDomain = $derived(deployment.ingresses?.[0] ?? null);
 	const extraDomains = $derived(Math.max(0, (deployment.ingresses?.length ?? 0) - 1));
 	const shortSha = $derived(_activeBuild?.commitSha ? _activeBuild.commitSha.slice(0, 7) : null);
@@ -131,6 +137,8 @@
 		{/if}
 		{#if deployChip}
 			<StatusBadge meta={deployChip.meta} tone={deployChip.tone} steps={deployChip.steps} />
+		{:else if verdictChip}
+			<StatusBadge meta={verdictChip} />
 		{/if}
 		{#if deployment.environment}
 			<Badge>{deployment.environment.name}</Badge>

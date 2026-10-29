@@ -10,7 +10,7 @@
 		ScrollText,
 		Settings2
 	} from 'lucide-svelte';
-	import { createInfiniteQuery } from '@tanstack/svelte-query';
+	import { createInfiniteQuery, createQuery } from '@tanstack/svelte-query';
 	import { queryClient } from '$lib/query';
 	import { apiFetch, selectedOrganization, subscribeOrgEvents } from '$lib/stores';
 	import { stateEcho } from '$lib/utils/motion.svelte';
@@ -32,6 +32,7 @@
 	import Widget from '$lib/components/ui/Widget.svelte';
 	import type { Deployment } from '$lib/types/deployment';
 	import ReleaseCard from './ReleaseCard.svelte';
+	import { verdictBadge, verdictText, worthShowing, type ReleaseVerdict } from './verdict';
 	import {
 		DEFAULT_FILTER,
 		TIMELINE_FILTERS,
@@ -92,6 +93,27 @@
 		refetchInterval: 60_000,
 		refetchIntervalInBackground: false
 	}));
+
+	const releaseVerdicts = createQuery(() => ({
+		queryKey: ['release-verdicts', deployment.id],
+		queryFn: async () => {
+			const res = await apiFetch(`/apiv1/deployments/${deployment.id}/releases?limit=50`);
+			if (!res.ok) return new Map<string, ReleaseVerdict>();
+			const rows = (await res.json()) as {
+				imageHistoryId: string | null;
+				verdict: ReleaseVerdict | null;
+			}[];
+			const out = new Map<string, ReleaseVerdict>();
+			for (const r of rows) {
+				if (r.imageHistoryId && worthShowing(r.verdict)) out.set(r.imageHistoryId, r.verdict);
+			}
+			return out;
+		},
+		enabled: !!deployment.id,
+		refetchInterval: 5 * 60_000,
+		refetchIntervalInBackground: false
+	}));
+	const verdicts = $derived(releaseVerdicts.data ?? new Map<string, ReleaseVerdict>());
 
 	const entries = $derived(flattenPages(timeline.data?.pages));
 	const rows = $derived(collapsePodRuns(entries));
@@ -232,6 +254,11 @@
 								{@const sha = str(entry.meta.commitSha)}
 								{@const imageHistoryId = str(entry.meta.imageHistoryId)}
 								{@const who = actorLabel(entry)}
+								{@const verdict =
+									entry.kind === 'release' && imageHistoryId
+										? verdicts.get(imageHistoryId)
+										: undefined}
+								{@const vBadge = verdict ? verdictBadge(verdict) : null}
 								<ActivityRow
 									tone={badge.kind}
 									muted={entry.kind === 'pod' || entry.kind === 'build'}
@@ -266,12 +293,21 @@
 										>
 										{#if entry.kind === 'release' && entry.meta.isActive}
 											<StatusBadge meta={statusMeta('success', 'Live')} />
+										{/if}
+										{#if vBadge}
+											<StatusBadge meta={vBadge} />
 										{:else if entry.kind === 'build'}
 											<StatusBadge meta={statusMeta(badge.kind, badge.label, badge.pulse)} />
 										{/if}
 									{/snippet}
 									{#snippet meta()}
-										{#if entry.kind === 'release' || entry.kind === 'build'}
+										{#if verdict}
+											<span
+												class="tl-clip"
+												class:tl-worse={verdict.status === 'regressed'}
+												title={verdictText(verdict)}>{verdictText(verdict)}</span
+											>
+										{:else if entry.kind === 'release' || entry.kind === 'build'}
 											{#if branch}<span>{branch}</span>{/if}
 											{#if sha}
 												{#if branch}<span aria-hidden="true">·</span>{/if}
@@ -406,6 +442,9 @@
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
+	}
+	.tl-worse {
+		color: var(--status-warning);
 	}
 	.tl-more {
 		display: flex;

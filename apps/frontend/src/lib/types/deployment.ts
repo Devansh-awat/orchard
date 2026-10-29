@@ -150,6 +150,7 @@ export interface Deployment {
 	services?: Service[];
 	ingresses?: Ingress[];
 	imageHistory?: ImageHistory[];
+	latestVerdict?: import('$lib/components/deployment/verdict').ReleaseVerdict | null;
 	dockerfileTarget?: string | null;
 	githubRepo?: string;
 	githubBranch?: string;
