@@ -303,6 +303,10 @@ Three-level hierarchy: **Org cap** → **Member allowance** → **Deployment req
   and metrics from the Kubernetes API itself, so it runs once on load and after a scale, never per event.
   The detail query polls every 60s only as a backstop while SSE is up.
 - `computeHealth` takes `now`; the page ticks it every 5s so a grace window can expire without new data.
+- The console's logs follow by default: the deployment log stream (`/observe/.../logs/stream`) wakes a
+  refetch whenever the selected pod writes a line. There is no Live toggle, only Pause. If the stream stays
+  down for 4s a "Logs aren't updating" capsule offers Retry; nothing falls back to polling silently. A
+  hidden tab closes the stream and catches up when it returns.
 
 ## Running without a backend
 

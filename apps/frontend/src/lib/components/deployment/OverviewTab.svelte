@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Boxes, Maximize2, Minimize2, RefreshCw, SquareTerminal, X } from 'lucide-svelte';
+	import { Boxes, Maximize2, Minimize2, Pause, Play, SquareTerminal, X } from 'lucide-svelte';
 	import { untrack } from 'svelte';
 	import { page } from '$app/stores';
 	import { Button, Menu, MenuItem, LogViewer, SelectTrigger } from '$lib/components/ui';
@@ -100,7 +100,10 @@
 	const drift = $derived(deployment ? replicaDrift(deployment) : null);
 
 	let showPreviousLogs = $state(false);
-	let liveLogs = $state(false);
+	let logsPaused = $state(false);
+	let logStream = $state<'live' | 'down'>('live');
+	let logStreamAttempt = $state(0);
+	let visibility = $state<DocumentVisibilityState>('visible');
 	let logsScrolledUp = $state(false);
 
 	const logSource = new PodLogSource({
@@ -127,14 +130,51 @@
 	});
 
 	$effect(() => {
-		if (!liveLogs || activeConsoleTab !== 'logs') return;
-		if (!selectedPod || !selectedContainer) return;
-		logSource.refresh(true);
-		const handle = setInterval(() => {
-			if (document.hidden) return;
-			logSource.refresh(true);
-		}, 2000);
-		return () => clearInterval(handle);
+		logStreamAttempt;
+		const id = deployment?.id;
+		const pod = selectedPod;
+		const following =
+			!logsPaused && !showPreviousLogs && activeConsoleTab === 'logs' && visibility === 'visible';
+		if (!following || !id || !pod || !selectedContainer) return;
+		let wake: ReturnType<typeof setTimeout> | null = null;
+		let down: ReturnType<typeof setTimeout> | null = null;
+		const markDown = () => {
+			down ??= setTimeout(() => (logStream = 'down'), 4_000);
+		};
+		markDown();
+		const es = new EventSource(
+			`/apiv1/observe/deployments/${encodeURIComponent(id)}/logs/stream?tailLines=1`
+		);
+		es.onopen = () => {
+			if (down) clearTimeout(down);
+			down = null;
+			logStream = 'live';
+			untrack(() => logSource.refresh(true));
+		};
+		es.onerror = () => {
+			if (es.readyState === EventSource.CLOSED) logStream = 'down';
+			else markDown();
+		};
+		es.onmessage = (e) => {
+			if (wake) return;
+			try {
+				const data = JSON.parse(e.data);
+				const lines: { pod?: string }[] = data.lines ?? [];
+				if (!lines.some((l) => !l.pod || l.pod === pod)) return;
+			} catch {
+				return;
+			}
+			wake = setTimeout(() => {
+				wake = null;
+				logSource.refresh(true);
+			}, 300);
+		};
+		return () => {
+			es.close();
+			if (wake) clearTimeout(wake);
+			if (down) clearTimeout(down);
+			logStream = 'live';
+		};
 	});
 
 	const sourceLabel = $derived(
@@ -191,6 +231,8 @@
 		revealConsole();
 	}
 </script>
+
+<svelte:document bind:visibilityState={visibility} />
 
 <div class="overview-board">
 	<div class="main">
@@ -281,27 +323,15 @@
 								{/each}
 							{/each}
 						</Menu>
-						<Button
-							variant="ghost"
-							size="sm"
-							icon={RefreshCw}
-							label="Refresh logs"
-							loading={logSource.loading}
-							onclick={() => logSource.refresh()}
-						/>
-						<button
-							type="button"
-							class="live"
-							class:live--on={liveLogs}
-							aria-pressed={liveLogs}
-							title={liveLogs ? 'Stop following new logs' : 'Follow new logs as they arrive'}
-							onclick={() => (liveLogs = !liveLogs)}
-						>
-							<StatusDot
-								meta={statusMeta(liveLogs ? 'success' : 'neutral', 'Live', liveLogs)}
-								size={8}
-							/>Live
-						</button>
+						{#if !showPreviousLogs}
+							<Button
+								variant="ghost"
+								size="sm"
+								icon={logsPaused ? Play : Pause}
+								label={logsPaused ? 'Resume logs' : 'Pause logs'}
+								onclick={() => (logsPaused = !logsPaused)}
+							/>
+						{/if}
 					{/if}
 
 					<Menu placement="bottom-end">
@@ -345,22 +375,41 @@
 
 			<div class="console-body">
 				{#if activeConsoleTab === 'logs'}
-					<LogViewer
-						lines={logSource.lines}
-						loading={logSource.loading}
-						loadingMore={logSource.loadingMore}
-						error={logSource.error}
-						atStart={logSource.atStart}
-						bind:scrolledUp={logsScrolledUp}
-						onLoadEarlier={() => logSource.loadEarlier()}
-					>
-						{#snippet empty()}
-							<div class="console-empty">
-								<SquareTerminal size={16} aria-hidden="true" />
-								<span>{selectedPod ? 'No output yet' : 'Pick a pod to read its logs'}</span>
+					<div class="logs">
+						<LogViewer
+							lines={logSource.lines}
+							loading={logSource.loading}
+							loadingMore={logSource.loadingMore}
+							error={logSource.error}
+							atStart={logSource.atStart}
+							bind:scrolledUp={logsScrolledUp}
+							onLoadEarlier={() => logSource.loadEarlier()}
+						>
+							{#snippet empty()}
+								<div class="console-empty">
+									<SquareTerminal size={16} aria-hidden="true" />
+									<span>{selectedPod ? 'No output yet' : 'Pick a pod to read its logs'}</span>
+								</div>
+							{/snippet}
+						</LogViewer>
+						{#if selectedPod && !showPreviousLogs && (logsPaused || logStream === 'down')}
+							<div class="logs-notice" role="status">
+								{#if logsPaused}
+									<StatusDot meta={statusMeta('neutral', 'Paused')} size={8} />
+									<span>Paused</span>
+									<Button variant="secondary" size="sm" onclick={() => (logsPaused = false)}
+										>Resume</Button
+									>
+								{:else}
+									<StatusDot meta={statusMeta('warning', 'Reconnecting', true)} size={8} />
+									<span>Logs aren't updating</span>
+									<Button variant="secondary" size="sm" onclick={() => logStreamAttempt++}
+										>Retry</Button
+									>
+								{/if}
 							</div>
-						{/snippet}
-					</LogViewer>
+						{/if}
+					</div>
 				{/if}
 				{#each terminalTabs as ttab (ttab.id)}
 					<PodTerminal
@@ -567,27 +616,35 @@
 	.bar :global(.trigger--sm) {
 		padding-inline: 0.75rem 0.5rem;
 	}
-	.live {
+	.logs {
+		position: relative;
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		min-height: 0;
+	}
+	.logs-notice {
+		position: absolute;
+		bottom: 0.75rem;
+		left: 50%;
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
-		height: 1.75rem;
-		padding: 0 0.75rem;
-		border: none;
+		gap: 0.5rem;
+		padding: 0.25rem 0.25rem 0.25rem 0.875rem;
 		border-radius: 999px;
-		background: transparent;
-		color: var(--console-dim);
+		background: var(--bg-surface);
+		box-shadow:
+			inset 0 0 0 0.5px var(--border-strong),
+			var(--shadow-raised);
+		color: var(--text-default);
 		font-size: var(--text-footnote);
 		font-weight: var(--weight-medium);
-		cursor: pointer;
+		white-space: nowrap;
+		translate: -50% 0;
 	}
-	.live:hover {
-		background: var(--console-hover);
-		color: var(--console-text);
-	}
-	.live--on {
-		background: var(--status-success-bg);
-		color: var(--status-success);
+	.logs-notice :global(.button) {
+		border-radius: 999px;
+		corner-shape: round;
 	}
 	.console-empty {
 		display: flex;
