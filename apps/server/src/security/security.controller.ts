@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  Body,
   Controller,
   ForbiddenException,
   Get,
@@ -12,7 +11,6 @@ import {
   ServiceUnavailableException
 } from '@nestjs/common';
 import { AttacksService } from './attacks.service';
-import { parseRateLimit } from './rate-limit';
 import { LogsStoreError } from '../logs/victoria-logs.service';
 import { parseRange } from '../logs/logs.controller';
 import { Throttle } from '@nestjs/throttler';
@@ -50,29 +48,6 @@ export class SecurityController {
       if (err instanceof LogsStoreError) throw new ServiceUnavailableException(err.message);
       throw err;
     }
-  }
-
-  @Post(':id/security/rate-limit')
-  async setRateLimit(
-    @Param('id') id: string,
-    @Request() req,
-    @Body() body: { requests?: number; periodSeconds?: number; off?: boolean }
-  ) {
-    const { user, access } = await this.access.assertDeploymentView(
-      id,
-      req.user.sub,
-      this.userData(req)
-    );
-    if (!access.canEdit) {
-      throw new ForbiddenException('Your role does not allow you to rate-limit this app');
-    }
-    const limit = body?.off ? null : parseRateLimit(body);
-    if (!body?.off && !limit) {
-      throw new BadRequestException(
-        'requests must be a whole number from 1 to 100000 and periodSeconds one of 1, 10, 60, 300 or 3600'
-      );
-    }
-    return this.attacks.setRateLimit(id, limit, user.id);
   }
 
   private userData(req: any) {

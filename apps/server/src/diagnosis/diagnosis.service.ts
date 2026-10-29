@@ -269,11 +269,7 @@ export class DiagnosisService {
         worstCve: scan?.scan?.severity ?? null,
         counts: scan?.scan?.counts ?? null,
         attacks: attacks
-          ? {
-              last24h: attacks.byKind,
-              rateLimit: attacks.rateLimit,
-              topSources: attacks.topSources.slice(0, 5)
-            }
+          ? { last24h: attacks.byKind, topSources: attacks.topSources.slice(0, 5) }
           : null
       },
       topErrors: topErrors

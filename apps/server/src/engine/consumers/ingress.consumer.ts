@@ -8,7 +8,6 @@ import { KubernetesService } from '../../kubernetes/kubernetes.service';
 import { EngineEventType, EngineObjectKey } from '../core/informer';
 import { K8S_DELETED_REASON } from './workload.consumer';
 import { LiveState, readLive } from './live-object';
-import { parseRateLimit, rateLimitPatch } from '../../security/rate-limit';
 import {
   AdoptableIngressRow,
   IngressRowCreate,
@@ -100,7 +99,6 @@ export class IngressConsumer {
   async onEvent(type: EngineEventType, ingress: k8s.V1Ingress): Promise<void> {
     if (type !== 'delete') {
       await this.adopt(ingress);
-      await this.reconcileRateLimit(ingress);
       return;
     }
     const namespace = ingress.metadata?.namespace;
@@ -123,34 +121,6 @@ export class IngressConsumer {
       return;
     }
     await this.removeRows(rows, 'watch');
-  }
-
-  private async reconcileRateLimit(ingress: k8s.V1Ingress): Promise<void> {
-    const namespace = ingress.metadata?.namespace;
-    const name = ingress.metadata?.name;
-    if (!namespace || !name || !this.kubernetes.kc) return;
-    const row = await this.prisma.ingress.findFirst({
-      where: { namespace, name, deploymentId: { not: null } },
-      select: { deployment: { select: { rateLimit: true } } }
-    });
-    if (!row?.deployment) return;
-    const limit = parseRateLimit(row.deployment.rateLimit);
-    const current = ingress.metadata?.annotations;
-    const patch = rateLimitPatch(current, ingress.spec?.ingressClassName, limit);
-    if (!patch) return;
-    await this.kubernetes.kc
-      .makeApiClient(k8s.NetworkingV1Api)
-      .patchNamespacedIngress(
-        name,
-        namespace,
-        { metadata: { annotations: patch } },
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        { headers: { 'Content-Type': 'application/merge-patch+json' } }
-      );
   }
 
   async pruneStaleRows(seen: EngineObjectKey[]): Promise<void> {

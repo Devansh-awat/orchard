@@ -9,10 +9,6 @@ export const haproxy: IngressAdapter = {
   id: 'haproxy',
   label: 'HAProxy',
   matchesIngressClass: (cls) => cls.includes('haproxy'),
-  rateLimitAnnotations: (limit) => ({
-    'haproxy.org/rate-limit-requests': limit ? String(limit.requests) : null,
-    'haproxy.org/rate-limit-period': limit ? `${limit.periodSeconds}s` : null
-  }),
   queries(target) {
     const sel = haproxySelector(target);
     if (!sel) return null;

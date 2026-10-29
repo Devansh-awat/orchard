@@ -477,7 +477,6 @@
   "POST /deployments/:id/rollback": "authenticated",
   "POST /deployments/:id/rollback/:imageHistoryId": "authenticated",
   "POST /deployments/:id/scale": "authenticated",
-  "POST /deployments/:id/security/rate-limit": "authenticated",
   "POST /deployments/:id/security/scan": "authenticated",
   "POST /deployments/:id/start": "authenticated",
   "POST /deployments/:id/stop": "authenticated",

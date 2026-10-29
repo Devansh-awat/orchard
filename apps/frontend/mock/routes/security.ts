@@ -480,7 +480,6 @@ export function securityRoutes(r: Router, { store }: MockContext) {
 		}
 	};
 
-	const limits = new Map<string, { requests: number; periodSeconds: number } | null>();
 	r.get('/deployments/:id/security/attacks', ({ params, query }) => {
 		const d = store.deployment(params.id);
 		if (!d) return notFound('Deployment not found');
@@ -514,18 +513,8 @@ export function securityRoutes(r: Router, { store }: MockContext) {
 				{ ip: '193.32.162.0/24', count: 192, kinds: ['auth-bruteforce'] },
 				{ ip: '94.102.61.0/24', count: 88, kinds: ['scanner'] }
 			],
-			samples: [],
-			rateLimit: limits.get(d.id) ?? null,
-			rateLimitSupported: true
+			samples: []
 		};
-	});
-	r.post('/deployments/:id/security/rate-limit', ({ params, body }) => {
-		const b = (body ?? {}) as { requests?: number; periodSeconds?: number; off?: boolean };
-		const limit = b.off
-			? null
-			: { requests: Number(b.requests), periodSeconds: Number(b.periodSeconds) };
-		limits.set(params.id, limit);
-		return { rateLimit: limit, applied: 1, unsupported: 0 };
 	});
 	r.get('/deployments/:id/security', ({ params }) => {
 		const d = store.deployment(params.id);

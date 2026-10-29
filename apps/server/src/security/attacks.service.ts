@@ -1,8 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { AuditService } from '../audit/audit.service';
-import { K8sNetworkService } from '../kubernetes/k8s-network.service';
 import { VictoriaLogsService } from '../logs/victoria-logs.service';
 import { buildIpCounts, buildIpSeries, buildSuspicious } from '../logs/logsql';
 import {
@@ -16,8 +13,6 @@ import {
   type AttackReport,
   type AttackSource
 } from './attack-signals';
-import { parseRateLimit, rateLimitPatch, supportsRateLimit } from './rate-limit';
-import type { RateLimit } from '../metrics/ingress/types';
 
 export function floodIps(counts: { ip: string; requests: number }[]): Map<string, number> {
   const out = new Map<string, number>();
@@ -45,9 +40,7 @@ export function maskReport(report: AttackReport): AttackReport {
 export class AttacksService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly store: VictoriaLogsService,
-    private readonly network: K8sNetworkService,
-    private readonly audit: AuditService
+    private readonly store: VictoriaLogsService
   ) {}
 
   get available(): boolean {
@@ -61,10 +54,7 @@ export class AttacksService {
         id: true,
         name: true,
         namespace: true,
-        projectId: true,
-        rateLimit: true,
-        project: { select: { organizationId: true } },
-        ingresses: { select: { name: true, namespace: true } }
+        projectId: true
       }
     });
     if (!d?.namespace) throw new NotFoundException('Deployment not found');
@@ -74,7 +64,7 @@ export class AttacksService {
   async report(
     deploymentId: string,
     opts: { start: number; end: number; canEdit: boolean }
-  ): Promise<AttackReport & { rateLimit: RateLimit | null; rateLimitSupported: boolean }> {
+  ): Promise<AttackReport> {
     const d = await this.target(deploymentId);
     const scope = { namespace: d.namespace, app: d.name, start: opts.start, end: opts.end };
     const bucketMs = Math.max(60_000, Math.round((opts.end - opts.start) / 60));
@@ -96,13 +86,7 @@ export class AttacksService {
       counts.map((c) => ({ ip: c.client_ip ?? '', requests: Number(c.requests) || 0 }))
     );
     const report = await this.withFloods(detected, flooding, scope, bucketMs);
-    const ingressClasses = await this.ingressClasses(d.ingresses);
-    const result = {
-      ...report,
-      rateLimit: parseRateLimit(d.rateLimit),
-      rateLimitSupported: ingressClasses.some((c) => supportsRateLimit(c))
-    };
-    return opts.canEdit ? result : { ...result, ...maskReport(result) };
+    return opts.canEdit ? report : maskReport(report);
   }
 
   private async withFloods(
@@ -144,71 +128,5 @@ export class AttacksService {
         .slice(0, 20),
       samples: detected.samples.filter((s) => s.kind !== 'flood')
     };
-  }
-
-  private async ingressClasses(ingresses: { name: string; namespace: string }[]) {
-    const objects = await this.prisma.k8sObject.findMany({
-      where: {
-        kind: 'Ingress',
-        OR: ingresses.map((i) => ({ namespace: i.namespace, name: i.name }))
-      },
-      select: { name: true, namespace: true, manifest: true }
-    });
-    return objects.map(
-      (o) =>
-        (o.manifest as { spec?: { ingressClassName?: string } })?.spec?.ingressClassName ?? null
-    );
-  }
-
-  async setRateLimit(
-    deploymentId: string,
-    limit: RateLimit | null,
-    userId: string
-  ): Promise<{ rateLimit: RateLimit | null; applied: number; unsupported: number }> {
-    const d = await this.target(deploymentId);
-    await this.prisma.deployment.update({
-      where: { id: deploymentId },
-      data: { rateLimit: limit ? (limit as unknown as Prisma.InputJsonValue) : Prisma.DbNull }
-    });
-    const objects = d.ingresses.length
-      ? await this.prisma.k8sObject.findMany({
-          where: {
-            kind: 'Ingress',
-            OR: d.ingresses.map((i) => ({ namespace: i.namespace, name: i.name }))
-          },
-          select: { name: true, namespace: true, manifest: true }
-        })
-      : [];
-    let applied = 0;
-    let unsupported = 0;
-    for (const o of objects) {
-      const manifest = o.manifest as {
-        metadata?: { annotations?: Record<string, string> };
-        spec?: { ingressClassName?: string };
-      };
-      const cls = manifest?.spec?.ingressClassName ?? null;
-      if (!supportsRateLimit(cls)) {
-        unsupported++;
-        continue;
-      }
-      const patch = rateLimitPatch(manifest?.metadata?.annotations, cls, limit);
-      if (patch) await this.network.patchIngressAnnotations(o.namespace, o.name, patch);
-      applied++;
-    }
-    void this.audit.log({
-      action: 'deployment.rate_limit.updated',
-      actorUserId: userId,
-      organizationId: d.project.organizationId,
-      projectId: d.projectId,
-      deploymentId: d.id,
-      targetType: 'deployment',
-      targetId: d.id,
-      targetLabel: d.name,
-      metadata: {
-        requests: [parseRateLimit(d.rateLimit)?.requests ?? null, limit?.requests ?? null],
-        periodSeconds: limit?.periodSeconds ?? null
-      }
-    });
-    return { rateLimit: limit, applied, unsupported };
   }
 }
