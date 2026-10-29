@@ -315,7 +315,7 @@ export function entryBadge(entry: TimelineEntry): EntryBadge {
 	switch (entry.kind) {
 		case 'release':
 			return entry.meta.isActive
-				? { kind: 'success', label: 'Live', pulse: true }
+				? { kind: 'success', label: 'Live', pulse: false }
 				: { kind: 'neutral', label: 'Ready', pulse: false };
 		case 'build':
 			switch (entry.meta.buildStatus) {

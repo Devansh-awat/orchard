@@ -9,6 +9,7 @@
 		hint?: string;
 		icon?: Icon;
 		optionClass?: string;
+		disabled?: boolean;
 	}
 
 	let {
@@ -18,6 +19,7 @@
 		onchange = undefined,
 		grow = false,
 		size = 'md',
+		shape = 'rounded',
 		iconOnly = false
 	}: {
 		options: readonly Option[];
@@ -26,6 +28,7 @@
 		onchange?: (value: string) => void;
 		grow?: boolean;
 		size?: 'md' | 'sm';
+		shape?: 'rounded' | 'capsule';
 		iconOnly?: boolean;
 	} = $props();
 
@@ -46,6 +49,7 @@
 		aria-label={iconOnly ? opt.label : opt.hint}
 		class="opt {opt.optionClass ?? ''}"
 		class:opt--active={value === opt.value}
+		disabled={opt.disabled}
 		onclick={() => select(opt.value)}
 	>
 		{#if opt.icon}
@@ -58,6 +62,7 @@
 
 <div
 	class="seg seg--{size}"
+	class:seg--capsule={shape === 'capsule'}
 	class:seg--grow={grow}
 	class:seg--icons={iconOnly}
 	role="radiogroup"
@@ -129,8 +134,12 @@
 			color var(--dur-fast) ease,
 			transform var(--spring-press-duration) var(--spring-press);
 	}
-	.opt:active {
+	.opt:active:not(:disabled) {
 		transform: scale(0.96);
+	}
+	.opt:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
 	}
 	:global(html.motion-reduce) .opt:active {
 		transform: none;
@@ -148,6 +157,12 @@
 	.seg--icons.seg--sm .opt {
 		width: 1.75rem;
 		padding: 0;
+	}
+	.seg--capsule,
+	.seg--capsule .thumb,
+	.seg--capsule .opt {
+		border-radius: 999px;
+		corner-shape: round;
 	}
 	.opt:hover,
 	.opt--active {

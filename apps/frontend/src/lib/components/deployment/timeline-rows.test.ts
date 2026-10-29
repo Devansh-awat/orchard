@@ -104,7 +104,7 @@ test('badges come from the row kind and never from color alone', () => {
 		{
 			kind: 'success',
 			label: 'Live',
-			pulse: true
+			pulse: false
 		}
 	);
 	assert.deepEqual(

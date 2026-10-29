@@ -2,13 +2,13 @@
 	import type { Snippet } from 'svelte';
 
 	let {
-		title,
+		title = undefined,
 		meta = undefined,
 		fill = false,
 		class: className = '',
 		children
 	}: {
-		title: string;
+		title?: string;
 		meta?: string | Snippet;
 		fill?: boolean;
 		class?: string;
@@ -17,14 +17,16 @@
 </script>
 
 <section class="widget {className}" class:widget--fill={fill} aria-label={title}>
-	<header class="head" class:head--controls={!!meta && typeof meta !== 'string'}>
-		<h2 class="title">{title}</h2>
-		{#if meta}
-			<span class="meta"
-				>{#if typeof meta === 'string'}{meta}{:else}{@render meta()}{/if}</span
-			>
-		{/if}
-	</header>
+	{#if title || meta}
+		<header class="head" class:head--controls={!!meta && typeof meta !== 'string'}>
+			{#if title}<h2 class="title">{title}</h2>{/if}
+			{#if meta}
+				<span class="meta"
+					>{#if typeof meta === 'string'}{meta}{:else}{@render meta()}{/if}</span
+				>
+			{/if}
+		</header>
+	{/if}
 	{#if fill}
 		<div class="fill">{@render children()}</div>
 	{:else}

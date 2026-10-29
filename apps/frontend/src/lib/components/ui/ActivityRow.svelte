@@ -7,6 +7,7 @@
 		tone = 'neutral',
 		muted = false,
 		struck = false,
+		pinned = false,
 		class: klass = '',
 		time = undefined,
 		tile,
@@ -18,6 +19,7 @@
 		tone?: StatusKind;
 		muted?: boolean;
 		struck?: boolean;
+		pinned?: boolean;
 		class?: string;
 		time?: Snippet;
 		tile: Snippet;
@@ -31,98 +33,69 @@
 	class="ui-arow motion-echo echo--{tone} {klass}"
 	class:ui-arow--muted={muted}
 	class:ui-arow--struck={struck}
+	class:ui-arow--pinned={pinned}
 	role="listitem"
 	{...rest}
 >
-	<div class="ui-arow-time">
-		{#if time}{@render time()}{/if}
-	</div>
-	<div class="ui-arow-spine" aria-hidden="true"><span class="ui-arow-dot"></span></div>
 	<div class="ui-arow-tile">{@render tile()}</div>
 	<div class="ui-arow-main">
 		<span class="ui-arow-title">{@render title()}</span>
 		{#if meta}<span class="ui-arow-meta">{@render meta()}</span>{/if}
 	</div>
-	{#if actions}<div class="ui-arow-actions">{@render actions()}</div>{/if}
+	{#if time || actions}
+		<div class="ui-arow-end">
+			{#if time}<span class="ui-arow-time">{@render time()}</span>{/if}
+			{#if actions}<div class="ui-arow-actions">{@render actions()}</div>{/if}
+		</div>
+	{/if}
 </div>
 
 <style>
 	.ui-arow {
+		--arow-inset: 0.5rem;
 		display: grid;
-		grid-template-columns: 3.25rem 1rem 1.5rem minmax(0, 1fr) auto;
-		gap: var(--space-2);
+		grid-template-columns: 1.75rem minmax(0, 1fr) auto;
 		align-items: center;
-		min-height: 2.125rem;
-		padding: 0.1875rem 0.5rem 0.1875rem 0;
-		border-radius: calc(var(--radius-sm) * var(--corner-scale));
+		column-gap: 0.75rem;
+		margin-inline: calc(var(--arow-inset) * -1);
+		padding: var(--arow-inset);
+		border-radius: calc(
+			max(var(--radius-floor), var(--widget-r, var(--radius-card)) - var(--arow-inset)) *
+				var(--corner-scale)
+		);
 		corner-shape: var(--corner);
-		transition: background-color var(--dur-fast);
+		transition: background-color var(--fade-in) var(--curve-out);
 	}
-	.ui-arow:hover {
+	.ui-arow:not(.ui-arow--pinned):hover {
 		background-color: var(--bg-hover);
-	}
-	.ui-arow-time {
-		font-family: var(--font-mono);
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		font-variant-numeric: tabular-nums;
-		color: var(--text-faint);
-		text-align: right;
-		white-space: nowrap;
-	}
-	.ui-arow-spine {
-		position: relative;
-		align-self: stretch;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-	}
-	.ui-arow-spine::before {
-		content: '';
-		position: absolute;
-		top: -0.1875rem;
-		bottom: -0.1875rem;
-		left: 50%;
-		width: 1px;
-		background: var(--rule);
-	}
-	.ui-arow-dot {
-		position: relative;
-		width: 0.4375rem;
-		height: 0.4375rem;
-		border-radius: 50%;
-		background: var(--echo-color, var(--border-strong));
-		box-shadow: 0 0 0 2px var(--bg-surface);
-	}
-	.ui-arow--muted .ui-arow-dot {
-		background: var(--border-strong);
 	}
 	.ui-arow-tile {
 		display: flex;
 		align-items: center;
 		justify-content: center;
+		width: 1.75rem;
+		height: 1.75rem;
 	}
 	.ui-arow-main {
 		display: flex;
-		align-items: baseline;
-		gap: var(--space-2);
+		flex-direction: column;
+		gap: 0.125rem;
 		min-width: 0;
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
 	}
 	.ui-arow-title {
-		display: inline-flex;
+		display: flex;
 		align-items: center;
-		gap: var(--space-2);
+		gap: 0.5rem;
 		min-width: 0;
-		flex-shrink: 0;
-		max-width: 60%;
-		font-weight: 600;
-		letter-spacing: var(--track-body);
+		height: var(--lh-body);
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
+		font-weight: var(--weight-medium);
 		color: var(--text-default);
+		white-space: nowrap;
 	}
 	.ui-arow--muted .ui-arow-title {
-		font-weight: 500;
+		font-weight: var(--weight-regular);
 		color: var(--text-muted);
 	}
 	.ui-arow--struck .ui-arow-title {
@@ -130,60 +103,63 @@
 		text-decoration-color: var(--text-faint);
 	}
 	.ui-arow-meta {
-		display: inline-flex;
-		align-items: baseline;
-		gap: var(--space-1);
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
 		min-width: 0;
+		height: var(--lh-callout);
 		overflow: hidden;
-		text-overflow: ellipsis;
 		white-space: nowrap;
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
+		text-overflow: ellipsis;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		color: var(--text-muted);
+	}
+	.ui-arow-end {
+		display: grid;
+		justify-items: end;
+		align-items: center;
+	}
+	.ui-arow-end > * {
+		grid-area: 1 / 1;
+	}
+	.ui-arow-time {
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		font-variant-numeric: tabular-nums;
+		color: var(--text-faint);
+		white-space: nowrap;
+		transition: opacity var(--fade-in) var(--curve-out);
 	}
 	.ui-arow-actions {
 		display: flex;
 		align-items: center;
-		justify-content: flex-end;
-		gap: 0.125rem;
+		gap: 0.25rem;
 		white-space: nowrap;
 		opacity: 0;
-		transition: opacity var(--dur-fast);
+		pointer-events: none;
+		transition: opacity var(--fade-in) var(--curve-out);
 	}
+	.ui-arow--pinned .ui-arow-actions,
 	.ui-arow:hover .ui-arow-actions,
-	.ui-arow:focus-within .ui-arow-actions {
+	.ui-arow:has(:focus-visible) .ui-arow-actions,
+	.ui-arow-actions:has(:global([aria-expanded='true'])) {
 		opacity: 1;
+		pointer-events: auto;
 	}
-	@media (max-width: 760px) {
-		.ui-arow {
-			grid-template-columns: 1rem 1.5rem minmax(0, 1fr);
-			grid-template-areas:
-				'spine tile main'
-				'spine time time'
-				'spine actions actions';
-			row-gap: 0.125rem;
-		}
-		.ui-arow-time {
-			grid-area: time;
-			text-align: left;
-		}
-		.ui-arow-spine {
-			grid-area: spine;
-		}
-		.ui-arow-tile {
-			grid-area: tile;
-		}
-		.ui-arow-main {
-			grid-area: main;
-			flex-wrap: wrap;
-		}
-		.ui-arow-title {
-			max-width: 100%;
-		}
+	.ui-arow--pinned .ui-arow-end:has(.ui-arow-actions) .ui-arow-time,
+	.ui-arow:hover .ui-arow-end:has(.ui-arow-actions) .ui-arow-time,
+	.ui-arow:has(:focus-visible) .ui-arow-end:has(.ui-arow-actions) .ui-arow-time,
+	.ui-arow-end:has(:global([aria-expanded='true'])) .ui-arow-time {
+		opacity: 0;
+	}
+	@media (hover: none) {
 		.ui-arow-actions {
-			grid-area: actions;
-			justify-content: flex-start;
 			opacity: 1;
+			pointer-events: auto;
+		}
+		.ui-arow-end:has(.ui-arow-actions) .ui-arow-time {
+			visibility: hidden;
 		}
 	}
 </style>
