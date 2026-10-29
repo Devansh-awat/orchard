@@ -1,19 +1,8 @@
 <script lang="ts">
-	import { CircleCheck } from 'lucide-svelte';
 	import { Button, SectionCard } from '$lib/components/ui';
-	import RelativeTime from '$lib/components/ui/RelativeTime.svelte';
-	import Sparkline from '$lib/components/ui/Sparkline.svelte';
 	import NumberRoll from '$lib/components/ui/NumberRoll.svelte';
+	import Sparkline from '$lib/components/ui/Sparkline.svelte';
 	import { apiFetch } from '$lib/stores';
-
-	type ErrorGroup = {
-		fingerprint: string;
-		type: string;
-		message: string;
-		count: number;
-		status: string;
-		lastSeen: string;
-	};
 
 	let {
 		deploymentId,
@@ -23,23 +12,11 @@
 		onopen: () => void;
 	} = $props();
 
-	let groups = $state<ErrorGroup[] | null>(null);
-	let rates = $state<number[]>([]);
+	let rates = $state<number[] | null>(null);
+	let scrub = $state<number | null>(null);
+	let chartHeight = $state(0);
 
 	async function load(id: string) {
-		try {
-			const res = await apiFetch(`/apiv1/observe/deployments/${encodeURIComponent(id)}/errors`);
-			if (!res.ok) return;
-			const body = await res.json();
-			groups = ((body?.errors ?? []) as ErrorGroup[])
-				.filter((g) => g.status !== 'resolved' && g.status !== 'ignored')
-				.sort((a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime());
-		} catch {
-			return;
-		}
-	}
-
-	async function loadRate(id: string) {
 		const end = Date.now();
 		try {
 			const res = await apiFetch(
@@ -57,160 +34,98 @@
 		const id = deploymentId;
 		if (!id) return;
 		load(id);
-		loadRate(id);
 		const timer = setInterval(() => {
-			if (document.hidden) return;
-			load(id);
-			loadRate(id);
+			if (!document.hidden) load(id);
 		}, 60_000);
 		return () => clearInterval(timer);
 	});
 
-	const rate = $derived(rates.length ? rates[rates.length - 1] : null);
+	const latest = $derived(rates?.length ? rates[rates.length - 1] : null);
+	const shown = $derived(scrub !== null && rates ? rates[scrub] : latest);
 	const tone = $derived(
-		rate == null ? 'neutral' : rate >= 5 ? 'error' : rate >= 1 ? 'warning' : 'neutral'
+		latest == null ? 'neutral' : latest >= 5 ? 'error' : latest >= 1 ? 'warning' : 'neutral'
 	);
 </script>
 
-<SectionCard title="Errors" size="sm" flush fill class="errors">
+<SectionCard title="Error rate" size="sm" flush fill class="errors">
 	{#snippet actions()}
 		<Button variant="ghost" size="sm" onclick={onopen}>All errors</Button>
 	{/snippet}
-	{#if rate != null}
-		<div class="rate rate--{tone}">
-			<span class="rate-label">Error rate</span>
-			<span class="rate-value"><NumberRoll value={rate.toFixed(2)} />%</span>
-			<span class="rate-of">of requests</span>
-			<span class="rate-trend">
-				<Sparkline values={rates} height={24} {tone} label="Error rate over the last 30 minutes" />
-			</span>
+	{#if shown != null && rates}
+		<div class="body body--{tone}">
+			<div class="reading">
+				<span class="value"><NumberRoll value={shown.toFixed(2)} />%</span>
+				<span class="of">of requests failed{scrub === null ? ', now' : ''}</span>
+			</div>
+			<div class="chart" bind:clientHeight={chartHeight}>
+				{#if chartHeight > 0}
+					<Sparkline
+						values={rates}
+						height={chartHeight}
+						{tone}
+						label="Error rate over the last 30 minutes"
+						interactive
+						onScrub={(i) => (scrub = i)}
+					/>
+				{/if}
+			</div>
+			<span class="window">Last 30 minutes</span>
 		</div>
-	{/if}
-	{#if groups && groups.length === 0}
-		<p class="clear"><CircleCheck size={16} aria-hidden="true" />No new errors</p>
-	{:else if groups}
-		<ul class="list">
-			{#each groups.slice(0, 4) as g (g.fingerprint)}
-				<li>
-					<button type="button" class="err" onclick={onopen}>
-						<span class="head">
-							<span class="type">{g.type}</span>
-							<span class="count">{g.count.toLocaleString()}×</span>
-						</span>
-						<span class="foot">
-							<span class="msg">{g.message}</span>
-							<span class="when"><RelativeTime date={g.lastSeen} /></span>
-						</span>
-					</button>
-				</li>
-			{/each}
-		</ul>
+	{:else if rates}
+		<p class="none">This app is not serving web traffic, so there is no rate to show.</p>
 	{/if}
 </SectionCard>
 
 <style>
-	.rate {
-		display: grid;
-		grid-template-columns: 4rem auto minmax(0, 1fr) 5rem;
-		align-items: center;
-		column-gap: 0.75rem;
-		padding: 0.625rem 1.25rem;
-		box-shadow: inset 0 -1px 0 var(--border-default);
+	.body {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		height: 100%;
+		min-height: 0;
+		padding: 0.25rem 1.25rem 1rem;
 	}
-	.rate-label {
-		font-size: var(--text-footnote);
-		color: var(--text-muted);
-		white-space: nowrap;
+	.reading {
+		display: flex;
+		align-items: baseline;
+		gap: 0.5rem;
 	}
-	.rate-value {
+	.value {
 		display: inline-flex;
 		align-items: baseline;
-		font-size: var(--text-headline);
-		line-height: var(--lh-headline);
+		font-size: var(--text-title-3);
+		line-height: var(--lh-title-3);
 		font-weight: var(--weight-semibold);
 		font-variant-numeric: tabular-nums;
 		color: var(--text-default);
 	}
-	.rate--warning .rate-value {
+	.body--warning .value {
 		color: var(--status-warning);
 	}
-	.rate--error .rate-value {
+	.body--error .value {
 		color: var(--status-error);
 	}
-	.rate-of {
+	.of {
 		font-size: var(--text-caption);
 		color: var(--text-muted);
 	}
-	.rate-trend {
-		min-width: 0;
-	}
-	.list {
-		margin: 0;
-		padding: 0;
-		list-style: none;
-	}
-	li + li {
-		box-shadow: inset 0 1px 0 var(--border-default);
-	}
-	.err {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-		width: 100%;
-		padding: 0.625rem 1.25rem;
-		border: none;
-		background: none;
-		text-align: left;
-		cursor: pointer;
-	}
-	.err:hover {
-		background: var(--bg-hover);
-	}
-	.head,
-	.foot {
-		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
-		gap: 0.75rem;
-		min-width: 0;
-	}
-	.type {
+	.chart {
+		position: relative;
+		flex: 1 1 0;
+		min-height: 2.5rem;
 		overflow: hidden;
-		font-family: var(--font-mono);
-		font-size: var(--text-footnote);
-		font-weight: var(--weight-medium);
-		color: var(--status-error);
-		text-overflow: ellipsis;
-		white-space: nowrap;
 	}
-	.count {
-		flex-shrink: 0;
-		font-family: var(--font-mono);
-		font-size: var(--text-footnote);
-		color: var(--text-default);
-		font-variant-numeric: tabular-nums;
+	.chart > :global(*) {
+		position: absolute;
+		inset: 0;
 	}
-	.msg {
-		overflow: hidden;
-		font-size: var(--text-caption);
-		color: var(--text-muted);
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.when {
-		flex-shrink: 0;
+	.window {
 		font-size: var(--text-caption);
 		color: var(--text-faint);
 	}
-	.clear {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
+	.none {
 		padding: 0.25rem 1.25rem 1rem;
 		font-size: var(--text-callout);
 		color: var(--text-muted);
-	}
-	.clear :global(svg) {
-		color: var(--status-success);
 	}
 </style>

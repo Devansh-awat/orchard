@@ -281,10 +281,10 @@ Three-level hierarchy: **Org cap** → **Member allowance** → **Deployment req
   (`SettingsRail`, `?s=`). Old ids (`metrics`, `environment`, `resources`, `volumes`, `build`,
   `advanced`) still resolve.
 - Overview fills exactly one viewport at 64rem wide and 40rem tall or more (`dep-shell--fit`): the
-  console takes the main column at full height; the side column (1.618 : 1) stacks `PodsList` (state
-  in words, `PodMenu` per row, a Replicas footer), `UsageCard` (CPU and memory against their limits,
-  sparklines seeded from `/metrics` then extended by SSE) and `ErrorsCard` (top error groups from
-  `/observe/.../errors`, led by the 5xx error rate when the app serves HTTP). Add `?guides=1` to
+  console takes the main column at full height; the side column (1.618 : 1) stacks `PodsList` (one
+  `IslandPill` per pod that opens in place, replicas in a popover), `UsageCard` (CPU and memory against their limits,
+  sparklines seeded from `/metrics` then extended by SSE) and `ErrorsCard` (the 5xx error rate and
+  its trend from `/observe/.../http-metrics`, when the app serves HTTP). Add `?guides=1` to
   draw the golden-ratio `GoldenReticle` over the page when checking alignment. Below that size it scrolls. Nodes and
   other infrastructure stay hidden.
 - Problems show as one `AlertStack` line above the panels; it expands to the full list.

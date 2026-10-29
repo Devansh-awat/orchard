@@ -1,5 +1,14 @@
 <script lang="ts">
-	import { ChevronDown } from 'lucide-svelte';
+	import {
+		ChevronDown,
+		Copy,
+		FileText,
+		RotateCcw,
+		SquareArrowOutUpRight,
+		SquareTerminal,
+		Trash2,
+		TriangleAlert
+	} from 'lucide-svelte';
 	import {
 		Button,
 		PopoverPanel,
@@ -15,7 +24,7 @@
 	import { formatCpu, formatMemory, humanizeWarning } from '$lib/utils/format';
 	import type { Pod } from '$lib/types/deployment';
 	import PodSimulator from './PodSimulator.svelte';
-	import PodMenu from './PodMenu.svelte';
+	import IslandPill from '$lib/components/patterns/IslandPill.svelte';
 
 	type PodWarning = { podName?: string; message: string };
 
@@ -178,22 +187,36 @@
 					: restarts
 						? `restarted ${restarts} ${restarts === 1 ? 'time' : 'times'}`
 						: null;
-				const tip = [state.hint, detail && detail[0].toUpperCase() + detail.slice(1)]
-					.filter(Boolean)
-					.join('. ');
-				return { pod, name: podLabel(pod.name), state, restarts, detail, tip };
+				const usage =
+					pod.cpuUsage != null && pod.cpuUsage > 0
+						? `${formatCpu(pod.cpuUsage)} CPU, ${formatMemory(pod.memoryUsage)}`
+						: null;
+				const tip = [state.label, state.hint, detail, usage].filter(Boolean).join(' · ');
+				const term = pod.containers?.find((c) => c.lastTermination)?.lastTermination;
+				const exit = term
+					? `${term.reason === 'OOMKilled' ? 'Out of memory' : term.reason}${term.exitCode != null ? ` (${term.exitCode})` : ''}`
+					: null;
+				return { pod, name: podLabel(pod.name), state, restarts, detail, tip, exit };
 			})
 			.sort((a, b) => (RANK[a.state.meta.kind] ?? 5) - (RANK[b.state.meta.kind] ?? 5))
 	);
 
-	const ready = $derived(rows.filter((r) => r.state.meta.kind === 'success').length);
-	const summary = $derived.by(() => {
-		if (drift?.stopped) return 'Stopped';
-		if (!rows.length) return 'None yet';
-		return `${ready} of ${rows.length} running`;
-	});
 	const pending = $derived(scaleReplicas !== replicas);
-	const menus: Record<string, PodMenu | undefined> = {};
+	const problems = $derived.by(() => {
+		const counts = new Map<string, number>();
+		for (const r of rows) {
+			if (r.state.meta.kind === 'success' || r.state.meta.kind === 'neutral') continue;
+			counts.set(r.state.label, (counts.get(r.state.label) ?? 0) + 1);
+		}
+		return [...counts].map(([label, n]) => `${n} ${label.toLowerCase()}`);
+	});
+	let openPod = $state<string | null>(null);
+
+	function toneOf(kind: StatusMeta['kind']): 'ok' | 'warn' | 'bad' {
+		if (kind === 'error') return 'bad';
+		if (kind === 'warning' || kind === 'progress') return 'warn';
+		return 'ok';
+	}
 
 	async function copyName(name: string) {
 		await navigator.clipboard.writeText(name);
@@ -206,11 +229,8 @@
 	}
 </script>
 
-<SectionCard title="Pods" size="sm" flush fill class="pods">
+<SectionCard title="Pods" size="sm" flush class="pods">
 	{#snippet actions()}
-		{#if ready < rows.length || drift?.stopped}
-			<span class="summary">{summary}</span>
-		{/if}
 		<PopoverPanel placement="bottom-end" class="scale">
 			{#snippet trigger(attrs)}
 				<Button {...attrs} variant="secondary" size="sm" iconRight={ChevronDown}
@@ -221,10 +241,7 @@
 				<div class="scale-body">
 					<div class="scale-copy">
 						<span class="scale-title">Replicas</span>
-						<span class="scale-hint"
-							>How many pods to keep running. More pods share the load and keep the app up if one
-							crashes.</span
-						>
+						<span class="scale-hint">How many pods to keep running</span>
 					</div>
 					<div class="scale-row">
 						<Stepper
@@ -266,160 +283,220 @@
 		{/if}
 	{/snippet}
 	{#if rows.length}
-		<ul class="list" aria-label="Pods">
-			{#each rows as r (r.pod.name)}
-				{@const container = r.pod.containers?.[0]?.name ?? ''}
-				<li
-					class="pod"
-					class:pod--selected={r.pod.name === selectedPod}
-					onclick={(e) => {
-						if (!(e.target as HTMLElement).closest('.menu, .hit')) onSelect(r.pod);
-					}}
-					oncontextmenu={(e) => {
-						e.preventDefault();
-						menus[r.pod.name]?.open();
-					}}
-				>
-					<button
-						type="button"
-						class="hit"
-						aria-label="Show logs for {r.name}"
-						aria-current={r.pod.name === selectedPod ? 'true' : undefined}
-						onclick={() => onSelect(r.pod)}
-					></button>
-					<span class="dot" {@attach stateEcho(() => r.state.meta.kind)}>
-						<StatusDot meta={r.state.meta} size={8} />
-					</span>
-					<Tooltip text={r.tip || r.state.label} delay={200}>
-						<span class="state state--{r.state.meta.kind}"
-							>{r.state.label}{#if r.restarts && r.state.meta.kind !== 'success'}<span
-									class="restarts">{r.restarts}×</span
-								>{/if}</span
+		<div class="pods-body">
+			<ul class="islands" aria-label="Pods">
+				{#each rows as r (r.pod.name)}
+					{@const container = r.pod.containers?.[0]?.name ?? ''}
+					{@const tone = toneOf(r.state.meta.kind)}
+					<li>
+						<IslandPill
+							bind:open={() => openPod === r.pod.name, (v) => (openPod = v ? r.pod.name : null)}
+							{tone}
+							label="{r.name}, {r.state.label}"
 						>
-					</Tooltip>
-					<span class="id">{r.name}</span>
-					<span class="num">{r.pod.cpuUsage ? formatCpu(r.pod.cpuUsage) : '—'}</span>
-					<span class="num">{r.pod.cpuUsage ? formatMemory(r.pod.memoryUsage) : '—'}</span>
-					<span class="menu">
-						<PodMenu
-							bind:this={menus[r.pod.name]}
-							label={r.name}
-							crashed={!!r.pod.containers?.some((c) => c.lastTermination)}
-							canShell={r.pod.status?.toLowerCase() === 'ready' && !!container}
-							href={podHref(r.pod.name)}
-							onLogs={() => onSelect(r.pod)}
-							onCrashLogs={() => onCrashLogs(r.pod)}
-							onShell={() => onShell(r.pod.name, container)}
-							onCopy={() => copyName(r.pod.name)}
-							onDelete={() => onDelete(r.pod.name)}
-						/>
-					</span>
-				</li>
-			{/each}
-		</ul>
+							{#snippet face()}
+								<span class="glyph" {@attach stateEcho(() => r.state.meta.kind)}>
+									{#if tone === 'ok'}
+										<span class="ok-dot"></span>
+									{:else}
+										<TriangleAlert size={15} strokeWidth={2.25} aria-hidden="true" />
+									{/if}
+								</span>
+								<span class="pid">{r.name}</span>
+								{#if r.pod.name === selectedPod}<span class="logs-tag">Logs</span>{/if}
+								<span class="face-end" class:face-end--tone={tone !== 'ok'}>
+									{#if tone === 'ok'}
+										{r.pod.cpuUsage
+											? `${formatCpu(r.pod.cpuUsage)} · ${formatMemory(r.pod.memoryUsage)}`
+											: r.state.label}
+									{:else}
+										{r.state.label}{#if r.restarts}
+											· {r.restarts}×{/if}
+									{/if}
+								</span>
+							{/snippet}
+							<div class="detail">
+								<dl class="kv">
+									<div>
+										<dt>Uptime</dt>
+										<dd>{uptime(r.pod.startTime) ?? '—'}</dd>
+									</div>
+									<div>
+										<dt>Restarts</dt>
+										<dd>{r.restarts}</dd>
+									</div>
+									{#if r.exit}<div>
+											<dt>Last exit</dt>
+											<dd class="kv-tone">{r.exit}</dd>
+										</div>{/if}
+									<div>
+										<dt>CPU</dt>
+										<dd>{r.pod.cpuUsage ? formatCpu(r.pod.cpuUsage) : '—'}</dd>
+									</div>
+									<div>
+										<dt>Memory</dt>
+										<dd>{r.pod.cpuUsage ? formatMemory(r.pod.memoryUsage) : '—'}</dd>
+									</div>
+								</dl>
+								<div class="acts">
+									<Button
+										variant="secondary"
+										size="sm"
+										icon={FileText}
+										onclick={() => onSelect(r.pod)}>Logs</Button
+									>
+									{#if r.pod.containers?.some((c) => c.lastTermination)}
+										<Button
+											variant="ghost"
+											size="sm"
+											icon={RotateCcw}
+											onclick={() => onCrashLogs(r.pod)}>Before crash</Button
+										>
+									{/if}
+									<Button
+										variant="ghost"
+										size="sm"
+										icon={SquareTerminal}
+										disabled={r.pod.status?.toLowerCase() !== 'ready' || !container}
+										onclick={() => onShell(r.pod.name, container)}>Shell</Button
+									>
+									<span class="acts-end">
+										<Button
+											variant="ghost"
+											size="sm"
+											icon={Copy}
+											label="Copy pod name"
+											onclick={() => copyName(r.pod.name)}
+										/>
+										<Button
+											variant="ghost"
+											size="sm"
+											icon={SquareArrowOutUpRight}
+											label="Pod details"
+											href={podHref(r.pod.name)}
+										/>
+										<Button
+											variant="ghost"
+											size="sm"
+											icon={Trash2}
+											label="Delete pod, Kubernetes starts a fresh one"
+											onclick={() => onDelete(r.pod.name)}
+										/>
+									</span>
+								</div>
+							</div>
+						</IslandPill>
+					</li>
+				{/each}
+			</ul>
+		</div>
 	{:else}
 		<p class="empty">Pods show up here once the first one is scheduled.</p>
 	{/if}
 </SectionCard>
 
 <style>
-	.summary {
-		font-size: var(--text-footnote);
-		color: var(--status-warning);
-		font-variant-numeric: tabular-nums;
+	.pods-body {
+		padding: 0.25rem 1.25rem 1.25rem;
 	}
-	.list {
+	.islands {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
 		margin: 0;
-		padding: 0 0 0.5rem;
+		padding: 0;
 		list-style: none;
 	}
-	.pod {
+	.glyph {
 		position: relative;
 		display: grid;
-		grid-template-columns: 0.5rem minmax(0, 1fr) 3.25rem 3rem 3.75rem 1.75rem;
-		align-items: center;
-		column-gap: 0.625rem;
-		height: 2.25rem;
-		padding: 0 0.8125rem 0 1.25rem;
-		cursor: pointer;
-	}
-	.pod:hover {
-		background: var(--bg-hover);
-	}
-	.pod--selected,
-	.pod--selected:hover {
-		background: var(--bg-active);
-	}
-	.hit {
-		position: absolute;
-		inset: 0;
-		border: none;
-		background: none;
-		cursor: pointer;
-	}
-	.hit:focus-visible {
-		outline: 2px solid var(--accent);
-		outline-offset: -2px;
-	}
-	.dot,
-	.state,
-	.id,
-	.num,
-	.menu {
-		position: relative;
-	}
-	.dot {
-		display: grid;
+		flex-shrink: 0;
 		place-items: center;
+		width: 1rem;
+		height: 1rem;
+		border-radius: 50%;
+		color: var(--island-tone);
+	}
+	.ok-dot {
 		width: 0.5rem;
 		height: 0.5rem;
 		border-radius: 50%;
+		background: var(--island-ok);
+		box-shadow: 0 0 0 3px color-mix(in oklab, var(--island-ok) 22%, transparent);
 	}
-	.state {
+	.pid {
+		font-family: var(--font-mono);
+		font-size: var(--text-footnote);
+		font-weight: var(--weight-medium);
+		text-box: trim-both cap alphabetic;
+	}
+	.logs-tag {
+		padding: 0.125rem 0.375rem;
+		border-radius: calc(0.3125rem * var(--corner-scale));
+		corner-shape: var(--corner);
+		background: var(--island-rule);
+		color: var(--island-muted);
+		font-size: var(--text-micro);
+		font-weight: var(--weight-medium);
+	}
+	.face-end {
+		margin-left: auto;
+		overflow: hidden;
+		font-family: var(--font-mono);
+		font-size: var(--text-caption);
+		color: var(--island-muted);
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-variant-numeric: tabular-nums;
+	}
+	.face-end--tone {
+		font-family: inherit;
+		font-size: var(--text-footnote);
+		font-weight: var(--weight-medium);
+		color: var(--island-tone);
+	}
+	.detail {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		padding-top: 0.625rem;
+		border-top: 1px solid var(--island-rule);
+	}
+	.kv {
+		display: flex;
+		flex-direction: column;
+		gap: 0.375rem;
+		margin: 0;
+	}
+	.kv > div {
 		display: flex;
 		align-items: baseline;
-		gap: 0.375rem;
-		min-width: 0;
-		overflow: hidden;
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		color: var(--text-default);
-		white-space: nowrap;
-		text-overflow: ellipsis;
+		justify-content: space-between;
+		gap: 1rem;
 	}
-	.state--error {
-		color: var(--status-error);
-		font-weight: var(--weight-semibold);
+	.kv dt {
+		font-size: var(--text-footnote);
+		color: var(--island-muted);
 	}
-	.state--warning {
-		color: var(--status-warning);
-	}
-	.state--progress {
-		color: var(--status-progress);
-	}
-	.restarts {
+	.kv dd {
+		margin: 0;
 		font-family: var(--font-mono);
-		font-size: var(--text-caption);
-		font-weight: var(--weight-regular);
-		opacity: 0.85;
-	}
-	.id,
-	.num {
-		font-family: var(--font-mono);
-		font-size: var(--text-caption);
+		font-size: var(--text-footnote);
+		color: var(--island-fg);
 		font-variant-numeric: tabular-nums;
-		white-space: nowrap;
 	}
-	.id {
-		color: var(--text-faint);
+	.kv .kv-tone {
+		color: var(--island-tone);
 	}
-	.num {
-		text-align: right;
-		color: var(--text-muted);
-	}
-	.menu {
+	.acts {
 		display: flex;
-		justify-content: flex-end;
+		align-items: center;
+		gap: 0.375rem;
+	}
+	.acts-end {
+		display: flex;
+		gap: 0.25rem;
+		margin-left: auto;
 	}
 	.empty {
 		padding: 1rem 1.25rem 1.25rem;

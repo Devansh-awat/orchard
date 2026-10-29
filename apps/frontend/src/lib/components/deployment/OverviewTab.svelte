@@ -435,9 +435,9 @@
 		min-height: 0;
 	}
 	.side > :global(.pods) {
-		flex: 0 1 auto;
-		max-height: 16.5rem;
+		overflow: visible;
 	}
+
 	.bar {
 		display: flex;
 		align-items: center;

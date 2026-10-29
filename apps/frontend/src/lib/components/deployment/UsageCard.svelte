@@ -75,24 +75,26 @@
 			{@const point = scrub?.id === row.id ? row.values[scrub.index] : undefined}
 			<li class="row row--{row.tone}">
 				<span class="label">{row.label}</span>
-				<span class="value"
-					>{#if point !== undefined}{row.at(point)}{:else}<NumberRoll
-							value={row.value}
-						/>{/if}</span
-				>
-				<span class="share">
-					{#if point !== undefined && row.limitRaw}
-						{Math.round(((point * row.scale) / row.limitRaw) * 100)}% of {row.limit}
-					{:else if row.ratio != null && row.limit}
-						{Math.round(Math.min(row.ratio, 9.99) * 100)}% of {row.limit}
-					{:else}
-						No limit
-					{/if}
+				<span class="reading">
+					<span class="value"
+						>{#if point !== undefined}{row.at(point)}{:else}<NumberRoll
+								value={row.value}
+							/>{/if}</span
+					>
+					<span class="share">
+						{#if point !== undefined && row.limitRaw}
+							{Math.round(((point * row.scale) / row.limitRaw) * 100)}% of {row.limit}
+						{:else if row.ratio != null && row.limit}
+							{Math.round(Math.min(row.ratio, 9.99) * 100)}% of {row.limit}
+						{:else}
+							No limit
+						{/if}
+					</span>
 				</span>
 				<span class="trend">
 					<Sparkline
 						values={row.values}
-						height={24}
+						height={28}
 						tone={row.tone}
 						label="{row.label} over the last 30 minutes"
 						interactive
@@ -124,11 +126,14 @@
 	.row {
 		--tone: var(--neutral-7);
 		display: grid;
-		grid-template-columns: 4rem auto minmax(0, 1fr) 5rem;
+		grid-template-columns: minmax(0, 1fr) 7rem;
+		grid-template-areas:
+			'label label'
+			'reading trend'
+			'bar bar';
 		align-items: center;
-		column-gap: 0.75rem;
-		row-gap: 0.5rem;
-		padding: 0.625rem 1.25rem;
+		column-gap: 1rem;
+		padding: 0.75rem 1.25rem 0.875rem;
 	}
 	.row + .row {
 		box-shadow: inset 0 1px 0 var(--border-default);
@@ -140,15 +145,26 @@
 		--tone: var(--status-error-solid);
 	}
 	.label {
-		font-size: var(--text-footnote);
+		grid-area: label;
+		margin-bottom: 0.25rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--text-muted);
 	}
+	.reading {
+		grid-area: reading;
+		display: flex;
+		align-items: baseline;
+		gap: 0.5rem;
+		min-width: 0;
+	}
 	.value {
-		font-size: var(--text-headline);
-		line-height: var(--lh-headline);
+		font-size: var(--text-title-3);
+		line-height: var(--lh-title-3);
 		font-weight: var(--weight-semibold);
 		font-variant-numeric: tabular-nums;
 		color: var(--text-default);
+		white-space: nowrap;
 	}
 	.share {
 		overflow: hidden;
@@ -164,10 +180,18 @@
 		color: var(--status-error);
 	}
 	.trend {
+		grid-area: trend;
+		display: flex;
+		align-items: center;
 		min-width: 0;
+		height: 1.75rem;
+	}
+	.trend > :global(*) {
+		flex: 1 1 auto;
 	}
 	.bar {
-		grid-column: 1 / -1;
+		grid-area: bar;
+		margin-top: 0.625rem;
 		height: 0.25rem;
 		overflow: hidden;
 		border-radius: 999px;
