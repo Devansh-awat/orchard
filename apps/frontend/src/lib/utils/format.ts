@@ -256,7 +256,7 @@ export function humanizeWarning(msg: string): HumanizedWarning | null {
 
 	if (/oomkilled|out of memory/i.test(m)) {
 		return {
-			title: 'Out of memory — container killed',
+			title: 'Out of memory: container killed',
 			hint: 'Your app exceeded its memory limit and was terminated. Increase memory in Resources or fix the memory leak.',
 			severity: 'critical',
 			action: 'Increase memory'
@@ -264,7 +264,7 @@ export function humanizeWarning(msg: string): HumanizedWarning | null {
 	}
 	if (/back-?off.*restarting failed container/i.test(m) || /crashloopbackoff/i.test(m)) {
 		return {
-			title: 'Crash loop — app keeps crashing',
+			title: 'Crash loop: app keeps crashing',
 			hint: 'Your app crashes on startup, Kubernetes restarts it, and it crashes again. Check logs for the error.',
 			severity: 'critical',
 			action: 'View logs'
@@ -326,7 +326,7 @@ export function humanizeWarning(msg: string): HumanizedWarning | null {
 	}
 	if (/liveness probe failed/i.test(m)) {
 		return {
-			title: 'Health check failing — restarting',
+			title: 'Health check failing: restarting',
 			hint: 'Your app stopped responding to its health check and is being restarted. This usually means the app froze or is overloaded.',
 			severity: 'error',
 			action: 'Check health settings'
