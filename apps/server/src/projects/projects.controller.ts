@@ -1055,13 +1055,33 @@ export class DeploymentsController {
         stepMs: step
       };
       const throttle = this.metricsService.fetchDeploymentThrottle(args).catch(() => []);
+      const forecast =
+        end >= Date.now() - 10 * 60 * 1000
+          ? this.metricsService
+              .forecastDeploymentMemory({
+                id,
+                name: dep.name,
+                namespace: dep.namespace,
+                memoryRequestBytes:
+                  dep.memoryRequestBytes != null ? Number(dep.memoryRequestBytes) : null
+              })
+              .catch(() => null)
+          : Promise.resolve(null);
       if (groupBy === 'pod') {
         const grouped = await this.metricsService.fetchDeploymentMetricsByPod(args);
-        return { start, end, step, groupBy: 'pod', grouped, throttle: await throttle };
+        return {
+          start,
+          end,
+          step,
+          groupBy: 'pod',
+          grouped,
+          throttle: await throttle,
+          forecast: await forecast
+        };
       }
 
       const data = await this.metricsService.fetchDeploymentMetrics(args);
-      return { start, end, step, data, throttle: await throttle };
+      return { start, end, step, data, throttle: await throttle, forecast: await forecast };
     } catch (err) {
       if (err instanceof MetricsStoreError) throw new ServiceUnavailableException(err.message);
       throw err;

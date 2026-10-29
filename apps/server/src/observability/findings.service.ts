@@ -3,7 +3,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MetricsService } from '../metrics/metrics.service';
 import { ObservabilityService } from './observability.service';
 import { TimelineService } from './timeline.service';
-import { correlate, type Change, type ChangeKind as CauseKind, type Finding } from './correlate';
+import {
+  correlate,
+  formatBytes,
+  type Change,
+  type ChangeKind as CauseKind,
+  type Finding
+} from './correlate';
 import { detectSymptoms, type Point } from './symptoms';
 import type { ChangeEntry, ChangeKind } from './changes';
 
@@ -37,7 +43,7 @@ export function detectionStep(rangeMs: number): number {
   return 30 * 60_000;
 }
 
-export function clockFor(tz: string | null | undefined): (ms: number) => string {
+export function clockFor(tz: string | null | undefined, now = Date.now()): (ms: number) => string {
   const zone = tz && validZone(tz) ? tz : null;
   const fmt = new Intl.DateTimeFormat('en-GB', {
     hour: '2-digit',
@@ -45,7 +51,21 @@ export function clockFor(tz: string | null | undefined): (ms: number) => string 
     hour12: false,
     timeZone: zone ?? 'UTC'
   });
-  return (ms) => (zone ? fmt.format(ms) : `${fmt.format(ms)} UTC`);
+  const dayFmt = new Intl.DateTimeFormat('en-GB', { dateStyle: 'short', timeZone: zone ?? 'UTC' });
+  const today = dayFmt.format(now);
+  const tomorrow = dayFmt.format(now + 24 * 60 * 60_000);
+  return (ms) => {
+    const day = dayFmt.format(ms);
+    const prefix = day === tomorrow ? 'tomorrow ' : day === today ? '' : `${day} `;
+    return `${prefix}${fmt.format(ms)}${zone ? '' : ' UTC'}`;
+  };
+}
+
+export function forecastSentence(
+  f: { hitsLimitAt: number; slopeBytesPerHour: number; since: number },
+  formatTime: (ms: number) => string
+): string {
+  return `Memory has climbed about ${formatBytes(f.slopeBytesPerHour)} an hour since ${formatTime(f.since)} and reaches its limit around ${formatTime(f.hitsLimitAt)}.`;
 }
 
 function validZone(tz: string): boolean {
@@ -88,9 +108,10 @@ export class FindingsService {
   ): Promise<{ findings: FindingEntry[]; changes: ChangeEntry[] }> {
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
-      select: { name: true, namespace: true }
+      select: { id: true, name: true, namespace: true, memoryRequestBytes: true }
     });
     if (!deployment?.namespace) return { findings: [], changes: [] };
+    const live = opts.end >= Date.now() - 10 * 60_000;
     const from = opts.start - LOOKBACK_MS;
     const step = detectionStep(opts.end - from);
     const args = {
@@ -100,12 +121,13 @@ export class FindingsService {
       endMs: opts.end,
       stepMs: step
     };
-    const [http, resources, throttle, health, changes] = await Promise.all([
+    const [http, resources, throttle, health, changes, forecast] = await Promise.all([
       this.observability.getHttpMetrics(deploymentId, from, opts.end, step).catch(() => null),
       this.metrics.fetchDeploymentMetrics(args).catch(() => null),
       this.metrics.fetchDeploymentThrottle(args).catch(() => []),
       this.observability.getPodHealth(deploymentId, from, opts.end, step).catch(() => null),
-      this.timeline.changes(deploymentId, { start: from, end: opts.end, canEdit: opts.canEdit })
+      this.timeline.changes(deploymentId, { start: from, end: opts.end, canEdit: opts.canEdit }),
+      live ? this.metrics.forecastDeploymentMemory(deployment).catch(() => null) : null
     ]);
     const symptoms = detectSymptoms({
       errorPct: http?.errorRate.map((p) => ({ x: p.x, y: p.y })),
@@ -120,8 +142,23 @@ export class FindingsService {
       formatTime: clockFor(opts.tz)
     });
     const kinds = new Map(symptoms.map((s) => [s.id, s.kind]));
+    const entries: FindingEntry[] = findings.map((f) => ({
+      ...f,
+      kind: kinds.get(f.symptomId) ?? 'unknown'
+    }));
+    if (forecast) {
+      const since = Math.max(Date.now() - 6 * 60 * 60_000, opts.start);
+      entries.push({
+        symptomId: `memory-forecast:${forecast.pod}`,
+        causeId: null,
+        sentence: forecastSentence({ ...forecast, since }, clockFor(opts.tz)),
+        evidence: [`memory-forecast:${forecast.pod}`],
+        at: since,
+        kind: 'memory-forecast'
+      });
+    }
     return {
-      findings: findings.map((f) => ({ ...f, kind: kinds.get(f.symptomId) ?? 'unknown' })),
+      findings: entries,
       changes: changes.changes.filter((c) => c.t >= opts.start)
     };
   }

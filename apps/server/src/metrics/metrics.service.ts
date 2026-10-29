@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { deploymentPodRegex } from './pod-selector';
+import { forecastMemoryLimit, linearFit, projection } from './forecast';
+import { parseMemory } from '../kubernetes/quantity';
 import {
   VictoriaMetricsService,
   escapeLabel,
@@ -212,6 +214,77 @@ export class MetricsService {
       rx: rx.map((p) => ({ x: p.x, y: p.y / 1024 })), // bytes/s → KB/s
       tx: tx.map((p) => ({ x: p.x, y: p.y / 1024 }))
     };
+  }
+
+  async forecastDeploymentMemory(deployment: {
+    id: string;
+    name: string;
+    namespace: string;
+    memoryRequestBytes: bigint | number | null;
+  }): Promise<{
+    pod: string;
+    hitsLimitAt: number;
+    slopeBytesPerHour: number;
+    confidence: number;
+    limitBytes: number;
+    projection: SeriesPoint[];
+  } | null> {
+    const [pods, workload] = await Promise.all([
+      this.prisma.pod.findMany({
+        where: { deploymentId: deployment.id },
+        select: { name: true, createdAt: true, lastTerminatedAt: true }
+      }),
+      this.prisma.k8sObject.findFirst({
+        where: { kind: 'Deployment', namespace: deployment.namespace, name: deployment.name },
+        select: { manifest: true }
+      })
+    ]);
+    const manifest = workload?.manifest as
+      | {
+          spec?: {
+            template?: {
+              spec?: { containers?: { resources?: { limits?: { memory?: string } } }[] };
+            };
+          };
+        }
+      | undefined;
+    const declared = manifest?.spec?.template?.spec?.containers?.[0]?.resources?.limits?.memory;
+    const limitBytes = declared
+      ? parseMemory(declared)
+      : deployment.memoryRequestBytes != null
+        ? Number(deployment.memoryRequestBytes)
+        : 0;
+    if (!(limitBytes > 0) || pods.length === 0) return null;
+    const now = Date.now();
+    const endSec = Math.floor(now / 1000);
+    const groups = await this.vm.queryRangeGrouped(
+      `sum by (pod) (container_memory_working_set_bytes{namespace="${escapeLabel(deployment.namespace)}",pod=~"${deploymentPodRegex(deployment.name)}",container="",image=""})`,
+      endSec - 6 * 3600,
+      endSec,
+      300,
+      'pod'
+    );
+    const started = new Map(
+      pods.map((p) => [p.name, Math.max(p.createdAt.getTime(), p.lastTerminatedAt?.getTime() ?? 0)])
+    );
+    let best: Awaited<ReturnType<MetricsService['forecastDeploymentMemory']>> = null;
+    for (const group of groups) {
+      const podStartedAt = started.get(group.key);
+      if (podStartedAt == null) continue;
+      const points = group.points.map((p) => ({ t: p.x, v: p.y }));
+      const forecast = forecastMemoryLimit({ points, limitBytes, podStartedAt, now });
+      if (!forecast || (best && best.hitsLimitAt <= forecast.hitsLimitAt)) continue;
+      best = {
+        pod: group.key,
+        ...forecast,
+        limitBytes,
+        projection: projection(points, linearFit(points), forecast.hitsLimitAt).map((p) => ({
+          x: p.t,
+          y: p.v
+        }))
+      };
+    }
+    return best;
   }
 
   async fetchDeploymentThrottle(args: {
