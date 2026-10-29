@@ -78,6 +78,27 @@ export class WorkloadConsumer implements OnModuleDestroy {
     return ctx ? { deploymentId: ctx.deploymentId, projectId: ctx.projectId } : {};
   }
 
+  // A ReplicaSet belongs to the app named by its pod template; blue/green
+  // copies carry `orchard.my/app`, so the green side's sets land on the app
+  // too. Mirroring them is what lets the overview tell old pods from new
+  // without asking the apiserver.
+  async mapReplicaSetRefs(rs: k8s.V1ReplicaSet): Promise<EngineRefs> {
+    const ctx = await this.resolveReplicaSet(rs);
+    return ctx ? { deploymentId: ctx.deploymentId, projectId: ctx.projectId } : {};
+  }
+
+  async onReplicaSetEvent(_type: EngineEventType, rs: k8s.V1ReplicaSet): Promise<void> {
+    const ctx = await this.resolveReplicaSet(rs);
+    if (ctx) this.scheduleEmit(ctx, { rollout: true });
+  }
+
+  private resolveReplicaSet(rs: k8s.V1ReplicaSet): Promise<Ctx | null> {
+    const labels = rs.metadata?.labels;
+    const app = labels?.['orchard.my/app'] ?? labels?.['app.kubernetes.io/name'];
+    if (!app) return Promise.resolve(null);
+    return this.resolveCtx({ metadata: { namespace: rs.metadata?.namespace, name: app } });
+  }
+
   // A PodDisruptionBudget carries the deployment's name, so it resolves
   // through the same lookup.
   async mapPdbRefs(pdb: k8s.V1PodDisruptionBudget): Promise<EngineRefs> {

@@ -208,6 +208,26 @@ export function buildEngineShards(deps: EngineShardDeps): EngineShard[] {
           onEvent: (type, obj) => deps.workloads.onEvent(type, obj)
         },
         {
+          kind: 'ReplicaSet',
+          apiVersion: 'apps/v1',
+          watchPath: '/apis/apps/v1/replicasets',
+          labelSelector: ORCHARD_SELECTOR,
+          list: async (kc, opts) =>
+            toListResult(
+              await kc
+                .makeApiClient(k8s.AppsV1Api)
+                .listReplicaSetForAllNamespaces(
+                  undefined,
+                  opts.continueToken,
+                  undefined,
+                  ORCHARD_SELECTOR,
+                  opts.limit
+                )
+            ),
+          mapRefs: (obj) => deps.workloads.mapReplicaSetRefs(obj),
+          onEvent: (type, obj) => deps.workloads.onReplicaSetEvent(type, obj)
+        },
+        {
           kind: 'PodDisruptionBudget',
           apiVersion: 'policy/v1',
           watchPath: '/apis/policy/v1/poddisruptionbudgets',

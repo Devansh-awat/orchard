@@ -5,7 +5,7 @@ import { OrgEventsService } from '../../events/org-events.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { PodLogCaptureService } from '../../kubernetes/pod-log-capture.service';
 import { EngineEventType, EngineObjectKey, EngineRefs } from '../core/informer';
-import { computePodStatus, latestTermination } from '../pod-status';
+import { computePodStatus, latestTermination, podRecord } from '../pod-status';
 
 export { computePodStatus, latestTermination } from '../pod-status';
 
@@ -28,10 +28,21 @@ interface Ctx {
   projectId: string;
 }
 
+type PodPayload = { name?: string; deleted?: boolean; [key: string]: unknown };
+
 interface PendingEmit {
   ctx: Ctx;
-  payload: unknown;
+  pods: Map<string, PodPayload>;
   timer: ReturnType<typeof setTimeout>;
+}
+
+function appNameOf(pod: k8s.V1Pod): string | undefined {
+  const labels = pod.metadata?.labels;
+  return labels?.['orchard.my/app'] ?? labels?.['app.kubernetes.io/name'];
+}
+
+function isGreen(pod: k8s.V1Pod): boolean {
+  return pod.metadata?.labels?.['orchard.my/slot'] === 'green';
 }
 
 @Injectable()
@@ -103,7 +114,7 @@ export class PodConsumer implements OnModuleDestroy {
 
   async mapRefs(pod: k8s.V1Pod): Promise<EngineRefs> {
     const ns = pod.metadata?.namespace;
-    const depName = pod.metadata?.labels?.['app.kubernetes.io/name'];
+    const depName = appNameOf(pod);
     if (!ns || !depName) return {};
     const ctx = await this.resolveCtx(ns, depName);
     return ctx ? { deploymentId: ctx.deploymentId, projectId: ctx.projectId } : {};
@@ -111,10 +122,15 @@ export class PodConsumer implements OnModuleDestroy {
 
   async onEvent(type: EngineEventType, pod: k8s.V1Pod): Promise<void> {
     const ns = pod.metadata?.namespace;
-    const depName = pod.metadata?.labels?.['app.kubernetes.io/name'];
+    const depName = appNameOf(pod);
     if (!ns || !depName) return;
     const ctx = await this.resolveCtx(ns, depName);
     if (!ctx) return;
+
+    if (isGreen(pod)) {
+      this.scheduleEmit(ctx, this.buildPayload(type, pod));
+      return;
+    }
 
     const statusChanged = await this.syncPod(type, ctx.deploymentId, pod);
 
@@ -130,20 +146,20 @@ export class PodConsumer implements OnModuleDestroy {
     this.scheduleEmit(ctx, this.buildPayload(type, pod));
   }
 
-  private scheduleEmit(ctx: Ctx, payload: unknown) {
+  private scheduleEmit(ctx: Ctx, payload: PodPayload) {
     const key = ctx.deploymentId;
     const now = Date.now();
     const last = this.lastEmit.get(key) ?? 0;
-
-    if (now - last >= EMIT_COALESCE_MS) {
-      this.lastEmit.set(key, now);
-      this.emit(ctx, payload);
-      return;
-    }
+    const podKey = String(payload.name ?? '');
 
     const existing = this.pending.get(key);
     if (existing) {
-      existing.payload = payload;
+      existing.pods.set(podKey, payload);
+      return;
+    }
+    if (now - last >= EMIT_COALESCE_MS) {
+      this.lastEmit.set(key, now);
+      this.emit(ctx, [payload]);
       return;
     }
     const delay = EMIT_COALESCE_MS - (now - last);
@@ -151,32 +167,31 @@ export class PodConsumer implements OnModuleDestroy {
       const p = this.pending.get(key);
       this.pending.delete(key);
       this.lastEmit.set(key, Date.now());
-      if (p) this.emit(p.ctx, p.payload);
+      if (p) this.emit(p.ctx, [...p.pods.values()]);
     }, delay);
-    this.pending.set(key, { ctx, payload, timer });
+    this.pending.set(key, { ctx, pods: new Map([[podKey, payload]]), timer });
   }
 
-  private emit(ctx: Ctx, payload: unknown) {
+  private emit(ctx: Ctx, pods: PodPayload[]) {
+    const last = pods[pods.length - 1];
     this.orgEvents.emit({
       organizationId: ctx.orgId,
       type: 'pod.changed',
       id: ctx.deploymentId,
       projectId: ctx.projectId,
-      payload
+      payload: { ...last, pods }
     });
   }
 
-  private buildPayload(type: EngineEventType, pod: k8s.V1Pod) {
+  private buildPayload(type: EngineEventType, pod: k8s.V1Pod): PodPayload {
     const name = pod.metadata?.name;
     if (type === 'delete') return { deleted: true, name };
     const containerStatuses = pod.status?.containerStatuses ?? [];
     const term = latestTermination(containerStatuses);
     return {
-      name,
-      status: computePodStatus(pod),
+      ...podRecord(pod),
       ready:
         pod.status?.conditions?.some((c) => c.type === 'Ready' && c.status === 'True') ?? false,
-      restartCount: containerStatuses.reduce((sum, c) => sum + (c.restartCount ?? 0), 0),
       lastTermination: term?.reason
         ? { reason: term.reason, exitCode: term.exitCode, finishedAt: term.finishedAt }
         : null

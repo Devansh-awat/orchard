@@ -13,6 +13,7 @@ import {
   HttpException
 } from '@nestjs/common';
 import { Prisma, ServiceType } from '@prisma/client';
+import type * as k8s from '@kubernetes/client-node';
 import type { V1EnvVar } from '@kubernetes/client-node';
 import { planEnvAdoption, type EnvAdoptionPlan } from '../env/env-adoption';
 import { PrismaService } from '../prisma/prisma.service';
@@ -60,7 +61,7 @@ import { GitConnectionsService } from '../git/git-connections.service';
 import { ScoreService } from '../score/score.service';
 import { hostOf } from '../git/git-provider';
 import { parseRepoUrl } from '../docker/repo-url';
-import { computePodStatus } from '../engine/pod-status';
+import { computePodStatus, podFacts, podRecord } from '../engine/pod-status';
 import { normalizeRootDirectory } from '../docker/build-config';
 import { applyEnvKeepRules, defaultSecretFlag, EnvVarWrite } from './env-write-rules';
 import { assertEnvSetStorable } from './environment-shared-vars.service';
@@ -107,6 +108,11 @@ import {
 import { buildStartedAtFrom } from './build-timing';
 import { ReleasesService } from './releases.service';
 import type { DeployStrategy } from '../kubernetes/rollout-strategy';
+import {
+  greenName as greenName_,
+  summarizeBlueGreen,
+  summarizeRollout
+} from '../kubernetes/rollout-strategy';
 
 const ROLLBACK_GATE_TIMEOUT_MS = 90_000;
 
@@ -1784,6 +1790,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       readyReplicas: workload?.readyReplicas ?? null,
       observedAt: workload?.updatedAt ?? null,
       warnings,
+      rollout: await this.mirroredRollout(deployment),
       totalCpuUsage,
       totalMemoryUsage,
       status: computedStatus,
@@ -1794,6 +1801,36 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       effectiveImagePullPolicy: resolvePullPolicy(deployment.imagePullPolicy, deployment.image)
     };
     return canEdit ? result : this.scrubDeploymentForViewer(result);
+  }
+
+  async mirroredRollout(deployment: { id: string; name: string | null; namespace: string | null }) {
+    if (!deployment.name || !deployment.namespace) return null;
+    const greenName = greenName_(deployment.name);
+    const objects = await this.prisma.k8sObject.findMany({
+      where: {
+        OR: [
+          { kind: 'ReplicaSet', deploymentId: deployment.id },
+          {
+            kind: 'Deployment',
+            namespace: deployment.namespace,
+            name: { in: [deployment.name, greenName] }
+          }
+        ]
+      },
+      select: { kind: true, name: true, manifest: true }
+    });
+    const blue = objects.find((o) => o.kind === 'Deployment' && o.name === deployment.name);
+    if (!blue) return null;
+    const owned = (owner: string) =>
+      objects
+        .filter((o) => o.kind === 'ReplicaSet')
+        .map((o) => o.manifest as k8s.V1ReplicaSet)
+        .filter((rs) => rs.metadata?.ownerReferences?.some((ref) => ref.name === owner));
+    const summary = summarizeRollout(blue.manifest as k8s.V1Deployment, owned(deployment.name));
+    const green = objects.find((o) => o.kind === 'Deployment' && o.name === greenName);
+    return green
+      ? summarizeBlueGreen(summary, green.manifest as k8s.V1Deployment, owned(greenName))
+      : summary;
   }
 
   async getDeploymentPods(deploymentId: string, userId?: string) {
@@ -1832,7 +1869,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     let totalCpuUsage: number | null = null;
     let totalMemoryUsage: number | null = null;
     let meteredPods: number | null = null;
-    let rollout: unknown = null;
 
     if (deployment.name && deployment.namespace) {
       try {
@@ -1845,7 +1881,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         totalCpuUsage = livePods?.totalCpuUsage ?? null;
         totalMemoryUsage = livePods?.totalMemoryUsage ?? null;
         meteredPods = livePods?.meteredPods ?? null;
-        rollout = livePods?.rollout ?? null;
 
         try {
           const k8sDeployment = await this.k8sWorkload.getKubernetesDeployment(
@@ -1869,7 +1904,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     return {
       pods,
       warnings,
-      rollout,
+      rollout: await this.mirroredRollout(deployment),
       availableReplicas,
       totalCpuUsage,
       totalMemoryUsage,
@@ -5652,46 +5687,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       where: { kind: 'Pod', deploymentId: { in: deploymentIds } },
       select: { deploymentId: true, manifest: true }
     });
-    return objects.map((o) => {
-      const pod = o.manifest as any;
-      const containerStatuses: any[] = pod.status?.containerStatuses ?? [];
-      const restartCount = containerStatuses.reduce(
-        (sum: number, c: any) => sum + (c.restartCount ?? 0),
-        0
-      );
-      const createdAt = pod.status?.startTime ?? pod.metadata?.creationTimestamp ?? null;
-      return {
-        deploymentId: o.deploymentId as string,
-        id: pod.metadata?.name,
-        name: pod.metadata?.name,
-        status: computePodStatus(pod),
-        ip: pod.status?.podIP ?? null,
-        podIp: pod.status?.podIP ?? null,
-        nodeName: pod.spec?.nodeName ?? null,
-        revision: pod.metadata?.labels?.['pod-template-hash'] ?? null,
-        restartCount,
-        startTime: createdAt,
-        createdAt,
-        cpuUsage: null,
-        memoryUsage: null,
-        containers: containerStatuses.map((cs: any) => {
-          const term = cs.state?.terminated ?? cs.lastState?.terminated ?? null;
-          return {
-            name: cs.name,
-            image: cs.image ?? null,
-            ready: cs.ready ?? false,
-            restartCount: cs.restartCount ?? 0,
-            lastTermination: term?.reason
-              ? {
-                  reason: term.reason,
-                  exitCode: term.exitCode ?? null,
-                  finishedAt: term.finishedAt ?? null
-                }
-              : null
-          };
-        })
-      };
-    });
+    return objects.map((o) => ({
+      deploymentId: o.deploymentId as string,
+      ...podRecord(o.manifest as any),
+      cpuUsage: null,
+      memoryUsage: null
+    }));
   }
 
   // Deliberately derived from CURRENT container state, not from k8s Event
@@ -5732,7 +5733,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       cpuUsage: pod.cpuUsage ?? null,
       memoryUsage: pod.memoryUsage ?? null,
       events: pod.events ?? [],
+      ...(pod.facts ?? {}),
       containers:
+        pod.facts?.containers ??
         pod.containers?.map((container) => ({
           name: container.name,
           image: container.image,
@@ -5745,7 +5748,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
                 finishedAt: container.lastTerminatedAt ?? null
               }
             : null
-        })) ?? []
+        })) ??
+        []
     }));
   }
 

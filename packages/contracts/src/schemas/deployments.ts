@@ -150,22 +150,23 @@ const volumeRecord = z
   })
   .passthrough();
 
+const revision = z.object({
+  hash: z.string(),
+  number: z.number(),
+  image: z.string().nullable(),
+  createdAt: z.string().nullable(),
+  replicas: z.number(),
+  ready: z.number()
+});
+
 const rolloutSummary = z.object({
   currentRevision: z.string().nullable(),
-  revisions: z.array(
-    z.object({
-      hash: z.string(),
-      number: z.number(),
-      image: z.string().nullable(),
-      createdAt: z.string().nullable(),
-      replicas: z.number(),
-      ready: z.number()
-    })
-  ),
+  revisions: z.array(revision),
   desired: z.number(),
   updated: z.number(),
   ready: z.number(),
   available: z.number(),
+  previous: revision.nullable().optional(),
   state: z.enum(['stable', 'progressing', 'failed']),
   reason: z.string().nullable()
 });
@@ -184,17 +185,36 @@ const podRecord = z
     createdAt: z.string().nullable().optional(),
     cpuUsage: z.number().nullable().optional(),
     memoryUsage: z.number().nullable().optional(),
+    phase: z.string().nullable().optional(),
+    reason: z.string().nullable().optional(),
+    slot: z.string().nullable().optional(),
+    disruption: z.string().nullable().optional(),
+    probes: z
+      .object({ liveness: z.boolean(), readiness: z.boolean(), startup: z.boolean() })
+      .optional(),
+    deletingAt: z.string().nullable().optional(),
+    graceSeconds: z.number().nullable().optional(),
+    scheduled: z.boolean().optional(),
+    unschedulableSince: z.string().nullable().optional(),
+    schedulingMessage: z.string().nullable().optional(),
+    readySince: z.string().nullable().optional(),
+    notReadySince: z.string().nullable().optional(),
     containers: z
       .array(
         z
           .object({
             name: z.string(),
-            image: z.string().optional(),
+            init: z.boolean().optional(),
+            image: z.string().nullable().optional(),
             ready: z.boolean().optional(),
             restartCount: z.number().optional(),
+            state: z.enum(['running', 'waiting', 'terminated', 'unknown']).optional(),
+            reason: z.string().nullable().optional(),
+            message: z.string().nullable().optional(),
+            startedAt: z.string().nullable().optional(),
             lastTermination: z
               .object({
-                reason: z.string(),
+                reason: z.string().nullable(),
                 exitCode: z.number().nullable().optional(),
                 finishedAt: z.string().nullable().optional()
               })
@@ -346,6 +366,7 @@ const deploymentBase = z
 
 const deploymentWithRelations = deploymentBase.extend({
   pods: z.array(podRecord).optional(),
+  rollout: rolloutSummary.nullable().optional(),
   services: z.array(serviceRecord).optional(),
   envVars: z.array(envVarRecord).optional(),
   volumes: z.array(volumeRecord).optional(),

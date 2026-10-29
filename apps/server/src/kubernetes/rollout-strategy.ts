@@ -237,6 +237,7 @@ export type RolloutRevision = {
 export type RolloutSummary = {
   currentRevision: string | null;
   revisions: RolloutRevision[];
+  previous: RolloutRevision | null;
   desired: number;
   updated: number;
   ready: number;
@@ -273,6 +274,10 @@ export function summarizeRollout(
 
   const current = revisions[0] ?? null;
   const live = revisions.filter((r) => r === current || r.replicas > 0);
+  const previous =
+    revisions.find((r) => r !== current && r.ready > 0) ??
+    revisions.find((r) => r !== current) ??
+    null;
   const desired = dep.spec?.replicas ?? 0;
   const status = dep.status ?? {};
   const updated = status.updatedReplicas ?? 0;
@@ -291,25 +296,47 @@ export function summarizeRollout(
       state = 'failed';
       reason = 'ProgressDeadlineExceeded';
     }
-    if (condition.type === 'ReplicaFailure' && condition.status === 'True') {
-      state = 'failed';
+    if (condition.type === 'ReplicaFailure' && condition.status === 'True' && !reason) {
       reason = condition.message || 'ReplicaFailure';
     }
   }
   if (state !== 'failed') {
     const behind = (dep.metadata?.generation ?? 0) > (status.observedGeneration ?? 0);
     const settled = updated >= desired && available >= desired && total <= desired;
-    if (behind || !settled || live.length > 1) state = 'progressing';
+    const finished = (status.conditions ?? []).some(
+      (c) => c.type === 'Progressing' && c.reason === 'NewReplicaSetAvailable'
+    );
+    if (behind || live.length > 1 || (!settled && !finished)) state = 'progressing';
   }
 
   return {
     currentRevision: current?.hash ?? null,
     revisions: live,
+    previous,
     desired,
     updated,
     ready,
     available,
     state,
     reason
+  };
+}
+
+export function summarizeBlueGreen(
+  blue: RolloutSummary,
+  green: k8s.V1Deployment,
+  greenSets: readonly k8s.V1ReplicaSet[]
+): RolloutSummary {
+  const next = summarizeRollout(green, greenSets);
+  const current = next.revisions[0];
+  if (!current) return blue;
+  const previous = blue.revisions.find((r) => r.hash === blue.currentRevision);
+  const number = Math.max(current.number, (previous?.number ?? 0) + 1);
+  return {
+    ...next,
+    currentRevision: current.hash,
+    revisions: [{ ...current, number }, ...(previous ? [previous] : [])],
+    previous: previous ?? null,
+    state: next.state === 'failed' ? 'failed' : 'progressing'
   };
 }
