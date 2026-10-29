@@ -2,10 +2,18 @@
 	import { env } from '$env/dynamic/public';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import type { Service, ServiceFormState, ServicePortForm } from '$lib/types/deployment';
-	import { EthernetPort, Globe, Plus } from 'lucide-svelte';
-	import { Button, EmptyState, List, SectionTitle } from '$lib/components/ui';
+	import { Cable, EthernetPort, Globe, Network, Plus } from 'lucide-svelte';
+	import {
+		Button,
+		EmptyState,
+		List,
+		Menu,
+		MenuItem,
+		MenuLabel,
+		MenuSeparator
+	} from '$lib/components/ui';
 	import Widget from '$lib/components/ui/Widget.svelte';
-	import PortCard from './network/PortCard.svelte';
+	import PortGroup from './network/PortGroup.svelte';
 	import DomainRow from './network/DomainRow.svelte';
 	import DomainModal from './network/DomainModal.svelte';
 	import ProtectionModal from './network/ProtectionModal.svelte';
@@ -185,6 +193,14 @@
 	let editingServiceId = $state<string | null>(null);
 	let domainPortLocked = $state(false);
 
+	const exposable = $derived(entries.filter((e) => e.port.id && !e.port.publicEnabled));
+	const canAddDomain = $derived(domainServiceOptions.length > 0 && !!deployment.project?.id);
+	const canJoinTailnet = $derived(tailnet.enabled && !tailnet.exposed);
+
+	function expose(entry: PortEntry) {
+		if (entry.port.id) onTogglePortPublic(entry.service.id, entry.port.id, false);
+	}
+
 	const editForm = $derived(editingServiceId ? serviceEditForms[editingServiceId] : undefined);
 	const removePortSiblings = $derived(
 		removePortFor
@@ -296,84 +312,126 @@
 	}
 </script>
 
-<div class="network">
-	<SectionTitle title="Ports">
-		{#snippet actions()}
+<Widget title="Ports">
+	{#snippet meta()}
+		<Menu placement="bottom-end">
+			{#snippet trigger(props)}
+				<Button
+					{...props}
+					variant="ghost"
+					size="sm"
+					icon={Plus}
+					class="net-add"
+					loading={!!portPublicBusyId}>Add</Button
+				>
+			{/snippet}
 			{#if entries.length > 0}
-				<span class="net-actions">
-					{#if domainServiceOptions.length > 0 && deployment.project?.id}
-						<Button variant="ghost" size="sm" icon={Globe} class="net-add" onclick={openAddDomain}
-							>Add domain</Button
-						>
-					{/if}
-					<Button variant="ghost" size="sm" icon={Plus} class="net-add" onclick={openAddPort}
-						>Add port</Button
+				<MenuItem
+					icon={Globe}
+					disabled={!canAddDomain}
+					description="Serve it at a web address"
+					onclick={openAddDomain}>Domain</MenuItem
+				>
+				{#if exposable.length === 1}
+					<MenuItem
+						icon={Cable}
+						disabled={!!portPublicBusyId}
+						description={entries.length > 1
+							? `Opens port ${exposable[0].port.targetPort} to the internet`
+							: 'Raw access for game servers and bots'}
+						onclick={() => expose(exposable[0])}
+						>Public {(exposable[0].port.protocol || 'TCP').toUpperCase()} port</MenuItem
 					>
-				</span>
+				{:else if exposable.length > 1}
+					<MenuSeparator />
+					<MenuLabel>Make a port public</MenuLabel>
+					{#each exposable as entry (entry.key)}
+						<MenuItem icon={Cable} disabled={!!portPublicBusyId} onclick={() => expose(entry)}
+							>Port {entry.port.targetPort} · {(
+								entry.port.protocol || 'TCP'
+							).toUpperCase()}</MenuItem
+						>
+					{/each}
+				{/if}
+				{#if canJoinTailnet}
+					<MenuItem
+						icon={Network}
+						disabled={tailnet.busy}
+						href={tailnet.linked ? undefined : '/user/settings'}
+						onclick={tailnet.linked ? tailnet.onExpose : undefined}
+						description={tailnet.linked
+							? 'Reach every port from your tailnet'
+							: 'Link your Tailscale account first'}>Tailnet</MenuItem
+					>
+				{/if}
+				<MenuSeparator />
 			{/if}
-		{/snippet}
-	</SectionTitle>
+			<MenuItem icon={EthernetPort} description="One your app listens on" onclick={openAddPort}
+				>Port</MenuItem
+			>
+		</Menu>
+	{/snippet}
 
 	{#if entries.length === 0}
-		<Widget>
-			<EmptyState title="No ports" description="Add the port your app listens on to reach it.">
-				{#snippet icon()}<EthernetPort size={18} />{/snippet}
-				<Button variant="secondary" icon={Plus} onclick={openAddPort}>Add port</Button>
-			</EmptyState>
-		</Widget>
+		<EmptyState title="No ports" description="Add the port your app listens on to reach it.">
+			{#snippet icon()}<EthernetPort size={18} />{/snippet}
+			<Button variant="secondary" icon={Plus} onclick={openAddPort}>Add port</Button>
+		</EmptyState>
 	{:else}
-		{#each entries as entry (entry.key)}
-			<PortCard
-				{entry}
-				domains={layout.byPort.get(entry.key) ?? []}
-				appDomain={APP_DOMAIN}
-				canAddDomain={!!deployment.project?.id}
-				canProtect={!!onUpdateProtection}
-				canEditRedirect={!!onUpdateRedirect}
-				busy={!!entry.port.id && portPublicBusyId === entry.port.id}
-				removing={serviceDeletingId === entry.service.id}
-				{deletingIngressId}
-				{tailnet}
-				{sharedWith}
-				onAddDomain={domainAdder(entry)}
-				onExpose={() => entry.port.id && onTogglePortPublic(entry.service.id, entry.port.id, false)}
-				onUnexpose={() => {
-					unexposeFor = entry;
-					unexposeOpen = true;
-				}}
-				onEditPort={() => openEditPort(entry)}
-				onRemovePort={() => {
-					removePortFor = entry;
-					removePortOpen = true;
-				}}
-				onProtection={openProtection}
-				onRedirect={openRedirect}
-				onDns={openDns}
-				onRemoveDomain={askRemoveDomain}
-			/>
-		{/each}
-	{/if}
-
-	{#if layout.redirects.length > 0}
-		<Widget title="Redirects">
-			<List inset={false} label="Redirects">
-				{#each layout.redirects as ingress (ingress.id)}
-					<DomainRow
-						{ingress}
+		<div class="groups">
+			{#each entries as entry (entry.key)}
+				<div class="group">
+					<PortGroup
+						{entry}
+						domains={layout.byPort.get(entry.key) ?? []}
 						appDomain={APP_DOMAIN}
 						canProtect={!!onUpdateProtection}
 						canEditRedirect={!!onUpdateRedirect}
-						deleting={deletingIngressId === ingress.id}
+						busy={!!entry.port.id && portPublicBusyId === entry.port.id}
+						removing={serviceDeletingId === entry.service.id}
+						{deletingIngressId}
+						{tailnet}
+						{sharedWith}
+						onAddDomain={canAddDomain ? domainAdder(entry) : null}
+						onExpose={() => expose(entry)}
+						onUnexpose={() => {
+							unexposeFor = entry;
+							unexposeOpen = true;
+						}}
+						onEditPort={() => openEditPort(entry)}
+						onRemovePort={() => {
+							removePortFor = entry;
+							removePortOpen = true;
+						}}
 						onProtection={openProtection}
 						onRedirect={openRedirect}
 						onDns={openDns}
-						onRemove={askRemoveDomain}
+						onRemoveDomain={askRemoveDomain}
 					/>
-				{/each}
-			</List>
-		</Widget>
+				</div>
+			{/each}
+			{#if layout.redirects.length > 0}
+				<div class="group group--plain">
+					<List inset={false} label="Redirects">
+						{#each layout.redirects as ingress (ingress.id)}
+							<DomainRow
+								{ingress}
+								appDomain={APP_DOMAIN}
+								canProtect={!!onUpdateProtection}
+								canEditRedirect={!!onUpdateRedirect}
+								deleting={deletingIngressId === ingress.id}
+								onProtection={openProtection}
+								onRedirect={openRedirect}
+								onDns={openDns}
+								onRemove={askRemoveDomain}
+							/>
+						{/each}
+					</List>
+				</div>
+			{/if}
+		</div>
 	{/if}
-</div>
+</Widget>
 
 <DomainModal
 	bind:open={showDomainForm}
@@ -476,20 +534,43 @@
 />
 
 <style>
-	.network {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-		min-width: 0;
-	}
-	.net-actions {
-		display: flex;
-		align-items: center;
-		gap: 0.25rem;
+	:global(.net-add) {
 		margin-right: -0.625rem;
-	}
-	.network :global(.net-add) {
 		border-radius: 999px;
 		corner-shape: round;
+	}
+	.groups {
+		margin-top: -0.25rem;
+	}
+	.group + .group {
+		box-shadow: inset 0 1px 0 var(--border-default);
+	}
+	.group:not(.group--plain) :global(.row:not(:first-child)) {
+		padding-left: 2.25rem;
+		box-shadow: none;
+		background: linear-gradient(var(--border-default), var(--border-default)) 4.75rem 0 /
+			calc(100% - 4.75rem) 1px no-repeat;
+	}
+	.group:not(.group--plain) :global(.row:not(:last-child)::after),
+	.group:not(.group--plain) :global(.row:not(:first-child)::before) {
+		content: '';
+		position: absolute;
+		left: calc(0.875rem - 0.5px);
+		border-left: 1px solid var(--rule);
+	}
+	.group:not(.group--plain) :global(.row:first-child::after) {
+		top: calc(50% + 0.875rem);
+		bottom: 0;
+	}
+	.group:not(.group--plain) :global(.row:not(:first-child)::before) {
+		top: 0;
+		width: 1.125rem;
+		height: 50%;
+		border-bottom: 1px solid var(--rule);
+		border-bottom-left-radius: 0.5rem;
+	}
+	.group:not(.group--plain) :global(.row:not(:first-child):not(:last-child)::after) {
+		top: 50%;
+		bottom: 0;
 	}
 </style>

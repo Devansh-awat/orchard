@@ -312,14 +312,17 @@ Three-level hierarchy: **Org cap** → **Member allowance** → **Deployment req
   time range, a synced crosshair, brush zoom, deploy and kill markers, incident bands and findings
   (`observe/findings.ts`). `?demo` feeds it synthetic data. Series the server does not record yet (latency
   percentiles, status classes, per-route stats, volume fill, not-ready history) are left out, not faked.
-- Network (`NetworkTab` + `deployment/network/`): one `PortCard` per port, because every way in is built
-  on a private port. The private address is the first row; domains, the public TCP/UDP port and the tailnet
-  stack under it on a spine, each added from that port's Add menu (`domainsByPort` assigns domains by route
-  `serviceName`/`servicePort`). Redirects point at no port, so they get their own card. Adding a domain is
-  one address field (`host/path`, the path is parsed out of it); the port is fixed when opened from a
-  card and only asked for when there are two or more. A host already used in the project draws its path
-  map (`/` web, `/api` this app, new) and a taken path blocks Add. Custom domains then turn the modal into
-  "Point your DNS", which polls until connected. Rows on a shared host say "Shared with api at /api".
+- Network (`NetworkTab` + `deployment/network/`): one "Ports" `Widget`, because every way in is built on a
+  private port. Each port is a row (`PortGroup`: port, protocol, private address); its domains, public
+  TCP/UDP port and tailnet hang under it, indented on a spine with elbows. Ports are split by a full
+  hairline, rows inside a port by one that starts at the text. One Add menu in the header (Domain, Public
+  port, Tailnet, Port); port-scoped actions live in that port's `…` (Add a domain, Make it public, Edit,
+  Remove). `domainsByPort` files each domain under the port its own route points at; redirects point at no
+  port and sit last. Adding a domain is one address field (`host/path`, the path is parsed out of it); the
+  port is fixed when opened from a port and only asked for when there are two or more. A host already used
+  in the project draws its path map (`/` web, `/api` this app, new) and a taken path blocks Add. Custom
+  domains then turn the modal into "Point your DNS", which polls until connected. Rows on a shared host
+  say "Shared with api at /api".
 - Security (`SecurityTab`): scan card and Configuration card at 1.618 : 1, then the vulnerability table only
   when there are findings. Reads `GET /deployments/:id/security`, rescans with `POST .../security/scan`, polls
   every 3s only while scanning. The scanner is an instance choice (`scan.provider`: `off` by default, `harbor`,

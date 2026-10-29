@@ -204,7 +204,24 @@ function service(store: Store, d: MockDeployment) {
 				publicPort: d.name === 'game-server' ? 30565 : null,
 				publicAddress: d.name === 'game-server' ? 'tcp.orchard.my:30565' : null,
 				internalUrl: `http://${internalHost}`
-			}
+			},
+			...(d.name === 'game-server'
+				? [
+						{
+							id: uid(`svcport:${d.id}:query`),
+							serviceId: uid(`svc:${d.id}`),
+							name: 'query',
+							port: 27015,
+							targetPort: 27015,
+							protocol: 'UDP',
+							nodePort: null,
+							publicEnabled: false,
+							publicPort: null,
+							publicAddress: null,
+							internalUrl: `${internalHost}:27015`
+						}
+					]
+				: [])
 		],
 		createdAt: d.createdAt,
 		updatedAt: d.updatedAt
