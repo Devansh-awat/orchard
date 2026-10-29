@@ -867,7 +867,7 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 			const terms = (query.get('q') ?? '').toLowerCase().split(/\s+/).filter(Boolean);
 			const lines = since(d, pods, start, end)
 				.filter((l) => !levels.length || levels.includes(l.level))
-				.filter((l) => terms.every((t) => l.message.toLowerCase().includes(t)))
+				.filter((l) => terms.every((t: string) => l.message.toLowerCase().includes(t)))
 				.reverse();
 			const page = lines.slice(0, limit);
 			const oldest = page.at(-1);
