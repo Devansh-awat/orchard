@@ -51,6 +51,8 @@
 		currentMemUsage?: number | null;
 		maxCpuMilli?: number | null;
 		maxMemoryBytes?: number | null;
+		recommendedCpuMilli?: number | null;
+		recommendedMemoryBytes?: number | null;
 		onchange?: (v: { cpuMilli: number | null; memoryBytes: number | null }) => void;
 	}
 
@@ -64,6 +66,8 @@
 		currentMemUsage = null,
 		maxCpuMilli = null,
 		maxMemoryBytes = null,
+		recommendedCpuMilli = null,
+		recommendedMemoryBytes = null,
 		onchange
 	}: Props = $props();
 
@@ -115,6 +119,7 @@
 		fallback={memDefault}
 		limit={memLimit}
 		usage={currentMemUsage}
+		recommended={recommendedMemoryBytes}
 		{disabled}
 		onchange={emit}
 	/>
@@ -127,6 +132,7 @@
 		fallback={cpuDefault}
 		limit={cpuLimit}
 		usage={currentCpuUsage}
+		recommended={recommendedCpuMilli}
 		{disabled}
 		onchange={emit}
 	/>

@@ -1176,6 +1176,47 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 		}))
 	);
 	r.get(
+		'/deployments/:id/rightsizing',
+		withDep((d) => {
+			const MiB = 1024 * 1024;
+			const peak = d.memoryUsageBytes;
+			const recommendedMem = Math.max(128 * MiB, Math.ceil((peak * 1.15) / (64 * MiB)) * 64 * MiB);
+			const lowerMem =
+				d.memoryRequestBytes - recommendedMem >= Math.max(128 * MiB, d.memoryRequestBytes * 0.25);
+			const p95 = d.cpuUsageMilli;
+			const recommendedCpu = Math.max(100, Math.ceil((p95 * 1.5) / 100) * 100);
+			const cpuChange =
+				Math.abs(recommendedCpu - d.cpuRequestMilli) >= Math.max(100, d.cpuRequestMilli * 0.25)
+					? recommendedCpu > d.cpuRequestMilli
+						? 'raise'
+						: 'lower'
+					: 'none';
+			return {
+				status: 'ok',
+				reason: null,
+				historyDays: 14,
+				confidence: 'high',
+				unlimited: false,
+				memory: {
+					current: d.memoryRequestBytes,
+					recommended: lowerMem ? recommendedMem : d.memoryRequestBytes,
+					peak,
+					change: lowerMem ? 'lower' : 'none',
+					reason: `Peak was ${Math.round(peak / MiB)} MB over 14 days.`
+				},
+				cpu: {
+					current: d.cpuRequestMilli,
+					recommended: cpuChange === 'none' ? d.cpuRequestMilli : recommendedCpu,
+					p95,
+					p99: p95 * 1.2,
+					throttledP95: null,
+					change: cpuChange,
+					reason: `Usage was ${p95}m at p95 and ${Math.round(p95 * 1.2)}m at p99 over 14 days.`
+				}
+			};
+		})
+	);
+	r.get(
 		'/deployments/:id/releases',
 		withDep((d) => {
 			const verdict = mockVerdict(store, d);

@@ -15,6 +15,7 @@
 		limit = null,
 		limitLabel = 'Your limit',
 		usage = null,
+		recommended = null,
 		disabled = false,
 		onchange = undefined
 	}: {
@@ -29,6 +30,7 @@
 		limit?: number | null;
 		limitLabel?: string;
 		usage?: number | null;
+		recommended?: number | null;
 		disabled?: boolean;
 		onchange?: (value: number | null) => void;
 	} = $props();
@@ -192,10 +194,12 @@
 		style:--at={shown != null ? pos(shown) : 0}
 		style:--limit={ceiling != null ? pos(ceiling) : 1}
 		style:--used={usage != null ? pos(usage) : 0}
+		style:--suggested={recommended != null ? pos(recommended) : 0}
 	>
 		<div class="rail">
 			{#if ceiling != null && pos(ceiling) < 1}<span class="beyond"></span>{/if}
 			{#if usage != null}<span class="used"></span>{/if}
+			{#if recommended != null}<span class="suggested"></span>{/if}
 			{#if shown != null}<span class="fill" class:fill--default={isDefault}></span>{/if}
 		</div>
 		{#if shown != null}
@@ -337,6 +341,15 @@
 		inset: 0 auto 0 0;
 		width: calc(var(--used) * 100%);
 		background: color-mix(in oklab, var(--accent-solid) 30%, transparent);
+	}
+	.suggested {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		left: calc(var(--suggested) * 100% - 1px);
+		width: 2px;
+		background: var(--status-success-solid);
+		z-index: 1;
 	}
 	.fill {
 		position: absolute;

@@ -270,12 +270,14 @@
 >
 	<div class="amounts">
 		<AmountSlider
-			label="No limit"
+			label="No limit, with a suggestion"
 			bind:value={memOpen}
 			stops={MEMORY}
 			format={formatMemory}
 			parse={parseMemory}
 			fallback={512 * MB}
+			usage={300 * MB}
+			recommended={384 * MB}
 		/>
 		<AmountSlider
 			label="2 GB left"
