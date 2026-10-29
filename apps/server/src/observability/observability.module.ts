@@ -20,7 +20,9 @@ import { MetricsModule } from '../metrics/metrics.module';
     ErrorIngestService,
     TimelineService,
     VerdictsService,
-    FindingsService
+    FindingsService,
+    VictoriaLogsService,
+    RequestsService
   ],
   controllers: [ObservabilityController],
   exports: [
@@ -28,7 +30,9 @@ import { MetricsModule } from '../metrics/metrics.module';
     ErrorIngestService,
     TimelineService,
     VerdictsService,
-    FindingsService
+    FindingsService,
+    VictoriaLogsService,
+    RequestsService
   ]
 })
 export class ObservabilityModule {}
