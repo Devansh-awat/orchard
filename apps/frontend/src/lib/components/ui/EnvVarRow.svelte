@@ -92,7 +92,7 @@
 	.name {
 		display: block;
 		min-width: 0;
-		overflow: hidden;
+		overflow-x: clip;
 		padding-block: 0.3em;
 		margin-block: -0.3em;
 		font-family: var(--font-mono);
@@ -113,7 +113,7 @@
 		grid-area: 1 / 1;
 		display: block;
 		min-width: 0;
-		overflow: hidden;
+		overflow-x: clip;
 		padding-block: 0.3em;
 		margin-block: -0.3em;
 		font-family: var(--font-mono);

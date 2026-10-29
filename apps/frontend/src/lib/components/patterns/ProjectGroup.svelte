@@ -336,7 +336,7 @@
 		min-width: 0;
 	}
 	.name {
-		overflow: hidden;
+		overflow-x: clip;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		font-size: var(--text-title-3);

@@ -520,7 +520,7 @@
 		gap: 0.75rem;
 	}
 	.name {
-		overflow: hidden;
+		overflow-x: clip;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		font-size: calc(var(--text-display) * 1.5);
@@ -552,7 +552,7 @@
 		font-size: var(--text-callout);
 	}
 	.status-label {
-		overflow: hidden;
+		overflow-x: clip;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		text-box: trim-both cap alphabetic;

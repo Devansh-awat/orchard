@@ -757,7 +757,7 @@
 	.face-app,
 	.face-phase,
 	.line {
-		overflow: hidden;
+		overflow-x: clip;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		text-box: trim-both cap alphabetic;
@@ -854,7 +854,7 @@
 	}
 	.sheet-app,
 	.sheet-project {
-		overflow: hidden;
+		overflow-x: clip;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		text-box: trim-both cap alphabetic;

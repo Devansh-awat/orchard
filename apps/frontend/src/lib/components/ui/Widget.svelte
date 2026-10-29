@@ -62,12 +62,9 @@
 	}
 	.head {
 		display: flex;
-		align-items: baseline;
+		align-items: center;
 		justify-content: space-between;
 		gap: 0.75rem;
-	}
-	.head--controls {
-		align-items: center;
 		min-height: 1.75rem;
 		margin: -0.25rem 0 0;
 	}

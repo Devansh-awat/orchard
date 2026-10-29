@@ -70,7 +70,7 @@
 	.name {
 		display: block;
 		min-width: 0;
-		overflow: hidden;
+		overflow-x: clip;
 		padding-block: 0.3em;
 		margin-block: -0.3em;
 		font-size: var(--text-caption);

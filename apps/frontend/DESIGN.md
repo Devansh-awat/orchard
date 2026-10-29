@@ -322,10 +322,10 @@ Every log surface (the app console, the pod page, build progress, past build log
 
 - **One stream.** Build output is never split into per-step dropdowns. A step, pod or container is a `source` you filter by, not a fold you open.
 - **Never taken away.** Nothing closes or swaps logs while someone may be reading. A finished build keeps its modal until it is closed. A pod that goes away keeps its logs on screen with "web-abc is gone · Show web-xyz". The console never jumps to a newer pod by itself.
-- **Search** filters to matching lines and highlights the matches (CSS Custom Highlight API, no DOM rewriting). Cmd or Ctrl+F inside the viewer focuses it.
-- **Filters:** level (all, warnings and errors, errors only), time (presets plus a from and to), source. Lines without a time inherit the one before them. "N of M" says how much is hidden; "No lines match" offers Clear filters.
-- **Take it:** one click copies exactly the lines shown as plain text (timestamps included, markup gone); Download saves them as `.log`. Selecting by hand copies clean lines too: gutters are not selectable, timestamps are.
-- **Find the failure:** a ⚠ count jumps through errors. A container in `CrashLoopBackOff` opens on its output from before the crash, because its current output is empty.
+- **One filter capsule:** the toolbar is a single capsule (search icon, active filters as removable chips, the query, "N lines" or "N of M") plus three quiet icons: wrap, copy, download. Level, time and source live in the capsule's filter popover, never as a row of dropdowns. Matches are highlighted with the CSS Custom Highlight API (no DOM rewriting). Cmd or Ctrl+F inside the viewer focuses it.
+- **Filters:** level (all, warnings, errors), time (presets plus a from and to), source. Lines without a time inherit the one before them. "No lines match" offers Clear filters.
+- **Take it:** one click copies exactly the lines shown as plain text (timestamps included, markup gone); Download saves them as `.log`. Selecting lines tints them in the accent and floats a capsule under the selection with the line count, Copy and Download, which copy whole lines. A selection survives live updates: following pauses while something is selected.
+- **Find the failure:** errors and warnings are ticks along the right edge of the scroll area, placed by position in the stream; clicking one centres that line. A container in `CrashLoopBackOff` opens on its output from before the crash, because its current output is empty.
 - **Stored logs:** where a log store answers (Observe Logs), the toolbar's search, level and time go to the server through `onFilters`, "Load earlier" pages by cursor, and `onExport` turns Download into a menu (what's shown, every matching line, NDJSON). A quiet `caption` says "Searching stored logs" or "Reading live from pods" so nobody mistakes a tail for history. The Observe range picker drives both Metrics and Logs. Search, level and pod live in the URL (`q`, `levels`, `pod`) next to the range (`range` or `from`/`to`), `at` and `panel`, so Copy link in the Observe toolbar always reopens exactly what is on screen.
 - Line model: `LogLine` in `$lib/utils/log-lines.ts` (`text`, `ts`, `source`, `level`), built by `textLogLines` / `buildLogLines` and tested in `log-lines.test.ts`.
 
@@ -379,6 +379,14 @@ finishing, connection lost) go `top-center`.
 
 Names and URLs truncate at the end. Middle truncation only for hashes, IDs and file
 paths, where the end is what tells two values apart.
+
+A single-line truncation is `overflow-x: clip; text-overflow: ellipsis; white-space: nowrap`,
+never `overflow: hidden`. Labels trimmed with `text-box: trim-both cap alphabetic` have no room
+below the baseline, so `overflow: hidden` cut the descenders off "g", "y" and "p" ("High" read
+"Hiah"). Clipping only the inline axis keeps the ellipsis and lets descenders paint.
+
+Rows of numbers next to bars (`TopList`) share one column sized to the widest value, so a list
+of short numbers doesn't leave a wide empty gutter, and a hairline separates values from bars.
 
 ## Performance rules
 

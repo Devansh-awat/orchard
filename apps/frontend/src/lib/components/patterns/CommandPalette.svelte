@@ -1243,7 +1243,7 @@
 	.none-text,
 	.hint-text,
 	.count {
-		overflow: hidden;
+		overflow-x: clip;
 		white-space: nowrap;
 		text-overflow: ellipsis;
 		text-box: trim-both cap alphabetic;

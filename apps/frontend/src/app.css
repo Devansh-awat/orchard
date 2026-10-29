@@ -969,7 +969,7 @@ html {
 .ui-dropdown-text {
 	display: block;
 	min-width: 0;
-	overflow: hidden;
+	overflow-x: clip;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	text-box: trim-both cap alphabetic;
@@ -1057,7 +1057,7 @@ html {
 
 .ui-dropdown-option-desc {
 	display: block;
-	overflow: hidden;
+	overflow-x: clip;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	font-size: var(--text-caption);

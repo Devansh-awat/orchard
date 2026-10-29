@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { createQuery } from '@tanstack/svelte-query';
 	import { apiFetch } from '$lib/stores';
-	import { Table } from '$lib/components/ui';
-	import type { TableColumn } from '$lib/components/ui/Table.svelte';
+	import { List, ListRow } from '$lib/components/ui';
 	import Widget from '$lib/components/ui/Widget.svelte';
 	import MetricPanel from '$lib/components/patterns/MetricPanel.svelte';
 	import type { ChartSeries } from '$lib/components/ui/time-chart';
@@ -24,12 +23,10 @@
 		{ id: 'auth-bruteforce', label: 'Password guessing', color: 'var(--hue-pink)' },
 		{ id: 'flood', label: 'Floods', color: 'var(--blue-7)' }
 	];
-	const LABEL = Object.fromEntries(KINDS.map((k) => [k.id, k.label])) as Record<Kind, string>;
-	const COLUMNS: TableColumn<Source>[] = [
-		{ id: 'ip', label: 'Source' },
-		{ id: 'kinds', label: 'Seen' },
-		{ id: 'count', label: 'Requests', align: 'end', numeric: true, width: '7rem' }
-	];
+	const KIND = Object.fromEntries(KINDS.map((k) => [k.id, k])) as Record<
+		Kind,
+		(typeof KINDS)[number]
+	>;
 
 	let now = $state(Date.now());
 
@@ -62,14 +59,14 @@
 	const count = (v: number) => Math.round(v).toLocaleString();
 </script>
 
-{#snippet sourceCell(s: Source, col: TableColumn<Source>)}
-	{#if col.id === 'ip'}
-		<span class="mono">{s.ip}</span>
-	{:else if col.id === 'kinds'}
-		<span class="kinds">{s.kinds.map((k) => LABEL[k]).join(', ')}</span>
-	{:else}
-		<span class="mono">{count(s.count)}</span>
-	{/if}
+{#snippet kinds(source: Source)}
+	<span class="kinds">
+		{#each source.kinds as kind (kind)}
+			<span class="kind"
+				><span class="swatch" style:--swatch={KIND[kind].color}></span>{KIND[kind].label}</span
+			>
+		{/each}
+	</span>
 {/snippet}
 
 {#if report}
@@ -89,14 +86,16 @@
 		/>
 		<Widget title="Top sources">
 			{#if report.topSources.length}
-				<Table
-					label="Top sources"
-					dense
-					columns={COLUMNS}
-					rows={report.topSources}
-					cell={sourceCell}
-					rowKey={(s) => s.ip}
-				/>
+				<List inset={false} label="Top sources">
+					{#each report.topSources as source (source.ip)}
+						<ListRow flush title={source.ip}>
+							{#snippet subtitle()}{@render kinds(source)}{/snippet}
+							{#snippet trailing()}
+								<span class="count">{count(source.count)}</span>
+							{/snippet}
+						</ListRow>
+					{/each}
+				</List>
 			{:else}
 				<p class="empty">Nobody stands out.</p>
 			{/if}
@@ -116,11 +115,29 @@
 			grid-template-columns: minmax(0, 1fr);
 		}
 	}
-	.mono {
-		font-family: var(--font-mono);
-		font-size: var(--text-footnote);
+	.kinds {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem 0.75rem;
 	}
-	.kinds,
+	.kind {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		white-space: nowrap;
+	}
+	.swatch {
+		width: 0.5rem;
+		height: 0.5rem;
+		border-radius: 2px;
+		background: var(--swatch);
+	}
+	.count {
+		color: var(--text-default);
+		font-size: var(--text-callout);
+		font-weight: var(--weight-medium);
+		font-variant-numeric: tabular-nums;
+	}
 	.empty {
 		color: var(--text-muted);
 		font-size: var(--text-footnote);

@@ -113,7 +113,7 @@
 		display: block;
 		min-width: 0;
 		max-width: 12rem;
-		overflow: hidden;
+		overflow-x: clip;
 		padding-block: 0.3em;
 		margin-block: -0.3em;
 		white-space: nowrap;

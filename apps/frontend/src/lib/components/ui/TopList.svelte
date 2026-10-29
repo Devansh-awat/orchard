@@ -26,6 +26,7 @@
 			onpointerleave={() => (emphasis = null)}
 		>
 			<span class="value">{item.value == null ? '–' : format(item.value)}</span>
+			<span class="rule" aria-hidden="true"></span>
 			<span class="track">
 				<span
 					class="bar"
@@ -40,9 +41,9 @@
 
 <style>
 	.top {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
+		display: grid;
+		grid-template-columns: max-content 1px minmax(0, 1fr);
+		column-gap: 0.75rem;
 		margin: 0;
 		padding: 0;
 		list-style: none;
@@ -51,11 +52,17 @@
 	}
 	.item {
 		display: grid;
-		grid-template-columns: 5.5rem minmax(0, 1fr);
+		grid-column: 1 / -1;
+		grid-template-columns: subgrid;
 		align-items: center;
-		gap: 0.75rem;
+		padding-block: 0.125rem;
+	}
+	.rule {
+		align-self: stretch;
+		background: var(--rule);
 	}
 	.value {
+		min-width: 2ch;
 		text-align: right;
 		color: var(--text-default);
 		font-weight: var(--weight-medium);

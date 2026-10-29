@@ -148,7 +148,7 @@
 	.label {
 		flex: 1;
 		min-width: 0;
-		overflow: hidden;
+		overflow-x: clip;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		text-box: trim-both cap alphabetic;

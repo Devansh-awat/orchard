@@ -72,7 +72,7 @@
 		background: var(--status-neutral-solid);
 	}
 	.label {
-		overflow: hidden;
+		overflow-x: clip;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		text-box: trim-both cap alphabetic;
