@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { Button, SectionCard } from '$lib/components/ui';
+	import { Button } from '$lib/components/ui';
+	import Widget from '$lib/components/ui/Widget.svelte';
 	import NumberRoll from '$lib/components/ui/NumberRoll.svelte';
 	import Sparkline from '$lib/components/ui/Sparkline.svelte';
 	import { formatCpu, formatMemory } from '$lib/utils/format';
@@ -66,10 +67,11 @@
 	]);
 </script>
 
-<SectionCard title="Usage" size="sm" flush class="usage-card">
-	{#snippet actions()}
-		<Button variant="ghost" size="sm" onclick={onopen}>Details</Button>
-	{/snippet}
+{#snippet details()}
+	<Button variant="ghost" size="sm" onclick={onopen}>Details</Button>
+{/snippet}
+
+<Widget title="Usage" meta={details} class="usage-card">
 	<ul class="rows">
 		{#each rows as row (row.id)}
 			{@const point = scrub?.id === row.id ? row.values[scrub.index] : undefined}
@@ -115,12 +117,12 @@
 			</li>
 		{/each}
 	</ul>
-</SectionCard>
+</Widget>
 
 <style>
 	.rows {
 		margin: 0;
-		padding: 0 0 0.5rem;
+		padding: 0;
 		list-style: none;
 	}
 	.row {
@@ -133,9 +135,11 @@
 			'bar bar';
 		align-items: center;
 		column-gap: 1rem;
-		padding: 0.75rem 1.25rem 0.875rem;
+		padding: 0;
 	}
 	.row + .row {
+		margin-top: 0.875rem;
+		padding-top: 0.875rem;
 		box-shadow: inset 0 1px 0 var(--border-default);
 	}
 	.row--warning {
@@ -206,7 +210,17 @@
 	}
 	@media (max-height: 54rem) {
 		.row {
-			padding: 0.5rem 1.25rem 0.625rem;
+			grid-template-columns: 3.75rem minmax(0, 1fr) 6rem;
+			grid-template-areas:
+				'label reading trend'
+				'bar bar bar';
+		}
+		.label {
+			margin: 0;
+		}
+		.row + .row {
+			margin-top: 0.625rem;
+			padding-top: 0.625rem;
 		}
 		.bar {
 			margin-top: 0.375rem;

@@ -6,9 +6,11 @@
 		SquareArrowOutUpRight,
 		SquareTerminal,
 		Trash2,
-		TriangleAlert
+		TriangleAlert,
+		X
 	} from 'lucide-svelte';
-	import { Button, Dropdown, SectionCard, StatusDot, statusMeta } from '$lib/components/ui';
+	import { Button, Dropdown, StatusDot, statusMeta } from '$lib/components/ui';
+	import Widget from '$lib/components/ui/Widget.svelte';
 	import type { StatusMeta } from '$lib/components/ui';
 	import { toasts } from '$lib/stores';
 	import { stateEcho } from '$lib/utils/motion.svelte';
@@ -16,6 +18,7 @@
 	import type { Pod } from '$lib/types/deployment';
 	import PodSimulator from './PodSimulator.svelte';
 	import IslandPill from '$lib/components/patterns/IslandPill.svelte';
+	import IslandSheet from '$lib/components/patterns/IslandSheet.svelte';
 
 	type PodWarning = { podName?: string; message: string };
 
@@ -205,14 +208,14 @@
 		}
 		return [...counts].map(([label, n]) => `${n} ${label.toLowerCase()}`);
 	});
-	let openPods = $state(new Set<string>());
+	let openName = $state<string | null>(null);
+	let sheet = $state<IslandSheet>();
+	const pills: Record<string, HTMLButtonElement | undefined> = $state({});
+	const openRow = $derived(rows.find((r) => r.pod.name === openName) ?? null);
 
-	function toggle(name: string, on: boolean) {
-		const next = new Set(openPods);
-		if (on) next.add(name);
-		else next.delete(name);
-		openPods = next;
-	}
+	$effect(() => {
+		if (openName && !openRow) openName = null;
+	});
 
 	function toneOf(kind: StatusMeta['kind']): 'ok' | 'warn' | 'bad' {
 		if (kind === 'error') return 'bad';
@@ -242,143 +245,141 @@
 				? `${formatCpu(r.pod.cpuUsage)} · ${formatMemory(r.pod.memoryUsage)}`
 				: r.state.label}
 		{:else}
-			{r.state.label}{#if r.restarts}
-				· {r.restarts}×{/if}
+			{r.state.label}{#if r.restarts}&nbsp;· {r.restarts}×{/if}
 		{/if}
 	</span>
 {/snippet}
 
-<SectionCard title="Pods" size="sm" flush fill class="pods">
-	{#snippet actions()}
-		<Dropdown
-			size="sm"
-			placement="bottom-end"
-			options={replicaOptions}
-			value={String(replicas)}
-			disabled={scaling}
-			ariaLabel="Replicas"
-			onchange={(v) => {
-				scaleReplicas = Number(v);
-				onChange(Number(v));
-				onScale();
-			}}
-		/>
-		{#if __ORCHARD_MOCK__}
-			<PodSimulator {deploymentId} {podLabel} onchange={onSimulated} />
-		{/if}
-	{/snippet}
+{#snippet controls()}
+	<Dropdown
+		size="sm"
+		placement="bottom-end"
+		options={replicaOptions}
+		value={String(replicas)}
+		disabled={scaling}
+		ariaLabel="Replicas"
+		onchange={(v) => {
+			scaleReplicas = Number(v);
+			onChange(Number(v));
+			onScale();
+		}}
+	/>
+	{#if __ORCHARD_MOCK__}
+		<PodSimulator {deploymentId} {podLabel} onchange={onSimulated} />
+	{/if}
+{/snippet}
+
+<Widget title="Pods" meta={controls} fill class="pods">
 	{#if rows.length}
-		<div class="pods-body">
-			<ul class="islands" aria-label="Pods">
-				{#each rows as r (r.pod.name)}
-					{@const container = r.pod.containers?.[0]?.name ?? ''}
-					{@const tone = toneOf(r.state.meta.kind)}
-					<li>
-						<IslandPill
-							bind:open={() => openPods.has(r.pod.name), (v) => toggle(r.pod.name, v)}
-							{tone}
-							label="{r.name}, {r.state.label}"
-						>
-							{#snippet face()}
-								{@render podFace(r, tone)}
-							{/snippet}
-							{#snippet children({ close })}
-								<button
-									type="button"
-									class="sheet-head"
-									aria-label="Close {r.name}"
-									onclick={close}
-								>
-									{@render podFace(r, tone)}
-								</button>
-								<div class="detail">
-									<dl class="kv">
-										<div>
-											<dt>Uptime</dt>
-											<dd>{uptime(r.pod.startTime) ?? '—'}</dd>
-										</div>
-										<div>
-											<dt>Restarts</dt>
-											<dd>{r.restarts}</dd>
-										</div>
-										{#if r.exit}<div>
-												<dt>Last exit</dt>
-												<dd class="kv-tone">{r.exit}</dd>
-											</div>{/if}
-										<div>
-											<dt>CPU</dt>
-											<dd>{r.pod.cpuUsage ? formatCpu(r.pod.cpuUsage) : '—'}</dd>
-										</div>
-										<div>
-											<dt>Memory</dt>
-											<dd>{r.pod.cpuUsage ? formatMemory(r.pod.memoryUsage) : '—'}</dd>
-										</div>
-									</dl>
-									<div class="acts">
-										<Button
-											variant="secondary"
-											size="sm"
-											icon={FileText}
-											onclick={() => onSelect(r.pod)}>Logs</Button
-										>
-										{#if r.pod.containers?.some((c) => c.lastTermination)}
-											<Button
-												variant="ghost"
-												size="sm"
-												icon={RotateCcw}
-												onclick={() => onCrashLogs(r.pod)}>Before crash</Button
-											>
-										{/if}
-										<Button
-											variant="ghost"
-											size="sm"
-											icon={SquareTerminal}
-											disabled={r.pod.status?.toLowerCase() !== 'ready' || !container}
-											onclick={() => onShell(r.pod.name, container)}>Shell</Button
-										>
-										<span class="acts-end">
-											<Button
-												variant="ghost"
-												size="sm"
-												icon={Copy}
-												label="Copy pod name"
-												onclick={() => copyName(r.pod.name)}
-											/>
-											<Button
-												variant="ghost"
-												size="sm"
-												icon={SquareArrowOutUpRight}
-												label="Pod details"
-												href={podHref(r.pod.name)}
-											/>
-											<Button
-												variant="ghost"
-												size="sm"
-												icon={Trash2}
-												label="Delete pod, Kubernetes starts a fresh one"
-												onclick={() => onDelete(r.pod.name)}
-											/>
-										</span>
-									</div>
-								</div>
-							{/snippet}
-						</IslandPill>
-					</li>
-				{/each}
-			</ul>
-		</div>
+		<ul class="islands" aria-label="Pods">
+			{#each rows as r (r.pod.name)}
+				<li>
+					<IslandPill
+						bind:el={pills[r.pod.name]}
+						tone={toneOf(r.state.meta.kind)}
+						label="{r.name}, {r.state.label}"
+						expanded={openName === r.pod.name}
+						onclick={() => (openName = r.pod.name)}
+					>
+						{@render podFace(r, toneOf(r.state.meta.kind))}
+					</IslandPill>
+				</li>
+			{/each}
+		</ul>
 	{:else}
 		<p class="empty">Pods show up here once the first one is scheduled.</p>
 	{/if}
-</SectionCard>
+	{#if openRow}
+		{@const r = openRow}
+		{@const tone = toneOf(r.state.meta.kind)}
+		{@const container = r.pod.containers?.[0]?.name ?? ''}
+		{#key r.pod.name}
+			<IslandSheet
+				bind:this={sheet}
+				origin={pills[r.pod.name] ?? null}
+				{tone}
+				onclose={() => (openName = null)}
+			>
+				<div class="sheet-head">
+					{@render podFace(r, tone)}
+					<Button
+						variant="ghost"
+						size="sm"
+						icon={X}
+						label="Close {r.name}"
+						onclick={() => sheet?.close()}
+					/>
+				</div>
+				<dl class="kv">
+					<div>
+						<dt>Uptime</dt>
+						<dd>{uptime(r.pod.startTime) ?? '—'}</dd>
+					</div>
+					<div>
+						<dt>Restarts</dt>
+						<dd>{r.restarts}</dd>
+					</div>
+					<div>
+						<dt>CPU</dt>
+						<dd>{r.pod.cpuUsage ? formatCpu(r.pod.cpuUsage) : '—'}</dd>
+					</div>
+					<div>
+						<dt>Memory</dt>
+						<dd>{r.pod.cpuUsage ? formatMemory(r.pod.memoryUsage) : '—'}</dd>
+					</div>
+					{#if r.exit}
+						<div class="kv-wide">
+							<dt>Last exit</dt>
+							<dd class="kv-tone">{r.exit}</dd>
+						</div>
+					{/if}
+				</dl>
+				<div class="acts">
+					<Button variant="secondary" size="sm" icon={FileText} onclick={() => onSelect(r.pod)}
+						>Logs</Button
+					>
+					{#if r.pod.containers?.some((c) => c.lastTermination)}
+						<Button variant="ghost" size="sm" icon={RotateCcw} onclick={() => onCrashLogs(r.pod)}
+							>Before crash</Button
+						>
+					{/if}
+					<Button
+						variant="ghost"
+						size="sm"
+						icon={SquareTerminal}
+						disabled={r.pod.status?.toLowerCase() !== 'ready' || !container}
+						onclick={() => onShell(r.pod.name, container)}>Shell</Button
+					>
+					<span class="acts-end">
+						<Button
+							variant="ghost"
+							size="sm"
+							icon={Copy}
+							label="Copy pod name"
+							onclick={() => copyName(r.pod.name)}
+						/>
+						<Button
+							variant="ghost"
+							size="sm"
+							icon={SquareArrowOutUpRight}
+							label="Pod details"
+							href={podHref(r.pod.name)}
+						/>
+						<Button
+							variant="ghost"
+							size="sm"
+							icon={Trash2}
+							label="Delete pod, Kubernetes starts a fresh one"
+							onclick={() => onDelete(r.pod.name)}
+						/>
+					</span>
+				</div>
+			</IslandSheet>
+		{/key}
+	{/if}
+</Widget>
 
 <style>
-	.pods-body {
-		padding: 0.25rem 1.25rem 1.25rem;
-	}
-	.islands {
-		scroll-padding-block: 0.5rem;
-	}
 	.islands {
 		display: flex;
 		flex-direction: column;
@@ -414,7 +415,7 @@
 		padding: 0.125rem 0.375rem;
 		border-radius: calc(0.3125rem * var(--corner-scale));
 		corner-shape: var(--corner);
-		background: var(--island-rule);
+		background: var(--bg-active);
 		color: var(--island-muted);
 		font-size: var(--text-micro);
 		font-weight: var(--weight-medium);
@@ -435,24 +436,35 @@
 		font-weight: var(--weight-medium);
 		color: var(--island-tone);
 	}
-	.detail {
+	.sheet-head {
 		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-		padding-top: 0.625rem;
-		border-top: 1px solid var(--island-rule);
+		align-items: center;
+		gap: 0.625rem;
+		min-height: 1.75rem;
+		margin: -0.25rem -0.375rem 0.75rem 0;
+	}
+	.sheet-head .pid {
+		font-size: var(--text-callout);
+	}
+	.sheet-head .face-end {
+		margin-right: 0.25rem;
 	}
 	.kv {
-		display: flex;
-		flex-direction: column;
-		gap: 0.375rem;
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.5rem 1.5rem;
 		margin: 0;
+		padding-top: 0.75rem;
+		border-top: 1px solid var(--island-rule);
 	}
 	.kv > div {
 		display: flex;
 		align-items: baseline;
 		justify-content: space-between;
 		gap: 1rem;
+	}
+	.kv .kv-wide {
+		grid-column: 1 / -1;
 	}
 	.kv dt {
 		font-size: var(--text-footnote);
@@ -471,33 +483,17 @@
 	.acts {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.25rem;
+		margin-top: auto;
+		padding-top: 0.75rem;
 	}
 	.acts-end {
 		display: flex;
-		gap: 0.25rem;
+		gap: 0.125rem;
 		margin-left: auto;
 	}
 	.empty {
-		padding: 1rem 1.25rem 1.25rem;
 		font-size: var(--text-callout);
 		color: var(--text-muted);
-	}
-	.sheet-head {
-		display: flex;
-		align-items: center;
-		gap: 0.625rem;
-		width: 100%;
-		margin: -0.25rem 0 0.75rem;
-		padding: 0;
-		border: none;
-		background: none;
-		color: inherit;
-		font: inherit;
-		text-align: left;
-		cursor: pointer;
-	}
-	.sheet-head .pid {
-		font-size: var(--text-callout);
 	}
 </style>

@@ -426,6 +426,12 @@
 		flex: 1 1 0;
 		height: auto;
 		min-height: 14rem;
+		border-radius: calc(var(--radius-widget) * var(--corner-scale));
+		corner-shape: var(--corner);
+		overflow: clip;
+	}
+	.main > .console-panel.console-at-fullscreen {
+		border-radius: 0;
 	}
 	.side {
 		display: flex;
@@ -440,14 +446,20 @@
 	}
 	.side > :global(.pods) {
 		flex: 0 1 auto;
-		min-height: 6rem;
+		min-height: min(100%, 12.25rem);
+	}
+	@media (max-height: 49rem) {
+		.side > :global(.pods) {
+			min-height: min(100%, 9rem);
+		}
 	}
 	.side > :global(.usage-card) {
 		flex: 0 0 auto;
 	}
 	.side > :global(.errors) {
 		flex: 1 1 0;
-		min-height: 6.5rem;
+		min-height: 3.5rem;
+		container: errors / size;
 	}
 
 	.bar {

@@ -251,7 +251,7 @@
 <style>
 	.dh-card {
 		padding: 1.25rem 1.5rem;
-		border-radius: calc(var(--radius-panel) * var(--corner-scale));
+		border-radius: calc(var(--radius-widget) * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--bg-surface);
 		box-shadow: var(--shadow-raised);

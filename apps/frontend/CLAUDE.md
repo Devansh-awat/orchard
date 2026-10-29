@@ -282,7 +282,8 @@ Three-level hierarchy: **Org cap** → **Member allowance** → **Deployment req
   `advanced`) still resolve.
 - Overview fills exactly one viewport at 64rem wide and 40rem tall or more (`dep-shell--fit`): the
   console takes the main column at full height; the side column (1.618 : 1) stacks `PodsList` (one
-  `IslandPill` per pod that opens in place, replicas in a popover), `UsageCard` (CPU and memory against their limits,
+  `IslandPill` per pod; opening one morphs an `IslandSheet` over the whole card; replicas in the kit
+  `Dropdown`), `UsageCard` (CPU and memory against their limits,
   sparklines seeded from `/metrics` then extended by SSE) and `ErrorsCard` (the 5xx error rate and
   its trend from `/observe/.../http-metrics`, when the app serves HTTP). Add `?guides=1` to
   draw the golden-ratio `GoldenReticle` over the page when checking alignment. Below that size it scrolls. Nodes and

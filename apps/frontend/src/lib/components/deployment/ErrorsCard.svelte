@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { Button, SectionCard } from '$lib/components/ui';
+	import { Button } from '$lib/components/ui';
+	import Widget from '$lib/components/ui/Widget.svelte';
 	import NumberRoll from '$lib/components/ui/NumberRoll.svelte';
 	import Sparkline from '$lib/components/ui/Sparkline.svelte';
 	import { apiFetch } from '$lib/stores';
@@ -47,10 +48,12 @@
 	);
 </script>
 
-<SectionCard title="Error rate" size="sm" flush fill class="errors">
-	{#snippet actions()}
-		<Button variant="ghost" size="sm" onclick={onopen}>All errors</Button>
-	{/snippet}
+{#snippet headRight()}
+	{#if latest != null}<span class="mini mini--{tone}">{latest.toFixed(2)}%</span>{/if}
+	<Button variant="ghost" size="sm" onclick={onopen}>All errors</Button>
+{/snippet}
+
+<Widget title="Error rate" meta={headRight} fill class="errors">
 	{#if shown != null && rates}
 		<div class="body body--{tone}">
 			<div class="reading">
@@ -73,7 +76,7 @@
 	{:else if rates}
 		<p class="none">This app is not serving web traffic, so there is no rate to show.</p>
 	{/if}
-</SectionCard>
+</Widget>
 
 <style>
 	.body {
@@ -82,7 +85,7 @@
 		gap: 0.5rem;
 		height: 100%;
 		min-height: 0;
-		padding: 0.25rem 1.25rem 1rem;
+		padding: 0;
 	}
 	.reading {
 		display: flex;
@@ -119,8 +122,35 @@
 		inset: 0;
 	}
 	.none {
-		padding: 0.25rem 1.25rem 1rem;
+		margin: 0;
 		font-size: var(--text-callout);
 		color: var(--text-muted);
+	}
+	.mini {
+		display: none;
+		font-size: var(--text-callout);
+		font-weight: var(--weight-semibold);
+		font-variant-numeric: tabular-nums;
+		color: var(--text-default);
+	}
+	.mini--warning {
+		color: var(--status-warning);
+	}
+	.mini--error {
+		color: var(--status-error);
+	}
+	@container errors (max-height: 7rem) {
+		.mini {
+			display: inline;
+		}
+		.reading,
+		.none {
+			display: none;
+		}
+	}
+	@container errors (max-height: 3.5rem) {
+		:global(.widget.errors > .fill) {
+			display: none;
+		}
 	}
 </style>

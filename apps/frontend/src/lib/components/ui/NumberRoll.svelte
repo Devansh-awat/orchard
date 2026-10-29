@@ -46,7 +46,7 @@
 	.slot {
 		display: inline-block;
 		height: 1.2em;
-		overflow: clip;
+		overflow: hidden;
 		mask-image: linear-gradient(transparent, black 22%, black 78%, transparent);
 	}
 	.strip {
