@@ -46,12 +46,6 @@ export function sanitizeLogs(logs: string): string {
 	return sanitized;
 }
 
-export {
-	envVarsToSealedRaw as envVarsToRaw,
-	parseEnvLines as rawToEnvVars,
-	rawToEnvVarsKeepingSecrets
-} from '$lib/utils/env-secrets';
-
 export interface DetectedApp {
 	dir: string;
 	framework: string;

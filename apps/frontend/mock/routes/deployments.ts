@@ -568,7 +568,30 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 				].join('\n')
 		};
 	});
-	r.get('/deployments/:id/bindings', () => []);
+	const BINDINGS = new Map<string, Record<string, unknown>[]>();
+	r.get('/deployments/:id/bindings', ({ params }) => BINDINGS.get(params.id) ?? []);
+	r.post(
+		'/deployments/:id/bindings',
+		withDep((d, { body }) => {
+			const db = store.databasesOf(d.projectId).find((x) => x.id === body?.resourceId);
+			if (!db) return notFound();
+			const binding = {
+				id: uid(`binding:${d.id}:${db.id}`),
+				name: String(body?.name || db.name),
+				resourceType: 'database',
+				resourceId: db.id,
+				resource: { name: db.name, status: db.status },
+				endpoint: `${db.name}-cluster-rw:5432`,
+				fields: ['connection_string', 'host', 'port', 'database', 'user', 'password'],
+				usedBy: [],
+				createdAt: new Date().toISOString(),
+				addedEnvKey: null
+			};
+			const list = (BINDINGS.get(d.id) ?? []).filter((b) => b.resourceId !== db.id);
+			BINDINGS.set(d.id, [...list, binding]);
+			return binding;
+		})
+	);
 	r.get(
 		'/deployments/:id/bindings/options',
 		withDep((d) =>
@@ -578,7 +601,7 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 				name: db.name,
 				status: db.status,
 				endpoint: `${db.name}-cluster-rw:5432`,
-				suggestedName: `${db.name.toUpperCase()}_URL`
+				suggestedName: db.name.toLowerCase().replace(/[^a-z0-9]+/g, '_')
 			}))
 		)
 	);

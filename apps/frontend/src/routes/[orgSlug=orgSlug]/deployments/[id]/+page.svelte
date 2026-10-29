@@ -17,9 +17,7 @@
 		podLabel,
 		getNewestPod,
 		formatBuildElapsed,
-		sanitizeLogs,
-		envVarsToRaw,
-		rawToEnvVarsKeepingSecrets
+		sanitizeLogs
 	} from '$lib/components/deployment/deployment-helpers';
 	import { resourceStatus, statusMeta } from '$lib/components/ui';
 	import {
@@ -962,19 +960,7 @@
 		scaleDirty = value !== (deployment?.replicas ?? value);
 	}
 
-	let envVars = $state<EditableEnvVar[]>([{ key: '', value: '' }]);
-	let envViewMode = $state<'ui' | 'raw'>('ui');
-	let envRawText = $state('');
-	let revealedIndices = $state<Set<number>>(new Set());
-
-	function toggleReveal(index: number) {
-		revealedIndices = new Set(revealedIndices);
-		if (revealedIndices.has(index)) {
-			revealedIndices.delete(index);
-		} else {
-			revealedIndices.add(index);
-		}
-	}
+	let envVars = $state<Array<{ key: string; value: string; secret?: boolean }>>([]);
 	let volumes = $state<
 		Array<
 			{
@@ -1376,21 +1362,7 @@
 				services.resetNewForm();
 			}
 
-			if (!isEditingEnv) {
-				if (data.envVars && Array.isArray(data.envVars) && data.envVars.length > 0) {
-					envVars = [
-						...data.envVars.map((ev: { key: string; value: string; secret?: boolean }) => ({
-							key: ev.key || '',
-							value: ev.value || '',
-							secret: Boolean(ev.secret),
-							sealed: Boolean(ev.secret)
-						})),
-						{ key: '', value: '' }
-					];
-				} else {
-					envVars = [{ key: '', value: '' }];
-				}
-			}
+			if (!isEditingEnv) seedEnv(data.envVars);
 
 			if (!isEditingVolumes) {
 				if (data.volumes && Array.isArray(data.volumes) && data.volumes.length > 0) {
@@ -1686,14 +1658,27 @@
 		}
 	}
 
+	function seedEnv(list: unknown) {
+		const saved = Array.isArray(list)
+			? (list as { key: string; value: string; secret?: boolean }[])
+			: [];
+		envVars = saved.map((ev) => ({
+			key: ev.key || '',
+			value: ev.value || '',
+			secret: Boolean(ev.secret)
+		}));
+	}
+
+	function discardEnv() {
+		isEditingEnv = false;
+		seedEnv(deployment?.envVars);
+	}
+
 	async function saveEnv() {
 		savingEnv = true;
 		isEditingEnv = false;
 		try {
-			if (envViewMode === 'raw') {
-				const parsed = rawToEnvVarsKeepingSecrets(envRawText, envVars);
-				envVars = [...parsed, { key: '', value: '' }];
-			}
+			const filteredEnv = envVars.filter((e) => e.key.trim());
 			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/env`, {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
@@ -2077,28 +2062,6 @@
 		} finally {
 			rollingBackId = null;
 		}
-	}
-
-	function addEnvRow() {
-		isEditingEnv = true;
-		envVars = [...envVars, { key: '', value: '' }];
-	}
-
-	function removeEnvRow(index: number) {
-		isEditingEnv = true;
-		envVars = envVars.filter((_, i) => i !== index);
-	}
-
-	function switchEnvView(mode: 'ui' | 'raw') {
-		if (mode === envViewMode) return;
-		isEditingEnv = true;
-		if (mode === 'raw') {
-			envRawText = envVarsToRaw(envVars);
-		} else {
-			const parsed = rawToEnvVarsKeepingSecrets(envRawText, envVars);
-			envVars = [...parsed, { key: '', value: '' }];
-		}
-		envViewMode = mode;
 	}
 
 	function addVolume() {
@@ -3221,6 +3184,7 @@
 							bind:isEditing={isEditingEnv}
 							{savingEnv}
 							onSave={saveEnv}
+							onDiscard={discardEnv}
 							{bindings}
 							resourceOptions={bindingOptions}
 							onConnect={connectResource}

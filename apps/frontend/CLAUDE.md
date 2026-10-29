@@ -294,6 +294,9 @@ Three-level hierarchy: **Org cap** → **Member allowance** → **Deployment req
   `kubernetes/rollout-strategy.ts`, read from the informer mirror).
 - Live values land instantly; motion is the decorative layer on top (`NumberRoll`, `stateEcho` on pod
   status, the sparkline growing), never a tween that delays the number.
+- Variables is the kit `EnvVarEditor` (the same one shared variables and the new-app flow use) with
+  `secrets`, `stored` and `issues`; resource references come in through its `accessory`, `tokenized` and
+  `addon` slots, so "Use a resource" and the linked-value pill never fork the editor.
 - `NextSteps` is a "Set up" button with a progress ring in the header, opening a popover.
 - `DeploymentAlerts` maps those problems, plus GitHub auth, apply errors, resource pressure and metric
   alerts, onto `AlertStack`.

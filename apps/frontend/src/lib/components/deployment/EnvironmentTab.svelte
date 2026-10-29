@@ -1,24 +1,22 @@
 <script lang="ts">
+	import { tick, untrack } from 'svelte';
+	import { Boxes, ChevronDown, Database, KeyRound, Link2, Pencil, Plus } from 'lucide-svelte';
 	import {
-		Plus,
-		Loader2,
-		Lock,
-		LockOpen,
-		Link2,
-		ChevronDown,
-		Pencil,
-		Database,
-		Boxes
-	} from 'lucide-svelte';
-	import { Eye, EyeOff, Trash2 } from '@jis3r/icons';
-	import { slide } from '$lib/utils/transitions';
-	import { Alert, Menu, MenuItem, MenuLabel, SectionCard } from '$lib/components/ui';
-	import { envVarsToRaw, rawToEnvVarsKeepingSecrets } from './deployment-helpers';
-	import {
-		SEALED_PLACEHOLDER,
-		autoSecretForKey,
-		type EditableEnvVar
-	} from '$lib/utils/env-secrets';
+		Alert,
+		Button,
+		EmptyState,
+		EnvVarEditor,
+		FormActions,
+		Menu,
+		MenuItem,
+		MenuLabel,
+		SectionCard,
+		SegmentedControl,
+		Swap,
+		type EnvVarEditorRow,
+		type EnvVarIssue
+	} from '$lib/components/ui';
+	import { rawToEnvVars } from '$lib/utils/format';
 	import {
 		PRIMARY_FIELD,
 		fieldLabel,
@@ -32,36 +30,57 @@
 	} from './bindings';
 
 	let {
-		envVars = $bindable<EditableEnvVar[]>(),
+		envVars = $bindable<EnvVarEditorRow[]>(),
 		isEditing = $bindable(false),
 		savingEnv,
 		onSave,
+		onDiscard,
 		bindings = [],
 		resourceOptions = [],
 		onConnect,
 		conflicts = []
 	}: {
-		envVars: EditableEnvVar[];
+		envVars: EnvVarEditorRow[];
 		isEditing?: boolean;
 		savingEnv: boolean;
 		onSave: () => void;
+		onDiscard?: () => void;
 		bindings?: Binding[];
 		resourceOptions?: BindingOption[];
 		onConnect?: (option: BindingOption) => Promise<Binding | null>;
 		conflicts?: { key: string; reason: string }[];
 	} = $props();
 
+	const KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+	const MODES = [
+		{ value: 'grid', label: 'Editor' },
+		{ value: 'raw', label: 'Raw' }
+	];
 	const CONFLICT_REASONS: Record<string, string> = {
-		reference: 'was changed in Kubernetes, but its value comes from a reference. Edit it here.',
-		'foreign-source': 'is read from a ConfigMap or Secret Orchard does not manage.',
-		'orphan-secret-ref': 'points at a secret Orchard has no variable for.',
+		reference: 'Changed in Kubernetes, but its value comes from a reference. Edit it here.',
+		'foreign-source': 'Read from a ConfigMap or Secret Orchard does not manage.',
+		'orphan-secret-ref': 'Points at a secret Orchard has no variable for.',
 		'removed-secret':
-			'is a secret that was removed in Kubernetes. Orchard kept its value; delete it here if that was intended.',
+			'Removed in Kubernetes. Orchard kept its value; delete it here if that was intended.',
 		'mass-removal':
-			'disappeared from Kubernetes along with most other variables. Orchard kept it; delete it here if that was intended.'
+			'Disappeared from Kubernetes with most other variables. Orchard kept it; delete it here if that was intended.'
 	};
 
 	type Pick = { kind: 'bound'; binding: Binding } | { kind: 'option'; option: BindingOption };
+
+	let mode = $state<'grid' | 'raw'>('grid');
+	let raw = $state('');
+	let connecting = $state(false);
+	let started = $state(false);
+	let stored = $state<ReadonlySet<string>>(new Set());
+
+	$effect(() => {
+		if (isEditing) return;
+		const next = new Set(
+			envVars.filter((e) => e.secret && e.value === '').map((e) => e.key.trim())
+		);
+		untrack(() => (stored = next));
+	});
 
 	const picks = $derived<Pick[]>([
 		...bindings.map((binding) => ({ kind: 'bound' as const, binding })),
@@ -69,7 +88,46 @@
 	]);
 	const databasePicks = $derived(picks.filter((p) => pickType(p) === 'database'));
 	const appPicks = $derived(picks.filter((p) => pickType(p) === 'deployment'));
-	let connecting = $state(false);
+
+	const named = $derived(envVars.filter((e) => e.key.trim()));
+	const empty = $derived(named.length === 0 && !started && !isEditing && mode === 'grid');
+
+	const draftKeys = $derived(
+		mode === 'raw' ? rawToEnvVars(raw).map((p) => p.key.trim()) : named.map((e) => e.key.trim())
+	);
+
+	const issues = $derived.by(() => {
+		const out = new Map<string, EnvVarIssue[]>();
+		const add = (key: string, issue: EnvVarIssue) => out.set(key, [...(out.get(key) ?? []), issue]);
+		const seen = new Set<string>();
+		for (const key of draftKeys) {
+			if (!KEY_RE.test(key))
+				add(key, {
+					tone: 'error',
+					text: 'Use letters, digits and underscores, and do not start with a digit.'
+				});
+			if (seen.has(key)) add(key, { tone: 'error', text: 'This name is set more than once.' });
+			seen.add(key);
+		}
+		for (const e of named) {
+			const key = e.key.trim();
+			if (!e.secret && e.value === '' && stored.has(key))
+				add(key, {
+					tone: 'error',
+					text: 'The old value stays hidden, so type a new one to make it plain.'
+				});
+		}
+		for (const c of conflicts) {
+			if (seen.has(c.key))
+				add(c.key, {
+					tone: 'warning',
+					text: CONFLICT_REASONS[c.reason] ?? 'Differs from the running app.'
+				});
+		}
+		return out;
+	});
+	const blocking = $derived([...issues.values()].flat().filter((i) => i.tone === 'error').length);
+	const strayConflicts = $derived(conflicts.filter((c) => !draftKeys.includes(c.key)));
 
 	function pickType(p: Pick) {
 		return p.kind === 'bound' ? p.binding.resourceType : p.option.resourceType;
@@ -92,87 +150,51 @@
 		}
 	}
 
-	async function useResource(index: number, p: Pick) {
+	async function useResource(row: EnvVarEditorRow | null, p: Pick) {
 		const binding = await resolvePick(p);
 		if (!binding) return;
-		const value = refFor(binding.name, PRIMARY_FIELD[binding.resourceType]);
+		const field = PRIMARY_FIELD[binding.resourceType];
 		const taken = envVars.map((e) => e.key.trim()).filter(Boolean);
+		const target = row;
+		const key = target?.key.trim() || suggestedKey(binding, field, taken);
+		const next = { key, value: refFor(binding.name, field), secret: false };
+		started = true;
 		isEditing = true;
-		envVars = envVars.map((e, i) =>
-			i === index
-				? {
-						...e,
-						key: e.key.trim() || suggestedKey(binding, PRIMARY_FIELD[binding.resourceType], taken),
-						value,
-						secret: Boolean(e.sealed),
-						secretTouched: true
-					}
-				: e
-		);
+		if (target) Object.assign(target, next);
+		else envVars = [...envVars, next];
 	}
 
-	function toggleSecret(index: number) {
-		if (envVars[index]?.sealed) return;
+	function setValue(row: EnvVarEditorRow, value: string) {
+		row.value = value;
+		row.secret = false;
 		isEditing = true;
-		envVars = envVars.map((e, i) =>
-			i === index ? { ...e, secret: !e.secret, secretTouched: true } : e
-		);
 	}
 
-	function setKey(index: number, key: string) {
+	function addFirst() {
+		started = true;
 		isEditing = true;
-		envVars = envVars.map((e, i) => (i === index ? autoSecretForKey({ ...e, key }) : e));
+		if (!envVars.some((e) => !e.key.trim())) envVars = [...envVars, { key: '', value: '' }];
 	}
 
-	let envViewMode = $state<'ui' | 'raw'>('ui');
-	let envRawText = $state('');
-	let revealedIndices = $state<Set<number>>(new Set());
-
-	function toggleReveal(index: number) {
-		revealedIndices = new Set(revealedIndices);
-		if (revealedIndices.has(index)) {
-			revealedIndices.delete(index);
-		} else {
-			revealedIndices.add(index);
-		}
+	function switchMode(next: string) {
+		if (next !== 'grid' && next !== 'raw') return;
+		if (next === mode) return;
+		isEditing = true;
+		mode = next;
 	}
 
-	function addEnvRow() {
-		isEditing = true;
-		envVars = [...envVars, { key: '', value: '' }];
-	}
-
-	function removeEnvRow(index: number) {
-		isEditing = true;
-		envVars = envVars.filter((_, i) => i !== index);
-	}
-
-	function switchEnvView(mode: 'ui' | 'raw') {
-		if (mode === envViewMode) return;
-		isEditing = true;
+	async function save() {
 		if (mode === 'raw') {
-			envRawText = envVarsToRaw(envVars);
-		} else {
-			const parsed = rawToEnvVarsKeepingSecrets(envRawText, envVars);
-			envVars = [...parsed, { key: '', value: '' }];
+			mode = 'grid';
+			await tick();
 		}
-		envViewMode = mode;
-	}
-
-	function setValue(index: number, value: string) {
-		isEditing = true;
-		envVars = envVars.map((e, i) =>
-			i === index ? { ...e, value, secret: Boolean(e.sealed), secretTouched: true } : e
-		);
-	}
-
-	function handleSave() {
-		if (envViewMode === 'raw') {
-			const parsed = rawToEnvVarsKeepingSecrets(envRawText, envVars);
-			envVars = [...parsed, { key: '', value: '' }];
-		}
-		isEditing = false;
 		onSave();
+	}
+
+	function discard() {
+		mode = 'grid';
+		started = false;
+		onDiscard?.();
 	}
 </script>
 
@@ -203,209 +225,137 @@
 	{/if}
 {/snippet}
 
+{#snippet accessory(row: EnvVarEditorRow)}
+	{#if isResourceRef(row.value)}
+		{@const bound = bindings.find((b) => b.name === refParts(row.value)?.binding)}
+		<Menu placement="bottom-start">
+			{#snippet trigger(props)}
+				<button {...props} type="button" class="token" title={row.value}>
+					<Link2 size={13} aria-hidden="true" />
+					<span class="token-text">{refLabel(row.value, bindings)}</span>
+					<ChevronDown size={12} aria-hidden="true" />
+				</button>
+			{/snippet}
+			{#if bound}
+				<MenuLabel>Read from {bound.resource?.name ?? bound.name}</MenuLabel>
+				{#each bound.fields as field (field)}
+					<MenuItem
+						checked={row.value === refFor(bound.name, field)}
+						onclick={() => setValue(row, refFor(bound.name, field))}
+					>
+						{fieldLabel(field)}
+					</MenuItem>
+				{/each}
+			{/if}
+			<MenuItem icon={Pencil} onclick={() => setValue(row, '')}>Type a value instead</MenuItem>
+		</Menu>
+	{:else if row.value === '' && picks.length > 0}
+		<Menu placement="bottom-end">
+			{#snippet trigger(props)}
+				<Button {...props} variant="ghost" size="sm" icon={Link2} disabled={connecting}
+					>Use a resource</Button
+				>
+			{/snippet}
+			{@render resourceMenu((p) => useResource(row, p))}
+		</Menu>
+	{/if}
+{/snippet}
+
 <SectionCard title="Environment variables">
 	{#snippet actions()}
-		<div class="relative flex rounded-lg p-0.5" style="background-color: var(--control-bg);">
-			<div
-				class="absolute top-0.5 bottom-0.5 rounded-md shadow-sm transition-all duration-200 ease-in-out"
-				style="background-color: var(--surface-bg); width: calc(50% - 2px); left: {envViewMode ===
-				'ui'
-					? '2px'
-					: 'calc(50% + 0px)'};"
-			></div>
-			<button
-				onclick={() => switchEnvView('ui')}
-				class="relative z-10 px-3 py-1 text-xs font-medium rounded-md transition-colors duration-200"
-				style="color: {envViewMode === 'ui'
-					? 'var(--center-channel-color)'
-					: 'var(--surface-muted)'};">UI</button
-			>
-			<button
-				onclick={() => switchEnvView('raw')}
-				class="relative z-10 px-3 py-1 text-xs font-medium rounded-md transition-colors duration-200"
-				style="color: {envViewMode === 'raw'
-					? 'var(--center-channel-color)'
-					: 'var(--surface-muted)'};">Raw</button
-			>
-		</div>
+		{#if !empty}
+			<SegmentedControl
+				label="Editor mode"
+				size="sm"
+				options={MODES}
+				bind:value={() => mode, switchMode}
+			/>
+		{/if}
 	{/snippet}
-	{#if conflicts.length > 0}
-		<div class="env-conflicts">
+
+	<div class="body">
+		{#if strayConflicts.length > 0}
 			<Alert tone="warning" title="Changed outside Orchard">
-				<ul class="env-conflict-list">
-					{#each conflicts as conflict (conflict.key)}
+				<ul class="conflicts">
+					{#each strayConflicts as conflict (conflict.key)}
 						<li>
 							<code>{conflict.key}</code>
-							{CONFLICT_REASONS[conflict.reason] ?? 'differs from the running app.'}
+							{CONFLICT_REASONS[conflict.reason] ?? 'Differs from the running app.'}
 						</li>
 					{/each}
 				</ul>
 			</Alert>
-		</div>
-	{/if}
-	<div class="env-container">
-		{#if envViewMode === 'ui'}
-			{#each envVars as env, index (index)}
-				{@const isRevealed = revealedIndices.has(index)}
-				{@const hasKey = env.key.trim().length > 0}
-				{@const withheld = Boolean(env.sealed) && env.value === ''}
-				{@const masked = Boolean(env.secret) && !isRevealed}
-				{@const isRef = isResourceRef(env.value)}
-				{@const refText = isRef ? refLabel(env.value, bindings) : null}
-				{@const bound = isRef
-					? bindings.find((b) => b.name === refParts(env.value)?.binding)
-					: null}
-				<div class="env-row" transition:slide={{ duration: 150 }}>
-					<div class="env-row-inner">
-						<div class="env-key-col">
-							<input
-								type="text"
-								value={env.key}
-								oninput={(e) => setKey(index, e.currentTarget.value)}
-								placeholder="KEY"
-								class="env-key-input"
-								onfocus={() => (isEditing = true)}
-							/>
-						</div>
-						<div class="env-val-col">
-							{#if isRef}
-								<Menu placement="bottom-start">
-									{#snippet trigger(props)}
-										<button {...props} type="button" class="env-token" title={env.value}>
-											<Link2 size={13} />
-											<span class="env-token-text">{refText}</span>
-											<ChevronDown size={12} class="env-token-chevron" />
-										</button>
-									{/snippet}
-									{#if bound}
-										<MenuLabel>Read from {bound.resource?.name ?? bound.name}</MenuLabel>
-										{#each bound.fields as field (field)}
-											<MenuItem
-												checked={env.value === refFor(bound.name, field)}
-												onclick={() => setValue(index, refFor(bound.name, field))}
-											>
-												{fieldLabel(field)}
-											</MenuItem>
-										{/each}
-									{/if}
-									<MenuItem icon={Pencil} onclick={() => setValue(index, '')}>
-										Type a value instead
-									</MenuItem>
-								</Menu>
-							{:else}
-								<input
-									type={masked || withheld ? 'password' : 'text'}
-									bind:value={env.value}
-									placeholder={withheld ? 'Sealed, type to replace' : hasKey ? 'value' : ''}
-									class="env-val-input"
-									class:env-val-sealed={withheld}
-									onfocus={() => (isEditing = true)}
-								/>
-								{#if env.value === '' && !withheld && picks.length > 0}
-									<Menu placement="bottom-end">
-										{#snippet trigger(props)}
-											<button {...props} type="button" class="env-use" disabled={connecting}>
-												<Link2 size={12} />
-												<span>Use a resource</span>
-											</button>
-										{/snippet}
-										{@render resourceMenu((p) => useResource(index, p))}
-									</Menu>
-								{/if}
-							{/if}
-						</div>
-						<div class="env-actions">
-							{#if env.secret && !withheld && !isRef && env.value !== ''}
-								<button
-									type="button"
-									onclick={() => toggleReveal(index)}
-									class="env-action-btn"
-									aria-label={isRevealed ? 'Hide' : 'Show'}
-								>
-									{#if isRevealed}<EyeOff size={14} class="h-3.5 w-3.5" />{:else}<Eye
-											size={14}
-											class="h-3.5 w-3.5"
-										/>{/if}
-								</button>
-							{/if}
-							<button
-								type="button"
-								onclick={() => toggleSecret(index)}
-								class="env-action-btn"
-								class:env-action-secret={env.secret}
-								class:env-action-sealed={env.sealed}
-								aria-disabled={env.sealed}
-								aria-label={env.sealed
-									? 'Sealed. Delete and re-add the variable to make it visible'
-									: env.secret
-										? 'Secret, sealed on save'
-										: 'Mark as secret'}
-								title={env.sealed
-									? 'Sealed. Delete and re-add the variable to make it visible'
-									: env.secret
-										? 'Secret, sealed on save'
-										: 'Mark as secret'}
-							>
-								{#if env.secret}<Lock size={14} class="h-3.5 w-3.5" />{:else}<LockOpen
-										size={14}
-										class="h-3.5 w-3.5"
-									/>{/if}
-							</button>
-							<button
-								onclick={() => removeEnvRow(index)}
-								class="env-action-btn env-action-delete"
-								aria-label="Remove"
-							>
-								<Trash2 size={14} class="h-3.5 w-3.5" />
-							</button>
-						</div>
-					</div>
-				</div>
-			{/each}
-			<button onclick={addEnvRow} class="env-add-btn">
-				<Plus class="h-4 w-4" />
-				<span>Add variable</span>
-			</button>
-		{:else}
-			<textarea
-				bind:value={envRawText}
-				placeholder="KEY1=value1&#10;KEY2=value2&#10;# Comments are ignored"
-				class="env-raw-textarea"
-				onfocus={() => (isEditing = true)}></textarea>
-			{#if envVars.some((e) => e.secret && e.key.trim())}
-				<p class="env-secret-note">
-					<Lock size={12} />
-					<span>
-						Secret values show as <code>{SEALED_PLACEHOLDER}</code>. Replace one to set a new value;
-						it stays sealed.
-					</span>
-				</p>
-			{/if}
 		{/if}
-	</div>
-	{#if envViewMode === 'ui' && envVars.some((e) => e.secret && e.key.trim())}
-		<p class="env-secret-note">
-			<Lock size={12} />
-			<span>
-				Secret values are sealed: write-only, encrypted at rest, and never shown again. Enter a new
-				value to replace one.
-			</span>
-		</p>
-	{/if}
-	<div class="env-footer">
-		<p class="env-footer-hint">Saving restarts pods.</p>
-		<button onclick={handleSave} disabled={savingEnv || !isEditing} class="btn btn-primary">
-			{#if savingEnv}<Loader2 class="h-4 w-4 animate-spin" />{/if}
-			<span>Save</span>
-		</button>
+
+		<Swap key={empty ? 'empty' : 'editor'}>
+			{#if empty}
+				<EmptyState title="No variables yet">
+					{#snippet icon()}<KeyRound size={18} />{/snippet}
+					<div class="empty-actions">
+						<Button variant="primary" icon={Plus} onclick={addFirst}>Add variable</Button>
+						{#if picks.length > 0}
+							<Menu placement="bottom-start">
+								{#snippet trigger(props)}
+									<Button {...props} variant="secondary" icon={Link2} disabled={connecting}
+										>Use a resource</Button
+									>
+								{/snippet}
+								{@render resourceMenu((p) => useResource(null, p))}
+							</Menu>
+						{/if}
+					</div>
+				</EmptyState>
+			{:else}
+				<EnvVarEditor
+					bind:rows={envVars}
+					bind:raw
+					{mode}
+					secrets
+					{stored}
+					{issues}
+					confirmSecret
+					{accessory}
+					tokenized={(row) => isResourceRef(row.value)}
+					onedit={() => (isEditing = true)}
+				>
+					{#snippet addon()}
+						{#if picks.length > 0}
+							<Menu placement="bottom-start">
+								{#snippet trigger(props)}
+									<Button {...props} variant="ghost" size="sm" icon={Link2} disabled={connecting}
+										>Use a resource</Button
+									>
+								{/snippet}
+								{@render resourceMenu((p) => useResource(null, p))}
+							</Menu>
+						{/if}
+					{/snippet}
+				</EnvVarEditor>
+			{/if}
+		</Swap>
+
+		{#if !empty}
+			<FormActions hint="Saving restarts your app.">
+				<Button variant="ghost" disabled={!isEditing || savingEnv} onclick={discard}>Discard</Button
+				>
+				<Button
+					variant="primary"
+					loading={savingEnv}
+					disabled={!isEditing || blocking > 0}
+					onclick={save}>Save</Button
+				>
+			</FormActions>
+		{/if}
 	</div>
 </SectionCard>
 
 <style>
-	.env-conflicts {
-		margin-bottom: 0.75rem;
+	.body {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
 	}
-	.env-conflict-list {
+	.conflicts {
 		display: flex;
 		flex-direction: column;
 		gap: 0.25rem;
@@ -413,79 +363,36 @@
 		padding: 0;
 		list-style: none;
 	}
-	.env-conflict-list code {
+	.conflicts code {
 		font-family: var(--font-mono);
-		font-weight: 600;
+		font-weight: var(--weight-semibold);
 	}
-	.env-val-col {
-		position: relative;
+	.empty-actions {
 		display: flex;
-		align-items: center;
+		gap: var(--space-2);
 	}
-	.env-token {
+	.token {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.375rem;
 		max-width: 100%;
-		padding: 0.25rem 0.5rem 0.25rem 0.5rem;
+		height: 1.75rem;
+		padding: 0 0.625rem;
 		border: 0;
 		border-radius: var(--radius-pill);
-		background: color-mix(in srgb, var(--accent) 10%, transparent);
+		background: color-mix(in oklab, var(--accent) 12%, transparent);
 		color: var(--accent);
-		font-size: var(--text-caption);
-		font-weight: 600;
+		font-size: var(--text-footnote);
+		font-weight: var(--weight-medium);
 		cursor: pointer;
+		transition: background-color var(--fade-in) var(--curve-out);
 	}
-	.env-token:hover {
-		background: color-mix(in srgb, var(--accent) 16%, transparent);
+	.token:hover {
+		background: color-mix(in oklab, var(--accent) 18%, transparent);
 	}
-	.env-token-text {
+	.token-text {
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
-	.env-use {
-		position: absolute;
-		right: 0.5rem;
-		display: inline-flex;
-		align-items: center;
-		gap: 0.25rem;
-		padding: 0.125rem 0.5rem;
-		border: 0;
-		border-radius: var(--radius-pill);
-		background: none;
-		color: var(--text-faint);
-		font-size: var(--text-caption);
-		cursor: pointer;
-	}
-	.env-use:hover {
-		background: var(--fill-quiet);
-		color: var(--text-muted);
-	}
-	.env-action-secret {
-		color: var(--status-warning);
-		background: color-mix(in srgb, var(--status-warning) 12%, transparent);
-	}
-	.env-action-sealed {
-		cursor: default;
-	}
-	.env-val-sealed::placeholder {
-		font-style: italic;
-	}
-	.env-secret-note {
-		display: flex;
-		align-items: flex-start;
-		gap: 0.4rem;
-		margin-top: 0.75rem;
-		font-size: var(--text-caption);
-		line-height: 1.4;
-		color: var(--text-muted);
-	}
-	.env-secret-note :global(svg) {
-		flex-shrink: 0;
-		margin-top: 0.1rem;
-	}
-	.env-secret-note code {
-		font-family: var(--font-mono);
 	}
 </style>

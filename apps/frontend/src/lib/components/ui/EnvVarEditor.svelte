@@ -12,7 +12,7 @@
 </script>
 
 <script lang="ts">
-	import { untrack } from 'svelte';
+	import { untrack, type Snippet } from 'svelte';
 	import { Eye, EyeOff, Lock, LockOpen, Plus, Trash2, TriangleAlert, X } from 'lucide-svelte';
 	import { envVarsToRaw, rawToEnvVars } from '$lib/utils/format';
 	import { presence } from '$lib/utils/transitions';
@@ -32,7 +32,10 @@
 		reference = undefined,
 		confirmSecret = false,
 		minRows = 0,
-		onedit = undefined
+		onedit = undefined,
+		accessory = undefined,
+		tokenized = undefined,
+		addon = undefined
 	}: {
 		rows?: EnvVarEditorRow[];
 		mode?: 'grid' | 'raw';
@@ -44,6 +47,9 @@
 		confirmSecret?: boolean;
 		minRows?: number;
 		onedit?: () => void;
+		accessory?: Snippet<[EnvVarEditorRow, number]>;
+		tokenized?: (row: EnvVarEditorRow) => boolean;
+		addon?: Snippet;
 	} = $props();
 
 	let revealed = $state<Set<number>>(new Set());
@@ -228,6 +234,10 @@
 							/>
 						</span>
 					</div>
+				{:else if tokenized?.(row)}
+					<div class="cell--value value">
+						<span class="token-slot">{@render accessory?.(row, i)}</span>
+					</div>
 				{:else}
 					<div class="cell--value value">
 						<input
@@ -247,10 +257,11 @@
 							}}
 							{@attach claimFocus(id)}
 						/>
+						{@render accessory?.(row, i)}
 					</div>
 				{/if}
 				<div class="tools" class:tools--wide={secrets}>
-					{#if (secrets ? row.secret : true) && !sealed(row)}
+					{#if (secrets ? row.secret : true) && !sealed(row) && !tokenized?.(row)}
 						<span class="tool">
 							<Button
 								variant="ghost"
@@ -330,6 +341,7 @@
 		{/each}
 		<div class="add">
 			<Button variant="ghost" size="sm" icon={Plus} onclick={addRow}>Add variable</Button>
+			{@render addon?.()}
 		</div>
 	</div>
 {/if}
@@ -413,6 +425,11 @@
 		flex: 1;
 		color: var(--text-muted);
 	}
+	.token-slot {
+		display: flex;
+		min-width: 0;
+		padding-inline: 0.5rem;
+	}
 	.sealed-label {
 		display: flex;
 		align-items: center;
@@ -444,6 +461,9 @@
 		transition: opacity var(--fade-in) var(--curve-out);
 	}
 	.add {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
 		padding: 0.25rem;
 	}
 	.confirm {
