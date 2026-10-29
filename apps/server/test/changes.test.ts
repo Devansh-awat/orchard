@@ -54,7 +54,8 @@ test('an audit row becomes a config-toned marker with its own title', () => {
     kind: 'resources',
     tone: 'config',
     label: 'Resources changed',
-    detail: 'memory 256 MB → 512 MB'
+    detail: 'memory 256 MB → 512 MB',
+    cause: 'the memory limit changed'
   });
 });
 
@@ -194,5 +195,48 @@ test('node transitions report cordons and new pressure only', () => {
   assert.deepEqual(
     nodeTransitions('house', { schedulable: false, taints: [] }, { schedulable: true, taints: [] }),
     [{ reason: 'Uncordoned', message: 'Node house was uncordoned' }]
+  );
+});
+
+test('audit causes name what the user changed', () => {
+  const row = (action: string, metadata: unknown, targetLabel: string | null = null) =>
+    auditChange({
+      id: 'x',
+      action,
+      createdAt: new Date(0),
+      targetType: 'deployment',
+      targetLabel,
+      metadata
+    })?.cause;
+  assert.equal(
+    row('deployment.env.updated', { changed: 'API_URL', added: null }),
+    'API_URL changed'
+  );
+  assert.equal(
+    row('deployment.env.updated', { changed: 'A,B', added: 'C' }),
+    '3 environment variables changed'
+  );
+  assert.equal(
+    row('deployment.resources.updated', { cpuMilli: [250, 500], memoryBytes: [1, 1] }),
+    'the CPU limit changed'
+  );
+  assert.equal(row('deployment.scaled', { replicas: [1, 3] }), 'the app was scaled to 3');
+  assert.equal(
+    row('deployment.strategy.updated', { strategy: ['rollingUpdate', 'recreate'] }),
+    'the deploy strategy changed'
+  );
+  assert.equal(row('ingress.created', null, 'api.example.com'), 'api.example.com changed');
+});
+
+test('cluster causes read as clauses', () => {
+  const base = { id: 'c', message: null, count: 1, at: new Date(0) };
+  assert.equal(
+    clusterEventChange({ ...base, kind: 'node', reason: 'MemoryPressure', nodeName: 'house' })
+      .cause,
+    'the node house ran low on memory'
+  );
+  assert.equal(
+    clusterEventChange({ ...base, kind: 'eviction', reason: 'Evicted', nodeName: 'house' }).cause,
+    'a pod was evicted'
   );
 });

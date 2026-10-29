@@ -31,6 +31,7 @@ export interface ChangeEntry {
   tone: ChangeTone;
   label: string;
   detail: string | null;
+  cause: string | null;
   actor: ChangeActor | null;
 }
 
@@ -92,6 +93,59 @@ export function versionLabel(h: { tag: string | null; commitSha: string | null }
   return h.tag ?? 'new version';
 }
 
+function changedKeys(metadata: unknown): string[] {
+  if (!metadata || typeof metadata !== 'object') return [];
+  const m = metadata as Record<string, unknown>;
+  return ['changed', 'added', 'removed']
+    .flatMap((k) => (typeof m[k] === 'string' ? (m[k] as string).split(',') : []))
+    .map((k) => k.trim())
+    .filter(Boolean);
+}
+
+function moved(metadata: unknown, key: string): boolean {
+  const v = (metadata as Record<string, unknown> | null)?.[key];
+  return Array.isArray(v) && v.length === 2 && v[0] !== v[1];
+}
+
+function lowerFirst(text: string): string {
+  return text.charAt(0).toLowerCase() + text.slice(1);
+}
+
+export function auditCause(
+  kind: ChangeKind,
+  row: { action: string; targetLabel: string | null; metadata: unknown },
+  title: string
+): string {
+  switch (kind) {
+    case 'resources': {
+      const cpu = moved(row.metadata, 'cpuMilli');
+      const mem = moved(row.metadata, 'memoryBytes');
+      if (cpu && mem) return 'the CPU and memory limits changed';
+      if (cpu) return 'the CPU limit changed';
+      return 'the memory limit changed';
+    }
+    case 'env': {
+      const keys = changedKeys(row.metadata);
+      if (keys.length === 1) return `${keys[0]} changed`;
+      if (keys.length > 1) return `${keys.length} environment variables changed`;
+      return 'the environment variables changed';
+    }
+    case 'scale': {
+      const r = (row.metadata as Record<string, unknown> | null)?.replicas;
+      const to = Array.isArray(r) ? r[1] : r;
+      return typeof to === 'number' ? `the app was scaled to ${to}` : 'the app was scaled';
+    }
+    case 'restart':
+      return row.action === 'deployment.stopped' ? 'the app was stopped' : 'the app was restarted';
+    case 'rollback':
+      return 'the app was rolled back';
+    case 'domain':
+      return row.targetLabel ? `${row.targetLabel} changed` : 'a domain changed';
+    default:
+      return `the ${lowerFirst(title).replace(/ (changed|updated)$/, '')} changed`;
+  }
+}
+
 export function auditChange(row: {
   id: string;
   action: string;
@@ -109,7 +163,8 @@ export function auditChange(row: {
     kind,
     tone: toneOf(kind),
     label: described.title,
-    detail: described.detail ?? describeAuditMetadata(row.metadata)
+    detail: described.detail ?? describeAuditMetadata(row.metadata),
+    cause: auditCause(kind, row, described.title)
   };
 }
 
@@ -140,6 +195,24 @@ const EVENT_LABELS: Record<string, string> = {
   NodeUnreachable: 'Node unreachable'
 };
 
+const NODE_CAUSES: Record<string, string> = {
+  Cordoned: 'was cordoned',
+  Uncordoned: 'was uncordoned',
+  MemoryPressure: 'ran low on memory',
+  DiskPressure: 'ran low on disk',
+  PIDPressure: 'ran out of process ids',
+  NodeNotReady: 'stopped reporting ready',
+  NodeUnreachable: 'became unreachable'
+};
+
+const EVENT_CAUSES: Record<string, string> = {
+  eviction: 'a pod was evicted',
+  preemption: 'a pod was preempted',
+  scheduling: 'a pod could not be scheduled',
+  killing: 'a failing probe killed a pod',
+  volume: 'a volume failed to mount'
+};
+
 export function clusterEventChange(row: {
   id: string;
   kind: string;
@@ -159,13 +232,18 @@ export function clusterEventChange(row: {
   ]
     .filter(Boolean)
     .join(' · ');
+  const cause =
+    row.kind === 'node'
+      ? `the node${row.nodeName ? ` ${row.nodeName}` : ''} ${NODE_CAUSES[row.reason] ?? 'had a problem'}`
+      : (EVENT_CAUSES[row.kind] ?? label.toLowerCase());
   return {
     id: `cluster:${row.id}`,
     t: row.at.getTime(),
     kind,
     tone: toneOf(kind),
     label,
-    detail: detail ? detail.slice(0, 240) : null
+    detail: detail ? detail.slice(0, 240) : null,
+    cause
   };
 }
 
@@ -192,7 +270,8 @@ export function releaseChange(row: {
     kind: rolledBack ? 'rollback' : 'deploy',
     tone: 'deploy',
     label: rolledBack ? `Rolled back to ${version}` : `${version} went live`,
-    detail: commit ? commit.slice(0, 240) : null
+    detail: commit ? commit.slice(0, 240) : null,
+    cause: rolledBack ? `the rollback to ${version}` : `${version} went live`
   };
 }
 
@@ -211,7 +290,8 @@ export function buildChange(row: {
     kind: 'build',
     tone: 'error',
     label: 'Build failed',
-    detail: reason ? reason.slice(0, 240) : null
+    detail: reason ? reason.slice(0, 240) : null,
+    cause: null
   };
 }
 

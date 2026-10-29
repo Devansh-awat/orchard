@@ -198,7 +198,7 @@ function formatMetaValue(v: unknown): string {
 const NOISY_META_KEYS = new Set(['repo', 'repoUrl', 'githubRepo', 'namespace', 'deploymentId']);
 
 function unitOf(key: string): { name: string; format: (v: unknown) => string } {
-  if (/Bytes$/.test(key)) {
+  if (key.endsWith('Bytes')) {
     return {
       name: key.replace(/Bytes$/, ''),
       format: (v) => {
@@ -212,7 +212,7 @@ function unitOf(key: string): { name: string; format: (v: unknown) => string } {
       }
     };
   }
-  if (/Milli$/.test(key)) {
+  if (key.endsWith('Milli')) {
     return {
       name: key.replace(/Milli$/, ''),
       format: (v) => {

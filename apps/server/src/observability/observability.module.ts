@@ -7,13 +7,26 @@ import { ObservabilityController } from './observability.controller';
 import { ErrorIngestService } from './error-ingest.service';
 import { TimelineService } from './timeline.service';
 import { VerdictsService } from './verdicts.service';
+import { FindingsService } from './findings.service';
 import { EventsModule } from '../events/events.module';
 import { MetricsModule } from '../metrics/metrics.module';
 
 @Module({
   imports: [PrismaModule, KubernetesModule, ProjectsModule, EventsModule, MetricsModule],
-  providers: [ObservabilityService, ErrorIngestService, TimelineService, VerdictsService],
+  providers: [
+    ObservabilityService,
+    ErrorIngestService,
+    TimelineService,
+    VerdictsService,
+    FindingsService
+  ],
   controllers: [ObservabilityController],
-  exports: [ObservabilityService, ErrorIngestService, TimelineService, VerdictsService]
+  exports: [
+    ObservabilityService,
+    ErrorIngestService,
+    TimelineService,
+    VerdictsService,
+    FindingsService
+  ]
 })
 export class ObservabilityModule {}

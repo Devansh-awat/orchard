@@ -411,6 +411,7 @@ export const routes: GeneratedRoute[] = [
   { method: 'GET', path: '/observe/deployments/:id/changes', auth: 'authenticated' },
   { method: 'GET', path: '/observe/deployments/:id/errors', auth: 'authenticated' },
   { method: 'PATCH', path: '/observe/deployments/:id/errors/:fingerprint', auth: 'authenticated' },
+  { method: 'GET', path: '/observe/deployments/:id/findings', auth: 'authenticated' },
   { method: 'GET', path: '/observe/deployments/:id/http-metrics', auth: 'authenticated' },
   { method: 'GET', path: '/observe/deployments/:id/logs/stream', auth: 'authenticated' },
   { method: 'GET', path: '/observe/deployments/:id/logs/structured', auth: 'authenticated' },

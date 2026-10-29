@@ -20,6 +20,7 @@ import { ObservabilityService } from './observability.service';
 import { MetricsStoreError } from '../metrics/victoria-metrics.service';
 import { ErrorIngestService } from './error-ingest.service';
 import { TimelineService } from './timeline.service';
+import { FindingsService } from './findings.service';
 import { parseKinds } from './timeline-entries';
 
 @Auth()
@@ -29,6 +30,7 @@ export class ObservabilityController {
     private readonly observability: ObservabilityService,
     private readonly errorIngest: ErrorIngestService,
     private readonly timeline: TimelineService,
+    private readonly findings: FindingsService,
     private readonly projectAccess: ProjectAccessService,
     private readonly streams: SseStreamLimiter
   ) {}
@@ -65,6 +67,29 @@ export class ObservabilityController {
       throw new BadRequestException('range must be 31 days or less');
     }
     return this.timeline.changes(id, { start, end, canEdit: access.canEdit });
+  }
+
+  @Get('deployments/:id/findings')
+  async getFindings(
+    @Param('id') id: string,
+    @Request() req,
+    @Query('start') startStr?: string,
+    @Query('end') endStr?: string,
+    @Query('tz') tz?: string
+  ) {
+    const { access } = await this.assertAccess(id, req);
+    const end = Number(endStr) || Date.now();
+    const start = Number(startStr) || end - 24 * 60 * 60 * 1000;
+    if (end <= start) throw new BadRequestException('end must be > start');
+    if (end - start > 8 * 24 * 60 * 60 * 1000) {
+      throw new BadRequestException('range must be 8 days or less');
+    }
+    try {
+      return await this.findings.findings(id, { start, end, tz, canEdit: access.canEdit });
+    } catch (err) {
+      if (err instanceof MetricsStoreError) throw new ServiceUnavailableException(err.message);
+      throw err;
+    }
   }
 
   @Get('deployments/:id/capabilities')
