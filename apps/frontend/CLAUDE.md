@@ -289,8 +289,8 @@ Three-level hierarchy: **Org cap** → **Member allowance** → **Deployment req
   draw the golden-ratio `GoldenReticle` over the page when checking alignment. Below that size it scrolls. Nodes and
   other infrastructure stay hidden.
 - Problems show as one `AlertStack` line above the panels; it expands to the full list. They come from
-  `computeHealth` in `deployment/health.ts` (app vs deploy vs build, current state only, unit tested in
-  `health.test.ts`), fed by pod facts and `rollout` (the server's `summarizeRollout` in
+  `computeHealth` in `packages/health` (imported as `$health`; the server uses a generated copy in `apps/server/src/health`) (app vs deploy vs build, current state only, unit tested in
+  `packages/health/test/health.test.ts`), fed by pod facts and `rollout` (the server's `summarizeRollout` in
   `kubernetes/rollout-strategy.ts`, read from the informer mirror).
 - Live values land instantly; motion is the decorative layer on top (`NumberRoll`, `stateEcho` on pod
   status, the sparkline growing), never a tween that delays the number.

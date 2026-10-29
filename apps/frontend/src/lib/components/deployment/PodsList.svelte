@@ -16,7 +16,7 @@
 	import type { Pod } from '$lib/types/deployment';
 	import PodSimulator from './PodSimulator.svelte';
 	import IslandPill from '$lib/components/patterns/IslandPill.svelte';
-	import type { ClassifiedPod } from './health';
+	import type { ClassifiedPod } from '$health';
 	import IslandSheet from '$lib/components/patterns/IslandSheet.svelte';
 
 	type PodWarning = { podName?: string; message: string };

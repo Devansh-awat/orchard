@@ -4,7 +4,7 @@
 	import type { WarningSeverity } from '$lib/utils/format';
 	import type { AlertState } from '$lib/components/notifications/alerts';
 	import AlertStack, { type StackAlert } from '$lib/components/patterns/AlertStack.svelte';
-	import type { PodProblem, Problem } from './health';
+	import type { PodProblem, Problem } from '$health';
 
 	interface ResourcePressure {
 		cpuRatio: number | null;

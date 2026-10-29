@@ -289,7 +289,7 @@ Every status indicator is `StatusDot`. Nothing else draws a coloured status circ
 
 ## App, deploy and build are three different things
 
-`deployment/health.ts` (`computeHealth`) is the only place that decides what is wrong, from what is true right now. It never keeps history: a pod that crashed and recovered raises nothing.
+`packages/health` (`computeHealth`, imported as `$health`) is the only place that decides what is wrong, from what is true right now. It never keeps history: a pod that crashed and recovered raises nothing.
 
 - **Build:** did the image get made. A failed build changes nothing that is running.
 - **Deploy:** is the new version (the newest ReplicaSet, `rollout.currentRevision`) coming up. A new version that crashes, can't pull, misses a secret, has no room or never gets ready is a deploy problem, and the app keeps serving the previous version.

@@ -12,7 +12,7 @@
 	import { toEnvWrite, type EditableEnvVar } from '$lib/utils/env-secrets';
 	import { TailscaleController } from '$lib/components/deployment/tailscale.svelte';
 	import { ServicesController } from '$lib/components/deployment/services.svelte';
-	import { computeHealth, type Rollout } from '$lib/components/deployment/health';
+	import { computeHealth, type Rollout } from '$health';
 	import {
 		podLabel,
 		getNewestPod,

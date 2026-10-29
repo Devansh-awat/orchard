@@ -6,7 +6,7 @@ import {
 	type HealthInput,
 	type HealthPod,
 	type Rollout
-} from './health.ts';
+} from '../src/health.ts';
 
 const NOW = Date.parse('2026-10-28T12:00:00Z');
 const ago = (s: number) => new Date(NOW - s * 1000).toISOString();

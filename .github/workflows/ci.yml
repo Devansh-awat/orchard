@@ -37,6 +37,7 @@ jobs:
             frontend:
               - 'apps/frontend/**'
               - 'packages/contracts/**'
+              - 'packages/health/**'
               - 'scripts/typecheck.mjs'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
@@ -47,6 +48,7 @@ jobs:
             server:
               - 'apps/server/**'
               - 'packages/contracts/**'
+              - 'packages/health/**'
               - 'packages/graft-sdk/**'
               - 'grafts/**'
               - 'scripts/typecheck.mjs'
@@ -232,6 +234,8 @@ jobs:
         run: pnpm --filter server build
       - name: Auth-coverage snapshot test
         run: pnpm --filter server test:auth-coverage
+      - name: Health copy matches packages/health
+        run: pnpm --filter server exec tsx --test test/health-sync.test.ts
       - name: Grafts test
         run: |
           export PATH="$(ls -d /usr/lib/postgresql/*/bin | sort -V | tail -1):$PATH"

@@ -15,7 +15,7 @@
 		"lint": "oxlint .",
 		"check:design": "node scripts/check-design.mjs",
 		"gen:design": "tsx scripts/gen-design.ts",
-		"test": "tsx --test src/**/*.test.ts",
+		"test": "tsx --test src/**/*.test.ts ../../packages/health/test/*.test.ts",
 		"test:e2e": "playwright test"
 	},
 	"devDependencies": {

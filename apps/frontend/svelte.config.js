@@ -20,7 +20,8 @@ const config = {
 			pollInterval: process.env.NODE_ENV === 'production' ? 60000 : 0
 		},
 		alias: {
-			$routes: 'src/routes'
+			$routes: 'src/routes',
+			$health: '../../packages/health/src/health.ts'
 		}
 	}
 };

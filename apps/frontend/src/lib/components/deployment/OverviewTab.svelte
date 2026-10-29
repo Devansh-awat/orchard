@@ -85,7 +85,7 @@
 		onSelectLogsPod: (podName: string, containerName?: string) => void;
 		onSetTabMetrics: (view?: 'metrics' | 'errors') => void;
 		onRefreshPods: () => void;
-		podVersions?: import('./health').ClassifiedPod[];
+		podVersions?: import('$health').ClassifiedPod[];
 		podLabel: (podName: string) => string;
 	} = $props();
 
