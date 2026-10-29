@@ -1893,7 +1893,11 @@
 		newDomainHost = `${adjective}-${noun}-${number}.${APP_DOMAIN}`;
 	}
 
-	async function checkDomainDns(domain: string): Promise<{ valid: boolean; message: string }> {
+	async function checkDomainDns(domain: string): Promise<{
+		valid: boolean;
+		message: string;
+		records: Array<{ type: string; name: string; value: string }>;
+	}> {
 		if (!deployment?.project?.id) throw new Error('Project not loaded');
 		const response = await apiFetch('/apiv1/projects/ingresses/validate-dns', {
 			method: 'POST',
@@ -1902,7 +1906,11 @@
 		});
 		const data = await response.json().catch(() => ({}));
 		if (!response.ok) throw new Error(data.message || 'Failed to check DNS');
-		return { valid: !!data.valid, message: data.message || '' };
+		return {
+			valid: !!data.valid,
+			message: data.message || '',
+			records: Array.isArray(data.records) ? data.records : []
+		};
 	}
 
 	async function createDomain(): Promise<boolean> {

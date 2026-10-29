@@ -72,7 +72,7 @@ export const PROTECTION_LABELS: Record<ProtectionMode | 'legacy', string> = {
 	none: '',
 	password: 'Password',
 	basic: 'Username and password',
-	orchard: 'Orchard sign-in',
+	orchard: 'Project members',
 	legacy: 'Sign-in'
 };
 
@@ -140,4 +140,14 @@ export function domainKeyOf(entry: PortEntry): string | null {
 
 export function bareAddress(url: string | null): string | null {
 	return url ? url.replace(/^[a-z]+:\/\//i, '') : null;
+}
+
+export type DnsCheck = {
+	valid: boolean;
+	message: string;
+	records?: Array<{ type: string; name: string; value: string }>;
+};
+
+export function apexOf(host: string): string {
+	return host.split('.').slice(-2).join('.');
 }

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tick, untrack } from 'svelte';
-	import { ChevronRight, Globe, Link, MonitorSmartphone, Plug, Shuffle } from 'lucide-svelte';
+	import { Globe, Link, Shuffle } from 'lucide-svelte';
 	import {
 		Alert,
 		Badge,
@@ -10,17 +10,14 @@
 		Field,
 		FieldGrid,
 		Input,
-		List,
-		ListRow,
 		Modal,
 		ModalIntro,
 		SegmentedControl,
 		Swap,
-		ToggleRow,
-		ToneTile
+		ToggleRow
 	} from '$lib/components/ui';
 	import DnsSetup from './DnsSetup.svelte';
-	import { REDIRECT_STATUS_OPTIONS } from './network';
+	import { REDIRECT_STATUS_OPTIONS, type DnsCheck } from './network';
 
 	type ProjectRoute = {
 		host: string;
@@ -39,15 +36,9 @@
 		redirectTarget = $bindable(),
 		redirectStatus = $bindable(),
 		advanced = $bindable(),
-		portLocked = false,
-		target = null,
-		kinds = { web: true, raw: false, tailnet: false, tailnetLinked: false },
-		onOpenRaw = () => {},
-		onJoinTailnet = () => {},
 		deploymentId,
 		projectRoutes,
 		appDomain,
-		cname,
 		creating,
 		error,
 		serviceOptions,
@@ -67,15 +58,9 @@
 		redirectTarget: string;
 		redirectStatus: string;
 		advanced: boolean;
-		portLocked?: boolean;
-		target?: { port: number; protocol: string; public: boolean } | null;
-		kinds?: { web: boolean; raw: boolean; tailnet: boolean; tailnetLinked: boolean };
-		onOpenRaw?: () => void;
-		onJoinTailnet?: () => void;
 		deploymentId: string;
 		projectRoutes: ProjectRoute[];
 		appDomain: string;
-		cname: string;
 		creating: boolean;
 		error: string | null;
 		serviceOptions: Array<{ key: string; label: string; serviceName: string; port: number }>;
@@ -84,50 +69,30 @@
 		onCreate: () => Promise<boolean>;
 		onReset: () => void;
 		onGenerate: () => void;
-		onCheckDns?: (domain: string) => Promise<{ valid: boolean; message: string }>;
+		onCheckDns?: (domain: string) => Promise<DnsCheck>;
 	} = $props();
 
 	const uid = $props.id();
 
-	type Step = 'choose' | 'address' | 'raw' | 'dns';
-
-	let step = $state<Step>('address');
-	let chose = $state(false);
+	let step = $state<'address' | 'dns'>('address');
 	let created = $state('');
 	let wasOpen = false;
-
-	const choiceCount = $derived([kinds.web, kinds.raw, kinds.tailnet].filter(Boolean).length);
 
 	$effect(() => {
 		const isOpen = open;
 		if (isOpen && !wasOpen) {
-			chose = choiceCount > 1;
-			step = chose ? 'choose' : kinds.raw && !kinds.web ? 'raw' : 'address';
+			step = 'address';
 			created = '';
 			if (appDomain && !host) onGenerate();
 		}
 		wasOpen = isOpen;
 	});
 
-	function pick(next: Step) {
-		step = next;
-	}
-
-	function joinTailnet() {
-		onJoinTailnet();
-		close();
-	}
-
-	function openRaw() {
-		onOpenRaw();
-		close();
-	}
-
 	const onAppDomain = $derived(!!appDomain && normalizedHost.endsWith(`.${appDomain}`));
 	const address = $derived(host + (path && path !== '/' ? path : ''));
 	const portLabel = $derived(serviceOptions.find((o) => o.key === serviceKey)?.label ?? '');
 	const portOptions = $derived(serviceOptions.map((o) => ({ value: o.key, label: o.label })));
-	const choosePort = $derived(!portLocked && routing === 'service' && serviceOptions.length > 1);
+	const choosePort = $derived(routing === 'service' && serviceOptions.length > 1);
 	const needsPort = $derived(routing === 'service' && serviceOptions.length === 0);
 
 	const sharedRoutes = $derived(
@@ -224,79 +189,17 @@
 
 <Modal bind:open size="md" closable={false} dismissable labelledby="{uid}-title" onclose={onReset}>
 	<Swap key={step}>
-		{#if step === 'choose'}
+		{#if step === 'dns'}
 			<div class="form">
 				<ModalIntro
 					id="{uid}-title"
 					icon={Globe}
 					tone="info"
 					solid
-					title={target?.public
-						? `Another way into port ${target.port}`
-						: `Make port ${target?.port ?? ''} public`}
+					title="Set up DNS"
+					description={created}
 				/>
-				<List label="Ways to reach it">
-					{#if kinds.web}
-						<ListRow title="Add a domain" onclick={() => pick('address')}>
-							{#snippet leading()}
-								<ToneTile tone="info" solid size={32}
-									><Globe size={16} strokeWidth={2.25} /></ToneTile
-								>
-							{/snippet}
-							{#snippet trailing()}<ChevronRight size={16} />{/snippet}
-						</ListRow>
-					{/if}
-					{#if kinds.raw}
-						<ListRow title="Open a public port" onclick={() => pick('raw')}>
-							{#snippet leading()}
-								<ToneTile tone="success" solid size={32}
-									><Plug size={16} strokeWidth={2.25} /></ToneTile
-								>
-							{/snippet}
-							{#snippet trailing()}<ChevronRight size={16} />{/snippet}
-						</ListRow>
-					{/if}
-					{#if kinds.tailnet}
-						<ListRow
-							title="Your devices"
-							subtitle={kinds.tailnetLinked ? undefined : 'Link Tailscale in your settings first'}
-							href={kinds.tailnetLinked ? undefined : '/user/settings'}
-							onclick={kinds.tailnetLinked ? joinTailnet : undefined}
-						>
-							{#snippet leading()}
-								<ToneTile tone="neutral" solid size={32}
-									><MonitorSmartphone size={16} strokeWidth={2.25} /></ToneTile
-								>
-							{/snippet}
-							{#snippet trailing()}<ChevronRight size={16} />{/snippet}
-						</ListRow>
-					{/if}
-				</List>
-			</div>
-		{:else if step === 'raw'}
-			<div class="form">
-				<ModalIntro
-					id="{uid}-title"
-					icon={Plug}
-					tone="success"
-					solid
-					title={target
-						? `Open port ${target.port} to the internet`
-						: 'Open a port to the internet'}
-				/>
-				<Alert tone="warning">This port will be accessible to anyone on the internet.</Alert>
-			</div>
-		{:else if step === 'dns'}
-			<div class="form">
-				<ModalIntro
-					id="{uid}-title"
-					icon={Globe}
-					tone="info"
-					solid
-					title="Point your DNS"
-					description={cname ? `Add this record where ${created} is registered.` : created}
-				/>
-				<DnsSetup host={created} {cname} watch {onCheckDns} />
+				<DnsSetup host={created} watch {onCheckDns} />
 			</div>
 		{:else}
 			<form
@@ -406,21 +309,11 @@
 	{#snippet footer()}
 		{#if step === 'dns'}
 			<Button variant="primary" onclick={close}>Done</Button>
-		{:else if step === 'choose'}
-			<Button variant="ghost" onclick={close}>Cancel</Button>
 		{:else}
-			{#if chose}
-				<Button variant="ghost" disabled={creating} onclick={() => pick('choose')}>Back</Button>
-			{:else}
-				<Button variant="ghost" disabled={creating} onclick={close}>Cancel</Button>
-			{/if}
-			{#if step === 'raw'}
-				<Button variant="primary" onclick={openRaw}>Open port</Button>
-			{:else}
-				<Button variant="primary" loading={creating} disabled={!canCreate} onclick={submit}
-					>Add domain</Button
-				>
-			{/if}
+			<Button variant="ghost" disabled={creating} onclick={close}>Cancel</Button>
+			<Button variant="primary" loading={creating} disabled={!canCreate} onclick={submit}
+				>Add domain</Button
+			>
 		{/if}
 	{/snippet}
 </Modal>

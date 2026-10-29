@@ -1637,7 +1637,21 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 		withDep((d) => deploymentDetail(store, d))
 	);
 
-	r.post('/projects/ingresses/validate-dns', () => ({ valid: true, message: 'DNS looks good' }));
+	const checks = new Map<string, number>();
+	r.post('/projects/ingresses/validate-dns', ({ body }) => {
+		const host = String(body?.domain ?? '').toLowerCase();
+		const labels = host.split('.');
+		const records =
+			labels.length > 2
+				? [{ type: 'CNAME', name: labels.slice(0, -2).join('.'), value: 'ingress.orchard.my' }]
+				: [
+						{ type: 'A', name: '@', value: '203.0.113.10' },
+						{ type: 'A', name: '@', value: '203.0.113.11' }
+					];
+		checks.set(host, (checks.get(host) ?? 0) + 1);
+		const valid = (checks.get(host) ?? 0) > 2;
+		return { valid, message: valid ? 'Connected' : 'Waiting', records };
+	});
 	r.post('/projects/:pid/ingresses', ({ params, body }) => {
 		const d =
 			store.deployment(body?.deploymentId ?? '') ??

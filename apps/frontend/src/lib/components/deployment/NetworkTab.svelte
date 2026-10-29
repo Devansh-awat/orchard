@@ -2,26 +2,25 @@
 	import { env } from '$env/dynamic/public';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import type { Service, ServiceFormState, ServicePortForm } from '$lib/types/deployment';
-	import { EthernetPort, Plus } from 'lucide-svelte';
-	import { Button, EmptyState } from '$lib/components/ui';
-	import Widget from '$lib/components/ui/Widget.svelte';
-	import AddressLedger from './network/AddressLedger.svelte';
-	import AddressModal from './network/AddressModal.svelte';
+	import { Plug } from 'lucide-svelte';
+	import { Alert, Button, Modal, ModalIntro } from '$lib/components/ui';
+	import DomainsCard from './network/DomainsCard.svelte';
+	import PortsCard from './network/PortsCard.svelte';
+	import DomainModal from './network/DomainModal.svelte';
 	import ProtectionModal from './network/ProtectionModal.svelte';
 	import RedirectModal from './network/RedirectModal.svelte';
 	import DnsModal from './network/DnsModal.svelte';
 	import PortModal from './network/PortModal.svelte';
 	import {
 		displayHost,
-		domainKeyOf,
-		domainsByPort,
 		portEntries,
+		portKeyOf,
+		type DnsCheck,
 		type PortEntry,
 		type ProtectionMode
 	} from './network/network';
 
 	const APP_DOMAIN = env.PUBLIC_APP_DOMAIN ?? '';
-	const INGRESS_CNAME = env.PUBLIC_INGRESS_CNAME ?? '';
 
 	let {
 		deployment,
@@ -132,7 +131,7 @@
 		onDeleteIngress: (ingressId: string) => void;
 		onResetDomainForm: () => void;
 		onGenerateRandomDomain: () => void;
-		onCheckDns?: (domain: string) => Promise<{ valid: boolean; message: string }>;
+		onCheckDns?: (domain: string) => Promise<DnsCheck>;
 		onUpdateRedirect?: (
 			ingressId: string,
 			data: { host: string; redirectTarget: string; redirectStatus: number }
@@ -158,7 +157,6 @@
 	const ingresses = $derived<any[]>(deployment.ingresses ?? []);
 	const services = $derived<any[]>(deployment.services ?? []);
 	const entries = $derived(portEntries(deployment.services));
-	const layout = $derived(domainsByPort(ingresses, entries));
 	const tailnet = $derived({
 		enabled: tailscaleFeatureEnabled,
 		linked: tailscaleLinked,
@@ -182,40 +180,33 @@
 	let unexposeOpen = $state(false);
 	let unexposeFor = $state<PortEntry | null>(null);
 	let editingServiceId = $state<string | null>(null);
-	let domainPortLocked = $state(false);
+	let openPortFor = $state<PortEntry | null>(null);
+	let openPortOpen = $state(false);
 
-	let addressFor = $state<PortEntry | null>(null);
+	const webPorts = $derived(
+		entries.filter((e) => (e.port.protocol || 'TCP').toUpperCase() !== 'UDP')
+	);
 
-	function webKey(entry: PortEntry) {
-		const key = domainKeyOf(entry);
-		return key && deployment.project?.id && domainServiceOptions.some((o) => o.key === key)
-			? key
-			: null;
+	function portOf(ingress: any): number | null {
+		if (ingress.redirectTarget || webPorts.length < 2) return null;
+		const key = portKeyOf(ingress, entries);
+		return entries.find((e) => e.key === key)?.port.targetPort ?? null;
 	}
 
-	function kindsFor(entry: PortEntry | null) {
-		return {
-			web: !!entry && !!webKey(entry),
-			raw: !!entry?.port.id && !(entry.port.publicEnabled && entry.port.publicPort),
-			tailnet: tailnet.enabled && !tailnet.exposed,
-			tailnetLinked: tailnet.linked
-		};
+	function setPublic(entry: PortEntry, on: boolean) {
+		if (!entry.port.id) return;
+		if (on) {
+			openPortFor = entry;
+			openPortOpen = true;
+		} else {
+			unexposeFor = entry;
+			unexposeOpen = true;
+		}
 	}
 
-	function canAddFor(entry: PortEntry) {
-		const kinds = kindsFor(entry);
-		return kinds.web || kinds.raw || kinds.tailnet;
-	}
-
-	function openAddress(entry: PortEntry) {
-		addressFor = entry;
-		const key = webKey(entry);
-		if (key) newDomainServiceKey = key;
-		domainPortLocked = true;
-		showDomainForm = true;
-	}
-
-	function expose(entry: PortEntry | null) {
+	function confirmOpenPort() {
+		const entry = openPortFor;
+		openPortOpen = false;
 		if (entry?.port.id) onTogglePortPublic(entry.service.id, entry.port.id, false);
 	}
 
@@ -315,49 +306,55 @@
 	}
 </script>
 
-<Widget>
-	{#if entries.length === 0}
-		<EmptyState
-			title="No ports yet"
-			description="Add the port your app listens on. It starts private, and you can make it public after."
-		>
-			{#snippet icon()}<EthernetPort size={18} />{/snippet}
-			<Button variant="secondary" icon={Plus} onclick={openAddPort}>Add a port</Button>
-		</EmptyState>
-	{:else}
-		<AddressLedger
-			{entries}
-			domainsFor={(entry) => layout.byPort.get(entry.key) ?? []}
-			redirects={layout.redirects}
-			appDomain={APP_DOMAIN}
-			{tailnet}
-			canProtect={!!onUpdateProtection}
-			canEditRedirect={!!onUpdateRedirect}
-			busyPortId={portPublicBusyId}
-			{deletingIngressId}
-			deletingServiceId={serviceDeletingId}
-			{sharedWith}
-			{canAddFor}
-			onAdd={openAddress}
-			onAddPort={openAddPort}
-			onUnexpose={(entry) => {
-				unexposeFor = entry;
-				unexposeOpen = true;
-			}}
-			onEditPort={openEditPort}
-			onRemovePort={(entry) => {
-				removePortFor = entry;
-				removePortOpen = true;
-			}}
-			onProtection={openProtection}
-			onRedirect={openRedirect}
-			onDns={openDns}
-			onRemoveDomain={askRemoveDomain}
-		/>
-	{/if}
-</Widget>
+<div class="network">
+	<DomainsCard
+		domains={ingresses}
+		appDomain={APP_DOMAIN}
+		{portOf}
+		canAdd={!!deployment.project?.id && domainServiceOptions.length > 0}
+		canProtect={!!onUpdateProtection}
+		canEditRedirect={!!onUpdateRedirect}
+		{deletingIngressId}
+		{sharedWith}
+		onAdd={() => (showDomainForm = true)}
+		onProtection={openProtection}
+		onRedirect={openRedirect}
+		onDns={openDns}
+		onRemove={askRemoveDomain}
+	/>
+	<PortsCard
+		{entries}
+		{tailnet}
+		busyPortId={portPublicBusyId}
+		deletingServiceId={serviceDeletingId}
+		onAdd={openAddPort}
+		onPublic={setPublic}
+		onEdit={openEditPort}
+		onRemove={(entry) => {
+			removePortFor = entry;
+			removePortOpen = true;
+		}}
+	/>
+</div>
 
-<AddressModal
+<Modal bind:open={openPortOpen} size="sm" closable={false} dismissable labelledby="open-port-title">
+	<div class="open-port">
+		<ModalIntro
+			id="open-port-title"
+			icon={Plug}
+			tone="success"
+			solid
+			title="Make port {openPortFor?.port.targetPort ?? ''} public"
+		/>
+		<Alert tone="warning">This port will be accessible to anyone on the internet.</Alert>
+	</div>
+	{#snippet footer()}
+		<Button variant="ghost" onclick={() => (openPortOpen = false)}>Cancel</Button>
+		<Button variant="primary" onclick={confirmOpenPort}>Make public</Button>
+	{/snippet}
+</Modal>
+
+<DomainModal
 	bind:open={showDomainForm}
 	bind:host={newDomainHost}
 	bind:path={newDomainPath}
@@ -368,25 +365,11 @@
 	bind:redirectStatus={newDomainRedirectStatus}
 	bind:advanced={showDomainAdvanced}
 	appDomain={APP_DOMAIN}
-	cname={INGRESS_CNAME}
 	creating={creatingDomain}
 	error={domainFormError}
 	serviceOptions={domainServiceOptions}
 	normalizedHost={newDomainNormalizedHost}
 	normalizedPath={newDomainNormalizedPath}
-	portLocked={domainPortLocked}
-	target={addressFor
-		? {
-				port: addressFor.port.targetPort,
-				protocol: (addressFor.port.protocol || 'TCP').toUpperCase(),
-				public:
-					(layout.byPort.get(addressFor.key) ?? []).length > 0 ||
-					(!!addressFor.port.publicEnabled && !!addressFor.port.publicPort)
-			}
-		: null}
-	kinds={kindsFor(addressFor)}
-	onOpenRaw={() => expose(addressFor)}
-	onJoinTailnet={onExposeTailscale}
 	deploymentId={deployment.id}
 	projectRoutes={projectIngresses}
 	onCreate={onCreateDomain}
@@ -410,7 +393,7 @@
 	onSave={saveRedirect}
 />
 
-<DnsModal bind:open={dnsOpen} host={dnsFor?.host ?? ''} cname={INGRESS_CNAME} {onCheckDns} />
+<DnsModal bind:open={dnsOpen} host={dnsFor?.host ?? ''} {onCheckDns} />
 
 <PortModal
 	open={showServiceForm}
@@ -461,10 +444,32 @@
 
 <ConfirmModal
 	bind:open={unexposeOpen}
-	title="Stop exposing port {unexposeFor?.port.targetPort ?? ''}?"
-	description="Clients lose the connection. Opening it again may pick a new public port."
-	confirmLabel="Stop exposing"
+	title="Make port {unexposeFor?.port.targetPort ?? ''} private?"
+	description="Anyone connected loses the connection. Making it public again may give it a new address."
+	confirmLabel="Make private"
 	onconfirm={() =>
 		unexposeFor?.port.id && onTogglePortPublic(unexposeFor.service.id, unexposeFor.port.id, true)}
 	oncancel={() => {}}
 />
+
+<style>
+	.network {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+	.open-port {
+		display: flex;
+		flex-direction: column;
+		gap: 1.25rem;
+	}
+	.network :global(.net-add) {
+		margin-right: -0.625rem;
+		border-radius: 999px;
+		corner-shape: round;
+	}
+	.network :global(.net-pill) {
+		border-radius: 999px;
+		corner-shape: round;
+	}
+</style>

@@ -3,87 +3,92 @@
 	import { Button, StatusBadge } from '$lib/components/ui';
 	import { statusMeta } from '$lib/components/ui/status';
 	import DnsRecord from '$lib/components/ui/DnsRecord.svelte';
-	import { dnsRecordName } from './network';
+	import { apexOf, type DnsCheck } from './network';
 
 	let {
 		host,
-		cname,
 		watch = false,
 		onCheckDns = undefined
 	}: {
 		host: string;
-		cname: string;
 		watch?: boolean;
-		onCheckDns?: (domain: string) => Promise<{ valid: boolean; message: string }>;
+		onCheckDns?: (domain: string) => Promise<DnsCheck>;
 	} = $props();
 
-	let phase = $state<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
-
-	$effect(() => {
-		void host;
-		untrack(() => (phase = 'idle'));
-	});
-
-	const name = $derived(host ? dnsRecordName(host) : '@');
-	const meta = $derived(
-		phase === 'valid'
-			? statusMeta('success', watch ? 'Connected' : 'Record found')
-			: watch
-				? statusMeta('progress', 'Waiting for DNS', true)
-				: phase === 'invalid'
-					? statusMeta('warning', 'Not found yet')
-					: null
-	);
+	let phase = $state<'checking' | 'valid' | 'invalid'>('checking');
+	let records = $state<NonNullable<DnsCheck['records']>>([]);
+	let checkedAt = $state<number | null>(null);
+	let now = $state(Date.now());
 
 	const connected = $derived(phase === 'valid');
-
-	$effect(() => {
-		if (!watch || !onCheckDns || !host || connected) return;
-		const timer = setInterval(() => {
-			if (untrack(() => phase) !== 'checking') check();
-		}, 5000);
-		untrack(check);
-		return () => clearInterval(timer);
-	});
+	const apex = $derived(records.some((r) => r.type === 'A'));
+	const ago = $derived(checkedAt ? Math.max(0, Math.round((now - checkedAt) / 1000)) : null);
+	const meta = $derived(
+		connected
+			? statusMeta('success', 'Connected')
+			: phase === 'checking' && checkedAt === null
+				? statusMeta('progress', 'Checking', true)
+				: statusMeta('warning', 'Waiting for DNS', watch)
+	);
 
 	async function check() {
 		if (!onCheckDns || !host) return;
 		phase = 'checking';
 		try {
 			const result = await onCheckDns(host);
+			if (result.records?.length) records = result.records;
 			phase = result.valid ? 'valid' : 'invalid';
 		} catch {
 			phase = 'invalid';
 		}
+		checkedAt = Date.now();
 	}
+
+	$effect(() => {
+		if (!host) return;
+		untrack(() => {
+			records = [];
+			checkedAt = null;
+			check();
+		});
+	});
+
+	$effect(() => {
+		if (!watch || connected) return;
+		const poll = setInterval(() => {
+			if (untrack(() => phase) !== 'checking') check();
+		}, 5000);
+		const tick = setInterval(() => (now = Date.now()), 1000);
+		return () => {
+			clearInterval(poll);
+			clearInterval(tick);
+		};
+	});
 </script>
 
 <div class="dns-setup">
-	{#if cname}
-		<DnsRecord records={[{ type: 'CNAME', name, value: cname }]} />
+	{#if records.length > 0}
+		<p class="lead">
+			Add {records.length > 1 ? 'these records' : 'this record'} in the DNS settings where you bought
+			<strong>{apexOf(host)}</strong>.
+		</p>
+		<DnsRecord {records} />
+		{#if apex}
+			<p class="note">Some providers write @ as {apexOf(host)} or leave the name empty.</p>
+		{/if}
 	{/if}
 	<div class="foot">
-		<p class="note">
-			{#if !cname}
-				Point this domain at your cluster's ingress.
-			{:else if host && name === '@'}
-				Root domains need CNAME flattening, like Cloudflare offers.
-			{:else}
-				Works as soon as the record is live.
-			{/if}
-		</p>
-		<div class="check">
-			{#if meta}<StatusBadge {meta} variant="plain" />{/if}
-			{#if onCheckDns && !watch}
-				<Button
-					variant="secondary"
-					size="sm"
-					loading={phase === 'checking'}
-					disabled={!host}
-					onclick={check}>Check</Button
-				>
-			{/if}
-		</div>
+		<span class="state">
+			<StatusBadge {meta} variant="plain" />
+			{#if ago !== null && !connected}<span class="ago"
+					>Checked {ago < 2 ? 'just now' : `${ago}s ago`}</span
+				>{/if}
+		</span>
+		{#if onCheckDns && !watch}
+			<Button variant="secondary" size="sm" loading={phase === 'checking'} onclick={check}
+				>Check again</Button
+			>
+		{/if}
 	</div>
 </div>
 
@@ -91,26 +96,38 @@
 	.dns-setup {
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
+		gap: 0.875rem;
 		min-width: 0;
+	}
+	.lead {
+		color: var(--text-default);
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		text-wrap: pretty;
+	}
+	.lead strong {
+		font-weight: var(--weight-semibold);
+	}
+	.note {
+		margin-top: -0.25rem;
+		color: var(--text-muted);
+		font-size: var(--text-footnote);
 	}
 	.foot {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: 1rem;
-		min-height: 1.75rem;
+		min-height: 2rem;
 	}
-	.note {
-		min-width: 0;
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		color: var(--text-muted);
-	}
-	.check {
-		display: flex;
-		flex-shrink: 0;
+	.state {
+		display: inline-flex;
 		align-items: center;
 		gap: 0.75rem;
+	}
+	.ago {
+		color: var(--text-faint);
+		font-size: var(--text-footnote);
+		font-variant-numeric: tabular-nums;
 	}
 </style>

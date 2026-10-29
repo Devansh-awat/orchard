@@ -312,16 +312,16 @@ Three-level hierarchy: **Org cap** → **Member allowance** → **Deployment req
   time range, a synced crosshair, brush zoom, deploy and kill markers, incident bands and findings
   (`observe/findings.ts`). `?demo` feeds it synthetic data. Series the server does not record yet (latency
   percentiles, status classes, per-route stats, volume fill, not-ready history) are left out, not faked.
-- Network (`NetworkTab` + `deployment/network/`): one `Widget` holding `AddressLedger`. Each port is a
-  section: a solid port tile, "Port 3000" with its protocol badge and the private address under it, then
-  the ways in indented beneath (domain, public port, Tailscale), each with the same solid tile its sheet
-  uses (blue globe, green plug, grey devices). Domains show "Add security" as a visible button, or a
-  green chip naming the protection once one is set. "Make it public" or "Add another way in" opens
-  `AddressModal`: it asks "Add a domain" or "Open a public port" (skipped when only one fits; UDP cannot
-  have a domain). The domain step is one address field (`host/path`), then a "Point to this app /
-  Redirect" switch, never hidden in Advanced. Opening a port shows one warning: "This port will be
-  accessible to anyone on the internet." Keep these sheets free of explaining copy. Redirects sit in their
-  own section. Never say ingress, service, cluster or NodePort.
+- Network (`NetworkTab` + `deployment/network/`): two `Widget`s. Domains (`DomainsCard`): one row per
+  domain or redirect with its status, the port it serves only when the app has more than one web port, an
+  "Add protection" button (or a green chip naming the protection) and open/more. Ports (`PortsCard`): one
+  row per port with protocol, private address (public address once public) and a Public switch, plus a
+  Tailscale row; turning Public on confirms with "This port will be accessible to anyone on the
+  internet". Adding a domain is one address field with a "Point to this app / Redirect" switch, then
+  "Set up DNS" with the exact records from `POST /projects/ingresses/validate-dns` (CNAME for
+  subdomains, A records for roots) and a check that polls until connected. Protection is a "Protection
+  type" radio list (None, Password, Username and password, Project members). No explaining copy in these
+  sheets. Never say ingress, service, cluster or NodePort.
 - Security (`SecurityTab`): scan card and Configuration card at 1.618 : 1, then the vulnerability table only
   when there are findings. Reads `GET /deployments/:id/security`, rescans with `POST .../security/scan`, polls
   every 3s only while scanning. The scanner is an instance choice (`scan.provider`: `off` by default, `harbor`,

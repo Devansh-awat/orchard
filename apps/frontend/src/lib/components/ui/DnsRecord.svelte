@@ -6,75 +6,77 @@
 	let { records, label = 'DNS records' }: { records: DnsEntry[]; label?: string } = $props();
 </script>
 
-<div class="dns" role="list" aria-label={label}>
+<div class="dns" role="table" aria-label={label}>
+	<div class="row head" role="row">
+		<span role="columnheader">Type</span>
+		<span role="columnheader">Name</span>
+		<span role="columnheader">Value</span>
+	</div>
 	{#each records as record (`${record.type}:${record.name}:${record.value}`)}
-		<dl class="record" role="listitem">
-			<div class="line">
-				<dt>Type</dt>
-				<dd><span class="value">{record.type}</span></dd>
-			</div>
-			<div class="line">
-				<dt>Name</dt>
-				<dd>
-					<span class="value">{record.name}</span>
-					<CopyButton value={record.name} label="Copy name" />
-				</dd>
-			</div>
-			<div class="line">
-				<dt>Value</dt>
-				<dd>
-					<span class="value">{record.value}</span>
-					<CopyButton value={record.value} label="Copy value" />
-				</dd>
-			</div>
-		</dl>
+		<div class="row" role="row">
+			<span class="cell type" role="cell">{record.type}</span>
+			<span class="cell" role="cell">
+				<span class="value">{record.name}</span>
+				<CopyButton value={record.name} label="Copy name" />
+			</span>
+			<span class="cell" role="cell">
+				<span class="value">{record.value}</span>
+				<CopyButton value={record.value} label="Copy value" />
+			</span>
+		</div>
 	{/each}
 </div>
 
 <style>
 	.dns {
-		display: flex;
-		flex-direction: column;
+		--dns-r: calc(var(--radius-card) * var(--corner-scale));
+		display: grid;
+		grid-template-columns: max-content minmax(5rem, max-content) minmax(0, 1fr);
 		min-width: 0;
-		border-radius: calc(var(--radius-control) * var(--corner-scale));
+		border-radius: var(--dns-r);
 		corner-shape: var(--corner);
 		background: var(--bg-sunken);
 		box-shadow: inset 0 0 0 0.5px var(--border-default);
 	}
-	.record {
-		display: flex;
-		flex-direction: column;
-		margin: 0;
-		padding: 0.25rem 0.25rem 0.25rem 0.75rem;
+	.row {
+		display: grid;
+		grid-column: 1 / -1;
+		grid-template-columns: subgrid;
+		align-items: center;
+		column-gap: 1.25rem;
+		min-height: 2.75rem;
+		padding: 0 0.375rem 0 1rem;
 	}
-	.record + .record {
+	.row + .row {
 		box-shadow: inset 0 1px 0 var(--border-default);
 	}
-	.line {
-		display: grid;
-		grid-template-columns: 3.5rem minmax(0, 1fr);
-		align-items: center;
-		gap: 0.75rem;
-		min-height: 1.75rem;
-	}
-	dt {
+	.head {
+		min-height: 2rem;
 		color: var(--text-faint);
 		font-size: var(--text-caption);
 		font-weight: var(--weight-medium);
 	}
-	dd {
+	.cell {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
-		gap: 0.5rem;
+		gap: 0.25rem;
 		min-width: 0;
-		margin: 0;
+	}
+	.cell:last-child {
+		justify-content: space-between;
+	}
+	.type {
+		color: var(--text-default);
+		font-family: var(--font-mono);
+		font-size: var(--text-footnote);
+		font-weight: var(--weight-medium);
 	}
 	.value {
-		overflow: hidden;
-		font-family: var(--font-mono);
-		font-size: var(--text-callout);
+		min-width: 0;
+		overflow-x: clip;
 		color: var(--text-default);
+		font-family: var(--font-mono);
+		font-size: var(--text-footnote);
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}

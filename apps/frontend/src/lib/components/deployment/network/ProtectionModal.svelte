@@ -33,14 +33,10 @@
 	const uid = $props.id();
 
 	const OPTIONS = [
-		{ value: 'none', label: 'Anyone', description: 'No sign-in' },
-		{ value: 'password', label: 'Password', description: 'One shared password' },
-		{
-			value: 'basic',
-			label: 'Username and password',
-			description: 'The browser asks before loading'
-		},
-		{ value: 'orchard', label: 'Orchard sign-in', description: 'Members of this project' }
+		{ value: 'none', label: 'None' },
+		{ value: 'password', label: 'Password' },
+		{ value: 'basic', label: 'Username and password' },
+		{ value: 'orchard', label: 'Project members' }
 	];
 
 	let mode = $state<ProtectionMode>('none');
@@ -123,12 +119,14 @@
 		<ModalIntro
 			id="{uid}-title"
 			icon={Shield}
-			title="Add security"
+			tone="success"
+			solid
+			title="Protection"
 			description={ingress ? displayHost(ingress) : undefined}
 		/>
 		<div>
-			<p class="question">Who can visit?</p>
-			<RadioGroup label="Who can visit?" options={OPTIONS} bind:value={mode} />
+			<p class="label">Protection type</p>
+			<RadioGroup label="Protection type" options={OPTIONS} bind:value={mode} />
 			<Swap key={mode}>
 				{#if mode !== 'none'}
 					<div class="stack">
@@ -190,10 +188,10 @@
 </Modal>
 
 <style>
-	.question {
-		margin-bottom: 0.625rem;
-		color: var(--text-default);
-		font-size: var(--text-callout);
+	.label {
+		margin-bottom: 0.5rem;
+		color: var(--text-muted);
+		font-size: var(--text-footnote);
 		font-weight: var(--weight-medium);
 	}
 	.form {

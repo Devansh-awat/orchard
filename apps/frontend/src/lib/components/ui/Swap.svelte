@@ -1,15 +1,22 @@
 <script lang="ts">
-	import type { Snippet } from 'svelte';
+	import { getContext, type Snippet } from 'svelte';
 	import { morphHeight } from '$lib/utils/motion.svelte';
 	import { swap } from '$lib/utils/transitions';
 
 	let { key, children }: { key: unknown; children: Snippet } = $props();
+
+	const inModal = getContext<boolean>('ui-modal-entrance') ?? false;
+	let settled = !inModal;
+	$effect(() => {
+		const frame = requestAnimationFrame(() => (settled = true));
+		return () => cancelAnimationFrame(frame);
+	});
 </script>
 
 <div class="swap" {@attach (el) => morphHeight(el as HTMLElement)}>
 	<div class="inner">
 		{#key key}
-			<div class="pane" in:swap>{@render children()}</div>
+			<div class="pane" in:swap={{ enabled: settled }}>{@render children()}</div>
 		{/key}
 	</div>
 </div>

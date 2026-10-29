@@ -1,5 +1,7 @@
 <script lang="ts">
-	import type { Snippet } from 'svelte';
+	import { setContext, type Snippet } from 'svelte';
+	import { morphHeight } from '$lib/utils/motion.svelte';
+	import { swap } from '$lib/utils/transitions';
 	import { X } from 'lucide-svelte';
 	import { motionPopover } from '$lib/utils/motion.svelte';
 
@@ -30,6 +32,8 @@
 	} = $props();
 
 	const titleId = $props.id();
+
+	setContext('ui-modal-entrance', true);
 
 	let dialogEl = $state<HTMLDialogElement | null>(null);
 	let rendered = $state(false);
@@ -98,7 +102,9 @@
 			</div>
 		{/if}
 		<div class="ui-modal-body">
-			{@render children()}
+			<div class="ui-modal-morph" {@attach (el) => morphHeight(el as HTMLElement)}>
+				<div class="ui-modal-content" in:swap>{@render children()}</div>
+			</div>
 		</div>
 		{#if footer}
 			<div class="ui-modal-footer">
