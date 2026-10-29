@@ -12,7 +12,6 @@
 	import Widget from '$lib/components/ui/Widget.svelte';
 	import type { StatusMeta } from '$lib/components/ui';
 	import { toasts } from '$lib/stores';
-	import { stateEcho } from '$lib/utils/motion.svelte';
 	import { formatCpu, formatMemory, humanizeWarning } from '$lib/utils/format';
 	import type { Pod } from '$lib/types/deployment';
 	import PodSimulator from './PodSimulator.svelte';
@@ -243,7 +242,7 @@
 
 {#snippet podFace(r: Row, tone: 'ok' | 'warn' | 'bad')}
 	{@const v = versionOf(r.pod.name)}
-	<span class="glyph" {@attach stateEcho(() => r.state.meta.kind)}>
+	<span class="glyph">
 		<StatusDot
 			meta={r.state.meta}
 			size={8}
@@ -409,14 +408,11 @@
 		list-style: none;
 	}
 	.glyph {
-		position: relative;
 		display: grid;
 		flex-shrink: 0;
 		place-items: center;
 		width: 1rem;
 		height: 1rem;
-		border-radius: 50%;
-		color: var(--island-tone);
 	}
 	.pid {
 		font-family: var(--font-mono);
