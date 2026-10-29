@@ -74,14 +74,7 @@
 			submit();
 		}}
 	>
-		<ModalIntro
-			id="{uid}-title"
-			icon={EthernetPort}
-			tone="neutral"
-			solid
-			{title}
-			description="The number your app listens on. It starts private, so only your other apps can reach it."
-		/>
+		<ModalIntro id="{uid}-title" icon={EthernetPort} tone="neutral" solid {title} />
 		{#each ports as port, index (index)}
 			<div class="port">
 				<Field label={index === 0 ? 'Port' : undefined} for="{uid}-port-{index}">
@@ -104,7 +97,6 @@
 				/>
 			</div>
 		{/each}
-		<p class="hint">Most apps use TCP. Some games and voice apps use UDP.</p>
 		{#if error}<Alert tone="error">{error}</Alert>{/if}
 	</form>
 	{#snippet footer()}
@@ -120,11 +112,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1.25rem;
-	}
-	.hint {
-		margin-top: -0.25rem;
-		color: var(--text-muted);
-		font-size: var(--text-footnote);
 	}
 	.port {
 		display: grid;

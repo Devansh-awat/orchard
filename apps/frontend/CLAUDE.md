@@ -312,17 +312,16 @@ Three-level hierarchy: **Org cap** → **Member allowance** → **Deployment req
   time range, a synced crosshair, brush zoom, deploy and kill markers, incident bands and findings
   (`observe/findings.ts`). `?demo` feeds it synthetic data. Series the server does not record yet (latency
   percentiles, status classes, per-route stats, volume fill, not-ready history) are left out, not faked.
-- Network (`NetworkTab` + `deployment/network/`): one `Widget` holding `AddressLedger`, a ledger with the
-  columns Port, Address and Who can reach it. Each port is a group: its number and protocol on the left,
-  then one line per address, public ones first and the port's private address last, because everything
-  public is built on it. `ReachTag` names the audience, never the mechanism: Anyone (the only coloured
-  one), Your devices (Tailscale), Only your apps. Under each group "Make it public" (or "Add another
-  address") opens `AddressModal`, a sheet that first asks how (Web address, Public port, Your devices) and
-  skips that question when only one fits (UDP cannot have a web address). The web step is one address
-  field (`host/path`); the port is fixed by the line you started from. A host already used in the project
-  draws its path map and a taken path blocks Add; custom domains then turn the sheet into "Point your
-  DNS", which polls until connected. Redirects point at no port and sit in their own group. Words to use:
-  address, domain, port, public, private, Tailscale; never ingress, service, cluster or NodePort.
+- Network (`NetworkTab` + `deployment/network/`): one `Widget` holding `AddressLedger`. Each port is a
+  section: a solid port tile, "Port 3000" with its protocol badge and the private address under it, then
+  the ways in indented beneath (domain, public port, Tailscale), each with the same solid tile its sheet
+  uses (blue globe, green plug, grey devices). Domains show "Add security" as a visible button, or a
+  green chip naming the protection once one is set. "Make it public" or "Add another way in" opens
+  `AddressModal`: it asks "Add a domain" or "Open a public port" (skipped when only one fits; UDP cannot
+  have a domain). The domain step is one address field (`host/path`), then a "Point to this app /
+  Redirect" switch, never hidden in Advanced. Opening a port shows one warning: "This port will be
+  accessible to anyone on the internet." Keep these sheets free of explaining copy. Redirects sit in their
+  own section. Never say ingress, service, cluster or NodePort.
 - Security (`SecurityTab`): scan card and Configuration card at 1.618 : 1, then the vulnerability table only
   when there are findings. Reads `GET /deployments/:id/security`, rescans with `POST .../security/scan`, polls
   every 3s only while scanning. The scanner is an instance choice (`scan.provider`: `off` by default, `harbor`,

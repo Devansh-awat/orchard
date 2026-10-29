@@ -123,11 +123,12 @@
 		<ModalIntro
 			id="{uid}-title"
 			icon={Shield}
-			title="Who can visit"
+			title="Add security"
 			description={ingress ? displayHost(ingress) : undefined}
 		/>
 		<div>
-			<RadioGroup label="Who can visit" options={OPTIONS} bind:value={mode} />
+			<p class="question">Who can visit?</p>
+			<RadioGroup label="Who can visit?" options={OPTIONS} bind:value={mode} />
 			<Swap key={mode}>
 				{#if mode !== 'none'}
 					<div class="stack">
@@ -189,6 +190,12 @@
 </Modal>
 
 <style>
+	.question {
+		margin-bottom: 0.625rem;
+		color: var(--text-default);
+		font-size: var(--text-callout);
+		font-weight: var(--weight-medium);
+	}
 	.form {
 		display: flex;
 		flex-direction: column;

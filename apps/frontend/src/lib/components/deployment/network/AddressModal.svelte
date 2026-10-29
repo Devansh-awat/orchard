@@ -14,6 +14,7 @@
 		ListRow,
 		Modal,
 		ModalIntro,
+		SegmentedControl,
 		Swap,
 		ToggleRow,
 		ToneTile
@@ -152,11 +153,7 @@
 				)
 			: sharedRoutes.map((r) => ({ ...r, fresh: false }))
 	);
-	const advancedNote = $derived(
-		[routing === 'redirect' ? 'Redirect' : '', tls ? '' : 'HTTP only']
-			.filter(Boolean)
-			.join(' · ') || undefined
-	);
+	const advancedNote = $derived([tls ? '' : 'HTTP only'].filter(Boolean).join(' · ') || undefined);
 	const canCreate = $derived(
 		!creating &&
 			!!normalizedHost &&
@@ -237,15 +234,10 @@
 					title={target?.public
 						? `Another way into port ${target.port}`
 						: `Make port ${target?.port ?? ''} public`}
-					description="Choose how people will reach it."
 				/>
 				<List label="Ways to reach it">
 					{#if kinds.web}
-						<ListRow
-							title="Web address"
-							subtitle="A link anyone can open, with HTTPS"
-							onclick={() => pick('address')}
-						>
+						<ListRow title="Add a domain" onclick={() => pick('address')}>
 							{#snippet leading()}
 								<ToneTile tone="info" solid size={32}
 									><Globe size={16} strokeWidth={2.25} /></ToneTile
@@ -255,11 +247,7 @@
 						</ListRow>
 					{/if}
 					{#if kinds.raw}
-						<ListRow
-							title="Public port"
-							subtitle="For games and apps that don't use the web"
-							onclick={() => pick('raw')}
-						>
+						<ListRow title="Open a public port" onclick={() => pick('raw')}>
 							{#snippet leading()}
 								<ToneTile tone="success" solid size={32}
 									><Plug size={16} strokeWidth={2.25} /></ToneTile
@@ -271,9 +259,7 @@
 					{#if kinds.tailnet}
 						<ListRow
 							title="Your devices"
-							subtitle={kinds.tailnetLinked
-								? 'Only devices on your Tailscale'
-								: 'Link Tailscale in your settings first'}
+							subtitle={kinds.tailnetLinked ? undefined : 'Link Tailscale in your settings first'}
 							href={kinds.tailnetLinked ? undefined : '/user/settings'}
 							onclick={kinds.tailnetLinked ? joinTailnet : undefined}
 						>
@@ -294,11 +280,11 @@
 					icon={Plug}
 					tone="success"
 					solid
-					title={target ? `Open port ${target.port} to the internet` : 'Open a public port'}
-				>
-					Anyone on the internet will be able to connect to it directly over
-					{target?.protocol ?? 'TCP'}. You get the address as soon as it opens.
-				</ModalIntro>
+					title={target
+						? `Open port ${target.port} to the internet`
+						: 'Open a port to the internet'}
+				/>
+				<Alert tone="warning">This port will be accessible to anyone on the internet.</Alert>
 			</div>
 		{:else if step === 'dns'}
 			<div class="form">
@@ -320,18 +306,8 @@
 					submit();
 				}}
 			>
-				<ModalIntro
-					id="{uid}-title"
-					icon={Globe}
-					tone="info"
-					solid
-					title="Add a web address"
-					description={portLocked && serviceOptions.length > 1
-						? `Visitors reach ${portLabel.toLowerCase()}.`
-						: appDomain
-							? 'Use a domain you own, or pick a free one.'
-							: 'Use a domain you own.'}
-				/>
+				<ModalIntro id="{uid}-title" icon={Globe} tone="info" solid title="Add a domain" />
+
 				<div class="address">
 					<Input
 						id="{uid}-host"
@@ -371,43 +347,46 @@
 					</div>
 				{/if}
 
+				<SegmentedControl
+					label="What the domain does"
+					grow
+					value={routing}
+					onchange={(next) => (routing = next === 'redirect' ? 'redirect' : 'service')}
+					options={[
+						{ value: 'service', label: 'Point to this app' },
+						{ value: 'redirect', label: 'Redirect' }
+					]}
+				/>
+
 				{#if choosePort}
 					<Field label="Port">
 						<Dropdown bind:value={serviceKey} options={portOptions} ariaLabel="Port" />
 					</Field>
 				{/if}
 
+				{#if routing === 'redirect'}
+					<FieldGrid>
+						<Field label="Redirect to" for="{uid}-target">
+							<Input
+								id="{uid}-target"
+								placeholder="example.com"
+								autocomplete="off"
+								spellcheck={false}
+								bind:value={redirectTarget}
+							/>
+						</Field>
+						<Field label="Status">
+							<Dropdown
+								bind:value={redirectStatus}
+								options={REDIRECT_STATUS_OPTIONS}
+								ariaLabel="Redirect status"
+							/>
+						</Field>
+					</FieldGrid>
+				{/if}
+
 				<Disclosure title="Advanced" note={advancedNote} bind:open={advanced}>
-					<div class="stack">
-						<ToggleRow
-							label="Redirect somewhere else"
-							bind:checked={
-								() => routing === 'redirect', (on) => (routing = on ? 'redirect' : 'service')
-							}
-						/>
-						{#if routing === 'redirect'}
-							<FieldGrid>
-								<Field label="Redirect to" for="{uid}-target" hint="Keeps the path and query.">
-									<Input
-										id="{uid}-target"
-										placeholder="example.com"
-										mono
-										autocomplete="off"
-										spellcheck={false}
-										bind:value={redirectTarget}
-									/>
-								</Field>
-								<Field label="Status">
-									<Dropdown
-										bind:value={redirectStatus}
-										options={REDIRECT_STATUS_OPTIONS}
-										ariaLabel="Redirect status"
-									/>
-								</Field>
-							</FieldGrid>
-						{/if}
-						<ToggleRow label="HTTPS" bind:checked={tls} disabled={onAppDomain} />
-					</div>
+					<ToggleRow label="HTTPS" bind:checked={tls} disabled={onAppDomain} />
 				</Disclosure>
 
 				{#if needsPort}
@@ -439,7 +418,7 @@
 				<Button variant="primary" onclick={openRaw}>Open port</Button>
 			{:else}
 				<Button variant="primary" loading={creating} disabled={!canCreate} onclick={submit}
-					>Add address</Button
+					>Add domain</Button
 				>
 			{/if}
 		{/if}
