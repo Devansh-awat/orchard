@@ -4,30 +4,61 @@
 	import { Button, LogViewer } from '$lib/components/ui';
 	import StatusDot from '$lib/components/ui/StatusDot.svelte';
 	import { statusMeta } from '$lib/components/ui/status';
-	import type { LogsState } from './logs.svelte';
+	import type { LogFilters } from '$lib/utils/log-lines';
+	import { queryFrom, type LogsState } from './logs.svelte';
 
 	let {
 		logs,
 		deploymentId,
 		deploymentName = 'app',
-		active
+		active,
+		windowMs = 60 * 60_000,
+		custom = null
 	}: {
 		logs: LogsState;
 		deploymentId: string;
 		deploymentName?: string;
 		active: boolean;
+		windowMs?: number;
+		custom?: { from: number; to: number } | null;
 	} = $props();
+
+	let filters = $state<LogFilters | null>(null);
+
+	const caption = $derived(
+		logs.source === 'store'
+			? 'Searching stored logs'
+			: logs.source === 'live'
+				? 'Reading live from pods'
+				: null
+	);
+
+	$effect(() => {
+		const id = deploymentId;
+		if (!id || !active) return;
+		const range = custom
+			? { start: custom.from, end: custom.to }
+			: { start: Date.now() - windowMs, end: null };
+		const next = queryFrom(range, filters);
+		untrack(() => {
+			logs.query = next;
+			logs.fetch(id);
+		});
+	});
+
+	function exportLogs(format: 'text' | 'ndjson') {
+		const url = logs.exportUrl(deploymentId, format);
+		if (!url) return;
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = '';
+		a.click();
+	}
 
 	let visibility = $state<DocumentVisibilityState>('visible');
 	let stream = $state<'live' | 'down'>('live');
 	let attempt = $state(0);
 	let scrolledUp = $state(false);
-
-	$effect(() => {
-		const id = deploymentId;
-		if (!id || !active) return;
-		untrack(() => logs.fetch(id));
-	});
 
 	$effect(() => {
 		attempt;
@@ -88,6 +119,9 @@
 		filename="{deploymentName}-logs"
 		sourceLabel="Pod"
 		onLoadEarlier={() => logs.loadEarlier(deploymentId)}
+		onFilters={(f) => (filters = f)}
+		onExport={exportLogs}
+		{caption}
 	>
 		{#snippet empty()}
 			<div class="empty">

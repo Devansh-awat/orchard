@@ -156,6 +156,7 @@ export class MetricsState {
 	releases = $state<Release[]>([]);
 	errorGroups = $state<ErrorGroup[]>([]);
 	logTail = $state<LogEntry[]>([]);
+	storedLevels = $state<Record<string, ChartPoint[]> | null>(null);
 	podHealth = $state<PodHealth | null>(null);
 	volumes = $state<VolumeFill[]>([]);
 	builds = $state<BuildRun[]>([]);
@@ -276,6 +277,7 @@ export class MetricsState {
 			this.builds = [];
 			this.changes = null;
 			this.findings = null;
+			this.storedLevels = null;
 			return;
 		}
 		const get = (url: string) =>
@@ -284,16 +286,19 @@ export class MetricsState {
 				.catch(() => null);
 		const base = `/apiv1/observe/deployments/${encodeURIComponent(id)}`;
 		const tz = encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone);
-		const [timeline, killed, live, errors, logs, volumes, builds, findings] = await Promise.all([
-			get(`${base}/timeline?kinds=release,build&limit=60`),
-			get(`/apiv1/deployments/${encodeURIComponent(id)}/killed-containers`),
-			get(`/apiv1/deployments/${encodeURIComponent(id)}/pods-live`),
-			get(`${base}/errors?window=${minutes}`),
-			get(`${base}/logs/structured?tailLines=2000`),
-			get(`${base}/volumes`),
-			get(`${base}/builds?limit=30`),
-			get(`${base}/findings?start=${this.from}&end=${this.to}&tz=${tz}`)
-		]);
+		const levelStep = Math.max(15_000, Math.round((this.to - this.from) / 60));
+		const [timeline, killed, live, errors, logs, volumes, builds, findings, levels] =
+			await Promise.all([
+				get(`${base}/timeline?kinds=release,build&limit=60`),
+				get(`/apiv1/deployments/${encodeURIComponent(id)}/killed-containers`),
+				get(`/apiv1/deployments/${encodeURIComponent(id)}/pods-live`),
+				get(`${base}/errors?window=${minutes}`),
+				get(`${base}/logs/structured?tailLines=2000`),
+				get(`${base}/volumes`),
+				get(`${base}/builds?limit=30`),
+				get(`${base}/findings?start=${this.from}&end=${this.to}&tz=${tz}`),
+				get(`${base}/logs/levels?start=${this.from}&end=${this.to}&step=${levelStep}`)
+			]);
 		const time = (v: unknown) => (v ? new Date(v as string).getTime() || null : null);
 		this.releases = ((timeline?.entries ?? []) as any[]).flatMap((e) => {
 			const at = time(e.at);
@@ -319,6 +324,10 @@ export class MetricsState {
 		this.builds = Array.isArray(builds?.builds) ? builds.builds : [];
 		this.changes = Array.isArray(findings?.changes) ? findings.changes : null;
 		this.findings = Array.isArray(findings?.findings) ? findings.findings : null;
+		this.storedLevels =
+			levels?.source === 'store' && levels.levels && typeof levels.levels === 'object'
+				? levels.levels
+				: null;
 	}
 
 	async load(id: string, opts: { http: boolean; demo: boolean }) {

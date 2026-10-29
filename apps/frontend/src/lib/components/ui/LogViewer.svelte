@@ -14,6 +14,7 @@
 		lineLevel,
 		lineText,
 		withTimes,
+		type LogFilters,
 		type LogLevel,
 		type LogLine
 	} from '$lib/utils/log-lines';
@@ -41,6 +42,9 @@
 		filename = 'logs',
 		sourceLabel = 'Source',
 		onLoadEarlier = undefined,
+		onFilters = undefined,
+		onExport = undefined,
+		caption = null,
 		empty = undefined
 	}: {
 		lines: LogLine[];
@@ -56,6 +60,9 @@
 		filename?: string;
 		sourceLabel?: string;
 		onLoadEarlier?: () => Promise<void> | void;
+		onFilters?: (filters: LogFilters) => void;
+		onExport?: (format: 'text' | 'ndjson') => void;
+		caption?: string | null;
 		empty?: Snippet;
 	} = $props();
 
@@ -116,6 +123,38 @@
 		const latest = times.reduce<number>((m, t) => (t != null && t > m ? t : m), 0);
 		const end = Math.max(latest, Date.now());
 		return [end - span, Infinity];
+	});
+
+	const serverWindow = $derived.by((): [number, number | null] | null => {
+		if (preset === 'all') return null;
+		if (preset === 'custom') {
+			const from = Date.parse(fromText);
+			const to = Date.parse(toText);
+			if (Number.isNaN(from) && Number.isNaN(to)) return null;
+			return [Number.isNaN(from) ? 0 : from, Number.isNaN(to) ? null : to];
+		}
+		const span = PRESETS.find((p) => p.id === preset)?.ms ?? 0;
+		return [Date.now() - span, null];
+	});
+
+	let filterTimer: ReturnType<typeof setTimeout> | undefined;
+	let lastFilters = '';
+	$effect(() => {
+		const next: LogFilters = {
+			query: query.trim(),
+			level,
+			window: serverWindow,
+			source
+		};
+		const key = JSON.stringify(next);
+		if (!onFilters || key === lastFilters) return;
+		const first = lastFilters === '';
+		lastFilters = key;
+		if (first) return;
+		clearTimeout(filterTimer);
+		const send = onFilters;
+		filterTimer = setTimeout(() => send(next), 300);
+		return () => clearTimeout(filterTimer);
 	});
 
 	const needle = $derived(query.trim().toLowerCase());
@@ -417,7 +456,8 @@
 					{/each}
 				</Menu>
 			{/if}
-			<span class="lv-count" aria-live="polite">
+			{#if caption}<span class="lv-caption">{caption}</span>{/if}
+			<span class="lv-count" class:lv-count--after={!!caption} aria-live="polite">
 				{#if filtering}{visible.length.toLocaleString()}<span class="lv-count-unit">
 						of {lines.length.toLocaleString()}</span
 					>{:else}{lines.length.toLocaleString()}<span class="lv-count-unit">
@@ -453,16 +493,27 @@
 					onclick={copyAll}
 				/>
 			</Tooltip>
-			<Tooltip text="Download">
-				<Button
-					variant="ghost"
-					size="sm"
-					icon={Download}
-					label="Download logs"
-					disabled={!visible.length}
-					onclick={download}
-				/>
-			</Tooltip>
+			{#if onExport}
+				<Menu placement="bottom-end">
+					{#snippet trigger(attrs)}
+						<Button {...attrs} variant="ghost" size="sm" icon={Download} label="Download logs" />
+					{/snippet}
+					<MenuItem disabled={!visible.length} onclick={download}>Download what's shown</MenuItem>
+					<MenuItem onclick={() => onExport('text')}>Export every matching line</MenuItem>
+					<MenuItem onclick={() => onExport('ndjson')}>Export as NDJSON</MenuItem>
+				</Menu>
+			{:else}
+				<Tooltip text="Download">
+					<Button
+						variant="ghost"
+						size="sm"
+						icon={Download}
+						label="Download logs"
+						disabled={!visible.length}
+						onclick={download}
+					/>
+				</Tooltip>
+			{/if}
 		</div>
 	{/if}
 	{#if loading && lines.length === 0}
@@ -793,6 +844,16 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		vertical-align: bottom;
+	}
+	.lv-caption {
+		margin-left: auto;
+		padding-left: 0.5rem;
+		color: var(--text-faint);
+		font-size: var(--text-footnote);
+		white-space: nowrap;
+	}
+	.lv-count.lv-count--after {
+		margin-left: 0;
 	}
 	.lv-count {
 		margin-left: auto;

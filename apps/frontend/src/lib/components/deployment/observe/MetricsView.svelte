@@ -444,25 +444,34 @@
 		metrics.logTail.filter((e) => /^(error|fatal|warn|warning)$/i.test(e.level ?? ''))
 	);
 
+	const storedLevelItems = $derived(
+		metrics.storedLevels
+			? (['error', 'warn'] as const).flatMap((key) =>
+					(metrics.storedLevels?.[key] ?? []).map((p) => ({ t: p.x, key, n: p.y }))
+				)
+			: null
+	);
+
 	const logLevels = $derived(
 		stackByKey(
-			problemLines.flatMap((e) =>
-				e.timestamp
-					? [
-							{
-								t: new Date(e.timestamp).getTime(),
-								key: /^warn/i.test(e.level ?? '') ? 'warn' : 'error'
-							}
-						]
-					: []
-			),
+			storedLevelItems ??
+				problemLines.flatMap((e) =>
+					e.timestamp
+						? [
+								{
+									t: new Date(e.timestamp).getTime(),
+									key: /^warn/i.test(e.level ?? '') ? 'warn' : 'error'
+								}
+							]
+						: []
+				),
 			metrics.from,
 			metrics.to,
 			{
 				size: bucket,
 				colors: REASON_COLORS,
 				label: (k) => (k === 'warn' ? 'Warnings' : 'Errors'),
-				since: logsSince ?? undefined
+				since: storedLevelItems ? undefined : (logsSince ?? undefined)
 			}
 		)
 	);
@@ -1060,8 +1069,9 @@
 			<div class="grid">
 				<MetricPanel
 					title="Error and warning lines"
-					info="Log lines at error or warning level per interval, from the latest {metrics.logTail
-						.length} lines across all pods."
+					info={storedLevelItems
+						? 'Log lines at error or warning level per interval, from the stored logs.'
+						: `Log lines at error or warning level per interval, from the latest ${metrics.logTail.length} lines across all pods.`}
 					series={logLevels}
 					from={metrics.from}
 					to={metrics.to}

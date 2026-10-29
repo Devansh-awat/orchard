@@ -150,3 +150,10 @@ export function withTimes(lines: LogLine[]): (number | null)[] {
 		return last;
 	});
 }
+
+export type LogFilters = {
+	query: string;
+	level: 'all' | 'warn' | 'error';
+	window: [number, number | null] | null;
+	source: string | null;
+};

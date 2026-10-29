@@ -162,16 +162,20 @@
 		/>
 
 		<div class="controls">
-			{#if view === 'metrics'}
-				<SegmentedControl
-					label="Split"
-					shape="capsule"
-					bind:value={() => (metrics.byPod ? 'pod' : 'total'), (v) => (metrics.byPod = v === 'pod')}
-					options={[
-						{ value: 'total', label: 'Total' },
-						{ value: 'pod', label: 'By pod' }
-					]}
-				/>
+			{#if view === 'metrics' || view === 'logs'}
+				{#if view === 'metrics'}
+					<SegmentedControl
+						label="Split"
+						shape="capsule"
+						bind:value={
+							() => (metrics.byPod ? 'pod' : 'total'), (v) => (metrics.byPod = v === 'pod')
+						}
+						options={[
+							{ value: 'total', label: 'Total' },
+							{ value: 'pod', label: 'By pod' }
+						]}
+					/>
+				{/if}
 				<div class="nav">
 					<Button
 						variant="ghost"
@@ -216,19 +220,21 @@
 						onclick={() => metrics.zoomOut()}
 					/>
 				</div>
-				<Button
-					variant="ghost"
-					icon={metrics.live ? Pause : Play}
-					label={metrics.live ? 'Pause' : 'Follow live'}
-					onclick={() => metrics.togglePause()}
-				/>
-			{:else if view === 'logs'}
-				<Button
-					variant="ghost"
-					icon={logs.paused ? Play : Pause}
-					label={logs.paused ? 'Resume logs' : 'Pause logs'}
-					onclick={() => (logs.paused = !logs.paused)}
-				/>
+				{#if view === 'metrics'}
+					<Button
+						variant="ghost"
+						icon={metrics.live ? Pause : Play}
+						label={metrics.live ? 'Pause' : 'Follow live'}
+						onclick={() => metrics.togglePause()}
+					/>
+				{:else}
+					<Button
+						variant="ghost"
+						icon={logs.paused ? Play : Pause}
+						label={logs.paused ? 'Resume logs' : 'Pause logs'}
+						onclick={() => (logs.paused = !logs.paused)}
+					/>
+				{/if}
 			{:else if view === 'errors'}
 				<SegmentedControl
 					label="Status"
@@ -275,7 +281,14 @@
 					sharedHttp={!!capabilities?.httpMetricsShared}
 				/>
 			{:else if view === 'logs'}
-				<LogsView {logs} deploymentId={deployment?.id} deploymentName={deployment?.name} {active} />
+				<LogsView
+					{logs}
+					deploymentId={deployment?.id}
+					deploymentName={deployment?.name}
+					{active}
+					windowMs={metrics.windowMs}
+					custom={metrics.custom}
+				/>
 			{:else if view === 'errors'}
 				<ErrorsView
 					{errors}

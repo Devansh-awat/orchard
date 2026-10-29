@@ -855,6 +855,86 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 		})
 	);
 	r.get(
+		'/observe/deployments/:id/logs/search',
+		withDep((d, { query }) => {
+			const pods = podsOf(store, d).map((p) => p.name);
+			const limit = Math.min(Number(query.get('limit') ?? 500), 2000);
+			const start = Number(query.get('start')) || Date.now() - 3_600_000;
+			let end = Number(query.get('end')) || Date.now();
+			const cursor = query.get('cursor');
+			if (cursor) end = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')).end;
+			const levels = query.get('levels')?.split(',').filter(Boolean) ?? [];
+			const terms = (query.get('q') ?? '').toLowerCase().split(/\s+/).filter(Boolean);
+			const lines = since(d, pods, start, end)
+				.filter((l) => !levels.length || levels.includes(l.level))
+				.filter((l) => terms.every((t) => l.message.toLowerCase().includes(t)))
+				.reverse();
+			const page = lines.slice(0, limit);
+			const oldest = page.at(-1);
+			const more = lines.length > limit && oldest;
+			return {
+				source: 'store',
+				entries: page.map(structured),
+				cursor: more
+					? Buffer.from(JSON.stringify({ end: Date.parse(oldest.ts) - 1 })).toString('base64url')
+					: null,
+				truncated: !!more
+			};
+		})
+	);
+	r.get(
+		'/observe/deployments/:id/logs/context',
+		withDep((d, { query }) => {
+			const at = Number(query.get('at')) || Date.now();
+			const pod = query.get('pod');
+			const pods = podsOf(store, d).map((p) => p.name);
+			const lines = since(d, pods, at - 60_000, Math.min(Date.now(), at + 60_000)).filter(
+				(l) => !pod || l.pod === pod
+			);
+			return { source: 'store', entries: lines.map(structured) };
+		})
+	);
+	r.get(
+		'/observe/deployments/:id/logs/levels',
+		withDep((d, { query }) => {
+			const end = Number(query.get('end')) || Date.now();
+			const start = Number(query.get('start')) || end - 3_600_000;
+			const step = Math.max(15_000, Number(query.get('step')) || Math.round((end - start) / 60));
+			const pods = podsOf(store, d).map((p) => p.name);
+			const levels: Record<string, { x: number; y: number }[]> = { error: [], warn: [] };
+			const buckets = new Map<number, { error: number; warn: number }>();
+			for (const l of since(d, pods, Math.max(start, end - 6 * 3_600_000), end)) {
+				const lv = l.level;
+				if (lv !== 'error' && lv !== 'warn') continue;
+				const x = Math.floor(Date.parse(l.ts) / step) * step;
+				const b = buckets.get(x) ?? { error: 0, warn: 0 };
+				b[lv]++;
+				buckets.set(x, b);
+			}
+			for (const [x, b] of [...buckets.entries()].sort((a, c) => a[0] - c[0])) {
+				levels.error.push({ x, y: b.error });
+				levels.warn.push({ x, y: b.warn });
+			}
+			return { source: 'store', levels };
+		})
+	);
+	r.get(
+		'/observe/deployments/:id/logs/export',
+		withDep((d, { query }) => {
+			const end = Number(query.get('end')) || Date.now();
+			const start = Number(query.get('start')) || end - 3_600_000;
+			const pods = podsOf(store, d).map((p) => p.name);
+			const ndjson = query.get('format') === 'ndjson';
+			return since(d, pods, start, end)
+				.map((l) =>
+					ndjson
+						? JSON.stringify({ time: l.ts, level: l.level, pod: l.pod, message: l.message })
+						: `${l.ts} ${l.pod} ${l.message}`
+				)
+				.join('\n');
+		})
+	);
+	r.get(
 		'/observe/deployments/:id/logs/stream',
 		withDep((d, { res }) => {
 			openStream(res);
