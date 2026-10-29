@@ -53,7 +53,7 @@
 			<span role="columnheader" class="name">Series</span>
 			{#if hasFindings}<span role="columnheader" class="finding">Findings</span>{/if}
 			<span role="columnheader" class="num">{avgLabel}</span>
-			<span role="columnheader" class="num">Min</span>
+			<span role="columnheader" class="num num--min">Min</span>
 			<span role="columnheader" class="num">Max</span>
 			<span role="columnheader" class="num">{valueLabel}</span>
 		</div>
@@ -74,7 +74,7 @@
 					<span role="cell" class="finding" title={r.finding ?? undefined}>{r.finding ?? ''}</span>
 				{/if}
 				<span role="cell" class="num">{cell(r.avg)}</span>
-				<span role="cell" class="num">{cell(r.min)}</span>
+				<span role="cell" class="num num--min">{cell(r.min)}</span>
 				<span role="cell" class="num">{cell(r.max)}</span>
 				<span role="cell" class="num num--value">{cell(r.value)}</span>
 			</div>
@@ -84,6 +84,7 @@
 
 <style>
 	.series {
+		container-type: inline-size;
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
@@ -168,5 +169,24 @@
 	}
 	.row--head .num--value {
 		font-weight: var(--weight-regular);
+	}
+	@container (max-width: 28rem) {
+		.row {
+			grid-template-columns: minmax(0, 1fr) repeat(4, 4.25rem);
+		}
+		.series--findings .row {
+			grid-template-columns: minmax(5rem, 0.8fr) minmax(0, 1.4fr) repeat(4, 4.25rem);
+		}
+	}
+	@container (max-width: 24rem) {
+		.row {
+			grid-template-columns: minmax(0, 1fr) repeat(3, 4rem);
+		}
+		.series--findings .row {
+			grid-template-columns: minmax(5rem, 0.8fr) minmax(0, 1.4fr) repeat(3, 4rem);
+		}
+		.num--min {
+			display: none;
+		}
 	}
 </style>

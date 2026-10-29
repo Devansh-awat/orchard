@@ -16,6 +16,7 @@
 	import { readMoment } from './observe/permalink';
 	import {
 		Button,
+		ControlGroup,
 		Dropdown,
 		Field,
 		Input,
@@ -25,8 +26,11 @@
 		Modal,
 		SegmentedControl,
 		SelectTrigger,
-		Swap
+		Swap,
+		UnderlineTabs
 	} from '$lib/components/ui';
+	import GoldenReticle from '$lib/components/ui/GoldenReticle.svelte';
+	import { runtimeName, uptime } from './observe/runtime';
 	import { demoOverview } from '$lib/utils/observe-demo';
 	import { fitViewport } from './observe/fit';
 	import { MetricsState, RANGES } from './observe/metrics.svelte';
@@ -115,10 +119,29 @@
 		untrack(() => {
 			if (moment.at != null) metrics.hover = moment.at;
 			if (moment.panel) {
-				requestAnimationFrame(() => {
-					document.getElementById(moment.panel!)?.scrollIntoView({ block: 'center' });
-					metrics.focus = { panel: moment.panel!, key: Date.now() };
-				});
+				let held = 0;
+				let stop = false;
+				const release = () => (stop = true);
+				for (const type of ['wheel', 'pointerdown', 'keydown', 'touchstart'])
+					addEventListener(type, release, { once: true, capture: true });
+				const reveal = (tries: number) => {
+					const el = document.getElementById(moment.panel!);
+					if (stop || tries > 240) return;
+					if (el?.getClientRects().length) {
+						const scroller = el.closest('main') ?? document.scrollingElement;
+						if (scroller) {
+							const box = el.getBoundingClientRect();
+							const top =
+								scroller === document.scrollingElement ? 0 : scroller.getBoundingClientRect().top;
+							const offset = box.top - top - Math.max(0, (scroller.clientHeight - box.height) / 2);
+							if (Math.abs(offset) > 2) scroller.scrollTo({ top: scroller.scrollTop + offset });
+						}
+						if (held === 0) metrics.focus = { panel: moment.panel!, key: Date.now() };
+						if (++held > 60) return;
+					}
+					requestAnimationFrame(() => reveal(tries + 1));
+				};
+				requestAnimationFrame(() => reveal(0));
 			}
 		});
 	});
@@ -215,24 +238,146 @@
 		customOpen = false;
 	}
 
+	const facts = $derived(
+		[
+			runtimeName(capabilities?.runtime ?? null),
+			uptime(overview?.uptime ?? null) && `Up ${uptime(overview?.uptime ?? null)}`
+		].filter(Boolean) as string[]
+	);
+
+	const guides = $derived($page.url.searchParams.has('guides'));
+	let guideLines = $state<{ axis: 'x' | 'y'; at: number; label?: string }[]>([]);
+	let board = $state<HTMLElement | null>(null);
+
+	$effect(() => {
+		const el = board;
+		if (!guides || !el) return;
+		let frame = 0;
+		const measure = () => {
+			frame = 0;
+			const xs = new Set<number>();
+			const ys = new Set<number>();
+			for (const panel of el.querySelectorAll('.metric-panel')) {
+				const box = panel.getBoundingClientRect();
+				if (box.bottom < 0 || box.top > innerHeight) continue;
+				const hit = panel.querySelector('.chart .hit')?.getBoundingClientRect();
+				if (hit) {
+					xs.add(Math.round(hit.left * 2) / 2);
+					xs.add(Math.round(hit.right * 2) / 2);
+				}
+				const title = panel.querySelector('.title')?.getBoundingClientRect();
+				if (title) ys.add(Math.round(title.bottom * 2) / 2);
+			}
+			guideLines = [
+				...[...xs].map((at) => ({ axis: 'x' as const, at, label: `${at}` })),
+				...[...ys].map((at) => ({ axis: 'y' as const, at, label: `${at}` }))
+			];
+		};
+		const schedule = () => {
+			if (!frame) frame = requestAnimationFrame(measure);
+		};
+		const timer = setInterval(schedule, 500);
+		addEventListener('scroll', schedule, { capture: true, passive: true });
+		addEventListener('resize', schedule);
+		schedule();
+		return () => {
+			cancelAnimationFrame(frame);
+			clearInterval(timer);
+			removeEventListener('scroll', schedule, { capture: true });
+			removeEventListener('resize', schedule);
+		};
+	});
+
 	function refreshEvents() {
 		if (deployment?.id) events.fetch(deployment.id, { demo, pods: deployment?.pods ?? [] });
 	}
 </script>
 
-<div class="observe">
-	<div class="toolbar">
-		<SegmentedControl
-			label="Observe"
-			shape="capsule"
-			options={VIEWS}
-			bind:value={() => view, (v) => (activeTab = v)}
+{#if guides}<GoldenReticle golden={false} lines={guideLines} />{/if}
+
+{#snippet rangePart()}
+	<Button
+		variant="ghost"
+		size="sm"
+		icon={ChevronLeft}
+		label="Earlier"
+		onclick={() => metrics.shift(-1)}
+	/>
+	<div class="range">
+		<Menu placement="bottom-end">
+			{#snippet trigger(attrs, isOpen)}
+				<SelectTrigger
+					{...attrs}
+					open={isOpen}
+					size="sm"
+					block
+					value={rangeLabel}
+					aria-label="Time range: {rangeLabel}"
+					onclear={metrics.custom ? () => metrics.clearCustom() : undefined}
+				/>
+			{/snippet}
+			{#each RANGES as r (r.id)}
+				<MenuItem
+					checked={!metrics.custom && metrics.windowMs === r.ms}
+					onclick={() => metrics.setRange(r.ms)}>{r.label}</MenuItem
+				>
+			{/each}
+			<MenuSeparator />
+			<MenuItem icon={CalendarRange} onclick={openCustom}>Custom range…</MenuItem>
+		</Menu>
+	</div>
+	<Button
+		variant="ghost"
+		size="sm"
+		icon={ChevronRight}
+		label="Later"
+		disabled={!metrics.custom}
+		onclick={() => metrics.shift(1)}
+	/>
+{/snippet}
+
+{#snippet zoomPart()}
+	<Button
+		variant="ghost"
+		size="sm"
+		icon={ZoomOut}
+		label="Zoom out"
+		disabled={!metrics.custom && metrics.windowMs >= 7 * 24 * 60 * 60_000}
+		onclick={() => metrics.zoomOut()}
+	/>
+{/snippet}
+
+{#snippet livePart()}
+	{#if view === 'metrics'}
+		<Button
+			variant="ghost"
+			size="sm"
+			icon={metrics.live ? Pause : Play}
+			label={metrics.live ? 'Pause' : 'Follow live'}
+			onclick={() => metrics.togglePause()}
 		/>
+	{:else}
+		<Button
+			variant="ghost"
+			size="sm"
+			icon={logs.paused ? Play : Pause}
+			label={logs.paused ? 'Resume logs' : 'Pause logs'}
+			onclick={() => (logs.paused = !logs.paused)}
+		/>
+	{/if}
+{/snippet}
+
+<div class="observe" bind:this={board}>
+	<div class="toolbar">
+		<div class="views">
+			<UnderlineTabs
+				label="Observe"
+				tabs={VIEWS.map((v) => ({ id: v.value, label: v.label }))}
+				bind:value={() => view, (v) => (activeTab = v)}
+			/>
+		</div>
 
 		<div class="controls">
-			{#if view === 'metrics' || view === 'logs' || view === 'requests'}
-				<CopyButton value={$page.url.toString()} label="Copy a link to this view" />
-			{/if}
 			{#if view === 'metrics' || view === 'logs' || view === 'requests'}
 				{#if view === 'metrics'}
 					<SegmentedControl
@@ -247,65 +392,11 @@
 						]}
 					/>
 				{/if}
-				<div class="nav">
-					<Button
-						variant="ghost"
-						icon={ChevronLeft}
-						label="Earlier"
-						onclick={() => metrics.shift(-1)}
-					/>
-					<div class="range">
-						<Menu placement="bottom-end">
-							{#snippet trigger(attrs, isOpen)}
-								<SelectTrigger
-									{...attrs}
-									open={isOpen}
-									block
-									value={rangeLabel}
-									aria-label="Time range: {rangeLabel}"
-									onclear={metrics.custom ? () => metrics.clearCustom() : undefined}
-								/>
-							{/snippet}
-							{#each RANGES as r (r.id)}
-								<MenuItem
-									checked={!metrics.custom && metrics.windowMs === r.ms}
-									onclick={() => metrics.setRange(r.ms)}>{r.label}</MenuItem
-								>
-							{/each}
-							<MenuSeparator />
-							<MenuItem icon={CalendarRange} onclick={openCustom}>Custom range…</MenuItem>
-						</Menu>
-					</div>
-					<Button
-						variant="ghost"
-						icon={ChevronRight}
-						label="Later"
-						disabled={!metrics.custom}
-						onclick={() => metrics.shift(1)}
-					/>
-					<Button
-						variant="ghost"
-						icon={ZoomOut}
-						label="Zoom out"
-						disabled={!metrics.custom && metrics.windowMs >= 7 * 24 * 60 * 60_000}
-						onclick={() => metrics.zoomOut()}
-					/>
-				</div>
-				{#if view === 'metrics'}
-					<Button
-						variant="ghost"
-						icon={metrics.live ? Pause : Play}
-						label={metrics.live ? 'Pause' : 'Follow live'}
-						onclick={() => metrics.togglePause()}
-					/>
-				{:else if view === 'logs'}
-					<Button
-						variant="ghost"
-						icon={logs.paused ? Play : Pause}
-						label={logs.paused ? 'Resume logs' : 'Pause logs'}
-						onclick={() => (logs.paused = !logs.paused)}
-					/>
-				{/if}
+				<ControlGroup
+					label="Time range"
+					parts={view === 'requests' ? [rangePart, zoomPart] : [rangePart, zoomPart, livePart]}
+				/>
+				<CopyButton value={$page.url.toString()} label="Copy a link to this view" />
 			{:else if view === 'errors'}
 				<SegmentedControl
 					label="Status"
@@ -338,6 +429,10 @@
 		</div>
 	</div>
 
+	{#if view === 'metrics' && facts.length}
+		<p class="facts">{facts.join(' · ')}</p>
+	{/if}
+
 	<div class="stage" {@attach fitViewport({ min: 26 * 16 })}>
 		<Swap key={view}>
 			{#if view === 'metrics'}
@@ -347,8 +442,6 @@
 					{active}
 					{demo}
 					{hasIngress}
-					runtime={capabilities?.runtime ?? null}
-					upSince={overview?.uptime ?? null}
 					sharedHttp={!!capabilities?.httpMetricsShared}
 				/>
 			{:else if view === 'logs'}
@@ -399,6 +492,7 @@
 
 <style>
 	.observe {
+		container: observe / inline-size;
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
@@ -410,7 +504,18 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 0.5rem 1rem;
-		min-height: 2rem;
+		box-shadow: inset 0 -1px 0 var(--border-default);
+	}
+	.views {
+		min-width: 0;
+	}
+	.views :global(.ui-tabs-track) {
+		padding-block: 0;
+		border-bottom: none;
+	}
+	.views :global(.ui-tab) {
+		padding-block: 0.75rem;
+		margin-bottom: 0;
 	}
 	.controls {
 		display: flex;
@@ -418,20 +523,28 @@
 		gap: 0.5rem;
 		margin-left: auto;
 	}
-	.controls :global(:is(.button, .trigger)) {
+	.controls :global(.trigger) {
 		border-radius: 999px;
 		corner-shape: round;
 	}
-	.nav {
-		display: flex;
-		align-items: center;
-		gap: 0.25rem;
-	}
 	.range {
-		width: 9.5rem;
+		width: 8.5rem;
+	}
+	@container observe (max-width: 52rem) {
+		.controls {
+			order: -1;
+			width: 100%;
+			justify-content: flex-end;
+		}
 	}
 	.window {
 		width: 7.5rem;
+	}
+	.facts {
+		margin: -0.5rem 0 0;
+		color: var(--text-faint);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 	}
 	.stage {
 		min-width: 0;

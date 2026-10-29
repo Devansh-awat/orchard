@@ -11,6 +11,7 @@
 		type ChartFinding,
 		type ChartSeries
 	} from './time-chart';
+	import { chartAxis } from './chart-axis.svelte';
 
 	let {
 		series,
@@ -128,9 +129,16 @@
 		return { max, ticks };
 	});
 
-	const gutter = $derived(
+	const axis = chartAxis();
+	const ownGutter = $derived(
 		Math.ceil(Math.max(0, ...yScale.ticks.map((t) => t.text.length)) * charWidth) + GAP
 	);
+	const gutter = $derived(Math.max(ownGutter, axis?.gutter ?? 0));
+
+	$effect(() => {
+		axis?.report(uid, ownGutter);
+	});
+	$effect(() => () => axis?.drop(uid));
 	const plotW = $derived(Math.max(1, width - gutter));
 	const sx = (t: number) => ((t - from) / span) * plotW;
 	const sy = (v: number) => bottom - (v / yScale.max) * (bottom - TOP);

@@ -6,11 +6,13 @@
 	let {
 		title,
 		note = undefined,
+		size = 'md',
 		open = $bindable(false),
 		children
 	}: {
 		title: string;
 		note?: string;
+		size?: 'md' | 'lg';
 		open?: boolean;
 		children: Snippet;
 	} = $props();
@@ -18,7 +20,7 @@
 	const uid = $props.id();
 </script>
 
-<div class="disclosure">
+<div class="disclosure" class:disclosure--lg={size === 'lg'}>
 	<button
 		type="button"
 		class="summary"
@@ -81,6 +83,23 @@
 		font-size: var(--text-caption);
 		font-weight: var(--weight-regular);
 		color: var(--text-muted);
+	}
+	.disclosure--lg .summary {
+		gap: 0.5rem;
+		min-height: 2.25rem;
+		font-size: var(--text-headline);
+		line-height: var(--lh-headline);
+	}
+	.disclosure--lg .chevron {
+		color: var(--text-faint);
+	}
+	.disclosure--lg .note {
+		margin-left: 0.25rem;
+		color: var(--text-faint);
+		font-size: var(--text-caption);
+	}
+	.disclosure--lg .body {
+		padding-top: 0.5rem;
 	}
 	.body {
 		display: flex;

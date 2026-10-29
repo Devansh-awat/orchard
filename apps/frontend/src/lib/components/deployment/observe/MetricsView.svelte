@@ -3,7 +3,7 @@
 	import { page } from '$app/stores';
 	import CopyButton from '$lib/components/ui/CopyButton.svelte';
 	import { SYMPTOM_PANELS, momentLink } from './permalink';
-	import { Boxes, Clock, Code, GitCommitHorizontal, Info, TriangleAlert } from 'lucide-svelte';
+	import { Boxes, GitCommitHorizontal, Info, TriangleAlert } from 'lucide-svelte';
 	import {
 		ActivityGroup,
 		ActivityRow,
@@ -31,11 +31,11 @@
 		type ChartThreshold,
 		type ChartTone
 	} from '$lib/components/ui/time-chart';
+	import { provideChartAxis } from '$lib/components/ui/chart-axis.svelte';
 	import { selectedOrganization, subscribeOrgEvents } from '$lib/stores';
 	import { podLabel } from '$lib/utils/format';
 	import { anomalies } from './findings';
 	import { entryLine, type LogEntry } from './logs.svelte';
-	import { runtimeName, uptime, type DetectedRuntime } from './runtime';
 	import { bucketSize, clock, clockOrDay, runsAbove, stackByKey } from './signals';
 	import {
 		STATUS_CLASSES,
@@ -54,8 +54,6 @@
 		active,
 		demo,
 		hasIngress,
-		runtime,
-		upSince,
 		sharedHttp
 	}: {
 		metrics: MetricsState;
@@ -63,8 +61,6 @@
 		active: boolean;
 		demo: boolean;
 		hasIngress: boolean;
-		runtime: DetectedRuntime | null;
-		upSince: string | null;
 		sharedHttp: boolean;
 	} = $props();
 
@@ -149,7 +145,9 @@
 	};
 	const PHASE_ORDER = Object.keys(PHASE_COLORS);
 
-	let open = $state({ red: true, use: true, pods: true, logs: true, deploys: true });
+	provideChartAxis();
+
+	let open = $state({ traffic: true, resources: true, pods: true, logs: true, deploys: true });
 	let picked = $state<LogEntry | null>(null);
 	let reading = $state(false);
 
@@ -632,17 +630,6 @@
 		picked?.timestamp ? liveDeploy(new Date(picked.timestamp).getTime()) : undefined
 	);
 
-	const facts = $derived(
-		[
-			runtimeName(runtime) && { label: runtimeName(runtime)!, icon: Code },
-			uptime(upSince) && { label: `Up ${uptime(upSince)}`, icon: Clock },
-			deployment?.pods && {
-				label: `${(deployment.pods ?? []).filter((p: any) => (p.status ?? '').toLowerCase() === 'ready').length} of ${deployment.pods.length} pods ready`,
-				icon: Boxes
-			}
-		].filter(Boolean) as { label: string; icon: typeof Code }[]
-	);
-
 	function load() {
 		const id = deployment?.id;
 		if (id) metrics.load(id, { http: hasIngress, demo });
@@ -742,10 +729,6 @@
 {/snippet}
 
 <div class="board">
-	{#if facts.length}
-		<MetaList items={facts} />
-	{/if}
-
 	{#if !metrics.loaded && metrics.error}
 		<EmptyState title="Metrics aren't available" description={metrics.error}>
 			{#snippet icon()}<TriangleAlert size={18} />{/snippet}
@@ -799,8 +782,9 @@
 		{#if hasIngress}
 			<Disclosure
 				title="Traffic and errors"
+				size="lg"
 				note={source ? `Measured at the ${source} ingress` : undefined}
-				bind:open={open.red}
+				bind:open={open.traffic}
 			>
 				<div class="grid">
 					<MetricPanel
@@ -881,6 +865,8 @@
 						empty="No requests to time in this range"
 						onZoom={(a, b) => metrics.zoom(a, b)}
 					/>
+				</div>
+				<div class="grid grid--lists">
 					{@render rank(
 						'Slowest routes',
 						'Average response time of each domain and path over this range.',
@@ -913,7 +899,7 @@
 			</Disclosure>
 		{/if}
 
-		<Disclosure title="Resources" bind:open={open.use}>
+		<Disclosure title="Resources" size="lg" bind:open={open.resources}>
 			<div class="grid">
 				<MetricPanel
 					focus={metrics.focus}
@@ -991,6 +977,8 @@
 					empty="No network samples in this range"
 					onZoom={(a, b) => metrics.zoom(a, b)}
 				/>
+			</div>
+			<div class="grid grid--lists">
 				{@render rank(
 					'Pods by memory',
 					'Memory each pod is using right now, largest first.',
@@ -1006,7 +994,7 @@
 			</div>
 		</Disclosure>
 
-		<Disclosure title="Pods" bind:open={open.pods}>
+		<Disclosure title="Pods" size="lg" bind:open={open.pods}>
 			<div class="grid">
 				<MetricPanel
 					focus={metrics.focus}
@@ -1083,7 +1071,7 @@
 			</div>
 		</Disclosure>
 
-		<Disclosure title="Logs" bind:open={open.logs}>
+		<Disclosure title="Logs" size="lg" bind:open={open.logs}>
 			<div class="grid">
 				<MetricPanel
 					focus={metrics.focus}
@@ -1104,6 +1092,8 @@
 					empty="No error or warning lines in this range"
 					onZoom={(a, b) => metrics.zoom(a, b)}
 				/>
+			</div>
+			<div class="grid grid--lists">
 				<Widget title="Latest errors" meta={errorsMeta} class="metric-panel">
 					<Table
 						label="Latest errors"
@@ -1128,7 +1118,7 @@
 			</div>
 		</Disclosure>
 
-		<Disclosure title="Deploys" bind:open={open.deploys}>
+		<Disclosure title="Deploys" size="lg" bind:open={open.deploys}>
 			<div class="grid">
 				<MetricPanel
 					focus={metrics.focus}
@@ -1238,14 +1228,11 @@
 
 <style>
 	.board {
+		container: board / inline-size;
 		display: flex;
 		flex-direction: column;
-		gap: 1rem;
+		gap: 1.5rem;
 		min-width: 0;
-	}
-	.board > :global(.meta) {
-		padding-inline: 0.25rem;
-		font-size: var(--text-footnote);
 	}
 	.finding {
 		min-width: 0;
@@ -1257,20 +1244,19 @@
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 1rem;
-		padding-top: 0.5rem;
 	}
 	.grid > :global(:last-child:nth-child(odd)) {
 		grid-column: 1 / -1;
 	}
 	.rank {
-		height: 11rem;
+		max-height: 11rem;
 		overflow-y: auto;
 		overscroll-behavior: contain;
 	}
 	.empty {
 		display: grid;
 		place-items: center;
-		height: 100%;
+		min-height: 3rem;
 		margin: 0;
 		color: var(--text-faint);
 		font-size: var(--text-callout);
@@ -1327,7 +1313,7 @@
 		corner-shape: var(--corner);
 		background: var(--console-bg);
 	}
-	@media (max-width: 60rem) {
+	@container board (max-width: 46rem) {
 		.grid {
 			grid-template-columns: minmax(0, 1fr);
 		}

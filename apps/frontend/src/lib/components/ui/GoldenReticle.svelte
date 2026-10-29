@@ -1,4 +1,12 @@
 <script lang="ts">
+	let {
+		golden = true,
+		lines = []
+	}: {
+		golden?: boolean;
+		lines?: { axis: 'x' | 'y'; at: number; label?: string }[];
+	} = $props();
+
 	const PHI = (1 + Math.sqrt(5)) / 2;
 	const DEPTH = 9;
 
@@ -55,20 +63,32 @@
 </script>
 
 <svg class="reticle" viewBox="0 0 {w} {h}" width={w} height={h} aria-hidden="true">
-	{#each squares as sq, i (i)}
-		<rect class="square" x={sq.x} y={sq.y} width={sq.s} height={sq.s} />
+	{#each lines as l, i (i)}
+		{#if l.axis === 'x'}
+			<line class="measure" x1={l.at} y1="0" x2={l.at} y2={h} />
+			{#if l.label}<text class="label" x={l.at + 4} y={h - 8}>{l.label}</text>{/if}
+		{:else}
+			<line class="measure" x1="0" y1={l.at} x2={w} y2={l.at} />
+			{#if l.label}<text class="label" x={w - 6} y={l.at - 4} text-anchor="end">{l.label}</text
+				>{/if}
+		{/if}
 	{/each}
-	<path class="spiral" d={squares.map((sq) => sq.arc).join('')} />
-	{#each cols as x, i (i)}
-		<line class="axis" x1={x} y1="0" x2={x} y2={h} />
-		<text class="label" x={x + 6} y="16">{i === 0 ? '0.382' : '0.618'} w</text>
-	{/each}
-	{#each rows as y, i (i)}
-		<line class="axis" x1="0" y1={y} x2={w} y2={y} />
-		<text class="label" x="6" y={y - 6}>{i === 0 ? '0.382' : '0.618'} h</text>
-	{/each}
-	<line class="center" x1={w / 2} y1="0" x2={w / 2} y2={h} />
-	<line class="center" x1="0" y1={h / 2} x2={w} y2={h / 2} />
+	{#if golden}
+		{#each squares as sq, i (i)}
+			<rect class="square" x={sq.x} y={sq.y} width={sq.s} height={sq.s} />
+		{/each}
+		<path class="spiral" d={squares.map((sq) => sq.arc).join('')} />
+		{#each cols as x, i (i)}
+			<line class="axis" x1={x} y1="0" x2={x} y2={h} />
+			<text class="label" x={x + 6} y="16">{i === 0 ? '0.382' : '0.618'} w</text>
+		{/each}
+		{#each rows as y, i (i)}
+			<line class="axis" x1="0" y1={y} x2={w} y2={y} />
+			<text class="label" x="6" y={y - 6}>{i === 0 ? '0.382' : '0.618'} h</text>
+		{/each}
+		<line class="center" x1={w / 2} y1="0" x2={w / 2} y2={h} />
+		<line class="center" x1="0" y1={h / 2} x2={w} y2={h / 2} />
+	{/if}
 </svg>
 
 <style>
@@ -97,6 +117,11 @@
 		stroke: color-mix(in oklab, var(--neutral-10) 25%, transparent);
 		stroke-width: 1;
 		stroke-dasharray: 2 4;
+	}
+	.measure {
+		stroke: color-mix(in oklab, var(--red-solid) 70%, transparent);
+		stroke-width: 1;
+		shape-rendering: crispEdges;
 	}
 	.label {
 		fill: var(--blue-solid);
