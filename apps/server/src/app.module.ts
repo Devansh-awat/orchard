@@ -36,6 +36,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { TelemetryModule } from './telemetry/telemetry.module';
 import { AiChatModule } from './ai-chat/ai-chat.module';
 import { ObservabilityModule } from './observability/observability.module';
+import { LogsModule } from './logs/logs.module';
 import { AlertsModule } from './alerts/alerts.module';
 import { StatusPagesModule } from './status-pages/status-pages.module';
 import { AnomaliesModule } from './anomalies/anomalies.module';
@@ -95,6 +96,7 @@ import { graftImports } from './grafts/boot';
     TelemetryModule,
     AiChatModule,
     ObservabilityModule,
+    LogsModule,
     AlertsModule,
     StatusPagesModule,
     AnomaliesModule,

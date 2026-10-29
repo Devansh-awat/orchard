@@ -426,6 +426,10 @@ var routeExclusions = map[string]string{
 	"GET /observe/deployments/:id/builds":              "dashboard series; CLI command to follow",
 	"GET /observe/deployments/:id/changes":             "dashboard chart markers; exposed to agents over MCP",
 	"GET /observe/deployments/:id/findings":            "dashboard findings; exposed to agents over MCP",
+	"GET /observe/deployments/:id/logs/search":         "stored log search; CLI keeps observe logs, agents use MCP search_logs",
+	"GET /observe/deployments/:id/logs/levels":         "dashboard series; CLI command to follow",
+	"GET /observe/deployments/:id/logs/context":        "log context; exposed to agents over MCP",
+	"GET /observe/deployments/:id/logs/export":         "browser download; CLI pipes observe logs",
 	"GET /deployments/:id/releases/:releaseId/verdict": "deploy verdict; shown in deploy releases and over MCP",
 	"GET /sandboxes/:id/connect":                       "UI-only open-in-editor readiness; the CLI writes ssh config itself",
 

@@ -766,9 +766,15 @@ export class ObservabilityService {
     };
   }
 
-  async getErrors(deploymentId: string, timeWindowMinutes = 60): Promise<{ errors: ErrorGroup[] }> {
+  async getErrors(
+    deploymentId: string,
+    timeWindowMinutes = 60,
+    stored?: LogEntry[] | null
+  ): Promise<{ errors: ErrorGroup[] }> {
     const tailLines = Math.min(20000, timeWindowMinutes * 50);
-    const { entries } = await this.getStructuredLogs(deploymentId, tailLines);
+    const { entries } = stored?.length
+      ? { entries: stored }
+      : await this.getStructuredLogs(deploymentId, tailLines);
 
     const cutoff = new Date(Date.now() - timeWindowMinutes * 60 * 1000);
     const windowEntries = entries.filter((e) => {
@@ -1031,7 +1037,7 @@ function isContinuation(line: RawLine, groupStartMs: number): boolean {
   return false;
 }
 
-function groupLines(rawLines: string[]): LogEntry[] {
+export function groupLines(rawLines: string[]): LogEntry[] {
   const entries: LogEntry[] = [];
   let group: { header: RawLine; lines: RawLine[] } | null = null;
 

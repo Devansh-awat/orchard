@@ -2,9 +2,13 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { PrismaService } from '../prisma/prisma.service';
 import { LeaderElectionService } from '../events/leader-election.service';
 import { ObservabilityService } from './observability.service';
+import { VictoriaLogsService } from '../logs/victoria-logs.service';
+import { buildSearch } from '../logs/logsql';
+import { rowsToEntries } from '../logs/entries';
 
 const SWEEP_INTERVAL_MS = 60_000;
 const SWEEP_WINDOW_MINUTES = 10;
+const STORE_LINES = 20000;
 const MAX_DEPLOYMENTS_PER_SWEEP = 40;
 
 // Enough to answer "what code am I looking at": the commit for GitHub deploys,
@@ -34,7 +38,8 @@ export class ErrorIngestService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly leader: LeaderElectionService,
-    private readonly observability: ObservabilityService
+    private readonly observability: ObservabilityService,
+    private readonly logsStore: VictoriaLogsService
   ) {}
 
   onModuleInit() {
@@ -161,8 +166,34 @@ export class ErrorIngestService implements OnModuleInit, OnModuleDestroy {
     return { ok: true };
   }
 
+  private async storedEntries(deploymentId: string, windowMinutes: number) {
+    if (!this.logsStore.configured) return null;
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: { name: true, namespace: true }
+    });
+    if (!deployment?.namespace) return null;
+    const end = Date.now();
+    try {
+      const rows = await this.logsStore.query(
+        buildSearch({
+          namespace: deployment.namespace,
+          app: deployment.name,
+          kind: 'app',
+          start: end - windowMinutes * 60_000,
+          end,
+          limit: STORE_LINES
+        })
+      );
+      return rows.length ? rowsToEntries(rows) : null;
+    } catch {
+      return null;
+    }
+  }
+
   async ingest(deploymentId: string, windowMinutes = SWEEP_WINDOW_MINUTES): Promise<number> {
-    const { errors } = await this.observability.getErrors(deploymentId, windowMinutes);
+    const stored = await this.storedEntries(deploymentId, windowMinutes);
+    const { errors } = await this.observability.getErrors(deploymentId, windowMinutes, stored);
     if (!errors.length) return 0;
 
     let savedCount = 0;
