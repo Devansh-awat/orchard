@@ -1176,6 +1176,80 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 		}))
 	);
 	r.get(
+		'/deployments/:id/diagnosis',
+		withDep((d) => {
+			const now = Date.now();
+			const appUrl = `http://localhost:3000/ysws/deployments/${d.id}`;
+			const crashAt = now - 12 * 60_000;
+			const change = store.buildsOf(d.id).find((b) => b.isActive);
+			const version = change?.commitSha?.slice(0, 7) ?? 'latest';
+			const link = `${appUrl}?tab=observe&from=${crashAt - 900_000}&to=${Math.min(now, crashAt + 900_000)}&at=${crashAt}&panel=panel-restarts-and-out-of-memory-kills`;
+			return {
+				app: { id: d.id, name: d.name, image: d.image, url: appUrl },
+				health: {
+					app: d.crash ? 'down' : 'healthy',
+					deploy: null,
+					build: null,
+					serving: d.crash ? 0 : 1,
+					desired: 1,
+					problems: d.crash
+						? [
+								{
+									scope: 'app',
+									tone: 'error',
+									title: 'Your app is down: it keeps running out of memory',
+									hint: 'Raise the memory limit or fix the leak.',
+									pods: [store.podName(d, 0)]
+								}
+							]
+						: []
+				},
+				rollout: { state: 'stable', reason: null },
+				verdict: null,
+				anomalies: [],
+				findings: d.crash
+					? [
+							{
+								kind: 'restart-burst',
+								sentence: `Restarted 14 times from ${new Date(crashAt).toISOString().slice(11, 16)} UTC, two minutes after ${version} went live.`,
+								at: new Date(crashAt).toISOString(),
+								cause: `release:${change?.id ?? 'x'}`,
+								link
+							}
+						]
+					: [],
+				changes: change
+					? [
+							{
+								at: new Date(crashAt - 120_000).toISOString(),
+								kind: 'deploy',
+								label: `${version} went live`,
+								detail: change.commitMessage ?? null,
+								actor: null
+							}
+						]
+					: [],
+				resources: {
+					cpu: { usedMilli: d.cpuUsageMilli, limitMilli: d.cpuRequestMilli, throttledPercent: 0 },
+					memory: {
+						usedBytes: d.memoryUsageBytes,
+						limitBytes: d.memoryRequestBytes,
+						forecast: null
+					},
+					rightsizing: null
+				},
+				http: null,
+				security: { worstCve: null, counts: null, attacks: null },
+				topErrors: [],
+				links: {
+					app: appUrl,
+					observe: `${appUrl}?tab=observe`,
+					logs: `${appUrl}?tab=observe&view=logs`
+				}
+			};
+		})
+	);
+	r.get(
 		'/deployments/:id/rightsizing',
 		withDep((d) => {
 			const MiB = 1024 * 1024;

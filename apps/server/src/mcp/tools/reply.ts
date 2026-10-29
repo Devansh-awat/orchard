@@ -61,3 +61,64 @@ export function paginate<T>(
     ...(next < all.length ? { nextCursor: String(next) } : {})
   };
 }
+
+export const OUTPUT_CAP = 40_000;
+
+type LogEntry = {
+  timestamp?: string;
+  level?: string;
+  raw?: string;
+  message?: string;
+  metadata?: { pod?: string };
+};
+
+export function logLine(e: LogEntry): string {
+  return [e.timestamp ?? '', e.metadata?.pod ?? '', e.level ?? '', e.raw ?? e.message ?? '']
+    .filter(Boolean)
+    .join(' ');
+}
+
+export function cursorBefore(timestamp: string | undefined): string | null {
+  const t = timestamp ? Date.parse(timestamp) : NaN;
+  if (!Number.isFinite(t)) return null;
+  return Buffer.from(JSON.stringify({ end: t - 1 }), 'utf8').toString('base64url');
+}
+
+export function capLines(
+  entries: LogEntry[],
+  serverCursor: string | null,
+  cap = OUTPUT_CAP
+): { lines: string[]; truncated: boolean; cursor: string | null } {
+  const lines: string[] = [];
+  let size = 0;
+  for (let i = 0; i < entries.length; i++) {
+    const line = logLine(entries[i]);
+    if (size + line.length + 1 > cap) {
+      return { lines, truncated: true, cursor: cursorBefore(entries[i - 1]?.timestamp) };
+    }
+    lines.push(line);
+    size += line.length + 1;
+  }
+  return { lines, truncated: !!serverCursor, cursor: serverCursor };
+}
+
+export function capJson<T>(value: T, cap = OUTPUT_CAP): T | { truncated: true; preview: string } {
+  const text = JSON.stringify(value);
+  if (text.length <= cap) return value;
+  return { truncated: true, preview: text.slice(0, cap) };
+}
+
+export function capList<T>(
+  items: T[],
+  cap = OUTPUT_CAP
+): { items: T[]; truncated: boolean; nextCursor?: string } {
+  let size = 2;
+  const out: T[] = [];
+  for (let i = 0; i < items.length; i++) {
+    const len = JSON.stringify(items[i]).length + 1;
+    if (size + len > cap) return { items: out, truncated: true, nextCursor: String(i) };
+    out.push(items[i]);
+    size += len;
+  }
+  return { items: out, truncated: false };
+}

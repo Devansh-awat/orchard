@@ -10,6 +10,7 @@ import { registerJobTools } from './tools/jobs';
 import { registerEnvironmentTools } from './tools/environments';
 import { registerDangerousTools } from './tools/dangerous';
 import { registerRolloutTools } from './tools/rollout';
+import { registerObservabilityTools } from './tools/observability';
 import { registerComposeTools } from './tools/compose';
 import { registerDocResources } from './tools/docs';
 import { createCompactMcpServer } from './compact/compact-server';
@@ -54,6 +55,7 @@ export function createOrchardMcpServer(options: OrchardMcpOptions = {}) {
   registerQueryTools(tools, client);
   registerDeploymentTools(tools, client);
   registerRolloutTools(tools, client);
+  registerObservabilityTools(tools, client);
   registerComposeTools(tools, client);
   registerConfigurationTools(tools, client);
   registerResourceTools(tools, client);

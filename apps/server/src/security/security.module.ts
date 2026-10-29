@@ -13,6 +13,6 @@ import { SecurityController } from './security.controller';
   imports: [PrismaModule, AuthModule, ProjectsModule, ObservabilityModule, KubernetesModule],
   controllers: [SecurityController],
   providers: [HarborScanClient, SecurityService, AttacksService],
-  exports: [SecurityService]
+  exports: [SecurityService, AttacksService]
 })
 export class SecurityModule {}

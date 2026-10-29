@@ -18,6 +18,7 @@ import { registerJobTools } from '../src/mcp/tools/jobs';
 import { registerEnvironmentTools } from '../src/mcp/tools/environments';
 import { registerDangerousTools } from '../src/mcp/tools/dangerous';
 import { registerRolloutTools } from '../src/mcp/tools/rollout';
+import { registerObservabilityTools } from '../src/mcp/tools/observability';
 import { registerComposeTools } from '../src/mcp/tools/compose';
 import { registerDocResources, fetchLlmsTxt } from '../src/mcp/tools/docs';
 
@@ -25,6 +26,7 @@ const REGISTER = [
   registerQueryTools,
   registerDeploymentTools,
   registerRolloutTools,
+  registerObservabilityTools,
   registerComposeTools,
   registerConfigurationTools,
   registerResourceTools,

@@ -434,6 +434,7 @@ var routeExclusions = map[string]string{
 	"GET /observe/deployments/:id/requests/stream":     "live request tail (SSE); dashboard only",
 	"GET /deployments/:id/releases/:releaseId/verdict": "deploy verdict; shown in deploy releases and over MCP",
 	"GET /deployments/:id/rightsizing":                 "resource suggestion; applied through deploy resources, exposed over MCP",
+	"GET /deployments/:id/diagnosis":                   "one-call diagnosis for agents; exposed over MCP as diagnose_deployment",
 	"GET /deployments/:id/security/attacks":            "attack signals from access logs; exposed over MCP",
 	"POST /deployments/:id/security/rate-limit":        "one-click rate limit from the security tab",
 	"GET /sandboxes/:id/connect":                       "UI-only open-in-editor readiness; the CLI writes ssh config itself",

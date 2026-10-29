@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod4';
 import { OrchardClient, path, query as toQuery } from '../client';
-import { capText, json, paginate, structured, text } from './reply';
+import { capLines, capText, json, paginate, structured, text } from './reply';
 import { pageInput } from './inputs';
 import { deploymentOutput, findOutput, pageOutput } from './outputs';
 
@@ -660,11 +660,9 @@ To diagnose an unhealthy database, check \`liveStatus.message\`, \`liveStatus.la
   server.registerTool(
     'get_deployment_logs',
     {
-      description: `Read an app's runtime logs. **This is the tool you want for "why is my app broken"** — it takes a deploymentId, merges every replica, and parses each line into a level, timestamp and message.
+      description: `Read an app's recent runtime logs as plain text lines, newest first, across every replica (the last 24 hours from the log store when there is one, otherwise a live read of the running pods). Start with diagnose_deployment; for a time window, more filters or paging use search_logs, which this calls with simpler inputs.
 
-\`get_pod_logs\` is the lower-level escape hatch for when you need one specific pod (or its previous, crashed container). This one saves you the \`list_pods\` round trip and works across a rolling deploy.
-
-Filter with \`level\` to see only errors, or \`search\` to grep. Both are applied server-side, so narrowing costs you nothing. Levels are inferred from the line, so a line the parser could not classify has no level and is dropped by any \`level\` filter — drop the filter if a search comes back emptier than you expect.`,
+\`level\` keeps only that level and \`search\` keeps lines containing every word. Output is capped near 40 KB; pass the returned \`cursor\` to search_logs for older lines.`,
       inputSchema: {
         deploymentId: z.guid().describe('The deployment UUID'),
         tailLines: z
@@ -679,11 +677,22 @@ Filter with \`level\` to see only errors, or \`search\` to grep. Both are applie
       }
     },
     async ({ deploymentId, tailLines, level, search }) => {
-      const logs = await client.get(
-        path`/observe/deployments/${deploymentId}/logs/structured` +
-          toQuery({ tailLines, level, search })
+      const normalized = level
+        ? level.toLowerCase().replace('fatal', 'error').replace('trace', 'debug')
+        : undefined;
+      const end = Date.now();
+      const result = await client.get(
+        path`/observe/deployments/${deploymentId}/logs/search` +
+          toQuery({
+            q: search,
+            levels: normalized,
+            start: end - 24 * 60 * 60 * 1000,
+            end,
+            limit: Math.min(Math.max(tailLines ?? 200, 1), 500)
+          })
       );
-      return json(logs);
+      const capped = capLines(result?.entries ?? [], result?.cursor ?? null);
+      return json({ source: result?.source ?? null, ...capped });
     }
   );
 

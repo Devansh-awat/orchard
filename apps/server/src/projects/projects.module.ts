@@ -106,7 +106,8 @@ import { RolloutController, RolloutPinInterceptor } from './rollout.controller';
     DatabasesService,
     DeploymentsService,
     IngressService,
-    NamespaceTeardownService
+    NamespaceTeardownService,
+    RightsizingService
   ]
 })
 export class ProjectsModule {}
