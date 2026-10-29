@@ -105,6 +105,7 @@ export interface MockDeployment {
 	buildType: 'dockerfile' | 'railpack';
 	framework: string | null;
 	host: string | null;
+	hostPath?: string;
 	port: number;
 	cpuRequestMilli: number;
 	memoryRequestBytes: number;

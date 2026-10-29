@@ -2,7 +2,7 @@
 	import { env } from '$env/dynamic/public';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import type { Service, ServiceFormState, ServicePortForm } from '$lib/types/deployment';
-	import { EthernetPort, Plus } from 'lucide-svelte';
+	import { EthernetPort, Globe, Plus } from 'lucide-svelte';
 	import { Button, EmptyState, List, SectionTitle } from '$lib/components/ui';
 	import Widget from '$lib/components/ui/Widget.svelte';
 	import PortCard from './network/PortCard.svelte';
@@ -76,7 +76,8 @@
 		onUpdateProtection,
 		onUpdateRedirect,
 		redirectUpdatingId = null,
-		protectionUpdatingId
+		protectionUpdatingId,
+		projectIngresses = []
 	}: {
 		deployment: any;
 		tailscaleFeatureEnabled?: boolean;
@@ -147,6 +148,12 @@
 		) => Promise<void> | void;
 		protectionUpdatingId?: string | null;
 		toasts?: unknown;
+		projectIngresses?: Array<{
+			host: string;
+			path?: string;
+			deploymentId?: string | null;
+			deploymentName?: string;
+		}>;
 	} = $props();
 
 	const ingresses = $derived<any[]>(deployment.ingresses ?? []);
@@ -176,6 +183,7 @@
 	let unexposeOpen = $state(false);
 	let unexposeFor = $state<PortEntry | null>(null);
 	let editingServiceId = $state<string | null>(null);
+	let domainPortLocked = $state(false);
 
 	const editForm = $derived(editingServiceId ? serviceEditForms[editingServiceId] : undefined);
 	const removePortSiblings = $derived(
@@ -214,8 +222,28 @@
 		if (!key || !domainServiceOptions.some((o) => o.key === key)) return null;
 		return () => {
 			newDomainServiceKey = key;
+			domainPortLocked = true;
 			showDomainForm = true;
 		};
+	}
+
+	function openAddDomain() {
+		domainPortLocked = false;
+		showDomainForm = true;
+	}
+
+	function sharedWith(ingress: any): string | null {
+		const path = ingress.path || '/';
+		const others = projectIngresses.filter(
+			(r) => r.host === ingress.host && (r.path || '/') !== path
+		);
+		if (others.length === 0) return null;
+		const names = others.map(
+			(r) =>
+				`${r.deploymentId === deployment.id ? 'this app' : (r.deploymentName ?? 'another app')} at ${r.path || '/'}`
+		);
+		if (names.length > 2) return `Shared with ${names.length} other paths`;
+		return `Shared with ${names.join(' and ')}`;
 	}
 
 	function openProtection(ingress: any) {
@@ -272,9 +300,16 @@
 	<SectionTitle title="Ports">
 		{#snippet actions()}
 			{#if entries.length > 0}
-				<Button variant="ghost" size="sm" icon={Plus} class="net-add" onclick={openAddPort}
-					>Add port</Button
-				>
+				<span class="net-actions">
+					{#if domainServiceOptions.length > 0 && deployment.project?.id}
+						<Button variant="ghost" size="sm" icon={Globe} class="net-add" onclick={openAddDomain}
+							>Add domain</Button
+						>
+					{/if}
+					<Button variant="ghost" size="sm" icon={Plus} class="net-add" onclick={openAddPort}
+						>Add port</Button
+					>
+				</span>
 			{/if}
 		{/snippet}
 	</SectionTitle>
@@ -299,6 +334,7 @@
 				removing={serviceDeletingId === entry.service.id}
 				{deletingIngressId}
 				{tailnet}
+				{sharedWith}
 				onAddDomain={domainAdder(entry)}
 				onExpose={() => entry.port.id && onTogglePortPublic(entry.service.id, entry.port.id, false)}
 				onUnexpose={() => {
@@ -356,7 +392,9 @@
 	serviceOptions={domainServiceOptions}
 	normalizedHost={newDomainNormalizedHost}
 	normalizedPath={newDomainNormalizedPath}
-	conflict={newDomainConflict}
+	portLocked={domainPortLocked}
+	deploymentId={deployment.id}
+	projectRoutes={projectIngresses}
 	onCreate={onCreateDomain}
 	onReset={onResetDomainForm}
 	onGenerate={onGenerateRandomDomain}
@@ -444,8 +482,13 @@
 		gap: 1rem;
 		min-width: 0;
 	}
-	.network :global(.net-add) {
+	.net-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
 		margin-right: -0.625rem;
+	}
+	.network :global(.net-add) {
 		border-radius: 999px;
 		corner-shape: round;
 	}

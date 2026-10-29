@@ -106,9 +106,12 @@ export function dnsRecordName(host: string): string {
 
 export function portKeyOf(ingress: any, entries: PortEntry[]): string | null {
 	if (ingress.redirectTarget) return null;
-	const route = ingress.routes?.[0];
-	const name = route?.serviceName ?? ingress.service?.name;
-	const port = Number(route?.servicePort ?? ingress.service?.port);
+	const path = ingress.path || '/';
+	const route = ingress.service
+		? null
+		: (ingress.routes ?? []).find((r: any) => (r.path || '/') === path);
+	const name = ingress.service?.name ?? route?.serviceName;
+	const port = Number(ingress.service?.port ?? route?.servicePort);
 	const match =
 		entries.find(
 			(e) => e.service.name === name && Number(e.port.port ?? e.service.port) === port

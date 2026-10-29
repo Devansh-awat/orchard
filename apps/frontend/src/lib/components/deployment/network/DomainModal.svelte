@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { tick } from 'svelte';
+	import { tick, untrack } from 'svelte';
 	import { Globe, Shuffle } from 'lucide-svelte';
 	import {
 		Alert,
+		Badge,
 		Button,
 		Disclosure,
 		Dropdown,
@@ -11,12 +12,18 @@
 		Input,
 		Modal,
 		ModalIntro,
-		SegmentedControl,
 		Swap,
 		ToggleRow
 	} from '$lib/components/ui';
 	import DnsSetup from './DnsSetup.svelte';
 	import { REDIRECT_STATUS_OPTIONS } from './network';
+
+	type ProjectRoute = {
+		host: string;
+		path?: string;
+		deploymentId?: string | null;
+		deploymentName?: string;
+	};
 
 	let {
 		open = $bindable(false),
@@ -28,6 +35,9 @@
 		redirectTarget = $bindable(),
 		redirectStatus = $bindable(),
 		advanced = $bindable(),
+		portLocked = false,
+		deploymentId,
+		projectRoutes,
 		appDomain,
 		cname,
 		creating,
@@ -35,7 +45,6 @@
 		serviceOptions,
 		normalizedHost,
 		normalizedPath,
-		conflict,
 		onCreate,
 		onReset,
 		onGenerate,
@@ -50,6 +59,9 @@
 		redirectTarget: string;
 		redirectStatus: string;
 		advanced: boolean;
+		portLocked?: boolean;
+		deploymentId: string;
+		projectRoutes: ProjectRoute[];
 		appDomain: string;
 		cname: string;
 		creating: boolean;
@@ -57,8 +69,7 @@
 		serviceOptions: Array<{ key: string; label: string; serviceName: string; port: number }>;
 		normalizedHost: string;
 		normalizedPath: string;
-		conflict: { otherDeployment: boolean; pathCollision: boolean } | null;
-		onCreate: () => void;
+		onCreate: () => Promise<boolean>;
 		onReset: () => void;
 		onGenerate: () => void;
 		onCheckDns?: (domain: string) => Promise<{ valid: boolean; message: string }>;
@@ -66,28 +77,52 @@
 
 	const uid = $props.id();
 
-	let mode = $state<'orchard' | 'custom'>('custom');
-	let customStash = '';
+	let step = $state<'address' | 'dns'>('address');
+	let created = $state('');
 	let wasOpen = false;
 
 	$effect(() => {
 		const isOpen = open;
 		if (isOpen && !wasOpen) {
-			mode = appDomain ? 'orchard' : 'custom';
-			customStash = '';
+			step = 'address';
+			created = '';
 			if (appDomain && !host) onGenerate();
 		}
 		wasOpen = isOpen;
 	});
 
-	const prefix = $derived(
-		appDomain && host.endsWith(`.${appDomain}`) ? host.slice(0, -(appDomain.length + 1)) : host
-	);
-
+	const onAppDomain = $derived(!!appDomain && normalizedHost.endsWith(`.${appDomain}`));
+	const address = $derived(host + (path && path !== '/' ? path : ''));
+	const portLabel = $derived(serviceOptions.find((o) => o.key === serviceKey)?.label ?? '');
 	const portOptions = $derived(serviceOptions.map((o) => ({ value: o.key, label: o.label })));
+	const choosePort = $derived(!portLocked && routing === 'service' && serviceOptions.length > 1);
 	const needsPort = $derived(routing === 'service' && serviceOptions.length === 0);
+
+	const sharedRoutes = $derived(
+		normalizedHost
+			? projectRoutes
+					.filter((r) => r.host === normalizedHost)
+					.map((r) => ({
+						path: r.path || '/',
+						name: r.deploymentId === deploymentId ? 'This app' : (r.deploymentName ?? 'Another app')
+					}))
+					.sort((a, b) => a.path.localeCompare(b.path))
+			: []
+	);
+	const taken = $derived(
+		routing === 'redirect'
+			? sharedRoutes.length > 0
+			: sharedRoutes.some((r) => r.path === normalizedPath)
+	);
+	const routeMap = $derived(
+		sharedRoutes.length > 0 && routing === 'service' && !taken
+			? [...sharedRoutes, { path: normalizedPath, name: 'This app', fresh: true }].sort((a, b) =>
+					a.path.localeCompare(b.path)
+				)
+			: sharedRoutes.map((r) => ({ ...r, fresh: false }))
+	);
 	const advancedNote = $derived(
-		[routing === 'service' && normalizedPath !== '/' ? normalizedPath : '', tls ? '' : 'HTTP only']
+		[routing === 'redirect' ? 'Redirect' : '', tls ? '' : 'HTTP only']
 			.filter(Boolean)
 			.join(' · ') || undefined
 	);
@@ -95,25 +130,41 @@
 		!creating &&
 			!!normalizedHost &&
 			(routing === 'service' ? !!serviceKey : !!redirectTarget.trim()) &&
-			!conflict?.pathCollision
+			!taken
 	);
 
-	function setMode(next: string) {
-		if (next !== 'orchard' && next !== 'custom') return;
-		if (next === mode) return;
-		if (mode === 'custom') customStash = host;
-		mode = next;
-		if (next === 'orchard') {
-			tls = true;
-			if (!host.endsWith(`.${appDomain}`)) onGenerate();
-		} else {
-			host = customStash;
-		}
+	let draft = $state('');
+
+	function parse(value: string) {
+		const clean = value.trim().replace(/^[a-z]+:\/\//i, '');
+		const slash = clean.indexOf('/');
+		return {
+			host: (slash === -1 ? clean : clean.slice(0, slash)).toLowerCase(),
+			path: slash === -1 ? '/' : clean.slice(slash) || '/'
+		};
 	}
 
-	function setPrefix(value: string) {
-		const clean = value.toLowerCase().replace(/[^a-z0-9-]/g, '');
-		host = clean ? `${clean}.${appDomain}` : '';
+	$effect(() => {
+		const next = { host, path: path || '/' };
+		untrack(() => {
+			const current = parse(draft);
+			if (current.host !== next.host || current.path !== next.path) draft = address;
+		});
+	});
+
+	function setAddress(value: string) {
+		draft = value;
+		const next = parse(value);
+		host = next.host;
+		path = next.path;
+		if (appDomain && next.host.endsWith(`.${appDomain}`)) tls = true;
+	}
+
+	function routeLabel(route: { name: string; fresh: boolean; path: string }) {
+		if (route.fresh) return 'This app';
+		if (taken && route.path === normalizedPath)
+			return `Taken by ${route.name === 'This app' ? 'this app' : route.name}`;
+		return route.name;
 	}
 
 	function close() {
@@ -121,53 +172,58 @@
 		onReset();
 	}
 
-	function submit() {
-		if (canCreate) onCreate();
+	async function submit() {
+		if (!canCreate) return;
+		const target = normalizedHost;
+		const custom = !onAppDomain && routing === 'service';
+		const ok = await onCreate();
+		if (!ok) return;
+		if (custom) {
+			created = target;
+			step = 'dns';
+		} else {
+			close();
+		}
 	}
 
 	function focusOnOpen(el: HTMLInputElement) {
-		void tick().then(() => el.focus());
+		void tick().then(() => {
+			el.focus();
+			el.select();
+		});
 	}
 </script>
 
 <Modal bind:open size="md" closable={false} dismissable labelledby="{uid}-title" onclose={onReset}>
-	<form
-		class="form"
-		onsubmit={(e) => {
-			e.preventDefault();
-			submit();
-		}}
-	>
-		<ModalIntro id="{uid}-title" icon={Globe} title="Add a domain" />
+	<Swap key={step}>
+		{#if step === 'dns'}
+			<div class="form">
+				<ModalIntro
+					id="{uid}-title"
+					icon={Globe}
+					title="Point your DNS"
+					description={cname ? `Add this record where ${created} is registered.` : created}
+				/>
+				<DnsSetup host={created} {cname} watch {onCheckDns} />
+			</div>
+		{:else}
+			<form
+				class="form"
+				onsubmit={(e) => {
+					e.preventDefault();
+					submit();
+				}}
+			>
+				<ModalIntro
+					id="{uid}-title"
+					icon={Globe}
+					title="Add a domain"
+					description={portLocked && serviceOptions.length > 1
+						? `Sends traffic to ${portLabel.toLowerCase()}.`
+						: undefined}
+				/>
 
-		{#if appDomain}
-			<SegmentedControl
-				label="Domain type"
-				grow
-				value={mode}
-				onchange={setMode}
-				options={[
-					{ value: 'orchard', label: `On ${appDomain}` },
-					{ value: 'custom', label: 'Your own domain' }
-				]}
-			/>
-		{/if}
-
-		<Swap key={mode}>
-			{#if mode === 'orchard'}
-				<div class="sub">
-					<Input
-						id="{uid}-host"
-						aria-label="Subdomain"
-						placeholder="my-app"
-						value={prefix}
-						suffix=".{appDomain}"
-						oninput={(e: Event) => setPrefix((e.currentTarget as HTMLInputElement).value)}
-					/>
-					<Button variant="secondary" icon={Shuffle} label="Suggest a name" onclick={onGenerate} />
-				</div>
-			{:else}
-				<div class="stack">
+				<div class="address">
 					<Input
 						id="{uid}-host"
 						aria-label="Domain"
@@ -175,94 +231,98 @@
 						mono
 						autocomplete="off"
 						spellcheck={false}
-						bind:value={host}
+						bind:value={() => draft, setAddress}
 						{@attach focusOnOpen}
 					/>
-					<DnsSetup host={normalizedHost} {cname} {onCheckDns} />
-				</div>
-			{/if}
-		</Swap>
-
-		{#if serviceOptions.length > 1 && routing === 'service'}
-			<Field label="Port">
-				<Dropdown bind:value={serviceKey} options={portOptions} ariaLabel="Port" />
-			</Field>
-		{/if}
-
-		<Disclosure title="Advanced" note={advancedNote} bind:open={advanced}>
-			<div class="stack">
-				<ToggleRow
-					label="Redirect somewhere else"
-					bind:checked={
-						() => routing === 'redirect', (on) => (routing = on ? 'redirect' : 'service')
-					}
-				/>
-				<Swap key={routing}>
-					{#if routing === 'redirect'}
-						<FieldGrid>
-							<Field label="Redirect to" for="{uid}-target" hint="Keeps the path and query.">
-								<Input
-									id="{uid}-target"
-									placeholder="example.com"
-									mono
-									autocomplete="off"
-									spellcheck={false}
-									bind:value={redirectTarget}
-								/>
-							</Field>
-							<Field label="Status">
-								<Dropdown
-									bind:value={redirectStatus}
-									options={REDIRECT_STATUS_OPTIONS}
-									ariaLabel="Redirect status"
-								/>
-							</Field>
-						</FieldGrid>
-					{:else}
-						<Field label="Path" for="{uid}-path" hint="Only requests under it reach this app.">
-							<Input
-								id="{uid}-path"
-								placeholder="/"
-								mono
-								width="short"
-								autocomplete="off"
-								spellcheck={false}
-								bind:value={path}
-							/>
-						</Field>
+					{#if appDomain}
+						<Button
+							variant="secondary"
+							icon={Shuffle}
+							label="Suggest a name on {appDomain}"
+							onclick={onGenerate}
+						/>
 					{/if}
-				</Swap>
-				<ToggleRow label="HTTPS" bind:checked={tls} disabled={mode === 'orchard'} />
-			</div>
-		</Disclosure>
+				</div>
 
-		{#if needsPort}
-			<Alert tone="info">Add a port first so the domain has somewhere to send traffic.</Alert>
-		{:else if conflict?.pathCollision && routing === 'redirect'}
-			<Alert tone="error" title="Domain in use">
-				{normalizedHost} already routes traffic. Remove it before adding a redirect.
-			</Alert>
-		{:else if conflict?.pathCollision}
-			<Alert tone="error" title="Path in use">
-				<code>{normalizedHost}{normalizedPath}</code> is already routed. Pick another path.
-			</Alert>
-		{:else if conflict?.otherDeployment}
-			<Alert tone="warning" title="Shared domain">
-				{normalizedHost} also serves another app. This adds <code>{normalizedPath}</code> to it.
-			</Alert>
-		{:else if conflict}
-			<Alert tone="info">This adds <code>{normalizedPath}</code> to {normalizedHost}.</Alert>
-		{/if}
+				{#if routeMap.length > 0}
+					<div class="routes" aria-label="Paths on {normalizedHost}">
+						{#each routeMap as route (route.path + route.name)}
+							<div
+								class="route"
+								class:route--fresh={route.fresh}
+								class:route--taken={taken && route.path === normalizedPath}
+							>
+								<span class="route-path">{route.path}</span>
+								<span class="route-app"
+									>{routeLabel(route)}{#if route.fresh}<Badge>New</Badge>{/if}</span
+								>
+							</div>
+						{/each}
+					</div>
+				{/if}
 
-		{#if error}
-			<Alert tone="error">{error}</Alert>
+				{#if choosePort}
+					<Field label="Port">
+						<Dropdown bind:value={serviceKey} options={portOptions} ariaLabel="Port" />
+					</Field>
+				{/if}
+
+				<Disclosure title="Advanced" note={advancedNote} bind:open={advanced}>
+					<div class="stack">
+						<ToggleRow
+							label="Redirect somewhere else"
+							bind:checked={
+								() => routing === 'redirect', (on) => (routing = on ? 'redirect' : 'service')
+							}
+						/>
+						{#if routing === 'redirect'}
+							<FieldGrid>
+								<Field label="Redirect to" for="{uid}-target" hint="Keeps the path and query.">
+									<Input
+										id="{uid}-target"
+										placeholder="example.com"
+										mono
+										autocomplete="off"
+										spellcheck={false}
+										bind:value={redirectTarget}
+									/>
+								</Field>
+								<Field label="Status">
+									<Dropdown
+										bind:value={redirectStatus}
+										options={REDIRECT_STATUS_OPTIONS}
+										ariaLabel="Redirect status"
+									/>
+								</Field>
+							</FieldGrid>
+						{/if}
+						<ToggleRow label="HTTPS" bind:checked={tls} disabled={onAppDomain} />
+					</div>
+				</Disclosure>
+
+				{#if needsPort}
+					<Alert tone="info">Add a port first so the domain has somewhere to send traffic.</Alert>
+				{:else if taken && routing === 'redirect'}
+					<Alert tone="error"
+						>{normalizedHost} already serves apps. Remove them to redirect it.</Alert
+					>
+				{/if}
+
+				{#if error}
+					<Alert tone="error">{error}</Alert>
+				{/if}
+			</form>
 		{/if}
-	</form>
+	</Swap>
 	{#snippet footer()}
-		<Button variant="ghost" disabled={creating} onclick={close}>Cancel</Button>
-		<Button variant="primary" loading={creating} disabled={!canCreate} onclick={submit}
-			>Add domain</Button
-		>
+		{#if step === 'dns'}
+			<Button variant="primary" onclick={close}>Done</Button>
+		{:else}
+			<Button variant="ghost" disabled={creating} onclick={close}>Cancel</Button>
+			<Button variant="primary" loading={creating} disabled={!canCreate} onclick={submit}
+				>Add</Button
+			>
+		{/if}
 	{/snippet}
 </Modal>
 
@@ -277,16 +337,56 @@
 		flex-direction: column;
 		gap: 1rem;
 	}
-	.sub {
+	.address {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
 	}
-	.sub > :global(.wrap) {
+	.address > :global(.wrap) {
 		flex: 1;
 	}
-	.form :global(code) {
+	.routes {
+		display: grid;
+		grid-template-columns: max-content minmax(0, 1fr);
+		column-gap: 1.5rem;
+		margin-top: -0.75rem;
+		padding: 0.25rem 0;
+	}
+	.route {
+		display: grid;
+		grid-column: 1 / -1;
+		grid-template-columns: subgrid;
+		align-items: baseline;
+		padding-block: 0.3125rem;
+		color: var(--text-muted);
+		font-size: var(--text-callout);
+	}
+	.route:not(:first-child) {
+		box-shadow: inset 0 1px 0 var(--border-default);
+	}
+	.route-path {
+		color: var(--text-default);
 		font-family: var(--font-mono);
-		font-size: 0.92em;
+		font-size: var(--text-footnote);
+	}
+	.route-app {
+		min-width: 0;
+		overflow-x: clip;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.route-app {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+	.route--fresh .route-path,
+	.route--fresh .route-app {
+		color: var(--text-default);
+		font-weight: var(--weight-medium);
+	}
+	.route--taken .route-path,
+	.route--taken .route-app {
+		color: var(--status-error);
 	}
 </style>

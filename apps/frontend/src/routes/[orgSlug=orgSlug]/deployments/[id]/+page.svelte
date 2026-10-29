@@ -393,7 +393,13 @@
 	let deletingIngressId = $state<string | null>(null);
 	let protectionUpdatingId = $state<string | null>(null);
 	let projectIngresses = $state<
-		Array<{ id: string; host: string; path?: string; deploymentId?: string | null }>
+		Array<{
+			id: string;
+			host: string;
+			path?: string;
+			deploymentId?: string | null;
+			deploymentName?: string;
+		}>
 	>([]);
 
 	let showDomainForm = $state(false);
@@ -443,11 +449,6 @@
 				? sameHost[0]
 				: sameHost.find((i) => (i.path || '/') === newDomainNormalizedPath);
 		return { otherDeployment: !!otherDeployment, pathCollision: !!pathCollision };
-	});
-
-	// Auto-expand Advanced path input when domain already has routes
-	$effect(() => {
-		if (newDomainConflict) showDomainAdvanced = true;
 	});
 
 	// Computed properties for template compatibility with API field names
@@ -1706,12 +1707,17 @@
 			if (!response.ok) return;
 			const projectData = await response.json();
 			const deploymentIngresses = (projectData.deployments ?? []).flatMap(
-				(d: { id: string; ingresses?: Array<{ id: string; host: string; path?: string }> }) =>
+				(d: {
+					id: string;
+					name: string;
+					ingresses?: Array<{ id: string; host: string; path?: string }>;
+				}) =>
 					(d.ingresses ?? []).map((i) => ({
 						id: i.id,
 						host: i.host,
 						path: i.path ?? '/',
-						deploymentId: d.id
+						deploymentId: d.id,
+						deploymentName: d.name
 					}))
 			);
 			projectIngresses = deploymentIngresses;
@@ -1899,24 +1905,24 @@
 		return { valid: !!data.valid, message: data.message || '' };
 	}
 
-	async function createDomain() {
-		if (!deployment?.project?.id) return;
+	async function createDomain(): Promise<boolean> {
+		if (!deployment?.project?.id) return false;
 		if (!newDomainNormalizedHost) {
 			domainFormError = 'Domain is required';
-			return;
+			return false;
 		}
 		if (newDomainConflict?.pathCollision) {
 			domainFormError = `${newDomainNormalizedHost}${newDomainNormalizedPath} is already in use. Use a different path.`;
-			return;
+			return false;
 		}
 		const option = domainServiceOptions.find((o) => o.key === newDomainServiceKey);
 		if (newDomainRoutingMode === 'service' && !option) {
 			domainFormError = 'Select a service';
-			return;
+			return false;
 		}
 		if (newDomainRoutingMode === 'redirect' && !newDomainRedirectTarget.trim()) {
 			domainFormError = 'Redirect destination is required';
-			return;
+			return false;
 		}
 
 		creatingDomain = true;
@@ -1965,12 +1971,13 @@
 				color: 'success'
 			});
 
-			showDomainForm = false;
 			resetDomainForm();
 			await fetchDeployment();
 			await fetchProjectIngresses();
+			return true;
 		} catch (e) {
 			domainFormError = e instanceof Error ? e.message : 'Failed to add domain';
+			return false;
 		} finally {
 			creatingDomain = false;
 		}
@@ -3234,6 +3241,7 @@
 							{newDomainConflict}
 							{deletingIngressId}
 							onCreateDomain={createDomain}
+							{projectIngresses}
 							onDeleteIngress={deleteIngress}
 							onResetDomainForm={resetDomainForm}
 							onGenerateRandomDomain={generateRandomDomainForNew}

@@ -48,6 +48,7 @@
 		removing,
 		deletingIngressId,
 		tailnet,
+		sharedWith,
 		onAddDomain,
 		onExpose,
 		onUnexpose,
@@ -68,6 +69,7 @@
 		removing: boolean;
 		deletingIngressId: string | null;
 		tailnet: Tailnet;
+		sharedWith: (ingress: any) => string | null;
 		onAddDomain: (() => void) | null;
 		onExpose: () => void;
 		onUnexpose: () => void;
@@ -182,6 +184,7 @@
 					{canProtect}
 					{canEditRedirect}
 					deleting={deletingIngressId === ingress.id}
+					shared={sharedWith(ingress)}
 					{onProtection}
 					{onRedirect}
 					{onDns}

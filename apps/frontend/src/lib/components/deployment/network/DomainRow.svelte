@@ -25,6 +25,7 @@
 		canProtect,
 		canEditRedirect,
 		deleting,
+		shared = null,
 		onProtection,
 		onRedirect,
 		onDns,
@@ -35,6 +36,7 @@
 		canProtect: boolean;
 		canEditRedirect: boolean;
 		deleting: boolean;
+		shared?: string | null;
 		onProtection: (ingress: any) => void;
 		onRedirect: (ingress: any) => void;
 		onDns: (ingress: any) => void;
@@ -49,7 +51,8 @@
 			return `Redirects to ${redirectLabel(ingress)} · ${ingress.redirectStatus ?? 307}`;
 		return [
 			ingress.tlsEnabled === false ? 'HTTP only' : 'HTTPS',
-			PROTECTION_LABELS[protectionOf(ingress)]
+			PROTECTION_LABELS[protectionOf(ingress)],
+			shared
 		]
 			.filter(Boolean)
 			.join(' · ');

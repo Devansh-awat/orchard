@@ -8,10 +8,12 @@
 	let {
 		host,
 		cname,
+		watch = false,
 		onCheckDns = undefined
 	}: {
 		host: string;
 		cname: string;
+		watch?: boolean;
 		onCheckDns?: (domain: string) => Promise<{ valid: boolean; message: string }>;
 	} = $props();
 
@@ -25,11 +27,24 @@
 	const name = $derived(host ? dnsRecordName(host) : '@');
 	const meta = $derived(
 		phase === 'valid'
-			? statusMeta('success', 'Record found')
-			: phase === 'invalid'
-				? statusMeta('warning', 'Not found yet')
-				: null
+			? statusMeta('success', watch ? 'Connected' : 'Record found')
+			: watch
+				? statusMeta('progress', 'Waiting for DNS', true)
+				: phase === 'invalid'
+					? statusMeta('warning', 'Not found yet')
+					: null
 	);
+
+	const connected = $derived(phase === 'valid');
+
+	$effect(() => {
+		if (!watch || !onCheckDns || !host || connected) return;
+		const timer = setInterval(() => {
+			if (untrack(() => phase) !== 'checking') check();
+		}, 5000);
+		untrack(check);
+		return () => clearInterval(timer);
+	});
 
 	async function check() {
 		if (!onCheckDns || !host) return;
@@ -59,7 +74,7 @@
 		</p>
 		<div class="check">
 			{#if meta}<StatusBadge {meta} variant="plain" />{/if}
-			{#if onCheckDns}
+			{#if onCheckDns && !watch}
 				<Button
 					variant="secondary"
 					size="sm"

@@ -403,7 +403,7 @@ export function deploymentDetail(store: Store, d: MockDeployment) {
 		services: [svc],
 		ingresses: ingress(d).map((i) => ({
 			...i,
-			routes: [{ path: '/', serviceName: svc.name, servicePort: 80 }],
+			routes: [{ path: d.hostPath ?? '/', serviceName: svc.name, servicePort: 80 }],
 			certificateStatus: 'ready',
 			protectionBypassPaths: [],
 			redirectTarget: null,
@@ -1627,6 +1627,7 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 			store.deploymentsOf(params.pid).find((x) => x.name === body?.routes?.[0]?.serviceName);
 		if (d && body?.host) {
 			d.host = String(body.host);
+			d.hostPath = String(body?.routes?.[0]?.path ?? '/');
 			changed(d);
 		}
 		return { ok: true };

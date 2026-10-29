@@ -315,8 +315,11 @@ Three-level hierarchy: **Org cap** → **Member allowance** → **Deployment req
 - Network (`NetworkTab` + `deployment/network/`): one `PortCard` per port, because every way in is built
   on a private port. The private address is the first row; domains, the public TCP/UDP port and the tailnet
   stack under it on a spine, each added from that port's Add menu (`domainsByPort` assigns domains by route
-  `serviceName`/`servicePort`). Redirects point at no port, so they get their own card. Dialogs for
-  domains, protection, redirects, ports and DNS.
+  `serviceName`/`servicePort`). Redirects point at no port, so they get their own card. Adding a domain is
+  one address field (`host/path`, the path is parsed out of it); the port is fixed when opened from a
+  card and only asked for when there are two or more. A host already used in the project draws its path
+  map (`/` web, `/api` this app, new) and a taken path blocks Add. Custom domains then turn the modal into
+  "Point your DNS", which polls until connected. Rows on a shared host say "Shared with api at /api".
 - Security (`SecurityTab`): scan card and Configuration card at 1.618 : 1, then the vulnerability table only
   when there are findings. Reads `GET /deployments/:id/security`, rescans with `POST .../security/scan`, polls
   every 3s only while scanning. The scanner is an instance choice (`scan.provider`: `off` by default, `harbor`,

@@ -143,7 +143,7 @@ export function ingress(d: MockDeployment) {
 			id: uid(`ing:${d.id}`),
 			name: `${d.name}-ingress`,
 			host: d.host,
-			path: '/',
+			path: d.hostPath ?? '/',
 			pathType: 'Prefix',
 			tlsSecretName: `${d.name}-tls`,
 			entrypoints: ['websecure'],
