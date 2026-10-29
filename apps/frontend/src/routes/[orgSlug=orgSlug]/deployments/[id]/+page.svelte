@@ -1651,7 +1651,8 @@
 		envVars = saved.map((ev) => ({
 			key: ev.key || '',
 			value: ev.value || '',
-			secret: Boolean(ev.secret)
+			secret: Boolean(ev.secret),
+			sealed: Boolean(ev.secret)
 		}));
 	}
 
@@ -1664,7 +1665,6 @@
 		savingEnv = true;
 		isEditingEnv = false;
 		try {
-			const filteredEnv = envVars.filter((e) => e.key.trim());
 			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/env`, {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },

@@ -60,20 +60,20 @@
 				bind:checked={buildWithDepot}
 				onchange={() => commit(() => (buildWithDepot = !buildWithDepot))}
 			/>
-			<SettingRow label="Fast builder" hint="Auto follows the rollout flag">
-				<SegmentedControl
-					label="Fast builder"
-					options={BUILDERS}
-					bind:value={
-						() => builderOverride,
-						(next) => {
-							const previous = builderOverride;
-							builderOverride = next as Builder;
-							commit(() => (builderOverride = previous));
-						}
-					}
-				/>
-			</SettingRow>
 		{/if}
+		<SettingRow label="Fast builder" hint="Auto lets Orchard decide">
+			<SegmentedControl
+				label="Fast builder"
+				options={BUILDERS}
+				bind:value={
+					() => builderOverride,
+					(next) => {
+						const previous = builderOverride;
+						builderOverride = next as Builder;
+						commit(() => (builderOverride = previous));
+					}
+				}
+			/>
+		</SettingRow>
 	</SettingsList>
 </SectionCard>

@@ -111,10 +111,10 @@
 		}
 		for (const e of named) {
 			const key = e.key.trim();
-			if (!e.secret && e.value === '' && stored.has(key))
+			if (!e.secret && stored.has(key))
 				add(key, {
 					tone: 'error',
-					text: 'The old value stays hidden, so type a new one to make it plain.'
+					text: 'Sealed. Remove it and add it back to make it visible.'
 				});
 		}
 		for (const c of conflicts) {
@@ -157,7 +157,7 @@
 		const taken = envVars.map((e) => e.key.trim()).filter(Boolean);
 		const target = row;
 		const key = target?.key.trim() || suggestedKey(binding, field, taken);
-		const next = { key, value: refFor(binding.name, field), secret: false };
+		const next = { key, value: refFor(binding.name, field), secret: stored.has(key) };
 		started = true;
 		isEditing = true;
 		if (target) Object.assign(target, next);
@@ -166,7 +166,7 @@
 
 	function setValue(row: EnvVarEditorRow, value: string) {
 		row.value = value;
-		row.secret = false;
+		row.secret = stored.has(row.key.trim());
 		isEditing = true;
 	}
 

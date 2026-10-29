@@ -3,6 +3,7 @@
 	import { KeyRound, Plus } from 'lucide-svelte';
 	import { apiFetch, toasts } from '$lib/stores';
 	import { envVarsToRaw, rawToEnvVars } from '$lib/utils/format';
+	import { looksSecretKey } from '$lib/utils/env-secrets';
 	import { presence } from '$lib/utils/transitions';
 	import {
 		Alert,
@@ -57,7 +58,13 @@
 	const draft = $derived.by<Draft[]>(() => {
 		const source =
 			mode === 'raw'
-				? rawToEnvVars(raw).map((p) => ({ ...p, secret: secretFlags.has(p.key) }))
+				? rawToEnvVars(raw).map((p) => ({
+						...p,
+						secret:
+							secretFlags.has(p.key) ||
+							storedSecrets.has(p.key) ||
+							(!saved.some((v) => v.key === p.key) && looksSecretKey(p.key))
+					}))
 				: rows;
 		return source
 			.filter((r) => r.key.trim())
@@ -86,10 +93,10 @@
 			}
 			if (seen.has(v.key)) add(v.key, { tone: 'error', text: 'This name is set more than once.' });
 			seen.add(v.key);
-			if (!v.secret && v.value === '' && storedSecrets.has(v.key)) {
+			if (!v.secret && storedSecrets.has(v.key)) {
 				add(v.key, {
 					tone: 'error',
-					text: 'The old value stays hidden, so type a new one to make it plain.'
+					text: 'Sealed. Remove it and add it back to make it visible.'
 				});
 			}
 			for (const m of v.value.matchAll(REF_RE)) {

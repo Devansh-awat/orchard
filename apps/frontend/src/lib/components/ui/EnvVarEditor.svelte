@@ -3,6 +3,7 @@
 		key: string;
 		value: string;
 		secret?: boolean;
+		sealed?: boolean;
 	}
 
 	export interface EnvVarIssue {
@@ -15,6 +16,7 @@
 	import { untrack, type Snippet } from 'svelte';
 	import { Eye, EyeOff, Lock, LockOpen, Plus, Trash2, TriangleAlert, X } from 'lucide-svelte';
 	import { envVarsToRaw, rawToEnvVars } from '$lib/utils/format';
+	import { looksSecretKey } from '$lib/utils/env-secrets';
 	import { presence } from '$lib/utils/transitions';
 	import Button from './Button.svelte';
 	import CopyButton from './CopyButton.svelte';
@@ -54,6 +56,7 @@
 
 	let revealed = $state<Set<number>>(new Set());
 	let replacing = $state<Set<number>>(new Set());
+	const touched = new Set<number>();
 	let focusId: number | null = null;
 	const ids = new WeakMap<EnvVarEditorRow, number>();
 	let seq = 0;
@@ -77,9 +80,7 @@
 				raw = envVarsToRaw(rows);
 				return;
 			}
-			const secretKeys = new Set(rows.filter((r) => r.secret).map((r) => r.key));
-			const parsed = rawToEnvVars(raw).map((p) => blank(p.key, p.value, secretKeys.has(p.key)));
-			rows = [...parsed, blank()];
+			rows = [...merge(rawToEnvVars(raw)), blank()];
 		});
 	});
 
@@ -92,6 +93,30 @@
 
 	function blank(key = '', value = '', secret = false): EnvVarEditorRow {
 		return secrets ? { key, value, secret } : { key, value };
+	}
+
+	function merge(parsed: { key: string; value: string }[]): EnvVarEditorRow[] {
+		const before = new Map(rows.filter((r) => r.key.trim()).map((r) => [r.key.trim(), r]));
+		return parsed.map(({ key, value }) => {
+			const old = before.get(key);
+			const secret = old ? !!old.secret || stored.has(key) : stored.has(key) || looksSecretKey(key);
+			const row = blank(key, value, secret);
+			if (old?.sealed) row.sealed = true;
+			if (old && touched.has(idOf(old))) touched.add(idOf(row));
+			return row;
+		});
+	}
+
+	function locked(row: EnvVarEditorRow) {
+		return secrets && hasStored(row);
+	}
+
+	function keyEdited(row: EnvVarEditorRow) {
+		if (secrets && !hasStored(row) && !touched.has(idOf(row))) {
+			row.secret = looksSecretKey(row.key);
+		}
+		if (hasStored(row)) row.secret = true;
+		edited();
 	}
 
 	function edited() {
@@ -127,8 +152,9 @@
 	}
 
 	function setSecret(row: EnvVarEditorRow, secret: boolean) {
+		if (locked(row)) return;
+		touched.add(idOf(row));
 		row.secret = secret;
-		if (!secret && hasStored(row) && row.value === '') focusId = idOf(row);
 		edited();
 	}
 
@@ -160,8 +186,10 @@
 		const parsed = rawToEnvVars(text);
 		if (parsed.length === 0) return;
 		e.preventDefault();
-		const next = [...rows];
-		next.splice(i, 1, ...parsed.map((p) => blank(p.key, p.value)));
+		const pasted = new Set(parsed.map((p) => p.key));
+		const merged = merge(parsed);
+		const next = rows.filter((r, idx) => idx !== i && !pasted.has(r.key.trim()));
+		next.splice(Math.min(i, next.length), 0, ...merged);
 		rows = next;
 		edited();
 	}
@@ -172,9 +200,7 @@
 	}
 
 	function placeholder(row: EnvVarEditorRow) {
-		if (secrets && hasStored(row) && row.value === '') {
-			return row.secret ? 'New value' : 'Type a new value';
-		}
+		if (secrets && hasStored(row) && row.value === '') return 'New value';
 		return row.key.trim() ? 'value' : '';
 	}
 </script>
@@ -206,7 +232,7 @@
 						autocomplete="off"
 						spellcheck={false}
 						bind:value={row.key}
-						oninput={edited}
+						oninput={() => keyEdited(row)}
 						onpaste={(e) => onPaste(e, i)}
 					/>
 					{#if found.length}
@@ -281,7 +307,17 @@
 					{/if}
 					{#if secrets}
 						<span class="tool">
-							{#if row.secret || !confirmSecret}
+							{#if locked(row)}
+								<Tooltip text="Sealed. Remove it and add it back to make it visible">
+									<Button
+										variant="tinted"
+										size="sm"
+										icon={Lock}
+										label="{key} is sealed. Remove it and add it back to make it visible"
+										aria-disabled="true"
+									/>
+								</Tooltip>
+							{:else if row.secret || !confirmSecret}
 								<Button
 									variant={row.secret ? 'tinted' : 'ghost'}
 									size="sm"
