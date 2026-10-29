@@ -1,5 +1,15 @@
 <script lang="ts">
-	import { SectionCard, Field, Input, Button, Badge, SegmentedControl } from '$lib/components/ui';
+	import {
+		SectionCard,
+		Input,
+		Button,
+		Badge,
+		SegmentedControl,
+		FormActions,
+		Swap
+	} from '$lib/components/ui';
+	import SettingsList from '$lib/components/ui/SettingsList.svelte';
+	import SettingRow from '$lib/components/ui/SettingRow.svelte';
 	import { frameworkLabel } from './deployment-helpers';
 	import FrameworkIcon from './FrameworkIcon.svelte';
 	import type { Deployment } from '$lib/types/deployment';
@@ -40,6 +50,8 @@
 
 	const detected = $derived(deployment?.detectedConfig ?? null);
 	const isStatic = $derived(Boolean(outputDirectory.trim()));
+
+	const uid = $props.id();
 
 	const buildOptions = [
 		{ value: 'railpack', label: 'Automatic', hint: 'Detect and build with Railpack' },
@@ -90,121 +102,141 @@
 	}
 </script>
 
-<div class="space-y-5">
-	<SectionCard
-		title="Build method"
-		description="How this app is built from its source. Changes apply on the next build."
-	>
-		{#snippet actions()}
-			<Button variant="ghost" size="sm" onclick={reset} disabled={!dirty || saving}>Discard</Button>
-			<Button variant="primary" size="sm" onclick={save} loading={saving} disabled={!dirty}>
-				Save
-			</Button>
-		{/snippet}
-
-		<div class="space-y-4">
-			<SegmentedControl
-				label="Build method"
-				options={buildOptions}
-				value={buildType}
-				onchange={(v) => (buildType = v === 'railpack' ? 'railpack' : 'dockerfile')}
-				grow
-			/>
-			{#if buildType === 'dockerfile'}
-				<Field
-					label="Dockerfile path"
-					hint="Path to the Dockerfile, relative to the repository root. Leave empty to use ./Dockerfile."
-				>
-					<Input bind:value={dockerfilePath} placeholder="Dockerfile" class="font-mono" />
-				</Field>
-				<Field
-					label="Build stage"
-					hint="Stage to stop at in a multi-stage Dockerfile. Leave empty to build the final stage, which is what a single-stage Dockerfile does anyway. Applies on the next build."
-				>
-					<Input bind:value={dockerfileTarget} placeholder="Final stage" class="font-mono" />
-				</Field>
-				<Field
-					label="Start command"
-					hint="Runs instead of the image's CMD, like a command passed to docker run. Applies on save, without a rebuild. Leave empty to use whatever the image starts."
-				>
-					<Input
-						bind:value={startCommand}
-						placeholder="Whatever the image starts"
-						class="font-mono"
-					/>
-				</Field>
-			{/if}
-		</div>
-	</SectionCard>
-
-	{#if buildType === 'railpack'}
-		{#if detected}
-			<SectionCard
-				title="Detected by the last build"
-				description="What Railpack found when it built this app."
-			>
-				<div class="flex flex-wrap items-center gap-2">
-					{#if frameworkLabel(detected.framework)}
-						<Badge tone="info">
-							<span class="inline-flex items-center gap-1.5">
-								<FrameworkIcon framework={detected.framework} size={13} />
-								{frameworkLabel(detected.framework)}
-							</span>
-						</Badge>
+<SectionCard title="Build">
+	<div class="bt-body">
+		<SettingsList>
+			<SettingRow label="Method">
+				<SegmentedControl
+					label="Build method"
+					options={buildOptions}
+					value={buildType}
+					onchange={(v) => (buildType = v === 'railpack' ? 'railpack' : 'dockerfile')}
+				/>
+			</SettingRow>
+			<Swap key={buildType}>
+				<SettingsList>
+					{#if buildType === 'dockerfile'}
+						<SettingRow label="Dockerfile" for="{uid}-path" wide>
+							<Input id="{uid}-path" bind:value={dockerfilePath} placeholder="Dockerfile" mono />
+						</SettingRow>
+						<SettingRow label="Build stage" for="{uid}-target" wide>
+							<Input
+								id="{uid}-target"
+								bind:value={dockerfileTarget}
+								placeholder="Final stage"
+								mono
+							/>
+						</SettingRow>
+						<SettingRow
+							label="Start command"
+							hint="Applies without a rebuild"
+							for="{uid}-start"
+							wide
+						>
+							<Input
+								id="{uid}-start"
+								bind:value={startCommand}
+								placeholder="Whatever the image starts"
+								mono
+							/>
+						</SettingRow>
+					{:else}
+						{#if detected}
+							<SettingRow label="Detected">
+								{#if frameworkLabel(detected.framework)}
+									<Badge tone="info">
+										<span class="bt-badge">
+											<FrameworkIcon framework={detected.framework} size={13} />
+											{frameworkLabel(detected.framework)}
+										</span>
+									</Badge>
+								{/if}
+								{#if detected.isStatic}
+									<Badge tone="neutral">Static site</Badge>
+								{/if}
+								{#if detected.packageManager}
+									<Badge tone="neutral">{detected.packageManager}</Badge>
+								{/if}
+								{#if detected.railpackVersion}
+									<span class="bt-version">Railpack {detected.railpackVersion}</span>
+								{/if}
+							</SettingRow>
+						{/if}
+						<SettingRow label="Root directory" for="{uid}-root" wide>
+							<Input
+								id="{uid}-root"
+								bind:value={rootDirectory}
+								placeholder="Repository root"
+								mono
+							/>
+						</SettingRow>
+						<SettingRow label="Install command" for="{uid}-install" wide>
+							<Input
+								id="{uid}-install"
+								bind:value={installCommand}
+								placeholder="Detected automatically"
+								mono
+							/>
+						</SettingRow>
+						<SettingRow label="Build command" for="{uid}-build" wide>
+							<Input
+								id="{uid}-build"
+								bind:value={buildCommand}
+								placeholder="Detected automatically"
+								mono
+							/>
+						</SettingRow>
+						<SettingRow
+							label="Output directory"
+							hint="Serves these files as a static site"
+							for="{uid}-output"
+							wide
+						>
+							<Input
+								id="{uid}-output"
+								bind:value={outputDirectory}
+								placeholder="Detected automatically"
+								mono
+							/>
+						</SettingRow>
+						<SettingRow label="Start command" for="{uid}-start" wide>
+							<Input
+								id="{uid}-start"
+								bind:value={startCommand}
+								placeholder={isStatic ? 'Not used for a static site' : 'Detected automatically'}
+								disabled={isStatic}
+								mono
+							/>
+						</SettingRow>
 					{/if}
-					{#if detected.isStatic}
-						<Badge tone="neutral">Static site</Badge>
-					{/if}
-					{#if detected.packageManager}
-						<Badge tone="neutral">{detected.packageManager}</Badge>
-					{/if}
-					{#if detected.railpackVersion}
-						<span class="text-xs text-muted">Railpack {detected.railpackVersion}</span>
-					{/if}
-				</div>
-			</SectionCard>
-		{/if}
-
-		<SectionCard
-			title="Build and output settings"
-			description="Leave a field empty to use what we detect. Anything you set here overrides a railpack.json in the repository."
+				</SettingsList>
+			</Swap>
+		</SettingsList>
+		<FormActions
+			hint={buildType === 'railpack'
+				? 'Applies on the next build, over any railpack.json.'
+				: 'Applies on the next build.'}
 		>
-			<div class="space-y-4">
-				<Field
-					label="Root directory"
-					hint="Directory of the app inside the repository. Leave empty for a single-app repository."
-				>
-					<Input bind:value={rootDirectory} placeholder="apps/web" class="font-mono" />
-				</Field>
-				<Field label="Install command">
-					<Input
-						bind:value={installCommand}
-						placeholder="Detected automatically"
-						class="font-mono"
-					/>
-				</Field>
-				<Field label="Build command">
-					<Input bind:value={buildCommand} placeholder="Detected automatically" class="font-mono" />
-				</Field>
-				<Field
-					label="Output directory"
-					hint="Set this to serve the built files as a static site instead of running a server."
-				>
-					<Input
-						bind:value={outputDirectory}
-						placeholder="Detected automatically"
-						class="font-mono"
-					/>
-				</Field>
-				<Field label="Start command">
-					<Input
-						bind:value={startCommand}
-						placeholder={isStatic ? 'Not used for a static site' : 'Detected automatically'}
-						disabled={isStatic}
-						class="font-mono"
-					/>
-				</Field>
-			</div>
-		</SectionCard>
-	{/if}
-</div>
+			<Button variant="ghost" onclick={reset} disabled={!dirty || saving}>Discard</Button>
+			<Button variant="primary" onclick={save} loading={saving} disabled={!dirty}>Save</Button>
+		</FormActions>
+	</div>
+</SectionCard>
+
+<style>
+	.bt-body {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+	}
+	.bt-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+	}
+	.bt-version {
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		color: var(--text-muted);
+	}
+</style>

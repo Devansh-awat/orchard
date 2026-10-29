@@ -1,8 +1,15 @@
 <script lang="ts">
-	import { Plus, Loader2, TriangleAlert } from 'lucide-svelte';
-	import { HardDriveDownload, Trash2 } from '@jis3r/icons';
-	import { slide, fade } from '$lib/utils/transitions';
-	import { SectionCard } from '$lib/components/ui';
+	import { HardDrive, Plus } from 'lucide-svelte';
+	import {
+		Button,
+		EmptyState,
+		FormActions,
+		Input,
+		RowList,
+		SectionCard,
+		Swap,
+		Switch
+	} from '$lib/components/ui';
 
 	import type { VolumeObservation } from '$lib/types/deployment';
 
@@ -57,15 +64,42 @@
 		volumes = $bindable<VolumeEntry[]>(),
 		isEditing = $bindable(false),
 		savingVolumes,
-		hasPvcVolume,
 		onSave
 	}: {
 		volumes: VolumeEntry[];
 		isEditing?: boolean;
 		savingVolumes: boolean;
-		hasPvcVolume: boolean;
 		onSave: () => void;
 	} = $props();
+
+	const COLUMNS = [
+		{ label: 'Name', width: 'minmax(0, 1fr)' },
+		{ label: 'Mount path', width: 'minmax(0, 1.618fr)' },
+		{ label: 'Size', width: '6rem' },
+		{ label: 'Read-only', width: '4.5rem' }
+	] as const;
+
+	const keys = new WeakMap<object, number>();
+	let nextKey = 0;
+	function keyOf(volume: VolumeEntry) {
+		let k = keys.get(volume);
+		if (k === undefined) {
+			k = nextKey++;
+			keys.set(volume, k);
+		}
+		return k;
+	}
+
+	let saved: VolumeEntry[] = [];
+	$effect(() => {
+		if (!isEditing) saved = $state.snapshot(volumes) as VolumeEntry[];
+	});
+
+	const notes = $derived(
+		volumes
+			.map((volume) => ({ volume, seen: observed(volume) }))
+			.filter((n) => n.seen && n.seen.tone !== 'ok')
+	);
 
 	function addVolume() {
 		isEditing = true;
@@ -80,98 +114,106 @@
 		volumes = volumes.filter((_, i) => i !== index);
 	}
 
+	function discard() {
+		volumes = structuredClone(saved);
+		isEditing = false;
+	}
+
 	function handleSave() {
 		isEditing = false;
 		onSave();
 	}
 </script>
 
-<SectionCard title="Persistent storage">
-	{#snippet actions()}
-		<button onclick={addVolume} class="btn btn-secondary btn-sm">
-			<Plus class="h-4 w-4" />
-			<span>Add storage</span>
-		</button>
-	{/snippet}
-	{#if hasPvcVolume}
-		<div class="strategy-note mb-4">
-			<TriangleAlert class="h-3.5 w-3.5 shrink-0" />
-			<span
-				>Rolling deployments are disabled because this app uses a PVC volume. Updates run with the <strong
-					>Recreate</strong
-				> strategy, so pods are torn down before new ones start.</span
-			>
-		</div>
-	{/if}
-	<div class="space-y-3" onfocusin={() => (isEditing = true)}>
-		{#each volumes as volume, index (index)}
-			<div class="vol-card" transition:slide={{ duration: 200 }}>
-				<div class="vol-card-header">
-					<div class="vol-card-number">{index + 1}</div>
-					<div class="vol-card-fields">
-						<div class="vol-field">
-							<input
-								type="text"
-								bind:value={volume.pvcName}
-								placeholder="Storage name"
-								class="vol-input"
-							/>
-						</div>
-						<span class="vol-arrow">→</span>
-						<div class="vol-field">
-							<input
-								type="text"
-								bind:value={volume.mountPath}
-								placeholder="/data"
-								class="vol-input vol-input-mono"
-							/>
-						</div>
-						<div class="vol-field vol-field--size">
-							<input
-								type="text"
-								bind:value={volume.storageSize}
-								placeholder="1Gi"
-								class="vol-input"
-							/>
-						</div>
-					</div>
-					<div class="vol-card-actions">
-						<label class="dm-toggle-row vol-toggle">
-							<span class="vol-toggle-label">Read-only</span>
-							<input type="checkbox" class="dm-toggle-input" bind:checked={volume.readOnly} />
-							<span class="dm-toggle-track"><span class="dm-toggle-thumb"></span></span>
-						</label>
-						<button onclick={() => removeVolume(index)} class="btn btn-ghost btn-sm vol-remove"
-							><Trash2 size={14} class="h-3.5 w-3.5" /></button
-						>
-					</div>
-				</div>
-				{#if observed(volume)}
-					{@const seen = observed(volume)!}
-					<p class="vol-observed vol-observed--{seen.tone}">{seen.text}</p>
-				{/if}
-			</div>
-		{:else}
-			<div class="text-center py-8" transition:fade={{ duration: 150 }}>
-				<span style="color: var(--surface-muted);"
-					><HardDriveDownload size={32} class="h-8 w-8 mx-auto mb-2" /></span
+<SectionCard title="Volumes">
+	<div class="vt-body" oninput={() => (isEditing = true)}>
+		<Swap key={volumes.length === 0}>
+			{#if volumes.length === 0}
+				<EmptyState title="No volumes">
+					{#snippet icon()}<HardDrive size={18} />{/snippet}
+					<Button variant="secondary" icon={Plus} onclick={addVolume}>Add volume</Button>
+				</EmptyState>
+			{:else}
+				<RowList
+					label="Volumes"
+					items={volumes}
+					key={keyOf}
+					columns={[...COLUMNS]}
+					addLabel="Add volume"
+					onadd={addVolume}
+					onremove={removeVolume}
+					removeLabel={(v) => `Remove ${v.pvcName || 'volume'}`}
 				>
-				<p class="text-sm font-medium" style="color: var(--center-channel-color);">
-					No storage attached
-				</p>
-				<p class="text-xs mt-1" style="color: var(--surface-muted);">
-					Add persistent storage to keep files across restarts.
-				</p>
-			</div>
-		{/each}
-	</div>
-	<div class="mt-4 flex items-center justify-between">
-		<p class="text-xs" style="color: var(--surface-muted);">
-			Saving will restart your app with the new storage config.
-		</p>
-		<button onclick={handleSave} disabled={savingVolumes || !isEditing} class="btn btn-primary">
-			{#if savingVolumes}<Loader2 class="h-4 w-4 animate-spin" />{/if}
-			<span>Save</span>
-		</button>
+					{#snippet row(volume)}
+						<Input bind:value={volume.pvcName} placeholder="data" aria-label="Volume name" />
+						<Input bind:value={volume.mountPath} placeholder="/data" mono aria-label="Mount path" />
+						<Input bind:value={volume.storageSize} placeholder="1Gi" aria-label="Size" />
+						<span class="vt-switch">
+							<Switch
+								bind:checked={volume.readOnly}
+								label="Read-only"
+								onchange={() => (isEditing = true)}
+							/>
+						</span>
+					{/snippet}
+				</RowList>
+				{#if notes.length > 0}
+					<ul class="vt-notes">
+						{#each notes as note (keyOf(note.volume))}
+							<li class="vt-note vt-note--{note.seen?.tone}">
+								<code>{note.volume.pvcName || note.volume.name}</code>
+								{note.seen?.text}
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			{/if}
+		</Swap>
+		{#if volumes.length > 0 || isEditing}
+			<FormActions hint="Saving restarts your app. With volumes, updates stop the app first.">
+				<Button variant="ghost" disabled={!isEditing || savingVolumes} onclick={discard}
+					>Discard</Button
+				>
+				<Button variant="primary" loading={savingVolumes} disabled={!isEditing} onclick={handleSave}
+					>Save</Button
+				>
+			</FormActions>
+		{/if}
 	</div>
 </SectionCard>
+
+<style>
+	.vt-body {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+	}
+	.vt-switch {
+		display: flex;
+		align-items: center;
+	}
+	.vt-notes {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		margin: var(--space-3) 0 0;
+		padding: 0;
+		list-style: none;
+	}
+	.vt-note {
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		color: var(--text-muted);
+	}
+	.vt-note code {
+		margin-right: var(--space-1);
+		font-family: var(--font-mono);
+		color: var(--text-default);
+	}
+	.vt-note--bad {
+		color: var(--status-error);
+	}
+	.vt-note--busy {
+		color: var(--status-warning);
+	}
+</style>

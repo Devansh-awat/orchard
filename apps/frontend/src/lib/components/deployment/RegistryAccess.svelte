@@ -1,10 +1,14 @@
 <script lang="ts">
-	import { KeyRound } from 'lucide-svelte';
 	import { apiFetch, toasts } from '$lib/stores';
-	import { Button, Field, Input } from '$lib/components/ui';
+	import { Button, FormActions, Input, SecretInput } from '$lib/components/ui';
+	import SettingsList from '$lib/components/ui/SettingsList.svelte';
+	import SettingRow from '$lib/components/ui/SettingRow.svelte';
+	import { presence } from '$lib/utils/transitions';
 	import { imageRegistryHost, registryHint, tokenLabel } from '$lib/utils/registry';
 
 	let { projectId, image }: { projectId: string; image: string } = $props();
+
+	const uid = $props.id();
 
 	type Credential = { id: string; registry: string; username: string };
 
@@ -93,114 +97,54 @@
 </script>
 
 {#if loaded && host}
-	<div class="ra">
-		<div class="ra-head">
-			<span class="ra-title"><KeyRound class="h-3.5 w-3.5" /> Registry access</span>
-			{#if !editing}
-				<div class="ra-actions">
-					{#if match}
-						<Button variant="ghost" size="sm" loading={removing} onclick={remove}>Remove</Button>
-						<Button variant="secondary" size="sm" onclick={open}>Replace</Button>
-					{:else}
-						<Button variant="secondary" size="sm" onclick={open}>Add credential</Button>
-					{/if}
-				</div>
+	<SettingRow label="Registry login">
+		{#snippet hint()}
+			{#if match}
+				Pulls from <code>{host}</code> as <code>{match.username}</code>, for every app in this
+				project
+			{:else}
+				Pulls from <code>{host}</code> anonymously
 			{/if}
-		</div>
+		{/snippet}
 		{#if match}
-			<p class="ra-help">
-				Pulls from <code>{host}</code> as <code>{match.username}</code>. Shared by every app and job
-				in this project that uses <code>{host}</code>.
-			</p>
-		{:else}
-			<p class="ra-help">
-				Pulls from <code>{host}</code> anonymously. If the image is private, add a credential and the
-				pods will roll to use it.
-			</p>
-		{/if}
-		{#if editing}
-			<form
-				class="ra-form"
-				onsubmit={(e) => {
-					e.preventDefault();
-					save();
-				}}
+			<Button variant="ghost" size="sm" loading={removing} disabled={editing} onclick={remove}
+				>Remove</Button
 			>
-				<div class="ra-grid">
-					<Field label="Username" for="ra-username">
-						<Input id="ra-username" bind:value={username} autocomplete="off" spellcheck="false" />
-					</Field>
-					<Field label={tokenLabel(host)} for="ra-password">
-						<Input
-							id="ra-password"
-							type="password"
-							bind:value={password}
-							autocomplete="new-password"
-						/>
-					</Field>
-				</div>
-				<p class="ra-help">{registryHint(host)}</p>
-				<div class="ra-actions">
-					<Button variant="ghost" size="sm" onclick={() => (editing = false)}>Cancel</Button>
-					<Button type="submit" variant="primary" size="sm" loading={saving} disabled={!canSave}>
-						{match ? 'Replace credential' : 'Save credential'}
-					</Button>
-				</div>
-			</form>
+			<Button variant="secondary" size="sm" disabled={editing} onclick={open}>Replace</Button>
+		{:else}
+			<Button variant="secondary" size="sm" disabled={editing} onclick={open}>Add login</Button>
 		{/if}
-	</div>
+	</SettingRow>
+	{#if editing}
+		<form
+			class="ra-form"
+			in:presence
+			out:presence
+			onsubmit={(e) => {
+				e.preventDefault();
+				save();
+			}}
+		>
+			<SettingsList>
+				<SettingRow label="Username" for="{uid}-user" wide>
+					<Input id="{uid}-user" bind:value={username} autocomplete="off" spellcheck="false" />
+				</SettingRow>
+				<SettingRow label={tokenLabel(host)} for="{uid}-token" wide>
+					<SecretInput id="{uid}-token" bind:value={password} autocomplete="new-password" />
+				</SettingRow>
+			</SettingsList>
+			<FormActions hint={registryHint(host)}>
+				<Button variant="ghost" onclick={() => (editing = false)}>Cancel</Button>
+				<Button type="submit" variant="primary" loading={saving} disabled={!canSave}>Save</Button>
+			</FormActions>
+		</form>
+	{/if}
 {/if}
 
 <style>
-	.ra {
-		margin-top: 1rem;
-		padding-top: 1rem;
-		border-top: 1px solid var(--border-subtle);
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-	.ra-head {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.75rem;
-		flex-wrap: wrap;
-	}
-	.ra-title {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: 600;
-		color: var(--text-fg);
-	}
-	.ra-actions {
-		display: flex;
-		align-items: center;
-		justify-content: flex-end;
-		gap: 0.5rem;
-	}
-	.ra-help {
-		margin: 0;
-		font-size: var(--text-micro);
-		line-height: var(--lh-caption);
-		color: var(--text-muted);
-	}
 	.ra-form {
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
-	}
-	.ra-grid {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 0.75rem;
-	}
-	@media (max-width: 640px) {
-		.ra-grid {
-			grid-template-columns: minmax(0, 1fr);
-		}
+		gap: var(--space-3);
 	}
 </style>

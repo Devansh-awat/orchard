@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { apiFetch, toasts, isSuperAdmin } from '$lib/stores';
-	import { SectionCard, Dropdown, Button } from '$lib/components/ui';
+	import { SectionCard, Dropdown } from '$lib/components/ui';
+	import SettingsList from '$lib/components/ui/SettingsList.svelte';
+	import SettingRow from '$lib/components/ui/SettingRow.svelte';
 
 	let {
 		deploymentId,
@@ -20,68 +22,82 @@
 		description: string | null;
 	}
 
+	const uid = $props.id();
+
 	let pools = $state<PoolOption[]>([]);
 	let selected = $state<string>(nodePoolId ?? '');
-	let savedPoolId = $state<string>(nodePoolId ?? '');
 	let saving = $state(false);
 	let loaded = $state(false);
 
 	async function load() {
 		try {
-			// Superadmins pick from every pool; tenants only see user-selectable ones.
 			const url = $isSuperAdmin ? '/apiv1/admin/node-pools' : '/apiv1/node-pools';
 			const res = await apiFetch(url);
 			if (!res.ok) return;
-			pools = await res.json();
+			const data = await res.json();
+			pools = Array.isArray(data) ? data : [];
 		} catch {
-			// Feature off or unreachable — leave the picker empty; it just won't render.
+			pools = [];
 		} finally {
 			loaded = true;
 		}
 	}
 
-	async function save() {
+	async function save(next: string) {
+		const previous = selected;
+		selected = next;
 		saving = true;
 		try {
 			const res = await apiFetch(`/apiv1/deployments/${deploymentId}/placement`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ nodePoolId: selected || null })
+				body: JSON.stringify({ nodePoolId: next || null })
 			});
 			if (!res.ok) {
 				const err = await res.json().catch(() => ({}));
 				throw new Error(err.message || 'Failed to update pool');
 			}
 			const updated = await res.json().catch(() => null);
-			savedPoolId = selected;
 			if (updated) onSaved?.(updated);
-			toasts.add({ title: 'Node pool saved. Redeploy to apply.', color: 'success' });
+			toasts.add({
+				title: 'Node pool saved',
+				description: 'Applies on the next deploy.',
+				color: 'success'
+			});
 		} catch (e) {
+			selected = previous;
 			toasts.add({ title: e instanceof Error ? e.message : 'Request failed', color: 'error' });
 		} finally {
 			saving = false;
 		}
 	}
 
-	const dirty = $derived((selected || '') !== (savedPoolId || ''));
-
 	onMount(load);
 </script>
 
 {#if loaded && pools.length > 0}
-	<SectionCard title="Node pool">
-		{#snippet actions()}
-			<Button size="sm" loading={saving} disabled={!dirty} onclick={save}>Save</Button>
-		{/snippet}
-		<p class="text-xs text-muted mb-2">
-			Route this app onto a specific set of nodes. Takes effect on the next deploy.
-		</p>
-		<Dropdown
-			bind:value={selected}
-			options={[
-				{ value: '', label: 'Default (no pool)' },
-				...pools.map((pool) => ({ value: pool.id, label: pool.name }))
-			]}
-		/>
+	<SectionCard title="Placement">
+		<SettingsList>
+			<SettingRow label="Node pool" hint="Applies on the next deploy" for="{uid}-pool">
+				<div class="np-picker">
+					<Dropdown
+						id="{uid}-pool"
+						disabled={saving}
+						bind:value={() => selected, save}
+						options={[
+							{ value: '', label: 'Default' },
+							...pools.map((pool) => ({ value: pool.id, label: pool.name }))
+						]}
+					/>
+				</div>
+			</SettingRow>
+		</SettingsList>
 	</SectionCard>
 {/if}
+
+<style>
+	.np-picker {
+		width: 15rem;
+		min-width: 0;
+	}
+</style>

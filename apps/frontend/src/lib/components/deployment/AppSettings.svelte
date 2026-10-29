@@ -1,10 +1,16 @@
 <script lang="ts">
-	import { SettingsRail, SectionCard, Button } from '$lib/components/ui';
+	import { ActionRow, Button, SectionCard, SettingsRail } from '$lib/components/ui';
+	import SettingsList from '$lib/components/ui/SettingsList.svelte';
 	import { ResourceNotifications, AlertRules } from '$lib/components/notifications';
 	import { featureFlag } from '$lib/posthog';
-	import AdvancedTab from './AdvancedTab.svelte';
+	import AutoDeployCard from './AutoDeployCard.svelte';
+	import BuilderOptions from './BuilderOptions.svelte';
 	import BuildTab from './BuildTab.svelte';
+	import GitHubSourceCard from './GitHubSourceCard.svelte';
+	import HealthChecks from './HealthChecks.svelte';
+	import ImageSource from './ImageSource.svelte';
 	import ResourcesTab from './ResourcesTab.svelte';
+	import UpdatesCard from './UpdatesCard.svelte';
 	import VolumesTab from './VolumesTab.svelte';
 	import type { AutoDeployStatus, GitHubDeploymentRecord } from '$lib/types/deployment';
 
@@ -27,6 +33,7 @@
 		buildFromRoot = $bindable(false),
 		buildWithDepot = $bindable(false),
 		persistentBuildCache = $bindable(false),
+		builderOverride = $bindable<'' | 'firecracker' | 'kubernetes'>(''),
 		buildOptionsDirty = $bindable(false),
 		savingAdvanced,
 		onSaveAdvanced,
@@ -75,6 +82,7 @@
 		imageDirty,
 		savingImage,
 		pullPolicy,
+		effectivePullPolicy = 'IfNotPresent',
 		savingPullPolicy,
 		onSaveResources,
 		onSaveImage,
@@ -104,6 +112,7 @@
 		buildFromRoot: boolean;
 		buildWithDepot: boolean;
 		persistentBuildCache: boolean;
+		builderOverride?: '' | 'firecracker' | 'kubernetes';
 		buildOptionsDirty?: boolean;
 		savingAdvanced: boolean;
 		onSaveAdvanced: () => void;
@@ -151,11 +160,12 @@
 		imageInput: string;
 		imageDirty: boolean;
 		savingImage: boolean;
-		pullPolicy?: 'Always' | 'IfNotPresent';
+		pullPolicy?: 'Always' | 'IfNotPresent' | null;
+		effectivePullPolicy?: 'Always' | 'IfNotPresent';
 		savingPullPolicy?: boolean;
 		onSaveResources: () => void;
 		onSaveImage: () => void;
-		onSavePullPolicy?: (next: 'Always' | 'IfNotPresent') => void;
+		onSavePullPolicy?: (next: 'Always' | 'IfNotPresent' | null) => void;
 		volumes: any[];
 		isEditingVolumes: boolean;
 		savingVolumes: boolean;
@@ -196,59 +206,32 @@
 	<SettingsRail groups={RAIL} activeId={activeSection} label="App settings sections" />
 	<div class="as-stack">
 		{#if activeSection === 'source'}
-			<AdvancedTab
-				{deployment}
-				{onSourceUpdated}
-				{onDeploymentUpdated}
-				{onRebuild}
-				{rebuilding}
-				sections={['source', 'build']}
-				bind:strategyValue
-				{savingStrategy}
-				bind:pdbMinAvailable
-				{savingPdb}
-				{onSavePdb}
-				{hasPvcVolume}
-				{onSaveStrategy}
-				bind:buildFromRoot
-				bind:buildWithDepot
-				bind:persistentBuildCache
-				bind:buildOptionsDirty
-				{savingAdvanced}
-				{onSaveAdvanced}
-				{autoDeployStatus}
-				{autoDeployLoading}
-				bind:autoDeployBranch
-				bind:autoDeployPaths
-				{savingAutoDeployPaths}
-				{onSaveAutoDeployPaths}
-				{enablingAutoDeploy}
-				{disablingAutoDeploy}
-				{githubDeployments}
-				{githubAppInstallUrl}
-				{loadingAppInstallUrl}
-				{onEnableAutoDeploy}
-				{onDisableAutoDeploy}
-				{onOpenGitHubAppInstall}
-				bind:healthCheckEnabled
-				bind:healthCheckType
-				bind:healthCheckPath
-				bind:healthCheckPort
-				bind:healthCheckCommand
-				bind:livenessEnabled
-				bind:readinessEnabled
-				bind:startupEnabled
-				bind:healthCheckInterval
-				bind:healthCheckTimeout
-				bind:healthCheckRetries
-				bind:startupFailureThreshold
-				bind:healthCheckOverride
-				{savingHealthCheck}
-				bind:isEditingHealthCheck
-				{onSaveHealthCheck}
-			/>
-			{#if !isImageSourceDeployment}
+			{#if isImageSourceDeployment}
+				<ImageSource
+					{deployment}
+					bind:imageInput
+					{imageDirty}
+					{savingImage}
+					{onSaveImage}
+					{pullPolicy}
+					{effectivePullPolicy}
+					{onSavePullPolicy}
+				/>
+			{:else}
+				{#if deployment.githubRepo}
+					<GitHubSourceCard {deployment} onUpdated={onSourceUpdated} {onRebuild} {rebuilding} />
+				{/if}
 				<BuildTab {deployment} saving={savingBuildConfig} onSave={onSaveBuildConfig} />
+				{#if deployment.githubRepo}
+					<BuilderOptions
+						bind:buildFromRoot
+						bind:buildWithDepot
+						bind:persistentBuildCache
+						bind:builderOverride
+						bind:buildOptionsDirty
+						onSave={onSaveAdvanced}
+					/>
+				{/if}
 			{/if}
 		{:else if activeSection === 'resources'}
 			<ResourcesTab
@@ -261,59 +244,19 @@
 				{effectiveMemLimit}
 				bind:resourcesDirty
 				{savingResources}
-				{isImageSourceDeployment}
-				bind:imageInput
-				{imageDirty}
-				{savingImage}
 				{onSaveResources}
-				{onSaveImage}
-				{pullPolicy}
-				{savingPullPolicy}
-				{onSavePullPolicy}
+				{onDeploymentUpdated}
 			/>
 		{:else if activeSection === 'storage'}
 			<VolumesTab
 				bind:volumes
 				bind:isEditing={isEditingVolumes}
 				{savingVolumes}
-				{hasPvcVolume}
 				onSave={onSaveVolumes}
 			/>
 		{:else if activeSection === 'health'}
-			<AdvancedTab
+			<HealthChecks
 				{deployment}
-				{onSourceUpdated}
-				{onDeploymentUpdated}
-				{onRebuild}
-				{rebuilding}
-				sections={['health']}
-				bind:strategyValue
-				{savingStrategy}
-				bind:pdbMinAvailable
-				{savingPdb}
-				{onSavePdb}
-				{hasPvcVolume}
-				{onSaveStrategy}
-				bind:buildFromRoot
-				bind:buildWithDepot
-				bind:persistentBuildCache
-				bind:buildOptionsDirty
-				{savingAdvanced}
-				{onSaveAdvanced}
-				{autoDeployStatus}
-				{autoDeployLoading}
-				bind:autoDeployBranch
-				bind:autoDeployPaths
-				{savingAutoDeployPaths}
-				{onSaveAutoDeployPaths}
-				{enablingAutoDeploy}
-				{disablingAutoDeploy}
-				{githubDeployments}
-				{githubAppInstallUrl}
-				{loadingAppInstallUrl}
-				{onEnableAutoDeploy}
-				{onDisableAutoDeploy}
-				{onOpenGitHubAppInstall}
 				bind:healthCheckEnabled
 				bind:healthCheckType
 				bind:healthCheckPath
@@ -332,57 +275,33 @@
 				{onSaveHealthCheck}
 			/>
 		{:else if activeSection === 'behavior'}
-			<AdvancedTab
-				{deployment}
-				{onSourceUpdated}
-				{onDeploymentUpdated}
-				{onRebuild}
-				{rebuilding}
-				sections={['strategy', 'autodeploy']}
-				bind:strategyValue
-				{savingStrategy}
-				bind:pdbMinAvailable
-				{savingPdb}
-				{onSavePdb}
+			<UpdatesCard
+				replicas={Number(deployment.replicas ?? 1)}
+				{strategyValue}
 				{hasPvcVolume}
 				{onSaveStrategy}
-				bind:buildFromRoot
-				bind:buildWithDepot
-				bind:persistentBuildCache
-				bind:buildOptionsDirty
-				{savingAdvanced}
-				{onSaveAdvanced}
-				{autoDeployStatus}
-				{autoDeployLoading}
-				bind:autoDeployBranch
-				bind:autoDeployPaths
-				{savingAutoDeployPaths}
-				{onSaveAutoDeployPaths}
-				{enablingAutoDeploy}
-				{disablingAutoDeploy}
-				{githubDeployments}
-				{githubAppInstallUrl}
-				{loadingAppInstallUrl}
-				{onEnableAutoDeploy}
-				{onDisableAutoDeploy}
-				{onOpenGitHubAppInstall}
-				bind:healthCheckEnabled
-				bind:healthCheckType
-				bind:healthCheckPath
-				bind:healthCheckPort
-				bind:healthCheckCommand
-				bind:livenessEnabled
-				bind:readinessEnabled
-				bind:startupEnabled
-				bind:healthCheckInterval
-				bind:healthCheckTimeout
-				bind:healthCheckRetries
-				bind:startupFailureThreshold
-				bind:healthCheckOverride
-				{savingHealthCheck}
-				bind:isEditingHealthCheck
-				{onSaveHealthCheck}
+				bind:pdbMinAvailable
+				{onSavePdb}
 			/>
+			{#if deployment.githubRepo}
+				<AutoDeployCard
+					{deployment}
+					{autoDeployStatus}
+					{autoDeployLoading}
+					bind:autoDeployBranch
+					bind:autoDeployPaths
+					{savingAutoDeployPaths}
+					{onSaveAutoDeployPaths}
+					{enablingAutoDeploy}
+					{disablingAutoDeploy}
+					{githubDeployments}
+					{githubAppInstallUrl}
+					{loadingAppInstallUrl}
+					{onEnableAutoDeploy}
+					{onDisableAutoDeploy}
+					{onOpenGitHubAppInstall}
+				/>
+			{/if}
 		{:else if activeSection === 'notifications'}
 			{#if deployment?.id && organizationId}
 				<SectionCard>
@@ -393,15 +312,14 @@
 				</SectionCard>
 			{/if}
 		{:else if activeSection === 'danger'}
-			<SectionCard
-				title="Delete this app"
-				description="Removes the app, its pods, domains, and build history. Attached volumes and their data are deleted too. This cannot be undone."
-			>
-				{#snippet actions()}
-					<Button variant="danger" size="sm" onclick={onShowDeleteModal} loading={deleting}>
-						Delete app
-					</Button>
-				{/snippet}
+			<SectionCard title="Danger zone" tone="danger">
+				<SettingsList>
+					<ActionRow label="Delete this app">
+						<Button variant="danger" size="sm" onclick={onShowDeleteModal} loading={deleting}>
+							Delete app
+						</Button>
+					</ActionRow>
+				</SettingsList>
 			</SectionCard>
 		{/if}
 	</div>
@@ -415,6 +333,7 @@
 		align-items: start;
 	}
 	.as-stack {
+		--section-r: var(--radius-widget);
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-4);

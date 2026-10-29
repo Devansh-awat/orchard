@@ -1,7 +1,17 @@
 <script lang="ts">
 	import { Github } from 'lucide-svelte';
 	import { apiFetch, toasts } from '$lib/stores';
-	import { SectionCard, Button, Badge, Alert, SearchPicker } from '$lib/components/ui';
+	import {
+		SectionCard,
+		Button,
+		Badge,
+		Alert,
+		SearchPicker,
+		Swap,
+		FormActions
+	} from '$lib/components/ui';
+	import SettingsList from '$lib/components/ui/SettingsList.svelte';
+	import SettingRow from '$lib/components/ui/SettingRow.svelte';
 
 	interface Repository {
 		id: number;
@@ -273,184 +283,176 @@
 </script>
 
 <SectionCard title="Source">
-	{#snippet actions()}
-		{#if editing}
-			<Button size="sm" variant="ghost" disabled={saving} onclick={cancelEditing}>Cancel</Button>
-			<Button size="sm" variant="primary" loading={saving} disabled={!canSave} onclick={save}>
-				Save
-			</Button>
+	<Swap key={editing}>
+		{#if !editing}
+			<SettingsList>
+				<div class="src-row">
+					<Github size={16} class="src-glyph" />
+					<a
+						class="src-repo"
+						href={deployment.githubRepo}
+						target="_blank"
+						rel="noopener noreferrer"
+					>
+						{currentRepoName}
+					</a>
+					{#if deployment.githubBranch}
+						<Badge tone="neutral"><span class="src-mono">{deployment.githubBranch}</span></Badge>
+					{/if}
+					{#if needsDockerfile && deployment.dockerfilePath}
+						<span class="src-detail">{deployment.dockerfilePath}</span>
+					{/if}
+					<span class="src-end">
+						<Button size="sm" variant="secondary" onclick={startEditing}>Change</Button>
+					</span>
+				</div>
+			</SettingsList>
+			{#if justSaved}
+				<div class="src-alert">
+					<Alert tone="info" title="Still running the previous build">
+						Rebuild to deploy from the new source.
+						{#snippet actions()}
+							<Button
+								size="sm"
+								variant="primary"
+								loading={rebuilding}
+								onclick={() => {
+									justSaved = false;
+									onRebuild();
+								}}
+							>
+								Rebuild now
+							</Button>
+						{/snippet}
+					</Alert>
+				</div>
+			{/if}
 		{:else}
-			<Button size="sm" variant="secondary" onclick={startEditing}>Change</Button>
-		{/if}
-	{/snippet}
-
-	{#if !editing}
-		<div class="src-row">
-			<Github class="h-4 w-4 shrink-0" />
-			<a class="src-repo" href={deployment.githubRepo} target="_blank" rel="noopener noreferrer">
-				{currentRepoName}
-			</a>
-			{#if deployment.githubBranch}
-				<Badge tone="neutral">{deployment.githubBranch}</Badge>
-			{/if}
-			{#if needsDockerfile && deployment.dockerfilePath}
-				<span class="src-detail">{deployment.dockerfilePath}</span>
-			{/if}
-		</div>
-		{#if justSaved}
-			<div class="mt-3">
-				<Alert tone="info" title="The app is still running the previous build">
-					<div class="src-rebuild">
-						<span>Rebuild to deploy from the new source.</span>
-						<Button
-							size="sm"
-							variant="primary"
-							loading={rebuilding}
-							onclick={() => {
-								justSaved = false;
-								onRebuild();
-							}}
+			<div class="src-form">
+				<SettingsList>
+					<SettingRow label="Repository" wide>
+						<SearchPicker
+							block
+							options={repoOptions}
+							bind:value={() => repoLabel, pickRepo}
+							bind:query={repoQuery}
+							placeholder="owner/repo or GitHub URL"
+							searchPlaceholder="Search repos, or paste owner/repo"
+							filter={false}
+							loading={loadingRepos && !repoQuery.trim()}
+							creatable={!!parsedRepoInput && !parsedRepoIsListed}
+							createLabel={() => `Use ${parsedRepoInput?.owner}/${parsedRepoInput?.repo}`}
+							onclear={clearRepoSelection}
 						>
-							Rebuild now
-						</Button>
-					</div>
-				</Alert>
+							{#snippet leading()}<Github size={15} />{/snippet}
+							{#snippet optionLeading()}<Github size={15} />{/snippet}
+							{#snippet trailing(option)}
+								{#if privateRepos.has(option.value)}<Badge tone="neutral">Private</Badge>{/if}
+							{/snippet}
+							{#snippet empty()}
+								{#if loadingRepos}
+									Loading your repositories
+								{:else if reposError}
+									{reposError}
+								{:else}
+									Search your repos, or paste owner/repo or a GitHub URL
+								{/if}
+							{/snippet}
+						</SearchPicker>
+					</SettingRow>
+					<SettingRow label="Branch" wide>
+						<SearchPicker
+							block
+							options={branchOptions}
+							bind:value={() => branchValue, selectBranch}
+							bind:query={branchQuery}
+							placeholder="main"
+							searchPlaceholder="Search branches"
+							mono
+							creatable
+							loading={loadingBranches}
+							empty={branches.length
+								? 'No matching branches'
+								: 'No branches found. Type a name to use anyway.'}
+						/>
+					</SettingRow>
+					{#if needsDockerfile}
+						<SettingRow label="Dockerfile" wide>
+							<SearchPicker
+								block
+								options={dockerfileOptions}
+								bind:value={dockerfileValue}
+								bind:query={dockerfileQuery}
+								placeholder="Dockerfile"
+								searchPlaceholder="Search paths"
+								mono
+								creatable
+								loading={loadingDockerfiles}
+								empty="No Dockerfiles found on this branch. Type a path to use anyway."
+							/>
+						</SettingRow>
+					{/if}
+				</SettingsList>
+				<FormActions hint="The app keeps its current build until you rebuild.">
+					<Button variant="ghost" disabled={saving} onclick={cancelEditing}>Cancel</Button>
+					<Button variant="primary" loading={saving} disabled={!canSave} onclick={save}>Save</Button
+					>
+				</FormActions>
 			</div>
 		{/if}
-	{:else}
-		<div class="src-form">
-			<div class="src-pickers">
-				<SearchPicker
-					options={repoOptions}
-					bind:value={() => repoLabel, pickRepo}
-					bind:query={repoQuery}
-					prefix="Repository"
-					placeholder="owner/repo or GitHub URL"
-					searchPlaceholder="Search repos, or paste owner/repo"
-					filter={false}
-					loading={loadingRepos && !repoQuery.trim()}
-					creatable={!!parsedRepoInput && !parsedRepoIsListed}
-					createLabel={() => `Use ${parsedRepoInput?.owner}/${parsedRepoInput?.repo}`}
-					onclear={clearRepoSelection}
-					width="24rem"
-				>
-					{#snippet leading()}<Github size={15} />{/snippet}
-					{#snippet optionLeading()}<Github size={15} />{/snippet}
-					{#snippet trailing(option)}
-						{#if privateRepos.has(option.value)}<Badge tone="neutral">Private</Badge>{/if}
-					{/snippet}
-					{#snippet empty()}
-						{#if loadingRepos}
-							Loading your repositories
-						{:else if reposError}
-							{reposError}
-						{:else}
-							Search your repos, or paste owner/repo or a GitHub URL
-						{/if}
-					{/snippet}
-				</SearchPicker>
-
-				<SearchPicker
-					options={branchOptions}
-					bind:value={() => branchValue, selectBranch}
-					bind:query={branchQuery}
-					prefix="Branch"
-					placeholder="main"
-					searchPlaceholder="Search branches"
-					width="18rem"
-					mono
-					creatable
-					loading={loadingBranches}
-					empty={branches.length
-						? 'No matching branches'
-						: 'No branches found. Type a name to use anyway.'}
-				/>
-
-				{#if needsDockerfile}
-					<SearchPicker
-						options={dockerfileOptions}
-						bind:value={dockerfileValue}
-						bind:query={dockerfileQuery}
-						prefix="Dockerfile"
-						placeholder="Dockerfile"
-						searchPlaceholder="Search paths"
-						width="18rem"
-						mono
-						creatable
-						loading={loadingDockerfiles}
-						empty="No Dockerfiles found on this branch. Type a path to use anyway."
-					/>
-				{/if}
-			</div>
-
-			<p class="src-note">
-				The app keeps running from its current build. Rebuild after saving to deploy from the new
-				source. Auto-deploy follows the new repository if the GitHub App has access to it.
-			</p>
-		</div>
-	{/if}
+	</Swap>
 </SectionCard>
 
 <style>
 	.src-row {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: var(--space-2);
 		min-width: 0;
 		color: var(--text-default);
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
 	}
-
+	.src-row :global(.src-glyph) {
+		flex-shrink: 0;
+		color: var(--text-muted);
+	}
 	.src-repo {
-		font-weight: 600;
-		white-space: nowrap;
+		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		min-width: 0;
+		white-space: nowrap;
+		font-weight: var(--weight-medium);
 		color: var(--text-default);
 	}
-
 	.src-repo:hover {
 		color: var(--text-link);
 		text-decoration: underline;
 	}
-
+	.src-mono {
+		font-family: var(--font-mono);
+	}
 	.src-detail {
-		font-family: var(--font-mono, monospace);
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-family: var(--font-mono);
 		font-size: var(--text-caption);
 		line-height: var(--lh-caption);
 		color: var(--text-muted);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
 	}
-
-	.src-rebuild {
+	.src-end {
 		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.75rem;
-		flex-wrap: wrap;
+		flex-shrink: 0;
+		margin-left: auto;
 	}
-
+	.src-alert {
+		margin-top: var(--space-5);
+	}
 	.src-form {
 		display: flex;
 		flex-direction: column;
-		gap: 0.875rem;
-	}
-
-	.src-note {
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		color: var(--text-muted);
-		margin: 0;
-	}
-
-	.src-pickers {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.5rem;
-		min-width: 0;
+		gap: var(--space-3);
 	}
 </style>
