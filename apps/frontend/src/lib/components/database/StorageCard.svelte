@@ -1,8 +1,12 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
-	import { Alert, Button, Field, Input } from '$lib/components/ui';
+	import { Alert, Button, SectionCard, Stepper } from '$lib/components/ui';
+	import CapacityList from '$lib/components/ui/CapacityList.svelte';
+	import SettingRow from '$lib/components/ui/SettingRow.svelte';
+	import SettingsList from '$lib/components/ui/SettingsList.svelte';
 	import type { DatabaseDetail } from './types';
-	import { parseStorageBytes, storageExpansionError, totalAllocatedStorage } from './storage-size';
+	import { parseStorageBytes, storageExpansionError } from './storage-size';
 
 	let {
 		database,
@@ -20,255 +24,182 @@
 		onExpand: () => void;
 	} = $props();
 
+	const GIB = 1024 ** 3;
+	const MIB = 1024 ** 2;
+	const MAX_GIB = 200;
+	const WAL_SEGMENT = 16 * MIB;
+	const PAUSE_AT = 0.92;
+	const RESUME_BELOW = 85;
+
 	let confirmOpen = $state(false);
-	const current = $derived(database.storageSize ?? 'Unknown');
+
+	const live = $derived(database.liveStatus);
+	const volume = $derived(live?.volume ?? null);
+	const paused = $derived(!!live?.writeGuard);
+	const resumeAt = $derived(paused ? (live?.resumeWritesAt ?? null) : null);
+	const walPending = $derived(live?.walPendingSegments ?? 0);
 	const instances = $derived(Math.max(1, database.replicas ?? 1));
-	const validationError = $derived(
-		dirty ? storageExpansionError(database.storageSize, value) : null
-	);
-	const total = $derived(totalAllocatedStorage(value, instances));
-	const canExpand = $derived(dirty && validationError == null && !saving);
-	const volume = $derived(database.liveStatus?.volume ?? null);
-	const walPending = $derived(database.liveStatus?.walPendingSegments ?? 0);
-	const resumeAt = $derived(
-		database.liveStatus?.writeGuard ? (database.liveStatus.resumeWritesAt ?? null) : null
-	);
-	const stillPaused = $derived.by(() => {
-		const requested = parseStorageBytes(value);
-		const needed = parseStorageBytes(resumeAt);
-		return requested != null && needed != null && requested < needed;
+
+	const currentBytes = $derived(Number(parseStorageBytes(database.storageSize) ?? 0n));
+	const minGi = $derived(Math.max(1, Math.ceil(currentBytes / GIB)));
+	const draftBytes = $derived(Number(parseStorageBytes(value) ?? 0n));
+	const draftGi = $derived(dirty && draftBytes > 0 ? Math.ceil(draftBytes / GIB) : minGi);
+	let gi = $state(1);
+	$effect.pre(() => {
+		gi = draftGi;
 	});
-	const fillTone = $derived(
-		volume == null ? 'ok' : volume.percent >= 85 ? 'critical' : volume.percent >= 70 ? 'warn' : 'ok'
-	);
+	$effect(() => {
+		const next = gi;
+		if (Number.isFinite(next) && next !== untrack(() => draftGi)) pick(next);
+	});
+
+	const error = $derived(dirty ? storageExpansionError(database.storageSize, value) : null);
+	const canGrow = $derived(dirty && error == null && !saving);
+	const stillPaused = $derived.by(() => {
+		const needed = Number(parseStorageBytes(resumeAt) ?? 0n);
+		return dirty && needed > 0 && draftBytes < needed;
+	});
+
+	function bytes(n: number): string {
+		if (n >= GIB) return `${Number((n / GIB).toFixed(1))} GiB`;
+		return `${Math.round(n / MIB)} MiB`;
+	}
+
+	function size(raw: string | null | undefined): string {
+		const n = Number(parseStorageBytes(raw) ?? 0n);
+		return n > 0 ? bytes(n) : (raw ?? 'Unknown');
+	}
+
+	const items = $derived([
+		{
+			id: 'volume',
+			label: 'Used',
+			value: volume?.usedBytes ?? null,
+			max: volume?.capacityBytes ?? null
+		}
+	]);
+
+	const usageNote = $derived.by(() => {
+		const used = volume?.usedBytes ?? 0;
+		const cap = volume?.capacityBytes ?? 0;
+		const high = cap > 0 && used / cap >= 0.8;
+		if (walPending > 0)
+			return `${walPending} WAL ${walPending === 1 ? 'segment' : 'segments'} (${bytes(walPending * WAL_SEGMENT)}) waiting to archive.`;
+		if (high)
+			return `Writes pause at ${Math.round(PAUSE_AT * 100)}% full and resume under ${RESUME_BELOW}%.`;
+		return null;
+	});
+
+	const sizeHint = $derived.by(() => {
+		if (error) return error;
+		if (stillPaused) return `Writes stay paused at this size. Grow to ${size(resumeAt)} or more.`;
+		const shown = dirty ? draftBytes : currentBytes;
+		const total =
+			instances > 1 && shown > 0
+				? ` · ${bytes(shown * instances)} across ${instances} instances`
+				: '';
+		return `Can't shrink later${total}`;
+	});
+
+	function pick(next: number) {
+		value = `${next}Gi`;
+		dirty = next * GIB !== currentBytes;
+	}
 </script>
 
-<section class="sc-card">
-	<div class="sc-header">
-		<div>
-			<h3 class="sc-title">Storage</h3>
-			<p class="sc-live">{current} configured per instance</p>
-		</div>
-		<div class="sc-badge">{current}</div>
-	</div>
-
-	<div class="sc-body">
-		<div class="sc-stats">
-			<div>
-				<span class="sc-value">{database.liveStatus?.size ?? 'Unavailable'}</span>
-				<span class="sc-label">PostgreSQL data size</span>
-			</div>
-			<div>
-				<span class="sc-value"
-					>{volume ? `${volume.used} of ${volume.capacity}` : 'Unavailable'}</span
-				>
-				<span class="sc-label">volume used, including WAL</span>
-			</div>
-		</div>
-
-		{#if volume}
-			<div class="sc-fill" data-tone={fillTone}>
-				<div class="sc-fill-track">
-					<div class="sc-fill-bar" style:width={`${Math.min(100, volume.percent)}%`}></div>
-				</div>
-				<span class="sc-fill-label">
-					{volume.percent}% full
-					{#if walPending > 0}
-						<span class="sc-fill-sep">·</span>
-						{walPending} WAL {walPending === 1 ? 'segment' : 'segments'} waiting to archive
-					{/if}
-				</span>
-			</div>
-		{/if}
-
-		<Field
-			label="New capacity"
-			for="database-storage-size"
-			error={validationError}
-			hint={resumeAt
-				? `Writes resume at ${resumeAt} or more. Whole-number Mi, Gi, or Ti. Maximum 200Gi.`
-				: 'Whole-number Mi, Gi, or Ti. Maximum 200Gi.'}
-		>
-			<Input
-				id="database-storage-size"
-				{value}
-				placeholder={resumeAt ?? '10Gi'}
-				disabled={saving}
-				error={validationError != null}
-				oninput={(event: Event) => {
-					value = (event.currentTarget as HTMLInputElement).value;
-					dirty = value.trim() !== database.storageSize;
-				}}
-			/>
-		</Field>
-
-		<p class="sc-desc">
-			Volumes grow online without restarting PostgreSQL. Storage cannot be reduced later.
-			{#if total && validationError == null}
-				This will allocate {total} across {instances} {instances === 1 ? 'instance' : 'instances'}.
+<SectionCard title="Storage">
+	{#if paused || warning || live?.archiving?.ok === false}
+		<div class="notices">
+			{#if paused}
+				<Alert tone="error" title="Writes are paused because the volume is full">
+					{resumeAt
+						? `Grow to ${size(resumeAt)} or more and writes resume on their own once the volume is under ${RESUME_BELOW}% full.`
+						: `Grow the volume and writes resume on their own once it is under ${RESUME_BELOW}% full.`}
+				</Alert>
 			{/if}
-		</p>
-
-		{#if dirty && stillPaused && validationError == null}
-			<Alert tone="warning" title="Writes stay paused at {value}">
-				The volume has to be under 85% full before writes resume. Expand to at least {resumeAt}.
-			</Alert>
-		{/if}
-
-		{#if database.liveStatus?.archiving?.ok === false}
-			<Alert tone="warning" title="WAL archiving is failing">
-				Expanding creates headroom, but WAL will continue filling the volume until archiving is
-				fixed.
-			</Alert>
-		{/if}
-
-		{#if warning}
-			<Alert tone="warning" title="Storage expanded">{warning}</Alert>
-		{/if}
-
-		<div class="sc-actions">
-			<Button
-				variant="ghost"
-				size="sm"
-				disabled={!dirty || saving}
-				onclick={() => {
-					value = database.storageSize ?? '';
-					dirty = false;
-				}}>Reset</Button
-			>
-			<Button
-				variant="primary"
-				size="sm"
-				disabled={!canExpand}
-				loading={saving}
-				onclick={() => (confirmOpen = true)}
-			>
-				{saving ? 'Expanding...' : 'Expand storage'}
-			</Button>
+			{#if live?.archiving?.ok === false}
+				<Alert tone="warning" title="WAL archiving is failing">
+					WAL keeps filling the volume until archiving is fixed, so growing only buys time.
+				</Alert>
+			{/if}
+			{#if warning}
+				<Alert tone="warning">{warning}</Alert>
+			{/if}
 		</div>
-	</div>
-</section>
+	{/if}
+
+	<SettingsList label="Storage">
+		<div class="usage">
+			<CapacityList label="Volume use" {items} format={bytes} warning={0.8} error={PAUSE_AT} />
+			{#if usageNote}<p class="note">{usageNote}</p>{/if}
+		</div>
+
+		<SettingRow label="Size" for="database-storage-size" hint={sizeHint}>
+			<span class="commit" class:commit--on={dirty} aria-hidden={!dirty}>
+				<Button
+					variant="primary"
+					size="sm"
+					disabled={!canGrow}
+					loading={saving}
+					onclick={() => (confirmOpen = true)}>Grow to {bytes(draftBytes || currentBytes)}</Button
+				>
+			</span>
+			<Stepper
+				id="database-storage-size"
+				label="Size per instance"
+				size="sm"
+				shape="capsule"
+				suffix="GiB"
+				min={minGi}
+				max={MAX_GIB}
+				disabled={saving}
+				bind:value={gi}
+			/>
+		</SettingRow>
+	</SettingsList>
+</SectionCard>
 
 <ConfirmModal
 	bind:open={confirmOpen}
-	title="Expand database storage?"
-	description={`This permanently grows every instance volume from ${current} to ${value}. The operation cannot be reversed.`}
-	confirmLabel="Expand storage"
+	title="Grow storage to {bytes(draftBytes)}?"
+	description={`Every instance's volume grows from ${size(database.storageSize)} to ${bytes(draftBytes)} without a restart. Storage can't shrink later.`}
+	confirmLabel="Grow storage"
 	danger={false}
 	onconfirm={onExpand}
 	oncancel={() => {}}
 />
 
 <style>
-	.sc-card {
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-xl);
-		background-color: var(--bg-raised);
-		box-shadow: var(--elev-1);
-		overflow: hidden;
-		margin-bottom: 1rem;
-	}
-	.sc-header {
+	.notices {
 		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
-		gap: 1rem;
-		padding: 1.25rem 1.5rem;
+		flex-direction: column;
+		gap: var(--space-2);
+		margin-bottom: var(--space-6);
 	}
-	.sc-title {
-		font-size: var(--text-body);
-		font-weight: 600;
-		color: var(--text-default);
+	.usage {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+	.note {
 		margin: 0;
-		line-height: 1.3;
-	}
-	.sc-live {
-		font-size: var(--text-caption);
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		color: var(--text-muted);
-		margin: 0.25rem 0 0;
 	}
-	.sc-badge {
+	.commit {
 		display: inline-flex;
-		padding: 0.25rem 0.75rem;
-		border-radius: var(--radius-2xl);
-		font-size: var(--text-micro);
-		font-weight: 600;
-		background-color: var(--accent-subtle);
-		color: var(--accent);
-		font-family: var(--font-mono);
+		visibility: hidden;
+		opacity: 0;
+		transition:
+			opacity var(--fade-out) var(--curve-in),
+			visibility 0s var(--fade-out);
 	}
-	.sc-body {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-		padding: 0 1.5rem 1.5rem;
-	}
-	.sc-stats {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 1rem;
-	}
-	.sc-stats > div {
-		display: flex;
-		flex-direction: column;
-		gap: 0.125rem;
-	}
-	.sc-value {
-		font-family: var(--font-mono);
-		font-size: var(--text-body);
-		font-weight: 600;
-		color: var(--text-default);
-	}
-	.sc-label {
-		font-size: var(--text-micro);
-		color: var(--text-muted);
-	}
-	.sc-desc {
-		font-size: var(--text-caption);
-		color: var(--text-muted);
-		margin: 0;
-	}
-	.sc-fill {
-		display: flex;
-		flex-direction: column;
-		gap: 0.375rem;
-		color: var(--text-muted);
-	}
-	.sc-fill[data-tone='warn'] {
-		color: var(--status-warning);
-	}
-	.sc-fill[data-tone='critical'] {
-		color: var(--status-error);
-	}
-	.sc-fill-track {
-		height: 0.375rem;
-		border-radius: var(--radius-pill);
-		background-color: color-mix(in srgb, currentColor 12%, transparent);
-		overflow: hidden;
-	}
-	.sc-fill-bar {
-		height: 100%;
-		border-radius: inherit;
-		background-color: var(--accent);
-		transition: width var(--dur-base);
-	}
-	.sc-fill[data-tone='warn'] .sc-fill-bar,
-	.sc-fill[data-tone='critical'] .sc-fill-bar {
-		background-color: currentColor;
-	}
-	.sc-fill-label {
-		font-size: var(--text-micro);
-		font-family: var(--font-mono);
-	}
-	.sc-fill-sep {
-		margin: 0 0.375rem;
-		opacity: 0.6;
-	}
-	.sc-actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: 0.5rem;
-		padding-top: 1rem;
-		border-top: 1px solid color-mix(in srgb, var(--border-default) 40%, transparent);
+	.commit--on {
+		visibility: visible;
+		opacity: 1;
+		transition:
+			opacity var(--fade-in) var(--curve-out),
+			visibility 0s;
 	}
 </style>

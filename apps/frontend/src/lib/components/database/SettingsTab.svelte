@@ -1,14 +1,16 @@
 <script lang="ts">
-	import { Loader2 } from 'lucide-svelte';
 	import {
+		Alert,
 		Button,
-		Input,
-		Dropdown,
-		Badge,
-		SectionCard,
 		EmptyState,
-		Alert
+		FormActions,
+		SectionCard,
+		SectionTitle,
+		Skeleton
 	} from '$lib/components/ui';
+	import SettingsList from '$lib/components/ui/SettingsList.svelte';
+	import { presence } from '$lib/utils/transitions';
+	import ParamRow from './ParamRow.svelte';
 	import type { DatabaseDetail, ParamMeta } from './types';
 
 	let {
@@ -20,8 +22,10 @@
 		settingsDirty,
 		settingsAdvisories = [],
 		settingsDrift = {},
+		savedValues = undefined,
 		onFetchSettings,
 		onSaveSettings,
+		onDiscardSettings = undefined,
 		paramValue,
 		setParam
 	}: {
@@ -33,123 +37,178 @@
 		settingsDirty: boolean;
 		settingsAdvisories?: { key: string; message: string }[];
 		settingsDrift?: Record<string, string | null>;
+		savedValues?: Record<string, string>;
 		onFetchSettings: () => void;
 		onSaveSettings: () => void;
+		onDiscardSettings?: () => void;
 		paramValue: (key: string) => string;
 		setParam: (key: string, v: string) => void;
 	} = $props();
 
-	const advisoryFor = (key: string) => settingsAdvisories.find((a) => a.key === key);
+	const GROUPS = [
+		{
+			title: 'Connections & memory',
+			keys: [
+				'max_connections',
+				'shared_buffers',
+				'work_mem',
+				'maintenance_work_mem',
+				'effective_cache_size'
+			]
+		},
+		{
+			title: 'Timeouts & logging',
+			keys: [
+				'statement_timeout',
+				'idle_in_transaction_session_timeout',
+				'log_min_duration_statement'
+			]
+		},
+		{ title: 'Durability', keys: ['synchronous_commit'] }
+	];
+
+	const groups = $derived.by(() => {
+		const byKey = new Map(paramSchema.map((p) => [p.key, p]));
+		const placed = new Set<string>();
+		const out: { title: string; params: ParamMeta[] }[] = [];
+		for (const g of GROUPS) {
+			const params = g.keys.flatMap((k) => {
+				const p = byKey.get(k);
+				if (!p) return [];
+				placed.add(k);
+				return [p];
+			});
+			if (params.length) out.push({ title: g.title, params });
+		}
+		const rest = paramSchema.filter((p) => !placed.has(p.key));
+		if (rest.length) out.push({ title: 'Other', params: rest });
+		return out;
+	});
+
+	let baseline = $state<Record<string, string>>({});
+	let everLoaded = $state(false);
+
+	$effect(() => {
+		if (!settingsLoaded) return;
+		everLoaded = true;
+		if (settingsDirty) return;
+		const next: Record<string, string> = {};
+		for (const p of paramSchema) next[p.key] = paramValue(p.key);
+		baseline = next;
+	});
+
+	const savedFor = (p: ParamMeta) =>
+		savedValues ? (savedValues[p.key] ?? p.defaultValue) : (baseline[p.key] ?? p.defaultValue);
+
+	const changed = $derived(paramSchema.filter((p) => paramValue(p.key) !== savedFor(p)));
+	const restarts = $derived(changed.some((p) => p.requiresRestart));
+
+	function invalid(p: ParamMeta, raw: string) {
+		const v = raw.trim();
+		if (v === '') return false;
+		if (p.kind === 'int') {
+			if (!/^-?\d+$/.test(v)) return true;
+			const n = Number(v);
+			return (p.min !== undefined && n < p.min) || (p.max !== undefined && n > p.max);
+		}
+		if (p.kind === 'memory') return !/^\d+(kB|MB|GB)$/.test(v);
+		return false;
+	}
+
+	const hasInvalid = $derived(paramSchema.some((p) => invalid(p, paramValue(p.key))));
+
+	const advisoryFor = (key: string) => settingsAdvisories.find((a) => a.key === key)?.message;
+	const looseAdvisories = $derived(
+		settingsAdvisories.filter((a) => !paramSchema.some((p) => p.key === a.key))
+	);
+
+	function discard() {
+		if (onDiscardSettings) onDiscardSettings();
+		else onFetchSettings();
+	}
 </script>
 
-<SectionCard title="PostgreSQL parameters">
-	{#snippet actions()}
-		{#if database.mode === 'cnpg'}
-			<Button variant="ghost" size="sm" onclick={onFetchSettings} disabled={settingsSaving}>
-				Discard
-			</Button>
-			<Button
-				variant="primary"
-				size="sm"
-				onclick={onSaveSettings}
-				loading={settingsSaving}
-				disabled={!settingsDirty}
-			>
-				Save
-			</Button>
-		{/if}
-	{/snippet}
-
-	{#if database.mode !== 'cnpg'}
-		<EmptyState
-			title="Settings need a dedicated database"
-			description="PostgreSQL parameters are only configurable for CNPG-backed databases."
-		/>
-	{:else if settingsLoading && !settingsLoaded}
-		<div class="db-empty-box flex items-center gap-2">
-			<Loader2 class="h-4 w-4 animate-spin" />
-			<span class="text-sm" style="color: var(--surface-muted);">Loading settings…</span>
-		</div>
-	{:else}
-		<div class="space-y-4">
-			{#each paramSchema as p (p.key)}
-				<div class="db-setting-row">
-					<div class="db-setting-info">
-						<div class="flex items-center gap-2 flex-wrap">
-							<label for={`param-${p.key}`} class="db-setting-label">{p.label}</label>
-							<code class="db-inline-code">{p.key}</code>
-							{#if p.requiresRestart}
-								<Badge tone="warning">Restart required</Badge>
-							{/if}
-						</div>
-						<p class="db-setting-help">
-							{p.help}
-							{#if p.autoSized}
-								Leave it empty to size it from the memory limit automatically.
-							{:else}
-								Default: <code class="db-inline-code">{p.defaultValue}</code>.
-							{/if}
-						</p>
-						{#if p.key in settingsDrift}
-							<p class="db-setting-drift">
-								{#if settingsDrift[p.key] == null}
-									The cluster isn't running this value. It was removed outside Orchard.
-								{:else}
-									The cluster is running <code class="db-inline-code">{settingsDrift[p.key]}</code>,
-									set outside Orchard.
-								{/if}
-							</p>
-						{/if}
-						{#if advisoryFor(p.key)}
-							<div class="db-setting-advisory">
-								<Alert tone="warning">{advisoryFor(p.key)?.message}</Alert>
-							</div>
-						{/if}
-					</div>
-					<div class="db-setting-control">
-						{#if p.kind === 'int'}
-							<Input
-								id={`param-${p.key}`}
-								type="number"
-								min={p.min}
-								max={p.max}
-								class="font-mono text-sm"
-								value={paramValue(p.key)}
-								oninput={(e: Event) => setParam(p.key, (e.currentTarget as HTMLInputElement).value)}
-								placeholder={p.defaultValue}
-							/>
-						{:else if p.kind === 'memory'}
-							<Input
-								id={`param-${p.key}`}
-								type="text"
-								class="font-mono text-sm"
-								value={paramValue(p.key)}
-								oninput={(e: Event) => setParam(p.key, (e.currentTarget as HTMLInputElement).value)}
-								placeholder={p.autoSized ? 'Automatic' : p.defaultValue}
-							/>
-						{:else if p.kind === 'string' && p.enum}
-							<Dropdown
-								id={`param-${p.key}`}
-								value={paramValue(p.key)}
-								options={p.enum.map((opt) => ({ value: opt, label: opt }))}
-								onchange={(v) => setParam(p.key, v)}
-							/>
-						{/if}
-					</div>
+{#if database.mode !== 'cnpg'}
+	<SectionCard title="PostgreSQL parameters">
+		<EmptyState title="Parameters need a dedicated database" />
+	</SectionCard>
+{:else if !everLoaded && !settingsLoaded}
+	<SectionCard title="PostgreSQL parameters">
+		<SettingsList>
+			{#each [0, 1, 2, 3] as i (i)}
+				<div class="param-skeleton">
+					<Skeleton width="9rem" height="0.875rem" />
+					<Skeleton width="11rem" height="2rem" />
 				</div>
 			{/each}
+		</SettingsList>
+	</SectionCard>
+{:else}
+	<SectionCard title="PostgreSQL parameters">
+		<div class="params">
+			{#each looseAdvisories as a (a.key)}
+				<Alert tone="warning">{a.message}</Alert>
+			{/each}
+			{#each groups as g (g.title)}
+				<div class="param-group">
+					<SectionTitle title={g.title} />
+					<SettingsList label={g.title}>
+						{#each g.params as p (p.key)}
+							<ParamRow
+								param={p}
+								value={paramValue(p.key)}
+								invalid={invalid(p, paramValue(p.key))}
+								drift={p.key in settingsDrift ? settingsDrift[p.key] : undefined}
+								advisory={advisoryFor(p.key)}
+								onchange={(v) => setParam(p.key, v)}
+							/>
+						{/each}
+					</SettingsList>
+				</div>
+			{/each}
+			{#if changed.length > 0 || settingsSaving}
+				<div class="param-save" in:presence out:presence>
+					<FormActions hint={restarts ? 'Saving restarts the database' : undefined}>
+						<Button variant="ghost" disabled={settingsSaving} onclick={discard}>Discard</Button>
+						<Button
+							variant="primary"
+							loading={settingsSaving}
+							disabled={hasInvalid}
+							onclick={onSaveSettings}
+						>
+							Save
+						</Button>
+					</FormActions>
+				</div>
+			{/if}
 		</div>
-	{/if}
-</SectionCard>
+	</SectionCard>
+{/if}
 
 <style>
-	.db-setting-drift {
-		margin: 0.375rem 0 0;
-		font-size: var(--text-caption);
-		color: var(--status-warning);
+	.params {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-6);
 	}
-	.db-setting-advisory {
-		margin-top: 0.5rem;
-		max-width: 46ch;
+	.param-group {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+	}
+	.param-skeleton {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-4);
+	}
+	.param-save {
+		position: sticky;
+		bottom: 0;
+		z-index: 1;
+		margin: 0 calc(var(--space-4) * -1) calc(var(--space-4) * -1);
+		padding: var(--space-1) var(--space-4) var(--space-4);
+		background: var(--bg-surface);
+		box-shadow: inset 0 1px 0 var(--border-default);
 	}
 </style>

@@ -1,21 +1,32 @@
 <script lang="ts">
 	import {
-		Loader2,
-		X,
-		RefreshCw,
-		Terminal as TerminalIcon,
-		Container,
 		ChevronDown,
+		Database,
+		History,
 		Maximize2,
 		Minimize2,
-		ChevronRight,
-		Skull
+		Pause,
+		Play,
+		RefreshCw,
+		SquareTerminal
 	} from 'lucide-svelte';
+	import { untrack } from 'svelte';
 	import PodTerminal from '$lib/components/PodTerminal.svelte';
 	import TerminalSettings from '$lib/components/TerminalSettings.svelte';
-	import { Button, TabBar, EmptyState, Dropdown } from '$lib/components/ui';
-	import { explainExitCode, formatRelativeTime } from '$lib/utils/format';
-	import type { DatabaseDetail, TerminalTab as TerminalTabType } from './types';
+	import {
+		Button,
+		EmptyState,
+		LogViewer,
+		Menu,
+		MenuItem,
+		SelectTrigger,
+		SessionTabs,
+		StatusDot
+	} from '$lib/components/ui';
+	import { statusMeta } from '$lib/components/ui/status';
+	import { ansiLogLines } from '$lib/utils/log-sources.svelte';
+	import ConsoleKilled from './ConsoleKilled.svelte';
+	import type { DatabaseDetail, DatabasePod, TerminalTab as TerminalTabType } from './types';
 
 	let {
 		database,
@@ -67,7 +78,7 @@
 		killedLogs?: Record<string, string>;
 		killedLogsLoading?: string | null;
 		expandedKilled?: string | null;
-		onFetchLogs: () => void;
+		onFetchLogs: () => void | Promise<void>;
 		onFetchKilled?: () => void;
 		onToggleKilled?: (entryId: string) => void;
 		onOpenShellTab: (podName: string, container: string) => void;
@@ -78,221 +89,323 @@
 		podShortName: (name: string) => string;
 	} = $props();
 
-	const consoleTabs = $derived([
-		{ id: 'logs', label: 'Logs' },
-		{ id: 'killed', label: 'Killed' },
-		...terminalTabs.map((t) => ({ id: t.id, label: t.title || t.label }))
-	]);
+	const FOLLOW_MS = 5_000;
+	const PAGE_LINES = 500;
+	const MAX_LINES = 5_000;
+
+	const dedicated = $derived(database.mode === 'cnpg' || database.mode === 'container');
+	const pods = $derived(database.pods ?? []);
+
+	const primaryName = $derived.by(() => {
+		const current = database.liveStatus?.currentPrimary;
+		if (current && pods.some((p) => p.name === current)) return current;
+		return pods.find((p) => p.role === 'primary')?.name ?? pods[0]?.name ?? null;
+	});
+
+	const ordered = $derived(
+		[...pods].sort((a, b) => Number(b.name === primaryName) - Number(a.name === primaryName))
+	);
+
+	const selectedName = $derived(logsPodName || primaryName || '');
+	const podGone = $derived(
+		!!logsPodName && pods.length > 0 && !pods.some((p) => p.name === logsPodName)
+	);
+
+	let paused = $state(false);
+	let frozen = $state('');
+	let loadingMore = $state(false);
+	let scrolledUp = $state(false);
+	let visibility = $state<DocumentVisibilityState>('visible');
+
+	const shown = $derived(paused ? frozen : logs);
+	const lines = $derived(ansiLogLines(shown));
+	const rawCount = $derived(shown ? shown.replace(/\n+$/, '').split('\n').length : 0);
+	const atStart = $derived(tailLines >= MAX_LINES || (!!shown && rawCount < tailLines));
+
+	function roleOf(name: string) {
+		if (database.mode !== 'cnpg') return null;
+		return name === primaryName ? 'Primary' : 'Standby';
+	}
+
+	function containerOf(pod: DatabasePod) {
+		return (
+			pod.containers?.find((c) => c.name === 'postgres')?.name ??
+			pod.containers?.[0]?.name ??
+			'postgres'
+		);
+	}
+
+	function restarted(pod: DatabasePod) {
+		const statuses = pod.containerStatuses;
+		if (!statuses?.length) return null;
+		return statuses.some((c) => (c.restartCount ?? 0) > 0);
+	}
+
+	const sourceLabel = $derived.by(() => {
+		if (!selectedName) return null;
+		const role = roleOf(selectedName);
+		return role ? `${podShortName(selectedName)} · ${role}` : podShortName(selectedName);
+	});
+
+	const primaryPod = $derived(pods.find((p) => p.name === primaryName) ?? null);
+
+	$effect(() => {
+		const primary = primaryName;
+		if (!primary) return;
+		untrack(() => {
+			if (logsPodName) return;
+			logsPodName = primary;
+			onFetchLogs();
+		});
+	});
+
+	$effect(() => {
+		const following =
+			visible &&
+			!paused &&
+			!logsPrevious &&
+			!podGone &&
+			activeConsoleTab === 'logs' &&
+			visibility === 'visible' &&
+			!!selectedName;
+		if (!following) return;
+		const timer = setInterval(() => onFetchLogs(), FOLLOW_MS);
+		return () => clearInterval(timer);
+	});
+
+	function pick(name: string, previous: boolean) {
+		paused = false;
+		scrolledUp = false;
+		logsPodName = name;
+		logsPrevious = previous;
+		onFetchLogs();
+	}
+
+	function togglePause() {
+		if (!paused) frozen = logs;
+		paused = !paused;
+	}
+
+	async function loadEarlier() {
+		if (loadingMore || atStart || paused) return;
+		loadingMore = true;
+		tailLines = Math.min(tailLines + PAGE_LINES, MAX_LINES);
+		try {
+			await onFetchLogs();
+		} finally {
+			loadingMore = false;
+		}
+	}
+
+	function openShell(pod: DatabasePod | null) {
+		if (pod) onOpenShellTab(pod.name, containerOf(pod));
+	}
 </script>
 
-{#if database.mode !== 'cnpg' && database.mode !== 'container'}
-	<EmptyState
-		title="Terminal needs a dedicated database"
-		description="Terminal access requires a managed database (CNPG or container mode)."
-	/>
-{:else}
-	{@const pod = database.pods?.[0] ?? null}
-	<div
-		class="console-panel"
-		class:console-expanded={consoleExpanded}
-		class:console-at-fullscreen={consoleExpanded}
-	>
-		<div class="console-toolbar">
-			<div class="console-toolbar-left">
-				<TabBar tabs={consoleTabs} bind:value={activeConsoleTab}>
-					{#snippet tab(t)}
-						<span>{t.label}</span>
-						{#if t.id !== 'logs' && t.id !== 'killed'}
-							<span
-								class="console-tab-close"
-								role="button"
-								tabindex="-1"
-								onclick={(e) => {
-									e.stopPropagation();
-									onCloseTerminalTab(t.id);
-								}}
-								onkeydown={(e) => {
-									if (e.key === 'Enter') {
-										e.stopPropagation();
-										onCloseTerminalTab(t.id);
-									}
-								}}
+<svelte:document bind:visibilityState={visibility} />
+
+<div class="console" class:console--full={consoleExpanded}>
+	{#if !dedicated}
+		<EmptyState
+			title="Terminal needs a dedicated database"
+			description="Terminal access requires a managed database (CNPG or container mode)."
+		/>
+	{:else}
+		<div class="bar">
+			<SessionTabs
+				label="Console"
+				items={[
+					{ id: 'logs', label: 'Logs' },
+					{ id: 'killed', label: 'Killed' },
+					...terminalTabs.map((t) => ({
+						id: t.id,
+						label: t.title || t.label,
+						icon: SquareTerminal,
+						closable: true,
+						bell: t.bell
+					}))
+				]}
+				bind:value={activeConsoleTab}
+				onselect={(id) => {
+					const t = terminalTabs.find((x) => x.id === id);
+					if (t) t.bell = false;
+				}}
+				onclose={onCloseTerminalTab}
+			/>
+
+			<div class="tools">
+				{#if activeConsoleTab === 'logs'}
+					<Menu placement="bottom-end">
+						{#snippet trigger(attrs, isOpen)}
+							<SelectTrigger
+								shape="capsule"
+								{...attrs}
+								open={isOpen}
+								size="sm"
+								mono
+								prefix={logsPrevious ? 'Previous' : undefined}
+								value={sourceLabel}
+								placeholder="Pick an instance"
+							/>
+						{/snippet}
+						{#each ordered as pod (pod.name)}
+							{@const here = selectedName === pod.name}
+							{@const role = roleOf(pod.name)}
+							{@const died = restarted(pod)}
+							<MenuItem
+								icon={Database}
+								checked={here && !logsPrevious}
+								description={role ?? undefined}
+								onclick={() => pick(pod.name, false)}
 							>
-								<X class="h-2.5 w-2.5" />
-							</span>
-						{/if}
-					{/snippet}
-				</TabBar>
-			</div>
-			<div class="console-toolbar-right">
-				{#if activeConsoleTab === 'killed'}
-					<span class="db-hint" style="margin: 0;">Terminated in the last 24h</span>
+								{podShortName(pod.name)}
+							</MenuItem>
+							{#if died !== false || (here && logsPrevious)}
+								<MenuItem
+									icon={History}
+									checked={here && logsPrevious}
+									description="Output from before the last restart"
+									onclick={() => pick(pod.name, true)}
+								>
+									{podShortName(pod.name)}
+								</MenuItem>
+							{/if}
+						{/each}
+					</Menu>
+					{#if !logsPrevious}
+						<Button
+							shape="capsule"
+							variant="ghost"
+							size="sm"
+							icon={paused ? Play : Pause}
+							label={paused ? 'Resume logs' : 'Pause logs'}
+							onclick={togglePause}
+						/>
+					{/if}
+				{:else if activeConsoleTab === 'killed' && killedList.length > 0}
 					<Button
+						shape="capsule"
 						variant="ghost"
 						size="sm"
+						icon={RefreshCw}
+						label="Check again"
 						loading={killedLoading}
 						onclick={() => onFetchKilled?.()}
-					>
-						Refresh
-					</Button>
-				{:else if activeConsoleTab === 'logs'}
-					{#if (database.pods?.length ?? 0) > 1}
-						<div class="tt-pod-select">
-							<Dropdown
-								value={logsPodName || pod?.name || ''}
-								ariaLabel="Pod to read logs from"
-								options={(database.pods ?? []).map((p) => ({
-									value: p.name,
-									label: podShortName(p.name)
-								}))}
-								onchange={(v) => {
-									logsPodName = v;
-									onFetchLogs();
-								}}
-							/>
-						</div>
-					{/if}
-					<Button
-						variant={logsPrevious ? 'primary' : 'ghost'}
-						size="sm"
-						onclick={() => {
-							logsPrevious = !logsPrevious;
-							onFetchLogs();
-						}}
-						title="Read the container that died instead of the one running now"
-					>
-						Previous
-					</Button>
-					<Button
-						variant="ghost"
-						size="sm"
-						onclick={(e: MouseEvent) => {
-							e.preventDefault();
-							tailLines =
-								tailLines === 100 ? 200 : tailLines === 200 ? 500 : tailLines === 500 ? 1000 : 100;
-							onFetchLogs();
-						}}
-						title="Cycle tail size"
-					>
-						<Container class="h-3 w-3 opacity-40" />
-						<span>{podShortName(logsPodName || pod?.name || '')} / postgres</span>
-						<ChevronDown class="h-2.5 w-2.5 opacity-40" />
-					</Button>
-					<Button
-						variant="ghost"
-						size="sm"
-						onclick={onFetchLogs}
-						loading={logsLoading}
-						title={`Refresh (tail ${tailLines})`}
-						aria-label="Refresh logs"
-					>
-						{#if !logsLoading}<RefreshCw class="h-3.5 w-3.5" />{/if}
-					</Button>
+					/>
 				{/if}
+
 				<Button
+					shape="capsule"
 					variant="secondary"
 					size="sm"
-					disabled={!pod}
-					onclick={() => pod && onOpenShellTab(pod.name, 'postgres')}
-					title={pod ? 'Open shell in pod' : 'Waiting for the Postgres pod'}
+					icon={SquareTerminal}
+					disabled={!primaryPod}
+					title={primaryPod
+						? `Open a shell on ${podShortName(primaryPod.name)}`
+						: 'Waiting for the Postgres pod'}
+					onclick={() => openShell(primaryPod)}>Shell</Button
 				>
-					<TerminalIcon class="h-3 w-3" />
-					Shell
-				</Button>
+				{#if pods.length > 1}
+					<Menu placement="bottom-end">
+						{#snippet trigger(attrs)}
+							<Button
+								shape="capsule"
+								{...attrs}
+								variant="ghost"
+								size="sm"
+								icon={ChevronDown}
+								label="Open a shell on another instance"
+							/>
+						{/snippet}
+						{#each ordered as pod (pod.name)}
+							<MenuItem
+								icon={SquareTerminal}
+								description={roleOf(pod.name) ?? undefined}
+								onclick={() => openShell(pod)}
+							>
+								{podShortName(pod.name)}
+							</MenuItem>
+						{/each}
+					</Menu>
+				{/if}
+
 				<TerminalSettings />
+
 				<Button
+					shape="capsule"
 					variant="ghost"
 					size="sm"
+					icon={consoleExpanded ? Minimize2 : Maximize2}
+					label={consoleExpanded ? 'Collapse console' : 'Expand console'}
 					onclick={() => (consoleExpanded = !consoleExpanded)}
-					title={consoleExpanded ? 'Collapse' : 'Expand'}
-					aria-label={consoleExpanded ? 'Collapse' : 'Expand'}
-				>
-					{#if consoleExpanded}<Minimize2 class="h-3.5 w-3.5" />{:else}<Maximize2
-							class="h-3.5 w-3.5"
-						/>{/if}
-				</Button>
+				/>
 			</div>
 		</div>
 
-		<div class="console-body">
-			{#if activeConsoleTab === 'killed'}
-				{#if killedLoading && killedList.length === 0}
-					<div class="console-empty">
-						<Loader2 class="h-4 w-4 animate-spin" />
-						<span>Loading...</span>
-					</div>
-				{:else if killedList.length === 0}
-					<div class="console-empty">
-						<Skull class="h-4 w-4 opacity-30" />
-						<span>Nothing has been killed in the last 24 hours</span>
-					</div>
-				{:else}
-					<div class="tt-killed-list">
-						{#each killedList as k (k.entryId)}
-							{@const why = explainExitCode(k.exitCode, k.reason)}
-							<div class="tt-killed-card">
-								<button
-									class="tt-killed-head"
-									type="button"
-									onclick={() => onToggleKilled?.(k.entryId)}
+		<div class="stage">
+			{#if activeConsoleTab === 'logs'}
+				<div class="logs">
+					<LogViewer
+						toolbar
+						filename={selectedName ? `${podShortName(selectedName)}-postgres` : 'postgres'}
+						{lines}
+						loading={logsLoading && !logs}
+						{loadingMore}
+						{atStart}
+						bind:scrolledUp
+						onLoadEarlier={loadEarlier}
+					>
+						{#snippet empty()}
+							<div class="quiet">
+								<SquareTerminal size={16} aria-hidden="true" />
+								<span
+									>{selectedName
+										? 'No output yet'
+										: 'Waiting for the Postgres pod to be scheduled'}</span
 								>
-									<ChevronRight
-										class="h-3.5 w-3.5 shrink-0"
-										style="transform: rotate({expandedKilled === k.entryId
-											? 90
-											: 0}deg); transition: transform var(--dur-fast) ease;"
-									/>
-									<div class="tt-killed-main">
-										<span class="tt-killed-title">{why?.short ?? k.reason}</span>
-										<span class="tt-killed-meta">
-											{k.reason}{#if k.exitCode != null}&nbsp;&middot; exit {k.exitCode}{/if}
-											&middot; {podShortName(k.pod)}{#if k.finishedAt}&nbsp;&middot;
-												{formatRelativeTime(new Date(k.finishedAt))}{/if}
-										</span>
-									</div>
-								</button>
-								{#if expandedKilled === k.entryId}
-									{#if killedLogsLoading === k.entryId}
-										<div class="console-empty">
-											<Loader2 class="h-4 w-4 animate-spin" />
-											<span>Loading captured logs...</span>
-										</div>
-									{:else if killedLogs[k.entryId]}
-										<pre class="console-output tt-killed-logs">{killedLogs[k.entryId]}</pre>
-									{:else}
-										<div class="console-empty">
-											<span>No logs were captured before this container died</span>
-										</div>
-									{/if}
-								{/if}
 							</div>
-						{/each}
-					</div>
-				{/if}
-			{:else if activeConsoleTab === 'logs'}
-				{#if !pod}
-					<div class="console-empty">
-						<Loader2 class="h-4 w-4 animate-spin" />
-						<span>Waiting for the Postgres pod to be scheduled</span>
-					</div>
-				{:else if logsLoading && !logs}
-					<div class="console-empty">
-						<Loader2 class="h-4 w-4 animate-spin" />
-						<span>Loading logs...</span>
-					</div>
-				{:else if logs}
-					<pre bind:this={logsRef} class="console-output">{logs}</pre>
-				{:else}
-					<div class="console-empty">
-						<TerminalIcon class="h-4 w-4 opacity-30" />
-						<span>No output yet</span>
-					</div>
-				{/if}
+						{/snippet}
+					</LogViewer>
+					{#if selectedName && !logsPrevious && (podGone || paused)}
+						<div class="notice" role="status">
+							{#if podGone}
+								<StatusDot meta={statusMeta('neutral', 'Gone')} size={8} />
+								<span>{podShortName(selectedName)} is gone</span>
+								{#if primaryName && primaryName !== selectedName}
+									<Button
+										shape="capsule"
+										variant="secondary"
+										size="sm"
+										onclick={() => primaryName && pick(primaryName, false)}
+										>Show {podShortName(primaryName)}</Button
+									>
+								{/if}
+							{:else}
+								<StatusDot meta={statusMeta('neutral', 'Paused')} size={8} />
+								<span>Paused</span>
+								<Button shape="capsule" variant="secondary" size="sm" onclick={togglePause}
+									>Resume</Button
+								>
+							{/if}
+						</div>
+					{/if}
+				</div>
+			{:else if activeConsoleTab === 'killed'}
+				<ConsoleKilled
+					list={killedList}
+					loading={killedLoading}
+					logs={killedLogs}
+					logsLoading={killedLogsLoading}
+					expanded={expandedKilled}
+					onToggle={onToggleKilled}
+					onRefresh={onFetchKilled}
+					{podShortName}
+				/>
 			{/if}
 			{#each terminalTabs as ttab (ttab.id)}
 				<PodTerminal
 					podName={ttab.podName}
-					namespace={database.namespace!}
+					namespace={database.namespace ?? 'default'}
 					container={ttab.container}
 					visible={visible && activeConsoleTab === ttab.id}
 					sessionHandle={ttab.sessionHandle}
@@ -302,58 +415,89 @@
 				/>
 			{/each}
 		</div>
-	</div>
-{/if}
+	{/if}
+</div>
 
 <style>
-	.tt-pod-select {
-		width: 11rem;
-		min-width: 0;
-	}
-	.tt-killed-list {
+	.console {
+		position: relative;
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
-		padding: 0.75rem;
-		overflow-y: auto;
+		height: 100%;
+		min-width: 0;
+		min-height: 0;
+		border: 1px solid var(--console-edge);
+		border-radius: calc(var(--radius-widget) * var(--corner-scale));
+		corner-shape: var(--corner);
+		background: var(--console-bg);
+		color: var(--console-text);
+		overflow: clip;
 	}
-	.tt-killed-card {
-		border: 1px solid var(--border-edge);
-		border-radius: var(--radius-md);
-		background-color: var(--bg-raised);
+	.console--full {
+		position: fixed;
+		inset: 0;
+		z-index: var(--z-modal);
+		height: auto;
+		border: none;
+		border-radius: 0;
+	}
+	.bar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		min-height: 2.75rem;
+		padding: 0.5rem;
+		border-bottom: 1px solid var(--console-edge);
+	}
+	.tools {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		flex-shrink: 0;
+	}
+	.stage {
+		position: relative;
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		min-height: 0;
+		padding: 0.75rem;
 		overflow: hidden;
 	}
-	.tt-killed-head {
+	.logs {
+		position: relative;
 		display: flex;
-		align-items: flex-start;
-		gap: 0.5rem;
-		width: 100%;
-		padding: 0.625rem 0.75rem;
-		text-align: left;
-		background: none;
-		border: none;
-		cursor: pointer;
-		color: inherit;
+		flex: 1;
+		flex-direction: column;
+		min-height: 0;
 	}
-	.tt-killed-main {
+	.notice {
+		position: absolute;
+		bottom: 0.75rem;
+		left: 50%;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.25rem 0.25rem 0.25rem 0.875rem;
+		border-radius: 999px;
+		background: var(--bg-surface);
+		box-shadow:
+			inset 0 0 0 0.5px var(--border-strong),
+			var(--shadow-raised);
+		color: var(--text-default);
+		font-size: var(--text-footnote);
+		font-weight: var(--weight-medium);
+		white-space: nowrap;
+		translate: -50% 0;
+	}
+	.quiet {
 		display: flex;
 		flex-direction: column;
-		gap: 0.125rem;
-		min-width: 0;
-	}
-	.tt-killed-title {
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: 600;
-		color: var(--text-fg);
-	}
-	.tt-killed-meta {
-		font-size: var(--text-micro);
-		line-height: var(--lh-caption);
-		color: var(--text-faint);
-	}
-	.tt-killed-logs {
-		max-height: 22rem;
-		border-top: 1px solid var(--border-edge);
+		align-items: center;
+		gap: 0.5rem;
+		padding: 3rem 1rem;
+		color: var(--console-faint);
+		font-size: var(--text-callout);
 	}
 </style>

@@ -1,3 +1,15 @@
+export interface DatabasePod {
+	name: string;
+	status?: string;
+	podIp?: string;
+	podIP?: string;
+	startTime?: string;
+	role?: string;
+	labels?: Record<string, string>;
+	containers?: { name: string; image?: string; ready?: boolean }[];
+	containerStatuses?: { name: string; ready?: boolean; restartCount?: number; image?: string }[];
+}
+
 export interface DatabaseDetail {
 	id: string;
 	name: string;
@@ -18,12 +30,7 @@ export interface DatabaseDetail {
 	publicPort?: number | null;
 	publicHostname?: string | null;
 	publicConnectionString?: string | null;
-	pods?: {
-		name: string;
-		status?: string;
-		podIp?: string;
-		containers?: { name: string; image?: string; ready?: boolean }[];
-	}[];
+	pods?: DatabasePod[];
 	cpuRequestMilli?: number | null;
 	memoryRequestBytes?: number | null;
 	replicas?: number;
@@ -35,7 +42,19 @@ export interface DatabaseDetail {
 	createdAt: string;
 	backupsEnabled?: boolean;
 	backupScheduleCron?: string | null;
+	environmentId?: string | null;
+	deletionProtection?: boolean;
+	ddlCheckpoints?: boolean;
+	restoreTests?: boolean;
+	poolerEnabled?: boolean;
+	poolerConfig?: PoolerConfig | null;
+	backupMethod?: 'barman' | 'plugin' | null;
+	backupServerName?: string | null;
+	forkedFromId?: string | null;
+	forkedAt?: string | null;
 	liveStatus?: {
+		verdict?: DatabaseVerdict;
+		verdictReasons?: string[];
 		exists: boolean;
 		size?: string;
 		volume?: {
@@ -52,6 +71,7 @@ export interface DatabaseDetail {
 		phase?: string;
 		replicas?: number;
 		readyReplicas?: number;
+		currentPrimary?: string | null;
 		restartCount?: number;
 		message?: string;
 		lastTerminationReason?: string;
@@ -69,6 +89,7 @@ export interface DatabaseDetail {
 		id: string;
 		name: string;
 		slug: string;
+		organization?: { id?: string; slug: string };
 		workspace?: {
 			slug: string;
 			organization?: {
@@ -130,4 +151,206 @@ export interface TerminalTab {
 	title?: string;
 	bell?: boolean;
 	sessionHandle?: string;
+}
+
+export type DatabaseVerdict =
+	| 'healthy'
+	| 'degraded'
+	| 'unprotected'
+	| 'down'
+	| 'hibernated'
+	| 'unknown';
+
+export type OperationKind = 'restore' | 'fork' | 'undelete' | 'drill' | 'upgrade';
+export type OperationStatus = 'pending' | 'running' | 'succeeded' | 'failed';
+export type OperationPhase =
+	| 'queued'
+	| 'provisioning'
+	| 'recovering'
+	| 'verifying'
+	| 'cleaning_up'
+	| 'cutting_over'
+	| 'finalizing'
+	| 'rehearsal_provisioning'
+	| 'rehearsal_cloning'
+	| 'rehearsal_upgrading'
+	| 'upgrading'
+	| 'upgrade_waiting'
+	| 'upgrade_finishing'
+	| 'done';
+
+export type RecoveryTarget =
+	| { type: 'latest' }
+	| { type: 'now' }
+	| { type: 'time'; time: string }
+	| { type: 'checkpoint'; checkpointId: string }
+	| { type: 'backup'; backupId: string }
+	| { type: 'major'; major: number; image?: string };
+
+export interface DrillVerdict {
+	passed: boolean;
+	tablesChecked?: number;
+	missingTables?: string[];
+	rowDrift?: { table: string; expected?: number; actual?: number }[];
+	reasons?: string[];
+}
+
+export interface RetiredCopy {
+	namespace: string;
+	clusterName: string;
+	retireAfter: string;
+	deleted?: boolean;
+}
+
+export interface OperationResult {
+	recoveredFrom?: unknown;
+	recoveredAt?: string;
+	progress?: string;
+	verdict?: DrillVerdict;
+	recoveryMs?: number;
+	sizeBytes?: number;
+	retired?: RetiredCopy;
+	rehearsal?: { passed?: boolean; upgradeMs?: number };
+}
+
+export interface DatabaseOperation {
+	id: string;
+	databaseId: string | null;
+	kind: OperationKind;
+	mode: 'in_place' | 'fork' | null;
+	status: OperationStatus;
+	phase: OperationPhase;
+	target: RecoveryTarget | null;
+	request?: { rehearse?: boolean } | null;
+	source: { name?: string; namespace?: string; clusterName?: string; projectId?: string } | null;
+	targetNamespace: string | null;
+	targetClusterName: string | null;
+	targetDatabaseId: string | null;
+	result: OperationResult | null;
+	error: string | null;
+	createdAt: string;
+	startedAt: string | null;
+	finishedAt: string | null;
+}
+
+export type CheckpointKind = 'manual' | 'pre_deploy' | 'pre_op' | 'ddl';
+export type CheckpointStatus = 'pending' | 'durable' | 'failed' | 'expired';
+
+export interface DatabaseCheckpoint {
+	id: string;
+	databaseId: string;
+	groupId: string | null;
+	label: string | null;
+	kind: CheckpointKind;
+	status: CheckpointStatus;
+	restorePointName: string;
+	lsn: string | null;
+	walFile: string | null;
+	detail: string | null;
+	deploymentId: string | null;
+	releaseId: string | null;
+	createdAt: string;
+	durableAt: string | null;
+	expiresAt: string | null;
+	error: string | null;
+}
+
+export interface RecoveryBackup {
+	id: string;
+	label: string;
+	type: string;
+	completedAt: string | null;
+	barmanId: string | null;
+	startedAt: string | null;
+}
+
+export interface DatabaseProtection {
+	deletionProtection: boolean;
+	ddlCheckpoints: boolean;
+	restoreTests: boolean;
+}
+
+export interface RecoveryInfo {
+	earliest: string | null;
+	latest: string | null;
+	archiving: { ok: boolean; message?: string | null } | null;
+	backups: RecoveryBackup[];
+	checkpoints: DatabaseCheckpoint[];
+	lastRestoreTest: DatabaseOperation | null;
+	restoreTests: DatabaseOperation[];
+	activeOperations: DatabaseOperation[];
+	protection: DatabaseProtection;
+}
+
+export interface PoolerConfig {
+	instances: number;
+	poolMode: 'transaction' | 'session';
+	defaultPoolSize: number;
+	maxClientConn: number;
+}
+
+export interface PoolerState {
+	enabled: boolean;
+	config: PoolerConfig;
+	host: string | null;
+	port: number | null;
+	ready: boolean;
+	phase: string | null;
+}
+
+export interface DeletedDatabase {
+	id: string;
+	projectId: string;
+	organizationId: string;
+	environmentId: string | null;
+	name: string;
+	pgMajor: number | null;
+	reason: string | null;
+	recoverableUntil: string | null;
+	deletedAt: string;
+	deletedBy: string | null;
+	purgeAfter: string;
+}
+
+export interface DatabaseVersion {
+	major: number;
+	image: string;
+	minor: string | null;
+	supported: boolean | null;
+	current: boolean;
+	eolDate: string | null;
+}
+
+export interface DatabaseVersions {
+	versions: DatabaseVersion[];
+	defaultMajor: number;
+	source: string;
+	catalogDate: string | null;
+}
+
+export interface Vulnerability {
+	cve: string;
+	description: string;
+	component: string;
+	score: number | null;
+	vector: string | null;
+	fixedInVersion: string | null;
+	url: string;
+}
+
+export interface DatabaseSecurity {
+	running: string;
+	major: number;
+	minor: number | null;
+	latestMinor: string | null;
+	supported: boolean | null;
+	eolDate: string | null;
+	endOfLifeSoon: boolean;
+	vulnerabilities: Vulnerability[];
+	highestScore: number | null;
+	action: 'none' | 'minor_update' | 'major_upgrade' | 'unknown';
+	image: string | null;
+	minorUpdate: { to: string; automatic: boolean } | null;
+	upgrades: number[];
+	advisoriesFetchedAt: string | null;
 }

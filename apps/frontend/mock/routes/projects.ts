@@ -401,7 +401,10 @@ export function projectRoutes(r: Router, { store }: MockContext) {
 					detail: d.crash!.message,
 					since: d.updatedAt,
 					href: `/${o.slug}/deployments/${d.id}`,
-					action: { label: 'Raise memory', href: `/${o.slug}/deployments/${d.id}?tab=resources` }
+					action: {
+						label: 'See why',
+						href: `/${o.slug}/deployments/${d.id}?tab=observe&view=killed`
+					}
 				};
 			})
 	}));

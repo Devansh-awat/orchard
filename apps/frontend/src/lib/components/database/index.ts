@@ -1,4 +1,3 @@
-export { default as ConnectionTab } from './ConnectionTab.svelte';
 export { default as BackupsTab } from './BackupsTab.svelte';
 export { default as TerminalTab } from './TerminalTab.svelte';
 export { default as ExtensionsTab } from './ExtensionsTab.svelte';
@@ -15,5 +14,10 @@ export type {
 	SchedulePreset,
 	ExtInfo,
 	ParamMeta,
-	TerminalTab as TerminalTabType
+	TerminalTab as TerminalTabType,
+	DatabaseOperation,
+	DatabaseCheckpoint,
+	RecoveryInfo,
+	PoolerState,
+	DeletedDatabase
 } from './types';

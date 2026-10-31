@@ -4,6 +4,7 @@
 
 	let {
 		databaseName,
+		recoverable = true,
 		deleteCountdownActive,
 		deleteCountdown,
 		deleteProgress,
@@ -11,6 +12,7 @@
 		onCancelDelete
 	}: {
 		databaseName: string;
+		recoverable?: boolean;
 		deleteCountdownActive: boolean;
 		deleteCountdown: number;
 		deleteProgress: number;
@@ -26,8 +28,15 @@
 		<AlertTriangle size={20} />
 	</div>
 	<p class="modal-desc">
-		This permanently <strong>drops the PostgreSQL database</strong> and its user. All data will be lost.
-		This cannot be undone.
+		{#if recoverable}
+			Apps using it lose their connection now. It can be brought back from <strong
+				>Recently deleted</strong
+			> on the project for 30 days, then it is removed with its backups.
+		{:else}
+			Apps using it lose their connection now. It has never been backed up, so <strong
+				>it cannot be brought back</strong
+			>.
+		{/if}
 	</p>
 
 	{#if deleteCountdownActive}

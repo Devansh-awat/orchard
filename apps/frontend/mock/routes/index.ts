@@ -5,6 +5,8 @@ import { deploymentRoutes } from './deployments.ts';
 import { gitRoutes } from './git.ts';
 import { jobRoutes } from './jobs.ts';
 import { projectRoutes } from './projects.ts';
+import { recoveryRoutes } from './recovery.ts';
+import { versionRoutes } from './versions.ts';
 import { securityRoutes } from './security.ts';
 import { settingsRoutes } from './settings.ts';
 import { shellRoutes } from './shell.ts';
@@ -14,6 +16,8 @@ export function registerRoutes(router: Router, ctx: MockContext) {
 	deploymentRoutes(router, ctx);
 	projectRoutes(router, ctx);
 	databaseRoutes(router, ctx);
+	recoveryRoutes(router, ctx);
+	versionRoutes(router, ctx);
 	jobRoutes(router, ctx);
 	securityRoutes(router, ctx);
 	settingsRoutes(router, ctx);

@@ -8,7 +8,8 @@
 	import { apiFetch, toasts, subscribeOrgEvents, sseStatusFor, user } from '$lib/stores';
 	import { queryClient } from '$lib/query';
 	import type { PageData } from './$types';
-	import { Ellipsis, ExternalLink, Palette, Plus, RotateCw } from 'lucide-svelte';
+	import { Ellipsis, ExternalLink, Flag, Palette, Plus, RotateCw } from 'lucide-svelte';
+	import DeletedDatabases from '$lib/components/database/DeletedDatabases.svelte';
 	import {
 		Alert,
 		Breadcrumbs,
@@ -226,6 +227,46 @@
 
 	let envFilteredDeployments = $derived.by(() => filteredDeployments.filter(matchesEnv));
 	let envFilteredDatabases = $derived.by(() => databases.filter(matchesEnv));
+	const checkpointable = $derived(
+		envFilteredDatabases.filter((d) => d.mode === 'cnpg' && d.status === 'ready').length
+	);
+	let checkpointing = $state(false);
+
+	async function checkpointAll() {
+		if (!project || checkpointing) return;
+		checkpointing = true;
+		try {
+			const res = await apiFetch('/apiv1/checkpoints', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(
+					selectedEnvId ? { environmentId: selectedEnvId } : { projectId: project.id }
+				)
+			});
+			const data = await res.json().catch(() => null);
+			if (!res.ok) throw new Error(data?.message || 'Could not take checkpoints');
+			const n = data?.checkpoints?.length ?? 0;
+			toasts.add({
+				title:
+					n === 0
+						? 'No databases to checkpoint'
+						: `${n} ${n === 1 ? 'checkpoint' : 'checkpoints'} taken`,
+				description:
+					n === 0
+						? undefined
+						: `Every database in ${selectedEnvName || project.name} can go back to this moment.`,
+				color: n === 0 ? 'info' : 'success'
+			});
+		} catch (e) {
+			toasts.add({
+				title: 'Could not take checkpoints',
+				description: e instanceof Error ? e.message : undefined,
+				color: 'error'
+			});
+		} finally {
+			checkpointing = false;
+		}
+	}
 	// Template instances aren't environment-scoped, so surface them in the
 	// default environment only rather than duplicating across every env.
 	let envFilteredTemplateInstances = $derived.by(() =>
@@ -959,6 +1000,26 @@
 								bind:selectedEnvId
 							/>
 						{/if}
+						{#if activeTab === 'resources' && canEdit && checkpointable > 0}
+							<Menu placement="bottom-end">
+								{#snippet trigger(props)}
+									<Button
+										{...props}
+										variant="ghost"
+										icon={Ellipsis}
+										label="More actions"
+										loading={checkpointing}
+									/>
+								{/snippet}
+								<MenuItem
+									icon={Flag}
+									description={`A restore point for ${checkpointable === 1 ? 'the database' : `all ${checkpointable} databases`} in ${selectedEnvName || 'this project'}`}
+									onclick={checkpointAll}
+								>
+									Checkpoint all databases
+								</MenuItem>
+							</Menu>
+						{/if}
 					</div>
 				</div>
 			</div>
@@ -1036,6 +1097,13 @@
 								{/if}
 							</EmptyState>
 						{/if}
+						<DeletedDatabases
+							projectId={project.id}
+							orgSlug={orgSlug ?? ''}
+							matches={matchesEnv}
+							{canEdit}
+							onrestored={fetchProject}
+						/>
 						{#if orgId}
 							<GraftCards
 								slot="project.overview.cards"

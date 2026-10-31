@@ -2,7 +2,7 @@
 	import '$lib/components/database/database.css';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { loadTerminalTabs, saveTerminalTabs, terminalTabsKey } from '$lib/terminal/tabs-store';
 	import {
 		apiFetch,
@@ -15,23 +15,39 @@
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import Breadcrumbs from '$lib/components/ui/Breadcrumbs.svelte';
 	import {
-		Key,
-		Archive,
-		Terminal as TerminalIcon,
-		Puzzle,
-		Settings as SettingsIcon,
 		Activity,
-		Cpu,
-		Timer
+		Archive,
+		LayoutGrid,
+		Pause,
+		Pencil,
+		Play,
+		Settings as SettingsIcon
 	} from 'lucide-svelte';
-	import { UnderlineTabs, Skeleton, EmptyState } from '$lib/components/ui';
-	import StatusDot from '$lib/components/ui/StatusDot.svelte';
-	import { statusMeta } from '$lib/components/ui/status';
-	import DatabaseProvisioning from '$lib/components/DatabaseProvisioning.svelte';
-	import DeploymentMetrics from '$lib/components/DeploymentMetrics.svelte';
-	import ResourceLimits from '$lib/components/ResourceLimits.svelte';
 	import {
-		ConnectionTab,
+		ActionRow,
+		Alert,
+		Button,
+		EmptyState,
+		Modal,
+		PageTabs,
+		SectionCard,
+		SettingsRail,
+		Skeleton,
+		Switch
+	} from '$lib/components/ui';
+	import SettingsList from '$lib/components/ui/SettingsList.svelte';
+	import DatabaseProvisioning from '$lib/components/DatabaseProvisioning.svelte';
+	import ResourceLimits from '$lib/components/ResourceLimits.svelte';
+	import DatabaseConnect from '$lib/components/database/DatabaseConnect.svelte';
+	import DatabaseHealth from '$lib/components/database/DatabaseHealth.svelte';
+	import DatabaseActivity from '$lib/components/database/DatabaseActivity.svelte';
+	import DatabaseObserve from '$lib/components/database/DatabaseObserve.svelte';
+	import ProtectionCard from '$lib/components/database/ProtectionCard.svelte';
+	import PoolerCard from '$lib/components/database/PoolerCard.svelte';
+	import ReplicationCard from '$lib/components/database/ReplicationCard.svelte';
+	import UsersCard from '$lib/components/database/UsersCard.svelte';
+	import VersionCard from '$lib/components/database/VersionCard.svelte';
+	import {
 		BackupsTab,
 		TerminalTab,
 		ExtensionsTab,
@@ -44,7 +60,6 @@
 		StorageCard
 	} from '$lib/components/database';
 	import RenameModal from '$lib/components/RenameModal.svelte';
-	import Anomalies from '$lib/components/anomalies/Anomalies.svelte';
 	import type {
 		DatabaseDetail,
 		Backup,
@@ -271,21 +286,107 @@
 	let replicasDirty = $state(false);
 	let savingReplicas = $state(false);
 
-	// Tabs
-	const tabSections = [
-		{ id: 'connection', label: 'Connection', icon: Key },
-		{ id: 'backups', label: 'Backups', icon: Archive },
-		{ id: 'terminal', label: 'Terminal', icon: TerminalIcon },
-		{ id: 'extensions', label: 'Extensions', icon: Puzzle },
-		{ id: 'queries', label: 'Queries', icon: Timer },
-		{ id: 'metrics', label: 'Metrics', icon: Activity },
-		{ id: 'resources', label: 'Resources', icon: Cpu },
-		{ id: 'settings', label: 'Settings', icon: SettingsIcon }
+	type DbTab = 'overview' | 'backups' | 'observe' | 'settings';
+	const TABS = [
+		{ id: 'overview' as const, label: 'Overview', icon: LayoutGrid },
+		{ id: 'backups' as const, label: 'Backups', icon: Archive },
+		{ id: 'observe' as const, label: 'Observe', icon: Activity },
+		{ id: 'settings' as const, label: 'Settings', icon: SettingsIcon }
 	];
-	let activeTab = $state('connection');
+	const LEGACY_TABS: Record<string, [DbTab, string?]> = {
+		connection: ['overview'],
+		terminal: ['overview'],
+		metrics: ['observe'],
+		queries: ['observe'],
+		resources: ['settings', 'resources'],
+		extensions: ['settings', 'extensions']
+	};
+	const SETTINGS_SECTIONS = [
+		'general',
+		'resources',
+		'protection',
+		'availability',
+		'version',
+		'pooler',
+		'users',
+		'parameters',
+		'extensions',
+		'network',
+		'danger'
+	] as const;
+
+	function routeFrom(url: URL): { tab: DbTab; section: string } {
+		const raw = url.searchParams.get('tab') ?? 'overview';
+		const legacy = LEGACY_TABS[raw];
+		const tab: DbTab = legacy
+			? legacy[0]
+			: TABS.some((t) => t.id === raw)
+				? (raw as DbTab)
+				: 'overview';
+		const s = url.searchParams.get('s');
+		const section =
+			s && (SETTINGS_SECTIONS as readonly string[]).includes(s) ? s : (legacy?.[1] ?? 'general');
+		return { tab, section };
+	}
+
+	const route = $derived(routeFrom($page.url));
+	const activeTab = $derived(route.tab);
+	const settingsSection = $derived(route.section);
+
+	function hrefFor(tab: DbTab, section?: string) {
+		const url = new URL($page.url);
+		if (tab === 'overview') url.searchParams.delete('tab');
+		else url.searchParams.set('tab', tab);
+		if (tab === 'settings' && section && section !== 'general') url.searchParams.set('s', section);
+		else url.searchParams.delete('s');
+		return url.pathname + url.search;
+	}
+
+	const SETTINGS_RAIL = $derived([
+		{
+			label: 'Database',
+			items: [
+				{ id: 'general', label: 'General', href: hrefFor('settings', 'general') },
+				{ id: 'resources', label: 'Resources', href: hrefFor('settings', 'resources') },
+				{ id: 'protection', label: 'Protection', href: hrefFor('settings', 'protection') },
+				{ id: 'network', label: 'Public access', href: hrefFor('settings', 'network') }
+			]
+		},
+		{
+			label: 'Postgres',
+			items: [
+				{
+					id: 'version',
+					label: 'Version and security',
+					href: hrefFor('settings', 'version')
+				},
+				{
+					id: 'availability',
+					label: 'High availability',
+					href: hrefFor('settings', 'availability')
+				},
+				{ id: 'pooler', label: 'Connection pooler', href: hrefFor('settings', 'pooler') },
+				{ id: 'users', label: 'Users', href: hrefFor('settings', 'users') },
+				{ id: 'parameters', label: 'Parameters', href: hrefFor('settings', 'parameters') },
+				{ id: 'extensions', label: 'Extensions', href: hrefFor('settings', 'extensions') }
+			]
+		},
+		{
+			label: 'Admin',
+			items: [{ id: 'danger', label: 'Danger zone', href: hrefFor('settings', 'danger') }]
+		}
+	]);
+
+	function gotoTab(tab: DbTab, section?: string) {
+		goto(hrefFor(tab, section), { replaceState: true, keepFocus: true, noScroll: true });
+	}
+
 	let terminalVisited = $state(false);
+	let connectOpen = $state(false);
+	let showDisablePublicModal = $state(false);
+	let observeView = $state<'metrics' | 'queries'>('metrics');
 	$effect(() => {
-		if (activeTab === 'terminal') terminalVisited = true;
+		if (activeTab === 'overview') terminalVisited = true;
 	});
 
 	// SSE
@@ -453,7 +554,8 @@
 	// --- Effects ---
 	$effect(() => {
 		if (
-			activeTab === 'extensions' &&
+			activeTab === 'settings' &&
+			settingsSection === 'extensions' &&
 			database?.mode === 'cnpg' &&
 			!extensionsLoaded &&
 			!extensionsLoading
@@ -461,7 +563,9 @@
 			fetchExtensions();
 		}
 		if (
-			activeTab === 'settings' &&
+			(activeTab === 'overview' ||
+				activeTab === 'observe' ||
+				(activeTab === 'settings' && settingsSection === 'parameters')) &&
 			database?.mode === 'cnpg' &&
 			!settingsLoaded &&
 			!settingsLoading
@@ -471,17 +575,23 @@
 		if (activeTab === 'backups' && database?.mode === 'cnpg' && !scheduleLoaded) {
 			fetchSchedule();
 		}
-		if (activeTab === 'queries' && database?.mode === 'cnpg' && !queryStats && !queryStatsLoading) {
+		if (
+			activeTab === 'observe' &&
+			observeView === 'queries' &&
+			database?.mode === 'cnpg' &&
+			!queryStats &&
+			!queryStatsLoading
+		) {
 			fetchQueryStats();
 		}
 	});
 
 	$effect(() => {
-		if (activeTab === 'terminal' && activeConsoleTab === 'logs' && database?.pods?.[0]?.name) {
-			fetchLogs();
+		if (activeTab === 'overview' && activeConsoleTab === 'logs' && database?.pods?.[0]?.name) {
+			untrack(fetchLogs);
 		}
-		if (activeTab === 'terminal' && activeConsoleTab === 'killed' && !killedFetched) {
-			fetchKilled();
+		if (activeTab === 'overview' && activeConsoleTab === 'killed' && !killedFetched) {
+			untrack(fetchKilled);
 		}
 	});
 
@@ -528,6 +638,8 @@
 		if (!prev) return next;
 		return {
 			...next,
+			verdict: next.verdict ?? prev.verdict,
+			verdictReasons: next.verdictReasons ?? prev.verdictReasons,
 			size: next.size ?? prev.size,
 			connections: next.connections ?? prev.connections,
 			statsAt: next.statsAt ?? prev.statsAt
@@ -625,6 +737,55 @@
 			});
 		} finally {
 			savingResources = false;
+		}
+	}
+
+	const MIB = 1024 * 1024;
+	const memoryBytes = $derived(
+		database?.memoryRequestBytes != null
+			? Number(database.memoryRequestBytes)
+			: orgDefaultMemoryBytes
+	);
+	const memoryUpgradeBytes = $derived.by(() => {
+		if (!memoryBytes) return null;
+		const next = memoryBytes < 512 * MIB ? 512 * MIB : memoryBytes * 2;
+		if (effectiveMemLimit != null && next > effectiveMemLimit) return null;
+		return next;
+	});
+	let upgradingMemory = $state(false);
+
+	async function upgradeMemory() {
+		if (!database || !memoryUpgradeBytes) return;
+		const toBytes = memoryUpgradeBytes;
+		upgradingMemory = true;
+		try {
+			const res = await apiFetch(`/apiv1/databases/${database.id}/resources`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					cpuRequestMilli: database.cpuRequestMilli ?? null,
+					memoryRequestBytes: toBytes
+				})
+			});
+			if (!res.ok) {
+				const data = await res.json().catch(() => null);
+				throw new Error(data?.message || 'Failed to raise memory');
+			}
+			toasts.add({
+				title: `Memory raised to ${toBytes >= 1024 * MIB ? `${toBytes / (1024 * MIB)} GiB` : `${toBytes / MIB} MiB`}`,
+				description: 'It restarts once with the new size.',
+				color: 'success'
+			});
+			resourcesDirty = false;
+			await fetchDatabase(true);
+		} catch (e) {
+			toasts.add({
+				title: 'Could not raise memory',
+				description: e instanceof Error ? e.message : 'Failed to raise memory',
+				color: 'error'
+			});
+		} finally {
+			upgradingMemory = false;
 		}
 	}
 
@@ -736,8 +897,6 @@
 	}
 
 	async function restoreBackup(backup: Backup) {
-		if (!confirm(`Restore "${backup.label}"? This replaces all current data in this database.`))
-			return;
 		restoringBackupId = backup.id;
 		try {
 			const response = await apiFetch(`/apiv1/databases/${dbId}/restore`, {
@@ -867,12 +1026,6 @@
 
 	async function disablePublic() {
 		if (!database) return;
-		if (
-			!confirm(
-				'Stop exposing this database publicly? Connected clients using the public endpoint will be disconnected.'
-			)
-		)
-			return;
 		togglingPublic = true;
 		try {
 			const r = await apiFetch(`/apiv1/databases/${dbId}/public`, { method: 'DELETE' });
@@ -939,8 +1092,6 @@
 	}
 
 	async function uninstallExtension(name: string, removeFromPreload: boolean) {
-		if (!confirm(`Drop extension "${name}"? Objects that depend on it will also be dropped.`))
-			return;
 		busyExtension = name;
 		try {
 			const qs = removeFromPreload ? '?removeFromPreload=true' : '';
@@ -994,16 +1145,6 @@
 	}
 
 	async function saveSettings() {
-		const hasRestart = PARAM_SCHEMA.filter((p) => p.requiresRestart).some(
-			(p) => (settings[p.key] ?? '') !== (settingsLoadedValues[p.key] ?? '')
-		);
-		if (
-			hasRestart &&
-			!confirm(
-				'Some of these settings require a brief database restart (~10–30s of downtime). Apply now?'
-			)
-		)
-			return;
 		settingsSaving = true;
 		try {
 			const r = await apiFetch(`/apiv1/databases/${dbId}/settings`, {
@@ -1033,7 +1174,7 @@
 	// Terminal / logs
 	async function fetchLogs() {
 		if (!database?.namespace) return;
-		const podName = logsPodName || database.pods?.[0]?.name;
+		const podName = logsPodName || database.liveStatus?.currentPrimary || database.pods?.[0]?.name;
 		if (!podName) return;
 		if (!logs) logsLoading = true;
 		try {
@@ -1163,7 +1304,7 @@
 
 	// Delete
 	function openDeleteModal() {
-		if (!database) return;
+		if (!database || database.deletionProtection) return;
 		showDeleteModal = true;
 		deleteCountdownActive = false;
 		deleteCountdown = 10;
@@ -1207,14 +1348,25 @@
 				const data = await response.json().catch(() => ({}));
 				throw new Error(data.message || 'Failed to delete database');
 			}
+			const result = await response.json().catch(() => ({}));
+			const until = result?.recoverableUntil
+				? new Date(result.recoverableUntil).toLocaleDateString(undefined, {
+						month: 'short',
+						day: 'numeric'
+					})
+				: null;
 			toasts.add({
-				title: 'Database deleted',
-				description: `${database.name} has been deleted`,
+				title: `${database.name} deleted`,
+				description: until
+					? `Bring it back from the project until ${until}.`
+					: 'It had no backup, so it cannot be brought back.',
 				color: 'success'
 			});
 			const ws = database.project?.workspace;
 			if (ws) {
 				goto(`/${orgSlug}/workspaces/${ws.slug}/projects/${database.project!.slug}`);
+			} else if (database.project?.slug) {
+				goto(`/${orgSlug}/projects/${database.project.slug}`);
 			} else {
 				goto(`/${orgSlug}`);
 			}
@@ -1332,6 +1484,8 @@
 					resourceCpuMilli = database?.cpuRequestMilli ?? null;
 					resourceMemoryBytes =
 						database?.memoryRequestBytes != null ? Number(database.memoryRequestBytes) : null;
+					scaleReplicas = Math.max(1, seed.replicas ?? 1);
+					storageSizeDraft = seed.storageSize ?? '';
 				}
 			})
 			.catch(() => {});
@@ -1381,7 +1535,7 @@
 			<Skeleton height="12rem" rounded="0.75rem" />
 		</div>
 	{:else if error}
-		<div class="db-error">{error}</div>
+		<EmptyState title="Couldn't load this database" description={error} />
 	{:else if database}
 		{@const ls = database.liveStatus}
 		{@const isUnhealthy = !!(
@@ -1389,22 +1543,20 @@
 				/oomkilled|out of memory|crashloopbackoff|back-?off|error/i.test(ls.message)) ||
 			(ls?.exists !== false && ls?.ready === false && database.status === 'ready')
 		)}
-		<div class="mb-4">
-			<Breadcrumbs
-				crumbs={[
-					{ label: 'Home', href: `/${orgSlug}` },
-					...(database.project
-						? [
-								{
-									label: database.project.name || database.project.slug,
-									href: `/${orgSlug}/projects/${database.project.slug}`
-								}
-							]
-						: []),
-					{ label: database.name }
-				]}
-			/>
-		</div>
+		<Breadcrumbs
+			crumbs={[
+				{ label: 'Home', href: `/${orgSlug}` },
+				...(database.project
+					? [
+							{
+								label: database.project.name || database.project.slug,
+								href: `/${orgSlug}/projects/${database.project.slug}`
+							}
+						]
+					: []),
+				{ label: database.name }
+			]}
+		/>
 		<DatabaseHeader
 			{database}
 			{deleting}
@@ -1417,25 +1569,35 @@
 			onStop={() => (showStopModal = true)}
 			onStart={() => lifecycleAction('start')}
 			onRestart={() => (showRestartModal = true)}
+			onConnect={database.status === 'ready' ? () => (connectOpen = true) : undefined}
 			statusOverride={dbStopped
 				? 'stopped'
-				: database.status === 'restarting'
+				: database.status === 'restarting' || database.status === 'upgrading'
 					? undefined
 					: isUnhealthy
 						? 'unhealthy'
 						: undefined}
 		/>
 
+		<div class="db-tabs-bar">
+			<PageTabs
+				label="Database sections"
+				tabs={TABS}
+				value={activeTab}
+				onchange={(v) => gotoTab(v as DbTab)}
+			/>
+		</div>
+
 		<DatabaseAlerts
 			{database}
-			onGoToBackups={() => {
-				activeTab = 'backups';
-			}}
-			onGoToResources={() => {
-				activeTab = 'resources';
-			}}
+			{memoryBytes}
+			memoryUpgrade={memoryUpgradeBytes
+				? { toBytes: memoryUpgradeBytes, busy: upgradingMemory, run: upgradeMemory }
+				: null}
+			onGoToBackups={() => gotoTab('backups')}
+			onGoToResources={() => gotoTab('settings', 'resources')}
 			onViewLogs={() => {
-				activeTab = 'terminal';
+				gotoTab('overview');
 				activeConsoleTab = 'logs';
 			}}
 		/>
@@ -1443,89 +1605,56 @@
 		{#if database.mode === 'cnpg' && (database.status === 'provisioning' || database.status === 'restoring' || dbErrorConfirmed)}
 			<DatabaseProvisioning {dbId} dbName={database.name} onDone={() => fetchDatabase(true)} />
 		{:else}
-			<Anomalies scope={{ kind: 'database', id: dbId }} hideResource />
-			{#if database.liveStatus}
-				{@const state = podStateLabel()}
-				<div class="db-stats">
-					{#if database.mode === 'container'}
-						<div class="db-stat db-stat-pod">
-							<span class="db-stat-label">Pod State</span>
-							<div class="db-pod-state-row">
-								<StatusDot
-									meta={state.kind === 'ready'
-										? statusMeta('success', state.label)
-										: state.kind === 'error'
-											? statusMeta('error', state.label)
-											: statusMeta('progress', state.label, true)}
-									size={8}
-								/>
-								<span class="db-stat-value" title={database.liveStatus.message ?? ''}
-									>{state.label}</span
-								>
-							</div>
-							{#if typeof database.liveStatus.readyReplicas === 'number' && typeof database.liveStatus.replicas === 'number'}
-								<span class="db-pod-sub"
-									>{database.liveStatus.readyReplicas} / {database.liveStatus.replicas} ready{#if database.liveStatus.restartCount}·
-										{database.liveStatus.restartCount} restarts{/if}</span
-								>
-							{/if}
-						</div>
-					{/if}
-					<div
-						class="db-stat"
-						class:db-stat--stale={statsStale}
-						title={statsAgo ? `As of ${statsAgo}` : ''}
-					>
-						<span class="db-stat-label">Data size</span>
-						<span class="db-stat-value">{database.liveStatus.size ?? '—'}</span>
+			{#if terminalVisited}
+				<div class="db-overview" hidden={activeTab !== 'overview'}>
+					<section class="db-console" aria-label="Console">
+						<TerminalTab
+							{database}
+							visible={activeTab === 'overview'}
+							{logs}
+							{logsLoading}
+							bind:logsRef
+							bind:activeConsoleTab
+							bind:terminalTabs
+							bind:consoleExpanded
+							bind:tailLines
+							bind:logsPodName
+							bind:logsPrevious
+							{killedList}
+							{killedLoading}
+							{killedLogs}
+							{killedLogsLoading}
+							{expandedKilled}
+							onFetchLogs={fetchLogs}
+							onFetchKilled={fetchKilled}
+							onToggleKilled={toggleKilled}
+							onOpenShellTab={openShellTab}
+							onCloseTerminalTab={closeTerminalTab}
+							onTerminalTitle={setTerminalTitle}
+							onTerminalBell={setTerminalBell}
+							onTerminalSession={setTerminalSession}
+							{podShortName}
+						/>
+					</section>
+					<div class="db-side">
+						{#if database.mode !== 'shared'}
+							<DatabaseHealth
+								{database}
+								maxConnections={settingsLoaded
+									? Number(paramValue('max_connections')) || null
+									: null}
+								backupsHref={hrefFor('backups')}
+								versionHref={hrefFor('settings', 'version')}
+								settingsHref={hrefFor('settings', 'resources')}
+							/>
+							<DatabaseActivity databaseId={database.id} observeHref={hrefFor('observe')} />
+						{/if}
 					</div>
-					<div
-						class="db-stat"
-						class:db-stat--stale={statsStale}
-						title={statsAgo ? `As of ${statsAgo}` : ''}
-					>
-						<span class="db-stat-label">Connections</span>
-						<span class="db-stat-value">{database.liveStatus.connections ?? '—'}</span>
-					</div>
-					<div class="db-stat">
-						<span class="db-stat-label">Port</span>
-						<span class="db-stat-value">{database.port}</span>
-					</div>
-					{#if database.mode === 'container' && database.storageSize}
-						<div class="db-stat">
-							<span class="db-stat-label">Storage</span>
-							<span class="db-stat-value">{database.storageSize}</span>
-						</div>
-					{/if}
 				</div>
 			{/if}
 
-			<div class="db-tabs">
-				<UnderlineTabs
-					tabs={tabSections}
-					bind:value={activeTab}
-					variant="toolbar"
-					label="Database sections"
-				/>
-			</div>
-
-			{#if activeTab === 'connection'}
-				<section class="db-tab-panel">
-					<ConnectionTab
-						{database}
-						{orgSlug}
-						bind:copiedField
-						bind:showPassword
-						bind:showConnectionString
-						bind:showPublicConnectionString
-						{togglingPublic}
-						onEnablePublic={enablePublic}
-						onDisablePublic={disablePublic}
-						onCopy={copyToClipboard}
-					/>
-				</section>
-			{:else if activeTab === 'backups'}
-				<section class="db-tab-panel">
+			{#if activeTab === 'backups'}
+				<section class="db-panel">
 					<BackupsTab
 						{database}
 						{orgSlug}
@@ -1542,29 +1671,22 @@
 						schedulePresets={[...SCHEDULE_PRESETS]}
 						onCreateBackup={createBackup}
 						onRestoreBackup={restoreBackup}
+						onRestoreConfirmed={restoreBackup}
 						onSaveSchedule={saveSchedule}
+						onRecoveryChanged={() => fetchDatabase(true)}
 						{formatBytes}
 						{formatDate}
 					/>
 				</section>
-			{:else if activeTab === 'extensions'}
-				<section class="db-tab-panel">
-					<ExtensionsTab
+			{:else if activeTab === 'observe'}
+				<section class="db-panel db-stack">
+					<DatabaseObserve
 						{database}
-						{filteredExtensions}
-						{preloadedExts}
-						{extensionsLoading}
-						bind:extensionSearch
-						{busyExtension}
-						onFetchExtensions={fetchExtensions}
-						onInstallExtension={installExtension}
-						onUninstallExtension={uninstallExtension}
-					/>
-				</section>
-			{:else if activeTab === 'queries'}
-				<section class="db-tab-panel">
-					<QueriesTab
-						{database}
+						bind:view={observeView}
+						active={activeTab === 'observe'}
+						defaultCpuMilli={orgDefaultCpuMilli}
+						defaultMemoryBytes={orgDefaultMemoryBytes}
+						maxConnections={settingsLoaded ? Number(paramValue('max_connections')) || null : null}
 						stats={queryStats}
 						loading={queryStatsLoading}
 						refreshing={queryStatsRefreshing}
@@ -1576,108 +1698,211 @@
 						onEnable={enableQueryStats}
 					/>
 				</section>
-			{:else if activeTab === 'metrics'}
-				<section class="db-tab-panel">
-					{#if database?.mode !== 'shared'}
-						<div class="card rounded-2xl p-5">
-							<DeploymentMetrics kind="database" id={database?.id ?? null} />
-						</div>
-					{:else}
-						<EmptyState
-							title="Metrics need a dedicated database"
-							description="Create a dedicated database for full metrics."
-						/>
-					{/if}
-				</section>
-			{:else if activeTab === 'resources'}
-				<section class="db-tab-panel">
-					{#if database?.mode !== 'shared'}
-						{#if database?.mode === 'cnpg'}
-							<StorageCard
-								{database}
-								bind:value={storageSizeDraft}
-								bind:dirty={storageDirty}
-								saving={expandingStorage}
-								warning={storageWarning}
-								onExpand={expandStorage}
-							/>
-							<ReplicasCard
-								{database}
-								bind:replicas={scaleReplicas}
-								bind:replicasDirty
-								saving={savingReplicas}
-								onScale={scaleDatabase}
-							/>
-						{/if}
-						<ResourceLimits
-							entity={database}
-							bind:resourceCpuMilli
-							bind:resourceMemoryBytes
-							{orgDefaultCpuMilli}
-							{orgDefaultMemoryBytes}
-							{effectiveCpuLimit}
-							{effectiveMemLimit}
-							bind:resourcesDirty
-							{savingResources}
-							onSaveResources={saveResources}
-						/>
-					{:else}
-						<EmptyState
-							title="Resources need a dedicated database"
-							description="Resource configuration is not available for shared databases."
-						/>
-					{/if}
-				</section>
 			{:else if activeTab === 'settings'}
-				<section class="db-tab-panel">
-					<SettingsTab
-						{database}
-						paramSchema={PARAM_SCHEMA}
-						{settingsLoading}
-						{settingsLoaded}
-						{settingsSaving}
-						{settingsDirty}
-						{settingsAdvisories}
-						{settingsDrift}
-						onFetchSettings={() => {
-							settingsLoaded = false;
-							fetchSettings();
-						}}
-						onSaveSettings={saveSettings}
-						{paramValue}
-						{setParam}
+				<section class="db-panel db-settings">
+					<SettingsRail
+						groups={SETTINGS_RAIL}
+						activeId={settingsSection}
+						label="Database settings"
 					/>
-				</section>
-			{/if}
-			{#if terminalVisited}
-				<section class="db-tab-panel" hidden={activeTab !== 'terminal'}>
-					<TerminalTab
-						{database}
-						visible={activeTab === 'terminal'}
-						{logs}
-						{logsLoading}
-						bind:logsRef
-						bind:activeConsoleTab
-						bind:terminalTabs
-						bind:consoleExpanded
-						bind:tailLines
-						bind:logsPodName
-						bind:logsPrevious
-						{killedList}
-						{killedLoading}
-						{killedLogs}
-						{killedLogsLoading}
-						{expandedKilled}
-						onFetchLogs={fetchLogs}
-						onFetchKilled={fetchKilled}
-						onToggleKilled={toggleKilled}
-						onOpenShellTab={openShellTab}
-						onCloseTerminalTab={closeTerminalTab}
-						onTerminalTitle={setTerminalTitle}
-						onTerminalBell={setTerminalBell}
-						onTerminalSession={setTerminalSession}
-						{podShortName}
-					/>
+					<div class="db-stack">
+						{#if settingsSection === 'general'}
+							<SectionCard title="General">
+								<SettingsList>
+									<ActionRow label="Name" hint={database.name}>
+										<Button size="sm" icon={Pencil} onclick={() => (renameOpen = true)}
+											>Rename</Button
+										>
+									</ActionRow>
+									<ActionRow
+										label="Engine"
+										hint={database.pgMajor ? `Postgres ${database.pgMajor}` : 'Postgres'}
+									>
+										<span></span>
+									</ActionRow>
+									<ActionRow
+										label="Database and user"
+										hint={`${database.dbName} · ${database.dbUser}`}
+									>
+										<span></span>
+									</ActionRow>
+								</SettingsList>
+							</SectionCard>
+						{:else if settingsSection === 'resources'}
+							{#if database.mode === 'shared'}
+								<EmptyState
+									title="Resources need a dedicated database"
+									description="A shared database runs on capacity Orchard manages."
+								/>
+							{:else}
+								<ResourceLimits
+									entity={database}
+									bind:resourceCpuMilli
+									bind:resourceMemoryBytes
+									{orgDefaultCpuMilli}
+									{orgDefaultMemoryBytes}
+									{effectiveCpuLimit}
+									{effectiveMemLimit}
+									bind:resourcesDirty
+									{savingResources}
+									onSaveResources={saveResources}
+								/>
+								{#if database.mode === 'cnpg'}
+									<StorageCard
+										{database}
+										bind:value={storageSizeDraft}
+										bind:dirty={storageDirty}
+										saving={expandingStorage}
+										warning={storageWarning}
+										onExpand={expandStorage}
+									/>
+									<ReplicasCard
+										{database}
+										bind:replicas={scaleReplicas}
+										bind:replicasDirty
+										saving={savingReplicas}
+										onScale={scaleDatabase}
+									/>
+								{/if}
+							{/if}
+						{:else if settingsSection === 'protection'}
+							<ProtectionCard
+								{database}
+								onchanged={(next) => {
+									if (!database) return;
+									database.deletionProtection = next.deletionProtection;
+									database.ddlCheckpoints = next.ddlCheckpoints;
+									database.restoreTests = next.restoreTests;
+								}}
+							/>
+						{:else if settingsSection === 'version'}
+							{#if database.mode === 'cnpg'}
+								<VersionCard
+									{database}
+									onupgrade={() => {
+										fetchDatabase(true);
+										gotoTab('backups');
+									}}
+								/>
+							{:else}
+								<EmptyState title="Upgrades need a dedicated database" />
+							{/if}
+						{:else if settingsSection === 'availability'}
+							{#if database.mode === 'cnpg'}
+								<ReplicationCard {database} resourcesHref={hrefFor('settings', 'resources')} />
+							{:else}
+								<EmptyState title="High availability needs a dedicated database" />
+							{/if}
+						{:else if settingsSection === 'pooler'}
+							{#if database.mode === 'cnpg'}
+								<PoolerCard
+									{database}
+									onchanged={(p) => {
+										if (database) database.poolerEnabled = p.enabled;
+									}}
+								/>
+							{:else}
+								<EmptyState title="The pooler needs a dedicated database" />
+							{/if}
+						{:else if settingsSection === 'users'}
+							{#if database.mode === 'cnpg'}
+								<UsersCard {database} />
+							{:else}
+								<EmptyState title="Users need a dedicated database" />
+							{/if}
+						{:else if settingsSection === 'parameters'}
+							<SettingsTab
+								{database}
+								paramSchema={PARAM_SCHEMA}
+								{settingsLoading}
+								{settingsLoaded}
+								{settingsSaving}
+								{settingsDirty}
+								{settingsAdvisories}
+								{settingsDrift}
+								onFetchSettings={() => {
+									settingsLoaded = false;
+									fetchSettings();
+								}}
+								onSaveSettings={saveSettings}
+								savedValues={settingsLoadedValues}
+								onDiscardSettings={fetchSettings}
+								{paramValue}
+								{setParam}
+							/>
+						{:else if settingsSection === 'extensions'}
+							<ExtensionsTab
+								{database}
+								{filteredExtensions}
+								{preloadedExts}
+								{extensionsLoading}
+								bind:extensionSearch
+								{busyExtension}
+								onFetchExtensions={fetchExtensions}
+								onInstallExtension={installExtension}
+								onUninstallExtension={uninstallExtension}
+							/>
+						{:else if settingsSection === 'network'}
+							<SectionCard title="Public access">
+								<SettingsList>
+									<ActionRow
+										label="Reachable from the internet"
+										hint={database.publicEnabled
+											? `On port ${database.publicPort ?? ''}. Anyone with the password can connect.`
+											: 'Off. Only apps in this project can connect.'}
+									>
+										<Switch
+											label="Public access"
+											checked={!!database.publicEnabled}
+											disabled={togglingPublic || database.mode !== 'cnpg'}
+											onchange={(on) => (on ? enablePublic() : (showDisablePublicModal = true))}
+										/>
+									</ActionRow>
+								</SettingsList>
+							</SectionCard>
+						{:else if settingsSection === 'danger'}
+							<SectionCard title="Danger zone" tone="danger">
+								<SettingsList>
+									{#if dbStopped}
+										<ActionRow label="Start this database" hint="Apps reconnect once it is ready.">
+											<Button
+												size="sm"
+												icon={Play}
+												loading={startingDb}
+												onclick={() => lifecycleAction('start')}>Start</Button
+											>
+										</ActionRow>
+									{:else}
+										<ActionRow
+											label="Stop this database"
+											hint="Apps lose their connection until you start it again. Data stays on disk."
+										>
+											<Button
+												size="sm"
+												icon={Pause}
+												loading={stoppingDb}
+												onclick={() => (showStopModal = true)}>Stop</Button
+											>
+										</ActionRow>
+									{/if}
+									<ActionRow
+										label="Delete this database"
+										hint={database.deletionProtection
+											? 'Deletion protection is on. Turn it off in Protection to delete.'
+											: 'Kept for 30 days in Recently deleted on the project, then removed with its backups.'}
+									>
+										<Button
+											variant="danger"
+											size="sm"
+											loading={deleting}
+											disabled={!!database.deletionProtection}
+											onclick={openDeleteModal}>Delete database</Button
+										>
+									</ActionRow>
+								</SettingsList>
+							</SectionCard>
+						{/if}
+					</div>
 				</section>
 			{/if}
 		{/if}
@@ -1685,6 +1910,13 @@
 </div>
 
 {#if database}
+	<Modal bind:open={connectOpen} title="Connect to {database.name}" size="md">
+		<DatabaseConnect
+			{database}
+			settingsHref={hrefFor('settings', 'network')}
+			onnavigate={() => (connectOpen = false)}
+		/>
+	</Modal>
 	<RenameModal
 		bind:open={renameOpen}
 		title="Rename database"
@@ -1693,6 +1925,15 @@
 		onSave={renameDatabase}
 	/>
 {/if}
+
+<ConfirmModal
+	bind:open={showDisablePublicModal}
+	title="Turn off public access?"
+	description="Clients connecting over the public address are disconnected. Apps in this project keep working."
+	confirmLabel="Turn off"
+	onconfirm={disablePublic}
+	oncancel={() => {}}
+/>
 
 <ConfirmModal
 	bind:open={showStopModal}
@@ -1726,6 +1967,8 @@
 {#if showDeleteModal && database}
 	<DeleteModal
 		databaseName={database.name}
+		recoverable={!!database.liveStatus?.lastSuccessfulBackup ||
+			backups.some((b) => b.status === 'completed')}
 		{deleteCountdownActive}
 		{deleteCountdown}
 		{deleteProgress}
@@ -1736,127 +1979,91 @@
 
 <style>
 	.db-page {
+		--section-r: var(--radius-widget);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-5);
 		max-width: 100rem;
 		margin: 0 auto;
 		padding: 1.5rem;
 	}
-
 	.db-page :global(.bc) {
 		align-self: flex-start;
 		width: fit-content;
-		margin-bottom: 1rem;
 		padding: 0.3125rem 0.75rem;
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-pill);
 		background: color-mix(in srgb, var(--bg-surface) 94%, transparent);
 		box-shadow: var(--elev-1);
 	}
-
 	.db-skeleton {
 		padding: 2.5rem 0;
 	}
-
-	.db-error {
-		padding: 0.75rem 1rem;
-		border-radius: var(--radius-md);
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		background-color: color-mix(in srgb, var(--error-text-color) 10%, transparent);
-		color: var(--error-text-color);
-		border: 1px solid color-mix(in srgb, var(--error-text-color) 25%, transparent);
+	.db-overview {
+		display: grid;
+		grid-template-columns: minmax(0, 1.618fr) minmax(21rem, 1fr);
+		gap: 1rem;
+		height: max(26rem, calc(100dvh - 16.875rem));
+		min-height: 0;
 	}
-
-	.db-stats {
-		display: flex;
-		align-items: stretch;
-		margin-bottom: 1.5rem;
-		flex-wrap: wrap;
-		row-gap: 0.5rem;
+	.db-overview[hidden] {
+		display: none;
 	}
-
-	.db-stat {
+	.db-console {
 		display: flex;
 		flex-direction: column;
-		gap: 0.25rem;
-		padding: 0.25rem 1.25rem;
-		min-width: 7.5rem;
+		min-width: 0;
+		min-height: 0;
+		border-radius: calc(var(--radius-widget) * var(--corner-scale));
+		corner-shape: var(--corner);
+		overflow: clip;
 	}
-
-	.db-stat--stale .db-stat-value {
-		color: var(--text-muted);
-		transition: color var(--dur-base) ease;
+	.db-console > :global(*) {
+		flex: 1 1 auto;
+		min-height: 0;
 	}
-
-	.db-stat:not(:first-child) {
-		border-left: 1px solid var(--rule);
+	.db-side > :global(.widget:last-child) {
+		flex: 1 1 auto;
 	}
-
-	.db-stat:first-child {
-		padding-left: 0;
-	}
-
-	.db-stat-label {
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: 500;
-		color: var(--text-faint);
-		white-space: nowrap;
-	}
-
-	.db-stat-value {
-		font-size: var(--text-headline);
-		line-height: var(--lh-headline);
-		font-weight: 600;
-		font-variant-numeric: tabular-nums;
-		letter-spacing: var(--track-headline);
-		color: var(--text-default);
-		white-space: nowrap;
-	}
-
-	.db-empty-state {
-		padding: 2rem 1.5rem;
-		text-align: center;
-		color: var(--surface-muted);
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		border: 1px dashed var(--surface-border);
-		border-radius: var(--radius-md);
-	}
-
-	.db-stat-pod {
-		min-width: 10rem;
-	}
-
-	.db-pod-state-row {
+	.db-side {
 		display: flex;
-		align-items: center;
-		gap: 0.5rem;
+		flex-direction: column;
+		gap: 1rem;
+		min-width: 0;
+		min-height: 0;
+		margin: -2px;
+		padding: 2px;
+		overflow-y: auto;
+		scrollbar-width: thin;
 	}
-
-	.db-pod-sub {
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		color: var(--surface-muted);
-		margin-top: 0.125rem;
+	.db-panel {
+		min-width: 0;
 	}
-
-	.db-tabs {
-		margin-bottom: 1.5rem;
+	.db-stack {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+		min-width: 0;
 	}
-
-	.db-tab-panel {
-		color: var(--center-channel-color);
-		animation: tab-panel-in 260ms cubic-bezier(0.22, 1, 0.36, 1);
+	.db-settings {
+		display: grid;
+		grid-template-columns: 12rem minmax(0, 1fr);
+		gap: var(--space-6);
+		align-items: start;
 	}
-
-	@keyframes tab-panel-in {
-		from {
-			opacity: 0;
-			transform: translateY(0.75rem) scale(0.99);
+	@media (max-width: 64rem) {
+		.db-overview {
+			grid-template-columns: minmax(0, 1fr);
+			height: auto;
 		}
-		to {
-			opacity: 1;
-			transform: none;
+		.db-console {
+			height: 32rem;
+		}
+	}
+	@media (max-width: 900px) {
+		.db-settings {
+			grid-template-columns: 1fr;
+			gap: var(--space-4);
 		}
 	}
 </style>

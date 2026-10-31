@@ -4,6 +4,7 @@ import { notFound, reply, type Router } from '../router.ts';
 import { creator, databaseSummary } from '../serialize.ts';
 import type { Store } from '../store.ts';
 import type { MockDatabase } from '../types.ts';
+import { recoveryFields, trashDatabase } from './recovery.ts';
 
 const MIB = 1024 ** 2;
 
@@ -34,10 +35,40 @@ function pods(db: MockDatabase) {
 	}));
 }
 
+function verdictOf(db: MockDatabase, oom: boolean) {
+	if (db.engine !== 'postgres') return {};
+	if (db.status === 'stopped') return { verdict: 'hibernated', verdictReasons: [] };
+	if (db.status === 'provisioning' || db.status === 'restoring')
+		return { verdict: 'unknown', verdictReasons: [] };
+	if (db.status !== 'ready')
+		return { verdict: 'down', verdictReasons: ['No instance is accepting connections'] };
+	if (oom)
+		return {
+			verdict: 'degraded',
+			verdictReasons: [
+				'The primary ran out of memory 4 minutes ago and restarted (exit 137)',
+				'512 MB is the smallest size that holds shared_buffers and connections'
+			]
+		};
+	if (!db.backups.some((b) => b.status === 'completed'))
+		return { verdict: 'unprotected', verdictReasons: ['There is no backup to restore from yet'] };
+	return { verdict: 'healthy', verdictReasons: [] };
+}
+
 function liveStatus(db: MockDatabase) {
 	const capacity = parseGi(db.storageSize);
 	const ready = db.status === 'ready';
+	const oom = ready && db.engine === 'postgres' && db.memoryRequestBytes < 512 * MIB;
 	return {
+		...verdictOf(db, oom),
+		...(oom
+			? {
+					message: 'OOMKilled',
+					lastTerminationReason: 'OOMKilled',
+					lastTerminationExitCode: 137,
+					lastTerminationAt: new Date(Date.now() - 4 * 60_000).toISOString()
+				}
+			: {}),
 		exists: db.status !== 'provisioning',
 		ready,
 		phase:
@@ -48,7 +79,8 @@ function liveStatus(db: MockDatabase) {
 					: 'Setting up primary',
 		replicas: db.instances,
 		readyReplicas: ready ? db.instances : 0,
-		restartCount: 0,
+		currentPrimary: db.status === 'stopped' ? null : `${db.name}-cluster-1`,
+		restartCount: oom ? 142 : 0,
 		size: `${Math.round(db.storageUsedBytes / MIB)} MB`,
 		connections: ready ? 4 + (db.name.length % 9) : 0,
 		statsAt: new Date().toISOString(),
@@ -85,7 +117,8 @@ export function databaseDetail(store: Store, db: MockDatabase, fast = false) {
 	return {
 		...databaseSummary(store, db),
 		dbUser: db.username,
-		dbPassword: db.password,
+		dbPassword: null,
+		passwordSet: true,
 		host,
 		port,
 		pgMajor: db.engine === 'postgres' ? Number(db.version) : undefined,
@@ -98,8 +131,8 @@ export function databaseDetail(store: Store, db: MockDatabase, fast = false) {
 		publicPort: null,
 		publicHostname: null,
 		publicConnectionString: null,
-		connectionString,
-		internalHost: host,
+		connectionString: connectionString.replace(db.password, '****'),
+		internalHost: `${host}:${port}`,
 		endpoints:
 			db.engine === 'postgres'
 				? {
@@ -115,6 +148,7 @@ export function databaseDetail(store: Store, db: MockDatabase, fast = false) {
 		backupsEnabled: db.backupSchedule.enabled,
 		backupScheduleCron: db.backupSchedule.enabled ? db.backupSchedule.schedule : null,
 		environmentId: db.environmentId,
+		...recoveryFields(db),
 		pods: fast ? [] : pods(db),
 		liveStatus: fast ? undefined : liveStatus(db),
 		project: { id: p.id, name: p.name, slug: p.slug, organization: { id: o.id, slug: o.slug } },
@@ -155,6 +189,31 @@ export function metricSeries(query: URLSearchParams, cpu: number, memMb: number)
 			mem: series(start, end, step, memMb, memMb * 0.06),
 			rx: series(start, end, step, 42, 30),
 			tx: series(start, end, step, 18, 12)
+		}
+	};
+}
+
+function databaseSeries(query: URLSearchParams, db: MockDatabase) {
+	const base = metricSeries(query, 38, Math.round(db.memoryRequestBytes / MIB / 2));
+	const { start, end, step } = base;
+	const used = db.storageUsedBytes / MIB;
+	const capacity = parseGi(db.storageSize) / MIB;
+	const flat = (y: number) => series(start, end, step, y, 0);
+	return {
+		...base,
+		data: {
+			...base.data,
+			connections: series(start, end, step, 9, 4).map((p) => ({ ...p, y: Math.round(p.y) })),
+			tps: series(start, end, step, 140, 90),
+			cacheHit: series(start, end, step, 98.6, 1.1).map((p) => ({ ...p, y: Math.min(100, p.y) })),
+			lag:
+				db.instances > 1
+					? series(start, end, step, 0.04, 0.03).map((p) => ({ ...p, y: Math.max(0, p.y) }))
+					: [],
+			size: series(start, end, step, used * 0.98, used * 0.02),
+			deadlocks: flat(0),
+			disk: series(start, end, step, used * 1.12, used * 0.03),
+			diskCapacity: flat(capacity)
 		}
 	};
 }
@@ -367,9 +426,25 @@ export function databaseRoutes(r: Router, { store }: MockContext) {
 	r.get('/databases/:id/metrics', ({ params, query }) => {
 		const db = find(params.id);
 		if (!db) return notFound();
-		return metricSeries(query, 38, Math.round(db.memoryRequestBytes / MIB / 2));
+		return databaseSeries(query, db);
 	});
 	r.get('/databases/:id/killed-containers', () => []);
+	r.get('/databases/:id/killed-containers/:entryId/logs', () => ({ logs: '' }));
+	r.get('/databases/:id/connection', ({ params }) => {
+		const db = find(params.id);
+		if (!db) return notFound();
+		const detail = databaseDetail(store, db);
+		return {
+			host: detail.host,
+			port: detail.port,
+			user: db.username,
+			password: db.password,
+			database: db.dbName,
+			connectionString: detail.connectionString.replace('****', db.password),
+			publicConnectionString: null
+		};
+	});
+	r.delete('/databases/:id/public', () => ({ ok: true }));
 
 	for (const action of ['stop', 'start', 'restart'] as const) {
 		r.post(`/databases/:id/${action}`, ({ params }) => {
@@ -419,10 +494,10 @@ export function databaseRoutes(r: Router, { store }: MockContext) {
 	r.post('/databases/:id/public', () =>
 		reply(400, { message: 'Public access needs a real cluster, it is off in mock mode' })
 	);
-	r.post('/databases/:id/restore', () => ({ ok: true }));
 	r.delete('/databases/:id', ({ params }) => {
-		store.removeDatabase(params.id);
-		return { ok: true };
+		const db = find(params.id);
+		if (!db) return notFound('Database not found');
+		return trashDatabase(store, db);
 	});
 
 	r.get('/databases/limits', () => ({ maxReplicas: 5 }));
