@@ -418,3 +418,38 @@ test('the pooler pins pgbouncer unless the image is cleared', { skip: !helmAvail
   assert.equal(operatorDefault.image, undefined);
   assert.ok(operatorDefault.resources, 'resources still render');
 });
+
+test(
+  'orchard-db archives to object storage and takes a first backup at once when backups are on',
+  { skip: !helmAvailable() },
+  () => {
+    const off = docs(render([]));
+    assert.equal(
+      off.some((d) => d.includes('kind: ScheduledBackup')),
+      false
+    );
+    const offCluster = off.find(
+      (d) => d.includes('kind: Cluster\n') && d.includes('name: orchard-db\n')
+    );
+    assert.match(offCluster ?? '', /max_slot_wal_keep_size: "2GB"/);
+    assert.ok(!(offCluster ?? '').includes('barmanObjectStore'));
+
+    const on = docs(
+      render([
+        'postgres.backup.enabled=true',
+        'postgres.backup.destinationPath=s3://bucket/orchard',
+        'postgres.backup.endpointURL=https://acct.r2.cloudflarestorage.com'
+      ])
+    );
+    const cluster = on.find(
+      (d) => d.includes('kind: Cluster\n') && d.includes('name: orchard-db\n')
+    );
+    assert.match(cluster ?? '', /destinationPath: "s3:\/\/bucket\/orchard"/);
+    assert.match(cluster ?? '', /name: orchard-db-backup\s+key: ACCESS_KEY_ID/);
+    const schedule = on.find((d) => d.includes('kind: ScheduledBackup'));
+    assert.match(schedule ?? '', /immediate: true/);
+    assert.match(schedule ?? '', /cluster:\s+name: orchard-db/);
+
+    assert.throws(() => render(['postgres.backup.enabled=true']), /destinationPath is required/);
+  }
+);
