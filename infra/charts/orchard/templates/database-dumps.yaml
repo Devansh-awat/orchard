@@ -1,0 +1,94 @@
+{{- if .Values.databaseDumps.enabled }}
+{{- $d := .Values.databaseDumps }}
+{{- range $t := $d.targets }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: dump-{{ $t.name }}
+  namespace: {{ $t.namespace | default $.Values.namespace }}
+  labels:
+    {{- include "orchard.labels" (dict "root" $ "name" "database-dumps") | nindent 4 }}
+spec:
+  schedule: {{ $t.schedule | default $d.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 7200
+      template:
+        metadata:
+          labels:
+            {{- include "orchard.labels" (dict "root" $ "name" "database-dumps") | nindent 12 }}
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 70
+            fsGroup: 70
+          volumes:
+            - name: dump
+              emptyDir: {}
+          initContainers:
+            - name: pg-dump
+              image: {{ $d.image }}
+              env:
+                - name: PGHOST
+                  value: {{ required "databaseDumps.targets[].host is required" $t.host | quote }}
+                - name: PGPORT
+                  value: {{ $t.port | default 5432 | toString | quote }}
+                - name: PGDATABASE
+                  value: {{ required "databaseDumps.targets[].database is required" $t.database | quote }}
+                - name: PGUSER
+                  value: {{ required "databaseDumps.targets[].user is required" $t.user | quote }}
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ required "databaseDumps.targets[].passwordSecret.name is required" $t.passwordSecret.name }}
+                      key: {{ $t.passwordSecret.key | default "password" }}
+              command: ["sh", "-c", "pg_dump --format=custom --no-owner --file=/dump/{{ $t.name }}.dump && ls -l /dump"]
+              volumeMounts:
+                - name: dump
+                  mountPath: /dump
+              resources:
+                requests: { cpu: 50m, memory: 128Mi }
+                limits: { memory: 512Mi }
+          containers:
+            - name: upload
+              image: {{ $d.uploaderImage }}
+              securityContext:
+                runAsUser: 70
+              env:
+                - name: HOME
+                  value: /dump
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ $d.destination.secretName }}
+                      key: ACCESS_KEY_ID
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ $d.destination.secretName }}
+                      key: ACCESS_SECRET_KEY
+                - name: AWS_DEFAULT_REGION
+                  value: auto
+                - name: AWS_REQUEST_CHECKSUM_CALCULATION
+                  value: when_required
+              command:
+                - sh
+                - -c
+                - >-
+                  aws s3 cp /dump/{{ $t.name }}.dump
+                  "s3://{{ required "databaseDumps.destination.bucket is required" $d.destination.bucket }}/{{ $d.destination.prefix }}/{{ $t.name }}/$(date -u +%Y-%m-%dT%H%M%SZ).dump"
+                  {{- with $d.destination.endpointURL }} --endpoint-url {{ . | quote }}{{- end }}
+              volumeMounts:
+                - name: dump
+                  mountPath: /dump
+              resources:
+                requests: { cpu: 20m, memory: 64Mi }
+                limits: { memory: 256Mi }
+{{- end }}
+{{- end }}

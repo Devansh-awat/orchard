@@ -67,7 +67,10 @@ rules:
     resources: ["ingresses", "networkpolicies"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: ["postgresql.cnpg.io"]
-    resources: ["clusters", "backups", "scheduledbackups"]
+    resources: ["clusters", "backups", "scheduledbackups", "poolers"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["barmancloud.cnpg.io"]
+    resources: ["objectstores"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   # The node informer mirrors labels/taints/capacity into the `nodes` table;
   # the nodes admin UI cordons and labels through patch.

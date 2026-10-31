@@ -453,3 +453,58 @@ test(
     assert.throws(() => render(['postgres.backup.enabled=true']), /destinationPath is required/);
   }
 );
+
+test(
+  'orchard-db can archive through the barman cloud plugin instead of in-tree barman',
+  { skip: !helmAvailable() },
+  () => {
+    const out = docs(
+      render([
+        'postgres.backup.enabled=true',
+        'postgres.backup.method=plugin',
+        'postgres.backup.destinationPath=s3://bucket/orchard'
+      ])
+    );
+    const cluster = out.find(
+      (d) => d.includes('kind: Cluster\n') && d.includes('name: orchard-db\n')
+    );
+    assert.match(cluster ?? '', /barmanObjectName: orchard-db-store/);
+    assert.ok(!(cluster ?? '').includes('barmanObjectStore'));
+    assert.match(
+      out.find((d) => d.includes('kind: ObjectStore')) ?? '',
+      /limits: \{ memory: 512Mi \}/
+    );
+    assert.match(out.find((d) => d.includes('kind: ScheduledBackup')) ?? '', /method: plugin/);
+  }
+);
+
+test(
+  'databases outside CNPG get a nightly pg_dump uploaded to object storage',
+  { skip: !helmAvailable() },
+  () => {
+    assert.equal(
+      docs(render([])).some((d) => d.includes('kind: CronJob') && d.includes('dump-')),
+      false
+    );
+    const out = docs(
+      render([
+        'databaseDumps.enabled=true',
+        'databaseDumps.destination.bucket=backups',
+        'databaseDumps.destination.endpointURL=https://acct.r2.cloudflarestorage.com',
+        'databaseDumps.targets[0].name=harbor',
+        'databaseDumps.targets[0].namespace=harbor',
+        'databaseDumps.targets[0].host=harbor-database',
+        'databaseDumps.targets[0].database=registry',
+        'databaseDumps.targets[0].user=postgres',
+        'databaseDumps.targets[0].passwordSecret.name=harbor-database',
+        'databaseDumps.targets[0].passwordSecret.key=POSTGRES_PASSWORD'
+      ])
+    );
+    const job = out.find((d) => d.includes('name: dump-harbor'));
+    assert.ok(job, 'cronjob rendered');
+    assert.match(job, /namespace: harbor/);
+    assert.match(job, /pg_dump --format=custom/);
+    assert.match(job, /s3:\/\/backups\/platform-dumps\/harbor\//);
+    assert.match(job, /--endpoint-url "https:\/\/acct\.r2\.cloudflarestorage\.com"/);
+  }
+);

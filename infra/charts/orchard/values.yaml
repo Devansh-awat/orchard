@@ -245,6 +245,7 @@ postgres:
   walSlotKeepSize: 2GB
   backup:
     enabled: false
+    method: barman
     destinationPath: ""
     endpointURL: ""
     secretName: orchard-db-backup
@@ -876,3 +877,15 @@ graftSettings:
   # what the graft asks for in graft.json (database.pool, default 3). The admin
   # Grafts page shows how close all pods together come to Postgres's limit.
   pools: {}
+
+databaseDumps:
+  enabled: false
+  schedule: "15 2 * * *"
+  image: postgres:17-alpine
+  uploaderImage: amazon/aws-cli:2.27.50
+  destination:
+    bucket: ""
+    prefix: platform-dumps
+    endpointURL: ""
+    secretName: database-dumps-r2
+  targets: []
