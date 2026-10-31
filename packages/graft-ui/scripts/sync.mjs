@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 
 const pkg = resolve(import.meta.dirname, '..');
@@ -87,7 +87,12 @@ writeFileSync(
   join(out, 'index.ts'),
   "export * from './components/ui/index';\nexport { default as ConfirmModal } from './components/ConfirmModal.svelte';\n"
 );
-cpSync(resolve(lib, '../tokens.css'), join(out, 'tokens.css'));
+writeFileSync(
+  join(out, 'tokens.css'),
+  ['scales.css', 'tokens.css', 'springs.css']
+    .map((file) => readFileSync(resolve(lib, 'design', file), 'utf8'))
+    .join('\n')
+);
 for (const spec of shimsUsed) {
   mkdirSync(join(out, 'shims'), { recursive: true });
   writeFileSync(join(out, 'shims', `${spec.replace(/[$/]/g, '_')}.ts`), SHIMS[spec]);
