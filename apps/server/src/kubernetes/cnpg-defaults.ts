@@ -10,6 +10,8 @@ import { completeChain, pemCertificates } from './tls-secret-sync';
 
 export interface ClusterLike {
   spec?: {
+    instances?: number;
+    enablePDB?: boolean;
     storage?: { size?: string };
     resources?: { requests?: Record<string, string>; limits?: Record<string, string> };
     postgresql?: { parameters?: Record<string, string> };
@@ -36,6 +38,16 @@ export interface PvcLike {
 export const WAL_ARCHIVE_MAX_PARALLEL = 4;
 
 export const CNPG_DATA_PVC_ROLE = 'PG_DATA';
+
+export function pdbEnabledFor(instances: number | null | undefined): boolean {
+  return Math.max(1, Math.trunc(Number(instances) || 1)) > 1;
+}
+
+export function pdbPatchFor(cluster: ClusterLike): { enablePDB: boolean } | null {
+  const wanted = pdbEnabledFor(cluster.spec?.instances);
+  const current = cluster.spec?.enablePDB ?? true;
+  return current === wanted ? null : { enablePDB: wanted };
+}
 
 export function walCapPatchFor(cluster: ClusterLike): Record<string, string> | null {
   const params = cluster.spec?.postgresql?.parameters ?? {};

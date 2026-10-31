@@ -33,6 +33,8 @@ import {
   tuningPatchFor,
   backupOomLooping,
   walCapPatchFor,
+  pdbEnabledFor,
+  pdbPatchFor,
   WAL_ARCHIVE_MAX_PARALLEL
 } from './cnpg-defaults';
 import { dbStatsCommand, parseDbStatsOutput, SampledDbStats } from './db-stats';
@@ -211,6 +213,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     volumesResized: number;
     tlsSynced: number;
     caRepaired: number;
+    disruptionBudgets: number;
     failed: number;
   } | null> {
     if (!this.kc || !this.canRunClusterWide()) return null;
@@ -226,6 +229,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     let volumesResized = 0;
     let tlsSynced = 0;
     let caRepaired = 0;
+    let disruptionBudgets = 0;
     let failed = 0;
     const namespaces = new Set<string>();
     for (const row of rows) {
@@ -255,8 +259,10 @@ export class K8sCnpgService implements OnApplicationBootstrap {
         const oomLooping = backupOomLooping(cluster, pods);
         const tuningPatch = tuningPatchFor(cluster, row, { backupOomLooping: oomLooping });
         const stamp = sharedBuffersStamp(cluster, tuningPatch);
-        if (!capPatch && !archivePatch && !tuningPatch && !stamp) continue;
+        const pdbPatch = pdbPatchFor(cluster);
+        if (!capPatch && !archivePatch && !tuningPatch && !stamp && !pdbPatch) continue;
         const spec: any = tuningPatch ? structuredClone(tuningPatch) : {};
+        if (pdbPatch) spec.enablePDB = pdbPatch.enablePDB;
         if (capPatch) {
           spec.postgresql = { parameters: { ...(spec.postgresql?.parameters ?? {}), ...capPatch } };
         }
@@ -280,6 +286,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
         if (capPatch) walCapped += 1;
         if (archivePatch) archiveParallel += 1;
         if (tuningPatch) retuned += 1;
+        if (pdbPatch) disruptionBudgets += 1;
         const raisedTo = (tuningPatch?.resources as any)?.limits?.memory as string | undefined;
         if (oomLooping && raisedTo) {
           await this.recordBackupMemoryRaise(
@@ -336,13 +343,23 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       volumesResized ||
       tlsSynced ||
       caRepaired ||
+      disruptionBudgets ||
       failed
     ) {
       this.logger.log(
-        `cnpg defaults reconciled: ${walCapped} clusters capped, ${archiveParallel} archives parallelised, ${retuned} retuned, ${volumesResized} volumes resized, ${tlsSynced} public certificates refreshed, ${caRepaired} ca bundles completed, ${failed} failed`
+        `cnpg defaults reconciled: ${walCapped} clusters capped, ${archiveParallel} archives parallelised, ${retuned} retuned, ${volumesResized} volumes resized, ${tlsSynced} public certificates refreshed, ${caRepaired} ca bundles completed, ${disruptionBudgets} disruption budgets matched to instances, ${failed} failed`
       );
     }
-    return { walCapped, archiveParallel, retuned, volumesResized, tlsSynced, caRepaired, failed };
+    return {
+      walCapped,
+      archiveParallel,
+      retuned,
+      volumesResized,
+      tlsSynced,
+      caRepaired,
+      disruptionBudgets,
+      failed
+    };
   }
 
   // CNPG only pushes spec.storage.size down to the PVCs while it has a healthy
@@ -599,18 +616,17 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     if (!this.kc) return;
     const desired = Math.max(1, Math.trunc(instances));
     const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
-    const patch = [{ op: 'replace', path: '/spec/instances', value: desired }];
     await customApi.patchNamespacedCustomObject(
       this.CNPG_GROUP,
       this.CNPG_VERSION,
       namespace,
       this.CNPG_PLURAL,
       clusterName,
-      patch,
+      { spec: { instances: desired, enablePDB: pdbEnabledFor(desired) } },
       undefined,
       undefined,
       undefined,
-      { headers: { 'Content-Type': 'application/json-patch+json' } }
+      { headers: { 'Content-Type': 'application/merge-patch+json' } }
     );
   }
 
@@ -1705,6 +1721,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
 
     const clusterSpec: any = {
       instances: Math.max(1, Math.trunc(options.instances || 1)),
+      enablePDB: pdbEnabledFor(options.instances),
       imageName: options.imageName || resolvePostgresImage(17, null),
       primaryUpdateStrategy: 'unsupervised',
       storage: {

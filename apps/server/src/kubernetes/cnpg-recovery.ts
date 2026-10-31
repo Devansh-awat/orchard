@@ -1,3 +1,5 @@
+import { pdbEnabledFor } from './cnpg-defaults';
+
 export const BARMAN_PLUGIN = 'barman-cloud.cloudnative-pg.io';
 
 export const BARMAN_GROUP = 'barmancloud.cnpg.io';
@@ -374,6 +376,7 @@ export interface RecoveryClusterInput {
 export function recoveryClusterSpec(input: RecoveryClusterInput): Record<string, unknown> {
   const spec: Record<string, unknown> = {
     instances: Math.max(1, Math.trunc(input.instances)),
+    enablePDB: pdbEnabledFor(input.instances),
     imageName: input.imageName,
     primaryUpdateStrategy: input.primaryUpdateStrategy || 'unsupervised',
     storage: { size: input.storageSize, storageClass: input.storageClass },

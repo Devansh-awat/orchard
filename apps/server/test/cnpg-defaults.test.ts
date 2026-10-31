@@ -7,7 +7,9 @@ import {
   repairedCaBundle,
   tuningPatchFor,
   walArchivePatchFor,
-  walCapPatchFor
+  walCapPatchFor,
+  pdbEnabledFor,
+  pdbPatchFor
 } from '../src/kubernetes/cnpg-defaults';
 import { pemCertificates, completeChain } from '../src/kubernetes/tls-secret-sync';
 
@@ -150,6 +152,7 @@ test('the reconcile only patches what is missing and never runs off a non-member
     },
     'ns-b/db-b': {
       spec: {
+        instances: 2,
         storage: { size: '5Gi' },
         postgresql: { parameters: { max_slot_wal_keep_size: '1GB' } },
         backup: { barmanObjectStore: { wal: { compression: 'gzip', maxParallel: 4 } } }
@@ -246,11 +249,12 @@ test('the reconcile only patches what is missing and never runs off a non-member
     volumesResized: 1,
     tlsSynced: 1,
     caRepaired: 1,
+    disruptionBudgets: 1,
     failed: 0
   });
   assert.deepEqual(tlsRefreshed, ['ns-a']);
   assert.deepEqual(patches, [
-    'ns-a/db-a:{"postgresql":{"parameters":{"max_slot_wal_keep_size":"2GB"}},"backup":{"barmanObjectStore":{"wal":{"maxParallel":4}}}}'
+    'ns-a/db-a:{"enablePDB":false,"postgresql":{"parameters":{"max_slot_wal_keep_size":"2GB"}},"backup":{"barmanObjectStore":{"wal":{"maxParallel":4}}}}'
   ]);
   assert.deepEqual(pvcPatches, ['ns-a/db-a-1:10Gi']);
   assert.deepEqual(secretPatches, ['ns-a']);
@@ -305,4 +309,14 @@ test('an old or one-off OOM, or a database without backups, is not treated as a 
   assert.equal(backupOomLooping(backedUp, [pod(40, '2026-10-20T00:00:00Z')], now), false);
   assert.equal(backupOomLooping(backedUp, [pod(1, '2026-10-30T19:00:00Z')], now), false);
   assert.equal(backupOomLooping({ spec: {} }, [pod(40, '2026-10-30T19:00:00Z')], now), false);
+});
+
+test('a single instance gets no disruption budget, so drains and updates are never blocked', () => {
+  assert.equal(pdbEnabledFor(1), false);
+  assert.equal(pdbEnabledFor(undefined), false);
+  assert.equal(pdbEnabledFor(2), true);
+  assert.deepEqual(pdbPatchFor({ spec: { instances: 1 } }), { enablePDB: false });
+  assert.equal(pdbPatchFor({ spec: { instances: 1, enablePDB: false } }), null);
+  assert.equal(pdbPatchFor({ spec: { instances: 3 } }), null);
+  assert.deepEqual(pdbPatchFor({ spec: { instances: 2, enablePDB: false } }), { enablePDB: true });
 });
