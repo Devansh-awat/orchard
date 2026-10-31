@@ -16,6 +16,16 @@ export type { SeriesPoint, GroupedSeries };
 export type SeriesId = 'cpu' | 'mem' | 'rx' | 'tx';
 export type SeriesBundle = Record<SeriesId, SeriesPoint[]>;
 export type GroupedBundle = Record<SeriesId, GroupedSeries[]>;
+export type DatabaseSeriesId =
+  | 'connections'
+  | 'tps'
+  | 'cacheHit'
+  | 'lag'
+  | 'size'
+  | 'deadlocks'
+  | 'disk'
+  | 'diskCapacity';
+export type DatabaseSeriesBundle = SeriesBundle & Record<DatabaseSeriesId, SeriesPoint[]>;
 
 @Injectable()
 export class MetricsService {
@@ -338,7 +348,8 @@ export class MetricsService {
     startMs: number;
     endMs: number;
     stepMs: number;
-  }): Promise<SeriesBundle> {
+    dbName?: string | null;
+  }): Promise<DatabaseSeriesBundle> {
     const ns = escapeLabel(args.namespace);
     const podRe = `${escapeRegex(args.podPrefix)}-.*`;
     const stepSec = Math.max(1, Math.round(args.stepMs / 1000));
@@ -361,11 +372,46 @@ export class MetricsService {
       this.vm.queryRange(queries.tx, startSec, endSec, stepSec)
     ]);
 
+    const instance = `namespace="${ns}",pod=~"${escapeRegex(args.podPrefix)}-[0-9]+"`;
+    const db = args.dbName ? `,datname="${escapeLabel(args.dbName)}"` : '';
+    const pvc = `namespace="${ns}",persistentvolumeclaim=~"${escapeRegex(args.podPrefix)}-[0-9]+"`;
+    const hit = `sum(rate(cnpg_pg_stat_database_blks_hit{${instance}${db}}[${rateWin}s]))`;
+    const read = `sum(rate(cnpg_pg_stat_database_blks_read{${instance}${db}}[${rateWin}s]))`;
+    const extra: Record<DatabaseSeriesId, string> = {
+      connections: `sum(cnpg_backends_total{${instance}${db}})`,
+      tps: `sum(rate(cnpg_pg_stat_database_xact_commit{${instance}${db}}[${rateWin}s])) + sum(rate(cnpg_pg_stat_database_xact_rollback{${instance}${db}}[${rateWin}s]))`,
+      cacheHit: `100 * ${hit} / (${hit} + ${read} > 0)`,
+      lag: `max(cnpg_pg_replication_lag{${instance}})`,
+      size: `max(cnpg_pg_database_size_bytes{${instance}${db}})`,
+      deadlocks: `sum(increase(cnpg_pg_stat_database_deadlocks{${instance}${db}}[${rateWin}s]))`,
+      disk: `max(kubelet_volume_stats_used_bytes{${pvc}})`,
+      diskCapacity: `max(kubelet_volume_stats_capacity_bytes{${pvc}})`
+    };
+    const ids = Object.keys(extra) as DatabaseSeriesId[];
+    const extraPoints = await Promise.all(
+      ids.map((id) =>
+        this.vm
+          .queryRange(extra[id], startSec, endSec, stepSec)
+          .then((points) => points.filter((p) => Number.isFinite(p.y)))
+          .catch(() => [] as SeriesPoint[])
+      )
+    );
+    const byId = Object.fromEntries(ids.map((id, i) => [id, extraPoints[i]])) as Record<
+      DatabaseSeriesId,
+      SeriesPoint[]
+    >;
+    const toMiB = (points: SeriesPoint[]) =>
+      points.map((p) => ({ x: p.x, y: p.y / (1024 * 1024) }));
+
     return {
       cpu,
       mem: mem.map((p) => ({ x: p.x, y: p.y / (1024 * 1024) })),
       rx: rx.map((p) => ({ x: p.x, y: p.y / 1024 })),
-      tx: tx.map((p) => ({ x: p.x, y: p.y / 1024 }))
+      tx: tx.map((p) => ({ x: p.x, y: p.y / 1024 })),
+      ...byId,
+      size: toMiB(byId.size),
+      disk: toMiB(byId.disk),
+      diskCapacity: toMiB(byId.diskCapacity)
     };
   }
 

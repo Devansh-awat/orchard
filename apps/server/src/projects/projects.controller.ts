@@ -2180,7 +2180,8 @@ export class DatabasesController {
         podPrefix,
         startMs: start,
         endMs: end,
-        stepMs: step
+        stepMs: step,
+        dbName: db.mode === 'cnpg' ? db.dbName : null
       });
       return { start, end, step, data };
     } catch (err) {

@@ -366,7 +366,7 @@ data:
             target_label: node
         metric_relabel_configs:
           - source_labels: [__name__]
-            regex: 'kubelet_(running_pods|running_containers|pod_start_duration_seconds.*)'
+            regex: 'kubelet_(running_pods|running_containers|pod_start_duration_seconds.*|volume_stats_(used|capacity)_bytes)'
             action: keep
 
       - job_name: kube-state-metrics
@@ -388,6 +388,29 @@ data:
             action: keep
           - source_labels: [__meta_kubernetes_pod_node_name]
             target_label: node
+
+      # CloudNativePG instance exporter: the Postgres series behind a database's
+      # Observe charts (connections, transactions, cache hits, replication lag,
+      # size, deadlocks). Only the series the server queries are kept.
+      - job_name: cnpg-instances
+        kubernetes_sd_configs: [{ role: pod }]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_cnpg_io_podRole]
+            regex: instance
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_container_port_name]
+            regex: metrics
+            action: keep
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+          - source_labels: [__meta_kubernetes_pod_label_cnpg_io_cluster]
+            target_label: cluster
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: 'cnpg_(backends_total|pg_replication_lag|pg_database_size_bytes|pg_stat_database_(xact_commit|xact_rollback|blks_hit|blks_read|deadlocks))'
+            action: keep
 
       - job_name: kubernetes-pods
         kubernetes_sd_configs: [{ role: pod }]
