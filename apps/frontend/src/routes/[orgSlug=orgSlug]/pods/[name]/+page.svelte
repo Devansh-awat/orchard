@@ -23,6 +23,7 @@
 	interface ContainerStatus {
 		name: string;
 		ready: boolean;
+		restartCount?: number;
 	}
 
 	interface PodContainer {
@@ -65,7 +66,9 @@
 	const logSource = new PodLogSource({
 		podName: () => podName,
 		namespace: () => namespace,
-		container: () => selectedContainer
+		container: () => selectedContainer,
+		restarts: () =>
+			pod?.status?.containerStatuses?.find((s) => s.name === selectedContainer)?.restartCount ?? 0
 	});
 
 	const containers = $derived(pod?.spec?.containers ?? []);

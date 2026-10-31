@@ -1,25 +1,15 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { page } from '$app/stores';
-	import CopyButton from '$lib/components/ui/CopyButton.svelte';
 	import { SYMPTOM_PANELS, momentLink } from './permalink';
 	import { Boxes, GitCommitHorizontal, Info, TriangleAlert } from 'lucide-svelte';
-	import {
-		ActivityGroup,
-		ActivityRow,
-		Button,
-		Disclosure,
-		EmptyState,
-		LogViewer,
-		Modal,
-		Table,
-		ToneTile
-	} from '$lib/components/ui';
+	import { Button, Disclosure, EmptyState, LogViewer, Modal, Table } from '$lib/components/ui';
 	import MetaList from '$lib/components/ui/MetaList.svelte';
 	import Skeleton from '$lib/components/ui/Skeleton.svelte';
 	import Tooltip from '$lib/components/ui/Tooltip.svelte';
 	import TopList from '$lib/components/ui/TopList.svelte';
 	import Widget from '$lib/components/ui/Widget.svelte';
+	import AlertStack from '$lib/components/patterns/AlertStack.svelte';
 	import CapacityList, { capacityTone } from '$lib/components/ui/CapacityList.svelte';
 	import MetricPanel from '$lib/components/patterns/MetricPanel.svelte';
 	import {
@@ -742,34 +732,27 @@
 		</div>
 	{:else}
 		{#if metrics.findings?.length}
-			<Widget title="Findings">
-				<ActivityGroup>
-					{#each metrics.findings as f (f.symptomId)}
-						<ActivityRow tone="warning">
-							{#snippet tile()}
-								<ToneTile tone="warning" size={28}>
-									<TriangleAlert size={14} aria-hidden="true" />
-								</ToneTile>
-							{/snippet}
-							{#snippet title()}<span class="finding" title={f.sentence}>{f.sentence}</span
-								>{/snippet}
-							{#snippet actions()}
-								<CopyButton
-									value={momentLink($page.url, { at: f.at, panel: SYMPTOM_PANELS[f.kind] })}
-									label="Copy a link to this moment"
-								/>
-								<Button
-									variant="ghost"
-									size="sm"
-									onclick={() =>
-										metrics.zoom(f.at - 15 * 60_000, Math.min(Date.now(), f.at + 15 * 60_000))}
-									>Show</Button
-								>
-							{/snippet}
-						</ActivityRow>
-					{/each}
-				</ActivityGroup>
-			</Widget>
+			<AlertStack
+				alerts={metrics.findings.map((f) => ({
+					id: f.symptomId,
+					tone: 'warning' as const,
+					title: f.sentence,
+					actions: [
+						{
+							label: 'Show',
+							onclick: () =>
+								metrics.zoom(f.at - 15 * 60_000, Math.min(Date.now(), f.at + 15 * 60_000))
+						},
+						{
+							label: 'Copy link',
+							onclick: () =>
+								navigator.clipboard.writeText(
+									momentLink($page.url, { at: f.at, panel: SYMPTOM_PANELS[f.kind] })
+								)
+						}
+					]
+				}))}
+			/>
 		{/if}
 
 		{#if metrics.error}
@@ -1233,12 +1216,6 @@
 		flex-direction: column;
 		gap: 1.5rem;
 		min-width: 0;
-	}
-	.finding {
-		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		font-weight: var(--weight-regular);
 	}
 	.grid {
 		display: grid;

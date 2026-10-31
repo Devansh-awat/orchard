@@ -165,12 +165,16 @@
 		flex-direction: column;
 		height: var(--fit-h, 36rem);
 		min-height: 0;
-		padding: 0.75rem 1rem;
-		border-radius: calc(var(--radius-widget) * var(--corner-scale));
+		--console-pad: 0.75rem;
+		padding: var(--console-pad);
+		border-radius: calc((var(--console-pad) + 1rem) * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--console-bg);
 		box-shadow: var(--shadow-raised);
 		overflow: clip;
+	}
+	.console :global(.lv-actions) {
+		margin-right: 0.125rem;
 	}
 	.console :global(.log-pod) {
 		display: inline-block;

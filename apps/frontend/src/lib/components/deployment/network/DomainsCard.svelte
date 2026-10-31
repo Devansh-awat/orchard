@@ -78,9 +78,7 @@
 <Widget title="Domains">
 	{#snippet meta()}
 		{#if canAdd}
-			<Button variant="ghost" size="sm" icon={Plus} class="net-add" onclick={onAdd}
-				>Add domain</Button
-			>
+			<Button variant="ghost" size="sm" icon={Plus} onclick={onAdd}>Add domain</Button>
 		{/if}
 	{/snippet}
 

@@ -5,6 +5,7 @@
 	import Dropdown from '$lib/components/ui/Dropdown.svelte';
 	import Select from '$lib/components/ui/Select.svelte';
 	import Combobox from '$lib/components/ui/Combobox.svelte';
+	import SwatchPicker from '$lib/components/ui/SwatchPicker.svelte';
 	import SearchPicker from '$lib/components/ui/SearchPicker.svelte';
 	import SelectTrigger from '$lib/components/ui/SelectTrigger.svelte';
 	import Menu from '$lib/components/ui/Menu.svelte';
@@ -172,6 +173,17 @@
 </SectionCard>
 
 <div class="grid grid-cols-2 gap-6">
+	<SectionCard title="SwatchPicker">
+		<SwatchPicker
+			label="Accent"
+			options={[
+				{ value: 'red', label: 'Red', fill: 'var(--hue-red, var(--status-error))' },
+				{ value: 'green', label: 'Green', fill: 'var(--status-success)' },
+				{ value: 'amber', label: 'Amber', fill: 'var(--status-warning)' },
+				{ value: 'blue', label: 'Blue', fill: 'var(--status-info)' }
+			]}
+		/>
+	</SectionCard>
 	<SectionCard title="Combobox" description="Searchable. Type to filter, Escape clears.">
 		<div class="flex flex-col gap-4">
 			<Field label="Repository">

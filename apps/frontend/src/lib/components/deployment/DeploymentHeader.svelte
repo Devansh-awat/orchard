@@ -264,8 +264,9 @@
 
 <style>
 	.dh-card {
-		padding: 1.25rem 1.5rem;
-		border-radius: calc(var(--radius-widget) * var(--corner-scale));
+		--dh-control-inset: calc(var(--section-r, var(--radius-widget)) - 0.625rem);
+		padding: var(--dh-control-inset) var(--dh-control-inset) 1.25rem 1.5rem;
+		border-radius: calc(var(--section-r, var(--radius-widget)) * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--bg-surface);
 		box-shadow: var(--shadow-raised);

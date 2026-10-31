@@ -5,4 +5,3 @@ export { default as PendingInvitationsModal } from './PendingInvitationsModal.sv
 export { default as OnboardingModal } from './OnboardingModal.svelte';
 export { default as UpdatesModal } from './UpdatesModal.svelte';
 export { default as InvitationWelcome } from './InvitationWelcome.svelte';
-export { default as Breadcrumb } from './Breadcrumb.svelte';

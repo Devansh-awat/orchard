@@ -11,6 +11,7 @@
 		open = false,
 		loading = false,
 		size = 'md',
+		shape = 'rounded',
 		block = false,
 		mono = false,
 		onclear = undefined,
@@ -23,6 +24,7 @@
 		open?: boolean;
 		loading?: boolean;
 		size?: 'sm' | 'md' | 'lg';
+		shape?: 'rounded' | 'capsule';
 		block?: boolean;
 		mono?: boolean;
 		onclear?: () => void;
@@ -34,6 +36,7 @@
 	<button
 		type="button"
 		class="trigger trigger--{size}"
+		class:trigger--capsule={shape === 'capsule'}
 		class:trigger--open={open}
 		class:trigger--clearable={!!onclear && !!value}
 		{...rest}
@@ -170,5 +173,12 @@
 	.clear:hover {
 		background: color-mix(in oklab, var(--neutral-10) 8%, transparent);
 		color: var(--text-default);
+	}
+	.trigger--capsule {
+		border-radius: 999px;
+		corner-shape: round;
+	}
+	.trigger--capsule.trigger--sm {
+		padding-inline: 0.75rem 0.5rem;
 	}
 </style>

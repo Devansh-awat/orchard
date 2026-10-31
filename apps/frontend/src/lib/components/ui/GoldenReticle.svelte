@@ -1,11 +1,15 @@
 <script lang="ts">
 	let {
 		golden = true,
+		contained = false,
 		lines = []
 	}: {
 		golden?: boolean;
+		contained?: boolean;
 		lines?: { axis: 'x' | 'y'; at: number; label?: string }[];
 	} = $props();
+
+	let svg: SVGSVGElement | undefined = $state();
 
 	const PHI = (1 + Math.sqrt(5)) / 2;
 	const DEPTH = 9;
@@ -14,6 +18,15 @@
 	let h = $state(0);
 
 	$effect(() => {
+		const host = contained ? svg?.parentElement : null;
+		if (host) {
+			const ro = new ResizeObserver(() => {
+				w = host.clientWidth;
+				h = host.clientHeight;
+			});
+			ro.observe(host);
+			return () => ro.disconnect();
+		}
 		const measure = () => {
 			w = window.innerWidth;
 			h = window.innerHeight;
@@ -62,7 +75,15 @@
 	const rows = $derived([h / PHI / PHI, h / PHI]);
 </script>
 
-<svg class="reticle" viewBox="0 0 {w} {h}" width={w} height={h} aria-hidden="true">
+<svg
+	bind:this={svg}
+	class="reticle"
+	class:reticle--contained={contained}
+	viewBox="0 0 {w} {h}"
+	width={w}
+	height={h}
+	aria-hidden="true"
+>
 	{#each lines as l, i (i)}
 		{#if l.axis === 'x'}
 			<line class="measure" x1={l.at} y1="0" x2={l.at} y2={h} />
@@ -97,6 +118,10 @@
 		inset: 0;
 		z-index: var(--z-tooltip);
 		pointer-events: none;
+	}
+	.reticle--contained {
+		position: absolute;
+		z-index: 2;
 	}
 	.square {
 		fill: none;

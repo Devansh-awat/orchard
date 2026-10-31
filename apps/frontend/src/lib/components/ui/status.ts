@@ -49,6 +49,9 @@ export function resourceStatus(status?: string, buildStatus?: string): StatusMet
 		case 'updating':
 		case 'building':
 		case 'creating':
+		case 'provisioning':
+		case 'restoring':
+		case 'upgrading':
 			return meta('progress', capitalize(s), true);
 		case 'unhealthy':
 			return meta('warning', 'Unhealthy');

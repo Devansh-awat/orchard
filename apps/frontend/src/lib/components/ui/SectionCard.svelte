@@ -43,7 +43,15 @@
 </section>
 
 <style>
+	@property --section-control-inset {
+		syntax: '<length>';
+		inherits: true;
+		initial-value: 0px;
+	}
 	.section {
+		--section-pad: 1rem;
+		--section-control-h: 1.75rem;
+		--section-title-gap: 0.75rem;
 		min-width: 0;
 		border-radius: calc(var(--section-r, var(--radius-card)) * var(--corner-scale));
 		corner-shape: var(--corner);
@@ -77,22 +85,21 @@
 		align-items: flex-start;
 		justify-content: space-between;
 		gap: 1rem;
-		padding: 1rem 1.25rem 0;
+		padding: var(--section-pad) var(--section-pad) 0;
 	}
 	.head:last-child {
-		padding-bottom: 1rem;
+		padding-bottom: var(--section-pad);
 	}
 	.heading {
 		display: flex;
 		flex-direction: column;
-		justify-content: center;
-		gap: 0.125rem;
+		gap: 0.5rem;
 		min-width: 0;
-		min-height: 1.75rem;
 	}
 	.title {
 		font-size: var(--text-headline);
 		line-height: var(--lh-headline);
+		text-box: trim-both cap alphabetic;
 		font-weight: var(--weight-semibold);
 		color: var(--text-default);
 	}
@@ -102,40 +109,62 @@
 		color: var(--text-muted);
 	}
 	.actions {
+		--section-control-shift: calc(0.5cap - var(--section-control-h) / 2);
 		display: flex;
 		align-items: center;
-		min-height: 1.75rem;
+		height: var(--section-control-h);
 		gap: 0.5rem;
 		flex-shrink: 0;
+		margin-top: var(--section-control-shift);
+		margin-right: var(--section-control-shift);
+		margin-bottom: var(--section-control-shift);
+		font-size: var(--text-headline);
+		--section-control-inset: calc(var(--section-pad) + var(--section-control-shift));
+	}
+	.actions:not(:has(:global(button, a, input, .sb, .pill))) {
+		margin-right: 0;
+	}
+	.actions > :global(:is(.sb, .pill)) {
+		box-sizing: border-box;
+		min-height: var(--section-control-h);
+		padding-inline: 0.75rem;
+		border-radius: 999px;
+	}
+	.actions > :global(.button) {
+		border-radius: 999px;
+		corner-shape: round;
+	}
+	.actions > :global(.seg) {
+		--radius-control: calc(var(--section-r, var(--radius-card)) - var(--section-control-inset));
 	}
 	.body {
-		padding: 1rem 1.25rem 1.25rem;
+		padding: var(--section-title-gap) var(--section-pad) var(--section-pad);
 	}
 	.body--flush {
 		padding: 0.75rem 0 0;
 	}
+	.body > :global(.list:not(.list--inset):first-child) {
+		margin-top: -0.75rem;
+	}
+	.body > :global(.list:not(.list--inset):last-child) {
+		margin-bottom: -0.75rem;
+	}
+	.head:last-child .heading > :last-child {
+		text-box: trim-end text alphabetic;
+	}
 	.head + .body--flush {
 		padding-top: 0.75rem;
 	}
-	.section--sm .head {
-		align-items: center;
-		padding: 0.75rem 1.25rem 0;
+	.section--sm {
+		--section-pad: 0.75rem;
 	}
-	.section--sm .head:last-child {
-		padding-bottom: 0.75rem;
-	}
-	.section--sm .title {
+	.section--sm .title,
+	.section--sm .actions {
 		font-size: var(--text-callout);
 		line-height: var(--lh-callout);
 	}
 	.section--sm .head + .body--flush {
 		padding-top: 0.25rem;
-	}
-	.section--sm .actions > :global(.button--ghost:last-of-type) {
-		margin-right: -0.625rem;
-	}
-	.section--sm .actions > :global(.button--ghost.button--icon:last-of-type) {
-		margin-right: -0.4375rem;
 	}
 	.foot {
 		display: flex;

@@ -31,6 +31,13 @@
 	} = $props();
 
 	const interactive = $derived(!!href || !!onclick);
+
+	function rowClick(e: MouseEvent) {
+		if (!onclick || (e.target as HTMLElement).closest('a, button, input, [role=menuitem]')) return;
+		const selection = window.getSelection();
+		if (selection && !selection.isCollapsed && selection.toString().trim()) return;
+		onclick(e);
+	}
 </script>
 
 <div
@@ -39,6 +46,12 @@
 	class:row--pinned={pinned}
 	class:row--selected={selected}
 	class:row--flush={flush}
+	class:row--clickable={!href && !!onclick}
+	{@attach (el: HTMLElement) => {
+		if (href || !onclick) return;
+		el.addEventListener('click', rowClick);
+		return () => el.removeEventListener('click', rowClick);
+	}}
 	aria-current={selected ? 'true' : undefined}
 	role="listitem"
 	in:enterExit={{ enabled: presence }}
@@ -104,6 +117,15 @@
 		border: none;
 		background: none;
 		cursor: pointer;
+	}
+	.row--clickable {
+		cursor: pointer;
+	}
+	.row--clickable .hit {
+		pointer-events: none;
+	}
+	.row--clickable .text {
+		pointer-events: auto;
 	}
 	.hit:focus-visible {
 		outline-offset: -2px;

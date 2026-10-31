@@ -5,6 +5,8 @@
 	import type { AlertState } from '$lib/components/notifications/alerts';
 	import AlertStack, { type StackAlert } from '$lib/components/patterns/AlertStack.svelte';
 	import type { PodProblem, Problem } from '$health';
+	import { parseBuildkitLogs } from '$lib/utils/buildkitParser';
+	import { diagnoseBuild } from '$lib/utils/build-failure';
 
 	interface ResourcePressure {
 		cpuRatio: number | null;
@@ -17,6 +19,7 @@
 	let {
 		buildFailed = false,
 		buildError = '',
+		buildLogs = '',
 		applyError = '',
 		onRetryApply,
 		problems = [],
@@ -39,6 +42,7 @@
 	}: {
 		buildFailed?: boolean;
 		buildError?: string;
+		buildLogs?: string | null;
 		applyError?: string;
 		onRetryApply?: () => void;
 		problems?: Problem[];
@@ -86,6 +90,15 @@
 			)
 	);
 
+	const buildCause = $derived.by(() => {
+		if (!buildFailed) return '';
+		const failure = diagnoseBuild({
+			parsed: parseBuildkitLogs(buildLogs ?? ''),
+			error: buildError
+		});
+		return failure.title.replaceAll('`', '').replace(/\.$/, '').slice(0, 160);
+	});
+
 	const healthAlerts = $derived(
 		problems
 			.filter((p) => p.scope !== 'build' || !isGithubAuth)
@@ -102,12 +115,12 @@
 				} else if (pod && onPodLogs && p.problem && LOGGED.has(p.problem)) {
 					actions.push({ label: 'Logs', onAction: () => onPodLogs(pod) });
 				}
-				const firstLine = buildError ? buildError.split('\n')[0].slice(0, 160) : '';
+				const cause = p.scope === 'build' ? buildCause : '';
 				return {
 					id: `health:${p.id}:${p.problem ?? ''}`,
 					severity: p.tone === 'error' ? (p.scope === 'app' ? 'critical' : 'error') : 'warning',
 					title: p.title,
-					hint: p.scope === 'build' && firstLine ? `${firstLine} ${p.hint}` : p.hint,
+					hint: cause ? `${cause}. ${p.hint}` : p.hint,
 					actions,
 					animateIcon: p.tone === 'error'
 				};

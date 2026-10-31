@@ -118,13 +118,12 @@
 		<Button
 			variant="ghost"
 			size="sm"
-			class="pull"
 			loading={requesting || state === 'scanning'}
 			disabled={requesting || state === 'scanning'}
 			onclick={onScan}>{actionLabel}</Button
 		>
 	{:else if canRetry}
-		<Button variant="ghost" size="sm" class="pull" onclick={onRetry}>Try again</Button>
+		<Button variant="ghost" size="sm" onclick={onRetry}>Try again</Button>
 	{/if}
 {/snippet}
 
@@ -226,8 +225,5 @@
 	.facts {
 		padding-top: 1rem;
 		box-shadow: inset 0 1px 0 var(--border-default);
-	}
-	:global(.scan-summary .pull) {
-		margin-right: -0.5rem;
 	}
 </style>

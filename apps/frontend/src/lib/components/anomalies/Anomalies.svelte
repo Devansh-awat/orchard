@@ -8,11 +8,13 @@
 		scope,
 		hideResource = false,
 		extra = [],
+		kinds = null,
 		onLoaded
 	}: {
 		scope: AnomalyScope;
 		hideResource?: boolean;
 		extra?: Anomaly[];
+		kinds?: readonly string[] | null;
 		onLoaded?: (items: Anomaly[]) => void;
 	} = $props();
 
@@ -25,7 +27,8 @@
 		if (inflight) return;
 		inflight = true;
 		try {
-			items = await fetchAnomalies(scope);
+			const all = await fetchAnomalies(scope);
+			items = kinds ? all.filter((a) => kinds.includes(a.kind)) : all;
 			loaded = true;
 			onLoaded?.(items);
 		} catch {

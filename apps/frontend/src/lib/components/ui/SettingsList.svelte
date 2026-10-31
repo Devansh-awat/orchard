@@ -23,9 +23,21 @@
 	.settings > :global(* + *) {
 		box-shadow: inset 0 1px 0 var(--border-default);
 	}
-	.settings > .settings {
+	.settings > .settings,
+	.settings > :global([data-settings-group]) {
 		min-height: 0;
 		margin-block: 0;
 		padding-block: 0;
+	}
+	.settings > :global([data-settings-group]) {
+		display: flex;
+		flex-direction: column;
+	}
+	.settings > :global([data-settings-group]) > :global(*) {
+		min-height: 3.5rem;
+		padding-block: var(--space-3);
+	}
+	.settings > :global([data-settings-group]) > :global(* + *) {
+		box-shadow: inset 0 1px 0 var(--border-default);
 	}
 </style>

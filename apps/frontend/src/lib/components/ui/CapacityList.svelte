@@ -5,6 +5,7 @@
 		detail?: string;
 		value: number | null;
 		max: number | null;
+		format?: (v: number) => string;
 	};
 
 	export function capacityTone(
@@ -43,7 +44,7 @@
 				ratio,
 				tone: measured ? capacityTone(item.value! / item.max!, warning, error) : 'neutral',
 				text: measured
-					? `${format(item.value!)} of ${format(item.max!)} · ${Math.round((item.value! / item.max!) * 100)}%`
+					? `${(item.format ?? format)(item.value!)} of ${(item.format ?? format)(item.max!)} · ${Math.round((item.value! / item.max!) * 100)}%`
 					: missing
 			};
 		})

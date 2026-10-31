@@ -7,6 +7,7 @@
 	import SeverityMeter from '$lib/components/ui/SeverityMeter.svelte';
 	import SeverityBar from '$lib/components/ui/SeverityBar.svelte';
 	import CapacityList from '$lib/components/ui/CapacityList.svelte';
+	import CheckList from '$lib/components/ui/CheckList.svelte';
 	import { SEVERITIES } from '$lib/components/ui/severity';
 	import { statusMeta, type StatusKind } from '$lib/components/ui/status';
 
@@ -116,6 +117,49 @@
 					{ id: 'cache', label: 'cache', detail: '/cache', value: 8.5, max: 10 },
 					{ id: 'uploads', label: 'uploads', detail: '/uploads', value: 9.6, max: 10 },
 					{ id: 'tmp', label: 'tmp', detail: '/tmp', value: null, max: 5 }
+				]}
+			/>
+		</div>
+		<div class="severity-demo" data-testid="checklist">
+			<CheckList
+				label="Health checks"
+				items={[
+					{
+						id: 'primary',
+						label: 'Primary',
+						detail: 'votes-1',
+						value: 'Ready',
+						meta: statusMeta('success', 'Ready')
+					},
+					{
+						id: 'standby',
+						label: 'Standby',
+						detail: 'votes-2',
+						value: 'Starting',
+						meta: statusMeta('progress', 'Starting', true)
+					},
+					{
+						id: 'disk',
+						label: 'Disk',
+						value: '4.2 of 5.0 GB',
+						ratio: 0.84,
+						meta: statusMeta('warning', 'Disk 84% full')
+					},
+					{
+						id: 'connections',
+						label: 'Connections',
+						value: '12 of 100',
+						ratio: 0.12,
+						meta: statusMeta('success', 'Connections 12% used')
+					},
+					{
+						id: 'backups',
+						label: 'Backups',
+						detail: 'since Oct 28',
+						value: '3h ago',
+						meta: statusMeta('success', 'Backed up'),
+						href: '#'
+					}
 				]}
 			/>
 		</div>

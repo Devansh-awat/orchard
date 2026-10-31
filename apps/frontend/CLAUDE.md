@@ -213,23 +213,20 @@ every `animate` prop goes through `iconAnimation()`, and `tokens.css` takes the 
 hit testing below `full` so the icon's own `mouseenter` cannot fire either. Any code that
 synthesises `mouseenter` on an icon to forward parent hover must check `decorativeMotion()`.
 
-For snippet-based components, pass hover as a snippet parameter. `SettingsSection` and
-`IconButton` already run their flag through `iconAnimation()` before handing it over, so the
-snippet passes it straight to the icon:
+For snippet-based components, pass hover as a snippet parameter, already run through
+`iconAnimation()`, so the snippet passes it straight to the icon:
 ```svelte
 <!-- Component declares: icon?: Snippet<[boolean]> -->
 {#snippet icon(hovered)}<KeyRound size={18} animate={hovered} />{/snippet}
 ```
 
-### Component patterns
+### Settings pages
 
-**Reusable settings primitives** (in `$lib/components/user-settings/`):
-- `SettingsSection` — card wrapper with animated icon header, stagger entrance
-- `SettingsField` — inline-editable field with pencil animation on cell hover
-- `IntegrationCard` — connected service with unplug animation on disconnect hover
-- `ConnectPrompt` — dashed CTA with springHover lift + chevron animation
-- `StatusPill` — connected/not connected indicator
-- `IconButton` — small action button with springHover + icon animation via snippet param
+Org settings (`/[org]/settings`) and account settings (`/user/settings`) share the `SettingsShell` pattern
+(breadcrumbs, a `ResourceHeader` with an `AvatarEdit`, `SettingsRail`, the scrolling section stack). Every
+section is a kit `SectionCard` of `SettingsList` rows or a flush `List`; creates, reveals and edits open a
+`Modal`; destructive actions confirm with `ConfirmModal`. The tab bodies live in `org-settings/` and
+`user-settings/`; there are no settings-only primitives anymore.
 
 ## Sound
 
@@ -331,7 +328,9 @@ Three-level hierarchy: **Org cap** → **Member allowance** → **Deployment req
   `POST /apiv1/__mock/deployments/:id/security {scenario}`.
 - Settings (`AppSettings` + `SettingsRail`): every section is a `SectionCard` of `SettingsList` rows;
   `BuilderOptions`, `UpdatesCard`, `AutoDeployCard`, `HealthChecks`, `ImageSource` replaced `AdvancedTab`.
-- Logs: see Logs in `DESIGN.md`. Build logs are one `LogViewer` stream (step = source); `BuildSteps` is gone. The
+- Logs: see Logs in `DESIGN.md`. Builds open on `StepRail` + `BuildLog`/`BuildTerminal` (phase sections, Docker-style
+  step lines, Raw logs switch); a failure opens its step with the cause and fix from `diagnoseBuild`. On the deployment page `Anomalies` only shows `error_spike` and
+  `rollback`; everything else is already an `AlertStack` line. `?view=killed` opens the newest kill's output. The
   console keeps the pod you picked; when it disappears, `podGone`/`replacementPod` show a capsule instead of swapping.
 - `computeHealth` takes `now`; the page ticks it every 5s so a grace window can expire without new data.
 - The console's logs follow by default: the deployment log stream (`/observe/.../logs/stream`) wakes a
@@ -339,7 +338,44 @@ Three-level hierarchy: **Org cap** → **Member allowance** → **Deployment req
   down for 4s a "Logs aren't updating" capsule offers Retry; nothing falls back to polling silently. A
   hidden tab closes the stream and catches up when it returns.
 
-## Running without a backend
+## Database Page Architecture
+
+- Same shape as the app page: `DatabaseHeader` on the kit `ResourceHeader` (status, a facts line, Restart, the
+  primary **Connect** button and `···` with Stop, Rename, Delete), one `AlertStack` line (`DatabaseAlerts`), then
+  `PageTabs` synced to `?tab=` (Overview, Backups, Observe, Settings) with `&s=` for the Settings rail. Old ids
+  redirect: `connection`/`terminal` to Overview, `metrics`/`queries` to Observe, `resources`/`extensions` to Settings.
+- Connect is a sheet (Supabase style), not a card: format (URI, psql, .env, JDBC), which instances (primary,
+  standbys, any), and the kit `SecretString`, which only fetches the real password from `/connection` on reveal or
+  copy (the server audits that call).
+- Overview: the Postgres console (`TerminalTab`: kit `LogViewer`, killed output, psql/shell tabs) as the main column;
+  `DatabaseHealth` (one kit `CheckList`: each instance with the primary from `liveStatus.currentPrimary`, disk and
+  connections against `max_connections` as thin meters, WAL backlog, backups, version) and `DatabaseActivity`
+  (transactions, cache hit, connections, CPU, memory sparklines, stretched to the console's height) on the side,
+  fitting one viewport.
+- Observe (`DatabaseObserve`): Metrics and Queries. `/databases/:id/metrics` returns the container series plus the
+  CloudNativePG exporter series (`connections`, `tps`, `cacheHit`, `lag`, `size`, `deadlocks`, `disk`,
+  `diskCapacity`), scraped by the `cnpg-instances` job in the chart. A series with no points drops its panel.
+  Queries has Supabase-style lenses (most time, most frequent, slowest).
+- Backups: the recovery home. Protection sentence (with the last restore test under it), one primary Restore and
+  a "Save a point" menu (checkpoint or backup), one Schedule row (preset, plus the cron field when custom),
+  operations with progress, Cancel and Undo, one "Restore points" list merging backups and checkpoints newest
+  first, and restore tests.
+  Every restore goes through `RestoreSheet` (a point: latest, backup, checkpoint or time; then replace or
+  copy into a new database). Replacing keeps the previous copy 24 hours.
+- Settings also carries Protection, High availability, Connection pooler and Users.
+- Settings: General, Resources (`ResourceLimits`, `StorageCard`, `ReplicasCard`), Public access, Parameters
+  (`SettingsTab` + `ParamRow`), Extensions (a `Switch` per row), Danger zone.
+
+## Usage Page Architecture
+
+- `/[org]/usage` uses the same shell as a resource page: `Breadcrumbs`, a `ResourceHeader` with facts, `PageTabs`
+  synced to `?tab=` (Organization `overview`, Yours `me`, Members, Right-sizing `provisioning`, plus graft tabs),
+  and a capsule `SegmentedControl` for `?range=` on the tabs that read `/metrics/provisioning`.
+- Numbers are `Metric` tiles in `Widget`s with a `Progress` meter against the cap; rankings are `TopList`s; the
+  right-sizing summary is a `CheckList`; members and workloads are kit `Table`s inside `SectionCard`s. Allowance
+  edits open a `Modal` with a Default / Custom / Unlimited `SegmentedControl` per resource.
+
+
 
 `pnpm dev:mock` (from here or the repo root) starts Vite with `ORCHARD_MOCK=1`, which mounts the
 `mockApi()` plugin from `mock/plugin.ts`. It answers every `/apiv1/*` request from an in-memory
@@ -359,7 +395,9 @@ provisioning).
   `mock/scenarios.ts` produces the same status and pod facts (`podFacts`) the server does, timed from the
   moment you set the scenario, so grace windows play out as they will in production. `POST /apiv1/__mock/deployments/:id/rollout`
   with `{ outcome, twice? }` simulates a rolling deploy whose new version has that outcome (`twice` deploys
-  again a second later), and `{ cancel: true }` ends it. `__ORCHARD_MOCK__` is true only in mock mode.
+  again a second later), and `{ cancel: true }` ends it. `POST /apiv1/__mock/deployments/:id/build` with
+  `{ failure }` (`command`, `lockfile`, `dockerfile`, `typescript`, `branch`) runs a build that fails that way, or
+  succeeds without one. `__ORCHARD_MOCK__` is true only in mock mode.
 - **Sign out** makes every non-auth route 401 until you click "Continue as alfd (mock)" on the login
   page (any email and 6-digit code also work).
 - **Data** is seeded in `mock/seed.ts` (entity types in `mock/types.ts`). State lives in `mock/store.ts`,

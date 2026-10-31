@@ -455,8 +455,24 @@
 		return () => el.removeEventListener('keydown', onKeydown);
 	}
 
+	function selectLines(e: KeyboardEvent) {
+		const target = e.target as HTMLElement | null;
+		if (target?.closest('input, textarea, [contenteditable]')) return false;
+		const body = scroller?.querySelector('.lv-body');
+		if (!body) return false;
+		e.preventDefault();
+		const range = document.createRange();
+		range.selectNodeContents(body);
+		const selection = window.getSelection();
+		selection?.removeAllRanges();
+		selection?.addRange(range);
+		return true;
+	}
+
 	function onKeydown(e: KeyboardEvent) {
-		if (!toolbar || !(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'f') return;
+		if (!(e.metaKey || e.ctrlKey)) return;
+		if (e.code === 'KeyA' && selectLines(e)) return;
+		if (!toolbar || e.code !== 'KeyF') return;
 		const input = root?.querySelector<HTMLInputElement>('.lv-filter input');
 		if (!input) return;
 		e.preventDefault();
@@ -694,7 +710,14 @@
 		</div>
 	{:else if lines.length}
 		<div class="lv-frame">
-			<div class="lv-scroll" bind:this={scroller} onscroll={handleScroll} {@attach selectionWatch}>
+			<div
+				class="lv-scroll"
+				bind:this={scroller}
+				onscroll={handleScroll}
+				tabindex="0"
+				role="log"
+				{@attach selectionWatch}
+			>
 				{#if loadingMore}
 					<div class="lv-more"><Spinner size={12} /> Loading earlier logs</div>
 				{:else if atStart}

@@ -2385,6 +2385,7 @@ a.dep-meta-lead-link:hover {
 }
 
 .dep-shell {
+	--section-r: var(--radius-widget);
 	display: flex;
 	flex-direction: column;
 	min-height: 100%;
@@ -2549,7 +2550,8 @@ html.vt-console-close::view-transition-old(root) {
 }
 
 .build-log-body {
+	--build-log-h: calc(min(85vh, 48rem) - 6.5rem);
 	display: flex;
 	flex-direction: column;
-	height: min(70vh, 44rem);
+	max-height: var(--build-log-h);
 }

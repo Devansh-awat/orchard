@@ -148,6 +148,7 @@
 	const logs = new LogsState();
 	const errors = new ErrorsState();
 	const events = new EventsState();
+	let focusKilled = $state(false);
 
 	const demo = $derived($page.url.searchParams.has('demo'));
 	const hasIngress = $derived(demo || (deployment?.ingresses?.length ?? 0) > 0);
@@ -160,6 +161,7 @@
 		const tab = activeTab;
 		if (!deployment || VIEWS.some((v) => v.value === tab)) return;
 		untrack(() => {
+			if (tab === 'killed') focusKilled = true;
 			activeTab = tab === 'killed' ? 'events' : 'metrics';
 		});
 	});
@@ -469,7 +471,7 @@
 					onOpenLogs={() => (activeTab = 'logs')}
 				/>
 			{:else}
-				<EventsView {events} {deployment} {active} {demo} />
+				<EventsView {events} {deployment} {active} {demo} bind:focusKilled />
 			{/if}
 		</Swap>
 	</div>

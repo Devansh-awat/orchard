@@ -463,11 +463,6 @@
 		flex-direction: column;
 		gap: 1.25rem;
 	}
-	.network :global(.net-add) {
-		margin-right: -0.625rem;
-		border-radius: 999px;
-		corner-shape: round;
-	}
 	.network :global(.net-pill) {
 		border-radius: 999px;
 		corner-shape: round;

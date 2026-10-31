@@ -646,6 +646,9 @@ html {
 	min-width: 15rem;
 }
 
+.ui-modal:focus {
+	outline: none;
+}
 .ui-modal {
 	position: fixed;
 	inset: 0;

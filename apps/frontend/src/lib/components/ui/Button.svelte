@@ -6,6 +6,7 @@
 	let {
 		variant = 'secondary',
 		size = 'md',
+		shape = 'rounded',
 		href = undefined,
 		type = 'button',
 		loading = false,
@@ -20,6 +21,7 @@
 	}: {
 		variant?: 'primary' | 'secondary' | 'tinted' | 'ghost' | 'danger' | 'media';
 		size?: 'sm' | 'md' | 'lg';
+		shape?: 'rounded' | 'capsule';
 		href?: string;
 		type?: 'button' | 'submit';
 		loading?: boolean;
@@ -57,6 +59,7 @@
 	<a
 		{href}
 		class="button button--{variant} button--{size} {className}"
+		class:button--capsule={shape === 'capsule'}
 		class:button--icon={iconOnly}
 		aria-label={label}
 		{...rest}>{@render body()}</a
@@ -65,6 +68,7 @@
 	<button
 		{type}
 		class="button button--{variant} button--{size} {className}"
+		class:button--capsule={shape === 'capsule'}
 		class:button--icon={iconOnly}
 		class:button--loading={loading}
 		disabled={disabled || loading}
@@ -206,5 +210,9 @@
 	}
 	.button--media:hover:not(:disabled) {
 		background: var(--on-media-fill-hover);
+	}
+	.button--capsule {
+		border-radius: 999px;
+		corner-shape: round;
 	}
 </style>

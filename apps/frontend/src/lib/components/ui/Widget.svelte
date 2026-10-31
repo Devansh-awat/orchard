@@ -41,6 +41,9 @@
 		flex-direction: column;
 		--widget-r: var(--radius-widget);
 		--widget-pad: 1rem;
+		--widget-control-h: 1.75rem;
+		--widget-corner-inset: calc(var(--widget-r) - var(--widget-control-h) / 2);
+		--widget-title-gap: 0.75rem;
 		gap: var(--widget-pad);
 		min-width: 0;
 		padding: var(--widget-pad);
@@ -65,8 +68,22 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 0.75rem;
-		min-height: 1.75rem;
-		margin: -0.25rem 0 0;
+		margin-bottom: calc(var(--widget-title-gap) - var(--widget-pad));
+		font-size: var(--text-headline);
+	}
+	.head--controls {
+		min-height: var(--widget-control-h);
+		margin-top: calc(var(--widget-corner-inset) - var(--widget-pad));
+		margin-bottom: calc(
+			var(--widget-title-gap) - var(--widget-pad) - (var(--widget-control-h) - 1cap) / 2
+		);
+	}
+	.head--controls .meta:has(:global(button, a)) {
+		margin-right: calc(var(--widget-corner-inset) - var(--widget-pad));
+	}
+	.head--controls .meta :global(.button) {
+		border-radius: 999px;
+		corner-shape: round;
 	}
 	.title {
 		font-size: var(--text-headline);

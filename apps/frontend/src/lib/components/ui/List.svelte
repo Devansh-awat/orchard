@@ -23,7 +23,7 @@
 		min-width: 0;
 	}
 	.list--inset {
-		border-radius: calc(var(--radius-card) * var(--corner-scale));
+		border-radius: calc(var(--section-r, var(--radius-card)) * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--bg-surface);
 		box-shadow: var(--shadow-raised);

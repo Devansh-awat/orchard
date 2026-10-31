@@ -208,7 +208,7 @@
 		--cell-x: 0.375rem;
 	}
 	.frame--inset {
-		border-radius: calc(var(--radius-card) * var(--corner-scale));
+		border-radius: calc(var(--section-r, var(--radius-card)) * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--bg-surface);
 		box-shadow: var(--shadow-raised);
@@ -246,7 +246,20 @@
 		min-height: 2.25rem;
 		background: color-mix(in oklab, var(--bg-surface) 92%, transparent);
 		backdrop-filter: blur(12px) saturate(1.4);
-		box-shadow: inset 0 -1px 0 var(--border-default);
+	}
+	.tr--head::after {
+		content: '';
+		position: absolute;
+		right: var(--pad-x);
+		bottom: 0;
+		left: var(--pad-x);
+		height: 1px;
+		background: var(--border-default);
+		pointer-events: none;
+	}
+	.frame--inset .tr--head {
+		min-height: calc(var(--pad-x) * 2 + 1cap);
+		font-size: var(--text-caption);
 	}
 	.frame:not(.frame--inset) .tr--head {
 		background: var(--bg-sheet);
@@ -268,7 +281,7 @@
 		position: absolute;
 		inset: 0.125rem var(--hover-inset);
 		z-index: -1;
-		border-radius: calc(var(--radius-card) - var(--hover-inset));
+		border-radius: calc(var(--section-r, var(--radius-card)) - var(--hover-inset));
 		background: var(--bg-hover);
 		opacity: 0;
 		transition: opacity var(--dur-fast) ease;
@@ -344,8 +357,8 @@
 		align-items: center;
 		gap: 0.25rem;
 		height: 1.5rem;
-		margin: 0 -0.375rem;
-		padding: 0 0.375rem;
+		margin: 0 -0.5rem;
+		padding: 0 0.5rem;
 		border: none;
 		border-radius: calc(0.375rem * var(--corner-scale));
 		corner-shape: var(--corner);

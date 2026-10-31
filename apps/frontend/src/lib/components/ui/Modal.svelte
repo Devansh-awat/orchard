@@ -43,7 +43,11 @@
 	});
 
 	$effect(() => {
-		if (dialogEl && !dialogEl.open) dialogEl.showModal();
+		if (!dialogEl || dialogEl.open) return;
+		dialogEl.showModal();
+		const landed = document.activeElement;
+		if (landed && dialogEl.contains(landed) && !landed.matches('input, textarea, select'))
+			dialogEl.focus();
 	});
 
 	function requestClose() {
@@ -71,6 +75,7 @@
 {#if rendered}
 	<dialog
 		bind:this={dialogEl}
+		tabindex="-1"
 		class="ui-modal ui-modal--{size}"
 		class:ui-modal--content={align === 'content'}
 		class:ui-modal--closing={!open}

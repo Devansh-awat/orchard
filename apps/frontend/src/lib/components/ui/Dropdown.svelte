@@ -16,6 +16,7 @@
 		icon = undefined,
 		trigger: custom = undefined,
 		size = 'md',
+		shape = 'rounded',
 		loading = false,
 		mono = false,
 		ariaLabel = undefined,
@@ -31,6 +32,7 @@
 		icon?: Snippet<[string]>;
 		trigger?: Snippet<[Record<string, unknown>, boolean, DropdownOption | null]>;
 		size?: 'sm' | 'md' | 'lg';
+		shape?: 'rounded' | 'capsule';
 		loading?: boolean;
 		mono?: boolean;
 		ariaLabel?: string;
@@ -163,6 +165,7 @@
 				id={base}
 				block
 				{size}
+				{shape}
 				{disabled}
 				open={isOpen}
 				{loading}

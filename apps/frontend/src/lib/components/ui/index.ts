@@ -74,6 +74,7 @@ export { default as Spinner } from './Spinner.svelte';
 export { default as Stack } from './Stack.svelte';
 export { default as FormActions } from './FormActions.svelte';
 export { default as SecretInput } from './SecretInput.svelte';
+export { default as SecretString } from './SecretString.svelte';
 export { default as SearchPicker } from './SearchPicker.svelte';
 export { default as AmountSlider } from './AmountSlider.svelte';
 export { default as GitHostMark, gitHostOf } from './GitHostMark.svelte';
@@ -93,6 +94,12 @@ export { default as SeriesTable } from './SeriesTable.svelte';
 export { ChartAxis, provideChartAxis, chartAxis } from './chart-axis.svelte';
 export { default as TopList } from './TopList.svelte';
 export { default as CapacityList } from './CapacityList.svelte';
+export { default as CheckList } from './CheckList.svelte';
+export { default as SessionTabs } from './SessionTabs.svelte';
+export { default as AvatarEdit } from './AvatarEdit.svelte';
+export { default as ItemLabel } from './ItemLabel.svelte';
+export type { SessionTab } from './session-tabs';
+export type { CheckItem } from './checklist';
 export { default as SeverityMeter } from './SeverityMeter.svelte';
 export { default as SeverityBar } from './SeverityBar.svelte';
 export {
@@ -112,3 +119,10 @@ export type {
 	ChartThreshold,
 	ChartBand
 } from './time-chart';
+export { default as RelativeTime } from './RelativeTime.svelte';
+export { default as RadioGroup } from './RadioGroup.svelte';
+export { default as Tooltip } from './Tooltip.svelte';
+export { default as CopyButton } from './CopyButton.svelte';
+export { default as CodeBlock } from './CodeBlock.svelte';
+export { default as Kbd } from './Kbd.svelte';
+export { default as SwatchPicker } from './SwatchPicker.svelte';

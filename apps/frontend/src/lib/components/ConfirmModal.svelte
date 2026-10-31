@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import { AlertTriangle, Trash2 } from 'lucide-svelte';
 	import { Modal, ModalIntro, Button, Input } from '$lib/components/ui';
 
@@ -13,6 +14,7 @@
 		confirmText?: string | null;
 		onconfirm: () => void;
 		oncancel: () => void;
+		children?: Snippet;
 	}
 
 	let {
@@ -25,7 +27,8 @@
 		danger = true,
 		confirmText = null,
 		onconfirm,
-		oncancel
+		oncancel,
+		children = undefined
 	}: Props = $props();
 
 	const uid = $props.id();
@@ -73,6 +76,7 @@
 				<p>{description}</p>
 			{/if}
 		</ModalIntro>
+		{#if children}{@render children()}{/if}
 		{#if confirmText}
 			<form
 				class="type"

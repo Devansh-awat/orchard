@@ -1,8 +1,15 @@
 <script lang="ts">
-	import { Boxes, Maximize2, Minimize2, Pause, Play, SquareTerminal, X } from 'lucide-svelte';
+	import { Boxes, Maximize2, Minimize2, Pause, Play, SquareTerminal } from 'lucide-svelte';
 	import { untrack } from 'svelte';
 	import { page } from '$app/stores';
-	import { Button, Menu, MenuItem, LogViewer, SelectTrigger } from '$lib/components/ui';
+	import {
+		Button,
+		Menu,
+		MenuItem,
+		LogViewer,
+		SelectTrigger,
+		SessionTabs
+	} from '$lib/components/ui';
 	import UsageCard from './UsageCard.svelte';
 	import StatusDot from '$lib/components/ui/StatusDot.svelte';
 	import { statusMeta } from '$lib/components/ui/status';
@@ -114,7 +121,11 @@
 		podName: () => selectedPod,
 		namespace: () => deployment?.namespace ?? 'default',
 		container: () => selectedContainer,
-		previous: () => showPreviousLogs
+		previous: () => showPreviousLogs,
+		restarts: () =>
+			((deployment?.pods ?? []) as Pod[])
+				.find((p) => p.name === selectedPod)
+				?.containers?.find((c) => c.name === selectedContainer)?.restartCount ?? 0
 	});
 
 	let crashLogsFor: string | null = null;
@@ -263,50 +274,32 @@
 				: ''}
 		>
 			<div class="bar">
-				<div class="sessions" role="tablist" aria-label="Console">
-					<button
-						type="button"
-						role="tab"
-						class="session"
-						aria-selected={activeConsoleTab === 'logs'}
-						onclick={() => (activeConsoleTab = 'logs')}>Logs</button
-					>
-					{#each terminalTabs as ttab (ttab.id)}
-						<span
-							class="session session--term"
-							class:session--bell={ttab.bell && activeConsoleTab !== ttab.id}
-						>
-							<button
-								type="button"
-								role="tab"
-								class="session-hit"
-								aria-selected={activeConsoleTab === ttab.id}
-								title={ttab.title || ttab.label}
-								onclick={() => {
-									ttab.bell = false;
-									activeConsoleTab = ttab.id;
-								}}
-							>
-								<SquareTerminal size={13} aria-hidden="true" />
-								<span class="session-title">{ttab.title || ttab.label}</span>
-							</button>
-							<button
-								type="button"
-								class="session-close"
-								aria-label="Close {ttab.title || ttab.label}"
-								onclick={() => onCloseTerminalTab(ttab.id)}
-							>
-								<X size={12} />
-							</button>
-						</span>
-					{/each}
-				</div>
+				<SessionTabs
+					label="Console"
+					items={[
+						{ id: 'logs', label: 'Logs' },
+						...terminalTabs.map((t) => ({
+							id: t.id,
+							label: t.title || t.label,
+							icon: SquareTerminal,
+							closable: true,
+							bell: t.bell
+						}))
+					]}
+					bind:value={activeConsoleTab}
+					onselect={(id) => {
+						const t = terminalTabs.find((x) => x.id === id);
+						if (t) t.bell = false;
+					}}
+					onclose={onCloseTerminalTab}
+				/>
 
 				<div class="tools">
 					{#if activeConsoleTab === 'logs'}
 						<Menu placement="bottom-end">
 							{#snippet trigger(attrs, isOpen)}
 								<SelectTrigger
+									shape="capsule"
 									{...attrs}
 									open={isOpen}
 									size="sm"
@@ -341,6 +334,7 @@
 						</Menu>
 						{#if !showPreviousLogs}
 							<Button
+								shape="capsule"
 								variant="ghost"
 								size="sm"
 								icon={logsPaused ? Play : Pause}
@@ -353,6 +347,7 @@
 					<Menu placement="bottom-end">
 						{#snippet trigger(attrs)}
 							<Button
+								shape="capsule"
 								{...attrs}
 								variant="secondary"
 								size="sm"
@@ -380,6 +375,7 @@
 					<TerminalSettings />
 
 					<Button
+						shape="capsule"
 						variant="ghost"
 						size="sm"
 						icon={consoleExpanded ? Minimize2 : Maximize2}
@@ -417,6 +413,7 @@
 									<span>{podLabel(selectedPod)} is gone</span>
 									{#if replacementPod}
 										<Button
+											shape="capsule"
 											variant="secondary"
 											size="sm"
 											onclick={() => replacementPod && onSelectLogsPod(replacementPod)}
@@ -426,14 +423,20 @@
 								{:else if logsPaused}
 									<StatusDot meta={statusMeta('neutral', 'Paused')} size={8} />
 									<span>Paused</span>
-									<Button variant="secondary" size="sm" onclick={() => (logsPaused = false)}
-										>Resume</Button
+									<Button
+										shape="capsule"
+										variant="secondary"
+										size="sm"
+										onclick={() => (logsPaused = false)}>Resume</Button
 									>
 								{:else}
 									<StatusDot meta={statusMeta('warning', 'Reconnecting', true)} size={8} />
 									<span>Logs aren't updating</span>
-									<Button variant="secondary" size="sm" onclick={() => logStreamAttempt++}
-										>Retry</Button
+									<Button
+										shape="capsule"
+										variant="secondary"
+										size="sm"
+										onclick={() => logStreamAttempt++}>Retry</Button
 									>
 								{/if}
 							</div>
@@ -557,93 +560,11 @@
 		padding: 0.5rem;
 		border-bottom: 1px solid var(--console-edge);
 	}
-	.sessions {
-		display: flex;
-		align-items: center;
-		gap: 0.25rem;
-		min-width: 0;
-		margin-block: -0.25rem;
-		padding-block: 0.25rem;
-		overflow-x: auto;
-		scrollbar-width: none;
-	}
-	.session {
-		display: inline-flex;
-		align-items: center;
-		flex-shrink: 0;
-		height: 1.75rem;
-		padding: 0 0.75rem;
-		border: none;
-		border-radius: 999px;
-		background: transparent;
-		color: var(--console-dim);
-		font-size: var(--text-footnote);
-		font-weight: var(--weight-medium);
-		cursor: pointer;
-	}
-	.session:hover,
-	.session--term:has(.session-hit:hover) {
-		background: var(--console-hover);
-		color: var(--console-text);
-	}
-	.session[aria-selected='true'],
-	.session--term:has([aria-selected='true']) {
-		background: var(--bg-surface);
-		color: var(--console-text);
-		box-shadow:
-			inset 0 0 0 0.5px var(--border-strong),
-			0 1px 2px color-mix(in oklab, var(--neutral-10) 8%, transparent);
-	}
-	.session--term {
-		gap: 0.125rem;
-		padding: 0 0.25rem 0 0.75rem;
-	}
-	.session--bell .session-hit {
-		color: var(--status-warning);
-	}
-	.session-hit {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		max-width: 12rem;
-		border: none;
-		background: none;
-		color: inherit;
-		font: inherit;
-		cursor: pointer;
-	}
-	.session-title {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.session-close {
-		display: grid;
-		place-items: center;
-		width: 1.25rem;
-		height: 1.25rem;
-		border: none;
-		border-radius: 50%;
-		background: none;
-		color: var(--console-faint);
-		cursor: pointer;
-	}
-	.session-close:hover {
-		background: var(--console-hover);
-		color: var(--console-text);
-	}
 	.tools {
 		display: flex;
 		align-items: center;
 		gap: 0.25rem;
 		flex-shrink: 0;
-	}
-	.bar :global(:is(.button, .trigger)) {
-		border-radius: 999px;
-		corner-shape: round;
-	}
-	.bar :global(.trigger--sm) {
-		padding-inline: 0.75rem 0.5rem;
 	}
 	.logs {
 		position: relative;
@@ -670,10 +591,6 @@
 		font-weight: var(--weight-medium);
 		white-space: nowrap;
 		translate: -50% 0;
-	}
-	.logs-notice :global(.button) {
-		border-radius: 999px;
-		corner-shape: round;
 	}
 	.console-empty {
 		display: flex;

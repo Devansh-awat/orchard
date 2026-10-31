@@ -14,6 +14,8 @@
 	import LogViewer from '$lib/components/ui/LogViewer.svelte';
 	import Avatar from '$lib/components/ui/Avatar.svelte';
 	import AvatarStack from '$lib/components/ui/AvatarStack.svelte';
+	import AvatarEdit from '$lib/components/ui/AvatarEdit.svelte';
+	import ItemLabel from '$lib/components/ui/ItemLabel.svelte';
 	import Breadcrumbs from '$lib/components/ui/Breadcrumbs.svelte';
 	import { resourceStatus } from '$lib/components/ui/status';
 	import type { LogLine } from '$lib/utils/log-sources.svelte';
@@ -407,6 +409,20 @@ health_check = "/healthz"`;
 					<AvatarStack people={PEOPLE.slice(0, 3)} size={24} />
 					<AvatarStack people={PEOPLE} size={24} />
 					<AvatarStack people={PEOPLE} size={32} max={5} />
+				</div>
+				<div class="flex items-center gap-4">
+					<AvatarEdit label="Change photo" removable onchange={() => {}} onremove={() => {}}>
+						<Avatar seed="seb" />
+					</AvatarEdit>
+					<AvatarEdit label="Uploading" busy onchange={() => {}}>
+						<Avatar seed="kara" />
+					</AvatarEdit>
+				</div>
+				<div class="flex items-center gap-8">
+					<ItemLabel title="Kara Lin" detail="kara@hackclub.com">
+						{#snippet leading()}<Avatar seed="kara" size={32} />{/snippet}
+					</ItemLabel>
+					<ItemLabel title="game-server" detail="terra · deployment" />
 				</div>
 			</div>
 		</SectionCard>

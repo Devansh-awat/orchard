@@ -11,12 +11,14 @@
 		size = 8,
 		tone = undefined,
 		steps = undefined,
+		orbit = undefined,
 		label = undefined
 	}: {
 		meta: StatusMeta;
 		size?: number;
 		tone?: 'deploy';
 		steps?: DotStep[];
+		orbit?: number;
 		label?: string;
 	} = $props();
 
@@ -65,6 +67,7 @@
 	class:dot--live={live}
 	class:dot--settle={settling}
 	style:--dot-size="{size}px"
+	style:--ring-size={orbit ? `${orbit}px` : undefined}
 	data-motion={live ? 'progress' : undefined}
 	role={label ? 'img' : undefined}
 	aria-label={label}
@@ -141,8 +144,8 @@
 		position: absolute;
 		top: 50%;
 		left: 50%;
-		width: calc(var(--dot-size) * 2.25);
-		height: calc(var(--dot-size) * 2.25);
+		width: var(--ring-size, calc(var(--dot-size) * 2.25));
+		height: var(--ring-size, calc(var(--dot-size) * 2.25));
 		overflow: visible;
 		pointer-events: none;
 		translate: -50% -50%;
@@ -174,7 +177,7 @@
 	.arc,
 	.seg {
 		fill: none;
-		stroke-width: 2.8;
+		stroke-width: var(--ring-stroke, 2.8);
 		stroke-linecap: round;
 	}
 	.track {

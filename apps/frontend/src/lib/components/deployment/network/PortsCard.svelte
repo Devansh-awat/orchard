@@ -50,7 +50,7 @@
 
 <Widget title="Ports">
 	{#snippet meta()}
-		<Button variant="ghost" size="sm" icon={Plus} class="net-add" onclick={onAdd}>Add port</Button>
+		<Button variant="ghost" size="sm" icon={Plus} onclick={onAdd}>Add port</Button>
 	{/snippet}
 
 	{#if entries.length === 0}

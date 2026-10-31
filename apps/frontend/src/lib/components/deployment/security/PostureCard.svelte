@@ -57,7 +57,7 @@
 						>{/snippet}
 					{#snippet leading()}<SeverityMeter severity={finding.severity} />{/snippet}
 					{#snippet actions()}
-						<Button variant="ghost" size="sm" class="pull" href={copy.href}>{copy.action}</Button>
+						<Button variant="ghost" size="sm" href={copy.href}>{copy.action}</Button>
 					{/snippet}
 				</ListRow>
 			{/each}
@@ -93,9 +93,6 @@
 		font-size: var(--text-caption);
 		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
-	:global(.posture .pull) {
-		margin-right: -0.5rem;
 	}
 	:global(.posture [role='listitem']:first-child) {
 		padding-top: 0;

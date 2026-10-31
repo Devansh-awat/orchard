@@ -1,5 +1,11 @@
 <script lang="ts" module>
-	export type StackAlertAction = { label: string; href?: string; onclick?: () => void };
+	export type StackAlertAction = {
+		label: string;
+		href?: string;
+		onclick?: () => void;
+		primary?: boolean;
+		loading?: boolean;
+	};
 	export type StackAlert = {
 		id: string;
 		tone: 'error' | 'warning' | 'info';
@@ -122,7 +128,13 @@
 								rel="noopener noreferrer">{act.label}</Button
 							>
 						{:else}
-							<Button variant="secondary" size="sm" onclick={act.onclick}>{act.label}</Button>
+							<Button
+								variant={act.primary ? 'primary' : 'secondary'}
+								size="sm"
+								loading={act.loading}
+								disabled={act.loading}
+								onclick={act.onclick}>{act.label}</Button
+							>
 						{/if}
 					{/each}
 					{#if i === 0 && many}

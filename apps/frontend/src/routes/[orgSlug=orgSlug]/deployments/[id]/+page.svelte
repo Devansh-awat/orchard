@@ -19,7 +19,7 @@
 		formatBuildElapsed,
 		sanitizeLogs
 	} from '$lib/components/deployment/deployment-helpers';
-	import { LogViewer, Modal, resourceStatus, statusMeta } from '$lib/components/ui';
+	import { Modal, resourceStatus, statusMeta } from '$lib/components/ui';
 	import {
 		apiFetch,
 		toasts,
@@ -68,6 +68,7 @@
 	import GraftCards from '$lib/grafts/GraftCards.svelte';
 	import { graftHost } from '$lib/grafts/host.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import Checkbox from '$lib/components/ui/Checkbox.svelte';
 	import RenameModal from '$lib/components/RenameModal.svelte';
 	import Anomalies from '$lib/components/anomalies/Anomalies.svelte';
 	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
@@ -77,6 +78,8 @@
 	import CircleAlertIcon from '$lib/components/icons/CircleAlertIcon.svelte';
 	import TriangleAlertIcon from '$lib/components/icons/TriangleAlertIcon.svelte';
 	import { ansiBuildLines } from '$lib/utils/log-sources.svelte';
+	import { parseBuildkitLogs } from '$lib/utils/buildkitParser';
+	import BuildLog from '$lib/components/deployment/build/BuildLog.svelte';
 	import PodTerminal from '$lib/components/PodTerminal.svelte';
 
 	// Extracted modules
@@ -1995,9 +1998,9 @@
 	let logModalContent = $state<string | null>(null);
 	let logModalLoading = $state(false);
 	let logModalError = $state<string | null>(null);
-	const logModalLines = $derived(
-		ansiBuildLines(logModalContent ? sanitizeLogs(logModalContent) : '')
-	);
+	const logModalText = $derived(logModalContent ? sanitizeLogs(logModalContent) : '');
+	const logModalLines = $derived(ansiBuildLines(logModalText));
+	const logModalParsed = $derived(parseBuildkitLogs(logModalText));
 
 	async function openLogModal(historyId: string) {
 		logModalId = historyId;
@@ -2031,6 +2034,7 @@
 	let rollingBackId = $state<string | null>(null);
 	let rollbackTarget = $state<ImageHistory | null>(null);
 	let showRollbackModal = $state(false);
+	let rollbackRestoreDatabases = $state(false);
 	const rollbackTargetTag = $derived(rollbackTarget?.image.split(':').pop() ?? '');
 
 	function requestRollback(historyId: string) {
@@ -2038,27 +2042,38 @@
 		const history = deployment?.imageHistory?.find((h) => h.id === historyId);
 		if (!history) return;
 		rollbackTarget = history;
+		rollbackRestoreDatabases = false;
 		showRollbackModal = true;
 	}
 
 	function confirmRollback() {
 		const id = rollbackTarget?.id;
 		rollbackTarget = null;
-		if (id) rollbackToImage(id);
+		if (id) rollbackToImage(id, rollbackRestoreDatabases);
 	}
 
-	async function rollbackToImage(historyId: string) {
+	async function rollbackToImage(historyId: string, restoreDatabases = false) {
 		if (rollingBackId) return;
 		rollingBackId = historyId;
 		try {
 			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/rollback/${historyId}`, {
-				method: 'POST'
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(restoreDatabases ? { restoreDatabases: true } : {})
 			});
 			if (!response.ok) {
-				throw new Error('Failed to rollback');
+				const data = await response.json().catch(() => null);
+				throw new Error(data?.message || 'Failed to rollback');
 			}
+			const result = await response.json().catch(() => null);
+			const restores = Array.isArray(result?.databaseRestores) ? result.databaseRestores.length : 0;
 			toasts.add({
 				title: 'Rollback initiated',
+				description: restoreDatabases
+					? restores > 0
+						? `${restores} ${restores === 1 ? 'database is' : 'databases are'} going back to before that deploy.`
+						: 'No bound database had a checkpoint from before that deploy.'
+					: undefined,
 				color: 'success'
 			});
 			fetchDeployment();
@@ -3086,6 +3101,7 @@
 			<!-- Unified alerts -->
 			<Anomalies
 				scope={{ kind: 'deployment', id: deploymentId }}
+				kinds={['error_spike', 'rollback']}
 				hideResource
 				onLoaded={(items) => (anomaliesShown = items.length > 0)}
 			/>
@@ -3098,6 +3114,7 @@
 					} catch {}
 				}}
 				buildFailed={buildFailedActive}
+				buildLogs={deployment?.buildLogs ?? ''}
 				buildError={debugAlerts
 					? $page.url.searchParams.get('debugAlerts') === 'github'
 						? 'Build failed: ERROR: GitHub authentication failed.'
@@ -3453,18 +3470,22 @@
 		danger={false}
 		onconfirm={confirmRollback}
 		oncancel={() => (rollbackTarget = null)}
-	/>
+	>
+		<Checkbox
+			bind:checked={rollbackRestoreDatabases}
+			label="Also restore bound databases to before this deploy"
+			hint="Each goes back to its checkpoint from before the deploy."
+		/>
+	</ConfirmModal>
 {/if}
 
 <Modal bind:open={() => !!logModalId, (v) => !v && closeLogModal()} title="Build logs" size="xl">
 	<div class="build-log-body">
-		<LogViewer
+		<BuildLog
+			parsed={logModalParsed}
 			lines={logModalLines}
 			loading={logModalLoading}
 			error={logModalError}
-			surface="dark"
-			toolbar
-			sourceLabel="Step"
 			filename="{deployment?.name ?? 'app'}-build"
 		/>
 	</div>

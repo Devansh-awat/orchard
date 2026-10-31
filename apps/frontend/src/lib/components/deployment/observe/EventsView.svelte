@@ -15,12 +15,14 @@
 		events,
 		deployment,
 		active,
-		demo
+		demo,
+		focusKilled = $bindable(false)
 	}: {
 		events: EventsState;
 		deployment: any;
 		active: boolean;
 		demo: boolean;
+		focusKilled?: boolean;
 	} = $props();
 
 	let open = $state<string | null>(null);
@@ -51,6 +53,15 @@
 			events.capture(deployment.id, row.item.entryId, demo);
 		}
 	}
+
+	$effect(() => {
+		if (!focusKilled || !events.loaded) return;
+		const row = events.items.find((r) => r.kind === 'killed');
+		untrack(() => {
+			focusKilled = false;
+			if (row && open !== row.key) toggle(row);
+		});
+	});
 
 	function describe(row: TimelineItem) {
 		if (row.kind === 'killed') {

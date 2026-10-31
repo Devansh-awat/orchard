@@ -40,6 +40,7 @@
 		background: var(--fill-quiet);
 		color: var(--text-muted);
 		flex-shrink: 0;
+		overflow: hidden;
 	}
 	.ui-tone-tile--success {
 		background: var(--status-success-bg);
