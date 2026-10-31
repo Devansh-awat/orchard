@@ -15,6 +15,7 @@ import {
   poolerOnByDefault,
   recoveryBootstrap,
   recoveryClusterSpec,
+  postgresTimestamp,
   recoveryTargetSpec,
   walArchiverPlugin,
   BARMAN_PLUGIN
@@ -34,8 +35,9 @@ import { targetFromRequest } from '../src/projects/database-recovery.service';
 test('recovery targets map onto the CNPG fields, and named points carry the backup they start from', () => {
   assert.equal(recoveryTargetSpec({ type: 'latest' }), undefined);
   assert.deepEqual(recoveryTargetSpec({ type: 'time', time: '2026-10-30T12:00:00Z' }), {
-    targetTime: '2026-10-30T12:00:00.000Z'
+    targetTime: '2026-10-30 12:00:00.000000+00'
   });
+  assert.equal(postgresTimestamp('2026-10-31T21:30:21.811Z'), '2026-10-31 21:30:21.811000+00');
   assert.deepEqual(
     recoveryTargetSpec({
       type: 'restore_point',

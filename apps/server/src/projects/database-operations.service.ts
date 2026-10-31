@@ -390,10 +390,6 @@ export class DatabaseOperationsService {
       `pg-${formatSlug(name).slice(0, 40)}-${suffix.slice(-4)}`,
       53
     );
-    const dbNameBase =
-      `${project.organization.slug}_${project.slug}_${formatSlug(name)}_${id.slice(0, 4)}`
-        .replace(/-/g, '_')
-        .slice(0, 61);
     const keepsCredentials = op.kind === 'undelete';
     const password = keepsCredentials ? this.crypto.open(src.dbPassword) : dbs.generatePassword();
     await this.prisma.database.create({
@@ -402,7 +398,7 @@ export class DatabaseOperationsService {
         projectId: project.id,
         environmentId: env?.id ?? null,
         name,
-        dbName: keepsCredentials ? src.dbName : dbNameBase,
+        dbName: src.dbName,
         dbUser: keepsCredentials ? src.dbUser : src.dbUser,
         dbPassword: this.crypto.seal(password),
         status: 'restoring',

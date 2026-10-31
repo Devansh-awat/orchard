@@ -136,12 +136,17 @@ export type RecoveryTarget =
   | { type: 'backup'; backupId: string }
   | { type: 'lsn'; lsn: string };
 
+export function postgresTimestamp(value: string | Date): string {
+  const iso = new Date(value).toISOString();
+  return `${iso.slice(0, 10)} ${iso.slice(11, 23)}000+00`;
+}
+
 export function recoveryTargetSpec(target: RecoveryTarget): Record<string, unknown> | undefined {
   switch (target.type) {
     case 'latest':
       return undefined;
     case 'time':
-      return { targetTime: new Date(target.time).toISOString() };
+      return { targetTime: postgresTimestamp(target.time) };
     case 'restore_point':
       return { targetName: target.name, backupID: target.backupId };
     case 'backup':
