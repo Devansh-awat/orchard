@@ -39,6 +39,18 @@ func dbCmd() *cobra.Command {
 		dbPsqlCmd(),
 		dbBackupCmd(),
 		dbBackupScheduleCmd(),
+		dbForkCmd(),
+		dbCheckpointCmd(),
+		dbOpsCmd(),
+		dbTestBackupCmd(),
+		dbRecoveryCmd(),
+		dbDiagnoseCmd(),
+		dbActivityCmd(),
+		dbProtectCmd(),
+		dbPoolerCmd(),
+		dbReplicationCmd(),
+		dbUserCmd(),
+		dbTrashCmd(),
 		dbExtensionCmd(),
 		dbSettingsCmd(),
 		dbPublicCmd(),
@@ -183,14 +195,16 @@ func dbRenderKV(raw map[string]any) {
 func dbCreateCmd() *cobra.Command {
 	var (
 		name, storage, restoreFrom, memory string
-		cpu                                int
+		cpu, pgMajor, replicas             int
 		wait                               *bool
 		timeout                            *time.Duration
 	)
 	c := &cobra.Command{
 		Use:   "create",
 		Short: "Create a PostgreSQL database in the current project",
-		Args:  cobra.NoArgs,
+		Long: `Create a PostgreSQL database in the scoped project. With an environment scope
+(--env, ORCHARD_ENV or ` + "`orchard use env`" + `) the database lives in that environment's namespace.`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, cfg, err := client()
 			if err != nil {
@@ -216,6 +230,19 @@ func dbCreateCmd() *cobra.Command {
 					return perr
 				}
 				body["memoryRequestBytes"] = b
+			}
+			if pgMajor > 0 {
+				body["pgMajor"] = pgMajor
+			}
+			if replicas > 0 {
+				body["replicas"] = replicas
+			}
+			if v := scopedEnv(cfg); v != "" {
+				envID, eerr := dbEnvInProject(cmd.Context(), cl, projectID, v)
+				if eerr != nil {
+					return eerr
+				}
+				body["environmentId"] = envID
 			}
 			var raw map[string]any
 			if err := cl.Send(cmd.Context(), http.MethodPost, "/projects/"+url.PathEscape(projectID)+"/databases", body, &raw); err != nil {
@@ -246,6 +273,8 @@ func dbCreateCmd() *cobra.Command {
 	c.Flags().StringVar(&restoreFrom, "restore-from", "", "postgres:// URL to seed data from on first boot")
 	c.Flags().IntVar(&cpu, "cpu", 0, "CPU request in millicores (e.g. 500)")
 	c.Flags().StringVar(&memory, "memory", "", `memory request in bytes or with unit (e.g. "512Mi")`)
+	c.Flags().IntVar(&pgMajor, "pg-major", 0, "PostgreSQL major version, e.g. 17 (server default when omitted)")
+	c.Flags().IntVar(&replicas, "replicas", 0, "number of Postgres instances, primary included (server default when omitted)")
 	_ = c.MarkFlagRequired("name")
 	wait, timeout = addWaitFlags(c)
 	return c
@@ -255,20 +284,34 @@ func dbDeleteCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:     "delete <id>",
 		Aliases: []string{"rm"},
-		Short:   "Delete a database and all its data",
-		Args:    cobra.ExactArgs(1),
+		Short:   "Delete a database (kept in the trash for 30 days when it has a backup)",
+		Long: `Delete a database. A database with a completed backup goes to the trash for 30 days
+and can be brought back with ` + "`orchard db trash restore`" + `. Without a backup its data is gone.
+The server refuses while deletion protection is on (` + "`orchard db protect <id> --deletion off`" + `).`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := output.Confirm(fmt.Sprintf("permanently delete database %s and ALL its data", args[0]), yesFlag); err != nil {
+			if err := output.Confirm(fmt.Sprintf("delete database %s (it stays in the trash for 30 days only if it has a completed backup)", args[0]), yesFlag); err != nil {
 				return err
 			}
 			cl, _, err := client()
 			if err != nil {
 				return err
 			}
-			if err := cl.Send(cmd.Context(), http.MethodDelete, "/databases/"+url.PathEscape(args[0]), nil, nil); err != nil {
+			var raw map[string]any
+			if err := cl.Send(cmd.Context(), http.MethodDelete, "/databases/"+url.PathEscape(args[0]), nil, &raw); err != nil {
 				return err
 			}
-			output.Successf("deleted database %s", args[0])
+			if msg := pick(raw, "message"); msg != "" {
+				output.Successf("%s", msg)
+			} else {
+				output.Successf("deleted database %s", args[0])
+			}
+			if fmtFlag() == output.FormatJSON && raw != nil {
+				return output.JSON(raw)
+			}
+			if until := pick(raw, "recoverableUntil"); until != "" {
+				output.KV([][2]string{{"recoverable until", until}})
+			}
 			return nil
 		},
 	}

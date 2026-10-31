@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/hackclub/orchard/cli/internal/api"
+	"github.com/hackclub/orchard/cli/internal/exitcode"
 	"github.com/hackclub/orchard/cli/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -104,31 +106,82 @@ func dbBackupCreateCmd() *cobra.Command {
 }
 
 func dbBackupRestoreCmd() *cobra.Command {
-	return &cobra.Command{
+	var (
+		checkpoint, at, name string
+		fork                 bool
+		wait                 *bool
+		timeout              *time.Duration
+	)
+	c := &cobra.Command{
 		Use:   "restore <id> [backupId]",
-		Short: "Restore from a backup (latest when backupId is omitted)",
-		Args:  cobra.RangeArgs(1, 2),
+		Short: "Restore a database from a backup, a checkpoint or a point in time (latest when none is given)",
+		Long: `Restore a database. Give a backupId, --checkpoint or --at to pick the restore point.
+With none of them the server restores to the latest recoverable point.
+
+In place (the default) replaces the current data. Orchard takes a checkpoint first and
+keeps the previous copy stopped for 24 hours, so ` + "`orchard db ops undo <operationId>`" + ` can
+swap it back.
+
+--fork restores into a new database instead and leaves the original untouched. --name
+and --env pick the new database's name and environment.
+
+The command prints the operation id. --wait follows it until it succeeds or fails.`,
+		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			from := "the latest backup"
+			if dbCountSet(len(args) == 2, checkpoint != "", at != "") > 1 {
+				return &exitcode.UsageError{Err: errors.New("pick one of backupId, --checkpoint or --at")}
+			}
+			if !fork && (name != "" || envFlag != "") {
+				return &exitcode.UsageError{Err: errors.New("--name and --env only apply with --fork")}
+			}
+			from := "the latest recoverable point"
 			body := map[string]any{}
-			if len(args) == 2 {
+			switch {
+			case len(args) == 2:
 				from = "backup " + args[1]
 				body["backupId"] = args[1]
+			case checkpoint != "":
+				from = "checkpoint " + checkpoint
+				body["checkpointId"] = checkpoint
+			case at != "":
+				from = dbAtLabel(at)
+				body["at"] = at
 			}
-			if err := output.Confirm(fmt.Sprintf("restore database %s from %s — this REPLACES all current data", args[0], from), yesFlag); err != nil {
-				return err
+			if !fork {
+				if err := output.Confirm(fmt.Sprintf("restore database %s from %s: this REPLACES all current data (the previous copy is kept stopped for 24 hours)", args[0], from), yesFlag); err != nil {
+					return err
+				}
 			}
 			cl, _, err := client()
 			if err != nil {
 				return err
 			}
-			if err := cl.Send(cmd.Context(), http.MethodPost, "/databases/"+url.PathEscape(args[0])+"/restore", body, nil); err != nil {
+			if fork {
+				body["mode"] = "fork"
+				if name != "" {
+					body["name"] = name
+				}
+				envID, eerr := dbTargetEnvForDatabase(cmd.Context(), cl, args[0])
+				if eerr != nil {
+					return eerr
+				}
+				if envID != "" {
+					body["environmentId"] = envID
+				}
+			}
+			var op map[string]any
+			if err := cl.Send(cmd.Context(), http.MethodPost, "/databases/"+url.PathEscape(args[0])+"/restore", body, &op); err != nil {
 				return err
 			}
-			output.Successf("restore started — poll `orchard db get %s` until status is ready", args[0])
-			return nil
+			return dbFinishOperation(cmd.Context(), cl, op, "restore", *wait, *timeout)
 		},
 	}
+	c.Flags().StringVar(&checkpoint, "checkpoint", "", "restore to this checkpoint id")
+	c.Flags().StringVar(&at, "at", "", `restore to a point in time: an ISO time, or "latest"`)
+	c.Flags().BoolVar(&fork, "fork", false, "restore into a new database and leave the original untouched")
+	c.Flags().StringVar(&name, "name", "", "name for the new database (with --fork)")
+	wait, timeout = addWaitFlags(c)
+	return c
 }
 
 func dbBackupScheduleCmd() *cobra.Command {
@@ -211,7 +264,7 @@ func dbBackupScheduleSetCmd() *cobra.Command {
 func dbBackupScheduleClearCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "clear <id>",
-		Short: "Disable automated backups (existing backups are kept)",
+		Short: "Disable automated backups and WAL archiving (backups already taken are kept)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, _, err := client()

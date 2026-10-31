@@ -200,11 +200,11 @@ func ConfirmTyped(prompt, expected string, yes bool) error {
 // Status colorizes common lifecycle states for table cells.
 func Status(s string) string {
 	switch strings.ToLower(s) {
-	case "running", "ready", "active", "succeeded", "healthy", "available":
+	case "running", "ready", "active", "succeeded", "healthy", "available", "durable":
 		return okStyle.Render(s)
-	case "pending", "building", "deploying", "provisioning", "progressing":
+	case "pending", "building", "deploying", "provisioning", "progressing", "restoring", "degraded", "unprotected":
 		return warnStyle.Render(s)
-	case "failed", "error", "crashloopbackoff", "unhealthy", "cancelled":
+	case "failed", "error", "crashloopbackoff", "unhealthy", "cancelled", "down":
 		return errStyle.Render(s)
 	}
 	return s

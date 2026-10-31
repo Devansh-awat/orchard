@@ -28,7 +28,7 @@ var exitCodeDocs = []exitCodeDoc{
 	{exitcode.Server, "server", "server error (HTTP 5xx)"},
 	{exitcode.Deadline, "deadline", "timed out: request deadline exceeded or --wait ran out of --timeout"},
 	{exitcode.DeployFailed, "deploy-failed", "the build failed while waiting for a deploy (build error and log tail on stderr)"},
-	{exitcode.DeployCrashing, "deploy-crashing", "the deploy built but its pods are crashing or unhealthy (pod reason and log tail on stderr)"},
+	{exitcode.DeployCrashing, "deploy-crashing", "the deploy built but its pods are crashing or unhealthy (pod reason and log tail on stderr), or `db diagnose` found the database down"},
 	{exitcode.Interrupted, "interrupted", "interrupted by Ctrl-C (SIGINT)"},
 }
 

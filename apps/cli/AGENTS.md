@@ -74,7 +74,7 @@ Format resolution, in order: explicit `-o json|table` flag, then `ORCHARD_JSON=1
 | 7    | server error (HTTP 5xx)                              |
 | 8    | `--wait` gave up after `--timeout`                   |
 | 9    | `deploy-failed`: the build failed during a wait      |
-| 10   | `deploy-crashing`: pods crash-loop or the rollout is unhealthy |
+| 10   | `deploy-crashing`: pods crash-loop or the rollout is unhealthy, or `db diagnose` found the database down |
 | 130  | interrupted (Ctrl-C / SIGTERM)                       |
 
 ## Scoping
@@ -99,7 +99,7 @@ JSON output includes a `nextCursor` field when more pages remain; pass it back v
 
 ## --wait / --timeout
 
-Commands that start async work accept `--wait` (block until a terminal state) and `--timeout` (default 10m; hitting it exits 8): `deploy create|scale|start|restart|rebuild|rollback`, `deploy image set`, `up`, `import`, `db create`, `db backup create`, `job run`. Without `--wait` they return as soon as the API accepts the request. Progress while waiting goes to stderr; stdout still carries only the data payload.
+Commands that start async work accept `--wait` (block until a terminal state) and `--timeout` (default 10m; hitting it exits 8): `deploy create|scale|start|restart|rebuild|rollback`, `deploy image set`, `up`, `import`, `db create`, `db backup create|restore`, `db fork`, `db checkpoint restore|restore-group`, `db ops get|undo`, `db test-backup run`, `db trash restore`, `job run`. Without `--wait` they return as soon as the API accepts the request. Progress while waiting goes to stderr; stdout still carries only the data payload.
 
 ## Rollout flow: is it live, and if not, why
 
@@ -119,6 +119,26 @@ Every deployment `--wait` (and `up`, `import`) waits on `GET /deployments/:id/ro
 - Mutating deployment endpoints (rebuild, scale, start, restart, rollback, image set, build-context upload) return `rolloutSince` (and `releaseId` when the call recorded a release). Pass them back as `?since=` / `?release=` so a wait right after a restart can't read `live` off the old pods. The CLI does this for you.
 - One-off check: `orchard deploy status <id>` (add `--wait` to block). Raw: `orchard api GET '/deployments/<id>/rollout?wait=1&timeout=60'` long-polls server-side for up to 120s.
 - `orchard up` waits by default when stdout is not a TTY. In JSON mode the build log streams to stderr and stdout gets one object: `{deploymentId, releaseId, phase, url, ...}`.
+
+## Database recovery
+
+Restores, forks, undeletes and restore tests are durable operations. The starting command prints the operation id on stderr and the operation object on stdout; `--wait` long-polls `GET /database-operations/:id?wait=1` until `status` is `succeeded` or `failed` (failed exits 1 with the server's `error`), and stdout then carries the final operation.
+
+```sh
+orchard db diagnose <dbId> -o json        # verdict, reasons, backups window, last restore test, log tail; exit 10 when down
+orchard db recovery <dbId>                # how far back it can be restored
+orchard db checkpoint create <dbId> --label before-migration
+orchard db checkpoint create --project my-app --env production   # every database at once, one group id
+orchard db backup restore <dbId> --yes --wait                    # in place, latest recoverable point
+orchard db backup restore <dbId> --at 2026-10-30T09:00:00Z --fork --name scratch --wait
+orchard db checkpoint restore <checkpointId> --yes --wait
+orchard db ops undo <operationId> --yes   # swap back to the copy from before an in-place restore (24h)
+orchard db fork <dbId> --name copy --env staging --wait          # live copy, original untouched
+orchard db test-backup run <dbId> --wait  # restore the latest backup into a throwaway copy and check it
+orchard db trash list --project my-app && orchard db trash restore <deletedId> --wait
+```
+
+An in-place restore takes a checkpoint first and keeps the previous copy stopped for 24 hours. `db delete` moves a database with a completed backup to the trash for 30 days; `db protect <dbId> --deletion on` makes the server refuse the delete.
 
 ## Retrying mutations safely
 

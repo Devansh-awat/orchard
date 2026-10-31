@@ -18,11 +18,14 @@ import (
 func deployRollbackCmd() *cobra.Command {
 	var wait *bool
 	var timeout *time.Duration
+	var restoreDatabases bool
 	c := &cobra.Command{
 		Use:   "rollback <id> [historyId]",
 		Short: "Roll a deployment back to a previous image (default: the previous release)",
 		Long: "Without a history id, rolls back to the release before the current one.\n" +
-			"Pass an id from `deploy history` to pick a specific image.",
+			"Pass an id from `deploy history` to pick a specific image.\n" +
+			"With --restore-databases, every bound database also goes back to the checkpoint\n" +
+			"Orchard took right before the current release rolled out.",
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			target := "the previous release"
@@ -37,15 +40,22 @@ func deployRollbackCmd() *cobra.Command {
 				return err
 			}
 			var raw map[string]any
+			var body any
+			if restoreDatabases {
+				body = map[string]any{"restoreDatabases": true}
+			}
 			if len(args) == 2 {
-				err = cl.Send(cmd.Context(), http.MethodPost, deployPath(args[0], "rollback", url.PathEscape(args[1])), nil, &raw)
+				err = cl.Send(cmd.Context(), http.MethodPost, deployPath(args[0], "rollback", url.PathEscape(args[1])), body, &raw)
 			} else {
-				raw, err = rollbackToPrevious(cmd.Context(), cl, args[0])
+				raw, err = rollbackToPrevious(cmd.Context(), cl, args[0], body)
 			}
 			if err != nil {
 				return err
 			}
 			output.Successf("rolled back %s to %s", args[0], target)
+			if restores, ok := raw["databaseRestores"].([]any); ok {
+				output.Successf("started %d database restore(s); follow them with `orchard db ops list`", len(restores))
+			}
 			if *wait {
 				return waitAndEmit(cmd, cl, args[0], api.PinFrom(raw), *timeout, deployWaitRunning(args[0]))
 			}
@@ -53,12 +63,13 @@ func deployRollbackCmd() *cobra.Command {
 		},
 	}
 	wait, timeout = addWaitFlags(c)
+	c.Flags().BoolVar(&restoreDatabases, "restore-databases", false, "also restore bound databases to before the current release")
 	return c
 }
 
-func rollbackToPrevious(ctx context.Context, cl *api.Client, id string) (map[string]any, error) {
+func rollbackToPrevious(ctx context.Context, cl *api.Client, id string, body any) (map[string]any, error) {
 	var raw map[string]any
-	err := cl.Send(ctx, http.MethodPost, deployPath(id, "rollback"), nil, &raw)
+	err := cl.Send(ctx, http.MethodPost, deployPath(id, "rollback"), body, &raw)
 	var apiErr *api.APIError
 	if err == nil || !errors.As(err, &apiErr) || apiErr.Status != 404 {
 		return raw, err
@@ -68,7 +79,7 @@ func rollbackToPrevious(ctx context.Context, cl *api.Client, id string) (map[str
 		return nil, err
 	}
 	raw = nil
-	err = cl.Send(ctx, http.MethodPost, deployPath(id, "rollback", url.PathEscape(historyID)), nil, &raw)
+	err = cl.Send(ctx, http.MethodPost, deployPath(id, "rollback", url.PathEscape(historyID)), body, &raw)
 	return raw, err
 }
 

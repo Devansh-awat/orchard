@@ -142,7 +142,12 @@ orchard db          list | get | create | delete | connection | metrics |
                     logs | psql | extension list|install|uninstall |
                     settings get|set | public enable|disable |
                     resources set | storage expand |
-                    backup list|create|restore | backup-schedule get|set|clear
+                    backup list|create|restore | backup-schedule get|set|clear |
+                    fork | recovery | diagnose | activity | protect |
+                    checkpoint create|list|group|restore|restore-group|rm |
+                    ops list|get|cancel|undo | test-backup run|list |
+                    trash list|restore | pooler get|set |
+                    replication get|set | user list|create|rm
 orchard pod         list | get | logs | delete | exec | shell
 orchard sandbox     create | list | get | update | start | stop | delete |
                     ssh | ssh-config | chat | credentials set|clear|status
