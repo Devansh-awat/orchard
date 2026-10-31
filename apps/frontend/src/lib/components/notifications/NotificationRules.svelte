@@ -1,9 +1,25 @@
 <script lang="ts">
-	import { BellOff, Loader2, Plus, Trash2, VolumeX } from 'lucide-svelte';
-	import { Badge, Button, Dropdown, EmptyState, Field, Input } from '$lib/components/ui';
-	import StatusDot from '$lib/components/ui/StatusDot.svelte';
-	import { statusMeta } from '$lib/components/ui/status';
-	import { motionStagger } from '$lib/utils/motion.svelte';
+	import { KeyRound, Plus, Trash2, VolumeX, Webhook } from 'lucide-svelte';
+	import {
+		Badge,
+		Button,
+		Dropdown,
+		Field,
+		Input,
+		List,
+		ListRow,
+		Modal,
+		ModalIntro,
+		SecretString,
+		SectionCard,
+		SegmentedControl,
+		Skeleton,
+		Stack,
+		StatusBadge,
+		ToneTile,
+		statusMeta
+	} from '$lib/components/ui';
+	import Checkbox from '$lib/components/ui/Checkbox.svelte';
 	import { toasts } from '$lib/stores';
 	import {
 		createChannel,
@@ -37,6 +53,8 @@
 		canEdit?: boolean;
 	} = $props();
 
+	const uid = $props.id();
+
 	let loading = $state(true);
 	let rules = $state<NotificationRule[]>([]);
 	let channels = $state<ScopedChannel[]>([]);
@@ -52,11 +70,16 @@
 	let formRecipients = $state('');
 	let webhookSecret = $state<string | null>(null);
 
+	const isOrg = $derived(scopeType === 'org');
+	const addLabel = $derived(isOrg ? 'Add rule' : 'Add channel');
 	const groups = $derived(eventGroupsForScope(scopeType));
-	const own = $derived(rules.filter((r) => !r.inherited));
-	const inherited = $derived(rules.filter((r) => r.inherited));
+	const ordered = $derived([
+		...rules.filter((r) => !r.inherited),
+		...rules.filter((r) => r.inherited)
+	]);
 	const creatingChannel = $derived(formChannelId === NEW_CHANNEL);
 	const typeMeta = $derived(CHANNEL_TYPE_META[formType]);
+	const muteTarget = $derived(channels.find((c) => c.id === formChannelId)?.name ?? 'channel');
 	const canSubmit = $derived(
 		formEvents.length > 0 &&
 			(creatingChannel
@@ -64,6 +87,24 @@
 					(formType === 'email' ? formRecipients.trim().length > 0 : formUrl.trim().length > 0)
 				: formChannelId.length > 0)
 	);
+
+	const TYPE_OPTIONS = Object.entries(CHANNEL_TYPE_META).map(([value, meta]) => ({
+		value,
+		label: meta.label,
+		icon: meta.icon
+	}));
+
+	const channelOptions = $derived([
+		...channels.map((channel) => ({
+			value: channel.id,
+			label: channel.name,
+			icon: CHANNEL_TYPE_META[channel.type]?.icon,
+			description: channel.own
+				? CHANNEL_TYPE_META[channel.type]?.label
+				: `${CHANNEL_TYPE_META[channel.type]?.label}, from ${scopeNoun(channel.scopeType)}`
+		})),
+		{ value: NEW_CHANNEL, label: 'New destination', icon: Plus }
+	]);
 
 	async function load() {
 		loading = true;
@@ -96,14 +137,10 @@
 		formOpen = true;
 	}
 
-	function toggleEvent(value: string) {
-		formEvents = formEvents.includes(value)
-			? formEvents.filter((e) => e !== value)
-			: [...formEvents, value];
+	function toggleEvent(value: string, on: boolean) {
+		formEvents = on ? [...formEvents, value] : formEvents.filter((e) => e !== value);
 	}
 
-	// Muting an inherited rule writes a mute at this scope for the same channel
-	// and events, which is exactly what the resolution order expects.
 	function openMute(rule: NotificationRule) {
 		formChannelId = rule.channelId;
 		formEvents = [...rule.events];
@@ -111,9 +148,6 @@
 		formOpen = true;
 	}
 
-	// A destination created here belongs to this scope, so someone who admins one
-	// app can wire it to their own Discord without an organization admin adding
-	// it first. Existing org and project destinations stay in the same picker.
 	async function submit() {
 		if (!canSubmit || saving) return;
 		saving = true;
@@ -186,434 +220,218 @@
 	}
 
 	function sourceLabel(rule: NotificationRule): string {
-		return rule.scopeType === 'org' ? 'from organization' : `from ${scopeNoun(rule.scopeType)}`;
+		return rule.scopeType === 'org' ? 'From organization' : `From ${scopeNoun(rule.scopeType)}`;
+	}
+
+	function typeIcon(type: string) {
+		return CHANNEL_TYPE_META[type as ChannelType]?.icon ?? Webhook;
 	}
 </script>
 
-<div class="nr">
-	<div class="nr-head">
-		<div class="nr-head-text">
-			<h4 class="nr-title">Team channels</h4>
-			<p class="nr-sub">
-				Shared with everyone in this {scopeNoun(scopeType)}. Your own notifications are separate and
-				live in your account settings.
-			</p>
-		</div>
-		{#if canEdit && !loading && !formOpen}
-			<Button variant="secondary" size="sm" onclick={openCreate}>
-				<Plus class="h-4 w-4" />
-				Add channel
-			</Button>
+<SectionCard title={isOrg ? 'Rules' : 'Team channels'}>
+	{#snippet actions()}
+		{#if canEdit && !loading}
+			<Button size="sm" icon={Plus} onclick={openCreate}>{addLabel}</Button>
 		{/if}
-	</div>
-
-	{#if webhookSecret}
-		<p class="nr-secret">
-			Signing secret, shown once: <code>{webhookSecret}</code>
-			<button type="button" class="nr-secret-dismiss" onclick={() => (webhookSecret = null)}>
-				Dismiss
-			</button>
-		</p>
-	{/if}
-
+	{/snippet}
 	{#if loading}
-		<div class="nr-skeleton"></div>
-	{:else if rules.length === 0 && !formOpen}
-		<EmptyState
-			title="No channels are watching this"
-			description="Route deploy failures and crashes to a Slack or Discord channel."
-		>
-			{#snippet icon()}<BellOff size={22} />{/snippet}
-			{#if canEdit}
-				<Button variant="secondary" size="sm" onclick={openCreate}>
-					<Plus class="h-4 w-4" />
-					Add channel
-				</Button>
-			{/if}
-		</EmptyState>
-	{:else}
-		<div class="nr-list">
-			{#each [...own, ...inherited] as rule, i (rule.id)}
-				<div
-					class="nr-item"
-					class:nr-item-inherited={rule.inherited}
-					class:nr-item-muted={rule.mode === 'mute'}
-					{@attach motionStagger({ index: i })}
-				>
-					<div class="nr-item-meta">
-						<div class="nr-item-title">
-							{#if rule.mode === 'mute'}
-								<VolumeX class="h-3.5 w-3.5" />
-							{/if}
-							<span class="nr-item-name">{rule.channel.name}</span>
-							<Badge>{rule.channel.type}</Badge>
-							{#if rule.inherited}
-								<Badge>{sourceLabel(rule)}</Badge>
-							{/if}
-							{#if !rule.enabled || !rule.channel.enabled}
-								<Badge>Paused</Badge>
-							{/if}
-						</div>
-						<p class="nr-item-sub">
-							{rule.mode === 'mute' ? 'Muted for' : 'Gets'}
-							{summarize(rule)}
-						</p>
-					</div>
-					{#if canEdit}
-						<div class="nr-item-actions">
-							{#if rule.inherited && rule.mode === 'deliver'}
-								<Button variant="ghost" size="sm" onclick={() => openMute(rule)}>Mute here</Button>
-							{:else if !rule.inherited}
-								<Button
-									variant="ghost"
-									size="sm"
-									onclick={() => remove(rule)}
-									disabled={busyId === rule.id}
-									aria-label="Remove rule"
-									title="Remove rule"
-								>
-									{#if busyId === rule.id}
-										<Loader2 class="h-4 w-4 animate-spin" />
-									{:else}
-										<Trash2 class="h-4 w-4" />
-									{/if}
-								</Button>
-							{/if}
-						</div>
-					{/if}
-				</div>
-			{/each}
+		<div class="placeholder">
+			<Skeleton height="2.75rem" />
+			<Skeleton height="2.75rem" />
 		</div>
-	{/if}
-
-	{#if formOpen && canEdit}
-		<div class="nr-form" {@attach motionStagger({ from: { y: 8 } })}>
-			{#if formMute}
-				<p class="nr-form-note">
-					This stops the channel hearing about these events here, without changing the rule it
-					inherits from.
-				</p>
-			{/if}
-			<Field label="Channel" for="nr-channel">
-				<Dropdown
-					id="nr-channel"
-					bind:value={formChannelId}
-					disabled={formMute}
-					options={[
-						...channels.map((channel) => ({
-							value: channel.id,
-							label: `${channel.name} (${CHANNEL_TYPE_META[channel.type].label})${
-								channel.own ? '' : ` from ${scopeNoun(channel.scopeType)}`
-							}`
-						})),
-						{ value: NEW_CHANNEL, label: 'New destination…' }
-					]}
-				/>
-			</Field>
-
-			{#if creatingChannel}
-				<div class="nr-new">
-					<div class="nr-new-row">
-						<Field label="Type" for="nr-type">
-							<Dropdown
-								id="nr-type"
-								bind:value={formType}
-								options={Object.entries(CHANNEL_TYPE_META).map(([value, meta]) => ({
-									value,
-									label: meta.label
-								}))}
+	{:else if rules.length === 0}
+		<p class="quiet">
+			{isOrg
+				? 'No rules yet, so destinations receive nothing.'
+				: `No team channel hears about this ${scopeNoun(scopeType)}.`}
+		</p>
+	{:else}
+		<List inset={false} label={isOrg ? 'Rules' : 'Team channels'}>
+			{#each ordered as rule (rule.id)}
+				{@const Glyph = rule.mode === 'mute' ? VolumeX : typeIcon(rule.channel.type)}
+				<ListRow
+					flush
+					presence
+					title={rule.channel.name}
+					subtitle={`${rule.mode === 'mute' ? 'Muted for' : 'Gets'} ${summarize(rule)}`}
+				>
+					{#snippet leading()}<ToneTile size={32}><Glyph size={16} /></ToneTile>{/snippet}
+					{#snippet titleSuffix()}
+						{#if rule.inherited}<Badge>{sourceLabel(rule)}</Badge>{/if}
+						{#if !rule.enabled || !rule.channel.enabled}
+							<StatusBadge meta={statusMeta('neutral', 'Paused')} />
+						{/if}
+					{/snippet}
+					{#snippet actions()}
+						{#if canEdit && rule.inherited && rule.mode === 'deliver'}
+							<Button variant="ghost" size="sm" icon={VolumeX} onclick={() => openMute(rule)}
+								>Mute here</Button
+							>
+						{:else if canEdit && !rule.inherited}
+							<Button
+								variant="ghost"
+								size="sm"
+								icon={Trash2}
+								label="Remove rule"
+								loading={busyId === rule.id}
+								onclick={() => remove(rule)}
 							/>
-						</Field>
-						<Field label="Name" for="nr-name">
-							<Input id="nr-name" bind:value={formName} placeholder="#deploys" maxlength={100} />
-						</Field>
-					</div>
+						{/if}
+					{/snippet}
+				</ListRow>
+			{/each}
+		</List>
+	{/if}
+</SectionCard>
+
+{#if canEdit}
+	<Modal bind:open={formOpen} title={formMute ? `Mute ${muteTarget} here` : addLabel}>
+		<form
+			id="{uid}-form"
+			onsubmit={(e) => {
+				e.preventDefault();
+				void submit();
+			}}
+		>
+			<Stack>
+				<Field
+					label="Channel"
+					for="{uid}-channel"
+					hint={formMute ? 'The rule it inherits stays as it is.' : undefined}
+				>
+					<Dropdown
+						id="{uid}-channel"
+						size="lg"
+						bind:value={formChannelId}
+						disabled={formMute}
+						options={channelOptions}
+					/>
+				</Field>
+				{#if creatingChannel}
+					<Field label="Type">
+						<SegmentedControl
+							label="Destination type"
+							options={TYPE_OPTIONS}
+							bind:value={formType}
+							grow
+						/>
+					</Field>
+					<Field label="Name" for="{uid}-name">
+						<Input
+							id="{uid}-name"
+							size="lg"
+							bind:value={formName}
+							placeholder="#deploys"
+							maxlength={100}
+						/>
+					</Field>
 					{#if formType === 'email'}
-						<Field label="Recipients" for="nr-recipients" hint="Members of this project only">
+						<Field
+							label="Recipients"
+							for="{uid}-recipients"
+							hint="Members of this {scopeNoun(scopeType)} only"
+						>
 							<Input
-								id="nr-recipients"
+								id="{uid}-recipients"
+								size="lg"
 								bind:value={formRecipients}
 								placeholder={typeMeta.placeholder}
 							/>
 						</Field>
 					{:else}
-						<Field label="Webhook URL" for="nr-url" hint={typeMeta.hint}>
-							<Input id="nr-url" bind:value={formUrl} placeholder={typeMeta.placeholder} />
+						<Field label="Webhook URL" for="{uid}-url" hint={typeMeta.hint}>
+							<Input
+								id="{uid}-url"
+								size="lg"
+								mono
+								bind:value={formUrl}
+								placeholder={typeMeta.placeholder}
+								autocomplete="off"
+								spellcheck="false"
+							/>
 						</Field>
 					{/if}
-				</div>
-			{/if}
-			<div class="nr-form-group">
-				<span class="nr-form-label">Events</span>
-				<div class="nr-event-groups">
-					{#each groups as group (group.label)}
-						<div class="nr-event-group">
-							<span class="nr-event-group-label">{group.label}</span>
-							<div class="nr-chips">
-								{#each group.options as opt (opt.value)}
-									{@const active = formEvents.includes(opt.value)}
-									<button
-										type="button"
-										class="nr-chip nr-chip-{opt.tone}"
-										class:nr-chip-active={active}
-										aria-pressed={active}
-										onclick={() => toggleEvent(opt.value)}
-									>
-										<StatusDot
-											meta={statusMeta(
-												active ? (opt.tone === 'ok' ? 'success' : 'error') : 'neutral',
-												opt.label
-											)}
-											size={8}
-										/>
-										{opt.label}
-									</button>
-								{/each}
-							</div>
+				{/if}
+				{#each groups as group (group.label)}
+					<Field label={group.label}>
+						<div class="events">
+							{#each group.options as opt (opt.value)}
+								<Checkbox
+									label={opt.label}
+									checked={formEvents.includes(opt.value)}
+									onchange={(on) => toggleEvent(opt.value, on)}
+								/>
+							{/each}
 						</div>
-					{/each}
-				</div>
-			</div>
-			<div class="nr-form-actions">
-				<Button variant="ghost" size="sm" onclick={() => (formOpen = false)} disabled={saving}>
-					Cancel
-				</Button>
-				<Button variant="primary" size="sm" onclick={submit} loading={saving} disabled={!canSubmit}>
-					{formMute ? 'Mute here' : creatingChannel ? 'Add destination' : 'Add rule'}
-				</Button>
-			</div>
-		</div>
-	{/if}
-</div>
+					</Field>
+				{/each}
+			</Stack>
+		</form>
+		{#snippet footer()}
+			<Button variant="ghost" shape="capsule" onclick={() => (formOpen = false)} disabled={saving}>
+				Cancel
+			</Button>
+			<Button
+				type="submit"
+				form="{uid}-form"
+				variant="primary"
+				shape="capsule"
+				loading={saving}
+				disabled={!canSubmit}
+			>
+				{formMute ? 'Mute here' : creatingChannel ? 'Add destination' : 'Add rule'}
+			</Button>
+		{/snippet}
+	</Modal>
+{/if}
 
-<style>
-	.nr {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-	}
-
-	.nr-head {
-		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
-		gap: 1rem;
-	}
-
-	.nr-head-text {
-		min-width: 0;
-	}
-
-	.nr-title {
-		font-size: 0.875rem;
-		font-weight: 600;
-		color: var(--text-fg);
-		margin: 0;
-	}
-
-	.nr-sub {
-		font-size: 0.75rem;
-		color: var(--text-muted);
-		margin: 0.2rem 0 0;
-		max-width: 46ch;
-	}
-
-	.nr-skeleton {
-		height: 3.25rem;
-		border-radius: var(--radius-md);
-		background: var(--bg-raised);
-		opacity: 0.6;
-	}
-
-	.nr-list {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-
-	.nr-item {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		padding: 0.7rem 0.875rem;
-		border-radius: var(--radius-md);
-		border: 1px solid var(--border-default);
-		background: var(--bg-raised);
-	}
-
-	.nr-item-inherited {
-		background: transparent;
-		border-style: dashed;
-	}
-
-	.nr-item-muted .nr-item-name {
-		text-decoration: line-through;
-		text-decoration-color: var(--text-faint);
-	}
-
-	.nr-item-meta {
-		min-width: 0;
-		flex: 1;
-	}
-
-	.nr-item-title {
-		display: flex;
-		align-items: center;
-		gap: 0.4rem;
-		flex-wrap: wrap;
-		color: var(--text-muted);
-	}
-
-	.nr-item-name {
-		font-size: 0.8125rem;
-		font-weight: 600;
-		color: var(--text-fg);
-	}
-
-	.nr-item-sub {
-		font-size: 0.75rem;
-		color: var(--text-muted);
-		margin: 0.2rem 0 0;
-	}
-
-	.nr-item-actions {
-		display: flex;
-		align-items: center;
-		gap: 0.25rem;
-		flex-shrink: 0;
-	}
-
-	.nr-form {
-		display: flex;
-		flex-direction: column;
-		gap: 0.875rem;
-		padding: 0.875rem;
-		border-radius: var(--radius-md);
-		border: 1px solid var(--border-default);
-		background: var(--bg-raised);
-	}
-
-	.nr-form-note {
-		font-size: 0.75rem;
-		color: var(--text-muted);
-		margin: 0;
-	}
-
-	.nr-new {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-	}
-
-	.nr-new-row {
-		display: grid;
-		grid-template-columns: minmax(0, 9rem) minmax(0, 1fr);
-		gap: 0.75rem;
-	}
-
-	@media (max-width: 640px) {
-		.nr-new-row {
-			grid-template-columns: minmax(0, 1fr);
+<Modal
+	bind:open={
+		() => !!webhookSecret,
+		(v) => {
+			if (!v) webhookSecret = null;
 		}
 	}
+	closable={false}
+	labelledby="{uid}-secret"
+>
+	<Stack>
+		<ModalIntro
+			id="{uid}-secret"
+			icon={KeyRound}
+			tone="success"
+			solid
+			title="Copy the signing secret"
+			description="It is not shown again."
+		/>
+		<Field label="Signing secret">
+			<SecretString
+				masked={'•'.repeat(24)}
+				resolve={async () => webhookSecret}
+				label="Signing secret"
+			/>
+		</Field>
+	</Stack>
+	{#snippet footer()}
+		<Button variant="primary" shape="capsule" onclick={() => (webhookSecret = null)}>Done</Button>
+	{/snippet}
+</Modal>
 
-	.nr-secret {
+<style>
+	.placeholder {
 		display: flex;
-		align-items: center;
-		flex-wrap: wrap;
+		flex-direction: column;
 		gap: 0.5rem;
+	}
+	.quiet {
 		margin: 0;
-		padding: 0.6rem 0.75rem;
-		border-radius: var(--radius-md);
-		border: 1px solid var(--border-default);
-		background: color-mix(in srgb, var(--status-warning) 8%, transparent);
-		font-size: 0.75rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		color: var(--text-muted);
 	}
-
-	.nr-secret code {
-		font-family: var(--font-mono);
-		color: var(--text-fg);
-		word-break: break-all;
-	}
-
-	.nr-secret-dismiss {
-		margin-left: auto;
-		background: none;
-		border: none;
-		padding: 0;
-		color: var(--text-muted);
-		cursor: pointer;
-		text-decoration: underline;
-	}
-
-	.nr-form-group {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-
-	.nr-form-label {
-		font-size: 0.75rem;
-		font-weight: 600;
-		color: var(--text-muted);
-	}
-
-	.nr-event-groups {
-		display: flex;
-		flex-direction: column;
-		gap: 0.6rem;
-	}
-
-	.nr-event-group {
-		display: flex;
-		flex-direction: column;
-		gap: 0.35rem;
-	}
-
-	.nr-event-group-label {
-		font-size: 0.6875rem;
-		color: var(--text-faint);
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-	}
-
-	.nr-chips {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.35rem;
-	}
-
-	.nr-chip {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.35rem;
-		padding: 0.25rem 0.6rem;
-		border-radius: 999px;
-		border: 1px solid var(--border-default);
-		background: transparent;
-		font-size: 0.75rem;
-		color: var(--text-muted);
-		cursor: pointer;
-		transition:
-			border-color var(--dur-base) ease,
-			color var(--dur-base) ease,
-			background-color var(--dur-base) ease;
-	}
-
-	.nr-chip:hover {
-		color: var(--text-fg);
-	}
-
-	.nr-chip-active {
-		color: var(--text-fg);
-		border-color: var(--accent);
-		background: color-mix(in srgb, var(--accent) 10%, transparent);
-	}
-
-	.nr-form-actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: 0.5rem;
+	.events {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+		gap: var(--space-2) var(--space-4);
 	}
 </style>

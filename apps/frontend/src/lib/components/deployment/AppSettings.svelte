@@ -304,12 +304,8 @@
 			{/if}
 		{:else if activeSection === 'notifications'}
 			{#if deployment?.id && organizationId}
-				<SectionCard>
-					<AlertRules {organizationId} scopeType="deployment" scopeId={deployment.id} />
-				</SectionCard>
-				<SectionCard title="Notifications">
-					<ResourceNotifications {organizationId} scopeType="deployment" scopeId={deployment.id} />
-				</SectionCard>
+				<AlertRules {organizationId} scopeType="deployment" scopeId={deployment.id} />
+				<ResourceNotifications {organizationId} scopeType="deployment" scopeId={deployment.id} />
 			{/if}
 		{:else if activeSection === 'danger'}
 			<SectionCard title="Danger zone" tone="danger">

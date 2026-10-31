@@ -1,9 +1,23 @@
 <script lang="ts">
-	import { Loader2, UserPlus, Trash2, ChevronDown, Mail, X, Search } from 'lucide-svelte';
-	import { UsersRound, MailCheck } from '@jis3r/icons';
-	import { motionStagger, springHover } from '$lib/utils/motion.svelte';
-	import { Avatar, Button, Badge, Dropdown, PopoverPanel } from '$lib/components/ui';
-	import SettingsSection from '$lib/components/user-settings/SettingsSection.svelte';
+	import { ChevronDown, ChevronsUpDown, Mail, Trash2, UserPlus, X } from 'lucide-svelte';
+	import {
+		Avatar,
+		ItemLabel,
+		Badge,
+		Button,
+		Dropdown,
+		Field,
+		Input,
+		List,
+		ListRow,
+		PopoverPanel,
+		SearchField,
+		SectionCard,
+		SegmentedControl,
+		Table
+	} from '$lib/components/ui';
+	import Tooltip from '$lib/components/ui/Tooltip.svelte';
+	import type { TableColumn, TableSort } from '$lib/components/ui/Table.svelte';
 	import { user } from '$lib/stores';
 
 	interface MemberProject {
@@ -60,8 +74,7 @@
 		onRemoveMember,
 		onUpdateMemberRole,
 		onResendInvitation,
-		onCancelInvitation,
-		index = 0
+		onCancelInvitation
 	}: {
 		members: Member[];
 		invitations: Invitation[];
@@ -81,16 +94,65 @@
 		onUpdateMemberRole: (memberId: string, role: 'owner' | 'admin' | 'member' | 'guest') => void;
 		onResendInvitation: (id: string) => void;
 		onCancelInvitation: (id: string) => void;
-		index?: number;
 	} = $props();
 
 	type OrgRole = 'member' | 'admin' | 'owner';
+	type RoleFilter = 'all' | 'owner' | 'admin' | 'member' | 'guest';
+
+	const uid = $props.id();
 
 	const roleOptions: Array<{ value: OrgRole; label: string }> = [
 		{ value: 'member', label: 'Member' },
 		{ value: 'admin', label: 'Admin' },
 		{ value: 'owner', label: 'Owner' }
 	];
+
+	const ROLE_ORDER: Record<string, number> = { owner: 0, admin: 1, member: 2, guest: 3 };
+
+	const ROLE_TABS: Array<{ value: RoleFilter; label: string }> = [
+		{ value: 'all', label: 'All' },
+		{ value: 'owner', label: 'Owners' },
+		{ value: 'admin', label: 'Admins' },
+		{ value: 'member', label: 'Members' },
+		{ value: 'guest', label: 'Guests' }
+	];
+
+	const COLUMNS = {
+		member: 'minmax(0, 1fr)',
+		access: '9.5rem',
+		role: '8rem',
+		actions: '5.75rem'
+	};
+
+	const memberColumns: TableColumn<Member>[] = [
+		{
+			id: 'member',
+			label: 'Member',
+			width: COLUMNS.member,
+			sortable: true,
+			sortValue: (m) => (memberName(m) || m.user.email).toLowerCase()
+		},
+		{ id: 'access', label: 'Access', width: COLUMNS.access },
+		{
+			id: 'role',
+			label: 'Role',
+			width: COLUMNS.role,
+			sortable: true,
+			sortValue: (m) => ROLE_ORDER[m.role]
+		},
+		{ id: 'actions', width: COLUMNS.actions, align: 'end' }
+	];
+
+	const inviteColumns: TableColumn<Invitation>[] = [
+		{ id: 'member', width: COLUMNS.member },
+		{ id: 'access', width: COLUMNS.access },
+		{ id: 'role', width: COLUMNS.role },
+		{ id: 'actions', width: COLUMNS.actions, align: 'end' }
+	];
+
+	let search = $state('');
+	let roleFilter = $state<RoleFilter>('all');
+	let sort = $state<TableSort | null>(null);
 
 	function setRole(member: Member, role: string) {
 		if (role !== member.role) onUpdateMemberRole(member.id, role as OrgRole);
@@ -104,20 +166,9 @@
 		return `${m.user.firstName ?? ''} ${m.user.lastName ?? ''}`.trim() || m.user.username || '';
 	}
 
-	const ROLE_ORDER: Record<string, number> = { owner: 0, admin: 1, member: 2, guest: 3 };
-
-	let search = $state('');
-	let roleFilter = $state<'all' | 'owner' | 'admin' | 'member' | 'guest'>('all');
-	let sortKey = $state<'name' | 'role'>('role');
-	let expanded = $state<Set<string>>(new Set());
-
-	function toggleExpanded(id: string) {
-		const next = new Set(expanded);
-		if (next.has(id)) next.delete(id);
-		else next.add(id);
-		expanded = next;
+	function shortDate(value: string) {
+		return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 	}
-	let sortAsc = $state(true);
 
 	const roleCounts = $derived.by(() => {
 		const c: Record<string, number> = { all: members.length };
@@ -125,770 +176,322 @@
 		return c;
 	});
 
+	const filterOptions = $derived(
+		ROLE_TABS.filter((t) => t.value === 'all' || t.value === roleFilter || roleCounts[t.value])
+	);
+
 	const visibleMembers = $derived.by(() => {
 		const q = search.trim().toLowerCase();
-		let out = members.filter((m) => {
-			if (roleFilter !== 'all' && m.role !== roleFilter) return false;
-			if (!q) return true;
-			return (
-				memberName(m).toLowerCase().includes(q) ||
-				m.user.email.toLowerCase().includes(q) ||
-				(m.user.username ?? '').toLowerCase().includes(q)
+		return members
+			.filter((m) => {
+				if (roleFilter !== 'all' && m.role !== roleFilter) return false;
+				if (!q) return true;
+				return (
+					memberName(m).toLowerCase().includes(q) ||
+					m.user.email.toLowerCase().includes(q) ||
+					(m.user.username ?? '').toLowerCase().includes(q)
+				);
+			})
+			.sort(
+				(a, b) =>
+					ROLE_ORDER[a.role] - ROLE_ORDER[b.role] || memberName(a).localeCompare(memberName(b))
 			);
-		});
-		out = [...out].sort((a, b) => {
-			const d =
-				sortKey === 'name'
-					? memberName(a).localeCompare(memberName(b))
-					: ROLE_ORDER[a.role] - ROLE_ORDER[b.role] || memberName(a).localeCompare(memberName(b));
-			return sortAsc ? d : -d;
-		});
-		return out;
 	});
 
-	function toggleSort(key: 'name' | 'role') {
-		if (sortKey === key) sortAsc = !sortAsc;
-		else {
-			sortKey = key;
-			sortAsc = true;
-		}
-	}
-
-	const ROLE_TABS: Array<{ id: 'all' | 'owner' | 'admin' | 'member' | 'guest'; label: string }> = [
-		{ id: 'all', label: 'All' },
-		{ id: 'owner', label: 'Owners' },
-		{ id: 'admin', label: 'Admins' },
-		{ id: 'member', label: 'Members' },
-		{ id: 'guest', label: 'Guests' }
-	];
+	const hasAccessColumn = $derived(members.some((m) => m.role === 'member' || m.role === 'guest'));
 </script>
 
-<SettingsSection title="Members" description="Manage team access" {index}>
-	{#snippet icon(hovered)}<UsersRound size={18} animate={hovered} />{/snippet}
-	{#snippet badge()}<span class="om-count">{members.length}</span>{/snippet}
-
-	<div class="om-toolbar">
-		<div class="om-search">
-			<Search size={14} />
-			<input
-				type="search"
-				placeholder="Search name or email…"
-				bind:value={search}
-				aria-label="Search members"
+<SectionCard title="Members" flush>
+	{#snippet actions()}
+		<div class="filters">
+			<SegmentedControl
+				label="Filter by role"
+				size="sm"
+				shape="capsule"
+				options={filterOptions}
+				bind:value={() => roleFilter, (v) => (roleFilter = v as RoleFilter)}
 			/>
 		</div>
-		<div class="om-filters" role="tablist" aria-label="Filter by role">
-			{#each ROLE_TABS as tab (tab.id)}
-				<button
-					type="button"
-					role="tab"
-					aria-selected={roleFilter === tab.id}
-					class="om-filter"
-					class:om-filter--active={roleFilter === tab.id}
-					onclick={() => (roleFilter = tab.id)}
-				>
-					{tab.label}
-					<span class="om-filter-count">{roleCounts[tab.id] ?? 0}</span>
-				</button>
-			{/each}
+		<div class="search">
+			<SearchField size="sm" placeholder="Search members" bind:value={search} />
 		</div>
 		{#if canInvite}
 			<PopoverPanel placement="bottom-end">
-				{#snippet trigger(attrs, open)}
-					<button
-						type="button"
-						class="om-invite-trigger"
-						aria-haspopup="dialog"
-						aria-expanded={open}
-						{...attrs}
-					>
-						<UserPlus size={14} />
-						Invite
-					</button>
+				{#snippet trigger(attrs)}
+					<Button {...attrs} size="sm" shape="capsule" icon={UserPlus}>Invite</Button>
 				{/snippet}
 				{#snippet children({ close })}
-					<div class="om-invite-pop">
-						<label class="om-invite-label" for="om-invite-email">Invite by email</label>
-						<input
-							id="om-invite-email"
-							type="email"
-							class="om-invite-input"
-							placeholder="name@company.com"
-							bind:value={newMemberEmail}
-						/>
-						<div class="om-invite-row">
-							<div class="om-role-pick">
+					<form
+						class="invite"
+						onsubmit={(e) => {
+							e.preventDefault();
+							if (!newMemberEmail) return;
+							onAddMember();
+							close();
+						}}
+					>
+						<Field label="Email" for="{uid}-email">
+							<Input
+								id="{uid}-email"
+								type="email"
+								placeholder="name@company.com"
+								autocomplete="off"
+								bind:value={newMemberEmail}
+							/>
+						</Field>
+						<div class="invite-row">
+							<div class="invite-role">
 								<Dropdown
 									bind:value={() => newMemberRole, (v) => (newMemberRole = v as OrgRole)}
 									options={roleOptions}
 									size="sm"
-									placeholder="Role"
 									ariaLabel="Role for the invite"
 								/>
 							</div>
 							<Button
+								type="submit"
 								variant="primary"
 								size="sm"
-								onclick={() => {
-									onAddMember();
-									close();
-								}}
 								loading={addingMember}
 								disabled={!newMemberEmail}
 							>
 								Send invite
 							</Button>
 						</div>
-					</div>
+					</form>
 				{/snippet}
 			</PopoverPanel>
 		{/if}
-	</div>
+	{/snippet}
 
-	<div class="om-table">
-		<div class="om-thead">
-			<button type="button" class="om-th om-th--sort" onclick={() => toggleSort('name')}>
-				Member
-				{#if sortKey === 'name'}<ChevronDown size={12} class={sortAsc ? '' : 'om-flip'} />{/if}
-			</button>
-			<span class="om-th">Access</span>
-			<button type="button" class="om-th om-th--sort" onclick={() => toggleSort('role')}>
-				Role
-				{#if sortKey === 'role'}<ChevronDown size={12} class={sortAsc ? '' : 'om-flip'} />{/if}
-			</button>
-			<span class="om-th om-th--end">Actions</span>
-		</div>
-
-		<div class="om-tbody">
-			{#each visibleMembers as member (member.user.id)}
-				<div class="om-tr">
-					<div class="om-td om-td--member">
+	<Table
+		columns={memberColumns}
+		rows={visibleMembers}
+		rowKey={(m) => m.user.id}
+		bind:sort
+		inset={false}
+		label="Members"
+		emptyText={search ? `Nobody matches “${search}”` : 'Nobody has this role'}
+	>
+		{#snippet cell(member, col)}
+			{#if col.id === 'member'}
+				<ItemLabel title={memberName(member) || member.user.email} detail={member.user.email}>
+					{#snippet leading()}
 						<Avatar
 							user={member.user}
 							alive
 							mood={member.user.id === $user?.id ? 'wink' : 'idle'}
-							class="om-avatar"
+							size={32}
 						/>
-						<div class="om-member-info">
-							<p class="om-member-name">{memberName(member) || member.user.email}</p>
-							<p class="om-member-email">{member.user.email}</p>
-						</div>
-					</div>
-					<div class="om-td">
-						{#if member.role === 'owner' || member.role === 'admin'}
-							<span
-								class="om-access-all"
-								title="Owners and admins can access every project in the organization"
-							>
-								All projects
-							</span>
-						{:else if (member.projects ?? []).length > 0}
-							<button
-								type="button"
-								class="om-access"
-								aria-expanded={expanded.has(member.id)}
-								onclick={() => toggleExpanded(member.id)}
-							>
-								<span class="om-access-count">{(member.projects ?? []).length}</span>
-								{(member.projects ?? []).length === 1 ? 'project' : 'projects'}
-								<ChevronDown size={12} class={expanded.has(member.id) ? 'om-flip' : ''} />
-							</button>
-						{:else}
-							<span class="om-access-none">No projects</span>
-						{/if}
-					</div>
-					<div class="om-td">
-						{#if isOwner && member.role !== 'guest'}
-							<div class="om-role-pick">
-								<Dropdown
-									bind:value={() => member.role, (v) => setRole(member, v)}
-									options={roleOptions}
+					{/snippet}
+				</ItemLabel>
+			{:else if col.id === 'access'}
+				{@const projects = member.projects ?? []}
+				{#if member.role === 'owner' || member.role === 'admin'}
+					<Tooltip text="Owners and admins can open every project">
+						<span class="quiet">All projects</span>
+					</Tooltip>
+				{:else if projects.length > 0}
+					<span class="pull">
+						<PopoverPanel placement="bottom-start">
+							{#snippet trigger(attrs, open)}
+								<Button
+									{...attrs}
+									variant="ghost"
 									size="sm"
-									ariaLabel="Role for {memberName(member) || member.user.email}"
-								/>
-							</div>
-						{:else if member.role === 'guest'}
-							<span
-								class="om-guest-wrap"
-								title="Guests only have access to specific projects, not the whole organization"
-							>
-								<Badge tone="warning">Guest</Badge>
-							</span>
-						{:else}
-							<Badge tone="neutral">{formatRole(member.role)}</Badge>
-						{/if}
-					</div>
-					<div class="om-td om-td--end">
-						{#if canInvite && member.role !== 'owner'}
-							<Button
-								variant="ghost"
-								size="sm"
-								onclick={() => onRemoveMember(member.id)}
-								loading={removingMemberId === member.id}
-								disabled={removingMemberId !== null}
-								title="Remove member"
-							>
-								{#if removingMemberId !== member.id}<Trash2 class="h-3.5 w-3.5" />{/if}
-							</Button>
-						{/if}
-					</div>
-				</div>
-				{#if expanded.has(member.id) && member.role !== 'owner' && member.role !== 'admin'}
-					<div class="om-access-panel">
-						{#each member.projects ?? [] as proj (proj.projectMemberId)}
-							<div class="om-access-row">
-								<a class="om-access-name" href={`/${organizationSlug}/projects/${proj.slug}`}>
-									{proj.name}
-								</a>
-								<Badge tone="neutral">{formatRole(proj.role)}</Badge>
-								{#if canInvite}
-									<button
-										type="button"
-										class="om-revoke"
-										disabled={revokingAccessId === proj.projectMemberId}
-										onclick={() => onRevokeProjectAccess?.(proj.id, proj.projectMemberId)}
+									iconRight={ChevronDown}
+									aria-expanded={open}
+								>
+									{projects.length}
+									{projects.length === 1 ? 'project' : 'projects'}
+								</Button>
+							{/snippet}
+							{#snippet children()}
+								<div class="access">
+									<List
+										inset={false}
+										label="Projects {memberName(member) || member.user.email} can open"
 									>
-										Revoke
-									</button>
-								{/if}
-							</div>
-						{/each}
-					</div>
+										{#each projects as proj (proj.projectMemberId)}
+											{#snippet revoke()}
+												{#if canInvite}
+													<Button
+														variant="ghost"
+														size="sm"
+														loading={revokingAccessId === proj.projectMemberId}
+														onclick={() => onRevokeProjectAccess?.(proj.id, proj.projectMemberId)}
+													>
+														Revoke
+													</Button>
+												{/if}
+											{/snippet}
+											<ListRow
+												flush
+												pinned
+												title={proj.name}
+												subtitle={formatRole(proj.role)}
+												href={`/${organizationSlug}/projects/${proj.slug}`}
+												actions={canInvite ? revoke : undefined}
+											/>
+										{/each}
+									</List>
+								</div>
+							{/snippet}
+						</PopoverPanel>
+					</span>
+				{:else if hasAccessColumn}
+					<span class="faint">No projects</span>
 				{/if}
-			{/each}
-
-			{#if visibleMembers.length === 0}
-				<p class="om-noresults">
-					No members match {search ? `“${search}”` : 'this filter'}.
-				</p>
+			{:else if col.id === 'role'}
+				{#if isOwner && member.role !== 'guest'}
+					<span class="pull">
+						<Dropdown
+							bind:value={() => member.role, (v) => setRole(member, v)}
+							options={roleOptions}
+							placement="bottom-start"
+							ariaLabel="Role for {memberName(member) || member.user.email}"
+						>
+							{#snippet trigger(attrs, _open, selected)}
+								<Button
+									{...attrs}
+									variant="ghost"
+									size="sm"
+									iconRight={ChevronsUpDown}
+									aria-label="Role for {memberName(member) ||
+										member.user.email}: {selected?.label ?? formatRole(member.role)}"
+								>
+									{selected?.label ?? formatRole(member.role)}
+								</Button>
+							{/snippet}
+						</Dropdown>
+					</span>
+				{:else if member.role === 'guest'}
+					<Tooltip text="Guests only open the projects they are added to">
+						<Badge tone="warning">Guest</Badge>
+					</Tooltip>
+				{:else}
+					<span class="quiet">{formatRole(member.role)}</span>
+				{/if}
+			{:else if canInvite && member.role !== 'owner'}
+				<Button
+					variant="ghost"
+					size="sm"
+					icon={Trash2}
+					label="Remove {memberName(member) || member.user.email}"
+					loading={removingMemberId === member.id}
+					disabled={removingMemberId !== null}
+					onclick={() => onRemoveMember(member.id)}
+				/>
 			{/if}
-		</div>
-	</div>
-</SettingsSection>
+		{/snippet}
+	</Table>
+</SectionCard>
 
 {#if canInvite && invitations.length > 0}
-	<SettingsSection
-		title="Pending invitations"
-		description="Invitations awaiting acceptance"
-		index={index + 1}
-	>
-		{#snippet icon(hovered)}<MailCheck size={18} animate={hovered} />{/snippet}
-		{#snippet badge()}<span class="om-count">{invitations.length}</span>{/snippet}
-
-		<div class="om-member-list">
-			{#each invitations as invitation, i (invitation.id)}
-				<div class="om-member" {@attach motionStagger({ index: i })}>
-					<div class="om-member-left">
-						<Avatar seed={invitation.email} mood="sleepy" class="om-avatar om-avatar-pending" />
-						<div class="om-member-info">
-							<p class="om-member-name">{invitation.email}</p>
-							<p class="om-member-email">
-								Invited {new Date(invitation.createdAt).toLocaleDateString()} · Expires {new Date(
-									invitation.expiresAt
-								).toLocaleDateString()}
-							</p>
-						</div>
-					</div>
-					<div class="om-member-right">
-						<Badge tone="neutral">{formatRole(invitation.role)}</Badge>
+	<SectionCard title="Pending invitations" flush>
+		<Table
+			columns={inviteColumns}
+			rows={invitations}
+			rowKey={(inv) => inv.id}
+			inset={false}
+			label="Pending invitations"
+		>
+			{#snippet cell(invitation, col)}
+				{#if col.id === 'member'}
+					<ItemLabel
+						title={invitation.email}
+						detail="Invited {shortDate(invitation.createdAt)} · expires {shortDate(
+							invitation.expiresAt
+						)}"
+					>
+						{#snippet leading()}<Avatar seed={invitation.email} mood="sleepy" size={32} />{/snippet}
+					</ItemLabel>
+				{:else if col.id === 'role'}
+					<span class="quiet">{formatRole(invitation.role)}</span>
+				{:else if col.id === 'actions'}
+					<span class="icons">
 						<Button
 							variant="ghost"
 							size="sm"
-							onclick={() => onResendInvitation(invitation.id)}
+							icon={Mail}
+							label="Resend the invitation to {invitation.email}"
+							loading={resendingInvitationId === invitation.id}
 							disabled={resendingInvitationId === invitation.id}
-							title="Resend"
-						>
-							{#if resendingInvitationId === invitation.id}<Loader2
-									class="h-3.5 w-3.5 animate-spin"
-								/>{:else}<Mail class="h-3.5 w-3.5" />{/if}
-						</Button>
+							onclick={() => onResendInvitation(invitation.id)}
+						/>
 						<Button
 							variant="ghost"
 							size="sm"
-							onclick={() => onCancelInvitation(invitation.id)}
+							icon={X}
+							label="Cancel the invitation to {invitation.email}"
+							loading={cancellingInvitationId === invitation.id}
 							disabled={cancellingInvitationId === invitation.id}
-							title="Cancel"
-						>
-							{#if cancellingInvitationId === invitation.id}<Loader2
-									class="h-3.5 w-3.5 animate-spin"
-								/>{:else}<X class="h-3.5 w-3.5" />{/if}
-						</Button>
-					</div>
-				</div>
-			{/each}
-		</div>
-	</SettingsSection>
+							onclick={() => onCancelInvitation(invitation.id)}
+						/>
+					</span>
+				{/if}
+			{/snippet}
+		</Table>
+	</SectionCard>
 {/if}
 
 <style>
-	.om-count {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		min-width: 1.25rem;
-		height: 1.25rem;
-		padding: 0 0.5rem;
-		border-radius: var(--radius-2xl);
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		font-weight: 600;
-		background-color: var(--accent-3);
-		color: var(--accent-9);
-	}
-
-	.om-invite-bar {
+	.filters {
 		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding-bottom: 1rem;
-		border-bottom: 1px solid var(--border-default);
-		margin-bottom: 0.25rem;
 	}
-
-	.om-invite-input {
-		flex: 1;
-		min-width: 0;
-		padding: 0.5rem 0.75rem;
-		border-radius: var(--radius-sm);
-		border: 1px solid var(--border-default);
-		background-color: var(--bg-raised);
-		color: var(--text-default);
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		outline: none;
-		transition: border-color var(--fade-in) var(--curve-out);
+	.search {
+		width: 13rem;
 	}
-
-	.om-invite-input:focus {
-		border-color: var(--accent);
-	}
-
-	.om-invite-input::placeholder {
-		color: var(--text-faint);
-	}
-
-	.om-role-pick {
-		width: 7rem;
-		flex-shrink: 0;
-	}
-
-	.om-member-list {
+	.invite {
 		display: flex;
 		flex-direction: column;
-	}
-
-	.om-member {
-		display: flex;
-		align-items: center;
 		gap: 0.75rem;
-		padding: 0.875rem 0;
-	}
-
-	.om-member + .om-member {
-		border-top: 1px solid var(--border-default);
-	}
-
-	.om-member-left {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		flex: 1;
-		min-width: 0;
-	}
-
-	/* Passed into `<Avatar>`, so it lands on an element this component does not
-	   render and has no scope hash to match. */
-	:global(.om-avatar) {
-		width: 2rem;
-		height: 2rem;
-		border-radius: 50%;
-		object-fit: cover;
-		flex-shrink: 0;
-	}
-
-	:global(.om-avatar-pending) {
-		opacity: 0.65;
-	}
-
-	.om-member-info {
-		min-width: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.0625rem;
-	}
-
-	.om-member-name {
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		font-weight: 600;
-		color: var(--text-default);
-		margin: 0;
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.om-guest-wrap {
-		display: inline-flex;
-	}
-
-	.om-member-email {
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		color: var(--text-muted);
-		margin: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.om-member-right {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		flex-shrink: 0;
-	}
-
-	@media (max-width: 640px) {
-		.om-invite-bar {
-			flex-direction: column;
-			align-items: stretch;
-		}
-
-		.om-member {
-			flex-direction: column;
-			align-items: flex-start;
-			gap: 0.5rem;
-		}
-
-		.om-member-right {
-			padding-left: 2.75rem;
-		}
-	}
-
-	/* ── Member table ─────────────────────────────────────────────────── */
-	.om-toolbar {
-		display: flex;
-		align-items: center;
-		gap: var(--space-3);
-		flex-wrap: wrap;
-		margin-bottom: var(--space-3);
-	}
-	.om-search {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		flex: 1;
-		min-width: 12rem;
-		max-width: 20rem;
-		height: 2.25rem;
-		padding: 0 var(--space-3);
-		border-radius: var(--radius-md);
-		background: var(--fill-quiet);
-		box-shadow: inset 0 0 0 1px var(--rule);
-		color: var(--text-muted);
-		box-sizing: border-box;
-	}
-	.om-search input {
-		flex: 1;
-		min-width: 0;
-		border: none;
-		background: transparent;
-		color: var(--text-default);
-		font-size: var(--text-body);
-		line-height: var(--lh-body);
-		outline: none;
-	}
-	.om-filters {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.125rem;
+		width: min(20rem, calc(100vw - 3rem));
 		padding: 0.25rem;
-		border-radius: var(--radius-md);
-		background: var(--fill-quiet);
-		box-shadow: inset 0 0 0 1px var(--rule);
 	}
-	.om-filter {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5rem;
-		height: 1.875rem;
-		padding: 0 0.75rem;
-		border: none;
-		border-radius: calc(var(--radius-md) - 0.1875rem);
-		background: none;
-		color: var(--text-muted);
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		font-weight: 600;
-		cursor: pointer;
-		white-space: nowrap;
-	}
-	.om-filter:hover {
-		color: var(--text-default);
-	}
-	.om-filter--active {
-		background: var(--bg-raised);
-		color: var(--text-default);
-		box-shadow:
-			0 0 0 1px var(--rule),
-			0 1px 2px rgb(0 0 0 / 0.06);
-	}
-	.om-filter-count {
-		font-variant-numeric: tabular-nums;
-		color: var(--text-faint);
-	}
-	.om-filter--active .om-filter-count {
-		color: var(--text-muted);
-	}
-
-	.om-table {
-		border-radius: var(--radius-md);
-		box-shadow: inset 0 0 0 1px var(--rule);
-		overflow: hidden;
-	}
-	.om-thead,
-	.om-tr {
-		display: grid;
-		align-items: center;
-		grid-template-columns: minmax(0, 1fr) 7.5rem 8.5rem 3rem;
-		align-items: center;
-		gap: var(--space-3);
-		padding: 0 var(--space-3);
-	}
-	.om-thead {
-		position: sticky;
-		top: 0;
-		z-index: 1;
-		height: 2.25rem;
-		background: var(--fill-quiet);
-		backdrop-filter: blur(12px);
-		-webkit-backdrop-filter: blur(12px);
-		box-shadow: inset 0 -1px 0 var(--rule);
-	}
-	.om-th {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.25rem;
-		border: none;
-		background: none;
-		padding: 0;
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: 600;
-		letter-spacing: 0.02em;
-		color: var(--text-faint);
-		text-align: left;
-	}
-	.om-th--sort {
-		cursor: pointer;
-	}
-	.om-th--sort:hover {
-		color: var(--text-muted);
-	}
-	.om-th--end {
-		justify-content: flex-end;
-	}
-	:global(.om-flip) {
-		transform: rotate(180deg);
-	}
-
-	.om-tbody {
-		max-height: 26rem;
-		overflow-y: auto;
-	}
-	.om-tr {
-		height: 3.25rem;
-		transition: background-color var(--dur-fast) ease;
-	}
-	.om-tr + .om-tr {
-		box-shadow: inset 0 1px 0 var(--rule);
-	}
-	.om-tr:hover {
-		background-color: var(--fill-quiet);
-	}
-	.om-td {
-		min-width: 0;
-	}
-	.om-td--member {
-		display: flex;
-		align-items: center;
-		gap: var(--space-3);
-	}
-	.om-td--end {
-		display: flex;
-		justify-content: flex-end;
-	}
-	.om-noresults {
-		margin: 0;
-		padding: var(--space-10) var(--space-4);
-		text-align: center;
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		color: var(--text-faint);
-	}
-
-	@media (max-width: 48rem) {
-		.om-thead {
-			display: none;
-		}
-		.om-tr {
-			grid-template-columns: minmax(0, 1fr) auto;
-			grid-template-areas: 'member role' 'member actions';
-			height: auto;
-			padding: var(--space-3);
-			row-gap: var(--space-2);
-		}
-		.om-td--member {
-			grid-area: member;
-		}
-	}
-
-	.om-invite-trigger {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5rem;
-		height: 2.25rem;
-		padding: 0 var(--space-3);
-		margin-left: auto;
-		border: none;
-		border-radius: var(--radius-md);
-		background: var(--fill-soft);
-		color: var(--text-default);
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		font-weight: 600;
-		cursor: pointer;
-		white-space: nowrap;
-	}
-	.om-invite-trigger:hover {
-		background: var(--fill-medium);
-	}
-	.om-invite-pop {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-		width: min(24rem, calc(100vw - 3rem));
-		padding: var(--space-1);
-	}
-	.om-invite-label {
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: 600;
-		color: var(--text-muted);
-	}
-	.om-invite-input {
-		width: 100%;
-		box-sizing: border-box;
-		height: 2.25rem;
-		padding: 0 0.75rem;
-		border: none;
-		border-radius: var(--radius-sm);
-		background: var(--fill-quiet);
-		box-shadow: inset 0 0 0 1px var(--rule);
-		color: var(--text-default);
-		font-size: var(--text-body);
-		line-height: var(--lh-body);
-		outline: none;
-	}
-	.om-invite-row {
+	.invite-row {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: var(--space-2);
+		gap: 0.5rem;
 	}
-
-	.om-access {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.3125rem;
-		max-width: 100%;
-		height: 1.625rem;
-		padding: 0 0.5rem;
-		border: none;
-		border-radius: var(--radius-pill);
-		background: var(--fill-soft);
-		color: var(--text-muted);
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: 600;
-		cursor: pointer;
+	.invite-role {
+		width: 7.5rem;
+	}
+	.name,
+	.quiet,
+	.faint {
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		white-space: nowrap;
 	}
-	.om-access:hover {
-		background: var(--fill-medium);
-		color: var(--text-default);
+	.quiet {
+		color: var(--text-muted);
 	}
-	.om-access-count {
-		font-variant-numeric: tabular-nums;
-		color: var(--text-default);
-	}
-	.om-access-none {
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
+	.faint {
 		color: var(--text-faint);
 	}
-	.om-access-panel {
+	.pull {
 		display: flex;
-		flex-direction: column;
-		padding: var(--space-2) var(--space-3) var(--space-3) 3.5rem;
-		background: var(--fill-quiet);
-		box-shadow: inset 0 1px 0 var(--rule);
+		margin-inline-start: -0.625rem;
 	}
-	.om-access-row {
+	.icons {
 		display: flex;
 		align-items: center;
-		gap: var(--space-3);
-		height: 2.25rem;
+		gap: 0.25rem;
 	}
-	.om-access-name {
-		flex: 1;
-		min-width: 0;
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		font-weight: 600;
-		color: var(--text-default);
-		text-decoration: none;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-	.om-access-name:hover {
-		text-decoration: underline;
-	}
-	.om-revoke {
-		border: none;
-		background: none;
-		padding: 0.25rem 0.5rem;
-		border-radius: var(--radius-xs);
-		color: var(--status-error);
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: 600;
-		cursor: pointer;
-	}
-	.om-revoke:hover {
-		background: var(--status-error-bg);
-	}
-	.om-revoke:disabled {
-		opacity: 0.5;
-		cursor: default;
-	}
-
-	.om-access-all {
-		display: inline-flex;
-		align-items: center;
-		height: 1.625rem;
+	.access {
+		width: min(20rem, calc(100vw - 3rem));
 		padding: 0 0.5rem;
-		border-radius: var(--radius-pill);
-		background: var(--accent-subtle);
-		color: var(--accent);
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: 600;
-		white-space: nowrap;
+	}
+	@media (max-width: 64rem) {
+		.filters {
+			display: none;
+		}
+	}
+	@media (max-width: 40rem) {
+		.search {
+			width: 9rem;
+		}
 	}
 </style>

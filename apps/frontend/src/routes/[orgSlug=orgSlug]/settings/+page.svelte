@@ -7,10 +7,10 @@
 	import GraftMount from '$lib/grafts/GraftMount.svelte';
 	import { graftHost } from '$lib/grafts/host.svelte';
 	import { env } from '$env/dynamic/public';
-	import { Loader2, ArrowLeft } from 'lucide-svelte';
 	import AuditLogList from '$lib/components/AuditLogList.svelte';
 	import RegistryCredentials from '$lib/components/project/RegistryCredentials.svelte';
-	import { SettingsRail } from '$lib/components/ui';
+	import { Alert, Skeleton } from '$lib/components/ui';
+	import SettingsShell from '$lib/components/patterns/SettingsShell.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import {
 		OrgMembersTab,
@@ -80,7 +80,6 @@
 
 	let uploadingAvatar = $state(false);
 	let deletingAvatar = $state(false);
-	let avatarInput = $state<HTMLInputElement | undefined>(undefined);
 
 	let newMemberEmail = $state('');
 	let newMemberRole = $state<'member' | 'admin' | 'owner'>('member');
@@ -140,7 +139,7 @@
 	const canEditOrg = $derived(currentUserRole === 'owner' || currentUserRole === 'admin');
 	const canInvite = $derived(currentUserRole === 'owner' || currentUserRole === 'admin');
 	const isOwner = $derived(currentUserRole === 'owner');
-	const isEnterprise = $derived(organization?.plan === 'enterprise');
+	const isEnterprise = $derived(organization?.plan?.toLowerCase() === 'enterprise');
 
 	let revokingAccessId = $state<string | null>(null);
 
@@ -271,7 +270,7 @@
 					await fetchInvitations();
 					await fetchBackupSettings();
 					await fetchNotificationChannels();
-					if (data.plan === 'enterprise') {
+					if (data.plan?.toLowerCase() === 'enterprise') {
 						await fetchScimTokens();
 					}
 				} else {
@@ -528,7 +527,6 @@
 			});
 		} finally {
 			uploadingAvatar = false;
-			if (avatarInput) avatarInput.value = '';
 		}
 	}
 
@@ -763,14 +761,17 @@
 		}
 	}
 
-	async function clearBackupSettings() {
+	let confirmClearBackups = $state(false);
+	let scimRevokeTarget = $state<string | null>(null);
+	let confirmRevokeScim = $state(false);
+
+	function clearBackupSettings() {
 		if (!organization) return;
-		if (
-			!confirm(
-				'Clear R2 backup configuration? Existing backups remain but new ones will be disabled.'
-			)
-		)
-			return;
+		confirmClearBackups = true;
+	}
+
+	async function performClearBackupSettings() {
+		if (!organization) return;
 		backupSaving = true;
 		try {
 			const r = await apiFetch(`/apiv1/organizations/${organization.id}`, {
@@ -862,14 +863,14 @@
 		}
 	}
 
-	async function revokeScimToken(tokenId: string) {
+	function revokeScimToken(tokenId: string) {
 		if (!organization || scimRevokingId) return;
-		if (
-			!confirm(
-				'Revoke this SCIM token? Provisioning from your identity provider will stop working immediately.'
-			)
-		)
-			return;
+		scimRevokeTarget = tokenId;
+		confirmRevokeScim = true;
+	}
+
+	async function performRevokeScimToken(tokenId: string) {
+		if (!organization || scimRevokingId) return;
 		scimRevokingId = tokenId;
 		try {
 			const r = await apiFetch(`/apiv1/organizations/${organization.id}/scim/tokens/${tokenId}`, {
@@ -921,180 +922,186 @@
 </script>
 
 {#if error}
-	<div class="osp-page"><div class="alert alert-error">{error}</div></div>
+	<div class="osp-state"><Alert tone="error">{error}</Alert></div>
 {/if}
 
 {#if loading}
-	<div class="osp-page">
-		<div class="osp-loading">
-			<Loader2 class="h-6 w-6 animate-spin text-primary-600" />
-		</div>
+	<div class="osp-state">
+		<Skeleton height="6rem" rounded="var(--radius-widget)" />
+		<Skeleton height="20rem" rounded="var(--radius-widget)" />
 	</div>
 {:else if organization}
-	<div class="osp-page">
-		<a href={`/${organizationSlug}`} class="osp-back">
-			<ArrowLeft class="h-3.5 w-3.5" />
-			Your Apps
-		</a>
-		<h1 class="osp-title">Settings</h1>
-		<OrgHero
-			{organization}
-			{organizationSlug}
-			{currentUserRole}
-			{canEditOrg}
-			pendingInvites={invitations.length}
-			bind:isEditing
-			bind:editingName
-			bind:editingDescription
-			{updating}
-			{uploadingAvatar}
-			{deletingAvatar}
-			onStartEditing={startEditing}
-			onCancelEditing={cancelEditing}
-			onSave={saveOrganization}
-			onUploadAvatar={uploadAvatar}
-			onDeleteAvatar={deleteAvatar}
-			bind:avatarInputRef={avatarInput}
-			index={0}
-		/>
-		<div class="osp-grid">
-			<SettingsRail
-				groups={SETTINGS_RAIL}
-				activeId={activeTab}
-				label="Organization settings sections"
+	<SettingsShell
+		crumbs={[{ label: 'Home', href: `/${organizationSlug}` }, { label: 'Settings' }]}
+		groups={SETTINGS_RAIL}
+		activeId={activeTab}
+		label="Organization settings sections"
+	>
+		{#snippet header()}
+			<OrgHero
+				{organization}
+				{organizationSlug}
+				{currentUserRole}
+				{canEditOrg}
+				pendingInvites={invitations.length}
+				bind:isEditing
+				bind:editingName
+				bind:editingDescription
+				{updating}
+				{uploadingAvatar}
+				{deletingAvatar}
+				onStartEditing={startEditing}
+				onCancelEditing={cancelEditing}
+				onSave={saveOrganization}
+				onUploadAvatar={uploadAvatar}
+				onDeleteAvatar={deleteAvatar}
 			/>
-			<div class="osp-stack">
-				{#if activeGraftTab && graftProps}
-					{#key activeGraftTab.key}
-						<GraftMount
-							graftId={activeGraftTab.graftId}
-							mount={activeGraftTab.mount}
-							props={graftProps}
-							host={activeGraftTab.host}
-						/>
-					{/key}
-				{/if}
-				{#if activeTab === 'audit'}
-					<AuditLogList scope={{ organizationId: organization.id }} />
-				{/if}
-				{#if activeTab === 'members'}
-					<OrgMembersTab
-						{members}
-						{invitations}
-						{canInvite}
-						{isOwner}
-						bind:newMemberEmail
-						bind:newMemberRole
-						{addingMember}
-						{resendingInvitationId}
-						{cancellingInvitationId}
-						{removingMemberId}
-						{organizationSlug}
-						{revokingAccessId}
-						onRevokeProjectAccess={revokeProjectAccess}
-						onAddMember={addMember}
-						onRemoveMember={requestRemoveMember}
-						onUpdateMemberRole={updateMemberRole}
-						onResendInvitation={resendInvitation}
-						onCancelInvitation={cancelInvitation}
-					/>
-				{/if}
-				{#if activeTab === 'registries' && canEditOrg}
-					{#key organization.id}<RegistryCredentials
-							organizationId={organization.id}
-							canEdit={canEditOrg}
-						/>{/key}
-				{/if}
+		{/snippet}
 
-				{#if activeTab === 'database'}
-					<OrgDatabaseTab
-						{canEditOrg}
-						bind:publicIp
-						{publicIpSaving}
-						{instanceDefaultPublicIp}
-						onSavePublicIp={savePublicIp}
-					/>
-				{/if}
-				{#if activeTab === 'backups'}
-					<OrgBackupsTab
-						{canEditOrg}
-						{isOwner}
-						{backupLoading}
-						{backupSaving}
-						{backupConfigured}
-						bind:backupEditMode
-						bind:backupEndpoint
-						bind:backupBucket
-						bind:backupRegion
-						bind:backupAccessKey
-						bind:backupSecretKey
-						{backupAccessKeyConfigured}
-						{backupAccessKeyLast4}
-						{backupSecretConfigured}
-						onSaveBackupSettings={saveBackupSettings}
-						onClearBackupSettings={clearBackupSettings}
-						onCancelEdit={() => {
-							backupEditMode = false;
-							backupSecretKey = '';
-							fetchBackupSettings();
-						}}
-					/>
-				{/if}
-				{#if activeTab === 'notifications' && $notificationsEnabled}
-					<OrgNotificationsTab
-						{canEditOrg}
-						organizationId={organization.id}
-						loading={notifLoading}
-						channels={notifChannels}
-						saving={notifSaving}
-						deletingId={notifDeletingId}
-						testingId={notifTestingId}
-						togglingId={notifTogglingId}
-						createdSecret={notifCreatedSecret}
-						onDismissSecret={() => {
-							notifCreatedSecret = null;
-						}}
-						onSaveChannel={saveNotificationChannel}
-						onDeleteChannel={(channel) => {
-							channelToDelete = channel;
-							showDeleteChannelModal = true;
-						}}
-						onTestChannel={testNotificationChannel}
-						onToggleChannel={toggleNotificationChannel}
-					/>
-				{/if}
-				{#if activeTab === 'status'}
-					<OrgStatusTab {organization} {isOwner} {baseDomain} />
-				{/if}
-				{#if activeTab === 'sso'}
-					<OrgSsoTab
-						{organization}
-						{isOwner}
-						{baseDomain}
-						onOrganizationChanged={fetchOrganization}
-					/>
-				{/if}
-				{#if activeTab === 'scim' && isEnterprise}
-					<OrgScimTab
-						{isOwner}
-						{scimLoading}
-						{scimBaseUrl}
-						{scimTokens}
-						bind:scimNewName
-						{scimCreating}
-						{scimRevokingId}
-						{scimCreatedToken}
-						onCreateToken={createScimToken}
-						onRevokeToken={revokeScimToken}
-						onDismissCreatedToken={() => {
-							scimCreatedToken = null;
-						}}
-					/>
-				{/if}
-			</div>
-		</div>
-	</div>
+		{#if activeGraftTab && graftProps}
+			{#key activeGraftTab.key}
+				<GraftMount
+					graftId={activeGraftTab.graftId}
+					mount={activeGraftTab.mount}
+					props={graftProps}
+					host={activeGraftTab.host}
+				/>
+			{/key}
+		{/if}
+		{#if activeTab === 'audit'}
+			<AuditLogList scope={{ organizationId: organization.id }} />
+		{/if}
+		{#if activeTab === 'members'}
+			<OrgMembersTab
+				{members}
+				{invitations}
+				{canInvite}
+				{isOwner}
+				bind:newMemberEmail
+				bind:newMemberRole
+				{addingMember}
+				{resendingInvitationId}
+				{cancellingInvitationId}
+				{removingMemberId}
+				{organizationSlug}
+				{revokingAccessId}
+				onRevokeProjectAccess={revokeProjectAccess}
+				onAddMember={addMember}
+				onRemoveMember={requestRemoveMember}
+				onUpdateMemberRole={updateMemberRole}
+				onResendInvitation={resendInvitation}
+				onCancelInvitation={cancelInvitation}
+			/>
+		{/if}
+		{#if activeTab === 'registries' && canEditOrg}
+			{#key organization.id}<RegistryCredentials
+					organizationId={organization.id}
+					canEdit={canEditOrg}
+				/>{/key}
+		{/if}
+
+		{#if activeTab === 'database'}
+			<OrgDatabaseTab
+				{canEditOrg}
+				bind:publicIp
+				{publicIpSaving}
+				{instanceDefaultPublicIp}
+				onSavePublicIp={savePublicIp}
+			/>
+		{/if}
+		{#if activeTab === 'backups'}
+			<OrgBackupsTab
+				{canEditOrg}
+				{isOwner}
+				{backupLoading}
+				{backupSaving}
+				{backupConfigured}
+				bind:backupEditMode
+				bind:backupEndpoint
+				bind:backupBucket
+				bind:backupRegion
+				bind:backupAccessKey
+				bind:backupSecretKey
+				{backupAccessKeyConfigured}
+				{backupAccessKeyLast4}
+				{backupSecretConfigured}
+				onSaveBackupSettings={saveBackupSettings}
+				onClearBackupSettings={clearBackupSettings}
+				onCancelEdit={() => {
+					backupEditMode = false;
+					backupSecretKey = '';
+					fetchBackupSettings();
+				}}
+			/>
+		{/if}
+		{#if activeTab === 'notifications' && $notificationsEnabled}
+			<OrgNotificationsTab
+				{canEditOrg}
+				organizationId={organization.id}
+				loading={notifLoading}
+				channels={notifChannels}
+				saving={notifSaving}
+				deletingId={notifDeletingId}
+				testingId={notifTestingId}
+				togglingId={notifTogglingId}
+				createdSecret={notifCreatedSecret}
+				onDismissSecret={() => {
+					notifCreatedSecret = null;
+				}}
+				onSaveChannel={saveNotificationChannel}
+				onDeleteChannel={(channel) => {
+					channelToDelete = channel;
+					showDeleteChannelModal = true;
+				}}
+				onTestChannel={testNotificationChannel}
+				onToggleChannel={toggleNotificationChannel}
+			/>
+		{/if}
+		{#if activeTab === 'status'}
+			<OrgStatusTab {organization} {isOwner} {baseDomain} />
+		{/if}
+		{#if activeTab === 'sso'}
+			<OrgSsoTab {organization} {isOwner} {baseDomain} onOrganizationChanged={fetchOrganization} />
+		{/if}
+		{#if activeTab === 'scim' && isEnterprise}
+			<OrgScimTab
+				{isOwner}
+				{scimLoading}
+				{scimBaseUrl}
+				{scimTokens}
+				bind:scimNewName
+				{scimCreating}
+				{scimRevokingId}
+				{scimCreatedToken}
+				onCreateToken={createScimToken}
+				onRevokeToken={revokeScimToken}
+				onDismissCreatedToken={() => {
+					scimCreatedToken = null;
+				}}
+			/>
+		{/if}
+	</SettingsShell>
 {/if}
+
+<ConfirmModal
+	bind:open={confirmClearBackups}
+	title="Clear backup storage?"
+	description="Existing backups stay in the bucket, but no new ones are taken until storage is set up again."
+	confirmLabel="Clear"
+	onconfirm={performClearBackupSettings}
+	oncancel={() => {}}
+/>
+
+<ConfirmModal
+	bind:open={confirmRevokeScim}
+	title="Revoke this SCIM token?"
+	description="Provisioning from your identity provider stops working right away."
+	confirmLabel="Revoke token"
+	onconfirm={() => {
+		if (scimRevokeTarget) performRevokeScimToken(scimRevokeTarget);
+	}}
+	oncancel={() => (scimRevokeTarget = null)}
+/>
 
 <ConfirmModal
 	bind:open={showRemoveMemberModal}
@@ -1123,68 +1130,12 @@
 />
 
 <style>
-	.osp-page {
-		padding: var(--space-8) var(--space-8) var(--space-12);
-		max-width: 84rem;
-		margin: 0 auto;
-	}
-	.osp-title {
-		margin: 0 0 var(--space-5);
-		font-size: var(--text-title-1);
-		font-weight: 600;
-		line-height: 1.15;
-		letter-spacing: var(--track-title);
-		color: var(--text-default);
-	}
-	.osp-back {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.25rem;
-		height: 1.75rem;
-		padding: 0 0.75rem 0 0.5rem;
-		border-radius: var(--radius-pill);
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		font-weight: 600;
-		letter-spacing: var(--track-body);
-		color: var(--text-muted);
-		text-decoration: none;
-		margin-bottom: var(--space-3);
-		transition:
-			color var(--dur-fast),
-			background-color var(--dur-fast);
-	}
-	.osp-back:hover {
-		color: var(--text-default);
-		background-color: var(--fill-soft);
-	}
-	.osp-grid {
-		display: grid;
-		grid-template-columns: 12rem minmax(0, 1fr);
-		gap: var(--space-6);
-		align-items: start;
-		margin-top: var(--space-5);
-	}
-	.osp-stack {
+	.osp-state {
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-4);
-		min-width: 0;
-	}
-	@media (max-width: 900px) {
-		.osp-grid {
-			grid-template-columns: 1fr;
-			gap: var(--space-4);
-		}
-	}
-	.osp-loading {
-		display: flex;
-		justify-content: center;
-		padding: 4rem 0;
-	}
-	@media (max-width: 640px) {
-		.osp-page {
-			padding: 1.5rem 1rem 3rem;
-		}
+		max-width: 100rem;
+		margin: 0 auto;
+		padding: 1.5rem;
 	}
 </style>

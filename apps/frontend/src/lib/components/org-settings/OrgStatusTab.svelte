@@ -1,17 +1,25 @@
 <script lang="ts">
-	import { Loader2, Plus, Trash2, ExternalLink, X } from 'lucide-svelte';
+	import { Activity, ArrowDown, ArrowUp, ArrowUpRight, Plus, Trash2 } from 'lucide-svelte';
 	import {
+		Badge,
 		Button,
-		SectionCard,
+		Dropdown,
 		Field,
+		FieldGrid,
 		Input,
-		EmptyState,
+		List,
+		ListRow,
+		Modal,
+		RowList,
+		SectionCard,
+		SettingsList,
+		Skeleton,
+		Stack,
 		ToggleRow,
-		Dropdown
+		ToneTile
 	} from '$lib/components/ui';
-	import { motionStagger } from '$lib/utils/motion.svelte';
-	import { slide } from '$lib/utils/transitions';
 	import { apiFetch, toasts } from '$lib/stores';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 
 	interface Component {
 		id: string;
@@ -59,6 +67,7 @@
 	let isPublic = $state(true);
 	let components = $state<Component[]>([]);
 	let pick = $state('');
+	const formId = $props.id();
 
 	const available = $derived(
 		options.filter(
@@ -133,8 +142,8 @@
 		editing = null;
 	}
 
-	function addPicked() {
-		const o = available.find((x) => `${x.kind}:${x.resourceId}` === pick);
+	function addPicked(value: string) {
+		const o = available.find((x) => `${x.kind}:${x.resourceId}` === value);
 		if (!o) return;
 		components = [
 			...components,
@@ -143,8 +152,8 @@
 		pick = '';
 	}
 
-	function removeComponent(id: string) {
-		components = components.filter((c) => c.id !== id);
+	function removeComponent(index: number) {
+		components = components.filter((_, i) => i !== index);
 	}
 
 	function move(id: string, dir: -1 | 1) {
@@ -197,6 +206,8 @@
 		}
 	}
 
+	let removeTarget = $state<StatusPage | null>(null);
+
 	async function remove(p: StatusPage) {
 		if (!organization) return;
 		try {
@@ -217,277 +228,210 @@
 
 <SectionCard title="Status pages">
 	{#snippet actions()}
-		{#if isOwner && !creating}
-			<Button variant="secondary" size="sm" onclick={startCreate} disabled={loading}>
-				<Plus class="h-3.5 w-3.5" />
-				<span>New page</span>
-			</Button>
+		{#if isOwner}
+			<Button size="sm" icon={Plus} onclick={startCreate} disabled={loading}>New page</Button>
 		{/if}
 	{/snippet}
 
-	{#if creating}
+	{#if loading}
+		<Skeleton height="2.5rem" />
+	{:else if pages.length === 0}
+		<p class="quiet">
+			{isOwner ? 'None yet. A status page shows anyone whether your apps are up.' : 'None yet.'}
+		</p>
+	{:else}
+		<List inset={false} label="Status pages">
+			{#each pages as p (p.id)}
+				<ListRow flush presence title={p.title}>
+					{#snippet leading()}<ToneTile size={32}><Activity size={16} /></ToneTile>{/snippet}
+					{#snippet titleSuffix()}
+						{#if !p.isPublic}<Badge>Private</Badge>{/if}
+					{/snippet}
+					{#snippet subtitle()}
+						<a class="url" href={publicUrl(p)} target="_blank" rel="noopener noreferrer"
+							>{p.host ?? `/status/${p.slug}`}<ArrowUpRight size={12} aria-hidden="true" /></a
+						>
+						<span>
+							· {p.components.length}
+							{p.components.length === 1 ? 'component' : 'components'}</span
+						>
+					{/snippet}
+					{#snippet actions()}
+						{#if isOwner}
+							<Button size="sm" onclick={() => startEdit(p)}>Edit</Button>
+							<Button
+								variant="ghost"
+								size="sm"
+								icon={Trash2}
+								label="Delete {p.title}"
+								onclick={() => (removeTarget = p)}
+							/>
+						{/if}
+					{/snippet}
+				</ListRow>
+			{/each}
+		</List>
+	{/if}
+</SectionCard>
+
+{#if isOwner}
+	<Modal bind:open={creating} size="lg" title={editing ? 'Edit status page' : 'New status page'}>
 		<form
-			class="st-form"
-			transition:slide={{ duration: 160 }}
+			id={formId}
 			onsubmit={(e) => {
 				e.preventDefault();
 				void save();
 			}}
 		>
-			<div class="st-grid">
-				<Field label="Title"><Input bind:value={title} placeholder="Acme status" /></Field>
-				<Field label="Slug" hint={`/status/${slug || 'acme'}`}>
-					<Input bind:value={slug} placeholder="acme" />
-				</Field>
+			<Stack>
+				<FieldGrid>
+					<Field label="Title" for="{formId}-title">
+						<Input id="{formId}-title" size="lg" bind:value={title} placeholder="Acme status" />
+					</Field>
+					<Field label="Slug" for="{formId}-slug" hint={`/status/${slug || 'acme'}`}>
+						<Input
+							id="{formId}-slug"
+							size="lg"
+							mono
+							bind:value={slug}
+							placeholder="acme"
+							autocomplete="off"
+							spellcheck="false"
+						/>
+					</Field>
+				</FieldGrid>
 				{#if baseDomain}
-					<Field label="Host" hint={subdomain ? `${subdomain}.${baseDomain}` : 'Optional'}>
-						<Input bind:value={subdomain} placeholder="acme-status" />
+					<Field label="Host" for="{formId}-host" hint="Optional">
+						<Input
+							id="{formId}-host"
+							size="lg"
+							mono
+							bind:value={subdomain}
+							placeholder="acme-status"
+							suffix={`.${baseDomain}`}
+							autocomplete="off"
+							spellcheck="false"
+						/>
 					</Field>
 				{/if}
-			</div>
-			<Field label="Description"><Input bind:value={description} placeholder="Optional" /></Field>
-
-			<div class="st-components">
-				{#each components as c, i (c.id)}
-					<div class="st-comp" {@attach motionStagger({ index: i, from: { y: 4 } })}>
-						<input class="st-comp-name" bind:value={c.name} aria-label="Component name" />
-						<span class="st-comp-kind">{c.kind === 'database' ? 'database' : 'app'}</span>
-						<button
-							type="button"
-							class="st-icon"
-							onclick={() => move(c.id, -1)}
-							aria-label="Move up"
-							disabled={i === 0}>↑</button
-						>
-						<button
-							type="button"
-							class="st-icon"
-							onclick={() => move(c.id, 1)}
-							aria-label="Move down"
-							disabled={i === components.length - 1}>↓</button
-						>
-						<button
-							type="button"
-							class="st-icon"
-							onclick={() => removeComponent(c.id)}
-							aria-label="Remove"><X class="h-3.5 w-3.5" /></button
-						>
-					</div>
-				{/each}
-				{#if available.length}
-					<div class="st-add">
-						<Dropdown
-							bind:value={pick}
-							placeholder="Add an app or database"
-							options={available.map((o) => ({
-								value: `${o.kind}:${o.resourceId}`,
-								label: `${o.name} · ${o.project}`
-							}))}
-						/>
-						<Button variant="secondary" size="sm" onclick={addPicked} disabled={!pick}>Add</Button>
-					</div>
-				{/if}
-			</div>
-
-			<ToggleRow label="Public" checked={isPublic} onchange={(v) => (isPublic = v)} />
-
-			<div class="st-actions">
-				<Button variant="ghost" size="sm" onclick={cancel} disabled={saving}>Cancel</Button>
-				<Button
-					variant="primary"
-					size="sm"
-					type="submit"
-					loading={saving}
-					disabled={saving || !title.trim() || !slug.trim()}
-				>
-					{editing ? 'Save' : 'Create'}
-				</Button>
-			</div>
-		</form>
-	{/if}
-
-	{#if loading}
-		<div class="st-loading"><Loader2 class="h-4 w-4 animate-spin" /></div>
-	{:else if pages.length === 0 && !creating}
-		<EmptyState
-			title="No status pages"
-			description={isOwner ? 'Publish a page anyone can check.' : ''}
-		/>
-	{:else if pages.length}
-		<ul class="st-list">
-			{#each pages as p, i (p.id)}
-				<li class="st-row" {@attach motionStagger({ index: i, from: { y: 4 } })}>
-					<div class="st-row-main">
-						<span class="st-row-title">{p.title}</span>
-						<a class="st-row-url" href={publicUrl(p)} target="_blank" rel="noopener noreferrer">
-							{p.host ?? `/status/${p.slug}`}
-							<ExternalLink class="h-3 w-3" />
-						</a>
-					</div>
-					<span class="st-row-meta">
-						{p.components.length} component{p.components.length === 1 ? '' : 's'}{p.isPublic
-							? ''
-							: ' · private'}
-					</span>
-					{#if isOwner}
-						<div class="st-row-actions">
-							<Button variant="ghost" size="sm" onclick={() => startEdit(p)}>Edit</Button>
-							<Button
-								variant="ghost"
-								size="sm"
-								onclick={() => remove(p)}
-								aria-label="Delete status page"
+				<Field label="Description" for="{formId}-description">
+					<Input
+						id="{formId}-description"
+						size="lg"
+						bind:value={description}
+						placeholder="Optional"
+					/>
+				</Field>
+				<Field label="Components">
+					<Stack gap="sm">
+						{#if components.length}
+							<RowList
+								items={components}
+								key={(c) => c.id}
+								label="Components"
+								columns={[
+									{ label: 'Name' },
+									{ label: 'Kind', width: '5rem' },
+									{ label: 'Order', width: '3.75rem' }
+								]}
+								onremove={removeComponent}
+								removeLabel={(c) => `Remove ${c.name}`}
 							>
-								<Trash2 class="h-3.5 w-3.5" />
-							</Button>
-						</div>
-					{/if}
-				</li>
-			{/each}
-		</ul>
-	{/if}
-</SectionCard>
+								{#snippet row(c, i)}
+									<Input bind:value={c.name} aria-label="Component name" />
+									<span class="kind">{c.kind === 'database' ? 'Database' : 'App'}</span>
+									<span class="order">
+										<Button
+											variant="ghost"
+											size="sm"
+											icon={ArrowUp}
+											label="Move {c.name} up"
+											disabled={i === 0}
+											onclick={() => move(c.id, -1)}
+										/>
+										<Button
+											variant="ghost"
+											size="sm"
+											icon={ArrowDown}
+											label="Move {c.name} down"
+											disabled={i === components.length - 1}
+											onclick={() => move(c.id, 1)}
+										/>
+									</span>
+								{/snippet}
+							</RowList>
+						{/if}
+						{#if available.length}
+							<Dropdown
+								bind:value={pick}
+								placeholder="Add an app or database"
+								options={available.map((o) => ({
+									value: `${o.kind}:${o.resourceId}`,
+									label: o.name,
+									description: o.project
+								}))}
+								onchange={addPicked}
+							/>
+						{/if}
+					</Stack>
+				</Field>
+				<SettingsList>
+					<ToggleRow label="Public" bind:checked={isPublic} />
+				</SettingsList>
+			</Stack>
+		</form>
+
+		{#snippet footer()}
+			<Button variant="ghost" shape="capsule" onclick={cancel} disabled={saving}>Cancel</Button>
+			<Button
+				type="submit"
+				form={formId}
+				variant="primary"
+				shape="capsule"
+				loading={saving}
+				disabled={saving || !title.trim() || !slug.trim()}
+			>
+				{editing ? 'Save' : 'Create page'}
+			</Button>
+		{/snippet}
+	</Modal>
+{/if}
+
+<ConfirmModal
+	bind:open={() => removeTarget !== null, (v) => !v && (removeTarget = null)}
+	title={`Delete ${removeTarget?.title ?? 'this status page'}?`}
+	description="The page stops loading for everyone with the link. Its components and history are deleted."
+	confirmLabel="Delete page"
+	onconfirm={() => {
+		if (removeTarget) remove(removeTarget);
+	}}
+	oncancel={() => (removeTarget = null)}
+/>
 
 <style>
-	.st-form {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-3);
-		padding: var(--space-3);
-		margin-bottom: var(--space-4);
-		border-radius: var(--radius-lg);
-		background: var(--bg-sunken);
-		box-shadow: inset 0 0 0 1px var(--rule);
-	}
-	.st-grid {
-		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
-		gap: var(--space-2);
-	}
-	.st-components {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-	}
-	.st-comp {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		padding: 0.25rem 0.375rem;
-		border-radius: var(--radius-md);
-		background: var(--bg-raised);
-	}
-	.st-comp-name {
-		flex: 1;
-		min-width: 0;
-		background: none;
-		border: none;
-		outline: none;
-		font-size: var(--text-footnote);
-		font-weight: 600;
-		color: var(--text-default);
-		padding: 0.25rem 0.25rem;
-		border-radius: var(--radius-xs);
-	}
-	.st-comp-name:focus {
-		background: var(--bg-sunken);
-	}
-	.st-comp-kind {
-		font-size: var(--text-micro);
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
-		color: var(--text-faint);
-	}
-	.st-icon {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 1.5rem;
-		height: 1.5rem;
-		border: none;
-		background: none;
-		border-radius: var(--radius-xs);
-		color: var(--text-faint);
-		cursor: pointer;
-		font-size: var(--text-caption);
-	}
-	.st-icon:hover:not(:disabled) {
-		background: var(--fill-soft);
-		color: var(--text-default);
-	}
-	.st-icon:disabled {
-		opacity: 0.3;
-		cursor: default;
-	}
-	.st-add {
-		display: flex;
-		gap: var(--space-2);
-		align-items: center;
-	}
-	.st-actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: var(--space-2);
-	}
-	.st-loading {
-		display: flex;
-		justify-content: center;
-		padding: var(--space-4);
-		color: var(--text-faint);
-	}
-	.st-list {
-		list-style: none;
+	.quiet {
 		margin: 0;
-		padding: 0;
-		display: flex;
-		flex-direction: column;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		color: var(--text-muted);
 	}
-	.st-row {
-		display: flex;
-		align-items: center;
-		gap: var(--space-3);
-		padding: 0.625rem 0.5rem;
-		border-top: 1px solid var(--rule);
-	}
-	.st-row:first-child {
-		border-top: none;
-	}
-	.st-row-main {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.125rem;
-	}
-	.st-row-title {
-		font-size: var(--text-footnote);
-		font-weight: 600;
-		color: var(--text-default);
-	}
-	.st-row-url {
+	.url {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.25rem;
-		font-family: var(--font-mono);
-		font-size: var(--text-caption);
-		color: var(--text-muted);
+		gap: 0.125rem;
+		color: inherit;
 		text-decoration: none;
 	}
-	.st-row-url:hover {
+	.url:hover {
 		color: var(--text-default);
 	}
-	.st-row-meta {
-		font-size: var(--text-caption);
-		color: var(--text-faint);
-		white-space: nowrap;
+	.kind {
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		color: var(--text-muted);
 	}
-	.st-row-actions {
-		display: flex;
-		gap: 0.125rem;
-	}
-	@media (max-width: 760px) {
-		.st-grid {
-			grid-template-columns: 1fr;
-		}
+	.order {
+		display: inline-flex;
+		align-items: center;
 	}
 </style>

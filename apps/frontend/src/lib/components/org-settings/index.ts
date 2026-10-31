@@ -6,4 +6,3 @@ export { default as OrgStatusTab } from './OrgStatusTab.svelte';
 export { default as OrgScimTab } from './OrgScimTab.svelte';
 export { default as OrgNotificationsTab } from './OrgNotificationsTab.svelte';
 export { default as OrgHero } from './OrgHero.svelte';
-export { default as OrgTabSummaryGrid } from './OrgTabSummaryGrid.svelte';

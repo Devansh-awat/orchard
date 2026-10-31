@@ -1,27 +1,28 @@
 <script lang="ts">
+	import { ExternalLink, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-svelte';
 	import {
-		Loader2,
-		Plus,
-		Check,
-		Copy,
-		ExternalLink,
-		Pencil,
-		Trash2,
-		Activity,
-		Globe
-	} from 'lucide-svelte';
-	import { ShieldCheck } from '@jis3r/icons';
-	import {
-		Button,
-		Field,
-		Input,
 		Alert,
-		Badge,
-		ToggleRow,
+		Button,
 		ColorField,
-		EmptyState
+		FormActions,
+		Input,
+		List,
+		ListRow,
+		Menu,
+		MenuItem,
+		SectionCard,
+		SettingRow,
+		SettingsList,
+		Skeleton,
+		Spinner,
+		StatusBadge,
+		ToggleRow,
+		ToneTile,
+		statusMeta,
+		type StatusMeta
 	} from '$lib/components/ui';
-	import SettingsSection from '$lib/components/user-settings/SettingsSection.svelte';
+	import CopyButton from '$lib/components/ui/CopyButton.svelte';
+	import DnsRecord from '$lib/components/ui/DnsRecord.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import { ProviderIcon } from '$lib/components/login';
 	import { apiFetch, toasts } from '$lib/stores';
@@ -40,13 +41,11 @@
 		organization,
 		isOwner,
 		baseDomain,
-		index = 0,
 		onOrganizationChanged
 	}: {
 		organization: { id: string; name: string; subdomain?: string } | null;
 		isOwner: boolean;
 		baseDomain: string;
-		index?: number;
 		onOrganizationChanged?: () => void;
 	} = $props();
 
@@ -59,7 +58,6 @@
 	let providerError = $state<string | null>(null);
 	let testing = $state<string | null>(null);
 	let testResult = $state<{ id: string; success: boolean; error?: string } | null>(null);
-	let copied = $state<string | null>(null);
 
 	let showProviderModal = $state(false);
 	let editingProvider = $state<SsoProvider | null>(null);
@@ -77,12 +75,23 @@
 	let bgColor = $state('');
 	let subdomain = $state('');
 	let savingSubdomain = $state(false);
+	let savingBranding = $state(false);
+
+	const uid = $props.id();
 
 	const settings = $derived(overview?.settings ?? null);
 	const providers = $derived(overview?.providers ?? []);
 	const domains = $derived(overview?.domains ?? []);
 	const locked = $derived(settings ? !settings.platformEnabled : false);
 	const canEnable = $derived(providers.some((p) => p.enabled && p.usable));
+	const brandingDirty = $derived(
+		!!settings &&
+			(logoUrl !== (settings.loginLogoUrl ?? '') ||
+				welcomeText !== (settings.loginWelcomeText ?? '') ||
+				tagline !== (settings.loginTagline ?? '') ||
+				primaryColor !== (settings.loginPrimaryColor ?? '') ||
+				bgColor !== (settings.loginBgColor ?? ''))
+	);
 
 	$effect(() => {
 		if (organization?.id) void load(organization.id);
@@ -128,8 +137,6 @@
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
-			// The toggle already flipped optimistically in the DOM; refetch so
-			// what is on screen is what the server actually stored.
 			if (organization) await load(organization.id);
 		} finally {
 			savingSettings = false;
@@ -250,16 +257,30 @@
 	}
 
 	async function saveBranding() {
-		await patchSettings(
-			{
-				loginLogoUrl: logoUrl.trim() || null,
-				loginWelcomeText: welcomeText.trim() || null,
-				loginTagline: tagline.trim() || null,
-				loginPrimaryColor: primaryColor || null,
-				loginBgColor: bgColor || null
-			},
-			'Login page updated'
-		);
+		savingBranding = true;
+		try {
+			await patchSettings(
+				{
+					loginLogoUrl: logoUrl.trim() || null,
+					loginWelcomeText: welcomeText.trim() || null,
+					loginTagline: tagline.trim() || null,
+					loginPrimaryColor: primaryColor || null,
+					loginBgColor: bgColor || null
+				},
+				'Login page updated'
+			);
+		} finally {
+			savingBranding = false;
+		}
+	}
+
+	function discardBranding() {
+		if (!settings) return;
+		logoUrl = settings.loginLogoUrl ?? '';
+		welcomeText = settings.loginWelcomeText ?? '';
+		tagline = settings.loginTagline ?? '';
+		primaryColor = settings.loginPrimaryColor ?? '';
+		bgColor = settings.loginBgColor ?? '';
 	}
 
 	async function addDomain() {
@@ -350,331 +371,356 @@
 		}
 	}
 
-	async function copyText(value: string, key: string) {
-		await navigator.clipboard.writeText(value);
-		copied = key;
-		setTimeout(() => {
-			if (copied === key) copied = null;
-		}, 1500);
+	function providerStatus(provider: SsoProvider): StatusMeta {
+		if (!provider.usable) return statusMeta('warning', 'Incomplete');
+		if (!provider.enabled) return statusMeta('neutral', 'Off');
+		return statusMeta('success', 'Live');
 	}
 
-	function providerStatus(provider: SsoProvider) {
-		if (!provider.usable) return { label: 'Incomplete', tone: 'warning' as const };
-		if (!provider.enabled) return { label: 'Off', tone: 'neutral' as const };
-		return { label: 'Live', tone: 'success' as const };
+	function providerDetail(provider: SsoProvider) {
+		const used = provider.lastUsedAt
+			? `last used ${new Date(provider.lastUsedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+			: 'never used';
+		return [provider.protocol.toUpperCase(), used, ...provider.allowedDomains].join(' · ');
 	}
 
-	function lastUsedLabel(value: string | null) {
-		if (!value) return 'never used';
-		return `last used ${new Date(value).toLocaleDateString()}`;
+	function openProvider(provider: SsoProvider | null) {
+		editingProvider = provider;
+		providerError = null;
+		showProviderModal = true;
 	}
 </script>
 
-<SettingsSection
-	title="Single sign-on"
-	description="Let members sign in through your own identity providers"
-	{index}
->
-	{#snippet icon(hovered)}<ShieldCheck size={18} animate={hovered} />{/snippet}
-
-	{#if loading}
-		<div class="sso-loading"><Loader2 class="h-5 w-5 animate-spin" /></div>
-	{:else if loadError}
-		<Alert tone="error">{loadError}</Alert>
-	{:else if settings && overview}
-		{#if locked}
-			<Alert tone="warning" title="Turned off by the platform administrator">
-				Single sign-on is unavailable for this organization. Existing configuration is kept, but
-				members cannot sign in through it until an administrator re-enables it.
-			</Alert>
+{#if loading || loadError || !settings || !overview}
+	<SectionCard title="Single sign-on">
+		{#if loadError}
+			<Alert tone="error">{loadError}</Alert>
+		{:else}
+			<SettingsList>
+				{#each [0, 1, 2] as row (row)}
+					<div class="skeleton-row">
+						<Skeleton width="12rem" height="0.875rem" />
+						<Skeleton width="2.25rem" height="1.25rem" rounded="999px" />
+					</div>
+				{/each}
+			</SettingsList>
 		{/if}
-
-		<!-- Where members sign in -->
-		<div class="sso-block">
-			<h3 class="sso-block-title">Your sign-in page</h3>
-			<div class="sso-url">
-				<code>{overview.loginUrl}</code>
-				<Button
-					variant="ghost"
-					size="sm"
-					onclick={() => copyText(overview?.loginUrl ?? '', 'login')}
-					aria-label="Copy sign-in URL"
-				>
-					{#if copied === 'login'}<Check size={13} />{:else}<Copy size={13} />{/if}
-				</Button>
-				<Button variant="ghost" size="sm" href={overview.loginUrl} target="_blank" rel="noopener">
-					<ExternalLink size={13} />
-				</Button>
+	</SectionCard>
+{:else}
+	<SectionCard title="Single sign-on">
+		{#if locked}
+			<div class="notice">
+				<Alert tone="warning" title="Turned off by the platform administrator">
+					Members can't sign in through it until an administrator turns it back on. Your setup is
+					kept.
+				</Alert>
 			</div>
-			<p class="sso-hint">
-				Anyone who opens this page gets your connections and your branding. There is no subdomain to
-				set up.
-			</p>
-
+		{/if}
+		<SettingsList>
+			{#if overview.loginUrl}
+				<SettingRow label="Sign-in page" hint="Shows your connections and branding">
+					<span class="address">
+						<code class="mono" title={overview.loginUrl}>{overview.loginUrl}</code>
+						<CopyButton value={overview.loginUrl} label="Copy sign-in URL" />
+						<Button
+							variant="ghost"
+							size="sm"
+							icon={ExternalLink}
+							label="Open the sign-in page"
+							href={overview.loginUrl}
+							target="_blank"
+							rel="noopener"
+						/>
+					</span>
+				</SettingRow>
+			{/if}
 			<ToggleRow
 				checked={settings.enabled}
 				disabled={locked || !canEnable || savingSettings}
-				label="Single sign-on is on"
+				label="Use single sign-on"
 				hint={canEnable
-					? 'Members can sign in through the connections below.'
-					: 'Add and enable a working connection first.'}
+					? 'Members can sign in through the connections below'
+					: 'Add and turn on a working connection first'}
 				onchange={() => patchSettings({ enabled: !settings.enabled })}
 			/>
 			<ToggleRow
 				checked={settings.enforced}
 				disabled={locked || !settings.enabled || savingSettings}
 				label="Require single sign-on"
-				hint="Blocks email codes, passkeys, and platform providers for everyone in this organization. Turning it on signs out members who got in another way."
+				hint="Blocks email codes, passkeys and platform providers, and signs out members who got in another way"
 				onchange={() => patchSettings({ enforced: !settings.enforced })}
 			/>
-		</div>
+		</SettingsList>
+	</SectionCard>
 
-		<!-- Connections -->
-		<div class="sso-block">
-			<div class="sso-block-head">
-				<h3 class="sso-block-title">Connections</h3>
-				<Button
-					variant="secondary"
-					size="sm"
-					disabled={locked}
-					onclick={() => {
-						editingProvider = null;
-						providerError = null;
-						showProviderModal = true;
-					}}
-				>
-					<Plus size={14} />
-					Add connection
-				</Button>
-			</div>
-
-			{#if !providers.length}
-				<EmptyState
-					title="No identity providers yet"
-					description="Connect Google, Microsoft, Okta, GitHub, or any OpenID Connect or SAML provider."
-				/>
-			{:else}
-				<ul class="sso-list">
-					{#each providers as provider (provider.id)}
-						{@const status = providerStatus(provider)}
-						<li class="sso-item">
-							<span class="sso-item-icon"
-								><ProviderIcon
-									preset={provider.preset}
-									iconUrl={provider.iconUrl}
-									size={18}
-								/></span
-							>
-							<div class="sso-item-main">
-								<span class="sso-item-name">{provider.name}</span>
-								<span class="sso-item-meta">
-									{provider.protocol.toUpperCase()} · {lastUsedLabel(provider.lastUsedAt)}
-									{#if provider.allowedDomains.length}
-										· {provider.allowedDomains.join(', ')}
-									{/if}
-								</span>
-								{#if testResult?.id === provider.id}
-									<span class="sso-item-test" class:sso-item-test--bad={!testResult.success}>
-										{testResult.success
-											? 'Reached the provider successfully.'
-											: `Test failed: ${testResult.error}`}
-									</span>
-								{/if}
-							</div>
-							<Badge tone={status.tone}>{status.label}</Badge>
-							<div class="sso-item-actions">
-								<Button
-									variant="ghost"
-									size="sm"
-									loading={testing === provider.id}
-									onclick={() => testProvider(provider)}
-									aria-label="Test connection"
+	<SectionCard title="Connections">
+		{#snippet actions()}
+			<Button
+				size="sm"
+				shape="capsule"
+				icon={Plus}
+				disabled={locked}
+				onclick={() => openProvider(null)}
+			>
+				Add connection
+			</Button>
+		{/snippet}
+		{#if providers.length}
+			<List inset={false} label="Connections">
+				{#each providers as provider (provider.id)}
+					{@const result = testResult?.id === provider.id ? testResult : null}
+					{#snippet detail()}
+						{#if testing === provider.id}
+							<Spinner size={12} />Testing
+						{:else if result}
+							<span class={result.success ? 'ok' : 'bad'}>
+								{result.success ? 'Reached the provider' : `Test failed: ${result.error}`}
+							</span>
+						{:else}
+							{providerDetail(provider)}
+						{/if}
+					{/snippet}
+					{#snippet controls()}
+						<span class="icons">
+							<Button
+								variant="ghost"
+								size="sm"
+								icon={Pencil}
+								label="Edit {provider.name}"
+								onclick={() => openProvider(provider)}
+							/>
+							<Menu>
+								{#snippet trigger(attrs)}
+									<Button
+										{...attrs}
+										variant="ghost"
+										size="sm"
+										icon={MoreHorizontal}
+										label="More for {provider.name}"
+									/>
+								{/snippet}
+								<MenuItem disabled={testing !== null} onclick={() => testProvider(provider)}
+									>Test connection</MenuItem
 								>
-									{#if testing !== provider.id}<Activity size={14} />{/if}
-								</Button>
-								<Button
-									variant="ghost"
-									size="sm"
-									onclick={() => {
-										editingProvider = provider;
-										providerError = null;
-										showProviderModal = true;
-									}}
-									aria-label="Edit connection"
-								>
-									<Pencil size={14} />
-								</Button>
-								<Button
-									variant="ghost"
-									size="sm"
+								<MenuItem
+									danger
+									icon={Trash2}
 									onclick={() => {
 										providerToDelete = provider;
 										showDeleteModal = true;
-									}}
-									aria-label="Remove connection"
+									}}>Remove</MenuItem
 								>
-									<Trash2 size={14} />
-								</Button>
-							</div>
-						</li>
-					{/each}
-				</ul>
-			{/if}
-		</div>
-
-		<!-- Domains -->
-		<div class="sso-block">
-			<h3 class="sso-block-title">Email domains</h3>
-			<p class="sso-hint">
-				Proving you own a domain lets work addresses at it route here from the platform login page,
-				and lets your providers create accounts for people at that domain who have never signed in
-				before. Until then, new people join by invitation.
+							</Menu>
+						</span>
+					{/snippet}
+					<ListRow flush pinned title={provider.name} subtitle={detail} actions={controls}>
+						{#snippet leading()}
+							<ToneTile size={32}>
+								<ProviderIcon preset={provider.preset} iconUrl={provider.iconUrl} size={16} />
+							</ToneTile>
+						{/snippet}
+						{#snippet titleSuffix()}
+							<StatusBadge meta={providerStatus(provider)} variant="plain" />
+						{/snippet}
+					</ListRow>
+				{/each}
+			</List>
+		{:else}
+			<p class="quiet">
+				Connect Google, Microsoft, Okta, GitHub, or any OpenID Connect or SAML provider.
 			</p>
+		{/if}
+	</SectionCard>
 
+	<SectionCard
+		title="Email domains"
+		description="Verified domains route work addresses here and let your providers create accounts for new people. Until then, people join by invitation."
+	>
+		<SettingsList>
 			<form
-				class="sso-inline"
 				onsubmit={(e) => {
 					e.preventDefault();
 					addDomain();
 				}}
 			>
-				<Input bind:value={newDomain} placeholder="acme.com" disabled={locked} />
-				<Button variant="secondary" type="submit" loading={addingDomain} disabled={locked}>
-					Add domain
-				</Button>
+				<SettingRow label="Add a domain" for="{uid}-domain" wide>
+					<span class="inline">
+						<span class="grow">
+							<Input
+								id="{uid}-domain"
+								bind:value={newDomain}
+								placeholder="acme.com"
+								autocomplete="off"
+								spellcheck={false}
+								disabled={locked}
+							/>
+						</span>
+						<Button type="submit" loading={addingDomain} disabled={locked || !newDomain.trim()}>
+							Add
+						</Button>
+					</span>
+				</SettingRow>
 			</form>
-
 			{#if domainError}
-				<Alert tone="error">{domainError}</Alert>
+				<div class="notice-row">
+					<Alert tone="error">{domainError}</Alert>
+				</div>
 			{/if}
-
 			{#each domains as domain (domain.id)}
-				<div class="sso-domain">
-					<div class="sso-domain-head">
-						<span class="sso-domain-name">{domain.domain}</span>
-						<Badge tone={domain.verified ? 'success' : 'warning'}>
-							{domain.verified ? 'Verified' : 'Pending'}
-						</Badge>
-						<div class="sso-item-actions">
-							{#if !domain.verified}
-								<Button
-									variant="secondary"
-									size="sm"
-									loading={verifyingDomain === domain.id}
-									onclick={() => verifyDomain(domain)}
-								>
-									Check DNS
-								</Button>
-							{/if}
+				<div class="domain">
+					<SettingRow
+						label={domain.domain}
+						hint={domain.verified
+							? undefined
+							: (domain.lastError ?? 'Add this TXT record at your DNS provider, then check again')}
+					>
+						<span class="status">
+							<StatusBadge
+								meta={domain.verified
+									? statusMeta('success', 'Verified')
+									: statusMeta('warning', 'Pending')}
+								variant="plain"
+							/>
+						</span>
+						{#if !domain.verified}
 							<Button
-								variant="ghost"
 								size="sm"
-								onclick={() => removeDomain(domain)}
-								aria-label="Remove domain"
+								loading={verifyingDomain === domain.id}
+								onclick={() => verifyDomain(domain)}
 							>
-								<Trash2 size={14} />
+								Check DNS
 							</Button>
-						</div>
-					</div>
-
-					{#if !domain.verified}
-						<p class="sso-hint">Add this TXT record at your DNS provider, then check again.</p>
-						<div class="sso-copy-row">
-							<span class="sso-copy-label">Name</span>
-							<code class="sso-copy-value">{domain.recordName}</code>
-							<Button
-								variant="ghost"
-								size="sm"
-								onclick={() => copyText(domain.recordName, `n-${domain.id}`)}
-								aria-label="Copy record name"
-							>
-								{#if copied === `n-${domain.id}`}<Check size={13} />{:else}<Copy size={13} />{/if}
-							</Button>
-						</div>
-						<div class="sso-copy-row">
-							<span class="sso-copy-label">Value</span>
-							<code class="sso-copy-value">{domain.recordValue}</code>
-							<Button
-								variant="ghost"
-								size="sm"
-								onclick={() => copyText(domain.recordValue, `v-${domain.id}`)}
-								aria-label="Copy record value"
-							>
-								{#if copied === `v-${domain.id}`}<Check size={13} />{:else}<Copy size={13} />{/if}
-							</Button>
-						</div>
-						{#if domain.lastError}
-							<p class="sso-domain-error">{domain.lastError}</p>
 						{/if}
+						<Button
+							variant="ghost"
+							size="sm"
+							icon={Trash2}
+							label="Remove {domain.domain}"
+							onclick={() => removeDomain(domain)}
+						/>
+					</SettingRow>
+					{#if !domain.verified}
+						<DnsRecord
+							label="DNS record for {domain.domain}"
+							records={[
+								{ type: domain.recordType, name: domain.recordName, value: domain.recordValue }
+							]}
+						/>
 					{/if}
 				</div>
 			{/each}
-		</div>
+		</SettingsList>
+	</SectionCard>
 
-		<!-- Branding -->
-		<div class="sso-block">
-			<h3 class="sso-block-title">Login page</h3>
-			<Field label="Logo URL" for="sso-logo">
+	<SectionCard title="Login page">
+		{#snippet actions()}
+			{#if overview?.loginUrl}
+				<Button
+					variant="ghost"
+					size="sm"
+					shape="capsule"
+					iconRight={ExternalLink}
+					href={overview.loginUrl}
+					target="_blank"
+					rel="noopener"
+				>
+					Preview
+				</Button>
+			{/if}
+		{/snippet}
+		<SettingsList>
+			<SettingRow label="Logo" for="{uid}-logo" wide>
 				<Input
-					id="sso-logo"
+					id="{uid}-logo"
 					type="url"
 					bind:value={logoUrl}
 					placeholder="https://acme.com/logo.svg"
 				/>
-			</Field>
-			<Field label="Heading" for="sso-welcome">
+			</SettingRow>
+			<SettingRow label="Heading" for="{uid}-welcome" wide>
 				<Input
-					id="sso-welcome"
+					id="{uid}-welcome"
 					bind:value={welcomeText}
 					placeholder={`Sign in to ${organization?.name ?? ''}`}
 				/>
-			</Field>
-			<Field label="Subheading" for="sso-tagline">
-				<Input id="sso-tagline" bind:value={tagline} placeholder="Use your work account" />
-			</Field>
-			<div class="sso-colors">
-				<ColorField
-					label="Accent"
-					value={primaryColor || DEFAULT_LOGIN_ACCENT}
-					onchange={(v) => (primaryColor = v)}
-				/>
-				<ColorField
-					label="Background"
-					value={bgColor || DEFAULT_LOGIN_BG}
-					onchange={(v) => (bgColor = v)}
-				/>
+			</SettingRow>
+			<SettingRow label="Subheading" for="{uid}-tagline" wide>
+				<Input id="{uid}-tagline" bind:value={tagline} placeholder="Use your work account" />
+			</SettingRow>
+			<div>
+				<div class="color">
+					<ColorField
+						label="Accent"
+						value={primaryColor || DEFAULT_LOGIN_ACCENT}
+						onchange={(v) => (primaryColor = v)}
+					/>
+				</div>
 			</div>
-			<div class="sso-actions">
-				<Button variant="primary" loading={savingSettings} onclick={saveBranding}>
-					Save login page
-				</Button>
-				<Button variant="ghost" href={overview.loginUrl} target="_blank" rel="noopener">
-					Preview
-					<ExternalLink size={13} />
-				</Button>
+			<div>
+				<div class="color">
+					<ColorField
+						label="Background"
+						value={bgColor || DEFAULT_LOGIN_BG}
+						onchange={(v) => (bgColor = v)}
+					/>
+				</div>
 			</div>
-		</div>
-
-		{#if isOwner && baseDomain}
-			<div class="sso-block">
-				<h3 class="sso-block-title"><Globe size={13} /> Vanity address</h3>
-				<Field
-					label="Subdomain"
-					for="sso-subdomain"
-					hint="Optional. Visitors are redirected to the sign-in page above."
+		</SettingsList>
+		<div class="save">
+			<FormActions>
+				<Button
+					variant="ghost"
+					disabled={!brandingDirty || savingBranding}
+					onclick={discardBranding}
 				>
-					<div class="sso-inline">
-						<Input id="sso-subdomain" bind:value={subdomain} placeholder="acme" />
-						<span class="sso-suffix">.{baseDomain}</span>
-						<Button variant="secondary" loading={savingSubdomain} onclick={saveSubdomain}>
-							Save
-						</Button>
-					</div>
-				</Field>
-			</div>
-		{/if}
+					Discard
+				</Button>
+				<Button
+					variant="primary"
+					loading={savingBranding}
+					disabled={!brandingDirty}
+					onclick={saveBranding}
+				>
+					Save
+				</Button>
+			</FormActions>
+		</div>
+	</SectionCard>
+
+	{#if isOwner && baseDomain}
+		<SectionCard title="Vanity address">
+			<SettingsList>
+				<form
+					onsubmit={(e) => {
+						e.preventDefault();
+						saveSubdomain();
+					}}
+				>
+					<SettingRow
+						label="Subdomain"
+						for="{uid}-subdomain"
+						hint="Visitors are sent to your sign-in page"
+						wide
+					>
+						<span class="inline">
+							<span class="grow">
+								<Input
+									id="{uid}-subdomain"
+									bind:value={subdomain}
+									placeholder="acme"
+									suffix=".{baseDomain}"
+									autocomplete="off"
+									spellcheck={false}
+								/>
+							</span>
+							<Button type="submit" loading={savingSubdomain}>Save</Button>
+						</span>
+					</SettingRow>
+				</form>
+			</SettingsList>
+		</SectionCard>
 	{/if}
-</SettingsSection>
+{/if}
 
 {#if overview}
 	<SsoProviderModal
@@ -705,227 +751,74 @@
 />
 
 <style>
-	.sso-loading {
-		display: flex;
-		justify-content: center;
-		padding: 2rem;
-		color: var(--text-muted);
-	}
-
-	.sso-block {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-		padding: 1rem 0;
-		border-top: 1px solid var(--border-subtle);
-	}
-
-	.sso-block:first-of-type {
-		border-top: none;
-	}
-
-	.sso-block-head {
+	.skeleton-row {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 1rem;
 	}
-
-	.sso-block-title {
-		display: flex;
+	.notice {
+		margin-bottom: var(--space-4);
+	}
+	.notice-row {
+		min-height: 0;
+	}
+	.address {
+		display: inline-flex;
 		align-items: center;
-		gap: 0.4rem;
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		font-weight: 600;
-		color: var(--text-default);
-		margin: 0;
-	}
-
-	.sso-url {
-		display: flex;
-		align-items: center;
-		gap: 0.35rem;
-	}
-
-	.sso-url code {
-		flex: 1;
+		gap: 0.25rem;
 		min-width: 0;
+		max-width: 30rem;
+	}
+	.mono {
+		min-width: 0;
+		margin-right: 0.25rem;
+		overflow-x: clip;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 		font-family: var(--font-mono);
 		font-size: var(--text-caption);
 		color: var(--text-default);
-		background: var(--bg-surface);
-		border: 1px solid var(--border-subtle);
-		border-radius: var(--radius-sm);
-		padding: 0.4rem 0.6rem;
-		overflow-x: auto;
-		white-space: nowrap;
 	}
-
-	.sso-hint {
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		color: var(--text-muted);
-		margin: 0;
-	}
-
-	.sso-list {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-
-	.sso-item {
+	.icons {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
-		padding: 0.65rem 0.75rem;
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-md);
-		background: var(--bg-surface);
+		gap: 0.25rem;
 	}
-
-	.sso-item-icon {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 2rem;
-		height: 2rem;
-		border-radius: var(--radius-sm);
-		background: var(--bg-raised);
-		color: var(--text-muted);
-		flex-shrink: 0;
-	}
-
-	.sso-item-main {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.1rem;
-	}
-
-	.sso-item-name {
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		font-weight: 500;
-		color: var(--text-default);
-	}
-
-	.sso-item-meta {
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		color: var(--text-faint);
-	}
-
-	.sso-item-test {
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
+	.ok {
 		color: var(--status-success);
 	}
-
-	.sso-item-test--bad {
+	.bad {
 		color: var(--status-error);
 	}
-
-	.sso-item-actions {
+	.quiet {
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		color: var(--text-muted);
+	}
+	.inline {
 		display: flex;
 		align-items: center;
-		gap: 0.1rem;
+		gap: 0.5rem;
+		min-width: 0;
 	}
-
-	.sso-domain {
+	.grow {
+		display: flex;
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+	.domain {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
-		padding: 0.75rem;
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-md);
-		background: var(--bg-surface);
-	}
-
-	.sso-domain-head {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-	}
-
-	.sso-domain-name {
-		flex: 1;
-		min-width: 0;
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		font-weight: 500;
-		color: var(--text-default);
-	}
-
-	.sso-domain-error {
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		color: var(--status-warning);
-		margin: 0;
-	}
-
-	.sso-copy-row {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-	}
-
-	.sso-copy-label {
-		width: 3.5rem;
-		flex-shrink: 0;
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		color: var(--text-muted);
-	}
-
-	.sso-copy-value {
-		flex: 1;
-		min-width: 0;
-		font-family: var(--font-mono);
-		font-size: var(--text-caption);
-		color: var(--text-default);
-		background: var(--bg-raised);
-		border: 1px solid var(--border-subtle);
-		border-radius: var(--radius-sm);
-		padding: 0.3rem 0.5rem;
-		overflow-x: auto;
-		white-space: nowrap;
-	}
-
-	.sso-inline {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-	}
-
-	.sso-inline :global(.ui-input-wrap),
-	.sso-inline :global(input) {
-		flex: 1;
-		min-width: 0;
-	}
-
-	.sso-suffix {
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		color: var(--text-muted);
-		white-space: nowrap;
-	}
-
-	.sso-colors {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
 		gap: 0.75rem;
 	}
-
-	.sso-actions {
+	.status {
 		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		flex-wrap: wrap;
+		width: 5.5rem;
+	}
+	.color {
+		margin: -0.625rem -0.75rem;
+	}
+	.save {
+		margin-top: var(--space-4);
 	}
 </style>

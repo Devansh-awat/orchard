@@ -1,8 +1,21 @@
 <script lang="ts">
-	import { Loader2, Link2, Copy, Check, Trash2, KeyRound, TriangleAlert } from 'lucide-svelte';
-	import { UserCog } from '@jis3r/icons';
-	import { Button, Field, Input } from '$lib/components/ui';
-	import SettingsSection from '$lib/components/user-settings/SettingsSection.svelte';
+	import { tick } from 'svelte';
+	import { KeyRound, Plus, Trash2 } from 'lucide-svelte';
+	import {
+		Button,
+		Field,
+		Input,
+		List,
+		ListRow,
+		Modal,
+		ModalIntro,
+		SectionCard,
+		SettingRow,
+		SettingsList,
+		Skeleton,
+		ToneTile
+	} from '$lib/components/ui';
+	import CopyButton from '$lib/components/ui/CopyButton.svelte';
 
 	type ScimToken = {
 		id: string;
@@ -23,8 +36,7 @@
 		scimCreatedToken,
 		onCreateToken,
 		onRevokeToken,
-		onDismissCreatedToken,
-		index = 0
+		onDismissCreatedToken
 	}: {
 		isOwner: boolean;
 		scimLoading: boolean;
@@ -37,312 +49,204 @@
 		onCreateToken: () => void;
 		onRevokeToken: (id: string) => void;
 		onDismissCreatedToken: () => void;
-		index?: number;
 	} = $props();
 
-	let copiedField = $state<string | null>(null);
+	const uid = $props.id();
 
-	async function copy(value: string, field: string) {
-		try {
-			await navigator.clipboard.writeText(value);
-			copiedField = field;
-			setTimeout(() => {
-				if (copiedField === field) copiedField = null;
-			}, 1500);
-		} catch {
-			/* clipboard unavailable */
-		}
-	}
+	let creating = $state(false);
 
-	function formatDate(value: string | null): string {
-		if (!value) return 'Never';
+	const sheetOpen = $derived(creating || !!scimCreatedToken);
+
+	function shortDate(value: string) {
 		return new Date(value).toLocaleDateString(undefined, {
 			year: 'numeric',
 			month: 'short',
 			day: 'numeric'
 		});
 	}
+
+	function tokenDetail(token: ScimToken) {
+		return [
+			`Created ${shortDate(token.createdAt)}`,
+			token.lastUsedAt ? `last used ${shortDate(token.lastUsedAt)}` : 'never used',
+			token.expiresAt ? `expires ${shortDate(token.expiresAt)}` : null
+		]
+			.filter(Boolean)
+			.join(' · ');
+	}
+
+	function openCreate() {
+		scimNewName = '';
+		creating = true;
+	}
+
+	function close() {
+		creating = false;
+		if (scimCreatedToken) onDismissCreatedToken();
+	}
+
+	function submit() {
+		if (!scimNewName.trim() || scimCreating) return;
+		onCreateToken();
+	}
+
+	function focusOnOpen(el: HTMLInputElement) {
+		void tick().then(() => el.focus());
+	}
 </script>
 
-{#if isOwner}
-	<SettingsSection
-		title="SCIM Provisioning"
-		description="Sync members automatically from your identity provider"
-		{index}
-	>
-		{#snippet icon(hovered)}<UserCog size={18} animate={hovered} />{/snippet}
+{#if !isOwner}
+	<SectionCard title="SCIM provisioning">
+		<p class="quiet">Only the organization owner can manage SCIM provisioning.</p>
+	</SectionCard>
+{:else}
+	<SectionCard title="SCIM provisioning" description="Sync members from your identity provider">
+		<SettingsList>
+			<SettingRow
+				label="Endpoint"
+				hint="Paste it with a token below into your identity provider's SCIM 2.0 connector"
+			>
+				{#if scimLoading}
+					<Skeleton width="16rem" height="0.875rem" />
+				{:else}
+					<span class="address">
+						<code class="mono" title={scimBaseUrl}>{scimBaseUrl}</code>
+						<CopyButton value={scimBaseUrl} label="Copy SCIM endpoint" />
+					</span>
+				{/if}
+			</SettingRow>
+		</SettingsList>
+	</SectionCard>
 
+	<SectionCard title="Tokens">
+		{#snippet actions()}
+			<Button size="sm" shape="capsule" icon={Plus} onclick={openCreate}>New token</Button>
+		{/snippet}
 		{#if scimLoading}
-			<div class="scim-loading">
-				<Loader2 class="h-5 w-5 animate-spin" />
+			<div class="placeholder">
+				<Skeleton height="2.5rem" />
+				<Skeleton height="2.5rem" />
+			</div>
+		{:else if scimTokens.length === 0}
+			<p class="quiet">Generate a token to connect your identity provider.</p>
+		{:else}
+			<List inset={false} label="SCIM tokens">
+				{#each scimTokens as token (token.id)}
+					{#snippet revoke()}
+						<Button
+							variant="ghost"
+							size="sm"
+							icon={Trash2}
+							label="Revoke {token.name}"
+							loading={scimRevokingId === token.id}
+							disabled={scimRevokingId !== null}
+							onclick={() => onRevokeToken(token.id)}
+						/>
+					{/snippet}
+					<ListRow flush presence title={token.name} subtitle={tokenDetail(token)} actions={revoke}>
+						{#snippet leading()}<ToneTile size={32}><KeyRound size={16} /></ToneTile>{/snippet}
+					</ListRow>
+				{/each}
+			</List>
+		{/if}
+	</SectionCard>
+
+	<Modal
+		bind:open={() => sheetOpen, (v) => !v && close()}
+		size={scimCreatedToken ? 'md' : 'sm'}
+		closable={false}
+		dismissable={!scimCreatedToken}
+		labelledby="{uid}-title"
+	>
+		{#if scimCreatedToken}
+			<div class="form">
+				<ModalIntro
+					id="{uid}-title"
+					icon={KeyRound}
+					tone="success"
+					solid
+					title={`${scimCreatedToken.name} is ready`}
+					description="Copy the token now. It is not shown again."
+				/>
+				{#snippet copy()}<CopyButton
+						value={scimCreatedToken?.token ?? ''}
+						label="Copy token"
+					/>{/snippet}
+				<Field label="Token" for="{uid}-token">
+					<Input id="{uid}-token" value={scimCreatedToken.token} readonly mono suffix={copy} />
+				</Field>
 			</div>
 		{:else}
-			<!-- Endpoint -->
-			<div class="scim-section">
-				<h3 class="scim-section-title">
-					<Link2 class="h-3.5 w-3.5" />
-					SCIM endpoint
-				</h3>
-				<div class="scim-endpoint-row">
-					<Input class="scim-endpoint-input" value={scimBaseUrl} readonly />
-					<Button variant="secondary" onclick={() => copy(scimBaseUrl, 'endpoint')}>
-						{#if copiedField === 'endpoint'}<Check class="h-4 w-4" />{:else}<Copy
-								class="h-4 w-4"
-							/>{/if}
-						{copiedField === 'endpoint' ? 'Copied' : 'Copy'}
-					</Button>
-				</div>
-				<p class="scim-hint">
-					Paste this URL and a bearer token below into your identity provider's SCIM 2.0 connector
-					(Okta, Entra ID, Google Workspace). Authentication uses an OAuth bearer token.
-				</p>
-			</div>
-
-			<!-- Freshly minted token (shown once) -->
+			<form
+				class="form"
+				onsubmit={(e) => {
+					e.preventDefault();
+					submit();
+				}}
+			>
+				<ModalIntro id="{uid}-title" icon={KeyRound} tone="accent" title="New SCIM token" />
+				<Field label="Name" for="{uid}-name">
+					<Input
+						id="{uid}-name"
+						bind:value={scimNewName}
+						placeholder="Okta production"
+						autocomplete="off"
+						{@attach focusOnOpen}
+					/>
+				</Field>
+			</form>
+		{/if}
+		{#snippet footer()}
 			{#if scimCreatedToken}
-				<div class="scim-section">
-					<div class="scim-reveal">
-						<div class="scim-reveal-head">
-							<TriangleAlert class="h-4 w-4" />
-							<span>Copy this token now. It won't be shown again.</span>
-						</div>
-						<div class="scim-endpoint-row">
-							<Input
-								class="scim-endpoint-input scim-token-value"
-								value={scimCreatedToken.token}
-								readonly
-							/>
-							<Button variant="secondary" onclick={() => copy(scimCreatedToken!.token, 'newtoken')}>
-								{#if copiedField === 'newtoken'}<Check class="h-4 w-4" />{:else}<Copy
-										class="h-4 w-4"
-									/>{/if}
-								{copiedField === 'newtoken' ? 'Copied' : 'Copy'}
-							</Button>
-						</div>
-						<Button variant="ghost" size="sm" onclick={onDismissCreatedToken}>Done</Button>
-					</div>
-				</div>
-			{/if}
-
-			<!-- Tokens -->
-			<div class="scim-section">
-				<h3 class="scim-section-title">
-					<KeyRound class="h-3.5 w-3.5" />
-					Bearer tokens
-				</h3>
-
-				{#if scimTokens.length === 0}
-					<p class="scim-empty">No tokens yet. Generate one to connect your identity provider.</p>
-				{:else}
-					<div class="scim-token-list">
-						{#each scimTokens as token (token.id)}
-							<div class="scim-token-item">
-								<div class="scim-token-meta">
-									<p class="scim-token-name">{token.name}</p>
-									<p class="scim-token-sub">
-										Created {formatDate(token.createdAt)} · Last used {formatDate(token.lastUsedAt)}
-										{#if token.expiresAt}· Expires {formatDate(token.expiresAt)}{/if}
-									</p>
-								</div>
-								<Button
-									variant="ghost"
-									size="sm"
-									onclick={() => onRevokeToken(token.id)}
-									disabled={scimRevokingId === token.id}
-									aria-label="Revoke token"
-								>
-									{#if scimRevokingId === token.id}
-										<Loader2 class="h-4 w-4 animate-spin" />
-									{:else}
-										<Trash2 class="h-4 w-4" />
-									{/if}
-								</Button>
-							</div>
-						{/each}
-					</div>
-				{/if}
-			</div>
-
-			<!-- Create -->
-			<div class="scim-section scim-create">
-				<div class="scim-create-field">
-					<Field label="New token name" for="scim-token-name">
-						<Input
-							id="scim-token-name"
-							bind:value={scimNewName}
-							placeholder="Okta production"
-							onkeydown={(e: KeyboardEvent) => {
-								if (e.key === 'Enter' && scimNewName.trim()) onCreateToken();
-							}}
-						/>
-					</Field>
-				</div>
+				<Button variant="primary" shape="capsule" onclick={close}>Done</Button>
+			{:else}
+				<Button variant="ghost" shape="capsule" disabled={scimCreating} onclick={close}
+					>Cancel</Button
+				>
 				<Button
 					variant="primary"
-					class="scim-create-btn"
-					onclick={onCreateToken}
+					shape="capsule"
 					loading={scimCreating}
 					disabled={!scimNewName.trim()}
+					onclick={submit}
 				>
 					Generate token
 				</Button>
-			</div>
-		{/if}
-	</SettingsSection>
-{:else}
-	<SettingsSection
-		title="SCIM Provisioning"
-		description="Sync members automatically from your identity provider"
-		{index}
-	>
-		{#snippet icon(hovered)}<UserCog size={18} animate={hovered} />{/snippet}
-		<p class="scim-no-access">Only the organization owner can manage SCIM provisioning.</p>
-	</SettingsSection>
+			{/if}
+		{/snippet}
+	</Modal>
 {/if}
 
 <style>
-	.scim-loading {
-		display: flex;
-		justify-content: center;
-		padding: 2rem;
-		color: var(--surface-muted);
+	.quiet {
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		color: var(--text-muted);
 	}
-
-	.scim-section {
-		padding: 1rem 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-		border-top: 1px solid var(--surface-border);
-	}
-
-	.scim-section-title {
-		display: flex;
+	.address {
+		display: inline-flex;
 		align-items: center;
-		gap: 0.5rem;
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		font-weight: 600;
-		color: var(--center-channel-color);
-		margin: 0;
-	}
-
-	.scim-endpoint-row {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-	}
-
-	.scim-endpoint-row :global(.scim-endpoint-input) {
-		flex: 1;
-		font-family: var(--font-mono, ui-monospace, monospace);
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-	}
-
-	.scim-endpoint-row :global(.scim-token-value) {
-		color: var(--center-channel-color);
-	}
-
-	.scim-hint {
-		font-size: var(--text-caption);
-		color: var(--surface-muted);
-		margin: 0;
-		line-height: 1.5;
-	}
-
-	.scim-reveal {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-		padding: 0.875rem 1rem;
-		border-radius: var(--radius-md);
-		background: color-mix(in srgb, var(--away-indicator) 8%, transparent);
-		border: 1px solid color-mix(in srgb, var(--away-indicator) 25%, transparent);
-	}
-
-	.scim-reveal-head {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: 600;
-		color: var(--away-indicator);
-	}
-
-	.scim-reveal :global(.btn) {
-		align-self: flex-start;
-	}
-
-	.scim-empty {
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		color: var(--surface-muted);
-		margin: 0;
-	}
-
-	.scim-token-list {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-
-	.scim-token-item {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 1rem;
-		padding: 0.75rem 0.875rem;
-		border-radius: var(--radius-md);
-		border: 1px solid var(--surface-border);
-		background: color-mix(in srgb, var(--center-channel-color) 2%, transparent);
-	}
-
-	.scim-token-meta {
+		gap: 0.25rem;
 		min-width: 0;
+		max-width: 30rem;
 	}
-
-	.scim-token-name {
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		font-weight: 600;
-		color: var(--center-channel-color);
-		margin: 0;
+	.mono {
+		min-width: 0;
+		margin-right: 0.25rem;
+		overflow-x: clip;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-family: var(--font-mono);
+		font-size: var(--text-caption);
+		color: var(--text-default);
 	}
-
-	.scim-token-sub {
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		color: var(--surface-muted);
-		margin: 0.15rem 0 0;
+	.form,
+	.placeholder {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
 	}
-
-	.scim-create {
-		flex-direction: row;
-		align-items: flex-end;
+	.placeholder {
 		gap: 0.5rem;
-	}
-
-	.scim-create-field {
-		flex: 1;
-	}
-
-	.scim-create :global(.scim-create-btn) {
-		flex-shrink: 0;
-	}
-
-	.scim-no-access {
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		color: var(--surface-muted);
-		margin: 0;
-	}
-
-	@media (max-width: 640px) {
-		.scim-create {
-			flex-direction: column;
-			align-items: stretch;
-		}
 	}
 </style>

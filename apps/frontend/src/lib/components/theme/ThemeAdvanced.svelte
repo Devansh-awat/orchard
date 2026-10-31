@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { RotateCcw } from 'lucide-svelte';
+	import { Pin, RotateCcw } from 'lucide-svelte';
 	import { Button, ColorField } from '$lib/components/ui';
 	import {
 		composeColors,
@@ -21,43 +21,40 @@
 
 <div class="adv">
 	<div class="adv-head">
-		<p class="adv-note">
-			These start from whatever the palette generates. Anything you set here is pinned and stops
-			following the nodes.
-		</p>
+		<p class="adv-note">Colours you set here are pinned and stop following the wheel.</p>
 		<Button
 			variant="ghost"
 			size="sm"
+			icon={RotateCcw}
 			disabled={overrideCount === 0}
-			onclick={() => themeStore.clearOverrides()}
+			onclick={() => themeStore.clearOverrides()}>Reset all</Button
 		>
-			<RotateCcw class="h-3.5 w-3.5" />
-			Reset {overrideCount ? `(${overrideCount})` : ''}
-		</Button>
 	</div>
 
 	{#each themeColorCategories as category (category.name)}
-		<section class="adv-group">
+		<section class="adv-group" aria-label={category.name}>
 			<h4 class="adv-group-title">{category.name}</h4>
 			<div class="adv-grid">
 				{#each category.colors as entry (entry.key)}
 					{@const key = entry.key as keyof SimpleThemeColors}
 					{@const pinned = state.overrides[key] !== undefined}
-					<div class="adv-cell" class:adv-cell--pinned={pinned}>
-						<ColorField
-							label={entry.label}
-							description={entry.description}
-							value={currentValue(key)}
-							onchange={(value) => themeStore.setOverride(key, value)}
-						/>
+					<div class="adv-cell">
+						<div class="adv-field">
+							<ColorField
+								label={entry.label}
+								description={entry.description}
+								value={currentValue(key)}
+								onchange={(value) => themeStore.setOverride(key, value)}
+							/>
+						</div>
 						{#if pinned}
-							<button
-								type="button"
-								class="adv-unpin"
+							<Button
+								variant="ghost"
+								size="sm"
+								icon={Pin}
+								label={`Unpin ${entry.label}`}
 								onclick={() => themeStore.setOverride(key, null)}
-							>
-								Back to generated
-							</button>
+							/>
 						{/if}
 					</div>
 				{/each}
@@ -70,70 +67,52 @@
 	.adv {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-5);
+		gap: var(--space-6);
 	}
 
 	.adv-head {
 		display: flex;
-		align-items: flex-start;
+		align-items: center;
 		justify-content: space-between;
 		gap: var(--space-3);
 	}
 
 	.adv-note {
 		margin: 0;
-		max-width: 38rem;
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		color: var(--text-muted);
 	}
 
 	.adv-group {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-2);
+		gap: var(--space-3);
 	}
 
 	.adv-group-title {
 		margin: 0;
-		font-size: var(--text-caption);
-		font-weight: 600;
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
-		color: var(--text-faint);
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		font-weight: var(--weight-medium);
+		color: var(--text-muted);
 	}
 
 	.adv-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
-		gap: var(--space-2);
+		grid-template-columns: repeat(auto-fill, minmax(21rem, 1fr));
+		gap: var(--space-4) var(--space-6);
 	}
 
 	.adv-cell {
 		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-		padding: var(--space-2);
-		border: 1px solid transparent;
-		border-radius: var(--radius-md);
+		align-items: center;
+		gap: var(--space-2);
+		min-width: 0;
 	}
 
-	.adv-cell--pinned {
-		border-color: var(--border-default);
-		background: var(--fill-quiet);
-	}
-
-	.adv-unpin {
-		align-self: flex-start;
-		padding: 0;
-		border: none;
-		background: none;
-		color: var(--text-link);
-		font-size: var(--text-caption);
-		cursor: pointer;
-	}
-
-	.adv-unpin:hover {
-		text-decoration: underline;
+	.adv-field {
+		flex: 1 1 auto;
+		min-width: 0;
 	}
 </style>

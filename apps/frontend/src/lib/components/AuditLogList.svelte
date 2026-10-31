@@ -1,16 +1,24 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { apiFetch, toasts, selectedOrganization, subscribeOrgEvents } from '$lib/stores';
-	import { Loader2, ScrollText, User, ArrowDown, RefreshCw } from 'lucide-svelte';
-	import { Button } from '$lib/components/ui';
+	import { RefreshCw } from 'lucide-svelte';
+	import RelativeTime from '$lib/components/ui/RelativeTime.svelte';
+	import {
+		Avatar,
+		Button,
+		List,
+		ListRow,
+		SearchField,
+		SectionCard,
+		Skeleton
+	} from '$lib/components/ui';
 
 	interface Props {
-		// One of: 'global' | { organizationId: string } | { deploymentId: string }
 		scope: 'global' | { organizationId: string } | { deploymentId: string };
 		title?: string;
 	}
 
-	let { scope, title = 'Audit Log' }: Props = $props();
+	let { scope, title = 'Audit log' }: Props = $props();
 
 	interface Actor {
 		id: string;
@@ -107,13 +115,16 @@
 
 	function formatVal(v: unknown): string {
 		if (v === null) return '∅';
-		if (typeof v === 'string') return v.length > 60 ? v.slice(0, 60) + '…' : v;
+		if (typeof v === 'string') {
+			if (/^[0-9a-f]{32,}$/i.test(v)) return v.slice(0, 7);
+			return v.length > 60 ? v.slice(0, 60) + '…' : v;
+		}
 		return String(v);
 	}
 
-	function formatDate(iso: string): string {
-		const d = new Date(iso);
-		return d.toLocaleString();
+	function entryTitle(entry: Entry): string {
+		const action = formatAction(entry.action);
+		return entry.targetLabel ? `${action} · ${entry.targetLabel}` : action;
 	}
 
 	let searchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -146,95 +157,90 @@
 	});
 </script>
 
-<div
-	class="rounded-2xl border"
-	style="border-color: var(--surface-border); background-color: var(--center-channel-bg);"
->
-	<div
-		class="flex items-center justify-between gap-3 border-b px-5 py-4"
-		style="border-color: var(--surface-border);"
-	>
-		<div class="flex items-center gap-2">
-			<ScrollText class="h-4 w-4" style="color: var(--surface-muted);" />
-			<h3 class="text-sm font-semibold" style="color: var(--center-channel-color);">{title}</h3>
-			<span class="text-xs" style="color: var(--surface-muted);">— last 180 days</span>
-		</div>
-		<div class="flex items-center gap-2">
-			<input
-				type="text"
+<SectionCard {title} description="Last 180 days">
+	{#snippet actions()}
+		<div class="filter">
+			<SearchField
+				size="sm"
 				bind:value={actionFilter}
 				oninput={onFilterInput}
-				placeholder="Filter by action (e.g. deployment.restarted)"
-				class="rounded-lg border px-3 py-1 text-sm"
-				style="border-color: var(--surface-border); background-color: var(--control-bg); color: var(--center-channel-color); min-width: 280px;"
+				placeholder="Filter by action"
 			/>
-			<Button variant="ghost" size="sm" aria-label="Refresh audit log" onclick={() => load(true)}>
-				<RefreshCw size={14} />
-			</Button>
 		</div>
-	</div>
+		<Button
+			variant="ghost"
+			size="sm"
+			icon={RefreshCw}
+			label="Refresh audit log"
+			onclick={() => load(true)}
+		/>
+	{/snippet}
 
 	{#if loading}
-		<div class="flex items-center justify-center py-12">
-			<Loader2 class="h-5 w-5 animate-spin" style="color: var(--surface-muted);" />
+		<div class="placeholder">
+			<Skeleton height="2.75rem" />
+			<Skeleton height="2.75rem" />
+			<Skeleton height="2.75rem" />
 		</div>
 	{:else if entries.length === 0}
-		<div class="px-5 py-12 text-center text-sm" style="color: var(--surface-muted);">
-			No audit log entries.
-		</div>
+		<p class="quiet">
+			{actionFilter.trim() ? 'No entries match that action.' : 'Nothing has happened yet.'}
+		</p>
 	{:else}
-		<ul class="divide-y" style="border-color: var(--surface-border);">
+		<List inset={false} label={title}>
 			{#each entries as entry (entry.id)}
-				<li class="px-5 py-3">
-					<div class="flex items-start justify-between gap-4">
-						<div class="min-w-0 flex-1">
-							<div class="flex items-center gap-2 text-sm">
-								<span class="font-mono font-semibold" style="color: var(--center-channel-color);"
-									>{formatAction(entry.action)}</span
-								>
-								{#if entry.targetLabel}
-									<span style="color: var(--surface-muted);">·</span>
-									<span class="truncate" style="color: var(--center-channel-color);"
-										>{entry.targetLabel}</span
-									>
-								{/if}
-							</div>
-							{#if entry.metadata && Object.keys(entry.metadata).length}
-								<div class="mt-1 truncate font-mono text-xs" style="color: var(--surface-muted);">
-									{formatMetadata(entry.metadata)}
-								</div>
-							{/if}
-							<div
-								class="mt-1 flex items-center gap-2 text-xs"
-								style="color: var(--surface-muted);"
-							>
-								<User class="h-3 w-3" />
-								<span>{actorName(entry)}</span>
-								<span>·</span>
-								<time>{formatDate(entry.createdAt)}</time>
-							</div>
-						</div>
-					</div>
-				</li>
+				<ListRow flush title={entryTitle(entry)}>
+					{#snippet leading()}
+						<Avatar
+							user={entry.actor}
+							seed={entry.actor ? undefined : (entry.actorEmail ?? 'system')}
+							size={28}
+						/>
+					{/snippet}
+					{#snippet subtitle()}
+						{@const meta = formatMetadata(entry.metadata)}
+						<span class="who">{actorName(entry)}</span>
+						{#if meta}<span class="meta" title={meta}>· {meta}</span>{/if}
+					{/snippet}
+					{#snippet trailing()}<RelativeTime date={entry.createdAt} />{/snippet}
+				</ListRow>
 			{/each}
-		</ul>
-
+		</List>
 		{#if nextCursor}
-			<div class="border-t px-5 py-3 text-center" style="border-color: var(--surface-border);">
-				<button
-					onclick={() => load(false)}
-					disabled={loadingMore}
-					class="inline-flex items-center gap-2 rounded-lg px-3 py-1 text-sm font-medium hover:opacity-80 disabled:opacity-50"
-					style="color: var(--primary-700);"
-				>
-					{#if loadingMore}
-						<Loader2 class="h-4 w-4 animate-spin" />
-					{:else}
-						<ArrowDown class="h-4 w-4" />
-					{/if}
+			<div class="more">
+				<Button variant="ghost" size="sm" loading={loadingMore} onclick={() => load(false)}>
 					Load more
-				</button>
+				</Button>
 			</div>
 		{/if}
 	{/if}
-</div>
+</SectionCard>
+
+<style>
+	.filter {
+		width: 16rem;
+	}
+	.placeholder {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+	.quiet {
+		margin: 0;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		color: var(--text-muted);
+	}
+	.who {
+		white-space: nowrap;
+	}
+	.meta {
+		font-family: var(--font-mono);
+		font-size: 0.95em;
+	}
+	.more {
+		display: flex;
+		justify-content: center;
+		padding-top: var(--space-2);
+	}
+</style>

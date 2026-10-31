@@ -11,9 +11,8 @@
 		instanceFeatures,
 		type PendingInvitation
 	} from '$lib/stores';
-	import { ArrowLeft } from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
-	import { SettingsRail } from '$lib/components/ui';
+	import SettingsShell from '$lib/components/patterns/SettingsShell.svelte';
 	import GraftMount from '$lib/grafts/GraftMount.svelte';
 	import { graftHost } from '$lib/grafts/host.svelte';
 	import {
@@ -25,7 +24,6 @@
 	} from '$lib/posthog';
 	import { page } from '$app/stores';
 	import { registerPasskey as createPasskey, passkeyErrorMessage } from '$lib/utils/passkey';
-	import { scrollFade } from '$lib/utils/scroll-fade';
 	import {
 		UserIdentityHero,
 		UserInvitations,
@@ -98,7 +96,6 @@
 	let emailRevealed = $state(false);
 	let uploadingAvatar = $state(false);
 	let deletingAvatar = $state(false);
-	let avatarInput = $state<HTMLInputElement | undefined>(undefined);
 
 	let acceptingInvitation = $state<string | null>(null);
 	let decliningInvitation = $state<string | null>(null);
@@ -312,7 +309,6 @@
 			});
 		} finally {
 			uploadingAvatar = false;
-			if (avatarInput) avatarInput.value = '';
 		}
 	}
 	async function deleteAvatar() {
@@ -769,38 +765,35 @@
 	});
 </script>
 
-<div class="usp-page">
-	<a href="/" class="usp-back">
-		<ArrowLeft class="h-3.5 w-3.5" />
-		Your Apps
-	</a>
-	<h1 class="usp-title">Settings</h1>
+<SettingsShell
+	crumbs={[{ label: 'Home', href: '/' }, { label: 'Account' }]}
+	groups={RAIL_GROUPS}
+	activeId={activeTab}
+	label="Account settings sections"
+>
+	{#snippet header()}
+		<UserIdentityHero
+			user={$user}
+			{displayEmail}
+			bind:emailRevealed
+			bind:isEditing={isEditingProfile}
+			bind:editFirstName
+			bind:editLastName
+			bind:editUsername
+			saving={savingProfile}
+			{uploadingAvatar}
+			{deletingAvatar}
+			onStartEditing={startEditProfile}
+			onCancelEditing={cancelEditProfile}
+			onSave={saveProfile}
+			onUploadAvatar={uploadAvatar}
+			onDeleteAvatar={deleteAvatar}
+			passkeyCount={passkeysLoading ? null : passkeys.length}
+			sessionCount={sessionsLoading ? null : sessions.length}
+			{githubLinked}
+		/>
 
-	<UserIdentityHero
-		index={0}
-		user={$user}
-		{displayEmail}
-		bind:emailRevealed
-		bind:isEditing={isEditingProfile}
-		bind:editFirstName
-		bind:editLastName
-		bind:editUsername
-		saving={savingProfile}
-		{uploadingAvatar}
-		{deletingAvatar}
-		onStartEditing={startEditProfile}
-		onCancelEditing={cancelEditProfile}
-		onSave={saveProfile}
-		onUploadAvatar={uploadAvatar}
-		onDeleteAvatar={deleteAvatar}
-		bind:avatarInputRef={avatarInput}
-		passkeyCount={passkeysLoading ? null : passkeys.length}
-		sessionCount={sessionsLoading ? null : sessions.length}
-		{githubLinked}
-	/>
-
-	{#if invitations.length}
-		<div class="usp-invites">
+		{#if invitations.length}
 			<UserInvitations
 				index={0}
 				{invitations}
@@ -809,128 +802,119 @@
 				onAccept={handleAcceptInvitation}
 				onDecline={handleDeclineInvitation}
 			/>
-		</div>
+		{/if}
+	{/snippet}
+	{#snippet footer()}
+		{frontendVersion}{backendVersion ? `+${backendVersion}` : ''}
+	{/snippet}
+
+	{#if activeTab === 'connections'}
+		<UserGitHub
+			index={0}
+			{loading}
+			{githubLinked}
+			{githubUsername}
+			{githubInstallations}
+			{githubAppInstallUrl}
+			{githubTokenExpired}
+			{unlinking}
+			onLink={linkGitHub}
+			onUnlink={unlinkGitHub}
+		/>
+		<UserGitProviders index={1} />
+		{#if $tailscaleEnabled}
+			<UserTailscale
+				index={1}
+				{tailscaleLoading}
+				{tailscaleLinked}
+				{tailscaleTailnet}
+				{unlinkingTailscale}
+				bind:showTailscaleForm
+				bind:tailscaleApiKey
+				{linkingTailscale}
+				onLink={linkTailscale}
+				onUnlink={unlinkTailscale}
+			/>
+		{/if}
 	{/if}
 
-	<div class="usp-grid">
-		<div class="usp-rail" {@attach scrollFade()}>
-			<SettingsRail groups={RAIL_GROUPS} activeId={activeTab} label="Account settings sections" />
-		</div>
+	{#if activeTab === 'tokens'}
+		<UserApiTokens />
+	{/if}
 
-		<div class="usp-stack" {@attach scrollFade()}>
-			{#if activeTab === 'connections'}
-				<UserGitHub
-					index={0}
-					{loading}
-					{githubLinked}
-					{githubUsername}
-					{githubInstallations}
-					{githubAppInstallUrl}
-					{githubTokenExpired}
-					{unlinking}
-					onLink={linkGitHub}
-					onUnlink={unlinkGitHub}
-				/>
-				<UserGitProviders index={1} />
-				{#if $tailscaleEnabled}
-					<UserTailscale
-						index={1}
-						{tailscaleLoading}
-						{tailscaleLinked}
-						{tailscaleTailnet}
-						{unlinkingTailscale}
-						bind:showTailscaleForm
-						bind:tailscaleApiKey
-						{linkingTailscale}
-						onLink={linkTailscale}
-						onUnlink={unlinkTailscale}
-					/>
-				{/if}
-			{/if}
+	{#if activeTab === 'mcp' && $instanceFeatures.mcp}
+		<UserMcp />
+	{/if}
 
-			{#if activeTab === 'tokens'}
-				<UserApiTokens />
-			{/if}
+	{#if activeTab === 'security'}
+		<UserPasskeys
+			index={0}
+			{passkeys}
+			{passkeysLoading}
+			{passkeyListError}
+			{passkeyEnvWarning}
+			{registerLoading}
+			bind:showAddPasskey
+			bind:newPasskeyName
+			bind:editingPasskeyId
+			bind:renameValue
+			{renaming}
+			{deletingPasskeyId}
+			onRegister={registerPasskey}
+			onStartRenaming={startRenaming}
+			onCancelRenaming={cancelRenaming}
+			onSavePasskeyName={savePasskeyName}
+			onConfirmDelete={confirmDeletePasskey}
+			{formatTimestamp}
+		/>
+		<UserSessions
+			index={1}
+			{sessions}
+			{sessionsLoading}
+			{sessionsError}
+			{revokingSessionId}
+			onConfirmRevokeSession={confirmRevokeSession}
+			onShowRevokeAll={() => (showRevokeAllModal = true)}
+		/>
+	{/if}
 
-			{#if activeTab === 'mcp' && $instanceFeatures.mcp}
-				<UserMcp />
-			{/if}
+	{#if activeTab === 'notifications' && $notificationsEnabled}
+		<UserNotifications index={0} />
+	{/if}
 
-			{#if activeTab === 'security'}
-				<UserPasskeys
-					index={0}
-					{passkeys}
-					{passkeysLoading}
-					{passkeyListError}
-					{passkeyEnvWarning}
-					{registerLoading}
-					bind:showAddPasskey
-					bind:newPasskeyName
-					bind:editingPasskeyId
-					bind:renameValue
-					{renaming}
-					{deletingPasskeyId}
-					onRegister={registerPasskey}
-					onStartRenaming={startRenaming}
-					onCancelRenaming={cancelRenaming}
-					onSavePasskeyName={savePasskeyName}
-					onConfirmDelete={confirmDeletePasskey}
-					{formatTimestamp}
-				/>
-				<UserSessions
-					index={1}
-					{sessions}
-					{sessionsLoading}
-					{sessionsError}
-					{revokingSessionId}
-					onConfirmRevokeSession={confirmRevokeSession}
-					onShowRevokeAll={() => (showRevokeAllModal = true)}
-				/>
-			{/if}
+	{#if activeTab === 'appearance'}
+		<UserAppearance />
+	{/if}
 
-			{#if activeTab === 'notifications' && $notificationsEnabled}
-				<UserNotifications index={0} />
-			{/if}
+	{#if activeTab === 'accessibility'}
+		<UserAccessibility index={0} />
+	{/if}
 
-			{#if activeTab === 'appearance'}
-				<UserAppearance />
-			{/if}
+	{#if activeTab === 'logs'}
+		<UserLogs index={0} />
+	{/if}
 
-			{#if activeTab === 'accessibility'}
-				<UserAccessibility index={0} />
-			{/if}
-
-			{#if activeTab === 'logs'}
-				<UserLogs index={0} />
-			{/if}
-
-			{#if activeGraftTab}
-				{#key activeGraftTab.key}
-					<GraftMount
-						graftId={activeGraftTab.graftId}
-						mount={activeGraftTab.mount}
-						props={{}}
-						host={activeGraftTab.host}
-					/>
-				{/key}
-			{/if}
-			{#if activeTab === 'early-access'}
-				<UserEarlyAccess
-					index={0}
-					{earlyAccessFeatures}
-					{earlyAccessLoading}
-					{earlyAccessEnrollment}
-					{togglingFeature}
-					onToggleFeature={toggleEarlyAccessFeature}
-				/>
-			{/if}
-		</div>
-	</div>
-
-	<p class="usp-version">
-		{frontendVersion}{backendVersion ? `+${backendVersion}` : ''}
-	</p>
-</div>
+	{#if activeGraftTab}
+		{#key activeGraftTab.key}
+			<GraftMount
+				graftId={activeGraftTab.graftId}
+				mount={activeGraftTab.mount}
+				props={{}}
+				host={activeGraftTab.host}
+			/>
+		{/key}
+	{/if}
+	{#if activeTab === 'early-access'}
+		<UserEarlyAccess
+			index={0}
+			{earlyAccessFeatures}
+			{earlyAccessLoading}
+			{earlyAccessEnrollment}
+			{togglingFeature}
+			onToggleFeature={toggleEarlyAccessFeature}
+		/>
+	{/if}
+</SettingsShell>
 
 {#if sessionToRevoke}
 	<ConfirmModal
@@ -970,132 +954,3 @@
 		}}
 	/>
 {/if}
-
-<style>
-	.usp-page {
-		padding: var(--space-8) var(--space-8) var(--space-12);
-		max-width: 84rem;
-		margin: 0 auto;
-	}
-	.usp-back {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.25rem;
-		height: 1.75rem;
-		padding: 0 0.75rem 0 0.5rem;
-		border-radius: var(--radius-pill);
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		font-weight: 600;
-		letter-spacing: var(--track-body);
-		color: var(--text-muted);
-		text-decoration: none;
-		margin-bottom: var(--space-3);
-		transition:
-			color var(--dur-fast),
-			background-color var(--dur-fast);
-	}
-	.usp-back:hover {
-		color: var(--text-default);
-		background-color: var(--fill-soft);
-	}
-	.usp-title {
-		margin: 0 0 var(--space-5);
-		font-size: var(--text-title-1);
-		font-weight: 600;
-		line-height: 1.15;
-		letter-spacing: var(--track-title);
-		color: var(--text-default);
-	}
-	.usp-invites {
-		margin-top: var(--space-4);
-	}
-	.usp-grid {
-		display: grid;
-		grid-template-columns: 12rem minmax(0, 1fr);
-		gap: var(--space-6);
-		align-items: start;
-		margin-top: var(--space-5);
-	}
-	.usp-rail {
-		min-width: 0;
-	}
-	.usp-stack {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-4);
-		min-width: 0;
-	}
-	.usp-version {
-		text-align: center;
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		color: var(--text-faint);
-		margin: var(--space-8) 0 0;
-		font-variant-numeric: tabular-nums;
-		letter-spacing: var(--track-body);
-	}
-	@media (min-width: 901px) {
-		.usp-page {
-			height: 100%;
-			display: flex;
-			flex-direction: column;
-			min-height: 0;
-			padding-bottom: var(--space-6);
-		}
-		.usp-grid {
-			flex: 1;
-			align-items: stretch;
-			min-height: 0;
-		}
-		.usp-rail,
-		.usp-stack {
-			--fade-top: 0;
-			--fade-bottom: 0;
-			--fade-size: 3.5rem;
-			overflow-y: auto;
-			overscroll-behavior-y: contain;
-			min-height: 0;
-			scrollbar-width: thin;
-			-webkit-mask-image: linear-gradient(
-				to bottom,
-				rgba(0, 0, 0, calc(1 - var(--fade-top))) 0,
-				rgba(0, 0, 0, 1) calc(var(--fade-size) * var(--fade-top)),
-				rgba(0, 0, 0, 1) calc(100% - var(--fade-size) * var(--fade-bottom)),
-				rgba(0, 0, 0, calc(1 - var(--fade-bottom))) 100%
-			);
-			mask-image: linear-gradient(
-				to bottom,
-				rgba(0, 0, 0, calc(1 - var(--fade-top))) 0,
-				rgba(0, 0, 0, 1) calc(var(--fade-size) * var(--fade-top)),
-				rgba(0, 0, 0, 1) calc(100% - var(--fade-size) * var(--fade-bottom)),
-				rgba(0, 0, 0, calc(1 - var(--fade-bottom))) 100%
-			);
-		}
-		.usp-rail :global(.ui-rail) {
-			position: static;
-		}
-		.usp-stack {
-			padding: var(--space-1) var(--space-2);
-			margin: calc(-1 * var(--space-1)) calc(-1 * var(--space-2));
-		}
-		.usp-stack > :global(*) {
-			flex-shrink: 0;
-		}
-		.usp-version {
-			margin-top: var(--space-4);
-			flex-shrink: 0;
-		}
-	}
-	@media (max-width: 900px) {
-		.usp-grid {
-			grid-template-columns: 1fr;
-			gap: var(--space-4);
-		}
-	}
-	@media (max-width: 640px) {
-		.usp-page {
-			padding: var(--space-6) var(--space-4) var(--space-12);
-		}
-	}
-</style>

@@ -1,20 +1,21 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Plus, Trash2 } from 'lucide-svelte';
-	import { presence } from '$lib/utils/transitions';
+	import { KeyRound, Plus, Trash2 } from 'lucide-svelte';
 	import { apiFetch, toasts } from '$lib/stores';
 	import {
-		ActionRow,
 		Button,
 		Dropdown,
 		Field,
 		FieldGrid,
 		Input,
+		List,
+		ListRow,
 		Modal,
 		SecretInput,
 		SectionCard,
 		Skeleton,
-		Stack
+		Stack,
+		ToneTile
 	} from '$lib/components/ui';
 	import { REGISTRY_PRESETS, registryHint, tokenLabel } from '$lib/utils/registry';
 
@@ -139,12 +140,13 @@
 
 {#snippet list()}
 	{#if !loaded}
-		<Skeleton class="h-10 w-full" />
-	{:else if credentials.length > 0}
-		<Stack>
+		<Skeleton height="2.5rem" />
+	{:else}
+		<List inset={false} label="Registry credentials">
 			{#each credentials as cred (cred.id)}
-				<div in:presence out:presence>
-					<ActionRow label={cred.registry} hint={cred.username}>
+				<ListRow flush presence title={cred.registry} subtitle={cred.username}>
+					{#snippet leading()}<ToneTile size={32}><KeyRound size={16} /></ToneTile>{/snippet}
+					{#snippet actions()}
 						{#if canEdit}
 							<Button size="sm" onclick={() => openEditor(cred)}>Replace</Button>
 							<Button
@@ -156,23 +158,25 @@
 								onclick={() => remove(cred)}
 							/>
 						{/if}
-					</ActionRow>
-				</div>
+					{/snippet}
+				</ListRow>
 			{/each}
-		</Stack>
+		</List>
+	{/if}
+{/snippet}
+
+{#snippet add()}
+	{#if canEdit}
+		<Button size="sm" icon={Plus} onclick={() => openEditor()}>Add</Button>
 	{/if}
 {/snippet}
 
 <SectionCard
 	title="Registry credentials"
+	description={organizationId ? 'Every project uses these unless it sets its own.' : undefined}
+	actions={add}
 	children={!loaded || credentials.length > 0 ? list : undefined}
->
-	{#snippet actions()}
-		{#if canEdit}
-			<Button size="sm" icon={Plus} onclick={() => openEditor()}>Add</Button>
-		{/if}
-	{/snippet}
-</SectionCard>
+/>
 
 {#if canEdit}
 	<Modal

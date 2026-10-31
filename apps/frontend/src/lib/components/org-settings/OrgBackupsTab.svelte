@@ -1,8 +1,19 @@
 <script lang="ts">
-	import { Loader2, Pencil, Check, Lock } from 'lucide-svelte';
-	import { CloudUpload } from '@jis3r/icons';
-	import { Button, Field, Input } from '$lib/components/ui';
-	import SettingsSection from '$lib/components/user-settings/SettingsSection.svelte';
+	import { Archive, KeyRound, Pencil } from 'lucide-svelte';
+	import {
+		Button,
+		FormActions,
+		Input,
+		List,
+		ListRow,
+		SecretInput,
+		SectionCard,
+		SettingRow,
+		SettingsList,
+		Skeleton,
+		Swap,
+		ToneTile
+	} from '$lib/components/ui';
 
 	let {
 		canEditOrg,
@@ -21,8 +32,7 @@
 		backupSecretConfigured,
 		onSaveBackupSettings,
 		onClearBackupSettings,
-		onCancelEdit,
-		index = 0
+		onCancelEdit
 	}: {
 		canEditOrg: boolean;
 		isOwner: boolean;
@@ -43,229 +53,157 @@
 		onCancelEdit: () => void;
 		index?: number;
 	} = $props();
+
+	const reading = $derived(backupConfigured && !backupEditMode);
+	const mode = $derived(
+		!canEditOrg ? 'locked' : backupLoading ? 'loading' : reading ? 'read' : 'edit'
+	);
+	const accessKeyShown = $derived(
+		backupAccessKeyConfigured ? (backupAccessKeyLast4 ? `••••${backupAccessKeyLast4}` : 'set') : ''
+	);
+	const endpointHost = $derived(backupEndpoint.replace(/^https?:\/\//, '').replace(/\/$/, ''));
 </script>
 
-<SettingsSection
-	title="Database backups (R2)"
-	description="Configure Cloudflare R2 for pgBackRest backups"
-	{index}
+<SectionCard
+	title="Database backups"
+	description={canEditOrg && reading && !isOwner
+		? 'Only the organization owner can change these.'
+		: undefined}
 >
-	{#snippet icon(hovered)}<CloudUpload size={18} animate={hovered} />{/snippet}
-
-	{#snippet badge()}
-		{#if !backupLoading && backupConfigured && !backupEditMode && isOwner}
-			<Button variant="ghost" size="sm" onclick={() => (backupEditMode = true)}>
-				<Pencil class="h-3.5 w-3.5" />
-				Edit
-			</Button>
+	{#snippet actions()}
+		{#if canEditOrg && !backupLoading && reading && isOwner}
+			<Button size="sm" icon={Pencil} onclick={() => (backupEditMode = true)}>Edit</Button>
 		{/if}
 	{/snippet}
 
-	{#if !canEditOrg}
-		<p class="ob-no-access">Only admins and owners can manage backup settings.</p>
-	{:else if backupLoading}
-		<div class="ob-loading"><Loader2 class="h-4 w-4 animate-spin" /></div>
-	{:else if !backupConfigured && !isOwner}
-		<p class="ob-lock-note">
-			<Lock class="h-3.5 w-3.5" />
-			Backups are not configured. Only the organization owner can set them up.
-		</p>
-	{:else if backupConfigured && !backupEditMode}
-		<dl class="ob-readonly">
-			<div class="ob-readonly-row">
-				<dt>R2 endpoint</dt>
-				<dd class="ob-mono">{backupEndpoint || 'Not set'}</dd>
+	<Swap key={mode}>
+		{#if !canEditOrg}
+			<p class="quiet">Only admins and owners can manage backups.</p>
+		{:else if backupLoading}
+			<div class="placeholder">
+				<Skeleton height="2.5rem" />
+				<Skeleton height="2.5rem" />
+				<Skeleton height="2.5rem" />
 			</div>
-			<div class="ob-readonly-row">
-				<dt>Bucket</dt>
-				<dd class="ob-mono">{backupBucket || 'Not set'}</dd>
-			</div>
-			<div class="ob-readonly-row">
-				<dt>Region</dt>
-				<dd>{backupRegion || 'auto'}</dd>
-			</div>
-			<div class="ob-readonly-row">
-				<dt>Access key ID</dt>
-				<dd class="ob-mono">
-					{#if backupAccessKeyConfigured}
-						{#if backupAccessKeyLast4}
-							••••••••{backupAccessKeyLast4}
-						{:else}
-							<span class="ob-status-ok">
-								<Check class="h-3 w-3" />
-								Configured
-							</span>
+		{:else if !backupConfigured && !isOwner}
+			<p class="quiet">Backups are not set up yet. Only the organization owner can set them up.</p>
+		{:else if reading}
+			<List inset={false} label="Backup storage">
+				<ListRow
+					flush
+					title={backupBucket}
+					subtitle="{endpointHost} · region {backupRegion || 'auto'}"
+				>
+					{#snippet leading()}<ToneTile size={32}><Archive size={16} /></ToneTile>{/snippet}
+				</ListRow>
+				<ListRow
+					flush
+					title={accessKeyShown ? `Access key ${accessKeyShown}` : 'No access key ID'}
+					subtitle="Secret access key set"
+				>
+					{#snippet leading()}<ToneTile size={32}><KeyRound size={16} /></ToneTile>{/snippet}
+				</ListRow>
+			</List>
+		{:else}
+			<form
+				onsubmit={(e) => {
+					e.preventDefault();
+					onSaveBackupSettings();
+				}}
+			>
+				<SettingsList label="Backup storage">
+					<SettingRow label="R2 endpoint" for="ob-endpoint" wide>
+						<Input
+							id="ob-endpoint"
+							mono
+							placeholder="https://<account-id>.r2.cloudflarestorage.com"
+							bind:value={backupEndpoint}
+							autocomplete="off"
+							spellcheck="false"
+						/>
+					</SettingRow>
+					<SettingRow label="Bucket" for="ob-bucket" wide>
+						<Input
+							id="ob-bucket"
+							mono
+							placeholder="orchard-backups"
+							bind:value={backupBucket}
+							autocomplete="off"
+							spellcheck="false"
+						/>
+					</SettingRow>
+					<SettingRow label="Region" for="ob-region" wide>
+						<Input
+							id="ob-region"
+							mono
+							placeholder="auto"
+							bind:value={backupRegion}
+							autocomplete="off"
+							spellcheck="false"
+						/>
+					</SettingRow>
+					<SettingRow
+						label="Access key ID"
+						for="ob-access-key"
+						hint={backupAccessKeyConfigured
+							? `${backupAccessKeyLast4 ? `Ends in ${backupAccessKeyLast4}. ` : ''}Leave it empty to keep it.`
+							: undefined}
+						wide
+					>
+						<Input
+							id="ob-access-key"
+							mono
+							placeholder={backupAccessKeyConfigured ? '••••••••••••' : 'R2 access key ID'}
+							bind:value={backupAccessKey}
+							autocomplete="off"
+							spellcheck="false"
+						/>
+					</SettingRow>
+					<SettingRow
+						label="Secret access key"
+						for="ob-secret-key"
+						hint={backupSecretConfigured ? 'Leave it empty to keep it.' : undefined}
+						wide
+					>
+						<SecretInput
+							id="ob-secret-key"
+							placeholder={backupSecretConfigured ? '••••••••••••' : 'R2 secret access key'}
+							bind:value={backupSecretKey}
+							autocomplete="off"
+						/>
+					</SettingRow>
+				</SettingsList>
+				<div class="save">
+					<FormActions>
+						{#if backupSecretConfigured && isOwner}
+							<Button variant="ghost" onclick={onClearBackupSettings} disabled={backupSaving}>
+								Clear
+							</Button>
 						{/if}
-					{:else}
-						Not set
-					{/if}
-				</dd>
-			</div>
-			<div class="ob-readonly-row">
-				<dt>Secret access key</dt>
-				<dd>
-					<span class="ob-status-ok">
-						<Check class="h-3 w-3" />
-						Configured
-					</span>
-				</dd>
-			</div>
-		</dl>
-		{#if !isOwner}
-			<p class="ob-lock-note">
-				<Lock class="h-3.5 w-3.5" />
-				Only the organization owner can reveal or change these credentials.
-			</p>
+						{#if backupEditMode && backupConfigured}
+							<Button variant="ghost" onclick={onCancelEdit} disabled={backupSaving}>Cancel</Button>
+						{/if}
+						<Button type="submit" variant="primary" loading={backupSaving}>Save</Button>
+					</FormActions>
+				</div>
+			</form>
 		{/if}
-	{:else}
-		<div class="ob-form">
-			<Field label="R2 endpoint" for="ob-endpoint">
-				<Input
-					id="ob-endpoint"
-					placeholder="https://<account-id>.r2.cloudflarestorage.com"
-					bind:value={backupEndpoint}
-				/>
-			</Field>
-
-			<Field label="Bucket" for="ob-bucket">
-				<Input id="ob-bucket" placeholder="orchard-backups" bind:value={backupBucket} />
-			</Field>
-
-			<Field label="Region" for="ob-region">
-				<Input id="ob-region" placeholder="auto" bind:value={backupRegion} />
-			</Field>
-
-			<Field
-				label="Access key ID"
-				for="ob-access-key"
-				hint={backupAccessKeyConfigured
-					? `Configured${backupAccessKeyLast4 ? `, ends in ${backupAccessKeyLast4}` : ''}, leave empty to keep`
-					: undefined}
-			>
-				<Input
-					id="ob-access-key"
-					placeholder={backupAccessKeyConfigured ? '••••••••••••' : 'R2 access key'}
-					bind:value={backupAccessKey}
-				/>
-			</Field>
-
-			<Field
-				label="Secret access key"
-				for="ob-secret-key"
-				hint={backupSecretConfigured ? 'Configured, leave empty to keep' : undefined}
-			>
-				<Input
-					id="ob-secret-key"
-					type="password"
-					placeholder={backupSecretConfigured ? '••••••••••••' : 'R2 secret key'}
-					bind:value={backupSecretKey}
-				/>
-			</Field>
-
-			<div class="ob-actions">
-				<Button variant="primary" onclick={onSaveBackupSettings} loading={backupSaving}>
-					Save backup settings
-				</Button>
-				{#if backupEditMode && backupConfigured}
-					<Button variant="ghost" onclick={onCancelEdit} disabled={backupSaving}>Cancel</Button>
-				{/if}
-				{#if backupSecretConfigured && isOwner}
-					<Button variant="ghost" onclick={onClearBackupSettings} disabled={backupSaving}>
-						Clear
-					</Button>
-				{/if}
-			</div>
-		</div>
-	{/if}
-</SettingsSection>
+	</Swap>
+</SectionCard>
 
 <style>
-	.ob-loading {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: 1.5rem 0;
-		color: var(--surface-muted);
-	}
-	.ob-no-access {
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		color: var(--surface-muted);
+	.quiet {
 		margin: 0;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		color: var(--text-muted);
 	}
-	.ob-lock-note {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		color: var(--surface-muted);
-		margin: 0.75rem 0 0;
-	}
-	/* Readonly display */
-	.ob-readonly {
-		margin: 0;
+	.placeholder {
 		display: flex;
 		flex-direction: column;
-		gap: 0;
-	}
-	.ob-readonly-row {
-		display: flex;
-		align-items: baseline;
-		padding: 0.5rem 0;
-		border-bottom: 1px solid color-mix(in srgb, var(--surface-border) 50%, transparent);
-	}
-	.ob-readonly-row:last-child {
-		border-bottom: none;
-	}
-	.ob-readonly-row dt {
-		width: 10rem;
-		flex-shrink: 0;
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: 600;
-		color: var(--surface-muted);
-	}
-	.ob-readonly-row dd {
-		margin: 0;
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		color: var(--center-channel-color);
-	}
-	.ob-mono {
-		font-family: var(--font-mono, ui-monospace, monospace);
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-	}
-	.ob-status-ok {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.25rem;
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		color: var(--online-indicator);
-	}
-
-	/* Edit form */
-	.ob-form {
-		display: flex;
-		flex-direction: column;
-		gap: 0.875rem;
-	}
-	.ob-actions {
-		display: flex;
-		align-items: center;
 		gap: 0.5rem;
-		padding-top: 0.25rem;
 	}
-
-	@media (max-width: 640px) {
-		.ob-readonly-row {
-			flex-direction: column;
-			gap: 0.125rem;
-		}
-		.ob-readonly-row dt {
-			width: auto;
-		}
+	.save {
+		margin-top: var(--space-4);
 	}
 </style>

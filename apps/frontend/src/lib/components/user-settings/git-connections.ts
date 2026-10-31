@@ -150,7 +150,6 @@ export async function detectGitRepo(
 	return res.json();
 }
 
-/** `owner/name` (or group/sub/name) for a repo URL on the connection's host. */
 export function repoPathOn(connection: GitConnection, repoUrl: string): string | null {
 	let url: URL;
 	try {

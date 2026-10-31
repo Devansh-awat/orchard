@@ -1,16 +1,22 @@
 <script lang="ts">
-	import { Loader2, Plus, Trash2, BellRing } from 'lucide-svelte';
+	import { untrack } from 'svelte';
+	import { BellRing, Pause, Play, Plus, Trash2 } from 'lucide-svelte';
 	import {
 		Button,
-		EmptyState,
 		Dropdown,
 		Input,
 		Field,
+		List,
+		ListRow,
+		Modal,
+		ModalIntro,
+		SectionCard,
+		Skeleton,
 		StatusBadge,
+		ToneTile,
 		statusMeta
 	} from '$lib/components/ui';
-	import { motionStagger, stateEcho } from '$lib/utils/motion.svelte';
-	import { slide } from '$lib/utils/transitions';
+	import { stateEcho } from '$lib/utils/motion.svelte';
 	import { toasts } from '$lib/stores';
 	import type { NotificationScopeType } from './types';
 	import {
@@ -89,7 +95,8 @@
 	}
 
 	$effect(() => {
-		if (organizationId) void load();
+		const scope = [organizationId, scopeType, scopeId];
+		if (scope[0]) untrack(load);
 	});
 
 	function pickMetric(id: string) {
@@ -167,275 +174,170 @@
 	}
 
 	function thresholdSuffix(m: AlertMetric | null): string {
-		return m ? m.unit : '';
+		return m?.unit ? `Threshold (${m.unit})` : 'Threshold';
 	}
+	const formId = $props.id();
 </script>
 
-<div class="ar">
-	<div class="ar-head">
-		<span class="ar-title">Alerts</span>
-		{#if canEdit && !formOpen}
-			<Button variant="secondary" size="sm" onclick={openCreate} disabled={loading}>
-				<Plus class="h-3.5 w-3.5" />
-				<span>Add</span>
-			</Button>
+<SectionCard title="Alerts">
+	{#snippet actions()}
+		{#if canEdit}
+			<Button size="sm" icon={Plus} onclick={openCreate} disabled={loading}>Add alert</Button>
 		{/if}
-	</div>
-
-	{#if formOpen}
-		<form
-			class="ar-form"
-			transition:slide={{ duration: 160 }}
-			onsubmit={(e) => {
-				e.preventDefault();
-				void submit();
-			}}
-		>
-			<div class="ar-form-row">
-				<Field label="Metric">
-					<Dropdown
-						value={formMetric}
-						options={catalogue.map((m) => ({ value: m.id, label: m.label }))}
-						onchange={pickMetric}
-					/>
-				</Field>
-				<Field label="Is">
-					<Dropdown
-						bind:value={formComparator}
-						options={(metric?.comparators ?? ['gt']).map((c) => ({
-							value: c,
-							label: c === 'gt' ? 'above' : 'below'
-						}))}
-					/>
-				</Field>
-				<Field label={thresholdSuffix(metric)}>
-					<Input type="number" min="0" step="any" bind:value={formThreshold} />
-				</Field>
-				<Field label="For">
-					<Dropdown
-						bind:value={formFor}
-						options={WINDOW_OPTIONS.map((w) => ({ value: String(w), label: windowLabel(w) }))}
-					/>
-				</Field>
-				{#if metric?.requestRateGuard}
-					<Field label="Min req/s" hint="Skipped below this traffic">
-						<Input type="number" min="0" step="any" placeholder="0.2" bind:value={formMinRate} />
-					</Field>
-				{/if}
-			</div>
-			{#if metric?.needsIngress}
-				<span class="ar-note">Needs a domain on the app. Apps without one are skipped.</span>
-			{/if}
-			<div class="ar-form-actions">
-				<Button variant="ghost" size="sm" onclick={() => (formOpen = false)} disabled={saving}>
-					Cancel
-				</Button>
-				<Button
-					variant="primary"
-					size="sm"
-					type="submit"
-					disabled={!canSubmit || saving}
-					loading={saving}
-				>
-					Add alert
-				</Button>
-			</div>
-		</form>
-	{/if}
-
+	{/snippet}
 	{#if loading}
-		<div class="ar-loading"><Loader2 class="h-4 w-4 animate-spin" /></div>
-	{:else if rules.length === 0 && !formOpen}
-		<EmptyState
-			title="No alerts"
-			description={canEdit ? 'Add one to hear when a metric crosses a line.' : ''}
-		>
-			{#snippet icon()}<BellRing size={22} />{/snippet}
-		</EmptyState>
+		<div class="loading">
+			<Skeleton height="2.5rem" />
+			<Skeleton height="2.5rem" />
+		</div>
+	{:else if rules.length === 0}
+		<p class="quiet">
+			{canEdit ? 'No alerts yet. Add one to hear when a metric crosses a line.' : 'No alerts yet.'}
+		</p>
 	{:else}
-		<ul class="ar-list">
-			{#each [...own, ...inherited] as rule, i (rule.id)}
+		<List inset={false} label="Alerts">
+			{#each [...own, ...inherited] as rule (rule.id)}
 				{@const st = stateByRule.get(rule.id)}
-				{@const tone = st ? statusTone(st.status) : rule.enabled ? 'success' : 'neutral'}
-				<li
-					class="ar-row motion-echo echo--{tone}"
-					class:ar-row--off={!rule.enabled}
-					{@attach motionStagger({ index: i, from: { y: 4 } })}
-					{@attach stateEcho(() => st?.status ?? (rule.enabled ? 'on' : 'off'))}
-				>
-					<div class="ar-row-main">
-						<span class="ar-row-title">{rule.description}</span>
-						<span class="ar-row-sub">
-							{#if rule.inherited}
-								<span>from {rule.scopeType === 'org' ? 'the organization' : 'the project'}</span>
-							{/if}
-							{#if st?.valueLabel}
-								<span class="ar-mono">now {st.valueLabel}</span>
-							{/if}
-							{#if rule.activeEpisodes > 0 && scopeType !== 'deployment'}
-								<span
-									>{rule.activeEpisodes} app{rule.activeEpisodes === 1 ? '' : 's'} over the line</span
-								>
-							{/if}
+				{@const meta = st
+					? statusMeta(statusTone(st.status), statusLabel(st.status), st.status === 'firing')
+					: statusMeta(rule.enabled ? 'success' : 'neutral', rule.enabled ? 'On' : 'Off')}
+				<ListRow flush presence title={rule.description}>
+					{#snippet leading()}
+						<span
+							class="tile motion-echo echo--{meta.kind}"
+							{@attach stateEcho(() => st?.status ?? (rule.enabled ? 'on' : 'off'))}
+						>
+							<ToneTile size={32} tone={st ? meta.kind : 'neutral'}><BellRing size={15} /></ToneTile
+							>
 						</span>
-					</div>
-					{#if st}
-						<StatusBadge
-							meta={statusMeta(
-								statusTone(st.status),
-								statusLabel(st.status),
-								st.status === 'firing'
-							)}
-						/>
-					{:else}
-						<StatusBadge
-							meta={statusMeta(rule.enabled ? 'success' : 'neutral', rule.enabled ? 'On' : 'Off')}
-						/>
-					{/if}
-					{#if canEdit && !rule.inherited}
-						<div class="ar-row-actions">
+					{/snippet}
+					{#snippet subtitle()}
+						{#if rule.inherited}
+							<span>From {rule.scopeType === 'org' ? 'the organization' : 'the project'}</span>
+						{/if}
+						{#if st?.valueLabel}
+							{#if rule.inherited}<span class="sep" aria-hidden="true">·</span>{/if}
+							<span class="mono">now {st.valueLabel}</span>
+						{/if}
+						{#if rule.activeEpisodes > 0 && scopeType !== 'deployment'}
+							<span class="sep" aria-hidden="true">·</span>
+							<span
+								>{rule.activeEpisodes} app{rule.activeEpisodes === 1 ? '' : 's'} over the line</span
+							>
+						{/if}
+					{/snippet}
+					{#snippet trailing()}
+						<StatusBadge {meta} />
+					{/snippet}
+					{#snippet actions()}
+						{#if canEdit && !rule.inherited}
 							<Button
 								variant="ghost"
 								size="sm"
-								onclick={() => toggle(rule)}
+								icon={rule.enabled ? Pause : Play}
 								disabled={busyId === rule.id}
+								onclick={() => toggle(rule)}
 							>
 								{rule.enabled ? 'Pause' : 'Resume'}
 							</Button>
 							<Button
 								variant="ghost"
 								size="sm"
+								icon={Trash2}
+								label="Delete alert"
+								loading={busyId === rule.id}
 								onclick={() => remove(rule)}
-								disabled={busyId === rule.id}
-								aria-label="Delete alert"
-							>
-								<Trash2 class="h-3.5 w-3.5" />
-							</Button>
-						</div>
-					{/if}
-				</li>
+							/>
+						{/if}
+					{/snippet}
+				</ListRow>
 			{/each}
-		</ul>
+		</List>
 	{/if}
-</div>
+</SectionCard>
+
+<Modal bind:open={formOpen} size="md" labelledby="{formId}-title">
+	<form
+		class="form"
+		onsubmit={(e) => {
+			e.preventDefault();
+			void submit();
+		}}
+	>
+		<ModalIntro id="{formId}-title" icon={BellRing} tone="accent" title="Add an alert" />
+		<div class="grid">
+			<Field label="Metric">
+				<Dropdown
+					value={formMetric}
+					options={catalogue.map((m) => ({ value: m.id, label: m.label }))}
+					onchange={pickMetric}
+				/>
+			</Field>
+			<Field label="Is">
+				<Dropdown
+					bind:value={formComparator}
+					options={(metric?.comparators ?? ['gt']).map((c) => ({
+						value: c,
+						label: c === 'gt' ? 'above' : 'below'
+					}))}
+				/>
+			</Field>
+			<Field label={thresholdSuffix(metric)}>
+				<Input type="number" min="0" step="any" bind:value={formThreshold} />
+			</Field>
+			<Field label="For">
+				<Dropdown
+					bind:value={formFor}
+					options={WINDOW_OPTIONS.map((w) => ({ value: String(w), label: windowLabel(w) }))}
+				/>
+			</Field>
+			{#if metric?.requestRateGuard}
+				<Field label="Min req/s" hint="Skipped below this traffic">
+					<Input type="number" min="0" step="any" placeholder="0.2" bind:value={formMinRate} />
+				</Field>
+			{/if}
+		</div>
+		{#if metric?.needsIngress}
+			<p class="quiet">Needs a domain on the app. Apps without one are skipped.</p>
+		{/if}
+	</form>
+	{#snippet footer()}
+		<Button variant="ghost" onclick={() => (formOpen = false)} disabled={saving}>Cancel</Button>
+		<Button variant="primary" disabled={!canSubmit || saving} loading={saving} onclick={submit}
+			>Add alert</Button
+		>
+	{/snippet}
+</Modal>
 
 <style>
-	.ar {
+	.loading,
+	.form {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-3);
+		gap: 0.5rem;
 	}
-	.ar-head {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: var(--space-2);
+	.form {
+		gap: 1rem;
 	}
-	.ar-title {
+	.grid {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.75rem;
+	}
+	.quiet {
 		font-size: var(--text-callout);
 		line-height: var(--lh-callout);
-		font-weight: 600;
-		color: var(--text-default);
-	}
-	.ar-form {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-3);
-		padding: var(--space-3);
-		border-radius: var(--radius-lg);
-		background: var(--bg-sunken);
-		box-shadow: inset 0 0 0 1px var(--rule);
-	}
-	.ar-form-row {
-		display: grid;
-		grid-template-columns:
-			minmax(9rem, 1.4fr) minmax(6rem, 0.8fr) minmax(5rem, 0.7fr) minmax(6rem, 0.8fr)
-			minmax(6rem, 0.8fr);
-		gap: var(--space-2);
-		align-items: end;
-	}
-	.ar-note {
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
 		color: var(--text-muted);
 	}
-	.ar-form-actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: var(--space-2);
+	.tile {
+		display: inline-flex;
+		border-radius: calc(var(--radius-md) * var(--corner-scale));
 	}
-	.ar-loading {
-		display: flex;
-		justify-content: center;
-		padding: var(--space-4);
+	.sep {
 		color: var(--text-faint);
 	}
-	.ar-list {
-		display: flex;
-		flex-direction: column;
-		list-style: none;
-		margin: 0;
-		padding: 0;
-	}
-	.ar-row {
-		display: flex;
-		align-items: center;
-		gap: var(--space-3);
-		padding: 0.5rem 0.625rem;
-		border-radius: var(--radius-md);
-		border-top: 1px solid var(--rule);
-	}
-	.ar-row:first-child {
-		border-top: none;
-	}
-	.ar-row--off .ar-row-title {
-		color: var(--text-muted);
-	}
-	.ar-row-main {
-		display: flex;
-		flex-direction: column;
-		gap: 0.125rem;
-		min-width: 0;
-		flex: 1;
-	}
-	.ar-row-title {
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		font-weight: 600;
-		color: var(--text-default);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-	.ar-row-sub {
-		display: flex;
-		gap: var(--space-2);
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		color: var(--text-faint);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-	.ar-mono {
+	.mono {
 		font-family: var(--font-mono);
-		font-variant-numeric: tabular-nums;
-		color: var(--text-muted);
-	}
-	.ar-row-actions {
-		display: flex;
-		align-items: center;
-		gap: 0.125rem;
-		opacity: 0.7;
-		transition: opacity var(--dur-fast);
-	}
-	.ar-row:hover .ar-row-actions,
-	.ar-row:focus-within .ar-row-actions {
-		opacity: 1;
-	}
-	@media (max-width: 760px) {
-		.ar-form-row {
-			grid-template-columns: 1fr 1fr;
-		}
+		font-size: var(--text-footnote);
 	}
 </style>

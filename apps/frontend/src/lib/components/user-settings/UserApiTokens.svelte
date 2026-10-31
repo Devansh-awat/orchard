@@ -1,21 +1,29 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
+	import { page } from '$app/state';
+	import { env } from '$env/dynamic/public';
 	import { apiFetch, toasts } from '$lib/stores';
-	import {
-		KeyRound,
-		Plus,
-		Loader2,
-		Trash2,
-		Copy,
-		Check,
-		ChevronRight,
-		Pencil,
-		BookOpen
-	} from 'lucide-svelte';
+	import { KeyRound, Pencil, Plus, Trash2 } from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import RenameModal from '$lib/components/RenameModal.svelte';
-	import { Alert, Button, EmptyState, Input, SegmentedControl, Skeleton } from '$lib/components/ui';
-	import { motionStagger } from '$lib/utils/motion.svelte';
+	import {
+		Alert,
+		Button,
+		Field,
+		Input,
+		List,
+		ListRow,
+		Modal,
+		ModalIntro,
+		SecretString,
+		SectionCard,
+		SegmentedControl,
+		Skeleton,
+		Swap,
+		ToneTile
+	} from '$lib/components/ui';
+	import CodeBlock from '$lib/components/ui/CodeBlock.svelte';
+	import RelativeTime from '$lib/components/ui/RelativeTime.svelte';
 
 	interface ApiToken {
 		id: string;
@@ -24,6 +32,8 @@
 		expiresAt: string | null;
 		createdAt: string;
 	}
+
+	const uid = $props.id();
 
 	let tokens = $state<ApiToken[]>([]);
 	let loading = $state(true);
@@ -38,9 +48,14 @@
 		{ value: 'deploy', label: 'Deploy' },
 		{ value: 'exec', label: 'Exec' }
 	] as const;
+	const SCOPE_HINT = {
+		read: 'Sees everything your account can, changes nothing',
+		deploy: 'Can also create, update and delete',
+		exec: 'Can also open shells in your pods and databases'
+	} as const;
 	let creating = $state(false);
 	let createdToken = $state<string | null>(null);
-	let copied = $state(false);
+	let createdName = $state('');
 
 	let deletingId = $state<string | null>(null);
 	let showRevokeModal = $state(false);
@@ -49,6 +64,27 @@
 	let renameOpen = $state(false);
 	let renaming = $state(false);
 	let tokenToRename = $state<ApiToken | null>(null);
+
+	const USAGE_OPTIONS = [
+		{ value: 'mcp', label: 'MCP client' },
+		{ value: 'curl', label: 'API' }
+	] as const;
+	let usage = $state<'mcp' | 'curl'>('mcp');
+
+	const mcpUrl = $derived(env.PUBLIC_MCP_URL || 'https://mcp.yourdomain.com/');
+	const mcpConfig = $derived(`{
+  "mcpServers": {
+    "orchard": {
+      "type": "http",
+      "url": "${mcpUrl}",
+      "headers": {
+        "Authorization": "Bearer orch_..."
+      }
+    }
+  }
+}`);
+	const curl = $derived(`curl -H "Authorization: Bearer orch_..." \\
+  ${page.url.origin}/apiv1/auth/me`);
 
 	async function fetchTokens() {
 		loading = true;
@@ -63,6 +99,17 @@
 		} finally {
 			loading = false;
 		}
+	}
+
+	function openCreate() {
+		newTokenName = '';
+		newTokenScope = 'read';
+		createdToken = null;
+		showCreate = true;
+	}
+
+	function focusOnOpen(el: HTMLInputElement) {
+		void tick().then(() => el.focus());
 	}
 
 	async function createToken() {
@@ -82,6 +129,7 @@
 				throw new Error(data?.message || 'Failed to create token');
 			}
 			const data = await response.json();
+			createdName = newTokenName.trim();
 			createdToken = data.token;
 			newTokenName = '';
 			newTokenScope = 'read';
@@ -97,24 +145,8 @@
 		}
 	}
 
-	async function copyToken() {
-		if (!createdToken) return;
-		try {
-			await navigator.clipboard.writeText(createdToken);
-			copied = true;
-			toasts.add({ title: 'Copied to clipboard', color: 'success' });
-			setTimeout(() => {
-				copied = false;
-			}, 2000);
-		} catch {
-			toasts.add({ title: 'Failed to copy', color: 'error' });
-		}
-	}
-
 	function closeCreated() {
-		createdToken = null;
 		showCreate = false;
-		copied = false;
 	}
 
 	function confirmRevokeToken(token: ApiToken) {
@@ -175,12 +207,8 @@
 		}
 	}
 
-	function formatTimestamp(value?: string | null) {
-		if (!value) return 'Never';
-		return new Date(value).toLocaleString(undefined, {
-			dateStyle: 'medium',
-			timeStyle: 'short'
-		});
+	function formatDate(value: string) {
+		return new Date(value).toLocaleDateString(undefined, { dateStyle: 'medium' });
 	}
 
 	onMount(() => {
@@ -188,191 +216,144 @@
 	});
 </script>
 
-<div class="settings-body" {@attach motionStagger({ index: 0 })}>
-	{#if createdToken}
-		<div class="token-created">
-			<Alert tone="success" title="Token created">
-				{#snippet icon()}<KeyRound size={15} />{/snippet}
-				<p class="token-created-note">Copy it now, it won't be shown again.</p>
-				<div class="token-created-value-row">
-					<code class="code-block token-created-value">{createdToken}</code>
-					<Button variant="primary" onclick={copyToken}>
-						{#if copied}
-							<Check class="h-4 w-4" />
-							Copied
-						{:else}
-							<Copy class="h-4 w-4" />
-							Copy
-						{/if}
-					</Button>
-				</div>
-				<div class="token-created-actions">
-					<Button variant="secondary" size="sm" onclick={closeCreated}>Done</Button>
-				</div>
-			</Alert>
+<SectionCard title="API tokens">
+	{#snippet actions()}
+		<Button size="sm" icon={Plus} onclick={openCreate}>New token</Button>
+	{/snippet}
+	{#if error}
+		<Alert tone="error">{error}</Alert>
+	{:else if loading}
+		<div class="placeholder">
+			<Skeleton height="2.5rem" />
+			<Skeleton height="2.5rem" />
 		</div>
+	{:else if tokens.length === 0}
+		<p class="quiet">No tokens yet. Create one for the CLI, an MCP client or the API.</p>
+	{:else}
+		<List inset={false} label="API tokens">
+			{#each tokens as token (token.id)}
+				<ListRow flush presence title={token.name}>
+					{#snippet leading()}<ToneTile size={32}><KeyRound size={16} /></ToneTile>{/snippet}
+					{#snippet subtitle()}
+						<span>
+							{#if token.lastUsedAt}Used <RelativeTime date={token.lastUsedAt} />{:else}Never used{/if}
+							· Created <RelativeTime date={token.createdAt} />
+							{#if token.expiresAt}· Expires {formatDate(token.expiresAt)}{/if}
+						</span>
+					{/snippet}
+					{#snippet actions()}
+						<Button
+							size="sm"
+							variant="ghost"
+							icon={Pencil}
+							label={`Rename ${token.name}`}
+							onclick={() => openRename(token)}
+						/>
+						<Button
+							size="sm"
+							variant="ghost"
+							icon={Trash2}
+							label={`Revoke ${token.name}`}
+							loading={deletingId === token.id}
+							onclick={() => confirmRevokeToken(token)}
+						/>
+					{/snippet}
+				</ListRow>
+			{/each}
+		</List>
 	{/if}
+</SectionCard>
 
-	<section class="settings-section">
-		<button
-			class="settings-section-trigger"
-			onclick={() => {
-				showCreate = !showCreate;
+<SectionCard title="Usage">
+	{#snippet actions()}
+		<SegmentedControl
+			label="Usage example"
+			options={USAGE_OPTIONS}
+			bind:value={usage}
+			size="sm"
+			shape="capsule"
+		/>
+	{/snippet}
+	<Swap key={usage}>
+		{#if usage === 'mcp'}
+			<CodeBlock code={mcpConfig} title=".mcp.json" />
+		{:else}
+			<CodeBlock code={curl} title="curl" />
+		{/if}
+	</Swap>
+</SectionCard>
+
+<Modal
+	bind:open={showCreate}
+	size={createdToken ? 'md' : 'sm'}
+	closable={false}
+	dismissable={!createdToken}
+	labelledby="{uid}-title"
+>
+	{#if createdToken}
+		<div class="form">
+			<ModalIntro
+				id="{uid}-title"
+				icon={KeyRound}
+				tone="success"
+				solid
+				title={`${createdName} is ready`}
+				description="Copy it now. It is not shown again."
+			/>
+			<SecretString
+				masked={`orch_${'•'.repeat(28)}`}
+				resolve={async () => createdToken}
+				label="Token"
+			/>
+		</div>
+	{:else}
+		<form
+			class="form"
+			onsubmit={(e) => {
+				e.preventDefault();
+				createToken();
 			}}
 		>
-			<div class="settings-section-trigger-left">
-				<span class="uat-icon"><Plus class="h-[18px] w-[18px]" /></span>
-				<div>
-					<p class="settings-section-label">Create new token</p>
-					<p class="settings-section-desc">
-						Generate a token for CLI tools, MCP server, or API access
-					</p>
-				</div>
-			</div>
-			<span class="settings-section-chevron" class:is-open={showCreate}
-				><ChevronRight class="h-4 w-4" /></span
+			<ModalIntro id="{uid}-title" icon={KeyRound} tone="accent" title="New token" />
+			<Field label="Name" for="{uid}-name">
+				<Input
+					id="{uid}-name"
+					bind:value={newTokenName}
+					placeholder="Claude Code, CI"
+					autocomplete="off"
+					{@attach focusOnOpen}
+				/>
+			</Field>
+			<Field label="Access" hint={SCOPE_HINT[newTokenScope]}>
+				<SegmentedControl
+					label="Token access"
+					options={scopeOptions}
+					bind:value={newTokenScope}
+					grow
+				/>
+			</Field>
+		</form>
+	{/if}
+	{#snippet footer()}
+		{#if createdToken}
+			<Button variant="primary" shape="capsule" onclick={closeCreated}>Done</Button>
+		{:else}
+			<Button
+				variant="ghost"
+				shape="capsule"
+				disabled={creating}
+				onclick={() => (showCreate = false)}>Cancel</Button
 			>
-		</button>
-
-		{#if showCreate}
-			<div class="settings-section-content">
-				<p class="settings-hint">
-					Read tokens can see anything your account can but change nothing. Deploy tokens can also
-					create, update and delete. Exec tokens can also open shells in your pods and databases.
-				</p>
-				<SegmentedControl label="Token access" options={scopeOptions} bind:value={newTokenScope} />
-				<div class="token-create-form">
-					<Input
-						class="flex-1"
-						type="text"
-						placeholder="Token name (e.g. Claude Code, CI/CD)"
-						bind:value={newTokenName}
-						onkeydown={(e: KeyboardEvent) => {
-							if (e.key === 'Enter') createToken();
-						}}
-					/>
-					<Button
-						variant="primary"
-						onclick={createToken}
-						loading={creating}
-						disabled={creating || !newTokenName.trim()}
-					>
-						Create
-					</Button>
-				</div>
-			</div>
+			<Button
+				variant="primary"
+				shape="capsule"
+				loading={creating}
+				disabled={!newTokenName.trim()}
+				onclick={createToken}>Create token</Button
+			>
 		{/if}
-	</section>
-
-	<section class="settings-section">
-		<button class="settings-section-trigger" style="cursor: default;">
-			<div class="settings-section-trigger-left">
-				<span class="uat-icon"><KeyRound class="h-[18px] w-[18px]" /></span>
-				<div>
-					<p class="settings-section-label">Active tokens</p>
-					<div class="settings-section-desc">
-						{#if loading}
-							<Skeleton width="4rem" height="0.75rem" />
-						{:else}
-							{tokens.length} token{tokens.length !== 1 ? 's' : ''}
-						{/if}
-					</div>
-				</div>
-			</div>
-		</button>
-
-		<div class="settings-section-content">
-			{#if error}
-				<Alert tone="error">{error}</Alert>
-			{:else if loading}
-				<div class="token-list">
-					{#each [1, 2] as _ (_)}
-						<div class="token-item token-item--skeleton">
-							<div class="token-skeleton-lines">
-								<Skeleton width="8rem" height="0.875rem" />
-								<Skeleton width="14rem" height="0.6875rem" />
-							</div>
-							<Skeleton width="1.75rem" height="1.75rem" rounded="var(--radius-xs)" />
-						</div>
-					{/each}
-				</div>
-			{:else if tokens.length === 0}
-				<EmptyState title="No API tokens yet">
-					{#snippet icon()}<KeyRound class="h-6 w-6" />{/snippet}
-				</EmptyState>
-			{:else}
-				<div class="token-list">
-					{#each tokens as token (token.id)}
-						<div class="token-item">
-							<div class="flex-1 min-w-0">
-								<p class="token-name">{token.name}</p>
-								<p class="token-meta">
-									Created {formatTimestamp(token.createdAt)} · Last used {formatTimestamp(
-										token.lastUsedAt
-									)}
-									{#if token.expiresAt}
-										· Expires {formatTimestamp(token.expiresAt)}
-									{/if}
-								</p>
-							</div>
-							<Button variant="ghost" onclick={() => openRename(token)} title="Rename token">
-								<Pencil class="h-3.5 w-3.5" />
-							</Button>
-							<Button
-								variant="ghost"
-								onclick={() => confirmRevokeToken(token)}
-								disabled={deletingId === token.id}
-								title="Revoke token"
-								class="uat-revoke"
-							>
-								{#if deletingId === token.id}
-									<Loader2 class="h-3.5 w-3.5 animate-spin" />
-								{:else}
-									<Trash2 class="h-3.5 w-3.5" />
-								{/if}
-							</Button>
-						</div>
-					{/each}
-				</div>
-			{/if}
-		</div>
-	</section>
-
-	<section class="settings-section">
-		<button class="settings-section-trigger" onclick={() => {}} style="cursor: default;">
-			<div class="settings-section-trigger-left">
-				<span class="uat-icon"><BookOpen class="h-[18px] w-[18px]" /></span>
-				<div>
-					<p class="settings-section-label">Usage</p>
-					<p class="settings-section-desc">How to use your token</p>
-				</div>
-			</div>
-		</button>
-
-		<div class="settings-section-content">
-			<div class="usage-block">
-				<p class="usage-label">Claude Code / MCP client</p>
-				<pre class="code-block usage-code">{`{
-  "mcpServers": {
-    "orchard": {
-      "type": "http",
-      "url": "https://mcp.yourdomain.com/",
-      "headers": {
-        "Authorization": "Bearer orch_..."
-      }
-    }
-  }
-}`}</pre>
-			</div>
-
-			<div class="usage-block">
-				<p class="usage-label">API (curl)</p>
-				<pre class="code-block usage-code">{`curl -H "Authorization: Bearer orch_..." \\
-  https://yourdomain.com/apiv1/auth/me`}</pre>
-			</div>
-		</div>
-	</section>
-</div>
+	{/snippet}
+</Modal>
 
 {#if tokenToRename}
 	<RenameModal
@@ -387,10 +368,9 @@
 {#if tokenToRevoke}
 	<ConfirmModal
 		bind:open={showRevokeModal}
-		title={`Revoke "${tokenToRevoke.name}"?`}
-		description="Any tools or integrations using this token will <strong>stop working</strong> immediately."
-		html
-		confirmLabel="Revoke Token"
+		title={`Revoke ${tokenToRevoke.name}?`}
+		description="Anything using this token stops working immediately."
+		confirmLabel="Revoke token"
 		onconfirm={() => revokeToken(tokenToRevoke!)}
 		oncancel={() => {
 			tokenToRevoke = null;
@@ -399,228 +379,19 @@
 {/if}
 
 <style>
-	.settings-body {
+	.form {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-4);
+		gap: 1rem;
 	}
-
-	.settings-section {
-		border: none;
-		border-radius: var(--radius-lg);
-		overflow: hidden;
-		background-color: var(--bg-raised);
-		margin-bottom: var(--space-2);
-		box-shadow: var(--elev-1);
-	}
-
-	.settings-section-trigger {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		width: 100%;
-		padding: var(--space-5) var(--space-6);
-		cursor: pointer;
-		background: transparent;
-		color: var(--text-default);
-		transition: background-color var(--dur-fast) ease;
-	}
-
-	.settings-section-trigger:hover {
-		background-color: var(--bg-hover);
-	}
-
-	.settings-section-trigger-left {
-		display: flex;
-		align-items: center;
-		gap: var(--space-3);
-	}
-
-	.uat-icon {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 2.25rem;
-		height: 2.25rem;
-		border-radius: var(--radius-md);
-		flex-shrink: 0;
-		background-color: var(--fill-soft);
-		color: var(--text-default);
-	}
-
-	.settings-section-label {
-		font-size: var(--text-title-3);
-		font-weight: 600;
-		line-height: 1.3;
-		color: var(--text-default);
-		text-align: left;
-		letter-spacing: var(--track-headline);
-	}
-
-	.settings-section-desc {
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		color: var(--text-muted);
-		text-align: left;
-		margin-top: 0.125rem;
-	}
-
-	.settings-section-chevron {
-		color: var(--text-muted);
-		transition: transform var(--dur-base) ease;
-		flex-shrink: 0;
-	}
-
-	.settings-section-chevron.is-open {
-		transform: rotate(90deg);
-	}
-
-	.settings-section-content {
-		padding: 0 var(--space-6) var(--space-6);
-		display: flex;
-		flex-direction: column;
-		gap: 0.875rem;
-	}
-
-	.settings-hint {
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		color: var(--text-muted);
-	}
-
-	.token-created {
-		margin-bottom: var(--space-2);
-	}
-
-	.token-created-note {
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		color: var(--text-muted);
-	}
-
-	.token-created-value-row {
-		display: flex;
-		gap: var(--space-2);
-		align-items: center;
-		margin-top: var(--space-3);
-	}
-
-	.token-created-value {
-		flex: 1;
-		min-width: 0;
-		padding: 0.625rem var(--space-3);
-		word-break: break-all;
-		user-select: all;
-		white-space: normal;
-	}
-
-	.token-created-actions {
-		margin-top: var(--space-3);
-	}
-
-	.token-create-form {
-		display: flex;
-		gap: var(--space-2);
-	}
-
-	.token-list {
+	.placeholder {
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
 	}
-
-	.token-item :global(.uat-revoke) {
-		color: var(--status-error);
-	}
-
-	.token-item {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: var(--space-4);
-		padding: 0.875rem var(--space-4);
-		border-radius: var(--radius-md);
-		border: 1px solid var(--border-default);
-		transition: background-color var(--dur-fast) ease;
-	}
-
-	.token-item:hover {
-		background-color: var(--fill-quiet);
-	}
-
-	.token-item--skeleton:hover {
-		background-color: transparent;
-	}
-
-	.token-skeleton-lines {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-		flex: 1;
-	}
-
-	.token-name {
-		font-size: var(--text-body);
-		line-height: var(--lh-body);
-		font-weight: 600;
-		color: var(--text-default);
-		overflow-wrap: anywhere;
-	}
-
-	.token-meta {
-		font-size: var(--text-footnote);
-		font-weight: 600;
-		color: var(--text-muted);
-		font-variant-numeric: tabular-nums;
-		line-height: 1.5;
-		margin-top: 0.125rem;
-		white-space: normal;
-		overflow-wrap: anywhere;
-	}
-
-	.usage-block {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-	}
-
-	.usage-label {
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		font-weight: 600;
-		color: var(--text-muted);
-	}
-
-	.code-block {
-		font-family: var(--font-mono);
+	.quiet {
 		font-size: var(--text-callout);
 		line-height: var(--lh-callout);
-		background-color: var(--bg-sunken);
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-sm);
-		color: var(--text-default);
-	}
-
-	.usage-code {
-		padding: 0.875rem 1.125rem;
-		overflow-x: auto;
-		white-space: pre;
-		line-height: 1.6;
-		margin: 0;
-	}
-
-	@media (max-width: 640px) {
-		.settings-section-trigger {
-			padding: var(--space-4) var(--space-5);
-		}
-
-		.settings-section-content {
-			padding: 0 var(--space-5) var(--space-5);
-		}
-
-		.token-created-value-row {
-			flex-direction: column;
-			align-items: stretch;
-		}
+		color: var(--text-muted);
 	}
 </style>

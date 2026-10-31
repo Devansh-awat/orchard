@@ -1,9 +1,25 @@
 <script lang="ts">
-	import { Loader2, Mail, MessageSquare, Plus, Send, Slack, Trash2, Webhook } from 'lucide-svelte';
-	import { Bell } from '@jis3r/icons';
-	import { Badge, Button, Dropdown, EmptyState, Field, Input } from '$lib/components/ui';
-	import SettingsSection from './SettingsSection.svelte';
-	import { motionStagger } from '$lib/utils/motion.svelte';
+	import { Ellipsis, Mail, MessageSquare, Plus, Send, Slack, Trash2, Webhook } from 'lucide-svelte';
+	import {
+		Badge,
+		Button,
+		Dropdown,
+		Field,
+		Input,
+		List,
+		ListRow,
+		Menu,
+		MenuItem,
+		Modal,
+		ModalIntro,
+		SectionCard,
+		SegmentedControl,
+		SettingRow,
+		SettingsList,
+		Skeleton,
+		Switch,
+		ToneTile
+	} from '$lib/components/ui';
 	import { formatRelativeTime } from '$lib/utils/format';
 	import { toasts } from '$lib/stores';
 	import {
@@ -28,17 +44,19 @@
 		type UserSettings
 	} from '$lib/components/notifications/types';
 
-	let { index = 0 }: { index?: number } = $props();
+	let { index: _index = 0 }: { index?: number } = $props();
+
+	const uid = $props.id();
 
 	const CATEGORIES: NotificationCategory[] = $derived([
 		...CORE_CATEGORIES,
 		...registerExtensionCategories(settings?.extensionCategories)
 	]);
 
-	const DEST_META: Record<string, { label: string; icon: typeof Webhook; hue: string }> = {
-		email: { label: 'Email', icon: Mail, hue: 'var(--hue-amber)' },
-		slack: { label: 'Slack', icon: Slack, hue: 'var(--hue-green)' },
-		discord: { label: 'Discord', icon: MessageSquare, hue: 'var(--hue-violet)' }
+	const DEST_META: Record<string, { label: string; icon: typeof Webhook }> = {
+		email: { label: 'Email', icon: Mail },
+		slack: { label: 'Slack', icon: Slack },
+		discord: { label: 'Discord', icon: MessageSquare }
 	};
 
 	let loading = $state(true);
@@ -72,11 +90,15 @@
 	});
 
 	async function choose(category: NotificationCategory, value: SettingValue) {
-		if (savingCategory) return;
+		if (savingCategory || !settings) return;
+		const previous = settings.global[category];
+		if (previous === value) return;
 		savingCategory = category;
+		settings.global[category] = value;
 		try {
 			settings = await saveGlobalSettings({ [category]: value });
 		} catch (e) {
+			if (settings) settings.global[category] = previous;
 			toasts.add({
 				title: 'Could not save that',
 				description: e instanceof Error ? e.message : undefined,
@@ -87,8 +109,12 @@
 		}
 	}
 
+	function overrideKey(override: UserSettings['overrides'][number]) {
+		return `${override.scopeType}:${override.scopeId}`;
+	}
+
 	async function clearOverride(override: UserSettings['overrides'][number]) {
-		const key = `${override.scopeType}:${override.scopeId}`;
+		const key = overrideKey(override);
 		if (clearingKey) return;
 		clearingKey = key;
 		try {
@@ -158,6 +184,12 @@
 		}
 	}
 
+	function openAdd() {
+		addType = 'slack';
+		addUrl = '';
+		addOpen = true;
+	}
+
 	async function submitDestination() {
 		if (!addUrl.trim() || adding) return;
 		adding = true;
@@ -179,383 +211,221 @@
 	}
 
 	function overrideSummary(override: UserSettings['overrides'][number]): string {
-		return Object.entries(override.values)
-			.map(([category, value]) => {
-				const key = category as NotificationCategory;
-				const label = CATEGORY_LABELS[key] ?? category;
-				return `${label}: ${settingLabel(key, value as SettingValue)?.label ?? value}`;
-			})
+		const values = Object.entries(override.values).map(([category, value]) => {
+			const key = category as NotificationCategory;
+			const label = CATEGORY_LABELS[key] ?? category;
+			const choice = settingLabel(key, value as SettingValue)?.label ?? String(value);
+			return `${choice} for ${label.toLowerCase()}`;
+		});
+		return [override.context ? `In ${override.context}` : null, ...values]
+			.filter(Boolean)
 			.join(' · ');
 	}
 
-	function destStatus(dest: UserDestination): string | null {
+	function scopeLabel(scopeType: string) {
+		return scopeType.charAt(0).toUpperCase() + scopeType.slice(1);
+	}
+
+	function destStatus(dest: UserDestination): string | undefined {
 		if (dest.circuitOpenUntil && new Date(dest.circuitOpenUntil).getTime() > Date.now()) {
-			return `paused until ${formatRelativeTime(new Date(dest.circuitOpenUntil))}`;
+			return `Paused until ${formatRelativeTime(new Date(dest.circuitOpenUntil))}`;
 		}
 		if (dest.consecutiveFailures > 0 && dest.lastErrorAt) {
-			return `failing since ${formatRelativeTime(new Date(dest.lastErrorAt))}`;
+			return `Failing since ${formatRelativeTime(new Date(dest.lastErrorAt))}`;
 		}
 		if (dest.lastSuccessAt) {
-			return `last delivered ${formatRelativeTime(new Date(dest.lastSuccessAt))}`;
+			return `Last delivered ${formatRelativeTime(new Date(dest.lastSuccessAt))}`;
 		}
-		return null;
+		return dest.enabled ? undefined : 'Off';
 	}
 
 	const webhookCount = $derived(destinations.filter((d) => d.type !== 'email').length);
 </script>
 
-<SettingsSection title="Notifications" description="Only affects your account" {index}>
-	{#snippet icon(hovered)}<Bell size={18} animate={hovered} />{/snippet}
-
-	{#if loading}
-		<div class="un-skeleton"></div>
-	{:else if settings}
-		<div class="un-block">
-			<div class="un-block-head">
-				<h4 class="un-block-title">Your defaults</h4>
-				<p class="un-block-sub">
-					What counts as yours, once you have turned on somewhere to receive it below. Applies
-					everywhere unless you override it on a specific project or app. Team channels your
-					organization set up are separate and are not affected by this.
-				</p>
-			</div>
-			<div class="un-rows">
-				{#each CATEGORIES as category (category)}
-					<div class="un-row">
-						<div class="un-row-meta">
-							<span class="un-row-label">{CATEGORY_LABELS[category]}</span>
-							<span class="un-row-hint">
-								{settingLabel(category, settings.global[category]).hint}
-							</span>
-						</div>
-						<div class="un-seg" role="radiogroup" aria-label={CATEGORY_LABELS[category]}>
-							{#each CATEGORY_OPTIONS[category] as option (option)}
-								<button
-									type="button"
-									role="radio"
-									aria-checked={settings.global[category] === option}
-									class="un-seg-btn"
-									class:un-seg-btn-active={settings.global[category] === option}
-									disabled={savingCategory === category}
-									title={settingLabel(category, option).hint}
-									onclick={() => choose(category, option)}
-								>
-									{settingLabel(category, option).label}
-								</button>
-							{/each}
-						</div>
-					</div>
-				{/each}
-			</div>
+{#if loading}
+	<SectionCard title="Your defaults">
+		<div class="placeholder">
+			<Skeleton height="2.5rem" />
+			<Skeleton height="2.5rem" />
+			<Skeleton height="2.5rem" />
 		</div>
+	</SectionCard>
+{:else if !settings}
+	<SectionCard title="Notifications">
+		{#snippet actions()}
+			<Button variant="ghost" size="sm" onclick={load}>Retry</Button>
+		{/snippet}
+		<p class="quiet">Could not load your notification settings.</p>
+	</SectionCard>
+{:else}
+	<SectionCard
+		title="Your defaults"
+		description="Applies everywhere unless you override it on a project or app. Team channels your organization set up are separate."
+	>
+		<SettingsList label="Your defaults">
+			{#each CATEGORIES as category (category)}
+				{@const current = settings.global[category]}
+				<SettingRow label={CATEGORY_LABELS[category]} hint={settingLabel(category, current).hint}>
+					<SegmentedControl
+						label={CATEGORY_LABELS[category]}
+						value={current}
+						options={CATEGORY_OPTIONS[category].map((option) => ({
+							value: option,
+							label: settingLabel(category, option).label,
+							hint: settingLabel(category, option).hint,
+							disabled: savingCategory === category
+						}))}
+						onchange={(v) => choose(category, v as SettingValue)}
+					/>
+				</SettingRow>
+			{/each}
+		</SettingsList>
+	</SectionCard>
 
-		<div class="un-block">
-			<div class="un-block-head">
-				<h4 class="un-block-title">Where they go</h4>
-				<p class="un-block-sub">
-					Everything here is off until you turn it on, so Orchard sends you nothing by default. Your
-					account email plus any personal Slack or Discord webhook you add, up to three.
-				</p>
-			</div>
-			<div class="un-rows">
-				{#each destinations as dest, i (dest.id)}
+	<SectionCard
+		title="Where they go"
+		description="Nothing is sent until you turn one on. Your account email plus up to three Slack or Discord webhooks."
+	>
+		{#snippet actions()}
+			{#if webhookCount < 3}
+				<Button size="sm" icon={Plus} onclick={openAdd}>Add webhook</Button>
+			{/if}
+		{/snippet}
+		{#if destinations.length}
+			<List inset={false} label="Delivery methods">
+				{#each destinations as dest (dest.id)}
 					{@const meta = DEST_META[dest.type]}
-					{@const status = destStatus(dest)}
-					<div
-						class="un-dest"
-						class:un-dest-off={!dest.enabled}
-						style="--un-hue: {meta.hue}"
-						{@attach motionStagger({ index: i })}
-					>
-						<div class="un-dest-icon"><meta.icon size={15} /></div>
-						<div class="un-row-meta">
-							<div class="un-dest-title">
-								<span class="un-row-label">{meta.label}</span>
-								{#if !dest.enabled}<Badge>Off</Badge>{/if}
-							</div>
-							{#if status}
-								<span class="un-row-hint">{status}</span>
-							{/if}
-						</div>
-						<div class="un-dest-actions">
-							<Button
-								variant="ghost"
-								size="sm"
-								onclick={() => test(dest)}
+					<ListRow flush pinned presence title={meta.label} subtitle={destStatus(dest)}>
+						{#snippet leading()}
+							<ToneTile size={32}><meta.icon size={16} /></ToneTile>
+						{/snippet}
+						{#snippet actions()}
+							<Switch
+								label={dest.enabled ? `Turn off ${meta.label}` : `Turn on ${meta.label}`}
+								bind:checked={() => dest.enabled, () => toggleDestination(dest)}
 								disabled={busyId === dest.id}
-								aria-label="Send a test"
-								title="Send a test"
-							>
-								{#if busyId === dest.id}
-									<Loader2 class="h-4 w-4 animate-spin" />
-								{:else}
-									<Send class="h-4 w-4" />
+							/>
+							<Menu>
+								{#snippet trigger(props)}
+									<Button
+										{...props}
+										size="sm"
+										variant="ghost"
+										icon={Ellipsis}
+										label={`More for ${meta.label}`}
+										loading={busyId === dest.id}
+									/>
+								{/snippet}
+								<MenuItem icon={Send} onclick={() => test(dest)}>Send a test</MenuItem>
+								{#if dest.type !== 'email'}
+									<MenuItem icon={Trash2} danger onclick={() => removeDestination(dest)}
+										>Remove</MenuItem
+									>
 								{/if}
-							</Button>
-							<Button
-								variant="ghost"
-								size="sm"
-								onclick={() => toggleDestination(dest)}
-								disabled={busyId === dest.id}
-							>
-								{dest.enabled ? 'Turn off' : 'Turn on'}
-							</Button>
-							{#if dest.type !== 'email'}
-								<Button
-									variant="ghost"
-									size="sm"
-									onclick={() => removeDestination(dest)}
-									disabled={busyId === dest.id}
-									aria-label="Remove"
-									title="Remove"
-								>
-									<Trash2 class="h-4 w-4" />
-								</Button>
-							{/if}
-						</div>
-					</div>
+							</Menu>
+						{/snippet}
+					</ListRow>
 				{/each}
-			</div>
-			{#if addOpen}
-				<div class="un-add" {@attach motionStagger({ from: { y: 8 } })}>
-					<Field label="Type" for="un-dest-type">
-						<Dropdown
-							id="un-dest-type"
-							bind:value={addType}
-							options={[
-								{ value: 'slack', label: 'Slack' },
-								{ value: 'discord', label: 'Discord' }
-							]}
-						/>
-					</Field>
-					<Field label="Webhook URL" for="un-dest-url">
-						<Input
-							id="un-dest-url"
-							bind:value={addUrl}
-							placeholder={addType === 'slack'
-								? 'https://hooks.slack.com/services/…'
-								: 'https://discord.com/api/webhooks/…'}
-						/>
-					</Field>
-					<div class="un-add-actions">
-						<Button variant="ghost" size="sm" onclick={() => (addOpen = false)} disabled={adding}>
-							Cancel
-						</Button>
-						<Button
-							variant="primary"
-							size="sm"
-							onclick={submitDestination}
-							loading={adding}
-							disabled={!addUrl.trim()}
-						>
-							Add
-						</Button>
-					</div>
-				</div>
-			{:else if webhookCount < 3}
-				<Button variant="secondary" size="sm" onclick={() => (addOpen = true)}>
-					<Plus class="h-4 w-4" />
-					Add a personal webhook
-				</Button>
-			{/if}
-		</div>
+			</List>
+		{/if}
+	</SectionCard>
 
-		<div class="un-block">
-			<div class="un-block-head">
-				<h4 class="un-block-title">Overrides</h4>
-				<p class="un-block-sub">
-					Everywhere you have deviated from your defaults. This is the whole list, so nothing is
-					muted without showing up here.
-				</p>
-			</div>
-			{#if settings.overrides.length === 0}
-				<EmptyState
-					title="No overrides"
-					description="Your defaults apply everywhere. Change a setting on a project or app to add one."
-				>
-					{#snippet icon()}<Bell size={22} />{/snippet}
-				</EmptyState>
-			{:else}
-				<div class="un-rows">
-					{#each settings.overrides as override, i (`${override.scopeType}:${override.scopeId}`)}
-						<div class="un-row" {@attach motionStagger({ index: i })}>
-							<div class="un-row-meta">
-								<div class="un-dest-title">
-									<span class="un-row-label">{override.label}</span>
-									<Badge>{override.scopeType}</Badge>
-									{#if override.context}
-										<span class="un-row-hint">in {override.context}</span>
-									{/if}
-									{#if override.missing}
-										<Badge>Deleted</Badge>
-									{/if}
-								</div>
-								<span class="un-row-hint">{overrideSummary(override)}</span>
-							</div>
+	<SectionCard title="Overrides" description="Everywhere you have changed your defaults.">
+		{#if settings.overrides.length === 0}
+			<p class="quiet">None. Your defaults apply everywhere.</p>
+		{:else}
+			<List inset={false} label="Overrides">
+				{#each settings.overrides as override (overrideKey(override))}
+					{@const key = overrideKey(override)}
+					<ListRow
+						flush
+						presence
+						pinned={clearingKey === key}
+						title={override.label}
+						subtitle={overrideSummary(override)}
+					>
+						{#snippet titleSuffix()}
+							<Badge>{scopeLabel(override.scopeType)}</Badge>
+							{#if override.missing}<Badge>Deleted</Badge>{/if}
+						{/snippet}
+						{#snippet actions()}
 							<Button
 								variant="ghost"
 								size="sm"
-								onclick={() => clearOverride(override)}
-								disabled={clearingKey === `${override.scopeType}:${override.scopeId}`}
+								loading={clearingKey === key}
+								onclick={() => clearOverride(override)}>Clear</Button
 							>
-								{#if clearingKey === `${override.scopeType}:${override.scopeId}`}
-									<Loader2 class="h-4 w-4 animate-spin" />
-								{:else}
-									Clear
-								{/if}
-							</Button>
-						</div>
-					{/each}
-				</div>
-			{/if}
-		</div>
-	{/if}
-</SettingsSection>
+						{/snippet}
+					</ListRow>
+				{/each}
+			</List>
+		{/if}
+	</SectionCard>
+{/if}
+
+<Modal bind:open={addOpen} size="sm" closable={false} dismissable labelledby="{uid}-title">
+	<form
+		class="form"
+		onsubmit={(e) => {
+			e.preventDefault();
+			submitDestination();
+		}}
+	>
+		<ModalIntro id="{uid}-title" icon={Webhook} title="Add a personal webhook" />
+		<Field label="Service" for="{uid}-type">
+			<Dropdown
+				id="{uid}-type"
+				size="lg"
+				bind:value={addType}
+				options={[
+					{ value: 'slack', label: 'Slack' },
+					{ value: 'discord', label: 'Discord' }
+				]}
+			/>
+		</Field>
+		<Field label="Webhook URL" for="{uid}-url">
+			<Input
+				id="{uid}-url"
+				size="lg"
+				mono
+				bind:value={addUrl}
+				autocomplete="off"
+				spellcheck={false}
+				placeholder={addType === 'slack'
+					? 'https://hooks.slack.com/services/…'
+					: 'https://discord.com/api/webhooks/…'}
+			/>
+		</Field>
+	</form>
+	{#snippet footer()}
+		<Button variant="ghost" shape="capsule" disabled={adding} onclick={() => (addOpen = false)}
+			>Cancel</Button
+		>
+		<Button
+			variant="primary"
+			shape="capsule"
+			loading={adding}
+			disabled={!addUrl.trim()}
+			onclick={submitDestination}>Add webhook</Button
+		>
+	{/snippet}
+</Modal>
 
 <style>
-	.un-skeleton {
-		height: 6rem;
-		border-radius: var(--radius-md);
-		background: var(--bg-raised);
-		opacity: 0.6;
-	}
-
-	.un-block {
+	.placeholder {
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
-		padding: 0.75rem 0;
+		gap: var(--space-2);
 	}
-
-	.un-block + .un-block {
-		border-top: 1px solid var(--border-default);
-	}
-
-	.un-block-title {
-		font-size: 0.875rem;
-		font-weight: 600;
-		color: var(--text-fg);
+	.quiet {
 		margin: 0;
-	}
-
-	.un-block-sub {
-		font-size: 0.75rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		color: var(--text-muted);
-		margin: 0.2rem 0 0;
-		max-width: 56ch;
 	}
-
-	.un-rows {
+	.form {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
-	}
-
-	.un-row,
-	.un-dest {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		flex-wrap: wrap;
-		padding: 0.7rem 0.875rem;
-		border-radius: var(--radius-md);
-		border: 1px solid var(--border-default);
-		background: var(--bg-raised);
-	}
-
-	.un-dest-off {
-		opacity: 0.6;
-	}
-
-	.un-dest-icon {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 2rem;
-		height: 2rem;
-		border-radius: var(--radius-sm);
-		background: color-mix(in srgb, var(--un-hue) 12%, transparent);
-		color: color-mix(in srgb, var(--un-hue) 80%, var(--text-fg));
-		flex-shrink: 0;
-	}
-
-	.un-dest-title {
-		display: flex;
-		align-items: center;
-		gap: 0.4rem;
-		flex-wrap: wrap;
-	}
-
-	.un-row-meta {
-		display: flex;
-		flex-direction: column;
-		gap: 0.15rem;
-		min-width: 0;
-		flex: 1;
-	}
-
-	.un-row-label {
-		font-size: 0.8125rem;
-		font-weight: 600;
-		color: var(--text-fg);
-	}
-
-	.un-row-hint {
-		font-size: 0.6875rem;
-		color: var(--text-faint);
-	}
-
-	.un-dest-actions {
-		display: flex;
-		align-items: center;
-		gap: 0.15rem;
-		flex-shrink: 0;
-	}
-
-	.un-seg {
-		display: inline-flex;
-		padding: 0.15rem;
-		gap: 0.15rem;
-		border-radius: var(--radius-md);
-		border: 1px solid var(--border-default);
-		background: var(--bg-surface);
-	}
-
-	.un-seg-btn {
-		padding: 0.25rem 0.6rem;
-		border: none;
-		border-radius: calc(var(--radius-md) - 0.15rem);
-		background: transparent;
-		font-size: 0.75rem;
-		color: var(--text-muted);
-		cursor: pointer;
-		transition:
-			background-color var(--dur-base) ease,
-			color var(--dur-base) ease;
-	}
-
-	.un-seg-btn:hover:not(:disabled) {
-		color: var(--text-fg);
-	}
-
-	.un-seg-btn-active {
-		background: color-mix(in srgb, var(--accent) 14%, transparent);
-		color: var(--text-fg);
-	}
-
-	.un-add {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-		padding: 0.875rem;
-		border-radius: var(--radius-md);
-		border: 1px solid var(--border-default);
-		background: var(--bg-raised);
-	}
-
-	.un-add-actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: 0.5rem;
+		gap: var(--space-4);
 	}
 </style>

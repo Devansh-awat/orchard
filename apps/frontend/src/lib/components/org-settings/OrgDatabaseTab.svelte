@@ -1,15 +1,19 @@
 <script lang="ts">
-	import { Database } from 'lucide-svelte';
-	import { Button, Field, Input } from '$lib/components/ui';
-	import SettingsSection from '$lib/components/user-settings/SettingsSection.svelte';
+	import {
+		Button,
+		FormActions,
+		Input,
+		SectionCard,
+		SettingRow,
+		SettingsList
+	} from '$lib/components/ui';
 
 	let {
 		canEditOrg,
 		publicIp = $bindable(''),
 		publicIpSaving,
 		instanceDefaultPublicIp = null,
-		onSavePublicIp,
-		index = 0
+		onSavePublicIp
 	}: {
 		canEditOrg: boolean;
 		publicIp: string;
@@ -20,60 +24,54 @@
 	} = $props();
 </script>
 
-<SettingsSection
-	title="Public database IP"
-	description="Shared external IP for public database exposure"
-	{index}
->
-	{#snippet icon(_hovered)}<Database class="h-[18px] w-[18px]" />{/snippet}
-
+<SectionCard title="Public database IP">
 	{#if canEditOrg}
-		<p class="od-hint">
-			Shared external IP used to expose databases publicly. Databases opted into public exposure
-			will share this IP with unique ports per database.
-		</p>
-
-		<Field
-			label="IPv4 / IPv6 address"
-			for="public-ip"
-			hint={instanceDefaultPublicIp
-				? `Leave blank to use this instance's default, ${instanceDefaultPublicIp}`
-				: undefined}
+		<form
+			onsubmit={(e) => {
+				e.preventDefault();
+				onSavePublicIp();
+			}}
 		>
-			<div class="od-input-row">
-				<Input
-					id="public-ip"
-					class="od-ip-input"
-					placeholder={instanceDefaultPublicIp || 'e.g. 203.0.113.10'}
-					bind:value={publicIp}
-				/>
-				<Button variant="primary" onclick={onSavePublicIp} loading={publicIpSaving}>Save</Button>
+			<SettingsList>
+				<SettingRow
+					label="Address"
+					for="public-ip"
+					hint="Public databases share it, each on its own port"
+					wide
+				>
+					<Input
+						id="public-ip"
+						mono
+						placeholder={instanceDefaultPublicIp || '203.0.113.10'}
+						bind:value={publicIp}
+						autocomplete="off"
+						spellcheck="false"
+					/>
+				</SettingRow>
+			</SettingsList>
+			<div class="save">
+				<FormActions
+					hint={instanceDefaultPublicIp
+						? `Leave it blank to use this instance's default, ${instanceDefaultPublicIp}`
+						: undefined}
+				>
+					<Button type="submit" variant="primary" loading={publicIpSaving}>Save</Button>
+				</FormActions>
 			</div>
-		</Field>
+		</form>
 	{:else}
-		<p class="od-no-access">Only admins and owners can manage database settings.</p>
+		<p class="quiet">Only admins and owners can change this.</p>
 	{/if}
-</SettingsSection>
+</SectionCard>
 
 <style>
-	.od-hint {
-		font-size: var(--text-caption);
-		color: var(--surface-muted);
-		margin: 0 0 1rem;
-		line-height: 1.5;
+	.save {
+		margin-top: var(--space-4);
 	}
-	.od-input-row {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-	}
-	.od-input-row :global(.od-ip-input) {
-		flex: 1;
-	}
-	.od-no-access {
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		color: var(--surface-muted);
+	.quiet {
 		margin: 0;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		color: var(--text-muted);
 	}
 </style>
