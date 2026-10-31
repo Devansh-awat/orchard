@@ -315,7 +315,7 @@ const TOOLS: ToolDef[] = [
   {
     name: 'delete_database',
     description:
-      'Permanently destroy a PostgreSQL database. This is destructive and cannot be undone.',
+      'Delete a PostgreSQL database. It goes to a 30-day trash and can be restored from there if it had a completed backup. Refused while deletion protection is on.',
     parameters: {
       type: 'object' as const,
       properties: { databaseId: { type: 'string', description: 'The database UUID' } },

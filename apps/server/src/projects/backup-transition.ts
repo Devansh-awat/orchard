@@ -76,3 +76,75 @@ export function supersededBackups(items: QueuedBackupLike[], now = Date.now()): 
     .filter((b) => now - b.createdAt > SUPERSEDED_GRACE_MS)
     .map((b) => b.name);
 }
+
+export const ORPHAN_CONFIRM_MS = 90 * 1000;
+
+const TERMINAL_PHASES = new Set(['completed', 'failed']);
+
+interface ClusterRefLike {
+  metadata?: { name?: string; namespace?: string; creationTimestamp?: string };
+  spec?: { cluster?: { name?: string } };
+  status?: { phase?: string } | null;
+}
+
+export interface OrphanCandidate {
+  kind: 'backup' | 'schedule';
+  namespace: string;
+  name: string;
+  cluster: string;
+}
+
+export function orphanCandidates(
+  clusters: ClusterRefLike[],
+  backups: ClusterRefLike[],
+  schedules: ClusterRefLike[],
+  now = Date.now()
+): OrphanCandidate[] {
+  const live = new Set(
+    clusters.map((c) => `${c.metadata?.namespace ?? ''}/${c.metadata?.name ?? ''}`)
+  );
+  const pick = (kind: OrphanCandidate['kind'], item: ClusterRefLike): OrphanCandidate | null => {
+    const namespace = item.metadata?.namespace;
+    const name = item.metadata?.name;
+    const cluster = item.spec?.cluster?.name;
+    if (!namespace || !name || !cluster) return null;
+    if (live.has(`${namespace}/${cluster}`)) return null;
+    const createdAt = Date.parse(item.metadata?.creationTimestamp ?? '') || 0;
+    if (now - createdAt < MISSING_CR_GRACE_MS) return null;
+    return { kind, namespace, name, cluster };
+  };
+  return [
+    ...schedules.map((s) => pick('schedule', s)),
+    ...backups
+      .filter((b) => !TERMINAL_PHASES.has(b.status?.phase ?? ''))
+      .map((b) => pick('backup', b))
+  ].filter((c): c is OrphanCandidate => c !== null);
+}
+
+export function orphanKey(c: OrphanCandidate): string {
+  return `${c.kind}:${c.namespace}/${c.name}`;
+}
+
+export function confirmedOrphans(
+  candidates: OrphanCandidate[],
+  missing: ReadonlySet<string>,
+  firstMissingAt: Map<string, number>,
+  now = Date.now()
+): OrphanCandidate[] {
+  const seen = new Set(candidates.map(orphanKey));
+  for (const key of [...firstMissingAt.keys()]) {
+    if (!seen.has(key) || !missing.has(key)) firstMissingAt.delete(key);
+  }
+  const confirmed: OrphanCandidate[] = [];
+  for (const c of candidates) {
+    const key = orphanKey(c);
+    if (!missing.has(key)) continue;
+    const first = firstMissingAt.get(key);
+    if (first === undefined) {
+      firstMissingAt.set(key, now);
+      continue;
+    }
+    if (now - first >= ORPHAN_CONFIRM_MS) confirmed.push(c);
+  }
+  return confirmed;
+}

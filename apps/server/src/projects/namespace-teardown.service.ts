@@ -135,11 +135,26 @@ export class NamespaceTeardownService {
     const databasesService: DatabasesServiceType = this.moduleRef.get(DatabasesService, {
       strict: false
     });
+    const { DatabaseTrashService } = await import('./database-trash.service.js');
+    const trash = this.moduleRef.get(DatabaseTrashService, { strict: false });
     for (const database of databases) {
       summary.databases += 1;
-      if (scope.keepData) {
+      let kept = false;
+      if (scope.reason === 'environment.deleted') {
+        try {
+          kept = Boolean(
+            await trash.keep(database, {
+              reason: 'environment',
+              deletedBy: scope.actor.userId ?? null
+            })
+          );
+        } catch (err) {
+          fail(`keep ${database.name} in the trash`, err);
+        }
+      }
+      if (kept || scope.keepData) {
         this.logger.warn(
-          `teardown of ${scope.namespace} keeps the backups of ${database.name}: the namespace was removed in the cluster, so they are the only way back`
+          `teardown of ${scope.namespace} keeps the backups of ${database.name}${kept ? ' for 30 days so it can be brought back' : ': the namespace was removed in the cluster, so they are the only way back'}`
         );
       } else {
         try {
@@ -147,6 +162,18 @@ export class NamespaceTeardownService {
           if (database.namespace && database.clusterName) summary.backupPrefixes += 1;
         } catch (err) {
           fail(`purge backups for ${database.name}`, err);
+        }
+      }
+      if (
+        database.mode === 'cnpg' &&
+        database.namespace &&
+        database.clusterName &&
+        database.namespace !== scope.namespace
+      ) {
+        try {
+          await databasesService.removeClusterResources(database.namespace, database.clusterName);
+        } catch (err) {
+          fail(`remove the cluster of ${database.name} from ${database.namespace}`, err);
         }
       }
       if (database.r2ProxyAccessKey) {

@@ -29,6 +29,19 @@ export function parseImageScanner(raw: string | null | undefined): ImageScannerC
   return (IMAGE_SCANNERS as readonly string[]).includes(v) ? (v as ImageScannerChoice) : null;
 }
 
+export const DATABASE_TOGGLES = {
+  ddlCheckpoints: { key: 'db_ddl_checkpoints', env: 'DB_DDL_CHECKPOINTS', fallback: true },
+  restoreDrills: { key: 'db_restore_drills', env: 'DB_RESTORE_DRILLS', fallback: false },
+  pluginMigration: {
+    key: 'db_barman_plugin_migration',
+    env: 'CNPG_BARMAN_PLUGIN_MIGRATE',
+    fallback: false
+  },
+  poolerByDefault: { key: 'db_pooler_by_default', env: 'DB_POOLER_BY_DEFAULT', fallback: true }
+} as const;
+
+export type DatabaseToggle = keyof typeof DATABASE_TOGGLES;
+
 export interface ToggleState {
   enabled: boolean;
   dbValue: boolean;
@@ -157,6 +170,34 @@ export class InstanceSettingsService {
   async setSsoEnforced(value: boolean): Promise<void> {
     this.assertUnlocked(SSO_ENFORCED_ENV);
     await this.setBool(SSO_ENFORCED_KEY, value);
+  }
+
+  isDatabaseToggleOn(name: DatabaseToggle): Promise<boolean> {
+    const t = DATABASE_TOGGLES[name];
+    return this.resolveBool(t.key, t.env, t.fallback);
+  }
+
+  async getDatabaseToggles(): Promise<Record<DatabaseToggle, ToggleState>> {
+    const names = Object.keys(DATABASE_TOGGLES) as DatabaseToggle[];
+    const states = await Promise.all(
+      names.map((n) =>
+        this.toggleState(
+          DATABASE_TOGGLES[n].key,
+          DATABASE_TOGGLES[n].env,
+          DATABASE_TOGGLES[n].fallback
+        )
+      )
+    );
+    return Object.fromEntries(names.map((n, i) => [n, states[i]])) as Record<
+      DatabaseToggle,
+      ToggleState
+    >;
+  }
+
+  async setDatabaseToggle(name: DatabaseToggle, value: boolean): Promise<void> {
+    const t = DATABASE_TOGGLES[name];
+    this.assertUnlocked(t.env);
+    await this.setBool(t.key, value);
   }
 
   isPostgresAutoUpdateEnabled(): Promise<boolean> {

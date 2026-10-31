@@ -59,35 +59,133 @@ List what is in it with \`list_deployments\` / \`list_databases\` and confirm wi
   server.registerTool(
     'delete_database',
     {
-      description: 'DANGEROUS: Delete a PostgreSQL database. This permanently destroys all data.',
+      description: `DANGEROUS: Delete a PostgreSQL database. Apps using it lose it immediately. The database goes to a 30-day trash: list it with list_deleted_databases and bring it back with undelete_database, as long as it had a completed backup (recoverableUntil in the response says how long). The server refuses the call while deletion protection is on.`,
       inputSchema: {
         databaseId: z.guid().describe('The database UUID to delete')
       }
     },
     async ({ databaseId }) => {
-      await client.delete(path`/databases/${databaseId}`);
-      return text('Database deleted successfully.');
+      const result = await client.delete(path`/databases/${databaseId}`);
+      return json(result);
     }
   );
 
   server.registerTool(
-    'restore_database_backup',
+    'restore_database',
     {
-      description: `DANGEROUS: Restore a database from a previous backup. This REPLACES all current data in the database with the backup's contents. Use list_database_backups to find a backupId.`,
+      description: `DANGEROUS: Restore a database to an earlier state. Pick at most one target: backupId (from list_database_backups), checkpointId (from list_checkpoints), or at (an ISO time inside the recovery window, or "latest"). With no target it restores the latest recoverable point.
+
+mode "in_place" (the default) replaces the current data. Orchard takes a checkpoint first and keeps the previous copy stopped for 24h, so undo_database_restore can swap it back. mode "fork" restores into a new database and leaves the original untouched; pass name and environmentId to place it.
+
+Check the window with get_database_recovery_window first. Returns the operation; poll it with get_database_operation (wait: true) until it succeeds or fails.`,
       inputSchema: {
-        databaseId: z.guid().describe('The database UUID to restore into'),
-        backupId: z
+        databaseId: z.guid().describe('The database UUID to restore'),
+        backupId: z.guid().optional().describe('Restore from this backup'),
+        checkpointId: z.guid().optional().describe('Restore to this checkpoint'),
+        at: z
+          .string()
+          .optional()
+          .describe('Point in time to restore to: an ISO 8601 timestamp, or "latest"'),
+        mode: z
+          .enum(['in_place', 'fork'])
+          .optional()
+          .describe('"in_place" (default) replaces the data, "fork" makes a new database'),
+        name: z.string().optional().describe('Name for the new database when mode is "fork"'),
+        environmentId: z
           .guid()
           .optional()
-          .describe(
-            'The backup UUID to restore from. If omitted, the server restores from the latest available backup.'
-          )
+          .describe('Environment for the new database when mode is "fork"')
       }
     },
-    async ({ databaseId, backupId }) => {
+    async ({ databaseId, backupId, checkpointId, at, mode, name, environmentId }) => {
+      const targets = [backupId, checkpointId, at].filter((value) => value !== undefined);
+      if (targets.length > 1) {
+        return failure('Error: Pass at most one of backupId, checkpointId or at.');
+      }
       const body: Record<string, unknown> = {};
       if (backupId) body.backupId = backupId;
-      const result = await client.post(path`/databases/${databaseId}/restore`, body);
+      if (checkpointId) body.checkpointId = checkpointId;
+      if (at) body.at = at;
+      if (mode) body.mode = mode;
+      if (name) body.name = name;
+      if (environmentId) body.environmentId = environmentId;
+      const operation = await client.post(path`/databases/${databaseId}/restore`, body);
+      return json(operation);
+    }
+  );
+
+  server.registerTool(
+    'restore_checkpoint',
+    {
+      description: `DANGEROUS: Restore to a checkpoint. Pass checkpointId for one database, or groupId to restore every database pinned together by a bulk create_checkpoint call.
+
+mode "in_place" (the default) replaces the current data. Orchard checkpoints first and keeps the previous copy for 24h, so undo_database_restore can swap it back. mode "fork" restores into a new database and leaves the original untouched; name and environmentId only apply to a single checkpoint.
+
+Only checkpoints with status "durable" can be restored. Returns the operation (an array of them for a group); poll each with get_database_operation.`,
+      inputSchema: {
+        checkpointId: z.guid().optional().describe('The checkpoint UUID (from list_checkpoints)'),
+        groupId: z
+          .guid()
+          .optional()
+          .describe('The checkpoint group UUID returned by a bulk create_checkpoint'),
+        mode: z
+          .enum(['in_place', 'fork'])
+          .optional()
+          .describe('"in_place" (default) replaces the data, "fork" makes new databases'),
+        name: z.string().optional().describe('Name for the new database when mode is "fork"'),
+        environmentId: z
+          .guid()
+          .optional()
+          .describe('Environment for the new database when mode is "fork"')
+      }
+    },
+    async ({ checkpointId, groupId, mode, name, environmentId }) => {
+      if (Boolean(checkpointId) === Boolean(groupId)) {
+        return failure('Error: Pass exactly one of checkpointId or groupId.');
+      }
+      if (groupId) {
+        const operations = await client.post(path`/checkpoints/groups/${groupId}/restore`, {
+          ...(mode ? { mode } : {})
+        });
+        return json(operations);
+      }
+      const body: Record<string, unknown> = {};
+      if (mode) body.mode = mode;
+      if (name) body.name = name;
+      if (environmentId) body.environmentId = environmentId;
+      const operation = await client.post(path`/checkpoints/${checkpointId}/restore`, body);
+      return json(operation);
+    }
+  );
+
+  server.registerTool(
+    'undo_database_restore',
+    {
+      description:
+        'DANGEROUS: Undo an in-place restore by swapping the database back to the copy Orchard kept from just before it. Works within 24h of the restore. Anything written since the restore is lost. Pass the restore operation id; returns the new operation, poll it with get_database_operation.',
+      inputSchema: {
+        operationId: z.guid().describe('The in-place restore operation UUID')
+      }
+    },
+    async ({ operationId }) => {
+      const operation = await client.post(path`/database-operations/${operationId}/undo`);
+      return json(operation);
+    }
+  );
+
+  server.registerTool(
+    'disable_database_deletion_protection',
+    {
+      description:
+        'DANGEROUS: Turn off deletion protection on a database so delete_database is allowed. Confirm with the user first. Turn it back on with set_database_protection.',
+      inputSchema: {
+        databaseId: z.guid().describe('The database UUID')
+      }
+    },
+    async ({ databaseId }) => {
+      const result = await client.patch(path`/databases/${databaseId}/protection`, {
+        deletionProtection: false
+      });
       return json(result);
     }
   );

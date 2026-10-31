@@ -9,6 +9,7 @@ import { registerNotificationTools } from './tools/notifications';
 import { registerJobTools } from './tools/jobs';
 import { registerEnvironmentTools } from './tools/environments';
 import { registerDangerousTools } from './tools/dangerous';
+import { registerDatabaseRecoveryTools } from './tools/database-recovery';
 import { registerRolloutTools } from './tools/rollout';
 import { registerObservabilityTools } from './tools/observability';
 import { registerComposeTools } from './tools/compose';
@@ -59,6 +60,7 @@ export function createOrchardMcpServer(options: OrchardMcpOptions = {}) {
   registerComposeTools(tools, client);
   registerConfigurationTools(tools, client);
   registerResourceTools(tools, client);
+  registerDatabaseRecoveryTools(tools, client);
   registerNotificationTools(tools, client);
   registerJobTools(tools, client);
   registerEnvironmentTools(tools, client);

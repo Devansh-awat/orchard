@@ -50,13 +50,49 @@ export function walArchivePatchFor(cluster: ClusterLike): { maxParallel: number 
   return { maxParallel: WAL_ARCHIVE_MAX_PARALLEL };
 }
 
+export const BACKUP_OOM_MIN_MEMORY_BYTES = 512 * 1024 * 1024;
+
+const BACKUP_OOM_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+const BACKUP_OOM_MIN_RESTARTS = 3;
+
+export interface InstancePodLike {
+  status?: {
+    containerStatuses?: {
+      name?: string;
+      restartCount?: number;
+      lastState?: { terminated?: { reason?: string; finishedAt?: string | Date } };
+    }[];
+  };
+}
+
+export function backupOomLooping(
+  cluster: ClusterLike,
+  pods: InstancePodLike[],
+  now = Date.now()
+): boolean {
+  if (!cluster.spec?.backup) return false;
+  return pods.some((pod) =>
+    (pod.status?.containerStatuses ?? []).some((c) => {
+      if (c.name !== 'postgres') return false;
+      const last = c.lastState?.terminated;
+      if (last?.reason !== 'OOMKilled') return false;
+      if ((c.restartCount ?? 0) < BACKUP_OOM_MIN_RESTARTS) return false;
+      const at = last.finishedAt ? new Date(last.finishedAt).getTime() : 0;
+      return now - at < BACKUP_OOM_WINDOW_MS;
+    })
+  );
+}
+
 export function tuningPatchFor(
   cluster: ClusterLike,
-  owned: TuningOwnership
+  owned: TuningOwnership,
+  opts: { backupOomLooping?: boolean } = {}
 ): Record<string, unknown> | null {
   const limit = parseMemory(String(cluster.spec?.resources?.limits?.memory ?? ''));
   if (!limit) return null;
-  const target = Math.max(limit, MANAGED_DB_MIN_MEMORY_BYTES);
+  const floor = opts.backupOomLooping ? BACKUP_OOM_MIN_MEMORY_BYTES : MANAGED_DB_MIN_MEMORY_BYTES;
+  const target = Math.max(limit, floor);
   const tuning = deriveDbTuning({
     memoryLimitBytes: target,
     overrides: {

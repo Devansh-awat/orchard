@@ -11,6 +11,8 @@ import { computePodStatus } from '../engine/pod-status';
 import {
   buildCnpgLiveStatus,
   clusterSnapshot,
+  withRecoveryFallback,
+  type RecoveryFallback,
   type ClusterSnapshot,
   type DbStats,
   type MirroredDbPod
@@ -29,6 +31,7 @@ import {
   repairedCaBundle,
   walArchivePatchFor,
   tuningPatchFor,
+  backupOomLooping,
   walCapPatchFor,
   WAL_ARCHIVE_MAX_PARALLEL
 } from './cnpg-defaults';
@@ -36,6 +39,7 @@ import { dbStatsCommand, parseDbStatsOutput, SampledDbStats } from './db-stats';
 import { ModuleRef } from '@nestjs/core';
 import { LeaseService } from '../coordination/lease.service';
 import { LeaderElectionService } from '../events/leader-election.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 /**
  * All PostgreSQL flows: legacy single-pod Postgres (exec into shared cluster
@@ -52,6 +56,17 @@ import { WRITE_GUARD_ANNOTATION } from './cnpg-status';
 import { stuckReplicas, type StuckReplica } from './cnpg-stuck-replicas';
 import { cnpgOperatorPolicy } from './security-policies';
 import { resolvePostgresImage } from './postgres-images';
+import {
+  BARMAN_GROUP,
+  BARMAN_VERSION,
+  backupMethodSpec,
+  clusterArchivesWithPlugin,
+  OBJECT_STORE_PLURAL,
+  objectStoreBody,
+  objectStoreName,
+  walArchiverPlugin,
+  type BackupMethod
+} from './cnpg-recovery';
 
 export function cnpgScheduleName(clusterName: string): string {
   return `${clusterName}-schedule`.substring(0, 63);
@@ -233,7 +248,12 @@ export class K8sCnpgService implements OnApplicationBootstrap {
         failed += synced.failed.length;
         const capPatch = walCapPatchFor(cluster);
         const archivePatch = walArchivePatchFor(cluster);
-        const tuningPatch = tuningPatchFor(cluster, row);
+        const pods = await this.listInstancePods(coreApi, ns, name).catch((e: any) => {
+          this.logger.warn(`instance pods of ${ns}/${name} unreadable: ${e?.message || e}`);
+          return [];
+        });
+        const oomLooping = backupOomLooping(cluster, pods);
+        const tuningPatch = tuningPatchFor(cluster, row, { backupOomLooping: oomLooping });
         const stamp = sharedBuffersStamp(cluster, tuningPatch);
         if (!capPatch && !archivePatch && !tuningPatch && !stamp) continue;
         const spec: any = tuningPatch ? structuredClone(tuningPatch) : {};
@@ -260,6 +280,15 @@ export class K8sCnpgService implements OnApplicationBootstrap {
         if (capPatch) walCapped += 1;
         if (archivePatch) archiveParallel += 1;
         if (tuningPatch) retuned += 1;
+        const raisedTo = (tuningPatch?.resources as any)?.limits?.memory as string | undefined;
+        if (oomLooping && raisedTo) {
+          await this.recordBackupMemoryRaise(
+            ns,
+            name,
+            String(cluster.spec?.resources?.limits?.memory ?? ''),
+            raisedTo
+          );
+        }
       } catch (e: any) {
         if (e?.response?.statusCode === 404) continue;
         failed += 1;
@@ -1523,6 +1552,67 @@ export class K8sCnpgService implements OnApplicationBootstrap {
 
   private readonly CNPG_SCHEDULED_BACKUP_PLURAL = 'scheduledbackups';
 
+  private async listInstancePods(
+    coreApi: k8s.CoreV1Api,
+    namespace: string,
+    clusterName: string
+  ): Promise<k8s.V1Pod[]> {
+    const { body } = await coreApi.listNamespacedPod(
+      namespace,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      `cnpg.io/cluster=${clusterName}`
+    );
+    return body.items || [];
+  }
+
+  private async recordBackupMemoryRaise(
+    namespace: string,
+    clusterName: string,
+    from: string,
+    to: string
+  ): Promise<void> {
+    this.logger.warn(
+      `raised ${namespace}/${clusterName} from ${from} to ${to}: backups kept OOMKilling it`
+    );
+    await this.prisma.database
+      .updateMany({
+        where: { namespace, clusterName },
+        data: { memoryRequestBytes: BigInt(parseMemory(to)) }
+      })
+      .catch((e) =>
+        this.logger.warn(`memory raise not recorded on ${clusterName}: ${e?.message || e}`)
+      );
+    const notifications = this.moduleRef.get(NotificationsService, { strict: false });
+    await notifications
+      ?.notifyDbMemoryRaised(namespace, clusterName, from, to)
+      .catch((e: any) =>
+        this.logger.warn(`memory raise notice for ${clusterName} failed: ${e?.message || e}`)
+      );
+  }
+
+  private async readClusterSpec(
+    customApi: k8s.CustomObjectsApi,
+    namespace: string,
+    clusterName: string
+  ): Promise<{ affinity?: any; primaryUpdateStrategy?: string } | null> {
+    try {
+      const res: any = await customApi.getNamespacedCustomObject(
+        this.CNPG_GROUP,
+        this.CNPG_VERSION,
+        namespace,
+        this.CNPG_PLURAL,
+        clusterName
+      );
+      return (res?.body ?? res)?.spec ?? null;
+    } catch (e: any) {
+      if (e?.response?.statusCode === 404) return null;
+      throw e;
+    }
+  }
+
   private buildAppSecretName(clusterName: string): string {
     return `${clusterName}-app`;
   }
@@ -1549,6 +1639,8 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     backupCompression?: string | null;
     instances?: number;
     placement?: ResolvedPlacement;
+    backupServerName?: string;
+    useBarmanPlugin?: boolean;
     importFrom?: {
       host: string;
       port?: number;
@@ -1694,13 +1786,33 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     }
 
     if (options.r2 && r2SecretName) {
-      clusterSpec.backup = this.buildBackupSpec(
-        ns,
-        name,
-        options.r2,
-        r2SecretName,
-        tuning.dataCompression
-      );
+      const serverName = options.backupServerName || name;
+      if (options.useBarmanPlugin) {
+        const store = objectStoreName(name);
+        await this.upsertObjectStore(
+          ns,
+          objectStoreBody(
+            ns,
+            store,
+            {
+              destinationPath: `s3://${options.r2.bucket}/${ns}/${name}`,
+              endpointURL: normalizeBackupEndpointURL(options.r2.endpoint),
+              secretName: r2SecretName
+            },
+            { walMaxParallel: WAL_ARCHIVE_MAX_PARALLEL, dataCompression: 'gzip', labels }
+          )
+        );
+        clusterSpec.plugins = [walArchiverPlugin(store, serverName)];
+      } else {
+        clusterSpec.backup = this.buildBackupSpec(
+          ns,
+          name,
+          options.r2,
+          r2SecretName,
+          tuning.dataCompression,
+          serverName
+        );
+      }
     }
 
     // CNPG places its instance pods; feed the resolved placement into
@@ -1823,11 +1935,16 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     clusterName: string,
     _dbName?: string,
     mirroredPods?: MirroredDbPod[] | null,
-    mirrored?: { cluster: ClusterSnapshot | null; stats: DbStats } | null
+    mirrored?: { cluster: ClusterSnapshot | null; stats: DbStats } | null,
+    recovery?: RecoveryFallback | null
   ): Promise<any> {
     const stats: DbStats = mirrored?.stats ?? { sizeBytes: null, connections: null, statsAt: null };
     if (mirrored?.cluster && mirroredPods && mirroredPods.length > 0) {
-      return buildCnpgLiveStatus(mirrored.cluster, mirroredPods, stats);
+      return buildCnpgLiveStatus(
+        withRecoveryFallback(mirrored.cluster, recovery),
+        mirroredPods,
+        stats
+      );
     }
     this.ensureKubeConfig();
     const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
@@ -1840,7 +1957,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
         this.CNPG_PLURAL,
         clusterName
       );
-      const cluster = clusterSnapshot(body);
+      const cluster = withRecoveryFallback(clusterSnapshot(body), recovery);
       let pods: MirroredDbPod[] = mirroredPods ?? [];
       if (pods.length === 0) {
         try {
@@ -2131,6 +2248,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
   ): Promise<void> {
     this.ensureKubeConfig();
     const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    const method = await this.backupMethodOf(customApi, namespace, clusterName);
     const body = {
       apiVersion: `${this.CNPG_GROUP}/${this.CNPG_VERSION}`,
       kind: 'Backup',
@@ -2142,7 +2260,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
           'cnpg.io/cluster': clusterName
         }
       },
-      spec: { cluster: { name: clusterName } }
+      spec: { cluster: { name: clusterName }, ...backupMethodSpec(method) }
     };
     await customApi.createNamespacedCustomObject(
       this.CNPG_GROUP,
@@ -2151,6 +2269,327 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       this.CNPG_BACKUP_PLURAL,
       body
     );
+  }
+
+  private async backupMethodOf(
+    customApi: k8s.CustomObjectsApi,
+    namespace: string,
+    clusterName: string
+  ): Promise<BackupMethod> {
+    const spec = (await this.readClusterSpec(customApi, namespace, clusterName)) as any;
+    return clusterArchivesWithPlugin(spec) ? 'plugin' : 'barman';
+  }
+
+  private pluginProbe: { at: number; installed: boolean } | null = null;
+
+  async barmanPluginInstalled(): Promise<boolean> {
+    if (this.pluginProbe && Date.now() - this.pluginProbe.at < 5 * 60_000) {
+      return this.pluginProbe.installed;
+    }
+    this.ensureKubeConfig();
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    try {
+      await customApi.listClusterCustomObject(
+        BARMAN_GROUP,
+        BARMAN_VERSION,
+        OBJECT_STORE_PLURAL,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        1
+      );
+      this.pluginProbe = { at: Date.now(), installed: true };
+    } catch (e: any) {
+      if (e?.response?.statusCode !== 404) throw e;
+      this.pluginProbe = { at: Date.now(), installed: false };
+    }
+    return this.pluginProbe.installed;
+  }
+
+  async usePluginForNewClusters(): Promise<boolean> {
+    if (process.env.CNPG_BARMAN_PLUGIN !== 'on') return false;
+    return this.barmanPluginInstalled().catch(() => false);
+  }
+
+  async primaryLogTail(namespace: string, clusterName: string, lines = 80): Promise<string> {
+    this.ensureKubeConfig();
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+    const pod = await this.findCnpgPrimaryPod(namespace, clusterName);
+    const { body } = await coreApi.readNamespacedPodLog(
+      pod,
+      namespace,
+      'postgres',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      Math.max(1, Math.min(lines, 500))
+    );
+    return typeof body === 'string' ? body : String(body ?? '');
+  }
+
+  async namespaceMemoryHeadroom(namespace: string): Promise<number | null> {
+    this.ensureKubeConfig();
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+    const { body } = await coreApi.listNamespacedResourceQuota(namespace);
+    let headroom: number | null = null;
+    for (const q of body.items ?? []) {
+      const hard = q.status?.hard?.['limits.memory'] ?? q.spec?.hard?.['limits.memory'];
+      if (!hard) continue;
+      const used = q.status?.used?.['limits.memory'] ?? '0';
+      const free = parseMemory(String(hard)) - parseMemory(String(used));
+      headroom = headroom === null ? free : Math.min(headroom, free);
+    }
+    return headroom;
+  }
+
+  async migrateClusterToPlugin(
+    namespace: string,
+    clusterName: string
+  ): Promise<{ serverName: string; objectStore: string } | null> {
+    const cluster = await this.readCluster(namespace, clusterName);
+    if (!cluster) return null;
+    if (clusterArchivesWithPlugin(cluster.spec)) {
+      const archiver = cluster.spec.plugins.find((p: any) => p?.isWALArchiver);
+      return {
+        serverName: archiver?.parameters?.serverName || clusterName,
+        objectStore: archiver?.parameters?.barmanObjectName || objectStoreName(clusterName)
+      };
+    }
+    const store = cluster.spec?.backup?.barmanObjectStore;
+    if (!store) return null;
+    const serverName = store.serverName || clusterName;
+    const name = objectStoreName(clusterName);
+    await this.upsertObjectStore(namespace, {
+      apiVersion: `${BARMAN_GROUP}/${BARMAN_VERSION}`,
+      kind: 'ObjectStore',
+      metadata: {
+        name,
+        namespace,
+        labels: { 'app.kubernetes.io/managed-by': 'orchard', 'cnpg.io/cluster': clusterName }
+      },
+      spec: {
+        ...objectStoreBody(
+          namespace,
+          name,
+          {
+            destinationPath: store.destinationPath,
+            endpointURL: store.endpointURL,
+            secretName: store.s3Credentials?.accessKeyId?.name || this.r2SecretName(clusterName)
+          },
+          {
+            walMaxParallel: store.wal?.maxParallel || WAL_ARCHIVE_MAX_PARALLEL,
+            dataCompression: 'gzip'
+          }
+        ).spec,
+        retentionPolicy: cluster.spec?.backup?.retentionPolicy || '30d'
+      }
+    });
+    await this.patchCluster(namespace, clusterName, {
+      spec: { backup: null, plugins: [walArchiverPlugin(name, serverName)] }
+    });
+    return { serverName, objectStore: name };
+  }
+
+  async upsertObjectStore(namespace: string, body: any): Promise<void> {
+    await this.upsertCustom(BARMAN_GROUP, BARMAN_VERSION, OBJECT_STORE_PLURAL, namespace, body);
+  }
+
+  async deleteObjectStore(namespace: string, name: string): Promise<void> {
+    await this.deleteCustom(BARMAN_GROUP, BARMAN_VERSION, OBJECT_STORE_PLURAL, namespace, name);
+  }
+
+  async upsertPooler(namespace: string, body: any): Promise<void> {
+    await this.upsertCustom(this.CNPG_GROUP, this.CNPG_VERSION, 'poolers', namespace, body);
+  }
+
+  async deletePooler(namespace: string, name: string): Promise<void> {
+    await this.deleteCustom(this.CNPG_GROUP, this.CNPG_VERSION, 'poolers', namespace, name);
+  }
+
+  async getPooler(namespace: string, name: string): Promise<any | null> {
+    this.ensureKubeConfig();
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    try {
+      const { body } = await customApi.getNamespacedCustomObject(
+        this.CNPG_GROUP,
+        this.CNPG_VERSION,
+        namespace,
+        'poolers',
+        name
+      );
+      return body;
+    } catch (e: any) {
+      if (e?.response?.statusCode === 404) return null;
+      throw e;
+    }
+  }
+
+  async createClusterFromSpec(
+    namespace: string,
+    name: string,
+    spec: any,
+    labels: Record<string, string>
+  ): Promise<void> {
+    this.ensureKubeConfig();
+    await this.ensureCnpgOperatorIngress(namespace).catch((e) => {
+      this.logger.warn(`allow-cnpg-operator ensure failed: ${e?.message || e}`);
+    });
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    await customApi.createNamespacedCustomObject(
+      this.CNPG_GROUP,
+      this.CNPG_VERSION,
+      namespace,
+      this.CNPG_PLURAL,
+      {
+        apiVersion: `${this.CNPG_GROUP}/${this.CNPG_VERSION}`,
+        kind: 'Cluster',
+        metadata: {
+          name,
+          namespace,
+          labels: { 'app.kubernetes.io/managed-by': 'orchard', ...labels },
+          annotations: appliedSharedBuffers(spec.postgresql?.parameters?.shared_buffers)
+        },
+        spec
+      }
+    );
+  }
+
+  async readCluster(namespace: string, name: string): Promise<any | null> {
+    this.ensureKubeConfig();
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    try {
+      const { body } = await customApi.getNamespacedCustomObject(
+        this.CNPG_GROUP,
+        this.CNPG_VERSION,
+        namespace,
+        this.CNPG_PLURAL,
+        name
+      );
+      return body;
+    } catch (e: any) {
+      if (e?.response?.statusCode === 404) return null;
+      throw e;
+    }
+  }
+
+  async patchCluster(namespace: string, name: string, patch: any): Promise<void> {
+    this.ensureKubeConfig();
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    await customApi.patchNamespacedCustomObject(
+      this.CNPG_GROUP,
+      this.CNPG_VERSION,
+      namespace,
+      this.CNPG_PLURAL,
+      name,
+      patch,
+      undefined,
+      undefined,
+      undefined,
+      { headers: { 'Content-Type': 'application/merge-patch+json' } }
+    );
+  }
+
+  async writeSecret(
+    namespace: string,
+    name: string,
+    data: Record<string, string>,
+    type = 'Opaque'
+  ): Promise<void> {
+    this.ensureKubeConfig();
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+    const encoded = Object.fromEntries(
+      Object.entries(data).map(([k, v]) => [k, Buffer.from(v).toString('base64')])
+    );
+    await this.upsertSecret(coreApi, namespace, name, type, encoded, {
+      'app.kubernetes.io/managed-by': 'orchard'
+    });
+  }
+
+  async copySecret(
+    fromNamespace: string,
+    name: string,
+    toNamespace: string,
+    toName: string
+  ): Promise<void> {
+    this.ensureKubeConfig();
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+    const { body } = await coreApi.readNamespacedSecret(name, fromNamespace);
+    await this.upsertSecret(
+      coreApi,
+      toNamespace,
+      toName,
+      body.type || 'Opaque',
+      (body.data ?? {}) as Record<string, string>,
+      { 'app.kubernetes.io/managed-by': 'orchard' }
+    );
+  }
+
+  async deleteSecret(namespace: string, name: string): Promise<void> {
+    this.ensureKubeConfig();
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+    try {
+      await coreApi.deleteNamespacedSecret(name, namespace);
+    } catch (e: any) {
+      if (e?.response?.statusCode !== 404) throw e;
+    }
+  }
+
+  private async upsertCustom(
+    group: string,
+    version: string,
+    plural: string,
+    namespace: string,
+    body: any
+  ): Promise<void> {
+    this.ensureKubeConfig();
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    const name = body.metadata.name;
+    try {
+      const { body: existing } = await customApi.getNamespacedCustomObject(
+        group,
+        version,
+        namespace,
+        plural,
+        name
+      );
+      await customApi.replaceNamespacedCustomObject(group, version, namespace, plural, name, {
+        ...body,
+        metadata: { ...body.metadata, resourceVersion: (existing as any).metadata?.resourceVersion }
+      });
+    } catch (e: any) {
+      if (e?.response?.statusCode !== 404) throw e;
+      await customApi.createNamespacedCustomObject(group, version, namespace, plural, body);
+    }
+  }
+
+  private async deleteCustom(
+    group: string,
+    version: string,
+    plural: string,
+    namespace: string,
+    name: string
+  ): Promise<void> {
+    this.ensureKubeConfig();
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    try {
+      await customApi.deleteNamespacedCustomObject(group, version, namespace, plural, name);
+    } catch (e: any) {
+      if (e?.response?.statusCode !== 404) throw e;
+    }
+  }
+
+  async deleteManualBackups(namespace: string, clusterName: string): Promise<void> {
+    const backups = await this.listCnpgBackups(namespace, clusterName);
+    for (const b of backups) {
+      if (b.metadata?.labels?.['cnpg.io/scheduled-backup']) continue;
+      if (b.metadata?.ownerReferences?.length) continue;
+      await this.deleteCnpgBackup(namespace, b.metadata.name);
+    }
   }
 
   async getCnpgBackup(namespace: string, backupName: string): Promise<any> {
@@ -2206,6 +2645,23 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     return (body as any).items || [];
   }
 
+  async listAllScheduledBackups(): Promise<any[]> {
+    this.ensureKubeConfig();
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    const { body } = await customApi.listClusterCustomObject(
+      this.CNPG_GROUP,
+      this.CNPG_VERSION,
+      this.CNPG_SCHEDULED_BACKUP_PLURAL
+    );
+    return (body as any).items || [];
+  }
+
+  async cnpgClusterExists(namespace: string, clusterName: string): Promise<boolean> {
+    this.ensureKubeConfig();
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    return (await this.readClusterSpec(customApi, namespace, clusterName)) !== null;
+  }
+
   async deleteCnpgBackup(namespace: string, backupName: string): Promise<void> {
     this.ensureKubeConfig();
     const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
@@ -2220,155 +2676,6 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     } catch (e: any) {
       if (e.response?.statusCode !== 404) throw e;
     }
-  }
-
-  async restoreCnpgCluster(
-    namespace: string,
-    sourceClusterName: string,
-    backupName: string,
-    options: {
-      dbName: string;
-      dbUser: string;
-      dbPassword: string;
-      storageSize?: string;
-      imageName?: string;
-      parameters?: Record<string, string>;
-      sharedPreloadLibraries?: string[];
-      r2?: {
-        endpoint: string;
-        bucket: string;
-        region?: string;
-        accessKey: string;
-        secretKey: string;
-      };
-      newClusterName?: string;
-      instances?: number;
-      resources?: { cpuMilli: number; memoryBytes: number };
-      backupCompression?: string | null;
-    }
-  ): Promise<{ host: string; port: number; newClusterName: string }> {
-    this.ensureKubeConfig();
-    await this.ensureCnpgOperatorIngress(String(namespace || '').trim()).catch((e) => {
-      this.logger.warn(`allow-cnpg-operator ensure failed: ${e?.message || e}`);
-    });
-    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
-    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
-
-    const suffix = Date.now().toString(36);
-    const newName = options.newClusterName || `${sourceClusterName}-r${suffix}`.substring(0, 53);
-
-    const appSecret = this.buildAppSecretName(newName);
-    await this.upsertSecret(
-      coreApi,
-      namespace,
-      appSecret,
-      'kubernetes.io/basic-auth',
-      {
-        username: Buffer.from(options.dbUser).toString('base64'),
-        password: Buffer.from(options.dbPassword).toString('base64')
-      },
-      { 'app.kubernetes.io/managed-by': 'orchard' }
-    );
-
-    let r2SecretName: string | undefined;
-    if (options.r2) {
-      r2SecretName = `${newName}-r2`;
-      await this.upsertSecret(
-        coreApi,
-        namespace,
-        r2SecretName,
-        'Opaque',
-        {
-          ACCESS_KEY_ID: Buffer.from(options.r2.accessKey).toString('base64'),
-          ACCESS_SECRET_KEY: Buffer.from(options.r2.secretKey).toString('base64')
-        },
-        { 'app.kubernetes.io/managed-by': 'orchard' }
-      );
-    }
-
-    const tuning = deriveDbTuning({
-      memoryLimitBytes: options.resources?.memoryBytes,
-      overrides: {
-        sharedBuffers: options.parameters?.shared_buffers,
-        backupCompression: options.backupCompression
-      }
-    });
-
-    const spec: any = {
-      instances: Math.max(1, Math.trunc(options.instances || 1)),
-      imageName: options.imageName || resolvePostgresImage(17, null),
-      storage: {
-        size: options.storageSize || '1Gi',
-        storageClass: process.env.K8S_STORAGE_CLASS || 'longhorn'
-      },
-      bootstrap: {
-        recovery: {
-          backup: { name: backupName }
-        }
-      },
-      postgresql: {
-        parameters: {
-          max_connections: '100',
-          shared_buffers: tuning.sharedBuffers,
-          max_slot_wal_keep_size: walSlotKeepSize(options.storageSize),
-          ...options.parameters
-        },
-        ...(options.sharedPreloadLibraries && options.sharedPreloadLibraries.length > 0
-          ? { shared_preload_libraries: options.sharedPreloadLibraries }
-          : {})
-      },
-      enableSuperuserAccess: true
-    };
-
-    if (options.resources) {
-      const memStr = memoryBytesToK8s(options.resources.memoryBytes);
-      spec.resources = {
-        requests: {
-          cpu: cpuMilliToK8s(cpuRequestFromLimitMilli(options.resources.cpuMilli)),
-          memory: memStr
-        },
-        limits: { cpu: cpuMilliToK8s(options.resources.cpuMilli), memory: memStr }
-      };
-    }
-
-    if (options.r2 && r2SecretName) {
-      spec.backup = this.buildBackupSpec(
-        namespace,
-        newName,
-        options.r2,
-        r2SecretName,
-        tuning.dataCompression
-      );
-    }
-
-    const body = {
-      apiVersion: `${this.CNPG_GROUP}/${this.CNPG_VERSION}`,
-      kind: 'Cluster',
-      metadata: {
-        name: newName,
-        namespace,
-        labels: {
-          'app.kubernetes.io/managed-by': 'orchard',
-          'orchard/restore-source': sourceClusterName
-        },
-        annotations: appliedSharedBuffers(spec.postgresql?.parameters?.shared_buffers)
-      },
-      spec
-    };
-
-    await customApi.createNamespacedCustomObject(
-      this.CNPG_GROUP,
-      this.CNPG_VERSION,
-      namespace,
-      this.CNPG_PLURAL,
-      body
-    );
-
-    return {
-      host: `${newName}-rw.${namespace}.svc.cluster.local`,
-      port: 5432,
-      newClusterName: newName
-    };
   }
 
   async updateCnpgParameters(
@@ -2717,7 +3024,8 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     clusterName: string,
     r2: { endpoint: string; bucket: string },
     r2SecretName: string,
-    dataCompression: 'gzip' | null = 'gzip'
+    dataCompression: 'gzip' | null = 'gzip',
+    serverName?: string
   ): any {
     // Preserve the scheme from the configured endpoint — when r2-proxy is
     // enabled the endpoint is http:// (plaintext, in-cluster); when going
@@ -2728,6 +3036,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       barmanObjectStore: {
         destinationPath: `s3://${r2.bucket}/${namespace}/${clusterName}`,
         endpointURL,
+        ...(serverName && serverName !== clusterName ? { serverName } : {}),
         s3Credentials: {
           accessKeyId: { name: r2SecretName, key: 'ACCESS_KEY_ID' },
           secretAccessKey: { name: r2SecretName, key: 'ACCESS_SECRET_KEY' }
@@ -2757,7 +3066,34 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       this.CNPG_PLURAL,
       clusterName
     );
-    return Boolean(cluster?.body?.spec?.backup?.barmanObjectStore);
+    if (cluster?.body?.spec?.backup?.barmanObjectStore) return true;
+    return clusterArchivesWithPlugin(cluster?.body?.spec);
+  }
+
+  private async archiveStoreOf(
+    customApi: k8s.CustomObjectsApi,
+    namespace: string,
+    cluster: any
+  ): Promise<any | null> {
+    const inTree = cluster?.spec?.backup?.barmanObjectStore;
+    if (inTree) return inTree;
+    if (!clusterArchivesWithPlugin(cluster?.spec)) return null;
+    const archiver = cluster.spec.plugins.find((p: any) => p?.isWALArchiver);
+    const name = archiver?.parameters?.barmanObjectName;
+    if (!name) return null;
+    try {
+      const { body } = await customApi.getNamespacedCustomObject(
+        BARMAN_GROUP,
+        BARMAN_VERSION,
+        namespace,
+        OBJECT_STORE_PLURAL,
+        name
+      );
+      return (body as any)?.spec?.configuration ?? null;
+    } catch (e: any) {
+      if (e?.response?.statusCode === 404) return null;
+      throw e;
+    }
   }
 
   async listVolumeUsage(): Promise<{ usage: Map<string, VolumeUsage>; nodesFailed: number }> {
@@ -2801,7 +3137,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       this.CNPG_PLURAL,
       clusterName
     );
-    const store = cluster?.body?.spec?.backup?.barmanObjectStore;
+    const store = await this.archiveStoreOf(customApi, namespace, cluster?.body);
     if (!store) {
       return {
         configured: false,
@@ -2852,6 +3188,28 @@ export class K8sCnpgService implements OnApplicationBootstrap {
         'cnpg.io/cluster': clusterName
       }
     );
+    const clusterSpec = (await this.readClusterSpec(customApi, namespace, clusterName)) as any;
+    if (clusterArchivesWithPlugin(clusterSpec)) {
+      const archiver = clusterSpec.plugins.find((p: any) => p?.isWALArchiver);
+      await this.upsertObjectStore(
+        namespace,
+        objectStoreBody(
+          namespace,
+          archiver.parameters?.barmanObjectName || objectStoreName(clusterName),
+          {
+            destinationPath: `s3://${r2.bucket}/${namespace}/${clusterName}`,
+            endpointURL: normalizeBackupEndpointURL(r2.endpoint),
+            secretName
+          },
+          {
+            walMaxParallel: WAL_ARCHIVE_MAX_PARALLEL,
+            dataCompression: 'gzip',
+            labels: { 'app.kubernetes.io/managed-by': 'orchard', 'cnpg.io/cluster': clusterName }
+          }
+        )
+      );
+      return;
+    }
     const dataCompression = await this.backupDataCompression(namespace, clusterName);
     await customApi.patchNamespacedCustomObject(
       this.CNPG_GROUP,
@@ -3038,7 +3396,8 @@ export class K8sCnpgService implements OnApplicationBootstrap {
         schedule: cronSchedule,
         backupOwnerReference: 'self',
         immediate: opts.immediate === true,
-        cluster: { name: clusterName }
+        cluster: { name: clusterName },
+        ...backupMethodSpec(await this.backupMethodOf(customApi, namespace, clusterName))
       }
     };
 
@@ -3100,17 +3459,31 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     }
   }
 
-  async deleteScheduledBackup(namespace: string, clusterName: string): Promise<void> {
+  async deleteScheduledBackup(
+    namespace: string,
+    clusterName: string,
+    opts: { keepBackups?: boolean } = {}
+  ): Promise<void> {
+    await this.deleteScheduledBackupNamed(namespace, this.scheduledBackupName(clusterName), opts);
+  }
+
+  async deleteScheduledBackupNamed(
+    namespace: string,
+    name: string,
+    opts: { keepBackups?: boolean } = {}
+  ): Promise<void> {
     this.ensureKubeConfig();
     const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
-    const name = this.scheduledBackupName(clusterName);
     try {
       await customApi.deleteNamespacedCustomObject(
         this.CNPG_GROUP,
         this.CNPG_VERSION,
         namespace,
         this.CNPG_SCHEDULED_BACKUP_PLURAL,
-        name
+        name,
+        undefined,
+        undefined,
+        opts.keepBackups ? 'Orphan' : undefined
       );
     } catch (e: any) {
       if (e.response?.statusCode !== 404) throw e;

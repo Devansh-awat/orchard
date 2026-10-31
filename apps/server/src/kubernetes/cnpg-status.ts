@@ -1,5 +1,6 @@
 import { volumeFraction } from './db-stats';
 import { sizeToResumeWrites } from './volume-stats';
+import { databaseVerdict } from './cnpg-health';
 
 export interface MirroredDbPod {
   status: string;
@@ -147,14 +148,40 @@ export function buildCnpgLiveStatus(
       phase: 'hibernated',
       replicas: 0,
       readyReplicas: 0,
-      message: 'Database is stopped'
+      message: 'Database is stopped',
+      verdict: 'hibernated',
+      verdictReasons: ['Stopped']
     };
   }
   const folded = foldPods(pods, now);
   const ready = cluster.readyInstances >= cluster.instances && cluster.readyInstances > 0;
   const archivingCond: any = cluster.conditions.find((c: any) => c?.type === 'ContinuousArchiving');
   const volume = volumeUsage(stats);
+  const archiving = archivingCond
+    ? {
+        ok: archivingCond.status === 'True',
+        message: archivingCond.message || null,
+        since: archivingCond.lastTransitionTime || null
+      }
+    : null;
+  const { verdict, reasons } = databaseVerdict(
+    {
+      hibernated: false,
+      instances: cluster.instances,
+      readyInstances: cluster.readyInstances,
+      message: folded.message,
+      writeGuard: cluster.writeGuard,
+      volumeFraction: volumeFraction(stats),
+      walPendingSegments: stats.walPendingSegments ?? null,
+      archiving,
+      firstRecoverabilityPoint: cluster.firstRecoverabilityPoint,
+      lastSuccessfulBackup: cluster.lastSuccessfulBackup
+    },
+    now
+  );
   return {
+    verdict,
+    verdictReasons: reasons,
     exists: true,
     phase: cluster.phase,
     ready,
@@ -167,13 +194,7 @@ export function buildCnpgLiveStatus(
     connections: stats.connections ?? undefined,
     statsAt: stats.statsAt ? stats.statsAt.toISOString() : undefined,
     conditions: cluster.conditions,
-    archiving: archivingCond
-      ? {
-          ok: archivingCond.status === 'True',
-          message: archivingCond.message || null,
-          since: archivingCond.lastTransitionTime || null
-        }
-      : null,
+    archiving,
     firstRecoverabilityPoint: cluster.firstRecoverabilityPoint,
     lastSuccessfulBackup: cluster.lastSuccessfulBackup,
     danglingPVC: cluster.danglingPVC,
@@ -184,5 +205,22 @@ export function buildCnpgLiveStatus(
         ? sizeToResumeWrites(volume, cluster.storageSize)
         : null,
     ...folded
+  };
+}
+
+export interface RecoveryFallback {
+  firstRecoverabilityPoint: string | null;
+  lastSuccessfulBackup: string | null;
+}
+
+export function withRecoveryFallback(
+  cluster: ClusterSnapshot,
+  fallback: RecoveryFallback | null | undefined
+): ClusterSnapshot {
+  if (!fallback) return cluster;
+  return {
+    ...cluster,
+    firstRecoverabilityPoint: cluster.firstRecoverabilityPoint ?? fallback.firstRecoverabilityPoint,
+    lastSuccessfulBackup: cluster.lastSuccessfulBackup ?? fallback.lastSuccessfulBackup
   };
 }

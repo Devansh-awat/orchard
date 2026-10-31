@@ -13,6 +13,8 @@ import {
   dbArchivingKey,
   dbStateKey,
   dbWriteGuardKey,
+  dbMemoryRaisedKey,
+  dbRestoreTestKey,
   dbStorageKey,
   deployKey,
   jobRunKey,
@@ -354,6 +356,80 @@ export class NotificationsService {
           ? `${db.name} is ${fillPercent}% full${db.storageSize ? ` on a ${db.storageSize} volume` : ''}, so Orchard switched it to read-only to keep it alive. Reads and backups continue. Expand storage or free space and writes resume on their own.`
           : `${db.name} has disk headroom again (${fillPercent}% full), so writes are back on.`,
         url: `${this.frontendUrl}/${db.project.organization.slug}/databases/${db.id}`,
+        projectId: db.project.id,
+        projectName: db.project.name,
+        targetId: db.id,
+        targetName: db.name
+      }
+    });
+  }
+
+  async notifyDbMemoryRaised(namespace: string, clusterName: string, from: string, to: string) {
+    const db = await this.prisma.database.findFirst({
+      where: { namespace, clusterName },
+      select: {
+        id: true,
+        name: true,
+        createdBy: true,
+        project: {
+          select: {
+            id: true,
+            name: true,
+            organizationId: true,
+            organization: { select: { slug: true } }
+          }
+        }
+      }
+    });
+    if (!db) return;
+    await this.emit({
+      organizationId: db.project.organizationId,
+      scopeType: 'database',
+      scopeId: db.id,
+      actorUserId: db.createdBy,
+      dedupeKey: dbMemoryRaisedKey(db.id, to),
+      message: {
+        event: 'db.memory_raised',
+        title: `Memory raised: ${db.name}`,
+        body: `${db.name} kept running out of memory while taking backups on ${from}, so Orchard raised it to ${to}. Without this its backups never finish and it restarts every few minutes.`,
+        url: `${this.frontendUrl}/${db.project.organization.slug}/databases/${db.id}`,
+        projectId: db.project.id,
+        projectName: db.project.name,
+        targetId: db.id,
+        targetName: db.name
+      }
+    });
+  }
+
+  async notifyRestoreTestFailed(databaseId: string, reason: string) {
+    const db = await this.prisma.database.findUnique({
+      where: { id: databaseId },
+      select: {
+        id: true,
+        name: true,
+        createdBy: true,
+        project: {
+          select: {
+            id: true,
+            name: true,
+            organizationId: true,
+            organization: { select: { slug: true } }
+          }
+        }
+      }
+    });
+    if (!db) return;
+    await this.emit({
+      organizationId: db.project.organizationId,
+      scopeType: 'database',
+      scopeId: db.id,
+      actorUserId: db.createdBy,
+      dedupeKey: dbRestoreTestKey(db.id),
+      message: {
+        event: 'db.restore_test_failed',
+        title: `Restore test failed: ${db.name}`,
+        body: `Orchard restored ${db.name} from its backups into a throwaway copy and the check did not pass: ${reason}. Its backups may not bring it back as expected.`,
+        url: `${this.frontendUrl}/${db.project.organization.slug}/databases/${db.id}?tab=backups`,
         projectId: db.project.id,
         projectName: db.project.name,
         targetId: db.id,

@@ -450,6 +450,7 @@ model Project {
   deployments       Deployment[]
   ingresses         Ingress[]
   databases         Database[]
+  deletedDatabases  DeletedDatabase[]
   templateInstances TemplateInstance[]
   composeStacks     ComposeStack[]
   jobs              Job[]
@@ -1515,6 +1516,16 @@ model Database {
   r2RestoreAccessKey String?  @map("r2_restore_access_key") @db.VarChar(64)
   r2RestoreSecret    String?  @map("r2_restore_secret") @db.VarChar(128)
   r2RestoreClusterName String? @map("r2_restore_cluster_name") @db.VarChar(100)
+  backupServerName   String?  @map("backup_server_name") @db.VarChar(100)
+  backupMethod       String?  @map("backup_method") @db.VarChar(20)
+  deletionProtection Boolean  @default(false) @map("deletion_protection")
+  ddlCheckpoints     Boolean  @default(true) @map("ddl_checkpoints")
+  ddlGuardVersion    Int?     @map("ddl_guard_version")
+  restoreTests       Boolean  @default(true) @map("restore_tests")
+  poolerEnabled      Boolean  @default(false) @map("pooler_enabled")
+  poolerConfig       Json?    @map("pooler_config") @db.JsonB
+  forkedFromId       String?  @map("forked_from_id") @db.Uuid
+  forkedAt           DateTime? @map("forked_at") @db.Timestamp(6)
   createdBy          String?  @map("created_by") @db.Uuid
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
@@ -1555,11 +1566,118 @@ model DatabaseBackup {
   createdBy    String?   @map("created_by") @db.Uuid
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
   completedAt  DateTime? @map("completed_at") @db.Timestamp(6)
+  method          String?   @db.VarChar(20)
+  barmanId        String?   @map("barman_id") @db.VarChar(64)
+  serverName      String?   @map("server_name") @db.VarChar(100)
+  destinationPath String?   @map("destination_path") @db.VarChar(500)
+  beginLsn        String?   @map("begin_lsn") @db.VarChar(32)
+  endLsn          String?   @map("end_lsn") @db.VarChar(32)
+  startedAt       DateTime? @map("started_at") @db.Timestamp(6)
 
   database Database @relation(fields: [databaseId], references: [id], onDelete: Cascade)
 
   @@index([databaseId, createdAt], map: "idx_database_backups_lookup")
   @@map("database_backups")
+}
+
+model DatabaseOperation {
+  id                    String    @id @default(uuid()) @db.Uuid
+  databaseId            String?   @map("database_id") @db.Uuid
+  kind                  String    @db.VarChar(20)
+  mode                  String?   @db.VarChar(20)
+  status                String    @default("pending") @db.VarChar(20)
+  phase                 String    @default("queued") @db.VarChar(40)
+  target                Json      @db.JsonB
+  source                Json      @db.JsonB
+  targetNamespace       String?   @map("target_namespace") @db.VarChar(63)
+  targetClusterName     String?   @map("target_cluster_name") @db.VarChar(63)
+  targetDatabaseId      String?   @map("target_database_id") @db.Uuid
+  storageAccessKey      String?   @map("storage_access_key") @db.VarChar(64)
+  request               Json?     @db.JsonB
+  result                Json?     @db.JsonB
+  error                 String?   @db.Text
+  attempts              Int       @default(0)
+  requestedBy           String?   @map("requested_by") @db.Uuid
+  deadlineAt            DateTime? @map("deadline_at") @db.Timestamp(6)
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  startedAt             DateTime? @map("started_at") @db.Timestamp(6)
+  finishedAt            DateTime? @map("finished_at") @db.Timestamp(6)
+  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  @@index([databaseId, createdAt], map: "idx_database_operations_database")
+  @@index([status, kind], map: "idx_database_operations_status")
+  @@map("database_operations")
+}
+
+model DatabaseCheckpoint {
+  id               String    @id @default(uuid()) @db.Uuid
+  databaseId       String    @map("database_id") @db.Uuid
+  groupId          String?   @map("group_id") @db.Uuid
+  label            String    @db.VarChar(255)
+  kind             String    @db.VarChar(20)
+  status           String    @default("pending") @db.VarChar(20)
+  restorePointName String    @map("restore_point_name") @db.VarChar(64)
+  lsn              String?   @db.VarChar(32)
+  walFile          String?   @map("wal_file") @db.VarChar(40)
+  serverName       String?   @map("server_name") @db.VarChar(100)
+  detail           String?   @db.Text
+  deploymentId     String?   @map("deployment_id") @db.Uuid
+  releaseId        String?   @map("release_id") @db.VarChar(100)
+  createdBy        String?   @map("created_by") @db.Uuid
+  error            String?   @db.Text
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  durableAt        DateTime? @map("durable_at") @db.Timestamp(6)
+  expiresAt        DateTime? @map("expires_at") @db.Timestamp(6)
+  hiddenAt         DateTime? @map("hidden_at") @db.Timestamp(6)
+
+  @@unique([databaseId, restorePointName])
+  @@index([databaseId, createdAt], map: "idx_database_checkpoints_database")
+  @@index([groupId], map: "idx_database_checkpoints_group")
+  @@index([status], map: "idx_database_checkpoints_status")
+  @@map("database_checkpoints")
+}
+
+model DeletedDatabase {
+  id                String    @id @db.Uuid
+  projectId         String    @map("project_id") @db.Uuid
+  organizationId    String    @map("organization_id") @db.Uuid
+  environmentId     String?   @map("environment_id") @db.Uuid
+  name              String    @db.VarChar(255)
+  namespace         String    @db.VarChar(63)
+  clusterName       String    @map("cluster_name") @db.VarChar(63)
+  backupServerName  String    @map("backup_server_name") @db.VarChar(100)
+  destinationPath   String    @map("destination_path") @db.VarChar(500)
+  pgMajor           Int       @map("pg_major")
+  snapshot          Json      @db.JsonB
+  reason            String    @db.VarChar(20)
+  recoverableUntil  DateTime? @map("recoverable_until") @db.Timestamp(6)
+  deletedBy         String?   @map("deleted_by") @db.Uuid
+  deletedAt         DateTime  @default(now()) @map("deleted_at") @db.Timestamp(6)
+  purgeAfter        DateTime  @map("purge_after") @db.Timestamp(6)
+  purgedAt          DateTime? @map("purged_at") @db.Timestamp(6)
+  restoredAs        String?   @map("restored_as") @db.Uuid
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, deletedAt], map: "idx_deleted_databases_project")
+  @@index([organizationId, deletedAt], map: "idx_deleted_databases_org")
+  @@index([purgeAfter], map: "idx_deleted_databases_purge")
+  @@map("deleted_databases")
+}
+
+model StorageAccessKey {
+  accessKey      String   @id @map("access_key") @db.VarChar(64)
+  secret         String   @db.VarChar(128)
+  organizationId String   @map("organization_id") @db.Uuid
+  writePrefix    String   @map("write_prefix") @db.VarChar(255)
+  readPrefixes   String[] @map("read_prefixes")
+  purpose        String   @db.VarChar(40)
+  operationId    String?  @map("operation_id") @db.Uuid
+  expiresAt      DateTime @map("expires_at") @db.Timestamp(6)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  @@index([expiresAt], map: "idx_storage_access_keys_expiry")
+  @@map("storage_access_keys")
 }
 
 model Job {

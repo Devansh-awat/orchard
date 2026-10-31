@@ -12,13 +12,22 @@ import {
   LEGACY_DEFAULT_BACKUP_CRON,
   toQuartzCron
 } from './projects.utils';
-import { backupTransition, SUPERSEDED_MESSAGE, supersededBackups } from './backup-transition';
+import {
+  backupTransition,
+  confirmedOrphans,
+  orphanCandidates,
+  orphanKey,
+  SUPERSEDED_MESSAGE,
+  supersededBackups
+} from './backup-transition';
 import { backupFleetGauges } from './backup-telemetry';
 import { gauge } from '../analytics/datadog';
+import { backupFieldsFromStatus } from '../kubernetes/cnpg-recovery';
 
 const NOTIFY_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 const INGEST_EVERY_N_TICKS = 5;
 const MAX_COMPLETED_BACKUPS = 10;
+const BACKUP_ROW_RETENTION_MS = 31 * 24 * 60 * 60 * 1000;
 const SCHEDULE_SWEEP_EVERY_N_TICKS = 30;
 const MAX_SCHEDULES_PER_SWEEP = 5;
 const MAX_RESPREADS_PER_SWEEP = 20;
@@ -37,6 +46,8 @@ export class BackupSyncService {
   private tickCount = 0;
 
   private ticking = false;
+
+  private readonly orphanFirstMissingAt = new Map<string, number>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -86,8 +97,8 @@ export class BackupSyncService {
         });
       }
       if (ingest) {
-        await this.emitFleetGauges().catch((e) => {
-          this.logger.warn(`backup telemetry failed: ${e?.message ?? e}`);
+        await this.fleetPass().catch((e) => {
+          this.logger.warn(`backup fleet pass failed: ${e?.message ?? e}`);
         });
       }
     } catch (e: any) {
@@ -110,12 +121,50 @@ export class BackupSyncService {
    * A database that has taken backups and then had its schedule cleared is
    * someone choosing manual backups, so it is left alone.
    */
-  private async emitFleetGauges(): Promise<void> {
-    const [clusters, backups] = await Promise.all([
+  private async fleetPass(): Promise<void> {
+    const [clusters, backups, schedules] = await Promise.all([
       this.k8sCnpg.listAllCnpgClusters(),
-      this.k8sCnpg.listAllCnpgBackups()
+      this.k8sCnpg.listAllCnpgBackups(),
+      this.k8sCnpg.listAllScheduledBackups()
     ]);
     for (const g of backupFleetGauges(clusters, backups)) gauge(g.metric, g.value, g.tags);
+    await this.sweepOrphans(clusters, backups, schedules);
+  }
+
+  private async sweepOrphans(clusters: any[], backups: any[], schedules: any[]): Promise<void> {
+    const candidates = orphanCandidates(clusters, backups, schedules);
+    const existence = new Map<string, boolean | null>();
+    const missing = new Set<string>();
+    for (const c of candidates) {
+      const ref = `${c.namespace}/${c.cluster}`;
+      if (!existence.has(ref)) {
+        const exists = await this.k8sCnpg.cnpgClusterExists(c.namespace, c.cluster).catch((e) => {
+          this.logger.warn(`orphan check for ${ref} failed: ${k8sErrorMessage(e)}`);
+          return null;
+        });
+        existence.set(ref, exists);
+      }
+      if (existence.get(ref) === false) missing.add(orphanKey(c));
+    }
+    for (const c of confirmedOrphans(candidates, missing, this.orphanFirstMissingAt)) {
+      try {
+        if (c.kind === 'schedule') {
+          await this.k8sCnpg.deleteScheduledBackupNamed(c.namespace, c.name, {
+            keepBackups: true
+          });
+        } else {
+          await this.k8sCnpg.deleteCnpgBackup(c.namespace, c.name);
+        }
+        this.orphanFirstMissingAt.delete(orphanKey(c));
+        this.logger.log(
+          `removed ${c.kind} ${c.namespace}/${c.name}: its cluster ${c.cluster} no longer exists`
+        );
+      } catch (e: any) {
+        this.logger.warn(
+          `removing orphan ${c.kind} ${c.namespace}/${c.name} failed: ${k8sErrorMessage(e)}`
+        );
+      }
+    }
   }
 
   private async ensureBackupSchedules(): Promise<void> {
@@ -243,6 +292,7 @@ export class BackupSyncService {
           where: { id: row.id, status: { in: ['pending', 'running'] } },
           data: {
             status: newStatus,
+            ...backupFieldsFromStatus(live),
             ...(terminal
               ? {
                   completedAt: new Date(live?.status?.stoppedAt || Date.now()),
@@ -308,9 +358,21 @@ export class BackupSyncService {
 
     const existing = await this.prisma.databaseBackup.findMany({
       where: { databaseId: database.id },
-      select: { backupName: true }
+      select: { id: true, backupName: true, barmanId: true, status: true }
     });
     const known = new Set(existing.map((r) => r.backupName));
+    const unrecorded = new Map(
+      existing
+        .filter((r) => r.status === 'completed' && !r.barmanId)
+        .map((r) => [r.backupName, r.id])
+    );
+    for (const lb of liveBackups) {
+      const id = unrecorded.get(lb.metadata?.name);
+      if (!id || lb.status?.phase !== 'completed' || !lb.status?.backupId) continue;
+      await this.prisma.databaseBackup
+        .update({ where: { id }, data: backupFieldsFromStatus(lb) })
+        .catch(() => {});
+    }
 
     for (const lb of liveBackups) {
       const name: string | undefined = lb.metadata?.name;
@@ -334,7 +396,8 @@ export class BackupSyncService {
                 ? String(lb.status?.error || '').substring(0, 2000) || null
                 : null,
             completedAt: terminal ? new Date(lb.status?.stoppedAt || Date.now()) : null,
-            createdAt
+            createdAt,
+            ...backupFieldsFromStatus(lb)
           }
         });
         if (status === 'completed') anyNewlyCompleted = true;
@@ -371,6 +434,7 @@ export class BackupSyncService {
       } catch (e: any) {
         this.logger.warn(`failed to delete old backup CR ${b.backupName}: ${e?.message ?? e}`);
       }
+      if (b.completedAt && Date.now() - b.completedAt.getTime() < BACKUP_ROW_RETENTION_MS) continue;
       try {
         await this.prisma.databaseBackup.delete({ where: { id: b.id } });
       } catch (e: any) {

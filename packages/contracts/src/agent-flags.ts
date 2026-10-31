@@ -1,5 +1,6 @@
 export const SENSITIVE_OPERATIONS = new Set<string>([
   'GET /databases/:id/connection',
+  'POST /databases/:id/users',
   'POST /databases/:id/rotate-password',
   'GET /projects/:id/ingresses/:ingressId/protection',
   'GET /users/me/git-connections/:connectionId/webhook-secret',
@@ -12,6 +13,8 @@ export const SENSITIVE_OPERATIONS = new Set<string>([
 
 export const REQUIRED_SCOPES = new Map<string, 'read' | 'deploy' | 'exec'>([
   ['GET /databases/:id/connection', 'deploy'],
+  ['GET /databases/:id/activity', 'deploy'],
+  ['POST /databases/:id/users', 'deploy'],
   ['GET /projects/:id/ingresses/:ingressId/protection', 'deploy'],
   ['GET /users/me/git-connections/:connectionId/webhook-secret', 'deploy'],
   ['POST /pods/:podName/exec', 'exec']
@@ -27,6 +30,9 @@ export const DESTRUCTIVE_OPERATIONS = new Set<string>([
   'POST /deployments/:id/stop',
   'POST /databases/:id/stop',
   'POST /databases/:id/restore',
+  'POST /checkpoints/:id/restore',
+  'POST /checkpoints/groups/:groupId/restore',
+  'POST /database-operations/:opId/undo',
   'POST /databases/:id/rotate-password',
   'POST /projects/:id/transfer-org',
   'POST /deployments/:id/cancel'

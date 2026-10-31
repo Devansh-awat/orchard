@@ -48,6 +48,14 @@ export function dbWriteGuardKey(databaseId: string, state: 'on' | 'off'): string
   return clamp(`dbwriteguard:${databaseId}:${state}:${bucket(6 * 3_600_000)}`);
 }
 
+export function dbMemoryRaisedKey(databaseId: string, memory: string): string {
+  return clamp(`dbmemory:${databaseId}:${memory}`);
+}
+
+export function dbRestoreTestKey(databaseId: string): string {
+  return clamp(`dbrestoretest:${databaseId}:${bucket(24 * 3_600_000)}`);
+}
+
 export function dbStateKey(databaseId: string, state: 'crashing' | 'recovered'): string {
   return clamp(`dbstate:${databaseId}:${state}:${bucket(60_000)}`);
 }

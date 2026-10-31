@@ -1,5 +1,9 @@
-import { Controller, Get, Patch, Body } from '@nestjs/common';
-import { InstanceSettingsService } from './instance-settings.service';
+import { BadRequestException, Body, Controller, Get, Patch } from '@nestjs/common';
+import {
+  DATABASE_TOGGLES,
+  InstanceSettingsService,
+  type DatabaseToggle
+} from './instance-settings.service';
 
 // Superadmin-only (default-deny: no @Auth()/@SuperAdmin() decorator, so the
 // global SuperAdminGuard requires a superadmin).
@@ -27,5 +31,18 @@ export class InstanceSettingsController {
   async setMcp(@Body() body: { enabled?: boolean }) {
     await this.settings.setMcp(Boolean(body?.enabled));
     return this.settings.getMcpState();
+  }
+
+  @Get('databases')
+  async getDatabaseToggles() {
+    return this.settings.getDatabaseToggles();
+  }
+
+  @Patch('databases')
+  async setDatabaseToggle(@Body() body: { toggle?: string; enabled?: boolean }) {
+    const toggle = String(body?.toggle ?? '') as DatabaseToggle;
+    if (!(toggle in DATABASE_TOGGLES)) throw new BadRequestException('Unknown database setting');
+    await this.settings.setDatabaseToggle(toggle, Boolean(body?.enabled));
+    return this.settings.getDatabaseToggles();
   }
 }

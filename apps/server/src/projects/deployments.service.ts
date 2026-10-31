@@ -107,6 +107,7 @@ import {
 } from './build-recovery';
 import { buildStartedAtFrom } from './build-timing';
 import { ReleasesService } from './releases.service';
+import { DatabaseCheckpointsService } from './database-checkpoints.service';
 import type { DeployStrategy } from '../kubernetes/rollout-strategy';
 import {
   greenName as greenName_,
@@ -211,7 +212,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     private readonly applyExecutor: ApplyExecutorService,
     private readonly instanceConfig: InstanceConfigService,
     private readonly releases: ReleasesService,
-    @Optional() private readonly buildJobInformer?: BuildJobInformerService
+    @Optional() private readonly buildJobInformer?: BuildJobInformerService,
+    @Optional() private readonly checkpoints?: DatabaseCheckpointsService
   ) {}
 
   async runQueuedBuild(run: {
@@ -8423,6 +8425,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         // volume attached mid-build has to reach the pod this build creates.
         const desiredVolumes = await this.currentVolumes(deploymentId);
 
+        await this.checkpointBoundDatabases(deploymentId, image, data.triggeredById ?? null);
+
         if (shouldCreateNew) {
           const healthCheck = await this.loadHealthCheckOptions(deploymentId);
           const startArgs = await this.loadStartArgs(deploymentId);
@@ -8948,6 +8952,45 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         }
       }
     }
+  }
+
+  private async checkpointBoundDatabases(
+    deploymentId: string,
+    image: string,
+    userId: string | null
+  ) {
+    if (!this.checkpoints) return;
+    const bound = await this.prisma.resourceBinding.findMany({
+      where: { deploymentId, resourceType: 'database' },
+      select: { resourceId: true }
+    });
+    if (bound.length === 0) return;
+    const tag = image.split('/').pop()?.slice(0, 80) ?? image.slice(0, 80);
+    const work = this.checkpoints
+      .create(
+        bound.map((b) => b.resourceId),
+        {
+          kind: 'pre_deploy',
+          label: `Before deploying ${tag}`,
+          createdBy: userId,
+          deploymentId,
+          releaseId: image.slice(0, 100)
+        }
+      )
+      .then((res) => {
+        const ok = res.checkpoints.filter((c: any) => c.status !== 'failed').length;
+        return this.appendBuildLog(
+          deploymentId,
+          `Checkpointed ${ok} of ${bound.length} bound database${bound.length === 1 ? '' : 's'} before rollout`
+        );
+      })
+      .catch((e) =>
+        this.appendBuildLog(
+          deploymentId,
+          `WARNING: database checkpoint before rollout failed: ${e?.message ?? e}`
+        )
+      );
+    await Promise.race([work, new Promise((r) => setTimeout(r, 15_000).unref?.())]);
   }
 
   async rebuildFromQueue(deploymentId: string, triggeredById: string | null, runId: string) {

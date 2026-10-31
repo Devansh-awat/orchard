@@ -1,4 +1,5 @@
 import { Idempotent } from '../idempotency/idempotency.interceptor';
+import { DatabaseRecoveryService } from './database-recovery.service';
 import { Throttle } from '@nestjs/throttler';
 import {
   Controller,
@@ -966,7 +967,8 @@ export class DeploymentsController {
     private readonly faviconService: FaviconService,
     private readonly metricsService: MetricsService,
     private readonly logCapture: PodLogCaptureService,
-    private readonly rightsizing: RightsizingService
+    private readonly rightsizing: RightsizingService,
+    private readonly recovery: DatabaseRecoveryService
   ) {}
 
   @Get(':id/build-runs')
@@ -1523,14 +1525,23 @@ export class DeploymentsController {
   @Post(':id/rollback')
   @UseInterceptors(RolloutPinInterceptor)
   @Idempotent()
-  async rollbackToPrevious(@Param('id') id: string, @Request() req) {
-    return this.deployments.rollbackToPrevious(id, req.user.sub, {
+  async rollbackToPrevious(
+    @Param('id') id: string,
+    @Body() body: { restoreDatabases?: boolean },
+    @Request() req
+  ) {
+    const userData = {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
       imageUrl: req.user.imageUrl
-    });
+    };
+    const databaseRestores = body?.restoreDatabases
+      ? await this.recovery.restoreBeforeLastDeploy(id, req.user.sub, userData)
+      : undefined;
+    const result = await this.deployments.rollbackToPrevious(id, req.user.sub, userData);
+    return databaseRestores ? { ...result, databaseRestores } : result;
   }
 
   @Post(':id/rollback/:imageHistoryId')
@@ -1539,15 +1550,26 @@ export class DeploymentsController {
   async rollbackToImage(
     @Param('id') id: string,
     @Param('imageHistoryId') imageHistoryId: string,
+    @Body() body: { restoreDatabases?: boolean },
     @Request() req
   ) {
-    return this.deployments.rollbackToImage(id, imageHistoryId, req.user.sub, {
+    const userData = {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
       imageUrl: req.user.imageUrl
-    });
+    };
+    const databaseRestores = body?.restoreDatabases
+      ? await this.recovery.restoreBeforeLastDeploy(id, req.user.sub, userData)
+      : undefined;
+    const result = await this.deployments.rollbackToImage(
+      id,
+      imageHistoryId,
+      req.user.sub,
+      userData
+    );
+    return databaseRestores ? { ...result, databaseRestores } : result;
   }
 
   @Put(':id/env')
@@ -2026,7 +2048,8 @@ export class DatabasesController {
     private readonly projectAccess: ProjectAccessService,
     private readonly databases: DatabasesService,
     private readonly metricsService: MetricsService,
-    private readonly logCapture: PodLogCaptureService
+    private readonly logCapture: PodLogCaptureService,
+    private readonly recovery: DatabaseRecoveryService
   ) {}
 
   @Post(':id/rotate-password')
@@ -2347,12 +2370,21 @@ export class DatabasesController {
   }
 
   @Post(':id/restore')
+  @Idempotent()
   async restoreBackup(
     @Param('id') id: string,
-    @Body() body: { backupId?: string },
+    @Body()
+    body: {
+      backupId?: string;
+      checkpointId?: string;
+      at?: string;
+      mode?: 'in_place' | 'fork';
+      name?: string;
+      environmentId?: string;
+    },
     @Request() req
   ) {
-    return this.databases.restoreDatabaseBackup(id, body?.backupId, req.user.sub, {
+    return this.recovery.restore(id, body ?? {}, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,

@@ -17,6 +17,7 @@ import { registerNotificationTools } from '../src/mcp/tools/notifications';
 import { registerJobTools } from '../src/mcp/tools/jobs';
 import { registerEnvironmentTools } from '../src/mcp/tools/environments';
 import { registerDangerousTools } from '../src/mcp/tools/dangerous';
+import { registerDatabaseRecoveryTools } from '../src/mcp/tools/database-recovery';
 import { registerRolloutTools } from '../src/mcp/tools/rollout';
 import { registerObservabilityTools } from '../src/mcp/tools/observability';
 import { registerComposeTools } from '../src/mcp/tools/compose';
@@ -30,6 +31,7 @@ const REGISTER = [
   registerComposeTools,
   registerConfigurationTools,
   registerResourceTools,
+  registerDatabaseRecoveryTools,
   registerNotificationTools,
   registerJobTools,
   registerEnvironmentTools,
@@ -349,4 +351,80 @@ test('docs are exposed as resources and llms.txt degrades to a pointer', async (
     throw new Error('offline');
   }) as any);
   assert.match(offline, /Read it directly at https:\/\//);
+});
+
+test('database recovery tools hit the recovery routes', async () => {
+  const { tools, calls } = capture();
+  await tools.get('restore_database')!.handler({ databaseId: 'db1', at: 'latest', mode: 'fork' });
+  assert.deepEqual(calls.at(-1), {
+    method: 'POST',
+    path: '/databases/db1/restore',
+    body: { at: 'latest', mode: 'fork' }
+  });
+  await tools.get('fork_database')!.handler({ databaseId: 'db1', name: 'try' });
+  assert.deepEqual(calls.at(-1), {
+    method: 'POST',
+    path: '/databases/db1/fork',
+    body: { name: 'try' }
+  });
+  await tools.get('create_checkpoint')!.handler({ databaseId: 'db1', label: 'pre' });
+  assert.deepEqual(calls.at(-1), {
+    method: 'POST',
+    path: '/databases/db1/checkpoints',
+    body: { label: 'pre' }
+  });
+  await tools.get('create_checkpoint')!.handler({ projectId: 'p1' });
+  assert.deepEqual(calls.at(-1), {
+    method: 'POST',
+    path: '/checkpoints',
+    body: { projectId: 'p1' }
+  });
+  await tools.get('restore_checkpoint')!.handler({ groupId: 'g1', mode: 'fork' });
+  assert.deepEqual(calls.at(-1), {
+    method: 'POST',
+    path: '/checkpoints/groups/g1/restore',
+    body: { mode: 'fork' }
+  });
+  await tools.get('get_database_operation')!.handler({ operationId: 'op1', wait: true });
+  assert.equal(calls.at(-1)!.path, '/database-operations/op1?wait=1');
+  await tools.get('undo_database_restore')!.handler({ operationId: 'op1' });
+  assert.equal(calls.at(-1)!.path, '/database-operations/op1/undo');
+  await tools.get('undelete_database')!.handler({ deletedDatabaseId: 't1' });
+  assert.deepEqual(calls.at(-1), {
+    method: 'POST',
+    path: '/deleted-databases/t1/restore',
+    body: {}
+  });
+  await tools.get('disable_database_deletion_protection')!.handler({ databaseId: 'db1' });
+  assert.deepEqual(calls.at(-1), {
+    method: 'PATCH',
+    path: '/databases/db1/protection',
+    body: { deletionProtection: false }
+  });
+});
+
+test('recovery tools refuse ambiguous targets and keep unprotecting in dangerous', async () => {
+  const { tools, calls } = capture();
+  const before = calls.length;
+  const restore = await tools
+    .get('restore_database')!
+    .handler({ databaseId: 'db1', backupId: 'b1', at: 'latest' });
+  assert.equal(restore.isError, true);
+  const checkpoint = await tools.get('restore_checkpoint')!.handler({});
+  assert.equal(checkpoint.isError, true);
+  const unprotect = await tools
+    .get('set_database_protection')!
+    .handler({ databaseId: 'db1', deletionProtection: false });
+  assert.equal(unprotect.isError, true);
+  assert.equal(calls.length, before);
+  const dbOnly = capture('databases').tools;
+  assert.ok(dbOnly.has('set_database_protection'));
+  assert.ok(!dbOnly.has('disable_database_deletion_protection') && !dbOnly.has('restore_database'));
+});
+
+test('diagnose_database is on by default and activity needs deploy scope', () => {
+  assert.ok(capture('').tools.has('diagnose_database'));
+  assert.ok(capture('all', 'read').tools.has('diagnose_database'));
+  assert.ok(!capture('all', 'read').tools.has('get_database_activity'));
+  assert.ok(capture('all', 'deploy').tools.has('get_database_activity'));
 });

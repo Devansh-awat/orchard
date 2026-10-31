@@ -154,6 +154,7 @@ export const EVENT_GROUPS: {
 			{ value: 'db.storage_pressure', label: 'Storage running out', tone: 'fail' },
 			{ value: 'db.read_only', label: 'Writes paused (disk full)', tone: 'fail' },
 			{ value: 'db.writes_resumed', label: 'Writes resumed', tone: 'ok' },
+			{ value: 'db.memory_raised', label: 'Memory raised to survive backups', tone: 'fail' },
 			{ value: 'db.storage_recovered', label: 'Storage recovered', tone: 'ok' }
 		]
 	},
@@ -161,6 +162,7 @@ export const EVENT_GROUPS: {
 		label: 'Backups and archiving',
 		category: 'data',
 		options: [
+			{ value: 'db.restore_test_failed', label: 'Restore test failed', tone: 'fail' },
 			{ value: 'backup.completed', label: 'Backup completed', tone: 'ok' },
 			{ value: 'backup.failed', label: 'Backup failed', tone: 'fail' },
 			{ value: 'db.archiving_failing', label: 'Archiving failing', tone: 'fail' },
@@ -251,6 +253,8 @@ const SCOPE_EVENTS: Record<NotificationScopeType, string[] | null> = {
 		'db.storage_pressure',
 		'db.read_only',
 		'db.writes_resumed',
+		'db.memory_raised',
+		'db.restore_test_failed',
 		'db.storage_recovered',
 		'db.crashing',
 		'db.recovered'

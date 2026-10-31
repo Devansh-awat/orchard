@@ -81,10 +81,29 @@ To wire it into an app, call get_database_connection and pass its connectionStri
 
 Optionally, pass restoreFromUrl to seed the new database from an existing one — the
 cluster will run pg_dump/pg_restore from the source URL during initdb. The URL must
-be reachable from the cluster and use the postgres:// or postgresql:// scheme.`,
+be reachable from the cluster and use the postgres:// or postgresql:// scheme.
+
+Pass environmentId to put the database in that environment, which gives it that environment's own namespace. Without it the database goes into the project's default environment.`,
       inputSchema: {
         projectId: z.guid().describe('The project UUID'),
         name: z.string().describe('Database display name'),
+        environmentId: z
+          .guid()
+          .optional()
+          .describe(
+            "Environment UUID to create the database in. Defaults to the project's default environment."
+          ),
+        pgMajor: z
+          .number()
+          .int()
+          .min(13)
+          .max(18)
+          .optional()
+          .describe('PostgreSQL major version. Defaults to the instance default.'),
+        nodePoolId: z
+          .guid()
+          .optional()
+          .describe('Node pool UUID to schedule the database on (see list_node_pools).'),
         storageSize: z
           .string()
           .regex(/^\d+(Mi|Gi|Ti)$/)
@@ -125,9 +144,15 @@ be reachable from the cluster and use the postgres:// or postgresql:// scheme.`,
       restoreFromUrl,
       cpuRequestMilli,
       memoryRequestBytes,
-      replicas
+      replicas,
+      environmentId,
+      pgMajor,
+      nodePoolId
     }) => {
       const body: Record<string, unknown> = { name };
+      if (environmentId) body.environmentId = environmentId;
+      if (pgMajor != null) body.pgMajor = pgMajor;
+      if (nodePoolId) body.nodePoolId = nodePoolId;
       if (storageSize) body.storageSize = storageSize;
       if (restoreFromUrl) body.restoreFromUrl = restoreFromUrl;
       if (cpuRequestMilli != null) body.cpuRequestMilli = cpuRequestMilli;
@@ -540,7 +565,7 @@ Common values:
     'clear_database_backup_schedule',
     {
       description:
-        'Disable automated backups for a database (clears the cron schedule). Existing backups are kept.',
+        'Turn off automated backups for a database. This also stops WAL archiving, so point-in-time recovery ends at this moment until a schedule is set again. Backups already taken are kept.',
       inputSchema: {
         databaseId: z.guid().describe('The database UUID')
       }

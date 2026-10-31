@@ -45,6 +45,15 @@ import { NamespaceTeardownService } from './namespace-teardown.service';
 import { RolloutStatusService } from './rollout-status.service';
 import { RolloutController, RolloutPinInterceptor } from './rollout.controller';
 
+import { DatabaseOperationsService } from './database-operations.service';
+import { DatabaseCheckpointsService } from './database-checkpoints.service';
+import { DatabaseTrashService } from './database-trash.service';
+import { DatabaseDrillsService } from './database-drills.service';
+import { DatabasePluginMigrationService } from './database-plugin-migration.service';
+import { DatabaseRecoveryService } from './database-recovery.service';
+import { DatabaseCatalogService } from './database-catalog.service';
+import { DatabaseRecoveryController } from './database-recovery.controller';
+import { DatabaseAdminController } from './database-admin.controller';
 @Module({
   imports: [
     RegistryCredentialsModule,
@@ -70,6 +79,13 @@ import { RolloutController, RolloutPinInterceptor } from './rollout.controller';
     EnvironmentsService,
     EnvironmentSharedVarsService,
     DatabasesService,
+    DatabaseOperationsService,
+    DatabaseCheckpointsService,
+    DatabaseTrashService,
+    DatabaseDrillsService,
+    DatabasePluginMigrationService,
+    DatabaseRecoveryService,
+    DatabaseCatalogService,
     BackupSyncService,
     ImportSettleService,
     DeploymentsService,
@@ -90,6 +106,8 @@ import { RolloutController, RolloutPinInterceptor } from './rollout.controller';
     ResourceBindingsController,
     IngressesController,
     DatabasesController,
+    DatabaseRecoveryController,
+    DatabaseAdminController,
     EnvironmentsController,
     OverviewController,
     ProjectTransfersController,
@@ -104,6 +122,8 @@ import { RolloutController, RolloutPinInterceptor } from './rollout.controller';
     EnvironmentsService,
     EnvironmentSharedVarsService,
     DatabasesService,
+    DatabaseCheckpointsService,
+    DatabaseRecoveryService,
     DeploymentsService,
     IngressService,
     NamespaceTeardownService,

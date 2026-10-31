@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
+  backupOomLooping,
   laggingDataVolumes,
   repairedCaBundle,
   tuningPatchFor,
@@ -256,4 +257,52 @@ test('the reconcile only patches what is missing and never runs off a non-member
 
   member = false;
   assert.equal(await svc.reconcileClusterDefaults(), null);
+});
+
+test('a small database that keeps dying in its backups is floored at 512Mi', () => {
+  const now = Date.parse('2026-10-30T19:30:00Z');
+  const cluster = {
+    spec: {
+      resources: { limits: { memory: '256Mi' }, requests: { memory: '256Mi' } },
+      postgresql: { parameters: { shared_buffers: '64MB' } },
+      backup: { barmanObjectStore: { wal: { maxParallel: 4 } } }
+    }
+  };
+  const pods = [
+    {
+      status: {
+        containerStatuses: [
+          {
+            name: 'postgres',
+            restartCount: 681,
+            lastState: { terminated: { reason: 'OOMKilled', finishedAt: '2026-10-30T19:27:00Z' } }
+          }
+        ]
+      }
+    }
+  ];
+  const looping = backupOomLooping(cluster, pods, now);
+  assert.equal(looping, true);
+  const patch = tuningPatchFor(cluster, {}, { backupOomLooping: looping }) as any;
+  assert.equal(patch.resources.limits.memory, '512Mi');
+  assert.equal(tuningPatchFor(cluster, {}), null);
+});
+
+test('an old or one-off OOM, or a database without backups, is not treated as a backup loop', () => {
+  const now = Date.parse('2026-10-30T19:30:00Z');
+  const pod = (restartCount: number, finishedAt: string) => ({
+    status: {
+      containerStatuses: [
+        {
+          name: 'postgres',
+          restartCount,
+          lastState: { terminated: { reason: 'OOMKilled', finishedAt } }
+        }
+      ]
+    }
+  });
+  const backedUp = { spec: { backup: { barmanObjectStore: {} } } };
+  assert.equal(backupOomLooping(backedUp, [pod(40, '2026-10-20T00:00:00Z')], now), false);
+  assert.equal(backupOomLooping(backedUp, [pod(1, '2026-10-30T19:00:00Z')], now), false);
+  assert.equal(backupOomLooping({ spec: {} }, [pod(40, '2026-10-30T19:00:00Z')], now), false);
 });
