@@ -4,7 +4,7 @@ import type { MockContext } from '../plugin.ts';
 import { STREAMING, notFound, reply, type Router } from '../router.ts';
 import { openStream, writeMessage } from '../events.ts';
 import { creator, deploymentSummary, ingress } from '../serialize.ts';
-import type { Store } from '../store.ts';
+import { BUILD_FAILURES, type BuildFailureKind, type Store } from '../store.ts';
 import type { MockDeployment } from '../types.ts';
 import {
 	POD_SCENARIOS,
@@ -609,6 +609,14 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 		})
 	);
 	r.post(
+		'/__mock/deployments/:id/build',
+		withDep((d, { body }) => {
+			const failure =
+				body?.failure in BUILD_FAILURES ? (body.failure as BuildFailureKind) : undefined;
+			return store.redeploy(d.id, { failure }) ?? notFound();
+		})
+	);
+	r.post(
 		'/__mock/deployments/:id/rollout',
 		withDep((d, { body }) => {
 			if (body?.cancel) {
@@ -709,7 +717,29 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 			}))
 		)
 	);
-	r.get('/deployments/:id/anomalies', () => ({ anomalies: [] }));
+	r.get('/deployments/:id/anomalies', ({ params }) => {
+		const d = store.deployment(params.id);
+		if (!d?.crash) return { anomalies: [] };
+		const o = store.orgOfProject(d.projectId)!;
+		return {
+			anomalies: [
+				{
+					id: `${d.id}:crashloop`,
+					kind: 'crashloop',
+					severity: 'critical',
+					resource: { kind: 'deployment', id: d.id, name: d.name },
+					title: 'keeps crashing',
+					detail: `Last exit: ${d.crash.reason}`,
+					since: d.updatedAt,
+					href: `/${o.slug}/deployments/${d.id}`,
+					action: {
+						label: 'See why',
+						href: `/${o.slug}/deployments/${d.id}?tab=observe&view=killed`
+					}
+				}
+			]
+		};
+	});
 	r.get(
 		'/deployments/:id/next-steps',
 		withDep((d) => ({
@@ -1493,7 +1523,7 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 	);
 	r.post(
 		'/deployments/:id/rollback/:hid',
-		withDep((d, { params }) => {
+		withDep((d, { params, body }) => {
 			const target = store.state.builds.find((b) => b.id === params.hid);
 			if (!target) return notFound();
 			for (const b of store.state.builds)
@@ -1501,7 +1531,23 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 			d.image = target.image;
 			store.restart(d.id);
 			store.emit('build.changed', d.projectId, d.id);
-			return { ok: true };
+			const bound = body?.restoreDatabases
+				? store
+						.databasesOf(d.projectId)
+						.filter((db) => db.mode === 'cnpg' && db.environmentId === d.environmentId)
+				: [];
+			return {
+				ok: true,
+				...(body?.restoreDatabases
+					? {
+							databaseRestores: bound.map((db) => ({
+								databaseId: db.id,
+								name: db.name,
+								status: 'pending'
+							}))
+						}
+					: {})
+			};
 		})
 	);
 	r.post(

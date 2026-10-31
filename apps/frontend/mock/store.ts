@@ -16,6 +16,92 @@ import type {
 	MockUser
 } from './types.ts';
 
+const BUILD_PREFIX = [
+	'=== Building image ===',
+	'#1 [internal] load build definition from Dockerfile',
+	'#1 transferring dockerfile: 812B done',
+	'#1 DONE 0.1s',
+	'#2 [internal] load metadata for docker.io/library/node:22-slim',
+	'#2 DONE 0.6s',
+	'#3 [base 1/6] FROM docker.io/library/node:22-slim@sha256:9b1f',
+	'#3 CACHED',
+	'#4 [deps 2/6] COPY package.json pnpm-lock.yaml ./',
+	'#4 CACHED'
+];
+
+export const BUILD_FAILURES = {
+	command: {
+		at: 'building',
+		error:
+			'Build failed: process "/bin/sh -c pnpm build" did not complete successfully: exit code: 1',
+		lines: [
+			...BUILD_PREFIX,
+			'#5 [deps 3/6] RUN corepack enable && pnpm install --frozen-lockfile',
+			'#5 DONE 18.4s',
+			'#6 [build 4/6] COPY . .',
+			'#6 DONE 0.3s',
+			'#7 [build 5/6] RUN pnpm build',
+			'#7 4.120 vite v8.3.4 building for production...',
+			'#7 9.204 ✓ 1180 modules transformed.',
+			'#7 9.311 [vite:load-fallback] Could not load /app/src/lib/Chart.svelte (imported by src/routes/+page.svelte): ENOENT: no such file or directory',
+			'#7 9.402 error during build:',
+			'#7 ERROR: process "/bin/sh -c pnpm build" did not complete successfully: exit code: 1',
+			'[ERROR] Build failed: process "/bin/sh -c pnpm build" did not complete successfully: exit code: 1'
+		]
+	},
+	lockfile: {
+		at: 'building',
+		error:
+			'Build failed: process "/bin/sh -c corepack enable && pnpm install --frozen-lockfile" did not complete successfully: exit code: 1',
+		lines: [
+			...BUILD_PREFIX,
+			'#5 [deps 3/6] RUN corepack enable && pnpm install --frozen-lockfile',
+			'#5 1.204 Lockfile is up to date, resolution step is skipped',
+			'#5 1.388 ERR_PNPM_OUTDATED_LOCKFILE  Cannot install with "frozen-lockfile" because pnpm-lock.yaml is not up to date with package.json',
+			'#5 1.389 ',
+			'#5 1.389 Failure reason:',
+			'#5 1.389 specifiers in the lockfile ({"svelte":"^5.38.0"}) don\'t match specs in package.json ({"svelte":"^5.41.2","zod":"^4.1.0"})',
+			'#5 ERROR: process "/bin/sh -c corepack enable && pnpm install --frozen-lockfile" did not complete successfully: exit code: 1'
+		]
+	},
+	dockerfile: {
+		at: 'building',
+		error:
+			'Build failed: error: failed to solve: failed to read dockerfile: open Dockerfile: no such file or directory\nContainer buildkit terminated: Error - exit code 1\nContainer pusher terminated: StartError - failed to start containerd task "94fea0bf": 429',
+		lines: [
+			'=== Building image ===',
+			'time="2026-10-29T00:18:57Z" level=warning msg="CDI setup error /etc/buildkit/cdi: failed to monitor for changes: no such file or directory"',
+			'[ERROR] Build failed: error: failed to solve: failed to read dockerfile: open Dockerfile: no such file or directory'
+		]
+	},
+	typescript: {
+		at: 'building',
+		error:
+			'Build failed: process "/bin/sh -c npx tsc && npm prune --omit=dev" did not complete successfully: exit code: 2',
+		lines: [
+			...BUILD_PREFIX,
+			'#5 [build 3/6] RUN npm ci',
+			'#5 DONE 7.9s',
+			'#6 [build 4/6] COPY src ./src',
+			'#6 DONE 0.0s',
+			'#7 [build 5/6] RUN npx tsc && npm prune --omit=dev',
+			"#7 3.512 src/slack.ts(41,9): error TS2322: Type 'string | undefined' is not assignable to type 'string'.",
+			'#7 3.513 src/queue.ts(12,3): error TS2554: Expected 2 arguments, but got 1.',
+			'#7 ERROR: process "/bin/sh -c npx tsc && npm prune --omit=dev" did not complete successfully: exit code: 2'
+		]
+	},
+	branch: {
+		at: 'cloning',
+		error: 'fatal: Remote branch {branch} not found in upstream origin',
+		lines: [
+			'Cloning https://github.com/{repo} (branch {branch})',
+			'[ERROR] fatal: Remote branch {branch} not found in upstream origin'
+		]
+	}
+} as const;
+
+export type BuildFailureKind = keyof typeof BUILD_FAILURES;
+
 const PHASES: { step: BuildStep; ms: number; lines: string[] }[] = [
 	{
 		step: 'queued',
@@ -35,21 +121,22 @@ const PHASES: { step: BuildStep; ms: number; lines: string[] }[] = [
 		step: 'building',
 		ms: 8_000,
 		lines: [
-			'#1 [internal] load build definition from Dockerfile',
-			'#1 transferring dockerfile: 812B done',
-			'#2 [internal] load metadata for docker.io/library/node:22-slim',
-			'#3 [base 1/6] FROM docker.io/library/node:22-slim@sha256:9b1f',
-			'#4 [deps 2/6] COPY package.json pnpm-lock.yaml ./',
+			...BUILD_PREFIX,
 			'#5 [deps 3/6] RUN corepack enable && pnpm install --frozen-lockfile',
-			'#5 12.41 Packages: +612',
-			'#5 18.02 Done in 9.4s',
+			'#5 12.410 Packages: +612',
+			'#5 18.020 Done in 9.4s',
+			'#5 DONE 18.4s',
 			'#6 [build 4/6] COPY . .',
+			'#6 DONE 0.3s',
 			'#7 [build 5/6] RUN pnpm build',
 			'#7 4.120 vite v8.3.4 building for production...',
 			'#7 9.884 ✓ 1284 modules transformed.',
 			'#7 11.203 ✓ built in 6.81s',
+			'#7 DONE 11.6s',
 			'#8 [runtime 6/6] COPY --from=build /app/build ./build',
-			'#9 exporting to image'
+			'#8 DONE 0.2s',
+			'#9 exporting to image',
+			'#9 DONE 0.9s'
 		]
 	},
 	{
@@ -359,13 +446,13 @@ export class Store {
 
 	private fill(line: string, d: MockDeployment, b: MockBuild) {
 		return line
-			.replace('{repo}', d.githubRepo ?? 'hackclub/app')
-			.replace('{branch}', b.branch ?? 'main')
-			.replace('{short}', (b.commitSha ?? '').slice(0, 7))
-			.replace('{message}', b.commitMessage ?? '')
-			.replace('{image}', b.image)
-			.replace('{name}', d.name)
-			.replace('{pod}', this.podName(d, 0));
+			.replaceAll('{repo}', d.githubRepo ?? 'hackclub/app')
+			.replaceAll('{branch}', b.branch ?? 'main')
+			.replaceAll('{short}', (b.commitSha ?? '').slice(0, 7))
+			.replaceAll('{message}', b.commitMessage ?? '')
+			.replaceAll('{image}', b.image)
+			.replaceAll('{name}', d.name)
+			.replaceAll('{pod}', this.podName(d, 0));
 	}
 
 	private appendLog(d: MockDeployment, b: MockBuild, lines: string[]) {
@@ -376,7 +463,7 @@ export class Store {
 
 	redeploy(
 		deploymentId: string,
-		opts: { trigger?: MockBuild['triggerType']; rebuild?: boolean } = {}
+		opts: { trigger?: MockBuild['triggerType']; rebuild?: boolean; failure?: BuildFailureKind } = {}
 	) {
 		const d = this.deployment(deploymentId);
 		if (!d) return null;
@@ -421,11 +508,19 @@ export class Store {
 			? PHASES
 			: PHASES.filter((p) => p.step === 'queued' || p.step === 'deploying');
 		let at = 0;
+		const failure = opts.failure ? BUILD_FAILURES[opts.failure] : null;
 		for (const phase of phases) {
+			if (failure && phase.step === failure.at) {
+				const failing = { ...phase, ms: 3_000, lines: [...failure.lines] };
+				this.schedule(`build:${d.id}`, at, () => this.enterPhase(d, build, failing));
+				at += failing.ms;
+				this.schedule(`build:${d.id}`, at, () => this.failBuild(d, build, failure.error));
+				break;
+			}
 			this.schedule(`build:${d.id}`, at, () => this.enterPhase(d, build, phase));
 			at += phase.ms;
 		}
-		this.schedule(`build:${d.id}`, at, () => this.finishBuild(d, build));
+		if (!failure) this.schedule(`build:${d.id}`, at, () => this.finishBuild(d, build));
 		this.touch(d);
 		this.emit('build.changed', d.projectId, d.id);
 		return build;
@@ -470,6 +565,18 @@ export class Store {
 		this.emit('build.changed', d.projectId, d.id, { step: 'complete' });
 		this.emit('deployment.changed', d.projectId, d.id);
 		this.emit('pod.changed', d.projectId, d.id, this.podPayload(d));
+	}
+
+	private failBuild(d: MockDeployment, b: MockBuild, error: string) {
+		this.timers.delete(`build:${d.id}`);
+		b.status = 'failed';
+		b.buildCompletedAt = new Date().toISOString();
+		d.buildStatus = 'failed';
+		d.buildError = this.fill(error, d, b);
+		if (d.status === 'deploying') d.status = d.crash ? 'crashing' : 'running';
+		this.touch(d);
+		this.emit('build.changed', d.projectId, d.id);
+		this.emit('deployment.changed', d.projectId, d.id);
 	}
 
 	private resumeSeededBuilds() {

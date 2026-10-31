@@ -23,6 +23,12 @@ export interface PodLogSourceOpts {
 	namespace: () => string;
 	container: () => string;
 	previous?: () => boolean;
+	restarts?: () => number;
+}
+
+function restartMarker(at: Date) {
+	const time = at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+	return `──── Restarted at ${time} · the output above is from before ────`;
 }
 
 export class PodLogSource {
@@ -37,6 +43,9 @@ export class PodLogSource {
 	atStart = $derived(this.atMax || this.tailLines >= LOG_MAX_LINES);
 
 	#opts: PodLogSourceOpts;
+	#carried = '';
+	#target = '';
+	#restarts: number | null = null;
 
 	constructor(opts: PodLogSourceOpts) {
 		this.#opts = opts;
@@ -48,6 +57,9 @@ export class PodLogSource {
 	}
 
 	clear() {
+		this.#carried = '';
+		this.#target = '';
+		this.#restarts = null;
 		this.text = '';
 		this.error = null;
 		this.resetPagination();
@@ -65,7 +77,23 @@ export class PodLogSource {
 			);
 			if (res.ok) {
 				const data = await res.json();
-				this.text = data.logs || '';
+				const next: string = data.logs || '';
+				const target = `${pod}/${container}/${prev}`;
+				const restarts = this.#opts.restarts?.() ?? null;
+				if (target !== this.#target) {
+					this.#carried = '';
+				} else if (
+					!prev &&
+					restarts !== null &&
+					this.#restarts !== null &&
+					restarts > this.#restarts &&
+					this.text.trim()
+				) {
+					this.#carried = `${this.text.replace(/\n+$/, '')}\n${restartMarker(new Date())}\n`;
+				}
+				this.#target = target;
+				this.#restarts = restarts;
+				this.text = this.#carried + next;
 				this.error = null;
 			} else {
 				const body = await res.json().catch(() => null);

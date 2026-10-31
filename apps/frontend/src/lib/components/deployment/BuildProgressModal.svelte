@@ -2,6 +2,7 @@
 	import { Loader2, ChevronDown, GripHorizontal } from 'lucide-svelte';
 	import { Check, Clock, Maximize2, X } from '@jis3r/icons';
 	import { animate } from 'motion';
+	import { page } from '$app/state';
 	import {
 		springRotate,
 		springCollapse,
@@ -187,35 +188,25 @@
 <!-- Build Progress Modal -->
 <Modal
 	bind:open={showBuildModal}
-	title={canCancelBuild
-		? `Redeploying ${deployment?.name ?? 'app'}`
-		: buildModalStatus === 'failed'
-			? 'Build failed'
-			: buildModalStatus === 'canceled' || buildModalStatus === 'cancelled'
-				? 'Build canceled'
-				: 'Build finished'}
-	size="lg"
+	title={deployment?.name ?? 'Build'}
+	size="xl"
 	onclose={onMinimizeBuildModal}
 >
-	<div
-		class="mb-4 flex items-center gap-1.5 text-sm"
-		style="color: var(--surface-muted);"
-		title="Elapsed time"
-	>
-		<Clock size={14} class="h-3.5 w-3.5" />
-		<span class="font-mono">{formatBuildElapsed(buildElapsed)}</span>
+	<div class="build-modal-progress">
+		<DeploymentProgress
+			status={deployment?.status ?? 'pending'}
+			buildStatus={buildModalStatus}
+			buildStep={buildModalStep}
+			buildLogs={accumulatedBuildLogs}
+			buildError={buildModalError}
+			isGitHubDeploy={true}
+			warnings={buildModalWarnings}
+			buildStepTimestamps={buildModalTimestamps}
+			settingsHref="{page.url.pathname}?tab=settings&s=source"
+			crashHref="{page.url.pathname}?tab=observe&view=killed"
+			onsettings={onCloseBuildModal}
+		/>
 	</div>
-
-	<DeploymentProgress
-		status={deployment?.status ?? 'pending'}
-		buildStatus={buildModalStatus}
-		buildStep={buildModalStep}
-		buildLogs={accumulatedBuildLogs}
-		buildError={buildModalError}
-		isGitHubDeploy={true}
-		warnings={buildModalWarnings}
-		buildStepTimestamps={buildModalTimestamps}
-	/>
 
 	{#snippet footer()}
 		{#if !canCancelBuild}
@@ -344,6 +335,9 @@
 </div>
 
 <style>
+	.build-modal-progress {
+		--progress-h: min(calc(min(85vh, 48rem) - 10.5rem), 30rem);
+	}
 	.build-widget-header {
 		cursor: grab;
 		touch-action: none;

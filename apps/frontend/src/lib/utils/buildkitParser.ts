@@ -25,6 +25,7 @@ export interface BuildStep {
 }
 
 export interface BuildMessage {
+	order: number;
 	timestamp: number | null;
 	level: 'INFO' | 'ERROR' | 'WARNING';
 	text: string;
@@ -131,7 +132,7 @@ function parseLineInto(state: ParserState, rawLine: string) {
 		if (isPusherLine(rest)) {
 			let push = stepMap.get(PUSHER_STEP_ID);
 			if (!push && !isPushActivity(rest)) {
-				messages.push({ timestamp: ts, level, text: rest });
+				messages.push({ order: state.order++, timestamp: ts, level, text: rest });
 				return;
 			}
 			if (!push) {
@@ -160,7 +161,7 @@ function parseLineInto(state: ParserState, rawLine: string) {
 			return;
 		}
 		// Non-step line: a status message from appendLog.
-		messages.push({ timestamp: ts, level, text: rest });
+		messages.push({ order: state.order++, timestamp: ts, level, text: rest });
 		return;
 	}
 
