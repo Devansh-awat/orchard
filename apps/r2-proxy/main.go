@@ -48,7 +48,7 @@ import (
 	"sync"
 	"time"
 
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 )
 
 // Version is set via -ldflags "-X main.Version=..." at build time.
@@ -202,7 +202,7 @@ func (s *bindingStore) lookupRestore(ctx context.Context, ak string) (Binding, b
 	var ns, restoreCluster, sourceCluster string
 	err := s.db.QueryRowContext(ctx, q, ak, s.defaultBucket).Scan(&b.AccessKey, &b.Secret, &ns, &restoreCluster, &sourceCluster, &b.Bucket)
 	if errors.Is(err, sql.ErrNoRows) {
-		return Binding{}, false, nil
+		return s.lookupScoped(ctx, ak)
 	}
 	if err != nil {
 		log.Printf("[r2-proxy] restore binding lookup ak=%s error: %v", ak, err)
@@ -211,6 +211,49 @@ func (s *bindingStore) lookupRestore(ctx context.Context, ak string) (Binding, b
 	b.Prefix = ns + "/" + restoreCluster + "/"
 	b.ReadPrefixes = []string{ns + "/" + sourceCluster + "/"}
 	return b, true, nil
+}
+
+// Short-lived keys the server mints for one recovery job: a fork, an undelete
+// or a restore drill. They read the source's prefixes and write only their own.
+func (s *bindingStore) lookupScoped(ctx context.Context, ak string) (Binding, bool, error) {
+	const q = `
+		SELECT k.access_key,
+		       k.secret,
+		       k.write_prefix,
+		       k.read_prefixes,
+		       COALESCE(o.backup_r2_bucket, NULLIF($2, ''))
+		FROM storage_access_keys k
+		JOIN organizations o ON o.id = k.organization_id
+		WHERE k.access_key = $1
+		  AND k.expires_at > (NOW() AT TIME ZONE 'UTC')
+		  AND k.write_prefix <> ''
+		  AND COALESCE(o.backup_r2_bucket, NULLIF($2, '')) IS NOT NULL
+		LIMIT 1`
+
+	var b Binding
+	var reads pq.StringArray
+	err := s.db.QueryRowContext(ctx, q, ak, s.defaultBucket).Scan(&b.AccessKey, &b.Secret, &b.Prefix, &reads, &b.Bucket)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Binding{}, false, nil
+	}
+	if err != nil {
+		log.Printf("[r2-proxy] scoped binding lookup ak=%s error: %v", ak, err)
+		return Binding{}, false, nil
+	}
+	b.Prefix = withSlash(b.Prefix)
+	for _, r := range reads {
+		if r != "" {
+			b.ReadPrefixes = append(b.ReadPrefixes, withSlash(r))
+		}
+	}
+	return b, true, nil
+}
+
+func withSlash(prefix string) string {
+	if strings.HasSuffix(prefix, "/") {
+		return prefix
+	}
+	return prefix + "/"
 }
 
 // ─────────────────────────── proxy ───────────────────────────

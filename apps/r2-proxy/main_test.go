@@ -400,3 +400,12 @@ func TestStreamingChunkedPayloadStaysBuffered(t *testing.T) {
 		t.Fatalf("aws-chunked payload was not buffered and re-hashed: %+v", hit)
 	}
 }
+
+func TestScopedPrefixesGetATrailingSlash(t *testing.T) {
+	if got := withSlash("ns/pg-db"); got != "ns/pg-db/" {
+		t.Fatalf("withSlash = %q", got)
+	}
+	if got := withSlash("ns/pg-db/"); got != "ns/pg-db/" {
+		t.Fatalf("withSlash = %q", got)
+	}
+}
