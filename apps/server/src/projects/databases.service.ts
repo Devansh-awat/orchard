@@ -20,7 +20,7 @@ import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
 import { K8sNetworkService } from '../kubernetes/k8s-network.service';
 import { K8sCnpgService, normalizeBackupEndpointURL } from '../kubernetes/k8s-cnpg.service';
 import { PostgresImageService } from '../kubernetes/postgres-image.service';
-import { resolvePostgresImage } from '../kubernetes/postgres-images';
+import { FALLBACK_POSTGRES_IMAGES, resolvePostgresImage } from '../kubernetes/postgres-images';
 import { k8sErrorMessage } from '../kubernetes/k8s-error';
 import { PG_PARAM_BOUNDS } from '../kubernetes/pg-params';
 import { deriveDbTuning } from '../kubernetes/db-tuning';
@@ -53,6 +53,7 @@ import { platformBackupTarget } from '../instance-config/object-storage';
 import { LeaseService } from '../coordination/lease.service';
 import { LeaderElectionService } from '../events/leader-election.service';
 import { DatabaseTrashService } from './database-trash.service';
+import { defaultMajor } from './postgres-security.service';
 import { DatabaseCheckpointsService } from './database-checkpoints.service';
 import {
   backupServerName,
@@ -217,13 +218,26 @@ export class DatabasesService {
 
   // ── Database (PostgreSQL) Management ──
 
-  // Default major for new clusters. Imports from a newer source
-  // auto-provision at the source's major (capped at MAX_PG_MAJOR) because
-  // CNPG's import runs pg_dump from the target image, and an older pg_dump
-  // cannot dump a newer server.
-  private readonly DEFAULT_PG_MAJOR = 17;
+  // Imports from a newer source auto-provision at the source's major (capped
+  // at the newest one CNPG publishes) because CNPG's import runs pg_dump from
+  // the target image, and an older pg_dump cannot dump a newer server.
+  offeredPgMajors(): number[] {
+    const channel = this.postgresImages?.currentChannel();
+    const images =
+      channel && Object.keys(channel.images).length ? channel.images : FALLBACK_POSTGRES_IMAGES;
+    return Object.keys(images)
+      .map(Number)
+      .filter((n) => Number.isInteger(n))
+      .sort((a, b) => a - b);
+  }
 
-  private readonly MAX_PG_MAJOR = 18;
+  private get MAX_PG_MAJOR(): number {
+    return Math.max(...this.offeredPgMajors());
+  }
+
+  private get DEFAULT_PG_MAJOR(): number {
+    return defaultMajor(this.offeredPgMajors().map((major) => ({ major, supported: null })));
+  }
 
   // pg_restore under CNPG's import-optimized config OOMs at small memory
   // limits, so imports provision at least this much and settle back down
@@ -625,9 +639,10 @@ export class DatabasesService {
     let pgMajor = this.DEFAULT_PG_MAJOR;
     if (data.pgMajor !== undefined && data.pgMajor !== null) {
       const requested = Number(data.pgMajor);
-      if (!Number.isInteger(requested) || requested < 13 || requested > this.MAX_PG_MAJOR) {
+      const offered = this.offeredPgMajors();
+      if (!Number.isInteger(requested) || !offered.includes(requested)) {
         throw new BadRequestException(
-          `Unsupported PostgreSQL version. Choose a major between 13 and ${this.MAX_PG_MAJOR}.`
+          `Unsupported PostgreSQL version. Choose one of ${offered.join(', ')}.`
         );
       }
       pgMajor = requested;

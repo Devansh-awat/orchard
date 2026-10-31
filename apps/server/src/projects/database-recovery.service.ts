@@ -9,6 +9,12 @@ import { DatabaseOperationsService, type OperationTarget } from './database-oper
 import { DatabaseCheckpointsService } from './database-checkpoints.service';
 import { DatabaseDrillsService } from './database-drills.service';
 import { DatabaseTrashService } from './database-trash.service';
+import { PostgresSecurityService } from './postgres-security.service';
+import {
+  securityReport,
+  versionFromImage,
+  versionFromServerVersionNum
+} from '../kubernetes/postgres-advisories';
 import {
   DEFAULT_POOLER,
   normalizePoolerConfig,
@@ -145,6 +151,7 @@ export class DatabaseRecoveryService {
     private readonly checkpoints: DatabaseCheckpointsService,
     private readonly drills: DatabaseDrillsService,
     private readonly trash: DatabaseTrashService,
+    private readonly security: PostgresSecurityService,
     private readonly moduleRef: ModuleRef
   ) {}
 
@@ -554,6 +561,100 @@ export class DatabaseRecoveryService {
     return this.poolerState(databaseId);
   }
 
+  versions() {
+    return this.security.offeredVersions();
+  }
+
+  async securityReport(databaseId: string, clerkId: string, userData?: UserData) {
+    const { database } = await this.access.assertDatabaseView(databaseId, clerkId, userData);
+    const db = await this.prisma.database.findUnique({ where: { id: database.id } });
+    if (!db?.namespace || !db.clusterName) throw new NotFoundException('Database not found');
+    const cluster = await this.k8sCnpg.readCluster(db.namespace, db.clusterName);
+    let version = versionFromImage(cluster?.status?.image ?? cluster?.spec?.imageName);
+    if (!version || version.minor === null) {
+      const out = await this.k8sCnpg
+        .runPsqlInCnpg(db.namespace, db.clusterName, 'postgres', 'SHOW server_version_num;', {
+          tuplesOnly: true
+        })
+        .catch(() => null);
+      version = (out?.success ? versionFromServerVersionNum(out.stdout) : null) ?? version;
+    }
+    const cache = await this.security.load();
+    const offered = await this.security.offeredVersions();
+    const report = version
+      ? securityReport(version, cache?.advisories ?? [], cache?.releases ?? [])
+      : null;
+    const sameMajor = offered.versions.find((v) => v.major === version?.major) ?? null;
+    return {
+      ...(report ?? { running: null, vulnerabilities: [], action: 'unknown' }),
+      image: cluster?.status?.image ?? cluster?.spec?.imageName ?? null,
+      minorUpdate:
+        sameMajor &&
+        sameMajor.minor !== null &&
+        version?.minor !== null &&
+        sameMajor.minor > (version?.minor ?? 0)
+          ? { to: `${sameMajor.major}.${sameMajor.minor}`, automatic: true }
+          : null,
+      upgrades: offered.versions.filter((v) => version && v.major > version.major),
+      advisoriesFetchedAt: cache?.fetchedAt ?? null
+    };
+  }
+
+  async upgrade(
+    databaseId: string,
+    body: { major?: number; rehearse?: boolean },
+    clerkId: string,
+    userData?: UserData
+  ) {
+    const { user, database } = await this.access.assertDatabaseEditor(
+      databaseId,
+      clerkId,
+      userData
+    );
+    if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
+      throw new BadRequestException('Upgrades need a CNPG database');
+    }
+    if ((database.replicas ?? 1) < 1 || database.status !== 'ready') {
+      throw new BadRequestException('The database has to be running and healthy to upgrade');
+    }
+    const offered = await this.security.offeredVersions();
+    const major = Number(body.major);
+    const target = offered.versions.find((v) => v.major === major);
+    const current = database.pgMajor ?? 17;
+    if (!target) {
+      throw new BadRequestException(
+        `Postgres ${body.major} is not offered; choose one of ${offered.versions.map((v) => v.major).join(', ')}`
+      );
+    }
+    if (major <= current)
+      throw new BadRequestException(`The database already runs Postgres ${current}`);
+    const busy = await this.prisma.databaseOperation.findFirst({
+      where: {
+        databaseId: database.id,
+        status: { in: ['pending', 'running'] },
+        kind: { in: ['restore', 'upgrade'] }
+      },
+      select: { id: true }
+    });
+    if (busy)
+      throw new BadRequestException('Another restore or upgrade is running for this database');
+    const source = await this.operations.sourceFromDatabase(database.id);
+    const op = await this.operations.enqueue({
+      kind: 'upgrade',
+      databaseId: database.id,
+      source,
+      target: { type: 'major', major, image: target.image },
+      request: { rehearse: body.rehearse !== false },
+      requestedBy: user.id
+    });
+    this.auditOp('database.upgrade.started', user, database, {
+      from: current,
+      to: major,
+      operationId: op.id
+    });
+    return op;
+  }
+
   async replication(databaseId: string, clerkId: string, userData?: UserData) {
     const { database } = await this.access.assertDatabaseView(databaseId, clerkId, userData);
     const db = await this.prisma.database.findUnique({ where: { id: database.id } });
@@ -691,6 +792,7 @@ export class DatabaseRecoveryService {
     const live: any = await dbs.getDatabaseLive(databaseId);
     const db = await this.prisma.database.findUnique({ where: { id: databaseId } });
     if (!db) throw new NotFoundException('Database not found');
+    const security = await this.securityReport(databaseId, clerkId, userData).catch(() => null);
     const [window, operations, logTail, pooler] = await Promise.all([
       this.recoveryWindow(databaseId, clerkId, userData),
       this.operations.list(databaseId, undefined, 5),
@@ -748,6 +850,17 @@ export class DatabaseRecoveryService {
       checkpoints: window.checkpoints.slice(0, 10),
       protection: window.protection,
       pooler,
+      security: security
+        ? {
+            running: security.running,
+            action: security.action,
+            vulnerabilities: security.vulnerabilities.length,
+            highestScore: (security as any).highestScore ?? null,
+            supported: (security as any).supported ?? null,
+            eolDate: (security as any).eolDate ?? null,
+            minorUpdate: security.minorUpdate
+          }
+        : null,
       operations,
       logTail: String(logTail).split('\n').slice(-60).join('\n')
     };

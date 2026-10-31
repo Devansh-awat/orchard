@@ -4831,6 +4831,37 @@
         ]
       }
     },
+    "/database-versions": {
+      "get": {
+        "description": "Auth: authenticated",
+        "operationId": "database_versions_list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /database-versions",
+        "tags": [
+          "database-versions"
+        ]
+      }
+    },
     "/databases": {
       "get": {
         "description": "Auth: authenticated (scope: read)",
@@ -7909,6 +7940,47 @@
         ]
       }
     },
+    "/databases/{id}/security": {
+      "get": {
+        "description": "Auth: authenticated",
+        "operationId": "databases_security_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /databases/:id/security",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
     "/databases/{id}/settings": {
       "get": {
         "description": "Auth: authenticated (scope: read)",
@@ -8279,6 +8351,57 @@
           }
         ],
         "summary": "Expand the storage volume of a database (grow only, max 200Gi)",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
+    "/databases/{id}/upgrade": {
+      "post": {
+        "description": "Auth: authenticated",
+        "operationId": "databases_upgrade",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /databases/:id/upgrade",
         "tags": [
           "databases"
         ]

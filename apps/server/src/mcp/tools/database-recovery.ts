@@ -428,4 +428,24 @@ Apps only go through the pooler if they connect to its host and port (see get_da
     async ({ databaseId, name }) =>
       json(await client.delete(path`/databases/${databaseId}/users/${name}`))
   );
+
+  server.registerTool(
+    'list_postgres_versions',
+    {
+      description:
+        'List the Postgres major versions new databases and upgrades can use, straight from the CNPG image catalog (so new majors appear without an Orchard release), with the minor each one rolls to, whether the Postgres project still supports it, its end of life date, and the default for new databases.',
+      inputSchema: {}
+    },
+    async () => json(await client.get('/database-versions'))
+  );
+
+  server.registerTool(
+    'get_database_security',
+    {
+      description:
+        "Show which known PostgreSQL vulnerabilities (CVEs from postgresql.org) affect a database's running version, with CVSS score, component and the version that fixes each, plus end of life status. action says what to do: none, minor_update (Orchard rolls minor versions automatically, see minorUpdate), or major_upgrade (the major is unsupported or a fix only exists on a newer major; use upgrade_database).",
+      inputSchema: { databaseId: z.guid().describe('The database UUID') }
+    },
+    async ({ databaseId }) => json(await client.get(path`/databases/${databaseId}/security`))
+  );
 }

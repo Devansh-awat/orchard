@@ -52,6 +52,7 @@ import { DatabaseDrillsService } from './database-drills.service';
 import { DatabasePluginMigrationService } from './database-plugin-migration.service';
 import { DatabaseRecoveryService } from './database-recovery.service';
 import { DatabaseCatalogService } from './database-catalog.service';
+import { PostgresSecurityService } from './postgres-security.service';
 import { DatabaseRecoveryController } from './database-recovery.controller';
 import { DatabaseAdminController } from './database-admin.controller';
 @Module({
@@ -86,6 +87,7 @@ import { DatabaseAdminController } from './database-admin.controller';
     DatabasePluginMigrationService,
     DatabaseRecoveryService,
     DatabaseCatalogService,
+    PostgresSecurityService,
     BackupSyncService,
     ImportSettleService,
     DeploymentsService,

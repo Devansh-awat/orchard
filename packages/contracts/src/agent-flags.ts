@@ -21,6 +21,7 @@ export const REQUIRED_SCOPES = new Map<string, 'read' | 'deploy' | 'exec'>([
 ]);
 
 export const DESTRUCTIVE_OPERATIONS = new Set<string>([
+  'POST /databases/:id/upgrade',
   'PUT /deployments/:id/env',
   'PUT /environments/:id/shared-vars',
   'PUT /deployments/:id/volumes',

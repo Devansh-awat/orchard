@@ -38,19 +38,21 @@ import {
 } from '../kubernetes/cnpg-recovery';
 import { WAL_ARCHIVE_MAX_PARALLEL } from '../kubernetes/cnpg-defaults';
 import { normalizeBackupEndpointURL } from '../kubernetes/k8s-cnpg.service';
+import { clusterSettled } from '../kubernetes/postgres-images';
 import { k8sErrorMessage } from '../kubernetes/k8s-error';
 import { defaultBackupCronFor, formatSlug, toQuartzCron, truncateK8sName } from './projects.utils';
 import type { DatabasesService } from './databases.service';
 import { EnvironmentsService } from './environments.service';
 
-export type OperationKind = 'restore' | 'fork' | 'undelete' | 'drill';
+export type OperationKind = 'restore' | 'fork' | 'undelete' | 'drill' | 'upgrade';
 
 export type OperationTarget =
   | { type: 'latest' }
   | { type: 'now' }
   | { type: 'time'; time: string }
   | { type: 'checkpoint'; checkpointId: string }
-  | { type: 'backup'; backupId: string };
+  | { type: 'backup'; backupId: string }
+  | { type: 'major'; major: number; image: string };
 
 export interface OperationSource {
   databaseId: string | null;
@@ -159,12 +161,12 @@ export class DatabaseOperationsService {
         where: {
           databaseId: input.databaseId,
           status: { in: ACTIVE },
-          kind: { in: ['restore', 'undelete'] }
+          kind: { in: ['restore', 'undelete', 'upgrade'] }
         },
         select: { id: true }
       });
-      if (busy && (input.kind === 'restore' || input.kind === 'undelete')) {
-        throw new BadRequestException('A restore is already running for this database');
+      if (busy && ['restore', 'undelete', 'upgrade'].includes(input.kind)) {
+        throw new BadRequestException('A restore or upgrade is already running for this database');
       }
     }
     return this.prisma.databaseOperation.create({
@@ -240,9 +242,19 @@ export class DatabaseOperationsService {
   }
 
   private async advance(op: DatabaseOperation): Promise<void> {
-    if (op.deadlineAt && op.deadlineAt.getTime() < Date.now() && op.phase === 'recovering') {
-      await this.fail(op, 'Recovery did not finish in time');
-      return;
+    if (op.deadlineAt && op.deadlineAt.getTime() < Date.now()) {
+      if (op.phase === 'recovering') {
+        await this.fail(op, 'Recovery did not finish in time');
+        return;
+      }
+      if (op.phase.startsWith('rehearsal_')) {
+        await this.fail(op, 'The rehearsal upgrade did not finish in time; nothing was changed');
+        return;
+      }
+      if (op.phase === 'upgrade_waiting') {
+        await this.revertUpgrade(op, 'The upgrade did not finish in time');
+        return;
+      }
     }
     switch (op.phase) {
       case 'queued':
@@ -266,6 +278,24 @@ export class DatabaseOperationsService {
       case 'cleaning_up':
         await this.cleanUp(op);
         return;
+      case 'rehearsal_provisioning':
+        await this.rehearsalProvision(op);
+        return;
+      case 'rehearsal_cloning':
+        await this.rehearsalCloned(op);
+        return;
+      case 'rehearsal_upgrading':
+        await this.rehearsalUpgraded(op);
+        return;
+      case 'upgrading':
+        await this.startUpgrade(op);
+        return;
+      case 'upgrade_waiting':
+        await this.watchUpgrade(op);
+        return;
+      case 'upgrade_finishing':
+        await this.finishUpgrade(op);
+        return;
       default:
         await this.fail(op, `Unknown phase ${op.phase}`);
     }
@@ -275,6 +305,20 @@ export class DatabaseOperationsService {
     const src = op.source as unknown as OperationSource;
     const req = (op.request ?? {}) as Record<string, any>;
     const suffix = Date.now().toString(36);
+
+    if (op.kind === 'upgrade') {
+      const rehearse = (op.request as any)?.rehearse !== false;
+      await this.setPhase(op, rehearse ? 'rehearsal_provisioning' : 'upgrading', {
+        startedAt: new Date(),
+        targetNamespace: src.namespace,
+        targetClusterName: rehearse
+          ? truncateK8sName(`${src.clusterName}-up${suffix.slice(-5)}`, 53)
+          : src.clusterName,
+        targetDatabaseId: src.databaseId,
+        deadlineAt: new Date(Date.now() + RECOVERY_DEADLINE_MS)
+      });
+      return;
+    }
 
     if (op.kind === 'drill') {
       await this.k8sNamespace.createNamespace(DRILL_NAMESPACE()).catch((e: any) => {
@@ -825,6 +869,242 @@ export class DatabaseOperationsService {
     });
   }
 
+  private upgradeTarget(op: DatabaseOperation): { major: number; image: string } {
+    const t = op.target as unknown as OperationTarget;
+    if (t.type !== 'major') throw new BadRequestException('Not an upgrade');
+    return { major: t.major, image: t.image };
+  }
+
+  private async rehearsalProvision(op: DatabaseOperation) {
+    const src = op.source as unknown as OperationSource;
+    const ns = op.targetNamespace!;
+    const name = op.targetClusterName!;
+    const dbs = await this.databases();
+    const sourceCluster = await this.k8sCnpg.readCluster(src.namespace, src.clusterName);
+    if (!sourceCluster) throw new NotFoundException('The database cluster is gone');
+    const secrets = liveCloneSecretNames(name);
+    await this.k8sCnpg.copySecret(
+      src.namespace,
+      `${src.clusterName}-replication`,
+      ns,
+      secrets.replication
+    );
+    await this.k8sCnpg.copySecret(src.namespace, `${src.clusterName}-ca`, ns, secrets.ca);
+    const owner = { database: src.dbName, owner: src.dbUser, secretName: `${name}-app` };
+    await this.k8sCnpg.writeSecret(
+      ns,
+      owner.secretName,
+      { username: src.dbUser, password: dbs.generatePassword() },
+      'kubernetes.io/basic-auth'
+    );
+    const spec = recoveryClusterSpec({
+      instances: 1,
+      imageName: sourceCluster.spec?.imageName || dbs.postgresImageFor(src.pgMajor),
+      storageSize: sourceCluster.spec?.storage?.size || src.storageSize,
+      storageClass:
+        sourceCluster.spec?.storage?.storageClass || process.env.K8S_STORAGE_CLASS || 'longhorn',
+      resources: sourceCluster.spec?.resources,
+      parameters: { ...(sourceCluster.spec?.postgresql?.parameters ?? {}) },
+      sharedPreloadLibraries: sourceCluster.spec?.postgresql?.shared_preload_libraries,
+      bootstrap: liveCloneBootstrap(owner),
+      externalClusters: [liveCloneSource(`${src.clusterName}-rw.${src.namespace}.svc`, name)],
+      archive: null
+    });
+    try {
+      await this.k8sCnpg.createClusterFromSpec(ns, name, spec, { 'orchard.my/operation': op.id });
+    } catch (e: any) {
+      if (e?.response?.statusCode !== 409) throw e;
+    }
+    await this.setPhase(op, 'rehearsal_cloning');
+  }
+
+  private async rehearsalCloned(op: DatabaseOperation) {
+    const cluster = await this.k8sCnpg.readCluster(op.targetNamespace!, op.targetClusterName!);
+    const progress = clusterProgress(cluster);
+    if (progress.state === 'failed') {
+      await this.fail(
+        op,
+        `Could not copy the database for the rehearsal: ${progress.message ?? 'unknown error'}`
+      );
+      return;
+    }
+    if (progress.state !== 'ready') return;
+    const { image } = this.upgradeTarget(op);
+    await this.k8sCnpg.patchCluster(op.targetNamespace!, op.targetClusterName!, {
+      spec: { imageName: image }
+    });
+    await this.setPhase(op, 'rehearsal_upgrading', {
+      result: {
+        ...(op.result as object),
+        rehearsalStartedAt: new Date().toISOString()
+      } as Prisma.InputJsonValue
+    });
+  }
+
+  private async serverMajor(ns: string, cluster: string): Promise<number | null> {
+    const out = await this.k8sCnpg.runPsqlInCnpg(
+      ns,
+      cluster,
+      'postgres',
+      'SHOW server_version_num;',
+      {
+        tuplesOnly: true
+      }
+    );
+    if (!out.success) return null;
+    const n = Number.parseInt(out.stdout.trim(), 10);
+    return Number.isInteger(n) ? Math.floor(n / 10000) : null;
+  }
+
+  private async rehearsalUpgraded(op: DatabaseOperation) {
+    const { major, image } = this.upgradeTarget(op);
+    const cluster = await this.k8sCnpg.readCluster(op.targetNamespace!, op.targetClusterName!);
+    const progress = clusterProgress(cluster);
+    if (progress.state === 'failed') {
+      await this.fail(
+        op,
+        `The rehearsal upgrade failed, so the database was left alone: ${progress.message ?? 'unknown error'}`
+      );
+      return;
+    }
+    if (!clusterSettled(cluster, image)) return;
+    const running = await this.serverMajor(op.targetNamespace!, op.targetClusterName!);
+    if (running !== major) return;
+    const started = Date.parse(String((op.result as any)?.rehearsalStartedAt ?? '')) || Date.now();
+    await this.removeTarget({ ...op, storageAccessKey: null });
+    const src = op.source as unknown as OperationSource;
+    await this.setPhase(op, 'upgrading', {
+      targetClusterName: src.clusterName,
+      result: {
+        ...(op.result as object),
+        rehearsal: { passed: true, upgradeMs: Date.now() - started }
+      } as Prisma.InputJsonValue
+    });
+  }
+
+  private async startUpgrade(op: DatabaseOperation) {
+    const src = op.source as unknown as OperationSource;
+    const { major, image } = this.upgradeTarget(op);
+    const db = await this.prisma.database.findUnique({ where: { id: src.databaseId! } });
+    if (!db?.namespace || !db.clusterName) {
+      await this.fail(op, 'The database is gone');
+      return;
+    }
+    const cluster = await this.k8sCnpg.readCluster(db.namespace, db.clusterName);
+    if (!cluster) throw new NotFoundException('The database cluster is gone');
+    const checkpoints = this.moduleRef.get(
+      (await import('./database-checkpoints.service.js')).DatabaseCheckpointsService,
+      { strict: false }
+    );
+    await checkpoints
+      ?.before(db.id, `upgrading to Postgres ${major}`, op.requestedBy)
+      .catch(() => null);
+    const previousServer = currentServerName(cluster) ?? db.backupServerName ?? db.clusterName;
+    const nextServer = upgradedServerName(previousServer, major);
+    await this.prisma.database.update({ where: { id: db.id }, data: { status: 'upgrading' } });
+    await this.k8sCnpg.patchCluster(db.namespace, db.clusterName, {
+      spec: { imageName: image, ...serverNamePatch(cluster, nextServer) }
+    });
+    await this.setPhase(op, 'upgrade_waiting', {
+      deadlineAt: new Date(Date.now() + RECOVERY_DEADLINE_MS),
+      result: {
+        ...(op.result as object),
+        previous: {
+          image: cluster.spec?.imageName ?? null,
+          serverName: previousServer,
+          major: src.pgMajor
+        },
+        nextServerName: nextServer,
+        upgradeStartedAt: new Date().toISOString()
+      } as Prisma.InputJsonValue
+    });
+  }
+
+  private async watchUpgrade(op: DatabaseOperation) {
+    const src = op.source as unknown as OperationSource;
+    const { major, image } = this.upgradeTarget(op);
+    const cluster = await this.k8sCnpg.readCluster(src.namespace, src.clusterName);
+    const progress = clusterProgress(cluster);
+    if (progress.state === 'failed') {
+      await this.revertUpgrade(op, progress.message ?? 'CNPG could not upgrade the database');
+      return;
+    }
+    if (!clusterSettled(cluster, image)) return;
+    const running = await this.serverMajor(src.namespace, src.clusterName);
+    if (running !== major) return;
+    await this.setPhase(op, 'upgrade_finishing');
+  }
+
+  private async finishUpgrade(op: DatabaseOperation) {
+    const src = op.source as unknown as OperationSource;
+    const { major } = this.upgradeTarget(op);
+    const result = (op.result ?? {}) as Record<string, any>;
+    await this.prisma.database.update({
+      where: { id: src.databaseId! },
+      data: { pgMajor: major, backupServerName: result.nextServerName, status: 'ready' }
+    });
+    await this.k8sCnpg
+      .createCnpgBackup(
+        src.namespace,
+        src.clusterName,
+        `${src.clusterName}-pg${major}-${Date.now().toString(36)}`.slice(0, 63)
+      )
+      .catch((e: any) =>
+        this.logger.warn(
+          `first backup after upgrading ${src.clusterName} failed: ${k8sErrorMessage(e)}`
+        )
+      );
+    await this.k8sCnpg
+      .runPsqlInCnpg(src.namespace, src.clusterName, src.dbName, 'ANALYZE;')
+      .catch(() => null);
+    const started = Date.parse(String(result.upgradeStartedAt ?? '')) || Date.now();
+    await this.prisma.databaseOperation.update({
+      where: { id: op.id },
+      data: {
+        phase: 'done',
+        status: 'succeeded',
+        finishedAt: new Date(),
+        result: { ...result, upgradeMs: Date.now() - started } as Prisma.InputJsonValue
+      }
+    });
+  }
+
+  private async revertUpgrade(op: DatabaseOperation, reason: string) {
+    const src = op.source as unknown as OperationSource;
+    const previous = (op.result as any)?.previous;
+    const cluster = await this.k8sCnpg
+      .readCluster(src.namespace, src.clusterName)
+      .catch(() => null);
+    if (previous?.image && cluster) {
+      await this.k8sCnpg
+        .patchCluster(src.namespace, src.clusterName, {
+          spec: { imageName: previous.image, ...serverNamePatch(cluster, previous.serverName) }
+        })
+        .catch((e: any) =>
+          this.logger.warn(`reverting ${src.clusterName} failed: ${k8sErrorMessage(e)}`)
+        );
+    }
+    await this.prisma.database
+      .updateMany({
+        where: { id: src.databaseId!, status: 'upgrading' },
+        data: { status: 'ready' }
+      })
+      .catch(() => {});
+    await this.prisma.databaseOperation.update({
+      where: { id: op.id },
+      data: {
+        status: 'failed',
+        phase: 'done',
+        error:
+          `${reason}. The database was put back on Postgres ${previous?.major ?? src.pgMajor}.`.slice(
+            0,
+            4000
+          ),
+        finishedAt: new Date()
+      }
+    });
+  }
+
   private async moveSchedule(
     db: { id: string; backupScheduleCron: string | null; backupScheduleDisabled: boolean },
     ns: string,
@@ -857,7 +1137,22 @@ export class DatabaseOperationsService {
   private async removeTarget(op: DatabaseOperation) {
     const ns = op.targetNamespace;
     const name = op.targetClusterName;
-    if (ns && name) {
+    const src = op.source as unknown as OperationSource;
+    const isSource = ns === src.namespace && name === src.clusterName;
+    const backsADatabase =
+      ns && name
+        ? await this.prisma.database.findFirst({
+            where: {
+              namespace: ns,
+              clusterName: name,
+              status: { notIn: ['restoring'] }
+            },
+            select: { id: true }
+          })
+        : null;
+    if (isSource || backsADatabase) {
+      this.logger.warn(`refusing to remove ${ns}/${name}: it holds a live database`);
+    } else if (ns && name) {
       await this.k8sCnpg.deleteCnpgCluster(ns, name);
       await this.k8sCnpg.deleteObjectStore(ns, objectStoreName(name)).catch(() => {});
       await this.k8sCnpg.deleteObjectStore(ns, `${name}-origin`.slice(0, 63)).catch(() => {});
@@ -873,6 +1168,28 @@ export class DatabaseOperationsService {
   async fail(op: DatabaseOperation, message: string) {
     const src = op.source as unknown as OperationSource;
     this.logger.warn(`operation ${op.id} (${op.kind}) failed: ${message}`);
+    if (op.kind === 'upgrade' && !op.phase.startsWith('rehearsal_') && op.phase !== 'queued') {
+      if (op.phase === 'upgrade_waiting') {
+        await this.revertUpgrade(op, message);
+        return;
+      }
+      await this.prisma.database
+        .updateMany({
+          where: { id: src.databaseId ?? '', status: 'upgrading' },
+          data: { status: 'ready' }
+        })
+        .catch(() => {});
+      await this.prisma.databaseOperation.update({
+        where: { id: op.id },
+        data: {
+          status: 'failed',
+          phase: 'done',
+          error: message.slice(0, 4000),
+          finishedAt: new Date()
+        }
+      });
+      return;
+    }
     await this.removeTarget(op).catch((e: any) => {
       this.logger.warn(`cleanup of operation ${op.id} failed: ${k8sErrorMessage(e)}`);
     });
@@ -998,4 +1315,31 @@ export class DatabaseOperationsService {
     });
     return this.get(opId);
   }
+}
+
+export function currentServerName(cluster: any): string | null {
+  const plugin = (cluster?.spec?.plugins ?? []).find((p: any) => p?.isWALArchiver);
+  if (plugin) return plugin.parameters?.serverName || cluster?.metadata?.name || null;
+  const store = cluster?.spec?.backup?.barmanObjectStore;
+  if (store) return store.serverName || cluster?.metadata?.name || null;
+  return null;
+}
+
+export function upgradedServerName(previous: string, major: number): string {
+  return `${previous.replace(/-pg\d+$/, '')}-pg${major}`.slice(0, 100);
+}
+
+export function serverNamePatch(cluster: any, serverName: string): Record<string, unknown> {
+  const plugins: any[] = cluster?.spec?.plugins ?? [];
+  if (plugins.some((p) => p?.isWALArchiver)) {
+    return {
+      plugins: plugins.map((p) =>
+        p?.isWALArchiver ? { ...p, parameters: { ...(p.parameters ?? {}), serverName } } : p
+      )
+    };
+  }
+  if (cluster?.spec?.backup?.barmanObjectStore) {
+    return { backup: { barmanObjectStore: { serverName } } };
+  }
+  return {};
 }

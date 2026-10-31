@@ -29,6 +29,26 @@ function who(req: any) {
 export class DatabaseRecoveryController {
   constructor(private readonly recovery: DatabaseRecoveryService) {}
 
+  @Get('database-versions')
+  versions() {
+    return this.recovery.versions();
+  }
+
+  @Get('databases/:id/security')
+  security(@Param('id') id: string, @Request() req) {
+    return this.recovery.securityReport(id, req.user.sub, who(req));
+  }
+
+  @Post('databases/:id/upgrade')
+  @Idempotent()
+  upgrade(
+    @Param('id') id: string,
+    @Body() body: { major?: number; rehearse?: boolean },
+    @Request() req
+  ) {
+    return this.recovery.upgrade(id, body ?? {}, req.user.sub, who(req));
+  }
+
   @Get('databases/:id/recovery')
   recoveryWindow(@Param('id') id: string, @Request() req) {
     return this.recovery.recoveryWindow(id, req.user.sub, who(req));

@@ -335,4 +335,19 @@ Only the keys you name are touched, so this is safe to use for a targeted remova
       return json(result);
     }
   );
+
+  server.registerTool(
+    'upgrade_database',
+    {
+      description:
+        'DANGEROUS: Upgrade a database to a newer Postgres major version (choices from list_postgres_versions). By default Orchard first rehearses the upgrade on a live copy; if that fails the database is left alone. Then it takes a checkpoint and upgrades in place with CNPG: Postgres is OFFLINE while pg_upgrade runs (the rehearsal reports roughly how long), and a failed upgrade is put back on the old version. Returns an operation; follow it with get_database_operation.',
+      inputSchema: {
+        databaseId: z.guid().describe('The database UUID'),
+        major: z.number().int().describe('Target Postgres major version'),
+        rehearse: z.boolean().optional().describe('Rehearse on a copy first (default true)')
+      }
+    },
+    async ({ databaseId, major, rehearse }) =>
+      json(await client.post(path`/databases/${databaseId}/upgrade`, { major, rehearse }))
+  );
 }

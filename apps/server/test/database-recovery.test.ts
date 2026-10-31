@@ -351,3 +351,148 @@ test('replication modes and extra users map onto CNPG and refuse reserved names'
   assert.equal(m.managedUserRoles(roles).length, 1);
   assert.equal(m.roleAccess(m.managedRole('w', 'write', 's')), 'write');
 });
+
+test('postgres advisories parse from the official page and match the running minor', async () => {
+  const { readFileSync } = await import('node:fs');
+  const a = await import('../src/kubernetes/postgres-advisories');
+  const advisories = a.parseAdvisories(
+    readFileSync(new URL('./fixtures/postgres-security.html', import.meta.url), 'utf8')
+  );
+  assert.equal(advisories.length, 4);
+  assert.equal(advisories[0].cve, 'CVE-2026-19385');
+  assert.equal(advisories[0].fixedIn[17], 11);
+  assert.equal(advisories[0].score, 8.8);
+  assert.equal(advisories[0].component, 'client');
+  const releases = a.parseReleases([
+    { major: '17', latestMinor: '11', supported: true, current: false, eolDate: '2029-11-08' },
+    { major: '13', latestMinor: '23', supported: false, current: false, eolDate: '2025-11-13' }
+  ]);
+  const old = a.securityReport(
+    { major: 17, minor: 9 },
+    advisories,
+    releases,
+    Date.parse('2026-10-31')
+  );
+  assert.ok(old.vulnerabilities.length > 0);
+  assert.equal(old.vulnerabilities[0].fixedInVersion, '17.11');
+  assert.equal(old.action, 'minor_update');
+  const fresh = a.securityReport(
+    { major: 17, minor: 11 },
+    advisories,
+    releases,
+    Date.parse('2026-10-31')
+  );
+  assert.equal(fresh.vulnerabilities.length, 0);
+  assert.equal(fresh.action, 'none');
+  const eol = a.securityReport(
+    { major: 13, minor: 23 },
+    advisories,
+    releases,
+    Date.parse('2026-10-31')
+  );
+  assert.equal(eol.action, 'major_upgrade');
+  assert.equal(eol.supported, false);
+  assert.deepEqual(
+    a.versionFromImage(
+      'ghcr.io/cloudnative-pg/postgresql:17.11-202610190957-system-trixie@sha256:ab'
+    ),
+    { major: 17, minor: 11 }
+  );
+  assert.deepEqual(a.versionFromImage('ghcr.io/cloudnative-pg/postgresql:17'), {
+    major: 17,
+    minor: null
+  });
+  assert.deepEqual(a.versionFromServerVersionNum('170011\n'), { major: 17, minor: 11 });
+});
+
+test('the default major is the newest supported one in the catalog unless pinned', async () => {
+  const { defaultMajor } = await import('../src/projects/postgres-security.service');
+  const versions = [
+    { major: 19, supported: null },
+    { major: 18, supported: true },
+    { major: 13, supported: false }
+  ];
+  assert.equal(defaultMajor(versions, {}), 19);
+  assert.equal(defaultMajor(versions, { POSTGRES_DEFAULT_MAJOR: '18' }), 18);
+  assert.equal(
+    defaultMajor([{ major: 18, supported: true }], { POSTGRES_DEFAULT_MAJOR: '19' }),
+    18
+  );
+});
+
+test('a major upgrade archives into a fresh server name for either backup method', async () => {
+  const m = await import('../src/projects/database-operations.service');
+  const plugin = {
+    metadata: { name: 'pg-x' },
+    spec: {
+      plugins: [
+        {
+          name: 'barman-cloud.cloudnative-pg.io',
+          isWALArchiver: true,
+          parameters: { barmanObjectName: 's', serverName: 'pg-x-abc123' }
+        }
+      ]
+    }
+  };
+  const inTree = {
+    metadata: { name: 'pg-y' },
+    spec: { backup: { barmanObjectStore: { destinationPath: 's3://b/n/pg-y' } } }
+  };
+  assert.equal(m.currentServerName(plugin), 'pg-x-abc123');
+  assert.equal(m.currentServerName(inTree), 'pg-y');
+  assert.equal(m.currentServerName({ spec: {} }), null);
+  assert.equal(m.upgradedServerName('pg-x-abc123', 18), 'pg-x-abc123-pg18');
+  assert.equal(m.upgradedServerName('pg-x-abc123-pg17', 18), 'pg-x-abc123-pg18');
+  assert.deepEqual((m.serverNamePatch(plugin, 'pg-x-abc123-pg18') as any).plugins[0].parameters, {
+    barmanObjectName: 's',
+    serverName: 'pg-x-abc123-pg18'
+  });
+  assert.deepEqual(m.serverNamePatch(inTree, 'pg-y-pg18'), {
+    backup: { barmanObjectStore: { serverName: 'pg-y-pg18' } }
+  });
+  assert.deepEqual(m.serverNamePatch({ spec: {} }, 'x'), {});
+});
+
+test('fleet security gauges report the worst CVE and days to end of life per cluster', async () => {
+  const { securityGauges } = await import('../src/projects/postgres-security.service');
+  const advisories = [
+    {
+      cve: 'CVE-1',
+      affectedMajors: [17],
+      fixedIn: { 17: 11 },
+      component: 'core server',
+      score: 8.8,
+      vector: null,
+      description: 'x',
+      url: 'u'
+    }
+  ];
+  const releases = [
+    { major: 17, latestMinor: 11, supported: true, current: false, eolDate: '2029-11-08' }
+  ];
+  const gauges = securityGauges(
+    [
+      {
+        metadata: { namespace: 'ns', name: 'old' },
+        status: { image: 'ghcr.io/cloudnative-pg/postgresql:17.9-1-system-trixie' }
+      },
+      {
+        metadata: { namespace: 'ns', name: 'new' },
+        status: { image: 'ghcr.io/cloudnative-pg/postgresql:17.11-1-system-trixie' }
+      },
+      {
+        metadata: { namespace: 'ns', name: 'floating' },
+        spec: { imageName: 'ghcr.io/cloudnative-pg/postgresql:17' }
+      }
+    ],
+    advisories,
+    releases,
+    Date.parse('2026-10-31T00:00:00Z')
+  );
+  const get = (metric: string, name: string) =>
+    gauges.find((g) => g.metric === metric && g.tags.includes(`cnpg_cluster:${name}`))?.value;
+  assert.equal(get('orchard.postgres.cve_max_score', 'old'), 8.8);
+  assert.equal(get('orchard.postgres.cve_max_score', 'new'), 0);
+  assert.equal(get('orchard.postgres.cves', 'floating'), undefined);
+  assert.equal(get('orchard.postgres.days_to_eol', 'new'), 1104);
+});

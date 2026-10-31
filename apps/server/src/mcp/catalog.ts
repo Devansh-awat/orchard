@@ -202,6 +202,8 @@ export const TOOL_CATALOG: Record<string, ToolSpec> = {
   list_database_users: t('databases', 'read'),
   create_database_user: t('databases', 'create', { sensitive: true, scope: 'deploy' }),
   delete_database_user: t('databases', 'destructive'),
+  list_postgres_versions: t('databases', 'read'),
+  get_database_security: t('databases', 'read'),
 
   list_ingresses: t('domains', 'read'),
   get_ingress: t('domains', 'read'),
@@ -254,6 +256,7 @@ export const TOOL_CATALOG: Record<string, ToolSpec> = {
   restore_checkpoint: t('dangerous', 'dangerous'),
   undo_database_restore: t('dangerous', 'dangerous'),
   disable_database_deletion_protection: t('dangerous', 'destructive'),
+  upgrade_database: t('dangerous', 'destructive'),
   delete_ingress: t('dangerous', 'destructive'),
   delete_service: t('dangerous', 'destructive'),
   delete_template: t('dangerous', 'destructive'),
