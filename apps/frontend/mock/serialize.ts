@@ -13,7 +13,7 @@ import type {
 	MockUser
 } from './types.ts';
 
-const UPDATES_DIR = fileURLToPath(new URL('../src/lib/updates/', import.meta.url));
+const UPDATES_DIR = fileURLToPath(new URL('../../../releases/ui/notes/', import.meta.url));
 
 const SECRET_MASK = '••••••••';
 

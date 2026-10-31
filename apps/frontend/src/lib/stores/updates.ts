@@ -1,13 +1,30 @@
-import { derived, get } from 'svelte/store';
-import { updates, type Update } from '$lib/updates';
+import { derived, get, writable } from 'svelte/store';
+import { parseUpdate, type Update } from '$lib/updates';
 import { user } from './auth';
 import { apiFetch } from './api';
 
-export const latestUpdate: Update | null = updates[0] ?? null;
+export const latestUpdate = writable<Update | null>(null);
 
-export const unseenUpdate = derived(user, ($user) => {
-	if (!$user || !latestUpdate) return null;
-	return ($user.seenUpdates ?? []).includes(latestUpdate.id) ? null : latestUpdate;
+let requested = false;
+
+export async function loadLatestUpdate() {
+	if (requested) return;
+	requested = true;
+	try {
+		const response = await apiFetch('/apiv1/updates/latest');
+		if (!response.ok) return;
+		const text = await response.text();
+		const data = text ? JSON.parse(text) : null;
+		latestUpdate.set(typeof data?.markdown === 'string' ? parseUpdate(data.markdown) : null);
+	} catch (e) {
+		requested = false;
+		console.warn('Failed to load the latest release notes:', e);
+	}
+}
+
+export const unseenUpdate = derived([user, latestUpdate], ([$user, $latest]) => {
+	if (!$user || !$latest) return null;
+	return ($user.seenUpdates ?? []).includes($latest.id) ? null : $latest;
 });
 
 export async function markUpdateSeen(id: string) {

@@ -680,6 +680,7 @@ var routeExclusions = map[string]string{
 	"PATCH /template-instances/:id/name":                              "no CLI command yet: rename mutations",
 	"PATCH /auth/tokens/:id":                                          "no CLI command yet: token rename",
 	"POST /auth/me/seen-updates":                                      "web UI changelog seen marker",
+	"GET /updates/latest":                                             "web UI release notes pop-up",
 	"PUT /deployments/:id/github-repo":                                "no CLI command yet: relink the github repo",
 
 	// first-run installer flow: a browser ceremony against an instance that has

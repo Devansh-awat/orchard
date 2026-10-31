@@ -27,7 +27,7 @@
 	import { env } from '$env/dynamic/public';
 	import { initPostHog, identifyUser } from '$lib/posthog';
 	import { captureUrlSecrets, rememberReturnTo, secretRoute } from '$lib/utils/url-secrets';
-	import { latestUpdateId } from '$lib/updates/meta';
+	import { loadLatestUpdate, unseenUpdate } from '$lib/stores/updates';
 	import { registerShortcut } from '$lib/utils/shortcuts';
 	import { whenIdle } from '$lib/utils/idle';
 	import { Lazy } from '$lib/utils/lazy.svelte';
@@ -42,12 +42,13 @@
 
 	const updatesModal = new Lazy(() => import('$lib/components/UpdatesModal.svelte'));
 	const UpdatesModal = $derived(updatesModal.current);
-	const updateUnseen = $derived(
-		!!$user && !!latestUpdateId && !($user.seenUpdates ?? []).includes(latestUpdateId)
-	);
+	$effect(() => {
+		if (loading || !$user) return;
+		untrack(() => loadLatestUpdate());
+	});
 
 	$effect(() => {
-		if (loading || !updateUnseen) return;
+		if (loading || !$unseenUpdate) return;
 		untrack(() => updatesModal.preload());
 	});
 

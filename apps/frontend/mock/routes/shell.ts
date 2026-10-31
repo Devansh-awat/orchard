@@ -1,3 +1,4 @@
+import { readdirSync, readFileSync } from 'node:fs';
 import type { MockContext } from '../plugin.ts';
 import { STREAMING, notFound, reply, type Router } from '../router.ts';
 import {
@@ -40,6 +41,25 @@ export function shellRoutes(r: Router, { store, hub, log }: MockContext) {
 		if (!u) return unauthorized();
 		if (body?.id && !u.seenUpdates.includes(body.id)) u.seenUpdates.push(body.id);
 		return { seenUpdates: u.seenUpdates };
+	});
+	r.get('/updates/latest', () => {
+		const dir = new URL('../../../../releases/ui/notes/', import.meta.url);
+		const versions = readdirSync(dir)
+			.map((f) => /^(\d+)\.(\d+)\.(\d+)\.md$/.exec(f))
+			.filter((m): m is RegExpExecArray => !!m)
+			.sort(
+				(a, b) =>
+					Number(b[1]) - Number(a[1]) || Number(b[2]) - Number(a[2]) || Number(b[3]) - Number(a[3])
+			);
+		const newest = versions[0];
+		if (!newest) return null;
+		const version = `${newest[1]}.${newest[2]}.${newest[3]}`;
+		return {
+			version,
+			url: null,
+			publishedAt: null,
+			markdown: readFileSync(new URL(`${version}.md`, dir), 'utf8')
+		};
 	});
 	r.get('/auth/login', loginRedirect);
 	r.get('/auth/mock-login', loginRedirect);

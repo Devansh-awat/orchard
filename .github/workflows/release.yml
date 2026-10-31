@@ -37,6 +37,8 @@ jobs:
       cli_v: ${{ steps.rp1.outputs['apps/cli--version'] || steps.rp2.outputs['apps/cli--version'] || steps.rp3.outputs['apps/cli--version'] }}
       sandbox: ${{ steps.rp1.outputs['infra/images/sandbox--release_created'] || steps.rp2.outputs['infra/images/sandbox--release_created'] || steps.rp3.outputs['infra/images/sandbox--release_created'] }}
       sandbox_v: ${{ steps.rp1.outputs['infra/images/sandbox--version'] || steps.rp2.outputs['infra/images/sandbox--version'] || steps.rp3.outputs['infra/images/sandbox--version'] }}
+      ui: ${{ steps.rp1.outputs['releases/ui--release_created'] || steps.rp2.outputs['releases/ui--release_created'] || steps.rp3.outputs['releases/ui--release_created'] }}
+      ui_v: ${{ steps.rp1.outputs['releases/ui--version'] || steps.rp2.outputs['releases/ui--version'] || steps.rp3.outputs['releases/ui--version'] }}
       paths_released: ${{ steps.rp1.outputs.paths_released || steps.rp2.outputs.paths_released || steps.rp3.outputs.paths_released }}
       graft_sdk: ${{ steps.rp1.outputs['packages/graft-sdk--release_created'] || steps.rp2.outputs['packages/graft-sdk--release_created'] || steps.rp3.outputs['packages/graft-sdk--release_created'] }}
       graft_ui: ${{ steps.rp1.outputs['packages/graft-ui--release_created'] || steps.rp2.outputs['packages/graft-ui--release_created'] || steps.rp3.outputs['packages/graft-ui--release_created'] }}
@@ -281,6 +283,47 @@ jobs:
     if: contains(needs.release-please.outputs.paths_released, '"registry"') || needs.release-please.outputs.server == 'true'
     uses: ./.github/workflows/registry.yml
     secrets: inherit
+
+  updates:
+    needs: release-please
+    if: needs.release-please.outputs.ui == 'true'
+    runs-on: ubuntu-latest
+    environment: registry
+    permissions:
+      contents: read
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.REGISTRY_R2_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.REGISTRY_R2_SECRET_KEY }}
+      AWS_DEFAULT_REGION: auto
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+      R2_ENDPOINT: ${{ secrets.REGISTRY_R2_ENDPOINT }}
+      R2_BUCKET: ${{ secrets.REGISTRY_R2_BUCKET }}
+      VERSION: ${{ needs.release-please.outputs.ui_v }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ui/v${{ needs.release-please.outputs.ui_v }}
+      - name: Publish the note to assets.orchard.my
+        run: |
+          note="releases/ui/notes/$VERSION.md"
+          test -f "$note" || { echo "::error::$note is missing, so there is nothing to show"; exit 1; }
+          aws s3 cp "$note" "s3://$R2_BUCKET/updates/ui/$VERSION.md" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --content-type 'text/markdown; charset=utf-8' \
+            --cache-control 'public, max-age=300' \
+            --only-show-errors
+          jq -n --arg v "$VERSION" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg url "https://github.com/$GITHUB_REPOSITORY/releases/tag/ui/v$VERSION" \
+            '{version: $v, file: ($v + ".md"), publishedAt: $at, url: $url}' > "$RUNNER_TEMP/latest.json"
+          aws s3 cp "$RUNNER_TEMP/latest.json" "s3://$R2_BUCKET/updates/ui/latest.json" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --content-type application/json \
+            --cache-control no-cache \
+            --only-show-errors
+      - name: Check what instances get
+        run: |
+          curl -fsSL "https://assets.orchard.my/updates/ui/latest.json?v=$GITHUB_SHA" | jq -e --arg v "$VERSION" '.version == $v'
 
   installer:
     needs: release-please

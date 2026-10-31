@@ -82,6 +82,10 @@
     "infra/images/sandbox": {
       "release-type": "simple",
       "component": "sandbox"
+    },
+    "releases/ui": {
+      "release-type": "simple",
+      "component": "ui"
     }
   }
 }

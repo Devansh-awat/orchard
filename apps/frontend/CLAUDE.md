@@ -375,7 +375,7 @@ Three-level hierarchy: **Org cap** → **Member allowance** → **Deployment req
   right-sizing summary is a `CheckList`; members and workloads are kit `Table`s inside `SectionCard`s. Allowance
   edits open a `Modal` with a Default / Custom / Unlimited `SegmentedControl` per resource.
 
-
+## Running without a backend
 
 `pnpm dev:mock` (from here or the repo root) starts Vite with `ORCHARD_MOCK=1`, which mounts the
 `mockApi()` plugin from `mock/plugin.ts`. It answers every `/apiv1/*` request from an in-memory

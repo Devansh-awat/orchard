@@ -1,5 +1,5 @@
 import { marked } from 'marked';
-import { files, parseFrontmatter } from './meta';
+import { parseFrontmatter } from './meta';
 
 export interface UpdateSection {
 	icon: string;
@@ -58,19 +58,17 @@ function parseSections(body: string): { intro: string; sections: UpdateSection[]
 	return { intro: render(introLines.join('\n')), sections };
 }
 
-export const updates: Update[] = Object.values(files)
-	.map((raw) => parseFrontmatter(raw))
-	.filter(({ meta }) => meta.id && meta.date)
-	.map(({ meta, body }) => {
-		const { intro, sections } = parseSections(body);
-		return {
-			id: meta.id,
-			title: meta.title || meta.id,
-			date: meta.date,
-			tag: meta.tag || 'New',
-			summary: meta.summary || '',
-			intro,
-			sections
-		};
-	})
-	.sort((a, b) => b.date.localeCompare(a.date));
+export function parseUpdate(raw: string): Update | null {
+	const { meta, body } = parseFrontmatter(raw);
+	if (!meta.id || !meta.date) return null;
+	const { intro, sections } = parseSections(body);
+	return {
+		id: meta.id,
+		title: meta.title || meta.id,
+		date: meta.date,
+		tag: meta.tag || 'New',
+		summary: meta.summary || '',
+		intro,
+		sections
+	};
+}

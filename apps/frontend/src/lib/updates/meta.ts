@@ -16,15 +16,3 @@ export function parseFrontmatter(raw: string): { meta: Record<string, string>; b
 
 	return { meta, body: raw.slice(match[0].length) };
 }
-
-export const files = import.meta.glob('./*.md', {
-	query: '?raw',
-	import: 'default',
-	eager: true
-}) as Record<string, string>;
-
-export const latestUpdateId: string | null =
-	Object.values(files)
-		.map((raw) => parseFrontmatter(raw).meta)
-		.filter((meta) => meta.id && meta.date)
-		.sort((a, b) => b.date.localeCompare(a.date))[0]?.id ?? null;

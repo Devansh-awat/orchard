@@ -1,4 +1,5 @@
 import { Module, type DynamicModule } from '@nestjs/common';
+import { UpdatesModule } from './updates/updates.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
@@ -63,6 +64,7 @@ import { graftImports } from './grafts/boot';
     // with @SkipThrottle().
     ThrottlerModule.forRoot([{ ttl: 60000, limit: apiThrottlerLimit }]),
     PrismaModule,
+    UpdatesModule,
     CryptoModule,
     AuthModule,
     UsersModule,
