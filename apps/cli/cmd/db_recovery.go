@@ -169,6 +169,13 @@ func dbRenderOperation(op map[string]any) {
 			[2]string{"recovery time", dbMillis(res["recoveryMs"])},
 			[2]string{"size", dbHumanSize(res["sizeBytes"])},
 		)
+		if r, ok := res["rehearsal"].(map[string]any); ok {
+			line := "done"
+			if d := dbMillis(r["upgradeMs"]); d != "" {
+				line = "pg_upgrade took " + d + " on the copy, about the expected downtime"
+			}
+			pairs = append(pairs, [2]string{"rehearsal", line})
+		}
 		if v, ok := res["verdict"].(map[string]any); ok {
 			pairs = append(pairs, [2]string{"check", dbVerdictLine(v)})
 		}
@@ -210,6 +217,8 @@ func dbDescribeTarget(v any) string {
 			return "backup " + pick(t, "backupId")
 		case "time":
 			return "time " + pick(t, "time")
+		case "major":
+			return "postgres " + pick(t, "major")
 		case "":
 			b, _ := json.Marshal(t)
 			return string(b)
@@ -367,7 +376,7 @@ func dbOpsCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:     "ops",
 		Aliases: []string{"op", "operations"},
-		Short:   "Inspect and control restore, fork, undelete and restore test operations",
+		Short:   "Inspect and control restore, fork, undelete, upgrade and restore test operations",
 	}
 	c.AddCommand(dbOpsListCmd(), dbOpsGetCmd(), dbOpsCancelCmd(), dbOpsUndoCmd())
 	return c

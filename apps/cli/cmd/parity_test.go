@@ -229,6 +229,9 @@ var routeCoverage = map[string]string{
 	"GET /databases/:id/users":                  "db user list",
 	"POST /databases/:id/users":                 "db user create",
 	"DELETE /databases/:id/users/:name":         "db user rm",
+	"GET /database-versions":                    "db versions",
+	"GET /databases/:id/security":               "db security",
+	"POST /databases/:id/upgrade":               "db upgrade",
 
 	// pods
 	"GET /pods":                "pod list",

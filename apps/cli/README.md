@@ -147,7 +147,8 @@ orchard db          list | get | create | delete | connection | metrics |
                     checkpoint create|list|group|restore|restore-group|rm |
                     ops list|get|cancel|undo | test-backup run|list |
                     trash list|restore | pooler get|set |
-                    replication get|set | user list|create|rm
+                    replication get|set | user list|create|rm |
+                    versions | security | upgrade
 orchard pod         list | get | logs | delete | exec | shell
 orchard sandbox     create | list | get | update | start | stop | delete |
                     ssh | ssh-config | chat | credentials set|clear|status

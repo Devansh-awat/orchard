@@ -51,6 +51,9 @@ func dbCmd() *cobra.Command {
 		dbReplicationCmd(),
 		dbUserCmd(),
 		dbTrashCmd(),
+		dbVersionsCmd(),
+		dbSecurityCmd(),
+		dbUpgradeCmd(),
 		dbExtensionCmd(),
 		dbSettingsCmd(),
 		dbPublicCmd(),
@@ -273,7 +276,7 @@ func dbCreateCmd() *cobra.Command {
 	c.Flags().StringVar(&restoreFrom, "restore-from", "", "postgres:// URL to seed data from on first boot")
 	c.Flags().IntVar(&cpu, "cpu", 0, "CPU request in millicores (e.g. 500)")
 	c.Flags().StringVar(&memory, "memory", "", `memory request in bytes or with unit (e.g. "512Mi")`)
-	c.Flags().IntVar(&pgMajor, "pg-major", 0, "PostgreSQL major version, e.g. 17 (server default when omitted)")
+	c.Flags().IntVar(&pgMajor, "pg-major", 0, "PostgreSQL major version; choices come from orchard db versions (server default when omitted)")
 	c.Flags().IntVar(&replicas, "replicas", 0, "number of Postgres instances, primary included (server default when omitted)")
 	_ = c.MarkFlagRequired("name")
 	wait, timeout = addWaitFlags(c)

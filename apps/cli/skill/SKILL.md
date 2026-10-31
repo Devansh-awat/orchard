@@ -22,7 +22,7 @@ description: Deploy and manage apps, databases, scheduled jobs, domains, and log
 ## Rules
 
 - Destructive commands (delete/revoke/restore) need `--yes` when not a TTY; the CLI never prompts in a pipe (it exits 2 instead).
-- Async ops (`deploy create|scale|start|restart|rebuild|rollback`, `deploy image set`, `up`, `import`, `db create`, `db backup create|restore`, `db fork`, `db checkpoint restore`, `db ops get`, `db test-backup run`, `db trash restore`, `job run`) take `--wait --timeout 10m`; deadline exits 8. `db diagnose <id>` explains database health and exits 10 when it is down.
+- Async ops (`deploy create|scale|start|restart|rebuild|rollback`, `deploy image set`, `up`, `import`, `db create`, `db backup create|restore`, `db fork`, `db checkpoint restore`, `db ops get`, `db test-backup run`, `db trash restore`, `db upgrade`, `job run`) take `--wait --timeout 10m`; deadline exits 8. `db diagnose <id>` explains database health and exits 10 when it is down. `db versions` lists Postgres majors; `db security <id>` lists CVEs and the fix; `db upgrade <id> --to <major> --yes` takes Postgres offline for the in-place step.
 - Paginated lists (`audit list`, `job runs`) take `--limit/--cursor/--all`; JSON includes `nextCursor`.
 - Rate limit is 600 req/60s per `orch_` token (200 req/60s per IP otherwise); 429s carry `Retry-After`. Prefer `--wait` (server long-poll) or `orchard events tail --types ...` over polling.
 - Anything without a wrapper: `orchard api METHOD /path [--data JSON|-]`. Route list: `apps/server/test/auth-coverage.snapshot.json`.

@@ -522,3 +522,88 @@ func TestDbReplicationAndUsers(t *testing.T) {
 		t.Errorf("bad replication mode: %v, want usage error", err)
 	}
 }
+
+func TestDbVersions(t *testing.T) {
+	_, srv := newDBFake(t, map[string]func(w http.ResponseWriter, r *http.Request){
+		"GET /database-versions": reply(`{"versions":[{"major":16,"minor":10,"supported":true,"eolDate":"2028-11-09"},{"major":17,"minor":6,"supported":true,"current":true},{"major":18,"minor":null,"supported":null}],"defaultMajor":17,"source":"https://example.com/catalog.yaml","catalogDate":"2026-10-29"}`),
+	})
+	out, err := runDBStdout(t, srv.URL, "db", "versions", "-o", "table")
+	if err != nil {
+		t.Fatalf("db versions: %v", err)
+	}
+	for _, want := range []string{"16.10", "17.6", "default", "unknown", "2028-11-09", "catalog 2026-10-29"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestDbSecurity(t *testing.T) {
+	_, srv := newDBFake(t, map[string]func(w http.ResponseWriter, r *http.Request){
+		"GET /databases/db1/security": reply(`{"running":"17.9","major":17,"supported":true,"action":"minor_update","highestScore":8.8,"vulnerabilities":[{"cve":"CVE-1","score":4.3,"fixedInVersion":"17.10","component":"client"},{"cve":"CVE-2","score":8.8,"fixedInVersion":"17.11","component":"core server"},{"cve":"CVE-3","score":7.5,"fixedInVersion":null,"component":"contrib module"}],"minorUpdate":{"to":"17.11","automatic":true},"upgrades":[{"major":18}]}`),
+	})
+	out, err := runDBStdout(t, srv.URL, "db", "security", "db1", "-o", "table")
+	if err != nil {
+		t.Fatalf("db security: %v", err)
+	}
+	if i, j := strings.Index(out, "CVE-2"), strings.Index(out, "CVE-1"); i < 0 || j < 0 || i > j {
+		t.Errorf("CVEs not sorted by score:\n%s", out)
+	}
+	for _, want := range []string{"minor update to 17.11 happens automatically", "major upgrades available: 18", "no fix on this major", "automatic minor update"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q:\n%s", want, out)
+		}
+	}
+	js, err := runDBStdout(t, srv.URL, "db", "security", "db1", "-o", "json")
+	if err != nil || !strings.Contains(js, `"highestScore": 8.8`) {
+		t.Errorf("json = %s (%v), want passthrough", js, err)
+	}
+}
+
+func TestDbUpgrade(t *testing.T) {
+	fastOperationPolls(t)
+	polls := 0
+	f, srv := newDBFake(t, map[string]func(w http.ResponseWriter, r *http.Request){
+		"POST /databases/db1/upgrade": reply(`{"id":"op7","kind":"upgrade","status":"pending","phase":"queued"}`),
+		"GET /database-operations/op7": func(w http.ResponseWriter, r *http.Request) {
+			polls++
+			if polls == 1 {
+				io.WriteString(w, `{"id":"op7","kind":"upgrade","status":"running","phase":"rehearsal_upgrading"}`)
+				return
+			}
+			io.WriteString(w, `{"id":"op7","kind":"upgrade","status":"succeeded","phase":"done","result":{"rehearsal":{"upgradeMs":42000}}}`)
+		},
+	})
+	if err := runDB(t, srv.URL, "db", "upgrade", "db1", "--to", "18"); exitcode.FromError(err) != exitcode.Usage {
+		t.Fatalf("upgrade without --yes: %v, want usage error", err)
+	}
+	if err := runDB(t, srv.URL, "db", "upgrade", "db1", "--yes"); err == nil {
+		t.Fatal("upgrade without --to succeeded, want an error")
+	}
+	if err := runDB(t, srv.URL, "db", "upgrade", "db1", "--to", "18", "--yes", "--wait", "--timeout", "5s"); err != nil {
+		t.Fatalf("upgrade --wait: %v", err)
+	}
+	if got := f.find(http.MethodPost, "/databases/db1/upgrade").body; got["major"] != float64(18) || got["rehearse"] != true {
+		t.Errorf("body = %v", got)
+	}
+	if err := runDB(t, srv.URL, "db", "upgrade", "db1", "--to", "18", "--no-rehearse", "--yes"); err != nil {
+		t.Fatalf("upgrade --no-rehearse: %v", err)
+	}
+	if n := f.count(http.MethodPost, "/databases/db1/upgrade"); n != 2 {
+		t.Fatalf("upgrade calls = %d, want 2", n)
+	}
+	f.mu.Lock()
+	last := map[string]any{}
+	for _, c := range f.calls {
+		if c.method == http.MethodPost && c.path == "/databases/db1/upgrade" {
+			last = c.body
+		}
+	}
+	f.mu.Unlock()
+	if last["rehearse"] != false {
+		t.Errorf("--no-rehearse body = %v, want rehearse false", last)
+	}
+	if polls != 2 {
+		t.Errorf("polls = %d, want 2", polls)
+	}
+}

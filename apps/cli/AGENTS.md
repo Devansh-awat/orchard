@@ -99,7 +99,7 @@ JSON output includes a `nextCursor` field when more pages remain; pass it back v
 
 ## --wait / --timeout
 
-Commands that start async work accept `--wait` (block until a terminal state) and `--timeout` (default 10m; hitting it exits 8): `deploy create|scale|start|restart|rebuild|rollback`, `deploy image set`, `up`, `import`, `db create`, `db backup create|restore`, `db fork`, `db checkpoint restore|restore-group`, `db ops get|undo`, `db test-backup run`, `db trash restore`, `job run`. Without `--wait` they return as soon as the API accepts the request. Progress while waiting goes to stderr; stdout still carries only the data payload.
+Commands that start async work accept `--wait` (block until a terminal state) and `--timeout` (default 10m; hitting it exits 8): `deploy create|scale|start|restart|rebuild|rollback`, `deploy image set`, `up`, `import`, `db create`, `db backup create|restore`, `db fork`, `db checkpoint restore|restore-group`, `db ops get|undo`, `db test-backup run`, `db trash restore`, `db upgrade`, `job run`. Without `--wait` they return as soon as the API accepts the request. Progress while waiting goes to stderr; stdout still carries only the data payload.
 
 ## Rollout flow: is it live, and if not, why
 
@@ -137,6 +137,16 @@ orchard db fork <dbId> --name copy --env staging --wait          # live copy, or
 orchard db test-backup run <dbId> --wait  # restore the latest backup into a throwaway copy and check it
 orchard db trash list --project my-app && orchard db trash restore <deletedId> --wait
 ```
+
+Postgres versions and CVEs:
+
+```sh
+orchard db versions                       # majors on offer (from the CloudNativePG catalog), default marked
+orchard db security <dbId> -o json        # running version, CVEs with fixedInVersion, action, minorUpdate, upgrades
+orchard db upgrade <dbId> --to 18 --yes --wait   # rehearsal on a copy, then in place; Postgres is offline during the real step
+```
+
+`db security` exits 0 whatever it finds; branch on the JSON (`jq -e '.action != "major_upgrade"'`). Minor versions roll automatically (`minorUpdate.automatic`). A failed upgrade is reverted to the old version; `--no-rehearse` skips the copy.
 
 An in-place restore takes a checkpoint first and keeps the previous copy stopped for 24 hours. `db delete` moves a database with a completed backup to the trash for 30 days; `db protect <dbId> --deletion on` makes the server refuse the delete.
 
