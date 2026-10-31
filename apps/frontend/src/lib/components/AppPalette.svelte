@@ -173,14 +173,18 @@
 				themeStore.setMode(dark ? 'light' : 'dark');
 			}
 		},
-		{
-			id: 'usage',
-			label: 'Usage',
-			hint: 'CPU, memory and quotas',
-			icon: Gauge,
-			keywords: ['quota', 'billing', 'resources'],
-			run: () => goto(`/${orgSlug}/usage`)
-		},
+		...($selectedOrganization?.myRole === 'guest'
+			? []
+			: [
+					{
+						id: 'usage',
+						label: 'Usage',
+						hint: 'CPU, memory and quotas',
+						icon: Gauge,
+						keywords: ['quota', 'billing', 'resources'],
+						run: () => goto(`/${orgSlug}/usage`)
+					}
+				]),
 		{
 			id: 'invite',
 			label: 'Invite a teammate',

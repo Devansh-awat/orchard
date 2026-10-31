@@ -20,9 +20,6 @@ export const load: PageLoad = ({ params, depends, url }) => {
 		}
 		const orgId: string = (await orgRes.json()).id;
 
-		// Membership and personal usage both need nothing but orgId, so they go
-		// together. Only the admin fan-out has to wait to learn the role, and
-		// firing those speculatively would just buy four 403s for a member.
 		const [me, myUsage] = await Promise.all([
 			apiFetch(`/apiv1/organizations/${orgId}/members/me`).then((r) => {
 				if (!r.ok) throw error(r.status, 'Failed to load membership');

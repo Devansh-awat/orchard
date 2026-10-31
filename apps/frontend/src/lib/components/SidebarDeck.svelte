@@ -91,13 +91,17 @@
 			icon: Timer,
 			active: $page.url.pathname.startsWith('/' + orgSlug + '/jobs')
 		},
-		{
-			id: 'usage',
-			label: 'Usage',
-			href: `/${orgSlug}/usage`,
-			icon: Gauge,
-			active: $page.url.pathname.startsWith('/' + orgSlug + '/usage')
-		},
+		...($selectedOrganization?.myRole === 'guest'
+			? []
+			: [
+					{
+						id: 'usage',
+						label: 'Usage',
+						href: `/${orgSlug}/usage`,
+						icon: Gauge,
+						active: $page.url.pathname.startsWith('/' + orgSlug + '/usage')
+					}
+				]),
 		...graftHost.slot('nav.primary').map(({ graftId, item }) => {
 			const href = item.href.replaceAll('{org}', orgSlug ?? '');
 			return {

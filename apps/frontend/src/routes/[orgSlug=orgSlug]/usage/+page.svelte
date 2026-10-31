@@ -2,19 +2,39 @@
 	import { onDestroy } from 'svelte';
 	import { goto, invalidate } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { fly, fade } from '$lib/utils/transitions';
-	import { motionStagger } from '$lib/utils/motion.svelte';
 	import { apiFetch, toasts, subscribeOrgEvents } from '$lib/stores';
 	import { formatCpuMilli, formatMemoryBytes } from '$lib/quantity';
-	import { BudgetMeter, UsageBreakdown, DataGrid } from '$lib/components/usage';
-	import HorizontalBars from '$lib/components/HorizontalBars.svelte';
-	import { Loader2, Activity, Gauge, Users, BarChart3, Pencil, Check, X } from 'lucide-svelte';
-	import { Puzzle } from 'lucide-svelte';
+	import { Activity, BarChart3, Gauge, Pencil, Puzzle, Users } from 'lucide-svelte';
 	import GraftMount from '$lib/grafts/GraftMount.svelte';
 	import { graftHost } from '$lib/grafts/host.svelte';
-	import { TabBar, SectionCard, EmptyState, Alert, PageHeader, Button } from '$lib/components/ui';
-	import StatusDot from '$lib/components/ui/StatusDot.svelte';
-	import { statusMeta, type StatusKind } from '$lib/components/ui/status';
+	import {
+		ActionRow,
+		Avatar,
+		Breadcrumbs,
+		Button,
+		CheckList,
+		EmptyState,
+		Field,
+		ItemLabel,
+		Input,
+		Modal,
+		ModalIntro,
+		PageTabs,
+		SearchField,
+		SectionCard,
+		SegmentedControl,
+		SettingsList,
+		Skeleton,
+		StatusBadge,
+		Table,
+		TopList
+	} from '$lib/components/ui';
+	import type { TableColumn, TableSort } from '$lib/components/ui/Table.svelte';
+	import Widget from '$lib/components/ui/Widget.svelte';
+	import Metric from '$lib/components/ui/Metric.svelte';
+	import Progress from '$lib/components/ui/Progress.svelte';
+	import ResourceHeader from '$lib/components/patterns/ResourceHeader.svelte';
+	import { statusMeta } from '$lib/components/ui/status';
 
 	const formatPods = (n: number) => `${n}`;
 	import type { PageData } from './$types';
@@ -147,7 +167,7 @@
 			{ id: 'me', label: 'Yours', icon: Gauge }
 		];
 		if (isAdmin) {
-			tabs.splice(1, 0, { id: 'overview', label: 'Organization', icon: Activity });
+			tabs.unshift({ id: 'overview', label: 'Organization', icon: Activity });
 			tabs.push({ id: 'members', label: 'Members', icon: Users });
 			tabs.push({ id: 'provisioning', label: 'Right-sizing', icon: BarChart3 });
 		}
@@ -174,11 +194,6 @@
 		goto(u.pathname + u.search, { keepFocus: true, noScroll: true });
 	}
 
-	function pct(used: number, cap: number | null): number {
-		if (!cap || cap <= 0) return 0;
-		return Math.min(100, Math.round((used / cap) * 100));
-	}
-
 	let usageUnsub: (() => void) | null = null;
 	let usageRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 	let hasLoadedOnce = false;
@@ -189,6 +204,10 @@
 		if (isInitial) loading = true;
 		promise
 			.then((p: any) => {
+				if (p.role === 'guest') {
+					goto(`/${orgSlug}`, { replaceState: true });
+					return;
+				}
 				role = p.role;
 				isAdmin = p.isAdmin;
 				orgId = p.orgId;
@@ -224,7 +243,6 @@
 		if (usageRefreshTimer) clearTimeout(usageRefreshTimer);
 	});
 
-	// ---- Default member allowance editing ----
 	let editingDefault = $state(false);
 	let defaultCpuInput = $state('');
 	let defaultMemInput = $state('');
@@ -283,7 +301,6 @@
 		}
 	}
 
-	// ---- Per-member editing ----
 	let editingMemberId = $state<string | null>(null);
 	let memCpuInput = $state('');
 	let memMemInput = $state('');
@@ -371,49 +388,6 @@
 		return `${fmt(value)}${src === 'default' ? ' · default' : ''}`;
 	}
 
-	// ---- Provisioning helpers ----
-	function verdictColor(v: Verdict): string {
-		switch (v) {
-			case 'over':
-				return 'var(--warning-text)';
-			case 'under':
-				return 'var(--error-text-color)';
-			case 'ok':
-				return 'var(--success-text)';
-			default:
-				return 'var(--surface-muted)';
-		}
-	}
-	function verdictBg(v: Verdict): string {
-		switch (v) {
-			case 'over':
-				return 'var(--warning-bg)';
-			case 'under':
-				return 'color-mix(in srgb, var(--error-text-color) 12%, transparent)';
-			case 'ok':
-				return 'var(--success-bg)';
-			default:
-				return 'color-mix(in srgb, var(--surface-border) 35%, transparent)';
-		}
-	}
-	function verdictLabel(v: Verdict): string {
-		switch (v) {
-			case 'over':
-				return 'Over-provisioned';
-			case 'under':
-				return 'Under-provisioned';
-			case 'ok':
-				return 'OK';
-			default:
-				return 'No data';
-		}
-	}
-
-	function utilPctStr(u: number | null): string {
-		if (u === null) return 'n/a';
-		return `${Math.round(u * 100)}%`;
-	}
-
 	const topWasters = $derived.by(() => {
 		const byCpu = [...provisioning]
 			.filter((r) => r.actualCpuMilliP95 !== null && r.requestedCpuMilli > 0)
@@ -457,1380 +431,867 @@
 		{ value: '24h', label: '24h' },
 		{ value: '7d', label: '7d' }
 	];
+
+	type Tone = 'neutral' | 'success' | 'warning' | 'error';
+	type Tile = {
+		label: string;
+		value: string;
+		unit?: string;
+		detail?: string;
+		tone: Tone;
+		ratio: number | null;
+	};
+
+	function splitAmount(s: string): { value: string; unit?: string } {
+		const i = s.lastIndexOf(' ');
+		return i > 0 ? { value: s.slice(0, i), unit: s.slice(i + 1) } : { value: s };
+	}
+
+	function toneFor(ratio: number | null): Tone {
+		if (ratio == null) return 'neutral';
+		return ratio >= 0.9 ? 'error' : ratio >= 0.75 ? 'warning' : 'neutral';
+	}
+
+	function capTile(
+		label: string,
+		used: number,
+		cap: number | null,
+		fmt: (n: number) => string
+	): Tile {
+		const ratio = cap && cap > 0 ? used / cap : null;
+		return {
+			label,
+			...splitAmount(fmt(used)),
+			detail: cap ? `of ${fmt(cap)} · ${Math.round((ratio ?? 0) * 100)}%` : 'No cap',
+			tone: toneFor(ratio),
+			ratio
+		};
+	}
+
+	const orgTiles = $derived.by((): Tile[] => {
+		if (!orgQuota) return [];
+		const { org, usage } = orgQuota;
+		return [
+			capTile('CPU reserved', usage.cpuMilli, org.cpuLimitMilli, formatCpuMilli),
+			capTile('Memory reserved', usage.memoryBytes, org.memoryLimitBytes, formatMemoryBytes),
+			capTile('Pods', usage.pods, org.maxPods, formatPods),
+			capTile('Services', usage.services, org.maxServices, formatPods)
+		];
+	});
+
+	const myTiles = $derived.by((): Tile[] => {
+		if (!myUsage) return [];
+		const make = (
+			label: string,
+			used: number,
+			left: number | null,
+			total: number | null,
+			fmt: (n: number) => string
+		): Tile => {
+			if (left == null) {
+				return {
+					label,
+					value: 'Unlimited',
+					detail: `${fmt(used)} in use`,
+					tone: 'neutral',
+					ratio: null
+				};
+			}
+			const ratio = total && total > 0 ? 1 - left / total : null;
+			return {
+				label,
+				...splitAmount(fmt(Math.max(0, left))),
+				detail: total
+					? `${fmt(used)} used by you · ${fmt(total)} in total`
+					: `${fmt(used)} used by you`,
+				tone: toneFor(ratio),
+				ratio
+			};
+		};
+		return [
+			make(
+				'CPU you can still assign',
+				myUsage.usage.cpuMilli,
+				myUsage.effectiveLimit.cpuMilli,
+				myUsage.allowance.cpuMilli ?? myUsage.orgCap.cpuLimitMilli,
+				formatCpuMilli
+			),
+			make(
+				'Memory you can still assign',
+				myUsage.usage.memoryBytes,
+				myUsage.effectiveLimit.memoryBytes,
+				myUsage.allowance.memoryBytes ?? myUsage.orgCap.memoryLimitBytes,
+				formatMemoryBytes
+			)
+		];
+	});
+
+	const commitTiles = $derived.by((): Tile[] => {
+		if (!membersData) return [];
+		const { org, commitment } = membersData;
+		const over = (used: number, cap: number | null) =>
+			cap && used > cap ? ' · over the cap, which is allowed' : '';
+		const cpu = capTile(
+			'CPU promised to members',
+			commitment.cpuMilli,
+			org.cpuLimitMilli,
+			formatCpuMilli
+		);
+		const mem = capTile(
+			'Memory promised to members',
+			commitment.memoryBytes,
+			org.memoryLimitBytes,
+			formatMemoryBytes
+		);
+		return [
+			{
+				...cpu,
+				detail: (cpu.detail ?? '') + over(commitment.cpuMilli, org.cpuLimitMilli),
+				tone: cpu.tone === 'error' ? 'warning' : cpu.tone
+			},
+			{
+				...mem,
+				detail: (mem.detail ?? '') + over(commitment.memoryBytes, org.memoryLimitBytes),
+				tone: mem.tone === 'error' ? 'warning' : mem.tone
+			}
+		];
+	});
+
+	const headerFacts = $derived.by((): string[] => {
+		if (orgQuota && isAdmin) {
+			const workloads = provisioning.length;
+			return [
+				`${projects.length} project${projects.length === 1 ? '' : 's'}`,
+				`${membersData?.members.length ?? 0} member${membersData?.members.length === 1 ? '' : 's'}`,
+				...(workloads ? [`${workloads} workload${workloads === 1 ? '' : 's'} measured`] : [])
+			];
+		}
+		if (myUsage) {
+			return [
+				`${formatCpuMilli(myUsage.usage.cpuMilli)} and ${formatMemoryBytes(myUsage.usage.memoryBytes)} yours`,
+				`${myUsage.usage.breakdown.length} workload${myUsage.usage.breakdown.length === 1 ? '' : 's'}`
+			];
+		}
+		return [];
+	});
+
+	const PROJECT_METRICS = [
+		{ value: 'cpu', label: 'CPU' },
+		{ value: 'mem', label: 'Memory' },
+		{ value: 'pods', label: 'Pods' }
+	];
+	let projectMetric = $state<'cpu' | 'mem' | 'pods'>('cpu');
+	const projectItems = $derived(
+		projects.map((p) => ({
+			id: p.id,
+			label: p.name,
+			value:
+				projectMetric === 'cpu'
+					? p.usage.cpuMilli
+					: projectMetric === 'mem'
+						? p.usage.memoryBytes
+						: p.usage.pods
+		}))
+	);
+	const projectFormat = $derived(
+		projectMetric === 'cpu'
+			? formatCpuMilli
+			: projectMetric === 'mem'
+				? formatMemoryBytes
+				: formatPods
+	);
+
+	const MY_METRICS = [
+		{ value: 'cpu', label: 'CPU' },
+		{ value: 'mem', label: 'Memory' }
+	];
+	let myMetric = $state<'cpu' | 'mem'>('cpu');
+	const myItems = $derived(
+		(myUsage?.usage.breakdown ?? []).map((b) => ({
+			id: `${b.kind}:${b.id}`,
+			label: `${b.projectName} / ${b.name}`,
+			value: myMetric === 'cpu' ? b.cpuMilli : b.memoryBytes
+		}))
+	);
+	const myFormat = $derived(myMetric === 'cpu' ? formatCpuMilli : formatMemoryBytes);
+
+	function verdictMeta(v: Verdict) {
+		switch (v) {
+			case 'over':
+				return statusMeta('warning', 'Over-provisioned');
+			case 'under':
+				return statusMeta('error', 'Under-provisioned');
+			case 'ok':
+				return statusMeta('success', 'Right-sized');
+			default:
+				return statusMeta('neutral', 'No data yet');
+		}
+	}
+
+	function utilTone(u: number | null): 'neutral' | 'warning' | 'error' {
+		if (u == null) return 'neutral';
+		return u >= 0.9 ? 'error' : u >= 0.75 ? 'warning' : 'neutral';
+	}
+
+	function tabHref(t: Tab) {
+		const u = new URL($page.url);
+		u.searchParams.set('tab', t);
+		return u.pathname + u.search;
+	}
+
+	const verdictChecks = $derived(
+		(['ok', 'under', 'over', 'unknown'] as Verdict[])
+			.filter((v) => v !== 'unknown' || provisioningSummary.counts.unknown > 0)
+			.map((v) => ({
+				id: v,
+				label: verdictMeta(v).label,
+				value: String(provisioningSummary.counts[v]),
+				meta:
+					provisioningSummary.counts[v] === 0 && v !== 'ok'
+						? statusMeta('neutral', verdictMeta(v).label)
+						: verdictMeta(v),
+				href: tabHref('provisioning')
+			}))
+	);
+
+	const reclaimLine = $derived(
+		`${formatCpuMilli(provisioningSummary.wastedCpu)} and ${formatMemoryBytes(provisioningSummary.wastedMem)} reserved but unused at the 95th percentile over ${range}.`
+	);
+
+	const rightTiles = $derived.by((): Tile[] => {
+		const total = provisioning.length;
+		const c = provisioningSummary.counts;
+		return [
+			{
+				label: 'Right-sized',
+				value: String(c.ok),
+				detail: `of ${total} workloads`,
+				tone: 'neutral',
+				ratio: total ? c.ok / total : null
+			},
+			{
+				label: 'Under-provisioned',
+				value: String(c.under),
+				detail: c.under
+					? 'Near their limits, may be throttled or killed'
+					: 'None near their limits',
+				tone: c.under ? 'error' : 'neutral',
+				ratio: null
+			},
+			{
+				label: 'Unused CPU',
+				...splitAmount(formatCpuMilli(provisioningSummary.wastedCpu)),
+				detail: 'Reserved but not used',
+				tone: 'neutral',
+				ratio: null
+			},
+			{
+				label: 'Unused memory',
+				...splitAmount(formatMemoryBytes(provisioningSummary.wastedMem)),
+				detail: 'Reserved but not used',
+				tone: 'neutral',
+				ratio: null
+			}
+		];
+	});
+
+	const wasteCpuItems = $derived(
+		topWasters.byCpu.map((x) => ({
+			id: `${x.row.kind}:${x.row.id}`,
+			label: `${x.row.projectName} / ${x.row.name}`,
+			value: x.wasted
+		}))
+	);
+	const wasteMemItems = $derived(
+		topWasters.byMem.map((x) => ({
+			id: `${x.row.kind}:${x.row.id}`,
+			label: `${x.row.projectName} / ${x.row.name}`,
+			value: x.wasted
+		}))
+	);
+
+	let verdictFilter = $state<'all' | Verdict>('all');
+	const verdictFilterOptions = $derived([
+		{ value: 'all', label: 'All' },
+		...(['under', 'over', 'ok'] as Verdict[])
+			.filter((v) => provisioningSummary.counts[v] > 0)
+			.map((v) => ({
+				value: v,
+				label: v === 'ok' ? 'Right-sized' : v === 'under' ? 'Under' : 'Over'
+			}))
+	]);
+	let workloadQuery = $state('');
+	let workloadSort = $state<TableSort | null>({ id: 'verdict', dir: 'asc' });
+	const VERDICT_RANK: Record<Verdict, number> = { under: 0, over: 1, ok: 2, unknown: 3 };
+	const WORKLOAD_COLUMNS: TableColumn<ProvisioningRow>[] = [
+		{ id: 'name', label: 'Workload', sortable: true, sortValue: (r) => r.name },
+		{
+			id: 'cpu',
+			label: 'CPU used',
+			width: '14rem',
+			sortable: true,
+			sortValue: (r) => r.cpuUtilization ?? -1
+		},
+		{
+			id: 'mem',
+			label: 'Memory used',
+			width: '14rem',
+			sortable: true,
+			sortValue: (r) => r.memoryUtilization ?? -1
+		},
+		{
+			id: 'verdict',
+			label: 'Verdict',
+			width: '11rem',
+			sortable: true,
+			sortValue: (r) => VERDICT_RANK[r.verdict]
+		}
+	];
+	const visibleWorkloads = $derived.by(() => {
+		const q = workloadQuery.trim().toLowerCase();
+		return provisioning.filter(
+			(r) =>
+				(verdictFilter === 'all' || r.verdict === verdictFilter) &&
+				(!q || `${r.name} ${r.projectName}`.toLowerCase().includes(q))
+		);
+	});
+
+	let memberQuery = $state('');
+	let memberSort = $state<TableSort | null>({ id: 'cpu', dir: 'desc' });
+	const MEMBER_COLUMNS: TableColumn<MemberRow>[] = [
+		{ id: 'member', label: 'Member', sortable: true, sortValue: (m) => memberName(m) },
+		{ id: 'role', label: 'Role', width: '7rem', sortable: true, sortValue: (m) => m.role },
+		{
+			id: 'cpu',
+			label: 'CPU',
+			width: '13rem',
+			sortable: true,
+			sortValue: (m) => m.usage.cpuMilli
+		},
+		{
+			id: 'mem',
+			label: 'Memory',
+			width: '13rem',
+			sortable: true,
+			sortValue: (m) => m.usage.memoryBytes
+		},
+		{ id: 'edit', width: '3rem', align: 'end' }
+	];
+	const visibleMembers = $derived.by(() => {
+		const q = memberQuery.trim().toLowerCase();
+		const list = membersData?.members ?? [];
+		return q
+			? list.filter((m) => `${memberName(m)} ${m.user.email}`.toLowerCase().includes(q))
+			: list;
+	});
+	const editingMember = $derived(
+		membersData?.members.find((m) => m.user.id === editingMemberId) ?? null
+	);
+
+	function formatRole(r: string) {
+		return r.charAt(0).toUpperCase() + r.slice(1);
+	}
+	function allowanceText(v: number | null, fmt: (n: number) => string) {
+		return v == null ? 'Unlimited' : fmt(v);
+	}
+
+	const LIMIT_MODES = [
+		{ value: 'custom', label: 'Set a limit' },
+		{ value: 'unlimited', label: 'Unlimited' }
+	];
+	const MEMBER_MODES = [
+		{ value: 'default', label: 'Default' },
+		{ value: 'custom', label: 'Custom' },
+		{ value: 'unlimited', label: 'Unlimited' }
+	];
+
+	const showRange = $derived(activeTab === 'provisioning' || activeTab === 'overview');
 </script>
 
-<div class="usage-page">
-	<PageHeader title="Usage">
-		{#snippet icon()}<Activity class="h-5 w-5" />{/snippet}
-		{#snippet meta()}
-			<span class="usage-subtitle">
-				{isAdmin
-					? 'What this organization is using, and how much room is left.'
-					: 'What you are using, and how much room you have left.'}
-			</span>
-		{/snippet}
-	</PageHeader>
-
-	{#if loading}
-		<div class="usage-loading">
-			<Loader2 class="h-6 w-6 animate-spin" style="color: var(--button-bg);" />
-		</div>
-	{:else}
-		<!-- Tab bar -->
-		<div class="usage-tabs-row" class:usage-tabs-row--bare={availableTabs.length < 2}>
-			{#if availableTabs.length > 1}
-				<TabBar tabs={availableTabs} bind:value={() => activeTab, (v) => setTab(v as Tab)} />
-			{/if}
-			{#if activeTab === 'provisioning'}
-				<div class="usage-range">
-					{#each RANGES as r (r.value)}
-						<button
-							type="button"
-							class="usage-range-btn"
-							class:is-active={range === r.value}
-							onclick={() => setRange(r.value)}>{r.label}</button
-						>
-					{/each}
-				</div>
-			{/if}
-		</div>
-
-		{#key activeTab}
-			<div
-				class="usage-tab-content"
-				in:fly={{ y: 8, duration: 200, delay: 60 }}
-				out:fade={{ duration: 100 }}
-			>
-				<!-- ───────── OVERVIEW ───────── -->
-				{#if activeTab === 'overview' && orgQuota}
-					<SectionCard title="Capacity">
-						<div class="budget-grid">
-							<BudgetMeter
-								label="CPU"
-								used={orgQuota.usage.cpuMilli}
-								limit={orgQuota.org.cpuLimitMilli}
-								available={null}
-								format={formatCpuMilli}
-								index={0}
-							/>
-							<BudgetMeter
-								label="Memory"
-								used={orgQuota.usage.memoryBytes}
-								limit={orgQuota.org.memoryLimitBytes}
-								available={null}
-								format={formatMemoryBytes}
-								index={1}
-							/>
-							<BudgetMeter
-								label="Pods"
-								used={orgQuota.usage.pods}
-								limit={orgQuota.org.maxPods}
-								available={null}
-								format={formatPods}
-								index={2}
-							/>
-							<BudgetMeter
-								label="Services"
-								used={orgQuota.usage.services}
-								limit={orgQuota.org.maxServices}
-								available={null}
-								format={formatPods}
-								index={3}
-							/>
-						</div>
-					</SectionCard>
-
-					{#if projects.length === 0}
-						<SectionCard title="By project">
-							<EmptyState
-								title="No projects yet"
-								description="Once this organization has projects, their share of the cap shows up here."
-							/>
-						</SectionCard>
-					{:else}
-						{@const topCpu = Math.max(...projects.map((x) => x.usage.cpuMilli), 1)}
-						<SectionCard
-							title="By project"
-							description="Ranked by reserved CPU. A project with its own cap shows it alongside."
-						>
-							<ul class="proj-list">
-								{#each [...projects].sort((a, b) => b.usage.cpuMilli - a.usage.cpuMilli) as p, i (p.id)}
-									<li {@attach motionStagger({ index: i, from: { y: 4, opacity: 0 } })}>
-										<a class="proj-row" href={`/${orgSlug}/projects/${p.slug}`}>
-											<span class="proj-bar" style="--share: {p.usage.cpuMilli / topCpu}"></span>
-											<span class="proj-main">
-												<span class="proj-name">{p.name}</span>
-												<span class="proj-ns">{p.namespace}</span>
-											</span>
-											<span class="proj-nums">
-												<span class="proj-primary">
-													{formatCpuMilli(p.usage.cpuMilli)}{#if p.cpuLimitMilli}<span
-															class="proj-cap"
-														>
-															/ {formatCpuMilli(p.cpuLimitMilli)}</span
-														>{/if}
-												</span>
-												<span class="proj-secondary">
-													{formatMemoryBytes(p.usage.memoryBytes)} &middot; {p.usage.pods}
-													{p.usage.pods === 1 ? 'pod' : 'pods'}
-												</span>
-											</span>
-										</a>
-									</li>
-								{/each}
-							</ul>
-						</SectionCard>
-					{/if}
-				{:else if activeTab === 'overview'}
-					<SectionCard title="Organization">
-						<EmptyState
-							title="Could not load organization usage"
-							description="This needs organization admin access. If you are an admin, reload the page."
-						/>
-					</SectionCard>
-				{:else if activeTab === 'me' && myUsage}
-					{@const userCpuCap = myUsage.allowance.cpuMilli}
-					{@const userMemCap = myUsage.allowance.memoryBytes}
-					{@const cpuCap = userCpuCap ?? myUsage.orgCap.cpuLimitMilli}
-					{@const memCap = userMemCap ?? myUsage.orgCap.memoryLimitBytes}
-					{@const effectiveCpu = myUsage.effectiveLimit?.cpuMilli ?? null}
-					{@const effectiveMem = myUsage.effectiveLimit?.memoryBytes ?? null}
-					{@const cpuTight =
-						cpuCap !== null && cpuCap > 0 && myUsage.usage.cpuMilli / cpuCap >= 0.8}
-					{@const memTight =
-						memCap !== null && memCap > 0 && myUsage.usage.memoryBytes / memCap >= 0.8}
-
-					<SectionCard title="Your budget">
-						<div class="budget-grid">
-							<BudgetMeter
-								label="CPU"
-								used={myUsage.usage.cpuMilli}
-								limit={cpuCap}
-								available={effectiveCpu}
-								format={formatCpuMilli}
-								index={0}
-							/>
-							<BudgetMeter
-								label="Memory"
-								used={myUsage.usage.memoryBytes}
-								limit={memCap}
-								available={effectiveMem}
-								format={formatMemoryBytes}
-								index={1}
-							/>
-						</div>
-
-						{#if cpuTight || memTight}
-							<div class="budget-note">
-								<Alert tone="warning" title="You are close to your limit">
-									New apps and scale-ups are checked against this budget, so a deploy can be refused
-									once it runs out. Free room up by lowering CPU or memory on something below, or
-									ask an organization admin to raise your allowance.
-								</Alert>
-							</div>
-						{/if}
-					</SectionCard>
-
-					{#if myUsage.usage.breakdown.length === 0}
-						<SectionCard title="Where it is going">
-							<EmptyState
-								title="Nothing is using your budget yet"
-								description="Apps and databases you own show up here with what they reserve, ranked by size."
-							>
-								<Button variant="primary" href="/{orgSlug}/new">Deploy something</Button>
-							</EmptyState>
-						</SectionCard>
-					{:else}
-						<SectionCard
-							title="Where it is going"
-							description="Ranked by what each workload reserves, not what it happens to be using right now."
-						>
-							<UsageBreakdown items={myUsage.usage.breakdown} {orgSlug} />
-						</SectionCard>
-					{/if}
-				{:else if activeTab === 'members' && isAdmin && membersData}
-					<SectionCard
-						title="Allowance committed"
-						description="What member allowances add up to, against the organization cap. Over 100% is allowed: it is a bet that members will not all use their full allowance at once."
-					>
-						<div class="budget-grid">
-							<BudgetMeter
-								label="CPU committed"
-								used={membersData.commitment.cpuMilli}
-								limit={membersData.org.cpuLimitMilli}
-								available={null}
-								format={formatCpuMilli}
-								index={0}
-							/>
-							<BudgetMeter
-								label="Memory committed"
-								used={membersData.commitment.memoryBytes}
-								limit={membersData.org.memoryLimitBytes}
-								available={null}
-								format={formatMemoryBytes}
-								index={1}
-							/>
-						</div>
-						<p class="hint-text">
-							Unlimited members do not add to these totals, but their real usage still counts
-							against the organization cap.
-						</p>
-					</SectionCard>
-
-					<div class="card">
-						<div class="card-head">
-							<div>
-								<h2 class="card-title">Default member allowance</h2>
-							</div>
-							{#if !editingDefault}
-								<button class="btn-icon" onclick={startEditDefault}>
-									<Pencil class="h-3.5 w-3.5" />
-									Edit
-								</button>
-							{/if}
-						</div>
-						<div class="card-body">
-							{#if editingDefault}
-								<div class="form-grid">
-									<label class="field">
-										<span class="field-label">CPU (millicores)</span>
-										<div class="field-row">
-											<input
-												type="number"
-												min="0"
-												class="input field-input"
-												bind:value={defaultCpuInput}
-												oninput={() => {
-													if (defaultCpuInput) defaultCpuUnlim = false;
-												}}
-												placeholder={defaultCpuUnlim ? 'Unlimited' : 'e.g. 500'}
-											/>
-											<label class="toggle">
-												<input
-													type="checkbox"
-													bind:checked={defaultCpuUnlim}
-													onchange={() => {
-														if (defaultCpuUnlim) defaultCpuInput = '';
-													}}
-												/> Unlimited
-											</label>
-										</div>
-									</label>
-									<label class="field">
-										<span class="field-label">Memory (MiB)</span>
-										<div class="field-row">
-											<input
-												type="number"
-												min="0"
-												class="input field-input"
-												bind:value={defaultMemInput}
-												oninput={() => {
-													if (defaultMemInput) defaultMemUnlim = false;
-												}}
-												placeholder={defaultMemUnlim ? 'Unlimited' : 'e.g. 1024'}
-											/>
-											<label class="toggle">
-												<input
-													type="checkbox"
-													bind:checked={defaultMemUnlim}
-													onchange={() => {
-														if (defaultMemUnlim) defaultMemInput = '';
-													}}
-												/> Unlimited
-											</label>
-										</div>
-									</label>
-								</div>
-								<div class="form-actions">
-									<button
-										class="btn btn-secondary"
-										onclick={() => (editingDefault = false)}
-										disabled={savingDefault}>Cancel</button
-									>
-									<button class="btn btn-primary" onclick={saveDefault} disabled={savingDefault}>
-										{#if savingDefault}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
-										Save
-									</button>
-								</div>
-							{:else}
-								<div class="commit-grid">
-									<div>
-										<p class="stat-label">CPU</p>
-										<p class="commit-value">
-											{membersData.org.defaultMemberCpuMilli === null
-												? 'Unlimited'
-												: formatCpuMilli(membersData.org.defaultMemberCpuMilli)}
-										</p>
-									</div>
-									<div>
-										<p class="stat-label">Memory</p>
-										<p class="commit-value">
-											{membersData.org.defaultMemberMemoryBytes === null
-												? 'Unlimited'
-												: formatMemoryBytes(membersData.org.defaultMemberMemoryBytes)}
-										</p>
-									</div>
-								</div>
-								<p class="hint-text">Inherited by members who don't have a custom allowance.</p>
-							{/if}
-						</div>
-					</div>
-
-					<SectionCard title="Members">
-						{#snippet actions()}
-							<span class="card-count">{membersData.members.length}</span>
-						{/snippet}
-						<DataGrid
-							rows={membersData.members}
-							rowKey={(m) => m.user.id}
-							search={(m) => `${memberName(m)} ${m.user.email} ${m.role}`}
-							searchPlaceholder="Filter members"
-							initialSort={{ id: 'cpu', dir: 'desc' }}
-							emptyTitle="No members yet"
-							expanded={(m) => editingMemberId === m.user.id}
-							columns={[
-								{ id: 'member', label: 'Member', sort: (m) => memberName(m) },
-								{ id: 'role', label: 'Role', width: '6rem', sort: (m) => m.role },
-								{ id: 'cpu', label: 'CPU', sort: (m) => m.usage.cpuMilli },
-								{ id: 'mem', label: 'Memory', sort: (m) => m.usage.memoryBytes },
-								{ id: 'edit', label: '', width: '2.5rem', align: 'end' }
-							]}
-						>
-							{#snippet row(m)}
-								<span class="grid-cell">
-									<span class="strong">{memberName(m)}</span>
-									<span class="cell-sub">{m.user.email}</span>
-								</span>
-								<span class="pill pill-muted capitalize">{m.role}</span>
-								<span class="grid-cell">
-									<span class="strong">
-										{formatCpuMilli(m.usage.cpuMilli)}
-										<span class="cell-sub">
-											/ {allowanceLabel(
-												m.allowance.source.cpu,
-												m.allowance.cpuMilli,
-												formatCpuMilli
-											)}</span
-										>
-									</span>
-									{#if m.allowance.cpuMilli !== null}
-										<span class="bar-track bar-track-sm bar-row-w">
-											<span
-												class="bar-fill"
-												style="width: {pct(m.usage.cpuMilli, m.allowance.cpuMilli)}%;"
-											></span>
-										</span>
-									{/if}
-								</span>
-								<span class="grid-cell">
-									<span class="strong">
-										{formatMemoryBytes(m.usage.memoryBytes)}
-										<span class="cell-sub">
-											/ {allowanceLabel(
-												m.allowance.source.memory,
-												m.allowance.memoryBytes,
-												formatMemoryBytes
-											)}</span
-										>
-									</span>
-									{#if m.allowance.memoryBytes !== null}
-										<span class="bar-track bar-track-sm bar-row-w">
-											<span
-												class="bar-fill"
-												style="width: {pct(m.usage.memoryBytes, m.allowance.memoryBytes)}%;"
-											></span>
-										</span>
-									{/if}
-								</span>
-								<span class="ta-right">
-									{#if editingMemberId === m.user.id}
-										<button
-											class="btn-icon-sm"
-											onclick={() => (editingMemberId = null)}
-											disabled={savingMember}
-											aria-label="Cancel"
-										>
-											<X class="h-4 w-4" />
-										</button>
-									{:else}
-										<button
-											class="btn-icon-sm"
-											onclick={() => startEditMember(m)}
-											aria-label="Edit allowance"
-										>
-											<Pencil class="h-4 w-4" />
-										</button>
-									{/if}
-								</span>
-							{/snippet}
-							{#snippet detail()}
-								<div class="form-grid">
-									<label class="field">
-										<span class="field-label">CPU (millicores)</span>
-										<div class="field-row">
-											<input
-												type="number"
-												min="0"
-												class="input field-input"
-												bind:value={memCpuInput}
-												oninput={() => {
-													if (memCpuInput) {
-														memCpuUnlim = false;
-														memCpuUseDefault = false;
-													}
-												}}
-												placeholder={memCpuUnlim
-													? 'Unlimited'
-													: memCpuUseDefault
-														? 'Inherits default'
-														: 'e.g. 500'}
-											/>
-											<label class="toggle">
-												<input
-													type="checkbox"
-													bind:checked={memCpuUnlim}
-													onchange={() => {
-														if (memCpuUnlim) {
-															memCpuUseDefault = false;
-															memCpuInput = '';
-														}
-													}}
-												/> Unlimited
-											</label>
-											<label class="toggle">
-												<input
-													type="checkbox"
-													bind:checked={memCpuUseDefault}
-													onchange={() => {
-														if (memCpuUseDefault) {
-															memCpuUnlim = false;
-															memCpuInput = '';
-														}
-													}}
-												/> Use default
-											</label>
-										</div>
-									</label>
-									<label class="field">
-										<span class="field-label">Memory (MiB)</span>
-										<div class="field-row">
-											<input
-												type="number"
-												min="0"
-												class="input field-input"
-												bind:value={memMemInput}
-												oninput={() => {
-													if (memMemInput) {
-														memMemUnlim = false;
-														memMemUseDefault = false;
-													}
-												}}
-												placeholder={memMemUnlim
-													? 'Unlimited'
-													: memMemUseDefault
-														? 'Inherits default'
-														: 'e.g. 1024'}
-											/>
-											<label class="toggle">
-												<input
-													type="checkbox"
-													bind:checked={memMemUnlim}
-													onchange={() => {
-														if (memMemUnlim) {
-															memMemUseDefault = false;
-															memMemInput = '';
-														}
-													}}
-												/> Unlimited
-											</label>
-											<label class="toggle">
-												<input
-													type="checkbox"
-													bind:checked={memMemUseDefault}
-													onchange={() => {
-														if (memMemUseDefault) {
-															memMemUnlim = false;
-															memMemInput = '';
-														}
-													}}
-												/> Use default
-											</label>
-										</div>
-									</label>
-								</div>
-								<div class="form-actions">
-									<button
-										class="btn btn-secondary"
-										onclick={() => (editingMemberId = null)}
-										disabled={savingMember}>Cancel</button
-									>
-									<button class="btn btn-primary" onclick={saveMember} disabled={savingMember}>
-										{#if savingMember}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Check
-												class="h-3.5 w-3.5"
-											/>{/if}
-										Save
-									</button>
-								</div>
-							{/snippet}
-						</DataGrid>
-					</SectionCard>
-
-					<!-- ───────── PROVISIONING ───────── -->
-				{:else if activeTab === 'provisioning' && isAdmin}
-					<div class="prov-overview">
-						<SectionCard title="Workload health" class="prov-donut-card">
-							<ul class="health-list">
-								{#each [{ id: 'ok', label: 'Right-sized', n: provisioningSummary.counts.ok, tone: 'success' }, { id: 'over', label: 'Over-provisioned', n: provisioningSummary.counts.over, tone: 'warning' }, { id: 'under', label: 'Under-provisioned', n: provisioningSummary.counts.under, tone: 'error' }, { id: 'unknown', label: 'No data yet', n: provisioningSummary.counts.unknown, tone: 'neutral' }] as bucket (bucket.id)}
-									<li class="health-row">
-										<StatusDot
-											meta={statusMeta(bucket.tone as StatusKind, bucket.label)}
-											size={8}
-										/>
-										<span class="health-label">{bucket.label}</span>
-										<span class="health-count">{bucket.n}</span>
-										<span
-											class="health-bar health-bar--{bucket.tone}"
-											style="--share: {provisioning.length > 0
-												? bucket.n / provisioning.length
-												: 0}"
-										></span>
-									</li>
-								{/each}
-							</ul>
-						</SectionCard>
-						<div class="card prov-headroom-card">
-							<div class="card-head">
-								<h2 class="card-title">Reclaimable headroom</h2>
-							</div>
-							<div class="card-body">
-								<div class="headroom-row">
-									<div class="headroom-cell">
-										<p class="stat-label">CPU</p>
-										<p class="headroom-value">{formatCpuMilli(provisioningSummary.wastedCpu)}</p>
-									</div>
-									<div class="headroom-cell">
-										<p class="stat-label">Memory</p>
-										<p class="headroom-value">{formatMemoryBytes(provisioningSummary.wastedMem)}</p>
-									</div>
-								</div>
-								<p class="hint-text">
-									Sum of requested minus p95 actual for every workload, across the selected range.
-									Lower these requests to reclaim capacity.
-								</p>
-							</div>
-						</div>
-					</div>
-
-					{#if provisioning.length === 0}
-						<SectionCard title="All workloads">
-							<EmptyState
-								title="Nothing to size yet"
-								description="Once workloads have run for a while in this range, their actual usage shows up here next to what they reserve."
-							/>
-						</SectionCard>
-					{:else}
-						{#if topWasters.byCpu.length > 0 || topWasters.byMem.length > 0}
-							<div class="top-wasters-grid">
-								<div class="card">
-									<div class="card-head">
-										<h2 class="card-title">Top CPU waste</h2>
-										<span class="cell-sub">reclaimable per workload</span>
-									</div>
-									<div class="card-body">
-										<HorizontalBars
-											rows={topWasters.byCpu.map((w) => ({
-												label: w.row.name,
-												sublabel: `${w.row.projectName} · ${w.row.kind}`,
-												value: w.wasted,
-												fillValue: w.row.actualCpuMilliP95 ?? 0,
-												color: 'var(--warning-bg)',
-												fillColor: verdictColor(w.row.verdict)
-											}))}
-											formatValue={formatCpuMilli}
-											emptyLabel="No waste detected"
-										/>
-									</div>
-								</div>
-								<div class="card">
-									<div class="card-head">
-										<h2 class="card-title">Top memory waste</h2>
-										<span class="cell-sub">reclaimable per workload</span>
-									</div>
-									<div class="card-body">
-										<HorizontalBars
-											rows={topWasters.byMem.map((w) => ({
-												label: w.row.name,
-												sublabel: `${w.row.projectName} · ${w.row.kind}`,
-												value: w.wasted,
-												fillValue: w.row.actualMemoryBytesP95 ?? 0,
-												color: 'var(--warning-bg)',
-												fillColor: verdictColor(w.row.verdict)
-											}))}
-											formatValue={formatMemoryBytes}
-											emptyLabel="No waste detected"
-										/>
-									</div>
-								</div>
-							</div>
-						{/if}
-
-						<SectionCard title="All workloads">
-							{#snippet actions()}
-								<span class="card-count">{provisioning.length}</span>
-							{/snippet}
-							<DataGrid
-								rows={provisioning}
-								rowKey={(r) => `${r.kind}:${r.id}`}
-								search={(r) => `${r.name} ${r.projectName} ${r.kind} ${r.verdict}`}
-								searchPlaceholder="Filter workloads"
-								initialSort={{ id: 'cpu', dir: 'asc' }}
-								emptyTitle="No workloads to size"
-								columns={[
-									{ id: 'name', label: 'Workload', sort: (r) => r.name },
-									{
-										id: 'cpu',
-										label: 'CPU actual / requested',
-										sort: (r) => r.cpuUtilization ?? -1
-									},
-									{
-										id: 'mem',
-										label: 'Memory actual / requested',
-										sort: (r) => r.memoryUtilization ?? -1
-									},
-									{ id: 'verdict', label: 'Verdict', width: '9rem', sort: (r) => r.verdict }
-								]}
-							>
-								{#snippet row(r)}
-									<span class="grid-cell">
-										<span class="strong">{r.name}</span>
-										<span class="cell-sub">{r.projectName} &middot; {r.kind}</span>
-									</span>
-									<span class="util-cell">
-										<span class="util-bar-track">
-											<span
-												class="util-bar-fill"
-												style="width: {r.cpuUtilization === null
-													? 0
-													: Math.min(
-															100,
-															r.cpuUtilization * 100
-														)}%; background-color: {verdictColor(r.verdict)};"
-											></span>
-										</span>
-										<span class="util-text">
-											<span class="util-actual">
-												{r.actualCpuMilliP95 === null ? 'n/a' : formatCpuMilli(r.actualCpuMilliP95)}
-											</span>
-											<span class="util-sep">/</span>
-											<span class="util-requested">{formatCpuMilli(r.requestedCpuMilli)}</span>
-											<span class="util-pct">{utilPctStr(r.cpuUtilization)}</span>
-										</span>
-									</span>
-									<span class="util-cell">
-										<span class="util-bar-track">
-											<span
-												class="util-bar-fill"
-												style="width: {r.memoryUtilization === null
-													? 0
-													: Math.min(
-															100,
-															r.memoryUtilization * 100
-														)}%; background-color: {verdictColor(r.verdict)};"
-											></span>
-										</span>
-										<span class="util-text">
-											<span class="util-actual">
-												{r.actualMemoryBytesP95 === null
-													? 'n/a'
-													: formatMemoryBytes(r.actualMemoryBytesP95)}
-											</span>
-											<span class="util-sep">/</span>
-											<span class="util-requested">{formatMemoryBytes(r.requestedMemoryBytes)}</span
-											>
-											<span class="util-pct">{utilPctStr(r.memoryUtilization)}</span>
-										</span>
-									</span>
-									<span
-										class="pill"
-										style="color: {verdictColor(r.verdict)}; background-color: {verdictBg(
-											r.verdict
-										)};"
-									>
-										{verdictLabel(r.verdict)}
-									</span>
-								{/snippet}
-							</DataGrid>
-						</SectionCard>
-					{/if}
-				{:else if activeGraftTab && orgId}
-					<GraftMount
-						graftId={activeGraftTab.graftId}
-						mount={activeGraftTab.mount}
-						props={{ orgId, orgSlug }}
-						host={activeGraftTab.host}
+{#snippet tile(t: Tile)}
+	<Widget>
+		<Metric label={t.label} value={t.value} unit={t.unit} detail={t.detail} tone={t.tone}>
+			{#snippet chart()}
+				{#if t.ratio != null}
+					<Progress
+						value={Math.min(100, t.ratio * 100)}
+						max={100}
+						size="sm"
+						tone={t.tone === 'neutral' ? 'neutral' : t.tone}
+						label={t.label}
+						labelHidden
 					/>
 				{/if}
+			{/snippet}
+		</Metric>
+	</Widget>
+{/snippet}
+
+<div class="usage-page">
+	<Breadcrumbs crumbs={[{ label: 'Home', href: `/${orgSlug}` }, { label: 'Usage' }]} />
+
+	<ResourceHeader title="Usage">
+		{#snippet facts()}
+			{#each headerFacts as fact (fact)}<span>{fact}</span>{/each}
+		{/snippet}
+	</ResourceHeader>
+
+	{#if availableTabs.length > 1 || showRange}
+		<div class="usage-bar">
+			{#if availableTabs.length > 1}
+				<PageTabs
+					label="Usage sections"
+					tabs={availableTabs}
+					value={activeTab}
+					onchange={(v) => setTab(v as Tab)}
+				/>
+			{/if}
+			{#if showRange}
+				<SegmentedControl
+					label="Range"
+					size="sm"
+					shape="capsule"
+					options={RANGES}
+					value={range}
+					onchange={(v) => setRange(v)}
+				/>
+			{/if}
+		</div>
+	{/if}
+
+	{#if loading}
+		<div class="tiles tiles--4">
+			{#each [0, 1, 2, 3] as i (i)}<Skeleton
+					height="7.5rem"
+					rounded="var(--radius-widget)"
+				/>{/each}
+		</div>
+		<Skeleton height="16rem" rounded="var(--radius-widget)" />
+	{:else if activeTab === 'overview' && orgQuota}
+		<div class="tiles tiles--4">
+			{#each orgTiles as t (t.label)}{@render tile(t)}{/each}
+		</div>
+		<div class="split">
+			<SectionCard title="By project">
+				{#snippet actions()}
+					<SegmentedControl
+						label="Rank projects by"
+						size="sm"
+						shape="capsule"
+						options={PROJECT_METRICS}
+						bind:value={projectMetric}
+					/>
+				{/snippet}
+				{#if projectItems.length}
+					<TopList label="Projects" items={projectItems} format={projectFormat} />
+				{:else}
+					<p class="quiet">No projects yet.</p>
+				{/if}
+			</SectionCard>
+			<SectionCard title="Right-sizing">
+				{#snippet actions()}
+					<Button size="sm" variant="ghost" href={tabHref('provisioning')}>Details</Button>
+				{/snippet}
+				{#if provisioning.length}
+					<div class="stack">
+						<CheckList label="Workload verdicts" items={verdictChecks} />
+						<p class="quiet">{reclaimLine}</p>
+					</div>
+				{:else}
+					<p class="quiet">No workload has enough history yet.</p>
+				{/if}
+			</SectionCard>
+		</div>
+	{:else if activeTab === 'me' && myUsage}
+		<div class="tiles tiles--2">
+			{#each myTiles as t (t.label)}{@render tile(t)}{/each}
+		</div>
+		<SectionCard title="Where it is going">
+			{#snippet actions()}
+				<SegmentedControl
+					label="Rank workloads by"
+					size="sm"
+					shape="capsule"
+					options={MY_METRICS}
+					bind:value={myMetric}
+				/>
+			{/snippet}
+			{#if myItems.length}
+				<TopList label="Your workloads" items={myItems} format={myFormat} />
+			{:else}
+				<p class="quiet">Nothing of yours is running yet.</p>
+			{/if}
+		</SectionCard>
+	{:else if activeTab === 'members' && membersData}
+		<div class="tiles tiles--2">
+			{#each commitTiles as t (t.label)}{@render tile(t)}{/each}
+		</div>
+		<SectionCard title="Default allowance">
+			<SettingsList>
+				<ActionRow
+					label={`${allowanceText(membersData.org.defaultMemberCpuMilli, formatCpuMilli)} CPU · ${allowanceText(membersData.org.defaultMemberMemoryBytes, formatMemoryBytes)} memory`}
+					hint="Members without their own allowance get this"
+				>
+					<Button size="sm" icon={Pencil} onclick={startEditDefault}>Edit</Button>
+				</ActionRow>
+			</SettingsList>
+		</SectionCard>
+		<SectionCard title="Members">
+			{#snippet actions()}
+				<SearchField size="sm" placeholder="Search members" bind:value={memberQuery} />
+			{/snippet}
+			<Table
+				columns={MEMBER_COLUMNS}
+				rows={visibleMembers}
+				rowKey={(m) => m.user.id}
+				bind:sort={memberSort}
+				inset={false}
+				label="Members"
+				emptyText={memberQuery ? `Nobody matches “${memberQuery}”` : 'No members'}
+			>
+				{#snippet cell(m, col)}
+					{#if col.id === 'member'}
+						<ItemLabel title={memberName(m)} detail={m.user.email}>
+							{#snippet leading()}<Avatar user={m.user} size={32} />{/snippet}
+						</ItemLabel>
+					{:else if col.id === 'role'}
+						<span class="amount muted">{formatRole(m.role)}</span>
+					{:else if col.id === 'cpu'}
+						<span class="amount"
+							><strong>{formatCpuMilli(m.usage.cpuMilli)}</strong>
+							<span class="muted"
+								>of {allowanceLabel(
+									m.allowance.source.cpu,
+									m.allowance.cpuMilli,
+									formatCpuMilli
+								)}</span
+							></span
+						>
+					{:else if col.id === 'mem'}
+						<span class="amount"
+							><strong>{formatMemoryBytes(m.usage.memoryBytes)}</strong>
+							<span class="muted"
+								>of {allowanceLabel(
+									m.allowance.source.memory,
+									m.allowance.memoryBytes,
+									formatMemoryBytes
+								)}</span
+							></span
+						>
+					{:else if col.id === 'edit'}
+						<Button
+							size="sm"
+							variant="ghost"
+							icon={Pencil}
+							label={`Edit ${memberName(m)}'s allowance`}
+							onclick={() => startEditMember(m)}
+						/>
+					{/if}
+				{/snippet}
+			</Table>
+		</SectionCard>
+	{:else if activeTab === 'provisioning'}
+		<div class="tiles tiles--4">
+			{#each rightTiles as t (t.label)}{@render tile(t)}{/each}
+		</div>
+		{#if topWasters.byCpu.length || topWasters.byMem.length}
+			<div class="split split--even">
+				<SectionCard title="Most unused CPU">
+					<TopList label="Unused CPU" items={wasteCpuItems} format={formatCpuMilli} />
+				</SectionCard>
+				<SectionCard title="Most unused memory">
+					<TopList label="Unused memory" items={wasteMemItems} format={formatMemoryBytes} />
+				</SectionCard>
 			</div>
-		{/key}
+		{/if}
+		<SectionCard title="Workloads">
+			{#snippet actions()}
+				<SegmentedControl
+					label="Verdict"
+					size="sm"
+					shape="capsule"
+					options={verdictFilterOptions}
+					bind:value={verdictFilter}
+				/>
+				<SearchField size="sm" placeholder="Search workloads" bind:value={workloadQuery} />
+			{/snippet}
+			<Table
+				columns={WORKLOAD_COLUMNS}
+				rows={visibleWorkloads}
+				rowKey={(r) => `${r.kind}:${r.id}`}
+				bind:sort={workloadSort}
+				inset={false}
+				label="Workloads"
+				emptyText={provisioning.length ? 'Nothing matches' : 'No workload has enough history yet'}
+			>
+				{#snippet cell(r, col)}
+					{#if col.id === 'name'}
+						<ItemLabel title={r.name} detail="{r.projectName} · {r.kind}" />
+					{:else if col.id === 'cpu'}
+						<span class="util">
+							<span class="amount"
+								><strong
+									>{r.actualCpuMilliP95 == null ? '–' : formatCpuMilli(r.actualCpuMilliP95)}</strong
+								>
+								<span class="muted">of {formatCpuMilli(r.requestedCpuMilli)}</span></span
+							>
+							<Progress
+								value={Math.min(100, (r.cpuUtilization ?? 0) * 100)}
+								max={100}
+								size="sm"
+								tone={utilTone(r.cpuUtilization)}
+								label="CPU used"
+								labelHidden
+							/>
+						</span>
+					{:else if col.id === 'mem'}
+						<span class="util">
+							<span class="amount"
+								><strong
+									>{r.actualMemoryBytesP95 == null
+										? '–'
+										: formatMemoryBytes(r.actualMemoryBytesP95)}</strong
+								>
+								<span class="muted">of {formatMemoryBytes(r.requestedMemoryBytes)}</span></span
+							>
+							<Progress
+								value={Math.min(100, (r.memoryUtilization ?? 0) * 100)}
+								max={100}
+								size="sm"
+								tone={utilTone(r.memoryUtilization)}
+								label="Memory used"
+								labelHidden
+							/>
+						</span>
+					{:else if col.id === 'verdict'}
+						<StatusBadge meta={verdictMeta(r.verdict)} />
+					{/if}
+				{/snippet}
+			</Table>
+		</SectionCard>
+	{:else if activeGraftTab && orgId}
+		<GraftMount
+			graftId={activeGraftTab.graftId}
+			mount={activeGraftTab.mount}
+			props={{ orgId, orgSlug }}
+			host={activeGraftTab.host}
+		/>
+	{:else}
+		<EmptyState
+			title="Nothing to show"
+			description="Usage for this organization isn't available."
+		/>
 	{/if}
 </div>
 
+<Modal bind:open={editingDefault} size="sm" labelledby="usage-default-title">
+	<div class="form">
+		<ModalIntro id="usage-default-title" icon={Gauge} tone="accent" title="Default allowance" />
+		<Field label="CPU" for="usage-default-cpu">
+			<div class="choice">
+				<SegmentedControl
+					label="CPU allowance"
+					options={LIMIT_MODES}
+					grow
+					bind:value={
+						() => (defaultCpuUnlim ? 'unlimited' : 'custom'),
+						(v) => (defaultCpuUnlim = v === 'unlimited')
+					}
+				/>
+				{#if !defaultCpuUnlim}
+					<Input
+						id="usage-default-cpu"
+						type="number"
+						min="0"
+						placeholder="1000"
+						suffix="millicores"
+						bind:value={defaultCpuInput}
+					/>
+				{/if}
+			</div>
+		</Field>
+		<Field label="Memory" for="usage-default-mem">
+			<div class="choice">
+				<SegmentedControl
+					label="Memory allowance"
+					options={LIMIT_MODES}
+					grow
+					bind:value={
+						() => (defaultMemUnlim ? 'unlimited' : 'custom'),
+						(v) => (defaultMemUnlim = v === 'unlimited')
+					}
+				/>
+				{#if !defaultMemUnlim}
+					<Input
+						id="usage-default-mem"
+						type="number"
+						min="0"
+						placeholder="1024"
+						suffix="MiB"
+						bind:value={defaultMemInput}
+					/>
+				{/if}
+			</div>
+		</Field>
+	</div>
+	{#snippet footer()}
+		<Button variant="ghost" onclick={() => (editingDefault = false)}>Cancel</Button>
+		<Button variant="primary" loading={savingDefault} onclick={saveDefault}>Save</Button>
+	{/snippet}
+</Modal>
+
+<Modal
+	bind:open={() => editingMemberId !== null, (v) => !v && (editingMemberId = null)}
+	size="sm"
+	labelledby="usage-member-title"
+>
+	<div class="form">
+		<ModalIntro
+			id="usage-member-title"
+			icon={Gauge}
+			tone="accent"
+			title={editingMember ? `${memberName(editingMember)}'s allowance` : 'Allowance'}
+		/>
+		<Field label="CPU" for="usage-member-cpu">
+			<div class="choice">
+				<SegmentedControl
+					label="CPU allowance"
+					options={MEMBER_MODES}
+					grow
+					bind:value={
+						() => (memCpuUnlim ? 'unlimited' : memCpuUseDefault ? 'default' : 'custom'),
+						(v) => {
+							memCpuUnlim = v === 'unlimited';
+							memCpuUseDefault = v === 'default';
+						}
+					}
+				/>
+				{#if !memCpuUnlim && !memCpuUseDefault}
+					<Input
+						id="usage-member-cpu"
+						type="number"
+						min="0"
+						placeholder="1000"
+						suffix="millicores"
+						bind:value={memCpuInput}
+					/>
+				{/if}
+			</div>
+		</Field>
+		<Field label="Memory" for="usage-member-mem">
+			<div class="choice">
+				<SegmentedControl
+					label="Memory allowance"
+					options={MEMBER_MODES}
+					grow
+					bind:value={
+						() => (memMemUnlim ? 'unlimited' : memMemUseDefault ? 'default' : 'custom'),
+						(v) => {
+							memMemUnlim = v === 'unlimited';
+							memMemUseDefault = v === 'default';
+						}
+					}
+				/>
+				{#if !memMemUnlim && !memMemUseDefault}
+					<Input
+						id="usage-member-mem"
+						type="number"
+						min="0"
+						placeholder="1024"
+						suffix="MiB"
+						bind:value={memMemInput}
+					/>
+				{/if}
+			</div>
+		</Field>
+	</div>
+	{#snippet footer()}
+		<Button variant="ghost" onclick={() => (editingMemberId = null)}>Cancel</Button>
+		<Button variant="primary" loading={savingMember} onclick={saveMember}>Save</Button>
+	{/snippet}
+</Modal>
+
 <style>
 	.usage-page {
-		padding: 2.5rem 2.5rem 3rem;
-		max-width: 64rem;
+		--section-r: var(--radius-widget);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-5);
+		max-width: 100rem;
 		margin: 0 auto;
-		display: flex;
-		flex-direction: column;
-		gap: 1.5rem;
+		padding: 1.5rem;
 	}
-
-	.usage-header {
+	.usage-bar {
 		display: flex;
 		align-items: center;
-		gap: 0.875rem;
+		justify-content: space-between;
+		gap: var(--space-4);
+		flex-wrap: wrap;
 	}
-	.usage-header-icon {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 2.5rem;
-		height: 2.5rem;
-		border-radius: var(--radius-md);
-		background-color: color-mix(in srgb, var(--button-bg) 15%, var(--surface-bg));
-		color: var(--button-bg);
-	}
-	.usage-title {
-		font-size: var(--text-title-2);
-		line-height: var(--lh-title-2);
-		font-weight: 700;
-		letter-spacing: -0.02em;
-		color: var(--center-channel-color);
-		margin: 0;
-	}
-	.usage-subtitle {
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		color: var(--surface-muted);
-		margin: 0.125rem 0 0;
-	}
-
-	.usage-loading {
-		display: flex;
-		justify-content: center;
-		padding: 4rem 0;
-	}
-
-	.proj-list {
-		display: flex;
-		flex-direction: column;
-		gap: 0.125rem;
-		list-style: none;
-		margin: 0;
-		padding: 0;
-	}
-	.proj-row {
-		position: relative;
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		padding: 0.5rem 0.625rem;
-		border-radius: var(--radius-md);
-		overflow: hidden;
-		color: inherit;
-		text-decoration: none;
-	}
-	.proj-row:hover {
-		background-color: var(--bg-hover);
-	}
-	.proj-bar {
-		position: absolute;
-		inset: 0 auto 0 0;
-		width: calc(var(--share) * 100%);
-		background-color: var(--accent-subtle);
-		border-radius: var(--radius-md);
-		pointer-events: none;
-	}
-	.proj-main {
-		position: relative;
-		display: flex;
-		flex-direction: column;
-		gap: 0.0625rem;
-		min-width: 0;
-		flex: 1;
-	}
-	.proj-name {
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: 600;
-		color: var(--text-default);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.proj-ns {
-		font-family: var(--font-mono);
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		color: var(--text-faint);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.proj-nums {
-		position: relative;
-		display: flex;
-		flex-direction: column;
-		align-items: flex-end;
-		gap: 0.0625rem;
-		flex-shrink: 0;
-	}
-	.proj-primary {
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: 600;
-		color: var(--text-default);
-		font-variant-numeric: tabular-nums;
-	}
-	.proj-cap {
-		font-weight: 400;
-		color: var(--text-faint);
-	}
-	.proj-secondary {
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		color: var(--text-faint);
-		font-variant-numeric: tabular-nums;
-	}
-	.health-list {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-		list-style: none;
-		margin: 0;
-		padding: 0;
-	}
-	.health-row {
+	.tiles {
 		display: grid;
-		grid-template-columns: auto 1fr auto;
-		grid-template-areas: 'dot label count' 'bar bar bar';
-		align-items: center;
-		gap: 0.375rem 0.5rem;
+		gap: var(--space-4);
 	}
-	.health-label {
-		grid-area: label;
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
+	.tiles--4 {
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+	}
+	.tiles--2 {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+	.split {
+		display: grid;
+		grid-template-columns: minmax(0, 1.618fr) minmax(0, 1fr);
+		gap: var(--space-4);
+		align-items: start;
+	}
+	.split--even {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+	.stack,
+	.form {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+	}
+	.form {
+		gap: var(--space-4);
+	}
+	.choice {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+	.quiet {
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		color: var(--text-muted);
 	}
-	.health-count {
-		grid-area: count;
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: 600;
-		color: var(--text-default);
+	.muted {
+		color: var(--text-muted);
+	}
+	.amount {
+		font-size: var(--text-callout);
 		font-variant-numeric: tabular-nums;
-	}
-	.health-bar {
-		grid-area: bar;
-		height: 0.25rem;
-		border-radius: var(--radius-pill);
-		background-color: var(--bg-sunken);
-		position: relative;
-		overflow: hidden;
-	}
-	.health-bar::after {
-		content: '';
-		position: absolute;
-		inset: 0 auto 0 0;
-		width: calc(var(--share) * 100%);
-		border-radius: var(--radius-pill);
-		background-color: currentColor;
-	}
-	.health-bar--success {
-		color: var(--status-success);
-		background-color: var(--bg-sunken);
-	}
-	.health-bar--warning {
-		color: var(--status-warning);
-		background-color: var(--bg-sunken);
-	}
-	.health-bar--error {
-		color: var(--status-error);
-		background-color: var(--bg-sunken);
-	}
-	.health-bar--neutral {
-		color: var(--status-neutral);
-		background-color: var(--bg-sunken);
-	}
-	.grid-cell {
-		display: flex;
-		flex-direction: column;
-		gap: 0.0625rem;
-		min-width: 0;
-	}
-	.grid-cell .strong,
-	.grid-cell .cell-sub {
-		overflow: hidden;
-		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.budget-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-		gap: 1.5rem 2rem;
+	.amount strong {
+		font-weight: var(--weight-medium);
+		color: var(--text-default);
 	}
-	.budget-note {
-		margin-top: 1.25rem;
-	}
-	.usage-tabs-row--bare {
-		margin-bottom: 0;
-	}
-	.usage-tabs-row {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.75rem;
-		flex-wrap: wrap;
-	}
-
-	.usage-range {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.125rem;
-		padding: 0.25rem;
-		border-radius: var(--radius-md);
-		background: color-mix(in srgb, var(--surface-border) 25%, transparent);
-	}
-	.usage-range-btn {
-		padding: 0.25rem 0.75rem;
-		border: none;
-		background: transparent;
-		color: color-mix(in srgb, var(--center-channel-color) 70%, var(--surface-muted));
-		border-radius: var(--radius-xs);
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: 600;
-		cursor: pointer;
-		font-family: inherit;
-		transition:
-			background-color var(--dur-fast) ease,
-			color var(--dur-fast) ease;
-	}
-	.usage-range-btn:hover {
-		color: var(--center-channel-color);
-	}
-	.usage-range-btn.is-active {
-		background-color: var(--surface-bg);
-		color: var(--center-channel-color);
-		box-shadow: var(--elev-1);
-	}
-
-	.usage-tab-content {
+	.util {
 		display: flex;
 		flex-direction: column;
-		gap: 1.25rem;
-	}
-	.usage-tab-content > :global(*) {
-		animation: tab-card-in 250ms ease both;
-	}
-	.usage-tab-content > :global(*:nth-child(2)) {
-		animation-delay: 50ms;
-	}
-	.usage-tab-content > :global(*:nth-child(3)) {
-		animation-delay: 100ms;
-	}
-	.usage-tab-content > :global(*:nth-child(4)) {
-		animation-delay: 150ms;
-	}
-	@keyframes tab-card-in {
-		from {
-			opacity: 0;
-			transform: translateY(6px);
-		}
-		to {
-			opacity: 1;
-			transform: translateY(0);
-		}
-	}
-
-	.stat-label {
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--surface-muted);
-		margin: 0 0 0.5rem;
-	}
-
-	/* Progress bars */
-	.bar-track {
-		height: 0.375rem;
-		border-radius: var(--radius-pill);
-		background-color: color-mix(in srgb, var(--surface-border) 60%, transparent);
-		margin-top: 0.5rem;
-		overflow: hidden;
-	}
-	.bar-track-sm {
-		height: 0.25rem;
-	}
-	.bar-fill {
-		height: 100%;
-		border-radius: var(--radius-pill);
-		background-color: var(--button-bg);
-		transition: width var(--dur-base) ease;
-	}
-	.bar-row-w {
-		width: 10rem;
-		margin-top: 0.5rem;
-	}
-
-	/* Cards */
-	.card {
-		border: 1px solid var(--surface-border);
-		border-radius: var(--radius-lg);
-		background-color: var(--surface-bg);
-		overflow: hidden;
-		box-shadow:
-			0 1px 3px rgb(0 0 0 / 0.03),
-			0 1px 2px rgb(0 0 0 / 0.02);
-	}
-	.card-head {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 1rem 1.25rem;
-		border-bottom: 1px solid var(--surface-border);
-	}
-	.card-title {
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		font-weight: 600;
-		color: var(--surface-muted);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		margin: 0;
-	}
-	.card-count {
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: 600;
-		padding: 0.25rem 0.5rem;
-		border-radius: var(--radius-pill);
-		background-color: color-mix(in srgb, var(--surface-border) 50%, var(--center-channel-bg));
-		color: var(--surface-muted);
-	}
-	.card-body {
-		padding: 1.25rem;
-	}
-
-	.commit-grid {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 1.5rem;
-	}
-	.commit-value {
-		font-size: var(--text-title-3);
-		line-height: var(--lh-title-3);
-		font-weight: 700;
-		color: var(--center-channel-color);
-		margin: 0.125rem 0 0.25rem;
-	}
-	.hint-text {
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		color: var(--surface-muted);
-		margin: 1rem 0 0;
-	}
-
-	/* Tables */
-	.cell-sub {
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		color: var(--surface-muted);
-	}
-	.strong {
-		font-weight: 600;
-	}
-	.mono {
-		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-	}
-	.ta-right {
-		text-align: right;
-	}
-	.link-cell {
-		font-weight: 600;
-		color: var(--center-channel-color);
-		text-decoration: none;
-	}
-	.link-cell:hover {
-		color: var(--link-color);
-		text-decoration: underline;
-	}
-
-	/* Pills */
-	.pill {
-		display: inline-flex;
-		align-items: center;
-		padding: 0.25rem 0.5rem;
-		border-radius: var(--radius-pill);
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-	}
-	.pill-muted {
-		color: var(--surface-muted);
-		background-color: color-mix(in srgb, var(--surface-border) 45%, var(--surface-bg));
-	}
-	.capitalize {
-		text-transform: capitalize;
-		letter-spacing: 0;
-	}
-
-	/* Buttons */
-	.btn {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.5rem;
-		padding: 0.5rem 0.875rem;
-		border-radius: var(--radius-sm);
-		border: 1px solid transparent;
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		font-weight: 600;
-		cursor: pointer;
-		font-family: inherit;
-		transition:
-			background-color var(--dur-fast) ease,
-			color var(--dur-fast) ease,
-			border-color var(--dur-fast) ease,
-			transform var(--dur-fast) ease;
-	}
-	.btn:active {
-		transform: scale(0.98);
-	}
-	.btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-	.btn-primary {
-		background-color: var(--button-bg);
-		color: var(--button-color);
-	}
-	.btn-primary:hover:not(:disabled) {
-		background-color: color-mix(in srgb, var(--button-bg) 88%, black);
-	}
-	.btn-secondary {
-		background-color: var(--control-bg);
-		color: var(--center-channel-color);
-		border-color: var(--surface-border);
-	}
-	.btn-secondary:hover:not(:disabled) {
-		background-color: var(--control-hover-bg);
-	}
-	.btn-icon {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.3125rem 0.75rem;
-		border: 1px solid var(--surface-border);
-		background-color: var(--surface-bg);
-		border-radius: var(--radius-sm);
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: 600;
-		color: var(--center-channel-color);
-		cursor: pointer;
-		font-family: inherit;
-		transition: background-color var(--dur-fast) ease;
-	}
-	.btn-icon:hover {
-		background-color: var(--control-hover-bg);
-	}
-	.btn-icon-sm {
-		display: inline-flex;
-		padding: 0.5rem;
-		border: 1px solid transparent;
-		background: transparent;
-		border-radius: var(--radius-xs);
-		color: var(--surface-muted);
-		cursor: pointer;
-		font-family: inherit;
-		transition:
-			background-color var(--dur-fast) ease,
-			color var(--dur-fast) ease;
-	}
-	.btn-icon-sm:hover {
-		background-color: var(--control-hover-bg);
-		color: var(--center-channel-color);
-	}
-
-	/* Forms */
-	.form-grid {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 1rem;
-	}
-	@media (max-width: 640px) {
-		.form-grid {
-			grid-template-columns: 1fr;
-		}
-	}
-	.field {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-	.field-label {
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--surface-muted);
-	}
-	.field-row {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		flex-wrap: wrap;
-	}
-	.field-input {
-		flex: 1;
-		min-width: 8rem;
-	}
-	.input {
+		gap: 0.375rem;
 		width: 100%;
-		padding: 0.5rem 0.75rem;
-		border: 1px solid var(--surface-border);
-		background-color: var(--surface-bg);
-		color: var(--center-channel-color);
-		border-radius: var(--radius-sm);
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		font-family: inherit;
-		transition:
-			border-color var(--dur-fast) ease,
-			box-shadow var(--dur-fast) ease;
+		min-width: 0;
 	}
-	.input:focus {
-		outline: none;
-		border-color: var(--button-bg);
-		box-shadow: 0 0 0 3px color-mix(in srgb, var(--button-bg) 20%, transparent);
-	}
-	.input:disabled {
-		opacity: 0.55;
-		cursor: not-allowed;
-	}
-	.toggle {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		color: var(--center-channel-color);
-		cursor: pointer;
-	}
-	.form-actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: 0.5rem;
-		margin-top: 1rem;
-	}
-
-	/* Provisioning */
-	.top-wasters-grid {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 1.25rem;
-	}
-	@media (max-width: 880px) {
-		.top-wasters-grid {
-			grid-template-columns: 1fr;
+	@media (max-width: 64rem) {
+		.tiles--4 {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
 		}
-	}
-
-	.util-cell {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-		min-width: 11rem;
-	}
-	.util-bar-track {
-		position: relative;
-		height: 0.5rem;
-		border-radius: var(--radius-pill);
-		background-color: color-mix(in srgb, var(--surface-border) 50%, transparent);
-		overflow: hidden;
-	}
-	.util-bar-fill {
-		height: 100%;
-		border-radius: var(--radius-pill);
-		transition: width var(--dur-base) ease;
-		animation: util-bar-grow 500ms cubic-bezier(0.22, 1, 0.36, 1) both;
-	}
-	@keyframes util-bar-grow {
-		from {
-			width: 0 !important;
+		.split,
+		.split--even {
+			grid-template-columns: minmax(0, 1fr);
 		}
-	}
-	.util-text {
-		display: inline-flex;
-		align-items: baseline;
-		gap: 0.5rem;
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-variant-numeric: tabular-nums;
-	}
-	.util-actual {
-		font-weight: 700;
-		color: var(--center-channel-color);
-	}
-	.util-sep {
-		color: var(--surface-muted);
-	}
-	.util-requested {
-		color: var(--surface-muted);
-	}
-	.util-pct {
-		margin-left: auto;
-		color: var(--surface-muted);
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		font-weight: 600;
-	}
-
-	.prov-overview {
-		display: grid;
-		grid-template-columns: 2fr 1fr;
-		gap: 1.25rem;
-	}
-	@media (max-width: 720px) {
-		.prov-overview {
-			grid-template-columns: 1fr;
-		}
-	}
-	.headroom-row {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 1.5rem;
-		margin-bottom: 0.75rem;
-	}
-	.headroom-cell {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-	}
-	.headroom-value {
-		font-size: var(--text-title-2);
-		line-height: var(--lh-title-2);
-		font-weight: 700;
-		color: var(--center-channel-color);
-		margin: 0;
-		letter-spacing: -0.02em;
 	}
 </style>
