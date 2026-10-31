@@ -1293,7 +1293,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   ) {
     const { count } = await this.prisma.deployment.updateMany({
       where: { id: deploymentId, buildStatus: { not: 'succeeded' } },
-      data: { buildStatus: 'failed', buildStep: 'failed', buildError: reason }
+      data: { buildStatus: 'failed', buildError: reason }
     });
     if (count === 0) {
       this.logger.warn(
@@ -8833,7 +8833,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           return;
         }
 
-        const errorLogEntry = `\n❌ Build failed at step '${currentDeployment?.buildStep || 'unknown'}'\nError: ${error.message}\nError Type: ${error.constructor.name}\n`;
+        const errorLogEntry = `\n❌ Build failed at step '${currentDeployment?.buildStep || 'unknown'}'\nError: ${error.message}\n`;
 
         await this.prisma.deployment.update({
           where: { id: deploymentId },

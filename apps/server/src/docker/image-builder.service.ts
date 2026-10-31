@@ -3799,8 +3799,6 @@ fi
       });
 
       await this.appendLog(deploymentId, errorMsg, 'ERROR');
-      await this.appendLog(deploymentId, `Error type: ${error.constructor.name}`, 'ERROR');
-      await this.setBuildStep(deploymentId, 'failed');
 
       if (deploymentId) {
         try {
