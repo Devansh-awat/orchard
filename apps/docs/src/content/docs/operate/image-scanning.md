@@ -8,7 +8,7 @@ sidebar:
 Every app has a **Security** tab. Its configuration checks (secrets stored as
 plain variables, moving image tags, domains without TLS) always run. The image
 scan, the list of known vulnerabilities in the app's container image, needs a
-scanner, and **image scanning is off until a superadmin turns it on**.
+scanner.
 
 There are two scanners to choose from:
 
@@ -25,6 +25,26 @@ If your registry is Harbor and it already scans on push, pick Harbor: nothing
 new to run. Otherwise, and on every installer-based instance, use the Orchard
 scanner.
 
+## The default
+
+Until a superadmin picks a scanner, Orchard picks one:
+
+1. **The Orchard scanner**, if it is deployed and configured (`TRIVY_SERVER_URL`
+   and `ORCHARD_INTERNAL_URL` set, and Kubernetes reachable).
+2. Otherwise **Harbor**, but only if the registry really is Harbor. Orchard asks
+   `/api/v2.0/systeminfo` on the Harbor API and checks the answer is Harbor's.
+   A registry that only accepts Harbor credentials does not count. The answer is
+   cached for ten minutes, or one minute after a network error.
+3. Otherwise **off**.
+
+The one-command installer turns the Orchard scanner on (`trivy.enabled: true`),
+and `orchardctl update` turns it on for a host installed before that. It scans
+straight from the bundled zot registry, so a fresh install scans images with
+nothing else to set up.
+
+Picking a scanner in **Instance admin → Configuration → Image scanning** stores the choice, and
+the default no longer applies. That includes picking **Off**.
+
 ## Turning it on
 
 ### Harbor
@@ -37,9 +57,12 @@ scanner.
    service inside the cluster.
 2. Optional: turn on **Automatically scan images on push** in the Harbor project
    so results are there before anyone opens the tab.
-3. In **Admin, Instance, Image scanning**, pick **Harbor**.
+3. In **Instance admin → Configuration → Image scanning**, pick **Harbor**.
 
 ### Orchard scanner
+
+Installer-based instances already have it. On a chart install, or a host where
+it was turned off:
 
 1. Enable the chart block and roll it out:
 
@@ -48,15 +71,29 @@ scanner.
      enabled: true
    ```
 
-   On installer-based instances add it to `/etc/orchard/values.yaml` and run
-   `orchard-update`. This creates the `orchard-scans` namespace with the Trivy
-   server, and gives the API server the variables it needs (`TRIVY_SERVER_URL`,
+   On an installer host:
+
+   ```bash
+   sudo orchardctl config set trivy.enabled true --apply
+   ```
+
+   This creates the `orchard-scans` namespace with the Trivy server, and gives
+   the API server the variables it needs (`TRIVY_SERVER_URL`,
    `ORCHARD_INTERNAL_URL` and the rest, listed in the
    [configuration reference](/reference/configuration/)).
 
 2. Wait for the `trivy` pod in `orchard-scans` to become ready. The first start
    downloads the vulnerability database, which takes a minute or two.
-3. In **Admin, Instance, Image scanning**, pick **Orchard scanner**.
+3. Nothing else, unless a superadmin already picked another scanner. Then pick
+   **Orchard scanner** in **Instance admin → Configuration → Image scanning**.
+
+The scan jobs pull images from the registry the server pushes to
+(`DOCKER_REGISTRY_PUSH`, over plain HTTP when the host is listed in
+`REGISTRY_HTTP_HOSTS`), with `HARBOR_USERNAME` and `HARBOR_PASSWORD`. That is
+how they reach the installer's zot.
+
+To turn it off on an installer host, `sudo orchardctl config set trivy.enabled
+false --apply`. `orchardctl update` does not turn it back on.
 
 A scanner whose requirements are missing is greyed out in the admin panel with
 the reason, so you cannot pick one that would not work.
@@ -64,8 +101,13 @@ the reason, so you cannot pick one that would not work.
 ### Pinning the choice
 
 Set `IMAGE_SCANNER` to `off`, `harbor` or `trivy` in the server environment to
-fix the choice. The admin panel then shows it as an environment override and
-cannot change it. Leave it unset to let superadmins decide.
+fix the choice. It wins over both the stored choice and the default. The admin
+panel then shows it as an environment override and cannot change it. Leave it
+unset to let superadmins decide.
+
+```bash
+sudo orchardctl env set IMAGE_SCANNER off --apply
+```
 
 ## What happens during a scan
 
@@ -82,8 +124,10 @@ With the Orchard scanner, pressing **Scan** on an app:
 
 A scan that fails, runs out of time (15 minutes by default) or whose Job is
 deleted shows up as **The last scan failed** with Trivy's error, for example an
-authorization failure pulling a private image. At most three scans run at once;
-a fourth is refused with a message to try again shortly.
+authorization failure pulling a private image. At most
+`trivy.maxConcurrentScans` scans run at once (3 in the chart, 2 from the
+installer, 1 on a box under 8G of RAM); one more is refused with a message to
+try again shortly.
 
 The result belongs to the image, not the app, so two apps running the same
 image share it. A result is not refreshed on its own: the vulnerability

@@ -13,6 +13,7 @@ instance over its API. These only work on the machine Orchard runs on.
 ```
 orchardctl update            upgrade to the latest chart and images
 orchardctl config ...        read and change chart values
+orchardctl env ...           read and change control-plane environment variables
 orchardctl registry ...      where builds are allowed to push
 orchardctl policies ...      which namespaces may reach tenant apps
 orchardctl mcp ...           the MCP endpoint agents connect to
@@ -30,7 +31,7 @@ orchardctl sync              refresh these commands from the deployed image
 ```
 
 Every subcommand also exists hyphenated, so `orchardctl config` and
-`orchard-config` are the same program. `update`, `config`, `registry`,
+`orchard-config` are the same program. `update`, `config`, `env`, `registry`,
 `policies`, `mcp`, `public-ip`, `hostname`, `claim`, `login`, `password`,
 `stop`, `start`, `restart` and `sync` need root, because the values
 file is `0600` and the rest runs through the cluster.
@@ -51,8 +52,16 @@ the one thing that can recover a host with no `orchardctl` on it.
 sudo orchardctl update
 ```
 
-Runs `helm upgrade --install` against the chart with your values file, then
-waits for each deployment to roll out.
+In order, it:
+
+1. runs `orchardctl harden`, so a host installed before the registry was locked
+   down comes out of the upgrade fixed;
+2. turns on, once, what newer releases do by default (see below);
+3. repairs log and metrics volumes that never bound;
+4. runs `helm upgrade --install` against the chart with your values file, and
+   waits for each deployment to roll out;
+5. makes sure Traefik writes the JSON access log the log store reads;
+6. refreshes the host commands.
 
 It also **restarts deployments whose image tag is a moving one**. The installer
 pins tags to `latest`, so a new build reuses the same tag string, Helm sees an
@@ -63,8 +72,60 @@ costs one rollout, missing an update leaves a fixed bug undeployed.
 
 Any extra arguments are passed through to `helm upgrade`.
 
-Afterwards it refreshes the host commands, so a release that changes them lands
-without anyone re-running the installer.
+### New defaults on an existing host
+
+A fresh install gets everything on. A host installed earlier gets the same on
+its next `update`. Each change is printed, and the values file is edited before
+the upgrade, so `orchardctl config list` shows what happened.
+
+| What                  | What it writes                                                                                    |
+| --------------------- | ------------------------------------------------------------------------------------------------- |
+| Metrics               | `metrics.enabled: true`, also when an older installer wrote `false`                               |
+| Image scanning        | `trivy.enabled: true`                                                                             |
+| Storage classes       | the log store, metrics and scanner volumes get the class Postgres already uses                    |
+| Log disk cap          | `logs.maxDiskSpaceUsage`, from free disk                                                          |
+| A box under 8G of RAM | smaller requests and limits for metrics, logs and the scanner, 7 days of logs, one scan at a time |
+| Backups               | `objectStorage.local.enabled: true` and `r2Proxy.enabled: true`, sized from free disk             |
+
+The log store needs no line of its own: `logs.enabled` is on in the chart, and
+an older installer never wrote it.
+
+Backups are the careful one. The local store is turned on **only when no object
+storage is configured anywhere**: no `R2_ENDPOINT`, `R2_ACCOUNT_ID` or
+`R2_BACKUP_BUCKET` in `server.env`, no `server.envFrom`, no
+`r2Proxy.upstream.endpoint`, and nothing saved under **Instance admin →
+Configuration → Object storage**. If it cannot read the database to check that
+last one, it leaves the store off and prints the two commands that turn it on.
+The local store is on the same machine as the databases, so it is not disaster
+recovery; see [Backups and restore](/data/backups/#the-local-store-on-self-hosted-installs).
+
+Apart from `metrics.enabled` and `r2Proxy.enabled`, which older installers wrote
+as `false` themselves, only keys missing from the values file are filled in. A
+value you set is never changed.
+
+All of this happens once. The top-level `hostDefaults` key in the values file
+records which round of defaults the file already has, so a later `update` does
+not run it again. Turning something off afterwards sticks:
+
+```bash
+sudo orchardctl config set trivy.enabled false --apply
+```
+
+### Volumes and Traefik
+
+The log store and VictoriaMetrics are StatefulSets, and a StatefulSet cannot
+change its StorageClass in place. For each one, `update` checks the live volume
+first. If it is bound, the values file is pinned to the class it already has,
+so the upgrade does not fail. If it never bound (stuck `Pending`, usually
+because the class it asked for does not exist here), the StatefulSet and its
+empty claim are deleted and recreated on the class in the values file.
+
+Traefik's access log is what the Requests view and attack signals read. If the
+`traefik` release is missing any of the three settings it needs, `update`
+upgrades that release with `--reuse-values` on the chart version already
+deployed, setting only what is missing. If that fails, it prints the
+`helm upgrade` command to run yourself. See
+[Logs and request data](/operate/logs/#traefik).
 
 ## config
 
@@ -84,16 +145,60 @@ bare word stays a string.
 Changes are written but **not deployed**. Add `--apply` to run `update`
 afterwards, or make every edit first and run it yourself once.
 
+`config set` and `config unset` refuse to walk into or replace a list, because
+the whole list would be replaced. `server.env` is a list, and it holds
+`JWT_SECRET` and `SECRETS_ENCRYPTION_KEY`; lose the second and every secret
+already stored becomes unreadable. Use [`orchardctl env`](#env) for environment
+variables, and `config edit` for any other list.
+
 Ones worth knowing:
 
-| Path                         | What it does                            |
-| ---------------------------- | --------------------------------------- |
-| `signupMode`                 | `open`, `invite_only` or `closed`       |
-| `tenant.certClusterIssuer`   | ClusterIssuer for user app certificates |
-| `ingress.tls.issuerRef.name` | ClusterIssuer for the Orchard UI itself |
-| `metrics.enabled`            | the built-in metrics stack              |
-| `cilium.enabled`             | Cilium-backed policy and basic auth     |
-| `server.replicas`            | control-plane API pods                  |
+| Path                                     | What it does                                          |
+| ---------------------------------------- | ----------------------------------------------------- |
+| `signupMode`                             | `open`, `invite_only` or `closed`                     |
+| `tenant.certClusterIssuer`               | ClusterIssuer for user app certificates               |
+| `ingress.tls.issuerRef.name`             | ClusterIssuer for the Orchard UI itself               |
+| `server.replicas`                        | control-plane API pods                                |
+| `cilium.enabled`                         | Cilium-backed policy and basic auth                   |
+| `metrics.enabled`                        | the built-in metrics stack                            |
+| `metrics.victoriametrics.retention`      | how long metrics are kept, for example `7d`           |
+| `logs.enabled`                           | the [log store](/operate/logs/)                       |
+| `logs.retention`                         | how long logs are kept, for example `14d`             |
+| `logs.maxDiskSpaceUsage`                 | disk cap for logs, for example `8GiB`                 |
+| `logs.victorialogs.storage.storageClass` | StorageClass for the log store                        |
+| `trivy.enabled`                          | the Orchard [image scanner](/operate/image-scanning/) |
+| `trivy.maxConcurrentScans`               | scans running at once                                 |
+| `objectStorage.local.enabled`            | the S3 store on this box that backups go to           |
+| `objectStorage.local.storage.size`       | its volume size, for example `40Gi`                   |
+| `r2Proxy.enabled`                        | the backup proxy databases talk to                    |
+| `r2Proxy.upstream.endpoint`              | real S3 or R2 for backups instead                     |
+| `updates.url`                            | the "What's new" feed, or `off`                       |
+
+## env
+
+```bash
+sudo orchardctl env list
+sudo orchardctl env get FRONTEND_URL
+sudo orchardctl env set SMTP_HOST smtp.example.com
+sudo orchardctl env set R2_BACKUP_BUCKET my-backups --apply
+sudo orchardctl env unset UPDATES_URL
+sudo orchardctl env set PUBLIC_INGRESS_CNAME ingress.example.com --for frontend
+```
+
+Reads and changes the control plane's environment variables, which live in
+`server.env` in the values file as a list of `{name, value}` entries. Each
+command touches one entry and leaves the others alone, which is why it is safe
+on a list that holds the instance's secrets.
+
+- `list` prints the names that are set, not the values.
+- `set` adds the variable, or changes it in place.
+- `unset` removes it.
+- `--for frontend` or `--for mcp` edits `frontend.env` or `mcp.env` instead of
+  the server's.
+
+Like `config`, changes are written but not deployed until `--apply` or the next
+`update`. A variable set here also locks the matching field in the admin UI,
+because the environment always wins.
 
 ## registry
 
@@ -209,18 +314,15 @@ a mismatch is the confusing failure: the dashboard answers, and every link it
 prints points somewhere else.
 
 ```bash
-sudo yq -i '.ingress.host = "mango" |
-  (.server.env[] | select(.name == "FRONTEND_URL")).value = "http://mango"' \
-  /etc/orchard/values.yaml
-
-sudo orchardctl update
+sudo orchardctl config set ingress.host mango
+sudo orchardctl env set FRONTEND_URL http://mango --apply
 sudo orchardctl claim
 ```
 
-`orchardctl config set ingress.host` handles the first on its own.
-`FRONTEND_URL` needs `yq` or `orchardctl config edit`, because it lives in a
-list of `{name, value}` entries rather than at a dotted path. Include the port
-in the URL if the instance serves on one other than 80 or 443.
+`ingress.host` is a chart value, so it goes through `config set`.
+`FRONTEND_URL` is an environment variable in the `server.env` list, so it goes
+through [`env set`](#env). Include the port in the URL if the instance serves on
+one other than 80 or 443.
 
 What Traefik ended up matching on:
 

@@ -63,28 +63,53 @@ Set any of these and the matching field becomes read-only in the UI.
 
 ## Configure database backups
 
-This is the warning-severity item, and the wording is literal: **until object
-storage is configured, managed databases have no base backup at all.** Write
+This is the warning-severity item, and the wording is literal: **until a backup
+bucket is configured, managed databases have no base backup at all.** Write
 ahead log archiving alone cannot restore a database that has been deleted,
-because there is no base to replay onto.
+because there is no base to replay onto. Checkpoints, the drop guard and
+restore tests are unavailable too, and the UI says so.
 
-| Variable               | Purpose                                            |
-| ---------------------- | -------------------------------------------------- |
-| `R2_ACCESS_KEY_ID`     | S3-compatible access key                           |
-| `R2_SECRET_ACCESS_KEY` | secret key                                         |
-| `R2_BUCKET_NAME`       | bucket backups are written to                      |
-| `R2_ENDPOINT`          | S3 endpoint, for example the R2 or MinIO URL       |
-| `R2_ACCOUNT_ID`        | Cloudflare account ID, R2 only                     |
-| `R2_PUBLIC_URL`        | public base URL, used for build context and assets |
+On an instance from the one-command installer this item is already done: the
+installer runs an S3 store inside the cluster and points backups at it. That
+store is on the same machine as the databases, so it is not disaster recovery.
+See [The local store on self-hosted installs](/data/backups/#the-local-store-on-self-hosted-installs)
+for what it covers and how to move to real S3 or R2.
 
-The checklist counts this item done once `R2_ACCESS_KEY_ID`,
-`R2_SECRET_ACCESS_KEY` and `R2_BUCKET_NAME` are all set.
+| Variable               | Purpose                                               |
+| ---------------------- | ----------------------------------------------------- |
+| `R2_BACKUP_BUCKET`     | the bucket backups are written to                     |
+| `R2_ENDPOINT`          | S3 endpoint, for example the R2 or MinIO URL          |
+| `R2_ACCESS_KEY_ID`     | S3-compatible access key                              |
+| `R2_SECRET_ACCESS_KEY` | secret key                                            |
+| `R2_REGION`            | optional, the signing region; `auto` by default       |
+| `R2_ACCOUNT_ID`        | Cloudflare account ID, R2 only; derives `R2_ENDPOINT` |
 
-Any S3-compatible store works. `R2_ENDPOINT` and `R2_PUBLIC_URL` are derived
-from the account ID when left blank.
+The checklist counts this item done once `R2_BACKUP_BUCKET`, an endpoint
+(`R2_ENDPOINT`, or `R2_ACCOUNT_ID` on R2), `R2_ACCESS_KEY_ID` and
+`R2_SECRET_ACCESS_KEY` are all set. Each is also a field under **Instance admin
+→ Configuration → Object storage**, apart from `R2_REGION`, which is
+environment only.
 
-After setting these, confirm a fresh backup appears under a database's Backups
-tab before you trust it. A backup you have never seen complete is not a backup.
+**`R2_BUCKET_NAME` is not a backup setting.** It is the general bucket for
+uploads and assets, may be public, and is never used for backups. Setting it
+alone leaves databases with no backups.
+
+An organization can also bring its own bucket under **Organization settings →
+Backups**, which always wins over the instance's.
+
+On an installer host, set them with `orchardctl env`, which edits one variable
+at a time and leaves the rest of the list alone:
+
+```bash
+sudo orchardctl env set R2_ENDPOINT https://<account>.r2.cloudflarestorage.com
+sudo orchardctl env set R2_ACCESS_KEY_ID <key id>
+sudo orchardctl env set R2_SECRET_ACCESS_KEY <secret>
+sudo orchardctl env set R2_BACKUP_BUCKET my-backups --apply
+```
+
+Any S3-compatible store works. After setting these, confirm a fresh backup
+appears under a database's Backups tab, then run a restore test on it. A backup
+you have never seen restore is not a backup.
 
 ## Set up email
 

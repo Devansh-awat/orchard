@@ -32,13 +32,16 @@ never reaches it. `bash -c "$(...)"` keeps your terminal attached. If you would
 rather not hand a script to `sudo` sight unseen, download it, read it, then run
 it:
 
-````bash
+```bash
 curl -fsSL https://assets.orchard.my/install.sh -o orchard-install.sh
 less orchard-install.sh
 sudo bash orchard-install.sh
-``` Everything it generates lands in
-`/etc/orchard/values.yaml`; edit that file and run `orchard-update` to apply
-changes.
+```
+
+Everything it generates lands in `/etc/orchard/values.yaml`; edit that file and
+run `orchard-update` to apply changes. Environment variables are one list in
+that file, holding the instance's secrets, so change them one at a time with
+`sudo orchardctl env set <NAME> <value>` rather than by hand.
 
 **amd64 or arm64.** The installer detects the architecture and builds apps for
 it, so an arm64 box (a Graviton or Ampere VM, a Raspberry Pi 5) builds arm64
@@ -48,15 +51,42 @@ images. Anything else is refused.
 nest its overlayfs snapshotter there, and under CPU emulation seccomp is
 unavailable, so the kubelet never creates a pod sandbox.
 
+### On by default
+
+These are on, configured and working when the installer finishes:
+
+| Feature                 | What runs                                                | More                                       |
+| ----------------------- | -------------------------------------------------------- | ------------------------------------------ |
+| Metrics                 | VictoriaMetrics, vmagent and exporters                   | [Metrics and alerts](/run/observability/)  |
+| Log search and requests | VictoriaLogs and Vector, plus Traefik's JSON access log  | [Logs and request data](/operate/logs/)    |
+| Image scanning          | the Orchard scanner (Trivy), scanning straight from zot  | [Image scanning](/operate/image-scanning/) |
+| Database backups        | an S3 store on this box (versitygw) and the backup proxy | [Backups and restore](/data/backups/)      |
+| MCP                     | the endpoint agents connect to, at `mcp.<your domain>`   | [MCP](/mcp/)                               |
+
+Backups to the local store give you checkpoints, point-in-time restore, forks,
+the 30-day trash and restore tests from the first database. They live on the
+same disk as the databases, so they are not disaster recovery; see
+[the local store](/data/backups/#the-local-store-on-self-hosted-installs).
+
+Each one has a flag to leave it out: `--metrics false`, `--logs false`,
+`--image-scanning false`, `--object-storage false`, `--mcp false`.
+
+A host installed before metrics, logs, scanning or local backups were on by
+default gets them on its next `sudo orchardctl update`. Each change is printed,
+and it happens once, so turning something back off sticks. The MCP is the
+exception, because it needs a DNS record first: turn it on with
+`sudo orchardctl mcp enable --apply`. See
+[host commands](/operate/host-commands/#new-defaults-on-an-existing-host).
+
 ### Ports 80 and 443
 
 Which ports get bound on the host, and what for:
 
-| mode     | port 80                                                                                                                | port 443                                       |
-| -------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| `public` | Let's Encrypt HTTP-01 challenges: the dashboard, the MCP endpoint, and every app hostname, at issue and at every renewal | everything, the dashboard and apps alike       |
-| `lan`    | the dashboard and the MCP endpoint, in plain HTTP, since there is no TLS to terminate                                    | deployed apps, on self-signed certificates     |
-| `tunnel` | nothing binds it                                                                                                       | nothing binds it                               |
+| mode     | port 80                                                                                                                  | port 443                                   |
+| -------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
+| `public` | Let's Encrypt HTTP-01 challenges: the dashboard, the MCP endpoint, and every app hostname, at issue and at every renewal | everything, the dashboard and apps alike   |
+| `lan`    | the dashboard and the MCP endpoint, in plain HTTP, since there is no TLS to terminate                                    | deployed apps, on self-signed certificates |
+| `tunnel` | nothing binds it                                                                                                         | nothing binds it                           |
 
 Port 80 in `public` mode is the one that cannot be negotiated. The ACME spec
 fixes the HTTP-01 challenge at port 80, so it is not an Orchard default you can
@@ -107,19 +137,16 @@ with `--mcp-domain`, or leave it out entirely with `--mcp false`.
 Before it deploys anything it checks that the MCP hostname resolves, and if it
 does not, it asks:
 
-````
-
+```text
 ! mcp.example.com does not resolve yet.
 That is where AI agents connect over MCP. Its certificate is issued
 over HTTP-01, so it cannot be obtained until the name points here.
 
 What would you like to do?
-
-1. I have added the record now, check again
-2. use a different hostname
-3. skip the MCP for now, I will turn it on later
-
-````
+  1) I have added the record now, check again
+  2) use a different hostname
+  3) skip the MCP for now, I will turn it on later
+```
 
 Skipping is safe and reversible: add the record whenever you like and run
 `sudo orchardctl mcp enable --apply`. Under `--yes` there is nobody to ask, so it
@@ -189,18 +216,15 @@ They are separate values and a mismatch is the confusing case: the dashboard
 answers, and every link it prints points somewhere else.
 
 ```bash
-sudo yq -i '.ingress.host = "mango" |
-  (.server.env[] | select(.name == "FRONTEND_URL")).value = "http://mango:8081"' \
-  /etc/orchard/values.yaml
-
-sudo orchardctl update
+sudo orchardctl config set ingress.host mango
+sudo orchardctl env set FRONTEND_URL http://mango:8081 --apply
 sudo orchardctl claim
 ```
 
-`yq` is already on the box, installed alongside everything else. Use the port
-the instance serves on, which is 80 unless you moved it. `orchardctl config set`
-handles `ingress.host` on its own, but not `FRONTEND_URL`, which lives in a
-list of `{name, value}` entries rather than at a dotted path.
+Use the port the instance serves on, which is 80 unless you moved it.
+`ingress.host` is a chart value and `FRONTEND_URL` an environment variable,
+which is why they take two different commands; see
+[host commands](/operate/host-commands/#env).
 
 To confirm what Traefik is matching on:
 
@@ -224,12 +248,14 @@ ORCHARD_ACME_EMAIL=me@example.com \
 ORCHARD_INGRESS_MODE=public \
 ORCHARD_UPDATE_POLICY=manual \
   sudo -E bash install.sh
-````
+```
 
 Others: `ORCHARD_VERSION`, `ORCHARD_CHART`, `ORCHARD_IMAGE_REGISTRY`,
 `ORCHARD_IMAGE_REPOSITORY`, `ORCHARD_STATE_DIR`, `ORCHARD_NODE_PORT_RANGE`,
 `ORCHARD_ZOT_NODE_PORT`, `ORCHARD_REGISTRY_HOST`, `ORCHARD_TUNNEL_TOKEN`,
-`ORCHARD_MCP`, `ORCHARD_MCP_DOMAIN`, `K3S_VERSION`, `GATEWAY_API_VERSION`.
+`ORCHARD_MCP`, `ORCHARD_MCP_DOMAIN`, `ORCHARD_METRICS`, `ORCHARD_LOGS`,
+`ORCHARD_IMAGE_SCANNING`, `ORCHARD_OBJECT_STORAGE`, `K3S_VERSION`,
+`GATEWAY_API_VERSION`.
 
 ### Hand it to an agent
 
@@ -293,8 +319,14 @@ Build concurrency, cache size and registry size are derived from the machine:
 | 8 to 16Gi | 2                 |
 | over 16Gi | 3                 |
 
-Build cache and registry each take a fifth of free disk, capped at 60G and 50G.
-The floor is 4Gi RAM and 20G disk; 8Gi and 60G is comfortable.
+Build cache, registry and backups each take a fifth of free disk, capped at
+60G, 50G and 50G. The log store takes a tenth, between 5G and 20G. The floor is
+4Gi RAM and 20G disk; 8Gi and 60G is comfortable.
+
+Nothing is switched off to fit a small box. Under 8Gi of RAM, metrics, logs and
+the scanner run with smaller memory requests and limits, logs are kept for a
+week instead of two, and one scan runs at a time. The numbers are in the
+generated values file, and `orchardctl config set` changes any of them.
 
 ### What the installer leaves off
 
@@ -324,6 +356,12 @@ is the right one. Set it once with
 `sudo orchardctl public-ip set <ip> --apply` and every organization inherits it;
 see [Set a default public IP](/operate/finishing-setup/#set-a-default-public-ip).
 
+**Off-box backups.** Database backups go to an S3 store on this same machine.
+That undoes a bad migration or a dropped table, but lose the disk and the
+backups go with it. Point the instance at real S3 or R2 for that:
+[Moving to real S3 or R2](/data/backups/#moving-to-real-s3-or-r2) walks through
+it, including copying what is already there.
+
 **Multi-node**, **wildcard certificates**, and **public TCP/UDP in tunnel mode**
 are also out of scope for the installer. See the chart for those.
 
@@ -352,7 +390,7 @@ helm install orchard oci://ghcr.io/hackclub/orchard/charts/orchard \
 | CloudNativePG operator       | The control-plane database and every database users create                 |
 | Traefik with Gateway API     | Control-plane ingress and app routing (`HTTPRoute` via a shared `Gateway`) |
 | cert-manager                 | TLS, plus a DNS-01 `ClusterIssuer` for wildcard certificates               |
-| A default StorageClass       | Postgres volumes, build cache, Redis, metrics                              |
+| A default StorageClass       | Postgres volumes, build cache, Redis, metrics, logs                        |
 | An OCI registry              | Where built images are pushed and pulled                                   |
 | An ingress controller        | Custom-domain ingresses for user apps                                      |
 | L4 LoadBalancer              | Only for public database exposure and TCP/UDP passthrough                  |

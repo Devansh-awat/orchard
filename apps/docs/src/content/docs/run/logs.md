@@ -14,6 +14,10 @@ roughly when something happened.
 Logs stream over a live connection, so a busy app fills the panel in real time
 rather than on a poll.
 
+**Observe → Logs** searches what the app logged before now, including replicas
+that have since been replaced. That history comes from the instance's log
+store; see [Logs and request data](/operate/logs/) if it is empty.
+
 ## Crash reports
 
 The logs that matter most belong to a container that already died, and those are
