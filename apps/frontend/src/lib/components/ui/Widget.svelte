@@ -74,9 +74,7 @@
 	.head--controls {
 		min-height: var(--widget-control-h);
 		margin-top: calc(var(--widget-corner-inset) - var(--widget-pad));
-		margin-bottom: calc(
-			var(--widget-title-gap) - var(--widget-pad) - (var(--widget-control-h) - 1cap) / 2
-		);
+		margin-bottom: calc(var(--widget-title-gap) - var(--widget-pad));
 	}
 	.head--controls .meta:has(:global(button, a)) {
 		margin-right: calc(var(--widget-corner-inset) - var(--widget-pad));
