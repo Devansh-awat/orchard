@@ -1481,59 +1481,58 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    // Currently building deployments
-    const activeBuilds = await this.prisma.deployment.findMany({
-      where: {
-        project: projectFilter,
-        buildStatus: { in: ['building', 'pending'] }
-      },
-      select: {
-        id: true,
-        name: true,
-        displayName: true,
-        image: true,
-        status: true,
-        buildStatus: true,
-        buildStep: true,
-        buildStepTimestamps: true,
-        updatedAt: true,
-        githubRepo: true,
-        githubBranch: true,
-        ingresses: { select: INGRESS_URL_SELECT, take: 1 },
-        project: { select: { name: true } }
-      },
-      orderBy: { updatedAt: 'desc' },
-      take: activeLimit
-    });
-
-    // Recent completed builds from image history
-    const recentBuilds = await this.prisma.imageHistory.findMany({
-      where: { deployment: { project: projectFilter } },
-      select: {
-        id: true,
-        commitSha: true,
-        commitMessage: true,
-        branch: true,
-        triggerType: true,
-        isActive: true,
-        buildStartedAt: true,
-        buildCompletedAt: true,
-        createdAt: true,
-        deployment: {
-          select: {
-            id: true,
-            name: true,
-            displayName: true,
-            image: true,
-            buildStatus: true,
-            ingresses: { select: INGRESS_URL_SELECT, take: 1 },
-            project: { select: { name: true } }
+    const [activeBuilds, recentBuilds] = await Promise.all([
+      this.prisma.deployment.findMany({
+        where: {
+          project: projectFilter,
+          buildStatus: { in: ['building', 'pending'] }
+        },
+        select: {
+          id: true,
+          name: true,
+          displayName: true,
+          image: true,
+          status: true,
+          buildStatus: true,
+          buildStep: true,
+          buildStepTimestamps: true,
+          updatedAt: true,
+          githubRepo: true,
+          githubBranch: true,
+          ingresses: { select: INGRESS_URL_SELECT, take: 1 },
+          project: { select: { name: true } }
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: activeLimit
+      }),
+      this.prisma.imageHistory.findMany({
+        where: { deployment: { project: projectFilter } },
+        select: {
+          id: true,
+          commitSha: true,
+          commitMessage: true,
+          branch: true,
+          triggerType: true,
+          isActive: true,
+          buildStartedAt: true,
+          buildCompletedAt: true,
+          createdAt: true,
+          deployment: {
+            select: {
+              id: true,
+              name: true,
+              displayName: true,
+              image: true,
+              buildStatus: true,
+              ingresses: { select: INGRESS_URL_SELECT, take: 1 },
+              project: { select: { name: true } }
+            }
           }
-        }
-      },
-      orderBy: { createdAt: 'desc' },
-      take: recentLimit
-    });
+        },
+        orderBy: { createdAt: 'desc' },
+        take: recentLimit
+      })
+    ]);
 
     return {
       // The elapsed counter runs off `buildStartedAt`; `updatedAt` is only a
@@ -1617,6 +1616,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     return deploymentsWithComputedStatus;
   }
 
+  metricsTarget(deploymentId: string) {
+    return this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: { name: true, namespace: true, memoryRequestBytes: true }
+    });
+  }
+
   async getDeployment(deploymentId: string, canEdit = true, userId?: string) {
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
@@ -1678,48 +1684,49 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    // Defense-in-depth: re-assert project-view even though the controller already did.
-    if (userId) {
-      await this.authz.requireProjectView(deployment.projectId, userId);
-    }
+    const deploymentWithInternalUrls = this.addInternalUrlsToDeployment(deployment);
+    const namespace = deployment.namespace;
+    const directIngresses: any[] = deploymentWithInternalUrls.ingresses ?? [];
+    const existingIds = new Set(directIngresses.map((i: any) => i.id));
 
-    const pods = await this.fetchMirroredPods([deploymentId]);
+    const [, pods, workload, projectIngresses, rollout, latestVerdict] = await Promise.all([
+      userId ? this.authz.requireProjectView(deployment.projectId, userId) : null,
+      this.fetchMirroredPods([deploymentId]),
+      this.prisma.k8sWorkload.findUnique({ where: { deploymentId } }),
+      namespace && deployment.projectId
+        ? this.prisma.ingress.findMany({
+            where: { projectId: deployment.projectId, id: { notIn: Array.from(existingIds) } },
+            include: { service: true }
+          })
+        : Promise.resolve([] as any[]),
+      this.mirroredRollout(deployment),
+      this.latestVerdict(deployment.id)
+    ]);
     const warnings = this.synthesizePodWarnings(pods);
     const totalCpuUsage: number | null = null;
     const totalMemoryUsage: number | null = null;
-
-    const workload = await this.prisma.k8sWorkload.findUnique({
-      where: { deploymentId }
-    });
     const availableReplicas =
       workload?.availableReplicas ??
       pods.filter((pod) => pod.status?.toLowerCase() === 'ready').length;
 
-    const deploymentWithInternalUrls = this.addInternalUrlsToDeployment(deployment);
-
-    // Discover project-level ingresses that route to this deployment's services,
-    // enriched with routes from the mirrored Ingress manifests.
-    if (deployment.namespace) {
-      const namespace = deployment.namespace;
-      const directIngresses: any[] = deploymentWithInternalUrls.ingresses ?? [];
-      const existingIds = new Set(directIngresses.map((i: any) => i.id));
-
-      const projectIngresses = deployment.projectId
-        ? await this.prisma.ingress.findMany({
-            where: { projectId: deployment.projectId, id: { notIn: Array.from(existingIds) } },
-            include: { service: true }
-          })
-        : [];
-
+    if (namespace) {
       const candidateIngresses = [...directIngresses, ...projectIngresses];
-      const mirrored = await this.prisma.k8sObject.findMany({
-        where: {
-          kind: 'Ingress',
-          namespace,
-          name: { in: [...new Set(candidateIngresses.map((i: any) => i.name))] }
-        },
-        select: { name: true, manifest: true }
-      });
+      const [mirrored, certificates] = await Promise.all([
+        this.prisma.k8sObject.findMany({
+          where: {
+            kind: 'Ingress',
+            namespace,
+            name: { in: [...new Set(candidateIngresses.map((i: any) => i.name))] }
+          },
+          select: { name: true, manifest: true }
+        }),
+        candidateIngresses.some((ing: any) => ing?.tlsSecretName)
+          ? this.prisma.k8sObject.findMany({
+              where: { kind: 'Certificate', namespace },
+              select: { manifest: true }
+            })
+          : Promise.resolve([] as { manifest: any }[])
+      ]);
       const k8sByName = new Map<string, any>(mirrored.map((m) => [m.name, m.manifest]));
 
       const serviceNames = new Set((deployment.services ?? []).map((s: any) => s.name));
@@ -1759,12 +1766,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       // next to the domain that caused it. Best-effort and per-host: a cluster
       // without cert-manager reports `unknown` and renders nothing.
       const enrichedIngresses = [...directEnriched, ...projectExtras];
-      const certificates = enrichedIngresses.some((ing: any) => ing?.tlsSecretName)
-        ? await this.prisma.k8sObject.findMany({
-            where: { kind: 'Certificate', namespace },
-            select: { manifest: true }
-          })
-        : [];
       for (const ing of enrichedIngresses as any[]) {
         if (!ing?.tlsSecretName) continue;
         ing.certificateStatus = certificateStatusFrom(
@@ -1792,8 +1793,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       readyReplicas: workload?.readyReplicas ?? null,
       observedAt: workload?.updatedAt ?? null,
       warnings,
-      rollout: await this.mirroredRollout(deployment),
-      latestVerdict: await this.latestVerdict(deployment.id),
+      rollout,
+      latestVerdict,
       totalCpuUsage,
       totalMemoryUsage,
       status: computedStatus,

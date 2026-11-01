@@ -1050,7 +1050,7 @@ export class DeploymentsController {
     @Query('step') stepStr?: string,
     @Query('groupBy') groupBy?: string
   ) {
-    const { user } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
+    await this.projectAccess.assertDeploymentView(id, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
@@ -1062,7 +1062,7 @@ export class DeploymentsController {
     const step = Math.max(1000, Number(stepStr) || 30_000);
     if (end <= start) throw new BadRequestException('end must be > start');
 
-    const dep = await this.deployments.getDeployment(id, true, user.id);
+    const dep = await this.deployments.metricsTarget(id);
     if (!dep?.namespace || !dep?.name) {
       throw new BadRequestException('Deployment has no namespace/name');
     }
