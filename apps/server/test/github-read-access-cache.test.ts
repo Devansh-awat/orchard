@@ -86,3 +86,16 @@ test('falls back to the user token when the installation token cannot be minted'
   });
   assert.equal(await svc.resolveReadAccessToken(user, 'acme', 'site'), 'user-token');
 });
+
+test('unlinking github forgets that user without touching anyone else', async () => {
+  const { svc, counts } = harness({ userCan: true, installation: 7n });
+  Object.assign(svc, { prisma: { user: { update: async () => ({}) } } });
+  const other = { id: 'u9', githubAccessToken: 'enc' };
+  await svc.resolveReadAccessToken(user, 'acme', 'site');
+  await svc.resolveReadAccessToken(other, 'acme', 'site');
+  await new Promise((r) => setTimeout(r, 5));
+  await svc.unlinkGitHubAccount(user.id);
+  await svc.resolveReadAccessToken(user, 'acme', 'site');
+  await svc.resolveReadAccessToken(other, 'acme', 'site');
+  assert.equal(counts.verify, 3);
+});

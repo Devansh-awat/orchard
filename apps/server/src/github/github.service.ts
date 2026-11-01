@@ -308,7 +308,19 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
 
   // Refresh a user's GitHub access token using the stored refresh token.
   // Returns the new access token, or null if refresh failed (user must reauthorize).
-  async refreshUserToken(userId: string): Promise<string | null> {
+  private readonly userTokenRefreshes = new Map<string, Promise<string | null>>();
+
+  refreshUserToken(userId: string): Promise<string | null> {
+    const pending = this.userTokenRefreshes.get(userId);
+    if (pending) return pending;
+    const run = this.refreshUserTokenOnce(userId).finally(() =>
+      this.userTokenRefreshes.delete(userId)
+    );
+    this.userTokenRefreshes.set(userId, run);
+    return run;
+  }
+
+  private async refreshUserTokenOnce(userId: string): Promise<string | null> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { githubRefreshToken: true, githubRefreshTokenExpiresAt: true }
@@ -443,6 +455,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
         githubRefreshTokenExpiresAt: tokens.refreshTokenExpiresAt
       }
     });
+    await this.forgetUserGitHub(userId);
   }
 
   async unlinkGitHubAccount(userId: string): Promise<void> {
@@ -457,6 +470,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
         githubRefreshTokenExpiresAt: null
       }
     });
+    await this.forgetUserGitHub(userId);
   }
 
   async getUserRepositories(accessToken: string, maxPages = 3): Promise<GitHubRepo[]> {
@@ -2154,7 +2168,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
 
   private readonly userInstallationsCache = new Map<
     string,
-    { at: number; epoch: number; rows: any[] }
+    { at: number; epoch: string; rows: any[] }
   >();
 
   private static readonly INSTALLATIONS_CACHE_MS = 5 * 60 * 1000;
@@ -2169,8 +2183,21 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
 
   private static readonly EPOCH_KEY = 'github:installations-epoch';
 
-  private async installationsEpoch(): Promise<number> {
-    return (await this.cache.get<number>(GitHubService.EPOCH_KEY)) ?? 0;
+  private async installationsEpoch(userId: string): Promise<string> {
+    const [global, own] = await Promise.all([
+      this.cache.get<number>(GitHubService.EPOCH_KEY),
+      this.cache.get<number>(`${GitHubService.EPOCH_KEY}:${userId}`)
+    ]);
+    return `${global ?? 0}.${own ?? 0}`;
+  }
+
+  private forgetUserGitHub(userId: string) {
+    this.userInstallationsCache.delete(userId);
+    return this.cache.set(
+      `${GitHubService.EPOCH_KEY}:${userId}`,
+      Date.now(),
+      7 * 24 * 60 * 60 * 1000
+    );
   }
 
   clearUserInstallationsCache() {
@@ -2178,8 +2205,28 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     void this.cache.set(GitHubService.EPOCH_KEY, Date.now(), 7 * 24 * 60 * 60 * 1000);
   }
 
+  async userInstallationsCached(userId: string, epoch?: string): Promise<any[]> {
+    const current = epoch ?? (await this.installationsEpoch(userId));
+    const cached = this.userInstallationsCache.get(userId);
+    if (
+      cached &&
+      cached.epoch === current &&
+      Date.now() - cached.at < GitHubService.INSTALLATIONS_CACHE_MS
+    ) {
+      return cached.rows;
+    }
+    const rows = await this.getUserInstallations(userId);
+    if (this.userInstallationsCache.size > 5_000) this.userInstallationsCache.clear();
+    if (rows.length > 0) {
+      this.userInstallationsCache.set(userId, { at: Date.now(), epoch: current, rows });
+    } else {
+      this.userInstallationsCache.delete(userId);
+    }
+    return rows;
+  }
+
   private async accessibleRepoIds(
-    epoch: number,
+    epoch: string,
     userId: string,
     userToken: string,
     installationId: bigint
@@ -2210,7 +2257,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     repo: string
   ): Promise<string | null> {
     type Decision = { via: 'installation'; installationId: string } | { via: 'user' | 'public' };
-    const epoch = await this.installationsEpoch();
+    const epoch = await this.installationsEpoch(user.id);
     const key = `github:repo-access:${epoch}:${user.id}:${owner.toLowerCase()}/${repo.toLowerCase()}`;
     const cached = await this.cache.get<Decision>(key);
     if (cached) {
@@ -2280,22 +2327,11 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     hasInstallations: boolean;
     userLinked: boolean;
   }> {
-    const epoch = await this.installationsEpoch();
-    let installations: any[];
-    const cachedInst = this.userInstallationsCache.get(userId);
-    if (
-      cachedInst &&
-      cachedInst.epoch === epoch &&
-      Date.now() - cachedInst.at < GitHubService.INSTALLATIONS_CACHE_MS
-    ) {
-      installations = cachedInst.rows;
-    } else {
-      installations = await this.getUserInstallations(userId);
-      if (this.userInstallationsCache.size > 5_000) this.userInstallationsCache.clear();
-      this.userInstallationsCache.set(userId, { at: Date.now(), epoch, rows: installations });
-    }
-
-    const userToken = await this.getValidUserToken(userId);
+    const epoch = await this.installationsEpoch(userId);
+    const [installations, userToken] = await Promise.all([
+      this.userInstallationsCached(userId, epoch),
+      this.getValidUserToken(userId)
+    ]);
     const userLinked = Boolean(userToken);
 
     if (installations.length === 0) {

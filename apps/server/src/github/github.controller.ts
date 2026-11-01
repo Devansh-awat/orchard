@@ -297,7 +297,7 @@ export class GitHubController {
       };
     }
 
-    const installations = await this.githubService.getUserInstallations(user.id);
+    const installations = await this.githubService.userInstallationsCached(user.id);
 
     return {
       linked: true,
