@@ -94,9 +94,9 @@ test('job conditions become plain failure reasons', () => {
   });
   assert.equal(scanJobFailure({}), null);
   assert.equal(scanJobFailure(cond('Failed', 'DeadlineExceeded')), 'The scan ran out of time');
-  assert.equal(scanJobFailure(cond('Failed', 'BackoffLimitExceeded')), 'The scanner exited with an error');
   assert.equal(
-    scanJobFailure(cond('Complete')),
-    'The scan finished without reporting a result'
+    scanJobFailure(cond('Failed', 'BackoffLimitExceeded')),
+    'The scanner exited with an error'
   );
+  assert.equal(scanJobFailure(cond('Complete')), 'The scan finished without reporting a result');
 });

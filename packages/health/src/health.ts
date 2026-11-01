@@ -1,96 +1,96 @@
 export type ContainerFact = {
-	name: string;
-	init?: boolean;
-	image?: string | null;
-	ready?: boolean;
-	restartCount?: number;
-	state?: 'running' | 'waiting' | 'terminated' | 'unknown';
-	reason?: string | null;
-	message?: string | null;
-	startedAt?: string | null;
-	lastTermination?: {
-		reason?: string | null;
-		exitCode?: number | null;
-		finishedAt?: string | null;
-	} | null;
+  name: string;
+  init?: boolean;
+  image?: string | null;
+  ready?: boolean;
+  restartCount?: number;
+  state?: 'running' | 'waiting' | 'terminated' | 'unknown';
+  reason?: string | null;
+  message?: string | null;
+  startedAt?: string | null;
+  lastTermination?: {
+    reason?: string | null;
+    exitCode?: number | null;
+    finishedAt?: string | null;
+  } | null;
 };
 
 export type HealthPod = {
-	name: string;
-	status?: string | null;
-	revision?: string | null;
-	restartCount?: number | null;
-	createdAt?: string | null;
-	startTime?: string | null;
-	phase?: string | null;
-	reason?: string | null;
-	disruption?: string | null;
-	probes?: { liveness?: boolean; readiness?: boolean; startup?: boolean } | null;
-	deletingAt?: string | null;
-	scheduled?: boolean;
-	unschedulableSince?: string | null;
-	schedulingMessage?: string | null;
-	readySince?: string | null;
-	notReadySince?: string | null;
-	containers?: ContainerFact[];
+  name: string;
+  status?: string | null;
+  revision?: string | null;
+  restartCount?: number | null;
+  createdAt?: string | null;
+  startTime?: string | null;
+  phase?: string | null;
+  reason?: string | null;
+  disruption?: string | null;
+  probes?: { liveness?: boolean; readiness?: boolean; startup?: boolean } | null;
+  deletingAt?: string | null;
+  scheduled?: boolean;
+  unschedulableSince?: string | null;
+  schedulingMessage?: string | null;
+  readySince?: string | null;
+  notReadySince?: string | null;
+  containers?: ContainerFact[];
 };
 
 export type RolloutRevision = {
-	hash: string;
-	number: number;
-	image?: string | null;
-	createdAt?: string | null;
-	replicas: number;
-	ready: number;
+  hash: string;
+  number: number;
+  image?: string | null;
+  createdAt?: string | null;
+  replicas: number;
+  ready: number;
 };
 
 export type Rollout = {
-	currentRevision: string | null;
-	revisions: RolloutRevision[];
-	previous?: RolloutRevision | null;
-	desired: number;
-	updated: number;
-	ready: number;
-	available: number;
-	state: 'stable' | 'progressing' | 'failed';
-	reason: string | null;
+  currentRevision: string | null;
+  revisions: RolloutRevision[];
+  previous?: RolloutRevision | null;
+  desired: number;
+  updated: number;
+  ready: number;
+  available: number;
+  state: 'stable' | 'progressing' | 'failed';
+  reason: string | null;
 };
 
 export type HealthInput = {
-	pods: HealthPod[];
-	rollout?: Rollout | null;
-	replicas: number;
-	stopped?: boolean;
-	buildStatus?: string | null;
-	strategy?: 'rollingUpdate' | 'recreate' | 'blueGreen' | null;
-	now?: number;
+  pods: HealthPod[];
+  rollout?: Rollout | null;
+  replicas: number;
+  stopped?: boolean;
+  buildStatus?: string | null;
+  strategy?: 'rollingUpdate' | 'recreate' | 'blueGreen' | null;
+  now?: number;
 };
 
 export type PodProblem =
-	| 'crash-loop'
-	| 'out-of-memory'
-	| 'liveness'
-	| 'exited'
-	| 'image-pull'
-	| 'missing-config'
-	| 'unschedulable'
-	| 'not-ready'
-	| 'stuck-creating'
-	| 'stuck-terminating'
-	| 'evicted'
-	| 'lost'
-	| 'quota';
+  | 'crash-loop'
+  | 'out-of-memory'
+  | 'liveness'
+  | 'exited'
+  | 'image-pull'
+  | 'missing-config'
+  | 'unschedulable'
+  | 'not-ready'
+  | 'stuck-creating'
+  | 'stuck-terminating'
+  | 'evicted'
+  | 'lost'
+  | 'quota';
 
 export type PodVersion = 'new' | 'old' | 'replaced';
 
 export type ClassifiedPod = {
-	name: string;
-	state: 'running' | 'starting' | 'waiting' | 'failing' | 'stopping' | 'unknown';
-	problem: PodProblem | null;
-	cause: string | null;
-	container: string | null;
-	version: PodVersion | null;
-	revision: number | null;
+  name: string;
+  state: 'running' | 'starting' | 'waiting' | 'failing' | 'stopping' | 'unknown';
+  problem: PodProblem | null;
+  cause: string | null;
+  container: string | null;
+  version: PodVersion | null;
+  revision: number | null;
 };
 
 export type AppState = 'healthy' | 'degraded' | 'down' | 'starting' | 'stopped' | 'unknown';
@@ -98,575 +98,575 @@ export type DeployState = 'deploying' | 'stuck' | 'failed';
 export type BuildState = 'building' | 'failed' | null;
 
 export type Problem = {
-	id: string;
-	scope: 'app' | 'deploy' | 'build';
-	tone: 'error' | 'warning';
-	title: string;
-	hint: string;
-	problem?: PodProblem;
-	pods?: string[];
+  id: string;
+  scope: 'app' | 'deploy' | 'build';
+  tone: 'error' | 'warning';
+  title: string;
+  hint: string;
+  problem?: PodProblem;
+  pods?: string[];
 };
 
 export type Health = {
-	app: AppState;
-	deploy: DeployState | null;
-	build: BuildState;
-	serving: number;
-	desired: number;
-	current: RolloutRevision | null;
-	previous: RolloutRevision | null;
-	progress: number | null;
-	pods: ClassifiedPod[];
-	problems: Problem[];
+  app: AppState;
+  deploy: DeployState | null;
+  build: BuildState;
+  serving: number;
+  desired: number;
+  current: RolloutRevision | null;
+  previous: RolloutRevision | null;
+  progress: number | null;
+  pods: ClassifiedPod[];
+  problems: Problem[];
 };
 
 export const PATIENCE = {
-	startup: 90_000,
-	unschedulable: 30_000,
-	imagePull: 60_000,
-	config: 20_000,
-	notReady: 120_000,
-	creating: 300_000,
-	nodeLost: 60_000,
-	terminating: 60_000,
-	crashWindow: 600_000
+  startup: 90_000,
+  unschedulable: 30_000,
+  imagePull: 60_000,
+  config: 20_000,
+  notReady: 120_000,
+  creating: 300_000,
+  nodeLost: 60_000,
+  terminating: 60_000,
+  crashWindow: 600_000
 } as const;
 
 const PROBLEM_COPY: Record<PodProblem, { title: string; deploy: string; hint: string }> = {
-	'crash-loop': {
-		title: 'keeps crashing',
-		deploy: 'The new version crashes on start',
-		hint: 'Check the logs from before the crash.'
-	},
-	'out-of-memory': {
-		title: 'keeps running out of memory',
-		deploy: 'The new version runs out of memory',
-		hint: 'Raise the memory limit or fix the leak.'
-	},
-	liveness: {
-		title: 'keeps failing its liveness check',
-		deploy: 'The new version fails its liveness check',
-		hint: 'Kubernetes restarts it when the check fails. The check may be too strict.'
-	},
-	exited: {
-		title: 'exits right after starting',
-		deploy: 'The new version exits right after starting',
-		hint: 'The process finished. A web app has to keep running.'
-	},
-	'image-pull': {
-		title: "can't pull its image",
-		deploy: "Can't pull the new image",
-		hint: 'The tag may be wrong or the registry needs a login.'
-	},
-	'missing-config': {
-		title: 'is missing a secret',
-		deploy: 'The new version is missing a secret',
-		hint: 'Add the missing variable or secret.'
-	},
-	unschedulable: {
-		title: 'has no room to start',
-		deploy: 'No room to start the new version',
-		hint: 'Lower its requests or wait for capacity.'
-	},
-	'not-ready': {
-		title: 'is failing its health check',
-		deploy: "The new version isn't passing its health check",
-		hint: 'It is running but never reports ready.'
-	},
-	'stuck-creating': {
-		title: 'is taking too long to start',
-		deploy: 'The new version is taking too long to start',
-		hint: 'A volume may not be attaching, or the image is very large.'
-	},
-	'stuck-terminating': {
-		title: "won't stop",
-		deploy: "An old pod won't stop",
-		hint: 'It was asked to stop over a minute ago. Its node may be unreachable.'
-	},
-	evicted: {
-		title: 'keeps getting evicted',
-		deploy: 'The new version keeps getting evicted',
-		hint: 'Its node runs low on memory or disk. Raise its requests.'
-	},
-	lost: {
-		title: 'is on a node we lost contact with',
-		deploy: 'Lost contact with the node running the new version',
-		hint: 'Kubernetes moves it to another node in a few minutes.'
-	},
-	quota: {
-		title: "can't be created",
-		deploy: "Can't create pods for the new version",
-		hint: 'The project is over its resource quota.'
-	}
+  'crash-loop': {
+    title: 'keeps crashing',
+    deploy: 'The new version crashes on start',
+    hint: 'Check the logs from before the crash.'
+  },
+  'out-of-memory': {
+    title: 'keeps running out of memory',
+    deploy: 'The new version runs out of memory',
+    hint: 'Raise the memory limit or fix the leak.'
+  },
+  liveness: {
+    title: 'keeps failing its liveness check',
+    deploy: 'The new version fails its liveness check',
+    hint: 'Kubernetes restarts it when the check fails. The check may be too strict.'
+  },
+  exited: {
+    title: 'exits right after starting',
+    deploy: 'The new version exits right after starting',
+    hint: 'The process finished. A web app has to keep running.'
+  },
+  'image-pull': {
+    title: "can't pull its image",
+    deploy: "Can't pull the new image",
+    hint: 'The tag may be wrong or the registry needs a login.'
+  },
+  'missing-config': {
+    title: 'is missing a secret',
+    deploy: 'The new version is missing a secret',
+    hint: 'Add the missing variable or secret.'
+  },
+  unschedulable: {
+    title: 'has no room to start',
+    deploy: 'No room to start the new version',
+    hint: 'Lower its requests or wait for capacity.'
+  },
+  'not-ready': {
+    title: 'is failing its health check',
+    deploy: "The new version isn't passing its health check",
+    hint: 'It is running but never reports ready.'
+  },
+  'stuck-creating': {
+    title: 'is taking too long to start',
+    deploy: 'The new version is taking too long to start',
+    hint: 'A volume may not be attaching, or the image is very large.'
+  },
+  'stuck-terminating': {
+    title: "won't stop",
+    deploy: "An old pod won't stop",
+    hint: 'It was asked to stop over a minute ago. Its node may be unreachable.'
+  },
+  evicted: {
+    title: 'keeps getting evicted',
+    deploy: 'The new version keeps getting evicted',
+    hint: 'Its node runs low on memory or disk. Raise its requests.'
+  },
+  lost: {
+    title: 'is on a node we lost contact with',
+    deploy: 'Lost contact with the node running the new version',
+    hint: 'Kubernetes moves it to another node in a few minutes.'
+  },
+  quota: {
+    title: "can't be created",
+    deploy: "Can't create pods for the new version",
+    hint: 'The project is over its resource quota.'
+  }
 };
 
 const FATAL: ReadonlySet<PodProblem> = new Set([
-	'crash-loop',
-	'out-of-memory',
-	'liveness',
-	'exited',
-	'image-pull',
-	'missing-config'
+  'crash-loop',
+  'out-of-memory',
+  'liveness',
+  'exited',
+  'image-pull',
+  'missing-config'
 ]);
 
 type Diagnosis = {
-	state: ClassifiedPod['state'];
-	problem: PodProblem | null;
-	cause: string | null;
-	container: string | null;
+  state: ClassifiedPod['state'];
+  problem: PodProblem | null;
+  cause: string | null;
+  container: string | null;
 };
 
 const ok = (state: Diagnosis['state']): Diagnosis => ({
-	state,
-	problem: null,
-	cause: null,
-	container: null
+  state,
+  problem: null,
+  cause: null,
+  container: null
 });
 
 function ms(iso: string | null | undefined) {
-	if (!iso) return null;
-	const t = Date.parse(iso);
-	return Number.isFinite(t) ? t : null;
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? t : null;
 }
 
 function terminationCause(
-	term: ContainerFact['lastTermination'],
-	liveness: boolean
+  term: ContainerFact['lastTermination'],
+  liveness: boolean
 ): { problem: PodProblem; cause: string | null } {
-	const code = term?.exitCode ?? null;
-	if (term?.reason === 'OOMKilled') return { problem: 'out-of-memory', cause: null };
-	if (code === 0 || term?.reason === 'Completed') return { problem: 'exited', cause: null };
-	if (code === 137 && liveness) return { problem: 'liveness', cause: null };
-	if (code === 127) return { problem: 'crash-loop', cause: "Its start command wasn't found." };
-	if (code === 126) return { problem: 'crash-loop', cause: "Its start command isn't executable." };
-	if (code === 143)
-		return { problem: 'crash-loop', cause: 'It stopped when asked to and keeps restarting.' };
-	if (code === 137) return { problem: 'crash-loop', cause: 'It was killed.' };
-	return { problem: 'crash-loop', cause: code != null ? `It exits with code ${code}.` : null };
+  const code = term?.exitCode ?? null;
+  if (term?.reason === 'OOMKilled') return { problem: 'out-of-memory', cause: null };
+  if (code === 0 || term?.reason === 'Completed') return { problem: 'exited', cause: null };
+  if (code === 137 && liveness) return { problem: 'liveness', cause: null };
+  if (code === 127) return { problem: 'crash-loop', cause: "Its start command wasn't found." };
+  if (code === 126) return { problem: 'crash-loop', cause: "Its start command isn't executable." };
+  if (code === 143)
+    return { problem: 'crash-loop', cause: 'It stopped when asked to and keeps restarting.' };
+  if (code === 137) return { problem: 'crash-loop', cause: 'It was killed.' };
+  return { problem: 'crash-loop', cause: code != null ? `It exits with code ${code}.` : null };
 }
 
 function pullCause(message: string | null | undefined) {
-	const text = message ?? '';
-	if (/toomanyrequests|rate limit/i.test(text)) return 'The registry is rate limiting pulls.';
-	if (/unauthorized|authentication required|denied|401|403/i.test(text))
-		return 'The registry needs a login. Add registry credentials.';
-	if (/manifest unknown|not found|does not exist/i.test(text)) return "That tag doesn't exist.";
-	return null;
+  const text = message ?? '';
+  if (/toomanyrequests|rate limit/i.test(text)) return 'The registry is rate limiting pulls.';
+  if (/unauthorized|authentication required|denied|401|403/i.test(text))
+    return 'The registry needs a login. Add registry credentials.';
+  if (/manifest unknown|not found|does not exist/i.test(text)) return "That tag doesn't exist.";
+  return null;
 }
 
 function configCause(message: string | null | undefined) {
-	const text = message ?? '';
-	const missing = text.match(/(secret|configmap) "([^"]+)" not found/i);
-	if (missing)
-		return `${missing[1] === 'secret' ? 'Secret' : 'ConfigMap'} ${missing[2]} doesn't exist.`;
-	const key = text.match(/couldn't find key (\S+) in (Secret|ConfigMap)/i);
-	if (key) return `${key[1]} isn't set.`;
-	return null;
+  const text = message ?? '';
+  const missing = text.match(/(secret|configmap) "([^"]+)" not found/i);
+  if (missing)
+    return `${missing[1] === 'secret' ? 'Secret' : 'ConfigMap'} ${missing[2]} doesn't exist.`;
+  const key = text.match(/couldn't find key (\S+) in (Secret|ConfigMap)/i);
+  if (key) return `${key[1]} isn't set.`;
+  return null;
 }
 
 function scheduleCause(message: string | null | undefined) {
-	const text = message ?? '';
-	const cpu = /Insufficient cpu/i.test(text);
-	const mem = /Insufficient memory/i.test(text);
-	if (cpu && mem) return 'No node has enough CPU and memory free.';
-	if (mem) return 'No node has enough memory free.';
-	if (cpu) return 'No node has enough CPU free.';
-	if (/volume node affinity|node\(s\) had volume/i.test(text))
-		return "Its volume lives on a node that can't take it.";
-	if (/unbound|persistentvolumeclaim/i.test(text)) return "Its volume isn't ready yet.";
-	if (/affinity|selector|taint/i.test(text)) return 'No node in its pool can run it.';
-	return null;
+  const text = message ?? '';
+  const cpu = /Insufficient cpu/i.test(text);
+  const mem = /Insufficient memory/i.test(text);
+  if (cpu && mem) return 'No node has enough CPU and memory free.';
+  if (mem) return 'No node has enough memory free.';
+  if (cpu) return 'No node has enough CPU free.';
+  if (/volume node affinity|node\(s\) had volume/i.test(text))
+    return "Its volume lives on a node that can't take it.";
+  if (/unbound|persistentvolumeclaim/i.test(text)) return "Its volume isn't ready yet.";
+  if (/affinity|selector|taint/i.test(text)) return 'No node in its pool can run it.';
+  return null;
 }
 
 function containerProblem(
-	pod: HealthPod,
-	c: ContainerFact,
-	now: number,
-	age: number
+  pod: HealthPod,
+  c: ContainerFact,
+  now: number,
+  age: number
 ): Diagnosis | null {
-	const liveness = !!pod.probes?.liveness && !c.init;
-	const reason = c.reason ?? '';
-	const at = (problem: PodProblem, cause: string | null): Diagnosis => ({
-		state: problem === 'not-ready' || problem === 'stuck-creating' ? 'waiting' : 'failing',
-		problem,
-		cause,
-		container: c.name
-	});
-	if (c.state === 'waiting') {
-		if (reason === 'CrashLoopBackOff') {
-			const t = terminationCause(c.lastTermination, liveness);
-			return at(t.problem, t.cause);
-		}
-		if (reason === 'InvalidImageName' || reason === 'ErrImageNeverPull')
-			return at('image-pull', "The image name isn't valid.");
-		if (reason === 'ImagePullBackOff' || reason === 'ErrImagePull') {
-			return age >= PATIENCE.imagePull ? at('image-pull', pullCause(c.message)) : null;
-		}
-		if (reason === 'CreateContainerConfigError') {
-			return age >= PATIENCE.config ? at('missing-config', configCause(c.message)) : null;
-		}
-		if (reason === 'CreateContainerError' || reason === 'RunContainerError') {
-			if (age < PATIENCE.config) return null;
-			const notFound = /executable file not found|no such file/i.test(c.message ?? '');
-			return at('crash-loop', notFound ? "Its start command wasn't found." : null);
-		}
-		if (reason === 'ContainerCreating' || reason === 'PodInitializing' || !reason) {
-			return age >= PATIENCE.creating ? at('stuck-creating', null) : null;
-		}
-		return null;
-	}
-	const finished = ms(c.lastTermination?.finishedAt);
-	const flapping =
-		(c.restartCount ?? 0) >= 2 && finished != null && now - finished < PATIENCE.crashWindow;
-	if (flapping) {
-		const t = terminationCause(c.lastTermination, liveness);
-		return at(t.problem, t.cause);
-	}
-	if (c.state === 'running' && !c.ready && !c.init && !pod.probes?.startup) {
-		const since = Math.max(ms(c.startedAt) ?? 0, ms(pod.notReadySince) ?? 0);
-		if (since && now - since >= PATIENCE.notReady) return at('not-ready', null);
-	}
-	return null;
+  const liveness = !!pod.probes?.liveness && !c.init;
+  const reason = c.reason ?? '';
+  const at = (problem: PodProblem, cause: string | null): Diagnosis => ({
+    state: problem === 'not-ready' || problem === 'stuck-creating' ? 'waiting' : 'failing',
+    problem,
+    cause,
+    container: c.name
+  });
+  if (c.state === 'waiting') {
+    if (reason === 'CrashLoopBackOff') {
+      const t = terminationCause(c.lastTermination, liveness);
+      return at(t.problem, t.cause);
+    }
+    if (reason === 'InvalidImageName' || reason === 'ErrImageNeverPull')
+      return at('image-pull', "The image name isn't valid.");
+    if (reason === 'ImagePullBackOff' || reason === 'ErrImagePull') {
+      return age >= PATIENCE.imagePull ? at('image-pull', pullCause(c.message)) : null;
+    }
+    if (reason === 'CreateContainerConfigError') {
+      return age >= PATIENCE.config ? at('missing-config', configCause(c.message)) : null;
+    }
+    if (reason === 'CreateContainerError' || reason === 'RunContainerError') {
+      if (age < PATIENCE.config) return null;
+      const notFound = /executable file not found|no such file/i.test(c.message ?? '');
+      return at('crash-loop', notFound ? "Its start command wasn't found." : null);
+    }
+    if (reason === 'ContainerCreating' || reason === 'PodInitializing' || !reason) {
+      return age >= PATIENCE.creating ? at('stuck-creating', null) : null;
+    }
+    return null;
+  }
+  const finished = ms(c.lastTermination?.finishedAt);
+  const flapping =
+    (c.restartCount ?? 0) >= 2 && finished != null && now - finished < PATIENCE.crashWindow;
+  if (flapping) {
+    const t = terminationCause(c.lastTermination, liveness);
+    return at(t.problem, t.cause);
+  }
+  if (c.state === 'running' && !c.ready && !c.init && !pod.probes?.startup) {
+    const since = Math.max(ms(c.startedAt) ?? 0, ms(pod.notReadySince) ?? 0);
+    if (since && now - since >= PATIENCE.notReady) return at('not-ready', null);
+  }
+  return null;
 }
 
 function diagnose(pod: HealthPod, now: number): Diagnosis | 'history' {
-	const status = (pod.status ?? '').toLowerCase();
-	const phase = pod.phase ?? null;
-	const created = ms(pod.createdAt) ?? ms(pod.startTime) ?? now;
-	const age = now - created;
+  const status = (pod.status ?? '').toLowerCase();
+  const phase = pod.phase ?? null;
+  const created = ms(pod.createdAt) ?? ms(pod.startTime) ?? now;
+  const age = now - created;
 
-	if (phase === 'Succeeded' || status === 'succeeded') return 'history';
-	if (phase === 'Failed') return 'history';
+  if (phase === 'Succeeded' || status === 'succeeded') return 'history';
+  if (phase === 'Failed') return 'history';
 
-	const deleting = ms(pod.deletingAt);
-	if (deleting != null || status === 'terminating') {
-		if (deleting != null && now - deleting >= PATIENCE.terminating)
-			return { state: 'stopping', problem: 'stuck-terminating', cause: null, container: null };
-		return ok('stopping');
-	}
-	if (pod.disruption) return ok('stopping');
+  const deleting = ms(pod.deletingAt);
+  if (deleting != null || status === 'terminating') {
+    if (deleting != null && now - deleting >= PATIENCE.terminating)
+      return { state: 'stopping', problem: 'stuck-terminating', cause: null, container: null };
+    return ok('stopping');
+  }
+  if (pod.disruption) return ok('stopping');
 
-	if (phase === 'Unknown')
-		return { state: 'unknown', problem: 'lost', cause: null, container: null };
+  if (phase === 'Unknown')
+    return { state: 'unknown', problem: 'lost', cause: null, container: null };
 
-	const containers = pod.containers ?? [];
-	const hasFacts = phase != null || containers.some((c) => c.state);
-	if (!hasFacts) return legacy(status);
+  const containers = pod.containers ?? [];
+  const hasFacts = phase != null || containers.some((c) => c.state);
+  if (!hasFacts) return legacy(status);
 
-	const main = containers.filter((c) => !c.init);
-	const notReady = ms(pod.notReadySince);
-	const staleNode =
-		phase === 'Running' &&
-		notReady != null &&
-		main.length > 0 &&
-		main.every((c) => c.state === 'running' && c.ready);
-	if (staleNode) {
-		return now - notReady >= PATIENCE.nodeLost
-			? { state: 'unknown', problem: 'lost', cause: null, container: null }
-			: ok('unknown');
-	}
+  const main = containers.filter((c) => !c.init);
+  const notReady = ms(pod.notReadySince);
+  const staleNode =
+    phase === 'Running' &&
+    notReady != null &&
+    main.length > 0 &&
+    main.every((c) => c.state === 'running' && c.ready);
+  if (staleNode) {
+    return now - notReady >= PATIENCE.nodeLost
+      ? { state: 'unknown', problem: 'lost', cause: null, container: null }
+      : ok('unknown');
+  }
 
-	if (!pod.scheduled && phase === 'Pending') {
-		const since = ms(pod.unschedulableSince);
-		if (since != null && now - since >= PATIENCE.unschedulable)
-			return {
-				state: 'waiting',
-				problem: 'unschedulable',
-				cause: scheduleCause(pod.schedulingMessage),
-				container: null
-			};
-		return ok('starting');
-	}
+  if (!pod.scheduled && phase === 'Pending') {
+    const since = ms(pod.unschedulableSince);
+    if (since != null && now - since >= PATIENCE.unschedulable)
+      return {
+        state: 'waiting',
+        problem: 'unschedulable',
+        cause: scheduleCause(pod.schedulingMessage),
+        container: null
+      };
+    return ok('starting');
+  }
 
-	const mainName = main[0]?.name ?? null;
-	for (const c of containers) {
-		const d = containerProblem(pod, c, now, age);
-		if (d) return { ...d, container: d.container === mainName ? null : d.container };
-	}
+  const mainName = main[0]?.name ?? null;
+  for (const c of containers) {
+    const d = containerProblem(pod, c, now, age);
+    if (d) return { ...d, container: d.container === mainName ? null : d.container };
+  }
 
-	if (status === 'ready' || (main.length > 0 && main.every((c) => c.ready))) return ok('running');
-	return ok('starting');
+  if (status === 'ready' || (main.length > 0 && main.every((c) => c.ready))) return ok('running');
+  return ok('starting');
 }
 
 function legacy(status: string): Diagnosis {
-	if (status === 'ready') return ok('running');
-	if (status === 'unknown')
-		return { state: 'unknown', problem: 'lost', cause: null, container: null };
-	if (status === 'crashing' || status === 'failed')
-		return { state: 'failing', problem: 'crash-loop', cause: null, container: null };
-	return ok('starting');
+  if (status === 'ready') return ok('running');
+  if (status === 'unknown')
+    return { state: 'unknown', problem: 'lost', cause: null, container: null };
+  if (status === 'crashing' || status === 'failed')
+    return { state: 'failing', problem: 'crash-loop', cause: null, container: null };
+  return ok('starting');
 }
 
 function plural(n: number, one: string, many = `${one}s`) {
-	return `${n} ${n === 1 ? one : many}`;
+  return `${n} ${n === 1 ? one : many}`;
 }
 
 function containerNote(pods: ClassifiedPod[], all: HealthPod[]) {
-	const name = pods.find((p) => p.container)?.container;
-	if (!name) return '';
-	const source = all.find((p) => p.name === pods[0]?.name);
-	const init = source?.containers?.find((c) => c.name === name)?.init;
-	return init ? `It's the ${name} step that runs before your app.` : `It's the ${name} sidecar.`;
+  const name = pods.find((p) => p.container)?.container;
+  if (!name) return '';
+  const source = all.find((p) => p.name === pods[0]?.name);
+  const init = source?.containers?.find((c) => c.name === name)?.init;
+  return init ? `It's the ${name} step that runs before your app.` : `It's the ${name} sidecar.`;
 }
 
 function hintFor(lead: ClassifiedPod | undefined, group: ClassifiedPod[], all: HealthPod[]) {
-	if (!lead?.problem) return '';
-	const copy = PROBLEM_COPY[lead.problem];
-	const hint = lead.cause && lead.problem === 'image-pull' ? null : copy.hint;
-	return [containerNote(group, all), lead.cause, hint].filter(Boolean).join(' ');
+  if (!lead?.problem) return '';
+  const copy = PROBLEM_COPY[lead.problem];
+  const hint = lead.cause && lead.problem === 'image-pull' ? null : copy.hint;
+  return [containerNote(group, all), lead.cause, hint].filter(Boolean).join(' ');
 }
 
 function groupByProblem(pods: ClassifiedPod[]) {
-	const groups = new Map<PodProblem, ClassifiedPod[]>();
-	for (const p of pods) {
-		if (!p.problem) continue;
-		groups.set(p.problem, [...(groups.get(p.problem) ?? []), p]);
-	}
-	return [...groups.entries()].sort((a, b) => {
-		const fatal = Number(FATAL.has(b[0])) - Number(FATAL.has(a[0]));
-		return fatal || b[1].length - a[1].length;
-	});
+  const groups = new Map<PodProblem, ClassifiedPod[]>();
+  for (const p of pods) {
+    if (!p.problem) continue;
+    groups.set(p.problem, [...(groups.get(p.problem) ?? []), p]);
+  }
+  return [...groups.entries()].sort((a, b) => {
+    const fatal = Number(FATAL.has(b[0])) - Number(FATAL.has(a[0]));
+    return fatal || b[1].length - a[1].length;
+  });
 }
 
 export function computeHealth(input: HealthInput): Health {
-	const now = input.now ?? Date.now();
-	const rollout = input.rollout ?? null;
-	const revisions = rollout?.revisions ?? [];
-	const current = revisions.find((r) => r.hash === rollout?.currentRevision) ?? null;
-	const others = revisions.filter((r) => r !== current);
-	const previous =
-		others.filter((r) => r.ready > 0).sort((a, b) => b.number - a.number)[0] ??
-		rollout?.previous ??
-		others.sort((a, b) => b.number - a.number)[0] ??
-		null;
-	const rolling = !!rollout && rollout.state !== 'stable' && !!current;
-	const numberOf = (hash?: string | null) =>
-		revisions.find((r) => r.hash === hash)?.number ??
-		(previous?.hash === hash ? previous?.number : null) ??
-		null;
+  const now = input.now ?? Date.now();
+  const rollout = input.rollout ?? null;
+  const revisions = rollout?.revisions ?? [];
+  const current = revisions.find((r) => r.hash === rollout?.currentRevision) ?? null;
+  const others = revisions.filter((r) => r !== current);
+  const previous =
+    others.filter((r) => r.ready > 0).sort((a, b) => b.number - a.number)[0] ??
+    rollout?.previous ??
+    others.sort((a, b) => b.number - a.number)[0] ??
+    null;
+  const rolling = !!rollout && rollout.state !== 'stable' && !!current;
+  const numberOf = (hash?: string | null) =>
+    revisions.find((r) => r.hash === hash)?.number ??
+    (previous?.hash === hash ? previous?.number : null) ??
+    null;
 
-	const evictedRecently = input.pods.filter((p) => {
-		if (p.phase !== 'Failed' || !/evict/i.test(p.reason ?? '')) return false;
-		const at = ms(p.notReadySince) ?? ms(p.createdAt);
-		return at != null && now - at < PATIENCE.crashWindow;
-	});
+  const evictedRecently = input.pods.filter((p) => {
+    if (p.phase !== 'Failed' || !/evict/i.test(p.reason ?? '')) return false;
+    const at = ms(p.notReadySince) ?? ms(p.createdAt);
+    return at != null && now - at < PATIENCE.crashWindow;
+  });
 
-	const pods: ClassifiedPod[] = [];
-	for (const pod of input.pods) {
-		const d = diagnose(pod, now);
-		if (d === 'history') continue;
-		let version: PodVersion | null = null;
-		if (rolling && pod.revision) {
-			version =
-				pod.revision === current?.hash
-					? 'new'
-					: pod.revision === previous?.hash
-						? 'old'
-						: 'replaced';
-		}
-		pods.push({ name: pod.name, ...d, version, revision: numberOf(pod.revision) });
-	}
+  const pods: ClassifiedPod[] = [];
+  for (const pod of input.pods) {
+    const d = diagnose(pod, now);
+    if (d === 'history') continue;
+    let version: PodVersion | null = null;
+    if (rolling && pod.revision) {
+      version =
+        pod.revision === current?.hash
+          ? 'new'
+          : pod.revision === previous?.hash
+            ? 'old'
+            : 'replaced';
+    }
+    pods.push({ name: pod.name, ...d, version, revision: numberOf(pod.revision) });
+  }
 
-	const live = pods.filter((p) => p.state !== 'stopping');
-	const serving = live.filter((p) => p.state === 'running').length;
-	const desired = input.stopped ? 0 : input.replicas;
-	const fresh = rolling ? live.filter((p) => p.version === 'new') : [];
-	const settled = rolling ? live.filter((p) => p.version === 'old' || !p.version) : live;
-	const quota = !!rollout?.reason && /exceeded quota|forbidden/i.test(rollout.reason);
-	const missing = desired > 0 && live.length < desired;
+  const live = pods.filter((p) => p.state !== 'stopping');
+  const serving = live.filter((p) => p.state === 'running').length;
+  const desired = input.stopped ? 0 : input.replicas;
+  const fresh = rolling ? live.filter((p) => p.version === 'new') : [];
+  const settled = rolling ? live.filter((p) => p.version === 'old' || !p.version) : live;
+  const quota = !!rollout?.reason && /exceeded quota|forbidden/i.test(rollout.reason);
+  const missing = desired > 0 && live.length < desired;
 
-	const build: BuildState =
-		input.buildStatus === 'building' ||
-		input.buildStatus === 'queued' ||
-		input.buildStatus === 'pending'
-			? 'building'
-			: input.buildStatus === 'failed'
-				? 'failed'
-				: null;
+  const build: BuildState =
+    input.buildStatus === 'building' ||
+    input.buildStatus === 'queued' ||
+    input.buildStatus === 'pending'
+      ? 'building'
+      : input.buildStatus === 'failed'
+        ? 'failed'
+        : null;
 
-	let deploy: DeployState | null = null;
-	const freshFatal = fresh.filter((p) => p.problem && FATAL.has(p.problem));
-	const freshSlow = fresh.filter((p) => p.problem && !FATAL.has(p.problem));
-	if (rolling) {
-		if (rollout?.state === 'failed' || freshFatal.length) deploy = 'failed';
-		else if (freshSlow.length || (quota && missing)) deploy = 'stuck';
-		else deploy = 'deploying';
-	}
+  let deploy: DeployState | null = null;
+  const freshFatal = fresh.filter((p) => p.problem && FATAL.has(p.problem));
+  const freshSlow = fresh.filter((p) => p.problem && !FATAL.has(p.problem));
+  if (rolling) {
+    if (rollout?.state === 'failed' || freshFatal.length) deploy = 'failed';
+    else if (freshSlow.length || (quota && missing)) deploy = 'stuck';
+    else deploy = 'deploying';
+  }
 
-	const settledBad = settled.filter((p) => p.problem);
-	let app: AppState;
-	if (desired === 0) app = 'stopped';
-	else if (live.length && live.every((p) => p.state === 'unknown'))
-		app = live.some((p) => p.problem) ? 'unknown' : 'starting';
-	else if (serving === 0 && live.some((p) => p.problem)) app = 'down';
-	else if (serving === 0 && quota && live.length === 0) app = 'down';
-	else if (serving === 0) app = 'starting';
-	else if (settledBad.length && !(deploy && fresh.some((p) => p.state === 'running')))
-		app = 'degraded';
-	else app = 'healthy';
+  const settledBad = settled.filter((p) => p.problem);
+  let app: AppState;
+  if (desired === 0) app = 'stopped';
+  else if (live.length && live.every((p) => p.state === 'unknown'))
+    app = live.some((p) => p.problem) ? 'unknown' : 'starting';
+  else if (serving === 0 && live.some((p) => p.problem)) app = 'down';
+  else if (serving === 0 && quota && live.length === 0) app = 'down';
+  else if (serving === 0) app = 'starting';
+  else if (settledBad.length && !(deploy && fresh.some((p) => p.state === 'running')))
+    app = 'degraded';
+  else app = 'healthy';
 
-	const problems: Problem[] = [];
-	const versionLabel = (r: RolloutRevision | null) => (r ? `v${r.number}` : 'the previous version');
+  const problems: Problem[] = [];
+  const versionLabel = (r: RolloutRevision | null) => (r ? `v${r.number}` : 'the previous version');
 
-	if (build === 'failed') {
-		problems.push({
-			id: 'build',
-			scope: 'build',
-			tone: 'error',
-			title: 'Build failed',
-			hint:
-				serving > 0
-					? `Nothing was deployed. Still serving ${versionLabel(current ?? previous)}.`
-					: 'Nothing was deployed.'
-		});
-	}
+  if (build === 'failed') {
+    problems.push({
+      id: 'build',
+      scope: 'build',
+      tone: 'error',
+      title: 'Build failed',
+      hint:
+        serving > 0
+          ? `Nothing was deployed. Still serving ${versionLabel(current ?? previous)}.`
+          : 'Nothing was deployed.'
+    });
+  }
 
-	if (deploy === 'failed' || deploy === 'stuck') {
-		const group = deploy === 'failed' ? freshFatal : freshSlow;
-		const [leadKind, leadPods] = groupByProblem(group)[0] ?? [null, []];
-		const kind: PodProblem | null = leadKind ?? (quota ? 'quota' : null);
-		const copy = kind ? PROBLEM_COPY[kind] : null;
-		const title =
-			copy?.deploy ??
-			(rollout?.reason === 'ProgressDeadlineExceeded'
-				? 'The new version never became ready'
-				: 'The deploy failed');
-		const still =
-			serving > 0 ? `Still serving ${versionLabel(previous)}.` : 'Nothing is serving traffic.';
-		const detail = leadPods.length
-			? hintFor(leadPods[0], leadPods, input.pods)
-			: (copy?.hint ?? '');
-		problems.push({
-			id: 'deploy',
-			scope: 'deploy',
-			tone: deploy === 'failed' || serving === 0 ? 'error' : 'warning',
-			title:
-				build === null && deploy === 'failed'
-					? `Deploy failed: ${title.charAt(0).toLowerCase()}${title.slice(1)}`
-					: title,
-			hint: `The build succeeded. ${still} ${detail}`.trim(),
-			problem: kind ?? undefined,
-			pods: leadPods.map((p) => p.name)
-		});
-	}
+  if (deploy === 'failed' || deploy === 'stuck') {
+    const group = deploy === 'failed' ? freshFatal : freshSlow;
+    const [leadKind, leadPods] = groupByProblem(group)[0] ?? [null, []];
+    const kind: PodProblem | null = leadKind ?? (quota ? 'quota' : null);
+    const copy = kind ? PROBLEM_COPY[kind] : null;
+    const title =
+      copy?.deploy ??
+      (rollout?.reason === 'ProgressDeadlineExceeded'
+        ? 'The new version never became ready'
+        : 'The deploy failed');
+    const still =
+      serving > 0 ? `Still serving ${versionLabel(previous)}.` : 'Nothing is serving traffic.';
+    const detail = leadPods.length
+      ? hintFor(leadPods[0], leadPods, input.pods)
+      : (copy?.hint ?? '');
+    problems.push({
+      id: 'deploy',
+      scope: 'deploy',
+      tone: deploy === 'failed' || serving === 0 ? 'error' : 'warning',
+      title:
+        build === null && deploy === 'failed'
+          ? `Deploy failed: ${title.charAt(0).toLowerCase()}${title.slice(1)}`
+          : title,
+      hint: `The build succeeded. ${still} ${detail}`.trim(),
+      problem: kind ?? undefined,
+      pods: leadPods.map((p) => p.name)
+    });
+  }
 
-	const appGroups = groupByProblem(settledBad.length ? settledBad : app === 'down' ? live : []);
-	if (app === 'down' || app === 'degraded' || app === 'unknown') {
-		appGroups.forEach(([kind, group], i) => {
-			const copy = PROBLEM_COPY[kind];
-			const headline = i === 0;
-			const hint = hintFor(group[0], group, input.pods);
-			if (kind === 'lost') {
-				problems.push({
-					id: 'app:lost',
-					scope: 'app',
-					tone: 'warning',
-					title:
-						group.length === live.length
-							? 'Lost contact with the node running this app'
-							: `${plural(group.length, 'pod')} on a node we lost contact with`,
-					hint: copy.hint,
-					problem: kind,
-					pods: group.map((p) => p.name)
-				});
-				return;
-			}
-			if (app === 'down' && headline) {
-				const onlyNew = !settledBad.length && deploy === 'failed';
-				problems.unshift({
-					id: 'app',
-					scope: 'app',
-					tone: 'error',
-					title: onlyNew
-						? 'Your app is down'
-						: deploy === 'failed'
-							? 'Your app is down, and the new version fails too'
-							: `Your app is down: it ${copy.title}`,
-					hint: onlyNew
-						? `${versionLabel(previous)} was stopped to start the new version, which fails.`
-						: hint,
-					problem: kind,
-					pods: group.map((p) => p.name)
-				});
-				return;
-			}
-			problems.push({
-				id: headline ? 'app' : `app:${kind}`,
-				scope: 'app',
-				tone: 'warning',
-				title: `${plural(group.length, 'pod')} of ${live.length} ${copy.title}`,
-				hint: headline ? `${plural(serving, 'pod')} still serving. ${hint}`.trim() : hint,
-				problem: kind,
-				pods: group.map((p) => p.name)
-			});
-		});
-	}
+  const appGroups = groupByProblem(settledBad.length ? settledBad : app === 'down' ? live : []);
+  if (app === 'down' || app === 'degraded' || app === 'unknown') {
+    appGroups.forEach(([kind, group], i) => {
+      const copy = PROBLEM_COPY[kind];
+      const headline = i === 0;
+      const hint = hintFor(group[0], group, input.pods);
+      if (kind === 'lost') {
+        problems.push({
+          id: 'app:lost',
+          scope: 'app',
+          tone: 'warning',
+          title:
+            group.length === live.length
+              ? 'Lost contact with the node running this app'
+              : `${plural(group.length, 'pod')} on a node we lost contact with`,
+          hint: copy.hint,
+          problem: kind,
+          pods: group.map((p) => p.name)
+        });
+        return;
+      }
+      if (app === 'down' && headline) {
+        const onlyNew = !settledBad.length && deploy === 'failed';
+        problems.unshift({
+          id: 'app',
+          scope: 'app',
+          tone: 'error',
+          title: onlyNew
+            ? 'Your app is down'
+            : deploy === 'failed'
+              ? 'Your app is down, and the new version fails too'
+              : `Your app is down: it ${copy.title}`,
+          hint: onlyNew
+            ? `${versionLabel(previous)} was stopped to start the new version, which fails.`
+            : hint,
+          problem: kind,
+          pods: group.map((p) => p.name)
+        });
+        return;
+      }
+      problems.push({
+        id: headline ? 'app' : `app:${kind}`,
+        scope: 'app',
+        tone: 'warning',
+        title: `${plural(group.length, 'pod')} of ${live.length} ${copy.title}`,
+        hint: headline ? `${plural(serving, 'pod')} still serving. ${hint}`.trim() : hint,
+        problem: kind,
+        pods: group.map((p) => p.name)
+      });
+    });
+  }
 
-	if (app === 'down' && quota && live.length === 0) {
-		problems.unshift({
-			id: 'app',
-			scope: 'app',
-			tone: 'error',
-			title: "Your app is down: its pods can't be created",
-			hint: PROBLEM_COPY.quota.hint,
-			problem: 'quota'
-		});
-	} else if (!rolling && quota && missing && app !== 'down') {
-		problems.push({
-			id: 'app:quota',
-			scope: 'app',
-			tone: 'warning',
-			title: `${plural(desired - live.length, 'pod')} of ${desired} ${PROBLEM_COPY.quota.title}`,
-			hint: PROBLEM_COPY.quota.hint,
-			problem: 'quota'
-		});
-	}
+  if (app === 'down' && quota && live.length === 0) {
+    problems.unshift({
+      id: 'app',
+      scope: 'app',
+      tone: 'error',
+      title: "Your app is down: its pods can't be created",
+      hint: PROBLEM_COPY.quota.hint,
+      problem: 'quota'
+    });
+  } else if (!rolling && quota && missing && app !== 'down') {
+    problems.push({
+      id: 'app:quota',
+      scope: 'app',
+      tone: 'warning',
+      title: `${plural(desired - live.length, 'pod')} of ${desired} ${PROBLEM_COPY.quota.title}`,
+      hint: PROBLEM_COPY.quota.hint,
+      problem: 'quota'
+    });
+  }
 
-	const stuck = pods.filter((p) => p.problem === 'stuck-terminating');
-	if (stuck.length) {
-		problems.push({
-			id: 'app:stuck-terminating',
-			scope: 'app',
-			tone: 'warning',
-			title: `${plural(stuck.length, 'pod')} ${PROBLEM_COPY['stuck-terminating'].title}`,
-			hint:
-				input.strategy === 'recreate' && rolling
-					? `${PROBLEM_COPY['stuck-terminating'].hint} The new version waits for it.`
-					: PROBLEM_COPY['stuck-terminating'].hint,
-			problem: 'stuck-terminating',
-			pods: stuck.map((p) => p.name)
-		});
-	}
+  const stuck = pods.filter((p) => p.problem === 'stuck-terminating');
+  if (stuck.length) {
+    problems.push({
+      id: 'app:stuck-terminating',
+      scope: 'app',
+      tone: 'warning',
+      title: `${plural(stuck.length, 'pod')} ${PROBLEM_COPY['stuck-terminating'].title}`,
+      hint:
+        input.strategy === 'recreate' && rolling
+          ? `${PROBLEM_COPY['stuck-terminating'].hint} The new version waits for it.`
+          : PROBLEM_COPY['stuck-terminating'].hint,
+      problem: 'stuck-terminating',
+      pods: stuck.map((p) => p.name)
+    });
+  }
 
-	if (evictedRecently.length >= 2) {
-		problems.push({
-			id: 'app:evicted',
-			scope: 'app',
-			tone: 'warning',
-			title: `Pods ${PROBLEM_COPY.evicted.title}`,
-			hint: `${plural(evictedRecently.length, 'eviction')} in the last 10 minutes. ${PROBLEM_COPY.evicted.hint}`,
-			problem: 'evicted'
-		});
-	}
+  if (evictedRecently.length >= 2) {
+    problems.push({
+      id: 'app:evicted',
+      scope: 'app',
+      tone: 'warning',
+      title: `Pods ${PROBLEM_COPY.evicted.title}`,
+      hint: `${plural(evictedRecently.length, 'eviction')} in the last 10 minutes. ${PROBLEM_COPY.evicted.hint}`,
+      problem: 'evicted'
+    });
+  }
 
-	const progress =
-		rolling && desired > 0
-			? Math.min(
-					1,
-					live.filter((p) => p.version === 'new' && p.state === 'running').length / desired
-				)
-			: null;
+  const progress =
+    rolling && desired > 0
+      ? Math.min(
+          1,
+          live.filter((p) => p.version === 'new' && p.state === 'running').length / desired
+        )
+      : null;
 
-	return {
-		app,
-		deploy,
-		build,
-		serving,
-		desired,
-		current,
-		previous: rolling ? previous : null,
-		progress,
-		pods,
-		problems
-	};
+  return {
+    app,
+    deploy,
+    build,
+    serving,
+    desired,
+    current,
+    previous: rolling ? previous : null,
+    progress,
+    pods,
+    problems
+  };
 }

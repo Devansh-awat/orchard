@@ -95,7 +95,8 @@
 					href="https://login.tailscale.com/admin/settings/keys"
 					target="_blank"
 					rel="noopener noreferrer">Settings, Keys</a
-				> in the Tailscale admin and click <strong>Generate auth key</strong>
+				>
+				in the Tailscale admin and click <strong>Generate auth key</strong>
 			</li>
 			<li>Turn on <strong>Reusable</strong> and <strong>Ephemeral</strong>, leave tags empty</li>
 			<li>Set it to expire in <strong>90 days</strong>, the longest Tailscale allows</li>

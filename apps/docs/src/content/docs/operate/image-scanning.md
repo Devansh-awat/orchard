@@ -12,14 +12,14 @@ scanner, and **image scanning is off until a superadmin turns it on**.
 
 There are two scanners to choose from:
 
-| | Harbor | Orchard scanner |
-| --- | --- | --- |
-| What it is | Harbor's own scanner (Trivy, run by Harbor) | A Trivy server Orchard deploys, plus one short-lived scan job per request |
-| Needs | Harbor as your registry, with API credentials | `trivy.enabled: true` in the chart |
-| Images built by Orchard | Yes | Yes |
-| Images from Docker Hub, GHCR or another registry | No | Yes, including private ones with registry credentials |
-| Self-hosted installs (zot registry) | No | Yes |
-| When a scan runs | When Harbor scans on push, or when someone presses Scan | When someone presses Scan |
+|                                                  | Harbor                                                  | Orchard scanner                                                           |
+| ------------------------------------------------ | ------------------------------------------------------- | ------------------------------------------------------------------------- |
+| What it is                                       | Harbor's own scanner (Trivy, run by Harbor)             | A Trivy server Orchard deploys, plus one short-lived scan job per request |
+| Needs                                            | Harbor as your registry, with API credentials           | `trivy.enabled: true` in the chart                                        |
+| Images built by Orchard                          | Yes                                                     | Yes                                                                       |
+| Images from Docker Hub, GHCR or another registry | No                                                      | Yes, including private ones with registry credentials                     |
+| Self-hosted installs (zot registry)              | No                                                      | Yes                                                                       |
+| When a scan runs                                 | When Harbor scans on push, or when someone presses Scan | When someone presses Scan                                                 |
 
 If your registry is Harbor and it already scans on push, pick Harbor: nothing
 new to run. Otherwise, and on every installer-based instance, use the Orchard
@@ -53,6 +53,7 @@ scanner.
    server, and gives the API server the variables it needs (`TRIVY_SERVER_URL`,
    `ORCHARD_INTERNAL_URL` and the rest, listed in the
    [configuration reference](/reference/configuration/)).
+
 2. Wait for the `trivy` pod in `orchard-scans` to become ready. The first start
    downloads the vulnerability database, which takes a minute or two.
 3. In **Admin, Instance, Image scanning**, pick **Orchard scanner**.

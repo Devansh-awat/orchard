@@ -255,7 +255,9 @@
 		<Field
 			label="Host"
 			for="{uid}-host"
-			hint={spec.kind === 'generic' ? 'Where the repositories live' : 'Change it for a self-hosted instance'}
+			hint={spec.kind === 'generic'
+				? 'Where the repositories live'
+				: 'Change it for a self-hosted instance'}
 		>
 			<Input id="{uid}-host" bind:value={baseUrl} placeholder="https://git.example.com" mono />
 		</Field>

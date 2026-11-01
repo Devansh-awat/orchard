@@ -24,12 +24,26 @@ const report = {
           InstalledVersion: '3.0.1',
           Severity: 'HIGH'
         },
-        { VulnerabilityID: 'CVE-2024-0002', PkgName: 'zlib', InstalledVersion: '1.2', Severity: 'CRITICAL' },
+        {
+          VulnerabilityID: 'CVE-2024-0002',
+          PkgName: 'zlib',
+          InstalledVersion: '1.2',
+          Severity: 'CRITICAL'
+        },
         { VulnerabilityID: '', PkgName: 'x' }
       ]
     },
     { Vulnerabilities: null },
-    { Vulnerabilities: [{ VulnerabilityID: 'GHSA-1', PkgName: 'lodash', InstalledVersion: '4.0.0', Severity: 'medium' }] }
+    {
+      Vulnerabilities: [
+        {
+          VulnerabilityID: 'GHSA-1',
+          PkgName: 'lodash',
+          InstalledVersion: '4.0.0',
+          Severity: 'medium'
+        }
+      ]
+    }
   ]
 };
 
@@ -53,13 +67,19 @@ test('trivy findings map onto the tab shape, deduped and worst first', () => {
 test('a clean image and junk input both read as clean', () => {
   assert.equal(mapTrivyReport({ Results: [] }).counts.total, 0);
   assert.equal(mapTrivyReport(null).counts.total, 0);
-  const summary = summaryFromStored(mapTrivyReport({}), { startedAt: null, finishedAt: new Date(0) });
+  const summary = summaryFromStored(mapTrivyReport({}), {
+    startedAt: null,
+    finishedAt: new Date(0)
+  });
   assert.equal(summary.state, 'clean');
   assert.equal(summary.scanner?.name, 'Trivy');
 });
 
 test('the summary carries the worst severity', () => {
-  const s = summaryFromStored(mapTrivyReport(report), { startedAt: new Date(0), finishedAt: new Date(1000) });
+  const s = summaryFromStored(mapTrivyReport(report), {
+    startedAt: new Date(0),
+    finishedAt: new Date(1000)
+  });
   assert.equal(s.state, 'vulnerable');
   assert.equal(s.severity, 'critical');
 });
@@ -75,7 +95,10 @@ test('stored rows read back as the tab expects', async () => {
     finishedAt: null
   };
   assert.equal(scanFromRow(null, 60_000, 2_000).summary.state, 'not_scanned');
-  assert.equal(scanFromRow({ ...base, status: 'running' }, 60_000, 2_000).summary.state, 'scanning');
+  assert.equal(
+    scanFromRow({ ...base, status: 'running' }, 60_000, 2_000).summary.state,
+    'scanning'
+  );
   const stale = scanFromRow({ ...base, status: 'running' }, 60_000, 100_000);
   assert.equal(stale.summary.state, 'failed');
   assert.equal(stale.error, 'The scan stopped responding');

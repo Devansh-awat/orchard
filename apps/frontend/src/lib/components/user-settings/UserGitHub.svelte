@@ -59,7 +59,9 @@
 				flush
 				pinned
 				title="@{githubUsername}"
-				subtitle={githubTokenExpired ? 'Session expired, reconnect to see your repositories' : undefined}
+				subtitle={githubTokenExpired
+					? 'Session expired, reconnect to see your repositories'
+					: undefined}
 			>
 				{#snippet leading()}
 					<ToneTile size={32} tone={githubTokenExpired ? 'warning' : 'neutral'}>
@@ -70,7 +72,9 @@
 					{#if githubTokenExpired}
 						<Button size="sm" variant="primary" onclick={onLink}>Reconnect</Button>
 					{/if}
-					<Button size="sm" variant="ghost" loading={unlinking} onclick={onUnlink}>Disconnect</Button>
+					<Button size="sm" variant="ghost" loading={unlinking} onclick={onUnlink}
+						>Disconnect</Button
+					>
 				{/snippet}
 			</ListRow>
 		</List>

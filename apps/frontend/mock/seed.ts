@@ -512,7 +512,11 @@ export function seed(): MockState {
 		database(flavortown, msw, 'analytics', 'postgres', 10, 1331),
 		database(flavortown, msw, 'sessions', 'redis', 1, 64),
 		database(flavortown, msw, 'votes', 'postgres', 5, 702, 'provisioning'),
-		{ ...database(mercury, dld, 'postgres', 'postgres', 5, 318), instances: 1, memoryRequestBytes: 256 * MIB },
+		{
+			...database(mercury, dld, 'postgres', 'postgres', 5, 318),
+			instances: 1,
+			memoryRequestBytes: 256 * MIB
+		},
 		database(hcb, kai, 'postgres', 'postgres', 50, 18_400)
 	];
 

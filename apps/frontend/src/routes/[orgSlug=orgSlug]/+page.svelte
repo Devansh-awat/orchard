@@ -49,11 +49,7 @@
 	import type { BuildItem } from '$lib/components/patterns/builds';
 	import { toBuildItems } from '$lib/components/org-dashboard/build-items';
 	import type { FailingApp } from '$lib/components/patterns/sidebar';
-	import {
-		IMG_ICONS,
-		knownIcon,
-		favUrl
-	} from '$lib/components/org-dashboard/helpers.svelte';
+	import { IMG_ICONS, knownIcon, favUrl } from '$lib/components/org-dashboard/helpers.svelte';
 	import type {
 		DeploymentSummary,
 		DatabaseSummary,
