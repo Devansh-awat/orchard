@@ -13,6 +13,7 @@ import {
 } from '../src/projects/projects.utils';
 import { DatabasesService } from '../src/projects/databases.service';
 import {
+  describeParameters,
   looksSecret,
   redactSecretParameters,
   sealTemplateEnv,
@@ -194,5 +195,30 @@ test('ai chat env merge keeps sealed values by sending null and never unseals', 
     { key: 'API_TOKEN', value: 'rotated' },
     { key: 'PORT', value: '8080' },
     { key: 'NEW', value: 'x', secret: true }
+  ]);
+});
+
+test('parameter defs mark credential-named text params as secret and keep labels', () => {
+  const defs = describeParameters([
+    { name: 'appName', displayName: 'App name', type: 'string' },
+    { name: 'SLACK_BOT_TOKEN', displayName: 'Slack bot token', type: 'string' },
+    { name: 'adminPassword', displayName: '', type: 'secret' },
+    {
+      name: 'logLevel',
+      displayName: 'Log level',
+      type: 'select',
+      options: [{ label: 'Info', value: 'info' }]
+    }
+  ]);
+  assert.deepEqual(defs, [
+    { name: 'appName', displayName: 'App name', type: 'string' },
+    { name: 'SLACK_BOT_TOKEN', displayName: 'Slack bot token', type: 'secret' },
+    { name: 'adminPassword', displayName: 'adminPassword', type: 'secret' },
+    {
+      name: 'logLevel',
+      displayName: 'Log level',
+      type: 'select',
+      options: [{ label: 'Info', value: 'info' }]
+    }
   ]);
 });

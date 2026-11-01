@@ -1,66 +1,195 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import { onDestroy, onMount } from 'svelte';
 	import { apiFetch, toasts, selectedOrganization, subscribeOrgEvents } from '$lib/stores';
 	import {
-		ArrowLeft,
+		ArrowUpRight,
+		Copy,
+		Ellipsis,
 		LayoutTemplate,
-		Trash2,
-		Database,
-		Server,
-		Globe,
-		ExternalLink,
-		Pencil
+		Lock,
+		Pencil,
+		Trash2
 	} from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
-	import { ingressUrl } from '$lib/ingress-url';
 	import RenameModal from '$lib/components/RenameModal.svelte';
-	import { Button, StatusBadge, resourceStatus, Skeleton } from '$lib/components/ui';
+	import ResourceHeader from '$lib/components/patterns/ResourceHeader.svelte';
+	import EntityRow from '$lib/components/patterns/EntityRow.svelte';
+	import ResourceTile from '$lib/components/patterns/ResourceTile.svelte';
+	import {
+		ActionRow,
+		AvatarEdit,
+		Breadcrumbs,
+		Button,
+		EmptyState,
+		IconTile,
+		List,
+		ListRow,
+		Menu,
+		MenuItem,
+		MenuSeparator,
+		RelativeTime,
+		SectionCard,
+		SettingRow,
+		SettingsList,
+		Skeleton,
+		StatusBadge,
+		resourceStatus
+	} from '$lib/components/ui';
+	import { IMG_ICONS, favUrl, knownIcon } from '$lib/components/org-dashboard/helpers.svelte';
+
+	interface ParameterDef {
+		name: string;
+		displayName: string;
+		type: 'string' | 'number' | 'boolean' | 'select' | 'secret';
+		options?: { label: string; value: string }[];
+	}
+
+	interface InstanceIngress {
+		id: string;
+		name: string;
+		host: string;
+		path: string;
+		url?: string;
+		deploymentId?: string | null;
+	}
 
 	interface TemplateInstance {
 		id: string;
 		name: string;
 		status: string;
-		parameters: Record<string, any>;
+		projectId: string;
+		parameters: Record<string, unknown> | null;
+		parameterDefs?: ParameterDef[];
 		createdAt: string;
+		project?: { id: string; name: string; slug: string } | null;
 		template: {
 			id: string;
 			name: string;
 			displayName: string;
-			icon?: string;
+			icon?: string | null;
 			category?: string;
 		};
-		deployments: { id: string; name: string; status: string; image?: string }[];
+		deployments: {
+			id: string;
+			name: string;
+			displayName?: string | null;
+			status: string;
+			buildStatus?: string;
+			image?: string;
+		}[];
 		databases: { id: string; name: string; status: string; dbName: string }[];
-		ingresses: { id: string; name: string; host: string; path: string }[];
+		ingresses: InstanceIngress[];
 	}
 
+	type ParamRow = { key: string; label: string; value: string | null; mono: boolean };
+
 	let instance = $state<TemplateInstance | null>(null);
-	let loading = $state(true);
+	let loadError = $state<string | null>(null);
 	let deleting = $state(false);
-	let error = $state<string | null>(null);
-	let showDeleteModal = $state(false);
+	let deleteOpen = $state(false);
 	let renameOpen = $state(false);
 	let renaming = $state(false);
+	let iconFailed = $state(false);
 
 	const orgSlug = $derived($page.params.orgSlug);
 	const instanceId = $derived($page.params.instanceId);
 
+	const projectHref = $derived(
+		instance?.project ? `/${orgSlug}/projects/${instance.project.slug}` : null
+	);
+	const visitUrl = $derived(instance?.ingresses.find((i) => i.url)?.url ?? null);
+	const appName = $derived(
+		new Map((instance?.deployments ?? []).map((d) => [d.id, d.displayName || d.name]))
+	);
+
+	const params = $derived.by((): ParamRow[] => {
+		if (!instance?.parameters) return [];
+		const values = instance.parameters;
+		const defs = new Map((instance.parameterDefs ?? []).map((d) => [d.name, d]));
+		const order = [
+			...(instance.parameterDefs ?? []).map((d) => d.name).filter((k) => k in values),
+			...Object.keys(values).filter((k) => !defs.has(k))
+		];
+		return order.map((key) => {
+			const def = defs.get(key);
+			const raw = values[key];
+			const hidden = def?.type === 'secret' || raw === null || raw === undefined;
+			return {
+				key,
+				label: def?.displayName || humanize(key),
+				value: hidden ? null : display(raw, def),
+				mono: !hidden && def?.type !== 'boolean' && def?.type !== 'select'
+			};
+		});
+	});
+
+	function humanize(key: string) {
+		const words = key
+			.replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+			.replace(/[_\-.]+/g, ' ')
+			.trim()
+			.toLowerCase();
+		return words.charAt(0).toUpperCase() + words.slice(1);
+	}
+
+	function display(raw: unknown, def: ParameterDef | undefined) {
+		if (typeof raw === 'boolean') return raw ? 'On' : 'Off';
+		const text = typeof raw === 'object' ? JSON.stringify(raw) : String(raw);
+		if (def?.type === 'select') return def.options?.find((o) => o.value === text)?.label ?? text;
+		return text;
+	}
+
+	function depIcon(d: TemplateInstance['deployments'][number]) {
+		const known = knownIcon(d.image);
+		if (known) return known;
+		const host = instance?.ingresses.find((i) => i.deploymentId === d.id)?.host;
+		return host ? favUrl(host.split('/')[0]) : null;
+	}
+
+	function address(ing: InstanceIngress) {
+		return `${ing.host}${ing.path && ing.path !== '/' ? ing.path : ''}`;
+	}
+
+	function plural(n: number, one: string, many: string) {
+		return `${n} ${n === 1 ? one : many}`;
+	}
+
+	const contents = $derived.by(() => {
+		if (!instance) return '';
+		const parts = [
+			instance.deployments.length && plural(instance.deployments.length, 'app', 'apps'),
+			instance.databases.length && plural(instance.databases.length, 'database', 'databases'),
+			instance.ingresses.length && plural(instance.ingresses.length, 'domain', 'domains')
+		].filter(Boolean) as string[];
+		if (parts.length < 2) return parts[0] ?? '';
+		return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+	});
+
+	const resourceTotal = $derived(
+		(instance?.deployments.length ?? 0) +
+			(instance?.databases.length ?? 0) +
+			(instance?.ingresses.length ?? 0)
+	);
+
+	async function failure(response: Response, fallback: string) {
+		const data = await response.json().catch(() => ({}));
+		return new Error(data.message || fallback);
+	}
+
 	async function fetchInstance() {
-		if (!instance) loading = true;
 		try {
 			const response = await apiFetch(`/apiv1/template-instances/${instanceId}`);
-			if (!response.ok) throw new Error('Failed to fetch template instance');
+			if (!response.ok) throw await failure(response, 'Template not found');
 			instance = await response.json();
+			loadError = null;
 		} catch (e) {
-			if (!instance) error = e instanceof Error ? e.message : 'Failed to load instance';
-		} finally {
-			loading = false;
+			if (!instance) loadError = e instanceof Error ? e.message : 'Template not found';
 		}
 	}
 
-	async function renameInstance(name: string) {
-		if (!instance) return;
+	async function rename(name: string) {
 		renaming = true;
 		try {
 			const response = await apiFetch(`/apiv1/template-instances/${instanceId}/name`, {
@@ -68,17 +197,14 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ name })
 			});
-			if (!response.ok) {
-				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to rename');
-			}
+			if (!response.ok) throw await failure(response, 'Rename failed');
 			instance = await response.json();
 			renameOpen = false;
-			toasts.add({ title: 'Template instance renamed', color: 'success' });
+			toasts.add({ title: 'Renamed', color: 'success' });
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to rename',
+				title: 'Rename failed',
+				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
 		} finally {
@@ -86,31 +212,31 @@
 		}
 	}
 
-	async function deleteInstance() {
+	async function remove() {
 		if (!instance) return;
 		deleting = true;
 		try {
 			const response = await apiFetch(`/apiv1/template-instances/${instanceId}`, {
 				method: 'DELETE'
 			});
-
-			if (!response.ok) {
-				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to delete');
-			}
-
-			toasts.add({
-				title: 'Template deleted',
-				description: `${instance.name} and all its resources have been removed`,
-				color: 'success'
-			});
-
-			history.back();
+			if (!response.ok) throw await failure(response, 'Delete failed');
+			toasts.add({ title: `${instance.name} deleted`, color: 'success' });
+			if (projectHref) goto(projectHref);
+			else history.back();
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to delete';
+			toasts.add({
+				title: 'Delete failed',
+				description: e instanceof Error ? e.message : undefined,
+				color: 'error'
+			});
 		} finally {
 			deleting = false;
 		}
+	}
+
+	async function copy(text: string) {
+		await navigator.clipboard.writeText(text);
+		toasts.add({ title: 'Copied', description: text, color: 'success' });
 	}
 
 	let unsub: (() => void) | null = null;
@@ -130,6 +256,7 @@
 				ev.type !== 'project.changed'
 			)
 				return;
+			if (instance && ev.projectId && ev.projectId !== instance.projectId) return;
 			if (refreshTimer) return;
 			refreshTimer = setTimeout(() => {
 				refreshTimer = null;
@@ -158,427 +285,260 @@
 	onMount(fetchInstance);
 </script>
 
+<svelte:head><title>{instance?.name ?? 'Template'}</title></svelte:head>
+
 <div class="ti-page">
-	{#if loading}
-		<div class="ti-skeleton">
-			<div class="ti-skel-back">
-				<Skeleton width="3.5rem" height="0.875rem" rounded="0.25rem" />
-			</div>
-			<div class="ti-skel-head">
-				<Skeleton width="2.5rem" height="2.5rem" rounded="0.75rem" />
-				<div>
-					<div class="ti-skel-title">
-						<Skeleton width="10rem" height="1.25rem" rounded="0.25rem" />
-					</div>
-					<Skeleton width="8rem" height="0.75rem" rounded="0.25rem" />
-				</div>
-			</div>
-			<div class="ti-skel-label"><Skeleton width="6rem" height="0.75rem" rounded="0.25rem" /></div>
-			<div class="ti-skel-row"><Skeleton width="100%" height="3.5rem" rounded="0.75rem" /></div>
-			<Skeleton width="100%" height="3.5rem" rounded="0.75rem" />
-		</div>
-	{:else if instance}
-		<button onclick={() => history.back()} class="ti-back">
-			<ArrowLeft class="h-4 w-4" />
-			Back
-		</button>
+	{#if instance}
+		<Breadcrumbs
+			crumbs={[
+				{ label: 'Home', href: `/${orgSlug}` },
+				...(instance.project && projectHref
+					? [{ label: instance.project.name, href: `${projectHref}?tab=templates` }]
+					: []),
+				{ label: instance.name }
+			]}
+		/>
 
-		<div class="ti-header">
-			<div class="ti-header-info">
-				<div class="ti-header-icon">
-					<LayoutTemplate class="h-5 w-5" style="color: var(--sidebar-text-active-border)" />
-				</div>
-				<div class="ti-header-text">
-					<div class="ti-title-row">
-						<h1 class="ti-title" title={instance.name}>{instance.name}</h1>
-						<button
-							class="ti-rename-btn"
-							title="Rename"
-							aria-label="Rename template instance"
-							onclick={() => (renameOpen = true)}
-						>
-							<Pencil size={14} />
-						</button>
-					</div>
-					<div class="ti-meta">
-						<span>{instance.template.displayName}</span>
-						<StatusBadge meta={resourceStatus(instance.status)} />
-					</div>
-				</div>
-			</div>
-			<Button variant="danger" loading={deleting} onclick={() => (showDeleteModal = true)}>
-				{#if !deleting}<Trash2 class="h-4 w-4" />{/if}
-				Delete all resources
-			</Button>
-		</div>
+		<ResourceHeader title={instance.name}>
+			{#snippet leading()}
+				<AvatarEdit
+					label={instance!.template.displayName}
+					size={56}
+					editable={false}
+					onchange={() => {}}
+				>
+					<IconTile
+						src={iconFailed ? null : (instance!.template.icon ?? null)}
+						alt=""
+						tint="var(--bg-raised)"
+						onerror={() => (iconFailed = true)}
+					>
+						{#snippet fallback()}<LayoutTemplate size={22} class="glyph" />{/snippet}
+					</IconTile>
+				</AvatarEdit>
+			{/snippet}
+			{#snippet badges()}<StatusBadge meta={resourceStatus(instance!.status)} />{/snippet}
+			{#snippet actions()}
+				{#if visitUrl}
+					<Button
+						variant="secondary"
+						iconRight={ArrowUpRight}
+						href={visitUrl}
+						target="_blank"
+						rel="noopener noreferrer">Visit</Button
+					>
+				{/if}
+				<Menu placement="bottom-end">
+					{#snippet trigger(props)}
+						<Button {...props} variant="ghost" icon={Ellipsis} label="More actions" />
+					{/snippet}
+					<MenuItem icon={Pencil} onclick={() => (renameOpen = true)}>Rename</MenuItem>
+					<MenuSeparator />
+					<MenuItem icon={Trash2} danger disabled={deleting} onclick={() => (deleteOpen = true)}
+						>Delete everything</MenuItem
+					>
+				</Menu>
+			{/snippet}
+			{#snippet facts()}
+				<span class="fact"
+					><LayoutTemplate size={14} />{instance!.template.displayName} template</span
+				>
+				{#if contents}<span>{contents}</span>{/if}
+				<span>Deployed <RelativeTime date={instance!.createdAt} /></span>
+			{/snippet}
+		</ResourceHeader>
 
-		{#if error}
-			<div class="ti-error">{error}</div>
-		{/if}
+		<div class="ti-body">
+			<div class="ti-main">
+				{#if resourceTotal}
+					<SectionCard title="Resources">
+						<List inset={false} label="Resources">
+							{#each instance.deployments as dep (dep.id)}
+								<EntityRow
+									flush
+									kind="deployment"
+									name={dep.displayName || dep.name}
+									status={resourceStatus(dep.status, dep.buildStatus)}
+									image={depIcon(dep)}
+									detail={dep.image}
+									href="/{orgSlug}/deployments/{dep.id}"
+								/>
+							{/each}
+							{#each instance.databases as db (db.id)}
+								<EntityRow
+									flush
+									kind="database"
+									name={db.name}
+									status={resourceStatus(db.status)}
+									image={IMG_ICONS.postgres}
+									detail={db.dbName}
+									href="/{orgSlug}/databases/{db.id}"
+								/>
+							{/each}
+							{#each instance.ingresses as ing (ing.id)}
+								{@const target = ing.deploymentId ? appName.get(ing.deploymentId) : undefined}
+								<ListRow
+									flush
+									pinned
+									title={address(ing)}
+									subtitle={target ? `Goes to ${target}` : undefined}
+								>
+									{#snippet leading()}<ResourceTile kind="domain" />{/snippet}
+									{#snippet actions()}
+										{#if ing.url}
+											<span class="acts">
+												<Button
+													variant="ghost"
+													size="sm"
+													icon={Copy}
+													label="Copy link to {ing.host}"
+													onclick={() => copy(ing.url!)}
+												/>
+												<Button
+													variant="ghost"
+													size="sm"
+													icon={ArrowUpRight}
+													label="Open {ing.host}"
+													href={ing.url}
+													target="_blank"
+													rel="noopener noreferrer"
+												/>
+											</span>
+										{/if}
+									{/snippet}
+								</ListRow>
+							{/each}
+						</List>
+					</SectionCard>
+				{/if}
 
-		<div class="ti-sections">
-			{#if instance.deployments.length}
-				<div class="ti-section">
-					<h2 class="ti-section-title">
-						<Server class="h-4 w-4" />
-						Deployments ({instance.deployments.length})
-					</h2>
-					<div class="ti-resource-list">
-						{#each instance.deployments as dep (dep.id)}
-							<a href="/{orgSlug}/deployments/{dep.id}" class="ti-resource-card">
-								<div class="ti-resource-info">
-									<span class="ti-resource-name" title={dep.name}>{dep.name}</span>
-									{#if dep.image}
-										<span class="ti-resource-detail" title={dep.image}>{dep.image}</span>
-									{/if}
-								</div>
-								<div class="ti-resource-right">
-									<StatusBadge meta={resourceStatus(dep.status)} />
-									<ExternalLink class="h-3.5 w-3.5 text-muted" />
-								</div>
-							</a>
-						{/each}
-					</div>
-				</div>
-			{/if}
-
-			{#if instance.databases.length}
-				<div class="ti-section">
-					<h2 class="ti-section-title">
-						<Database class="h-4 w-4" />
-						Databases ({instance.databases.length})
-					</h2>
-					<div class="ti-resource-list">
-						{#each instance.databases as db (db.id)}
-							<a href="/{orgSlug}/databases/{db.id}" class="ti-resource-card">
-								<div class="ti-resource-info">
-									<span class="ti-resource-name" title={db.name}>{db.name}</span>
-									<span class="ti-resource-detail" title={db.dbName}>{db.dbName}</span>
-								</div>
-								<div class="ti-resource-right">
-									<StatusBadge meta={resourceStatus(db.status)} />
-									<ExternalLink class="h-3.5 w-3.5 text-muted" />
-								</div>
-							</a>
-						{/each}
-					</div>
-				</div>
-			{/if}
-
-			{#if instance.ingresses.length}
-				<div class="ti-section">
-					<h2 class="ti-section-title">
-						<Globe class="h-4 w-4" />
-						Ingresses ({instance.ingresses.length})
-					</h2>
-					<div class="ti-resource-list">
-						{#each instance.ingresses as ing (ing.id)}
-							<a
-								href={ingressUrl(ing)}
-								target="_blank"
-								rel="noopener noreferrer"
-								class="ti-resource-card"
+				<SectionCard title="Danger zone" tone="danger">
+					<SettingsList>
+						<ActionRow label="Delete {instance.name}">
+							<Button
+								variant="danger"
+								size="sm"
+								loading={deleting}
+								onclick={() => (deleteOpen = true)}>Delete everything</Button
 							>
-								<div class="ti-resource-info">
-									<span class="ti-resource-name" title="{ing.host}{ing.path}"
-										>{ing.host}{ing.path}</span
-									>
-								</div>
-								<div class="ti-resource-right">
-									<ExternalLink class="h-3.5 w-3.5" style="color: var(--surface-muted)" />
-								</div>
-							</a>
+						</ActionRow>
+					</SettingsList>
+				</SectionCard>
+			</div>
+
+			{#if params.length}
+				<SectionCard title="Parameters">
+					<SettingsList label="Parameters">
+						{#each params as p (p.key)}
+							<SettingRow label={p.label}>
+								{#if p.value === null}
+									<span class="hidden-value"><Lock size={13} aria-hidden="true" />Hidden</span>
+								{:else if p.value === ''}
+									<span class="empty-value">Not set</span>
+								{:else}
+									<span class="value" class:value--mono={p.mono} title={p.value}>{p.value}</span>
+								{/if}
+							</SettingRow>
 						{/each}
-					</div>
-				</div>
+					</SettingsList>
+				</SectionCard>
 			{/if}
 		</div>
-
-		<div class="ti-section">
-			<h2 class="ti-section-title">Parameters used</h2>
-			<div class="ti-params">
-				{#each Object.entries(instance.parameters) as [key, value] (key)}
-					<div class="ti-param">
-						<span class="ti-param-key" title={key}>{key}</span>
-						<span class="ti-param-value">{value ?? '••••••••'}</span>
-					</div>
-				{/each}
-			</div>
-		</div>
+	{:else if loadError}
+		<EmptyState title="This template did not load" description={loadError}>
+			<Button variant="secondary" onclick={fetchInstance}>Try again</Button>
+		</EmptyState>
+	{:else}
+		<Skeleton width="12rem" height="1.25rem" rounded="999px" />
+		<Skeleton height="6.5rem" rounded="calc(var(--radius-widget) * var(--corner-scale))" />
+		<Skeleton height="9rem" rounded="calc(var(--radius-widget) * var(--corner-scale))" />
+		<Skeleton height="12rem" rounded="calc(var(--radius-widget) * var(--corner-scale))" />
 	{/if}
 </div>
 
 {#if instance}
 	<ConfirmModal
-		bind:open={showDeleteModal}
-		title={`Delete "${instance.name}"?`}
-		description="This will permanently <strong>delete all resources</strong> created by this template (deployments, databases, and ingresses). This cannot be undone."
-		html
-		confirmLabel="Delete all"
-		onconfirm={deleteInstance}
+		bind:open={deleteOpen}
+		title="Delete {instance.name}?"
+		description={contents
+			? `Its ${contents} ${resourceTotal === 1 ? 'is' : 'are'} deleted with it. This cannot be undone.`
+			: 'This cannot be undone.'}
+		confirmLabel="Delete everything"
+		confirmText={instance.name}
+		onconfirm={remove}
 		oncancel={() => {}}
 	/>
 	<RenameModal
 		bind:open={renameOpen}
-		title="Rename template instance"
+		title="Rename {instance.template.displayName}"
 		value={instance.name}
 		saving={renaming}
-		onSave={renameInstance}
+		onSave={rename}
 	/>
 {/if}
 
 <style>
 	.ti-page {
-		max-width: 44rem;
+		--section-r: var(--radius-widget);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-5);
+		max-width: var(--page-wide);
 		margin: 0 auto;
-		padding: 2.5rem 2.5rem 3rem;
+		padding: 1.5rem;
 	}
-
-	.ti-skeleton {
-		padding: 2.5rem 0;
-	}
-	.ti-skel-back {
-		margin-bottom: 1.5rem;
-	}
-	.ti-skel-head {
-		display: flex;
-		align-items: flex-start;
-		gap: 0.75rem;
-		margin-bottom: 1.5rem;
-	}
-	.ti-skel-title {
-		margin-bottom: 0.5rem;
-	}
-	.ti-skel-label {
-		margin-bottom: 0.75rem;
-	}
-	.ti-skel-row {
-		margin-bottom: 0.5rem;
-	}
-
-	.ti-back {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		color: var(--surface-muted);
-		background: none;
-		border: none;
-		cursor: pointer;
-		padding: 0;
-		margin-bottom: 1.5rem;
-		transition: color var(--dur-fast);
-	}
-
-	.ti-back:hover {
-		color: var(--center-channel-color);
-	}
-
-	.ti-header {
-		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
+	.ti-body {
+		display: grid;
+		grid-template-columns: minmax(0, 1.618fr) minmax(21rem, 1fr);
+		align-items: start;
 		gap: 1rem;
-		margin-bottom: 1.5rem;
 	}
-
-	.ti-header-info {
+	.ti-main {
 		display: flex;
-		gap: 0.75rem;
-		align-items: flex-start;
+		flex-direction: column;
+		gap: 1rem;
 		min-width: 0;
 	}
-
-	.ti-header-text {
-		min-width: 0;
+	@media (max-width: 64rem) {
+		.ti-body {
+			grid-template-columns: minmax(0, 1fr);
+		}
 	}
-
-	.ti-header-icon {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 2.5rem;
-		height: 2.5rem;
-		border-radius: var(--radius-md);
-		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent);
-		flex-shrink: 0;
-	}
-
-	.ti-title {
-		font-size: var(--text-title-3);
-		line-height: var(--lh-title-3);
-		font-weight: 700;
-		color: var(--center-channel-color);
-		margin: 0;
-		letter-spacing: -0.02em;
-		min-width: 0;
-		overflow-x: clip;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.ti-title-row {
-		display: flex;
-		align-items: center;
-		gap: 0.4rem;
-	}
-
-	.ti-rename-btn {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 26px;
-		height: 26px;
-		flex-shrink: 0;
-		border-radius: var(--radius-sm);
+	.ti-page :global(.glyph) {
 		color: var(--text-muted);
 	}
-
-	.ti-rename-btn:hover {
-		background: var(--bg-hover);
+	.fact {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+	}
+	.acts {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.125rem;
+	}
+	.value {
+		display: block;
+		max-width: 14rem;
+		overflow-x: clip;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 		color: var(--text-default);
-	}
-
-	.ti-meta {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		color: var(--surface-muted);
-		margin-top: 0.25rem;
-	}
-
-	.ti-error {
-		padding: 0.75rem 1rem;
-		border-radius: var(--radius-md);
 		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		background-color: color-mix(in srgb, var(--error-text-color) 10%, transparent);
-		color: var(--error-text-color);
-		border: 1px solid color-mix(in srgb, var(--error-text-color) 25%, transparent);
-		margin-bottom: 1.5rem;
 	}
-
-	.ti-sections {
-		display: flex;
-		flex-direction: column;
-		gap: 1.5rem;
-		margin-bottom: 1.5rem;
-	}
-
-	.ti-section {
-		margin-bottom: 0.5rem;
-	}
-
-	.ti-section-title {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--surface-muted);
-		margin: 0 0 0.75rem;
-	}
-
-	.ti-resource-list {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-
-	.ti-resource-card {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 1rem;
-		padding: 0.875rem 1.125rem;
-		border: 1px solid var(--surface-border);
-		border-radius: var(--radius-md);
-		background-color: var(--surface-bg);
-		text-decoration: none;
-		color: var(--center-channel-color);
-		transition:
-			border-color var(--dur-fast),
-			box-shadow var(--dur-fast);
-		box-shadow:
-			0 1px 3px rgb(0 0 0 / 0.03),
-			0 1px 2px rgb(0 0 0 / 0.02);
-	}
-
-	.ti-resource-card:hover {
-		border-color: var(--sidebar-text-active-border);
-	}
-
-	.ti-resource-info {
-		display: flex;
-		flex-direction: column;
-		gap: 0.125rem;
-		min-width: 0;
-	}
-
-	.ti-resource-name {
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		font-weight: 600;
-		overflow-x: clip;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.ti-resource-detail {
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		color: var(--surface-muted);
+	.value--mono {
 		font-family: var(--font-mono);
-		white-space: nowrap;
-		overflow-x: clip;
-		text-overflow: ellipsis;
+		font-size: var(--text-footnote);
 	}
-
-	.ti-resource-right {
-		display: flex;
+	.hidden-value {
+		display: inline-flex;
 		align-items: center;
-		gap: 0.5rem;
-		flex-shrink: 0;
-	}
-
-	.ti-params {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-		gap: 0.5rem;
-	}
-
-	.ti-param {
-		display: flex;
-		flex-direction: column;
-		gap: 0.125rem;
-		padding: 0.5rem 0.75rem;
-		border-radius: var(--radius-sm);
-		background-color: color-mix(in srgb, var(--surface-border) 30%, transparent);
-	}
-
-	.ti-param-key {
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		font-weight: 600;
-		color: var(--surface-muted);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		overflow-x: clip;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.ti-param-value {
+		gap: 0.375rem;
+		color: var(--text-muted);
 		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		color: var(--center-channel-color);
-		font-family: var(--font-mono);
-		word-break: break-all;
+	}
+	.empty-value {
+		color: var(--text-faint);
+		font-size: var(--text-callout);
 	}
 </style>

@@ -10,6 +10,7 @@ import type {
 	MockOrg,
 	MockProject,
 	MockState,
+	MockTemplateInstance,
 	MockUser,
 	Role
 } from './types.ts';
@@ -157,7 +158,7 @@ interface DeploymentSpec {
 	volumes?: MockDeployment['volumes'];
 }
 
-function deployment(p: MockProject, creator: MockUser, s: DeploymentSpec): MockDeployment {
+export function deployment(p: MockProject, creator: MockUser, s: DeploymentSpec): MockDeployment {
 	const id = uid(`dep:${p.id}:${s.name}`);
 	const repo = s.repo === undefined ? `hackclub/${p.slug}` : s.repo;
 	const commit = sha(`${id}:head`).slice(0, 7);
@@ -260,7 +261,7 @@ function history(d: MockDeployment, authors: MockUser[], count: number): MockBui
 	return out;
 }
 
-function database(
+export function database(
 	p: MockProject,
 	creator: MockUser,
 	name: string,
@@ -472,6 +473,38 @@ export function seed(): MockState {
 		})
 	];
 
+	const nephthysId = uid('tpl:terra:nephthys');
+	deployments.push({
+		...deployment(terra, olive, {
+			name: 'terra-nephthys',
+			host: 'nephthys.hackclub.com',
+			repo: null,
+			image: 'ghcr.io/hackclub/nephthys:2.4.0',
+			updated: 60 * 20
+		}),
+		templateInstanceId: nephthysId
+	});
+	const templateInstances: MockTemplateInstance[] = [
+		{
+			id: nephthysId,
+			projectId: terra.id,
+			name: 'terra-nephthys',
+			templateName: 'nephthys',
+			status: 'running',
+			parameters: {
+				appName: 'terra-nephthys',
+				domain: 'nephthys.hackclub.com',
+				helpChannel: 'C07TERRAHELP',
+				SLACK_BOT_TOKEN: 'xoxb-mock-terra-nephthys',
+				slackSigningSecret: sha('nephthys:signing').slice(0, 32),
+				sentryDsn: 'https://mock@o1.ingest.sentry.io/42',
+				logLevel: 'info',
+				autoClose: true
+			},
+			createdAt: ago(60 * 24 * 6)
+		}
+	];
+
 	const builds = deployments.flatMap((d) =>
 		history(d, [kai, olive, msw, dld, me], d.name === 'web' ? 6 : 4)
 	);
@@ -517,7 +550,12 @@ export function seed(): MockState {
 			instances: 1,
 			memoryRequestBytes: 256 * MIB
 		},
-		database(hcb, kai, 'postgres', 'postgres', 50, 18_400)
+		database(hcb, kai, 'postgres', 'postgres', 50, 18_400),
+		{
+			...database(terra, olive, 'terra-nephthys-db', 'postgres', 5, 96),
+			instances: 1,
+			templateInstanceId: nephthysId
+		}
 	];
 
 	const mailer = deployments.find((d) => d.name === 'mailer')!;
@@ -728,6 +766,7 @@ export function seed(): MockState {
 		databases,
 		jobs,
 		jobRuns,
+		templateInstances,
 		ssoProviders: [
 			{
 				id: uid('sso:ysws:hackclub'),

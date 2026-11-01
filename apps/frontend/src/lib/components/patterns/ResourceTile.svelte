@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Box, Database, Layers, Timer } from 'lucide-svelte';
+	import { Box, Database, Globe, Layers, LayoutTemplate, Timer } from 'lucide-svelte';
 	import RemoteImg from '$lib/components/ui/RemoteImg.svelte';
 	import StatusDot from '$lib/components/ui/StatusDot.svelte';
 	import type { StatusMeta } from '$lib/components/ui/status';
@@ -9,12 +9,19 @@
 		image = undefined,
 		status = undefined
 	}: {
-		kind: 'deployment' | 'database' | 'job' | 'stack';
+		kind: 'deployment' | 'database' | 'job' | 'stack' | 'template' | 'domain';
 		image?: string | null;
 		status?: StatusMeta;
 	} = $props();
 
-	const KIND_ICON = { deployment: Box, database: Database, job: Timer, stack: Layers };
+	const KIND_ICON = {
+		deployment: Box,
+		database: Database,
+		job: Timer,
+		stack: Layers,
+		template: LayoutTemplate,
+		domain: Globe
+	};
 	const KindIcon = $derived(KIND_ICON[kind]);
 	let failedSrc = $state<string | null>(null);
 	const showImage = $derived(!!image && failedSrc !== image);

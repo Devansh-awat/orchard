@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { Layers } from 'lucide-svelte';
+	import { Layers, LayoutTemplate } from 'lucide-svelte';
 	import ResourceTile from './ResourceTile.svelte';
 	import ListRow from '$lib/components/ui/ListRow.svelte';
 	import RelativeTime from '$lib/components/ui/RelativeTime.svelte';
@@ -17,6 +17,8 @@
 		image = undefined,
 		actions = undefined,
 		stack = undefined,
+		template = undefined,
+		flush = false,
 		presence = false
 	}: {
 		kind: 'deployment' | 'database' | 'job';
@@ -29,13 +31,15 @@
 		image?: string | null;
 		actions?: Snippet;
 		stack?: string;
+		template?: { name: string; instance: string };
+		flush?: boolean;
 		presence?: boolean;
 	} = $props();
 
 	const quiet = $derived(status.kind === 'success' || status.kind === 'neutral');
 </script>
 
-<ListRow title={name} {href} {actions} {presence}>
+<ListRow title={name} {href} {actions} {presence} {flush}>
 	{#snippet leading()}
 		<ResourceTile {kind} {image} {status} />
 	{/snippet}
@@ -44,6 +48,15 @@
 			<span class="stack" title="Part of the {stack} compose stack"
 				><Layers size={11} strokeWidth={2.25} aria-hidden="true" /><span class="stack-name"
 					>{stack}</span
+				></span
+			>
+		{/if}
+		{#if template}
+			<span
+				class="stack"
+				title="Part of {template.instance}, made from the {template.name} template"
+				><LayoutTemplate size={11} strokeWidth={2.25} aria-hidden="true" /><span class="stack-name"
+					>{template.name}</span
 				></span
 			>
 		{/if}

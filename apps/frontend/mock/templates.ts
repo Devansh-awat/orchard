@@ -131,6 +131,14 @@ export const TEMPLATES: MockTemplate[] = [
 		category: 'database'
 	},
 	{
+		name: 'nephthys',
+		displayName: 'Nephthys',
+		description:
+			'A Slack help desk bot: questions in a channel become tickets your team can claim and close.',
+		icon: null,
+		category: 'automation'
+	},
+	{
 		name: 'pocketbase',
 		displayName: 'PocketBase',
 		description:

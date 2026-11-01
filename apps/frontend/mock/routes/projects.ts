@@ -29,7 +29,8 @@ const STACK_EDITS = new Map<
 	{ name?: string; autoDeploy?: boolean; deleted?: boolean; redeployedAt?: number }
 >();
 
-import type { MockEnvironment, MockProject } from '../types.ts';
+import { database as seedDatabase, deployment as seedDeployment } from '../seed.ts';
+import type { MockEnvironment, MockProject, MockTemplateInstance } from '../types.ts';
 
 function projectDetail(store: Store, p: MockProject) {
 	const o = store.org(p.organizationId)!;
@@ -71,6 +72,7 @@ function projectDetail(store: Store, p: MockProject) {
 					commitAuthorUsername: b.commitAuthorUsername,
 					triggeredBy: creator(store.user(b.triggeredById))
 				})),
+			templateInstanceId: d.templateInstanceId ?? null,
 			services: [],
 			ingresses: ingress(d),
 			_count: { pods: d.stopped ? 0 : d.replicas, services: 1 }
@@ -86,9 +88,13 @@ function projectDetail(store: Store, p: MockProject) {
 			updatedAt: db.updatedAt,
 			namespace: null,
 			clusterName: `${db.name}-cluster`,
-			environmentId: db.environmentId
+			environmentId: db.environmentId,
+			templateInstanceId: db.templateInstanceId ?? null
 		})),
-		templateInstances: [],
+		templateInstances: store.state.templateInstances
+			.filter((ti) => ti.projectId === p.id)
+			.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+			.map((ti) => instanceSummary(store, ti)),
 		ingresses: store
 			.deploymentsOf(p.id)
 			.flatMap(ingress)
@@ -541,104 +547,200 @@ export function projectRoutes(r: Router, { store }: MockContext) {
 		};
 	});
 
-	const instances = new Map<string, TemplateInstance>();
+	const instanceOf = (id: string) => store.state.templateInstances.find((ti) => ti.id === id);
 
-	const live = (inst: TemplateInstance): TemplateInstance => {
-		if (Date.now() - new Date(inst.createdAt).getTime() < 8000) return inst;
-		return {
-			...inst,
-			status: 'running',
-			deployments: inst.deployments.map((d) => ({ ...d, status: 'running' })),
-			databases: inst.databases.map((d) => ({ ...d, status: 'running' }))
-		};
+	const settle = (inst: MockTemplateInstance) => {
+		if (inst.status === 'deploying' && Date.now() - new Date(inst.createdAt).getTime() >= 8000) {
+			inst.status = 'running';
+			for (const d of store.state.deployments) {
+				if (d.templateInstanceId === inst.id && d.status === 'deploying') d.status = 'running';
+			}
+		}
+		return instanceDetail(store, inst);
 	};
 
 	r.post('/projects/:projectId/template-instances', ({ params, body }) => {
+		const p = store.project(params.projectId);
+		if (!p) return notFound('Project not found');
 		const t = TEMPLATES.find((x) => `tpl_${x.name}` === body?.templateId);
 		if (!t) return notFound('Template not found');
 		const spec = templateSpec(t);
 		const values: Record<string, unknown> = { ...(body?.parameters ?? {}) };
-		for (const p of spec.parameters) {
-			if (p.type === 'secret' && !values[p.name]) {
-				values[p.name] = randomBytes(p.validation?.bytes ?? 16).toString('hex');
+		for (const param of spec.parameters) {
+			if (param.type === 'secret' && !values[param.name]) {
+				values[param.name] = randomBytes(param.validation?.bytes ?? 16).toString('hex');
 			}
-			if (p.required && (values[p.name] === undefined || values[p.name] === '')) {
-				return reply(400, { statusCode: 400, message: `${p.displayName} is required` });
+			if (param.required && (values[param.name] === undefined || values[param.name] === '')) {
+				return reply(400, { statusCode: 400, message: `${param.displayName} is required` });
 			}
 		}
 		const name = String(values.appName ?? t.name);
 		const host =
 			typeof values.domain === 'string' && values.domain ? values.domain : `${name}.orchard.my`;
-		const inst: TemplateInstance = {
+		const me = store.me()!;
+		const inst: MockTemplateInstance = {
 			id: freshId(),
+			projectId: p.id,
 			name,
+			templateName: t.name,
 			status: 'deploying',
-			projectId: params.projectId,
 			parameters: values,
-			createdAt: new Date().toISOString(),
-			template: {
-				id: `tpl_${t.name}`,
-				name: t.name,
-				displayName: t.displayName,
-				icon: t.icon ?? undefined,
-				category: t.category
-			},
-			deployments: spec.resources
-				.filter((x) => x.type === 'deployment')
-				.map((x) => ({
-					id: freshId(),
-					name: x.name,
-					status: 'deploying',
-					image: `${x.name}:latest`
-				})),
-			databases: spec.resources
-				.filter((x) => x.type === 'database')
-				.map((x) => ({
-					id: freshId(),
-					name: x.name,
-					status: 'provisioning',
-					dbName: x.name.replace(/-/g, '_')
-				})),
-			ingresses: spec.resources
-				.filter((x) => x.type === 'ingress')
-				.map((x) => ({ id: freshId(), name: x.name, host, path: '/' }))
+			createdAt: new Date().toISOString()
 		};
-		instances.set(inst.id, inst);
-		return inst;
+		store.state.templateInstances.push(inst);
+		const hasIngress = spec.resources.some((x) => x.type === 'ingress');
+		spec.resources.forEach((x, i) => {
+			const resourceName = x.name.replace(new RegExp(`^${t.name}`), name);
+			if (x.type === 'deployment') {
+				store.state.deployments.push({
+					...seedDeployment(p, me, {
+						name: resourceName,
+						host: hasIngress && i === 0 ? host : null,
+						repo: null,
+						image: `ghcr.io/orchard-templates/${x.name}:latest`,
+						status: 'deploying',
+						updated: 0
+					}),
+					id: store.newDeploymentId(p.id, resourceName),
+					templateInstanceId: inst.id,
+					createdAt: inst.createdAt,
+					updatedAt: inst.createdAt
+				});
+			} else if (x.type === 'database') {
+				store.provisionDatabase({
+					...seedDatabase(p, me, resourceName, 'postgres', 5, 48, 'provisioning'),
+					id: freshId(),
+					instances: 1,
+					templateInstanceId: inst.id,
+					createdAt: inst.createdAt,
+					updatedAt: inst.createdAt
+				});
+			}
+		});
+		store.emit('project.changed', p.id, p.id);
+		return instanceDetail(store, inst);
 	});
 
 	r.get('/projects/:projectId/template-instances', ({ params }) =>
-		[...instances.values()].filter((i) => i.projectId === params.projectId).map(live)
+		store.state.templateInstances
+			.filter((ti) => ti.projectId === params.projectId)
+			.map((ti) => instanceSummary(store, ti))
 	);
 
 	r.get('/template-instances/:id', ({ params }) => {
-		const inst = instances.get(params.id);
-		return inst ? live(inst) : notFound('Template instance not found');
+		const inst = instanceOf(params.id);
+		return inst ? settle(inst) : notFound('Template instance not found');
 	});
 
 	r.patch('/template-instances/:id/name', ({ params, body }) => {
-		const inst = instances.get(params.id);
+		const inst = instanceOf(params.id);
 		if (!inst) return notFound('Template instance not found');
 		if (typeof body?.name === 'string' && body.name.trim()) inst.name = body.name.trim();
-		return live(inst);
+		store.emit('project.changed', inst.projectId, inst.projectId);
+		return settle(inst);
 	});
 
 	r.delete('/template-instances/:id', ({ params }) => {
-		instances.delete(params.id);
+		const inst = instanceOf(params.id);
+		if (!inst) return notFound('Template instance not found');
+		for (const d of store.deploymentsOf(inst.projectId)) {
+			if (d.templateInstanceId === inst.id) store.removeDeployment(d.id);
+		}
+		for (const db of store.databasesOf(inst.projectId)) {
+			if (db.templateInstanceId === inst.id) store.removeDatabase(db.id);
+		}
+		store.state.templateInstances = store.state.templateInstances.filter((x) => x.id !== inst.id);
+		store.emit('project.changed', inst.projectId, inst.projectId);
 		return { ok: true };
 	});
 	r.get('/sync/:namespace', () => ({ ok: true }));
 }
 
-type TemplateInstance = {
-	id: string;
-	name: string;
-	status: string;
-	projectId: string;
-	parameters: Record<string, unknown>;
-	createdAt: string;
-	template: { id: string; name: string; displayName: string; icon?: string; category?: string };
-	deployments: { id: string; name: string; status: string; image?: string }[];
-	databases: { id: string; name: string; status: string; dbName: string }[];
-	ingresses: { id: string; name: string; host: string; path: string }[];
-};
+const SECRET_NAME =
+	/(token|secret|passw(or)?d|passphrase|api_?key|private_?key|access_?key|credential|auth_?key|signing|dsn|webhook_?url|cookie|session_?key|salt|pepper)/i;
+
+function templateOf(ti: MockTemplateInstance) {
+	const t = TEMPLATES.find((x) => x.name === ti.templateName);
+	return {
+		id: `tpl_${ti.templateName}`,
+		name: ti.templateName,
+		displayName: t?.displayName ?? ti.templateName,
+		icon: t?.icon ?? null,
+		category: t?.category
+	};
+}
+
+function instanceSummary(store: Store, ti: MockTemplateInstance) {
+	const deps = store.deploymentsOf(ti.projectId).filter((d) => d.templateInstanceId === ti.id);
+	const dbs = store.databasesOf(ti.projectId).filter((d) => d.templateInstanceId === ti.id);
+	return {
+		id: ti.id,
+		name: ti.name,
+		status: ti.status,
+		createdAt: ti.createdAt,
+		template: templateOf(ti),
+		_count: {
+			deployments: deps.length,
+			databases: dbs.length,
+			ingresses: deps.filter((d) => d.host).length
+		}
+	};
+}
+
+function instanceDetail(store: Store, ti: MockTemplateInstance) {
+	const t = TEMPLATES.find((x) => x.name === ti.templateName);
+	const defs = t ? templateSpec(t).parameters : [];
+	const secret = new Set(
+		defs.filter((d) => d.type === 'secret' || SECRET_NAME.test(d.name)).map((d) => d.name)
+	);
+	const p = store.project(ti.projectId);
+	const deps = store.deploymentsOf(ti.projectId).filter((d) => d.templateInstanceId === ti.id);
+	const dbs = store.databasesOf(ti.projectId).filter((d) => d.templateInstanceId === ti.id);
+	return {
+		id: ti.id,
+		name: ti.name,
+		status: ti.status,
+		projectId: ti.projectId,
+		templateId: `tpl_${ti.templateName}`,
+		createdAt: ti.createdAt,
+		project: p ? { id: p.id, name: p.name, slug: p.slug } : null,
+		template: templateOf(ti),
+		parameters: Object.fromEntries(
+			Object.entries(ti.parameters).map(([k, v]) => [
+				k,
+				secret.has(k) || SECRET_NAME.test(k) ? null : v
+			])
+		),
+		parameterDefs: defs.map((d) => ({
+			name: d.name,
+			displayName: d.displayName || d.name,
+			type: secret.has(d.name) ? 'secret' : d.type,
+			...(d.options?.length ? { options: d.options } : {})
+		})),
+		deployments: deps.map((d) => ({
+			id: d.id,
+			name: d.name,
+			displayName: d.displayName,
+			status: d.status,
+			buildStatus: d.buildStatus,
+			image: d.image
+		})),
+		databases: dbs.map((db) => ({
+			id: db.id,
+			name: db.name,
+			status: db.status,
+			dbName: db.dbName
+		})),
+		ingresses: deps.flatMap(ingress).map((i) => ({
+			id: i.id,
+			name: i.name,
+			host: i.host,
+			path: i.path,
+			tlsSecretName: i.tlsSecretName,
+			entrypoints: i.entrypoints,
+			deploymentId: i.deploymentId,
+			tlsEnabled: i.tlsEnabled,
+			url: i.url
+		}))
+	};
+}

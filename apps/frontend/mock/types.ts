@@ -130,8 +130,19 @@ export interface MockDeployment {
 	restarts: number;
 	creatorId: string;
 	autoDeployEnabled: boolean;
+	templateInstanceId?: string | null;
 	createdAt: string;
 	updatedAt: string;
+}
+
+export interface MockTemplateInstance {
+	id: string;
+	projectId: string;
+	name: string;
+	templateName: string;
+	status: string;
+	parameters: Record<string, unknown>;
+	createdAt: string;
 }
 
 export interface MockBuild {
@@ -184,6 +195,7 @@ export interface MockDatabase {
 	backups: MockBackup[];
 	backupSchedule: { enabled: boolean; schedule: string; retentionDays: number };
 	creatorId: string;
+	templateInstanceId?: string | null;
 	createdAt: string;
 	updatedAt: string;
 }
@@ -306,6 +318,7 @@ export interface MockState {
 	databases: MockDatabase[];
 	jobs: MockJob[];
 	jobRuns: MockJobRun[];
+	templateInstances: MockTemplateInstance[];
 	ssoProviders: MockSsoProvider[];
 	pinned: { type: string; id: string }[];
 }

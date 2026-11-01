@@ -61,6 +61,15 @@ export function redactSecretParameters(
   );
 }
 
+export function describeParameters(defs: ParameterDef[]) {
+  return defs.map((def) => ({
+    name: def.name,
+    displayName: def.displayName || def.name,
+    type: isSecretParameter(def) ? ('secret' as const) : def.type,
+    ...(def.options?.length ? { options: def.options } : {})
+  }));
+}
+
 export function secretParameterValues(
   parameters: Record<string, unknown>,
   defs: Pick<ParameterDef, 'name' | 'type'>[]
@@ -743,6 +752,14 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  private parameterDefs(yaml: string | null | undefined) {
+    try {
+      return describeParameters(this.templateEngine.parseTemplate(yaml ?? '').parameters);
+    } catch {
+      return [];
+    }
+  }
+
   async getTemplateInstance(instanceId: string, clerkId: string, userData?: any) {
     const userId = await this.resolveUserId(clerkId, userData);
     const owner = await this.prisma.templateInstance.findUnique({
@@ -754,6 +771,7 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
     const instance = await this.prisma.templateInstance.findUnique({
       where: { id: instanceId },
       include: {
+        project: { select: { id: true, name: true, slug: true } },
         template: {
           select: {
             id: true,
@@ -768,7 +786,9 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
           select: {
             id: true,
             name: true,
+            displayName: true,
             status: true,
+            buildStatus: true,
             image: true
           }
         },
@@ -787,7 +807,8 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
             host: true,
             path: true,
             tlsSecretName: true,
-            entrypoints: true
+            entrypoints: true,
+            deploymentId: true
           }
         }
       }
@@ -801,6 +822,7 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
       parameters: access.canEdit
         ? this.editorParameters(instance.parameters, yaml)
         : blankParameterValues(instance.parameters),
+      parameterDefs: this.parameterDefs(yaml),
       ingresses: instance.ingresses.map((ing) => scrubIngress(ing))
     };
   }

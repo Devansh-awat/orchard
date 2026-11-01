@@ -240,6 +240,46 @@ const SPECIFIC: Record<string, { parameters: MockParameter[]; resources: MockRes
 			{ name: 'plausible-web', type: 'ingress' }
 		]
 	},
+	nephthys: {
+		parameters: [
+			appName('nephthys'),
+			domain,
+			{
+				name: 'helpChannel',
+				displayName: 'Help channel',
+				description: 'Slack channel ID people ask for help in.',
+				type: 'string',
+				required: true,
+				placeholder: 'C07ABCDEF'
+			},
+			{
+				name: 'SLACK_BOT_TOKEN',
+				displayName: 'Slack bot token',
+				type: 'string',
+				required: true,
+				placeholder: 'xoxb-'
+			},
+			secret('slackSigningSecret', 'Slack signing secret', 16),
+			{ name: 'sentryDsn', displayName: 'Sentry DSN', type: 'string' },
+			{
+				name: 'logLevel',
+				displayName: 'Log level',
+				type: 'select',
+				default: 'info',
+				options: [
+					{ label: 'Debug', value: 'debug' },
+					{ label: 'Info', value: 'info' },
+					{ label: 'Warnings only', value: 'warn' }
+				]
+			},
+			{ name: 'autoClose', displayName: 'Close idle tickets', type: 'boolean', default: true }
+		],
+		resources: [
+			{ name: 'nephthys', type: 'deployment' },
+			{ name: 'nephthys-db', type: 'database' },
+			{ name: 'nephthys-web', type: 'ingress' }
+		]
+	},
 	'redis-oss': {
 		parameters: [appName('redis'), memory, secret('password', 'Password', 24)],
 		resources: [{ name: 'redis', type: 'deployment' }]
