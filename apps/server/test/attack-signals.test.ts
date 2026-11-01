@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {
   classifyRequest,
   detectAttacks,
+  foldInternalSources,
+  internalIp,
   maskIp,
   safeDecode,
   type AccessRecord
@@ -328,4 +330,38 @@ test('maskIp masks IPv6 to /48', () => {
   assert.equal(maskIp('1:2:3:4:5:6:7'), 'unknown');
   assert.equal(maskIp('not-an-ip'), 'unknown');
   assert.equal(maskIp(''), 'unknown');
+});
+
+test('internalIp spots cluster, private and loopback addresses and leaves public ones alone', () => {
+  for (const ip of [
+    '10.244.2.22',
+    '172.16.0.1',
+    '172.31.255.1',
+    '192.168.1.5',
+    '127.0.0.1',
+    '100.64.0.9',
+    '169.254.1.1',
+    'fd00::1',
+    'fe80::1',
+    '::1',
+    '::ffff:10.0.0.4',
+    '10.0.0.1:443'
+  ]) {
+    assert.equal(internalIp(ip), true, ip);
+  }
+  for (const ip of ['203.0.113.42', '172.32.0.1', '8.8.8.8', '2001:db8::1', '', 'garbage']) {
+    assert.equal(internalIp(ip), false, ip);
+  }
+});
+
+test('internal sources fold into one hidden source so a node address never poses as the attacker', () => {
+  const out = foldInternalSources([
+    { ip: '10.244.2.22', count: 18, kinds: ['scanner'] },
+    { ip: '203.0.113.9', count: 5, kinds: ['injection'] },
+    { ip: '10.244.4.116', count: 3, kinds: ['injection'] }
+  ]);
+  assert.deepEqual(out, [
+    { ip: '', count: 21, kinds: ['scanner', 'injection'], hidden: true },
+    { ip: '203.0.113.9', count: 5, kinds: ['injection'] }
+  ]);
 });

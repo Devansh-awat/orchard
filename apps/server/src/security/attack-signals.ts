@@ -31,6 +31,23 @@ export interface AttackSource {
   ip: string;
   count: number;
   kinds: AttackKind[];
+  hidden?: boolean;
+}
+
+export function foldInternalSources(sources: AttackSource[]): AttackSource[] {
+  const out: AttackSource[] = [];
+  let hidden: AttackSource | null = null;
+  for (const s of sources) {
+    if (!internalIp(s.ip)) {
+      out.push(s);
+      continue;
+    }
+    hidden ??= { ip: '', count: 0, kinds: [], hidden: true };
+    hidden.count += s.count;
+    hidden.kinds = [...new Set<AttackKind>([...hidden.kinds, ...s.kinds])];
+  }
+  if (hidden) out.push(hidden);
+  return out.sort((a, b) => b.count - a.count);
 }
 
 export interface AttackSample {
@@ -274,6 +291,33 @@ function expandV6(ip: string): number[] | null {
   const fill = 8 - head.length - tail.length;
   if (fill < 1) return null;
   return [...head, ...Array(fill).fill(0), ...tail];
+}
+
+export function internalIp(ip: string): boolean {
+  let raw = typeof ip === 'string' ? ip.trim() : '';
+  const bracket = /^\[([^\]]+)\](:\d+)?$/.exec(raw);
+  if (bracket) raw = bracket[1];
+  raw = raw.replace(/%.*$/, '').replace(/^(\d{1,3}(?:\.\d{1,3}){3}):\d+$/, '$1');
+  if (!raw) return false;
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/.exec(raw);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    return (
+      a === 10 ||
+      a === 127 ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 169 && b === 254) ||
+      (a === 100 && b >= 64 && b <= 127)
+    );
+  }
+  const groups = expandV6(raw);
+  if (!groups) return false;
+  if (groups.slice(0, 5).every((g) => g === 0) && groups[5] === 0xffff) {
+    return internalIp(`${groups[6] >> 8}.${groups[6] & 255}.${groups[7] >> 8}.${groups[7] & 255}`);
+  }
+  if (groups.slice(0, 7).every((g) => g === 0) && groups[7] === 1) return true;
+  return (groups[0] & 0xfe00) === 0xfc00 || (groups[0] & 0xffc0) === 0xfe80;
 }
 
 export function maskIp(ip: string): string {

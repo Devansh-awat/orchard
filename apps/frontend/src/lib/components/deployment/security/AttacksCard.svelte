@@ -7,7 +7,7 @@
 	import type { ChartSeries } from '$lib/components/ui/time-chart';
 
 	type Kind = 'scanner' | 'injection' | 'auth-bruteforce' | 'flood';
-	type Source = { ip: string; count: number; kinds: Kind[] };
+	type Source = { ip: string; count: number; kinds: Kind[]; hidden?: boolean };
 	type Report = {
 		byKind: Record<Kind, number>;
 		series: ({ t: number } & Record<Kind, number>)[];
@@ -87,8 +87,8 @@
 		<Widget title="Top sources">
 			{#if report.topSources.length}
 				<List inset={false} label="Top sources">
-					{#each report.topSources as source (source.ip)}
-						<ListRow flush title={source.ip}>
+					{#each report.topSources as source (source.hidden ? 'hidden' : source.ip)}
+						<ListRow flush title={source.hidden ? 'Hidden by the load balancer' : source.ip}>
 							{#snippet subtitle()}{@render kinds(source)}{/snippet}
 							{#snippet trailing()}
 								<span class="count">{count(source.count)}</span>

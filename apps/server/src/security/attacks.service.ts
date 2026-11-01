@@ -7,6 +7,8 @@ import {
   FLOOD_MIN_IPS,
   FLOOD_MIN_REQUESTS,
   detectAttacks,
+  foldInternalSources,
+  internalIp,
   maskIp,
   type AccessRecord,
   type AttackKind,
@@ -31,7 +33,7 @@ export function floodIps(counts: { ip: string; requests: number }[]): Map<string
 export function maskReport(report: AttackReport): AttackReport {
   return {
     ...report,
-    topSources: report.topSources.map((s) => ({ ...s, ip: maskIp(s.ip) })),
+    topSources: report.topSources.map((s) => (s.hidden ? s : { ...s, ip: maskIp(s.ip) })),
     samples: report.samples.map((s) => ({ ...s, ip: maskIp(s.ip) }))
   };
 }
@@ -83,7 +85,9 @@ export class AttacksService {
     }));
     const detected = detectAttacks(records, { start: opts.start, end: opts.end, bucketMs });
     const flooding = floodIps(
-      counts.map((c) => ({ ip: c.client_ip ?? '', requests: Number(c.requests) || 0 }))
+      counts
+        .map((c) => ({ ip: c.client_ip ?? '', requests: Number(c.requests) || 0 }))
+        .filter((c) => !internalIp(c.ip))
     );
     const report = await this.withFloods(detected, flooding, scope, bucketMs);
     return opts.canEdit ? report : maskReport(report);
@@ -122,10 +126,9 @@ export class AttacksService {
     return {
       byKind,
       series,
-      topSources: [...sources.values()]
-        .filter((s) => s.kinds.length > 0)
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 20),
+      topSources: foldInternalSources(
+        [...sources.values()].filter((s) => s.kinds.length > 0)
+      ).slice(0, 20),
       samples: detected.samples.filter((s) => s.kind !== 'flood')
     };
   }
