@@ -11,9 +11,11 @@
 		display: flex;
 		flex-direction: column;
 	}
-	.group > :global(* + *) {
-		margin-top: var(--space-2);
+	.group > :global(*) {
 		padding-top: var(--space-2);
 		border-top: 0.5px solid var(--rule);
+	}
+	.group > :global(* + *) {
+		margin-top: var(--space-2);
 	}
 </style>

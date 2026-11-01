@@ -117,7 +117,6 @@
 		flex-shrink: 0;
 		margin-top: var(--section-control-shift);
 		margin-right: var(--section-control-shift);
-		margin-bottom: var(--section-control-shift);
 		font-size: var(--text-headline);
 		--section-control-inset: calc(var(--section-pad) + var(--section-control-shift));
 	}

@@ -19,7 +19,7 @@
 	};
 </script>
 
-<ul class="list">
+<ul class="resources">
 	{#each items as item (`${item.type}:${item.name}`)}
 		<li class="row">
 			{#if item.type === 'ingress'}
@@ -36,7 +36,7 @@
 </ul>
 
 <style>
-	.list {
+	.resources {
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-3);
