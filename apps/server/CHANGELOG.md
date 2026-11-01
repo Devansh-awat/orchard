@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.85.1](https://github.com/hackclub/orchard/compare/server/v2.85.0...server/v2.85.1) (2026-11-01)
+
+
+### Bug Fixes
+
+* **server:** org usage runs a few app queries at a time, shares one run between identical requests and caches it, so a usage page can't knock over victoriametrics ([73e74ee](https://github.com/hackclub/orchard/commit/73e74ee4050f3cbd35d9ab1c0893a2cc78c98f68))
+
 ## [2.85.0](https://github.com/hackclub/orchard/compare/server/v2.84.0...server/v2.85.0) (2026-11-01)
 
 

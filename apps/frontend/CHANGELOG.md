@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.76.1](https://github.com/hackclub/orchard/compare/frontend/v1.76.0...frontend/v1.76.1) (2026-11-01)
+
+
+### Bug Fixes
+
+* **frontend:** grouped lists and the alert stack never render the same key twice, which crashed the page ([db1f029](https://github.com/hackclub/orchard/commit/db1f0296aa771d59edf3418abb810b9b3ea8be76))
+* **frontend:** logs on a crash opens the output from before the kill, and on other problems opens the console on that pod ([e017e5b](https://github.com/hackclub/orchard/commit/e017e5bc7824712cd6dbeb8e9b9b5757dc6adf42))
+* **frontend:** single toasts keep a real right inset and the update toast says orchard was updated ([0486ae5](https://github.com/hackclub/orchard/commit/0486ae512d5313017f7e049143c43d59d817e48b))
+
 ## [1.76.0](https://github.com/hackclub/orchard/compare/frontend/v1.75.0...frontend/v1.76.0) (2026-11-01)
 
 
