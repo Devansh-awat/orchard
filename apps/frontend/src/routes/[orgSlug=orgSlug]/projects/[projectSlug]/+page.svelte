@@ -46,6 +46,7 @@
 	import {
 		ProjectSettingsTab,
 		ComposeTab,
+		TemplatesTab,
 		MembersTab,
 		CustomizeModal,
 		TransferOwnershipModal,
@@ -100,7 +101,14 @@
 	const viewerIsTransferRecipient = $derived(
 		!!pendingTransfer && !!$user?.id && pendingTransfer.to.id === $user.id
 	);
-	const PROJECT_TABS: ProjectTab[] = ['resources', 'variables', 'compose', 'members', 'settings'];
+	const PROJECT_TABS: ProjectTab[] = [
+		'resources',
+		'variables',
+		'compose',
+		'templates',
+		'members',
+		'settings'
+	];
 	function tabFromUrl(url: URL): ProjectTab {
 		const t = url.searchParams.get('tab');
 		return t && (PROJECT_TABS as string[]).includes(t) ? (t as ProjectTab) : 'resources';
@@ -156,6 +164,13 @@
 	const composeStacksLoading = $derived(!!project?.id && composeQuery.isPending);
 	const stackOf = $derived(
 		new Map(composeStacks.flatMap((s) => (s.deployments ?? []).map((d) => [d.id, s.name] as const)))
+	);
+	const templateOf = $derived(
+		new Map(
+			templateInstances.map(
+				(ti) => [ti.id, { name: ti.template.displayName, instance: ti.name }] as const
+			)
+		)
 	);
 
 	// --- Org members for picker ---
@@ -267,12 +282,6 @@
 			checkpointing = false;
 		}
 	}
-	// Template instances aren't environment-scoped, so surface them in the
-	// default environment only rather than duplicating across every env.
-	let envFilteredTemplateInstances = $derived.by(() =>
-		!selectedEnvId || selectedEnvIsDefault ? templateInstances : []
-	);
-
 	async function fetchProject() {
 		await queryClient.invalidateQueries({ queryKey: ['project-detail', orgSlug, projectSlug] });
 	}
@@ -739,24 +748,29 @@
 		resources: 'Overview',
 		variables: 'Variables',
 		compose: 'Compose',
+		templates: 'Templates',
 		members: 'Members',
 		settings: 'Settings'
 	};
 	const showSettings = $derived(canDelete || canTransferOwnership || canMoveToOrg || canEdit);
 	const tabs = $derived(
-		PROJECT_TABS.filter((t) => t !== 'settings' || showSettings).map((t) => ({
+		PROJECT_TABS.filter(
+			(t) =>
+				(t !== 'settings' || showSettings) &&
+				(t !== 'templates' || templateInstances.length > 0 || activeTab === 'templates')
+		).map((t) => ({
 			id: t,
 			label: TAB_LABEL[t],
 			count:
 				t === 'resources'
-					? envFilteredDeployments.length +
-						envFilteredDatabases.length +
-						envFilteredTemplateInstances.length
+					? envFilteredDeployments.length + envFilteredDatabases.length
 					: t === 'compose'
 						? composeStacks.length || undefined
-						: t === 'members'
-							? projectMembers.length
-							: undefined
+						: t === 'templates'
+							? templateInstances.length || undefined
+							: t === 'members'
+								? projectMembers.length
+								: undefined
 		}))
 	);
 
@@ -922,6 +936,7 @@
 		detail={depDetail(d)}
 		updatedAt={depUpdatedAt(d)}
 		stack={stackOf.get(d.id)}
+		template={d.templateInstanceId ? templateOf.get(d.templateInstanceId) : undefined}
 		href="/{orgSlug}/deployments/{d.id}"
 	>
 		{#snippet actions()}
@@ -1054,7 +1069,7 @@
 			<Swap key={activeTab}>
 				{#if activeTab === 'resources'}
 					<div class="overview">
-						{#if envFilteredDeployments.length || envFilteredDatabases.length || envFilteredTemplateInstances.length}
+						{#if envFilteredDeployments.length || envFilteredDatabases.length}
 							<List label="Resources">
 								{#each envFilteredDeployments as d (d.id)}
 									{@render deploymentRow(d)}
@@ -1067,18 +1082,10 @@
 										image={IMG_ICONS.postgres}
 										detail={db.mode ? `${db.dbName} · ${db.mode}` : db.dbName}
 										updatedAt={db.createdAt}
+										template={db.templateInstanceId
+											? templateOf.get(db.templateInstanceId)
+											: undefined}
 										href="/{orgSlug}/databases/{db.id}"
-									/>
-								{/each}
-								{#each envFilteredTemplateInstances as ti (ti.id)}
-									<EntityRow
-										kind="deployment"
-										name={ti.name}
-										status={resourceStatus(ti.status)}
-										image={ti.template.icon ?? null}
-										detail={ti.template.displayName}
-										updatedAt={ti.createdAt}
-										href="/{orgSlug}/template-instances/{ti.id}"
 									/>
 								{/each}
 							</List>
@@ -1129,6 +1136,15 @@
 						{canEdit}
 						{composeStacks}
 						{composeStacksLoading}
+						orgSlug={orgSlug ?? ''}
+						projectSlug={projectSlug ?? ''}
+					/>
+				{:else if activeTab === 'templates'}
+					<TemplatesTab
+						{canEdit}
+						instances={templateInstances}
+						deployments={project.deployments ?? []}
+						{databases}
 						orgSlug={orgSlug ?? ''}
 						projectSlug={projectSlug ?? ''}
 					/>

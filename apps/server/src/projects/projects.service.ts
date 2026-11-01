@@ -768,7 +768,8 @@ export class ProjectsService {
             dbName: true,
             status: true,
             mode: true,
-            createdAt: true
+            createdAt: true,
+            templateInstanceId: true
           }
         },
         templateInstances: {
@@ -1909,6 +1910,7 @@ export class ProjectsService {
             githubBranch: true,
             projectId: true,
             environmentId: true,
+            templateInstanceId: true,
             updatedAt: true,
             createdAt: true,
             creator: {
@@ -1953,7 +1955,8 @@ export class ProjectsService {
             createdAt: true,
             namespace: true,
             clusterName: true,
-            environmentId: true
+            environmentId: true,
+            templateInstanceId: true
           }
         },
         templateInstances: {

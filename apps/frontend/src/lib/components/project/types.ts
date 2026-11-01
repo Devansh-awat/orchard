@@ -1,4 +1,10 @@
-export type ProjectTab = 'resources' | 'variables' | 'compose' | 'members' | 'settings';
+export type ProjectTab =
+	| 'resources'
+	| 'variables'
+	| 'compose'
+	| 'templates'
+	| 'members'
+	| 'settings';
 
 export interface DeploymentUser {
 	id: string;
@@ -18,6 +24,7 @@ export interface Deployment {
 	image?: string;
 	githubRepo?: string;
 	githubBranch?: string;
+	templateInstanceId?: string | null;
 	ingresses?: { id: string; host: string }[];
 	creator?: DeploymentUser;
 	imageHistory?: {
@@ -129,6 +136,7 @@ export interface DatabaseSummary {
 	status: string;
 	mode?: string;
 	createdAt: string;
+	templateInstanceId?: string | null;
 }
 
 export interface ComposeStackSummary {

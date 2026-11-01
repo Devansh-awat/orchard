@@ -19,6 +19,8 @@
 		error = undefined,
 		updatedAt = undefined,
 		shown = 4,
+		kind = 'stack',
+		image = undefined,
 		actions = undefined,
 		presence = false
 	}: {
@@ -30,6 +32,8 @@
 		error?: string | null;
 		updatedAt?: string | null;
 		shown?: number;
+		kind?: 'stack' | 'template';
+		image?: string | null;
 		actions?: Snippet;
 		presence?: boolean;
 	} = $props();
@@ -48,7 +52,7 @@
 
 <ListRow title={name} {href} {actions} {presence}>
 	{#snippet leading()}
-		<ResourceTile kind="stack" />
+		<ResourceTile {kind} {image} />
 	{/snippet}
 	{#snippet titleSuffix()}
 		{#if !quiet}<span class="state state--{status.kind}">{status.label}</span>{/if}
