@@ -1,6 +1,6 @@
 import { Injectable, Logger, BadRequestException, OnModuleInit } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
-import { clusterPods, clusterServiceCounts } from './cluster-snapshot';
+import { clusterPods, clusterServiceCounts, type SnapshotRead } from './cluster-snapshot';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from './kubernetes.service';
 import { LeaseService } from '../coordination/lease.service';
@@ -176,15 +176,16 @@ export class K8sNamespaceService implements OnModuleInit {
 
   // Aggregate resource requests for an org across all its namespaces.
   async getOrgUsage(
-    namespaces: string[]
+    namespaces: string[],
+    opts: SnapshotRead = {}
   ): Promise<{ cpuMilli: number; memoryBytes: number; pods: number; services: number }> {
     this.ensureKubeConfig();
     if (!this.kc || namespaces.length === 0)
       return { cpuMilli: 0, memoryBytes: 0, pods: 0, services: 0 };
     const nsSet = new Set(namespaces);
     const [allPods, svcCounts] = await Promise.all([
-      clusterPods(this.kc),
-      clusterServiceCounts(this.kc)
+      clusterPods(this.kc, opts),
+      clusterServiceCounts(this.kc, opts)
     ]);
 
     let cpuMilli = 0;

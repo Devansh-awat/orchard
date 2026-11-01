@@ -1,7 +1,7 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { parseMemory } from './quantity';
 import * as k8s from '@kubernetes/client-node';
-import { clusterPods } from './cluster-snapshot';
+import { clusterPods, type SnapshotRead } from './cluster-snapshot';
 import { PrismaService } from '../prisma/prisma.service';
 
 export const ALLOWED_INGRESS_ANNOTATION_KEYS = new Set<string>([
@@ -476,7 +476,7 @@ export class KubernetesService {
   }
 
   // Returns per-node aggregated requests for all pods in the cluster.
-  async getClusterPodUsage(): Promise<
+  async getClusterPodUsage(opts: SnapshotRead = {}): Promise<
     {
       nodeName: string | null;
       namespace: string;
@@ -489,7 +489,7 @@ export class KubernetesService {
     }[]
   > {
     this.ensureKubeConfig();
-    return clusterPods(this.kc);
+    return clusterPods(this.kc, opts);
   }
 
   async deletePVC(namespace: string, name: string) {

@@ -71,11 +71,30 @@ function projectPod(pod: k8s.V1Pod): PodSnapshot {
   };
 }
 
+export interface SnapshotRead {
+  staleMs?: number;
+}
+
+const usable = <T>(e: Entry<T> | null, opts: SnapshotRead): T | null =>
+  e && opts.staleMs && Date.now() - e.at < opts.staleMs ? e.value : null;
+
 // Live pods only. Succeeded/Failed are finished work and bill nothing, and
 // dropping them here keeps every caller from re-deciding it.
-export async function clusterPods(kc: k8s.KubeConfig | null): Promise<PodSnapshot[]> {
+export async function clusterPods(
+  kc: k8s.KubeConfig | null,
+  opts: SnapshotRead = {}
+): Promise<PodSnapshot[]> {
   if (!kc) return [];
+  const stale = usable(podCache, opts);
   if (fresh(podCache)) return podCache.value;
+  if (stale) {
+    void refreshPods(kc);
+    return stale;
+  }
+  return refreshPods(kc);
+}
+
+function refreshPods(kc: k8s.KubeConfig): Promise<PodSnapshot[]> {
   if (podInFlight) return podInFlight;
 
   podInFlight = (async () => {
@@ -102,10 +121,20 @@ export async function clusterPods(kc: k8s.KubeConfig | null): Promise<PodSnapsho
 }
 
 export async function clusterServiceCounts(
-  kc: k8s.KubeConfig | null
+  kc: k8s.KubeConfig | null,
+  opts: SnapshotRead = {}
 ): Promise<Map<string, number>> {
   if (!kc) return new Map();
+  const stale = usable(svcCache, opts);
   if (fresh(svcCache)) return svcCache.value;
+  if (stale) {
+    void refreshServices(kc);
+    return stale;
+  }
+  return refreshServices(kc);
+}
+
+function refreshServices(kc: k8s.KubeConfig): Promise<Map<string, number>> {
   if (svcInFlight) return svcInFlight;
 
   svcInFlight = (async () => {

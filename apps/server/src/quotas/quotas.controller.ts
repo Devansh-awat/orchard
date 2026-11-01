@@ -178,11 +178,10 @@ export class OrgQuotasController {
     const orgCpuCap = org?.cpuLimitMilli ?? null;
     const orgMemCap = org?.memoryLimitBytes ? Number(org.memoryLimitBytes) : null;
 
-    // Compute org-level remaining by fetching total org usage
-    const orgUsage = await this.quotas.getOrgTotalUsage(
-      orgId,
-      org?.projects?.map((p) => p.namespace) ?? []
-    );
+    const orgUsage =
+      orgCpuCap != null || orgMemCap != null
+        ? await this.quotas.getOrgTotalUsage(orgId, org?.projects?.map((p) => p.namespace) ?? [])
+        : { cpuMilli: 0, memoryBytes: 0 };
     const orgCpuRemaining = orgCpuCap != null ? Math.max(0, orgCpuCap - orgUsage.cpuMilli) : null;
     const orgMemRemaining =
       orgMemCap != null ? Math.max(0, orgMemCap - orgUsage.memoryBytes) : null;

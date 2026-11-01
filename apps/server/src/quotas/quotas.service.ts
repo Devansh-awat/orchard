@@ -6,6 +6,33 @@ import { K8sNamespaceService } from '../kubernetes/k8s-namespace.service';
 import { defaultPodResourcesForImage, minPodMemoryBytesForImage } from '../kubernetes/presets';
 import { formatBytes } from '../projects/projects.utils';
 import { ownerLeftAllowance } from './owner-allowance';
+import { allowanceCommitment, groupByOwner, memberAllowance, ownedUsage } from './member-usage';
+
+const VIEW_SNAPSHOT = { staleMs: 60_000 };
+
+const OWNED_PROJECT_SELECT = {
+  id: true,
+  name: true,
+  deployments: {
+    select: {
+      id: true,
+      name: true,
+      cpuRequestMilli: true,
+      memoryRequestBytes: true,
+      replicas: true,
+      stopped: true
+    }
+  },
+  databases: {
+    select: {
+      id: true,
+      name: true,
+      cpuRequestMilli: true,
+      memoryRequestBytes: true,
+      replicas: true
+    }
+  }
+} as const;
 
 export interface Caps {
   cpuLimitMilli: number | null;
@@ -243,7 +270,7 @@ export class QuotasService {
     namespaces: string[]
   ): Promise<{ cpuMilli: number; memoryBytes: number }> {
     if (namespaces.length === 0) return { cpuMilli: 0, memoryBytes: 0 };
-    const usage = await this.k8sNamespace.getOrgUsage(namespaces);
+    const usage = await this.k8sNamespace.getOrgUsage(namespaces, VIEW_SNAPSHOT);
     return { cpuMilli: usage.cpuMilli, memoryBytes: usage.memoryBytes };
   }
 
@@ -264,9 +291,12 @@ export class QuotasService {
       }
     });
     if (!org) throw new NotFoundException('Org not found');
-    const namespaces = await this.getQuotaGroupNamespaces(organizationId);
-    const usage = await this.k8sNamespace.getOrgUsage(namespaces);
-    const connections = await this.getOrgConnections(organizationId);
+    const [usage, connections] = await Promise.all([
+      this.getQuotaGroupNamespaces(organizationId).then((namespaces) =>
+        this.k8sNamespace.getOrgUsage(namespaces, VIEW_SNAPSHOT)
+      ),
+      this.getOrgConnections(organizationId)
+    ]);
     return {
       org: {
         id: org.id,
@@ -485,40 +515,9 @@ export class QuotasService {
       }
     });
     if (!member) {
-      // Non-members get no allowance — but in practice this isn't called for non-members.
       return { cpuMilli: 0, memoryBytes: 0, source: { cpu: 'explicit', memory: 'explicit' } };
     }
-    let cpu: number | null;
-    let cpuSource: 'explicit' | 'default' | 'unlimited';
-    if (member.cpuAllowanceUnlimited) {
-      cpu = null;
-      cpuSource = 'unlimited';
-    } else if (member.cpuAllowanceMilli !== null) {
-      cpu = member.cpuAllowanceMilli;
-      cpuSource = 'explicit';
-    } else if (member.organization.defaultMemberCpuMilli !== null) {
-      cpu = member.organization.defaultMemberCpuMilli;
-      cpuSource = 'default';
-    } else {
-      cpu = null;
-      cpuSource = 'unlimited';
-    }
-    let mem: number | null;
-    let memSource: 'explicit' | 'default' | 'unlimited';
-    if (member.memoryAllowanceUnlimited) {
-      mem = null;
-      memSource = 'unlimited';
-    } else if (member.memoryAllowanceBytes !== null) {
-      mem = Number(member.memoryAllowanceBytes);
-      memSource = 'explicit';
-    } else if (member.organization.defaultMemberMemoryBytes !== null) {
-      mem = Number(member.organization.defaultMemberMemoryBytes);
-      memSource = 'default';
-    } else {
-      mem = null;
-      memSource = 'unlimited';
-    }
-    return { cpuMilli: cpu, memoryBytes: mem, source: { cpu: cpuSource, memory: memSource } };
+    return memberAllowance(member, member.organization);
   }
 
   async resolveOwnerAllowance(
@@ -558,88 +557,9 @@ export class QuotasService {
   }> {
     const projects = await this.prisma.project.findMany({
       where: { organizationId, ownerId: userId },
-      select: {
-        id: true,
-        name: true,
-        deployments: {
-          select: {
-            id: true,
-            name: true,
-            cpuRequestMilli: true,
-            memoryRequestBytes: true,
-            replicas: true,
-            stopped: true
-          }
-        },
-        databases: {
-          select: {
-            id: true,
-            name: true,
-            cpuRequestMilli: true,
-            memoryRequestBytes: true,
-            replicas: true
-          }
-        },
-        templateInstances: {
-          select: {
-            id: true,
-            name: true
-          }
-        }
-      }
+      select: OWNED_PROJECT_SELECT
     });
-    let cpu = 0;
-    let mem = 0;
-    const breakdown: {
-      kind: 'deployment' | 'database' | 'templateInstance';
-      id: string;
-      name: string;
-      projectId: string;
-      projectName: string;
-      cpuMilli: number;
-      memoryBytes: number;
-      replicas: number;
-    }[] = [];
-    for (const p of projects) {
-      for (const d of p.deployments) {
-        if (excludeDeploymentId && d.id === excludeDeploymentId) continue;
-        const replicas = d.stopped ? 0 : (d.replicas ?? 1);
-        const c = (d.cpuRequestMilli ?? 0) * replicas;
-        const m = (d.memoryRequestBytes ? Number(d.memoryRequestBytes) : 0) * replicas;
-        cpu += c;
-        mem += m;
-        breakdown.push({
-          kind: 'deployment',
-          id: d.id,
-          name: d.name,
-          projectId: p.id,
-          projectName: p.name,
-          cpuMilli: c,
-          memoryBytes: m,
-          replicas
-        });
-      }
-      for (const db of p.databases) {
-        // A CNPG cluster runs `replicas` instances, each a full pod at the
-        // configured size — same arithmetic as a scaled deployment.
-        const instances = Math.max(1, db.replicas ?? 1);
-        const c = (db.cpuRequestMilli ?? 0) * instances;
-        const m = (db.memoryRequestBytes ? Number(db.memoryRequestBytes) : 0) * instances;
-        cpu += c;
-        mem += m;
-        breakdown.push({
-          kind: 'database',
-          id: db.id,
-          name: db.name,
-          projectId: p.id,
-          projectName: p.name,
-          cpuMilli: c,
-          memoryBytes: m,
-          replicas: instances
-        });
-      }
-    }
-    return { cpuMilli: cpu, memoryBytes: mem, breakdown };
+    return ownedUsage(projects, excludeDeploymentId);
   }
 
   // Throws if `ownerId`'s allowance would be exceeded by adding `requested`.
@@ -764,37 +684,7 @@ export class QuotasService {
       }
     });
     if (!org) throw new NotFoundException('Org not found');
-    const defaultCpu =
-      overrides?.defaultOverride?.cpuMilli !== undefined
-        ? overrides.defaultOverride.cpuMilli
-        : org.defaultMemberCpuMilli;
-    let defaultMem: number | null = org.defaultMemberMemoryBytes
-      ? Number(org.defaultMemberMemoryBytes)
-      : null;
-    if (overrides?.defaultOverride?.memoryBytes !== undefined) {
-      defaultMem = overrides.defaultOverride.memoryBytes;
-    }
-    let cpu = 0;
-    let mem = 0;
-    for (const m of org.members) {
-      const override =
-        overrides?.memberOverride?.userId === m.userId ? overrides.memberOverride : null;
-      const cpuUnlimited = override ? override.cpuUnlimited : m.cpuAllowanceUnlimited;
-      const memUnlimited = override ? override.memoryUnlimited : m.memoryAllowanceUnlimited;
-      const cpuExplicit = override ? override.cpuMilli : m.cpuAllowanceMilli;
-      let memExplicit: number | null = null;
-      if (override) memExplicit = override.memoryBytes;
-      else if (m.memoryAllowanceBytes) memExplicit = Number(m.memoryAllowanceBytes);
-      if (!cpuUnlimited) {
-        if (cpuExplicit !== null) cpu += cpuExplicit;
-        else if (defaultCpu !== null) cpu += defaultCpu;
-      }
-      if (!memUnlimited) {
-        if (memExplicit !== null) mem += memExplicit;
-        else if (defaultMem !== null) mem += defaultMem;
-      }
-    }
-    return { cpuMilli: cpu, memoryBytes: mem };
+    return allowanceCommitment(org, overrides);
   }
 
   async setMemberAllowance(
@@ -855,51 +745,58 @@ export class QuotasService {
     });
   }
 
-  // Table for the org admin view at /[org]/usage.
   async getOrgMembersUsage(organizationId: string) {
-    const org = await this.prisma.organization.findUnique({
-      where: { id: organizationId },
-      select: {
-        cpuLimitMilli: true,
-        memoryLimitBytes: true,
-        defaultMemberCpuMilli: true,
-        defaultMemberMemoryBytes: true,
-        members: {
-          select: {
-            userId: true,
-            role: true,
-            user: {
-              select: {
-                id: true,
-                username: true,
-                email: true,
-                firstName: true,
-                lastName: true,
-                imageUrl: true
+    const [org, owned] = await Promise.all([
+      this.prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: {
+          cpuLimitMilli: true,
+          memoryLimitBytes: true,
+          defaultMemberCpuMilli: true,
+          defaultMemberMemoryBytes: true,
+          members: {
+            select: {
+              userId: true,
+              role: true,
+              cpuAllowanceMilli: true,
+              memoryAllowanceBytes: true,
+              cpuAllowanceUnlimited: true,
+              memoryAllowanceUnlimited: true,
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  email: true,
+                  firstName: true,
+                  lastName: true,
+                  imageUrl: true
+                }
               }
             }
           }
         }
-      }
-    });
-    if (!org) throw new NotFoundException('Org not found');
-    const rows = await Promise.all(
-      org.members.map(async (m) => {
-        const allowance = await this.resolveMemberAllowance(organizationId, m.userId);
-        const usage = await this.getMemberUsage(organizationId, m.userId);
-        return {
-          user: m.user,
-          role: m.role,
-          allowance: {
-            cpuMilli: allowance.cpuMilli,
-            memoryBytes: allowance.memoryBytes,
-            source: allowance.source
-          },
-          usage: { cpuMilli: usage.cpuMilli, memoryBytes: usage.memoryBytes }
-        };
+      }),
+      this.prisma.project.findMany({
+        where: { organizationId, ownerId: { not: null } },
+        select: { ownerId: true, ...OWNED_PROJECT_SELECT }
       })
-    );
-    const commitment = await this.computeOrgAllowanceCommitment(organizationId);
+    ]);
+    if (!org) throw new NotFoundException('Org not found');
+    const byOwner = groupByOwner(owned);
+    const rows = org.members.map((m) => {
+      const allowance = memberAllowance(m, org);
+      const usage = ownedUsage(byOwner.get(m.userId) ?? []);
+      return {
+        user: m.user,
+        role: m.role,
+        allowance: {
+          cpuMilli: allowance.cpuMilli,
+          memoryBytes: allowance.memoryBytes,
+          source: allowance.source
+        },
+        usage: { cpuMilli: usage.cpuMilli, memoryBytes: usage.memoryBytes }
+      };
+    });
     return {
       org: {
         cpuLimitMilli: org.cpuLimitMilli,
@@ -909,7 +806,7 @@ export class QuotasService {
           ? Number(org.defaultMemberMemoryBytes)
           : null
       },
-      commitment,
+      commitment: allowanceCommitment(org),
       members: rows
     };
   }
@@ -930,9 +827,10 @@ export class QuotasService {
       orderBy: { name: 'asc' }
     });
     const namespaces = projects.map((p) => p.namespace);
-    const usage = await this.k8sNamespace.getOrgUsage(namespaces); // aggregate; we also want per-ns
-    // Fetch per-ns breakdown cheaply: reuse getClusterPodUsage
-    const pods = await this.k8s.getClusterPodUsage();
+    const [usage, pods] = await Promise.all([
+      this.k8sNamespace.getOrgUsage(namespaces, VIEW_SNAPSHOT),
+      this.k8s.getClusterPodUsage(VIEW_SNAPSHOT)
+    ]);
     const perNs = new Map<string, { cpuMilli: number; memoryBytes: number; pods: number }>();
     for (const p of pods) {
       if (!p.namespace) continue;
