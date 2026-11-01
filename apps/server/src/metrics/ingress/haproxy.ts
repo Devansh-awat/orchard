@@ -1,14 +1,22 @@
 import { alternation, escapeRegex, ratio, type IngressAdapter, type IngressTarget } from './types';
 
-export function haproxySelector(target: IngressTarget): string | null {
+function haproxyPattern(target: IngressTarget): string | null {
   if (!target.namespace || target.services.length === 0) return null;
-  return `proxy=~"${escapeRegex(target.namespace)}_svc_(${alternation(target.services)})_.+"`;
+  return `${escapeRegex(target.namespace)}_svc_(${alternation(target.services)})_.+`;
+}
+
+export function haproxySelector(target: IngressTarget): string | null {
+  const pattern = haproxyPattern(target);
+  return pattern ? `proxy=~"${pattern}"` : null;
 }
 
 export const haproxy: IngressAdapter = {
   id: 'haproxy',
   label: 'HAProxy',
   matchesIngressClass: (cls) => cls.includes('haproxy'),
+  presenceMetric: 'haproxy_backend_http_responses_total',
+  presenceLabel: 'proxy',
+  presencePattern: haproxyPattern,
   queries(target) {
     const sel = haproxySelector(target);
     if (!sel) return null;

@@ -94,12 +94,16 @@ export class VictoriaMetricsService {
     }
   }
 
-  async queryInstantGrouped(promql: string, label: string): Promise<Map<string, number>> {
+  async queryInstantGrouped(
+    promql: string,
+    label: string,
+    timeoutMs = QUERY_TIMEOUT_MS
+  ): Promise<Map<string, number>> {
     const params = new URLSearchParams({ query: promql });
     const url = `${this.base}/api/v1/query?${params}`;
     let res: Response;
     try {
-      res = await fetch(url, { signal: AbortSignal.timeout(QUERY_TIMEOUT_MS) });
+      res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
     } catch (err) {
       const reason = (err as Error).message;
       this.logger.warn(`VM query failed: ${reason}`);

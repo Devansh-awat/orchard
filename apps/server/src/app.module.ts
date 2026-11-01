@@ -7,6 +7,7 @@ import { ApiThrottlerGuard, apiThrottlerLimit } from './auth/api-throttler.guard
 import { HealthModule } from './health/health.module';
 import { AgentSpecModule } from './agent-spec/agent-spec.module';
 import { IdempotencyModule } from './idempotency/idempotency.module';
+import { SharedCacheModule } from './cache/shared-cache.module';
 import { KubernetesModule } from './kubernetes/kubernetes.module';
 import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -71,6 +72,7 @@ import { graftImports } from './grafts/boot';
     HealthModule,
     AgentSpecModule,
     IdempotencyModule,
+    SharedCacheModule,
     KubernetesModule,
     CoordinationModule,
     ApplyModule,

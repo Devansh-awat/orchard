@@ -28,6 +28,9 @@ export interface IngressAdapter {
   id: string;
   label: string;
   matchesIngressClass(ingressClass: string): boolean;
+  presenceMetric: string;
+  presenceLabel: string;
+  presencePattern(target: IngressTarget): string | null;
   queries(target: IngressTarget): IngressQueries | null;
 }
 

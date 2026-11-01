@@ -7,15 +7,23 @@ import {
   type StatusClass
 } from './types';
 
-export function traefikSelector(target: IngressTarget): string | null {
+function traefikPattern(target: IngressTarget): string | null {
   if (!target.namespace || target.services.length === 0) return null;
-  return `service=~"${escapeRegex(target.namespace)}-(${alternation(target.services)})-[^@]+@kubernetes.*"`;
+  return `${escapeRegex(target.namespace)}-(${alternation(target.services)})-[^@]+@kubernetes.*`;
+}
+
+export function traefikSelector(target: IngressTarget): string | null {
+  const pattern = traefikPattern(target);
+  return pattern ? `service=~"${pattern}"` : null;
 }
 
 export const traefik: IngressAdapter = {
   id: 'traefik',
   label: 'Traefik',
   matchesIngressClass: (cls) => cls.includes('traefik'),
+  presenceMetric: 'traefik_service_requests_total',
+  presenceLabel: 'service',
+  presencePattern: traefikPattern,
   queries(target) {
     const sel = traefikSelector(target);
     if (!sel) return null;

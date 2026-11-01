@@ -25,7 +25,6 @@ import { deploymentPodRegex } from '../metrics/pod-selector';
 import { volumeKey } from '../kubernetes/volume-stats';
 import { buildPhases } from './build-phases';
 import {
-  INGRESS_ADAPTERS,
   STATUS_CLASSES,
   configuredAdapter,
   guessedAdapter,
@@ -39,6 +38,8 @@ import {
   escapeLabel,
   type SeriesPoint
 } from '../metrics/victoria-metrics.service';
+import { SignalPresenceService } from '../metrics/signal-presence.service';
+import { hasContainerSignal, httpFlavors } from '../metrics/signal-presence';
 
 interface BuildLogMessage {
   id?: string;
@@ -87,9 +88,6 @@ export interface HttpMetricsSeries {
   routes: HttpRoute[];
   routesSource?: 'ingress' | 'access-logs';
 }
-
-const FLAVOR_TTL_MS = 10 * 60_000;
-const SIGNALS_TTL_MS = 2 * 60_000;
 
 function emptyHttpMetrics(source: string | null): HttpMetricsSeries {
   return {
@@ -173,7 +171,8 @@ export class ObservabilityService {
     private readonly k8sWorkload: K8sWorkloadService,
     private readonly orgEvents: OrgEventsService,
     private readonly vm: VictoriaMetricsService,
-    private readonly requests: RequestsService
+    private readonly requests: RequestsService,
+    private readonly presence: SignalPresenceService
   ) {}
 
   /**
@@ -397,41 +396,24 @@ export class ObservabilityService {
     };
   }
 
-  private readonly signalsCache = new Map<
-    string,
-    { value: { container: boolean; http: boolean; access: boolean }; at: number }
-  >();
-
   private async recordedSignals(
     deploymentId: string
   ): Promise<{ container: boolean; http: boolean; access: boolean }> {
-    const cached = this.signalsCache.get(deploymentId);
-    if (cached && Date.now() - cached.at < SIGNALS_TTL_MS) return cached.value;
-    const [deployment, resolved, access] = await Promise.all([
+    const [deployment, resolved, access, presence] = await Promise.all([
       this.prisma.deployment.findUnique({
         where: { id: deploymentId },
         select: { namespace: true }
       }),
       this.ingressTarget(deploymentId).catch(() => null),
-      this.requests.recorded(deploymentId)
+      this.requests.recorded(deploymentId),
+      this.presence.current().catch(() => null)
     ]);
-    const present = async (promql: string) =>
-      ((await this.vm.queryInstant(`count(last_over_time(${promql}[1d]))`)) ?? 0) > 0;
-    const container = deployment?.namespace
-      ? await present(
-          `container_memory_working_set_bytes{namespace=${JSON.stringify(deployment.namespace)}}`
-        )
-      : false;
-    const candidates = resolved
-      ? INGRESS_ADAPTERS.map((a) => a.queries(resolved.target)).filter(
-          (q): q is IngressQueries => q !== null
-        )
-      : [];
-    const http = (await Promise.all(candidates.map((q) => present(q.presence)))).some(Boolean);
-    const value = { container, http, access };
-    if (this.signalsCache.size > 5_000) this.signalsCache.clear();
-    this.signalsCache.set(deploymentId, { value, at: Date.now() });
-    return value;
+    if (!presence) return { container: false, http: false, access };
+    return {
+      container: hasContainerSignal(presence, deployment?.namespace ?? null),
+      http: resolved ? httpFlavors(presence, resolved.target).length > 0 : false,
+      access
+    };
   }
 
   private async protectedNeighbours(deploymentId: string): Promise<boolean> {
@@ -938,8 +920,6 @@ export class ObservabilityService {
     return { errors };
   }
 
-  private readonly flavorCache = new Map<string, { flavor: string; at: number }>();
-
   private async ingressTarget(
     deploymentId: string
   ): Promise<{ target: IngressTarget; hosts: Map<string, string[]> } | null> {
@@ -989,16 +969,8 @@ export class ObservabilityService {
   private async flavorFor(target: IngressTarget): Promise<string> {
     const configured = configuredAdapter();
     if (configured) return configured.id;
-    const cached = this.flavorCache.get(target.namespace);
-    if (cached && Date.now() - cached.at < FLAVOR_TTL_MS) return cached.flavor;
-    const candidates = INGRESS_ADAPTERS.map((a) => a.queries(target)).filter(
-      (q): q is IngressQueries => q !== null
-    );
-    const counts = await Promise.all(
-      candidates.map((q) => this.vm.queryInstant(`count(last_over_time(${q.presence}[6h]))`))
-    );
-    const found = candidates.find((_, i) => (counts[i] ?? 0) > 0)?.flavor;
-    if (found) this.flavorCache.set(target.namespace, { flavor: found, at: Date.now() });
+    const presence = await this.presence.current().catch(() => null);
+    const found = presence ? httpFlavors(presence, target)[0] : undefined;
     return found ?? guessedAdapter().id;
   }
 
