@@ -924,10 +924,14 @@ html {
 	color: var(--surface-muted);
 }
 
+.ui-menu {
+	max-width: min(20rem, calc(100vw - 2rem));
+}
+
 .ui-popover--match {
-	width: max-content;
-	min-width: max(12rem, var(--melt-invoker-width, 0px));
-	max-width: max(var(--melt-invoker-width, 0px), 30rem);
+	width: max(12rem, var(--melt-invoker-width, 0px));
+	min-width: 0;
+	max-width: calc(100vw - 2rem);
 }
 
 .ui-dropdown-trigger {
