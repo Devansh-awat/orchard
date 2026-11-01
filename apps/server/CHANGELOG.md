@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.87.0](https://github.com/hackclub/orchard/compare/server/v2.86.0...server/v2.87.0) (2026-11-01)
+
+
+### Features
+
+* **frontend:** restyle template instance page ([9198416](https://github.com/hackclub/orchard/commit/9198416c385770ac359d71ae28cadae12205b3ad))
+* mark template resources on project page ([6b31668](https://github.com/hackclub/orchard/commit/6b316686cbf17fdfcfd86ca50c6f8e8995700905))
+* **server:** search github repos instead of listing all ([a2a5119](https://github.com/hackclub/orchard/commit/a2a5119bc3f5dc9ccbac30a58dd6416cee931179))
+
 ## [2.86.0](https://github.com/hackclub/orchard/compare/server/v2.85.1...server/v2.86.0) (2026-11-01)
 
 

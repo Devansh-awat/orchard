@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.36.0](https://github.com/hackclub/orchard/compare/cli/v0.35.0...cli/v0.36.0) (2026-11-01)
+
+
+### Features
+
+* **server:** search github repos instead of listing all ([a2a5119](https://github.com/hackclub/orchard/commit/a2a5119bc3f5dc9ccbac30a58dd6416cee931179))
+
 ## [0.35.0](https://github.com/hackclub/orchard/compare/cli/v0.34.0...cli/v0.35.0) (2026-11-01)
 
 

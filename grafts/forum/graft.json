@@ -9,24 +9,12 @@
     "platform": ">=2.70.0 <3",
     "sdk": "^1.0.0"
   },
-  "capabilities": [
-    "db",
-    "storage"
-  ],
+  "capabilities": ["db", "storage"],
   "database": {
     "coreReads": {
-      "users": [
-        "id",
-        "username",
-        "image_url"
-      ]
+      "users": ["id", "username", "image_url"]
     },
-    "adopts": [
-      "forum_categories",
-      "forum_threads",
-      "forum_replies",
-      "forum_votes"
-    ]
+    "adopts": ["forum_categories", "forum_threads", "forum_replies", "forum_votes"]
   },
   "ui": {
     "screens": [

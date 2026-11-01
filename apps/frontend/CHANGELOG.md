@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.78.0](https://github.com/hackclub/orchard/compare/frontend/v1.77.0...frontend/v1.78.0) (2026-11-01)
+
+
+### Features
+
+* **frontend:** restyle template instance page ([9198416](https://github.com/hackclub/orchard/commit/9198416c385770ac359d71ae28cadae12205b3ad))
+* **frontend:** search github repos as you type ([ab9734d](https://github.com/hackclub/orchard/commit/ab9734d9147b157ac7f476e3ed4931d3fbceec26))
+* mark template resources on project page ([6b31668](https://github.com/hackclub/orchard/commit/6b316686cbf17fdfcfd86ca50c6f8e8995700905))
+
+
+### Bug Fixes
+
+* **frontend:** github banner waits for the status check ([0e719c9](https://github.com/hackclub/orchard/commit/0e719c9531af58ce3e466bcfecc68f1ef16b73c3))
+
 ## [1.77.0](https://github.com/hackclub/orchard/compare/frontend/v1.76.1...frontend/v1.77.0) (2026-11-01)
 
 
