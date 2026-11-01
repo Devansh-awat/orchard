@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.76.0](https://github.com/hackclub/orchard/compare/frontend/v1.75.0...frontend/v1.76.0) (2026-11-01)
+
+
+### Features
+
+* request data, attack signals, image scanning and database protection only show what an instance can actually do ([66891ce](https://github.com/hackclub/orchard/commit/66891cedb987beabeac86608d984f02d8c8982c4))
+
+
+### Bug Fixes
+
+* **frontend:** names, hosts, emails and paths truncate or wrap everywhere instead of stretching their containers ([1fc9e18](https://github.com/hackclub/orchard/commit/1fc9e1850e72fbe60847fa77e12d5c1b732fce93))
+
 ## [1.75.0](https://github.com/hackclub/orchard/compare/frontend/v1.74.0...frontend/v1.75.0) (2026-11-01)
 
 

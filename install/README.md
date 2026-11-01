@@ -18,18 +18,18 @@ Install the Helm chart instead and keep your own platform layer
 
 ## What it installs
 
-| Component     | Why                                                                                        |
-| ------------- | ------------------------------------------------------------------------------------------ |
-| k3s           | The cluster. Traefik disabled (installed separately), servicelb kept                       |
-| Traefik       | Control-plane ingress and the app Gateway                                                  |
-| CloudNativePG | Orchard's own database and every database you create                                       |
-| cert-manager  | TLS, unless Cloudflare is terminating it for you                                           |
-| zot           | Registry for images Orchard builds                                                         |
-| Orchard       | The Helm chart, with a generated values file, including the MCP endpoint agents connect to |
+| Component     | Why                                                                                                        |
+| ------------- | ---------------------------------------------------------------------------------------------------------- |
+| k3s           | The cluster. Traefik disabled (installed separately), servicelb kept                                       |
+| Traefik       | Control-plane ingress and the app Gateway                                                                  |
+| CloudNativePG | Orchard's own database and every database you create                                                       |
+| cert-manager  | TLS, unless Cloudflare is terminating it for you                                                           |
+| zot           | Registry for images Orchard builds                                                                         |
+| Orchard       | The Helm chart, with a generated values file, including the MCP endpoint agents connect to                 |
 | Observability | VictoriaMetrics for the metrics graphs, VictoriaLogs and Vector for log search and per-route request stats |
-| Trivy         | The Orchard image scanner behind each app's Security tab, scanning straight from zot       |
-| versitygw     | An S3 store on this box for database backups, checkpoints, point-in-time restore and forks  |
-| r2-proxy      | Hands each database credentials for its own backups only, never the store's root key       |
+| Trivy         | The Orchard image scanner behind each app's Security tab, scanning straight from zot                       |
+| versitygw     | An S3 store on this box for database backups, checkpoints, point-in-time restore and forks                 |
+| r2-proxy      | Hands each database credentials for its own backups only, never the store's root key                       |
 
 Everything lands in `/etc/orchard/values.yaml`. Edit that file and run
 `orchard-update` to apply changes. Environment variables are one list in that
@@ -246,18 +246,18 @@ sudo ./install.sh --yes \
 
 ### Behaviour
 
-| Flag                            | Environment variable    | Default                                                                     |
-| ------------------------------- | ----------------------- | --------------------------------------------------------------------------- |
-| `--updates <manual\|automatic>` | `ORCHARD_UPDATE_POLICY` | asks; `manual` under `--yes`                                                |
-| `--mcp <true\|false>`           | `ORCHARD_MCP`           | `true`. Off, no MCP is deployed and the admin panel's toggle is pinned off. |
-| `--metrics <true\|false>`       | `ORCHARD_METRICS`       | `true`. The metrics graphs and usage pages.                                  |
-| `--logs <true\|false>`          | `ORCHARD_LOGS`          | `true`. Log search and per-route request stats.                             |
-| `--image-scanning <true\|false>` | `ORCHARD_IMAGE_SCANNING` | `true`. Vulnerability scans of every image Orchard builds.                |
-| `--object-storage <true\|false>` | `ORCHARD_OBJECT_STORAGE` | `true`. The local S3 store database backups go to.                        |
-| `--yes`, `-y`                   | `ORCHARD_ASSUME_YES`    | `false`                                                                     |
-| `--help`, `-h`                  |                         |                                                                             |
-|                                 | `NO_COLOR`              | unset. Any value disables colour.                                           |
-|                                 | `ORCHARD_NO_PACING`     | unset. `1` removes the brief pauses in the opening screen.                  |
+| Flag                             | Environment variable     | Default                                                                     |
+| -------------------------------- | ------------------------ | --------------------------------------------------------------------------- |
+| `--updates <manual\|automatic>`  | `ORCHARD_UPDATE_POLICY`  | asks; `manual` under `--yes`                                                |
+| `--mcp <true\|false>`            | `ORCHARD_MCP`            | `true`. Off, no MCP is deployed and the admin panel's toggle is pinned off. |
+| `--metrics <true\|false>`        | `ORCHARD_METRICS`        | `true`. The metrics graphs and usage pages.                                 |
+| `--logs <true\|false>`           | `ORCHARD_LOGS`           | `true`. Log search and per-route request stats.                             |
+| `--image-scanning <true\|false>` | `ORCHARD_IMAGE_SCANNING` | `true`. Vulnerability scans of every image Orchard builds.                  |
+| `--object-storage <true\|false>` | `ORCHARD_OBJECT_STORAGE` | `true`. The local S3 store database backups go to.                          |
+| `--yes`, `-y`                    | `ORCHARD_ASSUME_YES`     | `false`                                                                     |
+| `--help`, `-h`                   |                          |                                                                             |
+|                                  | `NO_COLOR`               | unset. Any value disables colour.                                           |
+|                                  | `ORCHARD_NO_PACING`      | unset. `1` removes the brief pauses in the opening screen.                  |
 
 ### Versions and images
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.85.0](https://github.com/hackclub/orchard/compare/server/v2.84.0...server/v2.85.0) (2026-11-01)
+
+
+### Features
+
+* request data, attack signals, image scanning and database protection only show what an instance can actually do ([66891ce](https://github.com/hackclub/orchard/commit/66891cedb987beabeac86608d984f02d8c8982c4))
+* self-hosted installs run logs, metrics, image scanning and local backups by default, and orchardctl update turns them on for existing installs ([524f7d3](https://github.com/hackclub/orchard/commit/524f7d36cf7ec56de8ceff4e82e846e78e5cfc3c))
+
 ## [2.84.0](https://github.com/hackclub/orchard/compare/server/v2.83.0...server/v2.84.0) (2026-11-01)
 
 

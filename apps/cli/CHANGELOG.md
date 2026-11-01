@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.35.0](https://github.com/hackclub/orchard/compare/cli/v0.34.0...cli/v0.35.0) (2026-11-01)
+
+
+### Features
+
+* request data, attack signals, image scanning and database protection only show what an instance can actually do ([66891ce](https://github.com/hackclub/orchard/commit/66891cedb987beabeac86608d984f02d8c8982c4))
+
 ## [0.34.0](https://github.com/hackclub/orchard/compare/cli/v0.33.1...cli/v0.34.0) (2026-11-01)
 
 
