@@ -1,5 +1,32 @@
 # Changelog
 
+## [2.86.0](https://github.com/hackclub/orchard/compare/server/v2.85.1...server/v2.86.0) (2026-11-01)
+
+
+### Features
+
+* copy databases across projects ([6f9edcf](https://github.com/hackclub/orchard/commit/6f9edcfac63c275c045335f1a97eee266b9185bb))
+* link findings to their release ([ba87fe8](https://github.com/hackclub/orchard/commit/ba87fe89aef47d2fc37b89dc0bf11cb034d4c382))
+
+
+### Bug Fixes
+
+* **server:** cache observe capabilities in redis ([cbdacfa](https://github.com/hackclub/orchard/commit/cbdacfaeb404d38342d42f684777d75ed42e83b3))
+* **server:** cheaper session checks ([e465908](https://github.com/hackclub/orchard/commit/e4659086d3ff2634f80a8b22f6ea0fc285e359ce))
+* **server:** dedupe github token refreshes ([f7b7c2a](https://github.com/hackclub/orchard/commit/f7b7c2ad1bd6a1cb2e4897b3909fdf0d4a72f977))
+* **server:** faster deployment detail and metrics ([01d5335](https://github.com/hackclub/orchard/commit/01d533572ca7cd48753f0ade59947939ff460952))
+* **server:** faster member usage ([fc03804](https://github.com/hackclub/orchard/commit/fc0380497fa124ddf40d8861487a2b310a3cad7b))
+* **server:** faster org overview ([c32f1a5](https://github.com/hackclub/orchard/commit/c32f1a54d7d93dc253bf8d11917c5d55e1d11714))
+* **server:** hide credential-like template params ([1778c69](https://github.com/hackclub/orchard/commit/1778c6923e39ca6544e5551629ebab192af68000))
+* **server:** only the leader repoints ingress tls, so a dev server or a booting replica can't flip certificates ([031c61a](https://github.com/hackclub/orchard/commit/031c61a70ebe76b3bcff87debf6d603d575e9ddb))
+* **server:** per-user github repo cache ([3aafa96](https://github.com/hackclub/orchard/commit/3aafa96d4bbffaf8723273737708962c4ead8b86))
+* show org default resource values ([34ce941](https://github.com/hackclub/orchard/commit/34ce941379117840a8f9cd4ab25720758bd5409d))
+
+
+### Performance Improvements
+
+* **server:** org usage asks victoriametrics seven cluster-wide queries instead of five per app and shares the result through redis ([7ad7753](https://github.com/hackclub/orchard/commit/7ad77537bcf88207496702bd7b741cd19e6acd9f))
+
 ## [2.85.1](https://github.com/hackclub/orchard/compare/server/v2.85.0...server/v2.85.1) (2026-11-01)
 
 

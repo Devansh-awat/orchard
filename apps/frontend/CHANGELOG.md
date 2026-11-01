@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.77.0](https://github.com/hackclub/orchard/compare/frontend/v1.76.1...frontend/v1.77.0) (2026-11-01)
+
+
+### Features
+
+* copy databases across projects ([6f9edcf](https://github.com/hackclub/orchard/commit/6f9edcfac63c275c045335f1a97eee266b9185bb))
+* **frontend:** add an Amp tab to the MCP settings ([#198](https://github.com/hackclub/orchard/issues/198)) ([2bcd2e6](https://github.com/hackclub/orchard/commit/2bcd2e67d5ca4755286e62543ab4593fbfb5a008))
+* **frontend:** edit project description ([28a5346](https://github.com/hackclub/orchard/commit/28a534631dfcf61e99cb46dc11f08dc5cd11feb5))
+* **frontend:** group build logs by docker stage ([a8c79c9](https://github.com/hackclub/orchard/commit/a8c79c93dd952b2d1903ce5f0a895204281da33d))
+* **frontend:** slow loads show a loading bar with real progress instead of skeletons, and the error rate card says when it didn't load ([eab21b1](https://github.com/hackclub/orchard/commit/eab21b1c50364f1a7a25507224dd27af6b186ad8))
+* link findings to their release ([ba87fe8](https://github.com/hackclub/orchard/commit/ba87fe89aef47d2fc37b89dc0bf11cb034d4c382))
+
+
+### Bug Fixes
+
+* **frontend:** fewer app page refetches ([990ace1](https://github.com/hackclub/orchard/commit/990ace15cebdb319860d031a62f3fbcd83c611c8))
+* **frontend:** instant new menu navigation ([2638dfe](https://github.com/hackclub/orchard/commit/2638dfe76f0d4ab363177b08031984a0afc02249))
+* **frontend:** no banding under page fades ([25e2896](https://github.com/hackclub/orchard/commit/25e2896733cceb1a229b416d24f2505733a75a94))
+* **frontend:** no layout shift on loading cards ([0ff8629](https://github.com/hackclub/orchard/commit/0ff86293cad027c833a89d4757830d51b4108fc2))
+* **frontend:** parallel loads on new app and usage ([f4c0303](https://github.com/hackclub/orchard/commit/f4c03038c85e6431c748c77c531b3df7588b03a9))
+* **frontend:** pinned theme colours paint exactly ([78b0cbf](https://github.com/hackclub/orchard/commit/78b0cbf06ca80c7a08fc05f90d9b9a1023bfb2b9))
+* **frontend:** poll org overview less ([ce3d0e0](https://github.com/hackclub/orchard/commit/ce3d0e066e1930e98be28f551a36f2987bec929e))
+* **frontend:** reduce transparency works in dark mode ([33e8eb5](https://github.com/hackclub/orchard/commit/33e8eb525077b0e410df13be72c470937d25ddcc))
+* **frontend:** skip org lookup on project pages ([37ca3ce](https://github.com/hackclub/orchard/commit/37ca3ce14aacf6172351e40fa5c900c4cbce6bca))
+* **frontend:** squircle avatars, consistent plan label ([cabf0e5](https://github.com/hackclub/orchard/commit/cabf0e5b6ec9c92eb583ccfbe2b0f4ab7eac8d9f))
+* **frontend:** themed app page skeleton ([257bf74](https://github.com/hackclub/orchard/commit/257bf74f9715510f00d291aebe3715d12653c499))
+* **frontend:** themed toasts ([9f5029a](https://github.com/hackclub/orchard/commit/9f5029aa8bcdbaa983783a8a9cb0ce46f8b18e69))
+* **frontend:** themed, centered boot splash ([53f3b09](https://github.com/hackclub/orchard/commit/53f3b09e6454252f858ed08aed8d9cc5ed28479d))
+* **frontend:** tidy header-only cards ([7314f4c](https://github.com/hackclub/orchard/commit/7314f4c076efd9bd85d11c0cb713decefa82554f))
+* **frontend:** toast insets come from the same constants as its width, and the design system records toast, action and key rules ([3647038](https://github.com/hackclub/orchard/commit/36470382b165f9814b3601cdc22ac949f3d74f84))
+* show org default resource values ([34ce941](https://github.com/hackclub/orchard/commit/34ce941379117840a8f9cd4ab25720758bd5409d))
+
 ## [1.76.1](https://github.com/hackclub/orchard/compare/frontend/v1.76.0...frontend/v1.76.1) (2026-11-01)
 
 

@@ -1,7 +1,7 @@
 {
   "id": "forum",
   "name": "The Grove",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "publisher": "orchard",
   "description": "A forum for the people on your instance: bug reports, feature requests, votes and replies.",
   "homepage": "https://orchard.my/docs/run/grove",
@@ -9,12 +9,24 @@
     "platform": ">=2.70.0 <3",
     "sdk": "^1.0.0"
   },
-  "capabilities": ["db", "storage"],
+  "capabilities": [
+    "db",
+    "storage"
+  ],
   "database": {
     "coreReads": {
-      "users": ["id", "username", "image_url"]
+      "users": [
+        "id",
+        "username",
+        "image_url"
+      ]
     },
-    "adopts": ["forum_categories", "forum_threads", "forum_replies", "forum_votes"]
+    "adopts": [
+      "forum_categories",
+      "forum_threads",
+      "forum_replies",
+      "forum_votes"
+    ]
   },
   "ui": {
     "screens": [
