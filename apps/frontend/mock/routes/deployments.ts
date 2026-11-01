@@ -463,7 +463,7 @@ function remember(d: MockDeployment, patch: Record<string, unknown>) {
 }
 
 function timeline(store: Store, d: MockDeployment) {
-	const entries = store.buildsOf(d.id).map((b) => {
+	const entries: Record<string, unknown>[] = store.buildsOf(d.id).map((b) => {
 		const by = store.user(b.triggeredById);
 		return {
 			id: `release:${b.id}`,

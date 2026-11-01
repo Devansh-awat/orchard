@@ -2,7 +2,7 @@
 	import { Popover } from 'melt/builders';
 	import { PlacementLock } from './placement-lock.svelte';
 	import type { Snippet } from 'svelte';
-	import type { Placement } from '@floating-ui/dom';
+	import type { Placement } from './placement';
 	import { overlayMotion } from '$lib/utils/motion.svelte';
 
 	let {

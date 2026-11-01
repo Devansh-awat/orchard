@@ -1,4 +1,4 @@
-import type { Placement } from '@floating-ui/dom';
+import type { Placement } from './placement';
 import type { Attachment } from 'svelte/attachments';
 
 export class PlacementLock {

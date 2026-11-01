@@ -1,20 +1,6 @@
 <script lang="ts" module>
-	export type ShelfTone = 'success' | 'progress' | 'error' | 'neutral';
-
-	export type ShelfItem = {
-		id: string;
-		title: string;
-		subtitle?: string;
-		description?: string;
-		href: string;
-		kind?: 'deployment' | 'database' | 'job';
-		icon?: string | null;
-		background?: string | null;
-		status?: string;
-		tone?: ShelfTone;
-		progress?: number;
-		at?: string;
-	};
+	import type { ShelfTone, ShelfItem } from './shelf';
+	export type { ShelfTone, ShelfItem };
 </script>
 
 <script lang="ts">

@@ -101,7 +101,9 @@ function createActivityStore() {
 		patchOne(id, (a) => {
 			if (a.status !== 'running') return { ...a, ...patch, phases: patch.phases ?? a.phases };
 			const moved = patch.phase !== undefined && patch.phase !== a.phase && !patch.phases;
-			const next = moved ? advance(a, patch.phase!, patch.phaseId, now) : {};
+			const next: Partial<ReturnType<typeof advance>> = moved
+				? advance(a, patch.phase!, patch.phaseId, now)
+				: {};
 			return { ...a, ...patch, ...next, phases: patch.phases ?? next.phases ?? a.phases };
 		});
 	}

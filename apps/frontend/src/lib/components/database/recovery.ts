@@ -1,6 +1,6 @@
 import { Eraser, Flag, RefreshCcw, Rocket } from 'lucide-svelte';
 import { statusMeta, type StatusMeta } from '$lib/components/ui/status';
-import type { DotStep } from '$lib/components/ui/StatusDot.svelte';
+import type { DotStep } from '$lib/components/ui/status-dot';
 import { formatWhen } from './BackupFormat';
 import type {
 	CheckpointKind,

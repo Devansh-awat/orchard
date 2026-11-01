@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Tooltip } from 'melt/builders';
 	import type { Snippet } from 'svelte';
-	import type { Placement } from '@floating-ui/dom';
+	import type { Placement } from './placement';
 
 	let {
 		text,

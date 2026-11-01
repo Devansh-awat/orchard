@@ -1,15 +1,6 @@
 <script lang="ts" module>
-	export interface EnvVarEditorRow {
-		key: string;
-		value: string;
-		secret?: boolean;
-		sealed?: boolean;
-	}
-
-	export interface EnvVarIssue {
-		tone: 'error' | 'warning';
-		text: string;
-	}
+	import type { EnvVarEditorRow, EnvVarIssue } from './env-var-editor';
+	export type { EnvVarEditorRow, EnvVarIssue };
 </script>
 
 <script lang="ts">

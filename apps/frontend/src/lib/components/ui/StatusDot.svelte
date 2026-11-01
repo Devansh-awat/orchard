@@ -1,5 +1,6 @@
 <script lang="ts" module>
-	export type DotStep = 'done' | 'active' | 'failed' | 'pending';
+	import type { DotStep } from './status-dot';
+	export type { DotStep };
 </script>
 
 <script lang="ts">

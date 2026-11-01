@@ -1,5 +1,5 @@
 import { BookOpen, Box, Copy, Database, Moon, Plus, Timer, UserPlus } from 'lucide-svelte';
-import type { PaletteAction, PaletteItem } from '$lib/components/patterns/CommandPalette.svelte';
+import type { PaletteAction, PaletteItem } from '$lib/components/patterns/command-palette';
 import { themeStore } from '$lib/stores/theme';
 import { PROJECTS, MORE_PROJECTS } from './fixtures';
 
@@ -86,7 +86,6 @@ export function paletteActions(say: (text: string) => () => void): PaletteAction
 				navigator.clipboard
 					?.writeText('6e7235cf-d703-4868-9346-84de39f66e8c')
 					.catch(() => undefined);
-				said = 'Copied the org ID';
 			}
 		},
 		{

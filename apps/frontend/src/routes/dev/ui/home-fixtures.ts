@@ -1,5 +1,5 @@
-import type { SpotlightItem } from '$lib/components/patterns/ProjectSpotlight.svelte';
-import type { ShelfItem } from '$lib/components/patterns/Shelf.svelte';
+import type { SpotlightItem } from '$lib/components/patterns/project-spotlight';
+import type { ShelfItem } from '$lib/components/patterns/shelf';
 import { PROJECTS, MORE_PROJECTS, BUILD_FEED } from './fixtures';
 
 const [site, terra] = PROJECTS;
