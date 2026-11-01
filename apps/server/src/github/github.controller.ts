@@ -82,34 +82,14 @@ export class GitHubController {
    * then falls back to checking if the repo is public (unauthenticated access).
    */
   private async resolveRepoAccess(user: any, owner: string, repo: string): Promise<string> {
-    // If user has a GitHub token, try authenticated access first
-    if (user.githubAccessToken) {
-      const canAccess = await this.githubService.verifyUserCanAccessRepo(user.id, owner, repo);
-      if (canAccess) {
-        const token = await this.githubService.resolveRepoToken(user.id, owner, repo);
-        if (token) return token;
-      }
-    }
-
-    // Fallback: check if the repo is public
-    const isPublic = await this.githubService.isRepoPublic(owner, repo);
-    if (!isPublic) {
+    const token = await this.githubService.resolveReadAccessToken(user, owner, repo);
+    if (token === null) {
       throw new HttpException(
         'You do not have access to this repository on GitHub. Connect your GitHub account or check the repository URL.',
         HttpStatus.FORBIDDEN
       );
     }
-
-    // For public repos, user's OAuth token works (if available) — otherwise
-    // the GitHub service methods will use unauthenticated requests.
-    if (user.githubAccessToken) {
-      const token = await this.githubService.getValidUserToken(user.id);
-      if (token) return token;
-    }
-
-    // Public repo, no user token — return empty string; service methods need
-    // to handle this by omitting the Authorization header.
-    return '';
+    return token;
   }
 
   @Public()

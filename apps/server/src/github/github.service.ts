@@ -3,10 +3,12 @@ import {
   BadRequestException,
   ConflictException,
   OnModuleDestroy,
-  OnModuleInit
+  OnModuleInit,
+  Optional
 } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { SharedCache } from '../cache/shared-cache.service';
 import { OAuthService } from '../auth/oauth.service';
 import { LeaderElectionService } from '../events/leader-election.service';
 import { canonicalRepoUrl, isNullSha, repoUrlVariants } from './auto-deploy-match';
@@ -190,13 +192,18 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
 
   private readonly CACHE_TTL = 5 * 60 * 1000;
 
+  private readonly cache: SharedCache;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly oauthService: OAuthService,
     private readonly appConfig: GithubAppConfigService,
     private readonly leader: LeaderElectionService,
-    private readonly crypto: SecretCryptoService
-  ) {}
+    private readonly crypto: SecretCryptoService,
+    @Optional() cache?: SharedCache
+  ) {
+    this.cache = cache ?? new SharedCache();
+  }
 
   onModuleInit() {
     // Leadership lands asynchronously, so the interval alone would miss the
@@ -216,7 +223,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
   }
 
   private getCacheKey(accessToken: string, maxPages: number): string {
-    return `${accessToken.substring(0, 10)}_${maxPages}`;
+    return `${crypto.createHash('sha256').update(accessToken).digest('hex')}_${maxPages}`;
   }
 
   private getCachedRepos(accessToken: string, maxPages: number): GitHubRepo[] | null {
@@ -2145,19 +2152,117 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     return this.getValidUserToken(userId);
   }
 
-  private readonly userInstallationsCache = new Map<string, { at: number; rows: any[] }>();
-
-  private readonly accessibleReposCache = new Map<string, { at: number; ids: Set<string> }>();
+  private readonly userInstallationsCache = new Map<
+    string,
+    { at: number; epoch: number; rows: any[] }
+  >();
 
   private static readonly INSTALLATIONS_CACHE_MS = 5 * 60 * 1000;
 
-  private static readonly ACCESSIBLE_REPOS_CACHE_MS = 60 * 1000;
+  private static readonly ACCESSIBLE_REPOS_FRESH_MS = 60 * 1000;
+
+  private static readonly ACCESSIBLE_REPOS_KEEP_MS = 10 * 60 * 1000;
+
+  private static readonly REPO_ACCESS_TTL_MS = 2 * 60 * 1000;
 
   private static readonly MIRROR_STALE_MS = 24 * 60 * 60 * 1000;
 
+  private static readonly EPOCH_KEY = 'github:installations-epoch';
+
+  private async installationsEpoch(): Promise<number> {
+    return (await this.cache.get<number>(GitHubService.EPOCH_KEY)) ?? 0;
+  }
+
   clearUserInstallationsCache() {
     this.userInstallationsCache.clear();
-    this.accessibleReposCache.clear();
+    void this.cache.set(GitHubService.EPOCH_KEY, Date.now(), 7 * 24 * 60 * 60 * 1000);
+  }
+
+  private async accessibleRepoIds(
+    epoch: number,
+    userId: string,
+    userToken: string,
+    installationId: bigint
+  ): Promise<Set<string> | null> {
+    const key = `github:accessible:${epoch}:${userId}:${installationId}`;
+    try {
+      const ids = await this.cache.snapshot(
+        key,
+        {
+          freshMs: GitHubService.ACCESSIBLE_REPOS_FRESH_MS,
+          keepMs: GitHubService.ACCESSIBLE_REPOS_KEEP_MS
+        },
+        async () => {
+          const found = await this.getUserAccessibleRepoIds(userToken, installationId);
+          if (!found) throw new Error(`accessible repos unresolved for ${installationId}`);
+          return [...found];
+        }
+      );
+      return new Set(ids);
+    } catch {
+      return null;
+    }
+  }
+
+  async resolveReadAccessToken(
+    user: { id: string; githubAccessToken?: string | null },
+    owner: string,
+    repo: string
+  ): Promise<string | null> {
+    type Decision = { via: 'installation'; installationId: string } | { via: 'user' | 'public' };
+    const epoch = await this.installationsEpoch();
+    const key = `github:repo-access:${epoch}:${user.id}:${owner.toLowerCase()}/${repo.toLowerCase()}`;
+    const cached = await this.cache.get<Decision>(key);
+    if (cached) {
+      const token = await this.tokenForDecision(user, cached).catch(() => null);
+      if (token !== null) return token;
+      await this.cache.del(key);
+    }
+
+    let decision: Decision | null = null;
+    let token: string | null = null;
+    if (user.githubAccessToken) {
+      const [canAccess, installation] = await Promise.all([
+        this.verifyUserCanAccessRepo(user.id, owner, repo),
+        this.findInstallationForRepo(owner, repo).catch(() => null)
+      ]);
+      if (canAccess) {
+        if (installation) {
+          token = await this.getOrRefreshInstallationToken(installation.installationId).catch(
+            () => null
+          );
+          if (token) {
+            decision = {
+              via: 'installation',
+              installationId: installation.installationId.toString()
+            };
+          }
+        }
+        if (!token) {
+          token = await this.getValidUserToken(user.id);
+          if (token) decision = { via: 'user' };
+        }
+      }
+    }
+    if (!decision) {
+      if (!(await this.isRepoPublic(owner, repo))) return null;
+      decision = { via: 'public' };
+      token = await this.tokenForDecision(user, decision);
+    }
+    await this.cache.set(key, decision, GitHubService.REPO_ACCESS_TTL_MS);
+    return token ?? '';
+  }
+
+  private async tokenForDecision(
+    user: { id: string; githubAccessToken?: string | null },
+    decision: { via: 'installation'; installationId: string } | { via: 'user' | 'public' }
+  ): Promise<string | null> {
+    if (decision.via === 'installation') {
+      return this.getOrRefreshInstallationToken(BigInt(decision.installationId));
+    }
+    if (decision.via === 'user') return this.getValidUserToken(user.id);
+    if (!user.githubAccessToken) return '';
+    return (await this.getValidUserToken(user.id)) ?? '';
   }
 
   // Repo metadata is served from the DB mirror (kept current by installation,
@@ -2175,13 +2280,19 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     hasInstallations: boolean;
     userLinked: boolean;
   }> {
+    const epoch = await this.installationsEpoch();
     let installations: any[];
     const cachedInst = this.userInstallationsCache.get(userId);
-    if (cachedInst && Date.now() - cachedInst.at < GitHubService.INSTALLATIONS_CACHE_MS) {
+    if (
+      cachedInst &&
+      cachedInst.epoch === epoch &&
+      Date.now() - cachedInst.at < GitHubService.INSTALLATIONS_CACHE_MS
+    ) {
       installations = cachedInst.rows;
     } else {
       installations = await this.getUserInstallations(userId);
-      this.userInstallationsCache.set(userId, { at: Date.now(), rows: installations });
+      if (this.userInstallationsCache.size > 5_000) this.userInstallationsCache.clear();
+      this.userInstallationsCache.set(userId, { at: Date.now(), epoch, rows: installations });
     }
 
     const userToken = await this.getValidUserToken(userId);
@@ -2238,16 +2349,10 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
 
     const allowedByInst = new Map<string, Set<string> | null>(
       await Promise.all(
-        installations.map(async (i): Promise<[string, Set<string> | null]> => {
-          const key = `${userId}:${i.installationId}`;
-          const cached = this.accessibleReposCache.get(key);
-          if (cached && Date.now() - cached.at < GitHubService.ACCESSIBLE_REPOS_CACHE_MS) {
-            return [i.id, cached.ids];
-          }
-          const ids = await this.getUserAccessibleRepoIds(userToken, i.installationId);
-          if (ids) this.accessibleReposCache.set(key, { at: Date.now(), ids });
-          return [i.id, ids];
-        })
+        installations.map(async (i): Promise<[string, Set<string> | null]> => [
+          i.id,
+          await this.accessibleRepoIds(epoch, userId, userToken, i.installationId)
+        ])
       )
     );
 
