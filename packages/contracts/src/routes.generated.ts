@@ -291,6 +291,7 @@ export const routes: GeneratedRoute[] = [
   { method: 'GET', path: '/github/repositories/:owner/:repo/dockerfile-info', auth: 'authenticated' },
   { method: 'GET', path: '/github/repositories/:owner/:repo/dockerfile-stages', auth: 'authenticated' },
   { method: 'GET', path: '/github/repositories/:owner/:repo/dockerfiles', auth: 'authenticated' },
+  { method: 'GET', path: '/github/repositories/search', auth: 'authenticated' },
   { method: 'GET', path: '/github/status', auth: 'authenticated' },
   { method: 'DELETE', path: '/github/unlink', auth: 'authenticated' },
   { method: 'GET', path: '/grafts', auth: 'authenticated' },

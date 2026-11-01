@@ -204,6 +204,7 @@
   "GET /github/repositories/:owner/:repo/dockerfile-info": "authenticated",
   "GET /github/repositories/:owner/:repo/dockerfile-stages": "authenticated",
   "GET /github/repositories/:owner/:repo/dockerfiles": "authenticated",
+  "GET /github/repositories/search": "authenticated",
   "GET /github/status": "authenticated",
   "GET /grafts": "authenticated",
   "GET /greenhouse/admin/limits": "superadmin",

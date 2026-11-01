@@ -17,6 +17,20 @@ import { GithubAppConfigService } from './github-app-config.service';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { parseDockerfileEnvVars } from './dockerfile-env';
 import {
+  REPO_SEARCH_LIMIT,
+  RepoSearchError,
+  buildSearchQ,
+  classifyGitHubFailure,
+  mergeExact,
+  normalizeRepoQuery,
+  ownedBy,
+  pickSearchInstallation,
+  rankRepos,
+  retryAfterSeconds,
+  toSearchedRepo,
+  type SearchedRepo
+} from './repo-search';
+import {
   detectApps,
   primaryApp,
   type DetectedApp,
@@ -2427,6 +2441,142 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     }));
 
     return { repos, installations: installationData, hasInstallations: true, userLinked };
+  }
+
+  private static readonly REPO_SEARCH_FRESH_MS = 60 * 1000;
+
+  private static readonly REPO_SEARCH_KEEP_MS = 5 * 60 * 1000;
+
+  async searchUserRepositories(userId: string, account: unknown, rawQuery: unknown) {
+    const epoch = await this.installationsEpoch(userId);
+    const installation = pickSearchInstallation(
+      await this.userInstallationsCached(userId, epoch),
+      account
+    );
+    if (!installation) throw new RepoSearchError('not_installed');
+    const token = await this.getValidUserToken(userId);
+    if (!token) throw new RepoSearchError('reauth');
+
+    const query = normalizeRepoQuery(installation.accountLogin, rawQuery);
+    const login = installation.accountLogin;
+    const installationId = installation.installationId.toString();
+    const shape = (repos: SearchedRepo[]) => ({
+      account: login,
+      query: query.key,
+      repositories: repos.slice(0, REPO_SEARCH_LIMIT).map((r) => ({
+        id: r.id,
+        name: r.name,
+        full_name: r.full_name,
+        private: r.private,
+        default_branch: r.default_branch,
+        clone_url: `https://github.com/${r.full_name}.git`,
+        pushed_at: r.pushed_at,
+        updated_at: r.updated_at,
+        installationId,
+        accountLogin: login
+      }))
+    });
+    if (query.foreignOwner) return shape([]);
+
+    const key = `github:repo-search:${epoch}:${userId}:${installationId}:${query.key}`;
+    const [found, exact] = await Promise.all([
+      this.cache.snapshot(
+        key,
+        {
+          freshMs: GitHubService.REPO_SEARCH_FRESH_MS,
+          keepMs: GitHubService.REPO_SEARCH_KEEP_MS
+        },
+        () => this.runRepoSearch(token, installation, query.terms)
+      ),
+      query.exactName ? this.lookupOwnedRepo(token, login, query.exactName) : null
+    ]);
+    const merged = rankRepos(mergeExact(found, exact), query.terms);
+    return shape(await this.enrichFromMirror(installation.id, merged));
+  }
+
+  private async runRepoSearch(
+    token: string,
+    installation: { accountLogin: string; accountType: string },
+    terms: string[]
+  ): Promise<SearchedRepo[]> {
+    const params = new URLSearchParams({
+      q: buildSearchQ(installation, terms),
+      sort: 'updated',
+      order: 'desc',
+      per_page: String(REPO_SEARCH_LIMIT)
+    });
+    let response: Response;
+    try {
+      response = await fetch(`https://api.github.com/search/repositories?${params}`, {
+        headers: this.githubApiHeaders(token),
+        signal: AbortSignal.timeout(8000)
+      });
+    } catch {
+      throw new RepoSearchError('unavailable');
+    }
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      const kind = classifyGitHubFailure(response.status, response.headers, body?.message ?? '');
+      if (kind === 'invalid') return [];
+      throw new RepoSearchError(
+        kind,
+        kind === 'rate_limited' ? retryAfterSeconds(response.headers) : null
+      );
+    }
+    const data = await response.json();
+    return (Array.isArray(data?.items) ? data.items : [])
+      .map(toSearchedRepo)
+      .filter(
+        (r: SearchedRepo | null): r is SearchedRepo => !!r && ownedBy(r, installation.accountLogin)
+      );
+  }
+
+  private async lookupOwnedRepo(
+    token: string,
+    account: string,
+    name: string
+  ): Promise<SearchedRepo | null> {
+    try {
+      const response = await fetch(
+        `https://api.github.com/repos/${encodeURIComponent(account)}/${encodeURIComponent(name)}`,
+        { headers: this.githubApiHeaders(token), signal: AbortSignal.timeout(5000) }
+      );
+      if (!response.ok) return null;
+      const repo = toSearchedRepo(await response.json());
+      return repo && ownedBy(repo, account) ? repo : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async enrichFromMirror(
+    appInstallationId: string,
+    repos: SearchedRepo[]
+  ): Promise<SearchedRepo[]> {
+    if (repos.length === 0 || !/^[0-9a-f-]{36}$/i.test(appInstallationId)) return repos;
+    type MirrorRow = { githubRepoId: bigint; defaultBranch: string | null; pushedAt: Date | null };
+    let rows: MirrorRow[] = [];
+    try {
+      rows = await this.prisma.gitHubRepoMirror.findMany({
+        where: { appInstallationId, githubRepoId: { in: repos.map((r) => BigInt(r.id)) } },
+        select: { githubRepoId: true, defaultBranch: true, pushedAt: true }
+      });
+    } catch {
+      return repos;
+    }
+    if (rows.length === 0) return repos;
+    const byId = new Map(rows.map((r) => [Number(r.githubRepoId), r]));
+    return repos.map((r) => {
+      const row = byId.get(r.id);
+      if (!row) return r;
+      const searched = r.pushed_at ? Date.parse(r.pushed_at) : 0;
+      const newer = row.pushedAt && row.pushedAt.getTime() > searched ? row.pushedAt : null;
+      return {
+        ...r,
+        default_branch: row.defaultBranch || r.default_branch,
+        pushed_at: newer ? newer.toISOString() : r.pushed_at
+      };
+    });
   }
 
   /**

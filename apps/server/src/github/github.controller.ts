@@ -25,6 +25,7 @@ import { Public, Auth } from '../auth/decorators';
 import { setGithubOauthStateCookie, clearGithubOauthStateCookie } from '../auth/cookies';
 import { changedFilesFromPush, partitionByWatchPaths } from './watch-paths';
 import { autoDeployMatchesBranch, pushCommitSha } from './auto-deploy-match';
+import { RepoSearchError, repoSearchErrorResponse } from './repo-search';
 
 /** Only allow same-origin, non-protocol-relative return paths. */
 function isSafeRedirect(redirect?: string): redirect is string {
@@ -353,6 +354,36 @@ export class GitHubController {
     }
     const oauthRepos = await this.githubService.getUserRepositories(userToken, maxPages);
     return { repositories: oauthRepos, installations: [], source: 'oauth' };
+  }
+
+  @Get('repositories/search')
+  async searchRepositories(
+    @Req() req: any,
+    @Query('account') account?: unknown,
+    @Query('q') q?: unknown
+  ) {
+    const externalAuthId = req.user.externalAuthId || req.user.sub;
+    const user = await this.usersService.findOrCreateByClerkId(externalAuthId, {
+      email: req.user.email,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName
+    });
+    if (!user) {
+      throw new HttpException('User not found', HttpStatus.UNAUTHORIZED);
+    }
+    if (!user.githubAccessToken) {
+      throw new HttpException(
+        { code: 'github_reconnect', message: 'Connect GitHub to search your repositories.' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    try {
+      return await this.githubService.searchUserRepositories(user.id, account, q);
+    } catch (e) {
+      if (!(e instanceof RepoSearchError)) throw e;
+      const { status, body } = repoSearchErrorResponse(e);
+      throw new HttpException(body, status);
+    }
   }
 
   @Get('repositories/:owner/:repo/branches')

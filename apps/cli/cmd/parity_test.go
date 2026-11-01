@@ -629,6 +629,7 @@ var routeExclusions = map[string]string{
 	"GET /audit-logs/global": "no CLI command yet: cross-org audit feed",
 	"GET /endpoints":         "no CLI command yet: raw k8s endpoint listing per namespace",
 	"GET /github/repositories/:owner/:repo/dockerfile-stages":    "no CLI command yet: dockerfile stage introspection",
+	"GET /github/repositories/search":                            "web repo picker search-as-you-type; github repos lists them",
 	"PATCH /environments/:id":                                    "no CLI command yet: environment rename",
 	"GET /projects/:id/ingresses/:ingressId":                     "duplicate read: CLI uses GET /ingresses/:id",
 	"DELETE /deployments/:deploymentId/ingresses/:ingressId":     "duplicate delete: CLI uses the project-scoped route",
