@@ -120,6 +120,9 @@
 		font-size: var(--text-headline);
 		--section-control-inset: calc(var(--section-pad) + var(--section-control-shift));
 	}
+	.head:last-child .actions {
+		margin-bottom: var(--section-control-shift);
+	}
 	.actions:not(:has(:global(button, a, input, .sb, .pill))) {
 		margin-right: 0;
 	}
@@ -148,7 +151,7 @@
 	.body > :global(.ui-list:not(.ui-list--inset):last-child) {
 		margin-bottom: -0.75rem;
 	}
-	.head:last-child .heading > :last-child {
+	.head:last-child .heading > :last-child:not(.title) {
 		text-box: trim-end text alphabetic;
 	}
 	.head + .body--flush {

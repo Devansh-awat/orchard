@@ -241,47 +241,45 @@
 	<div class="head">
 		<SectionTitle size="md" title="Shared variables" count={draft.length || undefined}>
 			{#snippet actions()}
-				{#if !loading && !failed}
-					<SegmentedControl
-						label="Editor mode"
-						size="sm"
-						options={MODES}
-						bind:value={() => mode, switchMode}
-					/>
-				{/if}
+				<SegmentedControl
+					label="Editor mode"
+					size="sm"
+					options={loading || failed ? MODES.map((o) => ({ ...o, disabled: true })) : MODES}
+					bind:value={() => mode, switchMode}
+				/>
 			{/snippet}
 		</SectionTitle>
 	</div>
 
-	{#if loading}
-		<Skeleton height="6rem" rounded="var(--radius-control)" />
-	{:else if failed}
-		<Alert tone="error" title="Shared variables did not load">
-			{#snippet actions()}
-				<Button variant="secondary" size="sm" onclick={() => load(environmentId)}>Retry</Button>
-			{/snippet}
-		</Alert>
-	{:else}
-		<Swap key={view}>
-			{#if view === 'empty'}
-				<EmptyState title="No shared variables in {place}">
-					{#snippet icon()}<KeyRound size={18} />{/snippet}
-					<Button variant="primary" icon={Plus} onclick={addFirst}>Add variable</Button>
-				</EmptyState>
-			{:else}
-				<EnvVarEditor
-					bind:rows
-					bind:raw
-					{mode}
-					secrets
-					stored={storedSecrets}
-					{issues}
-					{reference}
-					confirmSecret
-				/>
-			{/if}
-		</Swap>
+	<Swap key={loading ? 'loading' : failed ? 'failed' : view}>
+		{#if loading}
+			<Skeleton height="6rem" rounded="var(--radius-control)" />
+		{:else if failed}
+			<Alert tone="error" title="Shared variables did not load">
+				{#snippet actions()}
+					<Button variant="secondary" size="sm" onclick={() => load(environmentId)}>Retry</Button>
+				{/snippet}
+			</Alert>
+		{:else if view === 'empty'}
+			<EmptyState title="No shared variables in {place}">
+				{#snippet icon()}<KeyRound size={18} />{/snippet}
+				<Button variant="primary" icon={Plus} onclick={addFirst}>Add variable</Button>
+			</EmptyState>
+		{:else}
+			<EnvVarEditor
+				bind:rows
+				bind:raw
+				{mode}
+				secrets
+				stored={storedSecrets}
+				{issues}
+				{reference}
+				confirmSecret
+			/>
+		{/if}
+	</Swap>
 
+	{#if !loading && !failed}
 		{#if mode === 'raw' && listed.length > 0}
 			<div in:presence out:presence>
 				<Alert tone={blocking > 0 ? 'error' : 'warning'}>

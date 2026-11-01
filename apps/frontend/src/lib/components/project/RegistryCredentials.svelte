@@ -13,7 +13,6 @@
 		Modal,
 		SecretInput,
 		SectionCard,
-		Skeleton,
 		Stack,
 		ToneTile
 	} from '$lib/components/ui';
@@ -139,30 +138,26 @@
 </script>
 
 {#snippet list()}
-	{#if !loaded}
-		<Skeleton height="2.5rem" />
-	{:else}
-		<List inset={false} label="Registry credentials">
-			{#each credentials as cred (cred.id)}
-				<ListRow flush presence title={cred.registry} subtitle={cred.username}>
-					{#snippet leading()}<ToneTile size={32}><KeyRound size={16} /></ToneTile>{/snippet}
-					{#snippet actions()}
-						{#if canEdit}
-							<Button size="sm" onclick={() => openEditor(cred)}>Replace</Button>
-							<Button
-								variant="ghost"
-								size="sm"
-								icon={Trash2}
-								label="Remove {cred.registry} credential"
-								loading={removing === cred.id}
-								onclick={() => remove(cred)}
-							/>
-						{/if}
-					{/snippet}
-				</ListRow>
-			{/each}
-		</List>
-	{/if}
+	<List inset={false} label="Registry credentials">
+		{#each credentials as cred (cred.id)}
+			<ListRow flush presence title={cred.registry} subtitle={cred.username}>
+				{#snippet leading()}<ToneTile size={32}><KeyRound size={16} /></ToneTile>{/snippet}
+				{#snippet actions()}
+					{#if canEdit}
+						<Button size="sm" onclick={() => openEditor(cred)}>Replace</Button>
+						<Button
+							variant="ghost"
+							size="sm"
+							icon={Trash2}
+							label="Remove {cred.registry} credential"
+							loading={removing === cred.id}
+							onclick={() => remove(cred)}
+						/>
+					{/if}
+				{/snippet}
+			</ListRow>
+		{/each}
+	</List>
 {/snippet}
 
 {#snippet add()}
@@ -175,7 +170,7 @@
 	title="Registry credentials"
 	description={organizationId ? 'Every project uses these unless it sets its own.' : undefined}
 	actions={add}
-	children={!loaded || credentials.length > 0 ? list : undefined}
+	children={loaded && credentials.length > 0 ? list : undefined}
 />
 
 {#if canEdit}
