@@ -76,21 +76,27 @@
 			0 1px 2px color-mix(in srgb, var(--text-default) 12%, transparent);
 	}
 	.ui-tone-tile--solid.ui-tone-tile--neutral {
-		background: var(--status-neutral);
+		background: var(--status-neutral-solid);
+		color: var(--on-solid);
 	}
 	.ui-tone-tile--solid.ui-tone-tile--success {
-		background: var(--status-success);
+		background: var(--status-success-solid);
+		color: var(--on-solid);
 	}
 	.ui-tone-tile--solid.ui-tone-tile--error {
-		background: var(--status-error);
+		background: var(--status-error-solid);
+		color: var(--on-solid);
 	}
 	.ui-tone-tile--solid.ui-tone-tile--warning {
-		background: var(--status-warning);
+		background: var(--status-warning-solid);
+		color: var(--on-solid);
 	}
 	.ui-tone-tile--solid.ui-tone-tile--info {
-		background: var(--status-info);
+		background: var(--status-info-solid);
+		color: var(--on-solid);
 	}
 	.ui-tone-tile--solid.ui-tone-tile--progress {
-		background: var(--status-progress);
+		background: var(--status-progress-solid);
+		color: var(--on-solid);
 	}
 </style>
