@@ -1,6 +1,7 @@
 export type SpotlightItem = {
 	id: string;
 	name: string;
+	description?: string | null;
 	href: string;
 	url?: string | null;
 	image?: string | null;

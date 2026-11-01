@@ -574,6 +574,7 @@
 			project = {
 				...project,
 				name: updated.name,
+				description: updated.description,
 				icon: updated.icon,
 				backgroundImage: updated.backgroundImage
 			};
@@ -847,6 +848,7 @@
 					{
 						id: project.id,
 						name: project.name,
+						description: project.description,
 						href: `/${orgSlug}/projects/${project.slug}`,
 						url: visitUrl,
 						image: project.icon ?? null,

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Field, ImageField, Input, Modal, Stack } from '$lib/components/ui';
+	import { Button, Field, ImageField, Input, Modal, Stack, Textarea } from '$lib/components/ui';
 	import AppIcon from '$lib/components/ui/AppIcon.svelte';
 	import type { Project } from './types';
 
@@ -12,14 +12,17 @@
 	}: {
 		project: Project;
 		open?: boolean;
-		onSave: (payload: {
-			icon?: string | null;
-			backgroundImage?: string | null;
-			name?: string;
-		}) => Promise<void>;
+		onSave: (payload: CustomizePayload) => Promise<void>;
 		onIconUpload: (file: File) => Promise<string | null>;
 		onBgUpload: (file: File) => Promise<string | null>;
 	} = $props();
+
+	type CustomizePayload = {
+		icon?: string | null;
+		backgroundImage?: string | null;
+		name?: string;
+		description?: string | null;
+	};
 
 	const uid = $props.id();
 
@@ -29,6 +32,7 @@
 	let iconValue = $state<string | null>(null);
 	let bgValue = $state<string | null>(null);
 	let nameValue = $state('');
+	let descriptionValue = $state('');
 	let wasOpen = false;
 
 	$effect(() => {
@@ -37,6 +41,7 @@
 			iconValue = project?.icon ?? null;
 			bgValue = project?.backgroundImage ?? null;
 			nameValue = project?.name ?? '';
+			descriptionValue = project?.description ?? '';
 		} else if (!open) {
 			wasOpen = false;
 		}
@@ -46,11 +51,14 @@
 		if (saving || uploadingIcon || uploadingBg) return;
 		saving = true;
 		try {
-			const payload: { icon?: string | null; backgroundImage?: string | null; name?: string } = {};
+			const payload: CustomizePayload = {};
 			if (iconValue !== (project.icon ?? null)) payload.icon = iconValue;
 			if (bgValue !== (project.backgroundImage ?? null)) payload.backgroundImage = bgValue;
 			const trimmedName = nameValue.trim();
 			if (trimmedName && trimmedName !== project.name) payload.name = trimmedName;
+			const trimmedDescription = descriptionValue.trim();
+			if (trimmedDescription !== (project.description ?? ''))
+				payload.description = trimmedDescription || null;
 			await onSave(payload);
 			open = false;
 		} finally {
@@ -75,6 +83,17 @@
 					placeholder={project.name}
 					maxlength={255}
 					bind:value={nameValue}
+				/>
+			</Field>
+
+			<Field label="Description" for="{uid}-description">
+				<Textarea
+					id="{uid}-description"
+					size="lg"
+					rows={2}
+					autoGrow
+					maxRows={6}
+					bind:value={descriptionValue}
 				/>
 			</Field>
 

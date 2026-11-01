@@ -76,7 +76,7 @@ export interface Project {
 	id: string;
 	name: string;
 	slug: string;
-	description?: string;
+	description?: string | null;
 	namespace?: string;
 	repositoryUrl?: string;
 	icon?: string | null;

@@ -8,6 +8,7 @@
 		mono = false,
 		maxlength = undefined,
 		counter = false,
+		size = 'md',
 		class: className = '',
 		...rest
 	}: {
@@ -19,6 +20,7 @@
 		mono?: boolean;
 		maxlength?: number;
 		counter?: boolean;
+		size?: 'md' | 'lg';
 		class?: string;
 		[key: string]: unknown;
 	} = $props();
@@ -28,7 +30,7 @@
 	const near = $derived(maxlength != null && length >= maxlength * 0.9);
 
 	function fit() {
-		if (!el || !autoGrow) return;
+		if (!el || !autoGrow || !el.getClientRects().length) return;
 		const style = getComputedStyle(el);
 		const line = parseFloat(style.lineHeight) || 20;
 		const pad = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
@@ -51,7 +53,7 @@
 		bind:value
 		{rows}
 		{maxlength}
-		class="area"
+		class="area area--{size}"
 		class:area--error={error}
 		class:area--mono={mono}
 		class:area--grow={autoGrow}
@@ -73,12 +75,12 @@
 		width: 100%;
 		min-width: 0;
 		min-height: 2rem;
-		padding: 0.375rem 0.625rem;
+		padding: 0.375rem 0.6875rem;
 		border: none;
 		border-radius: calc(var(--radius-control) * var(--corner-scale));
 		corner-shape: var(--corner);
-		background: var(--bg-raised);
-		box-shadow: inset 0 0 0 1px var(--border-default);
+		background: color-mix(in oklab, var(--neutral-10) 6%, transparent);
+		box-shadow: inset 0 0 0 0.5px color-mix(in oklab, var(--neutral-10) 6%, transparent);
 		color: var(--text-default);
 		font: inherit;
 		font-size: var(--text-body);
@@ -87,6 +89,12 @@
 		transition:
 			box-shadow var(--dur-fast) ease,
 			background-color var(--dur-fast) ease;
+	}
+	.area--lg {
+		min-height: 2.25rem;
+		padding: 0.4375rem 0.75rem;
+		border-radius: calc(0.625rem * var(--corner-scale));
+		font-size: var(--text-headline);
 	}
 	.area--grow {
 		resize: none;
@@ -101,25 +109,27 @@
 		padding-bottom: 1.5rem;
 	}
 	.area::placeholder {
-		color: var(--text-faint);
+		color: var(--text-muted);
 	}
-	.area:hover:not(:disabled) {
-		box-shadow: inset 0 0 0 1px var(--border-strong);
+	.area:hover:not(:disabled):not(:focus) {
+		background: color-mix(in oklab, var(--neutral-10) 8%, transparent);
 	}
 	.area:focus {
 		outline: none;
+		background: var(--bg-surface);
 		box-shadow:
-			inset 0 0 0 1px var(--accent),
-			0 0 0 3px var(--focus-ring);
+			inset 0 0 0 1px var(--accent-solid),
+			0 0 0 3.5px color-mix(in oklab, var(--accent-solid) 22%, transparent);
 	}
 	.area--error,
-	.area--error:hover:not(:disabled) {
-		box-shadow: inset 0 0 0 1px var(--red-7);
+	.area--error:hover:not(:focus) {
+		background: color-mix(in oklab, var(--red-solid) 7%, transparent);
+		box-shadow: inset 0 0 0 1px var(--red-6);
 	}
 	.area--error:focus {
 		box-shadow:
-			inset 0 0 0 1px var(--red-7),
-			0 0 0 3px color-mix(in oklab, var(--red-7) 24%, transparent);
+			inset 0 0 0 1px var(--red-solid),
+			0 0 0 3.5px color-mix(in oklab, var(--red-solid) 22%, transparent);
 	}
 	.area:disabled {
 		opacity: 0.5;

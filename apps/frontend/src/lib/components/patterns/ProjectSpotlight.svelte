@@ -192,7 +192,12 @@
 							{#if current.owner}<span class="owner">{current.owner}</span>{/if}
 						</div>
 						<div class="text">
-							<h2 class="name">{current.name}</h2>
+							<div class="heading">
+								<h2 class="name">{current.name}</h2>
+								{#if current.description}
+									<p class="description" title={current.description}>{current.description}</p>
+								{/if}
+							</div>
 							<p class="status status--{current.tone}">
 								<StatusDot
 									meta={statusMeta(current.tone, current.status, current.tone === 'progress')}
@@ -525,6 +530,27 @@
 	.copy--banner .name {
 		font-size: var(--text-title-1);
 		letter-spacing: -0.018em;
+	}
+	.heading {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		min-width: 0;
+	}
+	.text:has(.description) {
+		gap: 1.5rem;
+	}
+	.description {
+		max-width: min(100%, 40rem);
+		overflow-x: clip;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		color: var(--on-media);
+		font-size: var(--text-body);
+		text-shadow: var(--on-media-shadow);
+		text-box: trim-both cap alphabetic;
+		padding-block: 0.3em;
+		margin-block: -0.3em;
 	}
 
 	.status {
