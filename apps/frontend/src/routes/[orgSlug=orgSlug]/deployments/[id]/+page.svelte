@@ -1239,7 +1239,7 @@
 			if (sseUp) return 60_000;
 			return transient ? 3_000 : 10_000;
 		})(),
-		refetchIntervalInBackground: true
+		refetchIntervalInBackground: false
 	}));
 
 	/** Trigger a refetch of deployment data via TanStack Query. All call sites
@@ -2707,8 +2707,12 @@
 				if (!relevant) return;
 				if (ev.type === 'deployment.metrics') {
 					if (ev.id === currentId) applyMetricsDelta(ev.payload);
-				} else if (ev.type === 'pod.changed' && ev.id === currentId) {
-					applyPodDelta(ev.payload);
+				} else if (ev.type === 'pod.changed') {
+					if (ev.id === currentId) applyPodDelta(ev.payload);
+				} else if (ev.type === 'build.changed') {
+					return;
+				} else if (ev.id === currentId && ev.type === 'deployment.changed') {
+					return;
 				} else {
 					queryClient.invalidateQueries({ queryKey: ['deployment', currentId] });
 				}
@@ -2800,11 +2804,10 @@
 		}
 	});
 
-	// Fetch user's effective resource limits eagerly
 	let quotaMeFetched = false;
 	$effect(() => {
 		const orgId = $selectedOrganization?.id;
-		if (orgId && !quotaMeFetched) {
+		if (tabs.value === 'settings' && orgId && !quotaMeFetched) {
 			quotaMeFetched = true;
 			apiFetch(`/apiv1/organizations/${orgId}/quota/me`)
 				.then((r) => (r.ok ? r.json() : null))
