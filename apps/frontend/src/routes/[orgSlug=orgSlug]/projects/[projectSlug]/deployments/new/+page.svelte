@@ -1285,7 +1285,7 @@
 						</Field>
 
 						{#if isRepoSource}
-							<Field label="Build with" layout="row" split>
+							<Field label="Build with">
 								<Dropdown
 									size="lg"
 									value={frameworkValue}
@@ -1300,7 +1300,7 @@
 								</Dropdown>
 							</Field>
 							{#if buildType === 'railpack' && detectedApps.length > 1}
-								<Field label="App in this repository" layout="row" split>
+								<Field label="App in this repository">
 									<Dropdown
 										size="lg"
 										mono

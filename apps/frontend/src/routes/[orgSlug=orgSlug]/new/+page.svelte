@@ -39,6 +39,7 @@
 	const orgSlug = $derived($page.params.orgSlug);
 	const orgId = $derived($selectedOrganization?.id ?? '');
 	const preselectedProject = $page.url.searchParams.get('projectSlug');
+	const presetSource = $page.url.searchParams.get('source');
 
 	let projects = $state<{ id: string; name: string; slug: string }[]>([]);
 	let templates = $state<Template[]>([]);
@@ -298,6 +299,10 @@
 					: (projects[0]?.slug ?? '');
 		} finally {
 			loading = false;
+		}
+		if (presetSource === 'github' || presetSource === 'image') {
+			const item = dock.find((d) => d.id === presetSource);
+			if (item) openSource(item);
 		}
 	});
 </script>
