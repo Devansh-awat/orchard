@@ -37,7 +37,6 @@ import {
 import {
   VictoriaMetricsService,
   escapeLabel,
-  escapeRegex,
   type SeriesPoint
 } from '../metrics/victoria-metrics.service';
 

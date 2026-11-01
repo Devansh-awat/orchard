@@ -57,8 +57,8 @@ export function parseAdvisories(html: string): PostgresAdvisory[] {
       const m = /^(\d+)\.(\d+)$/.exec(v);
       if (m) fixedIn[Number(m[1])] = Number(m[2]);
     }
-    const vector = /class="cvssvector">([^<]+)</.exec(cells[3])?.[1]?.trim() ?? null;
-    const scoreRaw = /calculator\?vector=[^"]*">([\d.]+)</.exec(cells[3])?.[1];
+    const vector = /class="cvssvector"\s*>\s*([^<]+)</.exec(cells[3])?.[1]?.trim() ?? null;
+    const scoreRaw = /calculator\?vector=[^"]*"\s*>\s*([\d.]+)\s*</.exec(cells[3])?.[1];
     const component = text(cells[3].split(/<br\s*\/?>/i)[0]);
     const description = text(cells[4].replace(/<a[^>]*>more details<\/a>/i, ''));
     seen.add(cve);
