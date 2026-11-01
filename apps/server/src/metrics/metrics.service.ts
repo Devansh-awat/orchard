@@ -1,8 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import Redis from 'ioredis';
 import { PrismaService } from '../prisma/prisma.service';
 import { deploymentPodRegex } from './pod-selector';
 import { forecastMemoryLimit, linearFit, projection } from './forecast';
 import { classifyFromPeaks } from '../rightsizing/recommend';
+import { assemblePeaks, peakKey, peakQueries, type ClusterPeaks } from './usage-peaks';
 import { parseMemory } from '../kubernetes/quantity';
 import {
   VictoriaMetricsService,
@@ -27,21 +29,18 @@ export type DatabaseSeriesId =
   | 'diskCapacity';
 export type DatabaseSeriesBundle = SeriesBundle & Record<DatabaseSeriesId, SeriesPoint[]>;
 
-const PROVISIONING_TTL_MS = 5 * 60_000;
-const PROVISIONING_CONCURRENCY = 6;
+const PROVISIONING_TTL_MS = 30_000;
+const PEAKS_FRESH_MS = 3 * 60_000;
+const PEAKS_KEEP_MS = 30 * 60_000;
+const PEAKS_LOCK_MS = 90_000;
+const PEAKS_KEY = 'orchard:usage-peaks:v1';
 
 type ProvisioningReport = Awaited<ReturnType<MetricsService['computeOrgActualVsProvisioned']>>;
 
-async function runLimited(tasks: (() => Promise<void>)[], limit: number): Promise<void> {
-  let next = 0;
-  const worker = async () => {
-    while (next < tasks.length) await tasks[next++]();
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, worker));
-}
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 @Injectable()
-export class MetricsService {
+export class MetricsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(MetricsService.name);
 
   constructor(
@@ -55,6 +54,85 @@ export class MetricsService {
     string,
     { at: number; value: Promise<ProvisioningReport> }
   >();
+  private readonly peaksInFlight = new Map<number, Promise<ClusterPeaks>>();
+  private redis: Redis | null = null;
+
+  onModuleInit() {
+    const url = process.env.REDIS_URL;
+    if (!url) return;
+    this.redis = new Redis(url, {
+      maxRetriesPerRequest: 1,
+      enableOfflineQueue: false,
+      commandTimeout: 2000
+    });
+    this.redis.on('error', (e) => this.logger.warn(`usage peaks redis error: ${e.message}`));
+  }
+
+  onModuleDestroy() {
+    try {
+      this.redis?.disconnect();
+    } catch {}
+  }
+
+  private async readPeaks(key: string): Promise<ClusterPeaks | null> {
+    if (!this.redis) return null;
+    try {
+      const raw = await this.redis.get(key);
+      return raw ? (JSON.parse(raw) as ClusterPeaks) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async clusterPeaks(rangeSeconds: number): Promise<ClusterPeaks> {
+    const key = `${PEAKS_KEY}:${rangeSeconds}`;
+    const cached = await this.readPeaks(key);
+    if (cached && Date.now() - cached.at < PEAKS_FRESH_MS) return cached;
+    let run = this.peaksInFlight.get(rangeSeconds);
+    if (!run) {
+      run = this.refreshPeaks(rangeSeconds, key).finally(() =>
+        this.peaksInFlight.delete(rangeSeconds)
+      );
+      this.peaksInFlight.set(rangeSeconds, run);
+    }
+    try {
+      return await run;
+    } catch (err) {
+      if (cached) return cached;
+      throw err;
+    }
+  }
+
+  private async refreshPeaks(rangeSeconds: number, key: string): Promise<ClusterPeaks> {
+    const redis = this.redis;
+    const locked = redis
+      ? await redis.set(`${key}:lock`, '1', 'PX', PEAKS_LOCK_MS, 'NX').catch(() => 'OK')
+      : 'OK';
+    if (locked !== 'OK') {
+      for (let i = 0; i < 40; i++) {
+        await sleep(500);
+        const fresh = await this.readPeaks(key);
+        if (fresh && Date.now() - fresh.at < PEAKS_FRESH_MS) return fresh;
+      }
+    }
+    try {
+      const q = peakQueries(rangeSeconds);
+      const grouped = async <K extends string>(queries: Record<K, string>) => {
+        const out = {} as Record<K, Map<string, number>>;
+        for (const field of Object.keys(queries) as K[]) {
+          out[field] = await this.vm.queryInstantGrouped(queries[field], 'orchard_key');
+        }
+        return out;
+      };
+      const apps = await grouped(q.apps);
+      const databases = await grouped(q.databases);
+      const peaks = assemblePeaks(rangeSeconds, Date.now(), apps, databases);
+      await redis?.set(key, JSON.stringify(peaks), 'PX', PEAKS_KEEP_MS).catch(() => undefined);
+      return peaks;
+    } finally {
+      if (locked === 'OK') await redis?.del(`${key}:lock`).catch(() => undefined);
+    }
+  }
 
   getOrgActualVsProvisioned(
     organizationId: string,
@@ -137,7 +215,7 @@ export class MetricsService {
       verdict: 'over' | 'under' | 'ok' | 'unknown';
     }[] = [];
 
-    const tasks: (() => Promise<void>)[] = [];
+    const peaks = await this.clusterPeaks(rangeSeconds);
 
     for (const p of projects) {
       for (const d of p.deployments) {
@@ -145,91 +223,66 @@ export class MetricsService {
         const requestedCpu = (d.cpuRequestMilli ?? 0) * (d.replicas ?? 1);
         const requestedMem =
           (d.memoryRequestBytes ? Number(d.memoryRequestBytes) : 0) * (d.replicas ?? 1);
-        tasks.push(async () => {
-          const sel = `namespace="${escapeLabel(ns)}",pod=~"${deploymentPodRegex(d.name)}",container="",image=""`;
-          const [cpu, mem, cpuPodP95, cpuPodP99, memPodPeak] = await Promise.all([
-            this.vm.queryInstant(
-              `quantile_over_time(0.95, (sum(rate(container_cpu_usage_seconds_total{${sel}}[60s])) * 1000)[${rangeSeconds}s:60s])`
-            ),
-            this.vm.queryInstant(
-              `quantile_over_time(0.95, sum(container_memory_working_set_bytes{${sel}})[${rangeSeconds}s:60s])`
-            ),
-            this.vm.queryInstant(
-              `quantile_over_time(0.95, (max(sum by (pod) (rate(container_cpu_usage_seconds_total{${sel}}[5m]))) * 1000)[${rangeSeconds}s:300s])`
-            ),
-            this.vm.queryInstant(
-              `quantile_over_time(0.99, (max(sum by (pod) (rate(container_cpu_usage_seconds_total{${sel}}[5m]))) * 1000)[${rangeSeconds}s:300s])`
-            ),
-            this.vm.queryInstant(
-              `max_over_time(max(sum by (pod) (container_memory_working_set_bytes{${sel}}))[${rangeSeconds}s:300s])`
-            )
-          ]);
-          const cpuUtil = requestedCpu > 0 && cpu !== null ? cpu / requestedCpu : null;
-          const memUtil = requestedMem > 0 && mem !== null ? mem / requestedMem : null;
-          const unlimited = d.cpuRequestMilli === 0;
-          rows.push({
-            kind: 'deployment',
-            id: d.id,
-            name: d.name,
-            projectId: p.id,
-            projectName: p.name,
-            namespace: p.namespace,
-            requestedCpuMilli: requestedCpu,
-            requestedMemoryBytes: requestedMem,
-            actualCpuMilliP95: cpu,
-            actualMemoryBytesP95: mem,
-            cpuUtilization: cpuUtil,
-            memoryUtilization: memUtil,
-            verdict: unlimited
-              ? 'unknown'
-              : classifyFromPeaks({
-                  cpuP95: cpuPodP95,
-                  cpuP99: cpuPodP99,
-                  memoryPeak: memPodPeak,
-                  current: {
-                    cpuLimitMilli: d.cpuRequestMilli,
-                    memoryBytes: d.memoryRequestBytes != null ? Number(d.memoryRequestBytes) : null
-                  },
-                  image: d.image
-                })
-          });
+        const peak = ns ? peaks.apps[peakKey(ns, d.name)] : undefined;
+        const cpu = peak?.cpuP95 ?? null;
+        const mem = peak?.memoryP95 ?? null;
+        const cpuUtil = requestedCpu > 0 && cpu !== null ? cpu / requestedCpu : null;
+        const memUtil = requestedMem > 0 && mem !== null ? mem / requestedMem : null;
+        const unlimited = d.cpuRequestMilli === 0;
+        rows.push({
+          kind: 'deployment',
+          id: d.id,
+          name: d.name,
+          projectId: p.id,
+          projectName: p.name,
+          namespace: p.namespace,
+          requestedCpuMilli: requestedCpu,
+          requestedMemoryBytes: requestedMem,
+          actualCpuMilliP95: cpu,
+          actualMemoryBytesP95: mem,
+          cpuUtilization: cpuUtil,
+          memoryUtilization: memUtil,
+          verdict: unlimited
+            ? 'unknown'
+            : classifyFromPeaks({
+                cpuP95: peak?.cpuPodP95 ?? null,
+                cpuP99: peak?.cpuPodP99 ?? null,
+                memoryPeak: peak?.memoryPodPeak ?? null,
+                current: {
+                  cpuLimitMilli: d.cpuRequestMilli,
+                  memoryBytes: d.memoryRequestBytes != null ? Number(d.memoryRequestBytes) : null
+                },
+                image: d.image
+              })
         });
       }
       for (const db of p.databases) {
         if (!db.namespace || !db.clusterName) continue;
         const requestedCpu = db.cpuRequestMilli ?? 0;
         const requestedMem = db.memoryRequestBytes ? Number(db.memoryRequestBytes) : 0;
-        tasks.push(async () => {
-          const [cpu, mem] = await Promise.all([
-            this.vm.queryInstant(
-              `quantile_over_time(0.95, (sum(rate(container_cpu_usage_seconds_total{namespace="${escapeLabel(db.namespace!)}",pod=~"${escapeRegex(db.clusterName!)}-.*",container="",image=""}[60s])) * 1000)[${rangeSeconds}s:60s])`
-            ),
-            this.vm.queryInstant(
-              `quantile_over_time(0.95, sum(container_memory_working_set_bytes{namespace="${escapeLabel(db.namespace!)}",pod=~"${escapeRegex(db.clusterName!)}-.*",container="",image=""})[${rangeSeconds}s:60s])`
-            )
-          ]);
-          const cpuUtil = requestedCpu > 0 && cpu !== null ? cpu / requestedCpu : null;
-          const memUtil = requestedMem > 0 && mem !== null ? mem / requestedMem : null;
-          rows.push({
-            kind: 'database',
-            id: db.id,
-            name: db.name,
-            projectId: p.id,
-            projectName: p.name,
-            namespace: db.namespace,
-            requestedCpuMilli: requestedCpu,
-            requestedMemoryBytes: requestedMem,
-            actualCpuMilliP95: cpu,
-            actualMemoryBytesP95: mem,
-            cpuUtilization: cpuUtil,
-            memoryUtilization: memUtil,
-            verdict: classify(cpuUtil, memUtil)
-          });
+        const peak = peaks.databases[peakKey(db.namespace, db.clusterName)];
+        const cpu = peak?.cpuP95 ?? null;
+        const mem = peak?.memoryP95 ?? null;
+        const cpuUtil = requestedCpu > 0 && cpu !== null ? cpu / requestedCpu : null;
+        const memUtil = requestedMem > 0 && mem !== null ? mem / requestedMem : null;
+        rows.push({
+          kind: 'database',
+          id: db.id,
+          name: db.name,
+          projectId: p.id,
+          projectName: p.name,
+          namespace: db.namespace,
+          requestedCpuMilli: requestedCpu,
+          requestedMemoryBytes: requestedMem,
+          actualCpuMilliP95: cpu,
+          actualMemoryBytesP95: mem,
+          cpuUtilization: cpuUtil,
+          memoryUtilization: memUtil,
+          verdict: classify(cpuUtil, memUtil)
         });
       }
     }
 
-    await runLimited(tasks, PROVISIONING_CONCURRENCY);
     rows.sort((a, b) => a.projectName.localeCompare(b.projectName) || a.name.localeCompare(b.name));
     return { rows };
   }
