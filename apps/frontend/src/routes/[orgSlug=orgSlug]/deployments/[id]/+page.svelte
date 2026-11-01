@@ -958,6 +958,17 @@
 		}
 	}
 
+	const KILLED_PROBLEMS = new Set(['crash-loop', 'exited', 'liveness', 'out-of-memory']);
+
+	function openPodLogs(podName: string, problem?: string) {
+		if (problem && KILLED_PROBLEMS.has(problem)) {
+			gotoTab('observe', 'killed');
+			return;
+		}
+		selectLogsPod(podName);
+		gotoTab('overview');
+	}
+
 	function selectLogsPod(podName: string, containerName?: string) {
 		selectedPod = podName;
 		const pod = (deployment?.pods ?? []).find((p) => p.name === podName);
@@ -3118,7 +3129,7 @@
 					: (deployment?.buildError ?? '')}
 				problems={health.problems}
 				serving={health.serving}
-				onPodLogs={(name) => selectLogsPod(name)}
+				onPodLogs={openPodLogs}
 				{resourcePressure}
 				onViewLogs={handleViewBuildLogs}
 				onGoToResources={() => {

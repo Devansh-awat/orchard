@@ -49,7 +49,7 @@
 		onRetryApply?: () => void;
 		problems?: Problem[];
 		serving?: number;
-		onPodLogs?: (podName: string) => void;
+		onPodLogs?: (podName: string, problem?: PodProblem) => void;
 		resourcePressure?: ResourcePressure;
 		onViewLogs?: () => void;
 		onGoToResources?: () => void;
@@ -113,11 +113,12 @@
 					if (onViewLogs) actions.push({ label: 'Build logs', onAction: onViewLogs });
 				} else if (p.problem === 'out-of-memory') {
 					if (onGoToResources) actions.push({ label: 'Raise memory', onAction: onGoToResources });
-					if (pod && onPodLogs) actions.push({ label: 'Logs', onAction: () => onPodLogs(pod) });
+					if (pod && onPodLogs)
+						actions.push({ label: 'Logs', onAction: () => onPodLogs(pod, p.problem ?? undefined) });
 				} else if (p.problem === 'unschedulable') {
 					if (onGoToResources) actions.push({ label: 'Resources', onAction: onGoToResources });
 				} else if (pod && onPodLogs && p.problem && LOGGED.has(p.problem)) {
-					actions.push({ label: 'Logs', onAction: () => onPodLogs(pod) });
+					actions.push({ label: 'Logs', onAction: () => onPodLogs(pod, p.problem ?? undefined) });
 				}
 				const cause = p.scope === 'build' ? buildCause : '';
 				return {
