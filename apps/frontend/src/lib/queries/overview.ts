@@ -37,7 +37,7 @@ export function buildsQueryOptions(orgSlug: string) {
 	return {
 		queryKey: ['builds', orgSlug],
 		queryFn: async () => {
-			const res = await apiFetch(`/apiv1/overview/orgs/${orgSlug}/builds`);
+			const res = await apiFetch(`/apiv1/overview/orgs/${orgSlug}/builds?scope=all`);
 			if (!res.ok) {
 				throw Object.assign(new Error(`builds ${res.status}`), { status: res.status });
 			}
