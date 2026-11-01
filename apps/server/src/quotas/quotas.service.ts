@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { K8sNamespaceService } from '../kubernetes/k8s-namespace.service';
-import { defaultPodResourcesForImage, minPodMemoryBytesForImage } from '../kubernetes/presets';
+import { podResourcesFor } from '../kubernetes/presets';
 import { formatBytes } from '../projects/projects.utils';
 import { ownerLeftAllowance } from './owner-allowance';
 import { allowanceCommitment, groupByOwner, memberAllowance, ownedUsage } from './member-usage';
@@ -126,12 +126,9 @@ export class QuotasService {
     image?: string | null
   ): Promise<{ cpuMilli: number; memoryBytes: number }> {
     const { defaultPodCpuMilli, defaultPodMemoryBytes } = await this.resolveProjectCaps(projectId);
-    const fallback = defaultPodResourcesForImage(image);
-    const cpu = override?.cpuRequestMilli ?? defaultPodCpuMilli ?? fallback.cpuMilli;
-    const mem = override?.memoryRequestBytes ?? defaultPodMemoryBytes ?? fallback.memoryBytes;
     // Floor applies to the explicit override too: a user asking for 128Mi of
     // Postgres is asking for a database that OOMKills itself during its backup.
-    return { cpuMilli: cpu, memoryBytes: Math.max(mem, minPodMemoryBytesForImage(image)) };
+    return podResourcesFor(image, { defaultPodCpuMilli, defaultPodMemoryBytes }, override);
   }
 
   // Push the effective caps for a project to Kubernetes (ResourceQuota + LimitRange).

@@ -397,7 +397,10 @@ export function settingsRoutes(r: Router, { store }: MockContext) {
 				cpuMilli: CAP.cpuLimitMilli - total.cpuMilli,
 				memoryBytes: CAP.memoryLimitBytes - total.memoryBytes
 			},
-			org: { defaultPodCpuMilli: 500, defaultPodMemoryBytes: 512 * MIB }
+			podDefaults: {
+				app: { cpuMilli: 500, memoryBytes: 512 * MIB },
+				database: { cpuMilli: 500, memoryBytes: 512 * MIB }
+			}
 		};
 	});
 	r.get('/organizations/:orgId/quota', ({ params }) => {

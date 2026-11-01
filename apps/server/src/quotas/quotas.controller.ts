@@ -14,6 +14,7 @@ import { QuotasService } from './quotas.service';
 import { QuotaBackfillService } from './backfill.service';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { podDefaultsFor } from '../kubernetes/presets';
 import { Auth, SuperAdmin } from '../auth/decorators';
 
 interface CapBody {
@@ -170,6 +171,8 @@ export class OrgQuotasController {
         select: {
           cpuLimitMilli: true,
           memoryLimitBytes: true,
+          defaultPodCpuMilli: true,
+          defaultPodMemoryBytes: true,
           projects: { select: { namespace: true } }
         }
       })
@@ -225,7 +228,11 @@ export class OrgQuotasController {
       effectiveLimit: {
         cpuMilli: effectiveCpuLimit,
         memoryBytes: effectiveMemLimit
-      }
+      },
+      podDefaults: podDefaultsFor({
+        defaultPodCpuMilli: org?.defaultPodCpuMilli ?? null,
+        defaultPodMemoryBytes: org?.defaultPodMemoryBytes ?? null
+      })
     };
   }
 }

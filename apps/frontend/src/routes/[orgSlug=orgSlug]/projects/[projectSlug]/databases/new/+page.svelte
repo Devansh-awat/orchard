@@ -480,6 +480,7 @@
 						<ResourcePicker
 							bind:cpuMilli={resourceCpuMilli}
 							bind:memoryBytes={resourceMemoryBytes}
+							kind="database"
 							disabled={submitting}
 						/>
 					</div>

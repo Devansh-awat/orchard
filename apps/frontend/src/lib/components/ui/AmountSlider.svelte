@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { RotateCcw } from 'lucide-svelte';
-	import Badge from './Badge.svelte';
 	import Button from './Button.svelte';
 
 	let {
@@ -43,6 +42,13 @@
 
 	const shown = $derived(value ?? fallback);
 	const isDefault = $derived(value == null);
+	const display = $derived(
+		shown == null
+			? fallbackLabel
+			: isDefault
+				? `${fallbackLabel} · ${format(shown)}`
+				: format(shown)
+	);
 	const exhausted = $derived(limit != null && limit <= 0);
 	const ceiling = $derived(limit != null && limit > 0 ? limit : null);
 	const over = $derived(shown != null && ceiling != null && shown > ceiling);
@@ -141,8 +147,7 @@
 		editing = false;
 		const parsed = parse(draft.trim());
 		if (parsed != null && parsed > 0) commit(parsed);
-		const now = value ?? fallback;
-		el.value = now != null ? format(now) : fallbackLabel;
+		el.value = display;
 	}
 </script>
 
@@ -150,7 +155,6 @@
 	<div class="head">
 		<label class="label" for="{uid}-value">{label}</label>
 		<div class="readout">
-			{#if isDefault && fallback != null}<Badge>{fallbackLabel}</Badge>{/if}
 			{#if !isDefault && fallback != null}
 				<Button
 					variant="ghost"
@@ -166,7 +170,7 @@
 				class="value"
 				class:value--default={isDefault}
 				class:value--over={over}
-				value={editing ? draft : shown != null ? format(shown) : fallbackLabel}
+				value={editing ? draft : display}
 				disabled={disabled || exhausted}
 				spellcheck="false"
 				autocomplete="off"
@@ -213,7 +217,7 @@
 			step="1"
 			value={shown != null ? Math.round(pos(shown) * 1000) : 0}
 			aria-label={label}
-			aria-valuetext={shown != null ? format(shown) : fallbackLabel}
+			aria-valuetext={display}
 			disabled={disabled || exhausted}
 			oninput={(e) => fromTrack(Number((e.currentTarget as HTMLInputElement).value) / 1000)}
 			onpointerdown={() => (dragging = true)}

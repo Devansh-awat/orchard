@@ -102,3 +102,24 @@ export function defaultPodResourcesForImage(image?: string | null): {
 export function minPodMemoryBytesForImage(image?: string | null): number {
   return isDatabaseImage(image) ? DATABASE_MIN_MEMORY_BYTES : 0;
 }
+
+export type OrgPodDefaults = {
+  defaultPodCpuMilli: number | null;
+  defaultPodMemoryBytes: number | bigint | null;
+};
+
+export function podResourcesFor(
+  image: string | null | undefined,
+  org: OrgPodDefaults,
+  override?: { cpuRequestMilli?: number | null; memoryRequestBytes?: number | null }
+): { cpuMilli: number; memoryBytes: number } {
+  const fallback = defaultPodResourcesForImage(image);
+  const orgMemory = org.defaultPodMemoryBytes ? Number(org.defaultPodMemoryBytes) : null;
+  const cpuMilli = override?.cpuRequestMilli ?? org.defaultPodCpuMilli ?? fallback.cpuMilli;
+  const memoryBytes = override?.memoryRequestBytes ?? orgMemory ?? fallback.memoryBytes;
+  return { cpuMilli, memoryBytes: Math.max(memoryBytes, minPodMemoryBytesForImage(image)) };
+}
+
+export function podDefaultsFor(org: OrgPodDefaults) {
+  return { app: podResourcesFor(null, org), database: podResourcesFor('postgres', org) };
+}

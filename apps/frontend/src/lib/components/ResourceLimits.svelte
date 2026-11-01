@@ -48,6 +48,7 @@
 	<ResourcePicker
 		bind:cpuMilli={resourceCpuMilli}
 		bind:memoryBytes={resourceMemoryBytes}
+		kind="database"
 		defaultCpuMilli={orgDefaultCpuMilli}
 		defaultMemoryBytes={orgDefaultMemoryBytes}
 		showUnlimited={$isSuperAdmin}

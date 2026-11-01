@@ -1,4 +1,6 @@
 <script lang="ts" module>
+	import { apiFetch } from '$lib/stores';
+
 	const MIB = 1024 ** 2;
 	const GIB = 1024 ** 3;
 
@@ -33,16 +35,53 @@
 		const milli = m[2]?.startsWith('m') || (!m[2] && n >= 64);
 		return Math.round(milli ? n : n * 1000);
 	}
+
+	export type PodKind = 'app' | 'database';
+	export type QuotaMe = {
+		effectiveLimit?: { cpuMilli: number | null; memoryBytes: number | null };
+		podDefaults?: Record<PodKind, { cpuMilli: number; memoryBytes: number }>;
+	};
+
+	export function quotaMeQuery(orgId: string | null) {
+		return {
+			queryKey: ['quota-me', orgId],
+			enabled: !!orgId,
+			staleTime: 60_000,
+			queryFn: async (): Promise<QuotaMe> => {
+				const res = await apiFetch(`/apiv1/organizations/${orgId}/quota/me`);
+				if (!res.ok) return {};
+				return res.json();
+			}
+		};
+	}
+
+	export function resourcesNote(
+		cpuMilli: number | null,
+		memoryBytes: number | null,
+		defaults: { cpuMilli: number; memoryBytes: number } | null | undefined
+	) {
+		const memory = memoryBytes ?? defaults?.memoryBytes ?? null;
+		const cpu = cpuMilli ?? defaults?.cpuMilli ?? null;
+		const parts = [
+			memory != null ? formatMemory(memory) : null,
+			cpu != null ? formatCpu(cpu) : null
+		].filter(Boolean);
+		if (!parts.length) return 'Org default';
+		return cpuMilli == null && memoryBytes == null
+			? `Org default · ${parts.join(', ')}`
+			: parts.join(' · ');
+	}
 </script>
 
 <script lang="ts">
 	import { createQuery } from '@tanstack/svelte-query';
-	import { apiFetch, selectedOrganization } from '$lib/stores';
+	import { selectedOrganization } from '$lib/stores';
 	import AmountSlider from '$lib/components/ui/AmountSlider.svelte';
 
 	interface Props {
 		cpuMilli: number | null;
 		memoryBytes: number | null;
+		kind?: PodKind;
 		defaultCpuMilli?: number | null;
 		defaultMemoryBytes?: number | null;
 		disabled?: boolean;
@@ -59,6 +98,7 @@
 	let {
 		cpuMilli = $bindable(),
 		memoryBytes = $bindable(),
+		kind = 'app',
 		defaultCpuMilli = null,
 		defaultMemoryBytes = null,
 		disabled = false,
@@ -77,30 +117,11 @@
 	const CPU_STOPS = [100, 250, 500, 750, 1000, 1500, 2000, 3000, 4000, 6000, 8000, 12000, 16000];
 
 	const orgId = $derived($selectedOrganization?.id ?? null);
-	const needsQuota = $derived(
-		(defaultCpuMilli == null ||
-			defaultMemoryBytes == null ||
-			maxCpuMilli == null ||
-			maxMemoryBytes == null) &&
-			!!orgId
-	);
+	const quota = createQuery<QuotaMe>(() => quotaMeQuery(orgId));
 
-	const quota = createQuery<{
-		effectiveLimit?: { cpuMilli: number | null; memoryBytes: number | null };
-		org?: { defaultPodCpuMilli: number | null; defaultPodMemoryBytes: number | null };
-	}>(() => ({
-		queryKey: ['quota-me', orgId],
-		enabled: needsQuota,
-		staleTime: 60_000,
-		queryFn: async () => {
-			const res = await apiFetch(`/apiv1/organizations/${orgId}/quota/me`);
-			if (!res.ok) return {};
-			return res.json();
-		}
-	}));
-
-	const cpuDefault = $derived(defaultCpuMilli ?? quota.data?.org?.defaultPodCpuMilli ?? null);
-	const memDefault = $derived(defaultMemoryBytes ?? quota.data?.org?.defaultPodMemoryBytes ?? null);
+	const podDefaults = $derived(quota.data?.podDefaults?.[kind] ?? null);
+	const cpuDefault = $derived(podDefaults?.cpuMilli ?? defaultCpuMilli ?? null);
+	const memDefault = $derived(podDefaults?.memoryBytes ?? defaultMemoryBytes ?? null);
 	const cpuLimit = $derived(maxCpuMilli ?? quota.data?.effectiveLimit?.cpuMilli ?? null);
 	const memLimit = $derived(maxMemoryBytes ?? quota.data?.effectiveLimit?.memoryBytes ?? null);
 

@@ -28,7 +28,11 @@
 	import RepoAccountPicker from '$lib/components/deployment/RepoAccountPicker.svelte';
 	import GitSourcePane from '$lib/components/deployment/GitSourcePane.svelte';
 	import FrameworkIcon from '$lib/components/deployment/FrameworkIcon.svelte';
-	import ResourcePicker, { formatCpu, formatMemory } from '$lib/components/ResourcePicker.svelte';
+	import { createQuery } from '@tanstack/svelte-query';
+	import ResourcePicker, {
+		quotaMeQuery,
+		resourcesNote as describeResources
+	} from '$lib/components/ResourcePicker.svelte';
 	import ResourceList from '$lib/components/patterns/ResourceList.svelte';
 	import SourcePath from '$lib/components/patterns/SourcePath.svelte';
 	import {
@@ -1053,15 +1057,9 @@
 				? 'Custom commands'
 				: 'Detected'
 	);
+	const quotaMe = createQuery(() => quotaMeQuery($selectedOrganization?.id ?? null));
 	const resourcesNote = $derived(
-		resourceCpuMilli || resourceMemoryBytes
-			? [
-					resourceMemoryBytes ? formatMemory(resourceMemoryBytes) : null,
-					resourceCpuMilli ? formatCpu(resourceCpuMilli) : null
-				]
-					.filter(Boolean)
-					.join(' · ')
-			: 'Org default'
+		describeResources(resourceCpuMilli, resourceMemoryBytes, quotaMe.data?.podDefaults?.app)
 	);
 	const created = $derived([
 		{
