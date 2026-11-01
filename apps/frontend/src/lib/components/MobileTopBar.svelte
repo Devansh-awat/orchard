@@ -132,4 +132,7 @@
 			transition: none;
 		}
 	}
+	:global(html.reduce-transparency) .topbar--raised {
+		background-color: var(--bg-app);
+	}
 </style>

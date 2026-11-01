@@ -432,4 +432,7 @@
 		font-size: var(--text-callout);
 		color: var(--text-muted);
 	}
+	:global(html.reduce-transparency) .tr--head {
+		background: var(--bg-surface);
+	}
 </style>

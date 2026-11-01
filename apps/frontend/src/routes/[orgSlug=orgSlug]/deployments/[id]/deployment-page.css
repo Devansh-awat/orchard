@@ -342,6 +342,12 @@
 .dep-header-card--hasbg .dep-env-dot {
 	background-color: #fff;
 }
+html.reduce-transparency .dep-header-card--hasbg .dep-status-chip {
+	background-color: var(--on-media-fill);
+}
+html.reduce-transparency .dep-header-card--hasbg .dep-env-chip {
+	background-color: color-mix(in srgb, var(--env-c) 40%, var(--on-media-fill));
+}
 
 .dep-header-actions {
 	display: flex;

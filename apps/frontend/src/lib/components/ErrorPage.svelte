@@ -184,4 +184,7 @@
 		margin-bottom: 1.5rem;
 		line-height: 1.5;
 	}
+	:global(html.reduce-transparency) .nf-card {
+		background: var(--bg-surface);
+	}
 </style>

@@ -603,4 +603,7 @@
 			grid-template-columns: 1fr;
 		}
 	}
+	:global(html.reduce-transparency) .np-form--glass {
+		background: var(--bg-app);
+	}
 </style>
