@@ -74,7 +74,15 @@ export class NotificationFanoutService implements OnModuleInit, OnModuleDestroy 
     private readonly delivery: NotificationDeliveryService
   ) {}
 
+  private readonly workerDisabled = process.env.NOTIFICATIONS_WORKER_DISABLED === 'true';
+
   onModuleInit() {
+    if (this.workerDisabled) {
+      this.logger.warn(
+        'NOTIFICATIONS_WORKER_DISABLED=true; notifications queue here but another replica sends them'
+      );
+      return;
+    }
     this.timer = setInterval(() => this.kick(), TICK_MS);
     this.timer.unref?.();
     this.reclaimTimer = setInterval(() => {
@@ -97,6 +105,7 @@ export class NotificationFanoutService implements OnModuleInit, OnModuleDestroy 
   }
 
   kick() {
+    if (this.workerDisabled) return;
     if (this.running) {
       this.runAgain = true;
       return;
