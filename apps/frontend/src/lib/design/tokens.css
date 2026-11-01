@@ -277,6 +277,8 @@ html.contrast-high {
 }
 
 html.dark.contrast-high {
+	--border-default: var(--neutral-6);
+	--border-strong: var(--neutral-7);
 	--surface-border: #80696b !important;
 	--dropdown-border: #80696b !important;
 	--surface-muted: #efdddf !important;
@@ -319,10 +321,12 @@ html.reduce-transparency *::after {
 	--status-deploy-solid: oklch(0.68 0.17 293);
 	--status-deploy: oklch(0.78 0.13 293);
 	--status-deploy-bg: oklch(0.3 0.08 293);
-	--nav-active-bg: var(--neutral-10);
-	--nav-active-fg: var(--neutral-app);
-	--nav-active-icon: var(--neutral-app);
-	--nav-active-shadow: 0 1px 1.5px oklch(0 0 0 / 0.3);
+	--nav-active-bg: var(--neutral-3);
+	--nav-active-fg: var(--text-default);
+	--nav-active-icon: var(--accent-9);
+	--nav-active-shadow: inset 0 0 0 0.5px var(--border-default);
+	--border-default: var(--neutral-2);
+	--border-strong: var(--neutral-4);
 	--material-chrome-bg: color-mix(in oklab, var(--neutral-raised) 86%, transparent);
 	--brand-field: color-mix(in oklab, var(--accent-solid) 82%, black);
 
