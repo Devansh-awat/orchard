@@ -94,6 +94,7 @@ function isWildcardTlsSecret(name: string | null): boolean {
 }
 
 import { ingressLimitReached, ingressLimits } from './ingress-limits';
+import { LeaderElectionService } from '../events/leader-election.service';
 
 export type DnsRecordHint = { type: 'CNAME' | 'A'; name: string; value: string };
 
@@ -103,7 +104,7 @@ export class IngressService implements OnModuleInit {
 
   onModuleInit(): void {
     this.instanceConfig.onWildcardChange(() => this.reconcileWildcardTls());
-    void this.reconcileWildcardTls();
+    this.leaderElection.onAcquired(() => void this.reconcileWildcardTls());
   }
 
   constructor(
@@ -120,7 +121,8 @@ export class IngressService implements OnModuleInit {
     private readonly projects: ProjectsService,
     private readonly faviconService: FaviconService,
     private readonly instanceConfig: InstanceConfigService,
-    private readonly crypto: SecretCryptoService
+    private readonly crypto: SecretCryptoService,
+    private readonly leaderElection: LeaderElectionService
   ) {}
 
   /**
@@ -146,6 +148,7 @@ export class IngressService implements OnModuleInit {
   }
 
   async reconcileWildcardTls(): Promise<{ checked: number; repointed: number }> {
+    if (!this.leaderElection.isLeader()) return { checked: 0, repointed: 0 };
     const ingresses = await this.prisma.ingress.findMany({
       select: {
         id: true,
