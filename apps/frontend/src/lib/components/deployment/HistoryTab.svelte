@@ -133,6 +133,17 @@
 	const rows = $derived(collapsePodRuns(entries));
 	const groups = $derived(groupEntries(foldBuildRuns(rows), granularityFor(filter)));
 	const opened = new SvelteSet<string>();
+	const focusRelease = $derived($page.url.searchParams.get('release'));
+	let scrolledTo: string | null = null;
+
+	$effect(() => {
+		const id = focusRelease;
+		if (!id || id === scrolledTo || !groups.length) return;
+		const el = document.querySelector<HTMLElement>(`[data-release="${CSS.escape(id)}"]`);
+		if (!el) return;
+		scrolledTo = id;
+		el.scrollIntoView({ block: 'center' });
+	});
 	const loading = $derived(timeline.isPending && !timeline.data);
 	const live = $derived((ends.live && entries.find((e) => e.id === ends.live?.id)) || ends.live);
 
@@ -231,6 +242,8 @@
 	<ActivityRow
 		tone={badge.kind}
 		muted={entry.kind === 'pod' || entry.kind === 'build'}
+		selected={entry.kind === 'release' && !!imageHistoryId && imageHistoryId === focusRelease}
+		data-release={entry.kind === 'release' ? imageHistoryId : undefined}
 		{@attach stateEcho(() => entry.id, { arrival: () => freshIds.has(entry.id) })}
 	>
 		{#snippet tile()}

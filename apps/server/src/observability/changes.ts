@@ -33,6 +33,7 @@ export interface ChangeEntry {
   detail: string | null;
   cause: string | null;
   actor: ChangeActor | null;
+  imageHistoryId?: string | null;
 }
 
 const TONES: Record<ChangeKind, ChangeTone> = {
@@ -85,7 +86,7 @@ export function toneOf(kind: ChangeKind): ChangeTone {
   return TONES[kind];
 }
 
-const TIMESTAMP_TAG = /^v\d{9,}$/;
+const TIMESTAMP_TAG = /^v\d{8}(?:T?\d+)?$/;
 
 export function versionLabel(h: { tag: string | null; commitSha: string | null }): string {
   if (h.tag && !TIMESTAMP_TAG.test(h.tag)) return h.tag;
@@ -253,6 +254,7 @@ export function releaseChange(row: {
   status: string;
   reason: string | null;
   imageHistory: {
+    id?: string;
     tag: string | null;
     commitSha: string | null;
     commitMessage: string | null;
@@ -271,7 +273,8 @@ export function releaseChange(row: {
     tone: 'deploy',
     label: rolledBack ? `Rolled back to ${version}` : `${version} went live`,
     detail: commit ? commit.slice(0, 240) : null,
-    cause: rolledBack ? `the rollback to ${version}` : `${version} went live`
+    cause: rolledBack ? `the rollback to ${version}` : `${version} went live`,
+    imageHistoryId: row.imageHistory?.id ?? null
   };
 }
 

@@ -9,6 +9,16 @@ export const SYMPTOM_PANELS: Record<string, string> = {
 	'restart-burst': 'panel-restarts-and-out-of-memory-kills'
 };
 
+const OBSERVE_PARAMS = ['view', 'range', 'from', 'to', 'at', 'panel', 'q', 'levels', 'pod'];
+
+export function releaseLink(base: string | URL, imageHistoryId: string): string {
+	const url = new URL(base);
+	for (const key of OBSERVE_PARAMS) url.searchParams.delete(key);
+	url.searchParams.set('tab', 'deploys');
+	url.searchParams.set('release', imageHistoryId);
+	return url.toString();
+}
+
 export function momentLink(
 	base: string | URL,
 	opts: { at: number; panel?: string | null; view?: string; now?: number }

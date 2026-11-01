@@ -8,6 +8,7 @@
 		muted = false,
 		struck = false,
 		pinned = false,
+		selected = false,
 		class: klass = '',
 		time = undefined,
 		tile,
@@ -20,6 +21,7 @@
 		muted?: boolean;
 		struck?: boolean;
 		pinned?: boolean;
+		selected?: boolean;
 		class?: string;
 		time?: Snippet;
 		tile: Snippet;
@@ -34,7 +36,9 @@
 	class:ui-arow--muted={muted}
 	class:ui-arow--struck={struck}
 	class:ui-arow--pinned={pinned}
+	class:ui-arow--selected={selected}
 	role="listitem"
+	aria-current={selected ? 'true' : undefined}
 	{...rest}
 >
 	<div class="ui-arow-tile">{@render tile()}</div>
@@ -68,6 +72,10 @@
 	}
 	.ui-arow:not(.ui-arow--pinned):hover {
 		background-color: var(--bg-hover);
+	}
+	.ui-arow--selected,
+	.ui-arow--selected:not(.ui-arow--pinned):hover {
+		background-color: var(--bg-active);
 	}
 	.ui-arow-tile {
 		display: flex;

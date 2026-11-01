@@ -62,6 +62,7 @@ test('an audit row becomes a config-toned marker with its own title', () => {
 test('version labels prefer what the user named', () => {
   assert.equal(versionLabel({ tag: '1.8.2', commitSha: null }), '1.8.2');
   assert.equal(versionLabel({ tag: 'v1730000000123', commitSha: 'abcdef1234' }), 'abcdef1');
+  assert.equal(versionLabel({ tag: 'v20261101T05413', commitSha: 'f00dbeef99' }), 'f00dbee');
   assert.equal(versionLabel({ tag: null, commitSha: null }), 'new version');
 });
 

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { filtersFromUrl, momentLink, readMoment, writeFilters } from './permalink';
+import { filtersFromUrl, momentLink, readMoment, releaseLink, writeFilters } from './permalink';
 
 test('a moment link round-trips its window, crosshair and panel', () => {
 	const at = Date.UTC(2026, 9, 28, 14, 2);
@@ -45,4 +45,14 @@ test('log filters round-trip through the url', () => {
 	const cleared = writeFilters(url, { query: '', level: 'all', window: null, source: null });
 	assert.equal(cleared.search, '?tab=observe&view=logs');
 	assert.equal(filtersFromUrl(new URL('https://x.test/?levels=error'))?.level, 'error');
+});
+
+test('a release link opens activity on that release and drops the observe window', () => {
+	const url = new URL(
+		releaseLink('https://orchard.my/hq/deployments/abc?tab=observe&from=1&to=2&at=1&panel=p', 'ih1')
+	);
+	assert.equal(url.searchParams.get('tab'), 'deploys');
+	assert.equal(url.searchParams.get('release'), 'ih1');
+	assert.equal(url.searchParams.get('from'), null);
+	assert.equal(url.searchParams.get('panel'), null);
 });

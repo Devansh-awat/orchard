@@ -307,7 +307,7 @@ export class TimelineService {
           reason: true,
           image: true,
           createdById: true,
-          imageHistory: { select: { tag: true, commitSha: true, commitMessage: true } }
+          imageHistory: { select: { id: true, tag: true, commitSha: true, commitMessage: true } }
         }
       }),
       this.prisma.buildRun.findMany({

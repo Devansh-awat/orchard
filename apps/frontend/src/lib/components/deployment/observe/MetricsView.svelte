@@ -2,7 +2,8 @@
 	import { untrack } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { page } from '$app/stores';
-	import { SYMPTOM_PANELS, momentLink } from './permalink';
+	import { SYMPTOM_PANELS, momentLink, releaseLink } from './permalink';
+	import { goto } from '$app/navigation';
 	import { Boxes, GitCommitHorizontal, Info, TriangleAlert } from 'lucide-svelte';
 	import { Button, Disclosure, EmptyState, LogViewer, Modal, Table } from '$lib/components/ui';
 	import MetaList from '$lib/components/ui/MetaList.svelte';
@@ -679,6 +680,10 @@
 
 	const dismissedFindings = new SvelteSet<string>();
 	const findingKey = (f: { symptomId: string; at: number }) => `${f.symptomId}:${f.at}`;
+	function findingRelease(f: { causeId: string | null }): string[] {
+		const change = f.causeId ? metrics.changes?.find((c) => c.id === f.causeId) : null;
+		return change?.imageHistoryId ? [change.imageHistoryId] : [];
+	}
 	const shownFindings = $derived(
 		(metrics.findings ?? []).filter((f) => !dismissedFindings.has(findingKey(f)))
 	);
@@ -759,6 +764,10 @@
 					title: f.sentence,
 					dismissible: true,
 					actions: [
+						...findingRelease(f).map((id) => ({
+							label: 'View deploy',
+							onclick: () => goto(releaseLink($page.url, id), { noScroll: true })
+						})),
 						{
 							label: 'Show',
 							onclick: () =>

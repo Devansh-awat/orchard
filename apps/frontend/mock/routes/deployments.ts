@@ -243,7 +243,8 @@ function mockChanges(store: Store, d: MockDeployment, start: number, end: number
 			tone: 'deploy',
 			label: `${b.commitSha ? b.commitSha.slice(0, 7) : b.image.split(':').at(-1)} went live`,
 			detail: b.commitMessage?.split('\n')[0] ?? null,
-			actor
+			actor,
+			imageHistoryId: b.id
 		}));
 	const now = Date.now();
 	const extra = [
@@ -1375,6 +1376,7 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 			const at = (ms: number) =>
 				new Date(ms).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 			const now = Date.now();
+			const lastDeploy = changes.filter((c) => c.kind === 'deploy').at(-1);
 			const findings =
 				d.name === 'game-server'
 					? [
@@ -1399,9 +1401,9 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 						? [
 								{
 									symptomId: `error-rate:${now - 34 * 60_000}`,
-									causeId: 'release:x',
-									sentence: `Errors went from 0.2% to 4.1% at ${at(now - 34 * 60_000)}, two minutes after 6c29231 went live.`,
-									evidence: [`error-rate:${now - 34 * 60_000}`, 'release:x'],
+									causeId: lastDeploy?.id ?? null,
+									sentence: `Errors went from 0.2% to 4.1% at ${at(now - 34 * 60_000)}, two minutes after ${lastDeploy?.label ?? '6c29231 went live'}.`,
+									evidence: [`error-rate:${now - 34 * 60_000}`, lastDeploy?.id ?? 'release:x'],
 									at: now - 34 * 60_000,
 									kind: 'error-rate'
 								}

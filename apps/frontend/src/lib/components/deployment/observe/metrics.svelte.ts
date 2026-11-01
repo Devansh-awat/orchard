@@ -61,6 +61,7 @@ export type Change = {
 	label: string;
 	detail: string | null;
 	actor: { id: string; name: string } | null;
+	imageHistoryId?: string | null;
 };
 const MARKER_TONE: Record<ChangeTone, 'deploy' | 'neutral' | 'platform' | 'error'> = {
 	deploy: 'deploy',

@@ -20,6 +20,8 @@
 	import type { DotStep } from '$lib/components/ui/StatusDot.svelte';
 	import { statusMeta } from '$lib/components/ui/status';
 	import { headerVerdict } from './verdict';
+	import { releaseLink } from './observe/permalink';
+	import { page } from '$app/stores';
 
 	let {
 		deployment,
@@ -116,6 +118,11 @@
 		const label = headerVerdict(deployment.latestVerdict, Date.now());
 		return label ? statusMeta('warning', label) : null;
 	});
+	const verdictHref = $derived(
+		verdictChip && deployment.latestVerdict?.imageHistoryId
+			? releaseLink($page.url, deployment.latestVerdict.imageHistoryId)
+			: null
+	);
 	const primaryDomain = $derived(deployment.ingresses?.[0] ?? null);
 	const extraDomains = $derived(Math.max(0, (deployment.ingresses?.length ?? 0) - 1));
 	const shortSha = $derived(_activeBuild?.commitSha ? _activeBuild.commitSha.slice(0, 7) : null);
@@ -139,6 +146,10 @@
 		{/if}
 		{#if deployChip}
 			<StatusBadge meta={deployChip.meta} tone={deployChip.tone} steps={deployChip.steps} />
+		{:else if verdictChip && verdictHref}
+			<a class="dh-verdict" href={verdictHref} data-sveltekit-noscroll>
+				<StatusBadge meta={verdictChip} />
+			</a>
 		{:else if verdictChip}
 			<StatusBadge meta={verdictChip} />
 		{/if}
@@ -424,6 +435,16 @@
 			width: 100%;
 			justify-content: flex-start;
 		}
+	}
+	.dh-verdict {
+		display: inline-flex;
+		border-radius: var(--radius-pill);
+		color: inherit;
+		text-decoration: none;
+		transition: opacity var(--dur-fast) ease;
+	}
+	.dh-verdict:hover {
+		opacity: 0.8;
 	}
 	.dh-held-chip {
 		display: inline-flex;
