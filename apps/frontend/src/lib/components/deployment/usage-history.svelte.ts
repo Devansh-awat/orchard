@@ -12,6 +12,7 @@ const ys = (points: Point[] | undefined) => (points ?? []).map((p) => p.y);
 export class UsageHistory {
 	cpu = $state<number[]>([]);
 	mem = $state<number[]>([]);
+	loading = $state(true);
 	#loadedFor = '';
 
 	#window() {
@@ -32,6 +33,8 @@ export class UsageHistory {
 			this.mem = [...ys(body?.data?.mem), ...this.mem].slice(-MAX_POINTS);
 		} catch {
 			this.#loadedFor = '';
+		} finally {
+			this.loading = false;
 		}
 	}
 

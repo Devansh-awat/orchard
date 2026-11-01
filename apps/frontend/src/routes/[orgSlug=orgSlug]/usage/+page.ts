@@ -1,10 +1,9 @@
 import { error } from '@sveltejs/kit';
+import { writable } from 'svelte/store';
 import { apiFetch } from '$lib/stores';
 import type { PageLoad } from './$types';
 
 export const ssr = false;
-
-const json = (path: string) => apiFetch(path).then((r) => (r.ok ? r.json() : null));
 
 export const load: PageLoad = ({ params, depends, url }) => {
 	const orgSlug = params.orgSlug;
@@ -12,8 +11,13 @@ export const load: PageLoad = ({ params, depends, url }) => {
 	depends(`org:${orgSlug}:usage`);
 	depends(`org:${orgSlug}:usage:metrics:${range}`);
 
+	const progress = writable({ done: 0, total: 7 });
+	const step = <T>(work: Promise<T>) =>
+		work.finally(() => progress.update((p) => ({ ...p, done: p.done + 1 })));
+	const json = (path: string) => step(apiFetch(path).then((r) => (r.ok ? r.json() : null)));
+
 	const usage = (async () => {
-		const orgRes = await apiFetch(`/apiv1/organizations/slug/${orgSlug}`);
+		const orgRes = await step(apiFetch(`/apiv1/organizations/slug/${orgSlug}`));
 		if (!orgRes.ok) {
 			if (orgRes.status === 404) throw error(404, 'Organization not found');
 			throw error(orgRes.status, 'Failed to load organization');
@@ -21,20 +25,25 @@ export const load: PageLoad = ({ params, depends, url }) => {
 		const orgId: string = (await orgRes.json()).id;
 
 		const [me, myUsage] = await Promise.all([
-			apiFetch(`/apiv1/organizations/${orgId}/members/me`).then((r) => {
-				if (!r.ok) throw error(r.status, 'Failed to load membership');
-				return r.json();
-			}),
-			apiFetch(`/apiv1/organizations/${orgId}/quota/me`).then((r) => {
-				if (!r.ok) throw new Error('Failed to load personal usage');
-				return r.json();
-			})
+			step(
+				apiFetch(`/apiv1/organizations/${orgId}/members/me`).then((r) => {
+					if (!r.ok) throw error(r.status, 'Failed to load membership');
+					return r.json();
+				})
+			),
+			step(
+				apiFetch(`/apiv1/organizations/${orgId}/quota/me`).then((r) => {
+					if (!r.ok) throw new Error('Failed to load personal usage');
+					return r.json();
+				})
+			)
 		]);
 
 		const role: 'owner' | 'admin' | 'member' | 'guest' = me.role;
 		const isAdmin = role === 'owner' || role === 'admin';
 
 		if (!isAdmin) {
+			progress.set({ done: 3, total: 3 });
 			return {
 				orgId,
 				role,
@@ -57,5 +66,5 @@ export const load: PageLoad = ({ params, depends, url }) => {
 		return { orgId, role, isAdmin, myUsage, orgQuota, projectsData, membersData, provisioning };
 	})();
 
-	return { orgSlug, range, usagePromise: usage };
+	return { orgSlug, range, usagePromise: usage, usageProgress: progress };
 };

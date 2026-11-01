@@ -200,6 +200,17 @@ export class MetricsState {
 	http = $state(EMPTY_HTTP());
 	loaded = $state(false);
 	loading = $state(false);
+	loadTotal = $state(0);
+	loadDone = $state(0);
+
+	#track<T>(work: Promise<T>): Promise<T> {
+		if (this.loadDone >= this.loadTotal) {
+			this.loadTotal = 0;
+			this.loadDone = 0;
+		}
+		this.loadTotal++;
+		return work.finally(() => this.loadDone++);
+	}
 	error = $state<string | null>(null);
 
 	to = $derived(this.custom?.to ?? this.now);
@@ -282,9 +293,11 @@ export class MetricsState {
 			return;
 		}
 		const get = (url: string) =>
-			apiFetch(url)
-				.then((r) => (r.ok ? r.json() : null))
-				.catch(() => null);
+			this.#track(
+				apiFetch(url)
+					.then((r) => (r.ok ? r.json() : null))
+					.catch(() => null)
+			);
 		const base = `/apiv1/observe/deployments/${encodeURIComponent(id)}`;
 		const tz = encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone);
 		const levelStep = Math.max(15_000, Math.round((this.to - this.from) / 60));
@@ -358,9 +371,11 @@ export class MetricsState {
 		try {
 			const base = `/apiv1/observe/deployments/${encodeURIComponent(id)}`;
 			const [res, httpRes, healthRes] = await Promise.all([
-				apiFetch(`/apiv1/deployments/${encodeURIComponent(id)}/metrics?${query}&groupBy=pod`),
-				opts.http ? apiFetch(`${base}/http-metrics?${query}`) : Promise.resolve(null),
-				apiFetch(`${base}/pod-health?${query}`).catch(() => null)
+				this.#track(
+					apiFetch(`/apiv1/deployments/${encodeURIComponent(id)}/metrics?${query}&groupBy=pod`)
+				),
+				opts.http ? this.#track(apiFetch(`${base}/http-metrics?${query}`)) : Promise.resolve(null),
+				this.#track(apiFetch(`${base}/pod-health?${query}`).catch(() => null))
 			]);
 			if (seq !== this.#seq) return;
 			if (!res.ok) {

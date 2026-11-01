@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button } from '$lib/components/ui';
+	import { Button, LoadingBar } from '$lib/components/ui';
 	import Widget from '$lib/components/ui/Widget.svelte';
 	import NumberRoll from '$lib/components/ui/NumberRoll.svelte';
 	import Sparkline from '$lib/components/ui/Sparkline.svelte';
@@ -14,6 +14,7 @@
 	} = $props();
 
 	let rates = $state<number[] | null>(null);
+	let failed = $state(false);
 	let scrub = $state<number | null>(null);
 	let chartHeight = $state(0);
 
@@ -23,11 +24,15 @@
 			const res = await apiFetch(
 				`/apiv1/observe/deployments/${encodeURIComponent(id)}/http-metrics?start=${end - 30 * 60_000}&end=${end}&step=60000`
 			);
-			if (!res.ok) return;
+			if (!res.ok) {
+				if (rates === null) failed = true;
+				return;
+			}
 			const body = await res.json();
 			rates = ((body?.errorRate ?? []) as { y: number }[]).map((p) => p.y);
+			failed = false;
 		} catch {
-			return;
+			if (rates === null) failed = true;
 		}
 	}
 
@@ -79,10 +84,33 @@
 		</div>
 	{:else if rates}
 		<p class="none">This app is not serving web traffic, so there is no rate to show.</p>
+	{:else if failed}
+		<div class="waiting">
+			<p class="none">The error rate didn't load.</p>
+			<Button
+				variant="secondary"
+				size="sm"
+				onclick={() => {
+					failed = false;
+					load(deploymentId);
+				}}>Retry</Button
+			>
+		</div>
+	{:else}
+		<div class="waiting"><LoadingBar label="Loading error rate" /></div>
 	{/if}
 </Widget>
 
 <style>
+	.waiting {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 0.75rem;
+		height: 100%;
+		min-height: 4rem;
+	}
 	.body {
 		display: flex;
 		flex-direction: column;

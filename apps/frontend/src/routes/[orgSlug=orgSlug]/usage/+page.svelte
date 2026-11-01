@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
+	import { fromStore } from 'svelte/store';
 	import { goto, invalidate } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { apiFetch, toasts, subscribeOrgEvents } from '$lib/stores';
@@ -24,7 +25,7 @@
 		SectionCard,
 		SegmentedControl,
 		SettingsList,
-		Skeleton,
+		LoadingBar,
 		StatusBadge,
 		Table,
 		TopList
@@ -132,6 +133,7 @@
 	}
 
 	let { data } = $props<{ data: PageData }>();
+	const usageProgress = $derived(fromStore(data.usageProgress));
 
 	let role = $state<Role>('member');
 	let isAdmin = $state(false);
@@ -860,13 +862,15 @@
 	{/if}
 
 	{#if loading}
-		<div class="tiles tiles--4">
-			{#each [0, 1, 2, 3] as i (i)}<Skeleton
-					height="7.5rem"
-					rounded="var(--radius-widget)"
-				/>{/each}
+		<div class="waiting">
+			<LoadingBar
+				label="Loading usage"
+				value={usageProgress.current.total
+					? usageProgress.current.done / usageProgress.current.total
+					: null}
+				detail="{usageProgress.current.done} of {usageProgress.current.total}"
+			/>
 		</div>
-		<Skeleton height="16rem" rounded="var(--radius-widget)" />
 	{:else if activeTab === 'overview' && orgQuota}
 		<div class="tiles tiles--4">
 			{#each orgTiles as t (t.label)}{@render tile(t)}{/each}
@@ -1212,6 +1216,14 @@
 </Modal>
 
 <style>
+	.waiting {
+		display: grid;
+		place-items: center;
+		min-height: 16rem;
+	}
+	.waiting > :global(.ui-loadbar) {
+		max-width: 24rem;
+	}
 	.usage-page {
 		--section-r: var(--radius-widget);
 		display: flex;

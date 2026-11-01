@@ -89,6 +89,7 @@ export { default as Tabs } from './Tabs.svelte';
 export { default as PageTabs } from './PageTabs.svelte';
 export { default as SettingsList } from './SettingsList.svelte';
 export { default as SettingRow } from './SettingRow.svelte';
+export { default as LoadingBar } from './LoadingBar.svelte';
 export { default as DnsRecord } from './DnsRecord.svelte';
 export { default as TimeChart } from './TimeChart.svelte';
 export { default as SeriesTable } from './SeriesTable.svelte';

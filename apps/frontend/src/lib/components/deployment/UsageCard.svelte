@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button } from '$lib/components/ui';
+	import { Button, LoadingBar } from '$lib/components/ui';
 	import Widget from '$lib/components/ui/Widget.svelte';
 	import NumberRoll from '$lib/components/ui/NumberRoll.svelte';
 	import Sparkline from '$lib/components/ui/Sparkline.svelte';
@@ -94,14 +94,20 @@
 					</span>
 				</span>
 				<span class="trend">
-					<Sparkline
-						values={row.values}
-						height={28}
-						tone={row.tone}
-						label="{row.label} over the last 30 minutes"
-						interactive
-						onScrub={(i) => (scrub = i === null ? null : { id: row.id, index: i })}
-					/>
+					{#if history.loading && row.values.length < 2}
+						<span class="trend-wait"
+							><LoadingBar label="Loading {row.label.toLowerCase()} history" labelHidden /></span
+						>
+					{:else}
+						<Sparkline
+							values={row.values}
+							height={28}
+							tone={row.tone}
+							label="{row.label} over the last 30 minutes"
+							interactive
+							onScrub={(i) => (scrub = i === null ? null : { id: row.id, index: i })}
+						/>
+					{/if}
 				</span>
 				{#if row.ratio != null}
 					<span
@@ -182,6 +188,11 @@
 	}
 	.row--error .share {
 		color: var(--status-error);
+	}
+	.trend-wait {
+		display: flex;
+		align-items: center;
+		width: 100%;
 	}
 	.trend {
 		grid-area: trend;

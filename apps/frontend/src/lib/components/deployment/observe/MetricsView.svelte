@@ -6,7 +6,7 @@
 	import { Boxes, GitCommitHorizontal, Info, TriangleAlert } from 'lucide-svelte';
 	import { Button, Disclosure, EmptyState, LogViewer, Modal, Table } from '$lib/components/ui';
 	import MetaList from '$lib/components/ui/MetaList.svelte';
-	import Skeleton from '$lib/components/ui/Skeleton.svelte';
+	import LoadingBar from '$lib/components/ui/LoadingBar.svelte';
 	import Tooltip from '$lib/components/ui/Tooltip.svelte';
 	import TopList from '$lib/components/ui/TopList.svelte';
 	import Widget from '$lib/components/ui/Widget.svelte';
@@ -742,10 +742,12 @@
 			<Button variant="secondary" onclick={load}>Retry</Button>
 		</EmptyState>
 	{:else if !metrics.loaded}
-		<div class="grid">
-			{#each [0, 1, 2, 3] as i (i)}
-				<Skeleton height="17rem" rounded="calc(var(--radius-widget) * var(--corner-scale))" />
-			{/each}
+		<div class="waiting">
+			<LoadingBar
+				label="Loading metrics"
+				value={metrics.loadTotal ? metrics.loadDone / metrics.loadTotal : null}
+				detail={metrics.loadTotal ? `${metrics.loadDone} of ${metrics.loadTotal}` : undefined}
+			/>
 		</div>
 	{:else}
 		{#if shownFindings.length}
@@ -1230,6 +1232,15 @@
 </Modal>
 
 <style>
+	.waiting {
+		display: grid;
+		place-items: center;
+		min-height: 17rem;
+		padding: 0 1rem;
+	}
+	.waiting > :global(.ui-loadbar) {
+		max-width: 24rem;
+	}
 	.board {
 		container: board / inline-size;
 		display: flex;
