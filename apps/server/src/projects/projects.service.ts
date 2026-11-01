@@ -2281,6 +2281,17 @@ export class ProjectsService {
       // favicons are decorative — never fail the overview for them
     }
 
+    const faviconByDeployment = new Map(
+      (deployments as any[]).filter((d) => d.faviconUrl).map((d) => [d.id, d.faviconUrl as string])
+    );
+    for (const p of projects as any[]) {
+      if (typeof p.icon === 'string' && /^(https?:)?\/\//.test(p.icon)) continue;
+      const borrowed = (p.deployments ?? [])
+        .map((d: any) => faviconByDeployment.get(d.id))
+        .find(Boolean);
+      if (borrowed) p.icon = borrowed;
+    }
+
     // Auto-fill project banners from a child deployment's og:image. A banner
     // set manually in the UI lives in project.backgroundImage and wins; we
     // only decorate projects that have none (and never write to the DB, so
