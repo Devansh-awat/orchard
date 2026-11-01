@@ -2180,9 +2180,9 @@ export class ProjectsService {
           canEdit = projRole === 'admin' || projRole === 'member';
         }
       }
-      if (opts.members === false) return { ...p, icon: p.icon ?? null };
+      if (opts.members === false) return { ...p, icon: p.icon ?? null, canEdit };
       const members = canEdit ? p.members : this.scrubMembersForViewer(p.members as any);
-      return { ...p, members, icon: p.icon ?? null };
+      return { ...p, members, icon: p.icon ?? null, canEdit };
     });
   }
 

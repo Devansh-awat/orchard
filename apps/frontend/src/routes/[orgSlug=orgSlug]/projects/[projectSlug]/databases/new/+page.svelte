@@ -9,7 +9,10 @@
 		buildBasePath,
 		type ProjectContext
 	} from '$lib/stores';
+	import { createQuery } from '@tanstack/svelte-query';
 	import { Copy, Database, Link } from 'lucide-svelte';
+	import { overviewQueryOptions } from '$lib/queries/overview';
+	import AppIcon from '$lib/components/ui/AppIcon.svelte';
 	import RadioGroup from '$lib/components/ui/RadioGroup.svelte';
 	import { fromLocalInput, toLocalInput } from '$lib/components/database/recovery';
 	import { formatWhen } from '$lib/components/database/BackupFormat';
@@ -28,14 +31,12 @@
 		SectionCard,
 		Dropdown,
 		SegmentedControl,
-		Skeleton,
 		Slider,
 		Stepper,
 		Swap
 	} from '$lib/components/ui';
 
 	let project = $state<ProjectContext | null>(null);
-	let loading = $state(true);
 	let submitting = $state(false);
 	let error = $state<string | null>(null);
 	let name = $state('');
@@ -69,8 +70,10 @@
 
 	type StartFrom = 'empty' | 'url' | 'copy';
 	type CopyPoint = 'now' | 'latest' | 'time';
-	let startFrom = $state<StartFrom>($page.url.searchParams.get('from') ? 'copy' : 'empty');
-	let sourceId = $state($page.url.searchParams.get('from') ?? '');
+	const initialFrom = $page.url.searchParams.get('from') ?? '';
+	let startFrom = $state<StartFrom>(initialFrom ? 'copy' : 'empty');
+	let sourceId = $state(initialFrom);
+	let sourceProjectId = $state('');
 	let copyPoint = $state<CopyPoint>('now');
 	let copyTime = $state('');
 	let sourceWindow = $state<{ earliest: string | null; latest: string | null } | null>(null);
@@ -81,14 +84,54 @@
 		{ value: 'copy', label: 'Copy of a database', icon: Copy }
 	];
 
-	const sources = $derived(
-		(
-			(project?.databases as
-				| { id: string; name: string; mode?: string; status?: string; environmentId?: string }[]
-				| undefined) ?? []
-		).filter((d) => d.mode === 'cnpg' && d.status !== 'provisioning')
+	type SourceDb = { id: string; name: string; mode?: string; status?: string; projectId: string };
+	type CopyProject = { id: string; name: string; slug: string; icon?: string | null };
+
+	const copyProjects = $derived.by<CopyProject[]>(() => {
+		const list = (
+			(overview.data?.projects ?? []) as (CopyProject & { canEdit?: boolean })[]
+		).filter((p) => p.canEdit);
+		if (project && !list.some((p) => p.id === project!.id)) {
+			list.unshift({ id: project.id, name: project.name, slug: project.slug });
+		}
+		return list;
+	});
+
+	const allSources = $derived.by<SourceDb[]>(() => {
+		const own = ((project?.databases as Omit<SourceDb, 'projectId'>[] | undefined) ?? []).map(
+			(d) => ({ ...d, projectId: project!.id })
+		);
+		const others = (
+			(overview.data?.databases ?? []) as (Omit<SourceDb, 'projectId'> & {
+				project?: { id: string };
+			})[]
+		)
+			.filter((d) => d.project?.id && d.project.id !== project?.id)
+			.map((d) => ({
+				id: d.id,
+				name: d.name,
+				mode: d.mode,
+				status: d.status,
+				projectId: d.project!.id
+			}));
+		const editable = new Set(copyProjects.map((p) => p.id));
+		return [...own, ...others].filter(
+			(d) => editable.has(d.projectId) && d.mode === 'cnpg' && d.status !== 'provisioning'
+		);
+	});
+
+	const sourceProject = $derived(
+		sourceProjectId || allSources.find((d) => d.id === initialFrom)?.projectId || project?.id || ''
 	);
+	const sources = $derived(allSources.filter((d) => d.projectId === sourceProject));
 	const source = $derived(sources.find((d) => d.id === sourceId) ?? null);
+	const crossProject = $derived(!!project && !!sourceProject && sourceProject !== project.id);
+	const point = $derived<CopyPoint>(crossProject && copyPoint === 'now' ? 'latest' : copyPoint);
+
+	function pickSourceProject(id: string) {
+		sourceProjectId = id;
+		sourceId = allSources.find((d) => d.projectId === id)?.id ?? '';
+	}
 	const copyTimeIso = $derived(fromLocalInput(copyTime));
 	const copyTimeOk = $derived.by(() => {
 		if (!copyTimeIso || !sourceWindow?.earliest) return false;
@@ -96,7 +139,7 @@
 		const hi = sourceWindow.latest ? Date.parse(sourceWindow.latest) + 60_000 : Date.now();
 		return t >= Date.parse(sourceWindow.earliest) && t <= hi;
 	});
-	const copyReady = $derived(!!source && (copyPoint !== 'time' || copyTimeOk));
+	const copyReady = $derived(!!source && (point !== 'time' || copyTimeOk));
 
 	let windowFor = '';
 	$effect(() => {
@@ -134,6 +177,11 @@
 	const wsSlug = $derived($page.params.wsSlug);
 	const basePath = $derived(buildBasePath({ orgSlug, projectSlug, wsSlug }));
 
+	const overview = createQuery(() => ({
+		...overviewQueryOptions(orgSlug),
+		enabled: !!orgSlug && startFrom === 'copy'
+	}));
+
 	const generatedDbName = $derived(() => {
 		const o = orgSlug.replace(/-/g, '_');
 		const p = projectSlug.replace(/-/g, '_');
@@ -148,13 +196,10 @@
 	});
 
 	async function fetchProject() {
-		loading = true;
 		try {
 			project = await fetchProjectContext({ orgSlug, projectSlug, wsSlug });
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load project';
-		} finally {
-			loading = false;
 		}
 	}
 
@@ -182,7 +227,8 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					name: name.trim(),
-					at: copyPoint === 'time' ? copyTimeIso : copyPoint,
+					at: point === 'time' ? copyTimeIso : point,
+					...(crossProject && project ? { projectId: project.id } : {}),
 					...(selectedEnvId ? { environmentId: selectedEnvId } : {})
 				})
 			});
@@ -290,7 +336,7 @@
 	{/snippet}
 
 	{#snippet footer()}
-		{#if project}
+		{#if project || !error}
 			<Button variant="ghost" href={basePath}>Cancel</Button>
 			<Button
 				variant="primary"
@@ -299,6 +345,7 @@
 				icon={Database}
 				loading={submitting}
 				disabled={submitting ||
+					!project ||
 					!name.trim() ||
 					(startFrom === 'copy' && !copyReady) ||
 					(startFrom === 'url' && !restoreFromUrl.trim())}
@@ -314,17 +361,7 @@
 		</div>
 	{/if}
 
-	{#if loading}
-		<SectionCard>
-			<div class="nd-stack">
-				<Skeleton width="8rem" height="1rem" />
-				<Skeleton height="2rem" rounded="calc(var(--radius-control) * var(--corner-scale))" />
-				<Skeleton width="12rem" height="0.75rem" />
-				<Skeleton width="8rem" height="1rem" />
-				<Skeleton height="2rem" rounded="calc(var(--radius-control) * var(--corner-scale))" />
-			</div>
-		</SectionCard>
-	{:else if project}
+	{#if project || !error}
 		<form
 			id="new-database"
 			class="nd-form"
@@ -360,10 +397,27 @@
 								/>
 							</Field>
 						{:else if startFrom === 'copy'}
-							{#if sources.length === 0}
-								<p class="nd-note">There is no database in this project to copy yet.</p>
-							{:else}
-								<div class="nd-stack">
+							<div class="nd-stack">
+								{#if copyProjects.length > 1}
+									<Field label="Project" for="db-source-project">
+										<Dropdown
+											id="db-source-project"
+											size="lg"
+											value={sourceProject}
+											onchange={pickSourceProject}
+											disabled={submitting}
+											options={copyProjects.map((p) => ({ value: p.id, label: p.name }))}
+										>
+											{#snippet icon(id)}
+												{@const p = copyProjects.find((x) => x.id === id)}
+												<AppIcon name={p?.name ?? ''} icon={p?.icon} kind="project" size="xs" />
+											{/snippet}
+										</Dropdown>
+									</Field>
+								{/if}
+								{#if sources.length === 0}
+									<p class="nd-note">There is no database in this project to copy yet.</p>
+								{:else}
 									<Field label="Database" for="db-source">
 										<Dropdown
 											id="db-source"
@@ -373,19 +427,24 @@
 											options={sources.map((d) => ({ value: d.id, label: d.name }))}
 										/>
 									</Field>
-									<Field label="From">
+									<Field
+										label="From"
+										hint={crossProject
+											? 'A copy from another project starts from its backups'
+											: undefined}
+									>
 										<SegmentedControl
 											label="Copy from"
 											options={[
-												{ value: 'now', label: 'Now' },
+												{ value: 'now', label: 'Now', disabled: crossProject },
 												{ value: 'latest', label: 'Latest backup' },
 												{ value: 'time', label: 'A time', disabled: !sourceWindow?.earliest }
 											]}
-											bind:value={() => copyPoint, (v) => (copyPoint = v as CopyPoint)}
+											bind:value={() => point, (v) => (copyPoint = v as CopyPoint)}
 											grow
 										/>
 									</Field>
-									{#if copyPoint === 'time'}
+									{#if point === 'time'}
 										<Field
 											for="db-copy-time"
 											error={copyTime && !copyTimeOk
@@ -406,8 +465,8 @@
 											/>
 										</Field>
 									{/if}
-								</div>
-							{/if}
+								{/if}
+							</div>
 						{/if}
 					</Swap>
 				</div>

@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException
+} from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -125,6 +130,7 @@ export interface RestoreRequest {
   mode?: 'in_place' | 'fork';
   name?: string;
   environmentId?: string;
+  projectId?: string;
 }
 
 export function targetFromRequest(req: RestoreRequest, defaultLatest: boolean): OperationTarget {
@@ -138,6 +144,51 @@ export function targetFromRequest(req: RestoreRequest, defaultLatest: boolean): 
     throw new BadRequestException('at must be "now", "latest" or an ISO timestamp');
   if (t > Date.now()) throw new BadRequestException('at cannot be in the future');
   return { type: 'time', time: new Date(t).toISOString() };
+}
+
+export interface ForkSide {
+  projectId: string;
+  organizationId: string;
+  canEdit: boolean;
+}
+
+export type ForkVerdict =
+  | { target: OperationTarget; crossProject: boolean }
+  | {
+      reason: 'source_forbidden' | 'target_missing' | 'target_forbidden' | 'live_cross_project';
+      message: string;
+    };
+
+export function forkDecision(
+  source: ForkSide,
+  target: ForkSide | null,
+  req: RestoreRequest
+): ForkVerdict {
+  if (!source.canEdit) {
+    return {
+      reason: 'source_forbidden',
+      message: 'Your role does not allow you to copy this database'
+    };
+  }
+  if (!target || target.organizationId !== source.organizationId) {
+    return { reason: 'target_missing', message: 'Project not found' };
+  }
+  if (!target.canEdit) {
+    return {
+      reason: 'target_forbidden',
+      message: 'Your role does not allow you to add databases to that project'
+    };
+  }
+  const crossProject = target.projectId !== source.projectId;
+  const point = targetFromRequest(req, crossProject);
+  if (crossProject && point.type === 'now') {
+    return {
+      reason: 'live_cross_project',
+      message:
+        'A copy into another project starts from a backup, because projects cannot reach each other. Pick the latest backup or a time.'
+    };
+  }
+  return { target: point, crossProject };
 }
 
 @Injectable()
@@ -189,23 +240,70 @@ export class DatabaseRecoveryService {
   }
 
   async fork(databaseId: string, req: RestoreRequest, clerkId: string, userData?: UserData) {
-    const { user, database } = await this.access.assertDatabaseEditor(
-      databaseId,
-      clerkId,
-      userData
-    );
-    const target = targetFromRequest(req, false);
+    const {
+      user,
+      database,
+      access: sourceAccess
+    } = await this.access.assertDatabaseView(databaseId, clerkId, userData);
+    const sourceSide: ForkSide = {
+      projectId: database.projectId,
+      organizationId: database.project.organizationId,
+      canEdit: sourceAccess.canEdit
+    };
+    const targetProjectId = String(req.projectId ?? '').trim() || database.projectId;
+    const targetSide =
+      targetProjectId === database.projectId
+        ? sourceSide
+        : await this.access
+            .assertProjectView(targetProjectId, clerkId, userData)
+            .then(({ access }): ForkSide => ({
+              projectId: targetProjectId,
+              organizationId: access.organizationId,
+              canEdit: access.canEdit
+            }))
+            .catch((e) => {
+              if (e instanceof NotFoundException) return null;
+              throw e;
+            });
+    const verdict = forkDecision(sourceSide, targetSide, req);
+    if ('reason' in verdict) {
+      if (verdict.reason === 'target_missing') throw new NotFoundException(verdict.message);
+      if (verdict.reason === 'live_cross_project') throw new BadRequestException(verdict.message);
+      throw new ForbiddenException(verdict.message);
+    }
+    if (req.environmentId) {
+      const env = await this.prisma.environment.findUnique({
+        where: { id: req.environmentId },
+        select: { projectId: true }
+      });
+      if (!env || env.projectId !== targetProjectId) {
+        throw new BadRequestException('Environment does not belong to that project');
+      }
+    }
     const source = await this.operations.sourceFromDatabase(database.id);
     const op = await this.operations.enqueue({
       kind: 'fork',
       mode: 'fork',
       databaseId: database.id,
       source,
-      target,
-      request: { name: req.name, environmentId: req.environmentId },
+      target: verdict.target,
+      request: {
+        name: req.name,
+        environmentId: req.environmentId,
+        ...(verdict.crossProject ? { projectId: targetProjectId } : {})
+      },
       requestedBy: user.id
     });
-    this.auditOp('database.forked', user, database, { operationId: op.id, target });
+    this.auditOp(
+      'database.forked',
+      user,
+      { ...database, name: source.name },
+      {
+        operationId: op.id,
+        target: verdict.target,
+        ...(verdict.crossProject ? { targetProjectId } : {})
+      }
+    );
     return op;
   }
 

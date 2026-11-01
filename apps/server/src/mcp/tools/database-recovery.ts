@@ -68,13 +68,21 @@ at "now" (the default) copies the live database, "latest" uses the newest archiv
         environmentId: z
           .guid()
           .optional()
-          .describe("Environment for the new database. Defaults to the source database's."),
+          .describe(
+            "Environment for the new database. Defaults to the source database's, or the target project's default."
+          ),
+        projectId: z
+          .guid()
+          .optional()
+          .describe(
+            'Project to create the copy in, in the same organization. Defaults to the source database\'s. Copying into another project needs edit access to both and starts from a backup, so at "now" is refused there and the default becomes "latest".'
+          ),
         at: z.string().optional().describe('"now" (default), "latest", or an ISO 8601 timestamp'),
         checkpointId: z.guid().optional().describe('Fork from this checkpoint'),
         backupId: z.guid().optional().describe('Fork from this backup')
       }
     },
-    async ({ databaseId, name, environmentId, at, checkpointId, backupId }) => {
+    async ({ databaseId, name, environmentId, projectId, at, checkpointId, backupId }) => {
       const targets = [at, checkpointId, backupId].filter((value) => value !== undefined);
       if (targets.length > 1) {
         return failure('Error: Pass at most one of at, checkpointId or backupId.');
@@ -82,6 +90,7 @@ at "now" (the default) copies the live database, "latest" uses the newest archiv
       const body: Record<string, unknown> = {};
       if (name) body.name = name;
       if (environmentId) body.environmentId = environmentId;
+      if (projectId) body.projectId = projectId;
       if (at) body.at = at;
       if (checkpointId) body.checkpointId = checkpointId;
       if (backupId) body.backupId = backupId;

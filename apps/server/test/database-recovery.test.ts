@@ -30,7 +30,7 @@ import {
 } from '../src/kubernetes/cnpg-checkpoint';
 import { migrationRegression } from '../src/projects/database-plugin-migration.service';
 import { drillDue } from '../src/projects/database-drills.service';
-import { targetFromRequest } from '../src/projects/database-recovery.service';
+import { forkDecision, targetFromRequest } from '../src/projects/database-recovery.service';
 
 test('recovery targets map onto the CNPG fields, and named points carry the backup they start from', () => {
   assert.equal(recoveryTargetSpec({ type: 'latest' }), undefined);
@@ -265,6 +265,37 @@ test('restore requests pick their target', () => {
   assert.throws(() =>
     targetFromRequest({ at: new Date(Date.now() + 86_400_000).toISOString() }, true)
   );
+});
+
+test('a copy needs edit access to both projects, stays in the org and never streams across projects', () => {
+  const editor = { projectId: 'a', organizationId: 'org', canEdit: true };
+  const viewer = { ...editor, canEdit: false };
+  const otherEditor = { projectId: 'b', organizationId: 'org', canEdit: true };
+  const otherViewer = { ...otherEditor, canEdit: false };
+  const reason = (v: ReturnType<typeof forkDecision>) => ('reason' in v ? v.reason : 'ok');
+
+  assert.equal(reason(forkDecision(viewer, viewer, {})), 'source_forbidden');
+  assert.equal(reason(forkDecision(viewer, otherEditor, { at: 'latest' })), 'source_forbidden');
+  assert.equal(reason(forkDecision(editor, otherViewer, { at: 'latest' })), 'target_forbidden');
+  assert.equal(reason(forkDecision(editor, null, { at: 'latest' })), 'target_missing');
+  assert.equal(
+    reason(forkDecision(editor, { ...otherEditor, organizationId: 'elsewhere' }, { at: 'latest' })),
+    'target_missing'
+  );
+  assert.equal(reason(forkDecision(editor, otherEditor, { at: 'now' })), 'live_cross_project');
+
+  assert.deepEqual(forkDecision(editor, editor, {}), {
+    target: { type: 'now' },
+    crossProject: false
+  });
+  assert.deepEqual(forkDecision(editor, otherEditor, {}), {
+    target: { type: 'latest' },
+    crossProject: true
+  });
+  assert.deepEqual(forkDecision(editor, otherEditor, { at: '2026-10-30T12:00:00Z' }), {
+    target: { type: 'time', time: '2026-10-30T12:00:00.000Z' },
+    crossProject: true
+  });
 });
 
 test('poolers are small, transaction mode, and on by default only for databases up to 1Gi', () => {

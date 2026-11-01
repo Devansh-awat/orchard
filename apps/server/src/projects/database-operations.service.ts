@@ -352,7 +352,7 @@ export class DatabaseOperationsService {
 
     const dbs = await this.databases();
     const project = await this.prisma.project.findUnique({
-      where: { id: src.projectId },
+      where: { id: req.projectId ?? src.projectId },
       include: { organization: true }
     });
     if (!project) throw new NotFoundException('Project not found');
@@ -595,7 +595,7 @@ export class DatabaseOperationsService {
 
     const resources = await this.quotas
       .resolvePodResources(
-        src.projectId,
+        targetDb?.projectId ?? src.projectId,
         { cpuRequestMilli: src.cpuRequestMilli, memoryRequestBytes: src.memoryRequestBytes },
         'postgres'
       )

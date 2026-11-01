@@ -248,7 +248,8 @@ export function projectMeta(store: Store, p: MockProject) {
 			ingresses: deps.filter((d) => d.host).length
 		},
 		createdAt: p.createdAt,
-		updatedAt: p.updatedAt
+		updatedAt: p.updatedAt,
+		canEdit: access(store, p).canEdit
 	};
 }
 

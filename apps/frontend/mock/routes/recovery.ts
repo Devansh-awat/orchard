@@ -302,15 +302,24 @@ function cloneDatabase(
 	from: MockDatabase,
 	name: string,
 	environmentId: string | null,
-	status = 'restoring'
+	status = 'restoring',
+	projectId = from.projectId
 ): MockDatabase {
 	const now = new Date().toISOString();
 	const id = freshId();
+	const otherProject = projectId !== from.projectId;
+	const targetEnv =
+		environmentId ||
+		(otherProject
+			? (store.state.environments.find((e) => e.projectId === projectId && e.isDefault)?.id ??
+				from.environmentId)
+			: from.environmentId);
 	const db: MockDatabase = {
 		...from,
 		id,
 		name,
-		environmentId: environmentId || from.environmentId,
+		projectId,
+		environmentId: targetEnv,
 		status,
 		password: sha(`${id}:pw`).slice(0, 24),
 		extensions: [...from.extensions],
@@ -339,7 +348,14 @@ function startFork(store: Store, db: MockDatabase, body: any, target: Target) {
 	const name =
 		slugify(String(body?.name ?? '')) ||
 		`${db.name}-copy${store.state.databases.some((d) => d.name === `${db.name}-copy`) ? `-${Date.now().toString(36).slice(-3)}` : ''}`;
-	const copy = cloneDatabase(store, db, name, body?.environmentId ?? null);
+	const copy = cloneDatabase(
+		store,
+		db,
+		name,
+		body?.environmentId ?? null,
+		'restoring',
+		body?.projectId || db.projectId
+	);
 	const r = rec(copy);
 	r.forkedFromId = db.id;
 	r.forkedAt = new Date().toISOString();
@@ -860,7 +876,22 @@ export function recoveryRoutes(r: Router, { store }: MockContext) {
 	r.post('/databases/:id/fork', ({ params, body }) => {
 		const db = find(params.id);
 		if (!db) return notFound('Database not found');
-		const op = startFork(store, db, body, parseTarget(body, 'now'));
+		const targetProject = body?.projectId ? store.project(String(body.projectId)) : null;
+		const source = store.project(db.projectId);
+		if (
+			body?.projectId &&
+			(!targetProject || targetProject.organizationId !== source?.organizationId)
+		)
+			return notFound('Project not found');
+		const crossProject = !!targetProject && targetProject.id !== db.projectId;
+		const target = parseTarget(body, crossProject ? 'latest' : 'now');
+		if (crossProject && target.type === 'now') {
+			return reply(400, {
+				message:
+					'A copy into another project starts from a backup, because projects cannot reach each other. Pick the latest backup or a time.'
+			});
+		}
+		const op = startFork(store, db, body, target);
 		store.emit('database.changed', db.projectId, db.id);
 		return opView(op);
 	});
