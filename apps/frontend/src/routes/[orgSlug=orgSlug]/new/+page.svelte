@@ -276,11 +276,13 @@
 	}
 
 	onMount(async () => {
+		const preset =
+			presetSource === 'github' || presetSource === 'image'
+				? dock.find((d) => d.id === presetSource)
+				: undefined;
+		const tplEarly = preset ? null : apiFetch('/apiv1/templates').catch(() => null);
 		try {
-			const [projRes, tplRes] = await Promise.all([
-				apiFetch(orgId ? `/apiv1/projects?orgId=${orgId}` : '/apiv1/projects'),
-				apiFetch('/apiv1/templates')
-			]);
+			const projRes = await apiFetch(orgId ? `/apiv1/projects?orgId=${orgId}` : '/apiv1/projects');
 			if (projRes.ok) {
 				projects = (await projRes.json()).map((p: { id: string; name: string; slug: string }) => ({
 					id: p.id,
@@ -288,22 +290,20 @@
 					slug: p.slug
 				}));
 			}
-			if (tplRes.ok) {
-				templates = await tplRes.json();
-				const withIcons = templates.filter((t) => t.icon);
-				spotlight = shuffle(withIcons.length >= 3 ? withIcons : templates).slice(0, 5);
-			}
 			projectSlug =
 				preselectedProject && projects.some((p) => p.slug === preselectedProject)
 					? preselectedProject
 					: (projects[0]?.slug ?? '');
+			const tplRes = await tplEarly;
+			if (tplRes?.ok) {
+				templates = await tplRes.json();
+				const withIcons = templates.filter((t) => t.icon);
+				spotlight = shuffle(withIcons.length >= 3 ? withIcons : templates).slice(0, 5);
+			}
 		} finally {
 			loading = false;
 		}
-		if (presetSource === 'github' || presetSource === 'image') {
-			const item = dock.find((d) => d.id === presetSource);
-			if (item) openSource(item);
-		}
+		if (preset) openSource(preset);
 	});
 </script>
 

@@ -198,6 +198,13 @@
 
 	let usageUnsub: (() => void) | null = null;
 	let usageRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+	const USAGE_EVENTS = new Set([
+		'deployment.changed',
+		'database.changed',
+		'project.changed',
+		'membership.changed',
+		'pod.changed'
+	]);
 	let hasLoadedOnce = false;
 
 	$effect(() => {
@@ -222,12 +229,12 @@
 				loading = false;
 				usageUnsub?.();
 				usageUnsub = subscribeOrgEvents(p.orgId, (ev) => {
-					if (ev.type === 'deployment.metrics' || ev.type === 'heartbeat') return;
+					if (!USAGE_EVENTS.has(ev.type)) return;
 					if (usageRefreshTimer) return;
 					usageRefreshTimer = setTimeout(() => {
 						usageRefreshTimer = null;
 						invalidate(`org:${orgSlug}:usage`);
-					}, 2000);
+					}, 5000);
 				});
 			})
 			.catch((e: any) => {

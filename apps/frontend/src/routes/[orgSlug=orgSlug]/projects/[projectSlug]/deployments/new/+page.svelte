@@ -280,19 +280,41 @@
 		}
 	}
 
+	let reposRequested = false;
+
 	async function checkGitHubStatus() {
+		const reposEarly =
+			deploymentSource === 'github'
+				? apiFetch('/apiv1/github/repositories').catch(() => null)
+				: null;
+		if (reposEarly) {
+			reposRequested = true;
+			loadingRepos = true;
+		}
+		const installEarly = apiFetch('/apiv1/github/app/install').catch(() => null);
+		let linked = false;
 		try {
 			const response = await apiFetch('/apiv1/github/status');
 			if (response.ok) {
 				const status = await response.json();
 				githubLinked = status.linked;
+				linked = !!status.linked;
 				hasGitHubApp = (status.installations?.length ?? 0) > 0;
-				if (status.linked && deploymentSource === 'github') {
-					fetchRepositories();
-				}
 			}
-			const installRes = await apiFetch('/apiv1/github/app/install');
-			if (installRes.ok) {
+		} catch (e) {
+			console.error('Failed to check GitHub status:', e);
+		}
+		if (reposEarly) {
+			if (linked) {
+				fetchRepositories(reposEarly);
+			} else {
+				reposRequested = false;
+				loadingRepos = false;
+			}
+		}
+		try {
+			const installRes = await installEarly;
+			if (installRes?.ok) {
 				const data = await installRes.json();
 				githubAppInstallUrl = data.url;
 			}
@@ -301,11 +323,12 @@
 		}
 	}
 
-	async function fetchRepositories() {
+	async function fetchRepositories(early?: Promise<Response | null>) {
+		reposRequested = true;
 		loadingRepos = true;
 		reposError = null;
 		try {
-			const response = await apiFetch('/apiv1/github/repositories');
+			const response = (await early) ?? (await apiFetch('/apiv1/github/repositories'));
 			if (response.ok) {
 				const data = await response.json();
 				repositories = Array.isArray(data) ? data : (data.repositories ?? []);
@@ -912,11 +935,10 @@
 		}
 	}
 
-	let reposRequested = false;
 	$effect(() => {
 		if (deploymentSource === 'github' && githubLinked && !reposRequested) {
-			reposRequested = true;
 			if (repositories.length === 0) fetchRepositories();
+			else reposRequested = true;
 		}
 	});
 
