@@ -101,7 +101,7 @@
 					size="md"
 				/>
 				<span class="live-text">
-					<span class="live-app">{featured.app}</span>
+					<span class="live-app" title={featured.app}>{featured.app}</span>
 					<span class="live-state">
 						{#if live && current}
 							<span class="phase-dot phase--{current.id}"></span>
@@ -109,7 +109,9 @@
 						{:else}
 							<span>{featured.status.label}</span>
 						{/if}
-						{#if featured.project}<span class="faint">· {featured.project}</span>{/if}
+						{#if featured.project}<span class="faint project" title={featured.project}
+								>· {featured.project}</span
+							>{/if}
 					</span>
 				</span>
 				{#if total}
@@ -141,7 +143,7 @@
 				</span>
 			{/if}
 			<span class="live-foot">
-				<span class="live-msg"
+				<span class="live-msg" title={focused ? undefined : featured.message}
 					>{#if focused}{focused.label} · {clock(
 							focused.ms
 						)}{:else if featured.branch}{featured.message}
@@ -157,8 +159,11 @@
 				<span class="row-icon"
 					><AppIcon name={b.project ?? b.app} kind="project" icon={b.projectIcon} size="sm" /></span
 				>
-				<span class="row-app">{b.app}</span>
-				<span class="row-msg" class:row-msg--error={b.status.kind === 'error'}
+				<span class="row-app" title={b.app}>{b.app}</span>
+				<span
+					class="row-msg"
+					class:row-msg--error={b.status.kind === 'error'}
+					title={b.status.kind === 'error' ? undefined : b.message}
 					>{b.status.kind === 'error' ? 'Failed' : b.message}</span
 				>
 				<span class="row-when"><RelativeTime date={b.at} /></span>
@@ -206,7 +211,7 @@
 		align-items: center;
 		gap: 0.375rem;
 		min-width: 0;
-		overflow: hidden;
+		overflow-x: clip;
 		white-space: nowrap;
 		color: var(--text-muted);
 		font-size: var(--text-callout);
@@ -219,6 +224,11 @@
 	}
 	.faint {
 		color: var(--text-faint);
+	}
+	.project {
+		min-width: 0;
+		overflow-x: clip;
+		text-overflow: ellipsis;
 	}
 	.elapsed {
 		flex-shrink: 0;
@@ -324,7 +334,7 @@
 	}
 	.row {
 		display: grid;
-		grid-template-columns: 2.25rem auto minmax(0, 1fr) auto;
+		grid-template-columns: 2.25rem fit-content(45%) minmax(0, 1fr) auto;
 		align-items: center;
 		gap: 0.5rem;
 		height: 2rem;
@@ -337,10 +347,14 @@
 		justify-content: center;
 	}
 	.row-app {
+		min-width: 0;
 		margin-left: 0.25rem;
+		overflow-x: clip;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.row-msg {
-		overflow: hidden;
+		overflow-x: clip;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		color: var(--text-muted);

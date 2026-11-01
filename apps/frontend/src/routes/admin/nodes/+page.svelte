@@ -290,7 +290,7 @@
 		</EmptyState>
 	</div>
 {:else}
-	<div class="rounded-2xl border overflow-hidden" style="border-color: var(--surface-border);">
+	<div class="rounded-2xl border overflow-x-auto" style="border-color: var(--surface-border);">
 		<table class="w-full text-sm">
 			<thead style="background-color: var(--control-bg);">
 				<tr>
@@ -309,7 +309,7 @@
 						style="border-color: var(--surface-border);"
 						onclick={() => openNode(node.id)}
 					>
-						<td class="px-4 py-3 font-medium">{node.name}</td>
+						<td class="px-4 py-3 font-medium max-w-64 truncate" title={node.name}>{node.name}</td>
 						<td class="px-4 py-3">
 							<Badge tone={node.schedulable ? 'success' : 'error'}>
 								{node.schedulable ? 'Schedulable' : 'Cordoned'}

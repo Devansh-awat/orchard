@@ -168,9 +168,9 @@
 						/>
 					</span>
 				{:else}
-					<span class="env-row-name">{env.name}</span>
+					<span class="env-row-name" title={env.name}>{env.name}</span>
 					{#if env.isDefault}<Badge>Default</Badge>{/if}
-					<code class="env-row-ns">{env.namespace}</code>
+					<code class="env-row-ns" title={env.namespace}>{env.namespace}</code>
 					<span class="env-row-actions">
 						<Button
 							variant="ghost"
@@ -258,6 +258,16 @@
 		border-radius: 50%;
 		flex-shrink: 0;
 	}
+	.env-row-name,
+	.env-row-ns {
+		min-width: 0;
+		overflow-x: clip;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.env-row-ns {
+		flex-shrink: 100;
+	}
 	.env-row-name {
 		font-size: var(--text-callout);
 		line-height: var(--lh-callout);
@@ -273,6 +283,7 @@
 	}
 	.env-row-actions {
 		display: flex;
+		flex-shrink: 0;
 		gap: 0.25rem;
 		margin-left: auto;
 	}

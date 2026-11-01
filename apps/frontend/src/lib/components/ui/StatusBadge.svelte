@@ -15,9 +15,12 @@
 	} = $props();
 </script>
 
-<span class="sb sb--{variant} sb--{tone ?? meta.kind}">
+<span
+	class="sb sb--{variant} sb--{tone ?? meta.kind}"
+	title={meta.label.length > 32 ? meta.label : undefined}
+>
 	{#if variant !== 'solid'}<StatusDot {meta} {tone} {steps} size={8} />{/if}
-	{meta.label}
+	<span class="sb-label">{meta.label}</span>
 </span>
 
 <style>
@@ -26,11 +29,17 @@
 		align-items: center;
 		gap: 0.375rem;
 		flex-shrink: 0;
+		max-width: 100%;
 		height: 1.375rem;
 		font-size: var(--text-caption);
 		font-weight: var(--weight-medium);
 		line-height: 1;
 		white-space: nowrap;
+	}
+	.sb-label {
+		min-width: 0;
+		overflow-x: clip;
+		text-overflow: ellipsis;
 	}
 	.sb--subtle,
 	.sb--solid {

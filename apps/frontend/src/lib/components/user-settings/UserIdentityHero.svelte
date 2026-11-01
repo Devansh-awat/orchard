@@ -133,9 +133,9 @@
 		<Button variant="secondary" icon={Pencil} onclick={onStartEditing}>Edit</Button>
 	{/snippet}
 	{#snippet facts()}
-		{#if user?.username}<span class="mono">{user.username}</span>{/if}
+		{#if user?.username}<span class="mono" title={user.username}>{user.username}</span>{/if}
 		<span class="email">
-			{displayEmail}
+			<span class="email-text" title={displayEmail}>{displayEmail}</span>
 			<Button
 				variant="ghost"
 				size="sm"
@@ -177,6 +177,10 @@
 
 <style>
 	.mono {
+		max-width: 100%;
+		overflow-x: clip;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 		font-family: var(--font-mono);
 		font-size: var(--text-footnote);
 	}
@@ -184,6 +188,14 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.25rem;
+		min-width: 0;
+		max-width: 100%;
+	}
+	.email-text {
+		min-width: 0;
+		overflow-x: clip;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	a {
 		color: inherit;

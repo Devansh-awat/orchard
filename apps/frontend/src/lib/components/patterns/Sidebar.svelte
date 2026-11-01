@@ -378,7 +378,7 @@
 				</span>
 				{#if userBadge > 0}<span class="me-badge">{userBadge}</span>{/if}
 			</span>
-			<span class="me-name">@{user.handle}</span>
+			<span class="me-name" title="@{user.handle}">@{user.handle}</span>
 		{/snippet}
 		{#if userMenu}
 			<Menu placement="top-start" size="lg" width={menuW}>
@@ -661,6 +661,7 @@
 		flex: 1;
 		align-items: center;
 		gap: 0.75rem;
+		min-width: 0;
 		height: 2.5rem;
 		padding: 0 0.375rem;
 		border: none;
@@ -683,6 +684,10 @@
 		font-size: var(--text-caption);
 	}
 	.me-name {
+		min-width: 0;
+		overflow-x: clip;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 		font-family: var(--font-mono);
 		font-size: var(--text-callout);
 		text-box: trim-both cap alphabetic;

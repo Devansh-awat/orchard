@@ -35,12 +35,14 @@
 	.trigger {
 		display: inline-flex;
 		min-width: 0;
+		max-width: 100%;
 	}
 	.tip {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
 		max-width: 18rem;
+		overflow-wrap: anywhere;
 		margin: 0;
 		padding: 0.3125rem 0.5rem;
 		border: none;

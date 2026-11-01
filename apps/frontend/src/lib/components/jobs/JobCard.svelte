@@ -44,8 +44,8 @@
 >
 	<div class="job-card-main">
 		<div class="job-card-title-row">
-			<span class="job-card-name">{job.name}</span>
-			<span class="job-card-project">{job.projectName}</span>
+			<span class="job-card-name" title={job.name}>{job.name}</span>
+			<span class="job-card-project" title={job.projectName}>{job.projectName}</span>
 		</div>
 		{#if job.description}
 			<p class="job-card-desc">{job.description}</p>

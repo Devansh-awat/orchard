@@ -1303,6 +1303,9 @@
 		color: var(--text-muted);
 		font-size: var(--text-body);
 	}
+	.none-text {
+		min-width: 0;
+	}
 
 	.foot {
 		display: flex;

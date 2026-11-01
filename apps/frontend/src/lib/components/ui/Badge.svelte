@@ -11,13 +11,15 @@
 	} = $props();
 </script>
 
-<span class="pill pill--{tone}">{@render children()}</span>
+<span class="pill pill--{tone}"><span class="pill-text">{@render children()}</span></span>
 
 <style>
 	.pill {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.25rem;
+		max-width: 100%;
+		min-width: 0;
 		height: 1.25rem;
 		padding: 0 0.375rem;
 		border-radius: calc(0.375rem * var(--corner-scale));
@@ -28,6 +30,15 @@
 		white-space: nowrap;
 		font-variant-numeric: tabular-nums;
 		text-box: trim-both cap alphabetic;
+	}
+	.pill-text {
+		min-width: 0;
+		overflow-x: clip;
+		text-overflow: ellipsis;
+	}
+	.pill-text > :global(svg) {
+		display: inline-block;
+		vertical-align: middle;
 	}
 	.pill--neutral {
 		background: var(--bg-active);

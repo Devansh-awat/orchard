@@ -353,7 +353,7 @@
 			<Glyph size={14} strokeWidth={2.5} />
 		{/if}
 	</span>
-	<span class="label" data-tone={layer.color}>{layer.title}</span>
+	<span class="label" data-tone={layer.color} title={layer.title}>{layer.title}</span>
 {/snippet}
 
 <style>
@@ -507,6 +507,9 @@
 		background: var(--tone);
 	}
 	.label {
+		max-width: calc(var(--w) - 1.5rem - 0.5rem - 22px);
+		overflow-x: clip;
+		text-overflow: ellipsis;
 		text-box: trim-both cap alphabetic;
 		font-size: 0.8125rem;
 		line-height: 1rem;
@@ -586,6 +589,7 @@
 		font-size: var(--text-body);
 		line-height: var(--lh-body);
 		color: var(--toast-muted);
+		overflow-wrap: anywhere;
 	}
 	.action {
 		display: flex;

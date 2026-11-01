@@ -473,11 +473,14 @@
 						{#if testing === provider.id}
 							<Spinner size={12} />Testing
 						{:else if result}
-							<span class={result.success ? 'ok' : 'bad'}>
+							<span
+								class="line {result.success ? 'ok' : 'bad'}"
+								title={result.success ? undefined : `Test failed: ${result.error}`}
+							>
 								{result.success ? 'Reached the provider' : `Test failed: ${result.error}`}
 							</span>
 						{:else}
-							{providerDetail(provider)}
+							<span class="line" title={providerDetail(provider)}>{providerDetail(provider)}</span>
 						{/if}
 					{/snippet}
 					{#snippet controls()}
@@ -789,6 +792,11 @@
 	}
 	.bad {
 		color: var(--status-error);
+	}
+	.line {
+		min-width: 0;
+		overflow-x: clip;
+		text-overflow: ellipsis;
 	}
 	.quiet {
 		font-size: var(--text-callout);

@@ -486,7 +486,7 @@
 									{#if a.status === 'running'}
 										<AppIcon name={a.project} kind="project" icon={a.projectIcon} size="sm" />
 										<span class="face-text">
-											<span class="face-app">{a.app}</span>
+											<span class="face-app" title={a.app}>{a.app}</span>
 											{#key a.phase}
 												<span class="face-phase" {@attach swapIn}>{a.phase}</span>
 											{/key}
@@ -522,7 +522,9 @@
 											{/if}
 										</span>
 										<span class="face-text">
-											<span class="face-app face-app--{a.status}">{headline(a)}</span>
+											<span class="face-app face-app--{a.status}" title={headline(a)}
+												>{headline(a)}</span
+											>
 										</span>
 										<AppIcon name={a.project} kind="project" icon={a.projectIcon} size="sm" />
 									{/if}
@@ -765,7 +767,7 @@
 		margin-block: -0.3em;
 	}
 	.face-app {
-		flex-shrink: 0;
+		min-width: 0;
 		font-size: var(--text-callout);
 		font-weight: var(--weight-medium);
 	}

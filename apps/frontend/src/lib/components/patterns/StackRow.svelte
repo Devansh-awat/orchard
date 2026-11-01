@@ -55,12 +55,12 @@
 	{/snippet}
 	{#snippet subtitle()}
 		{#if error}
-			<span class="error">{error}</span>
+			<span class="error" title={error}>{error}</span>
 		{:else}
 			<span class="services">
 				{#each visible as s, i (s.id)}
 					{@const loud = s.status.kind !== 'success' && s.status.kind !== 'neutral'}
-					<span class="service"
+					<span class="service" title={s.name}
 						>{s.name}{#if loud}&nbsp;<span class="state state--{s.status.kind}"
 								>{s.status.label.toLowerCase()}</span
 							>{/if}{#if i < visible.length - 1 || hidden > 0},{/if}</span
@@ -72,7 +72,7 @@
 			</span>
 			{#if source}
 				<span aria-hidden="true">·</span>
-				<span class="source">{source}</span>
+				<span class="source" title={source}>{source}</span>
 			{/if}
 		{/if}
 	{/snippet}
@@ -100,12 +100,15 @@
 	}
 	.services {
 		display: flex;
-		flex-shrink: 0;
 		align-items: baseline;
 		gap: 0.3125rem;
+		min-width: 0;
+		overflow-x: clip;
 	}
 	.service {
-		flex-shrink: 0;
+		min-width: 0;
+		overflow-x: clip;
+		text-overflow: ellipsis;
 	}
 	.more {
 		flex-shrink: 0;
@@ -121,7 +124,7 @@
 	}
 	.error {
 		min-width: 0;
-		overflow: hidden;
+		overflow-x: clip;
 		text-overflow: ellipsis;
 		color: var(--status-error);
 	}

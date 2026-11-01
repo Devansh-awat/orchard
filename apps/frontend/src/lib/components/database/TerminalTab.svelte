@@ -370,7 +370,9 @@
 						<div class="notice" role="status">
 							{#if podGone}
 								<StatusDot meta={statusMeta('neutral', 'Gone')} size={8} />
-								<span>{podShortName(selectedName)} is gone</span>
+								<span class="notice-text" title={selectedName}
+									>{podShortName(selectedName)} is gone</span
+								>
 								{#if primaryName && primaryName !== selectedName}
 									<Button
 										shape="capsule"
@@ -490,6 +492,12 @@
 		font-weight: var(--weight-medium);
 		white-space: nowrap;
 		translate: -50% 0;
+		max-width: calc(100% - 1.5rem);
+	}
+	.notice-text {
+		min-width: 0;
+		overflow-x: clip;
+		text-overflow: ellipsis;
 	}
 	.quiet {
 		display: flex;

@@ -77,7 +77,7 @@
 		<IconTile src={branding.logoUrl || context.avatarUrl} alt="" class="org-mark">
 			{#snippet fallback()}<Monogram name={context.name} size="lg" />{/snippet}
 		</IconTile>
-		<span class="org-name">{context.name}</span>
+		<span class="org-name" title={context.name}>{context.name}</span>
 	{/snippet}
 	{#snippet headline()}
 		{#if branding.welcomeText}{branding.welcomeText}{:else}sign in to <em>{context.name}</em>.{/if}
@@ -101,12 +101,17 @@
 
 <style>
 	:global(.org-mark) {
+		flex-shrink: 0;
 		width: 2rem;
 		height: 2rem;
 		border-radius: calc(0.5rem * var(--corner-scale));
 		corner-shape: var(--corner);
 	}
 	.org-name {
+		min-width: 0;
+		overflow-x: clip;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 		font-size: var(--text-headline);
 		font-weight: var(--weight-semibold);
 	}

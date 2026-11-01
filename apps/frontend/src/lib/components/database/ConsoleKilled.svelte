@@ -99,7 +99,7 @@
 						<ToneTile tone={d.tone} size={32}><OctagonX size={16} /></ToneTile>
 					{/snippet}
 					{#snippet subtitle()}
-						<span class="parts">{d.parts.join(' · ')}</span>
+						<span class="parts" title={d.parts.join(' · ')}>{d.parts.join(' · ')}</span>
 					{/snippet}
 					{#snippet trailing()}
 						<span class="when"
@@ -139,6 +139,7 @@
 		scrollbar-width: thin;
 	}
 	.parts {
+		min-width: 0;
 		overflow-x: clip;
 		text-overflow: ellipsis;
 		white-space: nowrap;

@@ -476,7 +476,7 @@
 									</div>
 								</div>
 								<div class="hp-card-body">
-									<span class="hp-card-name">{workspace.name}</span>
+									<span class="hp-card-name" title={workspace.name}>{workspace.name}</span>
 									{#if workspace.description}
 										<span class="hp-card-desc">{workspace.description}</span>
 									{/if}

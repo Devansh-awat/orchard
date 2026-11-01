@@ -115,7 +115,7 @@
 							{:else if item.graftIcon}
 								<GraftIcon icon={item.graftIcon.icon} assetBase={item.graftIcon.assetBase} />
 							{/if}
-							<span>{item.label}</span>
+							<span class="admin-link-label" title={item.label}>{item.label}</span>
 							{#if item.href === '/admin' && $instanceChecklistOutstanding.length > 0}
 								<span class="admin-count">{$instanceChecklistOutstanding.length}</span>
 							{/if}
@@ -190,6 +190,18 @@
 		transition:
 			background-color 0.15s ease,
 			color 0.15s ease;
+	}
+
+	.admin-link :global(svg),
+	.admin-link :global(img) {
+		flex-shrink: 0;
+	}
+
+	.admin-link-label {
+		min-width: 0;
+		overflow-x: clip;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.admin-link:hover {

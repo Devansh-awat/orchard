@@ -199,7 +199,7 @@
 					{/snippet}
 					{#snippet subtitle()}
 						{@const meta = formatMetadata(entry.metadata)}
-						<span class="who">{actorName(entry)}</span>
+						<span class="who" title={actorName(entry)}>{actorName(entry)}</span>
 						{#if meta}<span class="meta" title={meta}>· {meta}</span>{/if}
 					{/snippet}
 					{#snippet trailing()}<RelativeTime date={entry.createdAt} />{/snippet}
@@ -231,10 +231,15 @@
 		line-height: var(--lh-callout);
 		color: var(--text-muted);
 	}
-	.who {
+	.who,
+	.meta {
+		min-width: 0;
+		overflow-x: clip;
+		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 	.meta {
+		flex-shrink: 100;
 		font-family: var(--font-mono);
 		font-size: 0.95em;
 	}

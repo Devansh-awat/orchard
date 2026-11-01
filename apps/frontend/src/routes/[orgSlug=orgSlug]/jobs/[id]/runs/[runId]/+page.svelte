@@ -107,10 +107,14 @@
 		</EmptyState>
 	{:else}
 		<div class="job-run-header">
-			<div>
-				<a href="/{orgSlug}/jobs/{jobId}?tab=runs" class="jobs-back-link">
+			<div class="job-page-header-main">
+				<a
+					href="/{orgSlug}/jobs/{jobId}?tab=runs"
+					class="jobs-back-link"
+					title={run.jobName ?? undefined}
+				>
 					<ArrowLeft size={14} />
-					{run.jobName ?? 'Job'}
+					<span class="jobs-back-label">{run.jobName ?? 'Job'}</span>
 				</a>
 				<div class="job-run-title-row">
 					<h1 class="job-page-title">Run #{run.number}</h1>

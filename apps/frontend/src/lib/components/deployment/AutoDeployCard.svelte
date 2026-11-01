@@ -256,7 +256,7 @@
 							<li class="ad-run">
 								<StatusDot meta={ghDot(run.status)} size={8} />
 								<code class="ad-sha">{run.commitSha.substring(0, 7)}</code>
-								<span class="ad-ref">{run.ref}</span>
+								<span class="ad-ref" title={run.ref}>{run.ref}</span>
 								<span class="ad-date">{new Date(run.createdAt).toLocaleDateString()}</span>
 								{#if run.logUrl}
 									<a

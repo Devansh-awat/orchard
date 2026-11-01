@@ -42,15 +42,17 @@
 	{#snippet titleSuffix()}
 		{#if stack}
 			<span class="stack" title="Part of the {stack} compose stack"
-				><Layers size={11} strokeWidth={2.25} aria-hidden="true" />{stack}</span
+				><Layers size={11} strokeWidth={2.25} aria-hidden="true" /><span class="stack-name"
+					>{stack}</span
+				></span
 			>
 		{/if}
 		{#if !quiet}<span class="state state--{status.kind}">{status.label}</span>{/if}
 	{/snippet}
 	{#snippet subtitle()}
-		{#if url}<span class="url">{url}</span>{/if}
+		{#if url}<span class="url" title={url}>{url}</span>{/if}
 		{#if url && detail}<span aria-hidden="true">·</span>{/if}
-		{#if detail}<span class="detail">{detail}</span>{/if}
+		{#if detail}<span class="detail" title={detail}>{detail}</span>{/if}
 	{/snippet}
 	{#snippet trailing()}
 		{#if updatedAt}<RelativeTime date={updatedAt} />{/if}
@@ -90,6 +92,8 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.25rem;
+		flex-shrink: 0;
+		max-width: 45%;
 		height: 1.125rem;
 		padding: 0 0.375rem;
 		border-radius: var(--radius-pill);
@@ -98,5 +102,13 @@
 		font-size: var(--text-caption);
 		font-weight: var(--weight-medium);
 		white-space: nowrap;
+	}
+	.stack :global(svg) {
+		flex-shrink: 0;
+	}
+	.stack-name {
+		min-width: 0;
+		overflow-x: clip;
+		text-overflow: ellipsis;
 	}
 </style>

@@ -73,6 +73,7 @@
 		justify-content: flex-end;
 		gap: var(--space-2);
 		min-width: 0;
+		max-width: 61.8%;
 	}
 	.setting--wide .control {
 		flex: 0 0 61.8%;
@@ -89,6 +90,7 @@
 	.setting--stack .control {
 		flex: 1 1 auto;
 		justify-content: stretch;
+		max-width: none;
 	}
 	.setting--stack .control > :global(*) {
 		flex: 1 1 auto;
@@ -102,6 +104,7 @@
 		}
 		.setting--wide .control {
 			flex-basis: auto;
+			max-width: none;
 		}
 	}
 </style>

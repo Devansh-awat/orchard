@@ -290,6 +290,7 @@
 					<Github size={16} class="src-glyph" />
 					<a
 						class="src-repo"
+						title={currentRepoName}
 						href={deployment.githubRepo}
 						target="_blank"
 						rel="noopener noreferrer"
@@ -297,10 +298,16 @@
 						{currentRepoName}
 					</a>
 					{#if deployment.githubBranch}
-						<Badge tone="neutral"><span class="src-mono">{deployment.githubBranch}</span></Badge>
+						<Badge tone="neutral"
+							><span class="src-mono" title={deployment.githubBranch}
+								>{deployment.githubBranch}</span
+							></Badge
+						>
 					{/if}
 					{#if needsDockerfile && deployment.dockerfilePath}
-						<span class="src-detail">{deployment.dockerfilePath}</span>
+						<span class="src-detail" title={deployment.dockerfilePath}
+							>{deployment.dockerfilePath}</span
+						>
 					{/if}
 					<span class="src-end">
 						<Button size="sm" variant="secondary" onclick={startEditing}>Change</Button>

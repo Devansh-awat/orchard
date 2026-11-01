@@ -2,6 +2,7 @@
 	display: inline-flex;
 	align-items: center;
 	gap: 0.35rem;
+	max-width: 100%;
 	height: 1.7rem;
 	padding: 0 0.6rem 0 0.45rem;
 	border-radius: var(--radius-sm);
@@ -13,6 +14,17 @@
 	transition:
 		background-color var(--dur-fast) cubic-bezier(0.32, 0.72, 0, 1),
 		color var(--dur-fast) cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.jobs-back-link svg {
+	flex-shrink: 0;
+}
+
+.jobs-back-label {
+	min-width: 0;
+	overflow-x: clip;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .jobs-back-link:hover {
@@ -106,10 +118,14 @@
 }
 
 .job-card-project {
+	flex-shrink: 100;
+	min-width: 0;
 	font-size: var(--text-caption);
 	line-height: var(--lh-caption);
 	color: var(--surface-muted);
 	white-space: nowrap;
+	overflow-x: clip;
+	text-overflow: ellipsis;
 }
 
 .job-card-desc {
@@ -450,11 +466,14 @@
 }
 
 .job-step-card-name {
+	min-width: 0;
 	font-size: var(--text-footnote);
 	line-height: var(--lh-footnote);
 	font-weight: 600;
 	color: var(--center-channel-color);
 	white-space: nowrap;
+	overflow-x: clip;
+	text-overflow: ellipsis;
 }
 
 .job-step-card-summary {
@@ -721,11 +740,14 @@
 }
 
 .job-pipeline-card-name {
+	min-width: 0;
 	font-size: var(--text-footnote);
 	line-height: var(--lh-footnote);
 	font-weight: 600;
 	color: var(--center-channel-color);
 	white-space: nowrap;
+	overflow-x: clip;
+	text-overflow: ellipsis;
 }
 
 .job-pipeline-card-summary {

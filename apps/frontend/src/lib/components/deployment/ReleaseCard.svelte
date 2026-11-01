@@ -180,7 +180,9 @@
 						{:else}
 							<MetaList items={liveFacts} />
 						{/if}
-						<span class="who">{originLabel(live)} · <RelativeTime date={live.at} /></span>
+						<span class="who" title={originLabel(live)}
+							>{originLabel(live)} · <RelativeTime date={live.at} /></span
+						>
 					{/snippet}
 					{#snippet actions()}
 						{#if previousId}
@@ -243,6 +245,13 @@
 		flex-shrink: 0;
 		margin-left: 0.625rem;
 		color: var(--text-faint);
+	}
+	.who {
+		flex-shrink: 1;
+		min-width: 0;
+		overflow-x: clip;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.timer {
 		display: inline-flex;

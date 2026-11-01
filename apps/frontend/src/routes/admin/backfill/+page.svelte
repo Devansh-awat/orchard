@@ -185,7 +185,7 @@
 		</div>
 	</div>
 
-	<div class="rounded-2xl border overflow-hidden" style="border-color: var(--surface-border);">
+	<div class="rounded-2xl border overflow-x-auto" style="border-color: var(--surface-border);">
 		<table class="w-full text-sm">
 			<thead style="background-color: var(--control-bg);">
 				<tr>
@@ -201,7 +201,7 @@
 					{@const key = rowKey(r)}
 					<tr class="border-t align-top" style="border-color: var(--surface-border);">
 						<td class="px-3 py-3">
-							<div class="font-medium">{r.name}</div>
+							<div class="font-medium max-w-64 truncate" title={r.name}>{r.name}</div>
 							<div class="text-xs" style="color: var(--surface-muted);">
 								<span
 									class="inline-block rounded px-1.5 py-0.5 mr-1"
@@ -212,10 +212,18 @@
 						</td>
 						<td class="px-3 py-3 text-xs">
 							{#if r.organization}
-								<div>{r.organization.name}</div>
+								<div class="max-w-48 truncate" title={r.organization.name}>
+									{r.organization.name}
+								</div>
 							{/if}
 							{#if r.project}
-								<div style="color: var(--surface-muted);">{r.project.name}</div>
+								<div
+									class="max-w-48 truncate"
+									style="color: var(--surface-muted);"
+									title={r.project.name}
+								>
+									{r.project.name}
+								</div>
 							{/if}
 						</td>
 						<td class="px-3 py-3 text-xs">

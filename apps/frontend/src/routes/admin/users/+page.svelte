@@ -205,21 +205,29 @@
 									<img
 										src={avatarUrl(user)}
 										alt={user.firstName || user.email}
-										class="h-8 w-8 rounded-full object-cover"
+										class="h-8 w-8 shrink-0 rounded-full object-cover"
 									/>
-									<div>
-										<p class="font-medium">
+									<div class="min-w-0">
+										<p class="font-medium truncate max-w-[240px]">
 											{user.firstName || ''}
 											{user.lastName || ''}
 											{#if !user.firstName && !user.lastName}
 												<span style="color: var(--surface-muted);">No name</span>
 											{/if}
 										</p>
-										<p class="text-xs" style="color: var(--surface-muted);">{user.email}</p>
+										<p
+											class="text-xs truncate max-w-[240px]"
+											style="color: var(--surface-muted);"
+											title={user.email}
+										>
+											{user.email}
+										</p>
 									</div>
 								</div>
 							</td>
-							<td class="px-4 py-3 font-mono text-xs">{user.username}</td>
+							<td class="px-4 py-3 font-mono text-xs max-w-40 truncate" title={user.username}>
+								{user.username}
+							</td>
 							<td class="px-4 py-3">
 								{#if user.isSuperAdmin}
 									<Badge tone="success"><Shield class="mr-1 h-3 w-3" />Admin</Badge>

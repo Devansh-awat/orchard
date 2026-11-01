@@ -153,6 +153,7 @@
 		font-weight: var(--weight-semibold);
 		letter-spacing: -0.024em;
 		color: var(--text-default);
+		overflow-wrap: anywhere;
 	}
 	.desc {
 		max-width: 65ch;

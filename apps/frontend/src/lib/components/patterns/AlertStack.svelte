@@ -115,7 +115,7 @@
 			>
 				<span class="icon"><Glyph size={16} aria-hidden="true" /></span>
 				<p class="text" title={alert.hint}>
-					<span class="title">{alert.title}</span>
+					<span class="title" title={alert.title}>{alert.title}</span>
 					{#if alert.hint}<span class="hint">{alert.hint}</span>{/if}
 				</p>
 				<span class="acts">
@@ -258,13 +258,17 @@
 		line-height: var(--lh-callout);
 	}
 	.title {
-		flex-shrink: 0;
+		min-width: 0;
+		overflow-x: clip;
 		font-weight: var(--weight-semibold);
 		color: var(--text-default);
+		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 	.hint {
-		overflow: hidden;
+		flex-shrink: 100;
+		min-width: 0;
+		overflow-x: clip;
 		color: var(--text-muted);
 		text-overflow: ellipsis;
 		white-space: nowrap;

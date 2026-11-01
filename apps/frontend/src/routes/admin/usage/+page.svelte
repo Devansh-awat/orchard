@@ -65,7 +65,7 @@
 		</div>
 	</div>
 
-	<div class="rounded-2xl border overflow-hidden" style="border-color: var(--surface-border);">
+	<div class="rounded-2xl border overflow-x-auto" style="border-color: var(--surface-border);">
 		<table class="w-full text-sm">
 			<thead style="background-color: var(--control-bg);">
 				<tr>
@@ -83,7 +83,9 @@
 						style="border-color: var(--surface-border);"
 						onclick={() => (expanded[r.organization.id] = !expanded[r.organization.id])}
 					>
-						<td class="px-4 py-3 font-medium">{r.organization.name}</td>
+						<td class="px-4 py-3 font-medium max-w-64 truncate" title={r.organization.name}>
+							{r.organization.name}
+						</td>
 						<td class="px-4 py-3">{formatCpuMilli(r.cpuMilli)}</td>
 						<td class="px-4 py-3">{formatMemoryBytes(r.memoryBytes)}</td>
 						<td class="px-4 py-3">{r.pods}</td>
@@ -94,8 +96,9 @@
 							<td colspan="5" class="px-4 py-3">
 								<div class="space-y-1">
 									{#each r.byNode as n (n.nodeName)}
-										<div class="flex items-center justify-between text-xs">
-											<span class="font-mono">{n.nodeName}</span>
+										<div class="flex items-center justify-between gap-4 text-xs">
+											<span class="font-mono min-w-0 truncate" title={n.nodeName}>{n.nodeName}</span
+											>
 											<span style="color: var(--surface-muted);">
 												{formatCpuMilli(n.cpuMilli)} · {formatMemoryBytes(n.memBytes)} · {n.pods} pods
 											</span>

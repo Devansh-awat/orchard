@@ -37,7 +37,7 @@
 <a class="line" data-entity={name} {href}>
 	<StatusDot meta={status} size={8} />
 	<span class="kind"><KindIcon size={14} /></span>
-	<span class="name">{name}</span>
+	<span class="name" title={name}>{name}</span>
 	{#if loud}<span class="state state--{status.kind}">{status.label}</span>{/if}
 	<span class="detail">{detail ?? ''}</span>
 	{#if traffic}
@@ -91,7 +91,9 @@
 		text-box: trim-both cap alphabetic;
 	}
 	.name {
-		flex-shrink: 0;
+		min-width: 0;
+		overflow-x: clip;
+		text-overflow: ellipsis;
 	}
 	.state {
 		flex-shrink: 0;

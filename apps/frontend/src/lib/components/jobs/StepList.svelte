@@ -63,7 +63,9 @@
 				>
 					<span class="job-step-index">{i + 1}</span>
 					<TypeIcon size={14} class="job-step-type-icon" />
-					<span class="job-step-card-name">{step.name.trim() || `Step ${i + 1}`}</span>
+					<span class="job-step-card-name" title={step.name.trim() || undefined}
+						>{step.name.trim() || `Step ${i + 1}`}</span
+					>
 					{#if step.type === 'script'}
 						<code class="job-inline-code">{step.scriptRuntime}</code>
 					{/if}

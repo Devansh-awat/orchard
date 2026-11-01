@@ -172,10 +172,10 @@
 			</h1>
 			<p class="protect-subtitle" {@attach motionStagger({ index: 2 })}>
 				{#if mode === 'password'}
-					Enter the password to view <span class="protect-host">{info.host}</span>
+					Enter the password to view <span class="protect-host" title={info.host}>{info.host}</span>
 				{:else}
 					Sign in with an Orchard account that has access to
-					<span class="protect-host">{info.host}</span>
+					<span class="protect-host" title={info.host}>{info.host}</span>
 				{/if}
 			</p>
 
@@ -226,7 +226,7 @@
 				{:else if !$isSignedIn}
 					<Button variant="primary" class="w-full" onclick={signIn}>Continue with Orchard</Button>
 				{:else}
-					<Button variant="primary" class="w-full" onclick={attemptExchange}>
+					<Button variant="primary" class="w-full" title={$user?.email} onclick={attemptExchange}>
 						Continue as {$user?.email}
 					</Button>
 				{/if}
@@ -299,7 +299,12 @@
 		font-size: var(--text-footnote);
 		line-height: var(--lh-footnote);
 		font-weight: 600;
+		display: inline-block;
+		max-width: 100%;
+		overflow-x: clip;
+		text-overflow: ellipsis;
 		white-space: nowrap;
+		vertical-align: bottom;
 	}
 
 	.protect-action {

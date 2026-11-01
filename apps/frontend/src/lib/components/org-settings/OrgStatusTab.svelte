@@ -248,8 +248,16 @@
 						{#if !p.isPublic}<Badge>Private</Badge>{/if}
 					{/snippet}
 					{#snippet subtitle()}
-						<a class="url" href={publicUrl(p)} target="_blank" rel="noopener noreferrer"
-							>{p.host ?? `/status/${p.slug}`}<ArrowUpRight size={12} aria-hidden="true" /></a
+						<a
+							class="url"
+							href={publicUrl(p)}
+							target="_blank"
+							rel="noopener noreferrer"
+							title={p.host ?? `/status/${p.slug}`}
+							><span class="url-text">{p.host ?? `/status/${p.slug}`}</span><ArrowUpRight
+								size={12}
+								aria-hidden="true"
+							/></a
 						>
 						<span>
 							· {p.components.length}
@@ -419,8 +427,17 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.125rem;
+		min-width: 0;
 		color: inherit;
 		text-decoration: none;
+	}
+	.url :global(svg) {
+		flex-shrink: 0;
+	}
+	.url-text {
+		min-width: 0;
+		overflow-x: clip;
+		text-overflow: ellipsis;
 	}
 	.url:hover {
 		color: var(--text-default);

@@ -206,12 +206,16 @@
 									alt="Profile"
 									class="h-14 w-14 rounded-2xl object-cover ring-2 ring-[var(--surface-border)]"
 								/>
-								<div>
+								<div class="min-w-0">
 									<p class="font-medium" style="color: var(--center-channel-color);">
 										{firstName || currentUser.firstName || 'Your'}
 										{lastName || currentUser.lastName || 'Name'}
 									</p>
-									<p class="text-sm" style="color: var(--surface-muted);">
+									<p
+										class="truncate text-sm"
+										style="color: var(--surface-muted);"
+										title={currentUser.email}
+									>
 										{currentUser.email}
 									</p>
 								</div>

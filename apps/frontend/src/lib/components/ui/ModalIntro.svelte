@@ -51,8 +51,10 @@
 		font-weight: var(--weight-semibold);
 		letter-spacing: var(--track-headline);
 		color: var(--text-default);
+		overflow-wrap: anywhere;
 	}
 	.desc {
+		overflow-wrap: anywhere;
 		font-size: var(--text-callout);
 		line-height: 1.25rem;
 		color: var(--text-muted);

@@ -1079,4 +1079,7 @@
 		padding: 1rem 0.75rem;
 		color: var(--text-muted);
 	}
+	.empty-text {
+		min-width: 0;
+	}
 </style>

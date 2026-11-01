@@ -188,9 +188,9 @@
 				<div class="ti-header-icon">
 					<LayoutTemplate class="h-5 w-5" style="color: var(--sidebar-text-active-border)" />
 				</div>
-				<div>
+				<div class="ti-header-text">
 					<div class="ti-title-row">
-						<h1 class="ti-title">{instance.name}</h1>
+						<h1 class="ti-title" title={instance.name}>{instance.name}</h1>
 						<button
 							class="ti-rename-btn"
 							title="Rename"
@@ -227,9 +227,9 @@
 						{#each instance.deployments as dep (dep.id)}
 							<a href="/{orgSlug}/deployments/{dep.id}" class="ti-resource-card">
 								<div class="ti-resource-info">
-									<span class="ti-resource-name">{dep.name}</span>
+									<span class="ti-resource-name" title={dep.name}>{dep.name}</span>
 									{#if dep.image}
-										<span class="ti-resource-detail">{dep.image}</span>
+										<span class="ti-resource-detail" title={dep.image}>{dep.image}</span>
 									{/if}
 								</div>
 								<div class="ti-resource-right">
@@ -252,8 +252,8 @@
 						{#each instance.databases as db (db.id)}
 							<a href="/{orgSlug}/databases/{db.id}" class="ti-resource-card">
 								<div class="ti-resource-info">
-									<span class="ti-resource-name">{db.name}</span>
-									<span class="ti-resource-detail">{db.dbName}</span>
+									<span class="ti-resource-name" title={db.name}>{db.name}</span>
+									<span class="ti-resource-detail" title={db.dbName}>{db.dbName}</span>
 								</div>
 								<div class="ti-resource-right">
 									<StatusBadge meta={resourceStatus(db.status)} />
@@ -280,7 +280,9 @@
 								class="ti-resource-card"
 							>
 								<div class="ti-resource-info">
-									<span class="ti-resource-name">{ing.host}{ing.path}</span>
+									<span class="ti-resource-name" title="{ing.host}{ing.path}"
+										>{ing.host}{ing.path}</span
+									>
 								</div>
 								<div class="ti-resource-right">
 									<ExternalLink class="h-3.5 w-3.5" style="color: var(--surface-muted)" />
@@ -297,7 +299,7 @@
 			<div class="ti-params">
 				{#each Object.entries(instance.parameters) as [key, value] (key)}
 					<div class="ti-param">
-						<span class="ti-param-key">{key}</span>
+						<span class="ti-param-key" title={key}>{key}</span>
 						<span class="ti-param-value">{value ?? '••••••••'}</span>
 					</div>
 				{/each}
@@ -385,6 +387,11 @@
 		display: flex;
 		gap: 0.75rem;
 		align-items: flex-start;
+		min-width: 0;
+	}
+
+	.ti-header-text {
+		min-width: 0;
 	}
 
 	.ti-header-icon {
@@ -405,6 +412,10 @@
 		color: var(--center-channel-color);
 		margin: 0;
 		letter-spacing: -0.02em;
+		min-width: 0;
+		overflow-x: clip;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.ti-title-row {
@@ -419,6 +430,7 @@
 		justify-content: center;
 		width: 26px;
 		height: 26px;
+		flex-shrink: 0;
 		border-radius: var(--radius-sm);
 		color: var(--text-muted);
 	}
@@ -513,6 +525,9 @@
 		font-size: var(--text-callout);
 		line-height: var(--lh-callout);
 		font-weight: 600;
+		overflow-x: clip;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.ti-resource-detail {
@@ -521,7 +536,7 @@
 		color: var(--surface-muted);
 		font-family: var(--font-mono);
 		white-space: nowrap;
-		overflow: hidden;
+		overflow-x: clip;
 		text-overflow: ellipsis;
 	}
 
@@ -534,7 +549,7 @@
 
 	.ti-params {
 		display: grid;
-		grid-template-columns: 1fr 1fr;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 		gap: 0.5rem;
 	}
 
@@ -554,6 +569,9 @@
 		color: var(--surface-muted);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
+		overflow-x: clip;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.ti-param-value {

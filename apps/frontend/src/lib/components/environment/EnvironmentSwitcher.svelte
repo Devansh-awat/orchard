@@ -67,7 +67,7 @@
 				>
 			{/snippet}
 			<span class="env-name">
-				<span class="env-label">{env.name}</span>
+				<span class="env-label" title={env.name}>{env.name}</span>
 				{#if env.isDefault}<Badge>Default</Badge>{/if}
 			</span>
 		</MenuItem>
@@ -101,7 +101,8 @@
 	}
 	.env-label {
 		min-width: 0;
-		overflow: hidden;
+		overflow-x: clip;
 		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 </style>

@@ -499,18 +499,18 @@
 										<img
 											src={org.avatarUrl}
 											alt={org.name}
-											class="h-8 w-8 rounded-lg object-cover"
+											class="h-8 w-8 shrink-0 rounded-lg object-cover"
 										/>
 									{:else}
 										<div
-											class="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-semibold"
+											class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-semibold"
 											style="background-color: var(--control-bg); color: var(--center-channel-color);"
 										>
 											{org.name[0].toUpperCase()}
 										</div>
 									{/if}
-									<div>
-										<p class="font-medium">{org.name}</p>
+									<div class="min-w-0">
+										<p class="font-medium truncate max-w-[240px]" title={org.name}>{org.name}</p>
 										{#if org.description}
 											<p
 												class="text-xs truncate max-w-[200px]"
@@ -525,7 +525,13 @@
 							<td class="px-4 py-3 font-mono text-xs">{org.slug}</td>
 							<td class="px-4 py-3">{org._count.members}</td>
 							<td class="px-4 py-3">{org._count.workspaces}</td>
-							<td class="px-4 py-3 text-xs" style="color: var(--surface-muted);">
+							<td
+								class="px-4 py-3 text-xs max-w-48 truncate"
+								style="color: var(--surface-muted);"
+								title={org.creator
+									? org.creator.firstName || org.creator.username || org.creator.email
+									: undefined}
+							>
 								{#if org.creator}
 									{org.creator.firstName || org.creator.username || org.creator.email}
 								{:else}
@@ -847,9 +853,9 @@
 							class="flex items-center justify-between rounded-lg border px-3 py-2 text-sm"
 							style="border-color: var(--surface-border);"
 						>
-							<div>
-								<div class="font-medium">{conn.name}</div>
-								<div class="font-mono text-xs" style="color: var(--surface-muted);">
+							<div class="min-w-0">
+								<div class="font-medium truncate" title={conn.name}>{conn.name}</div>
+								<div class="font-mono text-xs truncate" style="color: var(--surface-muted);">
 									{conn.slug}
 								</div>
 							</div>
@@ -892,7 +898,7 @@
 								disabled={qConnectBusy}
 								class="w-full text-left px-3 py-2 text-sm hover:bg-[color-mix(in_srgb,var(--surface-border)_20%,transparent)] flex items-center justify-between"
 							>
-								<span>
+								<span class="min-w-0 truncate" title={r.name}>
 									<span class="font-medium">{r.name}</span>
 									<span class="font-mono text-xs ml-2" style="color: var(--surface-muted);"
 										>{r.slug}</span

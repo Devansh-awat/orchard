@@ -236,7 +236,9 @@
 							<span>· {channel.ruleCount} {channel.ruleCount === 1 ? 'rule' : 'rules'}</span>
 						{/if}
 						{#if channel.config.urlPreview}
-							<span>· <span class="mono">{channel.config.urlPreview}</span></span>
+							<span class="preview" title={channel.config.urlPreview}
+								>· <span class="mono">{channel.config.urlPreview}</span></span
+							>
 						{/if}
 						{#if summary}
 							<span class="health" title={channel.lastDelivery?.error || undefined}
@@ -450,6 +452,11 @@
 	.mono {
 		font-family: var(--font-mono);
 		font-size: 0.95em;
+	}
+	.preview {
+		min-width: 0;
+		overflow-x: clip;
+		text-overflow: ellipsis;
 	}
 	.note code {
 		color: var(--text-default);

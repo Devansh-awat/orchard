@@ -240,7 +240,7 @@
 					>
 						<span class="graft-icon"><Puzzle size={16} /></span>
 						<span class="graft-main">
-							<span class="graft-name">
+							<span class="graft-name" title={g.name}>
 								{g.name}
 								{#if g.version}<span class="graft-version">{g.version}</span>{/if}
 							</span>
@@ -258,7 +258,7 @@
 										/>{:else if sig.tone === 'warning'}<ShieldAlert size={12} />{:else}<ShieldCheck
 											size={12}
 										/>{/if}
-									{sig.text}
+									<span class="graft-tier-text" title={sig.text}>{sig.text}</span>
 								</span>
 							</Badge>
 							<StatusBadge meta={statusOf(g)} />
@@ -413,7 +413,7 @@
 			<ul class="grafts-taps">
 				{#each overview.taps as tap (tap.name)}
 					<li class="grafts-tap">
-						<span class="graft-name">{tap.name}</span>
+						<span class="graft-name" title={tap.name}>{tap.name}</span>
 						<span class="graft-mono">{tap.url}</span>
 						<span class="graft-faint">key {tap.keyId}</span>
 					</li>
@@ -536,6 +536,10 @@
 	}
 
 	.graft-name {
+		min-width: 0;
+		overflow-x: clip;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 		font-size: var(--text-footnote);
 		line-height: var(--lh-footnote);
 		font-weight: 500;
@@ -568,13 +572,26 @@
 		align-items: center;
 		gap: 0.5rem;
 		flex-shrink: 0;
+		min-width: 0;
+		max-width: 50%;
 	}
 
 	.graft-tier {
-		display: inline-flex;
+		display: flex;
 		align-items: center;
 		gap: 0.3rem;
+		min-width: 0;
 		white-space: nowrap;
+	}
+
+	.graft-tier :global(svg) {
+		flex-shrink: 0;
+	}
+
+	.graft-tier-text {
+		min-width: 0;
+		overflow-x: clip;
+		text-overflow: ellipsis;
 	}
 
 	.graft-link {
@@ -616,7 +633,7 @@
 
 	.grafts-tap {
 		display: grid;
-		grid-template-columns: minmax(6rem, auto) minmax(0, 1fr) auto;
+		grid-template-columns: fit-content(14rem) minmax(0, 1fr) auto;
 		align-items: baseline;
 		gap: 0.75rem;
 		padding: 0.6rem 0.85rem;

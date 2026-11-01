@@ -262,7 +262,10 @@
 					<h1 class="text-xl font-semibold" style="color: var(--center-channel-color);">
 						You're invited to join
 					</h1>
-					<h2 class="mt-1 text-2xl font-bold" style="color: var(--center-channel-color);">
+					<h2
+						class="mt-1 text-2xl font-bold wrap-anywhere"
+						style="color: var(--center-channel-color);"
+					>
 						{invitation.organization.name}
 					</h2>
 				</div>
@@ -270,18 +273,22 @@
 				<!-- Details -->
 				<div class="space-y-4 p-6">
 					<div
-						class="flex items-center justify-between rounded-xl p-4"
+						class="flex items-center justify-between gap-4 rounded-xl p-4"
 						style="background-color: var(--control-bg);"
 					>
-						<div>
+						<div class="min-w-0">
 							<p class="text-xs uppercase tracking-wide" style="color: var(--surface-muted);">
 								Invited by
 							</p>
-							<p class="font-medium" style="color: var(--center-channel-color);">
+							<p
+								class="font-medium truncate"
+								style="color: var(--center-channel-color);"
+								title={getInviterName(invitation.inviter)}
+							>
 								{getInviterName(invitation.inviter)}
 							</p>
 						</div>
-						<div class="text-right">
+						<div class="shrink-0 text-right">
 							<p class="text-xs uppercase tracking-wide" style="color: var(--surface-muted);">
 								Role
 							</p>
@@ -298,7 +305,7 @@
 							style="border-color: var(--surface-border);"
 						>
 							<UserPlus class="mx-auto h-8 w-8 text-primary-600" />
-							<p class="mt-2 text-sm" style="color: var(--surface-muted);">
+							<p class="mt-2 text-sm wrap-anywhere" style="color: var(--surface-muted);">
 								Sign in with <strong>{invitation.email}</strong> to accept this invitation.
 							</p>
 						</div>
@@ -311,7 +318,7 @@
 							class="rounded-xl border p-4"
 							style="border-color: var(--warning-border); background-color: var(--warning-bg);"
 						>
-							<p class="text-sm" style="color: var(--warning-text);">
+							<p class="text-sm wrap-anywhere" style="color: var(--warning-text);">
 								This invitation was sent to <strong>{invitation.email}</strong>, but you're signed
 								in as <strong>{$user?.email}</strong>.
 							</p>

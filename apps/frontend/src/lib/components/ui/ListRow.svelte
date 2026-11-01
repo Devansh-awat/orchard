@@ -58,19 +58,21 @@
 	out:enterExit={{ enabled: presence }}
 >
 	{#if href}
-		<a class="hit" {href} aria-label={title}></a>
+		<a class="hit" {href} aria-label={title} {title}></a>
 	{:else if onclick}
-		<button type="button" class="hit" {onclick} aria-label={title}></button>
+		<button type="button" class="hit" {onclick} aria-label={title} {title}></button>
 	{/if}
 	{#if leading}<div class="leading">{@render leading()}</div>{/if}
 	<div class="text">
 		<div class="title-line">
-			<span class="title">{title}</span>
+			<span class="title" {title}>{title}</span>
 			{#if titleSuffix}{@render titleSuffix()}{/if}
 		</div>
 		{#if subtitle}
 			<div class="subtitle">
-				{#if typeof subtitle === 'string'}{subtitle}{:else}{@render subtitle()}{/if}
+				{#if typeof subtitle === 'string'}<span class="subtitle-text" title={subtitle}
+						>{subtitle}</span
+					>{:else}{@render subtitle()}{/if}
 			</div>
 		{/if}
 	</div>
@@ -194,7 +196,8 @@
 		min-width: 0;
 	}
 	.title {
-		overflow: hidden;
+		min-width: 0;
+		overflow-x: clip;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		font-size: var(--text-body);
@@ -207,12 +210,16 @@
 		align-items: center;
 		gap: 0.375rem;
 		min-width: 0;
-		overflow: hidden;
+		overflow-x: clip;
 		white-space: nowrap;
-		text-overflow: ellipsis;
 		font-size: var(--text-callout);
 		line-height: var(--lh-callout);
 		color: var(--text-muted);
+	}
+	.subtitle-text {
+		min-width: 0;
+		overflow-x: clip;
+		text-overflow: ellipsis;
 	}
 	.trailing {
 		font-size: var(--text-callout);

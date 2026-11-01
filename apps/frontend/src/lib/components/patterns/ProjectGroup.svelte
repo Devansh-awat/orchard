@@ -108,7 +108,7 @@
 				/></span
 			>
 			<span class="text">
-				<span class="name">{name}</span>
+				<span class="name" title={name}>{name}</span>
 				<span class="meta" {@attach fadeOverflow}>
 					{#if owner}<span class="owner">{owner}</span>{/if}
 					{#each counts as c, i (i)}
@@ -174,12 +174,13 @@
 		gap: 0.75rem;
 	}
 	.project--compact .name {
-		flex-shrink: 0;
+		min-width: 0;
 		font-size: var(--text-callout);
 		font-weight: var(--weight-medium);
 		letter-spacing: 0;
 	}
 	.project--compact .meta {
+		flex-shrink: 100;
 		font-size: var(--text-caption);
 	}
 	.project--compact .head {

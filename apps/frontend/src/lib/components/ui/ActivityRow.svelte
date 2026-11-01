@@ -93,6 +93,7 @@
 		font-weight: var(--weight-medium);
 		color: var(--text-default);
 		white-space: nowrap;
+		overflow-x: clip;
 	}
 	.ui-arow--muted .ui-arow-title {
 		font-weight: var(--weight-regular);
@@ -108,7 +109,7 @@
 		gap: 0.375rem;
 		min-width: 0;
 		height: var(--lh-callout);
-		overflow: hidden;
+		overflow-x: clip;
 		white-space: nowrap;
 		text-overflow: ellipsis;
 		font-size: var(--text-callout);

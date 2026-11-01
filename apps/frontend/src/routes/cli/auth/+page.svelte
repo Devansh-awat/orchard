@@ -180,6 +180,7 @@
 		line-height: var(--lh-callout);
 		color: var(--text-muted);
 		margin: 0;
+		overflow-wrap: anywhere;
 	}
 
 	.consent-subtitle strong {
@@ -200,6 +201,7 @@
 		line-height: var(--lh-footnote);
 		color: var(--text-muted);
 		margin: 0;
+		overflow-wrap: anywhere;
 	}
 
 	.consent-identity strong {
@@ -244,6 +246,7 @@
 	}
 
 	.cli-name {
+		overflow-wrap: anywhere;
 		font-size: var(--text-caption);
 		line-height: var(--lh-caption);
 		color: var(--text-faint);

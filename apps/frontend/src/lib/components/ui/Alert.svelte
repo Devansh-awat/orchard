@@ -83,6 +83,7 @@
 		min-width: 0;
 		font-size: var(--text-body);
 		line-height: var(--lh-body);
+		overflow-wrap: anywhere;
 	}
 	.title,
 	.body {

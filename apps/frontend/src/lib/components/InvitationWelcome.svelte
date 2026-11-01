@@ -727,6 +727,7 @@
 	}
 
 	.setup-profile-email {
+		overflow-wrap: anywhere;
 		font-size: var(--text-footnote);
 		line-height: var(--lh-footnote);
 		color: var(--surface-muted);

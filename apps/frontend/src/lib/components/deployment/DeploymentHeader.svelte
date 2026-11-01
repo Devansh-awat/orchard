@@ -127,7 +127,9 @@
 
 {#snippet identity()}
 	<div class="dh-identity">
-		<h1 class="dh-name">{deployment.displayName || deployment.name}</h1>
+		<h1 class="dh-name" title={deployment.displayName || deployment.name}>
+			{deployment.displayName || deployment.name}
+		</h1>
 		<StatusBadge meta={deploymentStatusChip} />
 		{#if stopped && heldPushes}
 			<span class="dh-held-chip" title={heldPushTitle}>{heldPushes}</span>
@@ -218,7 +220,7 @@
 				rel="noopener noreferrer"
 			>
 				<Globe size={14} aria-hidden="true" />
-				<span class="dh-domain-host">{primaryDomain.host}</span>
+				<span class="dh-domain-host" title={primaryDomain.host}>{primaryDomain.host}</span>
 			</a>
 			{#if extraDomains}
 				<Menu placement="bottom-start">
@@ -252,13 +254,13 @@
 				>
 					{#if repoLabel}<Github size={14} aria-hidden="true" />{/if}
 					{#if _activeBuild?.branch || branch}
-						<span class="dh-mono">{_activeBuild?.branch || branch}</span>
+						<span class="dh-mono dh-branch">{_activeBuild?.branch || branch}</span>
 					{/if}
 					{#if shortSha}
 						<GitCommitHorizontal size={14} aria-hidden="true" />
 						<span class="dh-mono">{shortSha}</span>
 					{:else if _commitLead && !repoLabel}
-						<span class="dh-mono dh-image">{_commitLead}</span>
+						<span class="dh-mono dh-image" title={_commitLead}>{_commitLead}</span>
 					{/if}
 				</a>
 			</Tooltip>
@@ -306,6 +308,7 @@
 		align-items: center;
 		gap: 0.375rem;
 		min-width: 0;
+		max-width: 100%;
 		text-decoration: none;
 	}
 	.dh-domain {
@@ -322,6 +325,7 @@
 		text-underline-offset: 0.2em;
 	}
 	.dh-domain-host {
+		min-width: 0;
 		overflow-x: clip;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -358,11 +362,15 @@
 	.dh-source .dh-mono + :global(svg) {
 		margin-left: 0.375rem;
 	}
+	.dh-branch,
 	.dh-image {
-		max-width: 18rem;
-		overflow: hidden;
+		min-width: 0;
+		overflow-x: clip;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	.dh-image {
+		max-width: 18rem;
 	}
 	.dh-when {
 		color: var(--text-faint);

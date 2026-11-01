@@ -279,7 +279,7 @@
 				<div class="asso-row asso-row--static">
 					<span class="asso-row-icon"><ProviderIcon preset={envProvider.preset} size={18} /></span>
 					<div class="asso-row-main">
-						<span class="asso-row-name">{envProvider.name}</span>
+						<span class="asso-row-name" title={envProvider.name}>{envProvider.name}</span>
 						<span class="asso-row-meta">Configured through environment variables</span>
 					</div>
 					<Badge tone="info">Read only</Badge>
@@ -304,7 +304,7 @@
 								/></span
 							>
 							<div class="asso-row-main">
-								<span class="asso-row-name">{provider.name}</span>
+								<span class="asso-row-name" title={provider.name}>{provider.name}</span>
 								<span class="asso-row-meta">
 									{provider.protocol.toUpperCase()}
 									{#if provider.allowedDomains.length}
@@ -423,7 +423,7 @@
 					{#each filteredOrgs as org (org.organizationId)}
 						<li class="asso-row">
 							<div class="asso-row-main">
-								<span class="asso-row-name">{org.name}</span>
+								<span class="asso-row-name" title={org.name}>{org.name}</span>
 								<span class="asso-row-meta">
 									/{org.slug} · {org.providerCount}
 									{org.providerCount === 1 ? 'connection' : 'connections'}
@@ -575,9 +575,13 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.1rem;
+		overflow-wrap: anywhere;
 	}
 
 	.asso-row-name {
+		overflow-x: clip;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 		font-size: var(--text-footnote);
 		line-height: var(--lh-footnote);
 		font-weight: 500;

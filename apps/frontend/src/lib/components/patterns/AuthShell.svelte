@@ -182,6 +182,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.625rem;
+		min-width: 0;
 		height: 2rem;
 	}
 	.wordmark :global(img) {

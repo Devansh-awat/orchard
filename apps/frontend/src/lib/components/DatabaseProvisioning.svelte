@@ -281,8 +281,8 @@
 					<Database class="h-4 w-4" />
 				{/if}
 			</div>
-			<div>
-				<h1 class="prov-title">{dbName}</h1>
+			<div class="prov-title-text">
+				<h1 class="prov-title" title={dbName}>{dbName}</h1>
 				<div class="prov-subtitle">
 					{#if overallStatus === 'ready'}
 						Database is ready
@@ -360,7 +360,7 @@
 						</span>
 					{/if}
 					{#if data.importPod?.name}
-						<span class="prov-panel-sub">{data.importPod.name}</span>
+						<span class="prov-panel-sub" title={data.importPod.name}>{data.importPod.name}</span>
 					{/if}
 				</button>
 				{#if logsOpen}
@@ -454,6 +454,11 @@
 		display: flex;
 		align-items: center;
 		gap: 0.875rem;
+		min-width: 0;
+	}
+
+	.prov-title-text {
+		min-width: 0;
 	}
 
 	.prov-icon {
@@ -481,6 +486,9 @@
 		line-height: var(--lh-title-3);
 		font-weight: 700;
 		color: var(--center-channel-color);
+		overflow-x: clip;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.prov-subtitle {
@@ -672,6 +680,10 @@
 		line-height: var(--lh-micro);
 		color: var(--surface-muted);
 		margin-left: auto;
+		min-width: 0;
+		overflow-x: clip;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.prov-pill {
@@ -761,6 +773,7 @@
 	}
 
 	.prov-warn-kind {
+		overflow-wrap: anywhere;
 		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 		font-size: var(--text-micro);
 		line-height: var(--lh-micro);

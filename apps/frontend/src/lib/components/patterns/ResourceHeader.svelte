@@ -26,7 +26,7 @@
 	<div class="rh-main">
 		<div class="rh-top">
 			<div class="rh-identity">
-				<h1 class="rh-name">{title}</h1>
+				<h1 class="rh-name" {title}>{title}</h1>
 				{#if badges}{@render badges()}{/if}
 			</div>
 			{#if actions}<div class="rh-actions">{@render actions()}</div>{/if}
@@ -107,6 +107,9 @@
 		font-size: var(--text-callout);
 		line-height: var(--lh-callout);
 		color: var(--text-muted);
+	}
+	.rh-facts > :global(*) {
+		max-width: 100%;
 	}
 	@media (max-width: 640px) {
 		.rh {

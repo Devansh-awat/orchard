@@ -321,7 +321,7 @@
 					Jobs
 				</a>
 				<div class="job-page-title-row">
-					<h1 class="job-page-title">{job.name}</h1>
+					<h1 class="job-page-title" title={job.name}>{job.name}</h1>
 					<ScheduleBadge
 						scheduleCron={job.scheduleCron}
 						timeZone={job.timeZone}

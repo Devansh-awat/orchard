@@ -733,6 +733,7 @@ html {
 .ui-modal-title {
 	flex: 1;
 	min-width: 0;
+	overflow-wrap: anywhere;
 	font-size: var(--text-headline);
 	line-height: var(--lh-headline);
 	font-weight: var(--weight-semibold);

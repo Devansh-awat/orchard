@@ -220,7 +220,9 @@
 					</h1>
 					{#if deployment.githubRepo}
 						<div class="mt-2 flex items-center justify-center gap-2 text-sm text-muted">
-							<span class="font-mono">{deployment.githubBranch}</span>
+							<span class="font-mono min-w-0 truncate" title={deployment.githubBranch}
+								>{deployment.githubBranch}</span
+							>
 							{#if deployment.buildType}
 								<span class="progress-meta-sep">&middot;</span>
 								<span class="font-mono">
@@ -244,10 +246,11 @@
 								href={liveUrl}
 								target="_blank"
 								rel="noopener noreferrer"
-								class="progress-url inline-flex items-center gap-1.5 font-mono text-sm"
+								class="progress-url inline-flex min-w-0 max-w-full items-center gap-1.5 font-mono text-sm"
+								title={liveUrl.replace('https://', '')}
 							>
-								{liveUrl.replace('https://', '')}
-								<ExternalLink class="h-3.5 w-3.5" />
+								<span class="min-w-0 truncate">{liveUrl.replace('https://', '')}</span>
+								<ExternalLink class="h-3.5 w-3.5 shrink-0" />
 							</a>
 						</div>
 					{/if}
@@ -320,6 +323,8 @@
 		line-height: var(--lh-title-2);
 		font-weight: 700;
 		letter-spacing: -0.01em;
+		max-width: 100%;
+		overflow-wrap: anywhere;
 	}
 
 	.progress-meta-sep {

@@ -19,7 +19,7 @@
 			>
 				<span class="dot"><StatusDot meta={item.meta} label={item.meta.label} /></span>
 				<span class="text">
-					<span class="label">{item.label}</span>
+					<span class="label" title={item.label}>{item.label}</span>
 					{#if item.detail}<span class="detail" title={item.detail}>{item.detail}</span>{/if}
 				</span>
 				{#if metered}
@@ -84,11 +84,15 @@
 		min-width: 0;
 	}
 	.label {
-		flex-shrink: 0;
+		min-width: 0;
+		overflow-x: clip;
+		white-space: nowrap;
+		text-overflow: ellipsis;
 	}
 	.detail {
+		flex-shrink: 100;
 		min-width: 0;
-		overflow: hidden;
+		overflow-x: clip;
 		white-space: nowrap;
 		text-overflow: ellipsis;
 		font-size: var(--text-footnote);

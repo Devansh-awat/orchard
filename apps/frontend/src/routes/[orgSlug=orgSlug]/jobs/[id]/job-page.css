@@ -15,6 +15,7 @@
 
 .job-page-header-main {
 	min-width: 0;
+	max-width: 100%;
 }
 
 .job-page-title-row {
@@ -25,6 +26,11 @@
 }
 
 .job-page-title {
+	min-width: 0;
+	max-width: 100%;
+	overflow-x: clip;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 	font-size: var(--text-title-2);
 	line-height: var(--lh-title-2);
 	font-weight: 700;
@@ -32,6 +38,7 @@
 }
 
 .job-page-subtitle {
+	overflow-wrap: anywhere;
 	font-size: var(--text-footnote);
 	line-height: var(--lh-footnote);
 	color: var(--surface-muted);

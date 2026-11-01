@@ -1037,13 +1037,13 @@
 {#snippet headRow(l: Live)}
 	{@render glyph(l)}
 	<span class="head-text">
-		<span class="head-title line" data-tone={l.status}>{headline(l)}</span>
+		<span class="head-title line" data-tone={l.status} title={headline(l)}>{headline(l)}</span>
 		{#if l.status === 'running' && l.phase && l.source === 'activity'}
 			{#key l.phase}
 				<span class="head-sub line" {@attach swapIn}>{l.phase}</span>
 			{/key}
 		{:else if l.status === 'error' && l.message}
-			<span class="head-sub line">{l.message}</span>
+			<span class="head-sub line" title={l.message}>{l.message}</span>
 		{/if}
 	</span>
 	{#if l.source === 'activity'}
@@ -1098,7 +1098,9 @@
 						<div class="toast-row" {@attach measureToast(id, 'w')}>
 							{@render toneGlyph(t.color)}
 							{#key t.title}
-								<span class="toast-title line" data-tone={t.color} {@attach swapIn}>{t.title}</span>
+								<span class="toast-title line" data-tone={t.color} title={t.title} {@attach swapIn}
+									>{t.title}</span
+								>
 							{/key}
 						</div>
 						{#if t.description || t.action}
@@ -1516,6 +1518,7 @@
 		padding-inline: 0.375rem 0.875rem;
 	}
 	.toast-title {
+		min-width: 0;
 		font-weight: var(--weight-medium);
 	}
 	.toast-title[data-tone='error'] {
@@ -1542,6 +1545,7 @@
 	}
 	.toast-desc {
 		margin: 0;
+		overflow-wrap: anywhere;
 		color: var(--text-muted);
 		font-size: var(--text-callout);
 		line-height: var(--lh-footnote);

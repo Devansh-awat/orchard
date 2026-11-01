@@ -87,7 +87,7 @@
 			>
 				{#each ongoing as inc (inc.componentId + inc.startedAt)}
 					<div class="sp-incident">
-						<span class="sp-incident-name">{inc.componentName}</span>
+						<span class="sp-incident-name" title={inc.componentName}>{inc.componentName}</span>
 						<span class="sp-incident-meta"
 							>Started {durationLabel(inc.startedAt, null, now)} ago</span
 						>
@@ -105,7 +105,7 @@
 					{@attach motionStagger({ index: 3 + i, from: { y: 6 } })}
 				>
 					<div class="sp-comp-row">
-						<span class="sp-comp-name">{c.name}</span>
+						<span class="sp-comp-name" title={c.name}>{c.name}</span>
 						<span class="sp-comp-uptime">{uptimeLabel(c.uptime)}</span>
 						<StatusBadge meta={statusMeta(copy.tone, copy.label, c.status === 'down')} />
 					</div>
@@ -129,7 +129,7 @@
 				<h2 class="sp-h2">Past incidents</h2>
 				{#each past as inc (inc.componentId + inc.startedAt)}
 					<div class="sp-incident sp-incident--past">
-						<span class="sp-incident-name">{inc.componentName}</span>
+						<span class="sp-incident-name" title={inc.componentName}>{inc.componentName}</span>
 						<span class="sp-incident-meta"
 							>{new Date(inc.startedAt).toLocaleDateString(undefined, {
 								day: 'numeric',
@@ -245,6 +245,10 @@
 		box-shadow: inset 0 0 0 1px var(--rule);
 	}
 	.sp-incident-name {
+		min-width: 0;
+		overflow-x: clip;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 		font-size: var(--text-callout);
 		font-weight: 600;
 		color: var(--text-default);
@@ -253,6 +257,7 @@
 		font-size: var(--text-caption);
 		color: var(--text-muted);
 		text-align: right;
+		flex-shrink: 0;
 	}
 	.sp-components {
 		display: flex;

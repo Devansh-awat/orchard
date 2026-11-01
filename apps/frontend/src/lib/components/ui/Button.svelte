@@ -86,6 +86,7 @@
 		justify-content: center;
 		gap: 0.375rem;
 		flex-shrink: 0;
+		max-width: 100%;
 		height: 2rem;
 		padding: 0 0.8125rem;
 		border: none;
@@ -152,6 +153,9 @@
 	}
 	.label {
 		display: block;
+		min-width: 0;
+		overflow-x: clip;
+		text-overflow: ellipsis;
 		text-box: trim-both cap alphabetic;
 	}
 	.label :global(svg) {

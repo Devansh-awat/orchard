@@ -61,7 +61,7 @@
 					: undefined}
 			>
 				<StepStatusRing status={step.runStep?.status ?? null} number={step.stepOrder} />
-				<span class="job-pipeline-card-name">{step.name}</span>
+				<span class="job-pipeline-card-name" title={step.name}>{step.name}</span>
 				{#if step.summary}
 					<span class="job-pipeline-card-summary font-mono">{step.summary}</span>
 				{/if}

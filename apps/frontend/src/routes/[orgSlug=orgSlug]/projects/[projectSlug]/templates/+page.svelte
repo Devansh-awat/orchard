@@ -292,7 +292,7 @@
 							</div>
 						</div>
 						<div class="tpl-card-body">
-							<span class="tpl-card-name">{template.displayName}</span>
+							<span class="tpl-card-name" title={template.displayName}>{template.displayName}</span>
 							{#if template.description}
 								<p class="tpl-card-desc">{template.description}</p>
 							{/if}
@@ -300,7 +300,7 @@
 						{#if template.tags.length}
 							<div class="tpl-card-tags">
 								{#each template.tags.slice(0, 4) as tag (tag)}
-									<span class="tpl-card-tag">{tag}</span>
+									<span class="tpl-card-tag" title={tag}>{tag}</span>
 								{/each}
 							</div>
 						{/if}
@@ -498,7 +498,7 @@
 
 	.tpl-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(18rem, 100%), 1fr));
 		gap: 0.75rem;
 	}
 
@@ -552,9 +552,13 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.25rem;
+		min-width: 0;
 	}
 
 	.tpl-card-name {
+		overflow-x: clip;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 		font-size: var(--text-body);
 		line-height: var(--lh-body);
 		font-weight: 600;
@@ -603,6 +607,7 @@
 		-webkit-line-clamp: 2;
 		-webkit-box-orient: vertical;
 		overflow: hidden;
+		overflow-wrap: anywhere;
 	}
 
 	.tpl-card-tags {
@@ -613,6 +618,10 @@
 	}
 
 	.tpl-card-tag {
+		max-width: 100%;
+		overflow-x: clip;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 		font-size: var(--text-micro);
 		line-height: var(--lh-micro);
 		padding: 0.0625rem 0.5rem;
