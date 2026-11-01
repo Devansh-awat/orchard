@@ -27,6 +27,19 @@ export type DatabaseSeriesId =
   | 'diskCapacity';
 export type DatabaseSeriesBundle = SeriesBundle & Record<DatabaseSeriesId, SeriesPoint[]>;
 
+const PROVISIONING_TTL_MS = 5 * 60_000;
+const PROVISIONING_CONCURRENCY = 6;
+
+type ProvisioningReport = Awaited<ReturnType<MetricsService['computeOrgActualVsProvisioned']>>;
+
+async function runLimited(tasks: (() => Promise<void>)[], limit: number): Promise<void> {
+  let next = 0;
+  const worker = async () => {
+    while (next < tasks.length) await tasks[next++]();
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, worker));
+}
+
 @Injectable()
 export class MetricsService {
   private readonly logger = new Logger(MetricsService.name);
@@ -38,9 +51,29 @@ export class MetricsService {
 
   // Provisioning view: for every deployment & database in the org, compare its requested
   // resources against the p95 actual usage over the window. Used to surface over/underprovisioning.
-  async getOrgActualVsProvisioned(
+  private readonly provisioning = new Map<
+    string,
+    { at: number; value: Promise<ProvisioningReport> }
+  >();
+
+  getOrgActualVsProvisioned(
     organizationId: string,
     rangeSeconds: number = 24 * 3600
+  ): Promise<ProvisioningReport> {
+    const key = `${organizationId}:${rangeSeconds}`;
+    const hit = this.provisioning.get(key);
+    if (hit && Date.now() - hit.at < PROVISIONING_TTL_MS) return hit.value;
+    const value = this.computeOrgActualVsProvisioned(organizationId, rangeSeconds).catch((err) => {
+      this.provisioning.delete(key);
+      throw err;
+    });
+    this.provisioning.set(key, { at: Date.now(), value });
+    return value;
+  }
+
+  private async computeOrgActualVsProvisioned(
+    organizationId: string,
+    rangeSeconds: number
   ): Promise<{
     rows: {
       kind: 'deployment' | 'database';
@@ -104,7 +137,7 @@ export class MetricsService {
       verdict: 'over' | 'under' | 'ok' | 'unknown';
     }[] = [];
 
-    const tasks: Promise<void>[] = [];
+    const tasks: (() => Promise<void>)[] = [];
 
     for (const p of projects) {
       for (const d of p.deployments) {
@@ -112,96 +145,91 @@ export class MetricsService {
         const requestedCpu = (d.cpuRequestMilli ?? 0) * (d.replicas ?? 1);
         const requestedMem =
           (d.memoryRequestBytes ? Number(d.memoryRequestBytes) : 0) * (d.replicas ?? 1);
-        tasks.push(
-          (async () => {
-            const sel = `namespace="${escapeLabel(ns)}",pod=~"${deploymentPodRegex(d.name)}",container="",image=""`;
-            const [cpu, mem, cpuPodP95, cpuPodP99, memPodPeak] = await Promise.all([
-              this.vm.queryInstant(
-                `quantile_over_time(0.95, (sum(rate(container_cpu_usage_seconds_total{${sel}}[60s])) * 1000)[${rangeSeconds}s:60s])`
-              ),
-              this.vm.queryInstant(
-                `quantile_over_time(0.95, sum(container_memory_working_set_bytes{${sel}})[${rangeSeconds}s:60s])`
-              ),
-              this.vm.queryInstant(
-                `quantile_over_time(0.95, (max(sum by (pod) (rate(container_cpu_usage_seconds_total{${sel}}[5m]))) * 1000)[${rangeSeconds}s:300s])`
-              ),
-              this.vm.queryInstant(
-                `quantile_over_time(0.99, (max(sum by (pod) (rate(container_cpu_usage_seconds_total{${sel}}[5m]))) * 1000)[${rangeSeconds}s:300s])`
-              ),
-              this.vm.queryInstant(
-                `max_over_time(max(sum by (pod) (container_memory_working_set_bytes{${sel}}))[${rangeSeconds}s:300s])`
-              )
-            ]);
-            const cpuUtil = requestedCpu > 0 && cpu !== null ? cpu / requestedCpu : null;
-            const memUtil = requestedMem > 0 && mem !== null ? mem / requestedMem : null;
-            const unlimited = d.cpuRequestMilli === 0;
-            rows.push({
-              kind: 'deployment',
-              id: d.id,
-              name: d.name,
-              projectId: p.id,
-              projectName: p.name,
-              namespace: p.namespace,
-              requestedCpuMilli: requestedCpu,
-              requestedMemoryBytes: requestedMem,
-              actualCpuMilliP95: cpu,
-              actualMemoryBytesP95: mem,
-              cpuUtilization: cpuUtil,
-              memoryUtilization: memUtil,
-              verdict: unlimited
-                ? 'unknown'
-                : classifyFromPeaks({
-                    cpuP95: cpuPodP95,
-                    cpuP99: cpuPodP99,
-                    memoryPeak: memPodPeak,
-                    current: {
-                      cpuLimitMilli: d.cpuRequestMilli,
-                      memoryBytes:
-                        d.memoryRequestBytes != null ? Number(d.memoryRequestBytes) : null
-                    },
-                    image: d.image
-                  })
-            });
-          })()
-        );
+        tasks.push(async () => {
+          const sel = `namespace="${escapeLabel(ns)}",pod=~"${deploymentPodRegex(d.name)}",container="",image=""`;
+          const [cpu, mem, cpuPodP95, cpuPodP99, memPodPeak] = await Promise.all([
+            this.vm.queryInstant(
+              `quantile_over_time(0.95, (sum(rate(container_cpu_usage_seconds_total{${sel}}[60s])) * 1000)[${rangeSeconds}s:60s])`
+            ),
+            this.vm.queryInstant(
+              `quantile_over_time(0.95, sum(container_memory_working_set_bytes{${sel}})[${rangeSeconds}s:60s])`
+            ),
+            this.vm.queryInstant(
+              `quantile_over_time(0.95, (max(sum by (pod) (rate(container_cpu_usage_seconds_total{${sel}}[5m]))) * 1000)[${rangeSeconds}s:300s])`
+            ),
+            this.vm.queryInstant(
+              `quantile_over_time(0.99, (max(sum by (pod) (rate(container_cpu_usage_seconds_total{${sel}}[5m]))) * 1000)[${rangeSeconds}s:300s])`
+            ),
+            this.vm.queryInstant(
+              `max_over_time(max(sum by (pod) (container_memory_working_set_bytes{${sel}}))[${rangeSeconds}s:300s])`
+            )
+          ]);
+          const cpuUtil = requestedCpu > 0 && cpu !== null ? cpu / requestedCpu : null;
+          const memUtil = requestedMem > 0 && mem !== null ? mem / requestedMem : null;
+          const unlimited = d.cpuRequestMilli === 0;
+          rows.push({
+            kind: 'deployment',
+            id: d.id,
+            name: d.name,
+            projectId: p.id,
+            projectName: p.name,
+            namespace: p.namespace,
+            requestedCpuMilli: requestedCpu,
+            requestedMemoryBytes: requestedMem,
+            actualCpuMilliP95: cpu,
+            actualMemoryBytesP95: mem,
+            cpuUtilization: cpuUtil,
+            memoryUtilization: memUtil,
+            verdict: unlimited
+              ? 'unknown'
+              : classifyFromPeaks({
+                  cpuP95: cpuPodP95,
+                  cpuP99: cpuPodP99,
+                  memoryPeak: memPodPeak,
+                  current: {
+                    cpuLimitMilli: d.cpuRequestMilli,
+                    memoryBytes: d.memoryRequestBytes != null ? Number(d.memoryRequestBytes) : null
+                  },
+                  image: d.image
+                })
+          });
+        });
       }
       for (const db of p.databases) {
         if (!db.namespace || !db.clusterName) continue;
         const requestedCpu = db.cpuRequestMilli ?? 0;
         const requestedMem = db.memoryRequestBytes ? Number(db.memoryRequestBytes) : 0;
-        tasks.push(
-          (async () => {
-            const [cpu, mem] = await Promise.all([
-              this.vm.queryInstant(
-                `quantile_over_time(0.95, (sum(rate(container_cpu_usage_seconds_total{namespace="${escapeLabel(db.namespace!)}",pod=~"${escapeRegex(db.clusterName!)}-.*",container="",image=""}[60s])) * 1000)[${rangeSeconds}s:60s])`
-              ),
-              this.vm.queryInstant(
-                `quantile_over_time(0.95, sum(container_memory_working_set_bytes{namespace="${escapeLabel(db.namespace!)}",pod=~"${escapeRegex(db.clusterName!)}-.*",container="",image=""})[${rangeSeconds}s:60s])`
-              )
-            ]);
-            const cpuUtil = requestedCpu > 0 && cpu !== null ? cpu / requestedCpu : null;
-            const memUtil = requestedMem > 0 && mem !== null ? mem / requestedMem : null;
-            rows.push({
-              kind: 'database',
-              id: db.id,
-              name: db.name,
-              projectId: p.id,
-              projectName: p.name,
-              namespace: db.namespace,
-              requestedCpuMilli: requestedCpu,
-              requestedMemoryBytes: requestedMem,
-              actualCpuMilliP95: cpu,
-              actualMemoryBytesP95: mem,
-              cpuUtilization: cpuUtil,
-              memoryUtilization: memUtil,
-              verdict: classify(cpuUtil, memUtil)
-            });
-          })()
-        );
+        tasks.push(async () => {
+          const [cpu, mem] = await Promise.all([
+            this.vm.queryInstant(
+              `quantile_over_time(0.95, (sum(rate(container_cpu_usage_seconds_total{namespace="${escapeLabel(db.namespace!)}",pod=~"${escapeRegex(db.clusterName!)}-.*",container="",image=""}[60s])) * 1000)[${rangeSeconds}s:60s])`
+            ),
+            this.vm.queryInstant(
+              `quantile_over_time(0.95, sum(container_memory_working_set_bytes{namespace="${escapeLabel(db.namespace!)}",pod=~"${escapeRegex(db.clusterName!)}-.*",container="",image=""})[${rangeSeconds}s:60s])`
+            )
+          ]);
+          const cpuUtil = requestedCpu > 0 && cpu !== null ? cpu / requestedCpu : null;
+          const memUtil = requestedMem > 0 && mem !== null ? mem / requestedMem : null;
+          rows.push({
+            kind: 'database',
+            id: db.id,
+            name: db.name,
+            projectId: p.id,
+            projectName: p.name,
+            namespace: db.namespace,
+            requestedCpuMilli: requestedCpu,
+            requestedMemoryBytes: requestedMem,
+            actualCpuMilliP95: cpu,
+            actualMemoryBytesP95: mem,
+            cpuUtilization: cpuUtil,
+            memoryUtilization: memUtil,
+            verdict: classify(cpuUtil, memUtil)
+          });
+        });
       }
     }
 
-    await Promise.all(tasks);
+    await runLimited(tasks, PROVISIONING_CONCURRENCY);
     rows.sort((a, b) => a.projectName.localeCompare(b.projectName) || a.name.localeCompare(b.name));
     return { rows };
   }
