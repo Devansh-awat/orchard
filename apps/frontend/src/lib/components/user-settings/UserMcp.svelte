@@ -15,11 +15,12 @@
 
 	const MCP_URL = env.PUBLIC_MCP_URL || '';
 
-	type Client = 'claude' | 'claude-code' | 'vscode' | 'cursor' | 'token';
+	type Client = 'claude' | 'claude-code' | 'amp' | 'vscode' | 'cursor' | 'token';
 
 	const CLIENTS = [
 		{ value: 'claude', label: 'Claude' },
 		{ value: 'claude-code', label: 'Claude Code' },
+		{ value: 'amp', label: 'Amp' },
 		{ value: 'vscode', label: 'VS Code' },
 		{ value: 'cursor', label: 'Cursor' },
 		{ value: 'token', label: 'Token' }
@@ -196,6 +197,9 @@
 					</p>
 					<CommandSnippet command={`claude mcp add --transport http orchard '${serverUrl}'`} />
 					<CodeBlock code={claudeCodeConfig} title=".mcp.json" />
+				{:else if client === 'amp'}
+					<p class="step">Run this, then sign in when Amp asks.</p>
+					<CommandSnippet command={`amp mcp add orchard '${serverUrl}'`} />
 				{:else if client === 'vscode'}
 					<p class="step">
 						Run MCP: Add Server from the Command Palette <Kbd keys={['⇧', '⌘', 'P']} />, or add
