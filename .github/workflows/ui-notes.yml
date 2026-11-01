@@ -22,17 +22,18 @@ jobs:
       AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
       R2_ENDPOINT: ${{ secrets.REGISTRY_R2_ENDPOINT }}
       R2_BUCKET: ${{ secrets.REGISTRY_R2_BUCKET }}
+      BEFORE: ${{ github.event.before }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          fetch-depth: 2
+          fetch-depth: 0
       - name: Re-upload edited notes that are already published
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = workflow_dispatch ]; then
             notes=$(ls releases/ui/notes/*.md)
           else
-            notes=$(git diff --name-only --diff-filter=AM HEAD^ HEAD -- releases/ui/notes/)
+            notes=$(git diff --name-only --diff-filter=AM "$BEFORE" HEAD -- releases/ui/notes/)
           fi
           for note in $notes; do
             file=$(basename "$note")
@@ -46,4 +47,23 @@ jobs:
               --cache-control 'public, max-age=300' \
               --only-show-errors
             echo "republished $file"
+          done
+      - name: Withdraw deleted notes
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          current=$(curl -fsSL "https://assets.orchard.my/updates/ui/latest.json?v=$GITHUB_SHA" | jq -r '.file // empty' || true)
+          for note in $(git diff --name-only --diff-filter=D "$BEFORE" HEAD -- releases/ui/notes/); do
+            file=$(basename "$note")
+            if [ "$file" = "$current" ]; then
+              echo '{}' > "$RUNNER_TEMP/latest.json"
+              aws s3 cp "$RUNNER_TEMP/latest.json" "s3://$R2_BUCKET/updates/ui/latest.json" \
+                --endpoint-url "$R2_ENDPOINT" \
+                --content-type application/json \
+                --cache-control no-cache \
+                --only-show-errors
+              echo "$file was the current update; nothing is announced now"
+            fi
+            aws s3 rm "s3://$R2_BUCKET/updates/ui/$file" --endpoint-url "$R2_ENDPOINT" --only-show-errors
+            echo "withdrew $file"
           done
