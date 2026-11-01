@@ -368,6 +368,20 @@ Scoped classes must not reuse legacy global names (`btn`, `card`, `badge`, `inpu
 `shadow`, `rounded`, `truncate`, `static`, `fixed`, `sticky`, `relative`, `isolate`).
 Tailwind generates real CSS for any of those it sees in markup.
 
+## Every action shows its result
+
+A button never appears to do nothing. If what it changes lives on another tab or off screen, it
+takes you there: "Logs" on a crash opens the output from before the kill
+(`?tab=observe&view=killed`), on any other pod problem it switches to Overview with the console
+on that pod. Selecting state the user can't see is not an action.
+
+## Keys are ids
+
+A keyed `{#each}` keys on an id, never on a display label (two projects can both have a `web`).
+Helpers that group rows (by day, by month) merge into the existing group for a key instead of
+starting a new one when rows arrive out of order; a repeated key throws `each_key_duplicate` and
+takes the whole page down. Lists fed from several sources (`AlertStack`) drop duplicate ids.
+
 ## Kit class names
 
 A kit root that other components select with `:global()` is namespaced `ui-*` (`ui-list`,
@@ -452,6 +466,13 @@ Coloured text on a dark capsule fails contrast. Position follows context: result
 clicked go `bottom-right` (default); things that happened on their own (a build
 finishing, connection lost) go `top-center`.
 
+
+A toast's text column has the same inset on both sides of its content: 44px from the left (past
+the glyph) and 20px from the right, never the 12px edge padding, or a full-width title or button
+reads as jammed against the edge. Any width a component measures in script (the toast's open
+width) reads the same constants its CSS uses, passed down as custom properties
+(`--text-x`, `--text-end`); a number written twice drifts, and the wrap it causes looks like a
+copy problem. Titles fit the open toast on one line: `Orchard was updated`, not a sentence.
 ## Truncation
 
 Names and URLs truncate at the end. Middle truncation only for hashes, IDs and file

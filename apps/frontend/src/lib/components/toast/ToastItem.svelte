@@ -213,6 +213,8 @@
 	role={toast.color === 'error' ? 'alert' : 'status'}
 	tabindex="-1"
 	style:--w="{width}px"
+	style:--text-x="{TEXT_X}px"
+	style:--text-end="{TEXT_END}px"
 	style:--h="{height}px"
 	onpointerenter={() => (hovered = true)}
 	onpointerleave={() => (hovered = false)}
@@ -577,7 +579,7 @@
 	}
 	.content--single .description {
 		gap: 0.5rem;
-		padding: 0 1.25rem 0.75rem 2.75rem;
+		padding: 0 var(--text-end) 0.75rem var(--text-x);
 		font-size: var(--text-callout);
 		line-height: 1.125rem;
 	}
