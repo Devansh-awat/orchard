@@ -219,8 +219,28 @@
 			>
 				<Globe size={14} aria-hidden="true" />
 				<span class="dh-domain-host">{primaryDomain.host}</span>
-				{#if extraDomains}<span class="dh-more-domains">+{extraDomains}</span>{/if}
 			</a>
+			{#if extraDomains}
+				<Menu placement="bottom-start">
+					{#snippet trigger(props)}
+						<button
+							{...props}
+							type="button"
+							class="dh-more-domains"
+							aria-label="{extraDomains} more {extraDomains === 1 ? 'domain' : 'domains'}"
+							>+{extraDomains}</button
+						>
+					{/snippet}
+					{#each (deployment.ingresses ?? []).slice(1) as ingress (ingress.host + ingress.path)}
+						<MenuItem
+							icon={Globe}
+							href={ingressUrl(ingress)}
+							target="_blank"
+							rel="noopener noreferrer">{ingress.host}</MenuItem
+						>
+					{/each}
+				</Menu>
+			{/if}
 		{/if}
 		{#if repoLabel || _commitLead}
 			<Tooltip text={sourceTitle} delay={200}>
@@ -308,8 +328,21 @@
 		text-box: trim-both cap alphabetic;
 	}
 	.dh-more-domains {
+		padding: 0.125rem 0.375rem;
+		margin-left: -0.25rem;
+		border: none;
+		border-radius: var(--radius-pill);
+		background: none;
 		color: var(--text-muted);
+		font: inherit;
 		font-weight: var(--weight-regular);
+		cursor: pointer;
+		transition: background-color var(--fade-in) var(--curve-out);
+	}
+	.dh-more-domains:hover,
+	.dh-more-domains[aria-expanded='true'] {
+		background: var(--bg-hover);
+		color: var(--text-default);
 	}
 	.dh-source {
 		color: var(--text-muted);
