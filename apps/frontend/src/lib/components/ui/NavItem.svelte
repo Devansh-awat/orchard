@@ -133,7 +133,7 @@
 		color: var(--red-9);
 	}
 	.item--active .tile {
-		color: var(--accent-9);
+		color: var(--nav-active-icon);
 	}
 	.item--liquid.item--active:not([data-on-pill]) .tile {
 		color: var(--text-muted);
