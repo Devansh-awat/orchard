@@ -268,7 +268,7 @@ export class DiagnosisService {
       security: {
         worstCve: scan?.scan?.severity ?? null,
         counts: scan?.scan?.counts ?? null,
-        attacks: attacks
+        attacks: attacks?.recorded
           ? { last24h: attacks.byKind, topSources: attacks.topSources.slice(0, 5) }
           : null
       },

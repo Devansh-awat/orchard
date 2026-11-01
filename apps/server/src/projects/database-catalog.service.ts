@@ -141,7 +141,7 @@ export class DatabaseCatalogService {
     const body = JSON.stringify(catalog, null, 2);
     const s3 = new S3Client({
       endpoint: target.endpoint,
-      region: 'auto',
+      region: target.region,
       credentials: { accessKeyId: target.accessKey, secretAccessKey: target.secretKey },
       forcePathStyle: true
     });

@@ -3306,6 +3306,7 @@
 						<SecurityTab
 							{deploymentId}
 							image={deployment?.image ?? null}
+							hasDomains={(deployment?.ingresses?.length ?? 0) > 0}
 							active={tabs.value === 'security'}
 						/>
 					{:else if tab.id === 'settings'}

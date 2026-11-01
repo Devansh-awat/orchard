@@ -8,7 +8,8 @@
 
 	interface State {
 		value: Scanner;
-		dbValue: Scanner;
+		dbValue: Scanner | null;
+		defaultValue?: Scanner;
 		envOverride: Scanner | null;
 		options: { value: Scanner; available: boolean; reason: string | null }[];
 	}
@@ -45,7 +46,7 @@
 			const res = await apiFetch('/apiv1/admin/instance-settings/image-scanning');
 			if (!res.ok) return;
 			state = await res.json();
-			picked = state?.dbValue ?? 'off';
+			picked = state?.value ?? 'off';
 		} catch {
 			state = null;
 		}
@@ -53,6 +54,7 @@
 
 	async function choose(next: string) {
 		if (!state || state.envOverride !== null || next === state.dbValue) return;
+		if (state.dbValue === null && next === state.value) return;
 		saving = true;
 		try {
 			const res = await apiFetch('/apiv1/admin/instance-settings/image-scanning', {
@@ -63,14 +65,14 @@
 			const body = await res.json().catch(() => ({}));
 			if (!res.ok) throw new Error(body?.message || 'Could not save');
 			state = body;
-			picked = body.dbValue;
+			picked = body.value;
 			toasts.add({
 				title:
 					next === 'off' ? 'Image scanning off' : `Scanning with ${COPY[next as Scanner].label}`,
 				color: 'success'
 			});
 		} catch (e) {
-			picked = state.dbValue;
+			picked = state.value;
 			toasts.add({ title: e instanceof Error ? e.message : 'Request failed', color: 'error' });
 		} finally {
 			saving = false;

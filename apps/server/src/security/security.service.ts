@@ -100,16 +100,36 @@ export class SecurityService {
     return 'external';
   }
 
-  scannerOptions(): ScannerOption[] {
-    const harbor = this.harbor.configured
-      ? null
-      : 'Harbor is not configured. Set HARBOR_USERNAME, HARBOR_PASSWORD and DOCKER_REGISTRY_PULL (or HARBOR_API_URL).';
+  private async harborUnavailableReason(): Promise<string | null> {
+    if (!this.harbor.configured) {
+      return 'Harbor is not configured. Set HARBOR_USERNAME, HARBOR_PASSWORD and DOCKER_REGISTRY_PULL (or HARBOR_API_URL).';
+    }
+    const detected = await this.harbor.detect();
+    return detected.harbor ? null : (detected.reason ?? 'Harbor is unavailable.');
+  }
+
+  async scannerOptions(): Promise<ScannerOption[]> {
+    const harbor = await this.harborUnavailableReason();
     const trivy = this.trivy.unavailableReason();
     return [
       { value: 'off', available: true, reason: null },
       { value: 'harbor', available: !harbor, reason: harbor },
       { value: 'trivy', available: !trivy, reason: trivy }
     ];
+  }
+
+  async defaultScanner(): Promise<ImageScannerChoice> {
+    if (this.trivy.configured) return 'trivy';
+    if ((await this.harborUnavailableReason()) === null) return 'harbor';
+    return 'off';
+  }
+
+  scannerState() {
+    return this.settings.getImageScannerState(() => this.defaultScanner());
+  }
+
+  private async provider(): Promise<ImageScannerChoice> {
+    return (await this.scannerState()).value;
   }
 
   private async scanFor(
@@ -202,7 +222,7 @@ export class SecurityService {
   async report(deploymentId: string, canEdit: boolean): Promise<DeploymentSecurity> {
     const dep = await this.loadDeployment(deploymentId);
     if (!dep) throw new NotFoundException(`Deployment ${deploymentId} not found`);
-    const provider = await this.settings.imageScanner();
+    const provider = await this.provider();
     const ref = this.refFor(dep);
     const source = this.sourceOf(dep, ref);
     const scan = await this.scanFor(provider, dep, source, ref);
@@ -212,7 +232,7 @@ export class SecurityService {
   async rescan(deploymentId: string, userId: string | null): Promise<DeploymentSecurity> {
     const dep = await this.loadDeployment(deploymentId);
     if (!dep) throw new NotFoundException(`Deployment ${deploymentId} not found`);
-    const provider = await this.settings.imageScanner();
+    const provider = await this.provider();
     const ref = this.refFor(dep);
     const source = this.sourceOf(dep, ref);
     if (provider === 'off') throw new ScanNotPossibleError(OFF_MESSAGE);

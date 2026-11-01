@@ -50,6 +50,7 @@ export function objectStorage(): ObjectStorage {
 export function platformBackupTarget(): {
   endpoint: string;
   bucket: string;
+  region: string;
   accessKey: string;
   secretKey: string;
 } | null {
@@ -58,7 +59,25 @@ export function platformBackupTarget(): {
   return {
     endpoint: s.endpoint,
     bucket: s.backupBucket,
+    region: process.env.R2_REGION || 'auto',
     accessKey: s.accessKeyId,
     secretKey: s.secretAccessKey
   };
+}
+
+export interface OrgBackupStorage {
+  backupR2Endpoint?: string | null;
+  backupR2Bucket?: string | null;
+  backupR2AccessKey?: string | null;
+  backupR2SecretKey?: string | null;
+}
+
+export function orgHasOwnBackupStorage(org: OrgBackupStorage | null | undefined): boolean {
+  return Boolean(
+    org?.backupR2Endpoint && org?.backupR2Bucket && org?.backupR2AccessKey && org?.backupR2SecretKey
+  );
+}
+
+export function hasBackupRoute(org: OrgBackupStorage | null | undefined): boolean {
+  return orgHasOwnBackupStorage(org) || platformBackupTarget() !== null;
 }

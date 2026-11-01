@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { LogsStoreError, VictoriaLogsService, type LogRow } from './victoria-logs.service';
 import {
+  buildAccessPresence,
   buildClients,
   buildLatencySeries,
   buildRecent,
@@ -40,6 +41,9 @@ export interface RouteStat {
 }
 
 type Point = { x: number; y: number };
+
+export const ACCESS_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
+const RECORDED_TTL_MS = 2 * 60 * 1000;
 
 const num = (v: string | undefined): number | null => {
   if (v == null || v === '') return null;
@@ -107,8 +111,24 @@ export class RequestsService {
     private readonly store: VictoriaLogsService
   ) {}
 
+  private readonly recordedCache = new Map<string, { value: boolean; at: number }>();
+
   get available(): boolean {
     return this.store.configured;
+  }
+
+  async recorded(deploymentId: string): Promise<boolean> {
+    if (!this.store.configured) return false;
+    const cached = this.recordedCache.get(deploymentId);
+    if (cached && Date.now() - cached.at < RECORDED_TTL_MS) return cached.value;
+    const end = Date.now();
+    const value = await this.scope(deploymentId, end - ACCESS_LOOKBACK_MS, end)
+      .then((opts) => this.store.query(buildAccessPresence(opts), { timeoutMs: 5_000 }))
+      .then((rows) => rows.length > 0)
+      .catch(() => false);
+    if (this.recordedCache.size > 5_000) this.recordedCache.clear();
+    this.recordedCache.set(deploymentId, { value, at: Date.now() });
+    return value;
   }
 
   private async scope(deploymentId: string, start: number, end: number): Promise<AccessOptions> {

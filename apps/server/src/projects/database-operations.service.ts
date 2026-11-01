@@ -43,6 +43,7 @@ import { k8sErrorMessage } from '../kubernetes/k8s-error';
 import { defaultBackupCronFor, formatSlug, toQuartzCron, truncateK8sName } from './projects.utils';
 import type { DatabasesService } from './databases.service';
 import { EnvironmentsService } from './environments.service';
+import { hasBackupRoute } from '../instance-config/object-storage';
 
 export type OperationKind = 'restore' | 'fork' | 'undelete' | 'drill' | 'upgrade';
 
@@ -1039,17 +1040,28 @@ export class DatabaseOperationsService {
       where: { id: src.databaseId! },
       data: { pgMajor: major, backupServerName: result.nextServerName, status: 'ready' }
     });
-    await this.k8sCnpg
-      .createCnpgBackup(
-        src.namespace,
-        src.clusterName,
-        `${src.clusterName}-pg${major}-${Date.now().toString(36)}`.slice(0, 63)
-      )
-      .catch((e: any) =>
-        this.logger.warn(
-          `first backup after upgrading ${src.clusterName} failed: ${k8sErrorMessage(e)}`
+    const org = await this.prisma.organization.findUnique({
+      where: { id: src.organizationId },
+      select: {
+        backupR2Endpoint: true,
+        backupR2Bucket: true,
+        backupR2AccessKey: true,
+        backupR2SecretKey: true
+      }
+    });
+    if (hasBackupRoute(org)) {
+      await this.k8sCnpg
+        .createCnpgBackup(
+          src.namespace,
+          src.clusterName,
+          `${src.clusterName}-pg${major}-${Date.now().toString(36)}`.slice(0, 63)
         )
-      );
+        .catch((e: any) =>
+          this.logger.warn(
+            `first backup after upgrading ${src.clusterName} failed: ${k8sErrorMessage(e)}`
+          )
+        );
+    }
     await this.k8sCnpg
       .runPsqlInCnpg(src.namespace, src.clusterName, src.dbName, 'ANALYZE;')
       .catch(() => null);

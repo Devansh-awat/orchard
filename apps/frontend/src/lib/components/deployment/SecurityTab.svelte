@@ -11,10 +11,12 @@
 	let {
 		deploymentId,
 		image = null,
+		hasDomains = false,
 		active = true
 	}: {
 		deploymentId: string;
 		image?: string | null;
+		hasDomains?: boolean;
 		active?: boolean;
 	} = $props();
 
@@ -73,7 +75,7 @@
 		<ScanSummary {data} {loadError} {requesting} onScan={scan} onRetry={retry} />
 		<PostureCard findings={data?.posture ?? null} failed={!!loadError} />
 	</div>
-	<AttacksCard {deploymentId} {active} />
+	<AttacksCard {deploymentId} {hasDomains} {active} />
 	{#if listed}
 		<VulnerabilityList
 			vulnerabilities={listed.vulnerabilities}

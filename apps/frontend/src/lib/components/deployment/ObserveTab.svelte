@@ -150,9 +150,13 @@
 	const events = new EventsState();
 	let focusKilled = $state(false);
 
+	let capabilities = $state<any>(null);
 	const demo = $derived($page.url.searchParams.has('demo'));
 	const hasIngress = $derived(demo || (deployment?.ingresses?.length ?? 0) > 0);
-	const VIEWS = $derived(ALL_VIEWS.filter((v) => v.value !== 'requests' || hasIngress));
+	const requestsRecorded = $derived(demo || capabilities?.accessLogs !== false);
+	const VIEWS = $derived(
+		ALL_VIEWS.filter((v) => v.value !== 'requests' || (hasIngress && requestsRecorded))
+	);
 	const view = $derived<View>(
 		VIEWS.some((v) => v.value === activeTab) ? (activeTab as View) : 'metrics'
 	);
@@ -166,7 +170,6 @@
 		});
 	});
 
-	let capabilities = $state<any>(null);
 	let overview = $state<any>(null);
 	let bootstrapped: string | null = null;
 

@@ -1,6 +1,7 @@
 import * as k8s from '@kubernetes/client-node';
 import * as crypto from 'crypto';
 import { truncateK8sName } from '../projects/projects.utils';
+import { objectStorage } from '../instance-config/object-storage';
 
 /**
  * Namespaces a tenant pod may be reached from, and reach.
@@ -37,7 +38,44 @@ export const TENANT_NAMESPACE_EGRESS_PEERS: k8s.V1NetworkPolicyPeer[] = TENANT_N
   (key) => ({ namespaceSelector: { matchExpressions: [{ key, operator: 'Exists' }] } })
 );
 
+export function platformMetricsNamespace(): string {
+  return process.env.PLATFORM_METRICS_NAMESPACE || 'orchard-metrics';
+}
+
+export function r2ProxyNamespace(): string {
+  return process.env.PLATFORM_R2_PROXY_NAMESPACE || 'orchard-r2-proxy';
+}
+
+export interface StorageEgress {
+  namespace: string;
+  port: number;
+}
+
+const IN_CLUSTER_HOST = /^[a-z0-9-]+\.([a-z0-9-]+)\.svc(?:\.cluster\.local)?\.?$/;
+
+export function objectStorageEgress(
+  endpoint: string | null = objectStorage().endpoint
+): StorageEgress | null {
+  const configuredPort = Number.parseInt(process.env.OBJECT_STORAGE_PORT || '', 10);
+  let url: URL | null = null;
+  try {
+    url = endpoint
+      ? new URL(/^https?:\/\//i.test(endpoint) ? endpoint : `https://${endpoint}`)
+      : null;
+  } catch {
+    url = null;
+  }
+  const namespace =
+    process.env.OBJECT_STORAGE_NAMESPACE || url?.hostname.match(IN_CLUSTER_HOST)?.[1] || null;
+  if (!namespace) return null;
+  const urlPort = url?.port ? Number(url.port) : url?.protocol === 'http:' ? 80 : 443;
+  const port = Number.isInteger(configuredPort) && configuredPort > 0 ? configuredPort : urlPort;
+  return { namespace, port };
+}
+
 export const TENANT_DENY_POLICY = 'default-deny-all';
+export const DATABASE_PLATFORM_POLICY = 'allow-database-platform';
+export const CNPG_METRICS_PORT = 9187;
 export const PROJECT_DATABASES_POLICY = 'allow-project-databases';
 export const CILIUM_INGRESS_POLICY = 'allow-cilium-ingress';
 export const CNPG_APISERVER_POLICY = 'allow-cnpg-apiserver';
@@ -149,15 +187,7 @@ export function tenantDenyPolicy(
         // egress would block backups entirely. Scope the exception to
         // the r2-proxy namespace on port 9000.
         {
-          to: [
-            {
-              namespaceSelector: {
-                matchLabels: {
-                  'kubernetes.io/metadata.name': 'orchard-r2-proxy'
-                }
-              }
-            }
-          ],
+          to: namespacePeers([r2ProxyNamespace()]),
           ports: [{ protocol: 'TCP', port: 9000 }]
         }
       ]
@@ -195,6 +225,43 @@ export function projectDatabasePolicy(
           ports: [{ protocol: 'TCP', port: 5432 }]
         }
       ]
+    }
+  };
+}
+
+export function databasePlatformPolicy(
+  namespace: string,
+  opts: { metricsNamespace?: string; storage?: StorageEgress | null } = {}
+): k8s.V1NetworkPolicy {
+  const metricsNamespace = opts.metricsNamespace ?? platformMetricsNamespace();
+  const storage = opts.storage === undefined ? objectStorageEgress() : opts.storage;
+  return {
+    apiVersion: 'networking.k8s.io/v1',
+    kind: 'NetworkPolicy',
+    metadata: {
+      name: DATABASE_PLATFORM_POLICY,
+      namespace,
+      labels: { ...GUARDED_POLICY_LABELS }
+    },
+    spec: {
+      podSelector: { matchExpressions: [{ key: 'cnpg.io/cluster', operator: 'Exists' }] },
+      policyTypes: storage ? ['Ingress', 'Egress'] : ['Ingress'],
+      ingress: [
+        {
+          from: namespacePeers([metricsNamespace]),
+          ports: [{ protocol: 'TCP', port: CNPG_METRICS_PORT }]
+        }
+      ],
+      ...(storage
+        ? {
+            egress: [
+              {
+                to: namespacePeers([storage.namespace]),
+                ports: [{ protocol: 'TCP', port: storage.port }]
+              }
+            ]
+          }
+        : {})
     }
   };
 }

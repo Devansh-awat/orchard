@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { createQuery } from '@tanstack/svelte-query';
 	import { apiFetch } from '$lib/stores';
-	import { List, ListRow } from '$lib/components/ui';
+	import { ScrollText } from 'lucide-svelte';
+	import { Button, EmptyState, List, ListRow } from '$lib/components/ui';
 	import Widget from '$lib/components/ui/Widget.svelte';
 	import MetricPanel from '$lib/components/patterns/MetricPanel.svelte';
 	import type { ChartSeries } from '$lib/components/ui/time-chart';
@@ -9,12 +10,19 @@
 	type Kind = 'scanner' | 'injection' | 'auth-bruteforce' | 'flood';
 	type Source = { ip: string; count: number; kinds: Kind[]; hidden?: boolean };
 	type Report = {
+		recorded?: boolean;
 		byKind: Record<Kind, number>;
 		series: ({ t: number } & Record<Kind, number>)[];
 		topSources: Source[];
 	};
 
-	let { deploymentId, active }: { deploymentId: string; active: boolean } = $props();
+	let {
+		deploymentId,
+		hasDomains = false,
+		active
+	}: { deploymentId: string; hasDomains?: boolean; active: boolean } = $props();
+
+	const ACCESS_LOGS_DOCS = 'https://docs.orchard.my/operate/logs/';
 
 	const DAY = 24 * 60 * 60_000;
 	const KINDS: { id: Kind; label: string; color: string }[] = [
@@ -69,7 +77,19 @@
 	</span>
 {/snippet}
 
-{#if report}
+{#if report?.recorded === false}
+	{#if hasDomains}
+		<Widget>
+			<EmptyState
+				title="Requests aren't recorded yet"
+				description="Attack attempts show up here once the ingress controller writes access logs to Orchard's log store."
+			>
+				{#snippet icon()}<ScrollText size={18} />{/snippet}
+				<Button href={ACCESS_LOGS_DOCS} target="_blank" rel="noreferrer">Set up access logs</Button>
+			</EmptyState>
+		</Widget>
+	{/if}
+{:else if report}
 	<div class="attacks">
 		<MetricPanel
 			title="Attack attempts"

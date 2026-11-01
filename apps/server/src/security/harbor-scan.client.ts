@@ -21,6 +21,30 @@ export class HarborScanError extends Error {
 
 const ACCEPT_HEADER = REPORT_MIME_TYPES.join(', ');
 
+const DETECT_TTL_MS = 10 * 60_000;
+const DETECT_RETRY_MS = 60_000;
+
+export interface HarborDetection {
+  harbor: boolean;
+  reason: string | null;
+  transient: boolean;
+}
+
+export function readSystemInfo(status: number, body: unknown, base: string): HarborDetection {
+  const info = body && typeof body === 'object' ? (body as Record<string, unknown>) : null;
+  if (status >= 200 && status < 300 && info && 'harbor_version' in info) {
+    return { harbor: true, reason: null, transient: false };
+  }
+  if (status >= 500) {
+    return { harbor: false, reason: `Harbor at ${base} answered ${status}.`, transient: true };
+  }
+  return {
+    harbor: false,
+    reason: `The registry at ${base} is not Harbor, so it cannot scan images. Use the Orchard scanner instead.`,
+    transient: false
+  };
+}
+
 function positiveInt(raw: string | undefined, fallback: number): number {
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
@@ -43,8 +67,46 @@ export class HarborScanClient {
   ).replace(/\/+$/, '');
   private readonly timeoutMs = positiveInt(process.env.HARBOR_API_TIMEOUT_MS, 8_000);
 
+  private detection: { at: number; ttl: number; value: Promise<HarborDetection> } | null = null;
+
   get configured(): boolean {
     return Boolean(this.apiBase && this.username && this.password && this.project);
+  }
+
+  detect(): Promise<HarborDetection> {
+    if (!this.configured) {
+      return Promise.resolve({
+        harbor: false,
+        reason: 'Harbor is not configured.',
+        transient: false
+      });
+    }
+    const cached = this.detection;
+    if (cached && Date.now() - cached.at < cached.ttl) return cached.value;
+    const entry = { at: Date.now(), ttl: DETECT_TTL_MS, value: this.probe() };
+    void entry.value.then((d) => {
+      if (d.transient) entry.ttl = DETECT_RETRY_MS;
+    });
+    this.detection = entry;
+    return entry.value;
+  }
+
+  private async probe(): Promise<HarborDetection> {
+    let res: Response;
+    try {
+      res = await fetch(`${this.apiBase}/api/v2.0/systeminfo`, {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(this.timeoutMs)
+      });
+    } catch (err) {
+      return {
+        harbor: false,
+        reason: `No Harbor API answered at ${this.apiBase}: ${(err as Error)?.message || 'request failed'}`,
+        transient: true
+      };
+    }
+    const body = await res.json().catch(() => null);
+    return readSystemInfo(res.status, body, this.apiBase);
   }
 
   get registryConfig(): ImageRegistryConfig {

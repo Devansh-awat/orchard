@@ -321,9 +321,10 @@ Three-level hierarchy: **Org cap** → **Member allowance** → **Deployment req
   sheets. Never say ingress, service, cluster or NodePort.
 - Security (`SecurityTab`): scan card and Configuration card at 1.618 : 1, then the vulnerability table only
   when there are findings. Reads `GET /deployments/:id/security`, rescans with `POST .../security/scan`, polls
-  every 3s only while scanning. The scanner is an instance choice (`scan.provider`: `off` by default, `harbor`,
-  or `trivy`, the Orchard scanner), set in Admin, Instance (`admin/ImageScanning.svelte`); `off` is a calm
-  neutral state, not a warning. Harbor covers only images in Orchard's registry, Trivy covers external ones
+  every 3s only while scanning. The scanner is an instance choice (`scan.provider`: `off`, `harbor`,
+  or `trivy`, the Orchard scanner), set in Admin, Instance (`admin/ImageScanning.svelte`). Until a superadmin
+  picks one it follows `defaultValue`: `trivy` when the Orchard scanner is set up, else `harbor` when the
+  registry answers Harbor's `/api/v2.0/systeminfo`, else `off`; `off` is a calm neutral state, not a warning. Harbor covers only images in Orchard's registry, Trivy covers external ones
   too. The mock defaults to `trivy`. Mock states:
   `POST /apiv1/__mock/deployments/:id/security {scenario}`.
 - Settings (`AppSettings` + `SettingsRail`): every section is a `SectionCard` of `SettingsList` rows;

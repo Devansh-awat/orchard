@@ -1,5 +1,6 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { platformBackupTarget } from '../instance-config/object-storage';
 
 export const USERSPACE_NODE_SCHEDULING_KEY = 'userspace_node_scheduling';
 const USERSPACE_NODE_SCHEDULING_ENV = 'USERSPACE_NODE_SCHEDULING';
@@ -20,7 +21,7 @@ export type ImageScannerChoice = (typeof IMAGE_SCANNERS)[number];
 
 export interface ChoiceState<T extends string> {
   value: T;
-  dbValue: T;
+  dbValue: T | null;
   envOverride: T | null;
 }
 
@@ -46,6 +47,26 @@ export interface ToggleState {
   enabled: boolean;
   dbValue: boolean;
   envOverride: boolean | null;
+  unavailable?: string;
+}
+
+export const BACKUP_DEPENDENT_TOGGLES: readonly DatabaseToggle[] = [
+  'ddlCheckpoints',
+  'restoreDrills'
+];
+
+export const NO_BACKUP_STORAGE =
+  'Needs backup storage. Set a backup bucket for the instance or an organization first.';
+
+export function markBackupDependent(
+  toggles: Record<DatabaseToggle, ToggleState>,
+  backupsAvailable: boolean
+): Record<DatabaseToggle, ToggleState> {
+  if (backupsAvailable) return toggles;
+  const out = { ...toggles };
+  for (const key of BACKUP_DEPENDENT_TOGGLES)
+    out[key] = { ...out[key], unavailable: NO_BACKUP_STORAGE };
+  return out;
 }
 
 @Injectable()
@@ -194,6 +215,27 @@ export class InstanceSettingsService {
     >;
   }
 
+  async databaseTogglesView(): Promise<Record<DatabaseToggle, ToggleState>> {
+    const [toggles, backupsAvailable] = await Promise.all([
+      this.getDatabaseToggles(),
+      this.anyBackupStorage()
+    ]);
+    return markBackupDependent(toggles, backupsAvailable);
+  }
+
+  private async anyBackupStorage(): Promise<boolean> {
+    if (platformBackupTarget()) return true;
+    const own = await this.prisma.organization.count({
+      where: {
+        backupR2Endpoint: { not: null },
+        backupR2Bucket: { not: null },
+        backupR2AccessKey: { not: null },
+        backupR2SecretKey: { not: null }
+      }
+    });
+    return own > 0;
+  }
+
   async setDatabaseToggle(name: DatabaseToggle, value: boolean): Promise<void> {
     const t = DATABASE_TOGGLES[name];
     this.assertUnlocked(t.env);
@@ -213,14 +255,12 @@ export class InstanceSettingsService {
     await this.setBool(POSTGRES_AUTO_UPDATE_KEY, value);
   }
 
-  async getImageScannerState(): Promise<ChoiceState<ImageScannerChoice>> {
+  async getImageScannerState(
+    fallback: () => Promise<ImageScannerChoice> = async () => 'off'
+  ): Promise<ChoiceState<ImageScannerChoice>> {
     const envOverride = parseImageScanner(process.env[IMAGE_SCANNER_ENV]);
-    const dbValue = parseImageScanner(await this.getRaw(IMAGE_SCANNER_KEY)) ?? 'off';
-    return { value: envOverride ?? dbValue, dbValue, envOverride };
-  }
-
-  async imageScanner(): Promise<ImageScannerChoice> {
-    return (await this.getImageScannerState()).value;
+    const dbValue = parseImageScanner(await this.getRaw(IMAGE_SCANNER_KEY));
+    return { value: envOverride ?? dbValue ?? (await fallback()), dbValue, envOverride };
   }
 
   async setImageScanner(value: ImageScannerChoice): Promise<void> {

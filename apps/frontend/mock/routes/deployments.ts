@@ -873,6 +873,7 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 			logs: true,
 			containerMetrics: true,
 			httpMetrics: Boolean(d.host),
+			accessLogs: Boolean(d.host),
 			httpMetricsShared: false,
 			customMetrics: false,
 			traces: false,

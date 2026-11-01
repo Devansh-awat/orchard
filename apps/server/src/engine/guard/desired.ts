@@ -5,6 +5,7 @@ import {
   CILIUM_INGRESS_POLICY,
   CNPG_APISERVER_POLICY,
   CNPG_OPERATOR_POLICY,
+  DATABASE_PLATFORM_POLICY,
   PROJECT_DATABASES_POLICY,
   TENANT_DENY_POLICY,
   basicAuthEnvoyConfig,
@@ -12,6 +13,7 @@ import {
   ciliumIngressPolicy,
   cnpgApiserverPolicy,
   cnpgOperatorPolicy,
+  databasePlatformPolicy,
   namespaceHasProtectedIngress,
   projectDatabasePolicy,
   projectNamespaces,
@@ -100,6 +102,12 @@ export class PrismaGuardDesired implements GuardDesired {
         select: { namespace: true, clusterName: true }
       });
       for (const db of databases) add(db.namespace!, publicDatabasePolicyName(db.clusterName!));
+      const managed = await this.prisma.database.findMany({
+        where: { mode: 'cnpg', namespace: { not: null } },
+        select: { namespace: true },
+        distinct: ['namespace']
+      });
+      for (const db of managed) add(db.namespace!, DATABASE_PLATFORM_POLICY);
       return keys;
     }
 
@@ -134,6 +142,10 @@ export class PrismaGuardDesired implements GuardDesired {
       return tenantDenyPolicy(ns, {
         allowProtectionProxy: await namespaceHasProtectedIngress(this.prisma, ns)
       }) as GuardManifest;
+    }
+    if (key.name === DATABASE_PLATFORM_POLICY) {
+      const count = await this.prisma.database.count({ where: { mode: 'cnpg', namespace: ns } });
+      return count > 0 ? (databasePlatformPolicy(ns) as GuardManifest) : null;
     }
     if (key.name === PROJECT_DATABASES_POLICY) {
       const project = await this.prisma.project.findUnique({

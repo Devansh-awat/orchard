@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { hasBackupRoute, platformBackupTarget } from '../src/instance-config/object-storage';
 import {
+  IMAGE_SCANNER_KEY,
   InstanceSettingsService,
+  NO_BACKUP_STORAGE,
+  markBackupDependent,
   MCP_ENABLED_KEY,
   SSO_ENFORCED_KEY
 } from '../src/instance-settings/instance-settings.service';
@@ -115,4 +119,81 @@ test('single sign-on is optional until an administrator requires it', async () =
     assert.equal(await settings.isSsoEnforced(), false);
     await assert.rejects(() => settings.setSsoEnforced(true), /SSO_ENFORCED/);
   });
+});
+
+test('an unset image scanner follows the computed default, a saved or pinned one wins', async () => {
+  await withEnv({ IMAGE_SCANNER: undefined }, async () => {
+    const { prisma, settings } = build();
+    assert.deepEqual(await settings.getImageScannerState(async () => 'trivy'), {
+      value: 'trivy',
+      dbValue: null,
+      envOverride: null
+    });
+    assert.equal((await settings.getImageScannerState()).value, 'off');
+    prisma.rows.set(IMAGE_SCANNER_KEY, 'off');
+    assert.equal((await settings.getImageScannerState(async () => 'trivy')).value, 'off');
+  });
+  await withEnv({ IMAGE_SCANNER: 'harbor' }, async () => {
+    const { settings } = build();
+    let asked = false;
+    const state = await settings.getImageScannerState(async () => {
+      asked = true;
+      return 'trivy';
+    });
+    assert.equal(state.value, 'harbor');
+    assert.equal(asked, false);
+  });
+});
+
+test('drop checkpoints and restore tests are unavailable without any backup storage', () => {
+  const t = { enabled: true, dbValue: true, envOverride: null };
+  const toggles = {
+    ddlCheckpoints: t,
+    restoreDrills: t,
+    pluginMigration: t,
+    poolerByDefault: t
+  };
+  const marked = markBackupDependent(toggles, false);
+  assert.equal(marked.ddlCheckpoints.unavailable, NO_BACKUP_STORAGE);
+  assert.equal(marked.restoreDrills.unavailable, NO_BACKUP_STORAGE);
+  assert.equal(marked.poolerByDefault.unavailable, undefined);
+  assert.equal(markBackupDependent(toggles, true).ddlCheckpoints.unavailable, undefined);
+});
+
+test('a backup route needs a backup bucket, an org bucket, or nothing counts', async () => {
+  const env = {
+    R2_ACCOUNT_ID: undefined,
+    R2_ENDPOINT: 'http://object-storage.orchard-object-storage.svc.cluster.local:9000',
+    R2_ACCESS_KEY_ID: 'ak',
+    R2_SECRET_ACCESS_KEY: 'sk',
+    R2_BUCKET_NAME: 'assets',
+    R2_BACKUP_BUCKET: undefined,
+    R2_REGION: undefined
+  };
+  await withEnv(env, async () => {
+    assert.equal(platformBackupTarget(), null);
+    assert.equal(hasBackupRoute(null), false);
+    assert.equal(
+      hasBackupRoute({
+        backupR2Endpoint: 'https://s3.example.com',
+        backupR2Bucket: 'b',
+        backupR2AccessKey: 'a',
+        backupR2SecretKey: 's'
+      }),
+      true
+    );
+  });
+  await withEnv(
+    { ...env, R2_BACKUP_BUCKET: 'orchard-backups', R2_REGION: 'us-east-1' },
+    async () => {
+      assert.deepEqual(platformBackupTarget(), {
+        endpoint: 'http://object-storage.orchard-object-storage.svc.cluster.local:9000',
+        bucket: 'orchard-backups',
+        region: 'us-east-1',
+        accessKey: 'ak',
+        secretKey: 'sk'
+      });
+      assert.equal(hasBackupRoute(null), true);
+    }
+  );
 });

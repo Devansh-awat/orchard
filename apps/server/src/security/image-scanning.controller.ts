@@ -13,10 +13,12 @@ export class ImageScanningController {
   ) {}
 
   private async state() {
-    return {
-      ...(await this.settings.getImageScannerState()),
-      options: this.security.scannerOptions()
-    };
+    const [state, options, defaultValue] = await Promise.all([
+      this.security.scannerState(),
+      this.security.scannerOptions(),
+      this.security.defaultScanner()
+    ]);
+    return { ...state, defaultValue, options };
   }
 
   @Get('image-scanning')
@@ -28,7 +30,7 @@ export class ImageScanningController {
   async set(@Body() body: { value?: unknown }) {
     const value = parseImageScanner(typeof body?.value === 'string' ? body.value : null);
     if (!value) throw new BadRequestException('value must be one of off, harbor, trivy');
-    const option = this.security.scannerOptions().find((o) => o.value === value);
+    const option = (await this.security.scannerOptions()).find((o) => o.value === value);
     if (option && !option.available) throw new BadRequestException(option.reason);
     await this.settings.setImageScanner(value);
     return this.state();

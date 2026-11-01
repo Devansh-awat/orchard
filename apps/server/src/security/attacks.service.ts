@@ -1,8 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { VictoriaLogsService } from '../logs/victoria-logs.service';
+import { RequestsService } from '../logs/requests.service';
 import { buildIpCounts, buildIpSeries, buildSuspicious } from '../logs/logsql';
 import {
+  ATTACK_KINDS,
   FLOOD_MEDIAN_RATIO,
   FLOOD_MIN_IPS,
   FLOOD_MIN_REQUESTS,
@@ -30,7 +32,19 @@ export function floodIps(counts: { ip: string; requests: number }[]): Map<string
   return out;
 }
 
-export function maskReport(report: AttackReport): AttackReport {
+export type AttacksResponse = AttackReport & { recorded: boolean };
+
+export function unrecordedReport(): AttacksResponse {
+  return {
+    recorded: false,
+    byKind: Object.fromEntries(ATTACK_KINDS.map((k) => [k, 0])) as Record<AttackKind, number>,
+    series: [],
+    topSources: [],
+    samples: []
+  };
+}
+
+export function maskReport<T extends AttackReport>(report: T): T {
   return {
     ...report,
     topSources: report.topSources.map((s) => (s.hidden ? s : { ...s, ip: maskIp(s.ip) })),
@@ -42,7 +56,8 @@ export function maskReport(report: AttackReport): AttackReport {
 export class AttacksService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly store: VictoriaLogsService
+    private readonly store: VictoriaLogsService,
+    private readonly requests: RequestsService
   ) {}
 
   get available(): boolean {
@@ -66,8 +81,9 @@ export class AttacksService {
   async report(
     deploymentId: string,
     opts: { start: number; end: number; canEdit: boolean }
-  ): Promise<AttackReport> {
+  ): Promise<AttacksResponse> {
     const d = await this.target(deploymentId);
+    if (!(await this.requests.recorded(deploymentId))) return unrecordedReport();
     const scope = { namespace: d.namespace, app: d.name, start: opts.start, end: opts.end };
     const bucketMs = Math.max(60_000, Math.round((opts.end - opts.start) / 60));
     const [rows, counts] = await Promise.all([
@@ -89,7 +105,10 @@ export class AttacksService {
         .map((c) => ({ ip: c.client_ip ?? '', requests: Number(c.requests) || 0 }))
         .filter((c) => !internalIp(c.ip))
     );
-    const report = await this.withFloods(detected, flooding, scope, bucketMs);
+    const report = {
+      recorded: true,
+      ...(await this.withFloods(detected, flooding, scope, bucketMs))
+    };
     return opts.canEdit ? report : maskReport(report);
   }
 

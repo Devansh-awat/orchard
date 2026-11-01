@@ -351,6 +351,7 @@ func observeCapabilitiesCmd() *cobra.Command {
 				{"logs", observeOr(pick(raw, "logs"))},
 				{"container metrics", observeOr(pick(raw, "containerMetrics"))},
 				{"http metrics", observeOr(pick(raw, "httpMetrics"))},
+				{"access logs", observeOr(pick(raw, "accessLogs"))},
 				{"custom metrics", observeOr(pick(raw, "customMetrics"))},
 				{"traces", observeOr(pick(raw, "traces"))},
 				{"runtime", observeRuntimeSummary(raw["runtime"])},

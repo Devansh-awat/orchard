@@ -56,7 +56,11 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { parseKubeletSummary, VolumeUsage } from './volume-stats';
 import { WRITE_GUARD_ANNOTATION } from './cnpg-status';
 import { stuckReplicas, type StuckReplica } from './cnpg-stuck-replicas';
-import { cnpgOperatorPolicy } from './security-policies';
+import {
+  DATABASE_PLATFORM_POLICY,
+  cnpgOperatorPolicy,
+  databasePlatformPolicy
+} from './security-policies';
 import { resolvePostgresImage } from './postgres-images';
 import {
   BARMAN_GROUP,
@@ -439,6 +443,18 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       );
     } catch (e: any) {
       if (e.response?.statusCode !== 409) throw e;
+    }
+  }
+
+  async ensureDatabasePlatformPolicy(namespace: string): Promise<void> {
+    this.ensureKubeConfig();
+    const networking = this.kc!.makeApiClient(k8s.NetworkingV1Api);
+    const body = databasePlatformPolicy(namespace);
+    try {
+      await networking.createNamespacedNetworkPolicy(namespace, body);
+    } catch (e: any) {
+      if (e?.response?.statusCode !== 409) throw e;
+      await networking.replaceNamespacedNetworkPolicy(DATABASE_PLATFORM_POLICY, namespace, body);
     }
   }
 
@@ -1670,6 +1686,9 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     await this.ensureCnpgOperatorIngress(String(options.namespace || '').trim()).catch((e) => {
       this.logger.warn(`allow-cnpg-operator ensure failed: ${e?.message || e}`);
     });
+    await this.ensureDatabasePlatformPolicy(String(options.namespace || '').trim()).catch((e) => {
+      this.logger.warn(`${DATABASE_PLATFORM_POLICY} ensure failed: ${e?.message || e}`);
+    });
     const ns = options.namespace.trim();
     const name = options.clusterName.trim();
     if (!ns || !name) throw new BadRequestException('namespace and clusterName required');
@@ -2455,6 +2474,9 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     this.ensureKubeConfig();
     await this.ensureCnpgOperatorIngress(namespace).catch((e) => {
       this.logger.warn(`allow-cnpg-operator ensure failed: ${e?.message || e}`);
+    });
+    await this.ensureDatabasePlatformPolicy(namespace).catch((e) => {
+      this.logger.warn(`${DATABASE_PLATFORM_POLICY} ensure failed: ${e?.message || e}`);
     });
     const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
     await customApi.createNamespacedCustomObject(

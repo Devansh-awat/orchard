@@ -89,6 +89,7 @@ export interface HttpMetricsSeries {
 }
 
 const FLAVOR_TTL_MS = 10 * 60_000;
+const SIGNALS_TTL_MS = 2 * 60_000;
 
 function emptyHttpMetrics(source: string | null): HttpMetricsSeries {
   return {
@@ -145,6 +146,7 @@ export interface Capabilities {
   logs: boolean;
   containerMetrics: boolean;
   httpMetrics: boolean;
+  accessLogs: boolean;
   httpMetricsShared: boolean;
   customMetrics: boolean;
   traces: boolean;
@@ -376,21 +378,60 @@ export class ObservabilityService {
   }
 
   async getCapabilities(deploymentId: string): Promise<Capabilities> {
-    const [ingressCount, runtime, httpMetricsShared] = await Promise.all([
+    const [ingressCount, runtime, httpMetricsShared, recorded] = await Promise.all([
       this.prisma.ingress.count({ where: { deploymentId } }),
       this.detectRuntime(deploymentId).catch(() => null),
-      this.protectedNeighbours(deploymentId)
+      this.protectedNeighbours(deploymentId),
+      this.recordedSignals(deploymentId)
     ]);
 
     return {
       logs: true,
-      containerMetrics: true,
-      httpMetrics: ingressCount > 0,
+      containerMetrics: recorded.container,
+      httpMetrics: ingressCount > 0 && recorded.http,
+      accessLogs: ingressCount > 0 && recorded.access,
       httpMetricsShared,
       customMetrics: false,
       traces: false,
       runtime
     };
+  }
+
+  private readonly signalsCache = new Map<
+    string,
+    { value: { container: boolean; http: boolean; access: boolean }; at: number }
+  >();
+
+  private async recordedSignals(
+    deploymentId: string
+  ): Promise<{ container: boolean; http: boolean; access: boolean }> {
+    const cached = this.signalsCache.get(deploymentId);
+    if (cached && Date.now() - cached.at < SIGNALS_TTL_MS) return cached.value;
+    const [deployment, resolved, access] = await Promise.all([
+      this.prisma.deployment.findUnique({
+        where: { id: deploymentId },
+        select: { namespace: true }
+      }),
+      this.ingressTarget(deploymentId).catch(() => null),
+      this.requests.recorded(deploymentId)
+    ]);
+    const present = async (promql: string) =>
+      ((await this.vm.queryInstant(`count(last_over_time(${promql}[1d]))`)) ?? 0) > 0;
+    const container = deployment?.namespace
+      ? await present(
+          `container_memory_working_set_bytes{namespace=${JSON.stringify(deployment.namespace)}}`
+        )
+      : false;
+    const candidates = resolved
+      ? INGRESS_ADAPTERS.map((a) => a.queries(resolved.target)).filter(
+          (q): q is IngressQueries => q !== null
+        )
+      : [];
+    const http = (await Promise.all(candidates.map((q) => present(q.presence)))).some(Boolean);
+    const value = { container, http, access };
+    if (this.signalsCache.size > 5_000) this.signalsCache.clear();
+    this.signalsCache.set(deploymentId, { value, at: Date.now() });
+    return value;
   }
 
   private async protectedNeighbours(deploymentId: string): Promise<boolean> {

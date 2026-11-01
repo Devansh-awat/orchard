@@ -1,5 +1,6 @@
 import { derived, get, writable } from 'svelte/store';
 import { parseUpdate, type Update } from '$lib/updates';
+import { noteReleased } from '$lib/updates/version';
 import { user } from './auth';
 import { apiFetch } from './api';
 
@@ -15,7 +16,10 @@ export async function loadLatestUpdate() {
 		if (!response.ok) return;
 		const text = await response.text();
 		const data = text ? JSON.parse(text) : null;
-		latestUpdate.set(typeof data?.markdown === 'string' ? parseUpdate(data.markdown) : null);
+		const released = __ORCHARD_MOCK__ || noteReleased(String(data?.version ?? ''), __UI_VERSION__);
+		latestUpdate.set(
+			released && typeof data?.markdown === 'string' ? parseUpdate(data.markdown) : null
+		);
 	} catch (e) {
 		requested = false;
 		console.warn('Failed to load the latest release notes:', e);

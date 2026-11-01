@@ -3,7 +3,10 @@ import test from 'node:test';
 import {
   LogQueryError,
   MAX_SEARCH_TERMS,
+  accessStreams,
+  buildAccessPresence,
   buildClients,
+  ingressServicePattern,
   recentFilters,
   buildContext,
   buildFilter,
@@ -26,6 +29,9 @@ const span = {
 };
 const scoped = '{namespace="ysws-terra",app="terra-api"';
 const range = '_time:[2026-10-29T05:00:00.000Z, 2026-10-29T07:00:00.250Z]';
+const access =
+  '(_stream:{namespace="ysws-terra",app="terra-api",kind="access"} or ' +
+  '_stream:{kind="access",ingress_service=~"^ysws-terra-terra-api(--green)?-[^-]+$"})';
 
 function unquote(literal: string): string {
   return JSON.parse(literal.replace(/\\u([0-9a-f]{4})/g, '\\u$1'));
@@ -118,7 +124,7 @@ test('every builder puts the stream scope first', () => {
       afterMs: 1
     })
   ];
-  for (const q of queries) assert.ok(q.startsWith(scoped), q);
+  for (const q of queries) assert.ok(q.startsWith(scoped) || q.startsWith(access), q);
 });
 
 test('buildSearch with only a span is scope, time and newest first', () => {
@@ -209,7 +215,7 @@ test('buildFilter is the pipe-free query /select/logsql/hits takes', () => {
 test('buildRouteStats groups access logs by host and ingest-normalised route', () => {
   assert.equal(
     buildRouteStats(span),
-    `${scoped},kind="access"} ${range} | stats by (host, route) count() requests, count() if (status:>=500) errors, ` +
+    `${access} ${range} | stats by (host, route) count() requests, count() if (status:>=500) errors, ` +
       'quantile(0.5, duration_ms) p50, quantile(0.95, duration_ms) p95, quantile(0.99, duration_ms) p99' +
       ' | sort by (requests desc)'
   );
@@ -220,17 +226,33 @@ test('buildRouteStats groups access logs by host and ingest-normalised route', (
 
 test('buildClients returns top client ips and user agents', () => {
   const { ips, agents } = buildClients(span, 5);
-  assert.equal(ips, `${scoped},kind="access"} ${range} | top 5 by (client_ip)`);
-  assert.equal(agents, `${scoped},kind="access"} ${range} | top 5 by (user_agent)`);
+  assert.equal(ips, `${access} ${range} | top 5 by (client_ip)`);
+  assert.equal(agents, `${access} ${range} | top 5 by (user_agent)`);
   assert.throws(() => buildClients(span, 0), LogQueryError);
 });
 
 test('buildSlowest sorts access logs by duration', () => {
   assert.equal(
     buildSlowest(span, 20),
-    `${scoped},kind="access"} ${range} | sort by (duration_ms desc) | limit 20`
+    `${access} ${range} | sort by (duration_ms desc) | limit 20`
   );
   assert.throws(() => buildSlowest(span, 1001), LogQueryError);
+});
+
+test('access logs match haproxy labels or a traefik service name for the app', () => {
+  assert.equal(accessStreams('ysws-terra', 'terra-api'), access);
+  const re = new RegExp(ingressServicePattern('ysws-terra', 'terra-api'));
+  assert.ok(re.test('ysws-terra-terra-api-80'));
+  assert.ok(re.test('ysws-terra-terra-api--green-3000'));
+  assert.ok(!re.test('ysws-terra-terra-api-worker-80'));
+  assert.ok(!re.test('ysws-terra-other-80'));
+  assert.ok(!re.test('x-ysws-terra-terra-api-80'));
+  assert.ok(ingressServicePattern('a.b', 'c+d').includes('a\\.b-c\\+d'));
+  assert.throws(() => accessStreams('', 'web'), LogQueryError);
+});
+
+test('buildAccessPresence asks for a single access line', () => {
+  assert.equal(buildAccessPresence(span), `${access} ${range} | limit 1`);
 });
 
 test('buildContext reads one pod around a moment, oldest first', () => {

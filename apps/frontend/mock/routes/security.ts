@@ -354,6 +354,7 @@ export function securityRoutes(r: Router, { store }: MockContext) {
 	const scanning = () => ({
 		value: provider,
 		dbValue: provider,
+		defaultValue: 'trivy',
 		envOverride: null,
 		options: PROVIDERS.map((value) => ({ value, available: true, reason: null }))
 	});
@@ -535,6 +536,7 @@ export function securityRoutes(r: Router, { store }: MockContext) {
 		}
 		const sum = (k: string) => series.reduce((n, b) => n + (b[k] ?? 0), 0);
 		return {
+			recorded: true,
 			byKind: {
 				scanner: sum('scanner'),
 				injection: sum('injection'),

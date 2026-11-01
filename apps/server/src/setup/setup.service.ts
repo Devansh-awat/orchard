@@ -3,7 +3,8 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { K8sNetworkService } from '../kubernetes/k8s-network.service';
 import { InstanceConfigService } from '../instance-config/instance-config.service';
-import { STORAGE, EMAIL, INGRESS, WILDCARD } from '../instance-config/instance-config.sections';
+import { EMAIL, INGRESS, WILDCARD } from '../instance-config/instance-config.sections';
+import { platformBackupTarget } from '../instance-config/object-storage';
 import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import { DnsCheckService, DnsReport } from '../instance-network/dns-check.service';
 import { sanitizeUsername } from '../users/users.service';
@@ -341,8 +342,8 @@ export class SetupService implements OnModuleInit {
         id: 'backups',
         title: 'Configure database backups',
         detail:
-          'Managed databases have no backups at all until object storage is configured, so a deleted database cannot be recovered.',
-        done: this.config.isConfigured(STORAGE),
+          'Managed databases have no backups at all until a backup bucket is configured, so a deleted database cannot be recovered.',
+        done: platformBackupTarget() !== null,
         severity: 'warning',
         href: '/admin/instance'
       },

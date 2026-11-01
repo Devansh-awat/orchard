@@ -21,6 +21,7 @@ import {
   type CheckpointKind
 } from '../kubernetes/cnpg-checkpoint';
 import { RETENTION_POLICY } from '../kubernetes/cnpg-recovery';
+import { hasBackupRoute } from '../instance-config/object-storage';
 
 const RETENTION_MS = Number.parseInt(RETENTION_POLICY, 10) * 24 * 60 * 60 * 1000;
 const DURABLE_GIVE_UP_MS = 30 * 60 * 1000;
@@ -43,6 +44,13 @@ async function inBatches<T, R>(items: T[], size: number, fn: (item: T) => Promis
   }
   return out;
 }
+
+const BACKUP_STORAGE_SELECT = {
+  backupR2Endpoint: true,
+  backupR2Bucket: true,
+  backupR2AccessKey: true,
+  backupR2SecretKey: true
+} as const;
 
 @Injectable()
 export class DatabaseCheckpointsService {
@@ -103,6 +111,7 @@ export class DatabaseCheckpointsService {
 
   async before(databaseId: string, reason: string, createdBy?: string | null) {
     try {
+      if (!(await this.backupRouteFor(databaseId))) return null;
       return await Promise.race([
         this.createOne(databaseId, { kind: 'pre_op', label: `Before ${reason}`, createdBy }, null),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), BEFORE_TIMEOUT_MS).unref?.())
@@ -111,6 +120,14 @@ export class DatabaseCheckpointsService {
       this.logger.warn(`checkpoint before ${reason} on ${databaseId} skipped: ${e?.message ?? e}`);
       return null;
     }
+  }
+
+  private async backupRouteFor(databaseId: string): Promise<boolean> {
+    const db = await this.prisma.database.findUnique({
+      where: { id: databaseId },
+      select: { project: { select: { organization: { select: BACKUP_STORAGE_SELECT } } } }
+    });
+    return hasBackupRoute(db?.project?.organization);
   }
 
   private async createOne(
@@ -122,6 +139,11 @@ export class DatabaseCheckpointsService {
     if (!db) throw new NotFoundException('Database not found');
     if (db.mode !== 'cnpg' || !db.namespace || !db.clusterName) {
       throw new BadRequestException(`${db.name} is not a CNPG database`);
+    }
+    if (!(await this.backupRouteFor(databaseId))) {
+      throw new BadRequestException(
+        'Checkpoints need backup storage. Add a backup bucket for this organization or the instance first.'
+      );
     }
     if (db.status === 'stopped') throw new BadRequestException(`${db.name} is stopped`);
     const id = randomUUID();
@@ -286,7 +308,8 @@ export class DatabaseCheckpointsService {
         dbName: true,
         ddlCheckpoints: true,
         ddlGuardVersion: true,
-        backupServerName: true
+        backupServerName: true,
+        project: { select: { organization: { select: BACKUP_STORAGE_SELECT } } }
       }
     });
   }
@@ -294,13 +317,13 @@ export class DatabaseCheckpointsService {
   private async reconcileGuards() {
     const enabled = await this.settings.isDatabaseToggleOn('ddlCheckpoints');
     const dbs = await this.guardTargets(false);
+    const wanted = (d: (typeof dbs)[number]) =>
+      enabled && d.ddlCheckpoints && hasBackupRoute(d.project?.organization);
     const work = dbs.filter((d) =>
-      enabled && d.ddlCheckpoints
-        ? d.ddlGuardVersion !== DDL_GUARD_VERSION
-        : d.ddlGuardVersion !== null
+      wanted(d) ? d.ddlGuardVersion !== DDL_GUARD_VERSION : d.ddlGuardVersion !== null
     );
     await inBatches(work.slice(0, 40), 4, async (d) => {
-      const install = enabled && d.ddlCheckpoints;
+      const install = wanted(d);
       const out = await this.k8sCnpg.runPsqlInCnpg(
         d.namespace!,
         d.clusterName!,
@@ -321,7 +344,9 @@ export class DatabaseCheckpointsService {
   }
 
   private async ingestGuardCheckpoints() {
-    const dbs = (await this.guardTargets(true)).filter((d) => d.ddlCheckpoints);
+    const dbs = (await this.guardTargets(true)).filter(
+      (d) => d.ddlCheckpoints && hasBackupRoute(d.project?.organization)
+    );
     await inBatches(dbs, PARALLEL, async (d) => {
       const after = this.guardSeq.get(d.id) ?? 0;
       const out = await this.k8sCnpg.runPsqlInCnpg(

@@ -297,7 +297,11 @@ export class DatabasesService {
       : own
         ? org!.backupR2Endpoint!
         : platform!.endpoint;
-    const region = (own && org?.backupR2Region) || 'auto';
+    const region = own
+      ? org?.backupR2Region || 'auto'
+      : viaProxy
+        ? 'auto'
+        : (platform?.region ?? 'auto');
     return { endpoint, bucket, region, viaProxy, own };
   }
 
@@ -363,7 +367,7 @@ export class DatabasesService {
       r2: {
         endpoint: platform.endpoint,
         bucket: platform.bucket,
-        region: 'auto',
+        region: platform.region,
         accessKey: platform.accessKey,
         secretKey: platform.secretKey
       },
@@ -1415,6 +1419,7 @@ export class DatabasesService {
       let endpoint: string | undefined;
       let accessKeyId: string | undefined;
       let secretAccessKey: string | undefined;
+      let region = org?.backupR2Region || 'auto';
       if (this.r2Proxy.isEnabled() && database.r2ProxyAccessKey && database.r2ProxySecret) {
         endpoint = this.r2Proxy.getEndpoint();
         accessKeyId = database.r2ProxyAccessKey;
@@ -1432,13 +1437,14 @@ export class DatabasesService {
         endpoint = platform.endpoint;
         accessKeyId = platform.accessKey;
         secretAccessKey = platform.secretKey;
+        region = platform.region;
       }
       if (!endpoint || !accessKeyId || !secretAccessKey) return;
 
       const prefix = `${database.namespace}/${database.clusterName}/`;
       const s3 = new S3Client({
         endpoint,
-        region: org?.backupR2Region || 'auto',
+        region,
         credentials: { accessKeyId, secretAccessKey },
         forcePathStyle: true
       });

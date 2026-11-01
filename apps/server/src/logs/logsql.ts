@@ -164,8 +164,28 @@ export function buildLevelCounts(opts: Omit<FilterOptions, 'levels'>): string {
   return `${buildFilter({ ...opts, levels: undefined })} | stats by (level) count() hits`;
 }
 
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+export function ingressServicePattern(namespace: string, app: string): string {
+  const ns = escapeRegex(requireValue('namespace', namespace));
+  const name = escapeRegex(requireValue('app', app));
+  return `^${ns}-${name}(--green)?-[^-]+$`;
+}
+
+export function accessStreams(namespace: string, app: string): string {
+  const labelled = scope({ namespace, app, kind: 'access' });
+  const routed = `{kind="access",ingress_service=~${quote(ingressServicePattern(namespace, app))}}`;
+  return `(_stream:${labelled} or _stream:${routed})`;
+}
+
 function accessScope(opts: AccessOptions): string {
-  return `${scope({ namespace: opts.namespace, app: opts.app, kind: 'access' })} ${timeRange(opts.start, opts.end)}`;
+  return `${accessStreams(opts.namespace, opts.app)} ${timeRange(opts.start, opts.end)}`;
+}
+
+export function buildAccessPresence(opts: AccessOptions): string {
+  return `${accessScope(opts)} | limit 1`;
 }
 
 export function buildRouteStats(opts: AccessOptions & { limit?: number }): string {

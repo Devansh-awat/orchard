@@ -35,7 +35,7 @@ export class InstanceSettingsController {
 
   @Get('databases')
   async getDatabaseToggles() {
-    return this.settings.getDatabaseToggles();
+    return this.settings.databaseTogglesView();
   }
 
   @Patch('databases')
@@ -43,6 +43,6 @@ export class InstanceSettingsController {
     const toggle = String(body?.toggle ?? '') as DatabaseToggle;
     if (!(toggle in DATABASE_TOGGLES)) throw new BadRequestException('Unknown database setting');
     await this.settings.setDatabaseToggle(toggle, Boolean(body?.enabled));
-    return this.settings.getDatabaseToggles();
+    return this.settings.databaseTogglesView();
   }
 }

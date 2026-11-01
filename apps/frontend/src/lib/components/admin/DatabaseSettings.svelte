@@ -10,6 +10,7 @@
 		enabled: boolean;
 		dbValue: boolean;
 		envOverride: boolean | null;
+		unavailable?: string;
 	}
 
 	interface Migration {
@@ -136,10 +137,10 @@
 					</div>
 				{:else}
 					<ToggleRow
-						checked={t.dbValue}
+						checked={t.dbValue && !t.unavailable}
 						label={row.label}
-						hint={row.hint}
-						disabled={saving === row.key}
+						hint={t.unavailable ?? row.hint}
+						disabled={saving === row.key || !!t.unavailable}
 						onchange={() => toggle(row.key)}
 					/>
 				{/if}
