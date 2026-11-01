@@ -40,6 +40,7 @@
 		bands = [],
 		peaks = 0,
 		empty = 'No data in this range',
+		zeroIsData = false,
 		table = true,
 		sum = false,
 		sparse = false,
@@ -64,6 +65,7 @@
 		bands?: ChartBand[];
 		peaks?: number;
 		empty?: string;
+		zeroIsData?: boolean;
 		table?: boolean;
 		sum?: boolean;
 		sparse?: boolean;
@@ -98,7 +100,9 @@
 		return p ? (p[p.length - 1].x - p[0].x) / (p.length - 1) : (to - from) / 60;
 	});
 
-	const hasData = $derived(series.some((s) => s.points.some((p) => p.y !== 0)));
+	const hasData = $derived(
+		series.some((s) => (zeroIsData ? s.points.length > 0 : s.points.some((p) => p.y !== 0)))
+	);
 
 	const rows = $derived<SeriesRow[]>(
 		series

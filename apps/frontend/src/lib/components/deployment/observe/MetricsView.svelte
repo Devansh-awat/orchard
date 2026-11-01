@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { SvelteSet } from 'svelte/reactivity';
 	import { page } from '$app/stores';
 	import { SYMPTOM_PANELS, momentLink } from './permalink';
 	import { Boxes, GitCommitHorizontal, Info, TriangleAlert } from 'lucide-svelte';
@@ -40,6 +41,8 @@
 
 	let {
 		metrics,
+		runtimeLabel = undefined,
+		uptimeLabel = undefined,
 		deployment,
 		active,
 		demo,
@@ -47,6 +50,8 @@
 		sharedHttp
 	}: {
 		metrics: MetricsState;
+		runtimeLabel?: string;
+		uptimeLabel?: string;
 		deployment: any;
 		active: boolean;
 		demo: boolean;
@@ -253,11 +258,17 @@
 	const percentiles = $derived(metrics.http.latency);
 	const typicalLatency = $derived(latest(percentiles ? percentiles.p50 : metrics.http.lat));
 
+	const servedErr = $derived.by(() => {
+		if (!metrics.http.req.length) return metrics.http.err;
+		const served = new Set(metrics.http.req.filter((p) => p.y > 0).map((p) => p.x));
+		return metrics.http.err.filter((p) => served.has(p.x));
+	});
+
 	const series = $derived({
 		req: statusSeries.length
 			? statusSeries
 			: [{ id: 'req', label: 'Per second', points: metrics.http.req, tone: 'neutral' }],
-		err: [{ id: 'err', label: '5xx share', points: metrics.http.err, tone: 'error' }],
+		err: [{ id: 'err', label: '5xx share', points: servedErr, tone: 'error' }],
 		lat: percentiles
 			? [
 					{ id: 'p50', label: 'Typical (p50)', points: percentiles.p50, tone: 'neutral' },
@@ -665,6 +676,12 @@
 			}
 		});
 	});
+
+	const dismissedFindings = new SvelteSet<string>();
+	const findingKey = (f: { symptomId: string; at: number }) => `${f.symptomId}:${f.at}`;
+	const shownFindings = $derived(
+		(metrics.findings ?? []).filter((f) => !dismissedFindings.has(findingKey(f)))
+	);
 </script>
 
 {#snippet shared()}Includes every protected app in this project{/snippet}
@@ -731,12 +748,14 @@
 			{/each}
 		</div>
 	{:else}
-		{#if metrics.findings?.length}
+		{#if shownFindings.length}
 			<AlertStack
-				alerts={metrics.findings.map((f) => ({
-					id: f.symptomId,
+				ondismiss={(id) => dismissedFindings.add(id)}
+				alerts={shownFindings.map((f) => ({
+					id: findingKey(f),
 					tone: 'warning' as const,
 					title: f.sentence,
+					dismissible: true,
 					actions: [
 						{
 							label: 'Show',
@@ -823,6 +842,7 @@
 						findings={findings.err}
 						bands={incidents}
 						empty="No requests, so no error rate"
+						zeroIsData
 						onZoom={(a, b) => metrics.zoom(a, b)}
 					/>
 					<MetricPanel
@@ -882,7 +902,7 @@
 			</Disclosure>
 		{/if}
 
-		<Disclosure title="Resources" size="lg" bind:open={open.resources}>
+		<Disclosure title="Resources" size="lg" note={runtimeLabel} bind:open={open.resources}>
 			<div class="grid">
 				<MetricPanel
 					focus={metrics.focus}
@@ -977,7 +997,7 @@
 			</div>
 		</Disclosure>
 
-		<Disclosure title="Pods" size="lg" bind:open={open.pods}>
+		<Disclosure title="Pods" size="lg" note={uptimeLabel} bind:open={open.pods}>
 			<div class="grid">
 				<MetricPanel
 					focus={metrics.focus}

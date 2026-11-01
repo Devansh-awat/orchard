@@ -240,12 +240,11 @@
 		customOpen = false;
 	}
 
-	const facts = $derived(
-		[
-			runtimeName(capabilities?.runtime ?? null),
-			uptime(overview?.uptime ?? null) && `Up ${uptime(overview?.uptime ?? null)}`
-		].filter(Boolean) as string[]
-	);
+	const runtimeLabel = $derived(runtimeName(capabilities?.runtime ?? null) || undefined);
+	const uptimeLabel = $derived.by(() => {
+		const up = uptime(overview?.uptime ?? null);
+		return up ? `Up ${up}` : undefined;
+	});
 
 	const guides = $derived($page.url.searchParams.has('guides'));
 	let guideLines = $state<{ axis: 'x' | 'y'; at: number; label?: string }[]>([]);
@@ -431,15 +430,13 @@
 		</div>
 	</div>
 
-	{#if view === 'metrics' && facts.length}
-		<p class="facts">{facts.join(' · ')}</p>
-	{/if}
-
 	<div class="stage" {@attach fitViewport({ min: 26 * 16 })}>
 		<Swap key={view}>
 			{#if view === 'metrics'}
 				<MetricsView
 					{metrics}
+					{runtimeLabel}
+					{uptimeLabel}
 					{deployment}
 					{active}
 					{demo}
@@ -503,7 +500,7 @@
 	.toolbar {
 		display: flex;
 		flex-wrap: wrap;
-		align-items: center;
+		align-items: flex-end;
 		justify-content: space-between;
 		gap: 0.5rem 1rem;
 		box-shadow: inset 0 -1px 0 var(--border-default);
@@ -516,7 +513,7 @@
 		border-bottom: none;
 	}
 	.views :global(.ui-tab) {
-		padding-block: 0.75rem;
+		padding-block: 0.875rem;
 		margin-bottom: 0;
 	}
 	.controls {
@@ -524,6 +521,7 @@
 		align-items: center;
 		gap: 0.5rem;
 		margin-left: auto;
+		padding-bottom: 0.5rem;
 	}
 	.controls :global(.trigger) {
 		border-radius: 999px;
@@ -541,12 +539,6 @@
 	}
 	.window {
 		width: 7.5rem;
-	}
-	.facts {
-		margin: -0.5rem 0 0;
-		color: var(--text-faint);
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
 	}
 	.stage {
 		min-width: 0;
