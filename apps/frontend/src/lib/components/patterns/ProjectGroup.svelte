@@ -6,7 +6,7 @@
 	import { Plus, ArrowRight, ChevronRight } from 'lucide-svelte';
 	import AppIcon from '$lib/components/ui/AppIcon.svelte';
 	import RelativeTime from '$lib/components/ui/RelativeTime.svelte';
-	import { bakeBlur } from '$lib/components/aura/aura';
+	import { bakeBlur, bakedBlur } from '$lib/components/aura/aura';
 	import { folder } from '$lib/utils/motion.svelte';
 
 	let {
@@ -50,12 +50,22 @@
 
 	let host = $state<HTMLElement>();
 	let iconEl = $state<HTMLElement>();
-	let mesh = $state<string | null>(null);
+	let mesh = $state<string | null>(background ? bakedBlur(background) : null);
 	let awake = $state(false);
 
 	onMount(() => {
-		if (!host) return;
-		if (background) bakeBlur(background).then((url) => (mesh = url));
+		if (!host || !background || mesh) return;
+		const src = background;
+		const io = new IntersectionObserver(
+			(entries) => {
+				if (!entries.some((e) => e.isIntersecting)) return;
+				io.disconnect();
+				bakeBlur(src).then((url) => (mesh = url));
+			},
+			{ rootMargin: '100% 0px' }
+		);
+		io.observe(host);
+		return () => io.disconnect();
 	});
 </script>
 

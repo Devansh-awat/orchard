@@ -140,23 +140,57 @@ export function colorsImage(colors: string[]): string | null {
 }
 
 const baked = new Map<string, Promise<string | null>>();
+const BAKE_KEY = 'orchard:baked-blur:v1';
+const BAKE_KEEP = 200;
+const BAKE_WIDTH = 96;
+
+function readBaked(): Record<string, string> {
+	try {
+		return JSON.parse(localStorage.getItem(BAKE_KEY) ?? '{}') as Record<string, string>;
+	} catch {
+		return {};
+	}
+}
+
+function keepBaked(url: string, data: string) {
+	try {
+		const all = readBaked();
+		delete all[url];
+		all[url] = data;
+		const keys = Object.keys(all);
+		for (const k of keys.slice(0, Math.max(0, keys.length - BAKE_KEEP))) delete all[k];
+		localStorage.setItem(BAKE_KEY, JSON.stringify(all));
+	} catch {}
+}
+
+export function bakedBlur(url: string): string | null {
+	return readBaked()[url] ?? null;
+}
 
 export function bakeBlur(url: string): Promise<string | null> {
 	let p = baked.get(url);
 	if (p) return p;
+	const stored = bakedBlur(url);
+	if (stored) {
+		p = Promise.resolve(stored);
+		baked.set(url, p);
+		return p;
+	}
 	p = loadImage(url).then((img) => {
 		if (!img) return null;
 		try {
-			const w = 640;
+			const w = BAKE_WIDTH;
 			const h = Math.max(1, Math.round((img.naturalHeight / Math.max(img.naturalWidth, 1)) * w));
 			const canvas = document.createElement('canvas');
 			canvas.width = w;
 			canvas.height = h;
 			const ctx = canvas.getContext('2d');
 			if (!ctx) return null;
-			ctx.filter = 'blur(80px) saturate(1.6)';
+			ctx.filter = `blur(${Math.round((80 * w) / 640)}px) saturate(1.6)`;
 			ctx.drawImage(img, 0, 0, w, h);
-			return canvas.toDataURL('image/jpeg', 0.85);
+			const data = canvas.toDataURL('image/jpeg', 0.85);
+			keepBaked(url, data);
+			return data;
 		} catch {
 			return null;
 		}
