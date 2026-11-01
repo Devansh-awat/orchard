@@ -316,7 +316,7 @@ body::before {
 	inset: 0;
 	z-index: -1;
 	pointer-events: none;
-	background-image: var(--theme-grain, none), var(--theme-chrome-image, none);
+	background-image: var(--theme-grain, none);
 	background-size: auto;
 	background-repeat: repeat;
 	opacity: 0.45;

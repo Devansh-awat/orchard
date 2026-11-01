@@ -1,15 +1,15 @@
 :root {
-	--neutral-1: #f5eeee;
-	--neutral-2: #efe7e7;
-	--neutral-3: #e9e0e0;
-	--neutral-4: #e3d9d9;
-	--neutral-5: #d5cccc;
-	--neutral-6: #bbb3b3;
-	--neutral-7: #9a9292;
-	--neutral-8: #847d7d;
-	--neutral-9: #5a5152;
+	--neutral-1: #f7eded;
+	--neutral-2: #f2e6e6;
+	--neutral-3: #eddfdf;
+	--neutral-4: #e6d8d8;
+	--neutral-5: #d8cbcb;
+	--neutral-6: #beb1b1;
+	--neutral-7: #9c9191;
+	--neutral-8: #877c7c;
+	--neutral-9: #594f50;
 	--neutral-10: #221e1e;
-	--neutral-app: #f7f1f1;
+	--neutral-app: #f7eeee;
 	--neutral-surface: #fffafa;
 	--neutral-raised: #fffbfb;
 	--neutral-border: #eddedd;
@@ -83,17 +83,17 @@
 }
 
 :root.dark {
-	--neutral-1: #201919;
-	--neutral-2: #261f1f;
-	--neutral-3: #2e2626;
-	--neutral-4: #332b2b;
-	--neutral-5: #433a3a;
-	--neutral-6: #5e5555;
-	--neutral-7: #8b8282;
-	--neutral-8: #7f7676;
-	--neutral-9: #9f9292;
+	--neutral-1: #231819;
+	--neutral-2: #2a1d1e;
+	--neutral-3: #322425;
+	--neutral-4: #37292a;
+	--neutral-5: #473839;
+	--neutral-6: #625354;
+	--neutral-7: #8f8081;
+	--neutral-8: #837475;
+	--neutral-9: #a19594;
 	--neutral-10: #f2ecec;
-	--neutral-app: #110a0a;
+	--neutral-app: #180c0d;
 	--neutral-surface: #1c1111;
 	--neutral-raised: #241919;
 	--neutral-border: #2f2222;

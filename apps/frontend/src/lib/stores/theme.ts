@@ -316,7 +316,6 @@ function themeVars(state: ThemeState, scheme: Scheme): [string, string][] {
 	const vars: [string, string][] = VAR_MAP.map(([name, key]) => [name, palette.colors[key]]);
 	vars.push(...Object.entries(generateScales(state.spec, scheme, palette)));
 	vars.push(
-		['--theme-chrome-image', palette.pinned.has('background') ? 'none' : chrome.image],
 		['--theme-grain', chrome.grain],
 		['--theme-accent-glow', chrome.accentGlow],
 		['--font-sans', fontById(state.font).stack],

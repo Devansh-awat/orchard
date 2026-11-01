@@ -128,6 +128,7 @@ type Ladder = {
 	status: { success: number; warning: number; error: number };
 	chromeL: number;
 	chromeAlpha: number;
+	chromeOpacity: number;
 };
 
 const LADDERS: Record<Scheme, Ladder> = {
@@ -154,7 +155,8 @@ const LADDERS: Record<Scheme, Ladder> = {
 		ramp: [0.985, 0.93, 0.855, 0.77, 0.675, 0.575, 0.505, 0.44, 0.375, 0.31, 0.215],
 		status: { success: 0.695, warning: 0.704, error: 0.575 },
 		chromeL: 0.74,
-		chromeAlpha: 0.5
+		chromeAlpha: 0.5,
+		chromeOpacity: 0.45
 	},
 	dark: {
 		bg: 0.145,
@@ -179,7 +181,8 @@ const LADDERS: Record<Scheme, Ladder> = {
 		ramp: [0.965, 0.925, 0.855, 0.79, 0.71, 0.625, 0.555, 0.485, 0.41, 0.34, 0.245],
 		status: { success: 0.783, warning: 0.813, error: 0.715 },
 		chromeL: 0.56,
-		chromeAlpha: 0.4
+		chromeAlpha: 0.4,
+		chromeOpacity: 0.7
 	}
 };
 
@@ -254,6 +257,19 @@ export function samplePalette(spec: ThemeSpec): PaletteSample[] {
 	return specNodes(spec).map((n) => ({ hue: n.hue, vividness: n.vividness }));
 }
 
+const MESH_COVERAGE = 0.6;
+
+export function pageWash(spec: ThemeSpec, scheme: Scheme): { hex: string; alpha: number } {
+	const L = LADDERS[scheme];
+	const samples = samplePalette(spec);
+	const tints = samples.map((s) =>
+		oklch(L.chromeL, maxChroma(s.hue, L.chromeL) * clamp(s.vividness * 0.85, 0, 1), s.hue)
+	);
+	const hex = tints.reduce((mean, tint, i) => mixHex(tint, mean, 1 / (i + 1)));
+	const coverage = samples.length === 1 ? 1 : MESH_COVERAGE;
+	return { hex, alpha: clamp(spec.blend * L.chromeAlpha * L.chromeOpacity * coverage, 0, 1) };
+}
+
 export function deriveSimpleColors(spec: ThemeSpec, scheme: Scheme): SimpleThemeColors {
 	const L = LADDERS[scheme];
 	const samples = samplePalette(spec);
@@ -269,11 +285,12 @@ export function deriveSimpleColors(spec: ThemeSpec, scheme: Scheme): SimpleTheme
 	};
 
 	const accentHex = tone(L.accent, accent.hue, accent.vividness, L.accentChroma);
+	const wash = pageWash(spec, scheme);
 
 	return {
 		accent: accentHex,
 		accentForeground: readableOn(accentHex),
-		background: neutral(L.bg, L.surface.bg),
+		background: mixHex(wash.hex, neutral(L.bg, L.surface.bg), wash.alpha),
 		foreground: neutral(L.ink, L.surface.ink, 0),
 		muted: neutral(L.muted, L.surface.muted, 0.6),
 		border: neutral(L.border, L.surface.border, 0.6),
@@ -579,16 +596,7 @@ function enforceReadability(
 	return out;
 }
 
-const BLOBS = [
-	{ x: 14, y: -4, rx: 82, ry: 66 },
-	{ x: 94, y: 10, rx: 72, ry: 60 },
-	{ x: 48, y: 106, rx: 90, ry: 66 },
-	{ x: -6, y: 84, rx: 64, ry: 58 },
-	{ x: 80, y: 96, rx: 68, ry: 58 }
-];
-
 export type ChromeVars = {
-	image: string;
 	grain: string;
 	accentGlow: string;
 };
@@ -601,34 +609,8 @@ function grainImage(amount: number): string {
 
 export function generateChrome(spec: ThemeSpec, scheme: Scheme): ChromeVars {
 	const L = LADDERS[scheme];
-	const samples = samplePalette(spec);
-	const strength = spec.blend * L.chromeAlpha;
-
-	const stop = (s: PaletteSample, alpha: number) =>
-		oklchAlpha(
-			L.chromeL,
-			maxChroma(s.hue, L.chromeL) * clamp(s.vividness * 0.85, 0, 1),
-			s.hue,
-			alpha
-		);
-
-	let image: string;
-	if (samples.length === 1) {
-		const flat = stop(samples[0], strength);
-		image = `linear-gradient(${flat}, ${flat})`;
-	} else {
-		image = samples
-			.map((s, i) => {
-				const b = BLOBS[i % BLOBS.length];
-				const fade = i === 0 ? 1 : 0.88;
-				return `radial-gradient(${b.rx}% ${b.ry}% at ${b.x}% ${b.y}%, ${stop(s, strength * fade)} 0%, ${stop(s, 0)} 72%)`;
-			})
-			.join(', ');
-	}
-
-	const accent = samples[0];
+	const accent = samplePalette(spec)[0];
 	return {
-		image,
 		grain: grainImage(spec.grain),
 		accentGlow: oklchAlpha(
 			L.chromeL,

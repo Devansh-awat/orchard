@@ -116,7 +116,7 @@ rule for each:
   background's own chroma, so a pinned near-black paints exactly and its ladder stays
   grey. The contrast guarantee only moves derived colours; a pinned value is never
   refitted. A pinned accent is `--accent-7` exactly and a pinned status colour is its
-  step 9. A pinned background also drops the blend wash (`--theme-chrome-image`).
+  step 9.
 - Step meanings: 1 component bg, 2 hover bg, 3 active bg, 4 border, 5 hover border,
   6 active border, 7 solid fill, 8 solid hover, 9 secondary text, 10 primary text.
 - Roles (`tokens.css`): `--bg-app` (tinted frame), `--bg-sheet` (content sheet),
@@ -571,10 +571,11 @@ square, and every token is generated from it.
 ```
 ThemeSpec { angle, radius, count, blend, grain }  +  scheme (light|dark)
   -> specNodes()            1 to 3 nodes, derived
-  -> deriveSimpleColors()   12 editable colours
+  -> deriveSimpleColors()   12 editable colours, background includes pageWash()
   -> [user overrides]       "Advanced colours" pins individual values
   -> generateThemeColors()  the ~47 engine tokens app.css expects
-  -> generateChrome()       --theme-chrome-image, --theme-grain
+  -> generateScales()       --neutral-*, --accent-* and status scales
+  -> generateChrome()       --theme-grain, --theme-accent-glow
 ```
 
 **The field is polar.** Angle is hue, distance from the centre is saturation, the
@@ -621,17 +622,16 @@ matter where the palette is dragged. The same ladder in HSL would wash yellows o
 muddy blues at identical values. `gamutMap()` walks chroma down rather than clipping
 RGB, because clipping shifts hue and breaks the harmony the constellation is protecting.
 
-**Chrome.** One node is a flat wash, two or more is a soft mesh gradient. Blob positions
-are fixed by node index, not node position, so the composition stays balanced and the
-background never lurches while dragging. Anything that paints a full-area background
-inside the app shell (`body`, `main`, the mobile drawer) must carry
-`var(--theme-grain), var(--theme-chrome-image)` with `background-attachment: fixed`, or
-it shows as a hard seam against its neighbours. `html.contrast-high` drops both.
-
-`--theme-chrome-image` expands to **one background layer per node**, so every companion
-longhand has to stay a single value (`background-size: auto`, `background-repeat:
-repeat`). A two-value list there gets cycled across the extra layers, which sized half
-the mesh gradients to the grain tile and rendered the background as 180px squares.
+**Chrome.** The blend wash is baked into the page colour, not painted over it.
+`pageWash()` averages the nodes' chrome tints and `deriveSimpleColors` composites it
+over the derived background at the strength the old overlay had (blend x `chromeAlpha` x
+`chromeOpacity`, with a mesh counted at 0.6 coverage), so `--bg-app` is exactly the
+colour the page shows. `body::before` carries only `--theme-grain`. Anything that fades
+or blends into the page (`ProjectBackdrop`, `Page`'s footer, translucent bars) ends on
+`--bg-app` and meets the body without a seam. The earlier overlay painted an accent wash
+over the body that no token described, so every fade to `--bg-app` ended a few levels
+darker than the page and left a hard edge. A pinned background is never washed.
+`html.contrast-high` drops the grain.
 
 **The wheel is a bare disc.** Drawing it inside a square plate leaves corner geometry
 that means nothing, since every position outside the inscribed circle clamps back to
