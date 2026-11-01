@@ -1,0 +1,49 @@
+name: ui-notes
+
+on:
+  push:
+    branches: [main]
+    paths: [releases/ui/notes/**]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  republish:
+    if: github.repository == 'hackclub/orchard'
+    runs-on: ubuntu-latest
+    environment: registry
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.REGISTRY_R2_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.REGISTRY_R2_SECRET_KEY }}
+      AWS_DEFAULT_REGION: auto
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+      R2_ENDPOINT: ${{ secrets.REGISTRY_R2_ENDPOINT }}
+      R2_BUCKET: ${{ secrets.REGISTRY_R2_BUCKET }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 2
+      - name: Re-upload edited notes that are already published
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = workflow_dispatch ]; then
+            notes=$(ls releases/ui/notes/*.md)
+          else
+            notes=$(git diff --name-only --diff-filter=AM HEAD^ HEAD -- releases/ui/notes/)
+          fi
+          for note in $notes; do
+            file=$(basename "$note")
+            if ! curl -fsI "https://assets.orchard.my/updates/ui/$file" >/dev/null; then
+              echo "$file is not published yet; the ui release publishes it"
+              continue
+            fi
+            aws s3 cp "$note" "s3://$R2_BUCKET/updates/ui/$file" \
+              --endpoint-url "$R2_ENDPOINT" \
+              --content-type 'text/markdown; charset=utf-8' \
+              --cache-control 'public, max-age=300' \
+              --only-show-errors
+            echo "republished $file"
+          done
