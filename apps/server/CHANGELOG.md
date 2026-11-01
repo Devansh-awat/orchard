@@ -1,5 +1,33 @@
 # Changelog
 
+## [2.83.0](https://github.com/hackclub/orchard/compare/server/v2.82.1...server/v2.83.0) (2026-11-01)
+
+
+### Features
+
+* **chart:** orchard-db can archive straight to object storage with a slot cap and an immediate first backup ([9f80aed](https://github.com/hackclub/orchard/commit/9f80aed3192e1f1544f3ff797f734954021f08a4))
+* **chart:** orchard-db can archive through the barman cloud plugin, outside databases get a nightly pg_dump, plus a dr runbook ([554ddab](https://github.com/hackclub/orchard/commit/554ddab983227cb9ab8b7aa8cb49bc6ab23544eb))
+* computeHealth moves to packages/health so the app page and the server agree on what is wrong ([a017f10](https://github.com/hackclub/orchard/commit/a017f1060b3d1362dd481f738c4f281eb1187c00))
+* image scanning picks harbor or the bundled trivy scanner, off until a superadmin turns it on ([6a6ed12](https://github.com/hackclub/orchard/commit/6a6ed124464e04a2c5cccda2b15b43e10347de3e))
+* release notes get their own ui release track and load at runtime, so a note never bumps the frontend ([4ef98ee](https://github.com/hackclub/orchard/commit/4ef98ee9843cf87bca7c7d158ec9c27e84a71385))
+* **server:** attack attempts are classified from access logs and an app can be rate-limited in one click ([77a5c46](https://github.com/hackclub/orchard/commit/77a5c46d8daf4cce3b43fd2b707ac364e2851757))
+* **server:** bound databases and apps report their health in plain lines, and database restarts become causes ([a1bc597](https://github.com/hackclub/orchard/commit/a1bc597cae7be208a6d39d23e3191562a8c42a70))
+* **server:** database checkpoints, point in time restores and forks that survive restarts, a 30 day trash, restore tests, pooler, ha and users ([aacf656](https://github.com/hackclub/orchard/commit/aacf6566d5cab78aa67e911037ad058f6d67f18b))
+* **server:** database metrics add connections, tps, cache hit, replication lag, size, deadlocks and disk from the cnpg exporter ([048a92a](https://github.com/hackclub/orchard/commit/048a92ab398abdfc8b24af20999411176ba2c389))
+* **server:** dns check returns the records to create and accepts a records for root domains ([b20fc93](https://github.com/hackclub/orchard/commit/b20fc93560fbd3dc74cdbdf3415db13678e01831))
+* **server:** one diagnosis call composes health, verdicts, findings, changes, resources, requests and security, and mcp agents can use all of it ([4d3cc52](https://github.com/hackclub/orchard/commit/4d3cc5270ee97c331c254696c7658d3203854c61))
+* **server:** postgres majors come from the cnpg catalog, rehearsed in-place major upgrades, and cve reports from postgresql.org advisories ([aca4cd4](https://github.com/hackclub/orchard/commit/aca4cd4d758695b21e98ed39a24aaafe7d5d93ce))
+
+
+### Bug Fixes
+
+* **server:** advisory scores parse even when the html is reflowed, and unused imports are gone ([ee6d1dd](https://github.com/hackclub/orchard/commit/ee6d1ddf497f857efc31f384f0c1bc5d4a25f8da))
+* **server:** failed builds report the buildkit error instead of daemon noise ([c4b2b75](https://github.com/hackclub/orchard/commit/c4b2b75e789d92aaac346482b9e06bab8898cf4a))
+* **server:** mcp log lines carry one timestamp, not two ([c0005b5](https://github.com/hackclub/orchard/commit/c0005b5a70949761bcc139347e172b83da6626db))
+* **server:** point in time restores send postgres a timestamp it accepts, and forks keep the source database name so apps see their data ([64af5ab](https://github.com/hackclub/orchard/commit/64af5ab85200cf0c12c8adceadca4e7913aa1c22))
+* **server:** provide the logs store and request services in observability so the app boots ([4e0aa2e](https://github.com/hackclub/orchard/commit/4e0aa2ec39edbf7813a65a9e9bdd7d803846f966))
+* **server:** single instance databases get no disruption budget, so drains and updates stop hanging on them ([d4b32ca](https://github.com/hackclub/orchard/commit/d4b32cae290810b7b1779724404677e8ae871544))
+
 ## [2.82.1](https://github.com/hackclub/orchard/compare/server/v2.82.0...server/v2.82.1) (2026-10-27)
 
 

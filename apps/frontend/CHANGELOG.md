@@ -1,5 +1,41 @@
 # Changelog
 
+## [1.74.0](https://github.com/hackclub/orchard/compare/frontend/v1.73.0...frontend/v1.74.0) (2026-11-01)
+
+
+### Features
+
+* computeHealth moves to packages/health so the app page and the server agree on what is wrong ([a017f10](https://github.com/hackclub/orchard/commit/a017f1060b3d1362dd481f738c4f281eb1187c00))
+* **frontend:** adding a domain is one address field that picks the port, maps shared paths and walks you through dns ([8d48457](https://github.com/hackclub/orchard/commit/8d48457fac8a85337123a7cece70b67b855329e2))
+* **frontend:** builds open on the failing step with its cause and fix, in vercel-style phase sections that keep following the log ([3a75cc9](https://github.com/hackclub/orchard/commit/3a75cc994f266c97b6a35b7bfabac83963576897))
+* **frontend:** database page redesign with a console overview, connect sheet, health checklist, backups as restore points and the overhaul ui ([487f69c](https://github.com/hackclub/orchard/commit/487f69c4c6c045e1b6a0b63a66def59fc56d484d))
+* **frontend:** kit gets one card corner per page, capsule shapes, session tabs, item labels, avatar edit, swatch picker, check list and a resource header ([6f9dd74](https://github.com/hackclub/orchard/commit/6f9dd74a79983b8a8f046561957717a043e6a9bd))
+* **frontend:** log search, level and pod join the observe permalink ([28b5339](https://github.com/hackclub/orchard/commit/28b53394d499ff3480922c047301a632193c9cf7))
+* **frontend:** logs filter in one capsule, errors as ticks on the edge, and selected lines float a copy and download bar ([5aa19c3](https://github.com/hackclub/orchard/commit/5aa19c367215cb95bdc83ab345a70794cd14c2d9))
+* **frontend:** network is a domains card and a ports card, dns setup shows the exact records, protection is plainly named and every sheet opens the same way ([a8df78d](https://github.com/hackclub/orchard/commit/a8df78d712f3c60f8b65820e23d69d3980602a0f))
+* **frontend:** network is a ledger of addresses per port with who can reach each one, and sheets are rounder, centred and walk you through making a port public ([71610ec](https://github.com/hackclub/orchard/commit/71610ecbcec11cad97a2a2df7207476b383b0edf))
+* **frontend:** network is one ports card where each port's domains, public port and tailnet branch off it, with a single add menu ([2f442fa](https://github.com/hackclub/orchard/commit/2f442faf8e7049f213c2dcc237fcebc9f00e020f))
+* **frontend:** network tab stacks domains, public ports and the tailnet on top of each private port ([d9152d0](https://github.com/hackclub/orchard/commit/d9152d06a8ac67b1f108747f70dc6905e3df01ac))
+* **frontend:** observe gets underline view tabs, one tidy control tray, charts that share a gutter and list cards sized to their rows ([da9d15d](https://github.com/hackclub/orchard/commit/da9d15daf34e0e6b6ca040fb308866d59257cfdf))
+* **frontend:** observe lives in the url so a link opens the same range, crosshair and panel ([c87c24a](https://github.com/hackclub/orchard/commit/c87c24a3d423135a6347db0adb1f344d5942e41b))
+* **frontend:** org and account settings share one shell, header and kit-only cards ([0cdaadd](https://github.com/hackclub/orchard/commit/0cdaadda50adf1ef372490dbe5a538719e00837c))
+* **frontend:** ports are sections with their ways in underneath, add security sits on every domain, redirect is a visible switch and the sheets lose their filler copy ([3da25fa](https://github.com/hackclub/orchard/commit/3da25fa61372b3921a7c3987c700c5ea42dcce15))
+* **frontend:** the overview shows what the app depends on and the worst thing about each ([05f135f](https://github.com/hackclub/orchard/commit/05f135fbb184539e97523071150f12ce3331eebc))
+* **frontend:** the security tab shows attack attempts, who sent them, and rate-limits the app after a confirm ([a9fcbe3](https://github.com/hackclub/orchard/commit/a9fcbe38a272f64efb70620cd4219896a0b09f83))
+* **frontend:** usage page redesign on kit tiles, top lists and tables, hidden from guests ([b526ab4](https://github.com/hackclub/orchard/commit/b526ab4c5fb2733baaf0df672987ee9e918585ab))
+* image scanning picks harbor or the bundled trivy scanner, off until a superadmin turns it on ([6a6ed12](https://github.com/hackclub/orchard/commit/6a6ed124464e04a2c5cccda2b15b43e10347de3e))
+* release notes get their own ui release track and load at runtime, so a note never bumps the frontend ([4ef98ee](https://github.com/hackclub/orchard/commit/4ef98ee9843cf87bca7c7d158ec9c27e84a71385))
+* **server:** database checkpoints, point in time restores and forks that survive restarts, a 30 day trash, restore tests, pooler, ha and users ([aacf656](https://github.com/hackclub/orchard/commit/aacf6566d5cab78aa67e911037ad058f6d67f18b))
+* **server:** dns check returns the records to create and accepts a records for root domains ([b20fc93](https://github.com/hackclub/orchard/commit/b20fc93560fbd3dc74cdbdf3415db13678e01831))
+* **server:** one diagnosis call composes health, verdicts, findings, changes, resources, requests and security, and mcp agents can use all of it ([4d3cc52](https://github.com/hackclub/orchard/commit/4d3cc5270ee97c331c254696c7658d3203854c61))
+
+
+### Bug Fixes
+
+* **frontend:** row actions keep their whole hover fill instead of being cut at the card edge ([49bbcd8](https://github.com/hackclub/orchard/commit/49bbcd824f57d20ba25b816278a483d7369cc76f))
+* **frontend:** truncated labels keep their descenders, top lists hug their numbers, widget titles line up and top sources read as a list ([348e3ba](https://github.com/hackclub/orchard/commit/348e3ba7ec614a58308cf75615a4d3c11ea59f79))
+* **frontend:** typecheck passes again, with module types moved into ts files and a local placement type ([9f7927b](https://github.com/hackclub/orchard/commit/9f7927b9104958b9e2279b99059ef76b33eccd3f))
+
 ## [1.73.0](https://github.com/hackclub/orchard/compare/frontend/v1.72.0...frontend/v1.73.0) (2026-10-27)
 
 

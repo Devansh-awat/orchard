@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.34.0](https://github.com/hackclub/orchard/compare/cli/v0.33.1...cli/v0.34.0) (2026-11-01)
+
+
+### Features
+
+* **cli:** db fork, checkpoints, operations, restore tests, diagnose, activity, protection, pooler, trash, replication and users, plus rollback --restore-databases ([08d99d8](https://github.com/hackclub/orchard/commit/08d99d845cda7ed2d638c5b148137408d24f193d))
+* **cli:** db versions, db security and db upgrade ([f527592](https://github.com/hackclub/orchard/commit/f5275925d52b1d7506e693072a6350378a2a6616))
+* image scanning picks harbor or the bundled trivy scanner, off until a superadmin turns it on ([6a6ed12](https://github.com/hackclub/orchard/commit/6a6ed124464e04a2c5cccda2b15b43e10347de3e))
+* release notes get their own ui release track and load at runtime, so a note never bumps the frontend ([4ef98ee](https://github.com/hackclub/orchard/commit/4ef98ee9843cf87bca7c7d158ec9c27e84a71385))
+* **server:** attack attempts are classified from access logs and an app can be rate-limited in one click ([77a5c46](https://github.com/hackclub/orchard/commit/77a5c46d8daf4cce3b43fd2b707ac364e2851757))
+* **server:** bound databases and apps report their health in plain lines, and database restarts become causes ([a1bc597](https://github.com/hackclub/orchard/commit/a1bc597cae7be208a6d39d23e3191562a8c42a70))
+* **server:** one diagnosis call composes health, verdicts, findings, changes, resources, requests and security, and mcp agents can use all of it ([4d3cc52](https://github.com/hackclub/orchard/commit/4d3cc5270ee97c331c254696c7658d3203854c61))
+
 ## [0.33.1](https://github.com/hackclub/orchard/compare/cli/v0.33.0...cli/v0.33.1) (2026-10-27)
 
 

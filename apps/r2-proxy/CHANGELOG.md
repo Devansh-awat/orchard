@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/hackclub/orchard/compare/r2-proxy/v0.6.3...r2-proxy/v0.7.0) (2026-11-01)
+
+
+### Features
+
+* **r2-proxy:** short-lived scoped keys let restores, forks and restore tests read one archive and write another ([3d507b4](https://github.com/hackclub/orchard/commit/3d507b49dc92f4afb0002ea3cdd202b4095b9c72))
+
 ## [0.6.3](https://github.com/hackclub/orchard/compare/r2-proxy/v0.6.2...r2-proxy/v0.6.3) (2026-10-23)
 
 

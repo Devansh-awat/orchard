@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.1](https://github.com/hackclub/orchard/compare/graft-ui/v1.1.0...graft-ui/v1.1.1) (2026-11-01)
+
+
+### Bug Fixes
+
+* **graft-ui:** declare ansi_up, which the shared format helpers now import ([4c3d4e6](https://github.com/hackclub/orchard/commit/4c3d4e6de76b5f355356ab52171d854b906e8959))
+* **graft-ui:** sync builds tokens.css from the design scales, tokens and springs ([54775c7](https://github.com/hackclub/orchard/commit/54775c7e6c2e202c0b1affa48f3ebf57903af6f9))
+
 ## [1.1.0](https://github.com/hackclub/orchard/compare/graft-ui/v1.0.0...graft-ui/v1.1.0) (2026-10-14)
 
 
