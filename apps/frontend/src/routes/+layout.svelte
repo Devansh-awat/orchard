@@ -268,11 +268,8 @@
 
 <QueryClientProvider client={queryClient}>
 	{#if loading && !isOrgLoginRoute && !isDevHarness}
-		<div
-			class="flex h-screen items-center justify-center"
-			style="background-color: var(--center-channel-bg);"
-		>
-			<div class="lds-ellipsis" style="color: var(--button-bg);">
+		<div class="boot-splash">
+			<div class="lds-ellipsis">
 				<div></div>
 				<div></div>
 				<div></div>
@@ -333,15 +330,22 @@
 		overscroll-behavior-y: contain;
 	}
 
+	.boot-splash {
+		position: fixed;
+		inset: 0;
+		display: grid;
+		place-items: center;
+		background-color: var(--bg-app);
+	}
 	.lds-ellipsis,
 	.lds-ellipsis div {
 		box-sizing: border-box;
 	}
 	.lds-ellipsis {
-		display: inline-block;
 		position: relative;
 		width: 80px;
 		height: 80px;
+		color: var(--accent);
 	}
 	.lds-ellipsis div {
 		position: absolute;
@@ -353,19 +357,19 @@
 		animation-timing-function: cubic-bezier(0, 1, 1, 0);
 	}
 	.lds-ellipsis div:nth-child(1) {
-		left: 8px;
+		left: 9.33333px;
 		animation: lds-ellipsis1 0.6s infinite;
 	}
 	.lds-ellipsis div:nth-child(2) {
-		left: 8px;
+		left: 9.33333px;
 		animation: lds-ellipsis2 0.6s infinite;
 	}
 	.lds-ellipsis div:nth-child(3) {
-		left: 32px;
+		left: 33.33333px;
 		animation: lds-ellipsis2 0.6s infinite;
 	}
 	.lds-ellipsis div:nth-child(4) {
-		left: 56px;
+		left: 57.33333px;
 		animation: lds-ellipsis3 0.6s infinite;
 	}
 	@keyframes lds-ellipsis1 {
