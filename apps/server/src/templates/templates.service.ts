@@ -36,16 +36,27 @@ function blankParameterValues(parameters: unknown): unknown {
   return Object.fromEntries(Object.keys(parameters).map((key) => [key, null]));
 }
 
+const SECRET_NAME =
+  /(token|secret|passw(or)?d|passphrase|api_?key|private_?key|access_?key|credential|auth_?key|signing|dsn|webhook_?url|cookie|session_?key|salt|pepper)/i;
+
+export function looksSecret(name: string): boolean {
+  return SECRET_NAME.test(name.replace(/[-.\s]/g, '_'));
+}
+
+export function isSecretParameter(def: Pick<ParameterDef, 'name' | 'type'>): boolean {
+  return def.type === 'secret' || looksSecret(def.name);
+}
+
 export function redactSecretParameters(
   parameters: unknown,
   defs: Pick<ParameterDef, 'name' | 'type'>[]
 ): unknown {
   if (!parameters || typeof parameters !== 'object' || Array.isArray(parameters)) return parameters;
-  const secret = new Set(defs.filter((d) => d.type === 'secret').map((d) => d.name));
+  const secret = new Set(defs.filter(isSecretParameter).map((d) => d.name));
   return Object.fromEntries(
     Object.entries(parameters as Record<string, unknown>).map(([key, value]) => [
       key,
-      secret.has(key) ? null : value
+      secret.has(key) || looksSecret(key) ? null : value
     ])
   );
 }
@@ -55,7 +66,7 @@ export function secretParameterValues(
   defs: Pick<ParameterDef, 'name' | 'type'>[]
 ): string[] {
   return defs
-    .filter((d) => d.type === 'secret')
+    .filter(isSecretParameter)
     .map((d) => parameters[d.name])
     .filter((v): v is string => typeof v === 'string' && v.length > 0);
 }

@@ -13,6 +13,7 @@ import {
 } from '../src/projects/projects.utils';
 import { DatabasesService } from '../src/projects/databases.service';
 import {
+  looksSecret,
   redactSecretParameters,
   sealTemplateEnv,
   secretParameterValues
@@ -128,6 +129,37 @@ test('secret template parameters are redacted on read', () => {
   assert.deepEqual(secretParameterValues({ appName: 'blog', adminPassword: 'pw123' }, defs), [
     'pw123'
   ]);
+});
+
+test('credential-shaped parameters stay hidden even when the template types them as text', () => {
+  const defs = [
+    { name: 'slackBotToken', type: 'string' as const },
+    { name: 'slackSigningSecret', type: 'string' as const },
+    { name: 'hackclubAiApiKey', type: 'string' as const },
+    { name: 'slackTicketChannel', type: 'string' as const },
+    { name: 'domain', type: 'string' as const }
+  ];
+  const params = {
+    slackBotToken: 'xoxb-1',
+    slackSigningSecret: 'sig',
+    hackclubAiApiKey: 'sk-1',
+    slackTicketChannel: 'C0C1YG7CUJH',
+    domain: 'x.k.hackclub.dev',
+    SENTRY_DSN: 'https://k@o/1'
+  };
+  assert.deepEqual(redactSecretParameters(params, defs), {
+    slackBotToken: null,
+    slackSigningSecret: null,
+    hackclubAiApiKey: null,
+    slackTicketChannel: 'C0C1YG7CUJH',
+    domain: 'x.k.hackclub.dev',
+    SENTRY_DSN: null
+  });
+  assert.deepEqual(secretParameterValues(params, defs).sort(), ['sig', 'sk-1', 'xoxb-1']);
+  assert.equal(looksSecret('SLACK_USER_TOKEN'), true);
+  assert.equal(looksSecret('DB_PASSWORD'), true);
+  assert.equal(looksSecret('SLACK_MAINTAINER_ID'), false);
+  assert.equal(looksSecret('APP_TITLE'), false);
 });
 
 test('template env carrying secret material is created secret', () => {
