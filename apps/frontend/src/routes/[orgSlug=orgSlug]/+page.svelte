@@ -88,11 +88,10 @@
 		enabled: !!orgSlug,
 		refetchInterval: (() => {
 			const sseUp = sseStatusValue === 'connected';
-			if (activeBuilds.length > 0) return sseUp ? 15_000 : 8_000;
-			if (!sseUp) return 10_000;
-			return 30_000;
+			if (!sseUp) return activeBuilds.length > 0 ? 8_000 : 10_000;
+			return activeBuilds.length > 0 ? 30_000 : 120_000;
 		})(),
-		refetchIntervalInBackground: true
+		refetchIntervalInBackground: false
 	}));
 
 	const buildsQuery = createQuery(() => ({
@@ -104,7 +103,7 @@
 			if (!sseUp) return 15_000;
 			return 60_000;
 		})(),
-		refetchIntervalInBackground: true
+		refetchIntervalInBackground: false
 	}));
 
 	// ── Stable ordering (existing cards keep their position; new ids are
@@ -333,7 +332,16 @@
 	// 2s window instead of refetching the full overview on every event. The
 	// builds feed is cheap, so it gets its own tight 400ms window.
 	let invalidateTimer: ReturnType<typeof setTimeout> | null = null;
+	let invalidateDue = 0;
 	let buildsInvalidateTimer: ReturnType<typeof setTimeout> | null = null;
+	const OVERVIEW_EVENT_DELAY: Partial<Record<string, number>> = {
+		'deployment.changed': 2000,
+		'database.changed': 2000,
+		'project.changed': 2000,
+		'build.changed': 2000,
+		'membership.changed': 2000,
+		'pod.changed': 10_000
+	};
 
 	$effect(() => {
 		const id = orgId;
@@ -362,11 +370,16 @@
 						queryClient.invalidateQueries({ queryKey: ['builds', slug] });
 					}, 400);
 				}
-				if (invalidateTimer) return;
+				const delay = OVERVIEW_EVENT_DELAY[ev.type];
+				if (delay === undefined) return;
+				const due = Date.now() + delay;
+				if (invalidateTimer && invalidateDue <= due) return;
+				if (invalidateTimer) clearTimeout(invalidateTimer);
+				invalidateDue = due;
 				invalidateTimer = setTimeout(() => {
 					invalidateTimer = null;
 					queryClient.invalidateQueries({ queryKey: ['overview', slug] });
-				}, 2000);
+				}, delay);
 			});
 		});
 	});

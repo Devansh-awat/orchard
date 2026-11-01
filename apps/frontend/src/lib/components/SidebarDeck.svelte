@@ -117,8 +117,8 @@
 	const overviewQuery = createQuery(() => ({
 		...overviewQueryOptions(orgSlug),
 		enabled: !!orgSlug,
-		refetchInterval: 45000,
-		staleTime: 15000
+		refetchInterval: 120_000,
+		staleTime: 60_000
 	}));
 
 	const orgDeps: OverviewDep[] = $derived(overviewQuery.data?.deployments ?? []);

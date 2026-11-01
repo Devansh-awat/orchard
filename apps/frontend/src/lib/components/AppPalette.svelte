@@ -49,7 +49,7 @@
 
 	const overview = createQuery(() => ({
 		...overviewQueryOptions(orgSlug),
-		enabled: !!orgSlug
+		enabled: open && !!orgSlug
 	}));
 
 	const orgId = $derived(

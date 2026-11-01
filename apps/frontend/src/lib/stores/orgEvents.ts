@@ -81,14 +81,12 @@ function applyEventToCache(sub: Subscription, ev: OrgEvent) {
 		case 'deployment.changed':
 		case 'build.changed':
 		case 'database.changed':
-		case 'project.changed':
 			// (the overview page invalidates its own ['overview', slug] query,
 			// debounced — no query uses an ['org', id, 'overview'] key)
-			qc.invalidateQueries({ queryKey: ['projects', sub.orgId] });
 			if (ev.id) qc.invalidateQueries({ queryKey: ['deployment', ev.id] });
 			if (ev.id && ev.payload?.alert) qc.invalidateQueries({ queryKey: ['alert-states', ev.id] });
 			break;
-		case 'pod.changed':
+		case 'project.changed':
 		case 'membership.changed':
 			qc.invalidateQueries({ queryKey: ['projects', sub.orgId] });
 			break;
@@ -108,7 +106,6 @@ function applyEventToCache(sub: Subscription, ev: OrgEvent) {
 		}
 		case 'environment.changed':
 			if (ev.projectId) qc.invalidateQueries({ queryKey: ['environments', ev.projectId] });
-			qc.invalidateQueries({ queryKey: ['projects', sub.orgId] });
 			break;
 		case 'sharedvars.changed':
 			if (ev.id) qc.invalidateQueries({ queryKey: ['shared-vars', ev.id] });
