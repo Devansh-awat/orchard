@@ -157,6 +157,78 @@
         ]
       }
     },
+    "/admin/databases/plugin-migration": {
+      "get": {
+        "description": "Auth: superadmin",
+        "operationId": "admin_databases_plugin_migration_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /admin/databases/plugin-migration",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/databases/plugin-migration/resume": {
+      "post": {
+        "description": "Auth: superadmin",
+        "operationId": "admin_databases_plugin_migration_resume",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /admin/databases/plugin-migration/resume",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/admin/grafts": {
       "get": {
         "description": "Auth: superadmin",
@@ -343,6 +415,76 @@
           }
         ],
         "summary": "PUT /admin/instance-config/:id",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/instance-settings/databases": {
+      "get": {
+        "description": "Auth: superadmin",
+        "operationId": "admin_instance_settings_databases_list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /admin/instance-settings/databases",
+        "tags": [
+          "admin"
+        ]
+      },
+      "patch": {
+        "description": "Auth: superadmin",
+        "operationId": "admin_instance_settings_databases_update",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /admin/instance-settings/databases",
         "tags": [
           "admin"
         ]
@@ -3890,6 +4032,231 @@
         ]
       }
     },
+    "/checkpoints": {
+      "post": {
+        "description": "Auth: authenticated",
+        "operationId": "checkpoints_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /checkpoints",
+        "tags": [
+          "checkpoints"
+        ]
+      }
+    },
+    "/checkpoints/{id}": {
+      "delete": {
+        "description": "Auth: authenticated",
+        "operationId": "checkpoints_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "DELETE /checkpoints/:id",
+        "tags": [
+          "checkpoints"
+        ]
+      }
+    },
+    "/checkpoints/{id}/restore": {
+      "post": {
+        "description": "Auth: authenticated",
+        "operationId": "checkpoints_restore",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /checkpoints/:id/restore",
+        "tags": [
+          "checkpoints"
+        ]
+      }
+    },
+    "/checkpoints/groups/{groupId}": {
+      "get": {
+        "description": "Auth: authenticated",
+        "operationId": "checkpoints_groups_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "groupId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /checkpoints/groups/:groupId",
+        "tags": [
+          "checkpoints"
+        ]
+      }
+    },
+    "/checkpoints/groups/{groupId}/restore": {
+      "post": {
+        "description": "Auth: authenticated",
+        "operationId": "checkpoints_groups_restore",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "groupId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /checkpoints/groups/:groupId/restore",
+        "tags": [
+          "checkpoints"
+        ]
+      }
+    },
     "/compact": {
       "delete": {
         "description": "Auth: superadmin",
@@ -4219,6 +4586,180 @@
         "summary": "POST /compose-stacks/:id/redeploy",
         "tags": [
           "compose-stacks"
+        ]
+      }
+    },
+    "/database-operations/{opId}": {
+      "get": {
+        "description": "Auth: authenticated",
+        "operationId": "database_operations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "opId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /database-operations/:opId",
+        "tags": [
+          "database-operations"
+        ]
+      }
+    },
+    "/database-operations/{opId}/cancel": {
+      "post": {
+        "description": "Auth: authenticated",
+        "operationId": "database_operations_cancel",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "opId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /database-operations/:opId/cancel",
+        "tags": [
+          "database-operations"
+        ]
+      }
+    },
+    "/database-operations/{opId}/undo": {
+      "post": {
+        "description": "Auth: authenticated",
+        "operationId": "database_operations_undo",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "opId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /database-operations/:opId/undo",
+        "tags": [
+          "database-operations"
+        ]
+      }
+    },
+    "/database-versions": {
+      "get": {
+        "description": "Auth: authenticated",
+        "operationId": "database_versions_list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /database-versions",
+        "tags": [
+          "database-versions"
         ]
       }
     },
@@ -4711,6 +5252,47 @@
         ]
       }
     },
+    "/databases/{id}/activity": {
+      "get": {
+        "description": "Auth: authenticated",
+        "operationId": "databases_activity_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /databases/:id/activity",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
     "/databases/{id}/anomalies": {
       "get": {
         "description": "Auth: authenticated",
@@ -5141,6 +5723,96 @@
         ]
       }
     },
+    "/databases/{id}/checkpoints": {
+      "get": {
+        "description": "Auth: authenticated",
+        "operationId": "databases_checkpoints_list",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /databases/:id/checkpoints",
+        "tags": [
+          "databases"
+        ]
+      },
+      "post": {
+        "description": "Auth: authenticated",
+        "operationId": "databases_checkpoints_create",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /databases/:id/checkpoints",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
     "/databases/{id}/connection": {
       "get": {
         "description": "Auth: authenticated",
@@ -5177,6 +5849,47 @@
           }
         ],
         "summary": "GET /databases/:id/connection",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
+    "/databases/{id}/diagnosis": {
+      "get": {
+        "description": "Auth: authenticated",
+        "operationId": "databases_diagnosis_list",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /databases/:id/diagnosis",
         "tags": [
           "databases"
         ]
@@ -5400,6 +6113,57 @@
           }
         ],
         "summary": "Drop a PostgreSQL extension, optionally removing it from shared_preload_libraries",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
+    "/databases/{id}/fork": {
+      "post": {
+        "description": "Auth: authenticated",
+        "operationId": "databases_fork",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /databases/:id/fork",
         "tags": [
           "databases"
         ]
@@ -5752,6 +6516,188 @@
           }
         ],
         "summary": "PATCH /databases/:id/name",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
+    "/databases/{id}/operations": {
+      "get": {
+        "description": "Auth: authenticated",
+        "operationId": "databases_operations_list",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /databases/:id/operations",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
+    "/databases/{id}/pooler": {
+      "get": {
+        "description": "Auth: authenticated",
+        "operationId": "databases_pooler_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /databases/:id/pooler",
+        "tags": [
+          "databases"
+        ]
+      },
+      "put": {
+        "description": "Auth: authenticated",
+        "operationId": "databases_pooler_set",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PUT /databases/:id/pooler",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
+    "/databases/{id}/protection": {
+      "patch": {
+        "description": "Auth: authenticated",
+        "operationId": "databases_protection_update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /databases/:id/protection",
         "tags": [
           "databases"
         ]
@@ -6125,6 +7071,47 @@
         ]
       }
     },
+    "/databases/{id}/recovery": {
+      "get": {
+        "description": "Auth: authenticated",
+        "operationId": "databases_recovery_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /databases/:id/recovery",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
     "/databases/{id}/replicas": {
       "patch": {
         "description": "Auth: authenticated",
@@ -6171,6 +7158,96 @@
           }
         ],
         "summary": "PATCH /databases/:id/replicas",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
+    "/databases/{id}/replication": {
+      "get": {
+        "description": "Auth: authenticated",
+        "operationId": "databases_replication_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /databases/:id/replication",
+        "tags": [
+          "databases"
+        ]
+      },
+      "patch": {
+        "description": "Auth: authenticated",
+        "operationId": "databases_replication_update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /databases/:id/replication",
         "tags": [
           "databases"
         ]
@@ -6623,6 +7700,96 @@
         ]
       }
     },
+    "/databases/{id}/restore-tests": {
+      "get": {
+        "description": "Auth: authenticated",
+        "operationId": "databases_restore_tests_list",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /databases/:id/restore-tests",
+        "tags": [
+          "databases"
+        ]
+      },
+      "post": {
+        "description": "Auth: authenticated",
+        "operationId": "databases_restore_tests_create",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /databases/:id/restore-tests",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
     "/databases/{id}/rotate-password": {
       "post": {
         "description": "Auth: authenticated",
@@ -6669,6 +7836,47 @@
           }
         ],
         "summary": "POST /databases/:id/rotate-password",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
+    "/databases/{id}/security": {
+      "get": {
+        "description": "Auth: authenticated",
+        "operationId": "databases_security_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /databases/:id/security",
         "tags": [
           "databases"
         ]
@@ -7049,6 +8257,196 @@
         ]
       }
     },
+    "/databases/{id}/upgrade": {
+      "post": {
+        "description": "Auth: authenticated",
+        "operationId": "databases_upgrade",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /databases/:id/upgrade",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
+    "/databases/{id}/users": {
+      "get": {
+        "description": "Auth: authenticated",
+        "operationId": "databases_users_list",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /databases/:id/users",
+        "tags": [
+          "databases"
+        ]
+      },
+      "post": {
+        "description": "Auth: authenticated",
+        "operationId": "databases_users_create",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /databases/:id/users",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
+    "/databases/{id}/users/{name}": {
+      "delete": {
+        "description": "Auth: authenticated",
+        "operationId": "databases_users_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "DELETE /databases/:id/users/:name",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
     "/databases/limits": {
       "get": {
         "description": "Auth: authenticated",
@@ -7077,6 +8475,57 @@
         "summary": "GET /databases/limits",
         "tags": [
           "databases"
+        ]
+      }
+    },
+    "/deleted-databases/{id}/restore": {
+      "post": {
+        "description": "Auth: authenticated",
+        "operationId": "deleted_databases_restore",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /deleted-databases/:id/restore",
+        "tags": [
+          "deleted-databases"
         ]
       }
     },
@@ -48070,6 +49519,47 @@
           }
         ],
         "summary": "Create a PostgreSQL database in a project",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/projects/{id}/deleted-databases": {
+      "get": {
+        "description": "Auth: authenticated",
+        "operationId": "projects_deleted_databases_list",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /projects/:id/deleted-databases",
         "tags": [
           "projects"
         ]
