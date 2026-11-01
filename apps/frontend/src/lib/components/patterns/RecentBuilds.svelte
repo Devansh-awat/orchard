@@ -305,6 +305,7 @@
 		margin-top: -0.25rem;
 	}
 	.live-msg {
+		min-width: 0;
 		color: var(--text-muted);
 		font-size: var(--text-caption);
 	}
