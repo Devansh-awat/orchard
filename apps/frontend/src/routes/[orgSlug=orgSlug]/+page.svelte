@@ -25,6 +25,7 @@
 		LayoutGrid,
 		List,
 		ChevronDown,
+		Github,
 		Sprout
 	} from 'lucide-svelte';
 	import { onDestroy, untrack } from 'svelte';
@@ -264,18 +265,9 @@
 
 			depOrder = mergeOrder(depOrder, deployments, (d) => new Date(d.updatedAt).getTime());
 			dbOrder = mergeOrder(dbOrder, databases, (d) => new Date(d.updatedAt).getTime());
-			const projLatest = new Map<string, number>();
-			for (const d of deployments) {
-				if (!d.project) continue;
-				const t = new Date(d.updatedAt).getTime();
-				projLatest.set(d.project.id, Math.max(projLatest.get(d.project.id) ?? 0, t));
-			}
-			for (const d of databases) {
-				if (!d.project) continue;
-				const t = new Date(d.updatedAt).getTime();
-				projLatest.set(d.project.id, Math.max(projLatest.get(d.project.id) ?? 0, t));
-			}
-			const projItems = [...projLatest.entries()].map(([id, t]) => ({ id, t }));
+			const projItems = (
+				(qData.projects ?? []) as { id: string; activityAt?: string | null }[]
+			).map((p) => ({ id: p.id, t: p.activityAt ? Date.parse(p.activityAt) : 0 }));
 			projOrder = mergeOrder(projOrder, projItems, (x) => x.t);
 
 			loading = false;
@@ -593,7 +585,13 @@
 	);
 
 	const NEW_ITEMS: NewMenuItem[] = [
-		{ id: 'deployment', label: 'App', description: 'From a repo or image', icon: Box },
+		{
+			id: 'github',
+			label: 'GitHub repo',
+			description: 'Deploy straight from your code',
+			icon: Github
+		},
+		{ id: 'deployment', label: 'App', description: 'From an image or a template', icon: Box },
 		{ id: 'database', label: 'Database', description: 'Postgres, Redis and more', icon: Database },
 		{ id: 'job', label: 'Job', description: 'Runs on a schedule', icon: Timer },
 		{ id: 'project', label: 'Project', description: 'A group for related apps', icon: FolderPlus }
@@ -601,6 +599,7 @@
 
 	function create(id: string) {
 		const to = {
+			github: `/${orgSlug}/new?source=github`,
 			deployment: `/${orgSlug}/new`,
 			database: `/${orgSlug}/new?type=database`,
 			job: `/${orgSlug}/jobs/new`,
@@ -809,7 +808,7 @@
 					background={$projectGradientEnabled ? (meta?.backgroundImage ?? null) : null}
 					owner={meta?.owner?.username ?? undefined}
 					counts={counts(g)}
-					updatedAt={latest(g)}
+					updatedAt={meta?.activityAt ?? latest(g)}
 					summary={summary(g)}
 					onNew={canCreateProjects
 						? () => goto(`/${orgSlug}/new?projectSlug=${g.slug}`)

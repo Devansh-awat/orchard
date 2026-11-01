@@ -2281,6 +2281,44 @@ export class ProjectsService {
       // favicons are decorative — never fail the overview for them
     }
 
+    try {
+      const projectIds = (projects as any[]).map((p) => p.id);
+      const deploymentProject = new Map<string, string>();
+      for (const p of projects as any[])
+        for (const d of p.deployments ?? []) deploymentProject.set(d.id, p.id);
+      const deploymentIds = [...deploymentProject.keys()];
+      const [audits, releases, builds] = await Promise.all([
+        this.prisma.auditLog.groupBy({
+          by: ['projectId'],
+          where: { projectId: { in: projectIds } },
+          _max: { createdAt: true }
+        }),
+        this.prisma.imageHistory.groupBy({
+          by: ['deploymentId'],
+          where: { deploymentId: { in: deploymentIds } },
+          _max: { createdAt: true }
+        }),
+        this.prisma.buildRun.groupBy({
+          by: ['deploymentId'],
+          where: { deploymentId: { in: deploymentIds } },
+          _max: { createdAt: true }
+        })
+      ]);
+      const activity = new Map<string, number>();
+      const bump = (projectId: string | null | undefined, at: Date | null | undefined) => {
+        if (!projectId || !at) return;
+        activity.set(projectId, Math.max(activity.get(projectId) ?? 0, at.getTime()));
+      };
+      for (const a of audits) bump(a.projectId, a._max.createdAt);
+      for (const r of [...releases, ...builds])
+        bump(deploymentProject.get(r.deploymentId), r._max.createdAt);
+      for (const p of projects as any[]) {
+        const created = p.createdAt ? new Date(p.createdAt).getTime() : 0;
+        const at = Math.max(activity.get(p.id) ?? 0, created);
+        p.activityAt = at ? new Date(at).toISOString() : null;
+      }
+    } catch {}
+
     const faviconByDeployment = new Map(
       (deployments as any[]).filter((d) => d.faviconUrl).map((d) => [d.id, d.faviconUrl as string])
     );

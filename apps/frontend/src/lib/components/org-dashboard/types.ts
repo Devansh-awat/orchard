@@ -83,6 +83,7 @@ export interface ProjectMeta {
 	icon?: string | null;
 	backgroundImage?: string | null;
 	owner?: { username: string | null } | null;
+	activityAt?: string | null;
 }
 
 export interface ProjectGroup {
