@@ -37,7 +37,8 @@
     "melt": "^0.42.0",
     "@blobatar/svelte": "^2.7.0",
     "blobatar": "^2.7.0",
-    "motion": "^12.38.0"
+    "motion": "^12.38.0",
+    "ansi_up": "^6.0.6"
   },
   "peerDependencies": {
     "svelte": "^5.0.0"

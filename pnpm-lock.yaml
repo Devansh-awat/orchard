@@ -738,6 +738,9 @@ importers:
       '@blobatar/svelte':
         specifier: ^2.7.0
         version: 2.7.0(blobatar@2.7.0)(svelte@5.57.0)
+      ansi_up:
+        specifier: ^6.0.6
+        version: 6.0.6
       blobatar:
         specifier: ^2.7.0
         version: 2.7.0
