@@ -179,7 +179,7 @@
 		externalRepoId: string | null;
 	} | null>(null);
 	let selectedEnvId = $state($page.url.searchParams.get('env') ?? '');
-	let githubLinked = $state(false);
+	let githubLinked = $state<boolean | null>(null);
 	let hasGitHubApp = $state(false);
 	let githubAppInstallUrl = $state<string | null>(null);
 	let repositories = $state<Repository[]>([]);
@@ -301,7 +301,7 @@
 			const response = await apiFetch('/apiv1/github/status');
 			if (response.ok) {
 				const status = await response.json();
-				githubLinked = status.linked;
+				githubLinked = !!status.linked;
 				linked = !!status.linked;
 				hasGitHubApp = (status.installations?.length ?? 0) > 0;
 			}
@@ -1206,7 +1206,7 @@
 										onDetect={(det) => applyDetection(det as DetectionResult)}
 									/>
 								{:else}
-									{#if !githubLinked}
+									{#if githubLinked === false}
 										<Alert tone="warning" title="GitHub not connected">
 											Paste owner/repo into the repository search to deploy a public repo.
 											{#snippet actions()}
