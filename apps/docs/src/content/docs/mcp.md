@@ -58,12 +58,22 @@ An OAuth connection carries one of three scopes, the same ladder API tokens use:
 | `mcp:deploy` | Everything `mcp:read` can, plus every change              |
 | `mcp:exec`   | Everything `mcp:deploy` can, plus `exec_in_pod`           |
 
-A client that asks for no scope gets `mcp:deploy`, which is also what the
-server suggests when it challenges an unauthenticated request. The older
-`mcp:access` scope means `mcp:deploy`, and connections made before scopes
-existed keep working as `mcp:deploy`. To give an agent a shell inside your
-pods, connect it with `mcp:exec` explicitly. The scope is enforced by the API
-itself, not just by which tools are listed.
+A client that asks for no scope, or for the older `mcp:access`, gets
+`mcp:exec`, and connections made before scopes existed keep everything they
+had. The consent screen shows "Also allow running commands inside containers"
+ticked; untick it to keep a connection to reading and deploying. The scope is
+enforced by the API itself, not just by which tools are listed.
+
+To hand out a narrower connection without relying on the client, add `scope`
+to the server URL. It only ever lowers what the connection gets:
+
+```
+https://mcp.your-orchard-domain/?scope=read
+https://mcp.your-orchard-domain/?scope=deploy
+```
+
+**Settings → MCP** builds this URL for you: pick toolsets and access, then copy
+the URL or a ready-made config for Claude Code, VS Code or Cursor.
 
 Clients that registered with `client_secret_post` must send their secret on
 every token request, including refreshes.
@@ -145,8 +155,9 @@ The tools cover the same ground as the dashboard:
 
 ### Toolsets
 
-Listing every tool costs an agent context before it has done anything, so the
-tools are split into toolsets and a connection only sees some of them:
+The tools are grouped into toolsets. A connection sees all of them unless its
+URL picks some, which is worth doing for an agent that only needs a few, since
+every listed tool costs context before it has done anything:
 
 | Toolset         | Covers                                                                   |
 | --------------- | ------------------------------------------------------------------------ |
@@ -161,18 +172,17 @@ tools are split into toolsets and a connection only sees some of them:
 | `templates`     | Templates and template instances                                         |
 | `dangerous`     | Every delete, plus restoring a database backup                           |
 
-The default is `core,deployments,logs,env`. Pick others with a query parameter
-on the server URL; `core` is always included:
+Every toolset, graft tools included, is on by default. To keep an agent's
+context small, list only the toolsets it needs; `core` is always included:
 
 ```
 https://mcp.your-orchard-domain/?toolsets=databases,domains
-https://mcp.your-orchard-domain/?toolsets=default,dangerous
-https://mcp.your-orchard-domain/?toolsets=all
+https://mcp.your-orchard-domain/?toolsets=deployments,logs,greenhouse
 ```
 
-Tools added by grafts appear with `all`, or when the graft's id is listed
-(`?toolsets=default,greenhouse`). The local stdio server reads the same list
-from `ORCHARD_MCP_TOOLSETS`.
+A graft's tools appear when its id is listed (`greenhouse` above), and with no
+`toolsets` at all. The local stdio server reads the same list from
+`ORCHARD_MCP_TOOLSETS`.
 
 ### Behaviour hints
 

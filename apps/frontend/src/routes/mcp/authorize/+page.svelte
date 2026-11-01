@@ -16,10 +16,10 @@
 	let requestedScope = $derived.by((): 'read' | 'deploy' | 'exec' => {
 		const raw = ($page.url.searchParams.get('scope') || '').trim().toLowerCase();
 		if (raw === 'mcp:read') return 'read';
-		if (raw === 'mcp:exec') return 'exec';
-		return 'deploy';
+		if (raw === 'mcp:deploy') return 'deploy';
+		return 'exec';
 	});
-	let allowExec = $state(false);
+	let allowExec = $state(true);
 	let grantedScope = $derived(
 		requestedScope === 'read'
 			? 'mcp:read'
@@ -352,8 +352,8 @@
 								Also allow running commands inside containers
 							</span>
 							<span class="consent-exec-hint">
-								{clientName} asked for this too. Leave it off unless you want it to run shell commands
-								in your running apps.
+								Lets {clientName} run shell commands in your running apps. Turn it off to keep it to reading
+								and deploying.
 							</span>
 						</span>
 					</label>
@@ -525,6 +525,7 @@
 		line-height: var(--lh-callout);
 		color: var(--text-muted);
 		margin: 0;
+		overflow-wrap: anywhere;
 	}
 
 	.consent-subtitle strong {
@@ -592,6 +593,7 @@
 	}
 
 	.consent-exec-hint {
+		overflow-wrap: anywhere;
 		font-size: var(--text-caption);
 		line-height: var(--lh-caption);
 		color: var(--text-muted);
@@ -645,6 +647,7 @@
 		line-height: var(--lh-footnote);
 		color: var(--text-muted);
 		margin: 0;
+		overflow-wrap: anywhere;
 	}
 
 	.consent-identity strong {

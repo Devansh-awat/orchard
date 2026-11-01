@@ -10,7 +10,7 @@ import { toNodeHandler, type NodeMcpRequestHandler } from '@modelcontextprotocol
 import { createOrchardMcpServer, type McpMode } from './server';
 import { McpOAuthService } from './mcp-oauth.service';
 import type { McpScope } from './client';
-import { DEFAULT_MCP_SCOPE, mcpScopeClaim } from './mcp-scopes';
+import { DEFAULT_MCP_SCOPE, capScope, mcpScopeClaim } from './mcp-scopes';
 
 interface McpAuthExtra {
   sub: string;
@@ -21,10 +21,10 @@ interface McpAuthExtra {
   apiToken?: boolean;
 }
 
-function toolsetsFrom(request?: Request): string | null {
+function searchParam(request: Request | undefined, name: string): string | null {
   if (!request) return null;
   try {
-    return new URL(request.url).searchParams.get('toolsets');
+    return new URL(request.url).searchParams.get(name);
   } catch {
     return null;
   }
@@ -58,8 +58,8 @@ export class McpTransportService implements OnModuleDestroy {
 
   private buildServer(ctx: McpRequestContext, mode: McpMode) {
     const extra = (ctx.authInfo?.extra ?? {}) as Partial<McpAuthExtra>;
-    const scope = extra.scope ?? DEFAULT_MCP_SCOPE;
-    const toolsets = toolsetsFrom(ctx.requestInfo);
+    const scope = capScope(extra.scope ?? DEFAULT_MCP_SCOPE, searchParam(ctx.requestInfo, 'scope'));
+    const toolsets = searchParam(ctx.requestInfo, 'toolsets');
     if (extra.apiToken) {
       return createOrchardMcpServer({ token: ctx.authInfo?.token, scope, toolsets, mode });
     }

@@ -1,6 +1,7 @@
 import type { McpScope } from './client';
 
-export const DEFAULT_MCP_SCOPE: McpScope = 'deploy';
+export const DEFAULT_MCP_SCOPE: McpScope = 'exec';
+const GATEWAY_FALLBACK_SCOPE: McpScope = 'deploy';
 
 export const MCP_SCOPES_SUPPORTED = ['mcp:read', 'mcp:deploy', 'mcp:exec', 'mcp:access'];
 
@@ -13,8 +14,8 @@ export function mcpScopeClaim(scope?: McpScope): string {
 function fromToken(token: string): McpScope | null {
   const value = token.trim().toLowerCase();
   if (value === 'mcp:read' || value === 'read') return 'read';
-  if (value === 'mcp:deploy' || value === 'deploy' || value === 'mcp:access') return 'deploy';
-  if (value === 'mcp:exec' || value === 'exec') return 'exec';
+  if (value === 'mcp:deploy' || value === 'deploy') return 'deploy';
+  if (value === 'mcp:exec' || value === 'exec' || value === 'mcp:access') return 'exec';
   return null;
 }
 
@@ -37,7 +38,7 @@ export function parseRequestedScope(raw: string | null | undefined): McpScope {
 export function grantedScope(requested: McpScope, granted: unknown): McpScope | null {
   const absent = granted === undefined || granted === null || granted === '';
   const parsed: McpScope | null = absent
-    ? 'deploy'
+    ? GATEWAY_FALLBACK_SCOPE
     : typeof granted === 'string'
       ? fromToken(granted)
       : null;
@@ -59,5 +60,10 @@ export function scopeFromApiTokenScopes(scopes: unknown): McpScope {
 
 export function scopeFromHeader(value: unknown): McpScope {
   const raw = Array.isArray(value) ? value[0] : value;
-  return fromToken(typeof raw === 'string' ? raw : '') ?? DEFAULT_MCP_SCOPE;
+  return fromToken(typeof raw === 'string' ? raw : '') ?? GATEWAY_FALLBACK_SCOPE;
+}
+
+export function capScope(granted: McpScope, cap: string | null | undefined): McpScope {
+  const limit = cap ? fromToken(cap) : null;
+  return limit && RANK[limit] < RANK[granted] ? limit : granted;
 }

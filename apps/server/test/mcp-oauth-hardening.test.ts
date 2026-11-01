@@ -10,6 +10,7 @@ import {
   verifyClientSecret
 } from '../src/mcp/mcp-oauth.helpers';
 import {
+  capScope,
   grantedScope,
   parseRequestedScope,
   scopeFromApiTokenScopes,
@@ -189,13 +190,14 @@ test('auth codes store the minted token sealed, and old plaintext rows still red
   delete process.env.SECRETS_ENCRYPTION_KEY;
 });
 
-test('requested scopes map onto read/deploy/exec, mcp:access means deploy', () => {
-  assert.equal(parseRequestedScope(undefined), 'deploy');
-  assert.equal(parseRequestedScope('mcp:access'), 'deploy');
+test('requested scopes map onto read/deploy/exec, and a client that asks for nothing specific gets everything', () => {
+  assert.equal(parseRequestedScope(undefined), 'exec');
+  assert.equal(parseRequestedScope('mcp:access'), 'exec');
   assert.equal(parseRequestedScope('mcp:read'), 'read');
+  assert.equal(parseRequestedScope('mcp:deploy'), 'deploy');
   assert.equal(parseRequestedScope('mcp:read mcp:exec'), 'exec');
-  assert.equal(parseRequestedScope('openid profile'), 'deploy');
-  assert.equal(scopeFromClaim(undefined), 'deploy');
+  assert.equal(parseRequestedScope('openid profile'), 'exec');
+  assert.equal(scopeFromClaim(undefined), 'exec');
   assert.equal(scopeFromClaim('mcp:exec'), 'exec');
   assert.equal(scopeFromApiTokenScopes(['read', 'deploy']), 'deploy');
   assert.equal(scopeFromApiTokenScopes([]), 'read');
@@ -321,10 +323,14 @@ test('consent cannot escalate past what the client requested', async () => {
     scope: 'mcp:read'
   });
   assert.deepEqual(await consent(undefined, 'mcp:exec'), {
-    requested: 'mcp:deploy',
-    scope: 'mcp:deploy'
+    requested: 'mcp:exec',
+    scope: 'mcp:exec'
   });
   assert.deepEqual(await consent(undefined, undefined), {
+    requested: 'mcp:exec',
+    scope: 'mcp:deploy'
+  });
+  assert.deepEqual(await consent('mcp:deploy', 'mcp:exec'), {
     requested: 'mcp:deploy',
     scope: 'mcp:deploy'
   });
@@ -334,7 +340,7 @@ test('consent cannot escalate past what the client requested', async () => {
   });
 });
 
-test('existing MCP tokens without a scope claim keep working as deploy', async () => {
+test('existing MCP tokens without a scope claim keep everything they had before scopes', async () => {
   const svc = new McpOAuthService(sessions as any, {} as any);
   const legacy = await new SignJWT({ type: 'mcp', sessionId: 's1' })
     .setProtectedHeader({ alg: 'HS256' })
@@ -342,7 +348,7 @@ test('existing MCP tokens without a scope claim keep working as deploy', async (
     .setExpirationTime('1h')
     .sign(secret());
   const auth = await svc.validateBearerTokenWithSub(`Bearer ${legacy}`);
-  assert.equal(auth?.scope, 'deploy');
+  assert.equal(auth?.scope, 'exec');
 });
 
 test('metadata advertises the new scopes', () => {
@@ -350,4 +356,12 @@ test('metadata advertises the new scopes', () => {
   for (const doc of [svc.getProtectedResourceMetadata(), svc.getAuthorizationServerMetadata()]) {
     assert.deepEqual(doc.scopes_supported, ['mcp:read', 'mcp:deploy', 'mcp:exec', 'mcp:access']);
   }
+});
+
+test('a scope on the MCP URL only ever lowers what the connection gets', () => {
+  assert.equal(capScope('exec', 'read'), 'read');
+  assert.equal(capScope('exec', 'mcp:deploy'), 'deploy');
+  assert.equal(capScope('read', 'exec'), 'read');
+  assert.equal(capScope('deploy', null), 'deploy');
+  assert.equal(capScope('deploy', 'nonsense'), 'deploy');
 });

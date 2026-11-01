@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { z } from 'zod4';
 import {
   DEFAULT_TOOLSETS,
+  TOOLSETS,
   SENSITIVE_META_KEY,
   TOOL_CATALOG,
   catalogServer,
@@ -141,23 +142,25 @@ test('sensitive tools are marked in _meta, the description and their results', a
   assert.equal(tools.get('get_deployment')!.config._meta, undefined);
 });
 
-test('default toolsets keep the listing small and always include core', () => {
+test('with no toolsets every tool is listed, and picking toolsets narrows it and keeps core', () => {
   const all = capture('all').tools.size;
   const defaults = capture('').tools;
-  assert.deepEqual(DEFAULT_TOOLSETS, ['core', 'deployments', 'logs', 'env']);
-  assert.ok(defaults.size < all, 'defaults list fewer tools than all');
-  assert.ok(defaults.has('find') && defaults.has('get_deployment_rollout'));
-  assert.ok(!defaults.has('create_database') && !defaults.has('delete_project'));
+  assert.deepEqual(DEFAULT_TOOLSETS, [...TOOLSETS]);
+  assert.equal(defaults.size, all);
+  assert.ok(defaults.has('create_database') && defaults.has('exec_in_pod'));
+  assert.equal(capture('default').tools.size, all);
   const dbOnly = capture('databases').tools;
   assert.ok(dbOnly.has('get_database_connection') && dbOnly.has('find'));
   assert.ok(!dbOnly.has('restart_deployment'));
 });
 
-test('parseToolsets understands all, default and graft ids', () => {
-  const all = parseToolsets('all');
-  assert.equal(all.allGrafts, true);
-  const mixed = parseToolsets('default, databases,greenhouse');
-  assert.ok(mixed.toolsets.has('databases') && mixed.toolsets.has('logs'));
+test('parseToolsets understands all, an empty list and graft ids', () => {
+  for (const raw of ['all', '', 'default']) assert.equal(parseToolsets(raw).allGrafts, true, raw);
+  const mixed = parseToolsets('logs, databases,greenhouse');
+  assert.ok(
+    mixed.toolsets.has('databases') && mixed.toolsets.has('logs') && mixed.toolsets.has('core')
+  );
+  assert.ok(!mixed.toolsets.has('domains'));
   assert.ok(mixed.grafts.has('greenhouse'));
   assert.equal(mixed.allGrafts, false);
 });

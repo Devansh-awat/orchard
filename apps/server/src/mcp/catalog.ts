@@ -15,7 +15,7 @@ export const TOOLSETS = [
 
 export type Toolset = (typeof TOOLSETS)[number];
 
-export const DEFAULT_TOOLSETS: Toolset[] = ['core', 'deployments', 'logs', 'env'];
+export const DEFAULT_TOOLSETS: Toolset[] = [...TOOLSETS];
 
 export const SENSITIVE_META_KEY = 'orchard/sensitive';
 
@@ -312,17 +312,13 @@ export function parseToolsets(raw?: string | null): ToolsetSelection {
     .split(',')
     .map((token) => token.trim().toLowerCase())
     .filter(Boolean);
-  if (tokens.length === 0) {
-    return { toolsets: new Set(DEFAULT_TOOLSETS), grafts: new Set(), allGrafts: false };
-  }
-  if (tokens.includes('all')) {
+  if (tokens.length === 0 || tokens.includes('all') || tokens.includes('default')) {
     return { toolsets: new Set(TOOLSETS), grafts: new Set(), allGrafts: true };
   }
   const toolsets = new Set<Toolset>();
   const grafts = new Set<string>();
   for (const token of tokens) {
     if ((TOOLSETS as readonly string[]).includes(token)) toolsets.add(token as Toolset);
-    else if (token === 'default') DEFAULT_TOOLSETS.forEach((set) => toolsets.add(set));
     else grafts.add(token);
   }
   toolsets.add('core');
