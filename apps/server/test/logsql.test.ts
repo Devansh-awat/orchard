@@ -4,6 +4,7 @@ import {
   LogQueryError,
   MAX_SEARCH_TERMS,
   buildClients,
+  recentFilters,
   buildContext,
   buildFilter,
   buildLevelCounts,
@@ -279,4 +280,18 @@ test('normalizeRoute collapses ids and strips query and fragment', () => {
     ['//double//7', '//double//:id']
   ];
   for (const [input, want] of cases) assert.equal(normalizeRoute(input), want, input);
+});
+
+test('recent request filters are typed, quoted and ignore junk', () => {
+  assert.equal(recentFilters(), '');
+  assert.equal(
+    recentFilters({
+      methods: ['GET', 'post', 'DROP TABLE'],
+      statusClasses: [4, 5, 9, 4],
+      path: '/a.b"c',
+      client: '203.0.113.9',
+      minMs: 1000
+    }),
+    ' method:in("GET") (status:range[400, 500) or status:range[500, 600)) path:~"/a\\\\.b\\"c" client_ip:="203.0.113.9" duration_ms:>=1000'
+  );
 });

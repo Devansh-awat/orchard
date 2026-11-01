@@ -194,8 +194,40 @@ export function buildLatencySeries(opts: AccessOptions, stepMs: number): string 
   );
 }
 
-export function buildRecent(opts: AccessOptions, n = 100): string {
-  return `${accessScope(opts)} | sort by (_time desc) | limit ${count('n', n, 2000)}`;
+export type RecentFilters = {
+  methods?: readonly string[];
+  statusClasses?: readonly number[];
+  path?: string;
+  client?: string;
+  minMs?: number;
+};
+
+const METHOD = /^[A-Z]{3,10}$/;
+
+export function recentFilters(f: RecentFilters = {}): string {
+  const parts: string[] = [];
+  const methods = (f.methods ?? []).filter((m) => METHOD.test(m));
+  if (methods.length) parts.push(`method:in(${methods.map(quote).join(', ')})`);
+  const classes = [
+    ...new Set((f.statusClasses ?? []).filter((c) => Number.isInteger(c) && c >= 1 && c <= 5))
+  ];
+  if (classes.length) {
+    parts.push(
+      `(${classes.map((c) => `status:range[${c * 100}, ${c * 100 + 100})`).join(' or ')})`
+    );
+  }
+  const path = f.path?.trim().slice(0, 200);
+  if (path) parts.push(`path:~${quote(path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))}`);
+  const client = f.client?.trim().slice(0, 64);
+  if (client) parts.push(`client_ip:=${quote(client)}`);
+  if (Number.isFinite(f.minMs) && (f.minMs ?? 0) > 0) {
+    parts.push(`duration_ms:>=${Math.min(Math.round(f.minMs!), 3_600_000)}`);
+  }
+  return parts.length ? ` ${parts.join(' ')}` : '';
+}
+
+export function buildRecent(opts: AccessOptions, n = 100, filters: RecentFilters = {}): string {
+  return `${accessScope(opts)}${recentFilters(filters)} | sort by (_time desc) | limit ${count('n', n, 2000)}`;
 }
 
 const SUSPICIOUS_PATH =

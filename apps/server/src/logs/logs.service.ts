@@ -165,7 +165,7 @@ export class LogsService {
 
   async context(
     deploymentId: string,
-    params: { at: number; pod: string; beforeMs: number; afterMs: number }
+    params: { at: number; pod?: string; beforeMs: number; afterMs: number }
   ): Promise<{ source: LogSource; entries: LogEntry[] }> {
     const scope = await this.scopeOf(deploymentId);
     try {
@@ -188,7 +188,7 @@ export class LogsService {
     const entries = liveFilter(live.entries, {
       start: params.at - params.beforeMs,
       end: params.at + params.afterMs,
-      pods: [params.pod]
+      pods: params.pod ? [params.pod] : undefined
     }).sort((a, b) => (Date.parse(a.timestamp ?? '') || 0) - (Date.parse(b.timestamp ?? '') || 0));
     return { source: 'live', entries };
   }

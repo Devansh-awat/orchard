@@ -54,7 +54,12 @@ export class LogsController {
     @Query('view') view?: string,
     @Query('start') startStr?: string,
     @Query('end') endStr?: string,
-    @Query('limit') limitStr?: string
+    @Query('limit') limitStr?: string,
+    @Query('method') methodStr?: string,
+    @Query('status') statusStr?: string,
+    @Query('path') pathStr?: string,
+    @Query('client') clientStr?: string,
+    @Query('minMs') minMsStr?: string
   ) {
     await this.assertLogAccess(id, req);
     if (!this.requests.available) {
@@ -74,7 +79,19 @@ export class LogsController {
           };
         case 'recent':
           return {
-            requests: await this.requests.recent(id, start, end, Number(limitStr) ? n : 100)
+            requests: await this.requests.recent(id, start, end, Number(limitStr) ? n : 100, {
+              methods: (methodStr ?? '')
+                .split(',')
+                .map((m) => m.trim().toUpperCase())
+                .filter(Boolean),
+              statusClasses: (statusStr ?? '')
+                .split(',')
+                .map((c) => Number.parseInt(c, 10))
+                .filter((c) => Number.isInteger(c)),
+              path: pathStr,
+              client: clientStr,
+              minMs: Number(minMsStr) || undefined
+            })
           };
         case 'clients':
           return await this.requests.clients(id, start, end, Number(limitStr) ? n : 10);
@@ -161,10 +178,14 @@ export class LogsController {
     await this.assertLogAccess(id, req);
     const at = Number(atStr) || Date.parse(atStr ?? '');
     if (!Number.isFinite(at)) throw new BadRequestException('at must be a time');
-    if (!pod) throw new BadRequestException('pod is required');
     const clamp = (v: string | undefined) =>
       Math.min(Math.max(Number(v) || 60_000, 1_000), 60 * 60 * 1000);
-    return this.logs.context(id, { at, pod, beforeMs: clamp(beforeStr), afterMs: clamp(afterStr) });
+    return this.logs.context(id, {
+      at,
+      pod: pod?.trim() || undefined,
+      beforeMs: clamp(beforeStr),
+      afterMs: clamp(afterStr)
+    });
   }
 
   @Get('deployments/:id/logs/export')

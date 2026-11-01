@@ -5,6 +5,7 @@ import {
   buildClients,
   buildLatencySeries,
   buildRecent,
+  type RecentFilters,
   buildRouteStats,
   buildSlowest,
   type AccessOptions
@@ -135,9 +136,15 @@ export class RequestsService {
     return (await this.store.query(buildSlowest(opts, n))).map(toRequest);
   }
 
-  async recent(deploymentId: string, start: number, end: number, n = 100): Promise<RequestRow[]> {
+  async recent(
+    deploymentId: string,
+    start: number,
+    end: number,
+    n = 100,
+    filters: RecentFilters = {}
+  ): Promise<RequestRow[]> {
     const opts = await this.scope(deploymentId, start, end);
-    return (await this.store.query(buildRecent(opts, n))).map(toRequest);
+    return (await this.store.query(buildRecent(opts, n, filters))).map(toRequest);
   }
 
   async clients(deploymentId: string, start: number, end: number, n = 10) {
