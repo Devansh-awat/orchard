@@ -283,6 +283,11 @@ export class SuperAdminGuard implements CanActivate {
         crossSiteDenied = true;
       }
 
+      const sessionId = payload.sessionId as string | undefined;
+      const sessionCheck = sessionId
+        ? this.sessionsService.validateSession(sessionId)
+        : Promise.resolve(false);
+      sessionCheck.catch(() => {});
       // Resolve the real DB user ID for OAuth users (where sub is a Hack Club ID, not a UUID).
       // Fall back to email if externalAuthId lookup fails — without this, a user whose
       // externalAuthId column got nulled or overwritten ends up with dbUserId = a Hack Club ID,
@@ -316,11 +321,10 @@ export class SuperAdminGuard implements CanActivate {
       // Pre-fix, JWTs without sessionId survived "Sign out everywhere" for the
       // full 7-day expiry. Every issuance path now mints with a session id;
       // any token lacking one is either pre-fix legacy or a forgery — reject.
-      const sessionId = payload.sessionId as string | undefined;
       if (!sessionId) {
         throw new UnauthorizedException('Session has been revoked');
       }
-      const sessionValid = await this.sessionsService.validateSession(sessionId);
+      const sessionValid = await sessionCheck;
       if (!sessionValid) {
         throw new UnauthorizedException('Session has been revoked');
       }

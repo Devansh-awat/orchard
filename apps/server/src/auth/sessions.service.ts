@@ -21,6 +21,8 @@ export const MCP_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 const BROWSER_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
+const TOUCH_INTERVAL_MS = 60_000;
+
 @Injectable()
 export class SessionsService {
   private readonly logger = new Logger(SessionsService.name);
@@ -167,7 +169,14 @@ export class SessionsService {
   /**
    * Update the lastActiveAt timestamp for a session.
    */
+  private readonly touchedAt = new Map<string, number>();
+
   async touchSession(sessionId: string): Promise<void> {
+    const now = Date.now();
+    const last = this.touchedAt.get(sessionId);
+    if (last !== undefined && now - last < TOUCH_INTERVAL_MS) return;
+    if (this.touchedAt.size > 20_000) this.touchedAt.clear();
+    this.touchedAt.set(sessionId, now);
     await this.prisma.session
       .update({
         where: { id: sessionId },
