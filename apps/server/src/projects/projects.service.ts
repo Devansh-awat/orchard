@@ -2100,7 +2100,7 @@ export class ProjectsService {
     };
   }
 
-  async listProjects(userId: string, orgId?: string) {
+  async listProjects(userId: string, orgId?: string, opts: { members?: boolean } = {}) {
     const where = await this.access.buildProjectAccessFilter(userId, orgId);
     if (!where) return [];
 
@@ -2109,14 +2109,23 @@ export class ProjectsService {
       include: {
         organization: { select: { id: true, name: true, slug: true } },
         owner: { select: { username: true } },
-        members: {
-          include: {
-            role: true,
-            user: {
-              select: { id: true, email: true, firstName: true, lastName: true, imageUrl: true }
-            }
-          }
-        },
+        members:
+          opts.members === false
+            ? false
+            : {
+                include: {
+                  role: true,
+                  user: {
+                    select: {
+                      id: true,
+                      email: true,
+                      firstName: true,
+                      lastName: true,
+                      imageUrl: true
+                    }
+                  }
+                }
+              },
         deployments: {
           select: {
             id: true,
@@ -2171,6 +2180,7 @@ export class ProjectsService {
           canEdit = projRole === 'admin' || projRole === 'member';
         }
       }
+      if (opts.members === false) return { ...p, icon: p.icon ?? null };
       const members = canEdit ? p.members : this.scrubMembersForViewer(p.members as any);
       return { ...p, members, icon: p.icon ?? null };
     });
@@ -2231,7 +2241,7 @@ export class ProjectsService {
       .map((m) => m.organization)
       .sort((a, b) => a.name.localeCompare(b.name));
     const [projects, deployments, databases] = await Promise.all([
-      this.listProjects(userId),
+      this.listProjects(userId, undefined, { members: false }),
       this.deployments.listDeploymentsSummary(userId),
       this.listDatabasesSummary(userId)
     ]);
@@ -2261,27 +2271,23 @@ export class ProjectsService {
     else if (isSuper) currentMember = { role: 'owner' as const, synthetic: true };
 
     const [projects, deployments, databases] = await Promise.all([
-      this.listProjects(userId, org.id),
+      this.listProjects(userId, org.id, { members: false }),
       this.deployments.listDeploymentsSummary(userId, org.id),
       this.listDatabasesSummary(userId, org.id)
     ]);
 
-    // Resolve favicon URLs in bulk so cards can point straight at R2 instead
-    // of issuing one authenticated /deployments/favicon request per card.
-    // peekFavicons never blocks on cold domains (background warm + null).
-    try {
-      const hostOf = (d: any): string | null => d?.ingresses?.[0]?.host?.split('/')[0] || null;
+    const hostOf = (d: any): string | null => d?.ingresses?.[0]?.host?.split('/')[0] || null;
+
+    const decorateFavicons = async () => {
       const hosts = deployments.map(hostOf).filter(Boolean) as string[];
       const favicons = await this.faviconService.peekFavicons(hosts);
       for (const d of deployments as any[]) {
         const h = hostOf(d);
         d.faviconUrl = h ? (favicons[h] ?? null) : null;
       }
-    } catch {
-      // favicons are decorative — never fail the overview for them
-    }
+    };
 
-    try {
+    const decorateActivity = async () => {
       const projectIds = (projects as any[]).map((p) => p.id);
       const deploymentProject = new Map<string, string>();
       for (const p of projects as any[])
@@ -2317,7 +2323,32 @@ export class ProjectsService {
         const at = Math.max(activity.get(p.id) ?? 0, created);
         p.activityAt = at ? new Date(at).toISOString() : null;
       }
-    } catch {}
+    };
+
+    const decorateBanners = async () => {
+      const candidateHosts = new Map<string, string[]>();
+      for (const p of projects as any[]) {
+        if (p.backgroundImage) continue;
+        const hosts = (p.deployments ?? [])
+          .map((d: any) => d.ingresses?.[0]?.host?.split('/')[0])
+          .filter(Boolean) as string[];
+        if (hosts.length) candidateHosts.set(p.id, hosts);
+      }
+      if (candidateHosts.size === 0) return;
+      const banners = await this.faviconService.peekBanners([...candidateHosts.values()].flat());
+      for (const p of projects as any[]) {
+        const hosts = candidateHosts.get(p.id);
+        if (!hosts) continue;
+        const found = hosts.map((h) => banners[h]).find(Boolean);
+        if (found) p.backgroundImage = found;
+      }
+    };
+
+    await Promise.all([
+      decorateFavicons().catch(() => undefined),
+      decorateActivity().catch(() => undefined),
+      decorateBanners().catch(() => undefined)
+    ]);
 
     const faviconByDeployment = new Map(
       (deployments as any[]).filter((d) => d.faviconUrl).map((d) => [d.id, d.faviconUrl as string])
@@ -2328,32 +2359,6 @@ export class ProjectsService {
         .map((d: any) => faviconByDeployment.get(d.id))
         .find(Boolean);
       if (borrowed) p.icon = borrowed;
-    }
-
-    // Auto-fill project banners from a child deployment's og:image. A banner
-    // set manually in the UI lives in project.backgroundImage and wins; we
-    // only decorate projects that have none (and never write to the DB, so
-    // clearing the manual banner falls back to the auto one).
-    try {
-      const candidateHosts = new Map<string, string[]>();
-      for (const p of projects as any[]) {
-        if (p.backgroundImage) continue;
-        const hosts = (p.deployments ?? [])
-          .map((d: any) => d.ingresses?.[0]?.host?.split('/')[0])
-          .filter(Boolean) as string[];
-        if (hosts.length) candidateHosts.set(p.id, hosts);
-      }
-      if (candidateHosts.size > 0) {
-        const banners = await this.faviconService.peekBanners([...candidateHosts.values()].flat());
-        for (const p of projects as any[]) {
-          const hosts = candidateHosts.get(p.id);
-          if (!hosts) continue;
-          const found = hosts.map((h) => banners[h]).find(Boolean);
-          if (found) p.backgroundImage = found;
-        }
-      }
-    } catch {
-      // banners are decorative too
     }
 
     return { organization: org, projects, deployments, databases, currentMember };

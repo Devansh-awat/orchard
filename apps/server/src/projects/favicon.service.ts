@@ -387,12 +387,14 @@ export class FaviconService {
     if (!this.s3Client || !this.bucketName) return null;
 
     const key = `banners/${domain}.png`;
+    let missing = false;
     try {
       if (await this.objectExists(key)) {
         const url = `${this.publicUrl}/${key}`;
         this.bannerCache.set(domain, { url, ts: Date.now() });
         return url;
       }
+      missing = true;
     } catch (err) {
       this.logger.warn(
         `peekBanner R2 lookup failed for ${domain}: ${err instanceof Error ? err.message : err}`
@@ -400,10 +402,21 @@ export class FaviconService {
     }
     // Not in R2 (or lookup failed) — fetchAndStore extracts the banner
     // alongside the favicon.
-    if (!this.pendingFetches.has(domain)) {
-      const p = this.fetchAndStore(domain, `favicons/${domain}.png`);
+    let pending = this.pendingFetches.get(domain);
+    if (!pending) {
+      pending = this.fetchAndStore(domain, `favicons/${domain}.png`);
+      const p = pending;
       this.pendingFetches.set(domain, p);
       p.catch(() => null).finally(() => this.pendingFetches.delete(domain));
+    }
+    if (missing) {
+      pending
+        .catch(() => null)
+        .finally(() => {
+          if (!this.bannerCache.has(domain)) {
+            this.bannerCache.set(domain, { url: null, ts: Date.now() });
+          }
+        });
     }
     return null;
   }
