@@ -329,8 +329,8 @@ Three-level hierarchy: **Org cap** → **Member allowance** → **Deployment req
 - Settings (`AppSettings` + `SettingsRail`): every section is a `SectionCard` of `SettingsList` rows;
   `BuilderOptions`, `UpdatesCard`, `AutoDeployCard`, `HealthChecks`, `ImageSource` replaced `AdvancedTab`.
 - Logs: see Logs in `DESIGN.md`. Builds open on `StepRail` + `BuildLog`/`BuildTerminal` (phase sections, Docker-style
-  step lines, Raw logs switch); a failure opens its step with the cause and fix from `diagnoseBuild`. On the deployment page `Anomalies` only shows `error_spike` and
-  `rollback`; everything else is already an `AlertStack` line. `?view=killed` opens the newest kill's output. The
+  step lines, Raw logs switch); a failure opens its step with the cause and fix from `diagnoseBuild`. The deployment page feeds `error_spike` and `rollback`
+  anomalies (`anomalyFeed`) into the same `AlertStack` as everything else, dismissible; the `Anomalies` card is for project pages. `?view=killed` opens the newest kill's output. The
   console keeps the pod you picked; when it disappears, `podGone`/`replacementPod` show a capsule instead of swapping.
 - `computeHealth` takes `now`; the page ticks it every 5s so a grace window can expire without new data.
 - The console's logs follow by default: the deployment log stream (`/observe/.../logs/stream`) wakes a

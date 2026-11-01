@@ -1,78 +1,26 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { Flame, RotateCcw, ShieldAlert, TriangleAlert, Activity, Database } from 'lucide-svelte';
-	import { subscribeOrgEvents, selectedOrganization } from '$lib/stores';
-	import { anomalyAge, fetchAnomalies, type Anomaly, type AnomalyScope } from './anomalies';
+	import { anomalyAge, type Anomaly, type AnomalyScope } from './anomalies';
+	import { anomalyFeed } from './anomaly-feed.svelte';
 
 	let {
 		scope,
 		hideResource = false,
 		extra = [],
-		kinds = null,
-		onLoaded
+		kinds = null
 	}: {
 		scope: AnomalyScope;
 		hideResource?: boolean;
 		extra?: Anomaly[];
 		kinds?: readonly string[] | null;
-		onLoaded?: (items: Anomaly[]) => void;
 	} = $props();
 
-	let items = $state<Anomaly[]>([]);
-	let loaded = $state(false);
-	let inflight = false;
-	let timer: ReturnType<typeof setTimeout> | null = null;
-
-	async function load() {
-		if (inflight) return;
-		inflight = true;
-		try {
-			const all = await fetchAnomalies(scope);
-			items = kinds ? all.filter((a) => kinds.includes(a.kind)) : all;
-			loaded = true;
-			onLoaded?.(items);
-		} catch {
-			/* the card simply stays as it was */
-		} finally {
-			inflight = false;
-		}
-	}
-
-	function scheduleLoad() {
-		if (timer) return;
-		timer = setTimeout(() => {
-			timer = null;
-			void load();
-		}, 600);
-	}
-
-	$effect(() => {
-		scope.id;
-		scope.kind;
-		void load();
-	});
-
-	onMount(() => {
-		const orgId = $selectedOrganization?.id;
-		const unsub = orgId
-			? subscribeOrgEvents(orgId, (ev) => {
-					if (
-						ev.type === 'deployment.changed' ||
-						ev.type === 'pod.changed' ||
-						ev.type === 'database.changed'
-					)
-						scheduleLoad();
-				})
-			: () => {};
-		const interval = setInterval(() => {
-			if (!document.hidden) void load();
-		}, 60_000);
-		return () => {
-			unsub();
-			clearInterval(interval);
-			if (timer) clearTimeout(timer);
-		};
-	});
+	const feed = anomalyFeed(
+		() => scope,
+		() => kinds
+	);
+	const items = $derived(feed.items);
+	const loaded = $derived(feed.loaded);
 
 	const icons: Record<string, typeof Flame> = {
 		oom: Flame,

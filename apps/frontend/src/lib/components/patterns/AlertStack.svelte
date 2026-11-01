@@ -2,6 +2,7 @@
 	export type StackAlertAction = {
 		label: string;
 		href?: string;
+		external?: boolean;
 		onclick?: () => void;
 		primary?: boolean;
 		loading?: boolean;
@@ -119,7 +120,7 @@
 				</p>
 				<span class="acts">
 					{#each alert.actions ?? [] as act (act.label)}
-						{#if act.href}
+						{#if act.href && act.external}
 							<Button
 								variant="secondary"
 								size="sm"
@@ -127,6 +128,8 @@
 								target="_blank"
 								rel="noopener noreferrer">{act.label}</Button
 							>
+						{:else if act.href}
+							<Button variant="secondary" size="sm" href={act.href}>{act.label}</Button>
 						{:else}
 							<Button
 								variant={act.primary ? 'primary' : 'secondary'}

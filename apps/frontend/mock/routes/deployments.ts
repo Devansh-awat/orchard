@@ -736,6 +736,20 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 						label: 'See why',
 						href: `/${o.slug}/deployments/${d.id}?tab=observe&view=killed`
 					}
+				},
+				{
+					id: `${d.id}:error_spike`,
+					kind: 'error_spike',
+					severity: 'warning',
+					resource: { kind: 'deployment', id: d.id, name: d.name },
+					title: 'is logging errors',
+					detail: `910 errors in the last hour, most often: [auth] hca failed: ActionController::InvalidAuthenticityToken (${d.crash.reason})`,
+					since: d.updatedAt,
+					href: `/${o.slug}/deployments/${d.id}`,
+					action: {
+						label: 'Errors',
+						href: `/${o.slug}/deployments/${d.id}?tab=observe&view=errors`
+					}
 				}
 			]
 		};

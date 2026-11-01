@@ -3,6 +3,7 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import type { WarningSeverity } from '$lib/utils/format';
 	import type { AlertState } from '$lib/components/notifications/alerts';
+	import { anomalyAge, type Anomaly } from '$lib/components/anomalies/anomalies';
 	import AlertStack, { type StackAlert } from '$lib/components/patterns/AlertStack.svelte';
 	import type { PodProblem, Problem } from '$health';
 	import { parseBuildkitLogs } from '$lib/utils/buildkitParser';
@@ -38,6 +39,7 @@
 		canReconnectGithub = false,
 		githubRepoUrl = '',
 		metricAlerts = [],
+		anomalies = [],
 		onGoToAlerts
 	}: {
 		buildFailed?: boolean;
@@ -55,6 +57,7 @@
 		canReconnectGithub?: boolean;
 		githubRepoUrl?: string;
 		metricAlerts?: AlertState[];
+		anomalies?: Anomaly[];
 		onGoToAlerts?: () => void;
 	} = $props();
 
@@ -62,6 +65,7 @@
 		label: string;
 		onAction?: () => void;
 		href?: string;
+		external?: boolean;
 	}
 
 	interface AlertItem {
@@ -130,6 +134,18 @@
 	const candidates = $derived.by(() => {
 		const items: AlertItem[] = [];
 
+		for (const a of anomalies) {
+			const age = anomalyAge(a.since);
+			items.push({
+				id: `anomaly:${a.id}`,
+				severity: a.severity === 'warning' ? 'warning' : 'error',
+				title: a.title.replace(/^[a-z]/, (c) => c.toUpperCase()),
+				hint: age ? `${a.detail} · ${age}` : a.detail,
+				actions: a.action ? [{ label: a.action.label, href: a.action.href }] : [],
+				animateIcon: a.severity !== 'warning'
+			});
+		}
+
 		for (const a of metricAlerts) {
 			if (a.status !== 'firing' && a.status !== 'recovering') continue;
 			items.push({
@@ -146,7 +162,7 @@
 		if (isGithubAuth) {
 			const actions: AlertAction[] = [];
 			const repo = githubRepoUrl.replace(/\.git$/, '');
-			if (repo) actions.push({ label: 'Check repo access', href: repo });
+			if (repo) actions.push({ label: 'Check repo access', href: repo, external: true });
 			if (canReconnectGithub && onReconnectGithub)
 				actions.push({ label: 'Reconnect GitHub', onAction: onReconnectGithub });
 			if (onViewLogs) actions.push({ label: 'Build logs', onAction: onViewLogs });
@@ -228,7 +244,12 @@
 			hint: alert.hint,
 			dismissible: alert.severity !== 'critical',
 			actions: alert.actions?.length
-				? alert.actions.map((act) => ({ label: act.label, href: act.href, onclick: act.onAction }))
+				? alert.actions.map((act) => ({
+						label: act.label,
+						href: act.href,
+						external: act.external,
+						onclick: act.onAction
+					}))
 				: alert.action && alert.onAction
 					? [{ label: alert.action, onclick: alert.onAction }]
 					: []

@@ -70,7 +70,7 @@
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import Checkbox from '$lib/components/ui/Checkbox.svelte';
 	import RenameModal from '$lib/components/RenameModal.svelte';
-	import Anomalies from '$lib/components/anomalies/Anomalies.svelte';
+	import { anomalyFeed } from '$lib/components/anomalies/anomaly-feed.svelte';
 	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
 	import { formatCpu as fmtCpuPreset, formatMemory as fmtMemoryPreset } from '$lib/presets';
 
@@ -1796,7 +1796,10 @@
 	}
 
 	let redirectUpdatingId = $state<string | null>(null);
-	let anomaliesShown = $state(false);
+	const anomalies = anomalyFeed(
+		() => ({ kind: 'deployment', id: deploymentId }),
+		() => ['error_spike', 'rollback']
+	);
 	async function updateRedirect(
 		ingressId: string,
 		data: { host: string; redirectTarget: string; redirectStatus: number }
@@ -3098,13 +3101,6 @@
 				/>
 			</div>
 
-			<!-- Unified alerts -->
-			<Anomalies
-				scope={{ kind: 'deployment', id: deploymentId }}
-				kinds={['error_spike', 'rollback']}
-				hideResource
-				onLoaded={(items) => (anomaliesShown = items.length > 0)}
-			/>
 			<DeploymentAlerts
 				applyError={deployment?.applyError ?? ''}
 				onRetryApply={async () => {
@@ -3129,7 +3125,8 @@
 					gotoSettings('resources');
 				}}
 				githubRepoUrl={deployment?.githubRepo ?? ''}
-				metricAlerts={anomaliesShown ? [] : metricAlerts}
+				{metricAlerts}
+				anomalies={anomalies.items}
 				onGoToAlerts={() => gotoSettings('notifications')}
 				canReconnectGithub={!!deployment?.createdBy && deployment.createdBy === $user?.id}
 				onReconnectGithub={() => {
