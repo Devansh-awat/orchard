@@ -142,10 +142,10 @@
 	.body--flush {
 		padding: 0.75rem 0 0;
 	}
-	.body > :global(.list:not(.list--inset):first-child) {
+	.body > :global(.ui-list:not(.ui-list--inset):first-child) {
 		margin-top: -0.75rem;
 	}
-	.body > :global(.list:not(.list--inset):last-child) {
+	.body > :global(.ui-list:not(.ui-list--inset):last-child) {
 		margin-bottom: -0.75rem;
 	}
 	.head:last-child .heading > :last-child {

@@ -284,7 +284,8 @@ Any list where one row can be selected while another is hovered (sidebar, settin
 Lay a component out on an explicit grid before styling it, and check it with a reticule (measured offsets, not by eye):
 
 - One padding value all round inside a card (12px for toasts and compact cards).
-- A card title sits 12px above its content (`--widget-title-gap`, `--section-title-gap`), always less than the card's padding. A corner control never pushes content down: the header takes the control's height only to centre it, and gives the overhang back below.
+- A card title sits 12px above its content (`--widget-title-gap`, `--section-title-gap`), always less than the card's padding. A header control (segmented control, stepper, capsule button) sits concentric in the corner and keeps that same 12px below its own bottom edge: content starts under the control, never tucked up beside it. Giving the overhang back below put alerts, pod rows and paragraphs a few pixels under a capsule and read as a collision every time.
+- A list or disclosure group directly under a card title starts with a rule, so the title and the first row never read as one block.
 - A shared text column: every line of text in a block starts at the same x (toast: icon at 12, text at 44).
 - Read top to bottom: title first, detail under it, even when the surface grows upward from a bottom anchor.
 - Size to content: a one-line note gets a one-line card, not a fixed minimum.
@@ -367,6 +368,60 @@ Scoped classes must not reuse legacy global names (`btn`, `card`, `badge`, `inpu
 `shadow`, `rounded`, `truncate`, `static`, `fixed`, `sticky`, `relative`, `isolate`).
 Tailwind generates real CSS for any of those it sees in markup.
 
+## Kit class names
+
+A kit root that other components select with `:global()` is namespaced `ui-*` (`ui-list`,
+`ui-menu`, `ui-popover`). Never select a generic class like `.list` across components: a pattern
+that happened to call its own root `.list` was pulled 12px up into a card title by
+`SectionCard`'s list trim.
+
+## Dark mode is for working at night
+
+- Borders are quiet: `--border-default` is `neutral-2` and `--border-strong` `neutral-4` in dark
+  (a step that reads as a hairline in light mode reads as a ring on a dark ground). High
+  contrast mode keeps its stronger borders.
+- No near-white surfaces in chrome. The active nav item is a dark `neutral-3` pill with the
+  default text colour and the accent icon (`--nav-active-icon`).
+- No gradient rims or shimmer. `--rim-glass` is a flat 7% white edge in dark.
+- A solid fill behind a glyph or text uses `--status-<tone>-solid` with `--on-solid` (`ToneTile
+  solid`, toasts, `ModalIntro solid`). Status text tokens (`--status-<tone>`) are for text, dots
+  and thin meters only; filling a tile with one gave pastel blocks and dark glyphs in dark mode.
+  The guardrail counts these (`statusTextFills`).
+
+## Problems live in one stack
+
+Everything wrong on a page (health problems, apply errors, metric alerts, error spikes, rollbacks,
+Observe findings) is a card in that page's `AlertStack`, never a banner of its own. Anything that
+isn't critical is dismissible; a dismissal lasts the session and comes back when the condition
+changes or recurs. Nothing else sits between the tabs and the content.
+
+## Facts belong to what they describe
+
+A fact (runtime, uptime, scanner, region) sits on the thing it qualifies: a `Disclosure` note, a
+`Widget` meta, the header facts line. A loose caption under a toolbar or tab bar reads as
+something left behind.
+
+## Forms stack their labels
+
+In a single-column form every field puts its label above a full-width control. Inline label and
+control rows belong in `SettingsList` only; mixing the two breaks the column.
+
+## Filter bars
+
+A view that lists events (requests, logs) filters with one row above it: a capsule `Input` for
+text, a capsule `SegmentedControl` for the one dimension everyone uses (status class), capsule
+`Dropdown`s for the rest, a removable chip for a value picked from a row (click a client to filter
+by it), and a ghost Clear that only appears while something is filtered. Filters are sent to the
+server, and live rows arriving over SSE are checked against the same filters. An empty filtered
+result says so and offers Clear.
+
+## Charts: zero is a reading, missing is a gap
+
+A value of 0 with traffic (a healthy 0% error rate) is drawn and listed; a value that is undefined
+(error rate with no requests) is left out so the chart shows a gap. `MetricPanel` treats an all-zero
+series as empty only for counts where zero means nothing happened; panels where zero is a reading
+pass `zeroIsData`.
+
 ## The vine
 
 `AsciiVine` is the only ornament in Orchard: a monospace vine drawn on a canvas at 14
@@ -410,6 +465,20 @@ below the baseline, so `overflow: hidden` cut the descenders off "g", "y" and "p
 Rows of numbers next to bars (`TopList`) share one column sized to the widest value, so a list
 of short numbers doesn't leave a wide empty gutter, and a hairline separates values from bars.
 
+Anything a person or the cluster named (app, project, domain, image reference, branch, commit,
+pod, email, path, client address) truncates or wraps on purpose; nothing grows its container.
+
+- `overflow-x: clip` does not let a flex item shrink the way `overflow: hidden` does. A clipped
+  flex item needs `min-width: 0`, and so does every flex ancestor up to the box that is sized.
+- `text-overflow` does nothing on a flex container: put the ellipsis on a block child.
+- An item in a wrapping flex row (`MetaList`, fact lines) also needs `max-width: 100%`, or a long
+  value takes a line of its own and still overflows it.
+- Truncated text carries `title` with the full value.
+- Popovers never size to their content. `Menu`/`PopoverPanel` with `sameWidth` are exactly the
+  trigger's width (12rem at least); every other menu caps at 20rem and its labels ellipsize.
+- A count like `+2` is always a control that opens the full list, never decoration.
+- Only reach for a character limit where CSS can't truncate (SVG text, native options, toast titles).
+
 ## Performance rules
 
 - Never `background-attachment: fixed`, never `backdrop-filter` on scrolling content.
@@ -437,7 +506,8 @@ space closes on a height spring; nothing vanishes and no gap jumps shut.
 | Interaction                                                | Motion                                                                                      | Where it lives                                 |
 | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------- |
 | Menu, dropdown, popover, search picker, combobox           | `snap` in from the side it opened on, `snap` out toward it                                  | `overlayMotion` (Menu, PopoverPanel, Combobox) |
-| Modal, sheet                                               | `snap` in, `settle` out, backdrop fades with it                                             | `Modal`, `Sheet`                               |
+| Modal                                                      | opacity only, `settle` in and out (no rise, no scale), backdrop fades with it              | `Modal` (`motionPopover` with `curve: 'settle'`) |
+| Sheet                                                      | `snap` in, `settle` out, backdrop fades with it                                             | `Sheet`                                        |
 | Highlight inside an open menu or listbox                   | instant, it follows pointer and keys and a spring would trail them                          | `.ui-menu-item`, `.ui-dropdown-option`         |
 | Selection moving (segmented control, tabs)                 | the indicator `glide`s to the new item, labels recolour                                     | `SegmentedControl`, `Tabs`, `UnderlineTabs`    |
 | Content swap (tab panel, segmented content, source switch) | old content leaves at once, new rises in on `glide`, the container morphs height on `glide` | `Swap`                                         |
@@ -565,5 +635,5 @@ first paint and the store removes that style element once it owns the values.
 ## Guardrail
 
 `pnpm check:design` (also runs in root `pnpm lint`). Counts hex colors, legacy token
-usage, and legacy classes in `.svelte` files against `design-baseline.json`; fails only
-on increases. After paying down debt, tighten with `pnpm check:design --update`.
+usage, legacy classes and status text tokens used as fills (`statusTextFills`) in `.svelte`
+files against `design-baseline.json`; fails only on increases. After paying down debt, tighten with `pnpm check:design --update`.

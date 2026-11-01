@@ -54,6 +54,13 @@ function countLegacyTokens(content) {
 	return (content.match(LEGACY_TOKENS) ?? []).length;
 }
 
+const STATUS_TEXT_FILLS =
+	/background(?:-color)?:\s*var\(--status-(?:success|error|warning|info|neutral|progress|deploy)\)/g;
+
+function countStatusTextFills(content) {
+	return (content.match(STATUS_TEXT_FILLS) ?? []).length;
+}
+
 function countLegacyClasses(content, file) {
 	if (file.includes(`${join('lib', 'components', 'ui')}`)) return 0;
 	let count = 0;
@@ -66,7 +73,7 @@ function countLegacyClasses(content, file) {
 }
 
 const files = walk(SRC);
-const totals = { hexColors: 0, legacyTokens: 0, legacyClasses: 0 };
+const totals = { hexColors: 0, legacyTokens: 0, legacyClasses: 0, statusTextFills: 0 };
 const perFile = new Map();
 
 for (const file of files) {
@@ -74,12 +81,14 @@ for (const file of files) {
 	const counts = {
 		hexColors: countHex(content),
 		legacyTokens: countLegacyTokens(content),
-		legacyClasses: countLegacyClasses(content, file)
+		legacyClasses: countLegacyClasses(content, file),
+		statusTextFills: countStatusTextFills(content)
 	};
 	totals.hexColors += counts.hexColors;
 	totals.legacyTokens += counts.legacyTokens;
 	totals.legacyClasses += counts.legacyClasses;
-	if (counts.hexColors || counts.legacyTokens || counts.legacyClasses) {
+	totals.statusTextFills += counts.statusTextFills;
+	if (counts.hexColors || counts.legacyTokens || counts.legacyClasses || counts.statusTextFills) {
 		perFile.set(relative(ROOT, file), counts);
 	}
 }
@@ -115,6 +124,9 @@ for (const key of Object.keys(totals)) {
 
 if (failed) {
 	console.error('\ndesign check failed: use semantic tokens (src/tokens.css), ui/ components,');
+	console.error(
+		'solid fills from --status-*-solid with --on-solid text (never a status text token),'
+	);
 	console.error('and ui/status.ts instead. See apps/frontend/DESIGN.md.');
 	process.exit(1);
 }

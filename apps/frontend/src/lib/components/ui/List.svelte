@@ -12,7 +12,13 @@
 	} = $props();
 </script>
 
-<div class="list" class:list--inset={inset} role="list" aria-label={label}>
+<div
+	class="ui-list list"
+	class:list--inset={inset}
+	class:ui-list--inset={inset}
+	role="list"
+	aria-label={label}
+>
 	{@render children()}
 </div>
 
