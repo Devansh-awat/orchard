@@ -232,8 +232,8 @@
 					>
 						<div class="gv-card-top">
 							<span class="gv-num">#{t.number}</span>
-							<span class="gv-cat-tag">{t.category.name}</span>
-							<span class="gv-cat-tag">{scopeLabel(t.scope)}</span>
+							<span class="gv-cat-tag" title={t.category.name}>{t.category.name}</span>
+							<span class="gv-cat-tag" title={scopeLabel(t.scope)}>{scopeLabel(t.scope)}</span>
 							{#if grovePriority(t.priority)}
 								<StatusBadge meta={grovePriority(t.priority)!} />
 							{/if}
@@ -519,6 +519,10 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
+		min-width: 0;
+	}
+	.gv-card-top > :global(*) {
+		flex-shrink: 0;
 	}
 
 	.gv-num {
@@ -536,6 +540,11 @@
 		background: var(--bg-sunken);
 		border-radius: var(--radius-pill);
 		padding: 0.125rem 0.5rem;
+		min-width: 0;
+		flex-shrink: 1;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.gv-pin {
