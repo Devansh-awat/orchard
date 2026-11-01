@@ -1,6 +1,14 @@
 <script lang="ts">
 	import { env } from '$env/dynamic/public';
-	import { SectionCard, SegmentedControl, Swap } from '$lib/components/ui';
+	import { SvelteSet } from 'svelte/reactivity';
+	import {
+		SectionCard,
+		SegmentedControl,
+		SettingRow,
+		SettingsList,
+		Swap,
+		ToggleRow
+	} from '$lib/components/ui';
 	import CodeBlock from '$lib/components/ui/CodeBlock.svelte';
 	import Kbd from '$lib/components/ui/Kbd.svelte';
 	import CommandSnippet from '$lib/components/ui/Snippet.svelte';
@@ -19,43 +27,91 @@
 
 	let client = $state<Client>('claude');
 
-	const claudeCodeConfig = `{
+	const TOOLSETS = [
+		{
+			id: 'deployments',
+			label: 'Deployments',
+			hint: 'Create, build, scale, restart and roll back apps'
+		},
+		{ id: 'logs', label: 'Logs', hint: 'Runtime and build logs, pods, errors, metrics and exec' },
+		{ id: 'env', label: 'Variables', hint: 'Environment variables and environments' },
+		{ id: 'databases', label: 'Databases', hint: 'Databases, credentials, backups and settings' },
+		{ id: 'domains', label: 'Domains', hint: 'Domains, services, DNS checks and protection' },
+		{ id: 'jobs', label: 'Jobs', hint: 'Scheduled and on-demand jobs and their runs' },
+		{ id: 'notifications', label: 'Notifications', hint: 'Channels, rules and deliveries' },
+		{ id: 'templates', label: 'Templates', hint: 'Templates and what was deployed from them' },
+		{ id: 'dangerous', label: 'Deletes', hint: 'Every delete, plus restoring a database backup' }
+	] as const;
+
+	const ACCESS = [
+		{ value: 'exec', label: 'Everything' },
+		{ value: 'deploy', label: 'No shell' },
+		{ value: 'read', label: 'Read only' }
+	] as const;
+
+	const ACCESS_HINT: Record<string, string> = {
+		exec: 'Reads, changes and runs commands inside your apps.',
+		deploy: 'Reads and changes things, but cannot run commands inside your apps.',
+		read: 'Looks, never changes anything.'
+	};
+
+	let toolMode = $state<'all' | 'pick'>('all');
+	const picked = new SvelteSet<string>(TOOLSETS.map((t) => t.id));
+	let access = $state<'exec' | 'deploy' | 'read'>('exec');
+
+	const serverUrl = $derived.by(() => {
+		if (!MCP_URL) return '';
+		const url = new URL(MCP_URL);
+		if (toolMode === 'pick' && picked.size < TOOLSETS.length) {
+			const ids = ['core', ...TOOLSETS.filter((t) => picked.has(t.id)).map((t) => t.id)];
+			url.searchParams.set('toolsets', ids.join(','));
+		}
+		if (access !== 'exec') url.searchParams.set('scope', access);
+		return url.toString().replace(/%2C/g, ',');
+	});
+
+	function toggle(id: string) {
+		if (picked.has(id)) picked.delete(id);
+		else picked.add(id);
+	}
+
+	const claudeCodeConfig = $derived(`{
   "mcpServers": {
     "orchard": {
       "type": "http",
-      "url": "${MCP_URL}"
+      "url": "${serverUrl}"
     }
   }
-}`;
+}`);
 
-	const vscodeConfig = `{
+	const vscodeConfig = $derived(`{
   "servers": {
     "orchard": {
       "type": "http",
-      "url": "${MCP_URL}"
+      "url": "${serverUrl}"
     }
   }
-}`;
+}`);
 
-	const cursorConfig = `{
+	const cursorConfig = $derived(`{
   "mcpServers": {
     "orchard": {
-      "url": "${MCP_URL}"
+      "url": "${serverUrl}"
     }
   }
-}`;
+}`);
 
-	const tokenConfig = `{
+	const tokenConfig = $derived(`{
   "mcpServers": {
     "orchard": {
       "type": "http",
-      "url": "${MCP_URL}",
+      "url": "${serverUrl}",
       "headers": {
         "Authorization": "Bearer orch_your_token_here"
       }
     }
   }
-}`;
+}`);
 </script>
 
 <SectionCard
@@ -63,7 +119,47 @@
 	description="Lets Claude and other AI tools manage your apps, databases, variables and networking."
 >
 	{#if MCP_URL}
-		<CommandSnippet command={MCP_URL} prompt="" label="Copy server URL" />
+		<div class="build">
+			<SettingsList>
+				<SettingRow
+					label="Tools"
+					hint={toolMode === 'all'
+						? 'Every toolset, including graft tools'
+						: `${picked.size} of ${TOOLSETS.length} toolsets, plus the basics`}
+				>
+					<SegmentedControl
+						label="Tools"
+						size="sm"
+						shape="capsule"
+						options={[
+							{ value: 'all', label: 'Everything' },
+							{ value: 'pick', label: 'Choose' }
+						]}
+						bind:value={() => toolMode, (v) => (toolMode = v as 'all' | 'pick')}
+					/>
+				</SettingRow>
+				{#if toolMode === 'pick'}
+					{#each TOOLSETS as t (t.id)}
+						<ToggleRow
+							label={t.label}
+							hint={t.hint}
+							checked={picked.has(t.id)}
+							onchange={() => toggle(t.id)}
+						/>
+					{/each}
+				{/if}
+				<SettingRow label="Access" hint={ACCESS_HINT[access]}>
+					<SegmentedControl
+						label="Access"
+						size="sm"
+						shape="capsule"
+						options={ACCESS}
+						bind:value={() => access, (v) => (access = v as 'exec' | 'deploy' | 'read')}
+					/>
+				</SettingRow>
+			</SettingsList>
+			<CommandSnippet command={serverUrl} prompt="" label="Copy server URL" />
+		</div>
 	{:else}
 		<div class="steps">
 			<p class="step">
@@ -98,7 +194,7 @@
 						Run this, then <code>/mcp</code> inside Claude Code to sign in. Or add
 						<code>.mcp.json</code> to your project.
 					</p>
-					<CommandSnippet command={`claude mcp add --transport http orchard ${MCP_URL}`} />
+					<CommandSnippet command={`claude mcp add --transport http orchard '${serverUrl}'`} />
 					<CodeBlock code={claudeCodeConfig} title=".mcp.json" />
 				{:else if client === 'vscode'}
 					<p class="step">
@@ -126,6 +222,11 @@
 {/if}
 
 <style>
+	.build {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
 	.steps {
 		display: flex;
 		flex-direction: column;
