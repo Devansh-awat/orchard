@@ -89,7 +89,8 @@
 		{@attach motionPopover({
 			closing: () => !open,
 			onClosed: finishClose,
-			from: { opacity: 0, scale: 0.96, y: 8 }
+			from: { opacity: 0, scale: 1, y: 0 },
+			curve: 'settle'
 		})}
 	>
 		{#if header || title || closable}

@@ -791,9 +791,11 @@ export function overlayMotion(isOpen: () => boolean, opts: { origin?: string } =
 
 export function motionPopover(opts: {
 	from?: { opacity?: number; scale?: number; y?: number };
+	curve?: SpringName;
 	closing: () => boolean;
 	onClosed: () => void;
 }) {
+	const curve = opts.curve ?? 'snappy';
 	const from = {
 		opacity: opts.from?.opacity ?? 0,
 		scale: opts.from?.scale ?? 0.94,
@@ -801,11 +803,7 @@ export function motionPopover(opts: {
 	};
 	return (el: Element) => {
 		const target = el as HTMLElement;
-		motion(
-			target,
-			{ opacity: [from.opacity, 1], scale: [from.scale, 1], y: [from.y, 0] },
-			'snappy'
-		);
+		motion(target, { opacity: [from.opacity, 1], scale: [from.scale, 1], y: [from.y, 0] }, curve);
 		let firstRun = true;
 		$effect(() => {
 			const closing = opts.closing();
@@ -821,14 +819,14 @@ export function motionPopover(opts: {
 				const exit = motion(
 					target,
 					{ opacity: from.opacity, scale: from.scale, y: from.y },
-					'snappy',
+					curve,
 					{ exit: true }
 				);
 				exit?.finished.then(() => {
 					if (opts.closing()) opts.onClosed();
 				});
 			} else {
-				motion(target, { opacity: 1, scale: 1, y: 0 }, 'snappy');
+				motion(target, { opacity: 1, scale: 1, y: 0 }, curve);
 			}
 		});
 	};
