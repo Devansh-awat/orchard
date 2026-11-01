@@ -3,6 +3,7 @@
 		ArrowDown,
 		Box,
 		Bug,
+		ChevronDown,
 		CircleX,
 		GitCommitHorizontal,
 		History,
@@ -11,6 +12,7 @@
 		Settings2
 	} from 'lucide-svelte';
 	import { createInfiniteQuery, createQuery } from '@tanstack/svelte-query';
+	import { SvelteSet } from 'svelte/reactivity';
 	import { queryClient } from '$lib/query';
 	import { apiFetch, selectedOrganization, subscribeOrgEvents } from '$lib/stores';
 	import { stateEcho } from '$lib/utils/motion.svelte';
@@ -50,7 +52,10 @@
 		entryBadge,
 		filterKinds,
 		flattenPages,
+		foldBuildRuns,
+		foldTitle,
 		groupEntries,
+		headline,
 		granularityFor,
 		newestAt,
 		newlyArrived,
@@ -126,7 +131,8 @@
 
 	const entries = $derived(flattenPages(timeline.data?.pages));
 	const rows = $derived(collapsePodRuns(entries));
-	const groups = $derived(groupEntries(rows, granularityFor(filter)));
+	const groups = $derived(groupEntries(foldBuildRuns(rows), granularityFor(filter)));
+	const opened = new SvelteSet<string>();
 	const loading = $derived(timeline.isPending && !timeline.data);
 	const live = $derived((ends.live && entries.find((e) => e.id === ends.live?.id)) || ends.live);
 
@@ -213,6 +219,129 @@
 	}
 </script>
 
+{#snippet row(entry: DisplayEntry)}
+	{@const badge = entryBadge(entry)}
+	{@const branch = str(entry.meta.branch)}
+	{@const sha = str(entry.meta.commitSha)}
+	{@const imageHistoryId = str(entry.meta.imageHistoryId)}
+	{@const who = actorLabel(entry)}
+	{@const verdict =
+		entry.kind === 'release' && imageHistoryId ? verdicts.get(imageHistoryId) : undefined}
+	{@const vBadge = verdict ? verdictBadge(verdict) : null}
+	<ActivityRow
+		tone={badge.kind}
+		muted={entry.kind === 'pod' || entry.kind === 'build'}
+		{@attach stateEcho(() => entry.id, { arrival: () => freshIds.has(entry.id) })}
+	>
+		{#snippet tile()}
+			{#if entry.actor}
+				<Avatar user={entry.actor} size={28} />
+			{:else}
+				<ToneTile tone={tileTone(entry)} size={28}>
+					{#if entry.kind === 'pod'}
+						<Box size={14} aria-hidden="true" />
+					{:else if entry.kind === 'error'}
+						<Bug size={14} aria-hidden="true" />
+					{:else if entry.kind === 'build' && entry.meta.buildStatus === 'failed'}
+						<CircleX size={14} aria-hidden="true" />
+					{:else if entry.kind === 'audit'}
+						<Settings2 size={14} aria-hidden="true" />
+					{:else}
+						<GitCommitHorizontal size={14} aria-hidden="true" />
+					{/if}
+				</ToneTile>
+			{/if}
+		{/snippet}
+		{#snippet title()}
+			<span
+				class="tl-title"
+				class:tl-title--mono={entry.kind === 'release' && headline(entry) === shortRef(entry)}
+				title={str(entry.meta.commitMessage) ?? entry.title}>{headline(entry)}</span
+			>
+			{#if entry.kind === 'release' && entry.meta.isActive}
+				<StatusBadge meta={statusMeta('success', 'Live')} />
+			{/if}
+			{#if vBadge}
+				<StatusBadge meta={vBadge} />
+			{:else if entry.kind === 'build'}
+				<StatusBadge meta={statusMeta(badge.kind, badge.label, badge.pulse)} />
+			{/if}
+		{/snippet}
+		{#snippet meta()}
+			{#if verdict}
+				<span
+					class="tl-clip"
+					class:tl-worse={verdict.status === 'regressed'}
+					title={verdictText(verdict)}>{verdictText(verdict)}</span
+				>
+			{:else if entry.kind === 'release' || entry.kind === 'build'}
+				{#if branch}<span>{branch}</span>{/if}
+				{#if sha}
+					{#if branch}<span aria-hidden="true">·</span>{/if}
+					{#if entry.href}
+						<a href={entry.href} target="_blank" rel="noopener noreferrer" class="tl-mono tl-link"
+							>{sha.slice(0, 7)}</a
+						>
+					{:else}<span class="tl-mono">{sha.slice(0, 7)}</span>{/if}
+				{/if}
+				{#if entry.kind === 'build' && entry.detail && badge.kind === 'error' && entry.detail !== headline(entry)}
+					<span aria-hidden="true">·</span>
+					<span class="tl-err">{entry.detail}</span>
+				{/if}
+				{#if who}
+					{#if branch || sha}<span aria-hidden="true">·</span>{/if}
+					<span>{who}</span>
+				{/if}
+			{:else if entry.kind === 'pod'}
+				<span class="tl-mono">{str(entry.meta.podName)}</span>
+				{#if entry.steps}
+					<span aria-hidden="true">·</span>
+					<span>{entry.steps.join(' → ')}</span>
+				{:else if podDetail(entry)}
+					<span aria-hidden="true">·</span>
+					<span>{podDetail(entry)}</span>
+				{/if}
+			{:else if entry.kind === 'audit'}
+				{#if entry.detail}<span class="tl-clip" title={entry.detail}>{entry.detail}</span>{/if}
+				{#if who}
+					{#if entry.detail}<span aria-hidden="true">·</span>{/if}
+					<span>{who}</span>
+				{/if}
+			{:else if entry.detail}
+				<span class="tl-err" title={entry.detail}>{entry.detail}</span>
+			{/if}
+		{/snippet}
+		{#snippet time()}<RelativeTime date={entry.at} />{/snippet}
+		{#snippet actions()}
+			{@const moment = verdict ? verdictMoment(verdict) : null}
+			{#if moment}
+				<CopyButton
+					value={momentLink($page.url, moment)}
+					label="Copy a link to this deploy's moment"
+				/>
+			{/if}
+			{#if imageHistoryId}
+				{#if !entry.meta.isActive}
+					<Button
+						variant="ghost"
+						size="sm"
+						icon={RotateCcw}
+						onclick={() => onRollback(imageHistoryId)}
+						disabled={!!rollingBackId}
+						loading={rollingBackId === imageHistoryId}>Roll back</Button
+					>
+				{/if}
+				<Button
+					variant="ghost"
+					size="sm"
+					icon={ScrollText}
+					onclick={() => onOpenLogModal(imageHistoryId)}>Logs</Button
+				>
+			{/if}
+		{/snippet}
+	</ActivityRow>
+{/snippet}
+
 <div class="tl">
 	<ReleaseCard
 		{live}
@@ -258,135 +387,52 @@
 					{#each groups as group (group.key)}
 						<ActivityGroup label={groups.length > 1 ? group.label : undefined}>
 							{#each group.entries as entry (entry.id)}
-								{@const badge = entryBadge(entry)}
-								{@const branch = str(entry.meta.branch)}
-								{@const sha = str(entry.meta.commitSha)}
-								{@const imageHistoryId = str(entry.meta.imageHistoryId)}
-								{@const who = actorLabel(entry)}
-								{@const verdict =
-									entry.kind === 'release' && imageHistoryId
-										? verdicts.get(imageHistoryId)
-										: undefined}
-								{@const vBadge = verdict ? verdictBadge(verdict) : null}
-								<ActivityRow
-									tone={badge.kind}
-									muted={entry.kind === 'pod' || entry.kind === 'build'}
-									struck={entry.kind === 'build' && entry.meta.buildStatus === 'skipped'}
-									{@attach stateEcho(() => entry.id, { arrival: () => freshIds.has(entry.id) })}
-								>
-									{#snippet tile()}
-										{#if entry.actor}
-											<Avatar user={entry.actor} size={28} />
-										{:else}
+								{#if entry.folded}
+									{@const open = opened.has(entry.id)}
+									{@const first = entry.folded[entry.folded.length - 1]}
+									{@const last = entry.folded[0]}
+									<ActivityRow tone={entryBadge(entry).kind} muted>
+										{#snippet tile()}
 											<ToneTile tone={tileTone(entry)} size={28}>
-												{#if entry.kind === 'pod'}
-													<Box size={14} aria-hidden="true" />
-												{:else if entry.kind === 'error'}
-													<Bug size={14} aria-hidden="true" />
-												{:else if entry.kind === 'build' && entry.meta.buildStatus === 'failed'}
+												{#if entry.meta.buildStatus === 'failed'}
 													<CircleX size={14} aria-hidden="true" />
-												{:else if entry.kind === 'audit'}
-													<Settings2 size={14} aria-hidden="true" />
 												{:else}
 													<GitCommitHorizontal size={14} aria-hidden="true" />
 												{/if}
 											</ToneTile>
-										{/if}
-									{/snippet}
-									{#snippet title()}
-										<span
-											class="tl-title"
-											class:tl-title--mono={entry.kind === 'release' &&
-												entry.title === shortRef(entry)}
-											title={str(entry.meta.commitMessage) ?? entry.title}>{entry.title}</span
-										>
-										{#if entry.kind === 'release' && entry.meta.isActive}
-											<StatusBadge meta={statusMeta('success', 'Live')} />
-										{/if}
-										{#if vBadge}
-											<StatusBadge meta={vBadge} />
-										{:else if entry.kind === 'build'}
-											<StatusBadge meta={statusMeta(badge.kind, badge.label, badge.pulse)} />
-										{/if}
-									{/snippet}
-									{#snippet meta()}
-										{#if verdict}
-											<span
-												class="tl-clip"
-												class:tl-worse={verdict.status === 'regressed'}
-												title={verdictText(verdict)}>{verdictText(verdict)}</span
+										{/snippet}
+										{#snippet title()}
+											<button
+												type="button"
+												class="tl-fold"
+												aria-expanded={open}
+												onclick={() => (open ? opened.delete(entry.id) : opened.add(entry.id))}
 											>
-										{:else if entry.kind === 'release' || entry.kind === 'build'}
-											{#if branch}<span>{branch}</span>{/if}
-											{#if sha}
-												{#if branch}<span aria-hidden="true">·</span>{/if}
-												{#if entry.href}
-													<a
-														href={entry.href}
-														target="_blank"
-														rel="noopener noreferrer"
-														class="tl-mono tl-link">{sha.slice(0, 7)}</a
-													>
-												{:else}<span class="tl-mono">{sha.slice(0, 7)}</span>{/if}
-											{/if}
-											{#if entry.kind === 'build' && entry.detail && badge.kind === 'error'}
-												<span aria-hidden="true">·</span>
-												<span class="tl-err">{entry.detail}</span>
-											{/if}
-											{#if who}
-												{#if branch || sha}<span aria-hidden="true">·</span>{/if}
-												<span>{who}</span>
-											{/if}
-										{:else if entry.kind === 'pod'}
-											<span class="tl-mono">{str(entry.meta.podName)}</span>
-											{#if entry.steps}
-												<span aria-hidden="true">·</span>
-												<span>{entry.steps.join(' → ')}</span>
-											{:else if podDetail(entry)}
-												<span aria-hidden="true">·</span>
-												<span>{podDetail(entry)}</span>
-											{/if}
-										{:else if entry.kind === 'audit'}
-											{#if entry.detail}<span class="tl-clip" title={entry.detail}
-													>{entry.detail}</span
-												>{/if}
-											{#if who}
-												{#if entry.detail}<span aria-hidden="true">·</span>{/if}
-												<span>{who}</span>
-											{/if}
-										{:else if entry.detail}
-											<span class="tl-err" title={entry.detail}>{entry.detail}</span>
-										{/if}
-									{/snippet}
-									{#snippet time()}<RelativeTime date={entry.at} />{/snippet}
-									{#snippet actions()}
-										{@const moment = verdict ? verdictMoment(verdict) : null}
-										{#if moment}
-											<CopyButton
-												value={momentLink($page.url, moment)}
-												label="Copy a link to this deploy's moment"
-											/>
-										{/if}
-										{#if imageHistoryId}
-											{#if !entry.meta.isActive}
-												<Button
-													variant="ghost"
-													size="sm"
-													icon={RotateCcw}
-													onclick={() => onRollback(imageHistoryId)}
-													disabled={!!rollingBackId}
-													loading={rollingBackId === imageHistoryId}>Roll back</Button
+												{foldTitle(entry)}
+												<span class="tl-fold-chev" class:tl-fold-chev--open={open}
+													><ChevronDown size={14} aria-hidden="true" /></span
 												>
+											</button>
+										{/snippet}
+										{#snippet meta()}
+											{@const a = str(first.meta.commitSha)}
+											{@const b = str(last.meta.commitSha)}
+											{#if a && b}
+												<span class="tl-mono">{a.slice(0, 7)}</span>
+												<span aria-hidden="true">to</span>
+												<span class="tl-mono">{b.slice(0, 7)}</span>
 											{/if}
-											<Button
-												variant="ghost"
-												size="sm"
-												icon={ScrollText}
-												onclick={() => onOpenLogModal(imageHistoryId)}>Logs</Button
-											>
-										{/if}
-									{/snippet}
-								</ActivityRow>
+										{/snippet}
+										{#snippet time()}<RelativeTime date={entry.at} />{/snippet}
+									</ActivityRow>
+									{#if open}
+										<div class="tl-fold-body" role="list">
+											{#each entry.folded as inner (inner.id)}{@render row(inner)}{/each}
+										</div>
+									{/if}
+								{:else}
+									{@render row(entry)}
+								{/if}
 							{/each}
 						</ActivityGroup>
 					{/each}
@@ -461,6 +507,32 @@
 	}
 	.tl-worse {
 		color: var(--status-warning);
+	}
+	.tl-fold {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		padding: 0;
+		border: none;
+		background: none;
+		color: inherit;
+		font: inherit;
+		cursor: pointer;
+	}
+	.tl-fold:hover {
+		color: var(--text-default);
+	}
+	.tl-fold-chev {
+		display: inline-flex;
+		transition: transform var(--spring-glide-duration) var(--spring-glide);
+	}
+	.tl-fold-chev--open {
+		transform: rotate(180deg);
+	}
+	.tl-fold-body {
+		display: flex;
+		flex-direction: column;
+		padding-left: 2.5rem;
 	}
 	.tl-more {
 		display: flex;

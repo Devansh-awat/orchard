@@ -14,6 +14,9 @@ import {
 	shortRef,
 	filterKinds,
 	flattenPages,
+	foldBuildRuns,
+	foldTitle,
+	headline,
 	hasBuildEntry,
 	newlyArrived,
 	newestAt,
@@ -249,7 +252,7 @@ test('build start is the earliest step timestamp and a short ref prefers the sha
 	assert.equal(humanizeStep(null), 'Starting');
 });
 
-test('sparse views group by month so a page of deploys reads as one list', () => {
+test('changes group by month, deploys by day so a long history has somewhere to land', () => {
 	const now = new Date(2026, 8, 22, 12, 0, 0).getTime();
 	const rows = [
 		entry({ id: 'a', kind: 'release', at: new Date(2026, 8, 11, 9).toISOString() }),
@@ -257,7 +260,7 @@ test('sparse views group by month so a page of deploys reads as one list', () =>
 		entry({ id: 'c', kind: 'release', at: new Date(2026, 7, 28, 9).toISOString() }),
 		entry({ id: 'd', kind: 'release', at: new Date(2025, 11, 2, 9).toISOString() })
 	];
-	assert.equal(granularityFor('deploys'), 'month');
+	assert.equal(granularityFor('deploys'), 'day');
 	assert.equal(granularityFor('changes'), 'month');
 	assert.equal(granularityFor('all'), 'day');
 	assert.equal(granularityFor('pods'), 'day');
@@ -270,4 +273,47 @@ test('sparse views group by month so a page of deploys reads as one list', () =>
 		]
 	);
 	assert.equal(groupEntries(rows, 'day', now).length, 4);
+});
+
+test('builds and deploys are titled by their commit, everything else keeps its title', () => {
+	const failed = entry({
+		id: 'f',
+		kind: 'build',
+		title: 'Build failed',
+		meta: { buildStatus: 'failed', commitMessage: 'hero v2\n\nlonger body' }
+	});
+	assert.equal(headline(failed), 'hero v2');
+	assert.equal(headline(entry({ id: 'r', kind: 'release', title: 'abc1234' })), 'abc1234');
+	assert.equal(headline(entry({ id: 'a', kind: 'audit', title: 'Env changed' })), 'Env changed');
+});
+
+test('three or more failed builds in a row fold into one, shorter runs and other rows stay', () => {
+	const build = (id: string, buildStatus: string) =>
+		entry({ id, kind: 'build', meta: { buildStatus } });
+	const rows = [
+		entry({ id: 'live', kind: 'release' }),
+		build('f1', 'failed'),
+		build('f2', 'failed'),
+		build('f3', 'failed'),
+		build('s1', 'skipped'),
+		build('s2', 'canceled'),
+		build('f4', 'failed'),
+		entry({ id: 'old', kind: 'release' })
+	];
+	const out = foldBuildRuns(rows);
+	assert.deepEqual(
+		out.map((e) => e.id),
+		['live', 'fold:f1', 's1', 's2', 'f4', 'old']
+	);
+	assert.deepEqual(
+		out[1].folded?.map((e) => e.id),
+		['f1', 'f2', 'f3']
+	);
+	assert.equal(foldTitle(out[1]), '3 builds failed');
+	const skipped = foldBuildRuns([
+		build('a', 'skipped'),
+		build('b', 'canceled'),
+		build('c', 'skipped')
+	]);
+	assert.equal(foldTitle(skipped[0]), '3 builds skipped');
 });

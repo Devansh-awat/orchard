@@ -112,7 +112,7 @@ export function groupByMonth<T extends { at: string }>(
 export type Granularity = 'day' | 'month';
 
 export function granularityFor(filter: TimelineFilter): Granularity {
-	return filter === 'deploys' || filter === 'changes' ? 'month' : 'day';
+	return filter === 'changes' ? 'month' : 'day';
 }
 
 export function groupEntries<T extends { at: string }>(
@@ -123,7 +123,49 @@ export function groupEntries<T extends { at: string }>(
 	return granularity === 'month' ? groupByMonth(entries, now) : groupByDay(entries, now);
 }
 
-export type DisplayEntry = TimelineEntry & { steps?: string[]; count?: number };
+export type DisplayEntry = TimelineEntry & {
+	steps?: string[];
+	count?: number;
+	folded?: DisplayEntry[];
+};
+
+export function headline(entry: TimelineEntry): string {
+	if (entry.kind !== 'build' && entry.kind !== 'release') return entry.title;
+	const message = entry.meta.commitMessage;
+	if (typeof message !== 'string') return entry.title;
+	return message.split('\n')[0].trim() || entry.title;
+}
+
+function foldable(entry: DisplayEntry): string | null {
+	if (entry.kind !== 'build') return null;
+	const status = entry.meta.buildStatus;
+	if (status === 'failed') return 'failed';
+	if (status === 'skipped' || status === 'canceled') return 'skipped';
+	return null;
+}
+
+export function foldBuildRuns(entries: readonly DisplayEntry[], min = 3): DisplayEntry[] {
+	const out: DisplayEntry[] = [];
+	let run: DisplayEntry[] = [];
+	const flush = () => {
+		if (run.length >= min) out.push({ ...run[0], id: `fold:${run[0].id}`, folded: run });
+		else out.push(...run);
+		run = [];
+	};
+	for (const entry of entries) {
+		const kind = foldable(entry);
+		if (run.length && (!kind || kind !== foldable(run[0]))) flush();
+		if (kind) run.push(entry);
+		else out.push(entry);
+	}
+	flush();
+	return out;
+}
+
+export function foldTitle(entry: DisplayEntry): string {
+	const n = entry.folded?.length ?? 0;
+	return foldable(entry) === 'failed' ? `${n} builds failed` : `${n} builds skipped`;
+}
 
 export function collapsePodRuns(entries: readonly TimelineEntry[]): DisplayEntry[] {
 	const out: DisplayEntry[] = [];
