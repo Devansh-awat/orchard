@@ -91,6 +91,8 @@
 
 <style>
 	.build-log {
+		position: relative;
+		isolation: isolate;
 		display: flex;
 		flex: 1 1 auto;
 		flex-direction: column;
@@ -98,8 +100,17 @@
 		border-radius: calc(var(--radius-card) * var(--corner-scale));
 		corner-shape: var(--corner);
 		background: var(--console-bg);
-		box-shadow: inset 0 0 0 1px var(--console-edge);
 		overflow: clip;
+	}
+	.build-log::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		z-index: 2;
+		border-radius: inherit;
+		corner-shape: inherit;
+		box-shadow: inset 0 0 0 1px var(--console-edge);
+		pointer-events: none;
 	}
 	.bar {
 		display: flex;

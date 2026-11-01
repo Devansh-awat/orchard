@@ -95,11 +95,16 @@ function stripPrefix(line: string): {
 	return { ts: Number(m[1]), level: m[2] as BuildMessage['level'], rest: line.slice(m[0].length) };
 }
 
-function splitStage(stageLabel: string): { stage: string; stagePos: string | null } {
+function splitStage(stageLabel: string): { stage: string | null; stagePos: string | null } {
 	// "base 1/3" → ("base", "1/3"); "internal" → ("internal", null)
-	const m = stageLabel.match(/^(.+?)\s+(\d+\/\d+)\s*$/);
-	if (m) return { stage: m[1].trim(), stagePos: m[2] };
-	return { stage: stageLabel.trim(), stagePos: null };
+	const words = stageLabel.trim().split(/\s+/);
+	if (words.length > 1 && /^[a-z0-9]+\/[a-z0-9]+/i.test(words[0]) && !/^\d+\/\d+$/.test(words[0]))
+		words.shift();
+	const last = words.at(-1) ?? '';
+	if (/^\d+\/\d+$/.test(last)) {
+		return { stage: words.slice(0, -1).join(' ') || null, stagePos: last };
+	}
+	return { stage: words.join(' ') || null, stagePos: null };
 }
 
 interface ParserState {

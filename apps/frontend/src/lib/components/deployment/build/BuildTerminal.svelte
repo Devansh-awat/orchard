@@ -7,7 +7,14 @@
 	import { formatStepDuration, type RailStep } from '$lib/components/ui/steprail';
 	import { formatDuration, type BuildStep, type ParsedBuildLogs } from '$lib/utils/buildkitParser';
 	import { isNoise, type BuildFailure, type BuildPhaseId } from '$lib/utils/build-failure';
-	import { PHASE_ORDER, buildSections, type BuildSection } from '$lib/utils/build-sections';
+	import {
+		PHASE_ORDER,
+		buildSections,
+		sectionSteps,
+		type BuildSection,
+		type StageGroup,
+		type StepItem
+	} from '$lib/utils/build-sections';
 	import { springCollapse, springRotate } from '$lib/utils/motion.svelte';
 
 	let {
@@ -65,7 +72,7 @@
 
 	function phaseInfo(section: BuildSection) {
 		const rail = phases.find((p) => p.id === section.phase);
-		const hasError = section.items.some((i) => i.kind === 'step' && i.step.status === 'error');
+		const hasError = sectionSteps(section).some((i) => i.step.status === 'error');
 		const status =
 			rail?.status ??
 			(hasError || failedPhase === section.phase ? 'failed' : running ? 'running' : 'done');
@@ -87,6 +94,12 @@
 		if (!key || key === revealed) return;
 		revealed = key;
 		if (failedStepKey) open[failedStepKey] = true;
+		for (const section of sections) {
+			for (const item of section.items) {
+				if (item.kind === 'stage' && item.stage.items.some((s) => s.key === failedStepKey))
+					closed[item.key] = false;
+			}
+		}
 		const el = scroller;
 		const content = el?.firstElementChild;
 		if (!el || !content) return;
@@ -146,6 +159,30 @@
 		return `${where}${step.command || `step ${step.id}`}`;
 	}
 
+	function stageLabel(stage: StageGroup): string {
+		if (stage.kind === 'setup') return 'Setup';
+		if (stage.kind === 'export') return 'Export';
+		return stage.name ?? 'Dockerfile';
+	}
+
+	function stageMeta(stage: StageGroup): string {
+		const parts: string[] = [];
+		if (stage.status === 'error') parts.push('Failed');
+		else if (stage.status === 'canceled') parts.push('Canceled');
+		parts.push(
+			stage.cached
+				? `${stage.cached} of ${stage.total} cached`
+				: `${stage.total} ${stage.total === 1 ? 'step' : 'steps'}`
+		);
+		if (stage.durationSec !== null && stage.status !== 'running')
+			parts.push(formatDuration(stage.durationSec));
+		return parts.join(' · ');
+	}
+
+	function posWidth(stage: StageGroup): number {
+		return Math.max(0, ...stage.items.map((i) => i.step.stagePos?.length ?? 0));
+	}
+
 	function stepLines(step: BuildStep): string[] {
 		return step.output.map((l) => l.replace(STEP_TIME_RE, ''));
 	}
@@ -188,6 +225,40 @@
 			{/if}
 		</div>
 	{/if}
+{/snippet}
+
+{#snippet stepRow(item: StepItem, grouped: boolean)}
+	{@const step = item.step}
+	{@const hasOutput = step.output.length > 0 || !!step.error}
+	{@const isOpen = !!open[item.key] && hasOutput}
+	{@const label = grouped ? step.command || `step ${step.id}` : stepLabel(step)}
+	<div class="step" data-key={item.key} data-status={step.status}>
+		<button
+			type="button"
+			class="step-head"
+			disabled={!hasOutput}
+			aria-expanded={hasOutput ? isOpen : undefined}
+			onclick={() => (open[item.key] = !open[item.key])}
+		>
+			<span class="arrow" aria-hidden="true">=&gt;</span>
+			{#if grouped && step.stagePos}<span class="pos">{step.stagePos ?? ''}</span>{/if}
+			<span class="step-label" title={label}>{label}</span>
+			<span class="step-time">
+				{#if step.status === 'error'}ERROR
+				{:else if step.status === 'canceled'}CANCELED
+				{:else if step.status === 'cached'}<span class="cached">CACHED</span>
+				{:else if step.status === 'running'}<StatusDot meta={DOT.running} label="Running" />
+				{:else if step.durationSec !== null}{formatDuration(step.durationSec)}{/if}
+			</span>
+		</button>
+		{#if isOpen}
+			<div class="output">
+				{#each stepLines(step) as line, i (i)}<p class="line line--out">{line || ' '}</p>{/each}
+				{#if step.error}<p class="line line--error">ERROR: {step.error}</p>{/if}
+			</div>
+			{#if item.key === failedStepKey}{@render fix()}{/if}
+		{/if}
+	</div>
 {/snippet}
 
 <div
@@ -237,41 +308,35 @@
 								{#if text && !isNoise(text) && !HEADING_RE.test(text)}
 									<p class="line" class:line--error={isErrorLine(item.message)}>{text}</p>
 								{/if}
-							{:else}
-								{@const step = item.step}
-								{@const hasOutput = step.output.length > 0 || !!step.error}
-								{@const isOpen = !!open[item.key] && hasOutput}
-								<div class="step" data-key={item.key} data-status={step.status}>
+							{:else if item.kind === 'stage'}
+								{@const stage = item.stage}
+								{@const stageClosed = !!closed[item.key]}
+								<div class="stage" data-kind={stage.kind} data-status={stage.status}>
 									<button
 										type="button"
-										class="step-head"
-										disabled={!hasOutput}
-										aria-expanded={hasOutput ? isOpen : undefined}
-										onclick={() => (open[item.key] = !open[item.key])}
+										class="stage-head"
+										aria-expanded={!stageClosed}
+										onclick={() => (closed[item.key] = !stageClosed)}
 									>
-										<span class="arrow" aria-hidden="true">=&gt;</span>
-										{#if step.status === 'cached'}<span class="cached">CACHED</span>{/if}
-										<span class="step-label" title={stepLabel(step)}>{stepLabel(step)}</span>
-										<span class="step-time">
-											{#if step.status === 'error'}ERROR
-											{:else if step.status === 'canceled'}CANCELED
-											{:else if step.status === 'running'}<StatusDot
-													meta={DOT.running}
-													label="Running"
-												/>
-											{:else if step.durationSec !== null && step.status !== 'cached'}{formatDuration(
-													step.durationSec
-												)}{/if}
-										</span>
+										<span
+											class="stage-chev"
+											aria-hidden="true"
+											{@attach springRotate(() => !stageClosed, { rest: 0, on: 90 })}
+											><ChevronRight size={12} /></span
+										>
+										<span class="stage-name" title={stageLabel(stage)}>{stageLabel(stage)}</span>
+										<span class="stage-meta">{stageMeta(stage)}</span>
 									</button>
-									{#if isOpen}
-										<div class="output">
-											{#each stepLines(step) as line, i (i)}<p class="line line--out">{line || ' '}</p>{/each}
-											{#if step.error}<p class="line line--error">ERROR: {step.error}</p>{/if}
+									<div class="fold" inert={stageClosed} {@attach springCollapse(() => stageClosed)}>
+										<div class="stage-steps" style:--pos-w="{posWidth(stage)}ch">
+											{#each stage.items as child (child.key)}
+												{@render stepRow(child, true)}
+											{/each}
 										</div>
-										{#if item.key === failedStepKey}{@render fix()}{/if}
-									{/if}
+									</div>
 								</div>
+							{:else}
+								{@render stepRow(item, false)}
 							{/if}
 						{/each}
 						{#if !section.items.length && info.status === 'running'}
@@ -309,7 +374,7 @@
 		flex-direction: column;
 	}
 	.section:not(:first-child) {
-		box-shadow: inset 0 1px 0 var(--console-edge);
+		border-top: 1px solid var(--console-edge);
 	}
 	.section-head {
 		position: sticky;
@@ -384,6 +449,66 @@
 	.line--error {
 		color: var(--status-error);
 	}
+	.stage:not(:first-child),
+	.stage + :not(.stage) {
+		margin-top: 0.5rem;
+	}
+	.stage-head {
+		display: grid;
+		grid-template-columns: 0.75rem minmax(0, 1fr) auto;
+		column-gap: 0.5rem;
+		align-items: center;
+		width: 100%;
+		min-height: 1.75rem;
+		padding: 0 0.375rem;
+		border-radius: 0.375rem;
+		text-align: left;
+		color: var(--text-default);
+	}
+	.stage-head:hover {
+		background: color-mix(in oklab, var(--console-bg) 90%, var(--ink));
+	}
+	.stage-head:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: -2px;
+	}
+	.stage-chev {
+		display: grid;
+		place-items: center;
+		color: var(--text-faint);
+	}
+	.stage-name {
+		min-width: 0;
+		overflow-x: clip;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+		font-weight: var(--weight-medium);
+	}
+	.stage[data-kind='setup'] .stage-name,
+	.stage[data-kind='export'] .stage-name {
+		font-family: var(--font-sans);
+		color: var(--text-muted);
+	}
+	.stage[data-status='error'] .stage-name {
+		color: var(--status-error);
+	}
+	.stage-meta {
+		font-family: var(--font-sans);
+		font-size: var(--text-footnote);
+		color: var(--text-faint);
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+	}
+	.stage-steps {
+		padding-left: 1.25rem;
+	}
+	.pos {
+		flex-shrink: 0;
+		min-width: var(--pos-w);
+		text-align: right;
+		color: var(--text-faint);
+		font-variant-numeric: tabular-nums;
+	}
 	.step-head {
 		display: flex;
 		gap: 0.5rem;
@@ -432,7 +557,6 @@
 		text-overflow: ellipsis;
 	}
 	.arrow,
-	.cached,
 	.step-time {
 		flex-shrink: 0;
 	}

@@ -18,15 +18,60 @@ import type {
 
 const BUILD_PREFIX = [
 	'=== Building image ===',
-	'#1 [internal] load build definition from Dockerfile',
-	'#1 transferring dockerfile: 812B done',
-	'#1 DONE 0.1s',
-	'#2 [internal] load metadata for docker.io/library/node:22-slim',
-	'#2 DONE 0.6s',
-	'#3 [base 1/6] FROM docker.io/library/node:22-slim@sha256:9b1f',
-	'#3 CACHED',
-	'#4 [deps 2/6] COPY package.json pnpm-lock.yaml ./',
-	'#4 CACHED'
+	'#c3a49305 [internal] load build definition from Dockerfile',
+	'#c3a49305 transferring dockerfile: 812B done',
+	'#c3a49305 DONE 0.1s',
+	'#5d0e7a12 [internal] load metadata for docker.io/library/node:22-slim',
+	'#a07b3d58 [internal] load metadata for gcr.io/distroless/nodejs22-debian12',
+	'#5d0e7a12 DONE 0.6s',
+	'#a07b3d58 DONE 0.7s',
+	'#9a41b0ce [internal] load .dockerignore',
+	'#9a41b0ce transferring context: 92B done',
+	'#9a41b0ce DONE 0.0s',
+	'#e1f7c204 [deps 1/4] FROM docker.io/library/node:22-slim@sha256:9b1f0c7e3a41',
+	'#e1f7c204 resolve docker.io/library/node:22-slim@sha256:9b1f0c7e3a41 done',
+	'#e1f7c204 CACHED',
+	'#4b2d9e61 [internal] load build context',
+	'#4b2d9e61 transferring context: 2.41MB done',
+	'#4b2d9e61 DONE 0.4s',
+	'#07c3f5aa [deps 2/4] WORKDIR /app',
+	'#07c3f5aa CACHED',
+	'#b8e2d013 [deps 3/4] COPY package.json pnpm-lock.yaml ./',
+	'#b8e2d013 CACHED',
+	'#d4a9e0b2 [runner 1/4] FROM gcr.io/distroless/nodejs22-debian12@sha256:3c41aa20b7e1',
+	'#d4a9e0b2 CACHED',
+	'#71e3c6f9 [runner 2/4] WORKDIR /app',
+	'#71e3c6f9 CACHED'
+];
+
+const BUILD_STAGES = [
+	'#6c0d4e37 [build 1/4] FROM docker.io/library/node:22-slim@sha256:9b1f0c7e3a41',
+	'#6c0d4e37 CACHED',
+	'#f2b8a4c0 [build 2/4] COPY --from=deps /app/node_modules ./node_modules',
+	'#f2b8a4c0 CACHED',
+	'#8e5c1d73 [build 3/4] COPY . .',
+	'#8e5c1d73 DONE 0.4s'
+];
+
+export const SAMPLE_BUILD_LOG = [
+	...BUILD_PREFIX,
+	'#2f6a8c91 [deps 4/4] RUN corepack enable && pnpm install --frozen-lockfile',
+	'#2f6a8c91 CACHED',
+	...BUILD_STAGES,
+	'#3e9f07b5 [build 4/4] RUN pnpm build',
+	'#3e9f07b5 4.120 vite v8.3.4 building for production...',
+	'#3e9f07b5 9.884 ✓ 1284 modules transformed.',
+	'#3e9f07b5 11.203 ✓ built in 6.81s',
+	'#3e9f07b5 DONE 11.6s',
+	'#c90a2e64 [runner 3/4] COPY --from=build /app/build ./build',
+	'#c90a2e64 DONE 0.2s',
+	'#1b7d5f08 [runner 4/4] COPY --from=build /app/package.json ./',
+	'#1b7d5f08 DONE 0.1s',
+	'#0616c67c exporting to image',
+	'#0616c67c exporting layers 0.6s done',
+	'#0616c67c writing image sha256:6f2e9a1c4b2d done',
+	'#0616c67c naming to {image} done',
+	'#0616c67c DONE 0.9s'
 ];
 
 export const BUILD_FAILURES = {
@@ -36,16 +81,17 @@ export const BUILD_FAILURES = {
 			'Build failed: process "/bin/sh -c pnpm build" did not complete successfully: exit code: 1',
 		lines: [
 			...BUILD_PREFIX,
-			'#5 [deps 3/6] RUN corepack enable && pnpm install --frozen-lockfile',
-			'#5 DONE 18.4s',
-			'#6 [build 4/6] COPY . .',
-			'#6 DONE 0.3s',
-			'#7 [build 5/6] RUN pnpm build',
-			'#7 4.120 vite v8.3.4 building for production...',
-			'#7 9.204 ✓ 1180 modules transformed.',
-			'#7 9.311 [vite:load-fallback] Could not load /app/src/lib/Chart.svelte (imported by src/routes/+page.svelte): ENOENT: no such file or directory',
-			'#7 9.402 error during build:',
-			'#7 ERROR: process "/bin/sh -c pnpm build" did not complete successfully: exit code: 1',
+			'#2f6a8c91 [deps 4/4] RUN corepack enable && pnpm install --frozen-lockfile',
+			'#2f6a8c91 12.410 Packages: +612',
+			'#2f6a8c91 18.020 Done in 9.4s',
+			'#2f6a8c91 DONE 18.4s',
+			...BUILD_STAGES,
+			'#3e9f07b5 [build 4/4] RUN pnpm build',
+			'#3e9f07b5 4.120 vite v8.3.4 building for production...',
+			'#3e9f07b5 9.204 ✓ 1180 modules transformed.',
+			'#3e9f07b5 9.311 [vite:load-fallback] Could not load /app/src/lib/Chart.svelte (imported by src/routes/+page.svelte): ENOENT: no such file or directory',
+			'#3e9f07b5 9.402 error during build:',
+			'#3e9f07b5 ERROR: process "/bin/sh -c pnpm build" did not complete successfully: exit code: 1',
 			'[ERROR] Build failed: process "/bin/sh -c pnpm build" did not complete successfully: exit code: 1'
 		]
 	},
@@ -55,13 +101,13 @@ export const BUILD_FAILURES = {
 			'Build failed: process "/bin/sh -c corepack enable && pnpm install --frozen-lockfile" did not complete successfully: exit code: 1',
 		lines: [
 			...BUILD_PREFIX,
-			'#5 [deps 3/6] RUN corepack enable && pnpm install --frozen-lockfile',
-			'#5 1.204 Lockfile is up to date, resolution step is skipped',
-			'#5 1.388 ERR_PNPM_OUTDATED_LOCKFILE  Cannot install with "frozen-lockfile" because pnpm-lock.yaml is not up to date with package.json',
-			'#5 1.389 ',
-			'#5 1.389 Failure reason:',
-			'#5 1.389 specifiers in the lockfile ({"svelte":"^5.38.0"}) don\'t match specs in package.json ({"svelte":"^5.41.2","zod":"^4.1.0"})',
-			'#5 ERROR: process "/bin/sh -c corepack enable && pnpm install --frozen-lockfile" did not complete successfully: exit code: 1'
+			'#2f6a8c91 [deps 4/4] RUN corepack enable && pnpm install --frozen-lockfile',
+			'#2f6a8c91 1.204 Lockfile is up to date, resolution step is skipped',
+			'#2f6a8c91 1.388 ERR_PNPM_OUTDATED_LOCKFILE  Cannot install with "frozen-lockfile" because pnpm-lock.yaml is not up to date with package.json',
+			'#2f6a8c91 1.389 ',
+			'#2f6a8c91 1.389 Failure reason:',
+			'#2f6a8c91 1.389 specifiers in the lockfile ({"svelte":"^5.38.0"}) don\'t match specs in package.json ({"svelte":"^5.41.2","zod":"^4.1.0"})',
+			'#2f6a8c91 ERROR: process "/bin/sh -c corepack enable && pnpm install --frozen-lockfile" did not complete successfully: exit code: 1'
 		]
 	},
 	dockerfile: {
@@ -80,14 +126,18 @@ export const BUILD_FAILURES = {
 			'Build failed: process "/bin/sh -c npx tsc && npm prune --omit=dev" did not complete successfully: exit code: 2',
 		lines: [
 			...BUILD_PREFIX,
-			'#5 [build 3/6] RUN npm ci',
-			'#5 DONE 7.9s',
-			'#6 [build 4/6] COPY src ./src',
-			'#6 DONE 0.0s',
-			'#7 [build 5/6] RUN npx tsc && npm prune --omit=dev',
-			"#7 3.512 src/slack.ts(41,9): error TS2322: Type 'string | undefined' is not assignable to type 'string'.",
-			'#7 3.513 src/queue.ts(12,3): error TS2554: Expected 2 arguments, but got 1.',
-			'#7 ERROR: process "/bin/sh -c npx tsc && npm prune --omit=dev" did not complete successfully: exit code: 2'
+			'#2f6a8c91 [deps 4/4] RUN npm ci',
+			'#2f6a8c91 DONE 7.9s',
+			'#6c0d4e37 [build 1/4] FROM docker.io/library/node:22-slim@sha256:9b1f0c7e3a41',
+			'#6c0d4e37 CACHED',
+			'#f2b8a4c0 [build 2/4] COPY --from=deps /app/node_modules ./node_modules',
+			'#f2b8a4c0 DONE 1.1s',
+			'#8e5c1d73 [build 3/4] COPY src ./src',
+			'#8e5c1d73 DONE 0.0s',
+			'#3e9f07b5 [build 4/4] RUN npx tsc && npm prune --omit=dev',
+			"#3e9f07b5 3.512 src/slack.ts(41,9): error TS2322: Type 'string | undefined' is not assignable to type 'string'.",
+			'#3e9f07b5 3.513 src/queue.ts(12,3): error TS2554: Expected 2 arguments, but got 1.',
+			'#3e9f07b5 ERROR: process "/bin/sh -c npx tsc && npm prune --omit=dev" did not complete successfully: exit code: 2'
 		]
 	},
 	branch: {
@@ -119,33 +169,19 @@ const PHASES: { step: BuildStep; ms: number; lines: string[] }[] = [
 	},
 	{
 		step: 'building',
-		ms: 8_000,
-		lines: [
-			...BUILD_PREFIX,
-			'#5 [deps 3/6] RUN corepack enable && pnpm install --frozen-lockfile',
-			'#5 12.410 Packages: +612',
-			'#5 18.020 Done in 9.4s',
-			'#5 DONE 18.4s',
-			'#6 [build 4/6] COPY . .',
-			'#6 DONE 0.3s',
-			'#7 [build 5/6] RUN pnpm build',
-			'#7 4.120 vite v8.3.4 building for production...',
-			'#7 9.884 ✓ 1284 modules transformed.',
-			'#7 11.203 ✓ built in 6.81s',
-			'#7 DONE 11.6s',
-			'#8 [runtime 6/6] COPY --from=build /app/build ./build',
-			'#8 DONE 0.2s',
-			'#9 exporting to image',
-			'#9 DONE 0.9s'
-		]
+		ms: 13_000,
+		lines: SAMPLE_BUILD_LOG
 	},
 	{
 		step: 'pushing',
 		ms: 3_000,
 		lines: [
-			'#9 pushing layers 3.1MB / 41.8MB',
-			'#9 pushing layers 41.8MB / 41.8MB done',
-			'#9 pushing manifest for {image} done'
+			'[pusher] build done, pushing {image}',
+			'Getting image source signatures',
+			'Copying blob sha256:3b1f0c7e9a41 skipped: already exists',
+			'Copying blob sha256:a91f0c3e5d0e',
+			'Copying config sha256:6f2e9a1c4b2d',
+			'Writing manifest to image destination'
 		]
 	},
 	{
@@ -587,7 +623,7 @@ export class Store {
 			this.appendLog(d, b, [
 				...PHASES[0].lines,
 				...PHASES[1].lines,
-				...PHASES[2].lines.slice(0, 6)
+				...PHASES[2].lines.slice(0, 32)
 			]);
 			this.schedule(`build:${d.id}`, 6_000, () => this.enterPhase(d, b, PHASES[3]));
 			this.schedule(`build:${d.id}`, 9_000, () => this.enterPhase(d, b, PHASES[4]));

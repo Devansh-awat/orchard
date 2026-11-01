@@ -4,7 +4,7 @@ import type { MockContext } from '../plugin.ts';
 import { STREAMING, notFound, reply, type Router } from '../router.ts';
 import { openStream, writeMessage } from '../events.ts';
 import { creator, deploymentSummary, ingress } from '../serialize.ts';
-import { BUILD_FAILURES, type BuildFailureKind, type Store } from '../store.ts';
+import { BUILD_FAILURES, SAMPLE_BUILD_LOG, type BuildFailureKind, type Store } from '../store.ts';
 import type { MockDeployment } from '../types.ts';
 import {
 	POD_SCENARIOS,
@@ -667,18 +667,7 @@ export function deploymentRoutes(r: Router, { store }: MockContext) {
 		const b = store.state.builds.find((x) => x.id === params.hid);
 		if (!b) return notFound();
 		return {
-			logs:
-				b.logs ||
-				[
-					'#1 [internal] load build definition from Dockerfile',
-					'#1 DONE 0.1s',
-					'#2 [deps 2/5] RUN pnpm install --frozen-lockfile',
-					'#2 CACHED',
-					'#3 [build 3/5] RUN pnpm build',
-					'#3 DONE 14.2s',
-					`#4 exporting to image ${b.image}`,
-					'#4 DONE 3.8s'
-				].join('\n')
+			logs: b.logs || SAMPLE_BUILD_LOG.map((l) => l.replaceAll('{image}', b.image)).join('\n')
 		};
 	});
 	const BINDINGS = new Map<string, Record<string, unknown>[]>();
