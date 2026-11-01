@@ -317,3 +317,20 @@ test('three or more failed builds in a row fold into one, shorter runs and other
 	]);
 	assert.equal(foldTitle(skipped[0]), '3 builds skipped');
 });
+
+test('rows that arrive out of order never split a day into two groups with the same key', () => {
+	const now = new Date(2026, 9, 31, 22, 0, 0).getTime();
+	const rows = [
+		entry({ id: 'a', kind: 'release', at: new Date(2026, 9, 19, 12).toISOString() }),
+		entry({ id: 'b', kind: 'release', at: new Date(2026, 9, 18, 12).toISOString() }),
+		entry({ id: 'c', kind: 'build', at: new Date(2026, 9, 19, 9).toISOString() })
+	];
+	const groups = groupEntries(rows, 'day', now);
+	assert.deepEqual(
+		groups.map((g) => [g.key, g.entries.map((e) => e.id)]),
+		[
+			['2026-10-19', ['a', 'c']],
+			['2026-10-18', ['b']]
+		]
+	);
+});

@@ -41,7 +41,9 @@
 	let focused = $state(false);
 	let leaveTimer: ReturnType<typeof setTimeout> | undefined;
 
-	const all = $derived([...alerts].sort((a, b) => RANK[a.tone] - RANK[b.tone]));
+	const all = $derived(
+		[...new Map(alerts.map((a) => [a.id, a])).values()].sort((a, b) => RANK[a.tone] - RANK[b.tone])
+	);
 	const sorted = $derived.by((): StackAlert[] => {
 		if (all.length <= LIMIT) return all;
 		const rest = all.slice(LIMIT - 1);

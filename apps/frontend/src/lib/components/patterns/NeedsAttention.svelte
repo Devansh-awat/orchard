@@ -16,7 +16,7 @@
 {#if items.length > 0}
 	<Widget {title}>
 		<div class="rows">
-			{#each items as item (item.label)}
+			{#each items as item (item.href)}
 				<a
 					class="row"
 					class:row--arriving={arriving.includes(item.label)}

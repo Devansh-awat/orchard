@@ -75,14 +75,14 @@ export function groupByDay<T extends { at: string }>(
 	entries: readonly T[],
 	now: number = Date.now()
 ): DayGroup<T>[] {
-	const groups: DayGroup<T>[] = [];
+	const groups = new Map<string, DayGroup<T>>();
 	for (const entry of entries) {
 		const key = dayKey(new Date(entry.at));
-		const last = groups[groups.length - 1];
-		if (last && last.key === key) last.entries.push(entry);
-		else groups.push({ key, label: dayLabel(entry.at, now), entries: [entry] });
+		const group = groups.get(key);
+		if (group) group.entries.push(entry);
+		else groups.set(key, { key, label: dayLabel(entry.at, now), entries: [entry] });
 	}
-	return groups;
+	return [...groups.values()];
 }
 
 export function monthLabel(at: string, now: number = Date.now()): string {
@@ -98,15 +98,15 @@ export function groupByMonth<T extends { at: string }>(
 	entries: readonly T[],
 	now: number = Date.now()
 ): DayGroup<T>[] {
-	const groups: DayGroup<T>[] = [];
+	const groups = new Map<string, DayGroup<T>>();
 	for (const entry of entries) {
 		const d = new Date(entry.at);
 		const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-		const last = groups[groups.length - 1];
-		if (last && last.key === key) last.entries.push(entry);
-		else groups.push({ key, label: monthLabel(entry.at, now), entries: [entry] });
+		const group = groups.get(key);
+		if (group) group.entries.push(entry);
+		else groups.set(key, { key, label: monthLabel(entry.at, now), entries: [entry] });
 	}
-	return groups;
+	return [...groups.values()];
 }
 
 export type Granularity = 'day' | 'month';
