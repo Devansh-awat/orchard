@@ -1,6 +1,7 @@
 import { preloadCode } from '$app/navigation';
 import { queryClient } from '$lib/query';
 import { projectDetailQueryOptions } from '$lib/stores/project-context';
+import { prefetchGitHubRepos } from '$lib/queries/github';
 
 export type NewKind = 'github' | 'deployment' | 'database' | 'job' | 'project';
 
@@ -37,4 +38,5 @@ export function preloadNew(orgSlug: string, projectSlug: string | null) {
 		void preloadCode(newHref(kind, orgSlug, projectSlug).split('?')[0]).catch(() => {});
 	}
 	if (projectSlug) void queryClient.prefetchQuery(projectDetailQueryOptions(orgSlug, projectSlug));
+	void prefetchGitHubRepos();
 }

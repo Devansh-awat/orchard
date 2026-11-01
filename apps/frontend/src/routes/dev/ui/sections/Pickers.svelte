@@ -130,6 +130,8 @@
 		'hackclub/arcade-leaderboard'
 	].map((r, i) => ({ value: r, label: r, description: i % 3 === 0 ? 'Private' : undefined }));
 	let pickRepo = $state('orpheus/terra');
+	let remoteRepo = $state('');
+	let remoteQuery = $state('');
 	let pickEnv = $state('production');
 </script>
 
@@ -251,7 +253,7 @@
 
 <SectionCard
 	title="Pickers that look alike"
-	description="Choosing a project, an environment, an account or a repo is one kind of control: a SelectTrigger that opens the shared floating list. Long lists add a search field at the top of the same panel with SearchPicker."
+	description="Choosing a project, an environment, an account or a repo is one kind of control: a SelectTrigger that opens the shared floating list. Long lists add a search field at the top of the same panel with SearchPicker; lists searched on the server pass searching while a query is in flight."
 >
 	<div class="flex flex-wrap items-center gap-3">
 		<Menu placement="bottom-start" size="lg">
@@ -269,6 +271,17 @@
 			prefix="Repository"
 			searchPlaceholder="Search repositories"
 			creatable
+			width="22rem"
+		>
+			{#snippet optionLeading()}<Github size={15} />{/snippet}
+		</SearchPicker>
+		<SearchPicker
+			options={PICK_REPOS}
+			bind:value={remoteRepo}
+			bind:query={remoteQuery}
+			searching={!!remoteQuery.trim()}
+			placeholder="Searched on the server"
+			searchPlaceholder="Type to search"
 			width="22rem"
 		>
 			{#snippet optionLeading()}<Github size={15} />{/snippet}

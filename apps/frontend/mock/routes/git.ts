@@ -1,5 +1,5 @@
 import type { MockContext } from '../plugin.ts';
-import { notFound, type Router } from '../router.ts';
+import { notFound, reply, type Router } from '../router.ts';
 
 type Profile = {
 	framework: string | null;
@@ -218,6 +218,37 @@ const REPOS: Repo[] = [
 	}
 ];
 
+const MORE_HACKCLUB = [
+	'hackatime',
+	'sprig',
+	'hcb',
+	'summer-of-making',
+	'blot',
+	'jams',
+	'shipwrecked',
+	'neighborhood',
+	'highway',
+	'scrapbook',
+	'toolbox',
+	'onboard',
+	'arcade',
+	'hackathons',
+	'dinosaurbbq',
+	'pizza-grant'
+];
+
+REPOS.push(
+	...MORE_HACKCLUB.map((name, i) => ({
+		owner: 'hackclub',
+		name,
+		private: i % 3 === 1,
+		defaultBranch: 'main',
+		branches: ['main'],
+		updated: 6 + i * 3,
+		profile: NEXT
+	}))
+);
+
 const DAY = 86_400_000;
 const fullName = (r: Repo) => `${r.owner}/${r.name}`;
 const find = (owner: string, name: string) =>
@@ -340,6 +371,39 @@ export function gitRoutes(r: Router, _ctx: MockContext) {
 			githubRow(x, REPOS.indexOf(x))
 		)
 	}));
+
+	r.get('/github/repositories/search', async ({ query }) => {
+		const account = query.get('account') ?? '';
+		const inst = INSTALLATIONS.find((i) => i.accountLogin.toLowerCase() === account.toLowerCase());
+		if (!inst) {
+			return reply(404, {
+				statusCode: 404,
+				code: 'github_account_not_installed',
+				message: 'The GitHub App is not installed on that account.'
+			});
+		}
+		const q = (query.get('q') ?? '').trim().toLowerCase();
+		await new Promise((resolve) => setTimeout(resolve, q ? 450 : 120));
+		const terms = q.split(/\s+/).filter((t) => t && !t.includes(':'));
+		const words = (name: string) => name.toLowerCase().split(/[-_.]/);
+		const repositories = REPOS.filter(
+			(x) =>
+				x.owner === inst.accountLogin &&
+				terms.every((t) => words(x.name).some((w) => w.startsWith(t)))
+		)
+			.toSorted((a, b) => a.updated - b.updated)
+			.slice(0, 20)
+			.map((x) => {
+				const row = githubRow(x, REPOS.indexOf(x));
+				return {
+					...row,
+					pushed_at: row.updated_at,
+					installationId: inst.installationId,
+					accountLogin: inst.accountLogin
+				};
+			});
+		return { account: inst.accountLogin, query: terms.join(' '), repositories };
+	});
 
 	r.get('/github/repositories/:owner/:repo/branches', ({ params }) => {
 		const repo = find(params.owner, params.repo);

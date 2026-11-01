@@ -2,6 +2,7 @@
 	import { Building2, ExternalLink, Plus } from 'lucide-svelte';
 	import { Button, List, ListRow, SectionCard, Skeleton, ToneTile } from '$lib/components/ui';
 	import GitHostMark from '$lib/components/ui/GitHostMark.svelte';
+	import { installationSettingsUrl } from '$lib/queries/github';
 
 	interface GitHubInstallation {
 		id: string;
@@ -37,12 +38,6 @@
 	const showAccess = $derived(
 		githubLinked && !githubTokenExpired && (githubInstallations.length > 0 || !!githubAppInstallUrl)
 	);
-
-	function manageUrl(inst: GitHubInstallation) {
-		return inst.accountType === 'Organization'
-			? `https://github.com/organizations/${inst.accountLogin}/settings/installations/${inst.installationId}`
-			: `https://github.com/settings/installations/${inst.installationId}`;
-	}
 </script>
 
 <SectionCard title="GitHub" description="Deploy from your repositories">
@@ -121,7 +116,7 @@
 								size="sm"
 								variant="ghost"
 								iconRight={ExternalLink}
-								href={manageUrl(inst)}
+								href={installationSettingsUrl(inst)}
 								target="_blank"
 								rel="noopener noreferrer">Manage</Button
 							>

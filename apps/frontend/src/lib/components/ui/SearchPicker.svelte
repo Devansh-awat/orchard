@@ -16,6 +16,7 @@
 		prefix = undefined,
 		searchPlaceholder = 'Search',
 		loading = false,
+		searching = false,
 		filter = true,
 		creatable = false,
 		createLabel = (q: string) => `Use “${q}”`,
@@ -42,6 +43,7 @@
 		prefix?: string;
 		searchPlaceholder?: string;
 		loading?: boolean;
+		searching?: boolean;
 		filter?: boolean;
 		creatable?: boolean;
 		createLabel?: (q: string) => string;
@@ -168,6 +170,7 @@
 		/>
 	{/snippet}
 	{#snippet children({ close })}
+		{#snippet searchSpinner()}<Spinner size={14} label="Searching" />{/snippet}
 		<div class="head">
 			<Input
 				bind:element={search}
@@ -175,6 +178,7 @@
 				icon={Search}
 				size="sm"
 				placeholder={searchPlaceholder}
+				suffix={searching ? searchSpinner : undefined}
 				autocomplete="off"
 				spellcheck="false"
 				role="combobox"

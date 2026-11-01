@@ -29,6 +29,16 @@
 	import GitSourcePane from '$lib/components/deployment/GitSourcePane.svelte';
 	import FrameworkIcon from '$lib/components/deployment/FrameworkIcon.svelte';
 	import { createQuery } from '@tanstack/svelte-query';
+	import { queryClient } from '$lib/query';
+	import {
+		defaultAccount,
+		githubStatusQueryOptions,
+		installationSettingsUrl,
+		rememberAccount,
+		repoSearchQueryOptions,
+		RepoSearchError,
+		type GitHubInstallationSummary
+	} from '$lib/queries/github';
 	import ResourcePicker, {
 		quotaMeQuery,
 		resourcesNote as describeResources
@@ -180,16 +190,13 @@
 	} | null>(null);
 	let selectedEnvId = $state($page.url.searchParams.get('env') ?? '');
 	let githubLinked = $state<boolean | null>(null);
-	let hasGitHubApp = $state(false);
+	let installations = $state<GitHubInstallationSummary[]>([]);
 	let githubAppInstallUrl = $state<string | null>(null);
-	let repositories = $state<Repository[]>([]);
 	let branches = $state<Branch[]>([]);
 	let dockerfiles = $state<string[]>([]);
-	let loadingRepos = $state(false);
 	let loadingBranches = $state(false);
 	let loadingDockerfiles = $state(false);
 	let detectRun = 0;
-	let reposError = $state<string | null>(null);
 
 	let selectedRepo = $state<Repository | null>(null);
 	let selectedBranch = $state<Branch | null>(null);
@@ -284,37 +291,16 @@
 		}
 	}
 
-	let reposRequested = false;
-
 	async function checkGitHubStatus() {
-		const reposEarly =
-			deploymentSource === 'github'
-				? apiFetch('/apiv1/github/repositories').catch(() => null)
-				: null;
-		if (reposEarly) {
-			reposRequested = true;
-			loadingRepos = true;
-		}
 		const installEarly = apiFetch('/apiv1/github/app/install').catch(() => null);
-		let linked = false;
 		try {
-			const response = await apiFetch('/apiv1/github/status');
-			if (response.ok) {
-				const status = await response.json();
-				githubLinked = !!status.linked;
-				linked = !!status.linked;
-				hasGitHubApp = (status.installations?.length ?? 0) > 0;
-			}
+			const status = await queryClient.fetchQuery(githubStatusQueryOptions());
+			githubLinked = !!status.linked && !status.tokenExpired;
+			installations = status.installations ?? [];
+			if (!selectedAccount) selectedAccount = defaultAccount(installations);
 		} catch (e) {
 			console.error('Failed to check GitHub status:', e);
-		}
-		if (reposEarly) {
-			if (linked) {
-				fetchRepositories(reposEarly);
-			} else {
-				reposRequested = false;
-				loadingRepos = false;
-			}
+			githubLinked = false;
 		}
 		try {
 			const installRes = await installEarly;
@@ -324,30 +310,6 @@
 			}
 		} catch (e) {
 			console.error('Failed to check GitHub status:', e);
-		}
-	}
-
-	async function fetchRepositories(early?: Promise<Response | null>) {
-		reposRequested = true;
-		loadingRepos = true;
-		reposError = null;
-		try {
-			const response = (await early) ?? (await apiFetch('/apiv1/github/repositories'));
-			if (response.ok) {
-				const data = await response.json();
-				repositories = Array.isArray(data) ? data : (data.repositories ?? []);
-				if (data.source === 'app') {
-					hasGitHubApp = true;
-				}
-			} else {
-				const body = await response.json().catch(() => null);
-				reposError = body?.message || 'Could not load your repositories.';
-			}
-		} catch (e) {
-			console.error('Failed to fetch repositories:', e);
-			reposError = 'Could not load your repositories.';
-		} finally {
-			loadingRepos = false;
 		}
 	}
 
@@ -594,10 +556,12 @@
 
 	function selectAccount(login: string) {
 		selectedAccount = login;
+		rememberAccount(login);
 	}
 
 	function selectRepo(repo: Repository) {
 		selectedAccount = repo.full_name.split('/')[0];
+		rememberAccount(selectedAccount);
 		selectedRepo = repo;
 		repoUrl = repo.clone_url;
 		repoSearch = repo.full_name;
@@ -939,13 +903,6 @@
 		}
 	}
 
-	$effect(() => {
-		if (deploymentSource === 'github' && githubLinked && !reposRequested) {
-			if (repositories.length === 0) fetchRepositories();
-			else reposRequested = true;
-		}
-	});
-
 	onMount(() => {
 		deploymentSource = initialSource;
 		checkGitHubStatus();
@@ -967,45 +924,105 @@
 	});
 
 	let selectedAccount = $state<string | null>(null);
-	let accountAutoSet = false;
-
-	const accounts = $derived.by(() => {
-		const counts = new Map<string, number>();
-		for (const r of repositories) {
-			const owner = r.full_name.split('/')[0];
-			counts.set(owner, (counts.get(owner) ?? 0) + 1);
-		}
-		return Array.from(counts.entries())
-			.map(([login, count]) => ({ login, count }))
-			.sort((a, b) => b.count - a.count || a.login.localeCompare(b.login));
-	});
+	let debouncedQuery = $state('');
 
 	$effect(() => {
-		const first = accounts[0]?.login;
-		if (!first || accountAutoSet) return;
-		accountAutoSet = true;
-		if (!selectedAccount) selectedAccount = first;
+		const typed = repoQuery.trim();
+		if (!typed) {
+			debouncedQuery = '';
+			return;
+		}
+		const timer = setTimeout(() => (debouncedQuery = typed), 200);
+		return () => clearTimeout(timer);
 	});
 
-	const filteredRepos = $derived.by(() => {
-		const q = repoQuery.trim().toLowerCase();
-		return repositories.filter((r) => {
-			if (q && !r.full_name.toLowerCase().includes(q)) return false;
-			if (q.includes('/')) return true;
-			return !selectedAccount || r.full_name.split('/')[0] === selectedAccount;
-		});
+	const accounts = $derived(installations.map((i) => ({ login: i.accountLogin })));
+	const searchInstallation = $derived(
+		installations.find((i) => i.accountLogin === selectedAccount) ??
+			installations.find((i) => i.accountLogin === defaultAccount(installations)) ??
+			null
+	);
+	const searchTarget = $derived.by(() => {
+		const parsed = parseRepoInput(debouncedQuery);
+		if (parsed) {
+			const owner = installations.find(
+				(i) => i.accountLogin.toLowerCase() === parsed.owner.toLowerCase()
+			);
+			return owner ? { account: owner.accountLogin, q: parsed.repo } : null;
+		}
+		return searchInstallation
+			? { account: searchInstallation.accountLogin, q: debouncedQuery }
+			: null;
+	});
+	const targetInstallation = $derived(
+		installations.find((i) => i.accountLogin === searchTarget?.account) ?? null
+	);
+	const repoResults = createQuery(() => {
+		const options = repoSearchQueryOptions(searchTarget?.account ?? '', searchTarget?.q ?? '');
+		return {
+			...options,
+			enabled: deploymentSource === 'github' && githubLinked === true && !!searchTarget,
+			placeholderData: (
+				previous: Awaited<ReturnType<typeof options.queryFn>> | undefined,
+				previousQuery?: { queryKey: readonly unknown[] }
+			) => (previousQuery?.queryKey[1] === options.queryKey[1] ? previous : undefined)
+		};
+	});
+
+	function matchesTyped(fullName: string, typed: string) {
+		const parsed = parseRepoInput(typed);
+		const name = fullName.toLowerCase();
+		if (parsed) return name.startsWith(`${parsed.owner}/${parsed.repo}`.toLowerCase());
+		const words = (name.split('/')[1] ?? name).split(/[^a-z0-9]+/);
+		return typed
+			.toLowerCase()
+			.split(/[^a-z0-9]+/)
+			.filter(Boolean)
+			.every((term) => words.some((word) => word.startsWith(term)));
+	}
+
+	const typedQuery = $derived(repoQuery.trim());
+	const repoSettled = $derived(!repoResults.isPlaceholderData && typedQuery === debouncedQuery);
+	const repoSearching = $derived(
+		!!typedQuery && !!searchTarget && (!repoSettled || repoResults.isFetching)
+	);
+	const reposLoading = $derived(
+		githubLinked === null || (!repoResults.data && repoResults.isFetching)
+	);
+	const searchError = $derived(
+		repoResults.error instanceof RepoSearchError
+			? repoResults.error
+			: repoResults.error
+				? new RepoSearchError('Could not search your repositories.', null, null)
+				: null
+	);
+	const listedRepos = $derived.by((): Repository[] => {
+		const found = searchTarget ? (repoResults.data?.repositories ?? []) : [];
+		const list =
+			repoSettled || !typedQuery
+				? found
+				: found.filter((r) => matchesTyped(r.full_name, typedQuery));
+		if (
+			!typedQuery &&
+			selectedRepo &&
+			selectedRepo.full_name.split('/')[0] === searchTarget?.account &&
+			!list.some((r) => r.full_name === selectedRepo?.full_name)
+		) {
+			return [selectedRepo, ...list];
+		}
+		return list;
 	});
 	const parsedRepoInput = $derived(parseRepoInput(repoQuery.trim()));
 	const parsedRepoIsListed = $derived(
 		!!parsedRepoInput &&
-			repositories.some(
+			listedRepos.some(
 				(r) =>
 					r.full_name.toLowerCase() ===
 					`${parsedRepoInput.owner}/${parsedRepoInput.repo}`.toLowerCase()
 			)
 	);
 	const repoOptions = $derived<DropdownOption[]>(
-		filteredRepos.map((r) => {
+		listedRepos.map((r) => {
 			const [owner, repoName] = r.full_name.split('/');
 			return { value: r.full_name, label: owner === selectedAccount ? repoName : r.full_name };
 		})
@@ -1020,7 +1037,7 @@
 	const defaultBranch = $derived(selectedRepo?.default_branch ?? null);
 
 	function pickRepoByName(fullName: string) {
-		const repo = repositories.find((r) => r.full_name === fullName);
+		const repo = listedRepos.find((r) => r.full_name === fullName);
 		if (repo) {
 			selectRepo(repo);
 			return;
@@ -1086,7 +1103,7 @@
 </script>
 
 {#snippet lock(option: DropdownOption)}
-	{#if repositories.find((r) => r.full_name === option.value)?.private}
+	{#if listedRepos.find((r) => r.full_name === option.value)?.private}
 		<Lock size={13} class="text-faint" aria-label="Private" />
 	{/if}
 {/snippet}
@@ -1100,12 +1117,27 @@
 {/snippet}
 
 {#snippet repoEmpty(typed: string)}
-	{#if reposError}
-		{reposError} <a class="text-link" href="/user/settings">Connect GitHub</a>
-	{:else if typed}
-		No match. Paste owner/repo or a GitHub URL.
+	{#if searchError}
+		{searchError.message}
+		{#if searchError.code === 'github_reconnect'}
+			<a class="text-link" href="/user/settings">Connect GitHub</a>
+		{/if}
 	{:else}
-		No repositories on this account
+		{#if repoSearching || reposLoading}
+			Searching {searchTarget?.account ?? 'GitHub'}
+		{:else if typed}
+			No repositories match
+		{:else}
+			No repositories on {searchTarget?.account ?? 'this account'}
+		{/if}
+		{#if targetInstallation}
+			<a
+				class="mt-1 block text-link"
+				href={installationSettingsUrl(targetInstallation)}
+				target="_blank"
+				rel="noopener noreferrer">Configure on GitHub</a
+			>
+		{/if}
 	{/if}
 {/snippet}
 
@@ -1215,7 +1247,7 @@
 												>
 											{/snippet}
 										</Alert>
-									{:else if !hasGitHubApp && repositories.length === 0 && !loadingRepos}
+									{:else if githubLinked && installations.length === 0}
 										<Alert tone="warning" title="Install the GitHub App to list your repositories">
 											{#snippet actions()}
 												{#if githubAppInstallUrl}
@@ -1249,7 +1281,8 @@
 													bind:query={repoQuery}
 													options={repoOptions}
 													filter={false}
-													loading={loadingRepos}
+													loading={reposLoading}
+													searching={repoSearching}
 													placeholder="Choose a repository"
 													searchPlaceholder="Search, or paste owner/repo"
 													creatable={!!parsedRepoInput && !parsedRepoIsListed}

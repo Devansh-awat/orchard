@@ -20,6 +20,7 @@
 	import Shelf, { type ShelfItem } from '$lib/components/patterns/Shelf.svelte';
 	import { IMG_ICONS } from '$lib/components/org-dashboard/helpers.svelte';
 	import { templateCategory } from '$lib/utils/template-categories';
+	import { prefetchGitHubRepos } from '$lib/queries/github';
 
 	interface Template {
 		id: string;
@@ -281,6 +282,7 @@
 	}
 
 	onMount(async () => {
+		void prefetchGitHubRepos();
 		const preset =
 			presetSource === 'github' || presetSource === 'image' || presetSource === 'database'
 				? dock.find((d) => d.id === presetSource)

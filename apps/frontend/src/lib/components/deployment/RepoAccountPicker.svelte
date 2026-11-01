@@ -13,7 +13,7 @@
 		size = 'md',
 		block = true
 	}: {
-		accounts?: { login: string; count: number }[];
+		accounts?: { login: string; count?: number }[];
 		selected?: string | null;
 		onSelect: (login: string) => void;
 		installUrl?: string | null;
@@ -53,7 +53,7 @@
 	{#each accounts as account (account.login)}
 		<MenuItem
 			onclick={() => onSelect(account.login)}
-			shortcut={String(account.count)}
+			shortcut={account.count === undefined ? undefined : String(account.count)}
 			aria-current={!directLink && account.login === selected ? 'true' : undefined}
 		>
 			{#snippet leading()}<Avatar user={picture(account.login)} />{/snippet}
