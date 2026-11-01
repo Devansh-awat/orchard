@@ -108,6 +108,15 @@ rule for each:
 - `scales.css` is generated (`pnpm gen:design`) from the theme engine: `--neutral-*`,
   `--accent-*`, `--red-*`, `--amber-*`, `--green-*`, `--blue-*`, steps 1 to 10, plus
   `-contrast` (text on step 7). The theme store repaints them live.
+- The neutral scale is built from the composed palette (wheel plus pinned colours), the
+  way the earlier UI mapped its tokens straight onto the engine: `--neutral-app` is the
+  Background, `--neutral-surface` the Card, `--neutral-10` the Text, `--neutral-9` Muted
+  text, `--neutral-border` the Border and `--neutral-chrome` the Sidebar (opaque when
+  pinned). Every other step is derived from them and takes its tint from the
+  background's own chroma, so a pinned near-black paints exactly and its ladder stays
+  grey. The contrast guarantee only moves derived colours; a pinned value is never
+  refitted. A pinned accent is `--accent-7` exactly and a pinned status colour is its
+  step 9. A pinned background also drops the blend wash (`--theme-chrome-image`).
 - Step meanings: 1 component bg, 2 hover bg, 3 active bg, 4 border, 5 hover border,
   6 active border, 7 solid fill, 8 solid hover, 9 secondary text, 10 primary text.
 - Roles (`tokens.css`): `--bg-app` (tinted frame), `--bg-sheet` (content sheet),

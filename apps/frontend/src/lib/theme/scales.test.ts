@@ -9,6 +9,8 @@ import {
 	generateScales,
 	type ScaleVars
 } from './scales';
+import { composePalette } from './generate';
+import { LEGACY_THEMES } from './legacy';
 import { PALETTE_PRESETS, sanitizeSpec, type Scheme, type ThemeSpec } from './spec';
 
 const SCHEMES: Scheme[] = ['light', 'dark'];
@@ -97,4 +99,45 @@ test('every point on the wheel yields readable scales', () => {
 		const vars = generateScales(spec, scheme);
 		assertScales(vars, `${JSON.stringify(spec)}/${scheme}`);
 	});
+});
+
+test('pinned colours paint exactly and derived steps stay readable', () => {
+	for (const theme of LEGACY_THEMES) {
+		const vars = generateScales(
+			theme.spec,
+			theme.mode,
+			composePalette(theme.spec, theme.mode, theme.colours)
+		);
+		const label = `classic ${theme.id}`;
+		assert.equal(vars['--neutral-app'], theme.colours.background, `${label}: app`);
+		assert.equal(vars['--neutral-surface'], theme.colours.card, `${label}: surface`);
+		assert.equal(vars['--neutral-10'], theme.colours.foreground, `${label}: ink`);
+		assert.equal(vars['--neutral-9'], theme.colours.muted, `${label}: muted`);
+		assert.equal(vars['--neutral-border'], theme.colours.border, `${label}: border`);
+		assert.equal(vars['--neutral-chrome'], theme.colours.sidebarBackground, `${label}: chrome`);
+		assert.equal(vars['--accent-7'], theme.colours.accent, `${label}: accent`);
+		assertOrdered(vars, label, theme.mode);
+		for (const ground of ['app', 'surface', 'raised']) {
+			const faint = ratio(vars, '--neutral-8', `--neutral-${ground}`);
+			assert.ok(faint >= FAINT_TARGET, `${label}: --neutral-8 on ${ground} is ${faint.toFixed(2)}`);
+		}
+	}
+});
+
+test('a pinned black background keeps derived surfaces neutral', () => {
+	const spec = sanitizeSpec({ angle: 0, radius: 1, count: 1, blend: 1, grain: 0 });
+	const vars = generateScales(
+		spec,
+		'dark',
+		composePalette(spec, 'dark', { background: '#000000' })
+	);
+	assert.equal(vars['--neutral-app'], '#000000');
+	for (const step of ['1', '2', '3', '4', '5']) {
+		const { c } = hexToOklch(vars[`--neutral-${step}`]);
+		assert.ok(c < 0.004, `--neutral-${step} is tinted (chroma ${c.toFixed(4)})`);
+	}
+	for (const ground of ['app', '1', '2', '3']) {
+		const fg = ratio(vars, '--neutral-10', `--neutral-${ground}`);
+		assert.ok(fg >= TEXT_TARGET + 3, `--neutral-10 on ${ground} is ${fg.toFixed(2)}`);
+	}
 });

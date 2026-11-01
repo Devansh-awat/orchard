@@ -286,7 +286,34 @@ export function deriveSimpleColors(spec: ThemeSpec, scheme: Scheme): SimpleTheme
 	};
 }
 
-export function generateThemeColors(simple: SimpleThemeColors, isDark: boolean): ThemeColors {
+export type PinnedColors = ReadonlySet<keyof SimpleThemeColors>;
+
+const PINNED_FIELDS: Record<keyof SimpleThemeColors, (keyof ThemeColors)[]> = {
+	accent: ['mentionBg'],
+	accentForeground: ['mentionColor'],
+	background: ['centerChannelBg', 'surfaceBg'],
+	foreground: ['centerChannelColor', 'controlText'],
+	muted: ['surfaceMuted'],
+	border: ['surfaceBorder', 'dropdownBorder', 'dividerColor'],
+	card: ['cardBg', 'orgTriggerBg'],
+	sidebarBackground: ['sidebarBg', 'sidebarHeaderBg', 'sidebarTeamBarBg'],
+	sidebarForeground: ['sidebarText', 'sidebarHeaderText'],
+	error: ['errorTextColor', 'dndIndicator'],
+	success: ['onlineIndicator'],
+	warning: ['awayIndicator']
+};
+
+function pinnedFields(pinned: PinnedColors): Set<keyof ThemeColors> {
+	const out = new Set<keyof ThemeColors>();
+	for (const key of pinned) for (const field of PINNED_FIELDS[key] ?? []) out.add(field);
+	return out;
+}
+
+export function generateThemeColors(
+	simple: SimpleThemeColors,
+	isDark: boolean,
+	pinned: PinnedColors = new Set()
+): ThemeColors {
 	const scheme: Scheme = isDark ? 'dark' : 'light';
 	const L = LADDERS[scheme];
 
@@ -392,7 +419,25 @@ export function generateThemeColors(simple: SimpleThemeColors, isDark: boolean):
 		orgTriggerHoverBg: steppedFrom(simple.card)
 	};
 
-	return enforceReadability(colors, dangerBg);
+	return enforceReadability(colors, dangerBg, pinnedFields(pinned));
+}
+
+export type ComposedPalette = {
+	simple: SimpleThemeColors;
+	colors: ThemeColors;
+	pinned: PinnedColors;
+};
+
+export function composePalette(
+	spec: ThemeSpec,
+	scheme: Scheme,
+	overrides: Partial<SimpleThemeColors> = {}
+): ComposedPalette {
+	const pinned = new Set(
+		(Object.keys(overrides) as (keyof SimpleThemeColors)[]).filter((key) => overrides[key])
+	);
+	const simple = { ...deriveSimpleColors(spec, scheme), ...overrides };
+	return { simple, pinned, colors: generateThemeColors(simple, scheme === 'dark', pinned) };
 }
 
 type TextPair = {
@@ -462,10 +507,15 @@ export function hoverChecks(): HoverPair[] {
 	return HOVER_PAIRS;
 }
 
-function enforceReadability(colors: ThemeColors, dangerBg: string): ThemeColors {
+function enforceReadability(
+	colors: ThemeColors,
+	dangerBg: string,
+	fixed: Set<keyof ThemeColors>
+): ThemeColors {
 	const out = { ...colors };
 
 	for (const pair of TEXT_PAIRS) {
+		if (fixed.has(pair.fg)) continue;
 		out[pair.fg] = ensureContrastAll(
 			out[pair.fg],
 			[out[pair.anchor]],
@@ -486,7 +536,7 @@ function enforceReadability(colors: ThemeColors, dangerBg: string): ThemeColors 
 	// only move them back onto the base the step exists to lift them off.
 	const derived = new Set<keyof ThemeColors>(HOVER_PAIRS.map((pair) => pair.hover));
 	for (const [key, fgs] of load) {
-		if (derived.has(key)) continue;
+		if (derived.has(key) || fixed.has(key)) continue;
 		out[key] = fitBackground(out[key], fgs, CONTRAST.text);
 	}
 
@@ -501,6 +551,7 @@ function enforceReadability(colors: ThemeColors, dangerBg: string): ThemeColors 
 	// contrast. Text absorbs that rather than the surface: pushing the fill back
 	// is what would undo the step and return the hover to invisibility.
 	for (const pair of TEXT_PAIRS) {
+		if (fixed.has(pair.fg)) continue;
 		out[pair.fg] = ensureContrastAll(
 			out[pair.fg],
 			[out[pair.anchor], ...(pair.also ?? []).map((key) => out[key])],

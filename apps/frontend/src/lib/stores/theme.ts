@@ -11,9 +11,10 @@ import {
 	type Scheme
 } from '$lib/theme/spec';
 import {
-	deriveSimpleColors,
+	composePalette,
 	generateChrome,
 	generateThemeColors,
+	type ComposedPalette,
 	type SimpleThemeColors,
 	type ThemeColors
 } from '$lib/theme/generate';
@@ -252,9 +253,8 @@ export function composeColors(
 	spec: ThemeSpec,
 	scheme: Scheme,
 	overrides: Partial<SimpleThemeColors>
-): { simple: SimpleThemeColors; colors: ThemeColors } {
-	const simple = { ...deriveSimpleColors(spec, scheme), ...overrides };
-	return { simple, colors: generateThemeColors(simple, scheme === 'dark') };
+): ComposedPalette {
+	return composePalette(spec, scheme, overrides);
 }
 
 const VAR_MAP: [string, keyof ThemeColors][] = [
@@ -310,19 +310,25 @@ const VAR_MAP: [string, keyof ThemeColors][] = [
 	['--org-trigger-hover-bg', 'orgTriggerHoverBg']
 ];
 
-export function buildCssText(state: ThemeState, scheme: Scheme): string {
-	const { colors } = composeColors(state.spec, scheme, state.overrides);
+function themeVars(state: ThemeState, scheme: Scheme): [string, string][] {
+	const palette = composeColors(state.spec, scheme, state.overrides);
 	const chrome = generateChrome(state.spec, scheme);
-	const parts = VAR_MAP.map(([name, key]) => `${name}:${colors[key]}`);
-	for (const [name, value] of Object.entries(generateScales(state.spec, scheme))) {
-		parts.push(`${name}:${value}`);
-	}
-	parts.push(`--theme-chrome-image:${chrome.image}`);
-	parts.push(`--theme-grain:${chrome.grain}`);
-	parts.push(`--theme-accent-glow:${chrome.accentGlow}`);
-	parts.push(`--font-sans:${fontById(state.font).stack}`);
-	parts.push(`color-scheme:${scheme}`);
-	return parts.join(';');
+	const vars: [string, string][] = VAR_MAP.map(([name, key]) => [name, palette.colors[key]]);
+	vars.push(...Object.entries(generateScales(state.spec, scheme, palette)));
+	vars.push(
+		['--theme-chrome-image', palette.pinned.has('background') ? 'none' : chrome.image],
+		['--theme-grain', chrome.grain],
+		['--theme-accent-glow', chrome.accentGlow],
+		['--font-sans', fontById(state.font).stack],
+		['color-scheme', scheme]
+	);
+	return vars;
+}
+
+export function buildCssText(state: ThemeState, scheme: Scheme): string {
+	return themeVars(state, scheme)
+		.map(([name, value]) => `${name}:${value}`)
+		.join(';');
 }
 
 function createThemeStore() {
@@ -344,18 +350,7 @@ function createThemeStore() {
 		document.getElementById('theme-boot')?.remove();
 		const active = resolveScheme(next.mode, prefersDark());
 		const root = document.documentElement;
-		const { colors } = composeColors(next.spec, active, next.overrides);
-		for (const [name, key] of VAR_MAP) root.style.setProperty(name, colors[key]);
-		for (const [name, value] of Object.entries(generateScales(next.spec, active))) {
-			root.style.setProperty(name, value);
-		}
-
-		const chrome = generateChrome(next.spec, active);
-		root.style.setProperty('--theme-chrome-image', chrome.image);
-		root.style.setProperty('--theme-grain', chrome.grain);
-		root.style.setProperty('--theme-accent-glow', chrome.accentGlow);
-		root.style.setProperty('--font-sans', fontById(next.font).stack);
-		root.style.setProperty('color-scheme', active);
+		for (const [name, value] of themeVars(next, active)) root.style.setProperty(name, value);
 		root.classList.toggle('dark', active === 'dark');
 	}
 

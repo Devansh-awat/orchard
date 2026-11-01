@@ -1,4 +1,5 @@
 import { clamp, contrastOver, ensureContrastAll, fitBackground, hexToOklch, oklch } from './color';
+import { composePalette, type ComposedPalette, type SimpleThemeColors } from './generate';
 import { maxChroma, specNodes, type Scheme, type ThemeSpec } from './spec';
 
 export const STEPS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
@@ -88,16 +89,36 @@ function meanHue(hues: number[]): number {
 	return ((Math.atan2(sy, sx) * 180) / Math.PI + 360) % 360;
 }
 
-function neutralScale(hue: number, tint: number, scheme: Scheme): Record<string, string> {
+const CHROME_MIX: Record<Scheme, string> = { light: '84%', dark: '86%' };
+
+function neutralScale(palette: ComposedPalette, scheme: Scheme): Record<string, string> {
 	const ladder = NEUTRAL[scheme];
-	const at = ({ l, c }: Tone) => oklch(l, Math.min(c * tint, maxChroma(hue, l)), hue);
-	const out: Record<string, string> = {
-		app: at(ladder.app),
-		surface: at(ladder.surface),
-		raised: at(ladder.raised)
+	const { colors } = palette;
+	const ground = hexToOklch(colors.centerChannelBg);
+	const card = hexToOklch(colors.cardBg);
+	const tint = clamp(ground.c / ladder.app.c, 0, 4);
+	const hue = ground.c < 0.002 ? card.h : ground.h;
+	const lift = card.l - ladder.surface.l;
+	const at = ({ l, c }: Tone, shift: number) => {
+		const shifted = clamp(l + shift, 0.02, 0.999);
+		return oklch(shifted, Math.min(c * tint, maxChroma(hue, shifted)), hue);
 	};
-	ladder.steps.forEach((tone, i) => (out[String(i + 1)] = at(tone)));
+	const raisedL = clamp(card.l + ladder.raised.l - ladder.surface.l, 0.02, 0.999);
+	const out: Record<string, string> = {
+		app: colors.centerChannelBg,
+		surface: colors.cardBg,
+		raised: oklch(raisedL, Math.min(card.c, maxChroma(card.h, raisedL)), card.h)
+	};
+	ladder.steps.forEach((tone, i) => (out[String(i + 1)] = at(tone, i < 6 ? lift : lift / 2)));
+	out['9'] = colors.surfaceMuted;
+	out['10'] = colors.centerChannelColor;
 	return out;
+}
+
+function pinnedTone(hex: string): { hue: number; vividness: number } {
+	const { l, c, h } = hexToOklch(hex);
+	const ceiling = maxChroma(h, l);
+	return { hue: h, vividness: ceiling > 0 ? clamp(c / ceiling, 0, 1) : 0 };
 }
 
 function hueScale(
@@ -147,12 +168,22 @@ export function paletteHues(spec: ThemeSpec): {
 	};
 }
 
-export function generateScales(spec: ThemeSpec, scheme: Scheme): ScaleVars {
+const STATUS_PIN: Record<Exclude<HueScale, 'accent' | 'blue'>, keyof SimpleThemeColors> = {
+	red: 'error',
+	amber: 'warning',
+	green: 'success'
+};
+
+export function generateScales(
+	spec: ThemeSpec,
+	scheme: Scheme,
+	palette: ComposedPalette = composePalette(spec, scheme)
+): ScaleVars {
 	const { accent, vividness } = paletteHues(spec);
-	const colourfulness = Math.pow(clamp(vividness, 0, 1), 0.6);
+	const { simple, colors, pinned } = palette;
 
 	const neutrals: Record<NeutralScale, Record<string, string>> = {
-		neutral: neutralScale(accent, colourfulness, scheme)
+		neutral: neutralScale(palette, scheme)
 	};
 
 	const vars: ScaleVars = {};
@@ -161,19 +192,32 @@ export function generateScales(spec: ThemeSpec, scheme: Scheme): ScaleVars {
 		const scale = neutrals[name];
 		const grounds = [scale.app, scale.surface, scale.raised];
 		const fitted = { ...scale };
-		fitted['9'] = ensureContrastAll(
-			scale['9'],
-			[...grounds, scale['1'], scale['2'], scale['3']],
-			TEXT_TARGET
-		);
-		fitted['10'] = ensureContrastAll(
-			scale['10'],
-			[...grounds, scale['1'], scale['2'], scale['3']],
-			TEXT_TARGET + 3
-		);
+		if (!pinned.has('muted')) {
+			fitted['9'] = ensureContrastAll(
+				scale['9'],
+				[...grounds, scale['1'], scale['2'], scale['3']],
+				TEXT_TARGET
+			);
+		}
+		if (!pinned.has('foreground')) {
+			fitted['10'] = ensureContrastAll(
+				scale['10'],
+				[...grounds, scale['1'], scale['2'], scale['3']],
+				TEXT_TARGET + 3
+			);
+		}
 		fitted['8'] = ensureContrastAll(scale['8'], grounds, FAINT_TARGET);
 		for (const [step, value] of Object.entries(fitted)) vars[`--${name}-${step}`] = value;
 	}
+
+	vars['--neutral-border'] = colors.surfaceBorder;
+	const sidebarPinned = pinned.has('sidebarBackground');
+	vars['--neutral-chrome'] = sidebarPinned
+		? colors.sidebarBg
+		: scheme === 'dark'
+			? neutrals.neutral.raised
+			: neutrals.neutral.surface;
+	vars['--neutral-chrome-mix'] = sidebarPinned ? '100%' : CHROME_MIX[scheme];
 
 	const grounds = NEUTRAL_SCALES.flatMap((n) => [
 		neutrals[n].app,
@@ -182,15 +226,27 @@ export function generateScales(spec: ThemeSpec, scheme: Scheme): ScaleVars {
 	]);
 
 	for (const name of HUE_SCALES) {
-		const hue = name === 'accent' ? accent : STATUS_HUE[name];
-		const vivid = name === 'accent' ? vividness : 0.9;
+		const pin = name === 'accent' ? 'accent' : name === 'blue' ? null : STATUS_PIN[name];
+		const pinnedHex = pin && pinned.has(pin) ? simple[pin] : null;
+		const base = pinnedHex
+			? pinnedTone(pinnedHex)
+			: name === 'accent'
+				? { hue: accent, vividness }
+				: { hue: STATUS_HUE[name], vividness: 0.9 };
 		const scale = enforce(
-			hueScale(hue, vivid, scheme, SOLID_LIGHTNESS[name]?.[scheme]),
+			hueScale(base.hue, base.vividness, scheme, SOLID_LIGHTNESS[name]?.[scheme]),
 			grounds,
 			scheme
 		);
-		const contrast = readableOn(scale['7']);
-		scale['7'] = fitBackground(scale['7'], [{ hex: contrast }], TEXT_TARGET);
+		if (pinnedHex && name === 'accent') scale['7'] = pinnedHex;
+		if (pinnedHex && name !== 'accent') scale['9'] = pinnedHex;
+		const contrast =
+			name === 'accent' && pinned.has('accentForeground')
+				? simple.accentForeground
+				: readableOn(scale['7']);
+		if (!(pinnedHex && name === 'accent')) {
+			scale['7'] = fitBackground(scale['7'], [{ hex: contrast }], TEXT_TARGET);
+		}
 		scale['8'] = fitBackground(scale['8'], [{ hex: contrast }], TEXT_TARGET);
 		for (const [step, value] of Object.entries(scale)) vars[`--${name}-${step}`] = value;
 		vars[`--${name}-contrast`] = contrast;

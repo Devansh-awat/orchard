@@ -22,7 +22,7 @@
 	--text-link: var(--accent-9);
 	--text-on-accent: var(--accent-contrast);
 
-	--border-default: var(--neutral-4);
+	--border-default: var(--neutral-border);
 	--border-strong: var(--neutral-5);
 
 	--accent: var(--accent-7);
@@ -120,7 +120,11 @@
 	--nav-active-fg: var(--text-default);
 	--nav-active-icon: var(--accent-9);
 	--nav-active-shadow: 0 1px 3px color-mix(in oklab, var(--neutral-10) 8%, transparent);
-	--material-chrome-bg: color-mix(in oklab, var(--neutral-surface) 84%, transparent);
+	--material-chrome-bg: color-mix(
+		in oklab,
+		var(--neutral-chrome) var(--neutral-chrome-mix),
+		transparent
+	);
 	--material-chrome-edge: color-mix(in oklab, var(--neutral-10) 9%, transparent);
 	--on-solid: oklch(1 0 0);
 	--solid-sheen: linear-gradient(oklch(1 0 0 / 0.16), oklch(1 0 0 / 0));
@@ -325,9 +329,7 @@ html.reduce-transparency *::after {
 	--nav-active-fg: var(--text-default);
 	--nav-active-icon: var(--accent-9);
 	--nav-active-shadow: inset 0 0 0 0.5px var(--border-default);
-	--border-default: var(--neutral-2);
 	--border-strong: var(--neutral-4);
-	--material-chrome-bg: color-mix(in oklab, var(--neutral-raised) 86%, transparent);
 	--brand-field: color-mix(in oklab, var(--accent-solid) 82%, black);
 
 	--shadow-raised: 0 0 0 1px var(--border-default), 0 1px 2px rgb(0 0 0 / 0.3);
