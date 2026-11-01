@@ -19,7 +19,7 @@
 		formatBuildElapsed,
 		sanitizeLogs
 	} from '$lib/components/deployment/deployment-helpers';
-	import { Modal, resourceStatus, statusMeta } from '$lib/components/ui';
+	import { Modal, Skeleton, resourceStatus, statusMeta } from '$lib/components/ui';
 	import {
 		apiFetch,
 		toasts,
@@ -2982,46 +2982,25 @@
 	{/if}
 
 	{#if loading}
-		<!-- Skeleton -->
-		<div class="space-y-6 animate-pulse">
-			<section class="card rounded-3xl p-6 shadow-sm">
-				<div class="flex flex-wrap items-start justify-between gap-6">
-					<div class="flex-1">
-						<div class="flex items-center gap-3">
-							<div class="h-8 w-48 rounded" style="background-color: var(--surface-border);"></div>
-							<div
-								class="h-6 w-16 rounded-full"
-								style="background-color: var(--surface-border);"
-							></div>
-						</div>
-						<div class="mt-3 flex flex-wrap items-center gap-3">
-							<div
-								class="h-5 w-24 rounded-full"
-								style="background-color: var(--surface-border);"
-							></div>
-							<div class="h-4 w-40 rounded" style="background-color: var(--surface-border);"></div>
-							<div
-								class="h-5 w-16 rounded-full"
-								style="background-color: var(--surface-border);"
-							></div>
-						</div>
-					</div>
-					<div class="flex gap-2">
-						<div class="h-9 w-24 rounded-lg" style="background-color: var(--surface-border);"></div>
-						<div class="h-9 w-24 rounded-lg" style="background-color: var(--surface-border);"></div>
-					</div>
+		<div class="dep-skeleton" aria-busy="true">
+			<section class="dep-skeleton-head">
+				<div class="dep-skeleton-row">
+					<Skeleton width="12rem" height="2rem" />
+					<Skeleton width="4.5rem" height="1.5rem" rounded="999px" />
+					<span class="dep-skeleton-fill"></span>
+					<Skeleton width="6rem" height="2.25rem" rounded="999px" />
+					<Skeleton width="6rem" height="2.25rem" rounded="999px" />
+				</div>
+				<div class="dep-skeleton-row">
+					<Skeleton width="16rem" height="0.875rem" />
+					<Skeleton width="10rem" height="0.875rem" />
 				</div>
 			</section>
-			<section class="card rounded-3xl p-2 shadow-sm">
-				<div class="flex gap-1 overflow-x-auto p-1">
-					{#each Array(6) as _, i (i)}
-						<div
-							class="h-10 w-28 shrink-0 rounded-xl"
-							style="background-color: var(--surface-border);"
-						></div>
-					{/each}
-				</div>
-			</section>
+			<div class="dep-skeleton-tabs">
+				{#each Array(7) as _, i (i)}
+					<Skeleton width="6.5rem" height="2.25rem" rounded="999px" />
+				{/each}
+			</div>
 		</div>
 	{:else if deployment}
 		{@const _activeBuild = deployment.imageHistory?.find((h) => h.isActive)}
@@ -3499,3 +3478,39 @@
 		/>
 	</div>
 </Modal>
+
+<style>
+	.dep-skeleton {
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
+	}
+	.dep-skeleton-head {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+		padding: 1.5rem;
+		border-radius: calc(var(--radius-widget) * var(--corner-scale));
+		corner-shape: var(--corner);
+		background: var(--bg-surface);
+		box-shadow: var(--shadow-raised);
+	}
+	.dep-skeleton-row {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+	}
+	.dep-skeleton-fill {
+		flex: 1;
+	}
+	.dep-skeleton-tabs {
+		display: flex;
+		gap: 0.25rem;
+		align-self: flex-start;
+		max-width: 100%;
+		overflow: hidden;
+		padding: 0.25rem;
+		border-radius: var(--radius-pill);
+		background: var(--material-glass-bg);
+	}
+</style>
