@@ -5,13 +5,6 @@ api:
   enabled: true
   address: 0.0.0.0:8686
 
-enrichment_tables:
-  tenant_namespaces:
-    type: memory
-    ttl: 604800
-    flush_interval: 10
-    inputs: [tenant_namespace_marker]
-
 sources:
   tenant:
     type: kubernetes_logs
@@ -94,13 +87,6 @@ transforms:
         "level": level
       })
 
-  tenant_namespace_marker:
-    type: remap
-    inputs: [tenant_shape]
-    drop_on_error: true
-    source: |
-      . = set!({}, [string!(.namespace)], true)
-
   ingress_shape:
     type: remap
     inputs: [ingress]
@@ -120,6 +106,7 @@ transforms:
       ts = .timestamp
       namespace = null
       service = ""
+      ingress_service = ""
       if exists(p.RequestMethod) || exists(p.ServiceName) {
         text.host = string(p.RequestHost) ?? ""
         text.method = string(p.RequestMethod) ?? ""
@@ -133,20 +120,14 @@ transforms:
         ts = parse_timestamp(string(p.StartUTC) ?? "", "%+") ?? .timestamp
 
         name = text.backend
+        provider = ""
         at = int(find(name, "@")) ?? -1
-        if at >= 0 { name = slice!(name, 0, at) }
-        parts = split(name, "-")
-        acc = ""
-        namespace = null
-        for_each(parts) -> |i, part| {
-          acc = if i == 0 { part } else { acc + "-" + part }
-          _, missing = get_enrichment_table_record("tenant_namespaces", {"key": acc})
-          if missing == null && i < length(parts) - 2 { namespace = acc }
+        if at >= 0 {
+          provider = slice!(name, at + 1)
+          name = slice!(name, 0, at)
         }
-        if namespace == null { abort }
-        rest = slice!(name, length(string!(namespace)) + 1)
-        m = parse_regex(rest, r'^(?P<svc>.+)-[^-]*$') ?? {}
-        service = string(m.svc) ?? rest
+        if name == "" || provider == "internal" { abort }
+        ingress_service = name
       } else {
         text.host = string(p.host) ?? ""
         text.method = string(p.method) ?? ""
@@ -200,6 +181,7 @@ transforms:
         "namespace": namespace,
         "app": replace(service, r'--green$', ""),
         "service": service,
+        "ingress_service": ingress_service,
         "kind": "access",
         "level": level,
         "host": text.host,
@@ -220,7 +202,7 @@ sinks:
   victorialogs:
     type: http
     inputs: [tenant_shape, ingress_shape]
-    uri: http://victorialogs.{{ .Values.metrics.namespace }}.svc.cluster.local:9428/insert/jsonline?_stream_fields=namespace,app,kind&_msg_field=message&_time_field=timestamp
+    uri: http://victorialogs.{{ .Values.metrics.namespace }}.svc.cluster.local:9428/insert/jsonline?_stream_fields=namespace,app,kind,ingress_service&_msg_field=message&_time_field=timestamp
     method: post
     compression: gzip
     encoding:
@@ -314,7 +296,9 @@ spec:
         name: data
       spec:
         accessModes: ["ReadWriteOnce"]
-        storageClassName: {{ .Values.logs.victorialogs.storage.storageClass }}
+        {{- with include "orchard.storageClass" (dict "value" .Values.logs.victorialogs.storage.storageClass "apiVersion" "apps/v1" "kind" "StatefulSet" "namespace" .Values.metrics.namespace "name" "victorialogs") }}
+        storageClassName: {{ . }}
+        {{- end }}
         resources:
           requests:
             storage: {{ .Values.logs.victorialogs.storage.size }}

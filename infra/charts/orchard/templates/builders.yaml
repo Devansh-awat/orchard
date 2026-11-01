@@ -138,7 +138,7 @@ spec:
   resources:
     requests:
       storage: {{ .Values.builders.localCache.size | quote }}
-  {{- with .Values.builders.localCache.storageClass }}
+  {{- with include "orchard.storageClass" (dict "value" .Values.builders.localCache.storageClass "apiVersion" "v1" "kind" "PersistentVolumeClaim" "namespace" $bns "name" .Values.builders.localCache.pvcName) }}
   storageClassName: {{ . }}
   {{- end }}
 {{- end }}

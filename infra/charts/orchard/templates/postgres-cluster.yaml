@@ -58,7 +58,7 @@ spec:
         compression: gzip
   {{- end }}
   {{- end }}
-  {{- if or .Values.datadog.enabled .Values.r2Proxy.enabled }}
+  {{- if or .Values.datadog.enabled (include "orchard.r2ProxyActive" .) }}
   managed:
     roles:
       {{- if .Values.datadog.enabled }}
@@ -72,7 +72,7 @@ spec:
         passwordSecret:
           name: orchard-db-datadog
       {{- end }}
-      {{- if .Values.r2Proxy.enabled }}
+      {{- if include "orchard.r2ProxyActive" . }}
       # The backup proxy only ever runs one SELECT. The server grants it read
       # on the three tables it needs at boot; it never holds the app owner.
       - name: orchard_r2_proxy
@@ -85,7 +85,9 @@ spec:
   {{- end }}
   storage:
     size: {{ .Values.postgres.storage.size }}
-    storageClass: {{ .Values.postgres.storage.storageClass }}
+    {{- with include "orchard.storageClass" (dict "value" .Values.postgres.storage.storageClass "apiVersion" "postgresql.cnpg.io/v1" "kind" "Cluster" "namespace" .Values.namespace "name" .Values.postgres.name) }}
+    storageClass: {{ . }}
+    {{- end }}
   resources:
     {{- toYaml .Values.postgres.resources | nindent 4 }}
 {{- if .Values.postgres.backup.enabled }}
@@ -148,7 +150,7 @@ spec:
 {{- end }}
 {{- end }}
 {{- end }}
-{{- if and .Values.postgres.enabled .Values.r2Proxy.enabled }}
+{{- if and .Values.postgres.enabled (include "orchard.r2ProxyActive" .) }}
 ---
 apiVersion: v1
 kind: Secret

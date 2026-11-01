@@ -63,3 +63,18 @@ three are places where a mistake is silent rather than loud: a bad alias turns a
 command into a help screen, a bad values write corrupts an operator's
 configuration, and an MCP missing its shared credential starts cleanly and then
 fails every tool call.
+
+The host defaults `update` applies (`applyHostDefaults` in
+`internal/commands/defaults.go`) are covered too, because they rewrite the
+values file of every installer host on its next upgrade.
+
+## New defaults for existing hosts
+
+`install.sh` writes a fresh host's values with everything on. An older host gets
+the same on `orchardctl update`, through `applyHostDefaults`: it fills in only
+keys missing from the values file, runs once per round, and records the round in
+the top-level `hostDefaults` key so an operator who turns something back off is
+not overridden on the next upgrade. To turn on something new by default, add a
+round: bump `hostDefaultsVersion` here and `HOST_DEFAULTS_VERSION` in
+`install/install.sh` together, gate the new steps on the previous round, and
+print every change.

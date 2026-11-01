@@ -28,7 +28,10 @@ ORCHARD_ACME_EMAIL=${ORCHARD_ACME_EMAIL:-}
 ORCHARD_INGRESS_MODE=${ORCHARD_INGRESS_MODE:-}
 ORCHARD_TUNNEL_TOKEN=${ORCHARD_TUNNEL_TOKEN:-}
 ORCHARD_UPDATE_POLICY=${ORCHARD_UPDATE_POLICY:-}
-ORCHARD_METRICS=${ORCHARD_METRICS:-}
+ORCHARD_METRICS=${ORCHARD_METRICS:-true}
+ORCHARD_LOGS=${ORCHARD_LOGS:-true}
+ORCHARD_IMAGE_SCANNING=${ORCHARD_IMAGE_SCANNING:-true}
+ORCHARD_OBJECT_STORAGE=${ORCHARD_OBJECT_STORAGE:-true}
 ORCHARD_MCP=${ORCHARD_MCP:-true}
 ORCHARD_MCP_DOMAIN=${ORCHARD_MCP_DOMAIN:-}
 ASSUME_YES=${ORCHARD_ASSUME_YES:-false}
@@ -39,6 +42,8 @@ PORTS_BUSY=''
 PORTS_BUSY_DETAIL=''
 PROMPT_BLOCKED=''
 PROMPT_HINT_SHOWN=false
+
+HOST_DEFAULTS_VERSION=1
 
 IMAGE_TAG=${ORCHARD_IMAGE_TAG:-latest}
 IMAGE_PULL_POLICY=${ORCHARD_IMAGE_PULL_POLICY:-Always}
@@ -249,8 +254,15 @@ usage() {
 
   Behaviour
     --updates <manual|automatic> ORCHARD_UPDATE_POLICY  run orchard-update yourself, or nightly
-    --metrics <true|false>       ORCHARD_METRICS        built-in metrics stack, needs ~1G extra
-                                                        (default: on with 8G+ RAM)
+    --metrics <true|false>       ORCHARD_METRICS        built-in metrics stack (default: on,
+                                                        trimmed below 8G RAM)
+    --logs <true|false>          ORCHARD_LOGS           searchable log store (default: on)
+    --image-scanning <true|false>
+                                 ORCHARD_IMAGE_SCANNING vulnerability scans of built images
+                                                        (default: on)
+    --object-storage <true|false>
+                                 ORCHARD_OBJECT_STORAGE local S3 store for database backups
+                                                        (default: on; same disk, not DR)
     --mcp <true|false>           ORCHARD_MCP            the MCP endpoint agents connect to
                                                         (default: on)
     --yes, -y                    ORCHARD_ASSUME_YES     never prompt, take every default
@@ -306,6 +318,9 @@ parse_args() {
       --tunnel-token) need_value "$1" "${2:-}"; ORCHARD_TUNNEL_TOKEN=$2; shift 2 ;;
       --updates) need_value "$1" "${2:-}"; ORCHARD_UPDATE_POLICY=$2; shift 2 ;;
       --metrics) need_value "$1" "${2:-}"; ORCHARD_METRICS=$2; shift 2 ;;
+      --logs) need_value "$1" "${2:-}"; ORCHARD_LOGS=$2; shift 2 ;;
+      --image-scanning) need_value "$1" "${2:-}"; ORCHARD_IMAGE_SCANNING=$2; shift 2 ;;
+      --object-storage) need_value "$1" "${2:-}"; ORCHARD_OBJECT_STORAGE=$2; shift 2 ;;
       --chart) need_value "$1" "${2:-}"; CHART_REF=$2; shift 2 ;;
       --chart-version) need_value "$1" "${2:-}"; ORCHARD_VERSION=$2; shift 2 ;;
       --image-tag) need_value "$1" "${2:-}"; IMAGE_TAG=$2; shift 2 ;;
@@ -1247,14 +1262,111 @@ size_workloads() {
   if [ "$REGISTRY_SIZE_GB" -gt 50 ]; then REGISTRY_SIZE_GB=50; fi
   if [ "$REGISTRY_SIZE_GB" -lt 5 ]; then REGISTRY_SIZE_GB=5; fi
 
-  # The metrics stack (VictoriaMetrics + vmagent + exporters) is the largest
-  # idle cost in the chart. On a small box that budget is better spent on
-  # actually running apps, so default it off and let --metrics force it on.
-  if [ -z "$ORCHARD_METRICS" ]; then
-    if [ "$MEM_MB" -ge 7500 ]; then ORCHARD_METRICS=true; else ORCHARD_METRICS=false; fi
+  LOGS_SIZE_GB=$((DISK_GB / 10))
+  if [ "$LOGS_SIZE_GB" -gt 20 ]; then LOGS_SIZE_GB=20; fi
+  if [ "$LOGS_SIZE_GB" -lt 5 ]; then LOGS_SIZE_GB=5; fi
+  LOGS_MAX_DISK_GB=$((LOGS_SIZE_GB * 4 / 5))
+
+  OBJECT_STORAGE_GB=$((DISK_GB / 5))
+  if [ "$OBJECT_STORAGE_GB" -gt 50 ]; then OBJECT_STORAGE_GB=50; fi
+  if [ "$OBJECT_STORAGE_GB" -lt 5 ]; then OBJECT_STORAGE_GB=5; fi
+
+  SMALL_BOX=false
+  if [ "$MEM_MB" -lt 7500 ]; then SMALL_BOX=true; fi
+
+  info "concurrent builds: $MAX_BUILDS, build cache: ${BUILD_CACHE_GB}G, registry: ${REGISTRY_SIZE_GB}G, backups: ${OBJECT_STORAGE_GB}G, logs: ${LOGS_SIZE_GB}G"
+  if [ "$SMALL_BOX" = true ]; then
+    info "under 8G of RAM: metrics, logs and scanning run trimmed, with a week of logs"
+  fi
+}
+
+observability_values() {
+  local logs_retention=14d scans=2
+  local vm_res='' vmagent_res='' ksm_res='' node_res='' vl_res='' vector_res='' trivy_res=''
+  if [ "$SMALL_BOX" = true ]; then
+    logs_retention=7d
+    scans=1
+    vm_res='
+    resources:
+      requests: { cpu: 50m, memory: 96Mi }
+      limits: { cpu: "1", memory: 384Mi }'
+    vmagent_res='
+  vmagent:
+    resources:
+      requests: { cpu: 20m, memory: 64Mi }
+      limits: { cpu: 500m, memory: 256Mi }'
+    ksm_res='
+  kubeStateMetrics:
+    resources:
+      requests: { cpu: 10m, memory: 32Mi }
+      limits: { cpu: 200m, memory: 128Mi }'
+    node_res='
+  nodeExporter:
+    resources:
+      requests: { cpu: 10m, memory: 16Mi }
+      limits: { cpu: 200m, memory: 64Mi }'
+    vl_res='
+    resources:
+      requests: { cpu: 50m, memory: 96Mi }
+      limits: { cpu: "1", memory: 384Mi }'
+    vector_res='
+  vector:
+    bufferEvents: 5000
+    resources:
+      requests: { cpu: 20m, memory: 64Mi }
+      limits: { cpu: 500m, memory: 256Mi }'
+    trivy_res='
+  resources:
+    requests: { cpu: 50m, memory: 256Mi }
+    limits: { cpu: "2", memory: 1Gi }'
   fi
 
-  info "concurrent builds: $MAX_BUILDS, build cache: ${BUILD_CACHE_GB}G, registry: ${REGISTRY_SIZE_GB}G, metrics: $ORCHARD_METRICS"
+  cat <<EOF
+metrics:
+  enabled: $ORCHARD_METRICS
+  victoriametrics:
+    retention: 7d$vm_res
+    storage:
+      size: 5Gi
+      storageClass: local-path$vmagent_res$ksm_res$node_res
+
+logs:
+  enabled: $ORCHARD_LOGS
+  retention: $logs_retention
+  maxDiskSpaceUsage: ${LOGS_MAX_DISK_GB}GiB
+  victorialogs:$vl_res
+    storage:
+      size: ${LOGS_SIZE_GB}Gi
+      storageClass: local-path$vector_res
+
+# The Orchard scanner. It pulls each image from zot with the registry
+# credentials above, so scans need nothing else configured.
+trivy:
+  enabled: $ORCHARD_IMAGE_SCANNING
+  maxConcurrentScans: $scans
+  storage:
+    storageClass: local-path$trivy_res
+
+# Database backups, checkpoints, point-in-time restore, forks and the trash
+# land in an S3 store on this box. That is undo, not disaster recovery: the
+# copies share a disk with the databases. Point the instance at real S3 or R2
+# and turn this off for that; see infra/charts/orchard/AGENT.md.
+objectStorage:
+  local:
+    enabled: $ORCHARD_OBJECT_STORAGE
+    storage:
+      size: ${OBJECT_STORAGE_GB}Gi
+      storageClass: local-path
+
+# The backup proxy hands each database credentials for its own prefix only,
+# so no tenant ever holds the object store's root key.
+r2Proxy:
+  enabled: $ORCHARD_OBJECT_STORAGE
+  replicas: 1
+  resources:
+    requests: { cpu: 20m, memory: 32Mi }
+    limits: { cpu: "1", memory: 512Mi }
+EOF
 }
 
 # Pull a server env value out of the values file a previous run wrote, so a
@@ -1320,6 +1432,9 @@ write_values() {
   cat > "$VALUES_FILE" <<EOF
 # Generated by install/install.sh. Edit and re-run 'orchard-update' to apply.
 createNamespace: false
+# The round of new defaults this file already has. 'orchardctl update' applies
+# later rounds to an older file and bumps this.
+hostDefaults: $HOST_DEFAULTS_VERSION
 
 image:
   registry: $IMAGE_REGISTRY
@@ -1428,13 +1543,7 @@ builders:
     size: ${BUILD_CACHE_GB}Gi
     storageClass: local-path
 
-metrics:
-  enabled: $ORCHARD_METRICS
-  victoriametrics:
-    retention: 7d
-    storage:
-      size: 5Gi
-      storageClass: local-path
+$(observability_values)
 
 # Agents connect here. The chart derives MCP_BASE_URL, the frontend's
 # PUBLIC_MCP_URL and the API it calls from the hostname below, so this is the
@@ -1457,9 +1566,6 @@ mcp:
     - { name: MCP_SERVICE_TOKEN, value: "$MCP_TOKEN" }
 
 certificates:
-  enabled: false
-
-r2Proxy:
   enabled: false
 
 # Sandboxed builds and tenant isolation need gVisor or Kata on the node.
@@ -1493,6 +1599,26 @@ wait_for_cnpg_webhook() {
   return 1
 }
 
+release_unbound_volume() {
+  local sts=$1 claim=$2 want=$3 live phase
+  live=$(kubectl -n orchard-metrics get statefulset "$sts" --ignore-not-found \
+    -o jsonpath='{.metadata.name}|{.spec.volumeClaimTemplates[0].spec.storageClassName}') || return 0
+  [ -n "${live%%|*}" ] || return 0
+  [ "${live#*|}" != "$want" ] || return 0
+  phase=$(kubectl -n orchard-metrics get pvc "$claim" --ignore-not-found -o jsonpath='{.status.phase}') || return 0
+  case "$phase" in
+    ''|Pending)
+      kubectl -n orchard-metrics delete statefulset "$sts" --wait=true >/dev/null
+      [ -z "$phase" ] || kubectl -n orchard-metrics delete pvc "$claim" --wait=false >/dev/null
+      ;;
+  esac
+}
+
+release_unbound_volumes() {
+  release_unbound_volume victorialogs data-victorialogs-0 local-path
+  release_unbound_volume victoriametrics data-victoriametrics-0 local-path
+}
+
 install_orchard() {
   step
 
@@ -1504,6 +1630,7 @@ install_orchard() {
   if [ -n "$ORCHARD_VERSION" ]; then args+=(--version "$ORCHARD_VERSION"); fi
 
   run_step "CloudNativePG webhook" 1m wait_for_cnpg_webhook
+  run_step "checking existing volumes" 10s release_unbound_volumes
   run_step "applying the chart" 40s helm "${args[@]}"
   run_step "postgres" 3m kubectl -n orchard wait --for=condition=Ready \
     cluster.postgresql.cnpg.io/orchard-db --timeout=10m

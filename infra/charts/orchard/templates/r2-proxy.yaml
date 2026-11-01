@@ -1,4 +1,4 @@
-{{- if .Values.r2Proxy.enabled }}
+{{- if include "orchard.r2ProxyActive" . }}
 # r2-proxy — S3 V4 re-signing gateway sitting between CNPG/barman pods and
 # the real R2 endpoint. Tenant clusters hold per-cluster "fake" credentials
 # that only work via this proxy and only against their own prefix.
@@ -25,11 +25,19 @@ metadata:
   namespace: {{ .Values.r2Proxy.namespace }}
 type: Opaque
 stringData:
+{{- if .Values.r2Proxy.upstream.endpoint }}
   R2_ENDPOINT: {{ .Values.r2Proxy.upstream.endpoint | quote }}
   R2_REGION: {{ .Values.r2Proxy.upstream.region | quote }}
   R2_ACCESS_KEY: {{ .Values.r2Proxy.upstream.accessKey | quote }}
   R2_SECRET_KEY: {{ .Values.r2Proxy.upstream.secretKey | quote }}
   DEFAULT_BACKUP_BUCKET: {{ .Values.r2Proxy.defaultBucket | default "" | quote }}
+{{- else }}
+  R2_ENDPOINT: {{ include "orchard.objectStorageEndpoint" . | quote }}
+  R2_REGION: {{ .Values.objectStorage.local.region | quote }}
+  R2_ACCESS_KEY: {{ include "orchard.objectStorageKey" (dict "root" . "field" "accessKey") | quote }}
+  R2_SECRET_KEY: {{ include "orchard.objectStorageKey" (dict "root" . "field" "secretKey") | quote }}
+  DEFAULT_BACKUP_BUCKET: {{ .Values.r2Proxy.defaultBucket | default .Values.objectStorage.local.bucket | quote }}
+{{- end }}
 ---
 # Database URL for binding lookups. The proxy connects as the read-only
 # orchard_r2_proxy role the postgres cluster manages; r2Proxy.databaseUrl

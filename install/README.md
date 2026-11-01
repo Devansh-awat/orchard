@@ -26,9 +26,21 @@ Install the Helm chart instead and keep your own platform layer
 | cert-manager  | TLS, unless Cloudflare is terminating it for you                                           |
 | zot           | Registry for images Orchard builds                                                         |
 | Orchard       | The Helm chart, with a generated values file, including the MCP endpoint agents connect to |
+| Observability | VictoriaMetrics for the metrics graphs, VictoriaLogs and Vector for log search and per-route request stats |
+| Trivy         | The Orchard image scanner behind each app's Security tab, scanning straight from zot       |
+| versitygw     | An S3 store on this box for database backups, checkpoints, point-in-time restore and forks  |
+| r2-proxy      | Hands each database credentials for its own backups only, never the store's root key       |
 
 Everything lands in `/etc/orchard/values.yaml`. Edit that file and run
-`orchard-update` to apply changes.
+`orchard-update` to apply changes. Environment variables are one list in that
+file, holding the instance's secrets, so change them one at a time with
+`sudo orchardctl env set <NAME> <value>` rather than by hand.
+
+An instance installed before a feature was on by default gets it on its next
+`sudo orchardctl update`: metrics, the log store (on `local-path`), the image
+scanner, local backup storage when none is configured, and Traefik's JSON
+access log. Each change is printed, only settings missing from the values file
+are filled in, and it happens once, so turning something back off sticks.
 
 ## What it asks
 
@@ -135,8 +147,14 @@ Build concurrency, cache size and registry size are derived from the machine:
 | 8–16Gi | 2                 |
 | > 16Gi | 3                 |
 
-Build cache and registry each get a fifth of the free disk, capped at 60G and
-50G. The floor is 4Gi RAM and 20G disk; 8Gi and 60G is comfortable.
+Build cache, registry and backups each get a fifth of the free disk, capped at
+60G, 50G and 50G; the log store gets a tenth, capped at 20G. The floor is 4Gi
+RAM and 20G disk; 8Gi and 60G is comfortable.
+
+Nothing is switched off to fit a small box. Under 8Gi, metrics, logs and the
+scanner run with smaller memory requests and limits, logs keep a week instead
+of two, and one scan runs at a time. The exact numbers are in the generated
+values file, and `orchardctl config set` changes any of them.
 
 ## What it deliberately leaves off
 
@@ -160,6 +178,14 @@ builderSandbox: # Kata VMs for build jobs
   enabled: true
   runtimeClassName: kata
 ```
+
+**Off-box backups.** Database backups go to an S3 store on this same machine.
+That undoes a bad migration or a dropped table, but it is not disaster recovery:
+lose the disk and the backups go with it. Point the instance at real S3 or R2
+for that; "Moving backups to real S3 or R2" in
+[AGENT.md](../infra/charts/orchard/AGENT.md) walks through it, including
+copying what is already there. `--object-storage false` installs without the
+local store, and then backups are off until you configure storage.
 
 **Multi-node.** One box only. For multiple nodes, use the Helm chart.
 
@@ -224,6 +250,10 @@ sudo ./install.sh --yes \
 | ------------------------------- | ----------------------- | --------------------------------------------------------------------------- |
 | `--updates <manual\|automatic>` | `ORCHARD_UPDATE_POLICY` | asks; `manual` under `--yes`                                                |
 | `--mcp <true\|false>`           | `ORCHARD_MCP`           | `true`. Off, no MCP is deployed and the admin panel's toggle is pinned off. |
+| `--metrics <true\|false>`       | `ORCHARD_METRICS`       | `true`. The metrics graphs and usage pages.                                  |
+| `--logs <true\|false>`          | `ORCHARD_LOGS`          | `true`. Log search and per-route request stats.                             |
+| `--image-scanning <true\|false>` | `ORCHARD_IMAGE_SCANNING` | `true`. Vulnerability scans of every image Orchard builds.                |
+| `--object-storage <true\|false>` | `ORCHARD_OBJECT_STORAGE` | `true`. The local S3 store database backups go to.                        |
 | `--yes`, `-y`                   | `ORCHARD_ASSUME_YES`    | `false`                                                                     |
 | `--help`, `-h`                  |                         |                                                                             |
 |                                 | `NO_COLOR`              | unset. Any value disables colour.                                           |

@@ -65,17 +65,51 @@ func (v *Values) Get(path string) any {
 // YAML so true/false and numbers keep their own type while a bare word stays a
 // string, which is what `config set signupMode invite_only` needs.
 func (v *Values) Set(path, raw string) error {
+	return v.Put(path, parseScalar(raw))
+}
+
+type ListPathError struct {
+	Path string
+	List string
+	Verb string
+}
+
+func (e *ListPathError) Error() string {
+	verb, consequence := e.Verb, "replace"
+	if verb == "" {
+		verb = "setting"
+	}
+	if verb == "unsetting" {
+		consequence = "remove"
+	}
+	if strings.HasSuffix(e.List, ".env") || e.List == "env" {
+		return fmt.Sprintf("%s is a list of environment variables, and %s %s would %s every one of them; use orchardctl env set|unset <NAME> instead", e.List, verb, e.Path, consequence)
+	}
+	return fmt.Sprintf("%s is a list, and %s %s would %s all of it; use orchardctl config edit instead", e.List, verb, e.Path, consequence)
+}
+
+func (v *Values) Put(path string, value any) error {
 	parts := strings.Split(path, ".")
 	cur := v.root
-	for _, part := range parts[:len(parts)-1] {
-		next, ok := cur[part].(map[string]any)
-		if !ok {
-			next = map[string]any{}
-			cur[part] = next
+	for i, part := range parts[:len(parts)-1] {
+		switch existing := cur[part].(type) {
+		case map[string]any:
+			cur = existing
+			continue
+		case []any:
+			return &ListPathError{Path: path, List: strings.Join(parts[:i+1], ".")}
 		}
+		next := map[string]any{}
+		cur[part] = next
 		cur = next
 	}
-	cur[parts[len(parts)-1]] = parseScalar(raw)
+	last := parts[len(parts)-1]
+	if _, isList := cur[last].([]any); isList {
+		if _, replacing := value.([]any); !replacing {
+			return &ListPathError{Path: path, List: path}
+		}
+	}
+	cur[last] = value
 	return nil
 }
 
@@ -143,6 +177,35 @@ func (v *Values) SetEnv(path, name, value string) {
 		}
 	}
 	v.SetList(path, append(items, map[string]any{"name": name, "value": value}))
+}
+
+func (v *Values) UnsetEnv(path, name string) bool {
+	items := v.List(path)
+	kept := make([]any, 0, len(items))
+	removed := false
+	for _, item := range items {
+		if entry, ok := item.(map[string]any); ok && entry["name"] == name {
+			removed = true
+			continue
+		}
+		kept = append(kept, item)
+	}
+	if removed {
+		v.SetList(path, kept)
+	}
+	return removed
+}
+
+func (v *Values) EnvNames(path string) []string {
+	var names []string
+	for _, item := range v.List(path) {
+		if entry, ok := item.(map[string]any); ok {
+			if name, ok := entry["name"].(string); ok {
+				names = append(names, name)
+			}
+		}
+	}
+	return names
 }
 
 func parseScalar(raw string) any {

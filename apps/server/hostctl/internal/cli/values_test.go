@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -132,5 +134,59 @@ func TestEnvValueOnMissingPathIsEmpty(t *testing.T) {
 	v.SetEnv("mcp.env", "JWT_SECRET", "x")
 	if got := v.EnvValue("mcp.env", "JWT_SECRET"); got != "x" {
 		t.Fatalf("SetEnv should create the list, got %q", got)
+	}
+}
+
+func TestSetRefusesToWalkThroughAList(t *testing.T) {
+	v, err := LoadValues(write(t, "server:\n  env:\n    - {name: JWT_SECRET, value: keep}\n    - {name: SECRETS_ENCRYPTION_KEY, value: keep-too}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = v.Set("server.env.SMTP_HOST", "smtp.example.com")
+	var listErr *ListPathError
+	if !errors.As(err, &listErr) {
+		t.Fatalf("expected a ListPathError, got %v", err)
+	}
+	if listErr.List != "server.env" {
+		t.Fatalf("expected the list to be named, got %q", listErr.List)
+	}
+	if !strings.Contains(err.Error(), "orchardctl env set") {
+		t.Fatalf("the error should point at orchardctl env, got %q", err)
+	}
+	if got := v.EnvValue("server.env", "SECRETS_ENCRYPTION_KEY"); got != "keep-too" {
+		t.Fatalf("the env list must survive, got %q", got)
+	}
+}
+
+func TestSetRefusesToReplaceAListWithAScalar(t *testing.T) {
+	v, _ := LoadValues(write(t, "server:\n  env:\n    - {name: JWT_SECRET, value: keep}\n"))
+	if err := v.Set("server.env", "oops"); err == nil {
+		t.Fatal("replacing the env list with a string should be refused")
+	}
+	if got := len(v.List("server.env")); got != 1 {
+		t.Fatalf("expected the list untouched, got %d entries", got)
+	}
+}
+
+func TestPutStillReplacesAListWithAList(t *testing.T) {
+	v, _ := LoadValues(write(t, "builders:\n  harbor:\n    hosts: [a, b]\n"))
+	if err := v.Put("builders.harbor.hosts", []any{"c"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := v.List("builders.harbor.hosts"); len(got) != 1 || got[0] != "c" {
+		t.Fatalf("expected [c], got %#v", got)
+	}
+}
+
+func TestUnsetEnvRemovesOnlyThatEntry(t *testing.T) {
+	v, _ := LoadValues(write(t, "server:\n  env:\n    - {name: A, value: one}\n    - {name: B, value: two}\n"))
+	if !v.UnsetEnv("server.env", "A") {
+		t.Fatal("A should have been removed")
+	}
+	if v.UnsetEnv("server.env", "A") {
+		t.Fatal("a second unset should report nothing removed")
+	}
+	if names := v.EnvNames("server.env"); len(names) != 1 || names[0] != "B" {
+		t.Fatalf("expected only B left, got %v", names)
 	}
 }

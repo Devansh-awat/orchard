@@ -1,0 +1,161 @@
+package commands
+
+import (
+	"errors"
+	"strings"
+	"testing"
+)
+
+const oldInstallerValues = `createNamespace: false
+server:
+  env:
+    - {name: JWT_SECRET, value: jwt}
+    - {name: SECRETS_ENCRYPTION_KEY, value: enc}
+tenant:
+  storageClass: local-path
+postgres:
+  storage:
+    storageClass: local-path
+metrics:
+  enabled: false
+  victoriametrics:
+    retention: 7d
+    storage:
+      size: 5Gi
+      storageClass: local-path
+r2Proxy:
+  enabled: false
+`
+
+func TestHostDefaultsTurnEverythingOnForAnOldInstall(t *testing.T) {
+	values := load(t, oldInstallerValues)
+	changes := applyHostDefaults(values, hostFacts{MemMB: 16000, DiskGB: 200, ObjectStorage: storedNone})
+	if len(changes) == 0 {
+		t.Fatal("expected changes")
+	}
+	for path, want := range map[string]any{
+		"logs.victorialogs.storage.storageClass":   "local-path",
+		"trivy.storage.storageClass":               "local-path",
+		"trivy.enabled":                            true,
+		"metrics.enabled":                          true,
+		"objectStorage.local.enabled":              true,
+		"objectStorage.local.storage.storageClass": "local-path",
+		"objectStorage.local.storage.size":         "40Gi",
+		"r2Proxy.enabled":                          true,
+		"r2Proxy.replicas":                         1,
+		"logs.maxDiskSpaceUsage":                   "16GiB",
+		hostDefaultsPath:                           hostDefaultsVersion,
+	} {
+		if got := values.Get(path); got != want {
+			t.Fatalf("%s: expected %#v, got %#v", path, want, got)
+		}
+	}
+	if values.Get("logs.victorialogs.resources") != nil {
+		t.Fatal("a big box keeps the chart's resources")
+	}
+	if got := values.EnvValue(serverEnvPath, "SECRETS_ENCRYPTION_KEY"); got != "enc" {
+		t.Fatalf("server.env must survive, got %q", got)
+	}
+}
+
+func TestHostDefaultsNeverClobberExplicitSettings(t *testing.T) {
+	values := load(t, `server:
+  env: []
+postgres:
+  storage:
+    storageClass: local-path
+logs:
+  retention: 30d
+  victorialogs:
+    storage:
+      storageClass: fast
+trivy:
+  enabled: false
+objectStorage:
+  local:
+    enabled: false
+`)
+	applyHostDefaults(values, hostFacts{MemMB: 4000, DiskGB: 50, ObjectStorage: storedNone})
+	for path, want := range map[string]any{
+		"logs.retention":                         "30d",
+		"logs.victorialogs.storage.storageClass": "fast",
+		"trivy.enabled":                          false,
+		"objectStorage.local.enabled":            false,
+	} {
+		if got := values.Get(path); got != want {
+			t.Fatalf("%s: expected %#v kept, got %#v", path, want, got)
+		}
+	}
+	if values.Get("r2Proxy.enabled") != nil {
+		t.Fatal("r2Proxy is only turned on alongside local storage")
+	}
+	if values.Get("logs.victorialogs.resources") == nil || values.Get("trivy.maxConcurrentScans") != 1 {
+		t.Fatal("a small box gets trimmed resources where nothing was set")
+	}
+}
+
+func TestHostDefaultsRunOnce(t *testing.T) {
+	values := load(t, oldInstallerValues)
+	applyHostDefaults(values, hostFacts{ObjectStorage: storedNone})
+	if err := values.Put("metrics.enabled", false); err != nil {
+		t.Fatal(err)
+	}
+	if changes := applyHostDefaults(values, hostFacts{ObjectStorage: storedNone}); changes != nil {
+		t.Fatalf("a second run should change nothing, got %v", changes)
+	}
+	if values.Get("metrics.enabled") != false {
+		t.Fatal("turning metrics back off has to stick")
+	}
+}
+
+func TestHostDefaultsLeaveExistingObjectStorageAlone(t *testing.T) {
+	cases := map[string]struct {
+		body  string
+		state storedState
+	}{
+		"env":            {oldInstallerValues + "  upstream: {}\n", storedPresent},
+		"server env":     {strings.Replace(oldInstallerValues, "    - {name: JWT_SECRET, value: jwt}\n", "    - {name: JWT_SECRET, value: jwt}\n    - {name: R2_ENDPOINT, value: https://s3.example.com}\n", 1), storedNone},
+		"proxy upstream": {oldInstallerValues + "  upstream:\n    endpoint: https://acct.r2.cloudflarestorage.com\n", storedNone},
+		"unknown":        {oldInstallerValues, storedUnknown},
+	}
+	for name, tc := range cases {
+		values := load(t, tc.body)
+		changes := applyHostDefaults(values, hostFacts{ObjectStorage: tc.state})
+		if values.Get("objectStorage.local.enabled") != nil {
+			t.Fatalf("%s: local storage must stay off", name)
+		}
+		if values.Get("r2Proxy.enabled") != false {
+			t.Fatalf("%s: r2Proxy must be left as it was", name)
+		}
+		if !strings.Contains(strings.Join(changes, "\n"), "object storage") {
+			t.Fatalf("%s: the skip should be explained, got %v", name, changes)
+		}
+	}
+}
+
+func TestHostDefaultsSkipStorageClassWhenTheInstallNeverNamedOne(t *testing.T) {
+	values := load(t, "server:\n  env: []\n")
+	applyHostDefaults(values, hostFacts{ObjectStorage: storedNone})
+	if values.Get("logs.victorialogs.storage.storageClass") != nil {
+		t.Fatal("with no class to copy, the chart's cluster default is left in charge")
+	}
+}
+
+func TestStoredObjectStorageState(t *testing.T) {
+	for _, tc := range []struct {
+		out  string
+		err  error
+		want storedState
+	}{
+		{"", nil, storedNone},
+		{"\n", nil, storedNone},
+		{`{"endpoint":"","bucketName":null}`, nil, storedNone},
+		{`{"endpoint":"https://s3.example.com"}`, nil, storedPresent},
+		{`not json`, nil, storedPresent},
+		{"", errors.New("exec failed"), storedUnknown},
+	} {
+		if got := storedObjectStorageState(tc.out, tc.err); got != tc.want {
+			t.Fatalf("%q/%v: expected %v, got %v", tc.out, tc.err, tc.want, got)
+		}
+	}
+}

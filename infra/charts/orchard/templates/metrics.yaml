@@ -76,7 +76,9 @@ spec:
         name: data
       spec:
         accessModes: ["ReadWriteOnce"]
-        storageClassName: {{ .Values.metrics.victoriametrics.storage.storageClass }}
+        {{- with include "orchard.storageClass" (dict "value" .Values.metrics.victoriametrics.storage.storageClass "apiVersion" "apps/v1" "kind" "StatefulSet" "namespace" .Values.metrics.namespace "name" "victoriametrics") }}
+        storageClassName: {{ . }}
+        {{- end }}
         resources:
           requests:
             storage: {{ .Values.metrics.victoriametrics.storage.size }}

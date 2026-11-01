@@ -11,7 +11,9 @@ It does **not** install operators or CRDs. The cluster must already have:
 
 - **CloudNativePG operator** — provides `postgresql.cnpg.io/v1` `Cluster`
 - **Traefik** with the `traefik.io/v1alpha1` CRDs and a `websecure` entryPoint
-- A default StorageClass matching the values (defaults to `longhorn`)
+- A default StorageClass, or an explicit `storageClass` for each volume below.
+  Every volume the chart creates uses the cluster default when its
+  `storageClass` is empty, which is the default.
 
 ---
 
@@ -58,15 +60,35 @@ server:
   image: { tag: "sha-<commit>" }
 ```
 
-If the cluster's default StorageClass is not `longhorn`, also override:
+Every volume uses the cluster's default StorageClass unless you name one. To
+pin them all to a class that is not the default (k3s ships only `local-path`,
+and it is the default there):
 
 ```yaml
 postgres:
   storage: { storageClass: <sc-name> }
+redis:
+  storageClass: <sc-name>
+builders:
+  localCache: { storageClass: <sc-name> }
 metrics:
   victoriametrics:
     storage: { storageClass: <sc-name> }
+logs:
+  victorialogs:
+    storage: { storageClass: <sc-name> }
+trivy:
+  storage: { storageClass: <sc-name> }
+objectStorage:
+  local:
+    storage: { storageClass: <sc-name> }
 ```
+
+Upgrading from a chart that defaulted to `longhorn`: a StorageClass cannot
+change on a live StatefulSet or PVC, so when the value is empty the chart reads
+the class off the existing Postgres `Cluster`, the VictoriaMetrics StatefulSet
+and the BuildKit cache PVC and keeps it. Set the value explicitly to move to a
+new class on a fresh volume.
 
 ---
 
@@ -78,6 +100,8 @@ metrics:
 | `orchard-builders` | SA, RBAC, Harbor + R2 secrets, BuildKit ConfigMap, ResourceQuota, LimitRange, NetworkPolicy |
 | `orchard-metrics`  | VictoriaMetrics StatefulSet, vmagent, kube-state-metrics, node-exporter DaemonSet, VictoriaLogs StatefulSet, Vector DaemonSet |
 | `orchard-scans`    | Only with `trivy.enabled`: Trivy server Deployment + Service + cache PVC, the scan jobs, server Role for their Secrets, NetworkPolicies |
+| `orchard-r2-proxy` | Only when `r2Proxy.enabled` and it has an upstream: the backup proxy Deployment + Service, its upstream and database Secrets, NetworkPolicy |
+| `orchard-object-storage` | Only with `objectStorage.local.enabled`: versitygw Deployment + Service + data PVC, root-credentials Secret, the bucket Job, NetworkPolicy |
 | cluster-scoped     | `ClusterRole`/`ClusterRoleBinding` for builder management and metrics scraping |
 
 The server deployment gets `DATABASE_URL` injected automatically from the
@@ -159,7 +183,7 @@ The chart sets `TENANT_SECRETS_CLUSTER_ROLE` to `<release>-tenant-secrets`, the 
 | `postgres.database` | `orchard` | Initial database. |
 | `postgres.owner` | `orchard` | Owner role for the initial database. |
 | `postgres.storage.size` | `10Gi` | PVC size per instance. |
-| `postgres.storage.storageClass` | `longhorn` | StorageClass for the data PVC. |
+| `postgres.storage.storageClass` | `""` | StorageClass for the data PVC. Empty keeps the live cluster's class, or uses the cluster default on a fresh install. |
 | `postgres.resources` | requests `200m/512Mi`, limits `2/2Gi` | Per-instance resources. |
 | `postgres.pooler.image` | `ghcr.io/cloudnative-pg/pgbouncer:1.26.1` | PgBouncer image for the CNPG `Pooler`. Empty = operator default, which lags behind PgBouncer security releases. |
 
@@ -235,14 +259,108 @@ The chart also creates a ClusterRoleBinding granting the `default` ServiceAccoun
 
 | Key | Default | Description |
 |---|---|---|
-| `r2Proxy.enabled` | `true` | Deploy the proxy that brokers per-cluster backup credentials. |
+| `r2Proxy.enabled` | `true` | Deploy the proxy that brokers per-cluster backup credentials. Rendered only once it has somewhere to send backups: `r2Proxy.upstream.endpoint`, or `objectStorage.local.enabled`. Without either nothing is deployed and `BACKUP_PROXY_ENABLED` is not set, instead of a proxy that crash-loops on a missing `R2_ENDPOINT`. |
 | `r2Proxy.namespace` | `orchard-r2-proxy` | Its namespace. Tenant namespaces may reach it on 9000 and nothing else. |
-| `r2Proxy.upstream.*` | | Endpoint, region and the real R2 key pair. Only the proxy ever holds these. |
+| `r2Proxy.upstream.*` | | Endpoint, region and the real R2 key pair. Only the proxy ever holds these. Empty with `objectStorage.local.enabled` points the proxy at the local store. |
 | `r2Proxy.defaultBucket` | `""` | Bucket for organizations without their own. Also the default of the proxy's `ALLOWED_BUCKETS`. |
 | `r2Proxy.databasePassword` | `""` | Password for the read-only `orchard_r2_proxy` postgres role. Empty keeps whatever the `orchard-r2-proxy-db` secret already holds, or mints one on first install. |
 | `r2Proxy.databaseUrl` | `""` | Full override for a database the chart does not run. Give it a read-only role. |
 
 When `postgres.enabled`, the CNPG cluster manages the `orchard_r2_proxy` login role and the server grants it `SELECT` on `databases`, `projects` and `organizations` at boot. The proxy never holds the app owner's credentials.
+
+### Object storage (`objectStorage.local.*`)
+
+An S3 server inside the cluster (versitygw on one PVC), so database backups,
+checkpoints, point-in-time restore, forks, the 30-day trash and restore tests
+work on an instance with no external storage. Off in the chart; on from the
+one-command installer, and from `orchardctl update` when no object storage is
+configured anywhere (values file, `server.envFrom`, `r2Proxy.upstream` or
+Instance admin).
+
+**This is not disaster recovery.** The backups sit on the same machine, often
+the same disk, as the databases they protect. They undo a bad migration or a
+deleted table; they do not survive the disk or the box. Use real S3 or R2 for
+that.
+
+| Key | Default | Description |
+|---|---|---|
+| `objectStorage.local.enabled` | `false` | Deploy the store in `objectStorage.local.namespace`. |
+| `objectStorage.local.namespace` | `orchard-object-storage` | Its namespace. A NetworkPolicy admits only the release namespace (the server) and `r2Proxy.namespace`; tenant pods cannot reach it at all. |
+| `objectStorage.local.image` | `versity/versitygw:v1.10.0` | The S3 gateway, POSIX backend on `/data`. The filesystem needs user xattrs (ext4 and xfs have them). |
+| `objectStorage.local.bucketImage` | `amazon/aws-cli:2.39.3` | Image of the Job that creates the bucket. Its name hashes bucket, image and region, so a change runs it again. |
+| `objectStorage.local.bucket` | `orchard-backups` | The bucket backups go to. |
+| `objectStorage.local.region` | `auto` | The region every client signs with. versitygw rejects any other; the server and r2-proxy sign with `auto`. |
+| `objectStorage.local.backups` | `true` | Make this the instance backup target. Requires `r2Proxy.enabled`: the render fails otherwise, because tenant databases must only ever get per-prefix proxy credentials, never the root key. |
+| `objectStorage.local.accessKey` / `secretKey` | generated | Root credentials, kept across upgrades in the `orchard-object-storage` Secret in the release namespace. |
+| `objectStorage.local.storage.size` / `storageClass` | `20Gi` / cluster default | The data PVC. `local-path` does not enforce the size, so watch the disk. |
+| `objectStorage.local.resources` | requests `20m/64Mi`, limits `1/512Mi` | Resource block. |
+
+With `backups` on, the server gets `R2_ENDPOINT`
+(`http://object-storage.<namespace>.svc.cluster.local:9000`), `R2_BACKUP_BUCKET`
+and `R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY` from that Secret, each unless
+`server.env` already sets it. Nothing is injected when `server.envFrom` is set
+(it may hold the real ones, and an `env` entry would shadow it), when
+`server.env` has `R2_ACCOUNT_ID`, or when `r2Proxy.upstream.endpoint` is set.
+r2-proxy uses the store as its upstream and defaults `ALLOWED_BUCKETS` to the
+bucket. Tenant databases reach it through r2-proxy only, which the tenant
+NetworkPolicy already allows on `orchard-r2-proxy:9000`.
+
+The namespace, the data PVC and the credentials Secret carry
+`helm.sh/resource-policy: keep`: turning the store off or uninstalling leaves
+the backups and the key behind, and turning it back on picks both up again.
+
+Because these are environment variables, Instance admin shows the object
+storage endpoint, keys and backup bucket as set by the environment while the
+local store is on. Avatars and other uploads still need a public bucket
+(`R2_BUCKET_NAME`, `R2_PUBLIC_URL`) and are unaffected until one is set.
+
+#### Moving backups to real S3 or R2
+
+Every existing database's backup configuration names the bucket, and the proxy
+only serves the bucket it is configured with. So keep the name, and copy the
+history across before switching, or point-in-time restore loses everything
+before the switch.
+
+1. Create a bucket with the same name as `objectStorage.local.bucket`
+   (`orchard-backups` unless you changed it), and a key that can list, read,
+   write and delete in it.
+2. Copy what is already there. From the host, with the AWS CLI installed:
+
+   ```bash
+   kubectl -n orchard-object-storage port-forward svc/object-storage 9000:9000 &
+   export AWS_ACCESS_KEY_ID=$(kubectl -n orchard get secret orchard-object-storage -o jsonpath='{.data.accessKey}' | base64 -d)
+   export AWS_SECRET_ACCESS_KEY=$(kubectl -n orchard get secret orchard-object-storage -o jsonpath='{.data.secretKey}' | base64 -d)
+   aws --endpoint-url http://127.0.0.1:9000 --region auto s3 sync s3://orchard-backups ./orchard-backups
+   AWS_ACCESS_KEY_ID=<key id> AWS_SECRET_ACCESS_KEY=<secret> \
+     aws --endpoint-url https://<account>.r2.cloudflarestorage.com --region auto s3 sync ./orchard-backups s3://orchard-backups
+   ```
+
+3. Point the instance and the backup proxy at it, and turn the local store off:
+
+   ```bash
+   sudo orchardctl config set r2Proxy.upstream.endpoint https://<account>.r2.cloudflarestorage.com
+   sudo orchardctl config set r2Proxy.upstream.region auto
+   sudo orchardctl config set r2Proxy.upstream.accessKey <key id>
+   sudo orchardctl config set r2Proxy.upstream.secretKey <secret>
+   sudo orchardctl config set r2Proxy.defaultBucket orchard-backups
+   sudo orchardctl config set objectStorage.local.enabled false
+   sudo orchardctl env set R2_ENDPOINT https://<account>.r2.cloudflarestorage.com
+   sudo orchardctl env set R2_ACCESS_KEY_ID <key id>
+   sudo orchardctl env set R2_SECRET_ACCESS_KEY <secret>
+   sudo orchardctl env set R2_BACKUP_BUCKET orchard-backups --apply
+   ```
+
+   On a plain Helm install, set the same keys in your values file.
+4. WAL written between the copy and the switch exists only in the local store,
+   so take a fresh checkpoint of each database afterwards. The local PVC is
+   kept (`orchard-object-storage/object-storage-data`); delete it yourself once
+   those checkpoints are older than anything you would restore to.
+
+### Updates feed (`updates.*`)
+
+| Key | Default | Description |
+|---|---|---|
+| `updates.url` | `""` | Folder holding `latest.json` and the release notes the "what's new" sheet reads, as `UPDATES_URL`. Empty keeps the server's default; `off` hides the sheet. A value in `server.env` wins. |
 
 ### Greenhouse (`sandbox.*`)
 
@@ -305,7 +423,7 @@ sandbox:
 | `metrics.victoriametrics.image` | `victoriametrics/victoria-metrics:v1.154.1` | VM image. Keep it on the same version as `metrics.vmagent.image`. |
 | `metrics.victoriametrics.retention` | `30d` | `-retentionPeriod` flag. |
 | `metrics.victoriametrics.storage.size` | `5Gi` | StatefulSet PVC size. |
-| `metrics.victoriametrics.storage.storageClass` | `longhorn` | StorageClass for the VM data PVC. |
+| `metrics.victoriametrics.storage.storageClass` | `""` | StorageClass for the VM data PVC. Empty keeps the live StatefulSet's class, or uses the cluster default. |
 | `metrics.victoriametrics.memoryAllowedPercent` | `60` | `-memory.allowedPercent`. VM sizes its cache off the memory *limit*, so it grows to fill whatever it is given — lower this and the limit together to shrink idle RSS. |
 | `metrics.victoriametrics.resources` | requests `100m/256Mi`, limits `1/1Gi` | Resource block. |
 | `metrics.vmagent.image` | `victoriametrics/vmagent:v1.154.1` | vmagent image. |
@@ -315,13 +433,13 @@ sandbox:
 | `metrics.nodeExporter.image` | `prom/node-exporter:v1.12.1` | node-exporter image. |
 | `metrics.nodeExporter.resources` | requests `20m/32Mi`, limits `200m/128Mi` | Resource block. |
 
-This stack is the largest idle cost in the chart. `metrics.enabled: false` empties the deployment metrics graphs and usage pages and leaves everything else working.
+This stack is the largest idle cost in the chart. On a small cluster, trim it instead of turning it off: the installer gives a box under 8G of RAM VictoriaMetrics requests `50m/96Mi` limits `1/384Mi`, vmagent `20m/64Mi`/`500m/256Mi`, kube-state-metrics `10m/32Mi`/`200m/128Mi` and node-exporter `10m/16Mi`/`200m/64Mi`, with 7 days of retention. `metrics.enabled: false` empties the deployment metrics graphs and usage pages and leaves everything else working.
 
 The server gets `VICTORIAMETRICS_URL` built from `metrics.namespace` (port 8428) whenever the stack is on, so moving the namespace no longer leaves it pointing at `orchard-metrics`. Set it in `server.env` to point somewhere else; a value only in `server.envFrom` is shadowed by the chart's.
 
 ### Logs (`logs.*`)
 
-VictoriaLogs plus a Vector DaemonSet, in `metrics.namespace` but toggled independently (the namespace is created here when `metrics.enabled` is false). Vector tails pods in namespaces labelled `orchard.my/managed=true` (and the legacy `orchard.dev/managed=true`) and the ingress controller's pods (`app.kubernetes.io/name in (kubernetes-ingress,traefik)`), and ships them to `/insert/jsonline` with `namespace,app,kind` as stream fields.
+VictoriaLogs plus a Vector DaemonSet, in `metrics.namespace` but toggled independently (the namespace is created here when `metrics.enabled` is false). Vector tails pods in namespaces labelled `orchard.my/managed=true` (and the legacy `orchard.dev/managed=true`) and the ingress controller's pods (`app.kubernetes.io/name in (kubernetes-ingress,traefik)`), and ships them to `/insert/jsonline` with `namespace,app,kind,ingress_service` as stream fields (`ingress_service` is only set on Traefik access lines, which carry no namespace of their own).
 
 | Key | Default | Description |
 |---|---|---|
@@ -329,7 +447,7 @@ VictoriaLogs plus a Vector DaemonSet, in `metrics.namespace` but toggled indepen
 | `logs.retention` | `14d` | `-retentionPeriod`. |
 | `logs.maxDiskSpaceUsage` | `16GiB` | `-retention.maxDiskSpaceUsageBytes`. Oldest days are dropped past this whatever the retention says. Keep it below the PVC size. |
 | `logs.victorialogs.image` | `victoriametrics/victoria-logs:v1.53.0` | VictoriaLogs image. |
-| `logs.victorialogs.storage.size` / `storageClass` | `20Gi` / `longhorn` | StatefulSet PVC. |
+| `logs.victorialogs.storage.size` / `storageClass` | `20Gi` / cluster default | StatefulSet PVC. A StatefulSet cannot change class in place: `orchardctl update` recreates one whose volume never bound, and pins the values to the live class of one that did. |
 | `logs.victorialogs.resources` | requests `100m/256Mi`, limits `1/1Gi` | Resource block. |
 | `logs.vector.image` | `timberio/vector:0.60.0-distroless-libc` | Vector image. |
 | `logs.vector.dataDir` | `/var/lib/vector-orchard` | Host directory for file checkpoints, so a restarted pod resumes instead of re-shipping. |
@@ -341,14 +459,18 @@ Each record carries `namespace`, `app` (pod label `orchard.my/app`, then `app.ku
 Access logs need the controller to log JSON:
 
 - **HAProxy** (haproxytech kubernetes-ingress): set `controller.config.log-format` to a `%{+json}o` format with the field names above (`ts_ms`, `host`, `method`, `path`, `status`, `duration_ms`, `bytes`, `client_ip`, `user_agent`, `backend`, `server`) and capture host and UA into `txn.host`/`txn.ua` from `frontend-config-snippet`. The backend `<ns>_svc_<service>_<port>` gives namespace and service. Lines are capped at the log target's length (1024 bytes by default), so a very long path or UA truncates the JSON and that request is dropped.
-- **Traefik**: `logs.access.enabled=true`, `logs.access.format=json` and `logs.access.fields.headers.names.User-Agent=keep` (the installer sets these). `ServiceName` (`<ns>-<service>-<port>@kubernetes`) does not mark where the namespace ends, so Vector matches its prefixes against tenant namespaces it has seen logs from in the last 7 days; access lines for an app whose namespace has logged nothing in that window are dropped.
+- **Traefik**: on Traefik chart 41 and later, `accessLog.enabled=true`, `accessLog.format=json` and `accessLog.fields.headers.names.User-Agent=keep`; before 41 the same keys live under `logs.access.*`. The installer sets them, and `orchardctl update` turns them on for an install that predates that, with `--reuse-values` on the chart version already deployed. `ServiceName` (`<ns>-<service>-<port>@kubernetes`) does not mark where the namespace ends, so Vector matches its prefixes against tenant namespaces it has seen logs from in the last 7 days; access lines for an app whose namespace has logged nothing in that window are dropped.
 
 ### Image scanning (`trivy.*`)
 
 The Orchard scanner, one of the two backends behind the app Security tab (the
-other is Harbor's own scanner). Deploying it does **not** turn scanning on: a
-superadmin still picks a scanner in Admin, Instance, Image scanning, or pins it
-with `IMAGE_SCANNER` in `server.env`. Default is off.
+other is Harbor's own scanner). With nothing picked in Admin, Instance, Image
+scanning (or pinned with `IMAGE_SCANNER` in `server.env`), a deployed Orchard
+scanner is the one used. The chart default is off; the one-command installer
+and `orchardctl update` turn it on. It pulls images straight from the registry
+the server pushes to (`DOCKER_REGISTRY_PUSH`, plain http when listed in
+`REGISTRY_HTTP_HOSTS`) with `HARBOR_USERNAME`/`HARBOR_PASSWORD`, which is how
+it reaches the installer's zot.
 
 | Key | Default | Description |
 |-----|---------|-------------|
@@ -543,6 +665,20 @@ Upgrading across the 2026-09 security release:
   internal Harbor, list it.
 - identity-provider-initiated SAML sign-in stops working, and org owners only
   sign in through providers they created; see the self-hosting guide.
+
+Upgrading to the release with cluster-neutral storage defaults:
+
+- `postgres`, `metrics`, `logs` and `builders.localCache` no longer default to
+  `longhorn`. The Postgres cluster, the VictoriaMetrics and VictoriaLogs
+  StatefulSets and the BuildKit cache keep their live class on their own, so
+  `helm upgrade` does not trip over an immutable field.
+- Vector no longer guesses a Traefik access line's namespace from the pods on
+  its own node. It stores Traefik's service name as the `ingress_service`
+  stream field and the server matches `<namespace>-<app>(--green)-<port>`, so
+  access lines from apps on other nodes are kept. HAProxy lines are unchanged.
+- `r2Proxy` renders only with an upstream. A release that had it enabled with
+  an empty `r2Proxy.upstream.endpoint` (a crash-looping proxy) loses the
+  Deployment and `BACKUP_PROXY_ENABLED`; nothing that worked changes.
 
 ---
 

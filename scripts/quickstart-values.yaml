@@ -34,7 +34,31 @@ mcp:
   enabled: false
 
 metrics:
-  enabled: false
+  enabled: true
+  victoriametrics:
+    retention: 7d
+    storage:
+      size: 2Gi
+      storageClass: local-path
+
+logs:
+  enabled: true
+  retention: 7d
+  maxDiskSpaceUsage: 2GiB
+  victorialogs:
+    storage:
+      size: 3Gi
+      storageClass: local-path
+
+objectStorage:
+  local:
+    enabled: true
+    storage:
+      size: 5Gi
+      storageClass: local-path
+
+r2Proxy:
+  replicas: 1
 
 certificates:
   enabled: false

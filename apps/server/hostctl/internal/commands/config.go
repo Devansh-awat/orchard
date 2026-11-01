@@ -53,13 +53,29 @@ string.
 Changes are written but not deployed. Add --apply to upgrade afterwards, or
 run orchardctl update yourself once you have made every edit.
 
+Lists cannot be set one path at a time, because the whole list would be
+replaced. server.env holds the instance's secrets, so change it with
+orchardctl env set <NAME> <value>, and anything else with config edit.
+
 Common ones:
-  signupMode                     open | invite_only | closed
-  tenant.certClusterIssuer       ClusterIssuer for user app certificates
-  ingress.tls.issuerRef.name     ClusterIssuer for the Orchard UI itself
-  metrics.enabled                the built-in metrics stack
-  cilium.enabled                 Cilium-backed policy and basic auth
-  server.replicas                control-plane API pods
+  signupMode                              open | invite_only | closed
+  tenant.certClusterIssuer                ClusterIssuer for user app certificates
+  ingress.tls.issuerRef.name              ClusterIssuer for the Orchard UI itself
+  server.replicas                         control-plane API pods
+  cilium.enabled                          Cilium-backed policy and basic auth
+  metrics.enabled                         the built-in metrics stack
+  metrics.victoriametrics.retention       how long metrics are kept, e.g. 7d
+  logs.enabled                            the searchable log store
+  logs.retention                          how long logs are kept, e.g. 14d
+  logs.maxDiskSpaceUsage                  disk cap for logs, e.g. 8GiB
+  logs.victorialogs.storage.storageClass  StorageClass for the log store
+  trivy.enabled                           the Orchard image scanner
+  trivy.maxConcurrentScans                scans running at once
+  objectStorage.local.enabled             the S3 store backups go to on this box
+  objectStorage.local.storage.size        its volume size, e.g. 40Gi
+  r2Proxy.enabled                         the backup proxy databases talk to
+  r2Proxy.upstream.endpoint               real S3/R2 for backups instead
+  updates.url                             the what's-new feed, or off
 `,
 		Run: func(c *cli.Context, args []string) error {
 			args, apply := splitApply(args)
@@ -119,6 +135,9 @@ Common ones:
 			case "unset":
 				if len(args) != 2 {
 					return fmt.Errorf("usage: orchardctl config unset <path>")
+				}
+				if _, isList := values.Get(args[1]).([]any); isList && (args[1] == "env" || strings.HasSuffix(args[1], ".env")) {
+					return &cli.ListPathError{Path: args[1], List: args[1], Verb: "unsetting"}
 				}
 				values.Unset(args[1])
 				if err := values.Save(); err != nil {

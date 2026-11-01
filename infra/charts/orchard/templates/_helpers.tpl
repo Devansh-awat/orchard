@@ -358,6 +358,9 @@ true
             {{- if and .Values.logs.enabled (not (include "orchard.serverEnvHas" (dict "root" . "key" "VICTORIALOGS_URL"))) }}
             - { name: VICTORIALOGS_URL, value: {{ printf "http://victorialogs.%s.svc.cluster.local:9428" .Values.metrics.namespace | quote }} }
             {{- end }}
+            {{- if and (ne .Values.metrics.namespace "orchard-metrics") (not (include "orchard.serverEnvHas" (dict "root" . "key" "PLATFORM_METRICS_NAMESPACE"))) }}
+            - { name: PLATFORM_METRICS_NAMESPACE, value: {{ .Values.metrics.namespace | quote }} }
+            {{- end }}
             {{- if .Values.trivy.enabled }}
             - { name: TRIVY_SERVER_URL, value: {{ printf "http://trivy.%s.svc.cluster.local:4954" .Values.trivy.namespace | quote }} }
             - { name: TRIVY_SCAN_NAMESPACE, value: {{ .Values.trivy.namespace | quote }} }
@@ -373,7 +376,32 @@ true
             - { name: ORCHARD_INTERNAL_URL, value: {{ printf "http://server.%s.svc.cluster.local:%v" .Values.namespace .Values.server.service.port | quote }} }
             {{- end }}
             {{- end }}
-            {{- if .Values.r2Proxy.enabled }}
+            {{- if include "orchard.localBackups" . }}
+            {{- if not (include "orchard.serverEnvHas" (dict "root" . "key" "R2_ENDPOINT")) }}
+            - { name: R2_ENDPOINT, value: {{ include "orchard.objectStorageEndpoint" . | quote }} }
+            {{- end }}
+            {{- if not (include "orchard.serverEnvHas" (dict "root" . "key" "R2_BACKUP_BUCKET")) }}
+            - { name: R2_BACKUP_BUCKET, value: {{ .Values.objectStorage.local.bucket | quote }} }
+            {{- end }}
+            {{- if not (include "orchard.serverEnvHas" (dict "root" . "key" "R2_ACCESS_KEY_ID")) }}
+            - name: R2_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: orchard-object-storage
+                  key: accessKey
+            {{- end }}
+            {{- if not (include "orchard.serverEnvHas" (dict "root" . "key" "R2_SECRET_ACCESS_KEY")) }}
+            - name: R2_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: orchard-object-storage
+                  key: secretKey
+            {{- end }}
+            {{- end }}
+            {{- if and .Values.updates.url (not (include "orchard.serverEnvHas" (dict "root" . "key" "UPDATES_URL"))) }}
+            - { name: UPDATES_URL, value: {{ .Values.updates.url | quote }} }
+            {{- end }}
+            {{- if include "orchard.r2ProxyActive" . }}
             - { name: BACKUP_PROXY_ENABLED, value: "true" }
             - name: BACKUP_PROXY_ENDPOINT
               value: {{ default (printf "http://r2-proxy.%s.svc.cluster.local:9000" .Values.r2Proxy.namespace) .Values.r2Proxy.serviceUrl | quote }}
@@ -582,6 +610,62 @@ random one that every template in this render sees.
 {{- $_ := set .Values.trivy "generatedToken" (randAlphaNum 48) -}}
 {{- end -}}
 {{- index .Values.trivy "generatedToken" -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "orchard.r2ProxyActive" -}}
+{{- if and .Values.r2Proxy.enabled (or .Values.r2Proxy.upstream.endpoint .Values.objectStorage.local.enabled) -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{- define "orchard.localBackups" -}}
+{{- if and .Values.objectStorage.local.enabled .Values.objectStorage.local.backups (not .Values.r2Proxy.upstream.endpoint) (not .Values.server.envFrom) (not (include "orchard.serverEnvHas" (dict "root" . "key" "R2_ACCOUNT_ID"))) -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{- define "orchard.objectStorageEndpoint" -}}
+{{- printf "http://object-storage.%s.svc.cluster.local:9000" .Values.objectStorage.local.namespace -}}
+{{- end -}}
+
+{{- define "orchard.objectStorageKey" -}}
+{{- $root := .root -}}
+{{- $field := .field -}}
+{{- $local := $root.Values.objectStorage.local -}}
+{{- if index $local $field -}}
+{{- index $local $field -}}
+{{- else -}}
+{{- $existing := (lookup "v1" "Secret" $root.Values.namespace "orchard-object-storage") -}}
+{{- if and $existing $existing.data (index $existing.data $field) -}}
+{{- index $existing.data $field | b64dec -}}
+{{- else -}}
+{{- $generated := printf "generated%s" (title $field) -}}
+{{- if not (index $local $generated) -}}
+{{- $length := ternary 20 40 (eq $field "accessKey") -}}
+{{- $_ := set $local $generated (ternary (randAlphaNum $length | upper) (randAlphaNum $length) (eq $field "accessKey")) -}}
+{{- end -}}
+{{- index $local $generated -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "orchard.storageClass" -}}
+{{- if .value -}}
+{{- .value -}}
+{{- else -}}
+{{- $live := lookup .apiVersion .kind .namespace .name -}}
+{{- if $live -}}
+{{- if eq .kind "StatefulSet" -}}
+{{- with (dig "spec" "volumeClaimTemplates" list $live) -}}
+{{- dig "spec" "storageClassName" "" (first .) -}}
+{{- end -}}
+{{- else if eq .kind "Cluster" -}}
+{{- dig "spec" "storage" "storageClass" "" $live -}}
+{{- else -}}
+{{- dig "spec" "storageClassName" "" $live -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}

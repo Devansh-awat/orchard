@@ -238,7 +238,8 @@ postgres:
   owner: orchard
   storage:
     size: 10Gi
-    storageClass: longhorn
+    # Empty uses the cluster's default StorageClass.
+    storageClass: ""
   resources:
     requests: { cpu: "200m", memory: "512Mi" }
     limits: { cpu: "2", memory: "2Gi" }
@@ -348,7 +349,10 @@ builders:
   localCache:
     enabled: true
     size: 100Gi
-    storageClass: longhorn
+    # Empty uses the cluster's default StorageClass. storageClassName is
+    # immutable on a PVC, so an existing cache keeps whatever it was made with
+    # only if this still names it.
+    storageClass: ""
     path: /cache/buildkit
     pvcName: buildkit-cache
     accessMode: ReadWriteOnce
@@ -383,8 +387,8 @@ builders:
 
 # Orchard-metrics stack (VictoriaMetrics single-node + vmagent + exporters).
 # This is the largest idle cost in the chart. It powers the deployment metrics
-# graphs and the usage pages; disable it on small clusters and those views go
-# empty while everything else keeps working.
+# graphs and the usage pages. On a small cluster shrink the resources and the
+# retention below rather than turning it off: off, those views go empty.
 metrics:
   enabled: true
   namespace: orchard-metrics
@@ -399,7 +403,8 @@ metrics:
       limits: { cpu: "1", memory: "1Gi" }
     storage:
       size: 5Gi
-      storageClass: longhorn
+      # Empty uses the cluster's default StorageClass.
+      storageClass: ""
   vmagent:
     image: victoriametrics/vmagent:v1.154.1
     resources:
@@ -433,7 +438,8 @@ logs:
       limits: { cpu: "1", memory: "1Gi" }
     storage:
       size: 20Gi
-      storageClass: longhorn
+      # Empty uses the cluster's default StorageClass.
+      storageClass: ""
   vector:
     image: timberio/vector:0.60.0-distroless-libc
     # Host directory for file checkpoints, so a restarted pod resumes where it
@@ -527,10 +533,10 @@ certificates:
 # R2 credentials directly to barman (the legacy, less-isolated behavior).
 # Orchard's own image scanner: a Trivy server that keeps the vulnerability
 # database, plus one short-lived scan Job per request in its own namespace.
-# Deploying it does not turn scanning on. A superadmin still has to pick
-# "Orchard scanner" in Admin -> Instance -> Image scanning (or pin it with
-# the IMAGE_SCANNER server env var). Harbor's own scanner is the other option
-# and needs none of this.
+# Works with any registry the server pushes to, including the installer's zot.
+# With nothing picked in Admin -> Instance -> Image scanning (or pinned with the
+# IMAGE_SCANNER server env var), a deployed Orchard scanner is the one used.
+# Harbor's own scanner is the other option and needs none of this.
 trivy:
   enabled: false
   namespace: orchard-scans
@@ -653,6 +659,49 @@ r2Proxy:
   # orchard namespace at template time and copies its `uri` value here.
   # Override to point at a read-only role (recommended in prod).
   databaseUrl: ""
+
+# S3-compatible object storage inside the cluster (versitygw on one PVC), so
+# database backups, checkpoints, point-in-time restore, forks, the 30-day trash
+# and restore tests work on an instance with no external storage. Off by
+# default; the one-command installer turns it on.
+#
+# This is NOT disaster recovery: the backups sit on the same disks as the
+# databases they protect. Point the instance at real S3 or R2 for that (see
+# "Object storage" in AGENT.md) and turn this off.
+#
+# With `backups` on, the server's instance backup target (R2_ENDPOINT,
+# R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BACKUP_BUCKET) points here unless
+# server.env already sets one, and r2Proxy uses it as its upstream unless
+# r2Proxy.upstream.endpoint is set. Tenant databases only ever reach it through
+# r2Proxy, which must stay enabled.
+objectStorage:
+  local:
+    enabled: false
+    namespace: orchard-object-storage
+    image: versity/versitygw:v1.10.0
+    # Runs once per chart change to create the bucket.
+    bucketImage: amazon/aws-cli:2.39.3
+    bucket: orchard-backups
+    # The region every client signs with. versitygw rejects any other, and the
+    # server and r2-proxy sign with "auto".
+    region: auto
+    backups: true
+    # Root credentials. Generated and kept across upgrades when empty.
+    accessKey: ""
+    secretKey: ""
+    resources:
+      requests: { cpu: "20m", memory: "64Mi" }
+      limits: { cpu: "1", memory: "512Mi" }
+    storage:
+      size: 20Gi
+      # Empty uses the cluster's default StorageClass.
+      storageClass: ""
+
+# Where the "what's new" sheet reads latest.json and the release notes from.
+# Empty keeps the server's default; "off" hides the sheet. A value in
+# server.env wins.
+updates:
+  url: ""
 
 # Tenant pod sandboxing. When enabled, tenant Deployments created via the
 # API set `runtimeClassName: gvisor` so their pods run under runsc (a

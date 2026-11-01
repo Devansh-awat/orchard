@@ -169,13 +169,24 @@ func Update() *cli.Command {
 		Usage: `orchardctl update - upgrade this instance
 
 Runs orchardctl harden first, so an install from before the registry was
-locked down and the firewall was opened comes out of the upgrade fixed. Then
-helm upgrade --install with your values file, waits for each deployment to roll
-out, and refreshes the host commands. Extra arguments are passed through to
-helm.
+locked down and the firewall was opened comes out of the upgrade fixed.
+
+Then it turns on, once, what newer releases do by default: metrics, the log
+store, the Orchard image scanner and, when no object storage is configured
+anywhere, an S3 store on this box for database backups. Only keys missing from
+the values file are filled in, apart from metrics.enabled and r2Proxy.enabled,
+which older installers wrote as false themselves. Each change is printed. A
+hostDefaults key records that this ran, so turning something back off sticks.
+
+Then helm upgrade --install with your values file, waits for each deployment to
+roll out, makes sure Traefik writes the JSON access log the log store reads,
+and refreshes the host commands. Extra arguments are passed through to helm.
 `,
 		Run: func(c *cli.Context, args []string) error {
 			if err := harden(c); err != nil {
+				return err
+			}
+			if err := migrateValues(c); err != nil {
 				return err
 			}
 			helmArgs := append([]string{
@@ -222,6 +233,8 @@ helm.
 					return err
 				}
 			}
+
+			ensureTraefikAccessLogs(c)
 
 			// The host commands ship inside the server image, so a release that
 			// changes them lands here rather than waiting for someone to re-run

@@ -1,0 +1,200 @@
+{{- if .Values.objectStorage.local.enabled }}
+{{- $local := .Values.objectStorage.local }}
+{{- if and $local.backups (not .Values.r2Proxy.enabled) }}
+{{- fail "objectStorage.local.backups needs r2Proxy.enabled: tenant databases reach the local store only through the backup proxy, never with its root credentials. Set r2Proxy.enabled=true or objectStorage.local.backups=false." }}
+{{- end }}
+{{- $ns := $local.namespace }}
+{{- $access := include "orchard.objectStorageKey" (dict "root" . "field" "accessKey") }}
+{{- $secret := include "orchard.objectStorageKey" (dict "root" . "field" "secretKey") }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $ns }}
+  labels:
+    app.kubernetes.io/managed-by: orchard
+    orchard.io/component: object-storage
+  annotations:
+    helm.sh/resource-policy: keep
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: orchard-object-storage
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "object-storage") | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+type: Opaque
+stringData:
+  accessKey: {{ $access | quote }}
+  secretKey: {{ $secret | quote }}
+  endpoint: {{ include "orchard.objectStorageEndpoint" . | quote }}
+  bucket: {{ $local.bucket | quote }}
+  region: {{ $local.region | quote }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: object-storage-root
+  namespace: {{ $ns }}
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "object-storage") | nindent 4 }}
+type: Opaque
+stringData:
+  ROOT_ACCESS_KEY_ID: {{ $access | quote }}
+  ROOT_SECRET_ACCESS_KEY: {{ $secret | quote }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: object-storage-data
+  namespace: {{ $ns }}
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "object-storage") | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with $local.storage.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $local.storage.size | quote }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: object-storage
+  namespace: {{ $ns }}
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "object-storage") | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: object-storage
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        {{- include "orchard.labels" (dict "root" . "name" "object-storage") | nindent 8 }}
+      annotations:
+        checksum/root: {{ printf "%s/%s" $access $secret | sha256sum | trunc 16 }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: versitygw
+          image: {{ $local.image }}
+          args: ["posix", "/data"]
+          env:
+            - { name: VGW_PORT, value: ":9000" }
+            - { name: VGW_REGION, value: {{ $local.region | quote }} }
+            - { name: VGW_HEALTH, value: /health }
+          envFrom:
+            - secretRef:
+                name: object-storage-root
+          ports:
+            - { name: s3, containerPort: 9000 }
+          readinessProbe:
+            httpGet: { path: /health, port: s3 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: s3 }
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            {{- toYaml $local.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: data, mountPath: /data }
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: object-storage-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: object-storage
+  namespace: {{ $ns }}
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "object-storage") | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: object-storage
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - { name: s3, port: 9000, targetPort: s3 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: object-storage
+  namespace: {{ $ns }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: object-storage
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector: {}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.namespace }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.r2Proxy.namespace }}
+      ports:
+        - { port: 9000, protocol: TCP }
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "object-storage-bucket-%s" (printf "%s|%s|%s" $local.bucket $local.bucketImage $local.region | sha256sum | trunc 8) }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "object-storage-bucket") | nindent 4 }}
+spec:
+  backoffLimit: 30
+  template:
+    metadata:
+      labels:
+        {{- include "orchard.labels" (dict "root" . "name" "object-storage-bucket") | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      containers:
+        - name: bucket
+          image: {{ $local.bucketImage }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - aws configure set default.s3.addressing_style path && { aws s3api head-bucket --bucket "$BUCKET" || aws s3api create-bucket --bucket "$BUCKET"; }
+          env:
+            - { name: BUCKET, value: {{ $local.bucket | quote }} }
+            - { name: AWS_ENDPOINT_URL, value: "http://object-storage:9000" }
+            - { name: AWS_DEFAULT_REGION, value: {{ $local.region | quote }} }
+            - { name: AWS_REQUEST_CHECKSUM_CALCULATION, value: when_required }
+            - { name: AWS_RESPONSE_CHECKSUM_VALIDATION, value: when_required }
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef: { name: object-storage-root, key: ROOT_ACCESS_KEY_ID }
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: { name: object-storage-root, key: ROOT_SECRET_ACCESS_KEY }
+          resources:
+            requests: { cpu: 10m, memory: 64Mi }
+            limits: { memory: 256Mi }
+{{- end }}

@@ -44,6 +44,7 @@ func All() []*cli.Command {
 		Update(),
 		Harden(),
 		Config(),
+		Env(),
 		Registry(),
 		Policies(),
 		Mcp(),
