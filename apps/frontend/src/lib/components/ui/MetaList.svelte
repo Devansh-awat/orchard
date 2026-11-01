@@ -19,12 +19,12 @@
 				rel={item.external ? 'noopener noreferrer' : undefined}
 			>
 				{#if Glyph}<Glyph size={14} aria-hidden="true" />{/if}
-				<span class="label" class:label--mono={item.mono}>{item.label}</span>
+				<span class="label" class:label--mono={item.mono} title={item.label}>{item.label}</span>
 			</a>
 		{:else}
 			<span class="item">
 				{#if Glyph}<Glyph size={14} aria-hidden="true" />{/if}
-				<span class="label" class:label--mono={item.mono}>{item.label}</span>
+				<span class="label" class:label--mono={item.mono} title={item.label}>{item.label}</span>
 			</span>
 		{/if}
 	{/each}
@@ -45,6 +45,7 @@
 		align-items: center;
 		gap: 0.375rem;
 		min-width: 0;
+		max-width: 100%;
 		color: inherit;
 		text-decoration: none;
 	}
@@ -56,6 +57,7 @@
 		color: var(--text-faint);
 	}
 	.label {
+		min-width: 0;
 		overflow-x: clip;
 		text-overflow: ellipsis;
 		white-space: nowrap;
