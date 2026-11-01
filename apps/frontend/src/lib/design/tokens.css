@@ -155,9 +155,9 @@
 	--mark-codeberg: #2185d0;
 	--mark-gitea: #609926;
 	--mark-bitbucket: #2684ff;
-	--toast-fill: var(--neutral-10);
-	--toast-ink: var(--neutral-app);
-	--toast-muted: color-mix(in oklab, var(--neutral-app) 66%, transparent);
+	--toast-fill: var(--bg-raised);
+	--toast-ink: var(--text-default);
+	--toast-muted: var(--text-muted);
 	--toast-success: var(--green-solid);
 	--toast-success-on: var(--on-solid);
 	--toast-error: var(--red-solid);
@@ -166,8 +166,8 @@
 	--toast-warning-on: var(--on-solid);
 	--toast-info: var(--blue-solid);
 	--toast-info-on: var(--on-solid);
-	--toast-loading: color-mix(in oklab, var(--neutral-app) 16%, transparent);
-	--toast-loading-on: var(--neutral-app);
+	--toast-loading: color-mix(in oklab, var(--text-default) 10%, transparent);
+	--toast-loading-on: var(--text-default);
 
 	--page-narrow: 44rem;
 	--page-default: 64rem;

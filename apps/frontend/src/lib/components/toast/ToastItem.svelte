@@ -418,7 +418,8 @@
 		right: 0;
 		left: 0;
 		pointer-events: none;
-		filter: drop-shadow(0 6px 16px rgb(0 0 0 / 0.14));
+		filter: drop-shadow(0 0 0.5px color-mix(in oklab, var(--neutral-10) 30%, transparent))
+			drop-shadow(0 8px 20px rgb(0 0 0 / 0.16));
 	}
 	.canvas[data-edge='bottom'] {
 		top: 0;
@@ -433,17 +434,6 @@
 	}
 	.shape {
 		fill: var(--toast-fill);
-	}
-	.toast[data-look='light'] {
-		--toast-fill: var(--bg-raised);
-		--toast-ink: var(--text-default);
-		--toast-muted: var(--text-muted);
-		--toast-loading: color-mix(in oklab, var(--text-default) 10%, transparent);
-		--toast-loading-on: var(--text-default);
-	}
-	.toast[data-look='light'] .canvas {
-		filter: drop-shadow(0 0 0.5px color-mix(in oklab, var(--neutral-10) 30%, transparent))
-			drop-shadow(0 8px 20px color-mix(in oklab, var(--neutral-10) 14%, transparent));
 	}
 
 	.header {
