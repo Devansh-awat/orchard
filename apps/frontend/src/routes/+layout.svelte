@@ -151,8 +151,8 @@
 		if (!dev && $updated && !updatePromptShown) {
 			updatePromptShown = true;
 			toasts.add({
-				title: 'A new version of Orchard is available',
-				description: 'Reload to pick up the latest changes.',
+				title: 'Orchard was updated',
+				description: 'Reload to get the latest version.',
 				color: 'info',
 				duration: 0,
 				action: { label: 'Reload', onClick: () => location.reload() }

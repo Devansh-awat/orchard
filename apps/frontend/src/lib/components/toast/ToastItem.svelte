@@ -25,7 +25,7 @@
 	const TAIL = 14;
 	const MIN_OPEN = H * 2.25;
 	const TEXT_X = 44;
-	const TEXT_END = 12;
+	const TEXT_END = 20;
 	const PAD = 12;
 	const DESC_TOP = 38;
 	const OPEN_MAX = 300;
@@ -577,7 +577,7 @@
 	}
 	.content--single .description {
 		gap: 0.5rem;
-		padding: 0 0.75rem 0.75rem 2.75rem;
+		padding: 0 1.25rem 0.75rem 2.75rem;
 		font-size: var(--text-callout);
 		line-height: 1.125rem;
 	}
