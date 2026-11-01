@@ -39,7 +39,6 @@
 		isSuperAdmin,
 		instanceChecklist,
 		instanceChecklistOutstanding,
-		instanceChecklistWarnings,
 		organizations,
 		selectedOrganization,
 		pinnedItems,
@@ -318,7 +317,7 @@
 		collapsed={railed && !isMobile}
 		onToggle={toggleCollapsed}
 		onSearch={() => window.dispatchEvent(new CustomEvent('open-quick-search'))}
-		userBadge={invitationCount + ($instanceChecklistWarnings.length > 0 ? 1 : 0)}
+		userBadge={invitationCount + ($isSuperAdmin ? $instanceChecklistOutstanding.length : 0)}
 	>
 		{#snippet orgMenu()}
 			{#if $selectedOrganization}
@@ -381,16 +380,17 @@
 			<MenuItem icon={KeyRound} href="/user/settings?tab=tokens">API tokens</MenuItem>
 			{#if invitationCount > 0}
 				<MenuItem icon={Mail} href="/user/settings?tab=profile">
-					Invitations <Badge tone="accent">{invitationCount}</Badge>
+					Invitations
+					{#snippet trailing()}<Badge tone="accent">{invitationCount}</Badge>{/snippet}
 				</MenuItem>
 			{/if}
 			<MenuSeparator />
 			{#if $isSuperAdmin}
 				<MenuItem icon={Shield} href="/admin">
 					Instance admin
-					{#if $instanceChecklistOutstanding.length}<Badge tone="accent"
-							>{$instanceChecklistOutstanding.length}</Badge
-						>{/if}
+					{#snippet trailing()}{#if $instanceChecklistOutstanding.length}<Badge tone="accent"
+								>{$instanceChecklistOutstanding.length}</Badge
+							>{/if}{/snippet}
 				</MenuItem>
 			{/if}
 			<MenuItem icon={SquareTerminal} onclick={() => (cliOpen = true)}>Command line</MenuItem>

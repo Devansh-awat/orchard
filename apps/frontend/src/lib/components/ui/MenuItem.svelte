@@ -10,6 +10,7 @@
 		disabled = false,
 		icon = undefined,
 		shortcut = undefined,
+		trailing = undefined,
 		checked = undefined,
 		leading = undefined,
 		plain = false,
@@ -24,6 +25,7 @@
 		disabled?: boolean;
 		icon?: Icon;
 		shortcut?: string;
+		trailing?: Snippet;
 		checked?: boolean;
 		leading?: Snippet;
 		plain?: boolean;
@@ -36,7 +38,7 @@
 	const menu = getContext<{ close: () => void } | undefined>('ui-menu');
 
 	const structured = $derived(
-		!!icon || !!leading || !!shortcut || !!description || checked !== undefined
+		!!icon || !!leading || !!shortcut || !!trailing || !!description || checked !== undefined
 	);
 	const role = $derived(checked === undefined ? 'menuitem' : 'menuitemcheckbox');
 
@@ -69,6 +71,7 @@
 		{:else}
 			<span class="label">{@render children?.()}</span>
 		{/if}
+		{#if trailing}<span class="trailing">{@render trailing()}</span>{/if}
 		{#if shortcut}<kbd class="shortcut">{shortcut}</kbd>{/if}
 	{:else}
 		{@render children?.()}
@@ -181,6 +184,13 @@
 		font-size: var(--text-caption);
 		line-height: var(--lh-caption);
 		text-overflow: ellipsis;
+	}
+	.trailing {
+		display: inline-flex;
+		flex-shrink: 0;
+		align-items: center;
+		margin-left: auto;
+		padding-left: 0.75rem;
 	}
 	.shortcut {
 		flex-shrink: 0;
