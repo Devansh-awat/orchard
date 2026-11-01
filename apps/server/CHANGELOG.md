@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.84.0](https://github.com/hackclub/orchard/compare/server/v2.83.0...server/v2.84.0) (2026-11-01)
+
+
+### Features
+
+* **mcp:** every toolset and the exec scope by default, and a scope on the server url can only lower what a connection gets ([a02309f](https://github.com/hackclub/orchard/commit/a02309f0b47988433ea74b8f266f0a0f53f5576c))
+* projects order by their latest real activity, from audit events, deploys and builds ([7b73e77](https://github.com/hackclub/orchard/commit/7b73e771337becf9e2c0f73ab2c63729445c2482))
+* requests filter by path, status, method, duration and client, and a request opens with its details and the app's logs around it ([9d95a56](https://github.com/hackclub/orchard/commit/9d95a561ed82c674dca3985af926dca747bbe5e3))
+* **server:** NOTIFICATIONS_WORKER_DISABLED keeps a replica from sending notifications ([00bf995](https://github.com/hackclub/orchard/commit/00bf99540673c76957d8796cb1b0389eba9f2ff9))
+
+
+### Bug Fixes
+
+* attack signals fold cluster and private addresses into one hidden source and never call them a flood ([0ebf836](https://github.com/hackclub/orchard/commit/0ebf836882ddd3191d8bc9cc99721137adc45953))
+* **server:** projects without an uploaded icon borrow an app's favicon on the overview ([683b8de](https://github.com/hackclub/orchard/commit/683b8de05e1e9652b38d21a5c1f401b0aae1b2da))
+
 ## [2.83.0](https://github.com/hackclub/orchard/compare/server/v2.82.1...server/v2.83.0) (2026-11-01)
 
 

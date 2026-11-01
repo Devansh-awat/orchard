@@ -1,5 +1,38 @@
 # Changelog
 
+## [1.75.0](https://github.com/hackclub/orchard/compare/frontend/v1.74.0...frontend/v1.75.0) (2026-11-01)
+
+
+### Features
+
+* **frontend:** activity history groups by day, titles every build by its commit and folds runs of failed builds ([5e78b23](https://github.com/hackclub/orchard/commit/5e78b2383c0e2065c11faaf944f7978358b42951))
+* **frontend:** the extra domains count opens a menu of every domain ([874c3e2](https://github.com/hackclub/orchard/commit/874c3e25f53b33ea9918d470ca78045c56f6b26a))
+* **frontend:** the mcp tab builds the server url from the toolsets and access you pick ([efeb44a](https://github.com/hackclub/orchard/commit/efeb44ac9963424f226ed2dc3382b7752aadb02b))
+* **frontend:** the new menu deploys straight from a github repo, and every field on the new app form stacks its label ([c6bb0fd](https://github.com/hackclub/orchard/commit/c6bb0fdc227eb1288bb7ec523e7b5738005e2a3e))
+* **mcp:** every toolset and the exec scope by default, and a scope on the server url can only lower what a connection gets ([a02309f](https://github.com/hackclub/orchard/commit/a02309f0b47988433ea74b8f266f0a0f53f5576c))
+* projects order by their latest real activity, from audit events, deploys and builds ([7b73e77](https://github.com/hackclub/orchard/commit/7b73e771337becf9e2c0f73ab2c63729445c2482))
+* requests filter by path, status, method, duration and client, and a request opens with its details and the app's logs around it ([9d95a56](https://github.com/hackclub/orchard/commit/9d95a561ed82c674dca3985af926dca747bbe5e3))
+
+
+### Bug Fixes
+
+* attack signals fold cluster and private addresses into one hidden source and never call them a flood ([0ebf836](https://github.com/hackclub/orchard/commit/0ebf836882ddd3191d8bc9cc99721137adc45953))
+* **frontend:** dark mode keeps the active nav icon readable and drops the glass rim's shimmer ([d37e086](https://github.com/hackclub/orchard/commit/d37e086a18c4f7165ebefb6da1e712725018f196))
+* **frontend:** dark themes get quieter borders and a dark active nav pill for working at night ([3e9d107](https://github.com/hackclub/orchard/commit/3e9d10771462d61984d7f8725cc8115b7afd4c0d))
+* **frontend:** error spikes and rollbacks join the app page's alert stack as dismissible cards instead of a banner of their own ([8ca8ea9](https://github.com/hackclub/orchard/commit/8ca8ea9c8f18f1eca5395ffba723c538991d2a66))
+* **frontend:** menu counts sit at the row's edge, and the avatar badge counts the same checks as instance admin ([49901b6](https://github.com/hackclub/orchard/commit/49901b66d202486d38a9a016487590f284b4c451))
+* **frontend:** menus match their trigger or cap at 20rem, so long names truncate instead of stretching them ([6ebb993](https://github.com/hackclub/orchard/commit/6ebb9931ac65c9db7643b434b2d355a37e738621))
+* **frontend:** meta lists truncate long values like image references ([9311041](https://github.com/hackclub/orchard/commit/93110413453824c495503b15905da2bd21b58651))
+* **frontend:** modals fade in and out on the settle curve instead of rising ([e9e2250](https://github.com/hackclub/orchard/commit/e9e225005648eca93639e8dae2c7f7a7a4875ae5))
+* **frontend:** needs attention leaves room under its title ([9f5c6b0](https://github.com/hackclub/orchard/commit/9f5c6b0ce0cb0c6e8a63370b9b0a032d7fa582d0))
+* **frontend:** observe gives its controls room above the tabs, findings can be dismissed, a healthy zero error rate is a reading and runtime and uptime sit on their sections ([79565fc](https://github.com/hackclub/orchard/commit/79565fc5982e60277954eca2290f27b37b7264ac))
+* **frontend:** project gradients bake small, only near the viewport, and come back instantly from cache ([d5e5624](https://github.com/hackclub/orchard/commit/d5e5624536e4d6a1ee32955f38a68b0b69665ef9))
+* **frontend:** recent builds cover every project the page shows, not only ones you're a member of ([4bfda19](https://github.com/hackclub/orchard/commit/4bfda1911ff4f7023c22a005bdfe1b9eb3345de1))
+* **frontend:** section card controls, resource lists and disclosure groups keep their spacing under the title ([5e1de14](https://github.com/hackclub/orchard/commit/5e1de1466359f4d1c1c1b8fc9f18b73979e2e1cb))
+* **frontend:** solid tiles use the solid status fills with a white glyph, so dark mode stops showing pastel blocks ([16305d9](https://github.com/hackclub/orchard/commit/16305d9fd826b13355d3d8ea7bd21178d1701530))
+* **frontend:** the featured build's commit line truncates instead of running past the card ([35e9f24](https://github.com/hackclub/orchard/commit/35e9f244eae165505b8e8b9297bb90b7259214ab))
+* **frontend:** widget header controls keep a full gap above the content ([ecc836f](https://github.com/hackclub/orchard/commit/ecc836fa388ee100834a3475bed984d861abbd40))
+
 ## [1.74.0](https://github.com/hackclub/orchard/compare/frontend/v1.73.0...frontend/v1.74.0) (2026-11-01)
 
 
