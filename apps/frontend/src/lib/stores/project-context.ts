@@ -1,4 +1,6 @@
+import { get } from 'svelte/store';
 import { apiFetch } from './api';
+import { organizations } from './organizations';
 
 export interface ProjectContext {
 	id: string;
@@ -41,11 +43,14 @@ export async function fetchProjectContext(params: {
 		if (!matched) throw new Error('Project not found in workspace');
 		projectId = matched.id;
 	} else {
-		const orgRes = await apiFetch(`/apiv1/organizations/slug/${orgSlug}`);
-		if (!orgRes.ok) throw new Error('Organization not found');
-		const org = await orgRes.json();
+		let orgId = get(organizations).find((o) => o.slug === orgSlug)?.id;
+		if (!orgId) {
+			const orgRes = await apiFetch(`/apiv1/organizations/slug/${orgSlug}`);
+			if (!orgRes.ok) throw new Error('Organization not found');
+			orgId = (await orgRes.json()).id as string;
+		}
 
-		const slugRes = await apiFetch(`/apiv1/projects/slug/${projectSlug}?orgId=${org.id}`);
+		const slugRes = await apiFetch(`/apiv1/projects/slug/${projectSlug}?orgId=${orgId}`);
 		if (!slugRes.ok) throw new Error('Project not found');
 		const projData = await slugRes.json();
 		projectId = projData.id;
