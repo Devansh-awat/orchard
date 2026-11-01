@@ -15,7 +15,6 @@
 		ModalIntro,
 		SecretInput,
 		SectionCard,
-		Skeleton,
 		ToneTile
 	} from '$lib/components/ui';
 	import GitHostMark, { gitHostOf } from '$lib/components/ui/GitHostMark.svelte';
@@ -192,9 +191,7 @@
 		{/if}
 	{/snippet}
 
-	{#if !loaded}
-		<div class="placeholder"><Skeleton height="2.5rem" /></div>
-	{:else if connections.length > 0}
+	{#if loaded && connections.length > 0}
 		<List inset={false} label="Git providers">
 			{#each connections as c (c.id)}
 				<ListRow flush pinned presence title={c.name} subtitle={detail(c)}>
@@ -281,10 +278,6 @@
 </Modal>
 
 <style>
-	.placeholder {
-		display: flex;
-		flex-direction: column;
-	}
 	.form {
 		display: flex;
 		flex-direction: column;

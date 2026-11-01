@@ -87,8 +87,18 @@
 		gap: 1rem;
 		padding: var(--section-pad) var(--section-pad) 0;
 	}
-	.head:last-child {
+	.head:is(:last-child, :has(+ .body:empty:last-child)) {
 		padding-bottom: var(--section-pad);
+	}
+	.body:empty {
+		display: none;
+	}
+	.head:is(:last-child, :has(+ .body:empty:last-child)):has(.desc) {
+		align-items: center;
+	}
+	.head:is(:last-child, :has(+ .body:empty:last-child)):has(.desc) .actions {
+		--section-control-inset: var(--section-pad);
+		margin: 0;
 	}
 	.heading {
 		display: flex;
@@ -120,7 +130,7 @@
 		font-size: var(--text-headline);
 		--section-control-inset: calc(var(--section-pad) + var(--section-control-shift));
 	}
-	.head:last-child .actions {
+	.head:is(:last-child, :has(+ .body:empty:last-child)) .actions {
 		margin-bottom: var(--section-control-shift);
 	}
 	.actions:not(:has(:global(button, a, input, .sb, .pill))) {
@@ -151,7 +161,7 @@
 	.body > :global(.ui-list:not(.ui-list--inset):last-child) {
 		margin-bottom: -0.75rem;
 	}
-	.head:last-child .heading > :last-child:not(.title) {
+	.head:is(:last-child, :has(+ .body:empty:last-child)) .heading > :last-child:not(.title) {
 		text-box: trim-end text alphabetic;
 	}
 	.head + .body--flush {

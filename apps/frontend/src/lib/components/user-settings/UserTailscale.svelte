@@ -9,7 +9,6 @@
 		ModalIntro,
 		SecretInput,
 		SectionCard,
-		Skeleton,
 		ToneTile
 	} from '$lib/components/ui';
 
@@ -50,9 +49,7 @@
 			<Button size="sm" onclick={() => (showTailscaleForm = true)}>Connect</Button>
 		{/if}
 	{/snippet}
-	{#if tailscaleLoading}
-		<div class="placeholder"><Skeleton height="2.5rem" /></div>
-	{:else if tailscaleLinked}
+	{#if !tailscaleLoading && tailscaleLinked}
 		<List inset={false} label="Tailnet">
 			<ListRow flush pinned title={tailscaleTailnet ?? ''}>
 				{#snippet leading()}<ToneTile size={32}><Globe size={16} /></ToneTile>{/snippet}
@@ -118,10 +115,6 @@
 </Modal>
 
 <style>
-	.placeholder {
-		display: flex;
-		flex-direction: column;
-	}
 	.form {
 		display: flex;
 		flex-direction: column;
