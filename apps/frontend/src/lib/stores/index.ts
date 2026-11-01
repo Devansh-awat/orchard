@@ -71,7 +71,12 @@ export {
 	type ThemeColors,
 	type SimpleThemeColors
 } from './theme';
-export { fetchProjectContext, buildBasePath, type ProjectContext } from './project-context';
+export {
+	fetchProjectContext,
+	buildBasePath,
+	projectDetailQueryOptions,
+	type ProjectContext
+} from './project-context';
 export {
 	subscribeOrgEvents,
 	sseStatus,

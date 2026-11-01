@@ -39,7 +39,9 @@
 	const orgSlug = $derived($page.params.orgSlug);
 	const orgId = $derived($selectedOrganization?.id ?? '');
 	const preselectedProject = $page.url.searchParams.get('projectSlug');
-	const presetSource = $page.url.searchParams.get('source');
+	const presetSource =
+		$page.url.searchParams.get('source') ??
+		($page.url.searchParams.get('type') === 'database' ? 'database' : null);
 
 	let projects = $state<{ id: string; name: string; slug: string }[]>([]);
 	let templates = $state<Template[]>([]);
@@ -233,11 +235,11 @@
 		return p.slug;
 	}
 
-	async function go(id: string, to: (slug: string) => string) {
+	async function go(id: string, to: (slug: string) => string, replaceState = false) {
 		busy = id;
 		try {
 			const slug = await ensureProject();
-			await goto(to(slug));
+			await goto(to(slug), { replaceState });
 		} catch (e) {
 			toasts.add({
 				title: 'Could not start',
@@ -260,24 +262,27 @@
 		go(id, (slug) => `/${orgSlug}/projects/${slug}/templates/deploy/${id}`);
 	}
 
-	function openSource(item: DockItem) {
+	function openSource(item: DockItem, replaceState = false) {
 		if (item.id.startsWith('template:')) return openTemplate(item.id.slice('template:'.length));
 		const source = item.id as Source;
 		if (!projectSlug && source !== 'database') {
 			busy = item.id;
-			goto(sourceHref(source));
+			goto(sourceHref(source), { replaceState });
 			return;
 		}
-		go(item.id, (slug) =>
-			source === 'database'
-				? `/${orgSlug}/projects/${slug}/databases/new`
-				: `/${orgSlug}/projects/${slug}/deployments/new?source=${source}`
+		go(
+			item.id,
+			(slug) =>
+				source === 'database'
+					? `/${orgSlug}/projects/${slug}/databases/new`
+					: `/${orgSlug}/projects/${slug}/deployments/new?source=${source}`,
+			replaceState
 		);
 	}
 
 	onMount(async () => {
 		const preset =
-			presetSource === 'github' || presetSource === 'image'
+			presetSource === 'github' || presetSource === 'image' || presetSource === 'database'
 				? dock.find((d) => d.id === presetSource)
 				: undefined;
 		const tplEarly = preset ? null : apiFetch('/apiv1/templates').catch(() => null);
@@ -303,7 +308,7 @@
 		} finally {
 			loading = false;
 		}
-		if (preset) openSource(preset);
+		if (preset) openSource(preset, true);
 	});
 </script>
 

@@ -1,6 +1,5 @@
-import { get } from 'svelte/store';
+import { queryClient } from '$lib/query';
 import { apiFetch } from './api';
-import { organizations } from './organizations';
 
 export interface ProjectContext {
 	id: string;
@@ -18,6 +17,22 @@ export interface ProjectContext {
 		}[];
 	}[];
 	[key: string]: unknown;
+}
+
+export function projectDetailQueryOptions(orgSlug: string, projectSlug: string) {
+	return {
+		queryKey: ['project-detail', orgSlug, projectSlug],
+		queryFn: async (): Promise<ProjectContext> => {
+			const res = await apiFetch(`/apiv1/projects/by-slugs/${orgSlug}/${projectSlug}`);
+			if (!res.ok) {
+				if (res.status === 404) throw new Error('Project not found');
+				if (res.status === 403) throw new Error('Access denied');
+				throw new Error(`Project load failed: ${res.status}`);
+			}
+			return res.json();
+		},
+		staleTime: 15_000
+	};
 }
 
 /**
@@ -43,17 +58,8 @@ export async function fetchProjectContext(params: {
 		if (!matched) throw new Error('Project not found in workspace');
 		projectId = matched.id;
 	} else {
-		let orgId = get(organizations).find((o) => o.slug === orgSlug)?.id;
-		if (!orgId) {
-			const orgRes = await apiFetch(`/apiv1/organizations/slug/${orgSlug}`);
-			if (!orgRes.ok) throw new Error('Organization not found');
-			orgId = (await orgRes.json()).id as string;
-		}
-
-		const slugRes = await apiFetch(`/apiv1/projects/slug/${projectSlug}?orgId=${orgId}`);
-		if (!slugRes.ok) throw new Error('Project not found');
-		const projData = await slugRes.json();
-		projectId = projData.id;
+		const project = await queryClient.fetchQuery(projectDetailQueryOptions(orgSlug, projectSlug));
+		return structuredClone(project);
 	}
 
 	const projResponse = await apiFetch(`/apiv1/projects/${projectId}`);

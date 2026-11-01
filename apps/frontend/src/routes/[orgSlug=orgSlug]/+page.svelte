@@ -48,6 +48,13 @@
 		type NewMenuItem
 	} from '$lib/components/patterns/LiquidNewButton.svelte';
 	import type { BuildItem } from '$lib/components/patterns/builds';
+	import {
+		NEW_KINDS,
+		defaultProjectSlug,
+		newHref,
+		preloadNew,
+		type NewKind
+	} from '$lib/utils/new-routes';
 	import { toBuildItems } from '$lib/components/org-dashboard/build-items';
 	import type { FailingApp } from '$lib/components/patterns/sidebar';
 	import { IMG_ICONS, knownIcon, favUrl } from '$lib/components/org-dashboard/helpers.svelte';
@@ -610,15 +617,11 @@
 		{ id: 'project', label: 'Project', description: 'A group for related apps', icon: FolderPlus }
 	];
 
+	const newProjectSlug = $derived(defaultProjectSlug(overviewQuery.data?.projects));
+
 	function create(id: string) {
-		const to = {
-			github: `/${orgSlug}/new?source=github`,
-			deployment: `/${orgSlug}/new`,
-			database: `/${orgSlug}/new?type=database`,
-			job: `/${orgSlug}/jobs/new`,
-			project: `/${orgSlug}/projects/new`
-		}[id];
-		if (to) goto(to);
+		if (!(NEW_KINDS as string[]).includes(id)) return;
+		goto(newHref(id as NewKind, orgSlug, newProjectSlug));
 	}
 
 	function togglePin(d: DeploymentSummary) {
@@ -776,7 +779,11 @@
 			</Button>
 		{/if}
 		{#if canCreateProjects}
-			<LiquidNewButton items={NEW_ITEMS} onSelect={create} />
+			<LiquidNewButton
+				items={NEW_ITEMS}
+				onSelect={create}
+				onIntent={() => preloadNew(orgSlug, newProjectSlug)}
+			/>
 		{/if}
 	{/snippet}
 

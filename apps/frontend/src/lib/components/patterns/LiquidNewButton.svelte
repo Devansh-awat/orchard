@@ -26,10 +26,12 @@
 	let {
 		items = DEFAULT_ITEMS,
 		onSelect = undefined,
+		onIntent = undefined,
 		label = 'New'
 	}: {
 		items?: NewMenuItem[];
 		onSelect?: (id: string) => void;
+		onIntent?: () => void;
 		label?: string;
 	} = $props();
 
@@ -227,6 +229,7 @@
 
 	function show(focus: 'first' | 'last' | 'menu') {
 		if (open) return;
+		onIntent?.();
 		tier = motionLevel();
 		measure();
 		pop?.cancel();
@@ -382,6 +385,8 @@
 		data-spin={(open && full) || undefined}
 		onclick={onTriggerClick}
 		onkeydown={onTriggerKey}
+		onpointerenter={() => onIntent?.()}
+		onfocus={() => onIntent?.()}
 	>
 		<span class="skin skin--surface" aria-hidden="true" style:opacity={drawn ? 1 : 0}></span>
 		<span class="skin skin--accent" aria-hidden="true" style:opacity={tint}></span>

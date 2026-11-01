@@ -20,6 +20,7 @@
 		type PaletteItem
 	} from '$lib/components/patterns/CommandPalette.svelte';
 	import { overviewQueryOptions } from '$lib/queries/overview';
+	import { defaultProjectSlug, newHref } from '$lib/utils/new-routes';
 	import { jobsQueryOptions } from '$lib/queries/jobs';
 	import { resourceStatus, runStatus } from '$lib/components/ui/status';
 	import { knownIcon, favUrl, IMG_ICONS } from '$lib/components/org-dashboard/helpers.svelte';
@@ -145,7 +146,7 @@
 			hint: 'Postgres or Redis',
 			icon: Database,
 			keywords: ['create', 'postgres', 'redis', 'db'],
-			run: () => goto(`/${orgSlug}/new?type=database`)
+			run: () => goto(newHref('database', orgSlug, defaultProjectSlug(overview.data?.projects)))
 		},
 		{
 			id: 'new-job',
