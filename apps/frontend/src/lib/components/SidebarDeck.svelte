@@ -53,6 +53,7 @@
 	import { themeStore } from '$lib/stores/theme';
 	import type { ThemeMode } from '$lib/theme/spec';
 	import { fade } from '$lib/utils/transitions';
+	import { formatPlan } from '$lib/utils/format';
 
 	interface OverviewDep {
 		id: string;
@@ -309,7 +310,7 @@
 	<Sidebar
 		org={{
 			name: $selectedOrganization?.name ?? 'Select org',
-			plan: $selectedOrganization?.plan,
+			plan: formatPlan($selectedOrganization?.plan),
 			avatar: $selectedOrganization?.avatarUrl ?? null
 		}}
 		user={{ handle: $user?.username ?? 'you' }}
@@ -323,7 +324,7 @@
 			{#if $selectedOrganization}
 				<MenuHeader
 					title={$selectedOrganization.name}
-					subtitle={$selectedOrganization.plan ?? 'Organization'}
+					subtitle={formatPlan($selectedOrganization.plan) ?? 'Organization'}
 				>
 					{#snippet media()}
 						<IconTile src={$selectedOrganization?.avatarUrl}>

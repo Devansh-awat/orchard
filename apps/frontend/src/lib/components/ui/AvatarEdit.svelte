@@ -91,6 +91,8 @@
 	.avatar > :global(:not(.veil)) {
 		width: 100%;
 		height: 100%;
+		border-radius: 0;
+		outline: none;
 	}
 	.avatar--edit {
 		cursor: pointer;

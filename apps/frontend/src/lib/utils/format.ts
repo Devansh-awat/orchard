@@ -19,6 +19,11 @@ export function formatMemory(bytes: number | null | undefined): string {
 	return `${bytes} B`;
 }
 
+export function formatPlan(plan: string | null | undefined): string | undefined {
+	if (!plan) return undefined;
+	return plan.charAt(0).toUpperCase() + plan.slice(1).toLowerCase();
+}
+
 export function formatRelativeTime(date: Date): string {
 	const diffMs = elapsedSince(date.getTime());
 	const diffS = Math.floor(diffMs / 1000);

@@ -550,10 +550,7 @@
 	}
 	.org-plan {
 		color: var(--text-faint);
-		font-size: var(--text-micro);
-		font-weight: var(--weight-semibold);
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
+		font-size: var(--text-caption);
 	}
 	.org :global(.org-chev) {
 		flex-shrink: 0;
