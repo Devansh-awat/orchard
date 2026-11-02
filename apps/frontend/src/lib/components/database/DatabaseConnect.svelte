@@ -1,93 +1,146 @@
 <script lang="ts">
 	import { apiFetch } from '$lib/stores';
-	import { SecretString, SegmentedControl } from '$lib/components/ui';
+	import { ActionRow, Button, SecretString, SegmentedControl, Swap } from '$lib/components/ui';
+	import { formatConnection, parsePublicAddress, type ConnectionFormat } from './connection';
 	import type { DatabaseDetail } from './types';
 
 	let {
 		database,
 		settingsHref,
-		onnavigate = undefined
-	}: { database: DatabaseDetail; settingsHref: string; onnavigate?: () => void } = $props();
+		onnavigate = undefined,
+		onenablepublic = undefined,
+		enabling = false
+	}: {
+		database: DatabaseDetail;
+		settingsHref: string;
+		onnavigate?: () => void;
+		onenablepublic?: () => void;
+		enabling?: boolean;
+	} = $props();
 
-	type Format = 'uri' | 'psql' | 'env' | 'jdbc';
+	type Network = 'private' | 'public';
 	type Endpoint = 'rw' | 'ro' | 'r';
 
-	let format = $state<Format>('uri');
+	let chosenNetwork = $state<Network | null>(null);
+	let format = $state<ConnectionFormat>('uri');
 	let endpoint = $state<Endpoint>('rw');
 
 	const MASK = '••••••••';
+	const canBePublic = $derived(database.mode === 'cnpg');
+	const network = $derived<Network>(
+		chosenNetwork ?? (canBePublic && database.publicEnabled ? 'public' : 'private')
+	);
+	const publicAddress = $derived(parsePublicAddress(database.publicConnectionString));
+	const publicReady = $derived(!!database.publicEnabled && !!publicAddress);
 	const isPostgres = $derived(database.mode !== 'shared' || !!database.dbName);
 	const standbys = $derived(Math.max(0, (database.replicas ?? 1) - 1));
 	const endpoints = $derived(database.endpoints ?? null);
 
-	const host = $derived(
+	const privateHost = $derived(
 		endpoints && endpoint !== 'rw' ? (endpoints[endpoint] ?? database.host) : database.host
 	);
+	const target = $derived(
+		network === 'public' && publicAddress
+			? {
+					user: database.dbUser,
+					host: publicAddress.host,
+					port: publicAddress.port,
+					database: database.dbName,
+					query: publicAddress.query
+				}
+			: {
+					user: database.dbUser,
+					host: privateHost,
+					port: database.port,
+					database: database.dbName
+				}
+	);
 
-	function render(password: string) {
-		const uri = `postgresql://${database.dbUser}:${password}@${host}:${database.port}/${database.dbName}`;
-		if (format === 'psql') return `psql "${uri}"`;
-		if (format === 'env') return `DATABASE_URL="${uri}"`;
-		if (format === 'jdbc')
-			return `jdbc:postgresql://${host}:${database.port}/${database.dbName}?user=${database.dbUser}&password=${password}`;
-		return uri;
-	}
-
-	const masked = $derived(render(MASK));
+	const masked = $derived(formatConnection(format, target, MASK));
 
 	async function resolve() {
 		const res = await apiFetch(`/apiv1/databases/${database.id}/connection`);
 		if (!res.ok) return null;
 		const data = await res.json().catch(() => null);
-		return data?.password ? render(data.password) : null;
+		return data?.password ? formatConnection(format, target, data.password) : null;
 	}
-
-	const where = $derived(
-		database.publicEnabled ? 'Reachable from the internet' : 'Private to apps in this project'
-	);
 </script>
 
 <div class="connect">
-	<SegmentedControl
-		label="Connection format"
-		grow
-		bind:value={() => format, (v) => (format = v as Format)}
-		options={[
-			{ value: 'uri', label: 'URI' },
-			{ value: 'psql', label: 'psql' },
-			{ value: 'env', label: '.env' },
-			{ value: 'jdbc', label: 'JDBC' }
-		]}
-	/>
-	{#if isPostgres && endpoints}
+	{#if canBePublic}
 		<SegmentedControl
-			label="Which instances"
-			size="sm"
+			label="Where you connect from"
 			grow
-			bind:value={() => endpoint, (v) => (endpoint = v as Endpoint)}
+			bind:value={() => network, (v) => (chosenNetwork = v as Network)}
 			options={[
-				{ value: 'rw', label: 'Primary', hint: 'Reads and writes, follows a failover' },
-				{
-					value: 'ro',
-					label: 'Standbys',
-					hint: 'Read only, load balanced',
-					disabled: standbys === 0
-				},
-				{ value: 'r', label: 'Any', hint: 'Read only, every instance' }
+				{ value: 'private', label: 'Private', hint: 'From apps in this project' },
+				{ value: 'public', label: 'Public', hint: 'From anywhere on the internet' }
 			]}
 		/>
 	{/if}
-	<SecretString {masked} {resolve} label="Connection string" />
-	<p class="where">
-		{where} · <a href={settingsHref} onclick={onnavigate}>Public access</a>
-	</p>
-	<p class="where">
-		Apps in this project don't need to copy this: open an app's Variables and choose Use a resource.
-	</p>
+	<Swap key={network === 'public' && !publicReady ? 'off' : 'on'}>
+		{#if network === 'public' && !publicReady}
+			<ActionRow
+				label="Public access is off"
+				hint="Turn it on to connect from your computer or another host. Anyone with the password can connect."
+			>
+				<Button variant="primary" loading={enabling} onclick={() => onenablepublic?.()}>
+					Turn on
+				</Button>
+			</ActionRow>
+		{:else}
+			<div class="details">
+				<SegmentedControl
+					label="Connection format"
+					size="sm"
+					grow
+					bind:value={() => format, (v) => (format = v as ConnectionFormat)}
+					options={[
+						{ value: 'uri', label: 'URI' },
+						{ value: 'psql', label: 'psql' },
+						{ value: 'env', label: '.env' },
+						{ value: 'jdbc', label: 'JDBC' }
+					]}
+				/>
+				{#if network === 'private' && isPostgres && endpoints}
+					<SegmentedControl
+						label="Which instances"
+						size="sm"
+						grow
+						bind:value={() => endpoint, (v) => (endpoint = v as Endpoint)}
+						options={[
+							{ value: 'rw', label: 'Primary', hint: 'Reads and writes, follows a failover' },
+							{
+								value: 'ro',
+								label: 'Standbys',
+								hint: 'Read only, load balanced',
+								disabled: standbys === 0
+							},
+							{ value: 'r', label: 'Any', hint: 'Read only, every instance' }
+						]}
+					/>
+				{/if}
+				<SecretString {masked} {resolve} label="Connection string" />
+				{#if network === 'public'}
+					<p class="where">
+						Anyone with the password can connect. <a href={settingsHref} onclick={onnavigate}
+							>Manage public access</a
+						>
+					</p>
+				{:else}
+					<p class="where">
+						Only works from apps in this project. They don't need to copy this: open an app's
+						Variables and choose Use a resource.
+					</p>
+				{/if}
+			</div>
+		{/if}
+	</Swap>
 </div>
 
 <style>
-	.connect {
+	.connect,
+	.details {
 		display: flex;
 		flex-direction: column;
 		gap: 0.75rem;

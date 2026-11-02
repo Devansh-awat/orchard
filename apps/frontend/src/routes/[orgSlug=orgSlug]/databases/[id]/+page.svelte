@@ -25,6 +25,7 @@
 	} from 'lucide-svelte';
 	import {
 		ActionRow,
+		SecretString,
 		Alert,
 		Button,
 		EmptyState,
@@ -1025,6 +1026,13 @@
 		}
 	}
 
+	async function resolvePublicConnection() {
+		const r = await apiFetch(`/apiv1/databases/${dbId}/connection`);
+		if (!r.ok) return null;
+		const data = await r.json().catch(() => null);
+		return data?.publicConnectionString ?? null;
+	}
+
 	async function disablePublic() {
 		if (!database) return;
 		togglingPublic = true;
@@ -1860,6 +1868,15 @@
 										/>
 									</ActionRow>
 								</SettingsList>
+								{#if database.publicEnabled && database.publicConnectionString}
+									<div class="public-address">
+										<SecretString
+											masked={database.publicConnectionString}
+											resolve={resolvePublicConnection}
+											label="Public connection string"
+										/>
+									</div>
+								{/if}
 							</SectionCard>
 						{:else if settingsSection === 'danger'}
 							<SectionCard title="Danger zone" tone="danger">
@@ -1916,6 +1933,8 @@
 			{database}
 			settingsHref={hrefFor('settings', 'network')}
 			onnavigate={() => (connectOpen = false)}
+			onenablepublic={enablePublic}
+			enabling={togglingPublic}
 		/>
 	</Modal>
 	<RenameModal
@@ -1979,6 +1998,9 @@
 {/if}
 
 <style>
+	.public-address {
+		padding-top: 0.75rem;
+	}
 	.db-page {
 		--section-r: var(--radius-widget);
 		display: flex;

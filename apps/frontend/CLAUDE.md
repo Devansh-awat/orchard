@@ -345,8 +345,9 @@ Three-level hierarchy: **Org cap** → **Member allowance** → **Deployment req
   primary **Connect** button and `···` with Stop, Rename, Delete), one `AlertStack` line (`DatabaseAlerts`), then
   `PageTabs` synced to `?tab=` (Overview, Backups, Observe, Settings) with `&s=` for the Settings rail. Old ids
   redirect: `connection`/`terminal` to Overview, `metrics`/`queries` to Observe, `resources`/`extensions` to Settings.
-- Connect is a sheet (Supabase style), not a card: format (URI, psql, .env, JDBC), which instances (primary,
-  standbys, any), and the kit `SecretString`, which only fetches the real password from `/connection` on reveal or
+- Connect is a sheet (Supabase style), not a card: Private or Public first (public opens by default once it is on,
+  and offers Turn on right there while it is off), format (URI, psql, .env, JDBC), which instances (primary,
+  standbys, any; private only), and the kit `SecretString`, which only fetches the real password from `/connection` on reveal or
   copy (the server audits that call).
 - Overview: the Postgres console (`TerminalTab`: kit `LogViewer`, killed output, psql/shell tabs) as the main column;
   `DatabaseHealth` (one kit `CheckList`: each instance with the primary from `liveStatus.currentPrimary`, disk and

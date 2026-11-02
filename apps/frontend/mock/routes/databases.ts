@@ -102,6 +102,15 @@ function liveStatus(db: MockDatabase) {
 	};
 }
 
+const PUBLIC = new Map<string, number>();
+
+function publicConnection(db: MockDatabase, orgSlug: string, password: string) {
+	const port = PUBLIC.get(db.id);
+	return port
+		? `postgresql://${db.username}:${password}@db.${orgSlug}.example.dev:${port}/${db.dbName}?sslmode=verify-full&sslrootcert=system`
+		: null;
+}
+
 export function databaseDetail(store: Store, db: MockDatabase, fast = false) {
 	const p = store.project(db.projectId)!;
 	const o = store.org(p.organizationId)!;
@@ -126,11 +135,11 @@ export function databaseDetail(store: Store, db: MockDatabase, fast = false) {
 		containerName: db.mode === 'container' ? db.name : null,
 		clusterName: `${db.name}-cluster`,
 		storageSize: db.storageSize,
-		publicEnabled: false,
-		publicIp: null,
-		publicPort: null,
-		publicHostname: null,
-		publicConnectionString: null,
+		publicEnabled: PUBLIC.has(db.id),
+		publicIp: PUBLIC.has(db.id) ? '203.0.113.10' : null,
+		publicPort: PUBLIC.get(db.id) ?? null,
+		publicHostname: PUBLIC.has(db.id) ? `db.${o.slug}.example.dev` : null,
+		publicConnectionString: publicConnection(db, o.slug, '••••••••'),
 		connectionString: connectionString.replace(db.password, '****'),
 		internalHost: `${host}:${port}`,
 		endpoints:
@@ -441,10 +450,14 @@ export function databaseRoutes(r: Router, { store }: MockContext) {
 			password: db.password,
 			database: db.dbName,
 			connectionString: detail.connectionString.replace('****', db.password),
-			publicConnectionString: null
+			publicConnectionString:
+				detail.publicConnectionString?.replace('••••••••', db.password) ?? null
 		};
 	});
-	r.delete('/databases/:id/public', () => ({ ok: true }));
+	r.delete('/databases/:id/public', ({ params }) => {
+		PUBLIC.delete(params.id);
+		return { ok: true };
+	});
 
 	for (const action of ['stop', 'start', 'restart'] as const) {
 		r.post(`/databases/:id/${action}`, ({ params }) => {
@@ -491,9 +504,11 @@ export function databaseRoutes(r: Router, { store }: MockContext) {
 		changed(db);
 		return { name: db.name };
 	});
-	r.post('/databases/:id/public', () =>
-		reply(400, { message: 'Public access needs a real cluster, it is off in mock mode' })
-	);
+	r.post('/databases/:id/public', ({ params }) => {
+		const port = PUBLIC.get(params.id) ?? 31000 + PUBLIC.size;
+		PUBLIC.set(params.id, port);
+		return { enabled: true, host: '203.0.113.10', port };
+	});
 	r.delete('/databases/:id', ({ params }) => {
 		const db = find(params.id);
 		if (!db) return notFound('Database not found');
