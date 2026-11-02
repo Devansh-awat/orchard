@@ -6,9 +6,41 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestChooseLoginBaseURL(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    string
+		wantErr bool
+	}{
+		{name: "Hack Club Orchard", input: "\n", want: "https://orchard.infra.hackclub.com"},
+		{name: "Self-Hosted Orchard", input: "2\nhttps://dashboard.automiq.me/\n", want: "https://dashboard.automiq.me"},
+		{name: "Invalid choice", input: "3\n", wantErr: true},
+		{name: "Invalid URL", input: "2\nnot-a-url\n", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := chooseLoginBaseURL(strings.NewReader(tt.input), io.Discard)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("chooseLoginBaseURL: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("base URL = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
 
 // authStartAPI serves routes keyed "METHOD /path" and records every request,
 // mirroring startProjectAPI but scoped to this file's ownership.

@@ -104,7 +104,9 @@ export class IngressService implements OnModuleInit {
 
   onModuleInit(): void {
     this.instanceConfig.onWildcardChange(() => this.reconcileWildcardTls());
-    this.leaderElection.onAcquired(() => void this.reconcileWildcardTls());
+    this.leaderElection.onAcquired(() => {
+      void this.reconcileWildcardTls();
+    });
   }
 
   constructor(

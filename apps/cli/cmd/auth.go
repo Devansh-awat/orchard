@@ -3,6 +3,7 @@ package cmd
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -74,7 +75,16 @@ func authLoginCmd() *cobra.Command {
 			// API unless overridden.
 			base := webURL
 			if base == "" {
-				base = cfg.APIURL
+				if apiURL != "" {
+					base = apiURL
+				} else {
+					selectedBase, promptErr := chooseLoginBaseURL(os.Stdin, os.Stderr)
+					if promptErr != nil {
+						return promptErr
+					}
+					base = selectedBase
+					cfg.APIURL = base
+				}
 			}
 			return webLogin(cfg, base, !noBrowser)
 		},
@@ -85,6 +95,37 @@ func authLoginCmd() *cobra.Command {
 	c.Flags().StringVar(&webURL, "web-url", "", "override web app base URL (defaults to the API URL)")
 	c.Flags().BoolVar(&noBrowser, "no-browser", false, "print the URL instead of opening a browser")
 	return c
+}
+
+func chooseLoginBaseURL(in io.Reader, out io.Writer) (string, error) {
+	r := bufio.NewReader(in)
+	fmt.Fprintln(out, "Where do you want to log in?")
+	fmt.Fprintln(out, "1) Hack Club Orchard")
+	fmt.Fprintln(out, "2) Self-Hosted Orchard")
+	fmt.Fprint(out, "Choose an Orchard instance [1]: ")
+	choice, err := r.ReadString('\n')
+	if err != nil && len(choice) == 0 {
+		return "", fmt.Errorf("could not read Orchard instance choice: %w", err)
+	}
+	choice = strings.TrimSpace(choice)
+	if choice == "" || choice == "1" {
+		return config.DefaultAPIURL, nil
+	}
+	if choice != "2" {
+		return "", fmt.Errorf("invalid Orchard instance choice %q: choose 1 or 2", choice)
+	}
+
+	fmt.Fprint(out, "Base URL: ")
+	base, err := r.ReadString('\n')
+	if err != nil && len(base) == 0 {
+		return "", fmt.Errorf("could not read self-hosted base URL: %w", err)
+	}
+	base = strings.TrimRight(strings.TrimSpace(base), "/")
+	parsed, err := url.Parse(base)
+	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return "", fmt.Errorf("invalid self-hosted base URL %q: use an http:// or https:// URL", base)
+	}
+	return base, nil
 }
 
 func authStatusCmd() *cobra.Command {
