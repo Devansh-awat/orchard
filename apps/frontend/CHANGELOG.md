@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.79.0](https://github.com/hackclub/orchard/compare/frontend/v1.78.0...frontend/v1.79.0) (2026-11-02)
+
+
+### Features
+
+* **frontend:** public database address in connect ([c077332](https://github.com/hackclub/orchard/commit/c0773321f164f27fa0d7a95219169aef1addcb8e))
+
+
+### Bug Fixes
+
+* **frontend:** keep database health during refreshes ([f9b9a19](https://github.com/hackclub/orchard/commit/f9b9a193be1ad48dcbf2bf770d8463223287e30b))
+
 ## [1.78.0](https://github.com/hackclub/orchard/compare/frontend/v1.77.0...frontend/v1.78.0) (2026-11-01)
 
 
