@@ -82,7 +82,8 @@
 		database.mode === 'cnpg' &&
 			!!database.backupsEnabled &&
 			!database.backupScheduleCron &&
-			!database.liveStatus?.firstRecoverabilityPoint &&
+			!!database.liveStatus &&
+			!database.liveStatus.firstRecoverabilityPoint &&
 			database.status === 'ready' &&
 			!archivingFailing
 	);

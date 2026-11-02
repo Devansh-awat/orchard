@@ -18,7 +18,7 @@
 				href={item.href}
 			>
 				<span class="dot"><StatusDot meta={item.meta} label={item.meta.label} /></span>
-				<span class="text">
+				<span class="text" class:text--wide={metered && item.ratio === undefined}>
 					<span class="label" title={item.label}>{item.label}</span>
 					{#if item.detail}<span class="detail" title={item.detail}>{item.detail}</span>{/if}
 				</span>
@@ -27,8 +27,6 @@
 						<span class="meter" aria-hidden="true">
 							{#if ratio != null}<span class="fill" style:width="{ratio * 100}%"></span>{/if}
 						</span>
-					{:else}
-						<span></span>
 					{/if}
 				{/if}
 				{#if item.value}<span class="value">{item.value}</span>{/if}
@@ -77,6 +75,9 @@
 		display: grid;
 		place-items: center;
 	}
+	.text--wide {
+		grid-column: 2 / span 2;
+	}
 	.text {
 		display: flex;
 		align-items: baseline;
@@ -84,6 +85,8 @@
 		min-width: 0;
 	}
 	.label {
+		flex-shrink: 0;
+		max-width: 100%;
 		min-width: 0;
 		overflow-x: clip;
 		white-space: nowrap;

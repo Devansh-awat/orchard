@@ -144,7 +144,15 @@
 			});
 		}
 		if (database.mode === 'cnpg') {
-			if (live?.archiving && !live.archiving.ok) {
+			if (!live) {
+				out.push({
+					id: 'backups',
+					label: 'Backups',
+					value: 'Checking',
+					meta: statusMeta('neutral', 'Checking backups'),
+					href: backupsHref
+				});
+			} else if (live.archiving && !live.archiving.ok) {
 				out.push({
 					id: 'backups',
 					label: 'Backups',
@@ -153,7 +161,7 @@
 					meta: statusMeta('error', 'Archiving failed'),
 					href: backupsHref
 				});
-			} else if (live?.lastSuccessfulBackup) {
+			} else if (live.lastSuccessfulBackup) {
 				out.push({
 					id: 'backups',
 					label: 'Backups',

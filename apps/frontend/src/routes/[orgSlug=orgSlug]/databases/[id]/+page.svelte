@@ -605,6 +605,7 @@
 			const incoming = await response.json();
 			database = {
 				...incoming,
+				liveStatus: incoming?.liveStatus ?? database?.liveStatus,
 				pods: incoming?.pods?.length ? incoming.pods : (database?.pods ?? [])
 			};
 			error = null;
