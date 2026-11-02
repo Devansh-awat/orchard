@@ -20,6 +20,7 @@ import {
   railpackConfigOverride,
   resolveScratchMode
 } from './build-config';
+import { sandboxStartFailure } from './build-sandbox';
 import { cacheEvictInitContainer } from './cache-evict';
 import { parseRepoUrl, withCloneCredentials } from './repo-url';
 import {
@@ -642,6 +643,22 @@ export class ImageBuilderService {
       if ((error as { code?: string })?.code === 'P2025') return;
       console.error('[ImageBuilder] Failed to stamp build time:', error);
     }
+  }
+
+  private async markCloning(deploymentId: string | undefined) {
+    if (!deploymentId) return;
+    const updated = await this.prisma.$executeRaw`
+      UPDATE "deployments"
+      SET "build_step" = 'cloning',
+          "build_step_timestamps" = jsonb_set(
+            COALESCE("build_step_timestamps", '{}'::jsonb),
+            '{cloning}',
+            ${Date.now()}::text::jsonb
+          ),
+          "updated_at" = (NOW() AT TIME ZONE 'UTC')
+      WHERE "id" = ${deploymentId}::uuid AND "build_step" IS NULL
+    `;
+    if (updated > 0) this.emitBuildChanged(deploymentId).catch(() => {});
   }
 
   private async setBuildStep(deploymentId: string | undefined, step: string) {
@@ -2883,6 +2900,22 @@ fi
             }
           }
 
+          const sandboxMissing = podConditions?.some(
+            (c) => c.type === 'PodReadyToStartContainers' && c.status === 'False'
+          );
+          if (!schedulingMessage && !startupMessage && podPhase === 'Pending' && sandboxMissing) {
+            const events = await coreApi
+              .listNamespacedEvent(
+                this.builderNamespace,
+                undefined,
+                undefined,
+                undefined,
+                `involvedObject.name=${podName}`
+              )
+              .catch(() => null);
+            startupMessage = sandboxStartFailure(events?.body.items ?? []) ?? undefined;
+          }
+
           railpackInfoLog = await this.readRailpackInfoLog(
             coreApi,
             podName,
@@ -3301,6 +3334,7 @@ fi
         }
 
         if (status.status === 'running') {
+          await this.markCloning(deploymentId);
           await this.streamBuildkitOutput(deploymentId, jobName, status.logs);
           if (this.buildkitPushDetected.has(jobName)) {
             await this.streamPusherOutput(deploymentId, jobName, status.pusherLogs);
@@ -3646,25 +3680,13 @@ fi
 
     let firecrackerFailure = false;
     try {
-      if (deploymentId) {
-        const now = Date.now();
-        const logLine = `[${now}] [INFO] Starting BuildKit build for ${this.sanitizeLogMessage(repoUrl, deploymentId)}@${branch} (type: ${buildType})\n`;
-        await this.prisma.$executeRaw`
-          UPDATE "deployments"
-          SET "build_step" = 'cloning',
-              "build_logs" = COALESCE("build_logs", '') || ${logLine},
-              "build_step_timestamps" = jsonb_set(
-                COALESCE("build_step_timestamps", '{}'::jsonb),
-                '{cloning}',
-                ${now}::text::jsonb
-              ),
-              "updated_at" = (NOW() AT TIME ZONE 'UTC')
-          WHERE "id" = ${deploymentId}::uuid
-        `;
-        this.emitBuildChanged(deploymentId).catch(() => {});
-      }
+      await this.appendLog(
+        deploymentId,
+        `Starting BuildKit build for ${this.sanitizeLogMessage(repoUrl, deploymentId)}@${branch} (type: ${buildType})`
+      );
 
       if (options.builder === 'firecracker') {
+        await this.markCloning(deploymentId);
         try {
           return await this.buildWithFirecracker(options);
         } catch (error) {

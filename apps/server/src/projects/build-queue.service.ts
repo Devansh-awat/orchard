@@ -440,11 +440,13 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
     branch?: string | null;
     triggeredById?: string | null;
   }): Promise<void> {
+    const builder = await this.chooseBuilder(opts.deploymentId);
     const now = new Date();
     await this.prisma.buildRun.create({
       data: {
         deploymentId: opts.deploymentId,
         status: 'building',
+        builder,
         triggerType: opts.triggerType,
         commitSha: opts.commitSha ?? null,
         commitMessage: opts.commitMessage ?? null,
