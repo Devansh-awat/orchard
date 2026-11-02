@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.88.0](https://github.com/hackclub/orchard/compare/server/v2.87.0...server/v2.88.0) (2026-11-02)
+
+
+### Features
+
+* **cli:** prompt for Orchard instance during login ([#199](https://github.com/hackclub/orchard/issues/199)) ([a06ab1d](https://github.com/hackclub/orchard/commit/a06ab1d53e39f219dea19d15fc7839f399f3ecca))
+
+
+### Bug Fixes
+
+* **server:** first builds use firecracker, stuck sandboxes fail ([1552125](https://github.com/hackclub/orchard/commit/15521253a22aaff1ffd9362b936b45eb0df14192))
+
 ## [2.87.0](https://github.com/hackclub/orchard/compare/server/v2.86.0...server/v2.87.0) (2026-11-01)
 
 

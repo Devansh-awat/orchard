@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/hackclub/orchard/compare/forum/v1.1.1...forum/v1.2.0) (2026-11-02)
+
+
+### Features
+
+* **cli:** prompt for Orchard instance during login ([#199](https://github.com/hackclub/orchard/issues/199)) ([a06ab1d](https://github.com/hackclub/orchard/commit/a06ab1d53e39f219dea19d15fc7839f399f3ecca))
+
 ## [1.1.1](https://github.com/hackclub/orchard/compare/forum/v1.1.0...forum/v1.1.1) (2026-11-01)
 
 

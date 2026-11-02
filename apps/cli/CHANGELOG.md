@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.37.0](https://github.com/hackclub/orchard/compare/cli/v0.36.0...cli/v0.37.0) (2026-11-02)
+
+
+### Features
+
+* **cli:** prompt for Orchard instance during login ([#199](https://github.com/hackclub/orchard/issues/199)) ([a06ab1d](https://github.com/hackclub/orchard/commit/a06ab1d53e39f219dea19d15fc7839f399f3ecca))
+
 ## [0.36.0](https://github.com/hackclub/orchard/compare/cli/v0.35.0...cli/v0.36.0) (2026-11-01)
 
 

@@ -1,7 +1,7 @@
 {
   "id": "forum",
   "name": "The Grove",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "publisher": "orchard",
   "description": "A forum for the people on your instance: bug reports, feature requests, votes and replies.",
   "homepage": "https://orchard.my/docs/run/grove",
