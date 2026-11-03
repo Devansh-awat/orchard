@@ -136,6 +136,7 @@ func rootCmd() *cobra.Command {
 		commandsCmd(),
 		licensesCmd(),
 		exitCodesCmd(),
+		versionCmd(),
 	)
 	return root
 }

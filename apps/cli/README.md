@@ -208,7 +208,7 @@ echo '{"replicas":3}' | orchard api POST /deployments/abc/scale --data -
 - `--yes / -y`: skip confirmation prompts (required for destructive commands
   when stdin is not a TTY)
 - `-o, --output json|table`: force the output format (default: auto by TTY)
-- `--version`: print the CLI version
+- `--version`: print the CLI version (same as `orchard version`)
 
 ## Exit codes
 
