@@ -2,9 +2,7 @@
 // Typechecks every TypeScript project with TypeScript 7 and reports how long it
 // took and how much memory it needed.
 //
-// TS 7 is the Go port, so the whole repo checks in a few seconds. TS 5 could
-// never run here anyway: it is the version that removed `baseUrl` and
-// `moduleResolution: node10`, both of which the old server config used.
+// TS 7 is the Go port, so the whole repo checks in a few seconds.
 //
 // The server checks through tsconfig.check.json rather than tsconfig.json
 // because the build emits through swc, and the check-only config picks the
