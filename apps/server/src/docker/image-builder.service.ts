@@ -4487,10 +4487,17 @@ fi
       const artifactsUrl = `${auth.registryUrl}/api/v2.0/projects/${this.harborProject}/repositories/${encodeURIComponent(repoName)}/artifacts`;
       const headers = { Authorization: auth.authHeader };
 
-      const lookup = await fetch(`${artifactsUrl}/${encodeURIComponent(tag)}`, { headers });
-      if (lookup.status === 404) {
-        console.warn(
-          `[ImageBuilder] Artifact not found in registry (already deleted?): ${this.harborProject}/${repoName}:${tag}`
+      const lookup = await fetch(`${artifactsUrl}/${encodeURIComponent(tag)}`, { headers }).catch(
+        () => null
+      );
+      if (!lookup || lookup.status === 404) {
+        const scheme = this.plainHttpRegistries.has(this.harborRegistryPush) ? 'http' : 'https';
+        const res = await fetch(
+          `${scheme}://${this.harborRegistryPush}/v2/${this.harborProject}/${repoName}/manifests/${encodeURIComponent(tag)}`,
+          { method: 'DELETE', headers }
+        );
+        console.log(
+          `[ImageBuilder] Registry tag delete ${this.harborProject}/${repoName}:${tag}: ${res.status}`
         );
         return;
       }
