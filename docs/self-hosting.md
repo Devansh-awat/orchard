@@ -723,7 +723,7 @@ and keys talks to it directly and never goes through the proxy.
 The proxy reads its bindings from the platform database as `orchard_r2_proxy`,
 a login role the CNPG cluster manages with a password the chart keeps in the
 `orchard-r2-proxy-db` secret and holds stable across upgrades. The server
-grants that role `SELECT` on the three tables it needs at every boot. On the
+grants that role `SELECT` on the three tables it needs, plus the key columns of `storage_access_keys`, at every boot. On the
 first upgrade to this scheme backup lookups can fail for a few seconds until
 the grant lands, then recover on their own. `r2Proxy.databaseUrl` points the
 proxy somewhere else entirely for a database the chart does not run.

@@ -417,7 +417,7 @@ Both off by default, and both need the runtime on every node first, or pods fail
 | `r2Proxy.databasePassword` | `""` | Password for the read-only `orchard_r2_proxy` postgres role. Empty keeps whatever the `orchard-r2-proxy-db` secret already holds, or mints one on first install. |
 | `r2Proxy.databaseUrl` | `""` | Full override for a database the chart does not run. Give it a read-only role. |
 
-When `postgres.enabled`, the CNPG cluster manages the `orchard_r2_proxy` login role and the server grants it `SELECT` on `databases`, `projects` and `organizations` at boot. The proxy never holds the app owner's credentials.
+When `postgres.enabled`, the CNPG cluster manages the `orchard_r2_proxy` login role and the server grants it `SELECT` on `databases`, `projects`, `organizations` and the columns of `storage_access_keys` the proxy reads at boot. The proxy never holds the app owner's credentials.
 
 ### Object storage (`objectStorage.local.*`)
 
