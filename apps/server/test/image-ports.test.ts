@@ -448,7 +448,7 @@ test('a token realm that redirects to a private address is refused', async () =>
 
 test('plain http is only reachable for the configured hosts, port included', async () => {
   const plainHttpHosts = plainHttpHostsFrom(
-    ' harbor-core.harbor.svc.cluster.local , 178.156.144.127:5000 '
+    ' harbor-core.harbor.svc.cluster.local , 192.0.2.10:5000 '
   );
   const routes = {
     'http://harbor-core.harbor.svc.cluster.local/v2/orchard/app/manifests/latest': () =>
