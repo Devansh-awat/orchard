@@ -63,7 +63,7 @@ spec:
     roles:
       {{- if .Values.datadog.enabled }}
       # Read-only monitoring user the Datadog agent connects as. Password
-      # lives in the orchard-db-datadog secret (kubeops, SOPS-encrypted).
+      # lives in the orchard-db-datadog secret, which you create.
       - name: datadog
         ensure: present
         login: true

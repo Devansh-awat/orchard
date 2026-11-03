@@ -389,9 +389,9 @@ is the single place the MCP's address is configured.
 |---|---|---|
 | `builders.enabled` | `true` | Install the `orchard-builders` namespace + RBAC + secrets. |
 | `builders.namespace` | `orchard-builders` | Namespace where BuildKit pods will run. |
-| `builders.harbor.username` | `admin` | Harbor registry username (written to `harbor-registry-creds` dockerconfigjson). |
-| `builders.harbor.password` | `Harbor12345` | Harbor password. **Override this.** |
-| `builders.harbor.hosts` | `[harbor-core.harbor.svc.cluster.local, harbor.1mp.dev]` | Hosts the credentials apply to. |
+| `builders.harbor.username` | `""` | Registry username (written to `harbor-registry-creds` dockerconfigjson). Required when `hosts` is set. |
+| `builders.harbor.password` | `""` | Registry password. Required when `hosts` is set. |
+| `builders.harbor.hosts` | `[]` | Hosts the credentials apply to. |
 | `builders.httpRegistries` | `[harbor-core.harbor.svc.cluster.local]` | Registries BuildKit talks plain HTTP to. Anything not listed is HTTPS. A self-host running zot lists `zot.orchard.svc.cluster.local:5000`. |
 | `builders.r2.accessKeyId` | `""` | Cloudflare R2 access key for BuildKit S3-style cache. |
 | `builders.r2.secretAccessKey` | `""` | Cloudflare R2 secret. |
@@ -453,7 +453,7 @@ Both off by default, and both need the runtime on every node first, or pods fail
 | `builderSandbox.pusherImage` | `quay.io/skopeo/stable:latest` | Image for that container. Must have `skopeo` on `PATH`. |
 | `builderSandbox.tmpfsWorkspace` | `false` | Back workspace and output `emptyDir`s with memory. Counts against the container's memory limit. |
 | `builderSandbox.scratch.mode` | `""` | `tmpfs`, `disk` or `block`. Empty follows the isolation setting. |
-| `builderSandbox.scratch.size` / `storageClass` | `40Gi` / `longhorn-ssd` | Size and class of the BuildKit scratch. With tmpfs, `size` is a RAM reservation. |
+| `builderSandbox.scratch.size` / `storageClass` | `40Gi` / `""` | Size and class of the BuildKit scratch. The class only applies in block mode; empty uses the default StorageClass. With tmpfs, `size` is a RAM reservation. |
 | `builderSandbox.memoryLimit` | `""` | `BUILDER_MEMORY_LIMIT`. |
 
 ### Backup proxy (`r2Proxy.*`)
@@ -651,6 +651,7 @@ outside Orchard.
 |---|---|---|
 | `metrics.enabled` | `true` | Install the orchard-metrics stack. |
 | `metrics.namespace` | `orchard-metrics` | Namespace for the metrics stack. Referenced inside the vmagent scrape config and remote-write URL. |
+| `metrics.clusterLabel` | `leafycluster` | `cluster` label vmagent stamps on every series. |
 | `metrics.victoriametrics.image` | `victoriametrics/victoria-metrics:v1.154.1` | VM image. Keep it on the same version as `metrics.vmagent.image`. |
 | `metrics.victoriametrics.retention` | `30d` | `-retentionPeriod` flag. |
 | `metrics.victoriametrics.storage.size` | `5Gi` | StatefulSet PVC size. |
@@ -741,7 +742,7 @@ Renders the shared Gateway API `Gateway` objects and `ReferenceGrant`s.
 | `gateway.gatewayClassName` | `traefik` | `GatewayClass` both Gateways attach to. |
 | `gateway.http.enabled` | `true` | Render the L7 HTTP/HTTPS Gateway. |
 | `gateway.http.name` | `http-gateway` | Gateway object name. The server (`ensureCustomDomainListener`) targets this exact name, so keep them in sync. |
-| `gateway.http.appDomain` | `a.lfdl.ink` | Hostname pattern for autogen user app domains. Must match server `APP_DOMAIN` and frontend `PUBLIC_APP_DOMAIN`. |
+| `gateway.http.appDomain` | `""` | Hostname pattern for autogen user app domains. Must match server `APP_DOMAIN` and frontend `PUBLIC_APP_DOMAIN`. Empty renders no wildcard listener and no wildcard Certificate. |
 | `gateway.http.appWildcardSecretName` | `""` | Secret holding the wildcard TLS cert for `*.{appDomain}`. Empty derives `wildcard-<appDomain with dots as dashes>-tls`, which the chart-managed `Certificate`, the Gateway listener and `PLATFORM_WILDCARD_DOMAINS` all agree on. |
 | `gateway.db.enabled` | `true` | Render the L4 TCP Gateway for managed DBs. |
 | `gateway.db.name` | `db-gateway` | Gateway object name. Targeted by the server's `ensureDbGatewayListener`. |

@@ -7,8 +7,8 @@
 
 {{- /* App wildcard: terminates TLS on the shared HTTP gateway. */ -}}
 {{- with .Values.certificates.wildcards.app }}
-{{- if .enabled }}
 {{- $domain := .domain | default $.Values.gateway.http.appDomain -}}
+{{- if and .enabled $domain }}
 {{- $secret := .secretName | default (include "orchard.appWildcardSecret" $) -}}
 ---
 apiVersion: cert-manager.io/v1

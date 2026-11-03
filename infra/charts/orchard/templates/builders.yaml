@@ -50,6 +50,9 @@ stringData:
 {{- $hosts := .Values.builders.harbor.hosts }}
 {{- $user := .Values.builders.harbor.username }}
 {{- $pass := .Values.builders.harbor.password }}
+{{- if and $hosts (not (and $user $pass)) }}
+{{- fail "builders.harbor.hosts lists registries, so builders.harbor.username and builders.harbor.password are required" }}
+{{- end }}
 {{- $auth := printf "%s:%s" $user $pass | b64enc }}
 {{- $httpHosts := .Values.builders.httpRegistries | default list }}
 {{- $sep := "" }}

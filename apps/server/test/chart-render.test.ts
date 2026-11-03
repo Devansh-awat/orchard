@@ -107,6 +107,38 @@ test('buildkit only trusts plaintext registries from values', { skip: !helmAvail
   assert.match(out, /\[registry\."zot\.orchard\.svc\.cluster\.local:5000"\]\s+http = true/);
 });
 
+test("a stock render names nobody else's domain or registry", { skip: !helmAvailable() }, () => {
+  const out = render([]);
+  for (const internal of ['1mp.dev', 'lfdl.ink', 'Harbor12345', 'longhorn-ssd']) {
+    assert.ok(!out.includes(internal), `no ${internal}`);
+  }
+  assert.ok(!out.includes('https-wildcard'), 'no wildcard listener without an app domain');
+  assert.ok(!out.includes('kind: Certificate'), 'no wildcard Certificate without an app domain');
+});
+
+test(
+  'an app domain renders the wildcard listener and Certificate',
+  { skip: !helmAvailable() },
+  () => {
+    const out = render(['gateway.http.appDomain=apps.example.com']);
+    assert.match(out, /hostname: "\*\.apps\.example\.com"/);
+    assert.match(out, /commonName: "\*\.apps\.example\.com"/);
+  }
+);
+
+test('listing a registry without credentials refuses to render', { skip: !helmAvailable() }, () => {
+  assert.throws(
+    () => render(['builders.harbor.hosts[0]=registry.example.com']),
+    /builders\.harbor\.username and builders\.harbor\.password are required/
+  );
+  const out = render([
+    'builders.harbor.hosts[0]=registry.example.com',
+    'builders.harbor.username=robot',
+    'builders.harbor.password=secret'
+  ]);
+  assert.match(out, /"registry\.example\.com": \{ "username": "robot"/);
+});
+
 test('the chart lints clean', { skip: !helmAvailable() }, () => {
   execFileSync('helm', ['lint', chart], { stdio: 'ignore' });
 });

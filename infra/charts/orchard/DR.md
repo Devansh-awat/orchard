@@ -39,7 +39,7 @@ The teardown keeps the backups. Bring each database back from the trash as above
 
 ## The Kubernetes cluster is gone
 
-1. Build the new cluster and install CNPG, the barman cloud plugin and cert-manager through kubeops.
+1. Build the new cluster and install CNPG, the barman cloud plugin and cert-manager.
 2. Restore Orchard's own database first. Create a Cluster named `orchard-db` with `bootstrap.recovery` from the orchard-db archive (`postgres.backup.destinationPath`, server name `orchard-db`), then install the chart. Orchard comes back knowing every database, checkpoint and trash entry.
 3. For each tenant database, use the Backups tab or `orchard db backup restore <id> --wait`. Restores read the archive straight from the bucket and need nothing that lived in the old cluster.
 4. If orchard-db itself cannot be restored, download `_catalog/databases-latest.json`. Each entry has `destinationPath`, `serverName`, `pgMajor`, `dbName` and `dbUser`, which is everything a recovery Cluster needs:

@@ -456,7 +456,7 @@ true
               APP_DOMAIN is only injected when the operator hasn't supplied it
               themselves. A container `env` entry outranks every `envFrom`
               source, so emitting it unconditionally would silently shadow an
-              APP_DOMAIN held in a Secret, which is how the kubeops install
+              APP_DOMAIN held in a Secret, which is how a GitOps install usually
               provides it.
             */}}
             {{- if not (or (include "orchard.serverEnvHas" (dict "root" . "key" "APP_DOMAIN")) .Values.server.envFrom) }}
