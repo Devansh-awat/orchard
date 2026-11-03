@@ -543,7 +543,13 @@ export function projectRoutes(r: Router, { store }: MockContext) {
 		return {
 			...templateRow(TEMPLATES[i], i),
 			parameters: spec.parameters,
-			resources: spec.resources
+			resources: spec.resources.map((resource) =>
+				resource.type === 'ingress'
+					? { ...resource, cpuMilli: null, memoryBytes: null }
+					: resource.type === 'database'
+						? { ...resource, cpuMilli: 500, memoryBytes: 1024 ** 3 }
+						: { ...resource, cpuMilli: 1000, memoryBytes: 1024 ** 3 }
+			)
 		};
 	});
 

@@ -28,6 +28,8 @@
 	interface ResourceSummary {
 		name: string;
 		type: 'deployment' | 'database' | 'ingress';
+		cpuMilli: number | null;
+		memoryBytes: number | null;
 	}
 
 	interface TemplateDetail {
@@ -49,8 +51,7 @@
 	let deploying = $state(false);
 	let error = $state<string | null>(null);
 	let paramValues = $state<Record<string, any>>({});
-	let resourceCpuMilli = $state<number | null>(null);
-	let resourceMemoryBytes = $state<number | null>(null);
+	let sizes = $state<Record<string, { cpuMilli: number | null; memoryBytes: number | null }>>({});
 
 	const orgSlug = $derived($page.params.orgSlug ?? '');
 	const projectSlug = $derived($page.params.projectSlug ?? '');
@@ -124,6 +125,7 @@
 		)
 	);
 	const blocked = $derived(Object.values(problems).some(Boolean));
+	const sized = $derived((template?.resources ?? []).filter((r) => r.type !== 'ingress'));
 
 	async function fetchTemplate() {
 		try {
@@ -138,6 +140,11 @@
 					paramValues[param.name] = false;
 				} else {
 					paramValues[param.name] = '';
+				}
+			}
+			for (const resource of template!.resources) {
+				if (resource.type !== 'ingress') {
+					sizes[resource.name] = { cpuMilli: null, memoryBytes: null };
 				}
 			}
 		} catch (e) {
@@ -174,8 +181,12 @@
 				body: JSON.stringify({
 					templateId: template.id,
 					parameters: paramValues,
-					cpuRequestMilli: resourceCpuMilli,
-					memoryRequestBytes: resourceMemoryBytes
+					resourceOverrides: Object.fromEntries(
+						Object.entries(sizes).map(([name, size]) => [
+							name,
+							{ cpuRequestMilli: size.cpuMilli, memoryRequestBytes: size.memoryBytes }
+						])
+					)
 				})
 			});
 
@@ -309,15 +320,25 @@
 				</SectionCard>
 			{/if}
 
-			<SectionCard
-				title="Resources"
-				description="CPU and memory for every app and database it creates."
-			>
-				<ResourcePicker
-					bind:cpuMilli={resourceCpuMilli}
-					bind:memoryBytes={resourceMemoryBytes}
-					disabled={deploying}
-				/>
+			<SectionCard title="Resources">
+				<Stack gap="lg">
+					{#each sized as resource (resource.name)}
+						<div class="sized">
+							{#if sized.length > 1}
+								<ResourceList items={[resource]} />
+							{/if}
+							<ResourcePicker
+								defaultLabel="Recommended"
+								kind={resource.type === 'database' ? 'database' : 'app'}
+								defaultCpuMilli={resource.cpuMilli}
+								defaultMemoryBytes={resource.memoryBytes}
+								bind:cpuMilli={sizes[resource.name].cpuMilli}
+								bind:memoryBytes={sizes[resource.name].memoryBytes}
+								disabled={deploying}
+							/>
+						</div>
+					{/each}
+				</Stack>
 			</SectionCard>
 
 			<FormActions>
@@ -339,5 +360,10 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-6);
+	}
+	.sized {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
 	}
 </style>

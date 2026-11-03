@@ -84,6 +84,7 @@
 		kind?: PodKind;
 		defaultCpuMilli?: number | null;
 		defaultMemoryBytes?: number | null;
+		defaultLabel?: string;
 		disabled?: boolean;
 		showUnlimited?: boolean;
 		currentCpuUsage?: number | null;
@@ -101,6 +102,7 @@
 		kind = 'app',
 		defaultCpuMilli = null,
 		defaultMemoryBytes = null,
+		defaultLabel,
 		disabled = false,
 		currentCpuUsage = null,
 		currentMemUsage = null,
@@ -120,8 +122,12 @@
 	const quota = createQuery<QuotaMe>(() => quotaMeQuery(orgId));
 
 	const podDefaults = $derived(quota.data?.podDefaults?.[kind] ?? null);
-	const cpuDefault = $derived(podDefaults?.cpuMilli ?? defaultCpuMilli ?? null);
-	const memDefault = $derived(podDefaults?.memoryBytes ?? defaultMemoryBytes ?? null);
+	const cpuDefault = $derived(
+		defaultLabel ? defaultCpuMilli : (podDefaults?.cpuMilli ?? defaultCpuMilli ?? null)
+	);
+	const memDefault = $derived(
+		defaultLabel ? defaultMemoryBytes : (podDefaults?.memoryBytes ?? defaultMemoryBytes ?? null)
+	);
 	const cpuLimit = $derived(maxCpuMilli ?? quota.data?.effectiveLimit?.cpuMilli ?? null);
 	const memLimit = $derived(maxMemoryBytes ?? quota.data?.effectiveLimit?.memoryBytes ?? null);
 
@@ -138,6 +144,7 @@
 		format={formatMemory}
 		parse={parseMemory}
 		fallback={memDefault}
+		fallbackLabel={defaultLabel}
 		limit={memLimit}
 		usage={currentMemUsage}
 		recommended={recommendedMemoryBytes}
@@ -151,6 +158,7 @@
 		format={formatCpu}
 		parse={parseCpu}
 		fallback={cpuDefault}
+		fallbackLabel={defaultLabel}
 		limit={cpuLimit}
 		usage={currentCpuUsage}
 		recommended={recommendedCpuMilli}
