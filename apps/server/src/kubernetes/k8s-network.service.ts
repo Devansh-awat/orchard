@@ -763,23 +763,26 @@ export class K8sNetworkService implements OnModuleInit {
 
     if (!cleanNamespace || !cleanName) return;
 
-    const customObjectsApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    await this.deleteEnvoyConfig(cleanNamespace, basicAuthEnvoyConfigName(cleanName));
+  }
 
+  private async deleteEnvoyConfig(namespace: string, name: string): Promise<void> {
+    const customObjectsApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
     try {
       await customObjectsApi.deleteNamespacedCustomObject(
         'cilium.io',
         'v2',
-        cleanNamespace,
+        namespace,
         'ciliumenvoyconfigs',
-        basicAuthEnvoyConfigName(cleanName)
+        name
       );
     } catch (error) {
-      if (error.response?.statusCode !== 404) {
-        console.error(
-          `Failed to delete basic auth CiliumEnvoyConfig ${cleanName}-auth in ${cleanNamespace}:`,
-          error
-        );
-      }
+      const status = error.response?.statusCode;
+      if (status === 404) return;
+      if (status === 403 && !(await this.kubernetes.isCiliumAvailable())) return;
+      console.error(
+        `Failed to delete CiliumEnvoyConfig ${name} in ${namespace}: ${k8sErrorMessage(error)}`
+      );
     }
   }
 
@@ -791,24 +794,7 @@ export class K8sNetworkService implements OnModuleInit {
 
     if (!cleanNamespace || !cleanName) return;
 
-    const customObjectsApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
-
-    try {
-      await customObjectsApi.deleteNamespacedCustomObject(
-        'cilium.io',
-        'v2',
-        cleanNamespace,
-        'ciliumenvoyconfigs',
-        `${cleanName}-https-redirect`
-      );
-    } catch (error) {
-      if (error.response?.statusCode !== 404) {
-        console.error(
-          `Failed to delete HTTPS redirect CiliumEnvoyConfig ${cleanName}-https-redirect in ${cleanNamespace}:`,
-          error
-        );
-      }
-    }
+    await this.deleteEnvoyConfig(cleanNamespace, `${cleanName}-https-redirect`);
   }
 
   // Reports what actually happened rather than swallowing it. 'ingress-missing'
