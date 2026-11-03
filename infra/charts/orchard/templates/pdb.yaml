@@ -1,5 +1,5 @@
 {{- /* Keep at least one pod up during voluntary disruptions (node drains,
-       rollouts). Only emitted for services running >1 replica — a PDB with
+       rollouts). Only emitted for services running >1 replica: a PDB with
        minAvailable on a single replica would block all evictions. */}}
 {{- range $svc := list "server" "frontend" "mcp" }}
 {{- $cfg := index $.Values $svc }}

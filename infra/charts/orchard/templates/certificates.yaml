@@ -5,7 +5,7 @@
 {{- $renewBefore := .Values.certificates.renewBefore -}}
 {{- $privateKey := .Values.certificates.privateKey -}}
 
-{{- /* App wildcard — terminates TLS on the shared HTTP gateway. */ -}}
+{{- /* App wildcard: terminates TLS on the shared HTTP gateway. */ -}}
 {{- with .Values.certificates.wildcards.app }}
 {{- if .enabled }}
 {{- $domain := .domain | default $.Values.gateway.http.appDomain -}}
@@ -34,7 +34,7 @@ spec:
 {{- end }}
 {{- end }}
 
-{{- /* DB wildcard — consumed by syncPublicTlsSecret() for CNPG TLS. */ -}}
+{{- /* DB wildcard: consumed by syncPublicTlsSecret() for CNPG TLS. */ -}}
 {{- with .Values.certificates.wildcards.db }}
 {{- if and .enabled .domain }}
 ---

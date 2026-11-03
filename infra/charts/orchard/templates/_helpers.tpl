@@ -154,7 +154,7 @@ true
             - { name: NODE_ENV, value: production }
             - { name: TENANT_SECRETS_CLUSTER_ROLE, value: {{ printf "%s-tenant-secrets" .Release.Name | quote }} }
             {{- if .Values.datadog.enabled }}
-            # Datadog agent service with internalTrafficPolicy: Local — each
+            # Datadog agent service with internalTrafficPolicy: Local: each
             # pod reaches the agent on its own node. (hostPort 8126 is dead
             # here: Cilium runs without hostPort support; hostPath sockets
             # are blocked by PodSecurity baseline in this namespace.)
@@ -456,7 +456,7 @@ true
               APP_DOMAIN is only injected when the operator hasn't supplied it
               themselves. A container `env` entry outranks every `envFrom`
               source, so emitting it unconditionally would silently shadow an
-              APP_DOMAIN held in a Secret — which is how the kubeops install
+              APP_DOMAIN held in a Secret, which is how the kubeops install
               provides it.
             */}}
             {{- if not (or (include "orchard.serverEnvHas" (dict "root" . "key" "APP_DOMAIN")) .Values.server.envFrom) }}

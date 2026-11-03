@@ -22,7 +22,7 @@ metadata:
     app.kubernetes.io/managed-by: leaf
 ---
 # NB: the image-builder ServiceAccount intentionally has NO RoleBinding.
-# Build pods don't need to talk to the K8s API at all — they clone from
+# Build pods don't need to talk to the K8s API at all: they clone from
 # GitHub, build via BuildKit, push to Harbor via the sidecar pusher. The
 # pod spec also sets `automountServiceAccountToken: false`, but we drop
 # the Role too so that even a misconfigured pod that re-enables
@@ -40,7 +40,7 @@ type: kubernetes.io/dockerconfigjson
 stringData:
   # The push sidecar uses skopeo, which reads docker auth files via
   # containers/image. That parser expects the `auth` field (base64 of
-  # `user:pass`) — username/password alone produces "authentication
+  # `user:pass`): username/password alone produces "authentication
   # required" on push because skopeo can't synthesize the header from
   # the split fields. Emit `auth` alongside user/pass so both skopeo
   # and any Docker-CLI-style consumer work.
@@ -187,7 +187,7 @@ spec:
   # Allow-list egress for build pods. Blanket `- {}` let a malicious Dockerfile
   # exfil source/env/secrets anywhere, probe internal cluster services, or hit
   # the cloud metadata IMDS. Kata isolates the process but doesn't restrict
-  # network — this NetworkPolicy does.
+  # network, this NetworkPolicy does.
   egress:
     # DNS (kube-dns)
     - ports:
@@ -195,7 +195,7 @@ spec:
           protocol: UDP
         - port: 53
           protocol: TCP
-    # HTTPS to the public internet (git, package registries) — exclude
+    # HTTPS to the public internet (git, package registries): exclude
     # RFC1918, link-local, and the carrier-grade NAT range so builds can't
     # reach the apiserver, IMDS, or other internal services by IP.
     - ports:

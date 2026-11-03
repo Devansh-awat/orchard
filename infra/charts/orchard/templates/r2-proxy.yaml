@@ -1,10 +1,10 @@
 {{- if include "orchard.r2ProxyActive" . }}
-# r2-proxy — S3 V4 re-signing gateway sitting between CNPG/barman pods and
+# r2-proxy: S3 V4 re-signing gateway sitting between CNPG/barman pods and
 # the real R2 endpoint. Tenant clusters hold per-cluster "fake" credentials
 # that only work via this proxy and only against their own prefix.
 # The real R2 key lives in `r2-proxy-upstream` here and never leaves this ns.
 #
-# Bindings are read directly from orchard's Postgres `databases` table — no
+# Bindings are read directly from orchard's Postgres `databases` table: no
 # ConfigMap to drift out of sync with the source of truth.
 ---
 apiVersion: v1
@@ -15,7 +15,7 @@ metadata:
     app.kubernetes.io/managed-by: orchard
     orchard.io/component: r2-proxy
 ---
-# Upstream R2 credentials — the only place the real R2 key exists in-cluster.
+# Upstream R2 credentials: the only place the real R2 key exists in-cluster.
 # Set via values, or replace with an externally-managed Secret (External Secrets,
 # SOPS, Vault, etc.) and point the Deployment at it instead.
 apiVersion: v1
