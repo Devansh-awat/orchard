@@ -34,7 +34,6 @@ import { Public, Auth } from './decorators';
 import { getClientIp } from './client-ip';
 import { signupMode, signupDeniedError } from './signup-mode';
 
-// DTOs
 interface RequestOtpDto {
   email: string;
 }
@@ -83,7 +82,7 @@ export class PasswordlessController {
     return getClientIp(req);
   }
 
-  // H-2: cookie attributes live in ./cookies — one source of truth across
+  // H-2: cookie attributes live in ./cookies: one source of truth across
   // OAuth, SSO, and passwordless flows so SameSite/Secure stay in sync.
 
   /**
@@ -138,14 +137,6 @@ export class PasswordlessController {
     return user;
   }
 
-  // =====================================
-  // OTP Endpoints
-  // =====================================
-
-  /**
-   * Request an OTP code to be sent to the email.
-   * POST /auth/otp/request
-   */
   @Post('otp/request')
   async requestOtp(
     @Body() body: RequestOtpDto,
@@ -157,7 +148,6 @@ export class PasswordlessController {
       throw new HttpException('Email is required', HttpStatus.BAD_REQUEST);
     }
 
-    // Basic email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       throw new HttpException('Invalid email format', HttpStatus.BAD_REQUEST);
@@ -176,10 +166,6 @@ export class PasswordlessController {
     return this.otpService.requestOtp(email, ipAddress);
   }
 
-  /**
-   * Verify an OTP code and sign in.
-   * POST /auth/otp/verify
-   */
   @Post('otp/verify')
   async verifyOtp(
     @Body() body: VerifyOtpDto,
@@ -220,7 +206,7 @@ export class PasswordlessController {
 
     // H-1: refuse OTP login when the user's org enforces SSO.
     // H-4: even for brand-new identities, refuse OTP if the email has a
-    // pending invite from an SSO-enforced org — otherwise an attacker who
+    // pending invite from an SSO-enforced org, otherwise an attacker who
     // controls the inbox can slip in before SSO is enforced.
     await this.authz.assertSsoNotEnforced(existingUser, 'otp');
     if (!existingUser) {
@@ -229,7 +215,6 @@ export class PasswordlessController {
 
     const user = existingUser ?? (await this.findOrCreateUserByEmail(result.email));
 
-    // Create session
     const sessionId = await this.sessionsService.createSession({
       userId: user.id,
       ipAddress,
@@ -237,7 +222,6 @@ export class PasswordlessController {
       authMethod: 'otp'
     });
 
-    // Generate session token
     const displayName = user.firstName
       ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}`
       : user.username;
@@ -250,7 +234,6 @@ export class PasswordlessController {
       sessionId
     );
 
-    // Set cookie and respond
     setSessionCookie(res, token);
 
     res.status(200).json({
@@ -418,10 +401,6 @@ export class PasswordlessController {
     return { success: true };
   }
 
-  // =====================================
-  // Passkey Endpoints
-  // =====================================
-
   /**
    * Check if a user has passkeys registered (for conditional UI).
    * GET /auth/passkey/check?email=user@example.com
@@ -454,10 +433,6 @@ export class PasswordlessController {
     return options;
   }
 
-  /**
-   * Verify passkey registration and store the passkey.
-   * POST /auth/passkey/register/verify
-   */
   @Auth()
   @Post('passkey/register/verify')
   async verifyRegistration(@Body() body: RegisterPasskeyDto, @Req() req: any) {
@@ -475,10 +450,6 @@ export class PasswordlessController {
     return result;
   }
 
-  /**
-   * Generate passkey authentication options.
-   * POST /auth/passkey/authenticate/options
-   */
   @Post('passkey/authenticate/options')
   async getAuthenticationOptions(@Body() body: { email?: string }, @Req() req: Request) {
     const ipAddress = this.getClientIp(req);
@@ -487,10 +458,6 @@ export class PasswordlessController {
     return options;
   }
 
-  /**
-   * Verify passkey authentication and sign in.
-   * POST /auth/passkey/authenticate/verify
-   */
   @Post('passkey/authenticate/verify')
   async verifyAuthentication(
     @Body() body: AuthenticatePasskeyDto,
@@ -505,7 +472,6 @@ export class PasswordlessController {
       throw new HttpException('Authentication failed', HttpStatus.UNAUTHORIZED);
     }
 
-    // Get user details
     const user = await this.prisma.user.findUnique({
       where: { id: result.userId }
     });
@@ -526,7 +492,6 @@ export class PasswordlessController {
     // H-1: refuse passkey login when the user's org enforces SSO.
     await this.authz.assertSsoNotEnforced(user, 'passkey');
 
-    // Create session
     const sessionId = await this.sessionsService.createSession({
       userId: user.id,
       ipAddress,
@@ -534,7 +499,6 @@ export class PasswordlessController {
       authMethod: 'passkey'
     });
 
-    // Generate session token
     const displayName = user.firstName
       ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}`
       : user.username;
@@ -547,7 +511,6 @@ export class PasswordlessController {
       sessionId
     );
 
-    // Set cookie and respond
     setSessionCookie(res, token);
 
     res.status(200).json({
@@ -564,14 +527,6 @@ export class PasswordlessController {
     });
   }
 
-  // =====================================
-  // Passkey Management Endpoints (Authenticated)
-  // =====================================
-
-  /**
-   * List user's passkeys.
-   * GET /auth/passkeys
-   */
   @Auth()
   @Get('passkeys')
   async listPasskeys(@Req() req: any) {
@@ -581,10 +536,6 @@ export class PasswordlessController {
     return { passkeys };
   }
 
-  /**
-   * Delete a passkey.
-   * DELETE /auth/passkeys/:id
-   */
   @Auth()
   @Delete('passkeys/:id')
   async deletePasskey(@Param('id') passkeyId: string, @Req() req: any) {
@@ -594,10 +545,6 @@ export class PasswordlessController {
     return { success: true };
   }
 
-  /**
-   * Update a passkey's friendly name.
-   * PATCH /auth/passkeys/:id
-   */
   @Auth()
   @Post('passkeys/:id/rename')
   async updatePasskey(
@@ -611,10 +558,6 @@ export class PasswordlessController {
 
     return { success: true };
   }
-
-  // =====================================
-  // MCP Authorization
-  // =====================================
 
   /**
    * Generate a short-lived session token for MCP authorization.
@@ -642,21 +585,12 @@ export class PasswordlessController {
     res.status(200).json({ token });
   }
 
-  // =====================================
-  // Session Management Endpoints
-  // =====================================
-
-  /**
-   * List all active sessions for the current user.
-   * GET /auth/sessions
-   */
   @Auth()
   @Get('sessions')
   async listSessions(@Req() req: any) {
     const user = await this.resolveInternalUser(req.user.sub);
     const sessions = await this.sessionsService.getUserSessions(user.id);
 
-    // Mark the current session
     const currentSessionId = req.user.sessionId;
     return {
       sessions: sessions.map((s) => ({
@@ -666,10 +600,6 @@ export class PasswordlessController {
     };
   }
 
-  /**
-   * Revoke a specific session.
-   * DELETE /auth/sessions/:id
-   */
   @Auth()
   @Delete('sessions/:id')
   async revokeSession(@Param('id') sessionId: string, @Req() req: any) {
@@ -689,10 +619,6 @@ export class PasswordlessController {
     return { success: true };
   }
 
-  /**
-   * Revoke all sessions except the current one.
-   * POST /auth/sessions/revoke-all
-   */
   @Auth()
   @Post('sessions/revoke-all')
   async revokeAllSessions(@Req() req: any) {
@@ -703,10 +629,6 @@ export class PasswordlessController {
 
     return { success: true, revokedCount: count };
   }
-
-  // =====================================
-  // Helper Methods
-  // =====================================
 
   /**
    * Find or create a user by email (for OTP authentication).
@@ -719,7 +641,6 @@ export class PasswordlessController {
     });
 
     if (!user) {
-      // Generate a unique username from email
       const baseUsername = sanitizeUsername(normalizedEmail.split('@')[0]);
       let username = baseUsername;
       let counter = 1;

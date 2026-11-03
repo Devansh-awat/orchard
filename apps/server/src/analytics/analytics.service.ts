@@ -72,7 +72,7 @@ export class AnalyticsService implements OnModuleDestroy {
 
   /**
    * Forward an unhandled error to PostHog Error Tracking. distinctId may be
-   * a user id, an org/project synthetic id, or "anonymous" — anything is
+   * a user id, an org/project synthetic id, or "anonymous": anything is
    * better than no attribution when sifting through the dashboard.
    */
   captureException(

@@ -43,17 +43,17 @@ export class R2ProxyService {
   }
 
   /**
-   * Binding lifecycle is now implicit: persisting r2ProxyAccessKey on a
-   * Database row IS the binding (the proxy joins databases → projects →
-   * organizations on every cache miss). These methods stay as no-ops so
-   * existing callers in projects.service.ts don't break.
+   * Binding lifecycle is implicit: persisting r2ProxyAccessKey on a Database row
+   * IS the binding (the proxy joins databases, projects and organizations on
+   * every cache miss). These methods are no-ops so callers in
+   * projects.service.ts don't break.
    */
   async addBinding(_opts: R2ProxyBinding): Promise<void> {
-    // intentionally empty — proxy reads from DB
+    // intentionally empty: proxy reads from DB
   }
 
   async removeBinding(_accessKey: string): Promise<void> {
-    // intentionally empty — proxy reads from DB, removal happens when the
+    // intentionally empty: proxy reads from DB, removal happens when the
     // Database row is deleted
   }
 }

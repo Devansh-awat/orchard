@@ -24,8 +24,6 @@ export class AdminService {
     return { userCount, orgCount, projectCount, deploymentCount };
   }
 
-  // --- Users ---
-
   async getAllUsers(page = 1, limit = 20, search?: string) {
     const where: Prisma.UserWhereInput = search
       ? {
@@ -175,8 +173,6 @@ export class AdminService {
 
     return { success: true };
   }
-
-  // --- Organizations ---
 
   async getAllOrganizations(page = 1, limit = 20, search?: string) {
     const where: Prisma.OrganizationWhereInput = search

@@ -149,7 +149,7 @@ export class OAuthController {
         if (emailOwner) {
           if (emailOwner.externalAuthId && emailOwner.externalAuthId !== hackClubUser.id) {
             // Existing account is already linked to a different Hack Club
-            // identity — refuse with a generic error to avoid an enumeration
+            // identity: refuse with a generic error to avoid an enumeration
             // oracle.
             return res.redirect(
               `${frontendBase}/oauth/callback?error=${encodeURIComponent('oauth_failed')}`
@@ -164,7 +164,7 @@ export class OAuthController {
       }
 
       // H-1: if the user is in any org with SSO enforced, OAuth/OTP/passkey
-      // are not valid login paths — they must come through the SSO callback.
+      // are not valid login paths: they must come through the SSO callback.
       // H-4: even for brand-new identities, refuse OAuth if the email has a
       // pending invite from an SSO-enforced org. Otherwise an attacker who
       // controls a Hack Club account with the invited email can slip in
@@ -219,7 +219,6 @@ export class OAuthController {
         const oauthService = this.oauthService;
         const payload = await oauthService.verifySessionToken(token);
         if (payload.sessionId) {
-          // Resolve user ID
           let userId = payload.sub;
           if (payload.externalAuthId) {
             const dbUser = await this.prisma.user.findUnique({
@@ -236,10 +235,10 @@ export class OAuthController {
     }
 
     // M-3: route every clear through the cookies helper so secure/httpOnly/
-    // sameSite/domain attributes stay in lockstep with setSessionCookie.
-    // Prior to this, the clear path passed only { path, domain } which left
-    // browsers free to refuse the clear when the original cookie had
-    // SameSite=Strict from a cross-site context (rare, but observed).
+    // sameSite/domain attributes stay in lockstep with setSessionCookie. A clear
+    // that passes only { path, domain } leaves browsers free to refuse it when the
+    // original cookie had SameSite=Strict from a cross-site context (rare, but
+    // observed).
     clearSessionCookie(res);
     return res.status(204).send();
   }

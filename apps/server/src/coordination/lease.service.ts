@@ -38,7 +38,7 @@ export class LeaseService implements OnApplicationShutdown {
   // Whether this process is a member of the cluster it is pointed at: it has a
   // cluster to talk to, and a namespace whose leases it can contend for. A dev
   // process holding a real kubeconfig but no control namespace fails this, and
-  // that is the whole point — it cannot see the leases, so it can neither win
+  // that is the whole point: it cannot see the leases, so it can neither win
   // nor lose them, and anything cluster-wide it runs is a second uncoordinated
   // actor on someone else's infrastructure.
   get canCoordinate(): boolean {

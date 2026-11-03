@@ -14,7 +14,7 @@ interface DaemonInfo {
 /**
  * Manages a pool of persistent BuildKit daemon pods. Each tenant (keyed by
  * cacheTenantKey, usually the project namespace) gets its own daemon pod that
- * stays alive between builds so the layer cache stays warm — matching what
+ * stays alive between builds so the layer cache stays warm: matching what
  * Depot does under the hood.
  *
  * Lifecycle:
@@ -57,7 +57,7 @@ export class BuildKitPoolService {
         while ((p.startsWith('"') && p.endsWith('"')) || (p.startsWith("'") && p.endsWith("'"))) {
           p = p.slice(1, -1).trim();
         }
-        // KUBECONFIG_PATH also accepts the kubeconfig itself, base64 encoded —
+        // KUBECONFIG_PATH also accepts the kubeconfig itself, base64 encoded,
         // see KubernetesService. Loading it as a path gives ENAMETOOLONG and
         // silently drops daemon mode back to daemonless on every build.
         loadKubeConfigFromPathOrBase64(this.kc, p);
@@ -103,7 +103,6 @@ export class BuildKitPoolService {
 
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
 
-    // Look for an existing daemon pod
     const [existing, legacy] = await Promise.all([
       coreApi.listNamespacedPod(
         this.namespace,
@@ -128,23 +127,20 @@ export class BuildKitPoolService {
       const ip = pod.status?.podIP;
       const name = pod.metadata?.name;
       if (phase === 'Running' && ip && name) {
-        // Touch last-used timestamp
         await this.touchDaemon(name);
         console.log(`[BuildKitPool] Reusing daemon ${name} (${ip}) for tenant ${tenantKey}`);
         return { podName: name, podIp: ip };
       }
-      // If pending, wait for it below
       if (phase === 'Pending' && name) {
         console.log(`[BuildKitPool] Found pending daemon ${name}, waiting...`);
         return this.waitForDaemonReady(name);
       }
     }
 
-    // No daemon exists — create one
     return this.createDaemon(tenantKey);
   }
 
-  // buildkitd's tcp addr has no auth of its own — anything that can route to
+  // buildkitd's tcp addr has no auth of its own: anything that can route to
   // the pod can run builds and read the tenant's layer cache. Restrict
   // ingress to build-job pods in this namespace.
   private async ensureDaemonNetworkPolicy(): Promise<void> {
@@ -310,7 +306,6 @@ export class BuildKitPoolService {
         const ip = pod.status?.podIP;
 
         if (phase === 'Running' && ip) {
-          // Check readiness
           const ready = pod.status?.containerStatuses?.every((c) => c.ready) ?? false;
           if (ready) {
             console.log(`[BuildKitPool] Daemon ${podName} ready at ${ip}`);
@@ -415,9 +410,6 @@ export class BuildKitPoolService {
     }
   }
 
-  /**
-   * Delete the daemon pod for a specific tenant.
-   */
   async deleteDaemon(tenantKey: string): Promise<void> {
     if (!this.kc) return;
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);

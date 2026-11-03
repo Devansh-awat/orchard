@@ -1256,7 +1256,7 @@ export class DeploymentsController {
       res.setHeader('Cache-Control', 'public, max-age=86400');
       return res.redirect(302, url);
     }
-    // Cache the miss too — otherwise every dashboard load re-runs the full
+    // Cache the miss too, otherwise every dashboard load re-runs the full
     // fetch pipeline for domains that have no favicon. 204 (not 404) so the
     // <img> onerror fallback fires without a console error on every load.
     res.setHeader('Cache-Control', 'public, max-age=3600');
@@ -1940,8 +1940,6 @@ export class DeploymentsController {
     );
   }
 
-  // Auto-deploy endpoints
-
   @Get(':id/auto-deploy')
   async getAutoDeployStatus(@Param('id') id: string, @Request() req) {
     await this.projectAccess.assertDeploymentView(id, req.user.sub, {
@@ -1997,8 +1995,6 @@ export class DeploymentsController {
     });
     return this.deployments.getGitHubDeployments(id, req.user.sub);
   }
-
-  // Webhook token management endpoints
 
   @Get(':id/webhook-tokens')
   async listWebhookTokens(@Param('id') id: string, @Request() req) {

@@ -25,10 +25,10 @@ export function summarizeBuildFailure(logs?: string | null, pusherLogs?: string 
   parts.push(...stepErrors);
 
   // The "#N ERROR: process ... exit code: 1" line says a step failed, never why.
-  // The why is in that step's own output, a few lines above it, and it was being
-  // dropped: a user saw "pnpm run build did not complete successfully" with no
-  // mention of the Vite error that actually broke the build. Carry the tail of
-  // the failing step's output so the headline says the cause.
+  // The why is in that step's own output, a few lines above it: "pnpm run build
+  // did not complete successfully" says nothing about the Vite error that
+  // actually broke the build. Carry the tail of the failing step's output so the
+  // headline says the cause.
   const failingStep = stepErrors[stepErrors.length - 1]?.match(STEP_ERROR_RE)?.[1];
   if (failingStep) {
     const prefix = new RegExp(`^#${failingStep} (?:\\d+\\.\\d+ )?`);

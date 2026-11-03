@@ -34,7 +34,7 @@ interface EmitInput {
 // Stage one of three. This service does one thing: turn a real-world state
 // change into exactly one durable outbox row. Routing lives in the fanout
 // worker, sending in the delivery worker. Callers stay fire-and-forget, but the
-// event now survives a crash, a Slack outage, and a redeploy.
+// event survives a crash, a Slack outage, and a redeploy.
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
@@ -540,7 +540,7 @@ export class NotificationsService {
 
   /**
    * Something happened to an account: a sign-in, an app granted access. Unlike
-   * every other event here there is no organization and no team lane — it goes
+   * every other event here there is no organization and no team lane: it goes
    * to the one person it is about, through their own destinations, and a
    * channel rule cannot subscribe to it.
    *
@@ -607,8 +607,7 @@ export class NotificationsService {
     if (!enabled) return;
 
     // ON CONFLICT is the whole dedupe story. Two replicas reacting to the same
-    // build write the same key and exactly one row lands, which the old
-    // in-process Map could never guarantee.
+    // build write the same key and exactly one row lands.
     const inserted = await this.prisma.$executeRaw`
       INSERT INTO "notification_events" (
         "id", "organization_id", "event", "scope_type", "scope_id",

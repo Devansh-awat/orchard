@@ -21,9 +21,8 @@ import { assertProviderIcon, PROVIDER_ICON_UPLOAD } from './provider-icon';
  * decorator here means the global SuperAdminGuard applies.
  *
  * Two jobs. Providers with no organization are the platform's own sign-in
- * options, which is what replaced the hardcoded single OAuth button. The
- * per-org toggle is the operator's switch for one tenant, and an org owner
- * cannot turn it back on from inside their settings.
+ * options. The per-org toggle is the operator's switch for one tenant, and an
+ * org owner cannot turn it back on from inside their settings.
  */
 @Controller('admin/sso')
 export class SsoInstanceController {

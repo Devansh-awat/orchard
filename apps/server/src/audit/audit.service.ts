@@ -256,7 +256,7 @@ export class AuditService {
   }
 
   /**
-   * Daily prune of records past retention. @Cron — runs at 03:00 server time.
+   * Daily prune of records past retention. @Cron: runs at 03:00 server time.
    *
    * M-2: every prune writes a meta-audit row so the trail of "rows were
    * deleted" is itself part of the log. From the audited user's perspective

@@ -39,7 +39,7 @@ const execAsync = promisify(exec);
 
 // Allow letters, digits, `_`, `.`, `/`, `-`. Reject leading `-` (git option
 // smuggling), `..` segments (path traversal in refs), and any whitespace.
-// This is intentionally narrower than git's full ref grammar — it's the
+// This is intentionally narrower than git's full ref grammar: it's the
 // shape of every realistic branch/tag name in practice.
 function isSafeGitRef(ref: string): boolean {
   if (!ref || typeof ref !== 'string') return false;
@@ -109,7 +109,7 @@ export class DockerService {
   private readonly defaultBuildMode: BuildMode =
     (process.env.BUILD_MODE as BuildMode) || 'kubernetes';
 
-  // Kept in lockstep with ImageBuilderService's pin — the local-docker fallback
+  // Kept in lockstep with ImageBuilderService's pin: the local-docker fallback
   // must execute plans with the same frontend the Kubernetes path uses.
   private readonly railpackFrontendImage =
     process.env.RAILPACK_FRONTEND_IMAGE ||
@@ -146,9 +146,9 @@ export class DockerService {
    * against the environment's shared vars, matching what the runtime pod gets,
    * plus the RAILPACK_* overrides derived from its build settings.
    *
-   * The build path used to read the raw stored values, so a referenced shared
-   * var reached the builder as the literal string `${{shared.API_URL}}` — and
-   * for a framework build that string gets baked into the client bundle.
+   * Reading the raw stored values instead would hand the builder the literal
+   * string `${{shared.API_URL}}`, and a framework build bakes that string into
+   * the client bundle.
    *
    * The RAILPACK_* overrides are deliberately assembled here rather than
    * threaded through the call chain: every trigger (create, rebuild, webhook
@@ -184,7 +184,7 @@ export class DockerService {
             select: { key: true, value: true, secret: true }
           })
         : [];
-      // Secret values are encrypted at rest — decrypt before resolving.
+      // Secret values are encrypted at rest: decrypt before resolving.
       const shared = sharedRows.map((v) => this.secretCrypto.maybeDecrypt(v));
 
       const { resolved, errors } = resolveEnvVars(
@@ -1135,7 +1135,6 @@ export class DockerService {
             }
           }
 
-          // Check for Railpack-specific output
           if (
             lowerLine.includes('detected') ||
             lowerLine.includes('installing') ||
@@ -1631,7 +1630,6 @@ export class DockerService {
       console.error('[Docker Service]', errorMsg);
       await this.appendLog(deploymentId, errorMsg, 'ERROR');
 
-      // Update deployment with error
       if (deploymentId) {
         await this.prisma.deployment.update({
           where: { id: deploymentId },

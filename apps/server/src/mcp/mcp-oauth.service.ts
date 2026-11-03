@@ -189,7 +189,7 @@ export class McpOAuthService {
   /**
    * Accept any https redirect URI, plus loopback http per RFC 8252. Safety
    * relies on PKCE S256, per-client redirect_uri binding at registration,
-   * single-use auth codes, and the consent screen showing the full URI —
+   * single-use auth codes, and the consent screen showing the full URI,
    * not on a host allowlist.
    */
   private isAllowedRedirectUri(uri: string): boolean {
@@ -291,7 +291,7 @@ export class McpOAuthService {
     }
 
     // Require PKCE with S256. Plain or missing challenges leave the auth code
-    // exchangeable by anyone who intercepts the redirect — the authorization
+    // exchangeable by anyone who intercepts the redirect: the authorization
     // server metadata only advertises S256, but the request shape must be
     // enforced here too so a malicious client can't downgrade.
     if (!query.code_challenge || query.code_challenge_method !== 'S256') {
@@ -344,7 +344,7 @@ export class McpOAuthService {
     });
 
     // Redirect to Orchard frontend login page with MCP state. client_name and
-    // redirect_uri are passed for the consent screen to display — the actual
+    // redirect_uri are passed for the consent screen to display: the actual
     // values used for the redirect come from the server-stored pending entry,
     // so tampering with these params changes only what the user sees, not where
     // the auth code is sent.
@@ -571,7 +571,7 @@ export class McpOAuthService {
       return { error: 'invalid_grant', error_description: 'not a refresh token' };
     }
     // Bind to the issuing client via the embedded claim, not the in-memory
-    // registry — registrations are lost on restart but refresh must survive.
+    // registry: registrations are lost on restart but refresh must survive.
     if (!body.client_id || payload.clientId !== body.client_id) {
       console.error('[MCP OAuth] Refresh failed: client_id mismatch');
       return { error: 'invalid_client' };
@@ -666,7 +666,7 @@ export class McpOAuthService {
       return { error: 'invalid_redirect_uri' };
     }
 
-    // PKCE is mandatory — /authorize already rejects challenge-less requests,
+    // PKCE is mandatory: /authorize already rejects challenge-less requests,
     // but enforce again here so the token endpoint cannot be bypassed even if
     // an auth code somehow lands without a stored challenge.
     if (!authCode.codeChallenge || authCode.codeChallengeMethod !== 'S256') {
@@ -766,7 +766,7 @@ export class McpOAuthService {
 
       // M-2: MCP must only accept tokens this service minted. A first-party
       // browser-session JWT (issued by oauth.service / passwordless / SSO) is
-      // signed with the same secret and therefore passes jwtVerify — but it
+      // signed with the same secret and therefore passes jwtVerify, but it
       // is not the credential the user consented to share with the MCP client.
       // Reject anything that isn't type='mcp'.
       if (result.payload.type !== 'mcp') {
@@ -777,9 +777,8 @@ export class McpOAuthService {
       // MCP runs in its own Nest app and does NOT pass through SuperAdminGuard,
       // so the session check has to happen here. Without this, "sign out
       // everywhere" / session revocation / role downgrade does not invalidate
-      // an MCP access token until its 1-day expiry — the originating sessionId
-      // was carried in the JWT precisely so we could honor revocation, but
-      // nothing was actually checking it.
+      // an MCP access token until its 1-day expiry: the originating sessionId
+      // is carried in the JWT precisely so we can honor revocation.
       const sessionId = result.payload.sessionId as string | undefined;
       if (!sessionId) {
         console.error('[MCP OAuth] Token rejected: missing sessionId binding');

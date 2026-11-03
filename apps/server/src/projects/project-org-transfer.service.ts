@@ -86,7 +86,7 @@ export class ProjectOrgTransferService {
     }
 
     // Source: you must be able to edit the project. Destination: you must be
-    // able to create projects there (member, not guest) — the same gate as
+    // able to create projects there (member, not guest): the same gate as
     // spawning a brand-new project in that org.
     await this.authz.requireProjectDelete(projectId, user.id);
     await this.authz.requireOrgCanCreateProjects(destinationOrgId, user.id);

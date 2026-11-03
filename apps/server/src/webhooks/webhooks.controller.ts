@@ -8,7 +8,7 @@ export class WebhooksController {
   constructor(private readonly webhooksService: WebhooksService) {}
 
   // Extract a webhook token from either the Authorization: Bearer header
-  // or the URL path. Header takes precedence — secrets in the path get
+  // or the URL path. Header takes precedence: secrets in the path get
   // logged by every proxy / access log on the way in, so we want callers
   // migrating off the path-param form.
   private resolveToken(authHeader: string | undefined, pathToken?: string): string {

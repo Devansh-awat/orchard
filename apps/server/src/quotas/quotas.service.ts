@@ -141,7 +141,7 @@ export class QuotasService {
     const { caps, defaultPodCpuMilli, defaultPodMemoryBytes } =
       await this.resolveProjectCaps(projectId);
     // RollingUpdate briefly runs old and new pods side by side (maxSurge 25%),
-    // so the namespace ResourceQuota gets matching headroom on top of the cap —
+    // so the namespace ResourceQuota gets matching headroom on top of the cap,
     // otherwise a namespace running at its cap can never replace a pod: the
     // surge pod is rejected at admission and the rollout wedges. Steady-state
     // usage is still held to the real cap by the API-layer checks
@@ -190,7 +190,7 @@ export class QuotasService {
   }
 
   // Returns namespaces for `organizationId` plus any orgs sharing its quotaGroupId.
-  // Linked orgs share both the cap and the usage pool — total usage is summed across them.
+  // Linked orgs share both the cap and the usage pool: total usage is summed across them.
   private async getQuotaGroupNamespaces(organizationId: string): Promise<string[]> {
     // Union the project's own namespace with every environment namespace so
     // staging/dev pods count toward org caps. The prod env namespace equals
@@ -223,7 +223,7 @@ export class QuotasService {
   }
 
   // Org-wide admission check used at deploy time. Throws if the requested delta would push
-  // the org past its org-wide cap. Additive resources only — cpu/memory.
+  // the org past its org-wide cap. Additive resources only: cpu/memory.
   async enforceOrgCapForNewPod(
     organizationId: string,
     requested: { cpuMilli: number; memoryBytes: number }
@@ -261,7 +261,7 @@ export class QuotasService {
     }
   }
 
-  /** Org total resource usage — lightweight, no caps/metadata. */
+  /** Org total resource usage: lightweight, no caps/metadata. */
   async getOrgTotalUsage(
     organizationId: string,
     namespaces: string[]
@@ -448,7 +448,7 @@ export class QuotasService {
       })
     };
 
-    // Connected orgs share one set of caps — mirror the change across the group.
+    // Connected orgs share one set of caps: mirror the change across the group.
     const targetIds = self.quotaGroupId
       ? (
           await this.prisma.organization.findMany({
@@ -481,8 +481,6 @@ export class QuotasService {
     await this.applyProjectQuota(projectId);
     return project;
   }
-
-  // --- Per-member allowance ---
 
   // Resolved allowance for a member. Null = unlimited on that axis.
   async resolveMemberAllowance(
@@ -618,7 +616,7 @@ export class QuotasService {
   // Throws if handing `projectId` to `newOwnerId` would push them past their
   // allowance. Ownership is what getMemberUsage sums over, so a transfer moves
   // the project's entire request from one member's budget onto another's in
-  // one step — far bigger than any single deploy, and never checked anywhere
+  // one step: far bigger than any single deploy, and never checked anywhere
   // else. Caller must reject a no-op transfer first: if `newOwnerId` already
   // owns the project, getMemberUsage already counts it and this double-counts.
   async enforceMemberAllowanceForProjectTransfer(
@@ -645,7 +643,7 @@ export class QuotasService {
     }
   }
 
-  // Sum of all members' effective allowance — used to validate that admins don't oversell the org.
+  // Sum of all members' effective allowance: used to validate that admins don't oversell the org.
   // `Unlimited` members contribute 0 to the sum (they don't reserve a share).
   // Pass overrides to compute as if a specific member or default were changed.
   private async computeOrgAllowanceCommitment(

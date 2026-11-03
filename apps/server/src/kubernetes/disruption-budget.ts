@@ -21,7 +21,7 @@ export function normalizeMinAvailable(value: unknown): number {
 
 /**
  * `spec.minAvailable` is an IntOrString, so a budget written by hand can carry
- * "50%" — a shape Orchard's integer column cannot hold. Returns null for
+ * "50%", a shape Orchard's integer column cannot hold. Returns null for
  * anything that is not a plain whole number, and callers leave the stored
  * setting alone rather than guessing at it.
  */

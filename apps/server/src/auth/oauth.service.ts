@@ -303,9 +303,6 @@ export class OAuthService {
     return token;
   }
 
-  /**
-   * Get the JWT secret for external services.
-   */
   getJwtSecret(): Uint8Array {
     return this.jwtSecret;
   }

@@ -2,7 +2,7 @@
  * Tenant-level eviction for the shared BuildKit cache PVC.
  *
  * BuildKit's own GC bounds a single worker's root, and every build gets its own
- * worker rooted in its own subPath of the shared volume — so nothing in
+ * worker rooted in its own subPath of the shared volume, so nothing in
  * BuildKit bounds the *sum* across tenants. Left alone the volume fills, and
  * once it does kubelet can no longer mkdir the next tenant's subPath and every
  * build on the node dies with an opaque CreateContainerConfigError.
@@ -12,7 +12,7 @@
  */
 
 export interface CacheEvictOptions {
-  /** Sanitised tenant key — this build's subPath on the shared PVC. */
+  /** Sanitised tenant key: this build's subPath on the shared PVC. */
   cacheSubPath: string;
   /** Name of the pod volume holding the cache PVC. */
   volumeName?: string;
@@ -22,7 +22,7 @@ export interface CacheEvictOptions {
   highPct: number;
   /** Stop evicting once usage is at or below this. */
   targetPct: number;
-  /** Never evict a tenant touched this recently — assume a build is in flight. */
+  /** Never evict a tenant touched this recently: assume a build is in flight. */
   idleMinutes: number;
 }
 
@@ -107,7 +107,7 @@ echo "=== Shared build cache at $(usage)% after eviction ==="
  *
  * The cache volume is mounted at its **root, with no subPath**, and that is the
  * whole point: kubelet only has to mkdir a subPath for containers that ask for
- * one, so this container still starts when the volume is 100% full — the exact
+ * one, so this container still starts when the volume is 100% full: the exact
  * state in which the buildkit container cannot. Scheduled ahead of every other
  * init container, so by the time kubelet creates the buildkit container there
  * is room for its subPath.

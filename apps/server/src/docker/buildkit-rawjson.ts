@@ -6,8 +6,8 @@
  * at a time, prints its section, and holds every other vertex's updates until
  * it switches. So a step's `DONE` line can land long after the steps that
  * depend on it finished, and the UI ends up drawing spinners on work that
- * completed minutes ago. rawjson has no such buffering — each SolveStatus is
- * written the moment it arrives, carrying real `started`/`completed` stamps —
+ * completed minutes ago. rawjson has no such buffering: each SolveStatus is
+ * written the moment it arrives, carrying real `started`/`completed` stamps,
  * so folding it back into text here yields the same shape with causal order.
  *
  * Non-JSON lines pass through untouched, which keeps the plain-output builders
@@ -102,7 +102,7 @@ export interface RawjsonTranscoder {
   feed(chunk: string): string;
   /**
    * Close out the stream. Steps still open at this point were genuinely
-   * interrupted — a build that ran to completion closes every vertex, since
+   * interrupted: a build that ran to completion closes every vertex, since
    * the exporter is the sink of the graph.
    */
   flush(): string;

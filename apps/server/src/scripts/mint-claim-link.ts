@@ -9,7 +9,7 @@ import {
 } from '../setup/setup-token';
 
 // Backs `orchard-claim` on the host. The claim token is only ever stored
-// hashed, so a lost one cannot be recovered — this mints a replacement and
+// hashed, so a lost one cannot be recovered: this mints a replacement and
 // prints it. Reaching this means having exec on the server pod, which is
 // already equivalent to owning the instance, so it grants nothing new.
 // `orchardctl claim --url` passes the address the operator can actually reach,

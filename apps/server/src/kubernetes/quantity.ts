@@ -51,8 +51,8 @@ export function cpuMilliToK8s(milli: number): string {
 }
 
 // The CPU a workload *reserves* on its node, derived from the CPU it's allowed
-// to burst to. CPU is compressible — a container over its request is throttled,
-// never killed — so reserving the full limit buys nothing at runtime and costs
+// to burst to. CPU is compressible: a container over its request is throttled,
+// never killed, so reserving the full limit buys nothing at runtime and costs
 // the scheduler the whole difference on every idle workload. Memory gets no
 // equivalent: it's incompressible, and an over-committed node reclaims it by
 // OOM-killing, so memory requests stay pinned to the limit.

@@ -230,7 +230,7 @@ export class ComposeStacksService {
         if (!spec) continue;
         const [src, dst] = spec.split(':');
         if (!src || !dst) continue;
-        if (src.startsWith('/') || src.startsWith('.')) continue; // bind mount — skip
+        if (src.startsWith('/') || src.startsWith('.')) continue; // bind mount: skip
         const top = volumesTop[src];
         volumes.push({
           name: src,

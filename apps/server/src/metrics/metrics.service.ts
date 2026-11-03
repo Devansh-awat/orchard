@@ -303,7 +303,7 @@ export class MetricsService implements OnModuleInit, OnModuleDestroy {
 
     const queries: Record<SeriesId, string> = {
       // millicores: cores × 1000. Read the pod-level cgroup series
-      // (container="",image="") instead of summing per-container series —
+      // (container="",image="") instead of summing per-container series,
       // gVisor pods only populate the pod cgroup, not the inner containers.
       // image="" excludes the pause container (which also has container="").
       cpu: `sum(rate(container_cpu_usage_seconds_total{namespace="${ns}",pod=~"${podRe}",container="",image=""}[${rateWin}s])) * 1000`,

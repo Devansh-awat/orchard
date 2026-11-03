@@ -218,7 +218,7 @@ export class ProtectionService {
     const ingress = await this.resolveIngressFromHost(host);
     // Fail closed. A host we cannot resolve is not a host we can vouch for,
     // and handleProxyRequest resolves the ingress separately before calling
-    // this — so returning allow here would proxy to an upstream we just
+    // this, so returning allow here would proxy to an upstream we just
     // decided we know nothing about, with no credentials checked, whenever a
     // row disappears between the two lookups.
     if (!ingress) return { allow: false, status: 404 };
@@ -249,7 +249,7 @@ export class ProtectionService {
       };
 
       // A request with no Authorization header is the browser asking for the
-      // challenge, not a guess, so it must never count against the throttle —
+      // challenge, not a guess, so it must never count against the throttle,
       // every first visit to the site would otherwise burn an attempt.
       if (!authorizationHeader) return challenge;
 

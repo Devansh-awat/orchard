@@ -2,7 +2,7 @@ import { SsoProtocol } from '@prisma/client';
 
 /**
  * The catalogue an admin picks from when adding a connection. A preset is only
- * a set of defaults plus the list of fields worth asking for — every preset
+ * a set of defaults plus the list of fields worth asking for: every preset
  * ends up in the same IdentityProvider row and runs the same flow, so adding
  * one here is data, not code.
  *

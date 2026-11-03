@@ -1,7 +1,7 @@
 import { Controller, Post, Body } from '@nestjs/common';
 import { DockerService } from './docker.service';
 
-// No @Auth() — the global SuperAdminGuard defaults to requiring superadmin
+// No @Auth(): the global SuperAdminGuard defaults to requiring superadmin
 // when this decorator is absent. The /docker/build endpoint can compile and
 // publish an image from any GitHub URL, so it must not be reachable by
 // regular users (deployment-attached builds go through ProjectsService

@@ -83,7 +83,6 @@ export class PasskeyService {
       timeout: 60000 // 1 minute
     });
 
-    // Store the challenge for verification
     await this.storeChallenge(options.challenge, 'registration', email, userId);
 
     return options;
@@ -100,7 +99,6 @@ export class PasskeyService {
   ): Promise<{ verified: boolean; passkeyId?: string }> {
     const { rpID, origin } = getRpConfig();
 
-    // Retrieve and validate the challenge
     const challengeRecord = await this.getAndValidateChallenge(
       response?.response?.clientDataJSON,
       'registration',
@@ -132,7 +130,6 @@ export class PasskeyService {
     const { credential, credentialDeviceType, credentialBackedUp, aaguid } =
       verification.registrationInfo;
 
-    // Check if this credential already exists
     const existingPasskey = await this.prisma.passkey.findUnique({
       where: { credentialId: credential.id }
     });
@@ -161,9 +158,6 @@ export class PasskeyService {
     return { verified: true, passkeyId: passkey.id };
   }
 
-  /**
-   * Generate authentication options for signing in with a passkey.
-   */
   async generateAuthenticationOptions(
     email?: string,
     ipAddress?: string
@@ -205,7 +199,6 @@ export class PasskeyService {
       timeout: 60000 // 1 minute
     });
 
-    // Store the challenge for verification
     await this.storeChallenge(options.challenge, 'authentication', normalizedEmail);
 
     return options;
@@ -224,7 +217,6 @@ export class PasskeyService {
       throw new BadRequestException('Invalid passkey response');
     }
 
-    // Find the passkey by credential ID
     const passkey = await this.prisma.passkey.findUnique({
       where: { credentialId: response.id },
       include: { user: true }
@@ -234,10 +226,8 @@ export class PasskeyService {
       throw new BadRequestException('Passkey not found');
     }
 
-    // Check rate limits for the user's email
     await this.rateLimitService.checkRateLimit(passkey.user.email, 'email', 'passkey_auth');
 
-    // Retrieve and validate the challenge
     const challengeRecord = await this.getAndValidateChallenge(
       response.response?.clientDataJSON,
       'authentication'
@@ -306,7 +296,6 @@ export class PasskeyService {
       }
     });
 
-    // Reset rate limits on success
     await this.rateLimitService.resetRateLimit(passkey.user.email, 'email', 'passkey_auth');
     await this.rateLimitService.resetRateLimit(ipAddress, 'ip', 'passkey_auth');
 
@@ -317,9 +306,6 @@ export class PasskeyService {
     };
   }
 
-  /**
-   * Get all passkeys for a user.
-   */
   async getUserPasskeys(userId: string) {
     return this.prisma.passkey.findMany({
       where: { userId },
@@ -335,9 +321,6 @@ export class PasskeyService {
     });
   }
 
-  /**
-   * Delete a passkey.
-   */
   async deletePasskey(userId: string, passkeyId: string): Promise<void> {
     const passkey = await this.prisma.passkey.findUnique({
       where: { id: passkeyId }
@@ -356,9 +339,6 @@ export class PasskeyService {
     });
   }
 
-  /**
-   * Update a passkey's friendly name.
-   */
   async updatePasskeyName(userId: string, passkeyId: string, friendlyName: string): Promise<void> {
     const passkey = await this.prisma.passkey.findUnique({
       where: { id: passkeyId }
@@ -378,9 +358,6 @@ export class PasskeyService {
     });
   }
 
-  /**
-   * Check if a user has any passkeys registered.
-   */
   async userHasPasskeys(email: string): Promise<boolean> {
     const user = await this.prisma.user.findUnique({
       where: { email: email.toLowerCase() },
@@ -390,9 +367,6 @@ export class PasskeyService {
     return user ? user.passkeys.length > 0 : false;
   }
 
-  /**
-   * Store a challenge for later verification.
-   */
   private async storeChallenge(
     challenge: string,
     type: 'registration' | 'authentication',
@@ -412,9 +386,6 @@ export class PasskeyService {
     });
   }
 
-  /**
-   * Get and validate a challenge from the database.
-   */
   private async getAndValidateChallenge(
     clientDataJSON: unknown,
     type: 'registration' | 'authentication',
@@ -431,7 +402,6 @@ export class PasskeyService {
       return null;
     }
 
-    // Find the challenge in the database
     const challengeRecord = await this.prisma.webAuthnChallenge.findFirst({
       where: {
         challenge: challengeFromClient,
@@ -453,9 +423,6 @@ export class PasskeyService {
     }
   }
 
-  /**
-   * Clean up expired challenges.
-   */
   async cleanupExpiredChallenges(): Promise<number> {
     const result = await this.prisma.webAuthnChallenge.deleteMany({
       where: {

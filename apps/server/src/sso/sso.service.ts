@@ -113,8 +113,6 @@ export class SsoService {
     this.frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
   }
 
-  // ========== URLs ==========
-
   /**
    * Where the IdP sends the user back. Providers migrated from the old
    * per-org config keep their original path in `callbackPath`, because the
@@ -143,8 +141,6 @@ export class SsoService {
     });
     return org ? this.orgLoginUrl(org.slug) : null;
   }
-
-  // ========== Public login surfaces ==========
 
   /**
    * Everything the org login page at /<slug> needs. Returns null when the org
@@ -217,7 +213,7 @@ export class SsoService {
    * The env-configured provider (AUTH_PROVIDER, the old hardcoded button) is
    * returned alongside the database ones so the login page is a single list
    * and no provider is special-cased in the UI. It keeps its own /auth/login
-   * flow — this is a rendering hint, not a re-route.
+   * flow: this is a rendering hint, not a re-route.
    */
   async getInstanceProviders() {
     const providers = await this.prisma.identityProvider.findMany({
@@ -354,8 +350,6 @@ export class SsoService {
           : null
     };
   }
-
-  // ========== Provider CRUD ==========
 
   listProviders(organizationId: string | null) {
     return this.prisma.identityProvider
@@ -589,7 +583,7 @@ export class SsoService {
       if (input.clientSecret && !isMask(input.clientSecret)) {
         data.clientSecret = this.crypto.encrypt(input.clientSecret);
       } else if (!existing?.clientSecret && protocol === SsoProtocol.oidc) {
-        // Public clients are legitimate (PKCE, no secret), so this is allowed —
+        // Public clients are legitimate (PKCE, no secret), so this is allowed,
         // but it is worth a log line when an admin probably just forgot.
         this.logger.warn(
           `Identity provider "${name}" saved without a client secret (org ${organizationId ?? 'instance'})`
@@ -749,8 +743,6 @@ export class SsoService {
       );
     }
   }
-
-  // ========== Org settings ==========
 
   async getSettings(organizationId: string) {
     const settings = await this.prisma.orgSsoSettings.findUnique({ where: { organizationId } });
@@ -954,8 +946,6 @@ export class SsoService {
       loginUrl: this.orgLoginUrl(org.slug)
     }));
   }
-
-  // ========== SAML helpers ==========
 
   private normalizeCertificate(pem: string): string {
     return pem

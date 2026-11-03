@@ -50,8 +50,8 @@ import { NotificationsService } from '../notifications/notifications.service';
  * MetalLB exposure. Owns the postgresql.cnpg.io CRD interactions.
  *
  * Shares the kubeconfig + a couple of generic helpers (createPVC) with the
- * core KubernetesService via injection; the moved bodies still reference
- * `this.kc`, `this.ensureKubeConfig()`, `this.createPVC()` — delegated below.
+ * core KubernetesService via injection: `this.kc`, `this.ensureKubeConfig()`
+ * and `this.createPVC()` are delegated below.
  */
 import { parseKubeletSummary, VolumeUsage } from './volume-stats';
 import { WRITE_GUARD_ANNOTATION } from './cnpg-status';
@@ -578,7 +578,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     }
 
     // CNPG performs a rolling update on resource changes only when the cluster has
-    // a healthy primary — a single-instance cluster stuck in CrashLoopBackOff (the
+    // a healthy primary: a single-instance cluster stuck in CrashLoopBackOff (the
     // exact case where users tend to bump resources) won't get rolled. Force-delete
     // the cluster's pods so the operator recreates them with the new spec.
     try {
@@ -596,11 +596,11 @@ export class K8sCnpgService implements OnApplicationBootstrap {
         try {
           await coreApi.deleteNamespacedPod(name, namespace);
         } catch {
-          /* ignore — operator may already be recreating it */
+          /* ignore: operator may already be recreating it */
         }
       }
     } catch {
-      /* ignore — pod listing/deletion is best-effort */
+      /* ignore: pod listing/deletion is best-effort */
     }
   }
 
@@ -731,8 +731,6 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     };
   }
 
-  // ── PostgreSQL Database Management (via kubectl exec into CNPG pod) ──
-
   private readonly CNPG_NAMESPACE = 'postgresql';
 
   private readonly CNPG_POD = 'postgresql-cluster-1';
@@ -818,14 +816,12 @@ export class K8sCnpgService implements OnApplicationBootstrap {
 
     console.log(`[K8s/PG] Creating database "${dbName}" with user "${dbUser}"`);
 
-    // Create the role
     // NOTE: passwords are generated via crypto random hex upstream, so they cannot contain
     // a single quote; the .replace below is still applied as belt-and-braces.
     await this.execPsql(
       `DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '${dbUser}') THEN CREATE ROLE "${dbUser}" LOGIN PASSWORD '${dbPassword.replace(/'/g, "''")}'; END IF; END $$;`
     );
 
-    // Create the database
     // Can't use IF NOT EXISTS in DO block for CREATE DATABASE, so check first
     const exists = await this.execPsql(`SELECT 1 FROM pg_database WHERE datname = '${dbName}';`);
 
@@ -835,7 +831,6 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       throw new BadRequestException(`Database "${dbName}" already exists`);
     }
 
-    // Grant privileges
     await this.execPsql(`GRANT ALL PRIVILEGES ON DATABASE "${dbName}" TO "${dbUser}";`);
 
     console.log(`[K8s/PG] Database "${dbName}" created successfully`);
@@ -889,8 +884,6 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       return { exists: false };
     }
   }
-
-  // ── Container-mode Postgres with pgBackRest ──
 
   private pgBackRestStanza(dbName: string): string {
     return dbName.replace(/[^a-zA-Z0-9_]/g, '_');
@@ -1250,7 +1243,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
 
   // Public wrapper so other modules (e.g. the MCP exec tool, the deployments
   // controller) can run a one-shot command in a pod without going through the
-  // websocket terminal gateway. Returns stdout/stderr/success — no streaming.
+  // websocket terminal gateway. Returns stdout/stderr/success: no streaming.
   async runExec(
     namespace: string,
     pod: string,
@@ -1574,8 +1567,6 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     }
   }
 
-  // ── CNPG (CloudNativePG) Cluster management ──
-
   private readonly CNPG_GROUP = 'postgresql.cnpg.io';
 
   private readonly CNPG_VERSION = 'v1';
@@ -1704,7 +1695,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       'app.kubernetes.io/managed-by': 'orchard'
     };
 
-    // App-user credential secret — referenced by the Cluster for initdb bootstrap.
+    // App-user credential secret: referenced by the Cluster for initdb bootstrap.
     const appSecretName = this.buildAppSecretName(name);
     const appSecretData = {
       username: Buffer.from(options.dbUser).toString('base64'),
@@ -1731,7 +1722,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     }
 
     // Derived from the memory limit, but only where the user hasn't set the knob
-    // themselves — `options.parameters` still spreads last and wins outright.
+    // themselves: `options.parameters` still spreads last and wins outright.
     const tuning = deriveDbTuning({
       memoryLimitBytes: options.resources?.memoryBytes,
       overrides: {
@@ -2036,7 +2027,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
   // Detailed provisioning view for the CNPG cluster: PVC, instance pod, optional
   // import job pod, conditions, and recent warning events. Used by the database
   // page to show a step-by-step "provisioning" experience while the cluster is
-  // coming up, and to surface migration errors that previously only appeared via
+  // coming up, and to surface migration errors that otherwise only appear via
   // `kubectl logs`.
   async getCnpgProvisioningStatus(
     namespace: string,
@@ -2153,7 +2144,6 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       /* ignore */
     }
 
-    // Import progress
     let importStatus: 'pending' | 'running' | 'completed' | 'failed' | undefined;
     let importLogs: string | undefined;
     let importError: string | undefined;
@@ -2753,9 +2743,9 @@ export class K8sCnpgService implements OnApplicationBootstrap {
   }
 
   // Push the memory-derived tuning onto a live cluster. Called after a memory
-  // change so a database that just got more room actually gets to use it —
-  // previously a user who bumped memory to escape an OOM kept the same
-  // shared_buffers and got none of the benefit they paid for.
+  // change so a database that just got more room actually gets to use it: without
+  // this a user who bumps memory to escape an OOM keeps the same shared_buffers
+  // and gets none of the benefit they paid for.
   //
   // shared_buffers is always written explicitly rather than deleted: the patch
   // below is a JSON merge patch, so omitting the key leaves the old value in
@@ -3068,7 +3058,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     dataCompression: 'gzip' | null = 'gzip',
     serverName?: string
   ): any {
-    // Preserve the scheme from the configured endpoint — when r2-proxy is
+    // Preserve the scheme from the configured endpoint: when r2-proxy is
     // enabled the endpoint is http:// (plaintext, in-cluster); when going
     // direct to R2 it's https://. Stripping then re-prefixing https broke
     // the proxy path.
@@ -3530,8 +3520,6 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       if (e.response?.statusCode !== 404) throw e;
     }
   }
-
-  // ── Public TLS (cert-manager wildcard reflection) ──
 
   private readonly PUBLIC_TLS_SOURCE_NAMESPACE =
     process.env.PUBLIC_DB_TLS_SOURCE_NAMESPACE || 'network';

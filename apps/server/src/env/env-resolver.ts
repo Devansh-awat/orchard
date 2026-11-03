@@ -70,7 +70,7 @@ export function resolveSharedValues(shared: EnvVar[]): {
     if (resolved.has(key)) return resolved.get(key)!;
     if (!raw.has(key)) return '';
     if (stack.has(key)) {
-      // cycle — break it
+      // cycle: break it
       errors.push({ key, missingRef: `<cycle:${key}>` });
       return '';
     }

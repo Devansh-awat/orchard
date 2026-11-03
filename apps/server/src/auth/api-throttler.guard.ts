@@ -18,7 +18,7 @@ export function bearerApiToken(req: Record<string, any>): string | undefined {
 }
 
 // Resolvable limit for ThrottlerModule. PAT buckets are per-token (see
-// getTracker below), so several PAT clients on one host no longer share a
+// getTracker below), so several PAT clients on one host do not share a
 // bucket; the higher limit gives each of them headroom for bursty
 // SSE-driven refetch without loosening the per-IP limit for everyone else.
 export function apiThrottlerLimit(context: ExecutionContext): number {

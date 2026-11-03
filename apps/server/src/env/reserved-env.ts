@@ -7,7 +7,7 @@
  * expands `$(VAR)`, never `$VAR`, so the container comes up with a PATH of two
  * directories that do not exist. Orchard then copies every deployment env var
  * into the build job's containers, where it replaces the builder image's own
- * PATH — and BuildKit dies with `buildkitd: not found` before it can print a
+ * PATH, and BuildKit dies with `buildkitd: not found` before it can print a
  * single line of the user's build. Under Kata the sibling pusher container's
  * containerd task lands mid-sandbox-teardown and reports a 429, which is what
  * surfaces to the user: an infrastructure error for a variable we generated.
@@ -41,7 +41,7 @@ export const RUNTIME_OWNED_ENV_KEYS = new Set([
  * Names that steer the build job rather than the build. Deliberately short:
  * withholding a variable breaks any build that legitimately wanted it, so a key
  * only earns a place here if it reconfigures our container and has no sensible
- * meaning as a build arg. AWS_ACCESS_KEY_ID is the obvious near-miss — the
+ * meaning as a build arg. AWS_ACCESS_KEY_ID is the obvious near-miss: the
  * builder reads it for the S3 cache backend, but pulling assets from S3 during
  * a build is ordinary, so it is ordered around rather than taken away.
  */
@@ -70,7 +70,7 @@ export function builderContainerEnv(
  * The subset of a deployment's env vars that may enter a build at all.
  *
  * Applied once at the top of the build job so every consumer agrees on the
- * set — the container environment, the `ARG` declarations, the build args, and
+ * set: the container environment, the `ARG` declarations, the build args, and
  * the Railpack `--secret id=K,env=K` flags, which read the container's own
  * environment and would dangle if the two lists disagreed.
  *

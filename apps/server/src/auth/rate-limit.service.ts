@@ -12,53 +12,53 @@ export const RATE_LIMIT_CONFIGS: Record<string, RateLimitConfig> = {
   // OTP request: max 5 requests per email per 15 minutes, block for 1 hour
   otp_request_email: {
     maxAttempts: 5,
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    blockDurationMs: 60 * 60 * 1000 // 1 hour
+    windowMs: 15 * 60 * 1000,
+    blockDurationMs: 60 * 60 * 1000
   },
   // OTP request: max 20 requests per IP per 15 minutes, block for 1 hour
   otp_request_ip: {
     maxAttempts: 20,
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    blockDurationMs: 60 * 60 * 1000 // 1 hour
+    windowMs: 15 * 60 * 1000,
+    blockDurationMs: 60 * 60 * 1000
   },
   // OTP verification: max 5 attempts per email per 15 minutes, block for 30 minutes
   otp_verify_email: {
     maxAttempts: 5,
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    blockDurationMs: 30 * 60 * 1000 // 30 minutes
+    windowMs: 15 * 60 * 1000,
+    blockDurationMs: 30 * 60 * 1000
   },
   // OTP verification: max 30 attempts per IP per 15 minutes, block for 1 hour
   otp_verify_ip: {
     maxAttempts: 30,
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    blockDurationMs: 60 * 60 * 1000 // 1 hour
+    windowMs: 15 * 60 * 1000,
+    blockDurationMs: 60 * 60 * 1000
   },
   // Passkey auth: max 10 attempts per email per 15 minutes, block for 30 minutes
   passkey_auth_email: {
     maxAttempts: 10,
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    blockDurationMs: 30 * 60 * 1000 // 30 minutes
+    windowMs: 15 * 60 * 1000,
+    blockDurationMs: 30 * 60 * 1000
   },
   // Passkey auth: max 50 attempts per IP per 15 minutes, block for 1 hour
   passkey_auth_ip: {
     maxAttempts: 50,
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    blockDurationMs: 60 * 60 * 1000 // 1 hour
+    windowMs: 15 * 60 * 1000,
+    blockDurationMs: 60 * 60 * 1000
   },
   password_signin_email: {
     maxAttempts: 5,
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    blockDurationMs: 30 * 60 * 1000 // 30 minutes
+    windowMs: 15 * 60 * 1000,
+    blockDurationMs: 30 * 60 * 1000
   },
   password_signin_ip: {
     maxAttempts: 30,
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    blockDurationMs: 60 * 60 * 1000 // 1 hour
+    windowMs: 15 * 60 * 1000,
+    blockDurationMs: 60 * 60 * 1000
   },
   protection_password_ip: {
     maxAttempts: 10,
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    blockDurationMs: 15 * 60 * 1000 // 15 minutes
+    windowMs: 15 * 60 * 1000,
+    blockDurationMs: 15 * 60 * 1000
   },
   invite_email: {
     maxAttempts: 5,
@@ -72,8 +72,8 @@ export const RATE_LIMIT_CONFIGS: Record<string, RateLimitConfig> = {
   },
   protection_password_ingress: {
     maxAttempts: 100,
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    blockDurationMs: 15 * 60 * 1000 // 15 minutes
+    windowMs: 15 * 60 * 1000,
+    blockDurationMs: 15 * 60 * 1000
   }
 };
 

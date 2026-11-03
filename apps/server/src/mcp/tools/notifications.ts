@@ -5,8 +5,8 @@ import { json, paginate } from './reply';
 import { pageInput } from './inputs';
 import { NOTIFICATION_EVENTS, RULE_SCOPE_TYPES } from '../../notifications/notification-events';
 
-// Sourced from the server's own list rather than redeclared, which is how the
-// old copy silently drifted and stopped offering job and archiving events.
+// Sourced from the server's own list rather than redeclared, so it cannot drift
+// and stop offering job and archiving events.
 const EVENT_NAMES = NOTIFICATION_EVENTS.join(', ');
 const SCOPE_VALUES = RULE_SCOPE_TYPES as unknown as [string, ...string[]];
 

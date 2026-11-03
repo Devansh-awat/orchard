@@ -130,7 +130,6 @@ export class AiChatService {
         break;
       }
 
-      // Build assistant message with tool calls
       const assistantMsg: OpenAI.Chat.Completions.ChatCompletionMessageParam = {
         role: 'assistant',
         content: assistantContent || null,
@@ -142,7 +141,6 @@ export class AiChatService {
       };
       openaiMessages.push(assistantMsg);
 
-      // Execute each tool call
       for (const tc of toolCalls.values()) {
         yield `${JSON.stringify({ type: 'tool_call', name: tc.name, input: tc.arguments })}\n`;
 

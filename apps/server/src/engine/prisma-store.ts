@@ -184,7 +184,7 @@ export class PrismaEngineStore implements EngineStore {
     ]);
   }
 
-  // `= ANY($1)` binds the whole set as a single array parameter — an
+  // `= ANY($1)` binds the whole set as a single array parameter: an
   // `IN (...)` list would bind one parameter per object and fall off the
   // 65535-parameter cliff on a large cluster.
   async buryMissing(

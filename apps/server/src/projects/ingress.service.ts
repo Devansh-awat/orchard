@@ -209,7 +209,7 @@ export class IngressService implements OnModuleInit {
   /**
    * Fire-and-forget favicon (re)fetch for a freshly created or updated
    * ingress host, so dashboard icons appear without waiting for the daily
-   * refresh job. Deliberately not awaited — ingress mutations must never
+   * refresh job. Deliberately not awaited: ingress mutations must never
    * fail or slow down because a favicon fetch is slow.
    */
   private warmFavicon(host?: string | null) {
@@ -242,7 +242,7 @@ export class IngressService implements OnModuleInit {
     const expectedCname = this.instanceConfig.value(INGRESS, 'cname') || '';
     const domainToCheck = domain.trim().toLowerCase().replace(/\.$/, '');
 
-    // Generic failure message — do NOT echo resolved DNS records back to the
+    // Generic failure message: do NOT echo resolved DNS records back to the
     // caller. Returning resolved CNAME / A records turns this endpoint into a
     // DNS oracle for arbitrary internet domains.
     const records = await this.dnsRecordsFor(domainToCheck);
@@ -739,7 +739,7 @@ export class IngressService implements OnModuleInit {
 
     if (protectionMode !== 'none') {
       // Reconciler re-applies protection every 10 minutes, so a failure here
-      // only delays the auth wall — it must not fail ingress creation.
+      // only delays the auth wall: it must not fail ingress creation.
       try {
         const result = await this.k8sNetwork.enableProtectionProxy(
           deployment.namespace,
@@ -833,9 +833,9 @@ export class IngressService implements OnModuleInit {
     },
     choice: AutoUrlChoice = {}
   ) {
-    // No app domain configured means no URL can be generated at all. That used
-    // to return null and get logged as a warning nobody sees, so a deployment
-    // came up with no URL and no explanation. Named so callers can say why.
+    // No app domain configured means no URL can be generated at all. Returning
+    // null would get logged as a warning nobody sees, and a deployment would come
+    // up with no URL and no explanation. Named so callers can say why.
     const wildcard = platformWildcardDomains()[0];
     if (!wildcard) {
       this.logger.warn(

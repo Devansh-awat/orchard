@@ -5,8 +5,6 @@ import { json, paginate, text } from './reply';
 import { pageInput } from './inputs';
 
 export function registerResourceTools(server: McpServer, client: OrchardClient) {
-  // ── Projects ──────────────────────────────────────────────────────
-
   server.registerTool(
     'create_project',
     {
@@ -70,8 +68,6 @@ Only the fields you pass are changed — leave the rest undefined to keep them a
       return json(project);
     }
   );
-
-  // ── Databases ─────────────────────────────────────────────────────
 
   server.registerTool(
     'create_database',
@@ -590,8 +586,6 @@ Common values:
       return text('Public access disabled.');
     }
   );
-
-  // ── Templates ─────────────────────────────────────────────────────
 
   server.registerTool(
     'create_template',

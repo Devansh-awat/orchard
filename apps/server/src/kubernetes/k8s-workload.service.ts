@@ -67,9 +67,8 @@ import { pinToBuildArch } from '../docker/build-platform';
  * patch flows.
  *
  * Shares kubeconfig + a few cross-domain helpers (createPVC, mapServicePorts,
- * getDefaultNodeIp) with the core KubernetesService via injection. Moved
- * bodies still use `this.kc`, `this.ensureKubeConfig()`, etc. — delegated
- * below so the bodies stay byte-identical.
+ * getDefaultNodeIp) with the core KubernetesService via injection: `this.kc`,
+ * `this.ensureKubeConfig()`, etc. are delegated below.
  */
 // Only the fields Orchard sets. The API server fills in the rest (scheme,
 // successThreshold, termination grace), and comparing those would report drift
@@ -499,7 +498,7 @@ export class K8sWorkloadService {
 
         // k8s answers 400 "container ... is waiting to start: ContainerCreating"
         // (or PodInitializing / image pull states) for pods that haven't started
-        // yet — routine right after a scale-up or restart while the frontend is
+        // yet: routine right after a scale-up or restart while the frontend is
         // already polling logs. Not an error: report empty logs until the
         // container is up.
         if (statusCode === 400 && k8sMessage.includes('is waiting to start')) {
@@ -808,7 +807,7 @@ export class K8sWorkloadService {
     }
 
     // Split env into inline (normal) and k8s-Secret-backed (secret) entries.
-    // Secret values never appear inline in the pod spec — they're referenced
+    // Secret values never appear inline in the pod spec: they're referenced
     // via secretKeyRef into a per-deployment Secret.
     const { envList, secretData } = this.buildEnvAndSecret(cleanName, options.env, {
       HOST: '0.0.0.0',
@@ -892,7 +891,7 @@ export class K8sWorkloadService {
         // uid-drop set (see trusted-images.ts), refuse setuid privilege
         // escalation mid-process, and apply the runtime's default seccomp
         // profile.
-        // We deliberately do NOT force runAsNonRoot — many tenant images
+        // We deliberately do NOT force runAsNonRoot: many tenant images
         // still chown/listen on :80 as root and would crashloop. gVisor
         // already neuters root-in-container by virtualising the kernel,
         // so this is acceptable.
@@ -905,7 +904,7 @@ export class K8sWorkloadService {
       };
 
       // Burstable QoS: memory requests == limits, CPU requests a fraction of
-      // them. Org quota still bills the limit — see getOrgUsage.
+      // them. Org quota still bills the limit: see getOrgUsage.
       if (options.resources) {
         const cpuStr = cpuMilliToK8s(options.resources.cpuMilli);
         const cpuReqStr = cpuMilliToK8s(cpuRequestFromLimitMilli(options.resources.cpuMilli));
@@ -916,7 +915,6 @@ export class K8sWorkloadService {
         };
       }
 
-      // Apply health checks if configured
       if (options.healthCheck?.enabled) {
         const probes = probesFor(options.healthCheck);
         if (probes.liveness) container.livenessProbe = probes.liveness;
@@ -967,13 +965,13 @@ export class K8sWorkloadService {
               // pod do `selfsubjectreviews` and (more importantly) carries
               // any unintended RBAC grants out of the namespace.
               automountServiceAccountToken: false,
-              // Run under gVisor (runsc) when configured — a user-space
+              // Run under gVisor (runsc) when configured: a user-space
               // kernel that intercepts syscalls. A kernel CVE in the
               // tenant's image no longer reaches the host kernel; a
               // container escape requires escaping runsc itself.
               // Falsy env var ⇒ undefined ⇒ default containerd handler.
               // Trusted first-party images (see trusted-images.ts) skip
-              // the sandbox — runsc rejects some uid/cap transitions that
+              // the sandbox: runsc rejects some uid/cap transitions that
               // their entrypoints rely on (e.g. Redis's root→redis drop).
               runtimeClassName: isTrustedImage(cleanImage)
                 ? undefined
@@ -1135,7 +1133,7 @@ export class K8sWorkloadService {
    * converges instead of 409-ing.
    *
    * Inactive (see disruptionBudgetActive) means the budget is deleted rather
-   * than written, so this is safe to call on every apply — scaling from 2 to 1
+   * than written, so this is safe to call on every apply: scaling from 2 to 1
    * removes the object, scaling back restores it.
    */
   async applyPodDisruptionBudget(options: {
@@ -1224,7 +1222,7 @@ export class K8sWorkloadService {
 
   /**
    * Upsert (or delete when null) the per-deployment env Secret. Returns whether
-   * the stored values actually changed — secret entries reach the container
+   * the stored values actually changed: secret entries reach the container
    * through secretKeyRef, so their contents are invisible to the pod spec and
    * only a changed Secret justifies forcing a rollout.
    */
@@ -2471,7 +2469,7 @@ export class K8sWorkloadService {
    * Apply a changed start command without a rebuild.
    *
    * The args live in the pod template, so patching them rolls a new ReplicaSet
-   * the same way a pull-policy change does — and unlike every other build
+   * the same way a pull-policy change does, and unlike every other build
    * setting, a start command on a Dockerfile or image-source deployment needs
    * no builder at all, so it takes effect in seconds instead of a build.
    *
@@ -3100,7 +3098,7 @@ export class K8sWorkloadService {
 
   /**
    * Lightweight batch fetch: lists all pods in a namespace in one API call and
-   * groups them by their `app` label. Skips per-pod event fetches and metrics —
+   * groups them by their `app` label. Skips per-pod event fetches and metrics,
    * intended for status-badge computation across many deployments.
    */
   async listNamespacePodsByApp(
@@ -3247,9 +3245,8 @@ export class K8sWorkloadService {
             revision: revisionOf(pod),
             facts: podFacts(pod),
             containers,
-            // 5 was enough when nothing rendered these; the Events panel in
-            // ObserveTab shows the real history, and a crash loop generates
-            // several distinct reasons before the interesting one.
+            // The Events panel in ObserveTab shows the real history, and a crash loop
+            // generates several distinct reasons before the interesting one.
             events: events.slice(0, 20)
           };
         })
@@ -3310,7 +3307,6 @@ export class K8sWorkloadService {
         }));
       });
 
-      // Fetch metrics and attach to pods
       const metricsMap = await this.getPodMetrics(cleanNamespace, labelSelector);
       const podsWithMetrics = pods.map((pod) => {
         const metrics = metricsMap.get(pod.name);
@@ -3368,7 +3364,7 @@ export class K8sWorkloadService {
    * Lightweight batch: one listNamespacedPod call per namespace, bucketed by
    * the `app.kubernetes.io/name` label (which every orchard-managed Deployment
    * sets via selectorLabels). Returns just enough shape for
-   * computeDeploymentStatus — pod phase/ready/restarts and a crash-loop flag —
+   * computeDeploymentStatus: pod phase/ready/restarts and a crash-loop flag,
    * skipping the per-pod events + metrics fetches that getDeploymentPods does.
    *
    * Use for list/overview endpoints where you have many deployments in a
@@ -3437,8 +3433,6 @@ export class K8sWorkloadService {
 
     return result;
   }
-
-  // ── Public (MetalLB LoadBalancer) exposure ──
 
   async addTailscaleSidecar(
     namespace: string,
@@ -3520,7 +3514,7 @@ export class K8sWorkloadService {
     }
 
     // 4. Build a Tailscale Serve config to proxy each port to the target service.
-    // TS_SERVE_CONFIG works in userspace mode — no NET_ADMIN needed.
+    // TS_SERVE_CONFIG works in userspace mode: no NET_ADMIN needed.
     const serveConfig = JSON.stringify({
       TCP: Object.fromEntries(
         servicePorts.map((p) => [
@@ -3610,7 +3604,7 @@ export class K8sWorkloadService {
       }
     }
 
-    // 6. Create a strict NetworkPolicy — the TS proxy pod can ONLY talk to the
+    // 6. Create a strict NetworkPolicy: the TS proxy pod can ONLY talk to the
     //    target deployment's pods. No internet, no other namespaces, no DNS even.
     //
     // The TS container stores its state in the ts-auth Secret (see RBAC above),
@@ -3705,7 +3699,7 @@ export class K8sWorkloadService {
 
     // 7. Under Cilium, ipBlock rules can't select the apiserver (it has the
     //    reserved kube-apiserver identity), so the egress rule above is inert
-    //    there — mirror it as a CiliumNetworkPolicy, same as allow-cnpg-apiserver.
+    //    there: mirror it as a CiliumNetworkPolicy, same as allow-cnpg-apiserver.
     const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
     const tsApiServerPolicy = {
       apiVersion: 'cilium.io/v2',
@@ -3734,7 +3728,7 @@ export class K8sWorkloadService {
       const code = e.response?.statusCode;
       if (code === 404 || code === 403) {
         // Cilium CRD absent, or present with no cilium.io rbac granted
-        // (cilium.enabled=false) — the vanilla NetworkPolicy rule covers it.
+        // (cilium.enabled=false): the vanilla NetworkPolicy rule covers it.
       } else if (code !== 409) {
         throw e;
       }
@@ -3758,7 +3752,6 @@ export class K8sWorkloadService {
     const netpolName = `ts-isolate-${deploymentName}`;
     const serveConfigName = `ts-serve-${deploymentName}`;
 
-    // Delete the Tailscale proxy deployment
     try {
       await appsApi.deleteNamespacedDeployment(tsDeployName, namespace);
     } catch (e: any) {
@@ -3766,7 +3759,6 @@ export class K8sWorkloadService {
         console.error(`[K8s] Failed to delete TS deployment ${tsDeployName}:`, e);
     }
 
-    // Delete the NetworkPolicy
     try {
       await networkingApi.deleteNamespacedNetworkPolicy(netpolName, namespace);
     } catch (e: any) {
@@ -3774,7 +3766,6 @@ export class K8sWorkloadService {
         console.error(`[K8s] Failed to delete NetworkPolicy ${netpolName}:`, e);
     }
 
-    // Delete the apiserver CiliumNetworkPolicy
     try {
       const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
       await customApi.deleteNamespacedCustomObject(
@@ -3789,7 +3780,6 @@ export class K8sWorkloadService {
         console.error(`[K8s] Failed to delete CNP ts-apiserver-${deploymentName}:`, e);
     }
 
-    // Delete the ConfigMap
     try {
       await coreApi.deleteNamespacedConfigMap(serveConfigName, namespace);
     } catch (e: any) {
@@ -3797,7 +3787,6 @@ export class K8sWorkloadService {
         console.error(`[K8s] Failed to delete ConfigMap ${serveConfigName}:`, e);
     }
 
-    // Delete RBAC
     try {
       await rbacApi.deleteNamespacedRoleBinding(tsDeployName, namespace);
     } catch (e: any) {
@@ -3811,7 +3800,6 @@ export class K8sWorkloadService {
         console.error(`[K8s] Failed to delete Role ${tsDeployName}:`, e);
     }
 
-    // Delete ServiceAccount
     try {
       await coreApi.deleteNamespacedServiceAccount(tsDeployName, namespace);
     } catch (e: any) {
@@ -3819,7 +3807,6 @@ export class K8sWorkloadService {
         console.error(`[K8s] Failed to delete ServiceAccount ${tsDeployName}:`, e);
     }
 
-    // Delete the secret
     try {
       await coreApi.deleteNamespacedSecret(secretName, namespace);
     } catch (e: any) {
@@ -3841,7 +3828,6 @@ export class K8sWorkloadService {
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
     const tsDeployName = `ts-${deploymentName}`;
 
-    // Find the running Tailscale proxy pod
     const { body: podList } = await coreApi.listNamespacedPod(
       namespace,
       undefined,
@@ -3894,7 +3880,7 @@ export class K8sWorkloadService {
                 }
               }
             } catch {
-              // Parse error — proxy may not be ready yet
+              // Parse error: proxy may not be ready yet
             }
             resolve({ ip: null, dns: null });
           }

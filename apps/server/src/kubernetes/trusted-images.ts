@@ -1,6 +1,6 @@
 // Trusted images bypass the tenant sandbox runtime (gVisor/Kata) and run on
 // the default containerd runtime (runc). Use this only for first-party infra
-// images we ship and trust — never for anything that executes user code.
+// images we ship and trust, never for anything that executes user code.
 //
 // Why bypass: sandbox runtimes pay real costs. gVisor's runsc reimplements
 // syscalls in userspace and rejects some uid/cap transitions (e.g. Redis's
@@ -16,7 +16,7 @@
 export type TrustedImagePattern = string;
 
 export const TRUSTED_IMAGES: TrustedImagePattern[] = [
-  // Redis — used internally for caching/queues. Official image's entrypoint
+  // Redis: used internally for caching/queues. Official image's entrypoint
   // does a root→redis uid drop that runsc rejects.
   'redis',
   'redis:*',
@@ -135,7 +135,7 @@ export const trustedSecurityContext = () => ({
 // root→service-user drop via gosu/su-exec/setpriv: SETUID/SETGID for the
 // uid/gid transition itself, CHOWN/FOWNER/DAC_OVERRIDE to chown+chmod the
 // data dir before dropping. These caps are enforced by gVisor's Sentry
-// (userspace kernel), not the host kernel — granting them inside the
+// (userspace kernel), not the host kernel: granting them inside the
 // sandbox confers no host privilege, and allowPrivilegeEscalation=false
 // (no_new_privs) still blocks re-gaining privileges via setuid binaries
 // or file capabilities after the drop.

@@ -95,7 +95,7 @@ export class OrganizationsService {
     const isSuperAdmin = await this.authz.isSuperAdmin(user.id);
 
     // This listing reads memberships directly rather than going through
-    // AuthorizationService, so tenant confinement has to be repeated here —
+    // AuthorizationService, so tenant confinement has to be repeated here,
     // otherwise an org-scoped session could still enumerate the account's
     // other organizations by name, even while unable to open them.
     const sessionOrgId = requestAuthStorage.getStore()?.sessionOrgId;
@@ -136,7 +136,7 @@ export class OrganizationsService {
   }
 
   // Backup credentials are write-only over the API. We never return the access key
-  // or the secret access key in plaintext — only a "configured" flag and the last
+  // or the secret access key in plaintext, only a "configured" flag and the last
   // 4 chars of the access key so an operator can recognize which credential is set.
   private scrubOrgSecrets<
     T extends { backupR2SecretKey?: string | null; backupR2AccessKey?: string | null }
@@ -445,9 +445,9 @@ export class OrganizationsService {
 
     // M-5: route through AuthorizationService.getOrgAccess so the synthetic
     // superadmin "owner" only materialises for orgs that actually exist (the
-    // helper does a row-exists check). Previously a superadmin probing
-    // /orgs/<random-uuid>/membership/me got a 200 with a fabricated row,
-    // which both leaked superadmin-ness to clients and ran with a bogus org
+    // helper does a row-exists check). Otherwise a superadmin probing
+    // /orgs/<random-uuid>/membership/me gets a 200 with a fabricated row,
+    // which both leaks superadmin-ness to clients and runs with a bogus org
     // id through downstream calls.
     const access = await this.authz.getOrgAccess(organizationId, user.id);
     if (!access) {
@@ -461,13 +461,13 @@ export class OrganizationsService {
         }
       });
       if (membership) return membership;
-      // Theoretically unreachable — access.source === 'membership' implies
-      // the row exists — but treat the race as "not found" rather than
+      // Theoretically unreachable: access.source === 'membership' implies
+      // the row exists, but treat the race as "not found" rather than
       // synthesising data.
       throw new NotFoundException('Organization not found');
     }
 
-    // source === 'superadmin' — synthesise an in-memory "owner" record so
+    // source === 'superadmin': synthesise an in-memory "owner" record so
     // the UI can present admin affordances. The id prefix makes the synthetic
     // origin obvious to any consumer that joins back on OrganizationMember.
     return {
@@ -824,7 +824,7 @@ export class OrganizationsService {
 
     const inviterAccess = await this.authz.requireOrgAdmin(organizationId, inviter.id);
 
-    // Only owners can invite with the 'owner' role — admins cannot escalate.
+    // Only owners can invite with the 'owner' role: admins cannot escalate.
     if (role === 'owner' && inviterAccess.role !== 'owner') {
       throw new ForbiddenException('Only organization owners can invite new owners');
     }
@@ -937,7 +937,7 @@ export class OrganizationsService {
    * Invitation issued from a project's members page for an email with no
    * existing account. On accept the user joins the org as a guest AND becomes
    * a member of the target project. Authorization (project admin) is the
-   * caller's responsibility — this is invoked by ProjectsService, which has
+   * caller's responsibility: this is invoked by ProjectsService, which has
    * already run assertProjectAdmin.
    */
   async createProjectGuestInvitation(params: {
@@ -1049,10 +1049,9 @@ export class OrganizationsService {
   }
 
   async acceptInvitationByToken(token: string, clerkId: string, userData?: any) {
-    // M-3: hash lookup only. The plaintext-column fallback was removed once
-    // the backfill completed — a fallback that still queries by raw `token`
-    // turns a DB-read foothold (backup leak, replica access) into working
-    // invitation links.
+    // M-3: hash lookup only. A fallback that queries by raw `token` would turn a
+    // DB-read foothold (backup leak, replica access) into working invitation
+    // links.
     const tokenHash = this.hashToken(token);
     return this.acceptInvitationByLookup({ tokenHash }, clerkId, userData, 'invitation');
   }
@@ -1062,8 +1061,8 @@ export class OrganizationsService {
    * endpoint returns invitation IDs instead of plaintext tokens (the token
    * column is hashed at rest and nulled on existing rows), so this is the
    * only way for the in-app "Accept" button to consume an invite without
-   * the email link. All security checks are identical to the token path —
-   * email-match + emailVerified + already-member + expiry — and collapse to
+   * the email link. All security checks are identical to the token path
+   * (email-match + emailVerified + already-member + expiry) and collapse to
    * the same 404 shape on any reject branch.
    */
   async acceptInvitationById(invitationId: string, clerkId: string, userData?: any) {
@@ -1083,9 +1082,9 @@ export class OrganizationsService {
   ) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
 
-    // M-9: every "no" branch collapses to the SAME 404. The old shape
+    // M-9: every "no" branch collapses to the SAME 404. Distinct responses
     // (NotFound for missing, Forbidden for wrong-email, BadRequest for
-    // expired or already-member) let a holder of a stolen token probe
+    // expired or already-member) would let a holder of a stolen token probe
     // whether it ever existed, who it was addressed to, and whether it had
     // been redeemed.
     const notFound = () => new NotFoundException('Invitation not found or expired.');
@@ -1114,14 +1113,13 @@ export class OrganizationsService {
     if (user.email.toLowerCase() !== invitation.email.toLowerCase()) {
       throw notFound();
     }
-    // L-1: collapse to the same 404 shape — distinguishing "wrong user"
+    // L-1: collapse to the same 404 shape: distinguishing "wrong user"
     // from "not verified" lets a freshly-registered unverified account
     // under the victim's email probe whether an invitation exists.
     if (!user.emailVerified) {
       throw notFound();
     }
 
-    // Check if already a member
     const existingMember = await this.prisma.organizationMember.findUnique({
       where: {
         organizationId_userId: {
@@ -1134,7 +1132,7 @@ export class OrganizationsService {
     if (existingMember) {
       // Project-targeted invite where the user joined the org through some
       // other path in the meantime: still honor the project membership grant
-      // (never touching their existing — possibly higher — org role).
+      // (never touching their existing, possibly higher, org role).
       if (invitation.projectId && invitation.projectRoleId) {
         const granted = await this.prisma.$transaction(async (tx) => {
           const alreadyInProject = await tx.projectMember.findUnique({
@@ -1230,13 +1228,13 @@ export class OrganizationsService {
     return member;
   }
 
-  // M-4: the previous behavior accepted every pending invitation for the
-  // signed-in user's email in one shot. That is a bulk-accept primitive — a
+  // M-4: this is a LIST-only operation. Accepting every pending invitation for
+  // the signed-in user's email in one shot would be a bulk-accept primitive: a
   // single CSRF/cross-tab/foothold action could land the victim in arbitrary
   // organizations they never consented to join, with whatever role the
-  // inviter chose. We replace it with a LIST-only operation: the client is
-  // expected to call `acceptInvitationByToken` once per invitation, which
-  // enforces the per-token email + emailVerified checks individually.
+  // inviter chose. The client is expected to call `acceptInvitationByToken`
+  // once per invitation, which enforces the per-token email + emailVerified
+  // checks individually.
   async acceptPendingInvitationsForUser(clerkId: string, userData?: any) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
 
@@ -1290,8 +1288,8 @@ export class OrganizationsService {
   }
 
   async getInvitationByToken(token: string) {
-    // M-3: hash lookup only — see acceptInvitationByToken for why the
-    // plaintext-column fallback was removed.
+    // M-3: hash lookup only, see acceptInvitationByToken for why there is no
+    // plaintext-column fallback.
     const tokenHash = this.hashToken(token);
     const invitation = await this.prisma.organizationInvitation.findUnique({
       where: { tokenHash },
@@ -1328,7 +1326,7 @@ export class OrganizationsService {
       return [];
     }
 
-    // H-2: explicit field selection — never return `token` / `tokenHash` to
+    // H-2: explicit field selection, never return `token` / `tokenHash` to
     // the client. The in-app accept flow uses the row `id` via
     // acceptInvitationById, which re-runs every per-token security check
     // under the caller's session.
@@ -1375,7 +1373,7 @@ export class OrganizationsService {
   async declineInvitationByToken(token: string, clerkId: string, userData?: any) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
 
-    // M-9: collapse every reject branch to one 404 shape — see
+    // M-9: collapse every reject branch to one 404 shape: see
     // acceptInvitationByToken for the rationale.
     const notFound = () => new NotFoundException('Invitation not found or expired.');
 
@@ -1392,7 +1390,7 @@ export class OrganizationsService {
       throw notFound();
     }
 
-    // L-1: parity with acceptInvitationByToken — require a verified email and
+    // L-1: parity with acceptInvitationByToken: require a verified email and
     // collapse mismatch / unverified branches to the same 404 shape so a freshly
     // registered unverified account can't probe pending invitation addresses.
     if (user.email.toLowerCase() !== invitation.email.toLowerCase()) {
@@ -1607,12 +1605,12 @@ export class OrganizationsService {
 
     // Remove org membership AND all project memberships in this org atomically
     // to prevent stale ProjectMember rows from reactivating if the user is later
-    // re-invited (e.g. as a guest — they'd inherit their old project admin roles).
+    // re-invited (e.g. as a guest, they'd inherit their old project admin roles).
     // No sole-project-admin guard here: org owners and admins resolve as
     // project admins on every project in the org (resolveProjectAccess ->
     // source: 'orgAdmin'), so a project is never left unmanageable. Blocking
-    // the org removal instead left the member with org access and no way out
-    // short of promoting a new admin in every project they held.
+    // the org removal instead would leave the member with org access and no way
+    // out short of promoting a new admin in every project they held.
     await this.prisma.$transaction(async (tx) => {
       await tx.projectMember.deleteMany({
         where: {
@@ -1756,7 +1754,7 @@ export class OrganizationsService {
       );
     }
 
-    // Guests must have at least one project membership — prevent creating
+    // Guests must have at least one project membership: prevent creating
     // orphaned guests that violate the lifecycle rule.
     if (newRole === 'guest') {
       const projectCount = await this.prisma.projectMember.count({

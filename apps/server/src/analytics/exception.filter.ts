@@ -20,7 +20,7 @@ import { prismaHttpException } from '../prisma/prisma-error';
 /**
  * Global filter that forwards every unhandled error to PostHog Error
  * Tracking. We extend BaseExceptionFilter so Nest still produces the
- * standard JSON error response — we only add the analytics side-effect.
+ * standard JSON error response: we only add the analytics side-effect.
  *
  * 4xx HttpExceptions are skipped: they're expected-validation noise and
  * would drown out real bugs in the dashboard.

@@ -40,7 +40,7 @@ export class SsoController {
   }
 
   /**
-   * Login-page payload for one organization, keyed on its slug — the same slug
+   * Login-page payload for one organization, keyed on its slug: the same slug
    * that addresses it everywhere else in the product. 404 covers both "no such
    * org" and "SSO not live here" so this can't enumerate tenants.
    */
@@ -130,10 +130,9 @@ export class SsoController {
     return this.sso.getSpMetadata(providerId);
   }
 
-  // ========== Legacy routes ==========
-  // The org-scoped callback URLs predate identity providers and are registered
-  // on IdPs we don't control, so they keep working forever. New connections
-  // use /sso/callback/:providerId.
+  // Legacy routes. The org-scoped callback URLs predate identity providers and are
+  // registered on IdPs we don't control, so they keep working forever. New
+  // connections use /sso/callback/:providerId.
 
   @Get(':orgId/login')
   async legacyLogin(@Param('orgId') orgId: string, @Res() res: Response) {

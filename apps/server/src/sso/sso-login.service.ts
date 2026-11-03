@@ -65,8 +65,6 @@ export class SsoLoginService {
     return this.openidClient;
   }
 
-  // ========== Provider lookup ==========
-
   /**
    * Load a provider that is actually allowed to authenticate right now. Both
    * switches are checked here rather than at the edges, so no controller can
@@ -100,8 +98,6 @@ export class SsoLoginService {
     if (!provider) throw new NotFoundException('Identity provider not found');
     return this.loadLoginProvider(provider.id);
   }
-
-  // ========== Start ==========
 
   async startLogin(providerId: string, returnTo?: string): Promise<string> {
     const provider = await this.loadLoginProvider(providerId);
@@ -193,8 +189,6 @@ export class SsoLoginService {
       cacheProvider: this.samlRequests
     });
   }
-
-  // ========== Callbacks ==========
 
   async handleOidcCallback(
     providerId: string,
@@ -356,8 +350,6 @@ export class SsoLoginService {
     return { email, name, emailVerified, subject: body.id ? String(body.id) : null };
   }
 
-  // ========== User resolution ==========
-
   private async completeLogin(
     provider: IdentityProvider,
     profile: IdpProfile,
@@ -481,7 +473,7 @@ export class SsoLoginService {
    * for any address without the recipient ever acting, so treating it as proof
    * would let an admin mint an invite and then walk into the account behind
    * that address. Invitations are accepted by the person holding the emailed
-   * token, in their own session — the same rule the direct-add path already
+   * token, in their own session: the same rule the direct-add path already
    * refuses to bend.
    */
   private async resolveOrgUser(provider: IdentityProvider, email: string, name: string) {
@@ -673,8 +665,6 @@ export class SsoLoginService {
     });
     return Boolean(invitation);
   }
-
-  // ========== Admin connection test ==========
 
   /**
    * Reaches the IdP the same way a real sign-in would, without creating any

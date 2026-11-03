@@ -254,7 +254,7 @@ export class WorkloadConsumer implements OnModuleDestroy {
 
   // Kubernetes is truth: unambiguous spec fields edited outside Orchard
   // (kubectl scale / set image / resources patch) are adopted into the
-  // deployments row. Env is deliberately excluded — Orchard env carries
+  // deployments row. Env is deliberately excluded: Orchard env carries
   // ${{shared.*}} references and encrypted secrets that a raw k8s env list
   // cannot round-trip.
   private async adoptWorkloadSpec(deploymentId: string, dep: k8s.V1Deployment): Promise<void> {
@@ -279,7 +279,7 @@ export class WorkloadConsumer implements OnModuleDestroy {
     // hand is not evidence of anything. Thrown rather than returned: the
     // informer only marks an object derived when the handler succeeds, so this
     // leaves it `underived` and runs again on the repair pass. Returning
-    // quietly instead drops the adoption for good — the Deployment does not
+    // quietly instead drops the adoption for good: the Deployment does not
     // change again, so the next list sees a matching derived_version and skips
     // it. That is how a deployment scaled to zero outside Orchard kept
     // reporting one replica for eleven days.
@@ -351,7 +351,7 @@ export class WorkloadConsumer implements OnModuleDestroy {
     //
     // Compared against the EFFECTIVE policy, not the stored column. A null
     // column means "derive from the tag", and the live object legitimately
-    // carries that derived value — adopting it would silently convert every
+    // carries that derived value: adopting it would silently convert every
     // automatic deployment into a pinned one.
     const pullPolicy = container?.imagePullPolicy;
     if (

@@ -4,7 +4,7 @@ import type { DockerfileHealthCheck } from '../github/dockerfile-healthcheck';
  * Which health check a deployment actually runs with.
  *
  * A repo that declares `HEALTHCHECK` in its Dockerfile has already answered
- * the question, and that answer travels with the code — so it wins over
+ * the question, and that answer travels with the code, so it wins over
  * Orchard's own defaults without anyone opening the settings tab. The stored
  * configuration is still kept, untouched, behind `healthCheckOverride`: that
  * flag is the user saying "I know what the image says, do this instead".
@@ -129,7 +129,7 @@ export function resolveHealthCheck(
     // cut back to it rather than left to pile up.
     const timeout = Math.min(detected.timeout ?? DOCKER_DEFAULT_TIMEOUT, interval);
     // `--start-period` is grace, not health: failures inside it are not
-    // counted. A startup probe is the same bargain — liveness and readiness
+    // counted. A startup probe is the same bargain: liveness and readiness
     // stay quiet until it passes.
     const startPeriod = detected.startPeriod ?? 0;
     const http = loopbackHttpProbe(detected.command, appPort);

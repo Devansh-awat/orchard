@@ -7,12 +7,12 @@ import { objectStorage } from '../instance-config/object-storage';
  * Namespaces a tenant pod may be reached from, and reach.
  *
  * The ingress controller is the reason this is configurable rather than a
- * constant. This project runs HAProxy in `network`, so that was hardcoded; on
- * k3s Traefik lives in `traefik`, and on a cluster where it lives anywhere else
- * the tenant policy silently blocks it. The visible symptom is not "the site is
- * down" but a certificate that never issues: the ACME HTTP-01 solver is a pod
- * in the tenant namespace, the controller cannot reach it, and Let's Encrypt
- * gets a 502 instead of the token.
+ * constant. This project runs HAProxy in `network`, on k3s Traefik lives in
+ * `traefik`, and on a cluster where it lives anywhere else the tenant policy
+ * silently blocks it. The visible symptom is not "the site is down" but a
+ * certificate that never issues: the ACME HTTP-01 solver is a pod in the tenant
+ * namespace, the controller cannot reach it, and Let's Encrypt gets a 502
+ * instead of the token.
  */
 export function tenantIngressNamespaces(): string[] {
   const configured = (process.env.TENANT_INGRESS_NAMESPACES || '')
@@ -151,13 +151,13 @@ export function tenantDenyPolicy(
       //   1. Talk to other pods in the same tenant namespace.
       //   2. Resolve DNS via kube-dns in kube-system (UDP/TCP 53).
       //   3. Talk to the `network` namespace (ingress controllers).
-      //   4. Reach the public internet — but NOT link-local / cloud
+      //   4. Reach the public internet, but NOT link-local / cloud
       //      metadata (169.254.0.0/16) or the RFC1918 ranges the
       //      platform's own infra lives on.
       //   5. Reach other Orchard tenant namespaces. Those namespaces are
       //      still default-deny on ingress, so this only lands on what a
       //      tenant has explicitly published via an `-allow-public`
-      //      policy — the same surface the public internet already has.
+      //      policy: the same surface the public internet already has.
       // This blocks tenant pods from reaching the kube-apiserver,
       // platform Postgres/Harbor/server, other tenants' unpublished
       // services, and the cloud metadata IMDS.
@@ -203,7 +203,7 @@ export function tenantDenyPolicy(
           to: TENANT_NAMESPACE_EGRESS_PEERS
         },
         // CNPG barman sidecars in tenant namespaces stream WAL/backups to
-        // r2-proxy, which lives at a ClusterIP in 10.x — blanket RFC1918
+        // r2-proxy, which lives at a ClusterIP in 10.x: blanket RFC1918
         // egress would block backups entirely. Scope the exception to
         // the r2-proxy namespace on port 9000.
         {

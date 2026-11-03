@@ -1,10 +1,10 @@
 import * as k8s from '@kubernetes/client-node';
 import { parseCpu, parseMemory } from './quantity';
 
-// A cluster-wide pod LIST is ~8MB and takes seconds on a real cluster, and the
-// usage page used to trigger four of them plus three service LISTs on a single
-// load: /quota, /quota/me, and /quota/projects each did their own, and
-// /quota/projects did two. They all want the same snapshot at the same instant.
+// A cluster-wide pod LIST is ~8MB and takes seconds on a real cluster, and a
+// single load of the usage page wants four of them plus three service LISTs:
+// /quota, /quota/me, and /quota/projects each need their own, and
+// /quota/projects needs two. They all want the same snapshot at the same instant.
 //
 // So: one snapshot, shared. Single-flight collapses the parallel burst into one
 // request, and a short TTL covers the SSE-driven refetches that follow.

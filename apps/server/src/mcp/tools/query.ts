@@ -206,8 +206,6 @@ resources:
 `;
 
 export function registerQueryTools(server: McpServer, client: OrchardClient) {
-  // ── User & Organizations ──────────────────────────────────────────
-
   server.registerTool(
     'get_current_user',
     {
@@ -231,8 +229,6 @@ export function registerQueryTools(server: McpServer, client: OrchardClient) {
       return json(orgs);
     }
   );
-
-  // ── Resolution ────────────────────────────────────────────────────
 
   server.registerTool(
     'find',
@@ -409,8 +405,6 @@ Only pools an administrator marked user-selectable show up. On an instance that 
     }
   );
 
-  // ── Projects ──────────────────────────────────────────────────────
-
   server.registerTool(
     'list_projects',
     {
@@ -441,8 +435,6 @@ Only pools an administrator marked user-selectable show up. On an instance that 
       return json(project);
     }
   );
-
-  // ── Deployments ───────────────────────────────────────────────────
 
   server.registerTool(
     'list_deployments',
@@ -506,8 +498,6 @@ The build log is omitted here because it is often megabytes — read it with \`g
     }
   );
 
-  // ── Environment Variables ─────────────────────────────────────────
-
   server.registerTool(
     'get_env_vars',
     {
@@ -524,8 +514,6 @@ Secret vars come back with \`secret: true\` and a null value — the value is wr
       return json(envVars);
     }
   );
-
-  // ── Networking ────────────────────────────────────────────────────
 
   server.registerTool(
     'list_ingresses',
@@ -591,8 +579,6 @@ Secret vars come back with \`secret: true\` and a null value — the value is wr
     }
   );
 
-  // ── Databases ─────────────────────────────────────────────────────
-
   server.registerTool(
     'list_databases',
     {
@@ -649,8 +635,6 @@ To diagnose an unhealthy database, check \`liveStatus.message\`, \`liveStatus.la
       return json(database);
     }
   );
-
-  // ── Logs & Pods ───────────────────────────────────────────────────
 
   server.registerTool(
     'get_deployment_logs',
@@ -1093,8 +1077,6 @@ Use this before suggesting scale-ups, or to confirm an unhealthy / OOM-looking d
     }
   );
 
-  // ── Volumes ───────────────────────────────────────────────────────
-
   server.registerTool(
     'get_deployment_volumes',
     {
@@ -1126,8 +1108,6 @@ The response also surfaces \`deployStrategy\` and a \`pvcCount\` so callers can 
       return json(payload);
     }
   );
-
-  // ── GitHub ────────────────────────────────────────────────────────
 
   server.registerTool(
     'get_github_status',
@@ -1225,8 +1205,6 @@ Use this to answer "can I deploy this repo" and "which app in this monorepo did 
       return json(contents);
     }
   );
-
-  // ── Templates ─────────────────────────────────────────────────────
 
   server.registerTool(
     'list_templates',

@@ -12,8 +12,6 @@ export class AdminController {
     return this.adminService.getStats();
   }
 
-  // --- Users ---
-
   @Get('users')
   async getUsers(
     @Query('page') page?: string,
@@ -49,8 +47,6 @@ export class AdminController {
   async deleteUser(@Param('id') id: string, @Req() req: any) {
     return this.adminService.deleteUser(id, req.auth.userId);
   }
-
-  // --- Organizations ---
 
   @Get('organizations')
   async getOrganizations(

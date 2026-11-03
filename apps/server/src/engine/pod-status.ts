@@ -46,8 +46,8 @@ export function podBackoffReason(
 
 /**
  * The one place a pod's phase, conditions and container states turn into the
- * status Orchard shows. Every read path goes through this — the mirror, the
- * legacy informer and the live workload lookups — so the stored `pods` rows and
+ * status Orchard shows. Every read path goes through this: the mirror, the
+ * legacy informer and the live workload lookups, so the stored `pods` rows and
  * a live cluster query can never disagree.
  *
  *   terminating  the pod is being deleted

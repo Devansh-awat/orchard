@@ -45,7 +45,7 @@ export function isNullSha(sha: string | null | undefined): boolean {
  *
  * Deleting a branch arrives as a push to that same ref: same event, same
  * branch name, `deleted` set, and `after` as the null sha. Taking it at face
- * value starts a build of a commit that does not exist — which is what a
+ * value starts a build of a commit that does not exist, which is what a
  * deployment tracking a feature branch gets on the day that branch is merged
  * and tidied up.
  */

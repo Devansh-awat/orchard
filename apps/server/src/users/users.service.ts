@@ -248,7 +248,7 @@ export class UsersService {
       const identifierIsUuid = uuidRegex.test(identifier);
 
       if (user) {
-        // Link the externalAuthId to the existing user — but never overwrite it
+        // Link the externalAuthId to the existing user, but never overwrite it
         // with a UUID. Callers pass `req.user.sub` here, which SuperAdminGuard
         // has already resolved to the DB UUID for OAuth users. Writing that
         // UUID into `externalAuthId` clobbers the real Hack Club ID and breaks
@@ -274,7 +274,7 @@ export class UsersService {
       } else {
         // No existing record by id, externalAuthId, or email. If the identifier
         // looks like a UUID we cannot legitimately create a Hack Club–linked
-        // user from it — bail out so we don't write garbage into externalAuthId.
+        // user from it: bail out so we don't write garbage into externalAuthId.
         if (identifierIsUuid) return null;
 
         // Create a new user with the (presumably-real) Hack Club identifier.

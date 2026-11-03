@@ -156,7 +156,6 @@ export class SuperAdminGuard implements CanActivate {
       }
     }
 
-    // Extract and verify JWT token
     const request = context.switchToHttp().getRequest<Request>();
     const token = this.extractToken(request);
 
@@ -273,7 +272,7 @@ export class SuperAdminGuard implements CanActivate {
 
       // M-2: reject tokens minted by the MCP OAuth provider. They share the
       // same HS256 signing secret but are issued under a different consent
-      // surface — a user authorising an MCP client never agreed to hand that
+      // surface: a user authorising an MCP client never agreed to hand that
       // bearer to the first-party API. Sessions issued by oauth.service /
       // passwordless / SSO have no `type` claim and pass through.
       if ((payload as any).type !== undefined) {
@@ -289,7 +288,7 @@ export class SuperAdminGuard implements CanActivate {
         : Promise.resolve(false);
       sessionCheck.catch(() => {});
       // Resolve the real DB user ID for OAuth users (where sub is a Hack Club ID, not a UUID).
-      // Fall back to email if externalAuthId lookup fails — without this, a user whose
+      // Fall back to email if externalAuthId lookup fails. Without this, a user whose
       // externalAuthId column got nulled or overwritten ends up with dbUserId = a Hack Club ID,
       // and every downstream membership query runs against a non-UUID and returns empty
       // (surfacing as a permanent 403 on org-scoped endpoints until they log out).
@@ -308,7 +307,7 @@ export class SuperAdminGuard implements CanActivate {
         }
         if (!dbUser) {
           // Neither externalAuthId nor email mapped to a User. Falling through
-          // would leave dbUserId set to the raw Hack Club ID — a non-UUID —
+          // would leave dbUserId set to the raw Hack Club ID (a non-UUID)
           // and every downstream Prisma query keyed on it would silently
           // return empty, surfacing as confusing permanent 403/404s. Refuse
           // the request instead.
@@ -317,10 +316,9 @@ export class SuperAdminGuard implements CanActivate {
         dbUserId = dbUser.id;
       }
 
-      // Require a sessionId so that revocation actually kills the token.
-      // Pre-fix, JWTs without sessionId survived "Sign out everywhere" for the
-      // full 7-day expiry. Every issuance path now mints with a session id;
-      // any token lacking one is either pre-fix legacy or a forgery — reject.
+      // Require a sessionId so that revocation actually kills the token. Every
+      // issuance path mints with a session id, so any token lacking one is legacy
+      // or a forgery: reject it.
       if (!sessionId) {
         throw new UnauthorizedException('Session has been revoked');
       }
@@ -328,7 +326,6 @@ export class SuperAdminGuard implements CanActivate {
       if (!sessionValid) {
         throw new UnauthorizedException('Session has been revoked');
       }
-      // Touch session in background
       this.sessionsService.touchSession(sessionId).catch(() => {});
 
       // Sessions minted by an organization's own IdP carry that org, and are
@@ -355,7 +352,7 @@ export class SuperAdminGuard implements CanActivate {
       setTraceUser(dbUserId, sessionId);
       authenticated = true;
     } catch {
-      // JWT failed — try API token lookup
+      // JWT failed: try API token lookup
     }
 
     if (crossSiteDenied) {
@@ -368,8 +365,8 @@ export class SuperAdminGuard implements CanActivate {
     }
 
     if (!authenticated) {
-      // Cheap prefix check: bogus bearers (random strings, malformed JWTs) no
-      // longer cost a DB round-trip, blunting an unauth'd amplification path.
+      // Cheap prefix check: bogus bearers (random strings, malformed JWTs) never
+      // cost a DB round-trip, blunting an unauth'd amplification path.
       if (!token.startsWith('orch_')) {
         throw new UnauthorizedException('Invalid token');
       }
@@ -429,7 +426,6 @@ export class SuperAdminGuard implements CanActivate {
       };
       setTraceUser(user.id);
 
-      // Update lastUsedAt in the background
       this.prisma.apiToken
         .update({
           where: { id: apiToken.id },
@@ -446,14 +442,14 @@ export class SuperAdminGuard implements CanActivate {
       context.getClass()
     ]);
 
-    // Check @Auth() — JWT verified, no superadmin check needed (unless @SuperAdmin() overrides)
+    // Check @Auth(): JWT verified, no superadmin check needed (unless @SuperAdmin() overrides)
     if (requiresAuth && !requiresSuperadmin) {
       return true;
     }
 
     // Default (no decorator) OR explicit @SuperAdmin(): require superadmin.
     // An org-scoped session never qualifies, whatever the underlying account
-    // is — otherwise one tenant's IdP could reach the platform console.
+    // is, otherwise one tenant's IdP could reach the platform console.
     if (request['user']?.orgScope) {
       throw new ForbiddenException('Superadmin access required');
     }
@@ -510,7 +506,7 @@ export class SuperAdminGuard implements CanActivate {
 //   - GET / HEAD / OPTIONS → require `read` (or any higher scope)
 //   - everything else      → require `deploy` (or `exec`)
 // A route may opt into a different requirement with @RequireScope('exec').
-// Session-authenticated requests bypass this guard entirely — scopes only
+// Session-authenticated requests bypass this guard entirely: scopes only
 // constrain programmatic token use.
 @Injectable()
 export class ScopeGuard implements CanActivate {

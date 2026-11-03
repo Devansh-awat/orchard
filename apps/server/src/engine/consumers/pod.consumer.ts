@@ -18,7 +18,7 @@ const EMIT_COALESCE_MS = 250;
 // it restarts, so both edges are debounced: a deployment must hold a crashing
 // pod this long before it is announced, and must hold none for the recovery
 // window before it is called recovered. The UI's own pod warnings are derived
-// straight from the mirrored rows and are not debounced — this only governs
+// straight from the mirrored rows and are not debounced: this only governs
 // outbound notifications.
 const CRASH_CONFIRM_MS = 30_000;
 const RECOVER_CONFIRM_MS = 60_000;
@@ -136,8 +136,8 @@ export class PodConsumer implements OnModuleDestroy {
     const statusChanged = await this.syncPod(type, ctx.deploymentId, pod);
 
     // Only a pod whose own status moved can move the deployment's aggregate
-    // crash state. Most watch events are resourceVersion churn, and those now
-    // cost nothing beyond the row write.
+    // crash state. Most watch events are resourceVersion churn, and those cost
+    // nothing beyond the row write.
     if (statusChanged) await this.reconcileCrashState(ctx.deploymentId);
 
     if (type !== 'delete') {
@@ -210,7 +210,7 @@ export class PodConsumer implements OnModuleDestroy {
 
     // Deliberately not wrapped in a catch. A pod row that failed to write has
     // to be visible to the informer, which holds the object's derived_version
-    // back and comes round again — swallowing it here is what let a pod that
+    // back and comes round again: swallowing it here is what let a pod that
     // never changes again sit missing from this table indefinitely.
     const existing = await this.prisma.pod.findUnique({
       where: { deploymentId_name: { deploymentId, name } },
@@ -274,7 +274,7 @@ export class PodConsumer implements OnModuleDestroy {
 
   /**
    * Bring one deployment's persisted crash state in line with its mirrored pod
-   * rows. Safe to call from anywhere and as often as you like — it reads the
+   * rows. Safe to call from anywhere and as often as you like: it reads the
    * current cluster picture rather than accumulating in-process state, so a
    * shard failover mid-crash neither loses nor duplicates a notification.
    */
@@ -350,7 +350,7 @@ export class PodConsumer implements OnModuleDestroy {
     if (now.getTime() - state.healthySince.getTime() < RECOVER_CONFIRM_MS) return;
 
     if (!state.notifiedAt) {
-      // The crash cleared before it was ever announced — drop the episode.
+      // The crash cleared before it was ever announced: drop the episode.
       await this.prisma.deploymentCrashState.deleteMany({
         where: { deploymentId, notifiedAt: null }
       });

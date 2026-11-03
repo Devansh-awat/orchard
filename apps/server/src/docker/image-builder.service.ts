@@ -82,7 +82,7 @@ interface BuildJobOptions {
   buildType?: 'dockerfile' | 'railpack';
   /**
    * Repo-relative directory of the app for Railpack builds. Already validated
-   * by normalizeRootDirectory before it reaches here — it is interpolated into
+   * by normalizeRootDirectory before it reaches here: it is interpolated into
    * the prepare container's shell script.
    */
   rootDirectory?: string | null;
@@ -200,7 +200,6 @@ export class ImageBuilderService {
   private readonly registrySecretName =
     process.env.REGISTRY_PULL_SECRET_NAME || 'harbor-registry-creds';
 
-  // Depot configuration
   private readonly depotToken = process.env.DEPOT_TOKEN;
 
   private readonly depotProjectId = process.env.DEPOT_PROJECT_ID;
@@ -231,7 +230,7 @@ export class ImageBuilderService {
 
   private readonly s3CachePrefix = process.env.BUILDKIT_S3_CACHE_PREFIX || 'buildkit-cache/';
 
-  // Local cache configuration — when enabled, overrides S3 cache and uses a
+  // Local cache configuration: when enabled, overrides S3 cache and uses a
   // path inside the build pod (optionally backed by a PVC for persistence).
   private readonly localCacheEnabled = process.env.BUILDKIT_LOCAL_CACHE_ENABLED === 'true';
 
@@ -244,10 +243,10 @@ export class ImageBuilderService {
 
   // Railpack ships three artefacts on independent version lines: the CLI that
   // writes the plan, the BuildKit gateway frontend that executes it, and the
-  // mise base image the prepare step runs in. They all used to float on
-  // `latest`, so a Railway release could change every Orchard build with no
-  // deploy on our side — and a CLI/frontend plan-schema mismatch would break
-  // builds outright. Pin them together; bump deliberately.
+  // mise base image the prepare step runs in. Left floating on `latest`, a
+  // Railway release could change every Orchard build with no deploy on our side,
+  // and a CLI/frontend plan-schema mismatch would break builds outright. Pin them
+  // together; bump deliberately.
   private readonly railpackVersion = process.env.RAILPACK_VERSION || 'v0.33.0';
 
   private readonly railpackFrontendImage =
@@ -263,7 +262,7 @@ export class ImageBuilderService {
 
   // Mirrors builders.localCache.gcKeepBytes / gcEphemeralKeepBytes in the
   // chart. The chart renders a buildkit-config ConfigMap carrying these too,
-  // but ensureBuildkitConfig replaces that ConfigMap wholesale at runtime — so
+  // but ensureBuildkitConfig replaces that ConfigMap wholesale at runtime, so
   // they have to be threaded through here as well or the chart's GC policy is
   // silently dropped on the first build.
   private readonly gcKeepBytes = process.env.BUILDKIT_GC_KEEP_BYTES || '18GB';
@@ -271,7 +270,7 @@ export class ImageBuilderService {
   private readonly gcEphemeralKeepBytes = process.env.BUILDKIT_GC_EPHEMERAL_KEEP_BYTES || '1GB';
 
   // BuildKit's GC only bounds a single worker's root, and every build gets its
-  // own worker rooted in its own subPath of the shared PVC — nothing in
+  // own worker rooted in its own subPath of the shared PVC: nothing in
   // BuildKit bounds the *sum* across tenants. So the volume fills, kubelet can
   // no longer mkdir the next tenant's subPath, and the build dies with an
   // opaque CreateContainerConfigError. These knobs drive the tenant-level
@@ -290,7 +289,7 @@ export class ImageBuilderService {
   // (and tolerate a matching `orchard-builder` NoSchedule taint if present).
   private readonly dedicatedNodeEnabled = process.env.BUILDER_DEDICATED_NODE === 'true';
 
-  // Sandboxing toggles — both default off so prior versions behave identically.
+  // Sandboxing toggles: both default off so prior versions behave identically.
   //   BUILDER_RUNTIME_CLASS: if set (e.g. "kata"), the build Job pod selects
   //     that RuntimeClass. With Kata each pod gets its own lightweight VM, so
   //     the privileged BuildKit container is privileged-in-VM, not on host.
@@ -346,7 +345,7 @@ export class ImageBuilderService {
   // RAM-backed scratch. tmpfs supports d_type and xattrs, so overlayfs can use
   // it as an upperdir and BuildKit keeps its copy-on-write snapshotter. It is
   // charged to the pod's memory cgroup and is not reclaimable, so it carries a
-  // sizeLimit — without one a single build can consume the whole node.
+  // sizeLimit: without one a single build can consume the whole node.
   private readonly scratchTmpfs = this.scratchMode === 'tmpfs';
 
   private readonly scratchSize = process.env.BUILDER_SCRATCH_SIZE || '40Gi';
@@ -449,8 +448,8 @@ export class ImageBuilderService {
   }
 
   // BuildKit jobs run a `buildkit` container; super builds run `depot-build`
-  // instead. Reading logs from a container the pod doesn't have throws, which
-  // is why super builds used to stream nothing at all.
+  // instead. Reading logs from a container the pod doesn't have throws, and a
+  // super build would stream nothing at all.
   private mainContainerName(containerStatuses?: k8s.V1ContainerStatus[]): string {
     return containerStatuses?.some((cs) => cs.name === DEPOT_CONTAINER)
       ? DEPOT_CONTAINER
@@ -817,7 +816,6 @@ export class ImageBuilderService {
     const coreApi = this.kc!.makeApiClient(k8s.CoreV1Api);
     await this.upsertDockerConfigSecret(this.registrySecretName, this.harborAuths());
 
-    // Create S3 cache credentials secret if enabled
     if (this.s3CacheEnabled && this.s3AccessKeyId && this.s3SecretAccessKey) {
       const s3SecretName = 'buildkit-s3-cache-creds';
       try {
@@ -852,7 +850,6 @@ export class ImageBuilderService {
       }
     }
 
-    // Create BuildKit configuration ConfigMap
     await this.ensureBuilderConfigMap();
   }
 
@@ -1004,7 +1001,7 @@ ${registryConfigs}
     } = opts;
 
     // Keys are interpolated into the depot build shell string below. Reject
-    // anything that isn't a POSIX identifier — same rule applied elsewhere
+    // anything that isn't a POSIX identifier: same rule applied elsewhere
     // in this service and in projects.service.
     const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
     for (const key of Object.keys(envVars)) {
@@ -1013,18 +1010,16 @@ ${registryConfigs}
       }
     }
 
-    // Depot has never actually supported Railpack here: this branch used to
-    // point at a plain `Dockerfile`, but the Railpack path writes a BuildKit
-    // frontend plan (`railpack-plan.json`) and no Dockerfile ever exists, so
-    // the build failed deep inside depot with a confusing "not found". Fail
-    // fast with something actionable instead.
+    // Depot does not support Railpack here: the Railpack path writes a BuildKit
+    // frontend plan (`railpack-plan.json`) and no Dockerfile ever exists, so the
+    // build would fail deep inside depot with a confusing "not found". Fail fast
+    // with something actionable instead.
     if (buildType === 'railpack') {
       throw new BadRequestException(
         'Super builds do not support automatic (Railpack) builds yet. Turn off super builds for this app, or switch it to a Dockerfile build.'
       );
     }
 
-    // Determine context directory and dockerfile flag
     let contextDir = '.';
     let dockerfileFlag = dockerfilePath;
 
@@ -1166,7 +1161,7 @@ fi
    * Generate a shell snippet that prunes *this tenant's own* per-image cache
    * directories when disk usage exceeds 80%, oldest-idle first, until usage
    * drops below 70%. It runs inside the buildkit container, whose cache mount
-   * is the tenant's subPath — so `df` reports the whole shared PVC but the
+   * is the tenant's subPath, so `df` reports the whole shared PVC but the
    * loop can only ever delete our own entries. Cross-tenant eviction is
    * `cacheEvictInitContainer`'s job.
    */
@@ -1203,7 +1198,7 @@ fi
   }
 
   // Waiting reasons kubelet retries forever without the pod ever leaving
-  // Pending. ImagePullBackOff is deliberately absent — a registry blip does
+  // Pending. ImagePullBackOff is deliberately absent: a registry blip does
   // recover on its own.
   private static readonly FATAL_WAITING_REASONS = new Set([
     'CreateContainerConfigError',
@@ -1282,7 +1277,7 @@ fi
 
     // A broken cache is our problem, not the user's build's. Probe it up front
     // and drop the cache flags if it is unusable, so the build still produces
-    // an image — but say so loudly, because a cache that silently stops working
+    // an image, but say so loudly, because a cache that silently stops working
     // is exactly the kind of fault worth noticing.
     const cachePreflight = cacheDir
       ? `
@@ -1323,14 +1318,13 @@ exit $BUILD_EXIT_CODE
   /**
    * Run a build command once and surface its exit code.
    *
-   * This used to retry three times, classifying failures by grepping the
-   * combined output for words like "timeout" and "network". That output
-   * includes the user's own program logs, so a Django traceback ending in
-   * "connection timeout expired" was read as a transient network blip and the
-   * build ran three more times — tripling wall clock and holding a builder slot
-   * for a build that could never succeed. Masking failures also hides our own
-   * infrastructure faults, which are the ones worth seeing. One attempt, real
-   * exit code, fail loudly.
+   * No retries: classifying failures by grepping the combined output for words
+   * like "timeout" and "network" also reads the user's own program logs, so a
+   * Django traceback ending in "connection timeout expired" looks like a
+   * transient network blip and the build runs three more times, tripling wall
+   * clock and holding a builder slot for a build that can never succeed. Masking
+   * failures also hides our own infrastructure faults, which are the ones worth
+   * seeing. One attempt, real exit code, fail loudly.
    */
   private generateBuildScript(command: string): string {
     return `
@@ -1392,7 +1386,7 @@ exit $EXIT_CODE
 
     // Sanitize the tenant key for use as a PVC subPath. Anything outside
     // [a-z0-9-] gets squashed; missing key collapses to "_shared" which is
-    // the legacy behaviour (every build in one directory) — only used when
+    // the legacy behaviour (every build in one directory), only used when
     // a caller hasn't been updated yet. New callers must pass this.
     const cacheSubPath = cacheTenantKey
       ? cacheTenantKey
@@ -1562,7 +1556,7 @@ ls -la /workspace
 
     // Env keys flow into Dockerfile directives and unquoted shell positions
     // below; a key containing a newline or shell metachar would inject
-    // arbitrary instructions. Reject early — projects.service already
+    // arbitrary instructions. Reject early: projects.service already
     // validates on write, this is defense-in-depth at the build boundary.
     const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
     for (const key of Object.keys(envVars)) {
@@ -1678,7 +1672,7 @@ ls -la /workspace
       skipCache: !!daemonIp
     });
 
-    // Runs first, and only when the cache volume is the real shared PVC — the
+    // Runs first, and only when the cache volume is the real shared PVC: the
     // disableSharedCache fallback swaps in an emptyDir with nothing to evict,
     // and daemon mode keeps its cache in the daemon pod.
     const sharedCacheVolume =
@@ -1708,15 +1702,14 @@ ls -la /workspace
     //      starts+stops its own buildkitd. Privileged, needs config/state.
     //
     // sidecarPushEnabled changes credential handling in both modes:
-    //   - no docker-config mount — the build cannot exfiltrate push creds.
+    //   - no docker-config mount: the build cannot exfiltrate push creds.
     //   - mount `output` emptyDir at /output for the OCI tarball.
     const buildkitContainer: k8s.V1Container | null = buildWithDepot
       ? null
       : (() => {
           if (daemonIp) {
-            // --- Daemon client mode ---
-            // buildctl sends the local context directory to the remote daemon
-            // over gRPC, so the client needs /workspace but NOT privilege.
+            // Daemon client mode: buildctl sends the local context directory to the remote
+            // daemon over gRPC, so the client needs /workspace but NOT privilege.
             const clientCmd = `buildctl --addr tcp://${daemonIp}:1234 ${buildctlArgs.map(renderBuildctlArg).join(' ')}${
               injectGitSha ? ImageBuilderService.GIT_SHA_BUILDCTL_OPT : ''
             }`;
@@ -1732,7 +1725,7 @@ ls -la /workspace
               name: 'buildkit',
               image: this.buildkitImage,
               imagePullPolicy: 'IfNotPresent',
-              // Not privileged — just a gRPC client. The daemon pod has registry
+              // Not privileged, just a gRPC client. The daemon pod has registry
               // creds and pushes directly, so the client doesn't need docker-config.
               command: ['/bin/sh', '-c'],
               args: [clientScript],
@@ -1746,12 +1739,11 @@ ls -la /workspace
             } as k8s.V1Container;
           }
 
-          // --- Daemonless mode (original) ---
-          // Cache export is only worth skipping for the S3 backend, which
-          // round-trips the whole cache over the network before the pusher can
-          // read the tarball. The local backend writes to a PVC and is
-          // independent of the push, so keep it — without the export nothing ever
-          // populates the cache dir and every build imports from an empty path.
+          // Daemonless mode: cache export is only worth skipping for the S3 backend,
+          // which round-trips the whole cache over the network before the pusher can read
+          // the tarball. The local backend writes to a PVC and is independent of the
+          // push, so keep it: without the export nothing ever populates the cache dir and
+          // every build imports from an empty path.
           const stripExportCache = this.sidecarPushEnabled && !this.localCacheEnabled;
           const scriptArgs = stripExportCache
             ? buildctlArgs.filter((arg, idx, arr) => {
@@ -1781,7 +1773,7 @@ ls -la /workspace
               // After the user's variables, not before. A build that pulls assets
               // from S3 sets AWS_ACCESS_KEY_ID for perfectly good reasons, and it
               // reaches the build by value as a --build-arg, so losing the race
-              // here costs it nothing — while losing it the other way points our
+              // here costs it nothing, while losing it the other way points our
               // cache exporter at someone else's bucket.
               ...(this.s3CacheEnabled && !this.localCacheEnabled
                 ? [
@@ -1862,14 +1854,14 @@ ls -la /workspace
           } as k8s.V1Container;
         })();
 
-    // Pusher container — only used when sidecarPushEnabled. Polls for a
+    // Pusher container, only used when sidecarPushEnabled. Polls for a
     // done-marker written by BuildKit, then `skopeo copy`s the OCI
     // tarball to Harbor.
     //
     // Why run BuildKit + pusher as PARALLEL main containers (not init→main):
     //   Under runtimeClassName=kata, transitioning from the last init
     //   container to the first main container triggers a 429 from the
-    //   kata-shim's task-create RPC — the kata-agent inside the VM
+    //   kata-shim's task-create RPC: the kata-agent inside the VM
     //   doesn't accept new tasks during sandbox-state-transition. Running
     //   both as `containers:` avoids that transition entirely; both tasks
     //   start once at pod startup, share /output via emptyDir, and
@@ -1879,7 +1871,7 @@ ls -la /workspace
     // namespaces inside the Kata VM, so a malicious Dockerfile RUN in
     // BuildKit cannot read the pusher container's
     // /root/.docker/config.json.
-    // No pusher in daemon mode — the daemon pushes directly (it has creds).
+    // No pusher in daemon mode: the daemon pushes directly (it has creds).
     const pusherImageRef = fullImageName.replace(/^[^/]+/, this.pusherRegistryHost);
     const pusherContainer: k8s.V1Container | null =
       buildkitContainer && this.sidecarPushEnabled && !daemonIp
@@ -1999,7 +1991,6 @@ exit $rc`
       containers = [buildkitContainer!];
     }
 
-    // Create the build job with init containers and daemonless buildkit
     const job: k8s.V1Job = {
       apiVersion: 'batch/v1',
       kind: 'Job',
@@ -2048,9 +2039,9 @@ exit $rc`
             // exfil the Harbor push creds via the apiserver.
             automountServiceAccountToken: false,
             // Builder pod runtime: Kata (lightweight VM) when configured.
-            // Empty/undefined ⇒ default containerd handler (runc) — matches
+            // Empty/undefined ⇒ default containerd handler (runc): matches
             // legacy behaviour on first upgrade.
-            // Daemon-client mode doesn't need Kata — it's just a gRPC client,
+            // Daemon-client mode doesn't need Kata: it's just a gRPC client,
             // the daemon pod itself runs with the runtime class.
             ...(!daemonIp && podRuntimeClass ? { runtimeClassName: podRuntimeClass } : {}),
             nodeSelector: {
@@ -2107,7 +2098,7 @@ exit $rc`
                   ]
                 : []),
               // Daemon-client mode doesn't need buildkit-config, buildkit-state,
-              // or buildkit-cache — the daemon pod has its own.
+              // or buildkit-cache: the daemon pod has its own.
               ...(!daemonIp && !buildWithDepot
                 ? [
                     {
@@ -2294,7 +2285,6 @@ exit $rc`
     rootDirectory: string | undefined,
     installRailpack: boolean
   ): string {
-    // Build the env args for railpack prepare
     const envArgs = Object.keys(envVars)
       .map((key, index) => ({ key, index, value: envVars[key] }))
       .filter(({ value }) => value && typeof value === 'string')
@@ -2436,7 +2426,6 @@ fi
     const { dockerfilePath, fullImageName, target, buildFromRoot, envVars, secretEnvKeys } =
       options;
 
-    // Determine dockerfile location and context
     let dockerfileDir = '.';
     let dockerfileName = 'Dockerfile';
 
@@ -2470,7 +2459,6 @@ fi
       `platform=${BUILD_PLATFORM}`
     ];
 
-    // Add target if specified
     if (target) {
       args.push('--opt', `target=${target}`);
     }
@@ -2488,8 +2476,8 @@ fi
     }
 
     // Add cache arguments (namespaced per image to prevent cross-deployment contamination)
-    // Skip when using persistent daemon — its content store IS the cache.
-    // Strip the tag from the cache key — tags change per build (timestamp), so
+    // Skip when using persistent daemon: its content store IS the cache.
+    // Strip the tag from the cache key: tags change per build (timestamp), so
     // including them means every build writes to a unique cache path and never
     // gets a hit. Also strip the registry/project prefix since it's constant.
     if (!options.skipCache) {
@@ -2501,7 +2489,7 @@ fi
     }
 
     // Output mode:
-    //   - Persistent daemon: always push directly — the daemon has registry
+    //   - Persistent daemon: always push directly, the daemon has registry
     //     creds and sidecar push doesn't work across pods.
     //   - sidecarPushEnabled: write OCI tarball to /output for the pusher
     //     sidecar container.
@@ -2556,7 +2544,7 @@ fi
       args.push('--secret', `id=${key},env=${key}`);
     }
 
-    // Skip cache when using persistent daemon — its content store IS the cache.
+    // Skip cache when using persistent daemon: its content store IS the cache.
     if (!options.skipCache) {
       const cacheImageKey = fullImageName.replace(/:[^/]*$/, '').replace(/^[^/]*\/[^/]*\//, '');
       const cacheArgs = this.buildCacheArgs(cacheImageKey);
@@ -2640,7 +2628,7 @@ fi
    * Emit per-phase spans (clone / image build / registry push) for a finished
    * build job, using the exact container timestamps Kubernetes reports:
    * git-clone init container, buildkit main container, pusher sidecar.
-   * Best-effort — failures here never affect the build result.
+   * Best-effort: failures here never affect the build result.
    */
   private async emitBuildPhaseSpans(jobName: string, deploymentId?: string): Promise<void> {
     try {
@@ -2674,7 +2662,7 @@ fi
       if (image) recordPhaseSpan('build.image', image.start, image.end, tags);
 
       // The pusher sidecar starts with the pod and idles until buildkit hands
-      // it the image, so clamp its window to begin where the build ended —
+      // it the image, so clamp its window to begin where the build ended,
       // otherwise "push" would include the whole build as wait time.
       const push = windowOf(pod.status?.containerStatuses?.find((c) => c.name === 'pusher'));
       if (push) {
@@ -2719,8 +2707,8 @@ fi
   /**
    * Pull the marker line the railpack-prepare init container echoed.
    *
-   * The normal log path only reads the buildkit container — init container
-   * logs are a failure-path fallback — so this is a targeted read. It runs at
+   * The normal log path only reads the buildkit container: init container
+   * logs are a failure-path fallback, so this is a targeted read. It runs at
    * most once per job (the status poll is on a timer) and only after the
    * container has terminated, since the marker is the last thing it prints.
    */
@@ -2769,12 +2757,11 @@ fi
   /**
    * Put Railpack's own prepare output into the build log.
    *
-   * Until this existed the build log for a Railpack build started at the
-   * buildkit container, so everything Railpack said about the repo — which
-   * provider it picked, which versions it resolved, and every warning it
-   * raised — was thrown away on success and only survived when the build
-   * happened to fail. That is precisely backwards: a warning matters most on
-   * the builds that go green.
+   * Without it the build log for a Railpack build starts at the buildkit
+   * container, so everything Railpack says about the repo (which provider it
+   * picked, which versions it resolved, every warning it raised) is thrown away
+   * on success and only survives when the build happens to fail. That is
+   * precisely backwards: a warning matters most on the builds that go green.
    *
    * The read is guarded to once per job, so this appends once.
    */
@@ -2783,7 +2770,7 @@ fi
 
     const body = prepareLog
       // Everything from here down is the pretty-printed copy of
-      // railpack-info.json plus the machine-readable marker line — the same
+      // railpack-info.json plus the machine-readable marker line: the same
       // detection that already lands on the deployment as a label.
       .split(`=== Build Info ===`)[0]
       .split('\n')
@@ -2849,7 +2836,7 @@ fi
         );
       } else if (jobSpec.status?.active && jobSpec.status.active > 0) {
         // A Job counts an unscheduled pod as active, so this is only a
-        // provisional 'running' — the pod's own phase decides, below.
+        // provisional 'running': the pod's own phase decides, below.
         status = 'running';
       } else {
         status = 'pending';
@@ -3786,7 +3773,7 @@ fi
         //   - ENOSPC, straight from buildctl or from cache-evict's mkdir.
         //   - kubelet refusing to leak the errno behind a failed subPath mkdir,
         //     which arrives as a bare CreateContainerConfigError with no build
-        //     logs at all — matchable only by shape.
+        //     logs at all: matchable only by shape.
         //   - cache-evict exiting non-zero. That container touches nothing but
         //     the shared cache, so its failure can't mean anything else.
         const message = error?.message ?? '';
@@ -4290,7 +4277,6 @@ fi
 
     const saName = 'image-builder';
 
-    // Create ServiceAccount
     try {
       await coreApi.readNamespacedServiceAccount(saName, this.builderNamespace);
     } catch (error) {
@@ -4304,7 +4290,6 @@ fi
       }
     }
 
-    // Create or update Role for the builder
     const roleName = 'image-builder-role';
     const roleRules = BUILDER_ROLE_RULES;
 
@@ -4328,7 +4313,6 @@ fi
       );
     }
 
-    // Create RoleBinding
     const roleBindingName = 'image-builder-rolebinding';
     try {
       await rbacApi.readNamespacedRoleBinding(roleBindingName, this.builderNamespace);
@@ -4593,9 +4577,6 @@ fi
     }
   }
 
-  /**
-   * Delete specific artifacts (tags) from Harbor.
-   */
   async deleteArtifactsFromRegistry(images: string[]): Promise<void> {
     for (const image of images) {
       await this.deleteArtifactFromRegistry(image);

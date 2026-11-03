@@ -130,12 +130,12 @@ async function bootstrap() {
 
   // Own the request's auth context from the very first middleware frame.
   //
-  // The guard used to establish this with AsyncLocalStorage.enterWith(), which
-  // is not reliable from inside a guard: the handler often resumes on a context
-  // captured before the guard ran, and getStore() comes back undefined. That
-  // silently disabled every restriction published this way — project-scoped API
-  // tokens as well as org-scoped sessions. Running the whole request inside
-  // run() and letting the guard mutate this object keeps it visible everywhere.
+  // AsyncLocalStorage.enterWith() is not reliable from inside a guard: the handler
+  // often resumes on a context captured before the guard ran, and getStore() comes
+  // back undefined. That would silently disable every restriction published this
+  // way, project-scoped API tokens as well as org-scoped sessions. Running the
+  // whole request inside run() and letting the guard mutate this object keeps it
+  // visible everywhere.
   app.use((_req: unknown, _res: unknown, next: () => void) => {
     requestAuthStorage.run({}, next);
   });

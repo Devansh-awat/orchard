@@ -4,7 +4,7 @@
  * Must be imported FIRST in main.ts (before Nest, before any application
  * code) so instrumentation is in place before modules start logging.
  *
- * Disabled when POSTHOG_API_KEY is unset — useful for local dev where you
+ * Disabled when POSTHOG_API_KEY is unset: useful for local dev where you
  * don't want every console.log shipped to PostHog.
  */
 import { NodeSDK } from '@opentelemetry/sdk-node';

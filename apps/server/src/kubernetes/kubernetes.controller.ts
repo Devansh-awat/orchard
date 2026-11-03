@@ -38,7 +38,7 @@ export class KubernetesController {
   /**
    * Resolve a namespace to its owning project and require the caller has the
    * appropriate access. Returns 404 (not 403) when the caller has no path to
-   * the project — matches the wider RBAC contract.
+   * the project: matches the wider RBAC contract.
    */
   private async resolveNamespace(
     namespace: string | undefined,
@@ -200,9 +200,9 @@ export class KubernetesController {
   }
 
   // Synchronous one-shot exec. Used by the MCP exec tool and any non-WS
-  // caller — the websocket terminal gateway handles interactive sessions.
+  // caller: the websocket terminal gateway handles interactive sessions.
   // Requires the `exec` API-token scope (the default for POST is `deploy`,
-  // which is insufficient — exec is shell access and demands an explicit
+  // which is insufficient: exec is shell access and demands an explicit
   // higher-privilege scope, matching the WS terminal gateway).
   @Post('pods/:podName/exec')
   @RequireScope('exec')

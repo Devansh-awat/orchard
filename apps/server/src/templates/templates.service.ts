@@ -375,7 +375,6 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
     await this.requireSuperAdmin(clerkId, userData);
     const parsed = this.templateEngine.parseTemplate(yamlContent);
 
-    // Check for name conflicts
     const existing = await this.prisma.template.findUnique({
       where: { name: parsed.metadata.name }
     });
@@ -416,7 +415,6 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
 
     const parsed = this.templateEngine.parseTemplate(yamlContent);
 
-    // Check name conflicts with other templates
     const nameConflict = await this.prisma.template.findFirst({
       where: { name: parsed.metadata.name, id: { not: id } }
     });
@@ -455,7 +453,6 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('Built-in templates cannot be deleted');
     }
 
-    // Check for active instances
     const instances = await this.prisma.templateInstance.count({
       where: { templateId: id }
     });
@@ -497,7 +494,6 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
     const parsed = this.templateEngine.parseTemplate(template.yaml);
     const validatedParams = this.templateEngine.validateParameters(parameters, parsed.parameters);
 
-    // Create instance record
     const instance = await this.prisma.templateInstance.create({
       data: {
         templateId,
@@ -907,7 +903,6 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    // Delete deployments
     for (const deployment of instance.deployments) {
       try {
         await this.deployments.deleteDeployment(deployment.id, clerkId, userData);
@@ -916,7 +911,6 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    // Delete databases
     for (const database of instance.databases) {
       try {
         await this.databases.deleteDatabase(database.id, clerkId, userData);

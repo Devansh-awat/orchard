@@ -61,7 +61,7 @@ export interface ProjectAccess {
 // invalidateSuperAdmin is called when the flag is toggled in this process,
 // but other pods only learn about it when this TTL expires.
 //
-// MUST stay equal to MembershipCacheService.TTL_MS — the slower of the two
+// MUST stay equal to MembershipCacheService.TTL_MS: the slower of the two
 // caches sets the platform-wide revocation bound, and a mismatch means the
 // stated SLA is a lie.
 const SUPERADMIN_TTL_MS = 1_000;
@@ -96,20 +96,18 @@ export class AuthorizationService {
     this.superAdminCache.delete(userId);
   }
 
-  // ──────────────────────────── SSO enforcement ────────────────────────────
-
   /**
    * H-1: If the user is a member of any organization with SSO enforced, refuse
    * non-SSO authentication paths (OTP, passkey, password, Hack Club OAuth).
-   * Without this gate, `OrgSsoSettings.enforced=true` is purely cosmetic — an admin
+   * Without this gate, `OrgSsoSettings.enforced=true` is purely cosmetic: an admin
    * who offboards a user from the IdP cannot prevent them from logging back
    * in via OTP to the same email, defeating the whole point of enforcement.
    *
-   * Superadmins bypass enforcement (break-glass access) — the assumption is
+   * Superadmins bypass enforcement (break-glass access): the assumption is
    * that they manage SSO config and need a way back in if it breaks.
    *
    * The `authMethod` param is the method the caller is about to use; only
-   * 'sso' satisfies enforcement. Anything else throws — including
+   * 'sso' satisfies enforcement. Anything else throws, including
    * 'instance_sso', the platform-wide identity providers, because an org that
    * enforces its own IdP is not asking to also trust the instance's Google
    * button.
@@ -179,8 +177,6 @@ export class AuthorizationService {
     throw new ForbiddenException(INSTANCE_SSO_REQUIRED_MESSAGE);
   }
 
-  // ──────────────────────────── organisation ────────────────────────────
-
   async getOrgAccess(organizationId: string, userId: string): Promise<OrgAccess | null> {
     // A project-scoped API token must not grant org-admin powers (settings,
     // member management, billing). Strip isAdmin so admin checks fall through
@@ -233,7 +229,7 @@ export class AuthorizationService {
     return access;
   }
 
-  /** Settings / member management on the organisation — owners and admins only. */
+  /** Settings / member management on the organisation: owners and admins only. */
   async requireOrgAdmin(organizationId: string, userId: string): Promise<OrgAccess> {
     const access = await this.requireOrgMember(organizationId, userId);
     if (!access.isAdmin) {
@@ -244,7 +240,7 @@ export class AuthorizationService {
 
   /**
    * Project creation gate. Guests are explicitly forbidden from spawning new
-   * projects — they only ever interact with projects they've been added to.
+   * projects: they only ever interact with projects they've been added to.
    * Everyone else (owner / admin / member) can create.
    */
   async requireOrgCanCreateProjects(organizationId: string, userId: string): Promise<OrgAccess> {
@@ -288,8 +284,6 @@ export class AuthorizationService {
     return access;
   }
 
-  // ──────────────────────────── project ────────────────────────────
-
   /**
    * Resolve a user's effective access to a project.
    * Returns null if the user has no path to the project (not org member, not project member).
@@ -314,7 +308,7 @@ export class AuthorizationService {
   ): Promise<ProjectAccess | null> {
     // Token project-scoping: when the request is authenticated by an API token
     // with a non-empty restrictedProjectIds, treat any project outside that
-    // list as if it didn't exist for this caller — even if the underlying user
+    // list as if it didn't exist for this caller, even if the underlying user
     // is org owner. Same 404 shape as a non-member to avoid leaking existence.
     const tokenCtx = requestAuthStorage.getStore();
     if (tokenCtx?.tokenProjectIds && tokenCtx.tokenProjectIds.length > 0) {
@@ -428,7 +422,7 @@ export class AuthorizationService {
     return access;
   }
 
-  /** Mutate deployments/services/ingresses/databases/etc. — viewers are blocked. */
+  /** Mutate deployments/services/ingresses/databases/etc.: viewers are blocked. */
   async requireProjectEdit(
     projectId: string,
     userId: string,
@@ -454,7 +448,7 @@ export class AuthorizationService {
   /**
    * Ownership transfer is deliberately narrower than member management.
    * `Project.ownerId` is what every deployment and database in the project is
-   * billed against, so handing it over spends somebody else's allowance — a
+   * billed against, so handing it over spends somebody else's allowance: a
    * project admin who doesn't own the project must not be able to do that to
    * the person who does. Org admins/owners keep the escape hatch they need to
    * reassign projects when a member leaves.
@@ -495,7 +489,7 @@ export class AuthorizationService {
 
   /**
    * For list endpoints. Returns the set of project IDs the user can see in the org.
-   * If the user is an org admin/owner, returns null meaning "no filter — show every project in the org".
+   * If the user is an org admin/owner, returns null meaning "no filter: show every project in the org".
    * If the user is a plain org member, returns the explicit list of project IDs they belong to.
    * If the user is not an org member at all, throws 404.
    */

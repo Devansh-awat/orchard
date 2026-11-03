@@ -80,7 +80,7 @@ const DATABASE_DEFAULT_MEMORY_BYTES = 1024 * MiB;
 
 // A database gets a hard floor, not just a better default. The org-wide
 // `defaultPodMemoryBytes` outranks the image-aware fallback below, so an org
-// that set 128Mi for its app pods was silently handing that to Postgres too —
+// that set 128Mi for its app pods was silently handing that to Postgres too,
 // which is not enough to run Postgres *and* its own base backup, whatever
 // shared_buffers says. See db-tuning.ts for the incident this came from.
 const DATABASE_MIN_MEMORY_BYTES = 256 * MiB;

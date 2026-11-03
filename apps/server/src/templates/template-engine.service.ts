@@ -150,7 +150,6 @@ export class TemplateEngineService {
         }
       }
 
-      // Apply default
       if (value === undefined || value === null || value === '') {
         if (def.default !== undefined) {
           value = def.default;
@@ -159,7 +158,6 @@ export class TemplateEngineService {
         }
       }
 
-      // Type coercion
       if (value !== undefined && value !== null) {
         switch (def.type) {
           case 'number':

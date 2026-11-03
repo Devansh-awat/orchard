@@ -1,7 +1,7 @@
 import { ScimError } from './scim-error';
 
 // Advertised as filter.maxResults in ServiceProviderConfig, so it has to be
-// the number we actually honour — clients page against totalResults.
+// the number we actually honour: clients page against totalResults.
 export const SCIM_MAX_RESULTS = 200;
 
 export interface ScimQuery {
@@ -17,7 +17,7 @@ export interface ScimQuery {
 // SCIMMY inspects query params with `"key" in params`, not by value, so an
 // explicitly-undefined key reads as "supplied but not a string" and 400s with
 // invalidFilter. Every request has to carry only the params the client actually
-// sent — otherwise a bare GET /Users is rejected, and a filtered one only works
+// sent, otherwise a bare GET /Users is rejected, and a filtered one only works
 // if attributes and excludedAttributes tag along.
 export function parseScimQuery(q: Record<string, any>): ScimQuery {
   const query: ScimQuery = {};

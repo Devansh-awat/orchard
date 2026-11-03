@@ -43,7 +43,7 @@ interface ChannelConfig {
   secret?: string;
 }
 
-// Channels are destinations now: a name, a transport, and health. What they
+// Channels are destinations: a name, a transport, and health. What they
 // receive is decided by NotificationRule, which is why nothing here mentions
 // events or projects.
 @Injectable()

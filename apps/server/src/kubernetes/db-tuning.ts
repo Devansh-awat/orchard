@@ -4,7 +4,7 @@
 // hand we hand their value straight back and never clamp it. The most we do is
 // attach an advisory saying what we think will happen.
 //
-// This exists because the alternative — a constant — put `shared_buffers: 128MB`
+// This exists because the alternative, a constant, put `shared_buffers: 128MB`
 // on a 128Mi container, i.e. 100% of the cgroup reserved as shared memory before
 // Postgres served a single query. `barman-cloud-backup` then ran inside that same
 // cgroup and OOMKilled the database, CNPG retried every 10 minutes, and seven

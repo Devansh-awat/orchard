@@ -76,7 +76,7 @@ export class EnvironmentsService {
       orderBy: { isProduction: 'desc' }
     });
     if (def) return def;
-    // Legacy safety: a project with no environment row yet — synthesize the
+    // Legacy safety: a project with no environment row yet, so synthesize the
     // prod env from the project namespace so nothing 500s mid-rollout.
     return this.ensureDefaultEnvironment(projectId);
   }

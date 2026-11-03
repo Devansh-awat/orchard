@@ -6,7 +6,7 @@
  * turned every affected marker into text the recipient reads: the sign-in mail
  * shipped `{{ otpCode }}` where the code should have been. So the pattern
  * tolerates the whitespace, and anything left unfilled is reported rather than
- * posted to someone — a marker that survives rendering is always a bug, and
+ * posted to someone: a marker that survives rendering is always a bug, and
  * silence is what let this one out.
  */
 const PLACEHOLDER = /\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g;

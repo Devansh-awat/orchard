@@ -5,13 +5,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
-// M-1: Geo enrichment uses ipwho.is over HTTPS with a short timeout. The
-// previous implementation hit http://ip-api.com over plaintext for every
-// login, which (a) leaked every login IP to a third party in cleartext and
-// (b) let a network attacker forge the "location" stored against the
-// session, enabling social-engineering vectors via the "Active sessions"
-// UI. HTTPS closes the MITM angle; the leak-to-third-party tradeoff is
-// accepted as the price of avoiding a local DB.
+// M-1: Geo enrichment uses ipwho.is over HTTPS with a short timeout. Plain HTTP
+// would leak every login IP in cleartext and let a network attacker forge the
+// "location" stored against the session, enabling social-engineering vectors
+// via the "Active sessions" UI. The leak-to-third-party tradeoff is accepted as
+// the price of avoiding a local DB.
 
 const GEO_LOOKUP_TIMEOUT_MS = 1500;
 
@@ -46,9 +44,6 @@ export class SessionsService {
     }
   }
 
-  /**
-   * Create a new session record when a user logs in.
-   */
   async createSession(params: {
     userId: string;
     ipAddress?: string;
@@ -102,7 +97,7 @@ export class SessionsService {
 
   /**
    * Tell the account holder that something got in. Every way into Orchard ends
-   * up here, so this is the one place that has to know about it — and an MCP
+   * up here, so this is the one place that has to know about it, and an MCP
    * session is not a person signing in, it is an app being handed the keys, so
    * it reads as its own thing.
    *
@@ -166,9 +161,6 @@ export class SessionsService {
     return true;
   }
 
-  /**
-   * Update the lastActiveAt timestamp for a session.
-   */
   private readonly touchedAt = new Map<string, number>();
 
   async touchSession(sessionId: string): Promise<void> {
@@ -188,7 +180,7 @@ export class SessionsService {
   /**
    * Sliding expiration for sessions kept alive by an active credential
    * (currently the MCP refresh-token grant). Only live sessions are
-   * extended — revoked or already-expired sessions stay dead, so
+   * extended: revoked or already-expired sessions stay dead, so
    * "sign out everywhere" still wins.
    */
   async extendSession(sessionId: string, ttlMs = BROWSER_SESSION_TTL_MS): Promise<void> {
@@ -205,9 +197,6 @@ export class SessionsService {
     });
   }
 
-  /**
-   * Get all active sessions for a user.
-   */
   async getUserSessions(userId: string) {
     const sessions = await this.prisma.session.findMany({
       where: {
@@ -230,9 +219,6 @@ export class SessionsService {
     return sessions;
   }
 
-  /**
-   * Revoke a specific session.
-   */
   async revokeSession(userId: string, sessionId: string): Promise<boolean> {
     const session = await this.prisma.session.findFirst({
       where: { id: sessionId, userId }
@@ -250,12 +236,12 @@ export class SessionsService {
 
   /**
    * Revoke all sessions for a user except the current one. API tokens are
-   * also revoked here — "sign out everywhere" without this leaves long-lived
+   * also revoked here: "sign out everywhere" without this leaves long-lived
    * tokens valid and silently undermines the user's expectation that they
    * have logged out of every entry point.
    *
    * L-3: this is intentionally unconditional. Do NOT call this helper from
-   * scoped flows (org/project removal) where only some tokens should die —
+   * scoped flows (org/project removal) where only some tokens should die,
    * use revokeUserSessions plus a targeted apiToken cleanup at the call site.
    * The only legitimate callers are user-initiated "Sign out everywhere"
    * and account-deletion paths, where nuking every token is the goal.
@@ -283,7 +269,7 @@ export class SessionsService {
 
   // Revokes browser and MCP sessions, leaving API tokens intact. Used when a
   // user is removed from one org/project but may still hold tokens scoped to
-  // other resources they still belong to — full revocation would nuke
+  // other resources they still belong to: full revocation would nuke
   // unrelated work. Project-scoped tokens for the affected resource are pruned
   // at the call site. Use revokeAllSessions for "sign out everywhere".
   async revokeUserSessions(userId: string): Promise<number> {
@@ -362,7 +348,7 @@ export class SessionsService {
 
   /**
    * Look up approximate location from IP via ipwho.is over HTTPS. Returns
-   * null for private/local IPs, on timeout, or on any error — geolocation
+   * null for private/local IPs, on timeout, or on any error: geolocation
    * is best-effort and must never block auth.
    */
   private async lookupLocation(ip: string): Promise<string | null> {

@@ -10,8 +10,6 @@ interface SharedVar {
 }
 
 export function registerEnvironmentTools(server: McpServer, client: OrchardClient) {
-  // ── Environments ──────────────────────────────────────────────────
-
   server.registerTool(
     'list_environments',
     {
@@ -82,8 +80,6 @@ Provisions a fresh namespace. Nothing is copied from production: the new environ
       return json(result);
     }
   );
-
-  // ── Shared variables ──────────────────────────────────────────────
 
   server.registerTool(
     'get_shared_env_vars',

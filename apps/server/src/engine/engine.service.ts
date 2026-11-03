@@ -270,7 +270,7 @@ export class EngineService implements OnApplicationBootstrap, OnModuleDestroy {
         resyncRepairs: row.resyncRepairs,
         healthy: row.healthy,
         lastError: row.lastError,
-        // The heartbeat timestamp only proves the holder's process is alive —
+        // The heartbeat timestamp only proves the holder's process is alive,
         // it is written on a timer regardless of whether the watch works. A
         // shard is stale when the holder stopped heartbeating, or when the
         // holder says its watch has been down for longer than the grace. A
@@ -616,7 +616,7 @@ export class EngineService implements OnApplicationBootstrap, OnModuleDestroy {
     const cached = this.nsRefCache.get(namespace);
     if (cached && cached.exp > Date.now()) return cached.refs;
     // Left to throw. Swallowing the error and caching `{}` told the informer
-    // this namespace belongs to no project — for the next ten minutes, and for
+    // this namespace belongs to no project, for the next ten minutes, and for
     // as long afterwards as none of its objects changed.
     const scope = await resolveNamespaceScope(this.prisma, namespace);
     const refs: EngineRefs = scope ? { projectId: scope.projectId } : {};

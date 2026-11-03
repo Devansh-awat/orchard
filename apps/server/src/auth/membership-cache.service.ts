@@ -7,7 +7,7 @@ interface CachedEntry {
   expiresAt: number;
 }
 
-// H-5: Process-local cache. Cross-pod invalidation isn't broadcast — a role
+// H-5: Process-local cache. Cross-pod invalidation isn't broadcast: a role
 // downgrade in pod A is honoured by pod B only after this TTL expires.
 //
 // Bound: 1 second is the maximum revocation latency on any pod that didn't
@@ -15,7 +15,7 @@ interface CachedEntry {
 // invalidateInternalUserId) makes the same-pod window effectively zero.
 //
 // If you change TTL_MS, also update SUPERADMIN_TTL_MS in
-// AuthorizationService — both caches must agree on the revocation budget,
+// AuthorizationService: both caches must agree on the revocation budget,
 // or the longer one becomes the platform's effective bound.
 //
 // True zero-latency revocation requires Redis/NATS pub/sub. That's a
@@ -52,7 +52,7 @@ export class MembershipCacheService {
   /**
    * Public sub → internal user UUID resolution. Prisma conditions that
    * compare against user-id FK columns (projectMember.userId etc.) must go
-   * through this — the raw JWT sub may be a Hack Club id, which silently
+   * through this: the raw JWT sub may be a Hack Club id, which silently
    * matches nothing against a UUID column.
    */
   async resolveUserId(sub: string): Promise<string | null> {
@@ -71,7 +71,7 @@ export class MembershipCacheService {
       try {
         const internalId = await this.resolveInternalId(sub);
         if (!internalId) {
-          // Don't cache "user not found" — recently-created users would
+          // Don't cache "user not found": recently-created users would
           // otherwise be locked out for the full TTL.
           return [];
         }
@@ -83,7 +83,7 @@ export class MembershipCacheService {
         // check for this user for 30s whenever a transient blip (a stray
         // invalidateUser landing between request and DB read, a read-replica
         // lag, etc.) made findMany return [] for a member who is actually
-        // in the org — surfacing as a 403 that "fixed itself on reload."
+        // in the org, surfacing as a 403 that "fixed itself on reload."
         if (memberships.length > 0) {
           this.cache.set(sub, { memberships, expiresAt: Date.now() + TTL_MS });
         }

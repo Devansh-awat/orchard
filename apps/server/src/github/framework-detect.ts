@@ -8,8 +8,8 @@
 //
 // Rules ported from railpack (see each preset for the source file):
 //   core/providers/node/{vite,astro,next,cra,angular,react_router}.go
-//   core/providers/node/spa.go — isSPA / getOutputDirectory ordering
-//   core/providers/staticfile/staticfile.go — root dir resolution
+//   core/providers/node/spa.go: isSPA / getOutputDirectory ordering
+//   core/providers/staticfile/staticfile.go: root dir resolution
 //
 // Everything here is pure and takes an injected file reader so it can be tested
 // without touching the GitHub API.
@@ -20,7 +20,7 @@ export interface DetectedApp {
   /** Repo-relative directory, '' for the repo root. */
   dir: string;
   framework: string;
-  /** null means "let Railpack decide" — we only fill these when we add value. */
+  /** null means "let Railpack decide": we only fill these when we add value. */
   installCommand: string | null;
   buildCommand: string | null;
   startCommand: string | null;
@@ -33,7 +33,7 @@ export interface DetectedApp {
    * Built server entry the start command runs, relative to the app directory.
    * Kept next to startCommand rather than folded into it because a workspace
    * build runs from the repo root, where a bare `node build` would look in the
-   * wrong place — scopeToWorkspace re-roots this the way it re-roots
+   * wrong place: scopeToWorkspace re-roots this the way it re-roots
    * outputDirectory.
    */
   serverEntry: string | null;
@@ -263,7 +263,7 @@ function adapterOutFromConfig(contents: string | null): string | null {
  * checklist is framework-specific and handled by the presets below.
  *
  * This matters more than it looks. When Railpack finds nothing it does not
- * fail — validate.go:71 downgrades to a warning unless --error-missing-start
+ * fail: validate.go:71 downgrades to a warning unless --error-missing-start
  * is set, and buildkit/convert.go:65 then bakes `CMD ["/bin/bash"]` into the
  * image. The build goes green and ships a container that exits 0 with no
  * output. So a preset that knows the answer has to say so here.
@@ -276,7 +276,7 @@ function railpackFindsStartCommand(pkg: PackageJson, dir: string, paths: Set<str
 
 /**
  * Classify one directory. `read` resolves paths relative to the repo root, so a
- * preset that needs a config file asks for it lazily — most apps never trigger
+ * preset that needs a config file asks for it lazily: most apps never trigger
  * more than the package.json fetch.
  */
 async function classify(
@@ -319,7 +319,7 @@ async function classify(
     // Only fill a start command in when Railpack would otherwise come up empty.
     const needsStart = !railpackFindsStartCommand(pkg, dir, paths);
 
-    // Order mirrors spa.go:getOutputDirectory — the first match wins.
+    // Order mirrors spa.go:getOutputDirectory: the first match wins.
     if (deps['@sveltejs/kit']) {
       // SvelteKit is not static by default (vite.go:29 excludes it explicitly);
       // adapter-static is the exception, and only when it is the adapter the
@@ -339,7 +339,7 @@ async function classify(
         // adapter-node emits a Node server at `out` (default `build`), and
         // `node build` is what SvelteKit documents. Railpack knows this command
         // but gates it behind adapter-auto (svelte.go:18), so naming
-        // adapter-node explicitly — the thing the docs tell you to do — is
+        // adapter-node explicitly (the thing the docs tell you to do) is
         // exactly the case it drops on the floor.
         app.serverEntry = adapterOutFromConfig(svelteConfig) ?? 'build';
         app.startCommand = `node ${app.serverEntry}`;
@@ -373,7 +373,7 @@ async function classify(
       ) {
         // Same gap as SvelteKit: Railpack has no Astro entry in its
         // start-command checklist at all. Standalone is the only mode that
-        // produces a server we can start — middleware mode expects the user to
+        // produces a server we can start: middleware mode expects the user to
         // bring their own entrypoint, and guessing one would be worse than the
         // build failing with Railpack's own explanation.
         app.serverEntry = 'dist/server/entry.mjs';
@@ -516,7 +516,7 @@ export async function detectApps(paths: string[], read: FileReader): Promise<Rep
  * lockfile and shared packages live at the root, so the install has to happen
  * there. Railpack also only inspects the workspace *root* package when it
  * decides whether something is an SPA (core/providers/node/spa.go:41), so a
- * Vite app at apps/web is never detected as static on its own — spelling out
+ * Vite app at apps/web is never detected as static on its own: spelling out
  * the output directory is what makes monorepo static sites work at all.
  *
  * These land in the deployment's build settings as ordinary editable values,

@@ -106,7 +106,7 @@ function isExplicitShell(argv: string[]): boolean {
  * sends. Behind a shell that only mostly holds: `sh -c 'a && b'` tail-execs
  * `b`, so it is still PID 1 and still signalled, but `sh -c 'a | b'` leaves
  * the app at PID 2, where it is torn down when the shell exits without ever
- * being told to stop — no connection draining, no finishing the job in hand.
+ * being told to stop: no connection draining, no finishing the job in hand.
  * Measured under gVisor, which is what tenant pods run.
  */
 export function resolveStartArgs(raw: string | null | undefined): string[] | null {
@@ -129,8 +129,8 @@ export function resolveStartArgs(raw: string | null | undefined): string[] | nul
  *
  * Railpack folds it into the image at build time instead (see
  * docker.service.loadBuildEnv), so applying it to the pod as well would run it
- * twice over. Every other build type — Dockerfile builds and image-source
- * deployments, which never run a builder — has nowhere else to put it.
+ * twice over. Every other build type (Dockerfile builds and image-source
+ * deployments, which never run a builder) has nowhere else to put it.
  */
 export function usesRuntimeStartCommand(buildType: string | null | undefined): boolean {
   return buildType !== 'railpack';

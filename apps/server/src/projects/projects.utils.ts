@@ -23,10 +23,10 @@ export function wildcardSecretNameFor(suffix: string): string {
 // it doesn't own.
 //
 // `secret` is the wildcard TLS Secret to reuse for hosts under the suffix, and
-// it is null unless the operator named one. Synthesising a name here was a bug:
+// it is null unless the operator named one. Do not synthesise a name here:
 // nothing creates that Secret on an install without a DNS-01 issuer and a way
-// to copy it into every tenant namespace, so every generated URL pointed at a
-// Secret that never existed and served no certificate. With null, callers fall
+// to copy it into every tenant namespace, so every generated URL would point at
+// a Secret that never exists and serve no certificate. With null, callers fall
 // through to per-host issuance against CERT_CLUSTER_ISSUER, which works out of
 // the box. See docs/self-hosting.md for the wildcard upgrade path.
 //

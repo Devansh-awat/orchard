@@ -3,7 +3,7 @@
  * metrics, and trace/log correlation via dd-trace.
  *
  * Must be called from main.ts AFTER dotenv (needs the DD_* env vars) but
- * BEFORE Nest/express/prisma are imported — dd-trace patches modules as they
+ * BEFORE Nest/express/prisma are imported: dd-trace patches modules as they
  * are required, so anything loaded before init() is invisible to APM.
  *
  * Off by default: only activates when the deployment points it at an agent
@@ -311,11 +311,9 @@ export function recordBuildOutcome(meta: {
 
 /**
  * Every pass the build recovery sweep takes over a stuck build, with the facts
- * it decided on. This exists because the failure it used to produce was
- * invisible: the reason was written to a Postgres column and appended to build
- * logs, and nowhere else, so "Build job not found after server restart" could
- * not be found in Datadog at all — not as a log line, not as a metric, not as
- * a span. There was no way to ask how often it fired or what it saw.
+ * it decided on. A reason written only to a Postgres column and the build logs
+ * cannot be found in Datadog as a log line, a metric or a span, so there would
+ * be no way to ask how often it fired or what it saw.
  *
  * Emitted on every decision, not just failures, so the denominator is there:
  * `defer` dominating is healthy, `fail` climbing is not, and the tags say

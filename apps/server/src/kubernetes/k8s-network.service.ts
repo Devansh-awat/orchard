@@ -219,7 +219,7 @@ export class K8sNetworkService implements OnModuleInit {
     }
 
     // A row whose Ingress is gone has nothing to protect, so it is a cleanup
-    // problem rather than an auth problem — summarise it once instead of once
+    // problem rather than an auth problem: summarise it once instead of once
     // per row per pass. A real failure means a reachable app is not behind the
     // wall, so that one stays loud.
     if (failed.length > 0) {
@@ -601,10 +601,10 @@ export class K8sNetworkService implements OnModuleInit {
   /**
    * What cert-manager thinks of the certificate behind an ingress's TLS Secret.
    *
-   * Nothing used to read this back. The annotation asking for a certificate was
-   * written and never checked, so a host whose issuance failed looked exactly
-   * like one that worked: the Ingress existed, the UI said fine, and the browser
-   * showed a certificate error with no explanation anywhere.
+   * Without this the annotation asking for a certificate is written and never
+   * checked, so a host whose issuance failed looks exactly like one that worked:
+   * the Ingress exists, the UI says fine, and the browser shows a certificate
+   * error with no explanation anywhere.
    *
    * Never throws. A cluster with no cert-manager, or one where the Secret was
    * provisioned some other way, reports `unknown` rather than turning a missing
@@ -2353,8 +2353,6 @@ export class K8sNetworkService implements OnModuleInit {
       if (e.response?.statusCode !== 404) throw e;
     }
   }
-
-  // ── Public deployment-port exposure (MetalLB LoadBalancer, TCP/UDP passthrough) ──
 
   private readonly PUBLIC_DEPLOYMENT_BASE_DOMAIN = optionalDomain(
     process.env.PUBLIC_DEPLOYMENT_DOMAIN

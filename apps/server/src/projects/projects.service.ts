@@ -98,10 +98,10 @@ export class ProjectsService {
    * - Build logs/errors are nulled (often leak secrets via stack traces / cmdline).
    */
   /**
-   * NOTE: Used to resolve a per-deployment favicon as the project icon fallback.
-   * That fired N sequential HTTP/disk lookups on every page load and blocked
-   * `getProjectBySlugsFull` and `listProjects`. Now a no-op — the frontend
-   * decides its own fallback (Folder icon) when `project.icon` is null.
+   * NOTE: a no-op. Resolving a per-deployment favicon here would fire N sequential
+   * HTTP/disk lookups on every page load and block `getProjectBySlugsFull` and
+   * `listProjects`, so the frontend decides its own fallback (Folder icon) when
+   * `project.icon` is null.
    */
   private async resolveProjectIconFallback(
     _deployments: { ingresses?: { host?: string | null }[] | null }[] | null | undefined
@@ -112,7 +112,7 @@ export class ProjectsService {
   /**
    * Auto banner: when a project has no manually-set backgroundImage, fall
    * back to the og:image of one of its deployments' sites (cached in R2 by
-   * FaviconService). Response-only — never persisted, so a manual banner
+   * FaviconService). Response-only, never persisted, so a manual banner
    * always wins and clearing it reverts to the auto one.
    */
   private async resolveProjectBannerFallback(
@@ -131,7 +131,7 @@ export class ProjectsService {
   }
 
   // Tenant namespaces are `{org-slug}-{project-slug}`. With no blocklist an
-  // org named e.g. `kube` with project `system` would mint `kube-system` —
+  // org named e.g. `kube` with project `system` would mint `kube-system`,
   // the existing-namespace 409 check below blocks collisions with namespaces
   // that already exist, but that's fragile (race on first install, control-
   // plane components in different clusters, etc). This list mirrors the
@@ -411,7 +411,7 @@ export class ProjectsService {
         cpuRequestMilli: data.cpuRequestMilli,
         memoryRequestBytes:
           data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null,
-        // Pod is being force-recreated by updateCnpgClusterResources — surface this
+        // Pod is being force-recreated by updateCnpgClusterResources: surface this
         // in the UI until the new pod is ready (the getDatabase reconciler flips
         // it back to 'ready' once liveStatus.ready is true).
         status: 'restarting'
@@ -640,7 +640,7 @@ export class ProjectsService {
       this.membershipCache.invalidateInternalUserId(userId);
       // Only the guests dropped out of the org entirely lose sessions. Org
       // members and admins who happened to be on this project keep their
-      // sessions — they still have other projects/access in this org and we
+      // sessions: they still have other projects/access in this org and we
       // don't want to interrupt unrelated work.
       await this.sessions.revokeUserSessions(userId).catch(() => {});
     }
@@ -697,10 +697,10 @@ export class ProjectsService {
     }
 
     // M-1: authorize FIRST with a cheap indexed lookup. Loading the project
-    // with every relation before the access check turned non-member latency
-    // into an existence oracle — a real project ID ran a multi-join query;
-    // a random UUID returned after a single index miss. `requireProjectView`
-    // throws the same 404 either way, and now the timing matches the body.
+    // with every relation before the access check turns non-member latency
+    // into an existence oracle: a real project ID runs a multi-join query;
+    // a random UUID returns after a single index miss. `requireProjectView`
+    // throws the same 404 either way, so the timing matches the body.
     await this.authz.requireProjectView(projectId, user.id);
 
     const project = await this.prisma.project.findUnique({
@@ -810,7 +810,6 @@ export class ProjectsService {
       project.organizationId
     );
 
-    // Compute status for each deployment
     const deploymentsWithComputedStatus = await Promise.all(
       project.deployments.map(async (deployment) => {
         const computedStatus = await this.deployments.computeDeploymentStatus(deployment);
@@ -1029,7 +1028,7 @@ export class ProjectsService {
 
     const user = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
 
-    // No account under that email yet — send a project-targeted guest
+    // No account under that email yet: send a project-targeted guest
     // invitation instead of failing. Accepting it creates the account's org
     // guest membership and this project membership in one step.
     if (!user) {
@@ -1053,7 +1052,7 @@ export class ProjectsService {
     // If the invitee isn't already in the org, attach them as a guest. Guests
     // can only see projects they're explicit members of, so this is the
     // narrowest membership that still lets them log in and see this project.
-    // Existing members/admins/owners keep their current role — we never
+    // Existing members/admins/owners keep their current role: we never
     // downgrade.
     const existingOrgMember = await this.prisma.organizationMember.findUnique({
       where: { organizationId_userId: { organizationId: project.organizationId, userId: user.id } }
@@ -1375,7 +1374,7 @@ export class ProjectsService {
    *
    * Pass `viewer` whenever this goes into a response. Viewers already have
    * member emails nulled by scrubMembersForViewer, and the two parties to a
-   * transfer are members — without the same treatment here, the banner would
+   * transfer are members, so without the same treatment here the banner would
    * hand a read-only member the emails the members list just withheld. The
    * recipient is the exception: the offer is addressed to them.
    */
@@ -1431,7 +1430,7 @@ export class ProjectsService {
   /**
    * Open a transfer request. `Project.ownerId` is what every deployment and
    * database under the project is billed against, so handing it over spends
-   * somebody else's allowance — which is exactly why this only opens an offer.
+   * somebody else's allowance, which is exactly why this only opens an offer.
    * Nothing moves until the recipient accepts.
    */
   async requestProjectOwnershipTransfer(
@@ -1581,7 +1580,7 @@ export class ProjectsService {
   }
 
   /**
-   * Only the addressee can act on a request, and only on their own — the
+   * Only the addressee can act on a request, and only on their own: the
    * permission gate here is recipient identity, not project role. Everything
    * checked at request time is re-checked, because a week can pass in between:
    * the recipient can have been removed from the project, and their allowance
@@ -1592,7 +1591,7 @@ export class ProjectsService {
       where: { id: requestId },
       select: { ...ProjectsService.TRANSFER_REQUEST_SHAPE, toUserId: true, fromUserId: true }
     });
-    // Same 404 for "not yours" as for "doesn't exist" — a request id must not
+    // Same 404 for "not yours" as for "doesn't exist": a request id must not
     // be an oracle for the existence of somebody else's project transfer.
     if (!request || request.toUserId !== userId) {
       throw new NotFoundException('Ownership transfer request not found');
@@ -1815,7 +1814,6 @@ export class ProjectsService {
       throw new NotFoundException(`Project with slug ${slug} not found`);
     }
 
-    // Compute status for each deployment
     const deploymentsWithComputedStatus = await Promise.all(
       project.deployments.map(async (deployment) => {
         const computedStatus = await this.deployments.computeDeploymentStatus(deployment);
@@ -1938,7 +1936,7 @@ export class ProjectsService {
             },
             services: { include: { ports: true } },
             ingresses: { include: { service: true } },
-            // envVars omitted — large per-deployment, only needed on deployment detail.
+            // envVars omitted: large per-deployment, only needed on deployment detail.
             _count: { select: { pods: true, services: true } }
           }
         },
@@ -2057,7 +2055,7 @@ export class ProjectsService {
       ? (reconciledDatabases as any[]).map((d) => sealDatabaseCredentials(d))
       : (reconciledDatabases as any[]).map((d) => redactDatabaseForViewer(d));
 
-    // Pending email invitations targeted at this project — only revealed to
+    // Pending email invitations targeted at this project, only revealed to
     // users who can manage members (emails of people not yet in the org).
     const pendingInvitations = access.canManageMembers
       ? await this.prisma.organizationInvitation.findMany({
@@ -2147,11 +2145,11 @@ export class ProjectsService {
 
     if (projects.length === 0) return [];
 
-    // Previously resolved access per project via resolveProjectAccess → 2 DB
-    // queries each (org membership + project membership). For N projects that
-    // was 2N round-trips. Now: one membership-cache hit + one batched
-    // projectMember.findMany over the candidate set, then decide canEdit in
-    // memory. Superadmin still short-circuits to canEdit=true.
+    // One membership-cache hit + one batched projectMember.findMany over the
+    // candidate set, then decide canEdit in memory. resolveProjectAccess per
+    // project would be 2 DB queries each (org membership + project membership),
+    // so 2N round-trips for N projects. Superadmin still short-circuits to
+    // canEdit=true.
     const isSuperAdmin = await this.authz.isSuperAdmin(userId);
     const orgRoleByOrgId = new Map<string, string>();
     if (!isSuperAdmin) {
@@ -2191,7 +2189,7 @@ export class ProjectsService {
 
   /**
    * Lightweight bulk fetch of all deployments the user has access to.
-   * Returns only the fields needed for the overview page — NO k8s calls.
+   * Returns only the fields needed for the overview page: NO k8s calls.
    */
   async listDatabasesSummary(userId: string, orgId?: string) {
     const projectFilter = await this.access.buildProjectAccessFilter(userId, orgId);

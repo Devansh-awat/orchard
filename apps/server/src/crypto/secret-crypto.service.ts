@@ -5,12 +5,12 @@ import { createCipheriv, createDecipheriv, hkdfSync, randomBytes, scryptSync } f
  * At-rest encryption for secret environment-variable values (AES-256-GCM),
  * mirroring the SSO service's approach. Encrypted values carry the `enc:v1:`
  * prefix so ciphertext is distinguishable from legacy plaintext, and decrypt is
- * idempotent — a value without the prefix is returned unchanged. That lets the
+ * idempotent: a value without the prefix is returned unchanged. That lets the
  * same reader handle both encrypted and not-yet-migrated rows.
  *
  * Key comes from SECRETS_ENCRYPTION_KEY (falls back to SSO_ENCRYPTION_KEY so an
  * existing deployment already has one). If no key is configured, encrypt() fails
- * closed — we never silently store secrets in plaintext.
+ * closed: we never silently store secrets in plaintext.
  */
 const PREFIX = 'enc:v1:';
 const USER_PREFIX = 'enc:u1:';
@@ -76,7 +76,7 @@ export class SecretCryptoService {
   /**
    * Encrypt only when the row is marked secret. Degrades gracefully: with no key
    * configured, the value is stored as-is (plaintext, as before) rather than
-   * failing — setting the key later + the boot backfill encrypts existing rows.
+   * failing: setting the key later + the boot backfill encrypts existing rows.
    */
   encryptIfSecret(value: string, secret: boolean | undefined | null): string {
     if (!secret || !this.key) return value;

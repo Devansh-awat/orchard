@@ -147,7 +147,7 @@ export class TailscaleService {
       protocol: svc.protocol
     }));
 
-    // Pass the user's auth key directly to the sidecar — it registers itself on their tailnet
+    // Pass the user's auth key directly to the sidecar: it registers itself on their tailnet
     await this.k8sWorkload.addTailscaleSidecar(
       deployment.namespace,
       deployment.name,

@@ -10,8 +10,6 @@ interface EnvVarInput {
 }
 
 export function registerConfigurationTools(server: McpServer, client: OrchardClient) {
-  // ── Environment Variables ─────────────────────────────────────────
-
   server.registerTool(
     'set_env_vars',
     {
@@ -102,8 +100,6 @@ Related: \`delete_env_vars\` to remove keys, \`get_env_vars\` to read, \`set_env
       return json(result);
     }
   );
-
-  // ── Health checks ─────────────────────────────────────────────────
 
   server.registerTool(
     'update_deployment_health_check',
@@ -215,8 +211,6 @@ Applies immediately and rolls the pods.`,
     }
   );
 
-  // ── Volumes ───────────────────────────────────────────────────────
-
   server.registerTool(
     'update_deployment_volumes',
     {
@@ -257,8 +251,6 @@ To remove all volumes, pass an empty array.`,
       return json(result);
     }
   );
-
-  // ── Image & deploy strategy ───────────────────────────────────────
 
   server.registerTool(
     'update_deployment_image',
@@ -330,8 +322,6 @@ Changing this rolls the pods on its own; no separate restart is needed.`,
       return json(result);
     }
   );
-
-  // ── Registry credentials ──────────────────────────────────────────
 
   server.registerTool(
     'list_registry_credentials',
@@ -457,8 +447,6 @@ Everything except \`startCommand\` applies on the next build, so follow up with 
       return json(result);
     }
   );
-
-  // ── Networking ────────────────────────────────────────────────────
 
   server.registerTool(
     'create_ingress',

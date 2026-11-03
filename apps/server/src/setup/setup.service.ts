@@ -38,7 +38,7 @@ export interface SetupState {
 }
 
 // The checklist is read on every superadmin page load for the sidebar badge,
-// and it now reports live certificate state, so an uncached read would put a
+// and it reports live certificate state, so an uncached read would put a
 // Kubernetes API call behind a UI badge. Short enough that the setup flow's
 // own polling still sees the certificate land promptly.
 const CERT_TTL_MS = 10_000;
@@ -528,7 +528,7 @@ export class SetupService implements OnModuleInit {
     });
 
     // Every other thing Orchard can create hangs off an organization, and there
-    // is no self-serve way to make one — the only endpoint is superadmin-only.
+    // is no self-serve way to make one: the only endpoint is superadmin-only.
     // Leaving the operator to create it themselves is what produced instances
     // with no org, and losing your last org resets setupCompleted, so that
     // state bounces you back into setup forever. Create it here so "has an org"

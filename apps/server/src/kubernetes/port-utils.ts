@@ -4,7 +4,7 @@ import type { DeploymentPortInput, SanitizedPortEntry } from './kubernetes.servi
 /**
  * Convert k8s V1ServicePort[] back into our SanitizedPortEntry shape so
  * deployment updates can reconcile container ports against existing service
- * defs. `fallback` is the previously-sanitized port list — used to resolve
+ * defs. `fallback` is the previously-sanitized port list: used to resolve
  * string-named targetPorts and to short-circuit when the service has no
  * ports defined.
  */

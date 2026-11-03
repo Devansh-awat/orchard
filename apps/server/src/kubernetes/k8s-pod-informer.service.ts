@@ -92,7 +92,7 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
     // The informer's initial LIST fires an 'add' for every existing pod, but it
     // lands before this replica has won the lease, so onPodEvent drops all of
     // it. Without this the mirror is built purely from live events, and a pod
-    // that never changes again is never written at all — a Tailscale sidecar
+    // that never changes again is never written at all: a Tailscale sidecar
     // sat Running for six days while its deployment read "pending", because the
     // only 'add' it ever produced arrived during that window.
     this.leader.onAcquired(() => {

@@ -10,7 +10,7 @@ import { signalEnvironmentEnvChanged } from '../env/env-change-signal';
 import { applyEnvKeepRules } from './env-write-rules';
 
 const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
-// Generous ceilings — unreachable in normal use, but bound what a single env can
+// Generous ceilings: unreachable in normal use, but bound what a single env can
 // store so a client can't bloat the DB or blow past the 1MB k8s Secret limit.
 export const MAX_ENV_VARS = 1000;
 const MAX_KEY_LEN = 256;

@@ -11,7 +11,7 @@ export interface NamespaceScope {
  * namespace, or one owned by one of its environments. The default environment
  * shares the project's namespace; every other one gets a suffixed namespace of
  * its own, so resolving against Project.namespace alone makes every resource
- * outside the default environment look like it belongs to nobody — pod logs,
+ * outside the default environment look like it belongs to nobody: pod logs,
  * exec and the shell all 404 on it.
  */
 export async function resolveNamespaceScope(

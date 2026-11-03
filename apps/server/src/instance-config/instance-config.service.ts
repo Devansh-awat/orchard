@@ -36,7 +36,7 @@ export interface SectionState {
  *
  * Same precedence as the GitHub App config it is modelled on: the environment
  * always wins, and setting a variable locks that field so nothing can change
- * it — a write that would is refused, not dropped. That is what an operator
+ * it: a write that would is refused, not dropped. That is what an operator
  * wants for anything they must control absolutely, and it means a
  * chart-managed instance behaves exactly as before.
  *

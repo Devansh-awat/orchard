@@ -37,7 +37,6 @@ export class OtpService {
 
     const normalizedEmail = email.toLowerCase().trim();
 
-    // Check rate limits for both email and IP
     await this.rateLimitService.checkRateLimit(normalizedEmail, 'email', 'otp_request');
     await this.rateLimitService.checkRateLimit(ipAddress, 'ip', 'otp_request');
 
@@ -49,16 +48,14 @@ export class OtpService {
         expiresAt: { gt: new Date() }
       },
       data: {
-        used: true // Mark as used so they can't be used
+        used: true
       }
     });
 
-    // Generate new OTP
     const plainCode = generateOtpCode();
     const hashedCode = hashOtpCode(plainCode);
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
-    // Store the hashed OTP
     await this.prisma.otpCode.create({
       data: {
         email: normalizedEmail,
@@ -69,7 +66,6 @@ export class OtpService {
       }
     });
 
-    // Send OTP email
     const emailSent = await this.emailService.sendOtpEmail({
       recipientEmail: normalizedEmail,
       otpCode: plainCode,
@@ -105,12 +101,10 @@ export class OtpService {
     const normalizedEmail = email.toLowerCase().trim();
     const normalizedCode = code.trim();
 
-    // Validate code format
     if (!/^\d{6}$/.test(normalizedCode)) {
       throw new BadRequestException('Invalid OTP format. Must be 6 digits.');
     }
 
-    // Check rate limits
     await this.rateLimitService.checkRateLimit(normalizedEmail, 'email', 'otp_verify');
     await this.rateLimitService.checkRateLimit(ipAddress, 'ip', 'otp_verify');
 
@@ -152,7 +146,6 @@ export class OtpService {
       return { valid: false };
     }
 
-    // Mark OTP as used
     await this.prisma.otpCode.update({
       where: { id: otpRecord.id },
       data: { used: true }
@@ -168,7 +161,6 @@ export class OtpService {
       data: { emailVerified: true, emailVerifiedAt: new Date() }
     });
 
-    // Reset rate limits on success
     await this.rateLimitService.resetRateLimit(normalizedEmail, 'email', 'otp_verify');
     await this.rateLimitService.resetRateLimit(ipAddress, 'ip', 'otp_verify');
 

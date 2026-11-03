@@ -120,8 +120,6 @@ export class OrgQuotasController {
     return this.quotas.updateProjectCaps(projectId, body);
   }
 
-  // --- Per-member allowance ---
-
   @Get('members')
   async listMembersUsage(@Param('orgId') orgId: string, @Req() req: any) {
     await this.orgs.checkPermission(orgId, req.auth.userId, 'admin');

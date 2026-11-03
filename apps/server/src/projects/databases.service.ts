@@ -216,8 +216,6 @@ export class DatabasesService {
     });
   }
 
-  // ── Database (PostgreSQL) Management ──
-
   // Imports from a newer source auto-provision at the source's major (capped
   // at the newest one CNPG publishes) because CNPG's import runs pg_dump from
   // the target image, and an older pg_dump cannot dump a newer server.
@@ -248,7 +246,7 @@ export class DatabasesService {
 
   // Ceiling on CNPG instances per cluster (1 primary + N-1 standbys). Every
   // extra instance is a full pod plus its own PVC, so self-hosters running on
-  // a small cluster will want this lower — and a big one, higher.
+  // a small cluster will want this lower, and a big one, higher.
   get maxReplicas(): number {
     const raw = Number.parseInt(process.env.MAX_DATABASE_REPLICAS || '', 10);
     return Number.isFinite(raw) && raw >= 1 ? raw : 5;
@@ -271,7 +269,7 @@ export class DatabasesService {
    * Build the R2/backup config object that gets handed to the in-cluster
    * barman sidecar. When the r2-proxy is enabled we mint a per-cluster fake
    * AK/SK, register a binding with the proxy ConfigMap, and tell the cluster
-   * to talk to the proxy instead of real R2 — so real R2 credentials never
+   * to talk to the proxy instead of real R2, so real R2 credentials never
    * land in the tenant's namespace.
    */
   hasBackupStorage(org: Partial<OrgR2> | null | undefined): boolean {
@@ -576,7 +574,7 @@ export class DatabasesService {
     const dbUser = `u_${dbBase}`;
     const dbPassword = this.generatePassword();
 
-    // Check uniqueness in our records (now per environment)
+    // Check uniqueness in our records (per environment)
     const existing = await this.prisma.database.findFirst({
       where: { environmentId: dbEnv?.id ?? undefined, projectId, name: nameInput }
     });
@@ -982,7 +980,7 @@ export class DatabasesService {
       pods = await this.mirroredClusterPods(database.id);
 
       // Reconcile stored status with live cluster state.
-      // 'restarting' flips to 'ready' once the new pod becomes ready — same path
+      // 'restarting' flips to 'ready' once the new pod becomes ready: same path
       // as initial provisioning, just from a different starting state.
       if (liveStatus.ready && database.status !== 'ready' && database.status !== 'restoring') {
         try {
@@ -1314,7 +1312,7 @@ export class DatabasesService {
     });
 
     // Promote the first non-done step to "running" if everything before it is
-    // done — this gives the UI a clear "current" step even when CNPG hasn't
+    // done: this gives the UI a clear "current" step even when CNPG hasn't
     // emitted intermediate signals yet.
     for (let i = 0; i < steps.length; i++) {
       if (steps[i].status === 'pending') {
@@ -1488,7 +1486,7 @@ export class DatabasesService {
    * to the destination; existing backups stay exactly where they were taken, so
    * their restore records keep resolving and nothing is deleted or lost. When the
    * destination has no R2 configured, archiving is switched off so the database
-   * stops writing into the old org's bucket — new backups pause until R2 is set
+   * stops writing into the old org's bucket: new backups pause until R2 is set
    * up in the destination. Best-effort; runs in the background after a move.
    */
   async repointProjectBackupsToOrg(projectId: string, destOrgId: string): Promise<void> {
@@ -2086,14 +2084,12 @@ export class DatabasesService {
     return sealDatabaseCredentials(updated);
   }
 
-  // ── Database backup management ──
-
   /**
    * Make sure the cluster is actually archiving before anything tries to back
    * it up. Clusters provisioned before their org had backup storage carry no
    * `spec.backup`, and CNPG answers a ScheduledBackup or Backup against one of
-   * those with a validation error, which is how "set a schedule" used to fail
-   * for a third of the fleet. Returns true when archiving was just turned on.
+   * those with a validation error. Returns true when archiving was just turned
+   * on.
    */
   private async ensureBackupsConfigured(database: {
     id: string;
@@ -2415,8 +2411,6 @@ export class DatabasesService {
     return record;
   }
 
-  // ── Backup schedule (one cron per database) ──
-
   private isValidCron(expr: string): boolean {
     // CNPG accepts "quartz" 6-field cron ("seconds minutes hours day month weekday")
     // and also supports 5-field via the standard scheduler; we require 5 or 6 fields.
@@ -2482,7 +2476,7 @@ export class DatabasesService {
     }
     // Stop archiving too. WAL keeps being shipped for as long as the backup
     // stanza is there, and with no base backup left to expire against, barman
-    // can never prune any of it — that is the pile-up that filled the bucket.
+    // can never prune any of it: that is the pile-up that filled the bucket.
     try {
       await this.k8sCnpg.disableCnpgBackup(database.namespace, database.clusterName);
     } catch (e: any) {
@@ -2494,8 +2488,6 @@ export class DatabasesService {
     });
     return { success: true };
   }
-
-  // ── Extensions ──
 
   // 15s TTL keeps refresh-hammering from stressing tenant pods; the read
   // itself is a single fixed-SQL exec against the tenant's own instance.
@@ -2574,7 +2566,7 @@ export class DatabasesService {
     // postgres_fdw). The tenant already runs in their own namespace and
     // their CNPG pod has the tenant netpol applied, but we still don't
     // want to hand them a code-exec primitive on a platform-managed
-    // database — fix the blast radius with an explicit allow-list.
+    // database: fix the blast radius with an explicit allow-list.
     const ALLOWED_EXTENSIONS = new Set<string>([
       'pgvector',
       'vector',
@@ -2675,8 +2667,6 @@ export class DatabasesService {
 
     return { success: result.success, output: result.output };
   }
-
-  // ── Settings ──
 
   async getDatabaseSettings(databaseId: string, clerkId: string, userData?: any) {
     const { database } = await this.access.assertDatabaseEditorOrViewer(
@@ -2838,8 +2828,6 @@ export class DatabasesService {
       advisories: tuning.advisories
     };
   }
-
-  // ── Public (MetalLB) exposure ──
 
   private readonly PUBLIC_PORT_MIN = 30000;
 

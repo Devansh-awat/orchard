@@ -1,8 +1,7 @@
 import type { Response } from 'express';
 
-// H-2: Single source of truth for the session cookie. Previously the OAuth,
-// SSO and passwordless controllers each set their own cookie attributes and
-// drifted. All call sites now route through this helper.
+// H-2: Single source of truth for the session cookie, so the OAuth, SSO and
+// passwordless controllers cannot drift apart on cookie attributes.
 // SameSite=Lax is required so the cookie survives cross-site top-level
 // navigations (e.g. GitHub OAuth redirect back to our callback).
 

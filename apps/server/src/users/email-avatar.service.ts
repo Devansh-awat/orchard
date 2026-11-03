@@ -13,7 +13,7 @@ import { objectStorage, objectStorageGeneration } from '../instance-config/objec
  * in the browser would be three lines instead of this file, but it would also
  * hand Automattic a hit from every viewer's IP on every page, carrying the
  * email hash of everyone else in the member list they happen to be looking at.
- * Those hashes are not anonymous — a plain digest of a well-known address is
+ * Those hashes are not anonymous: a plain digest of a well-known address is
  * reversible by rainbow table. Fetching once from here means the avatar
  * services only ever see this server, once per user per recheck window.
  */
@@ -116,7 +116,7 @@ export class EmailAvatarService {
    *
    * Safe to call on every sign-in: it no-ops for users who uploaded their own
    * picture, who deleted one, or who were checked inside the recheck window.
-   * Never throws — a failed lookup just leaves the generated mascot in place.
+   * Never throws: a failed lookup just leaves the generated mascot in place.
    */
   async ensure(user: {
     id: string;
@@ -165,7 +165,7 @@ export class EmailAvatarService {
 
       // Re-assert provenance in the WHERE clause, not just in the guard above.
       // This runs unawaited while the user is free to hit "upload photo", and
-      // the probe plus download is seconds long — an unconditional update here
+      // the probe plus download is seconds long: an unconditional update here
       // would happily overwrite a picture they chose in the meantime.
       //
       // Spelled as an explicit OR rather than `notIn: ['upload','none']`
@@ -198,7 +198,7 @@ export class EmailAvatarService {
     return user.imageUrl;
   }
 
-  /** `d=404` is the documented way to ask "is one actually set?" — no placeholder. */
+  /** `d=404` is the documented way to ask "is one actually set?": no placeholder. */
   private async fetchFrom(
     provider: Provider,
     hashes: Hashes

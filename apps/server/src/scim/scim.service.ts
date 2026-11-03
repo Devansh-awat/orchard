@@ -73,7 +73,7 @@ function normalizeRole(raw: any): string | null {
 //
 // currentRole disambiguates PATCH. SCIMMY applies the operation to the whole
 // resource and hands the merged result back, so the attribute the client didn't
-// touch still echoes the role we last sent it — and a pathless `replace` on a
+// touch still echoes the role we last sent it, and a pathless `replace` on a
 // multi-valued attribute *appends*, leaving the old role sitting in front of
 // the new one in `roles`. Either way the value that already matches the current
 // role carries no instruction, and the one that differs is the request.
@@ -105,7 +105,7 @@ function profileFromInstance(instance: any, fallbackUserName: string) {
   const trim = (v: any) => (typeof v === 'string' && v.trim() ? v.trim() : null);
   return {
     // userName is required by the schema, so an absent one means "unchanged"
-    // rather than "clear" — there's no valid empty state to replace it with.
+    // rather than "clear": there's no valid empty state to replace it with.
     userName: trim(instance?.userName)?.toLowerCase() ?? fallbackUserName,
     givenName: trim(instance?.name?.givenName),
     familyName: trim(instance?.name?.familyName),
@@ -192,8 +192,6 @@ export class ScimService implements OnModuleInit {
     SCIMMY.Resources.declare(SCIMMY.Resources.Group);
   }
 
-  // ---- Users -------------------------------------------------------------
-
   private primaryEmail(instance: any): string | null {
     const emails = Array.isArray(instance.emails) ? instance.emails : [];
     const primary = emails.find((e: any) => e?.primary) ?? emails[0];
@@ -220,7 +218,7 @@ export class ScimService implements OnModuleInit {
   }): ScimMemberView {
     // A membership added in-app has no IdP profile of its own, so it reads
     // through to the account. Once SCIM owns it, the per-org profile is the
-    // whole truth — that's what makes replace-on-omit safe.
+    // whole truth: that's what makes replace-on-omit safe.
     const owned = member.scimManaged === true;
     return {
       id: member.id,
@@ -302,7 +300,7 @@ export class ScimService implements OnModuleInit {
   }
 
   // An org with no owner can't be administered back into shape, so SCIM is not
-  // allowed to remove the last one — by deactivation, deletion, or demotion.
+  // allowed to remove the last one, by deactivation, deletion, or demotion.
   private async assertNotLastOwner(view: ScimMemberView, ctx: Ctx, action: string) {
     if (view.role !== 'owner') return;
     const owners = await this.prisma.organizationMember.count({
@@ -355,7 +353,7 @@ export class ScimService implements OnModuleInit {
       })
     ]);
 
-    // A live membership wins over a stale tombstone for the same person — that
+    // A live membership wins over a stale tombstone for the same person: that
     // pairing only happens if someone was re-added in-app after SCIM deactivated
     // them, and the live row is the truth.
     const live = new Set(members.map((m) => m.userId));
@@ -365,7 +363,7 @@ export class ScimService implements OnModuleInit {
     ].map((v) => this.toScimUser(v));
 
     // SCIMMY applies sort + pagination in the ListResponse, but filtering is the
-    // handler's job — `resource.filter.match` evaluates the parsed expression.
+    // handler's job: `resource.filter.match` evaluates the parsed expression.
     return resource.filter ? resource.filter.match(mapped) : mapped;
   }
 
@@ -386,7 +384,7 @@ export class ScimService implements OnModuleInit {
 
   // Deactivate: drop the org membership so access is really gone, and park the
   // SCIM identity in a tombstone under the same id so the resource stays
-  // readable and reactivatable. The global account is untouched — the person
+  // readable and reactivatable. The global account is untouched: the person
   // may belong to other orgs.
   private async deactivate(view: ScimMemberView, write: ScimWrite, ctx: Ctx) {
     await this.assertNotLastOwner(view, ctx, 'deactivate');
@@ -472,7 +470,7 @@ export class ScimService implements OnModuleInit {
         throw ScimError(404, null, `User ${resource.id} not found`);
       }
       // Everything SCIM owns lives on the membership, so a PUT that omits any
-      // of it clears it — RFC 7644 §3.5.1 replace semantics, applied literally.
+      // of it clears it: RFC 7644 §3.5.1 replace semantics, applied literally.
       // Nothing here touches the shared account.
       const write: ScimWrite = {
         externalId: instance.externalId ?? null,
@@ -482,7 +480,7 @@ export class ScimService implements OnModuleInit {
       const requestedRole = roleFromInstance(instance, view.role);
 
       if (instance.active === false) {
-        // Already deactivated — RFC 7644 writes are idempotent, so this is a
+        // Already deactivated: RFC 7644 writes are idempotent, so this is a
         // no-op rather than an error.
         if (!view.active) {
           return this.toScimUser({ ...view, ...write });
@@ -661,8 +659,6 @@ export class ScimService implements OnModuleInit {
     });
   }
 
-  // ---- Groups (read-only role projection) --------------------------------
-
   private async egressGroups(resource: any, ctx: Ctx) {
     const members = await this.prisma.organizationMember.findMany({
       where: { organizationId: ctx.organizationId },
@@ -689,8 +685,6 @@ export class ScimService implements OnModuleInit {
     const groups = ROLE_GROUPS.map(build);
     return resource.filter ? resource.filter.match(groups) : groups;
   }
-
-  // ---- Protocol entry points used by the controller ----------------------
 
   async listUsers(query: ScimQuery, ctx: Ctx) {
     return new SCIMMY.Resources.User(query as any).read(ctx);

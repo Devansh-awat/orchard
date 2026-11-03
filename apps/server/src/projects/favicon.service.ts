@@ -64,7 +64,7 @@ export class FaviconService {
    * purpose: HeadObject throws NotFound (a 404) for a missing key, and since
    * the common case here is a cold/uncached domain, that turned every miss
    * into an errored AWS span that dd-trace surfaced in Error Tracking as
-   * noise. ListObjectsV2 returns 200 with empty Contents on a miss — no
+   * noise. ListObjectsV2 returns 200 with empty Contents on a miss: no
    * exception, no error span. Genuine R2 failures still throw and are still
    * reported, which is correct.
    */
@@ -86,7 +86,6 @@ export class FaviconService {
    * Returns null if no favicon could be found.
    */
   async getFavicon(domain: string): Promise<string | null> {
-    // Check memory cache
     const cached = this.memoryCache.get(domain);
     if (cached && Date.now() - cached.ts < FaviconService.MEMORY_TTL) {
       return cached.url;
@@ -96,7 +95,6 @@ export class FaviconService {
 
     const r2Key = `favicons/${domain}.png`;
 
-    // Check if already in R2
     if (this.s3Client && this.bucketName) {
       try {
         if (await this.objectExists(r2Key)) {
@@ -105,7 +103,7 @@ export class FaviconService {
           return url;
         }
       } catch (err) {
-        // R2 lookup failed — fall through and try to (re)fetch it.
+        // R2 lookup failed: fall through and try to (re)fetch it.
         this.logger.warn(
           `R2 lookup failed for ${domain}: ${err instanceof Error ? err.message : err}`
         );
@@ -154,7 +152,7 @@ export class FaviconService {
         `peekFavicon R2 lookup failed for ${domain}: ${err instanceof Error ? err.message : err}`
       );
     }
-    // Not in R2 (or lookup failed) — warm it in the background, don't block.
+    // Not in R2 (or lookup failed): warm it in the background, don't block.
     if (!this.pendingFetches.has(domain)) {
       const p = this.fetchAndStore(domain, r2Key);
       this.pendingFetches.set(domain, p);
@@ -262,7 +260,6 @@ export class FaviconService {
       // Fire-and-forget: banner failures must never affect the favicon result.
       void this.storeBanner(domain, html).catch(() => {});
 
-      // Parse icon URLs from HTML
       const iconUrl = html ? this.parseIconFromHtml(html, domain) : null;
       if (!iconUrl) {
         // Try /favicon.ico as last resort
@@ -275,7 +272,6 @@ export class FaviconService {
         return null;
       }
 
-      // Download the icon
       const iconData = await this.downloadImage(iconUrl);
       if (!iconData) {
         this.memoryCache.set(domain, { url: null, ts: Date.now() });
@@ -335,7 +331,7 @@ export class FaviconService {
         return { buffer: resized, contentType: 'image/jpeg' };
       }
     } catch {
-      // sharp missing or unsupported input — store as-is
+      // sharp missing or unsupported input: store as-is
     }
     return { buffer, contentType };
   }
@@ -400,7 +396,7 @@ export class FaviconService {
         `peekBanner R2 lookup failed for ${domain}: ${err instanceof Error ? err.message : err}`
       );
     }
-    // Not in R2 (or lookup failed) — fetchAndStore extracts the banner
+    // Not in R2 (or lookup failed): fetchAndStore extracts the banner
     // alongside the favicon.
     let pending = this.pendingFetches.get(domain);
     if (!pending) {
@@ -444,7 +440,6 @@ export class FaviconService {
     ) {
       const tag = linkMatch[0];
 
-      // Check if it's an icon link
       const relMatch = tag.match(/rel=["']([^"']+)["']/i);
       if (!relMatch) continue;
       const rel = relMatch[1].toLowerCase();
@@ -456,12 +451,10 @@ export class FaviconService {
         rel === 'apple-touch-icon-precomposed';
       if (!isIcon) continue;
 
-      // Extract href
       const hrefMatch = tag.match(/href=["']([^"']+)["']/i);
       if (!hrefMatch) continue;
       let href = hrefMatch[1];
 
-      // Resolve relative URLs
       if (href.startsWith('//')) {
         href = `https:${href}`;
       } else if (href.startsWith('/')) {
@@ -470,7 +463,6 @@ export class FaviconService {
         href = `https://${domain}/${href}`;
       }
 
-      // Size hint
       const sizeMatch = tag.match(/sizes=["'](\d+)x\d+["']/i);
       const size = sizeMatch ? parseInt(sizeMatch[1], 10) : 0;
 
@@ -525,7 +517,7 @@ export class FaviconService {
     }
   }
 
-  // Downscale icons before storing — apple-touch-icons can be 512px/250KB+
+  // Downscale icons before storing: apple-touch-icons can be 512px/250KB+
   // while the dashboard renders them at ~20px. Falls back to the original
   // bytes if sharp is unavailable or the format is unsupported (e.g. some
   // .ico variants).
@@ -545,7 +537,7 @@ export class FaviconService {
         return { buffer: dematted, contentType: 'image/png' };
       }
     } catch {
-      // sharp missing or unsupported input — store as-is
+      // sharp missing or unsupported input: store as-is
     }
     return { buffer, contentType };
   }
@@ -614,7 +606,7 @@ export class FaviconService {
     contentType: string
   ): Promise<string | null> {
     if (!this.s3Client || !this.bucketName) {
-      // R2 not configured — return the original URL from memory
+      // R2 not configured: return the original URL from memory
       this.logger.warn('R2 not configured, cannot cache favicon');
       this.memoryCache.set(domain, { url: null, ts: Date.now() });
       return null;

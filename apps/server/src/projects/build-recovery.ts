@@ -1,20 +1,17 @@
 /**
  * Build recovery, as a decision separated from the IO that feeds it.
  *
- * The recovery sweep used to read liveness out of our own rows: a build was
- * "orphaned" when `deployments.build_status` said `building` and no Job came
- * back from a list call. Both halves of that were wrong in the same way. Our
- * rows lag the cluster by however long a build takes to write them, and a
- * failed list call is indistinguishable from a deployment that has no jobs.
- * A build in its first minute — still creating a check run, not yet holding a
- * Job — looked exactly like a build whose Job had vanished, and got failed
- * with "Build job not found after server restart" while it was running.
+ * Our own rows cannot say whether a build is alive: they lag the cluster by
+ * however long a build takes to write them, and a failed list call is
+ * indistinguishable from a deployment that has no jobs. A build in its first
+ * minute, still creating a check run and not yet holding a Job, looks exactly
+ * like a build whose Job has vanished, and reading liveness that way fails it
+ * with "Build job not found after server restart" while it is running.
  *
  * So the cluster is the only thing allowed to say whether a build is alive
  * here, by way of the Job watch cache, and "the cluster did not answer" is a
  * distinct answer from "the cluster says there is nothing". Everything else is
- * a pure function over facts, which is what makes the branch that failed
- * crescent-worker something a test can pin down.
+ * a pure function over facts, which is what lets a test pin each branch down.
  */
 
 export type ObservedJobStatus = 'pending' | 'running' | 'succeeded' | 'failed';
@@ -37,17 +34,17 @@ export const HEARTBEAT_STALE_MS = 30_000;
 /**
  * How long a build may hold `building` without having created a Job before we
  * treat it as dead rather than starting. Deliberately longer than the queue's
- * own 4-minute "did not start" timeout, so that path — which knows why it gave
- * up — gets to conclude the build first, and this one only catches builds
+ * own 4-minute "did not start" timeout, so that path, which knows why it gave
+ * up, gets to conclude the build first, and this one only catches builds
  * whose run row was lost before it could.
  */
 export const JOB_CREATE_GRACE_MS = 6 * 60_000;
 
 /**
  * How long after a run is claimed before its deployment's `build_status` is
- * worth believing. Claim and deployment row are written together now, but a
- * row from before that, or from a path that still writes them apart, must not
- * be read as finished just because the build has not got round to saying it
+ * worth believing. Claim and deployment row are written together, but a row
+ * from before that, or from a path that still writes them apart, must not be
+ * read as finished just because the build has not got round to saying it
  * started.
  */
 export const CLAIM_SETTLE_MS = 2 * 60_000;
@@ -88,7 +85,7 @@ export interface RecoveryFacts {
   run: RecoveryRun | null;
   /**
    * Is a run already sitting in `scheduled` for this deployment? If so a
-   * retry is queued and recovery has nothing left to decide — failing here
+   * retry is queued and recovery has nothing left to decide: failing here
    * would kill the attempt that is about to start.
    */
   retryPending: boolean;
@@ -130,7 +127,7 @@ export interface RecoveryDecision {
 
 /**
  * True when the decision will turn on whether the image already made it to the
- * registry, so the caller knows to spend a registry call before deciding — and
+ * registry, so the caller knows to spend a registry call before deciding, and
  * only then. A build whose Job is still listed never needs this.
  */
 export function needsRegistryProbe(facts: Pick<RecoveryFacts, 'deployment' | 'jobs'>): boolean {
@@ -278,8 +275,8 @@ export function decideBuildRecovery(facts: RecoveryFacts): RecoveryDecision {
   };
 
   // No Job was ever recorded for this build. Either it is still in its prep
-  // phase — resolving the installation, opening a check run, none of which
-  // touches the cluster — or it died there. Only elapsed time tells them
+  // phase (resolving the installation, opening a check run, none of which
+  // touches the cluster) or it died there. Only elapsed time tells them
   // apart, and getting this wrong is what failed a live build.
   if (deployment.jobName === null) {
     const age = deployment.startedAt === null ? null : now - deployment.startedAt;

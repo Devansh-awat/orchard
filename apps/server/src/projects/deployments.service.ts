@@ -875,7 +875,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Build jobs for this deployment as the cluster currently holds them, read
-   * from the same Job watch cache the build watcher concludes from — so
+   * from the same Job watch cache the build watcher concludes from, so
    * recovery and the build path can never disagree about whether a build is
    * alive.
    *
@@ -901,7 +901,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           image: o.image
         }));
       // A cache that has only just listed may not hold a job we recorded by
-      // name yet. Ask for that one directly instead of calling it gone — but
+      // name yet. Ask for that one directly instead of calling it gone, but
       // only if the watch has never heard of it. If the watch saw it deleted,
       // that is the answer, and re-reading it every pass would hammer the API
       // for the whole time a stuck deployment sits in `building`.
@@ -1197,7 +1197,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       orderBy: { startedAt: 'desc' }
     });
     // With no run in `building` the newest run is still the record of what
-    // this build was meant to do — most often because it was concluded out
+    // this build was meant to do: most often because it was concluded out
     // from under a build that was still starting.
     const source =
       building ??
@@ -1310,10 +1310,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       });
       return;
     }
-    // This used to be written to a column and appended to the build log and
-    // nowhere else, so a build the sweep killed left no trace in Datadog —
-    // not a log line, not a metric, not a span. Ending someone's build is the
-    // loudest thing this service does; it logs and reports like it.
+    // Written only to a column and the build log, a build the sweep killed would
+    // leave no trace in Datadog: not a log line, not a metric, not a span. Ending
+    // someone's build is the loudest thing this service does; it logs and reports
+    // like it.
     this.logger.error(`[BuildRecovery] Failed ${deploymentId}: ${reason} (${cause})`);
     recordBuildOutcome({
       outcome: 'failed',
@@ -1406,7 +1406,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           }
         },
         // Lets the org-wide search resolve a person to their apps. Deliberately
-        // no email — that is scrubbed from viewers everywhere else too.
+        // no email: that is scrubbed from viewers everywhere else too.
         creator: {
           select: {
             id: true,
@@ -1784,7 +1784,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       pods,
       availableReplicas,
       // What the cluster is actually asked to run, straight off the mirror.
-      // `replicas` on the row is intent, and the two legitimately disagree —
+      // `replicas` on the row is intent, and the two legitimately disagree:
       // a stopped deployment keeps its count so it can come back to it, and an
       // external `kubectl scale` is only adopted when nothing is mid-build or
       // mid-apply. Clients that render `replicas` as if it were state end up
@@ -2056,8 +2056,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     await this.teardownDeploymentResources(deployment, { ingresses, services, volumes }, true);
 
     // Delete the DB record (cascades to pods, services, envVars, ingresses, volumes, imageHistory).
-    // ingresses only started cascading in 20260808060000; before that the FK was
-    // SET NULL and every delete left a protected orphan row behind.
     await this.prisma.deployment.delete({
       where: { id: deploymentId }
     });
@@ -2157,7 +2155,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     deleteVolumes: boolean
   ) {
     const { ingresses, services, volumes } = related;
-    // Delete all ingresses from Kubernetes
     for (const ingress of ingresses) {
       try {
         await this.k8sNetwork.deleteIngress(ingress.namespace, ingress.name);
@@ -2166,7 +2163,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    // Delete all services from Kubernetes
     for (const service of services) {
       try {
         await this.k8sNetwork.deleteService(deployment.namespace, service.name);
@@ -2175,7 +2171,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    // Delete all PVCs from Kubernetes
     const claims = volumes.filter((v) => v.type === 'pvc' && v.pvcName).map((v) => v.pvcName!);
     const heldElsewhere =
       deleteVolumes && claims.length > 0
@@ -2219,7 +2214,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       );
     }
 
-    // Delete the K8s deployment itself
     await this.k8sWorkload.deleteDeployment(deployment.name, deployment.namespace);
 
     if (deployment.buildContextKey) {
@@ -2757,7 +2751,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     if (!this.applyPipelineEnabled()) {
       // Only push to K8s if the deployment actually exists in the cluster.
-      // If the build hasn't succeeded yet, just persist to DB — the env vars
+      // If the build hasn't succeeded yet, just persist to DB: the env vars
       // will be applied when the build completes and creates the K8s deployment.
       const k8sExists = await this.k8sWorkload
         .getKubernetesDeployment(deployment.name, deployment.namespace)
@@ -2856,7 +2850,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         targetType: 'deployment',
         targetId: deployment.id,
         targetLabel: deployment.name,
-        // Keys only — never values.
+        // Keys only, never values.
         metadata: {
           added: added.join(',') || null,
           removed: removed.join(',') || null,
@@ -2874,7 +2868,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
    * Every field is optional and only applied when present, so a caller can
    * change one setting without restating the rest. The zero-config commands
    * additionally accept an explicit null, which clears the override and hands
-   * the decision back to Railpack's own detection — that is a different
+   * the decision back to Railpack's own detection: that is a different
    * intent from "leave unchanged", hence the `in body` checks.
    */
   async updateDeploymentBuildConfig(
@@ -2996,8 +2990,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     // The start command means two different things either side of a build-type
-    // switch — a Railpack build bakes it into the image, everything else runs
-    // it as the container's args — so a value carried across the switch would
+    // switch: a Railpack build bakes it into the image, everything else runs
+    // it as the container's args, so a value carried across the switch would
     // start behaving differently without anyone touching it. Clear it, the
     // same way the Dockerfile path is cleared below, unless this same request
     // is also setting one.
@@ -4763,8 +4757,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     return this.addInternalUrlsToDeployment(result);
   }
 
-  // Auto-deploy methods
-
   async enableAutoDeploy(
     deploymentId: string,
     branch: string,
@@ -4946,7 +4938,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const previousBranch = deployment.autoDeployBranch;
     const previouslyEnabled = deployment.autoDeployEnabled;
 
-    // Update the deployment
     const updated = await this.prisma.deployment.update({
       where: { id: deploymentId },
       data: {
@@ -5059,7 +5050,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    // Parse repo info for GitHub API calls
     const repoInfo = deployment.gitConnectionId
       ? null
       : this.githubService.parseRepoUrl(deployment.githubRepo);
@@ -5133,7 +5123,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
               `Deploying ${deployment.name} from commit ${commitSha.substring(0, 7)}`
             );
 
-            // Update deployment status to in_progress
             await this.githubService.updateDeploymentStatusWithApp(
               installationId,
               repoInfo.owner,
@@ -5143,7 +5132,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
               { logUrl, description: 'Building...' }
             );
 
-            // Store the GitHub deployment record
             await this.prisma.gitHubDeployment.create({
               data: {
                 deploymentId,
@@ -5188,13 +5176,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       }
     });
 
-    // Extract image name from current image
     const imageParts = deployment.image?.split('/') || [];
     const imageNameWithTag =
       imageParts[imageParts.length - 1] || `${deployment.project.namespace}-${deployment.name}`;
     const [imageName] = imageNameWithTag.split(':');
 
-    // Generate unique tag based on timestamp
     const timestamp = new Date()
       .toISOString()
       .replace(/[-:]/g, '')
@@ -5202,7 +5188,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       .slice(0, 14);
     const uniqueTag = `v${timestamp}`;
 
-    // Get service configuration
     const service = deployment.services[0];
     const rawPorts =
       service?.ports.map((port) => ({
@@ -5439,7 +5424,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       take: 20
     });
   }
-  // ── Public deployment-port exposure ──
 
   private async pickFreePublicDeploymentPort(ip: string): Promise<number> {
     const dbPortsRaw = await this.prisma.database.findMany({
@@ -5628,14 +5612,14 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       where: { environmentId },
       select: { key: true, value: true, secret: true }
     });
-    // Secret values are stored encrypted at rest — decrypt before they feed the
+    // Secret values are stored encrypted at rest: decrypt before they feed the
     // resolver so plaintext reaches the pod/build.
     return vars.map((v) => this.crypto.maybeDecrypt(v));
   }
 
   /**
    * A deployment's own variables with secret values back in plaintext. Only
-   * things that hand a value to the cluster or the builder may call this — a
+   * things that hand a value to the cluster or the builder may call this: a
    * response reaches a client, and a secret that reaches a client is one that
    * was never write-only in the first place.
    */
@@ -5919,16 +5903,14 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         return restartCount > 0;
       });
 
-      // No ready pods at all
       if (readyPods.length === 0) {
         if (hasBackOffWarning || hasCrashingPods) {
           return 'failed';
         }
-        // Pods exist but none ready and no crash loops — starting up or restarting
+        // Pods exist but none ready and no crash loops: starting up or restarting
         return hasAnyRestarts ? 'restarting' : 'pending';
       }
 
-      // Some pods ready, some not
       if (readyPods.length < desiredReplicas) {
         if (hasBackOffWarning || hasCrashingPods) {
           return 'unhealthy';
@@ -6141,7 +6123,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       await this.authz.requireProjectEdit(deployment.projectId, userId, 'change deploy strategy');
     }
 
-    // PVC volumes pin the strategy to Recreate — ReadWriteOnce can't satisfy
+    // PVC volumes pin the strategy to Recreate: ReadWriteOnce can't satisfy
     // a rolling cutover.
     const hasPvc = deployment.volumes.some((v) => v.type === 'pvc');
     if (hasPvc && strategy !== 'recreate') {
@@ -6172,7 +6154,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
    *
    * The value is stored even when it cannot take effect yet (a 1-replica app
    * asking for 1 available pod would block every drain, so no object is
-   * written) — the setting is the user's intent, and scaling up later is what
+   * written): the setting is the user's intent, and scaling up later is what
    * makes it real. `active` in the response says which of the two happened.
    */
   async updateDeploymentDisruptionBudget(
@@ -6301,7 +6283,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           // step, and being told to do it again is how a nudge becomes noise.
           done: deployment.healthCheckEnabled || hasDockerfileHealthCheck
         },
-        // No pull-policy step: a moving tag now defaults to Always, so the only
+        // No pull-policy step: a moving tag defaults to Always, so the only
         // way to be on IfNotPresent is to have chosen it, and nagging someone
         // about a deliberate choice is just noise.
         { id: 'cli', applicable: true, done: false }
@@ -6388,7 +6370,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       ).namespace
     );
 
-    // Image-source deployments only — anything tied to a repo is rebuilt from
+    // Image-source deployments only: anything tied to a repo is rebuilt from
     // source by the GitHub flow, so a manual image change would just be
     // overwritten by the next build.
     if (deployment.githubRepo) {
@@ -6482,7 +6464,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       );
 
       // The deployment's current footprint is already counted in org/member
-      // usage, so only the increase is additive — charging the full new
+      // usage, so only the increase is additive: charging the full new
       // footprint would double-count the running pods. Previously-unlimited
       // deployments contribute nothing to counted usage, so their whole new
       // footprint is the increase.
@@ -6507,7 +6489,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       };
 
       if (increase.cpuMilli > 0 || increase.memoryBytes > 0) {
-        // Org-wide delta check.
         await this.quotasService.enforceOrgCapForNewPod(
           deployment.project.organizationId,
           increase
@@ -6676,7 +6657,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     assertEnvSetStorable(env);
 
     // Injected form resolves shared references against the environment's shared
-    // vars (secrets — own or inherited — route to a k8s Secret downstream).
+    // vars (secrets, own or inherited, route to a k8s Secret downstream).
     const sharedVars = await this.loadSharedVarsForDeployment('', environment.id);
     const { resolved: resolvedEnv } = this.resolveOrReject(env, sharedVars, {});
 
@@ -7050,7 +7031,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     // Validate refs and paths at the boundary. The same checks are
     // enforced again inside DockerService.cloneRepository as defence in
-    // depth — see isSafeGitRef / isSafeRelativePath there.
+    // depth: see isSafeGitRef / isSafeRelativePath there.
     const GIT_REF_RE = /^[A-Za-z0-9._/-]+$/;
     if (
       branch.length > 200 ||
@@ -7139,10 +7120,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       );
 
       // Auto-deploy defaults ON when the installation covers the repo, because
-      // push webhooks can then actually fire. Asking for it without one used to
-      // be honoured anyway, which is the worst of both: the row says enabled,
-      // nothing is bound to an installation, every push is dropped, and the only
-      // symptom is a commit that never queues.
+      // push webhooks can then actually fire. Honouring a request for it without
+      // one is the worst of both: the row says enabled, nothing is bound to an
+      // installation, every push is dropped, and the only symptom is a commit that
+      // never queues.
       if (data.autoDeployEnabled === true && !repoInstallation) {
         throw new BadRequestException(
           this.githubService.autoDeployUnavailableMessage(parsed.owner, parsed.repo)
@@ -7174,7 +7155,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     const imageName = `${project.namespace}-${name}`;
 
-    // Generate unique tag based on timestamp
     const timestamp = new Date()
       .toISOString()
       .replace(/[-:]/g, '')
@@ -7207,7 +7187,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     assertEnvSetStorable(env);
 
     // Injected form resolves shared references against the environment's shared
-    // vars (secrets — own or inherited — route to a k8s Secret downstream).
+    // vars (secrets, own or inherited, route to a k8s Secret downstream).
     const sharedVars = await this.loadSharedVarsForDeployment('', environment.id);
     const { resolved: resolvedEnv } = this.resolveOrReject(env, sharedVars, {});
 
@@ -7305,7 +7285,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       }
     });
 
-    // Add environment variables
     if (env.length > 0) {
       await this.prisma.deploymentEnvVar.createMany({
         data: env.map((entry) => ({
@@ -7317,7 +7296,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       });
     }
 
-    // Add volumes
     const volumes = Array.isArray(data.volumes) ? data.volumes : [];
     if (volumes.length > 0) {
       await this.prisma.deploymentVolume.createMany({
@@ -7868,10 +7846,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   /**
    * Give a Railpack deployment a start command when it has none and we know it.
    *
-   * Railpack does not fail when it cannot work out how to start an app — it
+   * Railpack does not fail when it cannot work out how to start an app: it
    * warns, and buildkit bakes `CMD ["/bin/bash"]` into the image
    * (convert.go:65), which exits 0 the moment it starts and then
-   * CrashLoopBackOffs without ever writing a log line. The builder now passes
+   * CrashLoopBackOffs without ever writing a log line. The builder passes
    * --error-missing-start so that becomes a build failure instead of a silent
    * one, but failing a build we could have completed is no kind of fix: for
    * the frameworks detection recognises, the answer is already known, and a
@@ -7898,7 +7876,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         select: { startCommand: true, outputDirectory: true, rootDirectory: true }
       });
       if (!deployment) return;
-      // Already answered — by the user, by detection at create time, or by an
+      // Already answered, by the user, by detection at create time, or by an
       // earlier backfill.
       if (deployment.startCommand) return;
       // A static site is served by Caddy, which supplies its own start command.
@@ -7989,12 +7967,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
    * The volumes a deployment should be running with, read now.
    *
    * The build path is handed a snapshot of these when the build is queued, and
-   * a build can run for many minutes. Attaching a volume while one is in
-   * flight used to be lost twice over: the deploy step applied the stale
-   * snapshot, and every later rebuild only patched the image, so the
-   * volume-less pod spec survived until something re-applied the volumes by
-   * hand. Anything writing to that mount path in between went to the node's
-   * disk and disappeared with the pod.
+   * a build can run for many minutes. A volume attached while one is in flight
+   * would be lost twice over: the deploy step applies the stale snapshot, and
+   * every later rebuild only patches the image, so the volume-less pod spec
+   * survives until something re-applies the volumes by hand. Anything writing to
+   * that mount path in between goes to the node's disk and disappears with the
+   * pod.
    */
   private async currentVolumes(deploymentId: string) {
     const rows = await this.prisma.deploymentVolume.findMany({ where: { deploymentId } });
@@ -8074,7 +8052,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       githubDeploymentId?: number | null;
       githubAccessToken?: string | null;
       repoInfo?: { owner: string; repo: string } | null;
-      // GitHub Checks API support (new - via App)
+      // GitHub Checks API support (via App)
       checkRunId?: number | null;
       checkLogUrl?: string | null;
       installationId?: string | null;
@@ -8089,7 +8067,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   ) {
     console.log(`[Projects] Starting buildAndDeployAsync for deployment ${deploymentId}`);
 
-    // One Datadog APM trace per build (service: orchard-builds) — duration,
+    // One Datadog APM trace per build (service: orchard-builds): duration,
     // start time, outcome, and user-vs-system failure classification.
     const buildTrace = startBuildTrace({
       deploymentId,
@@ -8365,7 +8343,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         await this.syncReplicasForRebuild(deploymentId, data.name, data.namespace, data.replicas);
 
         // Image-only rebuild keeps the existing spec, so re-apply the stored
-        // env to heal deployments whose pod spec drifted from the config —
+        // env to heal deployments whose pod spec drifted from the config,
         // every removal made before env updates replaced (rather than merged)
         // the container's env list is still sitting on the live object.
         const rebuildDeployment = await this.prisma.deployment.findUnique({
@@ -8598,7 +8576,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             existingDeployment?.services && existingDeployment.services.length > 0;
 
           if (hasServices) {
-            // Services were created upfront — update with K8s-assigned values
+            // Services were created upfront: update with K8s-assigned values
             const normalizedPorts = deploymentResult.ports || [];
             const existingService = existingDeployment!.services[0];
             const primaryPort = normalizedPorts[0];
@@ -8628,7 +8606,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
               }
             }
           } else {
-            // No services exist — create them (legacy path for old deployments)
+            // No services exist: create them (legacy path for old deployments)
             const normalizedPorts = deploymentResult.ports || [];
             const primaryPort = normalizedPorts[0] || {
               name: 'http',
@@ -8675,7 +8653,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             }
           }
 
-          // Update deployment status to success
           const txDeployData = await tx.deployment.findUnique({
             where: { id: deploymentId },
             select: { buildLogs: true, buildStepTimestamps: true }
@@ -8730,10 +8707,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           this.logger.warn(`build queue release failed for ${deploymentId}: ${err?.message ?? err}`)
         );
 
-      // Update GitHub deployment status to success
       if (data.githubDeploymentId && data.repoInfo && data.githubAccessToken) {
         try {
-          // Get the environment URL from ingresses if available
           const deploymentWithIngress = await this.prisma.deployment.findUnique({
             where: { id: deploymentId },
             include: { ingresses: true }
@@ -8755,7 +8730,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             }
           );
 
-          // Update our record
           await this.prisma.gitHubDeployment.updateMany({
             where: {
               deploymentId,
@@ -8771,13 +8745,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
-      // Clear the log update interval
       if (logUpdateInterval) {
         clearInterval(logUpdateInterval);
         logUpdateInterval = null;
       }
 
-      // Update GitHub Check Run to success (via App)
       if (data.checkRunId && data.installationId && data.repoInfo) {
         try {
           const finalDeployment = await this.prisma.deployment.findUnique({
@@ -8815,10 +8787,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
-      // Update GitHub Deployment to success (via App)
       if (data.installationId && data.repoInfo) {
         try {
-          // Find the GitHub deployment we created
           const ghDeployment = await this.prisma.gitHubDeployment.findFirst({
             where: { deploymentId, status: 'in_progress' },
             orderBy: { createdAt: 'desc' }
@@ -8943,7 +8913,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             }
           );
 
-          // Update our record
           await this.prisma.gitHubDeployment.updateMany({
             where: {
               deploymentId,
@@ -8958,7 +8927,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
-      // Update GitHub Deployment to failure (via App)
       if (data.installationId && data.repoInfo) {
         try {
           const ghDeployment = await this.prisma.gitHubDeployment.findFirst({
@@ -8993,7 +8961,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
-      // Update GitHub Check Run to failure (via App)
       if (data.checkRunId && data.installationId && data.repoInfo) {
         try {
           await this.githubService.updateCheckRun(
@@ -9177,7 +9144,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       console.error(`[Projects] Error cancelling existing build jobs:`, error);
     }
 
-    // Reset build status to building
     await this.prisma.deployment.update({
       where: { id: deploymentId },
       data: {
@@ -9189,13 +9155,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       }
     });
 
-    // Extract image name from current image
     const imageParts = deployment.image?.split('/') || [];
     const imageNameWithTag =
       imageParts[imageParts.length - 1] || `${deployment.project.namespace}-${deployment.name}`;
     const [imageName] = imageNameWithTag.split(':');
 
-    // Generate unique tag based on timestamp
     const timestamp = new Date()
       .toISOString()
       .replace(/[-:]/g, '')
@@ -9203,7 +9167,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       .slice(0, 14);
     const uniqueTag = `v${timestamp}`;
 
-    // Get service configuration
     const service = deployment.services[0];
     const rawPorts =
       service?.ports.map((port) => ({
@@ -9230,7 +9193,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       readOnly: vol.readOnly
     }));
 
-    // Start rebuild process asynchronously
     this.buildAndDeployAsync(
       deploymentId,
       {
@@ -9407,7 +9369,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     // The probes and start command belong to the app, not the image. A
-    // rollback that dropped them left the older image running the container's
+    // rollback that drops them leaves the older image running the container's
     // own CMD with no readiness gate.
     const { healthCheck, args } = await this.rolloutInputs(deploymentId);
     const rollbackStartedAt = Date.now();
@@ -9437,21 +9399,17 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException(`Rollback did not become ready: ${verdict.reason}`);
     }
 
-    // Update database
     await this.prisma.$transaction(async (tx) => {
-      // Mark all images as inactive
       await tx.imageHistory.updateMany({
         where: { deploymentId },
         data: { isActive: false }
       });
 
-      // Mark this image as active
       await tx.imageHistory.update({
         where: { id: imageHistoryId },
         data: { isActive: true }
       });
 
-      // Update deployment
       await tx.deployment.update({
         where: { id: deploymentId },
         data: {

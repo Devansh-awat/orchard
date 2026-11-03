@@ -8,7 +8,7 @@
  * with a command the container does not have.
  *
  * `HEALTHCHECK NONE` cancels an inherited check, which is a statement that the
- * image has none — the caller falls back to whatever Orchard is configured
+ * image has none: the caller falls back to whatever Orchard is configured
  * with, rather than to a command that was explicitly withdrawn.
  */
 export interface DockerfileHealthCheck {
@@ -105,7 +105,7 @@ function parseInstruction(rest: string): DockerfileHealthCheck | null {
 
   const argv = cmd[1].trim();
   // Shell form runs through `/bin/sh -c`, which is the only way `curl ... ||
-  // exit 1` — the form nearly every Dockerfile uses — means anything.
+  // exit 1` (the form nearly every Dockerfile uses) means anything.
   check.command = parseExecForm(argv) ?? ['/bin/sh', '-c', argv];
 
   return check;

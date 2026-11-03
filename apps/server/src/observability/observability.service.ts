@@ -1048,7 +1048,7 @@ function splitLine(raw: string): RawLine {
 }
 
 // A line continues the open entry when it's an indented/stack/brace fragment,
-// or — within the same flush window — a top-level `key: value` annotation
+// or, within the same flush window, a top-level `key: value` annotation
 // (e.g. `params:`, `cause:`, `H3Error:`). This folds a console.error's stack
 // and object dump into one logical entry instead of one row per physical line.
 function isContinuation(line: RawLine, groupStartMs: number): boolean {

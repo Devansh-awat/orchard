@@ -156,7 +156,7 @@ export class NodesService {
   }
 
   async listNodes() {
-    // Reads come straight from the DB — the node informer keeps it current.
+    // Reads come straight from the DB: the node informer keeps it current.
     const nodes = await this.prisma.node.findMany({
       orderBy: { name: 'asc' },
       include: {

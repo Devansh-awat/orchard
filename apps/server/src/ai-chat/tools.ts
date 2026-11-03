@@ -1,6 +1,5 @@
 import OpenAI from 'openai';
 
-// The apiFetch function signature: (method, path, body?) => Promise<any>
 type ApiFetch = (method: string, path: string, body?: any) => Promise<any>;
 
 interface ToolDef {
@@ -10,7 +9,6 @@ interface ToolDef {
 }
 
 const TOOLS: ToolDef[] = [
-  // ── Query tools ──────────────────────────────────────────────────
   {
     name: 'get_current_user',
     description: "Get the currently authenticated user's profile information",
@@ -165,7 +163,6 @@ const TOOLS: ToolDef[] = [
     }
   },
 
-  // ── Deployment actions ───────────────────────────────────────────
   {
     name: 'restart_deployment',
     description: 'Rolling restart of all pods in a deployment',
@@ -197,7 +194,6 @@ const TOOLS: ToolDef[] = [
     }
   },
 
-  // ── Configuration ────────────────────────────────────────────────
   {
     name: 'add_env_vars',
     description:
@@ -242,7 +238,6 @@ const TOOLS: ToolDef[] = [
     }
   },
 
-  // ── Resource creation ────────────────────────────────────────────
   {
     name: 'create_project',
     description: 'Create a new project in an organization',
@@ -301,7 +296,6 @@ const TOOLS: ToolDef[] = [
     }
   },
 
-  // ── Dangerous ────────────────────────────────────────────────────
   {
     name: 'delete_deployment',
     description:
@@ -324,7 +318,6 @@ const TOOLS: ToolDef[] = [
   }
 ];
 
-// Convert to OpenAI function-calling format
 export const TOOLS_OPENAI: OpenAI.Chat.Completions.ChatCompletionTool[] = TOOLS.map((t) => ({
   type: 'function' as const,
   function: {
@@ -362,7 +355,6 @@ export function mergeEnvForPut(
   return Array.from(merged.values());
 }
 
-// ── Tool executor ────────────────────────────────────────────────────
 // Maps tool names to local API calls using the user's session token.
 
 export async function executeTool(
@@ -371,7 +363,6 @@ export async function executeTool(
   input: Record<string, any>
 ): Promise<string> {
   switch (name) {
-    // Query
     case 'get_current_user':
       return json(await apiFetch('GET', '/auth/me'));
     case 'list_organizations':
@@ -433,7 +424,6 @@ export async function executeTool(
     case 'analyze_deployment_resources':
       return json(await apiFetch('GET', `/deployments/${input.deploymentId}/resource-analysis`));
 
-    // Deployment actions
     case 'restart_deployment':
       return json(await apiFetch('POST', `/deployments/${input.deploymentId}/restart`));
     case 'rebuild_deployment':
@@ -445,7 +435,6 @@ export async function executeTool(
         })
       );
 
-    // Configuration
     case 'add_env_vars': {
       const dep = await apiFetch('GET', `/deployments/${input.deploymentId}`);
       return json(
@@ -463,7 +452,6 @@ export async function executeTool(
         })
       );
 
-    // Resource creation
     case 'create_project':
       return json(
         await apiFetch('POST', '/projects', {
@@ -503,7 +491,6 @@ export async function executeTool(
         })
       );
 
-    // Dangerous
     case 'delete_deployment':
       return json(await apiFetch('DELETE', `/deployments/${input.deploymentId}`));
     case 'delete_database':

@@ -29,7 +29,7 @@ export class InvitationsController {
     });
   }
 
-  // H-2: in-app accept by row id. The listing endpoints no longer return
+  // H-2: in-app accept by row id. The listing endpoints do not return
   // plaintext tokens (they're nulled at rest), so the in-app Accept button
   // calls this route. Every per-token security check still runs under the
   // caller's session inside acceptInvitationById.

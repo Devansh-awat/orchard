@@ -28,7 +28,7 @@ export class ProjectAccessService {
    * C-2: enforce global hostname uniqueness across projects.
    *
    * The schema's only unique constraint on Ingress is (namespace, name), which
-   * is the K8s resource name — NOT the routed host. Without this check, org A
+   * is the K8s resource name, NOT the routed host. Without this check, org A
    * can register `app.example.com` in namespace `proj-a` and org B can register
    * the same host in `proj-b`; whichever IngressRoute the controller resolves
    * last wins, and traffic (including session cookies) can land in the wrong
@@ -51,7 +51,7 @@ export class ProjectAccessService {
 
     // Platform-owned hostnames are never registerable by a tenant. Without
     // this check a tenant could claim e.g. `app.orchard.my` (the platform
-    // login host) — their IngressRoute would then live alongside the
+    // login host): their IngressRoute would then live alongside the
     // platform's chart-managed Ingress, and depending on Traefik
     // priority/ordering the tenant route could shadow the platform's and
     // capture session cookies from logged-in admins. RESERVED_HOSTS holds
@@ -96,7 +96,7 @@ export class ProjectAccessService {
    *
    * Guests get the same scoping as members here: they're explicit-membership-only.
    * The difference between member and guest lives at write-side endpoints
-   * (project creation, org settings) — for reads, both see the same slice.
+   * (project creation, org settings); for reads, both see the same slice.
    */
   /** Sub → internal UUID for prisma conditions on user-id FK columns. */
   async resolveMemberUserId(sub: string): Promise<string | null> {
@@ -104,7 +104,7 @@ export class ProjectAccessService {
   }
 
   async buildProjectAccessFilter(userId: string, orgId?: string) {
-    // Superadmins bypass membership checks — they can see all projects.
+    // Superadmins bypass membership checks: they can see all projects.
     if (await this.authz.isSuperAdmin(userId)) {
       const base = orgId ? { organizationId: orgId } : {};
       const tokenCtx = requestAuthStorage.getStore();
@@ -118,7 +118,7 @@ export class ProjectAccessService {
     const orgMemberships = orgId ? all.filter((m) => m.organizationId === orgId) : all;
     if (orgMemberships.length === 0) return null;
 
-    // The sub may be a Hack Club id while projectMember.userId is a UUID FK —
+    // The sub may be a Hack Club id while projectMember.userId is a UUID FK,
     // comparing the raw sub silently matches nothing, which hid explicit-
     // membership projects from org members/guests logged in via SSO.
     const memberUserId = (await this.membershipCache.resolveUserId(userId)) ?? userId;

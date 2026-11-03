@@ -115,8 +115,8 @@ export class WebhooksService {
 
     return {
       id: record.id,
-      // Return the plaintext from the in-memory variable — `record.token` is
-      // NULL by design now that the column is no longer persisted.
+      // Return the plaintext from the in-memory variable: `record.token` is
+      // NULL by design.
       token,
       label: record.label,
       createdAt: record.createdAt
@@ -191,9 +191,8 @@ export class WebhooksService {
   }
 
   async triggerWebhookDeploy(rawToken: string, image?: string, tag?: string) {
-    // H-3: look up by hash only. Plaintext-column lookup is gone — all
-    // post-migration rows have token=NULL, and querying the legacy column
-    // would defeat the at-rest hashing.
+    // H-3: look up by hash only. All post-migration rows have token=NULL, and
+    // querying the legacy column would defeat the at-rest hashing.
     const tokenRecord = await this.prisma.deploymentWebhookToken.findUnique({
       where: { tokenHash: hashWebhookToken(rawToken) },
       include: { deployment: { include: { project: true } } }
@@ -216,10 +215,10 @@ export class WebhooksService {
     // revoked on the first failed check so a stale CI hook can't keep
     // hammering the audit log.
     //
-    // Legacy tokens with no `createdByUserId` cannot be RBAC-checked — there
-    // is no principal to evaluate against. Previously these tokens bypassed
-    // the re-check entirely, meaning any pre-RBAC token kept full mutation
-    // power forever. Reject and purge them on first use.
+    // Legacy tokens with no `createdByUserId` cannot be RBAC-checked: there
+    // is no principal to evaluate against, and bypassing the re-check would
+    // leave any pre-RBAC token with full mutation power forever. Reject and
+    // purge them on first use.
     if (!tokenRecord.createdByUserId) {
       await this.prisma.deploymentWebhookToken
         .delete({ where: { id: tokenRecord.id } })
@@ -363,13 +362,11 @@ export class WebhooksService {
         throw err;
       }
 
-      // Update DB
       await this.prisma.deployment.update({
         where: { id: deployment.id },
         data: { image: fullImage }
       });
 
-      // Track in image history
       await this.prisma.$transaction(async (tx) => {
         await tx.imageHistory.updateMany({
           where: { deploymentId: deployment.id, isActive: true },

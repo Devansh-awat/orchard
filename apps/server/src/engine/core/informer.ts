@@ -324,7 +324,7 @@ export class EngineInformer {
         if (countRepairs) repairs += 1;
         if (state === 'underived') {
           // The manifest we hold is already the right one, so there is nothing
-          // to rewrite — only the state derived from it is missing.
+          // to rewrite, only the state derived from it is missing.
           underived.push({ obj, refs: resolved.refs });
           if (underived.length >= WRITE_CHUNK) {
             await this.deriveCurrent(underived);
@@ -372,7 +372,7 @@ export class EngineInformer {
    *   stale      the manifest or the mapping moved and the row is rewritten
    *
    * `current` is deliberately the strictest of the three. Skipping on the
-   * resourceVersion alone means a single failed write becomes permanent — the
+   * resourceVersion alone means a single failed write becomes permanent: the
    * object is passed over from then on precisely because it never changes
    * again, which is how a running pod ends up reading "pending" for six days.
    */
@@ -461,7 +461,7 @@ export class EngineInformer {
       );
     } catch (err) {
       // A failed chunk leaves those rows behind rather than aborting the whole
-      // list — the seen set is still complete, so the stale sweep downstream
+      // list: the seen set is still complete, so the stale sweep downstream
       // stays correct, and the rows keep their old resourceVersion so the next
       // pass comes back for them.
       this.logger.warn(`batch write of ${entries.length} objects failed: ${errorText(err)}`);
@@ -500,8 +500,8 @@ export class EngineInformer {
    * The mark is the whole point. `resource_version` alone says "we hold this
    * manifest"; `derived_version` says "everything Orchard derives from this
    * manifest has been written". Only a row where both match the cluster may be
-   * skipped, so a handler that throws — or a process that dies between the
-   * write and the handler — is retried on the next pass instead of hiding
+   * skipped, so a handler that throws, or a process that dies between the
+   * write and the handler, is retried on the next pass instead of hiding
    * behind a resourceVersion that already looks up to date.
    *
    * `bounded` is the semaphore invariant: a permit is held for exactly one
@@ -511,7 +511,7 @@ export class EngineInformer {
    * to, and a node going down was enough to wedge the shard for good: once
    * EVENT_CONCURRENCY pods changed at the same time, every permit was held by
    * an event waiting on a permit only one of the others could release. Nothing
-   * else moved after that — no updates, no deletes, and the resync that was
+   * else moved after that: no updates, no deletes, and the resync that was
    * supposed to repair it blocked in here too, so the mirror served a snapshot
    * of the cluster as it was the moment the node died until the process
    * restarted.
@@ -585,7 +585,7 @@ export class EngineInformer {
   private dispatch(phase: string, raw: any): void {
     if (this.stopped) return;
 
-    // Track progress on every message, bookmarks included — that is the whole
+    // Track progress on every message, bookmarks included: that is the whole
     // point of asking for them. Without this a reconnect has nothing newer than
     // the last full LIST to resume from and has to re-pull the world.
     const rv = raw?.metadata?.resourceVersion;
@@ -598,7 +598,7 @@ export class EngineInformer {
       this.logger.warn(`watch error event: ${text}`);
       this.setWatchHealth(false, text);
       // The apiserver normally closes the stream after an ERROR frame, but do
-      // not depend on it — aborting drives the done callback and the reconnect.
+      // not depend on it: aborting drives the done callback and the reconnect.
       try {
         this.req?.abort();
       } catch {}
@@ -619,7 +619,7 @@ export class EngineInformer {
       .then(() => this.sem.run(fn))
       .catch((err) => {
         // The watch has already moved past this event, so nothing else will
-        // bring it back — a repair list is the only thing that will.
+        // bring it back: a repair list is the only thing that will.
         this.logger.warn(`event handling failed for ${key}: ${errorText(err)}`);
         this.scheduleRepair();
       })

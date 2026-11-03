@@ -32,15 +32,15 @@ function snapshotPool(pool: BuilderKind): QueueSnapshot['pool'] {
 /**
  * Flip a deployment to `building` in the same transaction that claims its run.
  *
- * These two writes used to be as much as a minute apart: the run went
- * `building` at claim, and the deployment only followed once the build path
- * had resolved a GitHub installation, minted an installation token and opened
- * a check run. Everything that reads one of them to judge the other — the
- * reclaim sweep below, the recovery sweep, this file's own "is a build already
- * running" test — was wrong for the length of that gap. The reclaim sweep saw
- * a run in `building` whose deployment still read `succeeded` from the
- * *previous* build, concluded the run, and left the deployment `building` with
- * no run to own it; the recovery sweep then failed the live build.
+ * Written apart, these two rows can be as much as a minute out of step: the run
+ * goes `building` at claim, and the deployment only follows once the build path
+ * has resolved a GitHub installation, minted an installation token and opened a
+ * check run. Everything that reads one of them to judge the other (the reclaim
+ * sweep below, the recovery sweep, this file's own "is a build already running"
+ * test) is wrong for the length of that gap. The reclaim sweep sees a run in
+ * `building` whose deployment still reads `succeeded` from the *previous* build,
+ * concludes the run, and leaves the deployment `building` with no run to own it;
+ * the recovery sweep then fails the live build.
  *
  * Clearing `buildStepTimestamps` matters as much as the status. It carries the
  * last build's `__jobName` and `__image`, and a sweep landing in this window
@@ -369,7 +369,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
    * Put a concluded run's work back on the queue as a fresh scheduled run.
    *
    * Takes the same advisory lock the claim path holds, because the caller
-   * reached here precisely because no run was `building` — which is also the
+   * reached here precisely because no run was `building`, which is also the
    * moment a claim is most likely to land. Without the lock the insert could
    * race a claim and knock the deployment back to `pending` underneath a build
    * that had just started. Answers `false` when something else already owns
@@ -677,10 +677,10 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
         continue;
       }
       // Conclude a run from its deployment's status only once the two are
-      // describing the same build. Claim writes them together now, but a run
-      // claimed by an older build of this service — or mid-rollout by a pod
-      // that still wrote them apart — has a deployment status left over from
-      // the *previous* build, and reading it here concluded live builds.
+      // describing the same build. Claim writes them together, but a run
+      // claimed by an older build of this service, or mid-rollout by a pod
+      // that still wrote them apart, has a deployment status left over from
+      // the *previous* build, and reading it here would conclude live builds.
       const settled = canTrustDeploymentStatus({
         now,
         startedAt: run.startedAt?.getTime() ?? null

@@ -30,10 +30,9 @@ const RESERVED_SUBDOMAINS = new Set([
 ]);
 
 /**
- * An org's vanity host. It used to be load-bearing: SSO only worked if the org
- * had a subdomain and an ingress to serve it. Login now lives at /<org-slug> on
- * the main domain, so this is purely a nicer URL — acme.orchard.my resolves and
- * the frontend redirects it to orchard.my/acme/login.
+ * An org's vanity host. Login lives at /<org-slug> on the main domain, so this
+ * is purely a nicer URL: acme.orchard.my resolves and the frontend redirects it
+ * to orchard.my/acme/login.
  */
 @Injectable()
 export class VanityDomainService {

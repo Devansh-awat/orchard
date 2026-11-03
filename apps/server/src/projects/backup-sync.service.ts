@@ -124,7 +124,7 @@ export class BackupSyncService {
    * one that grows forever and cannot be restored from either. Two repairs:
    *
    *   - our row names a schedule but the ScheduledBackup is not in the cluster
-   *     (the k8s call failed at some point, which used to happen a lot)
+   *     (the k8s call failed at some point)
    *   - the cluster archives, has no schedule, and has never produced a single
    *     backup, which is the state that fills the bucket
    *

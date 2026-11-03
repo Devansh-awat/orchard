@@ -82,7 +82,7 @@ export class NodePoolsService {
     });
   }
 
-  // Trimmed, safe projection for tenants — friendly names only, no raw
+  // Trimmed, safe projection for tenants: friendly names only, no raw
   // selectors/taints. Only pools the superadmin opted into userspace.
   async listSelectable() {
     return this.prisma.nodePool.findMany({

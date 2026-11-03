@@ -188,9 +188,9 @@ export class NotificationTransport {
       subject,
       title: subject,
       body,
-      // Slack and Discord render the fields; email had been dropping them, so
-      // the one line that says which device and which address never reached the
-      // destination most people actually have turned on.
+      // Slack and Discord render the fields, and email has to as well: the one line
+      // that says which device and which address must reach the destination most
+      // people actually have turned on.
       contextLine: digest ? '' : detailLine(first),
       ctaUrl: (digest ? undefined : first.url) || this.frontendUrl
     });

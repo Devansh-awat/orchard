@@ -264,7 +264,7 @@ export class BuildJobInformerService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Every build Job the cluster currently has for this deployment, newest
-   * first. This is the canonical answer to "is a build running" — the watch
+   * first. This is the canonical answer to "is a build running": the watch
    * cache is a mirror of the Job list, so it beats inferring liveness from
    * our own rows, which lag the cluster by however long a build takes to set
    * them.

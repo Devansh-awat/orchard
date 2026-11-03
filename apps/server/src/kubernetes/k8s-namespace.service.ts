@@ -31,9 +31,8 @@ export {
  * for sealed-secrets/tenant operators, and the default-deny NetworkPolicy
  * that isolates each tenant namespace.
  *
- * Shares the kubeconfig with the core KubernetesService via injection;
- * moved bodies use `this.kc` / `this.ensureKubeConfig()` through the
- * private delegates below so they stay byte-identical to the originals.
+ * Shares the kubeconfig with the core KubernetesService via injection, through
+ * the private delegates below.
  */
 @Injectable()
 export class K8sNamespaceService implements OnModuleInit {
@@ -114,7 +113,7 @@ export class K8sNamespaceService implements OnModuleInit {
       }
     }
 
-    // LimitRange — required for per-container defaults so ResourceQuota admission succeeds
+    // LimitRange: required for per-container defaults so ResourceQuota admission succeeds
     // for pods that don't specify requests. Also caps per-container to org defaults.
     const hasDefaults =
       (options.defaultPodCpuMilli && options.defaultPodCpuMilli > 0) ||
@@ -195,7 +194,7 @@ export class K8sNamespaceService implements OnModuleInit {
       if (!nsSet.has(pod.namespace)) continue;
       pods += 1;
       // Quota bills what the workload is allowed to consume, not what it
-      // reserves — CPU requests are a fraction of the limit (see
+      // reserves: CPU requests are a fraction of the limit (see
       // cpuRequestFromLimitMilli), so summing requests would under-bill.
       cpuMilli += pod.cpuLimitMilli;
       memoryBytes += pod.memoryLimitBytes;
@@ -235,7 +234,7 @@ export class K8sNamespaceService implements OnModuleInit {
             // hole if anything bypasses the API (operators creating
             // pods directly, future code paths, etc).
             //
-            // We do not use `restricted` — it forces runAsNonRoot and
+            // We do not use `restricted`: it forces runAsNonRoot and
             // would break tenant images that bind to :80 or chown at
             // start. gVisor (runtimeClassName) provides the equivalent
             // protection by sandboxing root-in-container.
@@ -258,10 +257,9 @@ export class K8sNamespaceService implements OnModuleInit {
       }
 
       // Bootstrap the per-tenant Role+RoleBinding that lets the orchard-server
-      // ServiceAccount manage secrets and configmaps inside this namespace.
-      // The cluster-wide grant on these resources was removed — see
-      // charts/orchard/templates/builders.yaml. This namespaced Role is the
-      // replacement for tenant namespaces.
+      // ServiceAccount manage secrets and configmaps inside this namespace. There is
+      // no cluster-wide grant on these resources (see
+      // charts/orchard/templates/builders.yaml), so tenant namespaces need this Role.
       try {
         await this.bootstrapTenantSecretsRbac(cleanNamespace);
       } catch (rbacErr) {
@@ -377,9 +375,7 @@ export class K8sNamespaceService implements OnModuleInit {
   /**
    * Create a namespaced Role + RoleBinding that grants the orchard-server
    * ServiceAccount full secrets/configmaps management inside `namespace`.
-   * Idempotent — swallows 409 if the bindings already exist. This replaces
-   * the previous cluster-wide secrets/configmaps grant on the orchard-server
-   * ServiceAccount.
+   * Idempotent: swallows 409 if the bindings already exist.
    */
   async bootstrapTenantSecretsRbac(namespace: string): Promise<void> {
     const rbacApi = this.kc.makeApiClient(k8s.RbacAuthorizationV1Api);

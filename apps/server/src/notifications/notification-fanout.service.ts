@@ -186,7 +186,7 @@ export class NotificationFanoutService implements OnModuleInit, OnModuleDestroy 
       return;
     }
 
-    // An account-scoped event has no team lane at all. Not "no rules matched" —
+    // An account-scoped event has no team lane at all. Not "no rules matched",
     // no rule may ever match, because the shared channel belongs to an
     // organization and the event belongs to a person.
     const [channelIds, userDestinations] = await Promise.all([

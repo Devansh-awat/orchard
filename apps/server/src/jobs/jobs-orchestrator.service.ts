@@ -134,8 +134,6 @@ export class JobsOrchestratorService {
     return this.kc!.makeApiClient(k8s.CoreV1Api);
   }
 
-  // ---------------------------------------------------------------- resolve
-
   async resolveSteps(jobId: string): Promise<ResolvedStep[]> {
     const job = await this.prisma.job.findUniqueOrThrow({
       where: { id: jobId },
@@ -264,8 +262,6 @@ export class JobsOrchestratorService {
       )
     };
   }
-
-  // ------------------------------------------------------------ spec builders
 
   private buildStepJobManifest(
     ctx: RunContext,
@@ -406,8 +402,6 @@ export class JobsOrchestratorService {
     if (Object.keys(stringData).length === 0) return null;
     return { metadata: { name, namespace, labels }, type: 'Opaque', stringData };
   }
-
-  // ------------------------------------------------------------ cronjob sync
 
   isSyncingCronJob(jobId: string): boolean {
     return (this.cronJobSyncs.get(jobId) ?? 0) > 0;
@@ -629,8 +623,6 @@ export class JobsOrchestratorService {
     }
   }
 
-  // ------------------------------------------------------------ run lifecycle
-
   async triggerRun(
     jobId: string,
     opts: { trigger: 'manual' | 'api'; triggeredBy?: string | null; allowConcurrent?: boolean }
@@ -789,8 +781,6 @@ export class JobsOrchestratorService {
     const fresh = await this.prisma.jobRun.findUniqueOrThrow({ where: { id: runId } });
     this.jobsService.emitRunChanged(ctx.organizationId, ctx.projectId, ctx.jobId, fresh);
   }
-
-  // ------------------------------------------------- cron-spawned materialize
 
   async materializeCronRun(k8sJob: k8s.V1Job): Promise<void> {
     const uid = k8sJob.metadata?.uid;
@@ -1015,8 +1005,6 @@ export class JobsOrchestratorService {
       .catch(() => {});
   }
 
-  // -------------------------------------------------------- terminal handling
-
   async handleStepTerminal(
     ctx: RunContext,
     runId: string,
@@ -1218,8 +1206,6 @@ export class JobsOrchestratorService {
     }
   }
 
-  // ------------------------------------------------------------------ cancel
-
   async cancelRun(runId: string) {
     const run = await this.prisma.jobRun.findUniqueOrThrow({
       where: { id: runId },
@@ -1278,8 +1264,6 @@ export class JobsOrchestratorService {
     }
     return this.jobsService.getRunDetail(runId);
   }
-
-  // ---------------------------------------------------------------- teardown
 
   async teardownJob(job: {
     id: string;

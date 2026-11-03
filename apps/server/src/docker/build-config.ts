@@ -7,8 +7,8 @@
 // the easy path, the repo file is the escape hatch.
 //
 // Variable names verified against railpack's source, not its docs:
-//   core/core.go:209,217,225 — INSTALL_CMD / BUILD_CMD / START_CMD
-//   core/providers/node/spa.go:16 — SPA_OUTPUT_DIR
+//   core/core.go:209,217,225: INSTALL_CMD / BUILD_CMD / START_CMD
+//   core/providers/node/spa.go:16: SPA_OUTPUT_DIR
 // All are read through Environment.GetConfigVariable, which prefixes RAILPACK_
 // (core/app/environment.go:61).
 
@@ -111,7 +111,7 @@ export const ORCHARD_RAILPACK_CONFIG = '.orchard-railpack.json';
  * Railpack resolves Merge(cliOptions, env, railpack.json) with the last source
  * winning (core.go:160, config.go:62), so a railpack.json committed to the repo
  * silently beats anything set in the UI. Emitting the overrides as the config
- * file instead — merged over the repo's own, ours last — puts them in the slot
+ * file instead (merged over the repo's own, ours last) puts them in the slot
  * that wins.
  *
  * Reads the RAILPACK_* variables rather than the columns so the file and the
@@ -155,7 +155,7 @@ export function railpackConfigOverride(env: Record<string, string>): Record<stri
 /**
  * Map stored build settings onto RAILPACK_* overrides.
  *
- * Only non-empty values are emitted — a null column means "whatever Railpack
+ * Only non-empty values are emitted: a null column means "whatever Railpack
  * detected", which is the whole point of the zero-config flow. Setting an
  * output directory forces SPA mode even when Railpack's own framework
  * detection would not have triggered it (spa.go:28), which is how a static

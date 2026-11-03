@@ -382,7 +382,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       data: {
         githubAccessToken: this.crypto.seal(parsed.accessToken),
         githubTokenExpiresAt: parsed.expiresAt,
-        // GitHub rotates the refresh token on each use — only overwrite if returned.
+        // GitHub rotates the refresh token on each use: only overwrite if returned.
         ...(parsed.refreshToken
           ? {
               githubRefreshToken: this.crypto.seal(parsed.refreshToken),
@@ -663,7 +663,6 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
 
   private dockerfilesFromTree(paths: string[]): string[] {
     return paths.filter((p) => {
-      // Skip node_modules and .git paths
       if (p.includes('node_modules/') || p.includes('.git/')) return false;
       const fileName = p.split('/').pop()?.toLowerCase() ?? '';
       return fileName === 'dockerfile' || fileName.startsWith('dockerfile.');
@@ -875,7 +874,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
    * short-circuit that detectRepoConfig applies.
    *
    * detectRepoConfig answers "how should the create form be filled in", so a
-   * repo containing a Dockerfile stops right there — there is nothing left to
+   * repo containing a Dockerfile stops right there: there is nothing left to
    * suggest. This answers "what is this app", which a Railpack deployment still
    * needs even when the repo also happens to carry a Dockerfile it is not
    * building from. Those two questions look the same until a repo adds a
@@ -1037,7 +1036,6 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     return this.parseDockerfileStages(content);
   }
 
-  // Webhook signature verification
   verifyWebhookSignature(payload: string, signature: string, secret: string): boolean {
     if (!signature || !secret) {
       return false;
@@ -1055,12 +1053,10 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  // Generate a secure webhook secret
   generateWebhookSecret(): string {
     return crypto.randomBytes(32).toString('hex');
   }
 
-  // Create a GitHub webhook for a repository
   async createWebhook(
     accessToken: string,
     owner: string,
@@ -1100,7 +1096,6 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     return await response.json();
   }
 
-  // Delete a GitHub webhook
   async deleteWebhook(
     accessToken: string,
     owner: string,
@@ -1237,7 +1232,6 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     return data.sha;
   }
 
-  // Parse repository owner and name from URL
   parseRepoUrl(repoUrl: string): { owner: string; repo: string } | null {
     // Handle various GitHub URL formats
     // https://github.com/owner/repo
@@ -1256,11 +1250,6 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     return null;
   }
 
-  // ============================================
-  // GitHub App Methods
-  // ============================================
-
-  // Generate a JWT for GitHub App authentication
   private generateAppJwt(): string {
     const { appId, privateKey } = this.appConfig.get();
 
@@ -1289,7 +1278,6 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     return `${signatureInput}.${signature}`;
   }
 
-  // Get an installation access token for a specific installation
   async getInstallationAccessToken(
     installationId: bigint
   ): Promise<{ token: string; expiresAt: Date }> {
@@ -1327,25 +1315,20 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  // Get or refresh installation access token (with caching)
   async getOrRefreshInstallationToken(installationId: bigint): Promise<string> {
-    // Check if we have a cached token
     const installation = await this.prisma.gitHubAppInstallation.findUnique({
       where: { installationId }
     });
 
     if (installation?.accessToken && installation.tokenExpiresAt) {
-      // Check if token is still valid (with 5 minute buffer)
       const bufferTime = 5 * 60 * 1000;
       if (new Date(installation.tokenExpiresAt).getTime() - bufferTime > Date.now()) {
         return installation.accessToken;
       }
     }
 
-    // Get a new token
     const { token, expiresAt } = await this.getInstallationAccessToken(installationId);
 
-    // Cache the token if we have a DB record for this installation
     if (installation) {
       await this.prisma.gitHubAppInstallation.update({
         where: { installationId },
@@ -1359,7 +1342,6 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     return token;
   }
 
-  // Handle GitHub App installation event
   async handleInstallationEvent(
     action: string,
     installation: {
@@ -1412,7 +1394,6 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
         `[GitHub App] Installation created for ${installation.account.login}${user ? ` (linked to ${user.username})` : ' (no user link)'}`
       );
     } else if (action === 'deleted') {
-      // Delete the installation record
       await this.prisma.gitHubAppInstallation.deleteMany({
         where: { installationId: BigInt(installation.id) }
       });
@@ -1435,7 +1416,6 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  // Get list of repositories accessible by an installation
   async getInstallationRepositories(installationId: bigint): Promise<GitHubRepo[]> {
     const token = await this.getOrRefreshInstallationToken(installationId);
 
@@ -1473,7 +1453,6 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     return repos;
   }
 
-  // Check if a repository is accessible by an installation
   async isRepoAccessibleByInstallation(
     installationId: bigint,
     owner: string,
@@ -1495,7 +1474,6 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     return response.ok;
   }
 
-  // Get GitHub App webhook secret
   getAppWebhookSecret(): string {
     const secret = this.appConfig.get().webhookSecret;
     if (!secret) {
@@ -1504,13 +1482,11 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     return secret;
   }
 
-  // Verify GitHub App webhook signature
   verifyAppWebhookSignature(payload: string, signature: string): boolean {
     const secret = this.getAppWebhookSecret();
     return this.verifyWebhookSignature(payload, signature, secret);
   }
 
-  // Find installation for a repository
   async findInstallationForRepo(
     owner: string,
     repo: string
@@ -1558,7 +1534,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
         const data = await response.json();
         const installationId = BigInt(data.id);
 
-        // Backfill DB — non-blocking so the return isn't gated on it
+        // Backfill DB: non-blocking so the return isn't gated on it
         this.prisma.gitHubAppInstallation
           .upsert({
             where: { installationId },
@@ -1595,7 +1571,6 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     return null;
   }
 
-  // Create GitHub deployment using app installation token
   async createGitHubDeploymentWithApp(
     installationId: bigint,
     owner: string,
@@ -1608,7 +1583,6 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     return this.createGitHubDeployment(token, owner, repo, ref, environment, description);
   }
 
-  // Update GitHub deployment status using app installation token
   async updateDeploymentStatusWithApp(
     installationId: bigint,
     owner: string,
@@ -1719,7 +1693,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
    * Repo ids the user can actually see through one installation.
    *
    * The mirror table is installation-scoped, so it contains every repo the App
-   * was granted — including ones an org member has no permission on. GitHub's
+   * was granted, including ones an org member has no permission on. GitHub's
    * user-to-server `/user/installations/{id}/repositories` returns the
    * intersection of the installation grant and the caller's own access, which
    * is what we have to list against. Returns null when we could not determine
@@ -1858,7 +1832,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
    *
    * The id is the only part of a repository that a rename does not change.
    * Matching on the URL alone meant renaming a repo on GitHub silently
-   * detached every deployment built from it — the webhook arrives under the new
+   * detached every deployment built from it: the webhook arrives under the new
    * full name, the lookup matches nothing, and the push is ignored without
    * anything being raised anywhere. Rows are still required to belong to the
    * sending installation, so a full name alone can never impersonate a repo.
@@ -2044,7 +2018,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
    * Rows whose stored name is still the repo's real name are resolved from the
    * installation mirror for free. The ones left over are exactly the rows whose
    * repository was renamed while nothing was watching, so they are asked about
-   * directly — GET /repos follows a rename and answers with the current name
+   * directly: GET /repos follows a rename and answers with the current name
    * and the id, which is the only way to reattach a deployment that has already
    * drifted.
    */
@@ -2161,9 +2135,8 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  // Resolve an access token for a specific repo — prefers App installation token, falls back to user OAuth token.
+  // Resolve an access token for a specific repo: prefers App installation token, falls back to user OAuth token.
   async resolveRepoToken(userId: string, owner: string, repo: string): Promise<string | null> {
-    // Try installation token first
     const installation = await this.findInstallationForRepo(owner, repo);
     if (installation) {
       try {
@@ -2582,7 +2555,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
   /**
    * Installations the current user can see on GitHub.
    *
-   * GitHub's `/user/installations` endpoint is the source of truth — it
+   * GitHub's `/user/installations` endpoint is the source of truth: it
    * returns installations accessible through org membership, not just ones
    * the user personally installed. We cross-reference with DB rows for our
    * internal UUID + cached tokens, and backfill any GitHub-reported
@@ -2704,7 +2677,6 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
-  // Get GitHub App installation URL
   getAppInstallationUrl(): string {
     const appSlug = this.appConfig.get().slug;
     if (!appSlug) {
@@ -2712,10 +2684,6 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     }
     return `https://github.com/apps/${appSlug}/installations/new`;
   }
-
-  // ============================================
-  // GitHub Checks API Methods
-  // ============================================
 
   // Create a check run (appears under "Checks" on commits)
   async createCheckRun(

@@ -184,7 +184,7 @@ export class OrgDomainsService {
    * Look for the challenge token in DNS.
    *
    * Split out so the lookup can be exercised without the database, and so the
-   * resolver's own timeout is bounded — a domain pointed at a black-holed
+   * resolver's own timeout is bounded: a domain pointed at a black-holed
    * nameserver would otherwise hang the request.
    */
   async lookupChallenge(domain: string): Promise<string[]> {

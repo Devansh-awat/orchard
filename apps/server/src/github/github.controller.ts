@@ -49,7 +49,7 @@ function parseLinkState(state?: string): {
       };
     }
   } catch {
-    // Not encoded JSON — treat the whole state as a raw session token.
+    // Not encoded JSON: treat the whole state as a raw session token.
   }
   return { stateToken: state };
 }
@@ -549,7 +549,6 @@ export class GitHubController {
   ) {
     console.log(`[GitHub App] Received ${event} event, delivery: ${deliveryId}`);
 
-    // Verify the webhook signature
     const rawBody = req.rawBody?.toString() || JSON.stringify(body);
 
     try {
@@ -564,9 +563,7 @@ export class GitHubController {
       throw new HttpException('Webhook verification failed', HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
-    // Handle different event types
     if (event === 'installation' || event === 'installation_repositories') {
-      // Handle app installation events
       await this.githubService.handleInstallationEvent(body.action, body.installation, body.sender);
       this.githubService.clearUserInstallationsCache();
       if (event === 'installation_repositories') {
@@ -625,7 +622,7 @@ export class GitHubController {
       }
 
       if (!senderInstallationId) {
-        // No installation context — refuse rather than match by repo name
+        // No installation context: refuse rather than match by repo name
         // alone (would let any installation impersonate a repo by full_name).
         return { received: true, action: 'ignored', reason: 'missing installation context' };
       }
@@ -639,7 +636,7 @@ export class GitHubController {
 
       // Matched on the repository id where we have it and the canonical https
       // URL otherwise, always scoped to the owning installation. Legacy rows
-      // with githubInstallationId === null are intentionally excluded — they
+      // with githubInstallationId === null are intentionally excluded: they
       // must be re-linked via enableAutoDeploy before they will fire.
       const installationIdBig = BigInt(senderInstallationId);
       const candidates = await this.githubService.findAutoDeployTargets(
@@ -746,7 +743,6 @@ export class GitHubController {
       return this.githubService.handleIssueCommentEvent(deliveryId, body);
     }
 
-    // Ignore other events
     return { received: true, action: 'ignored', reason: `unhandled event type: ${event}` };
   }
 

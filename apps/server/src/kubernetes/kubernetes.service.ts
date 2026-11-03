@@ -185,7 +185,7 @@ export interface CreateDeploymentOptions {
   imagePullPolicy?: 'Always' | 'IfNotPresent';
   imagePullSecrets?: { name: string }[];
   // Pods that must stay ready through a node drain. Omitted means 1, and the
-  // budget is skipped entirely unless `replicas` exceeds it — see
+  // budget is skipped entirely unless `replicas` exceeds it: see
   // K8sWorkloadService.applyPodDisruptionBudget.
   pdbMinAvailable?: number;
 }

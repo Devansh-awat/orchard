@@ -1,7 +1,7 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 
 // @kubernetes/client-node throws an `HttpError` whose `message` is the constant
-// string 'HTTP request failed' — the useful part (the API server's Status) is
+// string 'HTTP request failed': the useful part (the API server's Status) is
 // hidden on `body`. Nest's BaseExceptionFilter duck-types any error carrying
 // `statusCode` + `message` and serialises it verbatim, so an unhandled k8s
 // error reaches the caller as `{"statusCode":422,"message":"HTTP request
