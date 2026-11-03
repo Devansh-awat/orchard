@@ -82,7 +82,6 @@
 	import BuildLog from '$lib/components/deployment/build/BuildLog.svelte';
 	import PodTerminal from '$lib/components/PodTerminal.svelte';
 
-	// Extracted modules
 	import {
 		motionPanel,
 		pressSpringDelegate,
@@ -347,7 +346,7 @@
 		}, 650);
 	}
 
-	// Header card collapses (spring) when the user leaves the Overview tab — the
+	// Header card collapses (spring) when the user leaves the Overview tab: the
 	// build provenance + domains belong with the overview, while the title and the
 	// Redeploy/Restart/Delete actions stay visible everywhere.
 	const headerCollapsed = $derived(tabs.value !== 'overview');
@@ -604,7 +603,6 @@
 		refetch: fetchDeployment
 	});
 
-	// Auto-deploy state
 	let autoDeployStatus = $state<AutoDeployStatus | null>(null);
 	let autoDeployLoading = $state(false);
 	let autoDeployBranch = $state('');
@@ -617,7 +615,6 @@
 	let githubAppInstallUrl = $state<string | null>(null);
 	let loadingAppInstallUrl = $state(false);
 
-	// Health check state
 	let healthCheckEnabled = $state(false);
 	let healthCheckType = $state('http');
 	let healthCheckPath = $state('/');
@@ -676,7 +673,7 @@
 
 		// A CPU limit is enforced by the kernel's CFS quota, so a pod cannot
 		// actually spend more than it. A ratio well past 1 is not an overloaded
-		// app, it is a bad sample — metrics-server derives a rate from two
+		// app, it is a bad sample: metrics-server derives a rate from two
 		// cAdvisor readings, and a container that restarted between them resets
 		// the counter and produces a garbage spike. Crashlooping pods hit this
 		// constantly, which is exactly when someone is looking at the page.
@@ -824,7 +821,7 @@
 		}
 	}
 
-	// Container image edit (image-source deployments only — GitHub-built
+	// Container image edit (image-source deployments only: GitHub-built
 	// deployments rebuild from source, so a manual image change would be
 	// overwritten by the next build).
 	let imageInput = $state('');
@@ -1012,7 +1009,6 @@
 		refetch: fetchDeployment
 	});
 
-	// Build modal state
 	let showBuildModal = $state(false);
 	let expandedBuildLogId = $state<string | null>(null);
 	let buildLogCache = $state<Record<string, string>>({});
@@ -1068,7 +1064,6 @@
 	let buildModalTimestamps = $state<Record<string, number> | null>(null);
 	let cancelingBuild = $state(false);
 
-	// Webhook state
 	let webhookTokens = $state<WebhookToken[]>([]);
 	let webhookTokensLoading = $state(false);
 	let webhookTokensFetched = $state(false);
@@ -1201,7 +1196,7 @@
 	let lastSeenDeploymentId: string | null = null;
 	const orgSlug = $derived($page.params.orgSlug);
 
-	// SSE connection health — declared early so the query's refetchInterval can read it.
+	// SSE connection health: declared early so the query's refetchInterval can read it.
 	let sseStatusValue = $state<'connecting' | 'connected' | 'disconnected'>('connecting');
 	const sseDisconnected = $derived(sseStatusValue === 'disconnected');
 	let sseReloadPrompt = $state(false);
@@ -1220,7 +1215,6 @@
 		resourceStatus('')
 	];
 
-	// ── TanStack Query: deployment data ──
 	const TRANSIENT_DEPLOYMENT_STATUSES = new Set([
 		'scaling',
 		'restarting',
@@ -1242,9 +1236,8 @@
 		refetchIntervalInBackground: false
 	}));
 
-	/** Trigger a refetch of deployment data via TanStack Query. All call sites
-	 *  that previously called this function directly now just invalidate the cache
-	 *  and the $effect below applies the new data. */
+	/** Trigger a refetch of deployment data via TanStack Query. Call sites just
+	 *  invalidate the cache and the $effect below applies the new data. */
 	function fetchDeployment() {
 		fetchBindingsForTab();
 		queryClient.invalidateQueries({ queryKey: ['deployment', deploymentId] });
@@ -1316,7 +1309,7 @@
 		}
 	}
 
-	// Apply query data to local state. This replaces the old fetchDeployment() body.
+	// Apply query data to local state.
 	let lastQueryData: any = null;
 	let seededFor: string | null = null;
 	$effect(() => {
@@ -1339,8 +1332,8 @@
 	function applyDeploymentData(data: any) {
 		const wasUnloaded = !deployment;
 
-		// If a build is in progress — either transitioning during the session or
-		// already running when the page loaded — surface it immediately. Show the
+		// If a build is in progress, either transitioning during the session or
+		// already running when the page loaded, surface it immediately. Show the
 		// floating card on first load so we don't blast the modal over the page
 		// the user just navigated to; show the modal when a build kicks off mid-session.
 		if (data.buildStatus === 'building' && data.githubRepo && !showBuildModal && !showBuildCard) {
@@ -2692,7 +2685,7 @@
 	}));
 	const metricAlerts = $derived(alertStatesQuery.data ?? []);
 
-	// SSE subscription — invalidates the TanStack query instead of fetching directly.
+	// SSE subscription: invalidates the TanStack query instead of fetching directly.
 	let sseOrgId: string | null = null;
 	$effect(() => {
 		const orgIdForSse = $selectedOrganization?.id ?? null;
@@ -3144,7 +3137,6 @@
 				</div>
 			{/if}
 
-			<!-- Tab panels -->
 			{#each visibleTabs as tab (tab.id)}
 				<section
 					{...tabs.getContent(tab.id)}
@@ -3400,7 +3392,6 @@
 	{/if}
 </div>
 
-<!-- Build Progress Modal + Floating Card -->
 <BuildProgressModal
 	{deployment}
 	bind:showBuildModal

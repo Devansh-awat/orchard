@@ -159,9 +159,7 @@
 	{/if}
 
 	{#if loading}
-		<!-- Skeleton: Back link -->
 		<div class="skeleton" style="height: 0.8125rem; width: 6rem; margin-bottom: 1rem;"></div>
-		<!-- Skeleton: Header -->
 		<div class="tpl-header">
 			<div class="tpl-header-info">
 				<div class="skeleton" style="height: 1.5rem; width: 10rem; margin-bottom: 0.5rem;"></div>
@@ -174,7 +172,6 @@
 				></div>
 			</div>
 		</div>
-		<!-- Skeleton: Filters -->
 		<div class="tpl-filters">
 			<div
 				class="skeleton"
@@ -189,7 +186,6 @@
 				{/each}
 			</div>
 		</div>
-		<!-- Skeleton: Cards -->
 		<div class="tpl-grid">
 			{#each Array(6) as _, i (i)}
 				<div class="tpl-card" style="pointer-events: none;">
@@ -220,7 +216,6 @@
 			{/each}
 		</div>
 	{:else}
-		<!-- Back link -->
 		<button
 			onclick={() => goto(`/${orgSlug}/workspaces/${wsSlug}/projects/${projectSlug}`)}
 			class="tpl-back"
@@ -229,7 +224,6 @@
 			Back to Project
 		</button>
 
-		<!-- Header -->
 		<div class="tpl-header">
 			<div class="tpl-header-info">
 				<h1 class="tpl-title">Templates</h1>
@@ -246,7 +240,6 @@
 			</div>
 		</div>
 
-		<!-- Stats -->
 		<div class="tpl-stats">
 			<div class="tpl-stat">
 				<Package class="h-4 w-4" />
@@ -268,7 +261,6 @@
 			{/if}
 		</div>
 
-		<!-- Filters -->
 		<div class="tpl-section-header">
 			<h2 class="tpl-section-title">Browse Templates</h2>
 			<div class="tpl-toolbar">
@@ -306,7 +298,6 @@
 			{/each}
 		</div>
 
-		<!-- Grid -->
 		{#if filteredTemplates.length === 0}
 			<div class="tpl-empty">
 				<LayoutTemplate class="h-10 w-10" style="color: var(--surface-muted)" />
@@ -409,7 +400,7 @@
 		color: var(--center-channel-color);
 	}
 
-	/* Header — matches project page layout */
+	/* Header: matches project page layout */
 	.tpl-header {
 		display: flex;
 		align-items: flex-start;
@@ -445,7 +436,7 @@
 		margin: 0.25rem 0 0;
 	}
 
-	/* Stats — matches project page stats row */
+	/* Stats: matches project page stats row */
 	.tpl-stats {
 		display: flex;
 		flex-wrap: wrap;
@@ -470,7 +461,7 @@
 		color: var(--center-channel-color);
 	}
 
-	/* Section header — matches project page deployments header */
+	/* Section header: matches project page deployments header */
 	.tpl-section-header {
 		display: flex;
 		align-items: center;
@@ -507,7 +498,6 @@
 		margin-bottom: 1.5rem;
 	}
 
-	/* Filters */
 	.tpl-filters {
 		display: flex;
 		flex-direction: column;
@@ -585,7 +575,7 @@
 		color: #fff;
 	}
 
-	/* Grid — card layout matching project deployment cards */
+	/* Grid: card layout matching project deployment cards */
 	.tpl-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
@@ -715,7 +705,7 @@
 		color: var(--surface-muted);
 	}
 
-	/* Buttons — matches project page button system */
+	/* Buttons: matches project page button system */
 	.tpl-btn {
 		display: inline-flex;
 		align-items: center;
@@ -751,7 +741,6 @@
 			0 4px 12px rgb(0 0 0 / 0.06);
 	}
 
-	/* Empty */
 	.tpl-empty {
 		display: flex;
 		flex-direction: column;

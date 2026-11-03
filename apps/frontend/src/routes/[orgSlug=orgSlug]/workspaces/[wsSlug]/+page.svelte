@@ -401,7 +401,6 @@
 	{/if}
 
 	{#if loading}
-		<!-- Skeleton: Header -->
 		<div class="ws-header">
 			<div class="ws-header-top">
 				<div class="ws-header-info">
@@ -410,7 +409,6 @@
 				</div>
 			</div>
 		</div>
-		<!-- Skeleton: Stats -->
 		<div class="ws-stats">
 			{#each Array(3) as _, i (i)}
 				<div
@@ -419,11 +417,9 @@
 				></div>
 			{/each}
 		</div>
-		<!-- Skeleton: Projects header -->
 		<div class="ws-projects-header">
 			<div class="skeleton" style="height: 1.125rem; width: 5rem;"></div>
 		</div>
-		<!-- Skeleton: Project cards -->
 		<div class="ws-project-grid">
 			{#each Array(4) as _, i (i)}
 				<div class="ws-project-card" style="pointer-events: none;">
@@ -438,7 +434,6 @@
 				</div>
 			{/each}
 		</div>
-		<!-- Skeleton: Team -->
 		<div class="ws-team">
 			<div class="ws-team-header">
 				<div class="skeleton" style="height: 0.75rem; width: 4rem;"></div>
@@ -457,7 +452,6 @@
 			<Breadcrumbs crumbs={[{ label: 'Home', href: `/${orgSlug}` }, { label: workspace.name }]} />
 		</div>
 
-		<!-- Header -->
 		<div class="ws-header">
 			<div class="ws-header-top">
 				<div class="ws-header-info">
@@ -488,7 +482,6 @@
 			{/if}
 		</div>
 
-		<!-- Stats Row -->
 		<div class="ws-stats">
 			<div class="ws-stat">
 				<FolderKanban class="h-4 w-4" />
@@ -514,7 +507,6 @@
 			{/if}
 		</div>
 
-		<!-- Projects -->
 		<div class="ws-projects-header">
 			<h2 class="ws-section-title">Projects</h2>
 			<div class="ws-projects-toolbar">
@@ -589,7 +581,6 @@
 			</div>
 		{/if}
 
-		<!-- Team -->
 		<div class="ws-team">
 			<div class="ws-team-header">
 				<h3 class="ws-team-title">
@@ -826,7 +817,6 @@
 		margin-bottom: 1.5rem;
 	}
 
-	/* Header */
 	.ws-header {
 		margin-bottom: 1.5rem;
 	}
@@ -859,7 +849,6 @@
 		margin: 0.25rem 0 0;
 	}
 
-	/* Stats */
 	.ws-stats {
 		display: flex;
 		flex-wrap: wrap;
@@ -884,7 +873,6 @@
 		color: var(--center-channel-color);
 	}
 
-	/* Projects header */
 	.ws-projects-header {
 		display: flex;
 		align-items: center;
@@ -933,7 +921,6 @@
 		border-color: var(--sidebar-text-active-border);
 	}
 
-	/* Project grid */
 	.ws-project-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
@@ -1024,7 +1011,6 @@
 		overflow: hidden;
 	}
 
-	/* Empty card */
 	.ws-empty-card {
 		display: flex;
 		flex-direction: column;
@@ -1039,7 +1025,6 @@
 		margin-bottom: 1.5rem;
 	}
 
-	/* Team (secondary/compact) */
 	.ws-team {
 		margin-top: 0.5rem;
 		padding: 0.875rem 1rem;
@@ -1139,7 +1124,6 @@
 		margin: 0;
 	}
 
-	/* Buttons */
 	.ws-btn {
 		display: inline-flex;
 		align-items: center;
@@ -1222,7 +1206,6 @@
 		justify-content: center;
 	}
 
-	/* Dialog */
 	.ws-dialog-overlay {
 		position: fixed;
 		inset: 0;

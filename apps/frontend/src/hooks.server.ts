@@ -28,10 +28,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 			const subdomain = host.replace(`.${BASE_DOMAIN}`, '');
 			event.locals.subdomain = subdomain;
 
-			// An org's subdomain is a vanity address now, not a place the app
+			// An org's subdomain is a vanity address, not a place the app
 			// runs: login lives at /<org-slug> on the main domain. The apex
 			// serves everything, so nothing here needs a per-subdomain
-			// allowlist any more — the whole host forwards.
+			// allowlist: the whole host forwards.
 			if (!pathname.startsWith('/apiv1/') && !event.route.id?.startsWith('/status')) {
 				const target =
 					pathname === '/'

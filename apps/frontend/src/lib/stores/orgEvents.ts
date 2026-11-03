@@ -63,7 +63,7 @@ function setStatus(orgId: string, next: SseStatus) {
 }
 
 // If we don't see any event (data or heartbeat) for this long, treat the
-// stream as dead even if the EventSource hasn't fired onerror — proxies
+// stream as dead even if the EventSource hasn't fired onerror: proxies
 // sometimes wedge silently. The server sends heartbeats every 25s.
 const STALE_THRESHOLD_MS = 60_000;
 
@@ -82,7 +82,7 @@ function applyEventToCache(sub: Subscription, ev: OrgEvent) {
 		case 'build.changed':
 		case 'database.changed':
 			// (the overview page invalidates its own ['overview', slug] query,
-			// debounced — no query uses an ['org', id, 'overview'] key)
+			// debounced: no query uses an ['org', id, 'overview'] key)
 			if (ev.id) qc.invalidateQueries({ queryKey: ['deployment', ev.id] });
 			if (ev.id && ev.payload?.alert) qc.invalidateQueries({ queryKey: ['alert-states', ev.id] });
 			break;
@@ -124,7 +124,7 @@ function applyEventToCache(sub: Subscription, ev: OrgEvent) {
 }
 
 function scheduleReconnect(sub: Subscription) {
-	// Subscription was torn down (last listener left) — don't resurrect it.
+	// Subscription was torn down (last listener left): don't resurrect it.
 	if (subscriptions.get(sub.orgId) !== sub) return;
 	if (sub.reconnectTimer) return;
 	const delay = Math.min(
@@ -143,7 +143,7 @@ function scheduleReconnect(sub: Subscription) {
 function connect(sub: Subscription) {
 	const base = get(apiBase) ?? '';
 	// Encode orgId so a value containing path-special chars can't escape
-	// the route segment (defense-in-depth — orgIds are server-issued UUIDs
+	// the route segment (defense-in-depth: orgIds are server-issued UUIDs
 	// today, but the boundary is the safer place to enforce it).
 	const resume = sub.lastEventId ? `?lastEventId=${encodeURIComponent(sub.lastEventId)}` : '';
 	const source = new EventSource(
@@ -172,13 +172,13 @@ function connect(sub: Subscription) {
 	};
 	source.onerror = () => {
 		if (source.readyState === EventSource.CLOSED) {
-			// EventSource never recovers from CLOSED on its own — recreate it
+			// EventSource never recovers from CLOSED on its own: recreate it
 			// with backoff. Until then the UI shows the stale-data warning.
 			setStatus(sub.orgId, 'disconnected');
 			sub.source = null;
 			scheduleReconnect(sub);
 		} else {
-			// CONNECTING — the browser is auto-retrying; just surface the gap.
+			// CONNECTING: the browser is auto-retrying; just surface the gap.
 			setStatus(sub.orgId, 'connecting');
 		}
 	};

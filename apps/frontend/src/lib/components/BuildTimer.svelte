@@ -1,7 +1,7 @@
 <script module lang="ts">
 	// Single shared clock for every mounted <BuildTimer>. The interval only runs
 	// while at least one timer is on-screen, and `now` is module-scoped so
-	// per-second updates invalidate only this component's effect — not the
+	// per-second updates invalidate only this component's effect, not the
 	// caller's entire page tree.
 	let now = $state(Date.now());
 	let subs = 0;

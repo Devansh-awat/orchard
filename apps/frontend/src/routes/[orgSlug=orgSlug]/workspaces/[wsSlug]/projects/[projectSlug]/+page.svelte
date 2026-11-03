@@ -151,7 +151,6 @@
 				syncNamespace();
 			}
 
-			// Fetch template instances
 			if (project?.id) {
 				try {
 					const tiRes = await apiFetch(`/apiv1/projects/${project.id}/template-instances`);
@@ -174,7 +173,7 @@
 
 		syncing = true;
 		try {
-			// The server exposes sync as GET (kubernetes.controller.ts) — a POST
+			// The server exposes sync as GET (kubernetes.controller.ts): a POST
 			// here 404s and the namespace never syncs.
 			await apiFetch(`/apiv1/sync/${project.namespace}`);
 			const response = await apiFetch(`/apiv1/projects/${project.id}`);
@@ -321,9 +320,7 @@
 	{/if}
 
 	{#if loading}
-		<!-- Skeleton: Back link -->
 		<div class="skeleton" style="height: 0.8125rem; width: 6rem; margin-bottom: 1rem;"></div>
-		<!-- Skeleton: Header -->
 		<div class="pj-header">
 			<div class="pj-header-top">
 				<div class="pj-header-info">
@@ -342,7 +339,6 @@
 				</div>
 			</div>
 		</div>
-		<!-- Skeleton: Stats -->
 		<div class="pj-stats">
 			{#each Array(3) as _, i (i)}
 				<div
@@ -351,11 +347,9 @@
 				></div>
 			{/each}
 		</div>
-		<!-- Skeleton: Deployments header -->
 		<div class="pj-deployments-header">
 			<div class="skeleton" style="height: 1.125rem; width: 7rem;"></div>
 		</div>
-		<!-- Skeleton: Deployment cards -->
 		<div class="pj-deployment-grid">
 			{#each Array(3) as _, i (i)}
 				<div class="pj-deployment-card" style="pointer-events: none;">
@@ -391,7 +385,6 @@
 			/>
 		</div>
 
-		<!-- Header -->
 		<div class="pj-header">
 			<div class="pj-header-top">
 				<div class="pj-header-info">
@@ -421,7 +414,6 @@
 			</div>
 		</div>
 
-		<!-- Stats Row -->
 		<div class="pj-stats">
 			<div class="pj-stat">
 				<Boxes class="h-4 w-4" />
@@ -447,7 +439,6 @@
 			{/if}
 		</div>
 
-		<!-- Apps -->
 		<div class="pj-deployments-header">
 			<h2 class="pj-section-title">Apps</h2>
 			<div class="pj-deployments-toolbar">
@@ -541,7 +532,6 @@
 			</div>
 		{/if}
 
-		<!-- Template Instances -->
 		{#if templateInstances.length}
 			<div class="pj-deployments-header" style="margin-top: 1rem;">
 				<h2 class="pj-section-title">
@@ -591,7 +581,6 @@
 			</div>
 		{/if}
 
-		<!-- Members -->
 		{#if wsMembers.length > 0}
 			<div class="pj-members-section">
 				<div class="pj-deployments-header">
@@ -685,7 +674,6 @@
 		margin-bottom: 1.5rem;
 	}
 
-	/* Header */
 	.pj-header {
 		margin-bottom: 1.5rem;
 	}
@@ -724,7 +712,6 @@
 		flex-shrink: 0;
 	}
 
-	/* Stats */
 	.pj-stats {
 		display: flex;
 		flex-wrap: wrap;
@@ -761,7 +748,6 @@
 		color: var(--center-channel-color);
 	}
 
-	/* Deployments header */
 	.pj-deployments-header {
 		display: flex;
 		align-items: center;
@@ -811,7 +797,6 @@
 		border-color: var(--sidebar-text-active-border);
 	}
 
-	/* Deployment grid */
 	.pj-deployment-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
@@ -996,7 +981,6 @@
 		color: var(--pj-color-red);
 	}
 
-	/* Empty state */
 	.pj-empty-card {
 		display: flex;
 		flex-direction: column;
@@ -1011,7 +995,6 @@
 		margin-bottom: 1.5rem;
 	}
 
-	/* Buttons */
 	.pj-btn {
 		display: inline-flex;
 		align-items: center;
@@ -1074,7 +1057,6 @@
 		background-color: color-mix(in srgb, var(--error-text-color) 20%, transparent);
 	}
 
-	/* Members */
 	.pj-members-section {
 		margin-top: 2rem;
 	}

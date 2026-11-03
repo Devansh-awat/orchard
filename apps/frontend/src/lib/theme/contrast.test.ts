@@ -26,8 +26,8 @@ function assertReadable(colors: ThemeColors, label: string) {
 }
 
 // A hover that brightens an already-light panel reads as a hole rather than a
-// highlight, which is how it looked before the fills were stepped off their own
-// surface instead of read off the neutral ladder.
+// highlight, so the fills are stepped off their own surface instead of read off
+// the neutral ladder.
 function assertHoverDirection(colors: ThemeColors, label: string) {
 	for (const pair of hoverChecks()) {
 		const baseL = hexToOklch(colors[pair.base]).l;

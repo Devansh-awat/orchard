@@ -140,7 +140,7 @@
 	color: var(--center-channel-color);
 }
 
-/* Glassy breadcrumb pill — mirrors the project page so navigation reads
+/* Glassy breadcrumb pill: mirrors the project page so navigation reads
 	   the same across the org → project → deployment hierarchy. */
 .deployment-page .bc {
 	align-self: flex-start;
@@ -153,7 +153,6 @@
 	margin-bottom: 0;
 }
 
-/* ===== Deployment header ===== */
 .dep-header {
 	padding: 0.25rem 0;
 }
@@ -168,7 +167,6 @@
 	box-shadow:
 		0 1px 3px rgb(0 0 0 / 0.03),
 		0 1px 2px rgb(0 0 0 / 0.02);
-	/* padding transition removed — Motion springs drive the collapse */
 }
 /* Compact mode: tighter top/bottom padding, less generous spacing under the title.
 	   Body height is animated by motion; the card pads in sympathy. */
@@ -271,7 +269,7 @@
 	flex: 1;
 }
 
-/* Status chip next to the deployment name — single source of truth for
+/* Status chip next to the deployment name: single source of truth for
 	   what state the deployment is actually in. */
 .dep-status-chip {
 	display: inline-flex;
@@ -309,7 +307,7 @@
 	backdrop-filter: blur(8px);
 }
 
-/* Environment badge in the deployment header — tinted in the env's own color. */
+/* Environment badge in the deployment header: tinted in the env's own color. */
 .dep-env-chip {
 	display: inline-flex;
 	align-items: center;
@@ -440,7 +438,7 @@ html.reduce-transparency .dep-header-card--hasbg .dep-env-chip {
 	margin: 0;
 }
 
-/* Lead: commit message at the start of the meta line — strongest tier in the row */
+/* Lead: commit message at the start of the meta line, strongest tier in the row */
 .dep-meta-lead {
 	font-weight: 600;
 	color: color-mix(in srgb, var(--center-channel-color) 90%, transparent);
@@ -524,7 +522,6 @@ a.dep-meta-lead-link:hover {
 	opacity: 1;
 }
 
-/* ===== Tab nav ===== */
 .dep-tabs {
 	border-bottom: 1px solid color-mix(in srgb, var(--surface-border) 60%, transparent);
 	position: relative;
@@ -615,7 +612,6 @@ a.dep-meta-lead-link:hover {
 	}
 }
 
-/* ===== Console (Pterodactyl-style) ===== */
 .console-panel {
 	--console-flash: 0;
 	position: relative;
@@ -881,7 +877,7 @@ a.dep-meta-lead-link:hover {
 	opacity: 0.4;
 }
 
-/* Pod rows — clickable to select for console */
+/* Pod rows: clickable to select for console */
 .pod-item {
 	--pod-indent: 0.875rem;
 	--pod-pad: 0.75rem;
@@ -1208,9 +1204,7 @@ a.dep-meta-lead-link:hover {
 	background-color: var(--status-error);
 }
 
-/* ===== Advanced tab ===== */
-
-/* Strategy picker — three tappable cards */
+/* Strategy picker: three tappable cards */
 .strategy-grid {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1770,7 +1764,6 @@ a.dep-meta-lead-link:hover {
 	}
 }
 
-/* ── Environment variables ── */
 .env-container {
 	border: 1px solid var(--surface-border);
 	border-radius: var(--radius-md);
@@ -1938,7 +1931,6 @@ a.dep-meta-lead-link:hover {
 	color: var(--surface-muted);
 }
 
-/* ── Deployments list (Vercel-style) ── */
 .dep-list-header {
 	display: flex;
 	align-items: flex-start;
@@ -2217,8 +2209,6 @@ a.dep-meta-lead-link:hover {
 	}
 }
 
-/* ── Log modal ── */
-
 .sse-reload-banner {
 	display: flex;
 	align-items: center;
@@ -2333,7 +2323,6 @@ a.dep-meta-lead-link:hover {
 	color: var(--text-default);
 }
 
-/* ---- redesigned tab bar (uiv2) ---- */
 .dep-toolbar {
 	background-color: var(--bg-raised);
 	border: none;

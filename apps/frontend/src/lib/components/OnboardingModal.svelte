@@ -54,7 +54,6 @@
 		saving = true;
 
 		try {
-			// Update profile on the backend
 			const response = await apiFetch('/apiv1/auth/me', {
 				method: 'PATCH',
 				headers: {
@@ -72,7 +71,6 @@
 
 			const updatedUser = await response.json();
 
-			// Update the user store with the new data
 			user.set({
 				...$user,
 				...updatedUser
@@ -130,7 +128,6 @@
 
 <Modal open={isOpen} closable={false} size="lg">
 	<div>
-		<!-- Progress indicator -->
 		<div
 			class="flex items-center justify-center gap-2 border-b p-4"
 			style="border-color: var(--surface-border);"
@@ -164,7 +161,6 @@
 			{/each}
 		</div>
 
-		<!-- Step content -->
 		<div class="p-6">
 			{#if currentStep === 'profile'}
 				<div in:fly={{ x: 20, duration: 200 }}>

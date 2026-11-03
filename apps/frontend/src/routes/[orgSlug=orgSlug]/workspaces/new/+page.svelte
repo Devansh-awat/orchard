@@ -87,7 +87,6 @@
 </script>
 
 <div class="nw-page">
-	<!-- Header -->
 	<div class="nw-header">
 		<div class="nw-header-icon">
 			<FolderKanban class="h-6 w-6" />
@@ -98,14 +97,12 @@
 		</div>
 	</div>
 
-	<!-- Card -->
 	<div class="nw-card">
 		{#if error}
 			<div class="nw-error">{error}</div>
 		{/if}
 
 		<div class="nw-form">
-			<!-- Organization -->
 			<div class="nw-field">
 				<span class="nw-label">Organization</span>
 				<div class="nw-org-display">
@@ -114,7 +111,6 @@
 				</div>
 			</div>
 
-			<!-- Name -->
 			<div class="nw-field">
 				<label for="name" class="nw-label">Name</label>
 				<input
@@ -126,7 +122,6 @@
 				/>
 			</div>
 
-			<!-- Slug -->
 			<div class="nw-field">
 				<label for="slug" class="nw-label">Slug</label>
 				<input
@@ -140,7 +135,6 @@
 				<p class="nw-hint">Used in URLs and namespace generation</p>
 			</div>
 
-			<!-- Namespace preview -->
 			{#if $selectedOrganization && slug}
 				<div class="nw-preview">
 					<span class="nw-preview-label">Namespace</span>
@@ -148,7 +142,6 @@
 				</div>
 			{/if}
 
-			<!-- Description -->
 			<div class="nw-field">
 				<label for="description" class="nw-label">
 					Description
@@ -163,7 +156,6 @@
 			</div>
 		</div>
 
-		<!-- Actions -->
 		<div class="nw-actions">
 			<button class="nw-btn nw-btn-secondary" onclick={() => window.history.back()}>
 				Cancel
@@ -189,7 +181,6 @@
 		justify-content: center;
 	}
 
-	/* Header */
 	.nw-header {
 		display: flex;
 		align-items: center;
@@ -225,7 +216,6 @@
 		line-height: 1.4;
 	}
 
-	/* Card */
 	.nw-card {
 		border: 1px solid var(--surface-border);
 		border-radius: var(--radius-lg);
@@ -236,7 +226,6 @@
 			0 1px 2px rgb(0 0 0 / 0.02);
 	}
 
-	/* Error */
 	.nw-error {
 		padding: 0.75rem 1rem;
 		border-radius: var(--radius-md);
@@ -248,14 +237,13 @@
 		margin-bottom: 1rem;
 	}
 
-	/* Form */
 	.nw-form {
 		display: flex;
 		flex-direction: column;
 		gap: 1.5rem;
 	}
 
-	/* Field — clear spacing between label/input groups */
+	/* Field: clear spacing between label/input groups */
 	.nw-field {
 		display: flex;
 		flex-direction: column;
@@ -287,7 +275,6 @@
 		line-height: 1.4;
 	}
 
-	/* Input */
 	.nw-input {
 		width: 100%;
 		padding: 0.5rem 0.75rem;
@@ -314,7 +301,6 @@
 		font-family: var(--font-mono);
 	}
 
-	/* Org display */
 	.nw-org-display {
 		display: flex;
 		align-items: center;
@@ -327,7 +313,6 @@
 		line-height: var(--lh-footnote);
 	}
 
-	/* Preview */
 	.nw-preview {
 		display: flex;
 		align-items: center;
@@ -352,7 +337,6 @@
 		color: var(--sidebar-text-active-border);
 	}
 
-	/* Actions */
 	.nw-actions {
 		display: flex;
 		justify-content: flex-end;
@@ -362,7 +346,7 @@
 		border-top: 1px solid color-mix(in srgb, var(--surface-border) 60%, transparent);
 	}
 
-	/* Buttons — primary/secondary hierarchy */
+	/* Buttons: primary/secondary hierarchy */
 	.nw-btn {
 		display: inline-flex;
 		align-items: center;

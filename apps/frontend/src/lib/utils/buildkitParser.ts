@@ -53,7 +53,7 @@ const STEP_SUBLINE_RE = new RegExp(`^#(${ID})\\s+(.*)$`);
 // `transferring …: 14.30MB done` or `… 1.7kB`
 const TRANSFER_RE = /(?:transferring\b[^:]*:\s*|\s)([\d.]+\s?[KMG]?B)(?:\s+done)?\s*$/i;
 
-// Export/push phases emit no `[stage]` header — their first line is the only
+// Export/push phases emit no `[stage]` header: their first line is the only
 // description (e.g. `#36 exporting to oci image format`). Map the known ones
 // to friendly labels; anything unrecognized falls back to the raw line.
 const HEADERLESS_LABELS: [RegExp, string][] = [
@@ -251,7 +251,7 @@ export function createBuildkitParser() {
 			return { steps: [], messages: [] };
 		}
 		// Treat an unterminated final line as complete. If that line later grows,
-		// the prefix check fails and we fall back to one full reparse — rare with
+		// the prefix check fails and we fall back to one full reparse: rare with
 		// line-buffered build logs, and always correct.
 		const raw = rawInput.endsWith('\n') ? rawInput : `${rawInput}\n`;
 		if (!raw.startsWith(committedRaw)) {

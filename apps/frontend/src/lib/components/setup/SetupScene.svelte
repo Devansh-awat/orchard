@@ -152,14 +152,14 @@
 		// The closing move covers most of the viewport twice over: the band drops
 		// about 95% of the screen while the lockup flies half of it and shrinks
 		// to under a third. `cinematic` is sized for exactly this; the panel
-		// springs turn it into a cut, which is what it had become.
+		// springs turn it into a cut.
 		const travel = window.innerHeight / 2 - 52;
 		animate(root, { '--setup-band': [null, band(RESTING_BAND)] }, transition('cinematic'));
 		animate(lockups, { scale: [1.05, 0.3], y: [0, -travel] }, transition('cinematic'));
 		animate([mark], { rotate: [0, -14] }, transition('cinematic'));
-		// Roughly two thirds of the way through the flight, which is where the
-		// card used to arrive: late enough to read as following the lockup up
-		// rather than racing it, early enough that they are still one move.
+		// Roughly two thirds of the way through the flight: late enough to read as
+		// following the lockup up rather than racing it, early enough that they are
+		// still one move.
 		await pause(400);
 		settle();
 	}

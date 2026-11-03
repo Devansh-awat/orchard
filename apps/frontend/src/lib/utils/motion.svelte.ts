@@ -34,8 +34,8 @@ type Options = Record<string, unknown>;
 
 /**
  * The decay curve for an event marker. Deliberately much longer than any of the
- * named springs because it is not a transition between two states — the state
- * has already arrived — it is the trail left behind so you can see what moved.
+ * named springs because it is not a transition between two states (the state
+ * has already arrived), it is the trail left behind so you can see what moved.
  */
 const ECHO_DECAY = { type: 'spring', bounce: 0.2, duration: 0.8 };
 const ECHO_DECAY_REDUCED = { duration: 0.4, ease: 'linear' };
@@ -47,7 +47,7 @@ const ECHO_DECAY_REDUCED = { duration: 0.4, ease: 'linear' };
  * for the people who asked for less motion: a 500px panel closing in 120ms is a
  * snap, which is exactly the kind of abrupt change Reduce Motion exists to
  * avoid. So the tier keeps a calm, unhurried duration and drops the motion
- * instead — transforms are stripped by `adapt`, and opacity carries the change
+ * instead: transforms are stripped by `adapt`, and opacity carries the change
  * on a gentle symmetric curve. Slower than `full`'s spring arrival, deliberately.
  */
 const REDUCED_DURATION = 0.26;
@@ -61,8 +61,8 @@ const BURST_SCALE = 0.2;
 
 const MAX_STAGGER = 0.2;
 /**
- * Zero. A stagger is choreography — the eye tracks a wave travelling across the
- * group — and that is motion even when nothing translates. Reduced fades the
+ * Zero. A stagger is choreography: the eye tracks a wave travelling across the
+ * group, and that is motion even when nothing translates. Reduced fades the
  * whole group in together.
  */
 const REDUCED_MAX_STAGGER = 0;
@@ -101,7 +101,7 @@ export const functionalMotion = () => effectiveAnimationLevel() !== 'off';
  * Gate for a movingicons `animate` prop.
  *
  * Those icons animate with plain CSS inside the package, and their end state is
- * a static transform rather than a keyframe — so the tier rules in tokens.css
+ * a static transform rather than a keyframe, so the tier rules in tokens.css
  * only shorten the transition, they don't stop the icon from snapping to its
  * animated pose. Icon hover flourishes are pure decoration, so the fix is to
  * never enter the animate state below `full`: wrap the hover flag in this.
@@ -127,7 +127,7 @@ export const iconAnimation = (on: boolean) => on && decorativeMotion();
  * Duration is a *rate* problem, not a taste problem: 812px collapsing in 190ms
  * moves 313px in a single frame, and the eye reads that as discrete jumps no
  * matter how good the curve is. Scaling sub-linearly with distance keeps short
- * moves snappy while giving long ones enough frames to look continuous — which
+ * moves snappy while giving long ones enough frames to look continuous, which
  * is also just how physical objects behave.
  */
 const PACE_REFERENCE = 420;
@@ -331,7 +331,7 @@ function clampIntoContent(origin: Point, content: Element | null): Point {
 /**
  * Marks that a value describing real cluster state has changed.
  *
- * Orchard's state mostly is not typed in by the user — it arrives from SSE and
+ * Orchard's state mostly is not typed in by the user: it arrives from SSE and
  * the pod informer, describing something that already happened on the cluster.
  * Animating *into* such a state adds latency to information: a pod that died
  * 200ms ago should not spend another 350ms springing a red dot into view. So
@@ -490,7 +490,7 @@ export function originBurst(opts: {
 			}
 
 			// No stagger on the way out, unlike the entrance. The container clips
-			// what it shrinks past, so the exit cannot show a real convergence —
+			// what it shrinks past, so the exit cannot show a real convergence,
 			// only a short pull toward the origin. Staggering that tiny movement
 			// does not read as choreography, it reads as eleven different opacities
 			// at once, a gradient wiping across the grid. Leaving as one group is
@@ -577,14 +577,14 @@ export function motionStagger(
 	const stride = opts.stride ?? STAGGER_STRIDE;
 	const from = { y: opts.from?.y ?? 8, opacity: opts.from?.opacity ?? 0 };
 	return (el: Element) => {
-		// Entrance plays once per element — a re-run of the attachment (index
+		// Entrance plays once per element: a re-run of the attachment (index
 		// shift, list reorder) must not replay the fade-in on live DOM.
 		if (staggeredEls.has(el)) return;
 		staggeredEls.add(el);
 		if (!motionEnabled()) return;
 		// Hidden until the animation owns opacity. Between mount and the first
 		// sample the element would otherwise paint at full opacity, which reads as
-		// a flash before the entrance — most visible on a staggered item whose
+		// a flash before the entrance: most visible on a staggered item whose
 		// delay pushes that first sample several frames out.
 		const target = el as HTMLElement;
 		target.classList.add('motion-entering');
@@ -597,19 +597,19 @@ export function motionStagger(
 /**
  * The one motion path for every transient surface: menus, popovers, dropdowns.
  *
- * Two things it fixes over the CSS keyframe it replaces. There is now an exit —
- * a surface that vanishes because a rule flipped to `display: none` has no
- * opposing force and reads as a glitch, not a dismissal. And it is interruptible:
- * on re-open mid-dismiss the element already carries live transform values, so
- * only the targets are given and Motion continues from wherever it actually is,
- * animating from the on-screen value rather than a fixed start. Seeding the closed state only when nothing is running is what keeps a
- * fresh open crisp without snapping an interrupted one backwards.
+ * It has an exit: a surface that vanishes because a rule flipped to
+ * `display: none` has no opposing force and reads as a glitch, not a dismissal.
+ * And it is interruptible: on re-open mid-dismiss the element already carries
+ * live transform values, so only the targets are given and Motion continues from
+ * wherever it actually is, animating from the on-screen value rather than a
+ * fixed start. Seeding the closed state only when nothing is running is what
+ * keeps a fresh open crisp without snapping an interrupted one backwards.
  */
 /**
  * Entrance for a tab panel that stays mounted and is revealed by a flag.
  *
- * Replaces a bespoke 320ms CSS keyframe whose `cubic-bezier(0.22, 1, 0.36, 1)`
- * was 91% complete in the first 136ms and then crawled: nominally slow, visually
+ * A spring rather than a CSS keyframe: a 320ms `cubic-bezier(0.22, 1, 0.36, 1)`
+ * is 91% complete in the first 136ms and then crawls, nominally slow, visually
  * instant, nothing to appreciate. A spring spends its time where the eye can see
  * it and arrives decisively, which is the whole difference.
  */
@@ -724,7 +724,7 @@ export function overlayMotion(isOpen: () => boolean, opts: { origin?: string } =
 				// These are native popovers, so the element is not in the top layer
 				// until the library calls showPopover(), which happens after this
 				// effect. Animating a frame early runs against a non-rendered element
-				// and completes instantly, which is why the open used to just appear.
+				// and completes instantly, so the open would just appear.
 				// Seeded now, animated next frame. Deferring the seed too would let the
 				// panel paint at full opacity for one frame before snapping back to
 				// start, which reads as a flash.
@@ -907,7 +907,7 @@ export function springCollapse(collapsed: () => boolean) {
 			// Height is driven as a plain value and written straight to the style,
 			// never handed to Motion as an element property. Motion retains
 			// ownership of anything it has animated on an element and re-applies its
-			// last value when the next animation starts there — so an element whose
+			// last value when the next animation starts there, so an element whose
 			// expand animated `height` would have that height restored the moment
 			// the collapse's opacity animation began, snapping the panel back open a
 			// beat after it had closed. Clamping at zero keeps the spring's physics

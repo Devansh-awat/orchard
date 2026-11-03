@@ -357,7 +357,7 @@ html.contrast-high .deck-host--drawer {
 
 /* While the sidebar is mid-resize, freeze hover/transition activity on the
    main content. As the sidebar width animates, cards reflow under the user's
-   cursor — every transient enter/leave used to fire a spring + box-shadow
+   cursor: every transient enter/leave would fire a spring + box-shadow
    transition on the card sitting under the pointer, cascading into visible
    flicker (most obvious on cards with blurred backdrops because the filter
    re-rasterizes per frame). The Sidebar component toggles this attribute for
@@ -413,7 +413,7 @@ html {
 	color: var(--text-on-accent);
 }
 
-/* Button base styles — primary/secondary/tertiary hierarchy */
+/* Button base styles: primary/secondary/tertiary hierarchy */
 .btn {
 	@apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none;
 	letter-spacing: 0.01em;
@@ -426,7 +426,7 @@ html {
 		opacity var(--dur-fast) ease;
 }
 
-/* Primary: solid, high contrast — the obvious action */
+/* Primary: solid, high contrast, the obvious action */
 .btn-primary {
 	@apply focus-visible:ring-primary-500;
 	background-color: var(--accent);
@@ -449,7 +449,7 @@ html {
 	box-shadow: var(--elev-1);
 }
 
-/* Secondary: outline / low-contrast — clear but not prominent */
+/* Secondary: outline / low-contrast, clear but not prominent */
 .btn-secondary {
 	@apply focus-visible:ring-gray-500;
 	background-color: var(--control-bg);
@@ -466,7 +466,7 @@ html {
 	border-color: color-mix(in srgb, var(--surface-border) 60%, var(--center-channel-color));
 }
 
-/* Ghost/tertiary: discoverable but unobtrusive — styled like links */
+/* Ghost/tertiary: discoverable but unobtrusive, styled like links */
 .btn-ghost {
 	@apply bg-transparent focus-visible:ring-gray-500;
 	color: var(--surface-muted);
@@ -497,8 +497,6 @@ html {
 .btn-sm {
 	@apply px-3 py-1.5 text-xs rounded-md;
 }
-
-/* ── UI primitives (lib/components/ui) ─────────────────────────────── */
 
 .ui-glass-rim::after {
 	content: '';
@@ -576,7 +574,7 @@ html {
 	opacity: 0;
 }
 
-/* Open and close are both driven by `overlayMotion`. A 130ms keyframe here had
+/* Open and close are both driven by `overlayMotion`. A keyframe here would have
    no exit at all, because the rule above hides the panel outright the moment it
    closes. */
 
@@ -1223,7 +1221,6 @@ html {
 	}
 }
 
-/* Input styles */
 .input {
 	@apply w-full rounded-lg border px-3.5 py-2.5 text-sm focus:outline-none;
 	border-color: var(--surface-border);
@@ -1261,7 +1258,7 @@ select.input:focus {
 	@apply border-red-500 focus:border-red-500 focus:ring-red-500;
 }
 
-/* Card styles — two-part shadows for realistic depth */
+/* Card styles: two-part shadows for realistic depth */
 .card {
 	@apply rounded-xl border;
 	background-color: var(--card-bg);
@@ -1282,7 +1279,6 @@ select.input:focus {
 	color: var(--center-channel-color);
 }
 
-/* Badge styles */
 .badge {
 	@apply inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold;
 	letter-spacing: 0.02em;
@@ -1373,7 +1369,6 @@ select.input:focus {
 	margin-top: 0.5rem;
 }
 
-/* Sidebar styles */
 .sidebar {
 	position: relative;
 	z-index: 40;
@@ -1476,7 +1471,7 @@ select.input:focus {
 	background-color: var(--sidebar-text-hover-bg);
 }
 
-/* Compact search button — mirrors `.sidebar-search-trigger` styling so the
+/* Compact search button: mirrors `.sidebar-search-trigger` styling so the
    search affordance reads as a search field even when collapsed. */
 .sidebar-collapsed-icon--search {
 	background-color: color-mix(in srgb, var(--sidebar-text-hover-bg) 55%, transparent);
@@ -1796,7 +1791,6 @@ select.input:focus {
 	letter-spacing: 0.04em;
 }
 
-/* Log viewer */
 .log-viewer {
 	@apply bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto font-mono text-sm whitespace-pre-wrap;
 	font-weight: 400;

@@ -75,12 +75,10 @@ async function accept(
 
 		const result = await response.json();
 
-		// Remove the accepted invitation from the list
 		pendingInvitationsList.update((list) =>
 			list.filter((inv) => (useId ? inv.id !== tokenOrId : inv.token !== tokenOrId))
 		);
 
-		// Set the accepted organization for onboarding
 		if (result.organization) {
 			acceptedOrganization.set(result.organization);
 		}
@@ -106,7 +104,6 @@ async function decline(tokenOrId: string, useId = false): Promise<boolean> {
 			throw new Error(data?.message || 'Failed to decline invitation');
 		}
 
-		// Remove the declined invitation from the list
 		pendingInvitationsList.update((list) =>
 			list.filter((inv) => (useId ? inv.id !== tokenOrId : inv.token !== tokenOrId))
 		);

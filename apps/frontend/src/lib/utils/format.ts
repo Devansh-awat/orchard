@@ -257,7 +257,7 @@ export function explainExitCode(
 export function humanizeWarning(msg: string): HumanizedWarning | null {
 	const m = msg ?? '';
 
-	// --- Critical: deployment is down or will be down imminently ---
+	// Critical: deployment is down or will be down imminently
 
 	if (/oomkilled|out of memory/i.test(m)) {
 		return {
@@ -291,7 +291,7 @@ export function humanizeWarning(msg: string): HumanizedWarning | null {
 		};
 	}
 
-	// --- Error: something is broken but may self-heal ---
+	// Error: something is broken but may self-heal
 
 	const restarts = m.match(/has restarted (\d+) time\(s\)/i);
 	if (restarts) {
@@ -419,7 +419,7 @@ export function humanizeWarning(msg: string): HumanizedWarning | null {
 		};
 	}
 
-	// --- Warning: degraded but not broken ---
+	// Warning: degraded but not broken
 
 	if (/readiness probe failed/i.test(m)) {
 		return {
@@ -488,7 +488,7 @@ export function humanizeWarning(msg: string): HumanizedWarning | null {
 		};
 	}
 
-	// --- Info: transient or expected ---
+	// Info: transient or expected
 
 	if (/pulling image/i.test(m)) {
 		return {

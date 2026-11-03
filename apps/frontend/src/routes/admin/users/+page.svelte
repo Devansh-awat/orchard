@@ -36,14 +36,12 @@
 	let searchQuery = $state('');
 	let searchTimeout: ReturnType<typeof setTimeout>;
 
-	// Edit modal state
 	let editingUser = $state<UserItem | null>(null);
 	let editFirstName = $state('');
 	let editLastName = $state('');
 	let editIsSuperAdmin = $state(false);
 	let saving = $state(false);
 
-	// Delete confirmation
 	let deletingUser = $state<UserItem | null>(null);
 	let deleting = $state(false);
 
@@ -149,7 +147,6 @@
 	});
 </script>
 
-<!-- Search -->
 <div class="mb-4 flex items-center gap-3">
 	<div class="relative flex-1">
 		<Search
@@ -169,7 +166,6 @@
 	</span>
 </div>
 
-<!-- Table -->
 <div
 	class="rounded-2xl border overflow-hidden"
 	style="border-color: var(--surface-border); background-color: var(--surface-bg);"
@@ -269,7 +265,6 @@
 	{/if}
 </div>
 
-<!-- Pagination -->
 {#if totalPages > 1}
 	<div class="mt-4 flex items-center justify-center gap-2">
 		<Button

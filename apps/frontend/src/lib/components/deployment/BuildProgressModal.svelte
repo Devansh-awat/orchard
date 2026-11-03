@@ -16,7 +16,6 @@
 
 	let {
 		deployment,
-		// Build modal
 		showBuildModal = $bindable(),
 		buildModalStatus,
 		buildModalStep,
@@ -32,7 +31,6 @@
 		onCancelBuild,
 		onCloseBuildModal,
 		formatBuildElapsed,
-		// Build card
 		showBuildCard = $bindable(),
 		showBuildCardRender = $bindable(),
 		onExpandBuildCard
@@ -185,7 +183,6 @@
 	}
 </script>
 
-<!-- Build Progress Modal -->
 <Modal
 	bind:open={showBuildModal}
 	title={deployment?.name ?? 'Build'}

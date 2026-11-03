@@ -55,7 +55,6 @@
 	let detailLoading = $state(false);
 	let orgs = $state<OrgLite[]>([]);
 
-	// Add-assignment form
 	let addOrgId = $state('');
 	let addMode = $state<'allow' | 'deny'>('allow');
 	let addCpuLimit = $state('');
@@ -63,10 +62,8 @@
 	let addMaxServices = $state('');
 	let savingAssignment = $state(false);
 
-	// Taint editor (drawer)
 	let taintRows = $state<Taint[]>([]);
 	let savingTaints = $state(false);
-	// Label add form (drawer)
 	let newLabelKey = $state('');
 	let newLabelValue = $state('');
 	let savingLabels = $state(false);

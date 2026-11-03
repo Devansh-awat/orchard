@@ -347,7 +347,6 @@
 		/>
 	</AuthShell>
 {:else}
-	<!-- Dashboard for authenticated users -->
 	<div class="hp">
 		<div class="hp-grid-bg"></div>
 		<div class="hp-topbar">

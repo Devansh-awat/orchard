@@ -7,8 +7,8 @@ import type { OrgLoginContext } from '$lib/components/login';
  * The org login page is server-rendered so branding paints on the first frame
  * rather than flashing the platform default first.
  *
- * An org with no SSO and an org that does not exist are treated identically —
- * both fall back to the platform login page — so this page never confirms
+ * An org with no SSO and an org that does not exist are treated identically
+ * (both fall back to the platform login page), so this page never confirms
  * which organizations exist.
  */
 export const load: PageServerLoad = async ({ params, fetch }) => {

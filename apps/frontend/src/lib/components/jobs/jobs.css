@@ -51,8 +51,6 @@
 	color: var(--center-channel-color);
 }
 
-/* ------------------------------------------------------------- card list */
-
 .job-card {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto minmax(9.5rem, auto) auto;
@@ -212,8 +210,6 @@
 	color: var(--center-channel-color);
 }
 
-/* ---------------------------------------------------------------- form */
-
 .job-form-card {
 	border: 1px solid var(--surface-border);
 	border-radius: var(--radius-lg);
@@ -287,8 +283,6 @@
 	flex-shrink: 0;
 }
 
-/* ------------------------------------------------------------ env editor */
-
 .job-env-editor {
 	display: flex;
 	flex-direction: column;
@@ -347,8 +341,6 @@
 	border-color: var(--surface-muted);
 }
 
-/* --------------------------------------------------------- script editor */
-
 .job-script-editor {
 	display: flex;
 	flex-direction: column;
@@ -392,8 +384,6 @@
 .job-script-textarea::placeholder {
 	color: var(--console-faint);
 }
-
-/* ------------------------------------------------------------ step list */
 
 .job-step-list {
 	display: flex;
@@ -635,8 +625,6 @@
 	border-color: var(--surface-muted);
 }
 
-/* ------------------------------------------------------------- pipeline */
-
 .job-pipeline {
 	position: relative;
 	display: flex;
@@ -780,8 +768,6 @@
 	margin: 0.45rem 0 0.25rem 2.4rem;
 }
 
-/* ----------------------------------------------------------------- logs */
-
 .job-logs-shell {
 	padding: 0.25rem;
 	border-radius: var(--radius-lg);
@@ -867,8 +853,6 @@
 	color: var(--console-faint);
 }
 
-/* ------------------------------------------------------------ status ring */
-
 .job-ring {
 	position: relative;
 	display: inline-flex;
@@ -929,8 +913,6 @@
 	line-height: 1;
 }
 
-/* --------------------------------------------------------------- duration */
-
 .job-duration {
 	font-size: var(--text-caption);
 	line-height: var(--lh-caption);
@@ -943,8 +925,6 @@
 	color: #a855f7;
 	font-weight: 600;
 }
-
-/* ------------------------------------------------------------ run history */
 
 .job-history-strip {
 	display: flex;
@@ -1007,8 +987,6 @@ button.job-history-bar:hover {
 .job-history-bar--muted {
 	background: var(--surface-border);
 }
-
-/* ------------------------------------------------------------- step dots */
 
 .job-step-dots {
 	display: inline-flex;

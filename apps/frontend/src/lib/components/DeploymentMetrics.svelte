@@ -391,7 +391,7 @@
 	}
 
 	// Hatch any region of the visible x-axis that falls outside the
-	// available data extent — i.e. before VM started collecting, or after
+	// available data extent, i.e. before VM started collecting, or after
 	// the most recent sample. Communicates "no data here" without lying
 	// with a flat zero line.
 	const pendingPlugin = {
@@ -504,7 +504,7 @@
 	let tickHandle: ReturnType<typeof setInterval> | null = null;
 	$effect(() => {
 		if (!isLive || !active) return;
-		// 15s matches the upstream scrape interval — no point refetching faster.
+		// 15s matches the upstream scrape interval: no point refetching faster.
 		tickHandle = setInterval(() => {
 			if (hoveringChart || brushActive) return;
 			now = Date.now();

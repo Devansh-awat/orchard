@@ -8,7 +8,7 @@ test('agreement is silent', () => {
 });
 
 test('an unmirrored deployment says nothing rather than guessing', () => {
-	// No k8s_workloads row yet — a deployment whose first build has not landed.
+	// No k8s_workloads row yet: a deployment whose first build has not landed.
 	assert.equal(replicaDrift({ replicas: 1, specReplicas: null, stopped: false }), null);
 	assert.equal(replicaDrift({ replicas: 1, stopped: false }), null);
 });
@@ -25,7 +25,7 @@ test('an external scale to zero is reported, not hidden behind intent', () => {
 
 test('a stopped deployment is reported even though the row is correct', () => {
 	// `stopped` deliberately keeps replicas as the restore point, so the numbers
-	// disagree by design — which is exactly why it needs saying out loud.
+	// disagree by design, which is exactly why it needs saying out loud.
 	assert.deepEqual(replicaDrift({ replicas: 1, specReplicas: 0, stopped: true }), {
 		observed: 0,
 		desired: 1,

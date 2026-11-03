@@ -11,7 +11,7 @@
 	//   - `tint` is a coloured plate painted as the image's OWN background, so a
 	//     logo with transparency fills the tile with colour instead of letting the
 	//     letter show through. It rides the image's opacity, so it only appears once
-	//     the image has actually loaded — never a gradient flashing before a letter.
+	//     the image has actually loaded, never a gradient flashing before a letter.
 	let {
 		src,
 		alt = '',

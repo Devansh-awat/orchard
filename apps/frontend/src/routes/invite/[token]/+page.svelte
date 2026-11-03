@@ -108,7 +108,6 @@
 		try {
 			await pendingInvitations.accept(token);
 
-			// Refresh organizations
 			const orgsResponse = await apiFetch('/apiv1/organizations/user');
 			if (orgsResponse.ok) {
 				const orgs = await orgsResponse.json();
@@ -122,10 +121,8 @@
 				color: 'success'
 			});
 
-			// Show onboarding modal
 			showOnboarding.show();
 
-			// Navigate to home
 			goto('/');
 		} catch (e) {
 			toasts.add({
@@ -146,7 +143,6 @@
 		try {
 			await pendingInvitations.decline(token);
 
-			// Check if user has any organizations
 			const orgsResponse = await apiFetch('/apiv1/organizations/user');
 			if (orgsResponse.ok) {
 				const orgs = await orgsResponse.json();
@@ -244,7 +240,6 @@
 			</div>
 		{:else if invitation}
 			<div class="card overflow-hidden">
-				<!-- Header -->
 				<div class="border-b p-6 text-center" style="border-color: var(--surface-border);">
 					<div
 						class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary-100 dark:bg-primary-900/30"
@@ -270,7 +265,6 @@
 					</h2>
 				</div>
 
-				<!-- Details -->
 				<div class="space-y-4 p-6">
 					<div
 						class="flex items-center justify-between gap-4 rounded-xl p-4"

@@ -71,7 +71,7 @@
 	let { data } = $props<{ data: PageData }>();
 	const orgSlug = $derived(data.orgSlug);
 
-	// Manual state — set from $effect watching query, avoids $derived chains
+	// Manual state: set from $effect watching query, avoids $derived chains
 	let currentOrgRole = $state<'owner' | 'admin' | 'member' | 'guest' | null>(null);
 	let isSyntheticMembership = $state(false);
 	let joiningOrg = $state(false);
@@ -113,9 +113,9 @@
 		refetchIntervalInBackground: false
 	}));
 
-	// ── Stable ordering (existing cards keep their position; new ids are
+	// Stable ordering (existing cards keep their position; new ids are
 	// rank-sorted and appended). Returns `prev` untouched when nothing changed
-	// so downstream deriveds don't churn on every refetch. ──
+	// so downstream deriveds don't churn on every refetch.
 	let depOrder = $state<string[]>([]);
 	let dbOrder = $state<string[]>([]);
 	let projOrder = $state<string[]>([]);
@@ -260,7 +260,7 @@
 
 			const newOrgId = qData.organization?.id ?? null;
 			if (newOrgId && newOrgId !== orgId) orgId = newOrgId;
-			// Membership is inlined in the overview payload — no extra fetch
+			// Membership is inlined in the overview payload: no extra fetch
 			if (qData.currentMember) {
 				currentOrgRole = qData.currentMember.role;
 				isSyntheticMembership = !!qData.currentMember.synthetic;
@@ -330,9 +330,8 @@
 		});
 	});
 
-	// ── SSE subscription ──
 	// Subscribes once orgId is known. SSE events invalidate the TanStack query
-	// which triggers an automatic refetch — no manual loadOverview() needed.
+	// which triggers an automatic refetch, no manual loadOverview() needed.
 	let unsub: (() => void) | null = null;
 	let sseOrgId: string | null = null;
 	// Builds emit a burst of SSE events; collapse them into one refetch per

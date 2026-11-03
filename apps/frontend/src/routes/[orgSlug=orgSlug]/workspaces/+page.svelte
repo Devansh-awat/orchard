@@ -74,7 +74,6 @@
 			const slug = toSlug(name);
 			const orgId = $selectedOrganization?.id;
 
-			// Create workspace
 			const wsRes = await apiFetch('/apiv1/workspaces', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },

@@ -87,7 +87,6 @@
 <div class="donut-wrap">
 	<div class="donut-svg-wrap" style="width: {size}px; height: {size}px;">
 		<svg viewBox="0 0 {size} {size}" width={size} height={size} aria-hidden="true">
-			<!-- Background ring -->
 			<circle
 				{cx}
 				{cy}

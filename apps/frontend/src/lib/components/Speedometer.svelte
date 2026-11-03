@@ -67,7 +67,6 @@
 
 <div class="speedo" style="--fill-color: {fillColor}; --max-w: {dims.w}px;">
 	<svg viewBox="0 0 {dims.w} {dims.h}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-		<!-- Background arc -->
 		<path
 			d={bgArc}
 			stroke="color-mix(in srgb, var(--surface-border) 60%, transparent)"
@@ -75,7 +74,6 @@
 			stroke-linecap="round"
 			fill="none"
 		/>
-		<!-- Filled arc -->
 		{#if fillArc}
 			<path
 				d={fillArc}
@@ -86,7 +84,6 @@
 				class="speedo-fill"
 			/>
 		{/if}
-		<!-- Tick marks -->
 		{#each ticks as t (t)}
 			{@const e = tickEnd(t, dims.r - dims.sw / 2 - 4, dims.r - dims.sw / 2 - 10)}
 			<line
@@ -99,7 +96,6 @@
 				stroke-linecap="round"
 			/>
 		{/each}
-		<!-- Needle -->
 		{#if !isUnlimited}
 			<line
 				x1={cx}

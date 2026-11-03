@@ -3,9 +3,9 @@ import { env } from '$env/dynamic/public';
 import type { PageServerLoad } from './$types';
 
 /**
- * Compatibility entry point. SSO used to live on a per-org subdomain that
- * rewrote / to this route; it now lives at /<org-slug> on the main domain.
- * Anything still arriving here is forwarded to the org's real login page.
+ * Compatibility entry point for per-org subdomains that rewrite / to this
+ * route. SSO lives at /<org-slug> on the main domain, so anything arriving here
+ * is forwarded to the org's real login page.
  */
 export const load: PageServerLoad = async ({ locals, url, fetch }) => {
 	const apiBase = env.PUBLIC_API_BASE || '';

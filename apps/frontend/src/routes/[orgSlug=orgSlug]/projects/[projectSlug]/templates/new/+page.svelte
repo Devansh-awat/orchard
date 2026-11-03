@@ -76,7 +76,6 @@
 	let saving = $state(false);
 	let error = $state<string | null>(null);
 
-	// Visual editor state
 	let metaName = $state('my-template');
 	let metaDisplayName = $state('My Template');
 	let metaDescription = $state('');
@@ -88,7 +87,6 @@
 	let parameters = $state<Param[]>([]);
 	let resources = $state<Resource[]>([]);
 
-	// YAML editor state
 	let yamlContent = $state(exampleYaml());
 
 	function exampleYaml(): string {
@@ -435,7 +433,6 @@ resources:
 		</div>
 	</div>
 
-	<!-- Mode toggle -->
 	<div class="nt-mode-toggle">
 		<button class="nt-mode-btn" class:nt-mode-active={mode === 'visual'} onclick={switchToVisual}>
 			<SlidersHorizontal class="h-4 w-4" />
@@ -452,7 +449,6 @@ resources:
 	{/if}
 
 	{#if mode === 'yaml'}
-		<!-- YAML Editor -->
 		<div class="nt-yaml-section">
 			<p class="nt-yaml-hint">
 				Write your template YAML directly. See the
@@ -470,9 +466,7 @@ resources:
 			></textarea>
 		</div>
 	{:else}
-		<!-- Visual Editor -->
 		<div class="nt-visual">
-			<!-- Metadata -->
 			<section class="nt-section">
 				<h2 class="nt-section-title">Metadata</h2>
 				<div class="nt-grid-2">
@@ -532,7 +526,6 @@ resources:
 				</Field>
 			</section>
 
-			<!-- Parameters -->
 			<section class="nt-section">
 				<div class="nt-section-header">
 					<h2 class="nt-section-title">Parameters</h2>
@@ -698,7 +691,6 @@ resources:
 				{/if}
 			</section>
 
-			<!-- Resources -->
 			<section class="nt-section">
 				<div class="nt-section-header">
 					<h2 class="nt-section-title">Resources</h2>
@@ -789,7 +781,6 @@ resources:
 										</div>
 									</div>
 
-									<!-- Ports -->
 									<div class="nt-sub-section">
 										<div class="nt-sub-header">
 											<span class="nt-label-sm">Ports</span>
@@ -834,7 +825,6 @@ resources:
 										{/each}
 									</div>
 
-									<!-- Env vars -->
 									<div class="nt-sub-section">
 										<div class="nt-sub-header">
 											<span class="nt-label-sm">Environment variables</span>
@@ -886,7 +876,6 @@ resources:
 										</div>
 									</div>
 
-									<!-- Routes -->
 									<div class="nt-sub-section">
 										<div class="nt-sub-header">
 											<span class="nt-label-sm">Routes</span>
@@ -940,7 +929,6 @@ resources:
 		</div>
 	{/if}
 
-	<!-- Actions -->
 	<div class="nt-actions">
 		<Button variant="primary" onclick={save} loading={saving}>
 			{#if !saving}<LayoutTemplate class="h-4 w-4" />{/if}
@@ -977,7 +965,6 @@ resources:
 		margin: 0.25rem 0 0;
 	}
 
-	/* Mode toggle */
 	.nt-mode-toggle {
 		display: flex;
 		gap: 0;
@@ -1020,7 +1007,6 @@ resources:
 		margin-bottom: 1.5rem;
 	}
 
-	/* YAML editor */
 	.nt-yaml-section {
 		display: flex;
 		flex-direction: column;
@@ -1060,7 +1046,6 @@ resources:
 		border-color: var(--sidebar-text-active-border);
 	}
 
-	/* Visual editor */
 	.nt-visual {
 		display: flex;
 		flex-direction: column;
@@ -1107,7 +1092,6 @@ resources:
 		background-color: color-mix(in srgb, var(--surface-border) 50%, transparent);
 	}
 
-	/* Fields */
 	.nt-field {
 		display: flex;
 		flex-direction: column;
@@ -1174,7 +1158,6 @@ resources:
 		cursor: pointer;
 	}
 
-	/* Grids */
 	.nt-grid-2 {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
@@ -1186,7 +1169,6 @@ resources:
 		gap: 0.75rem;
 	}
 
-	/* Param cards */
 	.nt-param-card {
 		border: 1px solid var(--surface-border);
 		border-radius: var(--radius-md);
@@ -1209,7 +1191,6 @@ resources:
 		min-width: 1.5rem;
 	}
 
-	/* Resource cards */
 	.nt-res-card {
 		border: 1px solid var(--surface-border);
 		border-radius: var(--radius-md);
@@ -1248,7 +1229,6 @@ resources:
 		color: var(--center-channel-color);
 	}
 
-	/* Sub-sections */
 	.nt-sub-section {
 		display: flex;
 		flex-direction: column;
@@ -1260,7 +1240,6 @@ resources:
 		justify-content: space-between;
 	}
 
-	/* Rows */
 	.nt-env-row,
 	.nt-port-row,
 	.nt-route-row,
@@ -1273,7 +1252,6 @@ resources:
 		max-width: 12rem;
 	}
 
-	/* Buttons */
 	.nt-remove-btn {
 		display: flex;
 		align-items: center;
@@ -1333,14 +1311,12 @@ resources:
 		border-radius: var(--radius-md);
 	}
 
-	/* Options */
 	.nt-options {
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
 	}
 
-	/* Actions */
 	.nt-actions {
 		margin-top: 1.5rem;
 		padding-top: 1.25rem;

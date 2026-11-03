@@ -25,7 +25,6 @@
 	let error = $state<string | null>(null);
 	let formError = $state<string | null>(null);
 
-	// Progress animation
 	const PROGRESS_DURATION = 3000;
 	let progressValue = $state(0);
 	let progressAnimationFrame: number | null = null;
@@ -269,7 +268,6 @@
 			</div>
 		{:else if workspace}
 			<div class="mx-auto max-w-2xl space-y-6">
-				<!-- Header -->
 				<div
 					class="rounded-3xl border p-6 shadow-sm"
 					style="background-color: var(--surface-bg); border-color: var(--surface-border); color: var(--center-channel-color);"
@@ -291,12 +289,10 @@
 					<div class="card-body">
 						<div class="relative">
 							<div class={['space-y-6', showingProgress ? 'opacity-0' : '']}>
-								<!-- Project Name -->
 								<Field label="Project name" for="name">
 									<Input id="name" bind:value={name} placeholder="My Project" />
 								</Field>
 
-								<!-- Project Slug -->
 								<Field
 									label="Project slug"
 									for="slug"
@@ -311,7 +307,6 @@
 									/>
 								</Field>
 
-								<!-- Repository URL -->
 								<Field label="Repository URL (optional)" for="repositoryUrl">
 									<Input
 										id="repositoryUrl"
@@ -321,7 +316,6 @@
 									/>
 								</Field>
 
-								<!-- Description -->
 								<Field label="Description (optional)" for="description">
 									<textarea
 										id="description"
@@ -331,7 +325,6 @@
 										class="input"></textarea>
 								</Field>
 
-								<!-- Namespace Preview -->
 								{#if slug && workspace.organization}
 									<div
 										class="rounded-2xl border p-4"
@@ -346,7 +339,6 @@
 									</div>
 								{/if}
 
-								<!-- Actions -->
 								<div
 									class="flex items-center justify-end gap-3 pt-4 border-t"
 									style="border-color: var(--surface-border);"

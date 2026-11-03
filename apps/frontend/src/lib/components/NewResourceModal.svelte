@@ -188,7 +188,6 @@
 			transition:scale={{ duration: 200, start: 0.95 }}
 			onclick={(e) => e.stopPropagation()}
 		>
-			<!-- Header -->
 			<div class="nr-header">
 				<h2 class="nr-title">Create new resource</h2>
 				<button class="nr-close" onclick={() => (open = false)}>
@@ -196,7 +195,6 @@
 				</button>
 			</div>
 
-			<!-- Search -->
 			<div class="nr-search-wrap">
 				<Search class="h-4 w-4 nr-search-icon" />
 				<input
@@ -209,7 +207,6 @@
 			</div>
 
 			<div class="nr-body">
-				<!-- Quick Actions -->
 				{#if filteredActions.length > 0}
 					<div class="nr-section">
 						<h3 class="nr-section-title">Quick start</h3>
@@ -233,7 +230,6 @@
 					</div>
 				{/if}
 
-				<!-- Templates -->
 				<div class="nr-section">
 					<div class="nr-section-header">
 						<h3 class="nr-section-title">Templates</h3>
@@ -369,7 +365,6 @@
 		background-color: color-mix(in srgb, var(--surface-border) 50%, transparent);
 	}
 
-	/* Search */
 	.nr-search-wrap {
 		position: relative;
 		padding: 0.75rem 1.5rem;
@@ -404,7 +399,6 @@
 		border-color: var(--sidebar-text-active-border);
 	}
 
-	/* Body */
 	.nr-body {
 		overflow-y: auto;
 		padding: 0 1.5rem 1.5rem;
@@ -445,7 +439,6 @@
 		text-decoration: underline;
 	}
 
-	/* Quick start grid */
 	.nr-quick-grid {
 		display: grid;
 		grid-template-columns: repeat(2, 1fr);
@@ -501,7 +494,6 @@
 		color: var(--surface-muted);
 	}
 
-	/* Template list */
 	.nr-tpl-grid {
 		display: flex;
 		flex-direction: column;

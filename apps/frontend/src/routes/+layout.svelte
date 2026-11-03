@@ -145,7 +145,7 @@
 	});
 
 	// The guard above only helps tabs that navigate. Parked tabs (logs,
-	// metrics) would run the stale build indefinitely — prompt them instead.
+	// metrics) would run the stale build indefinitely: prompt them instead.
 	let updatePromptShown = false;
 	$effect(() => {
 		if (!dev && $updated && !updatePromptShown) {
@@ -193,10 +193,8 @@
 
 			captureUrlSecrets();
 
-			// Initialize PostHog analytics (no-op if PUBLIC_POSTHOG_KEY is unset)
 			initPostHog();
 
-			// Initialize API base from environment or default
 			const apiBase = env.PUBLIC_API_BASE || '';
 			initApiBase(apiBase);
 

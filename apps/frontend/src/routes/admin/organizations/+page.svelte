@@ -46,7 +46,6 @@
 
 	const PLAN_OPTIONS = ['free', 'pro', 'enterprise'] as const;
 
-	// Create modal
 	let showCreate = $state(false);
 	let createName = $state('');
 	let createSlug = $state('');
@@ -56,17 +55,14 @@
 	let createPrimaryOwnerEmail = $state('');
 	let creating = $state(false);
 
-	// Edit modal
 	let editingOrg = $state<OrgItem | null>(null);
 	let editName = $state('');
 	let editDescription = $state('');
 	let saving = $state(false);
 
-	// Delete confirmation
 	let deletingOrg = $state<OrgItem | null>(null);
 	let deleting = $state(false);
 
-	// Quota modal
 	let quotaOrg = $state<OrgItem | null>(null);
 	let quotaLoading = $state(false);
 	let quotaSaving = $state(false);
@@ -438,7 +434,6 @@
 	});
 </script>
 
-<!-- Search + Create -->
 <div class="mb-4 flex items-center gap-3">
 	<div class="relative flex-1">
 		<Search
@@ -462,7 +457,6 @@
 	</Button>
 </div>
 
-<!-- Table -->
 <div
 	class="rounded-2xl border overflow-hidden"
 	style="border-color: var(--surface-border); background-color: var(--surface-bg);"
@@ -578,7 +572,6 @@
 	{/if}
 </div>
 
-<!-- Pagination -->
 {#if totalPages > 1}
 	<div class="mt-4 flex items-center justify-center gap-2">
 		<Button

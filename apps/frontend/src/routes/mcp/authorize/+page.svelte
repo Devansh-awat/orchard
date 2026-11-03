@@ -65,7 +65,6 @@
 	let authorizing = $state(false);
 	let authorized = $state(false);
 
-	// OTP login state
 	let otpEmail = $state('');
 	let otpCode = $state('');
 	let otpStep = $state<'email' | 'code'>('email');
@@ -83,7 +82,6 @@
 		return { 'x-turnstile-token': await widget.execute() };
 	}
 
-	// Passkey state
 	let passkeyEmail = $state('');
 	let passkeyLoading = $state(false);
 	let passkeyError = $state<string | null>(null);

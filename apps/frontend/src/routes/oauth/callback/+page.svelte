@@ -11,7 +11,6 @@
 	let signupsDisabled = $state(false);
 
 	onMount(async () => {
-		// Check for error in URL params
 		const errorParam = $page.url.searchParams.get('error');
 		if (errorParam) {
 			if (errorParam === 'private_beta' || errorParam === 'signups_disabled') {
@@ -23,7 +22,6 @@
 			return;
 		}
 
-		// Fetch user data
 		try {
 			await user.fetchUser();
 
@@ -37,7 +35,6 @@
 				}
 			}
 
-			// Redirect to appropriate page
 			goto(redirectTo);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Authentication failed';

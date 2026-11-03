@@ -71,7 +71,6 @@
 	const orgSlug = $derived(data.orgSlug);
 	const projectSlug = $derived(data.projectSlug);
 
-	// --- State ---
 	let project = $state<Project | null>(null);
 	const canEdit = $derived(project?.currentUserRole?.canEdit ?? false);
 	const canManageMembers = $derived(project?.currentUserRole?.canManageMembers ?? false);
@@ -145,7 +144,7 @@
 	}
 	let memberSearch = $state('');
 
-	// Compose stacks — keyed by project id so SSE-driven project refetches
+	// Compose stacks: keyed by project id so SSE-driven project refetches
 	// don't re-trigger this request (staleTime gates background refetches).
 	const composeQuery = createQuery(() => {
 		const projectId = project?.id;
@@ -173,7 +172,6 @@
 		)
 	);
 
-	// --- Org members for picker ---
 	let orgMembers = $state<OrgMember[]>([]);
 	let orgMembersLoaded = false;
 
@@ -202,7 +200,6 @@
 		});
 	});
 
-	// --- Filtered deployments ---
 	let selectedEnvId = $state('');
 	const projectEnvQuery = createQuery(() => ({
 		...environmentsQueryOptions(project?.id ?? ''),
@@ -294,14 +291,13 @@
 		databases = p.databases ?? [];
 	}
 
-	// --- Namespace sync ---
 	let lastSyncedNamespace: string | null = null;
 	async function syncNamespace() {
 		if (!project?.namespace) return;
 		if (project.namespace === lastSyncedNamespace) return;
 		lastSyncedNamespace = project.namespace;
 		try {
-			// The server exposes sync as GET (kubernetes.controller.ts) — a POST
+			// The server exposes sync as GET (kubernetes.controller.ts): a POST
 			// here 404s and the namespace never syncs.
 			await apiFetch(`/apiv1/sync/${project.namespace}`);
 			// Refresh through the query (coalesced) instead of a second full
@@ -312,7 +308,6 @@
 		}
 	}
 
-	// --- Actions ---
 	async function deleteProject() {
 		if (!project) return;
 		const deletedId = project.id;
@@ -566,7 +561,6 @@
 		}
 	}
 
-	// --- Customize handlers ---
 	async function handleCustomizeSave(payload: Record<string, string | null>) {
 		if (!project) return;
 		if (Object.keys(payload).length > 0) {
@@ -634,7 +628,6 @@
 		return updated.backgroundImage;
 	}
 
-	// --- Live updates: SSE connection health ---
 	let sseStatusValue = $state<'connecting' | 'connected' | 'disconnected'>('connecting');
 	const sseDisconnected = $derived(sseStatusValue === 'disconnected');
 	const orgId = $derived(project?.organization?.id ?? null);
@@ -651,7 +644,6 @@
 		}, 350);
 	}
 
-	// ── TanStack Query: project data ──
 	const TRANSIENT_DEPLOYMENT_STATUSES = new Set(['scaling', 'restarting', 'pending', 'unhealthy']);
 	const projectQuery = createQuery(() => ({
 		queryKey: ['project-detail', orgSlug, projectSlug],
@@ -701,14 +693,14 @@
 	});
 
 	// Apply query data to local state (latest-wins: TanStack never resolves a
-	// stale response after a newer one, which is what made cards flicker to
-	// "Pending" under bursts of invalidations before).
+	// stale response after a newer one, so cards do not flicker to "Pending"
+	// under bursts of invalidations).
 	$effect(() => {
 		const qData = projectQuery.data;
 		const qError = projectQuery.error;
 		const qPending = projectQuery.isPending;
 		untrack(() => {
-			if (qPending && !lastQueryData) return; // initial load — keep skeleton
+			if (qPending && !lastQueryData) return; // initial load: keep skeleton
 			if (qError && !qData) {
 				error = qError instanceof Error ? qError.message : 'Failed to fetch project';
 				loading = false;

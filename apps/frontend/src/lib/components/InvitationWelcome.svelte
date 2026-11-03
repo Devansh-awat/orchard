@@ -35,7 +35,7 @@
 	let githubUsername = $state<string | null>(null);
 	// Whether the instance has a GitHub App at all, which is not the same as
 	// whether this user has linked one. Without it there is no client id, and
-	// the connect button used to send people to github.com with client_id=null.
+	// the connect button would send people to github.com with client_id=null.
 	let githubAvailable = $state(true);
 	let initialized = $state(false);
 
@@ -75,7 +75,7 @@
 		}
 
 		// Returning from the GitHub OAuth round-trip lands back on /setup with
-		// ?github=linked — resume on the GitHub step instead of restarting.
+		// ?github=linked: resume on the GitHub step instead of restarting.
 		const params = new URLSearchParams(window.location.search);
 		if (params.get('github') === 'linked' || params.get('step') === 'github') {
 			currentStep = 'github';
@@ -228,10 +228,8 @@
 </script>
 
 <div class="setup-page">
-	<!-- Grid background -->
 	<div class="setup-grid"></div>
 
-	<!-- Header -->
 	<header class="setup-header">
 		<div class="setup-header-inner">
 			<img src="/logo/logocompact.svg" alt="Orchard" class="setup-logo logo-light" />
@@ -249,7 +247,6 @@
 		</div>
 	</header>
 
-	<!-- Centered content -->
 	<div class="setup-content">
 		{#if currentStep === 'loading'}
 			<div class="setup-loading">
@@ -262,7 +259,6 @@
 			</div>
 		{:else}
 			<div class="card setup-card">
-				<!-- Progress bar -->
 				<div class="card-header">
 					<div class="setup-steps">
 						{#each steps as step, i (step.key)}
@@ -294,7 +290,6 @@
 					</div>
 				</div>
 
-				<!-- Step content -->
 				<div class="card-body">
 					{#if currentStep === 'profile'}
 						<div in:fly={{ x: 20, duration: 200 }}>
@@ -511,7 +506,6 @@
 		mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 20%, transparent 100%);
 	}
 
-	/* Header */
 	.setup-header {
 		position: relative;
 		z-index: 1;
@@ -548,7 +542,6 @@
 		line-height: 1.5;
 	}
 
-	/* Centered content area */
 	.setup-content {
 		position: relative;
 		z-index: 1;
@@ -581,7 +574,6 @@
 		padding: 4rem 0;
 	}
 
-	/* Progress steps */
 	.setup-steps {
 		display: flex;
 		align-items: center;
@@ -650,7 +642,6 @@
 		background-color: var(--button-bg);
 	}
 
-	/* Step content header */
 	.setup-step-header {
 		display: flex;
 		align-items: flex-start;
@@ -699,7 +690,6 @@
 		line-height: 1.5;
 	}
 
-	/* Profile step */
 	.setup-profile-preview {
 		display: flex;
 		align-items: center;
@@ -779,7 +769,6 @@
 		color: var(--center-channel-color);
 	}
 
-	/* GitHub step */
 	.setup-github-connected {
 		display: flex;
 		align-items: center;

@@ -1,4 +1,4 @@
-/* Database page — shared component styles */
+/* Database page: shared component styles */
 
 .db-header {
 	display: flex;
@@ -134,7 +134,6 @@
 	}
 }
 
-/* Key/value grid */
 .db-kv-grid {
 	display: grid;
 	grid-template-columns: 9rem 1fr;
@@ -290,7 +289,6 @@
 	color: var(--surface-muted);
 }
 
-/* Settings rows */
 .db-setting-row {
 	display: grid;
 	grid-template-columns: 1fr 16rem;

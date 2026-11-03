@@ -102,8 +102,6 @@
 	color: var(--center-channel-color);
 }
 
-/* ---------------------------------------------------------------- runs */
-
 .job-runs-table {
 	width: 100%;
 	border-collapse: collapse;
@@ -152,8 +150,6 @@
 	padding-top: 0.85rem;
 }
 
-/* ------------------------------------------------------------- settings */
-
 .job-settings {
 	display: flex;
 	flex-direction: column;
@@ -179,8 +175,6 @@
 	color: var(--center-channel-color);
 	letter-spacing: -0.01em;
 }
-
-/* ------------------------------------------------------------ run page */
 
 .job-run-header {
 	display: flex;

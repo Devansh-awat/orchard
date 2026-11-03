@@ -203,7 +203,7 @@ export interface ReplicaDrift {
  * row when nothing is mid-build or mid-apply. Rendering intent alone is how a
  * deployment sitting at zero pods reported one replica for eleven days.
  *
- * Returns null when there is nothing to explain — either they agree, or the
+ * Returns null when there is nothing to explain: either they agree, or the
  * mirror has not seen the object yet and we have no observation to offer.
  */
 export function replicaDrift(deployment: {

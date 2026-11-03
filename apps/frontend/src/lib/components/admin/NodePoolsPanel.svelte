@@ -43,7 +43,6 @@
 	let modalOpen = $state(false);
 	let saving = $state(false);
 
-	// Form state
 	let fName = $state('');
 	let fDescription = $state('');
 	let fAffinityMode = $state<'required' | 'preferred'>('preferred');

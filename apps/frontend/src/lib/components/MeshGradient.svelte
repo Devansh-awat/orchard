@@ -100,8 +100,7 @@
 
 			const colorMatrix = new ColorMatrixFilter();
 			// Grade the gradient identically in both themes so the shader reads the
-			// same regardless of light/dark mode. (Previously light mode lifted the
-			// shadows, which washed the gradient out.)
+			// same regardless of light/dark mode.
 			const grade = () => {
 				colorMatrix.reset();
 				colorMatrix.saturate(saturation, true);

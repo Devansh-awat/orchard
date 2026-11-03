@@ -41,7 +41,6 @@
 		try {
 			await pendingInvitations.accept(invitation.id, true);
 
-			// Refresh organizations
 			const orgsResponse = await apiFetch('/apiv1/organizations/user');
 			if (orgsResponse.ok) {
 				const orgs = await orgsResponse.json();
@@ -55,7 +54,6 @@
 				color: 'success'
 			});
 
-			// Close this modal and show onboarding
 			showPendingInvitationsModal.hide();
 			showOnboarding.show();
 		} catch (e) {
@@ -77,13 +75,11 @@
 		try {
 			await pendingInvitations.decline(invitation.id, true);
 
-			// Check if user has any organizations
 			const orgsResponse = await apiFetch('/apiv1/organizations/user');
 			if (orgsResponse.ok) {
 				const orgs = await orgsResponse.json();
 				organizations.set(orgs);
 
-				// Get remaining invitations
 				const remainingInvitations = invitations.filter((inv) => inv.token !== invitation.token);
 
 				if (orgs.length === 0 && remainingInvitations.length === 0) {

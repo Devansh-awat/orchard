@@ -50,7 +50,7 @@ function initializeSelected(preferredSlug?: string | null) {
 	const storedId = loadSelectedFromStorage();
 	const orgs = get(organizationsList);
 
-	// The org in the URL wins over the last-selected org in localStorage —
+	// The org in the URL wins over the last-selected org in localStorage,
 	// otherwise the sidebar mounts with the stored org and visibly flips to
 	// the URL's org a frame later when [orgSlug]/+layout corrects it.
 	if (preferredSlug) {

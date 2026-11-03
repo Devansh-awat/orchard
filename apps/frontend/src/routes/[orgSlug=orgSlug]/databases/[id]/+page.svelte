@@ -68,7 +68,6 @@
 		TerminalTab as TerminalTabType
 	} from '$lib/components/database';
 
-	// --- Constants ---
 	const SCHEDULE_PRESETS = [
 		{ id: 'hourly', label: 'Every hour', cron: '0 * * * *', description: 'Top of every hour' },
 		{
@@ -187,12 +186,10 @@
 
 	const MAX_BACKUPS = 10;
 
-	// --- Props & derived ---
 	let { data } = $props<{ data: PageData }>();
 	const dbId = $derived(data.dbId);
 	const orgSlug = $derived($page.params.orgSlug);
 
-	// --- Core state ---
 	let database = $state<DatabaseDetail | null>(null);
 	let loading = $state(true);
 	let deleting = $state(false);
@@ -204,21 +201,18 @@
 	let showPublicConnectionString = $state(false);
 	let copiedField = $state<string | null>(null);
 
-	// Backups
 	let backups = $state<Backup[]>([]);
 	let backupsLoading = $state(false);
 	let creatingBackup = $state(false);
 	let restoringBackupId = $state<string | null>(null);
 	let togglingPublic = $state(false);
 
-	// Backup schedule
 	let scheduleCron = $state<string>('');
 	let schedulePreset = $state<string>('none');
 	let scheduleCustomCron = $state<string>('');
 	let scheduleLoaded = $state(false);
 	let scheduleSaving = $state(false);
 
-	// Extensions
 	let extensions = $state<ExtInfo[]>([]);
 	let preloadedExts = $state<string[]>([]);
 	let extensionsLoading = $state(false);
@@ -226,7 +220,6 @@
 	let extensionSearch = $state('');
 	let busyExtension = $state<string | null>(null);
 
-	// Settings
 	let settings = $state<Record<string, string>>({});
 	let settingsLoading = $state(false);
 	let settingsLoaded = $state(false);
@@ -236,7 +229,6 @@
 	let settingsDrift = $state<Record<string, string | null>>({});
 	let settingsLoadedValues = $state<Record<string, string>>({});
 
-	// Terminal
 	let logs = $state('');
 	let logsLoading = $state(false);
 	let tailLines = $state(200);
@@ -264,14 +256,12 @@
 	let restoredTabsFor: string | null = null;
 	let consoleExpanded = $state(false);
 
-	// Delete modal
 	let showDeleteModal = $state(false);
 	let deleteCountdownActive = $state(false);
 	let deleteCountdown = $state(10);
 	let deleteTimerInterval = $state<ReturnType<typeof setInterval> | null>(null);
 	let deleteProgress = $derived(((10 - deleteCountdown) / 10) * 100);
 
-	// Resources
 	let resourceCpuMilli = $state<number | null>(null);
 	let resourceMemoryBytes = $state<number | null>(null);
 	let resourcesDirty = $state(false);
@@ -390,7 +380,6 @@
 		if (activeTab === 'overview') terminalVisited = true;
 	});
 
-	// SSE
 	interface QueryStatsPayload {
 		installed: boolean;
 		queries: import('$lib/components/database/QueriesTab.svelte').QueryStat[];
@@ -524,7 +513,6 @@
 		return () => clearInterval(interval);
 	});
 
-	// --- Derived ---
 	let filteredExtensions = $derived.by(() => {
 		const q = extensionSearch.trim().toLowerCase();
 		const byName = new Map<string, ExtInfo>();
@@ -552,7 +540,6 @@
 		);
 	});
 
-	// --- Effects ---
 	$effect(() => {
 		if (
 			activeTab === 'settings' &&
@@ -596,7 +583,6 @@
 		}
 	});
 
-	// --- API functions ---
 	async function fetchDatabase(silent = false) {
 		if (!silent) loading = true;
 		if (!silent) error = null;
@@ -1054,7 +1040,6 @@
 		}
 	}
 
-	// Extensions
 	async function fetchExtensions() {
 		if (!extensionsLoaded) extensionsLoading = true;
 		try {
@@ -1124,7 +1109,6 @@
 		}
 	}
 
-	// Settings
 	async function fetchSettings() {
 		if (!settingsLoaded) settingsLoading = true;
 		try {
@@ -1180,7 +1164,6 @@
 		}
 	}
 
-	// Terminal / logs
 	async function fetchLogs() {
 		if (!database?.namespace) return;
 		const podName = logsPodName || database.liveStatus?.currentPrimary || database.pods?.[0]?.name;
@@ -1311,7 +1294,6 @@
 		}
 	}
 
-	// Delete
 	function openDeleteModal() {
 		if (!database || database.deletionProtection) return;
 		showDeleteModal = true;
@@ -1418,7 +1400,6 @@
 		}
 	}
 
-	// Helpers
 	function copyToClipboard(text: string, field: string) {
 		navigator.clipboard.writeText(text);
 		copiedField = field;
@@ -1459,7 +1440,6 @@
 		return { label: ls.phase || 'Pending', kind: 'pending' };
 	}
 
-	// --- Lifecycle ---
 	async function fetchQuota() {
 		const orgId = $selectedOrganization?.id;
 		if (!orgId) return;

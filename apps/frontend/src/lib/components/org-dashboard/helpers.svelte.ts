@@ -81,7 +81,7 @@ export function buildIcon(
 	const k = knownIcon(img);
 	if (k) return k;
 	if (failedFav.has(`b-${id ?? ''}`)) return null;
-	// Prefer the R2 URL the overview already resolved — no backend round trip
+	// Prefer the R2 URL the overview already resolved: no backend round trip
 	if (faviconUrl) return faviconUrl;
 	if (ings?.length) return favUrl(ings[0].host.split('/')[0]);
 	return null;
