@@ -13,8 +13,11 @@ import (
 
 const (
 	hostDefaultsPath    = "hostDefaults"
-	hostDefaultsVersion = 1
+	hostDefaultsVersion = 2
 	smallBoxMemMB       = 7500
+
+	cnpgOperatorNamespaceEnv = "CNPG_OPERATOR_NAMESPACE"
+	installerCnpgNamespace   = "cnpg-system"
 )
 
 type storedState int
@@ -76,9 +79,23 @@ func objectStorageInValues(values *cli.Values) bool {
 }
 
 func applyHostDefaults(values *cli.Values, facts hostFacts) []string {
-	if defaultsRound(values) >= hostDefaultsVersion {
+	round := defaultsRound(values)
+	if round >= hostDefaultsVersion {
 		return nil
 	}
+	var changes []string
+	if round < 1 {
+		changes = applyFirstRound(values, facts)
+	}
+	if round < 2 && values.EnvValue(serverEnvPath, cnpgOperatorNamespaceEnv) == "" {
+		values.SetEnv(serverEnvPath, cnpgOperatorNamespaceEnv, installerCnpgNamespace)
+		changes = append(changes, cnpgOperatorNamespaceEnv+" = "+installerCnpgNamespace+" (lets the database operator reach database pods)")
+	}
+	_ = values.Put(hostDefaultsPath, hostDefaultsVersion)
+	return changes
+}
+
+func applyFirstRound(values *cli.Values, facts hostFacts) []string {
 	var changes []string
 	fill := func(path string, value any, note string) {
 		if values.Get(path) != nil {
@@ -152,7 +169,6 @@ func applyHostDefaults(values *cli.Values, facts hostFacts) []string {
 		}
 	}
 
-	_ = values.Put(hostDefaultsPath, hostDefaultsVersion)
 	return changes
 }
 
@@ -288,7 +304,7 @@ func migrateValues(c *cli.Context) error {
 		return err
 	}
 	facts := hostFacts{MemMB: memoryMB(), DiskGB: freeDiskGB("/var/lib")}
-	if defaultsRound(values) < hostDefaultsVersion && values.Get("objectStorage.local.enabled") == nil && !objectStorageInValues(values) {
+	if defaultsRound(values) < 1 && values.Get("objectStorage.local.enabled") == nil && !objectStorageInValues(values) {
 		facts.ObjectStorage = storedObjectStorage(c, values)
 	}
 	changes := applyHostDefaults(values, facts)

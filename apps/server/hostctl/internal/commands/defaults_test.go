@@ -108,6 +108,26 @@ func TestHostDefaultsRunOnce(t *testing.T) {
 	}
 }
 
+func TestHostDefaultsSecondRoundNamesTheInstallerOperatorNamespace(t *testing.T) {
+	values := load(t, "hostDefaults: 1\nmetrics:\n  enabled: false\nserver:\n  env:\n    - {name: JWT_SECRET, value: jwt}\n")
+	changes := applyHostDefaults(values, hostFacts{ObjectStorage: storedNone})
+	if len(changes) != 1 || !strings.Contains(changes[0], cnpgOperatorNamespaceEnv) {
+		t.Fatalf("only the operator namespace should change, got %v", changes)
+	}
+	if got := values.EnvValue(serverEnvPath, cnpgOperatorNamespaceEnv); got != installerCnpgNamespace {
+		t.Fatalf("expected %s, got %q", installerCnpgNamespace, got)
+	}
+	if values.Get("metrics.enabled") != false {
+		t.Fatal("the first round must not run again")
+	}
+
+	custom := load(t, "hostDefaults: 1\nserver:\n  env:\n    - {name: CNPG_OPERATOR_NAMESPACE, value: mine}\n")
+	applyHostDefaults(custom, hostFacts{})
+	if got := custom.EnvValue(serverEnvPath, cnpgOperatorNamespaceEnv); got != "mine" {
+		t.Fatalf("an explicit namespace has to stick, got %q", got)
+	}
+}
+
 func TestHostDefaultsLeaveExistingObjectStorageAlone(t *testing.T) {
 	cases := map[string]struct {
 		body  string
