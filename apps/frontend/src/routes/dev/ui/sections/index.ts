@@ -5,7 +5,7 @@ import Corners from './Corners.svelte';
 import TypeWeight from './TypeWeight.svelte';
 import ColourStatus from './ColourStatus.svelte';
 import Layout from './Layout.svelte';
-import AiTells from './AiTells.svelte';
+import Avoid from './Avoid.svelte';
 import WhichComponent from './WhichComponent.svelte';
 import Foundations from './Foundations.svelte';
 import Type from './Type.svelte';
@@ -36,7 +36,7 @@ export const SECTIONS: Section[] = [
 	{ id: 'type-weight', title: 'Type and weight', group: 'System', component: TypeWeight },
 	{ id: 'colour-status', title: 'Colour and status', group: 'System', component: ColourStatus },
 	{ id: 'layout', title: 'Layout and alignment', group: 'System', component: Layout },
-	{ id: 'ai-tells', title: 'AI tells', group: 'System', component: AiTells },
+	{ id: 'avoid', title: 'Patterns to avoid', group: 'System', component: Avoid },
 	{ id: 'which-component', title: 'Which component', group: 'System', component: WhichComponent },
 	{
 		id: 'foundations',
