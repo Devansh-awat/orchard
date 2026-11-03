@@ -336,6 +336,22 @@ func deployVolumesSetCmd() *cobra.Command {
 		Short: "Replace all volumes with the given PVC volumes",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cl, _, err := client()
+			if err != nil {
+				return err
+			}
+			var dep map[string]any
+			if len(volFlags) > 0 {
+				if err := cl.GetJSON(cmd.Context(), deployPath(args[0]), &dep); err != nil {
+					return err
+				}
+			}
+			current := map[string]map[string]any{}
+			for _, v := range asList(dep["volumes"]) {
+				if pick(v, "type") == "pvc" {
+					current[pick(v, "mountPath")] = v
+				}
+			}
 			vols := []map[string]any{}
 			for _, v := range volFlags {
 				mount, size, ok := strings.Cut(v, "=")
@@ -343,11 +359,16 @@ func deployVolumesSetCmd() *cobra.Command {
 					return fmt.Errorf("--volume expects mountPath=size (e.g. /data=5Gi), got %q", v)
 				}
 				name := deployVolumeName(mount)
+				claim := deployVolumeClaim(pick(dep, "name"), name)
+				if existing, ok := current[mount]; ok {
+					name = pick(existing, "name")
+					claim = pick(existing, "pvcName")
+				}
 				vols = append(vols, map[string]any{
 					"name":        name,
 					"type":        "pvc",
 					"mountPath":   mount,
-					"pvcName":     name,
+					"pvcName":     claim,
 					"storageSize": size,
 				})
 			}
@@ -355,10 +376,6 @@ func deployVolumesSetCmd() *cobra.Command {
 				if err := output.Confirm(fmt.Sprintf("remove ALL volumes from deployment %s", args[0]), yesFlag); err != nil {
 					return err
 				}
-			}
-			cl, _, err := client()
-			if err != nil {
-				return err
 			}
 			body := map[string]any{"volumes": vols}
 			if err := cl.Send(cmd.Context(), http.MethodPut, deployPath(args[0], "volumes"), body, nil); err != nil {
@@ -370,6 +387,17 @@ func deployVolumesSetCmd() *cobra.Command {
 	}
 	c.Flags().StringArrayVar(&volFlags, "volume", nil, "PVC volume as mountPath=size (repeatable); omit to remove all volumes")
 	return c
+}
+
+func deployVolumeClaim(deployment, volume string) string {
+	claim := volume
+	if deployment != "" {
+		claim = deployment + "-" + volume
+	}
+	if len(claim) > 63 {
+		claim = claim[:63]
+	}
+	return strings.TrimRight(claim, "-")
 }
 
 func deployVolumeName(mountPath string) string {

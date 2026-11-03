@@ -440,6 +440,10 @@ func TestDeployVolumesSetBody(t *testing.T) {
 	var gotMethod, gotPath string
 	var gotBody map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			io.WriteString(w, `{"name":"web","volumes":[{"name":"cache","type":"pvc","mountPath":"/cache","pvcName":"web-cache-a1b2c3"}]}`)
+			return
+		}
 		gotMethod, gotPath = r.Method, r.URL.Path
 		gotBody = deployDecodeBody(t, r)
 		io.WriteString(w, `{}`)
@@ -447,16 +451,17 @@ func TestDeployVolumesSetBody(t *testing.T) {
 	defer srv.Close()
 
 	root := deployTestRoot(t, srv.URL)
-	root.SetArgs([]string{"deploy", "volumes", "set", "d1", "--volume", "/data=5Gi"})
+	root.SetArgs([]string{"deploy", "volumes", "set", "d1", "--volume", "/data=5Gi", "--volume", "/cache=2Gi"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("deploy volumes set: %v", err)
 	}
 	if gotMethod != http.MethodPut || gotPath != "/apiv1/deployments/d1/volumes" {
 		t.Errorf("request = %s %s, want PUT /apiv1/deployments/d1/volumes", gotMethod, gotPath)
 	}
-	want := []any{map[string]any{
-		"name": "data", "type": "pvc", "mountPath": "/data", "pvcName": "data", "storageSize": "5Gi",
-	}}
+	want := []any{
+		map[string]any{"name": "data", "type": "pvc", "mountPath": "/data", "pvcName": "web-data", "storageSize": "5Gi"},
+		map[string]any{"name": "cache", "type": "pvc", "mountPath": "/cache", "pvcName": "web-cache-a1b2c3", "storageSize": "2Gi"},
+	}
 	if !reflect.DeepEqual(gotBody["volumes"], want) {
 		t.Errorf("volumes body = %v, want %v", gotBody["volumes"], want)
 	}
