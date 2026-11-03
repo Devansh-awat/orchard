@@ -40,6 +40,7 @@
 		slug: string;
 		description?: string;
 		organizationId: string;
+		organization?: { slug: string };
 		members?: unknown[];
 		projects?: unknown[];
 		_count?: {
@@ -183,17 +184,18 @@
 		});
 	});
 
-	function openWorkspace(slug: string) {
-		return goto(`/workspaces/${slug}`);
+	function projectPath(project: Workspace) {
+		const orgSlug = project.organization?.slug ?? $selectedOrganization?.slug;
+		return orgSlug ? `/${orgSlug}/projects/${project.slug}` : '/';
 	}
 
-	function handleWorkspaceClick(event: MouseEvent, slug: string) {
+	function handleWorkspaceClick(event: MouseEvent, project: Workspace) {
 		if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
 			return;
 		}
 
 		event.preventDefault();
-		openWorkspace(slug);
+		goto(projectPath(project));
 	}
 
 	async function enterDashboard() {
@@ -473,8 +475,8 @@
 					<div class="hp-grid">
 						{#each filteredWorkspaces as workspace (workspace.id)}
 							<a
-								href={`/workspaces/${workspace.slug}`}
-								onclick={(event) => handleWorkspaceClick(event, workspace.slug)}
+								href={projectPath(workspace)}
+								onclick={(event) => handleWorkspaceClick(event, workspace)}
 								class="hp-card"
 							>
 								<div class="hp-card-top">
@@ -506,7 +508,7 @@
 					</div>
 				{:else}
 					<div class="hp-empty">
-						<p>No workspaces match "{searchQuery}"</p>
+						<p>No projects match "{searchQuery}"</p>
 					</div>
 				{/if}
 			</div>
