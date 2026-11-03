@@ -21,7 +21,7 @@ var exitCodeDocs = []exitCodeDoc{
 	{exitcode.OK, "ok", "success"},
 	{exitcode.Generic, "generic", "unexpected failure without a more specific code"},
 	{exitcode.Usage, "usage", "bad invocation: unknown flag or argument, or a confirmation prompt was refused (pass --yes)"},
-	{exitcode.Auth, "auth", "authentication missing or rejected (HTTP 401): run `orchard auth login`"},
+	{exitcode.Auth, "auth", "authentication rejected (HTTP 401): run `orchard auth login`"},
 	{exitcode.NotFound, "not-found", "resource not found (HTTP 404)"},
 	{exitcode.Invalid, "invalid", "the API rejected the request (other HTTP 4xx)"},
 	{exitcode.RateLimited, "rate-limited", "rate limited (HTTP 429): retry with backoff"},
