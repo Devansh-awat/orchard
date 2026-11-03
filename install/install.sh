@@ -7,6 +7,7 @@ IMAGE_REGISTRY=${ORCHARD_IMAGE_REGISTRY:-ghcr.io}
 IMAGE_REPOSITORY=${ORCHARD_IMAGE_REPOSITORY:-hackclub/orchard}
 STATE_DIR=${ORCHARD_STATE_DIR:-/etc/orchard}
 VALUES_FILE="$STATE_DIR/values.yaml"
+REGISTRIES_FILE=${ORCHARD_REGISTRIES_FILE:-/etc/rancher/k3s/registries.yaml}
 
 K3S_VERSION=${K3S_VERSION:-v1.31.5+k3s1}
 HELM_VERSION=${HELM_VERSION:-v4.3.0}
@@ -1193,10 +1194,16 @@ configs:
       username: $REGISTRY_USER
       password: "$REGISTRY_PASSWORD"
 EOF
+)
+  if [ ! -f "$pending" ] && [ -f "$REGISTRIES_FILE" ] && [ "$(cat "$REGISTRIES_FILE")" = "$wanted" ]; then
+    info "registry mirror unchanged, k3s keeps running"
+    return 0
+  fi
+  mkdir -p "$(dirname "$REGISTRIES_FILE")" "$STATE_DIR"
+  : > "$pending"
+  printf '%s\n' "$wanted" > "$REGISTRIES_FILE"
   run_step "reloading k3s with the registry mirror" 45s restart_k3s
-  run_step "starting the registry" 2m \
-    kubectl -n orchard rollout status deploy/zot --timeout=5m
-  info "registry ready at $REGISTRY_HOST, mirrored to 127.0.0.1:$REGISTRY_PORT, loopback only"
+  rm -f "$pending"
 }
 
 restart_k3s() {
