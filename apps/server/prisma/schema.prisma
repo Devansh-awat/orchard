@@ -1543,7 +1543,6 @@ model Database {
   crashState       DatabaseCrashState?
 
   @@unique([environmentId, name])
-  @@unique([dbName])
   @@index([projectId], map: "idx_databases_project")
   @@index([environmentId], map: "idx_databases_environment")
   @@index([templateInstanceId], map: "idx_databases_template_instance")

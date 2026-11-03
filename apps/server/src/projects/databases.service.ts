@@ -583,8 +583,8 @@ export class DatabasesService {
     if (existing)
       throw new BadRequestException('A database with this name already exists in this environment');
 
-    const dbNameExists = await this.prisma.database.findUnique({
-      where: { dbName }
+    const dbNameExists = await this.prisma.database.findFirst({
+      where: { dbName, forkedFromId: null }
     });
     if (dbNameExists)
       throw new BadRequestException('A database with this identifier already exists');

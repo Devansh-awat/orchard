@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   forwardRef,
+  HttpException,
   Inject,
   Injectable,
   Logger,
@@ -86,6 +87,14 @@ const RETIRE_AFTER_MS = 24 * 60 * 60 * 1000;
 const MAX_ATTEMPTS = 30;
 
 export const DRILL_NAMESPACE = () => process.env.DB_DRILL_NAMESPACE || 'orchard-restore-drills';
+
+export function planRejected(phase: string, e: unknown): boolean {
+  if (phase !== 'queued') return false;
+  if ((e as { code?: string })?.code === 'P2002') return true;
+  if (!(e instanceof HttpException)) return false;
+  const status = e.getStatus();
+  return status >= 400 && status < 500;
+}
 
 function sourcePrefix(src: Pick<OperationSource, 'namespace' | 'clusterName'>): string {
   return `${src.namespace}/${src.clusterName}/`;
@@ -213,7 +222,7 @@ export class DatabaseOperationsService {
           const attempts = op.attempts + 1;
           const message = k8sErrorMessage(e);
           this.logger.warn(`operation ${op.id} (${op.kind}/${op.phase}) failed a step: ${message}`);
-          if (attempts >= MAX_ATTEMPTS) {
+          if (attempts >= MAX_ATTEMPTS || planRejected(op.phase, e)) {
             await this.fail(op, message);
           } else {
             await this.prisma.databaseOperation.update({
@@ -393,45 +402,50 @@ export class DatabaseOperationsService {
     );
     const keepsCredentials = op.kind === 'undelete';
     const password = keepsCredentials ? this.crypto.open(src.dbPassword) : dbs.generatePassword();
-    await this.prisma.database.create({
-      data: {
-        id,
-        projectId: project.id,
-        environmentId: env?.id ?? null,
-        name,
-        dbName: src.dbName,
-        dbUser: keepsCredentials ? src.dbUser : src.dbUser,
-        dbPassword: this.crypto.seal(password),
-        status: 'restoring',
-        mode: 'cnpg',
-        pgMajor: src.pgMajor,
-        namespace,
-        clusterName,
-        storageSize: src.storageSize,
-        replicas: src.replicas,
-        cpuRequestMilli: src.cpuRequestMilli,
-        memoryRequestBytes: src.memoryRequestBytes != null ? BigInt(src.memoryRequestBytes) : null,
-        pgParameters: (src.pgParameters ?? undefined) as Prisma.InputJsonValue | undefined,
-        sharedPreloadLibs: (src.sharedPreloadLibs ?? undefined) as
-          | Prisma.InputJsonValue
-          | undefined,
-        nodePoolId: src.nodePoolId,
-        placementOverride: (src.placementOverride ?? undefined) as
-          | Prisma.InputJsonValue
-          | undefined,
-        host: `${clusterName}-rw.${namespace}.svc.cluster.local`,
-        port: 5432,
-        backupServerName: backupServerName(clusterName, id),
-        forkedFromId: op.kind === 'fork' ? src.databaseId : null,
-        forkedAt: op.kind === 'fork' ? new Date() : null,
-        createdBy: op.requestedBy
-      }
-    });
-    await this.setPhase(op, 'provisioning', {
-      startedAt: new Date(),
-      targetNamespace: namespace,
-      targetClusterName: clusterName,
-      targetDatabaseId: id
+    const forked = op.kind === 'fork' || op.mode === 'fork';
+    const row: Prisma.DatabaseUncheckedCreateInput = {
+      id,
+      projectId: project.id,
+      environmentId: env?.id ?? null,
+      name,
+      dbName: src.dbName,
+      dbUser: keepsCredentials ? src.dbUser : src.dbUser,
+      dbPassword: this.crypto.seal(password),
+      status: 'restoring',
+      mode: 'cnpg',
+      pgMajor: src.pgMajor,
+      namespace,
+      clusterName,
+      storageSize: src.storageSize,
+      replicas: src.replicas,
+      cpuRequestMilli: src.cpuRequestMilli,
+      memoryRequestBytes: src.memoryRequestBytes != null ? BigInt(src.memoryRequestBytes) : null,
+      pgParameters: (src.pgParameters ?? undefined) as Prisma.InputJsonValue | undefined,
+      sharedPreloadLibs: (src.sharedPreloadLibs ?? undefined) as Prisma.InputJsonValue | undefined,
+      nodePoolId: src.nodePoolId,
+      placementOverride: (src.placementOverride ?? undefined) as Prisma.InputJsonValue | undefined,
+      host: `${clusterName}-rw.${namespace}.svc.cluster.local`,
+      port: 5432,
+      backupServerName: backupServerName(clusterName, id),
+      forkedFromId: forked ? src.databaseId : null,
+      forkedAt: forked ? new Date() : null,
+      createdBy: op.requestedBy
+    };
+    await this.prisma.$transaction(async (tx) => {
+      await tx.database.create({ data: row });
+      await tx.databaseOperation.update({
+        where: { id: op.id },
+        data: {
+          phase: 'provisioning',
+          status: 'running',
+          attempts: 0,
+          error: null,
+          startedAt: new Date(),
+          targetNamespace: namespace,
+          targetClusterName: clusterName,
+          targetDatabaseId: id
+        }
+      });
     });
   }
 
