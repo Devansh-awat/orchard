@@ -14,6 +14,12 @@ graphify-out/
 /apps/gateway/gateway
 /apps/r2-proxy/r2-proxy
 /apps/registry/registry
+/apps/server/hostctl/hostctl
+/apps/server/hostctl/orchardctl
+/apps/fc-builder/fc-host
+/apps/fc-builder/fc-guest
+/apps/cli/tofu-provider/tofu-provider
+/apps/cli/tofu-provider/terraform-provider-orchard
 .env
 .env.*
 !.env.example
