@@ -8,7 +8,7 @@ import (
 )
 
 // Two lists name the same symlinks: this one, and the shell bootstrap's, which
-// is what runs on the first sync of an upgrade. Drift is silent — the alias
+// is what runs on the first sync of an upgrade. Drift is silent: the alias
 // simply never appears on the host, and the command looks like it was never
 // shipped.
 func TestBootstrapLinksTheSameAliases(t *testing.T) {
