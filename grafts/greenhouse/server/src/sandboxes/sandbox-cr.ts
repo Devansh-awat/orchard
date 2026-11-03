@@ -50,8 +50,8 @@ export function readSandboxCr(cr: any): SandboxCrStatus {
 }
 
 // What the sandbox row should say, given the resource the cluster actually
-// holds. `null` means the resource is mid-flight — created but not ready, or
-// resuming — and whatever the row already says still stands.
+// holds. `null` means the resource is mid-flight: created but not ready, or
+// resuming, and whatever the row already says still stands.
 export function sandboxStatusFromCr(cr: SandboxCrStatus): 'running' | 'stopped' | null {
   if (!cr.exists) return null;
   if (cr.operatingMode === 'Suspended') return 'stopped';
