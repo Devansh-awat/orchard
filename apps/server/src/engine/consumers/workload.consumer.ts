@@ -15,6 +15,7 @@ import { disruptionBudgetActive, readMinAvailable } from '../../kubernetes/disru
 import { ApplyQueueService } from '../../apply/apply-queue.service';
 import { AuditService } from '../../audit/audit.service';
 import { EngineEventType, EngineRefs } from '../core/informer';
+import { rowMayBePending } from './row-pending';
 
 export const K8S_DELETED_REASON = 'resource deleted in k8s';
 
@@ -121,7 +122,13 @@ export class WorkloadConsumer implements OnModuleDestroy {
     const labels = rs.metadata?.labels;
     const app = labels?.['orchard.my/app'] ?? labels?.['app.kubernetes.io/name'];
     if (!app) return Promise.resolve(null);
-    return this.resolveCtx({ metadata: { namespace: rs.metadata?.namespace, name: app } });
+    return this.resolveCtx({
+      metadata: {
+        namespace: rs.metadata?.namespace,
+        name: app,
+        creationTimestamp: rs.metadata?.creationTimestamp
+      }
+    });
   }
 
   // A PodDisruptionBudget carries the deployment's name, so it resolves
@@ -621,7 +628,9 @@ export class WorkloadConsumer implements OnModuleDestroy {
       ? { deploymentId: row.id, orgId: row.project.organizationId, projectId: row.projectId }
       : null;
 
-    this.ctxCache.set(key, { ctx, exp: Date.now() + (ctx ? POSITIVE_TTL_MS : NEGATIVE_TTL_MS) });
+    if (ctx || !rowMayBePending(obj.metadata?.creationTimestamp)) {
+      this.ctxCache.set(key, { ctx, exp: Date.now() + (ctx ? POSITIVE_TTL_MS : NEGATIVE_TTL_MS) });
+    }
     return ctx;
   }
 }

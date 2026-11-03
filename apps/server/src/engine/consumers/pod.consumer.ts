@@ -6,6 +6,7 @@ import { NotificationsService } from '../../notifications/notifications.service'
 import { PodLogCaptureService } from '../../kubernetes/pod-log-capture.service';
 import { EngineEventType, EngineObjectKey, EngineRefs } from '../core/informer';
 import { computePodStatus, latestTermination, podRecord } from '../pod-status';
+import { rowMayBePending } from './row-pending';
 
 export { computePodStatus, latestTermination } from '../pod-status';
 
@@ -116,7 +117,7 @@ export class PodConsumer implements OnModuleDestroy {
     const ns = pod.metadata?.namespace;
     const depName = appNameOf(pod);
     if (!ns || !depName) return {};
-    const ctx = await this.resolveCtx(ns, depName);
+    const ctx = await this.resolveCtx(ns, depName, pod.metadata?.creationTimestamp);
     return ctx ? { deploymentId: ctx.deploymentId, projectId: ctx.projectId } : {};
   }
 
@@ -124,7 +125,7 @@ export class PodConsumer implements OnModuleDestroy {
     const ns = pod.metadata?.namespace;
     const depName = appNameOf(pod);
     if (!ns || !depName) return;
-    const ctx = await this.resolveCtx(ns, depName);
+    const ctx = await this.resolveCtx(ns, depName, pod.metadata?.creationTimestamp);
     if (!ctx) return;
 
     if (isGreen(pod)) {
@@ -393,7 +394,11 @@ export class PodConsumer implements OnModuleDestroy {
     }
   }
 
-  private async resolveCtx(ns: string, depName: string): Promise<Ctx | null> {
+  private async resolveCtx(
+    ns: string,
+    depName: string,
+    createdAt: Date | undefined
+  ): Promise<Ctx | null> {
     const key = `${ns}/${depName}`;
     const cached = this.ctxCache.get(key);
     if (cached && cached.exp > Date.now()) return cached.ctx;
@@ -413,7 +418,9 @@ export class PodConsumer implements OnModuleDestroy {
       ? { deploymentId: dep.id, orgId: dep.project.organizationId, projectId: dep.projectId }
       : null;
 
-    this.ctxCache.set(key, { ctx, exp: Date.now() + (ctx ? POSITIVE_TTL_MS : NEGATIVE_TTL_MS) });
+    if (ctx || !rowMayBePending(createdAt)) {
+      this.ctxCache.set(key, { ctx, exp: Date.now() + (ctx ? POSITIVE_TTL_MS : NEGATIVE_TTL_MS) });
+    }
     return ctx;
   }
 }
