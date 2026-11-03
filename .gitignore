@@ -1,24 +1,27 @@
 node_modules
 dist
+
+# Local tool state and generated output
+.claude/
+CLAUDE.local.md
 graphify-out/
 
-# Local agent state
-.claude/
-
-# Large binaries / design exports — keep out of git
+# Large binaries and design exports
 *.pdf
 
 # Compiled Go binaries (build outputs)
 /apps/cli/orchard
 /apps/gateway/gateway
 /apps/r2-proxy/r2-proxy
+/apps/registry/registry
 .env
 .env.*
 !.env.example
 .env.bak.*
 
+# Cluster credentials and infrastructure state
+kubeconfig
+*.tfstate
+
 # OS
 .DS_Store
-
-# Local agent operating notes (personal, not shared)
-CLAUDE.local.md
