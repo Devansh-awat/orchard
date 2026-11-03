@@ -78,6 +78,86 @@ Take a base backup, then restore it somewhere and confirm it works. An untested
 backup is a hypothesis.
 :::
 
+Backups are off by default. The chart turns them on with `postgres.backup`, which
+archives WAL through the CloudNativePG cluster and takes a scheduled base backup.
+It needs S3-compatible storage **off this machine**: the installer's bundled
+object store lives on the same disk, so losing the box loses both.
+
+Create a bucket and a key that can read, write and delete in it, then put the key
+in the namespace Orchard runs in:
+
+```bash
+kubectl -n orchard create secret generic orchard-db-backup \
+  --from-literal=ACCESS_KEY_ID=... \
+  --from-literal=ACCESS_SECRET_KEY=...
+```
+
+Those two key names are the ones the chart reads. Then set the values. On a host
+installed with `install.sh`:
+
+```bash
+sudo orchardctl config set postgres.backup.destinationPath s3://my-bucket/orchard-db
+sudo orchardctl config set postgres.backup.endpointURL https://s3.example.com
+sudo orchardctl config set postgres.backup.enabled true --apply
+```
+
+In your own values file:
+
+```yaml
+postgres:
+  backup:
+    enabled: true
+    destinationPath: s3://my-bucket/orchard-db
+    endpointURL: https://s3.example.com # leave out for AWS S3
+    secretName: orchard-db-backup # the default
+    retentionPolicy: 30d # the default
+    schedule: '0 30 1 * * *' # the default, six fields, with seconds
+```
+
+The first base backup starts as soon as the `ScheduledBackup` exists. Check that
+it finished and that WAL is arriving:
+
+```bash
+kubectl -n orchard get backups.postgresql.cnpg.io
+kubectl -n orchard get clusters.postgresql.cnpg.io orchard-db \
+  -o jsonpath='{.status.firstRecoverabilityPoint}{"\n"}{.status.conditions[?(@.type=="ContinuousArchiving")].status}{"\n"}'
+```
+
+To prove it restores, bring up a second cluster from the bucket in a scratch
+namespace, with the same secret copied into it, and look at the data:
+
+```yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: orchard-db-restore
+  namespace: orchard-restore-test
+spec:
+  instances: 1
+  storage:
+    size: 10Gi
+  bootstrap:
+    recovery:
+      source: orchard-db
+  externalClusters:
+    - name: orchard-db
+      barmanObjectStore:
+        serverName: orchard-db
+        destinationPath: s3://my-bucket/orchard-db
+        endpointURL: https://s3.example.com
+        s3Credentials:
+          accessKeyId:
+            name: orchard-db-backup
+            key: ACCESS_KEY_ID
+          secretAccessKey:
+            name: orchard-db-backup
+            key: ACCESS_SECRET_KEY
+```
+
+The chart can also use the barman cloud plugin instead, with
+`postgres.backup.method: plugin`, if that plugin is already installed in the
+cluster. The restore above is written for the default method.
+
 ## 6. Configure object storage for tenant backups
 
 Database backups need somewhere to go: an S3-compatible endpoint, bucket and
