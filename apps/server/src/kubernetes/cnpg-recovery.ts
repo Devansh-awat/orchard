@@ -359,7 +359,7 @@ export interface RecoveryClusterInput {
   instances: number;
   imageName: string;
   storageSize: string;
-  storageClass: string;
+  storageClass?: string;
   resources?: { requests: Record<string, string>; limits: Record<string, string> };
   parameters: Record<string, string>;
   sharedPreloadLibraries?: string[];

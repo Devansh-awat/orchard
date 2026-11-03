@@ -673,7 +673,7 @@ export class DatabaseOperationsService {
       instances: isDrill ? 1 : src.replicas,
       imageName: dbs.postgresImageFor(src.pgMajor),
       storageSize: src.storageSize,
-      storageClass: process.env.K8S_STORAGE_CLASS || 'longhorn',
+      storageClass: process.env.K8S_STORAGE_CLASS || undefined,
       resources: resources
         ? {
             requests: {
@@ -913,7 +913,7 @@ export class DatabaseOperationsService {
       imageName: sourceCluster.spec?.imageName || dbs.postgresImageFor(src.pgMajor),
       storageSize: sourceCluster.spec?.storage?.size || src.storageSize,
       storageClass:
-        sourceCluster.spec?.storage?.storageClass || process.env.K8S_STORAGE_CLASS || 'longhorn',
+        sourceCluster.spec?.storage?.storageClass || process.env.K8S_STORAGE_CLASS || undefined,
       resources: sourceCluster.spec?.resources,
       parameters: { ...(sourceCluster.spec?.postgresql?.parameters ?? {}) },
       sharedPreloadLibraries: sourceCluster.spec?.postgresql?.shared_preload_libraries,

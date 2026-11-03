@@ -1747,7 +1747,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       primaryUpdateStrategy: 'unsupervised',
       storage: {
         size: options.storageSize || '1Gi',
-        storageClass: process.env.K8S_STORAGE_CLASS || 'longhorn'
+        storageClass: process.env.K8S_STORAGE_CLASS || undefined
       },
       bootstrap: {
         initdb: {

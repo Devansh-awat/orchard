@@ -583,7 +583,7 @@ export class KubernetesService {
       },
       spec: {
         accessModes: ['ReadWriteOnce'],
-        storageClassName: process.env.K8S_STORAGE_CLASS || 'longhorn',
+        storageClassName: process.env.K8S_STORAGE_CLASS || undefined,
         resources: {
           requests: {
             storage: storageSize
