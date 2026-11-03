@@ -266,7 +266,8 @@ usage() {
                                                         (default: on; same disk, not DR)
     --mcp <true|false>           ORCHARD_MCP            the MCP endpoint agents connect to
                                                         (default: on)
-    --yes, -y                    ORCHARD_ASSUME_YES     never prompt, take every default
+    --yes, -y                    ORCHARD_ASSUME_YES     never prompt: use defaults, leave optional
+                                                        steps off if they are not ready
                                  ORCHARD_PROMPT_TIMEOUT seconds to wait on a question before
                                                         giving up (default: 900, 0 waits forever)
     --help, -h                                         show this and exit
