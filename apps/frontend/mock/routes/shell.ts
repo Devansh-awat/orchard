@@ -69,7 +69,7 @@ export function shellRoutes(r: Router, { store, hub, log }: MockContext) {
 		log('signed out, /auth/me answers 401 until you sign back in');
 		return { ok: true };
 	});
-	r.get('/auth/config', () => ({ turnstileSiteKey: null, ssoEnforced: false }));
+	r.get('/auth/config', () => ({ turnstileSiteKey: null, ssoEnforced: false, emailCodes: true }));
 	r.get('/auth/methods', () => ({ passkey: false, password: false, superadmin: false }));
 	r.post('/auth/otp/request', () => ({
 		message: 'Mock mode: any 6-digit code works except 000000.'

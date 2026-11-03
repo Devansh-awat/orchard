@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, ServiceUnavailableException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { RateLimitService } from './rate-limit.service';
@@ -17,6 +17,10 @@ export class OtpService {
     private readonly rateLimitService: RateLimitService
   ) {}
 
+  canDeliverCodes(): boolean {
+    return this.emailService.isConfigured() || process.env.NODE_ENV !== 'production';
+  }
+
   /**
    * Request an OTP code to be sent to the email address.
    * Implements rate limiting by email and IP.
@@ -25,6 +29,12 @@ export class OtpService {
     email: string,
     ipAddress: string
   ): Promise<{ success: boolean; message: string }> {
+    if (!this.canDeliverCodes()) {
+      throw new ServiceUnavailableException(
+        'This instance cannot send email. Sign in with your password or a passkey, or run orchardctl login on the host.'
+      );
+    }
+
     const normalizedEmail = email.toLowerCase().trim();
 
     // Check rate limits for both email and IP

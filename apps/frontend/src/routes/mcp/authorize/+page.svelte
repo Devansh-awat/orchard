@@ -75,6 +75,7 @@
 	let otpError = $state<string | null>(null);
 
 	let siteKey = $state<string | null>(null);
+	let emailCodes = $state(true);
 	let widget = $state<{ execute: () => Promise<string> } | null>(null);
 
 	async function botHeaders(): Promise<Record<string, string>> {
@@ -93,6 +94,7 @@
 			.load()
 			.then((config) => {
 				siteKey = config.turnstileSiteKey;
+				emailCodes = config.emailCodes !== false;
 			})
 			.catch(() => {
 				siteKey = null;
@@ -384,75 +386,79 @@
 				{:else}
 					<ConsentSignIn returnTo={$page.url.pathname + $page.url.search} onleave={rememberConsent}>
 						{#snippet children(hasProviders)}
-							{#if hasProviders}
+							{#if hasProviders && emailCodes}
 								<div class="consent-divider"><span>or continue with email</span></div>
 							{/if}
 
-							<form
-								class="consent-form"
-								novalidate
-								onsubmit={(e) => {
-									e.preventDefault();
-									if (otpStep === 'email') requestOtp();
-									else verifyOtp();
-								}}
-							>
-								<Input
-									type="email"
-									placeholder="you@example.com"
-									id="otp-email"
-									bind:value={otpEmail}
-									autocomplete="email"
-									error={!!otpError}
-									required
-								/>
-								{#if otpStep === 'code'}
-									<div class="consent-otp-row">
-										<Input
-											type="text"
-											class="consent-code"
-											inputmode="numeric"
-											maxlength="6"
-											placeholder="000000"
-											id="otp-code"
-											bind:value={otpCode}
-											autocomplete="one-time-code"
-											error={!!otpError}
-										/>
-										<Button
-											variant="ghost"
-											type="button"
-											onclick={() => {
-												otpStep = 'email';
-												otpCode = '';
-												otpMessage = null;
-											}}
-										>
-											Back
-										</Button>
-									</div>
-								{/if}
-								{#if otpError}
-									<p class="consent-error">{otpError}</p>
-								{/if}
-								{#if otpMessage}
-									<p class="consent-success">{otpMessage}</p>
-								{/if}
-								{#if siteKey}
-									<Turnstile bind:this={widget} {siteKey} action="signin" />
-								{/if}
-								<Button
-									variant="primary"
-									class="w-full"
-									type="submit"
-									loading={otpRequesting || otpVerifying}
+							{#if emailCodes}
+								<form
+									class="consent-form"
+									novalidate
+									onsubmit={(e) => {
+										e.preventDefault();
+										if (otpStep === 'email') requestOtp();
+										else verifyOtp();
+									}}
 								>
-									{otpStep === 'email' ? 'Send code' : 'Verify and authorize'}
-								</Button>
-							</form>
+									<Input
+										type="email"
+										placeholder="you@example.com"
+										id="otp-email"
+										bind:value={otpEmail}
+										autocomplete="email"
+										error={!!otpError}
+										required
+									/>
+									{#if otpStep === 'code'}
+										<div class="consent-otp-row">
+											<Input
+												type="text"
+												class="consent-code"
+												inputmode="numeric"
+												maxlength="6"
+												placeholder="000000"
+												id="otp-code"
+												bind:value={otpCode}
+												autocomplete="one-time-code"
+												error={!!otpError}
+											/>
+											<Button
+												variant="ghost"
+												type="button"
+												onclick={() => {
+													otpStep = 'email';
+													otpCode = '';
+													otpMessage = null;
+												}}
+											>
+												Back
+											</Button>
+										</div>
+									{/if}
+									{#if otpError}
+										<p class="consent-error">{otpError}</p>
+									{/if}
+									{#if otpMessage}
+										<p class="consent-success">{otpMessage}</p>
+									{/if}
+									{#if siteKey}
+										<Turnstile bind:this={widget} {siteKey} action="signin" />
+									{/if}
+									<Button
+										variant="primary"
+										class="w-full"
+										type="submit"
+										loading={otpRequesting || otpVerifying}
+									>
+										{otpStep === 'email' ? 'Send code' : 'Verify and authorize'}
+									</Button>
+								</form>
+							{/if}
 
 							{#if passkeySupported}
-								<div class="consent-divider"><span>or use a passkey</span></div>
+								{#if emailCodes}
+									<div class="consent-divider"><span>or use a passkey</span></div>
+								{/if}
 								<div class="consent-form">
 									<Input
 										type="email"

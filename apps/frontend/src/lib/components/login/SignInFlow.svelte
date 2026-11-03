@@ -88,6 +88,7 @@
 	let hasPasskey = $state(false);
 	let chooser = $state(false);
 	let siteKey = $state<string | null>(null);
+	let emailCodes = $state(true);
 	let widget = $state<{ execute: () => Promise<string> } | null>(null);
 	let configLoaded = false;
 	let pendingAutoVerify = false;
@@ -107,7 +108,10 @@
 			browser && window.isSecureContext && typeof window.PublicKeyCredential !== 'undefined';
 		authConfig
 			.load()
-			.then((config) => (siteKey = config.turnstileSiteKey))
+			.then((config) => {
+				siteKey = config.turnstileSiteKey;
+				emailCodes = config.emailCodes !== false;
+			})
 			.catch(() => (siteKey = null))
 			.finally(() => {
 				configLoaded = true;
@@ -231,7 +235,8 @@
 				go('passkey');
 				await signInWithPasskey();
 			} else if (hasPassword) go('password');
-			else await sendCode();
+			else if (emailCodes) await sendCode();
+			else fault = 'This instance cannot send email, so this address has no way to sign in here.';
 		} finally {
 			if (busy === 'check') busy = null;
 		}
@@ -484,15 +489,17 @@
 							{#snippet trailing()}<ChevronRight size={16} class="chev" />{/snippet}
 						</ListRow>
 					{/if}
-					<ListRow
-						title="Email me a code"
-						subtitle="A 6-digit code, valid for 10 minutes"
-						onclick={() => sendCode()}
-					>
-						{#snippet leading()}<ToneTile tone="accent" size={32}><Mail size={16} /></ToneTile
-							>{/snippet}
-						{#snippet trailing()}<ChevronRight size={16} class="chev" />{/snippet}
-					</ListRow>
+					{#if emailCodes}
+						<ListRow
+							title="Email me a code"
+							subtitle="A 6-digit code, valid for 10 minutes"
+							onclick={() => sendCode()}
+						>
+							{#snippet leading()}<ToneTile tone="accent" size={32}><Mail size={16} /></ToneTile
+								>{/snippet}
+							{#snippet trailing()}<ChevronRight size={16} class="chev" />{/snippet}
+						</ListRow>
+					{/if}
 				</List>
 				{@render faultLine()}
 				{@render botCheck()}
@@ -514,9 +521,11 @@
 					{#if hasPassword}
 						<Button variant="ghost" size="sm" onclick={() => go('password')}>Use password</Button>
 					{/if}
-					<Button variant="ghost" size="sm" loading={busy === 'send'} onclick={() => sendCode()}>
-						Email me a code
-					</Button>
+					{#if emailCodes}
+						<Button variant="ghost" size="sm" loading={busy === 'send'} onclick={() => sendCode()}>
+							Email me a code
+						</Button>
+					{/if}
 				</div>
 			{:else if step === 'password'}
 				{@render head('Enter your password', who, true)}
@@ -565,9 +574,11 @@
 					{#if hasPasskey}
 						<Button variant="ghost" size="sm" onclick={() => go('passkey')}>Use passkey</Button>
 					{/if}
-					<Button variant="ghost" size="sm" loading={busy === 'send'} onclick={() => sendCode()}>
-						Email me a code
-					</Button>
+					{#if emailCodes}
+						<Button variant="ghost" size="sm" loading={busy === 'send'} onclick={() => sendCode()}>
+							Email me a code
+						</Button>
+					{/if}
 				</div>
 			{:else if step === 'code'}
 				{#snippet sentTo()}Enter the code we sent to <span class="who">{address}</span>{/snippet}

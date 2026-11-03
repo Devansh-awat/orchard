@@ -268,10 +268,15 @@ export class PasswordlessController {
   }
 
   @Get('config')
-  async authConfig(): Promise<{ turnstileSiteKey: string | null; ssoEnforced: boolean }> {
+  async authConfig(): Promise<{
+    turnstileSiteKey: string | null;
+    ssoEnforced: boolean;
+    emailCodes: boolean;
+  }> {
     return {
       turnstileSiteKey: this.turnstile.siteKey(),
-      ssoEnforced: await this.instanceSettings.isSsoEnforced()
+      ssoEnforced: await this.instanceSettings.isSsoEnforced(),
+      emailCodes: this.otpService.canDeliverCodes()
     };
   }
 
