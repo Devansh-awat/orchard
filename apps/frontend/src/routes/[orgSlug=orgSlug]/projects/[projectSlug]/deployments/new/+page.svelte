@@ -28,6 +28,7 @@
 	import RepoAccountPicker from '$lib/components/deployment/RepoAccountPicker.svelte';
 	import GitSourcePane from '$lib/components/deployment/GitSourcePane.svelte';
 	import FrameworkIcon from '$lib/components/deployment/FrameworkIcon.svelte';
+	import { findProjectByName } from '$lib/components/deployment/project-match';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { queryClient } from '$lib/query';
 	import {
@@ -712,6 +713,13 @@
 			formError = 'No organization selected';
 			return null;
 		}
+		const listing = await apiFetch(`/apiv1/projects?orgId=${orgId}`);
+		if (!listing.ok) throw new Error('Could not load your projects');
+		const existing = findProjectByName<{ id: string; name: string; slug: string }>(
+			await listing.json(),
+			pendingProjectName
+		);
+		if (existing) return existing;
 		const res = await apiFetch('/apiv1/projects', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
