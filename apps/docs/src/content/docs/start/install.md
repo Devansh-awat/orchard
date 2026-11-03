@@ -426,21 +426,36 @@ Every variable the server reads is listed in [Configuration](/reference/configur
 
 ## Claiming the instance
 
-A fresh install has no superadmin. On first boot the server mints a **single-use
-setup token**, valid for 24 hours, and logs the URL that redeems it:
+A fresh install has no superadmin. On first boot the server mints a single-use
+setup token, valid for 24 hours. The installer prints the link when it finishes,
+and on the host you can mint a fresh one any time before you have a way to sign in:
 
 ```bash
-kubectl -n orchard logs deploy/server | grep -A2 'no superadmin'
+sudo orchardctl claim
 ```
 
-Sign up with the account you want to own the instance, open that URL, and the
-token is consumed. If it expires, restart the server to mint a new one.
+On a cluster with no `orchardctl`, the first boot logs it:
+
+```bash
+kubectl -n orchard logs deploy/server | grep -A3 'no superadmin'
+```
+
+Open the link. It asks only for the email address the account should use, sends
+no confirmation, and makes that account the superadmin. Then a short setup runs:
+
+1. **A way back in**, which cannot be skipped: a passkey, or a password on an
+   instance served over plain HTTP, where a browser will not offer passkeys.
+2. **An organization name.** One already exists, named after your email domain.
+3. **Connect GitHub**, which creates the app that deploying from a repository
+   needs. Skippable.
+4. **Certificates**, which reports how TLS is doing for your app domain.
+5. **Anonymous usage reports**, off unless you opt in.
 
 :::caution
-**Add a passkey straight after claiming.** Until you do, and with no SMTP
-configured, a cleared cookie jar leaves nothing to sign in with. `sudo
-orchardctl claim` will mint a recovery link in exactly that situation, but a
-passkey is the thing that stops you needing one.
+With no SMTP and no identity provider, what you set up in that first step is the
+only way in besides the host. If you lose it, `sudo orchardctl login` prints a
+one-time sign-in link, and `sudo orchardctl password set` sets or resets the
+superadmin's password.
 :::
 
 ## Trying it on a laptop

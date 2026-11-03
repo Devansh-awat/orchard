@@ -358,8 +358,8 @@ picks up the scheme and port this instance serves on, so `--url mango` becomes
 be one Traefik answers on, so `orchardctl hostname add` it first if it is new.
 
 It also works **after** the instance has been claimed, but only when there is
-genuinely no other way in. Claiming a box, skipping the passkey step and then
-clearing your cookies leaves nothing to sign in with if SMTP was never set up:
+genuinely no other way in. Claiming a box and closing the tab before finishing
+the first setup step leaves nothing to sign in with if SMTP was never set up:
 no code to email, no passkey to present. That is a permanent lockout from your
 own machine, so this mints a recovery link instead.
 

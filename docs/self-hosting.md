@@ -176,7 +176,8 @@ server:
       }
 ```
 
-Login options out of the box: email OTP (needs `SMTP_*` env) and passkeys.
+Login options out of the box: email OTP (needs `SMTP_*` env), passkeys, and on
+the superadmin a password or a printed link.
 
 ## First sign-in
 
@@ -213,42 +214,61 @@ already equivalent to owning the instance.
 
 ### The setup flow
 
-Claiming drops you into a three step gate, which blocks until the instance is
-in a state where it actually works:
+Claiming drops you into a short setup, which blocks until the instance has what
+it needs to work:
 
-1. **A passkey.** Not skippable. With no email transport, a session that ends
-   with no passkey registered locks you out of your own instance and there is no
-   self-service way back in.
+1. **A way back in.** Not skippable, because the claim link only works once and
+   a session that ends with nothing else locks you out. It offers a **passkey**
+   where the browser allows one and a **password** where it does not, which is
+   any instance served over plain HTTP. Either one satisfies the step.
 2. **Your organization.** Already created for you, named after your email
    domain, because everything else in Orchard hangs off one and there is no
    self-serve way to make one. This step only renames it, so skipping is safe.
-3. **Your first deployment.** Shows every source Orchard can deploy from and
-   completes inline for a container image or a public GitHub repo. Skippable.
+3. **Connect GitHub.** Creates the GitHub App that deploying from a repository
+   needs, in one click. Skippable, and you can do it later.
+4. **Certificates.** Reports how TLS is doing for your app domain. Nothing here
+   is yours to do unless something failed.
+5. **Anonymous usage reports.** Off unless you opt in. It shows you the exact
+   report first. See [Anonymous usage reports](#anonymous-usage-reports).
 
 The rule the gate is built on: **no skip may leave Orchard unusable**. Anything
 whose absence would break the instance is either unskippable, or done for you
 and demoted to customisation. It is enforced server-side, not just in the UI.
 
 Steps are resumable, and `done` is always derived from the thing the step
-produces rather than a stored flag, so deleting your last passkey reopens that
-step instead of leaving a stale tick behind.
+produces rather than a stored flag, so removing your only way back in reopens
+that step instead of leaving a stale tick behind.
 
-### Add a passkey immediately
+### Getting back in
 
-**With no SMTP and no identity provider, a passkey is your only way back in.**
-The claim link is one-time, so once you close that tab a session cookie is all
-you have. Go to Settings and register one before doing anything else.
+The claim link is one-time, so once you close that tab, a session cookie and
+whatever you set up in the first step are all you have. These all work with no
+email and no identity provider:
+
+| Way in      | How                                 | Notes                                                 |
+| ----------- | ----------------------------------- | ----------------------------------------------------- |
+| Passkey     | Setup, or Settings                  | Needs a secure context, so a real certificate         |
+| Password    | Setup, or `orchardctl password set` | Superadmin only. Running `set` again is the reset     |
+| Sign-in link | `sudo orchardctl login`             | Valid ten minutes, works once. Needs root on the host |
 
 Passkeys need no external service, and passkey sign-in needs no email address:
 Orchard uses discoverable credentials, so the login page can identify you from
-the authenticator alone. They also require a **secure context**, so the
-instance must be serving a real certificate first — a browser refuses WebAuthn
-behind a self-signed cert. `WEBAUTHN_RP_ID` defaults to the hostname in
-`FRONTEND_URL`, so there is normally nothing to configure.
+the authenticator alone. A browser refuses WebAuthn behind a self-signed cert,
+so the instance must be serving a real certificate first. `WEBAUTHN_RP_ID`
+defaults to the hostname in `FRONTEND_URL`, so there is normally nothing to
+configure.
 
-If you lose every passkey on an instance with no email transport, there is
-currently no self-service recovery. Configure `SMTP_*` or an identity provider
-before you are relying on a single authenticator.
+**If you lose every passkey**, `sudo orchardctl login` still gets you in, and you
+can register a new one from Settings. On a cluster with no `orchardctl`, run what
+it runs, adding `--email` if you are not the first superadmin:
+
+```bash
+kubectl -n orchard exec deploy/server -- node dist/scripts/mint-login-link.js
+```
+
+`sudo orchardctl claim` also mints a link after the instance has been claimed,
+but only when no passkey, password, email or identity provider exists to sign in
+with. Otherwise it refuses and names the one to use.
 
 ### Changing settings later
 
@@ -298,23 +318,20 @@ which is why an instance installed before a value existed needs
 
 ### Configuring email later
 
-Email is optional for a single-operator instance and required the moment you
-want to invite anyone, since invites and OTPs are both delivered over it. Set
+Email is optional for a single-operator instance. Without it an invitation still
+works as a copyable link, but anyone new needs email or an identity provider to
+sign in, since OTPs are delivered over it. Set
 `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` and `SMTP_FROM` in
 `server.env` and re-run the upgrade.
 
-Until then, OTP requests still generate a code and write it to the server log
-rather than sending it:
+Until then, a requested OTP goes nowhere. The server only writes codes to its log
+outside production, and the chart always sets `NODE_ENV=production`, so there
+is nothing to find in `kubectl logs`. Use a passkey or a password instead, or print
+a one-time link on the host. See [Getting back in](#getting-back-in).
 
-```
-[EmailService] SMTP_HOST not set — email sending is disabled
-[DEV] OTP code for you@example.com: 481920
-```
-
-That is a usable fallback for a lone operator reading their own logs, and a
-reason to keep `signupMode: invite_only` — the chart default. The installer
-sets it too. Switching to `open` on an instance that can send email turns the
-login page into public registration.
+Keep `signupMode: invite_only`, the chart default, which the installer sets too.
+Switching to `open` on an instance that can send email turns the login page into
+public registration.
 
 ### Rate limits, replicas and client addresses
 

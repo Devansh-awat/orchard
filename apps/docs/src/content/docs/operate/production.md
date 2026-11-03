@@ -28,8 +28,8 @@ unreadable.** Set it once, before people start storing things.
 
 ## 2. Close signups
 
-The default for a fresh chart install is `invite_only`. The installer may set
-`open` so you can create the first account.
+The default for a fresh chart install is `invite_only`, and the installer sets
+it too. Claiming the instance works under any mode.
 
 ```yaml
 signupMode: invite_only # or: closed
@@ -102,8 +102,9 @@ someone requests 32 cores for a side project. See
 ## 9. Email
 
 Set `SMTP_*` so sign-in codes, invitations and notifications actually arrive.
-Without SMTP, one-time codes have nowhere to go and nobody can sign in except
-through SSO.
+Without SMTP, one-time codes have nowhere to go and are not written to the log
+either, so a new member has no way in except SSO. For an account that already
+exists, `sudo orchardctl login --email <address>` prints a one-time link.
 
 ## 10. Wildcard certificates
 
