@@ -330,6 +330,45 @@ test('desired: default-deny opens to the protection proxy only while the namespa
   }
 });
 
+test('desired: the database platform policy only opens up without Cilium, and a failed read rewrites nothing', async () => {
+  const key: GuardKey = {
+    kind: 'NetworkPolicy',
+    namespace: 'acme',
+    name: 'allow-database-platform'
+  };
+  const prisma = fakePrisma({});
+  prisma.database.count = async () => 1;
+  const endpoints = async () => ({ ips: ['10.43.0.1'], ports: [443] });
+  const cluster = new FakeCluster();
+
+  const cilium = await new PrismaGuardDesired(prisma, async () => true, cluster, endpoints).desired(
+    key,
+    null
+  );
+  assert.equal(cilium!.manifest.spec.ingress.length, 1);
+
+  const flannel = await new PrismaGuardDesired(
+    prisma,
+    async () => false,
+    cluster,
+    endpoints
+  ).desired(key, null);
+  assert.equal(flannel!.manifest.spec.ingress.length, 2);
+  assert.ok(flannel!.manifest.spec.policyTypes.includes('Egress'));
+
+  await assert.rejects(
+    new PrismaGuardDesired(
+      prisma,
+      async () => false,
+      cluster,
+      async () => {
+        throw new Error('apiserver unreachable');
+      }
+    ).desired(key, null),
+    /apiserver unreachable/
+  );
+});
+
 test('desired: nothing for a namespace orchard does not own', async () => {
   const desired = new PrismaGuardDesired(fakePrisma({}), async () => true, new FakeCluster());
   assert.equal(await desired.desired({ ...DENY, namespace: 'kube-system' }, null), null);

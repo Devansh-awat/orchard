@@ -428,8 +428,6 @@ export class K8sCnpgService implements OnApplicationBootstrap {
 
   async ensureCnpgOperatorIngress(namespace: string): Promise<void> {
     this.ensureKubeConfig();
-    // Nothing to allow when Cilium isn't the CNI: the tenant default-deny is a
-    // plain NetworkPolicy there, and its own operator rule already covers this.
     if (!(await this.kubernetes.isCiliumAvailable())) return;
     const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
     const policy = cnpgOperatorPolicy(namespace, this.CNPG_OPERATOR_NAMESPACE);

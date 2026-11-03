@@ -51,6 +51,21 @@ export interface ApiserverEndpoints {
   ports: number[];
 }
 
+export function apiserverEndpointsFrom(
+  service: k8s.V1Service,
+  endpoints: k8s.V1Endpoints
+): ApiserverEndpoints | null {
+  const subsets = endpoints.subsets ?? [];
+  const backends = subsets.flatMap((s) => (s.addresses ?? []).map((a) => a.ip));
+  const backendPorts = subsets.flatMap((s) => (s.ports ?? []).map((p) => p.port));
+  if (!backends.length || !backendPorts.length) return null;
+  const ips = [...(service.spec?.clusterIPs ?? [service.spec?.clusterIP]), ...backends].filter(
+    (ip): ip is string => Boolean(ip) && ip !== 'None'
+  );
+  const ports = [...(service.spec?.ports ?? []).map((p) => p.port), ...backendPorts];
+  return { ips: [...new Set(ips)], ports: [...new Set(ports)] };
+}
+
 export interface StorageEgress {
   namespace: string;
   port: number;

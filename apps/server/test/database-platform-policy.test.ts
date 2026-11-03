@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  apiserverEndpointsFrom,
   CNPG_METRICS_PORT,
   DATABASE_PLATFORM_POLICY,
   databasePlatformPolicy,
@@ -86,6 +87,67 @@ test('database pods may reach in-cluster backup storage', () => {
       ports: [{ protocol: 'TCP', port: 9000 }]
     }
   ]);
+});
+
+test('with Cilium the policy carries no operator or API server rules', () => {
+  const plain = databasePlatformPolicy('acme-web', { storage: null });
+  const nulled = databasePlatformPolicy('acme-web', {
+    storage: null,
+    apiserver: null,
+    operatorNamespace: null
+  });
+  assert.deepEqual(nulled, plain);
+  assert.deepEqual(plain.spec?.policyTypes, ['Ingress']);
+  assert.equal(plain.spec?.egress, undefined);
+});
+
+test('without Cilium the policy admits the operator and reaches the API server', () => {
+  const policy = databasePlatformPolicy('acme-web', {
+    metricsNamespace: 'orchard-metrics',
+    storage: null,
+    apiserver: { ips: ['10.43.0.1', '192.168.1.5', 'fd00::1'], ports: [443, 6443] },
+    operatorNamespace: 'cnpg-system'
+  });
+  assert.deepEqual(policy.spec?.policyTypes, ['Ingress', 'Egress']);
+  assert.deepEqual(policy.spec?.egress, [
+    {
+      to: [
+        { ipBlock: { cidr: '10.43.0.1/32' } },
+        { ipBlock: { cidr: '192.168.1.5/32' } },
+        { ipBlock: { cidr: 'fd00::1/128' } }
+      ],
+      ports: [
+        { protocol: 'TCP', port: 443 },
+        { protocol: 'TCP', port: 6443 }
+      ]
+    }
+  ]);
+  assert.deepEqual(policy.spec?.ingress?.[1], {
+    from: [
+      {
+        namespaceSelector: { matchLabels: { 'kubernetes.io/metadata.name': 'cnpg-system' } },
+        podSelector: { matchLabels: { 'app.kubernetes.io/name': 'cloudnative-pg' } }
+      }
+    ],
+    ports: [{ protocol: 'TCP', port: 8000 }]
+  });
+});
+
+test('API server endpoints come from the service and its backends', () => {
+  assert.deepEqual(
+    apiserverEndpointsFrom(
+      { spec: { clusterIP: '10.43.0.1', ports: [{ port: 443 }] } },
+      { subsets: [{ addresses: [{ ip: '192.168.1.5' }], ports: [{ port: 6443 }] }] }
+    ),
+    { ips: ['10.43.0.1', '192.168.1.5'], ports: [443, 6443] }
+  );
+});
+
+test('an API server with no listed backends is not an answer', () => {
+  assert.equal(
+    apiserverEndpointsFrom({ spec: { clusterIP: '10.43.0.1', ports: [{ port: 443 }] } }, {}),
+    null
+  );
 });
 
 test('the tenant policy follows the configured r2-proxy namespace', () => {
