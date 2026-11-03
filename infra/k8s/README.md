@@ -26,8 +26,8 @@ The new build system:
    - Without this bucket, you'll get "Access Denied" errors
 3. Note your **Account ID** (shown in the R2 dashboard URL or overview)
    - Format: `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`
-   - Example: If your endpoint is `https://fb34c755bddfad217f6838781d3f3487.r2.cloudflarestorage.com`
-   - Then your Account ID is: `fb34c755bddfad217f6838781d3f3487`
+   - Example: If your endpoint is `https://0123456789abcdef0123456789abcdef.r2.cloudflarestorage.com`
+   - Then your Account ID is: `0123456789abcdef0123456789abcdef`
 
 ### Step 2: Create R2 API Token
 

@@ -474,8 +474,8 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       // default-deny, cutting the server off from its database
       // (2026-07-20 incident, second half).
       // The platform's own database is deliberately NOT in this set even
-      // when it is a cnpg cluster: its namespace belongs to the installer
-      // (kubeops here), so its network policies must live there
+      // when it is a cnpg cluster: its namespace belongs to the installer,
+      // so its network policies must live there
       // declaratively. Stamping it from app code depends on an out-of-band
       // allow existing and breaks installs whose platform db has none.
       const rows = await this.prisma.database.findMany({
