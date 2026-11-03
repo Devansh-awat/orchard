@@ -16,6 +16,8 @@ export const links = {
 	graftsInstall: 'https://docs.orchard.my/grafts/install/',
 	graftsBuild: 'https://docs.orchard.my/grafts/build/quickstart/',
 	notices: '/third-party-notices.txt',
+	changelog: 'https://github.com/hackclub/orchard/blob/main/CHANGELOG.md',
+	security: 'https://docs.orchard.my/operate/security/',
 	issues: 'https://github.com/hackclub/orchard/issues/new',
 	hackclub: 'https://hackclub.com',
 	joinHackClub: 'https://slack.hackclub.com',

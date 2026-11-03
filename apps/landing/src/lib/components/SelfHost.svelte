@@ -11,7 +11,7 @@
 	}[] = [
 		{
 			title: 'What you need',
-			body: 'A Linux server, amd64 or arm64, with at least 4 GB of RAM (8 GB is comfortable) and 20 GB of free disk. Already run a cluster? The guide covers the Helm chart.'
+			body: 'A Linux server, amd64 or arm64, with at least 4\u00a0GB of RAM (8\u00a0GB is comfortable) and 20\u00a0GB of free disk. Already run a cluster? The guide covers the Helm chart.'
 		},
 		{
 			title: 'Your data stays yours',

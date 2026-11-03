@@ -10,7 +10,9 @@
 		{ href: links.templates, label: 'Templates' },
 		{ href: links.extensions, label: 'Extensions' },
 		{ href: links.credits, label: 'Credits' },
-		{ href: links.docs, label: 'Resource Center' }
+		{ href: links.docs, label: 'Resource Center' },
+		{ href: links.changelog, label: 'Changelog' },
+		{ href: links.security, label: 'Security' }
 	];
 
 	const HACK_CLUB = [

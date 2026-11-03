@@ -88,7 +88,7 @@
 	inert={!shown}
 >
 	<div
-		class="relative flex w-full max-w-[1040px] items-center gap-2 rounded-2xl bg-crimson/92 p-2 text-white shadow-[0_18px_40px_-18px_rgb(120_0_20/0.6)] ring-1 ring-white/15 backdrop-blur-md"
+		class="relative flex w-full max-w-[1040px] items-center xl:max-w-[1140px] gap-2 rounded-2xl bg-crimson/92 p-2 text-white shadow-[0_18px_40px_-18px_rgb(120_0_20/0.6)] ring-1 ring-white/15 backdrop-blur-md"
 	>
 		<a
 			href="#hero"
@@ -134,6 +134,12 @@
 				class="relative rounded-lg px-2.5 py-2 text-[15px] font-medium xl:px-3 text-cream transition-colors hover:text-white focus-visible:outline-3 focus-visible:outline-cream"
 			>
 				Templates
+			</a>
+			<a
+				href={links.extensions}
+				class="relative rounded-lg max-xl:hidden px-2.5 py-2 text-[15px] font-medium xl:px-3 text-cream transition-colors hover:text-white focus-visible:outline-3 focus-visible:outline-cream"
+			>
+				Extensions
 			</a>
 			<a
 				href={links.docs}
@@ -186,6 +192,13 @@
 						href={links.templates}
 						class="block rounded-lg px-4 py-3 font-medium hover:bg-white/15 focus-visible:outline-3 focus-visible:outline-cream"
 						>Templates</a
+					>
+				</li>
+				<li>
+					<a
+						href={links.extensions}
+						class="block rounded-lg px-4 py-3 font-medium hover:bg-white/15 focus-visible:outline-3 focus-visible:outline-cream"
+						>Extensions</a
 					>
 				</li>
 				<li>

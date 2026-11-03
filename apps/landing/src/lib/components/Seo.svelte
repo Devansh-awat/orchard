@@ -2,11 +2,8 @@
 	import { page } from '$app/state';
 	import { absolute } from '$lib/site';
 
-	let {
-		title,
-		description,
-		image
-	}: { title: string; description: string; image?: string } = $props();
+	let { title, description, image }: { title: string; description: string; image?: string } =
+		$props();
 
 	const url = $derived(absolute(page.url.pathname));
 	const picture = $derived(absolute(image ?? '/og.png'));
