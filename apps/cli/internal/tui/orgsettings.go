@@ -116,7 +116,7 @@ func (e auditEntry) target() string {
 	}
 }
 
-// ---- messages + fetchers (endpoints mirror cmd/org.go, member.go, notify.go, audit.go) ----
+// messages + fetchers (endpoints mirror cmd/org.go, member.go, notify.go, audit.go)
 
 type (
 	orgDetailMsg struct {
