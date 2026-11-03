@@ -464,10 +464,38 @@ true
             - { name: APP_DOMAIN, value: {{ . | quote }} }
             {{- end }}
             {{- end }}
+            {{- /*
+              Status pages and org vanity hosts are Ingresses the server creates
+              onto the frontend. Same rule as APP_DOMAIN: with server.envFrom the
+              operator owns these, and an env entry here would shadow their Secret.
+            */}}
+            {{- if and .Values.frontend.enabled (not .Values.server.envFrom) }}
+            {{- if not (include "orchard.serverEnvHas" (dict "root" . "key" "PLATFORM_NAMESPACE")) }}
+            - { name: PLATFORM_NAMESPACE, value: {{ .Values.namespace | quote }} }
+            {{- end }}
+            {{- if not (include "orchard.serverEnvHas" (dict "root" . "key" "PLATFORM_SERVICE_NAME")) }}
+            - { name: PLATFORM_SERVICE_NAME, value: "frontend" }
+            {{- end }}
+            {{- if not (include "orchard.serverEnvHas" (dict "root" . "key" "PLATFORM_SERVICE_PORT")) }}
+            - { name: PLATFORM_SERVICE_PORT, value: {{ .Values.frontend.service.port | quote }} }
+            {{- end }}
+            {{- end }}
             {{- with .Values.server.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
 {{- end }}
+
+{{/*
+The vanity domain the frontend routes status and org hosts under, read from the
+server's BASE_DOMAIN. Empty with server.envFrom, where only the operator knows it.
+*/}}
+{{- define "orchard.baseDomain" -}}
+{{- if not .Values.server.envFrom -}}
+{{- range .Values.server.env -}}
+{{- if eq .name "BASE_DOMAIN" }}{{ .value }}{{ end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
 
 {{/*
 One password for the proxy's postgres role, stable across upgrades: an

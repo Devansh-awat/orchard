@@ -107,8 +107,14 @@ You need domains you control:
   databases. Keep it in sync with `certificates.wildcards.db.domain`.
 - **Public port domain** (`PUBLIC_DEPLOYMENT_DOMAIN`, optional): wildcard for
   publicly exposed deployment ports.
-- **Vanity domain** (`BASE_DOMAIN`, optional): parent for org subdomains like
-  `acme.example.com`.
+- **Vanity domain** (`BASE_DOMAIN`, optional): parent for org subdomains and
+  status pages like `acme.example.com`. Their Ingresses are created in the
+  release namespace and point at the chart's `frontend` Service. The chart sets
+  `PLATFORM_NAMESPACE`, `PLATFORM_SERVICE_NAME` and `PLATFORM_SERVICE_PORT` for
+  that, and passes the domain to the frontend as `PUBLIC_BASE_DOMAIN` with
+  `PUBLIC_PLATFORM_ORIGIN`. With `server.envFrom` it sets none of these, so put
+  them in your Secret and `frontend.env`, or the server falls back to
+  `default/leaf-frontend:3000`.
 
 These three are independent facts, not variations on the app domain. Each needs
 its own DNS and wildcard certificate, and in practice they diverge: the Hack

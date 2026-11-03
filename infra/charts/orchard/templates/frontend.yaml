@@ -41,6 +41,16 @@ spec:
             - { name: PUBLIC_APP_DOMAIN, value: {{ . | quote }} }
             {{- end }}
             {{- end }}
+            {{- with (include "orchard.baseDomain" .) }}
+            {{- if not (include "orchard.envHas" (dict "env" $.Values.frontend.env "key" "PUBLIC_BASE_DOMAIN")) }}
+            - { name: PUBLIC_BASE_DOMAIN, value: {{ . | quote }} }
+            {{- end }}
+            {{- if not (include "orchard.envHas" (dict "env" $.Values.frontend.env "key" "PUBLIC_PLATFORM_ORIGIN")) }}
+            {{- with (include "orchard.frontendUrl" $) }}
+            - { name: PUBLIC_PLATFORM_ORIGIN, value: {{ . | quote }} }
+            {{- end }}
+            {{- end }}
+            {{- end }}
             {{- if include "orchard.graftsOn" . }}{{- include "orchard.graftEnv" . }}{{- end }}
             {{- with .Values.frontend.env }}
             {{- toYaml . | nindent 12 }}
