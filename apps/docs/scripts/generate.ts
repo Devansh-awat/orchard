@@ -149,7 +149,7 @@ sidebar:
 ${BANNER.trim()}
 
 Orchard exposes **${collected.length} MCP tools** across ${groups.length} groups. Point any MCP
-client at \`https://your-orchard/mcp\` and these are the calls it can make. Every tool
+client at \`https://mcp.your-orchard-domain\` and these are the calls it can make. Every tool
 runs as the user who authorised the connection, so the same permissions apply.
 
 Tools are grouped into toolsets. A connection lists \`core\`, \`deployments\`, \`logs\` and \`env\`
