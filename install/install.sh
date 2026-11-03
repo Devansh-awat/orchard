@@ -721,7 +721,7 @@ collect_domains() {
 }
 
 # Not every base image ships getent, and "we could not check" must not be
-# treated as "it is broken" — this answer decides whether the MCP is deployed
+# treated as "it is broken": this answer decides whether the MCP is deployed
 # at all, so a missing tool would silently drop it.
 host_resolves() {
   local host=$1
