@@ -35,7 +35,7 @@ reading it. If the answer is nothing, delete it.
   A "What gets created" list does not need "Everything lands in this project".
 - **Keep consequences.** "Leave them empty and Orchard generates strong values" changes
   behaviour, so it stays. So does "Org defaults if you skip this".
-- **Keep the specific.** A hint that names a real value (`ysws_hackclub_site_name`,
+- **Keep the specific.** A hint that names a real value (`blog_site_name`,
   "17 is the recommended default") beats one that describes the field.
 - One line, sentence case, no trailing marketing. If a hint needs two sentences, the
   field probably needs a better label or a default.
@@ -57,10 +57,9 @@ the same rules everywhere, including over MCP:
 - **Past tense for events, present tense for current state.**
 - Each sentence links to its moment (`?at=` permalink).
 
-## Avoiding AI tells
+## Patterns to avoid
 
-AI-built UI averages its training data. These are the tells people notice, and the
-rule for each:
+These make a screen read as generic. The rule for each:
 
 - **Cards inside cards.** Nest only when elevation means something: a sunken tray holding
   raised cards, never a bordered card inside a bordered card.
@@ -68,7 +67,7 @@ rule for each:
   per-item actions on hover. One primary action per page.
 - **Decorative colour.** Red only means broken, amber only in progress, green only healthy.
   Identity colours (app icons) never use red.
-- **One radius everywhere.** Containers 18, cards 12, controls 10, inner tiles 8.
+- **One radius everywhere.** Containers 18, cards 14, controls 10, inner tiles 8.
 - **Fake people and fake art.** Use the real org logo, avatars and project icons; fall back
   to a glyph, never a lone letter.
 - **Generic copy.** Say what is true right now ("Everything is running except 3 apps").
@@ -77,8 +76,8 @@ rule for each:
 
 - **Optical alignment.** Icons centre on the text's cap height, not its line box. Text
   that sits next to an icon, or inside a pill, uses `text-box: trim-both cap alphabetic`
-  so padding is measured from the ink. Verify with `/dev/ui` and the alignment audit
-  (`.context`-style script: icon centre vs cap centre, delta 0).
+  so padding is measured from the ink. Verify with `/dev/ui` and a measured audit: icon
+  centre vs cap centre, delta 0.
 - **Continuous corners, not circles.** Every rounded rectangle writes
   `border-radius: calc(R * var(--corner-scale)); corner-shape: var(--corner);` where R is
   the nominal radius (`--radius-control` 10px, `--radius-card` 14px,
@@ -94,7 +93,7 @@ rule for each:
   Elevation is a ring plus a soft layered shadow, never a hard 1px grey box.
 - **Light from above.** Raised controls get a faint top inner highlight
   (`inset 0 1px 0 rgb(255 255 255 / 0.12)`) and a small drop shadow. Pressed controls
-  scale to 0.97.
+  scale to 0.96.
 - **Restraint.** One primary button per view. Colour only where it means something.
   Generous whitespace. Muted secondary text.
 - **Numbers are tabular** (`font-variant-numeric: tabular-nums`) everywhere they change.
@@ -157,7 +156,7 @@ callout|caption|micro`, `rounded-control|card|panel`.
 | A setting that is one action (transfer, move, delete)                  | `ActionRow` (label, hint, the button); stack them in a `SectionCard`. Delete uses `Button variant="danger"`, never a red-bordered box                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | Upload an image (icon, background)                                     | `ImageField` inside a `Field`: preview well (`square` or `wide`), Upload/Replace and Remove, `upload` returns the stored URL                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | One of few                                                             | `SegmentedControl`; one of many in a form: `RadioGroup` (list or cards)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| Sections of a page                                                     | `Tabs`; location: `Breadcrumbs`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Sections of a page                                                     | `PageTabs`; location: `Breadcrumbs`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | Sidebar link                                                           | `NavItem`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | Identity                                                               | `Monogram`, `Avatar`, `AvatarStack`, `Aura`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | Something happened                                                     | `toasts.add()` (see Toasts)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
@@ -240,7 +239,7 @@ callout|caption|micro`, `rounded-control|card|panel`.
 | Things that happened to an app (deploys, changes, pod events)          | `ActivityGroup` of `ActivityRow` in a `Widget`: 28px tile, title with a `StatusBadge` only when it is not quiet, one detail line, `RelativeTime` at the end that swaps in place with hover actions. Group by day; a build or deploy is titled by its commit message, and three or more failed or skipped builds in a row fold into one row that opens in place                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | What is running now, with its actions                                  | A title-less `Widget` of `ActivityRow pinned` rows (an in-flight or failed build above the live release). A repeated action keeps the same slot in every row                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | Filter for a list in a widget header                                   | `SegmentedControl size="sm" shape="capsule"`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| How an app is reached (domains, ports, internal and tailnet addresses) | Two `Widget`s, Public then Private, each a `List inset={false}` of `ListRow flush pinned`: address as title, subtitle says where it goes and who can visit, two fixed action slots (primary, then a `…` `Menu`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| How an app is reached (domains, ports, internal and tailnet addresses) | Two `Widget`s, Domains then Ports, each a `List inset={false}` of `ListRow flush pinned`: domain or port as title, its address or where it goes as subtitle, two fixed action slots (primary, then a `…` `Menu`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | A DNS record someone must paste                                        | `DnsRecord` (type, name, value; name and value copyable)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | Rows directly inside a card                                            | `ListRow flush`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | Field with a long fixed suffix (`.orchard.app`)                        | `Input suffix`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
@@ -257,7 +256,7 @@ callout|caption|micro`, `rounded-control|card|panel`.
 | Requests an app served (access logs)                                   | `Table dense` with method, path, `StatusBadge` from `httpStatus(code)` in `ui/status.ts`, duration and client; a row opens the app's log lines around that moment                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | Charts that sit side by side (a dashboard grid)                        | Call `provideChartAxis()` once in the dashboard: every `TimeChart` under it shares the widest y-axis gutter, so plots start and end at the same x in every column. `SeriesTable` narrows its number columns, then drops Min, in tight cards. Check with `?guides=1` (red lines mark plot edges and title baselines)                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | Related toolbar controls (earlier, range, later, zoom, pause)          | `ControlGroup` with one snippet per part: a 32px capsule tray, hairline separators between parts, 28px capsule controls inside                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| Views inside a page tab (Observe: Metrics, Logs, Errors)               | `UnderlineTabs` on a full-width hairline with the tab's controls on the same line, never a second `PageTabs` capsule under the first                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Views inside a page tab (Observe: Metrics, Logs, Requests, Errors)     | `UnderlineTabs` on a full-width hairline with the tab's controls on the same line, never a second `PageTabs` capsule under the first                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | Sections of a long dashboard                                           | `Disclosure size="lg"`; its `note` is a faint caption beside the title (where the numbers come from)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | A list panel next to charts (top routes, frequent errors)              | Its own grid after the charts, sized to its rows (capped, then it scrolls), paired with a list of similar length, never stretched to a chart's height                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
@@ -520,12 +519,43 @@ pod, email, path, client address) truncates or wraps on purpose; nothing grows i
 
 ## Motion
 
-One curve table, `CURVES` in `src/lib/design/springs.ts`: `snap` (opens), `pop` (appears),
-`settle` (closes), `glide` (moves and highlights), `press`, `morph` (shape changes), `bouncy`,
-`cinematic`. Each is a response plus damping ratio, mirrored as CSS tokens
-(`--spring-{name}`, `--spring-{name}-duration`, `--fade-in/out/long`, `--curve-out/in`) by
-`pnpm gen:design`. One `TEMPO` (CSS `--tempo`) scales them all. Never write stiffness, damping,
-cubic-bezier or raw durations for interaction motion in a component. See `CLAUDE.md`.
+One curve table, `CURVES` in `src/lib/design/springs.ts`. Each curve is a **response** (seconds, the
+spring's period) and a **damping ratio** (1 = no overshoot, lower = more bounce), mirrored as CSS
+tokens in `src/lib/design/springs.css` (`--spring-{name}`, `--spring-{name}-duration`,
+`--fade-in/out/long`, `--curve-out/in`) by `pnpm gen:design`. Never write stiffness, damping, mass,
+cubic-bezier or raw durations for interaction motion in a component. Name a curve. The motion
+utilities and their pitfalls are in `AGENTS.md`.
+
+| Name        | response | damping | Use for                                                                                    |
+| ----------- | -------- | ------- | ------------------------------------------------------------------------------------------ |
+| `snap`      | 0.22     | 0.88    | anything that opens or expands: folders, dropdowns, menus, popovers, panels                |
+| `pop`       | 0.24     | 0.78    | things appearing: staggered rows, fan buttons, buds, badges                                |
+| `settle`    | 0.17     | 1       | closing, exits, collapses (never bounces)                                                  |
+| `glide`     | 0.28     | 0.92    | highlights, carets, scrubbers, sliding indicators, hover lift, height and position changes |
+| `press`     | 0.12     | 1       | press feedback                                                                             |
+| `morph`     | 0.3      | 0.8     | shape morphs: toast, notifier island, liquid button and menu                               |
+| `bouncy`    | 0.32     | 0.6     | rare celebratory one-shots                                                                 |
+| `cinematic` | 0.7      | 0.86    | full-viewport choreography seen once                                                       |
+
+`smooth`, `snappy` and `interactive` are aliases for `glide`, `snap` and `press`.
+
+**Tempo.** `TEMPO` in `springs.ts` (CSS `--tempo`) scales every curve's time at once without changing
+its shape; `setTempo()` changes it at runtime (the Experiments panel has a slider). To make the whole
+app snappier or calmer, change that one number. To retune one kind of motion everywhere, change its
+row in `CURVES`.
+
+**Using them.**
+
+- CSS: `transition: transform var(--spring-snap-duration) var(--spring-snap)`; exits use
+  `--spring-<name>-exit(-duration)`.
+- Fades: `opacity var(--fade-in) var(--curve-out)`, `var(--fade-out) var(--curve-in)`,
+  `var(--fade-long)`.
+- WAAPI: `el.animate(frames, springTiming('snap', { distance, delay, exit }))` and
+  `fade('in' | 'out' | 'long', delay)`.
+- `motion` library: `transition('pop')` or `motion(el, kf, 'pop')`. Hand-rolled rAF springs:
+  `physics(SPRINGS.glide)`.
+- Distance: pass `distance` (px) and the curve is paced by `pace()`, √(distance / 420) clamped to
+  0.55–1.6, so a small folder and a big one move at a similar speed.
 
 ### What moves, what doesn't
 
@@ -533,12 +563,14 @@ Motion when the **user caused a spatial change**: something opens, appears, leav
 changes size, or gets pressed. Instant when **reality caused it** (the cluster, SSE, a refetch),
 when it is a **text or value edit while typing**, for **focus**, and for anything repeated fast
 enough that motion turns into latency. Every entrance has an exit. A removal animates out and its
-space closes on a height spring; nothing vanishes and no gap jumps shut.
+space closes on a height spring; nothing vanishes and no gap jumps shut. In a swap the outgoing half
+is instant on purpose: two panels sharing the layout is the jump this rule forbids, and the height
+morph carries the continuity.
 
 | Interaction                                                | Motion                                                                                      | Where it lives                                   |
 | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------ |
 | Menu, dropdown, popover, search picker, combobox           | `snap` in from the side it opened on, `snap` out toward it                                  | `overlayMotion` (Menu, PopoverPanel, Combobox)   |
-| Modal                                                      | opacity only, `settle` in and out (no rise, no scale), backdrop fades with it               | `Modal` (`motionPopover` with `curve: 'settle'`) |
+| Modal                                                      | the shell fades on `settle` (no rise, no scale), content `swap`s in, backdrop fades with it | `Modal` (`motionPopover` with `curve: 'settle'`) |
 | Sheet                                                      | `snap` in, `settle` out, backdrop fades with it                                             | `Sheet`                                          |
 | Highlight inside an open menu or listbox                   | instant, it follows pointer and keys and a spring would trail them                          | `.ui-menu-item`, `.ui-dropdown-option`           |
 | Selection moving (segmented control, tabs)                 | the indicator `glide`s to the new item, labels recolour                                     | `SegmentedControl`, `Tabs`, `UnderlineTabs`      |
@@ -563,7 +595,8 @@ space closes on a height spring; nothing vanishes and no gap jumps shut.
 `presence` is opt-in on `ListRow`/`EntityRow` because the kit cannot tell a row the user added
 from a row a refetch delivered. Pass `presence` where the person on this screen adds or deletes
 the rows; leave it off for lists the cluster fills. A keyed `{#each}` needs a stable key (never
-the index) or the wrong row leaves.
+the index) or the wrong row leaves. `presence` handles a flex-column parent's `gap` itself (it
+animates the edge margin from `-gap`), so a row leaving a `gap` stack does not leave a step behind.
 
 ## Theme engine (`src/lib/theme/`)
 
