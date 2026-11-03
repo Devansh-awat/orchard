@@ -4,6 +4,7 @@
 	import WaveEdge from '$lib/components/WaveEdge.svelte';
 	import Closing from '$lib/components/Closing.svelte';
 	import Footer from '$lib/components/Footer.svelte';
+	import Seo from '$lib/components/Seo.svelte';
 	import TemplatePreview from '$lib/components/TemplatePreview.svelte';
 	import CopyChip from '$lib/components/CopyChip.svelte';
 	import Terminal from '$lib/components/Terminal.svelte';
@@ -76,15 +77,10 @@
 	] as const);
 </script>
 
-<svelte:head>
-	<title>Templates · Hack Club Orchard</title>
-	<meta
-		name="description"
-		content="One-click stacks for Orchard, built in and contributed by the community. Deploy a blog, a database, a whole app with its pieces wired together."
-	/>
-	<meta property="og:title" content="Templates · Hack Club Orchard" />
-	<meta property="og:type" content="website" />
-</svelte:head>
+<Seo
+	title="Templates · Hack Club Orchard"
+	description="One-click stacks for Orchard, built in and contributed by the community. Deploy a blog, a database, a whole app with its pieces wired together."
+/>
 
 <header class="relative isolate overflow-hidden bg-crimson text-white">
 	<div class="shell pt-8">

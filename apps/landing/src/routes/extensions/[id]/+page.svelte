@@ -4,6 +4,7 @@
 	import WaveEdge from '$lib/components/WaveEdge.svelte';
 	import Closing from '$lib/components/Closing.svelte';
 	import Footer from '$lib/components/Footer.svelte';
+	import Seo from '$lib/components/Seo.svelte';
 	import CopyChip from '$lib/components/CopyChip.svelte';
 	import { links } from '$lib/links';
 	import { hover, reveal } from '$lib/motion.svelte';
@@ -90,12 +91,10 @@
 	}
 </script>
 
-<svelte:head>
-	<title>{m.name} · Extensions · Hack Club Orchard</title>
-	<meta name="description" content={m.description ?? `${m.name}, a graft for Orchard.`} />
-	<meta property="og:title" content="{m.name} · Hack Club Orchard extensions" />
-	<meta property="og:type" content="website" />
-</svelte:head>
+<Seo
+	title="{m.name} · Extensions · Hack Club Orchard"
+	description={m.description ?? `${m.name}, a graft for Orchard.`}
+/>
 
 <header class="relative isolate overflow-hidden bg-crimson text-white">
 	<div class="shell pt-8">

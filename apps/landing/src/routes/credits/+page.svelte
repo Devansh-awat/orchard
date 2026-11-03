@@ -5,6 +5,7 @@
 	import CreditPill from '$lib/components/CreditPill.svelte';
 	import Closing from '$lib/components/Closing.svelte';
 	import Footer from '$lib/components/Footer.svelte';
+	import Seo from '$lib/components/Seo.svelte';
 	import credits from '$lib/credits.generated.json';
 	import { links } from '$lib/links';
 	import { hover, reveal } from '$lib/motion.svelte';
@@ -180,15 +181,10 @@
 	}
 </script>
 
-<svelte:head>
-	<title>Credits · Hack Club Orchard</title>
-	<meta
-		name="description"
-		content="The people, typefaces, artwork and open-source packages behind Orchard."
-	/>
-	<meta property="og:title" content="Credits · Hack Club Orchard" />
-	<meta property="og:type" content="website" />
-</svelte:head>
+<Seo
+	title="Credits · Hack Club Orchard"
+	description="The people, typefaces, artwork and open-source packages behind Orchard."
+/>
 
 {#snippet row(pkg: Pkg)}
 	<li class="tr">

@@ -10,24 +10,14 @@
 	import HackClub from '$lib/components/HackClub.svelte';
 	import Closing from '$lib/components/Closing.svelte';
 	import Footer from '$lib/components/Footer.svelte';
+	import Seo from '$lib/components/Seo.svelte';
 
 	const title = 'Hack Club Orchard · Your own cloud in one command';
 	const description =
 		'Orchard turns a GitHub repo into a running app on your own Kubernetes cluster, with databases, HTTPS, logs, and an MCP server for your agents.';
 </script>
 
-<svelte:head>
-	<title>{title}</title>
-	<meta name="description" content={description} />
-	<meta property="og:title" content={title} />
-	<meta property="og:description" content={description} />
-	<meta property="og:image" content="/screenshots/project.png" />
-	<meta property="og:type" content="website" />
-	<meta name="twitter:card" content="summary_large_image" />
-	<meta name="twitter:title" content={title} />
-	<meta name="twitter:description" content={description} />
-	<meta name="twitter:image" content="/screenshots/project.png" />
-</svelte:head>
+<Seo {title} {description} />
 
 <Hero />
 <FloatingNav />

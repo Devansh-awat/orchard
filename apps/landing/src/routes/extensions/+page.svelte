@@ -4,6 +4,7 @@
 	import WaveEdge from '$lib/components/WaveEdge.svelte';
 	import Closing from '$lib/components/Closing.svelte';
 	import Footer from '$lib/components/Footer.svelte';
+	import Seo from '$lib/components/Seo.svelte';
 	import TemplatePreview from '$lib/components/TemplatePreview.svelte';
 	import Terminal from '$lib/components/Terminal.svelte';
 	import { links } from '$lib/links';
@@ -79,15 +80,10 @@
 	] as const;
 </script>
 
-<svelte:head>
-	<title>Extension Marketplace · Hack Club Orchard</title>
-	<meta
-		name="description"
-		content="Grafts are Orchard's extensions. Add pages, APIs and integrations to your Orchard instance, installed with one command and rolled out like an upgrade."
-	/>
-	<meta property="og:title" content="Extension Marketplace · Hack Club Orchard" />
-	<meta property="og:type" content="website" />
-</svelte:head>
+<Seo
+	title="Extension Marketplace · Hack Club Orchard"
+	description="Grafts are Orchard's extensions. Add pages, APIs and integrations to your Orchard instance, installed with one command and rolled out like an upgrade."
+/>
 
 <header class="relative isolate overflow-hidden bg-crimson text-white">
 	<div class="shell pt-8">

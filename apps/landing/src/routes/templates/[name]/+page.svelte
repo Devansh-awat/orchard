@@ -4,6 +4,7 @@
 	import WaveEdge from '$lib/components/WaveEdge.svelte';
 	import Closing from '$lib/components/Closing.svelte';
 	import Footer from '$lib/components/Footer.svelte';
+	import Seo from '$lib/components/Seo.svelte';
 	import TemplatePreview from '$lib/components/TemplatePreview.svelte';
 	import CopyChip from '$lib/components/CopyChip.svelte';
 	import TemplateForm from '$lib/components/TemplateForm.svelte';
@@ -39,15 +40,11 @@
 	}
 </script>
 
-<svelte:head>
-	<title>{t.displayName} · Templates · Hack Club Orchard</title>
-	<meta name="description" content={t.description ?? `Deploy ${t.displayName} on Orchard.`} />
-	<meta property="og:title" content="{t.displayName} · Hack Club Orchard templates" />
-	<meta property="og:type" content="website" />
-	{#if preview}
-		<meta property="og:image" content="{data.registry}/{preview}" />
-	{/if}
-</svelte:head>
+<Seo
+	title="{t.displayName} · Templates · Hack Club Orchard"
+	description={t.description ?? `Deploy ${t.displayName} on Orchard.`}
+	image={preview ? `${data.registry}/${preview}` : undefined}
+/>
 
 <header class="relative isolate overflow-hidden bg-crimson text-white">
 	<div class="shell pt-8">
