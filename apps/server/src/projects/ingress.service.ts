@@ -239,8 +239,7 @@ export class IngressService implements OnModuleInit {
     domain: string
   ): Promise<{ valid: boolean; message: string; records: DnsRecordHint[] }> {
     const expectedCname = this.instanceConfig.value(INGRESS, 'cname') || '';
-    const appDomain = process.env.APP_DOMAIN || '';
-    const domainToCheck = domain.trim().toLowerCase();
+    const domainToCheck = domain.trim().toLowerCase().replace(/\.$/, '');
 
     // Generic failure message — do NOT echo resolved DNS records back to the
     // caller. Returning resolved CNAME / A records turns this endpoint into a
@@ -256,8 +255,25 @@ export class IngressService implements OnModuleInit {
       return { valid: false, message: 'Domain is required', records };
     }
 
-    if (appDomain && domainToCheck.endsWith(`.${appDomain}`)) {
-      return { valid: true, message: 'Auto-generated domain is ready to use', records: [] };
+    const platform = platformWildcardDomains().find((w) => domainToCheck.endsWith(w.suffix));
+    if (platform) {
+      const wildcard = `*${platform.suffix}`;
+      const [v4, v6] = await Promise.all([
+        promisify(dns.resolve4)(domainToCheck).catch(() => [] as string[]),
+        promisify(dns.resolve6)(domainToCheck).catch(() => [] as string[])
+      ]);
+      if (v4.length || v6.length) {
+        return {
+          valid: true,
+          message: `Covered by the platform wildcard ${wildcard}`,
+          records: []
+        };
+      }
+      return {
+        valid: false,
+        message: `Nothing answers for this host. It needs the wildcard DNS record ${wildcard} pointing at this instance's ingress.`,
+        records: []
+      };
     }
 
     if (!expectedCname) {
