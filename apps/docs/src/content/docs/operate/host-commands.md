@@ -28,12 +28,13 @@ orchardctl restart           both, back to back
 orchardctl logs [service]    follow logs (server, frontend, mcp)
 orchardctl status            show the control-plane pods
 orchardctl sync              refresh these commands from the deployed image
+orchardctl uninstall         remove Orchard, k3s and everything on them
 ```
 
 Every subcommand also exists hyphenated, so `orchardctl config` and
 `orchard-config` are the same program. `update`, `config`, `env`, `registry`,
 `policies`, `mcp`, `public-ip`, `hostname`, `claim`, `login`, `password`,
-`stop`, `start`, `restart` and `sync` need root, because the values
+`stop`, `start`, `restart`, `sync` and `uninstall` need root, because the values
 file is `0600` and the rest runs through the cluster.
 
 They read `/etc/orchard/env` for paths, falling back to defaults that work
@@ -495,6 +496,47 @@ upgrade itself, which is the worst thing this command could do.
 
 `update` runs this for you at the end, so you rarely need it directly. Reach for
 it when the docs mention a command your host does not have yet.
+
+## uninstall
+
+```bash
+sudo orchardctl uninstall
+```
+
+Removes the instance for good. It lists what it is about to delete, then asks
+you to type a phrase naming the instance, such as
+`delete orchard.example.com`. Anything else stops it with nothing changed, and
+no flag skips the question. A script that really means it can pipe the phrase
+in.
+
+In order, it:
+
+1. disables `orchard-update.timer` and removes its units, so a nightly update
+   cannot start part-way through;
+2. runs `k3s-uninstall.sh`, which takes every app, database and volume with it;
+3. removes what that script leaves behind:
+
+| Path                                                                           | What it is                               |
+| ------------------------------------------------------------------------------ | ---------------------------------------- |
+| `/etc/orchard`                                                                 | The values file, with your secrets in it |
+| `/usr/local/bin/orchardctl` and its `orchard-*` links                          | These commands                           |
+| `/usr/local/bin/orchard-sync-commands`                                         | The shell bootstrap                      |
+| `/usr/local/bin/helm`, `/usr/local/bin/yq`                                     | Tools the installer downloaded           |
+| `/etc/rancher`, `/var/lib/rancher`                                             | What is left of k3s                      |
+| `~/.kube`, and helm's directories in `~/.config`, `~/.cache`, `~/.local/share` | Root's kubectl and helm state            |
+
+If `k3s-uninstall.sh` fails, it stops there and keeps `orchardctl` and the values
+file, so you can run it again.
+
+:::danger
+It removes k3s and helm whether or not the installer put them there, and root's
+`~/.kube` whatever else is in it. On a machine that ran k3s before Orchard, that
+includes everything else on that cluster.
+:::
+
+Three things stay, because they are not on this machine or not only Orchard's:
+database backups in off-host object storage, your DNS records, and the rules
+the installer opened in ufw or firewalld.
 
 ## Upgrading from the shell version
 

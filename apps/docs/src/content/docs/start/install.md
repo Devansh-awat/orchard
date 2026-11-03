@@ -475,6 +475,24 @@ CLI downloads carry `attestation.sigstore.jsonl` next to them on the release
 page, and grafts in the Extension Marketplace are signed separately with
 Orchard's own key, which Orchard checks on every install.
 
+## Uninstalling
+
+On a box the installer set up:
+
+```bash
+sudo orchardctl uninstall
+```
+
+It removes k3s with every app, database and volume on it, then the values file
+with your secrets, the update timer, the host commands, helm, yq and the rest of
+what `k3s-uninstall.sh` leaves behind. It asks you to type a phrase naming the
+instance first, and there is no undo. See
+[host commands](/operate/host-commands/#uninstall) for the full list.
+
+On an existing cluster, `helm uninstall orchard -n orchard` removes the release.
+The namespaces Orchard made for its apps and databases are not part of the
+release, so delete those yourself.
+
 ## Before you put real work on it
 
 A fresh install is not a production instance. Secrets, signup mode, TLS cookies,

@@ -35,6 +35,7 @@ var Aliases = []string{
 	"orchard-start",
 	"orchard-restart",
 	"orchard-graft",
+	"orchard-uninstall",
 }
 
 // All is the registry, in the order it is listed by help. main.go is a
@@ -60,6 +61,7 @@ func All() []*cli.Command {
 		Logs(),
 		Status(),
 		Sync(),
+		Uninstall(),
 		Licenses(),
 	}
 }

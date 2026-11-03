@@ -441,6 +441,7 @@ through helm and kubectl.
 | `orchardctl logs [service]`                       | follow logs, default `server`                                            | no   |
 | `orchardctl status`                               | control-plane pods                                                       | no   |
 | `orchardctl sync`                                 | refresh these commands from the deployed image                           | yes  |
+| `orchardctl uninstall`                            | remove Orchard, k3s and everything on them, after a typed confirmation   | yes  |
 
 `update`, `config` and `claim` need root: the values file is mode 0600, so
 without it helm fails with `open /etc/orchard/values.yaml: permission denied`.
