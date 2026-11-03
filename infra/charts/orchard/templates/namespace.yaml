@@ -6,4 +6,28 @@ metadata:
   labels:
     app.kubernetes.io/part-of: orchard
     app.kubernetes.io/managed-by: helm
+{{- $wanted := list -}}
+{{- if and .Values.gateway.enabled (or .Values.gateway.http.enabled .Values.gateway.db.enabled) -}}
+{{- $wanted = append $wanted .Values.gateway.namespace -}}
+{{- end -}}
+{{- if .Values.certificates.enabled -}}
+{{- $wanted = append $wanted .Values.certificates.namespace -}}
+{{- end -}}
+{{- if .Values.builders.enabled -}}
+{{- $wanted = append $wanted ((.Values.publicTls.db.sourceNamespace | default .Values.certificates.namespace) | default "network") -}}
+{{- end -}}
+{{- range $ns := (uniq $wanted) }}
+{{- if and (ne $ns $.Values.namespace) (not (lookup "v1" "Namespace" "" $ns)) }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $ns }}
+  labels:
+    app.kubernetes.io/part-of: orchard
+    app.kubernetes.io/managed-by: helm
+  annotations:
+    helm.sh/resource-policy: keep
+{{- end }}
+{{- end }}
 {{- end }}

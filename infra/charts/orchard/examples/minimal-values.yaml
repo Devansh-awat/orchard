@@ -1,0 +1,29 @@
+createNamespace: false
+signupMode: invite_only
+datadog:
+  enabled: false
+ingress:
+  host: orchard.example.com
+  tls:
+    enabled: true
+    issuerRef: { name: letsencrypt, kind: ClusterIssuer }
+gateway:
+  http:
+    enabled: false
+    appDomain: apps.example.com
+certificates:
+  enabled: false
+mcp:
+  enabled: false
+tenant:
+  storageClass: local-path
+  ingressClass: traefik
+  ingressNamespaces: traefik,orchard
+  certClusterIssuer: letsencrypt
+server:
+  env:
+    - { name: FRONTEND_URL, value: https://orchard.example.com }
+    - name: JWT_SECRET
+      valueFrom: { secretKeyRef: { name: orchard-secrets, key: jwt } }
+    - name: SECRETS_ENCRYPTION_KEY
+      valueFrom: { secretKeyRef: { name: orchard-secrets, key: enc } }

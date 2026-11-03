@@ -1,6 +1,7 @@
-# Where everything is installed.
-# The chart targets a single namespace "orchard" by default (create it with
-# `helm install ... --create-namespace` or set createNamespace=true below).
+# Where everything is installed. createNamespace renders the Namespace object for
+# this one, and for gateway.namespace and certificates.namespace when they are in
+# use and do not exist yet. Those two are kept on uninstall. Set false to manage
+# all of them yourself.
 namespace: orchard
 createNamespace: true
 
@@ -90,8 +91,9 @@ server:
 # Signup policy for the platform: open | invite_only | closed.
 signupMode: invite_only
 
-# Cluster knobs for tenant workloads (user apps/databases). Empty values fall
-# back to the app defaults (longhorn / haproxy / letsencrypt-prod).
+# Cluster knobs for tenant workloads (user apps/databases). An empty storageClass
+# uses the cluster's default StorageClass; the other two fall back to haproxy and
+# letsencrypt-prod.
 tenant:
   storageClass: ""
   ingressClass: ""
@@ -519,10 +521,11 @@ certificates:
       domain: ""       # empty → falls back to gateway.appDomain
       secretName: ""   # empty → falls back to gateway.appWildcardSecretName
     # *.{db.domain} — used by the server's syncPublicTlsSecret() to copy
-    # the wildcard cert into project namespaces for CNPG TLS.
+    # the wildcard cert into project namespaces for CNPG TLS. No domain, no
+    # Certificate.
     db:
       enabled: true
-      domain: db.orchard.my
+      domain: ""
       secretName: wildcard-db-orchard-my-tls
 
 # R2 backup proxy. Sits between tenant CNPG clusters and Cloudflare R2 so the
