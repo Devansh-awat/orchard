@@ -8,7 +8,7 @@
 // only work for that cluster's prefix. The real R2 credentials live only on
 // the proxy (separate namespace, NetworkPolicy-fenced).
 //
-// Bindings come straight from orchard's Postgres `databases` table — there
+// Bindings come straight from orchard's Postgres `databases` table: there
 // is no ConfigMap to drift from the source of truth. Lookups are cached
 // in-memory for 60s on hit, 5s on miss.
 //
@@ -53,8 +53,6 @@ import (
 
 // Version is set via -ldflags "-X main.Version=..." at build time.
 var Version = "dev"
-
-// ─────────────────────────── binding resolver ───────────────────────────
 
 type Binding struct {
 	AccessKey    string
@@ -109,7 +107,7 @@ func (s *bindingStore) get(ak string) (Binding, bool) {
 	}
 	s.mu.RUnlock()
 
-	// Cache miss / expired — hit the DB.
+	// Cache miss / expired: hit the DB.
 	b, found, err := s.lookup(ak)
 	if err != nil {
 		// On DB error, fall through to whatever stale entry we have rather
@@ -256,8 +254,6 @@ func withSlash(prefix string) string {
 	return prefix + "/"
 }
 
-// ─────────────────────────── proxy ───────────────────────────
-
 type Proxy struct {
 	upstreamURL     *url.URL
 	upstreamRegion  string
@@ -292,7 +288,7 @@ func main() {
 	db.SetConnMaxLifetime(10 * time.Minute)
 
 	// Eager-ping so we fail fast if creds are wrong, rather than crash on
-	// first request. Don't fatally exit though — DB blip during boot
+	// first request. Don't fatally exit though: DB blip during boot
 	// shouldn't take the proxy down indefinitely; we'll retry per request.
 	{
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -320,7 +316,7 @@ func main() {
 		policy:          store,
 		allowedBuckets:  allowed,
 		// No client-level timeout: backup uploads can be large/long. The
-		// caller controls liveness via context (we don't add one — barman
+		// caller controls liveness via context (we don't add one, barman
 		// has its own retry/timeout). If you front this with an ingress
 		// proxy add idle-timeout there.
 		client: &http.Client{},
@@ -370,7 +366,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Enforce bucket + prefix. Path-style addressing only — barman uses uri-style=path.
+	// Enforce bucket + prefix. Path-style addressing only: barman uses uri-style=path.
 	bucket, key := splitPathStyle(r.URL.Path)
 	if bucket == "" {
 		denyAndLog(w, r, authz.AccessKey, "AccessDenied", "missing bucket in path")
@@ -426,7 +422,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 	log.Printf("[r2-proxy] %s %s ak=%s → %d", r.Method, r.URL.Path, authz.AccessKey, resp.StatusCode)
 
-	// Stream response back. Don't add or rewrite headers — barman/aws-sdk
+	// Stream response back. Don't add or rewrite headers: barman/aws-sdk
 	// validates ETag, Content-Length, and the various x-amz-* headers it set.
 	for k, vs := range resp.Header {
 		for _, v := range vs {
@@ -436,8 +432,6 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(resp.StatusCode)
 	_, _ = io.Copy(w, resp.Body)
 }
-
-// ─────────────────────────── auth parsing ───────────────────────────
 
 type sigv4Authz struct {
 	AccessKey     string
@@ -485,11 +479,9 @@ func parseAuthHeader(h string) (sigv4Authz, error) {
 	return out, nil
 }
 
-// ─────────────────────────── V4 verify ───────────────────────────
-
 // verifyV4 reconstructs the canonical request the client signed and compares
 // the resulting signature against what they sent. The payload hash is taken
-// at face value from x-amz-content-sha256 (we don't re-hash the body — large
+// at face value from x-amz-content-sha256 (we don't re-hash the body, large
 // streaming uploads would otherwise need to be buffered). For our threat model
 // (inside-the-cluster attacker who already has the secret) body-tamper isn't
 // in scope; the value of the signature check is rejecting use of a leaked
@@ -673,8 +665,6 @@ func hexSha256(data []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// ─────────────────────────── upstream signing ───────────────────────────
-
 // signRequest signs `req` in-place with the upstream real-R2 credentials.
 // `contentSha` is the payload hash that will be presented in the
 // x-amz-content-sha256 header; pass "UNSIGNED-PAYLOAD" for streaming bodies.
@@ -729,8 +719,6 @@ func dedupe(in []string) []string {
 	}
 	return out
 }
-
-// ─────────────────────────── helpers ───────────────────────────
 
 type deleteObjectsBody struct {
 	Objects []struct {
