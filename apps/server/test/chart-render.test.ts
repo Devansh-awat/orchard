@@ -102,16 +102,15 @@ test('buildkit only trusts plaintext registries from values', { skip: !helmAvail
     'builders.httpRegistries[0]=harbor-core.harbor.svc.cluster.local',
     'builders.httpRegistries[1]=zot.orchard.svc.cluster.local:5000'
   ]);
-  assert.ok(!out.includes('178.156.144.127'), 'no hardcoded registry ip');
+  assert.doesNotMatch(out, /\[registry\."\d+\.\d+/, 'no hardcoded registry ip');
   assert.match(out, /\[registry\."harbor-core\.harbor\.svc\.cluster\.local"\]\s+http = true/);
   assert.match(out, /\[registry\."zot\.orchard\.svc\.cluster\.local:5000"\]\s+http = true/);
 });
 
 test("a stock render names nobody else's domain or registry", { skip: !helmAvailable() }, () => {
   const out = render([]);
-  for (const internal of ['1mp.dev', 'lfdl.ink', 'Harbor12345', 'longhorn-ssd']) {
-    assert.ok(!out.includes(internal), `no ${internal}`);
-  }
+  assert.match(out, /"auths": \{\s*\}/, 'no registry credentials');
+  assert.ok(!out.includes('longhorn'), 'no storage class from another cluster');
   assert.ok(!out.includes('https-wildcard'), 'no wildcard listener without an app domain');
   assert.ok(!out.includes('kind: Certificate'), 'no wildcard Certificate without an app domain');
 });
