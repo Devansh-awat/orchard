@@ -138,7 +138,6 @@
 	const canEditOrg = $derived(currentUserRole === 'owner' || currentUserRole === 'admin');
 	const canInvite = $derived(currentUserRole === 'owner' || currentUserRole === 'admin');
 	const isOwner = $derived(currentUserRole === 'owner');
-	const isEnterprise = $derived(organization?.plan?.toLowerCase() === 'enterprise');
 
 	let revokingAccessId = $state<string | null>(null);
 
@@ -217,9 +216,7 @@
 				label: 'Access',
 				items: [
 					{ id: 'sso', label: 'SSO', href: `/${organizationSlug}/settings?tab=sso` },
-					...(isEnterprise
-						? [{ id: 'scim', label: 'SCIM', href: `/${organizationSlug}/settings?tab=scim` }]
-						: [])
+					{ id: 'scim', label: 'SCIM', href: `/${organizationSlug}/settings?tab=scim` }
 				]
 			},
 			{
@@ -269,7 +266,7 @@
 					await fetchInvitations();
 					await fetchBackupSettings();
 					await fetchNotificationChannels();
-					if (data.plan?.toLowerCase() === 'enterprise') {
+					if (roleData.role === 'owner') {
 						await fetchScimTokens();
 					}
 				} else {
@@ -1062,7 +1059,7 @@
 		{#if activeTab === 'sso'}
 			<OrgSsoTab {organization} {isOwner} {baseDomain} onOrganizationChanged={fetchOrganization} />
 		{/if}
-		{#if activeTab === 'scim' && isEnterprise}
+		{#if activeTab === 'scim'}
 			<OrgScimTab
 				{isOwner}
 				{scimLoading}
