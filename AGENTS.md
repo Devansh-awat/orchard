@@ -41,7 +41,7 @@ Everything else:
   snapshot.
 - `packages/graft-sdk`, `packages/graft-ui`: what grafts build against.
 - `packages/health`: shared health copy, kept in sync with the server by a test.
-- `infra/charts/orchard`: the Helm chart. Values reference in its `AGENT.md`.
+- `infra/charts/orchard`: the Helm chart. Values reference in its `README.md`.
 - `install/`: the one-command installer, published to `assets.orchard.my/install.sh`.
 - `docs/`: architecture and design notes.
 

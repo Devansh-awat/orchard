@@ -183,7 +183,7 @@ builderSandbox: # Kata VMs for build jobs
 That undoes a bad migration or a dropped table, but it is not disaster recovery:
 lose the disk and the backups go with it. Point the instance at real S3 or R2
 for that; "Moving backups to real S3 or R2" in
-[AGENT.md](../infra/charts/orchard/AGENT.md) walks through it, including
+[the chart README](../infra/charts/orchard/README.md) walks through it, including
 copying what is already there. `--object-storage false` installs without the
 local store, and then backups are off until you configure storage.
 

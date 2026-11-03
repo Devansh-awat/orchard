@@ -1,19 +1,35 @@
-# Orchard Helm Chart — Agent Install Guide
+# Orchard Helm chart
 
-Chart published to: `oci://ghcr.io/hackclub/orchard/charts/orchard:0.1.0`
+Chart published to: `oci://ghcr.io/hackclub/orchard/charts/orchard`
+
+The chart version is the highest service version, assigned at release.
 
 This chart installs the Orchard app stack into a Kubernetes cluster:
-frontend + server + Traefik IngressRoute, a CloudNativePG `Cluster`,
+frontend + server + MCP + Traefik IngressRoutes, Redis, a CloudNativePG `Cluster`,
 the image-builder namespace/RBAC/secrets, and the orchard-metrics stack
 (VictoriaMetrics + vmagent + kube-state-metrics + node-exporter).
 
-It does **not** install operators or CRDs. The cluster must already have:
+It does **not** install operators or CRDs, and it does not check for them, so a
+missing one fails `helm install`. With the default values the cluster must already
+have:
 
-- **CloudNativePG operator** — provides `postgresql.cnpg.io/v1` `Cluster`
-- **Traefik** with the `traefik.io/v1alpha1` CRDs and a `websecure` entryPoint
+- **CloudNativePG operator**: provides `postgresql.cnpg.io/v1` `Cluster`
+- **Gateway API CRDs** (`gateway.networking.k8s.io/v1`), and a GatewayClass matching
+  `gateway.gatewayClassName`. Set `gateway.enabled: false` if you route without them.
+- **cert-manager** and a DNS-01 `ClusterIssuer` named `letsencrypt-dns01-wildcard`,
+  for the wildcard `Certificate`s. Change `certificates.issuer`, or set
+  `certificates.enabled: false` and bring the TLS Secrets yourself.
+- **A `network` namespace**, which the chart does not create. `gateway.namespace` and
+  `certificates.namespace` both default to it.
+- **An OCI registry** for builds to push to and nodes to pull from (`builders.harbor.*`,
+  plus `DOCKER_REGISTRY_PUSH` and `DOCKER_REGISTRY_PULL` in `server.env`).
 - A default StorageClass, or an explicit `storageClass` for each volume below.
   Every volume the chart creates uses the cluster default when its
   `storageClass` is empty, which is the default.
+
+Traefik (the `traefik.io/v1alpha1` CRDs and a `websecure` entryPoint) is needed only
+for `ingress.enabled` and `mcp.ingress`. Tenant apps use any ingress class
+(`tenant.ingressClass`), but app HTTP metrics come only from HAProxy and Traefik.
 
 ---
 
@@ -22,7 +38,6 @@ It does **not** install operators or CRDs. The cluster must already have:
 ```bash
 helm install orchard \
   oci://ghcr.io/hackclub/orchard/charts/orchard \
-  --version 0.1.0 \
   --namespace orchard \
   --create-namespace \
   -f my-values.yaml
@@ -31,7 +46,7 @@ helm install orchard \
 Inspect what will be applied first:
 
 ```bash
-helm template orchard oci://ghcr.io/hackclub/orchard/charts/orchard --version 0.1.0 -f my-values.yaml | less
+helm template orchard oci://ghcr.io/hackclub/orchard/charts/orchard -f my-values.yaml | less
 ```
 
 ---
@@ -45,20 +60,49 @@ ingress:
     enabled: true
     secretName: orchard-tls          # cert-manager / pre-existing secret
 
+# The defaults are this project's own domains
+gateway:
+  http:
+    appDomain: apps.example.com
+certificates:
+  wildcards:
+    db:
+      domain: db.example.com
+      secretName: wildcard-db-example-com-tls
+
+# On by default. Needs a Datadog agent in the cluster and an orchard-db-datadog Secret
+datadog:
+  enabled: false
+
 builders:
-  r2:
-    accessKeyId: "REPLACE_ME"
-    secretAccessKey: "REPLACE_ME"
   harbor:
     username: admin
     password: "REPLACE_ME"
+    hosts: [registry.example.com]
 
-# Pin image tags to a known-good commit (optional — defaults to AppVersion)
+# On by default, and needs JWT_SECRET and MCP_SERVICE_TOKEN in mcp.env. See MCP below
+mcp:
+  enabled: false
+
+server:
+  env:
+    # Required at boot, at least 32 characters
+    - name: JWT_SECRET
+      valueFrom: { secretKeyRef: { name: orchard-secrets, key: jwt } }
+    # Encrypts stored secrets. Keep it: a new key makes existing ones unreadable
+    - name: SECRETS_ENCRYPTION_KEY
+      valueFrom: { secretKeyRef: { name: orchard-secrets, key: enc } }
+    - { name: DOCKER_REGISTRY_PUSH, value: registry.example.com }
+    - { name: DOCKER_REGISTRY_PULL, value: registry.example.com }
+    - { name: FRONTEND_URL, value: https://orchard.example.com }
+  # Pin image tags to a known-good commit (optional, defaults to AppVersion)
+  image: { tag: "sha-<commit>" }
+
 frontend:
   image: { tag: "sha-<commit>" }
-server:
-  image: { tag: "sha-<commit>" }
 ```
+
+[`docs/self-hosting.md`](../../../docs/self-hosting.md) walks through the rest.
 
 Every volume uses the cluster's default StorageClass unless you name one. To
 pin them all to a class that is not the default (k3s ships only `local-path`,
@@ -96,12 +140,15 @@ new class on a fresh volume.
 
 | Namespace          | Resources |
 |--------------------|-----------|
-| `orchard`          | `frontend` / `server` Deployments + Services, Traefik `IngressRoute`, CNPG `Cluster` (`orchard-db`) |
+| `orchard`          | `frontend` / `server` / `mcp` Deployments + Services, Redis Deployment + PVC, Traefik `IngressRoute`s, CNPG `Cluster` (`orchard-db`) |
+| `network`          | Gateways and wildcard `Certificate`s. Not created by the chart. |
 | `orchard-builders` | SA, RBAC, Harbor + R2 secrets, BuildKit ConfigMap, ResourceQuota, LimitRange, NetworkPolicy |
 | `orchard-metrics`  | VictoriaMetrics StatefulSet, vmagent, kube-state-metrics, node-exporter DaemonSet, VictoriaLogs StatefulSet, Vector DaemonSet |
 | `orchard-scans`    | Only with `trivy.enabled`: Trivy server Deployment + Service + cache PVC, the scan jobs, server Role for their Secrets, NetworkPolicies |
 | `orchard-r2-proxy` | Only when `r2Proxy.enabled` and it has an upstream: the backup proxy Deployment + Service, its upstream and database Secrets, NetworkPolicy |
 | `orchard-object-storage` | Only with `objectStorage.local.enabled`: versitygw Deployment + Service + data PVC, root-credentials Secret, the bucket Job, NetworkPolicy |
+| `orchard-fc-builders` | Only with `fcBuilder.enabled`: the Firecracker builder StatefulSet, its Secrets, NetworkPolicy |
+| `orchard-sandboxes` | Only with `sandbox.install` or `sandbox.enabled`: machine quota, LimitRange, NetworkPolicy, RBAC |
 | cluster-scoped     | `ClusterRole`/`ClusterRoleBinding` for builder management and metrics scraping |
 
 The server deployment gets `DATABASE_URL` injected automatically from the
@@ -114,9 +161,10 @@ Routing (Traefik IngressRoute on `Host(ingress.host, ...ingress.extraHosts)`):
 
 ---
 
-## 4. Full values reference
+## 4. Values reference
 
-Every key the chart honors, with defaults from `values.yaml`.
+The keys most installs touch, with defaults from `values.yaml`. `values.yaml` itself
+is the complete list.
 
 ### Top-level
 
@@ -126,8 +174,26 @@ Every key the chart honors, with defaults from `values.yaml`.
 | `createNamespace` | `true` | Render a `Namespace` object for `.namespace`. Set `false` if you manage the namespace yourself or pass `--create-namespace` to helm. |
 | `cilium.enabled` | `false` | Add CiliumNetworkPolicy / CiliumEnvoyConfig grants to the server ClusterRole and set `CILIUM_ENABLED=true`. Only for clusters running Cilium as the CNI. Left off, the server probes for the `cilium.io` group plus create on `ciliumenvoyconfigs`: per-tenant policy falls back to plain NetworkPolicy, and basic auth on an ingress is enforced by the protection proxy instead of an Envoy filter. |
 | `protection.orchardLogin` | `false` | Offer `protectionMode: orchard` ("sign in with Orchard") on tenant ingresses, via `PROTECTION_ORCHARD_LOGIN=true`. Gates selecting the mode, not enforcing it. `basic` and `password` are always available. |
+| `signupMode` | `invite_only` | Who can sign up: `open`, `invite_only` or `closed`, as `SIGNUP_MODE`. |
+| `tenant.storageClass` | `""` | StorageClass for tenant apps and databases, as `K8S_STORAGE_CLASS`. Empty falls back to `longhorn`, so set it on any other cluster. |
+| `tenant.ingressClass` | `""` | Ingress class of tenant apps, as `K8S_INGRESS_CLASS`. Empty falls back to `haproxy`. |
+| `tenant.certClusterIssuer` | `""` | ClusterIssuer for tenant certificates, as `CERT_CLUSTER_ISSUER`. Empty falls back to `letsencrypt-prod`. |
+| `tenant.ingressNamespaces` | `""` | Namespaces a tenant pod may be reached from and reach, as `TENANT_INGRESS_NAMESPACES`. Empty means `network,orchard`. The ingress controller has to be on this list, or apps are unreachable and HTTP-01 certificates never issue. A k3s cluster running Traefik wants `traefik,orchard`. |
 | `tenant.wildcardDomains` | `""` | `.suffix=tlsSecret` pairs generated app URLs are built from. Empty derives one from `gateway.http.appDomain`. |
 | `tenant.publicIp` | `""` | Fallback external IP publicly exposed ports and databases are published on, via `PUBLIC_EXPOSURE_IP`. An organization that sets its own overrides it. Empty means every organization must configure one before it can expose anything, and setting it here locks the admin-panel field. |
+
+### Datadog (`datadog.*`)
+
+APM for the server, on by default because this project runs it. Turn it off unless you
+run a Datadog agent.
+
+| Key | Default | Description |
+|---|---|---|
+| `datadog.enabled` | `true` | Injects the `DD_*` env into the server, adds `pg_stat_statements` parameters to Postgres, and adds a `datadog` Postgres role whose password comes from an `orchard-db-datadog` Secret you create. |
+| `datadog.agentHost` | `datadog.monitoring.svc.cluster.local` | The agent Service, as `DD_AGENT_HOST`. |
+| `datadog.env` | `production` | `DD_ENV`. |
+| `datadog.profiling` | `true` | Continuous profiler. |
+| `datadog.appsec` | `true` | App and API Protection. Detection only unless you enable blocking in Datadog. |
 
 ### Image defaults (`image.*`)
 
@@ -147,7 +213,7 @@ Every key the chart honors, with defaults from `values.yaml`.
 | `frontend.image.name` | `frontend` | Image name suffix. |
 | `frontend.image.tag` | `""` | Tag override; empty falls back to `Chart.AppVersion`. Use `sha-<commit>` to pin. |
 | `frontend.service.port` | `3000` | ClusterIP Service port. |
-| `frontend.resources` | requests `50m/128Mi`, limits `1/512Mi` | Standard k8s resource block. |
+| `frontend.resources` | requests `50m/128Mi`, limits `1/1Gi` | Standard k8s resource block. |
 | `frontend.autoscaling.enabled` | `false` | HPA on CPU. Needs metrics-server. When on, `replicas` is omitted from the Deployment so upgrades don't fight the HPA. |
 | `frontend.autoscaling.minReplicas` / `maxReplicas` | `2` / `6` | Bounds. |
 | `frontend.autoscaling.targetCPUUtilizationPercentage` | `75` | Scale-out target. |
@@ -166,6 +232,9 @@ Every key the chart honors, with defaults from `values.yaml`.
 | `server.autoscaling.enabled` | `false` | HPA on CPU. Needs metrics-server. When on, `replicas` is omitted from the Deployment. |
 | `server.autoscaling.minReplicas` / `maxReplicas` | `2` / `8` | Bounds. |
 | `server.autoscaling.targetCPUUtilizationPercentage` | `70` | Scale-out target. |
+| `server.workers.enabled` | `false` | Run builds, notifications and the k8s apply queue in dedicated `server-worker` pods, leaving api pods enqueue-only. Same image and env as the server. |
+| `server.workers.replicas` | `2` | Replica count. Ignored when `server.workers.autoscaling.enabled`. |
+| `server.workers.resources` | requests `100m/384Mi`, limits `2/2Gi` | Resource block. |
 | `server.workers.autoscaling.*` | `false`, `1`–`10`, `60%` | Same for the worker Deployment. Builds are the burstiest tier. |
 | `server.env` | `[]` | Extra env vars. `DATABASE_URL` is injected automatically from `orchard-db-app` when `postgres.enabled=true`. `APP_DOMAIN` and `PLATFORM_WILDCARD_DOMAINS` are derived from `gateway.http.appDomain`; list them here to override. |
 | `server.envFrom` | `[]` | `envFrom` list (configMapRef / secretRef). |
@@ -185,7 +254,33 @@ The chart sets `TENANT_SECRETS_CLUSTER_ROLE` to `<release>-tenant-secrets`, the 
 | `postgres.storage.size` | `10Gi` | PVC size per instance. |
 | `postgres.storage.storageClass` | `""` | StorageClass for the data PVC. Empty keeps the live cluster's class, or uses the cluster default on a fresh install. |
 | `postgres.resources` | requests `200m/512Mi`, limits `2/2Gi` | Per-instance resources. |
+| `postgres.walSlotKeepSize` | `2GB` | `max_slot_wal_keep_size`. |
+| `postgres.pooler.enabled` | `false` | Put a CNPG `Pooler` (PgBouncer, transaction mode) in front of the database. Orchard's own queries go through it; migrations and graft pools connect directly. |
+| `postgres.pooler.instances` / `defaultPoolSize` / `maxClientConn` | `2` / `20` / `1000` | Postgres sees at most `instances` x `defaultPoolSize` connections from Orchard. |
 | `postgres.pooler.image` | `ghcr.io/cloudnative-pg/pgbouncer:1.26.1` | PgBouncer image for the CNPG `Pooler`. Empty = operator default, which lags behind PgBouncer security releases. |
+| `postgres.pooler.resources` | requests `50m/64Mi`, limits `256Mi` memory | Resource block. |
+| `postgres.backup.enabled` | `false` | Archive `orchard-db` and render a CNPG `ScheduledBackup`. |
+| `postgres.backup.method` | `barman` | `barman`, or `plugin` for the barman cloud plugin, which also renders an `ObjectStore`. The plugin must already be installed. |
+| `postgres.backup.destinationPath` | `""` | `s3://` path. Required when backups are on. |
+| `postgres.backup.endpointURL` | `""` | S3 endpoint, for anything that is not AWS. |
+| `postgres.backup.secretName` | `orchard-db-backup` | Secret you create, with keys `ACCESS_KEY_ID` and `ACCESS_SECRET_KEY`. |
+| `postgres.backup.retentionPolicy` | `30d` | Retention. |
+| `postgres.backup.schedule` | `0 30 1 * * *` | Six-field cron. |
+| `postgres.backup.walMaxParallel` | `4` | WAL upload parallelism. |
+
+### Redis (`redis.*`)
+
+Backs the cross-replica SSE event bus and is available as a cache. Without it the server
+degrades to local-only delivery plus polling.
+
+| Key | Default | Description |
+|---|---|---|
+| `redis.enabled` | `true` | Deploy Redis and inject `REDIS_URL` into the server. |
+| `redis.image` | `redis:7.4.11-alpine` | Image. |
+| `redis.storage` / `storageClass` | `1Gi` / cluster default | The data PVC. |
+| `redis.url` | `""` | Use this URL for `REDIS_URL` instead of the in-cluster Service. |
+| `redis.networkPolicy.enabled` | `true` | Restrict who can reach it. |
+| `redis.resources` | requests `50m/64Mi`, limits `500m/512Mi` | Resource block. |
 
 ### Ingress / Traefik (`ingress.*`)
 
@@ -213,6 +308,9 @@ its own hostname.
 | `mcp.replicas` | `1` | Replica count. Ignored when `mcp.autoscaling.enabled`. |
 | `mcp.image.name` | `mcp` | Image name suffix. Built from `apps/server/Dockerfile.mcp`. |
 | `mcp.service.port` | `3100` | ClusterIP Service port. |
+| `mcp.autoscaling.enabled` | `false` | HPA on CPU. Needs metrics-server. |
+| `mcp.autoscaling.minReplicas` / `maxReplicas` | `1` / `4` | Bounds. |
+| `mcp.autoscaling.targetCPUUtilizationPercentage` | `75` | Scale-out target. |
 | `mcp.ingress.enabled` | `true` | Create the Traefik `IngressRoute`. |
 | `mcp.ingress.host` | `""` | **The MCP domain**, e.g. `mcp.example.com`. Empty creates no route, and every URL derived from it stays unset. |
 | `mcp.ingress.tls.issuerRef` | `{}` | As `ingress.tls.issuerRef`, into `{release}-mcp-tls`. An MCP client refuses a self-signed certificate outright, so this or `secretName` is not optional in practice. |
@@ -250,10 +348,63 @@ is the single place the MCP's address is configured.
 | `builders.quota.requestsCpu` | `"16"` | Namespace ResourceQuota: total CPU requests. |
 | `builders.quota.requestsMemory` | `"32Gi"` | Total memory requests. |
 | `builders.quota.limitsCpu` | `"32"` | Total CPU limits. |
-| `builders.quota.limitsMemory` | `"64Gi"` | Total memory limits. |
+| `builders.quota.limitsMemory` | `"100Gi"` | Total memory limits. |
 | `builders.quota.pods` | `"10"` | Max concurrent builder pods. |
+| `builders.registryEgress` | `harbor`, plus the `kubernetes-ingress` pods in `network` | In-cluster destinations builders may reach on top of DNS and public IPs on 80/443. A registry not listed here fails the build at the push. Not defaulted to the release namespace on purpose: a build runs untrusted repo code. |
+| `builders.dedicatedNode.enabled` | `false` | Pin builds to nodes labelled `orchard-builder=true`, tolerating an `orchard-builder` NoSchedule taint. |
+| `builders.platform` | `""` | `linux/amd64` or `linux/arm64`. Set, it also pins Orchard-built apps to that architecture. Empty builds `linux/amd64` and leaves app placement alone. |
+| `builders.localCache.enabled` | `true` | Keep the BuildKit cache on a PVC instead of S3/R2. |
+| `builders.localCache.size` / `storageClass` | `100Gi` / cluster default | The PVC. `storageClass` is immutable once created. |
+| `builders.localCache.path` / `pvcName` / `accessMode` | `/cache/buildkit` / `buildkit-cache` / `ReadWriteOnce` | Where and how it mounts. |
+| `builders.localCache.gcKeepBytes` / `gcEphemeralKeepBytes` | `18GB` / `1GB` | BuildKit GC ceilings **per tenant**, not per volume. |
+| `builders.localCache.evict.maxAgeDays` | `14` | Evict any tenant untouched for this long. |
+| `builders.localCache.evict.highPct` / `targetPct` | `80` / `60` | Above `highPct` used, evict least-recently-used tenants until under `targetPct`. |
+| `builders.localCache.evict.idleMinutes` | `60` | Never evict a tenant whose cache moved this recently. |
 
-The chart also creates a ClusterRoleBinding granting the `default` ServiceAccount in `.namespace` permission to manage Jobs/Pods/Secrets in `builders.namespace`.
+The chart grants the orchard-server ServiceAccount in `.namespace` permission to manage Jobs/Pods/Secrets in `builders.namespace`.
+
+### Fast builder (`fcBuilder.*`)
+
+Experimental. One privileged pod per node runs a Firecracker microVM per project. Deploying
+the hosts does nothing on its own: builds route here only when `serverEnabled` is true and
+the PostHog flag `firecracker-builder` (or a per-deployment override) picks the project.
+
+| Key | Default | Description |
+|---|---|---|
+| `fcBuilder.enabled` | `false` | Deploy the hosts in `fcBuilder.namespace` (`orchard-fc-builders`). |
+| `fcBuilder.serverEnabled` | `false` | Let the server route builds to them. |
+| `fcBuilder.replicas` | `2` | Number of hosts. |
+| `fcBuilder.image.{name,tag,repository}` | `fc-builder`, `latest`, `""` | Image. |
+| `fcBuilder.token` | generated | Secret for the server to fc-builder API, kept across upgrades. |
+| `fcBuilder.nodeSelector` | `orchard-fc-builder: "true"` | Nodes that may host VMs. They need `/dev/kvm`. |
+| `fcBuilder.tolerations` | `[]` | Tolerations. |
+| `fcBuilder.terminationGracePeriodSeconds` | `90` | Grace period. |
+| `fcBuilder.resources` | requests `12/48Gi`, limits `32/84Gi` | Resource block. |
+| `fcBuilder.storage.storageClass` / `size` | `longhorn-build-scratch` / `1Ti` | Holds every project's cache disk image. |
+| `fcBuilder.vm.*` | `maxVms: 6`, `vcpus: 8`, `memoryMiB: 12288`, `idleSeconds: 300`, `cacheSize: 50G`, `minNodeFreeMiB: 32768`, `memoryOverheadMiB: 1536` | Per-host VM limits. |
+| `fcBuilder.jailer.{enabled,cgroups}` | `true`, `true` | Run VMs under the Firecracker jailer. |
+| `fcBuilder.maxConcurrentBuilds` | `16` | Queue slots across all hosts. |
+| `fcBuilder.registry.{upstream,username,password}` | Harbor core, `""`, `""` | Where the push proxy forwards guest pushes. Guests never see these credentials. |
+| `fcBuilder.registryEgress` | Harbor core on 8080 | In-cluster egress besides DNS and the public internet. |
+
+### Pod sandboxing (`tenantSandbox.*`, `builderSandbox.*`)
+
+Both off by default, and both need the runtime on every node first, or pods fail with
+`no runtime for ... is configured`.
+
+| Key | Default | Description |
+|---|---|---|
+| `tenantSandbox.enabled` | `false` | Run tenant apps under gVisor, as `TENANT_RUNTIME_CLASS`, and render the RuntimeClass. |
+| `tenantSandbox.runtimeClassName` | `gvisor` | RuntimeClass name (handler `runsc`). |
+| `builderSandbox.enabled` | `false` | Run build Jobs under a VM runtime and render the RuntimeClass. |
+| `builderSandbox.runtimeClassName` / `handler` | `kata` / `kata` | RuntimeClass for build Jobs, as `BUILDER_RUNTIME_CLASS`. |
+| `builderSandbox.depotRuntimeClassName` | `gvisor` | RuntimeClass for super builds (Depot), which never execute repo code. It must exist, and `tenantSandbox` renders it. `""` reuses `runtimeClassName`. |
+| `builderSandbox.sidecarPush` | `false` | Move BuildKit to an init container with no registry credentials and push from a separate container. |
+| `builderSandbox.pusherImage` | `quay.io/skopeo/stable:latest` | Image for that container. Must have `skopeo` on `PATH`. |
+| `builderSandbox.tmpfsWorkspace` | `false` | Back workspace and output `emptyDir`s with memory. Counts against the container's memory limit. |
+| `builderSandbox.scratch.mode` | `""` | `tmpfs`, `disk` or `block`. Empty follows the isolation setting. |
+| `builderSandbox.scratch.size` / `storageClass` | `40Gi` / `longhorn-ssd` | Size and class of the BuildKit scratch. With tmpfs, `size` is a RAM reservation. |
+| `builderSandbox.memoryLimit` | `""` | `BUILDER_MEMORY_LIMIT`. |
 
 ### Backup proxy (`r2Proxy.*`)
 
@@ -372,7 +523,7 @@ AI dev machines. Off by default. Full operator guide:
 | `sandbox.enabled` | `false` | Installs the plumbing below unless `install` is set. Greenhouse itself is the `greenhouse` graft: add it to `grafts:` to turn it on. |
 | `sandbox.install` | `null` | Renders the machine namespace, ResourceQuota, LimitRange, NetworkPolicy, RBAC and the `SANDBOX_*` settings below. `null` follows `enabled`. Needed for the kubernetes runner of the `greenhouse` graft. |
 | `sandbox.namespace` | `orchard-sandboxes` | Namespace for kubernetes machines. |
-| `sandbox.image` | `debian:bookworm` | Base image. A bootstrap script installs sshd, git, tmux, Node.js, Claude Code, Codex and opencode on first boot. |
+| `sandbox.image` | `ghcr.io/hackclub/orchard/sandbox:latest` | Ships sshd, git, tmux, Node.js and the supported agents, so a machine boots in seconds. With any other image, a bootstrap script installs what is missing on first boot, which is slow. |
 | `sandbox.runtimeClassName` | `kata` | RuntimeClass for machines. Empty runs them on runc, unprivileged, with a Filesystem home PVC. |
 | `sandbox.idleTimeoutMinutes` | `60` | Stop machines with no terminal or SSH activity and no busy agent. `0` never. |
 | `sandbox.maxLifetimeHours` | `168` | Stop machines this long after their last start. `0` never. |
@@ -396,9 +547,9 @@ AI dev machines. Off by default. Full operator guide:
 
 Prerequisites the chart does **not** install: the kubernetes-sigs/agent-sandbox controller and CRDs (`agents.x-k8s.io/v1beta1`), the kata RuntimeClass handler on the nodes, a VolumeSnapshotClass if you want forking, and for previews a wildcard DNS record (the route and certificate come from `sandbox.previews`). Values under `sandbox.runners` left empty render no env var, so those fields stay editable at Instance admin → Configuration → Sandbox runners. Slack and Linear integrations are configured there too (`SLACK_*`, `LINEAR_WEBHOOK_SECRET` via `server.env` if you want them pinned).
 
-Example:
-
 The `sandbox-isolation` NetworkPolicy is identical to the one the server applies on every leader election, ports included (`pnpm --filter server test:chart` compares them), so upgrades and the server never fight over it.
+
+Example:
 
 ```yaml
 sandbox:
@@ -414,6 +565,36 @@ sandbox:
     previewDomain: orchard-preview.dev
 ```
 
+### Grafts (`grafts`, `graftSettings.*`)
+
+`grafts` lists the extensions to load, and is usually managed with `orchardctl graft`.
+
+| Key | Default | Description |
+|---|---|---|
+| `graftSettings.trust` | `listed` | Which grafts may load: `official`, `listed` (official, marketplace, and signed by a key in `keys`), `taps` (listed plus the taps below) or `any` (unsigned too). |
+| `graftSettings.keys` | `[]` | Raw ed25519 publisher keys, as `graft keygen` prints them. |
+| `graftSettings.taps` | `[]` | Third-party catalogues, each with `name`, the https `url` of the folder holding `tap.json`, and `key`. Load only when `trust` is `taps` or `any`. |
+| `graftSettings.marketplaceUrl` | `""` | Override the marketplace. |
+| `graftSettings.strict` | `false` | `ORCHARD_GRAFTS_STRICT`. |
+| `graftSettings.safeMode` | `false` | `ORCHARD_GRAFTS_SAFE_MODE`. |
+| `graftSettings.pools` | `{}` | Database connections per pod, by graft id. Overrides `database.pool` in `graft.json` (default 3). |
+
+### Database dumps (`databaseDumps.*`)
+
+A CronJob per target that runs `pg_dump` and uploads the result to S3, for databases
+outside Orchard.
+
+| Key | Default | Description |
+|---|---|---|
+| `databaseDumps.enabled` | `false` | Render the CronJobs. |
+| `databaseDumps.schedule` | `15 2 * * *` | Cron, unless a target sets its own `schedule`. |
+| `databaseDumps.image` / `uploaderImage` | `postgres:17-alpine` / `amazon/aws-cli:2.27.50` | Dump and upload images. Keep the Postgres major at or above your server's. |
+| `databaseDumps.destination.bucket` | `""` | Required when there are targets. |
+| `databaseDumps.destination.prefix` | `platform-dumps` | Key prefix. |
+| `databaseDumps.destination.endpointURL` | `""` | S3 endpoint, for anything that is not AWS. |
+| `databaseDumps.destination.secretName` | `database-dumps-r2` | Secret you create, with keys `ACCESS_KEY_ID` and `ACCESS_SECRET_KEY`. |
+| `databaseDumps.targets` | `[]` | Each needs `name`, `host`, `database`, `user` and `passwordSecret.name`; optional `port`, `namespace`, `schedule`, `passwordSecret.key` (default `password`). |
+
 ### Metrics (`metrics.*`)
 
 | Key | Default | Description |
@@ -424,7 +605,7 @@ sandbox:
 | `metrics.victoriametrics.retention` | `30d` | `-retentionPeriod` flag. |
 | `metrics.victoriametrics.storage.size` | `5Gi` | StatefulSet PVC size. |
 | `metrics.victoriametrics.storage.storageClass` | `""` | StorageClass for the VM data PVC. Empty keeps the live StatefulSet's class, or uses the cluster default. |
-| `metrics.victoriametrics.memoryAllowedPercent` | `60` | `-memory.allowedPercent`. VM sizes its cache off the memory *limit*, so it grows to fill whatever it is given — lower this and the limit together to shrink idle RSS. |
+| `metrics.victoriametrics.memoryAllowedPercent` | `60` | `-memory.allowedPercent`. VM sizes its cache off the memory *limit*, so it grows to fill whatever it is given; lower this and the limit together to shrink idle RSS. |
 | `metrics.victoriametrics.resources` | requests `100m/256Mi`, limits `1/1Gi` | Resource block. |
 | `metrics.vmagent.image` | `victoriametrics/vmagent:v1.154.1` | vmagent image. |
 | `metrics.vmagent.resources` | requests `50m/128Mi`, limits `500m/512Mi` | Resource block. |
@@ -501,7 +682,7 @@ server needs egress to download its database (`mirror.gcr.io`, `ghcr.io`).
 
 ### Gateway (`gateway.*`)
 
-Renders the shared Gateway API `Gateway` objects and `ReferenceGrant`s that used to live in `k8s/gateway-api/`.
+Renders the shared Gateway API `Gateway` objects and `ReferenceGrant`s.
 
 | Key | Default | Description |
 |---|---|---|
@@ -509,12 +690,12 @@ Renders the shared Gateway API `Gateway` objects and `ReferenceGrant`s that used
 | `gateway.namespace` | `network` | Namespace the Gateways + ReferenceGrants live in. Cert Secrets must be readable from here. |
 | `gateway.gatewayClassName` | `traefik` | `GatewayClass` both Gateways attach to. |
 | `gateway.http.enabled` | `true` | Render the L7 HTTP/HTTPS Gateway. |
-| `gateway.http.name` | `http-gateway` | Gateway object name. The server (`ensureCustomDomainListener`) targets this exact name — keep in sync. |
+| `gateway.http.name` | `http-gateway` | Gateway object name. The server (`ensureCustomDomainListener`) targets this exact name, so keep them in sync. |
 | `gateway.http.appDomain` | `a.lfdl.ink` | Hostname pattern for autogen user app domains. Must match server `APP_DOMAIN` and frontend `PUBLIC_APP_DOMAIN`. |
 | `gateway.http.appWildcardSecretName` | `""` | Secret holding the wildcard TLS cert for `*.{appDomain}`. Empty derives `wildcard-<appDomain with dots as dashes>-tls`, which the chart-managed `Certificate`, the Gateway listener and `PLATFORM_WILDCARD_DOMAINS` all agree on. |
 | `gateway.db.enabled` | `true` | Render the L4 TCP Gateway for managed DBs. |
 | `gateway.db.name` | `db-gateway` | Gateway object name. Targeted by the server's `ensureDbGatewayListener`. |
-| `gateway.referenceGrants.enabled` | `false` | Render `ReferenceGrant`s. Only needed if Routes reference cross-namespace *backend Services* — not required for parentRefs (covered by `allowedRoutes.namespaces.from: All`). |
+| `gateway.referenceGrants.enabled` | `false` | Render `ReferenceGrant`s. Only needed if Routes reference cross-namespace *backend Services*, not for parentRefs (covered by `allowedRoutes.namespaces.from: All`). |
 | `gateway.referenceGrants.fromNamespaces` | `[]` | Explicit list of source namespaces. One ReferenceGrant rendered per (namespace × Gateway). Empty = no grants rendered. Gateway API admission rejects empty / wildcard `from.namespace`, so this must be a concrete list. |
 
 ### Certificates (`certificates.*`)
@@ -525,7 +706,7 @@ Renders `cert-manager.io/v1 Certificate` resources for the configured wildcards.
 |---|---|---|
 | `certificates.enabled` | `true` | Render `Certificate` resources. Set `false` if you pre-provision the TLS Secrets out-of-band. |
 | `certificates.namespace` | `network` | Where Certificates + their Secrets live. Same as `gateway.namespace` in the default layout. |
-| `certificates.issuer.name` | `letsencrypt-dns01-wildcard` | Name of the `ClusterIssuer` (or `Issuer`). **Must support DNS-01** — install acme-dns (see `kubeops/kubernetes/apps/network/acme-dns/SETUP.md`) before enabling. |
+| `certificates.issuer.name` | `letsencrypt-dns01-wildcard` | Name of the `ClusterIssuer` (or `Issuer`). **Must support DNS-01.** See [SETUP-wildcards.md](SETUP-wildcards.md). |
 | `certificates.issuer.kind` | `ClusterIssuer` | `ClusterIssuer` or `Issuer`. |
 | `certificates.duration` | `2160h` | Cert lifetime. |
 | `certificates.renewBefore` | `360h` | Renewal lead time. |
@@ -649,8 +830,7 @@ helm upgrade orchard oci://ghcr.io/hackclub/orchard/charts/orchard \
 ```
 
 CNPG handles rolling Postgres upgrades on its own. Bumping `postgres.instances`
-adds replicas; the chart does not configure backup — configure CNPG
-`ScheduledBackup` separately if needed.
+adds replicas. Set `postgres.backup.enabled` to render a CNPG `ScheduledBackup`.
 
 Upgrading across the 2026-09 security release:
 
@@ -684,9 +864,9 @@ Upgrading to the release with cluster-neutral storage defaults:
 
 ## 8. Troubleshooting checklist
 
-- `kubectl -n orchard get cluster orchard-db` → confirm CNPG `Cluster.status.phase` is `Cluster in healthy state`. If `not yet defined`, the CNPG operator isn't installed or isn't watching this namespace.
-- `kubectl -n orchard get ingressroute` → if empty, Traefik CRDs aren't installed. Switch to a regular `Ingress` by setting `ingress.enabled: false` and creating one manually, or install Traefik.
-- `kubectl -n orchard describe pod -l app.kubernetes.io/name=server` → look for `ImagePullBackOff` (pull secret) or `CreateContainerConfigError` (missing `orchard-db-app` secret — CNPG hasn't finished bootstrapping yet, retry).
+- `helm install` fails with `no matches for kind` → a CRD the chart renders isn't installed. Check the prerequisites at the top. `Gateway` and `Certificate` go away with `gateway.enabled: false` and `certificates.enabled: false`, and `IngressRoute` with `ingress.enabled: false` and `mcp.ingress.enabled: false` (then route to the Services yourself).
+- `kubectl -n orchard get cluster orchard-db` → confirm CNPG `Cluster.status.phase` is `Cluster in healthy state`. If it has no phase, the CNPG operator isn't running or isn't watching this namespace.
+- `kubectl -n orchard describe pod -l app.kubernetes.io/name=server` → look for `ImagePullBackOff` (pull secret) or `CreateContainerConfigError` (missing `orchard-db-app` secret: CNPG hasn't finished bootstrapping yet, retry).
 - `kubectl -n orchard-metrics logs deploy/vmagent` → scrape errors mean the RBAC ClusterRoleBinding didn't apply (cluster-admin needed for install).
 
 ---
@@ -695,13 +875,15 @@ Upgrading to the release with cluster-neutral storage defaults:
 
 ```bash
 helm uninstall orchard -n orchard
-kubectl delete ns orchard orchard-builders orchard-metrics
+kubectl delete ns --ignore-not-found orchard orchard-builders orchard-metrics \
+  orchard-scans orchard-r2-proxy orchard-object-storage
 ```
 
-PVCs (CNPG data, VictoriaMetrics data) are **not** deleted automatically —
-remove them manually if you want a clean slate:
+`helm uninstall` deletes the CNPG `Cluster`, and its PVCs go with it, so back up the Orchard
+database first. The metrics and logs volumes and the local object store
+(`helm.sh/resource-policy: keep`) survive the uninstall. Deleting the namespaces removes the PVCs
+in them too, including the local backups, so stop before that step if you want to keep them.
 
-```bash
-kubectl -n orchard delete pvc -l cnpg.io/cluster=orchard-db
-kubectl -n orchard-metrics delete pvc -l app=victoriametrics
-```
+Add `orchard-fc-builders` and `orchard-sandboxes` if you turned those on. Tenant
+namespaces (label `orchard.my/managed=true`) are not part of the release and stay
+either way.

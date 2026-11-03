@@ -1,6 +1,6 @@
 # Orchard chart: wildcard certs + Gateway as templates
 
-Spec for another agent. Folds the previously-raw `k8s/gateway-api/*.yaml` manifests into the chart and adds declarative wildcard `Certificate` resources, all parameterised through `values.yaml`. Pairs with `kubeops/kubernetes/apps/network/acme-dns/SETUP.md` — that spec is what makes DNS-01 issuance actually work; this one is what *consumes* it.
+Design notes from when the raw Gateway manifests moved into the chart and it gained declarative wildcard `Certificate` resources, parameterised through `values.yaml`. That work has shipped, so read this as history; [README.md](README.md) has the current values. A DNS-01 `ClusterIssuer` is what makes issuance work, and setting one up is outside this chart.
 
 ## Goal
 
@@ -23,7 +23,7 @@ Backward-compatible: an operator running the chart with no new values gets the p
 | Remove raw manifests | Delete now-redundant files | `k8s/gateway-api/00-cert-wildcard-a-lfdl-ink.yaml`, `k8s/gateway-api/10-http-gateway.yaml` |
 | Server code | Env-ify the one remaining hardcoded TLS secret name | `server/src/kubernetes/kubernetes.service.ts:5597–5600` |
 | Server deployment env | New env var so each cluster passes its own secret names | `charts/orchard/templates/server.yaml` (env block) + `values.yaml` |
-| Docs | Append a new section to `AGENT.md` | `charts/orchard/AGENT.md` |
+| Docs | Append a new section to `README.md` | `charts/orchard/README.md` |
 
 There is **no** cert change needed for `*.a.pub.tier2.infra.hackclub.com` — the public-deployment domain is TCP/UDP passthrough via MetalLB. No TLS termination happens at the cluster, so no cert resource lives in this chart for it. Operators terminating TLS in front of that LB (e.g. a separate proxy) handle their own cert there.
 
@@ -247,7 +247,7 @@ In `charts/orchard/templates/server.yaml` find the `env:` block for the `server`
 
 The existing `PUBLIC_DB_DOMAIN`, `APP_DOMAIN`, `INGRESS_CNAME`, `PUBLIC_DEPLOYMENT_DOMAIN` env vars stay as they are.
 
-### 7. `charts/orchard/AGENT.md` — new section
+### 7. `charts/orchard/README.md`: new section
 
 Append after section 4 ("Full values reference"):
 
@@ -372,6 +372,6 @@ kubectl -n orchard exec deploy/server -- env | grep -E 'PUBLIC_DB_|APP_DOMAIN|IN
 5. ☐ Env-ify the four `PUBLIC_TLS_*` fields in `kubernetes.service.ts`.
 6. ☐ Run `helm template` and diff against the raw manifests — confirm parity.
 7. ☐ Delete `k8s/gateway-api/00-cert-wildcard-a-lfdl-ink.yaml` and `10-http-gateway.yaml`.
-8. ☐ Update `charts/orchard/AGENT.md` with the new values reference sections.
+8. ☐ Update `charts/orchard/README.md` with the new values reference sections.
 9. ☐ Bump `Chart.yaml` `version` (this is a feature, not a patch — at minor bump).
 10. ☐ Publish + deploy to the tier2 cluster with the override above; verify per the Verification section.

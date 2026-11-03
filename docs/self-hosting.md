@@ -133,7 +133,7 @@ helm install orchard oci://ghcr.io/hackclub/orchard/charts/orchard \
   -f my-values.yaml
 ```
 
-The chart's [`AGENT.md`](../infra/charts/orchard/AGENT.md) is the full values
+The chart's [`README.md`](../infra/charts/orchard/README.md) is the values
 reference and troubleshooting guide. A minimal production values file
 overrides at least:
 

@@ -1368,7 +1368,7 @@ trivy:
 # Database backups, checkpoints, point-in-time restore, forks and the trash
 # land in an S3 store on this box. That is undo, not disaster recovery: the
 # copies share a disk with the databases. Point the instance at real S3 or R2
-# and turn this off for that; see infra/charts/orchard/AGENT.md.
+# and turn this off for that; see infra/charts/orchard/README.md.
 objectStorage:
   local:
     enabled: $ORCHARD_OBJECT_STORAGE
