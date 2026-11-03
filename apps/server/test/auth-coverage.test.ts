@@ -5,9 +5,9 @@
  * attached to each handler by the @Auth() / @Public() decorators (and by the
  * controller class itself), and classifies every route as one of:
  *
- *   - "public"        — @Public() — no token required, no RBAC
- *   - "authenticated" — @Auth() — JWT/session required, RBAC done in service
- *   - "superadmin"    — neither — SuperAdminGuard's default = superadmin only
+ *   - "public"        @Public(), no token required, no RBAC
+ *   - "authenticated" @Auth(), JWT/session required, RBAC done in service
+ *   - "superadmin"    neither, SuperAdminGuard's default = superadmin only
  *
  * The result is compared against test/auth-coverage.snapshot.json. When you
  * add, remove, or reclassify a route the test fails with a diff describing
@@ -18,7 +18,7 @@
  *   pnpm test:auth-coverage             # check
  *   UPDATE_SNAPSHOT=1 pnpm test:auth-coverage   # rewrite the snapshot
  *
- * The test imports controller modules directly via the filesystem — it does
+ * The test imports controller modules directly via the filesystem: it does
  * NOT boot the Nest app, so no DB / K8s / env setup is required.
  */
 import 'reflect-metadata';

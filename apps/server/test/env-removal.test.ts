@@ -9,11 +9,11 @@ import {
 } from '../src/kubernetes/env-patch';
 
 /**
- * Removing an env var in Orchard used to update the database and nothing else:
- * the pod spec was patched with application/strategic-merge-patch+json, and
- * `containers[].env` merges by name, so the apiserver kept every key the patch
- * left out. Containers went on serving variables their owner had deleted, and a
- * rebuild didn't help because it only patches the image.
+ * Removing an env var in Orchard has to reach the pod spec. Patched with
+ * application/strategic-merge-patch+json, `containers[].env` merges by name, so
+ * the apiserver keeps every key the patch leaves out. Containers go on serving
+ * variables their owner has deleted, and a rebuild doesn't help because it only
+ * patches the image.
  */
 
 const NAMESPACE = 'ysws-demo';
@@ -50,7 +50,7 @@ function applyStrategicMerge(doc: any, patch: any): any {
   return next;
 }
 
-/** Minimal RFC 6902 applier — only the ops buildEnvReplacePatch emits. */
+/** Minimal RFC 6902 applier, only the ops buildEnvReplacePatch emits. */
 function applyJsonPatch(doc: any, ops: any[]): any {
   const next = structuredClone(doc);
   for (const op of ops) {
@@ -252,7 +252,7 @@ test('re-asserting the same env does not roll the pods', async () => {
     ])
   );
 
-  // What a rebuild now does: push the stored config back at the live object.
+  // What a rebuild does: push the stored config back at the live object.
   await service.updateDeploymentEnv({
     namespace: NAMESPACE,
     deploymentName: NAME,
@@ -300,7 +300,7 @@ test('a rotated secret rolls the pods even though the pod spec is identical', as
   });
   const afterFirst = calls.length;
 
-  // Same key, same secretKeyRef in the spec — only the Secret's contents move.
+  // Same key, same secretKeyRef in the spec, only the Secret's contents move.
   await service.updateDeploymentEnv({
     namespace: NAMESPACE,
     deploymentName: NAME,
@@ -392,15 +392,16 @@ test('the container env op targets the container by index and replaces the whole
 
 /**
  * The other direction. `syncNamespaceToDatabase` pulls live cluster state into
- * the DB, and it used to pull env with it: every inline `containers[0].env`
- * entry was upserted over the stored config and every stored key absent from
- * the live spec was deleted. Two things fall out of that, and both destroy a
- * user's configuration rather than merely showing it wrong:
+ * the DB, and it must not pull env with it. Upserting every inline
+ * `containers[0].env` entry over the stored config and deleting every stored key
+ * absent from the live spec has two consequences, and both destroy a user's
+ * configuration rather than merely showing it wrong:
  *
  *  - secrets reach the container through a secretKeyRef and carry no inline
- *    value, so they were skipped on the way in and then deleted on the way out;
- *  - HOST and FORCE_COLOR are injected at the k8s layer, so they came back as
- *    if the user had typed them.
+ *    value, so they would be skipped on the way in and then deleted on the way
+ *    out;
+ *  - HOST and FORCE_COLOR are injected at the k8s layer, so they would come back
+ *    as if the user had typed them.
  *
  * Env belongs to the deployment record. The cluster only gets to seed it for a
  * Deployment we are adopting, which is the one case where the DB knows nothing.

@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { ingressPublicUrl, ingressTlsEnabled, scrubIngress } from '../src/projects/projects.utils';
 
 /**
- * Clients used to build `https://${host}` themselves, which is wrong twice
- * over: a lan install can serve on ports other than 80 and 443, and an ingress
- * with no certificate is not necessarily plaintext. The hostname alone cannot
- * answer either question, so the API answers both.
+ * A client building `https://${host}` itself is wrong twice over: a lan install
+ * can serve on ports other than 80 and 443, and an ingress with no certificate
+ * is not necessarily plaintext. The hostname alone cannot answer either
+ * question, so the API answers both.
  */
 
 function withPorts(http: string | undefined, https: string | undefined, run: () => void) {

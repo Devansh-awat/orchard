@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import * as k8s from '@kubernetes/client-node';
 import { K8sNetworkService } from '../src/kubernetes/k8s-network.service';
 
-// enableProtectionProxy decides whether a domain is behind the auth wall. It
-// used to swallow every failure and return void, so a domain could be recorded
-// as protected while the Ingress still pointed straight at the app. These
-// exercise the three outcomes against a stubbed API server.
+// enableProtectionProxy decides whether a domain is behind the auth wall.
+// Swallowing failures would let a domain be recorded as protected while the
+// Ingress still pointed straight at the app. These exercise the three outcomes
+// against a stubbed API server.
 
 const PROXY = 'orchard-protection-proxy';
 
@@ -154,12 +154,10 @@ test('failed when the ingress has no rule paths to repoint', async () => {
   assert.equal(await svc.enableProtectionProxy('ns', 'app-ing'), 'failed');
 });
 
-// ── restoreOrphanedProtectionBackends ──
-//
-// This is the one function that can take a domain OUT from behind the auth
-// wall. It exists to undo the proxy after protection is switched off, but the
-// same code path would strip a live protected domain if its guards ever
-// loosened. Each of these pins one guard.
+// restoreOrphanedProtectionBackends is the one function that can take a domain
+// OUT from behind the auth wall. It exists to undo the proxy after protection is
+// switched off, but the same code path would strip a live protected domain if
+// its guards ever loosened. Each of these pins one guard.
 
 const PROXIED_INGRESS = {
   metadata: { name: 'app-ing', namespace: 'ns' },

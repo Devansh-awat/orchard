@@ -165,7 +165,7 @@ test('a deleted job leaves a trace the sweep can tell from never having seen it'
   assert.equal(service.hasSeen('never-existed'), false);
 
   (service as unknown as { forget(j: k8s.V1Job): void }).forget(job);
-  // Gone from the list, but the watch remembers being told so — that is the
+  // Gone from the list, but the watch remembers being told so: that is the
   // difference between "the cluster says it is gone" and "we have no idea".
   assert.deepEqual(service.listForDeployment(DEPLOYMENT), []);
   assert.equal(service.hasSeen('ttl-reaped'), true);

@@ -1,7 +1,7 @@
 /**
  * RBAC end-to-end test.
  *
- * Boots no application — hits a running server. Seeds test users, an org, and
+ * Boots no application: hits a running server. Seeds test users, an org, and
  * a project directly via Prisma, mints session JWTs locally, and asserts that
  * every endpoint enforces the RBAC contract.
  *
@@ -11,7 +11,7 @@
  *
  * Env vars:
  *   SERVER_URL    Default http://localhost:3001 (matches main.ts default port).
- *   JWT_SECRET    Same secret the server is using — required to mint test tokens.
+ *   JWT_SECRET    Same secret the server is using: required to mint test tokens.
  *   TEST_DATABASE_URL  The throwaway database the server under test uses. DATABASE_URL is
  *                      only accepted when it is not localhost:5432 (see test/support/test-database.ts).
  *
@@ -45,7 +45,7 @@ interface Fixture {
   // Two orgs so we can verify cross-org isolation.
   orgA: { id: string; slug: string };
   orgB: { id: string; slug: string };
-  // Five users in orgA — owner, admin, member, viewer, and a guest (who is
+  // Five users in orgA: owner, admin, member, viewer, and a guest (who is
   // only on orgA because someone invited them to projectA). Plus one user
   // that's only in orgB (the outsider w.r.t. orgA).
   owner: { id: string; token: string };
@@ -98,7 +98,6 @@ before(async () => {
     prisma.role.upsert({ where: { name: 'viewer' }, update: {}, create: { name: 'viewer' } })
   ]);
 
-  // Users
   async function mkUser(label: string) {
     const email = `${RUN_TAG}-${label}@example.test`;
     const u = await prisma.user.create({
@@ -119,7 +118,6 @@ before(async () => {
   const guest = await mkUser('guest');
   const outsider = await mkUser('outsider');
 
-  // Orgs
   const orgA = await prisma.organization.create({
     data: {
       name: `${RUN_TAG}-orgA`,
@@ -135,7 +133,6 @@ before(async () => {
     }
   });
 
-  // Org memberships
   await prisma.organizationMember.createMany({
     data: [
       { organizationId: orgA.id, userId: owner.id, role: 'owner' },
@@ -147,7 +144,6 @@ before(async () => {
     ]
   });
 
-  // Projects (in orgA)
   const projectA = await prisma.project.create({
     data: {
       organizationId: orgA.id,
@@ -524,7 +520,7 @@ describe('Membership cache invalidation', () => {
     );
     assert.equal(del.status, 200, 'admin should be able to remove the member');
 
-    // Immediately re-check — the removed member must lose access right away.
+    // Immediately re-check: the removed member must lose access right away.
     // Removal revokes their sessions (401) before the membership cache is even
     // consulted; if revocation is skipped, cache invalidation yields 404. Either
     // way the denial is immediate (not deferred to the cache TTL).

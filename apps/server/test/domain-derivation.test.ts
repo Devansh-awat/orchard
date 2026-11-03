@@ -111,7 +111,7 @@ test('optional domains are used verbatim when set, and normalised', () => {
 
 // The vanity domain is its own fact. On the Hack Club cluster the UI is served
 // from orchard.infra.hackclub.com, apps land on k.hackclub.dev, and org vanity
-// hosts sit under orchard.my — so it can be derived from neither FRONTEND_URL
+// hosts sit under orchard.my, so it can be derived from neither FRONTEND_URL
 // nor APP_DOMAIN, and an unset BASE_DOMAIN has to mean "off".
 function vanityFor(env: Record<string, string>) {
   const script = `

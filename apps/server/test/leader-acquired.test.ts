@@ -6,7 +6,7 @@ import { LeaseService } from '../src/coordination/lease.service';
 // without awaiting it, so isLeader() is false for the whole first round-trip.
 // Anything doing a one-shot pass at boot (an informer's initial LIST) ran
 // inside that window and was silently dropped, so the pod mirror was built
-// only from live events. A pod that never changed again was never written —
+// only from live events. A pod that never changed again was never written,
 // which is how a Tailscale sidecar sat Running for six days behind a
 // deployment that read "pending".
 //

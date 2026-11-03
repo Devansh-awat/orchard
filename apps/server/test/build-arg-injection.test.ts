@@ -7,13 +7,12 @@ import { join, dirname } from 'node:path';
 import { injectBuildArgsScript, buildArgDeclarations } from '../src/docker/build-args';
 
 /**
- * The build job used to rewrite every Dockerfile with `ARG X` *and*
- * `ENV X=${X}`. The ENV half did nothing at build time — ARG already exposes a
- * build arg to RUN — and wrote every value into the pushed image's config,
- * where a `docker inspect` by anyone who can pull it reads back the plaintext.
- * It also kept variables alive in the image after they were deleted from the
- * config, which is how an API key stayed in a container its owner had removed
- * it from.
+ * Rewriting every Dockerfile with `ARG X` *and* `ENV X=${X}` is wrong twice
+ * over. The ENV half does nothing at build time (ARG already exposes a build arg
+ * to RUN) and writes every value into the pushed image's config, where a
+ * `docker inspect` by anyone who can pull it reads back the plaintext. It also
+ * keeps variables alive in the image after they are deleted from the config,
+ * which is how an API key stayed in a container its owner had removed it from.
  *
  * These run the real init-container script, not a description of it.
  */

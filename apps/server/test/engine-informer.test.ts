@@ -116,8 +116,6 @@ async function mirrored() {
   });
 }
 
-// --- crash state harness -----------------------------------------------------
-
 let notified: { deploymentId: string; state: string; detail?: string }[] = [];
 
 function newConsumer(): PodConsumer {
@@ -178,8 +176,6 @@ async function ageCrashState(ms: number) {
   });
 }
 
-// --- fixtures ----------------------------------------------------------------
-
 async function cleanup() {
   await prisma.k8sObject.deleteMany({ where: { shard: SHARD } });
   await prisma.k8sObjectTombstone.deleteMany({ where: { shard: SHARD } });
@@ -226,8 +222,6 @@ beforeEach(async () => {
   refsMode = 'unowned';
   failHandlerFor = new Set();
 });
-
-// --- informer ----------------------------------------------------------------
 
 test('a paginated list mirrors every object and only asks the apiserver in pages', async () => {
   cluster = Array.from({ length: 550 }, (_, i) =>
@@ -348,7 +342,7 @@ test('deleting and recreating an object under the same name replaces the row', a
   await listAndSync(informer);
   assert.equal((await mirrored())[0].uid, 'uid-old');
 
-  // Same natural key, new uid — an upsert keyed only on uid would violate the
+  // Same natural key, new uid: an upsert keyed only on uid would violate the
   // unique index on (kind, namespace, name, api_version) and, before the fix,
   // abort the list before the stale sweep could clear the displaced row.
   cluster = [obj('uid-new', 'ing-shared', '2')];
@@ -374,12 +368,12 @@ test('a watch event for a same-name replacement does not collide either', async 
 
 test('a burst of watch events larger than the concurrency limit still drains', async () => {
   // What a node going down looks like from the pods watch: dozens of objects
-  // changing in the same instant. Each event used to hold a semaphore permit
-  // for its whole lifetime and then ask for a second one to run the consumer,
-  // so once the limit was reached every permit was held by an event waiting on
-  // a permit only one of the others could release. The shard stopped applying
-  // anything from that moment on and served a frozen cluster until it
-  // restarted, which is how deleted pods lived on in the UI for days.
+  // changing in the same instant. If each event held a semaphore permit for its
+  // whole lifetime and then asked for a second one to run the consumer, then once
+  // the limit was reached every permit would be held by an event waiting on a
+  // permit only one of the others could release. The shard would stop applying
+  // anything from that moment on and serve a frozen cluster until it restarted,
+  // which is how deleted pods lived on in the UI for days.
   const informer = newInformer();
   const burst = Array.from({ length: 36 }, (_, i) =>
     obj(`burst-${i}`, `ing-burst-${String(i).padStart(3, '0')}`)
@@ -453,11 +447,9 @@ test('the stale sweep survives an object count past the bind-parameter ceiling',
       sweepStale(uids: string[], count: boolean, since: string): Promise<number>;
     }
   ).sweepStale(seenUids, false, '9999-01-01 00:00:00');
-  // Nothing to assert beyond "it executed" — a parameter-per-uid query throws.
+  // Nothing to assert beyond "it executed": a parameter-per-uid query throws.
   assert.equal(await prisma.k8sObject.count({ where: { shard: SHARD } }), 0);
 });
-
-// --- crash state -------------------------------------------------------------
 
 test('a crashing pod is not announced before the confirm window', async () => {
   const consumer = newConsumer();
@@ -645,8 +637,6 @@ test('a pod row lost to a failed sync is restored while the pod sits still', asy
   assert.equal(row?.status, computePodStatus(pods[0] as never));
   await prisma.k8sObject.deleteMany({ where: { shard: SHARD } });
 });
-
-// --- pod status derivation ---------------------------------------------------
 
 function pod(over: {
   phase?: string;

@@ -10,8 +10,6 @@ import { ScimService } from '../src/scim/scim.service';
 const ORG = '11111111-1111-4111-8111-111111111111';
 const ctx = { organizationId: ORG };
 
-// ---- SCIMMY query-param handling ------------------------------------------
-//
 // SCIMMY branches on `"key" in params`, so a query object carrying
 // explicitly-undefined keys is rejected as malformed. These guard the shape
 // parseScimQuery hands over.
@@ -43,10 +41,8 @@ test('pagination params are coerced to integers and bad ones are rejected', () =
   );
 });
 
-// ---- Request body parsing --------------------------------------------------
-
 // RFC 7644 puts SCIM bodies on application/scim+json, which Express's json
-// parser ignores unless it's in the type list — matching main.ts.
+// parser ignores unless it's in the type list, matching main.ts.
 test('scim+json request bodies are parsed', async () => {
   const app = express();
   app.use(express.json({ type: ['application/json', 'application/scim+json'] }));
@@ -65,8 +61,6 @@ test('scim+json request bodies are parsed', async () => {
     server.close();
   }
 });
-
-// ---- User lifecycle --------------------------------------------------------
 
 // Enough of the Prisma surface for the SCIM handlers to run against memory.
 function makeDb() {
@@ -284,8 +278,6 @@ test('DELETE clears the membership and the tombstone for good', async () => {
   );
 });
 
-// ---- Role provisioning -----------------------------------------------------
-
 test('a user can be provisioned straight in as an admin via roles', async () => {
   const { service, members } = makeService();
   const created: any = await service.createUser(
@@ -404,8 +396,6 @@ test('the last owner cannot be demoted, deactivated or deleted', async () => {
   assert.equal(demoted.roles[0].value, 'member');
 });
 
-// ---- Account isolation -----------------------------------------------------
-//
 // The SCIM resource is a membership, so everything the IdP writes belongs to
 // this org. One org's IdP must never edit the shared account another org reads.
 
@@ -531,8 +521,6 @@ test('a membership added in-app reads through to the account', async () => {
   assert.equal(read.roles[0].value, 'admin');
 });
 
-// ---- Enterprise extension --------------------------------------------------
-
 test('enterprise extension attributes round-trip', async () => {
   const { service } = makeService();
   const created: any = await service.createUser(
@@ -570,8 +558,6 @@ test('a filtered list finds the user by userName', async () => {
   assert.equal(found.Resources.length, 1);
   assert.equal(found.Resources[0].userName, 'dorothy@example.com');
 });
-
-// ---- Routing ---------------------------------------------------------------
 
 // The catch-all is only safe if Express registers it behind every real route,
 // since it matches in registration order. This boots the real controller and

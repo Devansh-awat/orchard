@@ -45,7 +45,7 @@ test('small workloads get the floor, never more than their limit', () => {
   withEnv(DEFAULTS, () => {
     // 10% of 250m is 25m, below the 50m floor.
     assert.equal(cpuRequestFromLimitMilli(250), 50);
-    // A limit under the floor can't be exceeded by its own request — that
+    // A limit under the floor can't be exceeded by its own request: that
     // would be rejected by the apiserver.
     assert.equal(cpuRequestFromLimitMilli(25), 25);
     assert.equal(cpuRequestFromLimitMilli(50), 50);

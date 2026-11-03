@@ -8,7 +8,7 @@ import { builderContainerEnv, buildSafeEnv } from '../src/env/reserved-env';
  * and the new-deployment page applies the whole set. A standard bun preamble
  * meant Orchard generated `PATH=/usr/local/bun/bin:$PATH` for the user, stored
  * the literal (Kubernetes expands `$(VAR)`, never `$VAR`), then copied it into
- * the builder container — where it replaced the builder image's own PATH and
+ * the builder container, where it replaced the builder image's own PATH and
  * left BuildKit unable to find `mkdir`, let alone `buildkitd`. It exited 127
  * with no output, and the failure surfaced as the pusher's containerd 429.
  */

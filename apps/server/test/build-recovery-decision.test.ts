@@ -109,9 +109,9 @@ test('a build already requeued once is failed rather than looped', () => {
   assert.match(decision.detail!, /never created/);
 });
 
-// A deployment's first build is `initial`, and the old guard only let `auto`
-// and `manual` back on the queue — so the one build with nothing to fall back
-// on was the one that got hard-failed.
+// A deployment's first build is `initial`, and it goes back on the queue the same
+// as `auto` and `manual`: it is the one build with nothing to fall back on, so it
+// must not be the one that gets hard-failed.
 test("a deployment's first build is requeueable", () => {
   assert.equal(isRequeueable(run({ triggerType: 'initial' })), true);
   assert.equal(isRequeueable(run({ triggerType: 'auto' })), true);

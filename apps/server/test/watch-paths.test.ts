@@ -136,8 +136,6 @@ test('a truncated commit list is unknown', () => {
   assert.equal(changedFilesFromPush({ commits }), null);
 });
 
-// --- compare responses -------------------------------------------------------
-
 test('a compare response reports every changed file', () => {
   assert.deepEqual(
     changedFilesFromCompare({
@@ -187,8 +185,6 @@ test('a compare answer filters exactly like a push payload would', () => {
   assert.equal(pushMatchesWatchPaths(['frontend/**'], compared), true);
   assert.equal(pushMatchesWatchPaths(['v2_pipeline/**'], compared), false);
 });
-
-// --- the two-stage decision -------------------------------------------------
 
 const frontend = { name: 'frontend', autoDeployPaths: ['frontend/**'] };
 const pipeline = { name: 'pipeline', autoDeployPaths: ['v2_pipeline/**'] };

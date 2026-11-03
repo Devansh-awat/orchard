@@ -34,7 +34,7 @@ test("the longer name does not match the shorter one's pods either", () => {
 });
 
 test('a database pod is not a deployment pod', () => {
-  // CNPG names instances `<cluster>-1`, with no ReplicaSet hash — which is why
+  // CNPG names instances `<cluster>-1`, with no ReplicaSet hash, which is why
   // the database queries keep their own prefix match.
   assert.ok(!matches('prod-redis', 'prod-redis-1'));
 });

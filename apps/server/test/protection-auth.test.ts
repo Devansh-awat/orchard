@@ -378,7 +378,7 @@ test('an unresolvable host is denied, not allowed', async () => {
 test('a second lookup returning nothing cannot slip past the wall', async () => {
   // handleProxyRequest resolves the ingress and checkProtection resolves it
   // again. In practice the 5s ingressCache serves the second lookup, so the
-  // two agree. This pins the behaviour when it does not — a cold or disabled
+  // two agree. This pins the behaviour when it does not: a cold or disabled
   // cache, or any future caller reaching checkProtection on its own.
   const svc = buildService(protectedRow());
   let calls = 0;

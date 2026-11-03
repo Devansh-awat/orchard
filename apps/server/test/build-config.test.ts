@@ -23,7 +23,7 @@ test('unset build settings emit no overrides so Railpack detection wins', () => 
 });
 
 test('blank strings are treated as unset, not as an empty command', () => {
-  // A user clearing an input posts '' — that must mean "go back to detection",
+  // A user clearing an input posts '': that must mean "go back to detection",
   // not "run the empty string as the build command".
   assert.deepEqual(
     railpackOverrideEnv({ buildCommand: '   ', installCommand: '', outputDirectory: '  ' }),

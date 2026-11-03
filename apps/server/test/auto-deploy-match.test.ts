@@ -49,7 +49,7 @@ test('a real push offers its head commit', () => {
 });
 
 test('deleting a branch offers nothing to deploy', () => {
-  // Same event, same ref as any other push to that branch — only `deleted` and
+  // Same event, same ref as any other push to that branch, only `deleted` and
   // the null sha say otherwise, and a build of the null sha can only fail.
   assert.equal(pushCommitSha({ deleted: true, after: NULL_SHA, head_commit: null }), null);
   assert.equal(pushCommitSha({ after: NULL_SHA, head_commit: null }), null);

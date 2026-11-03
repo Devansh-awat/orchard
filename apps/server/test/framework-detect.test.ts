@@ -44,7 +44,7 @@ test('vite outDir override in the config is respected', async () => {
 });
 
 test('SvelteKit is a server app, not a static site', async () => {
-  // vite.go:29 excludes SvelteKit from SPA detection — it would otherwise match
+  // vite.go:29 excludes SvelteKit from SPA detection: it would otherwise match
   // on the vite dependency and get served as an empty directory.
   const { paths, read } = repo({
     'package.json': pkg({
@@ -93,8 +93,8 @@ test('SvelteKit shipping adapter-static but configuring adapter-node is a server
 });
 
 // Railpack only emits `node build` for SvelteKit when the repo depends on
-// @sveltejs/adapter-auto (svelte.go:18). Naming adapter-node directly — what
-// the SvelteKit docs tell you to do — leaves its plan with no start command at
+// @sveltejs/adapter-auto (svelte.go:18). Naming adapter-node directly (what
+// the SvelteKit docs tell you to do) leaves its plan with no start command at
 // all, and buildkit then bakes CMD ["/bin/bash"] into the image
 // (convert.go:65): the build goes green and the container exits 0 on boot.
 test('SvelteKit on adapter-node gets the start command railpack will not emit', async () => {
@@ -211,7 +211,7 @@ test('a nested index.js does not count — railpack only globs the app root', as
 
 test('a workspace SvelteKit app starts from the repo root', async () => {
   // The build runs at the repo root, so a bare `node build` would look in the
-  // wrong directory — and `pnpm --filter start`, the usual workspace fallback,
+  // wrong directory, and `pnpm --filter start`, the usual workspace fallback,
   // would run a script the package does not have.
   const { paths, read } = repo({
     'package.json': pkg({ name: 'root', workspaces: ['apps/*'] }),

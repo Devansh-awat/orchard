@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { EmailAvatarService } from '../src/users/email-avatar.service';
 
 // The whole point of this feature is that it never touches a picture someone
-// chose themselves. That guarantee lives in two places — an early return in
-// ensure(), and a conditional WHERE in the write — and both need to hold.
+// chose themselves. That guarantee lives in two places: an early return in
+// ensure(), and a conditional WHERE in the write, and both need to hold.
 
 interface Row {
   id: string;

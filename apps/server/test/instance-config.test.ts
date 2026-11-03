@@ -82,7 +82,7 @@ test('a locked field is refused rather than quietly dropped', async () => {
 });
 
 // The panel posts the whole section back, locked fields included, so a save
-// that only touches an unrelated field still has to go through — and must not
+// that only touches an unrelated field still has to go through, and must not
 // take the locked field's stored fallback down with it.
 test('saving around a locked field keeps the value it falls back to', async () => {
   const { service, settings } = build();
