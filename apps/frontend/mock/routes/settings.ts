@@ -171,11 +171,11 @@ export function settingsRoutes(r: Router, { store }: MockContext) {
 	r.get('/organizations/:id/invitations', () => [
 		{
 			id: uid('inv:1'),
-			email: 'new-hire@hackclub.com',
+			email: 'new-hire@example.test',
 			role: 'member',
 			createdAt: store.createdAgo(60 * 20),
 			expiresAt: new Date(Date.now() + 6 * 86_400_000).toISOString(),
-			inviter: { firstName: 'Alfie', lastName: 'Doe', username: 'alfd', email: 'alfd@hackclub.com' }
+			inviter: { firstName: 'Alfie', lastName: 'Doe', username: 'alfd', email: 'alfd@example.test' }
 		}
 	]);
 	r.post('/organizations/:id/members', ({ params }) => {

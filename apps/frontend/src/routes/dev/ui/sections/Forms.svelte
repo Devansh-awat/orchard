@@ -346,7 +346,7 @@
 				<ToggleRow label="Preview deployments" hint="Available on the Pro plan." disabled />
 				<Checkbox
 					label="Email me when a deploy fails"
-					hint="Sent to seb@hackclub.com."
+					hint="Sent to alex@example.test."
 					bind:checked={failAlerts}
 				/>
 			</div>

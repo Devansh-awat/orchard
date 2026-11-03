@@ -38,7 +38,7 @@ function user(
 ): MockUser {
 	return {
 		id: uid(`user:${username}`),
-		email: `${username}@hackclub.com`,
+		email: `${username}@example.test`,
 		username,
 		firstName,
 		lastName,
@@ -310,13 +310,13 @@ export function database(
 
 export function seed(): MockState {
 	const me = user('alfd', 'Alfie', 'Doe', {
-		email: 'alfd@hackclub.com',
+		email: 'alfd@example.test',
 		imageUrl: ASSETS.userAvatar,
 		isSuperAdmin: true
 	});
 	const kai = user('kai', 'Kai', 'Nakamura');
 	const olive = user('olive', 'Olive', 'Park');
-	const msw = user('msw', 'Max', 'Wofford');
+	const msw = user('maxw', 'Max', 'Ward');
 	const dld = user('dld', 'Dana', 'Lund');
 	const users = [me, kai, olive, msw, dld];
 

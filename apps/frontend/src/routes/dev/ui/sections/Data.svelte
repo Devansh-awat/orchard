@@ -402,7 +402,7 @@ health_check = "/healthz"`;
 				<div class="flex items-center gap-4">
 					<Avatar seed="kara" size={32} mood="happy" />
 					<Avatar seed="max" size={32} mood="thinking" />
-					<Avatar seed="invite@hackclub.com" size={32} mood="sleepy" />
+					<Avatar seed="invite@example.test" size={32} mood="sleepy" />
 					<Avatar seed="nora" size={32} mood="wink" />
 				</div>
 				<div class="flex items-center gap-6">
@@ -419,7 +419,7 @@ health_check = "/healthz"`;
 					</AvatarEdit>
 				</div>
 				<div class="flex items-center gap-8">
-					<ItemLabel title="Kara Lin" detail="kara@hackclub.com">
+					<ItemLabel title="Kara Lin" detail="kara@example.test">
 						{#snippet leading()}<Avatar seed="kara" size={32} />{/snippet}
 					</ItemLabel>
 					<ItemLabel title="game-server" detail="terra · deployment" />

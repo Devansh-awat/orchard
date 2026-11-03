@@ -117,7 +117,7 @@ const admin = {
 	poolerByDefault: { dbValue: true, envOverride: null as boolean | null }
 };
 const migration = {
-	halted: 'theseus-cluster: WAL archive check failed' as string | null,
+	halted: 'billing-cluster: WAL archive check failed' as string | null,
 	migrated: 12,
 	remaining: 28
 };

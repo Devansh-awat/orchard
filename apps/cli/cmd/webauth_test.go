@@ -38,7 +38,7 @@ func TestWebLoginLoopback(t *testing.T) {
 				w.WriteHeader(401)
 				return
 			}
-			io.WriteString(w, `{"email":"raven@hackclub.com"}`)
+			io.WriteString(w, `{"email":"raven@example.test"}`)
 			return
 		}
 		w.WriteHeader(404)
@@ -155,7 +155,7 @@ func TestWebLoginRejectsBadState(t *testing.T) {
 func TestWebLoginAcceptsPostForm(t *testing.T) {
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/apiv1/auth/me" && r.Header.Get("Authorization") == "Bearer orch_post" {
-			io.WriteString(w, `{"email":"raven@hackclub.com"}`)
+			io.WriteString(w, `{"email":"raven@example.test"}`)
 			return
 		}
 		w.WriteHeader(401)
