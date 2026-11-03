@@ -1,5 +1,5 @@
-// Dev-only reverse proxy. Replaces the docker nginx container that used to
-// front-end /apiv1 → backend, everything else → frontend on the same origin.
+// Dev-only reverse proxy: /apiv1 → backend, everything else → frontend on the
+// same origin.
 //
 // Usage:
 //   go run .                 # listens on :4000, proxies localhost:3000/3001
