@@ -225,7 +225,7 @@
 			icon: BookOpen,
 			keywords: ['help', 'documentation', 'guide'],
 			shortcut: '⌘/',
-			run: () => window.open('https://orchard.my/docs', '_blank', 'noopener')
+			run: () => window.open('https://docs.orchard.my', '_blank', 'noopener')
 		},
 		{
 			id: 'sign-out',
