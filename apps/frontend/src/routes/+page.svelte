@@ -196,18 +196,23 @@
 		openWorkspace(slug);
 	}
 
+	async function enterDashboard() {
+		if (!organizations.getDefaultSlug()) await refreshUserContext(true);
+		const slug = organizations.getDefaultSlug();
+		if (slug) {
+			await goto(`/${slug}`, { replaceState: true });
+			return;
+		}
+		await fetchWorkspaces();
+	}
+
 	onMount(() => {
 		if ($isSignedIn) {
 			if ($user?.setupCompleted === false) {
 				goto('/setup', { replaceState: true });
 				return;
 			}
-			const slug = organizations.getDefaultSlug();
-			if (slug) {
-				goto(`/${slug}`, { replaceState: true });
-				return;
-			}
-			fetchWorkspaces();
+			void enterDashboard();
 		} else {
 			loading = false;
 			fetchProviders();
@@ -347,10 +352,12 @@
 			<div>
 				<h1 class="hp-greeting">{greeting}{userName ? `, ${userName}` : ''}</h1>
 			</div>
-			<a href="/workspaces/new" class="hp-new-btn">
-				<Plus size={15} />
-				New Workspace
-			</a>
+			{#if $selectedOrganization}
+				<a href={`/${$selectedOrganization.slug}/new`} class="hp-new-btn">
+					<Plus size={15} />
+					New app
+				</a>
+			{/if}
 		</div>
 
 		{#if error}
@@ -397,7 +404,7 @@
 					</div>
 					<div class="hp-stat-info">
 						<span class="hp-stat-value">{organizationWorkspaces.length}</span>
-						<span class="hp-stat-label">Workspaces</span>
+						<span class="hp-stat-label">Projects</span>
 					</div>
 				</div>
 				<div class="hp-stat">
@@ -431,7 +438,7 @@
 
 			<div class="hp-section">
 				<div class="hp-section-header">
-					<h2 class="hp-section-title">Workspaces</h2>
+					<h2 class="hp-section-title">Projects</h2>
 					{#if organizationWorkspaces.length > 3}
 						<div class="hp-search-wrap">
 							<Search size={14} class="hp-search-icon" />
@@ -450,14 +457,17 @@
 						<div class="hp-empty-icon">
 							<Sparkles size={24} />
 						</div>
-						<h3 class="hp-empty-title">Create your first workspace</h3>
-						<p class="hp-empty-desc">
-							Workspaces help you organize projects, deployments, and team members.
-						</p>
-						<a href="/workspaces/new" class="hp-new-btn">
-							<Plus size={16} />
-							Create Workspace
-						</a>
+						{#if $selectedOrganization}
+							<h3 class="hp-empty-title">Deploy your first app</h3>
+							<p class="hp-empty-desc">Projects keep your apps, databases and team together.</p>
+							<a href={`/${$selectedOrganization.slug}/new`} class="hp-new-btn">
+								<Plus size={16} />
+								New app
+							</a>
+						{:else}
+							<h3 class="hp-empty-title">You are not in an organization yet</h3>
+							<p class="hp-empty-desc">Ask an administrator to invite you to one.</p>
+						{/if}
 					</div>
 				{:else if filteredWorkspaces.length}
 					<div class="hp-grid">
