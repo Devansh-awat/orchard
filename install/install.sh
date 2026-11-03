@@ -399,8 +399,9 @@ prompt_hint() {
     printf '      %sRun it with your terminal attached:%s\n' "$C_GREY" "$C_RESET"
     # shellcheck disable=SC2016  # the $( ) is part of the command we are printing
     printf '        sudo bash -c "$(curl -fsSL %s)"\n' "$INSTALL_URL"
-    printf '      %sor answer nothing and take every default:%s\n' "$C_GREY" "$C_RESET"
-    printf '        curl -fsSL %s | sudo bash -s -- --yes\n' "$INSTALL_URL"
+    printf '      %sor pass the answers as flags. --yes takes the default for the rest,%s\n' "$C_GREY" "$C_RESET"
+    printf '      %sbut a public install still needs a domain and a contact email:%s\n' "$C_GREY" "$C_RESET"
+    printf '        curl -fsSL %s | sudo bash -s -- --yes --mode public --domain orchard.example.com --email you@example.com\n' "$INSTALL_URL"
     printf '\n'
   } >&2
 }
