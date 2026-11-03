@@ -18,8 +18,8 @@
 
 	const FEATURES: Feature[] = [
 		{
-			title: 'Zero-downtime deploys',
-			body: 'Ship in the middle of the day. Nobody notices.',
+			title: 'Rolling deploys',
+			body: 'New pods have to go ready before the old ones stop.',
 			yaml: 'apiVersion: apps/v1\nkind: Deployment\nspec:\n  strategy:\n    rollingUpdate:\n      maxSurge: 25%\n      maxUnavailable: 0',
 			at: [-24, 26, 16],
 			tilt: -5,
@@ -27,14 +27,14 @@
 		},
 		{
 			title: 'Self-healing',
-			body: 'Crash at 3am? It’s back up before you wake up.',
+			body: 'A pod that crashes gets restarted, even at 3am.',
 			yaml: 'apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: site\nspec:\n  replicas: 3',
 			at: [28, 2, 16],
 			tilt: 5
 		},
 		{
 			title: 'Postgres failover',
-			body: 'A dead database server doesn’t take your app down with it.',
+			body: 'Run 2 or more instances and a standby takes over if the primary’s server dies.',
 			yaml: 'apiVersion: postgresql.cnpg.io/v1\nkind: Cluster\nmetadata:\n  name: site-db\nspec:\n  instances: 2',
 			at: [22, -26, 12],
 			tilt: -3,
@@ -42,7 +42,7 @@
 		},
 		{
 			title: 'Node maintenance',
-			body: 'Update and reboot your servers without planning downtime.',
+			body: 'Apps with 2 or more replicas keep a pod running while you drain a server.',
 			yaml: 'apiVersion: policy/v1\nkind: PodDisruptionBudget\nspec:\n  minAvailable: 1',
 			at: [-30, 2, 4],
 			tilt: -4,
@@ -57,8 +57,8 @@
 		},
 		{
 			title: 'Resource quotas',
-			body: 'One runaway app can’t slow down everyone else’s.',
-			yaml: 'apiVersion: v1\nkind: ResourceQuota\nspec:\n  hard:\n    requests.cpu: "4"\n    requests.memory: 8Gi',
+			body: 'Cap each project’s CPU and memory, so one can’t starve the others.',
+			yaml: 'apiVersion: v1\nkind: ResourceQuota\nmetadata:\n  name: orchard-org-quota\nspec:\n  hard:\n    requests.cpu: 4000m\n    pods: "200"',
 			at: [26, 30, 8],
 			tilt: 4,
 			wide: true

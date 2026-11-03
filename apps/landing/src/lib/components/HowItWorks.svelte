@@ -3,7 +3,6 @@
 	import { animate } from 'motion';
 	import { fade } from 'svelte/transition';
 	import {
-		Activity,
 		ArrowLeft,
 		Check,
 		ChevronDown,
@@ -13,10 +12,10 @@
 		EllipsisVertical,
 		ExternalLink,
 		Eye,
+		Gauge,
 		Github,
 		History,
 		LayoutGrid,
-		Leaf,
 		LoaderCircle,
 		Maximize2,
 		MemoryStick,
@@ -27,11 +26,10 @@
 		Settings2,
 		Sprout,
 		SquareTerminal,
-		Trees,
+		Timer,
 		Variable,
 		Wifi,
-		X,
-		Zap
+		X
 	} from 'lucide-svelte';
 	import { pause, prefersReduced, reveal, whileVisible } from '$lib/motion.svelte';
 
@@ -57,11 +55,9 @@
 	];
 
 	const NAV = [
-		{ icon: Leaf, label: 'Your Apps' },
-		{ icon: Zap, label: 'Jobs' },
-		{ icon: Activity, label: 'Usage' },
-		{ icon: Sprout, label: 'Greenhouse' },
-		{ icon: Trees, label: 'The Grove' }
+		{ icon: Sprout, label: 'Your Apps' },
+		{ icon: Timer, label: 'Jobs' },
+		{ icon: Gauge, label: 'Usage' }
 	];
 
 	const BUILD = [
