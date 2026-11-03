@@ -21,9 +21,11 @@ import (
 )
 
 var (
-	semverRe   = regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$`)
-	githubRe   = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$`)
-	resourceOK = map[string]bool{"deployment": true, "database": true, "ingress": true}
+	cpuQuantityRe    = regexp.MustCompile(`^\d+(\.\d+)?m?$`)
+	memoryQuantityRe = regexp.MustCompile(`^\d+(\.\d+)?(Ki|Mi|Gi|Ti|K|M|G|T)$`)
+	semverRe         = regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$`)
+	githubRe         = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$`)
+	resourceOK       = map[string]bool{"deployment": true, "database": true, "ingress": true}
 )
 
 type templateDoc struct {
@@ -242,6 +244,28 @@ type catalog struct {
 	Templates   []catalogEntry `json:"templates"`
 }
 
+func validatePodResources(raw any) error {
+	fields, ok := raw.(map[string]any)
+	if !ok {
+		return errors.New("needs recommended resources with cpu and memory")
+	}
+	for key, pattern := range map[string]*regexp.Regexp{"cpu": cpuQuantityRe, "memory": memoryQuantityRe} {
+		value, set := fields[key]
+		if !set {
+			return fmt.Errorf("resources.%s is required", key)
+		}
+		if text := fmt.Sprint(value); !pattern.MatchString(text) {
+			return fmt.Errorf("resources.%s %q is not a valid size", key, text)
+		}
+	}
+	for key := range fields {
+		if key != "cpu" && key != "memory" {
+			return fmt.Errorf("resources has unknown field %q", key)
+		}
+	}
+	return nil
+}
+
 func parseTemplate(body []byte) (templateDoc, error) {
 	var doc templateDoc
 	if err := yaml.Unmarshal(body, &doc); err != nil {
@@ -284,6 +308,14 @@ func parseTemplate(body []byte) (templateDoc, error) {
 			return doc, fmt.Errorf("parameter %q is defined twice", name)
 		}
 		seen[name] = true
+	}
+	for i, r := range doc.Resources {
+		if r.Type == "ingress" {
+			continue
+		}
+		if err := validatePodResources(r.Config["resources"]); err != nil {
+			return doc, fmt.Errorf("resources[%d] (%s): %w", i, r.Name, err)
+		}
 	}
 	return doc, nil
 }

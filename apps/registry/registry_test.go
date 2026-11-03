@@ -134,6 +134,7 @@ resources:
     config:
       name: '{{ params.appName }}'
       image: ghost:5
+      resources: {cpu: 500m, memory: 1Gi}
   - name: web
     type: ingress
     config:
@@ -150,6 +151,7 @@ resources:
     type: deployment
     config:
       image: redis:7
+      resources: {cpu: 250m, memory: 512Mi}
 `
 
 func setup(t *testing.T) (*fakeS3, *Bucket, string, string) {
@@ -271,6 +273,10 @@ func TestValidationErrors(t *testing.T) {
 		"metadata:\n  name: ok\n  version: 1.0.0\nresources:\n  - {name: a, type: cronjob, config: {}}\n":                                               "unknown type",
 		"metadata:\n  name: ok\n  version: 1.0.0\n  author: 'not a login'\nresources:\n  - {name: a, type: deployment, config: {}}\n":                   "GitHub login",
 		"metadata:\n  name: ok\n  version: 1.0.0\nparameters:\n  - {name: x}\n  - {name: x}\nresources:\n  - {name: a, type: deployment, config: {}}\n": "defined twice",
+		"metadata:\n  name: ok\n  version: 1.0.0\nresources:\n  - {name: a, type: deployment, config: {image: x}}\n":                                    "needs recommended resources",
+		"metadata:\n  name: ok\n  version: 1.0.0\nresources:\n  - {name: a, type: database, config: {resources: {cpu: 1}}}\n":                           "resources.memory is required",
+		"metadata:\n  name: ok\n  version: 1.0.0\nresources:\n  - {name: a, type: deployment, config: {resources: {cpu: lots, memory: 1Gi}}}\n":         "not a valid size",
+		"metadata:\n  name: ok\n  version: 1.0.0\nresources:\n  - {name: a, type: deployment, config: {resources: {cpu: 1, memory: 1Gi, gpu: 1}}}\n":    "unknown field",
 	}
 	for body, want := range cases {
 		if _, err := parseTemplate([]byte(body)); err == nil || !strings.Contains(err.Error(), want) {
