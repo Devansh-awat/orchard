@@ -154,17 +154,17 @@
 
 		<div class="my-auto pt-10 pb-20 max-md:my-0">
 			<h1
-				aria-label="your own cloud in one click"
+				aria-label="Your own cloud in one command"
 				class="text-[clamp(2.5rem,5.2vw,4rem)] leading-[1.26] font-medium"
 			>
 				<span class="block overflow-hidden" aria-hidden="true">
 					<span data-line data-intro-hide class="block">
-						your <span class="font-extrabold">own</span> cloud
+						Your <span class="font-extrabold">own</span> cloud
 					</span>
 				</span>
 				<span class="block overflow-hidden" aria-hidden="true">
 					<span data-line data-intro-hide class="block">
-						in <em class="pr-[0.04em] font-extrabold">one</em> click
+						in <em class="pr-[0.04em] font-extrabold">one</em> command
 					</span>
 				</span>
 			</h1>
@@ -175,7 +175,7 @@
 				data-measure
 				class="mt-2 max-w-[728px] text-[clamp(1.5rem,2.2vw,2rem)] text-balance text-cream"
 			>
-				Turn any Linux box into a private hosting platform.
+				Turn a Linux box into a private hosting platform.
 			</p>
 
 			<div data-intro-hide data-cascade="cta" data-measure="box" class="mt-7">

@@ -10,14 +10,14 @@
 		{@attach reveal()}
 		class="text-center text-[clamp(1.75rem,3.9vw,3rem)] leading-[1.26] text-pretty text-white"
 	>
-		your <span class="font-extrabold">own</span> cloud, in
-		<em class="pr-[0.04em] font-extrabold">one</em> click.
+		Your <span class="font-extrabold">own</span> cloud, in
+		<em class="pr-[0.04em] font-extrabold">one</em> command.
 	</h2>
 	<p
 		{@attach reveal({ index: 1 })}
 		class="mt-3 text-center text-[clamp(1.0625rem,1.5vw,1.25rem)] font-medium text-white"
 	>
-		Free and open source. Runs on any Linux box.
+		Free and open source. Runs on your own Linux box.
 	</p>
 	<a
 		href={links.install}
