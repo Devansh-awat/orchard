@@ -128,4 +128,5 @@ pnpm credits                                                 # after adding or u
 
 ## Reporting security issues
 
-Please do not open public issues for security vulnerabilities. Email the maintainers instead.
+Please do not open public issues for security vulnerabilities. See [SECURITY.md](SECURITY.md) for how
+to report one privately.

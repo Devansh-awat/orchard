@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://docs.orchard.my
+    about: Install guides, operating notes and the API, CLI and MCP references.
+  - name: Report a security issue
+    url: https://github.com/hackclub/orchard/security/advisories/new
+    about: Report vulnerabilities privately, not in a public issue.

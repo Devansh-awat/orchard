@@ -2,9 +2,9 @@
 
 
 ## Component(s)
-<!-- frontend · server · gateway · cli · r2-proxy · infra · ci -->
+<!-- frontend · server · gateway · cli · r2-proxy · fc-builder · registry · landing · docs · grafts · chart · ci -->
 
 ## Checklist
-- [ ] Conventional Commit title (scope routes the release)
-- [ ] Tests / checks pass
+- [ ] Commit title uses `feat:`, `fix:` or `chore:` (the scope routes the release)
+- [ ] Tests and checks pass
 - [ ] Docs updated if behavior changed
