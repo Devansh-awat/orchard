@@ -1,4 +1,5 @@
 import { pickPreviousImage } from './rollback-target';
+import { findVolumeConflict, volumeClaim } from './volume-claims';
 import {
   Injectable,
   NotFoundException,
@@ -2175,8 +2176,17 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     // Delete all PVCs from Kubernetes
+    const claims = volumes.filter((v) => v.type === 'pvc' && v.pvcName).map((v) => v.pvcName!);
+    const heldElsewhere =
+      deleteVolumes && claims.length > 0
+        ? new Set(
+            (await this.volumeHolders(deployment.namespace, claims))
+              .filter((holder) => holder.deployment.id !== deployment.id)
+              .map(volumeClaim)
+          )
+        : new Set<string>();
     for (const volume of deleteVolumes ? volumes : []) {
-      if (volume.type === 'pvc' && volume.pvcName) {
+      if (volume.type === 'pvc' && volume.pvcName && !heldElsewhere.has(volume.pvcName)) {
         try {
           await this.kubernetesService.deletePVC(deployment.namespace, volume.pvcName);
         } catch (error) {
@@ -2215,6 +2225,56 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     if (deployment.buildContextKey) {
       this.storage.deleteBuildContext(deployment.buildContextKey).catch(() => {});
     }
+  }
+
+  private volumeHolders(namespace: string, claims: string[]) {
+    return this.prisma.deploymentVolume.findMany({
+      where: {
+        type: 'pvc',
+        deployment: { namespace },
+        OR: [{ pvcName: { in: claims } }, { pvcName: null, name: { in: claims } }]
+      },
+      select: {
+        name: true,
+        pvcName: true,
+        deployment: { select: { id: true, name: true } }
+      }
+    });
+  }
+
+  private async assertVolumesUnclaimed(
+    namespace: string,
+    volumes: { name?: string; type?: string; pvcName?: string | null }[] | undefined,
+    exceptDeploymentIds: string[] = []
+  ) {
+    const wanted = (Array.isArray(volumes) ? volumes : [])
+      .filter((vol) => vol?.type === 'pvc')
+      .map(volumeClaim)
+      .filter(Boolean);
+    if (wanted.length === 0) return;
+    const conflict = findVolumeConflict(
+      wanted,
+      await this.volumeHolders(namespace, wanted),
+      exceptDeploymentIds
+    );
+    if (conflict) {
+      throw new BadRequestException(
+        `Volume "${conflict.claim}" is already used by "${conflict.holder}". Two apps can't share a volume, so pick a different name.`
+      );
+    }
+  }
+
+  async assertEnvironmentVolumesUnclaimed(
+    projectId: string,
+    environmentId: string | null | undefined,
+    volumes: { name?: string; type?: string; pvcName?: string | null }[],
+    exceptDeploymentIds: string[] = []
+  ) {
+    const environment = await this.environments.resolveEnvironment(
+      projectId,
+      environmentId ?? undefined
+    );
+    await this.assertVolumesUnclaimed(environment.namespace, volumes, exceptDeploymentIds);
   }
 
   async scaleDeployment(
@@ -3738,6 +3798,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       where: { deploymentId: deployment.id, type: 'pvc' }
     });
     const existingByClaim = new Map(existingVolumes.map((v) => [v.pvcName ?? v.name, v] as const));
+    await this.assertVolumesUnclaimed(
+      deployment.namespace,
+      volumesList.filter((vol) => !existingByClaim.has(volumeClaim(vol))),
+      [deployment.id]
+    );
     for (const vol of volumesList) {
       if (vol.type !== 'pvc' || !vol.storageSize) continue;
       const previous = existingByClaim.get(vol.pvcName!);
@@ -6632,6 +6697,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           ];
 
     const volumes = Array.isArray(data.volumes) ? data.volumes : [];
+    await this.assertVolumesUnclaimed(environment.namespace, volumes);
 
     // Resolve per-pod resources (explicit override → org default → fallback).
     const podResources = await this.quotasService.resolvePodResources(
@@ -6957,6 +7023,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     if (Array.isArray(data.volumes) && data.volumes.some((v) => v && v.type === 'hostPath')) {
       throw new ForbiddenException('hostPath volumes are not permitted');
     }
+    await this.assertVolumesUnclaimed(environment.namespace, data.volumes);
 
     if (
       (data.buildWithDepot || data.persistentBuildCache) &&

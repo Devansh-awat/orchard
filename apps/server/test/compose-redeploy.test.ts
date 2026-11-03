@@ -20,7 +20,7 @@ function child(overrides: Record<string, unknown>) {
   };
 }
 
-function harness(composeYaml: string, children: any[]) {
+function harness(composeYaml: string, children: any[], volumeTaken?: string) {
   const calls: [string, ...unknown[]][] = [];
   const record =
     (name: string) =>
@@ -55,6 +55,10 @@ function harness(composeYaml: string, children: any[]) {
   service.fetchComposeFromGithub = async () => ({ composeYaml, installationId: 1 });
   service.getComposeStack = async () => stack;
   service.deployments = {
+    assertEnvironmentVolumesUnclaimed: async (...args: unknown[]) => {
+      calls.push(['preflight', ...args]);
+      if (volumeTaken) throw new Error(volumeTaken);
+    },
     deleteDeployment: record('delete'),
     createDeployment: record('create'),
     createDeploymentFromGitHub: record('createFromGitHub'),
@@ -68,7 +72,11 @@ function harness(composeYaml: string, children: any[]) {
     updateDeploymentImage: record('image'),
     restartDeployment: record('restart')
   };
-  return { service, calls, names: () => calls.map((c) => c[0]) };
+  return {
+    service,
+    calls,
+    names: () => calls.filter((c) => c[0] !== 'preflight').map((c) => c[0])
+  };
 }
 
 const webPorts = [{ port: 3000, targetPort: 3000, protocol: 'TCP' }];
@@ -189,4 +197,67 @@ services:
   ]);
   await service.redeployFromGithub('stack', 'clerk');
   assert.deepEqual(names(), ['delete', 'createFromGitHub']);
+});
+
+const sharing = `
+services:
+  web:
+    image: nginx:1.27
+    volumes: ["data:/data"]
+  worker:
+    image: acme/worker:1
+    volumes: ["data:/data"]
+`;
+
+test('a file whose services share a volume is refused before anything changes', async () => {
+  const { service, names } = harness(sharing, [
+    child({ id: 'web', name: 'app-web', composeServiceName: 'web', image: 'nginx:1.27' })
+  ]);
+  await assert.rejects(
+    service.redeployFromGithub('stack', 'clerk'),
+    /Services "web" and "worker" both use volume "data"/
+  );
+  assert.deepEqual(names(), []);
+});
+
+test('one service mounting a volume twice is not sharing', () => {
+  const service = Object.create(ComposeStacksService.prototype) as any;
+  const parsed = service.parseCompose(`
+services:
+  web:
+    image: nginx:1.27
+    volumes: ["data:/a", "data:/b"]
+`);
+  assert.equal(parsed[0].volumes.length, 2);
+});
+
+test('a volume held by another app stops a redeploy before any teardown', async () => {
+  const yaml = `
+services:
+  web:
+    image: nginx:1.27
+    volumes: ["data:/data"]
+`;
+  const { service, names } = harness(
+    yaml,
+    [child({ id: 'old', name: 'app-old', composeServiceName: 'old', image: 'busybox' })],
+    'Volume "data" is already used by "blog"'
+  );
+  await assert.rejects(service.redeployFromGithub('stack', 'clerk'), /already used by "blog"/);
+  assert.deepEqual(names(), []);
+});
+
+test('the preflight ignores volumes the stack already owns', async () => {
+  const yaml = `
+services:
+  web:
+    image: nginx:1.27
+    volumes: ["data:/data"]
+`;
+  const { service, calls } = harness(yaml, [
+    child({ id: 'web', name: 'app-web', composeServiceName: 'web', image: 'nginx:1.27' })
+  ]);
+  await service.redeployFromGithub('stack', 'clerk');
+  const preflight = calls.find((c) => c[0] === 'preflight')!;
+  assert.deepEqual(preflight[4], ['web']);
 });

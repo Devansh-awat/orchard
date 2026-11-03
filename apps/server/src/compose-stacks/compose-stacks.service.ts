@@ -257,6 +257,19 @@ export class ComposeStacksService {
         ...this.parseComposeResources(svc)
       });
     }
+
+    const volumeOwners = new Map<string, string>();
+    for (const svc of out) {
+      for (const volume of new Set(svc.volumes.map((v) => v.name))) {
+        const owner = volumeOwners.get(volume);
+        if (owner) {
+          throw new BadRequestException(
+            `Services "${owner}" and "${svc.name}" both use volume "${volume}". Two services can't share a volume, so give each one its own.`
+          );
+        }
+        volumeOwners.set(volume, svc.name);
+      }
+    }
     return out;
   }
 
@@ -353,6 +366,11 @@ export class ComposeStacksService {
     );
 
     const services = this.parseCompose(composeYaml);
+    await this.deployments.assertEnvironmentVolumesUnclaimed(
+      projectId,
+      environment.id,
+      services.flatMap((svc) => svc.volumes)
+    );
 
     const stack = await this.prisma.composeStack.create({
       data: {
@@ -526,6 +544,20 @@ export class ComposeStacksService {
     }
 
     const children = await this.loadChildren(stackId);
+    try {
+      await this.deployments.assertEnvironmentVolumesUnclaimed(
+        stack.projectId,
+        stack.environmentId,
+        services.flatMap((svc) => svc.volumes),
+        children.map((child) => child.id)
+      );
+    } catch (e: any) {
+      await this.prisma.composeStack.update({
+        where: { id: stackId },
+        data: { status: 'failed', lastError: e.message }
+      });
+      throw e;
+    }
     const wanted = new Map(services.map((svc) => [svc.name, svc]));
     const replaced = children.filter((child) => {
       const svc = child.composeServiceName ? wanted.get(child.composeServiceName) : undefined;
