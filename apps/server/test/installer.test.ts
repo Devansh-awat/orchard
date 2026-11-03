@@ -115,11 +115,14 @@ test('a restart that never finished is retried on the next run', () => {
   }
 });
 
-test('re-running keeps env the installer does not manage', { skip: !has('yq', '--version') }, () => {
-  const box = sandbox();
-  try {
-    const values = join(box.state, 'values.yaml');
-    const edit = `yq -i '
+test(
+  're-running keeps env the installer does not manage',
+  { skip: !has('yq', '--version') },
+  () => {
+    const box = sandbox();
+    try {
+      const values = join(box.state, 'values.yaml');
+      const edit = `yq -i '
       .server.env += [
         {"name":"BASE_DOMAIN","value":"vanity.example.com"},
         {"name":"SMTP_PASS","valueFrom":{"secretKeyRef":{"name":"smtp","key":"pass"}}},
@@ -132,68 +135,77 @@ test('re-running keeps env the installer does not manage', { skip: !has('yq', '-
       ] |
       .mcp.env += [{"name":"MCP_FOO","value":"kept"}]
     ' "${values}"`;
-    box.run(`mkdir -p "${box.state}"; write_values; ${edit}`);
-    const secret = (name: string) =>
-      execFileSync('yq', ['-r', `.server.env[] | select(.name == "${name}") | .value`, values], {
-        encoding: 'utf8'
-      }).trim();
-    const jwt = secret('JWT_SECRET');
-    const key = secret('SECRETS_ENCRYPTION_KEY');
+      box.run(`mkdir -p "${box.state}"; write_values; ${edit}`);
+      const secret = (name: string) =>
+        execFileSync('yq', ['-r', `.server.env[] | select(.name == "${name}") | .value`, values], {
+          encoding: 'utf8'
+        }).trim();
+      const jwt = secret('JWT_SECRET');
+      const key = secret('SECRETS_ENCRYPTION_KEY');
 
-    const output = box.run('write_values');
-    assert.ok(!output.includes(jwt) && !output.includes(key), 'no secret reaches the output');
+      const output = box.run('write_values');
+      assert.ok(!output.includes(jwt) && !output.includes(key), 'no secret reaches the output');
 
-    const env = (list: string) =>
-      JSON.parse(execFileSync('yq', ['-o=json', `.${list}.env`, values], { encoding: 'utf8' }));
-    const names = (list: string) => env(list).map((e: { name: string }) => e.name);
-    assert.equal(secret('JWT_SECRET'), jwt);
-    assert.equal(secret('SECRETS_ENCRYPTION_KEY'), key);
-    assert.equal(secret('BASE_DOMAIN'), 'vanity.example.com');
-    assert.equal(secret('FRONTEND_URL'), 'https://orchard.example.com');
-    assert.deepEqual(
-      env('server').find((e: { name: string }) => e.name === 'SMTP_PASS').valueFrom,
-      {
-        secretKeyRef: { name: 'smtp', key: 'pass' }
+      const env = (list: string) =>
+        JSON.parse(execFileSync('yq', ['-o=json', `.${list}.env`, values], { encoding: 'utf8' }));
+      const names = (list: string) => env(list).map((e: { name: string }) => e.name);
+      assert.equal(secret('JWT_SECRET'), jwt);
+      assert.equal(secret('SECRETS_ENCRYPTION_KEY'), key);
+      assert.equal(secret('BASE_DOMAIN'), 'vanity.example.com');
+      assert.equal(secret('FRONTEND_URL'), 'https://orchard.example.com');
+      assert.deepEqual(
+        env('server').find((e: { name: string }) => e.name === 'SMTP_PASS').valueFrom,
+        {
+          secretKeyRef: { name: 'smtp', key: 'pass' }
+        }
+      );
+      assert.ok(names('frontend').includes('PUBLIC_FOO'));
+      assert.ok(names('mcp').includes('MCP_FOO'));
+      assert.ok(!names('frontend').includes('PUBLIC_APP_DOMAIN'));
+      assert.ok(!names('server').includes('K8S_STORAGE_CLASS'));
+      for (const list of ['server', 'frontend', 'mcp']) {
+        assert.equal(
+          new Set(names(list)).size,
+          names(list).length,
+          `${list}.env has no duplicates`
+        );
       }
-    );
-    assert.ok(names('frontend').includes('PUBLIC_FOO'));
-    assert.ok(names('mcp').includes('MCP_FOO'));
-    assert.ok(!names('frontend').includes('PUBLIC_APP_DOMAIN'));
-    assert.ok(!names('server').includes('K8S_STORAGE_CLASS'));
-    for (const list of ['server', 'frontend', 'mcp']) {
-      assert.equal(new Set(names(list)).size, names(list).length, `${list}.env has no duplicates`);
+      assert.deepEqual(
+        execFileSync('ls', ['-A', box.state], { encoding: 'utf8' }).trim().split('\n'),
+        ['values.yaml'],
+        'no copy of the old values is left behind'
+      );
+    } finally {
+      box.cleanup();
     }
-    assert.deepEqual(
-      execFileSync('ls', ['-A', box.state], { encoding: 'utf8' }).trim().split('\n'),
-      ['values.yaml'],
-      'no copy of the old values is left behind'
-    );
-  } finally {
-    box.cleanup();
   }
-});
+);
 
-test('a failed merge leaves the previous values in place', { skip: !has('yq', '--version') }, () => {
-  const box = sandbox();
-  try {
-    const values = join(box.state, 'values.yaml');
-    box.run(`mkdir -p "${box.state}"; write_values`);
-    const before = readFileSync(values, 'utf8');
-    const failed = spawnSync('bash', ['-c', `${preamble}\nyq() { return 1; }\nwrite_values`], {
-      encoding: 'utf8',
-      env: {
-        ...process.env,
-        PATH: `${box.dir}:${process.env.PATH}`,
-        ORCHARD_STATE_DIR: box.state,
-        ORCHARD_REGISTRIES_FILE: box.registries
-      }
-    });
-    assert.notEqual(failed.status, 0);
-    assert.equal(readFileSync(values, 'utf8'), before);
-  } finally {
-    box.cleanup();
+test(
+  'a failed merge leaves the previous values in place',
+  { skip: !has('yq', '--version') },
+  () => {
+    const box = sandbox();
+    try {
+      const values = join(box.state, 'values.yaml');
+      box.run(`mkdir -p "${box.state}"; write_values`);
+      const before = readFileSync(values, 'utf8');
+      const failed = spawnSync('bash', ['-c', `${preamble}\nyq() { return 1; }\nwrite_values`], {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          PATH: `${box.dir}:${process.env.PATH}`,
+          ORCHARD_STATE_DIR: box.state,
+          ORCHARD_REGISTRIES_FILE: box.registries
+        }
+      });
+      assert.notEqual(failed.status, 0);
+      assert.equal(readFileSync(values, 'utf8'), before);
+    } finally {
+      box.cleanup();
+    }
   }
-});
+);
 
 test(
   'the installer values reach the server with its issuer and a real frontend target',
