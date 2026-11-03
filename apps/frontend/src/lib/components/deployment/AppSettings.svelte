@@ -2,7 +2,7 @@
 	import { ActionRow, Button, SectionCard, SettingsRail } from '$lib/components/ui';
 	import SettingsList from '$lib/components/ui/SettingsList.svelte';
 	import { ResourceNotifications, AlertRules } from '$lib/components/notifications';
-	import { featureFlag } from '$lib/posthog';
+	import { earlyAccessFlag } from '$lib/stores';
 	import AutoDeployCard from './AutoDeployCard.svelte';
 	import BuilderOptions from './BuilderOptions.svelte';
 	import BuildTab from './BuildTab.svelte';
@@ -174,7 +174,7 @@
 		onShowDeleteModal: () => void;
 	} = $props();
 
-	const notificationsEnabled = featureFlag('notifications');
+	const notificationsEnabled = earlyAccessFlag('notifications');
 
 	const RAIL = $derived([
 		{

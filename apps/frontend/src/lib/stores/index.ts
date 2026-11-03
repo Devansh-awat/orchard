@@ -7,7 +7,7 @@ export {
 	instanceChecklistWarnings,
 	type InstanceChecklistItem
 } from './instance-checklist';
-export { instanceFeatures, type InstanceFeatures } from './instance-features';
+export { instanceFeatures, earlyAccessFlag, type InstanceFeatures } from './instance-features';
 export { telemetry, type TelemetryState, type TelemetryPreview } from './telemetry';
 export { authConfig, type AuthConfig } from './auth-config';
 export {

@@ -9,6 +9,7 @@
 		pendingInvitations,
 		organizations,
 		instanceFeatures,
+		earlyAccessFlag,
 		type PendingInvitation
 	} from '$lib/stores';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
@@ -129,7 +130,7 @@
 	const frontendVersion = __APP_VERSION__;
 
 	const tailscaleEnabled = featureFlag('tailscale-integration');
-	const notificationsEnabled = featureFlag('notifications');
+	const notificationsEnabled = earlyAccessFlag('notifications');
 
 	let tailscaleChecked = false;
 	$effect(() => {

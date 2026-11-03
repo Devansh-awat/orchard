@@ -40,7 +40,7 @@ export class AlertsController {
   }
 
   private async requireNotificationsFeature(userId: string): Promise<void> {
-    const enabled = await this.analytics.isFeatureEnabled('notifications', userId);
+    const enabled = await this.analytics.isEarlyAccessEnabled('notifications', userId);
     if (!enabled) {
       throw new ForbiddenException(
         'Alerts are not enabled for your account. Enable the Notifications beta in Early Access Features.'

@@ -1,11 +1,15 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Inject } from '@nestjs/common';
 import { Auth } from '../auth/decorators';
 import { loadedGrafts } from '../grafts/graft-registry';
 import { InstanceSettingsService } from './instance-settings.service';
+import { AnalyticsService } from '../analytics/analytics.service';
 
 @Controller('instance')
 export class InstanceFeaturesController {
-  constructor(private readonly settings: InstanceSettingsService) {}
+  constructor(
+    private readonly settings: InstanceSettingsService,
+    @Inject(AnalyticsService) private readonly analytics: AnalyticsService
+  ) {}
 
   @Auth()
   @Get('features')
@@ -14,7 +18,8 @@ export class InstanceFeaturesController {
     return {
       mcp: await this.settings.isMcpEnabled(),
       grafts,
-      sandboxes: grafts.includes('greenhouse')
+      sandboxes: grafts.includes('greenhouse'),
+      earlyAccessOpen: !this.analytics.configured
     };
   }
 }

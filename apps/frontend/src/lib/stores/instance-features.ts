@@ -1,12 +1,19 @@
-import { writable, get } from 'svelte/store';
+import { derived, writable, get, type Readable } from 'svelte/store';
+import { browser } from '$app/environment';
+import { featureFlag } from '$lib/posthog';
 import { apiFetch } from './api';
 
 export interface InstanceFeatures {
 	mcp: boolean;
 	sandboxes: boolean;
+	earlyAccessOpen: boolean;
 }
 
-const features = writable<InstanceFeatures>({ mcp: true, sandboxes: false });
+const features = writable<InstanceFeatures>({
+	mcp: true,
+	sandboxes: false,
+	earlyAccessOpen: false
+});
 let loaded = false;
 
 export const instanceFeatures = {
@@ -19,9 +26,18 @@ export const instanceFeatures = {
 		const next = {
 			mcp: true,
 			sandboxes: false,
+			earlyAccessOpen: false,
 			...((await response.json()) as Partial<InstanceFeatures>)
 		};
 		features.set(next);
 		return next;
 	}
 };
+
+export function earlyAccessFlag(key: string): Readable<boolean> {
+	if (browser) instanceFeatures.load().catch(() => undefined);
+	return derived(
+		[features, featureFlag(key)],
+		([$features, $enabled]) => $features.earlyAccessOpen || $enabled
+	);
+}

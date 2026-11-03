@@ -114,6 +114,15 @@ export class AnalyticsService implements OnModuleDestroy {
     return this.refreshFlag(id, key, distinctId);
   }
 
+  async isEarlyAccessEnabled(
+    key: string,
+    distinctId: string,
+    options?: { groups?: Record<string, string>; personProperties?: Record<string, unknown> }
+  ): Promise<boolean> {
+    if (!this.client) return true;
+    return this.isFeatureEnabled(key, distinctId, options);
+  }
+
   private refreshFlag(id: string, key: string, distinctId: string): Promise<boolean> {
     const running = this.flagInflight.get(id);
     if (running) return running;

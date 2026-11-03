@@ -2,8 +2,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount, onDestroy } from 'svelte';
-	import { apiFetch, toasts, subscribeOrgEvents } from '$lib/stores';
-	import { featureFlag } from '$lib/posthog';
+	import { apiFetch, toasts, subscribeOrgEvents, earlyAccessFlag } from '$lib/stores';
 	import GraftMount from '$lib/grafts/GraftMount.svelte';
 	import { graftHost } from '$lib/grafts/host.svelte';
 	import { env } from '$env/dynamic/public';
@@ -133,7 +132,7 @@
 	let scimRevokingId = $state<string | null>(null);
 	let scimCreatedToken = $state<{ name: string; token: string } | null>(null);
 
-	const notificationsEnabled = featureFlag('notifications');
+	const notificationsEnabled = earlyAccessFlag('notifications');
 	const organizationSlug = $derived($page.params.orgSlug);
 	const activeTab = $derived($page.url.searchParams.get('tab') || 'members');
 	const canEditOrg = $derived(currentUserRole === 'owner' || currentUserRole === 'admin');

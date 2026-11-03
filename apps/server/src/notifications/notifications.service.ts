@@ -601,7 +601,7 @@ export class NotificationsService {
     // account-scoped event has no organization to key the flag on, so it is
     // checked against the person it is about.
     const flagSubject = input.organizationId ?? input.scopeId;
-    const enabled = await this.analytics.isFeatureEnabled('notifications', flagSubject, {
+    const enabled = await this.analytics.isEarlyAccessEnabled('notifications', flagSubject, {
       personProperties: { '$feature_enrollment/notifications': true }
     });
     if (!enabled) return;
