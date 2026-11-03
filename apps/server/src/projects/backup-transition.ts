@@ -48,6 +48,24 @@ export function backupTransition(
   return null;
 }
 
+export const FAILED_RECHECK_MS = 7 * 24 * 60 * 60 * 1000;
+
+export function recoveredBackups<
+  Row extends { backupName: string; status: string; createdAt: Date },
+  Live extends LiveBackupLike & { metadata?: { name?: string } }
+>(rows: Row[], liveBackups: Live[], now = Date.now()): { row: Row; live: Live }[] {
+  const completed = new Map(
+    liveBackups
+      .filter((b) => b.metadata?.name && b.status?.phase === 'completed')
+      .map((b) => [b.metadata!.name!, b])
+  );
+  return rows.flatMap((row) => {
+    const live = completed.get(row.backupName);
+    if (!live || row.status !== 'failed') return [];
+    return now - row.createdAt.getTime() <= FAILED_RECHECK_MS ? [{ row, live }] : [];
+  });
+}
+
 export const SUPERSEDED_GRACE_MS = 30 * 60 * 1000;
 export const SUPERSEDED_MESSAGE = 'Superseded by a newer scheduled backup before it could start';
 

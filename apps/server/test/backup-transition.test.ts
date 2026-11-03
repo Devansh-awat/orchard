@@ -5,6 +5,8 @@ import {
   BACKUP_TIMEOUT_MS,
   WAL_ARCHIVING_FAILING_MESSAGE,
   WAL_ARCHIVING_GRACE_MS,
+  FAILED_RECHECK_MS,
+  recoveredBackups,
   supersededBackups
 } from '../src/projects/backup-transition';
 
@@ -37,6 +39,36 @@ test('a backup whose cluster cannot archive wal fails once the grace period is o
       now
     ),
     { status: 'failed', errorMessage: `${WAL_ARCHIVING_FAILING_MESSAGE}: Expected empty archive` }
+  );
+});
+
+test('a failed backup the cluster later completed is recovered, nothing else is', () => {
+  const failed = (backupName: string, ageMs: number) => ({
+    backupName,
+    status: 'failed',
+    createdAt: new Date(now - ageMs)
+  });
+  const cr = (name: string, phase: string) => ({ metadata: { name }, status: { phase } });
+  const rows = [
+    failed('retried', MINUTE),
+    failed('still-failed', MINUTE),
+    failed('gone', MINUTE),
+    failed('ancient', FAILED_RECHECK_MS + MINUTE),
+    { backupName: 'fine', status: 'completed', createdAt: new Date(now - MINUTE) }
+  ];
+  const got = recoveredBackups(
+    rows,
+    [
+      cr('retried', 'completed'),
+      cr('still-failed', 'failed'),
+      cr('ancient', 'completed'),
+      cr('fine', 'completed')
+    ],
+    now
+  );
+  assert.deepEqual(
+    got.map((r) => r.row.backupName),
+    ['retried']
   );
 });
 

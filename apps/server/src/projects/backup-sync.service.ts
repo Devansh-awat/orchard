@@ -15,8 +15,10 @@ import {
 import {
   backupTransition,
   confirmedOrphans,
+  FAILED_RECHECK_MS,
   orphanCandidates,
   orphanKey,
+  recoveredBackups,
   SUPERSEDED_MESSAGE,
   supersededBackups
 } from './backup-transition';
@@ -71,7 +73,15 @@ export class BackupSyncService {
             ? {
                 OR: [
                   { backups: { some: { status: { in: ['pending', 'running'] } } } },
-                  { backupScheduleCron: { not: null } }
+                  { backupScheduleCron: { not: null } },
+                  {
+                    backups: {
+                      some: {
+                        status: 'failed',
+                        createdAt: { gte: new Date(Date.now() - FAILED_RECHECK_MS) }
+                      }
+                    }
+                  }
                 ]
               }
             : { backups: { some: { status: { in: ['pending', 'running'] } } } })
@@ -358,8 +368,23 @@ export class BackupSyncService {
 
     const existing = await this.prisma.databaseBackup.findMany({
       where: { databaseId: database.id },
-      select: { id: true, backupName: true, barmanId: true, status: true }
+      select: { id: true, backupName: true, barmanId: true, status: true, createdAt: true }
     });
+    for (const { row, live } of recoveredBackups(existing, liveBackups)) {
+      const claimed = await this.prisma.databaseBackup.updateMany({
+        where: { id: row.id, status: 'failed' },
+        data: {
+          status: 'completed',
+          errorMessage: null,
+          completedAt: new Date(live.status?.stoppedAt || Date.now()),
+          ...backupFieldsFromStatus(live)
+        }
+      });
+      if (claimed.count > 0) {
+        anyNewlyCompleted = true;
+        this.maybeNotify(row.id, 'completed', row.createdAt);
+      }
+    }
     const known = new Set(existing.map((r) => r.backupName));
     const unrecorded = new Map(
       existing
