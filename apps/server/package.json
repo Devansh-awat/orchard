@@ -24,6 +24,7 @@
     "test:registry-prune": "tsx --test test/registry-prune.test.ts",
     "test:template-params": "tsx --test test/template-params.test.ts",
     "test:template-registry": "tsx --test test/template-registry.test.ts",
+    "test:template-defaults": "tsx --test test/template-defaults.test.ts test/volume-claims.test.ts",
     "test:namespace-scope": "tsx --test test/namespace-scope.test.ts",
     "test:build-timing": "tsx --test test/build-timing.test.ts",
     "test:ingress-url": "tsx --test test/ingress-url.test.ts",

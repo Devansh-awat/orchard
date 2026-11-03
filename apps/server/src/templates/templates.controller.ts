@@ -61,6 +61,10 @@ export class TemplatesController {
       parameters: Record<string, any>;
       cpuRequestMilli?: number | null;
       memoryRequestBytes?: number | null;
+      resourceOverrides?: Record<
+        string,
+        { cpuRequestMilli?: number | null; memoryRequestBytes?: number | null }
+      >;
     },
     @Request() req
   ) {
@@ -79,7 +83,8 @@ export class TemplatesController {
       {
         cpuRequestMilli: body.cpuRequestMilli ?? null,
         memoryRequestBytes: body.memoryRequestBytes ?? null
-      }
+      },
+      body.resourceOverrides
     );
   }
 

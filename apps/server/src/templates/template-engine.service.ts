@@ -2,6 +2,7 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import * as yaml from 'js-yaml';
 import { randomBytes } from 'crypto';
 import { formatSlug } from '../projects/projects.utils';
+import { recommendedPodSize, type PodSize } from './template-defaults';
 
 export interface ParameterValidation {
   pattern?: string;
@@ -39,6 +40,7 @@ export interface ResourceDef {
   name: string;
   type: 'deployment' | 'database' | 'ingress';
   config: Record<string, any>;
+  recommended: PodSize | null;
 }
 
 export interface ParsedTemplate {
@@ -102,7 +104,12 @@ export class TemplateEngineService {
       if (!['deployment', 'database', 'ingress'].includes(r.type)) {
         throw new BadRequestException(`Invalid resource type: ${r.type}`);
       }
-      return { name: r.name, type: r.type, config: r.config };
+      return {
+        name: r.name,
+        type: r.type,
+        config: r.config,
+        recommended: r.type === 'ingress' ? null : recommendedPodSize(r.name, r.type, r.config)
+      };
     });
 
     return {

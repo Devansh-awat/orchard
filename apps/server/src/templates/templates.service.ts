@@ -20,6 +20,7 @@ import { scrubIngress } from '../projects/projects.utils';
 import { AuthorizationService } from '../auth/authorization.service';
 import { UsersService } from '../users/users.service';
 import { TemplateEngineService, ResolutionContext, ParameterDef } from './template-engine.service';
+import { chosenPodSize, isolateTemplateVolumes, type PodSizeOverride } from './template-defaults';
 
 const REGISTRY_SYNC_MS = 6 * 60 * 60 * 1000;
 const REGISTRY_FETCH_TIMEOUT_MS = 15_000;
@@ -363,7 +364,9 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
       parameters: parsed.parameters,
       resources: parsed.resources.map((r) => ({
         name: r.name,
-        type: r.type
+        type: r.type,
+        cpuMilli: r.recommended?.cpuMilli ?? null,
+        memoryBytes: r.recommended?.memoryBytes ?? null
       }))
     };
   }
@@ -478,10 +481,8 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
       lastName?: string;
       imageUrl?: string;
     },
-    resourceOverride?: {
-      cpuRequestMilli?: number | null;
-      memoryRequestBytes?: number | null;
-    }
+    resourceOverride?: PodSizeOverride,
+    perResource?: Record<string, PodSizeOverride | null | undefined> | null
   ) {
     const template = await this.prisma.template.findUnique({ where: { id: templateId } });
     if (!template) throw new NotFoundException('Template not found');
@@ -517,6 +518,15 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
     try {
       for (const resource of parsed.resources) {
         const config = this.templateEngine.resolveResourceConfig(resource, context);
+        const podSize = resource.recommended
+          ? chosenPodSize(
+              resource.recommended,
+              resourceOverride,
+              perResource && Object.hasOwn(perResource, resource.name)
+                ? perResource[resource.name]
+                : null
+            )
+          : null;
 
         switch (resource.type) {
           case 'database': {
@@ -526,8 +536,7 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
                 name: config.name,
                 templateInstanceId: instance.id,
                 replicas: config.replicas ? Number(config.replicas) : 1,
-                cpuRequestMilli: resourceOverride?.cpuRequestMilli ?? null,
-                memoryRequestBytes: resourceOverride?.memoryRequestBytes ?? null
+                ...podSize
               },
               clerkId,
               userData
@@ -550,6 +559,7 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
           case 'deployment': {
             const repoUrl = config.repo || config.githubRepo || config.repoUrl;
             const buildsFromRepo = Boolean(repoUrl);
+            const volumes = isolateTemplateVolumes(config.name, config.volumes);
 
             let deployment;
             if (buildsFromRepo) {
@@ -572,13 +582,12 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
                   ports: config.ports,
                   port: config.port ? Number(config.port) : undefined,
                   env: sealTemplateEnv(config.env, secretValues),
-                  volumes: config.volumes,
+                  volumes,
                   exposePublic: config.exposePublic ?? false,
                   autoDeployEnabled: config.autoDeploy,
                   autoDeployBranch: config.autoDeployBranch,
                   templateInstanceId: instance.id,
-                  cpuRequestMilli: resourceOverride?.cpuRequestMilli ?? null,
-                  memoryRequestBytes: resourceOverride?.memoryRequestBytes ?? null
+                  ...podSize
                 },
                 clerkId,
                 userData
@@ -590,12 +599,11 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
                 replicas: config.replicas ? Number(config.replicas) : 1,
                 ports: config.ports,
                 env: sealTemplateEnv(config.env, secretValues),
-                volumes: config.volumes,
+                volumes,
                 exposePublic: config.exposePublic ?? false,
                 templateInstanceId: instance.id,
                 startCommand: config.startCommand ?? null,
-                cpuRequestMilli: resourceOverride?.cpuRequestMilli ?? null,
-                memoryRequestBytes: resourceOverride?.memoryRequestBytes ?? null
+                ...podSize
               };
 
               deployment = await this.deployments.createDeployment(
