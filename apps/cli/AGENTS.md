@@ -4,7 +4,7 @@ This file is for AI coding agents driving the `orchard` binary. Humans should re
 
 ## What orchard is
 
-Orchard is HackClub's app platform: deployments, databases, domains, scheduled jobs, and logs on Kubernetes. The `orchard` CLI speaks the same `/apiv1` REST API as the web UI and the MCP server, so every platform capability is reachable from this one binary. When stdout is not a TTY (i.e. whenever you run it as a subprocess), it emits JSON on stdout and keeps human status chatter on stderr, so you can pipe it straight into a parser without any flags.
+Orchard is a self-hostable app platform: deployments, databases, domains, scheduled jobs, and logs on Kubernetes. The `orchard` CLI speaks the same `/apiv1` REST API as the web UI and the MCP server, so every platform capability is reachable from this one binary. When stdout is not a TTY (i.e. whenever you run it as a subprocess), it emits JSON on stdout and keeps human status chatter on stderr, so you can pipe it straight into a parser without any flags.
 
 ## Auth for headless use
 
@@ -18,11 +18,11 @@ export ORCHARD_API_TOKEN=orch_xxx
 
 Tokens carry scopes, and each higher scope includes the lower ones (read is a subset of deploy, deploy is a subset of exec):
 
-| scope  | allows                                                              |
-| ------ | ------------------------------------------------------------------- |
-| read   | GET / HEAD / OPTIONS requests                                       |
-| deploy | read, plus every mutation (create, update, delete, scale, restart)  |
-| exec   | deploy, plus interactive terminals: `pod exec`, `pod shell`, `db psql` |
+| scope  | allows                                                                  |
+| ------ | ----------------------------------------------------------------------- |
+| read   | most GET / HEAD / OPTIONS; `orchard api describe <op>` shows exceptions |
+| deploy | read, plus every mutation (create, update, delete, scale, restart)      |
+| exec   | deploy, plus interactive terminals: `pod exec`, `pod shell`, `db psql`  |
 
 Mint a token from an already-authenticated CLI (the secret prints once, default scope read, lifetime capped at 90 days):
 
@@ -31,18 +31,22 @@ orchard auth token create --name agent --scope deploy --expires-in 30d
 orchard auth token create --name ci --scope read --project my-app   # project-restricted
 ```
 
-Or create one in the web UI under Settings, API Tokens. Interactive humans can also run `orchard auth login` (browser flow) or `orchard auth login --token orch_xxx`.
+Or create one in the web UI under Settings, API Tokens. Interactive humans can also run `orchard auth login` (browser flow) or `orchard auth login --token orch_xxx`. Add `--api-url <url>` to log in to a self-hosted instance.
 
 Other env vars:
 
-| var                  | effect                                                       |
-| -------------------- | ------------------------------------------------------------ |
-| `ORCHARD_API_URL`    | API base (default `https://orchard.infra.hackclub.com`)      |
-| `ORCHARD_API_TOKEN`  | credential, skips login                                      |
-| `ORCHARD_JSON=1`     | force JSON output even on a TTY                              |
-| `ORCHARD_ORG`        | default org scope (id or slug)                               |
-| `ORCHARD_PROJECT`    | default project scope (id or slug)                           |
-| `ORCHARD_ENV`        | default environment scope (id or name)                       |
+| var                       | effect                                                                                              |
+| ------------------------- | --------------------------------------------------------------------------------------------------- |
+| `ORCHARD_API_URL`         | API base. Set for any self-hosted instance (built-in default: `https://orchard.infra.hackclub.com`) |
+| `ORCHARD_API_TOKEN`       | credential, skips login                                                                             |
+| `ORCHARD_JSON=1`          | force JSON output even on a TTY                                                                     |
+| `ORCHARD_ORG`             | default org scope (id or slug)                                                                      |
+| `ORCHARD_PROJECT`         | default project scope (id or slug)                                                                  |
+| `ORCHARD_ENV`             | default environment scope (id or name)                                                              |
+| `ORCHARD_IDEMPOTENCY_KEY` | `Idempotency-Key` to send instead of a fresh one per mutation (see Retrying mutations safely)       |
+| `ORCHARD_TS_AUTHKEY`      | Tailscale auth key for `orchard tailscale link`, instead of `--auth-key` or stdin                   |
+| `ORCHARD_INGRESS_CNAME`   | CNAME target the CLI and TUI show for custom domains                                                |
+| `ORCHARD_SPEC_CACHE_DIR`  | directory for the cached `agent-spec.json` (default `~/.orchard`)                                   |
 
 ## Output contract
 
@@ -50,7 +54,7 @@ Format resolution, in order: explicit `-o json|table` flag, then `ORCHARD_JSON=1
 
 - Data goes to stdout. Status, progress, and warnings go to stderr. Parse stdout only.
 - `orchard events tail` emits NDJSON when piped: one JSON object per line, shaped `{"eventId","type","organizationId","id","projectId","ts","payload"}`.
-- `--follow` log commands (`deploy logs -f`, `pod logs -f`, `job-run logs -f`, `observe logs --follow`) stream plain log lines to stdout, one per line, until interrupted (or, for job runs, until the run finishes).
+- `--follow` log commands (`deploy logs -f`, `pod logs -f`, `job-run logs -f`) stream plain log lines to stdout, one per line, until interrupted (or, for job runs, until the run finishes). `observe logs --follow` does the same on a TTY; piped, it emits one JSON log entry per line.
 - One-shot log fetches in JSON mode return structured arrays (e.g. `deploy logs` returns `[{"pod","container","logs"}]`).
 - On failure in JSON mode, a single error line is printed to stderr:
 
@@ -62,20 +66,20 @@ Format resolution, in order: explicit `-o json|table` flag, then `ORCHARD_JSON=1
 
 ## Exit codes
 
-| code | meaning                                              |
-| ---- | ---------------------------------------------------- |
-| 0    | success                                              |
-| 1    | generic or network error                             |
-| 2    | usage error, or a confirmation prompt was refused    |
-| 3    | authentication failed (HTTP 401)                     |
-| 4    | not found (HTTP 404)                                 |
-| 5    | validation or conflict (other HTTP 4xx)              |
-| 6    | rate limited (HTTP 429)                              |
-| 7    | server error (HTTP 5xx)                              |
-| 8    | `--wait` gave up after `--timeout`                   |
-| 9    | `deploy-failed`: the build failed during a wait      |
+| code | meaning                                                                                                  |
+| ---- | -------------------------------------------------------------------------------------------------------- |
+| 0    | success                                                                                                  |
+| 1    | generic or network error, or no token configured                                                         |
+| 2    | usage error, or a confirmation prompt was refused                                                        |
+| 3    | authentication rejected (HTTP 401)                                                                       |
+| 4    | not found (HTTP 404)                                                                                     |
+| 5    | API rejected the request (other HTTP 4xx, including 403 missing scope)                                   |
+| 6    | rate limited (HTTP 429)                                                                                  |
+| 7    | server error (HTTP 5xx)                                                                                  |
+| 8    | `--wait` gave up after `--timeout`                                                                       |
+| 9    | `deploy-failed`: the build failed during a wait                                                          |
 | 10   | `deploy-crashing`: pods crash-loop or the rollout is unhealthy, or `db diagnose` found the database down |
-| 130  | interrupted (Ctrl-C / SIGTERM)                       |
+| 130  | interrupted (Ctrl-C / SIGTERM)                                                                           |
 
 ## Scoping
 
@@ -162,8 +166,6 @@ ORCHARD_IDEMPOTENCY_KEY=$key orchard deploy rebuild <deploymentId> --wait   # re
 
 Generate a new key for each intended action. Reusing one for a deliberate second rebuild within 24 hours replays the first response instead of rebuilding.
 
-`orchard deploy rollback <deploymentId>` with no history id rolls back to the previous image (`POST /deployments/:id/rollback`).
-
 ## Destructive commands and --yes
 
 Delete/revoke/restore style commands ask for confirmation. With stdin or stdout not a TTY the CLI never prompts: it fails immediately with exit 2 unless you pass `--yes` (`-y`). Always pass `--yes` explicitly when you intend a destructive operation.
@@ -216,7 +218,7 @@ case $? in
 esac
 ```
 
-Roll back to the previous release:
+Roll back to the previous release (with no history id, `POST /deployments/:id/rollback` picks the previous image):
 
 ```sh
 orchard deploy rollback <deploymentId> --yes --wait
@@ -326,7 +328,7 @@ done
 From Node, with the same token:
 
 ```js
-const base = process.env.ORCHARD_API_URL ?? 'https://orchard.infra.hackclub.com';
+const base = process.env.ORCHARD_API_URL;
 const api = (p) => fetch(`${base}/apiv1${p}`, { headers: { Authorization: `Bearer ${process.env.ORCHARD_API_TOKEN}` } }).then((r) => r.json());
 for (const d of await api(`/projects/${process.env.PROJECT}/deployments`)) {
   const r = await api(`/deployments/${d.id}/rollout`);

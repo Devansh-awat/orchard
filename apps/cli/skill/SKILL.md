@@ -1,11 +1,11 @@
 ---
 name: orchard-cli
-description: Deploy and manage apps, databases, scheduled jobs, domains, and logs on Orchard (HackClub's app platform) via the orchard CLI. Use when deploying from GitHub or an image, scaling or restarting deployments, tailing logs, managing env vars, running jobs, creating databases, or scripting against the Orchard API on HackClub infra.
+description: Deploy and manage apps, databases, scheduled jobs, domains, and logs on Orchard, a self-hostable app platform, via the orchard CLI. Use when deploying from GitHub or an image, scaling or restarting deployments, tailing logs, managing env vars, running jobs, creating databases, or scripting against the Orchard API.
 ---
 
 # orchard CLI
 
-`orchard` drives the Orchard platform (HackClub infra) over the same `/apiv1` REST API as the web UI. Full agent contract: `AGENTS.md` next to this skill (apps/cli/AGENTS.md in the repo).
+`orchard` drives an Orchard instance over the same `/apiv1` REST API as the web UI. Full agent contract: `AGENTS.md` next to this skill (apps/cli/AGENTS.md in the repo).
 
 ## Setup
 
@@ -15,7 +15,7 @@ description: Deploy and manage apps, databases, scheduled jobs, domains, and log
 ## Output and exit codes
 
 - Piped output is JSON on stdout; status lines go to stderr. `ORCHARD_JSON=1` or `-o json` forces it.
-- `events tail` emits NDJSON; `--follow` log commands stream plain lines.
+- `events tail` emits NDJSON; `--follow` log commands stream plain lines, except piped `observe logs --follow`, which emits JSON entries.
 - Errors in JSON mode: one stderr line `{"error":{"status":<http>,"code":<exit>,"message":"..."}}`.
 - Exit codes: 0 ok, 1 generic, 2 usage/refused prompt, 3 auth, 4 not found, 5 validation, 6 rate limited, 7 server, 8 wait timeout, 9 deploy-failed (build failed), 10 deploy-crashing (pods crashing or rollout unhealthy), 130 interrupted.
 
