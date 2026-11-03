@@ -1120,8 +1120,8 @@ server:
 
 - Cluster bootstrap (nodes, CNI, operator installation): bring your own or
   see the quickstart for a local reference stack.
-- DNS-01 issuer credentials and wildcard issuance: documented in
-  `SETUP-wildcards.md`, secrets stay in your ops repo.
+- DNS-01 issuer credentials and wildcard issuance: see
+  [Wildcard certificates](https://docs.orchard.my/operate/wildcard-certificates/). Secrets stay in your ops repo.
 - Database backup schedules: CNPG `ScheduledBackup` resources are yours to
   define; the r2-proxy component brokers per-cluster credentials when
   enabled.

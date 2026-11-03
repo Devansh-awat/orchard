@@ -192,7 +192,7 @@ The installer issues per-hostname certificates over HTTP-01. That works, but
 every new app waits on an ACME round-trip.
 
 A wildcard certificate needs a DNS-01 issuer, which is a chart-level change. See
-`SETUP-wildcards.md` in the chart.
+[Wildcard certificates](/operate/wildcard-certificates/).
 
 ## 11. Move off a single box
 

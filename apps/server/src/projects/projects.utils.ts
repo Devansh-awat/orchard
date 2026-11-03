@@ -28,7 +28,7 @@ export function wildcardSecretNameFor(suffix: string): string {
 // to copy it into every tenant namespace, so every generated URL would point at
 // a Secret that never exists and serve no certificate. With null, callers fall
 // through to per-host issuance against CERT_CLUSTER_ISSUER, which works out of
-// the box. See docs/self-hosting.md for the wildcard upgrade path.
+// the box. See the wildcard certificates guide in apps/docs for the upgrade path.
 //
 // Parsed here rather than in ingress.service so deployments.service can use it:
 // ingress.service already forwardRef-imports DeploymentsService, and importing

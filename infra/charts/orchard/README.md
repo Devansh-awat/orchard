@@ -757,7 +757,7 @@ Renders `cert-manager.io/v1 Certificate` resources for the configured wildcards.
 |---|---|---|
 | `certificates.enabled` | `true` | Render `Certificate` resources. Set `false` if you pre-provision the TLS Secrets out-of-band. |
 | `certificates.namespace` | `network` | Where Certificates + their Secrets live. Same as `gateway.namespace` in the default layout. |
-| `certificates.issuer.name` | `letsencrypt-dns01-wildcard` | Name of the `ClusterIssuer` (or `Issuer`). **Must support DNS-01.** See [SETUP-wildcards.md](SETUP-wildcards.md). |
+| `certificates.issuer.name` | `letsencrypt-dns01-wildcard` | Name of the `ClusterIssuer` (or `Issuer`). **Must support DNS-01.** See [Wildcard certificates](https://docs.orchard.my/operate/wildcard-certificates/). |
 | `certificates.issuer.kind` | `ClusterIssuer` | `ClusterIssuer` or `Issuer`. |
 | `certificates.duration` | `2160h` | Cert lifetime. |
 | `certificates.renewBefore` | `360h` | Renewal lead time. |

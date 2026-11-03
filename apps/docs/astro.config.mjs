@@ -156,6 +156,7 @@ export default defineConfig({
             { label: 'Running Greenhouse', slug: 'operate/greenhouse' },
             { label: 'Upgrades', slug: 'operate/upgrades' },
             { label: 'Going to production', slug: 'operate/production' },
+            { label: 'Wildcard certificates', slug: 'operate/wildcard-certificates' },
             { label: 'Security and isolation', slug: 'operate/security' },
             { label: 'Image scanning', slug: 'operate/image-scanning' },
             { label: 'Logs and request data', slug: 'operate/logs' },

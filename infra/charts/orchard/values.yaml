@@ -495,7 +495,8 @@ gateway:
     fromNamespaces: []
 
 # cert-manager Certificates for cluster wildcards.
-# Requires cert-manager + a working DNS-01 ClusterIssuer. See SETUP-wildcards.md.
+# Requires cert-manager + a working DNS-01 ClusterIssuer. Guide:
+# https://docs.orchard.my/operate/wildcard-certificates/
 # Set enabled=false if you provision Secrets out-of-band.
 certificates:
   enabled: true

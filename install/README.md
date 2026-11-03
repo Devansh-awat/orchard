@@ -212,7 +212,7 @@ the `url` the API returns for every ingress carries them and the dashboard, CLI
 and TUI all link correctly.
 
 **Wildcard certificates.** Apps get per-hostname certificates. Wildcards need a
-DNS-01 issuer; see [SETUP-wildcards.md](../infra/charts/orchard/SETUP-wildcards.md).
+DNS-01 issuer; see [Wildcard certificates](https://docs.orchard.my/operate/wildcard-certificates/).
 
 **Public TCP/UDP in tunnel mode.** Cloudflare Tunnels carry HTTP only, so
 publicly exposed databases and raw ports are unavailable there.

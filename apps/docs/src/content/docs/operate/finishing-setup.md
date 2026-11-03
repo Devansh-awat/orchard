@@ -196,8 +196,8 @@ subdomain.
 | `WILDCARD_TLS_SOURCE_NAMESPACE` | namespace holding the certificate secret                      |
 
 The suffix before `=` is the domain, the name after it is the Kubernetes secret
-holding the certificate. Without a secret name Orchard still generates URLs, but
-serves them without TLS.
+holding the certificate. Without a secret name Orchard still generates URLs, and
+each one gets its own certificate.
 
 Wildcards require a **DNS-01** challenge, so cert-manager needs an issuer with
 credentials for your DNS provider. Cloudflare, Route53, AzureDNS, Google
@@ -208,6 +208,9 @@ Tenant namespaces need their own copy of the secret. Either run
 [reflector](https://github.com/emberstack/kubernetes-reflector) and annotate the
 source secret, or let Orchard copy it by setting `certificates.copyToTenants` in
 the chart. Do not do both: two writers on the same secret will fight.
+
+[Wildcard certificates](/operate/wildcard-certificates/) has the full setup, including
+the issuer and how to verify it.
 
 ## Set a default public IP
 
