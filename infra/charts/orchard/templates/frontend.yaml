@@ -36,8 +36,10 @@ spec:
             {{- with (include "orchard.mcpUrl" .) }}
             - { name: PUBLIC_MCP_URL, value: {{ . | quote }} }
             {{- end }}
+            {{- if not (include "orchard.envHas" (dict "env" .Values.frontend.env "key" "PUBLIC_APP_DOMAIN")) }}
             {{- with (include "orchard.appDomain" .) }}
             - { name: PUBLIC_APP_DOMAIN, value: {{ . | quote }} }
+            {{- end }}
             {{- end }}
             {{- if include "orchard.graftsOn" . }}{{- include "orchard.graftEnv" . }}{{- end }}
             {{- with .Values.frontend.env }}
