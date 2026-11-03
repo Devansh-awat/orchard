@@ -198,6 +198,13 @@ export class ProjectAccessService {
     return { user, access };
   }
 
+  async assertOrgCanCreateProjects(organizationId: string, clerkId: string, userData?: any) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) throw new NotFoundException('User not found');
+    const access = await this.authz.requireOrgCanCreateProjects(organizationId, user.id);
+    return { user, access };
+  }
+
   async assertDatabaseView(databaseId: string, clerkId: string, userData?: any) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
     if (!user) throw new NotFoundException('User not found');

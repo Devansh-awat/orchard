@@ -4,7 +4,7 @@ import { Agent, fetch as pinnedFetch } from 'undici';
 import { lookup as dnsLookupAsync } from 'dns/promises';
 import { isIP } from 'net';
 
-const BLOCKED_HOST_SUFFIXES = [
+export const BLOCKED_HOST_SUFFIXES = [
   '.svc',
   '.cluster.local',
   '.internal',

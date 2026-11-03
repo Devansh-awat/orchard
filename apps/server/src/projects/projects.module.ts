@@ -41,6 +41,7 @@ import { EnvironmentsController } from './environments.controller';
 import { OverviewController } from './overview.controller';
 import { ProjectTransfersController } from './project-transfers.controller';
 import { RegistryCredentialsController } from './registry-credentials.controller';
+import { ImagePortsController } from './image-ports.controller';
 import { NamespaceTeardownService } from './namespace-teardown.service';
 import { RolloutStatusService } from './rollout-status.service';
 import { RolloutController, RolloutPinInterceptor } from './rollout.controller';
@@ -114,6 +115,7 @@ import { DatabaseAdminController } from './database-admin.controller';
     OverviewController,
     ProjectTransfersController,
     RegistryCredentialsController,
+    ImagePortsController,
     RolloutController
   ],
   exports: [

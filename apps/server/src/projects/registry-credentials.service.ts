@@ -5,6 +5,7 @@ import { AuditService } from '../audit/audit.service';
 import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { BlockedDestinationError, guardedFetch } from '../notifications/webhook-guard';
+import { inspectImagePorts, type ImagePorts, type RegistryCredential } from './image-ports';
 import {
   REGISTRY_PULL_SECRET_NAME,
   bearerTokenUrl,
@@ -298,6 +299,46 @@ export class RegistryCredentialsService {
       ...next,
       ...wanted
     ]);
+  }
+
+  async pullCredential(
+    scope: { projectId: string } | { organizationId: string },
+    registry: string
+  ): Promise<RegistryCredential | null> {
+    let organizationId: string | null = null;
+    if ('projectId' in scope) {
+      const own = await this.prisma.registryCredential.findFirst({
+        where: { projectId: scope.projectId, registry },
+        select: { username: true, password: true }
+      });
+      const password = own ? this.crypto.open(own.password) : null;
+      if (own && password) return { username: own.username, password };
+      const project = await this.prisma.project.findUnique({
+        where: { id: scope.projectId },
+        select: { organizationId: true }
+      });
+      organizationId = project?.organizationId ?? null;
+    } else {
+      organizationId = scope.organizationId;
+    }
+    if (!organizationId) return null;
+    const inherited = await this.prisma.organizationRegistryCredential.findFirst({
+      where: { organizationId, registry },
+      select: { username: true, password: true }
+    });
+    const password = inherited ? this.crypto.open(inherited.password) : null;
+    return inherited && password ? { username: inherited.username, password } : null;
+  }
+
+  detectImagePorts(
+    image: unknown,
+    scope: { projectId: string } | { organizationId: string }
+  ): Promise<ImagePorts> {
+    return inspectImagePorts(image, {
+      credentialFor: (registry) => this.pullCredential(scope, registry),
+      onFailure: (reason, registry) =>
+        this.logger.debug(`image port detection on ${registry ?? 'no registry'}: ${reason}`)
+    });
   }
 
   private async authsFor(projectId: string) {
