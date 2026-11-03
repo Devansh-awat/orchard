@@ -40,6 +40,7 @@ import { PodLogCaptureService } from '../kubernetes/pod-log-capture.service';
 import { GitHubService } from '../github/github.service';
 import { UsersService } from '../users/users.service';
 import { RolloutPinInterceptor } from './rollout.controller';
+import { autoUrlChoice } from './auto-url';
 
 @Auth()
 @Controller('projects')
@@ -718,6 +719,7 @@ export class ProjectsController {
         containerPort?: number;
         servicePort?: number;
         protocol?: string;
+        reach?: string;
       }[];
       replicas?: number;
       env?: { key: string; value: string }[];
@@ -791,13 +793,18 @@ export class ProjectsController {
     const declaredPort = Boolean(port || (Array.isArray(ports) && ports.length > 0));
     if ((body.autoUrl ?? declaredPort) && result?.id) {
       try {
-        const withUrl = await this.ingress.createAutoIngressForDeployment(result.id, req.user.sub, {
-          email: req.user.email,
-          username: req.user.username,
-          firstName: req.user.firstName,
-          lastName: req.user.lastName,
-          imageUrl: req.user.imageUrl
-        });
+        const withUrl = await this.ingress.createAutoIngressForDeployment(
+          result.id,
+          req.user.sub,
+          {
+            email: req.user.email,
+            username: req.user.username,
+            firstName: req.user.firstName,
+            lastName: req.user.lastName,
+            imageUrl: req.user.imageUrl
+          },
+          autoUrlChoice(ports)
+        );
         if (withUrl) return withUrl;
       } catch (error) {
         console.warn(
@@ -894,6 +901,7 @@ export class ProjectsController {
         containerPort?: number;
         servicePort?: number;
         protocol?: string;
+        reach?: string;
       }[];
       replicas?: number;
       env?: { key: string; value: string }[];
@@ -941,7 +949,8 @@ export class ProjectsController {
         const withUrl = await this.ingress.createAutoIngressForDeployment(
           result.id,
           req.user.externalAuthId || req.user.sub,
-          userData
+          userData,
+          autoUrlChoice(body.ports)
         );
         if (withUrl) return withUrl;
       } catch (error) {
