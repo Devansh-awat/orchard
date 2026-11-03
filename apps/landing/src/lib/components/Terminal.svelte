@@ -61,15 +61,15 @@
 	</div>
 	<div class="p-6 font-mono text-[clamp(12px,1.1vw,14px)] leading-[1.85] text-night-100">
 		{#each lines as line, i (i)}
-			<p class="break-all">
+			<p class="wrap-anywhere">
 				{#if line.kind === 'cmd'}
 					<span class="text-rose">$</span> <span>{line.text}</span>
 				{:else if line.kind === 'ok'}
 					<span class="text-live">✓</span> <span>{line.text}</span>
 				{:else if line.kind === 'out'}
-					<span class="whitespace-pre-wrap pl-4">{line.text}</span>
+					<span class="block pl-4 whitespace-pre-wrap">{line.text}</span>
 				{:else}
-					<span class="whitespace-pre-wrap pl-4 text-night-300">{line.text}</span>
+					<span class="block pl-4 whitespace-pre-wrap text-night-300">{line.text}</span>
 				{/if}
 			</p>
 		{/each}
