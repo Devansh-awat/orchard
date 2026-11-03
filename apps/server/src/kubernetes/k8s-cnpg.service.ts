@@ -449,7 +449,11 @@ export class K8sCnpgService implements OnApplicationBootstrap {
   async ensureDatabasePlatformPolicy(namespace: string): Promise<void> {
     this.ensureKubeConfig();
     const networking = this.kc!.makeApiClient(k8s.NetworkingV1Api);
-    const body = databasePlatformPolicy(namespace);
+    const withoutCilium = !(await this.kubernetes.isCiliumAvailable());
+    const body = databasePlatformPolicy(namespace, {
+      apiserver: withoutCilium ? await this.kubernetes.apiserverEndpoints() : null,
+      operatorNamespace: withoutCilium ? this.CNPG_OPERATOR_NAMESPACE : null
+    });
     try {
       await networking.createNamespacedNetworkPolicy(namespace, body);
     } catch (e: any) {

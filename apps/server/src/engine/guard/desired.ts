@@ -14,6 +14,8 @@ import {
   cnpgApiserverPolicy,
   cnpgOperatorPolicy,
   databasePlatformPolicy,
+  cnpgOperatorNamespace,
+  type ApiserverEndpoints,
   namespaceHasProtectedIngress,
   projectDatabasePolicy,
   projectNamespaces,
@@ -50,7 +52,8 @@ export class PrismaGuardDesired implements GuardDesired {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ciliumAvailable: () => Promise<boolean>,
-    private readonly cluster: GuardCluster
+    private readonly cluster: GuardCluster,
+    private readonly apiserver: () => Promise<ApiserverEndpoints | null> = async () => null
   ) {}
 
   async desired(key: GuardKey, hint: GuardManifest | null): Promise<DesiredObject | null> {
@@ -145,7 +148,12 @@ export class PrismaGuardDesired implements GuardDesired {
     }
     if (key.name === DATABASE_PLATFORM_POLICY) {
       const count = await this.prisma.database.count({ where: { mode: 'cnpg', namespace: ns } });
-      return count > 0 ? (databasePlatformPolicy(ns) as GuardManifest) : null;
+      if (count === 0) return null;
+      const withoutCilium = !(await this.ciliumAvailable());
+      return databasePlatformPolicy(ns, {
+        apiserver: withoutCilium ? await this.apiserver() : null,
+        operatorNamespace: withoutCilium ? cnpgOperatorNamespace() : null
+      }) as GuardManifest;
     }
     if (key.name === PROJECT_DATABASES_POLICY) {
       const project = await this.prisma.project.findUnique({

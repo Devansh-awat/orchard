@@ -3,6 +3,7 @@ import { parseMemory } from './quantity';
 import * as k8s from '@kubernetes/client-node';
 import { clusterPods, type SnapshotRead } from './cluster-snapshot';
 import { PrismaService } from '../prisma/prisma.service';
+import type { ApiserverEndpoints } from './security-policies';
 
 export const ALLOWED_INGRESS_ANNOTATION_KEYS = new Set<string>([
   'cert-manager.io/cluster-issuer',
@@ -358,6 +359,38 @@ export class KubernetesService {
   private ciliumProbe: { at: number; result: boolean } | null = null;
 
   private static readonly CILIUM_PROBE_TTL_MS = 5 * 60 * 1000;
+
+  private apiserverProbe: { at: number; result: ApiserverEndpoints | null } | null = null;
+
+  async apiserverEndpoints(): Promise<ApiserverEndpoints | null> {
+    if (!this.kc) return null;
+    const cached = this.apiserverProbe;
+    if (cached && Date.now() - cached.at < KubernetesService.CILIUM_PROBE_TTL_MS) {
+      return cached.result;
+    }
+    try {
+      const core = this.kc.makeApiClient(k8s.CoreV1Api);
+      const [{ body: service }, { body: endpoints }] = await Promise.all([
+        core.readNamespacedService('kubernetes', 'default'),
+        core.readNamespacedEndpoints('kubernetes', 'default')
+      ]);
+      const subsets = endpoints.subsets ?? [];
+      const ips = [
+        ...(service.spec?.clusterIPs ?? [service.spec?.clusterIP]),
+        ...subsets.flatMap((s) => (s.addresses ?? []).map((a) => a.ip))
+      ].filter((ip): ip is string => Boolean(ip) && ip !== 'None');
+      const ports = [
+        ...(service.spec?.ports ?? []).map((p) => p.port),
+        ...subsets.flatMap((s) => (s.ports ?? []).map((p) => p.port))
+      ];
+      const result = ips.length ? { ips: [...new Set(ips)], ports: [...new Set(ports)] } : null;
+      this.apiserverProbe = { at: Date.now(), result };
+      return result;
+    } catch (err) {
+      console.warn(`[K8s] could not read the API server endpoints: ${(err as Error).message}`);
+      return cached?.result ?? null;
+    }
+  }
 
   /**
    * Whether Cilium-backed edge features (basic auth via CiliumEnvoyConfig,

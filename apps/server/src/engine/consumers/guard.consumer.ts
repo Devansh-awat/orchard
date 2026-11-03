@@ -61,7 +61,8 @@ export class GuardConsumer implements OnModuleDestroy {
     this.desired = new PrismaGuardDesired(
       prisma,
       () => kubernetes.isCiliumAvailable(),
-      this.cluster
+      this.cluster,
+      () => kubernetes.apiserverEndpoints()
     );
   }
 

@@ -46,6 +46,11 @@ export function r2ProxyNamespace(): string {
   return process.env.PLATFORM_R2_PROXY_NAMESPACE || 'orchard-r2-proxy';
 }
 
+export interface ApiserverEndpoints {
+  ips: string[];
+  ports: number[];
+}
+
 export interface StorageEgress {
   namespace: string;
   port: number;
@@ -231,10 +236,49 @@ export function projectDatabasePolicy(
 
 export function databasePlatformPolicy(
   namespace: string,
-  opts: { metricsNamespace?: string; storage?: StorageEgress | null } = {}
+  opts: {
+    metricsNamespace?: string;
+    storage?: StorageEgress | null;
+    apiserver?: ApiserverEndpoints | null;
+    operatorNamespace?: string | null;
+  } = {}
 ): k8s.V1NetworkPolicy {
   const metricsNamespace = opts.metricsNamespace ?? platformMetricsNamespace();
   const storage = opts.storage === undefined ? objectStorageEgress() : opts.storage;
+  const egress: k8s.V1NetworkPolicyEgressRule[] = [];
+  if (storage) {
+    egress.push({
+      to: namespacePeers([storage.namespace]),
+      ports: [{ protocol: 'TCP', port: storage.port }]
+    });
+  }
+  if (opts.apiserver?.ips.length) {
+    egress.push({
+      to: opts.apiserver.ips.map((ip) => ({
+        ipBlock: { cidr: ip.includes(':') ? `${ip}/128` : `${ip}/32` }
+      })),
+      ports: opts.apiserver.ports.map((port) => ({ protocol: 'TCP', port }))
+    });
+  }
+  const ingress: k8s.V1NetworkPolicyIngressRule[] = [
+    {
+      from: namespacePeers([metricsNamespace]),
+      ports: [{ protocol: 'TCP', port: CNPG_METRICS_PORT }]
+    }
+  ];
+  if (opts.operatorNamespace) {
+    ingress.push({
+      from: [
+        {
+          namespaceSelector: {
+            matchLabels: { 'kubernetes.io/metadata.name': opts.operatorNamespace }
+          },
+          podSelector: { matchLabels: { 'app.kubernetes.io/name': 'cloudnative-pg' } }
+        }
+      ],
+      ports: [{ protocol: 'TCP', port: 8000 }]
+    });
+  }
   return {
     apiVersion: 'networking.k8s.io/v1',
     kind: 'NetworkPolicy',
@@ -245,23 +289,9 @@ export function databasePlatformPolicy(
     },
     spec: {
       podSelector: { matchExpressions: [{ key: 'cnpg.io/cluster', operator: 'Exists' }] },
-      policyTypes: storage ? ['Ingress', 'Egress'] : ['Ingress'],
-      ingress: [
-        {
-          from: namespacePeers([metricsNamespace]),
-          ports: [{ protocol: 'TCP', port: CNPG_METRICS_PORT }]
-        }
-      ],
-      ...(storage
-        ? {
-            egress: [
-              {
-                to: namespacePeers([storage.namespace]),
-                ports: [{ protocol: 'TCP', port: storage.port }]
-              }
-            ]
-          }
-        : {})
+      policyTypes: egress.length ? ['Ingress', 'Egress'] : ['Ingress'],
+      ingress,
+      ...(egress.length ? { egress } : {})
     }
   };
 }
