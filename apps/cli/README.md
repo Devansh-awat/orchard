@@ -63,6 +63,14 @@ orchard auth login --no-browser         # print the URL instead of opening it
 ORCHARD_API_TOKEN=orch_xxx orchard ...  # skip login entirely (agents/CI)
 ```
 
+`--no-browser` still finishes through a callback to a random port on `localhost`,
+so on a remote box the browser's machine has to reach it. The command prints the
+port and the tunnel to open from that machine:
+
+```sh
+ssh -L <port>:127.0.0.1:<port> <remote-host>
+```
+
 Tokens carry scopes (`read`, `deploy`, `exec`; each includes the previous) and
 live at most 90 days. Mint and manage them from the CLI:
 

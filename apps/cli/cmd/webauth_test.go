@@ -15,6 +15,20 @@ import (
 	"github.com/hackclub/orchard/cli/internal/config"
 )
 
+func TestManualAuthPrintsTheTunnelNotABrowser(t *testing.T) {
+	var out strings.Builder
+	printManualAuth(&out, "https://orchard.example.com/cli/auth?port=51234", 51234)
+	got := out.String()
+	if strings.Contains(got, "opening browser") {
+		t.Fatalf("--no-browser still claims to open one: %q", got)
+	}
+	for _, want := range []string{"https://orchard.example.com/cli/auth?port=51234", "ssh -L 51234:127.0.0.1:51234"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in %q", want, got)
+		}
+	}
+}
+
 // drives webLogin by capturing the printed callback URL and simulating the
 // browser hitting the loopback endpoint, exactly as the /cli/auth page would.
 func TestWebLoginLoopback(t *testing.T) {

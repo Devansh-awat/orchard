@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -113,10 +114,12 @@ func webLogin(cfg *config.Config, webBase string, openBrowserFlag bool) error {
 		}
 	}()
 
-	fmt.Fprintln(os.Stderr, output.Dim("opening browser to authorize…"))
-	fmt.Fprintln(os.Stderr, output.Dim("if it doesn't open, visit:\n  ")+authURL)
 	if openBrowserFlag {
+		fmt.Fprintln(os.Stderr, output.Dim("opening browser to authorize…"))
+		fmt.Fprintln(os.Stderr, output.Dim("if it doesn't open, visit:\n  ")+authURL)
 		_ = api.OpenBrowser(authURL)
+	} else {
+		printManualAuth(os.Stderr, authURL, port)
 	}
 
 	select {
@@ -142,6 +145,14 @@ func webLogin(cfg *config.Config, webBase string, openBrowserFlag bool) error {
 	}
 	output.Successf("logged in to %s as %s", cfg.APIURL, displayUser(me))
 	return nil
+}
+
+func printManualAuth(w io.Writer, authURL string, port int) {
+	fmt.Fprintln(w, output.Dim("open this in a browser to authorize:\n  ")+authURL)
+	fmt.Fprintln(w, output.Dim(fmt.Sprintf(
+		"it calls back to localhost:%d on the machine with the browser. On a remote box, tunnel it first:\n  ssh -L %d:127.0.0.1:%d <this-host>",
+		port, port, port,
+	)))
 }
 
 func randomState() (string, error) {
