@@ -96,7 +96,7 @@ model TailscaleConnection {
 model ApiToken {
   id                   String    @id @default(uuid()) @db.Uuid
   name                 String    @db.VarChar(255)
-  // sha256 hex digest of the plaintext token. Plaintext is never persisted —
+  // sha256 hex digest of the plaintext token. Plaintext is never persisted:
   // a DB compromise (read replica, backup leak) yields hashes, not working
   // credentials. Lookup is by hash, so authentication still hits one indexed row.
   tokenHash            String    @unique @map("token_hash") @db.VarChar(128)
@@ -353,7 +353,7 @@ model OrganizationMember {
 
   // Per-org profile the IdP owns. The SCIM resource is this membership, but
   // userName/firstName/lastName live on the shared User row that every other
-  // org also reads — writing there let one org's IdP rename someone everywhere,
+  // org also reads: writing there let one org's IdP rename someone everywhere,
   // and made RFC 7644 replace-on-omit unsafe to implement. SCIM writes the User
   // row only when it creates the account; after that it owns these instead.
   scimUserName    String? @map("scim_user_name") @db.VarChar(255)
@@ -376,7 +376,7 @@ model OrganizationInvitation {
   organizationId String           @map("organization_id") @db.Uuid
   email          String           @db.VarChar(255)
   role           OrganizationRole @default(member)
-  // Legacy plaintext column. Nullable now — the 20260515180100 migration
+  // Legacy plaintext column. Nullable: the 20260515180100 migration
   // nulled every backfilled row so a DB-read foothold can't mint working
   // invite links. New code writes NULL here; lookups use `tokenHash`.
   token          String?          @unique @db.VarChar(255)
@@ -428,13 +428,13 @@ model Project {
   icon             String?  @db.VarChar(500)
   backgroundImage  String?  @map("background_image") @db.VarChar(1000)
   namespace        String   @db.VarChar(100)
-  // Per-project caps — override the org-level share (null = inherit from org).
+  // Per-project caps: override the org-level share (null = inherit from org).
   cpuLimitMilli    Int?     @map("cpu_limit_milli")
   memoryLimitBytes BigInt?  @map("memory_limit_bytes")
   maxPods          Int?     @map("max_pods")
   maxServices      Int?     @map("max_services")
   createdBy        String?  @map("created_by") @db.Uuid
-  // Project owner — deployments under this project are accredited to this user's allowance.
+  // Project owner: deployments under this project are accredited to this user's allowance.
   // Backfilled from createdBy on migration; transferable later.
   ownerId          String?  @map("owner_id") @db.Uuid
   createdAt        DateTime @default(now()) @map("created_at") @db.Timestamp(6)
@@ -656,9 +656,9 @@ model Deployment {
   envObservedHash      String?            @map("env_observed_hash") @db.VarChar(64)
   envConflicts         Json?              @map("env_conflicts") @db.JsonB
   githubRepo           String?            @map("github_repo") @db.VarChar(500)
-  // GitHub's numeric repository id — the only part of a repo that survives a
+  // GitHub's numeric repository id, the only part of a repo that survives a
   // rename. Auto-deploy matches on this first and on `githubRepo` second, so
-  // renaming a repo on GitHub no longer silently detaches its deployments.
+  // renaming a repo on GitHub does not silently detach its deployments.
   githubRepoId         BigInt?            @map("github_repo_id")
   githubBranch         String?            @map("github_branch") @db.VarChar(255)
   dockerfilePath       String?            @map("dockerfile_path") @db.VarChar(500)
@@ -673,7 +673,7 @@ model Deployment {
   persistentBuildCache Boolean            @default(false) @map("persistent_build_cache")
   builderOverride      String?            @map("builder_override") @db.VarChar(20)
   // Zero-config build settings for `railpack` builds. Every one of these is
-  // null by default, meaning "whatever Railpack detected" — a non-null value
+  // null by default, meaning "whatever Railpack detected": a non-null value
   // becomes a RAILPACK_* override on the build. Railpack's own merge order
   // (options < env < railpack.json) means a repo that commits a railpack.json
   // still wins over anything set here, which is the intended escape hatch.
@@ -695,7 +695,7 @@ model Deployment {
   // Non-null turns the app into a static site: Railpack builds it, then serves
   // this directory with Caddy on $PORT with index.html fallback.
   outputDirectory      String?            @map("output_directory") @db.VarChar(500)
-  // Reconciled from the build's railpack-info.json — what Railpack actually
+  // Reconciled from the build's railpack-info.json: what Railpack actually
   // detected, as opposed to what the create-form guessed.
   detectedConfig       Json?              @map("detected_config") @db.JsonB
   // Local-upload builds ("orchard up"): R2 object key + sha256 of the last
@@ -757,7 +757,7 @@ model Deployment {
   startupFailureThreshold Int     @default(30) @map("startup_failure_threshold")
   // The HEALTHCHECK the last build read out of the repo's Dockerfile, if it
   // declared one. It wins over the columns above, because it ships with the
-  // code — unless the user says otherwise by setting the override flag.
+  // code, unless the user says otherwise by setting the override flag.
   dockerfileHealthCheck   Json?   @map("dockerfile_health_check")
   healthCheckOverride     Boolean @default(false) @map("health_check_override")
 
@@ -963,7 +963,7 @@ model DeploymentWebhookToken {
   // after their hash is backfilled. New code must look up by `tokenHash`.
   token                 String?   @unique @db.VarChar(128)
   // SHA-256 hex digest of the plaintext token. Webhook tokens are bearer
-  // secrets — storing them in plaintext turned a DB-read foothold (backup
+  // secrets: storing them in plaintext turns a DB-read foothold (backup
   // leak, replica access) into working triggers.
   tokenHash             String    @unique @map("token_hash") @db.VarChar(128)
   label                 String?   @db.VarChar(100)
@@ -1077,7 +1077,7 @@ model Pod {
 }
 
 // Debounced crash/recovery state per deployment, derived from the mirrored
-// `pods` rows rather than from in-process timers — so it survives shard
+// `pods` rows rather than from in-process timers, so it survives shard
 // failover and a crash that resolves while no replica was watching still
 // resolves here. Both edges are level-triggered: a deployment is announced
 // crashing once it has held a crashing pod for CRASH_CONFIRM, and recovered
@@ -1851,7 +1851,7 @@ model ComposeStack {
   status      String  @default("deploying") @db.VarChar(50)
   lastError   String? @map("last_error") @db.Text
 
-  // GitHub source — when set, the compose file is fetched from GitHub on
+  // GitHub source: when set, the compose file is fetched from GitHub on
   // every (re)deploy and `build:` services are built into Harbor images.
   githubRepo           String? @map("github_repo") @db.VarChar(500)
   githubBranch         String? @map("github_branch") @db.VarChar(255)
@@ -1999,7 +1999,7 @@ model OrgSsoSettings {
 //   - provisioning: an org IdP may only mint NEW accounts inside a namespace
 //     the org owns. Without it, any tenant admin could point a hostile IdP at
 //     ceo@bigcorp.com and pre-create that account before its real owner ever
-//     signs up — the squatting half of the SSO threat model.
+//     signs up: the squatting half of the SSO threat model.
 //
 // Unverified rows are harmless placeholders; nothing reads them but the
 // settings screen. Verification is exclusive: the partial unique index in the
@@ -2317,7 +2317,7 @@ model ScimToken {
 // deactivation as a state change, not a delete: the resource stays readable and
 // the same id has to come back to life on `active: true`. We still drop the
 // organization_members row so access is genuinely revoked, and park the SCIM
-// identity here — reusing the old membership id as the primary key keeps the
+// identity here: reusing the old membership id as the primary key keeps the
 // SCIM resource id stable across deactivate/reactivate. DELETE clears both.
 model ScimDeprovisionedMember {
   id             String           @id @db.Uuid
@@ -2350,7 +2350,7 @@ model AuditLog {
   // Who did it. Null = system / unauthenticated action.
   actorUserId    String?  @map("actor_user_id") @db.Uuid
   actorEmail     String?  @map("actor_email") @db.VarChar(255)
-  // Scoping. All three nullable — a global event has no org, a project event has no deployment, etc.
+  // Scoping. All three nullable: a global event has no org, a project event has no deployment, etc.
   organizationId String?  @map("organization_id") @db.Uuid
   projectId      String?  @map("project_id") @db.Uuid
   deploymentId   String?  @map("deployment_id") @db.Uuid
