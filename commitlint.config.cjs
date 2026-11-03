@@ -5,12 +5,15 @@
 //   fix(r2-proxy): ...    -> bumps `r2-proxy` only (patch)
 //   feat!: ...  / BREAKING CHANGE footer -> major
 //   feat: ...  (no scope) -> repo-wide: bumps EVERY service + the umbrella
-//   chore/docs/test/...   -> no release (still allowed)
+//   chore: ...            -> no release
+//
+// feat, fix and chore are the only types allowed.
 //
 // The umbrella (`orchard`) version always tracks the highest bump seen.
 module.exports = {
   extends: ['@commitlint/config-conventional'],
   rules: {
+    'type-enum': [2, 'always', ['feat', 'fix', 'chore']],
     // Empty scope is allowed and means "repo-wide". When a scope is given it
     // must be a real service (or a meta scope) so it routes correctly.
     'scope-enum': [
@@ -31,7 +34,10 @@ module.exports = {
         'release',
         'ci',
         'deps',
-        'repo'
+        'repo',
+        'landing',
+        'docs',
+        'grafts'
       ]
     ]
   }
