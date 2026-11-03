@@ -46,6 +46,27 @@ test('only images Orchard pushed to its own registry project count as built here
   assert.equal(platform.isPlatformBuiltImage('zot.example.com/orchard'), false);
 });
 
+test('a build with no registry configured fails and names what is missing', () => {
+  assert.throws(
+    () => platform.assertBuildRegistryConfigured({}),
+    /DOCKER_REGISTRY_PUSH and DOCKER_REGISTRY_PULL are not set/
+  );
+  assert.throws(
+    () =>
+      platform.assertBuildRegistryConfigured({
+        DOCKER_REGISTRY_PUSH: 'zot:5000',
+        DOCKER_REGISTRY_PULL: ' '
+      }),
+    /DOCKER_REGISTRY_PULL is not set/
+  );
+  assert.doesNotThrow(() =>
+    platform.assertBuildRegistryConfigured({
+      DOCKER_REGISTRY_PUSH: 'zot:5000',
+      DOCKER_REGISTRY_PULL: 'zot.example.com'
+    })
+  );
+});
+
 test('third-party images keep whatever placement they had', () => {
   const affinity = {
     nodeAffinity: {

@@ -79,11 +79,11 @@ recognised. Anything without a default is optional unless the description says o
 | `EMAIL_AVATAR_LOOKUP` |  | Import a profile picture from Gravatar/Libravatar when a user has one set up for their email. The server does the lookup and copies the image into R2, so users' browsers never contact the avatar service and no email hash leaks to it from a viewer's IP. Set to false to never look anything up; requires R2. |
 | `EMAIL_AVATAR_PROVIDERS` |  | Comma-separated, tried in order. Defaults to "libravatar,gravatar". |
 | `BUILD_MODE` | `local` | ── Image builds ───────────────────────────────────────────────────────────── local (docker daemon) \| kubernetes (in-cluster buildkit jobs) |
-| `DOCKER_REGISTRY_PUSH` |  |  |
+| `DOCKER_REGISTRY_PUSH` |  | Both are required to build images. With either unset, builds fail and say so. |
 | `DOCKER_REGISTRY_PULL` |  |  |
 | `REGISTRY_PROJECT` | `orchard` |  |
 | `REGISTRY_PULL_SECRET_NAME` |  |  |
-| `REGISTRY_HTTP_HOSTS` |  |  |
+| `REGISTRY_HTTP_HOSTS` |  | Comma-separated registry hosts reached over plain HTTP. Anything not listed is HTTPS. |
 | `HARBOR_USERNAME` |  |  |
 | `HARBOR_PASSWORD` |  |  |
 | `HARBOR_API_URL` |  | Harbor API base for vulnerability scan results (the app Security tab). Defaults to https://$DOCKER_REGISTRY_PULL; set it to reach Harbor's core service in-cluster. |

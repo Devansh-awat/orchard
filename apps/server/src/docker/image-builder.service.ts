@@ -36,7 +36,11 @@ import {
   secretValuesToMask
 } from './build-log-redaction';
 import { BUILDER_NAMESPACE } from './builder-namespace';
-import { BUILD_PLATFORM, buildArchNodeSelector } from './build-platform';
+import {
+  assertBuildRegistryConfigured,
+  BUILD_PLATFORM,
+  buildArchNodeSelector
+} from './build-platform';
 import { BUILDKIT_IMAGE } from './buildkit-image';
 import { BUILDER_ROLE_RULES } from './builder-rbac';
 import { k8sErrorMessage } from '../kubernetes/k8s-error';
@@ -179,13 +183,10 @@ export class ImageBuilderService {
   private readonly builderNamespace = BUILDER_NAMESPACE;
 
   // Internal Harbor registry for pushing (HTTP on port 80)
-  private readonly harborRegistryPush =
-    process.env.DOCKER_REGISTRY_PUSH || 'harbor-core.harbor.svc.cluster.local';
+  private readonly harborRegistryPush = process.env.DOCKER_REGISTRY_PUSH || '';
 
   private readonly plainHttpRegistries = new Set<string>(
-    (process.env.REGISTRY_HTTP_HOSTS || 'harbor-core.harbor.svc.cluster.local,178.156.144.127')
-      .split(',')
-      .filter(Boolean)
+    (process.env.REGISTRY_HTTP_HOSTS || '').split(',').filter(Boolean)
   );
 
   private readonly pusherRegistryHost =
@@ -193,7 +194,7 @@ export class ImageBuilderService {
       ? `${this.harborRegistryPush}:80`
       : this.harborRegistryPush;
 
-  private readonly harborRegistryPull = process.env.DOCKER_REGISTRY_PULL || 'harbor.1mp.dev';
+  private readonly harborRegistryPull = process.env.DOCKER_REGISTRY_PULL || '';
 
   private readonly harborProject = process.env.REGISTRY_PROJECT || 'orchard';
 
@@ -350,8 +351,7 @@ export class ImageBuilderService {
 
   private readonly scratchSize = process.env.BUILDER_SCRATCH_SIZE || '40Gi';
 
-  private readonly scratchStorageClass =
-    process.env.BUILDER_SCRATCH_STORAGE_CLASS || 'longhorn-ssd';
+  private readonly scratchStorageClass = process.env.BUILDER_SCRATCH_STORAGE_CLASS || undefined;
 
   private readonly pendingScheduleTimeoutSeconds = Number(
     process.env.BUILDER_PENDING_SCHEDULE_TIMEOUT_SECONDS || 300
@@ -736,11 +736,15 @@ export class ImageBuilderService {
     const username = process.env.HARBOR_USERNAME || 'admin';
     const password = process.env.HARBOR_PASSWORD || '';
     const auth = registryAuth(username, password);
-    return {
-      [this.harborRegistryPush]: auth,
-      [this.pusherRegistryHost]: auth,
-      [this.harborRegistryPull]: auth
-    };
+    const auths: RegistryAuths = {};
+    for (const host of [
+      this.harborRegistryPush,
+      this.pusherRegistryHost,
+      this.harborRegistryPull
+    ]) {
+      if (host) auths[host] = auth;
+    }
+    return auths;
   }
 
   private async upsertDockerConfigSecret(
@@ -1345,6 +1349,7 @@ exit $EXIT_CODE
   }
 
   async createBuildJob(options: BuildJobOptions): Promise<string> {
+    assertBuildRegistryConfigured();
     this.ensureKubeConfig();
 
     const {
@@ -3622,6 +3627,7 @@ fi
   }
 
   async buildAndPush(options: BuildJobOptions): Promise<string> {
+    assertBuildRegistryConfigured();
     const owned = this.trackBuildSecrets(options);
     try {
       return await this.runBuildAndPush(options);
@@ -4417,7 +4423,7 @@ fi
   }
 
   /**
-   * Parse an image string (e.g. harbor.1mp.dev/orchard/namespace-name:tag)
+   * Parse an image string (e.g. registry.example.com/orchard/namespace-name:tag)
    * and return the repo name (without project prefix) and tag.
    */
   private parseImageRef(image: string): { repoName: string; tag: string | null } {
@@ -4440,7 +4446,7 @@ fi
   private getHarborAuth(): { authHeader: string; registryUrl: string } | null {
     const harborUsername = process.env.HARBOR_USERNAME;
     const harborPassword = process.env.HARBOR_PASSWORD;
-    if (!harborUsername || !harborPassword) {
+    if (!harborUsername || !harborPassword || !this.harborRegistryPull) {
       console.warn(
         '[ImageBuilder] Harbor credentials not configured, skipping registry image deletion'
       );

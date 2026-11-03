@@ -31,16 +31,27 @@ export function buildArchNodeSelector(): Record<string, string> {
   return { [ARCH_NODE_LABEL]: BUILD_ARCH };
 }
 
-function platformRegistryHosts(): string[] {
-  return [
-    process.env.DOCKER_REGISTRY_PULL || 'harbor.1mp.dev',
-    process.env.DOCKER_REGISTRY_PUSH || 'harbor-core.harbor.svc.cluster.local'
-  ].map((h) =>
-    h
-      .replace(/^https?:\/\//, '')
-      .replace(/\/+$/, '')
-      .toLowerCase()
+export function assertBuildRegistryConfigured(env: NodeJS.ProcessEnv = process.env): void {
+  const missing = ['DOCKER_REGISTRY_PUSH', 'DOCKER_REGISTRY_PULL'].filter(
+    (name) => !env[name]?.trim()
   );
+  if (missing.length === 0) return;
+  throw new Error(
+    `Image builds need a container registry, but ${missing.join(' and ')} ${
+      missing.length === 1 ? 'is' : 'are'
+    } not set on the server. Point them at your registry and restart the server.`
+  );
+}
+
+function platformRegistryHosts(): string[] {
+  return [process.env.DOCKER_REGISTRY_PULL, process.env.DOCKER_REGISTRY_PUSH]
+    .filter((h): h is string => Boolean(h))
+    .map((h) =>
+      h
+        .replace(/^https?:\/\//, '')
+        .replace(/\/+$/, '')
+        .toLowerCase()
+    );
 }
 
 export function isPlatformBuiltImage(image: string): boolean {

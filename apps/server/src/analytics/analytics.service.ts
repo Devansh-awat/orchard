@@ -37,7 +37,7 @@ export class AnalyticsService implements OnModuleDestroy {
       return;
     }
     this.client = new PostHog(key, {
-      host: process.env.POSTHOG_HOST || 'https://at.leafd.dev',
+      host: process.env.POSTHOG_HOST || 'https://us.i.posthog.com',
       flushAt: 20,
       flushInterval: 10_000
     });

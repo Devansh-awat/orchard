@@ -55,8 +55,8 @@ LABEL org.opencontainers.image.source="https://github.com/hackclub/orchard"
 WORKDIR /app
 
 ENV NODE_ENV=production
-ENV NO_PROXY=178.156.144.127,harbor.1mp.dev,harbor-core.harbor.svc.cluster.local,localhost,127.0.0.1
-ENV no_proxy=178.156.144.127,harbor.1mp.dev,harbor-core.harbor.svc.cluster.local,localhost,127.0.0.1
+ENV NO_PROXY=localhost,127.0.0.1
+ENV no_proxy=localhost,127.0.0.1
 
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY --from=builder /app/apps/server/package.json ./apps/server/package.json

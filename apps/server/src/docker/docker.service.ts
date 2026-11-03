@@ -26,7 +26,7 @@ import {
   secretValuesToMask
 } from './build-log-redaction';
 import { buildSafeEnv } from '../env/reserved-env';
-import { BUILD_PLATFORM } from './build-platform';
+import { assertBuildRegistryConfigured, BUILD_PLATFORM } from './build-platform';
 import {
   hasRegistryAuths,
   isPullAuthEnvKey,
@@ -83,17 +83,19 @@ interface BuildOptions {
 
 @Injectable()
 export class DockerService {
-  private readonly harborRegistryPush = process.env.DOCKER_REGISTRY_PUSH || '178.156.144.127';
+  private readonly harborRegistryPush = process.env.DOCKER_REGISTRY_PUSH || '';
 
-  private readonly harborRegistryPull = process.env.DOCKER_REGISTRY_PULL || 'harbor.1mp.dev';
+  private readonly harborRegistryPull = process.env.DOCKER_REGISTRY_PULL || '';
 
   private readonly harborProject = process.env.REGISTRY_PROJECT || 'orchard';
 
   private readonly registryNoProxy = [
     this.harborRegistryPush,
     this.harborRegistryPull,
-    ...(process.env.BUILD_NO_PROXY_EXTRA || '').split(',').filter(Boolean)
-  ].join(',');
+    ...(process.env.BUILD_NO_PROXY_EXTRA || '').split(',')
+  ]
+    .filter(Boolean)
+    .join(',');
 
   private activeBuilds = 0;
 
@@ -1437,6 +1439,8 @@ export class DockerService {
   }
 
   async buildAndPushFromGitHub(options: BuildOptions): Promise<string> {
+    assertBuildRegistryConfigured();
+
     const {
       repoUrl,
       branch,
