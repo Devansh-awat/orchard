@@ -448,7 +448,7 @@
 		}
 	}
 
-	async function fetchDockerfiles(repo: Repository, branchName: string) {
+	async function fetchDockerfiles(repo: Pick<Repository, 'full_name'>, branchName: string) {
 		const run = ++detectRun;
 		loadingDockerfiles = true;
 		dockerfiles = [];
@@ -634,12 +634,7 @@
 					selectedBranch = defaultBranch;
 					branch = defaultBranch.name;
 					branchSearch = defaultBranch.name;
-					const dfResponse = await apiFetch(
-						`/apiv1/github/repositories/${owner}/${repoName}/dockerfiles?branch=${encodeURIComponent(defaultBranch.name)}`
-					);
-					if (dfResponse.ok) {
-						dockerfiles = await dfResponse.json();
-					}
+					detectForBranch(defaultBranch.name);
 				}
 			}
 		} catch (e) {
@@ -649,22 +644,25 @@
 		}
 	}
 
+	function detectForBranch(branchName: string) {
+		const ownerRepo = getOwnerRepo();
+		if (ownerRepo) {
+			fetchDockerfiles({ full_name: `${ownerRepo.owner}/${ownerRepo.repo}` }, branchName);
+		}
+	}
+
 	function selectBranch(b: Branch) {
 		selectedBranch = b;
 		branch = b.name;
 		branchSearch = b.name;
-		if (selectedRepo) {
-			fetchDockerfiles(selectedRepo, b.name);
-		}
+		detectForBranch(b.name);
 	}
 
 	function useCustomBranch(name: string) {
 		selectedBranch = null;
 		branch = name;
 		branchSearch = name;
-		if (selectedRepo) {
-			fetchDockerfiles(selectedRepo, name);
-		}
+		detectForBranch(name);
 	}
 
 	function addPort() {
