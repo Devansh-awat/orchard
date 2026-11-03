@@ -152,7 +152,7 @@
     "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.6",
     "cron": "4.4.0",
-    "dd-trace": "^5.106.0",
+    "dd-trace": "^5.134.0",
     "dotenv": "^16.4.5",
     "express": "^5.2.1",
     "hono": "^4.13.5",
