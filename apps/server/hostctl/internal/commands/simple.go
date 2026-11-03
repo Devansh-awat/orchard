@@ -195,6 +195,7 @@ and refreshes the host commands. Extra arguments are passed through to helm.
 				"-f", c.Env.Values,
 				"--timeout", "20m",
 			}, args...)
+			helmArgs = append(helmArgs, clientSideApply(c)...)
 			if err := c.Run("helm", helmArgs...); err != nil {
 				return err
 			}
@@ -245,4 +246,12 @@ and refreshes the host commands. Extra arguments are passed through to helm.
 			return nil
 		},
 	}
+}
+
+func clientSideApply(c *cli.Context) []string {
+	version, err := c.Capture("helm", "version", "--short")
+	if err == nil && strings.HasPrefix(strings.TrimSpace(version), "v4.") {
+		return []string{"--server-side=false"}
+	}
+	return nil
 }

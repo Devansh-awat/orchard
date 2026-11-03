@@ -913,7 +913,7 @@ func installChart(c *cli.Context, id string, chartTar []byte) error {
 		}
 	}
 	c.Printf("installing the %s cluster chart as helm release orchard-graft-%s...\n", id, id)
-	return c.Run("helm", "upgrade", "--install", "orchard-graft-"+id, dir, "--namespace", c.Env.Namespace, "--wait", "--timeout", "10m")
+	return c.Run("helm", append([]string{"upgrade", "--install", "orchard-graft-" + id, dir, "--namespace", c.Env.Namespace, "--wait", "--timeout", "10m"}, clientSideApply(c)...)...)
 }
 
 func dbPrimary(c *cli.Context, values *cli.Values) (string, string, error) {
