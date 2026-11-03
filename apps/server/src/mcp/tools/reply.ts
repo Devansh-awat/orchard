@@ -6,8 +6,14 @@
  *
  * Every tool returns through here so that stays true as tools are added.
  */
+const BUILD_LOGS_OMITTED = '<omitted — call get_build_logs>';
+
+function omitBuildLogs(key: string, value: unknown) {
+  return key === 'buildLogs' && value ? BUILD_LOGS_OMITTED : value;
+}
+
 export function json(value: unknown) {
-  return { content: [{ type: 'text' as const, text: JSON.stringify(value) }] };
+  return { content: [{ type: 'text' as const, text: JSON.stringify(value, omitBuildLogs) }] };
 }
 
 /** For results that are already prose or a raw log, not a structure. */
@@ -16,9 +22,10 @@ export function text(value: string) {
 }
 
 export function structured<T extends Record<string, unknown>>(value: T) {
+  const text = JSON.stringify(value, omitBuildLogs);
   return {
-    content: [{ type: 'text' as const, text: JSON.stringify(value) }],
-    structuredContent: value
+    content: [{ type: 'text' as const, text }],
+    structuredContent: JSON.parse(text) as T
   };
 }
 

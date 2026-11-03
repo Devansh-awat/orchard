@@ -1,4 +1,4 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable, OnModuleDestroy } from '@nestjs/common';
 import type { Request as ExpressRequest, Response as ExpressResponse } from 'express';
 import {
   createMcpHandler,
@@ -11,6 +11,9 @@ import { createOrchardMcpServer, type McpMode } from './server';
 import { McpOAuthService } from './mcp-oauth.service';
 import type { McpScope } from './client';
 import { DEFAULT_MCP_SCOPE, capScope, mcpScopeClaim } from './mcp-scopes';
+import { AnalyticsService } from '../analytics/analytics.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { flagGatedMcpGrafts, graftsHiddenFrom } from '../grafts/mcp';
 
 interface McpAuthExtra {
   sub: string;
@@ -20,6 +23,8 @@ interface McpAuthExtra {
   scope: McpScope;
   apiToken?: boolean;
 }
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function searchParam(request: Request | undefined, name: string): string | null {
   if (!request) return null;
@@ -46,7 +51,11 @@ export class McpTransportService implements OnModuleDestroy {
     })
   };
 
-  constructor(private readonly oauth: McpOAuthService) {}
+  constructor(
+    private readonly oauth: McpOAuthService,
+    @Inject(AnalyticsService) private readonly analytics: AnalyticsService,
+    @Inject(PrismaService) private readonly prisma: PrismaService
+  ) {}
 
   async handle(req: ExpressRequest, res: ExpressResponse, mode: McpMode = 'normal'): Promise<void> {
     await this.nodeHandlers[mode](req, res, req.body);
@@ -56,12 +65,33 @@ export class McpTransportService implements OnModuleDestroy {
     await Promise.all(Object.values(this.handlers).map((handler) => handler.close()));
   }
 
-  private buildServer(ctx: McpRequestContext, mode: McpMode) {
+  private async hiddenGrafts(sub: string | undefined): Promise<Set<string>> {
+    const gated = flagGatedMcpGrafts();
+    if (gated.length === 0 || !this.analytics.configured) return new Set();
+    const user = sub
+      ? await this.prisma.user.findFirst({
+          where: UUID.test(sub) ? { id: sub } : { externalAuthId: sub },
+          select: { id: true }
+        })
+      : null;
+    return graftsHiddenFrom(gated, user?.id ?? null, (flag, userId) =>
+      this.analytics.isFeatureEnabled(flag, userId)
+    );
+  }
+
+  private async buildServer(ctx: McpRequestContext, mode: McpMode) {
     const extra = (ctx.authInfo?.extra ?? {}) as Partial<McpAuthExtra>;
     const scope = capScope(extra.scope ?? DEFAULT_MCP_SCOPE, searchParam(ctx.requestInfo, 'scope'));
     const toolsets = searchParam(ctx.requestInfo, 'toolsets');
+    const hiddenGrafts = mode === 'compact' ? undefined : await this.hiddenGrafts(extra.sub);
     if (extra.apiToken) {
-      return createOrchardMcpServer({ token: ctx.authInfo?.token, scope, toolsets, mode });
+      return createOrchardMcpServer({
+        token: ctx.authInfo?.token,
+        scope,
+        toolsets,
+        mode,
+        hiddenGrafts
+      });
     }
     return createOrchardMcpServer({
       token: ctx.authInfo?.token,
@@ -74,7 +104,8 @@ export class McpTransportService implements OnModuleDestroy {
       },
       scope,
       toolsets,
-      mode
+      mode,
+      hiddenGrafts
     });
   }
 

@@ -1100,7 +1100,7 @@ Use this to:
 - Tail a single file (`tail -n 50 /var/log/app.log`)
 
 The `command` arg can be a string (executed via /bin/sh -c) or a string array (exec'd directly with no shell — preferred when arguments contain special chars).
-Use `list_pods` first to get pod names and the namespace. If `container` is omitted, the first container in the pod spec is used.
+Pass `deploymentId` and the newest ready pod of that deployment is picked for you, which survives pod names changing on every restart. Pass `podName` and `namespace` (from `list_pods`) to target one pod exactly. If `container` is omitted, the first container in the pod spec is used.
 Not for long-running interactive sessions — the call times out (default 60s, max 5min). stdout and stderr are capped at the last 20,000 characters each.
 
 Needs an exec-scoped session: connect with the mcp:exec scope or an orch_ token with exec scope. [sensitive]

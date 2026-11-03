@@ -338,7 +338,7 @@ export class RolloutStatusService {
 
   private async buildLogTail(deploymentId: string): Promise<string> {
     const rows = await this.prisma.$queryRaw<{ tail: string | null }[]>`
-      SELECT right("build_logs", ${BUILD_LOG_TAIL_CHARS}) AS tail
+      SELECT right("build_logs", ${BUILD_LOG_TAIL_CHARS}::int) AS tail
       FROM "deployments" WHERE "id" = ${deploymentId}::uuid`;
     return rows[0]?.tail ?? '';
   }

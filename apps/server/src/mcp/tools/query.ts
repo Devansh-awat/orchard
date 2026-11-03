@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod4';
 import { OrchardClient, path, query as toQuery } from '../client';
-import { capLines, capText, json, paginate, structured, text } from './reply';
+import { capLines, capText, failure, json, paginate, structured, text } from './reply';
 import { pageInput } from './inputs';
 import { deploymentOutput, findOutput, pageOutput } from './outputs';
 
@@ -488,12 +488,7 @@ The build log is omitted here because it is often megabytes — read it with \`g
     },
     async ({ deploymentId }) => {
       const deployment = await client.get(path`/deployments/${deploymentId}`);
-      const { buildLogs, ...rest } = deployment ?? {};
-      const slim = {
-        ...rest,
-        ...(buildLogs ? { buildLogs: '<omitted — call get_build_logs>' } : {})
-      };
-      return structured(slim);
+      return structured(deployment ?? {});
     }
   );
 
@@ -927,15 +922,27 @@ Use this to:
 - Tail a single file (\`tail -n 50 /var/log/app.log\`)
 
 The \`command\` arg can be a string (executed via /bin/sh -c) or a string array (exec'd directly with no shell — preferred when arguments contain special chars).
-Use \`list_pods\` first to get pod names and the namespace. If \`container\` is omitted, the first container in the pod spec is used.
+Pass \`deploymentId\` and the newest ready pod of that deployment is picked for you, which survives pod names changing on every restart. Pass \`podName\` and \`namespace\` (from \`list_pods\`) to target one pod exactly. If \`container\` is omitted, the first container in the pod spec is used.
 Not for long-running interactive sessions — the call times out (default 60s, max 5min). stdout and stderr are capped at the last 20,000 characters each.
 
 Needs an exec-scoped session: connect with the mcp:exec scope or an orch_ token with exec scope.`,
       inputSchema: {
-        podName: z.string().describe('Pod name (from list_pods)'),
+        deploymentId: z
+          .guid()
+          .optional()
+          .describe(
+            'Run in the newest ready pod of this deployment. Use instead of podName/namespace.'
+          ),
+        podName: z
+          .string()
+          .optional()
+          .describe('Exact pod name (from list_pods). Omit to pick one from deploymentId.'),
         namespace: z
           .string()
-          .describe('Kubernetes namespace (from list_pods or get_deployment.namespace)'),
+          .optional()
+          .describe(
+            'Kubernetes namespace (from list_pods). Taken from the deployment when deploymentId is given.'
+          ),
         command: z
           .union([z.string(), z.array(z.string())])
           .describe(
@@ -951,15 +958,29 @@ Needs an exec-scoped session: connect with the mcp:exec scope or an orch_ token 
           .describe('Hard timeout in milliseconds (default 60000, max 300000)')
       }
     },
-    async ({ podName, namespace, command, container, timeoutMs }) => {
-      const result = await client.post(path`/pods/${podName}/exec`, {
-        namespace,
+    async ({ deploymentId, podName, namespace, command, container, timeoutMs }) => {
+      let target = podName;
+      let targetNamespace = namespace;
+      if (deploymentId && (!target || !targetNamespace)) {
+        const [pods, deployment] = await Promise.all([
+          client.get(path`/deployments/${deploymentId}/pods`),
+          client.get(path`/deployments/${deploymentId}`)
+        ]);
+        targetNamespace ??= deployment?.namespace;
+        target ??= pickExecPod(Array.isArray(pods) ? pods : (pods?.pods ?? pods?.items ?? []));
+        if (!target) return failure(`Deployment ${deploymentId} has no running pod to exec into`);
+      }
+      if (!target || !targetNamespace) {
+        return failure('Pass deploymentId, or both podName and namespace');
+      }
+      const result = await client.post(path`/pods/${target}/exec`, {
+        namespace: targetNamespace,
         command,
         ...(container && { container }),
         ...(timeoutMs && { timeoutMs })
       });
       if (typeof result === 'string') return text(capText(result).text);
-      const capped: Record<string, unknown> = { ...(result ?? {}) };
+      const capped: Record<string, unknown> = { pod: target, ...(result ?? {}) };
       for (const key of ['stdout', 'stderr', 'output']) {
         const value = capped[key];
         if (typeof value !== 'string') continue;
@@ -1270,5 +1291,23 @@ Use this to answer "can I deploy this repo" and "which app in this monorepo did 
       inputSchema: {}
     },
     async () => ({ content: [{ type: 'text', text: YAML_FORMAT_GUIDE }] })
+  );
+}
+
+interface ExecCandidate {
+  name: string;
+  status?: string;
+  phase?: string;
+  deletingAt?: string | null;
+  createdAt?: string;
+}
+
+export function pickExecPod(pods: ExecCandidate[]): string | undefined {
+  const live = pods.filter((pod) => !pod.deletingAt);
+  const newest = (list: ExecCandidate[]) =>
+    [...list].sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))[0]?.name;
+  return (
+    newest(live.filter((pod) => pod.status === 'ready')) ??
+    newest(live.filter((pod) => pod.phase === 'Running'))
   );
 }

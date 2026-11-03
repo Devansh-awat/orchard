@@ -25,6 +25,7 @@ export interface OrchardMcpOptions {
   scope?: McpScope;
   toolsets?: string | ToolsetSelection | null;
   mode?: McpMode;
+  hiddenGrafts?: ReadonlySet<string>;
 }
 
 export function orchardClientFor(options: OrchardMcpOptions = {}): OrchardClient {
@@ -70,7 +71,8 @@ export function createOrchardMcpServer(options: OrchardMcpOptions = {}) {
   registerGraftMcpTools(
     server,
     client,
-    (graftId) => selection.allGrafts || selection.grafts.has(graftId)
+    (graftId) =>
+      !options.hiddenGrafts?.has(graftId) && (selection.allGrafts || selection.grafts.has(graftId))
   );
 
   return server;

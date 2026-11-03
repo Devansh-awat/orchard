@@ -56,6 +56,22 @@ function guard(server: object, record: GraftRecord): object {
   });
 }
 
+export function flagGatedMcpGrafts(): string[] {
+  return registrars
+    .filter(({ record }) => record.manifest!.capabilities.includes('flags'))
+    .map(({ record }) => record.id);
+}
+
+export async function graftsHiddenFrom(
+  graftIds: string[],
+  userId: string | null,
+  isEnabled: (flag: string, userId: string) => Promise<boolean>
+): Promise<Set<string>> {
+  if (!userId) return new Set(graftIds);
+  const enabled = await Promise.all(graftIds.map((id) => isEnabled(id, userId).catch(() => false)));
+  return new Set(graftIds.filter((_, index) => !enabled[index]));
+}
+
 export function registerGraftMcpTools(
   server: object,
   client: unknown,
