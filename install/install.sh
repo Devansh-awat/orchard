@@ -1637,6 +1637,24 @@ release_unbound_volumes() {
   release_unbound_volume victoriametrics data-victoriametrics-0 local-path
 }
 
+apply_chart() {
+  local attempt output
+  for attempt in 1 2 3 4 5; do
+    if output=$(helm "$@" 2>&1); then
+      printf '%s\n' "$output"
+      return 0
+    fi
+    printf '%s\n' "$output" >&2
+    case "$output" in
+      *"failed calling webhook"*) ;;
+      *) return 1 ;;
+    esac
+    [ "$attempt" -lt 5 ] || return 1
+    sleep 15
+    wait_for_cnpg_webhook || return 1
+  done
+}
+
 install_orchard() {
   step
 
@@ -1650,7 +1668,7 @@ install_orchard() {
   run_step "CloudNativePG webhook" 1m wait_for_cnpg_webhook
   run_step "checking existing volumes" 10s release_unbound_volumes
   if helm version --short 2>/dev/null | grep -q '^v4\.'; then args+=(--server-side=false); fi
-  run_step "applying the chart" 40s helm "${args[@]}"
+  run_step "applying the chart" 40s apply_chart "${args[@]}"
   run_step "postgres" 3m kubectl -n orchard wait --for=condition=Ready \
     cluster.postgresql.cnpg.io/orchard-db --timeout=10m
   run_step "redis" 30s kubectl -n orchard rollout status deploy/redis --timeout=5m
