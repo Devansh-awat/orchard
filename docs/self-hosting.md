@@ -18,18 +18,19 @@ keep it on your laptop.
 
 ## Cluster prerequisites
 
-| Component                                                                    | Needed for                                                                                       | Notes                                                                                                                       |
-| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| [CloudNativePG](https://cloudnative-pg.io) operator                          | Control-plane DB and every user database                                                         | The chart only creates `Cluster` resources                                                                                  |
-| [Traefik](https://traefik.io) with Gateway API support                       | Control-plane ingress (`IngressRoute`) and user app routing (`HTTPRoute` via a shared `Gateway`) | Gateway API CRDs must be installed                                                                                          |
-| [cert-manager](https://cert-manager.io)                                      | TLS certificates                                                                                 | Plus a DNS-01 `ClusterIssuer` if you want wildcard certs for the app domain (see `infra/charts/orchard/SETUP-wildcards.md`) |
-| A default StorageClass                                                       | Postgres volumes, buildkit cache, Redis, metrics                                                 | Set `tenant.storageClass` / the chart `storageClass` values if it isn't the cluster default                                 |
-| An OCI registry (e.g. [Harbor](https://goharbor.io))                         | Where built user images are pushed and pulled from                                               | Configure via `DOCKER_REGISTRY_PUSH` / `DOCKER_REGISTRY_PULL` / `REGISTRY_PROJECT` server env                               |
-| An ingress controller for tenant ingresses                                   | Custom-domain ingresses for user apps                                                            | Class name via `tenant.ingressClass` (default `haproxy`)                                                                    |
-| L4 LoadBalancer (e.g. [MetalLB](https://metallb.io))                         | Public database exposure and TCP/UDP passthrough                                                 | Only if you enable those features                                                                                           |
-| gVisor / Kata RuntimeClasses                                                 | Sandboxed tenant/builder pods                                                                    | Optional; Talos-specific setup in `values.yaml`                                                                             |
-| [agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) controller | Greenhouse machines on the Kubernetes runner                                                     | Optional; only with `sandbox.enabled`. See [Greenhouse](#greenhouse-ai-dev-machines)                                        |
-| Datadog agent                                                                | APM/tracing                                                                                      | Optional; `datadog.enabled: false` turns it all off                                                                         |
+| Component                                                                    | Needed for                                                                       | Notes                                                                                                                       |
+| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| [CloudNativePG](https://cloudnative-pg.io) operator                          | Control-plane DB and every user database                                         | The chart only creates `Cluster` resources                                                                                  |
+| [Traefik](https://traefik.io)                                                | Control-plane ingress (`IngressRoute`)                                           |                                                                                                                             |
+| Gateway API CRDs                                                             | The chart's `Gateway` for database exposure                                      | Not needed with `gateway.enabled: false`                                                                                    |
+| [cert-manager](https://cert-manager.io)                                      | TLS certificates                                                                 | Plus a DNS-01 `ClusterIssuer` if you want wildcard certs for the app domain (see `infra/charts/orchard/SETUP-wildcards.md`) |
+| A default StorageClass                                                       | Postgres volumes, buildkit cache, Redis, metrics                                 | Set `tenant.storageClass` / the chart `storageClass` values if it isn't the cluster default                                 |
+| An OCI registry (e.g. [Harbor](https://goharbor.io))                         | Where built user images are pushed and pulled from                               | Configure via `DOCKER_REGISTRY_PUSH` / `DOCKER_REGISTRY_PULL` / `REGISTRY_PROJECT` server env                               |
+| An ingress controller                                                        | Every app URL. The server creates an `Ingress` per host and never an `HTTPRoute` | Class name via `tenant.ingressClass` (default `haproxy`)                                                                    |
+| L4 LoadBalancer (e.g. [MetalLB](https://metallb.io))                         | Public database exposure and TCP/UDP passthrough                                 | Only if you enable those features                                                                                           |
+| gVisor / Kata RuntimeClasses                                                 | Sandboxed tenant/builder pods                                                    | Optional; Talos-specific setup in `values.yaml`                                                                             |
+| [agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) controller | Greenhouse machines on the Kubernetes runner                                     | Optional; only with `sandbox.enabled`. See [Greenhouse](#greenhouse-ai-dev-machines)                                        |
+| Datadog agent                                                                | APM/tracing                                                                      | Optional; `datadog.enabled: false` turns it all off                                                                         |
 
 ## ServiceAccount permissions
 
@@ -91,8 +92,9 @@ is chosen.
 You need domains you control:
 
 - **App domain** (`gateway.http.appDomain`, e.g. `apps.example.com`): wildcard
-  DNS `*.apps.example.com` pointing at your Gateway's LoadBalancer IP, plus a
-  wildcard certificate (DNS-01). This is the single source of truth: the chart
+  DNS `*.apps.example.com` pointing at your ingress controller's LoadBalancer
+  IP. Each host gets its own certificate unless you add a wildcard (see
+  [TLS for app URLs](#tls-for-app-urls)). This is the single source of truth: the chart
   derives the server's `APP_DOMAIN`, the frontend's `PUBLIC_APP_DOMAIN`, and
   `PLATFORM_WILDCARD_DOMAINS` (which generated app URLs like
   `main-forge-16294e.apps.example.com` are built from) from it. Override any of
@@ -245,10 +247,10 @@ The claim link is one-time, so once you close that tab, a session cookie and
 whatever you set up in the first step are all you have. These all work with no
 email and no identity provider:
 
-| Way in      | How                                 | Notes                                                 |
-| ----------- | ----------------------------------- | ----------------------------------------------------- |
-| Passkey     | Setup, or Settings                  | Needs a secure context, so a real certificate         |
-| Password    | Setup, or `orchardctl password set` | Superadmin only. Running `set` again is the reset     |
+| Way in       | How                                 | Notes                                                 |
+| ------------ | ----------------------------------- | ----------------------------------------------------- |
+| Passkey      | Setup, or Settings                  | Needs a secure context, so a real certificate         |
+| Password     | Setup, or `orchardctl password set` | Superadmin only. Running `set` again is the reset     |
 | Sign-in link | `sudo orchardctl login`             | Valid ten minutes, works once. Needs root on the host |
 
 Passkeys need no external service, and passkey sign-in needs no email address:

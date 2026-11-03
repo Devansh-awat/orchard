@@ -252,7 +252,7 @@ ORCHARD_UPDATE_POLICY=manual \
 
 Others: `ORCHARD_VERSION`, `ORCHARD_CHART`, `ORCHARD_IMAGE_REGISTRY`,
 `ORCHARD_IMAGE_REPOSITORY`, `ORCHARD_STATE_DIR`, `ORCHARD_NODE_PORT_RANGE`,
-`ORCHARD_ZOT_NODE_PORT`, `ORCHARD_REGISTRY_HOST`, `ORCHARD_TUNNEL_TOKEN`,
+`ORCHARD_REGISTRY_HOST`, `ORCHARD_TUNNEL_TOKEN`,
 `ORCHARD_MCP`, `ORCHARD_MCP_DOMAIN`, `ORCHARD_METRICS`, `ORCHARD_LOGS`,
 `ORCHARD_IMAGE_SCANNING`, `ORCHARD_OBJECT_STORAGE`, `K3S_VERSION`,
 `GATEWAY_API_VERSION`.
@@ -385,23 +385,25 @@ helm install orchard oci://ghcr.io/hackclub/orchard/charts/orchard \
 
 ### Prerequisites
 
-| Component                    | Needed for                                                                 |
-| ---------------------------- | -------------------------------------------------------------------------- |
-| CloudNativePG operator       | The control-plane database and every database users create                 |
-| Traefik with Gateway API     | Control-plane ingress and app routing (`HTTPRoute` via a shared `Gateway`) |
-| cert-manager                 | TLS, plus a DNS-01 `ClusterIssuer` for wildcard certificates               |
-| A default StorageClass       | Postgres volumes, build cache, Redis, metrics, logs                        |
-| An OCI registry              | Where built images are pushed and pulled                                   |
-| An ingress controller        | Custom-domain ingresses for user apps                                      |
-| L4 LoadBalancer              | Only for public database exposure and TCP/UDP passthrough                  |
-| gVisor / Kata RuntimeClasses | Optional, for sandboxed tenant and builder pods                            |
+| Component                    | Needed for                                                           |
+| ---------------------------- | -------------------------------------------------------------------- |
+| CloudNativePG operator       | The control-plane database and every database users create           |
+| Traefik                      | Control-plane ingress (`IngressRoute`)                               |
+| Gateway API CRDs             | The `Gateway` for database exposure, unless `gateway.enabled: false` |
+| cert-manager                 | TLS, plus a DNS-01 `ClusterIssuer` for wildcard certificates         |
+| A default StorageClass       | Postgres volumes, build cache, Redis, metrics, logs                  |
+| An OCI registry              | Where built images are pushed and pulled                             |
+| An ingress controller        | Every app URL, as an `Ingress` of class `tenant.ingressClass`        |
+| L4 LoadBalancer              | Only for public database exposure and TCP/UDP passthrough            |
+| gVisor / Kata RuntimeClasses | Optional, for sandboxed tenant and builder pods                      |
 
 ### DNS
 
 You need domains you control:
 
-- **App domain** (`APP_DOMAIN`): wildcard DNS pointing at your Gateway's
-  LoadBalancer IP, plus a wildcard certificate via DNS-01.
+- **App domain** (`APP_DOMAIN`): wildcard DNS pointing at your ingress
+  controller's LoadBalancer IP. Each host gets its own certificate unless you add
+  a wildcard.
 - **Ingress CNAME target** (`INGRESS_CNAME`): what users point custom domains at.
 - **Platform domain**: where the Orchard UI lives.
 - **DB domain** (`PUBLIC_DB_DOMAIN`, optional): wildcard for publicly exposed
@@ -419,7 +421,7 @@ tenant:
   storageClass: '' # empty means cluster default
   ingressClass: nginx
   certClusterIssuer: letsencrypt-prod
-signupMode: open
+signupMode: invite_only
 ```
 
 Every variable the server reads is listed in [Configuration](/reference/configuration/).

@@ -41,7 +41,7 @@ Projects carry shared variables and an icon and background of their own.
 
 One deployable unit: an image, a number of replicas, ports, environment,
 resources and storage. In Kubernetes terms it is a Deployment plus the Service,
-HTTPRoute or Ingress, and PersistentVolumeClaims around it.
+Ingress and PersistentVolumeClaims around it.
 
 Apps come from a GitHub repo (Orchard builds the image) or directly from a
 container image.
