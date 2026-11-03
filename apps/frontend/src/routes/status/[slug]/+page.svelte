@@ -23,7 +23,12 @@
 
 	async function load() {
 		try {
-			const url = statusApiUrl(data.slug, location.hostname, env.PUBLIC_BASE_DOMAIN || '');
+			const url = statusApiUrl(
+				data.slug,
+				location.hostname,
+				env.PUBLIC_BASE_DOMAIN || '',
+				env.PUBLIC_PLATFORM_ORIGIN || ''
+			);
 			const res = await fetch(url, { credentials: 'omit' });
 			if (res.status === 404) {
 				error = 'There is no status page here.';

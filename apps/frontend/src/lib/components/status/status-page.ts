@@ -58,10 +58,15 @@ export function componentCopy(status: ComponentStatus): { label: string; tone: T
 	}
 }
 
-export function statusApiUrl(slug: string, hostname: string, baseDomain: string): string {
+export function statusApiUrl(
+	slug: string,
+	hostname: string,
+	baseDomain: string,
+	platformOrigin = ''
+): string {
 	const path = `/apiv1/status/${encodeURIComponent(slug)}`;
 	if (baseDomain && hostname !== baseDomain && hostname.endsWith(`.${baseDomain}`)) {
-		return `https://${baseDomain}${path}`;
+		return `${platformOrigin || `https://${baseDomain}`}${path}`;
 	}
 	return path;
 }

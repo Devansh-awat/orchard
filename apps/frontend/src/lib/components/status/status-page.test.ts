@@ -18,6 +18,22 @@ test('the page reads its data from the apex api when served on a status host', (
 	assert.equal(statusApiUrl('a b', 'orchard.my', 'orchard.my'), '/apiv1/status/a%20b');
 });
 
+test('a status host reads from the platform origin when the api is not on the apex', () => {
+	assert.equal(
+		statusApiUrl(
+			'acme',
+			'acme-status.apps.example.com',
+			'apps.example.com',
+			'https://orchard.example.com'
+		),
+		'https://orchard.example.com/apiv1/status/acme'
+	);
+	assert.equal(
+		statusApiUrl('acme', 'orchard.example.com', 'apps.example.com', 'https://orchard.example.com'),
+		'/apiv1/status/acme'
+	);
+});
+
 test('copy is the canonical status page vocabulary', () => {
 	assert.equal(overallCopy('operational').label, 'All systems operational');
 	assert.equal(overallCopy('degraded').label, 'Partial outage');

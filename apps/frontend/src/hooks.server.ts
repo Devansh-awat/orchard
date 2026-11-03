@@ -5,6 +5,7 @@ import { loadGraftRegistry } from '$lib/server/grafts';
 import { setGraftRegistry } from '$lib/grafts/registry';
 
 const BASE_DOMAIN = env.PUBLIC_BASE_DOMAIN || '';
+const PLATFORM_ORIGIN = env.PUBLIC_PLATFORM_ORIGIN || `https://${BASE_DOMAIN}`;
 
 export const handle: Handle = async ({ event, resolve }) => {
 	// Merge consecutive slashes (`//ysws//projects` → `/ysws/projects`).
@@ -34,8 +35,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 			if (!pathname.startsWith('/apiv1/') && !event.route.id?.startsWith('/status')) {
 				const target =
 					pathname === '/'
-						? `https://${BASE_DOMAIN}/sso?org=${encodeURIComponent(subdomain)}`
-						: `https://${BASE_DOMAIN}${pathname}${event.url.search}`;
+						? `${PLATFORM_ORIGIN}/sso?org=${encodeURIComponent(subdomain)}`
+						: `${PLATFORM_ORIGIN}${pathname}${event.url.search}`;
 				return new Response(null, { status: 302, headers: { Location: target } });
 			}
 		}

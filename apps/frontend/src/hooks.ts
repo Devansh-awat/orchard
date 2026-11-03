@@ -2,6 +2,7 @@ import type { Reroute } from '@sveltejs/kit';
 import { env } from '$env/dynamic/public';
 
 const BASE_DOMAIN = env.PUBLIC_BASE_DOMAIN || '';
+const PLATFORM_ORIGIN = env.PUBLIC_PLATFORM_ORIGIN || `https://${BASE_DOMAIN}`;
 const RESOLVE_TTL_MS = 60_000;
 
 const hosts = new Map<string, { slug: string | null; exp: number }>();
@@ -20,7 +21,7 @@ export const reroute: Reroute = async ({ url, fetch }) => {
 	if (slug === undefined) {
 		try {
 			const res = await fetch(
-				`https://${BASE_DOMAIN}/apiv1/status/resolve?host=${encodeURIComponent(host)}`
+				`${PLATFORM_ORIGIN}/apiv1/status/resolve?host=${encodeURIComponent(host)}`
 			);
 			slug = res.ok ? ((await res.json())?.slug ?? null) : null;
 		} catch {

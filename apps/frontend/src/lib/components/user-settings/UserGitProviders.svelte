@@ -51,7 +51,10 @@
 	let token = $state('');
 
 	const spec = $derived(PROVIDERS.find((p) => p.kind === provider) ?? PROVIDERS[0]);
-	const apiBase = $derived(env.PUBLIC_BASE_DOMAIN ? `https://${env.PUBLIC_BASE_DOMAIN}` : '');
+	const apiBase = $derived(
+		env.PUBLIC_PLATFORM_ORIGIN ||
+			(env.PUBLIC_BASE_DOMAIN ? `https://${env.PUBLIC_BASE_DOMAIN}` : '')
+	);
 	const hasOauth = $derived(!!oauth.gitlab || !!oauth.bitbucket);
 	const canSave = $derived(!!name.trim() && !!token.trim() && !!baseUrl.trim());
 
