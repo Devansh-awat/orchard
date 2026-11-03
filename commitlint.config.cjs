@@ -37,7 +37,17 @@ module.exports = {
         'repo',
         'landing',
         'docs',
-        'grafts'
+        'grafts',
+        'builder',
+        'install',
+        'hostctl',
+        'ui',
+        'mcp',
+        'forum',
+        'greenhouse',
+        'announcements',
+        'graft-ui',
+        'graft-sdk'
       ]
     ]
   }
