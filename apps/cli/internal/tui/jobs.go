@@ -13,8 +13,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// ---- data (jobs domain; data.go is shared, so these live here) ----
-
 // JobRunRef is the compact run shape embedded in job list/detail responses
 // (lastRun / recentRuns).
 type JobRunRef struct {
@@ -91,8 +89,6 @@ type JobRun struct {
 	} `json:"triggeredBy"`
 	Steps []JobRunStep `json:"steps"`
 }
-
-// ---- messages + fetchers ----
 
 type (
 	jobsMsg struct {
@@ -192,8 +188,6 @@ func deleteJobCmd(cl *api.Client, id, name string) tea.Cmd {
 		return jobDeletedMsg{name, err}
 	}
 }
-
-// ---- shared run render helpers ----
 
 // runTone maps a run/step status to the frontend RunHistoryStrip tones:
 // succeeded=ok, failed/timed_out=fail, running/pending=live, rest muted.
@@ -316,8 +310,6 @@ func jobActiveRun(j Job) *JobRunRef {
 	}
 	return nil
 }
-
-// ---- jobs list screen ----
 
 type jobsListScreen struct {
 	cl        *api.Client
@@ -552,8 +544,6 @@ func firstNonEmpty(vals ...string) string {
 	}
 	return ""
 }
-
-// ---- job detail screen ----
 
 var jobTabs = []string{"Overview", "Runs"}
 

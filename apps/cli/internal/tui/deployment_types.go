@@ -192,8 +192,6 @@ func (e AuditEntry) actor() string {
 	return "system"
 }
 
-// ---- messages ----
-
 type (
 	tokensMsg struct {
 		items []WebhookToken
@@ -217,7 +215,7 @@ type (
 	shellDoneMsg struct{ err error }
 )
 
-// ---- fetch commands (paths mirror cmd/deploy*.go, cmd/domain.go, etc.) ----
+// fetch commands (paths mirror cmd/deploy*.go, cmd/domain.go, etc.)
 
 func ctxBG() context.Context { return context.Background() }
 

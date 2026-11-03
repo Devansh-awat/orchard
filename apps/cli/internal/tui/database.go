@@ -619,8 +619,6 @@ func (s *databaseScreen) viewSettings(height int) string {
 	return renderTable([]col{{title: "PARAMETER"}, {title: "VALUE"}}, rows, s.setCursor, s.w-2, height-2)
 }
 
-// ---- interactive psql (Terminal tab equivalent, via tea.Exec) ----
-
 // openShell suspends the TUI and runs psql in the database pod, resolving the
 // target exactly like `orchard db psql`: pods[0], container postgres, the
 // database's namespace, exec-ing psql with the platform connection string.
@@ -672,8 +670,6 @@ func (e *dbShellExec) Run() error {
 	}
 	return termsession.Run(ctx, conn, e.stdin, e.stdout)
 }
-
-// ---- small helpers ----
 
 func dbBackupLabel(b dbBackup) string {
 	if b.Label != "" {

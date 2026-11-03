@@ -26,7 +26,7 @@ type screen interface {
 }
 
 // orgEventHandler is an optional screen extension: screens implementing it
-// receive live org-bus events forwarded by the root (debounced per entity —
+// receive live org-bus events forwarded by the root (debounced per entity,
 // see sse.go) and return whatever refresh commands they need.
 type orgEventHandler interface {
 	OnOrgEvent(ev api.OrgEvent) tea.Cmd
@@ -84,7 +84,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
 		}
-		// global overlays — suppressed while the top screen is capturing text
+		// global overlays: suppressed while the top screen is capturing text
 		// (forms, env editor, the overlays themselves) or showing a modal
 		if !grabsKeys(m.top()) {
 			switch msg.String() {
@@ -287,8 +287,6 @@ func (h hitTable) rowAt(x, y, cursor int) int {
 	return idx
 }
 
-// ---- shared render helpers ----
-
 type col struct {
 	title string
 	w     int // 0 = size to content
@@ -352,7 +350,7 @@ func renderTable(cols []col, rows [][]string, cursor, width, height int) string 
 		inner := strings.Join(cells, "  ")
 		var line string
 		if i == cursor {
-			// fit (truncate+pad) BEFORE styling — lipgloss .Width() would wrap a
+			// fit (truncate+pad) BEFORE styling: lipgloss .Width() would wrap a
 			// too-wide row onto extra lines instead of clipping it.
 			line = stSelBar.Render("▌") + stSelected.Render(fitLine(" "+inner, barW))
 		} else {

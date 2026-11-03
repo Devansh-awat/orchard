@@ -202,7 +202,6 @@ func TestParseEnv(t *testing.T) {
 	}
 }
 
-// helpers
 func mustDeps(cl *api.Client) []Deployment {
 	d, _ := getList[Deployment](cl, "/projects/p1/deployments")
 	return d

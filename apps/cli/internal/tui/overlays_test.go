@@ -87,8 +87,6 @@ func ovRunes(k string) tea.KeyMsg {
 	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)}
 }
 
-// ---- global key routing ----
-
 func TestGlobalKeysOpenOverlays(t *testing.T) {
 	cl, _ := ovFakeAPI(t)
 	m := model{cl: cl, stack: []screen{newProjectsScreen(cl)}}
@@ -159,8 +157,6 @@ func TestGlobalKeybarHints(t *testing.T) {
 		t.Fatalf("keybar must not advertise search while typing:\n%s", bar)
 	}
 }
-
-// ---- org switcher ----
 
 func TestSwitcherRendersAndSwitchesOrg(t *testing.T) {
 	cl, _ := ovFakeAPI(t)
@@ -247,8 +243,6 @@ func TestSwitcherOpensOrgSettings(t *testing.T) {
 		t.Fatalf("expected settings for o1, got %T %+v", ps.s, ps.s)
 	}
 }
-
-// ---- quick search ----
 
 func loadedSearch(t *testing.T, cl *api.Client) *searchScreen {
 	t.Helper()
@@ -350,8 +344,6 @@ func TestSearchCachePerOrg(t *testing.T) {
 		t.Fatalf("overview should be fetched once and then cached, got %d fetches", n)
 	}
 }
-
-// ---- org settings ----
 
 func loadedOrgSettings(t *testing.T, cl *api.Client) *orgSettingsScreen {
 	t.Helper()

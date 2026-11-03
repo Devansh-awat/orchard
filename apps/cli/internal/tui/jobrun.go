@@ -13,7 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// jobRunPoll is the fast cadence while a run is active — step logs move fast.
+// jobRunPoll is the fast cadence while a run is active: step logs move fast.
 const jobRunPoll = 2 * time.Second
 
 type (

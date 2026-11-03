@@ -725,8 +725,6 @@ func (s *deploymentScreen) view() string {
 	return ""
 }
 
-// ---- Env tab ----
-
 func (s *deploymentScreen) envKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 	switch msg.String() {
 	case "e", "enter":

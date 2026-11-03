@@ -14,8 +14,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// ---- backup schedule editor ----
-
 // dbSchedulePresets mirror the frontend SCHEDULE_PRESETS (all cron in UTC).
 var dbSchedulePresets = []struct{ label, cron string }{
 	{"Every hour", "0 * * * *"},
@@ -172,8 +170,6 @@ func (s *dbScheduleScreen) View() string {
 	return b.String()
 }
 
-// ---- extension install ----
-
 func newDBExtInstallScreen(cl *api.Client, id string) *formScreen {
 	return newForm("Install extension",
 		"Preloading adds to shared_preload_libraries and restarts the database.",
@@ -192,8 +188,6 @@ func newDBExtInstallScreen(cl *api.Client, id string) *formScreen {
 			}
 		})
 }
-
-// ---- cpu/memory resources ----
 
 func newDBResourcesScreen(cl *api.Client, id string, d *dbDetail) *formScreen {
 	cpuF := fld("cpu", "CPU request (millicores, empty = default)", "500", false)
@@ -234,8 +228,6 @@ func newDBResourcesScreen(cl *api.Client, id string, d *dbDetail) *formScreen {
 		})
 }
 
-// ---- storage expansion ----
-
 func newDBStorageScreen(cl *api.Client, id, current string) *formScreen {
 	hint := "The volume can only grow, never shrink."
 	if current != "" {
@@ -250,8 +242,6 @@ func newDBStorageScreen(cl *api.Client, id, current string) *formScreen {
 			}
 		})
 }
-
-// ---- postgres parameters editor ----
 
 // dbSettingsScreen edits the full PostgreSQL parameter map as key=value lines.
 // It is prefilled with the current parameters and the PATCH replaces the whole

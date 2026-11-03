@@ -348,7 +348,7 @@ func TestJobRunLogsFollowStopsOnTerminalStatus(t *testing.T) {
 	go func() { done <- root.ExecuteContext(context.Background()) }()
 
 	// the run is already terminal, so follow must print the final fetch and
-	// stop on its own — no external cancel.
+	// stop on its own: no external cancel.
 	eventsWaitDone(t, done)
 	if got := eventsRecvLine(t, lines); got != "done" {
 		t.Errorf("output line = %q, want %q", got, "done")

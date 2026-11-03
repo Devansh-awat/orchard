@@ -13,7 +13,7 @@ import (
 // Railpack merges its own config last.
 //
 // Unset fields mean "let Railpack detect it", which is the point of the file
-// existing at all — you only write down the parts detection gets wrong.
+// existing at all: you only write down the parts detection gets wrong.
 type BuildConfig struct {
 	Framework       string `json:"framework,omitempty"`
 	RootDirectory   string `json:"rootDirectory,omitempty"`

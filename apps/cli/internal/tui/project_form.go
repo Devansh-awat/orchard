@@ -193,8 +193,6 @@ func (s *projectForm) View() string {
 	return b.String()
 }
 
-// ---- deploy type menu ----
-
 type deployMenu struct {
 	cl      *api.Client
 	project Project

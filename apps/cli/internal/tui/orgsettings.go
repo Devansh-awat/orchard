@@ -14,8 +14,6 @@ import (
 
 var orgTabs = []string{"General", "Members", "Notifications", "Backups", "Audit"}
 
-// ---- data ----
-
 type orgDetail struct {
 	ID               string `json:"id"`
 	Name             string `json:"name"`
@@ -191,8 +189,6 @@ func fetchOrgAudit(cl *api.Client, orgID string) tea.Cmd {
 	}
 }
 
-// ---- actions ----
-
 func inviteMemberForm(cl *api.Client, orgID string) *formScreen {
 	return newForm("Invite member",
 		"Sends an email invitation (expires after 7 days). Roles: owner, admin, member.",
@@ -290,8 +286,6 @@ func testChannel(cl *api.Client, orgID string, ch notifyChannel) tea.Cmd {
 		return actionMsg{"test notification sent via " + ch.Name, err}
 	}
 }
-
-// ---- screen ----
 
 type orgSettingsScreen struct {
 	cl  *api.Client

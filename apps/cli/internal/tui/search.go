@@ -66,7 +66,7 @@ func searchCachePut(orgID string, items []searchItem) {
 }
 
 // overview response, trimmed to what the palette needs (see
-// GET /overview/orgs/:slug — projects, deployments, and databases in one trip).
+// GET /overview/orgs/:slug: projects, deployments, and databases in one trip).
 type overviewResp struct {
 	Organization Org       `json:"organization"`
 	Projects     []Project `json:"projects"`

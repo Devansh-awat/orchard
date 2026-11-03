@@ -208,7 +208,7 @@ func (c *Client) Send(ctx context.Context, method, path string, in, out any) err
 }
 
 // Upload POSTs r as a multipart file field (avatars, project icons). The part
-// carries a real content type derived from the filename — the server's multer
+// carries a real content type derived from the filename: the server's multer
 // allowlists validate part mimetype, and CreateFormFile's hardcoded
 // octet-stream gets rejected.
 func (c *Client) Upload(ctx context.Context, path, field, filename string, r io.Reader) ([]byte, error) {

@@ -109,7 +109,6 @@ type logsResp struct {
 	BuildError string `json:"buildError"`
 }
 
-// helpers shared by commands
 func getList[T any](cl *api.Client, path string) ([]T, error) {
 	var out []T
 	if err := cl.GetJSON(context.Background(), path, &out); err != nil {

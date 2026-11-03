@@ -701,8 +701,8 @@ func deployBuildConfigCmd() *cobra.Command {
 }
 
 // Only flags the caller actually typed are sent, so one setting can be changed
-// without restating the rest. Passing a flag with an empty value clears it —
-// `--target ""` goes back to building the Dockerfile's final stage — which is
+// without restating the rest. Passing a flag with an empty value clears it
+// (`--target ""` goes back to building the Dockerfile's final stage), which is
 // why this reads Changed() rather than testing for "".
 func deployBuildConfigSetCmd() *cobra.Command {
 	var buildType, dockerfile, target, startCmd string

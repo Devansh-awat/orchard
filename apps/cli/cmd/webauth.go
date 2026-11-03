@@ -22,7 +22,7 @@ import (
 // webLogin runs the browser/loopback login: it opens the Orchard web app, which
 // (using the user's existing session) mints an orch_ API token and redirects it
 // back to a localhost callback this process is listening on. No MCP token is
-// involved — the minted orch_ token is a first-class credential the /apiv1 guard
+// involved: the minted orch_ token is a first-class credential the /apiv1 guard
 // accepts directly.
 func webLogin(cfg *config.Config, webBase string, openBrowserFlag bool) error {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -134,7 +134,6 @@ func webLogin(cfg *config.Config, webBase string, openBrowserFlag bool) error {
 		return errors.New("timed out waiting for browser authorization")
 	}
 
-	// Verify and persist.
 	cl := api.New(cfg.APIURL, cfg.Token)
 	var me map[string]any
 	if err := cl.GetJSON(context.Background(), "/auth/me", &me); err != nil {

@@ -142,8 +142,6 @@ func (s *formScreen) View() string {
 	return b.String()
 }
 
-// ---- concrete forms ----
-
 type createdMsg struct{ text string }
 
 func newDeployFormImage(cl *api.Client, p Project) *formScreen {

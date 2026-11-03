@@ -12,8 +12,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// The Overview tab folds the old Pods and Logs tabs into one btop-style board:
-// info + resource graphs up top, the pod table and a live log viewport below.
+// The Overview tab is one btop-style board: info + resource graphs up top, the
+// pod table and a live log viewport below.
 
 func (s *deploymentScreen) overviewLeftW() int {
 	w := s.w * 2 / 5
@@ -115,7 +115,7 @@ func (s *deploymentScreen) viewOverview(height int, strip string) string {
 		row(k, stLink.Render(ingressURL(ig.URL, ig.Host)))
 	}
 
-	// top-right: resources — braille area graphs + usage-vs-request bars
+	// top-right resources: braille area graphs + usage-vs-request bars
 	cpu := float64(d.TotalCPUUsage)
 	mem := float64(d.TotalMemoryUsage)
 	cpuReq, hasCPUReq := f64p(d.CPURequestMilli)
@@ -184,8 +184,6 @@ func (s *deploymentScreen) viewPods(height int) string {
 	cols := []col{{title: "POD"}, {title: "STATUS"}, {title: "READY"}, {title: "RESTARTS"}, {title: "AGE"}}
 	return renderTable(cols, rows, s.podCursor, s.overviewLeftW()-2, height-2)
 }
-
-// ---- interactive shell (tea.Exec over the pod-exec websocket) ----
 
 // wsShell adapts the termsession websocket pump to bubbletea's ExecCommand,
 // so the TUI can hand the real terminal to a remote shell and resume after.

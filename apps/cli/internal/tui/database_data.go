@@ -10,7 +10,7 @@ import (
 	"github.com/hackclub/orchard/cli/internal/api"
 )
 
-// dbDetail mirrors GET /databases/:id — the same fields cmd/db.go reads.
+// dbDetail mirrors GET /databases/:id: the same fields cmd/db.go reads.
 type dbDetail struct {
 	ID               string  `json:"id"`
 	Name             string  `json:"name"`

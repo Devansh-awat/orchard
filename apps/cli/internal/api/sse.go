@@ -29,7 +29,7 @@ const sseStaleAfter = 40 * time.Second
 // SubscribeOrgEvents streams org events until ctx is cancelled. It reconnects
 // forever with jittered backoff, resuming from the last seen event id so the
 // server replays anything missed (an expired replay id just means we continue
-// live — callers should treat a reconnect as "refetch what you care about").
+// live: callers should treat a reconnect as "refetch what you care about").
 // Heartbeats reset staleness but are not delivered. The error channel carries
 // non-fatal reconnect notices; both channels close when ctx ends.
 func (c *Client) SubscribeOrgEvents(ctx context.Context, orgID, lastEventID string) (<-chan OrgEvent, <-chan error) {

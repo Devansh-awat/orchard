@@ -68,7 +68,7 @@ func jobRunGetCmd() *cobra.Command {
 			fmt.Print(eventsClearScreen)
 			jobRunRenderKV(raw)
 			// run detail responses carry no organizationId, so there is no org
-			// to subscribe to — pure polling instead of SSE + fallback.
+			// to subscribe to: pure polling instead of SSE + fallback.
 			return eventsWatchPoll(cmd.Context(), 5*time.Second, func(ctx context.Context) error {
 				var cur map[string]any
 				if err := cl.GetJSON(ctx, jobRunPath(args[0]), &cur); err != nil {

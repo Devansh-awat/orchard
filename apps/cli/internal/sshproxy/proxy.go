@@ -11,7 +11,7 @@ import (
 
 // Pipe pumps raw bytes between stdio and a sandbox SSH tunnel websocket:
 // stdin goes up as binary frames, incoming binary frames go to stdout. It is
-// a dumb byte pump for ssh ProxyCommand use — no TTY, no resize, no text
+// a dumb byte pump for ssh ProxyCommand use: no TTY, no resize, no text
 // frames. stdin EOF closes the tunnel normally; a normal server close (or
 // ctx cancellation) returns nil, anything else returns the error.
 func Pipe(ctx context.Context, conn *websocket.Conn, stdin io.Reader, stdout io.Writer) error {
