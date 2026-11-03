@@ -309,7 +309,10 @@ export class SetupService implements OnModuleInit {
     const smtp = this.config.isConfigured(EMAIL);
     const oidc =
       envSet('AUTH_OAUTH_CLIENT_ID', 'AUTH_OAUTH_CLIENT_SECRET') ||
-      envSet('HACKCLUB_CLIENT_ID', 'HACKCLUB_CLIENT_SECRET');
+      envSet('HACKCLUB_CLIENT_ID', 'HACKCLUB_CLIENT_SECRET') ||
+      (await this.prisma.identityProvider.count({
+        where: { organizationId: null, enabled: true }
+      })) > 0;
 
     const wildcardConfigured = platformWildcardDomains().some((w) => !!w.secret);
     const cert = wildcardConfigured
