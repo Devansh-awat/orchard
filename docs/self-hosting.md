@@ -136,53 +136,114 @@ back to a built-in default.
 
 ## Install
 
+These steps reached a working login, an app with an HTTPS certificate and a
+database with a bound volume, on plain k3s with the published chart, Helm 4.3.1,
+Traefik, cert-manager and CloudNativePG. **Builds were not tested on this path.**
+They need a real registry, see below. The test run created the namespaces and the
+Secret after a first failed install rather than before it.
+
+**1. Create the namespaces and the Secret.** The Secret holds two values the
+server needs at boot. `jwt` signs sessions and must be at least 32 characters.
+`enc` encrypts stored secrets, so keep it safe: a new key makes everything already
+encrypted unreadable.
+
 ```bash
-helm install orchard oci://ghcr.io/hackclub/orchard/charts/orchard \
-  --namespace orchard --create-namespace \
-  -f my-values.yaml
+kubectl create namespace orchard
+kubectl create namespace network
+kubectl -n orchard create secret generic orchard-secrets \
+  --from-literal=jwt="$(openssl rand -base64 48 | tr -d '\n')" \
+  --from-literal=enc="$(openssl rand -base64 32 | tr -d '\n')"
 ```
 
-The chart's [`README.md`](../infra/charts/orchard/README.md) is the values
-reference and troubleshooting guide. A minimal production values file
-overrides at least:
+**2. Write `my-values.yaml`.** CI renders this exact file, from
+`infra/charts/orchard/examples/minimal-values.yaml`, on every chart change:
 
 ```yaml
+createNamespace: false
+signupMode: invite_only
+datadog:
+  enabled: false
 ingress:
   host: orchard.example.com
   tls:
     enabled: true
-    # Either name a Secret you create yourself, or set issuerRef and the chart
-    # issues the certificate for `host`. With neither, Traefik terminates using
-    # its self-signed default cert and every browser rejects it.
-    issuerRef: { name: letsencrypt-prod, kind: ClusterIssuer }
+    issuerRef: { name: letsencrypt, kind: ClusterIssuer }
 gateway:
   http:
+    enabled: false
     appDomain: apps.example.com
-tenant:
-  storageClass: '' # empty = cluster default
-  ingressClass: nginx
-  certClusterIssuer: letsencrypt-prod
-signupMode: invite_only
-datadog:
+certificates:
   enabled: false
+mcp:
+  enabled: false
+tenant:
+  storageClass: local-path
+  ingressClass: traefik
+  ingressNamespaces: traefik,orchard
+  certClusterIssuer: letsencrypt
+server:
+  env:
+    - { name: FRONTEND_URL, value: https://orchard.example.com }
+    - name: JWT_SECRET
+      valueFrom: { secretKeyRef: { name: orchard-secrets, key: jwt } }
+    - name: SECRETS_ENCRYPTION_KEY
+      valueFrom: { secretKeyRef: { name: orchard-secrets, key: enc } }
+```
+
+Replace the hostnames, then check these against your cluster:
+
+| Value                      | What to set                                                                                                                                                                                                            |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tenant.storageClass`      | A class from `kubectl get storageclass`, or `''` for the cluster default                                                                                                                                               |
+| `tenant.ingressClass`      | A class from `kubectl get ingressclass`                                                                                                                                                                                |
+| `tenant.ingressNamespaces` | The namespace your ingress controller's pods run in, then `orchard`, like `ingress-nginx,orchard`. Tenant namespaces are default-deny, so with the wrong one apps are unreachable and HTTP-01 certificates never issue |
+| `tenant.certClusterIssuer` | A ClusterIssuer from `kubectl get clusterissuer`, also used in `ingress.tls.issuerRef`                                                                                                                                 |
+| `gateway.http.enabled`     | Leave `false`. App URLs use `Ingress`, and this listener wants a wildcard Secret nothing creates                                                                                                                       |
+| `certificates.enabled`     | Leave `false` unless you have a DNS-01 issuer for wildcards. The default needs one named `letsencrypt-dns01-wildcard`                                                                                                  |
+| `mcp.enabled`              | Leave `false` to start. On, it needs the extra settings below                                                                                                                                                          |
+
+**3. Install and wait for the API.**
+
+```bash
+helm install orchard oci://ghcr.io/hackclub/orchard/charts/orchard \
+  --namespace orchard -f my-values.yaml
+kubectl -n orchard rollout status deploy/server --timeout=10m
+```
+
+**4. Get the claim link.** The server logs one on first boot, but only once and
+only on one replica, so mint one instead:
+
+```bash
+kubectl -n orchard exec deploy/server -- node dist/scripts/mint-claim-link.js
+```
+
+Keeping `createNamespace: true`, the default, makes the chart render `orchard`
+and any missing `network` namespace itself, so pass `--create-namespace` and
+create the Secret after the install. The server waits for it. A `network`
+namespace that already exists is left alone, and one the chart made survives
+`helm uninstall`.
+
+**Builds (untested on this path)** need a registry the cluster can reach:
+
+```yaml
 builders:
   harbor:
     username: robot$orchard
     password: <registry password>
     hosts: [registry.example.com]
-server:
-  env:
-    - { name: DOCKER_REGISTRY_PUSH, value: registry.example.com }
-    - { name: DOCKER_REGISTRY_PULL, value: registry.example.com }
-    - { name: REGISTRY_PROJECT, value: orchard }
-    - { name: INGRESS_CNAME, value: ingress.example.com }
-    - { name: FRONTEND_URL, value: https://orchard.example.com }
-    - { name: JWT_SECRET, valueFrom: { secretKeyRef: { name: orchard-secrets, key: jwt } } }
-    - {
-        name: SECRETS_ENCRYPTION_KEY,
-        valueFrom: { secretKeyRef: { name: orchard-secrets, key: enc } }
-      }
+  registryEgress:
+    - namespace: <namespace your registry runs in>
 ```
+
+and in `server.env`, `DOCKER_REGISTRY_PUSH`, `DOCKER_REGISTRY_PULL` and
+`REGISTRY_PROJECT`.
+
+**MCP (untested on this path)** needs `mcp.enabled: true`, `mcp.ingress.host`, and
+`JWT_SECRET` and `MCP_SERVICE_TOKEN` in `mcp.env`, with the same
+`MCP_SERVICE_TOKEN` in `server.env`.
+
+The chart's [`README.md`](../infra/charts/orchard/README.md) is the values
+reference and troubleshooting guide.
 
 Login options out of the box: email OTP (needs `SMTP_*` env), passkeys, and on
 the superadmin a password or a printed link.
@@ -197,8 +258,9 @@ superadmin, creates its organization, and signs it in, all in one step.
 The link is printed three ways, whichever suits you:
 
 - in the closing box the installer prints when it finishes
-- in the server log on first boot (`kubectl -n orchard logs deploy/server`)
-- on demand, by running `sudo orchardctl claim` on the host
+- in the server log on first boot, once, on one replica
+- on demand, by running `sudo orchardctl claim` on the host, or on a Helm install
+  `kubectl -n orchard exec deploy/server -- node dist/scripts/mint-claim-link.js`
 
 ```
 $ sudo orchardctl claim

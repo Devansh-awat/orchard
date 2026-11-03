@@ -19,8 +19,9 @@ have:
 - **cert-manager** and a DNS-01 `ClusterIssuer` named `letsencrypt-dns01-wildcard`,
   for the wildcard `Certificate`s. Change `certificates.issuer`, or set
   `certificates.enabled: false` and bring the TLS Secrets yourself.
-- **A `network` namespace**, which the chart does not create. `gateway.namespace` and
-  `certificates.namespace` both default to it.
+- **A `network` namespace.** `gateway.namespace` and `certificates.namespace` both
+  default to it. With `createNamespace: true` the chart creates it if missing and
+  keeps it on uninstall. With `false`, create it yourself.
 - **An OCI registry** for builds to push to and nodes to pull from (`builders.harbor.*`,
   plus `DOCKER_REGISTRY_PUSH` and `DOCKER_REGISTRY_PULL` in `server.env`).
 - A default StorageClass, or an explicit `storageClass` for each volume below.
@@ -35,13 +36,111 @@ for `ingress.enabled` and `mcp.ingress`. Tenant apps use any ingress class
 
 ## 1. Quick install
 
+These steps reached a working login, an app with an HTTPS certificate and a
+database with a bound volume, on plain k3s with the published chart, Helm 4.3.1,
+Traefik, cert-manager and CloudNativePG. **Builds were not tested on this path.**
+They need a real registry, see below. The test run created the namespaces and the
+Secret after a first failed install rather than before it.
+
+**1. Create the namespaces and the Secret.** The Secret holds two values the
+server needs at boot. `jwt` signs sessions and must be at least 32 characters.
+`enc` encrypts stored secrets, so keep it safe: a new key makes everything already
+encrypted unreadable.
+
 ```bash
-helm install orchard \
-  oci://ghcr.io/hackclub/orchard/charts/orchard \
-  --namespace orchard \
-  --create-namespace \
-  -f my-values.yaml
+kubectl create namespace orchard
+kubectl create namespace network
+kubectl -n orchard create secret generic orchard-secrets \
+  --from-literal=jwt="$(openssl rand -base64 48 | tr -d '\n')" \
+  --from-literal=enc="$(openssl rand -base64 32 | tr -d '\n')"
 ```
+
+**2. Write `my-values.yaml`.** CI renders this exact file, from
+`examples/minimal-values.yaml`, on every chart change:
+
+```yaml
+createNamespace: false
+signupMode: invite_only
+datadog:
+  enabled: false
+ingress:
+  host: orchard.example.com
+  tls:
+    enabled: true
+    issuerRef: { name: letsencrypt, kind: ClusterIssuer }
+gateway:
+  http:
+    enabled: false
+    appDomain: apps.example.com
+certificates:
+  enabled: false
+mcp:
+  enabled: false
+tenant:
+  storageClass: local-path
+  ingressClass: traefik
+  ingressNamespaces: traefik,orchard
+  certClusterIssuer: letsencrypt
+server:
+  env:
+    - { name: FRONTEND_URL, value: https://orchard.example.com }
+    - name: JWT_SECRET
+      valueFrom: { secretKeyRef: { name: orchard-secrets, key: jwt } }
+    - name: SECRETS_ENCRYPTION_KEY
+      valueFrom: { secretKeyRef: { name: orchard-secrets, key: enc } }
+```
+
+Replace the hostnames, then check these against your cluster:
+
+| Value                       | What to set                                                                                                                                                                                                             |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tenant.storageClass`       | A class from `kubectl get storageclass`, or `''` for the cluster default                                                                                                                                                |
+| `tenant.ingressClass`       | A class from `kubectl get ingressclass`                                                                                                                                                                                 |
+| `tenant.ingressNamespaces`  | The namespace your ingress controller's pods run in, then `orchard`, like `ingress-nginx,orchard`. Tenant namespaces are default-deny, so with the wrong one apps are unreachable and HTTP-01 certificates never issue |
+| `tenant.certClusterIssuer`  | A ClusterIssuer from `kubectl get clusterissuer`, also used in `ingress.tls.issuerRef`                                                                                                                                  |
+| `gateway.http.enabled`      | Leave `false`. App URLs use `Ingress`, and this listener wants a wildcard Secret nothing creates                                                                                                                        |
+| `certificates.enabled`      | Leave `false` unless you have a DNS-01 issuer for wildcards. The default needs one named `letsencrypt-dns01-wildcard`                                                                                                   |
+| `mcp.enabled`               | Leave `false` to start. On, it needs the extra settings below                                                                                                                                                           |
+
+**3. Install and wait for the API.**
+
+```bash
+helm install orchard oci://ghcr.io/hackclub/orchard/charts/orchard \
+  --namespace orchard -f my-values.yaml
+kubectl -n orchard rollout status deploy/server --timeout=10m
+```
+
+**4. Get the claim link.** The server logs one on first boot, but only once and
+only on one replica, so mint one instead:
+
+```bash
+kubectl -n orchard exec deploy/server -- node dist/scripts/mint-claim-link.js
+```
+
+Keeping `createNamespace: true`, the default, makes the chart render `orchard`
+and any missing `network` namespace itself, so pass `--create-namespace` and
+create the Secret after the install. The server waits for it. A `network`
+namespace that already exists is left alone, and one the chart made survives
+`helm uninstall`.
+
+**Builds (untested on this path)** need a registry the cluster can reach:
+
+```yaml
+builders:
+  harbor:
+    username: robot$orchard
+    password: <registry password>
+    hosts: [registry.example.com]
+  registryEgress:
+    - namespace: <namespace your registry runs in>
+```
+
+and in `server.env`, `DOCKER_REGISTRY_PUSH`, `DOCKER_REGISTRY_PULL` and
+`REGISTRY_PROJECT`.
+
+**MCP (untested on this path)** needs `mcp.enabled: true`, `mcp.ingress.host`, and
+`JWT_SECRET` and `MCP_SERVICE_TOKEN` in `mcp.env`, with the same
+`MCP_SERVICE_TOKEN` in `server.env`.
 
 Inspect what will be applied first:
 
@@ -49,60 +148,11 @@ Inspect what will be applied first:
 helm template orchard oci://ghcr.io/hackclub/orchard/charts/orchard -f my-values.yaml | less
 ```
 
+[`docs/self-hosting.md`](../../../docs/self-hosting.md) walks through the rest.
+
 ---
 
-## 2. Minimum `my-values.yaml`
-
-```yaml
-ingress:
-  host: orchard.example.com
-  tls:
-    enabled: true
-    secretName: orchard-tls          # cert-manager / pre-existing secret
-
-# The defaults are this project's own domains
-gateway:
-  http:
-    appDomain: apps.example.com
-certificates:
-  wildcards:
-    db:
-      domain: db.example.com
-      secretName: wildcard-db-example-com-tls
-
-# On by default. Needs a Datadog agent in the cluster and an orchard-db-datadog Secret
-datadog:
-  enabled: false
-
-builders:
-  harbor:
-    username: admin
-    password: "REPLACE_ME"
-    hosts: [registry.example.com]
-
-# On by default, and needs JWT_SECRET and MCP_SERVICE_TOKEN in mcp.env. See MCP below
-mcp:
-  enabled: false
-
-server:
-  env:
-    # Required at boot, at least 32 characters
-    - name: JWT_SECRET
-      valueFrom: { secretKeyRef: { name: orchard-secrets, key: jwt } }
-    # Encrypts stored secrets. Keep it: a new key makes existing ones unreadable
-    - name: SECRETS_ENCRYPTION_KEY
-      valueFrom: { secretKeyRef: { name: orchard-secrets, key: enc } }
-    - { name: DOCKER_REGISTRY_PUSH, value: registry.example.com }
-    - { name: DOCKER_REGISTRY_PULL, value: registry.example.com }
-    - { name: FRONTEND_URL, value: https://orchard.example.com }
-  # Pin image tags to a known-good commit (optional, defaults to AppVersion)
-  image: { tag: "sha-<commit>" }
-
-frontend:
-  image: { tag: "sha-<commit>" }
-```
-
-[`docs/self-hosting.md`](../../../docs/self-hosting.md) walks through the rest.
+## 2. Storage classes
 
 Every volume uses the cluster's default StorageClass unless you name one. To
 pin them all to a class that is not the default (k3s ships only `local-path`,
@@ -141,7 +191,7 @@ new class on a fresh volume.
 | Namespace          | Resources |
 |--------------------|-----------|
 | `orchard`          | `frontend` / `server` / `mcp` Deployments + Services, Redis Deployment + PVC, Traefik `IngressRoute`s, CNPG `Cluster` (`orchard-db`) |
-| `network`          | Gateways and wildcard `Certificate`s. Not created by the chart. |
+| `network`          | Gateways and wildcard `Certificate`s. Created by the chart only with `createNamespace: true`, and kept on uninstall. |
 | `orchard-builders` | SA, RBAC, Harbor + R2 secrets, BuildKit ConfigMap, ResourceQuota, LimitRange, NetworkPolicy |
 | `orchard-metrics`  | VictoriaMetrics StatefulSet, vmagent, kube-state-metrics, node-exporter DaemonSet, VictoriaLogs StatefulSet, Vector DaemonSet |
 | `orchard-scans`    | Only with `trivy.enabled`: Trivy server Deployment + Service + cache PVC, the scan jobs, server Role for their Secrets, NetworkPolicies |
@@ -171,11 +221,11 @@ is the complete list.
 | Key | Default | Description |
 |---|---|---|
 | `namespace` | `orchard` | Namespace the app components install into. |
-| `createNamespace` | `true` | Render a `Namespace` object for `.namespace`. Set `false` if you manage the namespace yourself or pass `--create-namespace` to helm. |
+| `createNamespace` | `true` | Render a `Namespace` object for `.namespace`, and for `gateway.namespace` and `certificates.namespace` when they are in use and missing. Those two are kept on uninstall. Set `false` if you manage them yourself. |
 | `cilium.enabled` | `false` | Add CiliumNetworkPolicy / CiliumEnvoyConfig grants to the server ClusterRole and set `CILIUM_ENABLED=true`. Only for clusters running Cilium as the CNI. Left off, the server probes for the `cilium.io` group plus create on `ciliumenvoyconfigs`: per-tenant policy falls back to plain NetworkPolicy, and basic auth on an ingress is enforced by the protection proxy instead of an Envoy filter. Set `CNPG_OPERATOR_NAMESPACE` in `server.env` to where CloudNativePG runs (default `postgresql`, the installer uses `cnpg-system`), or the tenant policy keeps the operator out of database pods. |
 | `protection.orchardLogin` | `false` | Offer `protectionMode: orchard` ("sign in with Orchard") on tenant ingresses, via `PROTECTION_ORCHARD_LOGIN=true`. Gates selecting the mode, not enforcing it. `basic` and `password` are always available. |
 | `signupMode` | `invite_only` | Who can sign up: `open`, `invite_only` or `closed`, as `SIGNUP_MODE`. |
-| `tenant.storageClass` | `""` | StorageClass for tenant apps and databases, as `K8S_STORAGE_CLASS`. Empty falls back to `longhorn`, so set it on any other cluster. |
+| `tenant.storageClass` | `""` | StorageClass for tenant apps and databases, as `K8S_STORAGE_CLASS`. Empty uses the cluster default StorageClass. |
 | `tenant.ingressClass` | `""` | Ingress class of tenant apps, as `K8S_INGRESS_CLASS`. Empty falls back to `haproxy`. |
 | `tenant.certClusterIssuer` | `""` | ClusterIssuer for tenant certificates, as `CERT_CLUSTER_ISSUER`. Empty falls back to `letsencrypt-prod`. |
 | `tenant.ingressNamespaces` | `""` | Namespaces a tenant pod may be reached from and reach, as `TENANT_INGRESS_NAMESPACES`. Empty means `network,orchard`. The ingress controller has to be on this list, or apps are unreachable and HTTP-01 certificates never issue. A k3s cluster running Traefik wants `traefik,orchard`. |
@@ -715,7 +765,7 @@ Renders `cert-manager.io/v1 Certificate` resources for the configured wildcards.
 | `certificates.wildcards.app.domain` | `""` (→ `gateway.http.appDomain`) | Hostname pattern. Cert covers `*.{domain}` + `{domain}`. |
 | `certificates.wildcards.app.secretName` | `""` (→ `gateway.http.appWildcardSecretName`) | Secret name. Consumed by the Gateway listener. |
 | `certificates.wildcards.db.enabled` | `true` | Issue the wildcard for public CNPG TLS. |
-| `certificates.wildcards.db.domain` | `db.orchard.my` | Hostname pattern. Matches server `PUBLIC_DB_DOMAIN`. |
+| `certificates.wildcards.db.domain` | `""` | Hostname pattern. Matches server `PUBLIC_DB_DOMAIN`. Empty issues no Certificate. |
 | `certificates.wildcards.db.secretName` | `wildcard-db-orchard-my-tls` | Secret consumed by the server's `syncPublicTlsSecret` reflection. |
 
 ### Public TLS reflection (`publicTls.*`)

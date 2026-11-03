@@ -612,6 +612,13 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
       - run: helm lint infra/charts/orchard
+      - name: The documented minimal values render clean
+        run: |
+          helm template orchard infra/charts/orchard --namespace orchard \
+            -f infra/charts/orchard/examples/minimal-values.yaml > minimal.yaml
+          if grep -nE 'db\.orchard\.my|longhorn' minimal.yaml; then exit 1; fi
+          dupes=$(yq -N 'select(.spec.template.spec.containers) | .spec.template.spec.containers[] | (.env // []) | map(.name) | group_by(.) | map(select(length > 1) | .[0]) | .[]' minimal.yaml)
+          test -z "$dupes" || { echo "duplicate env names: $dupes"; exit 1; }
 
   validate-images:
     needs: changes

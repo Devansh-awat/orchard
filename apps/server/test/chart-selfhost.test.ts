@@ -1,7 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { loadAll } from 'js-yaml';
+import { recoveryClusterSpec } from '../src/kubernetes/cnpg-recovery';
 
 const chart = resolve(__dirname, '../../../infra/charts/orchard');
 
@@ -14,11 +17,105 @@ function helmAvailable(): boolean {
   }
 }
 
-function render(sets: string[]): string {
+const skip = !helmAvailable();
+
+function render(sets: string[], valuesFile?: string): string {
   const args = ['template', 'orchard', chart, '--namespace', 'orchard'];
+  if (valuesFile) args.push('-f', valuesFile);
   for (const s of sets) args.push('--set', s);
   return execFileSync('helm', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 }
+
+const minimal = join(chart, 'examples/minimal-values.yaml');
+const repo = resolve(chart, '../../..');
+
+function parsed(yaml: string): any[] {
+  return loadAll(yaml).filter(Boolean) as any[];
+}
+
+function namespaces(yaml: string): any[] {
+  return parsed(yaml).filter((d) => d.kind === 'Namespace');
+}
+
+test(
+  'the documented minimal values render nothing that belongs to another cluster',
+  { skip },
+  () => {
+    const out = render([], minimal);
+    assert.doesNotMatch(out, /db\.orchard\.my/);
+    assert.doesNotMatch(out, /longhorn/);
+    for (const doc of parsed(out)) {
+      for (const container of doc.spec?.template?.spec?.containers ?? []) {
+        const names = (container.env ?? []).map((e: { name: string }) => e.name);
+        assert.equal(
+          new Set(names).size,
+          names.length,
+          `${doc.metadata.name}/${container.name} has a duplicate env name`
+        );
+      }
+    }
+  }
+);
+
+test('every install guide carries the same minimal values', () => {
+  const example = readFileSync(minimal, 'utf8');
+  for (const doc of [
+    'docs/self-hosting.md',
+    'apps/docs/src/content/docs/start/install.md',
+    'infra/charts/orchard/README.md'
+  ]) {
+    assert.ok(readFileSync(join(repo, doc), 'utf8').includes(example), doc);
+  }
+});
+
+test('the chart creates a missing network namespace and keeps it', { skip }, () => {
+  const network = namespaces(render([])).find((d) => d.metadata.name === 'network');
+  assert.ok(network);
+  assert.equal(network.metadata.annotations['helm.sh/resource-policy'], 'keep');
+  const release = namespaces(render([])).find((d) => d.metadata.name === 'orchard');
+  assert.equal(release.metadata.annotations, undefined);
+});
+
+test(
+  'createNamespace=false renders neither namespace, as production and the installer set',
+  { skip },
+  () => {
+    const names = namespaces(render(['createNamespace=false'])).map((d) => d.metadata.name);
+    assert.ok(!names.includes('network'));
+    assert.ok(!names.includes('orchard'));
+  }
+);
+
+test('no database wildcard Certificate without a domain', { skip }, () => {
+  const certificate = (yaml: string) =>
+    parsed(yaml).find((d) => d.kind === 'Certificate' && /db/.test(d.metadata.name));
+  assert.equal(certificate(render([])), undefined);
+  const set = certificate(render(['certificates.wildcards.db.domain=db.example.com']));
+  assert.deepEqual(set.spec.dnsNames, ['*.db.example.com', 'db.example.com']);
+});
+
+test('an unset storage class is left to the cluster', () => {
+  const spec = recoveryClusterSpec({
+    instances: 1,
+    imageName: 'postgres:17',
+    storageSize: '1Gi',
+    storageClass: process.env.UNSET_STORAGE_CLASS || undefined,
+    parameters: {},
+    bootstrap: {},
+    externalClusters: []
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(spec)).storage, { size: '1Gi' });
+  for (const file of [
+    'kubernetes/k8s-cnpg.service.ts',
+    'kubernetes/kubernetes.service.ts',
+    'projects/database-operations.service.ts'
+  ]) {
+    assert.doesNotMatch(
+      readFileSync(join(repo, 'apps/server/src', file), 'utf8'),
+      /K8S_STORAGE_CLASS \|\| 'longhorn'/
+    );
+  }
+});
 
 function deployment(out: string, name: string): string {
   return (
@@ -27,8 +124,6 @@ function deployment(out: string, name: string): string {
       .find((d) => /kind: Deployment/.test(d) && new RegExp(`name: ${name}\\n`).test(d)) ?? ''
   );
 }
-
-const skip = !helmAvailable();
 
 test('status and vanity hosts route to the frontend in the release namespace', { skip }, () => {
   const env = deployment(render(['namespace=paas', 'frontend.service.port=3100']), 'server');
