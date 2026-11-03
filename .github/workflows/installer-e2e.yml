@@ -98,6 +98,7 @@ jobs:
       - name: Run the installer
         run: |
           sudo apt-get install -y -qq apache2-utils jq >/dev/null
+          sudo rm -f "$(command -v helm)"
           sudo ORCHARD_ASSUME_YES=true ORCHARD_NO_PACING=1 NO_COLOR=1 bash install/install.sh \
             --mode lan \
             --mcp false \
@@ -107,6 +108,7 @@ jobs:
             --image-pull-policy IfNotPresent
           sudo rm -f /var/lib/rancher/k3s/agent/images/orchard-e2e.tar
           df -h /var/lib/rancher
+          helm version --short | grep -q '^v4\.'
 
       - name: The install targets this machine's architecture
         run: |
@@ -203,6 +205,23 @@ jobs:
           }
           check "$DOCKERFILE_ID" 'uname -m' "${{ matrix.uname }}"
           check "$RAILPACK_ID" 'node -p process.arch' "${{ matrix.node }}"
+
+      - name: Re-running the installer keeps secrets and volumes
+        run: |
+          fingerprint() {
+            sudo yq -r '.server.env[] | select(.name == "JWT_SECRET" or .name == "SECRETS_ENCRYPTION_KEY" or .name == "SSO_ENCRYPTION_KEY" or .name == "MCP_SERVICE_TOKEN") | .name + "=" + .value' /etc/orchard/values.yaml | sha256sum
+          }
+          before=$(fingerprint)
+          test "$(sudo yq -r '[.server.env[] | select(.name == "SSO_ENCRYPTION_KEY")] | length' /etc/orchard/values.yaml)" = 1
+          sudo ORCHARD_ASSUME_YES=true ORCHARD_NO_PACING=1 NO_COLOR=1 bash install/install.sh \
+            --mode lan \
+            --mcp false \
+            --metrics false \
+            --chart ./infra/charts/orchard \
+            --image-tag e2e \
+            --image-pull-policy IfNotPresent
+          test "$before" = "$(fingerprint)"
+          $KUBECTL -n orchard rollout status deploy/server --timeout=5m
 
       - name: Diagnostics
         if: failure()

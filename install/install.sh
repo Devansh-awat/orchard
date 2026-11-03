@@ -504,7 +504,7 @@ preflight() {
     warn "ss not found; skipping port check"
   fi
 
-  if command -v kubectl >/dev/null 2>&1 && kubectl cluster-info >/dev/null 2>&1; then
+  if [ ! -d "$STATE_DIR" ] && command -v kubectl >/dev/null 2>&1 && kubectl cluster-info >/dev/null 2>&1; then
     warn "an existing Kubernetes cluster is reachable from this shell."
     warn "This installer creates its own k3s cluster and will not touch it."
     warn "To install into that cluster instead, use the Helm chart: docs/self-hosting.md"
@@ -943,6 +943,8 @@ install_k3s() {
     run_step "downloading and starting k3s" 1m k3s_download
   fi
 
+  mkdir -p "$STATE_DIR"
+  chmod 700 "$STATE_DIR"
   export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
   run_step "waiting for the node to be ready" 30s wait_for_node
 }
@@ -1248,6 +1250,17 @@ EOF
     kubectl -n cloudflared rollout status deploy/cloudflared --timeout=5m
 }
 
+live_volume_gb() {
+  local namespace=$1 claim=$2 wanted=$3 live
+  live=$(KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl -n "$namespace" get pvc "$claim" \
+    -o jsonpath='{.spec.resources.requests.storage}' 2>/dev/null || true)
+  live=${live%Gi}
+  case "$live" in
+    ''|*[!0-9]*) printf '%s' "$wanted" ;;
+    *) printf '%s' "$live" ;;
+  esac
+}
+
 size_workloads() {
   if [ "$MEM_MB" -ge 15000 ]; then MAX_BUILDS=3
   elif [ "$MEM_MB" -ge 7500 ]; then MAX_BUILDS=2
@@ -1257,19 +1270,23 @@ size_workloads() {
   BUILD_CACHE_GB=$((DISK_GB / 5))
   if [ "$BUILD_CACHE_GB" -gt 60 ]; then BUILD_CACHE_GB=60; fi
   if [ "$BUILD_CACHE_GB" -lt 5 ]; then BUILD_CACHE_GB=5; fi
+  BUILD_CACHE_GB=$(live_volume_gb orchard-builders buildkit-cache "$BUILD_CACHE_GB")
 
   REGISTRY_SIZE_GB=$((DISK_GB / 5))
   if [ "$REGISTRY_SIZE_GB" -gt 50 ]; then REGISTRY_SIZE_GB=50; fi
   if [ "$REGISTRY_SIZE_GB" -lt 5 ]; then REGISTRY_SIZE_GB=5; fi
+  REGISTRY_SIZE_GB=$(live_volume_gb orchard zot-data "$REGISTRY_SIZE_GB")
 
   LOGS_SIZE_GB=$((DISK_GB / 10))
   if [ "$LOGS_SIZE_GB" -gt 20 ]; then LOGS_SIZE_GB=20; fi
   if [ "$LOGS_SIZE_GB" -lt 5 ]; then LOGS_SIZE_GB=5; fi
+  LOGS_SIZE_GB=$(live_volume_gb orchard-metrics data-victorialogs-0 "$LOGS_SIZE_GB")
   LOGS_MAX_DISK_GB=$((LOGS_SIZE_GB * 4 / 5))
 
   OBJECT_STORAGE_GB=$((DISK_GB / 5))
   if [ "$OBJECT_STORAGE_GB" -gt 50 ]; then OBJECT_STORAGE_GB=50; fi
   if [ "$OBJECT_STORAGE_GB" -lt 5 ]; then OBJECT_STORAGE_GB=5; fi
+  OBJECT_STORAGE_GB=$(live_volume_gb orchard-object-storage object-storage-data "$OBJECT_STORAGE_GB")
 
   SMALL_BOX=false
   if [ "$MEM_MB" -lt 7500 ]; then SMALL_BOX=true; fi
@@ -1419,7 +1436,7 @@ write_values() {
   # stored in the database permanently undecryptable. Carry them over.
   JWT_SECRET=$(reuse_secret JWT_SECRET)
   ENCRYPTION_KEY=$(reuse_secret SECRETS_ENCRYPTION_KEY)
-  SSO_KEY=$(reuse_secret SSO_STATE_SECRET)
+  SSO_KEY=$(reuse_secret SSO_ENCRYPTION_KEY)
   # Shared with the MCP below rather than minted per process: it is what the
   # API recognises when the MCP acts for a consenting user, so a mismatch shows
   # up as every tool call failing rather than as anything failing to start.
@@ -1450,7 +1467,6 @@ frontend:
   image:
     tag: $IMAGE_TAG
   env:
-    - { name: PUBLIC_APP_DOMAIN, value: $ORCHARD_APP_DOMAIN }
     - { name: PUBLIC_HTTP_PORT, value: "$HTTP_PORT" }
     - { name: PUBLIC_HTTPS_PORT, value: "$HTTPS_PORT" }
     - { name: PUBLIC_OAUTH_PROVIDER, value: none }

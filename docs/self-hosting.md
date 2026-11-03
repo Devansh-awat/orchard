@@ -497,7 +497,7 @@ when it doesn't.
 Re-running the installer also works and is the only way to change answers you
 gave at install time (domains, ingress mode, update policy). It skips k3s, helm
 and the operators when they're already present, and carries `JWT_SECRET`,
-`SECRETS_ENCRYPTION_KEY` and `SSO_STATE_SECRET` over from the existing values
+`SECRETS_ENCRYPTION_KEY` and `SSO_ENCRYPTION_KEY` over from the existing values
 file rather than minting new ones — a fresh encryption key would make every
 secret already in the database permanently undecryptable. Values you changed
 with `orchardctl config` are **not** preserved, so note them with
