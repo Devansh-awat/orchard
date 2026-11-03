@@ -254,6 +254,30 @@ function composeStacks(store: Store, p: MockProject) {
 	});
 }
 
+const MOCK_IMAGE_PORTS: [RegExp, string[]][] = [
+	[/prometheus/, ['9090/tcp']],
+	[/rabbitmq/, ['4369/tcp', '5671/tcp', '5672/tcp', '15691/tcp', '15692/tcp', '25672/tcp']],
+	[/redis/, ['6379/tcp']],
+	[/postgres/, ['5432/tcp']],
+	[/coredns/, ['53/udp', '53/tcp']],
+	[/wireguard/, ['51820/udp']],
+	[/nginx|httpd/, ['80/tcp']],
+	[/caddy/, ['443/tcp', '80/tcp', '2019/tcp']]
+];
+
+function imagePorts(image: string | null) {
+	const exposed = MOCK_IMAGE_PORTS.find(([pattern]) => pattern.test(image ?? ''))?.[1] ?? [];
+	const ports = exposed
+		.map((entry) => {
+			const [port, protocol] = entry.split('/');
+			return { port: Number(port), protocol };
+		})
+		.sort((a, b) => a.port - b.port);
+	const tcp = ports.filter((p) => p.protocol === 'tcp').map((p) => p.port);
+	const port = tcp.length === 0 ? null : tcp.includes(80) ? 80 : Math.min(...tcp);
+	return { port, ports };
+}
+
 export function projectRoutes(r: Router, { store }: MockContext) {
 	const find = (id: string) => store.project(id);
 
@@ -415,6 +439,8 @@ export function projectRoutes(r: Router, { store }: MockContext) {
 			})
 	}));
 	r.get('/projects/:id/registry-credentials', () => []);
+	r.get('/projects/:id/image-ports', ({ query }) => imagePorts(query.get('image')));
+	r.get('/organizations/:id/image-ports', ({ query }) => imagePorts(query.get('image')));
 	r.get('/projects/:id/members', ({ params }) => {
 		const p = find(params.id);
 		return p ? p.memberIds.map((id) => projectMember(store, p, id)) : notFound();

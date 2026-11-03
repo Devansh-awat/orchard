@@ -161,6 +161,15 @@
 		};
 	}
 
+	const DEFAULT_PORT = 80;
+	const IMAGE_DETECT_DEBOUNCE_MS = 600;
+	const MAX_HINT_PORTS = 6;
+
+	type ImagePorts = {
+		port: number | null;
+		ports: { port: number; protocol: string }[];
+	};
+
 	interface Branch {
 		name: string;
 		protected: boolean;
@@ -241,8 +250,11 @@
 	let replicas = $state(1);
 	let resourceCpuMilli = $state<number | null>(null);
 	let resourceMemoryBytes = $state<number | null>(null);
-	let ports = $state<PortRow[]>([portRow(80, 0)]);
+	let ports = $state<PortRow[]>([portRow(DEFAULT_PORT, 0)]);
 	let portsManuallyEdited = $state(false);
+	let imagePorts = $state<ImagePorts | null>(null);
+	let appliedImagePort: number | null = null;
+	const imagePortCache = new Map<string, ImagePorts>();
 	let envVars = $state<{ key: string; value: string; secret?: boolean }[]>([
 		{ key: '', value: '' }
 	]);
@@ -543,6 +555,93 @@
 			loadingStages = false;
 		}
 	}
+
+	const imagePortScope = $derived(
+		project?.id
+			? `projects/${project.id}`
+			: $selectedOrganization?.id
+				? `organizations/${$selectedOrganization.id}`
+				: null
+	);
+
+	const imagePortHint = $derived.by(() => {
+		const exposed = imagePorts?.ports ?? [];
+		if (exposed.length === 0) return undefined;
+		const labels = exposed
+			.slice(0, MAX_HINT_PORTS)
+			.map((p) => (p.protocol === 'tcp' ? `${p.port}` : `${p.port}/${p.protocol}`));
+		const more =
+			exposed.length > MAX_HINT_PORTS ? ` and ${exposed.length - MAX_HINT_PORTS} more` : '';
+		const list = `${labels.join(', ')}${more}`;
+		if (portsManuallyEdited || imagePorts?.port == null) return `Image exposes ${list}`;
+		return exposed.length === 1
+			? `Port set to ${imagePorts.port} from the image`
+			: `Port set to ${imagePorts.port}. Image exposes ${list}`;
+	});
+
+	function looksLikeImageRef(value: string) {
+		return /^[A-Za-z0-9][A-Za-z0-9._\-/:@]*[A-Za-z0-9_]$/.test(value);
+	}
+
+	function setOnlyPort(port: number) {
+		const first = ports[0] ?? portRow(port, 0);
+		ports = [{ ...first, name: 'port-1', containerPort: port, servicePort: port }];
+	}
+
+	function applyImagePorts(detected: ImagePorts | null) {
+		imagePorts = detected;
+		if (portsManuallyEdited) return;
+		if (detected?.port != null) {
+			if (ports.length !== 1 || ports[0]?.containerPort !== detected.port) {
+				setOnlyPort(detected.port);
+			}
+			appliedImagePort = detected.port;
+			return;
+		}
+		if (appliedImagePort === null) return;
+		if (ports.length === 1 && ports[0]?.containerPort === appliedImagePort) {
+			setOnlyPort(DEFAULT_PORT);
+		}
+		appliedImagePort = null;
+	}
+
+	async function fetchImagePorts(
+		scope: string,
+		ref: string,
+		signal: AbortSignal
+	): Promise<ImagePorts | null> {
+		const cached = imagePortCache.get(ref);
+		if (cached) return cached;
+		try {
+			const response = await apiFetch(
+				`/apiv1/${scope}/image-ports?image=${encodeURIComponent(ref)}`,
+				{ signal }
+			);
+			if (!response.ok) return null;
+			const detected: ImagePorts = await response.json();
+			if (detected.port != null) imagePortCache.set(ref, detected);
+			return detected;
+		} catch {
+			return null;
+		}
+	}
+
+	$effect(() => {
+		const ref = deploymentSource === 'image' ? image.trim() : '';
+		const scope = imagePortScope;
+		const controller = new AbortController();
+		const timer = setTimeout(async () => {
+			const detected =
+				scope && looksLikeImageRef(ref)
+					? await fetchImagePorts(scope, ref, controller.signal)
+					: null;
+			if (!controller.signal.aborted) applyImagePorts(detected);
+		}, IMAGE_DETECT_DEBOUNCE_MS);
+		return () => {
+			clearTimeout(timer);
+			controller.abort();
+		};
+	});
 
 	let nameTouched = false;
 
@@ -1221,7 +1320,7 @@
 						<Swap key={deploymentSource}>
 							<Stack gap="md">
 								{#if deploymentSource === 'image'}
-									<Field label="Image">
+									<Field label="Image" hint={imagePortHint}>
 										<Input
 											bind:value={image}
 											size="lg"
