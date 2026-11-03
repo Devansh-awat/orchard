@@ -1,3 +1,5 @@
+createNamespace: false
+
 image:
   repository: hackclub/orchard
 
@@ -7,6 +9,7 @@ datadog:
 signupMode: open
 
 tenant:
+  ingressNamespaces: 'traefik,orchard'
   storageClass: local-path
   ingressClass: traefik
   certClusterIssuer: selfsigned
@@ -19,6 +22,7 @@ ingress:
 
 gateway:
   http:
+    enabled: false
     appDomain: apps.127.0.0.1.nip.io
 
 postgres:
@@ -68,13 +72,22 @@ builders:
 
 server:
   replicas: 1
+  image:
+    tag: latest
   env:
-    - { name: JWT_SECRET, value: quickstart-insecure-jwt-secret }
-    - { name: SECRETS_ENCRYPTION_KEY, value: quickstart-insecure-enc-key0000 }
+    - { name: JWT_SECRET, value: quickstart-insecure-jwt-secret-not-for-real-use }
+    - { name: SECRETS_ENCRYPTION_KEY, value: quickstart-insecure-enc-key00000 }
     - { name: APP_DOMAIN, value: apps.127.0.0.1.nip.io }
     - { name: FRONTEND_URL, value: 'http://orchard.127.0.0.1.nip.io:8080' }
+    - { name: SESSION_COOKIE_SECURE, value: 'false' }
+    - { name: PUBLIC_HTTP_PORT, value: '8080' }
+    - { name: PUBLIC_HTTPS_PORT, value: '8443' }
 
 frontend:
   replicas: 1
+  image:
+    tag: latest
   env:
     - { name: PUBLIC_OAUTH_PROVIDER, value: none }
+    - { name: PUBLIC_HTTP_PORT, value: '8080' }
+    - { name: PUBLIC_HTTPS_PORT, value: '8443' }

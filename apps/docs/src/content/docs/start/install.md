@@ -452,7 +452,9 @@ For a throwaway local cluster:
 ```
 
 It creates a k3d cluster, installs the prerequisites, and deploys the chart with
-dev values.
+dev values, at `http://orchard.127.0.0.1.nip.io:8080`. Image builds are off, so
+deploy from a container image, and its secrets are public, so keep it on your
+laptop. It prints how to claim the instance when it finishes.
 
 ## Checking what you install
 

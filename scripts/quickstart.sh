@@ -2,8 +2,8 @@
 set -euo pipefail
 
 CLUSTER=${ORCHARD_CLUSTER:-orchard-dev}
-HTTP_PORT=${ORCHARD_HTTP_PORT:-8080}
-HTTPS_PORT=${ORCHARD_HTTPS_PORT:-8443}
+HTTP_PORT=8080
+HTTPS_PORT=8443
 GATEWAY_API_VERSION=v1.2.1
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -67,7 +67,13 @@ spec:
   selfSigned: {}
 EOF
 
+step "Waiting for the CloudNativePG webhook"
+until [ -n "$(kubectl -n cnpg-system get endpoints/cnpg-webhook-service -o jsonpath='{.subsets[*].addresses[*].ip}')" ]; do
+  sleep 2
+done
+
 step "Installing Orchard"
+kubectl create namespace network >/dev/null 2>&1 || true
 helm upgrade --install orchard "$REPO_ROOT/infra/charts/orchard" \
   --namespace orchard --create-namespace \
   -f "$REPO_ROOT/scripts/quickstart-values.yaml" \
@@ -80,12 +86,14 @@ Orchard is up:
 
   http://orchard.127.0.0.1.nip.io:$HTTP_PORT
 
-Signups are open; use the email OTP flow. Without SMTP configured, the OTP
-code is printed in the server logs:
+There is no account yet and no email here, so claim the instance with the
+single-use link in the server log. It asks for an email address, then for a
+password, because a passkey needs TLS:
 
-  kubectl logs -n orchard deploy/server -f | grep OTP
+  kubectl -n orchard logs deploy/server | grep -A3 'no superadmin'
 
-Image builds are disabled in the quickstart (no registry). To tear down:
+Image builds are disabled in the quickstart (no registry), so deploy from a
+container image. To tear down:
 
   k3d cluster delete $CLUSTER
 EOF

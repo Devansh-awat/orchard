@@ -13,7 +13,8 @@ For a laptop-sized trial run, use the quickstart instead:
 ```
 
 It creates a local k3d cluster, installs the prerequisites, and deploys the
-chart with dev values.
+chart with dev values. Image builds are off, and its secrets are public, so
+keep it on your laptop.
 
 ## Cluster prerequisites
 
