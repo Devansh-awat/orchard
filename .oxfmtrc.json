@@ -15,7 +15,7 @@
     "apps/docs/src/content/docs/reference/**",
     "apps/server/prisma/migrations/**",
     "CHANGELOG.md",
-    "**/CLAUDE.md",
+    "apps/frontend/AGENTS.md",
     "**/*.generated.ts",
     "**/*.generated.json",
     "packages/contracts/openapi.json",

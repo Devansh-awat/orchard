@@ -123,7 +123,9 @@ for (const key of Object.keys(totals)) {
 }
 
 if (failed) {
-	console.error('\ndesign check failed: use semantic tokens (src/tokens.css), ui/ components,');
+	console.error(
+		'\ndesign check failed: use semantic tokens (src/lib/design/tokens.css), ui/ components,'
+	);
 	console.error(
 		'solid fills from --status-*-solid with --on-solid text (never a status text token),'
 	);

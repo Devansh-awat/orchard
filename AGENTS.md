@@ -17,7 +17,7 @@ this repo. To drive a running instance through the CLI, read `apps/cli/AGENTS.md
 Deployed (`apps/`):
 
 - `apps/frontend`: SvelteKit + Svelte 5 web app. Rules in `apps/frontend/DESIGN.md` and
-  `apps/frontend/CLAUDE.md`. `pnpm dev:mock` runs it with no backend.
+  `apps/frontend/AGENTS.md`. `pnpm dev:mock` runs it with no backend.
 - `apps/server`: NestJS API and Prisma (Postgres). Auth in `src/auth`, k8s orchestration in
   `src/kubernetes`, the cluster mirror in `src/engine`, builds in `src/docker`, tenant resources in
   `src/projects`.
