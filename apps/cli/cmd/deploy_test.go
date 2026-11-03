@@ -96,6 +96,62 @@ func TestDeployGet(t *testing.T) {
 	}
 }
 
+func TestDeployCreateImagePortDetection(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		args     []string
+		status   int
+		response string
+		want     any
+		probes   int
+	}{
+		{name: "fills the detected port", status: 200, response: `{"port":9090,"ports":[]}`, want: float64(9090), probes: 1},
+		{name: "no EXPOSE leaves the server default", status: 200, response: `{"port":null,"ports":[]}`, want: nil, probes: 1},
+		{name: "a failure is not fatal", status: 403, response: `{}`, want: nil, probes: 1},
+		{name: "an explicit port wins", args: []string{"--port", "8080"}, want: float64(8080), probes: 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotBody map[string]any
+			var probes int
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.URL.Path == "/apiv1/projects/slug/proj":
+					io.WriteString(w, `{"id":"p1"}`)
+				case r.URL.Path == "/apiv1/projects/p1/image-ports":
+					probes++
+					if r.URL.Query().Get("image") != "quay.io/prometheus/prometheus:v3" {
+						t.Errorf("image = %q", r.URL.Query().Get("image"))
+					}
+					w.WriteHeader(tc.status)
+					io.WriteString(w, tc.response)
+				case r.Method == http.MethodPost && r.URL.Path == "/apiv1/projects/p1/deployments":
+					gotBody = deployDecodeBody(t, r)
+					io.WriteString(w, `{"id":"d1"}`)
+				default:
+					t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+					w.WriteHeader(404)
+				}
+			}))
+			defer srv.Close()
+
+			root := deployTestRoot(t, srv.URL)
+			root.SetArgs(append([]string{
+				"deploy", "create", "--project", "proj", "--name", "web",
+				"--image", "quay.io/prometheus/prometheus:v3", "--wait=false",
+			}, tc.args...))
+			if err := root.Execute(); err != nil {
+				t.Fatalf("deploy create: %v", err)
+			}
+			if gotBody["port"] != tc.want {
+				t.Errorf("port = %v, want %v", gotBody["port"], tc.want)
+			}
+			if probes != tc.probes {
+				t.Errorf("probes = %d, want %d", probes, tc.probes)
+			}
+		})
+	}
+}
+
 func TestDeployCreateImageBody(t *testing.T) {
 	var gotPath string
 	var gotBody map[string]any

@@ -216,6 +216,19 @@ func deployRenderKV(raw map[string]any) {
 	output.KV(pairs)
 }
 
+func detectImagePort(ctx context.Context, cl *api.Client, projectID, image string) int {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	var out struct {
+		Port int `json:"port"`
+	}
+	path := "/projects/" + url.PathEscape(projectID) + "/image-ports?image=" + url.QueryEscape(image)
+	if err := cl.GetJSON(ctx, path, &out); err != nil {
+		return 0
+	}
+	return out.Port
+}
+
 func deployCreateCmd() *cobra.Command {
 	var (
 		name, image, github, dockerfile, memory, envFile   string
@@ -351,6 +364,11 @@ func deployCreateCmd() *cobra.Command {
 				if normalizedPullPolicy != "" {
 					body["imagePullPolicy"] = normalizedPullPolicy
 				}
+				if port <= 0 {
+					if detected := detectImagePort(cmd.Context(), cl, projectID, image); detected > 0 {
+						body["port"] = detected
+					}
+				}
 			}
 
 			var raw map[string]any
@@ -401,7 +419,7 @@ func deployCreateCmd() *cobra.Command {
 	c.Flags().StringVar(&startCmd, "start-cmd", "", "override the detected start command")
 	c.Flags().StringVar(&outputDir, "output-dir", "", "directory of built static files; serves the app as a static site")
 	c.Flags().BoolVar(&autoURL, "auto-url", true, "generate a platform URL for the deployment (org-protected by default)")
-	c.Flags().IntVar(&port, "port", 0, "port the container listens on (server default 80 / EXPOSE autodetect)")
+	c.Flags().IntVar(&port, "port", 0, "port the container listens on (default: the image's or Dockerfile's EXPOSE, else 80)")
 	c.Flags().IntVar(&replicas, "replicas", 0, "number of replicas (server default 1)")
 	c.Flags().StringArrayVar(&envs, "env", nil, "environment variable KEY=VAL (repeatable)")
 	c.Flags().StringVar(&envFile, "env-file", "", "read environment variables from a dotenv-style file")

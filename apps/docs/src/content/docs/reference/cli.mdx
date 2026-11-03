@@ -1481,7 +1481,7 @@ orchard create
 | `--memory` | string |  | memory request in bytes or with unit (e.g. "512Mi") |
 | `--name` | string |  | deployment name (required) |
 | `--output-dir` | string |  | directory of built static files; serves the app as a static site |
-| `--port` | int | `0` | port the container listens on (server default 80 / EXPOSE autodetect) |
+| `--port` | int | `0` | port the container listens on (default: the image's or Dockerfile's EXPOSE, else 80) |
 | `--pull-policy` | string |  | pin the pull policy instead of deriving it from the tag: always\|ifnotpresent (--image only) |
 | `--railpack` | bool | `false` | build with railpack instead of a Dockerfile |
 | `--replicas` | int | `0` | number of replicas (server default 1) |
