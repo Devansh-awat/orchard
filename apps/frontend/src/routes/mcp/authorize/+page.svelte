@@ -6,6 +6,7 @@
 	import { user, isSignedIn, apiFetch, authConfig } from '$lib/stores';
 	import { KeyRound } from 'lucide-svelte';
 	import { Button, Input } from '$lib/components/ui';
+	import ConsentSignIn from '$lib/components/login/ConsentSignIn.svelte';
 	import Turnstile from '$lib/components/Turnstile.svelte';
 	import { motionStagger } from '$lib/utils/motion.svelte';
 
@@ -282,13 +283,10 @@
 		}
 	}
 
-	function signInWithHackClub() {
-		if (browser) {
-			sessionStorage.setItem('mcp_authorize_state', mcpState);
-			sessionStorage.setItem('mcp_authorize_server', mcpServer);
-			sessionStorage.setItem('mcp_authorize_exec', allowExec ? '1' : '0');
-			user.signIn();
-		}
+	function rememberConsent() {
+		sessionStorage.setItem('mcp_authorize_state', mcpState);
+		sessionStorage.setItem('mcp_authorize_server', mcpServer);
+		sessionStorage.setItem('mcp_authorize_exec', allowExec ? '1' : '0');
 	}
 
 	onMount(async () => {
@@ -384,99 +382,101 @@
 						{authorizing ? 'Authorizing...' : 'Authorize'}
 					</Button>
 				{:else}
-					<Button variant="primary" class="w-full" onclick={signInWithHackClub}>
-						Continue with Hack Club
-					</Button>
-
-					<div class="consent-divider"><span>or continue with email</span></div>
-
-					<form
-						class="consent-form"
-						novalidate
-						onsubmit={(e) => {
-							e.preventDefault();
-							if (otpStep === 'email') requestOtp();
-							else verifyOtp();
-						}}
-					>
-						<Input
-							type="email"
-							placeholder="you@example.com"
-							id="otp-email"
-							bind:value={otpEmail}
-							autocomplete="email"
-							error={!!otpError}
-							required
-						/>
-						{#if otpStep === 'code'}
-							<div class="consent-otp-row">
-								<Input
-									type="text"
-									class="consent-code"
-									inputmode="numeric"
-									maxlength="6"
-									placeholder="000000"
-									id="otp-code"
-									bind:value={otpCode}
-									autocomplete="one-time-code"
-									error={!!otpError}
-								/>
-								<Button
-									variant="ghost"
-									type="button"
-									onclick={() => {
-										otpStep = 'email';
-										otpCode = '';
-										otpMessage = null;
-									}}
-								>
-									Back
-								</Button>
-							</div>
-						{/if}
-						{#if otpError}
-							<p class="consent-error">{otpError}</p>
-						{/if}
-						{#if otpMessage}
-							<p class="consent-success">{otpMessage}</p>
-						{/if}
-						{#if siteKey}
-							<Turnstile bind:this={widget} {siteKey} action="signin" />
-						{/if}
-						<Button
-							variant="primary"
-							class="w-full"
-							type="submit"
-							loading={otpRequesting || otpVerifying}
-						>
-							{otpStep === 'email' ? 'Send code' : 'Verify and authorize'}
-						</Button>
-					</form>
-
-					{#if passkeySupported}
-						<div class="consent-divider"><span>or use a passkey</span></div>
-						<div class="consent-form">
-							<Input
-								type="email"
-								placeholder="Email (optional)"
-								id="passkey-email"
-								bind:value={passkeyEmail}
-							/>
-							<Button
-								variant="secondary"
-								class="w-full"
-								type="button"
-								onclick={signInWithPasskey}
-								loading={passkeyLoading}
-							>
-								<KeyRound class="h-4 w-4" />
-								Sign in with passkey
-							</Button>
-							{#if passkeyError}
-								<p class="consent-error">{passkeyError}</p>
+					<ConsentSignIn returnTo={$page.url.pathname + $page.url.search} onleave={rememberConsent}>
+						{#snippet children(hasProviders)}
+							{#if hasProviders}
+								<div class="consent-divider"><span>or continue with email</span></div>
 							{/if}
-						</div>
-					{/if}
+
+							<form
+								class="consent-form"
+								novalidate
+								onsubmit={(e) => {
+									e.preventDefault();
+									if (otpStep === 'email') requestOtp();
+									else verifyOtp();
+								}}
+							>
+								<Input
+									type="email"
+									placeholder="you@example.com"
+									id="otp-email"
+									bind:value={otpEmail}
+									autocomplete="email"
+									error={!!otpError}
+									required
+								/>
+								{#if otpStep === 'code'}
+									<div class="consent-otp-row">
+										<Input
+											type="text"
+											class="consent-code"
+											inputmode="numeric"
+											maxlength="6"
+											placeholder="000000"
+											id="otp-code"
+											bind:value={otpCode}
+											autocomplete="one-time-code"
+											error={!!otpError}
+										/>
+										<Button
+											variant="ghost"
+											type="button"
+											onclick={() => {
+												otpStep = 'email';
+												otpCode = '';
+												otpMessage = null;
+											}}
+										>
+											Back
+										</Button>
+									</div>
+								{/if}
+								{#if otpError}
+									<p class="consent-error">{otpError}</p>
+								{/if}
+								{#if otpMessage}
+									<p class="consent-success">{otpMessage}</p>
+								{/if}
+								{#if siteKey}
+									<Turnstile bind:this={widget} {siteKey} action="signin" />
+								{/if}
+								<Button
+									variant="primary"
+									class="w-full"
+									type="submit"
+									loading={otpRequesting || otpVerifying}
+								>
+									{otpStep === 'email' ? 'Send code' : 'Verify and authorize'}
+								</Button>
+							</form>
+
+							{#if passkeySupported}
+								<div class="consent-divider"><span>or use a passkey</span></div>
+								<div class="consent-form">
+									<Input
+										type="email"
+										placeholder="Email (optional)"
+										id="passkey-email"
+										bind:value={passkeyEmail}
+									/>
+									<Button
+										variant="secondary"
+										class="w-full"
+										type="button"
+										onclick={signInWithPasskey}
+										loading={passkeyLoading}
+									>
+										<KeyRound class="h-4 w-4" />
+										Sign in with passkey
+									</Button>
+									{#if passkeyError}
+										<p class="consent-error">{passkeyError}</p>
+									{/if}
+								</div>
+							{/if}
+						{/snippet}
+					</ConsentSignIn>
 				{/if}
 			</div>
 		{/if}

@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 	import { user, isSignedIn, apiFetch } from '$lib/stores';
 	import { Terminal } from 'lucide-svelte';
 	import { Button } from '$lib/components/ui';
+	import ConsentSignIn from '$lib/components/login/ConsentSignIn.svelte';
 	import { motionStagger } from '$lib/utils/motion.svelte';
 
 	let port = $derived($page.url.searchParams.get('port') || '');
@@ -69,15 +69,6 @@
 		if (validPort()) window.location.href = callbackUrl({ error: 'access_denied', state });
 	}
 
-	function signIn() {
-		if (browser) {
-			// Reuse the callback's invite-redirect hook so we land back here,
-			// with the same query params, after the Hack Club round-trip.
-			sessionStorage.setItem('inviteRedirect', $page.url.pathname + $page.url.search);
-			user.signIn();
-		}
-	}
-
 	onMount(() => {
 		if (!port || !state) {
 			error = 'Invalid request: missing port or state. Re-run `orchard auth login`.';
@@ -131,7 +122,7 @@
 					</Button>
 					<Button variant="ghost" class="w-full" onclick={deny}>Cancel</Button>
 				{:else}
-					<Button variant="primary" class="w-full" onclick={signIn}>Continue with Hack Club</Button>
+					<ConsentSignIn returnTo={$page.url.pathname + $page.url.search} />
 				{/if}
 			</div>
 		{/if}
