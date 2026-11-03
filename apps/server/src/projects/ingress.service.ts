@@ -31,15 +31,14 @@ import {
   truncateK8sName,
   platformWildcardDomains,
   desiredWildcardTls,
-  OWN_CERT_PREFIX
+  OWN_CERT_PREFIX,
+  CERT_CLUSTER_ISSUER
 } from './projects.utils';
 import { InstanceConfigService } from '../instance-config/instance-config.service';
 import { INGRESS } from '../instance-config/instance-config.sections';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 
 const TENANT_INGRESS_CLASS = process.env.K8S_INGRESS_CLASS || 'haproxy';
-
-const CERT_CLUSTER_ISSUER = process.env.CERT_CLUSTER_ISSUER || 'letsencrypt-prod';
 
 // "Sign in with Orchard" bounces visitors of a tenant host to the control
 // plane's login and requires project membership, so it only makes sense when

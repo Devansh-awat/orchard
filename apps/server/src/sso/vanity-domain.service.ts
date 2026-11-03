@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, ConflictException, Logger } from '@nes
 import { PrismaService } from '../prisma/prisma.service';
 import { K8sNetworkService } from '../kubernetes/k8s-network.service';
 import { optionalDomain } from '../env/platform-domains';
+import { CERT_CLUSTER_ISSUER } from '../projects/projects.utils';
 
 const RESERVED_SUBDOMAINS = new Set([
   'www',
@@ -138,7 +139,7 @@ export class VanityDomainService {
       servicePort: this.platformServicePort,
       tlsSecretName: `sso-tls-${subdomain}`,
       tlsHosts: [host],
-      annotations: { 'cert-manager.io/cluster-issuer': 'letsencrypt-prod' }
+      annotations: { 'cert-manager.io/cluster-issuer': CERT_CLUSTER_ISSUER }
     };
 
     try {

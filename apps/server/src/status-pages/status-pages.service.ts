@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { K8sNetworkService } from '../kubernetes/k8s-network.service';
 import { AuditService } from '../audit/audit.service';
 import { optionalDomain } from '../env/platform-domains';
+import { CERT_CLUSTER_ISSUER } from '../projects/projects.utils';
 import {
   MAX_COMPONENTS,
   SLUG_PATTERN,
@@ -637,7 +638,7 @@ export class StatusPagesService {
       servicePort: this.platformServicePort,
       tlsSecretName: `status-tls-${subdomain}`,
       tlsHosts: [host],
-      annotations: { 'cert-manager.io/cluster-issuer': 'letsencrypt-prod' }
+      annotations: { 'cert-manager.io/cluster-issuer': CERT_CLUSTER_ISSUER }
     };
     try {
       await this.k8sNetwork.createIngress(opts);

@@ -6,6 +6,8 @@ import { BadRequestException } from '@nestjs/common';
  * without dragging in DI.
  */
 
+export const CERT_CLUSTER_ISSUER = process.env.CERT_CLUSTER_ISSUER || 'letsencrypt-prod';
+
 export function wildcardSecretNameFor(suffix: string): string {
   return `wildcard-${suffix
     .replace(/^\./, '')
