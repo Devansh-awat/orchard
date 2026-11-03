@@ -5,7 +5,7 @@ metadata:
   displayName: 'n8n'
   description: 'Workflow automation with a visual editor and hundreds of integrations.'
   icon: https://github.com/n8n-io.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: automation
   tags: ['automation', 'workflows', 'integrations', 'webhooks']
   keywords: ['zapier', 'make', 'ifttt', 'cron', 'pipelines', 'low code']
@@ -142,11 +142,17 @@ resources:
     type: database
     config:
       name: '{{ params.appName }}-db'
+      resources:
+        cpu: 500m
+        memory: 1Gi
 
   - name: app
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 1000m
+        memory: 1Gi
       image: n8nio/n8n:latest
       replicas: 1
       ports:

@@ -5,7 +5,7 @@ metadata:
   displayName: 'Formbricks'
   description: 'Surveys and forms with targeting, in-app or by link, and a drag-and-drop builder.'
   icon: https://github.com/formbricks.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: forms
   tags: ['forms', 'surveys', 'feedback']
   keywords: ['typeform', 'google forms', 'nps', 'questionnaire', 'user research']
@@ -97,11 +97,17 @@ resources:
     type: database
     config:
       name: '{{ params.appName }}-db'
+      resources:
+        cpu: 500m
+        memory: 1Gi
 
   - name: app
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 1000m
+        memory: 2Gi
       image: ghcr.io/formbricks/formbricks:3
       replicas: 1
       ports:

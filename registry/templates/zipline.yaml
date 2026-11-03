@@ -5,7 +5,7 @@ metadata:
   displayName: 'Zipline'
   description: 'A file and screenshot host with ShareX support, short links and an admin UI.'
   icon: upload
-  version: '1.0.0'
+  version: '1.1.0'
   category: files
   tags: ['uploads', 'sharex', 'screenshots']
   keywords: ['file host', 'image host', 'imgur', 'sharex server']
@@ -47,11 +47,17 @@ resources:
     type: database
     config:
       name: '{{ params.appName }}-db'
+      resources:
+        cpu: 500m
+        memory: 1Gi
 
   - name: app
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 500m
+        memory: 512Mi
       image: ghcr.io/diced/zipline:latest
       replicas: 1
       ports:

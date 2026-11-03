@@ -5,7 +5,7 @@ metadata:
   displayName: 'Audiobookshelf'
   description: 'A server for audiobooks and podcasts with progress sync and mobile apps.'
   icon: https://github.com/advplyr.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: media
   tags: ['audiobooks', 'podcasts', 'streaming']
   keywords: ['audible', 'podcast player', 'listening']
@@ -41,6 +41,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 500m
+        memory: 512Mi
       image: ghcr.io/advplyr/audiobookshelf:latest
       replicas: 1
       ports:

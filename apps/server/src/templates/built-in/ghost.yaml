@@ -5,7 +5,7 @@ metadata:
   displayName: Ghost Blog
   description: Modern publishing platform powered by Ghost with PostgreSQL storage and public domain.
   icon: https://github.com/TryGhost.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: cms
   tags: ['blog', 'cms', 'ghost', 'publishing']
   keywords: ['blog', 'writing', 'posts', 'newsletter', 'publishing', 'markdown']
@@ -45,11 +45,17 @@ resources:
     type: database
     config:
       name: '{{ params.appName }}-db'
+      resources:
+        cpu: 500m
+        memory: 1Gi
 
   - name: app
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 500m
+        memory: 1Gi
       image: '{{ params.ghostImage }}'
       replicas: 1
       ports:

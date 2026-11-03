@@ -5,7 +5,7 @@ metadata:
   displayName: 'Docmost'
   description: 'A wiki with real-time editing, spaces and comments. Ships with its own Postgres and Valkey.'
   icon: https://github.com/docmost.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: docs
   tags: ['wiki', 'docs', 'knowledge base', 'collaboration']
   keywords: ['notion', 'confluence', 'outline', 'documentation', 'pages']
@@ -112,11 +112,17 @@ resources:
     type: database
     config:
       name: '{{ params.appName }}-db'
+      resources:
+        cpu: 500m
+        memory: 1Gi
 
   - name: cache
     type: deployment
     config:
       name: '{{ params.appName }}-cache'
+      resources:
+        cpu: 500m
+        memory: 512Mi
       image: valkey/valkey:8-alpine
       replicas: 1
       ports:
@@ -129,6 +135,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 500m
+        memory: 1Gi
       image: docmost/docmost:latest
       replicas: 1
       ports:

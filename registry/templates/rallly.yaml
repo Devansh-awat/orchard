@@ -5,7 +5,7 @@ metadata:
   displayName: 'Rallly'
   description: 'Group scheduling polls, like Doodle. Sign-in is by email code, so SMTP is required.'
   icon: calendar
-  version: '1.0.0'
+  version: '1.1.0'
   category: community
   tags: ['scheduling', 'polls', 'calendar']
   keywords: ['doodle', 'when2meet', 'meeting poll', 'availability']
@@ -78,11 +78,17 @@ resources:
     type: database
     config:
       name: '{{ params.appName }}-db'
+      resources:
+        cpu: 500m
+        memory: 1Gi
 
   - name: app
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 500m
+        memory: 512Mi
       image: lukevella/rallly:latest
       replicas: 1
       ports:

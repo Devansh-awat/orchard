@@ -5,7 +5,7 @@ metadata:
   displayName: 'Matomo'
   description: 'Full-featured web analytics with heatmaps, funnels and a hundred plugins. Ships with its own MariaDB.'
   icon: https://github.com/matomo-org.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: analytics
   tags: ['analytics', 'tracking']
   keywords: ['google analytics alternative', 'piwik', 'visitors', 'stats']
@@ -53,6 +53,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}-mysql'
+      resources:
+        cpu: 1000m
+        memory: 2Gi
       image: mariadb:11
       replicas: 1
       ports:
@@ -81,6 +84,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 500m
+        memory: 1Gi
       image: matomo:5-apache
       replicas: 1
       ports:

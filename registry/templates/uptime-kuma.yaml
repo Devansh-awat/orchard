@@ -5,7 +5,7 @@ metadata:
   displayName: 'Uptime Kuma'
   description: 'Uptime monitoring with status pages and notifications to just about anything.'
   icon: activity
-  version: '1.0.0'
+  version: '1.1.0'
   category: monitoring
   tags: ['monitoring', 'uptime', 'status page', 'alerts']
   keywords: ['pingdom', 'healthcheck', 'downtime', 'incidents', 'statuspage']
@@ -50,6 +50,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 500m
+        memory: 512Mi
       image: louislam/uptime-kuma:1
       replicas: 1
       ports:

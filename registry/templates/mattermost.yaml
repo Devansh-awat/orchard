@@ -5,7 +5,7 @@ metadata:
   displayName: 'Mattermost'
   description: 'Team chat with channels, threads and calls. The team edition, on your own Postgres.'
   icon: https://github.com/mattermost.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: community
   tags: ['chat', 'team', 'messaging', 'slack']
   keywords: ['slack alternative', 'discord', 'channels', 'rocket.chat', 'workspace']
@@ -85,11 +85,17 @@ resources:
     type: database
     config:
       name: '{{ params.appName }}-db'
+      resources:
+        cpu: 500m
+        memory: 1Gi
 
   - name: app
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 1000m
+        memory: 2Gi
       image: mattermost/mattermost-team-edition:10.12
       replicas: 1
       ports:

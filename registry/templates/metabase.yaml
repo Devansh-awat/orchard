@@ -5,7 +5,7 @@ metadata:
   displayName: 'Metabase'
   description: 'Dashboards and questions over any SQL database, with a UI non-engineers can use.'
   icon: https://github.com/metabase.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: analytics
   tags: ['bi', 'dashboards', 'sql', 'reporting']
   keywords: ['business intelligence', 'looker', 'superset', 'charts', 'queries']
@@ -73,11 +73,17 @@ resources:
     type: database
     config:
       name: '{{ params.appName }}-db'
+      resources:
+        cpu: 500m
+        memory: 1Gi
 
   - name: app
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 1000m
+        memory: 2Gi
       image: metabase/metabase:latest
       replicas: 1
       ports:

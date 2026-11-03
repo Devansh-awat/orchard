@@ -5,7 +5,7 @@ metadata:
   displayName: 'DocuSeal'
   description: 'Document signing. Build forms from PDFs, send them, collect signatures.'
   icon: https://github.com/docusealco.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: forms
   tags: ['esignature', 'pdf', 'documents']
   keywords: ['docusign', 'sign pdf', 'contracts', 'documenso']
@@ -47,11 +47,17 @@ resources:
     type: database
     config:
       name: '{{ params.appName }}-db'
+      resources:
+        cpu: 500m
+        memory: 1Gi
 
   - name: app
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 500m
+        memory: 1Gi
       image: docuseal/docuseal:latest
       replicas: 1
       ports:

@@ -5,7 +5,7 @@ metadata:
   displayName: 'linkding'
   description: 'A bookmark manager that stays out of the way. Tags, search, archive, browser extension.'
   icon: https://raw.githubusercontent.com/sissbruecker/linkding/master/assets/logo.png
-  version: '1.0.0'
+  version: '1.1.0'
   category: reader
   tags: ['bookmarks', 'links', 'archive']
   keywords: ['pocket', 'raindrop', 'pinboard', 'read later', 'save links']
@@ -66,6 +66,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 250m
+        memory: 256Mi
       image: sissbruecker/linkding:latest
       replicas: 1
       ports:

@@ -5,7 +5,7 @@ metadata:
   displayName: 'Gotify'
   description: 'A simple server for sending and receiving push messages, with an Android app.'
   icon: https://github.com/gotify.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: monitoring
   tags: ['notifications', 'push']
   keywords: ['ntfy', 'pushover', 'alerts']
@@ -51,6 +51,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 100m
+        memory: 128Mi
       image: gotify/server:latest
       replicas: 1
       ports:

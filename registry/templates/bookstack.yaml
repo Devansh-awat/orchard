@@ -5,7 +5,7 @@ metadata:
   displayName: 'BookStack'
   description: 'A wiki organised as shelves, books, chapters and pages. Ships with its own MariaDB.'
   icon: https://github.com/BookStackApp.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: docs
   tags: ['wiki', 'docs', 'knowledge base']
   keywords: ['confluence', 'documentation', 'manual', 'handbook']
@@ -63,6 +63,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}-mysql'
+      resources:
+        cpu: 500m
+        memory: 1Gi
       image: mariadb:11
       replicas: 1
       ports:
@@ -91,6 +94,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 500m
+        memory: 512Mi
       image: lscr.io/linuxserver/bookstack:latest
       replicas: 1
       ports:

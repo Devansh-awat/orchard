@@ -5,7 +5,7 @@ metadata:
   displayName: 'MongoDB'
   description: 'A document database for the apps that need one. Internal-only, no public exposure.'
   icon: https://github.com/mongodb.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: database
   tags: ['mongodb', 'database', 'nosql']
   keywords: ['mongo', 'document store', 'mongoose']
@@ -43,6 +43,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 500m
+        memory: 1Gi
       image: mongo:8
       replicas: 1
       ports:

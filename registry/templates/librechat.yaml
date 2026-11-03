@@ -5,7 +5,7 @@ metadata:
   displayName: 'LibreChat'
   description: 'A ChatGPT-style interface for many providers with agents, files and search. Brings its own MongoDB and Meilisearch.'
   icon: message-square
-  version: '1.0.0'
+  version: '1.1.0'
   category: ai
   tags: ['llm', 'chat', 'openai']
   keywords: ['chatgpt', 'open webui', 'ai assistant', 'hack club ai']
@@ -89,6 +89,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}-mongo'
+      resources:
+        cpu: 500m
+        memory: 1Gi
       image: mongo:8
       replicas: 1
       ports:
@@ -106,6 +109,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}-search'
+      resources:
+        cpu: 500m
+        memory: 1Gi
       image: getmeili/meilisearch:v1.13
       replicas: 1
       ports:
@@ -129,6 +135,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 1000m
+        memory: 1Gi
       image: ghcr.io/danny-avila/librechat:latest
       replicas: 1
       ports:

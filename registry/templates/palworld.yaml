@@ -5,7 +5,7 @@ metadata:
   displayName: 'Palworld Server'
   description: 'A dedicated Palworld server on a public UDP port. Needs a lot of memory: 8 GB is the floor.'
   icon: none
-  version: '1.0.0'
+  version: '1.1.0'
   category: games
   tags: ['palworld', 'game server', 'multiplayer']
   keywords: ['pals', 'survival', 'dedicated server', 'steam']
@@ -115,6 +115,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 4000m
+        memory: 16Gi
       image: thijsvanloef/palworld-server-docker:latest
       replicas: 1
       ports:

@@ -5,7 +5,7 @@ metadata:
   displayName: 'HedgeDoc'
   description: 'Collaborative markdown notes in the browser, with live editing and slide mode.'
   icon: https://github.com/hedgedoc.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: docs
   tags: ['markdown', 'notes', 'collaboration', 'wiki']
   keywords: ['hackmd', 'codimd', 'pad', 'realtime editing', 'documents']
@@ -102,11 +102,17 @@ resources:
     type: database
     config:
       name: '{{ params.appName }}-db'
+      resources:
+        cpu: 500m
+        memory: 1Gi
 
   - name: app
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 500m
+        memory: 512Mi
       image: quay.io/hedgedoc/hedgedoc:1.10.3
       replicas: 1
       ports:

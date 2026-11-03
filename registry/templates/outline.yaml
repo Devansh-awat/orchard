@@ -5,7 +5,7 @@ metadata:
   displayName: 'Outline'
   description: 'A team wiki with a fast editor. Needs an OpenID Connect provider to sign in, so pair it with Keycloak.'
   icon: https://github.com/outline.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: docs
   tags: ['wiki', 'docs', 'knowledge base', 'oidc']
   keywords: ['notion', 'confluence', 'documentation', 'team wiki', 'markdown']
@@ -181,11 +181,17 @@ resources:
     type: database
     config:
       name: '{{ params.appName }}-db'
+      resources:
+        cpu: 500m
+        memory: 1Gi
 
   - name: cache
     type: deployment
     config:
       name: '{{ params.appName }}-cache'
+      resources:
+        cpu: 500m
+        memory: 512Mi
       image: valkey/valkey:8-alpine
       replicas: 1
       ports:
@@ -198,6 +204,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 500m
+        memory: 1Gi
       image: outlinewiki/outline:latest
       replicas: 1
       ports:

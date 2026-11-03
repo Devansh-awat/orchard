@@ -5,7 +5,7 @@ metadata:
   displayName: 'code-server'
   description: 'VS Code in the browser, with your home directory on a volume.'
   icon: https://github.com/coder.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: developer
   tags: ['vscode', 'ide', 'editor', 'remote']
   keywords: ['visual studio code', 'coder', 'cloud ide', 'dev environment']
@@ -66,6 +66,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 1000m
+        memory: 2Gi
       image: codercom/code-server:latest
       replicas: 1
       ports:

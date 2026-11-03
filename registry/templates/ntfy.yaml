@@ -5,7 +5,7 @@ metadata:
   displayName: 'ntfy'
   description: 'Push notifications over HTTP. curl a topic, get it on your phone.'
   icon: https://raw.githubusercontent.com/binwiederhier/ntfy/main/web/public/static/images/ntfy.png
-  version: '1.0.0'
+  version: '1.1.0'
   category: monitoring
   tags: ['notifications', 'push', 'api']
   keywords: ['pushover', 'gotify', 'alerts', 'webhook to phone']
@@ -64,6 +64,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 100m
+        memory: 128Mi
       image: binwiederhier/ntfy:latest
       startCommand: 'serve'
       replicas: 1

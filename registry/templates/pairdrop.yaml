@@ -5,7 +5,7 @@ metadata:
   displayName: 'PairDrop'
   description: 'AirDrop for everyone. Send files between devices on the same network or paired across networks.'
   icon: send
-  version: '1.0.0'
+  version: '1.1.0'
   category: files
   tags: ['file transfer', 'p2p']
   keywords: ['airdrop', 'snapdrop', 'send files', 'local sharing']
@@ -45,6 +45,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 100m
+        memory: 128Mi
       image: lscr.io/linuxserver/pairdrop:latest
       replicas: 1
       ports:

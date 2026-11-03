@@ -21,6 +21,18 @@ merged template shows up in the hosted instance and in self-hosted ones alike.
 4. Commit it as `feat(templates): add <name>` and open a pull request. CI runs
    the same validator; a merge publishes it within a minute.
 
+Every deployment and database needs a recommended size under `config`, which
+is what the deploy form starts from and what people can change before deploying:
+
+```yaml
+resources:
+  cpu: 500m
+  memory: 1Gi
+```
+
+Size it for real use, because memory is a hard limit and a container that goes
+over it gets killed. The validator rejects a template without it.
+
 Set `metadata.license` to the SPDX id of the software the template deploys
 (`MIT`, `AGPL-3.0-only`, `GPL-2.0-or-later`) and `metadata.homepage` to its
 site; the page shows both. The template file itself is covered by this repo's

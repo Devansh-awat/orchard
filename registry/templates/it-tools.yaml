@@ -5,7 +5,7 @@ metadata:
   displayName: 'IT Tools'
   description: 'A hundred small developer utilities on one page: encoders, hashes, converters, generators. No configuration.'
   icon: wrench
-  version: '1.0.0'
+  version: '1.1.0'
   category: developer
   tags: ['tools', 'utilities', 'static']
   keywords: ['base64', 'jwt', 'uuid', 'hash', 'regex', 'converter', 'cyberchef']
@@ -36,6 +36,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 100m
+        memory: 128Mi
       image: corentinth/it-tools:latest
       replicas: 1
       ports:

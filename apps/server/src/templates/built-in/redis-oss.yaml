@@ -5,7 +5,7 @@ metadata:
   displayName: Redis
   description: In-memory data store for caches, queues and sessions. Internal-only, no public exposure.
   icon: https://github.com/redis.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: database
   tags: ['redis', 'cache', 'memory', 'key-value']
   keywords: ['redis', 'cache', 'key-value', 'in-memory', 'queue', 'session store']
@@ -48,6 +48,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 500m
+        memory: 1Gi
       image: '{{ params.image }}'
       startCommand: 'redis-server --maxmemory {{ params.maxMemory }} --maxmemory-policy allkeys-lru'
       replicas: 1

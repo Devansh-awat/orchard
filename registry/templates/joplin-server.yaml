@@ -5,7 +5,7 @@ metadata:
   displayName: 'Joplin Server'
   description: 'Sync server for the Joplin note apps, with sharing and publishing.'
   icon: https://raw.githubusercontent.com/laurent22/joplin/dev/Assets/LinuxIcons/256x256.png
-  version: '1.0.0'
+  version: '1.1.0'
   category: docs
   tags: ['notes', 'sync']
   keywords: ['joplin', 'note sync', 'evernote alternative']
@@ -61,11 +61,17 @@ resources:
     type: database
     config:
       name: '{{ params.appName }}-db'
+      resources:
+        cpu: 500m
+        memory: 1Gi
 
   - name: app
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 500m
+        memory: 1Gi
       image: joplin/server:latest
       replicas: 1
       ports:

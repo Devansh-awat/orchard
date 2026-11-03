@@ -5,7 +5,7 @@ metadata:
   displayName: 'Automatisch'
   description: 'Open-source Zapier alternative. Connect apps with triggers and actions, no code.'
   icon: https://github.com/automatisch.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: automation
   tags: ['automation', 'workflows', 'integrations']
   keywords: ['zapier', 'n8n', 'triggers', 'actions']
@@ -59,11 +59,17 @@ resources:
     type: database
     config:
       name: '{{ params.appName }}-db'
+      resources:
+        cpu: 500m
+        memory: 1Gi
 
   - name: cache
     type: deployment
     config:
       name: '{{ params.appName }}-cache'
+      resources:
+        cpu: 500m
+        memory: 512Mi
       image: valkey/valkey:8-alpine
       replicas: 1
       ports:
@@ -76,6 +82,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 500m
+        memory: 1Gi
       image: automatischio/automatisch:latest
       replicas: 1
       ports:

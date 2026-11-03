@@ -5,7 +5,7 @@ metadata:
   displayName: 'Firefly III'
   description: 'Personal finance with accounts, budgets, rules and reports.'
   icon: https://github.com/firefly-iii.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: finance
   tags: ['finance', 'budget', 'accounting']
   keywords: ['ynab', 'money manager', 'transactions', 'bank import']
@@ -70,11 +70,17 @@ resources:
     type: database
     config:
       name: '{{ params.appName }}-db'
+      resources:
+        cpu: 500m
+        memory: 1Gi
 
   - name: app
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 500m
+        memory: 512Mi
       image: fireflyiii/core:latest
       replicas: 1
       ports:

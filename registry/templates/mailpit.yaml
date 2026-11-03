@@ -5,7 +5,7 @@ metadata:
   displayName: 'Mailpit'
   description: 'A fake SMTP server with a web inbox. Point your app at it and read every email it sends.'
   icon: https://raw.githubusercontent.com/axllent/mailpit/develop/server/ui/mailpit.svg
-  version: '1.0.0'
+  version: '1.1.0'
   category: developer
   tags: ['email', 'smtp', 'testing', 'dev tools']
   keywords: ['mailhog', 'mailcatcher', 'fake smtp', 'email testing', 'staging']
@@ -54,6 +54,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 100m
+        memory: 128Mi
       image: axllent/mailpit:latest
       replicas: 1
       ports:

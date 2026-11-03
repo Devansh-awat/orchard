@@ -5,7 +5,7 @@ metadata:
   displayName: 'Enshrouded Server'
   description: 'A dedicated Enshrouded server on public UDP ports.'
   icon: none
-  version: '1.0.0'
+  version: '1.1.0'
   category: games
   tags: ['enshrouded', 'game server', 'multiplayer']
   keywords: ['survival', 'coop', 'dedicated server', 'steam']
@@ -49,6 +49,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 4000m
+        memory: 16Gi
       image: sknnr/enshrouded-dedicated-server:latest
       replicas: 1
       ports:

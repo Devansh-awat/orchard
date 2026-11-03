@@ -5,7 +5,7 @@ metadata:
   displayName: 'Navidrome'
   description: 'A music server and streamer that speaks Subsonic, so every music app works with it.'
   icon: https://github.com/navidrome.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: media
   tags: ['music', 'streaming', 'subsonic']
   keywords: ['spotify', 'plexamp', 'mp3', 'flac', 'music library']
@@ -62,6 +62,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 500m
+        memory: 512Mi
       image: deluan/navidrome:latest
       replicas: 1
       ports:

@@ -5,7 +5,7 @@ metadata:
   displayName: 'RustFS'
   description: 'S3-compatible object storage with a web console. The bucket everything else can point at. MinIO stopped publishing its community image; this is the drop-in.'
   icon: https://github.com/rustfs.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: storage
   tags: ['s3', 'object storage', 'buckets']
   keywords: ['minio', 'aws s3', 'r2', 'garage', 'uploads', 'blob storage', 'file storage']
@@ -76,6 +76,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 500m
+        memory: 1Gi
       image: rustfs/rustfs:latest
       replicas: 1
       ports:

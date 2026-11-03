@@ -5,7 +5,7 @@ metadata:
   displayName: 'Wiki.js'
   description: 'A modern wiki with a WYSIWYG and markdown editor, and dozens of auth providers.'
   icon: https://github.com/requarks.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: docs
   tags: ['wiki', 'docs', 'knowledge base']
   keywords: ['confluence', 'documentation', 'mediawiki', 'handbook']
@@ -36,11 +36,17 @@ resources:
     type: database
     config:
       name: '{{ params.appName }}-db'
+      resources:
+        cpu: 500m
+        memory: 1Gi
 
   - name: app
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 500m
+        memory: 512Mi
       image: ghcr.io/requarks/wiki:2
       replicas: 1
       ports:

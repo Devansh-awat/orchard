@@ -5,7 +5,7 @@ metadata:
   displayName: Static Site
   description: Serve a static website or SPA with Nginx and a public domain. No database needed.
   icon: https://github.com/nginx.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: frontend
   tags: ['static', 'nginx', 'spa', 'frontend', 'html']
   keywords: ['website', 'html', 'landing page', 'spa', 'nginx', 'frontend']
@@ -46,6 +46,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 100m
+        memory: 128Mi
       image: '{{ params.image }}'
       replicas: 1
       ports:

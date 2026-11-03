@@ -5,7 +5,7 @@ metadata:
   displayName: 'SearXNG'
   description: 'A private metasearch engine. Aggregates results from other engines without tracking you.'
   icon: https://github.com/searxng.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: ai
   tags: ['search', 'privacy']
   keywords: ['google alternative', 'duckduckgo', 'meta search', 'web search api']
@@ -49,6 +49,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 500m
+        memory: 512Mi
       image: searxng/searxng:latest
       replicas: 1
       ports:

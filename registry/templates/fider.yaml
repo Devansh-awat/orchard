@@ -5,7 +5,7 @@ metadata:
   displayName: 'Fider'
   description: 'A feedback board where users post ideas and vote. Sign-in is by email link, so SMTP is required.'
   icon: https://github.com/getfider.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: community
   tags: ['feedback', 'voting', 'roadmap']
   keywords: ['canny', 'feature requests', 'ideas board', 'upvote']
@@ -67,11 +67,17 @@ resources:
     type: database
     config:
       name: '{{ params.appName }}-db'
+      resources:
+        cpu: 500m
+        memory: 1Gi
 
   - name: app
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 250m
+        memory: 256Mi
       image: getfider/fider:stable
       replicas: 1
       ports:

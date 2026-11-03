@@ -5,7 +5,7 @@ metadata:
   displayName: 'Flowise'
   description: 'Drag-and-drop LLM apps and agents. Chains, tools, vector stores, an API for each flow.'
   icon: https://github.com/FlowiseAI.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: ai
   tags: ['llm', 'agents', 'low code']
   keywords: ['langchain', 'langflow', 'chatbot builder', 'rag']
@@ -42,11 +42,17 @@ resources:
     type: database
     config:
       name: '{{ params.appName }}-db'
+      resources:
+        cpu: 500m
+        memory: 1Gi
 
   - name: app
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 500m
+        memory: 1Gi
       image: flowiseai/flowise:latest
       replicas: 1
       ports:

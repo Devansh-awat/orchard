@@ -5,7 +5,7 @@ metadata:
   displayName: 'Immich'
   description: 'Photo and video backup with a phone app, face recognition and search. Brings its own Postgres with the vector extension it needs, plus Valkey and the ML worker.'
   icon: https://github.com/immich-app.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: media
   tags: ['photos', 'backup', 'ai']
   keywords: ['google photos alternative', 'icloud photos', 'gallery', 'face recognition']
@@ -56,6 +56,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}-db'
+      resources:
+        cpu: 1000m
+        memory: 2Gi
       image: ghcr.io/immich-app/postgres:14-vectorchord0.3.0-pgvectors0.2.0
       replicas: 1
       ports:
@@ -83,6 +86,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}-cache'
+      resources:
+        cpu: 500m
+        memory: 512Mi
       image: valkey/valkey:8-alpine
       replicas: 1
       ports:
@@ -95,6 +101,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}-ml'
+      resources:
+        cpu: 2000m
+        memory: 3Gi
       image: ghcr.io/immich-app/immich-machine-learning:release
       replicas: 1
       ports:
@@ -112,6 +121,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 2000m
+        memory: 2Gi
       image: ghcr.io/immich-app/immich-server:release
       replicas: 1
       ports:

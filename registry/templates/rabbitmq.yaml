@@ -5,7 +5,7 @@ metadata:
   displayName: 'RabbitMQ'
   description: 'A message broker with a management UI. AMQP inside the cluster, the console on a domain.'
   icon: https://github.com/rabbitmq.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: database
   tags: ['queue', 'messaging', 'amqp']
   keywords: ['message queue', 'celery', 'bullmq', 'pubsub', 'broker']
@@ -53,6 +53,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 500m
+        memory: 1Gi
       image: rabbitmq:4-management
       replicas: 1
       ports:

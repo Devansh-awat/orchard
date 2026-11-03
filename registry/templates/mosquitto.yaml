@@ -5,7 +5,7 @@ metadata:
   displayName: 'Mosquitto MQTT'
   description: 'An MQTT broker for IoT and home automation, on a public TCP port. Starts open; add users afterwards.'
   icon: https://github.com/eclipse-mosquitto.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: database
   tags: ['mqtt', 'iot', 'messaging']
   keywords: ['home assistant', 'esp32', 'sensors', 'pubsub', 'broker']
@@ -32,6 +32,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 100m
+        memory: 128Mi
       image: eclipse-mosquitto:2
       startCommand: 'mosquitto -c /mosquitto-no-auth.conf'
       replicas: 1

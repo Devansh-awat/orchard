@@ -5,7 +5,7 @@ metadata:
   displayName: 'Typesense'
   description: 'An open-source search engine built for instant results. Internal-only; front it from your app.'
   icon: https://github.com/typesense.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: database
   tags: ['search', 'api']
   keywords: ['algolia', 'meilisearch', 'full text search', 'autocomplete']
@@ -42,6 +42,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 500m
+        memory: 1Gi
       image: typesense/typesense:28.0
       replicas: 1
       ports:

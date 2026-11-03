@@ -5,7 +5,7 @@ metadata:
   displayName: 'CloudBeaver'
   description: 'DBeaver in the browser. Connects to Postgres, MySQL, SQLite and more.'
   icon: https://github.com/dbeaver.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: developer
   tags: ['database', 'admin', 'sql']
   keywords: ['dbeaver', 'pgadmin', 'sql client', 'query editor']
@@ -36,6 +36,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 500m
+        memory: 1Gi
       image: dbeaver/cloudbeaver:latest
       replicas: 1
       ports:

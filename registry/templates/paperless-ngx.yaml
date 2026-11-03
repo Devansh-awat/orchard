@@ -5,7 +5,7 @@ metadata:
   displayName: 'Paperless-ngx'
   description: 'Scan, OCR, tag and search every document you own. Comes with Postgres, Valkey, Tika and Gotenberg so office files work too.'
   icon: https://github.com/paperless-ngx.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: docs
   tags: ['documents', 'ocr', 'archive']
   keywords: ['paperless', 'scanner', 'receipts', 'pdf archive', 'document management']
@@ -83,11 +83,17 @@ resources:
     type: database
     config:
       name: '{{ params.appName }}-db'
+      resources:
+        cpu: 500m
+        memory: 1Gi
 
   - name: cache
     type: deployment
     config:
       name: '{{ params.appName }}-cache'
+      resources:
+        cpu: 500m
+        memory: 512Mi
       image: valkey/valkey:8-alpine
       replicas: 1
       ports:
@@ -100,6 +106,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}-tika'
+      resources:
+        cpu: 500m
+        memory: 1Gi
       image: apache/tika:latest
       replicas: 1
       ports:
@@ -112,6 +121,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}-gotenberg'
+      resources:
+        cpu: 500m
+        memory: 1Gi
       image: gotenberg/gotenberg:8
       startCommand: 'gotenberg --chromium-disable-javascript=true --chromium-allow-list=file:///tmp/.*'
       replicas: 1
@@ -125,6 +137,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 1000m
+        memory: 2Gi
       image: ghcr.io/paperless-ngx/paperless-ngx:latest
       replicas: 1
       ports:

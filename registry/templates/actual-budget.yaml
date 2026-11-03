@@ -5,7 +5,7 @@ metadata:
   displayName: 'Actual Budget'
   description: 'Envelope budgeting that syncs between devices. Local-first, your data on a volume.'
   icon: https://github.com/actualbudget.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: finance
   tags: ['budget', 'finance', 'money']
   keywords: ['ynab', 'personal finance', 'expenses', 'envelope budgeting']
@@ -53,6 +53,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 250m
+        memory: 256Mi
       image: actualbudget/actual-server:latest
       replicas: 1
       ports:

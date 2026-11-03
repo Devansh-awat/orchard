@@ -5,7 +5,7 @@ metadata:
   displayName: 'Memos'
   description: 'A lightweight note-taking service. Markdown, tags, a timeline, and nothing else.'
   icon: https://github.com/usememos.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: docs
   tags: ['notes', 'markdown', 'journal']
   keywords: ['flomo', 'microblog', 'daily notes', 'second brain']
@@ -41,6 +41,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 250m
+        memory: 256Mi
       image: neosmemo/memos:stable
       replicas: 1
       ports:

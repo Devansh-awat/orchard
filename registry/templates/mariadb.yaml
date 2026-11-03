@@ -5,7 +5,7 @@ metadata:
   displayName: 'MariaDB'
   description: 'A MySQL-compatible database for the apps that will not talk to Postgres. Internal-only, no public exposure.'
   icon: https://github.com/MariaDB.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: database
   tags: ['mysql', 'mariadb', 'database', 'sql']
   keywords: ['mysql', 'wordpress', 'php', 'relational']
@@ -58,6 +58,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 500m
+        memory: 1Gi
       image: mariadb:11
       replicas: 1
       ports:

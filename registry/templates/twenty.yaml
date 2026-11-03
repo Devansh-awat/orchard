@@ -5,7 +5,7 @@ metadata:
   displayName: 'Twenty CRM'
   description: 'A CRM with the feel of a spreadsheet: people, companies, pipelines, custom objects.'
   icon: https://github.com/twentyhq.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: community
   tags: ['crm', 'sales', 'contacts']
   keywords: ['hubspot', 'salesforce', 'pipedrive', 'customers']
@@ -51,11 +51,17 @@ resources:
     type: database
     config:
       name: '{{ params.appName }}-db'
+      resources:
+        cpu: 500m
+        memory: 1Gi
 
   - name: cache
     type: deployment
     config:
       name: '{{ params.appName }}-cache'
+      resources:
+        cpu: 500m
+        memory: 512Mi
       image: valkey/valkey:8-alpine
       replicas: 1
       ports:
@@ -68,6 +74,9 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 1000m
+        memory: 2Gi
       image: twentycrm/twenty:latest
       replicas: 1
       ports:

@@ -5,7 +5,7 @@ metadata:
   displayName: 'LiteLLM Proxy'
   description: 'One OpenAI-compatible endpoint in front of a hundred model providers, with keys, budgets and logging.'
   icon: https://github.com/BerriAI.png?size=256
-  version: '1.0.0'
+  version: '1.1.0'
   category: ai
   tags: ['llm', 'proxy', 'api gateway']
   keywords: ['openai proxy', 'model router', 'api keys', 'spend tracking']
@@ -58,11 +58,17 @@ resources:
     type: database
     config:
       name: '{{ params.appName }}-db'
+      resources:
+        cpu: 500m
+        memory: 1Gi
 
   - name: app
     type: deployment
     config:
       name: '{{ params.appName }}'
+      resources:
+        cpu: 1000m
+        memory: 2Gi
       image: ghcr.io/berriai/litellm:main-latest
       replicas: 1
       ports:
