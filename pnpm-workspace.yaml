@@ -22,7 +22,7 @@ allowBuilds:
 overrides:
   '@peculiar/asn1-schema': 2.10.0
   '@grpc/grpc-js': ^1.14.5
-  multer@2: ^2.4.0
+  multer@2: ^2.5.0
   '@hono/node-server': ^1.19.17
   '@xmldom/xmldom': ^0.8.15
   ajv@8: ^8.20.0
@@ -52,7 +52,8 @@ overrides:
   protobufjs@7: ^7.6.6
   form-data@2: ^2.5.6
   form-data@4: ^4.0.6
-  request>qs: ^6.16.0
+  body-parser@2: ^2.4.0
+  qs: ^6.16.1
   request>tough-cookie: ^4.1.4
   rollup: ^4.63.1
   tar: ^7.5.22
