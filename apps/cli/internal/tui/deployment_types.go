@@ -277,29 +277,27 @@ func ingressCNAME() string {
 	if v := os.Getenv("ORCHARD_INGRESS_CNAME"); v != "" {
 		return v
 	}
-	return "ingress.lfdl.ink"
+	return "your instance's ingress hostname"
 }
 
-// createDomain validates DNS for custom hosts (orchard *.a.lfdl.ink subdomains
-// work immediately), then attaches the domain to the deployment.
+// createDomain validates DNS, which the server passes for hosts under the
+// instance's app domain, then attaches the domain to the deployment.
 func createDomain(cl *api.Client, projectID, depID, host, path string, servicePort int) tea.Cmd {
 	return func() tea.Msg {
-		if !strings.HasSuffix(host, ".a.lfdl.ink") {
-			var res struct {
-				Valid   bool   `json:"valid"`
-				Message string `json:"message"`
+		var res struct {
+			Valid   bool   `json:"valid"`
+			Message string `json:"message"`
+		}
+		check := map[string]any{"projectId": projectID, "domain": host}
+		if err := cl.Send(context.Background(), "POST", "/projects/ingresses/validate-dns", check, &res); err != nil {
+			return formResult{err: err}
+		}
+		if !res.Valid {
+			msg := res.Message
+			if msg == "" {
+				msg = "dns is not ready"
 			}
-			body := map[string]any{"projectId": projectID, "domain": host}
-			if err := cl.Send(context.Background(), "POST", "/projects/ingresses/validate-dns", body, &res); err != nil {
-				return formResult{err: err}
-			}
-			if !res.Valid {
-				msg := res.Message
-				if msg == "" {
-					msg = "dns is not ready"
-				}
-				return formResult{err: errInvalid(msg + " — point a CNAME at " + ingressCNAME())}
-			}
+			return formResult{err: errInvalid(msg + ", point a CNAME at " + ingressCNAME())}
 		}
 		body := map[string]any{"host": host, "path": path, "servicePort": servicePort, "tlsEnabled": true}
 		err := cl.Send(context.Background(), "POST", "/deployments/"+url.PathEscape(depID)+"/ingresses", body, nil)

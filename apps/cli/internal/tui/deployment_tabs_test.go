@@ -62,6 +62,10 @@ func fakeDepAPI(t *testing.T) (*api.Client, *capture) {
 		case p == "/apiv1/audit-logs/deployment/d1":
 			w.Write([]byte(`{"entries":[{"createdAt":"2026-07-02T10:00:00Z","action":"deployment.scale","targetType":"deployment","targetLabel":"api","actor":{"username":"seb"}}]}`))
 		case p == "/apiv1/projects/ingresses/validate-dns":
+			if strings.Contains(string(body), ".apps.example.com") {
+				w.Write([]byte(`{"valid":true,"message":"Covered by the platform wildcard"}`))
+				return
+			}
 			w.Write([]byte(`{"valid":false,"message":"dns not ready"}`))
 		default:
 			w.Write([]byte(`{}`))
@@ -291,15 +295,15 @@ func TestDomainFormValidatesDNS(t *testing.T) {
 		t.Fatal("ingress must not be created when DNS validation fails")
 	}
 
-	// orchard subdomains skip validation entirely
+	// the server passes hosts under the instance's app domain
 	f2 := newDomainForm(cl, "p1", "d1")
-	f2.fields[0].ti.SetValue("myapp.a.lfdl.ink")
+	f2.fields[0].ti.SetValue("myapp.apps.example.com")
 	_, cmd = f2.doSubmit()
 	if res, ok := run(cmd).(formResult); !ok || res.err != nil {
-		t.Fatalf("orchard subdomain create failed: %+v", res)
+		t.Fatalf("app domain subdomain create failed: %+v", res)
 	}
 	body, ok := hitBody(cap, "POST /apiv1/deployments/d1/ingresses")
-	if !ok || !strings.Contains(body, `"host":"myapp.a.lfdl.ink"`) || !strings.Contains(body, `"tlsEnabled":true`) {
+	if !ok || !strings.Contains(body, `"host":"myapp.apps.example.com"`) || !strings.Contains(body, `"tlsEnabled":true`) {
 		t.Fatalf("ingress create body wrong: %q", body)
 	}
 }

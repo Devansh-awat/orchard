@@ -252,7 +252,7 @@ func newServiceForm(cl *api.Client, depID string) *formScreen {
 
 func newDomainForm(cl *api.Client, projectID, depID string) *formScreen {
 	return newForm("Add domain",
-		"Orchard subdomains (*.a.lfdl.ink) work immediately; custom domains need a CNAME at "+ingressCNAME()+" first.",
+		"Subdomains of your instance's app domain work immediately; custom domains need a CNAME at "+ingressCNAME()+" first.",
 		[]*field{
 			fld("host", "Host", "app.example.com", true),
 			fld("path", "Path", "/", false),

@@ -72,7 +72,7 @@ func expectedCNAME() string {
 	if v := os.Getenv("ORCHARD_INGRESS_CNAME"); v != "" {
 		return v
 	}
-	return "ingress.lfdl.ink"
+	return "your instance's ingress hostname"
 }
 
 func domainListCmd() *cobra.Command {
@@ -179,8 +179,8 @@ func domainCreateCmd() *cobra.Command {
 		Use:   "create",
 		Short: "Add a domain to a deployment",
 		Long: "Add a domain to a deployment.\n\n" +
-			"An orchard subdomain (*.a.lfdl.ink) works immediately; a custom domain\n" +
-			"needs a CNAME pointed at the cluster first. Check readiness with\n" +
+			"A subdomain of your instance's app domain works immediately; a custom\n" +
+			"domain needs a CNAME pointed at the cluster first. Check readiness with\n" +
 			"`orchard domain validate-dns <host>`.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, _, err := client()

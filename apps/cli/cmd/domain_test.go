@@ -79,7 +79,7 @@ func domainCallSigs(calls []domainCall) []string {
 
 func TestDomainListByDeployment(t *testing.T) {
 	srv, calls := domainTestServer(t, map[string]string{
-		"GET /apiv1/deployments/dep1": `{"id":"dep1","ingresses":[{"id":"i1","host":"x.a.lfdl.ink"}]}`,
+		"GET /apiv1/deployments/dep1": `{"id":"dep1","ingresses":[{"id":"i1","host":"x.apps.example.com"}]}`,
 	})
 	if err := runDomain(t, srv, "domain", "list", "--deployment", "dep1"); err != nil {
 		t.Fatalf("domain list: %v", err)
