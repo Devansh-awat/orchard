@@ -15,6 +15,9 @@ on:
     - cron: '17 * * * *'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: grafts-${{ github.ref }}
   cancel-in-progress: false
