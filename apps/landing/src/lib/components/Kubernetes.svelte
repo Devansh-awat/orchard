@@ -76,12 +76,14 @@
 	let section = $state<HTMLElement | null>(null);
 	let canvas = $state<HTMLCanvasElement | null>(null);
 	let ring = $state<HTMLElement | null>(null);
-	let beats: HTMLElement[] = $state([]);
 	let cards: HTMLElement[] = $state([]);
 	let handled = $state(0);
-	let active = $state(-1);
+	let active = $state(0);
 	let still = $state(false);
 	let flat = $state(false);
+
+	const STORY_START = 0.2;
+	const STORY_LENGTH = 0.4;
 
 	function smoothstep(a: number, b: number, v: number) {
 		const t = Math.min(1, Math.max(0, (v - a) / (b - a)));
@@ -99,34 +101,21 @@
 		let disposed = false;
 		let visible = false;
 		let snapped = false;
+		let progress = 0;
 		const cleanups: (() => void)[] = [];
+		const step = STORY_LENGTH / FEATURES.length;
 
 		const pulls = () => {
 			if (still) return FEATURES.map(() => 1);
-			const vh = window.innerHeight;
 			return FEATURES.map((_, i) => {
-				const beat = beats[i];
-				if (!beat) return 0;
-				const rect = beat.getBoundingClientRect();
-				const center = rect.top + rect.height / 2;
-				return smoothstep(vh * 0.88, vh * 0.55, center);
+				const start = STORY_START + step * i;
+				return smoothstep(start, start + step * 1.4, progress);
 			});
 		};
 
 		const focus = () => {
-			const vh = window.innerHeight;
-			let best = -1;
-			let distance = Infinity;
-			beats.forEach((beat, i) => {
-				if (!beat) return;
-				const rect = beat.getBoundingClientRect();
-				const d = Math.abs(rect.top + rect.height / 2 - vh * 0.5);
-				if (d < distance) {
-					distance = d;
-					best = i;
-				}
-			});
-			return distance < vh * 0.4 ? best : -1;
+			const at = Math.floor((progress - STORY_START) / step);
+			return Math.min(FEATURES.length - 1, Math.max(0, at));
 		};
 
 		const layout = () => {
@@ -181,7 +170,7 @@
 				card.style.opacity = String(1 - smoothstep(0.55, 0.95, pull));
 			});
 			if (absorbed !== handled) handled = absorbed;
-			const next = still ? -1 : focus();
+			const next = focus();
 			if (next !== active) active = next;
 			s.assembly = each.reduce((sum, v) => sum + v, 0) / each.length;
 			if (!snapped && s.assembly >= 0.985) {
@@ -232,9 +221,10 @@
 			cleanups.push(
 				scroll(
 					(p: number) => {
+						progress = p;
 						if (scene) scene.turn = -0.5 * p;
 					},
-					{ target: el, offset: ['start start', 'end end'] }
+					{ target: el, offset: ['start end', 'end start'] }
 				)
 			);
 		};
@@ -273,7 +263,7 @@
 	<div class="k8s-glow pointer-events-none absolute inset-0" aria-hidden="true"></div>
 
 	<div
-		class="shell relative grid grid-cols-1 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:gap-x-10"
+		class="shell layout relative grid grid-cols-1 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:gap-x-10"
 	>
 		<div class="visual lg:order-2">
 			<div class="visual-frame">
@@ -328,7 +318,7 @@
 		</div>
 
 		<div class="story lg:order-1">
-			<header class="story-head">
+			<header>
 				<h2
 					id="kubernetes-title"
 					class="text-[clamp(2rem,3.6vw,3rem)] leading-[1.1] font-bold tracking-[-0.025em] text-balance"
@@ -338,30 +328,31 @@
 				</h2>
 			</header>
 
-			<ol class="flex flex-col">
+			<ol class="captions" class:captions-all={still || flat}>
 				{#each FEATURES as m, i (m.title)}
-					<li bind:this={beats[i]} class="beat" class:beat-on={still || active === i}>
-						<div class="beat-card">
-							<p class="flex items-center justify-between gap-3">
-								<span class="truncate text-[1.0625rem] font-bold">{m.title}</span>
-								<span
-									class="tick grid size-5 shrink-0 place-items-center rounded-full"
-									class:tick-on={handled > i}
-								>
-									<Check size={11} strokeWidth={3.5} aria-hidden="true" />
-								</span>
-							</p>
-							<p class="mt-1.5 text-base leading-normal text-pretty">{m.body}</p>
-						</div>
+					<li class="caption" class:caption-on={still || flat || active === i}>
+						<p class="text-[1.0625rem] font-bold">{m.title}</p>
+						<p class="mt-1.5 text-base leading-normal text-pretty">{m.body}</p>
 					</li>
 				{/each}
 			</ol>
 
-			<div class="story-end">
-				<p class="text-[clamp(1.75rem,3vw,2.5rem)] leading-[1.1] font-bold text-balance">
-					Never touch YAML again.
-				</p>
-			</div>
+			{#if !still && !flat}
+				<div class="-mt-2 flex gap-1.5" aria-hidden="true">
+					{#each FEATURES as m, i (m.title)}
+						<span
+							class="tick grid size-5 place-items-center rounded-full"
+							class:tick-on={handled > i}
+						>
+							<Check size={11} strokeWidth={3.5} />
+						</span>
+					{/each}
+				</div>
+			{/if}
+
+			<p class="text-[clamp(1.75rem,3vw,2.5rem)] leading-[1.1] font-bold text-balance">
+				Never touch YAML again.
+			</p>
 		</div>
 	</div>
 
@@ -375,57 +366,60 @@
 			radial-gradient(60% 50% at 70% 60%, rgb(195 16 38 / 0.3), transparent 75%);
 	}
 
+	.layout {
+		min-height: max(100svh, 620px);
+	}
+
 	.visual {
 		position: relative;
 	}
 
 	.visual-frame {
-		position: sticky;
-		top: 0;
-		height: 100svh;
-		min-height: 560px;
+		position: absolute;
+		inset: 0;
 	}
 
 	.story {
-		padding-block: clamp(5rem, 13vh, 8rem) clamp(5rem, 16vh, 9rem);
-	}
-
-	.story-head {
-		min-height: 30vh;
-	}
-
-	.beat {
 		display: flex;
-		align-items: center;
-		min-height: 19vh;
+		flex-direction: column;
+		justify-content: center;
+		gap: clamp(1.5rem, 4vh, 2.5rem);
+		padding-block: clamp(5rem, 11vh, 7rem) clamp(5rem, 12vh, 7rem);
 	}
 
-	.beat-card {
-		width: 100%;
+	.captions {
+		display: grid;
 		max-width: 360px;
+	}
+
+	.caption {
+		grid-area: 1 / 1;
 		border-radius: 1rem;
 		padding: 1rem 1.25rem;
 		background: var(--color-cream);
 		color: var(--color-crimson-deep);
-		opacity: 0.85;
-		transform: scale(0.97);
+		opacity: 0;
+		transform: translateY(8px) scale(0.97);
 		transform-origin: 0 50%;
 		transition:
-			opacity 0.35s ease,
-			transform 0.5s cubic-bezier(0.34, 1.4, 0.64, 1);
+			opacity 0.25s ease,
+			transform 0.4s cubic-bezier(0.34, 1.4, 0.64, 1);
 		box-shadow: 0 24px 50px -28px rgb(80 0 14 / 0.6);
 	}
 
-	.beat-on .beat-card {
+	.caption-on {
 		opacity: 1;
 		transform: none;
 	}
 
-	.story-end {
-		min-height: 28vh;
-		display: flex;
-		flex-direction: column;
-		justify-content: center;
+	.captions-all {
+		grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+		gap: 0.75rem;
+		max-width: none;
+	}
+
+	.captions-all .caption {
+		grid-area: auto;
 	}
 
 	.k8s-card {
@@ -436,7 +430,7 @@
 	}
 
 	.tick {
-		background: rgb(195 16 38 / 0.12);
+		background: rgb(255 255 255 / 0.22);
 		color: transparent;
 		transform: scale(0.7);
 		transition:
@@ -446,8 +440,8 @@
 	}
 
 	.tick-on {
-		background: var(--color-crimson);
-		color: #fff;
+		background: var(--color-cream);
+		color: var(--color-crimson-deep);
 		transform: none;
 	}
 
@@ -478,9 +472,6 @@
 
 	@media (max-width: 1023px) {
 		.visual {
-			position: sticky;
-			top: 0;
-			z-index: 2;
 			margin-inline: -1.5rem;
 		}
 
@@ -488,7 +479,6 @@
 			position: relative;
 			height: 38svh;
 			min-height: 260px;
-			background: linear-gradient(to bottom, var(--color-crimson) 82%, transparent);
 		}
 
 		.k8s-card {
@@ -496,21 +486,13 @@
 		}
 
 		.story {
-			padding-block: 1.5rem 8rem;
-		}
-
-		.story-head {
-			min-height: auto;
-			padding-bottom: 2rem;
-		}
-
-		.beat {
-			min-height: 20vh;
+			justify-content: flex-start;
+			padding-block: 1.5rem 7rem;
 		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.beat-card,
+		.caption,
 		.tick {
 			transition: none;
 		}
