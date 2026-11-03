@@ -43,8 +43,6 @@ function esc(text: unknown): string {
     .trim();
 }
 
-/* ------------------------------------------------------------------ MCP --- */
-
 type Registered = {
   name: string;
   group: string;
@@ -201,8 +199,6 @@ Tools the connection's scope cannot run are hidden. See [MCP](/mcp/) for details
   return collected.length;
 }
 
-/* ------------------------------------------------------------------ CLI --- */
-
 type CliFlag = {
   name: string;
   shorthand?: string;
@@ -294,8 +290,6 @@ override the saved context. **${visible.length} commands** are available.
   return visible.length;
 }
 
-/* --------------------------------------------------------------- config --- */
-
 function generateConfig() {
   const raw = readFileSync(resolve(repoRoot, '.env.example'), 'utf8');
   const lines = raw.split('\n');
@@ -368,8 +362,6 @@ recognised. Anything without a default is optional unless the description says o
   return entries.length;
 }
 
-/* -------------------------------------------------------------- openapi --- */
-
 /**
  * starlight-openapi builds one page per operation from the path, and the
  * contract contains a bare "/" route whose slug comes out empty. Emit a
@@ -391,8 +383,6 @@ function generateOpenApi() {
   console.log(`  wrote openapi.generated.json (${after} paths)`);
   return after;
 }
-
-/* --------------------------------------------------------------- Grafts --- */
 
 type DoorDescription = {
   status: 'stable' | 'deprecated';
@@ -486,8 +476,6 @@ ${slots.map((s) => `| \`${s.name}\` | ${describe(s.type)} |`).join('\n')}
   );
   return doors.length + slots.length;
 }
-
-/* ----------------------------------------------------------------- main --- */
 
 console.log('generating reference docs...');
 const mcpCount = await generateMcp();
