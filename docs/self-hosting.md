@@ -526,8 +526,13 @@ gave at install time (domains, ingress mode, update policy). It skips k3s, helm
 and the operators when they're already present, and carries `JWT_SECRET`,
 `SECRETS_ENCRYPTION_KEY` and `SSO_ENCRYPTION_KEY` over from the existing values
 file rather than minting new ones — a fresh encryption key would make every
-secret already in the database permanently undecryptable. Values you changed
-with `orchardctl config` are **not** preserved, so note them with
+secret already in the database permanently undecryptable. k3s only restarts if
+the registry mirror changed, so a re-run leaves your apps serving.
+
+Environment variables you set with `orchardctl env` are kept, for `server`,
+`frontend` and `mcp` alike. The installer's own entries win over a value of the
+same name, so use the install flags to change those. Everything else you changed
+with `orchardctl config` is **not** preserved, so note it with
 `orchardctl config list` first.
 
 ### When an upgrade says a Certificate can't be imported
