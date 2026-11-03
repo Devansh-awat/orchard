@@ -470,7 +470,7 @@ preflight() {
 
   DISK_GB=$(df -BG --output=avail /var/lib 2>/dev/null | tail -1 | tr -dc '0-9')
   DISK_GB=${DISK_GB:-0}
-  [ "$DISK_GB" -ge 20 ] || die "need at least 20G free on /var/lib, found ${DISK_GB}G"
+  [ "$DISK_GB" -ge 20 ] || [ -d "$STATE_DIR" ] || die "need at least 20G free on /var/lib, found ${DISK_GB}G"
   [ "$DISK_GB" -ge 60 ] || warn "only ${DISK_GB}G free; build cache and images will fill this quickly"
   info "free disk: ${DISK_GB}G"
 
@@ -1648,6 +1648,7 @@ install_orchard() {
 
   run_step "CloudNativePG webhook" 1m wait_for_cnpg_webhook
   run_step "checking existing volumes" 10s release_unbound_volumes
+  if helm version --short 2>/dev/null | grep -q '^v4\.'; then args+=(--server-side=false); fi
   run_step "applying the chart" 40s helm "${args[@]}"
   run_step "postgres" 3m kubectl -n orchard wait --for=condition=Ready \
     cluster.postgresql.cnpg.io/orchard-db --timeout=10m
