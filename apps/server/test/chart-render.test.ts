@@ -63,7 +63,11 @@ test(
   'the backup proxy gets its own postgres role instead of the app owner',
   { skip: !helmAvailable() },
   () => {
-    const out = render(['r2Proxy.enabled=true', 'r2Proxy.databasePassword=pw-for-test']);
+    const out = render([
+      'r2Proxy.enabled=true',
+      'r2Proxy.upstream.endpoint=https://r2.example.test',
+      'r2Proxy.databasePassword=pw-for-test'
+    ]);
     const cluster = docs(out).find((d) => /^kind: Cluster$/m.test(d));
     assert.ok(cluster, 'cnpg cluster rendered');
     assert.match(cluster, /name: orchard_r2_proxy/);
@@ -86,6 +90,7 @@ test(
 test('an explicit proxy database url still wins', { skip: !helmAvailable() }, () => {
   const out = render([
     'r2Proxy.enabled=true',
+    'r2Proxy.upstream.endpoint=https://r2.example.test',
     'r2Proxy.databaseUrl=postgresql://ro@elsewhere/orchard'
   ]);
   const dbSecret = docs(out).find((d) => d.includes('name: r2-proxy-db'));
