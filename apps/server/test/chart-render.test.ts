@@ -479,6 +479,30 @@ test(
 );
 
 test(
+  'the local bucket job names its region, and the job name follows the script',
+  { skip: !helmAvailable() },
+  () => {
+    const local = ['objectStorage.local.enabled=true', 'r2Proxy.enabled=true'];
+    const job = docs(render(local)).find((d) => d.includes('name: object-storage-bucket-'));
+    assert.ok(job, 'bucket job rendered');
+    assert.match(
+      job,
+      /--create-bucket-configuration \\"LocationConstraint=\$AWS_DEFAULT_REGION\\"/
+    );
+    assert.match(job, /name: AWS_DEFAULT_REGION, value: "auto"/);
+    const name = (out: string) => out.match(/name: (object-storage-bucket-\w+)/)?.[1];
+    assert.notEqual(
+      name(render(local)),
+      name(render([...local, 'objectStorage.local.region=eu-west-1']))
+    );
+    assert.equal(
+      docs(render([])).some((d) => d.includes('object-storage-bucket-')),
+      false
+    );
+  }
+);
+
+test(
   'databases outside CNPG get a nightly pg_dump uploaded to object storage',
   { skip: !helmAvailable() },
   () => {

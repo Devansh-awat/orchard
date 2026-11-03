@@ -159,10 +159,11 @@ spec:
       ports:
         - { port: 9000, protocol: TCP }
 ---
+{{- $bucketScript := `aws configure set default.s3.addressing_style path && { aws s3api head-bucket --bucket "$BUCKET" || { if [ "$AWS_DEFAULT_REGION" = us-east-1 ]; then aws s3api create-bucket --bucket "$BUCKET"; else aws s3api create-bucket --bucket "$BUCKET" --create-bucket-configuration "LocationConstraint=$AWS_DEFAULT_REGION"; fi; }; }` }}
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ printf "object-storage-bucket-%s" (printf "%s|%s|%s" $local.bucket $local.bucketImage $local.region | sha256sum | trunc 8) }}
+  name: {{ printf "object-storage-bucket-%s" (printf "%s|%s|%s|%s" $local.bucket $local.bucketImage $local.region $bucketScript | sha256sum | trunc 8) }}
   namespace: {{ $ns }}
   labels:
     {{- include "orchard.labels" (dict "root" . "name" "object-storage-bucket") | nindent 4 }}
@@ -181,7 +182,7 @@ spec:
           image: {{ $local.bucketImage }}
           command: ["/bin/sh", "-c"]
           args:
-            - aws configure set default.s3.addressing_style path && { aws s3api head-bucket --bucket "$BUCKET" || aws s3api create-bucket --bucket "$BUCKET"; }
+            - {{ $bucketScript | quote }}
           env:
             - { name: BUCKET, value: {{ $local.bucket | quote }} }
             - { name: AWS_ENDPOINT_URL, value: "http://object-storage:9000" }
