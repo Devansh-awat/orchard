@@ -364,14 +364,14 @@ jobs:
       # so a proxied zone is never badged as broken.
       - name: DNS check tests
         run: pnpm --filter server test:instance-network
-      # Volumes attached while a build was in flight used to be dropped from
+      # Volumes attached while a build is in flight must not be dropped from
       # the rendered pod spec and stay dropped through every later rebuild,
-      # which silently wrote data to the node's disk. The signature is what
+      # which would silently write data to the node's disk. The signature is what
       # decides whether a rebuild re-applies them.
       - name: Volume drift tests
         run: pnpm --filter server test:deployment-drift
-      # A queued rebuild returned the unchanged deployment, so callers could
-      # not tell "waiting for a slot" from "did nothing" and retried forever.
+      # A queued rebuild has to say so: with the unchanged deployment alone callers
+      # cannot tell "waiting for a slot" from "did nothing" and retry forever.
       - name: Build queue visibility tests
         run: pnpm --filter server test:build-queue-visibility
       - name: Auto-deploy precondition tests
@@ -395,15 +395,15 @@ jobs:
       - name: Engine core tests
         run: pnpm --filter server test:engine-core
       # The activity feed is five tables merged by timestamp with a composite
-      # cursor. Two pod transitions landing in the same millisecond used to be
+      # cursor. Two pod transitions landing in the same millisecond must not be
       # either served twice or skipped depending on which side of the page
-      # boundary they fell, and a cursor that looked valid but was not sent the
+      # boundary they fell, and a cursor that looks valid but is not must not send the
       # client back to page one silently.
       - name: Activity timeline tests
         run: pnpm --filter server test:timeline
-      # A deploy used to report success the moment the image was patched, so
-      # an image that crashlooped on boot was announced as live and the
-      # previous release was already gone. The gate decides what "landed"
+      # A deploy must not report success the moment the image is patched, or
+      # an image that crashloops on boot is announced as live and the
+      # previous release is already gone. The gate decides what "landed"
       # means, and blue/green must never move traffic to pods it has not seen
       # ready, nor touch blue when green fails.
       - name: Rollout gate and blue/green tests
