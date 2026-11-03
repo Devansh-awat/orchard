@@ -25,3 +25,7 @@ kubeconfig
 
 # OS
 .DS_Store
+
+# Private keys and certificates (test fixtures stay tracked)
+*.pem
+!apps/server/test/fixtures/*.pem
