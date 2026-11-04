@@ -81,12 +81,6 @@ Build failed: could not schedule build pod after 300s - 0/1 nodes are available:
 
 **Fix:** Correct the health check, or give it a longer start time.
 
-### App stays on port 80 and returns errors
-
-**Cause:** The deploy form does not detect the port from an image or Dockerfile. It stays on `80` until you change it.
-
-**Fix:** Set the port that your app listens on.
-
 ### One app cannot reach another
 
 **Cause:** The request uses the public URL.
