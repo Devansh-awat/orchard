@@ -9,11 +9,10 @@ type SidebarEntry = NonNullable<App.Locals['starlightRoute']>['sidebar'][number]
 interface Props {
   entries: SidebarEntry[];
   depth: number;
-  path: string;
   icon?: IconName;
 }
 
-const { entries, depth, path, icon } = Astro.props;
+const { entries, depth, icon } = Astro.props;
 
 function containsCurrent(entry: SidebarEntry): boolean {
   if (entry.type === 'link') return isCurrent(entry);
@@ -21,8 +20,7 @@ function containsCurrent(entry: SidebarEntry): boolean {
 }
 
 function isCurrent(entry: Extract<SidebarEntry, { type: 'link' }>): boolean {
-  if (entry.isCurrent) return true;
-  return entry.href === '/changelog/' && path.startsWith('/changelog/');
+  return entry.isCurrent;
 }
 ---
 
@@ -54,7 +52,7 @@ function isCurrent(entry: Extract<SidebarEntry, { type: 'link' }>): boolean {
                 <Icon name="chevron-right" class="caret" />
               </summary>
               <SidebarRestorePoint />
-              <Astro.self entries={entry.entries} depth={depth + 1} path={path} />
+              <Astro.self entries={entry.entries} depth={depth + 1} />
             </details>
           )}
         </li>

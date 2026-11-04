@@ -8,6 +8,7 @@
     "build": "pnpm generate && astro build",
     "preview": "astro preview --port 5174",
     "generate": "tsx scripts/generate.ts",
+    "gen:palette": "tsx scripts/gen-palette.ts",
     "check": "astro check",
     "format": "oxfmt .",
     "lint": "oxlint .",

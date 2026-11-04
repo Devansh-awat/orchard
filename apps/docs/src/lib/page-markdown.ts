@@ -1,8 +1,7 @@
 import { AGENT_SETUP, clients, examplePrompts, urlOptions } from './agent-setup';
-import { changeHref, formatDate, getChanges, getFeatured, groupByDate } from './changelog';
 import { DIRECTORY_TEXT, directory, directoryGroups } from './directory';
-import { AGENT_PANEL, HERO_TEXT, WHATS_NEW, homeSections, homeStarts } from './home';
-import { INSTALL_PROMPT, MCP_URL, SETUP_PROMPT, SITE_URL } from './nav';
+import { AGENT_PANEL, HERO_TEXT, homeSections, homeStarts } from './home';
+import { DOCS_PROMPT, INSTALL_PROMPT, MCP_URL, SETUP_PROMPT, SITE_URL } from './nav';
 
 function fence(code: string, lang = ''): string {
   return `\`\`\`${lang}\n${code}\n\`\`\``;
@@ -27,13 +26,12 @@ export function homeMarkdown(): string {
     '- [Install](/start/install/)',
     '- [Agent setup](/agent-setup/)',
     '- [Directory](/directory/)',
-    '- [Changelog](/changelog/)',
     '',
-    '## Install with an agent',
+    '## Read the docs with an agent',
     '',
     'Paste this prompt into your coding agent:',
     '',
-    fence(INSTALL_PROMPT, 'text'),
+    fence(DOCS_PROMPT, 'text'),
     '',
     '## Where to start',
     ''
@@ -56,11 +54,6 @@ export function homeMarkdown(): string {
     ''
   );
   parts.push(`[${AGENT_PANEL.sideLink}](/agent-setup/)`, '');
-  parts.push(`## ${WHATS_NEW.heading}`, '', WHATS_NEW.text, '');
-  for (const change of getFeatured(8)) {
-    parts.push(`- ${change.date}, ${change.component}: [${change.text}](${changeHref(change)})`);
-  }
-  parts.push('', `[${WHATS_NEW.link}](/changelog/)`, '');
   return parts.join('\n');
 }
 
@@ -126,29 +119,6 @@ export function directoryMarkdown(): string {
     parts.push(`## ${group}`, '');
     for (const item of directory.filter((entry) => entry.group === group)) {
       parts.push(`- [${item.title}](${item.href}): ${item.text}`);
-    }
-    parts.push('');
-  }
-  return parts.join('\n');
-}
-
-export function changelogMarkdown(): string {
-  const parts = [
-    '# Changelog',
-    '',
-    '> New features and fixes in Orchard.',
-    '',
-    `Source: ${SITE_URL}/changelog/`,
-    '',
-    `RSS: ${SITE_URL}/changelog/index.xml`,
-    ''
-  ];
-  for (const group of groupByDate(getChanges())) {
-    parts.push(`## ${formatDate(group.date, true, false)}`, '');
-    for (const change of group.changes) {
-      parts.push(
-        `- ${change.type}, ${change.component}: ${change.text}${change.detail ? `. ${change.detail}` : ''}`
-      );
     }
     parts.push('');
   }

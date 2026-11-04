@@ -2,6 +2,7 @@ import { defineConfig } from 'astro/config';
 import mdx from '@astrojs/mdx';
 import starlight from '@astrojs/starlight';
 import starlightOpenAPI, { openAPISidebarGroups } from 'starlight-openapi';
+import rehypeWrapTables from './src/lib/rehype-wrap-tables.mjs';
 
 export default defineConfig({
   site: 'https://docs.orchard.my',
@@ -9,6 +10,7 @@ export default defineConfig({
     '/run/sandboxes': '/greenhouse/',
     '/operate/node-pools': '/operate/nodes/'
   },
+  markdown: { rehypePlugins: [rehypeWrapTables] },
   server: { port: 5174, host: true },
   devToolbar: { enabled: false },
   integrations: [
@@ -18,7 +20,7 @@ export default defineConfig({
         'Install Orchard on a Linux server or a Kubernetes cluster, then deploy your apps.',
       favicon: '/favicon/favicon.ico',
       customCss: [
-        '../frontend/src/lib/design/scales.css',
+        './src/styles/palette.css',
         '../frontend/src/lib/design/tokens.css',
         './src/styles/orchard.css'
       ],
@@ -64,7 +66,8 @@ export default defineConfig({
             { label: 'What is Orchard', slug: 'start/what-is-orchard' },
             { label: 'Install', slug: 'start/install' },
             { label: 'First deploy', slug: 'start/first-deploy' },
-            { label: 'Concepts', slug: 'start/concepts' }
+            { label: 'Concepts', slug: 'start/concepts' },
+            { label: 'Directory', link: '/directory/' }
           ]
         },
         {

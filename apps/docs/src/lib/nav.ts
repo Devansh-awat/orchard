@@ -4,18 +4,14 @@ export const SITE_URL = 'https://docs.orchard.my';
 export const REPO_URL = 'https://github.com/hackclub/orchard';
 export const MCP_URL = 'https://mcp.your-orchard-domain';
 
+export const DOCS_PROMPT =
+  'Read the Orchard docs at https://docs.orchard.my/llms.txt and use them to help me. Fetch the pages you need before you answer, and link the pages you used.';
+
 export const INSTALL_PROMPT =
   'Install Orchard on my server following https://docs.orchard.my/start/install.md. Ask me before anything that is not reversible.';
 
 export const SETUP_PROMPT =
   'Connect to my Orchard instance over MCP. Follow https://docs.orchard.my/agent-setup.md. Ask me for my Orchard domain first.';
-
-export const topNav = [
-  { label: 'Directory', href: '/directory/' },
-  { label: 'API', href: '/api/' },
-  { label: 'CLI', href: '/cli/' },
-  { label: 'Changelog', href: '/changelog/' }
-] as const;
 
 export const groupIcons: Record<string, IconName> = {
   Deploy: 'rocket',
@@ -69,7 +65,6 @@ export const footerColumns = [
     title: 'Resources',
     links: [
       { label: 'Directory', href: '/directory/' },
-      { label: 'Changelog', href: '/changelog/' },
       { label: 'Troubleshooting', href: '/operate/troubleshooting/' },
       { label: 'llms.txt', href: '/llms.txt' }
     ]
@@ -95,18 +90,11 @@ export function isHome(pathname: string): boolean {
 
 export function isLanding(pathname: string): boolean {
   const path = normalizePath(pathname);
-  return (
-    path === '/' ||
-    path === '/agent-setup/' ||
-    path === '/directory/' ||
-    path === '/changelog/' ||
-    path.startsWith('/changelog/')
-  );
+  return path === '/' || path === '/agent-setup/' || path === '/directory/';
 }
 
 export function markdownPath(pathname: string): string {
   const path = normalizePath(pathname);
   if (path === '/') return '/index.md';
-  if (path.startsWith('/changelog/')) return '/changelog.md';
   return `${path.slice(0, -1)}.md`;
 }

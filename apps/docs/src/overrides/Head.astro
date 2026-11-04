@@ -16,8 +16,3 @@ const path = normalizePath(Astro.url.pathname);
   crossorigin
 />
 {!is404 && <link rel="alternate" type="text/markdown" href={markdownPath(path)} />}
-{
-  path.startsWith('/changelog/') && (
-    <link rel="alternate" type="application/rss+xml" title="Orchard changelog" href="/changelog/index.xml" />
-  )
-}

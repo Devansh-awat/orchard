@@ -10,7 +10,7 @@ import { INSTALL_PROMPT } from '../../lib/nav';
     <h2 id="agent-heading">{AGENT_PANEL.heading}</h2>
     <p>{AGENT_PANEL.text}</p>
     <blockquote>{INSTALL_PROMPT}</blockquote>
-    <CopyPromptButton />
+    <CopyPromptButton prompt={INSTALL_PROMPT} preview={false} />
   </div>
   <div class="side">
     <h3>{AGENT_PANEL.sideHeading}</h3>

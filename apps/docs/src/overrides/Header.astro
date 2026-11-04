@@ -3,23 +3,12 @@ import Search from '@astrojs/starlight/components/Search.astro';
 import Icon from '../components/Icon.astro';
 import SiteTitle from './SiteTitle.astro';
 import ThemeSelect from './ThemeSelect.astro';
-import { REPO_URL, normalizePath, topNav } from '../lib/nav';
-
-const path = normalizePath(Astro.url.pathname);
+import { REPO_URL } from '../lib/nav';
 ---
 
 <div class="bar">
   <div class="left">
     <span class="brand"><SiteTitle /></span>
-    <nav class="top-nav" aria-label="Primary">
-      {
-        topNav.map((item) => (
-          <a href={item.href} aria-current={path.startsWith(item.href) ? 'page' : undefined}>
-            {item.label}
-          </a>
-        ))
-      }
-    </nav>
   </div>
   <div class="right print:hidden">
     <Search />
@@ -55,37 +44,7 @@ const path = normalizePath(Astro.url.pathname);
     gap: 0.5rem;
   }
 
-  .top-nav {
-    gap: 0.125rem;
-    padding: 0.1875rem;
-    border-radius: var(--radius-pill);
-    background: var(--material-glass-bg);
-    box-shadow: 0 0 0 1px var(--material-glass-edge);
-    backdrop-filter: var(--material-glass-filter);
-  }
-
-  .top-nav a {
-    padding: 0.3125rem 0.75rem;
-    border-radius: var(--radius-pill);
-    color: var(--text-muted);
-    font-size: var(--text-callout);
-    font-weight: var(--weight-medium);
-    line-height: var(--lh-callout);
-    text-decoration: none;
-  }
-
-  .top-nav a:hover {
-    color: var(--text-default);
-  }
-
-  .top-nav a[aria-current='page'] {
-    background: var(--bg-raised);
-    color: var(--text-default);
-    box-shadow: var(--shadow-raised);
-  }
-
-  .top-nav,
-  .github,
+    .github,
   .theme,
   .install {
     display: none;
@@ -100,12 +59,6 @@ const path = normalizePath(Astro.url.pathname);
     .theme,
     .install {
       display: inline-flex;
-    }
-  }
-
-  @media (min-width: 66rem) {
-    .top-nav {
-      display: flex;
     }
   }
 </style>

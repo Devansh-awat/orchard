@@ -1,39 +1,102 @@
 ---
 import Icon from './Icon.astro';
-import { INSTALL_PROMPT } from '../lib/nav';
+import { DOCS_PROMPT } from '../lib/nav';
 
 interface Props {
   prompt?: string;
   label?: string;
+  preview?: boolean;
 }
 
-const { prompt = INSTALL_PROMPT, label = 'Copy prompt' } = Astro.props;
+const { prompt = DOCS_PROMPT, label = 'Copy prompt', preview = true } = Astro.props;
+const id = `prompt-${Math.random().toString(36).slice(2, 8)}`;
 ---
 
-<button type="button" class="o-btn o-btn-outline copy-prompt" data-copy={prompt} data-copied-text="Prompt copied">
-  <span class="marks" aria-hidden="true">
-    <Icon mark="claude" size={20} />
-    <Icon mark="codex" size={20} />
-    <Icon mark="cursor" size={20} />
-    <Icon mark="opencode" size={20} />
-  </span>
-  <span data-copy-label>{label}</span>
-</button>
+<span class:list={['prompt', { joined: preview }]} style={preview ? `anchor-name: --${id}` : undefined}>
+  <button type="button" class="o-btn o-btn-outline copy-prompt" data-copy={prompt} data-copied-text="Prompt copied">
+    <span class="marks" aria-hidden="true">
+      <Icon mark="claude" size={20} />
+      <Icon mark="codex" size={20} />
+      <Icon mark="cursor" size={20} />
+      <Icon mark="opencode" size={20} />
+    </span>
+    <span data-copy-label>{label}</span>
+  </button>
+  {
+    preview && (
+      <>
+        <button
+          type="button"
+          class="o-btn o-btn-outline toggle"
+          popovertarget={id}
+          aria-label="Preview prompt"
+          title="Preview prompt"
+        >
+          <Icon name="chevron-down" size={16} />
+        </button>
+        <div id={id} class="preview" popover="auto" style={`position-anchor: --${id}`}>
+          {prompt}
+        </div>
+      </>
+    )
+  }
+</span>
 
 <script>
   import '../lib/client/copy';
 </script>
 
 <style>
+  .prompt {
+    display: inline-flex;
+    gap: 1px;
+  }
+
   .copy-prompt {
     cursor: copy;
     gap: 0.75rem;
     padding-inline: 1rem;
   }
 
+  .joined .copy-prompt {
+    border-start-end-radius: 0;
+    border-end-end-radius: 0;
+  }
+
+  .toggle {
+    padding-inline: 0.625rem;
+    border-start-start-radius: 0;
+    border-end-start-radius: 0;
+  }
+
   .marks {
     display: inline-flex;
     align-items: center;
     gap: 0.1875rem;
+  }
+
+  .preview {
+    width: min(26rem, calc(100vw - 2rem));
+    padding: 0.875rem 1rem;
+    border: 0;
+    border-radius: var(--o-card-r);
+    corner-shape: var(--corner);
+    background: var(--bg-raised);
+    box-shadow: var(--shadow-overlay);
+    color: var(--text-default);
+    font-family: var(--sl-font-mono);
+    font-size: var(--text-caption);
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+  }
+
+  @supports (anchor-name: --a) {
+    .preview {
+      inset: auto;
+      top: anchor(bottom);
+      left: anchor(left);
+      margin: 0.5rem 0 0;
+      position-try-fallbacks: flip-block, flip-inline;
+    }
   }
 </style>

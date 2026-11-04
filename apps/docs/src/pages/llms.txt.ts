@@ -28,7 +28,6 @@ export const GET: APIRoute = async () => {
     `- [Docs home](${SITE}/index.md)`,
     `- [Agent setup](${SITE}/agent-setup.md): connect an MCP client to an Orchard instance`,
     `- [Directory](${SITE}/directory.md): everything Orchard does, with links`,
-    `- [Changelog](${SITE}/changelog.md): features and fixes by date`,
     ''
   ];
 

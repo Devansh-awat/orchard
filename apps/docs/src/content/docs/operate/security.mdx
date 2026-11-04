@@ -26,7 +26,7 @@ A pod that reaches another tenant namespace can only reach what that tenant has 
 
 <Diagram
   caption="Default-deny in both directions, with a short list of allowed paths."
-  code={`flowchart TD
+  code={`flowchart LR
   POD[Tenant pod]
   POD -->|allowed| SAME[Same namespace]
   POD -->|allowed| DNS[kube-dns :53]

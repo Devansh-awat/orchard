@@ -28,7 +28,8 @@ const { code, caption } = Astro.props;
     margin: 0;
     padding: 1.25rem;
     border: 1px solid var(--o-rule);
-    border-radius: var(--o-radius-control);
+    border-radius: var(--o-card-r);
+    corner-shape: var(--corner);
     background: var(--o-raised);
     overflow-x: auto;
     text-align: center;
@@ -76,11 +77,11 @@ const { code, caption } = Astro.props;
       const dark = document.documentElement.dataset.theme === "dark";
       return {
         dark,
-        raised: read("--o-raised", dark ? "#121214" : "#ffffff"),
-        line: dark ? "#5d4a4e" : "#d8c8cb",
-        text: read("--sl-color-white", dark ? "#f6eef0" : "#2c1a1d"),
-        accent: read("--o-accent", "#c93a4f"),
-        tint: dark ? "#2a1b1f" : "#fdeef0",
+        raised: read("--o-raised", dark ? "#1a1a1a" : "#fefefe"),
+        line: dark ? "#434343" : "#d1d1d1",
+        text: read("--sl-color-white", dark ? "#ededed" : "#1f1f1f"),
+        accent: read("--o-accent", "#5173c5"),
+        tint: dark ? "#172137" : "#eef0f5",
       };
     };
 
@@ -91,7 +92,9 @@ const { code, caption } = Astro.props;
       mermaid.initialize({
         startOnLoad: false,
         securityLevel: "strict",
-        fontFamily: "var(--sl-font)",
+        fontFamily: "'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif",
+        htmlLabels: false,
+        flowchart: { htmlLabels: false },
         theme: "base",
         themeVariables: {
           background: p.raised,
@@ -116,6 +119,15 @@ const { code, caption } = Astro.props;
           const { svg } = await mermaid.render(`diagram-${i++}`, source);
           node.innerHTML = svg;
           node.dataset.rendered = "true";
+          const drawn = node.querySelector("svg");
+          if (drawn) {
+            const box = drawn.getBBox();
+            drawn.setAttribute(
+              "viewBox",
+              `${box.x - 8} ${box.y - 8} ${box.width + 16} ${box.height + 16}`,
+            );
+            drawn.style.maxWidth = `${box.width + 16}px`;
+          }
         } catch {
           /* leave the source visible if it will not parse */
         }

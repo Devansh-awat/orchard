@@ -132,9 +132,3 @@ export const AGENT_PANEL = {
   sideHeading: 'Connect your agent to Orchard',
   sideLink: 'Agent setup'
 };
-
-export const WHATS_NEW = {
-  heading: "What's new",
-  text: 'The latest features and fixes in Orchard.',
-  link: 'View changelog'
-};

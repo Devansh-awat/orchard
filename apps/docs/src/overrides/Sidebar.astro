@@ -32,7 +32,7 @@ const onApiPage = path.startsWith('/api/');
     {
       sidebar.map((section) =>
         section.type === 'link' ? (
-          <SidebarGroup entries={[section]} depth={1} path={path} />
+          <SidebarGroup entries={[section]} depth={1} />
         ) : section.label === 'API reference' && !onApiPage ? (
           <section>
             <h2>API</h2>
@@ -48,14 +48,14 @@ const onApiPage = path.startsWith('/api/');
                 }
               ]}
               depth={1}
-              path={path}
+             
               icon="code"
             />
           </section>
         ) : (
           <section>
             <h2>{section.label}</h2>
-            <SidebarGroup entries={section.entries} depth={1} path={path} />
+            <SidebarGroup entries={section.entries} depth={1} />
           </section>
         )
       )
