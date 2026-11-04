@@ -21,7 +21,7 @@ A database has one endpoint for each kind of traffic. Select one in the **Connec
 | **Standbys** | `pg-<name>-ro` | Reads only, load-balanced across standbys. |
 | **Any** | `pg-<name>-r` | Reads only, across every instance. |
 
-Point your application's main connection at `-rw`, and read-only consumers at `-ro`. A write to `-ro` fails.
+Point your app's main connection at `-rw`, and read-only consumers at `-ro`. A write to `-ro` fails.
 
 <Diagram
   caption="Writes reach only the primary. The -ro endpoint spreads reads across standbys."

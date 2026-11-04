@@ -7,14 +7,14 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-Add a database user to give a tool or a person a separate login. For example, create a read-only user for a reporting tool.
+To give a tool or a person a separate login, add a database user. For example, create a read-only user for a reporting tool.
 
 Every database has an owner user. Apps in the project use the owner user. You cannot remove the owner user.
 
 ## Prerequisites
 
-- You need edit access to the project.
-- The database must be a dedicated database.
+- Edit access to the project.
+- A dedicated database.
 
 ## Add a user
 
@@ -46,9 +46,9 @@ The command prints the password once. The `--access` flag accepts `read` or `wri
 Orchard shows the password one time. If you lose the password, remove the user and add it again.
 :::
 
-## User names
+## Usernames
 
-A user name must follow these rules:
+A username must follow these rules:
 
 - It has 2 to 41 characters.
 - It starts with a lowercase letter.
@@ -76,7 +76,7 @@ orchard db user list <dbId>
 
 ## Remove a user
 
-Removing a user disconnects all sessions that use the login. The user cannot log in again.
+Removing a user disconnects all sessions that use the login. The user can no longer connect.
 
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">

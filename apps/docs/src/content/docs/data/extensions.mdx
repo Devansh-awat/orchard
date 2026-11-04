@@ -14,9 +14,10 @@ To add a PostgreSQL extension to a database, install it from the extensions list
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open the database and go to **Settings** > **Extensions**.
-2. Find the extension.
-3. Turn on its switch.
+1. Open the database.
+2. Go to **Settings** > **Extensions**.
+3. Find the extension.
+4. Turn on its switch.
 
 An extension that loads at startup shows **Loads at startup, restarts the database**. Installing one of these restarts the database and drops open connections.
 
@@ -38,9 +39,10 @@ For an extension that loads at startup, add `--preload`. This option restarts th
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open the database and go to **Settings** > **Extensions**.
-2. Turn off the extension's switch.
-3. Confirm the change.
+1. Open the database.
+2. Go to **Settings** > **Extensions**.
+3. Turn off the extension's switch.
+4. Confirm the change.
 
 </TabItem>
 <TabItem label="CLI">
@@ -69,7 +71,7 @@ Orchard allows the following extensions. It refuses others, because untrusted la
 | Query statistics | `pg_stat_statements` |
 | Other | `tablefunc`, `plpgsql`, `timescaledb` |
 
-An extension must also exist in the PostgreSQL image. If you need one that is missing, an instance operator must change the image.
+An extension must also exist in the PostgreSQL image. If you need one that is missing, an operator must change the image.
 
 ## Related resources
 

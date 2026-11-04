@@ -11,8 +11,8 @@ You can change a set of PostgreSQL parameters on a managed database. Some parame
 
 ## Prerequisites
 
-- You need edit access to the project.
-- The database must be a dedicated database.
+- Edit access to the project.
+- A dedicated database.
 
 ## Change a parameter
 
@@ -27,13 +27,13 @@ You can change a set of PostgreSQL parameters on a managed database. Some parame
 </TabItem>
 <TabItem label="CLI">
 
-To read the current values, run:
+To read the current values, run the following command:
 
 ```sh
 orchard db settings get <id>
 ```
 
-To set a value, run:
+To set a value, run the following command:
 
 ```sh
 orchard db settings set <id> statement_timeout=30000

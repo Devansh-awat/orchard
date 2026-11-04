@@ -7,13 +7,13 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-A database with standby instances can continue to serve traffic when the primary fails. A database with one instance has no failover. To configure high availability, add a standby, and then choose a replication mode.
+A database with standby instances can continue to serve traffic when the primary fails. A database with one instance has no failover. To configure high availability, add a standby, then choose a replication mode.
 
 ## Prerequisites
 
-- You need edit access to the project.
-- The database must be a dedicated database.
-- Each new instance counts against your [quota](/teams/quotas/).
+- Edit access to the project.
+- A dedicated database.
+- Available [quota](/teams/quotas/) for each new instance.
 
 ## Add a standby
 
@@ -48,7 +48,7 @@ The replication mode controls when PostgreSQL treats a write as saved.
 orchard db replication set <dbId> --mode preferred
 ```
 
-To read the current mode, run:
+To read the current mode, run the following command:
 
 ```sh
 orchard db replication get <dbId>

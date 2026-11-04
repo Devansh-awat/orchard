@@ -9,14 +9,13 @@ import { Tabs, TabItem } from '@astrojs/starlight/components';
 
 You can upgrade a managed database to a newer PostgreSQL major version from the dashboard or the CLI. The database is offline during the upgrade step.
 
-Minor updates are different. Orchard applies them automatically and restarts instances one at a time.
+Orchard applies minor updates automatically and restarts instances one at a time.
 
 ## Prerequisites
 
-- You need edit access to the project.
-- The database must be a dedicated database.
-- The database must be running and healthy.
-- No other restore or upgrade can be running on the database.
+- Edit access to the project.
+- A dedicated database that is running and healthy.
+- No other restore or upgrade running on the database.
 
 ## Check the running version
 
@@ -31,13 +30,13 @@ The page shows the running version and its support date. It also lists known vul
 </TabItem>
 <TabItem label="CLI">
 
-To read the running version and known vulnerabilities, run:
+To read the running version and known vulnerabilities, run the following command:
 
 ```sh
 orchard db security <dbId>
 ```
 
-To list the versions that this instance offers, run:
+To list the versions that this instance offers, run the following command:
 
 ```sh
 orchard db versions
@@ -55,7 +54,7 @@ orchard db versions
 2. Go to **Settings** > **Version and security**.
 3. Select **Upgrade to Postgres `<version>`**. The button shows the newest version.
 4. In **To**, select the target version.
-5. Keep **Rehearse on a copy first** turned on. This adds a few minutes before the real upgrade.
+5. Keep **Rehearse on a copy first** turned on. This adds a few minutes before the upgrade.
 6. Select **Upgrade to Postgres `<version>`**.
 
 To follow the upgrade, go to the **Backups** tab.

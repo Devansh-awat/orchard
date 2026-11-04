@@ -25,8 +25,9 @@ Without storage, the **Backups** tab shows **Backups need storage**. Checkpoints
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open the database and go to **Backups**.
-2. Select **Save a point** > **Backup**.
+1. Open the database.
+2. Go to **Backups**.
+3. Select **Save a point** > **Backup**.
 
 The backup appears in **Restore points** with its status.
 
@@ -47,8 +48,9 @@ Orchard gives each new database a daily schedule. To change it:
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open the database and go to **Backups**.
-2. In **Schedule**, select a preset, or select **Custom cron…** and enter a five-field cron expression in UTC.
+1. Open the database.
+2. Go to **Backups**.
+3. In **Schedule**, select a preset, or select **Custom cron…** and enter a five-field cron expression in UTC.
 
 </TabItem>
 <TabItem label="CLI">
@@ -67,10 +69,11 @@ A checkpoint is a named restore point: a marker in the WAL. It does not copy dat
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open the database and go to **Backups**.
-2. Select **Save a point** > **Checkpoint**.
-3. (Optional) In **Label**, enter a name.
-4. Select **Take checkpoint**.
+1. Open the database.
+2. Go to **Backups**.
+3. Select **Save a point** > **Checkpoint**.
+4. (Optional) In **Label**, enter a name.
+5. Select **Take checkpoint**.
 
 To checkpoint every database in a project, open the project's **Overview**, select **More actions**, then **Checkpoint all databases**.
 
@@ -86,13 +89,13 @@ Without a database ID, the command takes a checkpoint of every database in the p
 </TabItem>
 </Tabs>
 
-A checkpoint shows as pending until its WAL reaches object storage. It can be restored after that. Checkpoints expire after 30 days.
+A checkpoint shows as pending until its WAL reaches object storage. You can restore it after that. Checkpoints expire after 30 days.
 
 Orchard also takes checkpoints automatically:
 
 | Type | When Orchard takes it |
 | --- | --- |
-| **Before a drop** | Before any `DROP TABLE`, `DROP SCHEMA`, or `DROP COLUMN` runs, when **Checkpoint before drops** is on. The checkpoint records what was dropped and by whom. `TRUNCATE` is not covered. |
+| **Before a drop** | Before any `DROP TABLE`, `DROP SCHEMA`, or `DROP COLUMN` runs, when **Checkpoint before drops** is on. The checkpoint records what was dropped and by whom. This check does not cover `TRUNCATE`. |
 | **Before a deploy** | Before a deploy, so that a [rollback](/deploy/rollbacks/) can also restore the app's databases. |
 | **Before a change** | Before an operation that changes the database, such as an in-place restore or a major upgrade. |
 
@@ -108,12 +111,14 @@ You can restore in two ways.
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open the database and go to **Backups**.
-2. Select **Restore**.
-3. In **Point**, select **Latest**, **A backup**, **A checkpoint**, or **A time**. When you copy a database, **Now** replaces **Latest** and copies the live data.
-4. In **Where**, select **Replace this database** or **Copy into a new database**.
-5. For a copy, enter a **Name** and select an **Environment**.
-6. Select **Restore** or **Create copy**.
+1. Open the database.
+2. Go to **Backups**.
+3. Select **Restore**.
+4. In **Point**, select **Latest**, **A backup**, **A checkpoint**, or **A time**. When you copy a database, **Now** replaces **Latest** and copies the live data.
+5. In **Where**, select **Replace this database** or **Copy into a new database**.
+6. For a copy, enter a **Name**.
+7. For a copy, select an **Environment**.
+8. Select **Restore** or **Create copy**.
 
 The operation appears in **Operations** on the same tab.
 
@@ -152,11 +157,12 @@ You can undo an in-place restore for 24 hours.
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open the database and go to **Backups**.
-2. In **Operations**, select **Undo** on the restore.
-3. Select **Undo restore**.
+1. Open the database.
+2. Go to **Backups**.
+3. In **Operations**, select **Undo** on the restore.
+4. Select **Undo restore**.
 
-Anything written since the restore moves aside.
+Orchard moves aside anything written since the restore.
 
 </TabItem>
 <TabItem label="CLI">
@@ -198,8 +204,9 @@ A restore test restores the latest backup into a temporary copy, compares tables
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open the database and go to **Backups**.
-2. In **Restore tests**, select **Test this backup**.
+1. Open the database.
+2. Go to **Backups**.
+3. In **Restore tests**, select **Test this backup**.
 
 To run a test every week, turn on **Weekly restore tests** under **Settings** > **Protection**.
 
@@ -221,9 +228,10 @@ Superadmins set instance-wide defaults under **Instance admin** > **Configuratio
 WAL alone cannot restore a database. If no base backup has completed, a deleted database cannot be recovered.
 :::
 
-1. Open the database and go to **Backups**.
-2. Confirm that the status reads **Protected**.
-3. In **Restore tests**, select **Test this backup**.
+1. Open the database.
+2. Go to **Backups**.
+3. Confirm that the status reads **Protected**.
+4. In **Restore tests**, select **Test this backup**.
 
 In the API, an empty `liveStatus.firstRecoverabilityPoint` means no base backup has completed.
 
@@ -268,7 +276,7 @@ r2Proxy:
     secretKey: <secret>
 ```
 
-### The local store on self-hosted installs
+### The local store on installer hosts
 
 The one-command installer runs an S3 store (versitygw) in the `orchard-object-storage` namespace, with the backup proxy, and sends the instance's backups to it. Checkpoints, point-in-time restore, copies, deleted database recovery, and restore tests work from the first database.
 
@@ -291,11 +299,13 @@ To install without the local store, pass `--object-storage false`. Databases the
 
 ### Move to S3 or R2
 
-Each existing database's backup configuration names the bucket, and the proxy serves only the bucket it is configured with. Keep the bucket name, and copy the existing data before you switch. If you do not copy it, point-in-time restore loses everything from before the switch.
+To keep backups off the machine, move them to S3 or R2. Each existing database's backup configuration names the bucket, and the proxy serves only the bucket it is configured with. Keep the bucket name, and copy the existing data before you switch. If you do not copy it, point-in-time restore loses everything from before the switch.
 
-1. Create a bucket with the same name as `objectStorage.local.bucket`. The default is `orchard-backups`. Create a key that can list, read, write, and delete in the bucket.
+1. Create a bucket with the same name as `objectStorage.local.bucket`. The default is `orchard-backups`.
 
-2. On the host, copy the existing backups. This step needs the AWS CLI.
+2. Create a key that can list, read, write, and delete in the bucket.
+
+3. On the host, copy the existing backups. This step needs the AWS CLI.
 
    ```bash
    kubectl -n orchard-object-storage port-forward svc/object-storage 9000:9000 &
@@ -307,7 +317,7 @@ Each existing database's backup configuration names the bucket, and the proxy se
      s3 sync ./orchard-backups s3://orchard-backups
    ```
 
-3. Point the instance and the backup proxy at the new store, and turn off the local store. On a Helm install, set the same keys in your values file.
+4. Point the instance and the backup proxy at the new store, and turn off the local store. On a Helm install, set the same keys in your values file.
 
    ```bash
    sudo orchardctl config set r2Proxy.upstream.endpoint https://<account>.r2.cloudflarestorage.com
@@ -322,9 +332,9 @@ Each existing database's backup configuration names the bucket, and the proxy se
    sudo orchardctl env set R2_BACKUP_BUCKET orchard-backups --apply
    ```
 
-4. Take a new checkpoint of each database. WAL written between the copy and the switch exists only in the local store.
+5. Take a new checkpoint of each database. WAL written between the copy and the switch exists only in the local store.
 
-5. Delete the local volume, `object-storage-data` in `orchard-object-storage`, when those checkpoints are older than any point you would restore to. Orchard keeps the volume until you delete it.
+6. Delete the local volume, `object-storage-data` in `orchard-object-storage`, when those checkpoints are older than any point you would restore to. Orchard keeps the volume until you delete it.
 
 ## Related resources
 

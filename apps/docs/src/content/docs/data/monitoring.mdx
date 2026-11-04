@@ -54,9 +54,9 @@ Query statistics use the `pg_stat_statements` extension. Turning on the extensio
 1. Open the database.
 2. Go to **Observe** > **Queries**.
 3. In **Rank queries by**, select one of these options:
-   - **Most time**: Total time across all calls.
-   - **Most frequent**: Number of calls.
-   - **Slowest**: Mean time for each call.
+   - **Most time:** Total time across all calls.
+   - **Most frequent:** Number of calls.
+   - **Slowest:** Mean time for each call.
 4. (Optional) In **Filter queries**, enter text to search for.
 5. Select a row to read the full query.
 
@@ -66,14 +66,14 @@ To clear the collected statistics, select **Reset**.
 
 The **Overview** tab of a database includes a console. In the console, **Logs** shows PostgreSQL logs and **Killed** shows the output of containers that were killed.
 
-To read this data from the CLI, run these commands:
+To read this data from the CLI, run the following commands:
 
 ```sh
 orchard db logs <id>
 orchard db killed list <id>
 ```
 
-To print a summary of database health, run:
+To print a summary of database health, run the following command:
 
 ```sh
 orchard db diagnose <dbId>

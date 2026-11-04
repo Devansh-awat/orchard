@@ -14,14 +14,15 @@ A database in Orchard is a managed PostgreSQL instance in a project. Orchard run
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open a project and select **New app**.
-2. In **Start from scratch**, select **PostgreSQL**.
-3. In **Start from**, keep **Empty**. You can also select **Import from URL** or **Copy of a database**.
-4. In **Database name**, enter a name.
-5. In **PostgreSQL version**, select a version.
-6. In **Storage size**, set the volume size. The default is 1 GiB.
-7. In **Resources**, set the CPU, memory, and **Instances**.
-8. Select **Create database**.
+1. Open a project.
+2. Select **New app**.
+3. In **Start from scratch**, select **PostgreSQL**.
+4. In **Start from**, keep **Empty**. You can also select **Import from URL** or **Copy of a database**.
+5. In **Database name**, enter a name.
+6. In **PostgreSQL version**, select a version.
+7. In **Storage size**, set the volume size. The default is 1 GiB.
+8. In **Resources**, set the CPU, memory, and **Instances**.
+9. Select **Create database**.
 
 </TabItem>
 <TabItem label="CLI">
@@ -42,10 +43,12 @@ To connect an app in the same project, use a reference. A reference follows the 
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open the app and go to **Variables**.
-2. Add a variable named `DATABASE_URL`.
-3. In the value field, select **Use a resource**, then select the database.
-4. Select **Save**.
+1. Open the app.
+2. Go to **Variables**.
+3. Add a variable named `DATABASE_URL`.
+4. In the value field, select **Use a resource**.
+5. Select the database.
+6. Select **Save**.
 
 </TabItem>
 <TabItem label="CLI">
@@ -112,8 +115,9 @@ Public access is not available in Cloudflare Tunnel mode, because tunnels carry 
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open the database and go to **Settings** > **Public access**.
-2. Turn on **Reachable from the internet**.
+1. Open the database.
+2. Go to **Settings** > **Public access**.
+3. Turn on **Reachable from the internet**.
 
 </TabItem>
 <TabItem label="CLI">
@@ -136,8 +140,10 @@ Deleting a database moves it to **Recently deleted** on the project for 30 days.
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open the database and go to **Settings** > **Danger zone**.
-2. Select **Delete database**, then confirm.
+1. Open the database.
+2. Go to **Settings** > **Danger zone**.
+3. Select **Delete database**.
+4. Confirm the deletion.
 
 </TabItem>
 <TabItem label="CLI">

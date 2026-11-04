@@ -45,7 +45,7 @@ Orchard builds the URL from `FRONTEND_URL`. If your public origin is different, 
 
 Until a backup bucket is configured, managed databases have no base backup. Write-ahead log (WAL) archiving alone cannot restore a deleted database. Checkpoints, the drop guard and restore tests are also unavailable.
 
-An installer host has this item done. The installer runs an S3-compatible store inside the cluster. The store is on the same machine as the databases, so it does not protect you if the machine is lost. For more information, refer to [The local store on self-hosted installs](/data/backups/#the-local-store-on-self-hosted-installs).
+An installer host has this item done. The installer runs an S3-compatible store inside the cluster. The store is on the same machine as the databases, so it does not protect you if the machine is lost. For more information, refer to [The local store on installer hosts](/data/backups/#the-local-store-on-installer-hosts).
 
 To use S3 or R2, set the values in **Instance admin** > **Configuration** > **Object storage**, or use the following environment variables. Any S3-compatible store works.
 
