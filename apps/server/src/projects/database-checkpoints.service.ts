@@ -414,7 +414,7 @@ export class DatabaseCheckpointsService {
         d.clusterName!,
         d.dbName,
         guardCheckpointsSql(after),
-        { tuplesOnly: true }
+        { tuplesOnly: true, catalogOnly: true }
       );
       if (!out.success) {
         if (ddlGuardTableMissing(out.stderr)) {

@@ -749,12 +749,13 @@ export class DatabaseOperationsService {
       op.targetClusterName!,
       src.dbName,
       DRILL_CHECK_SQL,
-      { tuplesOnly: true }
+      { tuplesOnly: true, catalogOnly: true }
     );
     const restored = restoredOut.success ? parseDrillSnapshot(restoredOut.stdout) : null;
     const sourceOut = await this.k8sCnpg
       .runPsqlInCnpg(src.namespace, src.clusterName, src.dbName, DRILL_CHECK_SQL, {
-        tuplesOnly: true
+        tuplesOnly: true,
+        catalogOnly: true
       })
       .catch(() => null);
     const source = sourceOut?.success ? parseDrillSnapshot(sourceOut.stdout) : null;

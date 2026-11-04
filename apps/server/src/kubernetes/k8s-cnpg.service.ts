@@ -2886,10 +2886,19 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     clusterName: string,
     dbName: string,
     sql: string,
-    options: { tuplesOnly?: boolean } = {}
+    options: { tuplesOnly?: boolean; catalogOnly?: boolean } = {}
   ): Promise<{ stdout: string; stderr: string; success: boolean }> {
     const pod = await this.findCnpgPrimaryPod(namespace, clusterName);
-    const args = ['psql', '-U', 'postgres', '-d', dbName, '-v', 'ON_ERROR_STOP=1'];
+    const args = [
+      ...(options.catalogOnly ? ['env', 'PGOPTIONS=-c search_path=pg_catalog,pg_temp'] : []),
+      'psql',
+      '-U',
+      'postgres',
+      '-d',
+      dbName,
+      '-v',
+      'ON_ERROR_STOP=1'
+    ];
     if (options.tuplesOnly) args.push('-t', '-A');
     args.push('-c', sql);
     return this.execInPod(namespace, pod, 'postgres', args);
