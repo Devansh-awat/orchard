@@ -55,16 +55,17 @@ Orchard keeps a copy of cluster state in PostgreSQL, so the dashboard loads quic
 
 Organizations and projects each have their own roles.
 
-| Organization role | Access |
-| --- | --- |
-| Owner | All actions, including deleting the organization. |
-| Admin | Manage members, projects, quotas, and settings. |
-| Member | Access the projects they belong to. |
+| Organization role | Access                                                                |
+| ----------------- | --------------------------------------------------------------------- |
+| Owner             | All actions, including deleting the organization.                     |
+| Admin             | Manage members, projects, quotas, and settings.                       |
+| Member            | Create projects, and access the projects they create or are added to. |
+| Guest             | Access only the projects they are added to.                           |
 
-| Project role | Access |
-| --- | --- |
-| Admin | Manage members and all resources in the project. |
-| Member | Create and edit project resources. |
-| Viewer | Read-only access. |
+| Project role | Access                                           |
+| ------------ | ------------------------------------------------ |
+| Admin        | Manage members and all resources in the project. |
+| Member       | Create and edit project resources.               |
+| Viewer       | Read-only access.                                |
 
 Superadmin is a separate role for the people who operate the instance. For more information, refer to [Manage organizations and roles](/teams/organizations/).

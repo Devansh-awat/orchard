@@ -16,24 +16,24 @@ https://docs.orchard.my/start/install.md    its Markdown source
 
 The home page is at `/index.md`.
 
-Each page also has a **Copy page** button under its title, with a menu next to it:
+Each page has these actions under its title:
 
 | Action               | Result                                       |
 | -------------------- | -------------------------------------------- |
-| **Open in ChatGPT**  | Opens ChatGPT and asks about this page.      |
-| **Open in Claude**   | Opens Claude and asks about this page.       |
-| **Copy page**        | Copies the page as Markdown.                 |
+| **Copy as Markdown** | Copies the page as Markdown.                 |
 | **View as Markdown** | Opens the Markdown source.                   |
-| **Export as PDF**    | Prints the page, so you can save it as a PDF. |
+| **Agent setup**      | Opens the [agent setup](/agent-setup/) page. |
+
+The menu next to them has **Open in Claude**, **Open in ChatGPT**, and **Connect to MCP**.
 
 ## Use llms.txt
 
 Two files follow the [llms.txt](https://llmstxt.org) convention.
 
-| File                                                      | Contents                                                       |
-| --------------------------------------------------------- | -------------------------------------------------------------- |
+| File                                                      | Contents                                                         |
+| --------------------------------------------------------- | ---------------------------------------------------------------- |
 | [`/llms.txt`](https://docs.orchard.my/llms.txt)           | An index of every page, grouped by section, with Markdown links. |
-| [`/llms-full.txt`](https://docs.orchard.my/llms-full.txt) | The entire documentation set as one document.                  |
+| [`/llms-full.txt`](https://docs.orchard.my/llms-full.txt) | The entire documentation set as one document.                    |
 
 Use `llms.txt` to decide what to read. Use `llms-full.txt` to load everything in one request.
 
@@ -43,12 +43,12 @@ This documentation has no MCP server. The Orchard MCP server operates your insta
 
 An agent can also use the following entry points. For more information, refer to [Code mode for agents](/agents-code-mode/).
 
-| Entry point                       | Purpose                                                  |
-| --------------------------------- | -------------------------------------------------------- |
-| `GET /apiv1/agent-spec.json`      | A trimmed spec of the operations that an agent can call. |
-| `GET /apiv1/openapi.json`         | The complete OpenAPI document.                           |
+| Entry point                         | Purpose                                                  |
+| ----------------------------------- | -------------------------------------------------------- |
+| `GET /apiv1/agent-spec.json`        | A trimmed spec of the operations that an agent can call. |
+| `GET /apiv1/openapi.json`           | The complete OpenAPI document.                           |
 | `orchard api search` and `describe` | The same spec from a shell, with calls by `operationId`. |
-| `https://mcp.<domain>/compact`    | The whole API through three MCP tools.                   |
+| `https://mcp.<domain>/compact`      | The whole API through three MCP tools.                   |
 
 ## Check whether a deploy worked
 
