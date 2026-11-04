@@ -25,7 +25,7 @@ know.
 
   orchardctl public-ip           show it
   orchardctl public-ip set <ip>  set the instance-wide default
-  orchardctl public-ip unset     go back to requiring one per organization
+  orchardctl public-ip unset     go back to the admin panel's setting
 
 This is the fallback, not an override: an organization that sets its own still
 wins. There is also a field for it in the admin panel, under Configuration,
@@ -50,8 +50,9 @@ which this locks once set here.
 			case "show":
 				current, _ := values.Get(publicIPPath).(string)
 				if current == "" {
-					c.Printf("Not set, so each organization must configure its own.\n")
-					c.Printf("Set this box's routable address with:\n")
+					c.Printf("Not pinned here. Orchard uses the address in the admin panel, under\n")
+					c.Printf("Configuration, and with none there each organization sets its own.\n")
+					c.Printf("Pin this box's routable address with:\n")
 					c.Printf("  orchardctl public-ip set <ip> --apply\n")
 					return nil
 				}
