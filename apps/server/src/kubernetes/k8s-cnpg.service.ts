@@ -72,7 +72,9 @@ import {
   objectStoreBody,
   objectStoreName,
   walArchiverPlugin,
-  type BackupMethod
+  type BackupMethod,
+  failedRecoveryJob,
+  recoveryFailureMessage
 } from './cnpg-recovery';
 
 export function cnpgScheduleName(clusterName: string): string {
@@ -2327,6 +2329,61 @@ export class K8sCnpgService implements OnApplicationBootstrap {
   async usePluginForNewClusters(): Promise<boolean> {
     if (process.env.CNPG_BARMAN_PLUGIN !== 'on') return false;
     return this.barmanPluginInstalled().catch(() => false);
+  }
+
+  async recoveryJobFailure(namespace: string, clusterName: string): Promise<string | null> {
+    this.ensureKubeConfig();
+    const batchApi = this.kc.makeApiClient(k8s.BatchV1Api);
+    const { body } = await batchApi.listNamespacedJob(
+      namespace,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      `cnpg.io/cluster=${clusterName},cnpg.io/jobRole=full-recovery`
+    );
+    const job = failedRecoveryJob(body.items ?? []);
+    if (!job) return null;
+    return recoveryFailureMessage(await this.jobLogTail(namespace, job).catch(() => ''));
+  }
+
+  private async jobLogTail(namespace: string, job: string): Promise<string> {
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+    const { body } = await coreApi.listNamespacedPod(
+      namespace,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      `job-name=${job}`
+    );
+    const pod = (body.items ?? []).sort(
+      (a, b) =>
+        new Date(b.metadata?.creationTimestamp ?? 0).getTime() -
+        new Date(a.metadata?.creationTimestamp ?? 0).getTime()
+    )[0];
+    if (!pod?.metadata?.name) return '';
+    const containers = [...(pod.spec?.initContainers ?? []), ...(pod.spec?.containers ?? [])];
+    const logs = await Promise.all(
+      containers.map((container) =>
+        coreApi
+          .readNamespacedPodLog(
+            pod.metadata!.name!,
+            namespace,
+            container.name,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            40
+          )
+          .then((res) => String(res.body ?? ''))
+          .catch(() => '')
+      )
+    );
+    return logs.join('\n');
   }
 
   async primaryLogTail(namespace: string, clusterName: string, lines = 80): Promise<string> {

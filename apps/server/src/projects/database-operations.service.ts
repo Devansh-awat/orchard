@@ -713,6 +713,16 @@ export class DatabaseOperationsService {
       return;
     }
     if (progress.state !== 'ready') {
+      const failure = await this.k8sCnpg
+        .recoveryJobFailure(op.targetNamespace!, op.targetClusterName!)
+        .catch((e: any) => {
+          this.logger.warn(`recovery jobs of ${op.id} unreadable: ${k8sErrorMessage(e)}`);
+          return null;
+        });
+      if (failure) {
+        await this.fail(op, failure);
+        return;
+      }
       if (progress.message) {
         await this.prisma.databaseOperation.update({
           where: { id: op.id },

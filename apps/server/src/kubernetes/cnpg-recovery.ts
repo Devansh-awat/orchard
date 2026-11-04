@@ -402,6 +402,82 @@ export function recoveryClusterSpec(input: RecoveryClusterInput): Record<string,
 
 export type ClusterProgress = 'ready' | 'failed' | 'pending';
 
+const RECOVERY_JOB_FAILURES = 3;
+
+export function failedRecoveryJob(jobs: any[]): string | null {
+  for (const job of jobs) {
+    const failedCondition = (job?.status?.conditions ?? []).some(
+      (c: any) => c?.type === 'Failed' && c?.status === 'True'
+    );
+    if (failedCondition || Number(job?.status?.failed ?? 0) >= RECOVERY_JOB_FAILURES) {
+      return job?.metadata?.name ?? null;
+    }
+  }
+  return null;
+}
+
+function logMessage(line: string): string {
+  try {
+    const parsed = JSON.parse(line);
+    return String(parsed?.error ?? parsed?.msg ?? line);
+  } catch {
+    return line;
+  }
+}
+
+export function recoveryFailureMessage(logs: string): string {
+  if (/no target backup found/i.test(logs)) {
+    return 'No backup covers that point, so there is nothing to restore from.';
+  }
+  const lines = logs
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const cause = [...lines].reverse().find((line) => /error|fatal|failed/i.test(line));
+  return cause
+    ? `The recovery job failed: ${logMessage(cause).slice(0, 300)}`
+    : 'The recovery job failed.';
+}
+
+export type RestorePoint =
+  | { type: 'now' | 'latest' }
+  | { type: 'time'; time: string }
+  | { type: 'backup'; backup: { status: string; barmanId: string | null } | null }
+  | {
+      type: 'checkpoint';
+      checkpoint: { status: string; lsn: string | null } | null;
+    };
+
+export function restoreBlocker(point: RestorePoint, backups: BackupPoint[]): string | null {
+  const completed = backups.filter((b) => b.status === 'completed');
+  const none = 'This database has no completed backup, so there is nothing to restore from.';
+  switch (point.type) {
+    case 'now':
+      return null;
+    case 'latest':
+      return completed.length > 0 ? null : none;
+    case 'time': {
+      if (completed.length === 0) return none;
+      const at = Date.parse(point.time);
+      return completed.some((b) => b.completedAt && new Date(b.completedAt).getTime() <= at)
+        ? null
+        : 'No backup finished before that time, so there is nothing to restore from.';
+    }
+    case 'backup':
+      return point.backup?.status === 'completed' && point.backup.barmanId
+        ? null
+        : "You can't restore that backup, because it didn't complete.";
+    case 'checkpoint':
+      if (!point.checkpoint || !['pending', 'durable'].includes(point.checkpoint.status)) {
+        return "You can't restore that checkpoint.";
+      }
+      if (!point.checkpoint.lsn) return null;
+      return backupBefore(completed, point.checkpoint.lsn)
+        ? null
+        : 'No backup was taken before that checkpoint.';
+  }
+}
+
 export function clusterProgress(cluster: any): { state: ClusterProgress; message: string | null } {
   if (!cluster) return { state: 'pending', message: null };
   const status = cluster.status ?? {};

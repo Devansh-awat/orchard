@@ -6,6 +6,7 @@ import {
   backupMethodSpec,
   clusterArchivesWithPlugin,
   clusterProgress,
+  failedRecoveryJob,
   judgeDrill,
   lsnValue,
   normalizePoolerConfig,
@@ -15,6 +16,8 @@ import {
   poolerOnByDefault,
   recoveryBootstrap,
   recoveryClusterSpec,
+  recoveryFailureMessage,
+  restoreBlocker,
   postgresTimestamp,
   recoveryTargetSpec,
   walArchiverPlugin,
@@ -61,8 +64,10 @@ function guardHarness(answers: { probe: () => Psql | Promise<Psql>; ingest?: () 
   const svc = new DatabaseCheckpointsService(
     {
       database: {
-        findMany: async ({ where }: any) =>
-          where.ddlGuardVersion && row.ddlGuardVersion === null ? [] : [row],
+        findMany: async ({ where }: any) => {
+          if (where.ddlGuardVersion === null) return row.ddlGuardVersion === null ? [row] : [];
+          return where.ddlGuardVersion && row.ddlGuardVersion === null ? [] : [row];
+        },
         update: async ({ data }: any) => Object.assign(row, data)
       },
       databaseCheckpoint: {
@@ -657,4 +662,74 @@ test('fleet security gauges report the worst CVE and days to end of life per clu
   assert.equal(get('orchard.postgres.cve_max_score', 'new'), 0);
   assert.equal(get('orchard.postgres.cves', 'floating'), undefined);
   assert.equal(get('orchard.postgres.days_to_eol', 'new'), 1104);
+});
+
+const finished = {
+  barmanId: 'b1',
+  status: 'completed',
+  endLsn: '0/5000000',
+  completedAt: new Date('2026-11-01T00:00:00Z')
+};
+const broken = { barmanId: null, status: 'failed', endLsn: null, completedAt: null };
+
+test('a restore with nothing to restore from is refused before it starts', () => {
+  assert.match(restoreBlocker({ type: 'latest' }, [broken])!, /no completed backup/);
+  assert.match(
+    restoreBlocker({ type: 'time', time: '2026-11-02T00:00:00Z' }, [broken])!,
+    /no completed backup/
+  );
+  assert.match(
+    restoreBlocker({ type: 'time', time: '2026-10-30T00:00:00Z' }, [finished])!,
+    /No backup finished before that time/
+  );
+  assert.equal(restoreBlocker({ type: 'time', time: '2026-11-02T00:00:00Z' }, [finished]), null);
+  assert.equal(restoreBlocker({ type: 'latest' }, [broken, finished]), null);
+  assert.equal(restoreBlocker({ type: 'now' }, []), null);
+});
+
+test('a backup or checkpoint target has to be usable', () => {
+  assert.match(restoreBlocker({ type: 'backup', backup: broken }, [broken])!, /didn't complete/);
+  assert.match(restoreBlocker({ type: 'backup', backup: null }, [])!, /didn't complete/);
+  assert.equal(restoreBlocker({ type: 'backup', backup: finished }, [finished]), null);
+
+  const checkpoint = (status: string, lsn: string | null) => ({
+    type: 'checkpoint' as const,
+    checkpoint: { status, lsn }
+  });
+  assert.match(
+    restoreBlocker(checkpoint('durable', '0/1000000'), [finished])!,
+    /No backup was taken/
+  );
+  assert.equal(restoreBlocker(checkpoint('durable', '0/6000000'), [finished]), null);
+  assert.equal(restoreBlocker(checkpoint('pending', null), []), null);
+  assert.match(restoreBlocker(checkpoint('failed', '0/6000000'), [finished])!, /can't restore/);
+  assert.match(restoreBlocker({ type: 'checkpoint', checkpoint: null }, [])!, /can't restore/);
+});
+
+test('a recovery job that keeps failing ends the operation', () => {
+  const job = (status: unknown) => ({ metadata: { name: 'pg-1-full-recovery' }, status });
+  assert.equal(failedRecoveryJob([job({ active: 1 })]), null);
+  assert.equal(failedRecoveryJob([job({ failed: 2 })]), null);
+  assert.equal(failedRecoveryJob([job({ failed: 3 })]), 'pg-1-full-recovery');
+  assert.equal(
+    failedRecoveryJob([job({ conditions: [{ type: 'Failed', status: 'True' }] })]),
+    'pg-1-full-recovery'
+  );
+  assert.equal(
+    failedRecoveryJob([job({ conditions: [{ type: 'Failed', status: 'False' }] })]),
+    null
+  );
+  assert.equal(failedRecoveryJob([]), null);
+});
+
+test('a failed recovery says why', () => {
+  assert.match(
+    recoveryFailureMessage('{"msg":"Error while restoring","error":"no target backup found"}'),
+    /No backup covers that point/
+  );
+  assert.equal(
+    recoveryFailureMessage('starting\n{"level":"error","error":"access denied"}\nbye'),
+    'The recovery job failed: access denied'
+  );
+  assert.equal(recoveryFailureMessage(''), 'The recovery job failed.');
 });

@@ -25,7 +25,9 @@ import {
   normalizePoolerConfig,
   poolerBody,
   poolerName,
-  type PoolerConfig
+  type PoolerConfig,
+  restoreBlocker,
+  type RestorePoint
 } from '../kubernetes/cnpg-recovery';
 import { k8sErrorMessage } from '../kubernetes/k8s-error';
 import type { DatabasesService } from './databases.service';
@@ -211,6 +213,31 @@ export class DatabaseRecoveryService {
     return this.moduleRef.get(Svc, { strict: false });
   }
 
+  private async assertRestorable(databaseId: string, target: OperationTarget) {
+    if (target.type === 'now') return;
+    const backups = await this.prisma.databaseBackup.findMany({
+      where: { databaseId },
+      select: { barmanId: true, status: true, endLsn: true, completedAt: true, id: true }
+    });
+    let point: RestorePoint;
+    if (target.type === 'backup') {
+      point = {
+        type: 'backup',
+        backup: backups.find((b) => b.id === target.backupId) ?? null
+      };
+    } else if (target.type === 'checkpoint') {
+      const checkpoint = await this.checkpoints.get(target.checkpointId);
+      point = {
+        type: 'checkpoint',
+        checkpoint: checkpoint?.databaseId === databaseId ? checkpoint : null
+      };
+    } else {
+      point = target;
+    }
+    const blocker = restoreBlocker(point, backups);
+    if (blocker) throw new BadRequestException(blocker);
+  }
+
   async restore(databaseId: string, req: RestoreRequest, clerkId: string, userData?: UserData) {
     const { user, database } = await this.access.assertDatabaseEditor(
       databaseId,
@@ -224,6 +251,7 @@ export class DatabaseRecoveryService {
         'Restoring in place to now changes nothing. Pick a time, backup or checkpoint.'
       );
     }
+    await this.assertRestorable(database.id, target);
     if (mode === 'in_place') await this.checkpoints.before(database.id, 'a restore', user.id);
     const source = await this.operations.sourceFromDatabase(database.id);
     const op = await this.operations.enqueue({
@@ -280,6 +308,7 @@ export class DatabaseRecoveryService {
         throw new BadRequestException("Environment doesn't belong to that project");
       }
     }
+    await this.assertRestorable(database.id, verdict.target);
     const source = await this.operations.sourceFromDatabase(database.id);
     const op = await this.operations.enqueue({
       kind: 'fork',
