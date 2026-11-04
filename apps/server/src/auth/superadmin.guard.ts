@@ -42,10 +42,31 @@ const ORG_SCOPED_ALLOW = ['GET auth/me', 'POST auth/logout'];
 
 const API_TOKEN_DENY = [
   'auth/passkey/register',
+  'auth/passkeys',
   'auth/password/set',
   'auth/mcp-token',
   'setup',
   'admin'
+];
+
+const ORG_IDENTITY_ADMIN = /^organizations\/[^/]+\/(sso|scim)(\/|$)/;
+
+const PROJECT_TOKEN_ACCOUNT_DENY = [
+  'auth',
+  'users',
+  'github',
+  'git',
+  'tailscale/status',
+  'tailscale/link',
+  'tailscale/unlink',
+  'invitations'
+];
+
+const PUBLIC_CREDENTIAL_POSTS = [
+  /^auth\/otp\/(request|verify)$/,
+  /^auth\/password$/,
+  /^auth\/passkey\/authenticate\/(options|verify)$/,
+  /^invitations\/[^/]+\/sign-up$/
 ];
 
 const PLATFORM_ORIGINS = new Set<string>(
@@ -74,7 +95,7 @@ function crossSiteMutation(request: Request): boolean {
   return false;
 }
 
-const MCP_GATEWAY_DENY = [...API_TOKEN_DENY, 'auth/tokens'];
+const MCP_GATEWAY_DENY = [...API_TOKEN_DENY, 'auth/tokens', 'auth/sessions'];
 
 function normalizedPath(path: string): string {
   return path
@@ -83,14 +104,29 @@ function normalizedPath(path: string): string {
     .replace(/\/+$/, '');
 }
 
-function deniedToApiToken(path: string): boolean {
+export function deniedToApiToken(path: string): boolean {
   const p = normalizedPath(path);
-  return API_TOKEN_DENY.some((d) => p === d || p.startsWith(`${d}/`));
+  return API_TOKEN_DENY.some((d) => p === d || p.startsWith(`${d}/`)) || ORG_IDENTITY_ADMIN.test(p);
+}
+
+export function deniedToProjectToken(method: string, path: string): boolean {
+  const p = normalizedPath(path);
+  if (method.toUpperCase() === 'GET' && p === 'auth/me') return false;
+  return PROJECT_TOKEN_ACCOUNT_DENY.some((d) => p === d || p.startsWith(`${d}/`));
+}
+
+export function isPublicCredentialPost(method: string, path: string): boolean {
+  return (
+    method.toUpperCase() === 'POST' &&
+    PUBLIC_CREDENTIAL_POSTS.some((pattern) => pattern.test(normalizedPath(path)))
+  );
 }
 
 function deniedToMcpGateway(path: string): boolean {
   const p = normalizedPath(path);
-  return MCP_GATEWAY_DENY.some((d) => p === d || p.startsWith(`${d}/`));
+  return (
+    MCP_GATEWAY_DENY.some((d) => p === d || p.startsWith(`${d}/`)) || ORG_IDENTITY_ADMIN.test(p)
+  );
 }
 
 export function deniedToOrgScopedSession(method: string, path: string): boolean {
@@ -152,6 +188,13 @@ export class SuperAdminGuard implements CanActivate {
         context.getClass()
       ]);
       if (isPublic) {
+        const publicRequest = context.switchToHttp().getRequest<Request>();
+        if (
+          isPublicCredentialPost(publicRequest.method, publicRequest.path) &&
+          crossSiteMutation(publicRequest)
+        ) {
+          throw new ForbiddenException('Cross-site sign-in is not allowed');
+        }
         return true;
       }
     }
@@ -406,6 +449,9 @@ export class SuperAdminGuard implements CanActivate {
       const restrictedProjectIds = Array.isArray(apiToken.restrictedProjectIds)
         ? (apiToken.restrictedProjectIds as string[])
         : [];
+      if (restrictedProjectIds.length > 0 && deniedToProjectToken(request.method, request.path)) {
+        throw new ForbiddenException("A project token can't use account routes.");
+      }
       request['auth'] = {
         userId: user.id,
         apiTokenId: apiToken.id,
