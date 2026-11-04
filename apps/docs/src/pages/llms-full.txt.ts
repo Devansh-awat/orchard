@@ -1,26 +1,26 @@
 import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
-import { docUrl, plainTitle, sortEntries } from '../lib/llms';
+import { entryMarkdown, sortEntries } from '../lib/llms';
+import { agentSetupMarkdown } from '../lib/page-markdown';
 
-/** llms-full.txt: the whole documentation set as one markdown document. */
 export const GET: APIRoute = async () => {
-  const entries = sortEntries(await getCollection('docs'));
+  const entries = sortEntries(await getCollection('docs')).filter((entry) => entry.id !== '404');
 
   const parts = [
     '# Orchard documentation',
     '',
-    'Orchard is a self-hosted platform that installs into your own Kubernetes',
-    'cluster and turns a GitHub repo into a running app.',
+    'Orchard is a self-hosted platform. It installs on a Linux server or a Kubernetes',
+    'cluster and deploys apps from a repository or an image.',
     '',
+    '---',
+    '',
+    agentSetupMarkdown(),
     '---',
     ''
   ];
 
   for (const entry of entries) {
-    parts.push(`# ${plainTitle(entry)}`, '');
-    if (entry.data.description) parts.push(`> ${entry.data.description}`, '');
-    parts.push(`Source: ${docUrl(entry)}`, '');
-    parts.push(entry.body?.trim() ?? '', '', '---', '');
+    parts.push(entryMarkdown(entry), '---', '');
   }
 
   return new Response(parts.join('\n'), {
