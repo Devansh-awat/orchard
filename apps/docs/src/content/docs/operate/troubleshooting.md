@@ -202,6 +202,16 @@ IPv6-only servers are not supported yet. This server has no IPv4 address.
 
 To try anyway, add `--allow-ipv6-only` when you run the installer. `--yes` does not imply this flag. NAT64 in front of an IPv4 server is unsupported, and Orchard has not tested it.
 
+### A tunnel install fails with a handshake error
+
+```txt
+curl: (35) sslv3 alert handshake failure
+```
+
+**Cause:** The name is more than one level under your Cloudflare zone, such as `orchard.dev.example.com`. Cloudflare's free certificate covers `example.com` and `*.example.com` only, so the connection fails at Cloudflare. The tunnel is healthy, and plain HTTP still works.
+
+**Fix:** Use names directly under the zone, or add Advanced Certificate Manager in Cloudflare. To change a name, re-run the installer.
+
 ### The dashboard returns a 404 at a name that resolves to the host
 
 **Cause:** Traefik routes by `Host` header and does not know the name.

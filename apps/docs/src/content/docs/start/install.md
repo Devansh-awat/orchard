@@ -94,7 +94,7 @@ The installer asks these questions in order. A flag or an environment variable a
 | Cloudflare Tunnel token, in `tunnel` mode | None. Required in `tunnel` mode.                                                                           | `--tunnel-token`        | `ORCHARD_TUNNEL_TOKEN`              |
 | Public IP                                 | The detected address. In `lan` mode, the local address. In `tunnel` mode, none.                            | `--public-ip`           | `ORCHARD_PUBLIC_IP`                 |
 | Dashboard domain                          | An `sslip.io` name. In `lan` mode, the local address. Required in `tunnel` mode.                           | `--domain`              | `ORCHARD_DOMAIN`                    |
-| Apps domain                               | `apps.<parent of your domain>`                                                                             | `--app-domain`          | `ORCHARD_APP_DOMAIN`                |
+| Apps domain                               | `apps.<parent of your domain>`. In `tunnel` mode, the parent of your domain.                               | `--app-domain`          | `ORCHARD_APP_DOMAIN`                |
 | Custom domains target                     | The dashboard domain. In `tunnel` mode, `<tunnel-id>.cfargotunnel.com`. In `lan` mode, an `sslip.io` name. | `--ingress-cname`       | `ORCHARD_INGRESS_CNAME`             |
 | MCP endpoint, and its hostname            | On, at `mcp.<parent of your domain>`                                                                       | `--mcp`, `--mcp-domain` | `ORCHARD_MCP`, `ORCHARD_MCP_DOMAIN` |
 | Let's Encrypt email, in `public` mode     | None                                                                                                       | `--email`               | `ORCHARD_ACME_EMAIL`                |
@@ -153,7 +153,7 @@ For `tunnel` mode, the installer prints the hostnames to add to your tunnel:
 ```txt
 Type   Name                  Value
 CNAME  orchard.example.com   <tunnel-id>.cfargotunnel.com
-CNAME  *.apps.example.com    <tunnel-id>.cfargotunnel.com
+CNAME  *.example.com         <tunnel-id>.cfargotunnel.com
 ```
 
 1. In Cloudflare, go to **Zero Trust** > **Networks** > **Tunnels**, and select your tunnel.
@@ -161,7 +161,7 @@ CNAME  *.apps.example.com    <tunnel-id>.cfargotunnel.com
 3. Add each name, with the service `http://traefik.traefik.svc.cluster.local:80`. Cloudflare creates the CNAME for each name except the wildcard.
 4. Go to **DNS** > **Records**, and add the wildcard as a proxied CNAME to the value that the installer printed.
 
-The free Cloudflare certificate covers one level of subdomain. To serve apps at `*.apps.example.com`, you need Advanced Certificate Manager. To avoid this, use an apps domain of `example.com`, so that apps are at `*.example.com`.
+Cloudflare's free certificate covers your domain and one level under it. For this reason, the apps domain defaults to the parent of your dashboard name in `tunnel` mode, so that apps are at `*.example.com`. A name deeper than one level, such as `*.apps.example.com` or `orchard.dev.example.com`, needs Advanced Certificate Manager. Without it, HTTPS fails at Cloudflare with a handshake error, even when the tunnel is healthy. The installer warns you about these names, and the summary reports a failed connection.
 
 For `lan` mode, you do not need public DNS. For more information, refer to [Use `lan` mode](#use-lan-mode) and [Use Tailscale](#use-tailscale).
 
