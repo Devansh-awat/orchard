@@ -77,12 +77,15 @@
 				spellcheck="false"
 			/>
 		</Field>
-		<Field
-			label="Apps domain"
-			for="{uid}-apps"
-			hint="Needs a wildcard DNS record, *.{appDomain ||
-				'apps.example.com'}. If blank, apps get no URL."
-		>
+		<Field label="Apps domain" for="{uid}-apps">
+			{#snippet hint()}
+				Needs a wildcard DNS record, *.{appDomain || 'apps.example.com'}. If blank, apps get no URL.
+				<a
+					href="https://docs.orchard.my/operate/wildcard-certificates/"
+					target="_blank"
+					rel="noreferrer">Set up wildcard certificates</a
+				>
+			{/snippet}
 			<Input
 				id="{uid}-apps"
 				size="lg"
