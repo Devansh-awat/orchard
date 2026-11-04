@@ -177,7 +177,7 @@ export function deploymentAnomalies(d: DeploymentFacts, now = Date.now()): Anoma
           : 'Over the threshold',
       since: a.firingSince?.toISOString() ?? null,
       href: d.href,
-      action: { label: 'Alerts', href: `${d.href}?tab=settings&s=alerts` }
+      action: { label: 'Alerts', href: `${d.href}?tab=settings&s=notifications` }
     });
   }
   const spike = d.errorGroups.filter(
