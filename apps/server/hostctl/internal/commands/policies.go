@@ -17,18 +17,17 @@ func Policies() *cli.Command {
 		Root:    true,
 		Usage: `orchardctl policies - which namespaces may reach tenant apps
 
-Every tenant namespace is default-deny, so the ingress controller has to be
-named or it cannot reach the app. The symptom when it is wrong is not an
-obviously dead site: it is a certificate that never issues, because the ACME
-HTTP-01 solver is a pod in the tenant namespace and the controller cannot
-reach it.
+Every tenant namespace is default-deny, so you must name the ingress controller
+here or it can't reach the app. If it's wrong, the first sign is a certificate
+that never issues, because the ACME HTTP-01 solver is a pod in the tenant
+namespace and the controller can't reach it.
 
   orchardctl policies                     show the configured namespaces
   orchardctl policies set <ns>[,<ns>...]  change them
   orchardctl policies reapply             rewrite existing projects' policies
 
-Policies are written when a namespace is created, so a change only reaches
-new projects until it is re-applied. The server rewrites every namespace it
+Orchard writes policies when it creates a namespace, so a change only reaches
+new projects until you re-apply it. The server rewrites every namespace it
 manages on boot, which is what reapply triggers.
 
   orchardctl policies set traefik,orchard --apply

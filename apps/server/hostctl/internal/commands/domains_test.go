@@ -212,7 +212,7 @@ func TestLetsEncryptEmailPatchesTheIssuer(t *testing.T) {
 	if strings.TrimSpace(string(calls)) != want {
 		t.Errorf("kubectl got %s", calls)
 	}
-	if !strings.Contains(out, "Certificates are not affected") {
+	if !strings.Contains(out, "Certificates don't change") {
 		t.Errorf("output: %s", out)
 	}
 }
@@ -244,7 +244,7 @@ func TestLetsEncryptEmailRefusesBadInputAndOtherModes(t *testing.T) {
 	}
 	lan := "server:\n  env:\n    - { name: INSTALL_INGRESS_MODE, value: lan }\n"
 	_, _, err := runCommand(t, LetsEncryptEmail(), lan, "set", "you@example.com")
-	if err == nil || !strings.Contains(err.Error(), "does not use Let's Encrypt") {
+	if err == nil || !strings.Contains(err.Error(), "doesn't use Let's Encrypt") {
 		t.Errorf("lan mode should be refused, got %v", err)
 	}
 	if calls, err := os.ReadFile(log); err == nil {

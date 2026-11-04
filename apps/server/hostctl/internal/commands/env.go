@@ -38,7 +38,7 @@ func validEnvName(name string) error {
 	for i, r := range name {
 		letter := r == '_' || (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z')
 		if !letter && !(i > 0 && r >= '0' && r <= '9') {
-			return fmt.Errorf("%q is not an environment variable name", name)
+			return fmt.Errorf("%q isn't an environment variable name", name)
 		}
 	}
 	return nil
@@ -68,7 +68,7 @@ func runEnv(values *cli.Values, path string, args []string, out func(string, ...
 				return false, nil
 			}
 		}
-		return false, fmt.Errorf("%s is not set in %s", args[1], path)
+		return false, fmt.Errorf("%s isn't set in %s", args[1], path)
 
 	case "set":
 		if len(args) != 3 {
@@ -79,7 +79,7 @@ func runEnv(values *cli.Values, path string, args []string, out func(string, ...
 		}
 		if raw := values.Get(path); raw != nil {
 			if _, ok := raw.([]any); !ok {
-				return false, fmt.Errorf("%s is not a list in the values file; fix it with orchardctl config edit", path)
+				return false, fmt.Errorf("%s isn't a list in the values file; fix it with orchardctl config edit", path)
 			}
 		}
 		values.SetEnv(path, args[1], args[2])
@@ -91,7 +91,7 @@ func runEnv(values *cli.Values, path string, args []string, out func(string, ...
 			return false, fmt.Errorf("usage: orchardctl env unset <NAME>")
 		}
 		if !values.UnsetEnv(path, args[1]) {
-			out("%s was not set in %s\n", args[1], path)
+			out("%s wasn't set in %s\n", args[1], path)
 			return false, nil
 		}
 		out("unset %s %s\n", path, args[1])

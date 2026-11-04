@@ -71,7 +71,7 @@ func cleanAppDomain(raw string) (string, error) {
 	}
 	name = strings.ToLower(name)
 	if !isDomainName(name) {
-		return "", fmt.Errorf("%s is not a domain. Use a name such as apps.example.com", name)
+		return "", fmt.Errorf("%s isn't a domain. Use a name such as apps.example.com", name)
 	}
 	return name, nil
 }
@@ -204,9 +204,9 @@ func emailProblem(email string) string {
 	local, domain, ok := strings.Cut(email, "@")
 	switch {
 	case !ok || local == "" || domain == "":
-		return email + " is not an email address"
+		return email + " isn't an email address"
 	case strings.ContainsAny(email, " \t\"'"):
-		return email + " is not an email address"
+		return email + " isn't an email address"
 	case !strings.Contains(domain, "."):
 		return email + " needs a full domain after the @"
 	}
@@ -232,7 +232,7 @@ func LetsEncryptEmail() *cli.Command {
 
 The address is on the letsencrypt ClusterIssuer, not in the chart values, so a
 change takes effect right away and needs no update. cert-manager updates the
-account with Let's Encrypt. Certificates are not affected, and they issue and
+account with Let's Encrypt. Certificates don't change, and they issue and
 renew with no address at all.
 
   orchardctl letsencrypt-email               show it
@@ -251,7 +251,7 @@ Only public mode uses Let's Encrypt.
 				return err
 			}
 			if mode := installMode(values); mode == "lan" || mode == "tunnel" {
-				return fmt.Errorf("this instance runs in %s mode, which does not use Let's Encrypt", mode)
+				return fmt.Errorf("this instance runs in %s mode, which doesn't use Let's Encrypt", mode)
 			}
 
 			action := "show"
@@ -263,7 +263,7 @@ Only public mode uses Let's Encrypt.
 			case "show":
 				out, err := c.KubectlOut("get", "clusterissuer", letsEncryptIssuer, "-o", "jsonpath={.spec.acme.email}")
 				if err != nil {
-					return fmt.Errorf("could not read the %s ClusterIssuer: %w", letsEncryptIssuer, err)
+					return fmt.Errorf("couldn't read the %s ClusterIssuer: %w", letsEncryptIssuer, err)
 				}
 				if out = strings.TrimSpace(out); out == "" {
 					c.Printf("Not set. Set it with:\n")
@@ -284,14 +284,14 @@ Only public mode uses Let's Encrypt.
 				if err := c.Kubectl("patch", "clusterissuer", letsEncryptIssuer, "--type=merge", "-p", acmeEmailPatch(email)); err != nil {
 					return err
 				}
-				c.Printf("Let's Encrypt email is now %s. Certificates are not affected.\n", email)
+				c.Printf("Let's Encrypt email is now %s. Certificates don't change.\n", email)
 				return nil
 
 			case "unset":
 				if err := c.Kubectl("patch", "clusterissuer", letsEncryptIssuer, "--type=merge", "-p", acmeEmailPatch("")); err != nil {
 					return err
 				}
-				c.Printf("Let's Encrypt email removed. Certificates are not affected.\n")
+				c.Printf("Let's Encrypt email removed. Certificates don't change.\n")
 				return nil
 			}
 			return fmt.Errorf("unknown letsencrypt-email command: %s", action)

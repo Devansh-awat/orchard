@@ -90,7 +90,7 @@ func TestGraftTapAddListRemove(t *testing.T) {
 		t.Fatal(err)
 	}
 	keyID, _ := graftKeyID(tapKey)
-	for _, want := range []string{tap.URL, keyID, "Orchard has not checked anything in this tap; you are trusting acme.", "orchardctl graft trust taps"} {
+	for _, want := range []string{tap.URL, keyID, "Orchard hasn't checked anything in this tap. Install it only if you trust acme.", "orchardctl graft trust taps"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("tap add output is missing %q:\n%s", want, out)
 		}
@@ -247,8 +247,8 @@ func TestSignatureCopyByTier(t *testing.T) {
 		want string
 	}{
 		{graftSpec{ID: "a"}, &graftSignature{Tier: str("official"), SignedBy: str("official")}, "Signed by Orchard."},
-		{graftSpec{ID: "a"}, &graftSignature{Tier: str("community"), SignedBy: str("publisher"), Publisher: "acme", Repo: "acme/orchard-notes"}, "Published by acme (github.com/acme/orchard-notes), not by Orchard. Orchard checked it when it was listed, but does not review its updates."},
-		{graftSpec{ID: "a", Tap: "acme"}, &graftSignature{Tier: str("tap"), SignedBy: str("publisher"), Tap: "acme"}, "From the acme tap at https://acme.dev/orchard. Orchard has not checked anything in this tap; you are trusting acme."},
+		{graftSpec{ID: "a"}, &graftSignature{Tier: str("community"), SignedBy: str("publisher"), Publisher: "acme", Repo: "acme/orchard-notes"}, "Published by acme (github.com/acme/orchard-notes), not by Orchard. Orchard checked it when it was listed, but doesn't review its updates."},
+		{graftSpec{ID: "a", Tap: "acme"}, &graftSignature{Tier: str("tap"), SignedBy: str("publisher"), Tap: "acme"}, "From the acme tap at https://acme.dev/orchard. Orchard hasn't checked anything in this tap. Install it only if you trust acme."},
 		{graftSpec{ID: "a"}, &graftSignature{Tier: str("publisher"), SignedBy: str("publisher"), KeyID: str("0123456789abcdef")}, "Signed by publisher key 0123456789abcdef."},
 		{graftSpec{ID: "a"}, &graftSignature{SignedBy: str("publisher"), KeyID: str("0123456789abcdef")}, "Signed by publisher key 0123456789abcdef."},
 		{graftSpec{ID: "a"}, &graftSignature{}, graftUnsignedWarning},

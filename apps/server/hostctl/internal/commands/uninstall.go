@@ -108,14 +108,14 @@ func uninstallWarning(h hostLayout) string {
 
 func runUninstall(c *cli.Context, h hostLayout, run func(string, ...string) error) error {
 	if !confirmTyped(c, uninstallWarning(h), uninstallPhrase(c.Env.Values)) {
-		return fmt.Errorf("that did not match, so nothing was changed")
+		return fmt.Errorf("that didn't match, so nothing was changed")
 	}
 
 	removeUpdateTimer(c, h, run)
 
 	if pathExists(h.K3sUninstall) {
 		if err := run(h.K3sUninstall); err != nil {
-			return fmt.Errorf("k3s did not uninstall cleanly, so the rest is still here. Run this again: %w", err)
+			return fmt.Errorf("k3s didn't uninstall cleanly, so the rest is still here. Run this again: %w", err)
 		}
 	} else {
 		c.Printf("no %s here, so k3s is already gone\n", h.K3sUninstall)
@@ -128,7 +128,7 @@ func runUninstall(c *cli.Context, h hostLayout, run func(string, ...string) erro
 		}
 	}
 	if failed > 0 {
-		return fmt.Errorf("%d paths could not be removed, see above", failed)
+		return fmt.Errorf("%d paths couldn't be removed, see above", failed)
 	}
 
 	c.Printf("Orchard is gone from this machine.\n")
@@ -145,12 +145,12 @@ func removeUpdateTimer(c *cli.Context, h hostLayout, run func(string, ...string)
 
 	if pathExists(timer) {
 		if err := run("systemctl", "disable", "--now", updateTimerUnit); err != nil {
-			c.Warnf("could not disable %s: %v\n", updateTimerUnit, err)
+			c.Warnf("couldn't disable %s: %v\n", updateTimerUnit, err)
 		}
 	}
 	if pathExists(service) {
 		if err := run("systemctl", "stop", updateServiceUnit); err != nil {
-			c.Warnf("could not stop %s: %v\n", updateServiceUnit, err)
+			c.Warnf("couldn't stop %s: %v\n", updateServiceUnit, err)
 		}
 	}
 
@@ -159,7 +159,7 @@ func removeUpdateTimer(c *cli.Context, h hostLayout, run func(string, ...string)
 	removeLeftover(c, filepath.Join(h.SystemdDir, "timers.target.wants", updateTimerUnit))
 
 	if err := run("systemctl", "daemon-reload"); err != nil {
-		c.Warnf("could not reload systemd: %v\n", err)
+		c.Warnf("couldn't reload systemd: %v\n", err)
 	}
 }
 
@@ -222,7 +222,7 @@ func removeLeftover(c *cli.Context, path string) bool {
 		return true
 	}
 	if err := os.RemoveAll(clean); err != nil {
-		c.Warnf("could not remove %s: %v\n", clean, err)
+		c.Warnf("couldn't remove %s: %v\n", clean, err)
 		return false
 	}
 	c.Printf("removed %s\n", clean)

@@ -29,7 +29,7 @@ const (
 	defaultGraftMarketURL  = "https://assets.orchard.my/registry"
 	graftSnapshotsKept     = 5
 	graftAdminScript       = "dist/scripts/graft-admin.js"
-	graftTrustWarning      = "Grafts run inside Orchard with the same access Orchard has: your database, your users' data and your cluster. Only install grafts you trust."
+	graftTrustWarning      = "Grafts run with the same access as Orchard, including your database and your users' data. Only install grafts you trust."
 	graftUnsignedWarning   = "This graft is NOT signed by Orchard or a publisher key you added."
 	graftHistoryFile       = "graft-history.json"
 	graftSnapshotDirectory = "graft-snapshots"
@@ -170,7 +170,7 @@ Flags for add and upgrade:
 
 Official grafts are made and signed by Orchard. Community grafts are listed in
 the Extension Marketplace and signed by their publisher; Orchard checked them
-when they were listed but does not review their updates. Taps are folders of
+when they were listed but doesn't review their updates. Taps are folders of
 grafts run by someone else; Orchard checks nothing in them.
 
 Every install and upgrade verifies the signature against your trust policy
@@ -510,7 +510,7 @@ func graftSearch(c *cli.Context, term string) error {
 	}
 	index, err := loadMarket(values)
 	if err != nil {
-		c.Warnf("could not reach the Extension Marketplace: %v\n", err)
+		c.Warnf("couldn't reach the Extension Marketplace: %v\n", err)
 	}
 	for _, g := range index.Grafts {
 		show(g, "")
@@ -530,12 +530,12 @@ func graftSearch(c *cli.Context, term string) error {
 		}
 	}
 	if err != nil && len(taps) == 0 {
-		return fmt.Errorf("could not reach the Extension Marketplace: %w", err)
+		return fmt.Errorf("couldn't reach the Extension Marketplace: %w", err)
 	}
 	if matched == 0 {
 		c.Printf("no grafts match %q\n", term)
 	} else if len(taps) > 0 {
-		c.Printf("\ngrafts from taps are not checked by Orchard; install them with orchardctl graft add <tap>/<id>\n")
+		c.Printf("\ngrafts from taps aren't checked by Orchard; install them with orchardctl graft add <tap>/<id>\n")
 	}
 	return nil
 }
@@ -558,7 +558,7 @@ func graftDescribe(c *cli.Context, ref string) error {
 			return err
 		}
 	} else if index, err = loadMarket(values); err != nil {
-		return fmt.Errorf("could not reach the Extension Marketplace: %w", err)
+		return fmt.Errorf("couldn't reach the Extension Marketplace: %w", err)
 	}
 	g, ok := index.find(id)
 	if !ok {
@@ -643,7 +643,7 @@ func graftList(c *cli.Context) error {
 		c.Printf("%-24s %-10s %-14s %s\n", s.ID, s.Version, source, state)
 	}
 	if infoErr != nil {
-		c.Warnf("could not ask the server what is running: %v\n", infoErr)
+		c.Warnf("couldn't ask the server what is running: %v\n", infoErr)
 	}
 	if logs, err := c.KubectlOut("logs", "deploy/server", "-c", "server", "--tail", "4000"); err == nil {
 		var lines []string
@@ -772,7 +772,7 @@ func resolveSpec(c *cli.Context, values *cli.Values, arg string) (graftSpec, []b
 	id, version, _ := strings.Cut(arg, "@")
 	index, err := loadMarket(values)
 	if err != nil {
-		return graftSpec{}, nil, fmt.Errorf("could not reach the Extension Marketplace: %w", err)
+		return graftSpec{}, nil, fmt.Errorf("couldn't reach the Extension Marketplace: %w", err)
 	}
 	g, ok := index.find(id)
 	if !ok {
@@ -918,7 +918,7 @@ func installChart(c *cli.Context, id string, chartTar []byte) error {
 
 func dbPrimary(c *cli.Context, values *cli.Values) (string, string, error) {
 	if enabled, ok := values.Get("postgres.enabled").(bool); ok && !enabled {
-		return "", "", errors.New("Orchard uses an external database here, so orchardctl cannot snapshot it; back it up yourself and pass --no-snapshot")
+		return "", "", errors.New("Orchard uses an external database here, so orchardctl can't snapshot it; back it up yourself and pass --no-snapshot")
 	}
 	name, _ := values.Get("postgres.name").(string)
 	if name == "" {
@@ -934,7 +934,7 @@ func dbPrimary(c *cli.Context, values *cli.Values) (string, string, error) {
 			return strings.TrimSpace(out), database, nil
 		}
 	}
-	return "", "", fmt.Errorf("could not find the primary of database cluster %s", name)
+	return "", "", fmt.Errorf("couldn't find the primary of database cluster %s", name)
 }
 
 func graftSchemaName(id string) string {
@@ -1078,7 +1078,7 @@ func installSpec(c *cli.Context, values *cli.Values, spec graftSpec, archive []b
 	if prev != nil && len(report.Migrations.Pending) > 0 && !flags["no-snapshot"] {
 		dir, err := snapshot(c, values, spec.ID)
 		if err != nil {
-			return fmt.Errorf("could not snapshot %s before migrating, nothing was changed: %w", spec.ID, err)
+			return fmt.Errorf("couldn't snapshot %s before migrating, nothing was changed: %w", spec.ID, err)
 		}
 		snapshotDir = dir
 		c.Printf("saved a snapshot of %s's data to %s\n", spec.ID, dir)
@@ -1167,7 +1167,7 @@ func graftUpgrade(c *cli.Context, ids []string, flags map[string]bool, apply boo
 			}
 			source = tapIndex
 		} else if marketErr != nil {
-			return fmt.Errorf("could not reach the Extension Marketplace: %w", marketErr)
+			return fmt.Errorf("couldn't reach the Extension Marketplace: %w", marketErr)
 		}
 		g, ok := source.find(s.ID)
 		if !ok {
@@ -1215,7 +1215,7 @@ func graftRemove(c *cli.Context, id string, purge, apply bool) error {
 		kept = append(kept, s)
 	}
 	if !found {
-		return fmt.Errorf("%s is not installed", id)
+		return fmt.Errorf("%s isn't installed", id)
 	}
 	if info, err := instanceInfo(c); err == nil {
 		for _, g := range info.Installed {
@@ -1228,7 +1228,7 @@ func graftRemove(c *cli.Context, id string, purge, apply bool) error {
 		if !apply {
 			return errors.New("--purge deletes data after the rollout, so it needs --apply")
 		}
-		if !confirmTyped(c, fmt.Sprintf("This deletes everything %s stored, including its database schema %s. It cannot be undone.", id, graftSchemaName(id)), id) {
+		if !confirmTyped(c, fmt.Sprintf("This deletes everything %s stored, including its database schema %s. It can't be undone.", id, graftSchemaName(id)), id) {
 			return errors.New("cancelled")
 		}
 	}
@@ -1275,7 +1275,7 @@ func graftPool(c *cli.Context, args []string, apply bool) error {
 		}
 	}
 	if !installed {
-		return fmt.Errorf("%s is not installed", id)
+		return fmt.Errorf("%s isn't installed", id)
 	}
 	if args[1] == "default" {
 		values.Unset(path)
@@ -1288,7 +1288,7 @@ func graftPool(c *cli.Context, args []string, apply bool) error {
 		if err := values.Set(path, args[1]); err != nil {
 			return err
 		}
-		c.Printf("%s may now open %d database connections per pod; Admin -> Grafts shows how that adds up across pods\n", id, n)
+		c.Printf("%s may now open %d database connections per pod; Instance admin, under Grafts, shows how that adds up across pods\n", id, n)
 	}
 	if err := values.Save(); err != nil {
 		return err

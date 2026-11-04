@@ -169,7 +169,7 @@ Changes are written but not deployed. Add --apply to upgrade afterwards.
 					return err
 				}
 				if before == len(kept) {
-					c.Printf("%s was not listed\n", args[1])
+					c.Printf("%s wasn't listed\n", args[1])
 				} else {
 					c.Printf("removed %s\n", args[1])
 				}

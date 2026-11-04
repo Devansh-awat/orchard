@@ -17,19 +17,16 @@ func PublicIP() *cli.Command {
 		Root:    true,
 		Usage: `orchardctl public-ip - default address for publicly exposed ports
 
-Raw TCP and UDP ports, and publicly reachable databases, are published on an
-external address. An organization can set its own, but on a one-box install
-there is only ever one answer, and without this every organization is told to
-"set a public IP in organization settings" for an address they have no way to
-know.
+Public TCP and UDP ports and public databases use an external address. An
+organization can set its own. On a single-server install there is only one
+address, so set it here. Without it, each organization must set its own.
 
   orchardctl public-ip           show it
   orchardctl public-ip set <ip>  set the instance-wide default
-  orchardctl public-ip unset     go back to the admin panel's setting
+  orchardctl public-ip unset     go back to the Instance admin setting
 
-This is the fallback, not an override: an organization that sets its own still
-wins. There is also a field for it in the admin panel, under Configuration,
-which this locks once set here.
+An organization that sets its own address still uses that one. Instance admin
+also has a field for this, under Configuration, which this command locks.
 
   orchardctl public-ip set 203.0.113.10 --apply
 `,
@@ -50,9 +47,9 @@ which this locks once set here.
 			case "show":
 				current, _ := values.Get(publicIPPath).(string)
 				if current == "" {
-					c.Printf("Not pinned here. Orchard uses the address in the admin panel, under\n")
+					c.Printf("Not pinned here. Orchard uses the address in Instance admin, under\n")
 					c.Printf("Configuration, and with none there each organization sets its own.\n")
-					c.Printf("Pin this box's routable address with:\n")
+					c.Printf("Pin this server's public address with:\n")
 					c.Printf("  orchardctl public-ip set <ip> --apply\n")
 					return nil
 				}
@@ -64,7 +61,7 @@ which this locks once set here.
 					return fmt.Errorf("usage: orchardctl public-ip set <ip>")
 				}
 				if net.ParseIP(args[1]) == nil {
-					return fmt.Errorf("that is not an IP address: %s", args[1])
+					return fmt.Errorf("that isn't an IP address: %s", args[1])
 				}
 				if err := values.Set(publicIPPath, args[1]); err != nil {
 					return err

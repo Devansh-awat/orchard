@@ -22,24 +22,23 @@ func Hostname() *cli.Command {
 		Root:    true,
 		Usage: `orchardctl hostname - extra names the dashboard answers on
 
-Traefik routes by Host header. A name that is not listed gets a 404 even
-though the box is listening, which is what happens when you reach a LAN
-install by a name the installer did not know about: a Tailscale name, an
-mDNS name, a DNS record you added afterwards.
+Traefik routes by Host header. A name that isn't listed gets a 404, even though the server is listening.
+This happens when you reach a LAN install by a name the installer didn't know:
+a Tailscale name, an mDNS name, or a DNS record you added later.
 
   orchardctl hostname                     list them
   orchardctl hostname add <name>          answer on one more
   orchardctl hostname remove <name>       stop answering on it
   orchardctl hostname set <name>          change the dashboard domain
 
-The primary hostname, the one links are generated with, is not in this list.
-set changes it, along with FRONTEND_URL, and keeps the scheme and port this
-instance serves on. Everyone signs in again, and passkeys stop working, because
+The primary hostname, used for generated links, isn't in this list. set changes
+it, along with FRONTEND_URL, and keeps the scheme and port this instance serves
+on. Everyone signs in again, and passkeys stop working, because
 they belong to the old name.
 
-The other names are matched, not certified. On an install that terminates TLS,
-a name with no certificate covering it is a browser warning rather than a
-working address, so they suit LAN and Tailscale names best.
+The other names get no certificate. On an install that terminates TLS, a name
+with no certificate shows a browser warning, so they suit LAN and Tailscale
+names best.
 
   orchardctl hostname add mango --apply
   orchardctl hostname set orchard.example.com --apply
@@ -116,7 +115,7 @@ working address, so they suit LAN and Tailscale names best.
 					}
 				}
 				if len(kept) == len(current) {
-					return fmt.Errorf("%s is not in the list", name)
+					return fmt.Errorf("%s isn't in the list", name)
 				}
 				saveHosts(values, kept)
 				if err := values.Save(); err != nil {
@@ -166,13 +165,13 @@ func setPrimaryHostname(values *cli.Values, raw string) (string, error) {
 	name = strings.ToLower(name)
 
 	if installMode(values) != "lan" && !isDomainName(name) {
-		return "", fmt.Errorf("%s is not a domain. This install needs a name such as orchard.example.com", name)
+		return "", fmt.Errorf("%s isn't a domain. This install needs a name such as orchard.example.com", name)
 	}
 	if primary, _ := values.Get("ingress.host").(string); name == primary {
 		return "", fmt.Errorf("%s is already the dashboard domain", name)
 	}
 	if mcp, _ := values.Get(mcpHostPath).(string); name == mcp {
-		return "", fmt.Errorf("the MCP endpoint is at %s, and the dashboard cannot share it", name)
+		return "", fmt.Errorf("the MCP endpoint is at %s, and the dashboard can't share it", name)
 	}
 
 	base, err := claimBase(values, name)
@@ -198,7 +197,7 @@ func reportPrimaryMove(c *cli.Context, values *cli.Values, from, to string) {
 	c.Printf("Dashboard moves from %s to %s. Everyone signs in again.\n", from, to)
 	c.Printf("Passkeys belong to the old name and stop working. Use a password or 'sudo orchardctl login'.\n")
 	c.Printf("The GitHub App and any SSO provider keep the old URL until you update them.\n")
-	c.Printf("The custom domains target does not change.\n")
+	c.Printf("The custom domains target doesn't change.\n")
 	c.Printf("%s stops answering. To keep it, run: orchardctl hostname add %s --apply\n", from, from)
 	c.Printf("%s\n", dnsAdvice(values, to))
 }
@@ -231,7 +230,7 @@ func cleanHostname(raw string) (string, error) {
 		name = host
 	}
 	if name == "" {
-		return "", fmt.Errorf("that is not a hostname")
+		return "", fmt.Errorf("that isn't a hostname")
 	}
 	if net.ParseIP(name) != nil {
 		return name, nil
@@ -241,7 +240,7 @@ func cleanHostname(raw string) (string, error) {
 		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
 		case r == '-', r == '.':
 		default:
-			return "", fmt.Errorf("that is not a hostname: %s", raw)
+			return "", fmt.Errorf("that isn't a hostname: %s", raw)
 		}
 	}
 	return name, nil

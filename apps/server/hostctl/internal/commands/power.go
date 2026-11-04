@@ -14,7 +14,7 @@ const k3sUnit = "k3s"
 
 func systemd() error {
 	if _, err := exec.LookPath("systemctl"); err != nil {
-		return fmt.Errorf("no systemctl here, so k3s is not a service on this box: stop it the way it was started")
+		return fmt.Errorf("no systemctl here, so k3s isn't a service on this server: stop it the way it was started")
 	}
 	return nil
 }
@@ -30,9 +30,8 @@ Stops k3s, which stops everything: the dashboard, the API, your databases and
 every app deployed here. Nothing is deleted and nothing is lost, and disks stay
 where they are.
 
-For taking a box off the network for an afternoon, or freeing the machine up
-for something else. Start it again with orchardctl start, or just reboot: k3s
-comes back on its own.
+Use this to take a server off the network for a while, or to free it up for
+something else. To start it again, run orchardctl start or reboot.
 `,
 		Run: func(c *cli.Context, args []string) error {
 			if err := systemd(); err != nil {
@@ -56,10 +55,9 @@ func Start() *cli.Command {
 		Usage: `orchardctl start - start this instance
 
 Starts k3s and waits for the node to come back, which is when pods start
-again. Apps come up on their own; nothing has to be redeployed.
+again. Apps start on their own, so you don't need to redeploy them.
 
-A reboot does the same thing, so this is for a box stopped with
-orchardctl stop rather than for one that just booted.
+A reboot does the same thing, so use this after orchardctl stop.
 `,
 		Run: func(c *cli.Context, args []string) error {
 			if err := systemd(); err != nil {
@@ -74,7 +72,7 @@ orchardctl stop rather than for one that just booted.
 				c.Warnf("It may still be coming up. Watch it with: orchardctl status\n")
 				return nil
 			}
-			c.Printf("ready. Apps come back on their own, give them a minute.\n")
+			c.Printf("ready. Apps start on their own within about a minute.\n")
 			return nil
 		},
 	}
@@ -87,9 +85,8 @@ func Restart() *cli.Command {
 		Root:    true,
 		Usage: `orchardctl restart - stop and start this instance
 
-The two halves back to back. This restarts k3s itself, not the Orchard pods:
-to roll those without touching the cluster, use orchardctl update, which
-redeploys the chart and restarts what it needs to.
+This restarts k3s, not the Orchard pods. To restart only those, run
+orchardctl update, which redeploys the chart and restarts what it needs to.
 `,
 		Run: func(c *cli.Context, args []string) error {
 			if err := Stop().Run(c, nil); err != nil {
@@ -109,12 +106,12 @@ func waitForNode(c *cli.Context) error {
 			break
 		}
 		if time.Now().After(deadline) {
-			return fmt.Errorf("k3s did not answer within two minutes")
+			return fmt.Errorf("k3s didn't answer within two minutes")
 		}
 		time.Sleep(2 * time.Second)
 	}
 	if _, err := c.KubectlOut("wait", "--for=condition=Ready", "node", "--all", "--timeout=120s"); err != nil {
-		return fmt.Errorf("the node did not report Ready within two minutes")
+		return fmt.Errorf("the node didn't report Ready within two minutes")
 	}
 	return nil
 }

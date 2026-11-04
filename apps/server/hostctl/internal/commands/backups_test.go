@@ -126,7 +126,7 @@ func TestStorageTestResultCarriesTheServersMessage(t *testing.T) {
 
 func TestStorageStatusSaysWhereBackupsAre(t *testing.T) {
 	local := formatStorageStatus(`{"configured":false,"localStore":true,"lockedFields":[]}`)
-	if !strings.Contains(local, "Backups are on this server. If the server is lost, the backups are lost.") {
+	if !strings.Contains(local, "Backups are on this server. If you lose the server, you lose the backups.") {
 		t.Errorf("local: %q", local)
 	}
 	s3 := formatStorageStatus(`{"configured":true,"endpoint":"https://x","bucket":"b","region":"eu","pathStyle":"false","lockedFields":["endpoint"]}`)

@@ -41,7 +41,7 @@ func defaultMcpHost(appDomain, uiHost string) string {
 func mintToken() (string, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
-		return "", fmt.Errorf("could not mint a service token: %w", err)
+		return "", fmt.Errorf("couldn't create a service token: %w", err)
 	}
 	return base64.RawURLEncoding.EncodeToString(raw), nil
 }
@@ -120,7 +120,7 @@ func Mcp() *cli.Command {
 		Root:    true,
 		Usage: `orchardctl mcp - the MCP endpoint agents connect to
 
-Orchard's MCP server lets Claude and other agents drive this instance through
+Orchard's MCP server lets Claude and other agents manage this instance through
 the same API the dashboard uses. It answers on its own hostname, so it needs
 one before anything can connect.
 
@@ -129,17 +129,17 @@ one before anything can connect.
   orchardctl mcp disable          stop deploying it
 
 enable also copies JWT_SECRET across from the server and mints a shared
-MCP_SERVICE_TOKEN if there is not one already, because the MCP authenticates
+MCP_SERVICE_TOKEN if there isn't one already, because the MCP authenticates
 to the API as a service and passes the consenting user along. Without both,
 every tool call fails at authentication rather than at startup.
 
 The default needs no DNS of its own: the wildcard record for your apps covers
-it. For any other hostname, point an A record at this box first.
+it. For any other hostname, point an A record at this server first.
 
   orchardctl mcp enable mcp.example.com --apply
 
-There is also a runtime switch in the admin panel, under Configuration, which
-stops the deployed MCP from answering without redeploying anything.
+Instance admin also has a switch for this, under Configuration, which stops the
+deployed MCP from answering without a redeploy.
 `,
 		Run: func(c *cli.Context, args []string) error {
 			args, apply := splitApply(args)

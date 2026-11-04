@@ -126,7 +126,7 @@ func tapURL(raw string) (string, error) {
 func loadTapIndex(tap graftTap) (marketIndex, error) {
 	var index marketIndex
 	if err := fetchJSON(tap.URL+"/grafts/index.json", &index); err != nil {
-		return index, fmt.Errorf("could not read the %s tap: %w", tap.Name, err)
+		return index, fmt.Errorf("couldn't read the %s tap: %w", tap.Name, err)
 	}
 	return index, nil
 }
@@ -183,7 +183,7 @@ func graftTapAdd(c *cli.Context, values *cli.Values, name, rawURL string, yes bo
 	}
 	var manifest tapManifest
 	if err := fetchJSON(url+"/tap.json", &manifest); err != nil {
-		return fmt.Errorf("could not read %s/tap.json: %w", url, err)
+		return fmt.Errorf("couldn't read %s/tap.json: %w", url, err)
 	}
 	id, err := graftKeyID(manifest.PublicKey)
 	if err != nil {
@@ -209,7 +209,7 @@ func graftTapAdd(c *cli.Context, values *cli.Values, name, rawURL string, yes bo
 	}
 	c.Printf("added the %s tap. Install from it with: orchardctl graft add %s/<id>\n", name, name)
 	if trust := graftTrust(values); !trustAllowsTaps(trust) {
-		c.Printf("your trust policy is %s, so grafts from taps will not load until you run: orchardctl graft trust taps\n", trust)
+		c.Printf("your trust policy is %s, so grafts from taps won't load until you run: orchardctl graft trust taps\n", trust)
 	}
 	return nil
 }
@@ -238,7 +238,7 @@ func graftTapList(c *cli.Context, values *cli.Values) error {
 		c.Printf("%-20s %-16s %-40s %s\n", t.Name, id, t.URL, installed)
 	}
 	if trust := graftTrust(values); !trustAllowsTaps(trust) {
-		c.Printf("\nyour trust policy is %s, so grafts from taps do not load; change it with: orchardctl graft trust taps\n", trust)
+		c.Printf("\nyour trust policy is %s, so grafts from taps don't load; change it with: orchardctl graft trust taps\n", trust)
 	}
 	return nil
 }
@@ -334,11 +334,11 @@ func tierLabel(g marketGraft, tap string) string {
 }
 
 func communityCopy(publisher, repo string) string {
-	return fmt.Sprintf("Published by %s (github.com/%s), not by Orchard. Orchard checked it when it was listed, but does not review its updates.", publisher, repo)
+	return fmt.Sprintf("Published by %s (github.com/%s), not by Orchard. Orchard checked it when it was listed, but doesn't review its updates.", publisher, repo)
 }
 
 func tapTrustCopy(name, url string) string {
-	return fmt.Sprintf("From the %s tap at %s. Orchard has not checked anything in this tap; you are trusting %s.", name, url, name)
+	return fmt.Sprintf("From the %s tap at %s. Orchard hasn't checked anything in this tap. Install it only if you trust %s.", name, url, name)
 }
 
 func signatureCopy(values *cli.Values, spec graftSpec, sig *graftSignature) string {

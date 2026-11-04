@@ -54,11 +54,10 @@ func Claim() *cli.Command {
 
 Prints a single-use link that claims the instance and signs you in as the
 superadmin. Use it on a fresh install, or if you have locked yourself out.
-The link is minted inside the server pod, so it works with no email
-configured.
+The server pod creates the link, so it works with no email set up.
 
 The link is built from the hostname the instance generates links with, which
-is not always the one you can reach it at. --url overrides it:
+isn't always the one you can reach it at. --url overrides it:
 
   orchardctl claim --url mango
   orchardctl claim --url http://mango:8081
@@ -168,12 +167,12 @@ func Update() *cli.Command {
 		Root:    true,
 		Usage: `orchardctl update - upgrade this instance
 
-Runs orchardctl harden first, so an install from before the registry was
-locked down and the firewall was opened comes out of the upgrade fixed.
+Runs orchardctl harden first, which fixes an install from before the registry
+was locked down and the firewall was opened.
 
 Then it turns on, once, what newer releases do by default: metrics, the log
 store, the Orchard image scanner and, when no object storage is configured
-anywhere, an S3 store on this box for database backups. Only keys missing from
+anywhere, an S3 store on this server for database backups. Only keys missing from
 the values file are filled in, apart from metrics.enabled and r2Proxy.enabled,
 which older installers wrote as false themselves. Each change is printed. A
 hostDefaults key records that this ran, so turning something back off sticks.
@@ -241,7 +240,7 @@ and refreshes the host commands. Extra arguments are passed through to helm.
 			// changes them lands here rather than waiting for someone to re-run
 			// the installer.
 			if err := syncCommands(c); err != nil {
-				c.Warnf("note: could not refresh the host commands: %s\n", err)
+				c.Warnf("note: couldn't refresh the host commands: %s\n", err)
 			}
 			return nil
 		},

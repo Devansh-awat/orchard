@@ -53,7 +53,7 @@ Changing storage applies to new databases. Databases you already have keep
 backing up to where they are now, and their existing backups stay restorable
 from there. clear goes back to the store on this server, if it has one.
 
-Settings from R2_* environment variables win over these, and cannot be changed
+Settings from R2_* environment variables win over these, and can't be changed
 here. Refer to https://docs.orchard.my/operate/storage/
 `,
 		Run: func(c *cli.Context, args []string) error {
@@ -92,7 +92,7 @@ here. Refer to https://docs.orchard.my/operate/storage/
 				}
 				exec := append([]string{"-n", c.Env.Namespace}, storageExec("set")...)
 				if _, err := c.CaptureWithInput(string(payload), "kubectl", exec...); err != nil {
-					return fmt.Errorf("could not save the settings: %w", err)
+					return fmt.Errorf("couldn't save the settings: %w", err)
 				}
 				c.Printf("%s", storageAppliesTo)
 				return nil
@@ -199,7 +199,7 @@ func collectStorageInput(
 	if file != "" {
 		raw, err := readFile(file)
 		if err != nil {
-			return nil, fmt.Errorf("could not read %s: %w", file, err)
+			return nil, fmt.Errorf("couldn't read %s: %w", file, err)
 		}
 		secret = string(raw)
 	}
@@ -226,7 +226,7 @@ func testStorage(c *cli.Context, input map[string]string) error {
 	exec := append([]string{"-n", c.Env.Namespace}, storageExec("test")...)
 	out, err := c.CaptureWithInput(string(payload), "kubectl", exec...)
 	if err != nil {
-		return fmt.Errorf("could not run the test on the server: %w", err)
+		return fmt.Errorf("couldn't run the test on the server: %w", err)
 	}
 	return storageTestResult(out)
 }
@@ -248,7 +248,7 @@ func storageTestResult(out string) error {
 func runStorageStatus(c *cli.Context) error {
 	out, err := c.KubectlOut(storageExec("status")...)
 	if err != nil {
-		return fmt.Errorf("could not read the settings: %w", err)
+		return fmt.Errorf("couldn't read the settings: %w", err)
 	}
 	c.Printf("%s", formatStorageStatus(out))
 	return nil
@@ -265,7 +265,7 @@ func formatStorageStatus(out string) string {
 		LocalStore   bool     `json:"localStore"`
 	}
 	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &status); err != nil {
-		return "Could not read the status.\n"
+		return "Couldn't read the status.\n"
 	}
 	var b strings.Builder
 	switch {
@@ -276,14 +276,14 @@ func formatStorageStatus(out string) string {
 		}
 		b.WriteString("\n")
 	case status.LocalStore:
-		b.WriteString("Backups are on this server. If the server is lost, the backups are lost.\n")
+		b.WriteString("Backups are on this server. If you lose the server, you lose the backups.\n")
 		b.WriteString("To add S3 storage: sudo orchardctl backups s3 set\n")
 	default:
 		b.WriteString("No storage is set, so managed databases have no backups.\n")
 		b.WriteString("To add S3 storage: sudo orchardctl backups s3 set\n")
 	}
 	if len(status.LockedFields) > 0 {
-		fmt.Fprintf(&b, "Set by R2_* environment variables, so not changeable here: %s\n", strings.Join(status.LockedFields, ", "))
+		fmt.Fprintf(&b, "Set by R2_* environment variables, so you can't change them here: %s\n", strings.Join(status.LockedFields, ", "))
 	}
 	return b.String()
 }

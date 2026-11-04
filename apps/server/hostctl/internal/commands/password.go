@@ -28,18 +28,16 @@ func Password() *cli.Command {
   orchardctl password clear   remove it
 
 Orchard signs people in with an email code, a passkey or an identity provider.
-An instance with none of those has no way back in once its claim link is
-spent, which is what this is for. It applies to the superadmin only, there is
-no self-service and no reset email: setting it again here is how you reset it.
+An instance with none of those has no way back in once its claim link is used.
+Use this command in that case. It applies to the superadmin only. There is no
+reset email, so to reset the password, set it again here.
 
-The password is typed, never passed as an argument, so it stays out of the
-shell history and the process list. With more than one superadmin, name the
-one you mean with --email.
+You type the password at a prompt, so it stays out of the shell history and the
+process list. With more than one superadmin, name the one you mean with --email.
 
-On an instance served over plain HTTP the password crosses the network in the
-clear on every sign-in. Over Tailscale or a VPN that is WireGuard's problem
-rather than yours; on an untrusted LAN, prefer orchardctl login, whose link
-cannot be reused once spent.
+On an instance served over plain HTTP, the password crosses the network
+unencrypted on every sign-in. Tailscale or a VPN encrypts it. On an untrusted
+LAN, use orchardctl login instead, because its link works only once.
 `,
 		Run: func(c *cli.Context, args []string) error {
 			args, apply := splitApply(args)
@@ -82,7 +80,7 @@ cannot be reused once spent.
 					return err
 				}
 				if password != again {
-					return fmt.Errorf("those did not match")
+					return fmt.Errorf("the passwords don't match")
 				}
 				if err := c.RunWithInput(password, "kubectl",
 					append([]string{"-n", c.Env.Namespace}, script...)...); err != nil {
@@ -128,7 +126,7 @@ func readSecret(c *cli.Context, in *bufio.Reader, prompt string) (string, error)
 	line, err := in.ReadString('\n')
 	c.Printf("\n")
 	if err != nil && line == "" {
-		return "", fmt.Errorf("could not read the password")
+		return "", fmt.Errorf("couldn't read the password")
 	}
 	return strings.TrimRight(line, "\r\n"), nil
 }
@@ -139,23 +137,22 @@ func Login() *cli.Command {
 		Args:    "[--email <address>] [--url <address>]",
 		Summary: "print a one-time link that signs you in",
 		Root:    true,
-		Usage: `orchardctl login - sign in from this box
+		Usage: `orchardctl login - sign in from this server
 
 Prints a link that signs you in as the superadmin, or as --email if you name
-someone else. It is the same one-time code the email flow sends, minted here
-and printed instead of mailed, so an instance with no SMTP configured still
-has a way in. It expires in ten minutes and works once.
+someone else. It uses the same one-time code as email sign-in, printed here instead of sent,
+so an instance with no SMTP still has a way in. It expires in ten minutes and
+works once.
 
-Reaching this command means having root on the box, which is already
-ownership of the instance, so it grants nothing that was not already yours.
+This command needs root on the server, which already gives you full control of
+the instance.
 
   orchardctl login
   orchardctl login --email me@example.com
   orchardctl login --url mango
 
---url overrides the address the link is built with, for a box reachable at a
-name other than the one it generates links with. It has to be a name Traefik
-answers on: orchardctl hostname.
+--url overrides the address in the link, for a server you reach at a different
+name. It must be a name Traefik answers on: orchardctl hostname.
 `,
 		Run: func(c *cli.Context, args []string) error {
 			email, err := flagValue(args, "--email")

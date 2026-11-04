@@ -21,11 +21,11 @@ type Values struct {
 func LoadValues(path string) (*Values, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("could not read %s: %w", path, err)
+		return nil, fmt.Errorf("couldn't read %s: %w", path, err)
 	}
 	root := map[string]any{}
 	if err := yaml.Unmarshal(raw, &root); err != nil {
-		return nil, fmt.Errorf("could not parse %s: %w", path, err)
+		return nil, fmt.Errorf("couldn't parse %s: %w", path, err)
 	}
 	if root == nil {
 		root = map[string]any{}

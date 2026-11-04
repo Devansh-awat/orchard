@@ -32,19 +32,17 @@ func Harden() *cli.Command {
 		Usage: `orchardctl harden - what a fresh install does, applied to an existing one
 
 Earlier installers published the image registry as a NodePort with no
-authentication, so on a box with a public address anyone could pull every
-image ever built here, or push over a tag and be deployed on the next rollout.
-This moves it onto loopback, puts a password on it, and wires that password
-into the containerd mirror the kubelet pulls through and the credentials the
-builders push with.
+authentication, so on a server with a public address, anyone could pull every image built here
+or push over a tag and deploy it on the next rollout. This moves the registry
+onto loopback, adds a password, and sets that password on the containerd mirror
+the kubelet pulls through and on the credentials the builders push with.
 
-It also opens an active ufw or firewalld the way k3s needs, which is otherwise
-the thing that makes every pod time out against the API after a reboot, and
-makes the k3s kubeconfig readable by root only.
+It also opens an active ufw or firewalld for k3s. Without this, every pod times
+out against the API after a reboot. It also makes the k3s kubeconfig readable
+by root only.
 
-orchardctl update runs this first, so an upgrade fixes an old install on its
-own. Running it by hand is for a box you do not want to upgrade yet. It is
-idempotent.
+orchardctl update runs this first, so an upgrade fixes an old install. Run it by
+hand on a server you don't want to upgrade yet. You can run it more than once.
 
   ORCHARD_REGISTRY_PORT   loopback port for the registry mirror (default 5000)
 `,
@@ -73,7 +71,7 @@ func privateKubeconfig(c *cli.Context) error {
 		return nil
 	}
 	if err := os.Chmod(c.Env.Kubeconfig, 0o600); err != nil {
-		return fmt.Errorf("could not make %s private: %w", c.Env.Kubeconfig, err)
+		return fmt.Errorf("couldn't make %s private: %w", c.Env.Kubeconfig, err)
 	}
 	c.Printf("%s is now readable by root only\n", c.Env.Kubeconfig)
 	return nil
@@ -147,7 +145,7 @@ func lockdownRegistry(c *cli.Context) error {
 	current, _ := os.ReadFile(registriesYamlPath)
 	if string(current) != mirror {
 		if err := os.WriteFile(registriesYamlPath, []byte(mirror), 0o600); err != nil {
-			return fmt.Errorf("could not write %s: %w", registriesYamlPath, err)
+			return fmt.Errorf("couldn't write %s: %w", registriesYamlPath, err)
 		}
 		c.Printf("restarting k3s with the authenticated registry mirror\n")
 		if err := c.Run("systemctl", "restart", "k3s"); err != nil {
@@ -170,7 +168,7 @@ func registryPort() (int, error) {
 	if raw := os.Getenv("ORCHARD_REGISTRY_PORT"); raw != "" {
 		parsed, err := strconv.Atoi(raw)
 		if err != nil || parsed < 1 || parsed > 65535 {
-			return 0, fmt.Errorf("ORCHARD_REGISTRY_PORT is not a port: %s", raw)
+			return 0, fmt.Errorf("ORCHARD_REGISTRY_PORT isn't a port: %s", raw)
 		}
 		port = parsed
 	}
@@ -198,7 +196,7 @@ func nodePortRange() (int, int) {
 func mintHex(bytes int) (string, error) {
 	raw := make([]byte, bytes)
 	if _, err := rand.Read(raw); err != nil {
-		return "", fmt.Errorf("could not mint a registry password: %w", err)
+		return "", fmt.Errorf("couldn't mint a registry password: %w", err)
 	}
 	return hex.EncodeToString(raw), nil
 }
@@ -213,7 +211,7 @@ func htpasswdLine(c *cli.Context, password string) (string, error) {
 			"--restart=Never", "--image=httpd:2.4-alpine", "--command", "--", "htpasswd", "-nbB", registryUser, password)
 	}
 	if err != nil {
-		return "", fmt.Errorf("could not hash the registry password: %w", err)
+		return "", fmt.Errorf("couldn't hash the registry password: %w", err)
 	}
 	for _, line := range strings.Split(out, "\n") {
 		line = strings.TrimSpace(line)
@@ -340,7 +338,7 @@ func ensureFirewall(c *cli.Context) error {
 			}
 		}
 	default:
-		c.Printf("no host firewall active; install/README.md lists what this box listens on\n")
+		c.Printf("no host firewall active; install/README.md lists what this server listens on\n")
 	}
 	return nil
 }

@@ -53,7 +53,7 @@ string.
 Changes are written but not deployed. Add --apply to upgrade afterwards, or
 run orchardctl update yourself once you have made every edit.
 
-Lists cannot be set one path at a time, because the whole list would be
+Lists can't be set one path at a time, because the whole list would be
 replaced. server.env holds the instance's secrets, so change it with
 orchardctl env set <NAME> <value>, and anything else with config edit.
 
@@ -71,7 +71,7 @@ Common ones:
   logs.victorialogs.storage.storageClass  StorageClass for the log store
   trivy.enabled                           the Orchard image scanner
   trivy.maxConcurrentScans                scans running at once
-  objectStorage.local.enabled             the S3 store backups go to on this box
+  objectStorage.local.enabled             the S3 store backups go to on this server
   objectStorage.local.storage.size        its volume size, e.g. 40Gi
   r2Proxy.enabled                         the backup proxy databases talk to
   r2Proxy.upstream.endpoint               S3 for backups, set here instead of with

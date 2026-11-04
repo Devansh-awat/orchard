@@ -98,7 +98,7 @@ func syncCommands(c *cli.Context) error {
 
 	out, err := c.KubectlOut("exec", "deploy/server", "--", "cat", remote)
 	if err != nil {
-		return fmt.Errorf("could not read %s from the server image: %w", remote, err)
+		return fmt.Errorf("couldn't read %s from the server image: %w", remote, err)
 	}
 	data := []byte(out)
 
@@ -132,7 +132,7 @@ func syncCommands(c *cli.Context) error {
 		path := filepath.Join(c.Env.Bin, alias)
 		os.Remove(path)
 		if err := os.Symlink(target, path); err != nil {
-			c.Warnf("could not link %s: %s\n", alias, err)
+			c.Warnf("couldn't link %s: %s\n", alias, err)
 		}
 	}
 	return nil

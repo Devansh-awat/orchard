@@ -76,12 +76,12 @@ func ensureTraefikAccessLogs(c *cli.Context) {
 	}
 	version, major, ok := traefikChartVersion(releases[0].Chart)
 	if !ok {
-		c.Warnf("note: could not tell which Traefik chart is installed (%q); access logs left as they are\n", releases[0].Chart)
+		c.Warnf("note: couldn't tell which Traefik chart is installed (%q); access logs left as they are\n", releases[0].Chart)
 		return
 	}
 	raw, err := c.Capture("helm", "get", "values", traefikRelease, "-n", traefikNamespace, "-o", "json")
 	if err != nil {
-		c.Warnf("note: could not read Traefik's values; access logs left as they are\n")
+		c.Warnf("note: couldn't read Traefik's values; access logs left as they are\n")
 		return
 	}
 	current := map[string]any{}

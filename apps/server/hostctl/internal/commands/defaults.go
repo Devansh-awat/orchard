@@ -131,7 +131,7 @@ func applyFirstRound(values *cli.Values, facts hostFacts) []string {
 		fill("logs.maxDiskSpaceUsage", fmt.Sprintf("%dGiB", clamp(facts.DiskGB/10, 5, 20)*4/5), "")
 	}
 	if small {
-		trimmed := "trimmed for a box under 8G of RAM"
+		trimmed := "trimmed for a server under 8G of RAM"
 		fill("metrics.victoriametrics.resources", resources("50m", "96Mi", "1", "384Mi"), "metrics.victoriametrics.resources "+trimmed)
 		fill("metrics.vmagent.resources", resources("20m", "64Mi", "500m", "256Mi"), "metrics.vmagent.resources "+trimmed)
 		fill("metrics.kubeStateMetrics.resources", resources("10m", "32Mi", "200m", "128Mi"), "metrics.kubeStateMetrics.resources "+trimmed)
@@ -151,9 +151,9 @@ func applyFirstRound(values *cli.Values, facts hostFacts) []string {
 		case facts.ObjectStorage == storedPresent:
 			changes = append(changes, "object storage is configured under Instance admin, so backups stay where they are")
 		case facts.ObjectStorage == storedUnknown:
-			changes = append(changes, "could not read Instance admin settings, so local object storage for backups was left off; turn it on with:\n    orchardctl config set objectStorage.local.enabled true\n    orchardctl config set r2Proxy.enabled true --apply")
+			changes = append(changes, "couldn't read Instance admin settings, so local object storage for backups was left off; turn it on with:\n    orchardctl config set objectStorage.local.enabled true\n    orchardctl config set r2Proxy.enabled true --apply")
 		default:
-			fill("objectStorage.local.enabled", true, "objectStorage.local.enabled = true (database backups go to an S3 store on this box; not disaster recovery)")
+			fill("objectStorage.local.enabled", true, "objectStorage.local.enabled = true (database backups go to an S3 store on this server, which doesn't protect you if the server is lost)")
 			if class != "" {
 				fill("objectStorage.local.storage.storageClass", class, "")
 			}
@@ -278,20 +278,20 @@ func reconcileStatefulVolumes(c *cli.Context, values *cli.Values) bool {
 				_ = values.Put(vol.classPath, liveClass)
 			}
 			changed = true
-			c.Printf("%s keeps StorageClass %q: its volume already holds data, and a StatefulSet cannot change class in place\n", vol.statefulSet, liveClass)
+			c.Printf("%s keeps StorageClass %q: its volume already holds data, and a StatefulSet can't change class in place\n", vol.statefulSet, liveClass)
 			continue
 		}
 		if phase != "" && phase != "Pending" {
 			continue
 		}
-		c.Printf("%s never got a volume (StorageClass %q is not usable here); recreating it on %q\n", vol.statefulSet, liveClass, envOr(want, "the cluster default"))
+		c.Printf("%s never got a volume (StorageClass %q isn't usable here); recreating it on %q\n", vol.statefulSet, liveClass, envOr(want, "the cluster default"))
 		if err := c.Run("kubectl", "-n", ns, "delete", "statefulset", vol.statefulSet, "--wait=true"); err != nil {
-			c.Warnf("note: could not remove %s: %s\n", vol.statefulSet, err)
+			c.Warnf("note: couldn't remove %s: %s\n", vol.statefulSet, err)
 			continue
 		}
 		if phase == "Pending" {
 			if err := c.Run("kubectl", "-n", ns, "delete", "pvc", vol.claim, "--ignore-not-found", "--wait=false"); err != nil {
-				c.Warnf("note: could not remove the unbound claim %s: %s\n", vol.claim, err)
+				c.Warnf("note: couldn't remove the unbound claim %s: %s\n", vol.claim, err)
 			}
 		}
 	}
