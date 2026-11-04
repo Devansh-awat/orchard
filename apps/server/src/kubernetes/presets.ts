@@ -89,12 +89,17 @@ export function isDatabaseImage(image?: string | null): boolean {
   return Boolean(image && DATABASE_IMAGE_REPOS.has(imageRepo(image)));
 }
 
+function databaseDefaultMemoryBytes(): number {
+  const mb = Number.parseInt(process.env.DATABASE_DEFAULT_MEMORY_MB ?? '', 10);
+  return mb > 0 ? Math.max(mb * MiB, DATABASE_MIN_MEMORY_BYTES) : DATABASE_DEFAULT_MEMORY_BYTES;
+}
+
 export function defaultPodResourcesForImage(image?: string | null): {
   cpuMilli: number;
   memoryBytes: number;
 } {
   if (isDatabaseImage(image)) {
-    return { cpuMilli: DATABASE_DEFAULT_CPU_MILLI, memoryBytes: DATABASE_DEFAULT_MEMORY_BYTES };
+    return { cpuMilli: DATABASE_DEFAULT_CPU_MILLI, memoryBytes: databaseDefaultMemoryBytes() };
   }
   return { cpuMilli: DEFAULT_CPU_MILLI, memoryBytes: DEFAULT_MEMORY_BYTES };
 }

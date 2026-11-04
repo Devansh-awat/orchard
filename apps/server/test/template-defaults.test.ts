@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { defaultPodResourcesForImage } from '../src/kubernetes/presets';
 import { TemplateEngineService } from '../src/templates/template-engine.service';
 import {
   chosenPodSize,
@@ -12,6 +13,24 @@ import { TemplatesService } from '../src/templates/templates.service';
 
 const MiB = 1024 * 1024;
 const engine = new TemplateEngineService();
+
+test('a small box can lower the database default, and only with the env var set', () => {
+  const big = { cpuMilli: 500, memoryBytes: 1024 * MiB };
+  assert.deepEqual(recommendedPodSize('db', 'database', {}), big);
+  assert.deepEqual(defaultPodResourcesForImage('postgres'), big);
+  try {
+    process.env.DATABASE_DEFAULT_MEMORY_MB = '512';
+    assert.equal(recommendedPodSize('db', 'database', {}).memoryBytes, 512 * MiB);
+    assert.equal(defaultPodResourcesForImage('postgres:17').memoryBytes, 512 * MiB);
+    assert.equal(defaultPodResourcesForImage('nginx').memoryBytes, 128 * MiB);
+    process.env.DATABASE_DEFAULT_MEMORY_MB = '16';
+    assert.equal(defaultPodResourcesForImage('postgres').memoryBytes, 256 * MiB);
+    process.env.DATABASE_DEFAULT_MEMORY_MB = 'lots';
+    assert.deepEqual(defaultPodResourcesForImage('postgres'), big);
+  } finally {
+    delete process.env.DATABASE_DEFAULT_MEMORY_MB;
+  }
+});
 
 test('a declared size is read from the template', () => {
   assert.deepEqual(

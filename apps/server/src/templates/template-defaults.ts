@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { randomBytes } from 'crypto';
-import { isDatabaseImage } from '../kubernetes/presets';
+import { defaultPodResourcesForImage, isDatabaseImage } from '../kubernetes/presets';
 import { parseCpu, parseMemory } from '../kubernetes/quantity';
 import { formatSlug } from '../projects/projects.utils';
 
@@ -11,7 +11,6 @@ const CPU_QUANTITY = /^\d+(\.\d+)?m?$/;
 const MEMORY_QUANTITY = /^\d+(\.\d+)?(Ki|Mi|Gi|Ti|K|M|G|T)$/;
 
 const APP_DEFAULT = { cpuMilli: 500, memoryBytes: 512 * MiB };
-const DATABASE_DEFAULT = { cpuMilli: 500, memoryBytes: 1024 * MiB };
 
 export interface PodSize {
   cpuMilli: number;
@@ -29,7 +28,9 @@ export function recommendedPodSize(
   config: Record<string, any>
 ): PodSize {
   const fallback =
-    type === 'database' || isDatabaseImage(config?.image) ? DATABASE_DEFAULT : APP_DEFAULT;
+    type === 'database' || isDatabaseImage(config?.image)
+      ? defaultPodResourcesForImage('postgres')
+      : APP_DEFAULT;
   const raw = config?.resources;
   if (raw === undefined || raw === null) return fallback;
   if (typeof raw !== 'object' || Array.isArray(raw)) {
