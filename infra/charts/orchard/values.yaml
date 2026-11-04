@@ -113,9 +113,15 @@ tenant:
   # tenant namespace, the controller cannot reach it, and Let's Encrypt gets a
   # 502 instead of the token.
   #
-  # Empty means network,orchard, which is where this project runs HAProxy. A
-  # k3s cluster running Traefik wants "traefik,orchard".
+  # Empty means network,orchard, which is where this project runs HAProxy. Traefik
+  # in its own namespace wants "traefik,orchard". The Traefik bundled with k3s runs
+  # in kube-system, so that cluster wants "kube-system,orchard".
   ingressNamespaces: ""
+  # Where the CloudNativePG operator runs. Tenant namespaces are default-deny, so
+  # the operator has to be let in to manage a database. Empty leaves the server's
+  # default, postgresql. The symptom when it is wrong is a database stuck on
+  # "Instance Status Extraction Error".
+  cnpgOperatorNamespace: ""
   # Comma-separated suffixes that generated app URLs are built under, each
   # optionally naming a wildcard TLS Secret you manage:
   #   ".apps.example.com=wildcard-apps-example-com-tls"  reuse that Secret

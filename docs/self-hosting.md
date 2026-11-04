@@ -136,11 +136,80 @@ back to a built-in default.
 
 ## Install
 
-These steps reached a working login, an app with an HTTPS certificate and a
-database with a bound volume, on plain k3s with the published chart, Helm 4.3.1,
-Traefik, cert-manager and CloudNativePG. **Builds were not tested on this path.**
-They need a real registry, see below. The test run created the namespaces and the
-Secret after a first failed install rather than before it.
+To install Orchard on a cluster you operate, install the prerequisites, write a
+values file, and install the chart.
+
+**What was tested.** These steps were run end to end on one node: k3s v1.36.5 with
+its bundled Traefik, Helm 4.3.1, Let's Encrypt over HTTP-01, and a registry behind
+an ingress on the same node. The run reached a working sign-in, an app built from a
+repository and served over HTTPS, and two healthy databases. That run set
+`CNPG_OPERATOR_NAMESPACE` in `server.env`. The `tenant.cnpgOperatorNamespace` value
+used below sets the same variable. Its rendered output is checked in CI, but it has
+not been run on a cluster.
+
+These were not tested on this path: backups with the `objectStorage` values, MCP,
+public database exposure, more than one node, and other ingress controllers.
+
+### Install the prerequisites
+
+k3s includes Traefik and the `local-path` StorageClass, so these steps do not
+install them.
+
+1. Install the Gateway API CRDs:
+
+   ```bash
+   kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.1/standard-install.yaml
+   ```
+
+2. Install CloudNativePG and cert-manager:
+
+   ```bash
+   helm repo add cnpg https://cloudnative-pg.github.io/charts
+   helm repo add jetstack https://charts.jetstack.io
+   helm repo update
+   helm upgrade --install cnpg cnpg/cloudnative-pg \
+     --namespace cnpg-system --create-namespace --wait --timeout 10m
+   helm upgrade --install cert-manager jetstack/cert-manager \
+     --namespace cert-manager --create-namespace \
+     --set crds.enabled=true --wait --timeout 10m
+   ```
+
+3. Point DNS for your dashboard domain and app domain at the ingress controller.
+   Let's Encrypt must be able to reach port 80 on these hostnames.
+
+4. Create a ClusterIssuer. This one issues Let's Encrypt certificates over HTTP-01:
+
+   ```bash
+   kubectl apply -f - <<'EOF'
+   apiVersion: cert-manager.io/v1
+   kind: ClusterIssuer
+   metadata:
+     name: letsencrypt
+   spec:
+     acme:
+       server: https://acme-v02.api.letsencrypt.org/directory
+       privateKeySecretRef:
+         name: letsencrypt-account-key
+       solvers:
+         - http01:
+             ingress:
+               class: traefik
+   EOF
+   ```
+
+To add Traefik to a cluster that does not have it, run the same command that the
+installer uses. Then use `traefik,orchard` for `tenant.ingressNamespaces`.
+
+```bash
+helm repo add traefik https://traefik.github.io/charts
+helm upgrade --install traefik traefik/traefik \
+  --namespace traefik --create-namespace \
+  --set providers.kubernetesGateway.enabled=true \
+  --set gateway.enabled=false \
+  --wait --timeout 10m
+```
+
+### Install the chart
 
 **1. Create the namespaces and the Secret.** The Secret holds two values the
 server needs at boot. `jwt` signs sessions and must be at least 32 characters.
@@ -179,7 +248,8 @@ mcp:
 tenant:
   storageClass: local-path
   ingressClass: traefik
-  ingressNamespaces: traefik,orchard
+  ingressNamespaces: kube-system,orchard
+  cnpgOperatorNamespace: cnpg-system
   certClusterIssuer: letsencrypt
 server:
   env:
@@ -192,15 +262,21 @@ server:
 
 Replace the hostnames, then check these against your cluster:
 
-| Value                      | What to set                                                                                                                                                                                                            |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tenant.storageClass`      | A class from `kubectl get storageclass`, or `''` for the cluster default                                                                                                                                               |
-| `tenant.ingressClass`      | A class from `kubectl get ingressclass`                                                                                                                                                                                |
-| `tenant.ingressNamespaces` | The namespace your ingress controller's pods run in, then `orchard`, like `ingress-nginx,orchard`. Tenant namespaces are default-deny, so with the wrong one apps are unreachable and HTTP-01 certificates never issue |
-| `tenant.certClusterIssuer` | A ClusterIssuer from `kubectl get clusterissuer`, also used in `ingress.tls.issuerRef`                                                                                                                                 |
-| `gateway.http.enabled`     | Leave `false`. App URLs use `Ingress`, and this listener wants a wildcard Secret nothing creates                                                                                                                       |
-| `certificates.enabled`     | Leave `false` unless you have a DNS-01 issuer for wildcards. The default needs one named `letsencrypt-dns01-wildcard`                                                                                                  |
-| `mcp.enabled`              | Leave `false` to start. On, it needs the extra settings below                                                                                                                                                          |
+| Value                          | What to set                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `tenant.storageClass`          | A class from `kubectl get storageclass`, or `''` for the cluster default                                                                                                                                                                                                                                                                   |
+| `tenant.ingressClass`          | A class from `kubectl get ingressclass`                                                                                                                                                                                                                                                                                                    |
+| `tenant.ingressNamespaces`     | The namespace your ingress controller's pods run in, then `orchard`. The Traefik bundled with k3s runs in `kube-system`. To find the namespace, run `kubectl get pods -A -l app.kubernetes.io/name=traefik`. Tenant namespaces deny traffic by default, so with the wrong one apps are unreachable and HTTP-01 certificates are not issued |
+| `tenant.cnpgOperatorNamespace` | The namespace where CloudNativePG runs, which is `cnpg-system` in the commands above. With the wrong one, the tenant network policy blocks the operator, and databases show `Instance Status Extraction Error`                                                                                                                             |
+| `tenant.certClusterIssuer`     | A ClusterIssuer from `kubectl get clusterissuer`, also used in `ingress.tls.issuerRef`                                                                                                                                                                                                                                                     |
+| `gateway.http.enabled`         | Leave `false`. App URLs use `Ingress`, and this listener wants a wildcard Secret nothing creates                                                                                                                                                                                                                                           |
+| `certificates.enabled`         | Leave `false` unless you have a DNS-01 issuer for wildcards. The default needs one named `letsencrypt-dns01-wildcard`                                                                                                                                                                                                                      |
+| `mcp.enabled`                  | Leave `false` to start. On, it needs the extra settings below                                                                                                                                                                                                                                                                              |
+
+App pods can also open connections to the namespaces in
+`tenant.ingressNamespaces`. If you list `kube-system`, this includes the pods in
+`kube-system`. To keep apps away from them, turn off the bundled Traefik, install
+Traefik in its own namespace, and list that namespace instead.
 
 **3. Install and wait for the API.**
 
@@ -223,24 +299,102 @@ create the Secret after the install. The server waits for it. A `network`
 namespace that already exists is left alone, and one the chart made survives
 `helm uninstall`.
 
-**Builds (untested on this path)** need a registry the cluster can reach:
+### Upgrade the chart
 
-```yaml
-builders:
-  harbor:
-    username: robot$orchard
-    password: <registry password>
-    hosts: [registry.example.com]
-  registryEgress:
-    - namespace: <namespace your registry runs in>
+To change a value or move to a new version, upgrade the release:
+
+```bash
+helm upgrade orchard oci://ghcr.io/hackclub/orchard/charts/orchard \
+  --namespace orchard -f my-values.yaml --server-side=false
 ```
 
-and in `server.env`, `DOCKER_REGISTRY_PUSH`, `DOCKER_REGISTRY_PULL` and
-`REGISTRY_PROJECT`.
+On Helm 4, pass `--server-side=false`. Orchard's server updates the
+`buildkit-config` ConfigMap when it runs a build, so a server-side upgrade after the
+first build fails with `conflict ... buildkit-config ... conflicts with unknown`.
+Helm 3 does not have this flag, so leave it out. A failed upgrade can leave settings
+partly applied, so run the upgrade again with the flag.
 
-**MCP (untested on this path)** needs `mcp.enabled: true`, `mcp.ingress.host`, and
-`JWT_SECRET` and `MCP_SERVICE_TOKEN` in `mcp.env`, with the same
-`MCP_SERVICE_TOKEN` in `server.env`.
+### Turn on image builds
+
+Without a registry, a build stops with an error that names `DOCKER_REGISTRY_PUSH`
+and `DOCKER_REGISTRY_PULL`. To turn on builds:
+
+1. Add the registry to `my-values.yaml`. Builders can reach DNS and public IP
+   addresses on ports 80 and 443, plus what `builders.registryEgress` lists.
+
+   ```yaml
+   builders:
+     harbor:
+       username: robot$orchard
+       password: <registry password>
+       hosts: [registry.example.com]
+     registryEgress:
+       - namespace: <namespace your registry runs in>
+       - namespace: kube-system
+         podLabels: { app.kubernetes.io/name: traefik }
+   ```
+
+   If your registry is behind an ingress in the same cluster, the second entry is
+   required, with the namespace of your ingress controller. The push goes to the
+   ingress controller rather than the registry pod. Without this entry, the build
+   fails at the push with `dial tcp <address>:443: connection refused`. Otherwise,
+   remove the entry.
+
+2. Add these variables to `server.env`:
+
+   ```yaml
+   - { name: DOCKER_REGISTRY_PUSH, value: registry.example.com }
+   - { name: DOCKER_REGISTRY_PULL, value: registry.example.com }
+   - { name: REGISTRY_PROJECT, value: orchard }
+   ```
+
+3. Upgrade the chart.
+
+4. Give every node credentials for the registry. Orchard does not add a pull secret
+   to app pods for this registry, so without this step, a build succeeds and the pod
+   then fails with `ErrImagePull` and `no basic auth credentials`.
+
+   On k3s, write this file to `/etc/rancher/k3s/registries.yaml` on each node, then
+   run `sudo systemctl restart k3s`:
+
+   ```yaml
+   configs:
+     registry.example.com:
+       auth:
+         username: robot$orchard
+         password: <registry password>
+   ```
+
+   On another distribution, use the registry configuration of its container runtime.
+
+The `REGISTRY_PULL_SECRET_NAME` variable does not change how app pods pull. It names
+the Secret that build jobs in the `orchard-builders` namespace use to push.
+
+### Turn on backups
+
+Without object storage, a backup request fails with `No backup storage`. To keep
+backups in a store inside the cluster, add these values and upgrade the chart:
+
+```yaml
+objectStorage:
+  local:
+    enabled: true
+    storage: { size: 20Gi, storageClass: local-path }
+```
+
+These are the values that the installer writes, and backups and restores were tested
+through the installer. They were not tested on this path. These backups sit on the
+same disk as your databases, so they do not protect you if you lose the disk. To use
+external storage, refer to
+[Backup storage for operators](https://docs.orchard.my/data/backups/#backup-storage-for-operators).
+
+### Turn on MCP
+
+Set `mcp.enabled: true` and `mcp.ingress.host`. Set `JWT_SECRET` and
+`MCP_SERVICE_TOKEN` in `mcp.env`, and the same `MCP_SERVICE_TOKEN` in `server.env`.
+This configuration was not tested on this path.
+
+### More information
 
 The chart's [`README.md`](../infra/charts/orchard/README.md) is the values
 reference and troubleshooting guide.

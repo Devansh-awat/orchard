@@ -18,7 +18,8 @@ mcp:
 tenant:
   storageClass: local-path
   ingressClass: traefik
-  ingressNamespaces: traefik,orchard
+  ingressNamespaces: kube-system,orchard
+  cnpgOperatorNamespace: cnpg-system
   certClusterIssuer: letsencrypt
 server:
   env:

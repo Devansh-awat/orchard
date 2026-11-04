@@ -57,6 +57,31 @@ test(
   }
 );
 
+function serverEnv(yaml: string, name: string): string[] {
+  const server = parsed(yaml).find((d) => d.kind === 'Deployment' && d.metadata.name === 'server');
+  return server.spec.template.spec.containers[0].env
+    .filter((e: { name: string }) => e.name === name)
+    .map((e: { value: string }) => e.value);
+}
+
+test('the cnpg operator namespace reaches the server only when it is set', { skip }, () => {
+  assert.deepEqual(serverEnv(render([]), 'CNPG_OPERATOR_NAMESPACE'), []);
+  assert.deepEqual(
+    serverEnv(render(['tenant.cnpgOperatorNamespace=cnpg-system']), 'CNPG_OPERATOR_NAMESPACE'),
+    ['cnpg-system']
+  );
+  assert.deepEqual(serverEnv(render([], minimal), 'CNPG_OPERATOR_NAMESPACE'), ['cnpg-system']);
+});
+
+test('a value in server.env wins over the cnpg operator namespace', { skip }, () => {
+  const out = render([
+    'tenant.cnpgOperatorNamespace=cnpg-system',
+    'server.env[0].name=CNPG_OPERATOR_NAMESPACE',
+    'server.env[0].value=elsewhere'
+  ]);
+  assert.deepEqual(serverEnv(out, 'CNPG_OPERATOR_NAMESPACE'), ['elsewhere']);
+});
+
 test('every install guide carries the same minimal values', () => {
   const example = readFileSync(minimal, 'utf8');
   for (const doc of [
@@ -64,7 +89,9 @@ test('every install guide carries the same minimal values', () => {
     'apps/docs/src/content/docs/start/install.md',
     'infra/charts/orchard/README.md'
   ]) {
-    assert.ok(readFileSync(join(repo, doc), 'utf8').includes(example), doc);
+    const text = readFileSync(join(repo, doc), 'utf8');
+    const inNumberedStep = text.replace(/^ {3}/gm, '');
+    assert.ok(text.includes(example) || inNumberedStep.includes(example), doc);
   }
 });
 

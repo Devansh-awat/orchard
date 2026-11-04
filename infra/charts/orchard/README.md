@@ -36,11 +36,18 @@ for `ingress.enabled` and `mcp.ingress`. Tenant apps use any ingress class
 
 ## 1. Quick install
 
-These steps reached a working login, an app with an HTTPS certificate and a
-database with a bound volume, on plain k3s with the published chart, Helm 4.3.1,
-Traefik, cert-manager and CloudNativePG. **Builds were not tested on this path.**
-They need a real registry, see below. The test run created the namespaces and the
-Secret after a first failed install rather than before it.
+These steps were run end to end on one node: k3s v1.36.5 with its bundled Traefik,
+Helm 4.3.1, Let's Encrypt over HTTP-01, and a registry behind an ingress on the same
+node. The run reached a working sign-in, an app built from a repository and served
+over HTTPS, and two healthy databases. That run set `CNPG_OPERATOR_NAMESPACE` in
+`server.env`. The `tenant.cnpgOperatorNamespace` value used below sets the same
+variable. Its rendered output is checked in CI, but it has not been run on a cluster.
+
+These were not tested on this path: backups with the `objectStorage` values, MCP,
+public database exposure, more than one node, and other ingress controllers.
+
+To install the prerequisites, including the commands and a ClusterIssuer example,
+refer to [`docs/self-hosting.md`](../../../docs/self-hosting.md#install-the-prerequisites).
 
 **1. Create the namespaces and the Secret.** The Secret holds two values the
 server needs at boot. `jwt` signs sessions and must be at least 32 characters.
@@ -79,7 +86,8 @@ mcp:
 tenant:
   storageClass: local-path
   ingressClass: traefik
-  ingressNamespaces: traefik,orchard
+  ingressNamespaces: kube-system,orchard
+  cnpgOperatorNamespace: cnpg-system
   certClusterIssuer: letsencrypt
 server:
   env:
@@ -96,7 +104,8 @@ Replace the hostnames, then check these against your cluster:
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `tenant.storageClass`       | A class from `kubectl get storageclass`, or `''` for the cluster default                                                                                                                                                |
 | `tenant.ingressClass`       | A class from `kubectl get ingressclass`                                                                                                                                                                                 |
-| `tenant.ingressNamespaces`  | The namespace your ingress controller's pods run in, then `orchard`, like `ingress-nginx,orchard`. Tenant namespaces are default-deny, so with the wrong one apps are unreachable and HTTP-01 certificates never issue |
+| `tenant.ingressNamespaces`  | The namespace your ingress controller's pods run in, then `orchard`. The Traefik bundled with k3s runs in `kube-system`. To find the namespace, run `kubectl get pods -A -l app.kubernetes.io/name=traefik`. Tenant namespaces deny traffic by default, so with the wrong one apps are unreachable and HTTP-01 certificates are not issued |
+| `tenant.cnpgOperatorNamespace` | The namespace where CloudNativePG runs, usually `cnpg-system`. With the wrong one, the tenant network policy blocks the operator, and databases show `Instance Status Extraction Error` |
 | `tenant.certClusterIssuer`  | A ClusterIssuer from `kubectl get clusterissuer`, also used in `ingress.tls.issuerRef`                                                                                                                                  |
 | `gateway.http.enabled`      | Leave `false`. App URLs use `Ingress`, and this listener wants a wildcard Secret nothing creates                                                                                                                        |
 | `certificates.enabled`      | Leave `false` unless you have a DNS-01 issuer for wildcards. The default needs one named `letsencrypt-dns01-wildcard`                                                                                                   |
@@ -123,24 +132,33 @@ create the Secret after the install. The server waits for it. A `network`
 namespace that already exists is left alone, and one the chart made survives
 `helm uninstall`.
 
-**Builds (untested on this path)** need a registry the cluster can reach:
+**Upgrades.** On Helm 4, pass `--server-side=false` to `helm upgrade`. The server
+updates the `buildkit-config` ConfigMap when it runs a build, so a server-side
+upgrade after the first build fails with a conflict. Helm 3 does not have this flag.
 
-```yaml
-builders:
-  harbor:
-    username: robot$orchard
-    password: <registry password>
-    hosts: [registry.example.com]
-  registryEgress:
-    - namespace: <namespace your registry runs in>
-```
+**Builds** need these:
 
-and in `server.env`, `DOCKER_REGISTRY_PUSH`, `DOCKER_REGISTRY_PULL` and
-`REGISTRY_PROJECT`.
+- A registry in `builders.harbor`, and `DOCKER_REGISTRY_PUSH`, `DOCKER_REGISTRY_PULL`
+  and `REGISTRY_PROJECT` in `server.env`.
+- An entry in `builders.registryEgress` for the registry's namespace. A registry
+  behind an ingress in the same cluster also needs one for the ingress controller,
+  or the push fails with `connection refused`.
+- Registry credentials on every node. On k3s, that is
+  `/etc/rancher/k3s/registries.yaml`. Orchard does not add a pull secret to app pods
+  for this registry, so without them the pod fails with `no basic auth credentials`.
+  `REGISTRY_PULL_SECRET_NAME` does not change this: it names the Secret that build
+  jobs use to push.
 
-**MCP (untested on this path)** needs `mcp.enabled: true`, `mcp.ingress.host`, and
-`JWT_SECRET` and `MCP_SERVICE_TOKEN` in `mcp.env`, with the same
-`MCP_SERVICE_TOKEN` in `server.env`.
+**Backups** need object storage. Set `objectStorage.local.enabled: true` for a store
+inside the cluster, or configure external storage. Refer to
+[Object storage](#object-storage-objectstoragelocal).
+
+**MCP** needs `mcp.enabled: true`, `mcp.ingress.host`, and `JWT_SECRET` and
+`MCP_SERVICE_TOKEN` in `mcp.env`, with the same `MCP_SERVICE_TOKEN` in `server.env`.
+This was not tested on this path.
+
+For the steps in full, refer to
+[`docs/self-hosting.md`](../../../docs/self-hosting.md#turn-on-image-builds).
 
 Inspect what will be applied first:
 
@@ -222,13 +240,14 @@ is the complete list.
 |---|---|---|
 | `namespace` | `orchard` | Namespace the app components install into. |
 | `createNamespace` | `true` | Render a `Namespace` object for `.namespace`, and for `gateway.namespace` and `certificates.namespace` when they are in use and missing. Those two are kept on uninstall. Set `false` if you manage them yourself. |
-| `cilium.enabled` | `false` | Add CiliumNetworkPolicy / CiliumEnvoyConfig grants to the server ClusterRole and set `CILIUM_ENABLED=true`. Only for clusters running Cilium as the CNI. Left off, the server probes for the `cilium.io` group plus create on `ciliumenvoyconfigs`: per-tenant policy falls back to plain NetworkPolicy, and basic auth on an ingress is enforced by the protection proxy instead of an Envoy filter. Set `CNPG_OPERATOR_NAMESPACE` in `server.env` to where CloudNativePG runs (default `postgresql`, the installer uses `cnpg-system`), or the tenant policy keeps the operator out of database pods. |
+| `cilium.enabled` | `false` | Add CiliumNetworkPolicy / CiliumEnvoyConfig grants to the server ClusterRole and set `CILIUM_ENABLED=true`. Only for clusters running Cilium as the CNI. Left off, the server probes for the `cilium.io` group plus create on `ciliumenvoyconfigs`: per-tenant policy falls back to plain NetworkPolicy, and basic auth on an ingress is enforced by the protection proxy instead of an Envoy filter. |
 | `protection.orchardLogin` | `false` | Offer `protectionMode: orchard` ("sign in with Orchard") on tenant ingresses, via `PROTECTION_ORCHARD_LOGIN=true`. Gates selecting the mode, not enforcing it. `basic` and `password` are always available. |
 | `signupMode` | `invite_only` | Who can sign up: `open`, `invite_only` or `closed`, as `SIGNUP_MODE`. |
 | `tenant.storageClass` | `""` | StorageClass for tenant apps and databases, as `K8S_STORAGE_CLASS`. Empty uses the cluster default StorageClass. |
 | `tenant.ingressClass` | `""` | Ingress class of tenant apps, as `K8S_INGRESS_CLASS`. Empty falls back to `haproxy`. |
 | `tenant.certClusterIssuer` | `""` | ClusterIssuer for tenant certificates, as `CERT_CLUSTER_ISSUER`. Empty falls back to `letsencrypt-prod`. |
-| `tenant.ingressNamespaces` | `""` | Namespaces a tenant pod may be reached from and reach, as `TENANT_INGRESS_NAMESPACES`. Empty means `network,orchard`. The ingress controller has to be on this list, or apps are unreachable and HTTP-01 certificates never issue. A k3s cluster running Traefik wants `traefik,orchard`. |
+| `tenant.ingressNamespaces` | `""` | Namespaces a tenant pod may be reached from and reach, as `TENANT_INGRESS_NAMESPACES`. Empty means `network,orchard`. The ingress controller has to be on this list, or apps are unreachable and HTTP-01 certificates never issue. Traefik in its own namespace wants `traefik,orchard`. The Traefik bundled with k3s runs in `kube-system`, so that cluster wants `kube-system,orchard`. |
+| `tenant.cnpgOperatorNamespace` | `""` | Where CloudNativePG runs, as `CNPG_OPERATOR_NAMESPACE`. Empty leaves the server's default, `postgresql`. A value in `server.env` wins. With the wrong one, the tenant policy keeps the operator out of database pods, and databases show `Instance Status Extraction Error`. |
 | `tenant.wildcardDomains` | `""` | `.suffix=tlsSecret` pairs generated app URLs are built from. Empty derives one from `gateway.http.appDomain`. |
 | `tenant.publicIp` | `""` | Fallback external IP publicly exposed ports and databases are published on, via `PUBLIC_EXPOSURE_IP`. An organization that sets its own overrides it. Empty means every organization must configure one before it can expose anything, and setting it here locks the admin-panel field. |
 

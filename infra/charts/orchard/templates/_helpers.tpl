@@ -242,6 +242,9 @@ true
             {{- if .Values.tenant.ingressNamespaces }}
             - { name: TENANT_INGRESS_NAMESPACES, value: {{ .Values.tenant.ingressNamespaces | quote }} }
             {{- end }}
+            {{- if and .Values.tenant.cnpgOperatorNamespace (not (include "orchard.serverEnvHas" (dict "root" . "key" "CNPG_OPERATOR_NAMESPACE"))) }}
+            - { name: CNPG_OPERATOR_NAMESPACE, value: {{ .Values.tenant.cnpgOperatorNamespace | quote }} }
+            {{- end }}
             {{- if .Values.tenantSandbox.enabled }}
             - { name: TENANT_RUNTIME_CLASS, value: {{ .Values.tenantSandbox.runtimeClassName | quote }} }
             {{- end }}
