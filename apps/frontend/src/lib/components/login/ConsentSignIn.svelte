@@ -9,11 +9,9 @@
 
 	let {
 		returnTo,
-		onleave,
 		children
 	}: {
 		returnTo: string;
-		onleave?: () => void;
 		children?: Snippet<[boolean]>;
 	} = $props();
 
@@ -34,14 +32,9 @@
 		}
 	});
 
-	function leave() {
-		rememberReturnTo(returnTo);
-		onleave?.();
-	}
-
 	function startProvider(provider: LoginProvider) {
 		starting = provider.id;
-		leave();
+		rememberReturnTo(returnTo);
 		window.location.href = new URL(
 			`${$apiBase}${provider.startUrl}`,
 			window.location.origin
@@ -49,7 +42,7 @@
 	}
 
 	function openLoginPage() {
-		leave();
+		rememberReturnTo(returnTo);
 		goto('/');
 	}
 </script>

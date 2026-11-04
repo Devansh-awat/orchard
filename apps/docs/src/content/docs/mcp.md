@@ -58,11 +58,15 @@ An OAuth connection carries one of three scopes, the same ladder API tokens use:
 | `mcp:deploy` | Everything `mcp:read` can, plus every change              |
 | `mcp:exec`   | Everything `mcp:deploy` can, plus `exec_in_pod`           |
 
-A client that asks for no scope, or for the older `mcp:access`, gets
+A client that asks for no scope, or for the older `mcp:access`, is asking for
 `mcp:exec`, and connections made before scopes existed keep everything they
 had. The consent screen shows "Also allow running commands inside containers"
-ticked; untick it to keep a connection to reading and deploying. The scope is
+unticked, so a new connection only gets `mcp:exec` if you tick it. The scope is
 enforced by the API itself, not just by which tools are listed.
+
+Signing in never grants anything: after you sign in, the consent screen still
+waits for you to press Approve. The client name on that screen is whatever the
+client told Orchard when it registered, so check the address shown beside it.
 
 To hand out a narrower connection without relying on the client, add `scope`
 to the server URL. It only ever lowers what the connection gets:

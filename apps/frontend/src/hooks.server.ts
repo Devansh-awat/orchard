@@ -15,6 +15,8 @@ function platformHost(): string {
 	}
 }
 
+const CONSENT_PAGE = /^\/(mcp\/authorize|cli\/auth)\/?$/;
+
 export const handle: Handle = async ({ event, resolve }) => {
 	// Merge consecutive slashes (`//ysws//projects` → `/ysws/projects`).
 	// Doubled slashes still render a page but break every exact-match on
@@ -58,10 +60,15 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const grafts = loadGraftRegistry();
 	setGraftRegistry(grafts);
 	const graftScript = `<script>window.__ORCHARD_GRAFTS__=${JSON.stringify(grafts).replace(/</g, '\\u003c')}</script>`;
-	return resolve(event, {
+	const response = await resolve(event, {
 		transformPageChunk: ({ html }) =>
 			html.replace('%orchard.font.sans%', sansFont).replace('%orchard.grafts%', graftScript)
 	});
+	if (CONSENT_PAGE.test(pathname)) {
+		response.headers.set('X-Frame-Options', 'DENY');
+		response.headers.set('Content-Security-Policy', "frame-ancestors 'none'");
+	}
+	return response;
 };
 
 // Forward SSR errors to PostHog Error Tracking. SvelteKit's server context

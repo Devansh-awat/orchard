@@ -9,33 +9,16 @@
 	import ConsentSignIn from '$lib/components/login/ConsentSignIn.svelte';
 	import Turnstile from '$lib/components/Turnstile.svelte';
 	import { motionStagger } from '$lib/utils/motion.svelte';
+	import { consentDestination, consentScope, requestedConsentScope } from '$lib/utils/mcp-consent';
 
 	let mcpState = $derived($page.url.searchParams.get('mcp_state') || '');
 	let mcpServer = $derived($page.url.searchParams.get('mcp_server') || '');
 	let clientName = $derived($page.url.searchParams.get('client_name') || 'An application');
 	let redirectUri = $derived($page.url.searchParams.get('redirect_uri') || '');
-	let requestedScope = $derived.by((): 'read' | 'deploy' | 'exec' => {
-		const raw = ($page.url.searchParams.get('scope') || '').trim().toLowerCase();
-		if (raw === 'mcp:read') return 'read';
-		if (raw === 'mcp:deploy') return 'deploy';
-		return 'exec';
-	});
-	let allowExec = $state(true);
-	let grantedScope = $derived(
-		requestedScope === 'read'
-			? 'mcp:read'
-			: requestedScope === 'exec' && allowExec
-				? 'mcp:exec'
-				: 'mcp:deploy'
-	);
-	let redirectHost = $derived.by(() => {
-		if (!redirectUri) return '';
-		try {
-			return new URL(redirectUri).host;
-		} catch {
-			return '';
-		}
-	});
+	let requestedScope = $derived(requestedConsentScope($page.url.searchParams.get('scope')));
+	let allowExec = $state(false);
+	let grantedScope = $derived(consentScope(requestedScope, allowExec));
+	let destination = $derived(consentDestination(redirectUri));
 
 	function originOf(raw: string | undefined): string | null {
 		if (!raw) return null;
@@ -64,6 +47,16 @@
 	let error = $state<string | null>(null);
 	let authorizing = $state(false);
 	let authorized = $state(false);
+	let approveLocked = $state(false);
+	let approveTimer: ReturnType<typeof setTimeout> | undefined;
+
+	function signedInHere(signedInUser: Parameters<typeof user.set>[0] | undefined) {
+		if (!signedInUser) return;
+		approveLocked = true;
+		clearTimeout(approveTimer);
+		approveTimer = setTimeout(() => (approveLocked = false), 800);
+		user.set(signedInUser);
+	}
 
 	let otpEmail = $state('');
 	let otpCode = $state('');
@@ -108,14 +101,19 @@
 			return;
 		}
 
+		if (!destination) {
+			error = 'Invalid authorization request. Missing a valid redirect address.';
+			return;
+		}
+
 		if (browser && typeof window !== 'undefined') {
 			passkeySupported =
 				window.isSecureContext && typeof window.PublicKeyCredential !== 'undefined';
 		}
 	});
 
-	async function completeAuthorization() {
-		if (authorizing) return;
+	async function approve() {
+		if (authorizing || approveLocked) return;
 		if (!mcpServerAllowed(mcpServer)) {
 			error = 'Invalid authorization request. Unrecognized MCP server.';
 			return;
@@ -141,7 +139,9 @@
 				body: JSON.stringify({
 					mcp_state: mcpState,
 					session_token: token,
-					scope: grantedScope
+					scope: grantedScope,
+					redirect_uri: redirectUri,
+					client_name: $page.url.searchParams.get('client_name') ?? ''
 				})
 			});
 
@@ -222,11 +222,7 @@
 			}
 
 			const data = await response.json().catch(() => null);
-			if (data?.user) {
-				user.set(data.user);
-			}
-
-			await completeAuthorization();
+			signedInHere(data?.user);
 		} catch (err) {
 			otpError = err instanceof Error ? err.message : 'Failed to verify code.';
 		} finally {
@@ -267,11 +263,7 @@
 			}
 
 			const data = await verifyResponse.json().catch(() => null);
-			if (data?.user) {
-				user.set(data.user);
-			}
-
-			await completeAuthorization();
+			signedInHere(data?.user);
 		} catch (err) {
 			if (err instanceof Error && err.name === 'NotAllowedError') {
 				passkeyError = 'Passkey request was cancelled.';
@@ -282,31 +274,6 @@
 			passkeyLoading = false;
 		}
 	}
-
-	function rememberConsent() {
-		sessionStorage.setItem('mcp_authorize_state', mcpState);
-		sessionStorage.setItem('mcp_authorize_server', mcpServer);
-		sessionStorage.setItem('mcp_authorize_exec', allowExec ? '1' : '0');
-	}
-
-	onMount(async () => {
-		if (!browser) return;
-
-		const savedState = sessionStorage.getItem('mcp_authorize_state');
-		const savedServer = sessionStorage.getItem('mcp_authorize_server');
-		const savedExec = sessionStorage.getItem('mcp_authorize_exec');
-
-		if ($isSignedIn && savedState && savedServer) {
-			sessionStorage.removeItem('mcp_authorize_state');
-			sessionStorage.removeItem('mcp_authorize_server');
-			sessionStorage.removeItem('mcp_authorize_exec');
-			allowExec = savedExec === '1';
-
-			if (mcpState && mcpServer && savedServer === mcpServer && mcpServerAllowed(savedServer)) {
-				await completeAuthorization();
-			}
-		}
-	});
 </script>
 
 <svelte:head>
@@ -333,6 +300,16 @@
 			<p class="consent-subtitle" {@attach motionStagger({ index: 2 })}>
 				<strong>{clientName}</strong> is requesting access to your Orchard account.
 			</p>
+			{#if destination}
+				<p class="consent-origin" {@attach motionStagger({ index: 2 })}>
+					That name is self-reported. Access goes to
+					{#if destination.local}
+						a local app on this machine (<strong>{destination.host}</strong>).
+					{:else}
+						<strong>{destination.host}</strong>.
+					{/if}
+				</p>
+			{/if}
 
 			<div class="consent-details" {@attach motionStagger({ index: 3 })}>
 				<p class="consent-label">If you approve, it will be able to:</p>
@@ -350,8 +327,8 @@
 								Also allow running commands inside containers
 							</span>
 							<span class="consent-exec-hint">
-								Lets {clientName} run shell commands in your running apps. Turn it off to keep it to reading
-								and deploying.
+								Lets {clientName} run shell commands in your running apps. Leave it off to keep it to
+								reading and deploying.
 							</span>
 						</span>
 					</label>
@@ -361,7 +338,6 @@
 			{#if redirectUri}
 				<div class="consent-details" {@attach motionStagger({ index: 4 })}>
 					<p class="consent-label">After you approve, your authorization code will be sent to:</p>
-					<p class="consent-host">{redirectHost || redirectUri}</p>
 					<p class="consent-uri">{redirectUri}</p>
 					<p class="consent-warning">
 						Only approve if you recognize this destination. Anyone with access to that URL can use
@@ -376,13 +352,14 @@
 					<Button
 						variant="primary"
 						class="w-full"
-						onclick={completeAuthorization}
+						onclick={approve}
 						loading={authorizing}
+						disabled={approveLocked}
 					>
-						{authorizing ? 'Authorizing...' : 'Authorize'}
+						{authorizing ? 'Approving...' : 'Approve'}
 					</Button>
 				{:else}
-					<ConsentSignIn returnTo={$page.url.pathname + $page.url.search} onleave={rememberConsent}>
+					<ConsentSignIn returnTo={$page.url.pathname + $page.url.search}>
 						{#snippet children(hasProviders)}
 							{#if hasProviders && emailCodes}
 								<div class="consent-divider"><span>or continue with email</span></div>
@@ -448,7 +425,7 @@
 										type="submit"
 										loading={otpRequesting || otpVerifying}
 									>
-										{otpStep === 'email' ? 'Send code' : 'Verify and authorize'}
+										{otpStep === 'email' ? 'Send code' : 'Verify and continue'}
 									</Button>
 								</form>
 							{/if}
@@ -537,6 +514,20 @@
 		font-weight: 600;
 	}
 
+	.consent-origin {
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		color: var(--text-muted);
+		margin: 0.5rem 0 0;
+		overflow-wrap: anywhere;
+	}
+
+	.consent-origin strong {
+		color: var(--text-default);
+		font-weight: 600;
+		font-family: var(--font-mono);
+	}
+
 	.consent-details {
 		width: 100%;
 		margin-top: 1.5rem;
@@ -610,20 +601,10 @@
 		margin: 0 0 0.5rem;
 	}
 
-	.consent-host {
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		font-weight: 600;
-		font-family: var(--font-mono);
-		color: var(--text-default);
-		margin: 0 0 0.25rem;
-		word-break: break-all;
-	}
-
 	.consent-uri {
 		font-size: var(--text-caption);
 		line-height: var(--lh-caption);
-		color: var(--text-faint);
+		color: var(--text-default);
 		font-family: var(--font-mono);
 		margin: 0 0 0.75rem;
 		word-break: break-all;
