@@ -14,7 +14,14 @@ function service(rows: unknown[][], seen: { sql: string; values: unknown[] }[]) 
     }
   };
   const orgEvents = { forDeployment: () => EMPTY };
-  return new (ObservabilityService as any)(prisma, {}, orgEvents, {}, {}, {}) as ObservabilityService;
+  return new (ObservabilityService as any)(
+    prisma,
+    {},
+    orgEvents,
+    {},
+    {},
+    {}
+  ) as ObservabilityService;
 }
 
 test('casts the log offset to int, which is the only type substring takes', async () => {
@@ -30,7 +37,10 @@ test('casts the log offset to int, which is the only type substring takes', asyn
   assert.equal(seen[0].values[0], 5);
   assert.deepEqual(
     events.map((e) => e.data),
-    [{ offset: 9, chunk: 'more\n' }, { done: true, status: 'failed', step: 'build' }]
+    [
+      { offset: 9, chunk: 'more\n' },
+      { done: true, status: 'failed', step: 'build' }
+    ]
   );
 });
 
