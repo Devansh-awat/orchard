@@ -63,7 +63,7 @@
 			[connections, oauth] = await Promise.all([fetchGitConnections(), fetchOauthAvailability()]);
 		} catch (e) {
 			toasts.add({
-				title: 'Could not load git providers',
+				title: "Couldn't load git providers",
 				description: e instanceof Error ? e.message : '',
 				color: 'error'
 			});
@@ -106,7 +106,7 @@
 			await load();
 		} catch (e) {
 			toasts.add({
-				title: 'Could not connect',
+				title: "Couldn't connect",
 				description: e instanceof Error ? e.message : '',
 				color: 'error'
 			});
@@ -145,7 +145,7 @@
 			await copy(await fetchWebhookSecret(c.id), 'Webhook secret copied');
 		} catch (e) {
 			toasts.add({
-				title: 'Could not load the secret',
+				title: "Couldn't load the secret",
 				description: e instanceof Error ? e.message : '',
 				color: 'error'
 			});

@@ -90,17 +90,17 @@
 		try {
 			const [p, o] = await Promise.all([
 				apiFetch(`/apiv1/organizations/${organization.id}/status-pages`).then((r) =>
-					json<StatusPage[]>(r, 'Could not load status pages')
+					json<StatusPage[]>(r, "Couldn't load status pages")
 				),
 				apiFetch(`/apiv1/organizations/${organization.id}/status-pages/options`).then((r) =>
-					json<Option[]>(r, 'Could not load apps')
+					json<Option[]>(r, "Couldn't load apps")
 				)
 			]);
 			pages = p;
 			options = o;
 		} catch (e) {
 			toasts.add({
-				title: 'Could not load status pages',
+				title: "Couldn't load status pages",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -191,13 +191,13 @@
 					body: JSON.stringify(body)
 				}
 			);
-			await json(res, 'Could not save the status page');
+			await json(res, "Couldn't save the status page");
 			creating = false;
 			editing = null;
 			await load();
 		} catch (e) {
 			toasts.add({
-				title: 'Could not save the status page',
+				title: "Couldn't save the status page",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -214,11 +214,11 @@
 			const res = await apiFetch(`/apiv1/organizations/${organization.id}/status-pages/${p.id}`, {
 				method: 'DELETE'
 			});
-			await json(res, 'Could not delete the status page');
+			await json(res, "Couldn't delete the status page");
 			pages = pages.filter((x) => x.id !== p.id);
 		} catch (e) {
 			toasts.add({
-				title: 'Could not delete the status page',
+				title: "Couldn't delete the status page",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});

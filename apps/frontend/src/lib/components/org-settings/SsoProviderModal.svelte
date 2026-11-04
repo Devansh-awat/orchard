@@ -177,7 +177,7 @@
 >
 	{#if step === 'preset' || !draft}
 		<Stack gap="lg">
-			<p class="lede">Pick the service your members already sign in with.</p>
+			<p class="lede">Pick what your members already sign in with.</p>
 			{#each [['Social', grouped.social], ['Enterprise', grouped.enterprise], ['Custom', grouped.custom]] as [label, items] (label)}
 				{#if (items as SsoProviderPreset[]).length}
 					<Stack gap="sm">
@@ -391,7 +391,7 @@
 					<ToggleRow
 						bind:checked={draft.requireVerifiedEmail}
 						label="Require a verified email"
-						hint="Rejects sign-ins where the provider does not vouch for the address"
+						hint="Rejects sign-ins when the provider hasn't verified the address"
 					/>
 					<SettingRow label="Role for new members" for="{uid}-role">
 						<div class="role">
@@ -417,8 +417,8 @@
 					</SettingRow>
 					<ToggleRow
 						bind:checked={draft.enabled}
-						label="Show on the login page"
-						hint="Off keeps the setup without offering it to members"
+						label="Show on the sign-in page"
+						hint="Off keeps the setup but hides it from members"
 					/>
 				</SettingsList>
 			</Stack>

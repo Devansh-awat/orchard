@@ -153,10 +153,10 @@
 				await fetchOrganization();
 			} else {
 				const body = await res.json().catch(() => null);
-				toasts.add({ title: body?.message || 'Could not revoke access', color: 'error' });
+				toasts.add({ title: body?.message || "Couldn't revoke access", color: 'error' });
 			}
 		} catch {
-			toasts.add({ title: 'Could not revoke access', color: 'error' });
+			toasts.add({ title: "Couldn't revoke access", color: 'error' });
 		} finally {
 			revokingAccessId = null;
 		}
@@ -246,7 +246,7 @@
 		error = null;
 		try {
 			const response = await apiFetch(`/apiv1/organizations/slug/${organizationSlug}`);
-			if (!response.ok) throw new Error('Failed to fetch organization');
+			if (!response.ok) throw new Error("Couldn't load organization");
 			const data = await response.json();
 			organization = data;
 			members = data.members || [];
@@ -280,7 +280,7 @@
 				}
 			}
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to fetch organization';
+			error = e instanceof Error ? e.message : "Couldn't load organization";
 		} finally {
 			loading = false;
 		}
@@ -352,7 +352,7 @@
 			);
 			const d = await r.json().catch(() => ({}));
 			if (!r.ok) {
-				throw new Error(d.message || 'Failed to save channel');
+				throw new Error(d.message || "Couldn't save channel");
 			}
 			if (d.webhookSecret) notifCreatedSecret = d.webhookSecret;
 			toasts.add({ title: channelId ? 'Channel updated' : 'Channel added', color: 'success' });
@@ -360,8 +360,8 @@
 			return true;
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to save channel',
+				title: "Couldn't save channel",
+				description: e instanceof Error ? e.message : "Couldn't save channel",
 				color: 'error'
 			});
 			return false;
@@ -378,13 +378,13 @@
 				`/apiv1/organizations/${organization.id}/notification-channels/${channelId}`,
 				{ method: 'DELETE' }
 			);
-			if (!r.ok) throw new Error('Failed to delete channel');
+			if (!r.ok) throw new Error("Couldn't delete channel");
 			toasts.add({ title: 'Channel deleted', color: 'success' });
 			notifChannels = notifChannels.filter((c) => c.id !== channelId);
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to delete channel',
+				title: "Couldn't delete channel",
+				description: e instanceof Error ? e.message : "Couldn't delete channel",
 				color: 'error'
 			});
 		} finally {
@@ -430,15 +430,15 @@
 					body: JSON.stringify({ enabled })
 				}
 			);
-			if (!r.ok) throw new Error('Failed to update channel');
+			if (!r.ok) throw new Error("Couldn't update channel");
 			const updated = await r.json();
 			notifChannels = notifChannels.map((c) =>
 				c.id === channelId ? { ...c, enabled: updated.enabled } : c
 			);
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to update channel',
+				title: "Couldn't update channel",
+				description: e instanceof Error ? e.message : "Couldn't update channel",
 				color: 'error'
 			});
 		} finally {
@@ -466,15 +466,15 @@
 			});
 			if (!r.ok) {
 				const d = await r.json();
-				throw new Error(d.message || 'Failed to update organization');
+				throw new Error(d.message || "Couldn't update organization");
 			}
 			toasts.add({ title: 'Organization updated', color: 'success' });
 			isEditing = false;
 			fetchOrganization();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to update',
+				title: "Couldn't update",
+				description: e instanceof Error ? e.message : "Couldn't update",
 				color: 'error'
 			});
 		} finally {
@@ -491,7 +491,7 @@
 		if (!allowedTypes.includes(file.type)) {
 			toasts.add({
 				title: 'Invalid file type',
-				description: 'Only JPEG, PNG, GIF, and WebP images are allowed',
+				description: 'Use a JPEG, PNG, GIF or WebP image',
 				color: 'error'
 			});
 			return;
@@ -499,7 +499,7 @@
 		if (file.size > 5 * 1024 * 1024) {
 			toasts.add({
 				title: 'File too large',
-				description: 'Maximum file size is 5MB',
+				description: 'Use a file under 5 MB',
 				color: 'error'
 			});
 			return;
@@ -512,13 +512,13 @@
 				method: 'POST',
 				body: fd
 			});
-			if (!r.ok) throw new Error('Failed to upload avatar');
+			if (!r.ok) throw new Error("Couldn't upload avatar");
 			toasts.add({ title: 'Avatar updated', color: 'success' });
 			fetchOrganization();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to upload avatar',
+				title: "Couldn't upload avatar",
+				description: e instanceof Error ? e.message : "Couldn't upload avatar",
 				color: 'error'
 			});
 		} finally {
@@ -533,13 +533,13 @@
 			const r = await apiFetch(`/apiv1/organizations/${organization.id}/avatar`, {
 				method: 'DELETE'
 			});
-			if (!r.ok) throw new Error('Failed to delete avatar');
+			if (!r.ok) throw new Error("Couldn't delete avatar");
 			toasts.add({ title: 'Avatar removed', color: 'success' });
 			fetchOrganization();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to delete avatar',
+				title: "Couldn't delete avatar",
+				description: e instanceof Error ? e.message : "Couldn't delete avatar",
 				color: 'error'
 			});
 		} finally {
@@ -558,7 +558,7 @@
 			});
 			if (!r.ok) {
 				const d = await r.json();
-				throw new Error(d.message || 'Failed to add member');
+				throw new Error(d.message || "Couldn't add member");
 			}
 			toasts.add({ title: 'Member added', color: 'success' });
 			newMemberEmail = '';
@@ -566,8 +566,8 @@
 			await fetchOrganization();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to add member',
+				title: "Couldn't add member",
+				description: e instanceof Error ? e.message : "Couldn't add member",
 				color: 'error'
 			});
 		} finally {
@@ -597,14 +597,14 @@
 			});
 			if (!r.ok) {
 				const d = await r.json().catch(() => ({}));
-				throw new Error(d.message || 'Failed to remove member');
+				throw new Error(d.message || "Couldn't remove member");
 			}
 			toasts.add({ title: 'Member removed', color: 'success' });
 			fetchOrganization();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to remove member',
+				title: "Couldn't remove member",
+				description: e instanceof Error ? e.message : "Couldn't remove member",
 				color: 'error'
 			});
 		} finally {
@@ -628,14 +628,14 @@
 			});
 			if (!r.ok) {
 				const d = await r.json().catch(() => ({}));
-				throw new Error(d.message || 'Failed to update member role');
+				throw new Error(d.message || "Couldn't update member role");
 			}
 			toasts.add({ title: 'Role updated', color: 'success' });
 			fetchOrganization();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to update role',
+				title: "Couldn't update role",
+				description: e instanceof Error ? e.message : "Couldn't update role",
 				color: 'error'
 			});
 		} finally {
@@ -653,14 +653,14 @@
 			);
 			if (!r.ok) {
 				const d = await r.json();
-				throw new Error(d.message || 'Failed to resend invitation');
+				throw new Error(d.message || "Couldn't resend invitation");
 			}
 			await fetchOrganization();
 			toasts.add({ title: 'Invitation resent', color: 'success' });
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to resend invitation',
+				title: "Couldn't resend invitation",
+				description: e instanceof Error ? e.message : "Couldn't resend invitation",
 				color: 'error'
 			});
 		} finally {
@@ -678,14 +678,14 @@
 			);
 			if (!r.ok) {
 				const d = await r.json();
-				throw new Error(d.message || 'Failed to cancel invitation');
+				throw new Error(d.message || "Couldn't cancel invitation");
 			}
-			toasts.add({ title: 'Invitation cancelled', color: 'success' });
+			toasts.add({ title: 'Invitation canceled', color: 'success' });
 			invitations = invitations.filter((inv) => inv.id !== invitationId);
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to cancel invitation',
+				title: "Couldn't cancel invitation",
+				description: e instanceof Error ? e.message : "Couldn't cancel invitation",
 				color: 'error'
 			});
 		} finally {
@@ -704,7 +704,7 @@
 			});
 			if (!r.ok) {
 				const d = await r.json().catch(() => ({}));
-				throw new Error(d.message || 'Failed to save');
+				throw new Error(d.message || "Couldn't save");
 			}
 			toasts.add({
 				title: publicIp.trim() ? 'Public IP saved' : 'Public IP cleared',
@@ -713,8 +713,8 @@
 			await fetchBackupSettings();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to save',
+				title: "Couldn't save",
+				description: e instanceof Error ? e.message : "Couldn't save",
 				color: 'error'
 			});
 		} finally {
@@ -740,7 +740,7 @@
 			});
 			if (!r.ok) {
 				const d = await r.json().catch(() => ({}));
-				throw new Error(d.message || 'Failed to save');
+				throw new Error(d.message || "Couldn't save");
 			}
 			toasts.add({ title: 'Backup settings saved', color: 'success' });
 			backupSecretKey = '';
@@ -748,8 +748,8 @@
 			await fetchBackupSettings();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to save',
+				title: "Couldn't save",
+				description: e instanceof Error ? e.message : "Couldn't save",
 				color: 'error'
 			});
 		} finally {
@@ -781,7 +781,7 @@
 					backupR2SecretKey: null
 				})
 			});
-			if (!r.ok) throw new Error('Failed to clear');
+			if (!r.ok) throw new Error("Couldn't clear");
 			toasts.add({ title: 'Backup settings cleared', color: 'success' });
 			backupEndpoint = '';
 			backupBucket = '';
@@ -794,8 +794,8 @@
 			backupEditMode = false;
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to clear',
+				title: "Couldn't clear",
+				description: e instanceof Error ? e.message : "Couldn't clear",
 				color: 'error'
 			});
 		} finally {
@@ -831,7 +831,7 @@
 			});
 			if (!r.ok) {
 				const d = await r.json().catch(() => ({}));
-				throw new Error(d.message || d.detail || 'Failed to create token');
+				throw new Error(d.message || d.detail || "Couldn't create token");
 			}
 			const d = await r.json();
 			scimCreatedToken = { name: d.name, token: d.token };
@@ -850,8 +850,8 @@
 			toasts.add({ title: 'SCIM token created', color: 'success' });
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to create token',
+				title: "Couldn't create token",
+				description: e instanceof Error ? e.message : "Couldn't create token",
 				color: 'error'
 			});
 		} finally {
@@ -874,14 +874,14 @@
 			});
 			if (!r.ok) {
 				const d = await r.json().catch(() => ({}));
-				throw new Error(d.message || d.detail || 'Failed to revoke token');
+				throw new Error(d.message || d.detail || "Couldn't revoke token");
 			}
 			toasts.add({ title: 'SCIM token revoked', color: 'success' });
 			scimTokens = scimTokens.filter((t) => t.id !== tokenId);
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to revoke token',
+				title: "Couldn't revoke token",
+				description: e instanceof Error ? e.message : "Couldn't revoke token",
 				color: 'error'
 			});
 		} finally {
@@ -1082,7 +1082,7 @@
 <ConfirmModal
 	bind:open={confirmClearBackups}
 	title="Clear backup storage?"
-	description="Existing backups stay in the bucket, but no new ones are taken until storage is set up again."
+	description="Existing backups stay in the bucket, but Orchard takes no new ones until you set up storage again."
 	confirmLabel="Clear"
 	onconfirm={performClearBackupSettings}
 	oncancel={() => {}}

@@ -106,7 +106,7 @@
 		importError = null;
 		const entry = themeStore.importTheme(importJson);
 		if (!entry) {
-			importError = 'That does not look like an Orchard theme file.';
+			importError = "That isn't an Orchard theme file.";
 			return;
 		}
 		showImport = false;
@@ -124,7 +124,7 @@
 			runImport();
 		};
 		reader.onerror = () => {
-			importError = 'Could not read that file.';
+			importError = "Couldn't read that file.";
 		};
 		reader.readAsText(file);
 		input.value = '';
@@ -139,7 +139,7 @@
 	onchange={readFile}
 />
 
-<SectionCard title="Theme" description="Drag the wheel to move every colour at once.">
+<SectionCard title="Theme" description="Drag the wheel to move every color at once.">
 	{#snippet actions()}
 		<Button size="sm" onclick={startNaming}>Save theme</Button>
 		<Menu>
@@ -153,7 +153,10 @@
 
 	<ThemeStudio>
 		{#snippet presets()}
-			<SettingRow label="Classic" hint={activeLegacyName ?? 'Fixed colours from earlier Orchard'}>
+			<SettingRow
+				label="Classic"
+				hint={activeLegacyName ?? 'Fixed colors from earlier versions of Orchard'}
+			>
 				<SwatchPicker
 					options={CLASSIC_OPTIONS}
 					value={activeLegacyId}
@@ -166,7 +169,7 @@
 
 	<div class="advanced">
 		<Disclosure
-			title="Advanced colours"
+			title="Advanced colors"
 			note={overrideCount ? `${overrideCount} pinned` : undefined}
 			bind:open={advancedOpen}
 		>
@@ -216,7 +219,7 @@
 		<SettingRow
 			label="Typeface"
 			for="{uid}-font"
-			hint="Hyperlegible and Dyslexic are drawn for readability"
+			hint="Hyperlegible and Dyslexic are designed for readability"
 		>
 			<div class="picker">
 				<Dropdown
@@ -286,7 +289,7 @@
 	<ConfirmModal
 		bind:open={showDelete}
 		title={`Delete "${pendingDelete.name}"?`}
-		description="This saved theme will be removed. Your current colours stay as they are."
+		description="This removes the saved theme. Your current colors don't change."
 		confirmLabel="Delete"
 		danger
 		onconfirm={() => {

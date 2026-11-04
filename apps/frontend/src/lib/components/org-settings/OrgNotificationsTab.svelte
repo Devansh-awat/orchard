@@ -156,7 +156,7 @@
 			});
 		} catch (e) {
 			toasts.add({
-				title: 'Could not replay',
+				title: "Couldn't replay",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -414,7 +414,7 @@
 			tone="success"
 			solid
 			title="Copy the signing secret"
-			description="It is not shown again."
+			description="It isn't shown again."
 		/>
 		<Field label="Signing secret">
 			<SecretString

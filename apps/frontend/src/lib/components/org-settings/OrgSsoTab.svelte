@@ -102,7 +102,7 @@
 		loadError = null;
 		try {
 			const res = await apiFetch(`/apiv1/organizations/${organizationId}/sso`);
-			if (!res.ok) throw new Error('Could not load SSO settings');
+			if (!res.ok) throw new Error("Couldn't load SSO settings");
 			const data = (await res.json()) as SsoOverview;
 			overview = data;
 			logoUrl = data.settings.loginLogoUrl ?? '';
@@ -112,7 +112,7 @@
 			bgColor = data.settings.loginBgColor ?? '';
 			subdomain = organization?.subdomain ?? '';
 		} catch (e) {
-			loadError = e instanceof Error ? e.message : 'Could not load SSO settings';
+			loadError = e instanceof Error ? e.message : "Couldn't load SSO settings";
 		} finally {
 			loading = false;
 		}
@@ -128,12 +128,12 @@
 				body: JSON.stringify(patch)
 			});
 			const data = await res.json().catch(() => ({}));
-			if (!res.ok) throw new Error(data?.message || 'Could not save');
+			if (!res.ok) throw new Error(data?.message || "Couldn't save");
 			if (overview) overview = { ...overview, settings: data as SsoSettings };
 			if (successTitle) toasts.add({ title: successTitle, color: 'success' });
 		} catch (e) {
 			toasts.add({
-				title: 'Could not save',
+				title: "Couldn't save",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -164,7 +164,7 @@
 			return updated.iconUrl;
 		} catch (e) {
 			toasts.add({
-				title: 'Could not upload the icon',
+				title: "Couldn't upload the icon",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -182,7 +182,7 @@
 			replaceProvider(await removeProviderIcon(providerUrl(editingProvider.id)));
 		} catch (e) {
 			toasts.add({
-				title: 'Could not remove the icon',
+				title: "Couldn't remove the icon",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -203,7 +203,7 @@
 				body: JSON.stringify(draftToPayload(draft))
 			});
 			const data = await res.json().catch(() => ({}));
-			if (!res.ok) throw new Error(data?.message || 'Could not save the connection');
+			if (!res.ok) throw new Error(data?.message || "Couldn't save the connection");
 			if (pendingIcon) await sendIcon((data as SsoProvider).id, pendingIcon);
 
 			showProviderModal = false;
@@ -211,7 +211,7 @@
 			toasts.add({ title: 'Connection saved', color: 'success' });
 			await load(organization.id);
 		} catch (e) {
-			providerError = e instanceof Error ? e.message : 'Could not save the connection';
+			providerError = e instanceof Error ? e.message : "Couldn't save the connection";
 		} finally {
 			savingProvider = false;
 		}
@@ -224,12 +224,12 @@
 			const res = await apiFetch(`/apiv1/organizations/${organization.id}/sso/providers/${id}`, {
 				method: 'DELETE'
 			});
-			if (!res.ok) throw new Error('Could not remove the connection');
+			if (!res.ok) throw new Error("Couldn't remove the connection");
 			toasts.add({ title: 'Connection removed', color: 'success' });
 			await load(organization.id);
 		} catch (e) {
 			toasts.add({
-				title: 'Could not remove the connection',
+				title: "Couldn't remove the connection",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -250,7 +250,7 @@
 			const data = await res.json().catch(() => ({}));
 			testResult = { id: provider.id, success: Boolean(data?.success), error: data?.error };
 		} catch {
-			testResult = { id: provider.id, success: false, error: 'Could not reach the provider' };
+			testResult = { id: provider.id, success: false, error: "Couldn't reach the provider" };
 		} finally {
 			testing = null;
 		}
@@ -267,7 +267,7 @@
 					loginPrimaryColor: primaryColor || null,
 					loginBgColor: bgColor || null
 				},
-				'Login page updated'
+				'Sign-in page updated'
 			);
 		} finally {
 			savingBranding = false;
@@ -297,11 +297,11 @@
 				body: JSON.stringify({ domain: value })
 			});
 			const data = await res.json().catch(() => ({}));
-			if (!res.ok) throw new Error(data?.message || 'Could not add that domain');
+			if (!res.ok) throw new Error(data?.message || "Couldn't add that domain");
 			newDomain = '';
 			await load(organization.id);
 		} catch (e) {
-			domainError = e instanceof Error ? e.message : 'Could not add that domain';
+			domainError = e instanceof Error ? e.message : "Couldn't add that domain";
 		} finally {
 			addingDomain = false;
 		}
@@ -317,13 +317,13 @@
 				{ method: 'POST' }
 			);
 			const data = await res.json().catch(() => ({}));
-			if (!res.ok) throw new Error(data?.message || 'Could not check DNS');
+			if (!res.ok) throw new Error(data?.message || "Couldn't check DNS");
 			if (data?.verified) {
 				toasts.add({ title: `${domain.domain} verified`, color: 'success' });
 			}
 			await load(organization.id);
 		} catch (e) {
-			domainError = e instanceof Error ? e.message : 'Could not check DNS';
+			domainError = e instanceof Error ? e.message : "Couldn't check DNS";
 		} finally {
 			verifyingDomain = null;
 		}
@@ -336,11 +336,11 @@
 				`/apiv1/organizations/${organization.id}/sso/domains/${domain.id}`,
 				{ method: 'DELETE' }
 			);
-			if (!res.ok) throw new Error('Could not remove that domain');
+			if (!res.ok) throw new Error("Couldn't remove that domain");
 			await load(organization.id);
 		} catch (e) {
 			toasts.add({
-				title: 'Could not remove that domain',
+				title: "Couldn't remove that domain",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -357,12 +357,12 @@
 				body: JSON.stringify({ subdomain: subdomain.trim() || null })
 			});
 			const data = await res.json().catch(() => ({}));
-			if (!res.ok) throw new Error(data?.message || 'Could not save the subdomain');
+			if (!res.ok) throw new Error(data?.message || "Couldn't save the subdomain");
 			onOrganizationChanged?.();
 			toasts.add({ title: 'Vanity address updated', color: 'success' });
 		} catch (e) {
 			toasts.add({
-				title: 'Could not save the subdomain',
+				title: "Couldn't save the subdomain",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -410,9 +410,9 @@
 	<SectionCard title="Single sign-on">
 		{#if locked}
 			<div class="notice">
-				<Alert tone="warning" title="Turned off by the platform administrator">
-					Members can't sign in through it until an administrator turns it back on. Your setup is
-					kept.
+				<Alert tone="warning" title="Turned off by an instance admin">
+					Members can't sign in through it until an instance admin turns it back on. Orchard keeps
+					your setup.
 				</Alert>
 			</div>
 		{/if}
@@ -447,7 +447,7 @@
 				checked={settings.enforced}
 				disabled={locked || !settings.enabled || savingSettings}
 				label="Require single sign-on"
-				hint="Blocks email codes, passkeys and platform providers, and signs out members who got in another way"
+				hint="Blocks email codes, passkeys and instance providers, and signs out members who signed in another way"
 				onchange={() => patchSettings({ enforced: !settings.enforced })}
 			/>
 		</SettingsList>
@@ -615,7 +615,7 @@
 		</SettingsList>
 	</SectionCard>
 
-	<SectionCard title="Login page">
+	<SectionCard title="Sign-in page">
 		{#snippet actions()}
 			{#if overview?.loginUrl}
 				<Button
@@ -745,7 +745,7 @@
 <ConfirmModal
 	bind:open={showDeleteModal}
 	title="Remove this connection?"
-	description="Members who sign in through it will lose that route immediately. Their accounts and memberships are untouched."
+	description="Members who sign in through it lose this option immediately. Their accounts and memberships don't change."
 	confirmLabel="Remove connection"
 	onconfirm={deleteProvider}
 	oncancel={() => {

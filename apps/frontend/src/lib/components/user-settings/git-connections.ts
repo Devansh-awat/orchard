@@ -91,7 +91,7 @@ async function readError(res: Response, fallback: string): Promise<never> {
 
 export async function fetchGitConnections(): Promise<GitConnection[]> {
 	const res = await apiFetch(`/apiv1/users/me/git-connections`);
-	if (!res.ok) return readError(res, 'Could not load git providers');
+	if (!res.ok) return readError(res, "Couldn't load git providers");
 	return res.json();
 }
 
@@ -107,7 +107,7 @@ export async function createGitConnection(input: {
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(input)
 	});
-	if (!res.ok) return readError(res, 'Could not add the provider');
+	if (!res.ok) return readError(res, "Couldn't add the provider");
 	return res.json();
 }
 
@@ -115,18 +115,18 @@ export async function deleteGitConnection(id: string): Promise<void> {
 	const res = await apiFetch(`/apiv1/users/me/git-connections/${id}`, {
 		method: 'DELETE'
 	});
-	if (!res.ok) return readError(res, 'Could not remove the provider');
+	if (!res.ok) return readError(res, "Couldn't remove the provider");
 }
 
 export async function fetchWebhookSecret(id: string): Promise<string> {
 	const res = await apiFetch(`/apiv1/users/me/git-connections/${id}/webhook-secret`);
-	if (!res.ok) return readError(res, 'Could not load the secret');
+	if (!res.ok) return readError(res, "Couldn't load the secret");
 	return ((await res.json()) as { secret: string }).secret;
 }
 
 export async function fetchGitRepos(id: string): Promise<GitRepo[]> {
 	const res = await apiFetch(`/apiv1/users/me/git-connections/${id}/repositories`);
-	if (!res.ok) return readError(res, 'Could not list repositories');
+	if (!res.ok) return readError(res, "Couldn't list repositories");
 	return res.json();
 }
 
@@ -134,7 +134,7 @@ export async function fetchGitBranches(id: string, repo: string): Promise<GitBra
 	const res = await apiFetch(
 		`/apiv1/users/me/git-connections/${id}/branches?repo=${encodeURIComponent(repo)}`
 	);
-	if (!res.ok) return readError(res, 'Could not list branches');
+	if (!res.ok) return readError(res, "Couldn't list branches");
 	return res.json();
 }
 
@@ -146,7 +146,7 @@ export async function detectGitRepo(
 	const res = await apiFetch(
 		`/apiv1/users/me/git-connections/${id}/detect?repo=${encodeURIComponent(repo)}&branch=${encodeURIComponent(branch)}`
 	);
-	if (!res.ok) return readError(res, 'Could not inspect the repository');
+	if (!res.ok) return readError(res, "Couldn't inspect the repository");
 	return res.json();
 }
 

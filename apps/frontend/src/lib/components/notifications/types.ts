@@ -154,7 +154,7 @@ export const EVENT_GROUPS: {
 			{ value: 'db.storage_pressure', label: 'Storage running out', tone: 'fail' },
 			{ value: 'db.read_only', label: 'Writes paused (disk full)', tone: 'fail' },
 			{ value: 'db.writes_resumed', label: 'Writes resumed', tone: 'ok' },
-			{ value: 'db.memory_raised', label: 'Memory raised to survive backups', tone: 'fail' },
+			{ value: 'db.memory_raised', label: 'Memory raised for backups', tone: 'fail' },
 			{ value: 'db.storage_recovered', label: 'Storage recovered', tone: 'ok' }
 		]
 	},
@@ -219,7 +219,7 @@ export function registerExtensionCategories(categories: ExtensionCategory[] | un
 const SECURITY_LABELS: Partial<Record<SettingValue, { label: string; hint: string }>> = {
 	always: {
 		label: 'On',
-		hint: 'Told when something signs in, or when an app is given access to your account'
+		hint: 'Notifies you when something signs in or gets access to your account'
 	},
 	never: { label: 'Off', hint: 'No alerts when something signs in to your account' }
 };

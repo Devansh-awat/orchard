@@ -31,6 +31,6 @@ export const CHANNEL_TYPE_META: Record<
 		icon: Mail,
 		placeholder: 'alerts@example.com, oncall@example.com',
 		hue: 'var(--hue-amber)',
-		hint: 'Sent to org members only'
+		hint: 'Sent to organization members only'
 	}
 };

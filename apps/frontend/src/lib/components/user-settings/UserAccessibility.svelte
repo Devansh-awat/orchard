@@ -21,8 +21,8 @@
 
 	const ANIMATION_OPTIONS: { value: AnimationLevel; label: string; hint: string }[] = [
 		{ value: 'system', label: 'System', hint: 'Follows your system reduced motion setting' },
-		{ value: 'full', label: 'Full', hint: 'Springs, staggers and hover effects everywhere' },
-		{ value: 'reduced', label: 'Reduced', hint: 'Quick fades only, nothing slides or scales' },
+		{ value: 'full', label: 'Full', hint: 'All animations and hover effects' },
+		{ value: 'reduced', label: 'Reduced', hint: 'Fades only. Nothing slides or scales.' },
 		{ value: 'off', label: 'Off', hint: 'Nothing animates, including background gradients' }
 	];
 
@@ -74,7 +74,7 @@
 		</SettingRow>
 		<ToggleRow
 			label="Increase contrast"
-			hint="Darker text and visible borders on everything"
+			hint="Darker text and visible borders"
 			bind:checked={
 				() => $contrastLevel === 'high', (on) => contrastLevel.set(on ? 'high' : 'default')
 			}

@@ -166,7 +166,7 @@
 					tone="success"
 					solid
 					title={`${scimCreatedToken.name} is ready`}
-					description="Copy the token now. It is not shown again."
+					description="Copy the token now. It isn't shown again."
 				/>
 				{#snippet copy()}<CopyButton
 						value={scimCreatedToken?.token ?? ''}

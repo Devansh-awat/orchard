@@ -116,7 +116,7 @@
 				<button
 					type="button"
 					class="studio-grab"
-					aria-label="Colour wheel. Drag to move every colour together, arrow keys to nudge."
+					aria-label="Color wheel. Drag to move every color together, or use the arrow keys."
 					onpointerdown={startDrag}
 					onkeydown={nudge}
 				></button>
@@ -149,9 +149,9 @@
 				/>
 			</SettingRow>
 			{@render presets?.()}
-			<SettingRow label="Colours" hint="Points on the wheel">
+			<SettingRow label="Colors" hint="Points on the wheel">
 				<Stepper
-					label="Colours"
+					label="Colors"
 					size="sm"
 					shape="capsule"
 					min={MIN_NODES}
@@ -160,7 +160,7 @@
 					onchange={setCount}
 				/>
 			</SettingRow>
-			<SettingRow label="Blend" hint="How much the colours tint surfaces">
+			<SettingRow label="Blend" hint="How much the colors tint surfaces">
 				<div class="studio-dial">
 					<Slider
 						label="Blend"

@@ -254,7 +254,7 @@
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data?.message || 'Failed to update');
+				throw new Error(data?.message || "Couldn't update");
 			}
 			const updatedUser = await response.json();
 			user.set({ ...$user, ...updatedUser });
@@ -262,8 +262,8 @@
 			isEditingProfile = false;
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to update',
+				title: "Couldn't update",
+				description: e instanceof Error ? e.message : "Couldn't update",
 				color: 'error'
 			});
 		} finally {
@@ -279,7 +279,7 @@
 		if (!allowedTypes.includes(file.type)) {
 			toasts.add({
 				title: 'Invalid file type',
-				description: 'Only JPEG, PNG, GIF, and WebP images are allowed',
+				description: 'Use a JPEG, PNG, GIF or WebP image',
 				color: 'error'
 			});
 			return;
@@ -287,7 +287,7 @@
 		if (file.size > 5 * 1024 * 1024) {
 			toasts.add({
 				title: 'File too large',
-				description: 'Maximum file size is 5MB',
+				description: 'Use a file under 5 MB',
 				color: 'error'
 			});
 			return;
@@ -297,14 +297,14 @@
 			const formData = new FormData();
 			formData.append('file', file);
 			const response = await apiFetch('/apiv1/auth/me/avatar', { method: 'POST', body: formData });
-			if (!response.ok) throw new Error('Failed to upload avatar');
+			if (!response.ok) throw new Error("Couldn't upload avatar");
 			const updated = await response.json();
 			user.set({ ...$user, ...updated });
 			toasts.add({ title: 'Avatar updated', color: 'success' });
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to upload avatar',
+				title: "Couldn't upload avatar",
+				description: e instanceof Error ? e.message : "Couldn't upload avatar",
 				color: 'error'
 			});
 		} finally {
@@ -315,14 +315,14 @@
 		deletingAvatar = true;
 		try {
 			const response = await apiFetch('/apiv1/auth/me/avatar', { method: 'DELETE' });
-			if (!response.ok) throw new Error('Failed to remove avatar');
+			if (!response.ok) throw new Error("Couldn't remove avatar");
 			const updated = await response.json();
 			user.set({ ...$user, ...updated });
 			toasts.add({ title: 'Avatar removed', color: 'success' });
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to remove avatar',
+				title: "Couldn't remove avatar",
+				description: e instanceof Error ? e.message : "Couldn't remove avatar",
 				color: 'error'
 			});
 		} finally {
@@ -348,8 +348,8 @@
 			});
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to accept invitation',
+				title: "Couldn't accept invitation",
+				description: e instanceof Error ? e.message : "Couldn't accept invitation",
 				color: 'error'
 			});
 		} finally {
@@ -364,8 +364,8 @@
 			toasts.add({ title: 'Invitation declined', color: 'success' });
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to decline invitation',
+				title: "Couldn't decline invitation",
+				description: e instanceof Error ? e.message : "Couldn't decline invitation",
 				color: 'error'
 			});
 		} finally {
@@ -404,18 +404,18 @@
 		unlinking = true;
 		try {
 			const response = await apiFetch('/apiv1/github/unlink', { method: 'DELETE' });
-			if (!response.ok) throw new Error('Failed to unlink GitHub account');
+			if (!response.ok) throw new Error("Couldn't unlink GitHub account");
 			githubLinked = false;
 			githubUsername = null;
 			toasts.add({
 				title: 'GitHub unlinked',
-				description: 'Your GitHub account has been disconnected',
+				description: 'Your GitHub account is disconnected',
 				color: 'success'
 			});
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to unlink GitHub',
+				title: "Couldn't unlink GitHub",
+				description: e instanceof Error ? e.message : "Couldn't unlink GitHub",
 				color: 'error'
 			});
 		} finally {
@@ -449,7 +449,7 @@
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to connect Tailscale');
+				throw new Error(data.message || "Couldn't connect Tailscale");
 			}
 			const data = await response.json();
 			tailscaleLinked = true;
@@ -463,8 +463,8 @@
 			});
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to connect Tailscale',
+				title: "Couldn't connect Tailscale",
+				description: e instanceof Error ? e.message : "Couldn't connect Tailscale",
 				color: 'error'
 			});
 		} finally {
@@ -475,18 +475,18 @@
 		unlinkingTailscale = true;
 		try {
 			const response = await apiFetch('/apiv1/tailscale/unlink', { method: 'DELETE' });
-			if (!response.ok) throw new Error('Failed to unlink Tailscale account');
+			if (!response.ok) throw new Error("Couldn't unlink Tailscale account");
 			tailscaleLinked = false;
 			tailscaleTailnet = null;
 			toasts.add({
 				title: 'Tailscale disconnected',
-				description: 'Your Tailscale account has been disconnected',
+				description: 'Your Tailscale account is disconnected',
 				color: 'success'
 			});
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to unlink Tailscale',
+				title: "Couldn't unlink Tailscale",
+				description: e instanceof Error ? e.message : "Couldn't unlink Tailscale",
 				color: 'error'
 			});
 		} finally {
@@ -499,11 +499,11 @@
 		sessionsError = null;
 		try {
 			const response = await apiFetch('/apiv1/auth/sessions');
-			if (!response.ok) throw new Error('Failed to load sessions');
+			if (!response.ok) throw new Error("Couldn't load sessions");
 			const data = await response.json();
 			sessions = data.sessions ?? [];
 		} catch (err) {
-			sessionsError = err instanceof Error ? err.message : 'Could not load sessions';
+			sessionsError = err instanceof Error ? err.message : "Couldn't load sessions";
 		} finally {
 			sessionsLoading = false;
 		}
@@ -519,14 +519,14 @@
 			const response = await apiFetch(`/apiv1/auth/sessions/${session.id}`, { method: 'DELETE' });
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data?.message || 'Failed to revoke session');
+				throw new Error(data?.message || "Couldn't revoke session");
 			}
 			toasts.add({ title: 'Session revoked', color: 'success' });
 			await fetchSessions();
 		} catch (err) {
 			toasts.add({
-				title: 'Error',
-				description: err instanceof Error ? err.message : 'Failed to revoke session',
+				title: "Couldn't revoke session",
+				description: err instanceof Error ? err.message : "Couldn't revoke session",
 				color: 'error'
 			});
 		} finally {
@@ -538,7 +538,7 @@
 		revokingAll = true;
 		try {
 			const response = await apiFetch('/apiv1/auth/sessions/revoke-all', { method: 'POST' });
-			if (!response.ok) throw new Error('Failed to revoke sessions');
+			if (!response.ok) throw new Error("Couldn't revoke sessions");
 			const data = await response.json();
 			toasts.add({
 				title: 'Sessions revoked',
@@ -548,8 +548,8 @@
 			await fetchSessions();
 		} catch (err) {
 			toasts.add({
-				title: 'Error',
-				description: err instanceof Error ? err.message : 'Failed to revoke sessions',
+				title: "Couldn't revoke sessions",
+				description: err instanceof Error ? err.message : "Couldn't revoke sessions",
 				color: 'error'
 			});
 		} finally {
@@ -563,11 +563,11 @@
 		passkeyListError = null;
 		try {
 			const response = await apiFetch('/apiv1/auth/passkeys');
-			if (!response.ok) throw new Error('Failed to load passkeys');
+			if (!response.ok) throw new Error("Couldn't load passkeys");
 			const data = await response.json();
 			passkeys = data.passkeys ?? [];
 		} catch (err) {
-			passkeyListError = err instanceof Error ? err.message : 'Could not load passkeys';
+			passkeyListError = err instanceof Error ? err.message : "Couldn't load passkeys";
 		} finally {
 			passkeysLoading = false;
 		}
@@ -577,7 +577,7 @@
 		if (!browser || typeof window === 'undefined') {
 			toasts.add({
 				title: 'Unsupported',
-				description: 'Passkeys are not available in this environment.',
+				description: "Passkeys aren't available in this environment.",
 				color: 'error'
 			});
 			return;
@@ -593,7 +593,7 @@
 		if (!window.PublicKeyCredential) {
 			toasts.add({
 				title: 'Unsupported',
-				description: 'Passkeys are not available on this device.',
+				description: "Passkeys aren't available on this device.",
 				color: 'error'
 			});
 			return;
@@ -611,7 +611,7 @@
 			await fetchPasskeys();
 		} catch (err) {
 			toasts.add({
-				title: 'Unable to register passkey',
+				title: "Couldn't register passkey",
 				description: passkeyErrorMessage(err),
 				color: 'error'
 			});
@@ -645,14 +645,14 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ friendlyName })
 			});
-			if (!response.ok) throw new Error('Failed to rename passkey');
+			if (!response.ok) throw new Error("Couldn't rename passkey");
 			toasts.add({ title: 'Passkey renamed', color: 'success' });
 			cancelRenaming();
 			await fetchPasskeys();
 		} catch (err) {
 			toasts.add({
 				title: 'Rename failed',
-				description: err instanceof Error ? err.message : 'Could not update name',
+				description: err instanceof Error ? err.message : "Couldn't update name",
 				color: 'error'
 			});
 		} finally {
@@ -668,14 +668,14 @@
 		deletingPasskeyId = passkey.id;
 		try {
 			const response = await apiFetch(`/apiv1/auth/passkeys/${passkey.id}`, { method: 'DELETE' });
-			if (!response.ok) throw new Error('Failed to delete passkey');
+			if (!response.ok) throw new Error("Couldn't delete passkey");
 			toasts.add({ title: 'Passkey removed', color: 'success' });
 			if (editingPasskeyId === passkey.id) cancelRenaming();
 			await fetchPasskeys();
 		} catch (err) {
 			toasts.add({
-				title: 'Unable to remove passkey',
-				description: err instanceof Error ? err.message : 'Something went wrong',
+				title: "Couldn't remove passkey",
+				description: err instanceof Error ? err.message : 'Try again.',
 				color: 'error'
 			});
 		} finally {
@@ -714,8 +714,8 @@
 		} catch (err) {
 			earlyAccessEnrollment = { ...earlyAccessEnrollment, [feature.flagKey]: !next };
 			toasts.add({
-				title: 'Error',
-				description: err instanceof Error ? err.message : 'Failed to update enrollment',
+				title: "Couldn't update enrollment",
+				description: err instanceof Error ? err.message : "Couldn't update enrollment",
 				color: 'error'
 			});
 		} finally {
@@ -738,7 +738,7 @@
 			} else if (ghLinked === 'linked') {
 				toasts.add({
 					title: 'GitHub linked',
-					description: 'Your GitHub account has been connected',
+					description: 'Your GitHub account is connected',
 					color: 'success'
 				});
 			}
@@ -920,8 +920,8 @@
 	<ConfirmModal
 		bind:open={showRevokeSessionModal}
 		title="Sign out this device?"
-		description="This will immediately end the session on {sessionToRevoke.deviceName ||
-			'this device'}. They will need to sign in again."
+		description="This immediately ends the session on {sessionToRevoke.deviceName ||
+			'this device'}. That device must sign in again."
 		confirmLabel="Sign out"
 		danger
 		onconfirm={() => revokeSession(sessionToRevoke!)}
@@ -933,7 +933,7 @@
 <ConfirmModal
 	bind:open={showRevokeAllModal}
 	title="Sign out all other devices?"
-	description="This ends every session except this one and deletes all your API tokens. Other devices will need to sign in again, and anything using a token stops working until you create a new one."
+	description="This ends every session except this one and deletes all your API tokens. Other devices must sign in again, and anything using a token stops working until you create a new one."
 	confirmLabel="Sign out all"
 	danger
 	onconfirm={revokeAllSessions}
@@ -945,7 +945,7 @@
 	<ConfirmModal
 		bind:open={showDeletePasskeyModal}
 		title={`Remove "${passkeyToDelete.friendlyName || 'this passkey'}"?`}
-		description="This passkey will be permanently removed. You will no longer be able to use it to sign in."
+		description="This permanently removes the passkey. You can't use it to sign in again."
 		confirmLabel="Remove passkey"
 		danger
 		onconfirm={() => deletePasskey(passkeyToDelete!)}

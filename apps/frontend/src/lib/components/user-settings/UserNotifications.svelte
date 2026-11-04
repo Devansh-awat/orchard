@@ -76,7 +76,7 @@
 			[settings, destinations] = await Promise.all([fetchUserSettings(), fetchDestinations()]);
 		} catch (e) {
 			toasts.add({
-				title: 'Could not load your notification settings',
+				title: "Couldn't load your notification settings",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -100,7 +100,7 @@
 		} catch (e) {
 			if (settings) settings.global[category] = previous;
 			toasts.add({
-				title: 'Could not save that',
+				title: "Couldn't save that",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -122,7 +122,7 @@
 			settings = await fetchUserSettings();
 		} catch (e) {
 			toasts.add({
-				title: 'Could not clear that override',
+				title: "Couldn't clear that override",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -139,7 +139,7 @@
 			destinations = await fetchDestinations();
 		} catch (e) {
 			toasts.add({
-				title: 'Could not update that',
+				title: "Couldn't update that",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -156,7 +156,7 @@
 			destinations = destinations.filter((d) => d.id !== dest.id);
 		} catch (e) {
 			toasts.add({
-				title: 'Could not remove that',
+				title: "Couldn't remove that",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -201,7 +201,7 @@
 			toasts.add({ title: 'Delivery method added', color: 'success' });
 		} catch (e) {
 			toasts.add({
-				title: 'Could not add that',
+				title: "Couldn't add that",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -255,7 +255,7 @@
 		{#snippet actions()}
 			<Button variant="ghost" size="sm" onclick={load}>Retry</Button>
 		{/snippet}
-		<p class="quiet">Could not load your notification settings.</p>
+		<p class="quiet">Couldn't load your notification settings.</p>
 	</SectionCard>
 {:else}
 	<SectionCard

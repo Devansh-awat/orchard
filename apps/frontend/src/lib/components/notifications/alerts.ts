@@ -76,7 +76,7 @@ const base = (organizationId: string) => `/apiv1/organizations/${organizationId}
 
 export async function fetchAlertCatalogue(organizationId: string): Promise<AlertMetric[]> {
 	const res = await apiFetch(`${base(organizationId)}/catalogue`);
-	return json(res, 'Could not load the alert metrics');
+	return json(res, "Couldn't load the alert metrics");
 }
 
 export async function fetchAlertRules(
@@ -87,7 +87,7 @@ export async function fetchAlertRules(
 	const params = new URLSearchParams({ scopeType });
 	if (scopeId) params.set('scopeId', scopeId);
 	const res = await apiFetch(`${base(organizationId)}?${params}`);
-	return json(res, 'Could not load alert rules');
+	return json(res, "Couldn't load alert rules");
 }
 
 export async function fetchAlertStates(
@@ -96,7 +96,7 @@ export async function fetchAlertStates(
 ): Promise<AlertState[]> {
 	const params = new URLSearchParams({ deploymentId });
 	const res = await apiFetch(`${base(organizationId)}/states?${params}`);
-	return json(res, 'Could not load alert states');
+	return json(res, "Couldn't load alert states");
 }
 
 export async function createAlertRule(
@@ -108,7 +108,7 @@ export async function createAlertRule(
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(payload)
 	});
-	return json(res, 'Could not create the alert');
+	return json(res, "Couldn't create the alert");
 }
 
 export async function updateAlertRule(
@@ -121,12 +121,12 @@ export async function updateAlertRule(
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(patch)
 	});
-	return json(res, 'Could not update the alert');
+	return json(res, "Couldn't update the alert");
 }
 
 export async function deleteAlertRule(organizationId: string, ruleId: string): Promise<void> {
 	const res = await apiFetch(`${base(organizationId)}/${ruleId}`, { method: 'DELETE' });
-	if (!res.ok) await json(res, 'Could not delete the alert');
+	if (!res.ok) await json(res, "Couldn't delete the alert");
 }
 
 export function formatAlertValue(unit: AlertMetric['unit'], value: number): string {

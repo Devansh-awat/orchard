@@ -113,7 +113,7 @@
 			channels = await fetchScopeChannels(organizationId, scopeType, scopeId);
 		} catch (e) {
 			toasts.add({
-				title: 'Could not load notification rules',
+				title: "Couldn't load notification rules",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -184,7 +184,7 @@
 			await load();
 		} catch (e) {
 			toasts.add({
-				title: 'Could not save the rule',
+				title: "Couldn't save the rule",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -201,7 +201,7 @@
 			rules = rules.filter((r) => r.id !== rule.id);
 		} catch (e) {
 			toasts.add({
-				title: 'Could not delete the rule',
+				title: "Couldn't delete the rule",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -243,7 +243,7 @@
 		<p class="quiet">
 			{isOrg
 				? 'No rules yet, so destinations receive nothing.'
-				: `No team channel hears about this ${scopeNoun(scopeType)}.`}
+				: `No team channel gets notified about this ${scopeNoun(scopeType)}.`}
 		</p>
 	{:else}
 		<List inset={false} label={isOrg ? 'Rules' : 'Team channels'}>
@@ -402,7 +402,7 @@
 			tone="success"
 			solid
 			title="Copy the signing secret"
-			description="It is not shown again."
+			description="It isn't shown again."
 		/>
 		<Field label="Signing secret">
 			<SecretString

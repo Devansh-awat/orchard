@@ -49,7 +49,7 @@
 		{ value: 'exec', label: 'Exec' }
 	] as const;
 	const SCOPE_HINT = {
-		read: 'Sees everything your account can, changes nothing',
+		read: 'Can read everything your account can, but not change it',
 		deploy: 'Can also create, update and delete',
 		exec: 'Can also open shells in your pods and databases'
 	} as const;
@@ -91,11 +91,11 @@
 		error = null;
 		try {
 			const response = await apiFetch('/apiv1/auth/tokens');
-			if (!response.ok) throw new Error('Failed to load API tokens');
+			if (!response.ok) throw new Error("Couldn't load API tokens");
 			const data = await response.json();
 			tokens = data;
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Could not load tokens';
+			error = e instanceof Error ? e.message : "Couldn't load tokens";
 		} finally {
 			loading = false;
 		}
@@ -126,7 +126,7 @@
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data?.message || 'Failed to create token');
+				throw new Error(data?.message || "Couldn't create token");
 			}
 			const data = await response.json();
 			createdName = newTokenName.trim();
@@ -136,8 +136,8 @@
 			await fetchTokens();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to create token',
+				title: "Couldn't create token",
+				description: e instanceof Error ? e.message : "Couldn't create token",
 				color: 'error'
 			});
 		} finally {
@@ -160,13 +160,13 @@
 			const response = await apiFetch(`/apiv1/auth/tokens/${token.id}`, {
 				method: 'DELETE'
 			});
-			if (!response.ok) throw new Error('Failed to revoke token');
+			if (!response.ok) throw new Error("Couldn't revoke token");
 			toasts.add({ title: 'Token revoked', color: 'success' });
 			await fetchTokens();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to revoke token',
+				title: "Couldn't revoke token",
+				description: e instanceof Error ? e.message : "Couldn't revoke token",
 				color: 'error'
 			});
 		} finally {
@@ -190,7 +190,7 @@
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data?.message || 'Failed to rename token');
+				throw new Error(data?.message || "Couldn't rename token");
 			}
 			toasts.add({ title: 'Token renamed', color: 'success' });
 			renameOpen = false;
@@ -198,8 +198,8 @@
 			await fetchTokens();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to rename token',
+				title: "Couldn't rename token",
+				description: e instanceof Error ? e.message : "Couldn't rename token",
 				color: 'error'
 			});
 		} finally {
@@ -298,7 +298,7 @@
 				tone="success"
 				solid
 				title={`${createdName} is ready`}
-				description="Copy it now. It is not shown again."
+				description="Copy it now. It isn't shown again."
 			/>
 			<SecretString
 				masked={`orch_${'•'.repeat(28)}`}

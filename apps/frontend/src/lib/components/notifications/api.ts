@@ -20,7 +20,7 @@ async function json<T>(res: Response, fallback: string): Promise<T> {
 
 export async function fetchChannels(organizationId: string): Promise<NotificationChannel[]> {
 	const res = await apiFetch(`/apiv1/organizations/${organizationId}/notification-channels`);
-	return json<NotificationChannel[]>(res, 'Could not load notification channels');
+	return json<NotificationChannel[]>(res, "Couldn't load notification channels");
 }
 
 export async function fetchScopeChannels(
@@ -33,7 +33,7 @@ export async function fetchScopeChannels(
 	const res = await apiFetch(
 		`/apiv1/organizations/${organizationId}/notification-channels?${params}`
 	);
-	return json<ScopedChannel[]>(res, 'Could not load notification channels');
+	return json<ScopedChannel[]>(res, "Couldn't load notification channels");
 }
 
 export async function createChannel(
@@ -45,7 +45,7 @@ export async function createChannel(
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(payload)
 	});
-	return json(res, 'Could not create the destination');
+	return json(res, "Couldn't create the destination");
 }
 
 export async function fetchRules(
@@ -60,7 +60,7 @@ export async function fetchRules(
 	const res = await apiFetch(
 		`/apiv1/organizations/${organizationId}/notification-rules${query ? `?${query}` : ''}`
 	);
-	return json<NotificationRule[]>(res, 'Could not load notification rules');
+	return json<NotificationRule[]>(res, "Couldn't load notification rules");
 }
 
 export async function createRule(
@@ -72,7 +72,7 @@ export async function createRule(
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(payload)
 	});
-	return json<NotificationRule>(res, 'Could not create the rule');
+	return json<NotificationRule>(res, "Couldn't create the rule");
 }
 
 export async function updateRule(
@@ -88,7 +88,7 @@ export async function updateRule(
 			body: JSON.stringify(payload)
 		}
 	);
-	return json<NotificationRule>(res, 'Could not update the rule');
+	return json<NotificationRule>(res, "Couldn't update the rule");
 }
 
 export async function deleteRule(organizationId: string, ruleId: string): Promise<void> {
@@ -96,7 +96,7 @@ export async function deleteRule(organizationId: string, ruleId: string): Promis
 		`/apiv1/organizations/${organizationId}/notification-rules/${ruleId}`,
 		{ method: 'DELETE' }
 	);
-	await json(res, 'Could not delete the rule');
+	await json(res, "Couldn't delete the rule");
 }
 
 export async function replayChannel(
@@ -112,12 +112,12 @@ export async function replayChannel(
 			body: JSON.stringify({ sinceHours })
 		}
 	);
-	return json(res, 'Could not replay to this channel');
+	return json(res, "Couldn't replay to this channel");
 }
 
 export async function fetchUserSettings(): Promise<UserSettings> {
 	const res = await apiFetch('/apiv1/users/me/notification-settings');
-	return json<UserSettings>(res, 'Could not load your notification settings');
+	return json<UserSettings>(res, "Couldn't load your notification settings");
 }
 
 export async function saveGlobalSettings(
@@ -128,7 +128,7 @@ export async function saveGlobalSettings(
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ values })
 	});
-	return json<UserSettings>(res, 'Could not save your notification settings');
+	return json<UserSettings>(res, "Couldn't save your notification settings");
 }
 
 export async function fetchScopeSettings(
@@ -139,7 +139,7 @@ export async function fetchScopeSettings(
 	const res = await apiFetch(
 		`/apiv1/users/me/notification-settings/${scopeType}/${scopeId}?organizationId=${organizationId}`
 	);
-	return json<ScopeSettings>(res, 'Could not load your notification settings');
+	return json<ScopeSettings>(res, "Couldn't load your notification settings");
 }
 
 // A null value clears the override and hands the category back to the broader
@@ -155,7 +155,7 @@ export async function saveScopeSettings(
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ organizationId, values })
 	});
-	await json(res, 'Could not save your notification settings');
+	await json(res, "Couldn't save your notification settings");
 }
 
 // Removing your own override needs no org context and keeps working after the
@@ -167,12 +167,12 @@ export async function clearScopeSettings(
 	const res = await apiFetch(`/apiv1/users/me/notification-settings/${scopeType}/${scopeId}`, {
 		method: 'DELETE'
 	});
-	return json(res, 'Could not clear that override');
+	return json(res, "Couldn't clear that override");
 }
 
 export async function fetchDestinations(): Promise<UserDestination[]> {
 	const res = await apiFetch('/apiv1/users/me/notification-destinations');
-	return json<UserDestination[]>(res, 'Could not load your delivery methods');
+	return json<UserDestination[]>(res, "Couldn't load your delivery methods");
 }
 
 export async function addDestination(type: string, url?: string): Promise<UserDestination> {
@@ -181,7 +181,7 @@ export async function addDestination(type: string, url?: string): Promise<UserDe
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ type, url })
 	});
-	return json<UserDestination>(res, 'Could not add that delivery method');
+	return json<UserDestination>(res, "Couldn't add that delivery method");
 }
 
 export async function setDestinationEnabled(id: string, enabled: boolean): Promise<void> {
@@ -190,14 +190,14 @@ export async function setDestinationEnabled(id: string, enabled: boolean): Promi
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ enabled })
 	});
-	await json(res, 'Could not update that delivery method');
+	await json(res, "Couldn't update that delivery method");
 }
 
 export async function deleteDestination(id: string): Promise<void> {
 	const res = await apiFetch(`/apiv1/users/me/notification-destinations/${id}`, {
 		method: 'DELETE'
 	});
-	await json(res, 'Could not remove that delivery method');
+	await json(res, "Couldn't remove that delivery method");
 }
 
 export async function testDestination(id: string): Promise<{ success: boolean; error?: string }> {

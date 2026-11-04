@@ -11,9 +11,9 @@ async function send(url: string, init: RequestInit, fallback: string): Promise<S
 export function uploadProviderIcon(providerUrl: string, file: File) {
 	const body = new FormData();
 	body.append('file', file);
-	return send(`${providerUrl}/icon`, { method: 'POST', body }, 'Could not upload the icon');
+	return send(`${providerUrl}/icon`, { method: 'POST', body }, "Couldn't upload the icon");
 }
 
 export function removeProviderIcon(providerUrl: string) {
-	return send(`${providerUrl}/icon`, { method: 'DELETE' }, 'Could not remove the icon');
+	return send(`${providerUrl}/icon`, { method: 'DELETE' }, "Couldn't remove the icon");
 }

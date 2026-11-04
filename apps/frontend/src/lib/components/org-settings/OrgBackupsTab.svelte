@@ -86,7 +86,7 @@
 				<Skeleton height="2.5rem" />
 			</div>
 		{:else if !backupConfigured && !isOwner}
-			<p class="quiet">Backups are not set up yet. Only the organization owner can set them up.</p>
+			<p class="quiet">Backups aren't set up yet. Only the organization owner can set them up.</p>
 		{:else if reading}
 			<List inset={false} label="Backup storage">
 				<ListRow

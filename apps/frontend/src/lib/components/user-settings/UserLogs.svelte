@@ -28,13 +28,13 @@
 
 	const ZONE_OPTIONS: { value: LogZone; label: string; hint: string }[] = [
 		{ value: 'local', label: 'Local', hint: 'Your own time zone' },
-		{ value: 'utc', label: 'UTC', hint: 'Matches what the cluster recorded' }
+		{ value: 'utc', label: 'UTC', hint: 'Matches the time zone in the server logs' }
 	];
 
 	const DATE_OPTIONS: { value: LogDate; label: string; hint: string }[] = [
-		{ value: 'auto', label: 'When it changes', hint: 'Once a line is not from today' },
-		{ value: 'always', label: 'Always', hint: 'Every line carries its date' },
-		{ value: 'never', label: 'Never', hint: 'Times only, whatever day the line is from' }
+		{ value: 'auto', label: 'When it changes', hint: "On lines that aren't from today" },
+		{ value: 'always', label: 'Always', hint: 'Every line shows its date' },
+		{ value: 'never', label: 'Never', hint: 'Times only' }
 	];
 
 	const ESC = '\u001b';
@@ -93,7 +93,7 @@
 		</SettingRow>
 		<ToggleRow
 			label="Milliseconds"
-			hint="Worth it for reading latency, noise the rest of the time"
+			hint="Useful for reading latency"
 			bind:checked={() => logDisplay.milliseconds, (on) => setLogDisplay('milliseconds', on)}
 		/>
 	</SettingsList>

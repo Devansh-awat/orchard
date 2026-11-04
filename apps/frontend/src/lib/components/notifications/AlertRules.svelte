@@ -85,7 +85,7 @@
 					: [];
 		} catch (e) {
 			toasts.add({
-				title: 'Could not load alerts',
+				title: "Couldn't load alerts",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -132,7 +132,7 @@
 			await load();
 		} catch (e) {
 			toasts.add({
-				title: 'Could not create the alert',
+				title: "Couldn't create the alert",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -148,7 +148,7 @@
 			await load();
 		} catch (e) {
 			toasts.add({
-				title: 'Could not update the alert',
+				title: "Couldn't update the alert",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -164,7 +164,7 @@
 			rules = rules.filter((r) => r.id !== rule.id);
 		} catch (e) {
 			toasts.add({
-				title: 'Could not delete the alert',
+				title: "Couldn't delete the alert",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -192,7 +192,9 @@
 		</div>
 	{:else if rules.length === 0}
 		<p class="quiet">
-			{canEdit ? 'No alerts yet. Add one to hear when a metric crosses a line.' : 'No alerts yet.'}
+			{canEdit
+				? 'No alerts yet. Add one to get notified when a metric crosses a threshold.'
+				: 'No alerts yet.'}
 		</p>
 	{:else}
 		<List inset={false} label="Alerts">
@@ -222,7 +224,7 @@
 						{#if rule.activeEpisodes > 0 && scopeType !== 'deployment'}
 							<span class="sep" aria-hidden="true">·</span>
 							<span
-								>{rule.activeEpisodes} app{rule.activeEpisodes === 1 ? '' : 's'} over the line</span
+								>{rule.activeEpisodes} app{rule.activeEpisodes === 1 ? '' : 's'} over the threshold</span
 							>
 						{/if}
 					{/snippet}

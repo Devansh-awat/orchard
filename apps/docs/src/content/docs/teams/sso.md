@@ -27,7 +27,7 @@ Sessions created through an organization's SSO connection can only reach that or
    - **Require a verified email:** Orchard rejects sign-ins where the provider does not vouch for the address.
    - **Role for new members:** Select **Member**, **Admin**, or **Guest**.
    - **Email domains:** Leave this blank to accept any address.
-   - **Show on the login page:** Turn on to list the connection on the sign-in page.
+   - **Show on the sign-in page:** Turn on to list the connection on the sign-in page.
 6. Save the connection.
 7. Open the connection again.
 8. Copy the values under **Give these to your identity provider** to your provider. OIDC uses the **Redirect URL**. SAML uses the **Entity ID** and **SP metadata**.
@@ -73,7 +73,7 @@ Superadmins can still sign in without SSO, so that a broken provider does not lo
 
 ## Customize the sign-in page
 
-1. In **Login page**, enter a **Logo** URL, **Heading**, and **Subheading**.
+1. In **Sign-in page**, enter a **Logo** URL, **Heading**, and **Subheading**.
 2. Select the **Accent** and **Background** colors.
 3. Select **Save**.
 4. Select **Preview** to review the page.

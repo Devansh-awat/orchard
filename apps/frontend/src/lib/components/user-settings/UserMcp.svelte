@@ -37,7 +37,7 @@
 		{ id: 'logs', label: 'Logs', hint: 'Runtime and build logs, pods, errors, metrics and exec' },
 		{ id: 'env', label: 'Variables', hint: 'Environment variables and environments' },
 		{ id: 'databases', label: 'Databases', hint: 'Databases, credentials, backups and settings' },
-		{ id: 'domains', label: 'Domains', hint: 'Domains, services, DNS checks and protection' },
+		{ id: 'domains', label: 'Domains', hint: 'Domains, ports, DNS checks and protection' },
 		{ id: 'jobs', label: 'Jobs', hint: 'Scheduled and on-demand jobs and their runs' },
 		{ id: 'notifications', label: 'Notifications', hint: 'Channels, rules and deliveries' },
 		{ id: 'templates', label: 'Templates', hint: 'Templates and what was deployed from them' },
@@ -52,8 +52,8 @@
 
 	const ACCESS_HINT: Record<string, string> = {
 		exec: 'Reads, changes and runs commands inside your apps.',
-		deploy: 'Reads and changes things, but cannot run commands inside your apps.',
-		read: 'Looks, never changes anything.'
+		deploy: "Reads and changes things, but can't run commands inside your apps.",
+		read: "Reads, but can't change anything."
 	};
 
 	let toolMode = $state<'all' | 'pick'>('all');
@@ -165,7 +165,7 @@
 		<div class="steps">
 			<p class="step">
 				This instance has no MCP endpoint yet. An instance admin turns it on with
-				<code>mcp.ingress.host</code> in the chart values, or on the host:
+				<code>mcp.ingress.host</code> in the chart values, or on the server:
 			</p>
 			<CommandSnippet command="sudo orchardctl mcp enable" />
 		</div>

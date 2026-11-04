@@ -21,7 +21,7 @@
 
 <div class="adv">
 	<div class="adv-head">
-		<p class="adv-note">Colours you set here are pinned and stop following the wheel.</p>
+		<p class="adv-note">Colors you set here are pinned and stop following the wheel.</p>
 		<Button
 			variant="ghost"
 			size="sm"

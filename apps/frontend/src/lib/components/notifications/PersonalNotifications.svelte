@@ -44,7 +44,7 @@
 			settings = await fetchScopeSettings(organizationId, scopeType, scopeId);
 		} catch (e) {
 			toasts.add({
-				title: 'Could not load your notification settings',
+				title: "Couldn't load your notification settings",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -65,7 +65,7 @@
 			await load();
 		} catch (e) {
 			toasts.add({
-				title: 'Could not save that',
+				title: "Couldn't save that",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -123,7 +123,7 @@
 			{/each}
 		</SettingsList>
 	{:else}
-		<p class="quiet">Could not load your notification settings.</p>
+		<p class="quiet">Couldn't load your notification settings.</p>
 	{/if}
 	{#snippet actions()}
 		{#if !loading && !settings}
