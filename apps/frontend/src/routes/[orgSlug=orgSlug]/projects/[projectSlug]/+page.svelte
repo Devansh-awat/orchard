@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { settled } from '$lib/utils/view-transition';
 	import { goto, onNavigate } from '$app/navigation';
 	import { decorativeMotion, holdAmbient } from '$lib/utils/motion.svelte';
 	import { page } from '$app/stores';
@@ -131,7 +132,7 @@
 				resolve();
 				await nav.complete;
 			});
-			vt.finished.finally(() => {
+			settled(vt).finally(() => {
 				if (token === heroMorph) html.classList.remove('vt-hero', 'vt-hero--shrink');
 			});
 		});

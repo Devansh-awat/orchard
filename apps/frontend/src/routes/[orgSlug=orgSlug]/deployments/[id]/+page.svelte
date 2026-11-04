@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { settled } from '$lib/utils/view-transition';
 	import './deployment-page.css';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
@@ -1046,7 +1047,7 @@
 		document.documentElement.classList.add('vt-console', dir);
 		consoleAnimating = true;
 		const vt = document.startViewTransition(apply);
-		vt.finished.finally(() => {
+		settled(vt).finally(() => {
 			el.style.viewTransitionName = '';
 			document.documentElement.classList.remove('vt-console', dir);
 			consoleAnimating = false;
