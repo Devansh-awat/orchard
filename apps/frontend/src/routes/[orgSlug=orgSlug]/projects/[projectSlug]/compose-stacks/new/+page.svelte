@@ -13,7 +13,8 @@
 	import Breadcrumbs from '$lib/components/ui/Breadcrumbs.svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
 	import { EnvironmentSwitcher } from '$lib/components/environment';
-	import { Button, Field, Input, Badge, SearchPicker } from '$lib/components/ui';
+	import { Alert, Button, Field, Input, Badge, SearchPicker } from '$lib/components/ui';
+	import { parseRepoInput } from '$lib/utils/repo-input';
 
 	interface Repository {
 		id: number;
@@ -43,6 +44,7 @@
 	let loadingBranches = $state(false);
 
 	let selectedRepo = $state<Repository | null>(null);
+	let repoIsPasted = $state(false);
 	let selectedBranch = $state<Branch | null>(null);
 	let repoSearch = $state('');
 	let branchSearch = $state('');
@@ -121,7 +123,9 @@
 			const response = await apiFetch(`/apiv1/github/repositories/${owner}/${repoName}/branches`);
 			if (response.ok) {
 				branches = await response.json();
-				const defaultBranch = branches.find((b) => b.name === repo.default_branch);
+				const defaultBranch =
+					branches.find((b) => b.name === repo.default_branch) ??
+					(repoIsPasted ? branches.find((b) => b.name === 'master') : undefined);
 				if (defaultBranch) {
 					selectedBranch = defaultBranch;
 					branchSearch = defaultBranch.name;
@@ -142,6 +146,7 @@
 
 	function clearRepoSelection() {
 		selectedRepo = null;
+		repoIsPasted = false;
 		repoSearch = '';
 		branches = [];
 		selectedBranch = null;
@@ -171,9 +176,34 @@
 	);
 	const branchOptions = $derived(branches.map((b) => ({ value: b.name, label: b.name })));
 
+	const parsedRepoQuery = $derived(parseRepoInput(repoSearch.trim()));
+	const repoQueryIsListed = $derived(
+		!!parsedRepoQuery &&
+			repositories.some(
+				(r) =>
+					r.full_name.toLowerCase() ===
+					`${parsedRepoQuery.owner}/${parsedRepoQuery.repo}`.toLowerCase()
+			)
+	);
+	const canAutoDeploy = $derived(hasGitHubApp && !repoIsPasted);
+
 	function pickRepo(fullName: string) {
 		const repo = repositories.find((r) => r.full_name === fullName);
-		if (repo) selectRepo(repo);
+		if (repo) {
+			repoIsPasted = false;
+			selectRepo(repo);
+			return;
+		}
+		const parsed = parseRepoInput(fullName);
+		if (!parsed) return;
+		repoIsPasted = true;
+		selectRepo({
+			id: 0,
+			full_name: `${parsed.owner}/${parsed.repo}`,
+			clone_url: parsed.url,
+			default_branch: 'main',
+			private: false
+		});
 	}
 
 	function pickBranch(branchName: string) {
@@ -217,7 +247,7 @@
 					repoUrl: selectedRepo.clone_url,
 					branch,
 					composePath: composePath.trim() || 'docker-compose.yml',
-					autoDeployEnabled,
+					autoDeployEnabled: canAutoDeploy && autoDeployEnabled,
 					...(selectedEnvId ? { environmentId: selectedEnvId } : {})
 				})
 			});
@@ -289,81 +319,84 @@
 
 			<div class="cs-card-body">
 				{#if !githubLinked}
-					<div class="cs-warning">
-						<p class="cs-warning-title">Sign in with GitHub to continue</p>
-						<p class="cs-warning-desc">Required to read your repos and clone the compose file.</p>
-						<div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap;">
-							<Button variant="primary" size="sm" href="/user/settings">Sign in with GitHub</Button>
+					<Alert tone="warning" title="GitHub not connected">
+						Paste owner/repo into the repository search to deploy a public repo.
+						{#snippet actions()}
+							<Button variant="secondary" size="sm" href="/user/settings">Connect GitHub</Button>
 							{#if githubAppInstallUrl}
 								<Button variant="secondary" size="sm" href={githubAppInstallUrl} target="_blank">
 									Install GitHub App
 								</Button>
 							{/if}
-						</div>
-					</div>
-				{:else}
-					<div class="cs-pickers">
+						{/snippet}
+					</Alert>
+				{/if}
+				<div class="cs-pickers">
+					<SearchPicker
+						options={repoOptions}
+						bind:value={() => selectedRepo?.full_name ?? '', pickRepo}
+						bind:query={repoSearch}
+						prefix="Repository"
+						placeholder="owner/repo"
+						searchPlaceholder="Search, or paste owner/repo"
+						creatable={!!parsedRepoQuery && !repoQueryIsListed}
+						createLabel={() =>
+							parsedRepoQuery ? `Use ${parsedRepoQuery.owner}/${parsedRepoQuery.repo}` : ''}
+						loading={loadingRepos}
+						onclear={clearRepoSelection}
+						width="24rem"
+					>
+						{#snippet leading()}<Github size={15} />{/snippet}
+						{#snippet optionLeading()}<Github size={15} />{/snippet}
+						{#snippet trailing(option)}
+							{#if privateRepos.has(option.value)}<Badge tone="neutral">Private</Badge>{/if}
+						{/snippet}
+						{#snippet empty(typed)}
+							{#if reposError}
+								<span class="cs-picker-note">
+									{reposError}
+									<a href="/user/settings">Connect GitHub</a>
+								</span>
+							{:else}
+								No matching repositories{#if typed}&nbsp;for “{typed}”{/if}
+							{/if}
+						{/snippet}
+					</SearchPicker>
+
+					{#if selectedRepo}
 						<SearchPicker
-							options={repoOptions}
-							bind:value={() => selectedRepo?.full_name ?? '', pickRepo}
-							bind:query={repoSearch}
-							prefix="Repository"
-							placeholder="owner/repo"
-							searchPlaceholder="Search repositories"
-							loading={loadingRepos}
-							onclear={clearRepoSelection}
-							width="24rem"
-						>
-							{#snippet leading()}<Github size={15} />{/snippet}
-							{#snippet optionLeading()}<Github size={15} />{/snippet}
-							{#snippet trailing(option)}
-								{#if privateRepos.has(option.value)}<Badge tone="neutral">Private</Badge>{/if}
-							{/snippet}
-							{#snippet empty(typed)}
-								{#if reposError}
-									<span class="cs-picker-note">
-										{reposError}
-										<a href="/user/settings">Connect GitHub</a>
-									</span>
-								{:else}
-									No matching repositories{#if typed}&nbsp;for “{typed}”{/if}
-								{/if}
-							{/snippet}
-						</SearchPicker>
-
-						{#if selectedRepo}
-							<SearchPicker
-								options={branchOptions}
-								bind:value={() => branchSearch, pickBranch}
-								bind:query={branchQuery}
-								prefix="Branch"
-								placeholder="main"
-								searchPlaceholder="Search branches"
-								width="18rem"
-								mono
-								creatable
-								loading={loadingBranches}
-								disabled={loadingBranches}
-								onclear={selectedBranch ? clearBranchSelection : undefined}
-								empty={branches.length
-									? 'No matching branches'
-									: 'No branches found. Type a name to use anyway.'}
-							/>
-						{/if}
-					</div>
-
-					<Field label="Path to docker-compose.yml" for="cs-compose-path">
-						<Input
-							id="cs-compose-path"
-							bind:value={composePath}
-							placeholder="docker-compose.yml"
-							class="font-mono"
+							options={branchOptions}
+							bind:value={() => branchSearch, pickBranch}
+							bind:query={branchQuery}
+							prefix="Branch"
+							placeholder="main"
+							searchPlaceholder="Search branches"
+							width="18rem"
+							mono
+							creatable
+							loading={loadingBranches}
+							disabled={loadingBranches}
+							onclear={selectedBranch ? clearBranchSelection : undefined}
+							empty={branches.length
+								? 'No matching branches'
+								: 'No branches found. Type a name to use anyway.'}
 						/>
-						<p class="cs-hint">
-							Relative to the repo root. Default: <code>docker-compose.yml</code>.
-						</p>
-					</Field>
+					{/if}
+				</div>
 
+				<Field label="Path to docker-compose.yml" for="cs-compose-path">
+					<Input
+						id="cs-compose-path"
+						bind:value={composePath}
+						placeholder="docker-compose.yml"
+						class="font-mono"
+					/>
+					<p class="cs-hint">
+						Relative to the repo root. Default: <code>docker-compose.yml</code>.
+					</p>
+				</Field>
+
+				{#if canAutoDeploy}
 					<label class="cs-toggle">
 						<input type="checkbox" bind:checked={autoDeployEnabled} />
 						<span class="cs-toggle-label">
@@ -389,7 +422,7 @@
 						variant="primary"
 						onclick={handleSubmit}
 						loading={submitting}
-						disabled={submitting || !githubLinked || !selectedRepo}
+						disabled={submitting || !selectedRepo}
 					>
 						{#if !submitting}<FileText class="h-3.5 w-3.5" />{/if}
 						Deploy stack
