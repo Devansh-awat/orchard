@@ -434,3 +434,93 @@ for (const [mode, setup, mcpHost] of [
     );
   }
 }
+
+test(
+  'the CNAME target for custom domains is written on a new install only',
+  { skip: !has('yq', '--version') },
+  () => {
+    const box = sandbox();
+    try {
+      const values = join(box.state, 'values.yaml');
+      const cname = () =>
+        execFileSync(
+          'yq',
+          ['-r', '.server.env[] | select(.name == "INGRESS_CNAME") | .value', values],
+          { encoding: 'utf8' }
+        ).trim();
+      const fresh = (setup: string) => {
+        rmSync(box.state, { recursive: true, force: true });
+        box.run(`mkdir -p "${box.state}"; ${setup}; write_values`);
+        return cname();
+      };
+
+      assert.equal(fresh('INGRESS_MODE=public'), 'orchard.example.com');
+
+      const token = Buffer.from(
+        JSON.stringify({ a: 'acct', t: '8a1b2c3d-0000-4000-8000-000000000001', s: 'c2VjcmV0' })
+      ).toString('base64');
+      assert.equal(
+        fresh(`USE_TLS=false CERT_ISSUER= INGRESS_MODE=tunnel ORCHARD_TUNNEL_TOKEN=${token}`),
+        '8a1b2c3d-0000-4000-8000-000000000001.cfargotunnel.com'
+      );
+      assert.equal(
+        fresh('USE_TLS=false CERT_ISSUER= INGRESS_MODE=tunnel ORCHARD_TUNNEL_TOKEN=not-a-token'),
+        ''
+      );
+      assert.equal(
+        fresh('USE_TLS=false CERT_ISSUER=selfsigned INGRESS_MODE=lan PRIMARY_IP=192.168.1.5'),
+        'orchard.192-168-1-5.sslip.io'
+      );
+
+      fresh('INGRESS_MODE=public');
+      execFileSync('yq', ['-i', 'del(.server.env[] | select(.name == "INGRESS_CNAME"))', values]);
+      box.run('load_previous_answers; write_values');
+      assert.equal(cname(), '', 'an existing install does not gain a pinned value');
+
+      fresh('INGRESS_MODE=public');
+      execFileSync('yq', [
+        '-i',
+        '(.server.env[] | select(.name == "INGRESS_CNAME") | .value) = "edge.example.com"',
+        values
+      ]);
+      box.run('load_previous_answers; ORCHARD_DOMAIN=other.example.com; write_values');
+      assert.equal(cname(), 'edge.example.com', 'one the operator chose is left alone');
+    } finally {
+      box.cleanup();
+    }
+  }
+);
+
+test('the public IP is saved once, on a new public install with a routable address', () => {
+  const box = sandbox();
+  try {
+    const seed = (setup: string) => {
+      const log = join(box.dir, 'restarts');
+      rmSync(log, { force: true });
+      box.run(
+        `mkdir -p "${box.state}"; PUBLIC_IP=203.0.113.10 BEHIND_NAT=false; ${setup}; seed_public_ip`
+      );
+      return existsSync(log) ? readFileSync(log, 'utf8') : '';
+    };
+    const pending = join(box.state, 'public-ip-pending');
+    const arm = 'touch "$STATE_DIR/public-ip-pending"';
+
+    assert.equal(seed(':'), '', 'a re-run has nothing pending');
+    assert.match(seed(arm), /seed-public-ip\.js 203\.0\.113\.10/);
+    assert.ok(!existsSync(pending));
+
+    assert.equal(seed(`${arm}; BEHIND_NAT=true`), '');
+    assert.ok(!existsSync(pending));
+    assert.equal(seed(`${arm}; INGRESS_MODE=tunnel`), '');
+    assert.equal(seed(`${arm}; INGRESS_MODE=lan`), '');
+
+    writeFileSync(join(box.dir, 'kubectl'), '#!/bin/sh\nexit 1\n');
+    const failed = box.run(
+      `mkdir -p "${box.state}"; PUBLIC_IP=203.0.113.10 BEHIND_NAT=false; ${arm}; seed_public_ip`
+    );
+    assert.match(failed, /admin panel/);
+    assert.ok(existsSync(pending), 'a failure stays pending for the next run');
+  } finally {
+    box.cleanup();
+  }
+});

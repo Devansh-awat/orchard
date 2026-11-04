@@ -1459,6 +1459,16 @@ write_values() {
   [ -n "$SSO_KEY" ] || SSO_KEY=$(head -c 24 /dev/urandom | base64 | tr -d '\n=' | head -c 32)
   [ -n "$MCP_TOKEN" ] || MCP_TOKEN=$(head -c 32 /dev/urandom | base64 | tr -d '\n=' | head -c 43)
 
+  local cname_env='' cname previous_cname
+  previous_cname=$(reuse_secret INGRESS_CNAME)
+  if [ "$PREVIOUS_INSTALL" = false ] || { [ -n "$previous_cname" ] && [ "$previous_cname" = "$(reuse_value '.ingress.host')" ]; }; then
+    cname=$(ingress_cname)
+    if [ -n "$cname" ]; then
+      cname_env="
+    - { name: INGRESS_CNAME, value: $cname }"
+    fi
+  fi
+
   local public_ip_pin=''
   public_ip_pin=$(reuse_value '.tenant.publicIp')
   if [ -n "$public_ip_pin" ]; then
@@ -1512,7 +1522,7 @@ server:
     - { name: SECRETS_ENCRYPTION_KEY, value: "$ENCRYPTION_KEY" }
     - { name: SSO_ENCRYPTION_KEY, value: "$SSO_KEY" }
     - { name: MCP_SERVICE_TOKEN, value: "$MCP_TOKEN" }
-    - { name: APP_DOMAIN, value: $ORCHARD_APP_DOMAIN }
+    - { name: APP_DOMAIN, value: $ORCHARD_APP_DOMAIN }$cname_env
     - { name: CNPG_OPERATOR_NAMESPACE, value: cnpg-system }
     - { name: PUBLIC_HTTP_PORT, value: "$HTTP_PORT" }
     - { name: PUBLIC_HTTPS_PORT, value: "$HTTPS_PORT" }
@@ -1638,6 +1648,21 @@ EOF
   fi
 }
 
+ingress_cname() {
+  local tunnel_id
+  case "$INGRESS_MODE" in
+    public) printf '%s' "$ORCHARD_DOMAIN" ;;
+    tunnel)
+      tunnel_id=$(printf '%s' "$ORCHARD_TUNNEL_TOKEN" | base64 -d 2>/dev/null \
+        | sed -n 's/.*"t":"\([0-9a-fA-F-]*\)".*/\1/p' || true)
+      if [ -n "$tunnel_id" ]; then printf '%s.cfargotunnel.com' "$tunnel_id"; fi
+      ;;
+    lan)
+      if [ -n "$PRIMARY_IP" ]; then printf 'orchard.%s.sslip.io' "${PRIMARY_IP//./-}"; fi
+      ;;
+  esac
+}
+
 keep_custom_env() {
   local previous=$1 list
   for list in server frontend mcp; do
@@ -1714,8 +1739,25 @@ apply_chart() {
   done
 }
 
+seed_public_ip() {
+  local pending="$STATE_DIR/public-ip-pending"
+  [ -f "$pending" ] || return 0
+  if [ "$INGRESS_MODE" != public ] || [ "$BEHIND_NAT" = true ] || [ -z "$PUBLIC_IP" ]; then
+    rm -f "$pending"
+    return 0
+  fi
+  if kubectl -n orchard exec deploy/server -- node dist/scripts/seed-public-ip.js "$PUBLIC_IP" >/dev/null 2>&1; then
+    rm -f "$pending"
+    info "public ports and databases use $PUBLIC_IP; change it in the admin panel"
+  else
+    warn "could not save the public IP. Set $PUBLIC_IP in the admin panel, under Configuration."
+  fi
+}
+
 install_orchard() {
   step
+
+  if [ "$PREVIOUS_INSTALL" = false ]; then : > "$STATE_DIR/public-ip-pending"; fi
 
   kubectl create namespace network >/dev/null 2>&1 || true
 
@@ -1736,6 +1778,7 @@ install_orchard() {
   if [ "$ORCHARD_MCP" = true ]; then
     run_step "the agent endpoint" 1m kubectl -n orchard rollout status deploy/mcp --timeout=5m
   fi
+  seed_public_ip
 }
 
 install_updater() {
