@@ -39,9 +39,12 @@ Most parts of an instance get security fixes without an Orchard release:
 | k3s, Kubernetes, and containerd                | `orchardctl update` applies patches from the k3s release channels. `orchardctl k3s upgrade` moves to a new minor version. |
 | Postgres minor versions                        | Orchard applies them from the [CloudNativePG image catalog](/data/upgrades/).                                             |
 | The host operating system                      | Your distribution's updates. Orchard does not change them.                                                                |
+| Traefik, CloudNativePG, and cert-manager       | `orchardctl update` upgrades them from their own charts, within their major versions.                                     |
 | Orchard, Redis, and the metrics and log stores | A new Orchard chart. `orchardctl update` installs it.                                                                     |
 
-Traefik, CloudNativePG, and cert-manager install at their latest version. Re-run the installer to upgrade them.
+A new major version of an add-on needs a person, because it can change behavior. `orchardctl update` tells you when one is out. To turn off the add-on upgrades, add `ORCHARD_ADDON_UPDATES=off` to `/etc/orchard/env`.
+
+Upgrading CloudNativePG does not restart your databases, because the installer turns on in-place updates of the instance manager.
 
 An upgrade turns on, once, features that newer releases run by default. Orchard prints each change. If you turn a feature off afterward, it stays off. For the list, refer to [New defaults on an existing host](/operate/host-commands/#new-defaults-on-an-existing-host).
 

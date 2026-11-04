@@ -13,13 +13,14 @@ import (
 // Defaults that work unrendered, so the binary can be copied straight out of
 // the server image and run. install.sh writes the env file when paths differ.
 type Env struct {
-	StateDir   string
-	Values     string
-	Chart      string
-	Namespace  string
-	Bin        string
-	Kubeconfig string
-	K3sUpdates string
+	StateDir     string
+	Values       string
+	Chart        string
+	Namespace    string
+	Bin          string
+	Kubeconfig   string
+	K3sUpdates   string
+	AddonUpdates string
 }
 
 func LoadEnv() Env {
@@ -51,6 +52,8 @@ func LoadEnv() Env {
 			e.Kubeconfig = v
 		case "ORCHARD_K3S_UPDATES":
 			e.K3sUpdates = v
+		case "ORCHARD_ADDON_UPDATES":
+			e.AddonUpdates = v
 		}
 	}
 
@@ -62,6 +65,7 @@ func LoadEnv() Env {
 	e.Bin = envOr("ORCHARD_BIN", e.Bin)
 	e.Kubeconfig = envOr("KUBECONFIG", e.Kubeconfig)
 	e.K3sUpdates = envOr("ORCHARD_K3S_UPDATES", e.K3sUpdates)
+	e.AddonUpdates = envOr("ORCHARD_ADDON_UPDATES", e.AddonUpdates)
 	if e.Values == "" {
 		e.Values = filepath.Join(e.StateDir, "values.yaml")
 	}

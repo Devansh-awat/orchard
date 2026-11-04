@@ -56,6 +56,7 @@ Runs the following steps in order:
 5. Checks that Traefik writes the JSON access log.
 6. Refreshes the host commands.
 7. Applies the latest k3s patch. For more information, refer to [k3s](#k3s).
+8. Upgrades Traefik, CloudNativePG, and cert-manager within their major versions, from their own charts.
 
 The command restarts a deployment if its image tag is empty or `latest`. Otherwise, Helm sees an identical pod template and the old image keeps running.
 
