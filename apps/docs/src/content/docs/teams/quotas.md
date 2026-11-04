@@ -7,6 +7,8 @@ sidebar:
 
 To stop one person or project from using all of a cluster's capacity, set quotas.
 
+Quotas apply only when resource limits are on. If a superadmin turns limits off, Orchard does not check caps or allowances, and the **Usage** page shows `Limits are off`. For more information, refer to [Turn resource limits on or off](/operate/resource-limits/).
+
 ## How limits apply
 
 Orchard checks three limits when you create, scale, or resize an app or database:
@@ -18,6 +20,8 @@ Orchard checks three limits when you create, scale, or resize an app or database
 Quotas count the CPU and memory that you select for an app. The resource picker shows the remaining budget while you size an app.
 
 A member with no allowance of their own uses the organization's default allowance. If the organization has no default, the member has no limit.
+
+A cap or allowance must be greater than 0. To remove one, leave it blank.
 
 ## Set an organization cap
 

@@ -44,6 +44,7 @@ To change settings without a restart, go to **Instance admin** > **Configuration
 - **Custom domains**
 - **Wildcard certificate**
 - **Public exposure**
+- **Resource limits**
 - **GitLab sign-in** and **Bitbucket sign-in**
 - **Bot protection**
 - **Image scanning**
@@ -84,9 +85,21 @@ Changing `BASE_DOMAIN` does not move existing hosts. Each host keeps its Ingress
 2. Clear the subdomain in the organization's settings.
 3. Set the subdomain again.
 
+## Resource limits
+
+`INSTANCE_RESOURCE_LIMITS` turns resource limits `on` or `off` for the whole instance, and locks the setting in **Instance admin**. Unset, the choice in **Instance admin** applies. If nobody has chosen, limits are on. For more information, refer to [Turn resource limits on or off](/operate/resource-limits/).
+
 ## Database memory
 
 `DATABASE_DEFAULT_MEMORY_MB` sets the memory request for a database that has no size of its own. The default is `1024` and the minimum is `256`. The installer lowers the value on a machine with about 8 GB of memory or less.
+
+## App memory
+
+`DEFAULT_APP_MEMORY_MB` sets the memory limit for an app that has no size of its own and no organization default. The default is `128`. The installer sets the value on a new install, based on the memory of the machine.
+
+## Namespace floor
+
+`TENANT_QUOTA_FLOOR_PODS`, `TENANT_QUOTA_FLOOR_SERVICES`, `TENANT_QUOTA_FLOOR_PVCS`, and `TENANT_QUOTA_FLOOR_STORAGE_BYTES` set the most that a project without a cap can create when limits are on. The installer sets high values on a new install, so that the floor does not stop a small instance.
 
 ## The What's new sheet
 
@@ -110,5 +123,6 @@ To publish your own notes, point the setting at your own folder. `latest.json` n
 ## Related resources
 
 - [Finish instance setup](/operate/finishing-setup/)
+- [Turn resource limits on or off](/operate/resource-limits/)
 - [Host commands](/operate/host-commands/)
 - [Configuration](/reference/configuration/)

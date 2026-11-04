@@ -83,7 +83,7 @@ orchard deploy resources set <id> --cpu 500 --memory 512Mi
 </TabItem>
 </Tabs>
 
-The value you select is the container's limit.
+The value you select is the container's limit. If a superadmin has turned resource limits off, the resource picker shows that limits are off and these sizes do not apply. For more information, refer to [Turn resource limits on or off](/operate/resource-limits/).
 
 - **Memory:** The request equals the limit. The app gets that amount, and Kubernetes kills it if it uses more.
 - **CPU:** The request is 10% of the limit, with a minimum of 50 millicores. The app can use CPU up to the limit when the node has capacity. To change this, set `CPU_REQUEST_RATIO` and `CPU_REQUEST_MIN_MILLI` on the server.

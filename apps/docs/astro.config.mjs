@@ -230,6 +230,7 @@ export default defineConfig({
                 { label: 'Instance admin', slug: 'operate/instance-admin' },
                 { label: 'Manage users', slug: 'operate/manage-users' },
                 { label: 'Manage organizations', slug: 'operate/manage-organizations' },
+                { label: 'Resource limits', slug: 'operate/resource-limits' },
                 { label: 'Size older workloads', slug: 'operate/backfill' },
                 { label: 'Host commands', slug: 'operate/host-commands' },
                 { label: 'Nodes and pools', slug: 'operate/nodes' },
