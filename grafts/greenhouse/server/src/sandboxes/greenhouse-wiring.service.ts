@@ -27,7 +27,7 @@ import { sandboxMirrorShard, type SandboxMirrorScope } from './sandbox-mirror.sh
 import { attachSandboxSshWebSocket } from './sandbox-ssh.gateway';
 import { sandboxTerminalHooks } from './sandbox-terminal.gateway';
 
-export const SANDBOX_MCP_DENY_PATHS = ['sandboxes/credentials'];
+export const SANDBOX_MCP_DENY_PATHS = ['sandboxes/credentials', 'ssh-identities'];
 
 @Injectable()
 export class GreenhouseWiring implements OnModuleInit {
