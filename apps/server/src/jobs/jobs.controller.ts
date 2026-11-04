@@ -223,8 +223,13 @@ export class JobsController {
 
   @Get('job-runs/:runId')
   async getRun(@Param('runId') runId: string, @Request() req) {
-    await this.assertRunView(runId, req);
-    return this.jobs.getRunDetail(runId);
+    const { access } = await this.assertRunView(runId, req);
+    const detail = await this.jobs.getRunDetail(runId);
+    if (access.canEdit) return detail;
+    return {
+      ...detail,
+      steps: detail.steps?.map((step: any) => ({ ...step, command: null }))
+    };
   }
 
   @Post('job-runs/:runId/cancel')

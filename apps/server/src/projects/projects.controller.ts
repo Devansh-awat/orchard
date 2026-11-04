@@ -1081,14 +1081,14 @@ export class DeploymentsController {
 
   @Get(':id/releases')
   async getReleases(@Param('id') id: string, @Request() req, @Query('limit') limitStr?: string) {
-    await this.projectAccess.assertDeploymentView(id, req.user.sub, {
+    const { access } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
       imageUrl: req.user.imageUrl
     });
-    return this.deployments.listReleases(id, Number(limitStr) || 20);
+    return this.deployments.listReleases(id, Number(limitStr) || 20, access.canEdit);
   }
 
   @Get(':id/rightsizing')

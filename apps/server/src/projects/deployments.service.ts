@@ -3538,8 +3538,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   // every full (re)create re-reads the start command rather than trusting that
   // an earlier patch survives. Returns null for a Railpack build, where the
   // command is already baked into the image.
-  async listReleases(deploymentId: string, limit: number) {
-    return this.releases.list(deploymentId, limit);
+  async listReleases(deploymentId: string, limit: number, canEdit: boolean) {
+    return this.releases.list(deploymentId, limit, canEdit);
   }
 
   async getReleaseVerdict(deploymentId: string, releaseId: string) {

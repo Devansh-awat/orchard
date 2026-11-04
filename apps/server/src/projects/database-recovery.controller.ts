@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  UseInterceptors,
   Delete,
   Get,
   Param,
@@ -13,6 +14,7 @@ import {
 import { Auth, RequireScope } from '../auth/decorators';
 import { Idempotent } from '../idempotency/idempotency.interceptor';
 import { DatabaseRecoveryService, type RestoreRequest } from './database-recovery.service';
+import { StripOperationSecretsInterceptor } from './strip-operation-secrets.interceptor';
 
 function who(req: any) {
   return {
@@ -25,6 +27,7 @@ function who(req: any) {
 }
 
 @Auth()
+@UseInterceptors(StripOperationSecretsInterceptor)
 @Controller()
 export class DatabaseRecoveryController {
   constructor(private readonly recovery: DatabaseRecoveryService) {}

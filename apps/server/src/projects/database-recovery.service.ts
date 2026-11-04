@@ -914,7 +914,7 @@ export class DatabaseRecoveryService {
   }
 
   async diagnose(databaseId: string, clerkId: string, userData?: UserData) {
-    await this.access.assertDatabaseView(databaseId, clerkId, userData);
+    const { access } = await this.access.assertDatabaseView(databaseId, clerkId, userData);
     const dbs = await this.databases();
     const live: any = await dbs.getDatabaseLive(databaseId);
     const db = await this.prisma.database.findUnique({ where: { id: databaseId } });
@@ -923,7 +923,7 @@ export class DatabaseRecoveryService {
     const [window, operations, logTail, pooler] = await Promise.all([
       this.recoveryWindow(databaseId, clerkId, userData),
       this.operations.list(databaseId, undefined, 5),
-      db.namespace && db.clusterName
+      access.canEdit && db.namespace && db.clusterName
         ? this.k8sCnpg
             .primaryLogTail(db.namespace, db.clusterName, 60)
             .catch((e) => `logs unavailable: ${k8sErrorMessage(e)}`)

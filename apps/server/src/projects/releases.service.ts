@@ -68,7 +68,7 @@ export class ReleasesService {
       .catch(() => {});
   }
 
-  async list(deploymentId: string, limit = 20) {
+  async list(deploymentId: string, limit = 20, canEdit = true) {
     const take = Math.min(Math.max(limit, 1), LIST_MAX);
     const rows = await this.prisma.release.findMany({
       where: { deploymentId },
@@ -83,7 +83,8 @@ export class ReleasesService {
     });
     return rows.map((r) => ({
       ...r,
-      resourceSnapshot: r.resourceSnapshot
+      resourceSnapshot: r.resourceSnapshot,
+      ...(canEdit ? {} : { envSnapshot: null, startCommand: null, healthCheckSnapshot: null })
     }));
   }
 

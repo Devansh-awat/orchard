@@ -243,6 +243,7 @@ export class JobsService {
     return {
       ...step,
       script: null,
+      command: null,
       envVars: step.envVars.map(({ key, secret }) => ({ key, value: null, secret }))
     };
   }
