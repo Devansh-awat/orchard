@@ -7,14 +7,14 @@ type Doc = CollectionEntry<'docs'>;
 
 export const SECTION_TITLES: Record<string, string> = {
   start: 'Get started',
-  deploy: 'Deploying',
-  data: 'Data',
-  run: 'Running things',
+  deploy: 'Apps',
+  data: 'Databases',
+  run: 'Apps',
   greenhouse: 'Greenhouse',
   grafts: 'Grafts',
   account: 'Your account',
   teams: 'Teams',
-  operate: 'Operating Orchard',
+  operate: 'Self-hosting',
   reference: 'Reference'
 };
 

@@ -12,14 +12,14 @@ export const DIRECTORY_TEXT = 'Everything Orchard does, with a link to its docum
 
 export const directoryGroups = [
   'Deploy',
-  'Data',
-  'Run',
-  'Observe',
-  'Agents and tools',
+  'Databases',
+  'Configure',
+  'Monitoring',
+  'CLI and agents',
   'Greenhouse',
   'Grafts',
   'Teams',
-  'Operate'
+  'Self-hosting'
 ] as const;
 
 export const directory: DirectoryItem[] = [
@@ -141,84 +141,84 @@ export const directory: DirectoryItem[] = [
     text: 'Run managed Postgres next to your app.',
     href: '/data/databases/',
     icon: 'database',
-    group: 'Data'
+    group: 'Databases'
   },
   {
     title: 'Backups and restore',
     text: 'Use checkpoints, point-in-time restore, forks and restore tests.',
     href: '/data/backups/',
     icon: 'refresh',
-    group: 'Data'
+    group: 'Databases'
   },
   {
     title: 'Read replicas',
     text: 'Add read-only copies of a database to spread query load.',
     href: '/data/replicas/',
     icon: 'layers',
-    group: 'Data'
+    group: 'Databases'
   },
   {
     title: 'High availability',
     text: 'Add standby instances to a database.',
     href: '/data/high-availability/',
     icon: 'server',
-    group: 'Data'
+    group: 'Databases'
   },
   {
     title: 'Connection pooler',
     text: 'Let apps share a small set of server connections.',
     href: '/data/connection-pooler/',
     icon: 'network',
-    group: 'Data'
+    group: 'Databases'
   },
   {
     title: 'Database users',
     text: 'Create read-only or read-write Postgres users.',
     href: '/data/users/',
     icon: 'user',
-    group: 'Data'
+    group: 'Databases'
   },
   {
     title: 'Postgres upgrades',
     text: 'Upgrade a database to a newer major version.',
     href: '/data/upgrades/',
     icon: 'refresh',
-    group: 'Data'
+    group: 'Databases'
   },
   {
     title: 'Database protection',
     text: 'Turn on deletion protection and weekly restore tests.',
     href: '/data/protection/',
     icon: 'lock',
-    group: 'Data'
+    group: 'Databases'
   },
   {
     title: 'Postgres parameters',
     text: 'Change connection, memory, timeout and logging parameters.',
     href: '/data/parameters/',
     icon: 'sliders',
-    group: 'Data'
+    group: 'Databases'
   },
   {
     title: 'Database storage',
     text: 'Increase the volume size of a database.',
     href: '/data/storage/',
     icon: 'hard-drive',
-    group: 'Data'
+    group: 'Databases'
   },
   {
     title: 'Database monitoring',
     text: 'Read metrics and query performance for a database.',
     href: '/data/monitoring/',
     icon: 'activity',
-    group: 'Data'
+    group: 'Databases'
   },
   {
     title: 'Postgres extensions',
     text: 'Install extensions without a shell.',
     href: '/data/extensions/',
     icon: 'plug',
-    group: 'Data'
+    group: 'Databases'
   },
 
   {
@@ -226,56 +226,56 @@ export const directory: DirectoryItem[] = [
     text: 'Set app and shared variables, and separate production.',
     href: '/run/environments/',
     icon: 'sliders',
-    group: 'Run'
+    group: 'Configure'
   },
   {
     title: 'Jobs and pipelines',
     text: 'Run cron schedules and multi-step jobs on the cluster.',
     href: '/run/jobs/',
     icon: 'clock',
-    group: 'Run'
+    group: 'Configure'
   },
   {
     title: 'Compose stacks',
     text: 'Deploy several services from a docker-compose file.',
     href: '/run/compose/',
     icon: 'layers',
-    group: 'Run'
+    group: 'Configure'
   },
   {
     title: 'Templates',
     text: 'Create several resources together in one click.',
     href: '/run/templates/',
     icon: 'box',
-    group: 'Run'
+    group: 'Configure'
   },
   {
     title: 'Webhooks',
     text: 'Trigger a deploy from outside Orchard.',
     href: '/run/webhooks/',
     icon: 'webhook',
-    group: 'Run'
+    group: 'Configure'
   },
   {
     title: 'Terraform and OpenTofu',
     text: 'Manage projects, apps, databases and domains from HCL.',
     href: '/run/terraform/',
     icon: 'code',
-    group: 'Run'
+    group: 'Configure'
   },
   {
     title: 'Terminal dashboard',
     text: 'Manage projects, apps and databases with orchard ui.',
     href: '/run/terminal-dashboard/',
     icon: 'terminal',
-    group: 'Run'
+    group: 'Configure'
   },
   {
     title: 'The Grove',
     text: 'Run a discussion space for your instance.',
     href: '/run/grove/',
     icon: 'users',
-    group: 'Run'
+    group: 'Configure'
   },
 
   {
@@ -283,56 +283,56 @@ export const directory: DirectoryItem[] = [
     text: 'Read live logs and crash reports, and open a terminal in a container.',
     href: '/run/logs/',
     icon: 'terminal',
-    group: 'Observe'
+    group: 'Monitoring'
   },
   {
     title: 'Metrics and alerts',
     text: 'Track CPU and memory, and alert when something is wrong.',
     href: '/run/observability/',
     icon: 'activity',
-    group: 'Observe'
+    group: 'Monitoring'
   },
   {
     title: 'App monitoring',
     text: 'Read metrics, logs, requests and errors for an app.',
     href: '/run/monitor-an-app/',
     icon: 'activity',
-    group: 'Observe'
+    group: 'Monitoring'
   },
   {
     title: 'Alert rules',
     text: 'Fire an alert when a metric crosses a threshold.',
     href: '/run/alerts/',
     icon: 'bell',
-    group: 'Observe'
+    group: 'Monitoring'
   },
   {
     title: 'Status pages',
     text: 'Publish the current state and uptime of your apps.',
     href: '/run/status-pages/',
     icon: 'globe',
-    group: 'Observe'
+    group: 'Monitoring'
   },
   {
     title: 'Notifications',
     text: 'Send deploy and crash events to Slack, Discord or a webhook.',
     href: '/run/notifications/',
     icon: 'bell',
-    group: 'Observe'
+    group: 'Monitoring'
   },
   {
     title: 'Request data',
     text: 'Search logs and review requests and attack signals.',
     href: '/operate/logs/',
     icon: 'list',
-    group: 'Observe'
+    group: 'Monitoring'
   },
   {
     title: 'Image scanning',
     text: 'Choose a vulnerability scanner for the Security tab.',
     href: '/operate/image-scanning/',
     icon: 'shield',
-    group: 'Observe'
+    group: 'Monitoring'
   },
 
   {
@@ -340,56 +340,56 @@ export const directory: DirectoryItem[] = [
     text: 'Connect a coding agent to Orchard over MCP.',
     href: '/agent-setup/',
     icon: 'bot',
-    group: 'Agents and tools'
+    group: 'CLI and agents'
   },
   {
     title: 'MCP server',
     text: 'Let an agent deploy, provision and debug as you.',
     href: '/mcp/',
     icon: 'plug',
-    group: 'Agents and tools'
+    group: 'CLI and agents'
   },
   {
     title: 'MCP tools',
     text: 'Review every tool the MCP server exposes.',
     href: '/reference/mcp-tools/',
     icon: 'list',
-    group: 'Agents and tools'
+    group: 'CLI and agents'
   },
   {
     title: 'Code mode',
     text: 'Reach the whole API with the compact MCP or a script.',
     href: '/agents-code-mode/',
     icon: 'code',
-    group: 'Agents and tools'
+    group: 'CLI and agents'
   },
   {
     title: 'Docs for agents',
     text: 'Read these docs as Markdown and llms.txt.',
     href: '/for-agents/',
     icon: 'file',
-    group: 'Agents and tools'
+    group: 'CLI and agents'
   },
   {
     title: 'CLI',
     text: 'Install the orchard CLI and work from a terminal.',
     href: '/cli/',
     icon: 'terminal',
-    group: 'Agents and tools'
+    group: 'CLI and agents'
   },
   {
     title: 'CLI reference',
     text: 'Look up every orchard command and flag.',
     href: '/reference/cli/',
     icon: 'book',
-    group: 'Agents and tools'
+    group: 'CLI and agents'
   },
   {
     title: 'API reference',
     text: 'Look up every API endpoint.',
     href: '/api/',
     icon: 'code',
-    group: 'Agents and tools'
+    group: 'CLI and agents'
   },
 
   {
@@ -554,104 +554,104 @@ export const directory: DirectoryItem[] = [
     text: 'Install on a Linux server or with the Helm chart.',
     href: '/start/install/',
     icon: 'rocket',
-    group: 'Operate'
+    group: 'Self-hosting'
   },
   {
     title: 'Architecture',
     text: 'See what runs where.',
     href: '/operate/architecture/',
     icon: 'network',
-    group: 'Operate'
+    group: 'Self-hosting'
   },
   {
     title: 'Configuration',
     text: 'Find where instance settings live and change them.',
     href: '/operate/configuration/',
     icon: 'sliders',
-    group: 'Operate'
+    group: 'Self-hosting'
   },
   {
     title: 'Instance admin',
     text: 'Configure the instance and manage users and organizations.',
     href: '/operate/instance-admin/',
     icon: 'sliders',
-    group: 'Operate'
+    group: 'Self-hosting'
   },
   {
     title: 'Environment variables',
     text: 'Look up every variable the server reads.',
     href: '/reference/configuration/',
     icon: 'list',
-    group: 'Operate'
+    group: 'Self-hosting'
   },
   {
     title: 'Host commands',
     text: 'Use orchardctl on an Orchard host.',
     href: '/operate/host-commands/',
     icon: 'terminal',
-    group: 'Operate'
+    group: 'Self-hosting'
   },
   {
     title: 'Nodes and pools',
     text: 'Create pools, set taints and assign nodes to organizations.',
     href: '/operate/nodes/',
     icon: 'server',
-    group: 'Operate'
+    group: 'Self-hosting'
   },
   {
     title: 'Upgrades',
     text: 'Move to a new version of Orchard.',
     href: '/operate/upgrades/',
     icon: 'refresh',
-    group: 'Operate'
+    group: 'Self-hosting'
   },
   {
     title: 'Going to production',
     text: 'Prepare a trial instance for real work.',
     href: '/operate/production/',
     icon: 'rocket',
-    group: 'Operate'
+    group: 'Self-hosting'
   },
   {
     title: 'Wildcard certificates',
     text: 'Issue one certificate for every generated app URL.',
     href: '/operate/wildcard-certificates/',
     icon: 'lock',
-    group: 'Operate'
+    group: 'Self-hosting'
   },
   {
     title: 'Bot protection',
     text: 'Add a Cloudflare Turnstile challenge to sign-in pages.',
     href: '/operate/bot-protection/',
     icon: 'shield',
-    group: 'Operate'
+    group: 'Self-hosting'
   },
   {
     title: 'Database dumps',
     text: 'Run pg_dump on a schedule and upload to object storage.',
     href: '/operate/database-dumps/',
     icon: 'database',
-    group: 'Operate'
+    group: 'Self-hosting'
   },
   {
     title: 'Usage reports',
     text: 'Review what an instance sends, and turn reports on or off.',
     href: '/operate/telemetry/',
     icon: 'list',
-    group: 'Operate'
+    group: 'Self-hosting'
   },
   {
     title: 'Security and isolation',
     text: 'See what Orchard isolates by default and what it does not.',
     href: '/operate/security/',
     icon: 'shield',
-    group: 'Operate'
+    group: 'Self-hosting'
   },
   {
     title: 'Troubleshooting',
     text: 'Look up common failures and what they mean.',
     href: '/operate/troubleshooting/',
     icon: 'activity',
-    group: 'Operate'
+    group: 'Self-hosting'
   }
 ];

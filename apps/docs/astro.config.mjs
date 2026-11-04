@@ -60,110 +60,182 @@ export default defineConfig({
             { label: 'What is Orchard', slug: 'start/what-is-orchard' },
             { label: 'Install', slug: 'start/install' },
             { label: 'First deploy', slug: 'start/first-deploy' },
-            { label: 'Concepts', slug: 'start/concepts' },
-            { label: 'Agent setup', link: '/agent-setup/' },
-            { label: 'Directory', link: '/directory/' },
-            { label: 'Changelog', link: '/changelog/' }
+            { label: 'Concepts', slug: 'start/concepts' }
           ]
         },
         {
-          label: 'Build',
+          label: 'Apps',
           items: [
             {
-              label: 'Deploying',
+              label: 'Deploy',
               collapsed: true,
               items: [
                 { label: 'From GitHub', slug: 'deploy/github' },
                 { label: 'From GitLab, Gitea and others', slug: 'deploy/git-providers' },
                 { label: 'From an image', slug: 'deploy/image' },
                 { label: 'From your terminal', slug: 'deploy/deploy-from-terminal' },
+                { label: 'Compose stacks', slug: 'run/compose' },
+                { label: 'Templates', slug: 'run/templates' },
                 { label: 'Builds', slug: 'deploy/builds' },
-                { label: 'Domains and HTTPS', slug: 'deploy/domains' },
-                { label: 'Networking', slug: 'deploy/networking' },
-                { label: 'Tailscale', slug: 'deploy/tailscale' },
-                { label: 'Scaling and resources', slug: 'deploy/scaling' },
-                { label: 'Resource suggestions', slug: 'deploy/resource-suggestions' },
-                { label: 'Storage', slug: 'deploy/storage' },
-                { label: 'Update strategies', slug: 'deploy/update-strategies' },
-                { label: 'Rollbacks', slug: 'deploy/rollbacks' },
-                { label: 'Protection', slug: 'deploy/protection' },
-                { label: 'App security', slug: 'deploy/security-tab' },
-                { label: 'Connect resources', slug: 'deploy/connect-resources' },
                 { label: 'score.yaml', slug: 'deploy/score' }
               ]
             },
             {
-              label: 'Data',
+              label: 'Configure',
               collapsed: true,
               items: [
-                { label: 'Databases', slug: 'data/databases' },
-                { label: 'Backups and restore', slug: 'data/backups' },
-                { label: 'Read replicas', slug: 'data/replicas' },
-                { label: 'High availability', slug: 'data/high-availability' },
-                { label: 'Connection pooler', slug: 'data/connection-pooler' },
-                { label: 'Database users', slug: 'data/users' },
-                { label: 'Upgrade Postgres', slug: 'data/upgrades' },
-                { label: 'Protect a database', slug: 'data/protection' },
-                { label: 'Postgres parameters', slug: 'data/parameters' },
-                { label: 'Grow storage', slug: 'data/storage' },
-                { label: 'Monitor a database', slug: 'data/monitoring' },
-                { label: 'Extensions', slug: 'data/extensions' }
+                { label: 'Variables and environments', slug: 'run/environments' },
+                { label: 'Connect to a database or app', slug: 'deploy/connect-resources' },
+                { label: 'Scaling and resources', slug: 'deploy/scaling' },
+                { label: 'Resource suggestions', slug: 'deploy/resource-suggestions' },
+                { label: 'Volumes', slug: 'deploy/storage' }
               ]
             },
             {
-              label: 'Running things',
+              label: 'Domains and networking',
               collapsed: true,
               items: [
-                { label: 'Environments and variables', slug: 'run/environments' },
-                { label: 'Jobs and pipelines', slug: 'run/jobs' },
-                { label: 'Compose stacks', slug: 'run/compose' },
-                { label: 'Templates', slug: 'run/templates' },
-                { label: 'Logs and shell', slug: 'run/logs' },
+                { label: 'Ports and internal addresses', slug: 'deploy/networking' },
+                { label: 'Domains and HTTPS', slug: 'deploy/domains' },
+                { label: 'Protect an app', slug: 'deploy/protection' },
+                { label: 'Tailscale', slug: 'deploy/tailscale' }
+              ]
+            },
+            {
+              label: 'Releases',
+              collapsed: true,
+              items: [
+                { label: 'Update strategies', slug: 'deploy/update-strategies' },
+                { label: 'Rollbacks', slug: 'deploy/rollbacks' },
+                { label: 'Update with a webhook', slug: 'run/webhooks' }
+              ]
+            },
+            {
+              label: 'Jobs',
+              collapsed: true,
+              items: [{ label: 'Jobs and pipelines', slug: 'run/jobs' }]
+            },
+            {
+              label: 'Monitoring',
+              collapsed: true,
+              items: [
                 { label: 'Monitor an app', slug: 'run/monitor-an-app' },
-                { label: 'Metrics and alerts', slug: 'run/observability' },
+                { label: 'Logs and shell', slug: 'run/logs' },
+                { label: 'Metrics and problems', slug: 'run/observability' },
                 { label: 'Alert rules', slug: 'run/alerts' },
                 { label: 'Notifications', slug: 'run/notifications' },
                 { label: 'Status pages', slug: 'run/status-pages' },
-                { label: 'Webhooks', slug: 'run/webhooks' },
-                { label: 'Terraform and OpenTofu', slug: 'run/terraform' },
-                { label: 'Terminal dashboard', slug: 'run/terminal-dashboard' },
-                { label: 'The Grove', slug: 'run/grove' }
+                { label: 'App security', slug: 'deploy/security-tab' }
+              ]
+            }
+          ]
+        },
+        {
+          label: 'Databases',
+          items: [
+            {
+              label: 'Create and connect',
+              collapsed: true,
+              items: [
+                { label: 'Create a database', slug: 'data/databases' },
+                { label: 'Database users', slug: 'data/users' },
+                { label: 'Connection pooler', slug: 'data/connection-pooler' }
               ]
             },
             {
-              label: 'Greenhouse',
+              label: 'Backups and availability',
+              collapsed: true,
+              items: [
+                { label: 'Backups and restore', slug: 'data/backups' },
+                { label: 'Protect a database', slug: 'data/protection' },
+                { label: 'High availability', slug: 'data/high-availability' },
+                { label: 'Read replicas', slug: 'data/replicas' }
+              ]
+            },
+            {
+              label: 'Maintain',
+              collapsed: true,
+              items: [
+                { label: 'Upgrade Postgres', slug: 'data/upgrades' },
+                { label: 'Postgres parameters', slug: 'data/parameters' },
+                { label: 'Extensions', slug: 'data/extensions' },
+                { label: 'Grow storage', slug: 'data/storage' },
+                { label: 'Monitor a database', slug: 'data/monitoring' }
+              ]
+            }
+          ]
+        },
+        {
+          label: 'Greenhouse',
+          items: [
+            {
+              label: 'Start',
               collapsed: true,
               items: [
                 { label: 'Overview', slug: 'greenhouse' },
                 { label: 'Get started', slug: 'greenhouse/getting-started' },
-                { label: 'Machines', slug: 'greenhouse/machines' },
+                { label: 'Machines', slug: 'greenhouse/machines' }
+              ]
+            },
+            {
+              label: 'Work in a session',
+              collapsed: true,
+              items: [
                 { label: 'The workspace', slug: 'greenhouse/workspace' },
                 { label: 'Open in your editor', slug: 'greenhouse/editors' },
                 { label: 'Setup and run scripts', slug: 'greenhouse/scripts' },
-                { label: 'Previews and ports', slug: 'greenhouse/previews' },
+                { label: 'Previews and ports', slug: 'greenhouse/previews' }
+              ]
+            },
+            {
+              label: 'Ship and collaborate',
+              collapsed: true,
+              items: [
                 { label: 'Pull requests and checks', slug: 'greenhouse/pull-requests' },
                 { label: 'Attach an Orchard project', slug: 'greenhouse/projects' },
                 { label: 'Sharing and multiplayer', slug: 'greenhouse/sharing' },
                 { label: 'GitHub, Linear and Slack', slug: 'greenhouse/integrations' },
-                { label: 'Automating Greenhouse', slug: 'greenhouse/automation' },
-                { label: 'Troubleshooting', slug: 'greenhouse/troubleshooting' }
+                { label: 'Automating Greenhouse', slug: 'greenhouse/automation' }
               ]
             },
             {
-              label: 'Grafts',
+              label: 'Help',
+              collapsed: true,
+              items: [{ label: 'Troubleshooting', slug: 'greenhouse/troubleshooting' }]
+            }
+          ]
+        },
+        {
+          label: 'Grafts',
+          items: [
+            {
+              label: 'Use grafts',
               collapsed: true,
               items: [
                 { label: 'Overview', slug: 'grafts/overview' },
                 { label: 'Install grafts', slug: 'grafts/install' },
                 { label: 'Upgrades and rollback', slug: 'grafts/upgrades' },
                 { label: 'Announcements', slug: 'grafts/announcements' },
-                { label: 'Troubleshooting', slug: 'grafts/troubleshooting' },
-                { label: 'Build a graft', slug: 'grafts/build/quickstart' },
+                { label: 'The Grove', slug: 'run/grove' },
+                { label: 'Troubleshooting', slug: 'grafts/troubleshooting' }
+              ]
+            },
+            {
+              label: 'Build a graft',
+              collapsed: true,
+              items: [
+                { label: 'Quickstart', slug: 'grafts/build/quickstart' },
                 { label: 'graft.json', slug: 'grafts/build/manifest' },
                 { label: 'Server code and doors', slug: 'grafts/build/server' },
                 { label: 'UI islands and slots', slug: 'grafts/build/ui' },
                 { label: 'Database', slug: 'grafts/build/database' },
-                { label: 'Publishing', slug: 'grafts/build/publishing' },
+                { label: 'Publishing', slug: 'grafts/build/publishing' }
+              ]
+            },
+            {
+              label: 'Graft reference',
+              collapsed: true,
+              items: [
                 { label: 'Graft API versions', slug: 'reference/graft-api' },
                 { label: 'Graft UI slots', slug: 'reference/graft-slots' }
               ]
@@ -171,30 +243,26 @@ export default defineConfig({
           ]
         },
         {
-          label: 'Developer tools',
+          label: 'CLI',
           items: [
-            {
-              label: 'CLI',
-              collapsed: true,
-              items: [
-                { label: 'Overview', slug: 'cli' },
-                { label: 'CLI reference', slug: 'reference/cli' }
-              ]
-            },
-            {
-              label: 'Agents',
-              collapsed: true,
-              items: [
-                { label: 'MCP for agents', slug: 'mcp' },
-                { label: 'MCP tools', slug: 'reference/mcp-tools' },
-                { label: 'Code mode for agents', slug: 'agents-code-mode' },
-                { label: 'Docs for agents', slug: 'for-agents' }
-              ]
-            }
+            { label: 'Overview', slug: 'cli' },
+            { label: 'Command reference', slug: 'reference/cli' },
+            { label: 'Terminal dashboard', slug: 'run/terminal-dashboard' },
+            { label: 'Terraform and OpenTofu', slug: 'run/terraform' }
           ]
         },
         {
-          label: 'Manage',
+          label: 'Agents and MCP',
+          items: [
+            { label: 'Agent setup', link: '/agent-setup/' },
+            { label: 'MCP', slug: 'mcp' },
+            { label: 'MCP tools', slug: 'reference/mcp-tools' },
+            { label: 'Code mode', slug: 'agents-code-mode' },
+            { label: 'Docs for agents', slug: 'for-agents' }
+          ]
+        },
+        {
+          label: 'Account and teams',
           items: [
             {
               label: 'Your account',
@@ -209,44 +277,91 @@ export default defineConfig({
               ]
             },
             {
-              label: 'Teams',
+              label: 'Organizations and projects',
               collapsed: true,
               items: [
                 { label: 'Organizations and roles', slug: 'teams/organizations' },
                 { label: 'Manage a project', slug: 'teams/projects' },
-                { label: 'SSO', slug: 'teams/sso' },
-                { label: 'SCIM provisioning', slug: 'teams/scim' },
-                { label: 'Audit logs', slug: 'teams/audit-logs' },
-                { label: 'Quotas and usage', slug: 'teams/quotas' },
-                { label: 'Review usage', slug: 'teams/usage' }
+                { label: 'Quotas', slug: 'teams/quotas' },
+                { label: 'Usage', slug: 'teams/usage' }
               ]
             },
             {
-              label: 'Operating Orchard',
+              label: 'Sign-in and compliance',
+              collapsed: true,
+              items: [
+                { label: 'SSO', slug: 'teams/sso' },
+                { label: 'SCIM provisioning', slug: 'teams/scim' },
+                { label: 'Audit logs', slug: 'teams/audit-logs' }
+              ]
+            }
+          ]
+        },
+        {
+          label: 'Self-hosting',
+          items: [
+            {
+              label: 'Set up',
+              collapsed: true,
+              items: [
+                { label: 'Finish setup', slug: 'operate/finishing-setup' },
+                { label: 'Add S3 storage', slug: 'operate/storage' },
+                { label: 'Resource limits', slug: 'operate/resource-limits' },
+                { label: 'Wildcard certificates', slug: 'operate/wildcard-certificates' },
+                { label: 'Going to production', slug: 'operate/production' }
+              ]
+            },
+            {
+              label: 'Settings',
+              collapsed: true,
+              items: [
+                { label: 'Where settings live', slug: 'operate/configuration' },
+                { label: 'Environment variables', slug: 'reference/configuration' },
+                { label: 'Instance admin', slug: 'operate/instance-admin' },
+                { label: 'Host commands', slug: 'operate/host-commands' }
+              ]
+            },
+            {
+              label: 'People',
+              collapsed: true,
+              items: [
+                { label: 'Manage users', slug: 'operate/manage-users' },
+                { label: 'Manage organizations', slug: 'operate/manage-organizations' }
+              ]
+            },
+            {
+              label: 'Cluster',
               collapsed: true,
               items: [
                 { label: 'Architecture', slug: 'operate/architecture' },
-                { label: 'Configuration', slug: 'operate/configuration' },
-                { label: 'Environment variables', slug: 'reference/configuration' },
-                { label: 'Finishing setup', slug: 'operate/finishing-setup' },
-                { label: 'Add S3 storage', slug: 'operate/storage' },
-                { label: 'Instance admin', slug: 'operate/instance-admin' },
-                { label: 'Manage users', slug: 'operate/manage-users' },
-                { label: 'Manage organizations', slug: 'operate/manage-organizations' },
-                { label: 'Resource limits', slug: 'operate/resource-limits' },
-                { label: 'Size older workloads', slug: 'operate/backfill' },
-                { label: 'Host commands', slug: 'operate/host-commands' },
                 { label: 'Nodes and pools', slug: 'operate/nodes' },
-                { label: 'Bot protection', slug: 'operate/bot-protection' },
-                { label: 'Database dumps', slug: 'operate/database-dumps' },
-                { label: 'Usage reports', slug: 'operate/telemetry' },
-                { label: 'Running Greenhouse', slug: 'operate/greenhouse' },
                 { label: 'Upgrades', slug: 'operate/upgrades' },
-                { label: 'Going to production', slug: 'operate/production' },
-                { label: 'Wildcard certificates', slug: 'operate/wildcard-certificates' },
+                { label: 'Size older workloads', slug: 'operate/backfill' },
+                { label: 'Run Greenhouse', slug: 'operate/greenhouse' }
+              ]
+            },
+            {
+              label: 'Security',
+              collapsed: true,
+              items: [
                 { label: 'Security and isolation', slug: 'operate/security' },
-                { label: 'Image scanning', slug: 'operate/image-scanning' },
+                { label: 'Bot protection', slug: 'operate/bot-protection' },
+                { label: 'Image scanning', slug: 'operate/image-scanning' }
+              ]
+            },
+            {
+              label: 'Data and logs',
+              collapsed: true,
+              items: [
+                { label: 'Database dumps', slug: 'operate/database-dumps' },
                 { label: 'Logs and request data', slug: 'operate/logs' },
+                { label: 'Usage reports', slug: 'operate/telemetry' }
+              ]
+            },
+            {
+              label: 'Help',
+              collapsed: true,
+              items: [
                 { label: 'Troubleshooting', slug: 'operate/troubleshooting' },
                 { label: 'Licenses', slug: 'operate/licenses' }
               ]

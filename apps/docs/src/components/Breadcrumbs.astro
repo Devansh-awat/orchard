@@ -37,7 +37,7 @@ function walk(items: SidebarEntry[], trail: Crumb[]): Crumb[] | undefined {
 let trail: Crumb[] = [];
 for (const section of sidebar) {
   if (section.type !== 'group') continue;
-  const found = walk(section.entries, []);
+  const found = walk(section.entries, [{ label: section.label, href: firstLink(section) }]);
   if (found) {
     trail = found;
     break;
