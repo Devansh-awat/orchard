@@ -176,7 +176,7 @@ export class OrgQuotasController {
       })
     ]);
 
-    const orgCpuCap = org?.cpuLimitMilli ?? null;
+    const orgCpuCap = org?.cpuLimitMilli || null;
     const orgMemCap = org?.memoryLimitBytes ? Number(org.memoryLimitBytes) : null;
 
     const orgUsage =

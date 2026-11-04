@@ -1,4 +1,9 @@
-import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException
+} from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
@@ -49,6 +54,17 @@ type EffectiveProjectCaps = Caps & {
     services: 'project' | 'org' | null;
   };
 };
+
+export function assertPositiveOrBlank(fields: Record<string, number | null | undefined>): void {
+  for (const [label, value] of Object.entries(fields)) {
+    if (value === undefined || value === null) continue;
+    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+      throw new BadRequestException(
+        `${label} must be greater than 0. Leave it blank for no limit.`
+      );
+    }
+  }
+}
 
 @Injectable()
 export class QuotasService {
@@ -298,11 +314,11 @@ export class QuotasService {
       org: {
         id: org.id,
         name: org.name,
-        cpuLimitMilli: org.cpuLimitMilli,
+        cpuLimitMilli: org.cpuLimitMilli || null,
         memoryLimitBytes: org.memoryLimitBytes ? Number(org.memoryLimitBytes) : null,
-        maxPods: org.maxPods,
-        maxServices: org.maxServices,
-        defaultPodCpuMilli: org.defaultPodCpuMilli,
+        maxPods: org.maxPods || null,
+        maxServices: org.maxServices || null,
+        defaultPodCpuMilli: org.defaultPodCpuMilli || null,
         defaultPodMemoryBytes: org.defaultPodMemoryBytes ? Number(org.defaultPodMemoryBytes) : null,
         quotaGroupId: org.quotaGroupId
       },
@@ -428,6 +444,14 @@ export class QuotasService {
       defaultPodMemoryBytes?: number | null;
     }
   ) {
+    assertPositiveOrBlank({
+      'CPU cap': data.cpuLimitMilli,
+      'Memory cap': data.memoryLimitBytes,
+      'Max pods': data.maxPods,
+      'Max services': data.maxServices,
+      'Default CPU': data.defaultPodCpuMilli,
+      'Default memory': data.defaultPodMemoryBytes
+    });
     const self = await this.prisma.organization.findUnique({
       where: { id: organizationId },
       select: { quotaGroupId: true }
@@ -467,6 +491,12 @@ export class QuotasService {
   }
 
   async updateProjectCaps(projectId: string, data: Partial<Caps>) {
+    assertPositiveOrBlank({
+      'CPU cap': data.cpuLimitMilli,
+      'Memory cap': data.memoryLimitBytes,
+      'Max pods': data.maxPods,
+      'Max services': data.maxServices
+    });
     const project = await this.prisma.project.update({
       where: { id: projectId },
       data: {
@@ -692,6 +722,7 @@ export class QuotasService {
       memoryUnlimited?: boolean;
     }
   ) {
+    assertPositiveOrBlank({ 'CPU allowance': data.cpuMilli, 'Memory allowance': data.memoryBytes });
     const member = await this.prisma.organizationMember.findUnique({
       where: { organizationId_userId: { organizationId, userId } }
     });
@@ -729,6 +760,7 @@ export class QuotasService {
     organizationId: string,
     data: { cpuMilli?: number | null; memoryBytes?: number | null }
   ) {
+    assertPositiveOrBlank({ 'CPU allowance': data.cpuMilli, 'Memory allowance': data.memoryBytes });
     return this.prisma.organization.update({
       where: { id: organizationId },
       data: {
@@ -794,7 +826,7 @@ export class QuotasService {
     });
     return {
       org: {
-        cpuLimitMilli: org.cpuLimitMilli,
+        cpuLimitMilli: org.cpuLimitMilli || null,
         memoryLimitBytes: org.memoryLimitBytes ? Number(org.memoryLimitBytes) : null,
         defaultMemberCpuMilli: org.defaultMemberCpuMilli,
         defaultMemberMemoryBytes: org.defaultMemberMemoryBytes
@@ -839,7 +871,10 @@ export class QuotasService {
       orgTotal: usage,
       projects: projects.map((p) => ({
         ...p,
+        cpuLimitMilli: p.cpuLimitMilli || null,
         memoryLimitBytes: p.memoryLimitBytes ? Number(p.memoryLimitBytes) : null,
+        maxPods: p.maxPods || null,
+        maxServices: p.maxServices || null,
         usage: perNs.get(p.namespace) || { cpuMilli: 0, memoryBytes: 0, pods: 0 }
       }))
     };
