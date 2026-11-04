@@ -1,6 +1,6 @@
 ---
 title: Set up SCIM provisioning
-description: Connect an identity provider to Orchard with SCIM 2.0 to add, update and deactivate organization members automatically.
+description: Connect an identity provider to Orchard with SCIM 2.0 to add, update, and deactivate organization members automatically.
 sidebar:
   order: 3
 ---
@@ -9,11 +9,11 @@ To add and remove organization members from your identity provider, connect the 
 
 ## Prerequisites
 
-- You are an organization owner. Only owners can open the SCIM tab or manage SCIM tokens.
+- The **Owner** role in the organization. Only owners can open the SCIM tab or manage SCIM tokens.
 
 ## Connect your identity provider
 
-1. In your organization, select **Settings** > **SCIM**.
+1. Go to **Organization settings** > **SCIM**.
 2. Copy the **Endpoint** value.
 3. In **Tokens**, select **New token**.
 4. Enter a **Name**, such as `Okta production`.
@@ -37,11 +37,11 @@ To revoke a token, select **Revoke** on its row. Requests that use the token fai
 
 SCIM only changes the membership in this organization. The person's Orchard account stays, because they may belong to other organizations.
 
-Orchard refuses to deactivate, delete or demote the last owner of an organization.
+Orchard refuses to deactivate, delete, or demote the last owner of an organization.
 
 ## Assign roles from your provider
 
-Orchard reads a member's role from the SCIM `roles` attribute or the `userType` attribute. The accepted values are `admin`, `member` and `guest`. A provider cannot grant `owner`.
+Orchard reads a member's role from the SCIM `roles` attribute or the `userType` attribute. The accepted values are `admin`, `member`, and `guest`. A provider cannot grant `owner`.
 
 A role sent by the provider overrides a change made in the dashboard at the next sync.
 

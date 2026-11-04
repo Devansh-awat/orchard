@@ -1,11 +1,11 @@
 ---
 title: Read audit logs
-description: Read Orchard audit logs at the app, organization and instance level to find who made a change and when.
+description: Read Orchard audit logs at the app, organization, and instance level to find who made a change and when.
 sidebar:
   order: 4
 ---
 
-Orchard audit logs record actions taken through Orchard, such as deploys, deletions, member and role changes, settings changes and database operations. Each entry has the actor, the action, the target and the time.
+Orchard audit logs record actions taken through Orchard, such as deploys, deletions, member and role changes, settings changes, and database operations. Each entry has the actor, the action, the target, and the time.
 
 Orchard keeps audit log entries for 180 days and then deletes them. You cannot edit entries from the dashboard.
 
@@ -14,7 +14,7 @@ Orchard keeps audit log entries for 180 days and then deletes them. You cannot e
 | Level        | Who can read it                 | Location                                                     |
 | ------------ | ------------------------------- | ------------------------------------------------------------ |
 | App          | Anyone who can view the project | The **History** tab of the app                               |
-| Organization | Owners and admins               | **Settings** > **Audit log**                                 |
+| Organization | Owners and admins               | **Organization settings** > **Audit log**                               |
 | Instance     | Superadmins                     | **Instance admin** > **Audit log**                           |
 
 To read an organization's audit log from a terminal, run the following command:

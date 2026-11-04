@@ -1,6 +1,6 @@
 ---
 title: Set up SSO
-description: Add an OIDC or SAML identity provider to an Orchard organization, verify email domains and require single sign-on.
+description: Add an OIDC or SAML identity provider to an Orchard organization, verify email domains, and require single sign-on.
 sidebar:
   order: 2
 ---
@@ -11,25 +11,26 @@ Sessions created through an organization's SSO connection can only reach that or
 
 ## Prerequisites
 
-- A superadmin has allowed SSO for your organization at **Instance admin** > **Sign in**. SSO is off for every organization until a superadmin allows it.
-- You are an organization owner. Admins can view SSO settings but cannot change them.
+- SSO allowed for your organization. SSO is off for every organization until a superadmin allows it at **Instance admin** > **Sign in**.
+- The **Owner** role in the organization. Admins can view SSO settings but cannot change them.
 
 ## Add a connection
 
-1. In your organization, select **Settings** > **SSO**.
+1. Go to **Organization settings** > **SSO**.
 2. In **Connections**, select **Add connection**.
-3. Select a provider. Orchard has presets for Google Workspace, Microsoft Entra ID, GitHub, GitLab, Okta, Auth0, Keycloak, Authentik, OneLogin and JumpCloud. For another provider, select **OpenID Connect** or **SAML 2.0**.
+3. Select a provider. Orchard has presets for Google Workspace, Microsoft Entra ID, GitHub, GitLab, Okta, Auth0, Keycloak, Authentik, OneLogin, and JumpCloud. For another provider, select **OpenID Connect** or **SAML 2.0**.
 4. Enter the provider details:
    - For OIDC, enter the **Client ID** and **Client secret**, plus the **Issuer URL** or provider domain if the form asks for one.
-   - For SAML, enter the **IdP metadata URL**, or the **Sign-in URL**, **IdP entity ID** and **Signing certificate**.
+   - For SAML, enter the **IdP metadata URL**, or the **Sign-in URL**, **IdP entity ID**, and **Signing certificate**.
 5. In **Who this lets in**, set the following options:
-   - **Create accounts on first sign-in**. When this is off, only people with an account or a pending invitation can use the connection.
-   - **Require a verified email**. Orchard rejects sign-ins where the provider does not vouch for the address.
-   - **Role for new members**. Select **Member**, **Admin** or **Guest**.
-   - **Email domains**. Leave this blank to accept any address.
-   - **Show on the login page**.
+   - **Create accounts on first sign-in:** When this is off, only people with an account or a pending invitation can use the connection.
+   - **Require a verified email:** Orchard rejects sign-ins where the provider does not vouch for the address.
+   - **Role for new members:** Select **Member**, **Admin**, or **Guest**.
+   - **Email domains:** Leave this blank to accept any address.
+   - **Show on the login page:** Turn on to list the connection on the sign-in page.
 6. Save the connection.
-7. Open the connection again and copy the values under **Give these to your identity provider** to your provider. OIDC uses the **Redirect URL**. SAML uses the **Entity ID** and **SP metadata**.
+7. Open the connection again.
+8. Copy the values under **Give these to your identity provider** to your provider. OIDC uses the **Redirect URL**. SAML uses the **Entity ID** and **SP metadata**.
 
 ## Test the connection
 
@@ -41,8 +42,9 @@ A successful test shows `Reached the provider`.
 ## Turn on single sign-on
 
 1. In **Single sign-on**, turn on **Use single sign-on**. The option is unavailable until a working connection is turned on.
-2. Copy the **Sign-in page** address and open it in a private browser window.
-3. Sign in with a test account.
+2. Copy the **Sign-in page** address.
+3. Open the address in a private browser window.
+4. Sign in with a test account.
 
 The sign-in page shows your connections and branding, so members do not choose from every provider on the instance.
 
@@ -59,7 +61,7 @@ The domain status changes from **Pending** to **Verified**.
 
 ## Require single sign-on
 
-Requiring single sign-on blocks email codes, passkeys and platform providers for members of the organization. Orchard also signs out members who signed in another way.
+Requiring single sign-on blocks email codes, passkeys, and instance providers for members of the organization. Orchard also signs out members who signed in another way.
 
 :::caution
 Test a connection before you turn this on. A provider that fails blocks every member except superadmins.
@@ -83,11 +85,11 @@ A vanity address sends visitors at `<subdomain>.<base domain>` to your sign-in p
 1. In **Vanity address**, enter a **Subdomain**.
 2. Select **Save**.
 
-Orchard creates an Ingress and a certificate for the host. If the organization has no working SSO connection, visitors to the address go to the normal login page.
+Orchard creates an Ingress and a certificate for the host. If the organization has no working SSO connection, visitors to the address go to the default sign-in page.
 
 ## Set up instance providers
 
-A superadmin can offer a provider on the instance login page for everyone. To do this, go to **Instance admin** > **Sign in**. The same page has **Require single sign-on for everyone**, which stops email codes, passkeys and the superadmin password for everyone except superadmins.
+To offer a provider to everyone on the instance sign-in page, a superadmin can go to **Instance admin** > **Sign in**. The same page has **Require single sign-on for everyone**, which stops email codes, passkeys, and the superadmin password for everyone except superadmins.
 
 To set a provider through environment variables, refer to [Add an identity provider](/operate/finishing-setup/#add-an-identity-provider).
 

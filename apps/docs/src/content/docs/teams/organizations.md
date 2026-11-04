@@ -5,14 +5,14 @@ sidebar:
   order: 1
 ---
 
-To control who can access your Orchard resources, add people to an organization and assign them roles. An organization owns projects and holds members, quotas, SSO settings and audit logs. A person can belong to more than one organization.
+To control who can access your Orchard resources, add people to an organization and assign them roles. An organization owns projects and holds members, quotas, SSO settings, and audit logs. A person can belong to more than one organization.
 
 ## Organization roles
 
 | Role       | Permissions                                                                        |
 | ---------- | ---------------------------------------------------------------------------------- |
-| **Owner**  | Everything an admin can do. Owners also change SSO settings, manage SCIM and set the vanity address. |
-| **Admin**  | Manage members, organization settings and every project in the organization.       |
+| **Owner**  | Everything an admin can do. Owners also change SSO settings, manage SCIM, and set the vanity address. |
+| **Admin**  | Manage members, organization settings, and every project in the organization.       |
 | **Member** | Create projects. Open only the projects they create or are added to.               |
 | **Guest**  | Open only the projects they are added to. Guests cannot create projects.           |
 
@@ -32,10 +32,10 @@ Two people in the same organization can therefore see different lists of apps.
 
 Owners and admins can invite members.
 
-1. In your organization, select **Settings** > **Members**.
+1. Go to **Organization settings** > **Members**.
 2. Select **Invite**.
 3. Enter the email address.
-4. Select **Member**, **Admin** or **Owner**.
+4. Select **Member**, **Admin**, or **Owner**.
 5. Select **Send invite**.
 
 The invitation appears under **Pending invitations**. If the instance has no email configured, the invitation is a link that you send yourself.
@@ -46,18 +46,18 @@ To resend or cancel an invitation, use the controls on its row. The person joins
 
 Owners can change roles.
 
-1. In your organization, select **Settings** > **Members**.
+1. Go to **Organization settings** > **Members**.
 2. In the member's row, select a new role.
 
-Use the role filter above the table to list **Owners**, **Admins**, **Members** or **Guests**.
+Use the role filter above the table to list **Owners**, **Admins**, **Members**, or **Guests**.
 
 ## Add registry credentials
 
 Use organization registry credentials to let every project in the organization pull private images and build from them. Owners and admins can manage these credentials. The instance must have `SECRETS_ENCRYPTION_KEY` set.
 
-1. In your organization, select **Settings** > **Registry credentials**.
+1. Go to **Organization settings** > **Registry credentials**.
 2. Select **Add**.
-3. In **Registry**, select a registry. To share a Docker Hardened Images login, select **Docker Hardened Images (dhi.io)**.
+3. In **Registry**, select a registry. To share a Docker Hardened Images credential, select **Docker Hardened Images (dhi.io)**.
 4. Enter the **Username** and token. For a custom registry, also enter the **Host**.
 5. Select **Add credential**.
 
@@ -75,7 +75,7 @@ Removing a project credential restores the organization credential. Removing an 
 
 ## Superadmins
 
-A superadmin operates the instance. This role is separate from organization roles. A superadmin can administer every organization and manage instance settings, nodes and node pools at **Instance admin**.
+A superadmin operates the instance. This role is separate from organization roles. A superadmin can administer every organization and manage instance settings, nodes, and node pools at **Instance admin**.
 
 A new instance has no superadmin. The first superadmin claims the instance with a single-use setup token. For more information, refer to [Install](/start/install/#claim-the-instance).
 

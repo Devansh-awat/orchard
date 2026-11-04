@@ -5,11 +5,11 @@ sidebar:
   order: 5
 ---
 
-To stop one person or project from using all of a cluster's capacity, set quotas. This page explains how Orchard calculates limits and how to change them.
+To stop one person or project from using all of a cluster's capacity, set quotas.
 
 ## How limits apply
 
-Orchard checks three limits when an app or database is created, scaled or resized:
+Orchard checks three limits when you create, scale, or resize an app or database:
 
 1. The organization cap, set by a superadmin.
 2. The project cap, if the project has its own. A project cap replaces the organization cap for that project.
@@ -25,7 +25,7 @@ You must be a superadmin.
 
 1. Go to **Instance admin** > **Organizations**.
 2. Select **Resource quotas** on the organization row.
-3. Enter **CPU (millicores)**, **Memory (MiB)**, **Max pods** and **Max services**.
+3. Enter **CPU (millicores)**, **Memory (MiB)**, **Max pods**, and **Max services**.
 4. Save the quotas.
 
 Orchard applies the quotas to the cluster when you save.
@@ -49,7 +49,7 @@ Go to **Usage** in your organization. Owners and admins see all of the following
 | **Members**      | The default allowance, and each member's usage against their allowance. |
 | **Right-sizing** | How workloads compare with their allocated resources.                  |
 
-Size apps from metrics over a time range rather than a single reading, so that the size covers the peak you care about.
+Size apps from metrics over a time range instead of a single reading, so that the size covers the peak.
 
 ## Transfer project ownership
 
