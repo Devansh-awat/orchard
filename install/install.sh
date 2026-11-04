@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+ENV_AT_START=" $(compgen -e | tr '\n' ' ') "
+FLAGS_GIVEN=' '
+
 ORCHARD_VERSION=${ORCHARD_VERSION:-}
 CHART_REF=${ORCHARD_CHART:-oci://ghcr.io/hackclub/orchard/charts/orchard}
 IMAGE_REGISTRY=${ORCHARD_IMAGE_REGISTRY:-ghcr.io}
@@ -43,6 +46,12 @@ PORTS_BUSY=''
 PORTS_BUSY_DETAIL=''
 PROMPT_BLOCKED=''
 PROMPT_HINT_SHOWN=false
+PREVIOUS_INSTALL=false
+PREVIOUS_EXTRA_HOSTS=''
+PUBLIC_IP=''
+PRIMARY_IP=''
+LOCAL_IPS=''
+BEHIND_NAT=true
 
 HOST_DEFAULTS_VERSION=2
 
@@ -310,6 +319,7 @@ need_value() {
 
 parse_args() {
   while [ $# -gt 0 ]; do
+    FLAGS_GIVEN="$FLAGS_GIVEN$1 "
     case "$1" in
       --mode) need_value "$1" "${2:-}"; ORCHARD_INGRESS_MODE=$2; shift 2 ;;
       --domain) need_value "$1" "${2:-}"; ORCHARD_DOMAIN=$2; shift 2 ;;
@@ -452,17 +462,89 @@ ask() {
   printf '%s' "${answer:-$default}"
 }
 
+detect_arch() {
+  case "$(uname -m)" in
+    x86_64|amd64) ARCH=amd64 ;;
+    aarch64|arm64) ARCH=arm64 ;;
+    *) die "amd64 or arm64 only; this is $(uname -m)" ;;
+  esac
+}
+
+answer_given() {
+  case "$FLAGS_GIVEN" in *" $1 "*) return 0 ;; esac
+  case "$ENV_AT_START" in *" $2 "*) [ -n "${!2:-}" ] && return 0 ;; esac
+  return 1
+}
+
+keep_answer() {
+  local flag=$1 env_name=$2 target=$3 path=$4 value
+  if answer_given "$flag" "$env_name"; then return 0; fi
+  value=$(reuse_value "$path")
+  if [ -n "$value" ]; then printf -v "$target" '%s' "$value"; fi
+}
+
+previous_ingress_mode() {
+  if [ "$(reuse_value '.ingress.tls.enabled')" = true ]; then
+    printf public
+    return
+  fi
+  case "$(reuse_secret FRONTEND_URL)" in
+    https://*) printf tunnel ;;
+    http://*) printf lan ;;
+  esac
+}
+
+is_sslip() {
+  case "$1" in *.sslip.io) return 0 ;; *) return 1 ;; esac
+}
+
+load_previous_answers() {
+  [ -f "$VALUES_FILE" ] || return 0
+  PREVIOUS_INSTALL=true
+
+  if ! command -v yq >/dev/null 2>&1; then
+    detect_arch
+    ensure_yq
+  fi
+
+  if ! answer_given --mode ORCHARD_INGRESS_MODE; then
+    ORCHARD_INGRESS_MODE=$(previous_ingress_mode)
+  fi
+
+  local previous_domain moving_off_sslip=false
+  previous_domain=$(reuse_value '.ingress.host')
+  if answer_given --domain ORCHARD_DOMAIN && is_sslip "$previous_domain" && ! is_sslip "$ORCHARD_DOMAIN"; then
+    moving_off_sslip=true
+  fi
+
+  keep_answer --domain ORCHARD_DOMAIN ORCHARD_DOMAIN '.ingress.host'
+  if [ "$moving_off_sslip" = false ]; then
+    keep_answer --app-domain ORCHARD_APP_DOMAIN ORCHARD_APP_DOMAIN '.server.env[]? | select(.name == "APP_DOMAIN") | .value'
+    keep_answer --mcp-domain ORCHARD_MCP_DOMAIN ORCHARD_MCP_DOMAIN '.mcp.ingress.host'
+  fi
+  keep_answer --mcp ORCHARD_MCP ORCHARD_MCP '.mcp.enabled'
+  keep_answer --metrics ORCHARD_METRICS ORCHARD_METRICS '.metrics.enabled'
+  keep_answer --logs ORCHARD_LOGS ORCHARD_LOGS '.logs.enabled'
+  keep_answer --image-scanning ORCHARD_IMAGE_SCANNING ORCHARD_IMAGE_SCANNING '.trivy.enabled'
+  keep_answer --http-port ORCHARD_HTTP_PORT HTTP_PORT '.server.env[]? | select(.name == "PUBLIC_HTTP_PORT") | .value'
+  keep_answer --https-port ORCHARD_HTTPS_PORT HTTPS_PORT '.server.env[]? | select(.name == "PUBLIC_HTTPS_PORT") | .value'
+  keep_answer --registry-host ORCHARD_REGISTRY_HOST REGISTRY_HOST '.server.env[]? | select(.name == "DOCKER_REGISTRY_PULL") | .value'
+
+  PREVIOUS_EXTRA_HOSTS=$(yq -r '.ingress.extraHosts[]?' "$VALUES_FILE" 2>/dev/null | tr '\n' ' ')
+
+  if [ "$ORCHARD_INGRESS_MODE" = tunnel ] && [ -z "$ORCHARD_TUNNEL_TOKEN" ]; then
+    ORCHARD_TUNNEL_TOKEN=$(KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl -n cloudflared get secret tunnel-token \
+      -o jsonpath='{.data.token}' 2>/dev/null | base64 -d 2>/dev/null || true)
+  fi
+}
+
 preflight() {
   step
 
   [ "$(id -u)" -eq 0 ] || die "run as root (k3s needs it)"
   [ "$(uname -s)" = Linux ] || die "Linux only; this is $(uname -s)"
 
-  case "$(uname -m)" in
-    x86_64|amd64) ARCH=amd64 ;;
-    aarch64|arm64) ARCH=arm64 ;;
-    *) die "amd64 or arm64 only; this is $(uname -m)" ;;
-  esac
+  detect_arch
   info "architecture: $ARCH"
 
   MEM_MB=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
@@ -627,10 +709,16 @@ choose_ingress_mode() {
 # Tailscale one), its hostname, its mDNS name, and the sslip.io name earlier
 # versions used.
 lan_alt_hosts() {
-  local out='' seen=' ' candidate short
+  local short
   short=$(hostname 2>/dev/null | cut -d. -f1 || true)
-  for candidate in $LOCAL_IPS $short ${short:+$short.local} \
-    "orchard.${PRIMARY_IP//./-}.sslip.io"; do
+  # shellcheck disable=SC2086  # each of these is a list of names
+  extra_hosts_list $PREVIOUS_EXTRA_HOSTS $LOCAL_IPS $short ${short:+$short.local} \
+    "orchard.${PRIMARY_IP//./-}.sslip.io"
+}
+
+extra_hosts_list() {
+  local out='' seen=' ' candidate
+  for candidate in "$@"; do
     [ -n "$candidate" ] || continue
     [ "$candidate" != "$ORCHARD_DOMAIN" ] || continue
     case "$seen" in *" $candidate "*) continue ;; esac
@@ -647,6 +735,9 @@ collect_domains() {
     true|false) ;;
     *) die "--mcp takes true or false, not: $ORCHARD_MCP" ;;
   esac
+
+  # shellcheck disable=SC2086  # a list of names
+  INGRESS_EXTRA_HOSTS=$(extra_hosts_list $PREVIOUS_EXTRA_HOSTS)
 
   if [ "$INGRESS_MODE" = lan ]; then
     # The dashboard answers on this box's own address, so nothing has to resolve
@@ -844,25 +935,15 @@ wait_for_dns() {
 
 choose_update_policy() {
   if [ -z "$ORCHARD_UPDATE_POLICY" ]; then
-    if [ "$ASSUME_YES" = true ]; then
-      ORCHARD_UPDATE_POLICY=manual
-    else
-      echo
-      bold "Updates"
-      echo "  1) manual     - you run 'orchard-update' when you want a new version"
-      echo "  2) automatic  - check nightly and upgrade in place"
-      local attempt=0
-      while [ -z "$ORCHARD_UPDATE_POLICY" ] && [ "$attempt" -lt 5 ]; do
-        attempt=$((attempt + 1))
-        case "$(ask 'Choose' 1)" in
-          1|manual) ORCHARD_UPDATE_POLICY=manual ;;
-          2|automatic) ORCHARD_UPDATE_POLICY=automatic ;;
-          *) warn "pick 1 or 2" ;;
-        esac
-      done
-      [ -n "$ORCHARD_UPDATE_POLICY" ] || die "invalid choice"
+    ORCHARD_UPDATE_POLICY=manual
+    if [ "$PREVIOUS_INSTALL" = true ] && systemctl is-enabled --quiet orchard-update.timer 2>/dev/null; then
+      ORCHARD_UPDATE_POLICY=automatic
     fi
   fi
+  case "$ORCHARD_UPDATE_POLICY" in
+    manual|automatic) ;;
+    *) die "--updates takes manual or automatic, not: $ORCHARD_UPDATE_POLICY" ;;
+  esac
   info "update policy: $ORCHARD_UPDATE_POLICY"
 }
 
@@ -1465,6 +1546,13 @@ write_values() {
   [ -n "$SSO_KEY" ] || SSO_KEY=$(head -c 24 /dev/urandom | base64 | tr -d '\n=' | head -c 32)
   [ -n "$MCP_TOKEN" ] || MCP_TOKEN=$(head -c 32 /dev/urandom | base64 | tr -d '\n=' | head -c 43)
 
+  local public_ip_pin=''
+  public_ip_pin=$(reuse_value '.tenant.publicIp')
+  if [ -n "$public_ip_pin" ]; then
+    public_ip_pin="
+  publicIp: \"$public_ip_pin\""
+  fi
+
   local previous=
   if [ -f "$VALUES_FILE" ]; then
     previous=$(mktemp "$STATE_DIR/values.XXXXXX")
@@ -1533,7 +1621,7 @@ tenant:
   ingressNamespaces: "traefik,orchard"
   storageClass: local-path
   ingressClass: traefik
-  certClusterIssuer: "$CERT_ISSUER"
+  certClusterIssuer: "$CERT_ISSUER"$public_ip_pin
 
 ingress:
   enabled: true
@@ -1789,6 +1877,7 @@ EOF
     systemctl enable --now orchard-update.timer >/dev/null
     info "nightly updates enabled (systemctl disable orchard-update.timer to stop)"
   else
+    systemctl disable --now orchard-update.timer >/dev/null 2>&1 || true
     info "run 'sudo orchardctl update' to upgrade"
   fi
 }
@@ -1843,6 +1932,7 @@ summary() {
 
 main() {
   parse_args "$@"
+  load_previous_answers
 
   if [ "$ASSUME_YES" != true ] && ! open_prompt_fd; then
     warn "$PROMPT_BLOCKED"

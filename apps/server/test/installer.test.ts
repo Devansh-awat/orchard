@@ -232,3 +232,103 @@ test(
     }
   }
 );
+
+test(
+  'a re-run keeps every answer unless a flag changes it',
+  { skip: !has('yq', '--version') },
+  () => {
+    const box = sandbox();
+    try {
+      const values = join(box.state, 'values.yaml');
+      const edit = `yq -i '
+        .ingress.host = "kept.example.com" |
+        .ingress.extraHosts = ["mango", "mango.tail.ts.net"] |
+        .mcp.ingress.host = "agents.example.com" |
+        .mcp.enabled = false |
+        .metrics.enabled = false |
+        .tenant.publicIp = "198.51.100.7" |
+        (.server.env[] | select(.name == "APP_DOMAIN") | .value) = "kept-apps.example.com"
+      ' "${values}"`;
+      box.run(`mkdir -p "${box.state}"; write_values; ${edit}`);
+      const answers = `printf '%s|' "$ORCHARD_INGRESS_MODE" "$ORCHARD_DOMAIN" "$ORCHARD_APP_DOMAIN" "$ORCHARD_MCP_DOMAIN" "$ORCHARD_MCP" "$ORCHARD_METRICS" "$PREVIOUS_INSTALL" "$PREVIOUS_EXTRA_HOSTS"`;
+      const clean = `ORCHARD_INGRESS_MODE= ORCHARD_DOMAIN= ORCHARD_APP_DOMAIN= ORCHARD_MCP_DOMAIN= ORCHARD_MCP=true ORCHARD_METRICS=true`;
+
+      assert.match(
+        box.run(`${clean}; load_previous_answers; ${answers}`),
+        /public\|kept\.example\.com\|kept-apps\.example\.com\|agents\.example\.com\|false\|false\|true\|mango mango\.tail\.ts\.net \|/
+      );
+
+      assert.match(
+        box.run(
+          `${clean}; parse_args --domain new.example.com --mcp true; ORCHARD_DOMAIN=new.example.com; load_previous_answers; ${answers}`
+        ),
+        /public\|new\.example\.com\|kept-apps\.example\.com\|agents\.example\.com\|true\|false\|/
+      );
+
+      box.run(
+        `${clean}; load_previous_answers; collect_domains() { :; }; INGRESS_EXTRA_HOSTS="[\"mango\", \"mango.tail.ts.net\"]"; write_values`
+      );
+      const read = (path: string) =>
+        execFileSync('yq', ['-r', path, values], { encoding: 'utf8' }).trim();
+      assert.equal(read('.tenant.publicIp'), '198.51.100.7');
+      assert.equal(read('.ingress.host'), 'kept.example.com');
+      assert.equal(read('.mcp.ingress.host'), 'agents.example.com');
+      assert.equal(read('.mcp.enabled'), 'false');
+      assert.equal(read('.ingress.extraHosts[1]'), 'mango.tail.ts.net');
+    } finally {
+      box.cleanup();
+    }
+  }
+);
+
+test(
+  'a re-run keeps the ingress mode it finds in the values',
+  { skip: !has('yq', '--version') },
+  () => {
+    const box = sandbox();
+    try {
+      const cases: [string, string][] = [
+        ['USE_TLS=true INGRESS_MODE=public', 'public'],
+        ['USE_TLS=false INGRESS_MODE=tunnel CERT_ISSUER=', 'tunnel'],
+        ['USE_TLS=false INGRESS_MODE=lan CERT_ISSUER=selfsigned', 'lan']
+      ];
+      for (const [setup, want] of cases) {
+        rmSync(box.state, { recursive: true, force: true });
+        box.run(`mkdir -p "${box.state}"; ${setup}; write_values`);
+        const out = box.run(
+          'ORCHARD_INGRESS_MODE=; load_previous_answers; printf "mode=%s" "$ORCHARD_INGRESS_MODE"'
+        );
+        assert.ok(out.includes(`mode=${want}`), `${want}: ${out}`);
+      }
+    } finally {
+      box.cleanup();
+    }
+  }
+);
+
+test('the update policy defaults to manual and rejects anything else', () => {
+  const box = sandbox();
+  try {
+    assert.match(
+      box.run(
+        'ORCHARD_UPDATE_POLICY=; choose_update_policy; printf "got=%s" "$ORCHARD_UPDATE_POLICY"'
+      ),
+      /got=manual/
+    );
+    assert.match(
+      box.run(
+        'ORCHARD_UPDATE_POLICY=; PREVIOUS_INSTALL=true; choose_update_policy; printf "got=%s" "$ORCHARD_UPDATE_POLICY"'
+      ),
+      /got=automatic/,
+      'a timer already enabled on this box is kept'
+    );
+    const refused = spawnSync(
+      'bash',
+      ['-c', `${preamble}\nORCHARD_UPDATE_POLICY=sometimes; choose_update_policy`],
+      { encoding: 'utf8' }
+    );
+    assert.notEqual(refused.status, 0);
+  } finally {
+    box.cleanup();
+  }
+});
