@@ -195,7 +195,8 @@ test('the overview says what is configured and what was skipped', async () => {
   assert.equal(item(o, 'email')?.state, 'skipped');
   assert.equal(item(o, 'github')?.state, 'skipped');
   assert.equal(item(o, 'mcp')?.value, 'mcp.example.com');
-  assert.equal(item(o, 'domains')?.value, 'orchard.example.com');
+  assert.equal(item(o, 'dashboard')?.value, 'orchard.example.com');
+  assert.equal(item(o, 'apps')?.value, 'apps.example.com');
   assert.ok(o.mcp.deployed);
 });
 
@@ -223,8 +224,34 @@ test('tunnel and lan installs have no certificate of their own to report', async
 test('a Helm install keeps per-host certificates and says the script did not run', async () => {
   const o = await overview({}).result;
   assert.equal(o.installer, false);
+  assert.equal(o.mode, null);
   assert.equal(o.certificate.state, 'perHost');
   assert.equal(item(o, 'public-ip')?.state, 'pending');
+});
+
+test('the overview names the issuer and says when limits are pinned', async () => {
+  process.env.CERT_CLUSTER_ISSUER = 'letsencrypt-prod';
+  try {
+    const o = await overview({}).result;
+    assert.equal(o.certIssuer, 'letsencrypt-prod');
+    assert.equal(o.locked.limits, false);
+  } finally {
+    delete process.env.CERT_CLUSTER_ISSUER;
+  }
+});
+
+test('the MCP checklist item names the route that matches the install', async () => {
+  const detail = async (installMode: string | undefined) => {
+    const { svc } = overview({ installMode, mcpEnv: false });
+    svc.settings.getImageScannerState = async () => ({ value: 'trivy', dbValue: null });
+    svc.prisma.user.count = async () => 1;
+    const items = await svc.conditionalChecklist(installMode ?? '');
+    return items.find((i: { id: string }) => i.id === 'mcp')?.detail as string;
+  };
+  assert.match(await detail('public'), /sudo orchardctl mcp enable/);
+  const helm = await detail(undefined);
+  assert.doesNotMatch(helm, /orchardctl/);
+  assert.match(helm, /Helm values/);
 });
 
 test('an MCP the chart did not deploy reads as off', async () => {

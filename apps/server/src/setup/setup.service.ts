@@ -93,7 +93,14 @@ export interface SetupOverview {
   appDomain: string | null;
   publicIp: string | null;
   cname: string | null;
-  locked: { publicIp: boolean; cname: boolean; appDomain: boolean; email: boolean };
+  certIssuer: string | null;
+  locked: {
+    publicIp: boolean;
+    cname: boolean;
+    appDomain: boolean;
+    email: boolean;
+    limits: boolean;
+  };
   mcp: { deployed: boolean; enabled: boolean; url: string | null; locked: boolean };
   emailConfigured: boolean;
   certificate: SetupCertificate;
@@ -540,12 +547,20 @@ export class SetupService implements OnModuleInit {
         href: '/admin/instance'
       },
       {
-        id: 'domains',
-        title: 'Domains',
+        id: 'dashboard',
+        title: 'Dashboard domain',
         value: hostOf(dashboardUrl) ?? 'Not set',
         state: dashboardUrl ? 'configured' : 'pending',
-        detail: appDomain ? `Apps at *.${appDomain}` : 'No apps domain, so apps get no URL.',
+        detail: null,
         href: '/admin/networking'
+      },
+      {
+        id: 'apps',
+        title: 'Apps domain',
+        value: appDomain ?? 'Not set',
+        state: appDomain ? 'configured' : 'pending',
+        detail: appDomain ? null : 'No apps domain, so apps get no URL.',
+        href: '/admin/instance#wildcard'
       },
       {
         id: 'public-ip',
@@ -602,11 +617,13 @@ export class SetupService implements OnModuleInit {
       appDomain,
       publicIp,
       cname,
+      certIssuer: (process.env.CERT_CLUSTER_ISSUER || '').trim() || null,
       locked: {
         publicIp: this.config.lockedFields(NETWORK).includes('publicIp'),
         cname: this.config.lockedFields(INGRESS).includes('cname'),
         appDomain: this.config.lockedFields(WILDCARD).includes('appDomain'),
-        email: this.config.lockedFields(EMAIL).length > 0
+        email: this.config.lockedFields(EMAIL).length > 0,
+        limits: limits.envOverride !== null
       },
       mcp: {
         deployed: mcpDeployed,
@@ -658,8 +675,9 @@ export class SetupService implements OnModuleInit {
       items.push({
         id: 'mcp',
         title: 'Turn on the MCP endpoint',
-        detail:
-          'AI agents cannot connect to this instance. Run sudo orchardctl mcp enable --apply.',
+        detail: installMode
+          ? 'AI agents cannot connect to this instance. Run sudo orchardctl mcp enable --apply.'
+          : 'AI agents cannot connect to this instance. Set mcp.enabled and mcp.ingress.host in your Helm values.',
         done: false,
         severity: 'normal',
         href: 'https://docs.orchard.my/operate/finishing-setup/#turn-the-mcp-endpoint-on-or-off'
