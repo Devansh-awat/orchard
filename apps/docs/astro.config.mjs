@@ -79,6 +79,7 @@ export default defineConfig({
                 { label: 'Builds', slug: 'deploy/builds' },
                 { label: 'Domains and HTTPS', slug: 'deploy/domains' },
                 { label: 'Networking', slug: 'deploy/networking' },
+                { label: 'Tailscale', slug: 'deploy/tailscale' },
                 { label: 'Scaling and resources', slug: 'deploy/scaling' },
                 { label: 'Resource suggestions', slug: 'deploy/resource-suggestions' },
                 { label: 'Storage', slug: 'deploy/storage' },

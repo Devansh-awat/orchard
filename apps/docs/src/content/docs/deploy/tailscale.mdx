@@ -1,0 +1,119 @@
+---
+title: Reach apps over Tailscale
+description: Give an Orchard app a private address on your tailnet, without a public URL or an open port.
+sidebar:
+  order: 5
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+You can put an app on your [Tailscale](https://tailscale.com/) network. Devices on your tailnet reach the app at a private address, and the app needs no public URL or open port.
+
+Orchard runs a Tailscale proxy pod next to the app, in the same namespace. The proxy joins your tailnet with your auth key and forwards traffic to the app's Service. The app's own pods do not change or restart.
+
+## Prerequisites
+
+- A Tailscale account.
+- Edit access to the project.
+- On an instance that uses PostHog, the Tailscale feature turned on for your account. Go to **Account settings** > **Early access**. On an instance with no PostHog key, the feature is always on.
+
+## Link your tailnet
+
+An auth key connects your Orchard account to your tailnet. Each person links their own key.
+
+1. In the [Tailscale admin console](https://login.tailscale.com/admin/settings/keys), go to **Settings** > **Keys** and select **Generate auth key**.
+2. Turn on **Reusable** and **Ephemeral**. Leave the tags empty.
+3. Set the key to expire in 90 days, the longest period Tailscale allows.
+4. Copy the key. It starts with `tskey-auth-`.
+
+<Tabs syncKey="interface">
+<TabItem label="Dashboard">
+
+1. Go to **Account settings** > **GitHub and Tailscale**.
+2. In **Tailscale**, select **Connect**.
+3. Paste the auth key and select **Connect**.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard tailscale link
+```
+
+The command prompts for the key. You can also set `ORCHARD_TS_AUTHKEY` or pass `--auth-key`.
+
+</TabItem>
+</Tabs>
+
+Orchard encrypts the key before it stores it.
+
+## Put an app on your tailnet
+
+<Tabs syncKey="interface">
+<TabItem label="Dashboard">
+
+1. Open the app and go to the **Network** tab.
+2. In **Ports**, turn on the **Tailscale** switch.
+
+The address appears in the same row when the proxy joins the tailnet.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard tailscale expose <deployment-id>
+orchard tailscale get <deployment-id>
+```
+
+</TabItem>
+</Tabs>
+
+The device name on your tailnet is `<app>-<namespace>`. With [MagicDNS](https://tailscale.com/kb/1081/magicdns) on, the address is:
+
+```text
+<app>-<namespace>.<tailnet>.ts.net
+```
+
+Tailscale access controls apply to this device in the same way as to any other device on your tailnet.
+
+## Remove an app from your tailnet
+
+<Tabs syncKey="interface">
+<TabItem label="Dashboard">
+
+1. Open the app and go to the **Network** tab.
+2. In **Ports**, turn off the **Tailscale** switch.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard tailscale unexpose <deployment-id>
+```
+
+</TabItem>
+</Tabs>
+
+Orchard deletes the proxy pod and its copy of the auth key. Orchard also removes the proxy when you delete the app or its project.
+
+## Unlink your tailnet
+
+Go to **Account settings** > **GitHub and Tailscale**, and in **Tailscale**, select **Disconnect**. In the CLI, run `orchard tailscale unlink`.
+
+:::caution
+Unlinking removes every app you put on your tailnet from it. Apps that other people put on their tailnets stay connected.
+:::
+
+## When an auth key expires
+
+A proxy uses its auth key when it joins your tailnet. After the key expires, a proxy that has to join again fails, and new apps cannot join.
+
+To replace the key:
+
+1. Generate a new auth key and link your tailnet again. The new key replaces the old one on your account.
+2. For each app, turn the **Tailscale** switch off and on. Each proxy keeps its own copy of the key, so an app only gets the new key when its proxy is created again.
+
+## Related resources
+
+- [Configure app networking](/deploy/networking/)
+- [Protect an app](/deploy/protection/)
