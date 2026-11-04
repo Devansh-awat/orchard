@@ -23,6 +23,13 @@ function flag(name: string): string | undefined {
   return at === -1 ? undefined : process.argv[at + 1];
 }
 
+async function endSessions(prisma: PrismaClient, email: string) {
+  await prisma.session.updateMany({
+    where: { user: { email }, revokedAt: null },
+    data: { revokedAt: new Date() }
+  });
+}
+
 async function main() {
   const prisma = new PrismaClient();
   const email = flag('--email') ?? '';
@@ -51,12 +58,14 @@ async function main() {
       : null;
     if (account && !account.isSuperAdmin) {
       await setAccountPassword(prisma, account.id, password);
+      await endSessions(prisma, account.email);
       console.log(`password set for ${account.email}`);
       console.log('It works while this instance has no email. With email, they use a code.');
       return;
     }
 
     const who = await setSuperadminPassword(prisma, email, password);
+    await endSessions(prisma, who);
     console.log(`password set for ${who}`);
   } catch (err) {
     if (err instanceof PasswordRefused) {

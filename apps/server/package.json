@@ -69,7 +69,7 @@
     "test:repo-link": "tsx --test test/github-repo-link.test.ts",
     "test:certificates": "tsx --test test/certificate-status.test.ts",
     "test:setup-state": "tsx --test test/setup-state.test.ts",
-    "test:instance-config": "tsx --test test/instance-config.test.ts",
+    "test:instance-config": "tsx --test test/instance-config.test.ts test/smtp-failure.test.ts",
     "test:instance-settings": "tsx --test test/instance-settings.test.ts",
     "test:sso-enforcement": "tsx --test test/sso-enforcement.test.ts",
     "test:pvc-status": "tsx --test test/pvc-status.test.ts",

@@ -6,6 +6,7 @@ import {
   RolloutStatusService,
   parseRolloutSince,
   parseRolloutTimeout,
+  pendingBuildHint,
   tailLines,
   ROLLOUT_WAIT_MAX_MS
 } from '../src/projects/rollout-status.service';
@@ -334,4 +335,15 @@ test('rolloutPin returns the release recorded during the call', async () => {
   const pin = await service.rolloutPin(DEPLOYMENT_ID, before);
   assert.equal(pin.rolloutSince, before.toISOString());
   assert.equal(pin.releaseId, RELEASE_ID);
+});
+
+test('a build stuck waiting for a node says why while it waits', () => {
+  const line =
+    '[WARNING] Build job still pending after 60s (0/1 nodes are available: 1 Insufficient memory) - waiting for pod to be scheduled...';
+  assert.equal(
+    pendingBuildHint('building', `[INFO] start\n${line}\n`),
+    'The build is waiting for a place to run: 0/1 nodes are available: 1 Insufficient memory'
+  );
+  assert.equal(pendingBuildHint('building', `${line}\n[INFO] Pod started\n`), null);
+  assert.equal(pendingBuildHint('live', line), null);
 });

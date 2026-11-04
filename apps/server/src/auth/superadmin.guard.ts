@@ -396,7 +396,7 @@ export class SuperAdminGuard implements CanActivate {
       }
 
       if (deniedToApiToken(request.path)) {
-        throw new ForbiddenException("An API token can't add credentials. Sign in instead.");
+        throw new ForbiddenException("An API token can't use this. Sign in instead.");
       }
 
       const user = apiToken.user;

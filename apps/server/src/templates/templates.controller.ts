@@ -71,7 +71,7 @@ export class TemplatesController {
     return this.templatesService.deployTemplate(
       projectId,
       body.templateId,
-      body.parameters,
+      body.parameters ?? {},
       req.user.externalAuthId || req.user.sub,
       {
         email: req.user.email,

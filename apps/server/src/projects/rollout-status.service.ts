@@ -71,6 +71,13 @@ export function tailLines(text: string | null | undefined, n: number): string[] 
   return lines.slice(-n);
 }
 
+export function pendingBuildHint(phase: RolloutPhase, buildTail: string): string | null {
+  if (phase !== 'queued' && phase !== 'building') return null;
+  const last = tailLines(buildTail, 1)[0] ?? '';
+  const match = /still pending after \d+s \((.+)\) - waiting for pod to be scheduled/.exec(last);
+  return match ? `The build is waiting for a place to run: ${match[1]}` : null;
+}
+
 export function parseRolloutTimeout(raw: string | undefined): number {
   if (raw === undefined || raw === '') return ROLLOUT_WAIT_DEFAULT_MS;
   const secs = Number(raw);
@@ -320,7 +327,7 @@ export class RolloutStatusService {
         ready: v.ready,
         failing: v.failing.map((f) => ({ ...f, logTail: podTails.get(f.pod) ?? [] }))
       },
-      hint: v.hint
+      hint: v.hint ?? pendingBuildHint(v.phase, buildTail)
     };
   }
 

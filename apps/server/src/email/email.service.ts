@@ -52,6 +52,24 @@ export interface NotificationEmailData {
   ctaUrl: string;
 }
 
+export function smtpFailureMessage(
+  error: { code?: string; message?: string; responseCode?: number } | null | undefined,
+  host: string,
+  port: number
+): string {
+  const code = error?.code ?? '';
+  const text = error?.message ?? '';
+  if (code === 'EDNS' || /ENOTFOUND|EAI_AGAIN/.test(text)) return `Could not find ${host}.`;
+  if (code === 'EAUTH' || error?.responseCode === 535) {
+    return 'The server refused the username or password.';
+  }
+  if (/ECONNREFUSED/.test(text)) return `${host} refused the connection on port ${port}.`;
+  if (code === 'ETIMEDOUT' || /timeout/i.test(text)) {
+    return `No answer from ${host} on port ${port} after 10 seconds. Check the port and any firewall.`;
+  }
+  return text || "Couldn't send the test email.";
+}
+
 @Injectable()
 export class EmailService {
   private mailer: Transporter | null = null;
@@ -147,7 +165,7 @@ export class EmailService {
       });
       return { ok: true };
     } catch (error: any) {
-      return { ok: false, message: error?.message || "Couldn't send the test email." };
+      return { ok: false, message: smtpFailureMessage(error, host, port) };
     } finally {
       transport.close();
     }

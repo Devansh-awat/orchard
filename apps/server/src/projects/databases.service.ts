@@ -1796,10 +1796,10 @@ export class DatabasesService {
 
     return {
       success: true,
-      message: trashed
+      message: trashed?.recoverableUntil
         ? `Database "${database.name}" deleted. You can bring it back for 30 days.`
-        : `Database "${database.name}" deleted`,
-      recoverableUntil: trashed?.purgeAfter ?? null
+        : `Database "${database.name}" deleted. It had no backup, so you can't bring it back.`,
+      recoverableUntil: trashed?.recoverableUntil ? trashed.purgeAfter : null
     };
   }
 

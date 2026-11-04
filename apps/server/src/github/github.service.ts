@@ -707,8 +707,13 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     headers['Accept'] = 'application/vnd.github.raw+json';
     const response = await fetch(url, { headers });
 
+    if (response.status === 404) {
+      throw new BadRequestException(
+        `${path} isn't in ${owner}/${repo}${branch ? ` on ${branch}` : ''}. Check the path and branch.`
+      );
+    }
     if (!response.ok) {
-      throw new BadRequestException('Failed to fetch file content');
+      throw new BadRequestException(`GitHub wouldn't return ${path} (HTTP ${response.status}).`);
     }
 
     return await response.text();
