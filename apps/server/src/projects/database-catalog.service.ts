@@ -7,6 +7,7 @@ import { K8sCnpgService } from '../kubernetes/k8s-cnpg.service';
 import {
   bucketFromDestination,
   platformBackupTarget,
+  proxyHasChartUpstream,
   storageManagedByEnv
 } from '../instance-config/object-storage';
 
@@ -146,7 +147,7 @@ export class DatabaseCatalogService {
       this.prisma.deletedDatabase.findMany({ where: { purgedAt: null, restoredAs: null } })
     ]);
     const buckets = new Map<string, string>();
-    if (!storageManagedByEnv()) {
+    if (!storageManagedByEnv() || !proxyHasChartUpstream()) {
       for (const row of rows) {
         if (!row.namespace || !row.clusterName || row.project.organization.backupR2Bucket) continue;
         const state = await this.k8sCnpg

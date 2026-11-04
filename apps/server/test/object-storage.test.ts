@@ -222,6 +222,13 @@ test('R2 env wins over stored values and locks them', () =>
     assert.equal(objectStorage().region, 'wnam');
   }));
 
+test('a stray stored region or addressing style cannot change an env-managed instance', () =>
+  withStorage(PRODUCTION_ENV, { region: 'eu', pathStyle: 'true' }, () => {
+    assert.equal(objectStorage().region, 'auto');
+    assert.equal(objectStorage().pathStyle, null);
+    assert.equal(uploadStorage()!.pathStyle, false);
+  }));
+
 test('a public URL with a shared bucket is refused, and so is the local store name', () =>
   withStorage(LOCAL_ENV, {}, () => {
     assert.throws(

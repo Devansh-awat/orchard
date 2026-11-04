@@ -53,7 +53,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import {
   bucketFromDestination,
   localObjectStore,
-  platformBackupTarget,
+  proxyHasChartUpstream,
   storageManagedByEnv,
   tenantBackupTarget
 } from '../instance-config/object-storage';
@@ -390,7 +390,7 @@ export class DatabasesService {
     fallback: string
   ): Promise<string> {
     const route = this.describeBackupRoute(org);
-    if (!route || route.own || storageManagedByEnv()) return fallback;
+    if (!route || route.own || (storageManagedByEnv() && proxyHasChartUpstream())) return fallback;
     if (source.trashId) {
       const row = await this.prisma.deletedDatabase.findUnique({
         where: { id: source.trashId },

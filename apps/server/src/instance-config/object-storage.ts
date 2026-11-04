@@ -56,8 +56,10 @@ export function objectStorage(): ObjectStorage {
       pick('R2_PUBLIC_URL', 'publicUrl') ?? (accountId ? `https://pub-${accountId}.r2.dev` : null),
     buildContextBucket: pick('R2_BUILD_CONTEXT_BUCKET', 'buildContextBucket'),
     backupBucket: pick('R2_BACKUP_BUCKET', 'backupBucket'),
-    region: pick('R2_REGION', 'region') ?? 'auto',
-    pathStyle: parsePathStyle(pick('R2_PATH_STYLE', 'pathStyle'))
+    region: (storageManagedByEnv() ? process.env.R2_REGION : pick('R2_REGION', 'region')) || 'auto',
+    pathStyle: parsePathStyle(
+      storageManagedByEnv() ? process.env.R2_PATH_STYLE || null : pick('R2_PATH_STYLE', 'pathStyle')
+    )
   };
 }
 
