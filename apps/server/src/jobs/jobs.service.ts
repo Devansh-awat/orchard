@@ -12,6 +12,7 @@ import { SCRIPT_RUNTIMES, ScriptRuntime } from './script-runtimes';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { applyEnvKeepRules } from '../projects/env-write-rules';
+import { assertImageOwnedByProject } from '../projects/image-ownership';
 
 export const JOB_STEP_TYPES = ['app', 'image', 'script'] as const;
 export type JobStepType = (typeof JOB_STEP_TYPES)[number];
@@ -669,130 +670,142 @@ export class JobsService {
       : [];
     const validDeployments = new Set(deployments.map((d) => d.id));
 
-    return stepInputs.map((raw, i) => {
-      const order = i + 1;
-      const name = String(raw.name ?? '').trim() || `Step ${order}`;
-      if (name.length > 255) throw new BadRequestException(`Step ${order}: name is too long`);
-      if (!JOB_STEP_TYPES.includes(raw.type)) {
-        throw new BadRequestException(`Step ${order}: invalid type "${raw.type}"`);
-      }
-
-      const prior =
-        previous.find((p) => p.name === name) ?? previous.find((p) => p.stepOrder === order);
-      const before = new Map(
-        storedStepEnv(prior?.envVars).map((e) => {
-          const plain = this.crypto.maybeDecrypt(e);
-          return [plain.key, plain] as const;
+    const project = stepInputs.some((s) => s.type === 'image')
+      ? await this.prisma.project.findUniqueOrThrow({
+          where: { id: projectId },
+          select: { id: true, namespace: true }
         })
-      );
-      const kept = applyEnvKeepRules(
-        Array.isArray(raw.envVars)
-          ? raw.envVars.filter((e) => e && typeof e.key === 'string' && e.key.trim())
-          : [],
-        before
-      );
-      if (kept.length > 64) throw new BadRequestException(`Step ${order}: too many env vars`);
-      for (const e of kept) {
-        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(e.key)) {
-          throw new BadRequestException(`Step ${order}: invalid env var name "${e.key}"`);
-        }
-      }
-      const envVars = kept.map((e) => ({
-        key: e.key,
-        value: this.crypto.encryptIfSecret(e.value, e.secret),
-        secret: e.secret
-      }));
+      : null;
 
-      let timeoutSeconds =
-        raw.timeoutSeconds != null ? Math.floor(Number(raw.timeoutSeconds)) : 1800;
-      if (!Number.isFinite(timeoutSeconds)) timeoutSeconds = 1800;
-      if (timeoutSeconds < MIN_STEP_TIMEOUT || timeoutSeconds > MAX_STEP_TIMEOUT) {
-        throw new BadRequestException(
-          `Step ${order}: timeout must be between ${MIN_STEP_TIMEOUT} and ${MAX_STEP_TIMEOUT} seconds`
+    return Promise.all(
+      stepInputs.map(async (raw, i) => {
+        const order = i + 1;
+        const name = String(raw.name ?? '').trim() || `Step ${order}`;
+        if (name.length > 255) throw new BadRequestException(`Step ${order}: name is too long`);
+        if (!JOB_STEP_TYPES.includes(raw.type)) {
+          throw new BadRequestException(`Step ${order}: invalid type "${raw.type}"`);
+        }
+
+        const prior =
+          previous.find((p) => p.name === name) ?? previous.find((p) => p.stepOrder === order);
+        const before = new Map(
+          storedStepEnv(prior?.envVars).map((e) => {
+            const plain = this.crypto.maybeDecrypt(e);
+            return [plain.key, plain] as const;
+          })
         );
-      }
+        const kept = applyEnvKeepRules(
+          Array.isArray(raw.envVars)
+            ? raw.envVars.filter((e) => e && typeof e.key === 'string' && e.key.trim())
+            : [],
+          before
+        );
+        if (kept.length > 64) throw new BadRequestException(`Step ${order}: too many env vars`);
+        for (const e of kept) {
+          if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(e.key)) {
+            throw new BadRequestException(`Step ${order}: invalid env var name "${e.key}"`);
+          }
+        }
+        const envVars = kept.map((e) => ({
+          key: e.key,
+          value: this.crypto.encryptIfSecret(e.value, e.secret),
+          secret: e.secret
+        }));
 
-      let retries = raw.retries != null ? Math.floor(Number(raw.retries)) : 0;
-      if (!Number.isFinite(retries) || retries < 0) retries = 0;
-      if (retries > MAX_RETRIES) {
-        throw new BadRequestException(`Step ${order}: retries must be at most ${MAX_RETRIES}`);
-      }
-
-      let cpuRequestMilli: number | null = null;
-      if (raw.cpuRequestMilli != null) {
-        cpuRequestMilli = Math.floor(Number(raw.cpuRequestMilli));
-        if (!Number.isFinite(cpuRequestMilli) || cpuRequestMilli < 50 || cpuRequestMilli > 8000) {
+        let timeoutSeconds =
+          raw.timeoutSeconds != null ? Math.floor(Number(raw.timeoutSeconds)) : 1800;
+        if (!Number.isFinite(timeoutSeconds)) timeoutSeconds = 1800;
+        if (timeoutSeconds < MIN_STEP_TIMEOUT || timeoutSeconds > MAX_STEP_TIMEOUT) {
           throw new BadRequestException(
-            `Step ${order}: cpuRequestMilli must be between 50 and 8000`
+            `Step ${order}: timeout must be between ${MIN_STEP_TIMEOUT} and ${MAX_STEP_TIMEOUT} seconds`
           );
         }
-      }
 
-      let memoryRequestBytes: bigint | null = null;
-      if (raw.memoryRequestBytes != null) {
-        try {
-          memoryRequestBytes = BigInt(raw.memoryRequestBytes);
-        } catch {
-          throw new BadRequestException(`Step ${order}: invalid memoryRequestBytes`);
+        let retries = raw.retries != null ? Math.floor(Number(raw.retries)) : 0;
+        if (!Number.isFinite(retries) || retries < 0) retries = 0;
+        if (retries > MAX_RETRIES) {
+          throw new BadRequestException(`Step ${order}: retries must be at most ${MAX_RETRIES}`);
         }
-        if (
-          memoryRequestBytes < 64n * 1024n * 1024n ||
-          memoryRequestBytes > 16n * 1024n * 1024n * 1024n
-        ) {
-          throw new BadRequestException(`Step ${order}: memory must be between 64Mi and 16Gi`);
+
+        let cpuRequestMilli: number | null = null;
+        if (raw.cpuRequestMilli != null) {
+          cpuRequestMilli = Math.floor(Number(raw.cpuRequestMilli));
+          if (!Number.isFinite(cpuRequestMilli) || cpuRequestMilli < 50 || cpuRequestMilli > 8000) {
+            throw new BadRequestException(
+              `Step ${order}: cpuRequestMilli must be between 50 and 8000`
+            );
+          }
         }
-      }
 
-      const command =
-        raw.command != null && String(raw.command).trim() !== ''
-          ? { shell: String(raw.command).trim() }
-          : null;
-      if (command && command.shell.length > 4096) {
-        throw new BadRequestException(`Step ${order}: command is too long`);
-      }
-
-      const base = {
-        stepOrder: order,
-        name,
-        type: raw.type,
-        envVars,
-        cpuRequestMilli,
-        memoryRequestBytes,
-        timeoutSeconds,
-        retries
-      };
-
-      if (raw.type === 'script') {
-        const script = String(raw.script ?? '');
-        if (!script.trim()) throw new BadRequestException(`Step ${order}: script is empty`);
-        if (Buffer.byteLength(script, 'utf8') > MAX_SCRIPT_BYTES) {
-          throw new BadRequestException(`Step ${order}: script exceeds 64KB`);
+        let memoryRequestBytes: bigint | null = null;
+        if (raw.memoryRequestBytes != null) {
+          try {
+            memoryRequestBytes = BigInt(raw.memoryRequestBytes);
+          } catch {
+            throw new BadRequestException(`Step ${order}: invalid memoryRequestBytes`);
+          }
+          if (
+            memoryRequestBytes < 64n * 1024n * 1024n ||
+            memoryRequestBytes > 16n * 1024n * 1024n * 1024n
+          ) {
+            throw new BadRequestException(`Step ${order}: memory must be between 64Mi and 16Gi`);
+          }
         }
-        const runtime = raw.scriptRuntime as ScriptRuntime;
-        if (!SCRIPT_RUNTIMES.includes(runtime)) {
-          throw new BadRequestException(
-            `Step ${order}: scriptRuntime must be one of ${SCRIPT_RUNTIMES.join(', ')}`
-          );
-        }
-        return { ...base, script, scriptRuntime: runtime };
-      }
 
-      if (raw.type === 'image') {
-        const image = String(raw.image ?? '').trim();
-        if (!image) throw new BadRequestException(`Step ${order}: image is required`);
-        if (image.length > 500 || !IMAGE_REF_PATTERN.test(image)) {
-          throw new BadRequestException(`Step ${order}: "${image}" isn't a valid image reference`);
+        const command =
+          raw.command != null && String(raw.command).trim() !== ''
+            ? { shell: String(raw.command).trim() }
+            : null;
+        if (command && command.shell.length > 4096) {
+          throw new BadRequestException(`Step ${order}: command is too long`);
         }
-        return { ...base, image, command };
-      }
 
-      if (!raw.deploymentId || !validDeployments.has(raw.deploymentId)) {
-        throw new BadRequestException(`Step ${order}: select a deployment from this project`);
-      }
-      if (!command) {
-        throw new BadRequestException(`Step ${order}: command is required for app steps`);
-      }
-      return { ...base, deploymentId: raw.deploymentId, command };
-    });
+        const base = {
+          stepOrder: order,
+          name,
+          type: raw.type,
+          envVars,
+          cpuRequestMilli,
+          memoryRequestBytes,
+          timeoutSeconds,
+          retries
+        };
+
+        if (raw.type === 'script') {
+          const script = String(raw.script ?? '');
+          if (!script.trim()) throw new BadRequestException(`Step ${order}: script is empty`);
+          if (Buffer.byteLength(script, 'utf8') > MAX_SCRIPT_BYTES) {
+            throw new BadRequestException(`Step ${order}: script exceeds 64KB`);
+          }
+          const runtime = raw.scriptRuntime as ScriptRuntime;
+          if (!SCRIPT_RUNTIMES.includes(runtime)) {
+            throw new BadRequestException(
+              `Step ${order}: scriptRuntime must be one of ${SCRIPT_RUNTIMES.join(', ')}`
+            );
+          }
+          return { ...base, script, scriptRuntime: runtime };
+        }
+
+        if (raw.type === 'image') {
+          const image = String(raw.image ?? '').trim();
+          if (!image) throw new BadRequestException(`Step ${order}: image is required`);
+          if (image.length > 500 || !IMAGE_REF_PATTERN.test(image)) {
+            throw new BadRequestException(
+              `Step ${order}: "${image}" isn't a valid image reference`
+            );
+          }
+          await assertImageOwnedByProject(this.prisma, image, project!);
+          return { ...base, image, command };
+        }
+
+        if (!raw.deploymentId || !validDeployments.has(raw.deploymentId)) {
+          throw new BadRequestException(`Step ${order}: select a deployment from this project`);
+        }
+        if (!command) {
+          throw new BadRequestException(`Step ${order}: command is required for app steps`);
+        }
+        return { ...base, deploymentId: raw.deploymentId, command };
+      })
+    );
   }
 }

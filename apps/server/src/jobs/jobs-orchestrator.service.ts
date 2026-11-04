@@ -34,6 +34,7 @@ import { pullSecretsForImage } from '../projects/registry-credentials';
 import { pinToBuildArch } from '../docker/build-platform';
 import { ResourceBindingsService } from '../projects/resource-bindings.service';
 import { resolveEnvVars, EnvVar, ResourceValues } from '../env/env-resolver';
+import { assertImageOwnedByProject } from '../projects/image-ownership';
 
 export const JOB_MANAGED_BY = 'orchard-job';
 export const LABEL_JOB_ID = 'orchard/job-id';
@@ -140,7 +141,7 @@ export class JobsOrchestratorService {
       where: { id: jobId },
       include: {
         steps: { orderBy: { stepOrder: 'asc' } },
-        project: { select: { id: true } }
+        project: { select: { id: true, namespace: true } }
       }
     });
     const resolved: ResolvedStep[] = [];
@@ -176,7 +177,7 @@ export class JobsOrchestratorService {
 
   private async resolveStep(
     step: any,
-    job: { environmentId?: string | null; project: { id: string } }
+    job: { environmentId?: string | null; project: { id: string; namespace: string } }
   ): Promise<ResolvedStep> {
     const projectId = job.project.id;
     const shared = await this.loadSharedVars(job.environmentId);
@@ -212,6 +213,7 @@ export class JobsOrchestratorService {
     }
 
     if (step.type === 'image') {
+      await assertImageOwnedByProject(this.prisma, step.image, job.project);
       return {
         ...base,
         type: 'image',

@@ -15,6 +15,7 @@ import { UsersService } from '../users/users.service';
 import { AuditService } from '../audit/audit.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { QuotasService } from '../quotas/quotas.service';
+import { assertImageOwnedByProject } from '../projects/image-ownership';
 
 // H-3: Webhook bearer tokens are persisted as a SHA-256 hex digest. The
 // plaintext is only ever held in memory long enough to return it from
@@ -357,6 +358,7 @@ export class WebhooksService {
       const fullImage = `${baseImage}:${resolvedTag}`;
 
       try {
+        await assertImageOwnedByProject(this.prisma, fullImage, deployment.project);
         await this.k8sWorkload.updateDeploymentImage(
           deployment.name,
           deployment.namespace,

@@ -117,6 +117,7 @@ import {
   summarizeBlueGreen,
   summarizeRollout
 } from '../kubernetes/rollout-strategy';
+import { assertImageOwnedByProject } from './image-ownership';
 
 const ROLLBACK_GATE_TIMEOUT_MS = 90_000;
 
@@ -140,22 +141,6 @@ const RECOVERY_OUTCOME_REASON: Partial<
   k8s_missing: 'k8s_missing',
   internal: 'internal'
 };
-
-const PLATFORM_REGISTRY_HOSTS = [process.env.DOCKER_REGISTRY_PULL, process.env.DOCKER_REGISTRY_PUSH]
-  .filter((h): h is string => Boolean(h))
-  .map((h) => h.toLowerCase());
-const PLATFORM_REGISTRY_PROJECT = process.env.REGISTRY_PROJECT || 'orchard';
-
-function assertImageOwnedByProject(image: string, projectNamespace: string): void {
-  const [host, ...rest] = image.toLowerCase().split('/');
-  if (!PLATFORM_REGISTRY_HOSTS.includes(host)) return;
-  const [registryProject, repo] = rest;
-  if (registryProject !== PLATFORM_REGISTRY_PROJECT) return;
-  const name = (repo ?? '').split(/[:@]/)[0];
-  if (!name.startsWith(`${projectNamespace}-`)) {
-    throw new ForbiddenException('That image belongs to another project');
-  }
-}
 
 const DOCKERFILE_TARGET_RE = /^[A-Za-z0-9._-]{1,128}$/;
 
@@ -5286,6 +5271,25 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
+  private async assertResourceRequest(
+    data: { cpuRequestMilli?: number | null; memoryRequestBytes?: number | null },
+    userId?: string
+  ) {
+    for (const value of [data.cpuRequestMilli, data.memoryRequestBytes]) {
+      if (value != null && (!Number.isSafeInteger(value) || value < 0)) {
+        throw new BadRequestException('Resource requests must be whole, non-negative numbers');
+      }
+    }
+    if (
+      data.cpuRequestMilli === 0 &&
+      (data.memoryRequestBytes === 0 || data.memoryRequestBytes == null) &&
+      userId &&
+      !(await this.authz.isSuperAdmin(userId))
+    ) {
+      throw new ForbiddenException('Only a superadmin can run an app without resource limits');
+    }
+  }
+
   async listBuildRuns(deploymentId: string, limit = 20) {
     const runs = await this.prisma.buildRun.findMany({
       where: { deploymentId },
@@ -6398,14 +6402,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     if (userId) {
       await this.authz.requireProjectEdit(deployment.projectId, userId, 'change deployment image');
     }
-    assertImageOwnedByProject(
+    await assertImageOwnedByProject(
+      this.prisma,
       trimmed,
-      (
-        await this.prisma.project.findUniqueOrThrow({
-          where: { id: deployment.projectId },
-          select: { namespace: true }
-        })
-      ).namespace
+      await this.prisma.project.findUniqueOrThrow({
+        where: { id: deployment.projectId },
+        select: { id: true, namespace: true }
+      })
     );
 
     // Image-source deployments only: anything tied to a repo is rebuilt from
@@ -6488,6 +6491,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     // Unlimited mode: cpuRequestMilli === 0 means remove all resource constraints.
     const isUnlimited = data.cpuRequestMilli === 0 && data.memoryRequestBytes === 0;
+    await this.assertResourceRequest(data, userId);
 
     // Only push to K8s if the deployment exists in the cluster.
     const k8sExistsRes = await this.k8sWorkload
@@ -6643,6 +6647,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     await this.authz.requireProjectEdit(project.id, user.id, 'create deployments');
+    await this.assertResourceRequest(data, user.id);
 
     // Resolve the target environment (explicit id or the project default).
     // The environment owns the namespace the resource deploys into.
@@ -6664,7 +6669,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     if (!image) {
       throw new BadRequestException('Image is required');
     }
-    assertImageOwnedByProject(image, project.namespace);
+    await assertImageOwnedByProject(this.prisma, image, project);
 
     const name = formatSlug(nameInput);
 
@@ -7051,6 +7056,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     await this.authz.requireProjectEdit(project.id, user.id, 'create deployments');
+    await this.assertResourceRequest(data, user.id);
 
     const environment = await this.environments.resolveEnvironment(project.id, data.environmentId);
 
