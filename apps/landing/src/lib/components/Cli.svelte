@@ -10,14 +10,14 @@
 	const LINES: Line[] = [
 		{ kind: 'cmd', text: 'orchard auth login' },
 		{ kind: 'ok', text: 'logged in to https://orchard.my as leafd' },
-		{ kind: 'cmd', text: 'orchard up' },
-		{ kind: 'ok', text: 'created deployment site (dockerfile build)' },
-		{ kind: 'ok', text: 'uploaded 1.8MB (214 files), build started' },
-		{ kind: 'dim', text: '#5 [deps 3/3] RUN pnpm install --frozen-lockfile' },
-		{ kind: 'dim', text: '#6 [build 2/2] RUN pnpm build' },
-		{ kind: 'ok', text: 'live at https://site.orchard.my' },
-		{ kind: 'cmd', text: 'orchard deploy scale site 3' },
-		{ kind: 'ok', text: 'scaled site to 3 replicas' }
+		{ kind: 'cmd', text: 'orchard import owner/repo' },
+		{ kind: 'ok', text: 'imported owner/repo as project repo' },
+		{
+			kind: 'ok',
+			text: 'will be live at https://repo.orchard.my (visible to your org until made public)'
+		},
+		{ kind: 'cmd', text: 'orchard deploy scale repo 3' },
+		{ kind: 'ok', text: 'scaled repo to 3 replicas' }
 	];
 
 	let terminal = $state<HTMLElement | null>(null);
@@ -63,12 +63,12 @@
 				bind:this={terminal}
 				class="overflow-hidden rounded-2xl border-4 border-crimson bg-night-900 shadow-[0_40px_80px_-40px_rgb(120_0_20/0.55)]"
 				role="img"
-				aria-label="A terminal: orchard auth login, then orchard up deploys the current directory live at site.orchard.my, then orchard deploy scale site 3 scales it to three replicas."
+				aria-label="A terminal: orchard auth login, then orchard import owner/repo imports a repository that will be live at repo.orchard.my, then orchard deploy scale repo 3 scales it to three replicas."
 			>
 				<div
 					class="flex items-center justify-between border-b border-night-700 px-4 py-3 font-mono text-[12px] text-night-300"
 				>
-					<span>~/site</span>
+					<span>~/repo</span>
 					<span>zsh</span>
 				</div>
 				<div
@@ -110,7 +110,7 @@
 				Type
 				<code
 					class="rounded-md bg-white/70 px-1.5 py-0.5 font-mono text-[0.88em] whitespace-nowrap ring-1 ring-crimson/10"
-					>orchard up</code
+					>orchard import owner/repo</code
 				>
 				and your project is live. Check logs or roll back without leaving your terminal.
 			</p>
