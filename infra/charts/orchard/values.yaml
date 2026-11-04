@@ -826,7 +826,7 @@ sandbox:
   # Running machines are stopped this many hours after their last start,
   # active or not (0 = never). Stopped, not deleted.
   maxLifetimeHours: 168
-  # Default per-user machine cap; override per user via /admin/users.
+  # Default per-user machine cap; override per user via /admin/greenhouse.
   maxPerUserDefault: 1
   # Empty = the cluster's default StorageClass.
   storageClass: ""

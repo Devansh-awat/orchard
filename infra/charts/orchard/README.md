@@ -577,7 +577,7 @@ AI dev machines. Off by default. Full operator guide:
 | `sandbox.runtimeClassName` | `kata` | RuntimeClass for machines. Empty runs them on runc, unprivileged, with a Filesystem home PVC. |
 | `sandbox.idleTimeoutMinutes` | `60` | Stop machines with no terminal or SSH activity and no busy agent. `0` never. |
 | `sandbox.maxLifetimeHours` | `168` | Stop machines this long after their last start. `0` never. |
-| `sandbox.maxPerUserDefault` | `1` | Default machines per person; overridable per user in `/admin/users`. |
+| `sandbox.maxPerUserDefault` | `1` | Default machines per person; overridable per user in `/admin/greenhouse`. |
 | `sandbox.storageClass` | `""` | Home volume StorageClass. Empty = cluster default. |
 | `sandbox.diskSize` / `cpuLimit` / `memoryLimit` | `10Gi` / `"2"` / `4Gi` | Per-machine size. Keep memory at least `1Gi` under kata. |
 | `sandbox.tunnelMode` | `""` | `portforward` only for a server outside the cluster. |
