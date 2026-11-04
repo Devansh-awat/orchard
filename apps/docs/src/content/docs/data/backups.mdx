@@ -1,0 +1,333 @@
+---
+title: Backups and restore
+description: Back up an Orchard managed database, take checkpoints, restore to a point in time, copy a database, recover a deleted database, and configure backup storage.
+sidebar:
+  order: 2
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+Orchard backs up managed databases to S3-compatible object storage. Each database continuously archives its write-ahead log (WAL) and takes a daily base backup. A base backup is a full copy of the database. WAL is the stream of changes that Orchard replays onto a base backup.
+
+You can restore from a backup, from a checkpoint, or to any moment in the recovery window. Orchard keeps backups and WAL for 30 days.
+
+## Prerequisites
+
+A database needs one of these storage locations. The organization's bucket takes priority.
+
+- An organization bucket, set under **Organization settings** > **Backups**.
+- The instance bucket, set by an operator. For more information, refer to [Backup storage for operators](#backup-storage-for-operators).
+
+Without storage, the **Backups** tab shows **Backups need storage**. Checkpoints, the drop guard, and restore tests are not available.
+
+## Take a backup
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the database and go to **Backups**.
+2. Select **Save a point** > **Backup**.
+
+The backup appears in **Restore points** with its status.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard db backup create <id> --wait
+```
+
+</TabItem>
+</Tabs>
+
+## Set the schedule
+
+Orchard gives each new database a daily schedule. To change it:
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the database and go to **Backups**.
+2. In **Schedule**, select a preset, or select **Custom cron…** and enter a five-field cron expression in UTC.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard db backup-schedule set <id> --cron "0 3 * * *"
+```
+
+</TabItem>
+</Tabs>
+
+## Take a checkpoint
+
+A checkpoint is a named restore point: a marker in the WAL. It does not copy data, and it needs at least one completed backup.
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the database and go to **Backups**.
+2. Select **Save a point** > **Checkpoint**.
+3. (Optional) In **Label**, enter a name.
+4. Select **Take checkpoint**.
+
+To checkpoint every database in a project, open the project's **Overview**, select **More actions**, then **Checkpoint all databases**.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard db checkpoint create <id> --label "Before the users migration"
+```
+
+Without a database ID, the command takes a checkpoint of every database in the project or environment.
+
+</TabItem>
+</Tabs>
+
+A checkpoint shows as pending until its WAL reaches object storage. It can be restored after that. Checkpoints expire after 30 days.
+
+Orchard also takes checkpoints automatically:
+
+| Type | When Orchard takes it |
+| --- | --- |
+| **Before a drop** | Before any `DROP TABLE`, `DROP SCHEMA`, or `DROP COLUMN` runs, when **Checkpoint before drops** is on. The checkpoint records what was dropped and by whom. `TRUNCATE` is not covered. |
+| **Before a deploy** | Before a deploy, so that a [rollback](/deploy/rollbacks/) can also restore the app's databases. |
+| **Before a change** | Before an operation that changes the database, such as an in-place restore or a major upgrade. |
+
+## Restore a database
+
+You can restore in two ways.
+
+| Option | Result |
+| --- | --- |
+| **Replace this database** | Orchard takes a checkpoint, then swaps in the restored copy. It keeps the previous copy stopped for 24 hours, so you can undo the restore. Apps reconnect automatically. |
+| **Copy into a new database** | The original keeps running. The copy keeps the source's database name, so an app that connects to it finds its tables. |
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the database and go to **Backups**.
+2. Select **Restore**.
+3. In **Point**, select **Latest**, **A backup**, **A checkpoint**, or **A time**. When you copy a database, **Now** replaces **Latest** and copies the live data.
+4. In **Where**, select **Replace this database** or **Copy into a new database**.
+5. For a copy, enter a **Name** and select an **Environment**.
+6. Select **Restore** or **Create copy**.
+
+The operation appears in **Operations** on the same tab.
+
+</TabItem>
+<TabItem label="CLI">
+
+To restore in place to a point in time:
+
+```sh
+orchard db backup restore <id> --at 2026-11-03T14:30:00Z --wait
+```
+
+To restore to a checkpoint:
+
+```sh
+orchard db checkpoint restore <checkpoint-id> --wait
+```
+
+To copy a database from now, a backup, a checkpoint, or a point in time:
+
+```sh
+orchard db fork <id> --name appdb-copy --wait
+```
+
+For the source, add `--backup`, `--checkpoint`, or `--at`.
+
+</TabItem>
+</Tabs>
+
+To start a new database from an existing one, select **Copy of a database** in **Start from** when you [create a database](/data/databases/#create-a-database).
+
+### Undo a restore
+
+You can undo an in-place restore for 24 hours.
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the database and go to **Backups**.
+2. In **Operations**, select **Undo** on the restore.
+3. Select **Undo restore**.
+
+Anything written since the restore moves aside.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard db ops undo <op-id> --wait
+```
+
+</TabItem>
+</Tabs>
+
+## Deleted databases
+
+A deleted database stays in **Recently deleted** for 30 days, and Orchard then purges it. You can bring it back only if it had at least one completed backup, because recovery replays that backup.
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the project's **Overview**.
+2. In **Recently deleted**, select **Bring back**.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard db trash list
+orchard db trash restore <deleted-id> --wait
+```
+
+</TabItem>
+</Tabs>
+
+To block deletion, turn on **Deletion protection**. For more information, refer to [Protect a database](/data/protection/).
+
+## Test a backup
+
+A restore test restores the latest backup into a temporary copy, compares tables and row counts, and deletes the copy. A failed test sends a notification.
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the database and go to **Backups**.
+2. In **Restore tests**, select **Test this backup**.
+
+To run a test every week, turn on **Weekly restore tests** under **Settings** > **Protection**.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard db test-backup run <id> --wait
+```
+
+</TabItem>
+</Tabs>
+
+Superadmins set instance-wide defaults under **Instance admin** > **Configuration** > **Databases**. By default, checkpoints before drops are on and weekly restore tests are off.
+
+## Verify your backups
+
+:::caution
+WAL alone cannot restore a database. If no base backup has completed, a deleted database cannot be recovered.
+:::
+
+1. Open the database and go to **Backups**.
+2. Confirm that the status reads **Protected**.
+3. In **Restore tests**, select **Test this backup**.
+
+In the API, an empty `liveStatus.firstRecoverabilityPoint` means no base backup has completed.
+
+## How backups use memory
+
+The base backup runs inside the database container and shares its memory limit with PostgreSQL. Compressing a backup on a small database can use enough memory for the kernel to kill PostgreSQL. For this reason, Orchard chooses base backup compression from the memory limit.
+
+To override the choice, set `backupCompression` through the database settings API. Orchard always compresses WAL, one segment at a time.
+
+## Retention
+
+Orchard removes backups and WAL older than 30 days. This limit also sets how far back point-in-time restore and checkpoints reach.
+
+If your bucket has its own lifecycle rule, keep objects for longer than 30 days. A shorter rule deletes backups Orchard still needs.
+
+## Backup storage for operators
+
+The instance's backup target needs these variables.
+
+| Variable | Purpose |
+| --- | --- |
+| `R2_BACKUP_BUCKET` | The bucket for backups. |
+| `R2_ENDPOINT` | The S3 endpoint. On Cloudflare R2, Orchard derives it from `R2_ACCOUNT_ID`. |
+| `R2_ACCESS_KEY_ID` | The access key. |
+| `R2_SECRET_ACCESS_KEY` | The secret key. |
+| `R2_REGION` | Optional. The signing region. The default is `auto`. |
+
+You can also set these under **Instance admin** > **Configuration** > **Object storage**, except `R2_REGION`, which is environment only. Any S3-compatible store works.
+
+Orchard does not use `R2_BUCKET_NAME` for backups. That bucket holds uploads and assets, and it may be public. If you set only `R2_BUCKET_NAME`, databases have no backups.
+
+On a Helm install, also point the backup proxy at the same store. Each database then gets credentials for its own prefix.
+
+```yaml
+r2Proxy:
+  enabled: true
+  defaultBucket: my-backups
+  upstream:
+    endpoint: https://<account>.r2.cloudflarestorage.com
+    region: auto
+    accessKey: <key id>
+    secretKey: <secret>
+```
+
+### The local store on self-hosted installs
+
+The one-command installer runs an S3 store (versitygw) in the `orchard-object-storage` namespace, with the backup proxy, and sends the instance's backups to it. Checkpoints, point-in-time restore, copies, deleted database recovery, and restore tests work from the first database.
+
+:::caution
+The local store is not disaster recovery. Backups sit on the same machine as the databases, and usually on the same disk. They undo a bad migration or a dropped table. They do not survive the loss of the disk or the machine.
+:::
+
+The chart keys are under `objectStorage.local`:
+
+| Key | Default |
+| --- | --- |
+| `enabled` | `true` on an installer host |
+| `bucket` | `orchard-backups` |
+| `storage.size` | One fifth of free disk, from 5 GB to 50 GB |
+| `storage.storageClass` | The `local-path` class, which does not enforce the size |
+
+To install without the local store, pass `--object-storage false`. Databases then have no backups until you configure storage.
+
+`orchardctl update` turns on the local store for an older host only when no object storage is configured in the values file, in `server.envFrom`, in `r2Proxy.upstream`, or under **Instance admin**.
+
+### Moving to real S3 or R2
+
+Each existing database's backup configuration names the bucket, and the proxy serves only the bucket it is configured with. Keep the bucket name, and copy the existing data before you switch. If you do not copy it, point-in-time restore loses everything from before the switch.
+
+1. Create a bucket with the same name as `objectStorage.local.bucket`. The default is `orchard-backups`. Create a key that can list, read, write, and delete in the bucket.
+
+2. On the host, copy the existing backups. This step needs the AWS CLI.
+
+   ```bash
+   kubectl -n orchard-object-storage port-forward svc/object-storage 9000:9000 &
+   export AWS_ACCESS_KEY_ID=$(kubectl -n orchard get secret orchard-object-storage -o jsonpath='{.data.accessKey}' | base64 -d)
+   export AWS_SECRET_ACCESS_KEY=$(kubectl -n orchard get secret orchard-object-storage -o jsonpath='{.data.secretKey}' | base64 -d)
+   aws --endpoint-url http://127.0.0.1:9000 --region auto s3 sync s3://orchard-backups ./orchard-backups
+   AWS_ACCESS_KEY_ID=<key id> AWS_SECRET_ACCESS_KEY=<secret> \
+     aws --endpoint-url https://<account>.r2.cloudflarestorage.com --region auto \
+     s3 sync ./orchard-backups s3://orchard-backups
+   ```
+
+3. Point the instance and the backup proxy at the new store, and turn off the local store. On a Helm install, set the same keys in your values file.
+
+   ```bash
+   sudo orchardctl config set r2Proxy.upstream.endpoint https://<account>.r2.cloudflarestorage.com
+   sudo orchardctl config set r2Proxy.upstream.region auto
+   sudo orchardctl config set r2Proxy.upstream.accessKey <key id>
+   sudo orchardctl config set r2Proxy.upstream.secretKey <secret>
+   sudo orchardctl config set r2Proxy.defaultBucket orchard-backups
+   sudo orchardctl config set objectStorage.local.enabled false
+   sudo orchardctl env set R2_ENDPOINT https://<account>.r2.cloudflarestorage.com
+   sudo orchardctl env set R2_ACCESS_KEY_ID <key id>
+   sudo orchardctl env set R2_SECRET_ACCESS_KEY <secret>
+   sudo orchardctl env set R2_BACKUP_BUCKET orchard-backups --apply
+   ```
+
+4. Take a new checkpoint of each database. WAL written between the copy and the switch exists only in the local store.
+
+5. Delete the local volume, `object-storage-data` in `orchard-object-storage`, when those checkpoints are older than any point you would restore to. Orchard keeps the volume until you delete it.
+
+## Related resources
+
+- [Databases](/data/databases/)
+- [Protect a database](/data/protection/)
+- [Rollbacks](/deploy/rollbacks/)

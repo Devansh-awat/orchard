@@ -1,0 +1,159 @@
+---
+title: Databases
+description: Create a managed PostgreSQL database in an Orchard project, connect an app to it, size it, and turn on public access.
+sidebar:
+  order: 1
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+A database in Orchard is a managed PostgreSQL instance in a project. Orchard runs it as a CloudNativePG cluster. CloudNativePG is the Kubernetes operator that handles failover, storage, and backups.
+
+## Create a database
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open a project and select **New app**.
+2. In **Start from scratch**, select **PostgreSQL**.
+3. In **Start from**, keep **Empty**. You can also select **Import from URL** or **Copy of a database**.
+4. In **Database name**, enter a name.
+5. In **PostgreSQL version**, select a version.
+6. In **Storage size**, set the volume size. The default is 1 GiB.
+7. In **Resources**, set the CPU, memory, and **Instances**.
+8. Select **Create database**.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard db create --name appdb --pg-major 17 --storage 10Gi --wait
+```
+
+To seed the database from another PostgreSQL server, add `--restore-from postgres://...`.
+
+</TabItem>
+</Tabs>
+
+## Connect an app
+
+To connect an app in the same project, use a reference. A reference follows the database through a password rotation or a restore.
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the app and go to **Variables**.
+2. Add a variable named `DATABASE_URL`.
+3. In the value field, select **Use a resource**, then select the database.
+4. Select **Save**.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard deploy bindings add <app-id> --database appdb
+```
+
+</TabItem>
+</Tabs>
+
+### Get a connection string
+
+1. Open the database.
+2. Select **Connect**.
+3. Select **Private** to connect from apps in this project, or **Public** to connect from anywhere.
+4. Select a format: **URI**, **psql**, **.env**, or **JDBC**.
+5. For a private connection, select the instances: **Primary**, **Standbys**, or **Any**.
+
+The private host is a cluster-internal address, such as `pg-<name>-rw.<namespace>.svc.cluster.local`. Traffic to it stays inside the cluster. Apps in the same project use this address.
+
+To print the connection details from the CLI, run `orchard db connection <id>`. To open a `psql` session, run `orchard db psql <id>`.
+
+## Set CPU and memory
+
+Set CPU and memory under **Settings** > **Resources**, or with `orchard db resources set <id>`.
+
+Orchard sizes `shared_buffers` and backup compression from the memory limit, and recalculates them when the memory changes. To set `shared_buffers` yourself, refer to [Change PostgreSQL parameters](/data/parameters/#shared-buffers).
+
+:::caution
+PostgreSQL reserves `shared_buffers` when it starts. If this value is close to the memory limit, connections and backups have no room in the container, and the kernel can kill PostgreSQL.
+:::
+
+## Manage a database
+
+| Task | Location | Refer to |
+| --- | --- | --- |
+| Read logs and open a shell | **Overview** | [Logs and shell](/run/logs/#database-logs) |
+| Take and restore backups | **Backups** | [Backups and restore](/data/backups/) |
+| Read metrics and query performance | **Observe** | [Monitor a database](/data/monitoring/) |
+| Rename, stop, or delete the database | **Settings** > **General** and **Danger zone** | [Delete a database](#deleting) |
+| Grow storage | **Settings** > **Resources** | [Grow database storage](/data/storage/) |
+| Change protection settings | **Settings** > **Protection** | [Protect a database](/data/protection/) |
+| Upgrade PostgreSQL | **Settings** > **Version and security** | [Upgrade PostgreSQL](/data/upgrades/) |
+| Add standbys | **Settings** > **High availability** | [Configure high availability](/data/high-availability/) |
+| Turn on the pooler | **Settings** > **Connection pooler** | [Use a connection pooler](/data/connection-pooler/) |
+| Add users | **Settings** > **Users** | [Add database users](/data/users/) |
+| Change parameters | **Settings** > **Parameters** | [Change PostgreSQL parameters](/data/parameters/) |
+| Install extensions | **Settings** > **Extensions** | [Extensions](/data/extensions/) |
+
+## Public access
+
+By default, only apps in the project can connect. Public access assigns a port on the organization's public IP address, so you can connect from your computer or a business intelligence tool.
+
+### Prerequisites
+
+- A layer 4 (L4) load balancer in the cluster.
+- A public IP address. To set one for your organization, go to **Organization settings** > **Database defaults** > **Public database IP**. Otherwise, the organization inherits the instance default.
+
+Public access is not available in Cloudflare Tunnel mode, because tunnels carry HTTP only.
+
+### Turn on public access
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the database and go to **Settings** > **Public access**.
+2. Turn on **Reachable from the internet**.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard db public enable <id>
+```
+
+</TabItem>
+</Tabs>
+
+:::caution
+Anyone with the password can connect to a public database. Use a strong password, and turn off public access when you finish. To change the password, run `orchard db rotate-password <id>`.
+:::
+
+## Deleting
+
+Deleting a database moves it to **Recently deleted** on the project for 30 days. You can bring it back only if it had at least one completed backup. For the steps, refer to [Deleted databases](/data/backups/#deleted-databases).
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the database and go to **Settings** > **Danger zone**.
+2. Select **Delete database**, then confirm.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard db delete <id>
+```
+
+</TabItem>
+</Tabs>
+
+:::caution
+Orchard cannot delete a database while an app still references it. Remove the reference first.
+:::
+
+## Related resources
+
+- [Backups and restore](/data/backups/)
+- [Read replicas](/data/replicas/)

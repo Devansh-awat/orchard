@@ -1,0 +1,77 @@
+---
+title: Extensions
+description: Install and remove PostgreSQL extensions on an Orchard managed database from the dashboard or the CLI.
+sidebar:
+  order: 4
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+To add a PostgreSQL extension to a database, install it from the extensions list. Orchard runs `CREATE EXTENSION` against that database.
+
+## Install an extension
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the database and go to **Settings** > **Extensions**.
+2. Find the extension.
+3. Turn on its switch.
+
+An extension that loads at startup shows **Loads at startup, restarts the database**. Installing one of these restarts the database and drops open connections.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard db extension list <id>
+orchard db extension install <id> vector
+```
+
+For an extension that loads at startup, add `--preload`. This option restarts the database.
+
+</TabItem>
+</Tabs>
+
+## Remove an extension
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the database and go to **Settings** > **Extensions**.
+2. Turn off the extension's switch.
+3. Confirm the change.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard db extension uninstall <id> vector
+```
+
+</TabItem>
+</Tabs>
+
+Orchard runs `DROP EXTENSION`. The command fails if objects still depend on the extension. Drop those objects first.
+
+## Allowed extensions
+
+Orchard allows the following extensions. It refuses others, because untrusted languages and foreign data wrappers can run code or reach the network from the database pod.
+
+| Purpose | Extensions |
+| --- | --- |
+| UUIDs and hashing | `uuid-ossp`, `pgcrypto` |
+| Vectors | `vector`, `pgvector` |
+| Geospatial | `postgis`, `postgis_topology`, `postgis_raster`, `cube`, `earthdistance` |
+| Text search | `pg_trgm`, `unaccent`, `fuzzystrmatch`, `citext` |
+| Data types | `hstore`, `ltree`, `isn`, `intarray` |
+| Indexes | `btree_gin`, `btree_gist` |
+| Query statistics | `pg_stat_statements` |
+| Other | `tablefunc`, `plpgsql`, `timescaledb` |
+
+An extension must also exist in the PostgreSQL image. If you need one that is missing, an instance operator must change the image.
+
+## Related resources
+
+- [Databases](/data/databases/)
+- [Change PostgreSQL parameters](/data/parameters/)

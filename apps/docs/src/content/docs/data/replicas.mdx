@@ -1,51 +1,51 @@
 ---
 title: Read replicas
-description: Add read-only copies of a database to spread query load.
+description: Orchard database standbys serve read-only queries through a separate endpoint. Learn which endpoint to use and how replication lag affects reads.
 sidebar:
   order: 3
 ---
 
 import Diagram from '../../../components/Diagram.astro';
 
-A managed database can run **read replicas**: additional PostgreSQL instances
-that stream from the primary and serve read-only queries.
+A read replica is a standby PostgreSQL instance that streams changes from the primary and serves read-only queries. Use replicas for read-heavy workloads, analytics queries that should not compete with production traffic, and reporting tools that must not write.
 
-They are useful for read-heavy workloads, analytics queries you do not want
-competing with production traffic, and reporting tools that should never be able
-to write.
+To add a standby, refer to [Configure high availability](/data/high-availability/).
 
 ## Endpoints
 
-Adding replicas gives the cluster two addresses:
+A database has one endpoint for each kind of traffic. Select one in the **Connect** dialog under **Primary**, **Standbys**, or **Any**.
 
-| Endpoint       | Serves                                    |
-| -------------- | ----------------------------------------- |
-| `pg-<name>-rw` | Reads and writes, always the primary      |
-| `pg-<name>-ro` | Reads only, load-balanced across replicas |
+| **Connect** option | Host prefix | Serves |
+| --- | --- | --- |
+| **Primary** | `pg-<name>-rw` | Reads and writes. The endpoint follows a failover. |
+| **Standbys** | `pg-<name>-ro` | Reads only, load-balanced across standbys. |
+| **Any** | `pg-<name>-r` | Reads only, across every instance. |
 
-Point your application's primary connection at `-rw` and any read-only consumer
-at `-ro`. Sending writes to `-ro` fails; that is the point.
+Point your application's main connection at `-rw`, and read-only consumers at `-ro`. A write to `-ro` fails.
 
 <Diagram
-  caption="Writes only ever reach the primary; -ro spreads reads across replicas."
+  caption="Writes reach only the primary. The -ro endpoint spreads reads across standbys."
   code={`flowchart LR
   APP[Your app] -->|reads + writes| RW[["pg-name-rw"]]
   RPT[Reporting / analytics] -->|reads only| RO[["pg-name-ro"]]
   RW --> P[(Primary)]
-  RO --> S1[(Replica 1)]
-  RO --> S2[(Replica 2)]
-  P -.->|async stream| S1
-  P -.->|async stream| S2`}
+  RO --> S1[(Standby 1)]
+  RO --> S2[(Standby 2)]
+  P -.->|stream| S1
+  P -.->|stream| S2`}
 />
 
 ## Replication lag
 
-Replicas are asynchronous. A row written to the primary is not instantly visible
-on a replica, so read-after-write against `-ro` can return stale data. Anything
-that reads its own writes should use `-rw`.
+A row written to the primary can take time to appear on a standby. A read from `-ro` after a write can return old data. Code that reads its own writes must use `-rw`.
+
+The replication mode sets whether a commit waits for a standby. The default is **Async**. For the other modes, refer to [Choose a replication mode](/data/high-availability/#choose-a-replication-mode).
 
 ## Cost
 
-Each replica is a full copy of the database: same storage, same CPU and memory
-sizing. Two replicas means roughly three times the resource footprint. Add them
-because query load needs spreading, not by default.
+Each standby is a full copy of the database, with the same storage, CPU, and memory. A primary with two standbys uses about three times the resources of a single instance.
+
+## Related resources
+
+- [Databases](/data/databases/)
+- [Configure high availability](/data/high-availability/)
