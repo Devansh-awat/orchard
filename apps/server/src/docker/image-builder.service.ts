@@ -747,6 +747,17 @@ export class ImageBuilderService {
     return auths;
   }
 
+  private async secretExists(name: string): Promise<boolean> {
+    const coreApi = this.kc!.makeApiClient(k8s.CoreV1Api);
+    try {
+      await coreApi.readNamespacedSecret(name, this.builderNamespace);
+      return true;
+    } catch (error) {
+      if (error.statusCode === 404) return false;
+      throw error;
+    }
+  }
+
   private async upsertDockerConfigSecret(
     name: string,
     auths: RegistryAuths,
@@ -818,7 +829,9 @@ export class ImageBuilderService {
   async ensureBuilderSecrets(): Promise<void> {
     this.ensureKubeConfig();
     const coreApi = this.kc!.makeApiClient(k8s.CoreV1Api);
-    await this.upsertDockerConfigSecret(this.registrySecretName, this.harborAuths());
+    if (process.env.HARBOR_PASSWORD || !(await this.secretExists(this.registrySecretName))) {
+      await this.upsertDockerConfigSecret(this.registrySecretName, this.harborAuths());
+    }
 
     if (this.s3CacheEnabled && this.s3AccessKeyId && this.s3SecretAccessKey) {
       const s3SecretName = 'buildkit-s3-cache-creds';
