@@ -69,7 +69,7 @@ import { MCP_URL, SETUP_PROMPT } from '../lib/nav';
               hidden={index !== 0}
             >
               <h3>{client.name}</h3>
-              <ol>
+              <ol class:list={{ plain: client.numbered === false }}>
                 {client.steps.map((step) => (
                   <li>
                     <p>
@@ -304,6 +304,14 @@ import { MCP_URL, SETUP_PROMPT } from '../lib/nav';
     min-width: 0;
     padding-inline-start: 2.25rem;
     counter-increment: step;
+  }
+
+  ol.plain li {
+    padding-inline-start: 0;
+  }
+
+  ol.plain li::before {
+    content: none;
   }
 
   ol li::before {

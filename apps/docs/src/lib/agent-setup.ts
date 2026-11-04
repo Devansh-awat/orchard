@@ -13,6 +13,7 @@ export interface SetupClient {
   vendor: string;
   mark?: MarkName;
   icon?: IconName;
+  numbered?: boolean;
   steps: SetupStep[];
 }
 
@@ -142,17 +143,18 @@ export const clients: SetupClient[] = [
     name: 'Other clients',
     vendor: 'Any MCP client',
     icon: 'plug',
+    numbered: false,
     steps: [
       {
-        text: 'Amp: run this command, then sign in to Orchard and approve the connection.',
+        text: '**Amp:** Run this command, then sign in to Orchard and approve the connection.',
         code: `amp mcp add orchard '${url}'`
       },
       {
-        text: 'For CI, headless agents or a client without OAuth, create an API token:',
+        text: '**Clients without OAuth:** Create an API token.',
         code: 'orchard auth token create --name ci-agent --scope deploy'
       },
       {
-        text: 'Send the token as a bearer token:',
+        text: 'Send the token as a bearer token.',
         title: 'mcp.json',
         code: `{
   "mcpServers": {

@@ -118,7 +118,8 @@ function clean(text: string): string {
     .replace(/\s+/g, ' ')
     .replace(/\.$/, '')
     .replace(/\b[a-z][a-z0-9]*\b/g, (word, index: number, text: string) => {
-      if (text[index - 1] === '-' || text[index - 1] === '/' || text[index - 1] === '.') return word;
+      if (text[index - 1] === '-' || text[index - 1] === '/' || text[index - 1] === '.')
+        return word;
       const next = text[index + word.length];
       if (next === '-' || next === '/' || next === '.') return word;
       return PROPER_NAMES[word] ?? word;

@@ -85,7 +85,7 @@ export function agentSetupMarkdown(): string {
   for (const client of clients) {
     parts.push(`### ${client.name}`, '');
     client.steps.forEach((step, index) => {
-      parts.push(`${index + 1}. ${step.text}`);
+      parts.push(`${client.numbered === false ? '-' : `${index + 1}.`} ${step.text}`);
       if (step.code) {
         parts.push('', indent(fence(step.code, step.code.startsWith('{') ? 'json' : 'sh')));
       }
