@@ -126,7 +126,8 @@ func memberInviteCmd() *cobra.Command {
 		Short: "Invite someone to the organization by email",
 		Long: "Send an email invitation to join the scoped organization. The server never\n" +
 			"direct-adds: even people who already have an account receive an invitation\n" +
-			"they must accept themselves (it expires after 7 days).\n\n" +
+			"they must accept themselves (it expires after 7 days). On an instance with no\n" +
+			"email, this prints a one-time link for you to send instead.\n\n" +
 			"Only owners can invite new owners. Guests can't be invited at the organization\n" +
 			"level; use `orchard project member add` to invite a guest to a project.",
 		Args: cobra.ExactArgs(1),
@@ -147,15 +148,29 @@ func memberInviteCmd() *cobra.Command {
 			if err := cl.Send(cmd.Context(), http.MethodPost, memberPath(orgID), body, &raw); err != nil {
 				return err
 			}
-			output.Successf("sent invitation to %s as %s (%s)", args[0], role, pick(raw, "id"))
+			if str(raw["inviteLink"]) != "" {
+				output.Successf("created invitation for %s as %s (%s)", args[0], role, pick(raw, "id"))
+			} else {
+				output.Successf("sent invitation to %s as %s (%s)", args[0], role, pick(raw, "id"))
+			}
 			if fmtFlag() == output.FormatJSON {
 				return output.JSON(raw)
 			}
+			printInviteLink(raw)
 			return nil
 		},
 	}
 	c.Flags().StringVar(&role, "role", "member", "organization role: owner|admin|member")
 	return c
+}
+
+func printInviteLink(raw map[string]any) {
+	link := str(raw["inviteLink"])
+	if link == "" {
+		return
+	}
+	output.Warnf("this instance can't send email, so send this link yourself. It works once, and you won't see it again.")
+	fmt.Println(link)
 }
 
 func memberRemoveCmd() *cobra.Command {
@@ -302,7 +317,7 @@ func memberInvitesCancelCmd() *cobra.Command {
 func memberInvitesResendCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "resend <invitationId>",
-		Short: "Resend a pending invitation's email",
+		Short: "Resend a pending invitation's email, or create a new link with no email",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, cfg, err := client()
@@ -318,10 +333,15 @@ func memberInvitesResendCmd() *cobra.Command {
 			if err := cl.Send(cmd.Context(), http.MethodPost, path, nil, &raw); err != nil {
 				return err
 			}
-			output.Successf("resent invitation %s", args[0])
+			if str(raw["inviteLink"]) != "" {
+				output.Successf("created a new link for invitation %s; the old link no longer works", args[0])
+			} else {
+				output.Successf("resent invitation %s", args[0])
+			}
 			if fmtFlag() == output.FormatJSON {
 				return output.JSON(raw)
 			}
+			printInviteLink(raw)
 			return nil
 		},
 	}

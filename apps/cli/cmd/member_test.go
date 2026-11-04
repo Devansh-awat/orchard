@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -95,6 +96,44 @@ func TestMemberInvitePostsBody(t *testing.T) {
 	want := map[string]any{"email": "new@b.c", "role": "admin"}
 	if !reflect.DeepEqual(body, want) {
 		t.Errorf("invite body = %v, want %v", body, want)
+	}
+}
+
+func TestMemberInvitePrintsTheLinkWhenReturned(t *testing.T) {
+	mux := http.NewServeMux()
+	memberServeOrgHQ(mux)
+	mux.HandleFunc("POST /apiv1/organizations/o1/members", func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, `{"id":"inv1","delivery":"link","inviteLink":"https://orchard.test/invite/abc"}`)
+	})
+	memberTestServer(t, mux)
+	t.Setenv("ORCHARD_ORG", "hq")
+
+	out := captureStdout(t, func() {
+		if err := runMember(t, "invite", "new@b.c"); err != nil {
+			t.Fatalf("member invite: %v", err)
+		}
+	})
+	if !strings.Contains(out, "https://orchard.test/invite/abc") {
+		t.Errorf("stdout = %q, want the link", out)
+	}
+}
+
+func TestMemberInvitesResendPrintsANewLink(t *testing.T) {
+	mux := http.NewServeMux()
+	memberServeOrgHQ(mux)
+	mux.HandleFunc("POST /apiv1/organizations/o1/invitations/inv1/resend", func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, `{"success":true,"delivery":"link","inviteLink":"https://orchard.test/invite/new"}`)
+	})
+	memberTestServer(t, mux)
+	t.Setenv("ORCHARD_ORG", "hq")
+
+	out := captureStdout(t, func() {
+		if err := runMember(t, "invites", "resend", "inv1"); err != nil {
+			t.Fatalf("member invites resend: %v", err)
+		}
+	})
+	if !strings.Contains(out, "https://orchard.test/invite/new") {
+		t.Errorf("stdout = %q, want the new link", out)
 	}
 }
 

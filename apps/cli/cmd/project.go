@@ -596,13 +596,23 @@ func projectMemberAddCmd() *cobra.Command {
 			if err := cl.Send(cmd.Context(), http.MethodPost, "/projects/"+url.PathEscape(projectID)+"/members", body, &raw); err != nil {
 				return err
 			}
-			if invited, _ := raw["invited"].(bool); invited {
+			invitation, _ := raw["invitation"].(map[string]any)
+			invited, _ := raw["invited"].(bool)
+			switch {
+			case invited && str(invitation["delivery"]) == "link":
+				output.Successf("created invitation for %s (no account yet)", args[0])
+			case invited:
 				output.Successf("invitation sent to %s (no account yet)", args[0])
-			} else {
+			default:
 				output.Successf("added %s as %s", args[0], role)
 			}
 			if fmtFlag() == output.FormatJSON {
 				return output.JSON(raw)
+			}
+			if str(invitation["inviteLink"]) != "" {
+				printInviteLink(invitation)
+			} else if invited && str(invitation["delivery"]) == "link" {
+				output.Warnf("this instance can't send email. An organization admin can create the link: orchard member invites resend %s", str(invitation["id"]))
 			}
 			return nil
 		},

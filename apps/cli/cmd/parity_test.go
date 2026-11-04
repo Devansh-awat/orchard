@@ -620,6 +620,7 @@ var routeExclusions = map[string]string{
 	"GET /invitations/:token":          "browser invite landing page",
 	"POST /invitations/:token/accept":  "browser invite landing page",
 	"POST /invitations/:token/decline": "browser invite landing page",
+	"POST /invitations/:token/sign-up": "browser invite landing page",
 	"POST /invitations/accept-pending": "deliberately non-bulk endpoint; invitation accept-all loops the by-id route",
 
 	// superadmin in disguise: guard says authenticated, service requires superadmin

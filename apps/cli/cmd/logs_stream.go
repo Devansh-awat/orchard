@@ -86,12 +86,10 @@ type buildFollower struct {
 	watchState bool
 }
 
-// followBuildLogsSSE tails build logs until the build settles. The stream
-// carries the logs; a slow poll of the build state ends the follow even when
-// the stream never says so, and a stream that keeps failing is replaced by
-// polling the logs so that nothing is hidden. Returns errSSEUnsupported when
-// the server predates the endpoint (404 before any data) so callers can fall
-// back to the polling tail.
+// followBuildLogsSSE tails build logs line-by-line over the SSE stream and
+// returns once the build settles. Returns errSSEUnsupported when the server
+// predates the endpoint (404 before any data) so callers can fall back to the
+// polling tail.
 func followBuildLogsSSE(ctx context.Context, cl *api.Client, deploymentID string, w io.Writer, opts buildFollow) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -187,9 +185,6 @@ func (f *buildFollower) endLine() {
 	}
 }
 
-// checkBuild reads the build state and reports whether the follow is over,
-// and with what result. The logs are read when polling or when the build has
-// ended, so that a stream that never delivered them hides nothing.
 func (f *buildFollower) checkBuild(ctx context.Context, polling bool) (bool, error) {
 	if !f.watchState && !polling {
 		return false, nil
