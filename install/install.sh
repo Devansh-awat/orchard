@@ -2013,7 +2013,7 @@ dns_delegated_from() {
 }
 
 dns_zone_report() {
-  local i=0 name seen=' ' rc output zone servers parent caa
+  local i=0 name seen=' ' rc output zone servers parent
   while [ "$i" -lt "${#RECORD_NAMES[@]}" ]; do
     name=${RECORD_NAMES[$i]#\*.}
     i=$((i + 1))
@@ -2036,15 +2036,37 @@ dns_zone_report() {
     if [ -n "$parent" ]; then
       note "$zone is delegated away from $parent, so records added at $parent's provider do nothing."
     fi
-    caa=$(dns_ask_public CAA "$zone" || true)
-    case "$caa" in
-      *issue*letsencrypt*|'') ;;
-      *issue*)
-        if [ "$INGRESS_MODE" = public ]; then
-          warn "$zone has CAA records that don't allow Let's Encrypt. Add: 0 issue \"letsencrypt.org\""
-        fi
-        ;;
-    esac
+  done
+}
+
+dns_caa_report() {
+  [ "$INGRESS_MODE" = public ] || return 0
+  local i=0 name current zone caa warned=' '
+  while [ "$i" -lt "${#RECORD_NAMES[@]}" ]; do
+    name=${RECORD_NAMES[$i]#\*.}
+    i=$((i + 1))
+    zone=$(dns_zone_of "$name" 2>/dev/null | head -1 || true)
+    current=$name
+    while [ -n "$current" ]; do
+      caa=$(dns_ask_public CAA "$current" || true)
+      if [ -n "$caa" ]; then
+        case "$caa" in
+          *issue*letsencrypt*) ;;
+          *issue*)
+            case "$warned" in
+              *" $current "*) ;;
+              *)
+                warned="$warned$current "
+                warn "$current has CAA records that don't allow Let's Encrypt. Add: 0 issue \"letsencrypt.org\""
+                ;;
+            esac
+            ;;
+        esac
+        break
+      fi
+      if [ "$current" = "$zone" ] || [ "$current" = "${current#*.}" ]; then break; fi
+      current=${current#*.}
+    done
   done
 }
 
@@ -2175,7 +2197,7 @@ check_address_record() {
     other=$(dns_ask_public "$other_type" "$probe" || true)
     if [ -n "$other" ]; then
       CHECK_STATUS='wrong value'
-      CHECK_NOTE="It has a $other_type record ($(one_line "$other")), and this machine needs a $type record."
+      CHECK_NOTE="It has an $other_type record ($(one_line "$other")), and this machine needs an $type record."
       return 0
     fi
     CHECK_STATUS=waiting
@@ -2390,6 +2412,7 @@ dns_step() {
     fi
   fi
   dns_zone_report
+  dns_caa_report
 
   local PROMPT_TIMEOUT=0 ASK_SOFT=true choice
   while true; do
