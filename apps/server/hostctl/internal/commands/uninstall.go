@@ -22,6 +22,7 @@ type hostLayout struct {
 	SystemdDir   string
 	K3sUninstall string
 	Rancher      []string
+	Runtime      []string
 	Homes        []string
 }
 
@@ -70,6 +71,7 @@ func layoutFor(env cli.Env) hostLayout {
 		SystemdDir:   "/etc/systemd/system",
 		K3sUninstall: "/usr/local/bin/k3s-uninstall.sh",
 		Rancher:      []string{"/etc/rancher", "/var/lib/rancher"},
+		Runtime:      []string{"/var/lib/vector-orchard", "/etc/cni"},
 		Homes:        homes,
 	}
 }
@@ -94,7 +96,7 @@ func uninstallWarning(h hostLayout) string {
 	fmt.Fprintf(&b, "  %s and %s\n", updateTimerUnit, updateServiceUnit)
 	fmt.Fprintf(&b, "  orchardctl, its orchard-* links and orchard-sync-commands in %s\n", h.Bin)
 	fmt.Fprintf(&b, "  helm and yq in %s\n", h.SystemBin)
-	for _, path := range h.Rancher {
+	for _, path := range append(append([]string{}, h.Rancher...), h.Runtime...) {
 		fmt.Fprintf(&b, "  %s\n", path)
 	}
 	for _, home := range h.Homes {
@@ -164,6 +166,7 @@ func removeUpdateTimer(c *cli.Context, h hostLayout, run func(string, ...string)
 func (h hostLayout) leftovers() []string {
 	paths := []string{h.StateDir}
 	paths = append(paths, h.Rancher...)
+	paths = append(paths, h.Runtime...)
 	for _, home := range h.Homes {
 		paths = append(paths,
 			filepath.Join(home, ".kube"),

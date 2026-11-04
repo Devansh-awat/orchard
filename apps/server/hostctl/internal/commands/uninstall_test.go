@@ -39,6 +39,7 @@ func newFakeHost(t *testing.T) fakeHost {
 		SystemdDir:   at("etc", "systemd", "system"),
 		K3sUninstall: at("usr", "local", "bin", "k3s-uninstall.sh"),
 		Rancher:      []string{at("etc", "rancher"), at("var", "lib", "rancher")},
+		Runtime:      []string{at("var", "lib", "vector-orchard"), at("etc", "cni")},
 		Homes:        []string{at("root")},
 	}
 
@@ -54,6 +55,8 @@ func newFakeHost(t *testing.T) fakeHost {
 		filepath.Join(layout.SystemdDir, "timers.target.wants", updateTimerUnit),
 		at("etc", "rancher", "node", "password"),
 		at("var", "lib", "rancher", "leftover"),
+		at("var", "lib", "vector-orchard", "checkpoints.json"),
+		at("etc", "cni", "net.d", "10-flannel.conflist"),
 		at("root", ".kube", "cache", "discovery"),
 		at("root", ".config", "helm", "repositories.yaml"),
 		at("root", ".cache", "helm", "index"),
