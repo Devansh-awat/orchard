@@ -3385,6 +3385,9 @@ server:
     - { name: HARBOR_PASSWORD, value: "$REGISTRY_PASSWORD" }
     - { name: BUILDER_SCRATCH_STORAGE_CLASS, value: local-path }
 
+protection:
+  orchardLogin: true
+
 tenant:
   # Traefik, not the HAProxy this project runs in network. Tenant namespaces
   # are default-deny, so the ingress controller has to be named or the ACME
