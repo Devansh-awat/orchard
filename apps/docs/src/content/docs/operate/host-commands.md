@@ -22,6 +22,7 @@ sidebar:
 | `orchardctl claim`          | Print a link that claims the instance.                  |
 | `orchardctl login`          | Print a one-time sign-in link.                          |
 | `orchardctl password`       | Set a password on the superadmin account.               |
+| `orchardctl backups s3`     | Show or change the S3 storage for backups and uploads.  |
 | `orchardctl stop`           | Stop the instance.                                      |
 | `orchardctl start`          | Start the instance.                                     |
 | `orchardctl restart`        | Stop and start the instance.                            |
@@ -130,10 +131,10 @@ Changes are not deployed until you add `--apply` or run `update`.
 | `logs.victorialogs.storage.storageClass` | The StorageClass for the log store.                      |
 | `trivy.enabled`                          | The Orchard [image scanner](/operate/image-scanning/).   |
 | `trivy.maxConcurrentScans`               | Scans running at once.                                   |
-| `objectStorage.local.enabled`            | The S3-compatible store on this machine for backups.     |
+| `objectStorage.local.enabled`            | The S3-compatible store on this machine for backups and uploads. |
 | `objectStorage.local.storage.size`       | The volume size of that store, such as `40Gi`.           |
 | `r2Proxy.enabled`                        | The backup proxy that databases use.                     |
-| `r2Proxy.upstream.endpoint`              | An S3 or R2 endpoint for backups.                        |
+| `r2Proxy.upstream.endpoint`              | An S3 endpoint for backups, set in the values file. To set it in Orchard instead, use [`backups s3`](#backups-s3). |
 | `updates.url`                            | The What's new feed, or `off`.                           |
 
 ## env
@@ -299,6 +300,23 @@ The command prompts for the password and turns off terminal echo, so the passwor
 :::caution
 On an instance served over plain HTTP, the password crosses the network in clear text at each sign-in. On an untrusted network, use `orchardctl login`.
 :::
+
+## backups s3
+
+To show or change the S3 storage for backups and uploads, use `orchardctl backups s3`.
+
+```bash
+sudo orchardctl backups s3 status
+sudo orchardctl backups s3 test --endpoint https://s3.eu-west-1.amazonaws.com --bucket my-bucket --region eu-west-1 --path-style false --access-key <KEY_ID>
+sudo orchardctl backups s3 set --endpoint https://s3.eu-west-1.amazonaws.com --bucket my-bucket --region eu-west-1 --path-style false --access-key <KEY_ID>
+sudo orchardctl backups s3 clear
+```
+
+`set` tests the connection first and saves nothing if the test fails. To save without the test, add `--skip-test`. Both `test` and `set` ask for the secret key, or read it from `--secret-key-file` or `ORCHARD_S3_SECRET_KEY`. `--secret-key` also works, but it stays in your shell history.
+
+`clear` removes the saved settings. Backups then go back to the store on the server, if the instance has one.
+
+A change applies to new databases. For more information, refer to [Add S3 storage](/operate/storage/#what-happens-when-you-change-storage).
 
 ## stop, start, and restart
 

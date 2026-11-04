@@ -28,7 +28,7 @@ Install the Helm chart instead and keep your own platform layer
 | Orchard       | The Helm chart, with a generated values file, including the MCP endpoint agents connect to                 |
 | Observability | VictoriaMetrics for the metrics graphs, VictoriaLogs and Vector for log search and per-route request stats |
 | Trivy         | The Orchard image scanner behind each app's Security tab, scanning straight from zot                       |
-| versitygw     | An S3 store on this box for database backups, checkpoints, point-in-time restore and forks                 |
+| versitygw     | An S3 store on this box for database backups, checkpoints, point-in-time restore, forks and uploads        |
 | r2-proxy      | Hands each database credentials for its own backups only, never the store's root key                       |
 
 Everything lands in `/etc/orchard/values.yaml`. Edit that file and run
@@ -101,6 +101,49 @@ It also asks how traffic should reach the box:
 Updates are manual by default: run `sudo orchardctl update` when you want a new
 version. To update nightly with a systemd timer, run the installer with
 `--updates automatic`.
+
+## S3 storage
+
+S3 storage is optional. Database backups and uploads work without it, on this box.
+If the box is lost, the backups are lost, and a fresh install also keeps a daily
+dump of Orchard's own database there. `orchard up` needs S3 storage.
+
+The installer asks one question about it. If you say yes, it asks for a provider,
+region, bucket, access key and secret key, then tests the connection. A failed
+test lets you retry or skip, and it never stops the install.
+
+To answer without a prompt:
+
+```bash
+export ORCHARD_S3_SECRET_KEY='<secret key>'
+sudo --preserve-env=ORCHARD_S3_SECRET_KEY ./install.sh --yes \
+  --mode public --domain orchard.example.com --email you@example.com \
+  --s3-endpoint https://s3.eu-west-1.amazonaws.com \
+  --s3-bucket my-orchard-bucket \
+  --s3-region eu-west-1 \
+  --s3-access-key <access key> \
+  --no-s3-path-style
+```
+
+| Flag | Environment variable |
+| ---- | -------------------- |
+| `--s3-endpoint <url>` | `ORCHARD_S3_ENDPOINT` |
+| `--s3-bucket <name>` | `ORCHARD_S3_BUCKET` |
+| `--s3-region <name>` | `ORCHARD_S3_REGION` |
+| `--s3-access-key <id>` | `ORCHARD_S3_ACCESS_KEY` |
+| `--s3-secret-key-file <path>` | `ORCHARD_S3_SECRET_KEY_FILE` |
+| | `ORCHARD_S3_SECRET_KEY` |
+| `--s3-secret-key <secret>` | |
+| `--s3-path-style`, `--no-s3-path-style` | `ORCHARD_S3_PATH_STYLE` |
+| `--no-s3` | `ORCHARD_S3=false` |
+
+A secret on the command line stays in your shell history, so prefer the file or
+the environment variable. Under `--yes`, a failed test prints why and carries on
+without S3.
+
+Add or change it later with `sudo orchardctl backups s3 set`, or under Instance
+admin. Provider settings are at
+[docs.orchard.my/operate/storage](https://docs.orchard.my/operate/storage/).
 
 ## Claiming the instance
 

@@ -496,66 +496,45 @@ that.
 | `objectStorage.local.storage.size` / `storageClass` | `20Gi` / cluster default | The data PVC. `local-path` does not enforce the size, so watch the disk. |
 | `objectStorage.local.resources` | requests `20m/64Mi`, limits `1/512Mi` | Resource block. |
 
-With `backups` on, the server gets `R2_ENDPOINT`
-(`http://object-storage.<namespace>.svc.cluster.local:9000`), `R2_BACKUP_BUCKET`
-and `R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY` from that Secret, each unless
-`server.env` already sets it. Nothing is injected when `server.envFrom` is set
-(it may hold the real ones, and an `env` entry would shadow it), when
-`server.env` has `R2_ACCOUNT_ID`, or when `r2Proxy.upstream.endpoint` is set.
-r2-proxy uses the store as its upstream and defaults `ALLOWED_BUCKETS` to the
-bucket. Tenant databases reach it through r2-proxy only, which the tenant
-NetworkPolicy already allows on `orchard-r2-proxy:9000`.
+With `backups` on, the server gets `LOCAL_STORE_ENDPOINT`
+(`http://object-storage.<namespace>.svc.cluster.local:9000`),
+`LOCAL_STORE_BACKUP_BUCKET`, `LOCAL_STORE_UPLOADS_BUCKET`, `LOCAL_STORE_REGION`,
+and `LOCAL_STORE_ACCESS_KEY_ID`/`LOCAL_STORE_SECRET_ACCESS_KEY` from that Secret.
+These are a fallback: storage saved in the UI and any `R2_*` variable win.
+Nothing is injected when `server.envFrom` is set, when `server.env` has
+`R2_ACCOUNT_ID`, or when `r2Proxy.upstream.endpoint` is set. r2-proxy uses the
+store as its upstream and defaults `ALLOWED_BUCKETS` to the bucket. Tenant
+databases reach it through r2-proxy only, which the tenant NetworkPolicy already
+allows on `orchard-r2-proxy:9000`.
 
 The namespace, the data PVC and the credentials Secret carry
 `helm.sh/resource-policy: keep`: turning the store off or uninstalling leaves
 the backups and the key behind, and turning it back on picks both up again.
 
-Because these are environment variables, Instance admin shows the object
-storage endpoint, keys and backup bucket as set by the environment while the
-local store is on. Avatars and other uploads still need a public bucket
-(`R2_BUCKET_NAME`, `R2_PUBLIC_URL`) and are unaffected until one is set.
+Uploads use their own bucket, `objectStorage.local.uploadsBucket`, and the server
+serves them through its API at `/apiv1/uploads`, so nothing needs to be public.
+Empty turns uploads off until S3 storage is added.
 
-#### Moving backups to real S3 or R2
+#### Adding S3 storage
 
-Every existing database's backup configuration names the bucket, and the proxy
-only serves the bucket it is configured with. So keep the name, and copy the
-history across before switching, or point-in-time restore loses everything
-before the switch.
+Use the setup flow, **Instance admin**, or `sudo orchardctl backups s3 set`. No
+chart value changes. See
+[Add S3 storage](https://docs.orchard.my/operate/storage/) for provider settings.
 
-1. Create a bucket with the same name as `objectStorage.local.bucket`
-   (`orchard-backups` unless you changed it), and a key that can list, read,
-   write and delete in it.
-2. Copy what is already there. From the host, with the AWS CLI installed:
+New databases back up to the new bucket. Databases that already exist keep their
+bucket, so they keep archiving to the local store and restoring from it. To let
+that work, the server writes every bucket it has served to the `r2-proxy-stored`
+Secret in the proxy namespace, the proxy re-reads it while running, and each
+database key stays limited to its own prefix in any of those buckets. To move a
+database, fork it. Keep the local store on while any database still uses it.
 
-   ```bash
-   kubectl -n orchard-object-storage port-forward svc/object-storage 9000:9000 &
-   export AWS_ACCESS_KEY_ID=$(kubectl -n orchard get secret orchard-object-storage -o jsonpath='{.data.accessKey}' | base64 -d)
-   export AWS_SECRET_ACCESS_KEY=$(kubectl -n orchard get secret orchard-object-storage -o jsonpath='{.data.secretKey}' | base64 -d)
-   aws --endpoint-url http://127.0.0.1:9000 --region auto s3 sync s3://orchard-backups ./orchard-backups
-   AWS_ACCESS_KEY_ID=<key id> AWS_SECRET_ACCESS_KEY=<secret> \
-     aws --endpoint-url https://<account>.r2.cloudflarestorage.com --region auto s3 sync ./orchard-backups s3://orchard-backups
-   ```
+The S3 bucket cannot be named `objectStorage.local.bucket`, because the proxy picks
+its upstream by bucket name.
 
-3. Point the instance and the backup proxy at it, and turn the local store off:
-
-   ```bash
-   sudo orchardctl config set r2Proxy.upstream.endpoint https://<account>.r2.cloudflarestorage.com
-   sudo orchardctl config set r2Proxy.upstream.region auto
-   sudo orchardctl config set r2Proxy.upstream.accessKey <key id>
-   sudo orchardctl config set r2Proxy.upstream.secretKey <secret>
-   sudo orchardctl config set r2Proxy.defaultBucket orchard-backups
-   sudo orchardctl config set objectStorage.local.enabled false
-   sudo orchardctl env set R2_ENDPOINT https://<account>.r2.cloudflarestorage.com
-   sudo orchardctl env set R2_ACCESS_KEY_ID <key id>
-   sudo orchardctl env set R2_SECRET_ACCESS_KEY <secret>
-   sudo orchardctl env set R2_BACKUP_BUCKET orchard-backups --apply
-   ```
-
-   On a plain Helm install, set the same keys in your values file.
-4. WAL written between the copy and the switch exists only in the local store,
-   so take a fresh checkpoint of each database afterwards. The local PVC is
-   kept (`orchard-object-storage/object-storage-data`); delete it yourself once
-   those checkpoints are older than anything you would restore to.
+To set it in values instead, set `r2Proxy.upstream.*` and the `R2_*` variables on
+the server, which lock the fields in the UI. That route replaces the store's
+upstream, so the bucket must keep the same name and you must copy the history
+across first, or point-in-time restore loses everything before the switch.
 
 ### Updates feed (`updates.*`)
 

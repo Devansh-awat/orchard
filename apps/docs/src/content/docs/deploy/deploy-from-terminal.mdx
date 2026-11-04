@@ -15,7 +15,7 @@ The `orchard up` command packs a directory, uploads it, and builds it on the clu
 
 - The [Orchard CLI](/cli/), installed and signed in.
 - A project linked to the directory. To link one, run `orchard link --project <project>`.
-- Local deploys turned on by a superadmin. For more information, refer to [Turn on local deploys](#turn-on-local-deploys).
+- S3 storage on the instance. For more information, refer to [Turn on local deploys](#turn-on-local-deploys).
 
 ### Run the deploy
 
@@ -51,18 +51,19 @@ For all flags, refer to the [`orchard up` reference](/reference/cli/#up).
 
 ### Turn on local deploys
 
-Local deploys are off by default. To turn them on, set the following values on the server:
+Local deploys need S3 storage, because Orchard stores each uploaded directory in a bucket that build pods can reach. The store on the server holds database backups, so builds do not use it.
 
-| Setting                                                                   | Value                                  |
-| ------------------------------------------------------------------------- | -------------------------------------- |
-| `LOCAL_DEPLOYS_ENABLED`                                                   | `true`                                 |
-| `R2_BUILD_CONTEXT_BUCKET`, or **Build context bucket** in **Object storage** | The bucket for uploaded directories. |
+To turn on local deploys, a superadmin adds S3 storage. Local deploys then turn on with no other setting. For more information, refer to [Add S3 storage](/operate/storage/).
 
-**Object storage** must also have an access key and a secret key. If local deploys are off, the CLI returns this error:
+If the instance has no S3 storage, the CLI returns this error:
 
 ```txt
-Local deploys are disabled on this server (set LOCAL_DEPLOYS_ENABLED=true and configure R2_BUILD_CONTEXT_BUCKET)
+Local deploys need S3 storage. Add it under Instance admin, or run: sudo orchardctl backups s3 set
 ```
+
+To deploy without S3 storage, [import a GitHub repository](#import-a-github-repository).
+
+If you set storage with `R2_*` environment variables, also set `LOCAL_DEPLOYS_ENABLED=true` and `R2_BUILD_CONTEXT_BUCKET`. To turn local deploys off, set `LOCAL_DEPLOYS_ENABLED=false`.
 
 ## Import a GitHub repository
 

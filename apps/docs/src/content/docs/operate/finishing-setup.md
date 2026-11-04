@@ -44,35 +44,11 @@ Orchard builds the URL from `FRONTEND_URL`. If your public origin is different, 
 
 ## Configure database backups
 
-Until a backup bucket is configured, managed databases have no base backup. Write-ahead log (WAL) archiving alone cannot restore a deleted database. Checkpoints, the drop guard, and restore tests are also unavailable.
+On an installer host, backups already work. They are on this server, so if the server is lost, the backups are lost. The checklist shows **Add S3 storage for off-server backups** until you add a bucket.
 
-On an installer host, this item is already done. The installer runs an S3-compatible store inside the cluster. The store is on the same machine as the databases, so it does not protect you if the machine is lost. For more information, refer to [The local store on installer hosts](/data/backups/#the-local-store-on-installer-hosts).
+On a Helm install, managed databases have no backups until you turn on the store on the server or add a bucket. Write-ahead log (WAL) archiving alone cannot restore a deleted database. Checkpoints, the drop guard, and restore tests are also unavailable.
 
-To use S3 or R2, set the values in **Instance admin** > **Configuration** > **Object storage**, or use the following environment variables. Any S3-compatible store works.
-
-| Variable               | Purpose                                                  |
-| ---------------------- | -------------------------------------------------------- |
-| `R2_BACKUP_BUCKET`     | The bucket for backups.                                  |
-| `R2_ENDPOINT`          | The S3 endpoint.                                         |
-| `R2_ACCESS_KEY_ID`     | The access key.                                          |
-| `R2_SECRET_ACCESS_KEY` | The secret key.                                          |
-| `R2_REGION`            | Optional. The signing region. The default is `auto`. Environment variable only. |
-| `R2_ACCOUNT_ID`        | Cloudflare account ID, for R2. Derives `R2_ENDPOINT`.    |
-
-On an installer host, run the following commands:
-
-```bash
-sudo orchardctl env set R2_ENDPOINT https://<ACCOUNT_ID>.r2.cloudflarestorage.com
-sudo orchardctl env set R2_ACCESS_KEY_ID <KEY_ID>
-sudo orchardctl env set R2_SECRET_ACCESS_KEY <SECRET>
-sudo orchardctl env set R2_BACKUP_BUCKET my-backups --apply
-```
-
-On a Helm install, you can also set `objectStorage.local.enabled` to `true` to deploy the local store. For more information, refer to the chart README.
-
-The checklist item is done when `R2_BACKUP_BUCKET`, an endpoint (`R2_ENDPOINT` or `R2_ACCOUNT_ID`), `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY` are set.
-
-`R2_BUCKET_NAME` is not a backup setting. It is the general bucket for uploads and assets. It can be public, and Orchard does not use it for backups.
+For the steps and the settings for each provider, refer to [Add S3 storage](/operate/storage/).
 
 An organization can use its own bucket at **Organization settings** > **Backups**. That bucket takes precedence over the instance's.
 

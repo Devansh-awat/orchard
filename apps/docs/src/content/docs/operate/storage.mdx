@@ -1,0 +1,206 @@
+---
+title: Add S3 storage
+description: Add S3-compatible storage to Orchard to keep database backups off the server, store uploads, and turn on deploys from a local directory.
+sidebar:
+  order: 4
+---
+
+To keep database backups off the server and turn on `orchard up`, add S3-compatible storage. Orchard works with Amazon S3, Cloudflare R2, Backblaze B2, Hetzner Object Storage, MinIO, and any other S3-compatible service.
+
+S3 storage is optional. Database backups work without it on an instance from the one-command installer.
+
+| Feature                                             | With no S3 storage                           | With S3 storage                       |
+| --------------------------------------------------- | -------------------------------------------- | ------------------------------------- |
+| Database backups, restores, checkpoints, and copies | On. Stored on this server.                   | On. Stored in your bucket.            |
+| Avatars, icons, and other uploads                   | On. Stored on this server.                   | On. Stored in your bucket.            |
+| A daily dump of Orchard's own database              | On for a new install. Stored on this server. | On. Stored on this server.            |
+| Cached favicons                                     | Off.                                         | On.                                   |
+| `orchard up`                                        | Off.                                         | On, if builds can reach the endpoint. |
+
+:::caution
+Backups on the server share a disk with your databases. They undo a bad migration or a dropped table. If the server is lost, the backups are lost.
+:::
+
+On a [Helm install](#use-helm), these features need the store on the server or S3 storage. Neither is on by default.
+
+## Prerequisites
+
+- A bucket. Do not name it `orchard-backups`, because the store on the server uses that name.
+- A key that can list, read, write, and delete in the bucket.
+- The endpoint, region, and addressing style for your provider. For more information, refer to [Provider settings](#provider-settings).
+
+Keep the bucket private. Orchard serves uploads through its own API, so nothing in the bucket needs to be public.
+
+## Provider settings
+
+| Provider               | Endpoint                                        | Region                                         | Path-style                                      |
+| ---------------------- | ----------------------------------------------- | ---------------------------------------------- | ----------------------------------------------- |
+| Amazon S3              | `https://s3.<region>.amazonaws.com`             | The bucket's region, for example `eu-west-1`   | `false`                                         |
+| Cloudflare R2          | `https://<account-id>.r2.cloudflarestorage.com` | `auto`                                         | `true`                                          |
+| Backblaze B2           | `https://s3.<region>.backblazeb2.com`           | The bucket's region, for example `us-west-004` | `true`                                          |
+| Hetzner Object Storage | `https://<location>.your-objectstorage.com`     | The location, for example `fsn1`               | `true`                                          |
+| MinIO                  | The address of your server                      | `us-east-1`                                    | `true`                                          |
+| Another service        | The S3 endpoint from your provider              | The region from your provider                  | `true`, unless your provider requires otherwise |
+
+With path-style on, Orchard sends requests to `<endpoint>/<bucket>`. With path-style off, Orchard sends requests to `<bucket>.<endpoint>`.
+
+## Add storage
+
+All of these methods save the same settings. You can change the settings later with any of them.
+
+### During install
+
+The installer asks one optional question, after the other questions and before it installs anything.
+
+1. Answer `yes` to **Add S3-compatible storage for off-server backups and uploads?**
+2. Select your provider. The installer fills in the endpoint and the addressing style.
+3. Enter the region, the bucket, the access key, and the secret key.
+
+The installer tests the connection before it continues. If the test fails, you can try again or skip S3 storage. A failed test never stops the install.
+
+### Without prompts
+
+Pass the settings as flags or environment variables. To skip the question, pass `--no-s3`.
+
+```sh
+export ORCHARD_S3_SECRET_KEY='<secret key>'
+
+sudo --preserve-env=ORCHARD_S3_SECRET_KEY ./install.sh --yes \
+  --mode public --domain orchard.example.com --email you@example.com \
+  --s3-endpoint https://s3.eu-west-1.amazonaws.com \
+  --s3-bucket my-orchard-bucket \
+  --s3-region eu-west-1 \
+  --s3-access-key <access key> \
+  --no-s3-path-style
+```
+
+| Flag                   | Environment variable          | Description                                                                                 |
+| ---------------------- | ----------------------------- | ------------------------------------------------------------------------------------------- |
+| `--s3-endpoint`        | `ORCHARD_S3_ENDPOINT`         | The endpoint.                                                                               |
+| `--s3-bucket`          | `ORCHARD_S3_BUCKET`           | The bucket.                                                                                 |
+| `--s3-region`          | `ORCHARD_S3_REGION`           | The region. The default is `auto`.                                                          |
+| `--s3-access-key`      | `ORCHARD_S3_ACCESS_KEY`       | The access key.                                                                             |
+| `--s3-secret-key-file` | `ORCHARD_S3_SECRET_KEY_FILE`  | A file that holds the secret key.                                                           |
+| None                   | `ORCHARD_S3_SECRET_KEY`       | The secret key.                                                                             |
+| `--s3-secret-key`      | None                          | The secret key. This flag stays in your shell history, so use one of the two options above. |
+| `--s3-path-style`      | `ORCHARD_S3_PATH_STYLE=true`  | Use path-style requests. This is the default.                                               |
+| `--no-s3-path-style`   | `ORCHARD_S3_PATH_STYLE=false` | Send requests to `<bucket>.<endpoint>`.                                                     |
+| `--no-s3`              | `ORCHARD_S3=false`            | Skip S3 storage.                                                                            |
+
+If the test fails, the installer prints the reason and continues without S3 storage.
+
+### In the setup flow
+
+After you claim a new instance, the setup flow shows a **Storage** step. Orchard skips this step if storage is already set.
+
+1. Select your provider, and enter the region, the bucket, the access key, and the secret key.
+2. Select **Test connection**.
+3. Select **Save and continue**. To add storage later, select **Skip for now**.
+
+### Under Instance admin
+
+1. Go to **Instance admin** > **Configuration** > **Object storage**.
+2. Select your provider to fill in the endpoint, region, and addressing style.
+3. Enter the access key, the secret key, and a backup bucket and uploads bucket. These can be the same bucket.
+4. Select **Test connection**.
+5. Select **Save**.
+
+Orchard never shows a saved key again. To keep a saved key, leave its field empty.
+
+### With orchardctl
+
+On the host, run:
+
+```sh
+sudo orchardctl backups s3 set \
+  --endpoint https://s3.eu-west-1.amazonaws.com \
+  --bucket my-orchard-bucket \
+  --region eu-west-1 \
+  --path-style false \
+  --access-key <access key>
+```
+
+The command asks for the secret key, tests the connection, and saves the settings only if the test passes. It also reads the secret key from `--secret-key-file` or `ORCHARD_S3_SECRET_KEY`. For the other commands, refer to [`backups s3`](/operate/host-commands/#backups-s3).
+
+## What happens when you change storage
+
+A change applies to new databases.
+
+- **New databases** back up to the new bucket.
+- **Databases you already have** keep backing up to where they are now. Their existing backups stay restorable from there.
+- **Other features** use the new bucket as soon as the server reads the setting, within 30 seconds.
+
+Keep the old location available. Orchard keeps its connection details so these databases can keep backing up and restoring. If you delete the old bucket or its key, those databases lose their backups.
+
+To move an existing database to the new storage, create a copy of it. For more information, refer to [Back up and restore a database](/data/backups/). The copy backs up to the new bucket. The original database and its backups stay where they are until you delete them.
+
+Uploads that you already added stay in the old location. Upload them again to move them.
+
+## Turn on `orchard up`
+
+`orchard up` turns on when you save S3 storage. It needs no other setting. Orchard stores each uploaded directory in your bucket under `build-contexts/`.
+
+Build pods download the directory, and their network policy only lets them reach public addresses on ports 80 and 443. If your endpoint is inside the cluster, on a private address, or on another port, `orchard up` stays off.
+
+To turn it off, set `LOCAL_DEPLOYS_ENABLED` to `false`. For more information, refer to [Deploy from your terminal](/deploy/deploy-from-terminal/).
+
+## Serve uploads from a public URL
+
+Orchard serves uploads through its API by default. To serve them from your own domain or a CDN instead:
+
+1. Create a separate public bucket for uploads. Do not make your backup bucket public.
+2. Go to **Instance admin** > **Configuration** > **Object storage**.
+3. Set **Uploads bucket** to the public bucket.
+4. Set **Public base URL** to the address of the bucket.
+5. Select **Save**.
+
+Orchard refuses a public URL if uploads and backups share a bucket.
+
+## Use Helm
+
+The Helm chart runs the backup proxy but leaves the store on the server off. Choose one of these options.
+
+To keep backups and uploads on the server, add the following to your chart values:
+
+```yaml
+objectStorage:
+  local:
+    enabled: true
+    storage:
+      size: 20Gi
+```
+
+To add S3 storage, use the setup flow or **Instance admin**. You do not need to change the chart values.
+
+To manage storage from your values file, set the `R2_*` environment variables on the server. The names are historical and work with every provider.
+
+| Variable               | Description                             |
+| ---------------------- | --------------------------------------- |
+| `R2_ENDPOINT`          | The endpoint.                           |
+| `R2_REGION`            | The region. The default is `auto`.      |
+| `R2_PATH_STYLE`        | `true` or `false`.                      |
+| `R2_ACCESS_KEY_ID`     | The access key.                         |
+| `R2_SECRET_ACCESS_KEY` | The secret key.                         |
+| `R2_BACKUP_BUCKET`     | The bucket for backups.                 |
+| `R2_BUCKET_NAME`       | The bucket for uploads.                 |
+| `R2_PUBLIC_URL`        | Optional. A public address for uploads. |
+
+These variables take priority over saved settings, and they lock the matching fields in the dashboard. `orchard up` stays off until you also set `LOCAL_DEPLOYS_ENABLED=true` and `R2_BUILD_CONTEXT_BUCKET`.
+
+## How Orchard protects your keys
+
+- Orchard encrypts saved keys, and it never returns them through the API or writes them to logs.
+- Each database gets a key that only reaches its own backups. A backup proxy holds the real key in its own namespace.
+- If you turn the proxy off with `r2Proxy.enabled=false`, keys saved in Orchard do not reach databases, so those databases have no backups. Keys from `R2_*` variables do reach databases, and anyone who can read a Secret in that namespace can read every database's backups.
+
+## Verify the setup
+
+1. On the host, run `sudo orchardctl backups s3 status`, or go to **Instance admin** > **Configuration** > **Object storage**.
+2. Create a database.
+3. Take a backup, then run a restore test. For more information, refer to [Back up and restore a database](/data/backups/).
+
+## Related resources
+
+- [Back up and restore a database](/data/backups/)
+- [Schedule database dumps](/operate/database-dumps/)
+- [Host commands](/operate/host-commands/)

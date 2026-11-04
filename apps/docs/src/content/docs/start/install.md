@@ -164,11 +164,11 @@ To list every flag and variable, run the script with `--help`.
 | Metrics | VictoriaMetrics, vmagent, and exporters | `--metrics false` | [Metrics and alerts](/run/observability/) |
 | Log search and request data | VictoriaLogs, Vector, and the Traefik JSON access log | `--logs false` | [Configure logs and request data](/operate/logs/) |
 | Image scanning | The Orchard scanner (Trivy), which reads images from zot | `--image-scanning false` | [Set up image scanning](/operate/image-scanning/) |
-| Database backups | A local S3 store (versitygw) and the backup proxy | `--object-storage false` | [Back up and restore a database](/data/backups/) |
+| Database backups and uploads | An S3 store on the server (versitygw) and the backup proxy | `--object-storage false` | [Add S3 storage](/operate/storage/) |
 | MCP | The endpoint agents connect to | `--mcp false` | [Connect an MCP client](/mcp/) |
 
 :::caution
-Backups in the local store sit on the same disk as your databases. They do not protect you if you lose the disk. For off-machine backups, refer to [Move to S3 or R2](/data/backups/#move-to-s3-or-r2).
+Backups on the server sit on the same disk as your databases. If the server is lost, the backups are lost. To keep backups off the server, refer to [Add S3 storage](/operate/storage/).
 :::
 
 A host installed before these defaults existed receives them on its next `sudo orchardctl update`. The MCP endpoint is the exception. To turn it on, run `sudo orchardctl mcp enable --apply`. For more information, refer to [New defaults on an existing host](/operate/host-commands/#new-defaults-on-an-existing-host).
@@ -215,7 +215,7 @@ For the full list of commands, refer to [Host commands](/operate/host-commands/)
 | Sandboxed builds and tenant isolation | Install gVisor or Kata on the node, then set `tenantSandbox` and `builderSandbox` in `/etc/orchard/values.yaml`. Without them, image builds run with host-level privileges. |
 | DNS for your own domain | Add the records yourself. To check them, go to **Instance admin** > **Networking**. For more information, refer to [Point DNS at this instance](/operate/finishing-setup/#point-dns-at-this-instance). |
 | Public IP for raw ports and public databases, on a machine behind NAT | The installer saves the address when the machine has a routable IP in `public` mode. Otherwise, set it at **Instance admin** > **Configuration** > **Public exposure**. For more information, refer to [Set a default public IP](/operate/finishing-setup/#set-a-default-public-ip). |
-| Off-machine backups | Refer to [Move to S3 or R2](/data/backups/#move-to-s3-or-r2). |
+| Off-server backups | The installer asks for S3 storage, and you can add it later. Refer to [Add S3 storage](/operate/storage/). |
 | Multiple nodes, wildcard certificates, and public TCP or UDP in `tunnel` mode | Use the [Helm chart](#install-on-an-existing-cluster). |
 
 The following values turn on the sandboxes:

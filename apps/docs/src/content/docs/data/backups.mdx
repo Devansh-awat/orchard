@@ -249,39 +249,14 @@ If your bucket has its own lifecycle rule, keep objects for longer than 30 days.
 
 ## Backup storage for operators
 
-The instance's backup target needs these variables.
+To set up instance storage, refer to [Add S3 storage](/operate/storage/). The setup flow, **Instance admin**, `orchardctl backups s3`, and the installer all save the same settings. Any S3-compatible service works.
 
-| Variable | Purpose |
-| --- | --- |
-| `R2_BACKUP_BUCKET` | The bucket for backups. |
-| `R2_ENDPOINT` | The S3 endpoint. On Cloudflare R2, Orchard derives it from `R2_ACCOUNT_ID`. |
-| `R2_ACCESS_KEY_ID` | The access key. |
-| `R2_SECRET_ACCESS_KEY` | The secret key. |
-| `R2_REGION` | Optional. The signing region. The default is `auto`. |
+### The store on the server
 
-You can also set these under **Instance admin** > **Configuration** > **Object storage**, except `R2_REGION`, which is environment only. Any S3-compatible store works.
-
-Orchard does not use `R2_BUCKET_NAME` for backups. That bucket holds uploads and assets, and it may be public. If you set only `R2_BUCKET_NAME`, databases have no backups.
-
-On a Helm install, also point the backup proxy at the same store. Each database then gets credentials for its own prefix.
-
-```yaml
-r2Proxy:
-  enabled: true
-  defaultBucket: my-backups
-  upstream:
-    endpoint: https://<account>.r2.cloudflarestorage.com
-    region: auto
-    accessKey: <key id>
-    secretKey: <secret>
-```
-
-### The local store on installer hosts
-
-The one-command installer runs an S3 store (versitygw) in the `orchard-object-storage` namespace, with the backup proxy, and sends the instance's backups to it. Checkpoints, point-in-time restore, copies, deleted database recovery, and restore tests work from the first database.
+The one-command installer runs an S3 store (versitygw) in the `orchard-object-storage` namespace, with the backup proxy, and sends the instance's backups to it. Checkpoints, point-in-time restore, copies, deleted database recovery, and restore tests work from this store.
 
 :::caution
-The local store is not disaster recovery. Backups sit on the same machine as the databases, and usually on the same disk. They undo a bad migration or a dropped table. They do not survive the loss of the disk or the machine.
+The store on the server is not disaster recovery. Backups sit on the same machine as the databases, and usually on the same disk. They undo a bad migration or a dropped table. If the server is lost, the backups are lost.
 :::
 
 The chart keys are under `objectStorage.local`:
@@ -290,51 +265,17 @@ The chart keys are under `objectStorage.local`:
 | --- | --- |
 | `enabled` | `true` on an installer host |
 | `bucket` | `orchard-backups` |
+| `uploadsBucket` | `orchard-uploads` |
 | `storage.size` | One fifth of free disk, from 5 GB to 50 GB |
 | `storage.storageClass` | The `local-path` class, which does not enforce the size |
 
-To install without the local store, pass `--object-storage false`. Databases then have no backups until you configure storage.
+To install without this store, pass `--object-storage false`. Databases then have no backups until you add S3 storage.
 
-`orchardctl update` turns on the local store for an older host only when no object storage is configured in the values file, in `server.envFrom`, in `r2Proxy.upstream`, or under **Instance admin**.
+`orchardctl update` turns on this store for an older host only when no object storage is configured in the values file, in `server.envFrom`, in `r2Proxy.upstream`, or under **Instance admin**.
 
-### Move to S3 or R2
+### Add S3 storage later
 
-To keep backups off the machine, move them to S3 or R2. Each existing database's backup configuration names the bucket, and the proxy serves only the bucket it is configured with. Keep the bucket name, and copy the existing data before you switch. If you do not copy it, point-in-time restore loses everything from before the switch.
-
-1. Create a bucket with the same name as `objectStorage.local.bucket`. The default is `orchard-backups`.
-
-2. Create a key that can list, read, write, and delete in the bucket.
-
-3. On the host, copy the existing backups. This step needs the AWS CLI.
-
-   ```bash
-   kubectl -n orchard-object-storage port-forward svc/object-storage 9000:9000 &
-   export AWS_ACCESS_KEY_ID=$(kubectl -n orchard get secret orchard-object-storage -o jsonpath='{.data.accessKey}' | base64 -d)
-   export AWS_SECRET_ACCESS_KEY=$(kubectl -n orchard get secret orchard-object-storage -o jsonpath='{.data.secretKey}' | base64 -d)
-   aws --endpoint-url http://127.0.0.1:9000 --region auto s3 sync s3://orchard-backups ./orchard-backups
-   AWS_ACCESS_KEY_ID=<key id> AWS_SECRET_ACCESS_KEY=<secret> \
-     aws --endpoint-url https://<account>.r2.cloudflarestorage.com --region auto \
-     s3 sync ./orchard-backups s3://orchard-backups
-   ```
-
-4. Point the instance and the backup proxy at the new store, and turn off the local store. On a Helm install, set the same keys in your values file.
-
-   ```bash
-   sudo orchardctl config set r2Proxy.upstream.endpoint https://<account>.r2.cloudflarestorage.com
-   sudo orchardctl config set r2Proxy.upstream.region auto
-   sudo orchardctl config set r2Proxy.upstream.accessKey <key id>
-   sudo orchardctl config set r2Proxy.upstream.secretKey <secret>
-   sudo orchardctl config set r2Proxy.defaultBucket orchard-backups
-   sudo orchardctl config set objectStorage.local.enabled false
-   sudo orchardctl env set R2_ENDPOINT https://<account>.r2.cloudflarestorage.com
-   sudo orchardctl env set R2_ACCESS_KEY_ID <key id>
-   sudo orchardctl env set R2_SECRET_ACCESS_KEY <secret>
-   sudo orchardctl env set R2_BACKUP_BUCKET orchard-backups --apply
-   ```
-
-5. Take a new checkpoint of each database. WAL written between the copy and the switch exists only in the local store.
-
-6. Delete the local volume, `object-storage-data` in `orchard-object-storage`, when those checkpoints are older than any point you would restore to. Orchard keeps the volume until you delete it.
+When you add S3 storage, new databases back up to it. Databases you already have keep backing up to where they are now, and their existing backups stay restorable from there. To move a database, create a copy of it. For more information, refer to [What happens when you change storage](/operate/storage/#what-happens-when-you-change-storage).
 
 ## Related resources
 

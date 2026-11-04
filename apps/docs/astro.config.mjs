@@ -227,6 +227,7 @@ export default defineConfig({
                 { label: 'Configuration', slug: 'operate/configuration' },
                 { label: 'Environment variables', slug: 'reference/configuration' },
                 { label: 'Finishing setup', slug: 'operate/finishing-setup' },
+                { label: 'Add S3 storage', slug: 'operate/storage' },
                 { label: 'Instance admin', slug: 'operate/instance-admin' },
                 { label: 'Manage users', slug: 'operate/manage-users' },
                 { label: 'Manage organizations', slug: 'operate/manage-organizations' },
