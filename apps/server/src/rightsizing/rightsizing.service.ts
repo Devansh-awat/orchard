@@ -57,8 +57,9 @@ export class RightsizingService {
     });
     if (!deployment?.namespace) throw new NotFoundException('Deployment not found');
     const unlimited =
-      deployment.cpuRequestMilli === 0 &&
-      (deployment.memoryRequestBytes == null || deployment.memoryRequestBytes === BigInt(0));
+      (await this.quotas.limitsOff()) ||
+      (deployment.cpuRequestMilli === 0 &&
+        (deployment.memoryRequestBytes == null || deployment.memoryRequestBytes === BigInt(0)));
     const current = await this.quotas.resolvePodResources(
       deployment.projectId,
       {

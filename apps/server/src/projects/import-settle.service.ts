@@ -45,7 +45,7 @@ export class ImportSettleService {
             continue;
           }
           if (!status.ready) continue;
-          const requested = await this.quotas.resolvePodResources(
+          const requested = await this.quotas.podSizing(
             db.projectId,
             {
               cpuRequestMilli: db.cpuRequestMilli,
@@ -54,10 +54,7 @@ export class ImportSettleService {
             },
             'postgres'
           );
-          await this.k8sCnpg.updateCnpgClusterResources(db.namespace, db.clusterName, {
-            cpuMilli: requested.cpuMilli,
-            memoryBytes: requested.memoryBytes
-          });
+          await this.k8sCnpg.updateCnpgClusterResources(db.namespace, db.clusterName, requested);
           await this.clearFlag(db.id);
           this.logger.log(
             `settled import boost for database ${db.id} back to ${requested.cpuMilli}m / ${requested.memoryBytes} bytes`

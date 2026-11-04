@@ -21,6 +21,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { storageShrinks } from '../kubernetes/pvc-status';
 import { KubernetesService, CreateDeploymentOptions } from '../kubernetes/kubernetes.service';
 import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
+import type { PodSizing } from '../kubernetes/resource-spec';
 import {
   K8sNetworkService,
   certificateForSecret,
@@ -1043,7 +1044,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           deployment.namespace,
           image,
           healthCheck,
-          await this.loadStartArgs(deployment.id)
+          await this.loadStartArgs(deployment.id),
+          await this.rolloutSizing(deployment.id)
         );
         await this.recordRecoveredImageHistory(deployment.id, image).catch((error) => {
           this.logger.warn(
@@ -1691,6 +1693,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const directIngresses: any[] = deploymentWithInternalUrls.ingresses ?? [];
     const existingIds = new Set(directIngresses.map((i: any) => i.id));
 
+    const limitsRestartPending = await this.limitsRestartPending(deployment);
     const [, pods, workload, projectIngresses, rollout, latestVerdict] = await Promise.all([
       userId ? this.authz.requireProjectView(deployment.projectId, userId) : null,
       this.fetchMirroredPods([deploymentId]),
@@ -1797,6 +1800,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       warnings,
       rollout,
       latestVerdict,
+      limitsRestartPending,
       totalCpuUsage,
       totalMemoryUsage,
       status: computedStatus,
@@ -2669,7 +2673,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       );
     }
 
-    const result = await this.k8sWorkload.restartDeployment(deployment.name, deployment.namespace);
+    const result = await this.k8sWorkload.restartDeployment(
+      deployment.name,
+      deployment.namespace,
+      await this.quotasService.prepareRollout(deployment)
+    );
 
     void this.audit.log({
       action: 'deployment.restarted',
@@ -3596,7 +3604,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     namespace: string,
     image: string,
     healthCheck: ResolvedHealthCheck | undefined,
-    args: string[] | null
+    args: string[] | null,
+    resources?: PodSizing
   ): Promise<void> {
     const result = await this.k8sWorkload.deployBlueGreen({
       deploymentName: name,
@@ -3604,6 +3613,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       image,
       healthCheck,
       args,
+      resources,
       log: (line) => {
         this.appendBuildLog(deploymentId, line).catch(() => {});
       }
@@ -3624,6 +3634,22 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         'Green is serving; blue follows as soon as it settles'
       );
     }
+  }
+
+  private async limitsRestartPending(deployment: any): Promise<boolean> {
+    try {
+      return await this.quotasService.restartPending(deployment);
+    } catch {
+      return false;
+    }
+  }
+
+  private async rolloutSizing(deploymentId: string): Promise<PodSizing | undefined> {
+    const row = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: { projectId: true, image: true, cpuRequestMilli: true, memoryRequestBytes: true }
+    });
+    return row ? this.quotasService.prepareRollout(row) : undefined;
   }
 
   private async loadStartArgs(deploymentId: string): Promise<string[] | null> {
@@ -6381,7 +6407,14 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     // updateDeploymentImage patches k8s AND writes deployment.image in Prisma.
-    await this.k8sWorkload.updateDeploymentImage(deployment.name, deployment.namespace, trimmed);
+    await this.k8sWorkload.updateDeploymentImage(
+      deployment.name,
+      deployment.namespace,
+      trimmed,
+      undefined,
+      undefined,
+      await this.quotasService.prepareRollout(deployment)
+    );
     await this.registryCredentials
       .applyToDeployment(deployment.projectId, deployment, trimmed)
       .catch((e: any) => {
@@ -6455,7 +6488,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         await this.k8sWorkload.removeDeploymentResources(deployment.namespace, deployment.name);
       }
     } else {
-      const resolved = await this.quotasService.resolvePodResources(
+      const resolved = await this.quotasService.podSizing(
         deployment.projectId,
         {
           cpuRequestMilli: data.cpuRequestMilli,
@@ -6463,6 +6496,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         },
         deployment.image
       );
+      if (resolved.noLimits) await this.quotasService.clearProjectQuota(deployment.projectId);
 
       // The deployment's current footprint is already counted in org/member
       // usage, so only the increase is additive: charging the full new
@@ -6682,7 +6716,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     await this.assertVolumesUnclaimed(environment.namespace, volumes);
 
     // Resolve per-pod resources (explicit override → org default → fallback).
-    const podResources = await this.quotasService.resolvePodResources(
+    const podResources = await this.quotasService.podSizing(
       project.id,
       {
         cpuRequestMilli: data.cpuRequestMilli ?? null,
@@ -8318,6 +8352,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       if (data.isRebuild && k8sDeploymentExists) {
         const healthCheck = await this.resolveStoredHealthCheck(deploymentId);
         const startArgs = await this.loadStartArgs(deploymentId);
+        const rolloutResources = await this.rolloutSizing(deploymentId);
         if (rolloutStrategy === 'blueGreen') {
           await this.runBlueGreen(
             deploymentId,
@@ -8325,7 +8360,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             data.namespace,
             image,
             healthCheck,
-            startArgs
+            startArgs,
+            rolloutResources
           );
         } else {
           await this.k8sWorkload.updateDeploymentImage(
@@ -8333,7 +8369,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             data.namespace,
             image,
             healthCheck,
-            startArgs
+            startArgs,
+            rolloutResources
           );
         }
 
@@ -8415,7 +8452,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           deploymentRow?.placementOverride ?? null
         );
 
-        let rebuildResources: { cpuMilli: number; memoryBytes: number } | undefined;
+        let rebuildResources: PodSizing | undefined;
         const isUnlimitedDeploy =
           deploymentRow?.cpuRequestMilli === 0 &&
           (deploymentRow?.memoryRequestBytes === BigInt(0) ||
@@ -8450,6 +8487,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             console.error('[Projects] applyProjectQuota failed:', err);
           });
         }
+        const rolloutResources = deploymentRow
+          ? await this.quotasService.prepareRollout(deploymentRow)
+          : undefined;
+        rebuildResources = rolloutResources ?? rebuildResources;
 
         shouldCreateNew = !data.isRebuild || !k8sDeploymentExists;
         if (data.isRebuild && !k8sDeploymentExists) {
@@ -8503,7 +8544,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
               data.namespace,
               image,
               healthCheck,
-              startArgs
+              startArgs,
+              rolloutResources
             );
           } else {
             await this.k8sWorkload.updateDeploymentImage(
@@ -8511,7 +8553,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
               data.namespace,
               image,
               healthCheck,
-              startArgs
+              startArgs,
+              rolloutResources
             );
           }
           // A rebuild patches the image and nothing else, so it is also the
@@ -9375,7 +9418,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       deployment.namespace,
       imageHistory.image,
       healthCheck,
-      args
+      args,
+      await this.quotasService.prepareRollout(deployment)
     );
     const verdict = await this.k8sWorkload.waitForRollout(deployment.name, deployment.namespace, {
       sinceMs: rollbackStartedAt,

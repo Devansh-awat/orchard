@@ -47,7 +47,7 @@ function orchestrator(opts: {
       }
     },
     quotas: {
-      resolvePodResources: async () => ({ cpuMilli: 500, memoryBytes: 256 * 1024 * 1024 })
+      podSizing: async () => ({ cpuMilli: 500, memoryBytes: 256 * 1024 * 1024 })
     },
     resourceBindings: { valuesFor: async () => opts.bound ?? {} }
   });

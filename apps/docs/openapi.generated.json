@@ -630,6 +630,76 @@
         ]
       }
     },
+    "/admin/instance-settings/resource-limits": {
+      "get": {
+        "description": "Auth: superadmin",
+        "operationId": "admin_instance_settings_resource_limits_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /admin/instance-settings/resource-limits",
+        "tags": [
+          "admin"
+        ]
+      },
+      "patch": {
+        "description": "Auth: superadmin",
+        "operationId": "admin_instance_settings_resource_limits_update",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /admin/instance-settings/resource-limits",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/admin/instance-settings/userspace-scheduling": {
       "get": {
         "description": "Auth: superadmin",

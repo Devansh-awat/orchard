@@ -21,7 +21,14 @@ import {
   snapshotPublicPortState,
   publicPortKey
 } from './port-utils';
-import { cpuMilliToK8s, cpuRequestFromLimitMilli, memoryBytesToK8s } from './quantity';
+import {
+  applySizingTo,
+  containerResources,
+  containerResourcesPatch,
+  NO_LIMITS_ANNOTATION,
+  noLimitsMetadataPatch,
+  type PodSizing
+} from './resource-spec';
 import { isTrustedImage, trustedSecurityContext, hardenedSecurityContext } from './trusted-images';
 import {
   buildEnvReplacePatch,
@@ -157,17 +164,10 @@ export class K8sWorkloadService {
     return usage;
   }
 
-  async updateDeploymentResources(
-    namespace: string,
-    deploymentName: string,
-    resources: { cpuMilli: number; memoryBytes: number }
-  ) {
+  async updateDeploymentResources(namespace: string, deploymentName: string, resources: PodSizing) {
     this.ensureKubeConfig();
     if (!this.kc) return;
     const appsApi = this.kc.makeApiClient(k8s.AppsV1Api);
-    const cpuStr = cpuMilliToK8s(resources.cpuMilli);
-    const cpuReqStr = cpuMilliToK8s(cpuRequestFromLimitMilli(resources.cpuMilli));
-    const memStr = memoryBytesToK8s(resources.memoryBytes);
     const existing = await appsApi.readNamespacedDeployment(deploymentName, namespace);
     const containers = existing.body.spec?.template?.spec?.containers;
     if (!containers || containers.length === 0) {
@@ -175,16 +175,14 @@ export class K8sWorkloadService {
     }
     const containerName = containers[0].name;
     const patch = {
+      ...noLimitsMetadataPatch(resources),
       spec: {
         template: {
           spec: {
             containers: [
               {
                 name: containerName,
-                resources: {
-                  requests: { cpu: cpuReqStr, memory: memStr },
-                  limits: { cpu: cpuStr, memory: memStr }
-                }
+                resources: containerResourcesPatch(resources)
               }
             ]
           }
@@ -906,13 +904,7 @@ export class K8sWorkloadService {
       // Burstable QoS: memory requests == limits, CPU requests a fraction of
       // them. Org quota still bills the limit: see getOrgUsage.
       if (options.resources) {
-        const cpuStr = cpuMilliToK8s(options.resources.cpuMilli);
-        const cpuReqStr = cpuMilliToK8s(cpuRequestFromLimitMilli(options.resources.cpuMilli));
-        const memStr = memoryBytesToK8s(options.resources.memoryBytes);
-        container.resources = {
-          requests: { cpu: cpuReqStr, memory: memStr },
-          limits: { cpu: cpuStr, memory: memStr }
-        };
+        container.resources = containerResources(options.resources);
       }
 
       if (options.healthCheck?.enabled) {
@@ -945,7 +937,10 @@ export class K8sWorkloadService {
         metadata: {
           name: cleanName,
           labels,
-          annotations: { [ENV_HASH_ANNOTATION]: envHash(envList) }
+          annotations: {
+            [ENV_HASH_ANNOTATION]: envHash(envList),
+            ...(options.resources?.noLimits ? { [NO_LIMITS_ANNOTATION]: 'true' } : {})
+          }
         },
         spec: {
           replicas,
@@ -2084,7 +2079,11 @@ export class K8sWorkloadService {
     }
   }
 
-  async restartDeployment(deploymentName: string, namespace = 'midnight-staging') {
+  async restartDeployment(
+    deploymentName: string,
+    namespace = 'midnight-staging',
+    resources?: PodSizing
+  ) {
     this.ensureKubeConfig();
 
     const cleanNamespace = String(namespace || 'midnight-staging').trim();
@@ -2101,13 +2100,23 @@ export class K8sWorkloadService {
       const api = this.kc.makeApiClient(k8s.AppsV1Api);
 
       const patch = {
+        ...(resources ? noLimitsMetadataPatch(resources) : {}),
         spec: {
           template: {
             metadata: {
               annotations: {
                 'kubectl.kubernetes.io/restartedAt': new Date().toISOString()
               }
-            }
+            },
+            ...(resources
+              ? {
+                  spec: {
+                    containers: [
+                      { name: cleanDeploymentName, resources: containerResourcesPatch(resources) }
+                    ]
+                  }
+                }
+              : {})
           }
         }
       };
@@ -2533,7 +2542,8 @@ export class K8sWorkloadService {
     // Tri-state on purpose: undefined leaves the running args alone (callers
     // that only swap an image), an array sets them, null clears them back to
     // the image's CMD.
-    args?: string[] | null
+    args?: string[] | null,
+    resources?: PodSizing
   ) {
     this.ensureKubeConfig();
 
@@ -2581,6 +2591,7 @@ export class K8sWorkloadService {
         name: cleanDeploymentName,
         image: cleanImage,
         ...(args === undefined ? {} : { args: args?.length ? args : null }),
+        ...(resources ? { resources: containerResourcesPatch(resources) } : {}),
         ...(healthCheck
           ? {
               livenessProbe:
@@ -2600,6 +2611,7 @@ export class K8sWorkloadService {
       };
 
       const patch = {
+        ...(resources ? noLimitsMetadataPatch(resources) : {}),
         spec: {
           ...(strategy ? { strategy } : {}),
           minReadySeconds: ROLLOUT_MIN_READY_SECONDS,
@@ -2756,6 +2768,7 @@ export class K8sWorkloadService {
     image: string;
     healthCheck?: CreateDeploymentOptions['healthCheck'];
     args?: string[] | null;
+    resources?: PodSizing;
     timeoutMs?: number;
     pollMs?: number;
     log?: (line: string) => void;
@@ -2771,13 +2784,21 @@ export class K8sWorkloadService {
     const blocker = blueGreenBlocker(blue);
     if (blocker) return { ok: false, reason: blocker };
     if ((blue.spec?.replicas ?? 1) === 0) {
-      await this.updateDeploymentImage(name, namespace, opts.image, opts.healthCheck, opts.args);
+      await this.updateDeploymentImage(
+        name,
+        namespace,
+        opts.image,
+        opts.healthCheck,
+        opts.args,
+        opts.resources
+      );
       return { ok: true, settled: true };
     }
 
     await this.removeGreen(appsApi, green, namespace);
     const body = buildGreenDeployment(blue, { image: opts.image, args: opts.args });
     this.applyProbesTo(body, opts.healthCheck);
+    if (opts.resources) applySizingTo(body, opts.resources);
     log(`Starting ${green} with ${opts.image}`);
     const sinceMs = Date.now();
     await appsApi.createNamespacedDeployment(namespace, body);
@@ -2802,6 +2823,7 @@ export class K8sWorkloadService {
       image: opts.image,
       healthCheck: opts.healthCheck,
       args: opts.args,
+      resources: opts.resources,
       timeoutMs: opts.timeoutMs,
       pollMs: opts.pollMs,
       log
@@ -2821,6 +2843,7 @@ export class K8sWorkloadService {
     image: string;
     healthCheck?: CreateDeploymentOptions['healthCheck'];
     args?: string[] | null;
+    resources?: PodSizing;
     timeoutMs?: number;
     pollMs?: number;
     log?: (line: string) => void;
@@ -2831,7 +2854,14 @@ export class K8sWorkloadService {
     const namespace = String(opts.namespace).trim();
     const log = opts.log ?? (() => {});
     const sinceMs = Date.now();
-    await this.updateDeploymentImage(name, namespace, opts.image, opts.healthCheck, opts.args);
+    await this.updateDeploymentImage(
+      name,
+      namespace,
+      opts.image,
+      opts.healthCheck,
+      opts.args,
+      opts.resources
+    );
     const verdict = await this.waitForRollout(name, namespace, {
       sinceMs,
       timeoutMs: opts.timeoutMs,

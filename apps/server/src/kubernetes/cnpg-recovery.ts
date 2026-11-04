@@ -360,7 +360,7 @@ export interface RecoveryClusterInput {
   imageName: string;
   storageSize: string;
   storageClass?: string;
-  resources?: { requests: Record<string, string>; limits: Record<string, string> };
+  resources?: { requests: Record<string, string>; limits?: Record<string, string> };
   parameters: Record<string, string>;
   sharedPreloadLibraries?: string[];
   affinity?: unknown;

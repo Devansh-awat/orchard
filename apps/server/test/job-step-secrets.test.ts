@@ -95,7 +95,7 @@ test('the orchestrator decrypts secret step env and keeps it routed as secret', 
     crypto,
     logger: { warn: () => {}, log: () => {} },
     prisma: { environmentSharedVar: { findMany: async () => [] } },
-    quotas: { resolvePodResources: async () => ({ cpuMilli: 100, memoryBytes: 1 }) }
+    quotas: { podSizing: async () => ({ cpuMilli: 100, memoryBytes: 1 }) }
   });
   const step = await (
     svc as unknown as { resolveStep: (s: unknown, j: unknown) => Promise<any> }

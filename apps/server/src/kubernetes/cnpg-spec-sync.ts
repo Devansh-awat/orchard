@@ -2,6 +2,12 @@ import { parseCpu, parseMemory } from './quantity';
 import { deriveDbTuning, MANAGED_DB_MIN_MEMORY_BYTES, parsePgMemory } from './db-tuning';
 import { normalizePgParam, ORCHARD_PG_DEFAULTS, PG_PARAM_BOUNDS } from './pg-params';
 import { toQuartzCron } from '../projects/projects.utils';
+import {
+  containerResourcesPatch,
+  databaseSizing,
+  hasLimits,
+  type PodSizing
+} from './resource-spec';
 
 export interface ClusterSpecValues {
   storageSize: string | null;
@@ -183,6 +189,42 @@ export function sharedBuffersStamp(
   if (written) return appliedSharedBuffers(written);
   if (cluster?.metadata?.annotations?.[APPLIED_SHARED_BUFFERS_ANNOTATION]) return undefined;
   return appliedSharedBuffers(cluster?.spec?.postgresql?.parameters?.shared_buffers);
+}
+
+function clusterAlreadySized(cluster: any, size: PodSizing): boolean {
+  const live = cluster?.spec?.resources;
+  if (size.noLimits) return !hasLimits(live);
+  return (
+    parseCpu(String(live?.limits?.cpu ?? '')) === size.cpuMilli &&
+    parseMemory(String(live?.limits?.memory ?? '')) === size.memoryBytes
+  );
+}
+
+export function clusterRestartPatch(
+  cluster: any,
+  size: PodSizing,
+  tuning: { sharedBuffers: string; dataCompression: 'gzip' | null } | null,
+  now: Date = new Date()
+): Record<string, any> {
+  const annotations: Record<string, string> = { 'cnpg.io/restartedAt': now.toISOString() };
+  if (clusterAlreadySized(cluster, size)) return { metadata: { annotations } };
+
+  const liveBuffers = cluster?.spec?.postgresql?.parameters?.shared_buffers;
+  const spec: Record<string, any> = {
+    resources: containerResourcesPatch(databaseSizing(size, liveBuffers))
+  };
+  if (!size.noLimits && tuning) {
+    Object.assign(annotations, appliedSharedBuffers(tuning.sharedBuffers));
+    spec.postgresql = { parameters: { shared_buffers: tuning.sharedBuffers } };
+    if (cluster?.spec?.backup?.barmanObjectStore) {
+      spec.backup = {
+        barmanObjectStore: {
+          data: tuning.dataCompression ? { compression: tuning.dataCompression } : null
+        }
+      };
+    }
+  }
+  return { metadata: { annotations }, spec };
 }
 
 const ADOPTABLE_SHARED_BUFFERS_FRACTION = 0.4;

@@ -360,6 +360,19 @@ export class ProjectsService {
       );
     }
 
+    if (await this.quotasService.limitsOff()) {
+      return sealDatabaseCredentials(
+        await this.prisma.database.update({
+          where: { id: databaseId },
+          data: {
+            cpuRequestMilli: data.cpuRequestMilli,
+            memoryRequestBytes:
+              data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null
+          }
+        })
+      );
+    }
+
     const resolved = await this.quotasService.resolvePodResources(
       database.projectId,
       {

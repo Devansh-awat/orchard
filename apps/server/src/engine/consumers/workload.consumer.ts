@@ -10,6 +10,7 @@ import {
   cpuLimitMilliFromResources,
   memoryLimitBytesFromResources
 } from '../../kubernetes/quantity';
+import { runsWithoutLimitsOnPurpose } from '../../kubernetes/resource-spec';
 import { resolvePullPolicy } from '../../kubernetes/trusted-images';
 import { disruptionBudgetActive, readMinAvailable } from '../../kubernetes/disruption-budget';
 import { ApplyQueueService } from '../../apply/apply-queue.service';
@@ -320,18 +321,23 @@ export class WorkloadConsumer implements OnModuleDestroy {
       adopted.push(`image=${image}`);
     }
 
-    const cpuMilli = cpuLimitMilliFromResources(container?.resources);
-    if (cpuMilli > 0 && cpuMilli !== row.cpuRequestMilli) {
-      changes.cpuRequestMilli = cpuMilli;
-      adopted.push(`cpu=${cpuMilli}m`);
-    }
-    const memoryBytes = memoryLimitBytesFromResources(container?.resources);
-    if (
-      memoryBytes > 0 &&
-      (row.memoryRequestBytes == null || BigInt(memoryBytes) !== row.memoryRequestBytes)
-    ) {
-      changes.memoryRequestBytes = BigInt(memoryBytes);
-      adopted.push(`memory=${memoryBytes}`);
+    // Requests are not a size the user picked when Orchard removed the limits
+    // on purpose. Reading them back would pin the small no-limits requests and
+    // hand them back as real limits the day limits are turned on again.
+    if (!runsWithoutLimitsOnPurpose(dep.metadata?.annotations, container?.resources)) {
+      const cpuMilli = cpuLimitMilliFromResources(container?.resources);
+      if (cpuMilli > 0 && cpuMilli !== row.cpuRequestMilli) {
+        changes.cpuRequestMilli = cpuMilli;
+        adopted.push(`cpu=${cpuMilli}m`);
+      }
+      const memoryBytes = memoryLimitBytesFromResources(container?.resources);
+      if (
+        memoryBytes > 0 &&
+        (row.memoryRequestBytes == null || BigInt(memoryBytes) !== row.memoryRequestBytes)
+      ) {
+        changes.memoryRequestBytes = BigInt(memoryBytes);
+        adopted.push(`memory=${memoryBytes}`);
+      }
     }
 
     // Blue/green is orchestrated above Kubernetes: the blue object legitimately

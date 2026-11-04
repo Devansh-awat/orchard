@@ -18,7 +18,7 @@ import { LeaderElectionService } from '../events/leader-election.service';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { QuotasService } from '../quotas/quotas.service';
 import { deriveDbTuning, walSlotKeepSize } from '../kubernetes/db-tuning';
-import { cpuMilliToK8s, cpuRequestFromLimitMilli, memoryBytesToK8s } from '../kubernetes/quantity';
+import { containerResources, databaseSizing } from '../kubernetes/resource-spec';
 import {
   backupBefore,
   backupServerName,
@@ -609,7 +609,7 @@ export class DatabaseOperationsService {
     }
 
     const resources = await this.quotas
-      .resolvePodResources(
+      .podSizing(
         targetDb?.projectId ?? src.projectId,
         { cpuRequestMilli: src.cpuRequestMilli, memoryRequestBytes: src.memoryRequestBytes },
         'postgres'
@@ -676,16 +676,7 @@ export class DatabaseOperationsService {
       storageSize: src.storageSize,
       storageClass: process.env.K8S_STORAGE_CLASS || undefined,
       resources: resources
-        ? {
-            requests: {
-              cpu: cpuMilliToK8s(cpuRequestFromLimitMilli(resources.cpuMilli)),
-              memory: memoryBytesToK8s(resources.memoryBytes)
-            },
-            limits: {
-              cpu: cpuMilliToK8s(resources.cpuMilli),
-              memory: memoryBytesToK8s(resources.memoryBytes)
-            }
-          }
+        ? containerResources(databaseSizing(resources, parameters.shared_buffers))
         : undefined,
       parameters,
       sharedPreloadLibraries: src.sharedPreloadLibs ?? undefined,
@@ -915,7 +906,9 @@ export class DatabaseOperationsService {
       storageSize: sourceCluster.spec?.storage?.size || src.storageSize,
       storageClass:
         sourceCluster.spec?.storage?.storageClass || process.env.K8S_STORAGE_CLASS || undefined,
-      resources: sourceCluster.spec?.resources,
+      resources: (await this.quotas.limitsOff())
+        ? { requests: sourceCluster.spec?.resources?.requests ?? {} }
+        : sourceCluster.spec?.resources,
       parameters: { ...(sourceCluster.spec?.postgresql?.parameters ?? {}) },
       sharedPreloadLibraries: sourceCluster.spec?.postgresql?.shared_preload_libraries,
       bootstrap: liveCloneBootstrap(owner),

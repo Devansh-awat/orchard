@@ -6,6 +6,7 @@ import {
   HttpException,
   HttpStatus
 } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
@@ -13,6 +14,7 @@ import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
 import { UsersService } from '../users/users.service';
 import { AuditService } from '../audit/audit.service';
 import { AuthorizationService } from '../auth/authorization.service';
+import { QuotasService } from '../quotas/quotas.service';
 
 // H-3: Webhook bearer tokens are persisted as a SHA-256 hex digest. The
 // plaintext is only ever held in memory long enough to return it from
@@ -36,8 +38,13 @@ export class WebhooksService {
     private readonly k8sWorkload: K8sWorkloadService,
     private readonly usersService: UsersService,
     private readonly audit: AuditService,
-    private readonly authz: AuthorizationService
+    private readonly authz: AuthorizationService,
+    private readonly moduleRef: ModuleRef
   ) {}
+
+  private prepareRollout(deployment: Parameters<QuotasService['prepareRollout']>[0]) {
+    return this.moduleRef.get(QuotasService, { strict: false }).prepareRollout(deployment);
+  }
 
   private enforceTriggerRateLimit(tokenId: string): void {
     const now = Date.now();
@@ -353,7 +360,10 @@ export class WebhooksService {
         await this.k8sWorkload.updateDeploymentImage(
           deployment.name,
           deployment.namespace,
-          fullImage
+          fullImage,
+          undefined,
+          undefined,
+          await this.prepareRollout(deployment)
         );
       } catch (err) {
         writeAudit('failure', 'image-update', {
@@ -405,7 +415,11 @@ export class WebhooksService {
       };
     }
     try {
-      await this.k8sWorkload.restartDeployment(deployment.name, deployment.namespace);
+      await this.k8sWorkload.restartDeployment(
+        deployment.name,
+        deployment.namespace,
+        await this.prepareRollout(deployment)
+      );
     } catch (err) {
       writeAudit('failure', 'restart', {
         error: err instanceof Error ? err.message : String(err)

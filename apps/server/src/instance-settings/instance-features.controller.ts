@@ -23,7 +23,8 @@ export class InstanceFeaturesController {
       sandboxes: grafts.includes('greenhouse'),
       earlyAccessOpen: !this.analytics.configured,
       fastBuilder: new FirecrackerClient().enabled,
-      storage: storageFeatures()
+      storage: storageFeatures(),
+      resourceLimits: (await this.settings.getResourceLimitsState()).value
     };
   }
 }

@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
 import { K8sCnpgService } from '../kubernetes/k8s-cnpg.service';
 import { RESOURCE_PRESETS, type ResourcePreset } from '../kubernetes/presets';
+import { QuotasService } from './quotas.service';
 
 export interface BackfillRow {
   kind: 'deployment' | 'database';
@@ -32,7 +33,8 @@ export class QuotaBackfillService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly k8sWorkload: K8sWorkloadService,
-    private readonly k8sCnpg: K8sCnpgService
+    private readonly k8sCnpg: K8sCnpgService,
+    private readonly quotas: QuotasService
   ) {}
 
   // List every Deployment and Database that has no cpuRequestMilli set,
@@ -164,10 +166,11 @@ export class QuotaBackfillService {
     target: { kind: 'deployment' | 'database'; id: string },
     values: { cpuMilli: number; memoryBytes: number }
   ) {
+    const limitsOff = await this.quotas.limitsOff();
     if (target.kind === 'deployment') {
       const d = await this.prisma.deployment.findUnique({ where: { id: target.id } });
       if (!d) throw new Error('Deployment not found');
-      await this.k8sWorkload.updateDeploymentResources(d.namespace, d.name, values);
+      if (!limitsOff) await this.k8sWorkload.updateDeploymentResources(d.namespace, d.name, values);
       await this.prisma.deployment.update({
         where: { id: target.id },
         data: {
@@ -179,7 +182,9 @@ export class QuotaBackfillService {
       const db = await this.prisma.database.findUnique({ where: { id: target.id } });
       if (!db) throw new Error('Database not found');
       if (!db.namespace || !db.clusterName) throw new Error('Database not on CNPG');
-      await this.k8sCnpg.updateCnpgClusterResources(db.namespace, db.clusterName, values);
+      if (!limitsOff) {
+        await this.k8sCnpg.updateCnpgClusterResources(db.namespace, db.clusterName, values);
+      }
       await this.prisma.database.update({
         where: { id: target.id },
         data: {

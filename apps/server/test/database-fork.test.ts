@@ -47,6 +47,8 @@ function planHarness(kind: string, mode: string | null, options: { failPhase?: b
   };
   const quotas = {
     resolvePodResources: async () => ({ cpuMilli: 500, memoryBytes: 1024 }),
+    podSizing: async () => ({ cpuMilli: 500, memoryBytes: 1024 }),
+    limitsOff: async () => false,
     enforceOrgCapForNewPod: async () => {},
     enforceMemberAllowanceForNewPod: async () => {}
   };

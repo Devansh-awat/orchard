@@ -19,6 +19,18 @@ export const IMAGE_SCANNER_ENV = 'IMAGE_SCANNER';
 export const IMAGE_SCANNERS = ['off', 'harbor', 'trivy'] as const;
 export type ImageScannerChoice = (typeof IMAGE_SCANNERS)[number];
 
+export const RESOURCE_LIMITS_KEY = 'resource_limits';
+export const RESOURCE_LIMITS_ENV = 'INSTANCE_RESOURCE_LIMITS';
+export const RESOURCE_LIMITS_MODES = ['on', 'off'] as const;
+export type ResourceLimitsMode = (typeof RESOURCE_LIMITS_MODES)[number];
+
+export function parseResourceLimits(raw: string | null | undefined): ResourceLimitsMode | null {
+  const v = (raw ?? '').trim().toLowerCase();
+  return (RESOURCE_LIMITS_MODES as readonly string[]).includes(v)
+    ? (v as ResourceLimitsMode)
+    : null;
+}
+
 export interface ChoiceState<T extends string> {
   value: T;
   dbValue: T | null;
@@ -253,6 +265,21 @@ export class InstanceSettingsService {
   async setPostgresAutoUpdate(value: boolean): Promise<void> {
     this.assertUnlocked(POSTGRES_AUTO_UPDATE_ENV);
     await this.setBool(POSTGRES_AUTO_UPDATE_KEY, value);
+  }
+
+  async getResourceLimitsState(): Promise<ChoiceState<ResourceLimitsMode>> {
+    const envOverride = parseResourceLimits(process.env[RESOURCE_LIMITS_ENV]);
+    const dbValue = parseResourceLimits(await this.getRaw(RESOURCE_LIMITS_KEY));
+    return { value: envOverride ?? dbValue ?? 'on', dbValue, envOverride };
+  }
+
+  async setResourceLimits(value: ResourceLimitsMode): Promise<void> {
+    if (parseResourceLimits(process.env[RESOURCE_LIMITS_ENV]) !== null) {
+      throw new ConflictException(
+        `This is pinned by the ${RESOURCE_LIMITS_ENV} environment variable. Unset it to change this here.`
+      );
+    }
+    await this.set(RESOURCE_LIMITS_KEY, value);
   }
 
   async getImageScannerState(

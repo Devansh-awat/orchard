@@ -2,18 +2,43 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
-  NotFoundException
+  Logger,
+  NotFoundException,
+  OnModuleInit,
+  ServiceUnavailableException
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { K8sNamespaceService } from '../kubernetes/k8s-namespace.service';
-import { podResourcesFor } from '../kubernetes/presets';
+import { isDatabaseImage, podDefaultsFor, podResourcesFor } from '../kubernetes/presets';
+import {
+  isUnlimitedRow,
+  liveMatchesMode,
+  NO_LIMITS_APP_REQUESTS,
+  NO_LIMITS_DATABASE_REQUESTS,
+  type PodSizing
+} from '../kubernetes/resource-spec';
+import { LeaseService } from '../coordination/lease.service';
+import {
+  InstanceSettingsService,
+  type ResourceLimitsMode
+} from '../instance-settings/instance-settings.service';
 import { formatBytes } from '../projects/projects.utils';
 import { ownerLeftAllowance } from './owner-allowance';
 import { allowanceCommitment, groupByOwner, memberAllowance, ownedUsage } from './member-usage';
 
 const VIEW_SNAPSHOT = { staleMs: 60_000 };
+
+const QUOTA_SWEEP_BATCH = 10;
+const QUOTA_SWEEP_BOOT_DELAY_MS = 15_000;
+
+interface RolloutRow {
+  projectId: string;
+  image?: string | null;
+  cpuRequestMilli: number | null;
+  memoryRequestBytes: bigint | number | null;
+}
 
 const OWNED_PROJECT_SELECT = {
   id: true,
@@ -67,12 +92,139 @@ export function assertPositiveOrBlank(fields: Record<string, number | null | und
 }
 
 @Injectable()
-export class QuotasService {
+export class QuotasService implements OnModuleInit {
+  private readonly logger = new Logger(QuotasService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly k8s: KubernetesService,
-    private readonly k8sNamespace: K8sNamespaceService
+    private readonly k8sNamespace: K8sNamespaceService,
+    private readonly settings: InstanceSettingsService,
+    private readonly lease: LeaseService
   ) {}
+
+  onModuleInit(): void {
+    if (!this.lease.canCoordinate) return;
+    setTimeout(() => {
+      this.limitsOff()
+        .then((off) => (off ? this.clearAllQuotas() : undefined))
+        .catch((e) => this.logger.warn(`quota sweep skipped: ${e?.message ?? e}`));
+    }, QUOTA_SWEEP_BOOT_DELAY_MS);
+  }
+
+  async limitsOff(): Promise<boolean> {
+    return (await this.settings.getResourceLimitsState()).value === 'off';
+  }
+
+  private withNoLimits(size: { cpuMilli: number; memoryBytes: number }, image?: string | null) {
+    return {
+      ...size,
+      noLimits: isDatabaseImage(image)
+        ? { ...NO_LIMITS_DATABASE_REQUESTS }
+        : { ...NO_LIMITS_APP_REQUESTS }
+    };
+  }
+
+  async podSizing(
+    projectId: string,
+    override?: { cpuRequestMilli?: number | null; memoryRequestBytes?: number | null },
+    image?: string | null
+  ): Promise<PodSizing> {
+    const size = await this.resolvePodResources(projectId, override, image);
+    return (await this.limitsOff()) ? this.withNoLimits(size, image) : size;
+  }
+
+  async prepareRollout(row: RolloutRow): Promise<PodSizing | undefined> {
+    const state = await this.settings.getResourceLimitsState();
+    if (state.dbValue === null && state.envOverride === null) return undefined;
+    if (state.value === 'on' && isUnlimitedRow(row)) return undefined;
+    const size = await this.resolvePodResources(
+      row.projectId,
+      {
+        cpuRequestMilli: row.cpuRequestMilli,
+        memoryRequestBytes: row.memoryRequestBytes != null ? Number(row.memoryRequestBytes) : null
+      },
+      row.image
+    );
+    if (state.value === 'off') {
+      await this.clearProjectQuota(row.projectId);
+      return this.withNoLimits(size, row.image);
+    }
+    await this.applyProjectQuota(row.projectId).catch((err) => {
+      this.logger.warn(`quota for project ${row.projectId} not applied: ${err?.message ?? err}`);
+    });
+    return size;
+  }
+
+  async restartPending(deployment: {
+    id: string;
+    name: string;
+    namespace: string;
+    stopped?: boolean | null;
+    cpuRequestMilli: number | null;
+    memoryRequestBytes: bigint | number | null;
+  }): Promise<boolean> {
+    if (deployment.stopped) return false;
+    const state = await this.settings.getResourceLimitsState();
+    if (state.dbValue === null && state.envOverride === null) return false;
+    if (state.value === 'on' && isUnlimitedRow(deployment)) return false;
+    const live = await this.prisma.k8sObject.findFirst({
+      where: { kind: 'Deployment', namespace: deployment.namespace, name: deployment.name },
+      select: { manifest: true }
+    });
+    if (!live) return false;
+    const manifest = live.manifest as any;
+    return !liveMatchesMode(
+      state.value,
+      manifest?.spec?.template?.spec?.containers?.[0]?.resources
+    );
+  }
+
+  private async projectNamespaces(projectId: string): Promise<string[]> {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { namespace: true, environments: { select: { namespace: true } } }
+    });
+    if (!project) return [];
+    return Array.from(
+      new Set([project.namespace, ...project.environments.map((e) => e.namespace)])
+    );
+  }
+
+  async clearProjectQuota(projectId: string): Promise<void> {
+    const namespaces = await this.projectNamespaces(projectId);
+    const results = await Promise.allSettled(
+      namespaces.map((namespace) => this.k8sNamespace.removeNamespaceQuota(namespace))
+    );
+    const failed = results.find((r) => r.status === 'rejected') as
+      | PromiseRejectedResult
+      | undefined;
+    if (failed) {
+      throw new ServiceUnavailableException(
+        `Could not remove the old resource limits from this project: ${failed.reason?.message ?? failed.reason}`
+      );
+    }
+  }
+
+  async clearAllQuotas(): Promise<void> {
+    const projects = await this.prisma.project.findMany({ select: { id: true } });
+    for (let i = 0; i < projects.length; i += QUOTA_SWEEP_BATCH) {
+      await Promise.allSettled(
+        projects.slice(i, i + QUOTA_SWEEP_BATCH).map((p) =>
+          this.clearProjectQuota(p.id).catch((err) => {
+            this.logger.warn(`quota for project ${p.id} not removed: ${err?.message ?? err}`);
+          })
+        )
+      );
+    }
+  }
+
+  sweepQuotasInBackground(): void {
+    if (!this.lease.canCoordinate) return;
+    void this.clearAllQuotas().catch((err) => {
+      this.logger.warn(`quota sweep failed: ${err?.message ?? err}`);
+    });
+  }
 
   // Resolve the caps applied to a project namespace.
   // Precedence: project override > org cap. Nulls propagate "unlimited".
@@ -149,6 +301,12 @@ export class QuotasService {
 
   // Push the effective caps for a project to Kubernetes (ResourceQuota + LimitRange).
   async applyProjectQuota(projectId: string) {
+    if (await this.limitsOff()) {
+      await this.clearProjectQuota(projectId).catch((err) => {
+        this.logger.warn(`quota for project ${projectId} not removed: ${err?.message ?? err}`);
+      });
+      return;
+    }
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
       select: { namespace: true, environments: { select: { namespace: true } } }
@@ -244,6 +402,7 @@ export class QuotasService {
     organizationId: string,
     requested: { cpuMilli: number; memoryBytes: number }
   ) {
+    if (await this.limitsOff()) return;
     const org = await this.prisma.organization.findUnique({
       where: { id: organizationId },
       select: {
@@ -595,6 +754,7 @@ export class QuotasService {
     excludeDeploymentId?: string
   ) {
     if (!ownerId) return;
+    if (await this.limitsOff()) return;
     const allowance = await this.resolveOwnerAllowance(organizationId, ownerId);
     if (allowance.cpuMilli === null && allowance.memoryBytes === null) return;
     const usage = await this.getMemberUsage(organizationId, ownerId, excludeDeploymentId);
@@ -611,6 +771,84 @@ export class QuotasService {
         `User memory allowance exceeded: need ${formatBytes(usage.memoryBytes + requested.memoryBytes)}, allowance ${formatBytes(allowance.memoryBytes)}`
       );
     }
+  }
+
+  private async runningOnOtherMode(mode: ResourceLimitsMode) {
+    const apps = await (mode === 'off'
+      ? this.prisma.$queryRaw<{ count: number }[]>`
+          SELECT COUNT(*)::int AS count
+          FROM k8s_objects o
+          WHERE o.kind = 'Deployment'
+            AND o.deployment_id IS NOT NULL
+            AND COALESCE(o.manifest #> '{spec,template,spec,containers,0,resources,limits}', '{}'::jsonb) <> '{}'::jsonb`
+      : this.prisma.$queryRaw<{ count: number }[]>`
+          SELECT COUNT(*)::int AS count
+          FROM k8s_objects o
+          JOIN deployments d ON d.id = o.deployment_id
+          WHERE o.kind = 'Deployment'
+            AND NOT (d.cpu_request_milli IS NOT DISTINCT FROM 0 AND COALESCE(d.memory_request_bytes, 0) = 0)
+            AND COALESCE(o.manifest #> '{spec,template,spec,containers,0,resources,limits}', '{}'::jsonb) = '{}'::jsonb`);
+    const databases = await (mode === 'off'
+      ? this.prisma.$queryRaw<{ count: number }[]>`
+          SELECT COUNT(*)::int AS count
+          FROM k8s_objects o
+          WHERE o.kind = 'Cluster'
+            AND o.database_id IS NOT NULL
+            AND COALESCE(o.manifest #> '{spec,resources,limits}', '{}'::jsonb) <> '{}'::jsonb`
+      : this.prisma.$queryRaw<{ count: number }[]>`
+          SELECT COUNT(*)::int AS count
+          FROM k8s_objects o
+          WHERE o.kind = 'Cluster'
+            AND o.database_id IS NOT NULL
+            AND COALESCE(o.manifest #> '{spec,resources,limits}', '{}'::jsonb) = '{}'::jsonb`);
+    return { apps: apps[0]?.count ?? 0, databases: databases[0]?.count ?? 0 };
+  }
+
+  async resourceLimitsView() {
+    const state = await this.settings.getResourceLimitsState();
+    const chosen = state.dbValue !== null || state.envOverride !== null;
+    const withoutOwnLimits = {
+      OR: [{ cpuRequestMilli: null }, { memoryRequestBytes: null }]
+    };
+    const [apps, databases, appsAffected, databasesAffected, organizations, stale] =
+      await Promise.all([
+        this.prisma.deployment.count(),
+        this.prisma.database.count(),
+        this.prisma.deployment.count({ where: withoutOwnLimits }),
+        this.prisma.database.count({ where: withoutOwnLimits }),
+        this.prisma.organization.findMany({
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            defaultPodCpuMilli: true,
+            defaultPodMemoryBytes: true
+          },
+          orderBy: { name: 'asc' }
+        }),
+        chosen
+          ? this.runningOnOtherMode(state.value).catch((err) => {
+              this.logger.warn(`could not count workloads: ${err?.message ?? err}`);
+              return null;
+            })
+          : Promise.resolve({ apps: 0, databases: 0 })
+      ]);
+    return {
+      value: state.value,
+      dbValue: state.dbValue,
+      envOverride: state.envOverride,
+      newInstance: apps === 0 && databases === 0,
+      affected: { apps: appsAffected, databases: databasesAffected },
+      stale,
+      fallback: podDefaultsFor({ defaultPodCpuMilli: null, defaultPodMemoryBytes: null }),
+      organizations: organizations.map((org) => ({
+        id: org.id,
+        name: org.name,
+        slug: org.slug,
+        defaultPodCpuMilli: org.defaultPodCpuMilli || null,
+        defaultPodMemoryBytes: org.defaultPodMemoryBytes ? Number(org.defaultPodMemoryBytes) : null
+      }))
+    };
   }
 
   // Everything a single project currently requests, with the same
@@ -654,6 +892,7 @@ export class QuotasService {
     newOwnerId: string,
     projectId: string
   ) {
+    if (await this.limitsOff()) return;
     const allowance = await this.resolveMemberAllowance(organizationId, newOwnerId);
     if (allowance.cpuMilli === null && allowance.memoryBytes === null) return;
     const requested = await this.getProjectRequestedResources(projectId);

@@ -21,9 +21,10 @@ import { PassThrough } from 'stream';
 import { createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService, ResolvedPlacement } from './kubernetes.service';
-import { cpuMilliToK8s, cpuRequestFromLimitMilli, memoryBytesToK8s, parseMemory } from './quantity';
+import { parseMemory } from './quantity';
+import { containerResources, databaseSizing, type PodSizing } from './resource-spec';
 import { deriveDbTuning, walSlotKeepSize } from './db-tuning';
-import { appliedSharedBuffers, sharedBuffersStamp } from './cnpg-spec-sync';
+import { appliedSharedBuffers, clusterRestartPatch, sharedBuffersStamp } from './cnpg-spec-sync';
 import { optionalDomain } from '../env/platform-domains';
 import { syncTlsSecret } from './tls-secret-sync';
 import {
@@ -521,26 +522,23 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     return this.kubernetes.createPVC(namespace, name, storageSize);
   }
 
-  async updateCnpgClusterResources(
-    namespace: string,
-    clusterName: string,
-    resources: { cpuMilli: number; memoryBytes: number }
-  ) {
+  async updateCnpgClusterResources(namespace: string, clusterName: string, resources: PodSizing) {
     this.ensureKubeConfig();
     if (!this.kc) return;
     const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
-    const cpuStr = cpuMilliToK8s(resources.cpuMilli);
-    const cpuReqStr = cpuMilliToK8s(cpuRequestFromLimitMilli(resources.cpuMilli));
-    const memStr = memoryBytesToK8s(resources.memoryBytes);
+    const sized = resources.noLimits
+      ? databaseSizing(
+          resources,
+          (await this.readCluster(namespace, clusterName))?.spec?.postgresql?.parameters
+            ?.shared_buffers
+        )
+      : resources;
     const patch = [
       {
         op: 'replace',
         path: '/spec/resources',
-        value: {
-          requests: { cpu: cpuReqStr, memory: memStr },
-          limits: { cpu: cpuStr, memory: memStr }
-        }
+        value: containerResources(sized)
       }
     ];
     try {
@@ -932,7 +930,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       accessKey: string;
       secretKey: string;
     };
-    resources?: { cpuMilli: number; memoryBytes: number };
+    resources?: PodSizing;
   }): Promise<{ host: string; port: number }> {
     this.ensureKubeConfig();
 
@@ -1107,13 +1105,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     };
 
     if (options.resources) {
-      const cpuStr = cpuMilliToK8s(options.resources.cpuMilli);
-      const cpuReqStr = cpuMilliToK8s(cpuRequestFromLimitMilli(options.resources.cpuMilli));
-      const memStr = memoryBytesToK8s(options.resources.memoryBytes);
-      postgresContainer.resources = {
-        requests: { cpu: cpuReqStr, memory: memStr },
-        limits: { cpu: cpuStr, memory: memStr }
-      };
+      postgresContainer.resources = containerResources(options.resources);
     }
 
     const pgbackrestContainer: k8s.V1Container = {
@@ -1762,13 +1754,9 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     };
 
     if (options.resources) {
-      const cpuStr = cpuMilliToK8s(options.resources.cpuMilli);
-      const cpuReqStr = cpuMilliToK8s(cpuRequestFromLimitMilli(options.resources.cpuMilli));
-      const memStr = memoryBytesToK8s(options.resources.memoryBytes);
-      clusterSpec.resources = {
-        requests: { cpu: cpuReqStr, memory: memStr },
-        limits: { cpu: cpuStr, memory: memStr }
-      };
+      clusterSpec.resources = containerResources(
+        databaseSizing(options.resources, tuning.sharedBuffers)
+      );
     }
 
     if (options.importFrom) {
@@ -3040,6 +3028,29 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     await this.annotateCnpgCluster(namespace, clusterName, {
       'cnpg.io/restartedAt': new Date().toISOString()
     });
+  }
+
+  async restartCnpgClusterApplying(
+    namespace: string,
+    clusterName: string,
+    size: PodSizing,
+    tuning: { sharedBuffers: string; dataCompression: 'gzip' | null } | null
+  ): Promise<void> {
+    const cluster = await this.readCluster(namespace, clusterName);
+    if (!cluster) throw new NotFoundException(`Database cluster ${clusterName} not found`);
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    await customApi.patchNamespacedCustomObject(
+      this.CNPG_GROUP,
+      this.CNPG_VERSION,
+      namespace,
+      this.CNPG_PLURAL,
+      clusterName,
+      clusterRestartPatch(cluster, size, tuning),
+      undefined,
+      undefined,
+      undefined,
+      { headers: { 'Content-Type': 'application/merge-patch+json' } }
+    );
   }
 
   private scheduledBackupName(clusterName: string): string {

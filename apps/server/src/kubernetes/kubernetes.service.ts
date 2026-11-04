@@ -4,6 +4,7 @@ import * as k8s from '@kubernetes/client-node';
 import { clusterPods, type SnapshotRead } from './cluster-snapshot';
 import { PrismaService } from '../prisma/prisma.service';
 import { apiserverEndpointsFrom, type ApiserverEndpoints } from './security-policies';
+import type { PodSizing } from './resource-spec';
 
 export const ALLOWED_INGRESS_ANNOTATION_KEYS = new Set<string>([
   'cert-manager.io/cluster-issuer',
@@ -144,10 +145,7 @@ export interface CreateDeploymentOptions {
   // org allow/deny above via buildPlacement into affinity + tolerations).
   pool?: PoolPlacement | null;
   placementOverride?: PlacementOverride | null;
-  resources?: {
-    cpuMilli: number;
-    memoryBytes: number;
-  };
+  resources?: PodSizing;
   volumes?: {
     name: string;
     type: 'pvc' | 'hostPath' | 'emptyDir';

@@ -174,6 +174,17 @@ export class K8sNamespaceService implements OnModuleInit {
     }
   }
 
+  async removeNamespaceQuota(namespace: string): Promise<void> {
+    this.ensureKubeConfig();
+    if (!this.kc) return;
+    const api = this.kc.makeApiClient(k8s.CoreV1Api);
+    const gone = (error: any) => {
+      if (error?.response?.statusCode !== 404) throw error;
+    };
+    await api.deleteNamespacedResourceQuota('orchard-org-quota', namespace).catch(gone);
+    await api.deleteNamespacedLimitRange('orchard-defaults', namespace).catch(gone);
+  }
+
   // Aggregate resource requests for an org across all its namespaces.
   async getOrgUsage(
     namespaces: string[],

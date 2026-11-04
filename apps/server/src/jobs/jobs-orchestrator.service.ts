@@ -13,7 +13,7 @@ import {
   trustedSecurityContext,
   hardenedSecurityContext
 } from '../kubernetes/trusted-images';
-import { cpuMilliToK8s, cpuRequestFromLimitMilli, memoryBytesToK8s } from '../kubernetes/quantity';
+import { containerResources, type PodSizing } from '../kubernetes/resource-spec';
 import { QuotasService } from '../quotas/quotas.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NodesService } from '../nodes/nodes.service';
@@ -58,6 +58,7 @@ export interface ResolvedStep {
   envVars: { key: string; value: string; secret?: boolean }[];
   cpuMilli: number;
   memoryBytes: number;
+  noLimits?: PodSizing['noLimits'];
   timeoutSeconds: number;
   retries: number;
 }
@@ -179,7 +180,7 @@ export class JobsOrchestratorService {
   ): Promise<ResolvedStep> {
     const projectId = job.project.id;
     const shared = await this.loadSharedVars(job.environmentId);
-    const resources = await this.quotas.resolvePodResources(projectId, {
+    const resources = await this.quotas.podSizing(projectId, {
       cpuRequestMilli: step.cpuRequestMilli,
       memoryRequestBytes: step.memoryRequestBytes != null ? Number(step.memoryRequestBytes) : null
     });
@@ -191,6 +192,7 @@ export class JobsOrchestratorService {
       envVars: ownEnv,
       cpuMilli: resources.cpuMilli,
       memoryBytes: resources.memoryBytes,
+      ...(resources.noLimits ? { noLimits: resources.noLimits } : {}),
       timeoutSeconds: step.timeoutSeconds,
       retries: step.retries
     };
@@ -328,9 +330,6 @@ export class JobsOrchestratorService {
 
     const trusted = step.type === 'app' && isTrustedImage(step.image);
     const pullSecrets = pullSecretsForImage(step.image, ctx.pullSecretRegistries ?? []);
-    const cpuStr = cpuMilliToK8s(step.cpuMilli);
-    const cpuReqStr = cpuMilliToK8s(cpuRequestFromLimitMilli(step.cpuMilli));
-    const memStr = memoryBytesToK8s(step.memoryBytes);
 
     return {
       metadata: {
@@ -359,10 +358,7 @@ export class JobsOrchestratorService {
                 ...(step.type === 'script' ? { workingDir: '/workspace' } : {}),
                 env,
                 volumeMounts: volumeMounts.length ? volumeMounts : undefined,
-                resources: {
-                  requests: { cpu: cpuReqStr, memory: memStr },
-                  limits: { cpu: cpuStr, memory: memStr }
-                },
+                resources: containerResources(step),
                 securityContext: trusted ? trustedSecurityContext() : hardenedSecurityContext()
               }
             ],

@@ -23,6 +23,8 @@ export const routes: GeneratedRoute[] = [
   { method: 'PATCH', path: '/admin/instance-settings/image-scanning', auth: 'superadmin' },
   { method: 'GET', path: '/admin/instance-settings/mcp', auth: 'superadmin' },
   { method: 'PATCH', path: '/admin/instance-settings/mcp', auth: 'superadmin' },
+  { method: 'GET', path: '/admin/instance-settings/resource-limits', auth: 'superadmin' },
+  { method: 'PATCH', path: '/admin/instance-settings/resource-limits', auth: 'superadmin' },
   { method: 'GET', path: '/admin/instance-settings/userspace-scheduling', auth: 'superadmin' },
   { method: 'PATCH', path: '/admin/instance-settings/userspace-scheduling', auth: 'superadmin' },
   { method: 'GET', path: '/admin/networking/dns', auth: 'superadmin' },

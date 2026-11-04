@@ -25,6 +25,7 @@ import { k8sErrorMessage } from '../kubernetes/k8s-error';
 import { PG_PARAM_BOUNDS } from '../kubernetes/pg-params';
 import { deriveDbTuning } from '../kubernetes/db-tuning';
 import { parameterDrift } from '../kubernetes/cnpg-spec-sync';
+import type { PodSizing } from '../kubernetes/resource-spec';
 import { R2ProxyService } from '../kubernetes/r2-proxy.service';
 import { UsersService } from '../users/users.service';
 import { AuthorizationService } from '../auth/authorization.service';
@@ -703,7 +704,7 @@ export class DatabasesService {
 
     const replicas = this.resolveReplicas(data.replicas);
 
-    const dbResources = await this.quotasService.resolvePodResources(
+    const dbResources = await this.quotasService.podSizing(
       projectId,
       {
         cpuRequestMilli: data.cpuRequestMilli ?? null,
@@ -711,12 +712,13 @@ export class DatabasesService {
       },
       'postgres'
     );
-    const provisionResources = importFrom
-      ? {
-          cpuMilli: Math.max(dbResources.cpuMilli, this.IMPORT_BOOST_CPU_MILLI),
-          memoryBytes: Math.max(dbResources.memoryBytes, this.IMPORT_BOOST_MEMORY_BYTES)
-        }
-      : { cpuMilli: dbResources.cpuMilli, memoryBytes: dbResources.memoryBytes };
+    const provisionResources: PodSizing =
+      importFrom && !dbResources.noLimits
+        ? {
+            cpuMilli: Math.max(dbResources.cpuMilli, this.IMPORT_BOOST_CPU_MILLI),
+            memoryBytes: Math.max(dbResources.memoryBytes, this.IMPORT_BOOST_MEMORY_BYTES)
+          }
+        : dbResources;
     const importBoosted =
       provisionResources.cpuMilli !== dbResources.cpuMilli ||
       provisionResources.memoryBytes !== dbResources.memoryBytes;
@@ -2038,7 +2040,19 @@ export class DatabasesService {
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
       throw new BadRequestException('Restart requires a CNPG-backed database');
     }
-    await this.k8sCnpg.rolloutRestartCnpgCluster(database.namespace, database.clusterName);
+    const sizing = database.importBoosted
+      ? undefined
+      : await this.quotasService.prepareRollout({ ...database, image: 'postgres' });
+    if (sizing) {
+      await this.k8sCnpg.restartCnpgClusterApplying(
+        database.namespace,
+        database.clusterName,
+        sizing,
+        sizing.noLimits ? null : await this.tuningFor(database)
+      );
+    } else {
+      await this.k8sCnpg.rolloutRestartCnpgCluster(database.namespace, database.clusterName);
+    }
     await this.prisma.database.update({
       where: { id: databaseId },
       data: { status: 'restarting' }

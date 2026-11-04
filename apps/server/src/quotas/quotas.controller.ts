@@ -8,6 +8,7 @@ import {
   Req,
   Inject,
   forwardRef,
+  BadRequestException,
   NotFoundException
 } from '@nestjs/common';
 import { QuotasService } from './quotas.service';
@@ -16,6 +17,10 @@ import { OrganizationsService } from '../organizations/organizations.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { podDefaultsFor } from '../kubernetes/presets';
 import { Auth, SuperAdmin } from '../auth/decorators';
+import {
+  InstanceSettingsService,
+  parseResourceLimits
+} from '../instance-settings/instance-settings.service';
 
 interface CapBody {
   cpuLimitMilli?: number | null;
@@ -52,6 +57,31 @@ export class AdminQuotasController {
   @Post(':id/quota/disconnect')
   async disconnectQuota(@Param('id') id: string) {
     return this.quotas.unlinkOrganization(id);
+  }
+}
+
+// Super-admin: resource limits on or off for the whole instance. Writing this
+// never touches a running workload: it applies on the next restart or redeploy.
+@SuperAdmin()
+@Controller('admin/instance-settings/resource-limits')
+export class AdminResourceLimitsController {
+  constructor(
+    private readonly quotas: QuotasService,
+    private readonly settings: InstanceSettingsService
+  ) {}
+
+  @Get()
+  async get() {
+    return this.quotas.resourceLimitsView();
+  }
+
+  @Patch()
+  async set(@Body() body: { value?: string }) {
+    const value = parseResourceLimits(body?.value);
+    if (!value) throw new BadRequestException('value must be on or off');
+    await this.settings.setResourceLimits(value);
+    if (value === 'off') this.quotas.sweepQuotasInBackground();
+    return this.quotas.resourceLimitsView();
   }
 }
 
@@ -179,6 +209,7 @@ export class OrgQuotasController {
     const orgCpuCap = org?.cpuLimitMilli || null;
     const orgMemCap = org?.memoryLimitBytes ? Number(org.memoryLimitBytes) : null;
 
+    const limitsOff = await this.quotas.limitsOff();
     const orgUsage =
       orgCpuCap != null || orgMemCap != null
         ? await this.quotas.getOrgTotalUsage(orgId, org?.projects?.map((p) => p.namespace) ?? [])
@@ -215,7 +246,13 @@ export class OrgQuotasController {
       effectiveMemLimit = orgMemRemaining;
     }
 
+    if (limitsOff) {
+      effectiveCpuLimit = null;
+      effectiveMemLimit = null;
+    }
+
     return {
+      limitsOff,
       allowance,
       usage,
       orgCap: {
