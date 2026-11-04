@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import type { McpRegister } from '@orchardlabs/graft-sdk/server';
-import { z } from 'zod4';
+import { z } from 'zod';
 
 export type OrchardClient = Parameters<McpRegister>[1];
 
