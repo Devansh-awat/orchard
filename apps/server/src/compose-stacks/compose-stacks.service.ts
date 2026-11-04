@@ -293,13 +293,8 @@ export class ComposeStacksService {
     }
 
     const token = await this.github.resolveRepoToken(userId, parsed.owner, parsed.repo);
-    if (!token) {
-      throw new BadRequestException(
-        'No GitHub access for this repo. Connect your GitHub account or install the GitHub App.'
-      );
-    }
     const composeYaml = await this.github.getFileContent(
-      token,
+      token ?? '',
       parsed.owner,
       parsed.repo,
       composePath,
