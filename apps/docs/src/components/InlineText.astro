@@ -1,0 +1,19 @@
+---
+interface Props {
+  text: string;
+}
+
+const parts = Astro.props.text.split(/(`[^`]+`|\*\*[^*]+\*\*)/).filter(Boolean);
+---
+
+{
+  parts.map((part) =>
+    part.startsWith('`') ? (
+      <code>{part.slice(1, -1)}</code>
+    ) : part.startsWith('**') ? (
+      <strong>{part.slice(2, -2)}</strong>
+    ) : (
+      part
+    )
+  )
+}
