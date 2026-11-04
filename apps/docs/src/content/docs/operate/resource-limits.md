@@ -67,7 +67,7 @@ To choose during a non-interactive install, pass `--limits` to the installer. Th
 install.sh --limits off
 ```
 
-You can also set `ORCHARD_LIMITS` instead of the flag.
+You can also set `ORCHARD_LIMITS` instead of the flag. Orchard stores your answer as the current choice, so you can still change it in **Instance admin**.
 
 ## Lock the setting
 
@@ -86,6 +86,8 @@ To unlock the setting, run the following command:
 ```bash
 sudo orchardctl env unset INSTANCE_RESOURCE_LIMITS --apply
 ```
+
+Orchard keeps the value that was locked. You can then change it in **Instance admin**.
 
 ## Change the default limits
 

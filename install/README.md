@@ -317,7 +317,7 @@ sudo ./install.sh --yes \
 | `--logs <true\|false>`           | `ORCHARD_LOGS`           | `true`. Log search and per-route request stats.                             |
 | `--image-scanning <true\|false>` | `ORCHARD_IMAGE_SCANNING` | `true`. Vulnerability scans of every image Orchard builds.                  |
 | `--object-storage <true\|false>` | `ORCHARD_OBJECT_STORAGE` | `true`. The local S3 store database backups go to.                          |
-| `--limits <on\|off>`             | `ORCHARD_LIMITS`         | unset. The setup page asks. Set, it locks the choice and skips the question. |
+| `--limits <on\|off>`             | `ORCHARD_LIMITS`         | unset. The setup page asks. Set, it skips the question. You can change it in the dashboard. |
 | `--yes`, `-y`                    | `ORCHARD_ASSUME_YES`     | `false`                                                                     |
 | `--allow-ipv6-only`              | `ORCHARD_ALLOW_IPV6_ONLY` | `false`. Continue on a server with no IPv4 address. Unsupported and untested. |
 | `--help`, `-h`                   |                          |                                                                             |

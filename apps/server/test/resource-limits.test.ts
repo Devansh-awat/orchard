@@ -34,6 +34,7 @@ const noLimits: PodSizing = {
 
 afterEach(() => {
   delete process.env.INSTANCE_RESOURCE_LIMITS;
+  delete process.env.INSTANCE_RESOURCE_LIMITS_CHOICE;
 });
 
 function settingsWith(initial: string | null) {
@@ -49,6 +50,20 @@ function settingsWith(initial: string | null) {
     }
   };
   return { settings: new InstanceSettingsService(prisma), writes };
+}
+
+function settingsTable(initial: Record<string, string> = {}) {
+  const table = new Map(Object.entries(initial));
+  const prisma: any = {
+    instanceSetting: {
+      findUnique: async ({ where }: any) =>
+        table.has(where.key) ? { value: table.get(where.key) } : null,
+      upsert: async ({ where, update }: any) => {
+        table.set(where.key, update.value);
+      }
+    }
+  };
+  return { settings: new InstanceSettingsService(prisma), table };
 }
 
 function quotasWith(initial: string | null, overrides: any = {}) {
@@ -151,6 +166,72 @@ test('the environment wins over the stored choice and locks writes', async () =>
   assert.equal(state.envOverride, 'off');
   await assert.rejects(settings.setResourceLimits('on'), /pinned by the INSTANCE_RESOURCE_LIMITS/);
   assert.deepEqual(writes, []);
+});
+
+test('nothing is written when neither variable is set', async () => {
+  const { settings, table } = settingsTable();
+  await settings.settleResourceLimits();
+  assert.equal(table.size, 0);
+  assert.deepEqual(await settings.getResourceLimitsState(), {
+    value: 'on',
+    dbValue: null,
+    envOverride: null
+  });
+});
+
+test('unsetting a pin keeps its value and unlocks the setting', async () => {
+  const { settings } = settingsTable();
+  process.env.INSTANCE_RESOURCE_LIMITS = 'off';
+  await settings.settleResourceLimits();
+  delete process.env.INSTANCE_RESOURCE_LIMITS;
+  assert.deepEqual(await settings.getResourceLimitsState(), {
+    value: 'off',
+    dbValue: 'off',
+    envOverride: null
+  });
+  await settings.setResourceLimits('on');
+  assert.equal((await settings.getResourceLimitsState()).value, 'on');
+});
+
+test('a pin overwrites an older stored choice when the server starts', async () => {
+  const { settings, table } = settingsTable({ resource_limits: 'on' });
+  process.env.INSTANCE_RESOURCE_LIMITS = 'off';
+  await settings.settleResourceLimits();
+  assert.equal(table.get('resource_limits'), 'off');
+});
+
+test('the installer choice is stored once and stays editable', async () => {
+  const { settings, table } = settingsTable();
+  process.env.INSTANCE_RESOURCE_LIMITS_CHOICE = 'off';
+  await settings.settleResourceLimits();
+  assert.deepEqual(await settings.getResourceLimitsState(), {
+    value: 'off',
+    dbValue: 'off',
+    envOverride: null
+  });
+  await settings.setResourceLimits('on');
+  await settings.settleResourceLimits();
+  assert.equal(table.get('resource_limits'), 'on');
+});
+
+test('a different installer choice is stored again', async () => {
+  const { settings, table } = settingsTable({
+    resource_limits: 'on',
+    resource_limits_choice_applied: 'on'
+  });
+  process.env.INSTANCE_RESOURCE_LIMITS_CHOICE = 'off';
+  await settings.settleResourceLimits();
+  assert.equal(table.get('resource_limits'), 'off');
+  assert.equal(table.get('resource_limits_choice_applied'), 'off');
+});
+
+test('a pin wins over the installer choice', async () => {
+  const { settings, table } = settingsTable();
+  process.env.INSTANCE_RESOURCE_LIMITS = 'on';
+  process.env.INSTANCE_RESOURCE_LIMITS_CHOICE = 'off';
+  await settings.settleResourceLimits();
+  assert.equal(table.get('resource_limits'), 'on');
+  assert.equal(table.has('resource_limits_choice_applied'), false);
 });
 
 test('a limited pod keeps the exact resources it has today', () => {

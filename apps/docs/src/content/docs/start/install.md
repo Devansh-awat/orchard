@@ -101,7 +101,7 @@ The installer asks these questions in order. A flag or an environment variable a
 | Updates | `manual` | `--updates` | `ORCHARD_UPDATE_POLICY` |
 | S3 storage | None | `--s3-*`, `--no-s3` | `ORCHARD_S3_*` |
 
-The review screen also has one answer that the installer does not ask for: resource limits. By default, you choose them during setup in the dashboard. To set them from the installer, which locks the value, change this answer on the review screen or use `--limits`.
+The review screen also has one answer that the installer does not ask for: resource limits. By default, you choose them during setup in the dashboard. To set them from the installer, change this answer on the review screen or use `--limits`. You can still change the value in the dashboard.
 
 To leave the public IP, the custom domains target, or the email blank, type `none`. The result of each blank answer is:
 

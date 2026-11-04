@@ -928,6 +928,7 @@ export class QuotasService implements OnModuleInit {
           FROM k8s_objects o
           WHERE o.kind = 'Deployment'
             AND o.deployment_id IS NOT NULL
+            AND COALESCE((o.manifest #>> '{spec,replicas}')::int, 1) > 0
             AND COALESCE(o.manifest #> '{spec,template,spec,containers,0,resources,limits}', '{}'::jsonb) <> '{}'::jsonb`
       : this.prisma.$queryRaw<{ count: number }[]>`
           SELECT COUNT(*)::int AS count
@@ -935,6 +936,7 @@ export class QuotasService implements OnModuleInit {
           JOIN deployments d ON d.id = o.deployment_id
           WHERE o.kind = 'Deployment'
             AND NOT (d.cpu_request_milli IS NOT DISTINCT FROM 0 AND COALESCE(d.memory_request_bytes, 0) = 0)
+            AND COALESCE((o.manifest #>> '{spec,replicas}')::int, 1) > 0
             AND COALESCE(o.manifest #> '{spec,template,spec,containers,0,resources,limits}', '{}'::jsonb) = '{}'::jsonb`);
     const databases = await (mode === 'off'
       ? this.prisma.$queryRaw<{ count: number }[]>`
@@ -942,12 +944,14 @@ export class QuotasService implements OnModuleInit {
           FROM k8s_objects o
           WHERE o.kind = 'Cluster'
             AND o.database_id IS NOT NULL
+            AND COALESCE(o.manifest #>> '{metadata,annotations,cnpg.io/hibernation}', '') <> 'on'
             AND COALESCE(o.manifest #> '{spec,resources,limits}', '{}'::jsonb) <> '{}'::jsonb`
       : this.prisma.$queryRaw<{ count: number }[]>`
           SELECT COUNT(*)::int AS count
           FROM k8s_objects o
           WHERE o.kind = 'Cluster'
             AND o.database_id IS NOT NULL
+            AND COALESCE(o.manifest #>> '{metadata,annotations,cnpg.io/hibernation}', '') <> 'on'
             AND COALESCE(o.manifest #> '{spec,resources,limits}', '{}'::jsonb) = '{}'::jsonb`);
     return { apps: apps[0]?.count ?? 0, databases: databases[0]?.count ?? 0 };
   }

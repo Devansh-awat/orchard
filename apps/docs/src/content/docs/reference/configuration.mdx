@@ -166,7 +166,8 @@ recognised. Anything without a default is optional unless the description says o
 | `POSTGRES_AUTO_UPDATE` |  | Existing databases move to the catalog's image a few at a time inside this UTC hour range (default 8-11). Set POSTGRES_AUTO_UPDATE=false to stop it. |
 | `POSTGRES_IMAGE_ROLLOUT_WINDOW` |  |  |
 | `POSTGRES_IMAGE_ROLLOUT_BATCH` |  |  |
-| `INSTANCE_RESOURCE_LIMITS` |  | Resource limits for the whole instance: on or off. Set, it wins and locks the setting in Instance admin. Unset, the stored choice applies, and with no stored choice limits stay on. A change reaches a running app or database at its next restart or redeploy, never before. |
+| `INSTANCE_RESOURCE_LIMITS` |  | Resource limits for the whole instance: on or off. Set, it wins and locks the setting in Instance admin, and Orchard stores the value, so unsetting it later keeps that value and unlocks the setting. Unset, the stored choice applies, and with no stored choice limits stay on. A change reaches a running app or database at its next restart or redeploy, or when the cluster replaces its pod. |
+| `INSTANCE_RESOURCE_LIMITS_CHOICE` |  | The choice from the installer: on or off. Orchard stores it once, as if someone chose it in Instance admin, and the setting stays editable. A different value stores again. |
 | `TENANT_QUOTA_FLOOR_PODS` |  | ResourceQuota floor for tenant namespaces whose org or project has no cap. |
 | `TENANT_QUOTA_FLOOR_SERVICES` |  |  |
 | `TENANT_QUOTA_FLOOR_PVCS` |  |  |

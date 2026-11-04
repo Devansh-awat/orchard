@@ -1,4 +1,4 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { tenantBackupTarget } from '../instance-config/object-storage';
 
@@ -21,6 +21,8 @@ export type ImageScannerChoice = (typeof IMAGE_SCANNERS)[number];
 
 export const RESOURCE_LIMITS_KEY = 'resource_limits';
 export const RESOURCE_LIMITS_ENV = 'INSTANCE_RESOURCE_LIMITS';
+export const RESOURCE_LIMITS_CHOICE_ENV = 'INSTANCE_RESOURCE_LIMITS_CHOICE';
+export const RESOURCE_LIMITS_CHOICE_APPLIED_KEY = 'resource_limits_choice_applied';
 export const RESOURCE_LIMITS_MODES = ['on', 'off'] as const;
 export type ResourceLimitsMode = (typeof RESOURCE_LIMITS_MODES)[number];
 
@@ -82,8 +84,30 @@ export function markBackupDependent(
 }
 
 @Injectable()
-export class InstanceSettingsService {
+export class InstanceSettingsService implements OnModuleInit {
+  private readonly logger = new Logger(InstanceSettingsService.name);
+
   constructor(private readonly prisma: PrismaService) {}
+
+  async onModuleInit(): Promise<void> {
+    await this.settleResourceLimits().catch((err) => {
+      this.logger.warn(`resource limits choice not stored: ${err?.message ?? err}`);
+    });
+  }
+
+  async settleResourceLimits(): Promise<void> {
+    const pinned = parseResourceLimits(process.env[RESOURCE_LIMITS_ENV]);
+    const stored = await this.getRaw(RESOURCE_LIMITS_KEY);
+    if (pinned) {
+      if (stored !== pinned) await this.set(RESOURCE_LIMITS_KEY, pinned);
+      return;
+    }
+    const choice = parseResourceLimits(process.env[RESOURCE_LIMITS_CHOICE_ENV]);
+    if (!choice) return;
+    if ((await this.getRaw(RESOURCE_LIMITS_CHOICE_APPLIED_KEY)) === choice) return;
+    await this.set(RESOURCE_LIMITS_KEY, choice);
+    await this.set(RESOURCE_LIMITS_CHOICE_APPLIED_KEY, choice);
+  }
 
   private async getRaw(key: string): Promise<string | null> {
     const row = await this.prisma.instanceSetting.findUnique({ where: { key } });

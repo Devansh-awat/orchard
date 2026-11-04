@@ -86,7 +86,6 @@ PREV_CNAME=''
 PREV_PUBLIC_IP=''
 PREV_EMAIL=''
 PREV_UPDATES=''
-PREV_LIMITS=''
 
 HOST_DEFAULTS_VERSION=2
 
@@ -331,9 +330,9 @@ usage() {
     --s3-secret-key <secret>                            stays in your shell history
     --no-s3                      ORCHARD_S3=false       skip the question
 
-    --limits <on|off>            ORCHARD_LIMITS         resource limits on apps and databases,
-                                                        locked to this value. Unset, the setup
-                                                        page asks and you can change it later
+    --limits <on|off>            ORCHARD_LIMITS         resource limits on apps and databases.
+                                                        Unset, the setup page asks. Either way,
+                                                        you can change it later in the dashboard
     --yes, -y                    ORCHARD_ASSUME_YES     never prompt and never wait for DNS: use
                                                         flags, then current values, then defaults.
                                                         A required answer with no default stops
@@ -614,11 +613,9 @@ load_previous_answers() {
   PREV_APP_DOMAIN=$(reuse_secret APP_DOMAIN)
   PREV_MCP=$(reuse_value '.mcp.enabled')
   PREV_MCP_DOMAIN=$(reuse_value '.mcp.ingress.host')
-  PREV_LIMITS=$(reuse_secret INSTANCE_RESOURCE_LIMITS)
   if answer_given --domain ORCHARD_DOMAIN && is_sslip "$PREV_DOMAIN" && ! is_sslip "$ORCHARD_DOMAIN"; then
     MOVING_OFF_SSLIP=true
   fi
-  if ! answer_given --limits ORCHARD_LIMITS; then ORCHARD_LIMITS=$PREV_LIMITS; fi
   PREV_UPDATES=manual
   if systemctl is-enabled --quiet orchard-update.timer 2>/dev/null; then PREV_UPDATES=automatic; fi
 
@@ -1570,7 +1567,7 @@ q_limits() {
   q_head "Resource limits"
   note "on    Apps and databases get default CPU and memory caps, so one cannot starve the rest."
   note "off   No caps. This fits one person running their own apps."
-  note "ask   Choose in the dashboard setup. Setting it here locks it to this value."
+  note "ask   Choose in the dashboard setup. Either way, you can change it later in the dashboard."
   while [ "$attempt" -lt 5 ]; do
     attempt=$((attempt + 1))
     answer=$(ask "      Limits" "${ORCHARD_LIMITS:-ask}")
@@ -1678,7 +1675,7 @@ review_value() {
       fi
       ;;
     limits)
-      if [ -n "$ORCHARD_LIMITS" ]; then printf '%s, locked' "$ORCHARD_LIMITS"; else printf 'choose in the dashboard setup'; fi
+      if [ -n "$ORCHARD_LIMITS" ]; then printf '%s' "$ORCHARD_LIMITS"; else printf 'choose in the dashboard setup'; fi
       ;;
   esac
 }
@@ -3307,7 +3304,7 @@ write_values() {
   fi
   if [ -n "$ORCHARD_LIMITS" ]; then
     db_memory_env="$db_memory_env
-    - { name: INSTANCE_RESOURCE_LIMITS, value: \"$ORCHARD_LIMITS\" }"
+    - { name: INSTANCE_RESOURCE_LIMITS_CHOICE, value: \"$ORCHARD_LIMITS\" }"
   fi
 
   cat > "$VALUES_FILE" <<EOF
@@ -3470,9 +3467,6 @@ EOF
     rm -f "$previous"
     if [ -n "$pinned_cname" ] && [ -z "$ORCHARD_INGRESS_CNAME" ] && [ -n "$PREV_CNAME" ]; then
       yq -i 'del(.server.env[] | select(.name == "INGRESS_CNAME"))' "$VALUES_FILE" || true
-    fi
-    if [ -z "$ORCHARD_LIMITS" ] && [ -n "$PREV_LIMITS" ]; then
-      yq -i 'del(.server.env[] | select(.name == "INSTANCE_RESOURCE_LIMITS"))' "$VALUES_FILE" || true
     fi
   fi
 }
