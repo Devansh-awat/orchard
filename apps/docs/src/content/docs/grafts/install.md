@@ -39,6 +39,8 @@ Only install grafts you trust. A graft runs with the same access as Orchard. `or
 
 `orchardctl` then shows the graft's capabilities, the core tables it reads, its paths outside its own ID, and its routes open to anyone. It also checks that any CRDs the graft requires exist.
 
+A graft's migrations run with Orchard's database user. If a graft ships a Helm chart, `orchardctl` installs it with cluster-admin rights and asks you to type the graft's ID first. To accept a chart with `--yes`, add `--allow-chart`. Community grafts cannot ship a chart.
+
 After you confirm, Orchard rehearses the migrations inside a transaction and rolls them back. If that passes, `orchardctl` writes the graft into your values. `--apply` rolls Orchard out immediately. Without it, run `sudo orchardctl update` when you are ready.
 
 ### Commands

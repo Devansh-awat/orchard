@@ -244,6 +244,11 @@ func checkCommunityGraft(a graftArtifact, l communityListing, version string) (s
 	if adoptsCoreTables(a.doc) {
 		return "", errors.New("database.adopts is set; only official grafts may take over core tables")
 	}
+	for name := range a.files {
+		if strings.HasPrefix(name, "chart/") {
+			return "", errors.New("community grafts can't ship a Helm chart: it would install with cluster-admin rights")
+		}
+	}
 	if bad := publicSchemaMigrations(a.files); len(bad) > 0 {
 		return "", fmt.Errorf("migrations change the public schema: %s", strings.Join(bad, ", "))
 	}

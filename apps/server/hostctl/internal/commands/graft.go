@@ -75,6 +75,7 @@ type graftCheck struct {
 		Value      string `json:"value"`
 		ShadowedBy string `json:"shadowedBy"`
 	} `json:"shadowedClaims"`
+	HasChart   bool `json:"hasChart"`
 	Migrations struct {
 		Pending []string `json:"pending"`
 		DryRun  string   `json:"dryRun"`
@@ -165,6 +166,7 @@ Flags for add and upgrade:
   --yes        skip the confirmation prompt
   --dry-run    verify the graft and list its database changes, change nothing
   --apply      roll Orchard out afterwards (otherwise run orchardctl update)
+  --allow-chart  accept a graft's Helm chart without typing its id, for use with --yes
 
 ` + graftTrustWarning + `
 
@@ -177,8 +179,9 @@ Every install and upgrade verifies the signature against your trust policy
 (graftSettings.trust), checks the graft against this Orchard version, and
 rehearses its database migrations inside a transaction that is rolled back.
 Before any migration runs, the graft's own schema is saved under
-/etc/orchard/graft-snapshots so rollback can restore it. Orchard's own data is
-never touched.
+/etc/orchard/graft-snapshots so rollback can restore it. Migrations run with
+Orchard's own database user, so a graft can change Orchard's data. A graft that
+ships a Helm chart installs it with cluster-admin rights.
 `,
 		Run: runGraft,
 	}
@@ -857,6 +860,9 @@ func printCheck(c *cli.Context, values *cli.Values, spec graftSpec, report graft
 	if len(m.Requires.Kubernetes.Crds) > 0 {
 		c.Printf("  needs CRDs:      %s\n", strings.Join(m.Requires.Kubernetes.Crds, ", "))
 	}
+	if report.HasChart {
+		c.Printf("  cluster chart:   installs a Helm chart with cluster-admin rights, which gives it root on this host\n")
+	}
 	for _, p := range report.Problems {
 		c.Printf("  problem: %s\n", p)
 	}
@@ -1074,6 +1080,14 @@ func installSpec(c *cli.Context, values *cli.Values, spec graftSpec, archive []b
 	if flags["dry-run"] {
 		c.Printf("dry run: everything checks out and nothing was changed\n")
 		return nil
+	}
+	if report.HasChart && !flags["allow-chart"] {
+		if flags["yes"] {
+			return errors.New("this graft installs a Helm chart with cluster-admin rights; add --allow-chart to accept that with --yes")
+		}
+		if !confirmTyped(c, "This graft installs a Helm chart with cluster-admin rights.", report.Manifest.ID) {
+			return errors.New("cancelled")
+		}
 	}
 	if !flags["yes"] && !confirm(c, fmt.Sprintf("%s %s?", map[bool]string{true: "Upgrade", false: "Install"}[prev != nil], report.Manifest.Name)) {
 		return errors.New("cancelled")

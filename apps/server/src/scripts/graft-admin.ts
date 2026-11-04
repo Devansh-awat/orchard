@@ -186,6 +186,7 @@ async function check(rawSpec: string, dryRun: boolean) {
       manifest,
       digest,
       signature,
+      hasChart: existsSync(join(dir, 'chart')),
       trust: trust.policy,
       warnings: warning ? [warning] : [],
       problems,
