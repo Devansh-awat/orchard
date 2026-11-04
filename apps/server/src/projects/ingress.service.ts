@@ -286,6 +286,16 @@ export class IngressService implements OnModuleInit {
     }
 
     const normalizedExpected = expectedCname.toLowerCase().replace(/\.$/, '');
+    if (normalizedExpected.endsWith('.cfargotunnel.com')) {
+      const proxied = await promisify(dns.resolve4)(domainToCheck).catch(() => [] as string[]);
+      if (proxied.length === 0) return genericFailure;
+      return {
+        valid: true,
+        message:
+          'This hostname resolves. Cloudflare hides proxied records, so Orchard cannot check the target. Route the hostname to the tunnel in the Cloudflare dashboard.',
+        records
+      };
+    }
     const cnames = await promisify(dns.resolveCname)(domainToCheck).catch(() => [] as string[]);
     const hasValidCname = cnames.some((record) => {
       const normalizedRecord = record.toLowerCase().replace(/\.$/, '');
