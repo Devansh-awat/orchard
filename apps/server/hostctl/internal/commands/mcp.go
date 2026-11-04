@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/hackclub/orchard/orchardctl/internal/cli"
@@ -88,6 +89,14 @@ func publicScheme(values *cli.Values) string {
 	return "http"
 }
 
+func publicMcpURL(values *cli.Values, host string) string {
+	_, port := servedOn(values)
+	if port != "" {
+		host = net.JoinHostPort(host, port)
+	}
+	return fmt.Sprintf("%s://%s", publicScheme(values), host)
+}
+
 func mcpURL(values *cli.Values) string {
 	if url, _ := values.Get(mcpURLPath).(string); url != "" {
 		return url
@@ -166,8 +175,10 @@ stops the deployed MCP from answering without redeploying anything.
 				if len(args) > 1 {
 					host = args[1]
 				}
+				wasOn, _ := values.Get(mcpEnabledPath).(bool)
+				previous, _ := values.Get(mcpHostPath).(string)
 				if host == "" {
-					host, _ = values.Get(mcpHostPath).(string)
+					host = previous
 				}
 				if host == "" {
 					uiHost, _ := values.Get("ingress.host").(string)
@@ -185,7 +196,7 @@ stops the deployed MCP from answering without redeploying anything.
 					mcpEnabledPath:        "true",
 					"mcp.ingress.enabled": "true",
 					mcpHostPath:           host,
-					mcpURLPath:            fmt.Sprintf("%s://%s", publicScheme(values), host),
+					mcpURLPath:            publicMcpURL(values, host),
 				} {
 					if err := values.Set(path, value); err != nil {
 						return err
@@ -218,7 +229,14 @@ stops the deployed MCP from answering without redeploying anything.
 				if strings.HasPrefix(url, "http://") {
 					c.Printf("no TLS in front of it, so the endpoint is plain http\n")
 				}
-				c.Printf("point an A record for %s at this box before connecting a client\n", host)
+				if wasOn && previous != "" && previous != host {
+					c.Printf("Agents must reconnect at the new URL.\n")
+				}
+				if coveredByWildcard(host, currentAppDomain(values)) {
+					c.Printf("The wildcard record for your apps covers %s, so it needs no record of its own.\n", host)
+				} else {
+					c.Printf("%s\n", dnsAdvice(values, host))
+				}
 				return maybeApply(c, apply)
 
 			case "disable":

@@ -52,6 +52,8 @@ func All() []*cli.Command {
 		Graft(),
 		PublicIP(),
 		Hostname(),
+		AppsDomain(),
+		LetsEncryptEmail(),
 		Claim(),
 		Login(),
 		Password(),

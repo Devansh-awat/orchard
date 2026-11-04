@@ -30,17 +30,19 @@ mDNS name, a DNS record you added afterwards.
   orchardctl hostname                     list them
   orchardctl hostname add <name>          answer on one more
   orchardctl hostname remove <name>       stop answering on it
+  orchardctl hostname set <name>          change the dashboard domain
 
 The primary hostname, the one links are generated with, is not in this list.
-Change that one with:
+set changes it, along with FRONTEND_URL, and keeps the scheme and port this
+instance serves on. Everyone signs in again, and passkeys stop working, because
+they belong to the old name.
 
-  orchardctl config set ingress.host <name> --apply
-
-These are matched, not certified. On an install that terminates TLS, a name
-with no certificate covering it is a browser warning rather than a working
-address, so they suit LAN and Tailscale names best.
+The other names are matched, not certified. On an install that terminates TLS,
+a name with no certificate covering it is a browser warning rather than a
+working address, so they suit LAN and Tailscale names best.
 
   orchardctl hostname add mango --apply
+  orchardctl hostname set orchard.example.com --apply
 `,
 		Run: func(c *cli.Context, args []string) error {
 			args, apply := splitApply(args)
@@ -123,6 +125,20 @@ address, so they suit LAN and Tailscale names best.
 				c.Printf("removed %s\n", name)
 				reportPending(c, apply)
 
+			case "set":
+				if len(args) != 2 {
+					return fmt.Errorf("usage: orchardctl hostname set <name>")
+				}
+				name, err := setPrimaryHostname(values, args[1])
+				if err != nil {
+					return err
+				}
+				if err := values.Save(); err != nil {
+					return err
+				}
+				reportPrimaryMove(c, values, primary, name)
+				reportPending(c, apply)
+
 			default:
 				return fmt.Errorf("unknown hostname command: %s", action)
 			}
@@ -140,6 +156,51 @@ func reportPending(c *cli.Context, apply bool) {
 		return
 	}
 	c.Printf("written, not deployed yet. Run: orchardctl update\n")
+}
+
+func setPrimaryHostname(values *cli.Values, raw string) (string, error) {
+	name, err := cleanHostname(raw)
+	if err != nil {
+		return "", err
+	}
+	name = strings.ToLower(name)
+
+	if installMode(values) != "lan" && !isDomainName(name) {
+		return "", fmt.Errorf("%s is not a domain. This install needs a name such as orchard.example.com", name)
+	}
+	if primary, _ := values.Get("ingress.host").(string); name == primary {
+		return "", fmt.Errorf("%s is already the dashboard domain", name)
+	}
+	if mcp, _ := values.Get(mcpHostPath).(string); name == mcp {
+		return "", fmt.Errorf("the MCP endpoint is at %s, and the dashboard cannot share it", name)
+	}
+
+	base, err := claimBase(values, name)
+	if err != nil {
+		return "", err
+	}
+	if err := values.Put("ingress.host", name); err != nil {
+		return "", err
+	}
+	values.SetEnv(serverEnvPath, "FRONTEND_URL", base)
+
+	kept := []string{}
+	for _, h := range hostList(values) {
+		if h != name {
+			kept = append(kept, h)
+		}
+	}
+	saveHosts(values, kept)
+	return name, nil
+}
+
+func reportPrimaryMove(c *cli.Context, values *cli.Values, from, to string) {
+	c.Printf("Dashboard moves from %s to %s. Everyone signs in again.\n", from, to)
+	c.Printf("Passkeys belong to the old name and stop working. Use a password or 'sudo orchardctl login'.\n")
+	c.Printf("The GitHub App and any SSO provider keep the old URL until you update them.\n")
+	c.Printf("The custom domains target does not change.\n")
+	c.Printf("%s stops answering. To keep it, run: orchardctl hostname add %s --apply\n", from, from)
+	c.Printf("%s\n", dnsAdvice(values, to))
 }
 
 func hostList(values *cli.Values) []string {

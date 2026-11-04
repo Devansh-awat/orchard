@@ -308,6 +308,7 @@ func migrateValues(c *cli.Context) error {
 		facts.ObjectStorage = storedObjectStorage(c, values)
 	}
 	changes := applyHostDefaults(values, facts)
+	changes = append(changes, retrofitInstallMode(values)...)
 	volumes := reconcileStatefulVolumes(c, values)
 	if len(changes) == 0 && !volumes {
 		return nil
