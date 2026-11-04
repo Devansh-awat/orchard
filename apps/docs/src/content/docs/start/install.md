@@ -418,7 +418,7 @@ These steps were run end to end on one node: k3s v1.36.5 with its bundled Traefi
 
 That run set `CNPG_OPERATOR_NAMESPACE` in `server.env`. The `tenant.cnpgOperatorNamespace` value used below sets the same variable. Its rendered output is checked in CI, but it has not been run on a cluster.
 
-These were not tested on this path: backups with the `objectStorage` values, MCP, public database exposure, more than one node, and other ingress controllers.
+These were not tested on this path: MCP, public database exposure, more than one node, and other ingress controllers.
 :::
 
 ### Prerequisites
@@ -446,12 +446,13 @@ You also need these domains:
 
 ### Install the prerequisites
 
-k3s includes Traefik and the `local-path` StorageClass, so these steps do not install them.
+k3s includes Traefik, the Gateway API CRDs, and the `local-path` StorageClass, so these steps do not install them.
 
-1. Install the Gateway API CRDs:
+1. If the Gateway API CRDs are missing, install them. Do not apply an older version over the CRDs that k3s includes, because Traefik then stops with `Required CRDs are missing`.
 
    ```bash
-   kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.1/standard-install.yaml
+   kubectl get crd gateways.gateway.networking.k8s.io || \
+     kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.1/standard-install.yaml
    ```
 
 2. Install CloudNativePG and cert-manager:
@@ -619,7 +620,11 @@ Without a registry, a build stops with an error that names `DOCKER_REGISTRY_PUSH
    - { name: DOCKER_REGISTRY_PUSH, value: registry.example.com }
    - { name: DOCKER_REGISTRY_PULL, value: registry.example.com }
    - { name: REGISTRY_PROJECT, value: orchard }
+   - { name: HARBOR_USERNAME, value: robot$orchard }
+   - { name: HARBOR_PASSWORD, value: <registry password> }
    ```
+
+   Use the same username and password as `builders.harbor`. The server uses them to delete old images and to scan images.
 
 3. [Upgrade the chart](#upgrade-the-chart).
 
@@ -654,7 +659,7 @@ objectStorage:
     storage: { size: 20Gi, storageClass: local-path }
 ```
 
-These are the values that the installer writes, and backups and restores were tested through the installer. They were not tested on this path.
+These are the values that the installer writes.
 
 :::caution
 These backups sit on the same disk as your databases, so they do not protect you if you lose the disk. To use external storage, refer to [Backup storage for operators](/data/backups/#backup-storage-for-operators).
