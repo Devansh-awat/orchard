@@ -2,6 +2,7 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import ResourcePicker, { formatCpu, formatMemory } from '$lib/components/ResourcePicker.svelte';
 	import { Button, FormActions, SectionCard, SettingRow } from '$lib/components/ui';
+	import { isDatabaseImage } from '$lib/presets';
 	import { apiFetch, isSuperAdmin } from '$lib/stores';
 	import NodePoolPicker from './NodePoolPicker.svelte';
 
@@ -90,6 +91,7 @@
 		<ResourcePicker
 			bind:cpuMilli={resourceCpuMilli}
 			bind:memoryBytes={resourceMemoryBytes}
+			kind={isDatabaseImage(deployment?.image) ? 'database' : 'app'}
 			defaultCpuMilli={orgDefaultCpuMilli}
 			defaultMemoryBytes={orgDefaultMemoryBytes}
 			showUnlimited={$isSuperAdmin}

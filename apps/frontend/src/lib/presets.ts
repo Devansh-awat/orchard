@@ -57,6 +57,33 @@ export const RESOURCE_PRESETS: ResourcePreset[] = [
 export const DEFAULT_CPU_MILLI = 100;
 export const DEFAULT_MEMORY_BYTES = 128 * MiB;
 
+const DATABASE_IMAGE_REPOS = new Set([
+	'postgres',
+	'postgis/postgis',
+	'pgvector/pgvector',
+	'timescale/timescaledb',
+	'supabase/postgres',
+	'mysql',
+	'mariadb',
+	'mongo',
+	'redis',
+	'valkey/valkey',
+	'clickhouse/clickhouse-server',
+	'elasticsearch',
+	'opensearchproject/opensearch'
+]);
+
+export function isDatabaseImage(image: string | null | undefined): boolean {
+	if (!image) return false;
+	const ref = image.trim().split('@')[0];
+	const slash = ref.indexOf('/');
+	const first = slash > 0 ? ref.slice(0, slash) : '';
+	const hasHost = first.includes('.') || first.includes(':') || first === 'localhost';
+	const rest = hasHost ? ref.slice(slash + 1) : ref;
+	const colon = rest.lastIndexOf(':');
+	return DATABASE_IMAGE_REPOS.has(colon === -1 ? rest : rest.slice(0, colon));
+}
+
 export function matchPreset(cpuMilli: number, memoryBytes: number): string | null {
 	const p = RESOURCE_PRESETS.find(
 		(preset) => preset.cpuMilli === cpuMilli && preset.memoryBytes === memoryBytes

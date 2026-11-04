@@ -44,6 +44,7 @@
 		quotaMeQuery,
 		resourcesNote as describeResources
 	} from '$lib/components/ResourcePicker.svelte';
+	import { isDatabaseImage } from '$lib/presets';
 	import ResourceList from '$lib/components/patterns/ResourceList.svelte';
 	import SourcePath from '$lib/components/patterns/SourcePath.svelte';
 	import {
@@ -1180,8 +1181,11 @@
 				: 'Detected'
 	);
 	const quotaMe = createQuery(() => quotaMeQuery($selectedOrganization?.id ?? null));
+	const podKind = $derived(
+		deploymentSource === 'image' && isDatabaseImage(image) ? 'database' : 'app'
+	);
 	const resourcesNote = $derived(
-		describeResources(resourceCpuMilli, resourceMemoryBytes, quotaMe.data?.podDefaults?.app)
+		describeResources(resourceCpuMilli, resourceMemoryBytes, quotaMe.data?.podDefaults?.[podKind])
 	);
 	const created = $derived([
 		{
@@ -1739,6 +1743,7 @@
 							<ResourcePicker
 								bind:cpuMilli={resourceCpuMilli}
 								bind:memoryBytes={resourceMemoryBytes}
+								kind={podKind}
 							/>
 						</Disclosure>
 
