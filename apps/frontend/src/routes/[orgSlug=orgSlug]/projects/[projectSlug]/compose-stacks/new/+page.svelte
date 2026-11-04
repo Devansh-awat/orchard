@@ -26,6 +26,7 @@
 	interface Branch {
 		name: string;
 		protected: boolean;
+		default?: boolean;
 	}
 
 	let project = $state<ProjectContext | null>(null);
@@ -124,8 +125,7 @@
 			if (response.ok) {
 				branches = await response.json();
 				const defaultBranch =
-					branches.find((b) => b.name === repo.default_branch) ??
-					(repoIsPasted ? branches.find((b) => b.name === 'master') : undefined);
+					branches.find((b) => b.default) ?? branches.find((b) => b.name === repo.default_branch);
 				if (defaultBranch) {
 					selectedBranch = defaultBranch;
 					branchSearch = defaultBranch.name;
@@ -201,7 +201,7 @@
 			id: 0,
 			full_name: `${parsed.owner}/${parsed.repo}`,
 			clone_url: parsed.url,
-			default_branch: 'main',
+			default_branch: '',
 			private: false
 		});
 	}
@@ -232,10 +232,6 @@
 			return;
 		}
 		const branch = selectedBranch?.name || branchSearch.trim();
-		if (!branch) {
-			formError = 'Pick a branch';
-			return;
-		}
 
 		submitting = true;
 		try {
@@ -245,7 +241,7 @@
 				body: JSON.stringify({
 					name: name.trim(),
 					repoUrl: selectedRepo.clone_url,
-					branch,
+					...(branch ? { branch } : {}),
 					composePath: composePath.trim() || 'docker-compose.yml',
 					autoDeployEnabled: canAutoDeploy && autoDeployEnabled,
 					...(selectedEnvId ? { environmentId: selectedEnvId } : {})
@@ -369,7 +365,7 @@
 							bind:value={() => branchSearch, pickBranch}
 							bind:query={branchQuery}
 							prefix="Branch"
-							placeholder="main"
+							placeholder="Default branch"
 							searchPlaceholder="Search branches"
 							width="18rem"
 							mono

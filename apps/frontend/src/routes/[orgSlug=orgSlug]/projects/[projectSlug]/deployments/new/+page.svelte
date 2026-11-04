@@ -175,6 +175,7 @@
 	interface Branch {
 		name: string;
 		protected: boolean;
+		default?: boolean;
 	}
 
 	let project = $state<ProjectContext | null>(null);
@@ -711,6 +712,7 @@
 				branches = await response.json();
 				if (branches.length > 0) {
 					const defaultBranch =
+						branches.find((b) => b.default) ??
 						branches.find((b) => b.name === 'main') ??
 						branches.find((b) => b.name === 'master') ??
 						branches[0];
