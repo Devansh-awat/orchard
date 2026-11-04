@@ -287,12 +287,15 @@ To change an answer that you gave the installer:
 | Public IP | **Instance admin** > **Configuration** > **Public exposure** |
 | Custom domains target | **Instance admin** > **Configuration** > **Custom domains** |
 | MCP on or off | **Instance admin** > **Configuration** > **Model Context Protocol** |
-| MCP hostname | `sudo orchardctl mcp enable <host> --apply`. The hostname is a chart value, so **Instance admin** cannot change it. |
-| Dashboard domain, apps domain, Let's Encrypt email, updates | [Run the installer again](#run-the-installer-again). These are chart values or host settings, so **Instance admin** cannot change them. |
+| Dashboard domain | `sudo orchardctl hostname set <host> --apply` |
+| Apps domain | `sudo orchardctl apps-domain set <domain> --apply` |
+| MCP hostname | `sudo orchardctl mcp enable <host> --apply` |
+| Let's Encrypt email | `sudo orchardctl letsencrypt-email set <address>` |
+| Updates | [Run the installer again](#run-the-installer-again). |
 | S3 storage | **Instance admin** > **Configuration** > **Object storage**, or `sudo orchardctl backups s3 set` |
 | Email (SMTP) | **Instance admin** > **Configuration** > **Email** |
 
-For the full list of commands, refer to [Host commands](/operate/host-commands/).
+**Instance admin** cannot change a setting that has a command, because it is a chart value or a host setting. For what each one affects, refer to [Change settings that Instance admin cannot edit](/operate/configuration/#change-settings-that-instance-admin-cannot-edit). For the full list of commands, refer to [Host commands](/operate/host-commands/).
 
 ### What the installer does not configure
 
@@ -356,11 +359,10 @@ Use `lan` mode for a machine that you reach over Tailscale. The installer detect
    sudo orchardctl hostname add mango.tailnet-name.ts.net --apply
    ```
 
-3. (Optional) To generate links with one of these names, change the primary hostname and the server URL together. Use the port the instance serves on, which is 80 by default.
+3. (Optional) To generate links with one of these names, change the primary hostname.
 
    ```bash
-   sudo orchardctl config set ingress.host mango
-   sudo orchardctl env set FRONTEND_URL http://mango --apply
+   sudo orchardctl hostname set mango --apply
    sudo orchardctl claim
    ```
 

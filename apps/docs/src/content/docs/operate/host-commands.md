@@ -18,7 +18,9 @@ sidebar:
 | `orchardctl mcp`            | Manage the MCP endpoint.                                |
 | `orchardctl graft`          | Install and manage [grafts](/grafts/install/).          |
 | `orchardctl public-ip`      | Set the default address for public ports.               |
-| `orchardctl hostname`       | Add names that the dashboard answers on.                |
+| `orchardctl hostname`       | Change the dashboard domain, and add names that the dashboard answers on. |
+| `orchardctl apps-domain`    | Change the domain that app addresses end in.            |
+| `orchardctl letsencrypt-email` | Change where Let's Encrypt sends notices.            |
 | `orchardctl claim`          | Print a link that claims the instance.                  |
 | `orchardctl login`          | Print a one-time sign-in link.                          |
 | `orchardctl password`       | Set a password on the superadmin account.               |
@@ -70,6 +72,7 @@ On its next `update`, a host installed earlier gets the same defaults as a new i
 | Small machines    | Under 8 GB of memory, reduces requests and limits for metrics, logs, and the scanner, keeps 7 days of logs, and runs one scan at a time. |
 | Backups           | Sets `objectStorage.local.enabled: true` and `r2Proxy.enabled: true`, sized from free disk.            |
 | Database operator | Sets `CNPG_OPERATOR_NAMESPACE` to `cnpg-system`, if it is not set.                                     |
+| Install mode      | Sets `INSTALL_INGRESS_MODE` from your values, if it is not set. The dashboard uses it to show these commands instead of Helm values. |
 
 Orchard turns on the local backup store only when no object storage is configured. It checks for `R2_ENDPOINT`, `R2_ACCOUNT_ID`, or `R2_BACKUP_BUCKET` in `server.env`, `server.envFrom`, `r2Proxy.upstream.endpoint`, and values at **Instance admin** > **Configuration** > **Object storage**. If it cannot read the database, it leaves the store off and prints the commands that turn it on.
 
@@ -192,7 +195,7 @@ sudo orchardctl mcp disable --apply
 
 Turns the MCP endpoint on or off and sets its hostname. A new install has one at the hostname you gave the installer, unless you turned it off.
 
-`enable` with no hostname uses the one in values. Otherwise, it uses `mcp.<app domain>`, which the wildcard record for your apps covers. For any other hostname, create an A record first.
+`enable` with a new hostname moves the endpoint, and agents must reconnect at the new URL. The URL keeps the port that the instance serves on. `enable` with no hostname uses the one in values. Otherwise, it uses `mcp.<app domain>`, which the wildcard record for your apps covers. For any other hostname, create an A record first.
 
 `enable` also copies `JWT_SECRET` from the server and creates `MCP_SERVICE_TOKEN` if there is none. Without both, every tool call fails at authentication. It also sets the `issuerRef` so that cert-manager issues a certificate. Without a certificate, Traefik serves its self-signed default and MCP clients refuse to connect.
 
@@ -225,6 +228,7 @@ Pins the default address for raw TCP and UDP ports and public databases. An orga
 sudo orchardctl hostname
 sudo orchardctl hostname add mango --apply
 sudo orchardctl hostname remove mango --apply
+sudo orchardctl hostname set orchard.example.com --apply
 ```
 
 Lists, adds, and removes names that the dashboard answers on. Traefik routes by `Host` header, so a name that is not listed returns a `404` status. Use this for a Tailscale name, an mDNS name, a DNS record added later, or a renamed machine. A `lan` install starts with the addresses, hostname, `.local` name, and `sslip.io` name that the machine had during installation.
@@ -233,15 +237,7 @@ The list reads the values file. A name shows in the list as soon as you add it, 
 
 These names are matched, not certified. On an instance that terminates TLS, a name with no certificate causes a browser warning.
 
-The primary hostname is not in this list. To change it, change two values together. `ingress.host` is the name that Traefik matches, and `FRONTEND_URL` is the name in generated links.
-
-```bash
-sudo orchardctl config set ingress.host mango
-sudo orchardctl env set FRONTEND_URL http://mango --apply
-sudo orchardctl claim
-```
-
-Include the port in the URL if the instance serves on a port other than 80 or 443.
+The primary hostname is not in this list. To change it, use `set`. The command changes `ingress.host`, which is the name that Traefik matches, and `FRONTEND_URL`, which is the name in generated links. It keeps the scheme and port that the instance serves on, and it prints what the change affects. Outside `lan` mode, the name must be a domain, such as `orchard.example.com`. For more information, refer to [Dashboard domain](/operate/configuration/#dashboard-domain).
 
 To see what Traefik matches, run the following command:
 
@@ -249,6 +245,25 @@ To see what Traefik matches, run the following command:
 sudo kubectl -n orchard get ingressroute orchard \
   -o jsonpath='{.spec.routes[*].match}'
 ```
+
+## apps-domain
+
+```bash
+sudo orchardctl apps-domain
+sudo orchardctl apps-domain set apps.example.com --apply
+```
+
+Shows or changes the domain that app addresses end in. The command changes `gateway.http.appDomain` and `APP_DOMAIN` together, and removes a pinned `PUBLIC_APP_DOMAIN` from `frontend.env`. If `tenant.wildcardDomains` or `PLATFORM_WILDCARD_DOMAINS` is set, the command warns you, because these take precedence. For more information, refer to [Apps domain](/operate/configuration/#apps-domain).
+
+## letsencrypt-email
+
+```bash
+sudo orchardctl letsencrypt-email
+sudo orchardctl letsencrypt-email set you@example.com
+sudo orchardctl letsencrypt-email unset
+```
+
+Shows, changes, or removes the address where Let's Encrypt sends notices. The address is on the `letsencrypt` ClusterIssuer, so a change takes effect right away and does not need `--apply`. Certificates are not affected. In `lan` and `tunnel` modes, the command stops, because these modes do not use Let's Encrypt.
 
 ## claim
 
