@@ -488,6 +488,7 @@ export class SetupService implements OnModuleInit {
   }
 
   async getOverview(userId: string): Promise<SetupOverview> {
+    await this.config.fresh();
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { setupSkipped: true }

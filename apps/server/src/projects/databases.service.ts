@@ -609,6 +609,7 @@ export class DatabasesService {
     if (!project) throw new NotFoundException(`Project ${projectId} not found`);
 
     await this.authz.requireProjectEdit(project.id, user.id, 'create databases');
+    await this.instanceConfig.fresh();
 
     const nameInput = String(data.name || '').trim();
     if (!nameInput) throw new BadRequestException('Database name is required');

@@ -152,6 +152,7 @@ function overview(
   svc.logger = { warn() {}, error() {} };
   svc.githubApp = { isConfigured: () => opts.github ?? false };
   svc.config = {
+    fresh: async () => {},
     isConfigured: () => opts.email ?? false,
     defaultPublicIp: () => opts.publicIp ?? '',
     value: (_section: unknown, name: string) => (name === 'cname' ? (opts.cname ?? null) : null),

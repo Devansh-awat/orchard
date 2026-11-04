@@ -24,14 +24,16 @@ export class InstanceConfigController {
   ) {}
 
   @Get()
-  list() {
+  async list() {
+    await this.config.fresh();
     return SECTIONS.map((section) => this.config.state(section));
   }
 
   @Get(':id')
-  one(@Param('id') id: string) {
+  async one(@Param('id') id: string) {
     const section = sectionById(id);
     if (!section) throw new NotFoundException('Unknown configuration section');
+    await this.config.fresh();
     return this.config.state(section);
   }
 

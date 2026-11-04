@@ -15,6 +15,7 @@ import { ConfigSection, NETWORK, SECTIONS, STORAGE, WILDCARD } from './instance-
 export type ConfigValues = Record<string, string | null>;
 
 const RELOAD_INTERVAL_MS = 30_000;
+const FRESH_WITHIN_MS = 2_000;
 
 export interface SectionState {
   id: string;
@@ -54,6 +55,8 @@ export class InstanceConfigService implements OnModuleInit, OnModuleDestroy {
   private snapshot: string | null = null;
 
   private version = 0;
+
+  private lastReload = 0;
 
   private reloadTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -101,7 +104,13 @@ export class InstanceConfigService implements OnModuleInit, OnModuleDestroy {
     return this.version;
   }
 
+  async fresh(): Promise<void> {
+    if (Date.now() - this.lastReload < FRESH_WITHIN_MS) return;
+    await this.reload();
+  }
+
   async reload(): Promise<void> {
+    this.lastReload = Date.now();
     const next = new Map<string, ConfigValues>();
     for (const section of SECTIONS) {
       try {

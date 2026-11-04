@@ -289,3 +289,26 @@ test('a reload picks up a value another replica saved', async () => {
     assert.ok(reader.generation > before);
   });
 });
+
+test('fresh picks up a value another process just wrote, at most every 2 seconds', async () => {
+  let reads = 0;
+  let stored: string | null = null;
+  const settings = {
+    get: async (key: string) => {
+      reads += 1;
+      return key === STORAGE.key ? stored : null;
+    }
+  };
+  const service = new InstanceConfigService(settings as any, { decrypt: (v: string) => v } as any);
+  await service.reload();
+  assert.equal(service.value(STORAGE, 'bucketName'), null);
+
+  stored = JSON.stringify({ bucketName: 'written-by-orchardctl' });
+  const before = reads;
+  await service.fresh();
+  assert.equal(reads, before, 'a reload this recent is reused');
+
+  (service as any).lastReload = 0;
+  await service.fresh();
+  assert.equal(service.value(STORAGE, 'bucketName'), 'written-by-orchardctl');
+});

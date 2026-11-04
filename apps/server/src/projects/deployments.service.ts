@@ -7528,6 +7528,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       imageUrl?: string;
     }
   ) {
+    await this.instanceConfig.fresh();
     if (!this.storage.buildContextEnabled()) {
       throw new BadRequestException(LOCAL_DEPLOYS_NEED_S3);
     }
@@ -7724,6 +7725,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       imageUrl?: string;
     }
   ) {
+    await this.instanceConfig.fresh();
     if (!this.storage.buildContextEnabled()) {
       throw new BadRequestException(LOCAL_DEPLOYS_NEED_S3);
     }
