@@ -1402,7 +1402,7 @@ AAAA orchard-dns-probe.apps.example.com 2001:db8::10
     'ORCHARD_PUBLIC_IP=2001:db8::10'
   );
   assert.match(stray, /wrong value\s+orchard\.example\.com/);
-  assert.match(stray, /has a A record/);
+  assert.match(stray, /has an A record/);
 });
 
 test('a resolver blocked from here falls back to DNS over HTTPS, then says it could not check', () => {
@@ -1449,6 +1449,7 @@ CAA lab.example.com 0 issue "digicert.com"
       ORCHARD_INGRESS_CNAME=orchard.lab.example.com
       build_dns_records
       dns_zone_report
+      dns_caa_report
     `);
     assert.match(out, /DNS panel for lab\.example\.com/);
     assert.match(out, /ns1\.other\.dev/);
@@ -1462,6 +1463,75 @@ CAA lab.example.com 0 issue "digicert.com"
       dns_zone_report
     `);
     assert.match(unregistered, /No nameservers answer/);
+  } finally {
+    box.cleanup();
+  }
+});
+
+test('a CAA record above a name counts, and the nearest one wins', () => {
+  const box = dnsBox(`NS example.com ns1.example.net
+CAA example.com 0 issue "digicert.com"
+CAA ok.example.com 0 issue "letsencrypt.org"
+`);
+  try {
+    const blocked = box.run(`${PUBLIC_BOX}
+      RECORD_NAMES=(orchard.dev.example.com)
+      dns_caa_report
+    `);
+    assert.match(blocked, /example\.com has CAA records that don't allow Let's Encrypt/);
+
+    const allowed = box.run(`${PUBLIC_BOX}
+      RECORD_NAMES=(orchard.ok.example.com)
+      dns_caa_report
+    `);
+    assert.ok(!/CAA records/.test(allowed), allowed);
+  } finally {
+    box.cleanup();
+  }
+});
+
+test('tunnel mode warns about names the free certificate does not cover', () => {
+  const box = dnsBox(`NS example.com ns1.example.net
+`);
+  try {
+    const deep = box.run(`
+      INGRESS_MODE=tunnel
+      RECORD_NAMES=(orchard.dev.example.com '*.apps.example.com')
+      dns_tunnel_cert_report
+    `);
+    assert.match(deep, /orchard\.dev\.example\.com is more than one level under example\.com/);
+    assert.match(deep, /\*\.apps\.example\.com is more than one level under example\.com/);
+    assert.match(deep, /Advanced Certificate Manager/);
+
+    const covered = box.run(`
+      INGRESS_MODE=tunnel
+      RECORD_NAMES=(orchard.example.com '*.example.com' example.com)
+      dns_tunnel_cert_report
+    `);
+    assert.ok(!/more than one level/.test(covered), covered);
+  } finally {
+    box.cleanup();
+  }
+});
+
+test('the tunnel HTTPS probe only reports a refused handshake', () => {
+  const box = dnsBox('');
+  try {
+    writeFileSync(join(box.dir, 'curl'), '#!/bin/sh\nexit 35\n');
+    chmodSync(join(box.dir, 'curl'), 0o755);
+    const refused = box.run(`
+      sleep() { :; }
+      ORCHARD_DOMAIN=orchard.dev.example.com ORCHARD_APP_DOMAIN=dev.example.com ORCHARD_MCP=false
+      printf 'FAILED=%s\n' "$(tunnel_tls_failures)"
+    `);
+    assert.match(refused, /FAILED=orchard\.dev\.example\.com orchard-dns-probe\.dev\.example\.com/);
+
+    writeFileSync(join(box.dir, 'curl'), '#!/bin/sh\nexit 28\n');
+    const slow = box.run(`
+      ORCHARD_DOMAIN=orchard.dev.example.com ORCHARD_APP_DOMAIN=dev.example.com ORCHARD_MCP=false
+      printf 'FAILED=%s\n' "$(tunnel_tls_failures)"
+    `);
+    assert.match(slow, /FAILED=$/m);
   } finally {
     box.cleanup();
   }
@@ -1845,7 +1915,7 @@ test('option 4 on the DNS step goes back to the answers', () => {
 test('tunnel mode prints routes and CNAMEs to the tunnel, and defaults to it', () => {
   const answers = ['tunnel', CF_TOKEN, '', 'orchard.example.com', '', '', '', '', '', '', '', '2'];
   const table = `A orchard.example.com 104.21.3.4
-A orchard-dns-probe.apps.example.com 198.51.100.4
+A orchard-dns-probe.example.com 198.51.100.4
 `;
   const { status, out, box } = flow(answers, FRESH_NET, table);
   try {
@@ -1855,17 +1925,17 @@ A orchard-dns-probe.apps.example.com 198.51.100.4
       out,
       /CNAME\s+orchard\.example\.com\s+8a1b2c3d-0000-4000-8000-000000000001\.cfargotunnel\.com/
     );
-    assert.match(out, /CNAME\s+\*\.apps\.example\.com\s+8a1b2c3d/);
+    assert.match(out, /CNAME\s+\*\.example\.com\s+8a1b2c3d/);
     assert.match(out, /Public Hostname/);
     assert.match(out, /http:\/\/traefik\.traefik\.svc\.cluster\.local:80/);
     assert.match(out, /Add the wildcard by hand/);
-    assert.match(out, /Advanced Certificate Manager/);
+    assert.match(out, /Advanced Certificate\s+Manager/);
     assert.match(out, /cname=8a1b2c3d-0000-4000-8000-000000000001\.cfargotunnel\.com/);
     assert.match(out, /ip= /);
     assert.match(out, /tls=false issuer=/);
     assert.match(out, /resolves\s+orchard\.example\.com/);
     assert.match(out, /Cloudflare hides the target/);
-    assert.match(out, /wrong value\s+\*\.apps\.example\.com/);
+    assert.match(out, /wrong value\s+\*\.example\.com/);
     assert.ok(!/Let's Encrypt email/.test(out), 'tunnel mode has no Lets Encrypt');
   } finally {
     box.cleanup();
