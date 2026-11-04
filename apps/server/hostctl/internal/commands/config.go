@@ -74,7 +74,8 @@ Common ones:
   objectStorage.local.enabled             the S3 store backups go to on this box
   objectStorage.local.storage.size        its volume size, e.g. 40Gi
   r2Proxy.enabled                         the backup proxy databases talk to
-  r2Proxy.upstream.endpoint               real S3/R2 for backups instead
+  r2Proxy.upstream.endpoint               S3 for backups, set here instead of with
+                                          'orchardctl backups s3 set'
   updates.url                             the what's-new feed, or off
 `,
 		Run: func(c *cli.Context, args []string) error {

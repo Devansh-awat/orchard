@@ -55,6 +55,7 @@ func All() []*cli.Command {
 		Claim(),
 		Login(),
 		Password(),
+		Backups(),
 		Stop(),
 		Start(),
 		Restart(),

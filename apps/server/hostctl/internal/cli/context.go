@@ -140,6 +140,15 @@ func (c *Context) Capture(name string, args ...string) (string, error) {
 	return string(out), err
 }
 
+// CaptureWithInput returns stdout with stdin fed from a string, for secrets that
+// must not pass through an argument list.
+func (c *Context) CaptureWithInput(input string, name string, args ...string) (string, error) {
+	cmd := c.command(name, args...)
+	cmd.Stdin = strings.NewReader(input)
+	out, err := cmd.Output()
+	return string(out), err
+}
+
 func (c *Context) Kubectl(args ...string) error {
 	return c.Run("kubectl", append([]string{"-n", c.Env.Namespace}, args...)...)
 }
