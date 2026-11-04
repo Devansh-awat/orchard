@@ -28,7 +28,12 @@ function serviceWith(counts: {
   svc.admin = { createOrganization: async () => ({ id: 'o1' }) };
   svc.prisma = {
     user: {
-      findUnique: async () => ({ id: 'u1', email: 'hi@leafd.dev', setupSkipped: state.skipped }),
+      findUnique: async () => ({
+        id: 'u1',
+        email: 'hi@leafd.dev',
+        setupSkipped: state.skipped,
+        isSuperAdmin: counts.isSuperAdmin ?? true
+      }),
       update: async ({ data }: any) => {
         state.skipped = data.setupSkipped;
         return {};
@@ -139,6 +144,19 @@ test('an account with no org gets one when its setup state is read', async () =>
   };
   await svc.getSetupState('u1');
   assert.equal(created, 1);
+});
+
+test('reading setup state never gives a non-superadmin an org', async () => {
+  const { svc } = serviceWith({ orgs: 0, isSuperAdmin: false });
+  let created = 0;
+  (svc as any).admin = {
+    createOrganization: async () => {
+      created += 1;
+      return { id: 'o1' };
+    }
+  };
+  await svc.getSetupState('u1');
+  assert.equal(created, 0);
 });
 
 // Skipping the org step is only safe because an org exists. If creation failed,

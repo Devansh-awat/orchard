@@ -230,7 +230,7 @@ export class SetupService implements OnModuleInit {
   async getSetupState(userId: string): Promise<SetupState> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true, setupSkipped: true }
+      select: { id: true, email: true, setupSkipped: true, isSuperAdmin: true }
     });
     if (!user) throw new BadRequestException('Unknown user');
 
@@ -238,7 +238,7 @@ export class SetupService implements OnModuleInit {
     // organization is an invariant the rest of Orchard depends on, and it has
     // to hold for accounts that predate the auto-creation, and for the claim
     // path taken while already signed in. Idempotent.
-    if (user.email) await this.ensureOrganizationFor(user.id, user.email);
+    if (user.isSuperAdmin && user.email) await this.ensureOrganizationFor(user.id, user.email);
 
     const [passkeys, named, withPassword] = await Promise.all([
       this.prisma.passkey.count({ where: { userId } }),
