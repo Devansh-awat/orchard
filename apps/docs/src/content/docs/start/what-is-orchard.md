@@ -1,6 +1,6 @@
 ---
 title: What is Orchard
-description: Orchard is a self-hosted platform layer for Kubernetes, in the spirit of Coolify or Dokploy but Kubernetes-native.
+description: Orchard is a self-hosted platform layer for Kubernetes.
 sidebar:
   order: 1
 ---
@@ -10,11 +10,9 @@ that cluster a platform instead of a pile of YAML. Connect a GitHub repo, and
 Orchard builds it, runs it, routes traffic to it, gives it a database, and shows
 you the logs when it breaks.
 
-It is in the same family as Coolify and Dokploy: something you run yourself, on
-your own hardware, that makes deploying feel like a hosted platform. The
-difference is what it targets. Orchard schedules onto Kubernetes, so it inherits
-replicas, rolling updates, health checks, resource quotas, and node scheduling
-rather than reimplementing them.
+You run it yourself, on your own hardware. Orchard schedules onto Kubernetes, so
+it inherits replicas, rolling updates, health checks, resource quotas, and node
+scheduling rather than reimplementing them.
 
 ## What you get
 
