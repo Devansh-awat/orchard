@@ -128,7 +128,9 @@ export class CloudflareTunnelService {
         canEditDns: Boolean(zoneId),
         routes: hostnames.map((h) => {
           // A wildcard is routed as the wildcard, not as the probe label.
-          const match = byHost.get(h.record) || byHost.get(h.probe);
+          const parent = h.record.slice(h.record.indexOf('.') + 1);
+          const match =
+            byHost.get(h.record) || byHost.get(h.probe) || byHost.get(`*.${parent}`);
           return { ...h, routed: Boolean(match), service: match?.service ?? null };
         }),
         otherHostnames: rules

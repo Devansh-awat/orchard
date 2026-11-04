@@ -9,6 +9,7 @@ import { UsersService } from '../users/users.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { MembershipCacheService } from '../auth/membership-cache.service';
 import { requestAuthStorage } from '../auth/request-context';
+import { hostOf } from '../instance-network/hostnames';
 
 /**
  * Centralized RBAC/access guards for projects, deployments, databases,
@@ -64,6 +65,8 @@ export class ProjectAccessService {
         .map((s) => s.trim().toLowerCase())
         .filter(Boolean)
     );
+    const mcpHost = hostOf(process.env.MCP_BASE_URL);
+    if (mcpHost) reservedExact.add(mcpHost);
     const reservedSuffixes = (process.env.RESERVED_HOST_SUFFIXES || '')
       .split(',')
       .map((s) => s.trim().toLowerCase().replace(/^\./, ''))

@@ -15,7 +15,7 @@ export interface ExpectedHostname {
 // hosts are always `<name>-<project>-<6 hex>`, three hyphenated parts.
 export const WILDCARD_PROBE_LABEL = 'orchard-dns-probe';
 
-function hostOf(url: string | null | undefined): string | null {
+export function hostOf(url: string | null | undefined): string | null {
   if (!url) return null;
   try {
     return new URL(url).hostname || null;
