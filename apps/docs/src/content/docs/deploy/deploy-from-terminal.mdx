@@ -43,9 +43,9 @@ build context exceeds 100MB; add a .dockerignore to exclude build artifacts
 | `--dockerfile` | The path to the Dockerfile, relative to the directory.                                                         |
 | `--output-dir` | A directory of built static files. The app serves them as a static site.                                       |
 | `--detach`     | Start the build without following its logs.                                                                    |
-| `--wait`       | Block until the deploy is live. This is the default in a script.                                               |
+| `--wait`       | Block until the deploy is live. This is the default. To return when the build finishes, use `--wait=false`.    |
 
-With `--wait`, the command exits with code 9 if the build fails and code 10 if the pods crash.
+The command exits with code 9 if the build fails and code 10 if the pods crash. It also warns you if the app is live and nothing listens on its port.
 
 For all flags, refer to the [`orchard up` reference](/reference/cli/#up).
 

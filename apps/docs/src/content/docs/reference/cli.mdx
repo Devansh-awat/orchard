@@ -4501,7 +4501,7 @@ orchard up [dir]
 | `--root` | string |  | directory of the app inside the repo (monorepos) |
 | `--start-cmd` | string |  | override the detected start command |
 | `--timeout` | duration | `10m0s` | give up waiting after this long (exit 8) |
-| `--wait` | bool | `false` | block until the deploy is live (default: on when stdout isn't a terminal) |
+| `--wait` | bool | `false` | block until the deploy is live; --wait=false returns when the build finishes |
 
 ## use
 
