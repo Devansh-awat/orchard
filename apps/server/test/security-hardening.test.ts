@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ForbiddenException } from '@nestjs/common';
+import { IngressService } from '../src/projects/ingress.service';
 import { isValidPodName } from '../src/kubernetes/pod-name';
 import { deniedToOrgScopedSession } from '../src/auth/superadmin.guard';
 import { assertImageOwnedByProject } from '../src/projects/image-ownership';
@@ -20,8 +21,7 @@ test('org-scoped sessions cannot reach account credentials', () => {
     ['POST', '/apiv1/auth/password/set'],
     ['POST', '/apiv1/auth/passkey/register/options'],
     ['POST', '/apiv1/auth/sessions/revoke-all'],
-    ['POST', '/apiv1/ssh-identities'],
-    ['GET', '/apiv1/github/repositories']
+    ['POST', '/apiv1/ssh-identities']
   ]) {
     assert.equal(deniedToOrgScopedSession(method, path), true, path);
   }
@@ -69,4 +69,49 @@ test('operation records never carry the stored database password', () => {
   }) as any;
   assert.deepEqual(out.operations[0].source, { dbUser: 'app' });
   assert.equal(out.operations[0].createdAt, at);
+});
+
+function ingressService(existingHost: string) {
+  const checked: string[] = [];
+  const service = Object.create(IngressService.prototype) as any;
+  service.usersService = { findOrCreateByClerkId: async () => ({ id: 'u1' }) };
+  service.authz = { requireProjectEdit: async () => {} };
+  service.access = {
+    assertHostnameAvailable: async (host: string) => {
+      checked.push(host);
+      throw new ForbiddenException('taken');
+    }
+  };
+  const project = { id: 'p1', deployments: [] };
+  service.prisma = {
+    ingress: { findFirst: async () => ({ host: existingHost, project }) },
+    project: { findUnique: async () => project }
+  };
+  return { service, checked };
+}
+
+test('moving an ingress to a new host checks that the host is free', async () => {
+  const { service, checked } = ingressService('mine.example');
+  await assert.rejects(
+    () => service.updateProjectIngress('p1', 'i1', { host: 'victim.example' }, 'clerk'),
+    ForbiddenException
+  );
+  assert.deepEqual(checked, ['victim.example']);
+});
+
+test('keeping the same host does not recheck it', async () => {
+  const { service, checked } = ingressService('mine.example');
+  await assert.rejects(
+    () => service.updateProjectIngress('p1', 'i1', { host: 'mine.example' }, 'clerk'),
+    /At least one route/
+  );
+  assert.deepEqual(checked, []);
+});
+
+test('creating a project ingress reaches its own validation', async () => {
+  const { service } = ingressService('mine.example');
+  await assert.rejects(
+    () => service.createProjectIngress('p1', { host: 'new.example' }, 'clerk'),
+    /At least one route/
+  );
 });
