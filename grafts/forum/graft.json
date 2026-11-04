@@ -4,7 +4,7 @@
   "version": "1.2.0",
   "publisher": "orchard",
   "description": "A forum for the people on your instance: bug reports, feature requests, votes and replies.",
-  "homepage": "https://orchard.my/docs/run/grove",
+  "homepage": "https://docs.orchard.my/run/grove/",
   "engines": {
     "platform": ">=2.70.0 <3",
     "sdk": "^1.0.0"
