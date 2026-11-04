@@ -593,16 +593,9 @@ export const directory: DirectoryItem[] = [
   },
   {
     title: 'Nodes and pools',
-    text: 'Decide what runs where in the cluster.',
+    text: 'Create pools, set taints and assign nodes to organizations.',
     href: '/operate/nodes/',
     icon: 'server',
-    group: 'Operate'
-  },
-  {
-    title: 'Node pools',
-    text: 'Create pools and set taints and organization assignments.',
-    href: '/operate/node-pools/',
-    icon: 'layers',
     group: 'Operate'
   },
   {

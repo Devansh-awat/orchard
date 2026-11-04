@@ -6,7 +6,8 @@ import starlightOpenAPI, { openAPISidebarGroups } from 'starlight-openapi';
 export default defineConfig({
   site: 'https://docs.orchard.my',
   redirects: {
-    '/run/sandboxes': '/greenhouse/'
+    '/run/sandboxes': '/greenhouse/',
+    '/operate/node-pools': '/operate/nodes/'
   },
   server: { port: 5174, host: true },
   devToolbar: { enabled: false },
@@ -236,7 +237,6 @@ export default defineConfig({
                 { label: 'Size older workloads', slug: 'operate/backfill' },
                 { label: 'Host commands', slug: 'operate/host-commands' },
                 { label: 'Nodes and pools', slug: 'operate/nodes' },
-                { label: 'Manage node pools', slug: 'operate/node-pools' },
                 { label: 'Bot protection', slug: 'operate/bot-protection' },
                 { label: 'Database dumps', slug: 'operate/database-dumps' },
                 { label: 'Usage reports', slug: 'operate/telemetry' },
