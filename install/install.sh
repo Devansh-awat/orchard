@@ -595,6 +595,26 @@ $live
 EOF
 }
 
+keep_previous_answers() {
+  keep_answer --domain ORCHARD_DOMAIN ORCHARD_DOMAIN '.ingress.host'
+  if [ "$MOVING_OFF_SSLIP" = false ]; then
+    keep_answer --app-domain ORCHARD_APP_DOMAIN ORCHARD_APP_DOMAIN '.server.env[]? | select(.name == "APP_DOMAIN") | .value'
+    keep_answer --mcp-domain ORCHARD_MCP_DOMAIN ORCHARD_MCP_DOMAIN '.mcp.ingress.host'
+  fi
+  keep_answer --mcp ORCHARD_MCP ORCHARD_MCP '.mcp.enabled'
+  keep_answer --metrics ORCHARD_METRICS ORCHARD_METRICS '.metrics.enabled'
+  keep_answer --logs ORCHARD_LOGS ORCHARD_LOGS '.logs.enabled'
+  keep_answer --image-scanning ORCHARD_IMAGE_SCANNING ORCHARD_IMAGE_SCANNING '.trivy.enabled'
+  keep_answer --object-storage ORCHARD_OBJECT_STORAGE ORCHARD_OBJECT_STORAGE '.objectStorage.local.enabled'
+  keep_answer --http-port ORCHARD_HTTP_PORT HTTP_PORT '.server.env[]? | select(.name == "PUBLIC_HTTP_PORT") | .value'
+  keep_answer --https-port ORCHARD_HTTPS_PORT HTTPS_PORT '.server.env[]? | select(.name == "PUBLIC_HTTPS_PORT") | .value'
+  keep_answer --registry-host ORCHARD_REGISTRY_HOST REGISTRY_HOST '.server.env[]? | select(.name == "DOCKER_REGISTRY_PULL") | .value'
+  keep_answer --image-registry ORCHARD_IMAGE_REGISTRY IMAGE_REGISTRY '.image.registry'
+  keep_answer --image-repository ORCHARD_IMAGE_REPOSITORY IMAGE_REPOSITORY '.image.repository'
+  keep_answer --image-pull-policy ORCHARD_IMAGE_PULL_POLICY IMAGE_PULL_POLICY '.image.pullPolicy'
+  keep_answer --image-tag ORCHARD_IMAGE_TAG IMAGE_TAG '.server.image.tag'
+}
+
 load_previous_answers() {
   [ -f "$VALUES_FILE" ] || return 0
   PREVIOUS_INSTALL=true
@@ -603,6 +623,7 @@ load_previous_answers() {
     detect_arch
     ensure_yq
   fi
+  require_readable_values
 
   PREV_MODE=$(previous_ingress_mode)
   if ! answer_given --mode ORCHARD_INGRESS_MODE; then
@@ -624,18 +645,7 @@ load_previous_answers() {
   if ! answer_given --ingress-cname ORCHARD_INGRESS_CNAME; then ORCHARD_INGRESS_CNAME=$PREV_CNAME; fi
   if ! answer_given --email ORCHARD_ACME_EMAIL; then ORCHARD_ACME_EMAIL=$PREV_EMAIL; fi
 
-  keep_answer --domain ORCHARD_DOMAIN ORCHARD_DOMAIN '.ingress.host'
-  if [ "$MOVING_OFF_SSLIP" = false ]; then
-    keep_answer --app-domain ORCHARD_APP_DOMAIN ORCHARD_APP_DOMAIN '.server.env[]? | select(.name == "APP_DOMAIN") | .value'
-    keep_answer --mcp-domain ORCHARD_MCP_DOMAIN ORCHARD_MCP_DOMAIN '.mcp.ingress.host'
-  fi
-  keep_answer --mcp ORCHARD_MCP ORCHARD_MCP '.mcp.enabled'
-  keep_answer --metrics ORCHARD_METRICS ORCHARD_METRICS '.metrics.enabled'
-  keep_answer --logs ORCHARD_LOGS ORCHARD_LOGS '.logs.enabled'
-  keep_answer --image-scanning ORCHARD_IMAGE_SCANNING ORCHARD_IMAGE_SCANNING '.trivy.enabled'
-  keep_answer --http-port ORCHARD_HTTP_PORT HTTP_PORT '.server.env[]? | select(.name == "PUBLIC_HTTP_PORT") | .value'
-  keep_answer --https-port ORCHARD_HTTPS_PORT HTTPS_PORT '.server.env[]? | select(.name == "PUBLIC_HTTPS_PORT") | .value'
-  keep_answer --registry-host ORCHARD_REGISTRY_HOST REGISTRY_HOST '.server.env[]? | select(.name == "DOCKER_REGISTRY_PULL") | .value'
+  keep_previous_answers
 
   PREVIOUS_EXTRA_HOSTS=$(yq -r '.ingress.extraHosts[]?' "$VALUES_FILE" 2>/dev/null | tr '\n' ' ')
 
@@ -3230,6 +3240,35 @@ write_values() {
   mkdir -p "$STATE_DIR"
   chmod 700 "$STATE_DIR"
 
+  if [ -f "$VALUES_FILE" ]; then require_readable_values; fi
+
+  # Re-running the installer is the supported way to pick up new host commands.
+  # Minting fresh secrets would log every user out, and worse, a new
+  # SECRETS_ENCRYPTION_KEY makes every secret already stored in the database
+  # permanently undecryptable. Carry them over.
+  JWT_SECRET=$(reuse_secret JWT_SECRET)
+  ENCRYPTION_KEY=$(reuse_secret SECRETS_ENCRYPTION_KEY)
+  SSO_KEY=$(reuse_secret SSO_ENCRYPTION_KEY)
+  # Shared with the MCP below rather than minted per process: it is what the
+  # API recognises when the MCP acts for a consenting user, so a mismatch shows
+  # up as every tool call failing rather than as anything failing to start.
+  MCP_TOKEN=$(reuse_secret MCP_SERVICE_TOKEN)
+  [ -n "$JWT_SECRET" ] || JWT_SECRET=$(head -c 32 /dev/urandom | base64 | tr -d '\n=' | head -c 43)
+  [ -n "$ENCRYPTION_KEY" ] || ENCRYPTION_KEY=$(head -c 24 /dev/urandom | base64 | tr -d '\n=' | head -c 32)
+  [ -n "$SSO_KEY" ] || SSO_KEY=$(head -c 24 /dev/urandom | base64 | tr -d '\n=' | head -c 32)
+  [ -n "$MCP_TOKEN" ] || MCP_TOKEN=$(head -c 32 /dev/urandom | base64 | tr -d '\n=' | head -c 43)
+
+  if [ -f "$VALUES_FILE" ]; then
+    merge_values
+  else
+    local rendered
+    rendered=$(render_values)
+    printf '%s\n' "$rendered" > "$VALUES_FILE"
+    chmod 600 "$VALUES_FILE"
+  fi
+}
+
+render_values() {
   local url_suffix=$HTTP_SUFFIX
   local scheme=http entrypoint=web tls_enabled=false tls_issuer= mcp_tls_issuer=
   if [ "$USE_TLS" = true ]; then
@@ -3253,25 +3292,9 @@ write_values() {
   local cookie_secure=true
   if [ "$scheme" = http ]; then cookie_secure=false; fi
 
-  # Re-running the installer is the supported way to pick up new host commands,
-  # and it rewrites this file wholesale. Minting fresh secrets would log every
-  # user out, and worse, a new SECRETS_ENCRYPTION_KEY makes every secret already
-  # stored in the database permanently undecryptable. Carry them over.
-  JWT_SECRET=$(reuse_secret JWT_SECRET)
-  ENCRYPTION_KEY=$(reuse_secret SECRETS_ENCRYPTION_KEY)
-  SSO_KEY=$(reuse_secret SSO_ENCRYPTION_KEY)
-  # Shared with the MCP below rather than minted per process: it is what the
-  # API recognises when the MCP acts for a consenting user, so a mismatch shows
-  # up as every tool call failing rather than as anything failing to start.
-  MCP_TOKEN=$(reuse_secret MCP_SERVICE_TOKEN)
-  [ -n "$JWT_SECRET" ] || JWT_SECRET=$(head -c 32 /dev/urandom | base64 | tr -d '\n=' | head -c 43)
-  [ -n "$ENCRYPTION_KEY" ] || ENCRYPTION_KEY=$(head -c 24 /dev/urandom | base64 | tr -d '\n=' | head -c 32)
-  [ -n "$SSO_KEY" ] || SSO_KEY=$(head -c 24 /dev/urandom | base64 | tr -d '\n=' | head -c 32)
-  [ -n "$MCP_TOKEN" ] || MCP_TOKEN=$(head -c 32 /dev/urandom | base64 | tr -d '\n=' | head -c 43)
-
   local cname_env='' pinned_cname
   pinned_cname=$(reuse_secret INGRESS_CNAME)
-  if [ -n "$pinned_cname" ] && [ -n "$ORCHARD_INGRESS_CNAME" ] && [ "$ORCHARD_INGRESS_CNAME" != "$PREV_CNAME" ]; then
+  if [ -n "$pinned_cname" ] && [ -n "$ORCHARD_INGRESS_CNAME" ]; then
     cname_env="
     - { name: INGRESS_CNAME, value: $ORCHARD_INGRESS_CNAME }"
   fi
@@ -3284,12 +3307,6 @@ write_values() {
   if [ -n "$public_ip_pin" ]; then
     public_ip_pin="
   publicIp: \"$public_ip_pin\""
-  fi
-
-  local previous=
-  if [ -f "$VALUES_FILE" ]; then
-    previous=$(mktemp "$STATE_DIR/values.XXXXXX")
-    cp -p "$VALUES_FILE" "$previous"
   fi
 
   local db_memory_env=
@@ -3307,7 +3324,7 @@ write_values() {
     - { name: INSTANCE_RESOURCE_LIMITS_CHOICE, value: \"$ORCHARD_LIMITS\" }"
   fi
 
-  cat > "$VALUES_FILE" <<EOF
+  cat <<EOF
 # Generated by install/install.sh. Edit and run 'orchardctl update' to apply.
 createNamespace: false
 # The round of new defaults this file already has. 'orchardctl update' applies
@@ -3456,38 +3473,179 @@ builderSandbox:
 sandbox:
   enabled: false
 EOF
-  chmod 600 "$VALUES_FILE"
+}
 
-  if [ -n "$previous" ]; then
-    if ! keep_custom_env "$previous" >/dev/null 2>&1; then
-      cp -p "$previous" "$VALUES_FILE"
-      rm -f "$previous"
-      die "could not carry settings over from $VALUES_FILE; it was left as it was"
-    fi
-    rm -f "$previous"
-    if [ -n "$pinned_cname" ] && [ -z "$ORCHARD_INGRESS_CNAME" ] && [ -n "$PREV_CNAME" ]; then
-      yq -i 'del(.server.env[] | select(.name == "INGRESS_CNAME"))' "$VALUES_FILE" || true
-    fi
+backup_values() {
+  local backup
+  backup="$VALUES_FILE.$(date +%Y%m%d-%H%M%S).bak"
+  if [ -e "$backup" ]; then backup="$backup.$$"; fi
+  (umask 077; cp "$VALUES_FILE" "$backup") || return 1
+  chmod 600 "$backup" || return 1
+  printf '%s' "$backup"
+}
+
+refuse_values() {
+  local backup
+  backup=$(backup_values) || die "$1 The installer did not change the file, and it could not save a copy of it."
+  die "$1 The installer stopped and did not change the file. A copy is at $backup. Fix the problem, then run the installer again. Do not delete $VALUES_FILE: a new file means new secrets, and Orchard cannot read data encrypted with the old ones."
+}
+
+require_readable_values() {
+  if ! command -v yq >/dev/null 2>&1; then
+    refuse_values "The installer needs yq to keep your settings in $VALUES_FILE, and yq is not installed."
+  fi
+  if ! yq -e 'tag == "!!map"' "$VALUES_FILE" >/dev/null 2>&1; then
+    refuse_values "The installer cannot read $VALUES_FILE, so it cannot keep your settings. Check that the file is valid YAML."
   fi
 }
 
-keep_custom_env() {
-  local previous=$1 list
-  for list in server frontend mcp; do
-    PREVIOUS_VALUES=$previous yq -i "
-      .$list.env = (
-        (.$list.env // []) + (
-          (load(strenv(PREVIOUS_VALUES)).$list.env // [])
-          | map(select(
-              .name != \"K8S_INGRESS_CLASS\"
-              and .name != \"K8S_STORAGE_CLASS\"
-              and .name != \"PUBLIC_APP_DOMAIN\"
-            ))
-        )
-        | unique_by(.name)
-      )
-    " "$VALUES_FILE" || return 1
-  done
+previous_answers_values() {
+  (
+    FLAGS_GIVEN=' ' ENV_AT_START=' ' MOVING_OFF_SSLIP=false
+    keep_previous_answers
+    mode=$(previous_ingress_mode)
+    if [ -n "$mode" ]; then INGRESS_MODE=$mode; fi
+    apply_mode_settings
+    INGRESS_EXTRA_HOSTS=$(yq -o=json -I=0 '.ingress.extraHosts // []' "$VALUES_FILE")
+    HTTP_SUFFIX='' HTTPS_SUFFIX=''
+    if [ "$HTTP_PORT" != 80 ]; then HTTP_SUFFIX=":$HTTP_PORT"; fi
+    if [ "$HTTPS_PORT" != 443 ]; then HTTPS_SUFFIX=":$HTTPS_PORT"; fi
+    ORCHARD_PUBLIC_IP=$PREV_PUBLIC_IP
+    ORCHARD_INGRESS_CNAME=$PREV_CNAME
+    ORCHARD_LIMITS=''
+    HOST_DEFAULTS_VERSION=$(reuse_value '.hostDefaults')
+    HOST_DEFAULTS_VERSION=${HOST_DEFAULTS_VERSION:-0}
+    render_values
+  )
+}
+
+VALUES_FIELD=$'\037'
+VALUES_ENV_LISTS='.. | select(path | join(".") | test("^(server|frontend|mcp)[.]env$"))'
+VALUES_NODES='[.. | select(path | (length > 0 and all_c(tag == "!!str"))) | {"key": (path | join(".")), "value": {"path": path, "leaf": (tag != "!!map" or length == 0), "json": (. | to_json(0)), "node": .}}] | from_entries'
+
+env_lists_by_name() {
+  yq "($VALUES_ENV_LISTS | select(tag == \"!!seq\")) |= (.[] as \$entry ireduce ({}; .[\$entry.name] = [\$entry]))" "$1"
+}
+
+env_lists_restored() {
+  yq "($VALUES_ENV_LISTS | select(tag == \"!!map\")) |= [.[] | .[]]" "$1"
+}
+
+three_way_values() {
+  VALUES_PREVIOUS=$1 VALUES_BASELINE=$2 VALUES_GENERATED=$3 yq -n "
+    load(strenv(VALUES_PREVIOUS)) as \$previous |
+    load(strenv(VALUES_BASELINE)) as \$baseline |
+    load(strenv(VALUES_GENERATED)) as \$generated |
+    (\$baseline | $VALUES_NODES) as \$was |
+    (\$generated | $VALUES_NODES) as \$now |
+    (\$now | to_entries | map(select(.value.leaf and .value.json != (\$was[.key].json // \"\")) | .value)) as \$answered |
+    (\$was | to_entries | map(select(\$now[.key] == null) | .value.path)) as \$cleared |
+    (\$answered | .[] as \$at ireduce (\$generated * \$previous; setpath(\$at.path; \$at.node))) |
+    delpaths(\$cleared) |
+    del((.server.env, .frontend.env, .mcp.env) | (.K8S_INGRESS_CLASS, .K8S_STORAGE_CLASS, .PUBLIC_APP_DOMAIN))
+  "
+}
+
+values_changes() {
+  VALUES_PREVIOUS=$1 VALUES_MERGED=$2 VALUES_GENERATED=$3 yq -n "
+    (load(strenv(VALUES_PREVIOUS)) | $VALUES_NODES) as \$before |
+    (load(strenv(VALUES_MERGED)) | $VALUES_NODES) as \$after |
+    (load(strenv(VALUES_GENERATED)) | $VALUES_NODES) as \$generated |
+    [
+      (\$after | to_entries | .[] | select(.value.leaf and .value.json != (\$before[.key].json // \"\")) | [\"change\", .key, (\$before[.key].json // \"-\"), .value.json]),
+      (\$before | to_entries | .[] | select(.value.leaf and \$after[.key] == null) | [\"removed\", .key, \"-\", \"-\"]),
+      (\$generated | to_entries | .[] | select(.value.leaf and .key != \"hostDefaults\" and \$before[.key] != null and .value.json != \$before[.key].json and \$before[.key].json == \$after[.key].json) | [\"kept\", .key, \"-\", \"-\"])
+    ] | .[] | join(\"$VALUES_FIELD\")
+  "
+}
+
+shown_value() {
+  local value=$1
+  case "$value" in
+    '[{"name":'*'"value":'*'}]') value=${value#*\"value\":}; value=${value%\}\]} ;;
+  esac
+  value=${value#\"}
+  value=${value%\"}
+  printf '%s' "${value:-empty}"
+}
+
+hidden_value() {
+  case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
+    *secret*|*token*|*passw*|*_pass*|*key*|*credential*) return 0 ;;
+  esac
+  return 1
+}
+
+show_values_changes() {
+  local kind key old new kept='' any=false
+  while IFS=$VALUES_FIELD read -r kind key old new; do
+    [ -n "$kind" ] || continue
+    if [ "$kind" = kept ]; then
+      kept="${kept:+$kept, }$key"
+      continue
+    fi
+    if [ "$any" = false ]; then
+      note "These settings change in $VALUES_FILE:"
+      any=true
+    fi
+    if [ "$kind" = removed ]; then
+      note "  $key: removed"
+    elif hidden_value "$key"; then
+      if [ "$old" = - ]; then note "  $key: added, value hidden"; else note "  $key: changed, value hidden"; fi
+    elif [ "$old" = - ]; then
+      note "  $key: added as $(shown_value "$new")"
+    else
+      note "  $key: $(shown_value "$old") -> $(shown_value "$new")"
+    fi
+  done <<EOF
+$1
+EOF
+  if [ "$any" = false ]; then note "No settings change in $VALUES_FILE."; fi
+  if [ -n "$kept" ]; then note "These settings keep your value: $kept"; fi
+}
+
+merge_values() {
+  local work round changes backup
+  work=$(mktemp -d "$STATE_DIR/values-merge.XXXXXX") || refuse_values "The installer could not create a temporary folder in $STATE_DIR."
+
+  round=$(reuse_value '.hostDefaults')
+  case "$round" in
+    ''|*[!0-9]*) ;;
+    *) if [ "$round" -gt "$HOST_DEFAULTS_VERSION" ]; then HOST_DEFAULTS_VERSION=$round; fi ;;
+  esac
+
+  if ! {
+    render_values > "$work/generated.raw" \
+      && previous_answers_values > "$work/baseline.raw" \
+      && env_lists_by_name "$VALUES_FILE" > "$work/previous" \
+      && env_lists_by_name "$work/generated.raw" > "$work/generated" \
+      && env_lists_by_name "$work/baseline.raw" > "$work/baseline" \
+      && three_way_values "$work/previous" "$work/baseline" "$work/generated" > "$work/merged" \
+      && env_lists_restored "$work/merged" > "$work/final" \
+      && yq -e 'tag == "!!map"' "$work/final" >/dev/null \
+      && changes=$(values_changes "$work/previous" "$work/merged" "$work/generated")
+  } 2>/dev/null; then
+    rm -rf "$work"
+    refuse_values "The installer could not merge your settings into $VALUES_FILE."
+  fi
+
+  show_values_changes "$changes"
+
+  case "$changes" in
+    change*|*$'\n'change*|removed*|*$'\n'removed*)
+      if ! backup=$(backup_values); then
+        rm -rf "$work"
+        die "The installer could not save a copy of $VALUES_FILE, so it did not change the file."
+      fi
+      note "A copy of the previous file is at $backup."
+      chmod 600 "$work/final"
+      mv "$work/final" "$VALUES_FILE"
+      ;;
+    *)
+      chmod 600 "$VALUES_FILE"
+      ;;
+  esac
+  rm -rf "$work"
 }
 
 wait_for_cnpg_webhook() {

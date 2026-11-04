@@ -1,7 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -31,6 +40,10 @@ BUILD_CACHE_GB=5 LOGS_SIZE_GB=5 LOGS_MAX_DISK_GB=4 OBJECT_STORAGE_GB=5 SMALL_BOX
 ORCHARD_METRICS=true ORCHARD_LOGS=true ORCHARD_IMAGE_SCANNING=true
 ORCHARD_OBJECT_STORAGE=true ORCHARD_MCP=true INGRESS_EXTRA_HOSTS='[]'
 `;
+
+function backups(state: string) {
+  return readdirSync(state).filter((name) => /^values\.yaml\.\d{8}-\d{6}\.bak/.test(name));
+}
 
 function sandbox() {
   const dir = mkdtempSync(join(tmpdir(), 'installer-'));
@@ -76,8 +89,8 @@ exit 0
   for (const tool of ['dig', 'getent', 'timeout', 'curl']) chmodSync(join(dir, tool), 0o755);
   const state = join(dir, 'state');
   const registries = join(dir, 'k3s', 'registries.yaml');
-  const run = (script: string) => {
-    const result = spawnSync('bash', ['-c', `${preamble}\n${script}`], {
+  const attempt = (script: string) =>
+    spawnSync('bash', ['-c', `${preamble}\n${script}`], {
       encoding: 'utf8',
       env: {
         ...process.env,
@@ -88,6 +101,8 @@ exit 0
         ORCHARD_DMI_DIR: join(dir, 'no-dmi')
       }
     });
+  const run = (script: string) => {
+    const result = attempt(script);
     assert.equal(result.status, 0, result.stderr);
     return result.stdout + result.stderr;
   };
@@ -101,6 +116,7 @@ exit 0
     dir,
     state,
     registries,
+    attempt,
     run,
     k3sRestarts,
     cleanup: () => rmSync(dir, { recursive: true, force: true })
@@ -188,7 +204,11 @@ test(
       assert.equal(secret('JWT_SECRET'), jwt);
       assert.equal(secret('SECRETS_ENCRYPTION_KEY'), key);
       assert.equal(secret('BASE_DOMAIN'), 'vanity.example.com');
-      assert.equal(secret('FRONTEND_URL'), 'https://orchard.example.com');
+      assert.equal(
+        secret('FRONTEND_URL'),
+        'https://stale.example.com',
+        'a value set by hand stays, and the last definition is the one the container sees'
+      );
       assert.deepEqual(
         env('server').find((e: { name: string }) => e.name === 'SMTP_PASS').valueFrom,
         {
@@ -206,11 +226,146 @@ test(
           `${list}.env has no duplicates`
         );
       }
-      assert.deepEqual(
-        execFileSync('ls', ['-A', box.state], { encoding: 'utf8' }).trim().split('\n'),
-        ['values.yaml'],
-        'no copy of the old values is left behind'
+      assert.equal(backups(box.state).length, 1, 'one copy of the old values, and no temp files');
+      assert.equal(readdirSync(box.state).length, 2);
+    } finally {
+      box.cleanup();
+    }
+  }
+);
+
+const stoppingCases: [string, string, RegExp][] = [
+  ['yq fails outright', 'yq() { return 1; }', /cannot read/],
+  ['yq is missing', 'command() { [ "$2" != yq ] && builtin command "$@"; }', /yq is not installed/],
+  [
+    'the merge itself fails',
+    'real_yq=$(command -v yq); yq() { case "$*" in *load*) return 1 ;; esac; "$real_yq" "$@"; }',
+    /could not merge/
+  ]
+];
+
+for (const [name, stub, message] of stoppingCases) {
+  test(
+    `when ${name}, a re-run stops, keeps a copy and leaves the values in place`,
+    { skip: !has('yq', '--version') },
+    () => {
+      const box = sandbox();
+      try {
+        const values = join(box.state, 'values.yaml');
+        box.run(`mkdir -p "${box.state}"; write_values`);
+        const before = readFileSync(values, 'utf8');
+        const failed = box.attempt(`${stub}\nwrite_values`);
+        assert.notEqual(failed.status, 0);
+        assert.match(failed.stderr, message);
+        assert.match(failed.stderr, /did not change the file/);
+        assert.equal(readFileSync(values, 'utf8'), before);
+        const [copy] = backups(box.state);
+        assert.equal(readFileSync(join(box.state, copy), 'utf8'), before);
+        assert.equal(statSync(join(box.state, copy)).mode & 0o777, 0o600);
+        assert.equal(readdirSync(box.state).length, 2, 'no temp files are left behind');
+      } finally {
+        box.cleanup();
+      }
+    }
+  );
+}
+
+test(
+  'a values file that does not parse stops the installer before it asks anything',
+  { skip: !has('yq', '--version') },
+  () => {
+    const box = sandbox();
+    try {
+      const values = join(box.state, 'values.yaml');
+      box.run(`mkdir -p "${box.state}"; write_values`);
+      writeFileSync(values, 'server: [unclosed\n  : nope: {\n');
+      for (const entry of ['load_previous_answers', 'write_values']) {
+        const failed = box.attempt(`${entry}; echo got-past-it`);
+        assert.notEqual(failed.status, 0, entry);
+        assert.ok(!failed.stdout.includes('got-past-it'), entry);
+        assert.match(failed.stderr, /valid YAML/);
+        assert.match(failed.stderr, /Do not delete/);
+        assert.equal(readFileSync(values, 'utf8'), 'server: [unclosed\n  : nope: {\n');
+      }
+      for (const copy of backups(box.state)) {
+        assert.equal(statSync(join(box.state, copy)).mode & 0o777, 0o600);
+      }
+      assert.ok(backups(box.state).length >= 1);
+    } finally {
+      box.cleanup();
+    }
+  }
+);
+
+function readValues(box: ReturnType<typeof sandbox>) {
+  const values = join(box.state, 'values.yaml');
+  const read = (path: string) =>
+    execFileSync('yq', ['-r', path, values], { encoding: 'utf8' }).trim();
+  const env = (name: string, list = 'server') =>
+    read(`.${list}.env[] | select(.name == "${name}") | .value`);
+  return { values, read, env };
+}
+
+const handEdits = `yq -i '
+  .signupMode = "open" |
+  .tenant.ingressNamespaces = "traefik,orchard,mine" |
+  .custom.chart.key = "kept" |
+  .builders.httpRegistries = ["zot.orchard.svc.cluster.local:5000", "extra.local:5000"] |
+  .server.env += [
+    {"name":"HAND_ADDED","value":"kept"},
+    {"name":"SMTP_PASS","valueFrom":{"secretKeyRef":{"name":"smtp","key":"pass"}}}
+  ] |
+  .frontend.env += [{"name":"PUBLIC_HAND_ADDED","value":"kept"}]
+' "$VALUES_FILE"`;
+
+const secretNames = ['JWT_SECRET', 'SECRETS_ENCRYPTION_KEY', 'SSO_ENCRYPTION_KEY'];
+
+test(
+  'a re-run keeps what changed since the install and leaves an unchanged file alone',
+  { skip: !has('yq', '--version') },
+  () => {
+    const box = sandbox();
+    try {
+      const { values, read, env } = readValues(box);
+      box.run(`mkdir -p "${box.state}"; write_values`);
+      assert.equal(env('DATABASE_DEFAULT_MEMORY_MB'), '1024', 'a new install sizes its defaults');
+      assert.match(readFileSync(values, 'utf8'), /^# Generated by install\/install\.sh/);
+      const fresh = readFileSync(values, 'utf8');
+      assert.match(box.run('load_previous_answers; write_values'), /No settings change/);
+      assert.equal(readFileSync(values, 'utf8'), fresh, 'nothing to change, nothing rewritten');
+      assert.equal(backups(box.state).length, 0);
+
+      box.run(`${handEdits}
+        yq -i '.objectStorage.local.enabled = false | .server.image.tag = "v1.2.3" | .frontend.image.tag = "v1.2.3"' "$VALUES_FILE"`);
+      const before = secretNames.map((name) => env(name));
+      const edited = readFileSync(values, 'utf8');
+      const output = box.run('load_previous_answers; write_values');
+      assert.match(output, /No settings change/);
+      assert.match(output, /keep your value: .*signupMode/);
+      assert.ok(!output.includes('HAND_ADDED'), 'env the installer never wrote is not a conflict');
+      assert.equal(readFileSync(values, 'utf8'), edited);
+
+      box.run(`load_previous_answers; ORCHARD_MCP_DOMAIN=agents.example.com; write_values`);
+      assert.equal(read('.signupMode'), 'open');
+      assert.equal(read('.tenant.ingressNamespaces'), 'traefik,orchard,mine');
+      assert.equal(read('.custom.chart.key'), 'kept');
+      assert.equal(read('.objectStorage.local.enabled'), 'false');
+      assert.equal(read('.server.image.tag'), 'v1.2.3');
+      assert.equal(read('.frontend.image.tag'), 'v1.2.3');
+      assert.equal(env('HAND_ADDED'), 'kept');
+      assert.equal(env('PUBLIC_HAND_ADDED', 'frontend'), 'kept');
+      assert.equal(
+        read('.server.env[] | select(.name == "SMTP_PASS") | .valueFrom.secretKeyRef.key'),
+        'pass'
       );
+      assert.equal(read('.builders.httpRegistries | length'), '2', 'other lists stay as a whole');
+      assert.equal(read('.builders.httpRegistries[1]'), 'extra.local:5000');
+      assert.deepEqual(
+        secretNames.map((name) => env(name)),
+        before
+      );
+      assert.equal(read('.mcp.env[] | select(.name == "JWT_SECRET") | .value'), before[0]);
+      assert.equal(statSync(values).mode & 0o777, 0o600);
     } finally {
       box.cleanup();
     }
@@ -218,30 +373,184 @@ test(
 );
 
 test(
-  'a failed merge leaves the previous values in place',
+  'a changed answer wins, its derived values follow, and the diff hides secret values',
   { skip: !has('yq', '--version') },
   () => {
     const box = sandbox();
     try {
-      const values = join(box.state, 'values.yaml');
-      box.run(`mkdir -p "${box.state}"; write_values`);
-      const before = readFileSync(values, 'utf8');
-      const failed = spawnSync('bash', ['-c', `${preamble}\nyq() { return 1; }\nwrite_values`], {
-        encoding: 'utf8',
-        env: {
-          ...process.env,
-          PATH: `${box.dir}:${process.env.PATH}`,
-          ORCHARD_STATE_DIR: box.state,
-          ORCHARD_REGISTRIES_FILE: box.registries
-        }
-      });
-      assert.notEqual(failed.status, 0);
-      assert.equal(readFileSync(values, 'utf8'), before);
+      const { values, read, env } = readValues(box);
+      box.run(`mkdir -p "${box.state}"; write_values; ${handEdits}`);
+      box.run(
+        `yq -i '(.server.env[] | select(.name == "FRONTEND_URL") | .value) = "https://hand.example.com" | .mcp.url = "https://hand-mcp.example.com"' "$VALUES_FILE"`
+      );
+      const before = secretNames.map((name) => env(name));
+      const previous = readFileSync(values, 'utf8');
+
+      const output = box.run(`
+        parse_args --domain new.example.com --app-domain newapps.example.com --mcp-domain newmcp.example.com
+        load_previous_answers
+        write_values`);
+
+      assert.equal(read('.ingress.host'), 'new.example.com');
+      assert.equal(env('FRONTEND_URL'), 'https://new.example.com');
+      assert.equal(env('APP_DOMAIN'), 'newapps.example.com');
+      assert.equal(read('.gateway.http.appDomain'), 'newapps.example.com');
+      assert.equal(read('.mcp.ingress.host'), 'newmcp.example.com');
+      assert.equal(read('.mcp.url'), 'https://newmcp.example.com');
+      assert.equal(read('.signupMode'), 'open');
+      assert.equal(env('HAND_ADDED'), 'kept');
+      assert.deepEqual(
+        secretNames.map((name) => env(name)),
+        before
+      );
+
+      assert.match(output, /ingress\.host: orchard\.example\.com -> new\.example\.com/);
+      assert.match(
+        output,
+        /server\.env\.FRONTEND_URL: https:\/\/hand\.example\.com -> https:\/\/new\.example\.com/
+      );
+      assert.match(output, /keep your value: .*signupMode/);
+      for (const secret of before) assert.ok(!output.includes(secret), 'no secret in the output');
+
+      const [copy] = backups(box.state);
+      assert.equal(readFileSync(join(box.state, copy), 'utf8'), previous);
+      assert.equal(statSync(join(box.state, copy)).mode & 0o777, 0o600);
+      assert.ok(output.includes(copy), 'the output says where the copy is');
+
+      const lan = box.run(`
+        parse_args --mode lan
+        load_previous_answers
+        INGRESS_MODE=lan
+        apply_mode_settings
+        write_values`);
+      assert.equal(read('.ingress.tls.enabled'), 'false');
+      assert.equal(read('.ingress.tls.issuerRef'), 'null', 'an answer can remove a key too');
+      assert.equal(read('.mcp.ingress.tls.issuerRef'), 'null');
+      assert.equal(read('.ingress.entryPoints[0]'), 'web');
+      assert.equal(env('FRONTEND_URL'), 'http://new.example.com');
+      assert.equal(env('SESSION_COOKIE_SECURE'), 'false');
+      assert.equal(read('.tenant.certClusterIssuer'), 'selfsigned');
+      assert.equal(read('.signupMode'), 'open');
+      assert.match(lan, /ingress\.tls\.issuerRef\.name: removed/);
     } finally {
       box.cleanup();
     }
   }
 );
+
+test(
+  'new defaults reach an older file, without undoing what its owner turned off',
+  { skip: !has('yq', '--version') },
+  () => {
+    const box = sandbox();
+    try {
+      const { values, read, env } = readValues(box);
+      box.run(`mkdir -p "${box.state}"; write_values`);
+      const jwt = env('JWT_SECRET');
+      const token = env('MCP_SERVICE_TOKEN');
+      box.run(`yq -i '
+        .hostDefaults = 1 |
+        .metrics.enabled = false |
+        .signupMode = "closed" |
+        del(.logs.retention) |
+        del(.trivy) |
+        del(.server.env[] | select(.name == "CNPG_OPERATOR_NAMESPACE" or .name == "MCP_SERVICE_TOKEN")) |
+        del(.mcp.env[] | select(.name == "MCP_SERVICE_TOKEN"))
+      ' "$VALUES_FILE"`);
+
+      const output = box.run('load_previous_answers; write_values');
+
+      assert.equal(read('.hostDefaults'), '2');
+      assert.equal(env('CNPG_OPERATOR_NAMESPACE'), 'cnpg-system');
+      assert.equal(read('.logs.retention'), '14d');
+      assert.equal(read('.trivy.enabled'), 'true');
+      assert.equal(read('.metrics.enabled'), 'false', 'off stays off');
+      assert.equal(read('.signupMode'), 'closed');
+      assert.equal(env('JWT_SECRET'), jwt);
+
+      const minted = env('MCP_SERVICE_TOKEN');
+      assert.notEqual(minted, token, 'a secret that was missing is minted');
+      assert.equal(env('MCP_SERVICE_TOKEN', 'mcp'), minted);
+      assert.match(output, /server\.env\.MCP_SERVICE_TOKEN: added, value hidden/);
+      assert.ok(!output.includes(minted), 'a minted secret stays out of the output');
+      assert.match(output, /logs\.retention: added as 14d/);
+      assert.match(output, /server\.env\.CNPG_OPERATOR_NAMESPACE: added as cnpg-system/);
+
+      box.run(`yq -i '.hostDefaults = 9' "$VALUES_FILE"`);
+      const newer = readFileSync(values, 'utf8');
+      box.run('load_previous_answers; write_values');
+      assert.equal(readFileSync(values, 'utf8'), newer, 'a later round is not lowered');
+    } finally {
+      box.cleanup();
+    }
+  }
+);
+
+test(
+  'a re-run changes or clears a pinned public IP and keeps the limits choice',
+  { skip: !has('yq', '--version') },
+  () => {
+    const box = sandbox();
+    try {
+      const { read, env } = readValues(box);
+      box.run(`mkdir -p "${box.state}"; ORCHARD_LIMITS=on; write_values`);
+      box.run(`yq -i '.tenant.publicIp = "198.51.100.7"' "$VALUES_FILE"`);
+
+      box.run('load_previous_answers; write_values');
+      assert.equal(read('.tenant.publicIp'), '198.51.100.7');
+      assert.equal(env('INSTANCE_RESOURCE_LIMITS_CHOICE'), 'on');
+
+      box.run(
+        'parse_args --limits off; load_previous_answers; ORCHARD_PUBLIC_IP=203.0.113.9; write_values'
+      );
+      assert.equal(read('.tenant.publicIp'), '203.0.113.9');
+      assert.equal(env('INSTANCE_RESOURCE_LIMITS_CHOICE'), 'off');
+
+      box.run('load_previous_answers; ORCHARD_PUBLIC_IP=; write_values');
+      assert.equal(read('.tenant.publicIp'), 'null');
+      assert.equal(env('INSTANCE_RESOURCE_LIMITS_CHOICE'), 'off');
+    } finally {
+      box.cleanup();
+    }
+  }
+);
+
+for (const [mode, setup, host] of [
+  ['public', 'USE_TLS=true CERT_ISSUER=letsencrypt', 'https://new.example.com'],
+  ['tunnel', 'USE_TLS=false CERT_ISSUER=', 'https://new.example.com'],
+  ['lan', 'USE_TLS=false CERT_ISSUER=selfsigned', 'http://new.example.com']
+] as const) {
+  test(
+    `the chart renders merged ${mode} values with the settings kept`,
+    { skip: !has('yq', '--version') || !has('helm', 'version') },
+    () => {
+      const box = sandbox();
+      try {
+        const { values, env } = readValues(box);
+        box.run(`mkdir -p "${box.state}"
+          ${setup} INGRESS_MODE=${mode}
+          write_values
+          ${handEdits}
+          ${setup} INGRESS_MODE=${mode}
+          parse_args --domain new.example.com
+          load_previous_answers
+          write_values`);
+        assert.equal(env('FRONTEND_URL'), host);
+        const out = execFileSync(
+          'helm',
+          ['template', 'orchard', chart, '--namespace', 'orchard', '-f', values],
+          { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }
+        );
+        assert.ok(out.includes('Host(`new.example.com`)'), 'the route follows the new domain');
+        assert.match(out, /SIGNUP_MODE[^\n]*\n?[^\n]*open/);
+        assert.match(out, /name: HAND_ADDED/);
+        assert.match(out, /secretKeyRef/);
+      } finally {
+        box.cleanup();
+      }
+    }
+  );
+}
 
 test(
   'the installer values reach the server with its issuer and a real frontend target',
@@ -1627,7 +1936,8 @@ test('NAT, several interfaces, none detected and IPv6-only each get their own wo
   }
 });
 
-const IPV6_ONLY = 'PUBLIC_IP= PUBLIC_IP6=2001:db8::10 LOCAL_IPS= LOCAL_IPS6=2001:db8::10 PRIMARY_IP=';
+const IPV6_ONLY =
+  'PUBLIC_IP= PUBLIC_IP6=2001:db8::10 LOCAL_IPS= LOCAL_IPS6=2001:db8::10 PRIMARY_IP=';
 
 function ipv4Check(setup: string, args = '') {
   const box = sandbox();
@@ -1706,7 +2016,10 @@ test('the IPv4 check runs before any question and before anything is installed',
   const order = ['preflight', 'detect_network', 'require_ipv4', 'collect_answers', 'install_k3s'];
   const places = order.map((name) => main.indexOf(`\n  ${name}\n`));
   assert.ok(!places.includes(-1), `main calls each of ${order.join(', ')}`);
-  assert.deepEqual(places, [...places].sort((a, b) => a - b));
+  assert.deepEqual(
+    places,
+    [...places].sort((a, b) => a - b)
+  );
 });
 
 test('--help names the flag for IPv6-only servers', () => {
