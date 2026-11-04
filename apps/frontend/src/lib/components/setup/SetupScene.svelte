@@ -15,6 +15,7 @@
 	const LOBES = 6;
 	const CREST_HEIGHT = 124;
 	const RESTING_BAND = 0.2;
+	const LOCKUP_CLEARANCE = 88;
 
 	function wavePath(width: number): string {
 		const step = width / LOBES;
@@ -59,6 +60,14 @@
 		drift = animate(crest, { x: [0, -width] }, { duration: 22, ease: 'linear', repeat: Infinity });
 	}
 
+	const playing: { stop: () => void }[] = [];
+
+	const play = ((...args: Parameters<typeof animate>) => {
+		const controls = animate(...args);
+		playing.push(controls);
+		return controls;
+	}) as typeof animate;
+
 	function settle() {
 		if (done) return;
 		done = true;
@@ -67,6 +76,12 @@
 
 	function band(fraction: number) {
 		return `${window.innerHeight * fraction}px`;
+	}
+
+	function restingBand(fraction: number) {
+		const height = window.innerHeight;
+		const ceiling = Math.max(height - LOCKUP_CLEARANCE - CREST_HEIGHT, height * RESTING_BAND);
+		return `${Math.min(height * fraction, ceiling)}px`;
 	}
 
 	async function overture() {
@@ -92,7 +107,7 @@
 
 		const box = mark.getBoundingClientRect();
 		const offset = Math.round(window.innerWidth / 2 - (box.left + box.width / 2));
-		animate(lockups, { x: offset }, { duration: 0 });
+		play(lockups, { x: offset }, { duration: 0 });
 
 		rings.forEach((ring) => {
 			const length = (ring as SVGPathElement).getTotalLength();
@@ -101,7 +116,8 @@
 		});
 
 		await pause(360);
-		animate(
+		if (done) return;
+		play(
 			petals,
 			{ scale: [0, 1], opacity: [0, 1] },
 			{
@@ -111,20 +127,23 @@
 		);
 
 		await pause(980);
-		animate(rings, { strokeDashoffset: [null, 0] }, { duration: 0.9, ease: [0.32, 0.72, 0, 1] });
+		if (done) return;
+		play(rings, { strokeDashoffset: [null, 0] }, { duration: 0.9, ease: [0.32, 0.72, 0, 1] });
 
 		await pause(840);
-		animate(
+		if (done) return;
+		play(
 			Array.from(document.querySelectorAll('.setup-ringband')),
 			{ opacity: [0, 1] },
 			{ duration: 0.28 }
 		);
-		animate(rings, { opacity: [1, 0] }, { duration: 0.28, delay: 0.1 });
-		animate([mark], { scale: [1, 1.12, 1] }, { duration: 0.5, ease: [0.34, 1.4, 0.4, 1] });
+		play(rings, { opacity: [1, 0] }, { duration: 0.28, delay: 0.1 });
+		play([mark], { scale: [1, 1.12, 1] }, { duration: 0.5, ease: [0.34, 1.4, 0.4, 1] });
 
 		await pause(360);
-		animate(lockups, { x: [null, 0] }, transition('smooth'));
-		animate(
+		if (done) return;
+		play(lockups, { x: [null, 0] }, transition('smooth'));
+		play(
 			chars,
 			{
 				opacity: [0, 1],
@@ -135,9 +154,10 @@
 		);
 
 		await pause(1020);
-		animate('.setup-wash', { opacity: [0, 1] }, { duration: 1.5, ease: [0.22, 0.61, 0.36, 1] });
-		animate('.setup-crest', { opacity: [0, 1] }, { duration: 0.4 });
-		await animate(
+		if (done) return;
+		play('.setup-wash', { opacity: [0, 1] }, { duration: 1.5, ease: [0.22, 0.61, 0.36, 1] });
+		play('.setup-crest', { opacity: [0, 1] }, { duration: 0.4 });
+		await play(
 			root,
 			{ '--setup-band': [null, band(1.15)] },
 			{
@@ -145,22 +165,25 @@
 				ease: [0.5, 0, 0.25, 1]
 			}
 		).finished;
+		if (done) return;
 
-		animate(lockups, { scale: [1, 1.05] }, { duration: 0.9, ease: 'easeOut' });
+		play(lockups, { scale: [1, 1.05] }, { duration: 0.9, ease: 'easeOut' });
 		await pause(640);
+		if (done) return;
 
 		// The closing move covers most of the viewport twice over: the band drops
 		// about 95% of the screen while the lockup flies half of it and shrinks
 		// to under a third. `cinematic` is sized for exactly this; the panel
 		// springs turn it into a cut.
 		const travel = window.innerHeight / 2 - 52;
-		animate(root, { '--setup-band': [null, band(RESTING_BAND)] }, transition('cinematic'));
-		animate(lockups, { scale: [1.05, 0.3], y: [0, -travel] }, transition('cinematic'));
-		animate([mark], { rotate: [0, -14] }, transition('cinematic'));
+		play(root, { '--setup-band': [null, band(RESTING_BAND)] }, transition('cinematic'));
+		play(lockups, { scale: [1.05, 0.3], y: [0, -travel] }, transition('cinematic'));
+		play([mark], { rotate: [0, -14] }, transition('cinematic'));
 		// Roughly two thirds of the way through the flight: late enough to read as
 		// following the lockup up rather than racing it, early enough that they are
 		// still one move.
 		await pause(400);
+		if (done) return;
 		settle();
 	}
 
@@ -206,18 +229,19 @@
 
 	function skip() {
 		if (done) return;
+		playing.forEach((controls) => controls.stop());
 		rest();
 		settle();
 	}
 
 	export function raiseBand(fraction: number) {
 		if (!motionEnabled()) {
-			document.documentElement.style.setProperty('--setup-band', band(fraction));
+			document.documentElement.style.setProperty('--setup-band', restingBand(fraction));
 			return;
 		}
 		animate(
 			document.documentElement,
-			{ '--setup-band': [null, band(fraction)] },
+			{ '--setup-band': [null, restingBand(fraction)] },
 			transition('smooth')
 		);
 	}
