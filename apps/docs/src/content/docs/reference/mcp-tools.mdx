@@ -11,8 +11,8 @@ Orchard exposes **215 MCP tools** across 13 groups. Point any MCP
 client at `https://mcp.your-orchard-domain` and these are the calls it can make. Every tool
 runs as the user who authorised the connection, so the same permissions apply.
 
-Tools are grouped into toolsets. A connection lists `core`, `deployments`, `logs` and `env`
-by default; add `?toolsets=databases,domains` (or `?toolsets=all`) to the server URL for more.
+Tools are grouped into toolsets. A connection lists every toolset by default. To list fewer, add
+`?toolsets=databases,domains` to the server URL. `core` is always included.
 Tools the connection's scope cannot run are hidden. See [MCP](/mcp/) for details, or the
 [compact MCP](/agents-code-mode/) for the whole API in three tools.
 
@@ -515,7 +515,7 @@ Cancel an in-progress build for a deployment
 
 Mint a token that lets an outside system trigger a deploy over HTTP, for CI that builds elsewhere and pushes to Orchard.
 
-The holder POSTs to `/apiv1/webhooks/deploy` with `Authorization: Bearer &lt;token&gt;`. On an image-source deployment they may send `&#123; "image": "...", "tag": "..." &#125;` to roll a new image; on a GitHub-built deployment that is rejected and the POST just rebuilds from the repo.
+The holder POSTs to `/apiv1/webhooks/deploy` with `Authorization: Bearer &lt;token&gt;`. On an image-source deployment they may send `&#123; "image": "...", "tag": "..." &#125;` to roll a new image; on a GitHub-built deployment that is rejected. Without those fields the POST restarts the deployment and does not rebuild it.
 
 **The plaintext token is in this response and nowhere else** — it is stored hashed, so hand it to the user now or it is gone. It inherits the creator's project access and is revoked automatically if they lose it. [sensitive]
 

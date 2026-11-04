@@ -693,7 +693,7 @@ Only meaningful above one replica: a budget equal to the replica count blocks vo
     {
       description: `Mint a token that lets an outside system trigger a deploy over HTTP, for CI that builds elsewhere and pushes to Orchard.
 
-The holder POSTs to \`/apiv1/webhooks/deploy\` with \`Authorization: Bearer <token>\`. On an image-source deployment they may send \`{ "image": "...", "tag": "..." }\` to roll a new image; on a GitHub-built deployment that is rejected and the POST just rebuilds from the repo.
+The holder POSTs to \`/apiv1/webhooks/deploy\` with \`Authorization: Bearer <token>\`. On an image-source deployment they may send \`{ "image": "...", "tag": "..." }\` to roll a new image; on a GitHub-built deployment that is rejected. Without those fields the POST restarts the deployment and does not rebuild it.
 
 **The plaintext token is in this response and nowhere else** — it is stored hashed, so hand it to the user now or it is gone. It inherits the creator's project access and is revoked automatically if they lose it.`,
       inputSchema: {

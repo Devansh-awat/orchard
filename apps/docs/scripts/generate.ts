@@ -150,8 +150,8 @@ Orchard exposes **${collected.length} MCP tools** across ${groups.length} groups
 client at \`https://mcp.your-orchard-domain\` and these are the calls it can make. Every tool
 runs as the user who authorised the connection, so the same permissions apply.
 
-Tools are grouped into toolsets. A connection lists \`core\`, \`deployments\`, \`logs\` and \`env\`
-by default; add \`?toolsets=databases,domains\` (or \`?toolsets=all\`) to the server URL for more.
+Tools are grouped into toolsets. A connection lists every toolset by default. To list fewer, add
+\`?toolsets=databases,domains\` to the server URL. \`core\` is always included.
 Tools the connection's scope cannot run are hidden. See [MCP](/mcp/) for details, or the
 [compact MCP](/agents-code-mode/) for the whole API in three tools.
 
