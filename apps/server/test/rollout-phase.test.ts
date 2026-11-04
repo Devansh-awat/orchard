@@ -218,7 +218,7 @@ test('image pull failures get a registry hint', () => {
     state({ pods: [crashPod('app-1', { reason: 'ImagePullBackOff' })] })
   );
   assert.equal(v.phase, 'crashing');
-  assert.match(v.hint ?? '', /could not be pulled/);
+  assert.match(v.hint ?? '', /couldn't be pulled/);
 });
 
 test('a pod that restarted many times and is not ready counts as failing', () => {
