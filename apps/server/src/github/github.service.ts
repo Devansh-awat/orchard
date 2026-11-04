@@ -143,6 +143,7 @@ export interface GitHubBranch {
     sha: string;
     url: string;
   };
+  default?: boolean;
 }
 
 export interface GitHubContent {

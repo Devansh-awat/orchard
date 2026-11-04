@@ -29,7 +29,7 @@ interface UserData {
 interface CreateFromGithubBody {
   name: string;
   repoUrl: string;
-  branch: string;
+  branch?: string;
   composePath?: string;
   autoDeployEnabled?: boolean;
   environmentId?: string;
@@ -323,6 +323,13 @@ export class ComposeStacksService {
     return { composeYaml, installationId };
   }
 
+  private async defaultBranchOf(userId: string, repoUrl: string): Promise<string> {
+    const parsed = this.github.parseRepoUrl(repoUrl);
+    if (!parsed) throw new BadRequestException('Could not parse repository URL');
+    const token = await this.github.resolveRepoToken(userId, parsed.owner, parsed.repo);
+    return this.github.getDefaultBranch(token, parsed.owner, parsed.repo);
+  }
+
   async createFromGithub(
     projectId: string,
     body: CreateFromGithubBody,
@@ -338,11 +345,12 @@ export class ComposeStacksService {
     const repoUrl = String(body.repoUrl || '')
       .trim()
       .replace(/\.git$/, '');
-    const branch = String(body.branch || 'main').trim();
     const composePath = String(body.composePath || 'docker-compose.yml').trim();
     const autoDeployEnabled = Boolean(body.autoDeployEnabled);
 
     if (!repoUrl) throw new BadRequestException('Repository URL is required');
+    const branch =
+      String(body.branch || '').trim() || (await this.defaultBranchOf(userId, repoUrl));
 
     // Pin the stack to a concrete environment now so create + every later
     // redeploy drop the child deployments into the same namespace. Validates

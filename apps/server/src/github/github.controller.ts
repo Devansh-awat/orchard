@@ -405,7 +405,11 @@ export class GitHubController {
 
     const token = await this.resolveRepoAccess(user, owner, repo);
 
-    return this.githubService.getRepoBranches(token, owner, repo);
+    const [branches, defaultBranch] = await Promise.all([
+      this.githubService.getRepoBranches(token, owner, repo),
+      this.githubService.getDefaultBranch(token, owner, repo)
+    ]);
+    return branches.map((b) => (b.name === defaultBranch ? { ...b, default: true } : b));
   }
 
   @Get('repositories/:owner/:repo/dockerfiles')
