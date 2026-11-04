@@ -3,6 +3,7 @@ import { Auth } from '../auth/decorators';
 import { loadedGrafts } from '../grafts/graft-registry';
 import { InstanceSettingsService } from './instance-settings.service';
 import { AnalyticsService } from '../analytics/analytics.service';
+import { FirecrackerClient } from '../docker/fc/fc-client';
 
 @Controller('instance')
 export class InstanceFeaturesController {
@@ -19,7 +20,8 @@ export class InstanceFeaturesController {
       mcp: await this.settings.isMcpEnabled(),
       grafts,
       sandboxes: grafts.includes('greenhouse'),
-      earlyAccessOpen: !this.analytics.configured
+      earlyAccessOpen: !this.analytics.configured,
+      fastBuilder: new FirecrackerClient().enabled
     };
   }
 }
