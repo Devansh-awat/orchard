@@ -128,7 +128,10 @@ export class AuthDoorV1 {
   registerOrgScopedDevice(prefix: string, denyPaths: string[] = []): void {
     assertClaimed(this.graft, 'deviceNames', prefix, 'device name');
     registerOrgScopedDevice(prefix);
-    for (const path of denyPaths) denyToOrgScopedSessions(path);
+    for (const path of denyPaths) {
+      denyToOrgScopedSessions(path);
+      denyToOrgScopedSessions(`${this.graft.id}/${path}`);
+    }
   }
 
   deviceName(prefix: string, organizationId: string | null | undefined, subject: string): string {

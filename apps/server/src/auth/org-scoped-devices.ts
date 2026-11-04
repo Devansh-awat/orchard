@@ -3,12 +3,15 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const devicePrefixes = new Set<string>();
 
 export const ORG_SCOPED_DENY = [
+  'auth/',
+  'ssh-identities',
   'invitations',
   'users/',
   'setup',
   'admin/',
   'github/link',
   'github/unlink',
+  'github/repositories',
   'git/oauth/',
   'tailscale/link',
   'tailscale/unlink'

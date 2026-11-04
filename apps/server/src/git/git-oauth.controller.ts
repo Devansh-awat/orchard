@@ -49,13 +49,14 @@ export class GitOauthController {
     const token = req.cookies?.session_token;
     if (!token) return back(res, `error=${encodeURIComponent('Not authenticated')}`);
     try {
-      await this.github.verifySessionToken(token);
+      const payload = await this.github.verifySessionToken(token);
+      if (payload.orgScope) throw new Error('Org-scoped session');
     } catch {
       return back(res, `error=${encodeURIComponent('Not authenticated')}`);
     }
     let url: string;
     const nonce = randomBytes(32).toString('hex');
-    const state = Buffer.from(JSON.stringify({ t: token, n: nonce })).toString('base64url');
+    const state = Buffer.from(JSON.stringify({ n: nonce })).toString('base64url');
     try {
       url = this.oauth.authorizeUrl(provider, state);
     } catch (e) {
@@ -80,7 +81,7 @@ export class GitOauthController {
     if (!provider) return back(res, `error=${encodeURIComponent('Unknown provider')}`);
     if (error) return back(res, `error=${encodeURIComponent(errorDescription || error)}`);
     if (!code) return back(res, `error=${encodeURIComponent('No authorization code provided')}`);
-    let parsed: { t?: string; n?: string } = {};
+    let parsed: { n?: string } = {};
     try {
       parsed = JSON.parse(Buffer.from(String(state || ''), 'base64url').toString('utf8'));
     } catch {
@@ -94,10 +95,11 @@ export class GitOauthController {
         `error=${encodeURIComponent("Couldn't verify this link request. Try connecting again.")}`
       );
     }
-    const token = req.cookies?.session_token || parsed.t;
+    const token = req.cookies?.session_token;
     if (!token) return back(res, `error=${encodeURIComponent('Not authenticated')}`);
     try {
       const payload = await this.github.verifySessionToken(token);
+      if (payload.orgScope) return back(res, `error=${encodeURIComponent('Not authenticated')}`);
       const user = payload.externalAuthId
         ? await this.users.findByExternalAuthId(payload.externalAuthId)
         : await this.users.findById(payload.sub);

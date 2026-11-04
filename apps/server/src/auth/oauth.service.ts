@@ -311,7 +311,7 @@ export class OAuthService {
     try {
       const { payload } = await jwtVerify(token, this.jwtSecret);
 
-      if (!payload.sub || !payload.email || !payload.name) {
+      if (!payload.sub || !payload.email || !payload.name || payload.type) {
         throw new Error('Invalid token payload');
       }
 

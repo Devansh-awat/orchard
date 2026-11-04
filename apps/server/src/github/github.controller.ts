@@ -33,25 +33,20 @@ function isSafeRedirect(redirect?: string): redirect is string {
 }
 
 /** Recover the session token and optional return path from the OAuth state param. */
-function parseLinkState(state?: string): {
-  stateToken?: string;
-  returnPath?: string;
-  nonce?: string;
-} {
+function parseLinkState(state?: string): { returnPath?: string; nonce?: string } {
   if (!state) return {};
   try {
     const parsed = JSON.parse(Buffer.from(state, 'base64url').toString('utf8'));
-    if (parsed && typeof parsed === 'object' && typeof parsed.t === 'string') {
+    if (parsed && typeof parsed === 'object') {
       return {
-        stateToken: parsed.t,
         returnPath: isSafeRedirect(parsed.r) ? parsed.r : undefined,
         nonce: typeof parsed.n === 'string' ? parsed.n : undefined
       };
     }
   } catch {
-    // Not encoded JSON: treat the whole state as a raw session token.
+    return {};
   }
-  return { stateToken: state };
+  return {};
 }
 
 function csrfNonceMatches(nonce?: string, cookieNonce?: string): boolean {
@@ -127,16 +122,12 @@ export class GitHubController {
     }
     const redirectUri = this.githubAppConfig.callbackUrl();
 
-    // Pass the session token as OAuth state so the callback can identify the
-    // user even when the browser drops the cookie (e.g. SameSite restrictions).
-    // When a same-origin return path is supplied, carry it alongside the token
-    // so the callback knows where to send the user back (e.g. onboarding flow).
+    // When a same-origin return path is supplied, carry it in the state so the
+    // callback knows where to send the user back (e.g. onboarding flow).
     const nonce = crypto.randomBytes(32).toString('hex');
     setGithubOauthStateCookie(res, nonce);
     const safeRedirect = isSafeRedirect(redirect) ? redirect : undefined;
-    const state = Buffer.from(JSON.stringify({ t: token, r: safeRedirect, n: nonce })).toString(
-      'base64url'
-    );
+    const state = Buffer.from(JSON.stringify({ r: safeRedirect, n: nonce })).toString('base64url');
     const authUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`;
 
     return res.redirect(authUrl);
@@ -164,9 +155,7 @@ export class GitHubController {
     }
 
     try {
-      // State carries the session JWT, and optionally a same-origin return path
-      // encoded as base64url JSON. Older flows pass the raw JWT as state.
-      const { stateToken, returnPath, nonce } = parseLinkState(state);
+      const { returnPath, nonce } = parseLinkState(state);
 
       const cookieNonce = req.cookies?.github_oauth_state;
       clearGithubOauthStateCookie(res);
@@ -176,9 +165,7 @@ export class GitHubController {
         );
       }
 
-      // Prefer the cookie, fall back to the token from state when the browser
-      // strips the cookie on cross-site redirect.
-      const token = req.cookies?.session_token || stateToken;
+      const token = req.cookies?.session_token;
 
       if (!token) {
         return res.redirect(

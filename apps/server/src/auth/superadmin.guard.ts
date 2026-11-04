@@ -93,7 +93,7 @@ function deniedToMcpGateway(path: string): boolean {
   return MCP_GATEWAY_DENY.some((d) => p === d || p.startsWith(`${d}/`));
 }
 
-function deniedToOrgScopedSession(method: string, path: string): boolean {
+export function deniedToOrgScopedSession(method: string, path: string): boolean {
   const p = path
     .toLowerCase()
     .replace(/^\/?(apiv1\/)?/, '')
