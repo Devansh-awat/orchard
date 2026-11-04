@@ -24,7 +24,8 @@ test('a small box can lower the database default, and only with the env var set'
     assert.equal(defaultPodResourcesForImage('postgres:17').memoryBytes, 512 * MiB);
     assert.equal(defaultPodResourcesForImage('nginx').memoryBytes, 128 * MiB);
     process.env.DATABASE_DEFAULT_MEMORY_MB = '16';
-    assert.equal(defaultPodResourcesForImage('postgres').memoryBytes, 256 * MiB);
+    assert.equal(defaultPodResourcesForImage('postgres').memoryBytes, 512 * MiB);
+    assert.equal(defaultPodResourcesForImage('postgres:17').memoryBytes, 256 * MiB);
     process.env.DATABASE_DEFAULT_MEMORY_MB = 'lots';
     assert.deepEqual(defaultPodResourcesForImage('postgres'), big);
   } finally {

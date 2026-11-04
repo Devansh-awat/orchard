@@ -85,13 +85,16 @@ const DATABASE_DEFAULT_MEMORY_BYTES = 1024 * MiB;
 // shared_buffers says. See db-tuning.ts for the incident this came from.
 const DATABASE_MIN_MEMORY_BYTES = 256 * MiB;
 
+export const MANAGED_DATABASE_IMAGE = 'postgres';
+export const MANAGED_DATABASE_MIN_MEMORY_BYTES = 512 * MiB;
+
 export function isDatabaseImage(image?: string | null): boolean {
   return Boolean(image && DATABASE_IMAGE_REPOS.has(imageRepo(image)));
 }
 
-function databaseDefaultMemoryBytes(): number {
+function databaseDefaultMemoryBytes(floor: number): number {
   const mb = Number.parseInt(process.env.DATABASE_DEFAULT_MEMORY_MB ?? '', 10);
-  return mb > 0 ? Math.max(mb * MiB, DATABASE_MIN_MEMORY_BYTES) : DATABASE_DEFAULT_MEMORY_BYTES;
+  return mb > 0 ? Math.max(mb * MiB, floor) : DATABASE_DEFAULT_MEMORY_BYTES;
 }
 
 function appDefaultMemoryBytes(): number {
@@ -104,12 +107,16 @@ export function defaultPodResourcesForImage(image?: string | null): {
   memoryBytes: number;
 } {
   if (isDatabaseImage(image)) {
-    return { cpuMilli: DATABASE_DEFAULT_CPU_MILLI, memoryBytes: databaseDefaultMemoryBytes() };
+    return {
+      cpuMilli: DATABASE_DEFAULT_CPU_MILLI,
+      memoryBytes: databaseDefaultMemoryBytes(minPodMemoryBytesForImage(image))
+    };
   }
   return { cpuMilli: DEFAULT_CPU_MILLI, memoryBytes: appDefaultMemoryBytes() };
 }
 
 export function minPodMemoryBytesForImage(image?: string | null): number {
+  if (image === MANAGED_DATABASE_IMAGE) return MANAGED_DATABASE_MIN_MEMORY_BYTES;
   return isDatabaseImage(image) ? DATABASE_MIN_MEMORY_BYTES : 0;
 }
 

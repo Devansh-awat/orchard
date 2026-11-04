@@ -93,7 +93,7 @@
 
 	const fallbackHint = $derived(
 		state
-			? `Blank uses ${formatMemory(state.fallback.app.memoryBytes)} and ${formatCpu(state.fallback.app.cpuMilli)} for apps, and ${formatMemory(state.fallback.database.memoryBytes)} and ${formatCpu(state.fallback.database.cpuMilli)} for databases. A database never gets less than 256 MB.`
+			? `Blank uses ${formatMemory(state.fallback.app.memoryBytes)} and ${formatCpu(state.fallback.app.cpuMilli)} for apps, and ${formatMemory(state.fallback.database.memoryBytes)} and ${formatCpu(state.fallback.database.cpuMilli)} for databases. A database never gets less than 512 MB.`
 			: ''
 	);
 

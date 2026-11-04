@@ -1,5 +1,6 @@
 import { parseCpu, parseMemory } from './quantity';
 import { deriveDbTuning, MANAGED_DB_MIN_MEMORY_BYTES, parsePgMemory } from './db-tuning';
+import { MANAGED_DATABASE_MIN_MEMORY_BYTES } from './presets';
 import { normalizePgParam, ORCHARD_PG_DEFAULTS, PG_PARAM_BOUNDS } from './pg-params';
 import { toQuartzCron } from '../projects/projects.utils';
 import {
@@ -101,7 +102,11 @@ export function specColumnUpdate(
     );
     if (cpu !== undefined && cpu !== row.cpuRequestMilli) update.cpuRequestMilli = cpu;
   }
-  if (resources && live.memoryBytes != null) {
+  const runsBelowFloorUntilRestart =
+    Number(row.memoryRequestBytes ?? 0) < MANAGED_DATABASE_MIN_MEMORY_BYTES &&
+    live.memoryBytes != null &&
+    live.memoryBytes < MANAGED_DATABASE_MIN_MEMORY_BYTES;
+  if (resources && live.memoryBytes != null && !runsBelowFloorUntilRestart) {
     const memory = pinnedOrDefault(
       live.memoryBytes,
       resources.current.memoryBytes,

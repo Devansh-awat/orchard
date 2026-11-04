@@ -97,9 +97,9 @@ When limits are on, an app or database without its own size uses the first value
 | Variable                     | Applies to | Default | Minimum |
 | ---------------------------- | ---------- | ------- | ------- |
 | `DEFAULT_APP_MEMORY_MB`      | Apps       | `128`   | None    |
-| `DATABASE_DEFAULT_MEMORY_MB` | Databases  | `1024`  | `256`   |
+| `DATABASE_DEFAULT_MEMORY_MB` | Databases  | `1024`  | `512`   |
 
-A database never gets less than 256 MB, including when the organization default is lower.
+A database never gets less than 512 MB, including when the organization default is lower, because Postgres runs its backups in the same memory. A database that already runs with less keeps its size until its next restart.
 
 The installer sets `DEFAULT_APP_MEMORY_MB` on a new install, based on the memory of the machine:
 

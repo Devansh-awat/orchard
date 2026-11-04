@@ -109,6 +109,30 @@ test('a row below the memory floor matches a cluster provisioned at the floor', 
   assert.deepEqual(specColumnUpdate(tiny, clusterSpecValues(cluster), resources), {});
 });
 
+test('a raised floor leaves a database below it alone until its next restart', () => {
+  const cluster = structuredClone(hardware);
+  cluster.spec.resources.limits = { cpu: '500m', memory: '256Mi' };
+  const resources = { current: pinned.defaults, defaults: pinned.defaults };
+  const noOwnSize = { ...row, cpuRequestMilli: null, memoryRequestBytes: null };
+  assert.equal(
+    specColumnUpdate(noOwnSize, clusterSpecValues(cluster), {
+      current: { cpuMilli: 500, memoryBytes: 512 * MiB },
+      defaults: { cpuMilli: 500, memoryBytes: 512 * MiB }
+    }).memoryRequestBytes,
+    undefined
+  );
+  const tiny = { ...row, memoryRequestBytes: BigInt(128 * MiB) };
+  assert.equal(
+    specColumnUpdate(tiny, clusterSpecValues(cluster), resources).memoryRequestBytes,
+    undefined
+  );
+  const edited = { ...row, memoryRequestBytes: BigInt(2048 * MiB) };
+  assert.equal(
+    specColumnUpdate(edited, clusterSpecValues(cluster), resources).memoryRequestBytes,
+    BigInt(256 * MiB)
+  );
+});
+
 test('without resolved resources the cpu and memory columns are left alone', () => {
   const edited = structuredClone(hardware);
   edited.spec.resources.limits = { cpu: '4', memory: '32Gi' };
