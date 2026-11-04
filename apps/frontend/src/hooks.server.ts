@@ -7,6 +7,14 @@ import { setGraftRegistry } from '$lib/grafts/registry';
 const BASE_DOMAIN = env.PUBLIC_BASE_DOMAIN || '';
 const PLATFORM_ORIGIN = env.PUBLIC_PLATFORM_ORIGIN || `https://${BASE_DOMAIN}`;
 
+function platformHost(): string {
+	try {
+		return new URL(PLATFORM_ORIGIN).host;
+	} catch {
+		return '';
+	}
+}
+
 export const handle: Handle = async ({ event, resolve }) => {
 	// Merge consecutive slashes (`//ysws//projects` → `/ysws/projects`).
 	// Doubled slashes still render a page but break every exact-match on
@@ -24,7 +32,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 	if (BASE_DOMAIN) {
 		const host = event.request.headers.get('host') || '';
 
-		if (host.endsWith(`.${BASE_DOMAIN}`) && host !== BASE_DOMAIN && !host.startsWith('www.')) {
+		if (
+			host.endsWith(`.${BASE_DOMAIN}`) &&
+			host !== BASE_DOMAIN &&
+			host !== platformHost() &&
+			!host.startsWith('www.')
+		) {
 			const subdomain = host.replace(`.${BASE_DOMAIN}`, '');
 			event.locals.subdomain = subdomain;
 

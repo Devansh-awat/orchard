@@ -5,6 +5,14 @@ const BASE_DOMAIN = env.PUBLIC_BASE_DOMAIN || '';
 const PLATFORM_ORIGIN = env.PUBLIC_PLATFORM_ORIGIN || `https://${BASE_DOMAIN}`;
 const RESOLVE_TTL_MS = 60_000;
 
+function platformHost(): string {
+	try {
+		return new URL(PLATFORM_ORIGIN).host;
+	} catch {
+		return '';
+	}
+}
+
 const hosts = new Map<string, { slug: string | null; exp: number }>();
 
 // A status page on its own host renders the /status/[slug] route while the
@@ -15,6 +23,7 @@ export const reroute: Reroute = async ({ url, fetch }) => {
 	if (!BASE_DOMAIN) return;
 	const host = url.hostname;
 	if (!host.endsWith(`.${BASE_DOMAIN}`) || host === BASE_DOMAIN || host.startsWith('www.')) return;
+	if (url.host === platformHost()) return;
 	if (url.pathname.startsWith('/apiv1/') || url.pathname.startsWith('/status/')) return;
 	const hit = hosts.get(host);
 	let slug: string | null | undefined = hit && hit.exp > Date.now() ? hit.slug : undefined;
