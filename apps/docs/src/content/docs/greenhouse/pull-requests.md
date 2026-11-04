@@ -1,99 +1,78 @@
 ---
-title: Pull requests and checks
-description: Commit, push, open a pull request, follow CI and merge, all from the session.
+title: Commit, push, and merge
+description: Commit a Greenhouse session's changes, open a GitHub pull request, follow its checks, and merge it. Pushes and merges use your own linked GitHub account.
 sidebar:
   order: 8
 ---
 
-Each session is a branch, so the path from "the agent finished" to "it is merged"
-is short: commit, push, open a pull request, watch the checks, merge.
+Commit a session's changes, open a pull request, and merge it from the workspace.
 
-Pushes, pull requests and merges all use **your own** linked GitHub account,
-whoever you are on the machine. Link it under **User settings → GitHub and
-Tailscale**. Until you do, the pull request button reads **Link GitHub to push**;
-you can still commit locally.
+## Prerequisites
 
-## Commit
+- A GitHub account linked to Orchard. Link it in **User settings** > **GitHub and Tailscale**. Until you link it, the pull request button reads **Link GitHub to push**. You can still commit.
+- Host or guest access to the machine. Read-only guests cannot commit or push.
 
-The **Changes** tab lists what changed in the session's worktree. Write a message
-in the commit box and press **Commit** (**⌘Enter**) to commit everything that
-changed. The commit menu has **Amend last commit**. Through the API you
-can also commit only tracked files or a list of files, add a sign-off line, or
-undo the last commit while keeping its changes staged.
+Pushes, pull requests, and merges use your own GitHub account, on any machine you can edit.
 
-Commits made here carry your name and email: those of your GitHub account, using
-its `noreply` address, or your Orchard name and email when GitHub is not linked.
-When other people prompted the agent in this session, a `Co-authored-by` trailer
-is added for each of them.
+## 1. Commit
 
-The agent commits too, when you ask it to. Its commits are the host's, because
-the agent runs as the host. Each one carries a `Co-authored-by` trailer for
-everyone else who prompted the agent in the current turn: from the prompt that
-woke the agent up until it went idle again, including prompts queued while it was
-working. The host is never listed, being the author, and nor is whoever made the
-commit. Trailers use each person's GitHub `noreply` address when they have linked
-GitHub.
+1. In the right panel, select **Changes**.
+2. Enter a commit message.
+3. Select **Commit**, or press **⌘Enter**. This commits all changes in the session's worktree.
 
-This works through a `prepare-commit-msg` hook that Greenhouse sets on the
-session's worktree only (`core.hooksPath`, scoped to that worktree). It runs the
-repository's own hooks first, Husky included, so pre-commit checks keep working,
-and it applies to `git commit` from terminals as well. Sessions created before
-this existed get the hook when they are restored from the archive.
+To amend the last commit, open the menu next to **Commit** and select **Amend last commit**.
 
-## Push and open a pull request
+Your commit carries your name and your GitHub `noreply` address. If you have not linked GitHub, it carries your Orchard name and email.
 
-The pull request button at the top right of the workspace changes as the work
-moves along:
+## 2. Open a pull request
+
+Select **Create PR** in the title bar. To open a draft, open the menu next to the button and select **Create draft pull request**.
+
+Greenhouse opens a pull request from the session's branch into its base branch. The base branch is the branch that the session started from, or the repository's default branch. If the branch has no upstream, or has unpushed commits, Greenhouse pushes it first. Uncommitted changes are not included.
+
+To push without opening a pull request, select **Push only** in the same menu.
+
+The button then shows the pull request's state:
 
 | State               | Button          | Menu                                                                      |
 | ------------------- | --------------- | ------------------------------------------------------------------------- |
-| No pull request yet | **Create PR**   | Create pull request, Create draft pull request, Push only, Deploy preview |
-| Pull request open   | **View PR #12** | Push only, Squash and merge, Deploy preview                               |
-| Pull request merged | **Merged #12**  | Push only, Deploy preview                                                 |
+| No pull request     | **Create PR**   | **Create pull request**, **Create draft pull request**, **Push only**, **Deploy preview** |
+| Pull request open   | **View PR #12** | **Push only**, **Squash and merge**, **Deploy preview**                    |
+| Pull request merged | **Merged #12**  | **Push only**, **Deploy preview**                                         |
 
-**Push only** pushes the session branch to `origin`. **Create PR** opens a pull
-request from the session branch into its base branch (the branch it was created
-from, or the repository's default), titled after the session. **Create draft pull
-request** opens it as a draft.
+## 3. Review checks
 
-You do not need to push first. When the branch has no upstream on `origin` yet,
-or has commits that are not pushed, creating the pull request pushes it, as you
-and with your GitHub token, and then opens the pull request. Uncommitted changes
-are not included: commit them first.
+Select **Checks** in the right panel. The tab shows the pull request's state and every check on its latest commit. It refreshes every 20 seconds while the tab is open.
 
-The pull request's number, URL and state are kept on the session, so the session
-row, the share link and the CLI all show it.
+For a failed GitHub Actions job, the tab shows the last 60 lines of its log.
 
-## Checks
+**Fix with agent** queues one prompt with the failed checks and their log excerpts. The prompt goes to the session's chat.
 
-The **Checks** tab shows the pull request (open, draft, merged or closed, and
-whether GitHub considers it mergeable) and every check on its latest commit: GitHub
-Actions runs, other check runs and commit statuses. It refreshes every 20 seconds
-while the tab is visible. Checks are read with your GitHub access, or the host's
-when you have not linked GitHub.
+Greenhouse reads checks with your GitHub access, or with the host's access if you have not linked GitHub.
 
-For a failing GitHub Actions job, the tab shows the end of the job's log (the last
-60 lines). **Fix with agent** queues one prompt with the failing checks and their
-log excerpts, asking the agent to find the cause and fix it. It goes into the
-session's chat like any other prompt.
+## 4. Merge
 
-If there is no pull request yet, the tab says so; checks appear once one exists.
+Open the pull request menu and select **Squash and merge**. Greenhouse merges the pull request on GitHub with a squash commit.
 
-## Merge
+The merge endpoint also accepts `{"method": "rebase"}`. Greenhouse does not offer merge commits.
 
-**Squash and merge** merges the pull request on GitHub with a squash commit and
-marks the session **done**. The API also accepts a rebase merge
-(`{"method": "rebase"}`); merge commits are not offered.
+## 5. Archive the session
 
-After a merge, archive the session to remove its worktree. The branch stays, and
-any [preview environment](/greenhouse/previews/#teardown) is torn down with it.
+Archive the session to remove its worktree. The branch stays, unless **Delete branch on archive** is on in **Settings** > **Git**. Archiving also removes the session's [preview environment](/greenhouse/previews/#remove-a-preview-environment).
 
-## From the CLI and agents
+## Commit attribution
 
-```bash
-orchard sandbox session list leafy
-```
+When other people prompted the agent in a session, commits from the **Changes** tab carry a `Co-authored-by` trailer for each of them.
 
-lists each session's branch, diffstat and pull request. Agents connected over MCP
-can open a pull request with `create_sandbox_session_pr`; see
-[Automating Greenhouse](/greenhouse/automation/).
+Commits that the agent makes belong to the host, because the agent runs as the host. Each carries a `Co-authored-by` trailer for everyone else who prompted the agent in that turn.
+
+Greenhouse adds these trailers with a `prepare-commit-msg` hook that it sets on the session's worktree only. The hook runs the repository's own hooks first, and it also applies to `git commit` in a terminal.
+
+## Commit options in the API
+
+The commit endpoint, `POST /apiv1/sandboxes/:id/git/commit`, can also commit only tracked files or a list of files, and can add a sign-off line. `POST /apiv1/sandboxes/:id/git/uncommit` undoes the last commit.
+
+## Related resources
+
+- [Share a machine](/greenhouse/sharing/#git-identity): Learn how Greenhouse attributes commits and pushes.
+- [Automate Greenhouse](/greenhouse/automation/): Open a pull request with `create_sandbox_session_pr`.

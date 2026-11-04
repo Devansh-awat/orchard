@@ -1,0 +1,159 @@
+---
+title: Share a machine
+description: Invite people in your organization to a Greenhouse machine as guests, review what each role can do, and create read-only links to a session.
+sidebar:
+  order: 10
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+Work with other people on a machine, or show them a session's work. You can share in two ways:
+
+- **Invite someone to the machine** as a guest or a read-only guest. They open the workspace and work alongside you.
+- **Create a read-only link** to one session or to every session. The person sees the transcript and the diff, and has no other access to the machine.
+
+:::caution
+A guest with a terminal can read every credential on the machine. These include your agent tokens and the agent's Orchard token. Refer to [What sharing gives your guests](#what-sharing-gives-your-guests) before you invite anyone.
+:::
+
+## Roles
+
+| Role            | Label in the workspace | Who                                                                                     |
+| --------------- | ---------------------- | --------------------------------------------------------------------------------------- |
+| Host            | **Host**               | The person who created the machine. Superadmins have the same access.                    |
+| Guest           | **Guest**              | Someone the host invited with **Collaborate** access.                                    |
+| Read-only guest | **Read only**          | Someone the host invited with **Watch** access.                                          |
+| Org admin       | None                   | An admin of the machine's organization who was not invited.                              |
+
+An org admin who is also invited has the invited role, and can also start, stop, and delete the machine.
+
+### What each role can do
+
+| Action                                                                  | Host | Guest | Read-only guest | Org admin |
+| ----------------------------------------------------------------------- | :--: | :---: | :-------------: | :-------: |
+| See the machine in lists: name, status, runner, owner                   | Yes  |  Yes  |       Yes       |    Yes    |
+| See sessions, transcripts, comments, diffs, files, and who is here      | Yes  |  Yes  |       Yes       |    No     |
+| Watch other people's terminals and script output                        | Yes  |  Yes  |       Yes       |    No     |
+| Open previews                                                           | Yes  |  Yes  |       Yes       |    No     |
+| Prompt the agent and send reviews                                       | Yes  |  Yes  |       No        |    No     |
+| Comment with `/chat`                                                    | Yes  |  Yes  |       No        |    No     |
+| Edit, create, rename, and delete files                                  | Yes  |  Yes  |       No        |    No     |
+| Open their own terminals                                                | Yes  |  Yes  |       No        |    No     |
+| Start and stop run scripts                                              | Yes  |  Yes  |       No        |    No     |
+| Create, archive, and delete sessions and their branches                 | Yes  |  Yes  |       No        |    No     |
+| Commit                                                                  | Yes  |  Yes  |       No        |    No     |
+| Push, pull, open pull requests, and merge, with their own GitHub account | Yes  |  Yes  |       No        |    No     |
+| Start the machine                                                       | Yes  |  Yes  |       No        |    Yes    |
+| Stop or delete the machine, and retry failed changes                    | Yes  |  No   |       No        |    Yes    |
+| Connect over SSH and open editor links                                  | Yes  |  No   |       No        |    No     |
+| Invite people, change roles, and remove people                          | Yes  |  No   |       No        |    No     |
+| Change machine settings and clone repositories                          | Yes  |  No   |       No        |    No     |
+| Attach projects and deploy preview environments                         | Yes  |  No   |       No        |    No     |
+| Create and revoke read-only links, and fork the machine                 | Yes  |  No   |       No        |    No     |
+
+The server enforces these rules on each request, each terminal, and each live message. The server drops a read-only guest's edits to a shared file.
+
+Anyone can leave a machine they were invited to.
+
+## Invite someone to a machine
+
+You must be the host. You can invite people in the machine's organization only, and a machine can be shared with up to 50 people.
+
+1. In the workspace title bar, select **Share**.
+2. Select **Invite people**.
+3. Enter a name or an email address, and select the person. You can add several people.
+4. Select **Next**.
+5. Select **Collaborate** or **Watch**.
+6. Select **Invite**.
+
+The first time the person opens the machine, a notice states whose machine it is. They select **Continue** to proceed.
+
+To change a role or remove someone, select **Share**, then open the menu next to their name. A role change or removal takes effect immediately. Their open workspace disconnects, and their terminals and previews stop within seconds.
+
+**Copy link for guests** in the session menu copies a link to the session. The link works only for people who are on the machine.
+
+## What sharing gives your guests
+
+- **The agent is the host's.** A guest's prompts run on the host's Claude subscription, inside the host's machine. A guest can ask the agent to do anything the agent can do.
+- **The files are the host's.** A guest with a terminal can read anything on the machine. This includes agent tokens, [attached project](/greenhouse/projects/) env files, and the GitHub credential the agent uses.
+- **Terminals can be watched.** The host and guests can watch each other's terminals.
+- **The agent's Orchard access is the host's.** The agent holds an Orchard MCP token for the host, limited to the machine's organization. A guest can read this token and act as the host in that organization until the token changes.
+- **A guest's GitHub token is used on the host's machine.** A push from the workspace receives the token for that one command. In a guest's own terminal, the token stays in the shell's environment while the terminal is open. The host, other guests, and the agent can read it there.
+- **Org admins cannot look in.** An org admin can see that the machine exists, and can start, stop, or delete it. An org admin cannot see its sessions, transcripts, files, diffs, terminals, previews, or members without an invitation. Superadmins have host access.
+
+When you remove a guest or make them read-only, Orchard does the following:
+
+1. It ends their terminals.
+2. It revokes the agent's Orchard token and issues a new one. The agent's Orchard tools pick up the new token when the machine next starts.
+3. It changes the agent server password and the SSH bridge token. The agent server restarts, which stops any agent run in progress.
+
+Removal does not undo anything the guest already changed or copied. If you no longer trust someone who had access, delete the machine and create a new one.
+
+## Git identity
+
+Git operations through Greenhouse use the identity of the person who runs them.
+
+- **Commits** from the **Changes** tab use your name and your GitHub `noreply` address, or your Orchard name and email if you have not linked GitHub.
+- **Pushes, pulls, pull requests, and merges** use your own GitHub token. Greenhouse passes it to that one command through an inline credential helper, and does not store it on the machine.
+- **Your terminals** have your git identity and a credential helper for your GitHub token, so `git commit` and `git push` in them are yours.
+- **The agent** runs as the host. Its commits and pushes are the host's, with a `Co-authored-by` trailer for each person who prompted it in that turn.
+
+Each prompt shows who sent it, including prompts from the CLI, MCP, Slack, and issues.
+
+## Collaboration features
+
+| Feature       | Behavior                                                                                                                       |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Presence      | Avatars in the title bar show who is on the machine. Session rows, tabs, and the file tree show where each person is.          |
+| Follow        | Select someone's avatar to follow their session, tab, and file. Select it again to stop.                                       |
+| Typing        | While someone writes a prompt, you see their draft above the composer. Drafts are not stored.                                  |
+| Comments      | `/chat <message>` posts to the people in the session and does not prompt the agent. Comments stay with the session.             |
+| Co-editing    | Two people with the same file open edit it together. The agent's edits on disk merge in.                                       |
+| Notifications | When the agent finishes a turn, the host and everyone who prompted the session in the last six hours get a notification, unless they are viewing the machine. |
+
+## Create a read-only link
+
+A read-only link shows the latest messages of a session's agent chat, its changed files, and its diff. It does not give access to files, terminals, previews, or machine controls.
+
+You must be the host. The person who opens the link must be signed in to Orchard and be a member of the machine's organization. Organization guests cannot open it.
+
+<Tabs syncKey="interface">
+<TabItem label="Dashboard">
+
+1. In the workspace title bar, select **Share**.
+2. Select **Read-only link**.
+3. If you have a session open, select **This session** or **Every session**.
+4. Under **Expires after**, select **1 day**, **7 days**, or **30 days**.
+5. Select **Create link**.
+
+To revoke a link, select the **X** next to it in the same sheet.
+
+</TabItem>
+<TabItem label="CLI">
+
+```bash
+orchard sandbox share create my-machine --session fix-login --expires-in 48
+```
+
+`--expires-in` is a number of hours from 1 to 720. The default is 168. Omit `--session` to share every active session.
+
+To list and revoke links, run:
+
+```bash
+orchard sandbox share list my-machine
+orchard sandbox share revoke my-machine <link-id>
+```
+
+</TabItem>
+</Tabs>
+
+Orchard stores only a hash of the link's token. The CLI prints the token once.
+
+The link has the form `https://<your orchard>/share/sandbox#<token>`. The token follows the `#`, so browsers do not send it to the server in the request URL.
+
+A machine can have up to 50 active links. A revoked link stops working on the next request. Deleting the machine stops all of its links. The audit log records the use of each link.
+
+## Related resources
+
+- [Run Greenhouse](/operate/greenhouse/#security-model): Review the security model for operators.
+- [Commit, push, and merge](/greenhouse/pull-requests/): Commit and open pull requests.

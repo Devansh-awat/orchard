@@ -1,92 +1,73 @@
 ---
 title: Greenhouse
-description: An AI development environment built into Orchard, with parallel agent sessions on their own git worktrees.
+description: Greenhouse is an Orchard graft that runs coding agents on cloud machines, with each session on its own git worktree. It is available on instances where an operator has installed the greenhouse graft.
 sidebar:
   order: 1
   label: Overview
 ---
 
-Greenhouse is Orchard's AI development environment. You get a cloud machine with
-your repositories on it, and you run coding agents against those repositories in
-parallel: each agent works on its own branch in its own git worktree, so they
-never step on each other. You review what they did in a full IDE in the browser,
-or open the same machine in VS Code, Cursor or Zed.
+Run coding agents on cloud machines that your Orchard instance manages.
 
-It is for writing code, not for serving traffic. When something is ready, push it,
-open a pull request, or [deploy the session as a preview
-environment](/greenhouse/previews/#deploy-a-session-as-a-preview-environment).
+Greenhouse is a first-party [graft](/grafts/overview/) for Orchard. It gives you an isolated Linux machine with your repositories on it. Each agent session works on its own branch in its own git worktree, so several sessions can run on one machine at the same time. You review the changes in a browser workspace, or in a desktop editor over SSH.
 
-The product is called Greenhouse in the dashboard. The API, the CLI and the MCP
-tools call a machine a **sandbox** (`/sandboxes`, `orchard sandbox`,
-`list_sandboxes`), so both words refer to the same thing.
+Greenhouse is for writing code. To serve traffic, deploy the code to Orchard as an app.
 
-## Machines, sessions and chats
+Greenhouse is available when an operator installs the `greenhouse` graft on your instance. If the instance has PostHog configured, your account also needs the `greenhouse` feature flag. For more information, refer to [Run Greenhouse](/operate/greenhouse/).
 
-Three nested things, and it helps to keep them apart.
+## Get started
 
-| Thing       | What it is                                                                                                                                         | Lives                                       |
-| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| **Machine** | An isolated Linux box with a persistent home directory, its own repositories and its own agent server. Start it, stop it, share it, fork it.       | One per sandbox, on a [runner](#runners)    |
-| **Session** | One piece of work: a git worktree on a fresh branch `orchard/<slug>`, an agent working in it, its diff, its pull request and its preview.          | `~/.worktrees/<repo>/<slug>` on the machine |
-| **Chat**    | One conversation with the agent inside a session. A session starts with one chat and can have more as tabs; they all share the session's worktree. | The agent server on the machine             |
+- [Get started](/greenhouse/getting-started/): Create a machine and start your first session.
 
-A machine is a computer, not a checkout. Clone as many repositories into it as
-you like; each lands in `~/<repo>` (the home directory is `/persist/home`). A
-session always belongs to one repository and branches off it.
+## Terms
 
-### One worktree per session
+| Term    | Definition                                                                                                                                     |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Machine | An isolated Linux environment with a persistent home directory. It holds your repositories and sessions. The person who creates it is its **host**. |
+| Session | One piece of work: a git worktree on a new branch, an agent working in it, and its diff, pull request, and preview.                             |
+| Chat    | One conversation with the agent in a session. A session can have several chats. All of them share the session's worktree.                       |
+| Runner  | The system a machine runs on: Kubernetes or Vercel. You choose the runner when you create the machine.                                          |
 
-Creating a session runs `git worktree add` against the repository's default
-branch (or a base branch you pick), on a branch named `orchard/<slug>`. Three
-sessions on the same repository are three directories and three branches, so
-three agents can run side by side, each with its own diff, its own terminals and
-its own dev server.
+The API, the CLI, and the Model Context Protocol (MCP) tools call a machine a **sandbox**. For example, `orchard sandbox list` lists your machines.
 
-Archiving a session removes the worktree and keeps the branch. Restoring it puts
-the worktree back. Deleting a session removes the worktree and, if you ask, the
-branch too.
+## Coding agents
 
-## The agent
+A session runs one of these agents. You pick the agent in the model menu of the chat.
 
-Every machine runs an [opencode](https://opencode.ai) server, and that is the
-agent the chat talks to. It uses the Claude Code token you store under
-**User settings → Sandbox**, so the agent runs on your Claude subscription.
-Claude Code and Codex are installed as command-line tools as well, for when you
-would rather drive them from a terminal.
+| Agent       | CLI value                | Credentials                                                       |
+| ----------- | ------------------------ | ----------------------------------------------------------------- |
+| opencode    | `opencode`, `acp:opencode` | Your Claude token and OpenAI key, if set, and opencode's free models |
+| Claude Code | `acp:claude`             | Your Claude token                                                 |
+| Codex       | `acp:codex`              | A ChatGPT sign-in or an OpenAI key                                |
+| fx          | `acp:fx`                 | A Vercel AI Gateway, ChatGPT, or Grok sign-in, or an AI Gateway key |
 
-The agent works on real files with real git. Its edits show up in the session's
-diff as it goes, and anything you or a teammate change in the editor is on the
-same disk.
+The default agent is `opencode`. An operator can change the default with `SANDBOX_DEFAULT_AGENT`.
 
 ## Runners
 
-Where a machine runs is decided when it is created, by its **runner**. An instance
-offers one or both:
+An instance offers one or both runners.
 
-| Runner         | What a machine is                                                                                   | Stop keeps                | Previews                         |
-| -------------- | --------------------------------------------------------------------------------------------------- | ------------------------- | -------------------------------- |
-| **Kubernetes** | A pod on the instance's own cluster, a Kata VM when the operator has Kata, with a persistent volume | The home volume           | Private, through Orchard's proxy |
-| **Vercel**     | A Vercel Sandbox microVM on the operator's Vercel account                                           | A snapshot of the machine | Public URLs on Vercel's domain   |
+| Runner     | A machine is                                                   | A stopped machine keeps             | Previews                                     |
+| ---------- | -------------------------------------------------------------- | ----------------------------------- | -------------------------------------------- |
+| Kubernetes | A pod on the cluster, in a Kata VM if the operator configured Kata | Its home volume                     | Private, through the Orchard server          |
+| Vercel     | A Vercel Sandbox on the operator's Vercel account              | Its drive and a filesystem snapshot | Public URLs that anyone with the link can open |
 
-The new machine sheet shows only the runners that are available, with the
-instance default selected. [Machines](/greenhouse/machines/) covers the
-differences in detail.
+For more information, refer to [Machines](/greenhouse/machines/).
 
-## Isolation
+## Security
 
-A machine cannot reach your cluster. On Kubernetes it gets internet egress only:
-no other workloads, no cluster services, no cloud metadata, no other machines.
-There is no ingress at all; SSH, terminals and previews are tunnelled through the
-Orchard server, which checks who you are on every connection.
+A machine holds the credentials of its host, including agent tokens and GitHub access. Share a machine only with people you trust with those credentials. For more information, refer to [Share a machine](/greenhouse/sharing/).
 
-What a machine **does** hold is the credentials of the person who owns it: their
-Claude token, their GitHub access for the agent, and anything they put in it.
-Treat a machine you share accordingly. [Sharing](/greenhouse/sharing/) spells
-out exactly what a guest gets.
+On the Kubernetes runner, a machine has internet egress only. It cannot reach cluster services, other machines, or cloud metadata. Nothing outside the cluster can connect to it directly. SSH, terminals, and previews go through the Orchard server.
 
-## Where to go next
+## Guides
 
-- [Get started](/greenhouse/getting-started/): a machine and a first session in a few minutes.
-- [The workspace](/greenhouse/workspace/): the IDE, the chat thread and the keyboard shortcuts.
-- [Open in your editor](/greenhouse/editors/): VS Code, Cursor and Zed over SSH.
-- [Sharing and multiplayer](/greenhouse/sharing/): hosts, guests and what each can do.
+- [Workspace](/greenhouse/workspace/): The browser workspace, slash commands, and keyboard shortcuts.
+- [Connect an editor over SSH](/greenhouse/editors/): Open a session in VS Code, Cursor, or Zed.
+- [Configure setup and run scripts](/greenhouse/scripts/): Prepare each new worktree and start your app.
+- [Preview a session](/greenhouse/previews/): Open a running dev server, or deploy a session as a preview environment.
+- [Commit, push, and merge](/greenhouse/pull-requests/): Open a pull request and follow its checks.
+- [Attach an Orchard project](/greenhouse/projects/): Load a project's variables into a machine.
+- [Share a machine](/greenhouse/sharing/): Invite people and create read-only links.
+- [Start sessions from GitHub, Linear, and Slack](/greenhouse/integrations/): Start a session from an issue or a message.
+- [Automate Greenhouse](/greenhouse/automation/): Use MCP tools, the CLI, and the API.
+- [Troubleshooting Greenhouse](/greenhouse/troubleshooting/): Fix common failures by symptom.

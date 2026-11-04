@@ -1,189 +1,131 @@
 ---
 title: Machines
-description: Runners, lifecycle, what persists, forking and the limits a machine runs under.
+description: A Greenhouse machine is a Linux environment that belongs to one host and one organization. Learn what each runner provides, what persists, and which limits apply.
 sidebar:
   order: 3
 ---
 
-A machine is the box your sessions run on. It belongs to the person who created
-it (its **host**) and to that person's organization.
+A machine is the Linux environment that your sessions run on. It belongs to the person who created it, called the **host**, and to that person's organization.
 
 ## Status
 
-| Status       | Meaning                                                                        |
-| ------------ | ------------------------------------------------------------------------------ |
-| **Creating** | Just created; the runner is provisioning it.                                   |
-| **Starting** | Coming up, or resuming after a stop.                                           |
-| **Running**  | Ready. Sessions, terminals, SSH and previews work.                             |
-| **Stopping** | Shutting down. Its disk or snapshot is kept.                                   |
-| **Stopped**  | Not running and not costing compute. Start it to carry on.                     |
-| **Deleting** | Being removed with everything on it.                                           |
-| **Error**    | Something failed. The message says what; starting it again is usually the fix. |
+| Status   | Meaning                                                                   |
+| -------- | ------------------------------------------------------------------------- |
+| Creating | The runner is provisioning the machine.                                   |
+| Starting | The machine is booting, or resuming after a stop.                         |
+| Running  | The machine is ready. Sessions, terminals, SSH, and previews work.        |
+| Stopping | The machine is shutting down. Orchard keeps its disk or snapshot.         |
+| Stopped  | The machine is not running.                                               |
+| Deleting | Orchard is removing the machine and everything on it.                     |
+| Error    | The machine failed. The status message states why.                        |
 
-Next to the status, a machine can show **Applying** while Orchard is still
-carrying out a change you asked for (starting, stopping, syncing credentials), and
-an **apply error** if that change failed and is being retried. See
-[Troubleshooting](/greenhouse/troubleshooting/#applying-and-apply-errors).
+A machine can also show **Applying** while Orchard carries out a change, or **Apply failed** if the change did not succeed. For more information, refer to [Troubleshooting Greenhouse](/greenhouse/troubleshooting/#a-machine-shows-apply-failed).
 
 ## Runners
 
+The runner is fixed when you create the machine.
+
 ### Kubernetes
 
-The machine is a pod in the instance's own cluster, managed through the
-[agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) controller. On
-clusters with Kata Containers each machine is a lightweight VM, so code inside it
-does not share a kernel with anything else.
+The machine is a pod on the instance's cluster, managed by the [agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) controller. On clusters with Kata Containers, each machine is a lightweight virtual machine with its own kernel.
 
-- **Disk.** A persistent volume (10 GiB unless your operator changed it) mounted
-  at `/persist`. Your home directory, repositories, worktrees, agent history and
-  SSH host keys live there and survive every stop and start.
-- **Network.** Internet egress only. Nothing on the internet can reach the
-  machine; Orchard's server tunnels SSH, terminals and previews to it.
-- **Previews.** Private. A preview URL works only for people with access to the
-  machine (see [Previews and ports](/greenhouse/previews/)).
-- **Forking.** Available when the cluster's storage supports volume snapshots.
+- **Disk:** A persistent volume mounted at `/persist`, 10 GiB by default. It holds your home directory, repositories, worktrees, agent history, and SSH host keys. A stop does not remove it. The rest of the root filesystem is not kept across a stop.
+- **Network:** Internet egress only. Inbound connections come only from the Orchard server.
+- **Previews:** Private to people with access to the machine.
+- **Forking:** Available when the cluster can snapshot the machine's storage.
 
 ### Vercel
 
-The machine is a [Vercel Sandbox](https://vercel.com/docs/vercel-sandbox) on the
-operator's Vercel account.
+The machine is a [Vercel Sandbox](https://vercel.com/docs/vercel-sandbox) on the operator's Vercel account.
 
-- **Disk.** Two layers. `/persist` (your home directory, repositories, worktrees,
-  agent history and SSH host keys) lives on a Vercel drive that belongs to the
-  machine alone (50 GiB unless your operator changed it). The drive is kept until
-  the machine is deleted, however long the machine sits stopped, and it survives
-  even if Vercel loses the sandbox itself: the next start puts the machine on a new
-  sandbox with the same drive. Everything outside `/persist` is kept in snapshots:
-  stopping the machine snapshots the rest of its filesystem, so packages installed
-  with `apt` or `npm -g` and anything under `/etc`, `/usr/local` and `/root` come
-  back when it starts. Orchard keeps the last three snapshots and they never
-  expire. Running processes do not come back; Orchard restarts its own services on
-  start, and your dev servers need starting again.
-- **Older machines.** A machine created before drives existed keeps its home in its
-  snapshot until its next start. That start copies the home onto a new drive
-  before anything else runs, and the machine uses the drive from then on. The old
-  copy stays in the snapshot, untouched.
-- **Start time.** A new machine is ready in about 15 to 20 seconds. A stopped
-  machine resumes in about 7 seconds, and stopping takes about 7 seconds.
-- **Time limit.** Vercel stops a sandbox after a timeout (60 minutes unless your
-  operator changed it). Orchard extends it in 30 minute steps while the machine is
-  in use. If Vercel stops it anyway, the machine shows **Stopped** with the message
-  `Stopped by provider timeout`; start it again to resume.
-- **Network.** Ports are reachable from the internet by design. The agent server
-  and the SSH bridge require a per-machine secret; preview ports are public URLs.
-- **GitHub.** The GitHub token used by the agent is injected by Vercel's egress
-  proxy on requests to `github.com` and `api.github.com`, so it is never stored
-  inside the machine.
-- **Previews.** Public. Anyone with the URL can open them.
-- **Forking.** Copies the last saved snapshot and forks the machine's drive into a
-  new drive for the copy, and is ready in a few seconds. The fork gets its own
-  agent password and SSH bridge token. Drive forks are a Vercel feature not every
-  plan has; without it, machines with a drive cannot be forked and the option is
-  hidden.
+- **Disk:** `/persist` is a Vercel drive that belongs to the machine, 50 GiB by default. Orchard deletes the drive only when you delete the machine. If Vercel loses the sandbox, the next start creates a new sandbox with the same drive.
+- **Snapshots:** Stopping the machine snapshots the rest of its filesystem. Orchard keeps the last three snapshots. They do not expire.
+- **Processes:** Running processes do not survive a stop. Orchard restarts its own services on the next start. You restart your dev servers.
+- **Time limit:** Vercel stops a sandbox after a timeout, 60 minutes by default. Orchard extends the timeout in 30-minute steps while the machine is in use. If Vercel stops the machine, it shows **Stopped** with the message `Stopped by provider timeout`.
+- **Network:** Ports are reachable from the internet. The agent server and the SSH bridge require a per-machine secret. Preview ports are public.
+- **GitHub:** Vercel's egress proxy adds the host's GitHub token to requests to `github.com` and `api.github.com`. The token is not stored in the machine.
+- **Forking:** Requires Vercel drive forks on the operator's plan. Without them, the fork option is hidden for machines with a drive.
 
 ## Image and tools
 
-A new machine starts from Orchard's machine image on Kubernetes and Vercel's
-universal image on Vercel, unless your operator picked another. The Orchard image
-already has `sshd`, `git`, `tmux`, `ripgrep`, Node.js 22 and every agent: Claude
-Code, opencode, fx and Codex. On any other image Orchard installs whatever is
-missing on first boot and leaves the rest alone. The `dev` user has passwordless `sudo`, so install anything else
-you need.
+A new machine starts from Orchard's machine image on Kubernetes, and from Vercel's universal image on Vercel, unless the operator selected another image.
+
+Orchard's image includes `sshd`, `git`, `tmux`, `ripgrep`, Node.js 22, Claude Code, opencode, fx, and Codex. On another image, Orchard installs what is missing on boot.
+
+Your shell runs as the `dev` user. The `dev` user has passwordless `sudo`.
 
 ## Repositories
 
-Repositories are cloned into the home directory as `~/<name>`. The one you gave
-at creation is cloned on first boot. The host adds more from the sidebar (**Add
-repository**) or the CLI:
+Repositories live in the home directory as `~/<name>`. The home directory is `/persist/home`.
+
+To add a repository, select **Add repository** in the sidebar. The sheet has three modes: **Clone**, **New**, and **Open folder**. Only the host can use it. Guests can start a new empty repository from the home page.
+
+To add a repository from the CLI, run:
 
 ```bash
-orchard sandbox repo add leafy https://github.com/you/api
-orchard sandbox repo list leafy
+orchard sandbox repo add my-machine https://github.com/acme/api
 ```
 
-Clones run in the background and log to `~/.clone.log`. A failed clone never
-stops the machine. Clones use the host's GitHub access, so private repositories
-work once the host has linked GitHub.
+Clones use the host's GitHub access and run in the background. The repository named at creation logs to `~/.clone.log`.
 
-## Machine setup script
+## Setup script
 
-A machine can carry a setup script that runs **once**, as `dev`, on its first
-boot: install a language runtime, configure dotfiles, log in to a registry. Its
-output goes to `~/.setup.log`, and once it succeeds it never runs again on that
-machine. Set it when creating the machine from the CLI (`--setup file.sh`) or
-change it later in the machine settings.
+The setup script of a machine runs as `dev` on first boot. It logs to `~/.setup.log`. It runs again on later boots until it succeeds once.
 
-For commands that should run for **every session** of a repository, such as
-installing dependencies in a fresh worktree, use
-[`.orchard/greenhouse.json`](/greenhouse/scripts/) instead.
+Use it for language runtimes, global tools, and dotfiles. To edit it, go to **Settings** > **Machine**. From the CLI, use `orchard sandbox update --setup`.
 
-## Start, stop and delete
+To run commands for each session of a repository, use [`.orchard/greenhouse.json`](/greenhouse/scripts/) instead.
+
+## Agent credentials
+
+Your Claude token, OpenAI key, and AI Gateway key are stored on your account. Every machine you host uses them. When you change one, Orchard syncs it to those machines. Guests do not need their own credentials, because they run the host's agent.
+
+Some sign-ins stay on one machine instead of your account. These are the ChatGPT sign-in for Codex, and the fx sign-ins.
+
+## Actions by role
 
 | Action | Host | Guest | Read-only guest | Org admin |
 | ------ | ---- | ----- | --------------- | --------- |
 | Start  | Yes  | Yes   | No              | Yes       |
 | Stop   | Yes  | No    | No              | Yes       |
 | Delete | Yes  | No    | No              | Yes       |
+| Fork   | Yes  | No    | No              | No        |
 
-Stopping kills running agents, terminals and dev servers but keeps everything on
-disk (on Vercel, on the drive and in the snapshot). Sessions and their branches are all there on the next
-start.
+For all permissions, refer to [Share a machine](/greenhouse/sharing/#what-each-role-can-do).
 
-**Deleting a machine deletes everything on it.** Anything not pushed is gone.
-Push your branches first. On Vercel that includes the machine's drive and its
-snapshots: once the sandbox is deleted, Orchard deletes the drive too, and there
-is no way to get either back. Deleting is the only thing that ever removes a
-drive; stopping, starting, timeouts and forks never do.
+A stop ends running agents, terminals, and dev servers. Files on disk remain.
+
+Deleting a machine removes everything on it, including unpushed branches. On Vercel, it also removes the drive and snapshots. You cannot recover them.
 
 ## Forking
 
-Forking makes a new machine you own with the same disk and the same sessions:
-repositories, worktrees, branches, installed packages and settings. Use it to try
-something risky without touching the original, or to give an experiment its own
-box.
+Forking creates a new machine with a copy of the disk and the same sessions. The host of the source machine becomes the host of the copy.
 
-Only the host can fork a machine, because the copy carries their home directory
-and everything stored in it. The fork counts against your machine limit.
+Only the host can fork a machine, because the copy contains the host's home directory and credentials. The fork counts against your machine limit.
 
-```bash
-orchard sandbox fork leafy --name leafy-experiment
-```
+| Runner     | How the copy is made                                                                                                                       |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Kubernetes | A volume snapshot of the home volume, restored into the volume of the new machine. A forked machine has 30 minutes to start, instead of 10. |
+| Vercel     | A fork of the last saved snapshot and a fork of the drive. Stop the machine first to include recent changes.                                |
 
-The default name is `<name>-fork`. Sessions come across with their worktrees and
-branches; each starts a fresh agent chat on first use.
-
-| Runner     | How it copies                                                                                                                                                            |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Kubernetes | A volume snapshot of the home volume, restored into the new machine's volume. Only offered when the cluster can snapshot that storage.                                   |
-| Vercel     | A fork of the last saved snapshot plus a fork of the machine's drive. Stop the machine first to include recent changes. Needs Vercel drive forks on the operator's plan. |
-
-On Kubernetes a copy can take a while to start, because the volume has to be
-restored first. A forked machine gets 30 minutes to come up before it is marked
-as failed, instead of the usual 10, and the snapshot is deleted once the copy is
-running on its restored volume.
-
-## Agent credentials
-
-Your Claude Code token and OpenAI key are stored once on your account and used by
-every machine you host. Changing or clearing them queues a credential sync for
-each of those machines; a shell that was already open keeps the old value until
-the machine restarts. Guests never need their own: they run the host's agent.
+To fork a machine, open the machine menu and select **Fork machine**. From the CLI, run:
 
 ```bash
-orchard sandbox credentials status
-orchard sandbox credentials clear --claude
+orchard sandbox fork my-machine --name my-machine-experiment
 ```
+
+The default name is `<name>-fork`.
 
 ## Limits
 
-Your operator sets these; the defaults are below.
+The operator sets these limits. The following values are the defaults.
 
-| Limit               | Default    | What happens                                                                                                                                  |
-| ------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Machines per person | 1          | Creating or forking past it is refused. Admins can raise it per person; superadmins have no cap.                                              |
-| Idle stop           | 60 minutes | A running machine with no terminal or SSH activity for this long is stopped. A working agent counts as activity, so long agent runs are safe. |
-| Maximum lifetime    | 168 hours  | A machine running this long since its last start is stopped, active or not. It is not deleted.                                                |
-| Shared with         | 50 people  | Per machine.                                                                                                                                  |
-| Active share links  | 50         | Per machine.                                                                                                                                  |
+| Limit               | Default    | Behavior                                                                                                                       |
+| ------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Machines per person | 1          | Creating or forking past the limit fails. Instance admins can change the limit per person. Superadmins have no limit.           |
+| Idle stop           | 60 minutes | Orchard stops a running machine with no terminal or SSH activity for this long. A working agent counts as activity.             |
+| Maximum lifetime    | 168 hours  | Orchard stops a machine this long after its last start, whether or not it is active. Orchard does not delete it.               |
+| People per machine  | 50         | Fixed.                                                                                                                         |
+| Active share links  | 50         | Fixed, per machine.                                                                                                            |
 
-A stop by either limit is recorded in the audit log.
+The audit log records each stop caused by a limit.

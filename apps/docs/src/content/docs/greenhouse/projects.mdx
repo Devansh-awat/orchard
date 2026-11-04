@@ -1,0 +1,104 @@
+---
+title: Attach an Orchard project
+description: Load a project environment's variables and database URL into a Greenhouse machine as an env file. Only the host can attach a project, and the host needs edit access to it.
+sidebar:
+  order: 9
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+Give a machine the configuration that your deployed app uses. Attaching a project writes one of its environments into the machine as an env file that shells load.
+
+## Prerequisites
+
+- You are the host of the machine.
+- You have edit access to the project.
+- The project belongs to the machine's organization.
+
+## Attach a project
+
+<Tabs syncKey="interface">
+<TabItem label="Dashboard">
+
+1. Open the machine menu and select **Machine settings**.
+2. Under **Projects**, select **Attach**.
+3. Select a **Project** and an **Environment**.
+4. Select **Attach** to confirm.
+
+</TabItem>
+<TabItem label="CLI">
+
+```bash
+orchard sandbox link add my-machine storefront --env staging
+```
+
+If you omit `--env`, Greenhouse uses the project's default environment. To list attached projects, run `orchard sandbox link list my-machine`.
+
+</TabItem>
+</Tabs>
+
+A machine can have one environment per project. Attaching another environment of the same project replaces the first. The audit log records each attach and detach.
+
+## Use the variables
+
+Each attached project becomes a file:
+
+```text
+~/.config/orchard/env/<project-slug>.env
+```
+
+Login shells, terminals, and scripts load every file in that directory:
+
+```bash
+echo $STRIPE_PUBLISHABLE_KEY
+psql "$DATABASE_URL"
+```
+
+The file is readable only by the `dev` user. Orchard rewrites it on each sync, so do not edit it.
+
+When you change a variable on the environment, Orchard updates the file. Open shells keep the values they loaded. Open a new terminal to pick up changes.
+
+## File contents
+
+The file contains:
+
+- **Shared variables:** The environment's shared variables, as `KEY='value'` lines.
+- **`DATABASE_URL`:** The connection string of the environment's first managed database, if public access is on for that database. The connection uses TLS and the public address. If public access is off, the file has a comment instead.
+
+The file leaves out these values and adds a comment for each:
+
+- **Secret variables:** Orchard keeps secret values write-only. Set them on the machine yourself.
+- **Variables that change how tools run:** For example, `PATH`, `HOME`, `LD_PRELOAD`, `GIT_*`, `NODE_OPTIONS`, and `ANTHROPIC_BASE_URL`.
+
+If the environment defines its own `DATABASE_URL`, the file uses that value.
+
+## Who can read the values
+
+The host and guests can read the file, because they can open terminals on the machine. Attach only variables that you are comfortable sharing with those people.
+
+If the person who attached a project loses edit access to it, Orchard stops writing its variables to the machine.
+
+## Detach a project
+
+<Tabs syncKey="interface">
+<TabItem label="Dashboard">
+
+1. Open the machine menu and select **Machine settings**.
+2. Under **Projects**, select the **X** next to the project.
+
+</TabItem>
+<TabItem label="CLI">
+
+```bash
+orchard sandbox link remove my-machine storefront
+```
+
+</TabItem>
+</Tabs>
+
+Orchard removes the env file on the next sync.
+
+## Related resources
+
+- [Configure setup and run scripts](/greenhouse/scripts/): Use the variables in scripts.
+- [Share a machine](/greenhouse/sharing/): Review what guests can read.

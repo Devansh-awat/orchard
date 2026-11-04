@@ -1,99 +1,92 @@
 ---
-title: Automating Greenhouse
-description: Drive machines and sessions from MCP agents, the CLI and the API.
+title: Automate Greenhouse
+description: Control Greenhouse machines and sessions with Orchard's MCP tools, the Orchard CLI, and the REST API. Every interface acts as you, with the same roles as the dashboard.
 sidebar:
   order: 12
 ---
 
-Everything in the workspace has an API underneath, and the parts worth scripting
-are exposed through the [MCP server](/mcp/) and the [CLI](/cli/). Both act as you,
-with the same roles and permissions as the browser: a guest can prompt over MCP,
-a read-only guest cannot.
+Control machines and sessions from an agent or a script. The [MCP server](/mcp/), the [CLI](/cli/), and the [API](/api/) act as you, with the same roles as the dashboard. For example, a guest can prompt an agent over MCP, and a read-only guest cannot.
 
-## MCP tools
+## Use MCP tools
 
-An agent connected to Orchard's MCP server can work with Greenhouse through these
-tools. They are not in the default toolsets: connect with `?toolsets=default,greenhouse`
-(or `?toolsets=all`) to see them. The agent inside a machine is connected with
-`?toolsets=default,databases,greenhouse` already. Full parameter lists are in the generated
-[MCP tools reference](/reference/mcp-tools/#sandboxes).
+An agent connected to Orchard's Model Context Protocol (MCP) server can use these tools. For parameters, refer to the [MCP tools reference](/reference/mcp-tools/#greenhouse-graft).
 
-| Tool                             | Does                                                                                                              | Needs             |
-| -------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ----------------- |
-| `list_sandboxes`                 | Machines you host or were invited to, with status, runner and your role. Also your machine limit and the runners. | any role          |
-| `get_sandbox`                    | One machine: status, desired state, whether a change is still applying, runner, image, owner, your role.          | any role          |
-| `start_sandbox`                  | Start a stopped machine. Returns at once with `starting`; poll `get_sandbox`.                                     | guest or host     |
-| `stop_sandbox`                   | Stop a machine. Its disk is kept.                                                                                 | host or org admin |
-| `list_sandbox_sessions`          | Sessions with branch, diffstat, ahead and behind, activity and pull request.                                      | any role          |
-| `create_sandbox_session`         | New session on a running machine for a repository, optionally with a first prompt.                                | guest or host     |
-| `prompt_sandbox_session`         | Send a prompt to a session's agent, attributed to you.                                                            | guest or host     |
-| `get_sandbox_session_diff`       | Changed files with line counts and the unified diff (up to 200 KB), or one file's diff.                           | any role          |
-| `get_sandbox_session_transcript` | The latest messages of the session's chat as text, with who sent each prompt.                                     | any role          |
-| `create_sandbox_session_pr`      | Open a GitHub pull request (optionally a draft) for the session's branch, pushing it first when needed.           | see below         |
+| Tool                             | Action                                                                                                | Required role     |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------- |
+| `list_sandboxes`                 | Lists machines you host or were invited to, your machine limit, and the runners.                      | Any               |
+| `get_sandbox`                    | Returns one machine's status, desired state, runner, image, owner, and your role.                     | Any               |
+| `start_sandbox`                  | Starts a stopped machine. Returns `starting` immediately. Poll `get_sandbox` until it is running.      | Guest, host, or org admin |
+| `stop_sandbox`                   | Stops a machine. Its disk is kept.                                                                    | Host or org admin |
+| `list_sandbox_sessions`          | Lists sessions with branch, diffstat, activity, and pull request.                                     | Read-only guest or higher |
+| `create_sandbox_session`         | Creates a session on a running machine, optionally with a first prompt.                               | Guest or host     |
+| `prompt_sandbox_session`         | Sends a prompt to a session's agent, attributed to you.                                               | Guest or host     |
+| `get_sandbox_session_diff`       | Returns changed files and the unified diff of uncommitted work, up to 200 KB.                         | Read-only guest or higher |
+| `get_sandbox_session_transcript` | Returns the latest messages of the session's chat as text.                                            | Read-only guest or higher |
+| `create_sandbox_session_pr`      | Opens a pull request with your linked GitHub account, and pushes the branch first if needed.          | Guest or host     |
 
-Pull requests opened over MCP follow the same rule as in the browser: they use
-the GitHub account of the person the MCP connection belongs to. Push the branch
-first, or ask the agent to.
+These tools are on by default. If you set `toolsets` on the server URL, add `greenhouse` to keep them:
 
-A typical loop for an orchestrating agent: `list_sandboxes`, `start_sandbox` if
-needed, `create_sandbox_session` with a prompt, then poll
-`list_sandbox_sessions` until the session's activity is back to `idle`, read
-`get_sandbox_session_transcript` and `get_sandbox_session_diff`, and either
-prompt again or open a pull request.
+```text
+https://mcp.your-orchard-domain/?toolsets=deployments,logs,greenhouse
+```
 
-### The agent inside a machine
+If the instance has PostHog configured, accounts without the `greenhouse` feature flag do not see these tools.
 
-When the instance publishes its MCP server over HTTPS, each machine's opencode
-agent is configured with an `orchard` MCP server too, authenticated as the host.
-The agent in a machine can therefore look up the host's deployments, logs and
-databases while it works. Its access is exactly the host's; a guest prompting the
-agent reaches Orchard as the host through it, which is part of what
-[sharing a machine](/greenhouse/sharing/#what-sharing-gives-your-guests) means.
+To orchestrate a session, follow this sequence:
 
-## CLI
+1. Call `list_sandboxes`, and `start_sandbox` if needed.
+2. Call `create_sandbox_session` with a prompt.
+3. Poll `list_sandbox_sessions` until the session's activity is `idle`.
+4. Call `get_sandbox_session_transcript` and `get_sandbox_session_diff`.
+5. Prompt again, or call `create_sandbox_session_pr`.
 
-The CLI covers machines, sessions, sharing and SSH. Every command is listed with
-its flags in the generated [CLI reference](/reference/cli/#sandbox). Machines can
-be named by name, id or a unique id prefix; sessions by id or slug.
+### The agent on a machine
 
-| Command                                                                           | Does                                                                        |
-| --------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `orchard sandbox create [name] --repo <url> --runner <kubernetes\|vercel>`        | Create a machine. `--setup file.sh` sets the machine setup script.          |
-| `orchard sandbox list`, `get <name>`                                              | List machines, or show one.                                                 |
-| `orchard sandbox start <name>`, `stop <name>`, `delete <name>`                    | Lifecycle.                                                                  |
-| `orchard sandbox retry <name>`                                                    | Queue the machine's failed changes again (host or org admin).               |
-| `orchard sandbox update <name> --name ... --identity ...`                         | Rename, switch SSH identity, change the setup script.                       |
-| `orchard sandbox ssh <name> [-- ssh-args]`                                        | Open a shell over the tunnel. `--start` starts it first.                    |
-| `orchard sandbox ssh-config --install`                                            | One-time setup for `ssh orchard-<name>` and editor links.                   |
-| `orchard sandbox repo list <name>`, `repo add <name> <url>`                       | Repositories on a machine.                                                  |
-| `orchard sandbox session list <name>`                                             | Sessions with branch, diffstat and pull request. `--all` includes archived. |
-| `orchard sandbox session create <name> <repo> --prompt "..."`                     | New worktree session. `--base` and `--title` are optional.                  |
-| `orchard sandbox session prompt <name> <session> [text\|-]`                       | Prompt a session's agent as yourself; `-` or no text reads stdin.           |
-| `orchard sandbox session transcript <name> <session>`                             | Print the latest messages. `--limit` up to 200.                             |
-| `orchard sandbox session archive <name> <session>`                                | Archive a session; `--restore` brings it back.                              |
-| `orchard sandbox session preview <name> <session> --project <p>`                  | Deploy the session as a preview environment; `--remove` tears it down.      |
-| `orchard sandbox fork <name> [--name new]`                                        | Fork a machine you host.                                                    |
-| `orchard sandbox share create <name> [--session s] [--expires-in hours]`          | Create a read-only share link. The token is printed once.                   |
-| `orchard sandbox share list <name>`, `share revoke <name> <link-id>`              | Manage share links.                                                         |
-| `orchard sandbox link add <name> <project> [--env e]`, `link list`, `link remove` | Attach or detach an Orchard project's environment.                          |
-| `orchard sandbox credentials set --claude - \| --openai -`, `status`, `clear`     | Agent tokens for the machines you host.                                     |
-| `orchard sandbox diff <name>`                                                     | The git diff inside a machine. `--stat` for a file list.                    |
+If the instance publishes its MCP server over HTTPS, the opencode agent on each machine connects to it as the host. The agent can look up the host's deployments, logs, and databases. A guest who prompts the agent reaches Orchard as the host. Refer to [What sharing gives your guests](/greenhouse/sharing/#what-sharing-gives-your-guests).
 
-`sb` is a short alias for `sandbox`, and `sessions` for `session`. Add `-o json`
-to any command for machine-readable output.
+## Use the CLI
 
-Commands that open a connection into a machine (sessions, prompts, SSH, files)
-need the `exec` scope when the CLI uses an API token.
+`sb` is an alias for `sandbox`, and `sessions` is an alias for `session`. You can refer to a machine by name, ID, or a unique ID prefix, and to a session by ID or slug. For all commands and flags, refer to the [CLI reference](/reference/cli/#sandbox).
 
-## API
+| Command                                                                     | Action                                               |
+| --------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `orchard sandbox create [name] --repo <url> --runner <kubernetes\|vercel>`  | Creates a machine.                                   |
+| `orchard sandbox list`, `get <name>`, `usage <name>`                        | Lists machines, or shows one machine or its usage.   |
+| `orchard sandbox start <name>`, `stop <name>`, `delete <name>`              | Starts, stops, or deletes a machine.                 |
+| `orchard sandbox retry <name>`                                              | Queues the machine's failed changes again.           |
+| `orchard sandbox update <name> --name ... --identity ...`                   | Renames a machine, or changes its SSH identity or setup script. |
+| `orchard sandbox fork <name> [--name new]`                                  | Forks a machine you host.                            |
+| `orchard sandbox ssh <name> [-- ssh-args]`                                  | Opens a shell over the tunnel.                       |
+| `orchard sandbox ssh-config --install`                                      | Configures `ssh orchard-<name>` and editor links.    |
+| `orchard sandbox repo list <name>`, `repo add <name> <url>`                 | Lists or clones repositories.                        |
+| `orchard sandbox session list <name>`                                       | Lists sessions. `--all` includes archived sessions.  |
+| `orchard sandbox session create <name> <repo> --prompt "..."`               | Creates a session. `--agent`, `--base`, and `--title` are optional. |
+| `orchard sandbox session prompt <name> <session> [text\|-]`                 | Sends a prompt as you. `-` or no text reads stdin.   |
+| `orchard sandbox session transcript <name> <session>`                       | Prints the latest messages. `--limit` goes up to 200. |
+| `orchard sandbox session archive <name> <session>`                          | Archives a session. `--restore` restores it.         |
+| `orchard sandbox session preview <name> <session> --project <p>`            | Deploys a preview environment. `--remove` removes it. |
+| `orchard sandbox share create <name>`, `share list`, `share revoke`         | Manages read-only links.                             |
+| `orchard sandbox link add <name> <project> [--env e]`, `link list`, `link remove` | Attaches or detaches a project environment.    |
+| `orchard sandbox credentials set`, `status`, `clear`                        | Manages your agent tokens.                           |
+| `orchard sandbox diff <name>`                                               | Prints the git diff on a machine. `--stat` prints a file list. |
 
-The REST API is under `/apiv1/sandboxes` and documented in the
-[API reference](/api/). Live features use three WebSocket endpoints on the same
-host, all authenticated with your session cookie or a bearer token with the
-`exec` scope:
+Add `-o json` for machine-readable output.
 
-| Endpoint                        | What it carries                                              |
-| ------------------------------- | ------------------------------------------------------------ |
-| `/apiv1/sandboxes/:id/terminal` | Terminals, with resume after a dropped connection            |
-| `/apiv1/sandboxes/:id/live`     | Presence, typing, comments, follow and collaborative editing |
-| `/apiv1/sandboxes/:id/ssh`      | Raw SSH bytes, used by `orchard sandbox proxy`; host only    |
+If the CLI uses an API token, commands that connect into a machine require the `exec` scope. These include sessions, prompts, SSH, and file operations.
+
+## Use the API
+
+The REST API is under `/apiv1/sandboxes`. For its operations, refer to the [API reference](/api/).
+
+Live features use three WebSocket endpoints on the same host. They authenticate with your session cookie or a bearer token with the `exec` scope.
+
+| Endpoint                        | Carries                                                       |
+| ------------------------------- | ------------------------------------------------------------- |
+| `/apiv1/sandboxes/:id/terminal` | Terminals, with resume after a dropped connection             |
+| `/apiv1/sandboxes/:id/live`     | Presence, typing, comments, follow, and collaborative editing |
+| `/apiv1/sandboxes/:id/ssh`      | SSH bytes, used by `orchard sandbox proxy`. Host only.        |
+
+## Related resources
+
+- [MCP](/mcp/): Connect an MCP client to Orchard.
+- [API tokens](/account/tokens/): Create a token with the `exec` scope.

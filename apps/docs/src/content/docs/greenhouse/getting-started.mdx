@@ -1,0 +1,140 @@
+---
+title: Get started
+description: Create your first Greenhouse machine and start a coding agent session on it. You need an Orchard instance with the greenhouse graft installed and an SSH key.
+sidebar:
+  order: 2
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+Create a Greenhouse machine and start a coding agent on one of your repositories.
+
+## Prerequisites
+
+- An Orchard instance with the `greenhouse` graft installed. If **Greenhouse** is not in the dashboard sidebar, refer to [Troubleshooting Greenhouse](/greenhouse/troubleshooting/#greenhouse-is-not-in-the-sidebar).
+- Membership in an organization. Organization guests cannot create machines.
+- A GitHub account linked to Orchard, to clone private repositories and open pull requests. Link it in **User settings** > **GitHub and Tailscale**.
+- The [Orchard CLI](/cli/), if you use the CLI steps.
+
+## 1. Add an SSH key
+
+Orchard requires an SSH key to create a machine. Editors and `ssh` use the key to connect.
+
+<Tabs syncKey="interface">
+<TabItem label="Dashboard">
+
+1. Go to **User settings** > **Greenhouse**.
+2. Under **SSH identities**, select **Add identity** and paste a public key. To use the keys on your GitHub profile, select **Import from GitHub** instead.
+
+</TabItem>
+<TabItem label="CLI">
+
+Run the following command. It generates a key, registers it on your account, and configures `ssh`.
+
+```bash
+orchard sandbox ssh-config --install
+```
+
+</TabItem>
+</Tabs>
+
+## 2. Add an agent credential
+
+The default agent uses your Claude token when you have one. Claude Code requires it.
+
+Create a token on any computer with Claude Code installed:
+
+```bash
+claude setup-token
+```
+
+Store the token in Orchard:
+
+<Tabs syncKey="interface">
+<TabItem label="Dashboard">
+
+1. Go to **User settings** > **Greenhouse**.
+2. Under **Agent credentials**, paste the token into the **Claude Code** field.
+3. Select **Save**.
+
+</TabItem>
+<TabItem label="CLI">
+
+Run the following command, paste the token, and press **Ctrl+D**.
+
+```bash
+orchard sandbox credentials set --claude -
+```
+
+</TabItem>
+</Tabs>
+
+Orchard encrypts the token and does not show it again.
+
+For other agents and sign-in methods, open a running machine and go to **Settings** > **Agents**.
+
+## 3. Create a machine
+
+<Tabs syncKey="interface">
+<TabItem label="Dashboard">
+
+1. In the dashboard sidebar, select **Greenhouse**.
+2. Select **New machine**.
+3. (Optional) Enter a **Name**. It must be a lowercase DNS label of up to 63 characters. Orchard generates a name if you leave it empty.
+4. If the instance offers more than one runner, select one under **Runs on**.
+5. If you have more than one SSH identity, select one under **SSH key**.
+6. Select **Continue**.
+7. Select a repository to clone on first boot, then select **Continue**. To add a repository later, select **Skip**.
+8. (Optional) Enter a **Setup script**. It runs once, on the first boot of the machine.
+9. Select **Create machine**.
+
+The machine status changes from **Creating** to **Starting** to **Running**.
+
+</TabItem>
+<TabItem label="CLI">
+
+```bash
+orchard sandbox create my-machine --repo https://github.com/acme/app --wait
+```
+
+`--wait` returns when the machine is ready. `--runner` selects a runner. The instance default applies if you omit it.
+
+</TabItem>
+</Tabs>
+
+The first boot on an image without the required tools takes a few minutes. Orchard installs the tools during that boot.
+
+If Orchard reports `Sandbox limit reached`, ask an instance admin to raise your limit. The default limit is one machine.
+
+## 4. Start a session
+
+<Tabs syncKey="interface">
+<TabItem label="Dashboard">
+
+1. Open the machine. When it is **Running**, the home page shows **What should we build?**.
+2. Below the prompt, select the repository for the session.
+3. Enter what the agent should do.
+4. (Optional) To have the agent propose a plan without editing files, change **Build** to **Plan, read only**.
+5. Select **Start session**, or press **Enter**.
+
+</TabItem>
+<TabItem label="CLI">
+
+```bash
+orchard sandbox session create my-machine app --prompt "Fix the flaky login test"
+```
+
+`--base` selects a base branch. The repository's default branch applies if you omit it.
+
+</TabItem>
+</Tabs>
+
+Greenhouse creates a git worktree on a new branch named `orchard/<slug>` and sends your prompt to the agent. The session appears in the sidebar under its repository, and its row shows what the agent is doing.
+
+To run another agent at the same time, start another session. Each session has its own branch and worktree.
+
+## Next steps
+
+- [Workspace](/greenhouse/workspace/): Review the agent's work and leave comments on its diff.
+- [Configure setup and run scripts](/greenhouse/scripts/): Install dependencies in each new worktree.
+- [Commit, push, and merge](/greenhouse/pull-requests/): Open a pull request from the session.

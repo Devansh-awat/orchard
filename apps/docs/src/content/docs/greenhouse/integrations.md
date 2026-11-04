@@ -1,156 +1,114 @@
 ---
-title: Start from GitHub, Linear and Slack
-description: Start sessions from issues and chat, and link your GitHub, Linear and Slack accounts.
+title: Start sessions from GitHub, Linear, and Slack
+description: Start a Greenhouse session from an issue, a /greenhouse comment, or a Slack message, on a machine you host. You must link your account on the other service first.
 sidebar:
   order: 11
 ---
 
-A session does not have to start in the browser. Hand Greenhouse an issue, or ask
-for something in Slack, and it starts a session on one of your machines, sends the
-request to the agent and tells you where to find it.
+Start a Greenhouse session from an issue or a chat message. Greenhouse creates the session on a machine you host, sends your request to the agent, and replies with a link.
 
-Each of these needs your account on the other side linked to your Orchard
-account first. Linking is explicit, done by you, once. Orchard never matches
-accounts by email address.
+## Prerequisites
 
-| Service | How you link it                                               | What it enables                                               |
-| ------- | ------------------------------------------------------------- | ------------------------------------------------------------- |
-| GitHub  | **User settings → GitHub and Tailscale**, sign in with GitHub | Issues in the composer, `/greenhouse` on issues, pushes, PRs  |
-| Linear  | **User settings**, paste a personal Linear API key            | Linear issues in the composer, `/greenhouse` on Linear issues |
-| Slack   | Run `/greenhouse link` in Slack and confirm in Orchard        | `/greenhouse` and mentions in Slack                           |
+- A running machine that you host. These integrations do not use machines you were invited to, and they do not start a stopped machine.
+- The integration is set up on your instance. For the operator steps, refer to [Run Greenhouse](/operate/greenhouse/#set-up-integrations).
+- Your account on the other service is linked to your Orchard account. Orchard does not match accounts by email address.
 
-Your instance's operator decides which of these are set up at all; see
-[Running Greenhouse](/operate/greenhouse/#integrations).
+## Link your accounts
 
-## Issues in the composer
+| Service | How to link it                                                                                                                                              |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GitHub  | In **User settings** > **GitHub and Tailscale**, sign in with GitHub.                                                                                        |
+| Linear  | In **User settings** > **Greenhouse** > **Connected accounts**, select **Connect** next to **Linear** and paste a personal API key. In Linear, create the key under **Settings**, **Security and access**, **Personal API keys**. Read access is enough to pick issues. |
+| Slack   | In Slack, run `/greenhouse link`. Open the link that Slack shows you while signed in to Orchard, and confirm. The link works once and expires after 10 minutes. |
 
-The **Issue** chip on the launch composer takes:
+A Linear or Slack account can be linked to one Orchard user. To unlink Slack, run `/greenhouse unlink`, or select **Unlink** in **Settings** > **Integrations**. To disconnect Linear, select **Disconnect** in **Connected accounts**.
 
-- a GitHub issue: `owner/repo#123`, its full URL, or just `#123` for the
-  repository the session is branching from;
-- a Linear issue: its key, such as `ENG-42`, or its URL.
+## Start a session from the home page
 
-Greenhouse fetches the issue with your own access, puts its title, labels and body
-in front of your prompt, and names the session after it. With no prompt of your
-own, the agent is simply asked to work on the issue.
+1. On the home page, select **Start from an issue** in the prompt box.
+2. Search for an issue, or enter its reference.
+3. (Optional) Enter a prompt.
+4. Start the session.
 
-The issue text goes to the agent clearly marked as quoted content, not
-instructions, because issues on public repositories can be written by anyone. For
-the same reason, **if the issue was written by someone who is not the host or a
-guest of the machine, only the host can start a session from it**. A guest who
-tries gets an error saying so.
+The issue picker accepts these references:
 
-## GitHub: `/greenhouse` on an issue
+| Service | Reference                                                                              |
+| ------- | -------------------------------------------------------------------------------------- |
+| GitHub  | `owner/repo#123`, the issue's URL, or `#123` for the repository the session starts from |
+| Linear  | The issue's key, such as `ENG-42`, or its URL                                           |
 
-Comment on an issue in any repository where your instance's GitHub App is
-installed:
+Greenhouse fetches the issue with your access and gives it to the agent as quoted content, not as instructions.
 
-```
+:::note
+Issues on public repositories can be written by anyone. If the issue's author is not the host or a guest of the machine, only the host can start a session from it.
+:::
+
+## Start a session from a GitHub issue
+
+Comment on an issue in a repository where your instance's GitHub App is installed:
+
+```text
 /greenhouse fix this and add a regression test
 ```
 
-Orchard then:
+Greenhouse then does the following:
 
-1. Checks that the commenter's GitHub account is linked to an Orchard user.
-   Comments from anyone else, and from bots, are ignored.
-2. Picks one of **the commenter's own machines**: a running one with that
-   repository cloned, or failing that the machine of their most recent session in
-   it.
-3. Starts a session there with the issue and the text after `/greenhouse` as the
-   prompt.
-4. Replies on the issue with a link to the session, or with the reason it could
-   not start one (for example, none of your machines has the repository cloned,
-   or the machine that has it is stopped).
+1. It checks that your GitHub account is linked to an Orchard user. It ignores comments from other accounts and from bots.
+2. It picks one of your running machines that has the repository cloned. If none has it, it uses the machine of your most recent session in that repository.
+3. It starts a session with the issue and your text as the prompt.
+4. It replies on the issue with a link to the session. If it cannot start a session, the reply asks you to open Greenhouse in Orchard.
 
-Comments on pull requests are ignored. Each person can start up to five sessions
-a minute this way.
+Greenhouse ignores comments on pull requests.
 
-## Linear
-
-### Connect your API key
-
-Create a personal API key in your Linear account settings and paste it under
-**User settings** in Orchard. Orchard checks it
-against Linear, stores it encrypted, and records which Linear user it belongs to.
-That is the link: a Linear account can be connected to only one Orchard user.
-
-With a key connected:
-
-- the composer's issue chip accepts Linear keys and can search your open issues;
-- `/greenhouse` comments on Linear issues start sessions for you.
-
-Disconnect it from the same place. Removing the key also removes the link.
-
-### `/greenhouse` on a Linear issue
+## Start a session from a Linear issue
 
 Comment on a Linear issue:
 
-```
+```text
 /greenhouse in acme/storefront: implement this behind a feature flag
 ```
 
-Linear has no repository attached to an issue, so Greenhouse works out which one
-from your words and the issue title: mention it as `owner/name`, or by the name of
-a repository cloned on one of your running machines. Failing that it uses the
-machine and repository of your most recent session.
+Linear issues have no repository attached. Greenhouse picks the repository in this order:
 
-Greenhouse replies in the comment's thread with a link to the session, or the
-reason it could not start one. The reply is posted with your own Linear key, so
-it appears as you.
+1. A repository you mention as `owner/name`, on one of your running machines.
+2. The name of a repository cloned on one of your running machines.
+3. The machine and repository of your most recent session.
 
-## Slack
+Greenhouse replies in the comment's thread with a link, or with the reason it could not start a session. It posts the reply with your Linear key, so the reply appears as you.
 
-### Link your Slack account
+## Start a session from Slack
 
-In any channel or DM where the Greenhouse app is available, run:
+Run the slash command:
 
-```
-/greenhouse link
-```
-
-Slack shows you (and only you) a link. Open it while signed in to Orchard and
-confirm. The link works once and expires after ten minutes. Your Slack account in
-that workspace is now linked to your Orchard user.
-
-`/greenhouse unlink` removes the link from Slack's side; you can also remove it in
-**User settings**. A Slack account can be linked to only one Orchard user; to move
-it, unlink it first.
-
-If you use `/greenhouse` before linking, Slack replies privately with a fresh link
-instead of starting anything.
-
-### Start a session
-
-Use the slash command:
-
-```
+```text
 /greenhouse add rate limiting to the login endpoint in acme/api
 ```
 
-or mention the app in a channel or thread:
+Or mention the app in a channel or thread:
 
-```
+```text
 @Greenhouse the export button is broken on Safari, can you look at storefront?
 ```
 
-Greenhouse picks a machine and repository the same way as for Linear: an
-`owner/name` you mention, then a repository name cloned on one of your running
-machines, then your most recent session. It posts in the thread:
+Greenhouse picks the machine and repository in the same order as for Linear. It posts in the thread:
 
-> @you started Fix the export button on leafy (storefront). I will post here when the agent stops.
+```text
+@you started Fix the export button on my-machine (storefront). I will post here when the agent stops.
+```
 
-and, when the agent finishes its turn, follows up in the same thread with the
-session link and a summary of the diff. It stops watching after six hours.
+When the agent finishes its turn, Greenhouse follows up in the thread. It stops watching after six hours.
 
-The app has to be in the channel to post there. If it is not, the slash command
-still starts the session and tells you privately, with a suggestion to invite the
-app.
+The app must be in the channel to post there. If it is not, the slash command still starts the session and tells you privately.
 
-`/greenhouse help` lists the commands.
+If you have not linked your account, Slack shows you a link to do so and does not start a session.
 
-## Where sessions run
+To list the commands, run `/greenhouse help`.
 
-These integrations only ever use **machines you host**. They start the session as
-you, so the prompt is attributed to you in the shared thread like any other. They
-never start a stopped machine: if the right machine is stopped, the reply says so
-and you can start it from Greenhouse.
+## Limits
+
+You can start up to five sessions per minute from these integrations. Greenhouse records each delivery, so a repeated delivery does not start a second session.
+
+## Related resources
+
+- [Automate Greenhouse](/greenhouse/automation/): Start sessions from MCP and the CLI.
+- [Share a machine](/greenhouse/sharing/): Learn how Greenhouse attributes prompts.

@@ -1,0 +1,122 @@
+---
+title: Preview a session
+description: Open a dev server that runs on a Greenhouse machine, or deploy a session's branch to an Orchard project as a preview environment.
+sidebar:
+  order: 7
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+You can view a session's work in two ways:
+
+- **A preview** shows a dev server that runs on the machine. Nothing is built or deployed. The server updates as you and the agent change code.
+- **A preview environment** builds the session's branch and deploys it to an Orchard project. People without access to the machine can open it.
+
+## Open a preview
+
+### Prerequisites
+
+- The machine is running.
+- A process listens on a port that Greenhouse can preview, and it is bound to `0.0.0.0`.
+- On the Kubernetes runner, the operator has set a preview domain.
+
+These ports can always be previewed:
+
+```text
+3000  3001  4173  5173  8000  8080  8787
+```
+
+On the Kubernetes runner, a repository can add up to 10 more ports with the `ports` key in [`.orchard/greenhouse.json`](/greenhouse/scripts/#file-reference). The Vercel runner exposes only the ports listed here.
+
+### Steps
+
+1. In the terminal dock, select the **Ports** tab.
+2. Select **Preview** on the row of the port.
+
+The preview opens in a tab in the workspace. A port that cannot be previewed shows **Not exposed**. A port that is bound to `127.0.0.1` shows a warning on the button.
+
+The host, guests, and read-only guests can open previews.
+
+### Preview access by runner
+
+**Kubernetes:** The preview has its own address: `https://<port>-<machine>.<preview domain>/`. `<machine>` is the first eight characters of the machine's ID.
+
+- Access starts with a single-use ticket that expires after 60 seconds. The ticket sets a cookie for that preview address, valid for 12 hours.
+- Each request is checked against your current access. Removing someone from the machine ends their preview access within 15 seconds.
+- Orchard does not send your Orchard session cookie to the preview. The preview cannot set cookies for Orchard.
+- Orchard refuses requests from other sites.
+- HTTP and WebSockets work, so hot reload works.
+
+**Vercel:** The preview is the machine's public URL for that port on Vercel's domain. Anyone with the link can open it, without signing in. The **Ports** tab labels these ports **Public**.
+
+:::caution
+Do not serve anything on a preview port of a Vercel machine that you would not put on the public internet.
+:::
+
+## Deploy a session as a preview environment
+
+### Prerequisites
+
+- You are the host of the machine.
+- You have edit access to the target project, and the project belongs to the machine's organization.
+- The project has a deployment that builds the same GitHub repository.
+
+### Steps
+
+<Tabs syncKey="interface">
+<TabItem label="Dashboard">
+
+1. Open the session menu in the title bar and select **Deploy preview**. The pull request menu has the same item.
+2. Select a **Project**.
+3. (Optional) Under **Copy settings from**, select the deployment to copy. The default is the deployment that builds the repository.
+4. Select **Deploy preview**.
+
+</TabItem>
+<TabItem label="CLI">
+
+```bash
+orchard sandbox session preview my-machine fix-login --project storefront
+```
+
+To select the deployment to copy, add `--deployment <deployment-id>`.
+
+</TabItem>
+</Tabs>
+
+Greenhouse then does the following:
+
+1. It pushes the session's branch to GitHub.
+2. It creates an environment named `gh-<slug>` in the project, or reuses the one that this session already has.
+3. It copies the settings of the source deployment. Without a selection, it prefers a deployment in the project's default environment, then in its production environment.
+4. It deploys the branch with one replica.
+
+The session then shows the preview's status and URL.
+
+Secret variables, and variables that reference another resource in the source environment, are not copied. Greenhouse lists them after the deploy. Set them on the preview environment yourself.
+
+To deploy the latest commit again, repeat the steps. The button then reads **Redeploy**.
+
+## Remove a preview environment
+
+<Tabs syncKey="interface">
+<TabItem label="Dashboard">
+
+1. Open the session menu and select **Preview deploy**.
+2. Select **Remove preview**.
+
+</TabItem>
+<TabItem label="CLI">
+
+```bash
+orchard sandbox session preview my-machine fix-login --remove
+```
+
+</TabItem>
+</Tabs>
+
+Archiving or deleting the session also removes its preview environment. Greenhouse removes only `gh-` environments that belong to the session. It does not remove a default or production environment.
+
+## Related resources
+
+- [Configure setup and run scripts](/greenhouse/scripts/): Start your dev server from the terminal dock.
+- [Troubleshooting Greenhouse](/greenhouse/troubleshooting/#previews-do-not-open): Fix preview errors.

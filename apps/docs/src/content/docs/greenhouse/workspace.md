@@ -1,320 +1,221 @@
 ---
-title: The workspace
-description: The Greenhouse IDE, the shared chat thread, the editor, the review panel, the terminal dock and the keyboard shortcuts.
+title: Workspace
+description: Reference for the Greenhouse workspace, including its layout, settings, chat controls, slash commands, right panel, terminal dock, and keyboard shortcuts.
 sidebar:
   order: 4
 ---
 
-Opening a machine opens its workspace: a full-height IDE with a title bar across
-the top, the sidebar on the left and the centre and right panels floating beside
-it.
+The workspace opens when you open a machine. This page lists what each part of it does.
 
-| Region            | What it holds                                                                       |
-| ----------------- | ----------------------------------------------------------------------------------- |
-| **Title bar**     | Back and forward, where you are, the people here, and the session's actions.        |
-| **Sidebar**       | The machine switcher, navigation, and every session grouped by repository.          |
-| **Centre**        | The session's tabs: its chats, open files, diffs and previews.                      |
-| **Right panel**   | Files, changes, checks and review comments for the session, over the terminal dock. |
-| **Terminal dock** | Setup and run script output, terminals and listening ports.                         |
+## Layout
 
-Every split is resizable by dragging or with the keyboard, and the sizes are
-remembered. Below 960 pixels wide the workspace becomes a single column for
-reviewing on a phone: sessions, transcript and changes, without the editor or
-terminals.
+| Region        | Contents                                                                  |
+| ------------- | ------------------------------------------------------------------------- |
+| Title bar     | Back and forward, the current location, people on the machine, and session actions. |
+| Sidebar       | The machine menu, search, the home page, and sessions grouped by repository. |
+| Center        | Tabs for chats, open files, diffs, and previews.                          |
+| Right panel   | Tabs for files, changes, checks, and review comments.                     |
+| Terminal dock | Setup and run output, terminals, and listening ports.                     |
+
+Below 960 pixels wide, the workspace uses a single-column layout for mobile devices.
 
 ## Title bar
 
-The breadcrumb reads `machine › repo › session`. The machine shows its runner
-(the Vercel triangle or a Kubernetes box) and a status dot, and goes home. The
-repository shows its icon; hover it to see the GitHub repository it pushes to.
-The session title opens the session menu:
+The location reads machine, repository, session. Select the machine name to go to the home page.
 
-- **Rename**, **Archive** and **Delete** (keeping the branch or deleting it too).
-- **Fork session.** A new session branched from this one's branch, for trying a
-  different approach from the same point.
-- **Copy share link.** See [Sharing](/greenhouse/sharing/).
-- **Deploy preview.** See [Previews](/greenhouse/previews/#deploy-a-session-as-a-preview-environment).
+Select the session title to open the session menu:
 
-On the right: the people here (click someone to follow them), the preview,
-**Open in** for your editor, the pull request button, **Share**, and the right
-panel toggle.
+| Item                 | Action                                                 |
+| -------------------- | ------------------------------------------------------ |
+| Rename               | Renames the session.                                   |
+| Copy branch name     | Copies the session's branch name.                      |
+| Copy worktree path   | Copies the path of the session's worktree.             |
+| Copy link for guests | Copies a link to the session for people on the machine. |
+| Fork session         | Creates a session branched from this session's branch. |
+| Deploy preview       | Refer to [Preview a session](/greenhouse/previews/#deploy-a-session-as-a-preview-environment). |
+| Archive              | Removes the worktree and keeps the branch.             |
+| Delete               | Removes the session, with or without its branch.       |
+
+The right side of the title bar has the avatars of other people on the machine, the [editor button](/greenhouse/editors/), the [pull request button](/greenhouse/pull-requests/), **Share**, and the right panel toggle. Guests see **People** instead of **Share**. Select an avatar to follow that person.
 
 ## Sidebar
 
-- **Machine switcher.** The current machine, its runner and its status. The menu
-  switches machines, shows live CPU, memory and disk against the machine's limits,
-  starts or stops it, opens machine settings, forks it, and creates a new machine.
-- **Home.** The launch composer and your recent sessions across machines,
-  including machines shared with you.
-- **New session** (**⌘N**) and **Search** (**⌘K**).
-- **Repositories.** One group per repository cloned on the machine, with a **+**
-  to start a session in it. **Add repository** clones another one.
-- **Sessions.** Each row shows what the agent is doing and the title, and under
-  it the branch, when it last changed, and the diffstat against the base branch
-  (`+42 −7`). Hover a row to archive it or open its menu. Archived sessions
-  collapse under **Archived**.
-- **Footer.** You and **Settings** (**⌘,**). Help lives in the machine menu.
+- **Machine menu:** Switches machines, shows CPU, memory, and disk use, starts or stops the machine, and opens **Machine settings**, **Fork machine**, and **New machine**.
+- **Search:** Finds sessions, files, and commands.
+- **Home:** Opens the prompt for new sessions, your recent sessions, and your machines.
+- **New session:** Starts a session in the current repository.
+- **Repositories:** Lists each repository with its sessions. Select **+** to start a session in it. Open the **...** menu to start a session, change the icon, or remove the repository.
+- **Add repository:** Clones a repository, creates a new one, or opens a folder. Host only.
+- **Archived:** Lists archived sessions.
 
-A session's status glyph tells you whether the agent is **working**, **waiting
-for you**, idle, or whether the work is **done** (its pull request merged). A
-pencil means you have an unsent draft in its composer.
+A session row shows the agent's state, the title, the branch, and the diffstat against the base branch. Open the **...** menu on a row to rename the session, copy its branch name, open its pull request, archive it, or delete it.
 
-A session's menu (the **⋯** on hover, or right-click) renames it, copies its
-branch name, opens its pull request, archives it, or deletes it with or without
-its branch.
-
-Each repository has an icon, its initial on a coloured tile until someone picks
-one. Right-click a repository, or use the **⋯** on hover, and choose **Change
-icon…** to pick a symbol, an emoji, or the GitHub owner's avatar. The icon lives
-in the repository's own git config as `orchard.icon`, so everyone on the machine
-sees the same one (run `git config --unset orchard.icon` in a terminal to clear
-it by hand). Read-only guests cannot change it.
+A repository icon is stored in the repository's git config as `orchard.icon`. Everyone on the machine sees the same icon.
 
 ## Settings
 
-**⌘,** or the gear in the sidebar footer opens settings.
+Select the gear icon in the sidebar, or press **⌘,**.
 
-| Section          | What it holds                                                                                                             |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| **General**      | The machine's name, runner and size.                                                                                      |
-| **Setup script** | The script that runs on every start. See [Machines](/greenhouse/machines/).                                               |
-| **Projects**     | Orchard projects whose environment variables the machine gets. See [Projects](/greenhouse/projects/).                     |
-| **Usage**        | Live CPU, memory and disk against the machine's limits, uptime, idle sleep and network.                                   |
-| **Danger zone**  | Delete the machine. Host only.                                                                                            |
-| **Preferences**  | Send with Enter or ⌘Enter, queue or steer follow-ups, notifications, context usage, MCP status, tool calls and reasoning. |
-| **Sounds**       | What plays when an agent finishes, needs you, or fails. Follows Orchard's sound setting.                                  |
-| **Appearance**   | Theme, zoom, chat text size, sidebar diff colours, mono font, ligatures, code size and terminal font.                     |
-| **Git**          | The prefix for new session branches, and whether archiving deletes the branch.                                            |
-| **Agents**       | The Claude account the machine's agent uses, its plan and its limits.                                                     |
-| **Integrations** | Your GitHub, Linear and Slack links.                                                                                      |
-| **Shortcuts**    | Every keyboard shortcut.                                                                                                  |
+| Group   | Section      | Contents                                                                                                                                  |
+| ------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Machine | Machine      | Name, SSH key, people, setup script, attached projects, and machine deletion.                                                              |
+| Machine | Usage        | CPU, memory, disk, and time limits.                                                                                                       |
+| You     | Preferences  | **Send messages with**, **Follow-up behavior**, **Auto-accept permissions**, **Agent notifications**, and transcript options such as **Show reasoning**. |
+| You     | Sounds       | The sound for each agent event.                                                                                                           |
+| You     | Appearance   | Theme, zoom, text sizes, and fonts.                                                                                                       |
+| You     | Git          | **Branch name prefix** and **Delete branch on archive**.                                                                                  |
+| You     | Agents       | The coding agents on this machine, their sign-in state, and Claude usage limits. Requires a running machine.                              |
+| You     | Context      | Your `CLAUDE.md`, subagents, slash commands, skills, and MCP servers. To import them from Claude Code, run `orchard claude import`.         |
+| You     | Integrations | Your GitHub, Linear, and Slack accounts.                                                                                                  |
+| You     | Shortcuts    | Every keyboard shortcut and command.                                                                                                      |
 
-Machine sections are read-only for guests. Everything under **You** is yours
-alone and is kept in this browser.
+Greenhouse saves **Preferences**, **Appearance**, and **Git** on the current device.
 
-**Hold the applause** cuts openers like "You're absolutely right!" from agent
-replies. It only changes what you see; the transcript is untouched.
+**Hold the applause** removes flattery from agent replies in your view. The stored transcript does not change.
 
-## Centre
+## Chat
 
-### Tabs
+Each chat is one thread that everyone in the session can see.
 
-The first tabs are the session's **chats**. **+** starts another chat in the same
-worktree, useful for a side question that should not derail the main thread.
-Files you open and diffs you click appear as tabs next to them, with a dot while
-they have unsaved changes. Close a tab with its **×** or a middle click; drag to
-reorder.
+- Plain text is a prompt to the agent. The thread shows who sent it.
+- `/chat <message>` is a comment to the people in the session. The agent does not see it.
 
-**Checkpoints** (the history button at the end of the tab strip) lists the
-prompts of the current chat. Rolling back to one undoes everything the agent did
-after it.
+Select **+** in the tab strip to start another chat in the same worktree. **Checkpoints** lists the prompts of the current chat. Select a prompt to undo everything the agent did after it.
 
-## The chat thread
+The thread collapses the steps of a turn into one activity row. Expand the row to see each step.
 
-Each chat is one shared thread, visible to everyone in the session, like a group
-chat with the agent in it.
+### Permission and question cards
 
-- **Plain text is a prompt.** It goes to the agent and shows in the thread as your
-  message, with your avatar. Everyone sees who asked for what.
-- **`/chat <message>` is a comment.** It goes to the people in the session, not to
-  the agent. Comments are stored with the session and appear in the thread in
-  time order between prompts and answers. **Comment to the people here** in the
-  composer menu starts one for you.
+When the agent needs a decision, it waits and a card appears above the composer.
 
-### What the agent shows
+| Card       | Actions                                                                                                                 |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Permission | **Allow** approves this request. **Always allow** stops asking for this kind of request. **Deny** refuses it. You can tell the agent what to do instead. |
+| Question   | Select an option, or enter your own answer. **Skip** dismisses the question.                                            |
+| Plan       | **Start building** leaves plan mode. **Keep planning** stays in plan mode. You can also send feedback.                   |
 
-The agent's answer is the one thing each turn emphasises. Everything procedural,
-its thinking, the commands it ran, the files it read and wrote, its sub-agents,
-collapses into **one activity row** per turn, such as
-`Worked for 48s · 6 steps · +12 −3`. While the turn is running the row shows the
-single step in progress. Expand it to see every step.
+Read-only guests see the cards but cannot answer them.
 
-Under each turn a quiet footer gives the time and duration, a copy button and
-chips for the files that turn changed. Click a chip to open the file's diff.
+**Auto-accept permissions** allows permission requests automatically in chats where you sent the last prompt. Questions still wait for an answer.
 
-### Permissions and questions
+### Composer
 
-When the agent needs a decision it waits, and a card appears above the composer.
-The session shows as needing input until someone answers.
+- **Attach files or images** adds up to 10 files of up to 5 MB each. You can also drop files on the composer.
+- The model menu selects the model, the effort, and the agent for the next prompt.
+- Plan mode runs the agent read-only, so that it proposes a plan without editing files.
+- The ring shows how much of the model's context the chat has used.
 
-- **Permission cards** say what the agent wants to do: run a command, edit a file
-  (with a preview of the change), fetch a page or work outside the worktree.
-  **Allow** lets it through once, **Always allow** stops asking for that kind of
-  request until the agent restarts, and **Deny** stops the agent. Type what it should do instead before
-  you deny and it carries on with that.
-- **Question cards** list the agent's options. Pick one, or several when it
-  asks for more than one, or type your own under **Other**. **Skip** dismisses
-  the question and stops the agent.
-- **Plan ready.** In plan mode the agent asks before it starts editing.
-  **Start building** switches it to build mode, **Keep planning** keeps it
-  read only, or type feedback to send instead.
+If you send a prompt while the agent is working, the prompt waits in a queue by default. Queued prompts go out one at a time. To interrupt the agent instead, change **Follow-up behavior** to steer.
 
-With a card focused, **Enter** allows or submits, **⌘Enter** always allows,
-**Escape** starts a denial (Enter sends it) and **1** to **9** pick an option.
-A card takes focus when it appears, unless you are typing.
+### Slash commands
 
-The composer stays usable while a card is open, so you can still steer the
-agent. Once answered, the card leaves a quiet line in the thread, such as
-`Allowed npm test`, with the avatar of whoever answered.
+Type `/` in the composer to list commands. Built-in commands act on Greenhouse. `/init`, `/review`, and `/security-review` send the agent a prepared prompt.
 
-Read-only guests see the cards but cannot answer them. **Auto-accept
-permissions** in Settings allows every permission request in chats where you
-sent the last prompt. Questions still wait for you.
+| Command                            | Action                                                     |
+| ---------------------------------- | ---------------------------------------------------------- |
+| `/help`                            | Lists every command.                                       |
+| `/clear`, `/new`                   | Starts a new chat in a new tab.                            |
+| `/compact`                         | Summarizes the chat to free up context.                    |
+| `/resume`, `/continue`             | Switches to another chat.                                  |
+| `/rename <title>`                  | Renames the session.                                       |
+| `/export`                          | Downloads the chat as Markdown.                            |
+| `/undo`, `/rewind`                 | Rolls back the last prompt and its changes.                |
+| `/redo`                            | Restores what `/undo` rolled back.                         |
+| `/todos`                           | Shows the agent's todo list.                               |
+| `/stop`                            | Stops the agent.                                           |
+| `/chat <message>`                  | Messages the people in the session.                        |
+| `/model`                           | Selects the model.                                         |
+| `/effort`                          | Sets the reasoning effort.                                 |
+| `/fast`                            | Turns fast mode on or off.                                 |
+| `/plan`, `/build`                  | Enters or leaves plan mode.                                |
+| `/agents`                          | Selects the agent that answers.                            |
+| `/init`                            | Writes an `AGENTS.md` for the repository.                  |
+| `/review`                          | Reviews uncommitted changes, or a commit, branch, or pull request. |
+| `/security-review`                 | Reviews the branch for security issues.                    |
+| `/context`, `/cost`, `/usage`      | Shows context used, cost, and Claude usage limits.         |
+| `/mcp`                             | Manages MCP servers.                                       |
+| `/memory`                          | Edits `AGENTS.md` or `CLAUDE.md`.                          |
+| `/permissions`                     | Opens permission settings.                                 |
+| `/terminal`                        | Opens a terminal.                                          |
+| `/diff`                            | Opens **Changes**.                                         |
+| `/pr`                              | Creates or opens the pull request.                         |
+| `/status`                          | Shows machine and branch status.                           |
+| `/share`                           | Opens the share sheet.                                     |
+| `/settings`, `/config`             | Opens settings.                                            |
+| `/bug`, `/feedback`                | Opens a new issue on the Orchard repository.               |
 
-### The composer
-
-- **Enter** sends; **Shift+Enter** adds a new line.
-- **Escape** stops the agent while it is working.
-- The model menu picks the model and effort for the next prompt. **Plan mode**
-  runs the agent read only, so it proposes a plan instead of editing.
-- **Attach** adds files or images (up to 10, 5 MB each), or drop them on the
-  composer.
-- Typing **/** lists commands, grouped and matched loosely on name and
-  description. **↑** and **↓** move, **Tab** completes, and your send key runs a
-  command that takes no arguments. See [Slash commands](#slash-commands).
-- A ring shows how much of the model's context the chat has used.
-
-**Queued prompts.** Send while the agent is still working and your prompt waits
-as a chip above the composer. Queued prompts go out one at a time as each turn
-ends. Edit or remove a chip before it sends, or send it right away once the agent
-is idle.
-
-**Typing.** When a teammate is writing a prompt you see `Alex is typing…` above
-the composer with their draft as they type. Nothing is sent until they press
-Enter.
-
-#### Slash commands
-
-Built-in commands act on Greenhouse itself rather than being sent as a prompt;
-`/init`, `/review` and `/security-review` hand the agent a ready-made prompt.
-After you complete a command the composer shows what it takes, such as
-`/rename <title>`. Anything after **/** that is not a command goes to the agent
-as a normal prompt.
-
-| Command                            | Does                                                                                 |
-| ---------------------------------- | ------------------------------------------------------------------------------------ |
-| `/help`                            | Lists every command                                                                  |
-| `/clear`, `/new`                   | Starts a fresh chat in a new tab                                                     |
-| `/compact`                         | Summarizes the chat so it uses less context                                          |
-| `/resume [chat]`, `/continue`      | Switches to another chat in this session                                             |
-| `/rename <title>`                  | Renames the session                                                                  |
-| `/export`                          | Downloads the chat as Markdown                                                       |
-| `/undo`, `/rewind`                 | Rolls back the last prompt and its file changes, like **Checkpoints**                |
-| `/redo`                            | Brings back what `/undo` rolled back                                                 |
-| `/todos`                           | Shows the agent's todo list                                                          |
-| `/stop`                            | Stops the agent                                                                      |
-| `/chat <message>`                  | Messages the people in the session; the agent does not see it                        |
-| `/model [name]`                    | Opens the model menu, or picks the closest match                                     |
-| `/effort [low\|medium\|high\|max]` | Sets the reasoning effort, when the model has levels                                 |
-| `/fast`                            | Switches fast mode, when the model has one                                           |
-| `/plan`, `/build`                  | Turns plan mode on or off                                                            |
-| `/agents [name]`                   | Picks which opencode agent answers                                                   |
-| `/init`                            | Has the agent write an `AGENTS.md` for the repository                                |
-| `/review [target]`                 | Has the agent review your uncommitted changes, or a commit, branch or PR             |
-| `/security-review`                 | Has the agent review the branch for security issues                                  |
-| `/context`, `/cost`, `/usage`      | Opens the context ring: tokens used and your Claude usage limits                     |
-| `/mcp`                             | Opens MCP servers                                                                    |
-| `/memory`                          | Opens `AGENTS.md` or `CLAUDE.md`, and offers to create `AGENTS.md` if neither exists |
-| `/permissions`                     | Opens Preferences, where **Auto-accept permissions** lives                           |
-| `/terminal`                        | Opens a terminal in the dock                                                         |
-| `/diff`                            | Opens the Changes tab                                                                |
-| `/pr`                              | Opens the pull request, or creates one                                               |
-| `/status`                          | Shows the machine, branch, changes and pull request in one line                      |
-| `/share`                           | Opens the share sheet                                                                |
-| `/settings`, `/config`             | Opens settings                                                                       |
-| `/bug`, `/feedback`                | Opens a new Orchard issue on GitHub                                                  |
-
-The repository's own commands are listed under **Repository**: opencode
-commands in `.opencode/command/` or `.opencode/commands/`, commands from the
-`command` key of `opencode.json`, MCP prompts, and skills in `.claude/skills/`,
-`.agents/skills/` or the same folders in your home directory. They run through
-opencode with whatever you type after the name. `/init` and `/review` use
-opencode's own versions when it has them. Claude Code's `.claude/commands/`
-folder is not read; move those files to `.opencode/command/`.
+Commands that the agent server reports for the repository, such as skills and MCP prompts, appear under **Repository**.
 
 ## Editor
 
-Files open in Monaco, the editor from VS Code, with syntax highlighting, search,
-multiple cursors and the shortcuts you already know. **⌘S** saves. Files up to
-500 KB can be edited in the browser; open anything larger over SSH.
+Files open in the Monaco editor. Files up to 500 KB can be edited in the browser. To edit a larger file, connect [an editor over SSH](/greenhouse/editors/).
 
-When a teammate has the same file open, you edit it together: their cursor and
-selection show in their colour with their name, and changes merge as you type.
-Edits the agent makes on disk are merged into the open file as well, so nobody's
-work is overwritten. Shared files save automatically a couple of seconds after
-the last change.
+When two people open the same file, they edit it together and see each other's cursors. Edits that the agent makes on disk merge into the open file.
 
 ### Diffs and review comments
 
-Clicking a changed file opens its diff against `HEAD`. Click a line number to
-leave a comment on that line. Comments collect in the **Review** tab of the right
-panel, grouped by file. Collaborators see your draft comments as you write them.
+Select a changed file to open its diff. Select a line number to comment on that line. Comments appear in the **Review** tab of the right panel, grouped by file.
 
-When you have a few, **Send review to agent** turns every comment into one
-structured prompt, with each file, line and the line's text, and queues it. The
-agent then works through them as one request.
+**Send review to agent** combines all comments into one prompt and queues it.
 
 ## Right panel
 
-| Tab           | What it shows                                                                                                                                         |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **All files** | The worktree as a tree with git decorations. Right-click to create, rename or delete files and folders, copy a path, or open a file.                  |
-| **Changes**   | Changed files with line counts. Click one for its diff. A commit box at the top commits (**⌘Enter**); counters show what is ahead and behind.         |
-| **Checks**    | The pull request's state and its CI checks, with the failing logs and **Fix with agent**. See [Pull requests and checks](/greenhouse/pull-requests/). |
-| **Review**    | Your diff comments, ready to send to the agent.                                                                                                       |
-
-**⌘⇧G** jumps to Changes. **⌘⌥B** hides or shows the whole panel.
-
-Commits from the Changes tab are made as you: your name and email from your
-linked GitHub account. When several people prompted the agent in the session,
-the commit carries a `Co-authored-by` trailer for each of them. See
-[your own git identity](/greenhouse/sharing/#everyone-commits-as-themselves).
+| Tab       | Contents                                                                                                                               |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| All files | The worktree as a tree. Right-click to create, rename, or delete files and folders.                                                     |
+| Changes   | Changed files with line counts, and a commit box. Refer to [Commit, push, and merge](/greenhouse/pull-requests/).                       |
+| Checks    | The pull request's state, its checks, and **Fix with agent**. Refer to [Checks](/greenhouse/pull-requests/#review-checks).              |
+| Review    | Your diff comments.                                                                                                                    |
 
 ## Terminal dock
 
-The dock sits under the right panel. **⌘J** collapses or expands it.
+| Tab      | Contents                                                                                                 |
+| -------- | -------------------------------------------------------------------------------------------------------- |
+| Setup    | Output of the session's setup script. Read-only.                                                          |
+| Run      | Output of the run script, with start and stop controls. A repository with several commands has one tab per command. Refer to [Configure setup and run scripts](/greenhouse/scripts/). |
+| Terminal | A shell in the session's worktree. Select **+** to open another.                                          |
+| Ports    | Ports that processes on the machine listen on. Refer to [Preview a session](/greenhouse/previews/).        |
 
-| Tab          | What it is                                                                                                                                                                                                                  |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Setup**    | The live output of the session's setup script. Read only.                                                                                                                                                                   |
-| **Run**      | The output of the run script, with **Run** to start it and a stop button. See [Setup and run scripts](/greenhouse/scripts/).                                                                                                |
-| **Terminal** | A shell in the session's worktree. **+** opens another; **⌘`** jumps to the terminal.                                                                                                                                       |
-| **Ports**    | Every port a process on the machine is listening on, with which process, whether it belongs to this session, and **Open preview**. Ports declared in `.orchard/greenhouse.json` are listed before anything listens on them. |
+Terminals run inside `tmux` on the machine. They survive a page reload or a dropped connection.
 
-Terminals run inside `tmux` on the machine, so they survive a page reload, a
-dropped connection or switching machines: come back and you are attached to the
-same shell with its scrollback. They use the same terminal as Orchard's pod
-shells, with predictive echo so typing feels local on a slow link.
-
-Terminals are per person. Your terminal tabs are your own shells, with your git
-name, email and GitHub credential set up, so `git commit` and `git push` typed in
-them are yours. You can open a teammate's terminal to watch it, read only, and
-they can watch yours. The **Setup** and **Run** tabs are the same for everyone in
-the session.
+Each person has their own terminals, with their own git identity and GitHub credential. You can watch another person's terminal, but you can type only in your own. **Setup** and **Run** are the same for everyone in the session.
 
 ## Keyboard shortcuts
 
-On Windows and Linux, use **Ctrl** for **⌘**.
+On Windows and Linux, use **Ctrl** for **⌘**, and **Alt** for **⌥**.
 
-| Shortcut           | Does                                                |
-| ------------------ | --------------------------------------------------- |
-| **⌘N**             | New session in the current repository               |
-| **⌘K**             | Search sessions, files and commands                 |
-| **⌘B**             | Show or hide the sidebar                            |
-| **⌘⌥B**            | Show or hide the right panel                        |
-| **⌘J**             | Collapse or expand the terminal dock                |
-| **⌘`**             | Focus the terminal                                  |
-| **⌘⇧G**            | Open the Changes tab                                |
-| **⌘S**             | Save the open file                                  |
-| **⌃O**             | Expand or collapse tool calls                       |
-| **⌘,**             | Open settings                                       |
-| **⌘+** / **⌘−**    | Code size, in a terminal                            |
-| **Enter**          | Send the prompt                                     |
-| **Shift+Enter**    | New line in the prompt                              |
-| **Escape**         | Stop the agent while it is working                  |
-| **⌘Enter**         | Commit, in the Changes tab; post, in a diff comment |
-| **/** then **Tab** | Complete a command in the composer                  |
-| **Enter**          | Allow, or submit an answer, on a focused card       |
-| **⌘Enter**         | Always allow, on a focused permission card          |
-| **Escape**         | Deny, on a focused permission card                  |
-| **1** to **9**     | Pick an option, on a focused question card          |
+| Shortcut        | Action                                     |
+| --------------- | ------------------------------------------ |
+| **⌘N**          | New session in the current repository      |
+| **⌘K**          | Search sessions, files, and commands       |
+| **⌘B**          | Show or hide the sidebar                   |
+| **⌘⌥B**         | Show or hide the right panel               |
+| **⌘⇧G**         | Open the **Changes** tab                   |
+| **⌘,**          | Open settings                              |
+| **Enter**       | Send the prompt                            |
+| **Shift+Enter** | New line in the prompt                     |
+| **⌘Enter**      | Steer instead of queueing                  |
+| **Esc**         | Stop the agent while it is working         |
+| **/**, **Tab**  | Complete a command                         |
+| **Ctrl+O**      | Expand or collapse tool calls              |
+| **⌘⇧E**         | Fast mode, when the model has one          |
+| **⌘⇧/**         | Cycle reasoning effort                     |
+| **⌘P**          | Find a file                                |
+| **⌘S**          | Save the open file                         |
+| **⌘F**          | Find in the file                           |
+| **⌘`**          | Focus the terminal                         |
+| **⌘J**          | Collapse or expand the dock                |
+| **⌘+**, **⌘−**, **⌘0** | Change or reset the code size in a terminal |
+
+On a focused permission or question card:
+
+| Shortcut   | Action                             |
+| ---------- | ---------------------------------- |
+| **Enter**  | Allow, or submit the answer        |
+| **⌘Enter** | Always allow                       |
+| **Esc**    | Deny, then press **Enter** to send |
+| **1** to **9** | Select an option               |
+
+In the **Changes** tab and in diff comments, **⌘Enter** commits or posts.
+
+The **Send messages with** preference changes the send and new-line keys. **Settings** > **Shortcuts** shows the current keys.

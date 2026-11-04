@@ -1,178 +1,188 @@
 ---
-title: Troubleshooting
-description: Boot phases, stuck changes, runner errors, SSH host keys, GitHub linking and previews.
+title: Troubleshooting Greenhouse
+description: Fix common Greenhouse failures by symptom, including machines that do not start, failed changes, runner errors, SSH host keys, GitHub linking, and previews.
 sidebar:
   order: 13
 ---
 
-## Greenhouse is missing or says it is not enabled
+Find the symptom you see, then follow the fix.
 
-If Greenhouse is missing from the sidebar and `/sandboxes` shows a not found page,
-the Greenhouse graft is not installed on this instance. An operator installs it
-with `orchardctl graft add greenhouse` (see
-[Running Greenhouse](/operate/greenhouse/#turning-it-on)). **Instance admin →
-Grafts** shows whether it loaded and why not if it failed.
+## Greenhouse is not in the sidebar
 
-`Sandbox feature is not enabled for your account` means the instance gates
-Greenhouse per person with a product analytics feature flag, and you are not in
-it yet. Ask an admin.
+**Cause:** The `greenhouse` graft is not installed on this instance. `/sandboxes` shows a not found page.
 
-## The machine is taking a long time to start
+**Fix:** Ask an operator to install the graft. Refer to [Run Greenhouse](/operate/greenhouse/#install-the-graft). **Instance admin** > **Grafts** shows whether the graft loaded, and the reason if it failed.
 
-While a machine boots, the workspace shows which step it is on:
+## Sandbox feature is not enabled for your account
 
-| Step                              | What is happening                                        |
-| --------------------------------- | -------------------------------------------------------- |
-| Starting the virtual machine      | The runner is bringing the machine up.                   |
-| Installing system packages        | `sshd`, `git`, `tmux` and friends, on a bare image only. |
-| Installing Node.js                | Only when the image has no Node.js.                      |
-| Installing coding agents          | Claude Code, Codex and opencode, only when missing.      |
-| Preparing persistent storage      | Formatting (first boot) and mounting the home disk.      |
-| Creating your user account        | The `dev` user, SSH host keys and SSH config.            |
-| Starting SSH and the agent server | The last step before **Ready**.                          |
-
-The first boot on a plain image installs everything and takes a few minutes.
-Later starts skip what is installed already and are much quicker.
-
-A machine that stays in **Creating** or **Starting** for ten minutes is marked
-**Error** with `Sandbox did not become ready in time`, or
-`Sandbox resource never appeared in the cluster` if the runner never created it.
-Start it again; if it fails the same way, tell your operator.
-
-Logs on the machine, readable from a terminal or over SSH:
-
-| File                          | What it logs                               |
-| ----------------------------- | ------------------------------------------ |
-| `~/.setup.log`                | The machine setup script (first boot only) |
-| `~/.clone.log`                | Repository clones                          |
-| `~/.opencode-serve.log`       | The agent server                           |
-| `/var/log/orchard-bridge.log` | The SSH bridge, on Vercel machines         |
-
-## Applying and apply errors
-
-Starting, stopping, deleting and syncing credentials are not done inline. Orchard
-records what you want, queues the change, and a worker carries it out and retries
-it if it fails. While a change is queued or running the machine shows
-**Applying**.
-
-If it fails, the machine shows the error and the worker keeps retrying with
-increasing delays, up to ten attempts. Most errors are transient (the cluster was
-busy, Vercel's API was slow) and clear on their own.
-
-Once the attempts run out the error stays. After fixing the cause, the host or
-an organization admin can queue the failed changes again with fresh attempts:
-
-```bash
-orchard sandbox retry leafy
+```text
+Sandbox feature is not enabled for your account
 ```
 
-(`POST /apiv1/sandboxes/:id/apply/retry`.) An error that comes straight back, or
-a machine stuck on **Applying** for more than a few minutes, needs your operator:
-the change is waiting for something on the instance's side.
+**Cause:** The instance has PostHog configured, and your account does not have the `greenhouse` feature flag. Greenhouse is also missing from the sidebar in this case.
 
-## A runner is unavailable
+**Fix:** Ask an admin to enable the flag for your account.
 
-The new machine sheet lists each runner it cannot offer, with the reason:
+## The machine takes a long time to start
 
-| Reason                                                                                      | Meaning                                                               |
-| ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `Kubernetes sandboxes are turned off on this server`                                        | The operator switched the runner off.                                 |
-| `Vercel sandboxes are turned off on this server`                                            | Same, for Vercel.                                                     |
-| `Kubernetes is not configured on this server`                                               | The server has no cluster access.                                     |
-| `Vercel sandboxes need vercelToken (SANDBOX_VERCEL_TOKEN), ...`                             | Vercel credentials are incomplete; the message names what is missing. |
-| `Vercel sandboxes need SECRETS_ENCRYPTION_KEY so their public ports are password protected` | The instance has no encryption key, so Vercel machines are refused.   |
-| `No sandbox runner is available`                                                            | Every runner is off or misconfigured.                                 |
+**Cause:** On an image without the required tools, the first boot installs them. Later starts skip what is installed. The workspace shows the current step:
 
-All of these are for your operator to fix. A runner being switched off never
-strands existing machines: machines already on it keep starting, stopping and
-working.
+| Step                         | What happens                                       |
+| ---------------------------- | -------------------------------------------------- |
+| Starting the machine         | The runner brings the machine up.                  |
+| Installing packages          | Installs `sshd`, `git`, and `tmux`, if missing.    |
+| Installing the runtime       | Installs Node.js, if missing.                      |
+| Installing coding agents     | Installs the agents, if missing.                   |
+| Preparing storage            | Formats the home disk on first boot, and mounts it. |
+| Setting up your account      | Creates the `dev` user, SSH host keys, and SSH configuration. |
+| Starting services            | Starts SSH and the agent server.                   |
 
-## The machine stopped on its own
+**Fix:** Wait for the steps to finish. If the machine does not start, refer to the next entry.
 
-| Message                               | Why                                                                               |
-| ------------------------------------- | --------------------------------------------------------------------------------- |
-| (none)                                | Idle stop: no terminal or SSH activity, and no agent working, for the idle limit. |
-| `Stopped after reaching max lifetime` | It had been running for the maximum lifetime since it was last started.           |
-| `Stopped by provider timeout`         | Vercel's own timeout stopped it.                                                  |
+These logs are on the machine. Read them from a terminal or over SSH.
 
-Start it again; everything on disk (or in the snapshot) is still there. Running
-processes, including dev servers and agent turns in progress, are not.
+| File                          | Contents                                          |
+| ----------------------------- | ------------------------------------------------- |
+| `~/.setup.log`                | The machine setup script                          |
+| `~/.clone.log`                | The repository named at creation                  |
+| `~/.opencode-serve.log`       | The agent server                                  |
+| `/var/log/orchard-bridge.log` | The SSH bridge, on Vercel machines                |
+
+## Sandbox did not become ready in time
+
+```text
+Sandbox did not become ready in time
+Sandbox resource never appeared in the cluster
+```
+
+**Cause:** The machine stayed in **Creating** or **Starting** for 10 minutes, or 30 minutes for a fork. The second message means the runner did not create the resource.
+
+**Fix:** Start the machine again. If it fails the same way, contact your operator.
+
+## A machine shows Apply failed
+
+**Cause:** Orchard carries out starts, stops, deletes, and credential syncs through a queue. A worker retries a failed change up to ten times, with increasing delays. Transient errors clear without action. After the last attempt, the error stays on the machine.
+
+**Fix:** Fix the cause, then queue the failed changes again. The host or an org admin can select **Retry** in the machine menu, or run:
+
+```bash
+orchard sandbox retry my-machine
+```
+
+If the error returns, or the machine shows **Applying** for more than a few minutes, contact your operator.
+
+## A runner is not available
+
+The API returns one of these messages when you create a machine on an unavailable runner:
+
+| Message                                                                                     | Cause                                                       |
+| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `Kubernetes sandboxes are turned off on this server`                                        | The operator turned the runner off.                         |
+| `Vercel sandboxes are turned off on this server`                                            | The operator turned the runner off.                         |
+| `Kubernetes is not configured on this server`                                               | The server has no cluster access.                           |
+| `Vercel sandboxes need vercelToken (SANDBOX_VERCEL_TOKEN), ...`                             | Vercel credentials are incomplete. The message names what is missing. |
+| `Vercel sandboxes need SECRETS_ENCRYPTION_KEY so their public ports are password protected` | The instance has no encryption key.                          |
+| `No sandbox runner is available`                                                            | Every runner is off or misconfigured.                        |
+
+**Fix:** Contact your operator. Machines already on a runner that is turned off keep working.
+
+The **New machine** sheet offers only available runners.
+
+## The machine stopped without a request
+
+| Message                               | Cause                                                                            |
+| ------------------------------------- | -------------------------------------------------------------------------------- |
+| None                                  | Idle stop. There was no terminal or SSH activity for the idle limit, and no agent was working. |
+| `Stopped after reaching max lifetime` | The machine reached the maximum time since its last start.                        |
+| `Stopped by provider timeout`         | Vercel's timeout stopped the machine.                                            |
+
+**Fix:** Start the machine again. Files on disk remain. Running processes, including dev servers and agent turns in progress, do not.
 
 ## The machine is in Error
 
-| Message                                         | Meaning                                                                                                |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `Sandbox resource disappeared from the cluster` | Something outside Orchard deleted it. Starting it recreates it; if its disk went too, it starts empty. |
-| `The Vercel sandbox no longer exists`           | Same, on Vercel.                                                                                       |
-| `The Vercel sandbox failed`                     | Vercel reported the sandbox as failed. Start it again.                                                 |
-| `Failed to create sandbox: ...`                 | Creation was refused; the rest of the message says why.                                                |
+| Message                                         | Cause and fix                                                                                       |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `Sandbox resource disappeared from the cluster` | Something outside Orchard deleted the resource. Start the machine to recreate it. If its disk is also gone, it starts empty. |
+| `The Vercel sandbox no longer exists`           | The sandbox is gone on Vercel. Start the machine to recreate it.                                    |
+| `The Vercel sandbox failed`                     | Vercel reported a failure. Start the machine again.                                                 |
+| `Failed to create sandbox: ...`                 | Creation failed. The rest of the message states why.                                                |
 
-## SSH says the host key changed
+## SSH reports that the host key changed
 
-Machines keep their host keys on their own disk, so stopping and starting never
-changes them. Deleting a machine and creating a new one with the same name does.
+**Cause:** Host keys stay the same across stops and starts. Deleting a machine and creating another with the same name changes them. The stale key is in a `known_hosts` file that Orchard does not manage.
 
-With `orchard sandbox ssh-config --install` this is handled for you: every
-connection fetches the machine's current host keys from Orchard and updates
-`~/.orchard/ssh/known_hosts` before SSH checks it. If you still see the warning,
-the stale key is in a `known_hosts` file Orchard does not manage, for example from
-a host block you wrote by hand. Run the installer and remove the stale entry:
+**Fix:** Run the installer and remove the stale entry:
 
 ```bash
 orchard sandbox ssh-config --install
 ssh-keygen -R orchard-<name>
 ```
 
-`Permission denied (publickey)` means none of your SSH identities matches the key
-your client offered. `--install` registers its own key; otherwise add your key
-under **User settings → Sandbox**.
+## Permission denied (publickey)
+
+```text
+Permission denied (publickey)
+```
+
+**Cause:** None of your SSH identities matches the key your client offered.
+
+**Fix:** Run `orchard sandbox ssh-config --install`, or add your key in **User settings** > **Greenhouse** > **SSH identities**.
 
 ## Link GitHub to push
 
-The pull request button reads **Link GitHub to push**, or an action fails with
-`github_not_linked`, when you have no GitHub account linked to Orchard. Pushes,
-pull requests and merges use your own account, so each person on a machine needs
-their own link. Link it under **User settings → GitHub and Tailscale** and try
-again. Committing works without it.
+The pull request button reads **Link GitHub to push**, or an action fails with `github_not_linked`.
 
-`No GitHub account is linked to read checks` on the **Checks** tab means neither
-you nor the host has linked GitHub. Checks are read with your GitHub access, or
-the host's when you have none.
+**Cause:** Your account has no linked GitHub account. Pushes, pull requests, and merges use your own account.
 
-## Sessions
+**Fix:** Link it in **User settings** > **GitHub and Tailscale**. You can commit without it.
 
-| Error                                               | Fix                                                                          |
+## No GitHub account is linked to read checks
+
+```text
+No GitHub account is linked to read checks
+```
+
+**Cause:** Neither you nor the host has linked GitHub.
+
+**Fix:** Link it in **User settings** > **GitHub and Tailscale**.
+
+## A session does not start
+
+| Message                                             | Fix                                                                          |
 | --------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `"<repo>" is not a git repository in this sandbox`  | The repository is not cloned yet, or the clone failed. Check `~/.clone.log`. |
-| `Could not find the base branch in that repository` | The base branch does not exist on `origin` or locally. Pick another one.     |
-| `This session is archived`                          | Restore it first (`orchard sandbox session archive --restore`).              |
+| `Could not find the base branch in that repository` | Select another base branch.                                                  |
+| `This session is archived`                          | Restore it with `orchard sandbox session archive --restore`.                 |
 | `Sandbox is not running`                            | Start the machine.                                                           |
 
-## Terminals
+## A terminal does not open
 
-- `The sandbox is still setting up. Try again in a moment.` The `dev` user does not
-  exist yet because the machine is still booting.
-- `Interactive shells are not available for Vercel sandboxes` The installed Vercel
-  SDK cannot open shells; your operator needs to upgrade it.
-- A terminal that says it is waiting to start is attached to a script or a shell
-  that has not started yet; it connects as soon as it does.
+| Message                                                    | Cause and fix                                                                            |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `The sandbox is still setting up. Try again in a moment.`  | The `dev` user does not exist yet. Wait for the machine to finish booting.               |
+| `Interactive shells are not available for Vercel sandboxes` | The installed Vercel SDK cannot open shells. Your operator must upgrade it.             |
 
-## Previews
+## Previews do not open
 
-| Message                                             | Meaning                                                                      |
-| --------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `Previews need a preview domain`                    | Your operator has not set a preview domain, so Kubernetes previews are off.  |
-| `That port cannot be previewed`                     | Use one of 3000, 3001, 4173, 5173, 8000, 8080 or 8787.                       |
-| `This preview link has expired or was already used` | Preview links are single use for 60 seconds. Open it again from Greenhouse.  |
-| `Nothing is answering on this port in the sandbox`  | Nothing listens there, or it listens on `localhost` only. Bind to `0.0.0.0`. |
-| `Cross-site requests to previews are not allowed`   | Another site tried to call your preview. Open it directly.                   |
-| `You no longer have access to this sandbox`         | You were removed from the machine.                                           |
+| Message                                             | Cause and fix                                                                     |
+| --------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `Previews need a preview domain; ...`               | Your operator has not set a preview domain, so Kubernetes previews are off.       |
+| `That port cannot be previewed`                     | Use 3000, 3001, 4173, 5173, 8000, 8080, or 8787, or declare the port in `.orchard/greenhouse.json`. |
+| `This preview link has expired or was already used` | Links are single use and last 60 seconds. Open the preview again from Greenhouse. |
+| `Nothing is answering on this port in the sandbox`  | Nothing listens on the port, or it listens on `localhost` only. Bind to `0.0.0.0`. |
+| `Cross-site requests to previews are not allowed`   | Another site called your preview. Open the preview directly.                      |
+| `You no longer have access to this sandbox`         | You were removed from the machine.                                                |
 
-## Forking
+## A fork fails
 
-| Error                                                                               | Meaning                                                             |
-| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| `This cluster has no VolumeSnapshotClass for the sandbox disk's storage class, ...` | The cluster's storage cannot snapshot, so Kubernetes forks are off. |
-| `This machine has no home volume to copy yet`                                       | Start the machine once before forking it.                           |
-| `Only the machine's owner can fork it`                                              | Forks copy the host's home directory and credentials.               |
-| `Sandbox limit reached`                                                             | A fork is a new machine and counts against your limit.              |
+| Message                                                                             | Cause and fix                                                     |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `This cluster has no VolumeSnapshotClass for the sandbox disk's storage class, ...` | The cluster cannot snapshot the storage, so Kubernetes forks are off. |
+| `This machine has no home volume to copy yet`                                       | Start the machine once before forking it.                         |
+| `Only the machine's owner can fork it: ...`                                         | The copy contains the host's home directory and credentials.      |
+| `Forking needs Vercel drive forks, which this team's plan doesn't have`             | The operator's Vercel plan does not include drive forks.          |
+| `Sandbox limit reached (...)`                                                       | A fork counts against your machine limit. Ask an admin to raise it. |
+
+## Still stuck?
+
+Collect the machine's name, runner, status message, and the relevant log above. Then contact your instance operator.
