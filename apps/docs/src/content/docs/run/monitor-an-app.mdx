@@ -1,0 +1,128 @@
+---
+title: Monitor an app
+description: Read metrics, logs, requests, errors, and cluster events for an Orchard app on the Observe tab.
+sidebar:
+  order: 6
+---
+
+The **Observe** tab of an app shows metrics, logs, requests, errors, and cluster events. Use the tab to find out what changed and when.
+
+| View         | What it shows                                                  | Requirements                                                            |
+| ------------ | -------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| **Metrics**  | Traffic, resources, pods, log volume, and deploys over time.   | The metrics store. Traffic panels also need a domain on the app.        |
+| **Logs**     | Live logs and past logs.                                       | Past logs need the [log store](/operate/logs/).                         |
+| **Requests** | Individual HTTP requests.                                      | A domain on the app, the log store, and [access logs](/operate/logs/).  |
+| **Errors**   | Repeated error log lines, grouped into one entry.              | Errors from replaced pods need the log store.                           |
+| **Events**   | Crashes and Kubernetes warnings.                               | None.                                                                   |
+
+The **Requests** view does not appear until the requirements are met.
+
+## Read metrics
+
+1. Open the app.
+2. Go to **Observe** > **Metrics**.
+3. Select a time range. The options go from **Last 5 minutes** to **Last 7 days**. To enter exact times, select **Custom range**.
+4. (Optional) Select **By pod** to split the charts by pod.
+
+The view has these sections:
+
+| Section               | Panels                                                                                                  |
+| --------------------- | ------------------------------------------------------------------------------------------------------- |
+| **Traffic and errors** | **Requests**, **Error rate**, **Response time**                                                        |
+| **Resources**         | **CPU**, **CPU throttling**, **Memory**, **Network**, **Disk**                                          |
+| **Pods**              | **Restarts and out-of-memory kills**, **Waiting containers by reason**, **Pods not ready**, **Kubernetes warnings** |
+| **Logs**              | **Error and warning lines**, **Latest errors**                                                          |
+| **Deploys**           | **Deploys**, **Build time**, **Queue wait**, **Where build time goes**                                  |
+
+To share the current time range and view, select the copy icon next to the time range.
+
+## Review findings
+
+A finding is a warning at the top of the **Metrics** view. Orchard creates a finding when one of these signals changes:
+
+- Error rate
+- Response time
+- Memory use, including a forecast of when the app reaches its memory limit
+- CPU throttling
+- Restarts
+
+If a change happened in the 10 minutes before the signal changed, the finding names that change. Changes include a deploy, a change to resources or variables, and a node event.
+
+Each finding has these actions:
+
+- **View deploy**: Opens the related deploy, if there is one.
+- **Show**: Zooms the charts to 15 minutes on each side of the finding.
+- **Copy link**: Copies a link to the finding.
+
+## Search logs
+
+1. Open the app.
+2. Go to **Observe** > **Logs**.
+3. In **Filter logs**, enter text to search for.
+4. (Optional) Open the filters to select a level, a time range, or a pod.
+
+To download logs, select the download icon. You can download the lines on screen, export every matching line, or export as NDJSON.
+
+For more information about live logs and container crashes, refer to [Logs and shell](/run/logs/).
+
+## Inspect requests
+
+1. Open the app.
+2. Go to **Observe** > **Requests**.
+3. Filter by path, status class, method, or minimum duration.
+4. Select a request to read its details and the app logs from 30 seconds on each side.
+
+To show only the requests from one client, select the client address in the **Client** column.
+
+Query strings are not stored. IDs in paths are replaced with `:id`.
+
+## Triage errors
+
+1. Open the app.
+2. Go to **Observe** > **Errors**.
+3. Select **Open**, **Resolved**, **Ignored**, or **All**.
+4. Select a time window.
+5. Select an error to read its stack trace and the deploys it affected.
+
+Each error has these actions:
+
+- **Resolve** or **Reopen**: Changes the status of the error.
+- **Ignore**: Hides the error from the **Open** list.
+- **Assign to**: Assigns the error to a person.
+
+## Read deploy results
+
+After a release settles, Orchard compares the 15 minutes before the release with the 15 minutes after it. Orchard compares response time, error rate, restarts, and memory.
+
+Response time and error rate need at least 200 requests in each window. The result appears on the release in the **Activity** tab.
+
+A result counts as worse when any of these conditions is true:
+
+| Signal        | Condition                                                               |
+| ------------- | ----------------------------------------------------------------------- |
+| Response time | The 95th percentile rises by at least 25% and by at least 50 ms.        |
+| Error rate    | The rate at least doubles and rises by at least 0.5 percentage points.  |
+| Restarts      | Restarts rise and reach at least 2.                                     |
+
+A memory change of at least 30% and 64 MiB appears on the result, but it does not count as worse.
+
+To receive a notification when a result is worse, subscribe a channel to the **Got worse** event. For more information, refer to [Notifications](/run/notifications/).
+
+## Use the CLI
+
+| Command                                     | Description                                               |
+| ------------------------------------------- | --------------------------------------------------------- |
+| `orchard observe overview <deploymentId>`   | Print a summary for the app.                              |
+| `orchard observe logs <deploymentId>`       | Read past logs.                                           |
+| `orchard observe http <deploymentId>`       | Read HTTP metrics.                                        |
+| `orchard observe errors <deploymentId>`     | Read grouped errors.                                      |
+| `orchard observe activity <deploymentId>`   | Read the activity feed.                                   |
+| `orchard observe capabilities <deploymentId>` | List the signals available for the app.                 |
+| `orchard top <id>`                          | Show live pods, resources, and traffic.                   |
+
+## Related resources
+
+- [Create alert rules](/run/alerts/)
+- [Logs and request data](/operate/logs/)
+- [Metrics and alerts](/run/observability/)
+- [`orchard observe` reference](/reference/cli/#observe)

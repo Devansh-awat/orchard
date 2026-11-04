@@ -1,0 +1,69 @@
+---
+title: Anonymous usage reports
+description: Understand what an Orchard instance sends in its anonymous usage reports, and turn the reports on or off.
+sidebar:
+  order: 9
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+An Orchard instance can send an anonymous report to the Orchard team once a day. The reports are off until a superadmin turns them on.
+
+The setting is separate from `POSTHOG_API_KEY`, which sends analytics to your own PostHog project.
+
+## What a report contains
+
+- The versions of Orchard and Node.js, and the CPU architecture.
+- The number of users, and the number of users active in the last day, week, and month.
+- The number of organizations, projects, deployments, databases, jobs, and nodes, and similar counts from installed grafts.
+- The number of builds that succeeded and failed in the last 24 hours.
+- Whether GitHub, email, backups, SSO, MCP, and node scheduling are turned on.
+- For an unexpected server error: its type, the route pattern, and the file, function, and line in Orchard where it happened.
+
+## What a report does not contain
+
+Reports do not contain names, email addresses, domains, repositories, environment variables, logs, or error messages. IP addresses are not stored.
+
+Each report carries a random ID that Orchard creates for the instance.
+
+Reports go to `https://us.i.posthog.com`.
+
+## Read the exact report
+
+1. Go to **Instance admin** > **Configuration**.
+2. In **Anonymous usage reports**, select **See the exact report**.
+
+## Turn reports on or off
+
+<Tabs syncKey="dashPlusEnv">
+<TabItem label="Dashboard">
+
+1. Go to **Instance admin** > **Configuration**.
+2. In **Anonymous usage reports**, turn **Share anonymous reports** on or off.
+
+You can also answer the prompt that superadmins see during setup or after setup.
+
+</TabItem>
+<TabItem label="Environment variable">
+
+Set `ORCHARD_TELEMETRY` on the server. This value overrides the dashboard setting and locks it.
+
+| Value    | Effect                                                     |
+| -------- | ---------------------------------------------------------- |
+| `false`  | Reports are off.                                           |
+| `true`   | Reports are on, and superadmins do not see the prompt.     |
+| Not set  | A superadmin decides in the dashboard.                     |
+
+On an installer-based instance, run:
+
+```sh
+sudo orchardctl env set ORCHARD_TELEMETRY false --apply
+```
+
+</TabItem>
+</Tabs>
+
+## Related resources
+
+- [Configuration reference](/reference/configuration/)
+- [Host commands](/operate/host-commands/)

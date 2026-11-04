@@ -1,0 +1,61 @@
+---
+title: Choose an update strategy
+description: Select how Orchard replaces an app's pods during a deploy, and how many pods stay ready when a node drains.
+sidebar:
+  order: 8
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+The update strategy controls how Orchard replaces an app's pods when you deploy a new version.
+
+| Strategy       | CLI value       | Behavior                                                |
+| -------------- | --------------- | ------------------------------------------------------- |
+| **Rolling**    | `rollingupdate` | New pods start before old pods stop.                    |
+| **Recreate**   | `recreate`      | All pods stop first. The app has brief downtime.        |
+| **Blue/green** | `bluegreen`     | Traffic moves to new pods when the new pods are ready.  |
+
+Apps with [storage](/deploy/storage/) must use **Recreate**. The other strategies are not available for those apps.
+
+## Prerequisites
+
+- You need edit access to the project.
+
+## Change the strategy
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the app.
+2. Go to **Settings** > **Deploy behavior**.
+3. In **Updates**, select a **Strategy**.
+
+Orchard saves the change immediately. The new strategy applies to the next deploy.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard deploy strategy set <id> --type bluegreen
+```
+
+</TabItem>
+</Tabs>
+
+## Keep pods ready during a node drain
+
+**Keep ready during a drain** sets how many pods stay ready when a node drains. This setting creates a Kubernetes PodDisruptionBudget.
+
+1. Open the app.
+2. Go to **Settings** > **Deploy behavior**.
+3. In **Updates**, set **Keep ready during a drain**.
+
+Orchard saves the change immediately.
+
+The setting takes effect when the app has more replicas than the value. If you set the value to 0, a drain can take all pods down at the same time.
+
+## Related resources
+
+- [Scaling and resources](/deploy/scaling/)
+- [Rollbacks](/deploy/rollbacks/)
+- [`orchard deploy strategy` reference](/reference/cli/#deploy)

@@ -1,0 +1,50 @@
+---
+title: Apply resource suggestions
+description: Use Orchard resource suggestions to set an app's CPU and memory from its measured usage.
+sidebar:
+  order: 10
+---
+
+Orchard can suggest CPU and memory values for an app based on its measured usage. You choose whether to apply a suggestion.
+
+## Prerequisites
+
+- You need edit access to the project.
+- The metrics store must have at least 3 days of history for the app.
+
+## Apply a suggestion
+
+1. Open the app.
+2. Go to **Settings** > **Resources**.
+3. In **CPU and memory**, read the row that starts with **Suggested**. The row explains why Orchard suggests the change.
+4. Select **Apply**. This updates the form.
+5. Select **Save**. Saving restarts the app.
+
+If the row does not appear, Orchard has no suggestion for the app.
+
+## How Orchard calculates a suggestion
+
+Orchard uses up to 14 days of history.
+
+| Resource | Target                                                                                                                  | Minimum |
+| -------- | ----------------------------------------------------------------------------------------------------------------------- | ------- |
+| Memory   | 115% of the highest daily peak.                                                                                         | 128 MB  |
+| CPU      | The larger of 115% of the 99th percentile and 150% of the 95th percentile of usage.                                     | 100m    |
+
+Orchard rounds each target up to the next resource preset or step.
+
+Orchard also applies these rules:
+
+- If the app ran out of memory, the suggestion raises memory by at least 20%.
+- If the app was throttled more than 10% of the time at the 95th percentile, Orchard treats the CPU limit as the bottleneck. Orchard does not suggest a lower CPU value.
+- If the app restarted in the last 24 hours, Orchard does not suggest lower values.
+- Orchard ignores changes under 25% of the current value.
+- Orchard ignores memory changes under 128 MB and CPU changes under 100m.
+
+Orchard does not suggest values for an app that has no limits.
+
+## Related resources
+
+- [Scaling and resources](/deploy/scaling/)
+- [Quotas and usage](/teams/quotas/)
+- [Monitor an app](/run/monitor-an-app/)

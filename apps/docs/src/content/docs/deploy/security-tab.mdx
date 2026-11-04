@@ -1,0 +1,61 @@
+---
+title: Review app security
+description: Read configuration findings, image scan results, and attack attempts for an Orchard app on the Security tab.
+sidebar:
+  order: 9
+---
+
+The **Security** tab of an app shows configuration findings, image scan results, and attack attempts.
+
+To open the tab, open the app and select **Security**.
+
+## Configuration
+
+The **Configuration** card checks the app's settings. These checks do not need a scanner.
+
+| Finding                      | Meaning                                                 | How to resolve                                                                       |
+| ---------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| **Secrets in plain variables** | A variable name looks like a secret, and the value is stored as plain text. | Select **Variables**, and then store the value as a secret.      |
+| **Served over plain HTTP**   | A domain on the app has no TLS and is not a redirect.   | Select **Network**, edit the domain, and then turn on **HTTPS**.                     |
+| **Image tag can change**     | The image uses a tag that can point to a different image, such as `latest`. | Select **Source**, and then set a fixed tag.                    |
+
+When there are no findings, the card shows **Nothing to flag**.
+
+## Image scan
+
+The **Image scan** card lists known vulnerabilities in the app's container image. A superadmin must set up a scanner on the instance. For more information, refer to [Image scanning](/operate/image-scanning/).
+
+To run a scan, select **Scan now** or **Scan again**.
+
+| Message                                    | Meaning                                                                        |
+| ------------------------------------------ | ------------------------------------------------------------------------------ |
+| `No known vulnerabilities`                 | The scan found no known vulnerabilities.                                       |
+| `Not scanned yet`                          | No scan has run for this image.                                                |
+| `The last scan failed`                     | The scan did not finish. The card shows the error.                             |
+| `Image scanning is off`                    | No scanner is selected on this instance.                                       |
+| `Scanning is not set up on this instance`  | A scanner is selected, but its credentials or server are missing.              |
+| `Harbor only scans images Orchard builds`  | The app uses an external image, and the instance uses Harbor.                  |
+| `This image is no longer in the registry`  | The image was removed from the registry. Redeploy to build and scan it again.  |
+| `The scanner refused Orchard`              | The scanner rejected the credentials.                                          |
+| `Cannot reach the scanner`                 | Orchard cannot connect to the scanner.                                         |
+
+## Attack attempts
+
+The **Attack attempts** chart and the **Top sources** list show suspicious requests from the last 24 hours. Orchard finds these requests in the ingress access logs. Orchard records them, but does not block them.
+
+| Category            | Condition                                                                                                                                 |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **Scanners**        | The path targets a common probe location, such as `/.env`, `/wp-admin`, or `/.git`, or the user agent is a known scanning tool.           |
+| **Injection**       | The path contains an SQL injection, path traversal, script injection, or JNDI lookup pattern.                                             |
+| **Password guessing** | One client address receives at least 21 `401` or `403` responses from one path within 5 minutes.                                        |
+| **Floods**          | One client address sends at least 300 requests, and more than 10 times the median of all clients. This check needs at least 5 client addresses. |
+
+If the card shows `Requests aren't recorded yet`, the log store has no access logs for the app. To set up access logs, refer to [Logs and request data](/operate/logs/).
+
+The **Top sources** list can show the row **Hidden by the load balancer**. This row groups private and cluster addresses. For more information, refer to [Logs and request data](/operate/logs/).
+
+## Related resources
+
+- [Image scanning](/operate/image-scanning/)
+- [Environments and variables](/run/environments/)
+- [Deployment protection](/deploy/protection/)

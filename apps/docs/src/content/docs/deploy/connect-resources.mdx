@@ -1,0 +1,123 @@
+---
+title: Connect an app to a database or app
+description: Read the connection details of a database or another Orchard app through a variable that stays current.
+sidebar:
+  order: 11
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+You can connect an app to a database or to another app in the same project. Orchard stores a reference in a variable instead of a copied value. The reference stays correct after a password rotation or a restore.
+
+A reference has this format:
+
+```txt
+${{resource.<connection>.<field>}}
+```
+
+## Prerequisites
+
+- You need edit access to the project.
+- The database or app must be in the same project.
+
+## Connect a resource
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the app.
+2. Go to **Variables**.
+3. Select **Use a resource**, and then select a database or app.
+4. Select **Save**.
+
+For a database, Orchard adds the variable `DATABASE_URL` if the name is free. For an app, Orchard adds a variable named `<NAME>_URL`.
+
+To read a different field, select the reference in the variable row, and then select the field. To replace the reference with text, select **Type a value instead**.
+
+</TabItem>
+<TabItem label="CLI">
+
+To connect a database and add `DATABASE_URL`, run:
+
+```sh
+orchard deploy bindings add <id> --database <name>
+```
+
+To connect an app, run:
+
+```sh
+orchard deploy bindings add <id> --app <name>
+```
+
+| Flag       | Description                                                                              |
+| ---------- | ---------------------------------------------------------------------------------------- |
+| `--as`     | The connection name used in the reference. The default comes from the resource name.     |
+| `--env`    | The variable to add.                                                                     |
+| `--no-env` | Connect the resource without adding a variable.                                          |
+
+To list the resources that you can connect, run:
+
+```sh
+orchard deploy bindings options <id>
+```
+
+</TabItem>
+</Tabs>
+
+## Available fields
+
+| Resource | Field               | Value                                                      |
+| -------- | ------------------- | ---------------------------------------------------------- |
+| Database | `connection_string` | The full PostgreSQL connection string. This value is secret. |
+| Database | `host`              | The database host.                                         |
+| Database | `port`              | The database port.                                         |
+| Database | `database`          | The database name.                                         |
+| Database | `user`              | The database user.                                         |
+| Database | `password`          | The database password. This value is secret.               |
+| App      | `url`               | The internal URL of the app, in the format `http://<host>:<port>`. |
+| App      | `host`              | The internal host name of the app.                         |
+| App      | `port`              | The port of the app's first service.                       |
+
+App fields come from the app's first service. An app with no service has no fields.
+
+## Limits
+
+- An app can connect to 20 resources.
+- A connection name starts with a lowercase letter. It contains only lowercase letters, digits, and underscores. It has 32 characters at most.
+
+## Remove a connection
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the app.
+2. Go to **Variables**.
+3. Remove all variables that use the connection.
+4. Select **Save**.
+
+Orchard removes a connection when no variable uses it.
+
+</TabItem>
+<TabItem label="CLI">
+
+Remove all variables that use the connection, and then run:
+
+```sh
+orchard deploy bindings remove <id> <name>
+```
+
+</TabItem>
+</Tabs>
+
+You cannot delete a database while an app is connected to it.
+
+## Unresolved references
+
+If a variable refers to a connection or field that does not exist, the app does not start. Orchard does not pass an empty value to the app.
+
+## Related resources
+
+- [Environments and variables](/run/environments/)
+- [Databases](/data/databases/)
+- [score.yaml](/deploy/score/)
+- [`orchard deploy bindings` reference](/reference/cli/#deploy)
