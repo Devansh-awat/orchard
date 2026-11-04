@@ -419,7 +419,7 @@ func deployWebhookTokenCreateCmd() *cobra.Command {
 	var label string
 	c := &cobra.Command{
 		Use:   "create <id>",
-		Short: "Mint a webhook token that triggers a rebuild via POST",
+		Short: "Mint a webhook token that restarts the deployment via POST",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, cfg, err := client()

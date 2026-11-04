@@ -151,7 +151,7 @@ func (s *deploymentScreen) viewDeploys(height int, strip string) string {
 
 func newWebhookTokenForm(cl *api.Client, depID string) *formScreen {
 	return newForm("New webhook token",
-		"Mints a token that triggers a rebuild via POST. The secret is shown once.",
+		"Mints a token that restarts the deployment via POST. The secret is shown once.",
 		[]*field{fld("label", "Label", "ci-main", false)},
 		func(v map[string]string) tea.Cmd {
 			return createWebhookToken(cl, depID, v["label"])
