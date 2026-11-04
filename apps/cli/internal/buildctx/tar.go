@@ -23,6 +23,30 @@ const MaxContextBytes = 100 * 1024 * 1024
 // orchard link dir, and local env files that must never ride into a build.
 var alwaysExcluded = []string{".git", ".orchard", ".env.orchard"}
 
+var secretPatterns = []string{
+	"**/.env",
+	"**/.env.*",
+	"!**/.env.example",
+	"!**/.env.sample",
+	"!**/.env.template",
+	"**/.npmrc",
+	"**/.pypirc",
+	"**/.netrc",
+	"**/.git-credentials",
+	"**/.aws",
+	"**/.ssh",
+	"**/.gnupg",
+	"**/.docker/config.json",
+	"**/.kube",
+	"**/*.pem",
+	"**/*.key",
+	"**/*.p12",
+	"**/*.pfx",
+	"**/id_rsa",
+	"**/id_ed25519",
+	"**/id_ecdsa",
+}
+
 // Pack tars dir (gzipped) honoring .dockerignore when present, else
 // .gitignore. Returns the archive bytes and the number of files included.
 func Pack(dir string) ([]byte, int, error) {
@@ -33,6 +57,11 @@ func Pack(dir string) ([]byte, int, error) {
 	if source != "" {
 		fmt.Fprintln(os.Stderr, "using "+source+" to filter the build context")
 	}
+	secrets, err := loadSecretMatcher(dir)
+	if err != nil {
+		return nil, 0, err
+	}
+	var skipped []string
 
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
@@ -63,6 +92,18 @@ func Pack(dir string) ([]byte, int, error) {
 				}
 				return nil
 			}
+		}
+
+		isSecret, serr := secrets.MatchesOrParentMatches(rel)
+		if serr != nil {
+			return serr
+		}
+		if isSecret {
+			skipped = append(skipped, rel)
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 
 		if matcher != nil {
@@ -121,6 +162,10 @@ func Pack(dir string) ([]byte, int, error) {
 	if walkErr != nil {
 		return nil, 0, walkErr
 	}
+	if len(skipped) > 0 {
+		fmt.Fprintf(os.Stderr, "left out of the upload because they look like secrets: %s\n", strings.Join(skipped, ", "))
+		fmt.Fprintln(os.Stderr, "to upload one, add a line such as !.env to .dockerignore")
+	}
 	if err := tw.Close(); err != nil {
 		return nil, 0, err
 	}
@@ -131,6 +176,19 @@ func Pack(dir string) ([]byte, int, error) {
 		return nil, 0, errors.New("build context exceeds 100MB; add a .dockerignore to exclude build artifacts")
 	}
 	return buf.Bytes(), files, nil
+}
+
+func loadSecretMatcher(dir string) (*patternmatcher.PatternMatcher, error) {
+	patterns := append([]string{}, secretPatterns...)
+	dockerignore, err := readIgnoreFile(filepath.Join(dir, ".dockerignore"))
+	if err == nil {
+		for _, line := range dockerignore {
+			if strings.HasPrefix(line, "!") {
+				patterns = append(patterns, line)
+			}
+		}
+	}
+	return patternmatcher.New(patterns)
 }
 
 func loadIgnore(dir string) (*patternmatcher.PatternMatcher, string, error) {

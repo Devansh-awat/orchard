@@ -25,7 +25,7 @@ orchard up
 
 If the directory has a Dockerfile, Orchard builds it. If the directory has no Dockerfile, Railpack detects the language. To use Railpack when a Dockerfile exists, add `--railpack`.
 
-The CLI always excludes `.git`, `.orchard`, and `.env.orchard`. The CLI also uses `.dockerignore` if the file exists. Otherwise, it uses `.gitignore`.
+The CLI always excludes `.git`, `.orchard`, and `.env.orchard`. It also leaves out files that look like secrets, such as `.env`, `.env.*`, `.npmrc`, `.aws`, `.ssh`, and `*.pem`, and prints what it skipped. To upload one, add a line such as `!.env.build` to `.dockerignore`. The CLI also uses `.dockerignore` if the file exists. Otherwise, it uses `.gitignore`.
 
 The compressed directory cannot be larger than 100 MB. If you exceed the limit, the CLI returns this error:
 
