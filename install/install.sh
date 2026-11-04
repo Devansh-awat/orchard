@@ -2824,8 +2824,9 @@ configure_firewall() {
     if [ "$INGRESS_MODE" != tunnel ]; then
       for port in "$HTTP_PORT" "$HTTPS_PORT"; do
         if ufw_port_denied "$port"; then
-          warn "ufw denies port $port, and the installer left your rule in place. The dashboard, apps"
-          note "and certificates need this port. To open it: sudo ufw allow $port/tcp"
+          warn "ufw has a deny rule for port $port, and the installer left it in place."
+          note "Kubernetes traffic can pass around ufw, so don't rely on this rule to close the port."
+          note "To block it, use your provider's firewall."
         fi
       done
     fi
