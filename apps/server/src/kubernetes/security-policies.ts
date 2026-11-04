@@ -150,7 +150,9 @@ export function tenantDenyPolicy(
       // Egress is allow-listed. Pods may:
       //   1. Talk to other pods in the same tenant namespace.
       //   2. Resolve DNS via kube-dns in kube-system (UDP/TCP 53).
-      //   3. Talk to the `network` namespace (ingress controllers).
+      //   3. Talk to the ingress controller namespaces, so an app can reach a
+      //      public hostname served by this cluster. Orchard's own namespace is
+      //      left out: it only ever needs to reach into tenants.
       //   4. Reach the public internet, but NOT link-local / cloud
       //      metadata (169.254.0.0/16) or the RFC1918 ranges the
       //      platform's own infra lives on.
@@ -163,7 +165,7 @@ export function tenantDenyPolicy(
       // services, and the cloud metadata IMDS.
       egress: [
         {
-          to: namespacePeers([namespace, ...ingressNamespaces])
+          to: namespacePeers([namespace, ...tenantEgressNamespaces(ingressNamespaces)])
         },
         {
           to: [
@@ -213,6 +215,16 @@ export function tenantDenyPolicy(
       ]
     }
   };
+}
+
+export function tenantEgressNamespaces(ingressNamespaces: string[]): string[] {
+  const configured = (process.env.TENANT_EGRESS_NAMESPACES || '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  if (configured.length) return configured;
+  const platform = process.env.PLATFORM_NAMESPACE || PROTECTION_PROXY_SOURCE_NAMESPACE;
+  return ingressNamespaces.filter((name) => name !== platform);
 }
 
 export function projectNamespaces(project: {
