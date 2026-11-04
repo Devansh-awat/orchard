@@ -38,6 +38,16 @@ ORCHARD_IMAGE_SCANNING=${ORCHARD_IMAGE_SCANNING:-true}
 ORCHARD_OBJECT_STORAGE=${ORCHARD_OBJECT_STORAGE:-true}
 ORCHARD_MCP=${ORCHARD_MCP:-true}
 ORCHARD_MCP_DOMAIN=${ORCHARD_MCP_DOMAIN:-}
+ORCHARD_S3=${ORCHARD_S3:-}
+ORCHARD_S3_ENDPOINT=${ORCHARD_S3_ENDPOINT:-}
+ORCHARD_S3_BUCKET=${ORCHARD_S3_BUCKET:-}
+ORCHARD_S3_REGION=${ORCHARD_S3_REGION:-}
+ORCHARD_S3_PATH_STYLE=${ORCHARD_S3_PATH_STYLE:-}
+ORCHARD_S3_ACCESS_KEY=${ORCHARD_S3_ACCESS_KEY:-}
+ORCHARD_S3_SECRET_KEY=${ORCHARD_S3_SECRET_KEY:-}
+ORCHARD_S3_SECRET_KEY_FILE=${ORCHARD_S3_SECRET_KEY_FILE:-}
+S3_READY=false
+S3_PROBE_ERROR=''
 ASSUME_YES=${ORCHARD_ASSUME_YES:-false}
 INSTALL_URL=${ORCHARD_INSTALL_URL:-https://assets.orchard.my/install.sh}
 PROMPT_TIMEOUT=${ORCHARD_PROMPT_TIMEOUT:-900}
@@ -278,6 +288,19 @@ usage() {
                                                         (default: on; same disk, not DR)
     --mcp <true|false>           ORCHARD_MCP            the MCP endpoint agents connect to
                                                         (default: on)
+
+  S3-compatible storage, optional. Backups stay on this box without it.
+    --s3-endpoint <url>          ORCHARD_S3_ENDPOINT    for example https://s3.eu-west-1.amazonaws.com
+    --s3-bucket <name>           ORCHARD_S3_BUCKET      holds backups, uploads and build contexts
+    --s3-region <name>           ORCHARD_S3_REGION      default: auto
+    --s3-path-style              ORCHARD_S3_PATH_STYLE  <endpoint>/<bucket> (default). Set the
+    --no-s3-path-style                                  variable to false for <bucket>.<endpoint>
+    --s3-access-key <id>         ORCHARD_S3_ACCESS_KEY
+    --s3-secret-key-file <path>  ORCHARD_S3_SECRET_KEY_FILE
+                                 ORCHARD_S3_SECRET_KEY  the secret key. Prefer one of these
+    --s3-secret-key <secret>                            stays in your shell history
+    --no-s3                      ORCHARD_S3=false       skip the question
+
     --yes, -y                    ORCHARD_ASSUME_YES     never prompt: use defaults, leave optional
                                                         steps off if they are not ready
                                  ORCHARD_PROMPT_TIMEOUT seconds to wait on a question before
@@ -326,6 +349,15 @@ parse_args() {
       --app-domain) need_value "$1" "${2:-}"; ORCHARD_APP_DOMAIN=$2; shift 2 ;;
       --mcp-domain) need_value "$1" "${2:-}"; ORCHARD_MCP_DOMAIN=$2; shift 2 ;;
       --mcp) need_value "$1" "${2:-}"; ORCHARD_MCP=$2; shift 2 ;;
+      --s3-endpoint) need_value "$1" "${2:-}"; ORCHARD_S3_ENDPOINT=$2; shift 2 ;;
+      --s3-bucket) need_value "$1" "${2:-}"; ORCHARD_S3_BUCKET=$2; shift 2 ;;
+      --s3-region) need_value "$1" "${2:-}"; ORCHARD_S3_REGION=$2; shift 2 ;;
+      --s3-access-key) need_value "$1" "${2:-}"; ORCHARD_S3_ACCESS_KEY=$2; shift 2 ;;
+      --s3-secret-key) need_value "$1" "${2:-}"; ORCHARD_S3_SECRET_KEY=$2; warn "a secret on the command line stays in your shell history; prefer --s3-secret-key-file or ORCHARD_S3_SECRET_KEY"; shift 2 ;;
+      --s3-secret-key-file) need_value "$1" "${2:-}"; ORCHARD_S3_SECRET_KEY_FILE=$2; shift 2 ;;
+      --s3-path-style) ORCHARD_S3_PATH_STYLE=true; shift ;;
+      --no-s3-path-style) ORCHARD_S3_PATH_STYLE=false; shift ;;
+      --no-s3) ORCHARD_S3=false; shift ;;
       --email) need_value "$1" "${2:-}"; ORCHARD_ACME_EMAIL=$2; shift 2 ;;
       --tunnel-token) need_value "$1" "${2:-}"; ORCHARD_TUNNEL_TOKEN=$2; shift 2 ;;
       --updates) need_value "$1" "${2:-}"; ORCHARD_UPDATE_POLICY=$2; shift 2 ;;
@@ -878,6 +910,227 @@ choose_update_policy() {
   info "update policy: $ORCHARD_UPDATE_POLICY"
 }
 
+curl_can_sign() {
+  local version major minor
+  version=$(curl --version 2>/dev/null | head -1 | cut -d' ' -f2)
+  major=${version%%.*}
+  minor=${version#*.}
+  minor=${minor%%.*}
+  [ "${major:-0}" -gt 7 ] || { [ "${major:-0}" -eq 7 ] && [ "${minor:-0}" -ge 75 ]; }
+}
+
+s3_request() {
+  local method=$1 url=$2 code rc=0
+  code=$(printf 'user = "%s:%s"\n' "$ORCHARD_S3_ACCESS_KEY" "$ORCHARD_S3_SECRET_KEY" | curl -sS -K - \
+    --max-time 10 -o /dev/null -w '%{http_code}' -X "$method" \
+    --aws-sigv4 "aws:amz:${ORCHARD_S3_REGION:-auto}:s3" \
+    -H 'x-amz-content-sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' \
+    -H 'Content-Length: 0' "$url" 2>/dev/null) || rc=$?
+  if [ "$rc" -ne 0 ]; then S3_LAST_CODE=000; else S3_LAST_CODE=$code; fi
+}
+
+s3_explain_failure() {
+  case "$S3_LAST_CODE" in
+    000) S3_PROBE_ERROR="could not connect to $ORCHARD_S3_ENDPOINT" ;;
+    404) S3_PROBE_ERROR="the bucket $ORCHARD_S3_BUCKET does not exist at $ORCHARD_S3_ENDPOINT" ;;
+    401|403) S3_PROBE_ERROR="the key was refused; check it can list, read, write and delete in $ORCHARD_S3_BUCKET" ;;
+    301|400) S3_PROBE_ERROR="the region or the addressing style looks wrong for this bucket" ;;
+    *) S3_PROBE_ERROR="the storage answered with HTTP $S3_LAST_CODE" ;;
+  esac
+}
+
+s3_probe() {
+  local base key=.orchard-connection-test scheme host
+  S3_PROBE_ERROR=''
+  if ! curl_can_sign; then
+    S3_PROBE_ERROR='this curl is too old to test the connection'
+    return 2
+  fi
+  base=${ORCHARD_S3_ENDPOINT%/}
+  if [ "$ORCHARD_S3_PATH_STYLE" = false ]; then
+    scheme=${base%%://*}
+    host=${base#*://}
+    base="$scheme://$ORCHARD_S3_BUCKET.$host"
+  else
+    base="$base/$ORCHARD_S3_BUCKET"
+  fi
+  s3_request GET "$base/?list-type=2&max-keys=1"
+  case "$S3_LAST_CODE" in 2*) ;; *) s3_explain_failure; return 1 ;; esac
+  s3_request PUT "$base/$key"
+  case "$S3_LAST_CODE" in 2*) ;; *) s3_explain_failure; return 1 ;; esac
+  s3_request DELETE "$base/$key"
+  case "$S3_LAST_CODE" in 2*) ;; *) s3_explain_failure; return 1 ;; esac
+}
+
+s3_values_problem() {
+  case "$ORCHARD_S3_ENDPOINT" in
+    http://?*|https://?*) ;;
+    '') printf 'no endpoint'; return ;;
+    *) printf 'the endpoint must start with https://'; return ;;
+  esac
+  if [ -z "$ORCHARD_S3_BUCKET" ]; then printf 'no bucket'; return; fi
+  if [ "$ORCHARD_OBJECT_STORAGE" = true ] && [ "$ORCHARD_S3_BUCKET" = orchard-backups ]; then
+    printf 'the bucket name orchard-backups is used by the store on this server'
+    return
+  fi
+  if [ -z "$ORCHARD_S3_ACCESS_KEY" ]; then printf 'no access key'; return; fi
+  if [ -z "$ORCHARD_S3_SECRET_KEY" ]; then printf 'no secret key'; return; fi
+}
+
+ask_secret() {
+  local prompt=$1 answer='' rc=0
+  printf '%s: ' "$prompt" >&2
+  trap '' TTIN TTOU
+  IFS= read -r -s answer <&3 2>/dev/null || rc=$?
+  trap - TTIN TTOU
+  printf '\n' >&2
+  [ "$rc" -eq 0 ] || return 0
+  answer=${answer%$'\r'}
+  printf '%s' "$answer"
+}
+
+s3_ask_settings() {
+  local location account
+  echo
+  echo "  1) Amazon S3"
+  echo "  2) Cloudflare R2"
+  echo "  3) Backblaze B2"
+  echo "  4) Hetzner Object Storage"
+  echo "  5) MinIO, or another S3-compatible service"
+  case "$(ask 'Provider' 1)" in
+    1|aws|s3)
+      ORCHARD_S3_REGION=$(ask 'Region' "${ORCHARD_S3_REGION:-us-east-1}")
+      ORCHARD_S3_ENDPOINT="https://s3.$ORCHARD_S3_REGION.amazonaws.com"
+      ORCHARD_S3_PATH_STYLE=false
+      ;;
+    2|r2)
+      account=$(ask 'Account ID')
+      ORCHARD_S3_ENDPOINT="https://$account.r2.cloudflarestorage.com"
+      ORCHARD_S3_REGION=auto
+      ORCHARD_S3_PATH_STYLE=true
+      ;;
+    3|b2)
+      ORCHARD_S3_REGION=$(ask 'Region' "${ORCHARD_S3_REGION:-us-west-004}")
+      ORCHARD_S3_ENDPOINT="https://s3.$ORCHARD_S3_REGION.backblazeb2.com"
+      ORCHARD_S3_PATH_STYLE=true
+      ;;
+    4|hetzner)
+      location=$(ask 'Location' "${ORCHARD_S3_REGION:-fsn1}")
+      ORCHARD_S3_REGION=$location
+      ORCHARD_S3_ENDPOINT="https://$location.your-objectstorage.com"
+      ORCHARD_S3_PATH_STYLE=true
+      ;;
+    *)
+      ORCHARD_S3_ENDPOINT=$(ask 'Endpoint' "$ORCHARD_S3_ENDPOINT")
+      ORCHARD_S3_REGION=$(ask 'Region' "${ORCHARD_S3_REGION:-us-east-1}")
+      ORCHARD_S3_PATH_STYLE=true
+      ;;
+  esac
+  ORCHARD_S3_BUCKET=$(ask 'Bucket' "$ORCHARD_S3_BUCKET")
+  ORCHARD_S3_ACCESS_KEY=$(ask 'Access key' "$ORCHARD_S3_ACCESS_KEY")
+  ORCHARD_S3_SECRET_KEY=$(ask_secret 'Secret key')
+}
+
+s3_try_settings() {
+  local problem rc=0
+  problem=$(s3_values_problem)
+  if [ -n "$problem" ]; then
+    S3_PROBE_ERROR=$problem
+    return 1
+  fi
+  s3_probe || rc=$?
+  if [ "$rc" -eq 2 ]; then
+    info "$S3_PROBE_ERROR here; Orchard tests it again when it starts"
+    rc=0
+  fi
+  return "$rc"
+}
+
+choose_s3_storage() {
+  if [ "$ORCHARD_S3" = false ]; then return 0; fi
+  if [ -n "$ORCHARD_S3_SECRET_KEY_FILE" ]; then
+    if ! ORCHARD_S3_SECRET_KEY=$(tr -d '\r\n' < "$ORCHARD_S3_SECRET_KEY_FILE" 2>/dev/null); then
+      warn "could not read $ORCHARD_S3_SECRET_KEY_FILE"
+      ORCHARD_S3_SECRET_KEY=''
+    fi
+  fi
+  local given=false interactive=true
+  [ "$ASSUME_YES" = true ] && interactive=false
+  if [ -n "$ORCHARD_S3_ENDPOINT$ORCHARD_S3_BUCKET$ORCHARD_S3_ACCESS_KEY" ]; then given=true; fi
+
+  if [ "$given" = false ]; then
+    [ "$interactive" = true ] || return 0
+    echo
+    bold "Storage"
+    case "$(ask 'Add S3-compatible storage for off-server backups and uploads? (optional, you can do it later)' no)" in
+      y|Y|yes|YES|Yes) ;;
+      *) return 0 ;;
+    esac
+    s3_ask_settings
+  fi
+
+  while true; do
+    if s3_try_settings; then
+      S3_READY=true
+      info "S3 storage: $ORCHARD_S3_BUCKET at $ORCHARD_S3_ENDPOINT"
+      return 0
+    fi
+    warn "S3 storage: $S3_PROBE_ERROR"
+    if [ "$interactive" = false ]; then
+      info "continuing without S3; add it later with 'sudo orchardctl backups s3 set'"
+      return 0
+    fi
+    case "$(ask 'Try again, or skip S3 for now? (retry/skip)' retry)" in
+      r|retry) s3_ask_settings ;;
+      *)
+        info "skipped; add it later with 'sudo orchardctl backups s3 set'"
+        return 0
+        ;;
+    esac
+  done
+}
+
+apply_s3_storage() {
+  if [ "$S3_READY" != true ]; then return 0; fi
+  if ORCHARD_S3_ACCESS_KEY="$ORCHARD_S3_ACCESS_KEY" ORCHARD_S3_SECRET_KEY="$ORCHARD_S3_SECRET_KEY" \
+    orchardctl backups s3 set \
+    --endpoint "$ORCHARD_S3_ENDPOINT" \
+    --bucket "$ORCHARD_S3_BUCKET" \
+    --region "${ORCHARD_S3_REGION:-auto}" \
+    --path-style "${ORCHARD_S3_PATH_STYLE:-true}" >/dev/null 2>&1; then
+    info "S3 storage saved"
+  else
+    S3_READY=false
+    warn "could not save the S3 settings; add them with 'sudo orchardctl backups s3 set' or under Instance admin"
+  fi
+}
+
+control_plane_dump_values() {
+  if [ "$ORCHARD_OBJECT_STORAGE" != true ]; then return 0; fi
+  if [ "$PREVIOUS_INSTALL" = true ] && [ "$(reuse_value '.databaseDumps.enabled')" != true ]; then return 0; fi
+  cat <<EOF
+
+# A daily dump of Orchard's own database, kept in the store on this box. That is
+# undo, not disaster recovery: the dumps share a disk with the database.
+databaseDumps:
+  enabled: true
+  image: postgres:18-alpine
+  destination:
+    bucket: orchard-backups
+    prefix: _control-plane
+    endpointURL: http://object-storage.orchard-object-storage.svc.cluster.local:9000
+    secretName: orchard-object-storage
+    keep: 7
+  targets:
+    - name: orchard
+      host: orchard-db-rw
+      database: orchard
+      user: orchard
+      passwordSecret:
+        name: orchard-db-app
+EOF
+}
+
 k3s_download() {
   curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="$K3S_VERSION" sh -s - server \
     --disable=traefik \
@@ -1405,8 +1658,8 @@ trivy:
 
 # Database backups, checkpoints, point-in-time restore, forks and the trash
 # land in an S3 store on this box. That is undo, not disaster recovery: the
-# copies share a disk with the databases. Point the instance at real S3 or R2
-# and turn this off for that; see infra/charts/orchard/README.md.
+# copies share a disk with the databases. To add S3 storage, run
+# 'orchardctl backups s3 set' or use Instance admin.
 objectStorage:
   local:
     enabled: $ORCHARD_OBJECT_STORAGE
@@ -1417,11 +1670,12 @@ objectStorage:
 # The backup proxy hands each database credentials for its own prefix only,
 # so no tenant ever holds the object store's root key.
 r2Proxy:
-  enabled: $ORCHARD_OBJECT_STORAGE
+  enabled: true
   replicas: 1
   resources:
     requests: { cpu: 20m, memory: 32Mi }
     limits: { cpu: "1", memory: 512Mi }
+$(control_plane_dump_values)
 EOF
 }
 
@@ -1940,6 +2194,11 @@ summary() {
     fi
     printf '\n'
   fi
+  if [ "$S3_READY" != true ] && [ "$ORCHARD_OBJECT_STORAGE" = true ]; then
+    note "Backups are on this server. If the server is lost, the backups are lost."
+    note "To add S3 storage, run 'sudo orchardctl backups s3 set' or use Instance admin."
+    printf '\n'
+  fi
   if [ "$INGRESS_MODE" = tunnel ]; then
     warn "Tunnel mode carries HTTP only, so public databases and raw TCP ports are off."
   fi
@@ -1976,6 +2235,7 @@ main() {
   choose_ingress_mode
   collect_domains
   choose_update_policy
+  choose_s3_storage
   size_workloads
   install_k3s
   ensure_helm
@@ -1986,6 +2246,7 @@ main() {
   write_values
   install_orchard
   install_updater
+  apply_s3_storage
   summary
 }
 

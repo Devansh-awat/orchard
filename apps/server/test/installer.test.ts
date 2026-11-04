@@ -638,3 +638,139 @@ test(
     }
   }
 );
+
+function fakeCurlBox(answerByMethod: string) {
+  const box = sandbox();
+  writeFileSync(
+    join(box.dir, 'curl'),
+    `#!/bin/bash
+if [ "$1" = --version ]; then echo "curl 8.5.0 (x86_64)"; exit 0; fi
+input=$(cat)
+echo "$*" >> "${box.dir}/curl.args"
+case "$input" in *'very-secret'*) ;; *) echo "secret not on stdin" >> "${box.dir}/curl.args" ;; esac
+method=GET
+prev=''
+for a in "$@"; do [ "$prev" = -X ] && method=$a; prev=$a; done
+${answerByMethod}
+`
+  );
+  chmodSync(join(box.dir, 'curl'), 0o755);
+  return box;
+}
+
+const S3_FLAGS = `ORCHARD_S3_ENDPOINT=https://s3.example.com ORCHARD_S3_BUCKET=mine ORCHARD_S3_REGION=eu
+ORCHARD_S3_ACCESS_KEY=AK ORCHARD_S3_SECRET_KEY=very-secret ASSUME_YES=true`;
+
+test('--yes with no S3 settings asks nothing and keeps backups local', () => {
+  const box = sandbox();
+  const out = box.run(`ASSUME_YES=true; choose_s3_storage; echo "ready=$S3_READY"`);
+  assert.match(out, /ready=false/);
+});
+
+test('--no-s3 skips storage even with settings present', () => {
+  const box = sandbox();
+  const out = box.run(`${S3_FLAGS} ORCHARD_S3=false; choose_s3_storage; echo "ready=$S3_READY"`);
+  assert.match(out, /ready=false/);
+});
+
+test('working S3 settings pass the live test, and the secret never reaches argv', () => {
+  const box = fakeCurlBox(`printf 200`);
+  const out = box.run(`${S3_FLAGS}; choose_s3_storage; echo "ready=$S3_READY"`);
+  assert.match(out, /ready=true/);
+  const args = readFileSync(join(box.dir, 'curl.args'), 'utf8');
+  assert.doesNotMatch(args, /very-secret/);
+  assert.doesNotMatch(args, /secret not on stdin/);
+  assert.match(args, /aws:amz:eu:s3/);
+  assert.match(args, /https:\/\/s3\.example\.com\/mine\/\?list-type=2/);
+  assert.match(args, /-X PUT .*mine\/\.orchard-connection-test/);
+  assert.match(args, /-X DELETE/);
+});
+
+test('virtual-host style moves the bucket into the hostname', () => {
+  const box = fakeCurlBox(`printf 200`);
+  box.run(`${S3_FLAGS} ORCHARD_S3_PATH_STYLE=false; choose_s3_storage`);
+  const args = readFileSync(join(box.dir, 'curl.args'), 'utf8');
+  assert.match(args, /https:\/\/mine\.s3\.example\.com\/\?list-type=2/);
+});
+
+test('a failed S3 test never aborts a non-interactive install', () => {
+  const box = fakeCurlBox(`printf 403`);
+  const out = box.run(`${S3_FLAGS}; choose_s3_storage; echo "ready=$S3_READY rc=$?"`);
+  assert.match(out, /ready=false rc=0/);
+  assert.match(out, /the key was refused/);
+  assert.match(out, /continuing without S3/);
+  assert.doesNotMatch(out, /very-secret/);
+});
+
+test('a read-only key fails at the write step', () => {
+  const box = fakeCurlBox(`if [ "$method" = PUT ]; then printf 403; else printf 200; fi`);
+  const out = box.run(`${S3_FLAGS}; choose_s3_storage; echo "ready=$S3_READY"`);
+  assert.match(out, /ready=false/);
+});
+
+test('an unreachable endpoint is reported and skipped', () => {
+  const box = fakeCurlBox(`exit 7`);
+  const out = box.run(`${S3_FLAGS}; choose_s3_storage; echo "ready=$S3_READY"`);
+  assert.match(out, /could not connect/);
+  assert.match(out, /ready=false/);
+});
+
+test('the store bucket name and missing fields are refused before any request', () => {
+  const box = fakeCurlBox(`printf 200`);
+  const named = box.run(`${S3_FLAGS} ORCHARD_S3_BUCKET=orchard-backups; choose_s3_storage`);
+  assert.match(named, /used by the store on this server/);
+  const missing = box.run(`${S3_FLAGS} ORCHARD_S3_SECRET_KEY=; choose_s3_storage`);
+  assert.match(missing, /no secret key/);
+  assert.equal(existsSync(join(box.dir, 'curl.args')), false);
+});
+
+test('a secret key file is read, and an old curl does not block the install', () => {
+  const box = sandbox();
+  writeFileSync(join(box.dir, 'curl'), '#!/bin/sh\necho "curl 7.68.0 (x86_64)"\n');
+  chmodSync(join(box.dir, 'curl'), 0o755);
+  writeFileSync(join(box.dir, 'secret'), 'from-file\n');
+  const out = box.run(
+    `ORCHARD_S3_ENDPOINT=https://s3.example.com ORCHARD_S3_BUCKET=mine ORCHARD_S3_ACCESS_KEY=AK ASSUME_YES=true
+ORCHARD_S3_SECRET_KEY_FILE=${join(box.dir, 'secret')}; choose_s3_storage; echo "secret=$ORCHARD_S3_SECRET_KEY ready=$S3_READY"`
+  );
+  assert.match(out, /secret=from-file ready=true/);
+  assert.match(out, /too old to test/);
+});
+
+test('a failure saving S3 settings only warns', () => {
+  const box = sandbox();
+  writeFileSync(join(box.dir, 'orchardctl'), '#!/bin/sh\nexit 1\n');
+  chmodSync(join(box.dir, 'orchardctl'), 0o755);
+  const out = box.run(`${S3_FLAGS} S3_READY=true; apply_s3_storage; echo "ready=$S3_READY rc=$?"`);
+  assert.match(out, /could not save the S3 settings/);
+  assert.match(out, /ready=false rc=0/);
+});
+
+test('saving passes the secret through the environment, not the arguments', () => {
+  const box = sandbox();
+  writeFileSync(
+    join(box.dir, 'orchardctl'),
+    `#!/bin/sh\necho "$* key=$ORCHARD_S3_SECRET_KEY" > "${box.dir}/ctl.args"\n`
+  );
+  chmodSync(join(box.dir, 'orchardctl'), 0o755);
+  box.run(`${S3_FLAGS} ORCHARD_S3_PATH_STYLE=false S3_READY=true; apply_s3_storage`);
+  const args = readFileSync(join(box.dir, 'ctl.args'), 'utf8');
+  assert.match(
+    args,
+    /backups s3 set --endpoint https:\/\/s3\.example\.com --bucket mine --region eu --path-style false key=very-secret/
+  );
+});
+
+test('a fresh install keeps a daily control-plane dump in the local store, an old box does not gain one', () => {
+  const box = sandbox();
+  const fresh = box.run(`PREVIOUS_INSTALL=false; control_plane_dump_values`);
+  assert.match(fresh, /prefix: _control-plane/);
+  assert.match(fresh, /name: orchard-db-app/);
+  assert.match(fresh, /keep: 7/);
+  const old = box.run(`PREVIOUS_INSTALL=true; control_plane_dump_values`);
+  assert.doesNotMatch(old, /_control-plane/);
+  const none = box.run(
+    `PREVIOUS_INSTALL=false ORCHARD_OBJECT_STORAGE=false; control_plane_dump_values`
+  );
+  assert.doesNotMatch(none, /_control-plane/);
+});
