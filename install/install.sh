@@ -14,7 +14,7 @@ REGISTRIES_FILE=${ORCHARD_REGISTRIES_FILE:-/etc/rancher/k3s/registries.yaml}
 
 K3S_VERSION=${K3S_VERSION:-}
 K3S_CHANNEL=${K3S_CHANNEL:-v1.36}
-HELM_VERSION=${HELM_VERSION:-v4.3.0}
+HELM_VERSION=${HELM_VERSION:-v4.3.1}
 GATEWAY_API_VERSION=${GATEWAY_API_VERSION:-v1.2.1}
 NODE_PORT_RANGE=${ORCHARD_NODE_PORT_RANGE:-30000-30100}
 HTTP_PORT=${ORCHARD_HTTP_PORT:-80}
@@ -357,7 +357,7 @@ usage() {
   Cluster
     --k3s-channel <channel>      K3S_CHANNEL            k3s release channel (default: v1.36)
     --k3s-version <version>      K3S_VERSION            pin k3s, and turn off its automatic patches
-                                 HELM_VERSION           helm release to install (default: v4.3.0)
+                                 HELM_VERSION           helm release to install (default: v4.3.1)
     --gateway-api-version <ver>  GATEWAY_API_VERSION
     --node-port-range <lo-hi>    ORCHARD_NODE_PORT_RANGE  ports apps can claim
     --registry-port <port>       ORCHARD_REGISTRY_PORT    loopback port the kubelet pulls through
@@ -2921,6 +2921,7 @@ install_operators() {
     --wait --timeout 10m
 
   run_step "CloudNativePG" 1m helm upgrade --install cnpg cnpg/cloudnative-pg \
+    --set-string config.data.ENABLE_INSTANCE_MANAGER_INPLACE_UPDATES=true \
     --namespace cnpg-system --create-namespace \
     --wait --timeout 10m
 
