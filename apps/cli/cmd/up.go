@@ -23,6 +23,27 @@ import (
 
 var exposeRe = regexp.MustCompile(`(?im)^\s*EXPOSE\s+(\d+)`)
 
+var fromRe = regexp.MustCompile(`(?im)^\s*FROM\s+(?:--\S+\s+)*(\S+)(?:\s+AS\s+(\S+))?`)
+
+func finalBaseImage(dockerfile string) string {
+	stages := map[string]string{}
+	last := ""
+	for _, m := range fromRe.FindAllStringSubmatch(dockerfile, -1) {
+		base := m[1]
+		if parent, ok := stages[strings.ToLower(base)]; ok {
+			base = parent
+		}
+		if m[2] != "" {
+			stages[strings.ToLower(m[2])] = base
+		}
+		last = base
+	}
+	if strings.Contains(last, "$") || strings.EqualFold(last, "scratch") {
+		return ""
+	}
+	return last
+}
+
 func upCmd() *cobra.Command {
 	var name, dockerfile string
 	var rootDir, installCmd, buildCmd, startCmd, outputDir string
@@ -114,6 +135,8 @@ func upCmd() *cobra.Command {
 				if content, rerr := os.ReadFile(filepath.Join(abs, dockerfilePath)); rerr == nil {
 					if m := exposeRe.FindSubmatch(content); m != nil {
 						fmt.Sscanf(string(m[1]), "%d", &resolvedPort)
+					} else if base := finalBaseImage(string(content)); base != "" {
+						resolvedPort = detectImagePort(cmd.Context(), cl, projectID, base)
 					}
 				}
 			}
@@ -259,7 +282,7 @@ func upCmd() *cobra.Command {
 	c.Flags().StringVar(&name, "name", "", "deployment name (default: directory name)")
 	c.Flags().StringVar(&dockerfile, "dockerfile", "", "Dockerfile path relative to the directory")
 	c.Flags().BoolVar(&railpack, "railpack", false, "force a Railpack build even when a Dockerfile exists")
-	c.Flags().IntVar(&port, "port", 0, "port the app listens on (default: EXPOSE or 3000)")
+	c.Flags().IntVar(&port, "port", 0, "port the app listens on (default: EXPOSE, the base image's port, or 3000)")
 	c.Flags().BoolVar(&detach, "detach", false, "start the build without following its logs")
 	c.Flags().BoolVar(&wait, "wait", false, "block until the deploy is live (default: on when stdout isn't a terminal)")
 	c.Flags().DurationVar(&timeout, "timeout", 10*time.Minute, "give up waiting after this long (exit 8)")

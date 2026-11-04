@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"strconv"
@@ -110,6 +111,44 @@ func printDeploySuccess(ctx context.Context, cl *api.Client, apiURL, id string) 
 
 func printDeployFollowUp(ctx context.Context, cl *api.Client, apiURL, id string, r *api.Rollout) {
 	printDeployDetails(ctx, cl, apiURL, id, r == nil)
+	if r != nil && r.Phase == "live" && r.URL != "" {
+		if code := gatewayErrorAt(ctx, r.URL, 3, 2*time.Second); code != 0 {
+			output.Warnf("%s answered %d, so nothing is listening on the app's port. Check the port under Network in the dashboard, or with: orchard service update", r.URL, code)
+		}
+	}
+}
+
+func gatewayErrorAt(ctx context.Context, target string, attempts int, pause time.Duration) int {
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	code := 0
+	for i := 0; i < attempts; i++ {
+		if i > 0 {
+			select {
+			case <-ctx.Done():
+				return 0
+			case <-time.After(pause):
+			}
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+		if err != nil {
+			return 0
+		}
+		res, err := client.Do(req)
+		if err != nil {
+			return 0
+		}
+		res.Body.Close()
+		if res.StatusCode != http.StatusBadGateway && res.StatusCode != http.StatusServiceUnavailable && res.StatusCode != http.StatusGatewayTimeout {
+			return 0
+		}
+		code = res.StatusCode
+	}
+	return code
 }
 
 func printDeployDetails(ctx context.Context, cl *api.Client, apiURL, id string, withURL bool) {
