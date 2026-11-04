@@ -41,7 +41,7 @@ export function versionOptions(data: DatabaseVersions | null): DropdownOption[] 
 		.sort((a, b) => b.major - a.major)
 		.map((v) => ({
 			value: String(v.major),
-			label: `PostgreSQL ${v.major}`,
+			label: `Postgres ${v.major}`,
 			description: versionNote(v, data.defaultMajor)
 		}));
 }

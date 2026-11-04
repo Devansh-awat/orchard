@@ -313,7 +313,7 @@ export class NotificationsService {
         event: pressure ? 'db.storage_pressure' : 'db.storage_recovered',
         title: pressure ? `Storage running out: ${db.name}` : `Storage back to normal: ${db.name}`,
         body: pressure
-          ? `${db.name} is running out of disk${detail ? `: ${truncate(detail, 300)}` : '.'} PostgreSQL refuses to start once the volume is full, so expand storage${db.storageSize ? ` (currently ${db.storageSize})` : ''} before that happens.`
+          ? `${db.name} is running out of disk${detail ? `: ${truncate(detail, 300)}` : '.'} Postgres refuses to start once the volume is full, so expand storage${db.storageSize ? ` (currently ${db.storageSize})` : ''} before that happens.`
           : `${db.name} has free disk space again.`,
         url: `${this.frontendUrl}/${db.project.organization.slug}/databases/${db.id}`,
         projectId: db.project.id,

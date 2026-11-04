@@ -429,7 +429,7 @@ These were not tested on this path: backups with the `objectStorage` values, MCP
 | Traefik                       | Control-plane ingress (`IngressRoute`)                               |
 | Gateway API CRDs              | The `Gateway` for database exposure, unless `gateway.enabled: false` |
 | cert-manager                  | TLS, plus a DNS-01 `ClusterIssuer` for wildcard certificates         |
-| A default StorageClass        | PostgreSQL volumes, build cache, Redis, metrics, and logs            |
+| A default StorageClass        | Postgres volumes, build cache, Redis, metrics, and logs            |
 | An OCI registry               | Where built images are pushed and pulled                             |
 | An ingress controller         | Every app URL, as an `Ingress` of class `tenant.ingressClass`        |
 | A layer 4 (L4) load balancer  | Public database exposure and TCP or UDP passthrough only             |

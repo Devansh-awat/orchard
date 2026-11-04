@@ -56,7 +56,7 @@
 		},
 		{
 			id: 'postgres',
-			label: 'PostgreSQL',
+			label: 'Postgres',
 			hint: 'Managed, with backups',
 			image: IMG_ICONS.postgres
 		},

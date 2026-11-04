@@ -45,7 +45,7 @@ import { LeaderElectionService } from '../events/leader-election.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
 /**
- * All PostgreSQL flows: legacy single-pod Postgres (exec into shared cluster
+ * All Postgres flows: legacy single-pod Postgres (exec into shared cluster
  * pod), container-mode Postgres with pgBackRest, and CNPG operator-managed
  * clusters with backups, scheduled backups, public TLS reflection, and
  * MetalLB exposure. Owns the postgresql.cnpg.io CRD interactions.
@@ -791,7 +791,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
           } else {
             reject(
               new BadRequestException(
-                `PostgreSQL command failed: ${errOutput || status.message || 'Unknown error'}`
+                `Postgres command failed: ${errOutput || status.message || 'Unknown error'}`
               )
             );
           }

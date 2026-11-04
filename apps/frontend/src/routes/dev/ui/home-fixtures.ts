@@ -87,7 +87,7 @@ export const TEMPLATE_SHELVES: { title: string; items: ShelfItem[] }[] = [
 			tpl(
 				'ghost',
 				'Ghost Blog',
-				'Modern publishing platform powered by Ghost with PostgreSQL storage and public domain.',
+				'Modern publishing platform powered by Ghost with Postgres storage and public domain.',
 				'https://assets.orchard.my/registry/templates/ghost/1.0.0/icon.png',
 				'cms'
 			),

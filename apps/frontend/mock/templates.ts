@@ -18,7 +18,7 @@ export const TEMPLATES: MockTemplate[] = [
 		name: 'ghost',
 		displayName: 'Ghost Blog',
 		description:
-			'Modern publishing platform powered by Ghost with PostgreSQL storage and public domain.',
+			'Modern publishing platform powered by Ghost with Postgres storage and public domain.',
 		icon: 'https://assets.orchard.my/registry/templates/ghost/1.0.0/icon.png',
 		category: 'cms'
 	},

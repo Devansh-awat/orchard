@@ -38,8 +38,8 @@ export const homeTabs: HomeTab[] = [
     id: 'databases',
     label: 'Databases',
     icon: 'database',
-    heading: 'Create a PostgreSQL database',
-    text: 'Orchard runs PostgreSQL in your cluster. With backup storage set, each database takes a daily backup and archives its write-ahead log.',
+    heading: 'Create a Postgres database',
+    text: 'Orchard runs Postgres in your cluster. With backup storage set, each database takes a daily backup and archives its write-ahead log.',
     command: 'orchard db create --name app-db',
     primary: { label: 'Create a database', href: '/data/databases/' },
     related: [

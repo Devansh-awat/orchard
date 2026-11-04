@@ -238,7 +238,7 @@ To change whether a service is external use `set_service_exposure`, not this.
 
 **toolset: dangerous · destructive · idempotent**
 
-DANGEROUS: Delete a PostgreSQL database. Apps using it lose it immediately. The database goes to a 30-day trash: list it with list_deleted_databases and bring it back with undelete_database, as long as it had a completed backup (recoverableUntil in the response says how long). The server refuses the call while deletion protection is on.
+DANGEROUS: Delete a Postgres database. Apps using it lose it immediately. The database goes to a 30-day trash: list it with list_deleted_databases and bring it back with undelete_database, as long as it had a completed backup (recoverableUntil in the response says how long). The server refuses the call while deletion protection is on.
 
 ### `delete_deploy_webhook_token`
 
@@ -428,7 +428,7 @@ Read a database's replication mode. async: standbys follow the primary and a fai
 
 **toolset: databases · read-only · idempotent**
 
-Show which known PostgreSQL vulnerabilities (CVEs from postgresql.org) affect a database's running version, with CVSS score, component and the version that fixes each, plus end of life status. action says what to do: none, minor_update (Orchard rolls minor versions automatically, see minorUpdate), or major_upgrade (the major is unsupported or a fix only exists on a newer major; use upgrade_database).
+Show which known Postgres vulnerabilities (CVEs from postgresql.org) affect a database's running version, with CVSS score, component and the version that fixes each, plus end of life status. action says what to do: none, minor_update (Orchard rolls minor versions automatically, see minorUpdate), or major_upgrade (the major is unsupported or a fix only exists on a newer major; use upgrade_database).
 
 ### `list_checkpoints`
 
@@ -1312,7 +1312,7 @@ Get the full YAML format guide for creating Leaf templates, including all resour
 
 **toolset: databases · read-only · idempotent**
 
-List PostgreSQL databases. Pass a projectId for one project's databases, or nothing at all to get every database the user can see (optionally narrowed to one organization). Passwords are never included; use get_database_connection for credentials.
+List Postgres databases. Pass a projectId for one project's databases, or nothing at all to get every database the user can see (optionally narrowed to one organization). Passwords are never included; use get_database_connection for credentials.
 
 ### `list_deployment_errors`
 
@@ -1414,7 +1414,7 @@ Turn off automated backups for a database. This also stops WAL archiving, so poi
 
 **toolset: databases**
 
-Create a new PostgreSQL database in a project. Returns the database record with the password masked.
+Create a new Postgres database in a project. Returns the database record with the password masked.
 To wire it into an app, call get_database_connection and pass its connectionString to add_env_vars as DATABASE_URL with secret: true, so the credential never sits in a readable env var.
 
 Optionally, pass restoreFromUrl to seed the new database from an existing one. The
@@ -1471,7 +1471,7 @@ Expose a database publicly on a shared organization IP with a unique port and TL
 **toolset: databases · idempotent**
 
 Expand the storage volume of a CNPG database. Storage can ONLY grow, never shrink. Requests smaller than the current size are rejected. Expansion happens online: the cluster spec and every data volume are resized directly, so it works even while the database is crashlooping on a full disk or stopped; the filesystem grows within a couple of minutes and CNPG boots the instance once headroom exists. Re-requesting the current size is allowed and re-syncs any volume that lags behind the cluster spec. Maximum size is 200Gi.
-IMPORTANT: if the disk filled because WAL archiving is failing, expansion only buys time. PostgreSQL cannot recycle WAL while archiving fails, so the volume WILL fill again. The response includes a "warning" field when the cluster's ContinuousArchiving condition is failing; if present, surface it to the user and treat fixing the archiving config as the real remediation.
+IMPORTANT: if the disk filled because WAL archiving is failing, expansion only buys time. Postgres cannot recycle WAL while archiving fails, so the volume WILL fill again. The response includes a "warning" field when the cluster's ContinuousArchiving condition is failing; if present, surface it to the user and treat fixing the archiving config as the real remediation.
 
 ### `get_database_backup_schedule`
 
@@ -1491,7 +1491,7 @@ This is the only tool that returns the password, and every call is recorded in t
 
 **toolset: databases · read-only · idempotent**
 
-Instance-wide limits for managed databases, currently just maxReplicas: the largest number of PostgreSQL instances a single cluster may run on this Orchard instance. Self-hosters can change it, so read it rather than assuming the default of 5.
+Instance-wide limits for managed databases, currently just maxReplicas: the largest number of Postgres instances a single cluster may run on this Orchard instance. Self-hosters can change it, so read it rather than assuming the default of 5.
 
 ### `get_database_query_stats`
 
@@ -1505,7 +1505,7 @@ The first stop for "the database is slow". It tells you which statement is actua
 
 **toolset: databases · read-only · idempotent**
 
-Read the configured PostgreSQL parameters for a database (max_connections, shared_buffers, work_mem, statement_timeout, synchronous_commit, etc.).
+Read the configured Postgres parameters for a database (max_connections, shared_buffers, work_mem, statement_timeout, synchronous_commit, etc.).
 
 `parameters` contains ONLY what the user has explicitly set. A key that is absent is sized automatically from the database's memory limit, so an absent shared_buffers is not "unset", it is managed. `advisories` lists settings that were accepted but look dangerous at the current memory limit; check it when diagnosing an OOMKilled database.
 
@@ -1513,7 +1513,7 @@ Read the configured PostgreSQL parameters for a database (max_connections, share
 
 **toolset: databases · idempotent**
 
-Install a PostgreSQL extension on a CNPG database. Some extensions (like pg_stat_statements) require addToPreload=true, which adds them to shared_preload_libraries and triggers a database restart.
+Install a Postgres extension on a CNPG database. Some extensions (like pg_stat_statements) require addToPreload=true, which adds them to shared_preload_libraries and triggers a database restart.
 
 ### `list_database_backups`
 
@@ -1525,7 +1525,7 @@ List all backups for a database. Each backup has an id, label, type, status, siz
 
 **toolset: databases · read-only · idempotent**
 
-List PostgreSQL extensions available on the database and which are currently installed. Also returns the current shared_preload_libraries.
+List Postgres extensions available on the database and which are currently installed. Also returns the current shared_preload_libraries.
 
 ### `rename_database`
 
@@ -1549,7 +1549,7 @@ Restart a database cluster. Drops every open connection, so apps talking to it s
 
 **toolset: databases · idempotent**
 
-Change how many PostgreSQL instances a database cluster runs: 1 primary plus (replicas - 1) read replicas. The replicas are streaming hot standbys: they serve reads a few milliseconds behind the primary AND act as failover targets, so this buys read scaling and high availability at once. It does not buy write throughput, which is still one primary.
+Change how many Postgres instances a database cluster runs: 1 primary plus (replicas - 1) read replicas. The replicas are streaming hot standbys: they serve reads a few milliseconds behind the primary AND act as failover targets, so this buys read scaling and high availability at once. It does not buy write throughput, which is still one primary.
 Each instance is a full pod with its own volume, so scaling from 1 to 3 triples the cluster's CPU and memory usage; the API charges the difference against the organization cap and the project owner's member allowance and returns an error if it does not fit. Scaling down is always permitted.
 Scaling up is not instant. A new replica has to clone the primary before it reports ready. Reads that must never hit stale data should keep using the "rw" endpoint. See get_database for the rw/ro/r endpoints.
 
@@ -1582,7 +1582,7 @@ Use it to park a database you are not using without losing it. `delete_database`
 
 **toolset: databases · destructive · idempotent**
 
-DROP a PostgreSQL extension from a database. Objects that depend on it will also be dropped. Optionally remove it from shared_preload_libraries.
+DROP a Postgres extension from a database. Objects that depend on it will also be dropped. Optionally remove it from shared_preload_libraries.
 
 ### `update_database_resources`
 
@@ -1596,7 +1596,7 @@ Pass null for either field to clear it and fall back to the default.
 
 **toolset: databases · destructive · idempotent**
 
-Update PostgreSQL parameters on a database. Some parameters (max_connections, shared_buffers) require a brief database restart to take effect. The API applies them and rolls the pod automatically.
+Update Postgres parameters on a database. Some parameters (max_connections, shared_buffers) require a brief database restart to take effect. The API applies them and rolls the pod automatically.
 Pass values as strings (e.g. "256MB", "200", "off"). Use get_database_settings first to see current values and supported keys.
 
 The map REPLACES the set of user-set parameters, so omitting a key hands it back to automatic sizing rather than leaving it alone. Send the full map you want.

@@ -67,7 +67,7 @@ On its next `update`, a host installed earlier gets the same defaults as a new i
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | Metrics           | Sets `metrics.enabled: true`, including when an older installer wrote `false`.                                                           |
 | Image scanning    | Sets `trivy.enabled: true`.                                                                                                              |
-| Storage classes   | Gives the log store, metrics, and scanner volumes the class that PostgreSQL uses.                                                        |
+| Storage classes   | Gives the log store, metrics, and scanner volumes the class that Postgres uses.                                                        |
 | Log disk limit    | Sets `logs.maxDiskSpaceUsage` from free disk.                                                                                            |
 | Small machines    | Under 8 GB of memory, reduces requests and limits for metrics, logs, and the scanner, keeps 7 days of logs, and runs one scan at a time. |
 | Backups           | Sets `objectStorage.local.enabled: true` and `r2Proxy.enabled: true`, sized from free disk.                                              |

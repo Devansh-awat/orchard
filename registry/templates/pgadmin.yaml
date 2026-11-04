@@ -10,7 +10,7 @@ metadata:
   tags: ['postgres', 'database', 'admin']
   keywords: ['sql client', 'dbeaver', 'query editor']
   homepage: https://www.pgadmin.org
-  license: PostgreSQL
+  license: Postgres
 
 parameters:
   - name: appName

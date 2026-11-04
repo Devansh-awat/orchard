@@ -525,12 +525,12 @@ export class DatabasesService {
         );
       }
       if (!versionNum || Number.isNaN(versionNum)) {
-        throw new BadRequestException("Couldn't determine the source PostgreSQL version");
+        throw new BadRequestException("Couldn't determine the source Postgres version");
       }
       const sourceMajor = Math.floor(versionNum / 10000);
       if (sourceMajor > this.MAX_PG_MAJOR) {
         throw new BadRequestException(
-          `Source PostgreSQL ${sourceMajor} is newer than the newest version Orchard supports (${this.MAX_PG_MAJOR}), so you can't import it yet.`
+          `Source Postgres ${sourceMajor} is newer than the newest version Orchard supports (${this.MAX_PG_MAJOR}), so you can't import it yet.`
         );
       }
 
@@ -608,7 +608,7 @@ export class DatabasesService {
     const envSlug =
       dbEnv && dbEnv.namespace !== project.namespace ? `_${dbEnv.slug.replace(/-/g, '_')}` : '';
     const fullDbName = `${orgSlug}_${projSlug}${envSlug}_${nameSlug}`;
-    // PostgreSQL identifiers are limited to 63 characters; dbUser has "u_" prefix so max 61 for the base
+    // Postgres identifiers are limited to 63 characters; dbUser has "u_" prefix so max 61 for the base
     const maxLen = 61;
     const dbBase = fullDbName.length > maxLen ? fullDbName.substring(0, maxLen) : fullDbName;
     const dbName = dbBase;
@@ -685,7 +685,7 @@ export class DatabasesService {
       const offered = this.offeredPgMajors();
       if (!Number.isInteger(requested) || !offered.includes(requested)) {
         throw new BadRequestException(
-          `Unsupported PostgreSQL version. Choose one of ${offered.join(', ')}.`
+          `Unsupported Postgres version. Choose one of ${offered.join(', ')}.`
         );
       }
       pgMajor = requested;

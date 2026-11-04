@@ -204,8 +204,8 @@ func dbCreateCmd() *cobra.Command {
 	)
 	c := &cobra.Command{
 		Use:   "create",
-		Short: "Create a PostgreSQL database in the current project",
-		Long: `Create a PostgreSQL database in the scoped project. With an environment scope
+		Short: "Create a Postgres database in the current project",
+		Long: `Create a Postgres database in the scoped project. With an environment scope
 (--env, ORCHARD_ENV or ` + "`orchard use env`" + `) the database lives in that environment's namespace.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -276,7 +276,7 @@ func dbCreateCmd() *cobra.Command {
 	c.Flags().StringVar(&restoreFrom, "restore-from", "", "postgres:// URL to seed data from on first boot")
 	c.Flags().IntVar(&cpu, "cpu", 0, "CPU request in millicores (e.g. 500)")
 	c.Flags().StringVar(&memory, "memory", "", `memory request in bytes or with unit (e.g. "512Mi")`)
-	c.Flags().IntVar(&pgMajor, "pg-major", 0, "PostgreSQL major version; choices come from orchard db versions (server default when omitted)")
+	c.Flags().IntVar(&pgMajor, "pg-major", 0, "Postgres major version; choices come from orchard db versions (server default when omitted)")
 	c.Flags().IntVar(&replicas, "replicas", 0, "number of Postgres instances, primary included (server default when omitted)")
 	_ = c.MarkFlagRequired("name")
 	wait, timeout = addWaitFlags(c)
@@ -423,7 +423,7 @@ func dbLogsCmd() *cobra.Command {
 	var tail int
 	c := &cobra.Command{
 		Use:   "logs <id>",
-		Short: "Fetch PostgreSQL logs from the database pod",
+		Short: "Fetch Postgres logs from the database pod",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, _, err := client()
@@ -508,7 +508,7 @@ func dbExtensionCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:     "extension",
 		Aliases: []string{"extensions", "ext"},
-		Short:   "Manage PostgreSQL extensions",
+		Short:   "Manage Postgres extensions",
 	}
 	c.AddCommand(dbExtensionListCmd(), dbExtensionInstallCmd(), dbExtensionUninstallCmd())
 	return c
@@ -563,7 +563,7 @@ func dbExtensionInstallCmd() *cobra.Command {
 	var preload bool
 	c := &cobra.Command{
 		Use:   "install <id> <name>",
-		Short: "Install a PostgreSQL extension",
+		Short: "Install a Postgres extension",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, _, err := client()
@@ -592,7 +592,7 @@ func dbExtensionUninstallCmd() *cobra.Command {
 	var removePreload bool
 	c := &cobra.Command{
 		Use:   "uninstall <id> <name>",
-		Short: "Drop a PostgreSQL extension (and objects depending on it)",
+		Short: "Drop a Postgres extension (and objects depending on it)",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := output.Confirm(fmt.Sprintf("drop extension %s and the objects that depend on it", args[1]), yesFlag); err != nil {
@@ -620,7 +620,7 @@ func dbExtensionUninstallCmd() *cobra.Command {
 func dbSettingsCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "settings",
-		Short: "Read or update PostgreSQL parameters",
+		Short: "Read or update Postgres parameters",
 	}
 	c.AddCommand(dbSettingsGetCmd(), dbSettingsSetCmd())
 	return c
@@ -629,7 +629,7 @@ func dbSettingsCmd() *cobra.Command {
 func dbSettingsGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <id>",
-		Short: "Show configured PostgreSQL parameters",
+		Short: "Show configured Postgres parameters",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, _, err := client()
@@ -666,7 +666,7 @@ func dbSettingsGetCmd() *cobra.Command {
 func dbSettingsSetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "set <id> KEY=VAL...",
-		Short: "Update PostgreSQL parameters (KEY= removes a parameter)",
+		Short: "Update Postgres parameters (KEY= removes a parameter)",
 		Args:  cobra.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			updates, err := parseKVArgs(args[1:])

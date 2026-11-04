@@ -43,13 +43,13 @@ In Kubernetes terms, an app is a Deployment and its Services, Ingresses, and Per
 
 ## Database
 
-A database is a managed PostgreSQL instance that runs as a CloudNativePG `Cluster`. CloudNativePG is the Kubernetes operator that handles failover, storage, and backups. A database has its own lifecycle, separate from any app that connects to it.
+A database is a managed Postgres instance that runs as a CloudNativePG `Cluster`. CloudNativePG is the Kubernetes operator that handles failover, storage, and backups. A database has its own lifecycle, separate from any app that connects to it.
 
 ## Status
 
 Orchard reads status from the cluster. A pod that runs but fails its health check shows as failing. An app with a build in progress shows the build state.
 
-Orchard keeps a copy of cluster state in PostgreSQL, so the dashboard loads quickly and stays available while the API restarts. Kubernetes remains the source of truth. A failed read does not mark a resource as gone. Only a 404 response from Kubernetes does.
+Orchard keeps a copy of cluster state in Postgres, so the dashboard loads quickly and stays available while the API restarts. Kubernetes remains the source of truth. A failed read does not mark a resource as gone. Only a 404 response from Kubernetes does.
 
 ## Roles
 

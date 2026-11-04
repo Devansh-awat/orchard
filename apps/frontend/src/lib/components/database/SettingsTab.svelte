@@ -129,11 +129,11 @@
 </script>
 
 {#if database.mode !== 'cnpg'}
-	<SectionCard title="PostgreSQL parameters">
+	<SectionCard title="Postgres parameters">
 		<EmptyState title="Parameters need a dedicated database" />
 	</SectionCard>
 {:else if !everLoaded && !settingsLoaded}
-	<SectionCard title="PostgreSQL parameters">
+	<SectionCard title="Postgres parameters">
 		<SettingsList>
 			{#each [0, 1, 2, 3] as i (i)}
 				<div class="param-skeleton">
@@ -144,7 +144,7 @@
 		</SettingsList>
 	</SectionCard>
 {:else}
-	<SectionCard title="PostgreSQL parameters">
+	<SectionCard title="Postgres parameters">
 		<div class="params">
 			{#each looseAdvisories as a (a.key)}
 				<Alert tone="warning">{a.message}</Alert>

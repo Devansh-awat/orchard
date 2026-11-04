@@ -72,7 +72,7 @@ Only the fields you pass are changed. Leave the rest undefined to keep them as-i
   server.registerTool(
     'create_database',
     {
-      description: `Create a new PostgreSQL database in a project. Returns the database record with the password masked.
+      description: `Create a new Postgres database in a project. Returns the database record with the password masked.
 To wire it into an app, call get_database_connection and pass its connectionString to add_env_vars as DATABASE_URL with secret: true, so the credential never sits in a readable env var.
 
 Optionally, pass restoreFromUrl to seed the new database from an existing one. The
@@ -95,7 +95,7 @@ Pass environmentId to put the database in that environment, which gives it that 
           .min(13)
           .max(18)
           .optional()
-          .describe('PostgreSQL major version. Defaults to the instance default.'),
+          .describe('Postgres major version. Defaults to the instance default.'),
         nodePoolId: z
           .guid()
           .optional()
@@ -129,7 +129,7 @@ Pass environmentId to put the database in that environment, which gives it that 
           .positive()
           .optional()
           .describe(
-            'Total PostgreSQL instances: 1 primary plus (replicas - 1) read replicas. Defaults to 1. Each instance is a full pod with its own volume and counts against quota, so a value of 3 costs three times the CPU/memory of a single instance. Call get_database_limits for the ceiling on this instance.'
+            'Total Postgres instances: 1 primary plus (replicas - 1) read replicas. Defaults to 1. Each instance is a full pod with its own volume and counts against quota, so a value of 3 costs three times the CPU/memory of a single instance. Call get_database_limits for the ceiling on this instance.'
           )
       }
     },
@@ -265,7 +265,7 @@ Pass null for either field to clear it and fall back to the default.`,
     'get_database_limits',
     {
       description:
-        'Instance-wide limits for managed databases, currently just maxReplicas: the largest number of PostgreSQL instances a single cluster may run on this Orchard instance. Self-hosters can change it, so read it rather than assuming the default of 5.',
+        'Instance-wide limits for managed databases, currently just maxReplicas: the largest number of Postgres instances a single cluster may run on this Orchard instance. Self-hosters can change it, so read it rather than assuming the default of 5.',
       inputSchema: {}
     },
     async () => {
@@ -277,7 +277,7 @@ Pass null for either field to clear it and fall back to the default.`,
   server.registerTool(
     'scale_database',
     {
-      description: `Change how many PostgreSQL instances a database cluster runs: 1 primary plus (replicas - 1) read replicas. The replicas are streaming hot standbys: they serve reads a few milliseconds behind the primary AND act as failover targets, so this buys read scaling and high availability at once. It does not buy write throughput, which is still one primary.
+      description: `Change how many Postgres instances a database cluster runs: 1 primary plus (replicas - 1) read replicas. The replicas are streaming hot standbys: they serve reads a few milliseconds behind the primary AND act as failover targets, so this buys read scaling and high availability at once. It does not buy write throughput, which is still one primary.
 Each instance is a full pod with its own volume, so scaling from 1 to 3 triples the cluster's CPU and memory usage; the API charges the difference against the organization cap and the project owner's member allowance and returns an error if it does not fit. Scaling down is always permitted.
 Scaling up is not instant. A new replica has to clone the primary before it reports ready. Reads that must never hit stale data should keep using the "rw" endpoint. See get_database for the rw/ro/r endpoints.`,
       inputSchema: {
@@ -392,7 +392,7 @@ The first stop for "the database is slow". It tells you which statement is actua
     'expand_database_storage',
     {
       description: `Expand the storage volume of a CNPG database. Storage can ONLY grow, never shrink. Requests smaller than the current size are rejected. Expansion happens online: the cluster spec and every data volume are resized directly, so it works even while the database is crashlooping on a full disk or stopped; the filesystem grows within a couple of minutes and CNPG boots the instance once headroom exists. Re-requesting the current size is allowed and re-syncs any volume that lags behind the cluster spec. Maximum size is 200Gi.
-IMPORTANT: if the disk filled because WAL archiving is failing, expansion only buys time. PostgreSQL cannot recycle WAL while archiving fails, so the volume WILL fill again. The response includes a "warning" field when the cluster's ContinuousArchiving condition is failing; if present, surface it to the user and treat fixing the archiving config as the real remediation.`,
+IMPORTANT: if the disk filled because WAL archiving is failing, expansion only buys time. Postgres cannot recycle WAL while archiving fails, so the volume WILL fill again. The response includes a "warning" field when the cluster's ContinuousArchiving condition is failing; if present, surface it to the user and treat fixing the archiving config as the real remediation.`,
       inputSchema: {
         databaseId: z.guid().describe('The database UUID'),
         storageSize: z
@@ -413,7 +413,7 @@ IMPORTANT: if the disk filled because WAL archiving is failing, expansion only b
     'list_database_extensions',
     {
       description:
-        'List PostgreSQL extensions available on the database and which are currently installed. Also returns the current shared_preload_libraries.',
+        'List Postgres extensions available on the database and which are currently installed. Also returns the current shared_preload_libraries.',
       inputSchema: {
         databaseId: z.guid().describe('The database UUID')
       }
@@ -427,7 +427,7 @@ IMPORTANT: if the disk filled because WAL archiving is failing, expansion only b
   server.registerTool(
     'install_database_extension',
     {
-      description: `Install a PostgreSQL extension on a CNPG database. Some extensions (like pg_stat_statements) require addToPreload=true, which adds them to shared_preload_libraries and triggers a database restart.`,
+      description: `Install a Postgres extension on a CNPG database. Some extensions (like pg_stat_statements) require addToPreload=true, which adds them to shared_preload_libraries and triggers a database restart.`,
       inputSchema: {
         databaseId: z.guid().describe('The database UUID'),
         name: z
@@ -453,7 +453,7 @@ IMPORTANT: if the disk filled because WAL archiving is failing, expansion only b
   server.registerTool(
     'uninstall_database_extension',
     {
-      description: `DROP a PostgreSQL extension from a database. Objects that depend on it will also be dropped. Optionally remove it from shared_preload_libraries.`,
+      description: `DROP a Postgres extension from a database. Objects that depend on it will also be dropped. Optionally remove it from shared_preload_libraries.`,
       inputSchema: {
         databaseId: z.guid().describe('The database UUID'),
         name: z.string().describe('Extension name to drop'),
@@ -475,7 +475,7 @@ IMPORTANT: if the disk filled because WAL archiving is failing, expansion only b
   server.registerTool(
     'get_database_settings',
     {
-      description: `Read the configured PostgreSQL parameters for a database (max_connections, shared_buffers, work_mem, statement_timeout, synchronous_commit, etc.).
+      description: `Read the configured Postgres parameters for a database (max_connections, shared_buffers, work_mem, statement_timeout, synchronous_commit, etc.).
 
 \`parameters\` contains ONLY what the user has explicitly set. A key that is absent is sized automatically from the database's memory limit, so an absent shared_buffers is not "unset", it is managed. \`advisories\` lists settings that were accepted but look dangerous at the current memory limit; check it when diagnosing an OOMKilled database.`,
       inputSchema: {
@@ -491,7 +491,7 @@ IMPORTANT: if the disk filled because WAL archiving is failing, expansion only b
   server.registerTool(
     'update_database_settings',
     {
-      description: `Update PostgreSQL parameters on a database. Some parameters (max_connections, shared_buffers) require a brief database restart to take effect. The API applies them and rolls the pod automatically.
+      description: `Update Postgres parameters on a database. Some parameters (max_connections, shared_buffers) require a brief database restart to take effect. The API applies them and rolls the pod automatically.
 Pass values as strings (e.g. "256MB", "200", "off"). Use get_database_settings first to see current values and supported keys.
 
 The map REPLACES the set of user-set parameters, so omitting a key hands it back to automatic sizing rather than leaving it alone. Send the full map you want.

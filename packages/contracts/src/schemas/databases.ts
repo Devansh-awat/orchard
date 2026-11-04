@@ -293,7 +293,7 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     response: z.object({ success: z.boolean() }).passthrough()
   },
   'GET /databases/:id/extensions': {
-    summary: 'List available and installed PostgreSQL extensions',
+    summary: 'List available and installed Postgres extensions',
     scope: 'read',
     response: z
       .object({
@@ -303,7 +303,7 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
       .passthrough()
   },
   'POST /databases/:id/extensions': {
-    summary: 'Install a PostgreSQL extension, optionally adding it to shared_preload_libraries',
+    summary: 'Install a Postgres extension, optionally adding it to shared_preload_libraries',
     scope: 'deploy',
     request: z.object({
       name: z.string(),
@@ -318,7 +318,7 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
       .passthrough()
   },
   'DELETE /databases/:id/extensions/:name': {
-    summary: 'Drop a PostgreSQL extension, optionally removing it from shared_preload_libraries',
+    summary: 'Drop a Postgres extension, optionally removing it from shared_preload_libraries',
     scope: 'deploy',
     request: z.object({
       removeFromPreload: z
@@ -329,7 +329,7 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     response: z.object({ success: z.boolean(), output: z.string() }).passthrough()
   },
   'GET /databases/:id/settings': {
-    summary: 'Get configured PostgreSQL parameters and shared_preload_libraries',
+    summary: 'Get configured Postgres parameters and shared_preload_libraries',
     scope: 'read',
     response: z
       .object({
@@ -349,7 +349,7 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
       .passthrough()
   },
   'PATCH /databases/:id/settings': {
-    summary: 'Update PostgreSQL parameters on a database',
+    summary: 'Update Postgres parameters on a database',
     scope: 'deploy',
     request: z.object({
       parameters: z
@@ -399,7 +399,7 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     response: z.array(databaseSchema)
   },
   'POST /projects/:id/databases': {
-    summary: 'Create a PostgreSQL database in a project',
+    summary: 'Create a Postgres database in a project',
     scope: 'deploy',
     request: createDatabaseRequest,
     response: databaseSchema

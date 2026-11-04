@@ -490,7 +490,7 @@
 					</Field>
 
 					{#if startFrom !== 'copy'}
-						<Field label="PostgreSQL version" for="db-pg-major" hint={versionHint}>
+						<Field label="Postgres version" for="db-pg-major" hint={versionHint}>
 							<Dropdown
 								id="db-pg-major"
 								size="lg"
@@ -527,7 +527,7 @@
 								bind:value={replicas}
 								min={1}
 								max={maxReplicas}
-								label="PostgreSQL instances"
+								label="Postgres instances"
 								ticks
 								showValue
 								disabled={submitting}

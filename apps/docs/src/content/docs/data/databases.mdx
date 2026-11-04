@@ -1,13 +1,13 @@
 ---
 title: Create and manage a database
-description: Create a managed PostgreSQL database in an Orchard project, connect an app to it, size it, and turn on public access.
+description: Create a managed Postgres database in an Orchard project, connect an app to it, size it, and turn on public access.
 sidebar:
   order: 1
 ---
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-A database in Orchard is a managed PostgreSQL instance in a project. Orchard runs it as a CloudNativePG cluster. CloudNativePG is the Kubernetes operator that handles failover, storage, and backups.
+A database in Orchard is a managed Postgres instance in a project. Orchard runs it as a CloudNativePG cluster. CloudNativePG is the Kubernetes operator that handles failover, storage, and backups.
 
 ## Create a database
 
@@ -16,10 +16,10 @@ A database in Orchard is a managed PostgreSQL instance in a project. Orchard run
 
 1. Open a project.
 2. Select **New app**.
-3. In **Start from scratch**, select **PostgreSQL**.
+3. In **Start from scratch**, select **Postgres**.
 4. In **Start from**, keep **Empty**. You can also select **Import from URL** or **Copy of a database**.
 5. In **Database name**, enter a name.
-6. In **PostgreSQL version**, select a version.
+6. In **Postgres version**, select a version.
 7. In **Storage size**, set the volume size. The default is 1 GiB.
 8. In **Resources**, set the CPU, memory, and **Instances**.
 9. Select **Create database**.
@@ -31,7 +31,7 @@ A database in Orchard is a managed PostgreSQL instance in a project. Orchard run
 orchard db create --name appdb --pg-major 17 --storage 10Gi --wait
 ```
 
-To seed the database from another PostgreSQL server, add `--restore-from postgres://...`.
+To seed the database from another Postgres server, add `--restore-from postgres://...`.
 
 </TabItem>
 </Tabs>
@@ -76,10 +76,10 @@ To print the connection details from the CLI, run `orchard db connection <id>`. 
 
 Set CPU and memory under **Settings** > **Resources**, or with `orchard db resources set <id>`.
 
-Orchard sizes `shared_buffers` and backup compression from the memory limit, and recalculates them when the memory changes. To set `shared_buffers` yourself, refer to [Change PostgreSQL parameters](/data/parameters/#shared-buffers).
+Orchard sizes `shared_buffers` and backup compression from the memory limit, and recalculates them when the memory changes. To set `shared_buffers` yourself, refer to [Change Postgres parameters](/data/parameters/#shared-buffers).
 
 :::caution
-PostgreSQL reserves `shared_buffers` when it starts. If this value is close to the memory limit, connections and backups have no room in the container, and the kernel can kill PostgreSQL.
+Postgres reserves `shared_buffers` when it starts. If this value is close to the memory limit, connections and backups have no room in the container, and the kernel can kill Postgres.
 :::
 
 ## Manage a database
@@ -92,12 +92,12 @@ PostgreSQL reserves `shared_buffers` when it starts. If this value is close to t
 | Rename, stop, or delete the database | **Settings** > **General** and **Danger zone** | [Delete a database](#delete-a-database)                 |
 | Grow storage                         | **Settings** > **Resources**                   | [Grow database storage](/data/storage/)                 |
 | Change protection settings           | **Settings** > **Protection**                  | [Protect a database](/data/protection/)                 |
-| Upgrade PostgreSQL                   | **Settings** > **Version and security**        | [Upgrade PostgreSQL](/data/upgrades/)                   |
+| Upgrade Postgres                   | **Settings** > **Version and security**        | [Upgrade Postgres](/data/upgrades/)                   |
 | Add standbys                         | **Settings** > **High availability**           | [Configure high availability](/data/high-availability/) |
 | Turn on the pooler                   | **Settings** > **Connection pooler**           | [Use a connection pooler](/data/connection-pooler/)     |
 | Add users                            | **Settings** > **Users**                       | [Add database users](/data/users/)                      |
-| Change parameters                    | **Settings** > **Parameters**                  | [Change PostgreSQL parameters](/data/parameters/)       |
-| Install extensions                   | **Settings** > **Extensions**                  | [Install PostgreSQL extensions](/data/extensions/)      |
+| Change parameters                    | **Settings** > **Parameters**                  | [Change Postgres parameters](/data/parameters/)       |
+| Install extensions                   | **Settings** > **Extensions**                  | [Install Postgres extensions](/data/extensions/)      |
 
 ## Public access
 

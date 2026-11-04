@@ -138,7 +138,7 @@ export const directory: DirectoryItem[] = [
 
   {
     title: 'Databases',
-    text: 'Run managed PostgreSQL next to your app.',
+    text: 'Run managed Postgres next to your app.',
     href: '/data/databases/',
     icon: 'database',
     group: 'Data'
@@ -173,13 +173,13 @@ export const directory: DirectoryItem[] = [
   },
   {
     title: 'Database users',
-    text: 'Create read-only or read-write PostgreSQL users.',
+    text: 'Create read-only or read-write Postgres users.',
     href: '/data/users/',
     icon: 'user',
     group: 'Data'
   },
   {
-    title: 'PostgreSQL upgrades',
+    title: 'Postgres upgrades',
     text: 'Upgrade a database to a newer major version.',
     href: '/data/upgrades/',
     icon: 'refresh',
@@ -193,7 +193,7 @@ export const directory: DirectoryItem[] = [
     group: 'Data'
   },
   {
-    title: 'PostgreSQL parameters',
+    title: 'Postgres parameters',
     text: 'Change connection, memory, timeout and logging parameters.',
     href: '/data/parameters/',
     icon: 'sliders',
@@ -214,7 +214,7 @@ export const directory: DirectoryItem[] = [
     group: 'Data'
   },
   {
-    title: 'PostgreSQL extensions',
+    title: 'Postgres extensions',
     text: 'Install extensions without a shell.',
     href: '/data/extensions/',
     icon: 'plug',

@@ -101,9 +101,9 @@ export default defineConfig({
                 { label: 'High availability', slug: 'data/high-availability' },
                 { label: 'Connection pooler', slug: 'data/connection-pooler' },
                 { label: 'Database users', slug: 'data/users' },
-                { label: 'Upgrade PostgreSQL', slug: 'data/upgrades' },
+                { label: 'Upgrade Postgres', slug: 'data/upgrades' },
                 { label: 'Protect a database', slug: 'data/protection' },
-                { label: 'PostgreSQL parameters', slug: 'data/parameters' },
+                { label: 'Postgres parameters', slug: 'data/parameters' },
                 { label: 'Grow storage', slug: 'data/storage' },
                 { label: 'Monitor a database', slug: 'data/monitoring' },
                 { label: 'Extensions', slug: 'data/extensions' }

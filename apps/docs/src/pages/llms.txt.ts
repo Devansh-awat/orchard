@@ -16,7 +16,7 @@ export const GET: APIRoute = async () => {
     '# Orchard',
     '',
     '> Orchard is a self-hosted platform. It installs on a Linux server or a Kubernetes',
-    '> cluster and deploys apps from a repository or an image, with PostgreSQL, jobs,',
+    '> cluster and deploys apps from a repository or an image, with Postgres, jobs,',
     '> logs, metrics, rollbacks, teams and SSO.',
     '',
     'Every link below returns Markdown. Append `.md` to any documentation URL to get its',

@@ -17,7 +17,7 @@ An Orchard instance is a control plane that runs in a Kubernetes cluster and man
 | Server                    | The NestJS API and control plane.                                |
 | MCP server                | The [Model Context Protocol](/mcp/) endpoint for agents.         |
 | Builders                  | BuildKit jobs that build images for tenant apps.                 |
-| Control-plane PostgreSQL  | Orchard's own database, run by CloudNativePG.                    |
+| Control-plane Postgres  | Orchard's own database, run by CloudNativePG.                    |
 | Redis                     | The event bus between server replicas, and a cache.              |
 | Registry                  | Stores the images that builders push. The installer deploys zot. |
 | Backup proxy (`r2-proxy`) | Gives each database credentials for its own backups only.        |
@@ -26,10 +26,10 @@ An Orchard instance is a control plane that runs in a Kubernetes cluster and man
 Tenant apps and databases run in their own namespaces, separate from the control plane.
 
 <Diagram
-  caption="The server reads from PostgreSQL and writes through a queue. The Orchard Engine copies cluster state into PostgreSQL."
+  caption="The server reads from Postgres and writes through a queue. The Orchard Engine copies cluster state into Postgres."
   code={`flowchart LR
   U[Browser / CLI / MCP] --> API[API server]
-  API -->|reads| PG[(Control-plane<br/>PostgreSQL)]
+  API -->|reads| PG[(Control-plane<br/>Postgres)]
   API -->|writes| Q[Apply queue]
   Q -->|retry| K8S[Kubernetes API]
   INF[Engine informers] -->|watch| K8S
@@ -40,7 +40,7 @@ Tenant apps and databases run in their own namespaces, separate from the control
 
 ## Reads
 
-The Orchard Engine lists and watches the Kubernetes objects that Orchard manages, and keeps a copy in PostgreSQL. Most reads come from this copy, so a page load does not call the Kubernetes API.
+The Orchard Engine lists and watches the Kubernetes objects that Orchard manages, and keeps a copy in Postgres. Most reads come from this copy, so a page load does not call the Kubernetes API.
 
 The Engine follows these rules:
 

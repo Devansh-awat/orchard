@@ -393,7 +393,7 @@ A value under `sandbox.runners` left empty, or `null` for booleans, renders no v
 ## How machine changes apply
 
 - **Writes are queued.** Creating, starting, stopping, deleting, and syncing credentials record the desired state and add an item to the apply queue. Workers retry with backoff from 5 seconds up to 10 minutes, for 10 attempts. After the last attempt, the machine keeps showing the error. To queue the change again, run `orchard sandbox retry <name>`.
-- **Reads come from the Orchard Engine.** On Kubernetes, the `sandboxes` shard watches Sandbox resources, pods, volumes, and secrets (metadata only), and writes them to PostgreSQL.
+- **Reads come from the Orchard Engine.** On Kubernetes, the `sandboxes` shard watches Sandbox resources, pods, volumes, and secrets (metadata only), and writes them to Postgres.
 - **Vercel is polled.** It has no watch API. The leader polls Vercel and writes what it sees to the same columns.
 
 The queue drains only on a server that is a member of the cluster: in-cluster, or outside the cluster with `ORCHARD_CONTROL_NAMESPACE` and a kubeconfig. `APPLY_WORKER_DISABLED=true` makes a replica enqueue only.
@@ -430,13 +430,13 @@ A guest runs the host's agent on the host's Claude subscription, with access to 
 
 | Token                                     | Stored                                                                                                                        | Reaches a machine as                                                                       |
 | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Claude and OpenAI tokens                  | Encrypted in PostgreSQL (AES-256-GCM)                                                                                         | The machine's Secret (Kubernetes) or bootstrap environment (Vercel)                        |
-| The host's GitHub token, for the agent    | Encrypted in PostgreSQL                                                                                                       | The machine's Secret (Kubernetes), or an egress header (Vercel)                            |
-| A person's GitHub token, for their pushes | Encrypted in PostgreSQL                                                                                                       | The environment of the one git command they run, or of their own terminal while it is open |
+| Claude and OpenAI tokens                  | Encrypted in Postgres (AES-256-GCM)                                                                                         | The machine's Secret (Kubernetes) or bootstrap environment (Vercel)                        |
+| The host's GitHub token, for the agent    | Encrypted in Postgres                                                                                                       | The machine's Secret (Kubernetes), or an egress header (Vercel)                            |
+| A person's GitHub token, for their pushes | Encrypted in Postgres                                                                                                       | The environment of the one git command they run, or of their own terminal while it is open |
 | Agent server password, SSH bridge token   | Not stored. Derived with HMAC from `SECRETS_ENCRYPTION_KEY` and the machine's epoch                                           | Files in `/orchard-init`, mode 600                                                         |
 | Share link tokens                         | SHA-256 hash only                                                                                                             | Never                                                                                      |
 | Slack link tokens                         | SHA-256 hash only, single use, 10 minutes                                                                                     | Never                                                                                      |
-| Linear API keys                           | Encrypted in PostgreSQL                                                                                                       | Never                                                                                      |
+| Linear API keys                           | Encrypted in Postgres                                                                                                       | Never                                                                                      |
 | The agent's Orchard MCP token             | A 60-day token on a per-machine session of the host, confined to the machine's organization, and refused on superadmin routes | The agent's MCP configuration                                                              |
 
 Tokens do not appear in these places:

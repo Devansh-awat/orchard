@@ -34,7 +34,7 @@ A pod that reaches another tenant namespace can only reach what that tenant has 
   POD -->|allowed| NET[Public internet]
   POD -.->|blocked| API[Kube API server]
   POD -.->|blocked| IMDS[Cloud metadata<br/>169.254.0.0/16]
-  POD -.->|blocked| PLAT[Control-plane PostgreSQL<br/>registry]
+  POD -.->|blocked| PLAT[Control-plane Postgres<br/>registry]
   POD -.->|blocked| OTHER[Other tenants'<br/>unpublished services]`}
 />
 

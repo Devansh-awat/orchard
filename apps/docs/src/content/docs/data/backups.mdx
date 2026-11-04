@@ -237,7 +237,7 @@ In the API, an empty `liveStatus.firstRecoverabilityPoint` means no base backup 
 
 ## How backups use memory
 
-The base backup runs inside the database container and shares its memory limit with PostgreSQL. Compressing a backup on a small database can use enough memory for the kernel to kill PostgreSQL. For this reason, Orchard chooses base backup compression from the memory limit.
+The base backup runs inside the database container and shares its memory limit with Postgres. Compressing a backup on a small database can use enough memory for the kernel to kill Postgres. For this reason, Orchard chooses base backup compression from the memory limit.
 
 To override the choice, set `backupCompression` through the database settings API. Orchard always compresses WAL, one segment at a time.
 

@@ -47,7 +47,7 @@ resources:                    # infrastructure to create (order matters!)
 
 ### Resource Types
 
-**database**: Creates a PostgreSQL database.
+**database**: Creates a Postgres database.
 Available context fields: id, host, port, dbName, dbUser, dbPassword, connectionString
 \`\`\`yaml
 - name: db
@@ -106,15 +106,15 @@ Available context fields: id, host
 - \`{{ resources.resourceName.field }}\`: references a previously created resource
 - Resources are created in order, so a deployment can reference a database created before it
 
-### Example: Full-stack Node.js + PostgreSQL
+### Example: Full-stack Node.js + Postgres
 
 \`\`\`yaml
 apiVersion: leaf/v1
 kind: Template
 metadata:
   name: nodejs-postgres
-  displayName: Node.js + PostgreSQL
-  description: A Node.js app with a PostgreSQL database and public ingress.
+  displayName: Node.js + Postgres
+  description: A Node.js app with a Postgres database and public ingress.
   icon: nodejs
   category: backend
   tags: ["nodejs", "postgres", "api"]
@@ -584,7 +584,7 @@ Secret vars come back with \`secret: true\` and a null value. The value is write
     'list_databases',
     {
       description:
-        "List PostgreSQL databases. Pass a projectId for one project's databases, or nothing at all to get every database the user can see (optionally narrowed to one organization). Passwords are never included; use get_database_connection for credentials.",
+        "List Postgres databases. Pass a projectId for one project's databases, or nothing at all to get every database the user can see (optionally narrowed to one organization). Passwords are never included; use get_database_connection for credentials.",
       inputSchema: {
         projectId: z
           .guid()

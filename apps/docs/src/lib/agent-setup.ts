@@ -198,7 +198,7 @@ export const examplePrompts: ExamplePrompt[] = [
     title: 'Create a database',
     text: 'Stores the connection string as a secret variable.',
     prompt:
-      'Create a PostgreSQL database named app-db with create_database. Get its connection string with get_database_connection, then add it to the api app as a secret DATABASE_URL with add_env_vars.',
+      'Create a Postgres database named app-db with create_database. Get its connection string with get_database_connection, then add it to the api app as a secret DATABASE_URL with add_env_vars.',
     tools: ['create_database', 'get_database_connection', 'add_env_vars']
   },
   {

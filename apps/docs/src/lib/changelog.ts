@@ -83,7 +83,7 @@ const PROPER_NAMES: Record<string, string> = {
   oauth: 'OAuth',
   oidc: 'OIDC',
   otp: 'OTP',
-  postgres: 'PostgreSQL',
+  postgres: 'Postgres',
   saml: 'SAML',
   scim: 'SCIM',
   slack: 'Slack',

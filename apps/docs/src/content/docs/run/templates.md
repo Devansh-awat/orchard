@@ -36,7 +36,7 @@ kind: Template
 metadata:
   name: ghost
   displayName: Ghost Blog
-  description: Ghost with a PostgreSQL database and a public domain.
+  description: Ghost with a Postgres database and a public domain.
   version: '1.0.0'
   category: cms
   tags: ['blog', 'cms']
@@ -146,7 +146,7 @@ Orchard creates resources from top to bottom. Each resource can reference the on
 
 #### `database`
 
-Creates a PostgreSQL database.
+Creates a Postgres database.
 
 | Config      | Notes                                       |
 | ----------- | ------------------------------------------- |

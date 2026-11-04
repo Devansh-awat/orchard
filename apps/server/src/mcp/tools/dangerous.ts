@@ -59,7 +59,7 @@ List what is in it with \`list_deployments\` / \`list_databases\` and confirm wi
   server.registerTool(
     'delete_database',
     {
-      description: `DANGEROUS: Delete a PostgreSQL database. Apps using it lose it immediately. The database goes to a 30-day trash: list it with list_deleted_databases and bring it back with undelete_database, as long as it had a completed backup (recoverableUntil in the response says how long). The server refuses the call while deletion protection is on.`,
+      description: `DANGEROUS: Delete a Postgres database. Apps using it lose it immediately. The database goes to a 30-day trash: list it with list_deleted_databases and bring it back with undelete_database, as long as it had a completed backup (recoverableUntil in the response says how long). The server refuses the call while deletion protection is on.`,
       inputSchema: {
         databaseId: z.guid().describe('The database UUID to delete')
       }

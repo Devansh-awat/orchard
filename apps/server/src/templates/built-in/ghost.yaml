@@ -3,7 +3,7 @@ kind: Template
 metadata:
   name: ghost
   displayName: Ghost Blog
-  description: Modern publishing platform powered by Ghost with PostgreSQL storage and public domain.
+  description: Modern publishing platform powered by Ghost with Postgres storage and public domain.
   icon: https://github.com/TryGhost.png?size=256
   version: '1.1.0'
   category: cms

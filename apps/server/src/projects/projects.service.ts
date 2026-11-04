@@ -528,7 +528,7 @@ export class ProjectsService {
     }
     if (archivingFailure) {
       warnings.push(
-        `WAL archiving is failing (${archivingFailure}). PostgreSQL can't recycle WAL while archiving fails, so the volume keeps filling at any size. Fix or turn off backups to stop this.`
+        `WAL archiving is failing (${archivingFailure}). Postgres can't recycle WAL while archiving fails, so the volume keeps filling at any size. Fix or turn off backups to stop this.`
       );
     }
 

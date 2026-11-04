@@ -1,13 +1,13 @@
 ---
 title: Use a connection pooler
-description: Turn on the Orchard connection pooler for a managed PostgreSQL database so that apps share a small set of server connections.
+description: Turn on the Orchard connection pooler for a managed Postgres database so that apps share a small set of server connections.
 sidebar:
   order: 5
 ---
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-A connection pooler accepts many client connections and shares a small set of PostgreSQL server connections between them. Use a pooler when an app opens more connections than the database can serve.
+A connection pooler accepts many client connections and shares a small set of Postgres server connections between them. Use a pooler when an app opens more connections than the database can serve.
 
 Orchard runs the pooler with PgBouncer.
 
@@ -47,7 +47,7 @@ orchard db pooler get <dbId>
 
 ## Connect an app to the pooler
 
-Turning on the pooler does not change the database connection string. Apps keep connecting directly to PostgreSQL until you change them.
+Turning on the pooler does not change the database connection string. Apps keep connecting directly to Postgres until you change them.
 
 1. Copy the address from the **Address** row. The address has this format:
 

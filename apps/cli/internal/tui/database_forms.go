@@ -243,7 +243,7 @@ func newDBStorageScreen(cl *api.Client, id, current string) *formScreen {
 		})
 }
 
-// dbSettingsScreen edits the full PostgreSQL parameter map as key=value lines.
+// dbSettingsScreen edits the full Postgres parameter map as key=value lines.
 // It is prefilled with the current parameters and the PATCH replaces the whole
 // map server-side, so saving is the same read-modify-write as
 // `orchard db settings set` (remove a line to drop a parameter).

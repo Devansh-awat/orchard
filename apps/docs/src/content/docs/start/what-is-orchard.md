@@ -5,7 +5,7 @@ sidebar:
   order: 1
 ---
 
-Orchard is an open-source platform as a service (PaaS). You install it on a Kubernetes cluster you control. Orchard builds apps from a Git repository or runs them from a container image, routes HTTPS traffic to them, and manages PostgreSQL databases for them.
+Orchard is an open-source platform as a service (PaaS). You install it on a Kubernetes cluster you control. Orchard builds apps from a Git repository or runs them from a container image, routes HTTPS traffic to them, and manages Postgres databases for them.
 
 Orchard is licensed under AGPL-3.0. There is no hosted version, so you run the instance yourself.
 
@@ -22,7 +22,7 @@ Orchard is licensed under AGPL-3.0. There is no hosted version, so you run the i
 | Deployments   | Deploy from GitHub, other Git hosts, or a container image.                                                     | [Deploy from GitHub](/deploy/github/)                   |
 | Builds        | Build images in jobs on your cluster and stream the logs.                                                      | [Builds](/deploy/builds/)                               |
 | Routing       | Give each app an HTTPS URL, custom domains, and access protection.                                             | [Manage domains and HTTPS](/deploy/domains/)            |
-| Databases     | Run PostgreSQL with backups, checkpoints, point-in-time restore, and read replicas.                            | [Create and manage a database](/data/databases/)        |
+| Databases     | Run Postgres with backups, checkpoints, point-in-time restore, and read replicas.                            | [Create and manage a database](/data/databases/)        |
 | Jobs          | Run multi-step jobs on a cron schedule or on demand.                                                           | [Run jobs and pipelines](/run/jobs/)                    |
 | Observability | Search logs, read metrics and requests, and open a shell in a running container.                               | [Read logs and open a shell](/run/logs/)                |
 | Teams         | Manage organizations, roles, single sign-on (SSO), audit logs, and quotas.                                     | [Manage organizations and roles](/teams/organizations/) |

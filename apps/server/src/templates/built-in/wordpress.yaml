@@ -3,7 +3,7 @@ kind: Template
 metadata:
   name: wordpress
   displayName: WordPress
-  description: Full WordPress CMS with a PostgreSQL database and public ingress. Ready to use out of the box.
+  description: Full WordPress CMS with a Postgres database and public ingress. Ready to use out of the box.
   icon: https://github.com/WordPress.png?size=256
   version: '1.1.0'
   category: cms

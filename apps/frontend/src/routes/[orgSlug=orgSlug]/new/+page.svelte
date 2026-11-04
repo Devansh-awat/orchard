@@ -98,7 +98,7 @@
 		},
 		{
 			id: 'database',
-			label: 'PostgreSQL',
+			label: 'Postgres',
 			hint: 'Managed, with backups',
 			image: IMG_ICONS.postgres,
 			href: sourceHref('database')
@@ -120,7 +120,7 @@
 
 	const managedPostgres = $derived<ShelfItem>({
 		id: MANAGED_PG,
-		title: 'PostgreSQL',
+		title: 'Postgres',
 		subtitle: 'Managed by Orchard',
 		description:
 			'Postgres 13 to 18, managed by Orchard. Pick a version and get a connection string.',
@@ -254,7 +254,7 @@
 
 	function pick(item: ShelfItem) {
 		if (item.id === MANAGED_PG) {
-			openSource({ id: 'database', label: 'PostgreSQL' });
+			openSource({ id: 'database', label: 'Postgres' });
 			return;
 		}
 		openTemplate(item.id);

@@ -749,7 +749,7 @@ Aliases: `conn`
 
 ### `orchard db create`
 
-Create a PostgreSQL database in the current project
+Create a Postgres database in the current project
 
 ```bash
 orchard db create
@@ -760,7 +760,7 @@ orchard db create
 | `--cpu` | int | `0` | CPU request in millicores (e.g. 500) |
 | `--memory` | string |  | memory request in bytes or with unit (e.g. "512Mi") |
 | `--name` | string |  | database display name (required) |
-| `--pg-major` | int | `0` | PostgreSQL major version; choices come from orchard db versions (server default when omitted) |
+| `--pg-major` | int | `0` | Postgres major version; choices come from orchard db versions (server default when omitted) |
 | `--replicas` | int | `0` | number of Postgres instances, primary included (server default when omitted) |
 | `--restore-from` | string |  | postgres:// URL to seed data from on first boot |
 | `--storage` | string |  | storage size, e.g. "1Gi" (server default 1Gi) |
@@ -787,7 +787,7 @@ orchard db diagnose <dbId>
 
 ### `orchard db extension`
 
-Manage PostgreSQL extensions
+Manage Postgres extensions
 
 ```bash
 orchard db extension
@@ -797,7 +797,7 @@ Aliases: `extensions`, `ext`
 
 ### `orchard db extension install`
 
-Install a PostgreSQL extension
+Install a Postgres extension
 
 ```bash
 orchard db extension install <id> <name>
@@ -819,7 +819,7 @@ Aliases: `ls`
 
 ### `orchard db extension uninstall`
 
-Drop a PostgreSQL extension (and objects depending on it)
+Drop a Postgres extension (and objects depending on it)
 
 ```bash
 orchard db extension uninstall <id> <name>
@@ -896,7 +896,7 @@ Aliases: `ls`
 
 ### `orchard db logs`
 
-Fetch PostgreSQL logs from the database pod
+Fetch Postgres logs from the database pod
 
 ```bash
 orchard db logs <id>
@@ -1131,7 +1131,7 @@ orchard db security <dbId>
 
 ### `orchard db settings`
 
-Read or update PostgreSQL parameters
+Read or update Postgres parameters
 
 ```bash
 orchard db settings
@@ -1139,7 +1139,7 @@ orchard db settings
 
 ### `orchard db settings get`
 
-Show configured PostgreSQL parameters
+Show configured Postgres parameters
 
 ```bash
 orchard db settings get <id>
@@ -1147,7 +1147,7 @@ orchard db settings get <id>
 
 ### `orchard db settings set`
 
-Update PostgreSQL parameters (KEY= removes a parameter)
+Update Postgres parameters (KEY= removes a parameter)
 
 ```bash
 orchard db settings set <id> KEY=VAL...

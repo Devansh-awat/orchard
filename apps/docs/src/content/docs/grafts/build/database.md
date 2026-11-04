@@ -1,11 +1,11 @@
 ---
 title: Use the database
-description: Add migrations to an Orchard graft's own PostgreSQL schema, read declared columns from Orchard's tables, and connect through the db door.
+description: Add migrations to an Orchard graft's own Postgres schema, read declared columns from Orchard's tables, and connect through the db door.
 sidebar:
   order: 5
 ---
 
-Store a graft's data in its own PostgreSQL schema. The schema is named `ext_<graft_id>`, with dashes turned into underscores. Orchard creates it, runs the graft's migrations in it, and points the graft's connections at it. A migration writes `CREATE TABLE notes` and does not name the schema.
+Store a graft's data in its own Postgres schema. The schema is named `ext_<graft_id>`, with dashes turned into underscores. Orchard creates it, runs the graft's migrations in it, and points the graft's connections at it. A migration writes `CREATE TABLE notes` and does not name the schema.
 
 ## Add a migration
 

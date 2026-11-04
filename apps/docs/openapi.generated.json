@@ -6151,7 +6151,7 @@
             "cookieAuth": []
           }
         ],
-        "summary": "List available and installed PostgreSQL extensions",
+        "summary": "List available and installed Postgres extensions",
         "tags": [
           "databases"
         ]
@@ -6225,7 +6225,7 @@
             "cookieAuth": []
           }
         ],
-        "summary": "Install a PostgreSQL extension, optionally adding it to shared_preload_libraries",
+        "summary": "Install a Postgres extension, optionally adding it to shared_preload_libraries",
         "tags": [
           "databases"
         ]
@@ -6295,7 +6295,7 @@
             "cookieAuth": []
           }
         ],
-        "summary": "Drop a PostgreSQL extension, optionally removing it from shared_preload_libraries",
+        "summary": "Drop a Postgres extension, optionally removing it from shared_preload_libraries",
         "tags": [
           "databases"
         ]
@@ -8143,7 +8143,7 @@
             "cookieAuth": []
           }
         ],
-        "summary": "Get configured PostgreSQL parameters and shared_preload_libraries",
+        "summary": "Get configured Postgres parameters and shared_preload_libraries",
         "tags": [
           "databases"
         ]
@@ -8253,7 +8253,7 @@
             "cookieAuth": []
           }
         ],
-        "summary": "Update PostgreSQL parameters on a database",
+        "summary": "Update Postgres parameters on a database",
         "tags": [
           "databases"
         ]
@@ -54928,7 +54928,7 @@
             "cookieAuth": []
           }
         ],
-        "summary": "Create a PostgreSQL database in a project",
+        "summary": "Create a Postgres database in a project",
         "tags": [
           "projects"
         ]

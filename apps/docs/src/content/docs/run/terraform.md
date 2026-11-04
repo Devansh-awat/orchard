@@ -119,7 +119,7 @@ A reference needs the database to be connected to the app, and the provider does
 | -------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
 | `orchard_project`    | A project in an organization                                                                                        | `organization_id`, `slug`                         |
 | `orchard_deployment` | An app that runs a container image. Image and replica changes roll the app in place.                                | `name`, `port`, `start_command`, `environment_id` |
-| `orchard_database`   | A managed PostgreSQL database. Exposes `host`, `port`, `database_name`, and `status`. Does not expose the password. | Everything except `name`                          |
+| `orchard_database`   | A managed Postgres database. Exposes `host`, `port`, `database_name`, and `status`. Does not expose the password. | Everything except `name`                          |
 | `orchard_ingress`    | A custom domain routed to an app                                                                                    | `deployment_id`                                   |
 | `orchard_env_var`    | One variable on an app. Other variables stay as they are. A `secret` value is write-only.                           | `deployment_id`, `key`                            |
 | `orchard_job`        | A scheduled or on-demand job made of image steps                                                                    | `project_id`                                      |
