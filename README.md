@@ -66,22 +66,13 @@ Install Orchard on my server following https://docs.orchard.my/start/install.md.
 
 ## Features
 
-- **Deploy from GitHub.** Push to your repo and it rebuilds on its own
-- **Roll back.** The last deploy was a mistake. Now it never happened
-- **Fork a database.** Try the scary migration on a real copy of your data first
-- **Find out why it broke.** Logs, metrics and request stats, even for containers that already died
-- **Open a shell.** For when you really do have to look inside
-
-And the rest:
-
-- HTTPS on every app, custom domains and an auth wall if you want one
-- Managed Postgres with backups, point-in-time restore, read replicas and a query console
-- Cron and multi-step jobs, Compose stacks, and 90+ [templates](https://orchard.my/templates)
-- Log search, per-route request stats, image scanning and alerts
-- Organizations, roles, SSO, SCIM, audit logs and quotas
-- A [CLI](https://docs.orchard.my/reference/cli/), an [API](https://docs.orchard.my/api/) and an OpenTofu provider
-
-Orchard runs on Kubernetes, so replicas, rolling updates, health checks, quotas and node scheduling come from the platform underneath. Everything it creates is a normal Kubernetes resource you can still `kubectl get`.
+- **Deploy from GitHub.** Connect a repo, and every push builds and deploys your app.
+- **HTTPS and domains.** Every app gets an HTTPS URL, and you can add your own domains.
+- **Managed Postgres.** Add a database with backups and point-in-time restore.
+- **Logs and metrics.** Search logs and see requests, errors and resource use for each app.
+- **Rollbacks.** Go back to an earlier version when a deploy goes wrong.
+- **Templates.** Deploy any of 90+ [ready-made apps](https://orchard.my/templates).
+- **Teams.** Organizations, roles, SSO and audit logs.
 
 ## Contributing
 
