@@ -47,6 +47,10 @@ The policy blocks the following:
 
 Orchard restores this policy if someone changes it with `kubectl`.
 
+### Host firewalls
+
+A `ufw` deny rule does not close ports `80` and `443` on a machine that runs the installer. Traffic to these ports is forwarded to pods and does not pass through the rules that `ufw` applies to the machine. The installer leaves your deny rule in place and warns you. To close a port, use a firewall in front of the machine.
+
 ## Kernel isolation
 
 Kernel isolation is off by default. Tenant pods and build jobs share the host kernel, like ordinary containers. A container escape compromises the host.

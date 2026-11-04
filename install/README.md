@@ -198,6 +198,10 @@ The installer opens these itself when ufw or firewalld is active, and prints a
 note when neither is. If something else fronts the box, a cloud firewall or a
 router, this is the list to allow.
 
+A ufw deny rule doesn't close `80` or `443`: that traffic is forwarded to pods and
+passes around ufw. The installer keeps your rule and warns. To close a port, use a
+firewall in front of the box.
+
 | Port          | Bound to        | What                              | Who needs it                                 |
 | ------------- | --------------- | --------------------------------- | -------------------------------------------- |
 | `80`, `443`   | every interface | Traefik: the dashboard and apps   | everyone, in `public` and `lan` mode         |
