@@ -568,3 +568,127 @@ test(
     assert.match(job, /--endpoint-url "https:\/\/acct\.r2\.cloudflarestorage\.com"/);
   }
 );
+
+test(
+  'the local store reaches the server under fallback names, so storage stays editable',
+  { skip: !helmAvailable() },
+  () => {
+    const out = render(['objectStorage.local.enabled=true', 'r2Proxy.enabled=true']);
+    const server = docs(out).find(
+      (d) => d.includes('kind: Deployment') && d.includes('name: server')
+    );
+    assert.ok(server, 'server deployment rendered');
+    assert.match(server, /name: LOCAL_STORE_BACKUP_BUCKET, value: "orchard-backups"/);
+    assert.match(server, /name: LOCAL_STORE_UPLOADS_BUCKET, value: "orchard-uploads"/);
+    assert.match(server, /name: LOCAL_STORE_ACCESS_KEY_ID/);
+    for (const name of [
+      'R2_ENDPOINT',
+      'R2_BACKUP_BUCKET',
+      'R2_ACCESS_KEY_ID',
+      'R2_SECRET_ACCESS_KEY'
+    ]) {
+      assert.equal(server.includes(`name: ${name}`), false, `${name} must not be set`);
+    }
+    assert.doesNotMatch(server, /BACKUP_PROXY_CHART_UPSTREAM/);
+    const job = docs(out).find((d) => d.includes('name: object-storage-bucket-'));
+    assert.match(job!, /name: BUCKETS, value: "orchard-backups orchard-uploads"/);
+    const secret = docs(out).find(
+      (d) => d.includes('name: orchard-object-storage') && d.includes('kind: Secret')
+    );
+    assert.match(secret!, /ACCESS_KEY_ID:/);
+    assert.match(secret!, /ACCESS_SECRET_KEY:/);
+  }
+);
+
+test('real R2 env beside the local store is left to win', { skip: !helmAvailable() }, () => {
+  const out = render([
+    'objectStorage.local.enabled=true',
+    'r2Proxy.enabled=true',
+    'server.env[0].name=R2_BACKUP_BUCKET',
+    'server.env[0].value=mine'
+  ]);
+  const server = docs(out).find(
+    (d) => d.includes('kind: Deployment') && d.includes('name: server')
+  );
+  assert.match(server!, /R2_BACKUP_BUCKET/);
+  assert.match(server!, /LOCAL_STORE_BACKUP_BUCKET/);
+});
+
+test(
+  'the backup proxy runs whenever it can, so tenants never need the root key',
+  { skip: !helmAvailable() },
+  () => {
+    const out = render([]);
+    const proxy = docs(out).find(
+      (d) => d.includes('kind: Deployment') && d.includes('name: r2-proxy')
+    );
+    assert.ok(proxy, 'proxy runs with no upstream configured');
+    assert.match(proxy, /secretName: r2-proxy-stored/);
+    assert.match(proxy, /optional: true/);
+    const upstream = docs(out).find(
+      (d) => d.includes('name: r2-proxy-upstream') && d.includes('kind: Secret')
+    );
+    assert.equal(upstream!.includes('R2_ENDPOINT'), false);
+    const server = docs(out).find(
+      (d) => d.includes('kind: Deployment') && d.includes('name: server')
+    );
+    assert.match(server!, /name: BACKUP_PROXY_ENABLED, value: "true"/);
+    assert.doesNotMatch(server!, /BACKUP_PROXY_CHART_UPSTREAM/);
+    const role = docs(out).find((d) => d.includes('kind: Role') && d.includes('r2-proxy-stored'));
+    assert.match(role!, /resourceNames: \["r2-proxy-stored"\]/);
+    assert.equal(
+      docs(render(['r2Proxy.enabled=false'])).some((d) => d.includes('name: r2-proxy-upstream')),
+      false
+    );
+  }
+);
+
+test(
+  'an upstream set in values is what the proxy uses, and the server knows it',
+  { skip: !helmAvailable() },
+  () => {
+    const out = render([
+      'r2Proxy.upstream.endpoint=https://s3.eu-west-1.amazonaws.com',
+      'r2Proxy.upstream.region=eu-west-1',
+      'r2Proxy.upstream.pathStyle=false',
+      'r2Proxy.databasePassword=pw-for-test'
+    ]);
+    const upstream = docs(out).find(
+      (d) => d.includes('name: r2-proxy-upstream') && d.includes('kind: Secret')
+    );
+    assert.match(upstream!, /R2_ENDPOINT: "https:\/\/s3\.eu-west-1\.amazonaws\.com"/);
+    assert.match(upstream!, /R2_REGION: "eu-west-1"/);
+    assert.match(upstream!, /R2_PATH_STYLE: "false"/);
+    const server = docs(out).find(
+      (d) => d.includes('kind: Deployment') && d.includes('name: server')
+    );
+    assert.match(server!, /name: BACKUP_PROXY_CHART_UPSTREAM, value: "true"/);
+    assert.equal(
+      docs(
+        render(['r2Proxy.upstream.endpoint=https://x.example.com', 'r2Proxy.databasePassword=p'])
+      )
+        .find((d) => d.includes('name: r2-proxy-upstream') && d.includes('kind: Secret'))!
+        .includes('R2_PATH_STYLE'),
+      false
+    );
+  }
+);
+
+test('database dumps prune old copies only when asked', { skip: !helmAvailable() }, () => {
+  const sets = [
+    'databaseDumps.enabled=true',
+    'databaseDumps.destination.bucket=b',
+    'databaseDumps.targets[0].name=orchard',
+    'databaseDumps.targets[0].host=h',
+    'databaseDumps.targets[0].database=d',
+    'databaseDumps.targets[0].user=u',
+    'databaseDumps.targets[0].passwordSecret.name=s'
+  ];
+  const plain = docs(render(sets)).find((d) => d.includes('name: dump-orchard'));
+  assert.equal(plain!.includes('aws s3 rm'), false);
+  const kept = docs(render([...sets, 'databaseDumps.destination.keep=7'])).find((d) =>
+    d.includes('name: dump-orchard')
+  );
+  assert.match(kept!, /tail -n \+8/);
+  assert.match(kept!, /aws s3 rm/);
+});

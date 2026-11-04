@@ -648,13 +648,16 @@ r2Proxy:
   resources:
     requests: { cpu: "100m", memory: "256Mi" }
     limits: { cpu: "2", memory: "1Gi" }
-  # Upstream R2 credentials. The proxy needs ListBucket / ReadObject /
-  # WriteObject / DeleteObject on the bucket(s) that orgs are configured to
-  # back up to. If you'd rather provide these via External Secrets / SOPS,
-  # leave them blank here and edit r2-proxy.yaml to reference your Secret.
+  # Upstream S3 credentials, for any provider. The proxy needs ListBucket /
+  # ReadObject / WriteObject / DeleteObject on the bucket(s) that orgs are
+  # configured to back up to. Leave these empty to set storage in the setup
+  # flow, under Instance admin, or with `orchardctl backups s3`: the server then
+  # writes the r2-proxy-stored Secret, which the proxy re-reads while running.
   upstream:
-    endpoint: ""   # e.g. https://<account>.r2.cloudflarestorage.com
+    endpoint: ""   # e.g. https://s3.eu-west-1.amazonaws.com
     region: "auto"
+    # false sends requests to <bucket>.<endpoint> instead of <endpoint>/<bucket>.
+    pathStyle: true
     accessKey: ""
     secretKey: ""
   networkPolicy:
@@ -674,14 +677,14 @@ r2Proxy:
 # default; the one-command installer turns it on.
 #
 # This is NOT disaster recovery: the backups sit on the same disks as the
-# databases they protect. Point the instance at real S3 or R2 for that (see
-# "Object storage" under Instance admin, Configuration) and turn this off.
+# databases they protect. Add S3 storage for that (see "Object storage" under
+# Instance admin, Configuration, or `orchardctl backups s3 set`).
 #
-# With `backups` on, the server's instance backup target (R2_ENDPOINT,
-# R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BACKUP_BUCKET) points here unless
-# server.env already sets one, and r2Proxy uses it as its upstream unless
-# r2Proxy.upstream.endpoint is set. Tenant databases only ever reach it through
-# r2Proxy, which must stay enabled.
+# With `backups` on, the server uses this store through its LOCAL_STORE_*
+# variables, as a fallback: storage saved under Instance admin and any R2_*
+# variable win, and the fields stay editable. r2Proxy uses it as its upstream
+# unless r2Proxy.upstream.endpoint is set. Tenant databases only ever reach it
+# through r2Proxy, which must stay enabled.
 objectStorage:
   local:
     enabled: false
@@ -690,6 +693,10 @@ objectStorage:
     # Runs once per chart change to create the bucket.
     bucketImage: amazon/aws-cli:2.39.3
     bucket: orchard-backups
+    # Avatars, icons and other uploads when no S3 storage is set. The server
+    # serves them through its API, so this bucket stays private. Empty turns
+    # uploads off until S3 storage is added.
+    uploadsBucket: orchard-uploads
     # The region every client signs with. versitygw rejects any other, and the
     # server and r2-proxy sign with "auto".
     region: auto
@@ -945,4 +952,6 @@ databaseDumps:
     prefix: platform-dumps
     endpointURL: ""
     secretName: database-dumps-r2
+    # How many dumps to keep per target. 0 keeps them all.
+    keep: 0
   targets: []

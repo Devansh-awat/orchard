@@ -84,6 +84,13 @@ spec:
                   aws s3 cp /dump/{{ $t.name }}.dump
                   "s3://{{ required "databaseDumps.destination.bucket is required" $d.destination.bucket }}/{{ $d.destination.prefix }}/{{ $t.name }}/$(date -u +%Y-%m-%dT%H%M%SZ).dump"
                   {{- with $d.destination.endpointURL }} --endpoint-url {{ . | quote }}{{- end }}
+                  {{- with $d.destination.keep }}
+                  && aws s3 ls "s3://{{ $d.destination.bucket }}/{{ $d.destination.prefix }}/{{ $t.name }}/"
+                  {{- with $d.destination.endpointURL }} --endpoint-url {{ . | quote }}{{- end }}
+                  | awk '{print $4}' | sort -r | tail -n +{{ add . 1 }}
+                  | while read -r old; do aws s3 rm "s3://{{ $d.destination.bucket }}/{{ $d.destination.prefix }}/{{ $t.name }}/$old"
+                  {{- with $d.destination.endpointURL }} --endpoint-url {{ . | quote }}{{- end }}; done
+                  {{- end }}
               volumeMounts:
                 - name: dump
                   mountPath: /dump

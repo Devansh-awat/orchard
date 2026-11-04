@@ -28,15 +28,20 @@ stringData:
 {{- if .Values.r2Proxy.upstream.endpoint }}
   R2_ENDPOINT: {{ .Values.r2Proxy.upstream.endpoint | quote }}
   R2_REGION: {{ .Values.r2Proxy.upstream.region | quote }}
+  {{- if eq (toString .Values.r2Proxy.upstream.pathStyle) "false" }}
+  R2_PATH_STYLE: "false"
+  {{- end }}
   R2_ACCESS_KEY: {{ .Values.r2Proxy.upstream.accessKey | quote }}
   R2_SECRET_KEY: {{ .Values.r2Proxy.upstream.secretKey | quote }}
   DEFAULT_BACKUP_BUCKET: {{ .Values.r2Proxy.defaultBucket | default "" | quote }}
-{{- else }}
+{{- else if .Values.objectStorage.local.enabled }}
   R2_ENDPOINT: {{ include "orchard.objectStorageEndpoint" . | quote }}
   R2_REGION: {{ .Values.objectStorage.local.region | quote }}
   R2_ACCESS_KEY: {{ include "orchard.objectStorageKey" (dict "root" . "field" "accessKey") | quote }}
   R2_SECRET_KEY: {{ include "orchard.objectStorageKey" (dict "root" . "field" "secretKey") | quote }}
   DEFAULT_BACKUP_BUCKET: {{ .Values.r2Proxy.defaultBucket | default .Values.objectStorage.local.bucket | quote }}
+{{- else }}
+  DEFAULT_BACKUP_BUCKET: {{ .Values.r2Proxy.defaultBucket | default "" | quote }}
 {{- end }}
 ---
 # Database URL for binding lookups. The proxy connects as the read-only
@@ -107,6 +112,47 @@ spec:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: stored-upstreams, mountPath: /etc/r2-proxy/stored, readOnly: true }
+      volumes:
+        - name: stored-upstreams
+          secret:
+            secretName: r2-proxy-stored
+            optional: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-r2-proxy-stored
+  namespace: {{ .Values.r2Proxy.namespace }}
+  labels:
+    app.kubernetes.io/name: r2-proxy
+    app.kubernetes.io/managed-by: orchard
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["r2-proxy-stored"]
+    verbs: ["get", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-r2-proxy-stored
+  namespace: {{ .Values.r2Proxy.namespace }}
+  labels:
+    app.kubernetes.io/name: r2-proxy
+    app.kubernetes.io/managed-by: orchard
+subjects:
+  - kind: ServiceAccount
+    name: orchard-server
+    namespace: {{ .Values.namespace }}
+roleRef:
+  kind: Role
+  name: {{ .Release.Name }}-r2-proxy-stored
+  apiGroup: rbac.authorization.k8s.io
 ---
 apiVersion: v1
 kind: Service

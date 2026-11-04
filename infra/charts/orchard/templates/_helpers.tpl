@@ -377,32 +377,31 @@ true
             {{- end }}
             {{- end }}
             {{- if include "orchard.localBackups" . }}
-            {{- if not (include "orchard.serverEnvHas" (dict "root" . "key" "R2_ENDPOINT")) }}
-            - { name: R2_ENDPOINT, value: {{ include "orchard.objectStorageEndpoint" . | quote }} }
+            - { name: LOCAL_STORE_ENDPOINT, value: {{ include "orchard.objectStorageEndpoint" . | quote }} }
+            - { name: LOCAL_STORE_BACKUP_BUCKET, value: {{ .Values.objectStorage.local.bucket | quote }} }
+            {{- with .Values.objectStorage.local.uploadsBucket }}
+            - { name: LOCAL_STORE_UPLOADS_BUCKET, value: {{ . | quote }} }
             {{- end }}
-            {{- if not (include "orchard.serverEnvHas" (dict "root" . "key" "R2_BACKUP_BUCKET")) }}
-            - { name: R2_BACKUP_BUCKET, value: {{ .Values.objectStorage.local.bucket | quote }} }
-            {{- end }}
-            {{- if not (include "orchard.serverEnvHas" (dict "root" . "key" "R2_ACCESS_KEY_ID")) }}
-            - name: R2_ACCESS_KEY_ID
+            - { name: LOCAL_STORE_REGION, value: {{ .Values.objectStorage.local.region | quote }} }
+            - name: LOCAL_STORE_ACCESS_KEY_ID
               valueFrom:
                 secretKeyRef:
                   name: orchard-object-storage
                   key: accessKey
-            {{- end }}
-            {{- if not (include "orchard.serverEnvHas" (dict "root" . "key" "R2_SECRET_ACCESS_KEY")) }}
-            - name: R2_SECRET_ACCESS_KEY
+            - name: LOCAL_STORE_SECRET_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
                   name: orchard-object-storage
                   key: secretKey
-            {{- end }}
             {{- end }}
             {{- if and .Values.updates.url (not (include "orchard.serverEnvHas" (dict "root" . "key" "UPDATES_URL"))) }}
             - { name: UPDATES_URL, value: {{ .Values.updates.url | quote }} }
             {{- end }}
             {{- if include "orchard.r2ProxyActive" . }}
             - { name: BACKUP_PROXY_ENABLED, value: "true" }
+            {{- if .Values.r2Proxy.upstream.endpoint }}
+            - { name: BACKUP_PROXY_CHART_UPSTREAM, value: "true" }
+            {{- end }}
             - name: BACKUP_PROXY_ENDPOINT
               value: {{ default (printf "http://r2-proxy.%s.svc.cluster.local:9000" .Values.r2Proxy.namespace) .Values.r2Proxy.serviceUrl | quote }}
             {{- end }}
@@ -643,7 +642,7 @@ random one that every template in this render sees.
 {{- end -}}
 
 {{- define "orchard.r2ProxyActive" -}}
-{{- if and .Values.r2Proxy.enabled (or .Values.r2Proxy.upstream.endpoint .Values.objectStorage.local.enabled) -}}
+{{- if and .Values.r2Proxy.enabled (or .Values.r2Proxy.upstream.endpoint .Values.objectStorage.local.enabled .Values.postgres.enabled .Values.r2Proxy.databaseUrl) -}}
 true
 {{- end -}}
 {{- end -}}
