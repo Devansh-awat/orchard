@@ -115,7 +115,7 @@ export class DockerService {
   // must execute plans with the same frontend the Kubernetes path uses.
   private readonly railpackFrontendImage =
     process.env.RAILPACK_FRONTEND_IMAGE ||
-    `ghcr.io/railwayapp/railpack-frontend:${process.env.RAILPACK_VERSION || 'v0.33.0'}`;
+    `ghcr.io/railwayapp/railpack-frontend:${process.env.RAILPACK_VERSION || 'v0.43.0'}`;
 
   constructor(
     private readonly prisma: PrismaService,

@@ -248,11 +248,11 @@ export class ImageBuilderService {
   // Railway release could change every Orchard build with no deploy on our side,
   // and a CLI/frontend plan-schema mismatch would break builds outright. Pin them
   // together; bump deliberately.
-  private readonly railpackVersion = process.env.RAILPACK_VERSION || 'v0.33.0';
+  private readonly railpackVersion = process.env.RAILPACK_VERSION || 'v0.43.0';
 
   private readonly railpackFrontendImage =
     process.env.RAILPACK_FRONTEND_IMAGE ||
-    `ghcr.io/railwayapp/railpack-frontend:${process.env.RAILPACK_VERSION || 'v0.33.0'}`;
+    `ghcr.io/railwayapp/railpack-frontend:${process.env.RAILPACK_VERSION || 'v0.43.0'}`;
 
   private readonly railpackMiseImage =
     process.env.RAILPACK_MISE_IMAGE || 'ghcr.io/railwayapp/railpack-mise:20260227';
