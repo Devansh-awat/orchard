@@ -493,7 +493,7 @@
 </script>
 
 <div
-	class="pod-terminal"
+	class="pod-terminal ph-no-capture"
 	class:pod-terminal--hidden={!visible}
 	style:--pod-terminal-font={fontFamily}
 >

@@ -53,7 +53,7 @@
 	}
 </script>
 
-<div class="secret">
+<div class="secret ph-no-capture">
 	<code class="value" aria-label={label}>{revealed && full ? full : masked}</code>
 	<div class="tools">
 		<button

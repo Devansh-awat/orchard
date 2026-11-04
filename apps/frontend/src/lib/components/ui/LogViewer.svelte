@@ -502,7 +502,7 @@
 
 <div
 	bind:this={root}
-	class="lv"
+	class="lv ph-no-capture"
 	class:lv--dark={surface === 'dark'}
 	class:lv--nowrap={!wrap}
 	class:lv--numbered={hasNumbers}
