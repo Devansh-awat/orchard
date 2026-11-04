@@ -867,12 +867,6 @@ func dedupe(in []string) []string {
 	return out
 }
 
-type deleteObjectsBody struct {
-	Objects []struct {
-		Key string `xml:"Key"`
-	} `xml:"Object"`
-}
-
 func authorizeBinding(r *http.Request, key string, b Binding, body []byte) (code, msg string, ok bool) {
 	code, msg, ok = authorizeOperation(r, key, b.Prefix, body)
 	if ok || len(b.ReadPrefixes) == 0 || (r.Method != http.MethodGet && r.Method != http.MethodHead) {
@@ -894,8 +888,14 @@ func authorizeOperation(r *http.Request, key, prefix string, body []byte) (code,
 	}
 	q := r.URL.Query()
 	inPrefix := func(k string) bool { return prefix == "" || strings.HasPrefix(k, prefix) }
+	if ambiguousQuery(r.URL.RawQuery, q) {
+		return "AccessDenied", "query parameters must be unambiguous", false
+	}
 
 	if key != "" {
+		if hasDotSegment(key) {
+			return "AccessDenied", "key outside policy prefix", false
+		}
 		if !inPrefix(key) {
 			return "AccessDenied", "key outside policy prefix", false
 		}
@@ -914,8 +914,7 @@ func authorizeOperation(r *http.Request, key, prefix string, body []byte) (code,
 	case http.MethodHead:
 		return "", "", true
 	case http.MethodGet:
-		if q.Has("location") || q.Has("versioning") || q.Has("lifecycle") || q.Has("policy") ||
-			q.Has("acl") || q.Has("cors") || q.Has("logging") || q.Has("encryption") {
+		if onlyBucketSubresource(q) {
 			return "", "", true
 		}
 		if q.Has("uploads") {
@@ -929,21 +928,138 @@ func authorizeOperation(r *http.Request, key, prefix string, body []byte) (code,
 		if !q.Has("delete") {
 			return "MethodNotAllowed", "operation not permitted on the bucket", false
 		}
-		var del deleteObjectsBody
-		if err := xml.Unmarshal(body, &del); err != nil {
+		keys, err := deleteRequestKeys(body)
+		if err != nil {
 			return "MalformedXML", "could not parse the delete request", false
 		}
-		if len(del.Objects) == 0 {
+		if len(keys) == 0 {
 			return "MalformedXML", "delete request names no objects", false
 		}
-		for _, o := range del.Objects {
-			if o.Key == "" || !inPrefix(o.Key) {
+		for _, k := range keys {
+			if k == "" || hasDotSegment(k) || !inPrefix(k) {
 				return "AccessDenied", "delete request names a key outside policy prefix", false
 			}
 		}
 		return "", "", true
 	}
 	return "MethodNotAllowed", "operation not permitted on the bucket", false
+}
+
+var bucketSubresources = map[string]bool{
+	"location": true, "versioning": true, "lifecycle": true, "policy": true,
+	"acl": true, "cors": true, "logging": true, "encryption": true,
+}
+
+// A subresource read skips the prefix check, so it may carry nothing a backend
+// could read as a listing. x-id is the operation tag AWS SDKs add.
+func onlyBucketSubresource(q url.Values) bool {
+	found := false
+	for k := range q {
+		switch {
+		case bucketSubresources[k]:
+			found = true
+		case k != "x-id":
+			return false
+		}
+	}
+	return found
+}
+
+// The proxy authorizes its own parse of the query and forwards the raw string.
+// Anything two parsers could read differently is refused.
+func ambiguousQuery(raw string, q url.Values) bool {
+	if strings.Contains(raw, ";") {
+		return true
+	}
+	seen := make(map[string]bool, len(q))
+	for k, values := range q {
+		lower := strings.ToLower(k)
+		if len(values) > 1 || seen[lower] {
+			return true
+		}
+		seen[lower] = true
+	}
+	return false
+}
+
+func hasDotSegment(key string) bool {
+	for _, segment := range strings.Split(key, "/") {
+		if segment == "." || segment == ".." {
+			return true
+		}
+	}
+	return false
+}
+
+// deleteRequestKeys accepts only the documented shape of a multi-object delete,
+// so what the proxy checks is what any S3 backend reads: Delete > Object > one
+// Key, with no comments, directives or elements in unexpected places.
+func deleteRequestKeys(body []byte) ([]string, error) {
+	dec := xml.NewDecoder(bytes.NewReader(body))
+	var stack []string
+	var keys []string
+	var text strings.Builder
+	keysInObject := 0
+	for {
+		tok, err := dec.Token()
+		if errors.Is(err, io.EOF) {
+			if len(stack) != 0 {
+				return nil, errors.New("unterminated delete request")
+			}
+			return keys, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		switch t := tok.(type) {
+		case xml.StartElement:
+			name := t.Name.Local
+			path := strings.Join(stack, "/")
+			valid := (path == "" && name == "Delete") ||
+				(path == "Delete" && (name == "Object" || name == "Quiet")) ||
+				(path == "Delete/Object" && deleteObjectFields[name])
+			if !valid {
+				return nil, fmt.Errorf("unexpected element %s in a delete request", name)
+			}
+			if path == "Delete" && name == "Object" {
+				keysInObject = 0
+			}
+			if path == "Delete/Object" && name == "Key" {
+				keysInObject++
+				if keysInObject > 1 {
+					return nil, errors.New("an object names two keys")
+				}
+			}
+			stack = append(stack, name)
+			text.Reset()
+		case xml.EndElement:
+			path := strings.Join(stack, "/")
+			if path == "Delete/Object/Key" {
+				keys = append(keys, text.String())
+			}
+			if path == "Delete/Object" && keysInObject != 1 {
+				return nil, errors.New("an object names no key")
+			}
+			stack = stack[:len(stack)-1]
+			text.Reset()
+		case xml.CharData:
+			if len(stack) == 3 || (len(stack) == 2 && stack[1] == "Quiet") {
+				text.Write(t)
+			} else if len(bytes.TrimSpace(t)) != 0 {
+				return nil, errors.New("unexpected text in a delete request")
+			}
+		case xml.ProcInst:
+			if t.Target != "xml" {
+				return nil, errors.New("unexpected instruction in a delete request")
+			}
+		default:
+			return nil, errors.New("unexpected content in a delete request")
+		}
+	}
+}
+
+var deleteObjectFields = map[string]bool{
+	"Key": true, "VersionId": true, "ETag": true, "LastModifiedTime": true, "Size": true,
 }
 
 func splitPathStyle(p string) (bucket, key string) {

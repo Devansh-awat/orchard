@@ -599,3 +599,90 @@ func TestProxyWithNoUpstreamRefusesCleanly(t *testing.T) {
 		t.Fatal("an empty table must serve nothing")
 	}
 }
+
+func allowed(method, target, body string) bool {
+	_, _, ok := authorizeOperation(request(method, target, body, nil), "", prefix, []byte(body))
+	return ok
+}
+
+func TestRealClientRequestsStillPass(t *testing.T) {
+	for _, target := range []string{
+		"/b?location",
+		"/b?location=",
+		"/b?versioning",
+		"/b?location&x-id=GetBucketLocation",
+		"/b?list-type=2&prefix=ns-a/cluster-a/&delimiter=/&encoding-type=url",
+		"/b?list-type=2&prefix=ns-a%2Fcluster-a%2Fbase%2F&max-keys=1000&x-id=ListObjectsV2",
+		"/b?list-type=2&prefix=ns-a/cluster-a/&continuation-token=abc%3D%3D",
+		"/b?prefix=ns-a/cluster-a/&marker=x",
+	} {
+		if !allowed("GET", target, "") {
+			t.Errorf("GET %s should pass", target)
+		}
+	}
+	for _, body := range []string{
+		`<?xml version="1.0" encoding="UTF-8"?><Delete xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Object><Key>ns-a/cluster-a/wal/1</Key></Object><Quiet>true</Quiet></Delete>`,
+		"<Delete>\n  <Quiet>true</Quiet>\n  <Object>\n    <Key>ns-a/cluster-a/wal/1</Key>\n    <VersionId>v1</VersionId>\n  </Object>\n</Delete>\n",
+		`<Delete><Object><Key>ns-a/cluster-a/a&amp;b</Key></Object></Delete>`,
+	} {
+		if !allowed("POST", "/b?delete", body) {
+			t.Errorf("delete should pass: %s", body)
+		}
+	}
+	for _, tc := range []struct{ method, target string }{
+		{"PUT", "/b/ns-a/cluster-a/base/data?partNumber=1&uploadId=abc"},
+		{"POST", "/b/ns-a/cluster-a/base/data?uploads"},
+		{"POST", "/b/ns-a/cluster-a/base/data?uploadId=abc"},
+		{"GET", "/b/ns-a/cluster-a/base/data?x-id=GetObject"},
+		{"HEAD", "/b/ns-a/cluster-a/base/data"},
+		{"DELETE", "/b/ns-a/cluster-a/base/data"},
+	} {
+		key := strings.TrimPrefix(strings.SplitN(tc.target, "?", 2)[0], "/b/")
+		if _, _, ok := authorizeOperation(request(tc.method, tc.target, "", nil), key, prefix, nil); !ok {
+			t.Errorf("%s %s should pass", tc.method, tc.target)
+		}
+	}
+}
+
+func TestListingsCannotHideBehindParserDifferences(t *testing.T) {
+	for _, target := range []string{
+		"/b?list-type=2&prefix=ns-a/cluster-a/&prefix=",
+		"/b?list-type=2&prefix=ns-a/cluster-a/&Prefix=",
+		"/b?list-type=2&Prefix=",
+		"/b?list-type=2&prefix=ns-a/cluster-a/;prefix=",
+		"/b?list-type=2&prefix=ns-a/cluster-a/&x=1;prefix=",
+		"/b?logging&list-type=2&prefix=",
+		"/b?location&list-type=2",
+		"/b?acl&prefix=",
+		"/b?policy&delimiter=/",
+	} {
+		if allowed("GET", target, "") {
+			t.Errorf("GET %s must be refused", target)
+		}
+	}
+}
+
+func TestDeleteBodiesMustHaveOneReading(t *testing.T) {
+	for _, body := range []string{
+		`<Delete><Object><Key>ns-b/x</Key><Key>ns-a/cluster-a/x</Key></Object></Delete>`,
+		`<Delete><Quiet><Object><Key>ns-b/x</Key></Object></Quiet><Object><Key>ns-a/cluster-a/x</Key></Object></Delete>`,
+		`<Delete><Object><Key>ns-a/cluster-a/x</Key><Object><Key>ns-b/x</Key></Object></Object></Delete>`,
+		`<Delete><Object><Key>ns-a/cluster-a/<!-- c -->x</Key></Object></Delete>`,
+		`<Delete><Object><Key>ns-a/cluster-a/../../ns-b/x</Key></Object></Delete>`,
+		`<Other><Object><Key>ns-a/cluster-a/x</Key></Object></Other>`,
+		`<Delete><Object><Key>ns-a/cluster-a/x</Key></Object></Delete><Delete><Object><Key>ns-b/x</Key></Object></Delete>`,
+		`<Delete><Object></Object></Delete>`,
+		`<!DOCTYPE d><Delete><Object><Key>ns-a/cluster-a/x</Key></Object></Delete>`,
+	} {
+		if allowed("POST", "/b?delete", body) {
+			t.Errorf("delete must be refused: %s", body)
+		}
+	}
+}
+
+func TestObjectKeysCannotClimbOutOfThePrefix(t *testing.T) {
+	key := "ns-a/cluster-a/../../ns-b/secret"
+	if _, _, ok := authorizeOperation(request("GET", "/b/"+key, "", nil), key, prefix, nil); ok {
+		t.Fatal("a key with dot segments must be refused")
+	}
+}
