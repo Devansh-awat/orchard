@@ -30,8 +30,8 @@
 	<SectionCard
 		title="Addresses"
 		description={overview?.installer
-			? 'These settings live on the server, so each one has a command to change it.'
-			: 'These settings live in your Helm values, so each one shows what to set.'}
+			? 'Change these with a command on the server.'
+			: 'Change these in your Helm values.'}
 	>
 		<SettingsList label="Addresses">
 			{#each rows as row (row.change.title)}

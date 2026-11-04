@@ -36,7 +36,7 @@
 			open = false;
 			toasts.add({
 				title: enabled ? 'Thanks for sharing' : 'Nothing will be shared',
-				description: 'Change it any time in Admin → Configuration.',
+				description: 'Change this in Instance admin, under Configuration.',
 				color: 'success'
 			});
 		} catch (e) {
@@ -84,7 +84,7 @@
 		{/if}
 
 		<p class="tp-admin">
-			Only instance admins see this. Change it any time in Admin → Configuration.
+			Only instance admins see this. Change this in Instance admin, under Configuration.
 		</p>
 	</div>
 </Modal>

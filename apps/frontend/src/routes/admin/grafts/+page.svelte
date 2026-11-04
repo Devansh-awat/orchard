@@ -174,9 +174,8 @@
 		</header>
 
 		<Alert tone="warning" title="Only install grafts you trust">
-			A graft runs inside Orchard with the same access Orchard has: your database, your users' data
-			and your cluster. The details below show what each graft asked for, but they are not a
-			sandbox.
+			A graft runs with the same access as Orchard, including your database and your users' data.
+			The details below show what each graft asks for, but they don't limit it.
 		</Alert>
 	</section>
 
@@ -189,7 +188,7 @@
 	{:else if overview.grafts.length === 0}
 		<EmptyState
 			title="No grafts installed"
-			description="Pick one from the Extension Marketplace, then install it from your Orchard host."
+			description="Pick one from the Extension Marketplace, then install it on your Orchard server."
 		>
 			{#snippet icon()}<Puzzle size={20} />{/snippet}
 			<pre class="grafts-snippet">orchardctl graft add &lt;id&gt; --apply</pre>
@@ -282,8 +281,8 @@
 							{#if tierOf(g.signature) === 'tap'}
 								<Alert tone="warning" title="Third-party graft">
 									From the {g.signature?.tap} tap{#if tapUrl(g.signature?.tap)}&nbsp;at
-										<code>{tapUrl(g.signature?.tap)}</code>{/if}. Orchard has not checked anything
-									in this tap; you are trusting {g.signature?.tap}.
+										<code>{tapUrl(g.signature?.tap)}</code>{/if}. Orchard hasn't checked anything in
+									this tap. Install it only if you trust {g.signature?.tap}.
 								</Alert>
 							{:else if tierOf(g.signature) === 'community'}
 								<p class="graft-faint">
@@ -292,7 +291,7 @@
 											href="https://github.com/{g.signature.repo}"
 											target="_blank"
 											rel="noreferrer">github.com/{g.signature.repo}<ExternalLink size={11} /></a
-										>){/if}, not by Orchard. Orchard checked it when it was listed, but does not
+										>){/if}, not by Orchard. Orchard checked it when it was listed, but doesn't
 									review its updates.
 								</p>
 							{/if}
@@ -321,7 +320,7 @@
 									{/if}
 									{#if g.adopts?.length}
 										<p class="graft-faint">
-											Took over {g.adopts.join(', ')} from Orchard; the old names still work as views
+											Replaced {g.adopts.join(', ')} from Orchard. The old names still work as views
 										</p>
 									{/if}
 								</div>

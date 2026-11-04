@@ -38,7 +38,7 @@
 					{#if $instanceChecklistOutstanding.length === 0}
 						Nothing here needs your attention.
 					{:else}
-						None of these stop Orchard working. Each one turns something on.
+						These are optional. Each one turns on a feature.
 					{/if}
 				</p>
 			</div>

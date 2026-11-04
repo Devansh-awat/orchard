@@ -10,7 +10,7 @@ To control where workloads run on a multi-node cluster, create node pools and as
 ## Sync nodes
 
 1. Go to **Instance admin** > **Nodes**.
-2. Select **Sync from cluster**.
+2. Select **Sync nodes**.
 
 ## Create a node pool
 

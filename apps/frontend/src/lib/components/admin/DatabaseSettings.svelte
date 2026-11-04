@@ -43,7 +43,7 @@
 		{
 			key: 'poolerByDefault',
 			label: 'Connection pooler for new small databases',
-			hint: 'New databases with 1 GB of memory or less start with a pooler in front of them.',
+			hint: 'New databases with 1 GB of memory or less start with a connection pooler.',
 			env: 'DB_POOLER_BY_DEFAULT'
 		}
 	];

@@ -149,7 +149,7 @@
 
 	async function save() {
 		if (!fName.trim()) {
-			toasts.add({ title: 'Name is required', color: 'error' });
+			toasts.add({ title: 'Enter a name', color: 'error' });
 			return;
 		}
 		saving = true;
@@ -177,7 +177,10 @@
 
 	async function remove(pool: NodePool) {
 		const total = pool._count.deployments + pool._count.jobs + pool._count.databases;
-		const note = total > 0 ? ` ${total} workload(s) will revert to default scheduling.` : '';
+		const note =
+			total > 0
+				? ` ${total} ${total === 1 ? 'workload goes' : 'workloads go'} back to default scheduling.`
+				: '';
 		if (!confirm(`Delete pool "${pool.name}"?${note}`)) return;
 		try {
 			const res = await apiFetch(`/apiv1/admin/node-pools/${pool.id}`, { method: 'DELETE' });
@@ -207,8 +210,7 @@
 		</Button>
 	</div>
 	<p class="text-xs text-muted mb-4">
-		A pool maps a friendly name to a node label selector plus tolerations, so a workload assigned to
-		it lands on (and tolerates) the intended nodes.
+		A pool gives a set of nodes a name. Workloads assigned to the pool run on those nodes.
 	</p>
 
 	{#if loading}
@@ -237,8 +239,11 @@
 								<div class="text-xs text-muted mt-1">{pool.description}</div>
 							{/if}
 							<div class="text-xs text-faint mt-1">
-								{(pool.nodeSelector ?? []).length} selector(s) · {(pool.tolerations ?? []).length} toleration(s)
-								· {pool._count.deployments + pool._count.jobs + pool._count.databases} workload(s)
+								Selectors: {(pool.nodeSelector ?? []).length} · Tolerations: {(
+									pool.tolerations ?? []
+								).length} · Workloads: {pool._count.deployments +
+									pool._count.jobs +
+									pool._count.databases}
 							</div>
 						</div>
 						<div class="flex items-center gap-1 shrink-0">
@@ -275,7 +280,7 @@
 			<Input
 				id="pool-desc"
 				bind:value={fDescription}
-				placeholder="Old but fast box for background work"
+				placeholder="Older servers for background work"
 				class="w-full"
 			/>
 		</Field>
@@ -374,7 +379,7 @@
 				</div>
 			{/each}
 			<p class="text-xs text-faint">
-				A toleration lets pods in this pool land on a matching tainted node.
+				A toleration lets workloads in this pool run on a matching tainted node.
 			</p>
 		</div>
 	</div>

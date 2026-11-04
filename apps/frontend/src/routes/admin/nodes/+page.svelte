@@ -96,7 +96,7 @@
 			const res = await apiFetch('/apiv1/admin/nodes/sync', { method: 'POST' });
 			if (!res.ok) throw new Error('Sync failed');
 			await loadNodes();
-			toasts.add({ title: 'Nodes synced from cluster', color: 'success' });
+			toasts.add({ title: 'Nodes synced', color: 'success' });
 		} catch (e) {
 			toasts.add({ title: e instanceof Error ? e.message : 'Sync failed', color: 'error' });
 		} finally {
@@ -266,13 +266,13 @@
 
 <div class="flex items-center justify-between mb-4">
 	<div class="text-sm" style="color: var(--surface-muted);">
-		{nodes.length} node{nodes.length === 1 ? '' : 's'} in cluster
+		{nodes.length} node{nodes.length === 1 ? '' : 's'}
 	</div>
 	<Button variant="secondary" onclick={syncNow} loading={syncing}>
 		{#if !syncing}
 			<RefreshCw class="h-4 w-4" />
 		{/if}
-		Sync from cluster
+		Sync nodes
 	</Button>
 </div>
 
@@ -282,7 +282,7 @@
 	</div>
 {:else if nodes.length === 0}
 	<div class="rounded-2xl border" style="border-color: var(--surface-border);">
-		<EmptyState title="No nodes synced yet" description="Sync from cluster to import them.">
+		<EmptyState title="No nodes synced yet" description="Sync nodes to import them.">
 			{#snippet icon()}<Server class="h-10 w-10" />{/snippet}
 		</EmptyState>
 	</div>
@@ -377,8 +377,8 @@
 
 				<h3 class="text-sm font-semibold mb-2">Taints</h3>
 				<p class="text-xs mb-2 text-muted">
-					A tainted node repels workloads that don't tolerate it. Build a node pool that tolerates
-					these taints to route specific workloads here.
+					A tainted node runs only workloads that tolerate the taint. To run specific workloads
+					here, create a node pool that tolerates it.
 				</p>
 				<div class="space-y-2 mb-2">
 					{#each taintRows as taint, i (i)}
@@ -453,7 +453,8 @@
 				<h3 class="text-sm font-semibold mb-2">Organization assignments</h3>
 				{#if selectedNode.assignments.length === 0}
 					<p class="text-xs mb-4" style="color: var(--surface-muted);">
-						No assignments. Any org can schedule here. Add an allow-assignment to restrict.
+						No assignments, so any organization can run workloads here. Add an assignment to
+						restrict this.
 					</p>
 				{:else}
 					<div class="space-y-2 mb-4">
@@ -486,14 +487,14 @@
 				{/if}
 
 				<div class="rounded-xl border p-3" style="border-color: var(--surface-border);">
-					<h4 class="text-sm font-semibold mb-2">Add / update assignment</h4>
+					<h4 class="text-sm font-semibold mb-2">Add or update assignment</h4>
 					<div class="grid grid-cols-2 gap-2">
 						<div class="col-span-2">
 							<Field label="Organization" for="assign-org">
 								<Dropdown
 									id="assign-org"
 									bind:value={addOrgId}
-									placeholder="Select org…"
+									placeholder="Select an organization…"
 									options={assignableOrgs.map((o) => ({ value: o.id, label: o.name }))}
 								/>
 							</Field>
@@ -517,7 +518,7 @@
 								class="w-full"
 							/>
 						</Field>
-						<Field label="CPU limit (e.g. 2, 500m)" for="assign-cpu-limit">
+						<Field label="CPU limit, for example 2 or 500m" for="assign-cpu-limit">
 							<Input
 								id="assign-cpu-limit"
 								bind:value={addCpuLimit}
@@ -525,7 +526,7 @@
 								class="w-full"
 							/>
 						</Field>
-						<Field label="Memory limit (e.g. 4Gi)" for="assign-memory-limit">
+						<Field label="Memory limit, for example 4Gi" for="assign-memory-limit">
 							<Input
 								id="assign-memory-limit"
 								bind:value={addMemoryLimit}

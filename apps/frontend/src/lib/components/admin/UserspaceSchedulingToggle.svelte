@@ -51,15 +51,16 @@
 {#if state}
 	<SectionCard title="Userspace scheduling">
 		<p class="text-xs text-muted mb-3">
-			When on, normal users can assign their workloads to any pool marked user-selectable. When off,
-			only superadmins schedule onto pools. Pool taints and labels stay superadmin-only either way.
+			When on, users can assign their workloads to any pool marked user-selectable. When off, only
+			superadmins can. Only superadmins can change pool taints and labels.
 		</p>
 		{#if state.envOverride !== null}
 			<div class="flex items-center gap-2 text-xs text-muted">
 				<Badge tone="neutral">env override</Badge>
 				<span>
 					Pinned to <span class="font-mono">{state.envOverride ? 'on' : 'off'}</span> by the
-					<span class="font-mono">USERSPACE_NODE_SCHEDULING</span> env var. Unset it to control this here.
+					<span class="font-mono">USERSPACE_NODE_SCHEDULING</span> environment variable. Unset it to control
+					this here.
 				</span>
 			</div>
 		{:else}

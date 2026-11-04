@@ -45,7 +45,7 @@
 					returnTo: '/setup'
 				})
 			});
-			if (!response.ok) throw new Error('Could not start the App creation');
+			if (!response.ok) throw new Error("Couldn't create the GitHub App");
 
 			const { postUrl, manifest, state } = await response.json();
 			const form = document.createElement('form');
@@ -60,7 +60,7 @@
 			form.submit();
 		} catch (e) {
 			toasts.add({
-				title: e instanceof Error ? e.message : 'Could not start the App creation',
+				title: e instanceof Error ? e.message : "Couldn't create the GitHub App",
 				color: 'error'
 			});
 			creating = false;
@@ -75,8 +75,8 @@
 	{:else if status?.configured}
 		<h2>GitHub is connected</h2>
 		<p>
-			Created as <b class="gh-slug">{status.slug ?? 'your App'}</b>. Creating it is not the same as
-			installing it, so put it on the accounts whose repositories you want to deploy.
+			Created as <b class="gh-slug">{status.slug ?? 'your App'}</b>. Install it on the accounts
+			whose repositories you want to deploy.
 		</p>
 
 		<div class="setup-acts">
@@ -89,17 +89,14 @@
 		</div>
 	{:else if locked}
 		<h2>Connect GitHub</h2>
-		<p>
-			The GitHub App comes from environment variables on this instance, so there is nothing to
-			create here.
-		</p>
+		<p>Environment variables set the GitHub App on this instance, so you have nothing to create.</p>
 		<div class="setup-acts">
 			<button class="setup-pill" onclick={onDone}>Continue</button>
 		</div>
 	{:else}
 		<h2>Connect GitHub</h2>
 		<p>
-			Create a GitHub App in one click. Without it, private repositories and rebuilds on push do not
+			Create a GitHub App in one click. Without it, private repositories and rebuilds on push don't
 			work. Public repositories still deploy.
 		</p>
 

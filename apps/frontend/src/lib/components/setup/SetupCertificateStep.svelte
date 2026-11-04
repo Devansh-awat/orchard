@@ -18,23 +18,23 @@
 	const COPY: Record<SetupCertificate['state'], { title: string; note: string }> = {
 		ready: {
 			title: 'Certificate issued',
-			note: 'It renews on its own.'
+			note: 'It renews automatically.'
 		},
 		issuing: {
 			title: 'Still issuing',
 			note: 'cert-manager keeps trying in the background. If it fails, check that DNS points here and that ports 80 and 443 are open.'
 		},
 		failed: {
-			title: 'Certificate did not issue',
-			note: "Check that DNS points here and that ports 80 and 443 are open, including in your cloud provider's firewall. It retries on its own, first after about an hour. DNS status is in Instance admin, under Networking."
+			title: "Certificate didn't issue",
+			note: "Check that DNS points here and that ports 80 and 443 are open, including in your cloud provider's firewall. It retries automatically, first after about an hour. See DNS status in Instance admin, under Networking."
 		},
 		rateLimited: {
 			title: "Let's Encrypt rate limit",
-			note: 'Nothing to fix. The limit rolls off and the certificate issues on its own. Your own domain avoids the limit shared on sslip.io.'
+			note: 'You have nothing to fix. The certificate issues when the limit resets. Your own domain avoids the limit shared on sslip.io.'
 		},
 		unknown: {
 			title: 'Certificate status unknown',
-			note: 'Orchard cannot read cert-manager from here. If your browser warns about this page, the certificate has not issued.'
+			note: "Orchard can't read cert-manager from here. If your browser warns about this page, the certificate hasn't issued."
 		},
 		unconfigured: {
 			title: 'No app domain set',
@@ -42,7 +42,7 @@
 		},
 		perHost: {
 			title: 'Certificates issue per app',
-			note: 'Each generated URL gets its own certificate, and nothing here is waiting on you.'
+			note: "Each generated URL gets its own certificate. You don't need to do anything."
 		},
 		external: {
 			title: 'No certificate to issue here',
@@ -111,7 +111,7 @@
 
 	<div class="setup-acts">
 		{#if waiting}
-			<button class="setup-ghost" onclick={onDone}>Continue, it keeps trying</button>
+			<button class="setup-ghost" onclick={onDone}>Continue while it retries</button>
 		{:else}
 			<button class="setup-pill" onclick={onDone}>Continue</button>
 			{#if canRetry}

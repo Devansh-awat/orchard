@@ -102,7 +102,7 @@
 		email: {
 			title: 'Email',
 			description:
-				'Sends invitations and sign-in codes. Without it invitations still work as copyable links.',
+				'Sends invitations and sign-in codes. Without it, invitations still work as links you copy.',
 			fields: {
 				host: 'Host',
 				port: 'Port',
@@ -116,13 +116,13 @@
 		ingress: {
 			title: 'Custom domains',
 			description:
-				'The hostname people point their own domains at with a CNAME. Without it Orchard cannot check DNS before issuing a certificate.',
+				"The hostname people point their own domains at with a CNAME. Without it, Orchard can't check DNS before issuing a certificate.",
 			fields: { cname: 'CNAME target' }
 		},
 		wildcard: {
 			title: 'Wildcard certificate',
 			description:
-				'One certificate for every generated app URL, instead of one each against a limit of 50 per week per domain.',
+				'One certificate for all generated app URLs. Without it, each URL gets its own, with a limit of 50 per week per domain.',
 			fields: {
 				appDomain: 'App domain',
 				domains: 'Wildcard domains',
@@ -132,25 +132,25 @@
 		network: {
 			title: 'Public exposure',
 			description:
-				'The address raw TCP and UDP ports and public databases are published on. Organizations that set their own override it; the rest inherit this instead of being asked for an IP they do not know.',
+				'The address for public TCP and UDP ports and public databases. An organization can set its own.',
 			fields: { publicIp: 'Default public IP' }
 		},
 		'git-gitlab': {
 			title: 'GitLab sign-in',
 			description:
-				'An OAuth application on GitLab so people can connect their account with one click. Register it with the callback URL below. For a self-hosted GitLab, set the base URL.',
+				'Lets people connect their GitLab account. Register an OAuth application with the callback URL below. For self-hosted GitLab, set the base URL.',
 			fields: { baseUrl: 'GitLab URL', clientId: 'Application ID', clientSecret: 'Secret' }
 		},
 		'git-bitbucket': {
 			title: 'Bitbucket sign-in',
 			description:
-				'An OAuth consumer on Bitbucket Cloud so people can connect their account with one click. Grant it repository read and give it the callback URL below.',
+				'Lets people connect their Bitbucket Cloud account. Create an OAuth consumer with repository read access and the callback URL below.',
 			fields: { key: 'Key', secret: 'Secret' }
 		},
 		turnstile: {
 			title: 'Bot protection',
 			description:
-				'A Cloudflare Turnstile challenge on the sign-in pages and on password-protected deployments. Off until both keys are set. Once set, a sign-in that cannot solve the challenge is refused, so set TURNSTILE_ENABLED=false on the server to get back in if the keys are wrong.',
+				'Adds a Cloudflare Turnstile challenge to sign-in pages and password-protected apps. Off until you set both keys. If the keys are wrong, sign-in fails. To get back in, set TURNSTILE_ENABLED=false on the server.',
 			fields: {
 				siteKey: 'Site key',
 				secretKey: 'Secret key',
@@ -162,21 +162,21 @@
 
 	const HINTS: Record<string, string> = {
 		domains: 'Suffix and secret name, for example .apps.example.com=wildcard-tls',
-		secure: 'true for port 465, otherwise leave blank',
+		secure: 'Set to true for port 465. Otherwise, leave blank.',
 		endpoint: 'For example https://s3.eu-west-1.amazonaws.com',
 		accountId: 'Cloudflare R2 only. Fills in the endpoint when that is blank.',
 		bucketName: 'Holds uploads and cached images. It can be the same bucket.',
 		backupBucket: 'Holds database backups.',
-		buildContextBucket: 'Optional. Empty uses the bucket above, for orchard up.',
+		buildContextBucket: 'Optional. Empty uses the bucket above. Used by orchard up.',
 		publicUrl: 'Optional. Empty serves uploads through Orchard, so the bucket stays private.',
 		region: 'Empty means auto, which Cloudflare R2 expects.',
 		pathStyle: 'true sends requests to <endpoint>/<bucket>, false to <bucket>.<endpoint>.',
 		publicIp:
-			'The routable address of this box, for example 203.0.113.10. Leave blank to require one per organization.',
+			'The public address of this server, for example 203.0.113.10. Leave blank to require one per organization.',
 		siteKey: 'From the Turnstile widget in your Cloudflare dashboard',
 		secretKey: 'Never leaves the server. Leave blank to keep the stored one.',
-		enabled: 'Ignored until both keys are set. Turning this off keeps the keys.',
-		strict: 'Off lets sign-in through unchallenged if the check cannot be reached, and logs it.',
+		enabled: 'Ignored until you set both keys. Turning this off keeps the keys.',
+		strict: 'When off, sign-in skips the challenge if Cloudflare is unreachable, and logs it.',
 		baseUrl: 'Leave blank for gitlab.com. Callback URL: <origin>/apiv1/git/oauth/gitlab/callback',
 		clientId: 'Scopes: read_api, read_repository, read_user',
 		key: 'Callback URL: <origin>/apiv1/git/oauth/bitbucket/callback'
@@ -307,7 +307,7 @@
 					<div class="preset">
 						<Field label="Provider" for="storage-preset">
 							<Select id="storage-preset" bind:value={storagePreset} onchange={applyStoragePreset}>
-								<option value="">Choose to fill in the fields</option>
+								<option value="">Fills in the fields</option>
 								{#each STORAGE_PROVIDERS as provider (provider.id)}
 									<option value={provider.id}>{provider.label}</option>
 								{/each}
@@ -327,8 +327,8 @@
 				{/if}
 				{#if allLocked && lockedChanges(section).length === 0}
 					<Alert tone="info" title="Set by the environment">
-						Every field here comes from an environment variable, so it cannot be changed from the
-						browser. Edit your values file and restart to change it.
+						Every field here comes from an environment variable. To change one, edit your values
+						file and restart.
 					</Alert>
 				{/if}
 
@@ -381,8 +381,8 @@
 
 				{#if section.id === 'storage' && !allLocked}
 					<p class="storage-note">
-						Changing storage applies to new databases. Databases you already have keep backing up to
-						where they are now, and their existing backups stay restorable from there.
+						New storage applies to new databases. Existing databases keep backing up to their
+						current storage, and you can still restore their backups.
 					</p>
 					{#if storageResult}
 						<p class="storage-result" role="status">

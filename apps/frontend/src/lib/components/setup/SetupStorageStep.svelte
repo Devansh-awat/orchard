@@ -85,8 +85,8 @@
 <section class="setup-step">
 	<h2>Add S3 storage</h2>
 	<p>
-		Optional. Without it, backups stay on this server and are lost with it, and deploying from a
-		local directory is off.
+		Optional. Without it, you lose your backups if you lose this server, and you can't deploy from a
+		local directory.
 	</p>
 
 	<div class="setup-body fields">

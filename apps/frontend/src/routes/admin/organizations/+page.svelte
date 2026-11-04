@@ -259,7 +259,7 @@
 				body: JSON.stringify(body)
 			});
 			if (!res.ok) throw new Error('Save failed');
-			toasts.add({ title: 'Saved', description: 'Quotas applied to cluster', color: 'success' });
+			toasts.add({ title: 'Saved', description: 'Quotas applied', color: 'success' });
 			closeQuota();
 		} catch (e) {
 			toasts.add({
@@ -448,7 +448,7 @@
 			type="text"
 			bind:value={searchQuery}
 			oninput={handleSearch}
-			placeholder="Search organizations by name or slug..."
+			placeholder="Search organizations by name or slug"
 			class="w-full pl-10"
 		/>
 	</div>
@@ -626,7 +626,7 @@
 				id="create-org-description"
 				bind:value={createDescription}
 				rows="3"
-				placeholder="A brief description..."
+				placeholder="A brief description"
 				class="input w-full"></textarea>
 		</Field>
 		<Field label="Image URL (optional)" for="create-org-image-url">
@@ -710,13 +710,10 @@
 	size="sm"
 >
 	{#if deletingOrg}
-		<p class="text-sm mb-1" style="color: var(--surface-muted);">
-			Are you sure you want to delete this organization?
-		</p>
+		<p class="text-sm mb-1" style="color: var(--surface-muted);">Delete this organization?</p>
 		<p class="text-sm font-medium mb-4">{deletingOrg.name} ({deletingOrg.slug})</p>
 		<p class="text-xs" style="color: var(--error-text-color);">
-			This will permanently delete the organization and all its workspaces, projects, and
-			deployments.
+			This permanently deletes the organization and all its projects and apps.
 		</p>
 	{/if}
 	{#snippet footer()}
@@ -763,7 +760,7 @@
 
 			<p class="text-xs mb-3" style="color: var(--surface-muted);">
 				Click <strong>Unlimited</strong> or leave blank to remove a cap. Limits apply across all projects
-				in this org. Kubernetes enforces them at pod-admission time.
+				in this organization.
 			</p>
 
 			<div class="grid grid-cols-2 gap-3">
@@ -819,9 +816,9 @@
 				</Field>
 			</div>
 
-			<h4 class="text-sm font-semibold mt-4 mb-2">Per-pod defaults (LimitRange)</h4>
+			<h4 class="text-sm font-semibold mt-4 mb-2">Per-pod defaults</h4>
 			<p class="text-xs mb-2" style="color: var(--surface-muted);">
-				Applied to containers that don't specify requests. Required if CPU/memory quotas are set.
+				Applies to containers with no requests. Required if you set CPU or memory quotas.
 			</p>
 			<div class="grid grid-cols-2 gap-3">
 				<Field label="Default CPU / pod (millicores)" for="quota-default-cpu">
@@ -846,9 +843,9 @@
 
 			<h4 class="text-sm font-semibold mt-4 mb-2">Connected organizations</h4>
 			<p class="text-xs mb-2" style="color: var(--surface-muted);">
-				Connected orgs mirror the same caps and draw from the <strong>same usage pool</strong>.
-				Connecting org A (10 CPU) to org B means both show 10 CPU, but the sum of their usage still
-				cannot exceed 10.
+				Connected organizations share the same caps and the <strong>same usage pool</strong>. If you
+				connect organization A (10 CPU) to organization B, both show 10 CPU, but their combined
+				usage can't exceed 10.
 			</p>
 
 			{#if qConnections.length > 0}
@@ -879,7 +876,7 @@
 				</div>
 			{:else}
 				<p class="text-xs mb-2 italic" style="color: var(--surface-muted);">
-					Not connected to any other org.
+					Not connected to any other organization.
 				</p>
 			{/if}
 
@@ -888,7 +885,7 @@
 					type="text"
 					bind:value={qConnectSearch}
 					oninput={handleConnectSearch}
-					placeholder="Search for an organization to connect..."
+					placeholder="Search for an organization to connect"
 					class="w-full"
 				/>
 				{#if qConnectResults.length > 0}

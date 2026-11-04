@@ -60,9 +60,8 @@
 				<Badge tone="neutral">env override</Badge>
 				<span>
 					Pinned to <span class="font-mono">{state.envOverride ? 'on' : 'off'}</span> by the
-					<span class="font-mono">MCP_ENABLED</span> env var, which the chart sets when
-					<span class="font-mono">mcp.enabled</span> is false. Nothing is serving MCP until that is turned
-					back on.
+					<span class="font-mono">MCP_ENABLED</span> environment variable, which the chart sets when
+					<span class="font-mono">mcp.enabled</span> is false. MCP stays off until you turn it back on.
 				</span>
 			</div>
 			{#if change && state.envOverride === false}

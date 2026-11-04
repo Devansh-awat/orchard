@@ -43,14 +43,12 @@
 
 <SectionCard
 	title="DNS"
-	description="Every hostname this instance serves has to arrive where the dashboard does. A name that does not resolve is not a visible outage, it is a certificate that never issues."
+	description="Every hostname this instance serves must point to the same place as the dashboard. A hostname that doesn't resolve can't get a certificate."
 >
 	{#if loading}
 		<Skeleton class="h-40 w-full" />
 	{:else if !report || report.rows.length === 0}
-		<p class="dns-empty">
-			No domain is configured for this instance yet, so there is nothing to check.
-		</p>
+		<p class="dns-empty">This instance has no domain to check.</p>
 	{:else}
 		<ul class="dns-rows">
 			{#each report.rows as row (row.record)}

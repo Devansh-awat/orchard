@@ -54,14 +54,14 @@
 
 			if (!response.ok) {
 				const body = await response.json().catch(() => ({}));
-				throw new Error(body.message || 'That claim token is not valid');
+				throw new Error(body.message || "That setup token isn't valid");
 			}
 
 			await user.fetchUser();
 			state = 'claimed';
-			toasts.add({ title: 'You are now the superadmin of this instance', color: 'success' });
+			toasts.add({ title: "You're now the superadmin of this instance", color: 'success' });
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Could not claim this instance';
+			error = e instanceof Error ? e.message : "Couldn't claim this instance";
 		} finally {
 			submitting = false;
 		}
@@ -83,8 +83,7 @@
 			>
 				{#if state === 'claimed'}
 					<Alert tone="success" title="This instance is yours">
-						An organization has been created for you. A few more steps and you will have something
-						running on it.
+						Orchard created an organization for you. Finish setup to start deploying.
 					</Alert>
 					<div class="claim-actions">
 						<Button variant="primary" href="/setup">Set up your instance</Button>
@@ -115,7 +114,7 @@
 						{/if}
 						<Field
 							label="Setup token"
-							hint="Printed in the server logs, or run `orchard-claim` on the host."
+							hint="Find it in the server logs, or run `orchard-claim` on the server."
 							{error}
 							for="claim-token"
 						>

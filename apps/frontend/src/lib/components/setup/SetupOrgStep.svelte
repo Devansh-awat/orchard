@@ -70,7 +70,7 @@
 
 <section class="setup-step">
 	<h2>Name your organization</h2>
-	<p>We made one already. Rename it, or keep what is there.</p>
+	<p>Orchard created one for you. Rename it, or keep this name.</p>
 
 	<div class="setup-body">
 		<input bind:value={name} placeholder={org?.name ?? ''} aria-label="Organization name" />

@@ -157,7 +157,7 @@
 			type="text"
 			bind:value={searchQuery}
 			oninput={handleSearch}
-			placeholder="Search users by name, email, or username..."
+			placeholder="Search users by name, email or username"
 			class="w-full pl-10"
 		/>
 	</div>
@@ -184,7 +184,7 @@
 						<th class="px-4 py-3 text-left font-medium">User</th>
 						<th class="px-4 py-3 text-left font-medium">Username</th>
 						<th class="px-4 py-3 text-left font-medium">Role</th>
-						<th class="px-4 py-3 text-left font-medium">Orgs</th>
+						<th class="px-4 py-3 text-left font-medium">Organizations</th>
 						<th class="px-4 py-3 text-left font-medium">Workspaces</th>
 						<th class="px-4 py-3 text-left font-medium">Created</th>
 						<th class="px-4 py-3 text-right font-medium">Actions</th>
@@ -325,7 +325,7 @@
 						style={editIsSuperAdmin ? 'transform: translateX(16px);' : ''}
 					></div>
 				</button>
-				<span class="text-sm font-medium">Super admin</span>
+				<span class="text-sm font-medium">Superadmin</span>
 			</div>
 		</div>
 	{/if}
@@ -346,15 +346,13 @@
 	size="sm"
 >
 	{#if deletingUser}
-		<p class="text-sm mb-1" style="color: var(--surface-muted);">
-			Are you sure you want to delete this user?
-		</p>
+		<p class="text-sm mb-1" style="color: var(--surface-muted);">Delete this user?</p>
 		<p class="text-sm font-medium mb-4">
 			{deletingUser.firstName || ''}
 			{deletingUser.lastName || ''} ({deletingUser.email})
 		</p>
 		<p class="text-xs" style="color: var(--error-text-color);">
-			This action cannot be undone. All their data will be permanently deleted.
+			This permanently deletes all their data. You can't undo this.
 		</p>
 	{/if}
 	{#snippet footer()}

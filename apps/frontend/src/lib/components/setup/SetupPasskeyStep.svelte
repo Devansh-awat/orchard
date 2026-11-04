@@ -44,7 +44,7 @@
 			return;
 		}
 		if (password !== confirm) {
-			error = 'Those did not match.';
+			error = "The passwords don't match.";
 			return;
 		}
 
@@ -78,7 +78,7 @@
 		{#if error}
 			<p>{error}</p>
 		{:else}
-			<p>It stays on this device. Nothing to remember, nothing to leak.</p>
+			<p>It stays on this device, and you have no password to remember.</p>
 		{/if}
 
 		<div class="setup-acts">
@@ -96,10 +96,10 @@
 		{:else if !passkeyAvailable}
 			<p>
 				{warning ?? 'This browser cannot create a passkey.'}
-				A password works without one, and you can add a passkey later if this instance gets TLS.
+				Use a password for now. You can add a passkey later if this instance gets TLS.
 			</p>
 		{:else}
-			<p>Signs in this account without a device to hand. Twelve characters or more.</p>
+			<p>Lets you sign in without this device. Use at least 12 characters.</p>
 		{/if}
 
 		<div class="setup-body">
@@ -113,7 +113,7 @@
 			<input
 				type="password"
 				bind:value={confirm}
-				placeholder="Again"
+				placeholder="Confirm password"
 				aria-label="Confirm password"
 				autocomplete="new-password"
 			/>
@@ -132,7 +132,8 @@
 
 		{#if !passkeyAvailable}
 			<p class="setup-note">
-				Locked out anyway? <code>sudo orchardctl login</code> on the host prints a one-time link.
+				If you get locked out, run <code>sudo orchardctl login</code> on the server to get a one-time
+				link.
 			</p>
 		{/if}
 	{/if}

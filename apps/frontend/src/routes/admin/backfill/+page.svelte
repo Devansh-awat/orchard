@@ -139,8 +139,8 @@
 	<div>
 		<h2 class="text-lg font-semibold">Unsized resources</h2>
 		<p class="text-sm" style="color: var(--surface-muted);">
-			Deployments and databases created before resource limits were added. Pick a size and apply —
-			the pod will roll with requests = limits.
+			Apps and databases created before resource limits existed. Pick a size and apply it. The app
+			restarts with the new limits.
 		</p>
 	</div>
 	<div class="flex gap-2">
@@ -166,7 +166,7 @@
 		<CheckCircle2 class="h-10 w-10 mx-auto mb-2" style="color: #16a34a;" />
 		<p class="font-medium">Nothing to backfill</p>
 		<p class="text-sm mt-1" style="color: var(--surface-muted);">
-			Every deployment and database already has resource requests set.
+			Every app and database has resource requests set.
 		</p>
 	</div>
 {:else}
@@ -190,7 +190,7 @@
 			<thead style="background-color: var(--control-bg);">
 				<tr>
 					<th class="text-left px-3 py-2 font-medium">Target</th>
-					<th class="text-left px-3 py-2 font-medium">Org / Project</th>
+					<th class="text-left px-3 py-2 font-medium">Organization / project</th>
 					<th class="text-left px-3 py-2 font-medium">Observed (per pod)</th>
 					<th class="text-left px-3 py-2 font-medium">Apply size</th>
 					<th class="px-3 py-2"></th>
@@ -265,7 +265,7 @@
 									/>
 									<input
 										type="number"
-										placeholder="Mem MiB"
+										placeholder="Memory MiB"
 										bind:value={customMem[key]}
 										class="w-28 rounded-lg border px-2 py-1 text-sm"
 										style="border-color: var(--surface-border); background-color: var(--center-channel-bg);"

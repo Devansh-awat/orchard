@@ -40,7 +40,8 @@
 				<Badge tone="neutral">env override</Badge>
 				<span>
 					Pinned to <span class="font-mono">{$telemetry.envOverride ? 'on' : 'off'}</span> by the
-					<span class="font-mono">ORCHARD_TELEMETRY</span> env var. Unset it to control this here.
+					<span class="font-mono">ORCHARD_TELEMETRY</span> environment variable. Unset it to control this
+					here.
 				</span>
 			</div>
 		{:else}

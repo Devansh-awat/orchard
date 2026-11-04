@@ -61,7 +61,7 @@
 		},
 		accountId: { label: 'Account ID', hint: 'On the right of any Cloudflare dashboard page' },
 		tunnelId: { label: 'Tunnel ID', hint: 'Zero Trust, Networks, Tunnels, then the tunnel' },
-		zoneId: { label: 'Zone ID', hint: 'Optional. Without it, DNS records are left to you' }
+		zoneId: { label: 'Zone ID', hint: 'Optional. Without it, you create DNS records yourself' }
 	};
 
 	const allLocked = $derived(
@@ -71,7 +71,7 @@
 
 <SectionCard
 	title="Cloudflare Tunnel"
-	description="A token-managed tunnel keeps its routing in Cloudflare, so this box cannot normally see which hostnames reach it. With an API token it can, and adding one becomes a button instead of a trip to the dashboard."
+	description="A token-managed tunnel keeps its routes in Cloudflare, so this server can't see which hostnames reach it. Add an API token to see them and add routes here."
 >
 	{#if state?.error}
 		<Alert tone="error" title="Cloudflare rejected the request">{state.error}</Alert>
@@ -101,7 +101,7 @@
 							loading={routing === route.record}
 							onclick={() => onRoute(route.record)}
 						>
-							Route it
+							Add route
 						</Button>
 					{/if}
 				</li>
@@ -116,7 +116,7 @@
 
 		{#if !state.canEditDns}
 			<p class="tn-other">
-				Without a zone ID the route is added but the DNS record is not. Point each hostname at
+				Without a zone ID, Orchard adds the route but not the DNS record. Point each hostname at
 				<code>{'<tunnel-id>'}.cfargotunnel.com</code> yourself, or add the zone ID below.
 			</p>
 		{/if}
@@ -125,8 +125,7 @@
 	{#if section}
 		{#if allLocked}
 			<Alert tone="info" title="Set by the environment">
-				Every field here comes from an environment variable, so it cannot be changed from the
-				browser.
+				Every field here comes from an environment variable, so you can't change it here.
 			</Alert>
 		{:else}
 			<div class="tn-fields">

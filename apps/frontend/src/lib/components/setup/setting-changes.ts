@@ -88,7 +88,7 @@ function installerChanges(overview: SetupOverview): SettingChanges {
 			title: "Let's Encrypt email",
 			how: run('address'),
 			command: 'sudo orchardctl letsencrypt-email set you@example.com',
-			effect: "Changes where Let's Encrypt sends notices. Certificates are not affected.",
+			effect: "Changes where Let's Encrypt sends notices. Certificates don't change.",
 			note: 'To read the current address, run sudo orchardctl letsencrypt-email.'
 		};
 	}
@@ -189,7 +189,7 @@ server:
 	if (overview.certIssuer) {
 		changes.letsencrypt = {
 			title: 'Certificate issuer email',
-			how: 'The Orchard chart does not manage this issuer. Set the address where you manage cert-manager.',
+			how: "The Orchard chart doesn't manage this issuer. Set the address where you manage cert-manager.",
 			language: 'yaml',
 			values: `apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
@@ -198,8 +198,7 @@ metadata:
 spec:
   acme:
     email: you@example.com`,
-			effect:
-				'Changes where the certificate authority sends notices. Certificates are not affected.'
+			effect: "Changes where the certificate authority sends notices. Certificates don't change."
 		};
 	}
 

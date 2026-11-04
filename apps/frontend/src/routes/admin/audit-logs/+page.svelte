@@ -2,4 +2,4 @@
 	import AuditLogList from '$lib/components/AuditLogList.svelte';
 </script>
 
-<AuditLogList scope="global" title="Global Audit Log" />
+<AuditLogList scope="global" title="Audit log" />

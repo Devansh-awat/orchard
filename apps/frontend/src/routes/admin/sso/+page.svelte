@@ -257,9 +257,7 @@
 			<header class="asso-head">
 				<div>
 					<h2 class="asso-title">Platform sign-in</h2>
-					<p class="asso-desc">
-						Identity providers offered to everyone on the platform login page.
-					</p>
+					<p class="asso-desc">Identity providers on the sign-in page for this instance.</p>
 				</div>
 				<Button
 					variant="secondary"
@@ -289,7 +287,7 @@
 			{#if !providers.length && !envProvider}
 				<EmptyState
 					title="No platform providers"
-					description="Add Google, GitHub, Microsoft, or any OIDC or SAML provider to offer it on the login page."
+					description="Add Google, GitHub, Microsoft, or any OIDC or SAML provider to the sign-in page."
 				/>
 			{:else}
 				<ul class="asso-list">
@@ -314,7 +312,7 @@
 								{#if testResult?.id === provider.id}
 									<span class="asso-row-test" class:asso-row-test--bad={!testResult.success}>
 										{testResult.success
-											? 'Reached the provider successfully.'
+											? 'Reached the provider.'
 											: `Test failed: ${testResult.error}`}
 									</span>
 								{/if}
@@ -366,8 +364,8 @@
 					<div>
 						<h2 class="asso-title">Sign-in policy</h2>
 						<p class="asso-desc">
-							Whether anyone may sign in without an identity provider. Superadmins always can, so a
-							broken provider never locks the instance.
+							Choose whether people can sign in without an identity provider. Superadmins always
+							can, so a broken provider can't lock you out.
 						</p>
 					</div>
 				</header>
@@ -403,8 +401,8 @@
 				<div>
 					<h2 class="asso-title">Organization access</h2>
 					<p class="asso-desc">
-						Turn single sign-on off for one organization without touching its configuration. An org
-						owner cannot re-enable it from their own settings.
+						Turn off single sign-on for one organization and keep its configuration. Its owner can't
+						turn it back on.
 					</p>
 				</div>
 				<div class="asso-search">
@@ -474,7 +472,7 @@
 <ConfirmModal
 	bind:open={showDelete}
 	title="Remove this provider?"
-	description="It disappears from the platform login page immediately. Accounts created through it keep working."
+	description="It leaves the sign-in page immediately. Accounts created through it keep working."
 	confirmLabel="Remove provider"
 	onconfirm={deleteProvider}
 	oncancel={() => {

@@ -92,7 +92,7 @@
 				<Badge tone="neutral">env override</Badge>
 				<span>
 					Pinned to <span class="font-mono">{state.envOverride}</span> by the
-					<span class="font-mono">IMAGE_SCANNER</span> env var. Unset it to choose here.
+					<span class="font-mono">IMAGE_SCANNER</span> environment variable. Unset it to choose here.
 				</span>
 			</div>
 		{:else}

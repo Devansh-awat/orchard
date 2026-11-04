@@ -55,7 +55,7 @@
 
 <section class="setup-step">
 	<h2>Confirm your network</h2>
-	<p>This instance was not installed with the script, so check these before you deploy.</p>
+	<p>This instance wasn't installed with the script, so check these before you deploy.</p>
 
 	<div class="setup-body setup-fields">
 		<label class="setup-field">
@@ -67,7 +67,7 @@
 				autocomplete="off"
 				spellcheck="false"
 			/>
-			<small>Public ports and databases use it. Blank keeps them unavailable.</small>
+			<small>Public ports and databases use it. Leave blank to keep them unavailable.</small>
 		</label>
 		<label class="setup-field">
 			<span>Apps domain</span>
@@ -79,8 +79,7 @@
 				spellcheck="false"
 			/>
 			<small>
-				Needs a wildcard DNS record, *.{appDomain || 'apps.example.com'}. Blank means apps get no
-				URL.
+				Needs a wildcard DNS record, *.{appDomain || 'apps.example.com'}. If blank, apps get no URL.
 			</small>
 		</label>
 		<label class="setup-field">
@@ -92,7 +91,7 @@
 				autocomplete="off"
 				spellcheck="false"
 			/>
-			<small>People point a CNAME here. Blank means Orchard cannot check their domains.</small>
+			<small>People point a CNAME here. If blank, Orchard can't check their domains.</small>
 		</label>
 	</div>
 

@@ -58,7 +58,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ organization: organization.trim() || undefined })
 			});
-			if (!response.ok) throw new Error('Could not start the App creation');
+			if (!response.ok) throw new Error("Couldn't create the GitHub App");
 
 			const { postUrl, manifest, state } = await response.json();
 
@@ -75,7 +75,7 @@
 			document.body.appendChild(form);
 			form.submit();
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Could not start the App creation';
+			error = e instanceof Error ? e.message : "Couldn't create the GitHub App";
 			creating = false;
 		}
 	}
@@ -112,10 +112,10 @@
 		<div {@attach motionStagger({ index: 0 })}>
 			<SectionCard
 				title="Connect GitHub"
-				description="Orchard deploys from GitHub through its own App. Creating one takes a single click."
+				description="Orchard deploys from GitHub through its own GitHub App. Create it here."
 			>
 				{#if error}
-					<Alert tone="error" title="That did not work">{error}</Alert>
+					<Alert tone="error" title="Couldn't connect GitHub">{error}</Alert>
 				{/if}
 
 				{#if status?.configured}
@@ -126,7 +126,7 @@
 					{#if locked}
 						<div class="github-locked">
 							<Lock size={13} />
-							<span>Pinned by environment variables, so it cannot be changed here.</span>
+							<span>Set by environment variables, so you can't change it here.</span>
 						</div>
 					{/if}
 

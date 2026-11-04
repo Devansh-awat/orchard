@@ -96,8 +96,7 @@
 	<div class="admin">
 		<aside class="admin-nav">
 			<div class="admin-brand">
-				<p class="admin-brand-title">Instance</p>
-				<p class="admin-brand-sub">Settings that apply to everyone here</p>
+				<p class="admin-brand-title">Instance admin</p>
 			</div>
 
 			{#each groups as group, g (group.label)}
@@ -153,13 +152,6 @@
 		font-size: var(--text-title-3);
 		font-weight: 650;
 		color: var(--text-fg);
-	}
-
-	.admin-brand-sub {
-		margin-top: 0.15rem;
-		font-size: var(--text-caption);
-		line-height: 1.45;
-		color: var(--text-faint);
 	}
 
 	.admin-group {

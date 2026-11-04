@@ -212,7 +212,7 @@
 					<Badge tone="neutral">env override</Badge>
 					<span>
 						Pinned to <span class="font-mono">{state.envOverride}</span> by the
-						<span class="font-mono">INSTANCE_RESOURCE_LIMITS</span> env var.
+						<span class="font-mono">INSTANCE_RESOURCE_LIMITS</span> environment variable.
 					</span>
 				</div>
 				{#if change}

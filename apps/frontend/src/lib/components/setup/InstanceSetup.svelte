@@ -195,7 +195,7 @@
 		});
 		if (!response.ok) {
 			const body = await response.json().catch(() => ({}));
-			toasts.add({ title: body?.message || 'That step cannot be skipped', color: 'error' });
+			toasts.add({ title: body?.message || "You can't skip that step", color: 'error' });
 			return;
 		}
 		const data = await response.json();
@@ -210,7 +210,7 @@
 			body: JSON.stringify({ step })
 		}).catch(() => null);
 		if (!response?.ok) {
-			toasts.add({ title: 'Could not save that. It will be asked again.', color: 'error' });
+			toasts.add({ title: "Couldn't save that. You'll see this step again.", color: 'error' });
 		}
 	}
 

@@ -49,11 +49,11 @@
 				failure = null;
 			} else {
 				passed = false;
-				failure = body.message || 'The test email could not be sent.';
+				failure = body.message || "Couldn't send the test email.";
 			}
 		} catch {
 			passed = false;
-			failure = 'The test email could not be sent.';
+			failure = "Couldn't send the test email.";
 		} finally {
 			testing = false;
 		}
@@ -82,7 +82,7 @@
 
 <section class="setup-step">
 	<h2>Set up email</h2>
-	<p>Optional. Without it there are no email sign-in codes, and invitations are links you copy.</p>
+	<p>Optional. Without it, there are no email sign-in codes, and invitations are links you copy.</p>
 
 	<div class="setup-body setup-grid">
 		<input
