@@ -2,12 +2,17 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -140,7 +145,7 @@ type upstreamHit struct {
 func newProxyWithUpstream(t *testing.T, keepBody bool) (*Proxy, *[]upstreamHit) {
 	t.Helper()
 	hits := &[]upstreamHit{}
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hit := upstreamHit{
 			method:     r.Method,
 			path:       r.URL.Path,
@@ -173,9 +178,9 @@ func newProxyWithUpstream(t *testing.T, keepBody bool) (*Proxy, *[]upstreamHit) 
 		w.Header().Set("ETag", `"etag"`)
 		w.WriteHeader(http.StatusOK)
 	}))
-	t.Cleanup(upstream.Close)
+	t.Cleanup(mock.Close)
 
-	upURL, err := url.Parse(upstream.URL)
+	upURL, err := url.Parse(mock.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,16 +190,17 @@ func newProxyWithUpstream(t *testing.T, keepBody bool) (*Proxy, *[]upstreamHit) 
 		found:     true,
 		expiresAt: time.Now().Add(time.Hour),
 	}
-	return &Proxy{
-		upstreamURL:     upURL,
-		upstreamRegion:  "auto",
-		upstreamAK:      upstreamAK,
-		upstreamSK:      upstreamSK,
+	proxy := &Proxy{
 		upstreamService: "s3",
 		policy:          store,
-		allowedBuckets:  map[string]bool{"b": true},
-		client:          upstream.Client(),
-	}, hits
+		client:          mock.Client(),
+	}
+	proxy.upstreams.Store(&upstreamTable{
+		base:          &upstream{url: upURL, region: "auto", accessKey: upstreamAK, secretKey: upstreamSK, pathStyle: true},
+		baseBuckets:   map[string]bool{"b": true},
+		defaultBucket: "b",
+	})
+	return proxy, hits
 }
 
 func signedRequest(method, target string, body io.Reader, length int64, contentSha string) *http.Request {
@@ -407,5 +413,189 @@ func TestScopedPrefixesGetATrailingSlash(t *testing.T) {
 	}
 	if got := withSlash("ns/pg-db/"); got != "ns/pg-db/" {
 		t.Fatalf("withSlash = %q", got)
+	}
+}
+
+type capturedRequest struct {
+	host       string
+	path       string
+	signatureK string
+	verified   bool
+}
+
+func storedProxyFixture(t *testing.T) (*Proxy, *[]capturedRequest, *httptest.Server, *url.URL) {
+	t.Helper()
+	captured := &[]capturedRequest{}
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authz, err := parseAuthHeader(r.Header.Get("Authorization"))
+		hit := capturedRequest{host: r.Host, path: r.URL.Path}
+		if err == nil {
+			hit.signatureK = authz.AccessKey
+			secret := map[string]string{"local-ak": "local-sk", "s3-ak": "s3-sk"}[authz.AccessKey]
+			hit.verified = verifyV4(r, authz, secret) == nil
+		}
+		*captured = append(*captured, hit)
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(mock.Close)
+	endpoint, err := url.Parse(mock.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := newBindingStore(nil, "local")
+	store.cache[testAccessKey] = cacheEntry{
+		binding:   Binding{AccessKey: testAccessKey, Secret: testSecret, Bucket: "local", Prefix: prefix},
+		found:     true,
+		expiresAt: time.Now().Add(time.Hour),
+	}
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, network, endpoint.Host)
+		},
+	}
+	proxy := &Proxy{upstreamService: "s3", policy: store, client: &http.Client{Transport: transport}}
+	proxy.upstreams.Store(&upstreamTable{
+		base:          &upstream{url: endpoint, region: "auto", accessKey: "local-ak", secretKey: "local-sk", pathStyle: true},
+		baseBuckets:   map[string]bool{"local": true},
+		defaultBucket: "local",
+	})
+	return proxy, captured, mock, endpoint
+}
+
+func storedJSON(endpoint string, pathStyle bool, bucket string) []byte {
+	raw, _ := json.Marshal(storedFile{
+		DefaultBucket: bucket,
+		Targets: []storedTarget{{
+			Bucket: bucket, Endpoint: endpoint, Region: "eu-west-1",
+			AccessKey: "s3-ak", SecretKey: "s3-sk", PathStyle: &pathStyle,
+		}},
+	})
+	return raw
+}
+
+func loadStored(t *testing.T, proxy *Proxy, raw []byte) {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "upstreams.json")
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	base := *proxy.upstreams.Load()
+	base.stored = nil
+	var last []byte
+	proxy.reloadStored(path, base, &last)
+}
+
+func objectGet(proxy *Proxy, bucket string) *httptest.ResponseRecorder {
+	rec := httptest.NewRecorder()
+	proxy.ServeHTTP(rec, signedRequest(http.MethodGet, "/"+bucket+"/"+prefix+"wal/1", http.NoBody, 0, emptySha))
+	return rec
+}
+
+const emptySha = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+func TestExistingDatabaseKeepsItsOldBucketAfterStorageIsAdded(t *testing.T) {
+	proxy, captured, mock, _ := storedProxyFixture(t)
+	loadStored(t, proxy, storedJSON(mock.URL, true, "new"))
+
+	if rec := objectGet(proxy, "local"); rec.Code != http.StatusOK {
+		t.Fatalf("old bucket: status %d", rec.Code)
+	}
+	if rec := objectGet(proxy, "new"); rec.Code != http.StatusOK {
+		t.Fatalf("new bucket: status %d", rec.Code)
+	}
+	hits := *captured
+	if len(hits) != 2 || hits[0].signatureK != "local-ak" || hits[1].signatureK != "s3-ak" {
+		t.Fatalf("each bucket must use its own credentials: %+v", hits)
+	}
+	if !hits[0].verified || !hits[1].verified {
+		t.Fatalf("upstream signature did not verify: %+v", hits)
+	}
+	if got := proxy.upstreams.Load().defaultBucket; got != "new" {
+		t.Fatalf("default bucket %q", got)
+	}
+}
+
+func TestVirtualHostUpstreamMovesTheBucketIntoTheHost(t *testing.T) {
+	proxy, captured, mock, endpoint := storedProxyFixture(t)
+	loadStored(t, proxy, storedJSON(mock.URL, false, "new"))
+
+	if rec := objectGet(proxy, "new"); rec.Code != http.StatusOK {
+		t.Fatalf("status %d", rec.Code)
+	}
+	hit := (*captured)[0]
+	if hit.host != "new."+endpoint.Host || hit.path != "/"+prefix+"wal/1" {
+		t.Fatalf("host %q path %q", hit.host, hit.path)
+	}
+	if !hit.verified {
+		t.Fatal("virtual-host signature did not verify")
+	}
+}
+
+func TestStoredBucketDoesNotWidenTheKeyPrefix(t *testing.T) {
+	proxy, captured, mock, _ := storedProxyFixture(t)
+	loadStored(t, proxy, storedJSON(mock.URL, true, "new"))
+
+	rec := httptest.NewRecorder()
+	proxy.ServeHTTP(rec, signedRequest(http.MethodGet, "/new/uploads/users/a.png", http.NoBody, 0, emptySha))
+	if rec.Code != http.StatusForbidden || len(*captured) != 0 {
+		t.Fatalf("status %d, hits %d", rec.Code, len(*captured))
+	}
+}
+
+func TestUnknownBucketAndOrgBucketStayRefused(t *testing.T) {
+	proxy, captured, mock, _ := storedProxyFixture(t)
+	loadStored(t, proxy, storedJSON(mock.URL, true, "new"))
+	if rec := objectGet(proxy, "someone-else"); rec.Code != http.StatusForbidden {
+		t.Fatalf("unknown bucket: status %d", rec.Code)
+	}
+	proxy.policy.cache[testAccessKey] = cacheEntry{
+		binding:   Binding{AccessKey: testAccessKey, Secret: testSecret, Bucket: "org-owned", Prefix: prefix},
+		found:     true,
+		expiresAt: time.Now().Add(time.Hour),
+	}
+	if rec := objectGet(proxy, "new"); rec.Code != http.StatusForbidden {
+		t.Fatalf("org bound to its own bucket reached a platform one: status %d", rec.Code)
+	}
+	if len(*captured) != 0 {
+		t.Fatalf("hits %+v", *captured)
+	}
+}
+
+func TestReloadKeepsLastGoodAndClearsOnlyWhenTheFileIsGone(t *testing.T) {
+	proxy, _, mock, _ := storedProxyFixture(t)
+	path := filepath.Join(t.TempDir(), "upstreams.json")
+	base := *proxy.upstreams.Load()
+	var last []byte
+
+	if err := os.WriteFile(path, storedJSON(mock.URL, true, "new"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	proxy.reloadStored(path, base, &last)
+	if proxy.upstreams.Load().forBucket("new") == nil {
+		t.Fatal("stored target not loaded")
+	}
+
+	if err := os.WriteFile(path, []byte("{broken"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	proxy.reloadStored(path, base, &last)
+	if proxy.upstreams.Load().forBucket("new") == nil {
+		t.Fatal("a broken file must not drop a working target")
+	}
+
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	proxy.reloadStored(path, base, &last)
+	table := proxy.upstreams.Load()
+	if table.forBucket("new") != nil || table.defaultBucket != "local" {
+		t.Fatalf("removed file left %+v", table)
+	}
+}
+
+func TestProxyWithNoUpstreamRefusesCleanly(t *testing.T) {
+	table := &upstreamTable{}
+	if table.forBucket("anything") != nil || table.isPlatform("anything") {
+		t.Fatal("an empty table must serve nothing")
 	}
 }

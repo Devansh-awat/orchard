@@ -15,12 +15,14 @@
 // Configuration:
 //
 //	PROXY_LISTEN      address to listen on (default :9000)
-//	R2_ENDPOINT       upstream R2 endpoint (https://<acc>.r2.cloudflarestorage.com)
+//	R2_ENDPOINT       upstream S3 endpoint, any provider; optional when STORED_UPSTREAMS_FILE supplies one
 //	R2_REGION         signing region for upstream (default "auto")
-//	R2_ACCESS_KEY     real R2 access key id
-//	R2_SECRET_KEY     real R2 secret access key
+//	R2_PATH_STYLE     "false" sends requests to <bucket>.<host> instead of <host>/<bucket> (default "true")
+//	R2_ACCESS_KEY     real access key id
+//	R2_SECRET_KEY     real secret access key
 //	DATABASE_URL      postgres URL pointing at orchard's database (read-only role recommended)
 //	ALLOWED_BUCKETS   comma-separated buckets a binding may name (default: DEFAULT_BACKUP_BUCKET)
+//	STORED_UPSTREAMS_FILE  JSON the server writes when storage is set in the UI, re-read while running
 //
 // Only the subset of S3 that barman/CNPG actually uses is supported:
 // HEAD bucket, HEAD/PUT/GET/DELETE object, LIST objects v1/v2,
@@ -35,6 +37,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -46,6 +49,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/lib/pq"
@@ -76,6 +80,8 @@ const (
 	maxBodyBytes = 1 << 30
 
 	maxControlBodyBytes = 8 << 20
+
+	storedReloadInterval = 15 * time.Second
 )
 
 // bindingStore resolves access keys to bindings, backed by orchard's Postgres.
@@ -84,6 +90,7 @@ const (
 type bindingStore struct {
 	db            *sql.DB
 	defaultBucket string
+	defaults      func() string
 
 	mu    sync.RWMutex
 	cache map[string]cacheEntry
@@ -95,6 +102,13 @@ func newBindingStore(db *sql.DB, defaultBucket string) *bindingStore {
 		defaultBucket: defaultBucket,
 		cache:         map[string]cacheEntry{},
 	}
+}
+
+func (s *bindingStore) fallbackBucket() string {
+	if s.defaults != nil {
+		return s.defaults()
+	}
+	return s.defaultBucket
 }
 
 func (s *bindingStore) get(ak string) (Binding, bool) {
@@ -165,7 +179,7 @@ func (s *bindingStore) lookup(ak string) (Binding, bool, error) {
 
 	var b Binding
 	var ns, cluster string
-	err := s.db.QueryRowContext(ctx, q, ak, s.defaultBucket).Scan(&b.AccessKey, &b.Secret, &ns, &cluster, &b.Bucket)
+	err := s.db.QueryRowContext(ctx, q, ak, s.fallbackBucket()).Scan(&b.AccessKey, &b.Secret, &ns, &cluster, &b.Bucket)
 	if errors.Is(err, sql.ErrNoRows) {
 		return s.lookupRestore(ctx, ak)
 	}
@@ -198,7 +212,7 @@ func (s *bindingStore) lookupRestore(ctx context.Context, ak string) (Binding, b
 
 	var b Binding
 	var ns, restoreCluster, sourceCluster string
-	err := s.db.QueryRowContext(ctx, q, ak, s.defaultBucket).Scan(&b.AccessKey, &b.Secret, &ns, &restoreCluster, &sourceCluster, &b.Bucket)
+	err := s.db.QueryRowContext(ctx, q, ak, s.fallbackBucket()).Scan(&b.AccessKey, &b.Secret, &ns, &restoreCluster, &sourceCluster, &b.Bucket)
 	if errors.Is(err, sql.ErrNoRows) {
 		return s.lookupScoped(ctx, ak)
 	}
@@ -230,7 +244,7 @@ func (s *bindingStore) lookupScoped(ctx context.Context, ak string) (Binding, bo
 
 	var b Binding
 	var reads pq.StringArray
-	err := s.db.QueryRowContext(ctx, q, ak, s.defaultBucket).Scan(&b.AccessKey, &b.Secret, &b.Prefix, &reads, &b.Bucket)
+	err := s.db.QueryRowContext(ctx, q, ak, s.fallbackBucket()).Scan(&b.AccessKey, &b.Secret, &b.Prefix, &reads, &b.Bucket)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Binding{}, false, nil
 	}
@@ -254,29 +268,151 @@ func withSlash(prefix string) string {
 	return prefix + "/"
 }
 
+type upstream struct {
+	url       *url.URL
+	region    string
+	accessKey string
+	secretKey string
+	pathStyle bool
+}
+
+func (u *upstream) requestURL(bucket, key, path string) url.URL {
+	out := *u.url
+	if u.pathStyle {
+		out.Path = path
+		return out
+	}
+	out.Host = bucket + "." + u.url.Host
+	out.Path = "/" + key
+	return out
+}
+
+type upstreamTable struct {
+	base          *upstream
+	baseBuckets   map[string]bool
+	stored        map[string]*upstream
+	defaultBucket string
+}
+
+func (t *upstreamTable) forBucket(bucket string) *upstream {
+	if u, ok := t.stored[bucket]; ok {
+		return u
+	}
+	if t.base != nil && (len(t.baseBuckets) == 0 || t.baseBuckets[bucket]) {
+		return t.base
+	}
+	return nil
+}
+
+func (t *upstreamTable) isPlatform(bucket string) bool {
+	if _, ok := t.stored[bucket]; ok {
+		return true
+	}
+	return t.baseBuckets[bucket]
+}
+
+type storedTarget struct {
+	Bucket    string `json:"bucket"`
+	Endpoint  string `json:"endpoint"`
+	Region    string `json:"region"`
+	AccessKey string `json:"accessKey"`
+	SecretKey string `json:"secretKey"`
+	PathStyle *bool  `json:"pathStyle"`
+}
+
+type storedFile struct {
+	DefaultBucket string         `json:"defaultBucket"`
+	Targets       []storedTarget `json:"targets"`
+}
+
+func parseStored(raw []byte) (string, map[string]*upstream, error) {
+	var file storedFile
+	if err := json.Unmarshal(raw, &file); err != nil {
+		return "", nil, errors.New("not valid JSON")
+	}
+	out := map[string]*upstream{}
+	for _, t := range file.Targets {
+		parsed, err := url.Parse(strings.TrimRight(t.Endpoint, "/"))
+		if err != nil || parsed.Host == "" || t.Bucket == "" || t.AccessKey == "" || t.SecretKey == "" {
+			return "", nil, fmt.Errorf("target for bucket %q is incomplete", t.Bucket)
+		}
+		region := t.Region
+		if region == "" {
+			region = "auto"
+		}
+		out[t.Bucket] = &upstream{
+			url:       parsed,
+			region:    region,
+			accessKey: t.AccessKey,
+			secretKey: t.SecretKey,
+			pathStyle: t.PathStyle == nil || *t.PathStyle,
+		}
+	}
+	return file.DefaultBucket, out, nil
+}
+
 type Proxy struct {
-	upstreamURL     *url.URL
-	upstreamRegion  string
-	upstreamAK      string
-	upstreamSK      string
 	upstreamService string
 	policy          *bindingStore
-	allowedBuckets  map[string]bool
+	upstreams       atomic.Pointer[upstreamTable]
 	client          *http.Client
+}
+
+func (p *Proxy) reloadStored(path string, base upstreamTable, last *[]byte) {
+	raw, err := os.ReadFile(path)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		raw = nil
+	case err != nil:
+		log.Printf("[r2-proxy] could not read stored upstreams: %v", err)
+		return
+	}
+	if bytes.Equal(raw, *last) && p.upstreams.Load() != nil {
+		return
+	}
+	next := base
+	if raw != nil {
+		defaultBucket, stored, err := parseStored(raw)
+		if err != nil {
+			log.Printf("[r2-proxy] ignoring stored upstreams: %v", err)
+			return
+		}
+		next.stored = stored
+		if defaultBucket != "" {
+			next.defaultBucket = defaultBucket
+		}
+	}
+	*last = raw
+	p.upstreams.Store(&next)
+	log.Printf("[r2-proxy] upstreams: %d stored, default bucket %q", len(next.stored), next.defaultBucket)
+}
+
+func baseUpstream() (*upstream, error) {
+	endpoint := os.Getenv("R2_ENDPOINT")
+	if endpoint == "" {
+		return nil, nil
+	}
+	parsed, err := url.Parse(strings.TrimRight(endpoint, "/"))
+	if err != nil || parsed.Host == "" {
+		return nil, fmt.Errorf("R2_ENDPOINT invalid: %v", err)
+	}
+	return &upstream{
+		url:       parsed,
+		region:    envDefault("R2_REGION", "auto"),
+		accessKey: mustEnv("R2_ACCESS_KEY"),
+		secretKey: mustEnv("R2_SECRET_KEY"),
+		pathStyle: !strings.EqualFold(os.Getenv("R2_PATH_STYLE"), "false"),
+	}, nil
 }
 
 func main() {
 	log.Printf("r2-proxy version %s", Version)
 	listen := envDefault("PROXY_LISTEN", ":9000")
-	endpoint := mustEnv("R2_ENDPOINT")
-	region := envDefault("R2_REGION", "auto")
-	ak := mustEnv("R2_ACCESS_KEY")
-	sk := mustEnv("R2_SECRET_KEY")
 	dbURL := mustEnv("DATABASE_URL")
 
-	upURL, err := url.Parse(strings.TrimRight(endpoint, "/"))
-	if err != nil || upURL.Host == "" {
-		log.Fatalf("R2_ENDPOINT invalid: %v", err)
+	base, err := baseUpstream()
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	db, err := sql.Open("postgres", dbURL)
@@ -299,7 +435,6 @@ func main() {
 	}
 
 	defaultBucket := envDefault("DEFAULT_BACKUP_BUCKET", "")
-	store := newBindingStore(db, defaultBucket)
 	allowed := map[string]bool{}
 	for _, b := range strings.Split(envDefault("ALLOWED_BUCKETS", defaultBucket), ",") {
 		if b = strings.TrimSpace(b); b != "" {
@@ -307,20 +442,27 @@ func main() {
 		}
 	}
 
+	store := newBindingStore(db, defaultBucket)
 	p := &Proxy{
-		upstreamURL:     upURL,
-		upstreamRegion:  region,
-		upstreamAK:      ak,
-		upstreamSK:      sk,
 		upstreamService: "s3",
 		policy:          store,
-		allowedBuckets:  allowed,
 		// No client-level timeout: backup uploads can be large/long. The
 		// caller controls liveness via context (we don't add one, barman
 		// has its own retry/timeout). If you front this with an ingress
 		// proxy add idle-timeout there.
 		client: &http.Client{},
 	}
+	store.defaults = func() string { return p.upstreams.Load().defaultBucket }
+
+	storedPath := envDefault("STORED_UPSTREAMS_FILE", "/etc/r2-proxy/stored/upstreams.json")
+	baseTable := upstreamTable{base: base, baseBuckets: allowed, defaultBucket: defaultBucket}
+	var lastStored []byte
+	p.reloadStored(storedPath, baseTable, &lastStored)
+	go func() {
+		for range time.Tick(storedReloadInterval) {
+			p.reloadStored(storedPath, baseTable, &lastStored)
+		}
+	}()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -329,7 +471,11 @@ func main() {
 	})
 	mux.Handle("/", p)
 
-	log.Printf("[r2-proxy] listening %s, upstream=%s region=%s", listen, upURL, region)
+	if base != nil {
+		log.Printf("[r2-proxy] listening %s, upstream=%s region=%s", listen, base.url, base.region)
+	} else {
+		log.Printf("[r2-proxy] listening %s, no upstream in the environment", listen)
+	}
 	server := &http.Server{
 		Addr:              listen,
 		Handler:           mux,
@@ -372,11 +518,13 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		denyAndLog(w, r, authz.AccessKey, "AccessDenied", "missing bucket in path")
 		return
 	}
-	if bucket != binding.Bucket {
+	table := p.upstreams.Load()
+	if bucket != binding.Bucket && !(table.isPlatform(binding.Bucket) && table.isPlatform(bucket)) {
 		denyAndLog(w, r, authz.AccessKey, "AccessDenied", "bucket not allowed for this key")
 		return
 	}
-	if len(p.allowedBuckets) > 0 && !p.allowedBuckets[bucket] {
+	up := table.forBucket(bucket)
+	if up == nil {
 		denyAndLog(w, r, authz.AccessKey, "AccessDenied", "bucket not served by this proxy")
 		return
 	}
@@ -393,8 +541,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	upURL := *p.upstreamURL
-	upURL.Path = r.URL.Path
+	upURL := up.requestURL(bucket, key, r.URL.Path)
 	upURL.RawQuery = r.URL.RawQuery
 
 	outReq, err := http.NewRequestWithContext(r.Context(), r.Method, upURL.String(), payload.reader)
@@ -411,7 +558,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	outReq.Header.Set("x-amz-date", time.Now().UTC().Format("20060102T150405Z"))
 	outReq.Header.Del("Authorization")
 
-	signRequest(outReq, p.upstreamAK, p.upstreamSK, p.upstreamRegion, p.upstreamService, contentSha)
+	signRequest(outReq, up.accessKey, up.secretKey, up.region, p.upstreamService, contentSha)
 
 	resp, err := p.client.Do(outReq)
 	if err != nil {
