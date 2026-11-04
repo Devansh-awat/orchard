@@ -13,9 +13,9 @@ Orchard sets each component's status from the state of the cluster. You cannot s
 
 ## Prerequisites
 
-- To use the dashboard, you need the **Owner** role in the organization.
-- To use the CLI, you need the **Owner** or **Admin** role in the organization.
-- To use a host, your instance must have `BASE_DOMAIN` set.
+- For the dashboard, the **Owner** role in the organization.
+- For the CLI, the **Owner** or **Admin** role in the organization.
+- For a host, `BASE_DOMAIN` set on your instance.
 
 ## Create a page
 
@@ -28,7 +28,7 @@ Orchard sets each component's status from the state of the cluster. You cannot s
 4. In **Slug**, enter the path for the page. The page is served at `/status/<slug>`.
 5. (Optional) In **Host**, enter a subdomain of your instance domain.
 6. (Optional) In **Description**, enter a line of text to show below the title.
-7. In **Components**, select **Add an app or database**, and then select a resource. Repeat this step for each resource.
+7. In **Components**, select **Add an app or database**, then select a resource. Repeat this step for each resource.
 8. (Optional) Change the name of a component. Use the arrows to change the order.
 9. Keep **Public** turned on.
 10. Select **Create page**.
@@ -38,13 +38,13 @@ The page appears in the **Status pages** list with its URL.
 </TabItem>
 <TabItem label="CLI">
 
-To list the apps and databases that a page can show, run:
+To list the apps and databases that a page can show, run the following command:
 
 ```sh
 orchard status-page options
 ```
 
-To create the page, run:
+To create the page, run the following command:
 
 ```sh
 orchard status-page create --title "Acme status" --slug acme --component deployment:<id> --component database:<id>
@@ -102,7 +102,7 @@ A host serves the page at `<host>.<your instance domain>`. When you save a host,
 
 DNS for the host must point to your cluster. If you use a wildcard DNS record for your instance domain, no other DNS change is needed. For more information, refer to [Set up wildcard certificates](/operate/wildcard-certificates/).
 
-To remove a host from the CLI, run:
+To remove a host from the CLI, run the following command:
 
 ```sh
 orchard status-page update <pageId> --no-subdomain
@@ -112,9 +112,9 @@ In the dashboard, clear the **Host** field and select **Save**.
 
 ## Hide a page
 
-Turn off **Public** to hide a page. Visitors to a hidden page see `There is no status page here.`
+To hide a page, turn off **Public**. Visitors to a hidden page see `There is no status page here.`
 
-From the CLI, run:
+From the CLI, run the following command:
 
 ```sh
 orchard status-page update <pageId> --private

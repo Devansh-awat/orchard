@@ -10,7 +10,7 @@ The `hackclub/orchard` provider manages Orchard resources from Terraform or Open
 ## Prerequisites
 
 - An Orchard instance.
-- An [API token](/account/tokens/) or a login from `orchard auth login`.
+- An [API token](/account/tokens/) or a saved sign-in from `orchard auth login`.
 - Terraform or OpenTofu.
 - Go, to build the provider locally.
 
@@ -55,7 +55,7 @@ The provider reads the instance URL and token from these places, in order:
 
 1. The `api_url` and `token` attributes on the provider block.
 2. The `ORCHARD_API_URL` and `ORCHARD_API_TOKEN` environment variables.
-3. The login saved by `orchard auth login`.
+3. The token saved by `orchard auth login`.
 
 In CI, set the two environment variables.
 

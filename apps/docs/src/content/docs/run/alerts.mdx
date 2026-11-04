@@ -11,8 +11,8 @@ An alert rule watches one metric on an app. The rule fires when the metric stays
 
 ## Prerequisites
 
-- You need the **Owner** or **Admin** role in the organization, or admin access to the project. Only organization owners and admins can create organization rules.
-- The metrics store must be running on your instance. It is on by default (`metrics.enabled` in the Helm chart).
+- The **Owner** or **Admin** role in the organization, or admin access to the project. Only organization owners and admins can create organization rules.
+- A running metrics store on your instance. It is on by default (`metrics.enabled` in the Helm chart).
 
 ## Create a rule
 
@@ -34,7 +34,7 @@ The rule appears in the **Alerts** list with the status **OK**.
 </TabItem>
 <TabItem label="CLI">
 
-Run `orchard alert create`:
+Run the following command:
 
 ```sh
 orchard alert create --deployment <deploymentId> --metric cpu_percent --threshold 85 --for 300
@@ -72,7 +72,7 @@ CPU and memory percentages compare usage across all replicas with the total limi
 | **Over threshold** | The metric is past the threshold, but the period has not ended.          |
 | **Firing**       | The metric stayed past the threshold for the full period.                  |
 | **Recovering**   | The metric is back within the threshold, but the recovery period has not ended. |
-| **No data**      | The metric store did not answer while the rule was active.                 |
+| **No data**      | The metrics store did not answer while the rule was active.                 |
 | **Off**          | The rule is paused.                                                        |
 
 Orchard evaluates rules every 30 seconds.

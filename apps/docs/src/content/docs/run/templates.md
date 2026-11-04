@@ -9,13 +9,14 @@ A template is a YAML file that describes a set of resources and the parameters t
 
 ## Deploy a template
 
-1. Open a project and select **New app**.
-2. Select a template, or search for one by name.
-3. Fill in the parameters.
-4. (Optional) Change the size of each service.
-5. Select the deploy button, which names the template, such as **Deploy Ghost Blog**.
+1. Open a project.
+2. Select **New app**.
+3. Select a template, or search for one by name.
+4. Fill in the parameters.
+5. (Optional) Change the size of each service.
+6. Select the deploy button, which names the template, such as **Deploy Ghost Blog**.
 
-From the CLI, run `orchard template list` to find the template ID, then:
+From the CLI, run `orchard template list` to find the template ID, then run the following command:
 
 ```sh
 orchard template deploy <template-id> --param appName=ghost --param domain=blog.example.com
@@ -103,14 +104,14 @@ resources:
 | Field | Required | Notes |
 | --- | --- | --- |
 | `name` | Yes | Lowercase letters, digits, and hyphens. Must be unique on the instance. |
-| `displayName` | No | Shown in the UI. The default is `name`. |
+| `displayName` | No | Shown in the dashboard. The default is `name`. |
 | `description` | No | One or two sentences. |
 | `version` | To publish | A semantic version. Required to publish to the registry. |
 | `category` | No | Groups templates in the gallery, such as `cms` or `database`. |
 | `tags` | No | A list of searchable strings. |
 | `keywords` | No | Extra search terms. |
-| `icon` | No | An icon name for the UI. |
-| `author` | No | Your GitHub login. The gallery credits you with it. |
+| `icon` | No | An icon name for the dashboard. |
+| `author` | No | Your GitHub username. The gallery credits you with it. |
 | `homepage` | No | An `https://` link to the software's site. |
 | `license` | No | The SPDX ID of the software the template deploys. |
 
@@ -207,9 +208,9 @@ Deploy a template end to end before you publish it. A template can deploy withou
 
 Orchard publishes its built-in templates and community templates to `https://assets.orchard.my/registry`. The gallery is at [orchard.my/templates](https://orchard.my/templates).
 
-Each instance reads the catalogue when it starts and every six hours. To use another registry, set `TEMPLATE_REGISTRY_URL`. On an air-gapped instance, set the variable to an empty value. The built-in templates still load from the server image.
+Each instance reads the catalog when it starts and every six hours. To use another registry, set `TEMPLATE_REGISTRY_URL`. On an air-gapped instance, set the variable to an empty value. The built-in templates still load from the server image.
 
-Imported templates cannot be edited or deleted from the instance. An import does not overwrite a custom template with the same name.
+You cannot edit or delete imported templates from the instance. An import does not overwrite a custom template with the same name.
 
 ### Publish a template
 
@@ -221,7 +222,8 @@ Imported templates cannot be edited or deleted from the instance. An import does
    go run ./apps/registry validate -templates registry/templates
    ```
 
-4. Commit with the message `feat(templates): add <name>` and open a pull request. CI runs the same validator. A merge publishes the template within a minute.
+4. Commit with the message `feat(templates): add <name>`.
+5. Open a pull request. CI runs the same validator. A merge publishes the template within a minute.
 
 Published versions cannot change. To ship a change, increase `metadata.version`. Every version stays available:
 

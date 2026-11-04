@@ -32,11 +32,11 @@ Each row names the resource, shows how long the problem has existed, and links t
 
 ## App alerts
 
-Alerts above an app's tabs reflect the current state of the cluster. They include a failing build, a crash-looping pod, resource pressure, and a lost live connection. An alert clears when its condition clears. Short grace windows apply where state can flap, so a single restart does not leave a permanent banner.
+Alerts above an app's tabs reflect the current state of the cluster. They include a failing build, a crash-looping pod, resource pressure, and a lost live connection. An alert clears when its condition clears. Short grace windows apply where state can change quickly, so a single restart does not leave a permanent banner.
 
 ## Alert rules and notifications
 
-To get notified when you are not looking at the dashboard, use these features:
+To receive notifications when you are not viewing the dashboard, use these features:
 
 - [Create alert rules](/run/alerts/) to watch a metric on an app.
 - [Set up notifications](/run/notifications/) to route events to Slack, Discord, email, or a webhook.
@@ -44,4 +44,4 @@ To get notified when you are not looking at the dashboard, use these features:
 
 ## Usage
 
-Organization-wide use, by project and by person, is on the [Usage page](/teams/quotas/).
+Organization-wide usage, by project and by person, is on the [Usage page](/teams/quotas/).

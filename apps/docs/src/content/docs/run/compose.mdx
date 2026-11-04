@@ -19,14 +19,15 @@ A compose stack deploys the services in a `docker-compose.yml` file as apps in a
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open the project and go to **Compose**.
-2. Select **Deploy compose file**. If the project already has a stack, select **New stack**.
-3. Enter a name for the stack.
-4. In **Repository**, select the repository.
-5. In **Branch**, select the branch.
-6. In **Path to docker-compose.yml**, confirm the path.
-7. (Optional) Turn off **Auto-deploy on push**.
-8. Select **Deploy stack**.
+1. Open the project.
+2. Go to **Compose**.
+3. Select **Deploy compose file**. If the project already has a stack, select **New stack**.
+4. Enter a name for the stack.
+5. In **Repository**, select the repository.
+6. In **Branch**, select the branch.
+7. In **Path to docker-compose.yml**, confirm the path.
+8. (Optional) Turn off **Auto-deploy on push**.
+9. Select **Deploy stack**.
 
 Orchard opens the stack page. Builds run in the background.
 
@@ -52,7 +53,7 @@ Orchard names each app `<stack>-<service>`. Services use their Orchard internal 
 | `build` | An app that Orchard builds from the repository, with `context` and `dockerfile`. |
 | `ports` | The app's ports, over TCP. |
 | `environment` | The app's variables. |
-| `volumes` with a named volume | A persistent volume, 1 GiB unless `driver_opts.size` sets another size. Only the short string form is read. |
+| `volumes` with a named volume | A persistent volume, 1 GiB unless `driver_opts.size` sets another size. Orchard reads only the short string form. |
 | `deploy.replicas` | The replica count. |
 | `deploy.resources` | The CPU and memory sizes. |
 | `command` | The start command. |

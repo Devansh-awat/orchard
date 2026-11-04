@@ -7,16 +7,18 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-To read what an app is doing, use the console on its **Overview** tab. To search older logs, use **Observe** > **Logs**. For more on the **Observe** tab, refer to [Monitor an app](/run/monitor-an-app/).
+To read what an app is doing, use the console on its **Overview** tab. To search older logs, use **Observe** > **Logs**. For more information about the **Observe** tab, refer to [Monitor an app](/run/monitor-an-app/).
 
 ## Stream live logs
 
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open the app and go to **Overview**.
-2. In the console, select **Logs**.
-3. To follow one replica, open the source menu and select a pod and container.
+1. Open the app.
+2. Go to **Overview**.
+3. In the console, select **Logs**.
+4. To follow one replica, open the source menu.
+5. Select a pod and container.
 
 </TabItem>
 <TabItem label="CLI">
@@ -34,8 +36,9 @@ To read build logs, add `--build`.
 
 Past logs include replicas that have since been replaced. They come from the instance's log store. If the view is empty, refer to [Configure logs and request data](/operate/logs/).
 
-1. Open the app and go to **Observe** > **Logs**.
-2. Select a time range.
+1. Open the app.
+2. Go to **Observe** > **Logs**.
+3. Select a time range.
 
 ## Read crash output
 
@@ -44,9 +47,10 @@ Orchard captures the final output of a container that was killed, including out-
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open the app and go to **Overview**.
-2. In the console, open the source menu.
-3. Select the entry for the container labeled **Output from before the last crash**.
+1. Open the app.
+2. Go to **Overview**.
+3. In the console, open the source menu.
+4. Select the entry for the container labeled **Output from before the last crash**.
 
 </TabItem>
 <TabItem label="CLI">
@@ -70,16 +74,17 @@ In a crash loop, a container starts and exits, and Kubernetes restarts it. Read 
 | Killed with exit code 137 | The container ran out of memory | Raise the [memory limit](/deploy/scaling/#set-cpu-and-memory) or fix the leak |
 | Runs but never becomes ready | The health check path or port is wrong | Check [health checks](/deploy/scaling/#set-health-checks) |
 
-## Shell
+## Open a shell
 
 A shell opens a terminal inside a running container. It uses the same authentication as the dashboard.
 
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open the app and go to **Overview**.
-2. In the console, select **Shell**.
-3. If the app has more than one pod or container, select one.
+1. Open the app.
+2. Go to **Overview**.
+3. In the console, select **Shell**.
+4. If the app has more than one pod or container, select one.
 
 </TabItem>
 <TabItem label="CLI">
@@ -95,7 +100,7 @@ To open the app's language REPL in a pod, run `orchard console <id>`.
 </TabItem>
 </Tabs>
 
-Changes you make in a shell are lost on the next restart. A command that uses too much memory can get the container killed.
+Changes you make in a shell are lost on the next restart. A command that uses too much memory can cause Kubernetes to kill the container.
 
 ## Database logs
 

@@ -9,7 +9,7 @@ The Grove is a forum for the people on an Orchard instance. It holds bug reports
 
 ## Turn on the Grove
 
-Installing the graft turns on the Grove. On a host set up by the installer:
+Installing the graft turns on the Grove. On an installer host, run the following command:
 
 ```sh
 sudo orchardctl graft add forum --apply
