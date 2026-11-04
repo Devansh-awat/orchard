@@ -1,3 +1,4 @@
+import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import {
   BadRequestException,
   Injectable,
@@ -122,7 +123,8 @@ export class MetricAlertsService {
     private readonly rules: NotificationRulesService,
     private readonly orgEvents: OrgEventsService,
     private readonly audit: AuditService,
-    @Optional() private readonly leader?: LeaderElectionService
+    @Optional() private readonly leader?: LeaderElectionService,
+    @Optional() private readonly settings?: InstanceSettingsService
   ) {}
 
   catalogue() {
@@ -363,26 +365,38 @@ export class MetricAlertsService {
     });
     if (!target) return false;
     const selector = def.needsIngress ? await this.observability.ingressFor(target.id) : null;
-    const ctx = this.metricTarget(target, selector);
+    const ctx = this.metricTarget(target, selector, await this.limitsOff());
     const query = buildMetricQuery(def.id, ctx);
     if (query.kind === 'inapplicable') return false;
     return sampleHasData(await this.sample(rule, def.id, query.promql, ctx));
   }
 
-  private metricTarget(target: TargetRow, ingress: IngressQueries | null): MetricTarget {
+  private async limitsOff(): Promise<boolean> {
+    const state = await this.settings?.getResourceLimitsState();
+    return state?.value === 'off';
+  }
+
+  private metricTarget(
+    target: TargetRow,
+    ingress: IngressQueries | null,
+    limitsOff = false
+  ): MetricTarget {
     return {
       namespace: target.namespace,
       name: target.name,
       replicas: target.replicas,
-      cpuLimitMilli:
-        target.cpuRequestMilli ??
-        target.project.organization.defaultPodCpuMilli ??
-        FALLBACK_CPU_MILLI,
-      memoryLimitBytes: Number(
-        target.memoryRequestBytes ??
-          target.project.organization.defaultPodMemoryBytes ??
-          FALLBACK_MEMORY_BYTES
-      ),
+      cpuLimitMilli: limitsOff
+        ? null
+        : (target.cpuRequestMilli ??
+          target.project.organization.defaultPodCpuMilli ??
+          FALLBACK_CPU_MILLI),
+      memoryLimitBytes: limitsOff
+        ? null
+        : Number(
+            target.memoryRequestBytes ??
+              target.project.organization.defaultPodMemoryBytes ??
+              FALLBACK_MEMORY_BYTES
+          ),
       ingress
     };
   }
@@ -440,7 +454,7 @@ export class MetricAlertsService {
         selector = def.needsIngress ? await this.observability.ingressFor(target.id) : null;
         selectorCache.set(target.id, selector);
       }
-      const ctx = this.metricTarget(target, selector);
+      const ctx = this.metricTarget(target, selector, await this.limitsOff());
       const query = buildMetricQuery(def.id, ctx);
       if (query.kind === 'inapplicable') continue;
       used += 1;
