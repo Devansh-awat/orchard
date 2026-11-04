@@ -5226,6 +5226,9 @@
                     "internalHost": {
                       "type": "string"
                     },
+                    "keepsLocalBackups": {
+                      "type": "boolean"
+                    },
                     "liveStatus": {
                       "properties": {
                         "conditions": {

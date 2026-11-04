@@ -389,6 +389,22 @@ export class DatabasesService {
     };
   }
 
+  private async keepsLocalBackups(database: {
+    mode: string;
+    namespace: string | null;
+    clusterName: string | null;
+  }): Promise<boolean> {
+    const local = localObjectStore()?.backupBucket;
+    if (!local || tenantBackupTarget()?.bucket === local) return false;
+    if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) return false;
+    try {
+      const state = await this.k8sCnpg.getCnpgBackupState(database.namespace, database.clusterName);
+      return bucketFromDestination(state.destinationPath) === local;
+    } catch {
+      return false;
+    }
+  }
+
   async sourceBackupBucket(
     org: Partial<OrgR2> | null | undefined,
     source: { namespace: string; clusterName: string; trashId?: string | null },
@@ -1082,6 +1098,8 @@ export class DatabasesService {
         tenantBackupTarget())
     );
 
+    const keepsLocalBackups = skipLive ? false : await this.keepsLocalBackups(database);
+
     const resolvedPublicHostname = this.publicHostnameFor(database);
     const publicHostname = resolvedPublicHostname ?? null;
     const publicConnectionString =
@@ -1115,6 +1133,7 @@ export class DatabasesService {
       publicConnectionString,
       liveStatus,
       backupsEnabled,
+      keepsLocalBackups,
       pods
     };
     if (!canEdit) {

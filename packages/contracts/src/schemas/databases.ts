@@ -85,6 +85,7 @@ const databaseDetailSchema = databaseSchema.extend({
   publicConnectionString: z.string().nullable(),
   liveStatus: liveStatusSchema,
   backupsEnabled: z.boolean(),
+  keepsLocalBackups: z.boolean().optional(),
   pods: z.array(passthroughObject)
 });
 
