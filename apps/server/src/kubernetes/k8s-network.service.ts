@@ -964,29 +964,10 @@ export class K8sNetworkService implements OnModuleInit {
       console.error(`Failed to restore ingress backend: ${error.message}`);
     }
 
-    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
-    const proxyServiceName = 'orchard-protection-proxy';
     try {
-      await coreApi.deleteNamespacedService(proxyServiceName, cleanNamespace);
+      await this.cleanupProtectionProxy(cleanNamespace, cleanName);
     } catch (error) {
-      if (error.response?.statusCode !== 404) {
-        console.error(`Failed to delete protection proxy service: ${error.message}`);
-      }
-    }
-
-    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
-    try {
-      await customApi.deleteNamespacedCustomObject(
-        'discovery.k8s.io',
-        'v1',
-        cleanNamespace,
-        'endpointslices',
-        `${proxyServiceName}-1`
-      );
-    } catch (error) {
-      if (error.response?.statusCode !== 404) {
-        console.error(`Failed to delete protection proxy endpoint slice: ${error.message}`);
-      }
+      console.error(`Failed to clean up protection proxy: ${error.message}`);
     }
   }
 

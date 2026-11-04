@@ -263,3 +263,56 @@ test('restore does repoint a genuinely unprotected, orphaned ingress', async () 
   assert.equal(writes.length, 1);
   assert.equal(writes[0].spec.rules[0].http.paths[0].backend.service.name, 'app');
 });
+
+function teardownHarness(count: () => Promise<number>) {
+  const deleted: string[] = [];
+  const svc = Object.create(K8sNetworkService.prototype) as any;
+  svc.logger = { error() {}, warn() {}, log() {} };
+  svc.prisma = { ingress: { count } };
+  svc.kubernetes = {
+    ensureKubeConfig() {},
+    kc: {
+      makeApiClient(api: any) {
+        if (api === k8s.CoreV1Api) {
+          return {
+            deleteNamespacedService: async (name: string) => {
+              deleted.push(name);
+            }
+          };
+        }
+        if (api === k8s.CustomObjectsApi) {
+          return {
+            deleteNamespacedCustomObject: async (...args: any[]) => {
+              deleted.push(args[4]);
+            }
+          };
+        }
+        return {
+          readNamespacedIngress: async () => ingressWithBackends([PROXY]),
+          replaceNamespacedIngress: async (_n: string, _ns: string, body: any) => ({ body })
+        };
+      }
+    }
+  };
+  return { svc, deleted };
+}
+
+test('making one app public keeps the proxy for other protected apps', async () => {
+  const { svc, deleted } = teardownHarness(async () => 1);
+  await svc.disableProtectionProxy('ns', 'app-ing', 'app', 80);
+  assert.deepEqual(deleted, []);
+});
+
+test('the last protected app removes the shared proxy', async () => {
+  const { svc, deleted } = teardownHarness(async () => 0);
+  await svc.disableProtectionProxy('ns', 'app-ing', 'app', 80);
+  assert.deepEqual(deleted, [PROXY, `${PROXY}-1`]);
+});
+
+test('a failed count keeps the proxy', async () => {
+  const { svc, deleted } = teardownHarness(async () => {
+    throw new Error('database down');
+  });
+  await svc.disableProtectionProxy('ns', 'app-ing', 'app', 80);
+  assert.deepEqual(deleted, []);
+});
