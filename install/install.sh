@@ -2754,6 +2754,48 @@ databaseDumps:
 EOF
 }
 
+RELEASE_KEYS=""
+
+# Images from anywhere but a published Orchard release have no signature to check.
+unsigned_commands_allowed() {
+  if [ "${ORCHARD_ALLOW_UNSIGNED_COMMANDS:-}" = true ] \
+     || grep -qs '^ORCHARD_ALLOW_UNSIGNED_COMMANDS=true$' "$STATE_DIR/env" \
+     || [ "$IMAGE_REGISTRY" != ghcr.io ] \
+     || [ "$IMAGE_REPOSITORY" != hackclub/orchard ] \
+     || ! [[ "$IMAGE_TAG" =~ ^(latest|v?[0-9]+\.[0-9]+\.[0-9]+.*)$ ]]; then
+    echo true
+  else
+    echo false
+  fi
+}
+
+verify_bootstrap() {
+  local script=$1 dir key sum verified=false
+  [ -n "$RELEASE_KEYS" ] || return 0
+  [ "$(unsigned_commands_allowed)" = true ] && return 0
+  if ! openssl pkeyutl -help 2>&1 | grep -q rawin; then
+    warn "this openssl can't check release signatures; orchardctl checks later updates itself"
+    return 0
+  fi
+  dir=$(mktemp -d)
+  kubectl -n orchard exec deploy/server -- cat /app/hostbin/hostbin.manifest > "$dir/manifest" 2>/dev/null || true
+  kubectl -n orchard exec deploy/server -- cat /app/hostbin/hostbin.sig 2>/dev/null | base64 -d > "$dir/sig" 2>/dev/null || true
+  for key in $RELEASE_KEYS; do
+    printf -- '-----BEGIN PUBLIC KEY-----\n%s\n-----END PUBLIC KEY-----\n' "$key" > "$dir/key.pem"
+    if openssl pkeyutl -verify -pubin -inkey "$dir/key.pem" -rawin -in "$dir/manifest" -sigfile "$dir/sig" >/dev/null 2>&1; then
+      verified=true
+      break
+    fi
+  done
+  sum=$(sha256sum "$script" | cut -d' ' -f1)
+  if [ "$verified" != true ] || ! grep -qx "sha256 $sum orchard-sync-commands" "$dir/manifest"; then
+    rm -rf "$dir"
+    warn "the host commands in the server image aren't signed by an Orchard release; not installing them"
+    return 1
+  fi
+  rm -rf "$dir"
+}
+
 k3s_download() {
   curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="$K3S_VERSION" INSTALL_K3S_CHANNEL="$K3S_CHANNEL" sh -s - server \
     --disable=traefik \
@@ -3935,6 +3977,7 @@ ORCHARD_VALUES=$VALUES_FILE
 ORCHARD_CHART=$CHART_REF
 ORCHARD_NAMESPACE=orchard
 ORCHARD_K3S_UPDATES=$k3s_updates
+ORCHARD_ALLOW_UNSIGNED_COMMANDS=$(unsigned_commands_allowed)
 EOF
   chmod 600 "$STATE_DIR/env"
 
@@ -3943,7 +3986,8 @@ EOF
   local boot
   boot=$(mktemp)
   if kubectl -n orchard exec deploy/server -- cat /app/hostbin/orchard-sync-commands > "$boot" 2>/dev/null \
-     && [ -s "$boot" ] && bash -n "$boot" 2>/dev/null; then
+     && [ -s "$boot" ] && bash -n "$boot" 2>/dev/null \
+     && verify_bootstrap "$boot"; then
     install -m 0755 "$boot" /usr/local/bin/orchard-sync-commands
     rm -f "$boot"
     if ORCHARD_STATE_DIR="$STATE_DIR" orchard-sync-commands >/dev/null; then
