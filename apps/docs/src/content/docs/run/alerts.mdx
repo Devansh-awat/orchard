@@ -47,16 +47,16 @@ To list the available metric IDs, run `orchard alert metrics`.
 
 ## Available metrics
 
-| Metric                      | ID                      | Unit  | Comparison     | Default threshold | Default period |
-| --------------------------- | ----------------------- | ----- | -------------- | ----------------- | -------------- |
-| CPU                         | `cpu_percent`           | %     | Above          | 85                | 5 minutes      |
-| Memory                      | `memory_percent`        | %     | Above          | 85                | 5 minutes      |
-| Requests                    | `request_rate`          | req/s | Above or below | 100               | 5 minutes      |
-| 5xx rate                    | `error_rate`            | %     | Above          | 5                 | 5 minutes      |
-| Average latency             | `latency_avg_ms`        | ms    | Above          | 500               | 5 minutes      |
-| Max latency                 | `latency_max_ms`        | ms    | Above          | 2000              | 5 minutes      |
-| CPU throttling              | `cpu_throttled_percent` | %     | Above          | 25                | 10 minutes     |
-| Hours until out of memory   | `memory_forecast_hours` | h     | Below          | 6                 | 30 minutes     |
+| Metric                    | ID                      | Unit  | Comparison     | Default threshold | Default period |
+| ------------------------- | ----------------------- | ----- | -------------- | ----------------- | -------------- |
+| CPU                       | `cpu_percent`           | %     | Above          | 85                | 5 minutes      |
+| Memory                    | `memory_percent`        | %     | Above          | 85                | 5 minutes      |
+| Requests                  | `request_rate`          | req/s | Above or below | 100               | 5 minutes      |
+| 5xx rate                  | `error_rate`            | %     | Above          | 5                 | 5 minutes      |
+| Average latency           | `latency_avg_ms`        | ms    | Above          | 500               | 5 minutes      |
+| Max latency               | `latency_max_ms`        | ms    | Above          | 2000              | 5 minutes      |
+| CPU throttling            | `cpu_throttled_percent` | %     | Above          | 25                | 10 minutes     |
+| Hours until out of memory | `memory_forecast_hours` | h     | Below          | 6                 | 30 minutes     |
 
 CPU and memory percentages compare usage across all replicas with the total limit of those replicas. If an app has no limit of its own, Orchard uses the organization default.
 
@@ -66,14 +66,14 @@ CPU and memory percentages compare usage across all replicas with the total limi
 
 ## Rule status
 
-| Status           | Meaning                                                                    |
-| ---------------- | -------------------------------------------------------------------------- |
-| **OK**           | The metric is within the threshold.                                        |
-| **Over threshold** | The metric is past the threshold, but the period has not ended.          |
-| **Firing**       | The metric stayed past the threshold for the full period.                  |
-| **Recovering**   | The metric is back within the threshold, but the recovery period has not ended. |
-| **No data**      | The metrics store did not answer while the rule was active.                 |
-| **Off**          | The rule is paused.                                                        |
+| Status             | Meaning                                                                         |
+| ------------------ | ------------------------------------------------------------------------------- |
+| **OK**             | The metric is within the threshold.                                             |
+| **Over threshold** | The metric is past the threshold, but the period has not ended.                 |
+| **Firing**         | The metric stayed past the threshold for the full period.                       |
+| **Recovering**     | The metric is back within the threshold, but the recovery period has not ended. |
+| **No data**        | The metrics store did not answer while the rule was active.                     |
+| **Off**            | The rule is paused.                                                             |
 
 Orchard evaluates rules every 30 seconds.
 

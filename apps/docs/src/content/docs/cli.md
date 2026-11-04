@@ -72,16 +72,16 @@ To link a directory to a project, run `orchard link --project my-app` in that di
 
 ## Common commands
 
-| Task                                      | Command                                 |
-| ----------------------------------------- | --------------------------------------- |
-| List apps                          | `orchard deploy list`                   |
-| Scale an app                        | `orchard deploy scale <ID> 3`           |
-| Read or follow logs                       | `orchard logs <ID> -f`                  |
-| Build and deploy the current directory    | `orchard up`                            |
-| Write variables to `.env.orchard`         | `orchard env pull`                      |
-| List databases                            | `orchard db list`                       |
-| Run a job                                 | `orchard job run <ID>`                  |
-| Roll back an app                    | `orchard deploy rollback <ID> --yes`    |
+| Task                                   | Command                              |
+| -------------------------------------- | ------------------------------------ |
+| List apps                              | `orchard deploy list`                |
+| Scale an app                           | `orchard deploy scale <ID> 3`        |
+| Read or follow logs                    | `orchard logs <ID> -f`               |
+| Build and deploy the current directory | `orchard up`                         |
+| Write variables to `.env.orchard`      | `orchard env pull`                   |
+| List databases                         | `orchard db list`                    |
+| Run a job                              | `orchard job run <ID>`               |
+| Roll back an app                       | `orchard deploy rollback <ID> --yes` |
 
 ## Use the CLI in scripts
 

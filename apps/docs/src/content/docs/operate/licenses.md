@@ -15,14 +15,14 @@ The AGPL adds no further requirement if you run an unmodified version.
 
 Each part of Orchard includes the copyright notices and license texts of the open-source software built into it.
 
-| Part                      | Location                                                                                     |
-| ------------------------- | -------------------------------------------------------------------------------------------- |
+| Part                      | Location                                                                                      |
+| ------------------------- | --------------------------------------------------------------------------------------------- |
 | Dashboard                 | `/third-party-notices.txt` on your instance, and **Open source licenses** in the account menu |
-| API server and MCP images | `/app/THIRD_PARTY_NOTICES.txt`                                                               |
-| R2 proxy image            | `/THIRD_PARTY_NOTICES.txt`                                                                   |
-| CLI                       | `orchard licenses`, and `THIRD_PARTY_NOTICES.txt` in each release archive                    |
-| Terraform provider        | `THIRD_PARTY_NOTICES.txt` in each release archive                                            |
-| Host commands             | `orchardctl licenses`                                                                        |
-| This documentation        | [third-party-notices.txt](/third-party-notices.txt)                                          |
+| API server and MCP images | `/app/THIRD_PARTY_NOTICES.txt`                                                                |
+| R2 proxy image            | `/THIRD_PARTY_NOTICES.txt`                                                                    |
+| CLI                       | `orchard licenses`, and `THIRD_PARTY_NOTICES.txt` in each release archive                     |
+| Terraform provider        | `THIRD_PARTY_NOTICES.txt` in each release archive                                             |
+| Host commands             | `orchardctl licenses`                                                                         |
+| This documentation        | [third-party-notices.txt](/third-party-notices.txt)                                           |
 
 For all notices in one place, refer to [orchard.my/credits](https://orchard.my/credits).

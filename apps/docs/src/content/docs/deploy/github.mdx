@@ -55,13 +55,13 @@ For the build flags, refer to the [CLI reference](/reference/cli/).
 
 Orchard reads the repository and fills in the form.
 
-| Field | Detected from |
-| --- | --- |
-| **Build with** | A `Dockerfile`, or framework detection when no Dockerfile exists |
-| **Dockerfile** | The file Orchard found |
-| **Stage** | The stages in the Dockerfile. The default is **Final stage**. |
-| **Port** | `EXPOSE`, or the default port of the framework |
-| **Environment variables** | `ENV` lines in the image |
+| Field                     | Detected from                                                    |
+| ------------------------- | ---------------------------------------------------------------- |
+| **Build with**            | A `Dockerfile`, or framework detection when no Dockerfile exists |
+| **Dockerfile**            | The file Orchard found                                           |
+| **Stage**                 | The stages in the Dockerfile. The default is **Final stage**.    |
+| **Port**                  | `EXPOSE`, or the default port of the framework                   |
+| **Environment variables** | `ENV` lines in the image                                         |
 
 In a monorepo, turn on **Build from the repository root** if the Dockerfile copies files from outside its own directory.
 

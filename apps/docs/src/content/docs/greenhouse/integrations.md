@@ -15,11 +15,11 @@ To start a Greenhouse session without opening the workspace, comment on an issue
 
 ## Link your accounts
 
-| Service | How to link it                                                                                                                                              |
-| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GitHub  | In **Account settings** > **GitHub and Tailscale**, sign in with GitHub.                                                                                        |
+| Service | How to link it                                                                                                                                                                                                                                                                 |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| GitHub  | In **Account settings** > **GitHub and Tailscale**, sign in with GitHub.                                                                                                                                                                                                       |
 | Linear  | In **Account settings** > **Greenhouse** > **Connected accounts**, select **Connect** next to **Linear** and paste a personal API key. In Linear, create the key under **Settings** > **Security and access** > **Personal API keys**. Read access is enough to select issues. |
-| Slack   | In Slack, run `/greenhouse link`. Open the link that Slack shows you while signed in to Orchard, and confirm. The link works once and expires after 10 minutes. |
+| Slack   | In Slack, run `/greenhouse link`. Open the link that Slack shows you while signed in to Orchard, and confirm. The link works once and expires after 10 minutes.                                                                                                                |
 
 A Linear or Slack account can be linked to one Orchard user. To unlink Slack, run `/greenhouse unlink`, or select **Unlink** in **Settings** > **Integrations**. To disconnect Linear, select **Disconnect** in **Connected accounts**.
 
@@ -32,8 +32,8 @@ A Linear or Slack account can be linked to one Orchard user. To unlink Slack, ru
 
 The issue picker accepts these references:
 
-| Service | Reference                                                                              |
-| ------- | -------------------------------------------------------------------------------------- |
+| Service | Reference                                                                               |
+| ------- | --------------------------------------------------------------------------------------- |
 | GitHub  | `owner/repo#123`, the issue's URL, or `#123` for the repository the session starts from |
 | Linear  | The issue's key, such as `ENG-42`, or its URL                                           |
 

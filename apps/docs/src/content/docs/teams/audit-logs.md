@@ -11,11 +11,11 @@ Orchard keeps audit log entries for 180 days and then deletes them. You cannot e
 
 ## View audit logs
 
-| Level        | Who can read it                 | Location                                                     |
-| ------------ | ------------------------------- | ------------------------------------------------------------ |
-| App          | Anyone who can view the project | The **History** tab of the app                               |
-| Organization | Owners and admins               | **Organization settings** > **Audit log**                               |
-| Instance     | Superadmins                     | **Instance admin** > **Audit log**                           |
+| Level        | Who can read it                 | Location                                  |
+| ------------ | ------------------------------- | ----------------------------------------- |
+| App          | Anyone who can view the project | The **History** tab of the app            |
+| Organization | Owners and admins               | **Organization settings** > **Audit log** |
+| Instance     | Superadmins                     | **Instance admin** > **Audit log**        |
 
 To read an organization's audit log from a terminal, run the following command:
 

@@ -101,44 +101,44 @@ resources:
 
 ### Metadata
 
-| Field | Required | Notes |
-| --- | --- | --- |
-| `name` | Yes | Lowercase letters, digits, and hyphens. Must be unique on the instance. |
-| `displayName` | No | Shown in the dashboard. The default is `name`. |
-| `description` | No | One or two sentences. |
-| `version` | To publish | A semantic version. Required to publish to the registry. |
-| `category` | No | Groups templates in the gallery, such as `cms` or `database`. |
-| `tags` | No | A list of searchable strings. |
-| `keywords` | No | Extra search terms. |
-| `icon` | No | An icon name for the dashboard. |
-| `author` | No | Your GitHub username. The gallery credits you with it. |
-| `homepage` | No | An `https://` link to the software's site. |
-| `license` | No | The SPDX ID of the software the template deploys. |
+| Field         | Required   | Notes                                                                   |
+| ------------- | ---------- | ----------------------------------------------------------------------- |
+| `name`        | Yes        | Lowercase letters, digits, and hyphens. Must be unique on the instance. |
+| `displayName` | No         | Shown in the dashboard. The default is `name`.                          |
+| `description` | No         | One or two sentences.                                                   |
+| `version`     | To publish | A semantic version. Required to publish to the registry.                |
+| `category`    | No         | Groups templates in the gallery, such as `cms` or `database`.           |
+| `tags`        | No         | A list of searchable strings.                                           |
+| `keywords`    | No         | Extra search terms.                                                     |
+| `icon`        | No         | An icon name for the dashboard.                                         |
+| `author`      | No         | Your GitHub username. The gallery credits you with it.                  |
+| `homepage`    | No         | An `https://` link to the software's site.                              |
+| `license`     | No         | The SPDX ID of the software the template deploys.                       |
 
 ### Parameters
 
 Each parameter needs a `name`. The other fields are optional.
 
-| Field | Notes |
-| --- | --- |
-| `displayName` | The label in the form. The default is `name`. |
-| `description` | Help text under the field. |
-| `type` | `string` (default), `number`, `boolean`, `select`, or `secret`. |
-| `default` | The value used when the field is empty. |
-| `required` | Rejects an empty value that has no default. |
-| `placeholder` | Hint text in the empty field. |
-| `options` | For `select`, a list of `{ label, value }`. |
-| `validation` | `pattern` and `message` for strings. `min` and `max` for numbers and secret lengths. `bytes` and `encoding` (`hex` or `base64`) for generated secrets that must decode to an exact size. |
+| Field         | Notes                                                                                                                                                                                    |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `displayName` | The label in the form. The default is `name`.                                                                                                                                            |
+| `description` | Help text under the field.                                                                                                                                                               |
+| `type`        | `string` (default), `number`, `boolean`, `select`, or `secret`.                                                                                                                          |
+| `default`     | The value used when the field is empty.                                                                                                                                                  |
+| `required`    | Rejects an empty value that has no default.                                                                                                                                              |
+| `placeholder` | Hint text in the empty field.                                                                                                                                                            |
+| `options`     | For `select`, a list of `{ label, value }`.                                                                                                                                              |
+| `validation`  | `pattern` and `message` for strings. `min` and `max` for numbers and secret lengths. `bytes` and `encoding` (`hex` or `base64`) for generated secrets that must decode to an exact size. |
 
 Orchard handles each type as follows when you deploy:
 
-| Type | Handling |
-| --- | --- |
-| `string` | Checked against `validation.pattern`. A parameter that names a resource (`name`, `appName`, or anything ending in `Name`) is converted to a slug first, so `My Blog` becomes `my-blog`. |
-| `number` | Converted to a number and checked against `min` and `max`. |
-| `boolean` | Accepts `true` or the string `"true"`. |
-| `select` | Must match one of the option values. |
-| `secret` | Generated when empty, as a random hex string. The length is 32 characters, or `validation.min` if that is larger. |
+| Type      | Handling                                                                                                                                                                                |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `string`  | Checked against `validation.pattern`. A parameter that names a resource (`name`, `appName`, or anything ending in `Name`) is converted to a slug first, so `My Blog` becomes `my-blog`. |
+| `number`  | Converted to a number and checked against `min` and `max`.                                                                                                                              |
+| `boolean` | Accepts `true` or the string `"true"`.                                                                                                                                                  |
+| `select`  | Must match one of the option values.                                                                                                                                                    |
+| `secret`  | Generated when empty, as a random hex string. The length is 32 characters, or `validation.min` if that is larger.                                                                       |
 
 ### Resources
 
@@ -148,10 +148,10 @@ Orchard creates resources from top to bottom. Each resource can reference the on
 
 Creates a PostgreSQL database.
 
-| Config | Notes |
-| --- | --- |
-| `name` | Required. |
-| `replicas` | The number of instances. The default is 1. |
+| Config      | Notes                                       |
+| ----------- | ------------------------------------------- |
+| `name`      | Required.                                   |
+| `replicas`  | The number of instances. The default is 1.  |
 | `resources` | The recommended size, as `{ cpu, memory }`. |
 
 A database exposes `host`, `port`, `dbName`, `dbUser`, `dbPassword`, and `connectionString` to later resources.
@@ -160,20 +160,20 @@ A database exposes `host`, `port`, `dbName`, `dbUser`, `dbPassword`, and `connec
 
 Creates an app from an image or from a repository.
 
-| Config | Notes |
-| --- | --- |
-| `name` | Required. |
-| `image` | The image to deploy. Use this or `repo`. |
-| `repo`, `branch` | A Git repository to build. |
-| `buildType` | `dockerfile` (default, with `dockerfilePath`) or `railpack`. |
-| `rootDirectory`, `installCommand`, `buildCommand`, `startCommand`, `outputDirectory` | Build settings for a repository. `startCommand` also applies to images. |
-| `replicas` | The default is 1. |
-| `ports` | A list of `{ name, containerPort, servicePort, protocol, public }`. `public: true` publishes the port on the organization's external IP over raw TCP or UDP. |
-| `env` | A list of `{ key, value }`. Add `secret: true` to store the value as a secret. |
-| `volumes` | Persistent volumes, in the shape the API accepts. Each `pvc` volume gets its own randomly named disk, so two deployed templates do not share one. |
-| `resources` | The recommended size, as `{ cpu, memory }`, such as `500m` and `1Gi`. The deploy form starts here, and you can change it before you deploy. |
-| `exposePublic` | Creates the Service as a NodePort instead of ClusterIP. Use `public: true` on a port instead. |
-| `autoDeploy`, `autoDeployBranch` | Redeploys on push, for repository builds. |
+| Config                                                                               | Notes                                                                                                                                                        |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `name`                                                                               | Required.                                                                                                                                                    |
+| `image`                                                                              | The image to deploy. Use this or `repo`.                                                                                                                     |
+| `repo`, `branch`                                                                     | A Git repository to build.                                                                                                                                   |
+| `buildType`                                                                          | `dockerfile` (default, with `dockerfilePath`) or `railpack`.                                                                                                 |
+| `rootDirectory`, `installCommand`, `buildCommand`, `startCommand`, `outputDirectory` | Build settings for a repository. `startCommand` also applies to images.                                                                                      |
+| `replicas`                                                                           | The default is 1.                                                                                                                                            |
+| `ports`                                                                              | A list of `{ name, containerPort, servicePort, protocol, public }`. `public: true` publishes the port on the organization's external IP over raw TCP or UDP. |
+| `env`                                                                                | A list of `{ key, value }`. Add `secret: true` to store the value as a secret.                                                                               |
+| `volumes`                                                                            | Persistent volumes, in the shape the API accepts. Each `pvc` volume gets its own randomly named disk, so two deployed templates do not share one.            |
+| `resources`                                                                          | The recommended size, as `{ cpu, memory }`, such as `500m` and `1Gi`. The deploy form starts here, and you can change it before you deploy.                  |
+| `exposePublic`                                                                       | Creates the Service as a NodePort instead of ClusterIP. Use `public: true` on a port instead.                                                                |
+| `autoDeploy`, `autoDeployBranch`                                                     | Redeploys on push, for repository builds.                                                                                                                    |
 
 A deployment exposes `serviceName`, which an ingress route points at. A deployment with a published port also exposes `publicIp`, `publicPort`, and `publicHost`. The instance assigns the public port number.
 
@@ -181,13 +181,13 @@ A deployment exposes `serviceName`, which an ingress route points at. A deployme
 
 Puts a domain in front of a deployment.
 
-| Config | Notes |
-| --- | --- |
-| `host` | Required. The domain. |
-| `tlsEnabled` | The default is `true`. |
-| `routes` | A list of `{ path, serviceName, servicePort }`. |
+| Config                               | Notes                                                |
+| ------------------------------------ | ---------------------------------------------------- |
+| `host`                               | Required. The domain.                                |
+| `tlsEnabled`                         | The default is `true`.                               |
+| `routes`                             | A list of `{ path, serviceName, servicePort }`.      |
 | `path`, `serviceName`, `servicePort` | Shorthand for a single route when you omit `routes`. |
-| `basicAuth` | Protects the domain with a username and password. |
+| `basicAuth`                          | Protects the domain with a username and password.    |
 
 An ingress exposes `host`.
 

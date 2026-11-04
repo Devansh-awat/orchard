@@ -39,13 +39,13 @@ The `--provider` flag accepts `github`, `gitlab`, `gitea`, `bitbucket`, or `gene
 
 Orchard stores the token encrypted and checks it once before it saves.
 
-| Provider | Token | Scopes |
-| --- | --- | --- |
-| GitLab | Personal or project access token | `read_api`, `read_repository` |
-| Gitea, Forgejo, Codeberg | Access token | Repository read |
-| Bitbucket Cloud | App password, with your username | Repository read |
-| GitHub with a token | Fine-grained token | Contents read |
-| Any Git host | The password used to clone over HTTPS | None |
+| Provider                 | Token                                 | Scopes                        |
+| ------------------------ | ------------------------------------- | ----------------------------- |
+| GitLab                   | Personal or project access token      | `read_api`, `read_repository` |
+| Gitea, Forgejo, Codeberg | Access token                          | Repository read               |
+| Bitbucket Cloud          | App password, with your username      | Repository read               |
+| GitHub with a token      | Fine-grained token                    | Contents read                 |
+| Any Git host             | The password used to clone over HTTPS | None                          |
 
 ## Create an app
 

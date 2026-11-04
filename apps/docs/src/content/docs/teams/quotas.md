@@ -50,12 +50,12 @@ You must be an organization owner or admin.
 
 Go to **Usage** in your organization. Owners and admins see all of the following tabs. Other members see **Yours**.
 
-| Tab              | Shows                                                                  |
-| ---------------- | ---------------------------------------------------------------------- |
-| **Organization** | Capacity against caps, and usage by project.                           |
-| **Yours**        | The workloads that you own.                                            |
+| Tab              | Shows                                                                   |
+| ---------------- | ----------------------------------------------------------------------- |
+| **Organization** | Capacity against caps, and usage by project.                            |
+| **Yours**        | The workloads that you own.                                             |
 | **Members**      | The default allowance, and each member's usage against their allowance. |
-| **Right-sizing** | How workloads compare with their allocated resources.                  |
+| **Right-sizing** | How workloads compare with their allocated resources.                   |
 
 Size apps from metrics over a time range instead of a single reading, so that the size covers the peak.
 

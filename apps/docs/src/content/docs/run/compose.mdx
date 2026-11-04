@@ -47,17 +47,17 @@ Orchard names each app `<stack>-<service>`. Services reach each other by their c
 
 ## How Orchard reads the file
 
-| Compose key | Orchard result |
-| --- | --- |
-| `image` | An app that runs the image. |
-| `build` | An app that Orchard builds from the repository, with `context` and `dockerfile`. |
-| `ports` | The app's ports. The first one that isn't a known database port gets a URL, which only your organization can open until you make it public. |
-| `expose` | More ports on the app, for other services. No URL. |
-| `environment` | The app's variables. |
-| `volumes` with a named volume | A persistent volume, 1 GiB unless `driver_opts.size` sets another size. Orchard reads only the short string form. |
-| `deploy.replicas` | The replica count. |
-| `deploy.resources` | The CPU and memory sizes. |
-| `command` | The start command. |
+| Compose key                   | Orchard result                                                                                                                              |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `image`                       | An app that runs the image.                                                                                                                 |
+| `build`                       | An app that Orchard builds from the repository, with `context` and `dockerfile`.                                                            |
+| `ports`                       | The app's ports. The first one that isn't a known database port gets a URL, which only your organization can open until you make it public. |
+| `expose`                      | More ports on the app, for other services. No URL.                                                                                          |
+| `environment`                 | The app's variables.                                                                                                                        |
+| `volumes` with a named volume | A persistent volume, 1 GiB unless `driver_opts.size` sets another size. Orchard reads only the short string form.                           |
+| `deploy.replicas`             | The replica count.                                                                                                                          |
+| `deploy.resources`            | The CPU and memory sizes.                                                                                                                   |
+| `command`                     | The start command.                                                                                                                          |
 
 Each service must have `image` or `build`.
 

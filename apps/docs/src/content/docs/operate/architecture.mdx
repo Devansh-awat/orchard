@@ -11,17 +11,17 @@ An Orchard instance is a control plane that runs in a Kubernetes cluster and man
 
 ## Components
 
-| Component                  | Purpose                                                                 |
-| -------------------------- | ----------------------------------------------------------------------- |
-| Frontend                   | The SvelteKit dashboard.                                                |
-| Server                     | The NestJS API and control plane.                                       |
-| MCP server                 | The [Model Context Protocol](/mcp/) endpoint for agents.                |
-| Builders                   | BuildKit jobs that build images for tenant apps.                        |
-| Control-plane PostgreSQL     | Orchard's own database, run by CloudNativePG.                           |
-| Redis                      | The event bus between server replicas, and a cache.                     |
-| Registry                   | Stores the images that builders push. The installer deploys zot.        |
-| Backup proxy (`r2-proxy`)  | Gives each database credentials for its own backups only.               |
-| Metrics and logs           | VictoriaMetrics, VictoriaLogs, and Vector.                               |
+| Component                 | Purpose                                                          |
+| ------------------------- | ---------------------------------------------------------------- |
+| Frontend                  | The SvelteKit dashboard.                                         |
+| Server                    | The NestJS API and control plane.                                |
+| MCP server                | The [Model Context Protocol](/mcp/) endpoint for agents.         |
+| Builders                  | BuildKit jobs that build images for tenant apps.                 |
+| Control-plane PostgreSQL  | Orchard's own database, run by CloudNativePG.                    |
+| Redis                     | The event bus between server replicas, and a cache.              |
+| Registry                  | Stores the images that builders push. The installer deploys zot. |
+| Backup proxy (`r2-proxy`) | Gives each database credentials for its own backups only.        |
+| Metrics and logs          | VictoriaMetrics, VictoriaLogs, and Vector.                       |
 
 Tenant apps and databases run in their own namespaces, separate from the control plane.
 

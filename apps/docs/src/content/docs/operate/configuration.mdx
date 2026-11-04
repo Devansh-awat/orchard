@@ -207,22 +207,22 @@ spec:
 <Tabs syncKey="installMethod">
 <TabItem label="Script install">
 
-| Setting | Change the pinned value | Edit it in Instance admin again |
-| --- | --- | --- |
-| Public IP | `sudo orchardctl public-ip set <ip> --apply` | `sudo orchardctl public-ip unset --apply` |
-| Custom domains target | `sudo orchardctl env set INGRESS_CNAME <host> --apply` | `sudo orchardctl env unset INGRESS_CNAME --apply` |
-| Resource limits | `sudo orchardctl env set INSTANCE_RESOURCE_LIMITS on --apply` | `sudo orchardctl env unset INSTANCE_RESOURCE_LIMITS --apply` |
-| Any other field | `sudo orchardctl env set <NAME> <value> --apply` | `sudo orchardctl env unset <NAME> --apply` |
+| Setting               | Change the pinned value                                       | Edit it in Instance admin again                              |
+| --------------------- | ------------------------------------------------------------- | ------------------------------------------------------------ |
+| Public IP             | `sudo orchardctl public-ip set <ip> --apply`                  | `sudo orchardctl public-ip unset --apply`                    |
+| Custom domains target | `sudo orchardctl env set INGRESS_CNAME <host> --apply`        | `sudo orchardctl env unset INGRESS_CNAME --apply`            |
+| Resource limits       | `sudo orchardctl env set INSTANCE_RESOURCE_LIMITS on --apply` | `sudo orchardctl env unset INSTANCE_RESOURCE_LIMITS --apply` |
+| Any other field       | `sudo orchardctl env set <NAME> <value> --apply`              | `sudo orchardctl env unset <NAME> --apply`                   |
 
 </TabItem>
 <TabItem label="Helm">
 
-| Setting | Value | Edit it in Instance admin again |
-| --- | --- | --- |
-| Public IP | `tenant.publicIp` | Remove the value. |
-| Custom domains target | `INGRESS_CNAME` in `server.env` | Remove the entry. |
-| Resource limits | `INSTANCE_RESOURCE_LIMITS` in `server.env` | Remove the entry. |
-| Any other field | The variable in `server.env` | Remove the entry. |
+| Setting               | Value                                      | Edit it in Instance admin again |
+| --------------------- | ------------------------------------------ | ------------------------------- |
+| Public IP             | `tenant.publicIp`                          | Remove the value.               |
+| Custom domains target | `INGRESS_CNAME` in `server.env`            | Remove the entry.               |
+| Resource limits       | `INSTANCE_RESOURCE_LIMITS` in `server.env` | Remove the entry.               |
+| Any other field       | The variable in `server.env`               | Remove the entry.               |
 
 </TabItem>
 </Tabs>
@@ -236,21 +236,21 @@ A change to the public IP does not move ports and databases that are already pub
 <Tabs syncKey="installMethod">
 <TabItem label="Script install">
 
-| Setting | Command |
-| --- | --- |
-| Signup mode | `sudo orchardctl config set signupMode open --apply` |
-| MCP endpoint, if it is not deployed | `sudo orchardctl mcp enable --apply` |
-| Updates | `curl -fsSL https://assets.orchard.my/install.sh \| sudo bash -s -- --yes --updates automatic` |
-| Ingress mode | `curl -fsSL https://assets.orchard.my/install.sh \| sudo bash -s -- --yes --mode public` |
+| Setting                             | Command                                                                                        |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Signup mode                         | `sudo orchardctl config set signupMode open --apply`                                           |
+| MCP endpoint, if it is not deployed | `sudo orchardctl mcp enable --apply`                                                           |
+| Updates                             | `curl -fsSL https://assets.orchard.my/install.sh \| sudo bash -s -- --yes --updates automatic` |
+| Ingress mode                        | `curl -fsSL https://assets.orchard.my/install.sh \| sudo bash -s -- --yes --mode public`       |
 
 Updates and ingress mode have no separate command, so these commands run the installer again. For more information, refer to [Run the installer again](/start/install/#run-the-installer-again).
 
 </TabItem>
 <TabItem label="Helm">
 
-| Setting | Value |
-| --- | --- |
-| Signup mode | `signupMode` |
+| Setting                             | Value                                                                                                                                               |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Signup mode                         | `signupMode`                                                                                                                                        |
 | MCP endpoint, if it is not deployed | `mcp.enabled` and `mcp.ingress.host`. Also set `JWT_SECRET` and `MCP_SERVICE_TOKEN` in `mcp.env`, and the same `MCP_SERVICE_TOKEN` in `server.env`. |
 
 </TabItem>
@@ -266,11 +266,11 @@ Store secrets in Kubernetes Secrets. Do not commit them to a values file in a re
 
 When `BASE_DOMAIN` is set, Orchard creates an Ingress and a certificate for each vanity address and status page. The following settings apply to these hosts:
 
-| Setting                 | Purpose                                                                                               |
-| ----------------------- | ----------------------------------------------------------------------------------------------------- |
-| `PLATFORM_NAMESPACE`    | The namespace for the Ingress. The chart sets this to the release namespace.                          |
-| `PLATFORM_SERVICE_NAME` | The Service that the Ingress points at. The chart sets this to `frontend`.                            |
-| `PLATFORM_SERVICE_PORT` | The Service port. The chart sets this to the frontend port.                                           |
+| Setting                 | Purpose                                                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `PLATFORM_NAMESPACE`    | The namespace for the Ingress. The chart sets this to the release namespace.                                        |
+| `PLATFORM_SERVICE_NAME` | The Service that the Ingress points at. The chart sets this to `frontend`.                                          |
+| `PLATFORM_SERVICE_PORT` | The Service port. The chart sets this to the frontend port.                                                         |
 | `CERT_CLUSTER_ISSUER`   | The ClusterIssuer for the certificate. Set this with `tenant.certClusterIssuer`. The default is `letsencrypt-prod`. |
 
 The chart does not set these values if you use `server.envFrom`. In that case, add them to your Secret. Without them, the server uses `default/leaf-frontend:3000`.

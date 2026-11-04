@@ -16,10 +16,10 @@ To prepare a trial Orchard instance for production use, complete the following s
 
 The installer generates secrets. An instance assembled by hand may still use example values.
 
-| Variable                 | Purpose                                                                     |
-| ------------------------ | --------------------------------------------------------------------------- |
-| `JWT_SECRET`             | Signs sessions. Anyone who knows this value can create a session.           |
-| `SECRETS_ENCRYPTION_KEY` | Encrypts stored secrets. Orchard cannot save secrets without it.            |
+| Variable                 | Purpose                                                           |
+| ------------------------ | ----------------------------------------------------------------- |
+| `JWT_SECRET`             | Signs sessions. Anyone who knows this value can create a session. |
+| `SECRETS_ENCRYPTION_KEY` | Encrypts stored secrets. Orchard cannot save secrets without it.  |
 
 Store both in a Kubernetes Secret. Do not store them in a values file in a repository.
 

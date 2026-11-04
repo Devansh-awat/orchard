@@ -50,11 +50,11 @@ To connect an app, run the following command:
 orchard deploy bindings add <id> --app <name>
 ```
 
-| Flag       | Description                                                                              |
-| ---------- | ---------------------------------------------------------------------------------------- |
-| `--as`     | The connection name used in the reference. The default comes from the resource name.     |
-| `--env`    | The variable to add.                                                                     |
-| `--no-env` | Connect the resource without adding a variable.                                          |
+| Flag       | Description                                                                          |
+| ---------- | ------------------------------------------------------------------------------------ |
+| `--as`     | The connection name used in the reference. The default comes from the resource name. |
+| `--env`    | The variable to add.                                                                 |
+| `--no-env` | Connect the resource without adding a variable.                                      |
 
 To list the resources that you can connect, run the following command:
 
@@ -67,17 +67,17 @@ orchard deploy bindings options <id>
 
 ## Available fields
 
-| Resource | Field               | Value                                                      |
-| -------- | ------------------- | ---------------------------------------------------------- |
-| Database | `connection_string` | The full PostgreSQL connection string. This value is secret. |
-| Database | `host`              | The database host.                                         |
-| Database | `port`              | The database port.                                         |
-| Database | `database`          | The database name.                                         |
-| Database | `user`              | The database user.                                         |
-| Database | `password`          | The database password. This value is secret.               |
+| Resource | Field               | Value                                                              |
+| -------- | ------------------- | ------------------------------------------------------------------ |
+| Database | `connection_string` | The full PostgreSQL connection string. This value is secret.       |
+| Database | `host`              | The database host.                                                 |
+| Database | `port`              | The database port.                                                 |
+| Database | `database`          | The database name.                                                 |
+| Database | `user`              | The database user.                                                 |
+| Database | `password`          | The database password. This value is secret.                       |
 | App      | `url`               | The internal URL of the app, in the format `http://<host>:<port>`. |
-| App      | `host`              | The internal hostname of the app.                         |
-| App      | `port`              | The port of the app's first service.                       |
+| App      | `host`              | The internal hostname of the app.                                  |
+| App      | `port`              | The port of the app's first service.                               |
 
 App fields come from the app's first service. An app with no service has no fields.
 

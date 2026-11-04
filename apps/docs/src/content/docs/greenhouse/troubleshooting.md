@@ -27,26 +27,26 @@ Sandbox feature is not enabled for your account
 
 **Cause:** On an image without the required tools, the first boot installs them. Later starts skip what is installed. The workspace shows the current step:
 
-| Step                         | What happens                                       |
-| ---------------------------- | -------------------------------------------------- |
-| Starting the machine         | The runner brings the machine up.                  |
-| Installing packages          | Installs `sshd`, `git`, and `tmux`, if missing.    |
-| Installing the runtime       | Installs Node.js, if missing.                      |
-| Installing coding agents     | Installs the agents, if missing.                   |
-| Preparing storage            | Formats the home disk on first boot, and mounts it. |
-| Setting up your account      | Creates the `dev` user, SSH host keys, and SSH configuration. |
-| Starting services            | Starts SSH and the agent server.                   |
+| Step                     | What happens                                                  |
+| ------------------------ | ------------------------------------------------------------- |
+| Starting the machine     | The runner brings the machine up.                             |
+| Installing packages      | Installs `sshd`, `git`, and `tmux`, if missing.               |
+| Installing the runtime   | Installs Node.js, if missing.                                 |
+| Installing coding agents | Installs the agents, if missing.                              |
+| Preparing storage        | Formats the home disk on first boot, and mounts it.           |
+| Setting up your account  | Creates the `dev` user, SSH host keys, and SSH configuration. |
+| Starting services        | Starts SSH and the agent server.                              |
 
 **Fix:** Wait for the steps to finish. If the machine does not start, refer to the next entry.
 
 These logs are on the machine. Read them from a terminal or over SSH.
 
-| File                          | Contents                                          |
-| ----------------------------- | ------------------------------------------------- |
-| `~/.setup.log`                | The machine setup script                          |
-| `~/.clone.log`                | The repository named at creation                  |
-| `~/.opencode-serve.log`       | The agent server                                  |
-| `/var/log/orchard-bridge.log` | The SSH bridge, on Vercel machines                |
+| File                          | Contents                           |
+| ----------------------------- | ---------------------------------- |
+| `~/.setup.log`                | The machine setup script           |
+| `~/.clone.log`                | The repository named at creation   |
+| `~/.opencode-serve.log`       | The agent server                   |
+| `/var/log/orchard-bridge.log` | The SSH bridge, on Vercel machines |
 
 ## Sandbox did not become ready in time
 
@@ -75,14 +75,14 @@ If the error returns, or the machine shows **Applying** for more than a few minu
 
 The API returns one of these messages when you create a machine on an unavailable runner:
 
-| Message                                                                                     | Cause                                                       |
-| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `Kubernetes sandboxes are turned off on this server`                                        | The operator turned the runner off.                         |
-| `Vercel sandboxes are turned off on this server`                                            | The operator turned the runner off.                         |
-| `Kubernetes is not configured on this server`                                               | The server has no cluster access.                           |
+| Message                                                                                     | Cause                                                                 |
+| ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `Kubernetes sandboxes are turned off on this server`                                        | The operator turned the runner off.                                   |
+| `Vercel sandboxes are turned off on this server`                                            | The operator turned the runner off.                                   |
+| `Kubernetes is not configured on this server`                                               | The server has no cluster access.                                     |
 | `Vercel sandboxes need vercelToken (SANDBOX_VERCEL_TOKEN), ...`                             | Vercel credentials are incomplete. The message names what is missing. |
-| `Vercel sandboxes need SECRETS_ENCRYPTION_KEY so their public ports are password protected` | The instance has no encryption key.                          |
-| `No sandbox runner is available`                                                            | Every runner is off or misconfigured.                        |
+| `Vercel sandboxes need SECRETS_ENCRYPTION_KEY so their public ports are password protected` | The instance has no encryption key.                                   |
+| `No sandbox runner is available`                                                            | Every runner is off or misconfigured.                                 |
 
 **Fix:** Contact your operator. Machines already on a runner that is turned off keep working.
 
@@ -90,22 +90,22 @@ The **New machine** sheet offers only available runners.
 
 ## The machine stopped without a request
 
-| Message                               | Cause                                                                            |
-| ------------------------------------- | -------------------------------------------------------------------------------- |
+| Message                               | Cause                                                                                          |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | None                                  | Idle stop. There was no terminal or SSH activity for the idle limit, and no agent was working. |
-| `Stopped after reaching max lifetime` | The machine reached the maximum time since its last start.                        |
-| `Stopped by provider timeout`         | Vercel's timeout stopped the machine.                                            |
+| `Stopped after reaching max lifetime` | The machine reached the maximum time since its last start.                                     |
+| `Stopped by provider timeout`         | Vercel's timeout stopped the machine.                                                          |
 
 **Fix:** Start the machine again. Files on disk remain. Running processes, including dev servers and agent turns in progress, do not.
 
 ## The machine is in Error
 
-| Message                                         | Cause and fix                                                                                       |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Message                                         | Cause and fix                                                                                                                |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `Sandbox resource disappeared from the cluster` | Something outside Orchard deleted the resource. Start the machine to recreate it. If its disk is also gone, it starts empty. |
-| `The Vercel sandbox no longer exists`           | The sandbox is gone on Vercel. Start the machine to recreate it.                                    |
-| `The Vercel sandbox failed`                     | Vercel reported a failure. Start the machine again.                                                 |
-| `Failed to create sandbox: ...`                 | Creation failed. The rest of the message states why.                                                |
+| `The Vercel sandbox no longer exists`           | The sandbox is gone on Vercel. Start the machine to recreate it.                                                             |
+| `The Vercel sandbox failed`                     | Vercel reported a failure. Start the machine again.                                                                          |
+| `Failed to create sandbox: ...`                 | Creation failed. The rest of the message states why.                                                                         |
 
 ## SSH reports that the host key changed
 
@@ -157,30 +157,30 @@ No GitHub account is linked to read checks
 
 ## A terminal does not open
 
-| Message                                                    | Cause and fix                                                                            |
-| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `The sandbox is still setting up. Try again in a moment.`  | The `dev` user does not exist yet. Wait for the machine to finish booting.               |
-| `Interactive shells are not available for Vercel sandboxes` | The installed Vercel SDK cannot open shells. Your operator must upgrade it.             |
+| Message                                                     | Cause and fix                                                               |
+| ----------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `The sandbox is still setting up. Try again in a moment.`   | The `dev` user does not exist yet. Wait for the machine to finish booting.  |
+| `Interactive shells are not available for Vercel sandboxes` | The installed Vercel SDK cannot open shells. Your operator must upgrade it. |
 
 ## Previews do not open
 
-| Message                                             | Cause and fix                                                                     |
-| --------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `Previews need a preview domain; ...`               | Your operator has not set a preview domain, so Kubernetes previews are off.       |
+| Message                                             | Cause and fix                                                                                       |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `Previews need a preview domain; ...`               | Your operator has not set a preview domain, so Kubernetes previews are off.                         |
 | `That port cannot be previewed`                     | Use 3000, 3001, 4173, 5173, 8000, 8080, or 8787, or declare the port in `.orchard/greenhouse.json`. |
-| `This preview link has expired or was already used` | Links are single use and last 60 seconds. Open the preview again from Greenhouse. |
-| `Nothing is answering on this port in the sandbox`  | Nothing listens on the port, or it listens on `localhost` only. Bind to `0.0.0.0`. |
-| `Cross-site requests to previews are not allowed`   | Another site called your preview. Open the preview directly.                      |
-| `You no longer have access to this sandbox`         | You were removed from the machine.                                                |
+| `This preview link has expired or was already used` | Links are single use and last 60 seconds. Open the preview again from Greenhouse.                   |
+| `Nothing is answering on this port in the sandbox`  | Nothing listens on the port, or it listens on `localhost` only. Bind to `0.0.0.0`.                  |
+| `Cross-site requests to previews are not allowed`   | Another site called your preview. Open the preview directly.                                        |
+| `You no longer have access to this sandbox`         | You were removed from the machine.                                                                  |
 
 ## A fork fails
 
-| Message                                                                             | Cause and fix                                                     |
-| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `This cluster has no VolumeSnapshotClass for the sandbox disk's storage class, ...` | The cluster cannot snapshot the storage, so Kubernetes forks are off. |
-| `This machine has no home volume to copy yet`                                       | Start the machine once before forking it.                         |
-| `Only the machine's owner can fork it: ...`                                         | The copy contains the host's home directory and credentials.      |
-| `Forking needs Vercel drive forks, which this team's plan doesn't have`             | The operator's Vercel plan does not include drive forks.          |
+| Message                                                                             | Cause and fix                                                           |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `This cluster has no VolumeSnapshotClass for the sandbox disk's storage class, ...` | The cluster cannot snapshot the storage, so Kubernetes forks are off.   |
+| `This machine has no home volume to copy yet`                                       | Start the machine once before forking it.                               |
+| `Only the machine's owner can fork it: ...`                                         | The copy contains the host's home directory and credentials.            |
+| `Forking needs Vercel drive forks, which this team's plan doesn't have`             | The operator's Vercel plan does not include drive forks.                |
 | `Sandbox limit reached (...)`                                                       | A fork counts against your machine limit. Ask a superadmin to raise it. |
 
 ## Still stuck?

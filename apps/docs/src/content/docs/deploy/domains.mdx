@@ -93,11 +93,11 @@ orchard domain update <domain-id> --host new.example.com
 
 ## Certificates
 
-| Setup | Certificates |
-| --- | --- |
-| Installer, `public` mode | One certificate for each hostname, over HTTP-01 |
-| Installer, `lan` mode | Self-signed certificates |
-| Installer, `tunnel` mode | Cloudflare terminates TLS. Orchard does not use cert-manager. |
+| Setup                           | Certificates                                                                                                            |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Installer, `public` mode        | One certificate for each hostname, over HTTP-01                                                                         |
+| Installer, `lan` mode           | Self-signed certificates                                                                                                |
+| Installer, `tunnel` mode        | Cloudflare terminates TLS. Orchard does not use cert-manager.                                                           |
 | Helm chart with a DNS-01 issuer | A wildcard certificate. For more information, refer to [Set up wildcard certificates](/operate/wildcard-certificates/). |
 
 ## Related resources

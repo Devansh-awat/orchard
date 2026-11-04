@@ -43,29 +43,29 @@ After you confirm, `orchardctl` writes the graft into your values. `--apply` rol
 
 ### Commands
 
-| Command                                        | Action                                                                                 |
-| ---------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `orchardctl graft search [term]`               | Searches the Extension Marketplace and your taps.                                      |
-| `orchardctl graft info <id>`                   | Shows a graft's tier, publisher, versions, and compatibility.                          |
-| `orchardctl graft add <id>[@version]`          | Installs from the Extension Marketplace.                                               |
+| Command                                        | Action                                                                                                        |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `orchardctl graft search [term]`               | Searches the Extension Marketplace and your taps.                                                             |
+| `orchardctl graft info <id>`                   | Shows a graft's tier, publisher, versions, and compatibility.                                                 |
+| `orchardctl graft add <id>[@version]`          | Installs from the Extension Marketplace.                                                                      |
 | `orchardctl graft add ./file.graft`            | Installs a file. Orchard stores it in its database, so this works offline and on clusters with several nodes. |
-| `orchardctl graft add https://.../x.graft`     | Installs from an `https` address, pinned to the digest it had when you added it.       |
-| `orchardctl graft list`                        | Shows what is installed, whether it is running, and recent server messages about grafts. |
-| `orchardctl graft upgrade [id]`                | Moves to the newest compatible version. Refer to [Upgrade and roll back grafts](/grafts/upgrades/). |
-| `orchardctl graft rollback <id>`               | Returns to the previous version and its data.                                          |
-| `orchardctl graft remove <id>`                 | Uninstalls the graft. Its data stays.                                                  |
-| `orchardctl graft remove <id> --purge --apply` | Uninstalls the graft and deletes its schema, stored files, and settings.               |
-| `orchardctl graft pool <id> [n\|default]`      | Shows or sets the database connections the graft can open per pod.                     |
-| `orchardctl graft tap add\|list\|remove`       | Manages [taps](#add-a-tap).                                                            |
-| `orchardctl graft trust [level]`               | Shows or sets the [trust policy](#trust).                                              |
+| `orchardctl graft add https://.../x.graft`     | Installs from an `https` address, pinned to the digest it had when you added it.                              |
+| `orchardctl graft list`                        | Shows what is installed, whether it is running, and recent server messages about grafts.                      |
+| `orchardctl graft upgrade [id]`                | Moves to the newest compatible version. Refer to [Upgrade and roll back grafts](/grafts/upgrades/).           |
+| `orchardctl graft rollback <id>`               | Returns to the previous version and its data.                                                                 |
+| `orchardctl graft remove <id>`                 | Uninstalls the graft. Its data stays.                                                                         |
+| `orchardctl graft remove <id> --purge --apply` | Uninstalls the graft and deletes its schema, stored files, and settings.                                      |
+| `orchardctl graft pool <id> [n\|default]`      | Shows or sets the database connections the graft can open per pod.                                            |
+| `orchardctl graft tap add\|list\|remove`       | Manages [taps](#add-a-tap).                                                                                   |
+| `orchardctl graft trust [level]`               | Shows or sets the [trust policy](#trust).                                                                     |
 
 `add` and `upgrade` accept these flags:
 
-| Flag        | Effect                                                     |
-| ----------- | ---------------------------------------------------------- |
-| `--yes`     | Skips the confirmation prompt.                             |
-| `--dry-run` | Runs every check and changes nothing.                      |
-| `--apply`   | Rolls Orchard out afterward.                               |
+| Flag        | Effect                                |
+| ----------- | ------------------------------------- |
+| `--yes`     | Skips the confirmation prompt.        |
+| `--dry-run` | Runs every check and changes nothing. |
+| `--apply`   | Rolls Orchard out afterward.          |
 
 If a graft includes a cluster chart for CRDs or RBAC, `add` installs it as the Helm release `orchard-graft-<id>`. `remove` leaves that release in place and prints the `helm uninstall` command.
 
@@ -89,11 +89,11 @@ A graft with a cluster chart needs that chart installed as its own HelmRelease.
 
 ## Where grafts come from
 
-| Kind      | Publisher                                         | How Orchard identifies it                                                       | Label                     |
-| --------- | ------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------- |
-| Official  | Orchard                                           | Signed with Orchard's key                                                       | **Official**              |
-| Community | Another author, listed in the Extension Marketplace | Signed with the author's key, from a listing that Orchard signed                | **Community · by** the author |
-| Tap       | Anyone, from a tap you added                      | Signed with the tap's key, which you trusted when you added the tap             | **Tap:** its name         |
+| Kind      | Publisher                                           | How Orchard identifies it                                           | Label                         |
+| --------- | --------------------------------------------------- | ------------------------------------------------------------------- | ----------------------------- |
+| Official  | Orchard                                             | Signed with Orchard's key                                           | **Official**                  |
+| Community | Another author, listed in the Extension Marketplace | Signed with the author's key, from a listing that Orchard signed    | **Community · by** the author |
+| Tap       | Anyone, from a tap you added                        | Signed with the tap's key, which you trusted when you added the tap | **Tap:** its name             |
 
 An Orchard maintainer reviews a community graft when it is first listed. Each new version passes automated checks, but no one reviews it by hand. Orchard does not check taps.
 
@@ -101,12 +101,12 @@ An Orchard maintainer reviews a community graft when it is first listed. Each ne
 
 `graftSettings.trust` controls which grafts can load:
 
-| Policy             | Loads                                                                                 |
-| ------------------ | ------------------------------------------------------------------------------------- |
-| `official`         | Only Orchard's own grafts                                                             |
-| `listed` (default) | Official and community grafts, and grafts signed by a key in `graftSettings.keys`     |
-| `taps`             | All of the above, and grafts from taps you added                                      |
-| `any`              | Unsigned grafts too. Anything in the grafts directory runs.                           |
+| Policy             | Loads                                                                             |
+| ------------------ | --------------------------------------------------------------------------------- |
+| `official`         | Only Orchard's own grafts                                                         |
+| `listed` (default) | Official and community grafts, and grafts signed by a key in `graftSettings.keys` |
+| `taps`             | All of the above, and grafts from taps you added                                  |
+| `any`              | Unsigned grafts too. Anything in the grafts directory runs.                       |
 
 `signed` is an older name for `listed`, and it still works.
 
@@ -168,17 +168,17 @@ Go to **Instance admin** > **Grafts**. The page lists each graft with its status
 
 ## Settings
 
-| Value                          | Environment variable            | Default                                                                                                                            |
-| ------------------------------ | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `grafts`                       | `ORCHARD_GRAFTS`                | None                                                                                                                               |
-| `graftSettings.trust`          | `ORCHARD_GRAFT_TRUST`           | `listed`. One of `official`, `listed`, `taps`, or `any`.                                                                           |
-| `graftSettings.taps`           | `ORCHARD_GRAFT_TAPS`            | None. Each tap has a `name`, `url`, and `key`.                                                                                     |
-| `graftSettings.keys`           | `ORCHARD_GRAFT_KEYS`            | None                                                                                                                               |
-| `graftSettings.marketplaceUrl` | `ORCHARD_GRAFT_MARKETPLACE_URL` | `https://assets.orchard.my/registry`                                                                                               |
+| Value                          | Environment variable            | Default                                                                                                                              |
+| ------------------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `grafts`                       | `ORCHARD_GRAFTS`                | None                                                                                                                                 |
+| `graftSettings.trust`          | `ORCHARD_GRAFT_TRUST`           | `listed`. One of `official`, `listed`, `taps`, or `any`.                                                                             |
+| `graftSettings.taps`           | `ORCHARD_GRAFT_TAPS`            | None. Each tap has a `name`, `url`, and `key`.                                                                                       |
+| `graftSettings.keys`           | `ORCHARD_GRAFT_KEYS`            | None                                                                                                                                 |
+| `graftSettings.marketplaceUrl` | `ORCHARD_GRAFT_MARKETPLACE_URL` | `https://assets.orchard.my/registry`                                                                                                 |
 | `graftSettings.strict`         | `ORCHARD_GRAFTS_STRICT`         | `false`. When true, a graft that fails stops the pod instead of being skipped. The rollout halts and the previous pods keep serving. |
-| `graftSettings.safeMode`       | `ORCHARD_GRAFTS_SAFE_MODE`      | `false`. When true, no grafts load.                                                                                                |
-| `graftSettings.pools`          | `ORCHARD_GRAFT_POOLS`           | None. Database connections per pod by graft ID, for example `{ greenhouse: 15 }`.                                                  |
-|                                | `ORCHARD_GRAFT_DB_POOL`         | `3`. Database connections per pod for grafts that do not ask for a size.                                                           |
+| `graftSettings.safeMode`       | `ORCHARD_GRAFTS_SAFE_MODE`      | `false`. When true, no grafts load.                                                                                                  |
+| `graftSettings.pools`          | `ORCHARD_GRAFT_POOLS`           | None. Database connections per pod by graft ID, for example `{ greenhouse: 15 }`.                                                    |
+|                                | `ORCHARD_GRAFT_DB_POOL`         | `3`. Database connections per pod for grafts that do not ask for a size.                                                             |
 
 ## Database connections
 

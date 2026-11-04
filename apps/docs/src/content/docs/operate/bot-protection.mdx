@@ -26,21 +26,21 @@ Bot protection stays off until you set both keys.
 After you save the keys, Orchard refuses a sign-in that cannot solve the challenge. Test the sign-in page in a private browser window before you sign out.
 :::
 
-| Setting                                         | Default | Description                                                                                          |
-| ----------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------- |
-| **Challenge the sign-in pages**                 | On      | Orchard ignores this setting until both keys are set. Turning it off keeps the keys.                 |
-| **Refuse sign-in when Cloudflare is unreachable** | Off   | When this is off, Orchard allows sign-ins without a challenge if it cannot reach Cloudflare, and logs the event. |
+| Setting                                           | Default | Description                                                                                                      |
+| ------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------- |
+| **Challenge the sign-in pages**                   | On      | Orchard ignores this setting until both keys are set. Turning it off keeps the keys.                             |
+| **Refuse sign-in when Cloudflare is unreachable** | Off     | When this is off, Orchard allows sign-ins without a challenge if it cannot reach Cloudflare, and logs the event. |
 
 ## Set keys with environment variables
 
 Each field has an environment variable. A value in the environment overrides the dashboard, and the field shows `Set by the environment`.
 
-| Field                                           | Environment variable   |
-| ----------------------------------------------- | ---------------------- |
-| **Site key**                                    | `TURNSTILE_SITE_KEY`   |
-| **Secret key**                                  | `TURNSTILE_SECRET_KEY` |
-| **Challenge the sign-in pages**                 | `TURNSTILE_ENABLED`    |
-| **Refuse sign-in when Cloudflare is unreachable** | `TURNSTILE_STRICT`   |
+| Field                                             | Environment variable   |
+| ------------------------------------------------- | ---------------------- |
+| **Site key**                                      | `TURNSTILE_SITE_KEY`   |
+| **Secret key**                                    | `TURNSTILE_SECRET_KEY` |
+| **Challenge the sign-in pages**                   | `TURNSTILE_ENABLED`    |
+| **Refuse sign-in when Cloudflare is unreachable** | `TURNSTILE_STRICT`     |
 
 ## Recover from wrong keys
 

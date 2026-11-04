@@ -34,11 +34,11 @@ To push without opening a pull request, select **Push only** in the same menu.
 
 The button then shows the pull request's state:
 
-| State               | Button          | Menu                                                                      |
-| ------------------- | --------------- | ------------------------------------------------------------------------- |
+| State               | Button          | Menu                                                                                      |
+| ------------------- | --------------- | ----------------------------------------------------------------------------------------- |
 | No pull request     | **Create PR**   | **Create pull request**, **Create draft pull request**, **Push only**, **Deploy preview** |
-| Pull request open   | **View PR #12** | **Push only**, **Squash and merge**, **Deploy preview**                    |
-| Pull request merged | **Merged #12**  | **Push only**, **Deploy preview**                                         |
+| Pull request open   | **View PR #12** | **Push only**, **Squash and merge**, **Deploy preview**                                   |
+| Pull request merged | **Merged #12**  | **Push only**, **Deploy preview**                                                         |
 
 ## 3. Review checks
 

@@ -9,15 +9,15 @@ A machine is the Linux environment that your sessions run on. It belongs to the 
 
 ## Status
 
-| Status   | Meaning                                                                   |
-| -------- | ------------------------------------------------------------------------- |
-| Creating | The runner is provisioning the machine.                                   |
-| Starting | The machine is booting, or resuming after a stop.                         |
-| Running  | The machine is ready. Sessions, terminals, SSH, and previews work.        |
-| Stopping | The machine is shutting down. Orchard keeps its disk or snapshot.         |
-| Stopped  | The machine is not running.                                               |
-| Deleting | Orchard is removing the machine and everything on it.                     |
-| Error    | The machine failed. The status message states why.                        |
+| Status   | Meaning                                                            |
+| -------- | ------------------------------------------------------------------ |
+| Creating | The runner is provisioning the machine.                            |
+| Starting | The machine is booting, or resuming after a stop.                  |
+| Running  | The machine is ready. Sessions, terminals, SSH, and previews work. |
+| Stopping | The machine is shutting down. Orchard keeps its disk or snapshot.  |
+| Stopped  | The machine is not running.                                        |
+| Deleting | Orchard is removing the machine and everything on it.              |
+| Error    | The machine failed. The status message states why.                 |
 
 A machine can also show **Applying** while Orchard carries out a change, or **Apply failed** if the change did not succeed. For more information, refer to [Troubleshooting Greenhouse](/greenhouse/troubleshooting/#a-machine-shows-apply-failed).
 
@@ -85,11 +85,11 @@ Some sign-ins stay on one machine instead of your account. These are the ChatGPT
 ## Actions by role
 
 | Action | Host | Guest | Read-only guest | Organization admin |
-| ------ | ---- | ----- | --------------- | --------- |
-| Start  | Yes  | Yes   | No              | Yes       |
-| Stop   | Yes  | No    | No              | Yes       |
-| Delete | Yes  | No    | No              | Yes       |
-| Fork   | Yes  | No    | No              | No        |
+| ------ | ---- | ----- | --------------- | ------------------ |
+| Start  | Yes  | Yes   | No              | Yes                |
+| Stop   | Yes  | No    | No              | Yes                |
+| Delete | Yes  | No    | No              | Yes                |
+| Fork   | Yes  | No    | No              | No                 |
 
 For all permissions, refer to [Share a machine](/greenhouse/sharing/#what-each-role-can-do).
 
@@ -103,8 +103,8 @@ Forking creates a new machine with a copy of the disk and the same sessions. The
 
 Only the host can fork a machine, because the copy contains the host's home directory and credentials. The fork counts against your machine limit.
 
-| Runner     | How the copy is made                                                                                                                       |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Runner     | How the copy is made                                                                                                                        |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | Kubernetes | A volume snapshot of the home volume, restored into the volume of the new machine. A forked machine has 30 minutes to start, instead of 10. |
 | Vercel     | A fork of the last saved snapshot and a fork of the drive. Stop the machine first to include recent changes.                                |
 
@@ -120,12 +120,12 @@ The default name is `<name>-fork`.
 
 The operator sets these limits. The following values are the defaults.
 
-| Limit               | Default    | Behavior                                                                                                                       |
-| ------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Machines per person | 1          | Creating or forking past the limit fails. Superadmins can change the limit per person, and have no limit themselves.           |
-| Idle stop           | 60 minutes | Orchard stops a running machine with no terminal or SSH activity for this long. A working agent counts as activity.             |
-| Maximum lifetime    | 168 hours  | Orchard stops a machine this long after its last start, whether or not it is active. Orchard does not delete it.               |
-| People per machine  | 50         | Fixed.                                                                                                                         |
-| Active share links  | 50         | Fixed, per machine.                                                                                                            |
+| Limit               | Default    | Behavior                                                                                                             |
+| ------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------- |
+| Machines per person | 1          | Creating or forking past the limit fails. Superadmins can change the limit per person, and have no limit themselves. |
+| Idle stop           | 60 minutes | Orchard stops a running machine with no terminal or SSH activity for this long. A working agent counts as activity.  |
+| Maximum lifetime    | 168 hours  | Orchard stops a machine this long after its last start, whether or not it is active. Orchard does not delete it.     |
+| People per machine  | 50         | Fixed.                                                                                                               |
+| Active share links  | 50         | Fixed, per machine.                                                                                                  |
 
 The audit log records each stop caused by a limit.

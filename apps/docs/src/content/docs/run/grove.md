@@ -38,13 +38,13 @@ When the graft first starts, it moves the `forum_*` tables from the `public` sch
 
 Superadmins can manage threads with these actions:
 
-| Action | Result |
-| --- | --- |
-| Set status | Tracks where a report or a request stands. |
-| Set priority | Marks how important a thread is. |
-| Pin | Keeps a thread at the top. |
-| Lock | Stops further replies. |
-| Delete | Removes a thread or a reply. |
+| Action       | Result                                     |
+| ------------ | ------------------------------------------ |
+| Set status   | Tracks where a report or a request stands. |
+| Set priority | Marks how important a thread is.           |
+| Pin          | Keeps a thread at the top.                 |
+| Lock         | Stops further replies.                     |
+| Delete       | Removes a thread or a reply.               |
 
 ## Related resources
 

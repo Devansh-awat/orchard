@@ -1,6 +1,4 @@
-export function parseRepoInput(
-	value: string
-): { owner: string; repo: string; url: string } | null {
+export function parseRepoInput(value: string): { owner: string; repo: string; url: string } | null {
 	const urlMatch = value.match(/(?:https?:\/\/)?github\.com\/([^/\s]+)\/([^/\s#?.]+)/);
 	if (urlMatch) {
 		const owner = urlMatch[1];

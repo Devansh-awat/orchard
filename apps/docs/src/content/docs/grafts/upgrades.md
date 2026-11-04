@@ -80,11 +80,11 @@ npx -p @orchardlabs/graft-sdk graft bump values.yaml --platform 2.70.0
 
 The command moves each marked graft to the newest signed, unrevoked Extension Marketplace version in its range, and rewrites the digest. It does not downgrade.
 
-| Flag                 | Effect                                                                                                             |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `--platform <version>` | Holds back a release whose `engines.platform` does not include this Orchard version, and prints `held`.           |
-| `--marketplace <url>`  | Reads from another marketplace.                                                                                   |
-| `--check`            | Reports without writing. Exits with code 2 when something would change.                                            |
+| Flag                   | Effect                                                                                                  |
+| ---------------------- | ------------------------------------------------------------------------------------------------------- |
+| `--platform <version>` | Holds back a release whose `engines.platform` does not include this Orchard version, and prints `held`. |
+| `--marketplace <url>`  | Reads from another marketplace.                                                                         |
+| `--check`              | Reports without writing. Exits with code 2 when something would change.                                 |
 
 Run the command when a graft is published and when your Orchard version changes, then commit the result. These upgrades go through Helm values, so the rehearsal and snapshot do not apply.
 

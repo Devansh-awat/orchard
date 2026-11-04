@@ -13,12 +13,12 @@ Each app port has a Kubernetes Service in front of its pods. The Service balance
 
 Reach sets who can connect to a port. You choose it when you create an app.
 
-| Reach | Result |
-| --- | --- |
+| Reach            | Result                                                                                   |
+| ---------------- | ---------------------------------------------------------------------------------------- |
 | **Private link** | An HTTPS URL behind Orchard sign-in. Only people with access to the project can open it. |
-| **Public link** | An HTTPS URL open to anyone. |
-| **Public port** | Raw TCP or UDP on an external address. |
-| **Internal** | A cluster-internal address with no URL. |
+| **Public link**  | An HTTPS URL open to anyone.                                                             |
+| **Public port**  | Raw TCP or UDP on an external address.                                                   |
+| **Internal**     | A cluster-internal address with no URL.                                                  |
 
 UDP ports support only **Public port** and **Internal**.
 
@@ -105,12 +105,12 @@ Apps can reach the public internet. The tenant network policy blocks traffic to 
 
 Traffic reaches your app through at least one proxy, so the socket peer is the proxy. Client details arrive in headers.
 
-| Header | Set by | Contains |
-| --- | --- | --- |
-| `X-Real-IP` | The ingress | The peer of the inbound TCP connection |
-| `X-Forwarded-For` | The ingress, appended for each hop | The client chain, left to right |
-| `X-Forwarded-Proto` | The ingress | `https` or `http`, as the client saw it |
-| `X-Forwarded-Host` | The proxy | The hostname the client requested |
+| Header              | Set by                             | Contains                                |
+| ------------------- | ---------------------------------- | --------------------------------------- |
+| `X-Real-IP`         | The ingress                        | The peer of the inbound TCP connection  |
+| `X-Forwarded-For`   | The ingress, appended for each hop | The client chain, left to right         |
+| `X-Forwarded-Proto` | The ingress                        | `https` or `http`, as the client saw it |
+| `X-Forwarded-Host`  | The proxy                          | The hostname the client requested       |
 
 To get the client address, use `X-Real-IP`. The ingress sets it to the actual peer and overwrites any value from the client.
 

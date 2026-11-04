@@ -9,12 +9,12 @@ To control who can access your Orchard resources, add people to an organization 
 
 ## Organization roles
 
-| Role       | Permissions                                                                        |
-| ---------- | ---------------------------------------------------------------------------------- |
+| Role       | Permissions                                                                                           |
+| ---------- | ----------------------------------------------------------------------------------------------------- |
 | **Owner**  | Everything an admin can do. Owners also change SSO settings, manage SCIM, and set the vanity address. |
-| **Admin**  | Manage members, organization settings, and every project in the organization.       |
-| **Member** | Create projects. Open only the projects they create or are added to.               |
-| **Guest**  | Open only the projects they are added to. Guests cannot create projects.           |
+| **Admin**  | Manage members, organization settings, and every project in the organization.                         |
+| **Member** | Create projects. Open only the projects they create or are added to.                                  |
+| **Guest**  | Open only the projects they are added to. Guests cannot create projects.                              |
 
 ## Project roles
 

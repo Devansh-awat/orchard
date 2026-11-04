@@ -36,14 +36,14 @@ resources:
 
 ## Field reference
 
-| Score field | Orchard result |
-| --- | --- |
-| `containers.<first>.variables` | The app's variables. Keys that are not in the file stay as they are. |
-| `service.ports` | The app's ports. |
+| Score field                              | Orchard result                                                                                                    |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `containers.<first>.variables`           | The app's variables. Keys that are not in the file stay as they are.                                              |
+| `service.ports`                          | The app's ports.                                                                                                  |
 | `resources.<name>` with `type: postgres` | A managed database named `<name>` in the project. Orchard creates it if it is missing and connects it to the app. |
-| `${resources.<name>.<field>}` | A reference to that database, resolved when the pod starts. |
-| `orchard.my/domain` | A custom domain routed to the app. |
-| `orchard.my/replicas` | The replica count. |
+| `${resources.<name>.<field>}`            | A reference to that database, resolved when the pod starts.                                                       |
+| `orchard.my/domain`                      | A custom domain routed to the app.                                                                                |
+| `orchard.my/replicas`                    | The replica count.                                                                                                |
 
 Orchard deploys only the first container. `image: .` means the image Orchard builds. If you name another image, Orchard still builds from the repository.
 

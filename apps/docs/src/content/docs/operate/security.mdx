@@ -13,14 +13,14 @@ By default, Orchard separates tenants at the network layer. It does not separate
 
 Network isolation is on by default. Every tenant namespace has a `default-deny-all` NetworkPolicy for ingress and egress. A tenant pod has the following allowed paths:
 
-| Direction | Allowed                                                               |
-| --------- | --------------------------------------------------------------------- |
+| Direction | Allowed                                                                       |
+| --------- | ----------------------------------------------------------------------------- |
 | Ingress   | Pods in the same namespace, and the namespaces in `TENANT_INGRESS_NAMESPACES` |
 | Egress    | Pods in the same namespace, and the namespaces in `TENANT_INGRESS_NAMESPACES` |
-| Egress    | `kube-dns` on UDP and TCP port 53                                     |
-| Egress    | The public internet, except private and link-local ranges             |
-| Egress    | Other tenant namespaces, which are default-deny on ingress            |
-| Egress    | The backup proxy on TCP port 9000                                     |
+| Egress    | `kube-dns` on UDP and TCP port 53                                             |
+| Egress    | The public internet, except private and link-local ranges                     |
+| Egress    | Other tenant namespaces, which are default-deny on ingress                    |
+| Egress    | The backup proxy on TCP port 9000                                             |
 
 A pod that reaches another tenant namespace can only reach what that tenant has published.
 
@@ -53,9 +53,9 @@ Kernel isolation is off by default. Tenant pods and build jobs share the host ke
 
 Two optional runtimes change this. The one-command installer does not install either of them.
 
-| Setting          | Runtime          | Protects                                                  |
-| ---------------- | ---------------- | --------------------------------------------------------- |
-| `tenantSandbox`  | gVisor (`runsc`) | Tenant app pods, with a user-space kernel.                |
+| Setting          | Runtime          | Protects                                                           |
+| ---------------- | ---------------- | ------------------------------------------------------------------ |
+| `tenantSandbox`  | gVisor (`runsc`) | Tenant app pods, with a user-space kernel.                         |
 | `builderSandbox` | Kata Containers  | Image builds, by running the pod in a lightweight virtual machine. |
 
 BuildKit needs `privileged: true`, which gVisor does not allow. Builds therefore use Kata, where a privileged container stays inside the virtual machine.

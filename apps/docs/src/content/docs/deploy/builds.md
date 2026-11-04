@@ -13,13 +13,13 @@ Orchard reads build status from the job. If a builder stops unexpectedly, the bu
 
 The build progress page shows these steps, with the logs for each one.
 
-| Step | What happens |
-| --- | --- |
+| Step                     | What happens                                                       |
+| ------------------------ | ------------------------------------------------------------------ |
 | **Starting the builder** | The build waits for a slot and a node, and the builder pod starts. |
-| **Cloning the repo** | The builder clones the repository. |
-| **Building the image** | BuildKit builds the image. |
-| **Pushing the image** | The builder pushes the image to the registry. |
-| **Rolling out** | Kubernetes starts the new pods. |
+| **Cloning the repo**     | The builder clones the repository.                                 |
+| **Building the image**   | BuildKit builds the image.                                         |
+| **Pushing the image**    | The builder pushes the image to the registry.                      |
+| **Rolling out**          | Kubernetes starts the new pods.                                    |
 
 To cancel a running build, select **Cancel deployment** on the progress page.
 

@@ -9,11 +9,11 @@ import { Tabs, TabItem } from '@astrojs/starlight/components';
 
 The update strategy controls how Orchard replaces an app's pods when you deploy a new version.
 
-| Strategy       | CLI value       | Behavior                                                |
-| -------------- | --------------- | ------------------------------------------------------- |
-| **Rolling**    | `rollingupdate` | New pods start before old pods stop.                    |
-| **Recreate**   | `recreate`      | All pods stop first. The app has brief downtime.        |
-| **Blue/green** | `bluegreen`     | Traffic moves to new pods when the new pods are ready.  |
+| Strategy       | CLI value       | Behavior                                               |
+| -------------- | --------------- | ------------------------------------------------------ |
+| **Rolling**    | `rollingupdate` | New pods start before old pods stop.                   |
+| **Recreate**   | `recreate`      | All pods stop first. The app has brief downtime.       |
+| **Blue/green** | `bluegreen`     | Traffic moves to new pods when the new pods are ready. |
 
 Apps with [storage](/deploy/storage/) must use **Recreate**. The other strategies are not available for those apps.
 

@@ -68,13 +68,13 @@ Orchard attaches the credential to every app and job in the project whose image 
 
 You can also add credentials for a whole organization under **Organization settings** > **Registry credentials**. Every project uses them unless it sets its own.
 
-| Registry | Username | Token |
-| --- | --- | --- |
-| `ghcr.io` | Your GitHub username | A classic personal access token with `read:packages` |
-| `docker.io` | Your Docker Hub username | A Docker Hub access token |
+| Registry              | Username                                                       | Token                                                             |
+| --------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `ghcr.io`             | Your GitHub username                                           | A classic personal access token with `read:packages`              |
+| `docker.io`           | Your Docker Hub username                                       | A Docker Hub access token                                         |
 | `registry.gitlab.com` | A deploy token user (`gitlab+deploy-token-…`) or your username | The deploy token, or a personal access token with `read_registry` |
-| `quay.io` | A robot account name | The robot account token |
-| Other registries | The username its basic or bearer authentication expects | The matching password or token |
+| `quay.io`             | A robot account name                                           | The robot account token                                           |
+| Other registries      | The username its basic or bearer authentication expects        | The matching password or token                                    |
 
 For `ghcr.io`, use a classic token. GitHub fine-grained tokens cannot read packages. If an organization owns the package, also authorize the token for SSO in that organization.
 
@@ -110,11 +110,11 @@ Orchard rolls the app onto the new image. Health checks and rollback history app
 
 Orchard does not watch your registry. If you push a new image to the same tag, nothing changes until the app restarts. The pull policy decides whether the restart fetches the new image.
 
-| Pull policy | Behavior |
-| --- | --- |
-| **Automatic** | The default. A tag that can move, such as `latest`, `main`, or a major version like `17`, uses `Always`. A pinned tag or a digest uses `IfNotPresent`. |
-| **Use cached** | Starts reuse the copy already on the node. |
-| **Always re-pull** | Every start fetches the image again. |
+| Pull policy        | Behavior                                                                                                                                               |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Automatic**      | The default. A tag that can move, such as `latest`, `main`, or a major version like `17`, uses `Always`. A pinned tag or a digest uses `IfNotPresent`. |
+| **Use cached**     | Starts reuse the copy already on the node.                                                                                                             |
+| **Always re-pull** | Every start fetches the image again.                                                                                                                   |
 
 To change the policy on an existing app, go to **Settings** > **Source & build** > **Pulling**, or run `orchard deploy pull-policy set <id> --policy always`. The flag accepts `auto`, `always`, or `ifnotpresent`.
 

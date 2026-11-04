@@ -97,13 +97,13 @@ You can set another image with `sandbox.image`. The bootstrap installs what is m
 
 Each machine has these resources, labeled `orchard.my/instance=<id>` and `orchard.my/sandbox-id=<machine id>`:
 
-| Resource                  | Name                    | Notes                                                                                 |
-| ------------------------- | ----------------------- | ------------------------------------------------------------------------------------- |
-| `Sandbox` (agent-sandbox) | `sbx-<id>`              | `operatingMode` is `Running` or `Suspended`.                                          |
+| Resource                  | Name                    | Notes                                                                                   |
+| ------------------------- | ----------------------- | --------------------------------------------------------------------------------------- |
+| `Sandbox` (agent-sandbox) | `sbx-<id>`              | `operatingMode` is `Running` or `Suspended`.                                            |
 | `Secret`                  | `sbx-<id>-auth`         | `authorized_keys`, the bootstrap and setup scripts, agent and GitHub tokens, env files. |
-| `PersistentVolumeClaim`   | From the claim template | The home volume, mounted at `/persist`.                                               |
-| `VolumeSnapshot`          | `sbx-<id>-fork`         | Only during a fork.                                                                   |
-| `NetworkPolicy`           | `sbx-<id>-previews`     | Only when a repository declares extra preview ports.                                  |
+| `PersistentVolumeClaim`   | From the claim template | The home volume, mounted at `/persist`.                                                 |
+| `VolumeSnapshot`          | `sbx-<id>-fork`         | Only during a fork.                                                                     |
+| `NetworkPolicy`           | `sbx-<id>-previews`     | Only when a repository declares extra preview ports.                                    |
 
 The instance label keeps a second Orchard install on the same cluster from seeing or deleting these resources.
 
@@ -178,11 +178,11 @@ A machine does not install a bridge it cannot verify. SSH to that machine fails 
 
 Each exposed port has a public Vercel URL.
 
-| Port          | Protection                                                                  |
-| ------------- | --------------------------------------------------------------------------- |
-| 4096          | HTTP basic authentication with a per-machine password.                                |
-| 2222          | A per-machine bearer token. Behind it, `sshd` requires the host's SSH key.   |
-| Preview ports | None. The **Ports** tab labels them **Public**.                             |
+| Port          | Protection                                                                 |
+| ------------- | -------------------------------------------------------------------------- |
+| 4096          | HTTP basic authentication with a per-machine password.                     |
+| 2222          | A per-machine bearer token. Behind it, `sshd` requires the host's SSH key. |
+| Preview ports | None. The **Ports** tab labels them **Public**.                            |
 
 The password and token are `HMAC-SHA256(SECRETS_ENCRYPTION_KEY, "orchard-sandbox:<purpose>:<machine id>[:<epoch>]")`. Orchard derives them on demand and does not store them. The epoch increases when a guest is removed or made read-only. Orchard then writes the new values to the machine and restarts the agent server. If you rotate `SECRETS_ENCRYPTION_KEY`, restart your Vercel machines.
 
@@ -199,10 +199,10 @@ Vercel previews use Vercel's public URLs and need no configuration. Kubernetes p
 3. **Set the domain.** Set `sandbox.runners.previewDomain`, or **Preview domain** in **Greenhouse runners**.
 4. **Add a route and a certificate.** With `sandbox.runners.previewDomain` set in the chart, the chart renders a Traefik IngressRoute on `ingress.entryPoints` and a cert-manager Certificate for `*.<previewDomain>`:
 
-   | Value                             | Default                          | Notes                                                                                     |
-   | --------------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------- |
-   | `sandbox.previews.route`          | `true`                           | Set to `false` to use your own route.                                                     |
-   | `sandbox.previews.tls.secretName` | `<release>-sandbox-previews-tls` | The Secret Traefik terminates TLS with.                                                   |
+   | Value                             | Default                          | Notes                                                                                                                                       |
+   | --------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+   | `sandbox.previews.route`          | `true`                           | Set to `false` to use your own route.                                                                                                       |
+   | `sandbox.previews.tls.secretName` | `<release>-sandbox-previews-tls` | The Secret Traefik terminates TLS with.                                                                                                     |
    | `sandbox.previews.tls.issuerRef`  | `certificates.issuer`            | Wildcards need a DNS-01 issuer. With `certificates.enabled` off and no issuer, the chart renders no Certificate, and the Secret must exist. |
 
    Without the chart, create an equivalent route:
@@ -291,12 +291,12 @@ Each person connects a personal Linear API key. That key identifies them and pos
 
 ### Verification and limits
 
-| Endpoint                             | Verified by                                       | Rate limit       |
-| ------------------------------------ | ------------------------------------------------- | ---------------- |
-| `/apiv1/github/app/webhook`          | The GitHub App webhook secret                     | Same as deploys  |
-| `/apiv1/integrations/slack/commands` | Slack signing secret, timestamp within 5 minutes  | 120 per minute   |
-| `/apiv1/integrations/slack/events`   | Slack signing secret, timestamp within 5 minutes  | 300 per minute   |
-| `/apiv1/integrations/linear/webhook` | Linear signature, `webhookTimestamp` within 5 minutes | 120 per minute |
+| Endpoint                             | Verified by                                           | Rate limit      |
+| ------------------------------------ | ----------------------------------------------------- | --------------- |
+| `/apiv1/github/app/webhook`          | The GitHub App webhook secret                         | Same as deploys |
+| `/apiv1/integrations/slack/commands` | Slack signing secret, timestamp within 5 minutes      | 120 per minute  |
+| `/apiv1/integrations/slack/events`   | Slack signing secret, timestamp within 5 minutes      | 300 per minute  |
+| `/apiv1/integrations/linear/webhook` | Linear signature, `webhookTimestamp` within 5 minutes | 120 per minute  |
 
 Orchard records each delivery and ignores a repeat. Each person can start up to five sessions per minute from integrations.
 
@@ -308,31 +308,31 @@ These settings are in **Instance admin** > **Configuration**. Setting the enviro
 
 **Greenhouse runners**
 
-| Field                  | Variable                            | Default                         | Notes                                                                                      |
-| ---------------------- | ----------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------ |
-| `kubernetesEnabled`    | `SANDBOX_RUNNER_KUBERNETES_ENABLED` | On                              |                                                                                            |
-| `vercelEnabled`        | `SANDBOX_RUNNER_VERCEL_ENABLED`     | Off                             |                                                                                            |
-| `defaultRunner`        | `SANDBOX_DEFAULT_RUNNER`            | First available runner          | `kubernetes` or `vercel`.                                                                  |
-| `vercelToken`          | `SANDBOX_VERCEL_TOKEN`              |                                 | Secret.                                                                                    |
-| `vercelTeamId`         | `SANDBOX_VERCEL_TEAM_ID`            |                                 |                                                                                            |
-| `vercelProjectId`      | `SANDBOX_VERCEL_PROJECT_ID`         |                                 |                                                                                            |
-| `vercelImage`          | `SANDBOX_VERCEL_IMAGE`              | `vercel/sandbox/universal`      |                                                                                            |
-| `vercelVcpus`          | `SANDBOX_VERCEL_VCPUS`              | 2                               | 1 to 8.                                                                                    |
-| `vercelTimeoutMinutes` | `SANDBOX_VERCEL_TIMEOUT_MINUTES`    | 60                              | 1 to 1440. Orchard extends the timeout by 30 minutes at a time while a machine is in use.   |
-| `vercelDriveGiB`       | `SANDBOX_VERCEL_DRIVE_GIB`          | 50                              | 0 to 16384. 0 turns drives off. Applies to new drives only.                                |
-| `bridgeBinaryUrl`      | `SANDBOX_BRIDGE_BINARY_URL`         | The release matching the server | `https://` only. The Linux amd64 `orchard` CLI tarball.                                    |
-| `bridgeBinarySha256`   | `SANDBOX_BRIDGE_BINARY_SHA256`      | From the release's checksums    | 64 hex characters. Required with `bridgeBinaryUrl`.                                        |
-| `previewDomain`        | `SANDBOX_PREVIEW_DOMAIN`            |                                 | A bare domain. Refer to [Configure previews](#configure-previews).                         |
+| Field                  | Variable                            | Default                         | Notes                                                                                     |
+| ---------------------- | ----------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------- |
+| `kubernetesEnabled`    | `SANDBOX_RUNNER_KUBERNETES_ENABLED` | On                              |                                                                                           |
+| `vercelEnabled`        | `SANDBOX_RUNNER_VERCEL_ENABLED`     | Off                             |                                                                                           |
+| `defaultRunner`        | `SANDBOX_DEFAULT_RUNNER`            | First available runner          | `kubernetes` or `vercel`.                                                                 |
+| `vercelToken`          | `SANDBOX_VERCEL_TOKEN`              |                                 | Secret.                                                                                   |
+| `vercelTeamId`         | `SANDBOX_VERCEL_TEAM_ID`            |                                 |                                                                                           |
+| `vercelProjectId`      | `SANDBOX_VERCEL_PROJECT_ID`         |                                 |                                                                                           |
+| `vercelImage`          | `SANDBOX_VERCEL_IMAGE`              | `vercel/sandbox/universal`      |                                                                                           |
+| `vercelVcpus`          | `SANDBOX_VERCEL_VCPUS`              | 2                               | 1 to 8.                                                                                   |
+| `vercelTimeoutMinutes` | `SANDBOX_VERCEL_TIMEOUT_MINUTES`    | 60                              | 1 to 1440. Orchard extends the timeout by 30 minutes at a time while a machine is in use. |
+| `vercelDriveGiB`       | `SANDBOX_VERCEL_DRIVE_GIB`          | 50                              | 0 to 16384. 0 turns drives off. Applies to new drives only.                               |
+| `bridgeBinaryUrl`      | `SANDBOX_BRIDGE_BINARY_URL`         | The release matching the server | `https://` only. The Linux amd64 `orchard` CLI tarball.                                   |
+| `bridgeBinarySha256`   | `SANDBOX_BRIDGE_BINARY_SHA256`      | From the release's checksums    | 64 hex characters. Required with `bridgeBinaryUrl`.                                       |
+| `previewDomain`        | `SANDBOX_PREVIEW_DOMAIN`            |                                 | A bare domain. Refer to [Configure previews](#configure-previews).                        |
 
 Turning a runner off stops new machines on it. Existing machines keep working.
 
 **Slack app**
 
-| Field           | Variable               | Notes                       |
-| --------------- | ---------------------- | --------------------------- |
-| `signingSecret` | `SLACK_SIGNING_SECRET` | Required. Secret.           |
+| Field           | Variable               | Notes                                  |
+| --------------- | ---------------------- | -------------------------------------- |
+| `signingSecret` | `SLACK_SIGNING_SECRET` | Required. Secret.                      |
 | `botToken`      | `SLACK_BOT_TOKEN`      | Required. Secret. Starts with `xoxb-`. |
-| `appId`         | `SLACK_APP_ID`         | Optional.                   |
+| `appId`         | `SLACK_APP_ID`         | Optional.                              |
 
 **Linear**
 
@@ -342,51 +342,51 @@ Turning a runner off stops new machines on it. Existing machines keep working.
 
 ### Environment variables
 
-| Variable                       | Default                                   | Description                                                                 |
-| ------------------------------ | ----------------------------------------- | --------------------------------------------------------------------------- |
-| `SANDBOX_NAMESPACE`            | `orchard-sandboxes`                       | Namespace for Kubernetes machines.                                          |
-| `SANDBOX_IMAGE`                | `ghcr.io/hackclub/orchard/sandbox:latest` | Image for new Kubernetes machines.                                          |
-| `SANDBOX_DEFAULT_AGENT`        | `opencode`                                | Agent for new sessions when none is selected, for example `acp:claude`.     |
-| `SANDBOX_DAEMON`               |                                           | `off` stops the server from using the machine daemon.                       |
-| `SANDBOX_WARM_POOL`            |                                           | `off` stops machines from keeping spare worktrees.                          |
-| `SANDBOX_RUNTIME_CLASS`        |                                           | RuntimeClass, usually `kata`. Empty uses the default runtime.               |
+| Variable                       | Default                                   | Description                                                                    |
+| ------------------------------ | ----------------------------------------- | ------------------------------------------------------------------------------ |
+| `SANDBOX_NAMESPACE`            | `orchard-sandboxes`                       | Namespace for Kubernetes machines.                                             |
+| `SANDBOX_IMAGE`                | `ghcr.io/hackclub/orchard/sandbox:latest` | Image for new Kubernetes machines.                                             |
+| `SANDBOX_DEFAULT_AGENT`        | `opencode`                                | Agent for new sessions when none is selected, for example `acp:claude`.        |
+| `SANDBOX_DAEMON`               |                                           | `off` stops the server from using the machine daemon.                          |
+| `SANDBOX_WARM_POOL`            |                                           | `off` stops machines from keeping spare worktrees.                             |
+| `SANDBOX_RUNTIME_CLASS`        |                                           | RuntimeClass, usually `kata`. Empty uses the default runtime.                  |
 | `SANDBOX_HOME_MODE`            | `auto`                                    | `block`, `filesystem`, or `auto`, which is `block` when a RuntimeClass is set. |
-| `SANDBOX_STORAGE_CLASS`        | Cluster default                           | StorageClass for home volumes.                                              |
-| `SANDBOX_DISK_SIZE`            | `10Gi`                                    | Home volume size for new machines.                                          |
-| `SANDBOX_CPU_LIMIT`            | `2`                                       | CPU limit per Kubernetes machine.                                           |
-| `SANDBOX_MEMORY_LIMIT`         | `4Gi`                                     | Memory limit per Kubernetes machine. Keep at least `1Gi` under Kata.        |
-| `SANDBOX_TUNNEL_MODE`          |                                           | `portforward` for servers outside the cluster.                              |
-| `SANDBOX_MAX_PER_USER`         | `1`                                       | Default machine limit per person.                                           |
-| `SANDBOX_IDLE_TIMEOUT_MINUTES` | `60`                                      | Stops running machines that are idle this long. `0` turns it off.           |
-| `SANDBOX_MAX_LIFETIME_HOURS`   | `168`                                     | Stops machines this long after their last start. `0` turns it off.          |
+| `SANDBOX_STORAGE_CLASS`        | Cluster default                           | StorageClass for home volumes.                                                 |
+| `SANDBOX_DISK_SIZE`            | `10Gi`                                    | Home volume size for new machines.                                             |
+| `SANDBOX_CPU_LIMIT`            | `2`                                       | CPU limit per Kubernetes machine.                                              |
+| `SANDBOX_MEMORY_LIMIT`         | `4Gi`                                     | Memory limit per Kubernetes machine. Keep at least `1Gi` under Kata.           |
+| `SANDBOX_TUNNEL_MODE`          |                                           | `portforward` for servers outside the cluster.                                 |
+| `SANDBOX_MAX_PER_USER`         | `1`                                       | Default machine limit per person.                                              |
+| `SANDBOX_IDLE_TIMEOUT_MINUTES` | `60`                                      | Stops running machines that are idle this long. `0` turns it off.              |
+| `SANDBOX_MAX_LIFETIME_HOURS`   | `168`                                     | Stops machines this long after their last start. `0` turns it off.             |
 | `SANDBOX_MCP_URL`              | Derived from the MCP host                 | The MCP endpoint for each machine's agent. Vercel machines require `https://`. |
-| `ORCHARD_SERVER_NAMESPACE`     | `orchard`                                 | The server's namespace, used in the NetworkPolicy.                          |
+| `ORCHARD_SERVER_NAMESPACE`     | `orchard`                                 | The server's namespace, used in the NetworkPolicy.                             |
 
 For all server variables, refer to the [configuration reference](/reference/configuration/).
 
 ### Helm values
 
-| Value                                                                                       | Maps to                                                            |
-| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `sandbox.install`                                                                           | The namespace, quota, NetworkPolicy, RBAC, and `SANDBOX_*` settings |
-| `sandbox.enabled`                                                                           | `install`, unless `install` is set                                 |
-| `sandbox.namespace`                                                                         | `SANDBOX_NAMESPACE`                                                |
-| `sandbox.image`                                                                             | `SANDBOX_IMAGE`                                                    |
-| `sandbox.runtimeClassName`                                                                  | `SANDBOX_RUNTIME_CLASS`                                            |
-| `sandbox.idleTimeoutMinutes`                                                                | `SANDBOX_IDLE_TIMEOUT_MINUTES`                                     |
-| `sandbox.maxLifetimeHours`                                                                  | `SANDBOX_MAX_LIFETIME_HOURS`                                       |
-| `sandbox.maxPerUserDefault`                                                                 | `SANDBOX_MAX_PER_USER`                                             |
-| `sandbox.storageClass`, `diskSize`, `cpuLimit`, `memoryLimit`                               | The matching `SANDBOX_*` variables                                 |
-| `sandbox.tunnelMode`, `homeMode`                                                            | `SANDBOX_TUNNEL_MODE`, `SANDBOX_HOME_MODE`                         |
-| `sandbox.quota.*`                                                                           | The namespace ResourceQuota                                        |
-| `sandbox.runners.default`                                                                   | `SANDBOX_DEFAULT_RUNNER`                                           |
-| `sandbox.runners.kubernetes.enabled`                                                        | `SANDBOX_RUNNER_KUBERNETES_ENABLED`                                |
-| `sandbox.runners.vercel.enabled`                                                            | `SANDBOX_RUNNER_VERCEL_ENABLED`                                    |
-| `sandbox.runners.vercel.tokenSecret`                                                        | `SANDBOX_VERCEL_TOKEN`, from a Secret you create                   |
-| `sandbox.runners.vercel.teamId`, `projectId`, `image`, `vcpus`, `timeoutMinutes`, `driveGiB` | The matching `SANDBOX_VERCEL_*` variables                          |
-| `sandbox.runners.bridgeBinaryUrl`, `bridgeBinarySha256`                                     | `SANDBOX_BRIDGE_BINARY_URL`, `SANDBOX_BRIDGE_BINARY_SHA256`        |
-| `sandbox.runners.previewDomain`                                                             | `SANDBOX_PREVIEW_DOMAIN`, and the preview route and certificate    |
-| `sandbox.previews.*`                                                                        | The preview route and certificate                                  |
+| Value                                                                                        | Maps to                                                             |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `sandbox.install`                                                                            | The namespace, quota, NetworkPolicy, RBAC, and `SANDBOX_*` settings |
+| `sandbox.enabled`                                                                            | `install`, unless `install` is set                                  |
+| `sandbox.namespace`                                                                          | `SANDBOX_NAMESPACE`                                                 |
+| `sandbox.image`                                                                              | `SANDBOX_IMAGE`                                                     |
+| `sandbox.runtimeClassName`                                                                   | `SANDBOX_RUNTIME_CLASS`                                             |
+| `sandbox.idleTimeoutMinutes`                                                                 | `SANDBOX_IDLE_TIMEOUT_MINUTES`                                      |
+| `sandbox.maxLifetimeHours`                                                                   | `SANDBOX_MAX_LIFETIME_HOURS`                                        |
+| `sandbox.maxPerUserDefault`                                                                  | `SANDBOX_MAX_PER_USER`                                              |
+| `sandbox.storageClass`, `diskSize`, `cpuLimit`, `memoryLimit`                                | The matching `SANDBOX_*` variables                                  |
+| `sandbox.tunnelMode`, `homeMode`                                                             | `SANDBOX_TUNNEL_MODE`, `SANDBOX_HOME_MODE`                          |
+| `sandbox.quota.*`                                                                            | The namespace ResourceQuota                                         |
+| `sandbox.runners.default`                                                                    | `SANDBOX_DEFAULT_RUNNER`                                            |
+| `sandbox.runners.kubernetes.enabled`                                                         | `SANDBOX_RUNNER_KUBERNETES_ENABLED`                                 |
+| `sandbox.runners.vercel.enabled`                                                             | `SANDBOX_RUNNER_VERCEL_ENABLED`                                     |
+| `sandbox.runners.vercel.tokenSecret`                                                         | `SANDBOX_VERCEL_TOKEN`, from a Secret you create                    |
+| `sandbox.runners.vercel.teamId`, `projectId`, `image`, `vcpus`, `timeoutMinutes`, `driveGiB` | The matching `SANDBOX_VERCEL_*` variables                           |
+| `sandbox.runners.bridgeBinaryUrl`, `bridgeBinarySha256`                                      | `SANDBOX_BRIDGE_BINARY_URL`, `SANDBOX_BRIDGE_BINARY_SHA256`         |
+| `sandbox.runners.previewDomain`                                                              | `SANDBOX_PREVIEW_DOMAIN`, and the preview route and certificate     |
+| `sandbox.previews.*`                                                                         | The preview route and certificate                                   |
 
 A value under `sandbox.runners` left empty, or `null` for booleans, renders no variable. The field then stays editable in **Instance admin**.
 
@@ -428,16 +428,16 @@ A guest runs the host's agent on the host's Claude subscription, with access to 
 
 ### Where tokens are stored
 
-| Token                                     | Stored                                                                                                 | Reaches a machine as                                                                           |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| Claude and OpenAI tokens                  | Encrypted in PostgreSQL (AES-256-GCM)                                                                    | The machine's Secret (Kubernetes) or bootstrap environment (Vercel)                             |
-| The host's GitHub token, for the agent    | Encrypted in PostgreSQL                                                                                  | The machine's Secret (Kubernetes), or an egress header (Vercel)                                 |
-| A person's GitHub token, for their pushes | Encrypted in PostgreSQL                                                                                  | The environment of the one git command they run, or of their own terminal while it is open      |
-| Agent server password, SSH bridge token   | Not stored. Derived with HMAC from `SECRETS_ENCRYPTION_KEY` and the machine's epoch                    | Files in `/orchard-init`, mode 600                                                              |
-| Share link tokens                         | SHA-256 hash only                                                                                      | Never                                                                                           |
-| Slack link tokens                         | SHA-256 hash only, single use, 10 minutes                                                              | Never                                                                                           |
-| Linear API keys                           | Encrypted in PostgreSQL                                                                                  | Never                                                                                           |
-| The agent's Orchard MCP token             | A 60-day token on a per-machine session of the host, confined to the machine's organization, and refused on superadmin routes | The agent's MCP configuration                                                 |
+| Token                                     | Stored                                                                                                                        | Reaches a machine as                                                                       |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Claude and OpenAI tokens                  | Encrypted in PostgreSQL (AES-256-GCM)                                                                                         | The machine's Secret (Kubernetes) or bootstrap environment (Vercel)                        |
+| The host's GitHub token, for the agent    | Encrypted in PostgreSQL                                                                                                       | The machine's Secret (Kubernetes), or an egress header (Vercel)                            |
+| A person's GitHub token, for their pushes | Encrypted in PostgreSQL                                                                                                       | The environment of the one git command they run, or of their own terminal while it is open |
+| Agent server password, SSH bridge token   | Not stored. Derived with HMAC from `SECRETS_ENCRYPTION_KEY` and the machine's epoch                                           | Files in `/orchard-init`, mode 600                                                         |
+| Share link tokens                         | SHA-256 hash only                                                                                                             | Never                                                                                      |
+| Slack link tokens                         | SHA-256 hash only, single use, 10 minutes                                                                                     | Never                                                                                      |
+| Linear API keys                           | Encrypted in PostgreSQL                                                                                                       | Never                                                                                      |
+| The agent's Orchard MCP token             | A 60-day token on a per-machine session of the host, confined to the machine's organization, and refused on superadmin routes | The agent's MCP configuration                                                              |
 
 Tokens do not appear in these places:
 

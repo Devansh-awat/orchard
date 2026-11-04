@@ -15,11 +15,11 @@ To add a standby, refer to [Configure high availability](/data/high-availability
 
 A database has one endpoint for each kind of traffic. Select one in the **Connect** dialog under **Primary**, **Standbys**, or **Any**.
 
-| **Connect** option | Host prefix | Serves |
-| --- | --- | --- |
-| **Primary** | `pg-<name>-rw` | Reads and writes. The endpoint follows a failover. |
-| **Standbys** | `pg-<name>-ro` | Reads only, load-balanced across standbys. |
-| **Any** | `pg-<name>-r` | Reads only, across every instance. |
+| **Connect** option | Host prefix    | Serves                                             |
+| ------------------ | -------------- | -------------------------------------------------- |
+| **Primary**        | `pg-<name>-rw` | Reads and writes. The endpoint follows a failover. |
+| **Standbys**       | `pg-<name>-ro` | Reads only, load-balanced across standbys.         |
+| **Any**            | `pg-<name>-r`  | Reads only, across every instance.                 |
 
 Point your app's main connection at `-rw`, and read-only consumers at `-ro`. A write to `-ro` fails.
 

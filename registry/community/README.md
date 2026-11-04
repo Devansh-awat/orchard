@@ -20,13 +20,13 @@ Open a pull request that adds one file, `registry/community/<id>.json`:
 }
 ```
 
-| Field       | Description                                                                                                                                                       |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Field       | Description                                                                                                                                                                                              |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `id`        | Your graft's ID from `graft.json`. The file name must match it. 2 to 48 lowercase letters, digits, and hyphens, starting with a letter. An ID that an official graft or another listing uses is refused. |
-| `repo`      | The `owner/name` of the public GitHub repository you release from.                                                                                                |
-| `publisher` | The name shown next to your graft. 1 to 39 lowercase letters, digits, and hyphens. Your GitHub login is a good choice.                                            |
-| `publicKey` | The public half of your signing key.                                                                                                                              |
-| `homepage`  | Optional. An `https` address.                                                                                                                                     |
+| `repo`      | The `owner/name` of the public GitHub repository you release from.                                                                                                                                       |
+| `publisher` | The name shown next to your graft. 1 to 39 lowercase letters, digits, and hyphens. Your GitHub login is a good choice.                                                                                   |
+| `publicKey` | The public half of your signing key.                                                                                                                                                                     |
+| `homepage`  | Optional. An `https` address.                                                                                                                                                                            |
 
 The check rejects unknown fields.
 

@@ -62,11 +62,11 @@ The token also works in the URL, as `/apiv1/webhooks/deploy/<token>`. The URL th
 
 ## Behavior
 
-| Request | App type | Result |
-| --- | --- | --- |
-| No `image` or `tag` | Any | Restarts the app on its current image. |
-| With `image` or `tag` | Image | Rolls the app onto the new image. The previous image stays available for rollback. |
-| With `image` or `tag` | GitHub | Returns a `400` error. To rebuild a GitHub app, push to the branch or run `orchard deploy rebuild <id>`. |
+| Request               | App type | Result                                                                                                   |
+| --------------------- | -------- | -------------------------------------------------------------------------------------------------------- |
+| No `image` or `tag`   | Any      | Restarts the app on its current image.                                                                   |
+| With `image` or `tag` | Image    | Rolls the app onto the new image. The previous image stays available for rollback.                       |
+| With `image` or `tag` | GitHub   | Returns a `400` error. To rebuild a GitHub app, push to the branch or run `orchard deploy rebuild <id>`. |
 
 A request returns a `409` error while the app is building. Each token allows 30 requests per minute.
 

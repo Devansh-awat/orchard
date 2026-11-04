@@ -28,11 +28,11 @@ The **Instances** list shows each instance as **Primary** or **Standby**, with i
 
 The replication mode controls when PostgreSQL treats a write as saved.
 
-| Mode        | Behavior                                                                  | Needs a standby |
-| ----------- | ------------------------------------------------------------------------- | --------------- |
-| **Async**   | A failover can lose the last moments of writes.                           | No              |
-| **Preferred** | Each commit waits for a standby while one is healthy.                   | Yes             |
-| **Required** | No acknowledged write is lost, but writes stop if no standby is reachable. | Yes             |
+| Mode          | Behavior                                                                   | Needs a standby |
+| ------------- | -------------------------------------------------------------------------- | --------------- |
+| **Async**     | A failover can lose the last moments of writes.                            | No              |
+| **Preferred** | Each commit waits for a standby while one is healthy.                      | Yes             |
+| **Required**  | No acknowledged write is lost, but writes stop if no standby is reachable. | Yes             |
 
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">

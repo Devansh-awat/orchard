@@ -60,16 +60,16 @@ Orchard runs `DROP EXTENSION`. The command fails if objects still depend on the 
 
 Orchard allows the following extensions. It refuses others, because untrusted languages and foreign data wrappers can run code or reach the network from the database pod.
 
-| Purpose | Extensions |
-| --- | --- |
-| UUIDs and hashing | `uuid-ossp`, `pgcrypto` |
-| Vectors | `vector`, `pgvector` |
-| Geospatial | `postgis`, `postgis_topology`, `postgis_raster`, `cube`, `earthdistance` |
-| Text search | `pg_trgm`, `unaccent`, `fuzzystrmatch`, `citext` |
-| Data types | `hstore`, `ltree`, `isn`, `intarray` |
-| Indexes | `btree_gin`, `btree_gist` |
-| Query statistics | `pg_stat_statements` |
-| Other | `tablefunc`, `plpgsql`, `timescaledb` |
+| Purpose           | Extensions                                                               |
+| ----------------- | ------------------------------------------------------------------------ |
+| UUIDs and hashing | `uuid-ossp`, `pgcrypto`                                                  |
+| Vectors           | `vector`, `pgvector`                                                     |
+| Geospatial        | `postgis`, `postgis_topology`, `postgis_raster`, `cube`, `earthdistance` |
+| Text search       | `pg_trgm`, `unaccent`, `fuzzystrmatch`, `citext`                         |
+| Data types        | `hstore`, `ltree`, `isn`, `intarray`                                     |
+| Indexes           | `btree_gin`, `btree_gist`                                                |
+| Query statistics  | `pg_stat_statements`                                                     |
+| Other             | `tablefunc`, `plpgsql`, `timescaledb`                                    |
 
 An extension must also exist in the PostgreSQL image. If you need one that is missing, an operator must change the image.
 

@@ -18,38 +18,38 @@ A guest with a terminal can read every credential on the machine. These include 
 
 ## Roles
 
-| Role            | Label in the workspace | Who                                                                                     |
-| --------------- | ---------------------- | --------------------------------------------------------------------------------------- |
-| Host            | **Host**               | The person who created the machine. Superadmins have the same access.                    |
-| Guest           | **Guest**              | Someone the host invited with **Collaborate** access.                                    |
-| Read-only guest | **Read only**          | Someone the host invited with **Watch** access.                                          |
-| Organization admin       | None                   | An admin of the machine's organization who was not invited.                              |
+| Role               | Label in the workspace | Who                                                                   |
+| ------------------ | ---------------------- | --------------------------------------------------------------------- |
+| Host               | **Host**               | The person who created the machine. Superadmins have the same access. |
+| Guest              | **Guest**              | Someone the host invited with **Collaborate** access.                 |
+| Read-only guest    | **Read only**          | Someone the host invited with **Watch** access.                       |
+| Organization admin | None                   | An admin of the machine's organization who was not invited.           |
 
 An organization admin who is also invited has the invited role, and can also start, stop, and delete the machine.
 
 ### What each role can do
 
-| Action                                                                  | Host | Guest | Read-only guest | Organization admin |
-| ----------------------------------------------------------------------- | :--: | :---: | :-------------: | :-------: |
-| See the machine in lists: name, status, runner, owner                   | Yes  |  Yes  |       Yes       |    Yes    |
-| See sessions, transcripts, comments, diffs, files, and who is here      | Yes  |  Yes  |       Yes       |    No     |
-| Watch other people's terminals and script output                        | Yes  |  Yes  |       Yes       |    No     |
-| Open previews                                                           | Yes  |  Yes  |       Yes       |    No     |
-| Prompt the agent and send reviews                                       | Yes  |  Yes  |       No        |    No     |
-| Comment with `/chat`                                                    | Yes  |  Yes  |       No        |    No     |
-| Edit, create, rename, and delete files                                  | Yes  |  Yes  |       No        |    No     |
-| Open their own terminals                                                | Yes  |  Yes  |       No        |    No     |
-| Start and stop run scripts                                              | Yes  |  Yes  |       No        |    No     |
-| Create, archive, and delete sessions and their branches                 | Yes  |  Yes  |       No        |    No     |
-| Commit                                                                  | Yes  |  Yes  |       No        |    No     |
-| Push, pull, open pull requests, and merge, with their own GitHub account | Yes  |  Yes  |       No        |    No     |
-| Start the machine                                                       | Yes  |  Yes  |       No        |    Yes    |
-| Stop or delete the machine, and retry failed changes                    | Yes  |  No   |       No        |    Yes    |
-| Connect over SSH and open editor links                                  | Yes  |  No   |       No        |    No     |
-| Invite people, change roles, and remove people                          | Yes  |  No   |       No        |    No     |
-| Change machine settings and clone repositories                          | Yes  |  No   |       No        |    No     |
-| Attach projects and deploy preview environments                         | Yes  |  No   |       No        |    No     |
-| Create and revoke read-only links, and fork the machine                 | Yes  |  No   |       No        |    No     |
+| Action                                                                   | Host | Guest | Read-only guest | Organization admin |
+| ------------------------------------------------------------------------ | :--: | :---: | :-------------: | :----------------: |
+| See the machine in lists: name, status, runner, owner                    | Yes  |  Yes  |       Yes       |        Yes         |
+| See sessions, transcripts, comments, diffs, files, and who is here       | Yes  |  Yes  |       Yes       |         No         |
+| Watch other people's terminals and script output                         | Yes  |  Yes  |       Yes       |         No         |
+| Open previews                                                            | Yes  |  Yes  |       Yes       |         No         |
+| Prompt the agent and send reviews                                        | Yes  |  Yes  |       No        |         No         |
+| Comment with `/chat`                                                     | Yes  |  Yes  |       No        |         No         |
+| Edit, create, rename, and delete files                                   | Yes  |  Yes  |       No        |         No         |
+| Open their own terminals                                                 | Yes  |  Yes  |       No        |         No         |
+| Start and stop run scripts                                               | Yes  |  Yes  |       No        |         No         |
+| Create, archive, and delete sessions and their branches                  | Yes  |  Yes  |       No        |         No         |
+| Commit                                                                   | Yes  |  Yes  |       No        |         No         |
+| Push, pull, open pull requests, and merge, with their own GitHub account | Yes  |  Yes  |       No        |         No         |
+| Start the machine                                                        | Yes  |  Yes  |       No        |        Yes         |
+| Stop or delete the machine, and retry failed changes                     | Yes  |  No   |       No        |        Yes         |
+| Connect over SSH and open editor links                                   | Yes  |  No   |       No        |         No         |
+| Invite people, change roles, and remove people                           | Yes  |  No   |       No        |         No         |
+| Change machine settings and clone repositories                           | Yes  |  No   |       No        |         No         |
+| Attach projects and deploy preview environments                          | Yes  |  No   |       No        |         No         |
+| Create and revoke read-only links, and fork the machine                  | Yes  |  No   |       No        |         No         |
 
 The server enforces these rules on each request, each terminal, and each live message. The server drops a read-only guest's edits to a shared file.
 
@@ -102,13 +102,13 @@ Each prompt shows who sent it, including prompts from the CLI, MCP, Slack, and i
 
 ## Collaboration features
 
-| Feature       | Behavior                                                                                                                       |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Presence      | Avatars in the title bar show who is on the machine. Session rows, tabs, and the file tree show where each person is.          |
-| Follow        | Select someone's avatar to follow their session, tab, and file. Select it again to stop.                                       |
-| Typing        | While someone writes a prompt, you see their draft above the composer. Drafts are not stored.                                  |
-| Comments      | `/chat <message>` posts to the people in the session and does not prompt the agent. Comments stay with the session.             |
-| Co-editing    | Two people with the same file open edit it together. The agent's edits on disk merge in.                                       |
+| Feature       | Behavior                                                                                                                                                      |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Presence      | Avatars in the title bar show who is on the machine. Session rows, tabs, and the file tree show where each person is.                                         |
+| Follow        | Select someone's avatar to follow their session, tab, and file. Select it again to stop.                                                                      |
+| Typing        | While someone writes a prompt, you see their draft above the composer. Drafts are not stored.                                                                 |
+| Comments      | `/chat <message>` posts to the people in the session and does not prompt the agent. Comments stay with the session.                                           |
+| Co-editing    | Two people with the same file open edit it together. The agent's edits on disk merge in.                                                                      |
 | Notifications | When the agent finishes a turn, the host and everyone who prompted the session in the last six hours get a notification, unless they are viewing the machine. |
 
 ## Create a read-only link

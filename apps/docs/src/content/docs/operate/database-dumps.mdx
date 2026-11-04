@@ -52,17 +52,17 @@ Each CronJob is named `dump-<target name>`. Each dump uses the `pg_dump` custom 
 
 ## Values
 
-| Key                                     | Default                | Description                                                                 |
-| --------------------------------------- | ---------------------- | --------------------------------------------------------------------------- |
-| `databaseDumps.enabled`                 | `false`                | Creates the CronJobs.                                                       |
-| `databaseDumps.schedule`                | `15 2 * * *`           | The cron schedule, unless a target sets its own `schedule`.                 |
-| `databaseDumps.image`                   | `postgres:17-alpine`   | The dump image. Keep the PostgreSQL major version at or above the server's. |
-| `databaseDumps.uploaderImage`           | `amazon/aws-cli:2.27.50` | The upload image.                                                         |
-| `databaseDumps.destination.bucket`      | Empty                  | The bucket. Required when there are targets.                                |
-| `databaseDumps.destination.prefix`      | `platform-dumps`       | The key prefix.                                                             |
-| `databaseDumps.destination.endpointURL` | Empty                  | The S3 endpoint, for storage other than AWS.                                |
-| `databaseDumps.destination.secretName`  | `database-dumps-r2`    | The Secret with the storage credentials.                                    |
-| `databaseDumps.targets`                 | Empty                  | The databases to dump.                                                      |
+| Key                                     | Default                  | Description                                                                 |
+| --------------------------------------- | ------------------------ | --------------------------------------------------------------------------- |
+| `databaseDumps.enabled`                 | `false`                  | Creates the CronJobs.                                                       |
+| `databaseDumps.schedule`                | `15 2 * * *`             | The cron schedule, unless a target sets its own `schedule`.                 |
+| `databaseDumps.image`                   | `postgres:17-alpine`     | The dump image. Keep the PostgreSQL major version at or above the server's. |
+| `databaseDumps.uploaderImage`           | `amazon/aws-cli:2.27.50` | The upload image.                                                           |
+| `databaseDumps.destination.bucket`      | Empty                    | The bucket. Required when there are targets.                                |
+| `databaseDumps.destination.prefix`      | `platform-dumps`         | The key prefix.                                                             |
+| `databaseDumps.destination.endpointURL` | Empty                    | The S3 endpoint, for storage other than AWS.                                |
+| `databaseDumps.destination.secretName`  | `database-dumps-r2`      | The Secret with the storage credentials.                                    |
+| `databaseDumps.targets`                 | Empty                    | The databases to dump.                                                      |
 
 Each target needs `name`, `host`, `database`, `user`, and `passwordSecret.name`. The optional keys are `port`, `namespace`, `schedule`, and `passwordSecret.key`.
 

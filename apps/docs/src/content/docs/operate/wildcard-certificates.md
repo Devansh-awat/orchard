@@ -16,12 +16,12 @@ Let's Encrypt only issues wildcards over a DNS-01 challenge. This guide uses `ap
 
 ## What the chart renders
 
-| Template            | Renders                                                                                             | Condition                                                   |
-| ------------------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `certificates.yaml` | A `Certificate` for `*.apps.example.com` and `apps.example.com` in `certificates.namespace`.        | `certificates.enabled`, and an app domain is set.           |
-| `certificates.yaml` | A `Certificate` for `*.<db domain>`, for TLS on public databases.                                   | `certificates.enabled`, and `wildcards.db.domain` is set.   |
-| `gateway.yaml`      | The `http-gateway` Gateway, with an `https-wildcard` listener that references the app certificate.  | `gateway.enabled`, `gateway.http.enabled`, and a domain is set. |
-| `_helpers.tpl`      | `PLATFORM_WILDCARD_DOMAINS` on the server, which names the Secret to use on each Ingress.           | An app domain or `tenant.wildcardDomains` is set.           |
+| Template            | Renders                                                                                            | Condition                                                       |
+| ------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `certificates.yaml` | A `Certificate` for `*.apps.example.com` and `apps.example.com` in `certificates.namespace`.       | `certificates.enabled`, and an app domain is set.               |
+| `certificates.yaml` | A `Certificate` for `*.<db domain>`, for TLS on public databases.                                  | `certificates.enabled`, and `wildcards.db.domain` is set.       |
+| `gateway.yaml`      | The `http-gateway` Gateway, with an `https-wildcard` listener that references the app certificate. | `gateway.enabled`, `gateway.http.enabled`, and a domain is set. |
+| `_helpers.tpl`      | `PLATFORM_WILDCARD_DOMAINS` on the server, which names the Secret to use on each Ingress.          | An app domain or `tenant.wildcardDomains` is set.               |
 
 The chart does not create the issuer.
 
@@ -92,12 +92,12 @@ certificates:
   copyToTenants: true
 ```
 
-| Value                   | Purpose                                                                                                     |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `appDomain`             | The wildcard that the certificate covers. Also sets `APP_DOMAIN` on the server and `PUBLIC_APP_DOMAIN` on the frontend. |
-| `appWildcardSecretName` | Moves apps onto the wildcard. Without it, the chart issues the certificate but apps keep per-host certificates. |
-| `certificates.namespace` | Where the certificate is stored. The namespace must exist. With `createNamespace: true`, the chart creates it. |
-| `copyToTenants`         | The server copies the Secret into each namespace with an Ingress that references it.                       |
+| Value                    | Purpose                                                                                                                 |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `appDomain`              | The wildcard that the certificate covers. Also sets `APP_DOMAIN` on the server and `PUBLIC_APP_DOMAIN` on the frontend. |
+| `appWildcardSecretName`  | Moves apps onto the wildcard. Without it, the chart issues the certificate but apps keep per-host certificates.         |
+| `certificates.namespace` | Where the certificate is stored. The namespace must exist. With `createNamespace: true`, the chart creates it.          |
+| `copyToTenants`          | The server copies the Secret into each namespace with an Ingress that references it.                                    |
 
 If you use `server.envFrom`, the chart does not set `APP_DOMAIN`. Add it to your Secret.
 

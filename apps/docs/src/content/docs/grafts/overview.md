@@ -20,11 +20,11 @@ Only install grafts you trust. A graft runs inside Orchard with the same access 
 
 ## Kinds of graft
 
-| Kind      | Publisher                                        | Label in Orchard              |
-| --------- | ------------------------------------------------ | ----------------------------- |
-| Official  | Orchard                                          | **Official**                  |
+| Kind      | Publisher                                           | Label in Orchard              |
+| --------- | --------------------------------------------------- | ----------------------------- |
+| Official  | Orchard                                             | **Official**                  |
 | Community | Another author, listed in the Extension Marketplace | **Community · by** the author |
-| Tap       | Anyone, from a catalog that you added             | **Tap:** the tap's name       |
+| Tap       | Anyone, from a catalog that you added               | **Tap:** the tap's name       |
 
 Your trust policy controls which kinds can load. For more information, refer to [Trust](/grafts/install/#trust).
 
@@ -36,14 +36,14 @@ Orchard publishes these first-party grafts:
 
 ## Parts of a graft
 
-| Part          | Runs as                                                                        | Location                                                   |
-| ------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------- |
-| Server module | A NestJS module loaded into the Orchard server                                 | `/apiv1/<graft-id>/...`                                    |
+| Part          | Runs as                                                                           | Location                                                   |
+| ------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Server module | A NestJS module loaded into the Orchard server                                    | `/apiv1/<graft-id>/...`                                    |
 | UI            | An island: a bundle with its own copy of Svelte, mounted in pages Orchard renders | `/<graft-id>/...` and the [slots](/reference/graft-slots/) |
-| Migrations    | SQL that Orchard runs in a transaction                                          | The graft's own schema, `ext_<graft_id>`                   |
-| MCP tools     | Tools registered in the MCP server                                              | Named `<graft_id>_...`, or claimed by name                 |
-| Settings      | Sections in **Instance admin** > **Configuration**                                       | Stored as instance settings                                |
-| Cluster chart | An optional Helm chart for CRDs, namespaces, and RBAC                           | Its own Helm release, `orchard-graft-<id>`                 |
+| Migrations    | SQL that Orchard runs in a transaction                                            | The graft's own schema, `ext_<graft_id>`                   |
+| MCP tools     | Tools registered in the MCP server                                                | Named `<graft_id>_...`, or claimed by name                 |
+| Settings      | Sections in **Instance admin** > **Configuration**                                | Stored as instance settings                                |
+| Cluster chart | An optional Helm chart for CRDs, namespaces, and RBAC                             | Its own Helm release, `orchard-graft-<id>`                 |
 
 ## How grafts stay separate from Orchard
 

@@ -84,12 +84,12 @@ orchard db pooler set <dbId> --mode session --pool-size 20 --max-client-conn 100
 
 Clients reconnect once when the pooler restarts.
 
-| Setting                    | CLI flag            | Default       | Range      | Description                                                 |
-| -------------------------- | ------------------- | ------------- | ---------- | ----------------------------------------------------------- |
-| **Mode**                   | `--mode`            | `transaction` | `transaction`, `session` | How the pooler assigns server connections.                  |
-| **Pool size**              | `--pool-size`       | 10            | 1 to 100   | Server connections for each database and user.              |
-| **Max client connections** | `--max-client-conn` | 500           | 10 to 5000 | Clients the pooler accepts before it refuses new ones.      |
-| Not in the dashboard       | `--instances`       | 1             | 1 to 3     | Pooler instances.                                           |
+| Setting                    | CLI flag            | Default       | Range                    | Description                                            |
+| -------------------------- | ------------------- | ------------- | ------------------------ | ------------------------------------------------------ |
+| **Mode**                   | `--mode`            | `transaction` | `transaction`, `session` | How the pooler assigns server connections.             |
+| **Pool size**              | `--pool-size`       | 10            | 1 to 100                 | Server connections for each database and user.         |
+| **Max client connections** | `--max-client-conn` | 500           | 10 to 5000               | Clients the pooler accepts before it refuses new ones. |
+| Not in the dashboard       | `--instances`       | 1             | 1 to 3                   | Pooler instances.                                      |
 
 Two modes are available:
 

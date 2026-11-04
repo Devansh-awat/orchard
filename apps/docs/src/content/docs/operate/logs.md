@@ -7,12 +7,12 @@ sidebar:
 
 Orchard keeps a copy of each app's logs, and of the ingress controller's access log, in a log store inside the cluster. Live logs do not use the store, because they stream from the pods. Features that look back in time need it.
 
-| Feature                                        | Location                                         | Needs                         |
-| ---------------------------------------------- | ------------------------------------------------ | ----------------------------- |
-| Search over past logs, levels, context, export | **Observe** > **Logs**                           | The log store                 |
-| Per-route traffic, error rates, and latency     | **Observe** > **Requests**                       | The log store and access logs |
-| Attack attempts and top sources                | **Security** tab                                 | The log store and access logs |
-| Error grouping across replaced replicas        | **Observe** > **Errors**, and deploy verdicts    | The log store                 |
+| Feature                                        | Location                                      | Needs                         |
+| ---------------------------------------------- | --------------------------------------------- | ----------------------------- |
+| Search over past logs, levels, context, export | **Observe** > **Logs**                        | The log store                 |
+| Per-route traffic, error rates, and latency    | **Observe** > **Requests**                    | The log store and access logs |
+| Attack attempts and top sources                | **Security** tab                              | The log store and access logs |
+| Error grouping across replaced replicas        | **Observe** > **Errors**, and deploy verdicts | The log store                 |
 
 Without the store, error grouping uses the logs of the pods that are running now. A deploy verdict can then miss errors from replaced replicas.
 
@@ -54,19 +54,19 @@ To move a store that holds data to another class, set the value explicitly. The 
 
 ## Chart values
 
-| Value                                    | Chart default                                                 | Installer, less than 8 GB of memory      |
-| ---------------------------------------- | ------------------------------------------------------------- | ---------------------------------------- |
-| `logs.enabled`                           | `true`                                                        | `true`                                   |
-| `logs.retention`                         | `14d`                                                         | `7d`                                     |
-| `logs.maxDiskSpaceUsage`                 | `16GiB`                                                       | From free disk                           |
-| `logs.victorialogs.image`                | `victoriametrics/victoria-logs:v1.53.0`                       |                                          |
-| `logs.victorialogs.storage.size`         | `20Gi`                                                        | From free disk                           |
-| `logs.victorialogs.storage.storageClass` | Empty, the cluster default                                    | `local-path`                             |
-| `logs.victorialogs.resources`            | Requests `100m/256Mi`, limits `1/1Gi`                         | Requests `50m/96Mi`, limits `1/384Mi`    |
-| `logs.vector.image`                      | `timberio/vector:0.60.0-distroless-libc`                      |                                          |
-| `logs.vector.dataDir`                    | `/var/lib/vector-orchard`, a host path for checkpoints        |                                          |
-| `logs.vector.bufferEvents`               | `20000`                                                       | `5000`                                   |
-| `logs.vector.resources`                  | Requests `50m/128Mi`, limits `500m/512Mi`                     | Requests `20m/64Mi`, limits `500m/256Mi` |
+| Value                                    | Chart default                                          | Installer, less than 8 GB of memory      |
+| ---------------------------------------- | ------------------------------------------------------ | ---------------------------------------- |
+| `logs.enabled`                           | `true`                                                 | `true`                                   |
+| `logs.retention`                         | `14d`                                                  | `7d`                                     |
+| `logs.maxDiskSpaceUsage`                 | `16GiB`                                                | From free disk                           |
+| `logs.victorialogs.image`                | `victoriametrics/victoria-logs:v1.53.0`                |                                          |
+| `logs.victorialogs.storage.size`         | `20Gi`                                                 | From free disk                           |
+| `logs.victorialogs.storage.storageClass` | Empty, the cluster default                             | `local-path`                             |
+| `logs.victorialogs.resources`            | Requests `100m/256Mi`, limits `1/1Gi`                  | Requests `50m/96Mi`, limits `1/384Mi`    |
+| `logs.vector.image`                      | `timberio/vector:0.60.0-distroless-libc`               |                                          |
+| `logs.vector.dataDir`                    | `/var/lib/vector-orchard`, a host path for checkpoints |                                          |
+| `logs.vector.bufferEvents`               | `20000`                                                | `5000`                                   |
+| `logs.vector.resources`                  | Requests `50m/128Mi`, limits `500m/512Mi`              | Requests `20m/64Mi`, limits `500m/256Mi` |
 
 On a small machine, reduce these values instead of turning off the store.
 

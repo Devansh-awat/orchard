@@ -7,11 +7,11 @@ sidebar:
 
 To install Orchard, select the method that matches your environment.
 
-| Environment | Method |
-| --- | --- |
-| A Linux machine with no cluster on it | [One-command installer](#install-on-a-linux-machine) |
-| A Kubernetes cluster you already operate | [Helm chart](#install-on-an-existing-cluster) |
-| A laptop, for a local trial | [Quickstart script](#try-orchard-on-a-laptop) |
+| Environment                              | Method                                               |
+| ---------------------------------------- | ---------------------------------------------------- |
+| A Linux machine with no cluster on it    | [One-command installer](#install-on-a-linux-machine) |
+| A Kubernetes cluster you already operate | [Helm chart](#install-on-an-existing-cluster)        |
+| A laptop, for a local trial              | [Quickstart script](#try-orchard-on-a-laptop)        |
 
 After you install Orchard, [claim the instance](#claim-the-instance).
 
@@ -34,19 +34,19 @@ Do not run the installer inside a Docker container. k3s cannot nest its overlayf
 
 The ingress mode sets how traffic reaches the machine.
 
-| Mode | Use for | TLS |
-| --- | --- | --- |
-| `public` | A routable IP address with DNS pointed at it | Let's Encrypt over HTTP-01 |
-| `tunnel` | A machine behind NAT or CGNAT, through Cloudflare Tunnel | Cloudflare terminates TLS and the installer skips cert-manager |
-| `lan` | A LAN or Tailscale network, reached by address | Self-signed certificates for apps. The dashboard uses plain HTTP. |
+| Mode     | Use for                                                  | TLS                                                               |
+| -------- | -------------------------------------------------------- | ----------------------------------------------------------------- |
+| `public` | A routable IP address with DNS pointed at it             | Let's Encrypt over HTTP-01                                        |
+| `tunnel` | A machine behind NAT or CGNAT, through Cloudflare Tunnel | Cloudflare terminates TLS and the installer skips cert-manager    |
+| `lan`    | A LAN or Tailscale network, reached by address           | Self-signed certificates for apps. The dashboard uses plain HTTP. |
 
 The mode also decides which host ports Orchard binds.
 
-| Mode | Port 80 | Port 443 |
-| --- | --- | --- |
-| `public` | HTTP-01 challenges for the dashboard, the MCP endpoint, and every app hostname | All traffic |
-| `lan` | The dashboard and the MCP endpoint, in plain HTTP | Deployed apps |
-| `tunnel` | Not bound | Not bound |
+| Mode     | Port 80                                                                        | Port 443      |
+| -------- | ------------------------------------------------------------------------------ | ------------- |
+| `public` | HTTP-01 challenges for the dashboard, the MCP endpoint, and every app hostname | All traffic   |
+| `lan`    | The dashboard and the MCP endpoint, in plain HTTP                              | Deployed apps |
+| `tunnel` | Not bound                                                                      | Not bound     |
 
 :::caution
 In `public` mode, port 80 must stay open after the install. Let's Encrypt uses it for every new app hostname and every certificate renewal. If another process owns port 80 or 443, use `tunnel` mode.
@@ -88,18 +88,18 @@ sudo bash orchard-install.sh
 
 The installer asks these questions in order. A flag or an environment variable answers a question in advance, so the installer does not ask it. The answer still appears on the review screen.
 
-| Question | Default | Flag | Environment variable |
-| --- | --- | --- | --- |
-| Ingress mode | Based on the machine's network | `--mode` | `ORCHARD_INGRESS_MODE` |
-| Cloudflare Tunnel token, in `tunnel` mode | None. Required in `tunnel` mode. | `--tunnel-token` | `ORCHARD_TUNNEL_TOKEN` |
-| Public IP | The detected address. In `lan` mode, the local address. In `tunnel` mode, none. | `--public-ip` | `ORCHARD_PUBLIC_IP` |
-| Dashboard domain | An `sslip.io` name. In `lan` mode, the local address. Required in `tunnel` mode. | `--domain` | `ORCHARD_DOMAIN` |
-| Apps domain | `apps.<parent of your domain>` | `--app-domain` | `ORCHARD_APP_DOMAIN` |
-| Custom domains target | The dashboard domain. In `tunnel` mode, `<tunnel-id>.cfargotunnel.com`. In `lan` mode, an `sslip.io` name. | `--ingress-cname` | `ORCHARD_INGRESS_CNAME` |
-| MCP endpoint, and its hostname | On, at `mcp.<parent of your domain>` | `--mcp`, `--mcp-domain` | `ORCHARD_MCP`, `ORCHARD_MCP_DOMAIN` |
-| Let's Encrypt email, in `public` mode | None | `--email` | `ORCHARD_ACME_EMAIL` |
-| Updates | `manual` | `--updates` | `ORCHARD_UPDATE_POLICY` |
-| S3 storage | None | `--s3-*`, `--no-s3` | `ORCHARD_S3_*` |
+| Question                                  | Default                                                                                                    | Flag                    | Environment variable                |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------- | ----------------------------------- |
+| Ingress mode                              | Based on the machine's network                                                                             | `--mode`                | `ORCHARD_INGRESS_MODE`              |
+| Cloudflare Tunnel token, in `tunnel` mode | None. Required in `tunnel` mode.                                                                           | `--tunnel-token`        | `ORCHARD_TUNNEL_TOKEN`              |
+| Public IP                                 | The detected address. In `lan` mode, the local address. In `tunnel` mode, none.                            | `--public-ip`           | `ORCHARD_PUBLIC_IP`                 |
+| Dashboard domain                          | An `sslip.io` name. In `lan` mode, the local address. Required in `tunnel` mode.                           | `--domain`              | `ORCHARD_DOMAIN`                    |
+| Apps domain                               | `apps.<parent of your domain>`                                                                             | `--app-domain`          | `ORCHARD_APP_DOMAIN`                |
+| Custom domains target                     | The dashboard domain. In `tunnel` mode, `<tunnel-id>.cfargotunnel.com`. In `lan` mode, an `sslip.io` name. | `--ingress-cname`       | `ORCHARD_INGRESS_CNAME`             |
+| MCP endpoint, and its hostname            | On, at `mcp.<parent of your domain>`                                                                       | `--mcp`, `--mcp-domain` | `ORCHARD_MCP`, `ORCHARD_MCP_DOMAIN` |
+| Let's Encrypt email, in `public` mode     | None                                                                                                       | `--email`               | `ORCHARD_ACME_EMAIL`                |
+| Updates                                   | `manual`                                                                                                   | `--updates`             | `ORCHARD_UPDATE_POLICY`             |
+| S3 storage                                | None                                                                                                       | `--s3-*`, `--no-s3`     | `ORCHARD_S3_*`                      |
 
 The review screen also has one answer that the installer does not ask for: resource limits. By default, you choose them during setup in the dashboard. To set them from the installer, change this answer on the review screen or use `--limits`. You can still change the value in the dashboard.
 
@@ -124,29 +124,29 @@ A      mcp.example.com       203.0.113.10
 
 The installer then queries public DNS resolvers and shows the status of each record. It does not wait in silence, and it does not stop the install. You can choose **Check again**, **Continue anyway**, **Skip DNS for now**, or **Change an answer**.
 
-| Status | Meaning | What to do |
-| --- | --- | --- |
-| `resolves` | The record points at this machine. | Nothing. |
-| `waiting` | Public DNS has no answer yet. | Create the record, or wait for it to propagate. |
-| `wrong value` | The record points somewhere else. | Change the record. The old value can stay in caches for as long as its TTL. |
-| `proxied` | The record answers with a Cloudflare address. | Refer to the following table. |
-| `not checked` | This machine could not reach a public resolver. | Check the record from another machine. |
+| Status        | Meaning                                         | What to do                                                                  |
+| ------------- | ----------------------------------------------- | --------------------------------------------------------------------------- |
+| `resolves`    | The record points at this machine.              | Nothing.                                                                    |
+| `waiting`     | Public DNS has no answer yet.                   | Create the record, or wait for it to propagate.                             |
+| `wrong value` | The record points somewhere else.               | Change the record. The old value can stay in caches for as long as its TTL. |
+| `proxied`     | The record answers with a Cloudflare address.   | Refer to the following table.                                               |
+| `not checked` | This machine could not reach a public resolver. | Check the record from another machine.                                      |
 
 If you skip DNS or continue without it, Orchard installs. The dashboard, the claim link, and certificates do not work until the records are right. cert-manager retries on its own, first after about an hour. The summary at the end of the install lists what is still pending.
 
 These cases need more than a new record:
 
-| Case | What the installer reports | What to do |
-| --- | --- | --- |
-| Cloudflare proxy (orange cloud) | `proxied`, with the Cloudflare address it found | Set the record to **DNS only**. If you keep the proxy, turn off **Always Use HTTPS** so that Let's Encrypt can reach port 80, and set SSL mode to **Full (strict)**. Raw ports and databases do not pass through the proxy, and the free Cloudflare certificate does not cover names such as `*.apps.example.com`. |
-| No wildcard records at your DNS provider | `waiting` on the wildcard line | Add one record for each app as you deploy it, or move the domain to a provider that supports wildcards. |
-| Subdomain delegated to other nameservers | The zone, its nameservers, and the parent it was delegated from | Create the records at the provider for the delegated zone. |
-| A website already on the top of the zone | `wrong value`, and a warning about that site | Use a subdomain for the dashboard, such as `orchard.example.com`, to keep the site where it is. |
-| Split-horizon DNS, or an entry in `/etc/hosts` | Both the answer on this machine and the public answer | Create the public record. Let's Encrypt only uses public DNS. |
-| A private address in public DNS | `wrong value`, and the address | Point the record at the public address, or use `lan` mode. |
-| Ports 80 or 443 blocked by a provider firewall | A warning that names the firewall to open | Allow both ports. A test from the machine can only find this behind 1:1 NAT. On a machine that has the public address itself, the summary reports it when Let's Encrypt fails. |
-| Machine with both IPv4 and IPv6 addresses | A note not to add `AAAA` records | Create `A` records only. Orchard listens on IPv4 only. |
-| CAA records that exclude Let's Encrypt | A warning with the record to add | Add `0 issue "letsencrypt.org"` to the zone. |
+| Case                                           | What the installer reports                                      | What to do                                                                                                                                                                                                                                                                                                         |
+| ---------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Cloudflare proxy (orange cloud)                | `proxied`, with the Cloudflare address it found                 | Set the record to **DNS only**. If you keep the proxy, turn off **Always Use HTTPS** so that Let's Encrypt can reach port 80, and set SSL mode to **Full (strict)**. Raw ports and databases do not pass through the proxy, and the free Cloudflare certificate does not cover names such as `*.apps.example.com`. |
+| No wildcard records at your DNS provider       | `waiting` on the wildcard line                                  | Add one record for each app as you deploy it, or move the domain to a provider that supports wildcards.                                                                                                                                                                                                            |
+| Subdomain delegated to other nameservers       | The zone, its nameservers, and the parent it was delegated from | Create the records at the provider for the delegated zone.                                                                                                                                                                                                                                                         |
+| A website already on the top of the zone       | `wrong value`, and a warning about that site                    | Use a subdomain for the dashboard, such as `orchard.example.com`, to keep the site where it is.                                                                                                                                                                                                                    |
+| Split-horizon DNS, or an entry in `/etc/hosts` | Both the answer on this machine and the public answer           | Create the public record. Let's Encrypt only uses public DNS.                                                                                                                                                                                                                                                      |
+| A private address in public DNS                | `wrong value`, and the address                                  | Point the record at the public address, or use `lan` mode.                                                                                                                                                                                                                                                         |
+| Ports 80 or 443 blocked by a provider firewall | A warning that names the firewall to open                       | Allow both ports. A test from the machine can only find this behind 1:1 NAT. On a machine that has the public address itself, the summary reports it when Let's Encrypt fails.                                                                                                                                     |
+| Machine with both IPv4 and IPv6 addresses      | A note not to add `AAAA` records                                | Create `A` records only. Orchard listens on IPv4 only.                                                                                                                                                                                                                                                             |
+| CAA records that exclude Let's Encrypt         | A warning with the record to add                                | Add `0 issue "letsencrypt.org"` to the zone.                                                                                                                                                                                                                                                                       |
 
 For `tunnel` mode, the installer prints the hostnames to add to your tunnel:
 
@@ -201,13 +201,13 @@ This includes everything in `/etc/orchard/values.yaml`, such as values that you 
 
 When you change an answer, the installer states what the change affects:
 
-| Change | What it affects |
-| --- | --- |
-| Dashboard domain | Everyone signs in again. Passkeys belong to the old name and stop working, so use a password or `sudo orchardctl login`. The GitHub App and any SSO provider keep the old URL until you update them. |
-| Apps domain | Only new apps use it. Deployed apps keep their URLs, including after a redeploy, while DNS for the old name points at the machine. To move an app, add a domain to it. |
-| MCP hostname | Agents must reconnect at the new URL. |
-| Custom domains target | Domains already added keep working while their CNAME still reaches the machine. Orchard checks new domains against the new target. |
-| Public IP | Ports and databases that are already public stay on the old address until you turn public access off and on again. |
+| Change                | What it affects                                                                                                                                                                                      |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dashboard domain      | Everyone signs in again. Passkeys belong to the old name and stop working, so use a password or `sudo orchardctl login`. The GitHub App and any SSO provider keep the old URL until you update them. |
+| Apps domain           | Only new apps use it. Deployed apps keep their URLs, including after a redeploy, while DNS for the old name points at the machine. To move an app, add a domain to it.                               |
+| MCP hostname          | Agents must reconnect at the new URL.                                                                                                                                                                |
+| Custom domains target | Domains already added keep working while their CNAME still reaches the machine. Orchard checks new domains against the new target.                                                                   |
+| Public IP             | Ports and databases that are already public stay on the old address until you turn public access off and on again.                                                                                   |
 
 Before the installer changes the values file, it does the following:
 
@@ -248,13 +248,13 @@ To list every flag and variable, run the script with `--help`.
 
 ### Components the installer turns on
 
-| Component | What runs | Flag to leave it out | Refer to |
-| --- | --- | --- | --- |
-| Metrics | VictoriaMetrics, vmagent, and exporters | `--metrics false` | [Metrics and alerts](/run/observability/) |
-| Log search and request data | VictoriaLogs, Vector, and the Traefik JSON access log | `--logs false` | [Configure logs and request data](/operate/logs/) |
-| Image scanning | The Orchard scanner (Trivy), which reads images from zot | `--image-scanning false` | [Set up image scanning](/operate/image-scanning/) |
-| Database backups and uploads | An S3 store on the server (versitygw) and the backup proxy | `--object-storage false` | [Add S3 storage](/operate/storage/) |
-| MCP | The endpoint agents connect to | `--mcp false` | [Connect an MCP client](/mcp/) |
+| Component                    | What runs                                                  | Flag to leave it out     | Refer to                                          |
+| ---------------------------- | ---------------------------------------------------------- | ------------------------ | ------------------------------------------------- |
+| Metrics                      | VictoriaMetrics, vmagent, and exporters                    | `--metrics false`        | [Metrics and alerts](/run/observability/)         |
+| Log search and request data  | VictoriaLogs, Vector, and the Traefik JSON access log      | `--logs false`           | [Configure logs and request data](/operate/logs/) |
+| Image scanning               | The Orchard scanner (Trivy), which reads images from zot   | `--image-scanning false` | [Set up image scanning](/operate/image-scanning/) |
+| Database backups and uploads | An S3 store on the server (versitygw) and the backup proxy | `--object-storage false` | [Add S3 storage](/operate/storage/)               |
+| MCP                          | The endpoint agents connect to                             | `--mcp false`            | [Connect an MCP client](/mcp/)                    |
 
 :::caution
 Backups on the server sit on the same disk as your databases. If the server is lost, the backups are lost. To keep backups off the server, refer to [Add S3 storage](/operate/storage/).
@@ -266,18 +266,18 @@ A host installed before these defaults existed receives them on its next `sudo o
 
 The installer sizes build concurrency and volumes from the machine.
 
-| RAM | Concurrent builds |
-| --- | --- |
-| Under 8 GiB | 1 |
-| 8 to 16 GiB | 2 |
-| Over 16 GiB | 3 |
+| RAM         | Concurrent builds |
+| ----------- | ----------------- |
+| Under 8 GiB | 1                 |
+| 8 to 16 GiB | 2                 |
+| Over 16 GiB | 3                 |
 
-| Volume | Size |
-| --- | --- |
+| Volume      | Size                                       |
+| ----------- | ------------------------------------------ |
 | Build cache | One fifth of free disk, from 5 GB to 60 GB |
-| Registry | One fifth of free disk, from 5 GB to 50 GB |
-| Backups | One fifth of free disk, from 5 GB to 50 GB |
-| Log store | One tenth of free disk, from 5 GB to 20 GB |
+| Registry    | One fifth of free disk, from 5 GB to 50 GB |
+| Backups     | One fifth of free disk, from 5 GB to 50 GB |
+| Log store   | One tenth of free disk, from 5 GB to 20 GB |
 
 Under 8 GiB of RAM, metrics, logs, and the scanner use lower memory requests and limits. Logs are kept for 7 days instead of 14, and one scan runs at a time. To change any of these values, use `sudo orchardctl config set`.
 
@@ -297,29 +297,29 @@ sudo orchardctl env set <NAME> <value> --apply
 
 To change an answer that you gave the installer:
 
-| Setting | Where to change it |
-| --- | --- |
-| Public IP | **Instance admin** > **Configuration** > **Public exposure** |
-| Custom domains target | **Instance admin** > **Configuration** > **Custom domains** |
-| MCP on or off | **Instance admin** > **Configuration** > **Model Context Protocol** |
-| Dashboard domain | `sudo orchardctl hostname set <host> --apply` |
-| Apps domain | `sudo orchardctl apps-domain set <domain> --apply` |
-| MCP hostname | `sudo orchardctl mcp enable <host> --apply` |
-| Let's Encrypt email | `sudo orchardctl letsencrypt-email set <address>` |
-| Updates | [Run the installer again](#run-the-installer-again). |
-| S3 storage | **Instance admin** > **Configuration** > **Object storage**, or `sudo orchardctl backups s3 set` |
-| Email (SMTP) | **Instance admin** > **Configuration** > **Email** |
+| Setting               | Where to change it                                                                               |
+| --------------------- | ------------------------------------------------------------------------------------------------ |
+| Public IP             | **Instance admin** > **Configuration** > **Public exposure**                                     |
+| Custom domains target | **Instance admin** > **Configuration** > **Custom domains**                                      |
+| MCP on or off         | **Instance admin** > **Configuration** > **Model Context Protocol**                              |
+| Dashboard domain      | `sudo orchardctl hostname set <host> --apply`                                                    |
+| Apps domain           | `sudo orchardctl apps-domain set <domain> --apply`                                               |
+| MCP hostname          | `sudo orchardctl mcp enable <host> --apply`                                                      |
+| Let's Encrypt email   | `sudo orchardctl letsencrypt-email set <address>`                                                |
+| Updates               | [Run the installer again](#run-the-installer-again).                                             |
+| S3 storage            | **Instance admin** > **Configuration** > **Object storage**, or `sudo orchardctl backups s3 set` |
+| Email (SMTP)          | **Instance admin** > **Configuration** > **Email**                                               |
 
 **Instance admin** cannot change a setting that has a command, because it is a chart value or a host setting. For what each one affects, refer to [Change settings that Instance admin cannot edit](/operate/configuration/#change-settings-that-instance-admin-cannot-edit). For the full list of commands, refer to [Host commands](/operate/host-commands/).
 
 ### What the installer does not configure
 
-| Item | What to do |
-| --- | --- |
-| Sandboxed builds and tenant isolation | Install gVisor or Kata on the node, then set `tenantSandbox` and `builderSandbox` in `/etc/orchard/values.yaml`. Without them, image builds run with host-level privileges. |
-| DNS for your own domain | The installer prints the records and checks them, but you create them. To check them later, go to **Instance admin** > **Networking**. For more information, refer to [Point DNS at this instance](/operate/finishing-setup/#point-dns-at-this-instance). |
-| Off-server backups | The installer asks for S3 storage, and you can add it later. Refer to [Add S3 storage](/operate/storage/). |
-| Multiple nodes, wildcard certificates, and public TCP or UDP in `tunnel` mode | Use the [Helm chart](#install-on-an-existing-cluster). |
+| Item                                                                          | What to do                                                                                                                                                                                                                                                |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sandboxed builds and tenant isolation                                         | Install gVisor or Kata on the node, then set `tenantSandbox` and `builderSandbox` in `/etc/orchard/values.yaml`. Without them, image builds run with host-level privileges.                                                                               |
+| DNS for your own domain                                                       | The installer prints the records and checks them, but you create them. To check them later, go to **Instance admin** > **Networking**. For more information, refer to [Point DNS at this instance](/operate/finishing-setup/#point-dns-at-this-instance). |
+| Off-server backups                                                            | The installer asks for S3 storage, and you can add it later. Refer to [Add S3 storage](/operate/storage/).                                                                                                                                                |
+| Multiple nodes, wildcard certificates, and public TCP or UDP in `tunnel` mode | Use the [Helm chart](#install-on-an-existing-cluster).                                                                                                                                                                                                    |
 
 The following values turn on the sandboxes:
 
@@ -400,11 +400,11 @@ Ask me before anything that is not reversible.
 
 Decide these items before you start:
 
-| Decision | Reason |
-| --- | --- |
-| The ingress mode | The agent can detect NAT. It cannot know if you intend to expose the machine. |
-| The domain | Nothing on the machine shows which domains you own. |
-| The DNS records | The records must exist before the run, and the agent may not have access to your DNS provider. |
+| Decision           | Reason                                                                                         |
+| ------------------ | ---------------------------------------------------------------------------------------------- |
+| The ingress mode   | The agent can detect NAT. It cannot know if you intend to expose the machine.                  |
+| The domain         | Nothing on the machine shows which domains you own.                                            |
+| The DNS records    | The records must exist before the run, and the agent may not have access to your DNS provider. |
 | Whether to proceed | The installer installs k3s system-wide. Outside `tunnel` mode, it also takes ports 80 and 443. |
 
 Open the claim link yourself. The link signs you in as the superadmin, so treat it as a password. If you lose it, `sudo orchardctl claim` creates another.
@@ -423,26 +423,26 @@ These were not tested on this path: backups with the `objectStorage` values, MCP
 
 ### Prerequisites
 
-| Component | Needed for |
-| --- | --- |
-| CloudNativePG operator | The control-plane database and every database users create |
-| Traefik | Control-plane ingress (`IngressRoute`) |
-| Gateway API CRDs | The `Gateway` for database exposure, unless `gateway.enabled: false` |
-| cert-manager | TLS, plus a DNS-01 `ClusterIssuer` for wildcard certificates |
-| A default StorageClass | PostgreSQL volumes, build cache, Redis, metrics, and logs |
-| An OCI registry | Where built images are pushed and pulled |
-| An ingress controller | Every app URL, as an `Ingress` of class `tenant.ingressClass` |
-| A layer 4 (L4) load balancer | Public database exposure and TCP or UDP passthrough only |
-| gVisor or Kata RuntimeClasses | Optional sandboxing for tenant and builder pods |
+| Component                     | Needed for                                                           |
+| ----------------------------- | -------------------------------------------------------------------- |
+| CloudNativePG operator        | The control-plane database and every database users create           |
+| Traefik                       | Control-plane ingress (`IngressRoute`)                               |
+| Gateway API CRDs              | The `Gateway` for database exposure, unless `gateway.enabled: false` |
+| cert-manager                  | TLS, plus a DNS-01 `ClusterIssuer` for wildcard certificates         |
+| A default StorageClass        | PostgreSQL volumes, build cache, Redis, metrics, and logs            |
+| An OCI registry               | Where built images are pushed and pulled                             |
+| An ingress controller         | Every app URL, as an `Ingress` of class `tenant.ingressClass`        |
+| A layer 4 (L4) load balancer  | Public database exposure and TCP or UDP passthrough only             |
+| gVisor or Kata RuntimeClasses | Optional sandboxing for tenant and builder pods                      |
 
 You also need these domains:
 
-| Domain | Setting | Purpose |
-| --- | --- | --- |
-| Dashboard domain | `ingress.host` | The dashboard |
-| App domain | `APP_DOMAIN` | Wildcard DNS that points at your ingress controller's load balancer IP |
-| Ingress CNAME target | `INGRESS_CNAME` | The target for users' custom domains |
-| Database domain | `PUBLIC_DB_DOMAIN` | Optional wildcard for publicly exposed databases |
+| Domain               | Setting            | Purpose                                                                |
+| -------------------- | ------------------ | ---------------------------------------------------------------------- |
+| Dashboard domain     | `ingress.host`     | The dashboard                                                          |
+| App domain           | `APP_DOMAIN`       | Wildcard DNS that points at your ingress controller's load balancer IP |
+| Ingress CNAME target | `INGRESS_CNAME`    | The target for users' custom domains                                   |
+| Database domain      | `PUBLIC_DB_DOMAIN` | Optional wildcard for publicly exposed databases                       |
 
 ### Install the prerequisites
 
@@ -549,16 +549,16 @@ helm upgrade --install traefik traefik/traefik \
 
 3. Replace the hostnames, then check these values against your cluster.
 
-   | Value | What to set |
-   | --- | --- |
-   | `tenant.storageClass` | A class from `kubectl get storageclass`, or `''` for the cluster default |
-   | `tenant.ingressClass` | A class from `kubectl get ingressclass` |
-   | `tenant.ingressNamespaces` | The namespace your ingress controller's pods run in, followed by `orchard`. The Traefik bundled with k3s runs in `kube-system`. To find the namespace, run `kubectl get pods -A -l app.kubernetes.io/name=traefik`. Tenant namespaces deny traffic by default. With the wrong value, apps are unreachable and HTTP-01 certificates are not issued. |
-   | `tenant.cnpgOperatorNamespace` | The namespace where CloudNativePG runs, which is `cnpg-system` in the commands above. With the wrong value, the tenant network policy blocks the operator, and databases show `Instance Status Extraction Error`. |
-   | `tenant.certClusterIssuer` | A ClusterIssuer from `kubectl get clusterissuer`. Use the same issuer in `ingress.tls.issuerRef`. |
-   | `gateway.http.enabled` | Leave `false`. App URLs use `Ingress`, and this listener needs a wildcard Secret that nothing creates. |
-   | `certificates.enabled` | Leave `false` unless you have a DNS-01 issuer for wildcards. The default needs one named `letsencrypt-dns01-wildcard`. |
-   | `mcp.enabled` | Leave `false` to start. The MCP endpoint needs [extra settings](#turn-on-mcp). |
+   | Value                          | What to set                                                                                                                                                                                                                                                                                                                                        |
+   | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | `tenant.storageClass`          | A class from `kubectl get storageclass`, or `''` for the cluster default                                                                                                                                                                                                                                                                           |
+   | `tenant.ingressClass`          | A class from `kubectl get ingressclass`                                                                                                                                                                                                                                                                                                            |
+   | `tenant.ingressNamespaces`     | The namespace your ingress controller's pods run in, followed by `orchard`. The Traefik bundled with k3s runs in `kube-system`. To find the namespace, run `kubectl get pods -A -l app.kubernetes.io/name=traefik`. Tenant namespaces deny traffic by default. With the wrong value, apps are unreachable and HTTP-01 certificates are not issued. |
+   | `tenant.cnpgOperatorNamespace` | The namespace where CloudNativePG runs, which is `cnpg-system` in the commands above. With the wrong value, the tenant network policy blocks the operator, and databases show `Instance Status Extraction Error`.                                                                                                                                  |
+   | `tenant.certClusterIssuer`     | A ClusterIssuer from `kubectl get clusterissuer`. Use the same issuer in `ingress.tls.issuerRef`.                                                                                                                                                                                                                                                  |
+   | `gateway.http.enabled`         | Leave `false`. App URLs use `Ingress`, and this listener needs a wildcard Secret that nothing creates.                                                                                                                                                                                                                                             |
+   | `certificates.enabled`         | Leave `false` unless you have a DNS-01 issuer for wildcards. The default needs one named `letsencrypt-dns01-wildcard`.                                                                                                                                                                                                                             |
+   | `mcp.enabled`                  | Leave `false` to start. The MCP endpoint needs [extra settings](#turn-on-mcp).                                                                                                                                                                                                                                                                     |
 
    :::caution
    App pods can also open connections to the namespaces in `tenant.ingressNamespaces`. If you list `kube-system`, this includes the pods in `kube-system`. To keep apps away from them, turn off the bundled Traefik, install Traefik in its own namespace, and list that namespace instead.
@@ -691,16 +691,16 @@ To claim the instance:
 5. Rename the organization, or keep the name Orchard created.
 6. Complete the remaining steps. Orchard leaves out a step when the installer or your configuration already answered it. Each step that you can skip states what happens if you skip it.
 
-   | Step | Shown when | If you skip it |
-   | --- | --- | --- |
-   | GitHub App | No GitHub App exists | Private repositories and rebuilds on push do not work. Public repositories still deploy. |
-   | S3 storage | No storage is set | Backups stay on this server and are lost with it. |
-   | Resource limits | You did not set them in the installer | You must choose. You can change them later. |
-   | Public IP and domains | You installed with the Helm chart | Public ports and databases are unavailable, and Orchard does not check custom domains. |
-   | MCP endpoint | You installed with the Helm chart | Orchard keeps the current state. |
-   | Email | SMTP is not set | Orchard has no email sign-in codes, and invitations are links that you copy. |
-   | Certificate | The instance has a certificate of its own to report | This step only shows the status and what to do if it failed. |
-   | Usage reports | You have not answered | You must choose. Reports are off unless you opt in. |
+   | Step                  | Shown when                                          | If you skip it                                                                           |
+   | --------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+   | GitHub App            | No GitHub App exists                                | Private repositories and rebuilds on push do not work. Public repositories still deploy. |
+   | S3 storage            | No storage is set                                   | Backups stay on this server and are lost with it.                                        |
+   | Resource limits       | You did not set them in the installer               | You must choose. You can change them later.                                              |
+   | Public IP and domains | You installed with the Helm chart                   | Public ports and databases are unavailable, and Orchard does not check custom domains.   |
+   | MCP endpoint          | You installed with the Helm chart                   | Orchard keeps the current state.                                                         |
+   | Email                 | SMTP is not set                                     | Orchard has no email sign-in codes, and invitations are links that you copy.             |
+   | Certificate           | The instance has a certificate of its own to report | This step only shows the status and what to do if it failed.                             |
+   | Usage reports         | You have not answered                               | You must choose. Reports are off unless you opt in.                                      |
 
 7. Review the list of what is configured and what you skipped. To change an item, select **Change**.
 8. Select **Go to Orchard**.

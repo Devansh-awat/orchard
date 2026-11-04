@@ -93,20 +93,20 @@ A checkpoint shows as pending until its WAL reaches object storage. You can rest
 
 Orchard also takes checkpoints automatically:
 
-| Type | When Orchard takes it |
-| --- | --- |
-| **Before a drop** | Before any `DROP TABLE`, `DROP SCHEMA`, or `DROP COLUMN` runs, when **Checkpoint before drops** is on. The checkpoint records what was dropped and by whom. This check does not cover `TRUNCATE`. |
-| **Before a deploy** | Before a deploy, so that a [rollback](/deploy/rollbacks/) can also restore the app's databases. |
-| **Before a change** | Before an operation that changes the database, such as an in-place restore or a major upgrade. |
+| Type                | When Orchard takes it                                                                                                                                                                             |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Before a drop**   | Before any `DROP TABLE`, `DROP SCHEMA`, or `DROP COLUMN` runs, when **Checkpoint before drops** is on. The checkpoint records what was dropped and by whom. This check does not cover `TRUNCATE`. |
+| **Before a deploy** | Before a deploy, so that a [rollback](/deploy/rollbacks/) can also restore the app's databases.                                                                                                   |
+| **Before a change** | Before an operation that changes the database, such as an in-place restore or a major upgrade.                                                                                                    |
 
 ## Restore a database
 
 You can restore in two ways.
 
-| Option | Result |
-| --- | --- |
-| **Replace this database** | Orchard takes a checkpoint, then swaps in the restored copy. It keeps the previous copy stopped for 24 hours, so you can undo the restore. Apps reconnect automatically. |
-| **Copy into a new database** | The original keeps running. The copy keeps the source's database name, so an app that connects to it finds its tables. |
+| Option                       | Result                                                                                                                                                                   |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Replace this database**    | Orchard takes a checkpoint, then swaps in the restored copy. It keeps the previous copy stopped for 24 hours, so you can undo the restore. Apps reconnect automatically. |
+| **Copy into a new database** | The original keeps running. The copy keeps the source's database name, so an app that connects to it finds its tables.                                                   |
 
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
@@ -261,12 +261,12 @@ The store on the server is not disaster recovery. Backups sit on the same machin
 
 The chart keys are under `objectStorage.local`:
 
-| Key | Default |
-| --- | --- |
-| `enabled` | `true` on an installer host |
-| `bucket` | `orchard-backups` |
-| `uploadsBucket` | `orchard-uploads` |
-| `storage.size` | One fifth of free disk, from 5 GB to 50 GB |
+| Key                    | Default                                                 |
+| ---------------------- | ------------------------------------------------------- |
+| `enabled`              | `true` on an installer host                             |
+| `bucket`               | `orchard-backups`                                       |
+| `uploadsBucket`        | `orchard-uploads`                                       |
+| `storage.size`         | One fifth of free disk, from 5 GB to 50 GB              |
 | `storage.storageClass` | The `local-path` class, which does not enforce the size |
 
 To install without this store, pass `--object-storage false`. Databases then have no backups until you add S3 storage.

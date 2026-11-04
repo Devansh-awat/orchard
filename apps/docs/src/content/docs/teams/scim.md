@@ -28,12 +28,12 @@ To revoke a token, select **Revoke** on its row. Requests that use the token fai
 
 ## What SCIM changes
 
-| Provider action      | Result in Orchard                                                                                                  |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Create a user        | Adds the person to the organization. The default role is **Member**.                                               |
-| Update a user        | Updates the attributes that SCIM owns on the membership. A `PUT` request that omits an attribute clears it.        |
+| Provider action       | Result in Orchard                                                                                                  |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Create a user         | Adds the person to the organization. The default role is **Member**.                                               |
+| Update a user         | Updates the attributes that SCIM owns on the membership. A `PUT` request that omits an attribute clears it.        |
 | Set `active` to false | Removes the membership. Orchard keeps the SCIM record, so the provider can reactivate the person with the same ID. |
-| Delete a user        | Removes the membership and the SCIM record.                                                                        |
+| Delete a user         | Removes the membership and the SCIM record.                                                                        |
 
 SCIM only changes the membership in this organization. The person's Orchard account stays, because they may belong to other organizations.
 

@@ -57,34 +57,34 @@ Components appear in the order you list them.
 
 ## Limits
 
-| Item                 | Limit                                                           |
-| -------------------- | --------------------------------------------------------------- |
-| Pages                | 10 for each organization                                        |
-| Components           | 40 for each page                                                |
-| Title                | 1 to 120 characters                                             |
-| Description          | 500 characters                                                  |
-| Slug                 | 3 to 64 characters: lowercase letters, digits, and hyphens      |
-| Host                 | 3 to 50 characters: letters, digits, and hyphens                |
+| Item        | Limit                                                      |
+| ----------- | ---------------------------------------------------------- |
+| Pages       | 10 for each organization                                   |
+| Components  | 40 for each page                                           |
+| Title       | 1 to 120 characters                                        |
+| Description | 500 characters                                             |
+| Slug        | 3 to 64 characters: lowercase letters, digits, and hyphens |
+| Host        | 3 to 50 characters: letters, digits, and hyphens           |
 
 Slugs and hosts are unique across the instance. The slugs `new`, `edit`, `resolve`, `api`, and `admin` are reserved. Common hosts, such as `www`, `api`, `status`, and `docs`, are also reserved.
 
 ## Component status
 
-| Status          | App                                                                 | Database                                                           |
-| --------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| **Operational** | All replicas are ready and no alert is firing.                      | The database is ready.                                             |
-| **Degraded**    | Some replicas are not ready or are crashing, or an alert is firing. | The database is restoring, creating, starting, scaling, or updating. |
-| **Outage**      | No replicas are ready.                                              | The database is restarting repeatedly, or it has failed.           |
-| **Maintenance** | The app is stopped or is being removed.                             | The database is stopped.                                           |
-| **No data**     | Orchard has no cluster data for the app, or the app no longer exists. | The state is not known, or the database no longer exists.        |
+| Status          | App                                                                   | Database                                                             |
+| --------------- | --------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| **Operational** | All replicas are ready and no alert is firing.                        | The database is ready.                                               |
+| **Degraded**    | Some replicas are not ready or are crashing, or an alert is firing.   | The database is restoring, creating, starting, scaling, or updating. |
+| **Outage**      | No replicas are ready.                                                | The database is restarting repeatedly, or it has failed.             |
+| **Maintenance** | The app is stopped or is being removed.                               | The database is stopped.                                             |
+| **No data**     | Orchard has no cluster data for the app, or the app no longer exists. | The state is not known, or the database no longer exists.            |
 
 The banner at the top of the page shows the worst status of all components:
 
-| Banner                      | Condition                          |
-| --------------------------- | ---------------------------------- |
-| **All systems operational** | No component is degraded or down.  |
+| Banner                      | Condition                           |
+| --------------------------- | ----------------------------------- |
+| **All systems operational** | No component is degraded or down.   |
 | **Partial outage**          | At least one component is degraded. |
-| **Major outage**            | At least one component is down.    |
+| **Major outage**            | At least one component is down.     |
 
 ## Uptime and incidents
 

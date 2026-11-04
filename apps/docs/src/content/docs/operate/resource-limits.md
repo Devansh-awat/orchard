@@ -11,13 +11,13 @@ This setting applies to the whole instance. Only a superadmin can change it. Lim
 
 ## Compare the settings
 
-|                                 | Limits on                                                                         | Limits off                                            |
-| ------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| CPU and memory for an app       | Its own limits, or the organization default                                       | All of the server's resources                         |
-| Risk                            | An app that uses more memory than its limit is killed                             | One app can use up the whole server                   |
-| Organization and project caps   | Checked when you create, scale, or resize                                         | Not checked                                           |
-| Member allowances               | Checked when you create, scale, or resize                                         | Not checked                                           |
-| The resource picker             | Shows the size controls                                                           | Shows that limits are off                             |
+|                               | Limits on                                             | Limits off                          |
+| ----------------------------- | ----------------------------------------------------- | ----------------------------------- |
+| CPU and memory for an app     | Its own limits, or the organization default           | All of the server's resources       |
+| Risk                          | An app that uses more memory than its limit is killed | One app can use up the whole server |
+| Organization and project caps | Checked when you create, scale, or resize             | Not checked                         |
+| Member allowances             | Checked when you create, scale, or resize             | Not checked                         |
+| The resource picker           | Shows the size controls                               | Shows that limits are off           |
 
 With limits off, Orchard still reserves a small amount for each app so that it can place the app on a node: 50 millicores of CPU and 64 MB of memory. A database reserves at least 100 millicores and 256 MB.
 

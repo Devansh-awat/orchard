@@ -11,17 +11,17 @@ Use this page to fix common failures with grafts. Each entry lists the symptom, 
 
 ## Failure phases
 
-| Phase          | Meaning                                                                                                 | Fix                                                                           |
-| -------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `sync`         | The download failed, the digest did not match, or the signature did not pass your trust policy.         | Check `digest` in your values and your [trust policy](/grafts/install/#trust). |
-| `manifest`     | `graft.json` is invalid.                                                                                 | Ask the publisher for a fixed version.                                        |
-| `integrity`    | A file does not match the signed file list, or the signature does not pass your trust policy.            | Reinstall. Do not edit files in an installed graft.                           |
-| `compat`       | The graft needs a different Orchard version, graft SDK, or door.                                         | Upgrade Orchard, or install a matching version of the graft.                  |
-| `dependencies` | A graft it needs is missing, failed, or the wrong version.                                               | Install or fix the other graft first.                                         |
-| `migrations`   | Its database changes failed and were rolled back.                                                        | Read the error. It is usually a bug in the graft.                             |
-| `load`         | Its server code threw an error while loading.                                                            | Contact the publisher.                                                        |
-| `routes`       | Its routes do not match what it was packed with, or it opens a route to anyone without declaring it.     | Contact the publisher, or reinstall if a file changed.                        |
-| `boot`         | Orchard could not start with the graft, and started without it.                                          | Read the reason. A common cause is a capability missing from `graft.json`.    |
+| Phase          | Meaning                                                                                              | Fix                                                                            |
+| -------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `sync`         | The download failed, the digest did not match, or the signature did not pass your trust policy.      | Check `digest` in your values and your [trust policy](/grafts/install/#trust). |
+| `manifest`     | `graft.json` is invalid.                                                                             | Ask the publisher for a fixed version.                                         |
+| `integrity`    | A file does not match the signed file list, or the signature does not pass your trust policy.        | Reinstall. Do not edit files in an installed graft.                            |
+| `compat`       | The graft needs a different Orchard version, graft SDK, or door.                                     | Upgrade Orchard, or install a matching version of the graft.                   |
+| `dependencies` | A graft it needs is missing, failed, or the wrong version.                                           | Install or fix the other graft first.                                          |
+| `migrations`   | Its database changes failed and were rolled back.                                                    | Read the error. It is usually a bug in the graft.                              |
+| `load`         | Its server code threw an error while loading.                                                        | Contact the publisher.                                                         |
+| `routes`       | Its routes do not match what it was packed with, or it opens a route to anyone without declaring it. | Contact the publisher, or reinstall if a file changed.                         |
+| `boot`         | Orchard could not start with the graft, and started without it.                                      | Read the reason. A common cause is a capability missing from `graft.json`.     |
 
 ## digest mismatch
 

@@ -5,10 +5,10 @@ description: Call the whole Orchard API from an agent with the orchard CLI or th
 
 To reach any Orchard API operation from an agent, use the CLI or the compact MCP server. Describing every operation to a model uses more context than most tasks have, and the [full MCP server](/mcp/) does not cover every operation.
 
-| Your agent has                                     | Use                                                                   |
-| -------------------------------------------------- | --------------------------------------------------------------------- |
-| A shell, such as Claude Code, Codex, Cursor, or CI  | The CLI: `orchard api search`, `describe`, and calls by `operationId`. |
-| No shell, such as claude.ai or another chat app    | The compact MCP server at `/compact`.                                 |
+| Your agent has                                     | Use                                                                    |
+| -------------------------------------------------- | ---------------------------------------------------------------------- |
+| A shell, such as Claude Code, Codex, Cursor, or CI | The CLI: `orchard api search`, `describe`, and calls by `operationId`. |
+| No shell, such as claude.ai or another chat app    | The compact MCP server at `/compact`.                                  |
 
 Neither option runs model-written code on Orchard.
 
@@ -50,12 +50,12 @@ orchard api deployments_rollout_get -p id=$DEPLOYMENT -q wait=1 -q timeout=120
 orchard api deployments_env_set -p id=$DEPLOYMENT -d @env.json --yes
 ```
 
-| Flag     | Purpose                                         |
-| -------- | ----------------------------------------------- |
-| `-p`     | Fills a path parameter.                         |
-| `-q`     | Adds a query parameter.                         |
-| `-d`     | Sends a JSON body, a `@file`, or `-` for stdin. |
-| `--yes`  | Confirms a destructive operation without a terminal. |
+| Flag    | Purpose                                              |
+| ------- | ---------------------------------------------------- |
+| `-p`    | Fills a path parameter.                              |
+| `-q`    | Adds a query parameter.                              |
+| `-d`    | Sends a JSON body, a `@file`, or `-` for stdin.      |
+| `--yes` | Confirms a destructive operation without a terminal. |
 
 `orchard api GET /path` also works, and does not use the spec. Output is JSON when stdout is not a terminal.
 
@@ -120,11 +120,11 @@ Authentication works the same as on the full server. Use OAuth with `mcp:read`, 
 
 The server has three tools:
 
-| Tool                 | Purpose                                                                     |
-| -------------------- | --------------------------------------------------------------------------- |
+| Tool                 | Purpose                                                                       |
+| -------------------- | ----------------------------------------------------------------------------- |
 | `search_api`         | Finds operations by keyword. Returns IDs, paths, and flags, best match first. |
-| `describe_operation` | Returns the full contract for one `operationId` or `"METHOD /path"`.        |
-| `call_api`           | Runs one operation as you, with `pathParams`, `query`, `body`, and `fields`. |
+| `describe_operation` | Returns the full contract for one `operationId` or `"METHOD /path"`.          |
+| `call_api`           | Runs one operation as you, with `pathParams`, `query`, `body`, and `fields`.  |
 
 `call_api` has the following limits:
 

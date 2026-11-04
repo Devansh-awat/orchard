@@ -35,15 +35,15 @@ build context exceeds 100MB; add a .dockerignore to exclude build artifacts
 
 ### Common options
 
-| Flag           | Description                                                             |
-| -------------- | ----------------------------------------------------------------------- |
-| `--name`       | The app name. The default is the directory name.                        |
-| `--root`       | The directory of the app inside a monorepo.                             |
-| `--port`       | The port the app listens on. The default is the `EXPOSE` value or 3000. |
-| `--dockerfile` | The path to the Dockerfile, relative to the directory.                  |
+| Flag           | Description                                                              |
+| -------------- | ------------------------------------------------------------------------ |
+| `--name`       | The app name. The default is the directory name.                         |
+| `--root`       | The directory of the app inside a monorepo.                              |
+| `--port`       | The port the app listens on. The default is the `EXPOSE` value or 3000.  |
+| `--dockerfile` | The path to the Dockerfile, relative to the directory.                   |
 | `--output-dir` | A directory of built static files. The app serves them as a static site. |
-| `--detach`     | Start the build without following its logs.                             |
-| `--wait`       | Block until the deploy is live. This is the default in a script.        |
+| `--detach`     | Start the build without following its logs.                              |
+| `--wait`       | Block until the deploy is live. This is the default in a script.         |
 
 With `--wait`, the command exits with code 9 if the build fails and code 10 if the pods crash.
 
@@ -82,11 +82,11 @@ orchard import owner/repo --wait
 
 To select a branch, use `owner/repo#branch`. You can also pass a repository URL.
 
-| Flag     | Description                                  |
-| -------- | -------------------------------------------- |
+| Flag     | Description                                                   |
+| -------- | ------------------------------------------------------------- |
 | `--name` | The project and app name. The default is the repository name. |
-| `--port` | The port. This overrides the detected port.  |
-| `--wait` | Block until the operation finishes.          |
+| `--port` | The port. This overrides the detected port.                   |
+| `--wait` | Block until the operation finishes.                           |
 
 ## Related resources
 

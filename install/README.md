@@ -137,17 +137,17 @@ sudo --preserve-env=ORCHARD_S3_SECRET_KEY ./install.sh --yes \
   --no-s3-path-style
 ```
 
-| Flag | Environment variable |
-| ---- | -------------------- |
-| `--s3-endpoint <url>` | `ORCHARD_S3_ENDPOINT` |
-| `--s3-bucket <name>` | `ORCHARD_S3_BUCKET` |
-| `--s3-region <name>` | `ORCHARD_S3_REGION` |
-| `--s3-access-key <id>` | `ORCHARD_S3_ACCESS_KEY` |
-| `--s3-secret-key-file <path>` | `ORCHARD_S3_SECRET_KEY_FILE` |
-| | `ORCHARD_S3_SECRET_KEY` |
-| `--s3-secret-key <secret>` | |
-| `--s3-path-style`, `--no-s3-path-style` | `ORCHARD_S3_PATH_STYLE` |
-| `--no-s3` | `ORCHARD_S3=false` |
+| Flag                                    | Environment variable         |
+| --------------------------------------- | ---------------------------- |
+| `--s3-endpoint <url>`                   | `ORCHARD_S3_ENDPOINT`        |
+| `--s3-bucket <name>`                    | `ORCHARD_S3_BUCKET`          |
+| `--s3-region <name>`                    | `ORCHARD_S3_REGION`          |
+| `--s3-access-key <id>`                  | `ORCHARD_S3_ACCESS_KEY`      |
+| `--s3-secret-key-file <path>`           | `ORCHARD_S3_SECRET_KEY_FILE` |
+|                                         | `ORCHARD_S3_SECRET_KEY`      |
+| `--s3-secret-key <secret>`              |                              |
+| `--s3-path-style`, `--no-s3-path-style` | `ORCHARD_S3_PATH_STYLE`      |
+| `--no-s3`                               | `ORCHARD_S3=false`           |
 
 A secret on the command line stays in your shell history, so prefer the file or
 the environment variable. Under `--yes`, a failed test prints why and carries on
@@ -313,20 +313,20 @@ sudo ./install.sh --yes \
 
 ### Behaviour
 
-| Flag                             | Environment variable     | Default                                                                     |
-| -------------------------------- | ------------------------ | --------------------------------------------------------------------------- |
-| `--updates <manual\|automatic>`  | `ORCHARD_UPDATE_POLICY`  | `manual`                                                                    |
-| `--mcp <true\|false>`            | `ORCHARD_MCP`            | `true`. Off, no MCP is deployed and the admin panel's toggle is pinned off. |
-| `--metrics <true\|false>`        | `ORCHARD_METRICS`        | `true`. The metrics graphs and usage pages.                                 |
-| `--logs <true\|false>`           | `ORCHARD_LOGS`           | `true`. Log search and per-route request stats.                             |
-| `--image-scanning <true\|false>` | `ORCHARD_IMAGE_SCANNING` | `true`. Vulnerability scans of every image Orchard builds.                  |
-| `--object-storage <true\|false>` | `ORCHARD_OBJECT_STORAGE` | `true`. The local S3 store database backups go to.                          |
-| `--limits <on\|off>`             | `ORCHARD_LIMITS`         | unset. The setup page asks. Set, it skips the question. You can change it in the dashboard. |
-| `--yes`, `-y`                    | `ORCHARD_ASSUME_YES`     | `false`                                                                     |
-| `--allow-ipv6-only`              | `ORCHARD_ALLOW_IPV6_ONLY` | `false`. Continue on a server with no IPv4 address. Unsupported and untested. |
-| `--help`, `-h`                   |                          |                                                                             |
-|                                  | `NO_COLOR`               | unset. Any value disables colour.                                           |
-|                                  | `ORCHARD_NO_PACING`      | unset. `1` removes the brief pauses in the opening screen.                  |
+| Flag                             | Environment variable      | Default                                                                                     |
+| -------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------- |
+| `--updates <manual\|automatic>`  | `ORCHARD_UPDATE_POLICY`   | `manual`                                                                                    |
+| `--mcp <true\|false>`            | `ORCHARD_MCP`             | `true`. Off, no MCP is deployed and the admin panel's toggle is pinned off.                 |
+| `--metrics <true\|false>`        | `ORCHARD_METRICS`         | `true`. The metrics graphs and usage pages.                                                 |
+| `--logs <true\|false>`           | `ORCHARD_LOGS`            | `true`. Log search and per-route request stats.                                             |
+| `--image-scanning <true\|false>` | `ORCHARD_IMAGE_SCANNING`  | `true`. Vulnerability scans of every image Orchard builds.                                  |
+| `--object-storage <true\|false>` | `ORCHARD_OBJECT_STORAGE`  | `true`. The local S3 store database backups go to.                                          |
+| `--limits <on\|off>`             | `ORCHARD_LIMITS`          | unset. The setup page asks. Set, it skips the question. You can change it in the dashboard. |
+| `--yes`, `-y`                    | `ORCHARD_ASSUME_YES`      | `false`                                                                                     |
+| `--allow-ipv6-only`              | `ORCHARD_ALLOW_IPV6_ONLY` | `false`. Continue on a server with no IPv4 address. Unsupported and untested.               |
+| `--help`, `-h`                   |                           |                                                                                             |
+|                                  | `NO_COLOR`                | unset. Any value disables colour.                                                           |
+|                                  | `ORCHARD_NO_PACING`       | unset. `1` removes the brief pauses in the opening screen.                                  |
 
 ### Versions and images
 

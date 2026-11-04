@@ -37,10 +37,10 @@ The host and guests can start and stop run scripts. Everyone in the session can 
 
 All keys are optional.
 
-| Key     | Type                                                  | Description                                                                                       |
-| ------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `setup` | String, or array of strings                           | Runs once, when Greenhouse creates the session's worktree.                                         |
-| `run`   | String, array of strings, or object of named commands | Runs when someone starts it in the terminal dock.                                                  |
+| Key     | Type                                                  | Description                                                                                                                                                                                                   |
+| ------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `setup` | String, or array of strings                           | Runs once, when Greenhouse creates the session's worktree.                                                                                                                                                    |
+| `run`   | String, array of strings, or object of named commands | Runs when someone starts it in the terminal dock.                                                                                                                                                             |
 | `ports` | Array of numbers                                      | The ports your app serves on. Up to 10 ports from 1024 to 65535, except 2222, 4096, and 4097. They appear in the **Ports** tab before anything listens on them. On Kubernetes machines, you can preview them. |
 
 An array joins with newlines into one script. Each script can be up to 64 KB. Greenhouse reads up to 64 KB of the file.
@@ -72,11 +72,11 @@ To run several long-running processes, make `run` an object. Each command has it
 }
 ```
 
-| Field   | Description                                                                                                                                                                                                  |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Key     | The command's name. It starts with a lowercase letter or digit, and can contain lowercase letters, digits, and dashes, up to 24 characters.                                                                   |
-| `run`   | The script, as a string or an array of lines. A command can also be a plain string, like `worker` in the example.                                                                                             |
-| `label` | The name in the tab and the menu, up to 40 characters. The default is the key with its first letter capitalized and dashes replaced by spaces.                                                                |
+| Field   | Description                                                                                                                                                                                                      |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Key     | The command's name. It starts with a lowercase letter or digit, and can contain lowercase letters, digits, and dashes, up to 24 characters.                                                                      |
+| `run`   | The script, as a string or an array of lines. A command can also be a plain string, like `worker` in the example.                                                                                                |
+| `label` | The name in the tab and the menu, up to 40 characters. The default is the key with its first letter capitalized and dashes replaced by spaces.                                                                   |
 | `icon`  | One of `play`, `server`, `database`, `globe`, `flask-conical`, `hammer`, `terminal`, `zap`, `box`, `bug`, `rocket`, `book-open`, `layers`, `radio`, `cpu`, `wrench`, `eye`, `sparkles`, `refresh-cw`, or `mail`. |
 
 The first command is the one that the API starts when a request does not name a command.
@@ -99,12 +99,12 @@ Each script runs in its own `tmux` session on the machine, so it keeps running w
 
 Greenhouse has two kinds of setup script.
 
-|          | Machine setup script                      | `setup` in `greenhouse.json`                  |
-| -------- | ----------------------------------------- | --------------------------------------------- |
+|          | Machine setup script                                | `setup` in `greenhouse.json`                   |
+| -------- | --------------------------------------------------- | ---------------------------------------------- |
 | Runs     | On first boot, and on later boots until it succeeds | Once per session, when its worktree is created |
-| Location | The machine's settings                    | The repository                                |
-| Use for  | Language runtimes, global tools, dotfiles | Dependencies, generated files, local config   |
-| Log      | `~/.setup.log`                            | The **Setup** tab                             |
+| Location | The machine's settings                              | The repository                                 |
+| Use for  | Language runtimes, global tools, dotfiles           | Dependencies, generated files, local config    |
+| Log      | `~/.setup.log`                                      | The **Setup** tab                              |
 
 ## Examples
 
