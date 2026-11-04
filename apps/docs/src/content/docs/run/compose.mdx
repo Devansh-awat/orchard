@@ -43,7 +43,7 @@ To rebuild on each push, add `--auto-deploy`.
 </TabItem>
 </Tabs>
 
-Orchard names each app `<stack>-<service>`. Services use their Orchard internal addresses to reach each other, so check any hostnames in your configuration. To find an address, open the app and go to **Network** > **Ports**.
+Orchard names each app `<stack>-<service>`. Services reach each other by their compose names, as they do in Docker Compose: `db:3306` works, on the container's port. Each name must be free in the project's environment, so two stacks with a service named `db` need separate environments or projects. A name with an underscore or another character that DNS doesn't allow has no such address. To find the full internal address, open the app and go to **Network** > **Ports**.
 
 ## How Orchard reads the file
 
@@ -51,7 +51,8 @@ Orchard names each app `<stack>-<service>`. Services use their Orchard internal 
 | --- | --- |
 | `image` | An app that runs the image. |
 | `build` | An app that Orchard builds from the repository, with `context` and `dockerfile`. |
-| `ports` | The app's ports, over TCP. |
+| `ports` | The app's ports. The first one that isn't a known database port gets a URL, which only your organization can open until you make it public. |
+| `expose` | More ports on the app, for other services. No URL. |
 | `environment` | The app's variables. |
 | `volumes` with a named volume | A persistent volume, 1 GiB unless `driver_opts.size` sets another size. Orchard reads only the short string form. |
 | `deploy.replicas` | The replica count. |
