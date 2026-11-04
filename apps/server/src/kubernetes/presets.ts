@@ -94,6 +94,11 @@ function databaseDefaultMemoryBytes(): number {
   return mb > 0 ? Math.max(mb * MiB, DATABASE_MIN_MEMORY_BYTES) : DATABASE_DEFAULT_MEMORY_BYTES;
 }
 
+function appDefaultMemoryBytes(): number {
+  const mb = Number.parseInt(process.env.DEFAULT_APP_MEMORY_MB ?? '', 10);
+  return mb > 0 ? mb * MiB : DEFAULT_MEMORY_BYTES;
+}
+
 export function defaultPodResourcesForImage(image?: string | null): {
   cpuMilli: number;
   memoryBytes: number;
@@ -101,7 +106,7 @@ export function defaultPodResourcesForImage(image?: string | null): {
   if (isDatabaseImage(image)) {
     return { cpuMilli: DATABASE_DEFAULT_CPU_MILLI, memoryBytes: databaseDefaultMemoryBytes() };
   }
-  return { cpuMilli: DEFAULT_CPU_MILLI, memoryBytes: DEFAULT_MEMORY_BYTES };
+  return { cpuMilli: DEFAULT_CPU_MILLI, memoryBytes: appDefaultMemoryBytes() };
 }
 
 export function minPodMemoryBytesForImage(image?: string | null): number {
@@ -120,7 +125,7 @@ export function podResourcesFor(
 ): { cpuMilli: number; memoryBytes: number } {
   const fallback = defaultPodResourcesForImage(image);
   const orgMemory = org.defaultPodMemoryBytes ? Number(org.defaultPodMemoryBytes) : null;
-  const cpuMilli = override?.cpuRequestMilli ?? org.defaultPodCpuMilli ?? fallback.cpuMilli;
+  const cpuMilli = override?.cpuRequestMilli ?? (org.defaultPodCpuMilli || fallback.cpuMilli);
   const memoryBytes = override?.memoryRequestBytes ?? orgMemory ?? fallback.memoryBytes;
   return { cpuMilli, memoryBytes: Math.max(memoryBytes, minPodMemoryBytesForImage(image)) };
 }

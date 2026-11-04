@@ -6,6 +6,7 @@ import { KubernetesService } from './kubernetes.service';
 import { LeaseService } from '../coordination/lease.service';
 import { tenantSecretsBinding, tenantSecretsRole } from './tenant-rbac';
 import { tenantQuotaFloor, tenantQuotaHard } from './tenant-quota';
+import { defaultPodResourcesForImage } from './presets';
 import {
   PROJECT_DATABASES_POLICY,
   TENANT_DENY_POLICY,
@@ -143,7 +144,7 @@ export class K8sNamespaceService implements OnModuleInit {
     const memDefault =
       options.defaultPodMemoryBytes && options.defaultPodMemoryBytes > 0
         ? options.defaultPodMemoryBytes
-        : 128 * 1024 * 1024; // 128Mi
+        : defaultPodResourcesForImage(null).memoryBytes;
     defaultReq['cpu'] = `${cpuDefault}m`;
     defaultReq['memory'] = String(memDefault);
     defaultLim['cpu'] = `${cpuDefault * 4}m`;

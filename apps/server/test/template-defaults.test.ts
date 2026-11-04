@@ -32,6 +32,21 @@ test('a small box can lower the database default, and only with the env var set'
   }
 });
 
+test('the app memory default follows DEFAULT_APP_MEMORY_MB and stays 128 MB unset', () => {
+  assert.equal(defaultPodResourcesForImage('nginx').memoryBytes, 128 * MiB);
+  try {
+    process.env.DEFAULT_APP_MEMORY_MB = '512';
+    assert.equal(defaultPodResourcesForImage('nginx').memoryBytes, 512 * MiB);
+    assert.equal(defaultPodResourcesForImage('postgres').memoryBytes, 1024 * MiB);
+    process.env.DEFAULT_APP_MEMORY_MB = '0';
+    assert.equal(defaultPodResourcesForImage('nginx').memoryBytes, 128 * MiB);
+    process.env.DEFAULT_APP_MEMORY_MB = 'lots';
+    assert.equal(defaultPodResourcesForImage(null).memoryBytes, 128 * MiB);
+  } finally {
+    delete process.env.DEFAULT_APP_MEMORY_MB;
+  }
+});
+
 test('a declared size is read from the template', () => {
   assert.deepEqual(
     recommendedPodSize('app', 'deployment', { resources: { cpu: '1500m', memory: '2Gi' } }),
