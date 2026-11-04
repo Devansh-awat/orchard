@@ -235,8 +235,8 @@ test(
 );
 
 const stoppingCases: [string, string, RegExp][] = [
-  ['yq fails outright', 'yq() { return 1; }', /cannot read/],
-  ['yq is missing', 'command() { [ "$2" != yq ] && builtin command "$@"; }', /yq is not installed/],
+  ['yq fails outright', 'yq() { return 1; }', /can't read/],
+  ['yq is missing', 'command() { [ "$2" != yq ] && builtin command "$@"; }', /yq isn't installed/],
   [
     'the merge itself fails',
     'real_yq=$(command -v yq); yq() { case "$*" in *load*) return 1 ;; esac; "$real_yq" "$@"; }',
@@ -257,7 +257,7 @@ for (const [name, stub, message] of stoppingCases) {
         const failed = box.attempt(`${stub}\nwrite_values`);
         assert.notEqual(failed.status, 0);
         assert.match(failed.stderr, message);
-        assert.match(failed.stderr, /did not change the file/);
+        assert.match(failed.stderr, /didn't change the file/);
         assert.equal(readFileSync(values, 'utf8'), before);
         const [copy] = backups(box.state);
         assert.equal(readFileSync(join(box.state, copy), 'utf8'), before);
@@ -284,7 +284,7 @@ test(
         assert.notEqual(failed.status, 0, entry);
         assert.ok(!failed.stdout.includes('got-past-it'), entry);
         assert.match(failed.stderr, /valid YAML/);
-        assert.match(failed.stderr, /Do not delete/);
+        assert.match(failed.stderr, /Don't delete/);
         assert.equal(readFileSync(values, 'utf8'), 'server: [unclosed\n  : nope: {\n');
       }
       for (const copy of backups(box.state)) {
@@ -1038,7 +1038,7 @@ test(
         dns_step
       `);
       assert.ok(!/Create these DNS records/.test(out));
-      assert.match(out, /not listed again/);
+      assert.match(out, /aren't listed again/);
     } finally {
       box.cleanup();
     }
@@ -1117,7 +1117,7 @@ test('a read-only key fails at the write step', () => {
 test('an unreachable endpoint is reported and skipped', () => {
   const box = fakeCurlBox(`exit 7`);
   const out = box.run(`${S3_FLAGS}; choose_s3_storage; echo "ready=$S3_READY"`);
-  assert.match(out, /could not connect/);
+  assert.match(out, /couldn't connect/);
   assert.match(out, /ready=false/);
 });
 
@@ -1148,7 +1148,7 @@ test('a failure saving S3 settings only warns', () => {
   writeFileSync(join(box.dir, 'orchardctl'), '#!/bin/sh\nexit 1\n');
   chmodSync(join(box.dir, 'orchardctl'), 0o755);
   const out = box.run(`${S3_FLAGS} S3_READY=true; apply_s3_storage; echo "ready=$S3_READY rc=$?"`);
-  assert.match(out, /could not save the S3 settings/);
+  assert.match(out, /couldn't save the S3 settings/);
   assert.match(out, /ready=false rc=0/);
 });
 
@@ -1310,7 +1310,7 @@ test('a record that points at this box resolves', () => {
 test('a missing record is waiting, and says what to do about wildcards', () => {
   const out = dnsOutput('A orchard.example.com 203.0.113.10\n');
   assert.match(out, /waiting\s+\*\.apps\.example\.com/);
-  assert.match(out, /does not allow wildcard records/);
+  assert.match(out, /doesn't allow wildcard records/);
   assert.match(out, /one record for each app/);
   assert.match(out, /PENDING=\*\.apps\.example\.com \(waiting\)/);
 });
@@ -1453,7 +1453,7 @@ CAA lab.example.com 0 issue "digicert.com"
     assert.match(out, /DNS panel for lab\.example\.com/);
     assert.match(out, /ns1\.other\.dev/);
     assert.match(out, /delegated away from example\.com/);
-    assert.match(out, /CAA records that do not allow Let's Encrypt/);
+    assert.match(out, /CAA records that don't allow Let's Encrypt/);
 
     const unregistered = box.run(`${PUBLIC_BOX}
       ORCHARD_DOMAIN=orchard.nothing.test ORCHARD_APP_DOMAIN=apps.nothing.test
@@ -1488,7 +1488,7 @@ test('a firewall in front of the box is named per provider', () => {
     const direct = box.run(`${PUBLIC_BOX}
       check_reachability
     `);
-    assert.match(direct, /a test from here proves nothing/);
+    assert.match(direct, /a test from here can't check the firewall/);
 
     assert.match(box.run(`CLOUD=oracle; firewall_hint`), /iptables/);
     assert.match(box.run(`CLOUD=hetzner; firewall_hint`), /Cloud Console > Firewalls/);
@@ -1574,7 +1574,7 @@ test('address helpers cover the edges', () => {
       box.run(`printf 'got=%s' "$(email_problem me@example.com)"`),
       /refuses addresses at example\.com/
     );
-    assert.match(box.run(`printf 'got=%s' "$(email_problem nope)"`), /not an email address/);
+    assert.match(box.run(`printf 'got=%s' "$(email_problem nope)"`), /isn't an email address/);
     assert.match(box.run(`printf 'got=[%s]' "$(email_problem me@sub.real.dev)"`), /got=\[\]/);
   } finally {
     box.cleanup();
@@ -1697,7 +1697,7 @@ A orchard-dns-probe.apps.example.com 198.51.100.20
       out,
       /RESULT mode=public ip=198\.51\.100\.20 ui=orchard\.example\.com apps=apps\.example\.com cname=edge\.example\.com mcp=true host=agents\.other\.dev email=me@real\.dev updates=automatic/
     );
-    assert.match(out, /that is not an email address/);
+    assert.match(out, /that isn't an email address/);
     assert.match(out, /A\s+agents\.other\.dev\s+198\.51\.100\.20/);
     assert.match(out, /A\s+edge\.example\.com\s+198\.51\.100\.20/);
     assert.match(out, /needs its own DNS record/);
@@ -1780,7 +1780,7 @@ test('cancel on the review screen installs nothing', () => {
   const { status, out, box } = flow(['public', '', '', '', '', '', '', '', '', '', 'c']);
   try {
     assert.equal(status, 0, out);
-    assert.match(out, /Cancelled\. Nothing was installed/);
+    assert.match(out, /Canceled\. Nothing was installed/);
     assert.ok(!/RESULT/.test(out));
   } finally {
     box.cleanup();
@@ -1955,7 +1955,7 @@ test('NAT, several interfaces, none detected and IPv6-only each get their own wo
   );
   try {
     assert.equal(dual.status, 0, dual.out);
-    assert.match(dual.out, /Do not add AAAA records/);
+    assert.match(dual.out, /Don't add AAAA records/);
   } finally {
     dual.box.cleanup();
   }
@@ -1997,7 +1997,7 @@ function ipv4Check(setup: string, args = '') {
 test('a server with no IPv4 address stops and says what does not work', () => {
   const { status, out } = ipv4Check(IPV6_ONLY);
   assert.equal(status, 1);
-  assert.match(out, /IPv6-only servers are not supported yet/);
+  assert.match(out, /IPv6-only servers aren't supported yet/);
   assert.match(out, /GitHub and ghcr\.io have no IPv6 addresses/);
   assert.match(out, /Use a server with an IPv4 address/);
   assert.match(out, /NAT64/);
@@ -2014,7 +2014,7 @@ test('--yes does not get past the IPv4 check, and --allow-ipv6-only does', () =>
 
   const flag = ipv4Check(IPV6_ONLY, '--allow-ipv6-only');
   assert.equal(flag.status, 0, flag.out);
-  assert.match(flag.out, /IPv6-only servers are not supported yet/);
+  assert.match(flag.out, /IPv6-only servers aren't supported yet/);
   assert.match(flag.out, /Continuing because of --allow-ipv6-only/);
   assert.match(flag.out, /CONTINUED/);
 
@@ -2051,7 +2051,7 @@ test('--help names the flag for IPv6-only servers', () => {
   const out = spawnSync('bash', [installer, '--help'], { encoding: 'utf8' }).stdout;
   assert.match(out, /--allow-ipv6-only/);
   assert.match(out, /ORCHARD_ALLOW_IPV6_ONLY/);
-  assert.match(out, /--yes does not imply it/);
+  assert.match(out, /--yes doesn't imply it/);
 });
 
 test('--yes never prompts, never waits on DNS, and required answers name their flag', () => {
@@ -2072,7 +2072,7 @@ test('--yes never prompts, never waits on DNS, and required answers name their f
       box
     );
     assert.equal(own.status, 0, own.out);
-    assert.match(own.out, /does not wait for DNS/);
+    assert.match(own.out, /doesn't wait for DNS/);
     assert.match(own.out, /waiting\s+orchard\.example\.com/);
     assert.ok(!/Check again/.test(own.out));
 
@@ -2094,7 +2094,7 @@ test('--yes never prompts, never waits on DNS, and required answers name their f
     refuse('parse_args --updates sometimes', /--updates takes manual or automatic/);
     refuse('parse_args --limits maybe', /--limits takes on or off/);
     refuse('parse_args --domain bad_name', /--domain takes a name/);
-    refuse('parse_args --domain o.example.com --mcp-domain o.example.com', /cannot share/);
+    refuse('parse_args --domain o.example.com --mcp-domain o.example.com', /can't share/);
 
     const none = flow(
       [],

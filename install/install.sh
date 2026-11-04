@@ -342,7 +342,7 @@ usage() {
     --allow-ipv6-only            ORCHARD_ALLOW_IPV6_ONLY=true
                                                         continue on a server with no IPv4 address.
                                                         IPv6-only servers are not supported yet, so
-                                                        this is untested. --yes does not imply it
+                                                        this is untested. --yes doesn't imply it
     --help, -h                                         show this and exit
 
   Versions and images
@@ -496,7 +496,7 @@ ask() {
   if [ "$ASSUME_YES" = true ]; then printf '%s' "$default"; return; fi
 
   if [ "$PROMPT_FD_OPEN" != true ]; then
-    warn "cannot ask '${prompt#"${prompt%%[![:space:]]*}"}': ${PROMPT_BLOCKED:-no terminal to read an answer from}"
+    warn "can't ask '${prompt#"${prompt%%[![:space:]]*}"}': ${PROMPT_BLOCKED:-no terminal to read an answer from}"
     if [ "$PROMPT_HINT_SHOWN" != true ]; then prompt_hint; fi
     die "nothing has been installed yet; nothing to undo"
   fi
@@ -529,7 +529,7 @@ ask() {
     if [ "$rc" -gt 128 ]; then
       warn "no answer after $(fmt_secs "$PROMPT_TIMEOUT"); giving up on the question"
     else
-      warn "could not read an answer from this terminal"
+      warn "couldn't read an answer from this terminal"
     fi
     prompt_hint
     die "nothing has been installed yet; nothing to undo"
@@ -708,7 +708,7 @@ preflight() {
 
   if [ ! -d "$STATE_DIR" ] && command -v kubectl >/dev/null 2>&1 && kubectl cluster-info >/dev/null 2>&1; then
     warn "an existing Kubernetes cluster is reachable from this shell."
-    warn "This installer creates its own k3s cluster and will not touch it."
+    warn "This installer creates its own k3s cluster and won't touch it."
     warn "To install into that cluster instead, use the Helm chart: docs/self-hosting.md"
     if [ "$(ask 'Continue and create a new k3s cluster? (yes/no)' no)" != yes ]; then
       die "stopped so the existing cluster is left alone"
@@ -731,7 +731,7 @@ preflight() {
   done
   if command -v ss >/dev/null 2>&1 && ss -lnt "sport = :$REGISTRY_PORT" 2>/dev/null | grep -q LISTEN; then
     if ! kubectl -n orchard get deploy zot >/dev/null 2>&1; then
-      die "port $REGISTRY_PORT is already in use on this box; pick another with --registry-port"
+      die "port $REGISTRY_PORT is already in use on this machine; pick another with --registry-port"
     fi
   fi
   info "node ports: $NODE_PORT_RANGE, registry on 127.0.0.1:$REGISTRY_PORT"
@@ -822,9 +822,9 @@ valid_lan_host() {
 
 email_problem() {
   case "$1" in
-    *[[:space:]]*|*\"*|*\'*|*:*) printf 'that is not an email address'; return ;;
+    *[[:space:]]*|*\"*|*\'*|*:*) printf "that isn't an email address"; return ;;
     *@*.*) ;;
-    *) printf 'that is not an email address'; return ;;
+    *) printf "that isn't an email address"; return ;;
   esac
   case "${1##*@}" in
     example.com|example.org|example.net|*.example.com|*.example.org|*.example.net|*.local|*.test|*.invalid|*.localhost)
@@ -940,11 +940,11 @@ has_only_ipv6() {
 require_ipv4() {
   has_only_ipv6 || return 0
 
-  warn "IPv6-only servers are not supported yet. This server has no IPv4 address."
-  note "GitHub and ghcr.io have no IPv6 addresses, so this server cannot download k3s"
-  note "or the Orchard images, and Orchard cannot clone or build from GitHub."
+  warn "IPv6-only servers aren't supported yet. This server has no IPv4 address."
+  note "GitHub and ghcr.io have no IPv6 addresses, so this server can't download k3s"
+  note "or the Orchard images, and Orchard can't clone or build from GitHub."
   note "k3s runs with IPv4 inside the cluster, and Orchard listens on IPv4 only, so"
-  note "traffic to the IPv6 address of this server does not reach it."
+  note "traffic to the IPv6 address of this server doesn't reach it."
   printf '\n'
   note "Use a server with an IPv4 address. NAT64 in front of an IPv4 server also works"
   note "in principle, but it is unsupported and untested."
@@ -987,21 +987,21 @@ check_mode_constraints() {
   if [ "$INGRESS_MODE" != lan ] && { [ "$HTTP_PORT" != 80 ] || [ "$HTTPS_PORT" != 443 ]; }; then
     case "$INGRESS_MODE" in
       public)
-        warn "public mode cannot move off 80 and 443."
-        note "80 is fixed by the ACME spec for the HTTP-01 challenge, and a browser"
-        note "reaching an app on anything but 443 has to be told the port by hand."
+        warn "public mode can't move off 80 and 443."
+        note "The ACME HTTP-01 challenge requires port 80, and a browser reaching an app"
+        note "on any port but 443 needs the port in its URL."
         die "custom ports are lan only" ;;
       tunnel)
-        warn "tunnel mode binds no host port at all, so there is nothing to move."
+        warn "tunnel mode binds no host port, so there is nothing to move."
         die "custom ports are lan only" ;;
     esac
   fi
 
   if [ -n "$PORTS_BUSY" ] && [ "$INGRESS_MODE" != tunnel ]; then
-    warn "$INGRESS_MODE mode needs 80 and 443 on this box, and port $PORTS_BUSY is taken:"
+    warn "$INGRESS_MODE mode needs 80 and 443 on this machine, and port $PORTS_BUSY is taken:"
     printf '%s' "$PORTS_BUSY_DETAIL" >&2
     note "Free it, move whatever holds it, or install in tunnel mode"
-    note "(--mode tunnel), which binds nothing on this box."
+    note "(--mode tunnel), which binds nothing on this machine."
     die "stopped before installing anything"
   fi
 }
@@ -1206,7 +1206,7 @@ validate_answers() {
     problem=$(host_problem "$ORCHARD_MCP_DOMAIN" --mcp-domain)
     if [ -n "$problem" ]; then die "$problem"; fi
     if [ "$ORCHARD_MCP_DOMAIN" = "$ORCHARD_DOMAIN" ]; then
-      die "the MCP endpoint and the dashboard cannot share $ORCHARD_DOMAIN: change --mcp-domain"
+      die "the MCP endpoint and the dashboard can't share $ORCHARD_DOMAIN: change --mcp-domain"
     fi
   fi
   if [ -n "$ORCHARD_INGRESS_CNAME" ]; then
@@ -1299,11 +1299,11 @@ q_tunnel_token() {
     attempt=$((attempt + 1))
     ORCHARD_TUNNEL_TOKEN=$(ask "      Token" "$ORCHARD_TUNNEL_TOKEN")
     if [ -n "$ORCHARD_TUNNEL_TOKEN" ]; then break; fi
-    warn "tunnel mode cannot run without a token"
+    warn "tunnel mode can't run without a token"
   done
   [ -n "$ORCHARD_TUNNEL_TOKEN" ] || die "--tunnel-token is required for tunnel mode"
   if [ -z "$(tunnel_id)" ]; then
-    warn "That does not look like a tunnel token, so the tunnel ID is unknown."
+    warn "That doesn't look like a tunnel token, so the tunnel ID is unknown."
   fi
   if [ "$CNAME_SET" != true ]; then ORCHARD_INGRESS_CNAME=$(ingress_cname); fi
 }
@@ -1313,14 +1313,14 @@ q_public_ip() {
   q_head "Public IP"
   case "$INGRESS_MODE" in
     public)
-      note "Raw TCP and UDP ports and public databases are published on this address."
+      note "Public TCP and UDP ports and public databases use this address."
       ;;
     lan)
-      note "The address on your network for raw TCP and UDP ports and databases."
+      note "The address on your network for public TCP and UDP ports and databases."
       ;;
     tunnel)
       note "Tunnel mode carries web traffic only, so most tunnel installs leave this blank."
-      note "Set it only if this machine also has a routable address for raw ports."
+      note "Set it only if this machine also has a public address for TCP and UDP ports."
       ;;
   esac
   if [ "$INGRESS_MODE" != tunnel ] && [ "$BEHIND_NAT" = true ] && [ -n "$PUBLIC_IP$PUBLIC_IP6" ] && [ -n "$PRIMARY_IP" ]; then
@@ -1357,12 +1357,12 @@ q_public_ip() {
       if [ "$answer" != "$default" ]; then PUBLIC_IP_SET=true; fi
       ORCHARD_PUBLIC_IP=$answer
       if [ "$INGRESS_MODE" = public ] && is_private_ip "$answer"; then
-        warn "$answer is a private address. Let's Encrypt cannot reach it, so certificates will not issue."
+        warn "$answer is a private address. Let's Encrypt can't reach it, so certificates won't issue."
       fi
       derive_answers
       return
     fi
-    warn "that is not an IP address"
+    warn "that isn't an IP address"
   done
   die "no valid public IP; nothing has been installed"
 }
@@ -1467,7 +1467,7 @@ q_cname() {
       note "On a private network this only helps clients that can resolve the name."
       ;;
   esac
-  note "Type none to skip: Orchard then cannot check custom domains before it requests a certificate."
+  note "Type none to skip: Orchard then can't check custom domains before it requests a certificate."
   default=$ORCHARD_INGRESS_CNAME
   while [ "$attempt" -lt 5 ]; do
     attempt=$((attempt + 1))
@@ -1575,7 +1575,7 @@ q_s3() {
 q_limits() {
   local answer attempt=0
   q_head "Resource limits"
-  note "on    Apps and databases get default CPU and memory caps, so one cannot starve the rest."
+  note "on    Apps and databases get default CPU and memory caps, so one can't starve the rest."
   note "off   No caps. This fits one person running their own apps."
   note "ask   Choose in the dashboard setup. Either way, you can change it later in the dashboard."
   while [ "$attempt" -lt 5 ]; do
@@ -1790,9 +1790,9 @@ review_answers() {
       c|C|cancel)
         printf '\n'
         if [ "$PREVIOUS_INSTALL" = true ]; then
-          note "Cancelled. Nothing was changed."
+          note "Canceled. Nothing was changed."
         else
-          note "Cancelled. Nothing was installed."
+          note "Canceled. Nothing was installed."
         fi
         exit 0
         ;;
@@ -1832,7 +1832,7 @@ collect_answers() {
     INGRESS_MODE=$ORCHARD_INGRESS_MODE
   elif [ "$ASSUME_YES" = true ] || [ "$PREVIOUS_INSTALL" = true ]; then
     INGRESS_MODE=$(recommended_mode)
-    info "ingress mode: $INGRESS_MODE. $(recommended_reason)"
+    info "mode: $INGRESS_MODE. $(recommended_reason)"
   else
     INGRESS_MODE=''
   fi
@@ -2035,7 +2035,7 @@ dns_zone_report() {
       *issue*letsencrypt*|'') ;;
       *issue*)
         if [ "$INGRESS_MODE" = public ]; then
-          warn "$zone has CAA records that do not allow Let's Encrypt. Add: 0 issue \"letsencrypt.org\""
+          warn "$zone has CAA records that don't allow Let's Encrypt. Add: 0 issue \"letsencrypt.org\""
         fi
         ;;
     esac
@@ -2271,7 +2271,7 @@ dns_check_all() {
   done
   if [ "$quiet" != true ] && [ "$wildcard_waiting" = true ]; then
     printf '\n'
-    note "If your DNS provider does not allow wildcard records, add one record for each app as you"
+    note "If your DNS provider doesn't allow wildcard records, add one record for each app as you"
     note "deploy it, or move this domain to a provider that does. The dashboard works either way."
   fi
 }
@@ -2292,7 +2292,7 @@ check_reachability() {
   [ -n "$ORCHARD_PUBLIC_IP" ] || return 0
   if is_private_ip "$ORCHARD_PUBLIC_IP"; then return 0; fi
   if ip_is_local "$ORCHARD_PUBLIC_IP"; then
-    note "$ORCHARD_PUBLIC_IP is on this machine, so a test from here proves nothing. If 80 and 443"
+    note "$ORCHARD_PUBLIC_IP is on this machine, so a test from here can't check the firewall. If 80 and 443"
     note "are blocked upstream, the summary reports it when the certificate fails."
     note "$(firewall_hint)"
     return 0
@@ -2306,7 +2306,7 @@ check_reachability() {
   if [ -n "$blocked" ]; then
     warn "Nothing answered on $ORCHARD_PUBLIC_IP port $blocked from this machine. A firewall may be in the way."
     note "DNS can be right and Let's Encrypt still fail. $(firewall_hint)"
-    note "Some routers cannot loop back to their own address, so this can be a false alarm at home."
+    note "Some routers can't loop back to their own address, so this warning can be wrong on a home network."
   else
     info "Connections to $ORCHARD_PUBLIC_IP on 80 and 443 get through from this machine."
   fi
@@ -2329,7 +2329,7 @@ print_lan_instructions() {
   note "Tailscale: MagicDNS gives the machine a name such as box.tailnet.ts.net. It has no wildcards,"
   note "so generated app URLs stay on sslip.io, and sslip.io needs internet DNS on each client."
   note ".local names come from mDNS. They cover this machine only, and no subdomains."
-  note "To teach Orchard another name later: sudo orchardctl hostname add <name> --apply"
+  note "To add another name later: sudo orchardctl hostname add <name> --apply"
 }
 
 dns_settings_unchanged() {
@@ -2352,10 +2352,10 @@ dns_step() {
   fi
 
   if dns_settings_unchanged; then
-    info "DNS answers have not changed, so the records are not listed again."
+    info "DNS answers haven't changed, so the records aren't listed again."
     dns_check_all true
     if [ -n "$DNS_PENDING" ]; then
-      warn "These records still do not point here: $(one_line "$DNS_PENDING")"
+      warn "These records still don't point here: $(one_line "$DNS_PENDING")"
     fi
     return 0
   fi
@@ -2375,9 +2375,9 @@ dns_step() {
     print_dns_records
     if is_ipv6 "$ORCHARD_PUBLIC_IP"; then
       warn "These are AAAA records because $ORCHARD_PUBLIC_IP is an IPv6 address, and Orchard listens on IPv4 only."
-      note "They reach Orchard only through a proxy that you run in front of it. Orchard has not tested this."
+      note "They reach Orchard only through a proxy that you run in front of it. Orchard hasn't tested this."
     elif [ -n "$PUBLIC_IP6" ]; then
-      note "This machine also has $PUBLIC_IP6. Do not add AAAA records: this install listens on IPv4 only."
+      note "This machine also has $PUBLIC_IP6. Don't add AAAA records: this install listens on IPv4 only."
     fi
     if [ -z "$ORCHARD_PUBLIC_IP" ]; then
       note "You left the public IP blank, so the check below only looks for an answer."
@@ -2396,14 +2396,14 @@ dns_step() {
     fi
     if [ "$ASSUME_YES" = true ]; then
       check_reachability
-      info "--yes does not wait for DNS. Certificates retry on their own."
+      info "--yes doesn't wait for DNS. Certificates retry on their own."
       return 0
     fi
     printf '\n'
     note "1) Check again. New records usually appear in a few minutes."
     note "2) Continue anyway. Orchard installs now, and the dashboard opens once DNS is right."
     note "3) Skip DNS for now. Until these records exist, the dashboard, the first sign-in link"
-    note "   and certificates do not work. Certificates retry on their own once DNS is right."
+    note "   and certificates don't work. Certificates retry on their own once DNS is right."
     note "4) Change an answer."
     choice=$(ask "      Choice" 1)
     case "$choice" in
@@ -2470,7 +2470,7 @@ s3_request() {
 
 s3_explain_failure() {
   case "$S3_LAST_CODE" in
-    000) S3_PROBE_ERROR="could not connect to $ORCHARD_S3_ENDPOINT" ;;
+    000) S3_PROBE_ERROR="couldn't connect to $ORCHARD_S3_ENDPOINT" ;;
     404) S3_PROBE_ERROR="the bucket $ORCHARD_S3_BUCKET does not exist at $ORCHARD_S3_ENDPOINT" ;;
     401|403) S3_PROBE_ERROR="the key was refused; check it can list, read, write and delete in $ORCHARD_S3_BUCKET" ;;
     301|400) S3_PROBE_ERROR="the region or the addressing style looks wrong for this bucket" ;;
@@ -2589,7 +2589,7 @@ choose_s3_storage() {
   if [ "$ORCHARD_S3" = false ]; then return 0; fi
   if [ -n "$ORCHARD_S3_SECRET_KEY_FILE" ]; then
     if ! ORCHARD_S3_SECRET_KEY=$(tr -d '\r\n' < "$ORCHARD_S3_SECRET_KEY_FILE" 2>/dev/null); then
-      warn "could not read $ORCHARD_S3_SECRET_KEY_FILE"
+      warn "couldn't read $ORCHARD_S3_SECRET_KEY_FILE"
       ORCHARD_S3_SECRET_KEY=''
     fi
   fi
@@ -2637,7 +2637,7 @@ apply_s3_storage() {
     info "S3 storage saved"
   else
     S3_READY=false
-    warn "could not save the S3 settings; add them with 'sudo orchardctl backups s3 set' or under Instance admin"
+    warn "couldn't save the S3 settings; add them with 'sudo orchardctl backups s3 set' or under Instance admin"
   fi
 }
 
@@ -2733,7 +2733,7 @@ configure_firewall() {
   elif command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; then
     run_step "opening firewalld for k3s and Orchard" 20s firewalld_rules "$lo" "$hi"
   else
-    info "no host firewall active; install/README.md lists what this box will listen on"
+    info "no host firewall active; install/README.md lists what this machine will listen on"
   fi
 }
 
@@ -3487,12 +3487,12 @@ backup_values() {
 refuse_values() {
   local backup
   backup=$(backup_values) || die "$1 The installer did not change the file, and it could not save a copy of it."
-  die "$1 The installer stopped and did not change the file. A copy is at $backup. Fix the problem, then run the installer again. Do not delete $VALUES_FILE: a new file means new secrets, and Orchard cannot read data encrypted with the old ones."
+  die "$1 The installer stopped and didn't change the file. A copy is at $backup. Fix the problem, then run the installer again. Don't delete $VALUES_FILE: a new file means new secrets, and Orchard can't read data encrypted with the old ones."
 }
 
 require_readable_values() {
   if ! command -v yq >/dev/null 2>&1; then
-    refuse_values "The installer needs yq to keep your settings in $VALUES_FILE, and yq is not installed."
+    refuse_values "The installer needs yq to keep your settings in $VALUES_FILE, and yq isn't installed."
   fi
   if ! yq -e 'tag == "!!map"' "$VALUES_FILE" >/dev/null 2>&1; then
     refuse_values "The installer cannot read $VALUES_FILE, so it cannot keep your settings. Check that the file is valid YAML."
@@ -3635,7 +3635,7 @@ merge_values() {
     change*|*$'\n'change*|removed*|*$'\n'removed*)
       if ! backup=$(backup_values); then
         rm -rf "$work"
-        die "The installer could not save a copy of $VALUES_FILE, so it did not change the file."
+        die "The installer couldn't save a copy of $VALUES_FILE, so it didn't change the file."
       fi
       note "A copy of the previous file is at $backup."
       chmod 600 "$work/final"
@@ -3727,7 +3727,7 @@ save_install_settings() {
 
   if [ "${#args[@]}" -gt 1 ] && [ "${args[*]}" != "seed --force" ]; then
     if ! kubectl -n orchard exec deploy/server -- node dist/scripts/install-settings.js "${args[@]}" >/dev/null 2>&1; then
-      warn "could not save the public IP and custom domains target. Set them under Instance admin > Configuration."
+      warn "couldn't save the public IP and custom domains target. Set them under Instance admin > Configuration."
       return 0
     fi
     info "saved. Change the public IP and custom domains target under Instance admin > Configuration."
@@ -3795,7 +3795,7 @@ install_orchard() {
   save_install_settings
   if [ "$USE_TLS" = true ]; then
     if [ -n "$DNS_PENDING" ] || [ "$DNS_SKIPPED" = true ]; then
-      info "not waiting for the dashboard certificate, because DNS is not finished"
+      info "not waiting for the dashboard certificate, because DNS isn't finished"
     else
       run_step "the dashboard certificate" 1m wait_for_dashboard_cert
     fi
@@ -3825,11 +3825,11 @@ EOF
     if ORCHARD_STATE_DIR="$STATE_DIR" orchard-sync-commands >/dev/null; then
       info "host commands installed (orchardctl)"
     else
-      warn "could not install the host commands; run orchard-sync-commands later"
+      warn "couldn't install the host commands; run orchard-sync-commands later"
     fi
   else
     rm -f "$boot"
-    warn "could not read the host commands from the server pod; skipping"
+    warn "couldn't read the host commands from the server pod; skipping"
   fi
 
   if [ "$ORCHARD_UPDATE_POLICY" = automatic ]; then
@@ -3897,7 +3897,7 @@ summary() {
   if [ "$S3_READY" = true ]; then
     note "Storage: $ORCHARD_S3_BUCKET at $ORCHARD_S3_ENDPOINT"
   elif [ "$ORCHARD_OBJECT_STORAGE" = true ]; then
-    note "Storage: on this server. If the server is lost, the backups are lost."
+    note "Storage: on this server. If you lose the server, you lose the backups."
   fi
 
   if [ -n "$DNS_PENDING" ] || [ "$cert_pending" = true ]; then
@@ -3915,10 +3915,10 @@ EOF
       problem=$(certificate_problem)
       case "$problem" in
         firewall)
-          note "Let's Encrypt could not connect to this machine. $(firewall_hint)"
+          note "Let's Encrypt couldn't connect to this machine. $(firewall_hint)"
           ;;
         dns)
-          note "Let's Encrypt could not find the DNS records for it."
+          note "Let's Encrypt couldn't find the DNS records for it."
           ;;
         ratelimit)
           note "Let's Encrypt is rate limiting this domain. That clears on its own."
@@ -3927,14 +3927,14 @@ EOF
       if is_sslip "$ORCHARD_DOMAIN"; then
         note "All sslip.io users share one Let's Encrypt limit. Your own domain avoids it."
       fi
-      note "cert-manager retries on its own, first after about an hour. To see why it has not"
+      note "cert-manager retries on its own, first after about an hour. To see why it hasn't"
       note "issued yet: sudo kubectl -n orchard describe certificate orchard-tls"
     fi
   fi
 
   printf '\n  %sSign in%s\n' "$C_BOLD" "$C_RESET"
-  note "Open this link to create the first account. The link is the credential,"
-  note "so there is no email to wait for."
+  note "Open this link to create the first account. You don't need an email"
+  note "to sign in with this link."
   if [ -n "$DNS_PENDING" ]; then
     note "It opens once the dashboard's DNS record is right."
   fi
