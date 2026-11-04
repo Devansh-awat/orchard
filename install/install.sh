@@ -3894,8 +3894,9 @@ install_orchard() {
   kubectl create namespace network >/dev/null 2>&1 || true
 
   local args=(upgrade --install orchard "$CHART_REF"
-    --namespace orchard --create-namespace
-    -f "$VALUES_FILE" --timeout 20m)
+    --namespace orchard --create-namespace)
+  if [ -f "$STATE_DIR/images.yaml" ]; then args+=(-f "$STATE_DIR/images.yaml"); fi
+  args+=(-f "$VALUES_FILE" --timeout 20m)
   if [ -n "$ORCHARD_VERSION" ]; then args+=(--version "$ORCHARD_VERSION"); fi
 
   run_step "CloudNativePG webhook" 1m wait_for_cnpg_webhook
