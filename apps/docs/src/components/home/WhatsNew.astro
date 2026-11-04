@@ -1,0 +1,250 @@
+---
+import CornerMarks from '../CornerMarks.astro';
+import Icon from '../Icon.astro';
+import { changeHref, formatDate, getChanges, getFeatured } from '../../lib/changelog';
+import { WHATS_NEW } from '../../lib/home';
+
+const featured = getFeatured(8);
+const [lead, ...rest] = featured;
+const leadAlso = lead
+  ? getChanges()
+      .filter((change) => change.date === lead.date && change !== lead && change.text.length <= 90)
+      .slice(0, 3)
+  : [];
+---
+
+{
+  lead && (
+    <section class="whats-new not-content" aria-labelledby="new-heading">
+      <div class="head">
+        <div>
+          <h2 id="new-heading">{WHATS_NEW.heading}</h2>
+          <p>{WHATS_NEW.text}</p>
+        </div>
+        <a class="more" href="/changelog/">
+          {WHATS_NEW.link}
+          <Icon name="chevron-right" size={14} />
+        </a>
+      </div>
+      <div class="grid">
+        <CornerMarks />
+        <article class="news lead">
+          <div class="meta">
+            <time datetime={lead.date}>
+              <span class="dot" aria-hidden="true" />
+              {formatDate(lead.date)}
+            </time>
+            <span class="o-label">{lead.component}</span>
+          </div>
+          <h3>
+            <a href={changeHref(lead)}>{lead.text}</a>
+          </h3>
+          {leadAlso.length > 0 && (
+            <ul>
+              {leadAlso.map((change) => (
+                <li>{change.text}</li>
+              ))}
+            </ul>
+          )}
+          <span class="read" aria-hidden="true">
+            View in changelog
+            <Icon name="arrow-right" size={14} />
+          </span>
+          <div class="o-dots lead-dots" aria-hidden="true" />
+        </article>
+        {rest.map((change) => (
+          <article class="news">
+            <div class="meta">
+              <time datetime={change.date}>{formatDate(change.date, false)}</time>
+              <span class="o-label">{change.component}</span>
+            </div>
+            <h3>
+              <a href={changeHref(change)}>{change.text}</a>
+            </h3>
+            {change.version && <p class="version">{change.version}</p>}
+            <span class="read" aria-hidden="true">
+              View in changelog
+              <Icon name="arrow-right" size={14} />
+            </span>
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+<style>
+  .head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 0.75rem 2rem;
+    margin-bottom: 1.5rem;
+  }
+
+  h2 {
+    margin: 0;
+    color: var(--sl-color-white);
+    font-size: clamp(1.5rem, 1.3rem + 0.9vw, 2rem);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+  }
+
+  .head p {
+    margin: 0.5rem 0 0;
+    color: var(--sl-color-gray-2);
+    font-size: 1.0625rem;
+  }
+
+  .more {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: var(--o-accent-text);
+    font-size: 0.9375rem;
+    font-weight: 500;
+    text-decoration: none;
+  }
+
+  .more:hover {
+    text-decoration: underline;
+  }
+
+  .grid {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 15.5rem), 1fr));
+    border-top: 1px solid var(--o-rule);
+    border-inline-start: 1px solid var(--o-rule);
+  }
+
+  .news {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    padding: 1.25rem 1.5rem;
+    border-inline-end: 1px solid var(--o-rule);
+    border-bottom: 1px solid var(--o-rule);
+    background: var(--o-raised);
+  }
+
+  .news:hover {
+    background: color-mix(in srgb, var(--o-raised) 92%, var(--sl-color-white));
+  }
+
+  .meta {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+    color: var(--o-muted);
+    font-family: var(--sl-font-mono);
+    font-size: 0.75rem;
+  }
+
+  .dot {
+    display: inline-block;
+    width: 0.375rem;
+    height: 0.375rem;
+    margin-inline-end: 0.5rem;
+    border-radius: 50%;
+    background: var(--o-accent-text);
+    vertical-align: 0.0625rem;
+  }
+
+  h3 {
+    position: relative;
+    z-index: 1;
+    margin: 0;
+    color: var(--sl-color-white);
+    font-size: 1.0625rem;
+    font-weight: 500;
+    line-height: 1.35;
+    text-wrap: pretty;
+  }
+
+  h3 a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  h3 a::after {
+    content: '';
+    position: absolute;
+    inset: -5rem -2rem -8rem;
+    z-index: 2;
+  }
+
+  h3 a:focus-visible {
+    outline: none;
+  }
+
+  .news:has(h3 a:focus-visible) {
+    outline: 2px solid var(--o-accent-text);
+    outline-offset: -2px;
+  }
+
+  .version {
+    margin: 0.625rem 0 0;
+    color: var(--o-muted);
+    font-size: 0.875rem;
+  }
+
+  .read {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: auto;
+    padding-top: 1.25rem;
+    color: var(--sl-color-gray-2);
+    font-size: 0.875rem;
+  }
+
+  .news:hover .read {
+    color: var(--sl-color-white);
+  }
+
+  .lead h3 {
+    font-size: clamp(1.25rem, 1.1rem + 0.7vw, 1.625rem);
+    line-height: 1.25;
+    letter-spacing: -0.015em;
+  }
+
+  .lead ul {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    gap: 0.5rem;
+    margin: 1rem 0 0;
+    padding: 0;
+    color: var(--sl-color-gray-2);
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    list-style: none;
+  }
+
+  .lead-dots {
+    position: absolute;
+    inset: 40% 0 0;
+    opacity: 0.45;
+    mask-image: linear-gradient(to top, black, transparent);
+  }
+
+  @media (min-width: 72rem) {
+    .grid {
+      grid-template-columns: minmax(0, 1.66fr) minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .lead {
+      grid-row: span 2;
+    }
+  }
+</style>

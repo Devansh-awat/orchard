@@ -1,0 +1,321 @@
+---
+interface Props {
+  kind: 'deploy' | 'databases' | 'observe' | 'agents';
+}
+
+const { kind } = Astro.props;
+---
+
+<div class="graphic" aria-hidden="true">
+  {
+    kind === 'deploy' && (
+      <div class="steps">
+        <div class="step">
+          <span class="dot done" />
+          <b>git push</b>
+          <em>main</em>
+        </div>
+        <i class="line" />
+        <div class="step">
+          <span class="dot done" />
+          <b>Build</b>
+          <em>image</em>
+        </div>
+        <i class="line" />
+        <div class="step">
+          <span class="dot done" />
+          <b>Rollout</b>
+          <em>2/2 ready</em>
+        </div>
+        <i class="line" />
+        <div class="step live">
+          <span class="dot on" />
+          <b>Live</b>
+          <em>https</em>
+        </div>
+      </div>
+    )
+  }
+  {
+    kind === 'databases' && (
+      <div class="db">
+        <div class="pair">
+          <div class="node primary">
+            <b>Primary</b>
+            <em>read, write</em>
+          </div>
+          <div class="stream"><span /></div>
+          <div class="node">
+            <b>Standby</b>
+            <em>read only</em>
+          </div>
+        </div>
+        <div class="down">
+          <span class="label">WAL</span>
+        </div>
+        <div class="node bucket">
+          <b>Bucket</b>
+          <em>nightly backup</em>
+        </div>
+      </div>
+    )
+  }
+  {
+    kind === 'observe' && (
+      <div class="observe">
+        <div class="chart">
+          <div class="chart-head">
+            <b>CPU</b>
+            <em>alert at 85%</em>
+          </div>
+          <svg viewBox="0 0 220 56" preserveAspectRatio="none">
+            <line class="limit" x1="0" y1="12" x2="220" y2="12" />
+            <polyline
+              class="spark"
+              points="0,44 18,40 36,42 54,34 72,38 90,30 108,33 126,24 144,28 162,18 180,26 198,22 220,30"
+            />
+          </svg>
+        </div>
+        <ul class="log">
+          <li>
+            <span>12:04:11</span> GET /health 200
+          </li>
+          <li>
+            <span>12:04:12</span> GET /api/items 200
+          </li>
+          <li class="warn">
+            <span>12:04:13</span> POST /api/items 500
+          </li>
+        </ul>
+      </div>
+    )
+  }
+  {
+    kind === 'agents' && (
+      <div class="agent">
+        <div class="node">
+          <b>Your agent</b>
+          <em>MCP client</em>
+        </div>
+        <div class="vline" />
+        <div class="node primary">
+          <b>mcp.your-domain</b>
+          <em>OAuth or token</em>
+        </div>
+        <div class="scopes">
+          <span>read</span>
+          <span>deploy</span>
+          <span>exec</span>
+        </div>
+        <div class="vline" />
+        <div class="node">
+          <b>Orchard API</b>
+          <em>acts as you</em>
+        </div>
+      </div>
+    )
+  }
+</div>
+
+<style>
+  .graphic {
+    width: 100%;
+    max-width: 16rem;
+    color: var(--sl-color-gray-2);
+    font-size: 0.75rem;
+    line-height: 1.3;
+  }
+
+  b {
+    color: var(--sl-color-white);
+    font-weight: 500;
+  }
+
+  em {
+    color: var(--o-muted);
+    font-family: var(--sl-font-mono);
+    font-size: 0.6875rem;
+    font-style: normal;
+  }
+
+  .steps {
+    display: grid;
+    gap: 0;
+  }
+
+  .step {
+    display: grid;
+    grid-template-columns: 0.75rem 1fr auto;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--o-rule);
+    border-radius: 0.375rem;
+    background: var(--o-raised);
+  }
+
+  .step.live {
+    border-color: color-mix(in srgb, var(--o-accent-text) 60%, transparent);
+  }
+
+  .dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: var(--o-muted);
+  }
+
+  .dot.on {
+    background: var(--o-accent-text);
+  }
+
+  .line {
+    display: block;
+    width: 1px;
+    height: 0.625rem;
+    margin-inline-start: 1.0625rem;
+    background: var(--o-rule-strong);
+  }
+
+  .node {
+    display: grid;
+    gap: 0.125rem;
+    padding: 0.5rem 0.625rem;
+    border: 1px solid var(--o-rule);
+    border-radius: 0.375rem;
+    background: var(--o-raised);
+  }
+
+  .node.primary {
+    border-color: color-mix(in srgb, var(--o-accent-text) 60%, transparent);
+  }
+
+  .db {
+    display: grid;
+    justify-items: center;
+  }
+
+  .pair {
+    display: grid;
+    grid-template-columns: 1fr 1.25rem 1fr;
+    align-items: center;
+    width: 100%;
+  }
+
+  .stream {
+    height: 1px;
+    background-image: linear-gradient(to right, var(--o-accent-text) 50%, transparent 50%);
+    background-size: 0.375rem 1px;
+  }
+
+  .down {
+    position: relative;
+    width: 1px;
+    height: 1.75rem;
+    margin-inline-end: 50%;
+    background-image: linear-gradient(to bottom, var(--o-accent-text) 50%, transparent 50%);
+    background-size: 1px 0.375rem;
+    justify-self: start;
+    margin-inline-start: 22%;
+  }
+
+  .label {
+    position: absolute;
+    top: 0.375rem;
+    left: 0.5rem;
+    color: var(--o-accent-text);
+    font-family: var(--sl-font-mono);
+    font-size: 0.6875rem;
+  }
+
+  .bucket {
+    width: 100%;
+  }
+
+  .observe {
+    display: grid;
+    gap: 0.625rem;
+  }
+
+  .chart {
+    padding: 0.625rem;
+    border: 1px solid var(--o-rule);
+    border-radius: 0.375rem;
+    background: var(--o-raised);
+  }
+
+  .chart-head {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+  }
+
+  svg {
+    display: block;
+    width: 100%;
+    height: 3.5rem;
+  }
+
+  .spark {
+    fill: none;
+    stroke: var(--o-accent-text);
+    stroke-width: 1.5;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .limit {
+    stroke: var(--o-rule-strong);
+    stroke-dasharray: 3 3;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .log {
+    display: grid;
+    gap: 0.25rem;
+    margin: 0;
+    padding: 0.5rem 0.625rem;
+    border: 1px solid var(--o-rule);
+    border-radius: 0.375rem;
+    background: var(--o-code);
+    color: var(--sl-color-gray-2);
+    font-family: var(--sl-font-mono);
+    font-size: 0.625rem;
+    list-style: none;
+  }
+
+  .log span {
+    color: var(--o-muted);
+  }
+
+  .log .warn {
+    color: var(--o-accent-text);
+  }
+
+  .agent {
+    display: grid;
+  }
+
+  .vline {
+    width: 1px;
+    height: 0.75rem;
+    margin-inline-start: 50%;
+    background: var(--o-rule-strong);
+  }
+
+  .scopes {
+    display: flex;
+    gap: 0.25rem;
+    margin-top: 0.375rem;
+  }
+
+  .scopes span {
+    flex: 1;
+    padding: 0.125rem 0;
+    border: 1px solid var(--o-rule);
+    border-radius: 0.25rem;
+    color: var(--sl-color-gray-2);
+    font-family: var(--sl-font-mono);
+    font-size: 0.625rem;
+    text-align: center;
+  }
+</style>
