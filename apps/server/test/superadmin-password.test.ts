@@ -8,6 +8,7 @@ import {
   superadminHasPassword,
   verifySuperadminPassword
 } from '../src/auth/superadmin-password';
+import { signedInUser } from '../src/auth/signed-in-user';
 
 /**
  * The superadmin password exists for instances with no SMTP, no identity
@@ -160,4 +161,18 @@ test('email case and whitespace do not matter', async () => {
   assert.ok(
     await verifySuperadminPassword(prisma, '  Boss@Example.com  ', 'a long enough password')
   );
+});
+
+test('a sign-in response says superadmin only when it is true', () => {
+  const base = {
+    id: 'u1',
+    email: 'a@b.c',
+    username: 'a',
+    firstName: null,
+    lastName: null,
+    imageUrl: null,
+    setupCompleted: false
+  };
+  assert.equal(signedInUser({ ...base, isSuperAdmin: true }).isSuperAdmin, true);
+  assert.equal('isSuperAdmin' in signedInUser({ ...base, isSuperAdmin: false }), false);
 });

@@ -33,6 +33,7 @@ import { setSessionCookie } from './cookies';
 import { Public, Auth } from './decorators';
 import { getClientIp } from './client-ip';
 import { signupMode, signupDeniedError } from './signup-mode';
+import { signedInUser } from './signed-in-user';
 
 interface RequestOtpDto {
   email: string;
@@ -238,15 +239,7 @@ export class PasswordlessController {
 
     res.status(200).json({
       success: true,
-      user: {
-        id: user.id,
-        email: user.email,
-        username: user.username,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        imageUrl: user.imageUrl,
-        setupCompleted: user.setupCompleted
-      }
+      user: signedInUser(user)
     });
   }
 
@@ -345,15 +338,7 @@ export class PasswordlessController {
     setSessionCookie(res, token);
     res.status(200).json({
       success: true,
-      user: {
-        id: user.id,
-        email: user.email,
-        username: user.username,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        imageUrl: user.imageUrl,
-        setupCompleted: user.setupCompleted
-      }
+      user: signedInUser(user)
     });
   }
 
@@ -515,15 +500,7 @@ export class PasswordlessController {
 
     res.status(200).json({
       success: true,
-      user: {
-        id: user.id,
-        email: user.email,
-        username: user.username,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        imageUrl: user.imageUrl,
-        setupCompleted: user.setupCompleted
-      }
+      user: signedInUser(user)
     });
   }
 
