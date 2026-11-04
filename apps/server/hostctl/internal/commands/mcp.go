@@ -18,10 +18,14 @@ const (
 	serviceTokenKey = "MCP_SERVICE_TOKEN"
 )
 
-// defaultMcpHost puts the MCP on a sibling of the UI's hostname, the same way
-// the installer derives the app domain: orchard.example.com becomes
-// mcp.example.com. An operator who wants something else passes it explicitly.
-func defaultMcpHost(uiHost string) string {
+// defaultMcpHost puts the MCP under the app domain, because the app wildcard
+// record already covers mcp.<app domain>. An instance with no app domain falls
+// back to a sibling of the UI's hostname. An operator who wants something else
+// passes it explicitly.
+func defaultMcpHost(appDomain, uiHost string) string {
+	if appDomain = strings.TrimSpace(appDomain); appDomain != "" {
+		return "mcp." + appDomain
+	}
 	uiHost = strings.TrimSpace(uiHost)
 	if uiHost == "" {
 		return ""
@@ -112,7 +116,7 @@ the same API the dashboard uses. It answers on its own hostname, so it needs
 one before anything can connect.
 
   orchardctl mcp                  show whether it is on and where it answers
-  orchardctl mcp enable [host]    turn it on, default mcp.<your domain>
+  orchardctl mcp enable [host]    turn it on, default mcp.<your app domain>
   orchardctl mcp disable          stop deploying it
 
 enable also copies JWT_SECRET across from the server and mints a shared
@@ -120,7 +124,8 @@ MCP_SERVICE_TOKEN if there is not one already, because the MCP authenticates
 to the API as a service and passes the consenting user along. Without both,
 every tool call fails at authentication rather than at startup.
 
-Point DNS at this box for the hostname first, the same A record as the UI.
+The default needs no DNS of its own: the wildcard record for your apps covers
+it. For any other hostname, point an A record at this box first.
 
   orchardctl mcp enable mcp.example.com --apply
 
@@ -166,7 +171,7 @@ stops the deployed MCP from answering without redeploying anything.
 				}
 				if host == "" {
 					uiHost, _ := values.Get("ingress.host").(string)
-					host = defaultMcpHost(uiHost)
+					host = defaultMcpHost(values.EnvValue(serverEnvPath, "APP_DOMAIN"), uiHost)
 				}
 				if host == "" {
 					return fmt.Errorf("no hostname to use: orchardctl mcp enable <host>")

@@ -29,9 +29,16 @@ func TestDefaultMcpHostIsASiblingOfTheUI(t *testing.T) {
 		"localhost":           "",
 		"":                    "",
 	} {
-		if got := defaultMcpHost(host); got != want {
+		if got := defaultMcpHost("", host); got != want {
 			t.Fatalf("%q should derive %q, got %q", host, want, got)
 		}
+	}
+}
+
+func TestDefaultMcpHostPrefersTheAppDomain(t *testing.T) {
+	got := defaultMcpHost("apps.example.com", "orchard.example.com")
+	if got != "mcp.apps.example.com" {
+		t.Fatalf("got %q", got)
 	}
 }
 
