@@ -12,7 +12,7 @@ import {
   ServiceUnavailableException,
   ForbiddenException
 } from '@nestjs/common';
-import { Observable, finalize } from 'rxjs';
+import { Observable, finalize, takeUntil } from 'rxjs';
 import { Auth } from '../auth/decorators';
 import { ProjectAccessService } from '../projects/project-access.service';
 import { SseStreamLimiter } from '../events/sse-stream-limiter';
@@ -169,7 +169,10 @@ export class ObservabilityController {
     const release = this.streams.acquire(req.user.sub, `build-logs:${id}`);
     return this.observability
       .streamBuildLogs(id, offset)
-      .pipe(finalize(release)) as Observable<MessageEvent>;
+      .pipe(
+        takeUntil(this.streams.untilAccessLost(req.auth, () => this.assertLogAccess(id, req))),
+        finalize(release)
+      ) as Observable<MessageEvent>;
   }
 
   @Sse('deployments/:id/logs/stream')
@@ -187,7 +190,10 @@ export class ObservabilityController {
     const release = this.streams.acquire(req.user.sub, `logs:${id}`);
     return this.observability
       .streamRuntimeLogs(id, tailLines, sinceTime)
-      .pipe(finalize(release)) as Observable<MessageEvent>;
+      .pipe(
+        takeUntil(this.streams.untilAccessLost(req.auth, () => this.assertLogAccess(id, req))),
+        finalize(release)
+      ) as Observable<MessageEvent>;
   }
 
   @Get('deployments/:id/logs/structured')

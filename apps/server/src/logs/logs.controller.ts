@@ -12,7 +12,17 @@ import {
   Sse
 } from '@nestjs/common';
 import type { Response } from 'express';
-import { Observable, finalize, from, interval, startWith, switchMap, filter, map } from 'rxjs';
+import {
+  Observable,
+  finalize,
+  from,
+  interval,
+  startWith,
+  switchMap,
+  takeUntil,
+  filter,
+  map
+} from 'rxjs';
 import { SseStreamLimiter } from '../events/sse-stream-limiter';
 import { RequestsService, type RequestRow } from './requests.service';
 import { LogsStoreError } from './victoria-logs.service';
@@ -128,6 +138,7 @@ export class LogsController {
       }),
       filter((fresh) => fresh.length > 0),
       map((fresh) => ({ data: { requests: fresh } }) as MessageEvent),
+      takeUntil(this.streams.untilAccessLost(req.auth, () => this.assertLogAccess(id, req))),
       finalize(release)
     );
   }
