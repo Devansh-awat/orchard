@@ -21,6 +21,7 @@ import {
   InstanceSettingsService,
   parseResourceLimits
 } from '../instance-settings/instance-settings.service';
+import { AuthorizationService } from '../auth/authorization.service';
 
 interface CapBody {
   cpuLimitMilli?: number | null;
@@ -117,7 +118,8 @@ export class OrgQuotasController {
     private readonly quotas: QuotasService,
     @Inject(forwardRef(() => OrganizationsService))
     private readonly orgs: OrganizationsService,
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
+    private readonly authz: AuthorizationService
   ) {}
 
   @Get()
@@ -186,9 +188,12 @@ export class OrgQuotasController {
   @Get('me')
   async getMyUsage(@Param('orgId') orgId: string, @Req() req: any) {
     const userId = req.auth.userId;
-    const membership = await this.prisma.organizationMember.findUnique({
-      where: { organizationId_userId: { organizationId: orgId, userId } }
-    });
+    const access = await this.authz.getOrgAccess(orgId, userId);
+    const membership = access
+      ? await this.prisma.organizationMember.findUnique({
+          where: { organizationId_userId: { organizationId: orgId, userId } }
+        })
+      : null;
     if (!membership) throw new NotFoundException('Not a member of this organization');
 
     const [allowance, usage, org] = await Promise.all([

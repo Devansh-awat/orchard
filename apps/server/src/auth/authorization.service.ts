@@ -66,6 +66,12 @@ export interface ProjectAccess {
 // stated SLA is a lie.
 const SUPERADMIN_TTL_MS = 1_000;
 
+const ENFORCING_SSO = { enforced: true, enabled: true, platformEnabled: true };
+
+function emailDomain(email: string | null | undefined): string {
+  return (email ?? '').split('@')[1]?.toLowerCase() ?? '';
+}
+
 @Injectable()
 export class AuthorizationService {
   // userId → { value, expiresAt }. TTL'd because superadmin status is sticky
@@ -113,7 +119,7 @@ export class AuthorizationService {
    * button.
    */
   async assertSsoNotEnforced(
-    user: { id: string; isSuperAdmin?: boolean | null } | null,
+    user: { id: string; email?: string | null; isSuperAdmin?: boolean | null } | null,
     authMethod: AuthMethod
   ): Promise<void> {
     if (authMethod === 'sso') return;
@@ -124,7 +130,8 @@ export class AuthorizationService {
         where: {
           userId: user.id,
           organization: {
-            ssoSettings: { is: { enforced: true, enabled: true, platformEnabled: true } }
+            ssoSettings: { is: ENFORCING_SSO },
+            domains: { some: { domain: emailDomain(user.email), verifiedAt: { not: null } } }
           }
         },
         select: { organizationId: true }
@@ -135,6 +142,43 @@ export class AuthorizationService {
         );
       }
     }
+  }
+
+  async orgRequiresSso(organizationId: string, userId: string): Promise<boolean> {
+    if (!this.sessionNeedsOrgSso(organizationId) || (await this.isSuperAdmin(userId))) return false;
+    const member = await this.prisma.organizationMember.findUnique({
+      where: { organizationId_userId: { organizationId, userId } },
+      select: { role: true }
+    });
+    return Boolean(member) && (await this.blockedByOrgSso(organizationId, member!.role));
+  }
+
+  async ssoBlockedOrgIds(userId: string): Promise<string[]> {
+    const ctx = requestAuthStorage.getStore();
+    if (!ctx?.browserSession || ctx.sessionOrgId || (await this.isSuperAdmin(userId))) return [];
+    const rows = await this.prisma.organizationMember.findMany({
+      where: {
+        userId,
+        role: { not: 'owner' },
+        organization: { ssoSettings: { is: ENFORCING_SSO } }
+      },
+      select: { organizationId: true }
+    });
+    return rows.map((row) => row.organizationId);
+  }
+
+  private sessionNeedsOrgSso(organizationId: string): boolean {
+    const ctx = requestAuthStorage.getStore();
+    return Boolean(ctx?.browserSession) && ctx?.sessionOrgId !== organizationId;
+  }
+
+  private async blockedByOrgSso(organizationId: string, role: string): Promise<boolean> {
+    if (role === 'owner' || !this.sessionNeedsOrgSso(organizationId)) return false;
+    const settings = await this.prisma.orgSsoSettings.findFirst({
+      where: { organizationId, ...ENFORCING_SSO },
+      select: { organizationId: true }
+    });
+    return Boolean(settings);
   }
 
   /**
@@ -159,7 +203,8 @@ export class AuthorizationService {
         email: normalized,
         expiresAt: { gt: new Date() },
         organization: {
-          ssoSettings: { is: { enforced: true, enabled: true, platformEnabled: true } }
+          ssoSettings: { is: ENFORCING_SSO },
+          domains: { some: { domain: emailDomain(normalized), verifiedAt: { not: null } } }
         }
       },
       select: { organizationId: true }
@@ -212,6 +257,7 @@ export class AuthorizationService {
       select: { role: true }
     });
     if (!member) return null;
+    if (await this.blockedByOrgSso(organizationId, member.role)) return null;
     return {
       organizationId,
       role: member.role,
@@ -346,6 +392,8 @@ export class AuthorizationService {
         include: { role: true }
       })
     ]);
+
+    if (orgMember && (await this.blockedByOrgSso(organizationId, orgMember.role))) return null;
 
     // Org admins/owners see and control every project in the org.
     if (orgMember && (orgMember.role === 'owner' || orgMember.role === 'admin')) {
@@ -515,7 +563,7 @@ export class AuthorizationService {
       where: { organizationId_userId: { organizationId, userId } },
       select: { role: true }
     });
-    if (!member) {
+    if (!member || (await this.blockedByOrgSso(organizationId, member.role))) {
       throw new NotFoundException('Organization not found');
     }
     if (member.role === 'owner' || member.role === 'admin') {

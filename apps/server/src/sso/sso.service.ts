@@ -802,13 +802,22 @@ export class SsoService {
 
     let revokedSessions = 0;
     if (saved.enforced && !current?.enforced) {
-      const members = await this.prisma.organizationMember.findMany({
-        where: { organizationId },
-        select: { userId: true }
-      });
+      const [members, domains] = await Promise.all([
+        this.prisma.organizationMember.findMany({
+          where: { organizationId },
+          select: { userId: true, user: { select: { email: true } } }
+        }),
+        this.prisma.orgDomain.findMany({
+          where: { organizationId, verifiedAt: { not: null } },
+          select: { domain: true }
+        })
+      ]);
+      const owned = new Set(domains.map((d) => d.domain.toLowerCase()));
       revokedSessions = await this.sessions.revokeSignInSessions({
         authMethods: ORG_ENFORCEMENT_REVOKES,
-        userIds: members.map((m) => m.userId),
+        userIds: members
+          .filter((m) => owned.has(m.user.email.split('@')[1]?.toLowerCase() ?? ''))
+          .map((m) => m.userId),
         exceptSessionId: actor.sessionId
       });
     }

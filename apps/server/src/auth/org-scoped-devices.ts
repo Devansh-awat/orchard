@@ -11,7 +11,6 @@ export const ORG_SCOPED_DENY = [
   'admin/',
   'github/link',
   'github/unlink',
-  'github/repositories',
   'git/oauth/',
   'tailscale/link',
   'tailscale/unlink'

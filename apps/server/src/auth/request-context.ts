@@ -11,6 +11,7 @@ export interface RequestAuthContext {
   // org's IdP (or whoever compromises it) must not become a way to reach the
   // other tenants its users happen to belong to.
   sessionOrgId?: string;
+  browserSession?: boolean;
 }
 
 export const requestAuthStorage = new AsyncLocalStorage<RequestAuthContext>();

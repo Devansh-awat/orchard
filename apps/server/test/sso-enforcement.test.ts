@@ -8,14 +8,22 @@ class FakePrisma {
 
   enforcedOrgInvites = new Set<string>();
 
+  verifiedDomains = new Set<string>(['corp.example']);
+
   organizationMember = {
     findFirst: async ({ where }: any) =>
-      this.enforcedOrgMembers.has(where.userId) ? { organizationId: 'org' } : null
+      this.enforcedOrgMembers.has(where.userId) &&
+      this.verifiedDomains.has(where.organization.domains.some.domain)
+        ? { organizationId: 'org' }
+        : null
   };
 
   organizationInvitation = {
     findFirst: async ({ where }: any) =>
-      this.enforcedOrgInvites.has(where.email) ? { organizationId: 'org' } : null
+      this.enforcedOrgInvites.has(where.email) &&
+      this.verifiedDomains.has(where.organization.domains.some.domain)
+        ? { organizationId: 'org' }
+        : null
   };
 }
 
@@ -25,7 +33,7 @@ function build(instanceEnforced: boolean) {
   return { prisma, authz: new AuthorizationService(prisma as any, settings as any) };
 }
 
-const member = { id: 'u1', isSuperAdmin: false };
+const member = { id: 'u1', email: 'a@corp.example', isSuperAdmin: false };
 const superadmin = { id: 'root', isSuperAdmin: true };
 
 test('an instance that requires SSO refuses mailbox and credential sign-ins', async () => {
@@ -69,10 +77,21 @@ test('org enforcement still blocks the platform providers that instance enforcem
 
 test('a pending invitation from an enforcing org gates a brand-new identity', async () => {
   const { prisma, authz } = build(false);
-  prisma.enforcedOrgInvites.add('invited@example.com');
+  prisma.enforcedOrgInvites.add('invited@corp.example');
   await assert.rejects(
-    () => authz.assertSsoNotEnforcedForEmail('Invited@Example.com', 'otp'),
+    () => authz.assertSsoNotEnforcedForEmail('Invited@Corp.Example', 'otp'),
     ForbiddenException
   );
-  await authz.assertSsoNotEnforcedForEmail('nobody@example.com', 'otp');
+  await authz.assertSsoNotEnforcedForEmail('nobody@corp.example', 'otp');
+});
+
+test('an org only blocks account-wide sign-in for emails on its verified domains', async () => {
+  const { prisma, authz } = build(false);
+  prisma.enforcedOrgMembers.add('pepito');
+  prisma.enforcedOrgInvites.add('pepito@gmail.example');
+  const pepito = { id: 'pepito', email: 'pepito@gmail.example', isSuperAdmin: false };
+  for (const method of ['otp', 'passkey', 'password', 'oauth', 'instance_sso'] as const) {
+    await authz.assertSsoNotEnforced(pepito, method);
+  }
+  await authz.assertSsoNotEnforcedForEmail('pepito@gmail.example', 'otp');
 });

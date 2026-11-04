@@ -348,7 +348,7 @@ export class SuperAdminGuard implements CanActivate {
       };
       // Session-auth: no token-scope restrictions to publish, but an org-scoped
       // session publishes its confinement so AuthorizationService can enforce it.
-      publishAuthContext(orgScope ? { sessionOrgId: orgScope } : {});
+      publishAuthContext({ browserSession: true, ...(orgScope ? { sessionOrgId: orgScope } : {}) });
       setTraceUser(dbUserId, sessionId);
       authenticated = true;
     } catch {

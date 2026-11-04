@@ -149,7 +149,7 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
       const runWithAuthCtx = <T>(fn: () => Promise<T>): Promise<T> =>
         new Promise<T>((resolve, rejectPromise) => {
           requestAuthStorage.run(
-            auth.tokenAuthCtx ?? { sessionOrgId: auth.sessionOrgScope },
+            auth.tokenAuthCtx ?? { sessionOrgId: auth.sessionOrgScope, browserSession: true },
             () => {
               fn().then(resolve, rejectPromise);
             }

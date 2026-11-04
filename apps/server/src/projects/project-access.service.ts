@@ -123,7 +123,10 @@ export class ProjectAccessService {
       return Object.keys(base).length > 0 ? base : {};
     }
 
-    const all = await this.membershipCache.getMemberships(userId);
+    const blocked = new Set(await this.authz.ssoBlockedOrgIds(userId));
+    const all = (await this.membershipCache.getMemberships(userId)).filter(
+      (m) => !blocked.has(m.organizationId)
+    );
     const orgMemberships = orgId ? all.filter((m) => m.organizationId === orgId) : all;
     if (orgMemberships.length === 0) return null;
 

@@ -5,7 +5,8 @@ import {
   ConflictException,
   InternalServerErrorException,
   Inject,
-  forwardRef
+  forwardRef,
+  ForbiddenException
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -42,6 +43,7 @@ import {
 import { parseMemory } from '../kubernetes/quantity';
 import { projectedFill, sizeToResumeWrites, WRITE_GUARD_EXIT } from '../kubernetes/volume-stats';
 import { deriveDbTuning } from '../kubernetes/db-tuning';
+import { requestAuthStorage } from '../auth/request-context';
 
 @Injectable()
 export class ProjectsService {
@@ -674,11 +676,6 @@ export class ProjectsService {
 
     for (const userId of droppedGuests) {
       this.membershipCache.invalidateInternalUserId(userId);
-      // Only the guests dropped out of the org entirely lose sessions. Org
-      // members and admins who happened to be on this project keep their
-      // sessions: they still have other projects/access in this org and we
-      // don't want to interrupt unrelated work.
-      await this.sessions.revokeUserSessions(userId).catch(() => {});
     }
 
     if (droppedGuests.length > 0) {
@@ -1244,13 +1241,6 @@ export class ProjectsService {
     });
 
     if (guestDropped) {
-      // M-1: revoke sessions BEFORE invalidating the membership cache.
-      // The reverse ordering leaves a small window where an in-flight request
-      // with a still-valid session can read the post-invalidation cache and
-      // re-populate it with the (empty) membership view, while the session
-      // itself is technically still authoritative. Killing the session first
-      // guarantees the next observable request goes through a fresh DB lookup.
-      await this.sessions.revokeUserSessions(member.userId).catch(() => {});
       this.membershipCache.invalidateInternalUserId(member.userId);
     }
 
@@ -2263,9 +2253,27 @@ export class ProjectsService {
    * Single-roundtrip overview aggregator. Looks up org by slug, runs RBAC once
    * (via cached memberships), and fans out the four list queries in parallel.
    */
+  private async assertOrgOverviewAccess(organizationId: string, userId: string) {
+    if (await this.authz.orgRequiresSso(organizationId, userId)) {
+      throw new ForbiddenException({
+        error: 'org_sso_required',
+        message: 'This organization requires single sign-on.'
+      });
+    }
+    if (!(await this.authz.getOrgAccess(organizationId, userId))) {
+      throw new NotFoundException('Organization not found');
+    }
+  }
+
   async getUserOverview(userId: string) {
+    const sessionOrgId = requestAuthStorage.getStore()?.sessionOrgId;
+    const blocked = await this.authz.ssoBlockedOrgIds(userId);
     const memberships = await this.prisma.organizationMember.findMany({
-      where: { userId },
+      where: {
+        userId,
+        ...(sessionOrgId ? { organizationId: sessionOrgId } : {}),
+        ...(blocked.length ? { organizationId: { notIn: blocked } } : {})
+      },
       select: { organization: { select: { id: true, slug: true, name: true } } }
     });
     const organizations = memberships
@@ -2285,6 +2293,8 @@ export class ProjectsService {
       select: { id: true, slug: true, name: true }
     });
     if (!org) throw new NotFoundException('Organization not found');
+
+    await this.assertOrgOverviewAccess(org.id, userId);
 
     const [isSuper, memberships] = await Promise.all([
       this.authz.isSuperAdmin(userId),
@@ -2408,6 +2418,8 @@ export class ProjectsService {
       select: { id: true }
     });
     if (!org) throw new NotFoundException('Organization not found');
+
+    await this.assertOrgOverviewAccess(org.id, userId);
 
     const [isSuper, memberships] = await Promise.all([
       this.authz.isSuperAdmin(userId),
