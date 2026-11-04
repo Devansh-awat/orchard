@@ -16,6 +16,8 @@
 	import { apiFetch } from '$lib/stores';
 	import { displayHost, protectionOf, type ProtectionMode } from './network';
 
+	const MIN_PASSWORD = 8;
+
 	let {
 		open = $bindable(false),
 		ingress,
@@ -87,8 +89,11 @@
 	const ready = $derived(
 		mode === 'none' ||
 			mode === 'orchard' ||
-			(mode === 'password' && !!password) ||
-			(mode === 'basic' && !!username.trim() && !username.includes(':') && !!password)
+			(mode === 'password' && password.length >= MIN_PASSWORD) ||
+			(mode === 'basic' &&
+				!!username.trim() &&
+				!username.includes(':') &&
+				password.length >= MIN_PASSWORD)
 	);
 	const changed = $derived(
 		mode !== current ||
@@ -131,7 +136,11 @@
 				{#if mode !== 'none'}
 					<div class="stack">
 						{#if mode === 'password'}
-							<Field label="Password" for="{uid}-password">
+							<Field
+								label="Password"
+								for="{uid}-password"
+								hint="At least {MIN_PASSWORD} characters."
+							>
 								<SecretInput
 									id="{uid}-password"
 									placeholder={current === 'password' ? 'Enter a new password' : ''}
@@ -147,7 +156,11 @@
 								>
 									<Input id="{uid}-user" autocomplete="off" bind:value={username} />
 								</Field>
-								<Field label="Password" for="{uid}-password">
+								<Field
+									label="Password"
+									for="{uid}-password"
+									hint="At least {MIN_PASSWORD} characters."
+								>
 									<SecretInput id="{uid}-password" bind:value={password} />
 								</Field>
 							</FieldGrid>

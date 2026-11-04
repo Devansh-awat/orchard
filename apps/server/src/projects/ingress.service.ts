@@ -98,6 +98,16 @@ import { LeaderElectionService } from '../events/leader-election.service';
 
 export type DnsRecordHint = { type: 'CNAME' | 'A'; name: string; value: string };
 
+export const MIN_PROTECTION_PASSWORD_LENGTH = 8;
+
+export function assertProtectionPassword(password: string): void {
+  if (password.length < MIN_PROTECTION_PASSWORD_LENGTH) {
+    throw new BadRequestException(
+      `Password must be at least ${MIN_PROTECTION_PASSWORD_LENGTH} characters`
+    );
+  }
+}
+
 @Injectable()
 export class IngressService implements OnModuleInit {
   private readonly logger = new Logger(IngressService.name);
@@ -2845,6 +2855,7 @@ export class IngressService implements OnModuleInit {
       if (context === 'update') return { via: 'none' };
       throw new BadRequestException('Basic auth requires a username and a password');
     }
+    assertProtectionPassword(password);
     if (await this.kubernetesService.isCiliumAvailable()) return { via: 'cilium' };
 
     // RFC 7617 credentials are colon-delimited, so a colon in the username
@@ -2986,6 +2997,7 @@ export class IngressService implements OnModuleInit {
 
     if (mode === 'password') {
       if (!password) throw new BadRequestException('Password is required for password protection');
+      assertProtectionPassword(password);
       protectionPasswordHash = await bcrypt.hash(password, 10);
     }
 
@@ -2993,6 +3005,7 @@ export class IngressService implements OnModuleInit {
       const cleanUsername = String(username || '').trim();
       if (!cleanUsername) throw new BadRequestException('Username is required for basic auth');
       if (!password) throw new BadRequestException('Password is required for basic auth');
+      assertProtectionPassword(password);
       // RFC 7617 credentials are colon-delimited, so a colon in the username
       // makes the split ambiguous and the account unusable.
       if (cleanUsername.includes(':')) {
