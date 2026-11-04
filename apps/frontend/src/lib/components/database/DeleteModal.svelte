@@ -29,12 +29,12 @@
 	</div>
 	<p class="modal-desc">
 		{#if recoverable}
-			Apps using it lose their connection now. It can be brought back from <strong
+			Apps using it lose their connection now. You can bring it back from <strong
 				>Recently deleted</strong
-			> on the project for 30 days, then it is removed with its backups.
+			> on the project for 30 days. After that, Orchard removes it and its backups.
 		{:else}
-			Apps using it lose their connection now. It has never been backed up, so <strong
-				>it cannot be brought back</strong
+			Apps using it lose their connection now. It has no backups, so <strong
+				>you can't bring it back</strong
 			>.
 		{/if}
 	</p>

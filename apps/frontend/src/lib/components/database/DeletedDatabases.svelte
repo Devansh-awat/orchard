@@ -60,7 +60,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({})
 			});
-			if (!res.ok) throw new Error(await errorMessage(res, 'Could not bring it back'));
+			if (!res.ok) throw new Error(await errorMessage(res, "Couldn't bring it back"));
 			const op = (await res.json()) as DatabaseOperation;
 			rows = rows.filter((r) => r.id !== row.id);
 			toasts.add({
@@ -74,7 +74,7 @@
 			onrestored?.();
 		} catch (e) {
 			toasts.add({
-				title: 'Could not bring it back',
+				title: "Couldn't bring it back",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});

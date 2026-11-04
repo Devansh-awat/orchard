@@ -172,7 +172,7 @@
 	{#if database.mode !== 'cnpg'}
 		<EmptyState
 			title="Query statistics need a dedicated database"
-			description="Recreate this database as a dedicated cluster to see how long each query takes."
+			description="Create a dedicated database to see how long each query takes."
 		>
 			{#snippet icon()}<Timer size={18} />{/snippet}
 		</EmptyState>

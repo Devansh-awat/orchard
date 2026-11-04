@@ -91,11 +91,11 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ name, access })
 			});
-			if (!res.ok) throw new Error(await errorMessage(res, 'Could not add the user'));
+			if (!res.ok) throw new Error(await errorMessage(res, "Couldn't add the user"));
 			created = (await res.json()) as Created;
 			await load();
 		} catch (e) {
-			addError = e instanceof Error ? e.message : 'Could not add the user';
+			addError = e instanceof Error ? e.message : "Couldn't add the user";
 		} finally {
 			adding = false;
 		}
@@ -108,12 +108,12 @@
 				`/apiv1/databases/${database.id}/users/${encodeURIComponent(user.name)}`,
 				{ method: 'DELETE' }
 			);
-			if (!res.ok) throw new Error(await errorMessage(res, 'Could not remove the user'));
+			if (!res.ok) throw new Error(await errorMessage(res, "Couldn't remove the user"));
 			users = (users ?? []).filter((u) => u.name !== user.name);
 			toasts.add({ title: `${user.name} removed`, color: 'success' });
 		} catch (e) {
 			toasts.add({
-				title: 'Could not remove the user',
+				title: "Couldn't remove the user",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -185,7 +185,7 @@
 				tone="success"
 				solid
 				title={`${created.name} can log in`}
-				description="Copy the password now. It is not shown again."
+				description="Copy the password now. It isn't shown again."
 			/>
 			<Field label="Password">
 				<SecretString

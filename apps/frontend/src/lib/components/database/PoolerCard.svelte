@@ -80,7 +80,7 @@
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify(body)
 		});
-		if (!res.ok) throw new Error(await errorMessage(res, 'Could not save'));
+		if (!res.ok) throw new Error(await errorMessage(res, "Couldn't save"));
 		adopt(await res.json());
 	}
 
@@ -91,7 +91,7 @@
 			toasts.add({ title: on ? 'Pooler turned on' : 'Pooler turned off', color: 'success' });
 		} catch (e) {
 			toasts.add({
-				title: 'Could not change the pooler',
+				title: "Couldn't change the pooler",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -112,7 +112,7 @@
 			toasts.add({ title: 'Pooler saved', color: 'success' });
 		} catch (e) {
 			toasts.add({
-				title: 'Could not save the pooler',
+				title: "Couldn't save the pooler",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});

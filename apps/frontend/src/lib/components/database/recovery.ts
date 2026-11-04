@@ -70,7 +70,7 @@ const PHASES: Record<DatabaseOperation['kind'] | 'in_place', OperationPhase[]> =
 
 export const PHASE_LABEL: Record<OperationPhase, string> = {
 	queued: 'Queued',
-	provisioning: 'Creating a cluster',
+	provisioning: 'Creating the copy',
 	recovering: 'Recovering data',
 	verifying: 'Checking tables',
 	cleaning_up: 'Cleaning up',

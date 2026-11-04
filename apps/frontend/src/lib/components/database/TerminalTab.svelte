@@ -208,7 +208,7 @@
 	{#if !dedicated}
 		<EmptyState
 			title="Terminal needs a dedicated database"
-			description="Terminal access requires a managed database (CNPG or container mode)."
+			description="Shared databases don't have their own terminal."
 		/>
 	{:else}
 		<div class="bar">

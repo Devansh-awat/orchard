@@ -199,7 +199,7 @@
 				id: 'connections',
 				title: 'Connections',
 				info: maxConnections
-					? 'Open connections against max_connections. At the limit new connections are refused.'
+					? 'Open connections against max_connections. At the limit, new connections are refused.'
 					: 'Open connections to the database.',
 				series: line('connections', 'Open', data.connections),
 				format: count,
@@ -308,7 +308,7 @@
 			id: 'cpu',
 			title: 'CPU',
 			info: cpuLimit
-				? `CPU used by ${together}, against the limit. At the limit Postgres is throttled.`
+				? `CPU used by ${together}, against the limit. At the limit, Postgres is throttled.`
 				: `CPU used by ${together}.`,
 			series: line('cpu', 'Used', data.cpu),
 			format: cpu,
@@ -321,7 +321,7 @@
 			id: 'mem',
 			title: 'Memory',
 			info: memLimit
-				? `Memory in use by ${together}, against the limit. At the limit Postgres runs out of memory and restarts.`
+				? `Memory in use by ${together}, against the limit. At the limit, Postgres runs out of memory and restarts.`
 				: `Memory in use by ${together}.`,
 			series: line('mem', 'Used', data.mem),
 			format: mib,
@@ -364,7 +364,7 @@
 					{
 						id: 'deadlocks',
 						title: 'Deadlocks',
-						info: 'Transactions Postgres cancelled because they were waiting on each other.',
+						info: 'Transactions Postgres canceled because they were waiting on each other.',
 						series: line('deadlocks', 'Deadlocks', data.deadlocks),
 						format: count,
 						headline: {

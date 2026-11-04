@@ -38,7 +38,7 @@
 		}
 	];
 
-	const NO_BACKUPS = 'Needs backup storage, which this organization does not have yet.';
+	const NO_BACKUPS = "Needs backup storage, which this organization doesn't have yet.";
 	const unavailable = (row: (typeof ROWS)[number]) =>
 		row.needsBackups && database.backupsEnabled === false;
 
@@ -56,7 +56,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ [key]: on })
 			});
-			if (!res.ok) throw new Error(await errorMessage(res, 'Could not save'));
+			if (!res.ok) throw new Error(await errorMessage(res, "Couldn't save"));
 			const next = (await res.json()) as DatabaseProtection;
 			onchanged({
 				deletionProtection: next.deletionProtection,
@@ -65,7 +65,7 @@
 			});
 		} catch (e) {
 			toasts.add({
-				title: 'Could not save',
+				title: "Couldn't save",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});

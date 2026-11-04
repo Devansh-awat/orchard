@@ -18,7 +18,7 @@ export function storageExpansionError(
 ): string | null {
 	const requestedBytes = parseStorageBytes(requested);
 	if (requestedBytes == null) return 'Enter a whole number followed by Mi, Gi, or Ti.';
-	if (requestedBytes > MAX_STORAGE_BYTES) return 'Storage cannot exceed 200Gi.';
+	if (requestedBytes > MAX_STORAGE_BYTES) return "Storage can't exceed 200Gi.";
 	const currentBytes = parseStorageBytes(current);
 	if (currentBytes == null) return 'The current storage size is unavailable.';
 	if (requestedBytes <= currentBytes) return `Enter a size larger than ${current}.`;

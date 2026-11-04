@@ -103,7 +103,7 @@
 
 <SectionCard title="Version and security">
 	{#if failed}
-		<EmptyState title="Could not load version details">
+		<EmptyState title="Couldn't load version details">
 			<Button variant="secondary" icon={RefreshCw} onclick={load}>Try again</Button>
 		</EmptyState>
 	{:else if !security}

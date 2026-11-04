@@ -88,12 +88,12 @@
 				headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
 				body: JSON.stringify({ major: Number(major), rehearse })
 			});
-			if (!res.ok) throw new Error(await errorMessage(res, 'Could not start the upgrade'));
+			if (!res.ok) throw new Error(await errorMessage(res, "Couldn't start the upgrade"));
 			const op = (await res.json()) as DatabaseOperation;
 			open = false;
 			onstarted(op);
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Could not start the upgrade';
+			error = e instanceof Error ? e.message : "Couldn't start the upgrade";
 		} finally {
 			submitting = false;
 		}
@@ -123,7 +123,7 @@
 		<ToggleRow
 			bind:checked={rehearse}
 			label="Rehearse on a copy first"
-			hint="Adds a few minutes before the real upgrade."
+			hint="Adds a few minutes before the upgrade."
 			disabled={submitting}
 		/>
 

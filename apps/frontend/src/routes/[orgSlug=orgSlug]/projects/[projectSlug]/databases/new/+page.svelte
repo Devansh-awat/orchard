@@ -47,7 +47,7 @@
 	const versionChoices = $derived(versionOptions(versions));
 	const selectedVersion = $derived(versions?.versions.find((v) => v.major === pgMajor) ?? null);
 	const versionHint = $derived.by(() => {
-		if (versionsFailed) return 'The version list did not load. Orchard picks its default.';
+		if (versionsFailed) return "The version list didn't load. Orchard picks its default.";
 		if (startFrom === 'url') return "Imports from a newer source use the source's version";
 		if (!selectedVersion) return undefined;
 		const note = versionNote(selectedVersion, versions?.defaultMajor);
@@ -168,8 +168,8 @@
 
 	const replicaHint = $derived(
 		replicas === 1
-			? 'A single instance. If its node goes down the database goes with it.'
-			: `One primary and ${replicas - 1} read ${replicas === 2 ? 'replica' : 'replicas'}, each a full pod with its own volume. Uses ${replicas}x the CPU and memory below.`
+			? 'A single instance. If its node goes down, the database goes down too.'
+			: `One primary and ${replicas - 1} read ${replicas === 2 ? 'replica' : 'replicas'}, each with its own volume. Uses ${replicas}x the CPU and memory below.`
 	);
 
 	const projectSlug = $derived($page.params.projectSlug ?? '');
@@ -199,7 +199,7 @@
 		try {
 			project = await fetchProjectContext({ orgSlug, projectSlug, wsSlug });
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load project';
+			error = e instanceof Error ? e.message : "Couldn't load project";
 		}
 	}
 
@@ -234,7 +234,7 @@
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to copy the database');
+				throw new Error(data.message || "Couldn't copy the database");
 			}
 			const op = await response.json();
 			toasts.add({
@@ -244,7 +244,7 @@
 			});
 			goto(op.targetDatabaseId ? `/${orgSlug}/databases/${op.targetDatabaseId}` : basePath);
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to copy the database';
+			error = e instanceof Error ? e.message : "Couldn't copy the database";
 		} finally {
 			submitting = false;
 		}
@@ -276,7 +276,7 @@
 
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to create database');
+				throw new Error(data.message || "Couldn't create database");
 			}
 
 			const database = await response.json();
@@ -289,7 +289,7 @@
 
 			goto(`/${orgSlug}/databases/${database.id}`);
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to create database';
+			error = e instanceof Error ? e.message : "Couldn't create database";
 		} finally {
 			submitting = false;
 		}
@@ -312,7 +312,7 @@
 
 <Page
 	title="New database"
-	description="Create a PostgreSQL database on the shared cluster. Orchard generates a unique user and password for you."
+	description="Orchard generates a unique user and password."
 	width="narrow"
 >
 	{#snippet eyebrow()}
@@ -385,7 +385,7 @@
 							<Field
 								label="Connection URL"
 								for="db-restore-url"
-								hint="Orchard imports everything from this database. It must be reachable from the cluster."
+								hint="Orchard imports everything from this database. Orchard must be able to reach it."
 							>
 								<Input
 									id="db-restore-url"
@@ -476,7 +476,9 @@
 				<div class="nd-stack">
 					<Field label="Database name" for="db-name">
 						{#snippet hint()}
-							A slug-friendly name. The database is created as <code>{generatedDbName()}</code>
+							Lowercase letters, digits and hyphens. The database is created as <code
+								>{generatedDbName()}</code
+							>
 						{/snippet}
 						<Input
 							id="db-name"
@@ -500,11 +502,7 @@
 							/>
 						</Field>
 
-						<Field
-							label="Storage size"
-							for="db-size"
-							hint="Persistent volume size for this database. Defaults to 1 GiB."
-						>
+						<Field label="Storage size" for="db-size" hint="Defaults to 1 GiB.">
 							<div>
 								<Stepper
 									id="db-size"

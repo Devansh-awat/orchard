@@ -69,7 +69,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ mode: next })
 			});
-			if (!res.ok) throw new Error(await errorMessage(res, 'Could not save'));
+			if (!res.ok) throw new Error(await errorMessage(res, "Couldn't save"));
 			const data = await res.json();
 			mode = data.mode;
 			instances = data.instances ?? instances;
@@ -77,7 +77,7 @@
 		} catch (e) {
 			mode = previous;
 			toasts.add({
-				title: 'Could not change high availability',
+				title: "Couldn't change high availability",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});

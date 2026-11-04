@@ -109,7 +109,7 @@
 	const PARAM_SCHEMA = [
 		{
 			key: 'max_connections',
-			label: 'Max Connections',
+			label: 'Max connections',
 			kind: 'int' as const,
 			min: 10,
 			max: 500,
@@ -119,7 +119,7 @@
 		},
 		{
 			key: 'shared_buffers',
-			label: 'Shared Buffers',
+			label: 'Shared buffers',
 			kind: 'memory' as const,
 			defaultValue: '',
 			requiresRestart: true,
@@ -128,28 +128,28 @@
 		},
 		{
 			key: 'work_mem',
-			label: 'Work Memory',
+			label: 'Work memory',
 			kind: 'memory' as const,
 			defaultValue: '4MB',
 			help: 'Memory per sort/hash operation.'
 		},
 		{
 			key: 'maintenance_work_mem',
-			label: 'Maintenance Work Memory',
+			label: 'Maintenance work memory',
 			kind: 'memory' as const,
 			defaultValue: '64MB',
 			help: 'Memory for VACUUM, CREATE INDEX, etc.'
 		},
 		{
 			key: 'effective_cache_size',
-			label: 'Effective Cache Size',
+			label: 'Effective cache size',
 			kind: 'memory' as const,
 			defaultValue: '4GB',
 			help: 'Planner hint for OS page cache size.'
 		},
 		{
 			key: 'log_min_duration_statement',
-			label: 'Slow Query Log (ms)',
+			label: 'Slow query log (ms)',
 			kind: 'int' as const,
 			min: -1,
 			max: 600000,
@@ -158,7 +158,7 @@
 		},
 		{
 			key: 'statement_timeout',
-			label: 'Statement Timeout (ms)',
+			label: 'Statement timeout (ms)',
 			kind: 'int' as const,
 			min: 0,
 			max: 3600000,
@@ -167,7 +167,7 @@
 		},
 		{
 			key: 'idle_in_transaction_session_timeout',
-			label: 'Idle-in-Transaction Timeout (ms)',
+			label: 'Idle-in-transaction timeout (ms)',
 			kind: 'int' as const,
 			min: 0,
 			max: 3600000,
@@ -176,7 +176,7 @@
 		},
 		{
 			key: 'synchronous_commit',
-			label: 'Synchronous Commit',
+			label: 'Synchronous commit',
 			kind: 'string' as const,
 			enum: ['on', 'off', 'local', 'remote_write', 'remote_apply'],
 			defaultValue: 'on',
@@ -409,7 +409,7 @@
 			const response = await apiFetch(`/apiv1/databases/${dbId}/${kind}`, { method: 'POST' });
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || `Failed to ${kind} database`);
+				throw new Error(data.message || `Couldn't ${kind} database`);
 			}
 			toasts.add({
 				title:
@@ -424,8 +424,8 @@
 			void fetchLive();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : `Failed to ${kind} database`,
+				title: `Couldn't ${kind} database`,
+				description: e instanceof Error ? e.message : `Couldn't ${kind} database`,
 				color: 'error'
 			});
 		} finally {
@@ -457,14 +457,14 @@
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to reset statistics');
+				throw new Error(data.message || "Couldn't reset statistics");
 			}
 			toasts.add({ title: 'Statistics reset', color: 'success' });
 			await fetchQueryStats(true);
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to reset statistics',
+				title: "Couldn't reset statistics",
+				description: e instanceof Error ? e.message : "Couldn't reset statistics",
 				color: 'error'
 			});
 		} finally {
@@ -588,7 +588,7 @@
 		if (!silent) error = null;
 		try {
 			const response = await apiFetch(`/apiv1/databases/${dbId}?fast=1`);
-			if (!response.ok) throw new Error('Failed to fetch database');
+			if (!response.ok) throw new Error("Couldn't load database");
 			const incoming = await response.json();
 			database = {
 				...incoming,
@@ -609,7 +609,7 @@
 				storageSizeDraft = database?.storageSize ?? '';
 			}
 		} catch (e) {
-			if (!silent) error = e instanceof Error ? e.message : 'Failed to load database';
+			if (!silent) error = e instanceof Error ? e.message : "Couldn't load database";
 		} finally {
 			if (!silent) loading = false;
 		}
@@ -708,19 +708,19 @@
 			});
 			if (!res.ok) {
 				const data = await res.json().catch(() => null);
-				throw new Error(data?.message || 'Failed to update resources');
+				throw new Error(data?.message || "Couldn't update resources");
 			}
 			toasts.add({
 				title: 'Resources updated',
-				description: 'Database pod will restart with new values.',
+				description: 'The database restarts with the new values.',
 				color: 'success'
 			});
 			resourcesDirty = false;
 			await fetchDatabase(true);
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to update resources',
+				title: "Couldn't update resources",
+				description: e instanceof Error ? e.message : "Couldn't update resources",
 				color: 'error'
 			});
 		} finally {
@@ -757,7 +757,7 @@
 			});
 			if (!res.ok) {
 				const data = await res.json().catch(() => null);
-				throw new Error(data?.message || 'Failed to raise memory');
+				throw new Error(data?.message || "Couldn't raise memory");
 			}
 			toasts.add({
 				title: `Memory raised to ${toBytes >= 1024 * MIB ? `${toBytes / (1024 * MIB)} GiB` : `${toBytes / MIB} MiB`}`,
@@ -768,8 +768,8 @@
 			await fetchDatabase(true);
 		} catch (e) {
 			toasts.add({
-				title: 'Could not raise memory',
-				description: e instanceof Error ? e.message : 'Failed to raise memory',
+				title: "Couldn't raise memory",
+				description: e instanceof Error ? e.message : "Couldn't raise memory",
 				color: 'error'
 			});
 		} finally {
@@ -787,7 +787,7 @@
 				body: JSON.stringify({ storageSize: storageSizeDraft.trim() })
 			});
 			const payload = await res.json().catch(() => null);
-			if (!res.ok) throw new Error(payload?.message || 'Failed to expand storage');
+			if (!res.ok) throw new Error(payload?.message || "Couldn't expand storage");
 			const expandedTo = payload?.storageSize ?? storageSizeDraft.trim();
 			database.storageSize = expandedTo;
 			storageSizeDraft = expandedTo;
@@ -801,8 +801,8 @@
 			await fetchDatabase(true);
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to expand storage',
+				title: "Couldn't expand storage",
+				description: e instanceof Error ? e.message : "Couldn't expand storage",
 				color: 'error'
 			});
 		} finally {
@@ -821,22 +821,22 @@
 			});
 			if (!res.ok) {
 				const data = await res.json().catch(() => null);
-				throw new Error(data?.message || 'Failed to scale database');
+				throw new Error(data?.message || "Couldn't scale database");
 			}
 			toasts.add({
 				title: `Scaling to ${scaleReplicas}`,
 				description:
 					scaleReplicas === 1
-						? 'Read replicas are being retired.'
-						: 'New replicas clone the primary before they report ready.',
+						? 'Orchard is removing read replicas.'
+						: "New replicas copy the primary before they're ready.",
 				color: 'success'
 			});
 			replicasDirty = false;
 			await fetchDatabase(true);
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to scale database',
+				title: "Couldn't scale database",
+				description: e instanceof Error ? e.message : "Couldn't scale database",
 				color: 'error'
 			});
 		} finally {
@@ -865,7 +865,7 @@
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to create backup');
+				throw new Error(data.message || "Couldn't create backup");
 			}
 			toasts.add({
 				title: 'Backup started',
@@ -875,8 +875,8 @@
 			await fetchBackups();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to create backup',
+				title: "Couldn't create backup",
+				description: e instanceof Error ? e.message : "Couldn't create backup",
 				color: 'error'
 			});
 		} finally {
@@ -894,18 +894,18 @@
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to restore');
+				throw new Error(data.message || "Couldn't restore");
 			}
 			toasts.add({
 				title: 'Restore started',
-				description: 'The database will be restored shortly',
+				description: 'The database restores shortly',
 				color: 'success'
 			});
 			await fetchDatabase();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to restore',
+				title: "Couldn't restore",
+				description: e instanceof Error ? e.message : "Couldn't restore",
 				color: 'error'
 			});
 		} finally {
@@ -942,7 +942,7 @@
 					scheduleCron = '';
 					toasts.add({ title: 'Schedule cleared', color: 'success' });
 				} else {
-					toasts.add({ title: 'Failed to clear schedule', color: 'error' });
+					toasts.add({ title: "Couldn't clear schedule", color: 'error' });
 				}
 			} finally {
 				scheduleSaving = false;
@@ -970,15 +970,15 @@
 			const data = await r.json().catch(() => ({}));
 			if (!r.ok) {
 				toasts.add({
-					title: 'Failed to save schedule',
-					description: data.message || 'Unknown error',
+					title: "Couldn't save schedule",
+					description: data.message || 'Try again.',
 					color: 'error'
 				});
 			} else {
 				scheduleCron = data.cron || cron;
 				toasts.add({
 					title: 'Schedule saved',
-					description: `Backups will run: ${scheduleCron}`,
+					description: `Backups run on: ${scheduleCron}`,
 					color: 'success'
 				});
 			}
@@ -995,14 +995,14 @@
 			const data = await r.json().catch(() => ({}));
 			if (!r.ok) {
 				toasts.add({
-					title: 'Could not expose database',
-					description: data.message || 'Unknown error',
+					title: "Couldn't turn on public access",
+					description: data.message || 'Try again.',
 					color: 'error'
 				});
 				return;
 			}
 			toasts.add({
-				title: 'Database exposed',
+				title: 'Public access on',
 				description: `${data.host}:${data.port}`,
 				color: 'success'
 			});
@@ -1027,13 +1027,13 @@
 			if (!r.ok) {
 				const data = await r.json().catch(() => ({}));
 				toasts.add({
-					title: 'Failed to disable',
-					description: data.message || 'Unknown error',
+					title: "Couldn't turn off public access",
+					description: data.message || 'Try again.',
 					color: 'error'
 				});
 				return;
 			}
-			toasts.add({ title: 'Public access disabled', color: 'success' });
+			toasts.add({ title: 'Public access off', color: 'success' });
 			await fetchDatabase(true);
 		} finally {
 			togglingPublic = false;
@@ -1067,7 +1067,7 @@
 			if (!r.ok || !data.success) {
 				toasts.add({
 					title: 'Install failed',
-					description: data.output || data.message || 'Unknown error',
+					description: data.output || data.message || 'Try again.',
 					color: 'error'
 				});
 			} else {
@@ -1097,7 +1097,7 @@
 			if (!r.ok || !data.success) {
 				toasts.add({
 					title: 'Uninstall failed',
-					description: data.output || data.message || 'Unknown error',
+					description: data.output || data.message || 'Try again.',
 					color: 'error'
 				});
 			} else {
@@ -1149,7 +1149,7 @@
 			if (!r.ok) {
 				toasts.add({
 					title: 'Save failed',
-					description: data.message || 'Unknown error',
+					description: data.message || 'Try again.',
 					color: 'error'
 				});
 			} else {
@@ -1187,7 +1187,7 @@
 				const data = await r.json().catch(() => null);
 				logs = logsPrevious
 					? data?.message ||
-						'No previous container to read. This pod has not restarted since it was created.'
+						"No previous container to read. This pod hasn't restarted since it was created."
 					: '';
 			}
 		} catch {
@@ -1337,7 +1337,7 @@
 			const response = await apiFetch(`/apiv1/databases/${dbId}`, { method: 'DELETE' });
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to delete database');
+				throw new Error(data.message || "Couldn't delete database");
 			}
 			const result = await response.json().catch(() => ({}));
 			const until = result?.recoverableUntil
@@ -1350,7 +1350,7 @@
 				title: `${database.name} deleted`,
 				description: until
 					? `Bring it back from the project until ${until}.`
-					: 'It had no backup, so it cannot be brought back.',
+					: "It had no backup, so it can't be brought back.",
 				color: 'success'
 			});
 			const ws = database.project?.workspace;
@@ -1363,8 +1363,8 @@
 			}
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to delete',
+				title: "Couldn't delete",
+				description: e instanceof Error ? e.message : "Couldn't delete",
 				color: 'error'
 			});
 		} finally {
@@ -1383,7 +1383,7 @@
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to rename');
+				throw new Error(data.message || "Couldn't rename");
 			}
 			const updated = await response.json();
 			database.name = updated.name;
@@ -1391,8 +1391,8 @@
 			toasts.add({ title: 'Database renamed', color: 'success' });
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to rename',
+				title: "Couldn't rename",
+				description: e instanceof Error ? e.message : "Couldn't rename",
 				color: 'error'
 			});
 		} finally {
@@ -1957,7 +1957,7 @@
 <ConfirmModal
 	bind:open={showResetStatsModal}
 	title="Reset query statistics?"
-	description="All recorded query timings and counts start over from zero. This does not affect your data or running queries."
+	description="All recorded query timings and counts start over from zero. This doesn't affect your data or running queries."
 	confirmLabel="Reset statistics"
 	danger={false}
 	onconfirm={resetQueryStats}

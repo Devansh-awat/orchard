@@ -477,14 +477,14 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(label ? { label } : {})
 			});
-			if (!res.ok) throw new Error(await errorMessage(res, 'Could not take a checkpoint'));
+			if (!res.ok) throw new Error(await errorMessage(res, "Couldn't take a checkpoint"));
 			checkpointOpen = false;
 			toasts.add({ title: 'Checkpoint taken', description: label || undefined, color: 'success' });
 			await loadRecovery();
 			setTimeout(() => alive && loadRecovery(), 10_000);
 		} catch (e) {
 			toasts.add({
-				title: 'Could not take a checkpoint',
+				title: "Couldn't take a checkpoint",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -496,11 +496,11 @@
 	async function hideCheckpoint(c: DatabaseCheckpoint) {
 		try {
 			const res = await apiFetch(`/apiv1/checkpoints/${c.id}`, { method: 'DELETE' });
-			if (!res.ok) throw new Error(await errorMessage(res, 'Could not hide it'));
+			if (!res.ok) throw new Error(await errorMessage(res, "Couldn't hide it"));
 			if (recovery) recovery.checkpoints = recovery.checkpoints.filter((x) => x.id !== c.id);
 		} catch (e) {
 			toasts.add({
-				title: 'Could not hide the checkpoint',
+				title: "Couldn't hide the checkpoint",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -513,14 +513,14 @@
 			const res = await apiFetch(`/apiv1/databases/${database.id}/restore-tests`, {
 				method: 'POST'
 			});
-			if (!res.ok) throw new Error(await errorMessage(res, 'Could not start a restore test'));
+			if (!res.ok) throw new Error(await errorMessage(res, "Couldn't start a restore test"));
 			const op = (await res.json()) as DatabaseOperation;
 			startedHere.add(op.id);
 			upsert(op);
 			watch(op.id);
 		} catch (e) {
 			toasts.add({
-				title: 'Could not start a restore test',
+				title: "Couldn't start a restore test",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -537,7 +537,7 @@
 			});
 			if (!res.ok)
 				throw new Error(
-					await errorMessage(res, action === 'undo' ? 'Could not undo' : 'Could not cancel')
+					await errorMessage(res, action === 'undo' ? "Couldn't undo" : "Couldn't cancel")
 				);
 			upsert((await res.json()) as DatabaseOperation);
 			toasts.add({
@@ -552,7 +552,7 @@
 			onRecoveryChanged?.();
 		} catch (e) {
 			toasts.add({
-				title: action === 'undo' ? 'Could not undo' : 'Could not cancel',
+				title: action === 'undo' ? "Couldn't undo" : "Couldn't cancel",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -595,7 +595,7 @@
 
 	{#if available && $backupsOnThisServer}
 		<p class="on-this-server">
-			Backups are on this server. If the server is lost, the backups are lost.
+			Backups are on this server. If you lose the server, you lose the backups.
 			{#if $isSuperAdmin}<a href="/admin/instance#storage">Add S3 storage</a>{/if}
 		</p>
 	{/if}
@@ -637,7 +637,7 @@
 							{/snippet}
 							<MenuItem
 								icon={Flag}
-								description="Instant, marks this moment by name"
+								description="Instant. Names this moment"
 								disabled={completed.length === 0}
 								onclick={() => (checkpointOpen = true)}
 							>
@@ -645,7 +645,7 @@
 							</MenuItem>
 							<MenuItem
 								icon={Archive}
-								description="A full copy, takes a few minutes"
+								description="A full copy. Takes a few minutes"
 								disabled={creatingBackup || inFlight}
 								onclick={onCreateBackup}
 							>

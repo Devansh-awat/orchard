@@ -64,7 +64,7 @@
 		try {
 			const r = await apiFetch(`/apiv1/databases/${dbId}/provisioning`);
 			if (!r.ok) {
-				error = `Failed to load provisioning status (${r.status})`;
+				error = `Couldn't load provisioning status (${r.status})`;
 				return;
 			}
 			const j = (await r.json()) as Provisioning;
@@ -75,7 +75,7 @@
 				onDone?.();
 			}
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load provisioning status';
+			error = e instanceof Error ? e.message : "Couldn't load provisioning status";
 		} finally {
 			loading = false;
 		}
@@ -136,24 +136,24 @@
 			if (/unbound immediate persistentvolumeclaim/i.test(m)) {
 				return {
 					title: 'Waiting for storage to be ready',
-					hint: 'The Postgres pod is waiting on its PersistentVolumeClaim to bind. This usually resolves on its own once Longhorn provisions the volume. Give it a few seconds.'
+					hint: 'The database is waiting for its volume. This usually takes a few seconds.'
 				};
 			}
 			if (/insufficient (cpu|memory)/i.test(m)) {
 				return {
 					title: 'No node has enough free CPU or memory',
-					hint: 'Lower the database resources, or free capacity on the cluster before the pod can schedule.'
+					hint: 'Lower the database resources, or free up capacity.'
 				};
 			}
 			if (/taint|toleration|nodeselector|node\(s\) didn't match/i.test(m)) {
 				return {
 					title: 'No node matches the scheduling rules',
-					hint: "Node selectors or taints are excluding every available worker. Check the cluster's node labels and taints."
+					hint: 'Node selectors or taints exclude every node. Check your node labels and taints.'
 				};
 			}
 			return {
-				title: "Couldn't place the pod on any node",
-				hint: 'Kubernetes will retry. If it persists, capacity is exhausted or scheduling constraints are too strict.'
+				title: "Couldn't find a node for the database",
+				hint: 'Kubernetes keeps retrying. If this continues, free up capacity or loosen the scheduling rules.'
 			};
 		}
 		if (
@@ -163,25 +163,25 @@
 		) {
 			return {
 				title: "Couldn't attach the storage volume",
-				hint: 'The PVC may still be detaching from another node, or the storage class is having trouble. Usually self-heals within a minute.'
+				hint: 'The volume may still be detaching from another node. This usually clears within a minute.'
 			};
 		}
 		if (r === 'provisioningfailed' || /failed to provision volume/i.test(m)) {
 			return {
 				title: 'Storage provisioning failed',
-				hint: "The storage class (Longhorn) couldn't create the underlying volume. Check storage capacity and the Longhorn controller."
+				hint: "The storage provider couldn't create the volume. Check your storage capacity and provider."
 			};
 		}
 		if (/imagepullbackoff|errimagepull|failed to pull image/i.test(m)) {
 			return {
 				title: "Couldn't pull the Postgres image",
-				hint: 'The image registry is unreachable or the tag is missing. Retries will keep happening with back-off.'
+				hint: 'The registry is unreachable or the tag is missing. Kubernetes keeps retrying.'
 			};
 		}
 		if (/back-?off.*restarting failed container/i.test(m) || /crashloopbackoff/i.test(m)) {
 			return {
 				title: 'Postgres container keeps crashing on startup',
-				hint: 'See the migration / pod logs below for the actual error. Common causes: corrupt data dir, bad initdb parameters, or a failing import.'
+				hint: 'Check the logs below for the error. Common causes are a corrupt data directory, bad initdb parameters or a failed import.'
 			};
 		}
 		if (/oomkilled|out of memory/i.test(m)) {
@@ -192,26 +192,26 @@
 		}
 		if (/secret.*not found|configmap.*not found/i.test(m)) {
 			return {
-				title: 'A referenced secret or config is missing',
-				hint: 'The cluster references an object that does not exist in this namespace yet. Usually transient during create.'
+				title: 'A secret or config is missing',
+				hint: "The database needs something that doesn't exist yet. This usually clears on its own during creation."
 			};
 		}
 		if (/dnsconfig|dns/i.test(m) && /fail/i.test(m)) {
 			return {
 				title: 'DNS lookups inside the pod are failing',
-				hint: 'Cluster DNS is unreachable. The import job may not be able to reach the source database.'
+				hint: 'Internal DNS is unreachable. The import may not be able to reach the source database.'
 			};
 		}
 		if (/connection refused|could not connect to server/i.test(m)) {
 			return {
 				title: "Can't reach the source database",
-				hint: 'The migration URL host is unreachable from this cluster, or the source server is rejecting the connection.'
+				hint: "Orchard can't reach the host in the migration URL, or the source server is rejecting the connection."
 			};
 		}
 		if (/password authentication failed|role .* does not exist/i.test(m)) {
 			return {
-				title: 'Source database rejected our credentials',
-				hint: 'Double-check the user and password in the migration URL.'
+				title: 'The source database rejected the credentials',
+				hint: 'Check the user and password in the migration URL.'
 			};
 		}
 		return null;
@@ -382,7 +382,7 @@
 						style={warningsOpen ? '' : 'transform: rotate(-90deg)'}
 					/>
 					<TriangleAlertIcon size={14} animate={true} class="prov-warn-head-icon" />
-					<span class="prov-panel-title">Heads up</span>
+					<span class="prov-panel-title">Warning</span>
 					<span class="prov-panel-sub">
 						{warnings.length}
 						{warnings.length === 1 ? 'issue' : 'issues'} from Kubernetes

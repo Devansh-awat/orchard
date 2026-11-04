@@ -16,7 +16,7 @@ test('rejects malformed and zero quantities', () => {
 test('requires a grow-only size within the 200Gi limit', () => {
 	assert.equal(storageExpansionError('10Gi', '10240Mi'), 'Enter a size larger than 10Gi.');
 	assert.equal(storageExpansionError('10Gi', '9Gi'), 'Enter a size larger than 10Gi.');
-	assert.equal(storageExpansionError('10Gi', '201Gi'), 'Storage cannot exceed 200Gi.');
+	assert.equal(storageExpansionError('10Gi', '201Gi'), "Storage can't exceed 200Gi.");
 	assert.equal(storageExpansionError('10Gi', '11Gi'), null);
 });
 

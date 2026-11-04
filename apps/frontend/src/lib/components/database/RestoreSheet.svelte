@@ -178,12 +178,12 @@
 				headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
 				body: JSON.stringify(body())
 			});
-			if (!res.ok) throw new Error(await errorMessage(res, 'Could not start'));
+			if (!res.ok) throw new Error(await errorMessage(res, "Couldn't start"));
 			const op = (await res.json()) as DatabaseOperation;
 			open = false;
 			onstarted(op, mode);
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Could not start';
+			error = e instanceof Error ? e.message : "Couldn't start";
 		} finally {
 			submitting = false;
 		}

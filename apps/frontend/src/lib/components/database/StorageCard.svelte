@@ -119,7 +119,7 @@
 			{/if}
 			{#if live?.archiving?.ok === false}
 				<Alert tone="warning" title="WAL archiving is failing">
-					WAL keeps filling the volume until archiving is fixed, so growing only buys time.
+					WAL keeps filling the volume until you fix archiving. Growing the volume only delays this.
 				</Alert>
 			{/if}
 			{#if warning}
