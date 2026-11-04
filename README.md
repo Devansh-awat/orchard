@@ -25,6 +25,8 @@ If you just want the command, you need a Linux server with at least 4 GB of RAM 
 sudo bash -c "$(curl -fsSL https://assets.orchard.my/install.sh)"
 ```
 
+![Installing Orchard on a Linux server](.github/assets/install.gif)
+
 > [!IMPORTANT]
 > Deployments are network isolated from each other and from the platform by default, but they **share
 > the host kernel** unless you install gVisor or Kata and switch them on. Running untrusted code is not
