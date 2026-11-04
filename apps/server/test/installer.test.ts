@@ -373,6 +373,31 @@ test(
 );
 
 test(
+  'the merge runs under the shell options the installer itself uses',
+  { skip: !has('yq', '--version') },
+  () => {
+    const box = sandbox();
+    try {
+      const { read } = readValues(box);
+      box.run(`mkdir -p "${box.state}"; write_values; ${handEdits}`);
+      assert.match(
+        box.run('set -euo pipefail; load_previous_answers; write_values'),
+        /No settings change/
+      );
+      assert.match(
+        box.run(
+          'set -euo pipefail; parse_args --domain new.example.com; load_previous_answers; write_values'
+        ),
+        /ingress\.host: orchard\.example\.com -> new\.example\.com/
+      );
+      assert.equal(read('.signupMode'), 'open');
+    } finally {
+      box.cleanup();
+    }
+  }
+);
+
+test(
   'a changed answer wins, its derived values follow, and the diff hides secret values',
   { skip: !has('yq', '--version') },
   () => {

@@ -216,7 +216,7 @@ jobs:
           check "$DOCKERFILE_ID" 'uname -m' "${{ matrix.uname }}"
           check "$RAILPACK_ID" 'node -p process.arch' "${{ matrix.node }}"
 
-      - name: Re-running the installer keeps secrets, volumes, custom env and k3s running
+      - name: Re-running the installer keeps secrets, volumes, custom env, chart values and k3s running
         run: |
           fingerprint() {
             sudo yq -r '.server.env[] | select(.name == "JWT_SECRET" or .name == "SECRETS_ENCRYPTION_KEY" or .name == "SSO_ENCRYPTION_KEY" or .name == "MCP_SERVICE_TOKEN") | .name + "=" + .value' /etc/orchard/values.yaml | sha256sum
@@ -227,6 +227,7 @@ jobs:
           before=$(fingerprint)
           test "$(sudo yq -r '[.server.env[] | select(.name == "SSO_ENCRYPTION_KEY")] | length' /etc/orchard/values.yaml)" = 1
           sudo orchardctl env set E2E_KEEP_ME kept
+          sudo orchardctl config set signupMode open
           started=$(k3s_started)
           settings_before=$($KUBECTL -n orchard exec deploy/server -- node dist/scripts/install-settings.js show)
           sudo ORCHARD_ASSUME_YES=true ORCHARD_NO_PACING=1 NO_COLOR=1 bash install/install.sh \
@@ -236,12 +237,15 @@ jobs:
           test "$before" = "$(fingerprint)"
           test "$started" = "$(k3s_started)"
           test "$(sudo orchardctl env get E2E_KEEP_ME)" = kept
+          test "$(sudo yq -r '.signupMode' /etc/orchard/values.yaml)" = open
           test "$(sudo yq -r '.mcp.enabled' /etc/orchard/values.yaml)" = false
           test "$($KUBECTL -n orchard exec deploy/server -- node dist/scripts/install-settings.js show)" = "$settings_before"
           test "$(sudo yq -r '.metrics.enabled' /etc/orchard/values.yaml)" = false
           $KUBECTL -n orchard rollout status deploy/server --timeout=5m
           $KUBECTL -n orchard get deploy server -o json \
             | jq -e '[.spec.template.spec.containers[0].env[] | select(.name == "E2E_KEEP_ME") | .value] == ["kept"]'
+          $KUBECTL -n orchard get deploy server -o json \
+            | jq -e '[.spec.template.spec.containers[0].env[] | select(.name == "SIGNUP_MODE") | .value] == ["open"]'
 
       - name: Diagnostics
         if: failure()
