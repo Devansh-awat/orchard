@@ -13,6 +13,7 @@ import { clusterSnapshot, WRITE_GUARD_ANNOTATION } from '../../kubernetes/cnpg-s
 import { storagePressure, storagePressureDetail } from '../../kubernetes/db-stats';
 import { dataVolumesOf, fullestVolume, writeGuardDecision } from '../../kubernetes/volume-stats';
 import { DatabasesService } from '../../projects/databases.service';
+import { DatabaseCheckpointsService } from '../../projects/database-checkpoints.service';
 import { QuotasService } from '../../quotas/quotas.service';
 import { AuditService } from '../../audit/audit.service';
 import { K8S_DELETED_REASON } from './workload.consumer';
@@ -864,6 +865,18 @@ export class CnpgConsumer implements OnModuleDestroy {
 
     if (next !== db.status) {
       await this.prisma.database.update({ where: { id: ctx.databaseId }, data: { status: next } });
+      if (next === 'ready') this.installDropGuard(ctx.databaseId);
+    }
+  }
+
+  private installDropGuard(databaseId: string) {
+    try {
+      void this.moduleRef
+        .get(DatabaseCheckpointsService, { strict: false })
+        .ensureGuard(databaseId)
+        .catch((e: any) => this.logger.warn(`drop guard on ${databaseId}: ${e?.message ?? e}`));
+    } catch (e: any) {
+      this.logger.warn(`drop guard on ${databaseId}: ${e?.message ?? e}`);
     }
   }
 

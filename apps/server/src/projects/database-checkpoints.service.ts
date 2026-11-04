@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 import { randomUUID } from 'crypto';
-import type { DatabaseCheckpoint } from '@prisma/client';
+import type { DatabaseCheckpoint, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { K8sCnpgService } from '../kubernetes/k8s-cnpg.service';
 import { LeaderElectionService } from '../events/leader-election.service';
@@ -55,6 +55,22 @@ const BACKUP_STORAGE_SELECT = {
   backupR2SecretKey: true
 } as const;
 
+const GUARD_RETRY_MS = 5 * 60 * 1000;
+
+const GUARD_TARGET_SELECT = {
+  id: true,
+  name: true,
+  namespace: true,
+  clusterName: true,
+  dbName: true,
+  ddlCheckpoints: true,
+  ddlGuardVersion: true,
+  backupServerName: true,
+  project: { select: { organization: { select: BACKUP_STORAGE_SELECT } } }
+} satisfies Prisma.DatabaseSelect;
+
+type GuardTarget = Prisma.DatabaseGetPayload<{ select: typeof GUARD_TARGET_SELECT }>;
+
 @Injectable()
 export class DatabaseCheckpointsService {
   private readonly logger = new Logger(DatabaseCheckpointsService.name);
@@ -66,6 +82,8 @@ export class DatabaseCheckpointsService {
   private guardLost = false;
 
   private readonly guardSeq = new Map<string, number>();
+
+  private readonly guardRetryAt = new Map<string, number>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -246,6 +264,7 @@ export class DatabaseCheckpointsService {
         data: { status: 'expired' }
       });
       this.guardTick += 1;
+      await this.installMissingGuards();
       if (this.guardTick % 4 === 1) await this.ingestGuardCheckpoints();
       if (this.guardTick % 20 === 1 || this.guardLost) {
         this.guardLost = false;
@@ -299,26 +318,62 @@ export class DatabaseCheckpointsService {
     });
   }
 
-  private async guardTargets(installed: boolean) {
+  private async guardTargets(installed: boolean, only: Prisma.DatabaseWhereInput = {}) {
     return this.prisma.database.findMany({
       where: {
         mode: 'cnpg',
         status: 'ready',
         namespace: { not: null },
         clusterName: { not: null },
-        ...(installed ? { ddlGuardVersion: { not: null } } : {})
+        ...(installed ? { ddlGuardVersion: { not: null } } : {}),
+        ...only
       },
-      select: {
-        id: true,
-        name: true,
-        namespace: true,
-        clusterName: true,
-        dbName: true,
-        ddlCheckpoints: true,
-        ddlGuardVersion: true,
-        backupServerName: true,
-        project: { select: { organization: { select: BACKUP_STORAGE_SELECT } } }
-      }
+      select: GUARD_TARGET_SELECT
+    });
+  }
+
+  private async guardsWanted(only: Prisma.DatabaseWhereInput) {
+    if (!(await this.settings.isDatabaseToggleOn('ddlCheckpoints'))) return [];
+    const dbs = await this.guardTargets(false, {
+      ddlCheckpoints: true,
+      ddlGuardVersion: null,
+      ...only
+    });
+    return dbs.filter((d) => hasBackupRoute(d.project?.organization));
+  }
+
+  private async installMissingGuards() {
+    const now = Date.now();
+    const due = (await this.guardsWanted({})).filter(
+      (d) => (this.guardRetryAt.get(d.id) ?? 0) <= now
+    );
+    await inBatches(due.slice(0, 40), 4, (d) => this.applyGuard(d, true));
+  }
+
+  async ensureGuard(databaseId: string) {
+    const [db] = await this.guardsWanted({ id: databaseId });
+    if (db) await this.applyGuard(db, true);
+  }
+
+  private async applyGuard(d: GuardTarget, install: boolean) {
+    const out = await this.k8sCnpg.runPsqlInCnpg(
+      d.namespace!,
+      d.clusterName!,
+      d.dbName,
+      install ? ddlGuardInstallSql() : ddlGuardRemoveSql()
+    );
+    if (!out.success) {
+      this.guardRetryAt.set(d.id, Date.now() + GUARD_RETRY_MS);
+      this.logger.warn(
+        `drop guard ${install ? 'install' : 'removal'} on ${d.name} failed: ${(out.stderr || '').slice(0, 300)}`
+      );
+      return;
+    }
+    this.guardRetryAt.delete(d.id);
+    this.guardSeq.delete(guardSeqKey(d));
+    await this.prisma.database.update({
+      where: { id: d.id },
+      data: { ddlGuardVersion: install ? DDL_GUARD_VERSION : null }
     });
   }
 
@@ -345,26 +400,7 @@ export class DatabaseCheckpointsService {
       const probe = probes[i];
       return probe.status === 'fulfilled' && probe.value === false;
     });
-    await inBatches([...work, ...lost].slice(0, 40), 4, async (d) => {
-      const install = wanted(d);
-      const out = await this.k8sCnpg.runPsqlInCnpg(
-        d.namespace!,
-        d.clusterName!,
-        d.dbName,
-        install ? ddlGuardInstallSql() : ddlGuardRemoveSql()
-      );
-      if (!out.success) {
-        this.logger.warn(
-          `drop guard ${install ? 'install' : 'removal'} on ${d.name} failed: ${(out.stderr || '').slice(0, 300)}`
-        );
-        return;
-      }
-      this.guardSeq.delete(guardSeqKey(d));
-      await this.prisma.database.update({
-        where: { id: d.id },
-        data: { ddlGuardVersion: install ? DDL_GUARD_VERSION : null }
-      });
-    });
+    await inBatches([...work, ...lost].slice(0, 40), 4, (d) => this.applyGuard(d, wanted(d)));
   }
 
   private async ingestGuardCheckpoints() {
