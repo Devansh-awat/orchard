@@ -164,7 +164,7 @@ Select a changed file to open its diff. Select a line number to comment on that 
 | --------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | All files | The worktree as a tree. Right-click to create, rename, or delete files and folders.                                                     |
 | Changes   | Changed files with line counts, and a commit box. Refer to [Commit, push, and merge](/greenhouse/pull-requests/).                       |
-| Checks    | The pull request's state, its checks, and **Fix with agent**. Refer to [Checks](/greenhouse/pull-requests/#review-checks).              |
+| Checks    | The pull request's state, its checks, and **Fix with agent**. Refer to [Checks](/greenhouse/pull-requests/#3-review-checks).              |
 | Review    | Your diff comments.                                                                                                                    |
 
 ## Terminal dock

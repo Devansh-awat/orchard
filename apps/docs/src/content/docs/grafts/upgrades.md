@@ -1,88 +1,94 @@
 ---
-title: Upgrades and rollback
-description: How graft upgrades keep your data safe, and how to go back.
+title: Upgrade and roll back grafts
+description: Upgrade an Orchard graft with a rehearsal and a snapshot, roll back to the previous version and its data, and follow a version range from Git.
 sidebar:
   order: 3
 ---
 
-Upgrading a graft can change its database, so Orchard is careful about it.
-Everything here only ever touches the graft's own schema, `ext_<graft_id>`.
-Orchard's own data is never part of a graft upgrade or rollback.
+Move a graft to a new version, or return to the previous one. An upgrade or rollback changes only the graft's own schema, `ext_<graft_id>`. It does not change Orchard's data or the data of other grafts.
 
-## What happens on an upgrade
+## Upgrade a graft
+
+Run:
 
 ```sh
 sudo orchardctl graft upgrade announcements --apply
 ```
 
-1. **Rehearsal.** The new version's migrations run against your live database
-   inside a transaction that is then rolled back. If they would fail, you see the
-   exact error and nothing changes. `--dry-run` stops here.
-2. **Snapshot.** The graft's schema and its migration history are saved under
-   `/etc/orchard/graft-snapshots/<id>/<time>/`. The last five are kept.
-3. **Rollout.** The new version is written into your values and Orchard rolls
-   out. The first pod to start runs the migrations, all of them in one
-   transaction: either every one applies or none do. If they fail, that pod
-   reports the graft as failed and the rest of Orchard keeps running.
+To upgrade all grafts, omit the ID. A graft that you installed from a file does not upgrade this way. Run `orchardctl graft add` with the newer file.
 
-Migrations that cannot run in a transaction, such as
-`CREATE INDEX CONCURRENTLY`, are marked by their author and run on their own.
-`graft doctor` warns about them, and a dry run cannot rehearse them.
+The command does the following:
 
-While a rollout is in progress, old and new pods run side by side for a short
-time. Graft authors write migrations that both versions can live with (add a
-column first, stop using an old one a version later), the same rule Orchard
-follows for its own.
+1. **Rehearsal:** It runs the new version's migrations against your live database, in a transaction that it rolls back. If they would fail, it shows the error and changes nothing. `--dry-run` stops here.
+2. **Snapshot:** If the new version has pending migrations, it saves the graft's schema and migration history under `/etc/orchard/graft-snapshots/<id>/<time>/`. It keeps the last five snapshots.
+3. **Rollout:** It writes the new version to your values, and Orchard rolls out. The first pod to start runs the pending migrations in one transaction. If they fail, that pod reports the graft as failed and the rest of Orchard keeps running.
 
-## Rolling back
+:::note
+`orchardctl` cannot take a snapshot when Orchard uses an external database. Back up the database yourself and pass `--no-snapshot`.
+:::
+
+An author can mark a migration that cannot run in a transaction, such as `CREATE INDEX CONCURRENTLY`. These migrations run on their own, and `--dry-run` cannot rehearse them. `graft doctor` warns about them.
+
+During a rollout, old and new pods run side by side for a short time.
+
+## Roll back a graft
+
+Run:
 
 ```sh
 sudo orchardctl graft rollback announcements --apply
 ```
 
-Rollback puts the previous version back into your values and restores the
-snapshot taken before the upgrade. **Anything the graft saved after the upgrade
-is lost**, which is why the command makes you type the graft's id to confirm.
-Orchard's own data, and every other graft's, is untouched.
+The command puts the previous version back in your values and restores the snapshot taken before the upgrade.
 
-If you upgraded through Helm values rather than `orchardctl`, there is no
-snapshot. Set the previous version back in your values; if the newer version's
-migrations already ran, the older version refuses to start until its data is
-restored from your own backup, rather than running against a schema it does not
-understand.
+:::caution
+Anything the graft saved after the upgrade is lost. The command asks you to type the graft's ID to confirm.
+:::
 
-## Edited migrations are refused
+### Roll back an upgrade made with Helm values
 
-Orchard records a checksum for every migration it applies. A graft version
-whose already-applied migration has changed is refused, so a republished graft
-cannot quietly rewrite history. Authors ship a new migration instead.
+Upgrades made through Helm values have no snapshot. Set the previous version back in your values.
 
-## Following a version range from Git
+If the newer version's migrations already ran, the older version fails in the `migrations` phase, with this message:
 
-Values always pin an exact version and digest, so every pod runs the same graft
-and a revert is a rollback. To keep a pin moving without editing it by hand, mark
-the version with a range:
+```text
+applied migrations are missing from this version: 0002_pinned; downgrades must use orchardctl graft rollback
+```
+
+Restore the graft's schema from your own backup.
+
+## Edited migrations
+
+Orchard records a checksum for each migration it applies. It refuses a graft version whose applied migration has changed. Authors ship a new migration instead.
+
+## Follow a version range from Git
+
+Values pin an exact version and digest, so that every pod runs the same graft. To update a pin automatically, mark the version with a range:
 
 ```yaml
 grafts:
   - id: greenhouse
     version: 1.2.0 # {"$graftpolicy": "^1"}
-    digest: sha256:...
+    digest: sha256:<digest>
 ```
 
-and run `graft bump` from the graft SDK in your GitOps repository:
+In your GitOps repository, run `graft bump` from the graft SDK:
 
 ```sh
 npx -p @orchardlabs/graft-sdk graft bump values.yaml --platform 2.70.0
 ```
 
-It moves each marked graft to the newest signed, unrevoked marketplace version
-inside its range and rewrites the digest with it. It never downgrades, and with
-`--platform` set to the Orchard version you run it holds back any release whose
-`engines.platform` that version does not satisfy, printing `held` instead, so a
-graft never lands on a server too old to load it. `--check` reports without
-writing and exits 2 when something would change.
+The command moves each marked graft to the newest signed, unrevoked Extension Marketplace version in its range, and rewrites the digest. It does not downgrade.
 
-Run it when a graft is published and again when your Orchard version changes,
-then commit the result. Upgrades made this way go through Helm values, so the
-rehearsal and snapshot above do not apply.
+| Flag                 | Effect                                                                                                             |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `--platform <version>` | Holds back a release whose `engines.platform` does not include this Orchard version, and prints `held`.           |
+| `--marketplace <url>`  | Reads from another marketplace.                                                                                   |
+| `--check`            | Reports without writing. Exits with code 2 when something would change.                                            |
+
+Run the command when a graft is published and when your Orchard version changes, then commit the result. These upgrades go through Helm values, so the rehearsal and snapshot do not apply.
+
+## Related resources
+
+- [Install grafts](/grafts/install/): Add and remove grafts.
+- [Troubleshooting grafts](/grafts/troubleshooting/): Fix a failed upgrade.

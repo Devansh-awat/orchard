@@ -1,16 +1,15 @@
 ---
-title: Database
-description: A graft's own schema, its migrations, and reading Orchard's tables.
+title: Use the database
+description: Add migrations to an Orchard graft's own Postgres schema, read declared columns from Orchard's tables, and connect through the db door.
 sidebar:
   order: 5
 ---
 
-Each graft gets a Postgres schema of its own, `ext_<graft_id>` (dashes become
-underscores). Orchard creates it, runs the graft's migrations in it, and points
-the graft's connections at it, so a migration writes `CREATE TABLE notes` and
-never names the schema.
+Store a graft's data in its own Postgres schema. The schema is named `ext_<graft_id>`, with dashes turned into underscores. Orchard creates it, runs the graft's migrations in it, and points the graft's connections at it. A migration writes `CREATE TABLE notes` and does not name the schema.
 
-## Migrations
+## Add a migration
+
+Add a folder under `migrations/` with a `migration.sql` file:
 
 ```text
 migrations/
@@ -18,29 +17,26 @@ migrations/
   0002_pinned/migration.sql
 ```
 
-Folders run in name order and each runs once. All of a graft's pending
-migrations run in one transaction, so they apply together or not at all. A
-migration that cannot run in a transaction starts with:
+Folders run in name order, and each runs once. A graft's pending migrations run in one transaction.
+
+A migration that cannot run in a transaction starts with a marker, and runs on its own:
 
 ```sql
 -- graft:no-transaction
 CREATE INDEX CONCURRENTLY notes_body ON notes (body);
 ```
 
-and runs on its own. `graft doctor` points these out.
+`graft doctor` notes these migrations.
 
-Rules that keep upgrades safe:
+Follow these rules:
 
-- **Never edit a released migration.** Orchard checksums each one and refuses
-  a graft whose history changed. Add a new migration instead.
-- **Old and new versions run side by side during a rollout.** Add things in one
-  version and remove what replaced them in the next.
-- **Only change your own schema.** Reading core tables is fine; changing them is
-  not, and `graft doctor` refuses migrations that try.
+- **Do not edit a released migration.** Orchard checksums each one and refuses a graft whose history changed. Add a new migration.
+- **Support two versions during a rollout.** Old and new pods run side by side. Add new structures in one version, and remove what they replace in the next.
+- **Change only your own schema.** You can read core tables. `graft doctor` reports a problem for migrations that change them, unless the graft lists them in `database.adopts`.
 
-## Reading Orchard's tables
+## Read Orchard's tables
 
-Declare the core columns you need, and join against them as `public.<table>`:
+Declare the core columns you need in `graft.json`, and join against them as `public.<table>`:
 
 ```json
 { "database": { "coreReads": { "users": ["id", "username"] } } }
@@ -52,30 +48,33 @@ SELECT n.body, u.username
   LEFT JOIN public.users u ON u.id = n.created_by;
 ```
 
-Foreign keys to core tables are allowed, usually with `ON DELETE CASCADE` or
-`SET NULL` so a deleted user or project does not strand rows.
+Foreign keys to core tables are allowed. Use `ON DELETE CASCADE` or `ON DELETE SET NULL`, so that a deleted user or project does not leave orphaned rows.
 
-When the database user may create roles, the graft's connections run as
-`orchard_ext_<graft_id>`, which can use its own schema and read only the
-declared columns. That catches mistakes; it is not a security boundary, because
-the graft's code runs inside Orchard.
+When the database user can create roles, the graft's connections run as `orchard_ext_<graft_id>`. This role can use the graft's schema and read only the declared columns.
 
-## Connecting
+:::note
+The role catches mistakes. It is not a security boundary, because the graft's code runs inside Orchard.
+:::
 
-`Doors.db` gives a `pg` pool already pointed at the schema:
+## Connect to the database
+
+`Doors.db` gives you a `pg` pool that points at the schema:
 
 ```ts
 const { rows } = await this.db.query('SELECT * FROM notes WHERE id = $1', [id]);
 ```
 
-Any query builder or ORM that accepts a `pg` pool works with `this.db.pool()`.
-The pool holds 3 connections per pod unless you ask for more in `graft.json`:
+To use a query builder or an ORM that accepts a `pg` pool, call `this.db.pool()`.
+
+The pool holds 3 connections per pod by default. To ask for more, up to 50, set this in `graft.json`:
 
 ```json
 "database": { "pool": 10 }
 ```
 
-Ask for what the graft needs under load, up to 50; operators can override it
-with `orchardctl graft pool`, and Orchard checks every pod's pools together
-against the database's limit (see [Database connections](/grafts/install/#database-connections)).
-Keep transactions short either way.
+Operators can override the size with `orchardctl graft pool`. Orchard checks the pools of all pods against the database's limit. Refer to [Database connections](/grafts/install/#database-connections).
+
+## Related resources
+
+- [graft.json](/grafts/build/manifest/): Declare core reads and adopted tables.
+- [Upgrade and roll back grafts](/grafts/upgrades/): Learn how migrations run on an upgrade.

@@ -1,12 +1,11 @@
 ---
 title: graft.json
-description: Every field of a graft's manifest, and how claims work.
+description: Reference for graft.json, the Orchard graft manifest. It lists each field, how claims work, and which names a graft owns without a claim.
 sidebar:
   order: 2
 ---
 
-`graft.json` is what Orchard reads before it runs any of a graft's code. Unknown
-fields are refused, so a typo fails loudly at `graft pack`.
+`graft.json` is the manifest that Orchard reads before it runs a graft's code. Orchard refuses unknown fields when it checks or loads a graft. `graft pack` checks only the required fields, so use `orchardctl graft add --dry-run` to validate the whole file.
 
 ```json
 {
@@ -29,50 +28,68 @@ fields are refused, so a typo fails loudly at `graft pack`.
 }
 ```
 
-| Field | Means |
+## Fields
+
+| Field | Description |
 | --- | --- |
-| `id` | 2 to 48 lowercase letters, digits and dashes, starting with a letter. Names in Orchard such as `admin` or `api` are reserved. It is the graft's URL prefix and namespace |
-| `name`, `version`, `publisher`, `description`, `homepage`, `icon` | Shown in the Extension Marketplace and on Admin → Grafts. `version` is semver |
-| `engines.platform` | Orchard versions the graft works with, as a semver range |
-| `engines.sdk` | Graft SDK versions it was built against |
-| `uses` | Filled in by `graft pack`: the doors and versions the server code injects |
-| `requires.grafts` | Other grafts it needs, with version ranges |
-| `requires.kubernetes.crds` | CRDs that must exist. `orchardctl` checks before installing |
-| `capabilities` | What the graft asks for. Each door needs its capability; see the [graft API reference](/reference/graft-api/) |
-| `database.coreReads` | Core tables and columns the graft may read, for joins. Shown before install |
-| `database.adopts` | Core tables the graft takes over from an older Orchard that shipped the feature built in. Its first migration moves them into its own schema and leaves a view with the old name. Shown before install; without it a migration may not change the public schema |
-| `database.pool` | Database connections the graft may open per pod, 1 to 50, default 3. Operators can override it |
-| `permissions` | Permissions the graft checks, with default grants by role, e.g. `{ "use": { "label": "Use it", "defaultGrants": ["org:member"] } }` |
-| `settings` | Sections for Admin → Configuration. Fields are `string`, `text`, `number`, `boolean`, `select` or `secret`, and can name an `env` variable that overrides them |
-| `ui.screens` | Pages the graft owns: `id`, `path` (with `:param` and a trailing `*`), `layout` (`shell` or `fullscreen`), `title` |
-| `public.routes` | Every route open to anyone, as `"POST /hooks/github"`. Anything public that is not listed is refused |
-| `claims` | Names outside the graft's own id. See below |
-| `entries` | Filled in by `graft pack` |
+| `id` | 2 to 48 lowercase letters, digits, and dashes, starting with a letter. It is the graft's URL prefix and namespace. Names in Orchard such as `admin` and `api` are reserved. |
+| `name`, `version`, `publisher`, `description`, `homepage`, `icon` | Shown in the Extension Marketplace and in **Admin** > **Grafts**. `version` is a semver version. |
+| `engines.platform` | The Orchard versions the graft works with, as a semver range. |
+| `engines.sdk` | The graft SDK versions it was built against. |
+| `uses` | Filled in by `graft pack`. The doors and versions the server code injects. |
+| `requires.grafts` | Other grafts it needs, with version ranges. |
+| `requires.kubernetes.crds` | CRDs that must exist. `orchardctl` checks them before it installs the graft. |
+| `requires.kubernetes.verbs` | Kubernetes API verbs the graft uses, each with `group`, `resource`, `verb`, and an optional `namespace`. |
+| `capabilities` | What the graft asks for. Each door needs its capability. Refer to the [graft API reference](/reference/graft-api/). |
+| `database.coreReads` | Core tables and columns the graft can read, for joins. Shown before install. |
+| `database.adopts` | Core tables the graft takes over from an older Orchard that included the feature. Its first migration moves them into its own schema and leaves a view with the old name. Shown before install. The Extension Marketplace accepts this only from official grafts. |
+| `database.pool` | Database connections per pod, from 1 to 50. The default is 3. Operators can override it. |
+| `permissions` | Permissions the graft checks, with default grants by role. For example, `{ "use": { "label": "Use it", "defaultGrants": ["org:member"] } }`. |
+| `settings` | Sections for **Admin** > **Configuration**. Refer to [Settings](#settings). |
+| `ui.screens` | Pages the graft owns: `id`, `path` (with `:param` and a trailing `*`), `layout` (`shell` or `fullscreen`), `title`, and optional `og` metadata. |
+| `public.routes` | Every route open to anyone, as `"POST /hooks/github"`. Orchard refuses a public route that is not listed. |
+| `claims` | Names outside the graft's own ID. Refer to [Claims](#claims). |
+| `entries` | Filled in by `graft pack`. |
+
+## Settings
+
+Each section has an `id`, a `title`, and `fields`. It can also have a `description`, a `storageKey`, and a `required` list of field keys.
+
+| Field property | Description |
+| --- | --- |
+| `key` | The field's key. |
+| `type` | `string`, `text`, `number`, `boolean`, `select`, or `secret`. |
+| `label`, `help` | The text in the admin UI. |
+| `env` | An environment variable that overrides the field. |
+| `options` | The choices for a `select` field. |
+| `default` | The default value. |
+
+Only instance-scoped fields are supported. A field with another `scope` adds a warning in **Admin** > **Grafts**.
 
 ## Claims
 
-A graft owns everything under its id without asking: `/apiv1/<id>/...`,
-`/<id>/...`, and names that start with `<id>.`, `<id>-` or `<id>_`. A name
-outside that is a claim, listed under `claims` and shown to the admin before
-install:
+A graft owns `/apiv1/<id>/...`, `/<id>/...`, and names that start with `<id>.`, `<id>-`, `<id>/`, `<id>:`, or `<id>_` without a claim. A name outside that is a claim. Orchard shows claims to the admin before install.
 
-| Claim | For |
+| Claim | Purpose |
 | --- | --- |
-| `apiAliases` | API paths, e.g. `sandboxes` serves `/apiv1/sandboxes/...` from the graft's own `sandboxes` controller |
-| `uiAliases` | Top-level page paths |
-| `wsAliases` | Websocket paths |
-| `hostRouting` | Hostnames the graft serves directly, for preview domains |
-| `notificationEvents`, `notificationCategories` | Notification names |
-| `configSections`, `settingKeys` | Settings names |
-| `auditActions` | Audit log action prefixes |
-| `mcpTools` | MCP tool names |
-| `sseEvents` | Live event types |
-| `rateLimitBuckets` | Rate limit names |
-| `applyOps` | Apply queue operation names the graft handles |
-| `deviceNames` | Session device name prefixes for org-scoped tokens the graft mints |
-| `mirrorShards` | Cluster mirror shard names the graft registers |
+| `apiAliases` | API paths. For example, `sandboxes` serves `/apiv1/sandboxes/...` from the graft's `sandboxes` controller. |
+| `uiAliases` | Top-level page paths. |
+| `wsAliases` | WebSocket paths. |
+| `hostRouting` | Hostnames the graft serves directly, for preview domains. |
+| `notificationEvents`, `notificationCategories` | Notification names. |
+| `configSections`, `settingKeys` | Settings names. |
+| `auditActions` | Audit log action prefixes. |
+| `mcpTools` | MCP tool names. |
+| `sseEvents` | Live event types. |
+| `rateLimitBuckets` | Rate limit names. |
+| `applyOps` | Apply queue operation names the graft handles. |
+| `deviceNames` | Session device name prefixes for organization-scoped tokens the graft mints. |
+| `engineShards` | Engine shard names the graft registers. `mirrorShards` is an older name for this claim, and it still works. |
 
-Core Orchard always wins. A claim on something core already uses, or starts
-using later, is marked **taken** and skipped; the graft keeps working under its
-own id. Between two grafts, a name a graft owns by id beats another graft's
-claim, and otherwise the first graft in the values list wins.
+### Conflicts
+
+Between two grafts, a name that one graft owns by its ID beats the other graft's claim. Otherwise, the first graft in the values list wins. The losing claim shows as **taken** in **Admin** > **Grafts** and is skipped. The graft keeps working under its own ID.
+
+For an `apiAliases` claim, a core route that handles the same path and method takes priority on each request.
+
+`graft doctor` notes each alias claim, because core Orchard can start using that path later.

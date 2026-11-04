@@ -1,13 +1,13 @@
 ---
-title: UI islands and slots
-description: Add pages, navigation, tabs and cards to Orchard's UI.
+title: Add UI
+description: Add pages, navigation, tabs, and cards to Orchard's UI from a graft, using a Svelte island, slots, and the host object.
 sidebar:
   order: 4
 ---
 
-A graft's UI is an island: a bundle with its own copy of Svelte that Orchard
-loads and hands an empty element to draw in. Orchard can upgrade its own UI
-without ever breaking a graft, and a graft can use any library it likes.
+Add pages, navigation, tabs, and cards to Orchard's UI. A graft's UI is an island: a bundle with its own copy of Svelte. Orchard loads the bundle and gives it an empty element to draw in. A graft can use any library.
+
+## Define what the graft adds
 
 `ui/src/client.ts` default-exports what the graft adds:
 
@@ -39,41 +39,48 @@ export default defineGraft({
 });
 ```
 
-Screens are listed in `graft.json` under `ui.screens` with their path and
-layout: `shell` draws inside Orchard's sidebar and header, `fullscreen` takes
-the whole window. A screen at `/admin/<graft id>` (or below it) renders inside
-the instance admin area, next to Orchard's own admin pages, and only
-superadmins reach it; pair it with an `admin.nav` entry. Every place a graft can add to is in the
-[slot reference](/reference/graft-slots/).
+For each place a graft can add to, refer to the [slot reference](/reference/graft-slots/).
 
-## The host object
+## Add a screen
 
-Every mount function gets `host`, the graft's way to talk to Orchard's UI:
+List each screen in `graft.json` under `ui.screens`, with its path and layout:
 
-| Member | Gives you |
+| Layout       | Behavior                                  |
+| ------------ | ----------------------------------------- |
+| `shell`      | Draws inside Orchard's sidebar and header. |
+| `fullscreen` | Takes the whole window.                   |
+
+A screen at `/admin/<graft id>`, or below it, renders in the instance admin area, and only superadmins reach it. Pair it with an `admin.nav` entry. Orchard ignores a screen under `/admin/` that uses another path.
+
+## Use the host object
+
+Each mount function receives `host`, the graft's interface to Orchard's UI.
+
+| Member | Description |
 | --- | --- |
-| `host.api(path, init?)` | JSON from the graft's API. Paths are relative to `/apiv1/<graft-id>`; `json` in `init` sends a body |
-| `host.fetch(path, init?)` | The raw response |
-| `host.stores.user`, `.org`, `.theme`, `.route` | Svelte-compatible stores: use `$user` in a component |
-| `host.navigate(href)` | Client-side navigation |
-| `host.toast(message, tone?)` | Orchard's toasts |
-| `host.confirm({ title, body, confirmLabel, danger })` | Orchard's confirmation dialog, resolves to a boolean |
-| `host.onOrgEvent(handler)` | Live events for the current organization, including the graft's own |
+| `host.graft` | The graft's `id`, `version`, `apiBase`, and `assetBase`. |
+| `host.api(path, init?)` | Returns JSON from the graft's API. Paths are relative to `/apiv1/<graft-id>`. `json` in `init` sends a body. |
+| `host.fetch(path, init?)` | Returns the raw response. |
+| `host.stores.user`, `.org`, `.theme`, `.route` | Svelte-compatible stores. Use `$user` in a component. |
+| `host.navigate(href, options?)` | Navigates on the client. |
+| `host.toast(message, tone?, options?)` | Shows one of Orchard's toasts. |
+| `host.confirm({ title, body, confirmLabel, danger })` | Shows Orchard's confirmation dialog, and resolves to a boolean. |
+| `host.onOrgEvent(handler)` | Receives live events for the current organization. |
+| `host.refreshSlots()` | Evaluates the `visible` functions of the graft's slot items again. |
 
-## Looking like Orchard
+## Match Orchard's styles
 
-`@orchardlabs/graft-ui` is Orchard's own component kit (`Button`, `Alert`,
-`SectionCard`, `Field`, `Input`, `Modal`, `Table`, `ConfirmModal` and the rest)
-packaged for grafts. Theme colours, fonts and spacing are CSS variables Orchard
-sets on the page, so `var(--text-muted)`, `var(--bg-surface)` and friends work
-in a graft's own styles too.
+`@orchardlabs/graft-ui` is Orchard's component kit, packaged for grafts. It includes components such as `Button`, `SectionCard`, `Field`, `Input`, `Select`, `Modal`, and `EmptyState`.
 
-Because a graft bundles its copy of the kit, a graft built against an older
-Orchard keeps that version's component shapes until it is rebuilt. Colours and
-fonts always follow the instance.
+Orchard sets theme colors, fonts, and spacing as CSS variables on the page. You can use `var(--text-muted)` and `var(--bg-surface)` in a graft's own styles.
 
-## When something throws
+A graft bundles its copy of the kit. A graft built against an older Orchard keeps that version's components until you rebuild it. Colors and fonts follow the instance.
 
-Each mount is wrapped by Orchard. If a graft throws while mounting or updating,
-only that box shows an error with a retry button; the page around it keeps
-working.
+## Errors
+
+Orchard wraps each mount. If a graft throws while mounting or updating, that element shows an error with a **Retry** button. The rest of the page keeps working.
+
+## Related resources
+
+- [Graft UI slots](/reference/graft-slots/): Review each slot and its props.
+- [graft.json](/grafts/build/manifest/): Declare screens.

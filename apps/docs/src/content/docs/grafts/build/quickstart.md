@@ -1,21 +1,20 @@
 ---
-title: Build a graft
-description: Scaffold a graft, run it against your local Orchard, then pack and sign it.
+title: Get started
+description: Build an Orchard graft by scaffolding it with the graft CLI, running it against a local Orchard, and packing and signing it. You need Node.js, pnpm, and a local Orchard dev stack.
 sidebar:
   order: 1
 ---
 
-A graft is a folder with a `graft.json`, and any of: a NestJS module for the API,
-a Svelte island for the UI, SQL migrations for its own tables and MCP tools for
-agents. The `graft` command in `@orchardlabs/graft-sdk` builds, packs and signs it.
-The [announcements graft](https://github.com/hackclub/orchard/tree/main/grafts/announcements)
-in the Orchard repository uses every part and is the best example to copy.
+Scaffold a graft, run it against your local Orchard, and pack it into a signed file.
 
-`@orchardlabs/graft-sdk` is MIT licensed, so your graft can use any license you
-like. The UI kit, `@orchardlabs/graft-ui`, is a copy of Orchard's own components
-and stays AGPL like Orchard: a graft that bundles it shares that license.
+A graft is a folder with a `graft.json`. It can also have a NestJS module for the API, a Svelte island for the UI, SQL migrations, and MCP tools. The `graft` command in `@orchardlabs/graft-sdk` builds, packs, and signs it.
 
-## Scaffold
+## Prerequisites
+
+- Node.js and pnpm.
+- A local Orchard dev stack. Refer to the repository's README.
+
+## 1. Scaffold a graft
 
 ```sh
 npx -p @orchardlabs/graft-sdk graft init snippets
@@ -23,9 +22,13 @@ cd snippets
 pnpm install
 ```
 
+The command creates these files:
+
 ```text
 snippets/
   graft.json                 what the graft is and what it asks for
+  package.json
+  README.md
   server/src/index.ts        NestJS module, default export
   ui/src/client.ts           defineGraft({ slots, screens })
   ui/src/Home.svelte
@@ -33,48 +36,60 @@ snippets/
   tsconfig.json
 ```
 
-## Run it against your Orchard
+## 2. Run the graft
 
-Run your local Orchard dev stack as usual (see the repository README), then in
-the graft:
+In the graft's folder, run:
 
 ```sh
 graft dev
 ```
 
-It builds into `.graft-dev/` and rebuilds on every save. Start the Orchard
-server and frontend with:
+The command builds into `.graft-dev/` and rebuilds when a file changes.
+
+Start the Orchard server and frontend with these variables:
 
 ```sh
 ORCHARD_GRAFTS_DIR=/path/to/snippets/.graft-dev ORCHARD_GRAFTS_DEV=1
 ```
 
-`ORCHARD_GRAFTS_DEV` skips signature checks for local work. UI changes appear
-on reload; restart the API server to pick up server changes and new migrations.
-Your graft's pages are at `http://localhost:4000/snippets`, its API at
-`/apiv1/snippets/...`, and Admin → Grafts shows how Orchard sees it.
+`ORCHARD_GRAFTS_DEV` skips signature checks for local work.
 
-## Check, pack and sign
+The graft's pages are at `http://localhost:4000/snippets`, and its API is at `/apiv1/snippets/...`. **Admin** > **Grafts** shows its status.
+
+UI changes appear when you reload the page. Restart the API server to pick up server changes and new migrations.
+
+## 3. Check, pack, and sign
 
 ```sh
-graft doctor            # graft.json and migrations, common mistakes
+graft doctor
 graft keygen ~/.config/graft/key.pem
 graft pack --key ~/.config/graft/key.pem
 ```
 
-`pack` builds everything, records every route and its access level in
-`routes.json`, works out which [doors](/reference/graft-api/) the graft uses,
-hashes every file into `MANIFEST.json`, signs that list, and writes
-`snippets-0.1.0.graft` with the Helm entry to install it. Keep the private key
-secret; share the public key `keygen` printed so people can trust your grafts.
+`graft doctor` checks `graft.json` and the migrations for common mistakes.
 
-`pack` stops when something would be refused at install time: a route open to
-anyone that `graft.json` does not list, or a door used without its capability.
+`graft pack` does the following:
 
-## Next
+1. It builds everything.
+2. It records each route and its access level in `routes.json`.
+3. It works out which [doors](/reference/graft-api/) the graft uses.
+4. It hashes each file into `MANIFEST.json`, and signs that list.
+5. It writes `snippets-0.1.0.graft`, and prints the Helm entry to install it.
 
-- [graft.json](/grafts/build/manifest/)
-- [Server code and doors](/grafts/build/server/)
-- [UI islands and slots](/grafts/build/ui/)
-- [Database](/grafts/build/database/)
-- [Publishing](/grafts/build/publishing/)
+`graft pack` fails if a route open to anyone is not listed in `graft.json`, or if the code uses a door without its capability.
+
+Keep the private key secret. To let people trust your grafts, share the public key that `graft keygen` prints.
+
+## Licenses
+
+`@orchardlabs/graft-sdk` is MIT licensed, so your graft can use any license. `@orchardlabs/graft-ui` is a copy of Orchard's components and is licensed under AGPL-3.0-only. A graft that bundles it shares that license.
+
+## Next steps
+
+- [graft.json](/grafts/build/manifest/): Review each field of the manifest.
+- [Write server code](/grafts/build/server/): Add API routes, and reach Orchard through doors.
+- [Add UI](/grafts/build/ui/): Add pages, navigation, tabs, and cards.
+- [Use the database](/grafts/build/database/): Add migrations, and read Orchard's tables.
+- [Publish a graft](/grafts/build/publishing/): Share your graft, or list it in the Extension Marketplace.
+
+For an example, read the [announcements graft](https://github.com/hackclub/orchard/tree/main/grafts/announcements). It has a server module, UI, migrations, and settings.
