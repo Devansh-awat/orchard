@@ -41,6 +41,7 @@ Secrets read back with a null value, so you cannot round-trip them through this 
                 )
             })
           )
+          .max(1000)
           .describe('The complete environment. Omitted keys are deleted.')
       }
     },
@@ -78,6 +79,7 @@ Related: \`delete_env_vars\` to remove keys, \`get_env_vars\` to read, \`set_env
                 )
             })
           )
+          .max(1000)
           .describe('Array of environment variable key-value pairs to add or update')
       }
     },
@@ -243,6 +245,7 @@ To remove all volumes, pass an empty array.`,
               readOnly: z.boolean().optional().describe('Mount as read-only (default: false)')
             })
           )
+          .max(256)
           .describe('List of volumes to attach')
       }
     },
@@ -544,6 +547,7 @@ To make a service reachable from outside the cluster use \`set_service_exposure\
                 .describe('Fixed node port, for an externally exposed service')
             })
           )
+          .max(1000)
           .optional()
           .describe('The complete port list for this service. Omitted ports are removed.'),
         domain: z
@@ -644,6 +648,7 @@ Not available on redirect domains. Switching away from \`password\`/\`basic\` di
         password: z.string().optional().describe('Password (required for `basic` and `password`)'),
         bypassPaths: z
           .array(z.string())
+          .max(1000)
           .optional()
           .describe('Path prefixes that stay public, e.g. ["/api/webhooks", "/health"]')
       }

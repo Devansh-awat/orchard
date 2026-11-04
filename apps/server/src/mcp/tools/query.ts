@@ -243,6 +243,7 @@ Searches organizations, projects, deployments and databases at once and returns 
           .describe('Substring to match. Omit to return everything the user can see.'),
         kinds: z
           .array(z.enum(['organization', 'project', 'deployment', 'database']))
+          .max(20)
           .optional()
           .describe('Restrict the search to these kinds. Default: all four.'),
         organizationId: z.guid().optional().describe('Restrict the search to one organization')
@@ -928,7 +929,7 @@ Needs an exec-scoped session: connect with the mcp:exec scope or an orch_ token 
             'Kubernetes namespace (from list_pods). Taken from the deployment when deploymentId is given.'
           ),
         command: z
-          .union([z.string(), z.array(z.string())])
+          .union([z.string(), z.array(z.string()).max(4096)])
           .describe(
             'Command to run. String → run via /bin/sh -c. Array → exec directly (e.g. ["ls", "-la", "/data"]).'
           ),

@@ -48,6 +48,7 @@ A destination belongs to a scope: org-wide (the default) needs org admin, and a 
         url: z.string().optional().describe('Webhook URL (discord/slack/webhook types)'),
         recipients: z
           .array(z.string())
+          .max(100)
           .optional()
           .describe('Email recipients (email type, members of the owning scope only)'),
         scopeType: z
@@ -81,7 +82,7 @@ A destination belongs to a scope: org-wide (the default) needs org admin, and a 
         channelId: z.guid().describe('The notification channel UUID'),
         name: z.string().max(100).optional().describe('New display name'),
         url: z.string().optional().describe('New webhook URL (keeps the existing signing secret)'),
-        recipients: z.array(z.string()).optional().describe('Replace email recipients'),
+        recipients: z.array(z.string()).max(100).optional().describe('Replace email recipients'),
         enabled: z
           .boolean()
           .optional()
@@ -140,6 +141,7 @@ Events must be possible at the scope (a database cannot emit deploy events). Org
         scopeId: z.guid().optional().describe('The UUID of the scope (omit for scopeType=org)'),
         events: z
           .array(z.string())
+          .max(500)
           .min(1)
           .describe(`Events this rule matches, e.g. ${EVENT_NAMES}`),
         mode: z.enum(['deliver', 'mute']).optional().describe('deliver (default) or mute')
@@ -166,6 +168,7 @@ Events must be possible at the scope (a database cannot emit deploy events). Org
         ruleId: z.guid().describe('The notification rule UUID'),
         events: z
           .array(z.string())
+          .max(500)
           .min(1)
           .optional()
           .describe(`Replace matched events, e.g. ${EVENT_NAMES}`),

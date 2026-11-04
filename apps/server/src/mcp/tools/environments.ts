@@ -123,6 +123,7 @@ Related: \`delete_shared_env_vars\` to remove keys, \`set_shared_env_vars\` only
                 .describe('Store encrypted and write-only: reads never return the value')
             })
           )
+          .max(1000)
           .describe('Variables to add or overwrite')
       }
     },
@@ -170,6 +171,7 @@ Use \`add_shared_env_vars\` to change a few, \`delete_shared_env_vars\` to remov
                 .describe('Store encrypted and write-only: reads never return the value')
             })
           )
+          .max(1000)
           .describe('The complete shared set. Omitted keys are deleted.')
       }
     },
@@ -186,7 +188,7 @@ Use \`add_shared_env_vars\` to change a few, \`delete_shared_env_vars\` to remov
         'Remove specific shared variables from an environment by key name, leaving the rest alone. Any deployment whose env references a removed key via `${{shared.KEY}}` resolves it to an empty string and restarts, so check `get_deployment.envVars` for references before removing one.',
       inputSchema: {
         environmentId: z.guid().describe('The environment UUID (from list_environments)'),
-        keys: z.array(z.string()).describe('Variable names to delete')
+        keys: z.array(z.string()).max(1000).describe('Variable names to delete')
       }
     },
     async ({ environmentId, keys }) => {

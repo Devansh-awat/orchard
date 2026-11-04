@@ -271,7 +271,10 @@ Only checkpoints with status "durable" can be restored. Returns the operation (a
 Only the keys you name are touched, so this is safe to use for a targeted removal — it is filed here because deleting a var an app reads will break it. To change a value instead of removing it, use \`add_env_vars\`.`,
       inputSchema: {
         deploymentId: z.guid().describe('The deployment UUID'),
-        keys: z.array(z.string()).describe('Array of environment variable names to delete')
+        keys: z
+          .array(z.string())
+          .max(1000)
+          .describe('Array of environment variable names to delete')
       }
     },
     async ({ deploymentId, keys }) => {

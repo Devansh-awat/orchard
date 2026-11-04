@@ -28,6 +28,7 @@ If no port is specified, it defaults to 80. Make sure the port matches the port 
               value: z.string().describe('Environment variable value')
             })
           )
+          .max(1000)
           .optional()
           .describe('Environment variables to set on the deployment'),
         cpuRequestMilli: z
@@ -212,6 +213,7 @@ Before using this tool:
               value: z.string().describe('Environment variable value')
             })
           )
+          .max(1000)
           .optional()
           .describe('Environment variables to set on the deployment'),
         cpuRequestMilli: z
@@ -332,6 +334,7 @@ Before calling, you should still confirm with list_github_deploy_targets that th
               value: z.string().describe('Environment variable value')
             })
           )
+          .max(1000)
           .optional()
           .describe('Environment variables to set on the deployment'),
         cpuRequestMilli: z
@@ -722,6 +725,7 @@ Check with \`get_auto_deploy_status\` afterwards. If it reports \`deliverable: f
         branch: z.string().describe('The branch to auto-deploy from (e.g. main)'),
         paths: z
           .array(z.string())
+          .max(1000)
           .optional()
           .describe(
             'Watch paths: glob patterns a push must touch to trigger a build (e.g. ["apps/web/**", "!**/*.md"]). Empty array deploys on every push. Omit to leave the current paths unchanged.'

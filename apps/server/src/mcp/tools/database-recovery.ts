@@ -107,7 +107,11 @@ at "now" (the default) copies the live database, "latest" uses the newest archiv
 Pass databaseId for one database, or pin many at once with projectId, environmentId or databaseIds; a bulk call returns a groupId that restore_checkpoint can restore together. A checkpoint becomes restorable once its status is "durable", usually within seconds. Checkpoints are kept for 30 days.`,
       inputSchema: {
         databaseId: z.guid().optional().describe('Checkpoint this one database'),
-        databaseIds: z.array(z.guid()).optional().describe('Checkpoint these databases together'),
+        databaseIds: z
+          .array(z.guid())
+          .max(1000)
+          .optional()
+          .describe('Checkpoint these databases together'),
         projectId: z.guid().optional().describe('Checkpoint every database in this project'),
         environmentId: z
           .guid()

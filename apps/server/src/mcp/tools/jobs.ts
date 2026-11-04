@@ -38,6 +38,7 @@ const stepSchema = z.object({
           .describe('Store write-only and inject from a Kubernetes Secret. Reads return it masked.')
       })
     )
+    .max(1000)
     .optional()
     .describe(
       'Environment variables (for app steps these override the deployment env). A value of `${{shared.KEY}}` expands to the environment shared variable KEY when the step pod is built, same as for deployments. Mark tokens and passwords secret: true.'

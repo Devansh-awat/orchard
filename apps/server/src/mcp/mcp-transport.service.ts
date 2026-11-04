@@ -7,6 +7,7 @@ import {
   type McpHttpHandler
 } from '@modelcontextprotocol/server';
 import { toNodeHandler, type NodeMcpRequestHandler } from '@modelcontextprotocol/node';
+import { MCP_MAX_BODY_BYTES } from './body-limit';
 import { createOrchardMcpServer, type McpMode } from './server';
 import { McpOAuthService } from './mcp-oauth.service';
 import type { McpScope } from './client';
@@ -43,12 +44,14 @@ export class McpTransportService implements OnModuleDestroy {
   };
 
   private readonly nodeHandlers: Record<McpMode, NodeMcpRequestHandler> = {
-    normal: toNodeHandler({
-      fetch: (request, options) => this.authenticateAndDispatch('normal', request, options)
-    }),
-    compact: toNodeHandler({
-      fetch: (request, options) => this.authenticateAndDispatch('compact', request, options)
-    })
+    normal: toNodeHandler(
+      { fetch: (request, options) => this.authenticateAndDispatch('normal', request, options) },
+      { maxRequestBodySize: MCP_MAX_BODY_BYTES }
+    ),
+    compact: toNodeHandler(
+      { fetch: (request, options) => this.authenticateAndDispatch('compact', request, options) },
+      { maxRequestBodySize: MCP_MAX_BODY_BYTES }
+    )
   };
 
   constructor(

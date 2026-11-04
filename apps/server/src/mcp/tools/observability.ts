@@ -65,7 +65,7 @@ Pass the returned \`cursor\` to get the next older page. Output is capped near 4
           .max(1000)
           .optional()
           .describe('Words or "quoted phrases" that must all appear'),
-        levels: z.array(z.enum(LEVELS)).optional().describe('Only these levels'),
+        levels: z.array(z.enum(LEVELS)).max(20).optional().describe('Only these levels'),
         pods: z.array(z.string()).max(50).optional().describe('Only these pod names'),
         start: time.describe('Window start, unix ms or ISO time. Default: end - 1h'),
         end: time.describe('Window end, unix ms or ISO time. Default: now'),
@@ -271,7 +271,10 @@ Pass the returned \`cursor\` to get the next older page. Output is capped near 4
         'The app’s activity feed, newest first: audit events, builds, releases, pod transitions and new errors. Pass `nextCursor` back as `cursor` for older entries.',
       inputSchema: {
         deploymentId: z.guid().describe('The deployment UUID'),
-        kinds: z.array(z.enum(['audit', 'build', 'release', 'pod', 'error'])).optional(),
+        kinds: z
+          .array(z.enum(['audit', 'build', 'release', 'pod', 'error']))
+          .max(20)
+          .optional(),
         limit: z.number().int().min(1).max(200).optional(),
         cursor: z.string().optional()
       }

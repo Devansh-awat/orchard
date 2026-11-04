@@ -94,7 +94,11 @@ export function registerCompactTools(
           .describe('Values for :params in the path'),
         query: z.record(z.string(), z.unknown()).optional().describe('Query string parameters'),
         body: z.unknown().optional().describe('JSON request body'),
-        fields: z.array(z.string()).optional().describe('Dotted paths to keep in the response'),
+        fields: z
+          .array(z.string())
+          .max(500)
+          .optional()
+          .describe('Dotted paths to keep in the response'),
         confirm: z.string().optional().describe('Set to the operationId to run a destructive call')
       },
       annotations: {
