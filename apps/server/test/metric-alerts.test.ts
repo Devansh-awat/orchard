@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import {
   METRIC_IDS,
   breaches,
@@ -13,6 +14,7 @@ import {
   type MetricTarget
 } from '../src/alerts/metric-catalogue';
 import { MetricAlertsService } from '../src/alerts/metric-alerts.service';
+import { NotificationsService } from '../src/notifications/notifications.service';
 import { haproxy } from '../src/metrics/ingress/haproxy';
 import { traefik } from '../src/metrics/ingress/traefik';
 
@@ -228,8 +230,127 @@ test('a rule with no state reads OK only when the metric has a value', async () 
   assert.equal(await status({ value: 12, running: false }), 'unknown');
 });
 
-test('quiet traffic below the request floor is OK, not missing data', () => {
-  assert.equal(sampleHasData({ kind: 'ok', value: null }), true);
+test('a rule guarded by a request floor reads as no data while the app is quiet', async () => {
+  for (const metric of ['latency_avg_ms', 'latency_max_ms', 'error_rate']) {
+    const service = statesHarness({ value: 0 });
+    const [rule] = await service.listRules();
+    service.listRules = async () => [{ ...rule, metric }];
+    service.observability = {
+      ingressFor: async () => ({
+        requestRate: () => 'rate',
+        errorPercent: () => 'errors',
+        latencyAvgMs: () => 'avg',
+        latencyMaxMs: () => 'max'
+      })
+    };
+    const [state] = await service.statesFor('org', 'd1');
+    assert.equal(state.status, 'unknown', metric);
+    assert.equal(state.value, null, metric);
+  }
+});
+
+test('a guarded rule with real traffic still reads OK', async () => {
+  const service = statesHarness({ value: 5 });
+  const [rule] = await service.listRules();
+  service.listRules = async () => [{ ...rule, metric: 'latency_avg_ms', threshold: 500 }];
+  service.observability = {
+    ingressFor: async () => ({ requestRate: () => 'rate', latencyAvgMs: () => 'avg' })
+  };
+  assert.equal((await service.statesFor('org', 'd1'))[0].status, 'ok');
+});
+
+function deleteHarness(opts: { scope: () => Promise<unknown>; createdById?: string }) {
+  const service = Object.create(MetricAlertsService.prototype) as any;
+  const deleted: string[] = [];
+  const checked: unknown[] = [];
+  service.prisma = {
+    metricAlertRule: {
+      findFirst: async () => ({
+        id: 'r1',
+        scopeType: 'deployment',
+        scopeId: 'gone',
+        metric: 'cpu_percent',
+        comparator: 'gt',
+        threshold: 85,
+        forSeconds: 300,
+        createdById: opts.createdById ?? 'someone'
+      }),
+      delete: async ({ where }: any) => deleted.push(where.id)
+    }
+  };
+  service.rules = {
+    resolveScope: opts.scope,
+    assertCanEditScope: async (_org: string, scope: any) => {
+      checked.push(scope);
+      if (scope.scopeType === 'org') throw new ForbiddenException('admins only');
+    }
+  };
+  service.audit = { log: async () => undefined };
+  return { service, deleted, checked };
+}
+
+const gone = async () => {
+  throw new NotFoundException('Deployment not found');
+};
+
+test('a rule on a deleted app can be deleted by an org admin, and only an admin', async () => {
+  const denied = deleteHarness({ scope: gone });
+  await assert.rejects(
+    denied.service.deleteRule('org', 'r1', { id: 'member' }),
+    ForbiddenException
+  );
+  assert.deepEqual(denied.deleted, []);
+
+  const admin = deleteHarness({ scope: gone });
+  admin.service.rules.assertCanEditScope = async () => undefined;
+  assert.deepEqual(await admin.service.deleteRule('org', 'r1', { id: 'admin' }), { ok: true });
+  assert.deepEqual(admin.deleted, ['r1']);
+});
+
+test('whoever wrote a rule on a deleted app can delete it', async () => {
+  const { service, deleted, checked } = deleteHarness({ scope: gone, createdById: 'author' });
+  await service.deleteRule('org', 'r1', { id: 'author' });
+  assert.deepEqual(deleted, ['r1']);
+  assert.deepEqual(checked, []);
+});
+
+test('a failed scope lookup deletes nothing: only a real not-found means gone', async () => {
+  const { service, deleted } = deleteHarness({
+    scope: async () => {
+      throw new Error('database unavailable');
+    },
+    createdById: 'author'
+  });
+  await assert.rejects(service.deleteRule('org', 'r1', { id: 'author' }), /database unavailable/);
+  assert.deepEqual(deleted, []);
+});
+
+test('a rule on a live app still goes through its own scope check', async () => {
+  const scope = { scopeType: 'deployment', scopeId: 'd1', projectId: 'p1', label: 'web' };
+  const { service, deleted, checked } = deleteHarness({ scope: async () => scope });
+  await service.deleteRule('org', 'r1', { id: 'editor' });
+  assert.deepEqual(checked, [scope]);
+  assert.deepEqual(deleted, ['r1']);
+});
+
+test('deleting an app removes the alert rules scoped to it', async () => {
+  const where: unknown[] = [];
+  const table = { deleteMany: async (args: any) => where.push(args.where) };
+  const service = Object.create(NotificationsService.prototype) as any;
+  service.prisma = {
+    notificationRule: table,
+    notificationChannel: table,
+    userNotificationSetting: table,
+    metricAlertRule: {
+      deleteMany: async (args: any) => where.push({ alertRule: args.where })
+    }
+  };
+  await service.purgeScope('deployment', 'd1');
+  assert.deepEqual(where.at(-1), { alertRule: { scopeType: 'deployment', scopeId: 'd1' } });
+});
+
+test('only an empty sample counts as missing data', () => {
+  assert.equal(sampleHasData({ kind: 'ok', value: 0 }), true);
   assert.equal(sampleHasData({ kind: 'ok', value: null, empty: true }), false);
   assert.equal(sampleHasData({ kind: 'unknown', reason: 'down' }), false);
   assert.equal(sampleHasData({ kind: 'breaching', value: 90 }), true);

@@ -54,6 +54,7 @@ export class NotificationsService {
     await this.prisma.notificationRule.deleteMany({ where: { scopeType, scopeId } });
     await this.prisma.notificationChannel.deleteMany({ where: { scopeType, scopeId } });
     await this.prisma.userNotificationSetting.deleteMany({ where: { scopeType, scopeId } });
+    await this.prisma.metricAlertRule.deleteMany({ where: { scopeType, scopeId } });
   }
 
   async notifyDeploy(deploymentId: string, status: 'succeeded' | 'failed') {

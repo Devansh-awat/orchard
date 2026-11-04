@@ -94,6 +94,14 @@ const MAX_RULES_PER_SCOPE = 25;
 const FALLBACK_CPU_MILLI = 100;
 const FALLBACK_MEMORY_BYTES = 128 * 1024 * 1024;
 const ALERT_SCOPES = new Set(['org', 'project', 'deployment']);
+// A rule whose app or project is gone has no project to ask about, so removing
+// it falls to an org admin or whoever wrote it.
+const ORPHAN_RULE_SCOPE: ResolvedScope = {
+  scopeType: 'org',
+  scopeId: null,
+  projectId: null,
+  label: 'Organization'
+};
 
 @Injectable()
 export class MetricAlertsService {
@@ -271,16 +279,23 @@ export class MetricAlertsService {
       organizationId,
       existing.scopeType,
       existing.scopeId
-    );
-    await this.rules.assertCanEditScope(organizationId, scope, actor);
+    ).catch((err) => {
+      if (err instanceof NotFoundException) return null;
+      throw err;
+    });
+    if (scope) {
+      await this.rules.assertCanEditScope(organizationId, scope, actor);
+    } else if (existing.createdById !== actor.id) {
+      await this.rules.assertCanEditScope(organizationId, ORPHAN_RULE_SCOPE, actor);
+    }
     await this.prisma.metricAlertRule.delete({ where: { id: ruleId } });
     void this.audit.log({
       action: 'alert_rule.deleted',
       actorUserId: actor.id,
       actorEmail: actor.email ?? undefined,
       organizationId,
-      projectId: scope.projectId ?? undefined,
-      deploymentId: scope.scopeType === 'deployment' ? scope.scopeId : undefined,
+      projectId: scope?.projectId ?? undefined,
+      deploymentId: scope?.scopeType === 'deployment' ? (scope.scopeId ?? undefined) : undefined,
       targetType: 'alert_rule',
       targetId: ruleId,
       targetLabel: describeRule(existing)
@@ -446,7 +461,7 @@ export class MetricAlertsService {
       const rate = await this.vm.queryInstantStrict(ctx.ingress.requestRate(RATE_WINDOW));
       if (rate.ok === false) return { kind: 'unknown', reason: rate.reason };
       const floor = rule.minRequestRate ?? DEFAULT_MIN_REQUEST_RATE;
-      if ((rate.value ?? 0) < floor) return { kind: 'ok', value: null };
+      if ((rate.value ?? 0) < floor) return { kind: 'ok', value: null, empty: true };
     }
     const result = await this.vm.queryInstantStrict(promql);
     if (result.ok === false) return { kind: 'unknown', reason: result.reason };
