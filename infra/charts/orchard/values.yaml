@@ -956,7 +956,7 @@ databaseDumps:
   enabled: false
   schedule: "15 2 * * *"
   image: postgres:17-alpine
-  uploaderImage: amazon/aws-cli:2.27.50
+  uploaderImage: amazon/aws-cli:2.39.3
   destination:
     bucket: ""
     prefix: platform-dumps

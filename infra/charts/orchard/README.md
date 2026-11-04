@@ -637,7 +637,7 @@ outside Orchard.
 |---|---|---|
 | `databaseDumps.enabled` | `false` | Render the CronJobs. |
 | `databaseDumps.schedule` | `15 2 * * *` | Cron, unless a target sets its own `schedule`. |
-| `databaseDumps.image` / `uploaderImage` | `postgres:17-alpine` / `amazon/aws-cli:2.27.50` | Dump and upload images. Keep the Postgres major at or above your server's. |
+| `databaseDumps.image` / `uploaderImage` | `postgres:17-alpine` / `amazon/aws-cli:2.39.3` | Dump and upload images. Keep the Postgres major at or above your server's. |
 | `databaseDumps.destination.bucket` | `""` | Required when there are targets. |
 | `databaseDumps.destination.prefix` | `platform-dumps` | Key prefix. |
 | `databaseDumps.destination.endpointURL` | `""` | S3 endpoint, for anything that is not AWS. |
