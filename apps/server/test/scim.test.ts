@@ -63,6 +63,8 @@ test('scim+json request bodies are parsed', async () => {
 });
 
 // Enough of the Prisma surface for the SCIM handlers to run against memory.
+const state = { domainVerified: true };
+
 function makeDb() {
   const users: any[] = [];
   const members: any[] = [];
@@ -126,6 +128,7 @@ function makeDb() {
             (where.username && u.username === where.username)
         ) ?? null
     },
+    orgDomain: { findFirst: async () => (state.domainVerified ? { id: 'domain' } : null) },
     organizationMember: {
       ...collection(members, () => ({
         id: randomUUID(),
@@ -609,5 +612,25 @@ test('the SCIM catch-all registers behind every real endpoint', async () => {
     }
   } finally {
     await app.close();
+  }
+});
+
+test("provisioning refuses an address outside the org's verified domains", async () => {
+  const { service } = makeService();
+  state.domainVerified = false;
+  try {
+    await assert.rejects(
+      () =>
+        service.createUser(
+          {
+            schemas: ['urn:ietf:params:scim:schemas:core:2.0:User'],
+            userName: 'ceo@bigcorp.example'
+          },
+          ctx
+        ),
+      /Verify bigcorp\.example/
+    );
+  } finally {
+    state.domainVerified = true;
   }
 });

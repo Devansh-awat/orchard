@@ -583,6 +583,23 @@ export class ScimService implements OnModuleInit {
       }
     }
 
+    const emailDomain = email.split('@')[1]?.toLowerCase() ?? '';
+    const domainVerified = await this.prisma.orgDomain.findFirst({
+      where: {
+        organizationId: ctx.organizationId,
+        domain: emailDomain,
+        verifiedAt: { not: null }
+      },
+      select: { id: true }
+    });
+    if (!domainVerified) {
+      throw ScimError(
+        403,
+        'invalidValue',
+        `Verify ${emailDomain} for this organization before provisioning its users`
+      );
+    }
+
     const result = await this.prisma.$transaction(async (tx) => {
       // Creating the account is the one and only time SCIM writes to `users`.
       // An account that already exists is linked as-is: this org's IdP has no

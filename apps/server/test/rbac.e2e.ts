@@ -472,7 +472,7 @@ describe('Guest org members', () => {
     assert.equal(res.status, 403);
   });
 
-  test('inviting a brand-new user to a project auto-creates them as a guest org member', async () => {
+  test('adding an account outside the org to a project invites them instead of joining them', async () => {
     // Create a fresh user with no org membership at all.
     const newGuestEmail = `${RUN_TAG}-fresh-guest@example.test`;
     const newGuest = await prisma.user.create({
@@ -489,12 +489,13 @@ describe('Guest org members', () => {
       });
       assert.equal(res.status, 201, `expected 201, got ${res.status}`);
 
-      // They should now have an OrgMember row with role=guest.
+      assert.equal((await res.json()).invited, true);
+
+      // Joining an org is the recipient's decision.
       const orgMembership = await prisma.organizationMember.findUnique({
         where: { organizationId_userId: { organizationId: fx.orgA.id, userId: newGuest.id } }
       });
-      assert.ok(orgMembership, 'org membership should have been auto-created');
-      assert.equal(orgMembership!.role, 'guest');
+      assert.equal(orgMembership, null);
     } finally {
       // Cascade-cleanup: deleting the user removes their project + org memberships.
       await prisma.user.delete({ where: { id: newGuest.id } }).catch(() => {});

@@ -1055,11 +1055,20 @@ export class ProjectsService {
     if (!project) throw new NotFoundException('Project not found');
 
     const user = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
+    const orgMember = user
+      ? await this.prisma.organizationMember.findUnique({
+          where: {
+            organizationId_userId: { organizationId: project.organizationId, userId: user.id }
+          }
+        })
+      : null;
 
-    // No account under that email yet: send a project-targeted guest
-    // invitation instead of failing. Accepting it creates the account's org
-    // guest membership and this project membership in one step.
-    if (!user) {
+    // Not in this org yet: send a project-targeted guest invitation. Joining an
+    // org is the recipient's decision, whether or not they already have an
+    // account. Accepting creates the guest membership and this project
+    // membership in one step, and the answer doesn't reveal whether the address
+    // has an account.
+    if (!user || !orgMember) {
       const invitation = await this.organizationsService.createProjectGuestInvitation({
         organizationId: project.organizationId,
         projectId,
@@ -1076,26 +1085,6 @@ export class ProjectsService {
       where: { projectId, userId: user.id }
     });
     if (existing) throw new BadRequestException('User is already a member of this project');
-
-    // If the invitee isn't already in the org, attach them as a guest. Guests
-    // can only see projects they're explicit members of, so this is the
-    // narrowest membership that still lets them log in and see this project.
-    // Existing members/admins/owners keep their current role: we never
-    // downgrade.
-    const existingOrgMember = await this.prisma.organizationMember.findUnique({
-      where: { organizationId_userId: { organizationId: project.organizationId, userId: user.id } }
-    });
-    if (!existingOrgMember) {
-      await this.prisma.organizationMember.create({
-        data: {
-          organizationId: project.organizationId,
-          userId: user.id,
-          role: 'guest',
-          addedBy: adder.id
-        }
-      });
-      this.membershipCache.invalidateInternalUserId(user.id);
-    }
 
     const created = await this.prisma.projectMember.create({
       data: {

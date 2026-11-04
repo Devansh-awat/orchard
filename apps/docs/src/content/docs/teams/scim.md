@@ -10,6 +10,7 @@ To add and remove organization members from your identity provider, connect the 
 ## Prerequisites
 
 - The **Owner** [role](/teams/organizations/#organization-roles) in the organization. Only owners can open the SCIM tab or manage SCIM tokens.
+- A verified domain for each email domain you provision. Orchard refuses users whose address is outside the organization's verified domains.
 
 ## Connect your identity provider
 
