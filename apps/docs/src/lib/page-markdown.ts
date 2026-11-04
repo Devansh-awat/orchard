@@ -1,7 +1,7 @@
 import { AGENT_SETUP, clients, examplePrompts, urlOptions } from './agent-setup';
 import { changeHref, formatDate, getChanges, getFeatured, groupByDate } from './changelog';
 import { DIRECTORY_TEXT, directory, directoryGroups } from './directory';
-import { AGENT_PANEL, HERO_TEXT, TABS_HEADING, WHATS_NEW, homeTabs } from './home';
+import { AGENT_PANEL, HERO_TEXT, WHATS_NEW, homeSections, homeStarts } from './home';
 import { INSTALL_PROMPT, MCP_URL, SETUP_PROMPT, SITE_URL } from './nav';
 
 function fence(code: string, lang = ''): string {
@@ -35,13 +35,16 @@ export function homeMarkdown(): string {
     '',
     fence(INSTALL_PROMPT, 'text'),
     '',
-    `## ${TABS_HEADING}`,
+    '## Where to start',
     ''
   ];
-  for (const tab of homeTabs) {
-    parts.push(`### ${tab.label}: ${tab.heading}`, '', tab.text, '', fence(tab.command, 'sh'), '');
-    parts.push(`- [${tab.primary.label}](${tab.primary.href})`);
-    for (const link of tab.related) parts.push(`- [${link.label}](${link.href})`);
+  for (const start of homeStarts) {
+    parts.push(`- [${start.title}](${start.href}): ${start.text}`);
+  }
+  parts.push('', '## Browse the docs', '');
+  for (const section of homeSections) {
+    parts.push(`### ${section.title}`, '');
+    for (const link of section.links) parts.push(`- [${link.label}](${link.href})`);
     parts.push('');
   }
   parts.push(

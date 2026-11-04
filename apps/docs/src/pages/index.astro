@@ -1,10 +1,10 @@
 ---
 import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
 import CopyPromptButton from '../components/CopyPromptButton.astro';
+import Icon from '../components/Icon.astro';
 import AgentPanel from '../components/home/AgentPanel.astro';
-import HomeTabs from '../components/home/HomeTabs.astro';
 import WhatsNew from '../components/home/WhatsNew.astro';
-import { HERO_TEXT, TABS_HEADING } from '../lib/home';
+import { HERO_TEXT, homeSections, homeStarts } from '../lib/home';
 ---
 
 <StarlightPage
@@ -19,9 +19,6 @@ import { HERO_TEXT, TABS_HEADING } from '../lib/home';
   }}
 >
   <div class="o-landing o-home not-content">
-    <div class="edge" aria-hidden="true">
-      <div class="o-dots edge-dots"></div>
-    </div>
     <section class="hero">
       <h1>Orchard Docs</h1>
       <p>{HERO_TEXT}</p>
@@ -30,10 +27,44 @@ import { HERO_TEXT, TABS_HEADING } from '../lib/home';
         <CopyPromptButton />
       </div>
     </section>
-    <section class="features" aria-labelledby="features-heading">
-      <h2 id="features-heading">{TABS_HEADING}</h2>
-      <HomeTabs />
+
+    <section class="starts" aria-label="Where to start">
+      {
+        homeStarts.map((start) => (
+          <a class="start" href={start.href}>
+            <span class="tile">
+              <Icon name={start.icon} size={18} />
+            </span>
+            <h2>{start.title}</h2>
+            <p>{start.text}</p>
+          </a>
+        ))
+      }
     </section>
+
+    <section class="sections" aria-labelledby="sections-heading">
+      <h2 id="sections-heading">Browse the docs</h2>
+      <div class="section-grid">
+        {
+          homeSections.map((section) => (
+            <div class="widget">
+              <h3>
+                <Icon name={section.icon} size={16} />
+                {section.title}
+              </h3>
+              <ul>
+                {section.links.map((link) => (
+                  <li>
+                    <a href={link.href}>{link.label}</a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))
+        }
+      </div>
+    </section>
+
     <AgentPanel />
     <WhatsNew />
   </div>
@@ -41,73 +72,137 @@ import { HERO_TEXT, TABS_HEADING } from '../lib/home';
 
 <style>
   .o-home {
-    position: relative;
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 4rem;
-    max-width: 90rem;
-    padding: 3rem var(--o-page-pad) 0;
-  }
-
-  .edge {
-    display: none;
+    gap: 3rem;
+    max-width: 68rem;
+    margin-inline: auto;
+    padding: 2rem var(--o-page-pad) 3rem;
   }
 
   h1 {
     margin: 0;
-    color: var(--sl-color-white);
-    font-size: clamp(2.5rem, 2rem + 2.4vw, 3.5rem);
-    font-weight: 500;
+    color: var(--text-default);
+    font-size: var(--text-display);
+    font-weight: var(--weight-semibold);
     letter-spacing: -0.03em;
-    line-height: 1.1;
-    text-wrap: balance;
+    line-height: var(--lh-display);
   }
 
   .hero p {
-    max-width: 30rem;
-    margin: 1rem 0 0;
-    color: var(--sl-color-gray-2);
-    font-size: 1.125rem;
-    line-height: 1.6;
+    max-width: 32rem;
+    margin: 0.5rem 0 0;
+    color: var(--text-muted);
+    font-size: var(--text-headline);
+    line-height: 1.5;
     text-wrap: pretty;
   }
 
   .actions {
     display: flex;
     flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+  }
+
+  .starts,
+  .section-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(14.5rem, 1fr));
     gap: 0.75rem;
-    margin-top: 1.75rem;
   }
 
-  h2 {
-    margin: 0 0 1.75rem;
-    color: var(--sl-color-white);
-    font-size: clamp(1.5rem, 1.3rem + 0.9vw, 2rem);
-    font-weight: 500;
-    letter-spacing: -0.02em;
-    line-height: 1.2;
+  .start,
+  .widget {
+    padding: 1rem;
+    border-radius: var(--o-widget-r);
+    corner-shape: var(--corner);
+    background: var(--bg-surface);
+    box-shadow: var(--shadow-raised);
   }
 
-  @media (min-width: 50rem) {
-    .o-home {
-      gap: 5rem;
-      padding-block-start: 5rem;
-    }
+  .start {
+    display: block;
+    color: inherit;
+    text-decoration: none;
+    transition: background-color var(--dur-fast) ease;
+  }
 
-    .edge {
-      position: fixed;
-      top: var(--sl-nav-height);
-      right: 0;
-      bottom: 0;
-      display: block;
-      width: var(--o-page-pad);
-      border-inline-start: 1px dashed var(--o-rule);
-    }
+  .start:hover {
+    background: var(--bg-hover);
+  }
 
-    .edge-dots {
-      position: absolute;
-      inset: 0;
-      mask-image: linear-gradient(to left, black 30%, transparent);
-    }
+  .tile {
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: var(--o-control-r);
+    corner-shape: var(--corner);
+    background: var(--accent-subtle);
+    color: var(--accent-9);
+  }
+
+  .start h2 {
+    margin: 0.75rem 0 0;
+    color: var(--text-default);
+    font-size: var(--text-headline);
+    font-weight: var(--weight-medium);
+    line-height: var(--lh-headline);
+  }
+
+  .start p {
+    margin: 0.25rem 0 0;
+    color: var(--text-muted);
+    font-size: var(--text-callout);
+    line-height: var(--lh-callout);
+    text-wrap: pretty;
+  }
+
+  .sections > h2 {
+    margin: 0 0 0.75rem;
+    color: var(--text-default);
+    font-size: var(--text-title-2);
+    font-weight: var(--weight-medium);
+    line-height: var(--lh-title-2);
+  }
+
+  .widget h3 {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0 0 0.5rem;
+    color: var(--text-default);
+    font-size: var(--text-headline);
+    font-weight: var(--weight-medium);
+    line-height: var(--lh-headline);
+  }
+
+  .widget h3 :global(svg) {
+    color: var(--text-faint);
+  }
+
+  ul {
+    display: grid;
+    gap: 0.125rem;
+    margin: 0 -0.5rem;
+    padding: 0;
+    list-style: none;
+  }
+
+  .widget a {
+    display: block;
+    padding: 0.25rem 0.5rem;
+    border-radius: calc(0.5rem * var(--corner-scale));
+    corner-shape: var(--corner);
+    color: var(--text-muted);
+    font-size: var(--text-callout);
+    line-height: var(--lh-callout);
+    text-decoration: none;
+  }
+
+  .widget a:hover {
+    background: color-mix(in oklab, var(--neutral-10) 6%, transparent);
+    color: var(--text-default);
   }
 </style>

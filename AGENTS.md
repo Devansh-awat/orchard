@@ -28,7 +28,7 @@ Deployed (`apps/`):
 - `apps/cli`: Go CLI (`orchard`), Cobra + Bubbletea, plus the OpenTofu provider in `tofu-provider`.
 - `apps/landing`: the marketing site (orchard.my) on `:5173`. Tailwind only, no shared UI with
   `apps/frontend`.
-- `apps/docs`: docs.orchard.my, Astro Starlight on `:5174`. `src/content/docs/reference` is generated.
+- `apps/docs`: docs.orchard.my, Astro Starlight on `:5174`. `src/content/docs/reference` is generated. Styles use the design tokens from `apps/frontend/src/lib/design`.
 - `apps/r2-proxy`: Go proxy that issues per-cluster scoped credentials for database backups to R2.
 - `apps/registry`: Go service that serves and publishes templates and grafts.
 - `apps/fc-builder`: Firecracker microVM image builder.

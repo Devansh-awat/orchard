@@ -17,7 +17,11 @@ export default defineConfig({
       description:
         'Install Orchard on a Linux server or a Kubernetes cluster, then deploy your apps.',
       favicon: '/favicon/favicon.ico',
-      customCss: ['./src/styles/orchard.css'],
+      customCss: [
+        '../frontend/src/lib/design/scales.css',
+        '../frontend/src/lib/design/tokens.css',
+        './src/styles/orchard.css'
+      ],
       lastUpdated: true,
       credits: false,
       components: {
@@ -92,7 +96,7 @@ export default defineConfig({
               ]
             },
             {
-              label: 'Domains and networking',
+              label: 'Networking',
               collapsed: true,
               items: [
                 { label: 'Ports and internal addresses', slug: 'deploy/networking' },
@@ -277,7 +281,7 @@ export default defineConfig({
               ]
             },
             {
-              label: 'Organizations and projects',
+              label: 'Organizations',
               collapsed: true,
               items: [
                 { label: 'Organizations and roles', slug: 'teams/organizations' },

@@ -34,7 +34,7 @@ import PageLinks from '../components/PageLinks.astro';
     margin-bottom: 0.625rem;
     color: var(--sl-color-white);
     font-size: 0.875rem;
-    font-weight: 500;
+    font-weight: var(--weight-medium);
   }
 
   .rail :global(ul) {
@@ -58,12 +58,11 @@ import PageLinks from '../components/PageLinks.astro';
 
   .rail :global(starlight-toc a) {
     padding-block: 0.3125rem;
-    padding-inline: calc(0.875rem * var(--depth, 0) + 0.875rem) 0;
-    border-inline-start: 2px solid var(--o-rule);
+    padding-inline: calc(0.75rem * var(--depth, 0) + 0.625rem) 0.5rem;
   }
 
   .rail :global(starlight-toc li ul a) {
-    padding-inline-start: 1.625rem;
+    padding-inline-start: 1.375rem;
   }
 
   .rail :global(a:hover) {
@@ -71,7 +70,8 @@ import PageLinks from '../components/PageLinks.astro';
   }
 
   .rail :global(starlight-toc a[aria-current='true']) {
-    border-inline-start-color: var(--o-accent-text);
-    color: var(--sl-color-white);
+    background: var(--bg-raised);
+    color: var(--text-default);
+    box-shadow: var(--shadow-raised);
   }
 </style>

@@ -20,7 +20,7 @@ export const topNav = [
 export const groupIcons: Record<string, IconName> = {
   Deploy: 'rocket',
   Configure: 'sliders',
-  'Domains and networking': 'globe',
+  Networking: 'globe',
   Releases: 'history',
   Jobs: 'clock',
   Monitoring: 'activity',
@@ -35,7 +35,7 @@ export const groupIcons: Record<string, IconName> = {
   'Build a graft': 'code',
   'Graft reference': 'list',
   'Your account': 'user',
-  'Organizations and projects': 'users',
+  Organizations: 'users',
   'Sign-in and compliance': 'key',
   'Set up': 'rocket',
   Settings: 'sliders',

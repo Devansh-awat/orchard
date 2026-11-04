@@ -3,7 +3,6 @@ import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
 import CenteredHeader from '../components/CenteredHeader.astro';
 import Command from '../components/Command.astro';
 import CopyPromptButton from '../components/CopyPromptButton.astro';
-import CornerMarks from '../components/CornerMarks.astro';
 import Icon from '../components/Icon.astro';
 import InlineText from '../components/InlineText.astro';
 import { AGENT_SETUP, clients, examplePrompts, urlOptions } from '../lib/agent-setup';
@@ -35,7 +34,6 @@ import { MCP_URL, SETUP_PROMPT } from '../lib/nav';
       <h2>{AGENT_SETUP.pickHeading}</h2>
       <p class="lede">{AGENT_SETUP.pickText}</p>
       <div class="picker" data-tabs>
-        <CornerMarks />
         <div class="tablist" role="tablist" aria-label="Clients">
           {
             clients.map((client, index) => (
@@ -122,7 +120,6 @@ import { MCP_URL, SETUP_PROMPT } from '../lib/nav';
       <h2>{AGENT_SETUP.promptsHeading}</h2>
       <p class="lede">{AGENT_SETUP.promptsText}</p>
       <div class="prompts">
-        <CornerMarks />
         {
           examplePrompts.map((example) => (
             <article>
@@ -187,11 +184,11 @@ import { MCP_URL, SETUP_PROMPT } from '../lib/nav';
 
   h2 {
     margin: 0;
-    color: var(--sl-color-white);
-    font-size: 1.75rem;
-    font-weight: 500;
+    color: var(--text-default);
+    font-size: var(--text-title-1);
+    font-weight: var(--weight-medium);
     letter-spacing: -0.02em;
-    line-height: 1.2;
+    line-height: var(--lh-title-1);
   }
 
   .lede {
@@ -207,25 +204,25 @@ import { MCP_URL, SETUP_PROMPT } from '../lib/nav';
 
   .picker {
     position: relative;
-    border: 1px solid var(--o-rule);
-    background: var(--o-raised);
   }
 
   .tablist {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
-    gap: 1px;
-    background: var(--o-rule);
-    border-bottom: 1px solid var(--o-rule);
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
   }
 
   [role='tab'] {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    padding: 1rem;
+    padding: 0.75rem;
     border: 0;
-    background: var(--o-raised);
+    border-radius: var(--o-card-r);
+    corner-shape: var(--corner);
+    background: var(--bg-surface);
+    box-shadow: var(--shadow-raised);
     color: inherit;
     font: inherit;
     text-align: start;
@@ -233,12 +230,14 @@ import { MCP_URL, SETUP_PROMPT } from '../lib/nav';
   }
 
   [role='tab']:hover {
-    background: color-mix(in srgb, var(--o-raised) 94%, var(--sl-color-white));
+    background: var(--bg-hover);
   }
 
   [role='tab'][aria-selected='true'] {
-    background: var(--o-canvas);
-    box-shadow: inset 0 -2px 0 var(--o-accent);
+    background: var(--bg-raised);
+    box-shadow:
+      0 0 0 1.5px var(--accent-solid),
+      0 1px 2px rgb(0 0 0 / 0.04);
   }
 
   [role='tab']:focus-visible {
@@ -251,7 +250,8 @@ import { MCP_URL, SETUP_PROMPT } from '../lib/nav';
     place-items: center;
     width: 2.5rem;
     height: 2.5rem;
-    border-radius: 0.375rem;
+    border-radius: var(--o-control-r);
+    corner-shape: var(--corner);
     background: var(--o-fill);
     color: var(--sl-color-white);
   }
@@ -265,12 +265,16 @@ import { MCP_URL, SETUP_PROMPT } from '../lib/nav';
   .name {
     color: var(--sl-color-white);
     font-size: 0.9375rem;
-    font-weight: 500;
+    font-weight: var(--weight-medium);
     line-height: 1.25;
   }
 
   .panel {
-    padding: 1.5rem 1.25rem 1.75rem;
+    padding: 1.25rem;
+    border-radius: var(--o-widget-r);
+    corner-shape: var(--corner);
+    background: var(--bg-surface);
+    box-shadow: var(--shadow-raised);
   }
 
   .panel:focus-visible {
@@ -285,7 +289,7 @@ import { MCP_URL, SETUP_PROMPT } from '../lib/nav';
     margin: 0 0 1rem;
     color: var(--sl-color-white);
     font-size: 1.125rem;
-    font-weight: 500;
+    font-weight: var(--weight-medium);
   }
 
   ol {
@@ -323,11 +327,12 @@ import { MCP_URL, SETUP_PROMPT } from '../lib/nav';
     place-items: center;
     width: 1.5rem;
     height: 1.5rem;
-    border: 1px solid var(--o-rule-strong);
-    border-radius: 0.25rem;
-    color: var(--sl-color-gray-2);
-    font-family: var(--sl-font-mono);
-    font-size: 0.75rem;
+    border-radius: calc(0.5rem * var(--corner-scale));
+    corner-shape: var(--corner);
+    background: var(--o-fill);
+    color: var(--text-muted);
+    font-size: var(--text-caption);
+    font-weight: var(--weight-medium);
   }
 
   ol p {
@@ -343,7 +348,8 @@ import { MCP_URL, SETUP_PROMPT } from '../lib/nav';
   :is(ol, .note, dt, .url-text) code {
     padding: 0.0625rem 0.3125rem;
     border: 1px solid var(--o-rule);
-    border-radius: 0.25rem;
+    border-radius: calc(0.375rem * var(--corner-scale));
+    corner-shape: var(--corner);
     background: var(--o-fill-quiet);
     color: var(--o-accent-text);
     font-family: var(--sl-font-mono);
@@ -352,7 +358,7 @@ import { MCP_URL, SETUP_PROMPT } from '../lib/nav';
 
   strong {
     color: var(--sl-color-white);
-    font-weight: 500;
+    font-weight: var(--weight-medium);
   }
 
   .split {
@@ -412,7 +418,7 @@ import { MCP_URL, SETUP_PROMPT } from '../lib/nav';
     margin: 0;
     color: var(--sl-color-white);
     font-size: 1.0625rem;
-    font-weight: 500;
+    font-weight: var(--weight-medium);
   }
 
   .note {
@@ -426,7 +432,8 @@ import { MCP_URL, SETUP_PROMPT } from '../lib/nav';
     margin: 0 0 1rem;
     padding: 0.75rem;
     border: 1px solid var(--o-rule);
-    border-radius: 0.375rem;
+    border-radius: var(--o-control-r);
+    corner-shape: var(--corner);
     background: var(--o-code);
     color: var(--sl-color-gray-1);
     font-family: var(--sl-font-mono);

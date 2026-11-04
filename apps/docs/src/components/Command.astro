@@ -30,7 +30,8 @@ const multiline = code.includes('\n');
   .o-command {
     margin: 0;
     border: 1px solid var(--o-rule);
-    border-radius: 0.375rem;
+    border-radius: var(--o-control-r);
+    corner-shape: var(--corner);
     background: var(--o-code);
     min-width: 0;
   }

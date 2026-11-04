@@ -174,7 +174,8 @@ const isFirst = page === 1 && !component;
   .filters nav a {
     padding: 0.1875rem 0.625rem;
     border: 1px solid var(--o-rule);
-    border-radius: 999px;
+    border-radius: var(--o-control-r);
+    corner-shape: var(--corner);
     color: var(--sl-color-gray-2);
     font-size: 0.8125rem;
     text-decoration: none;
@@ -218,13 +219,13 @@ const isFirst = page === 1 && !component;
     width: 0.8125rem;
     height: 0.8125rem;
     border: 1px solid var(--o-rule-strong);
-    border-radius: 0.1875rem;
+    border-radius: calc(0.375rem * var(--corner-scale));
+    corner-shape: var(--corner);
     background: var(--o-canvas);
   }
 
   time {
     color: var(--o-muted);
-    font-family: var(--sl-font-mono);
     font-size: 0.8125rem;
     line-height: 1.75;
   }
@@ -249,7 +250,7 @@ const isFirst = page === 1 && !component;
     margin: 0;
     color: var(--sl-color-white);
     font-size: 1.0625rem;
-    font-weight: 500;
+    font-weight: var(--weight-medium);
     letter-spacing: -0.005em;
     line-height: 1.4;
     overflow-wrap: anywhere;
@@ -273,14 +274,14 @@ const isFirst = page === 1 && !component;
 
   .tag {
     padding: 0.0625rem 0.5rem;
-    border-radius: 999px;
+    border-radius: var(--o-control-r);
+    corner-shape: var(--corner);
     background: var(--o-accent-tint);
     color: var(--o-accent-text);
   }
 
   .kind {
     color: var(--o-muted);
-    font-family: var(--sl-font-mono);
   }
 
   .tags a {

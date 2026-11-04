@@ -4,6 +4,8 @@
     try {
       stored = localStorage.getItem('starlight-theme');
     } catch {}
-    document.documentElement.dataset.theme = stored === 'light' ? 'light' : 'dark';
+    const theme = stored === 'light' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.classList.toggle('dark', theme === 'dark');
   })();
 </script>

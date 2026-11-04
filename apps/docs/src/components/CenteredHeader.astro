@@ -7,8 +7,6 @@ interface Props {
 const { title, text } = Astro.props;
 ---
 
-<div class="gutter left o-dots" aria-hidden="true"></div>
-<div class="gutter right o-dots" aria-hidden="true"></div>
 <header class="centered">
   <h1>{title}</h1>
   {text && <p>{text}</p>}
@@ -19,48 +17,27 @@ const { title, text } = Astro.props;
   .centered {
     max-width: 42rem;
     margin-inline: auto;
-    padding-block: 3rem 2.5rem;
+    padding-block: 2rem;
     text-align: center;
   }
 
   h1 {
     margin: 0;
-    color: var(--sl-color-white);
-    font-size: clamp(2.5rem, 2rem + 2.4vw, 3.5rem);
-    font-weight: 500;
+    color: var(--text-default);
+    font-size: var(--text-display);
+    font-weight: var(--weight-medium);
     letter-spacing: -0.03em;
-    line-height: 1.08;
+    line-height: var(--lh-display);
   }
 
   p {
     max-width: 28rem;
-    margin: 1rem auto 0;
-    color: var(--sl-color-gray-2);
-    font-size: 1.125rem;
-    line-height: 1.6;
+    margin: 0.5rem auto 0;
+    color: var(--text-muted);
+    font-size: var(--text-headline);
+    line-height: 1.5;
     text-wrap: balance;
   }
 
-  .gutter {
-    display: none;
-  }
 
-  @media (min-width: 80rem) {
-    .gutter {
-      position: fixed;
-      top: var(--sl-nav-height);
-      bottom: 0;
-      display: block;
-      width: 7.5rem;
-      border-inline: 1px dashed var(--o-rule);
-    }
-
-    .left {
-      left: max(2.5rem, calc(50% - 42.5rem));
-    }
-
-    .right {
-      right: max(2.5rem, calc(50% - 42.5rem));
-    }
-  }
-</style>
+  </style>

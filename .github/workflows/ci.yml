@@ -82,6 +82,7 @@ jobs:
               - '.github/workflows/**'
             docs:
               - 'apps/docs/**'
+              - 'apps/frontend/src/lib/design/**'
               - 'apps/cli/**'
               - 'apps/server/src/mcp/**'
               - 'packages/contracts/**'
