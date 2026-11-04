@@ -74,6 +74,7 @@ import {
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { NodesService } from '../nodes/nodes.service';
 import { StorageService } from '../organizations/storage.service';
+import { LOCAL_DEPLOYS_NEED_S3 } from '../instance-config/object-storage';
 import { ApplyQueueService } from '../apply/apply-queue.service';
 import { ApplyExecutorService } from '../apply/apply-executor.service';
 import { formatSlug, scrubIngress, isPlatformGeneratedHost } from './projects.utils';
@@ -7478,9 +7479,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
   ) {
     if (!this.storage.buildContextEnabled()) {
-      throw new BadRequestException(
-        'Local deploys are disabled on this server (set LOCAL_DEPLOYS_ENABLED=true and configure R2_BUILD_CONTEXT_BUCKET)'
-      );
+      throw new BadRequestException(LOCAL_DEPLOYS_NEED_S3);
     }
 
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
@@ -7678,9 +7677,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
   ) {
     if (!this.storage.buildContextEnabled()) {
-      throw new BadRequestException(
-        'Local deploys are disabled on this server (set LOCAL_DEPLOYS_ENABLED=true and configure R2_BUILD_CONTEXT_BUCKET)'
-      );
+      throw new BadRequestException(LOCAL_DEPLOYS_NEED_S3);
     }
 
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);

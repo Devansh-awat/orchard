@@ -1,4 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  ServiceUnavailableException
+} from '@nestjs/common';
 import {
   S3Client,
   PutObjectCommand,
@@ -7,131 +12,134 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'crypto';
-import { objectStorage, objectStorageGeneration } from '../instance-config/object-storage';
+import { Readable } from 'stream';
+import {
+  BuildContextStorage,
+  LOCAL_DEPLOYS_NEED_S3,
+  UploadStorage,
+  buildContextStorage,
+  objectStorageGeneration,
+  s3ClientConfig,
+  uploadStorage
+} from '../instance-config/object-storage';
+
+export class StorageNotConfiguredError extends BadRequestException {
+  constructor() {
+    super('File uploads need storage. An instance admin can add it under Instance admin.');
+  }
+}
 
 @Injectable()
 export class StorageService {
-  private s3Client: S3Client | null = null;
+  private readonly logger = new Logger(StorageService.name);
 
-  private bucketName: string | null = null;
+  private uploadClient: { generation: number; client: S3Client; target: UploadStorage } | null =
+    null;
 
-  private initializedAt = -1;
+  private contextClient: {
+    generation: number;
+    client: S3Client;
+    target: BuildContextStorage;
+  } | null = null;
 
-  private initialize() {
+  uploadsEnabled(): boolean {
+    return uploadStorage() !== null;
+  }
+
+  private uploads(): { client: S3Client; target: UploadStorage } {
     const generation = objectStorageGeneration();
-    if (this.initializedAt === generation) {
-      return;
-    }
-
-    const { accessKeyId, secretAccessKey, bucketName, endpoint } = objectStorage();
-
-    if (!accessKeyId || !secretAccessKey || !bucketName || !endpoint) {
-      throw new Error(
-        'Object storage is not configured. Set it under Instance admin, or with the R2_* environment variables.'
-      );
-    }
-
-    this.bucketName = bucketName;
-
-    this.s3Client = new S3Client({
-      region: 'auto',
-      endpoint,
-      credentials: {
-        accessKeyId,
-        secretAccessKey
-      }
-    });
-
-    this.initializedAt = generation;
+    if (this.uploadClient?.generation === generation) return this.uploadClient;
+    const target = uploadStorage();
+    if (!target) throw new StorageNotConfiguredError();
+    const client = new S3Client(s3ClientConfig(target));
+    this.uploadClient = { generation, client, target };
+    return this.uploadClient;
   }
 
   async uploadFile(file: Express.Multer.File, folder = 'organizations'): Promise<string> {
-    this.initialize();
-
-    if (!this.s3Client || !this.bucketName) {
-      throw new Error('R2 storage is not configured');
-    }
+    const { client, target } = this.uploads();
 
     const fileExtension = file.originalname.split('.').pop();
     const fileName = `${folder}/${randomUUID()}.${fileExtension}`;
 
-    const command = new PutObjectCommand({
-      Bucket: this.bucketName,
-      Key: fileName,
-      Body: file.buffer,
-      ContentType: file.mimetype,
-      CacheControl: 'public, max-age=31536000, immutable'
-    });
+    try {
+      await client.send(
+        new PutObjectCommand({
+          Bucket: target.bucket,
+          Key: `${target.keyPrefix}${fileName}`,
+          Body: file.buffer,
+          ContentType: file.mimetype,
+          CacheControl: 'public, max-age=31536000, immutable'
+        })
+      );
+    } catch (e: any) {
+      this.logger.warn(`upload to ${target.bucket} failed: ${e?.name ?? 'error'}`);
+      throw new ServiceUnavailableException('Storage is not reachable right now. Try again later.');
+    }
 
-    await this.s3Client.send(command);
-
-    const publicUrl = objectStorage().publicUrl ?? '';
-
-    return `${publicUrl}/${fileName}`;
+    return `${target.publicUrl}/${fileName}`;
   }
 
   async deleteFile(url: string): Promise<void> {
-    this.initialize();
+    if (!uploadStorage()) return;
+    const { client, target } = this.uploads();
 
-    if (!this.s3Client || !this.bucketName) {
-      throw new Error('R2 storage is not configured');
-    }
-
-    const publicUrl = objectStorage().publicUrl ?? '';
-
-    if (!url.startsWith(publicUrl)) {
+    if (!url.startsWith(`${target.publicUrl}/`)) {
       return;
     }
 
-    const key = url.replace(`${publicUrl}/`, '');
-
-    const command = new DeleteObjectCommand({
-      Bucket: this.bucketName,
-      Key: key
-    });
-
-    await this.s3Client.send(command);
-  }
-
-  buildContextEnabled(): boolean {
-    const flag = String(process.env.LOCAL_DEPLOYS_ENABLED || '').toLowerCase();
-    if (flag !== 'true' && flag !== '1') {
-      return false;
-    }
-    return Boolean(
-      objectStorage().buildContextBucket &&
-      objectStorage().accessKeyId &&
-      objectStorage().secretAccessKey
+    await client.send(
+      new DeleteObjectCommand({
+        Bucket: target.bucket,
+        Key: `${target.keyPrefix}${url.slice(target.publicUrl.length + 1)}`
+      })
     );
   }
 
-  private contextBucket(): string {
-    const bucket = objectStorage().buildContextBucket;
-    if (!bucket) {
-      throw new Error('No build context bucket is configured (R2_BUILD_CONTEXT_BUCKET)');
+  async readUpload(
+    path: string
+  ): Promise<{
+    body: Readable;
+    contentType: string | undefined;
+    length: number | undefined;
+  } | null> {
+    const target = uploadStorage();
+    if (!target || target.keyPrefix === '') return null;
+    const { client } = this.uploads();
+    try {
+      const out = await client.send(
+        new GetObjectCommand({ Bucket: target.bucket, Key: `${target.keyPrefix}${path}` })
+      );
+      return {
+        body: out.Body as Readable,
+        contentType: out.ContentType,
+        length: out.ContentLength
+      };
+    } catch (e: any) {
+      if (e?.name === 'NoSuchKey' || e?.$metadata?.httpStatusCode === 404) return null;
+      throw e;
     }
-    this.initializeContextClient();
-    return bucket;
   }
 
-  private initializeContextClient() {
-    if (this.s3Client) return;
-    const { accessKeyId, secretAccessKey, endpoint } = objectStorage();
-    if (!accessKeyId || !secretAccessKey || !endpoint) {
-      throw new Error('Object storage credentials are not configured');
-    }
-    this.s3Client = new S3Client({
-      region: 'auto',
-      endpoint,
-      credentials: { accessKeyId, secretAccessKey }
-    });
+  buildContextEnabled(): boolean {
+    return buildContextStorage() !== null;
+  }
+
+  private context(): { client: S3Client; target: BuildContextStorage } {
+    const generation = objectStorageGeneration();
+    if (this.contextClient?.generation === generation) return this.contextClient;
+    const target = buildContextStorage();
+    if (!target) throw new BadRequestException(LOCAL_DEPLOYS_NEED_S3);
+    const client = new S3Client(s3ClientConfig(target));
+    this.contextClient = { generation, client, target };
+    return this.contextClient;
   }
 
   async putBuildContext(key: string, body: Buffer): Promise<void> {
-    const bucket = this.contextBucket();
-    await this.s3Client!.send(
+    const { client, target } = this.context();
+    await client.send(
       new PutObjectCommand({
-        Bucket: bucket,
+        Bucket: target.bucket,
         Key: key,
         Body: body,
         ContentType: 'application/gzip'
@@ -140,14 +148,14 @@ export class StorageService {
   }
 
   async signBuildContextGet(key: string, expiresInSeconds = 900): Promise<string> {
-    const bucket = this.contextBucket();
-    return getSignedUrl(this.s3Client! as any, new GetObjectCommand({ Bucket: bucket, Key: key }), {
+    const { client, target } = this.context();
+    return getSignedUrl(client as any, new GetObjectCommand({ Bucket: target.bucket, Key: key }), {
       expiresIn: expiresInSeconds
     });
   }
 
   async deleteBuildContext(key: string): Promise<void> {
-    const bucket = this.contextBucket();
-    await this.s3Client!.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+    const { client, target } = this.context();
+    await client.send(new DeleteObjectCommand({ Bucket: target.bucket, Key: key }));
   }
 }

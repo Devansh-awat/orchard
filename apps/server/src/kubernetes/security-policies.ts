@@ -1,7 +1,7 @@
 import * as k8s from '@kubernetes/client-node';
 import * as crypto from 'crypto';
 import { truncateK8sName } from '../projects/projects.utils';
-import { objectStorage } from '../instance-config/object-storage';
+import { localObjectStore, objectStorage } from '../instance-config/object-storage';
 
 /**
  * Namespaces a tenant pod may be reached from, and reach.
@@ -74,7 +74,7 @@ export interface StorageEgress {
 const IN_CLUSTER_HOST = /^[a-z0-9-]+\.([a-z0-9-]+)\.svc(?:\.cluster\.local)?\.?$/;
 
 export function objectStorageEgress(
-  endpoint: string | null = objectStorage().endpoint
+  endpoint: string | null = objectStorage().endpoint ?? localObjectStore()?.endpoint ?? null
 ): StorageEgress | null {
   const configuredPort = Number.parseInt(process.env.OBJECT_STORAGE_PORT || '', 10);
   let url: URL | null = null;

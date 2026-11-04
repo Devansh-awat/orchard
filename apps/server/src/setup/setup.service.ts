@@ -245,6 +245,29 @@ export class SetupService implements OnModuleInit {
    * domain) and `unknown` (no cert-manager, or no RBAC to read it) are both
    * ordinary outcomes on a self-hosted box, not failures.
    */
+  private backupsChecklistItem(): ChecklistItem {
+    const target = platformBackupTarget();
+    if (target?.local) {
+      return {
+        id: 'backups',
+        title: 'Add S3 storage for off-server backups',
+        detail: 'Backups are on this server. If the server is lost, the backups are lost.',
+        done: false,
+        severity: 'normal',
+        href: '/admin/instance#storage'
+      };
+    }
+    return {
+      id: 'backups',
+      title: 'Configure database backups',
+      detail:
+        'Managed databases have no backups at all until a backup bucket is configured, so a deleted database cannot be recovered.',
+      done: target !== null,
+      severity: 'warning',
+      href: '/admin/instance#storage'
+    };
+  }
+
   async getCertificate(): Promise<SetupCertificate> {
     const wildcard = platformWildcardDomains()[0];
     const host = wildcard ? `*${wildcard.suffix}` : null;
@@ -345,15 +368,7 @@ export class SetupService implements OnModuleInit {
         severity: 'normal',
         href: '/setup/github'
       },
-      {
-        id: 'backups',
-        title: 'Configure database backups',
-        detail:
-          'Managed databases have no backups at all until a backup bucket is configured, so a deleted database cannot be recovered.',
-        done: platformBackupTarget() !== null,
-        severity: 'warning',
-        href: '/admin/instance'
-      },
+      this.backupsChecklistItem(),
       {
         id: 'smtp',
         title: 'Set up email',

@@ -1,6 +1,7 @@
-import { Body, Controller, Delete, Get, NotFoundException, Param, Put } from '@nestjs/common';
+import { Body, Controller, Delete, Get, NotFoundException, Param, Post, Put } from '@nestjs/common';
 import { InstanceConfigService, ConfigValues } from './instance-config.service';
-import { SECTIONS, sectionById } from './instance-config.sections';
+import { SECTIONS, STORAGE, sectionById } from './instance-config.sections';
+import { probeStorage, storageProbeTarget } from './storage-probe';
 
 // Superadmin-only (default-deny: no @Auth()/@Public() decorator, so the global
 // SuperAdminGuard requires a superadmin).
@@ -18,6 +19,11 @@ export class InstanceConfigController {
     const section = sectionById(id);
     if (!section) throw new NotFoundException('Unknown configuration section');
     return this.config.state(section);
+  }
+
+  @Post('storage/test')
+  async testStorage(@Body() body: ConfigValues) {
+    return probeStorage(storageProbeTarget(body ?? {}, this.config.all(STORAGE)));
   }
 
   @Put(':id')

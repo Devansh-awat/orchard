@@ -585,8 +585,9 @@ export class DatabaseOperationsService {
       bootstrap = liveCloneBootstrap(owner);
       externalClusters = [liveCloneSource(`${src.clusterName}-rw.${src.namespace}.svc`, name)];
     } else {
+      const sourceBucket = await dbs.sourceBackupBucket(org, src, r2!.bucket);
       const location = {
-        destinationPath: `s3://${r2!.bucket}/${src.namespace}/${src.clusterName}`,
+        destinationPath: `s3://${sourceBucket}/${src.namespace}/${src.clusterName}`,
         endpointURL,
         secretName: r2Secret,
         serverName: src.serverName

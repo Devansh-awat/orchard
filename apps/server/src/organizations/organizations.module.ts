@@ -8,11 +8,13 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { AuthModule } from '../auth/auth.module';
 import { UsersModule } from '../users/users.module';
 import { StorageService } from './storage.service';
+import { UploadsController } from './uploads.controller';
 import { TailscaleModule } from '../tailscale/tailscale.module';
 
 @Module({
   imports: [RegistryCredentialsModule, PrismaModule, AuthModule, UsersModule, TailscaleModule],
   controllers: [
+    UploadsController,
     OrganizationRegistryCredentialsController,
     OrganizationsController,
     InvitationsController

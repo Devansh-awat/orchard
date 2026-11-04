@@ -3,7 +3,11 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { S3Client, PutObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { PrismaService } from '../prisma/prisma.service';
 import { LeaderElectionService } from '../events/leader-election.service';
-import { objectStorage, objectStorageGeneration } from '../instance-config/object-storage';
+import {
+  externalUploadStorage,
+  objectStorageGeneration,
+  s3ClientConfig
+} from '../instance-config/object-storage';
 import { assertPublicUrl, guardedFetch } from '../notifications/webhook-guard';
 
 const FETCH_HEADERS = { 'User-Agent': 'Mozilla/5.0 (compatible; OrchardBot/1.0)' };
@@ -18,6 +22,8 @@ export class FaviconService {
   private bucketName: string | null = null;
 
   private publicUrl: string | null = null;
+
+  private keyPrefix = '';
 
   // In-memory cache to avoid repeated R2 checks within the same process lifetime
   private memoryCache = new Map<string, { url: string | null; ts: number }>();
@@ -41,22 +47,17 @@ export class FaviconService {
     if (this.s3Client && this.s3InitAt === generation) return;
     this.s3InitAt = generation;
 
-    const { accessKeyId, secretAccessKey, bucketName, endpoint, publicUrl } = objectStorage();
-
-    if (!accessKeyId || !secretAccessKey || !bucketName || !endpoint) {
-      this.logger.warn('object storage not configured — favicon caching disabled');
+    const target = externalUploadStorage();
+    if (!target) {
       this.s3Client = null;
       return;
     }
 
-    this.bucketName = bucketName;
-    this.publicUrl = publicUrl ?? '';
+    this.bucketName = target.bucket;
+    this.publicUrl = target.publicUrl;
+    this.keyPrefix = target.keyPrefix;
 
-    this.s3Client = new S3Client({
-      region: 'auto',
-      endpoint,
-      credentials: { accessKeyId, secretAccessKey }
-    });
+    this.s3Client = new S3Client(s3ClientConfig(target));
   }
 
   /**
@@ -73,11 +74,11 @@ export class FaviconService {
     const res = await this.s3Client.send(
       new ListObjectsV2Command({
         Bucket: this.bucketName,
-        Prefix: key,
+        Prefix: `${this.keyPrefix}${key}`,
         MaxKeys: 1
       })
     );
-    return res.Contents?.some((o) => o.Key === key) ?? false;
+    return res.Contents?.some((o) => o.Key === `${this.keyPrefix}${key}`) ?? false;
   }
 
   /**
@@ -352,7 +353,7 @@ export class FaviconService {
       await this.s3Client.send(
         new PutObjectCommand({
           Bucket: this.bucketName,
-          Key: key,
+          Key: `${this.keyPrefix}${key}`,
           Body: buffer,
           ContentType: contentType,
           CacheControl: 'public, max-age=604800' // 7 days
@@ -621,7 +622,7 @@ export class FaviconService {
       await this.s3Client.send(
         new PutObjectCommand({
           Bucket: this.bucketName,
-          Key: key,
+          Key: `${this.keyPrefix}${key}`,
           Body: finalBuffer,
           ContentType: finalContentType,
           CacheControl: 'public, max-age=604800' // 7 days

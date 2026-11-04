@@ -4,6 +4,7 @@ import { loadedGrafts } from '../grafts/graft-registry';
 import { InstanceSettingsService } from './instance-settings.service';
 import { AnalyticsService } from '../analytics/analytics.service';
 import { FirecrackerClient } from '../docker/fc/fc-client';
+import { storageFeatures } from '../instance-config/object-storage';
 
 @Controller('instance')
 export class InstanceFeaturesController {
@@ -21,7 +22,8 @@ export class InstanceFeaturesController {
       grafts,
       sandboxes: grafts.includes('greenhouse'),
       earlyAccessOpen: !this.analytics.configured,
-      fastBuilder: new FirecrackerClient().enabled
+      fastBuilder: new FirecrackerClient().enabled,
+      storage: storageFeatures()
     };
   }
 }

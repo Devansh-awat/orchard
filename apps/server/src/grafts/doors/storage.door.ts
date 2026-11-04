@@ -1,6 +1,6 @@
 import { Inject, Injectable, Scope } from '@nestjs/common';
 import { INQUIRER, ModuleRef } from '@nestjs/core';
-import { objectStorage } from '../../instance-config/object-storage';
+import { uploadStorage } from '../../instance-config/object-storage';
 import { StorageService } from '../../organizations/storage.service';
 import { bindGraft, type DoorMeta } from './door';
 
@@ -29,13 +29,12 @@ export class StorageDoorV1 {
   }
 
   get configured(): boolean {
-    const s = objectStorage();
-    return !!(s.accessKeyId && s.secretAccessKey && s.bucketName && s.endpoint && s.publicUrl);
+    return uploadStorage() !== null;
   }
 
   get publicBase(): string | null {
-    const publicUrl = objectStorage().publicUrl;
-    return publicUrl ? `${publicUrl}/${this.graftId}/` : null;
+    const target = uploadStorage();
+    return target ? `${target.publicUrl}/${this.graftId}/` : null;
   }
 
   owns(url: string): boolean {

@@ -191,7 +191,9 @@ test('a backup route needs a backup bucket, an org bucket, or nothing counts', a
         bucket: 'orchard-backups',
         region: 'us-east-1',
         accessKey: 'ak',
-        secretKey: 'sk'
+        secretKey: 'sk',
+        pathStyle: true,
+        local: false
       });
       assert.equal(hasBackupRoute(null), true);
     }

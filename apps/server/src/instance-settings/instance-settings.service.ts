@@ -1,6 +1,6 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { platformBackupTarget } from '../instance-config/object-storage';
+import { tenantBackupTarget } from '../instance-config/object-storage';
 
 export const USERSPACE_NODE_SCHEDULING_KEY = 'userspace_node_scheduling';
 const USERSPACE_NODE_SCHEDULING_ENV = 'USERSPACE_NODE_SCHEDULING';
@@ -224,7 +224,7 @@ export class InstanceSettingsService {
   }
 
   private async anyBackupStorage(): Promise<boolean> {
-    if (platformBackupTarget()) return true;
+    if (tenantBackupTarget()) return true;
     const own = await this.prisma.organization.count({
       where: {
         backupR2Endpoint: { not: null },

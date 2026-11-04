@@ -6,6 +6,7 @@ import { K8sWorkloadService } from './k8s-workload.service';
 import { K8sNetworkService } from './k8s-network.service';
 import { K8sNamespaceService } from './k8s-namespace.service';
 import { R2ProxyService } from './r2-proxy.service';
+import { BackupUpstreamSyncService } from './backup-upstream-sync.service';
 import { PostgresImageService } from './postgres-image.service';
 import { AuthModule } from '../auth/auth.module';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -20,6 +21,7 @@ import { PrismaModule } from '../prisma/prisma.module';
     K8sNetworkService,
     K8sNamespaceService,
     R2ProxyService,
+    BackupUpstreamSyncService,
     PostgresImageService
   ],
   exports: [

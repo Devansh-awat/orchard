@@ -38,9 +38,34 @@ export const STORAGE = section(
     { name: 'endpoint', env: 'R2_ENDPOINT' },
     { name: 'publicUrl', env: 'R2_PUBLIC_URL' },
     { name: 'buildContextBucket', env: 'R2_BUILD_CONTEXT_BUCKET' },
-    { name: 'backupBucket', env: 'R2_BACKUP_BUCKET' }
+    { name: 'backupBucket', env: 'R2_BACKUP_BUCKET' },
+    { name: 'region', env: 'R2_REGION' },
+    { name: 'pathStyle', env: 'R2_PATH_STYLE' }
   ],
-  ['accessKeyId', 'secretAccessKey', 'bucketName']
+  ['accessKeyId', 'secretAccessKey', 'bucketName'],
+  (values) => {
+    const endpoint = (values.endpoint || '').trim();
+    if (endpoint && !/^https?:\/\/[^\s/]+\/?$/.test(endpoint)) {
+      throw new Error('The endpoint must be a plain address such as https://s3.example.com');
+    }
+    const publicUrl = (values.publicUrl || '').trim();
+    if (publicUrl && !/^https?:\/\/\S+$/.test(publicUrl)) {
+      throw new Error('The public URL must start with https://');
+    }
+    const backupBucket = values.backupBucket || process.env.R2_BACKUP_BUCKET;
+    const uploadsBucket = values.bucketName || process.env.R2_BUCKET_NAME;
+    if (publicUrl && backupBucket && uploadsBucket === backupBucket) {
+      throw new Error(
+        'A public URL makes the uploads bucket public. Use a separate bucket for uploads, so backups stay private.'
+      );
+    }
+    const local = process.env.LOCAL_STORE_BACKUP_BUCKET;
+    if (local && values.backupBucket === local) {
+      throw new Error(
+        `The bucket name ${local} is used by the store on this server. Use a different bucket name.`
+      );
+    }
+  }
 );
 
 export const EMAIL = section(

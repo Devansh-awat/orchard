@@ -2,7 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { PrismaService } from '../prisma/prisma.service';
-import { objectStorage, objectStorageGeneration } from '../instance-config/object-storage';
+import {
+  externalUploadStorage,
+  objectStorageGeneration,
+  s3ClientConfig
+} from '../instance-config/object-storage';
 
 /**
  * Imports a user's profile picture from an email-keyed avatar service
@@ -59,6 +63,8 @@ export class EmailAvatarService {
 
   private publicUrl?: string;
 
+  private keyPrefix = '';
+
   // One in-flight resolve per user. Several requests land at once on sign-in
   // and each would otherwise fire its own probe at the avatar services.
   private readonly pending = new Map<string, Promise<string | null>>();
@@ -88,18 +94,15 @@ export class EmailAvatarService {
     if (this.s3Client && this.s3InitAt === generation) return;
     this.s3InitAt = generation;
 
-    const { accessKeyId, secretAccessKey, bucketName, endpoint, publicUrl } = objectStorage();
-    this.bucketName = bucketName ?? undefined;
-    if (!accessKeyId || !secretAccessKey || !this.bucketName || !endpoint) {
+    const target = externalUploadStorage();
+    this.bucketName = target?.bucket;
+    if (!target) {
       this.s3Client = null;
       return;
     }
-    this.publicUrl = publicUrl ?? '';
-    this.s3Client = new S3Client({
-      region: 'auto',
-      endpoint,
-      credentials: { accessKeyId, secretAccessKey }
-    });
+    this.publicUrl = target.publicUrl;
+    this.keyPrefix = target.keyPrefix;
+    this.s3Client = new S3Client(s3ClientConfig(target));
   }
 
   private static hashes(email: string): Hashes {
@@ -244,7 +247,7 @@ export class EmailAvatarService {
     await this.s3Client.send(
       new PutObjectCommand({
         Bucket: this.bucketName,
-        Key: key,
+        Key: `${this.keyPrefix}${key}`,
         Body: found.body,
         ContentType: found.contentType,
         CacheControl: 'public, max-age=31536000, immutable'

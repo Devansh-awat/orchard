@@ -49,7 +49,13 @@ import {
   MASKED_PASSWORD
 } from './projects.utils';
 import { NotificationsService } from '../notifications/notifications.service';
-import { platformBackupTarget } from '../instance-config/object-storage';
+import {
+  bucketFromDestination,
+  localObjectStore,
+  platformBackupTarget,
+  storageManagedByEnv,
+  tenantBackupTarget
+} from '../instance-config/object-storage';
 import { LeaseService } from '../coordination/lease.service';
 import { LeaderElectionService } from '../events/leader-election.service';
 import { DatabaseTrashService } from './database-trash.service';
@@ -285,7 +291,7 @@ export class DatabasesService {
       org?.backupR2AccessKey &&
       org?.backupR2SecretKey
     );
-    const platform = platformBackupTarget();
+    const platform = tenantBackupTarget();
     const bucket = own ? org!.backupR2Bucket! : platform?.bucket;
     if (!bucket) return null;
     const viaProxy =
@@ -360,7 +366,10 @@ export class DatabasesService {
       };
     }
 
-    const platform = platformBackupTarget()!;
+    const platform = tenantBackupTarget()!;
+    this.logger.warn(
+      `[DB/backup] ${namespace}/${clusterName} gets the instance storage key directly because the backup proxy is off. Set r2Proxy.enabled=true and r2Proxy.upstream.endpoint so each database gets a key for its own prefix.`
+    );
     return {
       r2: {
         endpoint: platform.endpoint,
@@ -372,6 +381,32 @@ export class DatabasesService {
       r2ProxyAccessKey: undefined,
       r2ProxySecret: undefined
     };
+  }
+
+  async sourceBackupBucket(
+    org: Partial<OrgR2> | null | undefined,
+    source: { namespace: string; clusterName: string; trashId?: string | null },
+    fallback: string
+  ): Promise<string> {
+    const route = this.describeBackupRoute(org);
+    if (!route || route.own || storageManagedByEnv()) return fallback;
+    if (source.trashId) {
+      const row = await this.prisma.deletedDatabase.findUnique({
+        where: { id: source.trashId },
+        select: { destinationPath: true }
+      });
+      const trashed = bucketFromDestination(row?.destinationPath);
+      if (trashed) return trashed;
+    }
+    try {
+      const state = await this.k8sCnpg.getCnpgBackupState(source.namespace, source.clusterName);
+      return bucketFromDestination(state.destinationPath) ?? fallback;
+    } catch (e: any) {
+      this.logger.warn(
+        `[DB/backup] could not read the archive location of ${source.namespace}/${source.clusterName}: ${e?.message ?? e}`
+      );
+      return fallback;
+    }
   }
 
   async mintScopedR2(
@@ -1033,7 +1068,7 @@ export class DatabasesService {
         org?.backupR2Bucket &&
         org?.backupR2AccessKey &&
         org?.backupR2SecretKey) ||
-        platformBackupTarget())
+        tenantBackupTarget())
     );
 
     const resolvedPublicHostname = this.publicHostnameFor(database);
@@ -1409,15 +1444,18 @@ export class DatabasesService {
     } | null;
   }): Promise<void> {
     const org = database.project?.organization;
-    const platform = platformBackupTarget();
+    const platform = tenantBackupTarget();
     const bucket = org?.backupR2Bucket ?? platform?.bucket;
     if (!database.namespace || !database.clusterName || !bucket) return;
+    const localBucket = org?.backupR2Bucket ? null : localObjectStore()?.backupBucket;
+    const buckets = [...new Set([bucket, ...(localBucket ? [localBucket] : [])])];
 
     try {
       let endpoint: string | undefined;
       let accessKeyId: string | undefined;
       let secretAccessKey: string | undefined;
       let region = org?.backupR2Region || 'auto';
+      let pathStyle = true;
       if (this.r2Proxy.isEnabled() && database.r2ProxyAccessKey && database.r2ProxySecret) {
         endpoint = this.r2Proxy.getEndpoint();
         accessKeyId = database.r2ProxyAccessKey;
@@ -1436,6 +1474,7 @@ export class DatabasesService {
         accessKeyId = platform.accessKey;
         secretAccessKey = platform.secretKey;
         region = platform.region;
+        pathStyle = platform.pathStyle;
       }
       if (!endpoint || !accessKeyId || !secretAccessKey) return;
 
@@ -1444,31 +1483,33 @@ export class DatabasesService {
         endpoint,
         region,
         credentials: { accessKeyId, secretAccessKey },
-        forcePathStyle: true
+        forcePathStyle: pathStyle
       });
 
       try {
-        let continuationToken: string | undefined;
-        let deleted = 0;
-        do {
-          const listed = await s3.send(
-            new ListObjectsV2Command({
-              Bucket: bucket,
-              Prefix: prefix,
-              ContinuationToken: continuationToken
-            })
-          );
-          const keys = (listed.Contents ?? []).map((o) => o.Key).filter((k): k is string => !!k);
-          for (const Key of keys) {
-            await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key }));
-            deleted += 1;
+        for (const target of buckets) {
+          let continuationToken: string | undefined;
+          let deleted = 0;
+          do {
+            const listed = await s3.send(
+              new ListObjectsV2Command({
+                Bucket: target,
+                Prefix: prefix,
+                ContinuationToken: continuationToken
+              })
+            );
+            const keys = (listed.Contents ?? []).map((o) => o.Key).filter((k): k is string => !!k);
+            for (const Key of keys) {
+              await s3.send(new DeleteObjectCommand({ Bucket: target, Key }));
+              deleted += 1;
+            }
+            continuationToken = listed.IsTruncated ? listed.NextContinuationToken : undefined;
+          } while (continuationToken);
+          if (deleted > 0) {
+            this.logger.log(
+              `[R2] Purged ${deleted} orphaned backup object(s) under ${target}/${prefix}`
+            );
           }
-          continuationToken = listed.IsTruncated ? listed.NextContinuationToken : undefined;
-        } while (continuationToken);
-        if (deleted > 0) {
-          this.logger.log(
-            `[R2] Purged ${deleted} orphaned backup object(s) under ${bucket}/${prefix}`
-          );
         }
       } finally {
         s3.destroy();

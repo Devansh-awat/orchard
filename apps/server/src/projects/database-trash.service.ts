@@ -60,8 +60,12 @@ export class DatabaseTrashService {
       where: { databaseId: database.id, status: 'completed' },
       select: { id: true }
     });
-    const bucket =
-      database.project.organization?.backupR2Bucket ?? platformBackupTarget()?.bucket ?? '';
+    const dbs = await this.databases();
+    const bucket = await dbs.sourceBackupBucket(
+      database.project.organization,
+      { namespace: database.namespace, clusterName: database.clusterName },
+      database.project.organization?.backupR2Bucket ?? platformBackupTarget()?.bucket ?? ''
+    );
     const snapshot: Record<string, unknown> = { ...database };
     delete snapshot.project;
     for (const f of SECRET_FIELDS) if (f !== 'dbPassword') delete snapshot[f];

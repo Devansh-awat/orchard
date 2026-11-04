@@ -3,7 +3,12 @@ import { Interval } from '@nestjs/schedule';
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { PrismaService } from '../prisma/prisma.service';
 import { LeaderElectionService } from '../events/leader-election.service';
-import { platformBackupTarget } from '../instance-config/object-storage';
+import { K8sCnpgService } from '../kubernetes/k8s-cnpg.service';
+import {
+  bucketFromDestination,
+  platformBackupTarget,
+  storageManagedByEnv
+} from '../instance-config/object-storage';
 
 export const CATALOG_PREFIX = '_catalog';
 
@@ -42,7 +47,8 @@ export function buildCatalog(
   rows: CatalogRow[],
   trash: TrashRow[],
   platformBucket: string,
-  now = new Date()
+  now = new Date(),
+  buckets?: Map<string, string>
 ) {
   return {
     version: 1,
@@ -52,7 +58,8 @@ export function buildCatalog(
     databases: rows
       .filter((r) => r.namespace && r.clusterName)
       .map((r) => {
-        const bucket = r.project.organization.backupR2Bucket || platformBucket;
+        const bucket =
+          r.project.organization.backupR2Bucket || buckets?.get(r.id) || platformBucket;
         return {
           id: r.id,
           name: r.name,
@@ -96,7 +103,8 @@ export class DatabaseCatalogService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly leader: LeaderElectionService
+    private readonly leader: LeaderElectionService,
+    private readonly k8sCnpg: K8sCnpgService
   ) {}
 
   @Interval(60 * 60 * 1000)
@@ -137,13 +145,24 @@ export class DatabaseCatalogService {
       }),
       this.prisma.deletedDatabase.findMany({ where: { purgedAt: null, restoredAs: null } })
     ]);
-    const catalog = buildCatalog(rows, trash, target.bucket);
+    const buckets = new Map<string, string>();
+    if (!storageManagedByEnv()) {
+      for (const row of rows) {
+        if (!row.namespace || !row.clusterName || row.project.organization.backupR2Bucket) continue;
+        const state = await this.k8sCnpg
+          .getCnpgBackupState(row.namespace, row.clusterName)
+          .catch(() => null);
+        const bucket = bucketFromDestination(state?.destinationPath);
+        if (bucket) buckets.set(row.id, bucket);
+      }
+    }
+    const catalog = buildCatalog(rows, trash, target.bucket, new Date(), buckets);
     const body = JSON.stringify(catalog, null, 2);
     const s3 = new S3Client({
       endpoint: target.endpoint,
       region: target.region,
       credentials: { accessKeyId: target.accessKey, secretAccessKey: target.secretKey },
-      forcePathStyle: true
+      forcePathStyle: target.pathStyle
     });
     const day = catalog.generatedAt.slice(0, 10);
     for (const key of [
