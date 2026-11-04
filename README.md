@@ -58,7 +58,13 @@ flag.
 ## Works with your agent
 
 Connect Claude, Cursor or any MCP client, and it can deploy apps, add databases, read logs and roll back
-a bad deploy. [Set up MCP](https://docs.orchard.my/mcp/).
+a bad deploy. [Set up your agent](https://docs.orchard.my/agent-setup/).
+
+It can read the docs for you:
+
+```
+Read the Orchard docs at https://docs.orchard.my/llms.txt and use them to help me. Fetch the pages you need before you answer, and link the pages you used.
+```
 
 It can install Orchard for you too:
 
@@ -69,7 +75,8 @@ Install Orchard on my server following https://docs.orchard.my/start/install.md.
 ## Features
 
 - **Deploy from GitHub.** Connect a repo, and every push builds and deploys your app.
-- **HTTPS and domains.** Every app gets an HTTPS URL, and you can add your own domains.
+- **HTTPS and domains.** Every app gets an HTTPS URL, and you can add [your own domains](https://docs.orchard.my/deploy/domains/) or use a [wildcard certificate](https://docs.orchard.my/operate/wildcard-certificates/).
+- **Tailscale.** Put an app on your [tailnet](https://docs.orchard.my/deploy/tailscale/) instead of the public internet.
 - **Managed Postgres.** Add a database with backups and point-in-time restore.
 - **Logs and metrics.** Search logs and see requests, errors and resource use for each app.
 - **Rollbacks.** Go back to an earlier version when a deploy goes wrong.
@@ -84,7 +91,7 @@ together. Report security issues privately: see [SECURITY.md](SECURITY.md).
 
 ## Help
 
-Open an [issue](https://github.com/hackclub/orchard/issues), or find **@lfd** on the
+Browse the [Directory](https://docs.orchard.my/directory/) or [Troubleshooting](https://docs.orchard.my/operate/troubleshooting/). Otherwise, open an [issue](https://github.com/hackclub/orchard/issues), or find **@lfd** on the
 [Hack Club Slack](https://slack.hackclub.com).
 
 ## License
