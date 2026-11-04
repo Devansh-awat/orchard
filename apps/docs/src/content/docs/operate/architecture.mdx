@@ -1,74 +1,69 @@
 ---
 title: Architecture
-description: What runs where, and why reads are fast.
+description: The components of an Orchard instance, and how Orchard reads from and writes to Kubernetes.
 sidebar:
   order: 1
 ---
 
 import Diagram from '../../../components/Diagram.astro';
 
-## The pieces
+An Orchard instance is a control plane that runs in a Kubernetes cluster and manages tenant workloads in the same cluster. Kubernetes is the source of truth for every resource that Orchard manages.
 
-| Component                  | What it is                                   |
-| -------------------------- | -------------------------------------------- |
-| **Frontend**               | SvelteKit web app                            |
-| **Server**                 | NestJS API and Prisma, the control plane     |
-| **Gateway**                | Go edge proxy                                |
-| **Builders**               | BuildKit jobs that build tenant images       |
-| **Control-plane Postgres** | Orchard's own database, run by CloudNativePG |
-| **Redis**                  | Event bus and caching                        |
-| **Registry**               | Where built images are pushed and pulled     |
+## Components
 
-Tenant apps and databases run in their own namespaces, separate from the control
-plane.
+| Component                  | Purpose                                                                 |
+| -------------------------- | ----------------------------------------------------------------------- |
+| Frontend                   | The SvelteKit dashboard.                                                |
+| Server                     | The NestJS API and control plane.                                       |
+| MCP server                 | The [Model Context Protocol](/mcp/) endpoint for agents.                |
+| Builders                   | BuildKit jobs that build images for tenant apps.                        |
+| Control-plane Postgres     | Orchard's own database, run by CloudNativePG.                           |
+| Redis                      | The event bus between server replicas, and a cache.                     |
+| Registry                   | Stores the images that builders push. The installer deploys zot.        |
+| Backup proxy (`r2-proxy`)  | Gives each database credentials for its own backups only.               |
+| Metrics and logs           | VictoriaMetrics, VictoriaLogs and Vector.                               |
+
+Tenant apps and databases run in their own namespaces, separate from the control plane.
 
 <Diagram
-  caption="Reads come from the mirror; writes go through a retrying queue."
+  caption="The server reads from Postgres and writes through a queue. The engine copies cluster state into Postgres."
   code={`flowchart LR
   U[Browser / CLI / MCP] --> API[API server]
   API -->|reads| PG[(Control-plane<br/>Postgres)]
   API -->|writes| Q[Apply queue]
-  Q -->|reconcile, retry| K8S[Kubernetes API]
-  INF[Informers] -->|watch| K8S
-  INF -->|mirror state| PG
+  Q -->|retry| K8S[Kubernetes API]
+  INF[Engine informers] -->|watch| K8S
+  INF -->|copy state| PG
   K8S --> NS[Tenant namespaces<br/>apps · databases · jobs]
-  API -->|SSE via Redis| U`}
+  API -->|events via Redis| U`}
 />
 
-## The mirror
+## Reads
 
-The API does not ask Kubernetes every time you load a page. Informers watch
-cluster objects and **mirror their state into Postgres**, and reads are served
-from there with live escape hatches for the cases that need the truth right now.
+The Orchard engine lists and watches the Kubernetes objects that Orchard manages, and keeps a copy in Postgres. Most reads come from this copy, so a page load does not call the Kubernetes API.
 
-This is why the dashboard stays responsive with hundreds of apps, and why it
-keeps working while the API server restarts. When the mirror and the cluster
-disagree, the cluster wins: the mirror is a cache of reality, never the source of
-it.
+The engine follows these rules:
 
-Changes made outside Orchard, with `kubectl` directly, are adopted into Orchard's
-state rather than being fought or silently overwritten.
+- If the copy and the cluster disagree, the cluster is correct.
+- A failed read does not mean that a resource is gone. Only a live `404` response removes it.
+- A change made with `kubectl` is adopted into Orchard. Security objects are the exception. Orchard restores its own version of default-deny network policies and records the change in the audit log.
 
 ## Writes
 
-Cluster writes go through a **retrying apply queue** instead of happening inline
-in the HTTP request. A deploy request records intent and returns; the queue
-reconciles it against the cluster, retrying on conflict. A transient API server
-error becomes a retry rather than a failed deploy the user has to repeat.
+Most cluster writes go through an apply queue. The request records the desired state and returns. A worker applies the change and retries with backoff on a failure.
 
 ## Events
 
-State changes flow over Redis Streams to the frontend as server-sent events, so
-build steps advance and pods change colour without polling. Reconnecting replays
-from the last event seen rather than starting blind.
+Orchard sends state changes to the dashboard as server-sent events over Redis Streams. After a reconnect, the client replays from the last event it received. Without Redis, each server replica delivers only its own events.
 
-## Leader election
+## Replicas and leases
 
-Components that must not run twice, informers, schedulers, the protection proxy's
-guard, use lease-based leader election, so the API can run multiple replicas
-without duplicating work.
+Background work that must not run twice, such as watching the cluster, uses a Kubernetes lease. This lets the server run more than one replica.
 
-## Queues and API pods
+By default, each server pod serves the API and runs the queues. To run builds, notifications and the apply queue in separate pods, set `server.workers.enabled` to `true` in the chart.
 
-Queue workers run as a separate deployment from the API pods, so a long queue of
-builds does not compete with serving the dashboard.
+## Related resources
+
+- [Security and isolation](/operate/security/)
+- [Configuration](/operate/configuration/)
+- [Logs and request data](/operate/logs/)

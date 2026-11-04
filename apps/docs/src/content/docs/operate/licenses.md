@@ -1,33 +1,28 @@
 ---
 title: Licenses
-description: Orchard's license, and where each part of it keeps the notices for the open-source software inside.
+description: Find Orchard's license and the third-party notices for each part of Orchard.
 ---
 
-Orchard is free software under the
-[GNU Affero General Public License v3.0](https://github.com/hackclub/orchard/blob/main/LICENSE).
-Run it, study it, change it and share it.
+Orchard is licensed under the [GNU Affero General Public License v3.0](https://github.com/hackclub/orchard/blob/main/LICENSE) (AGPL).
 
-## If you change Orchard
+## Modified versions
 
-The AGPL adds one rule for software used over a network. If you run a modified
-Orchard that other people use, offer those people the source code of your
-version, for example with a link in your instance's UI or docs. Running an
-unmodified Orchard for your team asks nothing extra of you.
+If you run a modified version of Orchard that other people use over a network, you must offer those people the source code of your version. A link in your instance's interface or documentation is one way to do this.
+
+The AGPL adds no further requirement if you run an unmodified version.
 
 ## Third-party notices
 
-Every part of Orchard carries the copyright notices and license texts of the
-open-source software built into it:
+Each part of Orchard includes the copyright notices and license texts of the open-source software built into it.
 
-| Part                      | Where its notices live                                                                        |
-| ------------------------- | --------------------------------------------------------------------------------------------- |
+| Part                      | Location                                                                                     |
+| ------------------------- | -------------------------------------------------------------------------------------------- |
 | Web app                   | `/third-party-notices.txt` on your instance, and **Open source licenses** in the account menu |
-| API server and MCP images | `/app/THIRD_PARTY_NOTICES.txt`                                                                |
-| R2 proxy image            | `/THIRD_PARTY_NOTICES.txt`                                                                    |
-| CLI                       | `orchard licenses`, and `THIRD_PARTY_NOTICES.txt` in every release archive                    |
-| Terraform provider        | `THIRD_PARTY_NOTICES.txt` in every release archive                                            |
-| Host commands             | `orchardctl licenses`                                                                         |
-| These docs                | [third-party-notices.txt](/third-party-notices.txt)                                           |
+| API server and MCP images | `/app/THIRD_PARTY_NOTICES.txt`                                                               |
+| R2 proxy image            | `/THIRD_PARTY_NOTICES.txt`                                                                   |
+| CLI                       | `orchard licenses`, and `THIRD_PARTY_NOTICES.txt` in each release archive                    |
+| Terraform provider        | `THIRD_PARTY_NOTICES.txt` in each release archive                                            |
+| Host commands             | `orchardctl licenses`                                                                        |
+| This documentation        | [third-party-notices.txt](/third-party-notices.txt)                                          |
 
-[orchard.my/credits](https://orchard.my/credits) lists all of it in one place,
-along with the people who build Orchard.
+For all notices in one place, refer to [orchard.my/credits](https://orchard.my/credits).

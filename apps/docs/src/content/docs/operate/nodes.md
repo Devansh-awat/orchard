@@ -1,44 +1,77 @@
 ---
-title: Nodes and pools
-description: Deciding what runs where.
+title: Manage nodes and pools
+description: Group Orchard cluster nodes into pools, assign nodes to organizations, and resolve pods that do not schedule.
 sidebar:
   order: 3
 ---
 
-On a multi-node cluster, superadmins can group nodes into **pools** and control
-what lands on them.
+To control where workloads run on a multi-node cluster, create node pools and assign nodes to organizations. You must be a superadmin. Pools use Kubernetes node selectors, affinity and tolerations, so `kubectl describe node` and `kubectl get events` explain placement.
 
-## Pools
+## Sync nodes
 
-A pool is a set of nodes with a purpose: general workloads, builds, a machine
-with more memory, hardware someone specific paid for. Pools can be assigned to
-organizations, so a tenant's apps schedule onto the nodes intended for them.
+1. Go to **Instance admin** > **Nodes**.
+2. Select **Sync from cluster**.
 
-## Taints and affinity
+## Create a node pool
 
-Pools work through Kubernetes taints and affinity rather than a parallel
-scheduler. A tainted node repels anything that does not tolerate it; affinity
-pulls matching workloads towards it. Orchard sets these when it creates workloads
-for an organization mapped to a pool.
+1. Go to **Instance admin** > **Nodes**.
+2. Select **New pool**.
+3. Enter a **Name** and **Description**.
+4. Add node selectors that match the nodes in the pool.
+5. In **Affinity**, select **preferred (soft)** or **required (hard)**.
+6. Add tolerations for any taints on the nodes.
+7. To let people choose this pool, turn on **User-selectable**.
+8. Save the pool.
 
-Because it is ordinary Kubernetes scheduling, `kubectl describe node` and
-`kubectl get events` explain placement decisions the same way they always do.
+To let people pick a pool at all, turn on **Let users pick a node pool** in **Userspace scheduling**.
 
-## Builds
+## Assign a node to an organization
 
-Builds are scheduled like other workloads, and benefit from landing on nodes with
-the build cache. Concurrency is bounded so builds cannot take a node's memory
-away from running apps.
+1. Go to **Instance admin** > **Nodes**.
+2. Select the node.
+3. In **Organization assignments**, select the **Organization**.
+4. In **Mode**, select `allow` or `deny`.
+5. Optional: enter **Max services**, **CPU limit** and **Memory limit**.
 
-## When a pod will not schedule
+An organization with at least one `allow` assignment runs only on its allowed nodes. An organization never runs on a node with a `deny` assignment.
 
-Usually one of:
+## Set taints and labels
 
-- No node has enough **allocatable** CPU or memory for the request. Allocatable is
-  smaller than the node's total, because the system takes a share.
-- A **taint** with no matching toleration.
-- A **single-writer volume** already attached elsewhere, so the pod cannot start
-  on a different node.
+1. Go to **Instance admin** > **Nodes**.
+2. Select the node.
+3. Change the taints and select **Save taints**, or change the labels.
 
-Orchard surfaces the reason in plain English on the app rather than leaving you
-to decode the raw event.
+A taint repels any workload that does not tolerate it.
+
+## Resolve a pod that does not schedule
+
+Orchard shows the scheduling reason on the app. The usual causes are:
+
+- **Not enough resources.** No node has enough allocatable CPU or memory for the request. Allocatable capacity is smaller than the node's total, because the system reserves a share.
+- **A taint with no matching toleration.** Add a toleration to the pool, or remove the taint.
+- **A single-writer volume.** The volume is attached to another node, so the pod cannot start on a different one.
+
+On a small cluster, memory requests are the usual limit, even when real usage is low. A rolling update starts the new pod before it stops the old one, so the node needs room for both.
+
+## Control where builds run
+
+Builds schedule like other workloads, and also need memory on a node. A build that cannot schedule fails with the following error:
+
+```txt
+Build failed: could not schedule build pod after 300s - 0/1 nodes are available: 1 Insufficient memory.
+```
+
+To reserve a node for builds, label it and set `builders.dedicatedNode.enabled` to `true` in the chart:
+
+```bash
+kubectl label node <NODE_NAME> orchard-builder=true
+kubectl taint node <NODE_NAME> orchard-builder=true:NoSchedule
+```
+
+The taint is optional. To limit how many builds run at once, set `MAX_CONCURRENT_BUILDS` on the server.
+
+## Related resources
+
+- [Quotas and usage](/teams/quotas/)
+- [Scaling and resources](/deploy/scaling/)
+- [Troubleshooting](/operate/troubleshooting/)

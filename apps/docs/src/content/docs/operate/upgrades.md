@@ -1,55 +1,57 @@
 ---
-title: Upgrades
-description: Moving to a new version of Orchard.
+title: Upgrade Orchard
+description: Upgrade an Orchard instance installed with the one-command installer or the Helm chart, and understand what an upgrade changes.
 sidebar:
   order: 4
 ---
 
-## Installer-based instances
+To upgrade Orchard, use the command that matches how you installed it. Take a backup of the control-plane database before a major upgrade. This database holds every organization, project and app definition on the instance.
 
-If you used the one-command installer:
+## Upgrade an installer host
+
+Run the following command on the host:
 
 ```bash
-orchard-update
+sudo orchardctl update
 ```
 
-It re-applies the chart with `/etc/orchard/values.yaml`. If you chose automatic
-updates at install time, a nightly systemd timer runs the same thing.
+`orchard-update` is the same command. It upgrades the chart with `/etc/orchard/values.yaml`, restarts deployments that use a moving image tag, and refreshes the host commands. For the full sequence, refer to [`orchardctl update`](/operate/host-commands/#update).
 
-That values file is the source of truth for the instance. Edit it, run
-`orchard-update`, and the change is applied.
+If you chose automatic updates during installation, a nightly systemd timer runs the same command.
 
-An upgrade also turns on, once, features that newer releases run by default:
-metrics, the log store, image scanning, local backup storage when none is
-configured, and Traefik's JSON access log. Each change is printed, and turning
-one back off afterwards sticks. See
-[New defaults on an existing host](/operate/host-commands/#new-defaults-on-an-existing-host).
+An upgrade turns on, once, features that newer releases run by default. Orchard prints each change. If you turn a feature off afterwards, it stays off. For the list, refer to [New defaults on an existing host](/operate/host-commands/#new-defaults-on-an-existing-host).
 
-## Chart-based instances
+## Re-run the installer
+
+You can also re-run the installer on an existing host. A re-run:
+
+- Keeps your secrets, custom environment variables and volume sizes.
+- Does not restart k3s unless the registry mirror configuration changed.
+
+## Upgrade a Helm install
+
+Run the following command:
 
 ```bash
 helm upgrade orchard oci://ghcr.io/hackclub/orchard/charts/orchard \
   --namespace orchard -f my-values.yaml
 ```
 
-Pin a chart version in anything automated so an upgrade happens when you decide
-it does, not when a tag moves.
+In automated pipelines, add `--version` to pin a chart version.
 
 ## Database migrations
 
-Schema migrations run on server start. Roll forward rather than back: an older
-server against a newer schema is not a supported combination.
+Schema migrations run when the server starts. Upgrade forward. An older server with a newer schema is not supported.
 
-Take a backup of the control-plane database before a major upgrade. It holds
-every organization, project and app definition on the instance.
+## Effect on running apps
 
-## Tenant impact
+Upgrading the control plane does not restart tenant apps. The server, frontend and MCP pods roll out, and apps keep serving during the rollout.
 
-Upgrading the control plane does not restart tenant apps. Their pods keep serving
-while the API restarts; the dashboard is briefly unavailable, deploys queue.
+## Roll back an upgrade
 
-## Rolling back
+You can roll back the release with `helm rollback`. If the new version migrated the schema, the old version may not run against it. If downtime matters, test upgrades on a non-production instance first.
 
-Helm can roll the release back, but if the new version migrated the schema, the
-old code may not run against it. Test upgrades on a non-production instance if
-downtime matters.
+## Related resources
+
+- [Host commands](/operate/host-commands/)
+- [Going to production](/operate/production/)

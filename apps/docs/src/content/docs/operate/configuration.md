@@ -1,82 +1,114 @@
 ---
 title: Configuration
-description: Where instance settings live and how they are changed.
+description: Where Orchard instance settings are stored, which value takes precedence, and how to change them on an installer host or a Helm install.
 sidebar:
   order: 2
 ---
 
-Orchard is configured in two places, and knowing which is which saves a lot of
-confusion.
+Orchard reads instance settings from environment variables, chart values and the database. An environment variable always takes precedence over a value stored in the database.
 
 ## Environment variables
 
-The server reads its configuration from the environment. This covers the things
-that must be known at boot: database URL, registry, app domain, cluster access,
-object storage, SMTP.
+The server reads environment variables at boot. These cover the database URL, registry, app domain, cluster access, object storage and email. For the full list, refer to the [configuration reference](/reference/configuration/).
 
-The full list is generated from `.env.example` and lives in
-[Configuration reference](/reference/configuration/).
-
-On installer-based instances these come from the `server.env` list in
-`/etc/orchard/values.yaml`. Change them one at a time with
-[`orchardctl env`](/operate/host-commands/#env), which leaves the rest of the
-list, including the instance's secrets, alone:
+To change a variable on an installer host, use [`orchardctl env`](/operate/host-commands/#env):
 
 ```bash
 sudo orchardctl env set SMTP_HOST smtp.example.com --apply
 ```
 
-On chart-based instances they come from your values file.
+On a Helm install, set the variable in `server.env` in your values file.
 
-## Instance settings
+## Chart values
 
-Some settings are stored in the database and changed from the admin UI at
-runtime, without a restart. These are the operational toggles: signup mode,
-feature switches, defaults for new organizations.
+Chart values control what the chart deploys, such as metrics, logs and the MCP server.
 
-Where a setting exists in both places, the environment variable acts as an
-override and can lock the value so it cannot be changed from the UI. That is what
-you want for anything an instance operator must control absolutely.
+On an installer host, the values file is `/etc/orchard/values.yaml`. To change a value, use [`orchardctl config`](/operate/host-commands/#config):
 
-## Cluster-specific values
+```bash
+sudo orchardctl config set logs.retention 30d --apply
+```
 
-Storage class, ingress class, registry, wildcard certificate domains and runtime
-classes are all values rather than literals, because they differ per cluster.
-Never hardcode them; set them in your values file.
+On a Helm install, change your values file and run `helm upgrade`.
 
-Changing `BASE_DOMAIN` does not move hosts that already exist. Each status page
-and org subdomain keeps its Ingress and certificate on the old domain, while the
-API reports the new one. To move one, clear its subdomain and set it again, which
-deletes the old Ingress and creates one on the new domain. Point DNS for the new
-domain at the cluster first so the certificate can issue.
+Re-running the installer keeps your secrets, custom environment variables and volume sizes.
+
+Set cluster-specific values, such as storage class, ingress class and registry, in the values file. These values differ for each cluster.
+
+## Settings stored in the database
+
+To change settings without a restart, go to **Instance admin** > **Configuration**. This page has the following sections:
+
+- **Object storage**
+- **Email**
+- **Custom domains**
+- **Wildcard certificate**
+- **Public exposure**
+- **GitLab sign-in** and **Bitbucket sign-in**
+- **Bot protection**
+- **Image scanning**
+- **Model Context Protocol**
+- **Databases**
+- **Anonymous usage reports**
+
+Grafts can add sections to this page. A saved setting reaches every server replica within 30 seconds.
+
+When an environment variable sets a field, the field is read-only and shows `Set by the environment`. Secret fields show `Unchanged` when a value is stored. Leave them blank to keep the value.
+
+`SIGNUP_MODE` is not on this page. To change it, set the `signupMode` chart value to `open`, `invite_only` or `closed`.
 
 ## Secrets
 
-Secrets belong in Kubernetes secrets, referenced by the chart, not in a values
-file committed to a repository. The installer generates the ones it needs and
-writes them into cluster secrets.
+Store secrets in Kubernetes Secrets. Do not commit them to a values file in a repository. The installer generates the secrets it needs and writes them to `/etc/orchard/values.yaml`, which only root can read.
 
-## The "What's new" sheet
+## Base domain
 
-The dashboard shows each person the latest release notes once, in a sheet,
-until they dismiss it. The server reads the notes from a folder holding
-`latest.json` and one markdown file per release, and the dashboard gets them
-through the API, never from the folder directly.
+`BASE_DOMAIN` is the parent domain for organization vanity addresses and status pages, such as `acme.example.com`. It is independent of the dashboard host and the app domain. Each needs its own DNS records.
+
+When `BASE_DOMAIN` is set, Orchard creates an Ingress and a certificate for each vanity address and status page. The following settings apply to these hosts:
+
+| Setting                 | Purpose                                                                                               |
+| ----------------------- | ----------------------------------------------------------------------------------------------------- |
+| `PLATFORM_NAMESPACE`    | The namespace for the Ingress. The chart sets this to the release namespace.                          |
+| `PLATFORM_SERVICE_NAME` | The Service that the Ingress points at. The chart sets this to `frontend`.                            |
+| `PLATFORM_SERVICE_PORT` | The Service port. The chart sets this to the frontend port.                                           |
+| `CERT_CLUSTER_ISSUER`   | The ClusterIssuer for the certificate. Set this with `tenant.certClusterIssuer`. The default is `letsencrypt-prod`. |
+
+The chart does not set these values if you use `server.envFrom`. In that case, add them to your Secret. Without them, the server uses `default/leaf-frontend:3000`.
+
+A vanity address sends visitors to the organization's SSO sign-in page. If the organization has no working SSO connection, visitors go to the normal login page. The dashboard host keeps working if it is a subdomain of `BASE_DOMAIN`.
+
+Changing `BASE_DOMAIN` does not move existing hosts. Each host keeps its Ingress and certificate on the old domain, while the API reports the new one. To move a host:
+
+1. Point DNS for the new domain at the cluster.
+2. Clear the subdomain in the organization's settings.
+3. Set the subdomain again.
+
+## Database memory
+
+`DATABASE_DEFAULT_MEMORY_MB` sets the memory request for a database that has no size of its own. The default is `1024` and the minimum is `256`. The installer lowers the value on a machine with about 8 GB of memory or less.
+
+## The What's new sheet
+
+The dashboard shows each person the latest release notes once. The server reads the notes from a folder that holds `latest.json` and one Markdown file for each release.
 
 | Setting                | Default                                |
 | ---------------------- | -------------------------------------- |
 | `UPDATES_URL`          | `https://assets.orchard.my/updates/ui` |
-| `updates.url` in chart | `""`, which keeps the server's default |
+| `updates.url` in chart | Empty, which keeps the server default. |
 
-- Set it to `off` to hide the sheet entirely.
-- Point it at your own folder to publish your own notes. `latest.json` needs a
-  `version` like `2.70.0`, and optionally a `file` (default `<version>.md`),
-  `url` and `publishedAt`.
-- A note only shows when its version is at or below the version of the UI the
-  instance runs. An instance that has not upgraded yet never sees notes for a
-  release it does not have.
-- A value in `server.env` wins over `updates.url`.
+A value in `server.env` takes precedence over `updates.url`.
+
+To hide the sheet, run the following command:
 
 ```bash
 sudo orchardctl config set updates.url off --apply
 ```
+
+To publish your own notes, point the setting at your own folder. `latest.json` needs a `version`, such as `2.70.0`. It can also have `file`, `url` and `publishedAt`. The default `file` is `<version>.md`. A note shows only when its version is at or below the running version of the dashboard.
+
+## Related resources
+
+- [Finish instance setup](/operate/finishing-setup/)
+- [Host commands](/operate/host-commands/)
+- [Configuration reference](/reference/configuration/)

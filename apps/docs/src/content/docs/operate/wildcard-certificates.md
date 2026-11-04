@@ -1,85 +1,83 @@
 ---
-title: Wildcard certificates
-description: Issue one certificate for every generated app URL with a DNS-01 issuer and the Helm chart.
+title: Set up wildcard certificates
+description: Issue one certificate for every generated Orchard app URL with a cert-manager DNS-01 issuer and the Helm chart.
 sidebar:
   order: 6
 ---
 
-By default every generated app URL gets its own certificate from
-`tenant.certClusterIssuer`. That works with no extra setup, but each new app waits
-on an ACME round-trip, and Let's Encrypt allows 50 certificates per registered
-domain per week.
+To cover every generated app URL with one certificate, set up a wildcard certificate. By default, each generated URL gets its own certificate from `tenant.certClusterIssuer`. Each new app then waits for an ACME request. Let's Encrypt allows 50 certificates for each registered domain per week.
 
-A wildcard certificate covers every subdomain of your app domain at once. Let's
-Encrypt only issues wildcards over a DNS-01 challenge, so you need cert-manager and
-credentials for your DNS provider.
+Let's Encrypt only issues wildcards over a DNS-01 challenge. This guide uses `apps.example.com` as the app domain.
 
-This guide uses `apps.example.com` as the app domain.
+## Prerequisites
 
-## What the chart does
+- cert-manager is installed in the cluster.
+- You have credentials for your DNS provider.
 
-| Template            | What it renders                                                                                   | Rendered when                                               |
-| ------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `certificates.yaml` | A `Certificate` for `*.apps.example.com` and `apps.example.com` in `certificates.namespace`       | `certificates.enabled`, and an app domain is set            |
-| `certificates.yaml` | A `Certificate` for `*.<db domain>`, used for TLS on public databases                             | `certificates.enabled`, and `wildcards.db.domain` is set    |
-| `gateway.yaml`      | The `http-gateway` Gateway, with an `https-wildcard` listener that references the app certificate | `gateway.enabled`, `gateway.http.enabled`, and a domain set |
-| `_helpers.tpl`      | `PLATFORM_WILDCARD_DOMAINS` on the server, which tells it which Secret to put on each Ingress     | An app domain or `tenant.wildcardDomains` is set            |
+## What the chart renders
 
-The chart does not create the issuer. cert-manager has to be installed and the
-issuer has to exist before the `Certificate` can be issued.
+| Template            | Renders                                                                                             | Condition                                                   |
+| ------------------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `certificates.yaml` | A `Certificate` for `*.apps.example.com` and `apps.example.com` in `certificates.namespace`.        | `certificates.enabled`, and an app domain is set.           |
+| `certificates.yaml` | A `Certificate` for `*.<db domain>`, for TLS on public databases.                                   | `certificates.enabled`, and `wildcards.db.domain` is set.   |
+| `gateway.yaml`      | The `http-gateway` Gateway, with an `https-wildcard` listener that references the app certificate.  | `gateway.enabled`, `gateway.http.enabled`, and a domain is set. |
+| `_helpers.tpl`      | `PLATFORM_WILDCARD_DOMAINS` on the server, which names the Secret to use on each Ingress.           | An app domain or `tenant.wildcardDomains` is set.           |
 
-Orchard routes every app through an `Ingress`, not an `HTTPRoute`, so the
-`https-wildcard` listener carries no app traffic. Turn it off with
-`gateway.http.enabled: false` unless something else of yours attaches to it.
+The chart does not create the issuer.
+
+Orchard routes each app through an `Ingress`, so the `https-wildcard` listener carries no app traffic. Set `gateway.http.enabled` to `false` unless something else uses that listener.
 
 ## 1. Point DNS at the cluster
 
-Create a wildcard record for the app domain that points at your ingress controller.
+Create a wildcard record for the app domain that points at your ingress controller:
 
-```text
+```txt
 *.apps.example.com  A  203.0.113.10
 ```
 
 ## 2. Create a DNS-01 issuer
 
-cert-manager supports Cloudflare, Route53, AzureDNS, Google CloudDNS, DigitalOcean,
-Akamai, ACME-DNS and RFC2136 natively. This example uses Cloudflare, with an API
-token that can edit DNS in the zone.
+cert-manager supports Cloudflare, Route53, AzureDNS, Google CloudDNS, DigitalOcean, Akamai, ACME-DNS and RFC2136. The following example uses Cloudflare, with an API token that can edit DNS in the zone.
 
-```bash
-kubectl -n cert-manager create secret generic cloudflare-api-token \
-  --from-literal=api-token=<token>
-```
+1. Create a Secret that holds the token:
 
-```yaml
-apiVersion: cert-manager.io/v1
-kind: ClusterIssuer
-metadata:
-  name: letsencrypt-dns01-wildcard
-spec:
-  acme:
-    server: https://acme-v02.api.letsencrypt.org/directory
-    email: you@example.com
-    privateKeySecretRef:
-      name: letsencrypt-dns01-wildcard-account
-    solvers:
-      - dns01:
-          cloudflare:
-            apiTokenSecretRef:
-              name: cloudflare-api-token
-              key: api-token
-```
+   ```bash
+   kubectl -n cert-manager create secret generic cloudflare-api-token \
+     --from-literal=api-token=<API_TOKEN>
+   ```
 
-`letsencrypt-dns01-wildcard` is the name the chart looks for. To use another issuer,
-set `certificates.issuer.name` and `certificates.issuer.kind`.
+2. Create the issuer:
 
-Check that the issuer is ready before you go on:
+   ```yaml
+   apiVersion: cert-manager.io/v1
+   kind: ClusterIssuer
+   metadata:
+     name: letsencrypt-dns01-wildcard
+   spec:
+     acme:
+       server: https://acme-v02.api.letsencrypt.org/directory
+       email: you@example.com
+       privateKeySecretRef:
+         name: letsencrypt-dns01-wildcard-account
+       solvers:
+         - dns01:
+             cloudflare:
+               apiTokenSecretRef:
+                 name: cloudflare-api-token
+                 key: api-token
+   ```
 
-```bash
-kubectl get clusterissuer letsencrypt-dns01-wildcard
-```
+   The chart looks for the name `letsencrypt-dns01-wildcard`. To use another issuer, set `certificates.issuer.name` and `certificates.issuer.kind`.
+
+3. Check that the issuer is ready:
+
+   ```bash
+   kubectl get clusterissuer letsencrypt-dns01-wildcard
+   ```
 
 ## 3. Set the chart values
+
+Add the following to your values file:
 
 ```yaml
 gateway:
@@ -94,47 +92,35 @@ certificates:
   copyToTenants: true
 ```
 
-- `appDomain` sets the wildcard the certificate covers. It also sets the server's
-  `APP_DOMAIN` and the frontend's `PUBLIC_APP_DOMAIN`. If you use `server.envFrom`,
-  the chart leaves `APP_DOMAIN` to you, so set it in that Secret too.
-- `appWildcardSecretName` is what moves apps onto the wildcard. Without it the chart
-  still issues the certificate, but `PLATFORM_WILDCARD_DOMAINS` names no Secret, so
-  apps keep getting per-host certificates. With it empty, the certificate is stored
-  in `wildcard-<domain with dots as dashes>-tls`.
-- `certificates.namespace` must exist. With `createNamespace: true` the chart creates
-  it.
-- `copyToTenants` makes the server copy the Secret into every namespace whose
-  ingresses reference it. An `Ingress` can only read a Secret in its own namespace.
-  If you already run a secret replicator such as
-  [reflector](https://github.com/emberstack/kubernetes-reflector), leave this `false`
-  and have it copy the Secret. Do not use both: two writers on the same Secret
-  overwrite each other forever.
+| Value                   | Purpose                                                                                                     |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `appDomain`             | The wildcard that the certificate covers. Also sets `APP_DOMAIN` on the server and `PUBLIC_APP_DOMAIN` on the frontend. |
+| `appWildcardSecretName` | Moves apps onto the wildcard. Without it, the chart issues the certificate but apps keep per-host certificates. |
+| `certificates.namespace` | Where the certificate is stored. The namespace must exist. With `createNamespace: true`, the chart creates it. |
+| `copyToTenants`         | The server copies the Secret into each namespace with an Ingress that references it.                       |
 
-On a one-command install, the values live in `/etc/orchard/values.yaml`. The
-installer sets `certificates.enabled: false`, so change that too, then apply with
-`orchard-update`.
+If you use `server.envFrom`, the chart does not set `APP_DOMAIN`. Add it to your Secret.
 
-Apply the values with `helm upgrade`. On its next reconcile the server moves
-existing generated hosts onto the wildcard Secret.
+If you run a secret replicator, such as [reflector](https://github.com/emberstack/kubernetes-reflector), leave `copyToTenants` as `false`. Do not use both. Two writers on the same Secret overwrite each other.
+
+Apply the values with `helm upgrade`. At its next reconcile, the server moves existing generated hosts onto the wildcard Secret.
+
+### Installer hosts
+
+The installer sets `certificates.enabled` to `false` and `gateway.http.enabled` to `false`. To use a wildcard on an installer host, set `certificates.enabled` to `true` in `/etc/orchard/values.yaml`, add the values above, and run `sudo orchardctl update`.
 
 ### Several domains
 
-For more than one wildcard, or a Secret you manage yourself, set the mapping
-directly. It takes precedence over the derived value.
+For more than one wildcard, or a Secret that you manage yourself, set the mapping directly. It takes precedence over the derived value. The chart only issues certificates for the app domain and the database domain, so you provide the Secret for any other domain.
 
 ```yaml
 tenant:
   wildcardDomains: .apps.example.com=wildcard-apps-tls,.preview.example.com=wildcard-preview-tls
 ```
 
-The chart only issues a certificate for the app domain and the database domain. You
-provide the Secret for anything else.
-
 ### Public databases
 
-To use a wildcard for public database connections, name the domain and tell the
-server to read from the same Secret. The domain has to match `PUBLIC_DB_DOMAIN` on
-the server.
+To use a wildcard for public database connections, name the domain and point the server at the same Secret. The domain must match `PUBLIC_DB_DOMAIN` on the server.
 
 ```yaml
 certificates:
@@ -149,17 +135,40 @@ publicTls:
     sourceSecret: wildcard-db-example-com-tls
 ```
 
-## 4. Verify
+## 4. Verify the certificate
 
-Check that the certificate was issued. `READY` should be `True`.
+1. Check that the certificate was issued. `READY` should be `True`.
 
-```bash
-kubectl -n network get certificate
-kubectl -n network get secret wildcard-apps-example-com-tls
-```
+   ```bash
+   kubectl -n network get certificate
+   kubectl -n network get secret wildcard-apps-example-com-tls
+   ```
 
-If it stays `False`, follow the chain down. The challenge's status says what the
-DNS provider or Let's Encrypt returned.
+2. Check that the server has the mapping:
+
+   ```bash
+   kubectl -n orchard exec deploy/server -- printenv PLATFORM_WILDCARD_DOMAINS
+   ```
+
+   The output should be as follows:
+
+   ```txt
+   .apps.example.com=wildcard-apps-example-com-tls
+   ```
+
+3. Check an app. Its namespace should have a copy of the Secret, and the subject should be `CN=*.apps.example.com`.
+
+   ```bash
+   kubectl -n <APP_NAMESPACE> get secret wildcard-apps-example-com-tls
+   kubectl -n <APP_NAMESPACE> get ingress -o yaml | grep secretName
+   curl -vI https://<APP_HOST> 2>&1 | grep -E 'subject:|issuer:'
+   ```
+
+## Troubleshoot the certificate
+
+### The certificate stays `False`
+
+Follow the chain down. The challenge status shows what the DNS provider or Let's Encrypt returned.
 
 ```bash
 kubectl -n network describe certificate wildcard-apps-example-com-tls
@@ -167,23 +176,11 @@ kubectl -n network get certificaterequest,order,challenge
 kubectl -n network describe challenge
 ```
 
-Check that the server picked it up:
+### The Secret is missing from the app namespace
 
-```bash
-kubectl -n orchard exec deploy/server -- printenv PLATFORM_WILDCARD_DOMAINS
-```
+Check that `copyToTenants` is on, or that your replicator covers that namespace.
 
-This should print `.apps.example.com=wildcard-apps-example-com-tls`.
+## Related resources
 
-Deploy an app, or look at one you already have, then check its namespace has a copy
-of the Secret and the URL serves the wildcard:
-
-```bash
-kubectl -n <app namespace> get secret wildcard-apps-example-com-tls
-kubectl -n <app namespace> get ingress -o yaml | grep secretName
-curl -vI https://<app host> 2>&1 | grep -E 'subject:|issuer:'
-```
-
-The subject should be `CN=*.apps.example.com`. If the Secret is missing from the app's
-namespace, check that `copyToTenants` is on, or that your replicator covers that
-namespace.
+- [Use a wildcard certificate](/operate/finishing-setup/#use-a-wildcard-certificate)
+- [Domains and HTTPS](/deploy/domains/)

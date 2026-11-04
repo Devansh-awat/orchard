@@ -1,101 +1,84 @@
 ---
 title: Security and isolation
-description: What Orchard isolates by default, what it does not, and what running untrusted code actually requires.
+description: What Orchard isolates by default at the network and kernel layers, and what to enable before you run untrusted code.
 sidebar:
   order: 6
 ---
 
 import Diagram from '../../../components/Diagram.astro';
 
-Orchard separates tenants at the **network** layer by default. It does **not**
-separate them at the **kernel** layer unless you install a sandbox runtime and
-turn it on.
+By default, Orchard separates tenants at the network layer. It does not separate them at the kernel layer unless you install a sandbox runtime and turn it on.
 
-That distinction is the whole page. If you are running your own code, or code
-from people you trust, the defaults are reasonable. If you are running code you
-do not trust, keep reading.
+## Network isolation
 
-## Network isolation: on by default
-
-Every tenant namespace gets a `default-deny-all` NetworkPolicy covering both
-ingress and egress. From inside a tenant pod, the allowed paths are:
+Network isolation is on by default. Every tenant namespace has a `default-deny-all` NetworkPolicy for ingress and egress. A tenant pod has the following allowed paths:
 
 | Direction | Allowed                                                               |
 | --------- | --------------------------------------------------------------------- |
-| Ingress   | Pods in the same namespace, and the ingress controllers               |
-| Egress    | Pods in the same namespace                                            |
-| Egress    | `kube-dns`, on UDP and TCP 53                                         |
-| Egress    | The ingress controller namespace                                      |
-| Egress    | The public internet                                                   |
-| Egress    | Other tenant namespaces, which are themselves default-deny on ingress |
+| Ingress   | Pods in the same namespace, and the namespaces in `TENANT_INGRESS_NAMESPACES` |
+| Egress    | Pods in the same namespace, and the namespaces in `TENANT_INGRESS_NAMESPACES` |
+| Egress    | `kube-dns` on UDP and TCP port 53                                     |
+| Egress    | The public internet, except private and link-local ranges             |
+| Egress    | Other tenant namespaces, which are default-deny on ingress            |
+| Egress    | The backup proxy on TCP port 9000                                     |
 
-That last row sounds worse than it is: reaching another tenant namespace only
-lands on what that tenant has explicitly published, which is the same surface
-the public internet already has.
+A pod that reaches another tenant namespace can only reach what that tenant has published.
 
 <Diagram
-  caption="Default-deny in both directions, with a short allow-list."
+  caption="Default-deny in both directions, with a short list of allowed paths."
   code={`flowchart TD
   POD[Tenant pod]
   POD -->|allowed| SAME[Same namespace]
   POD -->|allowed| DNS[kube-dns :53]
-  POD -->|allowed| ING[Ingress controllers]
+  POD -->|allowed| ING[Ingress namespaces]
   POD -->|allowed| NET[Public internet]
   POD -.->|blocked| API[Kube API server]
   POD -.->|blocked| IMDS[Cloud metadata<br/>169.254.0.0/16]
-  POD -.->|blocked| PLAT[Platform Postgres<br/>registry, server]
+  POD -.->|blocked| PLAT[Platform Postgres<br/>registry]
   POD -.->|blocked| OTHER[Other tenants'<br/>unpublished services]`}
 />
 
-What this blocks is more interesting:
+The policy blocks the following:
 
-- **The Kubernetes API server.** A tenant pod cannot talk to it.
-- **Cloud metadata (`169.254.0.0/16`).** No IMDS credential theft.
-- **RFC1918 ranges where the platform's own infrastructure lives**, so no
-  reaching the control-plane database, the registry, or the API server host.
-- **Other tenants' unpublished services.**
+- The Kubernetes API server.
+- Cloud metadata services at `169.254.0.0/16`.
+- The ranges `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16` and `100.64.0.0/10`, where platform services run.
+- Unpublished services of other tenants.
 
-## Kernel isolation: off by default
+Orchard restores this policy if someone changes it with `kubectl`.
 
-By default, tenant pods and build jobs share the host kernel, like ordinary
-containers. A container escape is a host compromise.
+## Kernel isolation
 
-Two optional runtimes change that, and **neither is installed by the
-one-command installer**:
+Kernel isolation is off by default. Tenant pods and build jobs share the host kernel, like ordinary containers. A container escape compromises the host.
 
-| Setting          | Runtime          | Protects                                              |
-| ---------------- | ---------------- | ----------------------------------------------------- |
-| `tenantSandbox`  | gVisor (`runsc`) | Tenant app pods, via a user-space kernel              |
-| `builderSandbox` | Kata Containers  | Image builds, by wrapping the pod in a lightweight VM |
+Two optional runtimes change this. The one-command installer does not install either of them.
 
-Builds are the sharper edge. BuildKit needs `privileged: true`, which gVisor
-refuses, so builds use Kata instead: privileged-inside-a-VM is fine, and a
-malicious Dockerfile cannot reach the host kernel. **Without `builderSandbox`,
-image builds run with host-level privileges**, the same posture as
-Docker-based platforms, and genuinely fine when whoever wrote the Dockerfile
-already owns the box.
+| Setting          | Runtime          | Protects                                                  |
+| ---------------- | ---------------- | --------------------------------------------------------- |
+| `tenantSandbox`  | gVisor (`runsc`) | Tenant app pods, with a user-space kernel.                |
+| `builderSandbox` | Kata Containers  | Image builds, by running the pod in a lightweight virtual machine. |
 
-Greenhouse machines (the [AI dev environments](/greenhouse/)) are the exception:
-on the Kubernetes runner they run as Kata VMs when the cluster has Kata, with
-internet egress only. Their security model is described in
-[Running Greenhouse](/operate/greenhouse/#security-model).
+BuildKit needs `privileged: true`, which gVisor does not allow. Builds therefore use Kata, where a privileged container stays inside the virtual machine.
 
-## Turning kernel isolation on
+:::caution
+Without `builderSandbox`, image builds run with host-level privileges.
+:::
 
-The runtimes are node-level and vary by distribution, which is why they are not
-installed for you.
+Greenhouse machines run as Kata virtual machines on the Kubernetes runner when the cluster has Kata. For more information, refer to [Running Greenhouse](/operate/greenhouse/#security-model).
 
-1. Install the runtime on **every** node. On Talos these are the
-   `siderolabs/gvisor` and `siderolabs/kata-containers` system extensions;
-   elsewhere, follow the runtime's own instructions.
-2. Confirm the RuntimeClass exists and a smoke-test pod using it actually runs:
+## Turn on kernel isolation
+
+The runtimes are node-level and vary by distribution, so Orchard does not install them.
+
+1. Install the runtime on every node. On Talos, use the `siderolabs/gvisor` and `siderolabs/kata-containers` system extensions. On other distributions, follow the runtime's instructions.
+2. Confirm that the RuntimeClass exists:
 
    ```bash
    kubectl get runtimeclass gvisor
    ```
 
-3. Only then enable it. On an installer-based instance, edit
-   `/etc/orchard/values.yaml` and run `orchard-update`:
+3. Run a test pod that uses the RuntimeClass.
+4. Add the settings to your values file:
 
    ```yaml
    tenantSandbox:
@@ -106,38 +89,32 @@ installed for you.
      runtimeClassName: kata
    ```
 
-Order matters. Flip the flag before the runtime exists and new tenant pods fail
-to schedule with `no runtime for "runsc" is configured`.
+5. Apply the change. On an installer host, edit `/etc/orchard/values.yaml` and run `sudo orchardctl update`. On a Helm install, run `helm upgrade`.
 
-## If you are running untrusted code
+Complete step 1 before step 4. If the runtime does not exist, new tenant pods fail with the following error:
 
-Be honest about the threat model. "Untrusted" means a user can run a process you
-did not write, which includes letting strangers deploy from their own
-repositories.
+```txt
+no runtime for "runsc" is configured
+```
 
-In that case, treat the following as required rather than optional:
+## Requirements for untrusted code
 
-- **`builderSandbox` with Kata.** Builds execute arbitrary Dockerfiles with
-  host-level privileges without it. This is the single most important one.
-- **`tenantSandbox` with gVisor**, so a compromised app does not share a kernel
-  with everything else on the node.
-- **Quotas**, so one tenant cannot exhaust the cluster. See
-  [Quotas and usage](/teams/quotas/).
-- **Node pools**, to keep untrusted workloads on hardware you are willing to
-  lose. See [Nodes and pools](/operate/nodes/).
-- **`invite_only` or `closed` signups**, so the set of people who can run code
-  is a set you chose.
+Code is untrusted if someone can run a process that you did not write. This includes letting other people deploy from their own repositories. In that case, set up all of the following:
 
-Without those, a single-box Orchard running strangers' code is roughly as
-exposed as giving them Docker on that box. That is a fine trade for a homelab
-and a bad one for anything else.
+- **`builderSandbox` with Kata.** Without it, builds run arbitrary Dockerfiles with host-level privileges. This is the most important item.
+- **`tenantSandbox` with gVisor.** Without it, a compromised app shares a kernel with everything else on the node.
+- **Quotas.** Refer to [Quotas and usage](/teams/quotas/).
+- **Node pools.** Refer to [Manage nodes and pools](/operate/nodes/).
+- **`invite_only` or `closed` signups.** Refer to [Going to production](/operate/production/#2-close-signups).
 
-## What Orchard does not claim
+Without these settings, a single-machine Orchard that runs other people's code has about the same exposure as giving them Docker on that machine.
 
-It is not a multi-tenant hosting provider out of the box. There is no per-tenant
-kernel, no hardware isolation, and no guarantee that a determined attacker who
-escapes a container cannot reach the node.
+## Limitations
 
-The pieces to raise that bar are all here and documented. They are just not on
-by default, because they need node-level changes that would fail confusingly on
-a machine that is not ready for them.
+Orchard has no per-tenant kernel and no hardware isolation by default. Orchard does not guarantee that an attacker who escapes a container cannot reach the node.
+
+## Related resources
+
+- [Going to production](/operate/production/)
+- [Image scanning](/operate/image-scanning/)
+- [Running Greenhouse](/operate/greenhouse/)

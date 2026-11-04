@@ -1,155 +1,112 @@
 ---
-title: Image scanning
-description: Choosing a vulnerability scanner for the Security tab, turning it on, and what each one covers.
+title: Set up image scanning
+description: Choose a vulnerability scanner for the Orchard Security tab, turn it on, and review how each scanner works.
 sidebar:
   order: 7
 ---
 
-Every app has a **Security** tab. Its configuration checks (secrets stored as
-plain variables, moving image tags, domains without TLS) always run. The image
-scan, the list of known vulnerabilities in the app's container image, needs a
-scanner.
+To show known vulnerabilities in an app's container image on its **Security** tab, set up a scanner. The tab also has configuration checks, such as secrets stored as plain variables, moving image tags and domains without TLS. Those checks always run.
 
-There are two scanners to choose from:
+## Choose a scanner
 
 |                                                  | Harbor                                                  | Orchard scanner                                                           |
 | ------------------------------------------------ | ------------------------------------------------------- | ------------------------------------------------------------------------- |
-| What it is                                       | Harbor's own scanner (Trivy, run by Harbor)             | A Trivy server Orchard deploys, plus one short-lived scan job per request |
+| What it is                                       | Harbor's own scanner (Trivy, run by Harbor)             | A Trivy server that Orchard deploys, plus one short-lived scan job for each request |
 | Needs                                            | Harbor as your registry, with API credentials           | `trivy.enabled: true` in the chart                                        |
 | Images built by Orchard                          | Yes                                                     | Yes                                                                       |
-| Images from Docker Hub, GHCR or another registry | No                                                      | Yes, including private ones with registry credentials                     |
-| Self-hosted installs (zot registry)              | No                                                      | Yes                                                                       |
-| When a scan runs                                 | When Harbor scans on push, or when someone presses Scan | When someone presses Scan                                                 |
+| Images from Docker Hub, GHCR or another registry | No                                                      | Yes, including private images with registry credentials                   |
+| Installer hosts (zot registry)                   | No                                                      | Yes                                                                       |
+| When a scan runs                                 | When Harbor scans on push, or when someone selects **Scan now** or **Scan again** | When someone selects **Scan now** or **Scan again** |
 
-If your registry is Harbor and it already scans on push, pick Harbor: nothing
-new to run. Otherwise, and on every installer-based instance, use the Orchard
-scanner.
+If your registry is Harbor and it already scans on push, use Harbor. Otherwise, use the Orchard scanner.
 
-## The default
+## The default scanner
 
-Until a superadmin picks a scanner, Orchard picks one:
+Until a superadmin chooses a scanner, Orchard uses the first match:
 
-1. **The Orchard scanner**, if it is deployed and configured (`TRIVY_SERVER_URL`
-   and `ORCHARD_INTERNAL_URL` set, and Kubernetes reachable).
-2. Otherwise **Harbor**, but only if the registry really is Harbor. Orchard asks
-   `/api/v2.0/systeminfo` on the Harbor API and checks the answer is Harbor's.
-   A registry that only accepts Harbor credentials does not count. The answer is
-   cached for ten minutes, or one minute after a network error.
-3. Otherwise **off**.
+1. **The Orchard scanner**, if `TRIVY_SERVER_URL` and `ORCHARD_INTERNAL_URL` are set and Kubernetes is reachable.
+2. **Harbor**, if the registry is Harbor. Orchard checks `/api/v2.0/systeminfo` on the Harbor API. It caches the answer for ten minutes, or one minute after a network error.
+3. **Off**.
 
-The one-command installer turns the Orchard scanner on (`trivy.enabled: true`),
-and `orchardctl update` turns it on for a host installed before that. It scans
-straight from the bundled zot registry, so a fresh install scans images with
-nothing else to set up.
+The one-command installer sets `trivy.enabled: true`. `orchardctl update` turns it on for a host installed before this default existed.
 
-Picking a scanner in **Instance admin → Configuration → Image scanning** stores the choice, and
-the default no longer applies. That includes picking **Off**.
+To choose a scanner, go to **Instance admin** > **Configuration** > **Image scanning**. The stored choice replaces the default, including a choice of **Off**. A scanner with missing requirements is unavailable, and the page shows the reason.
 
-## Turning it on
+## Set up the Orchard scanner
 
-### Harbor
+Installer hosts already have the Orchard scanner.
 
-1. Make sure the server has Harbor API access: `HARBOR_USERNAME` and
-   `HARBOR_PASSWORD` (a robot account with read access to the project is
-   enough, plus "scan" if people should be able to press Scan), and
-   `DOCKER_REGISTRY_PULL` pointing at Harbor. Set `HARBOR_API_URL` if the API is
-   reached at a different address from the registry, for example Harbor's core
-   service inside the cluster.
-2. Optional: turn on **Automatically scan images on push** in the Harbor project
-   so results are there before anyone opens the tab.
-3. In **Instance admin → Configuration → Image scanning**, pick **Harbor**.
+1. Enable the chart block. On an installer host, run the following command:
 
-### Orchard scanner
+   ```bash
+   sudo orchardctl config set trivy.enabled true --apply
+   ```
 
-Installer-based instances already have it. On a chart install, or a host where
-it was turned off:
-
-1. Enable the chart block and roll it out:
+   On a Helm install, add the following to your values file and run `helm upgrade`:
 
    ```yaml
    trivy:
      enabled: true
    ```
 
-   On an installer host:
+   This creates the `orchard-scans` namespace with the Trivy server, and sets the variables that the server needs.
 
-   ```bash
-   sudo orchardctl config set trivy.enabled true --apply
-   ```
+2. Wait for the `trivy` pod in `orchard-scans` to become ready. The first start downloads the vulnerability database.
+3. If a superadmin already chose another scanner, go to **Instance admin** > **Configuration** > **Image scanning** and select **Orchard scanner**.
 
-   This creates the `orchard-scans` namespace with the Trivy server, and gives
-   the API server the variables it needs (`TRIVY_SERVER_URL`,
-   `ORCHARD_INTERNAL_URL` and the rest, listed in the
-   [configuration reference](/reference/configuration/)).
+Scan jobs pull images from `DOCKER_REGISTRY_PUSH` with `HARBOR_USERNAME` and `HARBOR_PASSWORD`. They use plain HTTP when the host is in `REGISTRY_HTTP_HOSTS`.
 
-2. Wait for the `trivy` pod in `orchard-scans` to become ready. The first start
-   downloads the vulnerability database, which takes a minute or two.
-3. Nothing else, unless a superadmin already picked another scanner. Then pick
-   **Orchard scanner** in **Instance admin → Configuration → Image scanning**.
+If your registry or the Orchard namespace has its own NetworkPolicy, allow traffic from `orchard-scans`.
 
-The scan jobs pull images from the registry the server pushes to
-(`DOCKER_REGISTRY_PUSH`, over plain HTTP when the host is listed in
-`REGISTRY_HTTP_HOSTS`), with `HARBOR_USERNAME` and `HARBOR_PASSWORD`. That is
-how they reach the installer's zot.
+To turn off the scanner on an installer host, run the following command. `orchardctl update` does not turn it back on.
 
-To turn it off on an installer host, `sudo orchardctl config set trivy.enabled
-false --apply`. `orchardctl update` does not turn it back on.
+```bash
+sudo orchardctl config set trivy.enabled false --apply
+```
 
-A scanner whose requirements are missing is greyed out in the admin panel with
-the reason, so you cannot pick one that would not work.
+## Set up Harbor
 
-### Pinning the choice
+1. Give the server Harbor API access. Set `HARBOR_USERNAME` and `HARBOR_PASSWORD`, and set `DOCKER_REGISTRY_PULL` to Harbor. A robot account with read access to the project is enough. Add the scan permission if people should start scans from Orchard.
+2. If the API is at a different address from the registry, set `HARBOR_API_URL`.
+3. Optional: turn on **Automatically scan images on push** in the Harbor project.
+4. Go to **Instance admin** > **Configuration** > **Image scanning** and select **Harbor**.
 
-Set `IMAGE_SCANNER` to `off`, `harbor` or `trivy` in the server environment to
-fix the choice. It wins over both the stored choice and the default. The admin
-panel then shows it as an environment override and cannot change it. Leave it
-unset to let superadmins decide.
+## Pin the scanner
+
+To fix the choice for the instance, set `IMAGE_SCANNER` on the server to `off`, `harbor` or `trivy`. This value overrides the stored choice and the default. The admin page shows it as an environment override.
 
 ```bash
 sudo orchardctl env set IMAGE_SCANNER off --apply
 ```
 
-## What happens during a scan
+## How a scan works
 
-With the Orchard scanner, pressing **Scan** on an app:
+With the Orchard scanner, a scan runs as follows:
 
-1. records the scan and creates a Job in `orchard-scans`, together with a Secret
-   holding the registry credentials it needs (Orchard's own registry, plus any
-   registry credentials saved on the project) and a one-time token;
-2. the Job runs Trivy in client mode: it pulls the image layers itself and asks
-   the Trivy server which packages have known vulnerabilities;
-3. the Job posts the report back to the API server, which keeps the worst 500
-   findings and the totals;
-4. the Job and its Secret are deleted 10 minutes after it finishes.
+1. Orchard records the scan and creates a Job in `orchard-scans`, with a Secret that holds the registry credentials and a one-time token.
+2. The Job runs Trivy in client mode. It pulls the image layers and asks the Trivy server which packages have known vulnerabilities.
+3. The Job posts the report to the API server. The server keeps the worst 500 findings and the totals.
+4. Kubernetes deletes the Job and its Secret 10 minutes after it finishes.
 
-A scan that fails, runs out of time (15 minutes by default) or whose Job is
-deleted shows up as **The last scan failed** with Trivy's error, for example an
-authorization failure pulling a private image. At most
-`trivy.maxConcurrentScans` scans run at once (3 in the chart, 2 from the
-installer, 1 on a box under 8G of RAM); one more is refused with a message to
-try again shortly.
+The tab shows **The last scan failed** with Trivy's error when a scan fails, times out or loses its Job. The default timeout is 15 minutes.
 
-The result belongs to the image, not the app, so two apps running the same
-image share it. A result is not refreshed on its own: the vulnerability
-database changes daily, so press **Scan again** to recheck an image that has not
-been rebuilt.
+At most `trivy.maxConcurrentScans` scans run at once. The value is `3` in the chart and `2` from the installer, or `1` on a machine with less than 8 GB of memory. Orchard refuses more requests until a scan finishes.
 
-## What app teams see
+A result belongs to the image, so two apps that run the same image share it. Results do not refresh on their own. To check an image that has not been rebuilt, select **Scan again**.
 
-Anyone who can view an app sees its scan result. Members who can edit it can
-start a scan. When scanning is off the tab says **Image scanning is off** and
-still shows the configuration checks.
+## Permissions
 
-## Security notes
+Anyone who can view an app can see its scan result. Members who can edit the app can start a scan. When scanning is off, the tab shows **Image scanning is off** and still runs the configuration checks.
 
-- Scan jobs run with no service account token, as a non-root user, with a
-  read-only root filesystem, under Pod Security `restricted`. They take no
-  inbound traffic and cannot reach cloud metadata (`169.254.0.0/16`).
-- Trivy reads image layers but never runs them.
-- Only scan jobs may talk to the Trivy server, and they authenticate with a
-  shared token kept in the `trivy-server-token` Secret.
-- The result endpoint is `POST /apiv1/internal/image-scans/:id/result`. It
-  accepts one report per scan, authenticated by that scan's one-time token, and
-  nothing once the scan has finished.
-- If your registry or the Orchard namespace has a NetworkPolicy of its own,
-  allow traffic from `orchard-scans`.
+## Security of scan jobs
+
+- Scan jobs run with no service account token, as a non-root user, with a read-only root filesystem, under Pod Security `restricted`.
+- Scan jobs take no inbound traffic and cannot reach cloud metadata at `169.254.0.0/16`.
+- Trivy reads image layers but does not run them.
+- Only scan jobs can reach the Trivy server. They authenticate with a shared token in the `trivy-server-token` Secret.
+- The result endpoint is `POST /apiv1/internal/image-scans/:id/result`. It accepts one report for each scan, authenticated by that scan's one-time token.
+
+## Related resources
+
+- [Logs and request data](/operate/logs/)
+- [Configuration reference](/reference/configuration/)
