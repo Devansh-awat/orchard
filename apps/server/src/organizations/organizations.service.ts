@@ -23,6 +23,7 @@ import { RateLimitService } from '../auth/rate-limit.service';
 import { signupMode, signupDeniedError } from '../auth/signup-mode';
 import { PasswordRefused, hashAccountPassword } from '../auth/superadmin-password';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
+import { assertPublicUrl } from '../notifications/webhook-guard';
 
 export function normalizeBackupEndpoint(input: string | null): string | null {
   const raw = (input ?? '').trim().replace(/\/+$/, '');
@@ -543,6 +544,15 @@ export class OrganizationsService {
     if (data.description !== undefined) updateData.description = data.description;
     if (data.backupR2Endpoint !== undefined)
       updateData.backupR2Endpoint = normalizeBackupEndpoint(data.backupR2Endpoint);
+    if (updateData.backupR2Endpoint && process.env.BACKUP_ALLOW_INTERNAL_ENDPOINT !== 'true') {
+      try {
+        await assertPublicUrl(updateData.backupR2Endpoint, 'backupR2Endpoint');
+      } catch (error) {
+        throw new BadRequestException(
+          `${(error as Error).message}. An operator can allow private endpoints with BACKUP_ALLOW_INTERNAL_ENDPOINT=true.`
+        );
+      }
+    }
     if (data.backupR2Bucket !== undefined) updateData.backupR2Bucket = data.backupR2Bucket || null;
     if (data.backupR2Region !== undefined) updateData.backupR2Region = data.backupR2Region || null;
     if (data.backupR2AccessKey !== undefined)

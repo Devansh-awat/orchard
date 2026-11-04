@@ -79,6 +79,7 @@ import {
   type DbStats,
   type MirroredDbPod
 } from '../kubernetes/cnpg-status';
+import { assertPublicUrl } from '../notifications/webhook-guard';
 
 /** The org fields that locate a managed database's backups in R2. */
 export type OrgR2 = {
@@ -484,6 +485,18 @@ export class DatabasesService {
     database: string;
     sslMode?: string;
   }): Promise<{ sourceSizeBytes: number | null; sourceMajor: number }> {
+    if (process.env.DB_IMPORT_ALLOW_INTERNAL !== 'true') {
+      try {
+        await assertPublicUrl(
+          `https://${src.host.includes(':') ? `[${src.host}]` : src.host}/`,
+          'Host'
+        );
+      } catch (error) {
+        throw new BadRequestException(
+          `${(error as Error).message}. An operator can allow private addresses with DB_IMPORT_ALLOW_INTERNAL=true.`
+        );
+      }
+    }
     const ssl = src.sslMode && src.sslMode !== 'disable' ? { rejectUnauthorized: false } : false;
     const client = new Client({
       host: src.host,

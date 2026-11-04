@@ -2426,14 +2426,15 @@ export class DatabasesController {
 
   @Get(':id/provisioning')
   async getProvisioning(@Param('id') id: string, @Request() req) {
-    const { user } = await this.projectAccess.assertDatabaseView(id, req.user.sub, {
+    const { user, access } = await this.projectAccess.assertDatabaseView(id, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
       imageUrl: req.user.imageUrl
     });
-    return this.databases.getDatabaseProvisioning(id, user.id);
+    const provisioning: any = await this.databases.getDatabaseProvisioning(id, user.id);
+    return access.canEdit ? provisioning : { ...provisioning, importLogs: null };
   }
 
   @Get(':id/backups')
