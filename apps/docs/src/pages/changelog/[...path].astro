@@ -1,0 +1,349 @@
+---
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import CenteredHeader from '../../components/CenteredHeader.astro';
+import Icon from '../../components/Icon.astro';
+import {
+  PAGE_SIZE,
+  formatDate,
+  getChanges,
+  getComponents,
+  groupByDate,
+  type Change
+} from '../../lib/changelog';
+
+const CHANGELOG_TEXT = 'New features and fixes in Orchard.';
+
+interface PageProps {
+  changes: Change[];
+  page: number;
+  pages: number;
+  component?: string;
+}
+
+export function getStaticPaths() {
+  const all = getChanges();
+  const paths: Array<{ params: { path: string | undefined }; props: PageProps }> = [];
+
+  const add = (base: string, changes: Change[], component?: string) => {
+    const pages = Math.max(1, Math.ceil(changes.length / PAGE_SIZE));
+    for (let page = 1; page <= pages; page += 1) {
+      const segments = [base, page > 1 ? `page/${page}` : ''].filter(Boolean).join('/');
+      paths.push({
+        params: { path: segments || undefined },
+        props: {
+          changes: changes.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+          page,
+          pages,
+          component
+        }
+      });
+    }
+  };
+
+  add('', all);
+  for (const component of getComponents()) {
+    add(
+      component.slug,
+      all.filter((change) => change.componentSlug === component.slug),
+      component.slug
+    );
+  }
+  return paths;
+}
+
+const { changes, page, pages, component } = Astro.props as PageProps;
+const components = getComponents();
+const current = components.find((item) => item.slug === component);
+const base = component ? `/changelog/${component}/` : '/changelog/';
+const pageHref = (target: number) => (target === 1 ? base : `${base}page/${target}/`);
+const title = current ? `Changelog: ${current.label}` : 'Changelog';
+const isFirst = page === 1 && !component;
+---
+
+<StarlightPage
+  frontmatter={{
+    title,
+    description: CHANGELOG_TEXT,
+    tableOfContents: false,
+    lastUpdated: false,
+    pagefind: isFirst,
+    prev: false,
+    next: false
+  }}
+>
+  <div class="o-landing o-wide o-page not-content">
+    <CenteredHeader title="Changelog" text={CHANGELOG_TEXT} />
+    <div class="filters">
+      <nav aria-label="Filter by component">
+        <a href="/changelog/" aria-current={!component ? 'page' : undefined}>All components</a>
+        {
+          components.map((item) => (
+            <a href={`/changelog/${item.slug}/`} aria-current={item.slug === component ? 'page' : undefined}>
+              {item.label}
+            </a>
+          ))
+        }
+      </nav>
+      <a class="o-btn o-btn-outline o-btn-sm rss" href="/changelog/index.xml">
+        <Icon name="rss" size={14} />
+        Subscribe to RSS
+      </a>
+    </div>
+
+    {
+      changes.length === 0 ? (
+        <p class="empty">No changes found.</p>
+      ) : (
+        <ol class="timeline">
+          {groupByDate(changes).map((group) => (
+            <li class="day">
+              <time datetime={group.date}>{formatDate(group.date, true, false)}</time>
+              <ul>
+                {group.changes.map((change) => (
+                  <li id={change.id} class="change">
+                    <h2>{change.text}</h2>
+                    {change.detail && <p>{change.detail}</p>}
+                    <div class="tags">
+                      <span class="tag">{change.component}</span>
+                      <span class="kind">{change.type}</span>
+                      {change.version && <span class="kind">{change.version}</span>}
+                      {change.url && (
+                        <a href={change.url} rel="noopener">
+                          View source
+                        </a>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ol>
+      )
+    }
+
+    {
+      pages > 1 && (
+        <nav class="pager" aria-label="Pages">
+          {page > 1 ? (
+            <a class="o-btn o-btn-outline o-btn-sm" href={pageHref(page - 1)} rel="prev">
+              <Icon name="chevron-left" size={14} />
+              Newer
+            </a>
+          ) : (
+            <span />
+          )}
+          <span class="count">
+            Page {page} of {pages}
+          </span>
+          {page < pages ? (
+            <a class="o-btn o-btn-outline o-btn-sm" href={pageHref(page + 1)} rel="next">
+              Older
+              <Icon name="chevron-right" size={14} />
+            </a>
+          ) : (
+            <span />
+          )}
+        </nav>
+      )
+    }
+  </div>
+</StarlightPage>
+
+<style>
+  .o-page {
+    max-width: 60rem;
+    margin-inline: auto;
+    padding-inline: var(--o-page-pad);
+  }
+
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 2rem;
+  }
+
+  .filters nav {
+    display: flex;
+    flex: 1 1 24rem;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+  }
+
+  .filters nav a {
+    padding: 0.1875rem 0.625rem;
+    border: 1px solid var(--o-rule);
+    border-radius: 999px;
+    color: var(--sl-color-gray-2);
+    font-size: 0.8125rem;
+    text-decoration: none;
+  }
+
+  .filters nav a:hover {
+    border-color: var(--o-rule-strong);
+    color: var(--sl-color-white);
+  }
+
+  .filters nav a[aria-current='page'] {
+    border-color: var(--sl-color-white);
+    color: var(--sl-color-white);
+  }
+
+  .rss {
+    flex: none;
+  }
+
+  .timeline {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .day {
+    position: relative;
+    display: grid;
+    gap: 0.75rem;
+    padding-bottom: 2.25rem;
+    padding-inline-start: 1.5rem;
+    border-inline-start: 1px solid var(--o-rule-strong);
+  }
+
+  .day::before {
+    content: '';
+    position: absolute;
+    top: 0.3125rem;
+    inset-inline-start: -0.4375rem;
+    width: 0.8125rem;
+    height: 0.8125rem;
+    border: 1px solid var(--o-rule-strong);
+    border-radius: 0.1875rem;
+    background: var(--o-canvas);
+  }
+
+  time {
+    color: var(--o-muted);
+    font-family: var(--sl-font-mono);
+    font-size: 0.8125rem;
+    line-height: 1.75;
+  }
+
+  .day ul {
+    display: grid;
+    gap: 1.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .change {
+    scroll-margin-top: calc(var(--sl-nav-height) + 1rem);
+  }
+
+  .change:target h2 {
+    color: var(--o-accent-text);
+  }
+
+  h2 {
+    margin: 0;
+    color: var(--sl-color-white);
+    font-size: 1.0625rem;
+    font-weight: 500;
+    letter-spacing: -0.005em;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+    text-wrap: pretty;
+  }
+
+  .change p {
+    margin: 0.375rem 0 0;
+    color: var(--sl-color-gray-2);
+    font-size: 0.9375rem;
+  }
+
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.75rem;
+    margin-top: 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .tag {
+    padding: 0.0625rem 0.5rem;
+    border-radius: 999px;
+    background: var(--o-accent-tint);
+    color: var(--o-accent-text);
+  }
+
+  .kind {
+    color: var(--o-muted);
+    font-family: var(--sl-font-mono);
+  }
+
+  .tags a {
+    color: var(--sl-color-gray-2);
+  }
+
+  .tags a:hover {
+    color: var(--sl-color-white);
+  }
+
+  .empty {
+    color: var(--sl-color-gray-2);
+    text-align: center;
+  }
+
+  .pager {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 1rem;
+    padding-top: 0.5rem;
+  }
+
+  .pager a[rel='next'] {
+    justify-self: end;
+  }
+
+  .pager a[rel='prev'] {
+    justify-self: start;
+  }
+
+  .count {
+    color: var(--o-muted);
+    font-size: 0.875rem;
+  }
+
+  @media (min-width: 50rem) {
+    .day {
+      grid-template-columns: 7rem minmax(0, 1fr);
+      margin-inline-start: 0;
+      padding-inline-start: 0;
+      border-inline-start: 0;
+      gap: 3rem;
+    }
+
+    .day::before {
+      inset-inline-start: 8.0625rem;
+    }
+
+    .day::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      inset-inline-start: 8.5rem;
+      width: 1px;
+      background: var(--o-rule-strong);
+    }
+
+    time {
+      text-align: end;
+    }
+  }
+</style>
