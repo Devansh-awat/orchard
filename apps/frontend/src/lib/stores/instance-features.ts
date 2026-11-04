@@ -9,14 +9,28 @@ export interface InstanceFeatures {
 	earlyAccessOpen: boolean;
 	fastBuilder: boolean;
 	resourceLimits: 'on' | 'off';
+	storage: {
+		s3: boolean;
+		backups: 'external' | 'local' | 'none';
+		uploads: boolean;
+		localDeploys: boolean;
+	};
 }
+
+const STORAGE_DEFAULT: InstanceFeatures['storage'] = {
+	s3: true,
+	backups: 'external',
+	uploads: true,
+	localDeploys: true
+};
 
 const features = writable<InstanceFeatures>({
 	mcp: true,
 	sandboxes: false,
 	earlyAccessOpen: false,
 	fastBuilder: false,
-	resourceLimits: 'on'
+	resourceLimits: 'on',
+	storage: STORAGE_DEFAULT
 });
 let loaded = false;
 
@@ -33,12 +47,30 @@ export const instanceFeatures = {
 			earlyAccessOpen: false,
 			fastBuilder: false,
 			resourceLimits: 'on' as const,
+			storage: STORAGE_DEFAULT,
 			...((await response.json()) as Partial<InstanceFeatures>)
 		};
 		features.set(next);
 		return next;
 	}
 };
+
+function loadedOnUse<T>(store: Readable<T>): Readable<T> {
+	return {
+		subscribe(run, invalidate) {
+			if (browser) instanceFeatures.load().catch(() => undefined);
+			return store.subscribe(run, invalidate);
+		}
+	};
+}
+
+export const uploadsEnabled = loadedOnUse(
+	derived(features, ($features) => $features.storage.uploads)
+);
+
+export const backupsOnThisServer = loadedOnUse(
+	derived(features, ($features) => $features.storage.backups === 'local')
+);
 
 export function earlyAccessFlag(key: string): Readable<boolean> {
 	if (browser) instanceFeatures.load().catch(() => undefined);

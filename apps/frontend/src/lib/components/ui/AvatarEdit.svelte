@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { Camera, Trash2, Upload } from 'lucide-svelte';
+	import { uploadsEnabled } from '$lib/stores/instance-features';
 	import Menu from './Menu.svelte';
 	import MenuItem from './MenuItem.svelte';
 	import Spinner from './Spinner.svelte';
@@ -28,7 +29,7 @@
 	let input = $state<HTMLInputElement>();
 </script>
 
-{#if editable}
+{#if editable && $uploadsEnabled}
 	<input
 		bind:this={input}
 		type="file"

@@ -2,7 +2,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { apiFetch, selectedOrganization, toasts } from '$lib/stores';
+	import { apiFetch, selectedOrganization, toasts, uploadsEnabled } from '$lib/stores';
 	import {
 		Github,
 		Container,
@@ -164,10 +164,11 @@
 				class="np-banner"
 				class:np-banner--set={bannerPreview}
 				style={bannerPreview ? `background-image: url(${bannerPreview})` : ''}
+				disabled={!$uploadsEnabled}
 				onclick={() => bannerInput?.click()}
 				{@attach springPop(() => !!bannerPreview)}
 			>
-				{#if !bannerPreview}
+				{#if !bannerPreview && $uploadsEnabled}
 					<ImageIcon size={15} />
 					<span>Add a banner</span>
 				{/if}
@@ -176,6 +177,7 @@
 				<button
 					type="button"
 					class="np-icon-edit"
+					disabled={!$uploadsEnabled}
 					onclick={() => iconInput?.click()}
 					{@attach springPop(() => !!iconPreview)}
 				>

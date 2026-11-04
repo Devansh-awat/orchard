@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { Image as ImageIcon } from 'lucide-svelte';
+	import { uploadsEnabled } from '$lib/stores/instance-features';
 	import Button from './Button.svelte';
 	import RemoteImg from './RemoteImg.svelte';
 
@@ -52,20 +53,33 @@
 			<ImageIcon size={16} aria-hidden="true" />
 		{/if}
 	</span>
-	<div class="actions">
-		<Button size="sm" loading={busy} {disabled} onclick={() => input?.click()}>
-			{value ? 'Replace' : 'Upload'}
-		</Button>
-		{#if value}
-			<Button size="sm" variant="ghost" disabled={disabled || busy} onclick={() => (value = null)}>
-				Remove
+	{#if $uploadsEnabled}
+		<div class="actions">
+			<Button size="sm" loading={busy} {disabled} onclick={() => input?.click()}>
+				{value ? 'Replace' : 'Upload'}
 			</Button>
-		{/if}
-	</div>
-	<input bind:this={input} {id} class="file" type="file" {accept} {disabled} onchange={pick} />
+			{#if value}
+				<Button
+					size="sm"
+					variant="ghost"
+					disabled={disabled || busy}
+					onclick={() => (value = null)}
+				>
+					Remove
+				</Button>
+			{/if}
+		</div>
+		<input bind:this={input} {id} class="file" type="file" {accept} {disabled} onchange={pick} />
+	{:else}
+		<span class="off">Uploads need storage. An instance admin can add it.</span>
+	{/if}
 </div>
 
 <style>
+	.off {
+		font-size: var(--text-caption);
+		color: var(--text-faint);
+	}
 	.field {
 		position: relative;
 		display: flex;

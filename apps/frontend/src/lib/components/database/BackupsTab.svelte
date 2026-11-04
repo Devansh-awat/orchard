@@ -15,7 +15,13 @@
 		Undo2,
 		X
 	} from 'lucide-svelte';
-	import { apiFetch, selectedOrganization, toasts } from '$lib/stores';
+	import {
+		apiFetch,
+		backupsOnThisServer,
+		isSuperAdmin,
+		selectedOrganization,
+		toasts
+	} from '$lib/stores';
 	import {
 		Button,
 		Dropdown,
@@ -587,6 +593,13 @@
 		</Widget>
 	{/if}
 
+	{#if available && $backupsOnThisServer}
+		<p class="on-this-server">
+			Backups are on this server. If the server is lost, the backups are lost.
+			{#if $isSuperAdmin}<a href="/admin/instance#storage">Add S3 storage</a>{/if}
+		</p>
+	{/if}
+
 	{#if available}
 		<Widget>
 			<SettingsList label="Protection">
@@ -1103,6 +1116,13 @@
 {/if}
 
 <style>
+	.on-this-server {
+		font-size: var(--text-callout);
+		color: var(--text-muted);
+	}
+	.on-this-server a {
+		color: var(--text-link);
+	}
 	.backups {
 		display: flex;
 		flex-direction: column;

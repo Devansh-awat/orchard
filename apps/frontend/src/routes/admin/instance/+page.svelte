@@ -1,12 +1,14 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { apiFetch, instanceChecklist, toasts } from '$lib/stores';
+	import { apiFetch, instanceChecklist, instanceFeatures, toasts } from '$lib/stores';
+	import { STORAGE_PROVIDERS, storageProvider } from '$lib/storage-providers';
 	import {
 		Alert,
 		Button,
 		Field,
 		Input,
 		SectionCard,
+		Select,
 		Skeleton,
 		ToggleRow
 	} from '$lib/components/ui';
@@ -56,16 +58,18 @@
 		storage: {
 			title: 'Object storage',
 			description:
-				'Where database backups, uploads and cached favicons are written. Until this is set, managed databases have no base backup and a deleted database cannot be recovered.',
+				'Where database backups, uploads and build contexts go. Any S3-compatible provider works. The access key needs to list, read, write and delete in each bucket.',
 			fields: {
-				accountId: 'Account ID',
+				endpoint: 'Endpoint',
+				region: 'Region',
 				accessKeyId: 'Access key ID',
 				secretAccessKey: 'Secret access key',
-				bucketName: 'Bucket',
-				endpoint: 'Endpoint',
+				backupBucket: 'Backup bucket',
+				bucketName: 'Uploads bucket',
+				pathStyle: 'Path-style addressing',
 				publicUrl: 'Public base URL',
 				buildContextBucket: 'Build context bucket',
-				backupBucket: 'Backup bucket'
+				accountId: 'Account ID'
 			}
 		},
 		email: {
@@ -132,8 +136,14 @@
 	const HINTS: Record<string, string> = {
 		domains: 'Suffix and secret name, for example .apps.example.com=wildcard-tls',
 		secure: 'true for port 465, otherwise leave blank',
-		endpoint: 'Derived from the account ID when left blank',
-		publicUrl: 'Derived from the account ID when left blank',
+		endpoint: 'For example https://s3.eu-west-1.amazonaws.com',
+		accountId: 'Cloudflare R2 only. Fills in the endpoint when that is blank.',
+		bucketName: 'Holds uploads and cached images. It can be the same bucket.',
+		backupBucket: 'Holds database backups.',
+		buildContextBucket: 'Optional. Empty uses the bucket above, for orchard up.',
+		publicUrl: 'Optional. Empty serves uploads through Orchard, so the bucket stays private.',
+		region: 'Empty means auto, which Cloudflare R2 expects.',
+		pathStyle: 'true sends requests to <endpoint>/<bucket>, false to <bucket>.<endpoint>.',
 		publicIp:
 			'The routable address of this box, for example 203.0.113.10. Leave blank to require one per organization.',
 		siteKey: 'From the Turnstile widget in your Cloudflare dashboard',
@@ -190,6 +200,7 @@
 			sections = sections.map((s) => (s.id === updated.id ? updated : s));
 			seed(sections);
 			await instanceChecklist.load(true);
+			if (section.id === 'storage') await instanceFeatures.load(true);
 			toasts.add({ title: `${metaFor(section).title} saved`, color: 'success' });
 		} catch (e) {
 			toasts.add({
@@ -201,9 +212,54 @@
 		}
 	}
 
+	let storagePreset = $state('');
+	let storagePlace = $state('');
+	let storageTesting = $state(false);
+	let storageResult = $state<{ ok: boolean; message?: string } | null>(null);
+	const presetProvider = $derived(storagePreset ? storageProvider(storagePreset) : null);
+
+	function applyStoragePreset() {
+		if (!presetProvider || !drafts.storage) return;
+		const place = storagePlace.trim() || presetProvider.placeDefault;
+		const locked = sections.find((s) => s.id === 'storage')?.lockedFields ?? [];
+		const set = (name: string, value: string) => {
+			if (!locked.includes(name)) drafts.storage[name] = value;
+		};
+		if (presetProvider.placeLabel) {
+			set('endpoint', presetProvider.endpoint(place));
+			set('region', presetProvider.region(place));
+		}
+		set('pathStyle', String(presetProvider.pathStyle));
+		storageResult = null;
+	}
+
+	async function testStorage() {
+		storageTesting = true;
+		try {
+			const response = await apiFetch('/apiv1/admin/instance-config/storage/test', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(drafts.storage ?? {})
+			});
+			const body = await response.json().catch(() => ({}));
+			storageResult =
+				response.ok && typeof body.ok === 'boolean'
+					? body
+					: { ok: false, message: body?.message || 'The connection test failed.' };
+		} catch {
+			storageResult = { ok: false, message: 'The connection test failed.' };
+		} finally {
+			storageTesting = false;
+		}
+	}
+
 	onMount(async () => {
 		await load();
 		loading = false;
+		instanceFeatures.load(true).catch(() => undefined);
+		if (window.location.hash === '#storage') {
+			document.getElementById('storage')?.scrollIntoView();
+		}
 	});
 </script>
 
@@ -213,8 +269,35 @@
 	{#each sections as section, i (section.id)}
 		{@const meta = metaFor(section)}
 		{@const allLocked = section.lockedFields.length === Object.keys(meta.fields).length}
-		<div {@attach motionStagger({ index: i })}>
+		<div id={section.id} {@attach motionStagger({ index: i })}>
 			<SectionCard title={meta.title} description={meta.description}>
+				{#if section.id === 'storage' && !allLocked}
+					{#if $instanceFeatures.storage.backups === 'local'}
+						<p class="storage-note">
+							Backups are on this server. If the server is lost, the backups are lost.
+						</p>
+					{/if}
+					<div class="preset">
+						<Field label="Provider" for="storage-preset">
+							<Select id="storage-preset" bind:value={storagePreset} onchange={applyStoragePreset}>
+								<option value="">Choose to fill in the fields</option>
+								{#each STORAGE_PROVIDERS as provider (provider.id)}
+									<option value={provider.id}>{provider.label}</option>
+								{/each}
+							</Select>
+						</Field>
+						{#if presetProvider?.placeLabel}
+							<Field label={presetProvider.placeLabel} for="storage-place">
+								<Input
+									id="storage-place"
+									placeholder={presetProvider.placeDefault}
+									bind:value={storagePlace}
+									oninput={applyStoragePreset}
+								/>
+							</Field>
+						{/if}
+					</div>
+				{/if}
 				{#if allLocked}
 					<Alert tone="info" title="Set by the environment">
 						Every field here comes from an environment variable, so it cannot be changed from the
@@ -259,8 +342,23 @@
 					</div>
 				{/if}
 
+				{#if section.id === 'storage' && !allLocked}
+					<p class="storage-note">
+						Changing storage applies to new databases. Databases you already have keep backing up to
+						where they are now, and their existing backups stay restorable from there.
+					</p>
+					{#if storageResult}
+						<p class="storage-result" role="status">
+							{storageResult.ok ? 'Connection works.' : storageResult.message}
+						</p>
+					{/if}
+				{/if}
+
 				{#if !allLocked}
 					<div class="actions">
+						{#if section.id === 'storage'}
+							<Button loading={storageTesting} onclick={testStorage}>Test connection</Button>
+						{/if}
 						<Button variant="primary" loading={saving === section.id} onclick={() => save(section)}>
 							Save
 						</Button>
@@ -308,6 +406,30 @@
 	.actions {
 		display: flex;
 		justify-content: flex-end;
+		gap: 0.5rem;
 		margin-top: 1.25rem;
+	}
+
+	.preset {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+		gap: 0.85rem;
+		margin-bottom: 0.85rem;
+	}
+
+	.storage-note,
+	.storage-result {
+		font-size: var(--text-callout);
+		color: var(--text-muted);
+		margin: 0 0 0.85rem;
+	}
+
+	.fields + .storage-note {
+		margin-top: 1rem;
+	}
+
+	.storage-result {
+		color: var(--text-default);
+		margin-top: 0.5rem;
 	}
 </style>

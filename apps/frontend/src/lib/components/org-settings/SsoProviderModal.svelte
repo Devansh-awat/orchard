@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { uploadsEnabled } from '$lib/stores';
 	import { ExternalLink } from 'lucide-svelte';
 	import {
 		Alert,
@@ -240,14 +241,16 @@
 						<ToneTile size={32}>
 							<ProviderIcon preset={draft.preset} iconUrl={previewUrl} size={16} />
 						</ToneTile>
-						<Button
-							size="sm"
-							loading={iconBusy === 'upload'}
-							disabled={iconBusy !== null}
-							onclick={() => iconInput?.click()}
-						>
-							{previewUrl ? 'Replace' : 'Upload'}
-						</Button>
+						{#if $uploadsEnabled}
+							<Button
+								size="sm"
+								loading={iconBusy === 'upload'}
+								disabled={iconBusy !== null}
+								onclick={() => iconInput?.click()}
+							>
+								{previewUrl ? 'Replace' : 'Upload'}
+							</Button>
+						{/if}
 						{#if previewUrl}
 							<Button
 								variant="ghost"

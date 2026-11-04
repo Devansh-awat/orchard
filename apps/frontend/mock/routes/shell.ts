@@ -12,6 +12,28 @@ import {
 
 const unauthorized = () => reply(401, { statusCode: 401, message: 'Unauthorized' });
 
+const storageFeatures = { s3: false, backups: 'local', uploads: true, localDeploys: false };
+
+const storageSection: Record<string, any> = {
+	id: 'storage',
+	configured: false,
+	values: {
+		accountId: null,
+		accessKeyId: null,
+		secretAccessKey: null,
+		bucketName: null,
+		endpoint: null,
+		publicUrl: null,
+		buildContextBucket: null,
+		backupBucket: null,
+		region: null,
+		pathStyle: null
+	},
+	lockedFields: [],
+	secretFields: ['accessKeyId', 'secretAccessKey'],
+	boolFields: []
+};
+
 export function shellRoutes(r: Router, { store, hub, log }: MockContext) {
 	const signIn = () => {
 		if (!store.state.signedIn) log('signed in');
@@ -110,8 +132,24 @@ export function shellRoutes(r: Router, { store, hub, log }: MockContext) {
 		sandboxes: false,
 		fastBuilder: true,
 		resourceLimits: store.state.resourceLimits ?? 'on',
-		grafts: []
+		grafts: [],
+		storage: storageFeatures
 	}));
+	r.get('/admin/instance-config', () => [storageSection]);
+	r.get('/admin/instance-config/storage', () => storageSection);
+	r.post('/admin/instance-config/storage/test', ({ body }) =>
+		body?.backupBucket === 'missing'
+			? { ok: false, message: `The bucket missing does not exist at ${body?.endpoint}.` }
+			: { ok: true }
+	);
+	r.put('/admin/instance-config/storage', ({ body }) => {
+		storageSection.values = { ...storageSection.values, ...body, secretAccessKey: '' };
+		storageSection.configured = true;
+		storageFeatures.s3 = true;
+		storageFeatures.backups = 'external';
+		storageFeatures.localDeploys = true;
+		return storageSection;
+	});
 	r.get('/engine/health', () => ({
 		shards: ['workloads', 'pods', 'network', 'storage'].map((shard) => ({
 			shard,
@@ -138,6 +176,13 @@ export function shellRoutes(r: Router, { store, hub, log }: MockContext) {
 		}
 	]);
 	r.get('/setup/status', () => ({ setupCompleted: true, hasUsers: true, needsClaim: false }));
+	r.get('/setup/github-app/status', () => ({ configured: false, lockedFields: [] }));
+	r.get('/setup/state', () => ({
+		steps: [
+			{ id: 'passkey', done: true, skipped: false, required: false },
+			{ id: 'organization', done: true, skipped: false, required: false }
+		]
+	}));
 	r.get('/admin/telemetry', () => ({
 		enabled: false,
 		consent: 'denied',

@@ -11,6 +11,7 @@
 	import SetupOrgStep from './SetupOrgStep.svelte';
 	import SetupGithubStep from './SetupGithubStep.svelte';
 	import SetupCertificateStep from './SetupCertificateStep.svelte';
+	import SetupStorageStep from './SetupStorageStep.svelte';
 	import SetupTelemetryStep from './SetupTelemetryStep.svelte';
 	import SetupLimitsStep from './SetupLimitsStep.svelte';
 	import SetupDoneStep from './SetupDoneStep.svelte';
@@ -22,6 +23,7 @@
 		| 'github'
 		| 'certificate'
 		| 'limits'
+		| 'storage'
 		| 'telemetry'
 		| 'done';
 
@@ -32,7 +34,8 @@
 		organization: 0.34,
 		github: 0.48,
 		certificate: 0.58,
-		limits: 0.68,
+		limits: 0.66,
+		storage: 0.73,
 		telemetry: 0.8,
 		done: 1
 	};
@@ -40,6 +43,7 @@
 	let steps = $state<ServerStep[]>([]);
 	let phase = $state<Phase>('passkey');
 	let askTelemetry = $state(false);
+	let askStorage = $state(false);
 	let certificateFailed = $state(false);
 	let askLimits = $state(false);
 	let ready = $state(false);
@@ -55,6 +59,7 @@
 		'github',
 		...(certificateFailed ? (['certificate'] as const) : []),
 		...(askLimits ? (['limits'] as const) : []),
+		...(askStorage ? (['storage'] as const) : []),
 		...(askTelemetry ? (['telemetry'] as const) : []),
 		'done'
 	]);
@@ -68,6 +73,12 @@
 
 	async function load() {
 		void telemetry.reload().then((state) => (askTelemetry = !!state?.needsAnswer));
+		void apiFetch('/apiv1/admin/instance-config/storage')
+			.then((response) => (response.ok ? response.json() : null))
+			.then((section) => {
+				askStorage = !!section && !section.configured && section.lockedFields.length === 0;
+			})
+			.catch(() => (askStorage = false));
 		void apiFetch('/apiv1/setup/certificate')
 			.then((response) => (response.ok ? response.json() : null))
 			.then(
@@ -142,8 +153,12 @@
 		await move(firstUnsettled(steps) ?? 'github');
 	}
 
-	function afterLimits() {
+	function afterStorage() {
 		return move(askTelemetry ? 'telemetry' : 'done');
+	}
+
+	function afterLimits() {
+		return askStorage ? move('storage') : afterStorage();
 	}
 
 	function afterCertificate() {
@@ -192,6 +207,8 @@
 				<SetupCertificateStep onDone={afterCertificate} />
 			{:else if phase === 'limits'}
 				<SetupLimitsStep onDone={afterLimits} />
+			{:else if phase === 'storage'}
+				<SetupStorageStep onDone={afterStorage} />
 			{:else if phase === 'telemetry'}
 				<SetupTelemetryStep onDone={() => move('done')} />
 			{:else}
