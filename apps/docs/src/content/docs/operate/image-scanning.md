@@ -111,6 +111,6 @@ Anyone who can view an app can see its scan result. Members who can edit the app
 ## Related resources
 
 - [Configure logs and request data](/operate/logs/)
-- [Configuration](/reference/configuration/)
+- [Environment variables](/reference/configuration/)
 - [Review app security](/deploy/security-tab/)
 - [Host commands](/operate/host-commands/)

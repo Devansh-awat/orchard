@@ -679,7 +679,7 @@ These backups sit on the same disk as your databases, so they do not protect you
 
 Set `mcp.enabled: true` and `mcp.ingress.host`. Set `JWT_SECRET` and `MCP_SERVICE_TOKEN` in `mcp.env`, and the same `MCP_SERVICE_TOKEN` in `server.env`. This configuration was not tested on this path.
 
-For every variable the server reads, refer to [Configuration](/reference/configuration/).
+For every variable the server reads, refer to [Environment variables](/reference/configuration/).
 
 ## Claim the instance
 

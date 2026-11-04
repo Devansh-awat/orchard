@@ -308,7 +308,7 @@ sudo orchardctl password set
 sudo orchardctl password clear
 ```
 
-Sets or removes a password on a superadmin account. Other accounts cannot have a password. Running `set` again resets the password. With more than one superadmin, add `--email`.
+Sets or removes a password on a superadmin account. On an instance with no email, `--email` can also name someone who joined by invitation link. Running `set` again resets the password. With more than one superadmin, add `--email`.
 
 The command prompts for the password and turns off terminal echo, so the password stays out of the shell history and the process list. Orchard stores a bcrypt hash. The minimum length is 12 characters.
 

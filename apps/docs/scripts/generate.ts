@@ -333,7 +333,7 @@ function generateConfig() {
 
   const sections = [...new Set(entries.map((e) => e.section))];
   let body = `---
-title: Configuration
+title: Environment variables
 description: Every environment variable the Orchard server reads, generated from .env.example.
 sidebar:
   order: 3

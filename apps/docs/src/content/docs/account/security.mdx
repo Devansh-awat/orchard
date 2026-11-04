@@ -13,13 +13,13 @@ To control access to your Orchard account, add sign-in methods and review the de
 
 The methods available to you depend on how your instance is configured.
 
-| Method            | Availability                                                                                                                 |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Email code        | The instance has [email configured](/operate/finishing-setup/#set-up-email). Without email, Orchard hides this option.       |
-| Passkey           | The instance is served over HTTPS. Browsers do not offer passkeys over plain HTTP.                                           |
-| Identity provider | [A superadmin](/operate/finishing-setup/#add-an-identity-provider) or [your organization](/teams/sso/) has added a provider. |
-| Password          | Superadmin accounts only. An operator sets the password on the host.                                                         |
-| One-time link     | An operator prints the link on the host. The link works once and expires after 10 minutes.                                   |
+| Method            | Availability                                                                                                                                                         |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Email code        | The instance has [email configured](/operate/finishing-setup/#set-up-email). Without email, Orchard hides this option.                                               |
+| Passkey           | The instance is served over HTTPS. Browsers do not offer passkeys over plain HTTP.                                                                                   |
+| Identity provider | [A superadmin](/operate/finishing-setup/#add-an-identity-provider) or [your organization](/teams/sso/) has added a provider.                                         |
+| Password          | Superadmin accounts. On an instance with no email, also people who joined by [invitation link](/teams/organizations/). An operator can reset a password on the host. |
+| One-time link     | An operator prints the link on the host. The link works once and expires after 10 minutes.                                                                           |
 
 If your organization [requires single sign-on](/teams/sso/#require-single-sign-on), other methods stop working for your account.
 
