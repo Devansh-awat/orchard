@@ -36,7 +36,6 @@ import { MetricsModule } from './metrics/metrics.module';
 import { AuditModule } from './audit/audit.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { TelemetryModule } from './telemetry/telemetry.module';
-import { AiChatModule } from './ai-chat/ai-chat.module';
 import { ObservabilityModule } from './observability/observability.module';
 import { LogsModule } from './logs/logs.module';
 import { DiagnosisModule } from './diagnosis/diagnosis.module';
@@ -99,7 +98,6 @@ import { graftImports } from './grafts/boot';
     AuditModule,
     AnalyticsModule,
     TelemetryModule,
-    AiChatModule,
     ObservabilityModule,
     LogsModule,
     DiagnosisModule,

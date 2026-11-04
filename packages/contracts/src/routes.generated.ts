@@ -71,7 +71,6 @@ export const routes: GeneratedRoute[] = [
   { method: 'GET', path: '/admin/users/:id', auth: 'superadmin' },
   { method: 'PATCH', path: '/admin/users/:id', auth: 'superadmin' },
   { method: 'GET', path: '/agent-spec.json', auth: 'public' },
-  { method: 'POST', path: '/ai/chat', auth: 'authenticated' },
   { method: 'GET', path: '/announcements/announcements', auth: 'authenticated' },
   { method: 'POST', path: '/announcements/announcements', auth: 'superadmin' },
   { method: 'DELETE', path: '/announcements/announcements/:id', auth: 'superadmin' },

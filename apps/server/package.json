@@ -124,7 +124,6 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.97.1",
     "@aws-sdk/client-s3": "^3.1123.0",
     "@aws-sdk/s3-request-presigner": "^3.1123.0",
     "@kubernetes/client-node": "^0.21.0",
@@ -163,7 +162,6 @@
     "mjml": "^5.4.0",
     "multer": "^2.5.0",
     "nodemailer": "^10.3.1",
-    "openai": "^6.38.0",
     "openid-client": "^6.8.2",
     "pg": "^8.20.0",
     "posthog-node": "^5.34.2",

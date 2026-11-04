@@ -19,7 +19,6 @@ import {
   sealTemplateEnv,
   secretParameterValues
 } from '../src/templates/templates.service';
-import { mergeEnvForPut } from '../src/ai-chat/tools';
 
 const crypto = new SecretCryptoService();
 
@@ -176,25 +175,6 @@ test('template env carrying secret material is created secret', () => {
     { key: 'DATABASE_URL', value: 'postgresql://app:dbpw@h/app', secret: true },
     { key: 'ADMIN_PASS', value: 'pw123', secret: true },
     { key: 'SITE_NAME', value: 'blog' }
-  ]);
-});
-
-test('ai chat env merge keeps sealed values by sending null and never unseals', () => {
-  const out = mergeEnvForPut(
-    [
-      { key: 'API_TOKEN', value: null, secret: true },
-      { key: 'PORT', value: '3000', secret: false }
-    ],
-    [
-      { key: 'PORT', value: '8080' },
-      { key: 'API_TOKEN', value: 'rotated' },
-      { key: 'NEW', value: 'x', secret: true }
-    ]
-  );
-  assert.deepEqual(out, [
-    { key: 'API_TOKEN', value: 'rotated' },
-    { key: 'PORT', value: '8080' },
-    { key: 'NEW', value: 'x', secret: true }
   ]);
 });
 

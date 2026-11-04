@@ -10,9 +10,9 @@
 
 ## Today
 
-`apps/server` is a NestJS monolith with ~24 feature modules (`auth`,
+`apps/server` is a NestJS monolith with feature modules (`auth`,
 `organizations`, `projects`, `quotas`, `kubernetes`, `docker`, `github`,
-`ai-chat`, `scim`, `sso`, …). Those module boundaries are the future service
+`scim`, `sso`, …). Those module boundaries are the future service
 seams.
 
 Design notes for individual subsystems live next to this file. The largest is
@@ -63,7 +63,6 @@ duplicates types and they drift.
 **Suggested first cuts** (by blast radius / scaling profile, not alphabetically):
 
 - `kubernetes` + `docker` → a builder/deployer service (heavy, async).
-- `ai-chat` → bursty, isolated deps.
 - `github` (webhooks) → event-ingest edge.
 - Keep `auth` · `organizations` · `projects` · `quotas` together as the core
   API — they're welded by RBAC.

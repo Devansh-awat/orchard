@@ -610,7 +610,6 @@ var routeExclusions = map[string]string{
 	"POST /webhooks/deploy/:token": "CLI sends the token via the Authorization header on POST /webhooks/deploy instead (the URL form leaks the secret into proxy logs); deploy webhook-token create prints this URL for curl-only CI",
 
 	// web-UI-only conveniences
-	"POST /ai/chat":                                  "web UI AI assistant",
 	"GET /deployments/favicon":                       "web UI favicon proxy for deployment URLs",
 	"GET /deployments/recent-builds":                 "web dashboard widget (CLI: overview --builds)",
 	"GET /projects/by-slugs/:orgSlug/:projectSlug":   "web URL resolver (CLI resolves via GET /projects/slug/:slug)",

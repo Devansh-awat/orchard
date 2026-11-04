@@ -460,7 +460,6 @@
   "POST /admin/sso/providers": "superadmin",
   "POST /admin/sso/providers/:providerId/icon": "superadmin",
   "POST /admin/sso/providers/:providerId/test": "superadmin",
-  "POST /ai/chat": "authenticated",
   "POST /announcements/announcements": "superadmin",
   "POST /auth/logout": "public",
   "POST /auth/mcp-token": "authenticated",
