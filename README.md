@@ -83,20 +83,6 @@ And the rest:
 
 Orchard runs on Kubernetes, so replicas, rolling updates, health checks, quotas and node scheduling come from the platform underneath. Everything it creates is a normal Kubernetes resource you can still `kubectl get`.
 
----
-
-## Table of contents
-
-- [Installation](#installation)
-  - [Already running Kubernetes?](#already-running-kubernetes)
-- [Works with your agent](#works-with-your-agent)
-- [Features](#features)
-- [Contributing](#contributing)
-- [Help](#help)
-- [License](#license)
-
----
-
 ## Contributing
 
 Issues and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers running it locally and
