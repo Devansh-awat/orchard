@@ -19,6 +19,7 @@ import { Auth, RequireScope } from '../auth/decorators';
 import { AuthorizationService } from '../auth/authorization.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveNamespaceScope } from '../projects/namespace-scope';
+import { assertValidPodName } from './pod-name';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const RFC3339_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
@@ -219,6 +220,7 @@ export class KubernetesController {
   ) {
     const namespace = (body?.namespace || namespaceQuery || '').trim();
     if (!namespace) throw new BadRequestException('namespace is required');
+    assertValidPodName(podName);
     await this.resolveNamespace(namespace, req, 'edit', 'exec in pod');
 
     let cmd: string[] = [];

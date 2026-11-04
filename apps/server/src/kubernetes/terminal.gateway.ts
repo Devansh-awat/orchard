@@ -14,6 +14,7 @@ import type { PtyHandle } from './pty';
 import { loadKubeConfigFromPathOrBase64 } from './kubeconfig';
 import { ResizableOutput, isPodTarget, type PodExecTarget } from './exec-sessions';
 import { execSessionEngine, type ExecRouteHooks } from './exec-session-engine';
+import { isValidPodName } from './pod-name';
 
 function describeExecFailure(message: string): string {
   if (/failed to load \/bin\/sh|no such file or directory/i.test(message)) {
@@ -42,6 +43,7 @@ export function podPty(
   command: string[],
   size: { cols: number; rows: number }
 ): PtyHandle {
+  if (!isValidPodName(target.podName)) throw new Error('Invalid pod name');
   const stdin = new PassThrough();
   const stdout = new ResizableOutput();
   stdout.setSize(size.cols, size.rows);
@@ -137,6 +139,7 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
       url.searchParams.get('namespace') ? null : { reject: 400, message: 'Bad Request' },
     async resolveTarget(match, url, auth) {
       const podName = match[1];
+      if (!isValidPodName(podName)) return { reject: 400, message: 'Bad Request' };
       const namespace = url.searchParams.get('namespace') || '';
       const container = url.searchParams.get('container') || '';
       const principal = auth.userId;

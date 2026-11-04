@@ -76,6 +76,7 @@ import {
   failedRecoveryJob,
   recoveryFailureMessage
 } from './cnpg-recovery';
+import { assertValidPodName } from './pod-name';
 
 export function cnpgScheduleName(clusterName: string): string {
   return `${clusterName}-schedule`.substring(0, 63);
@@ -1244,6 +1245,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     cmd: string[],
     container?: string
   ): Promise<{ stdout: string; stderr: string; success: boolean; container: string }> {
+    assertValidPodName(pod);
     this.ensureKubeConfig();
 
     let targetContainer = container?.trim() || '';
@@ -1277,9 +1279,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
   ): Promise<{ stdout: string; stderr: string; success: boolean }> {
     this.ensureKubeConfig();
     const exec = new k8s.Exec(this.kc);
-    console.log(
-      `[K8s/exec] ns=${namespace} pod=${pod} container=${container} cmd=${JSON.stringify(cmd)}`
-    );
+    console.log(`[K8s/exec] ns=${namespace} pod=${pod} container=${container}`);
     return new Promise((resolve) => {
       const outChunks: Buffer[] = [];
       const errChunks: Buffer[] = [];
@@ -1295,8 +1295,6 @@ export class K8sCnpgService implements OnApplicationBootstrap {
           console.log(
             `[K8s/exec] result ns=${namespace} pod=${pod} container=${container} success=${success}`
           );
-          if (stdoutStr) console.log(`[K8s/exec] stdout:\n${stdoutStr}`);
-          if (stderrStr) console.log(`[K8s/exec] stderr:\n${stderrStr}`);
           if (!success) console.log(`[K8s/exec] status: ${JSON.stringify(status)}`);
           resolve({ stdout: stdoutStr, stderr: stderrStr, success });
         })
