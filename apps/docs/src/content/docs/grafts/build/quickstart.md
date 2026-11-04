@@ -12,7 +12,7 @@ A graft is a folder with a `graft.json`. It can also have a NestJS module for th
 ## Prerequisites
 
 - Node.js and pnpm.
-- A local Orchard dev stack. Refer to the repository's README.
+- A local Orchard dev stack. For more information, refer to the repository's README.
 
 ## 1. Scaffold a graft
 
@@ -38,7 +38,7 @@ snippets/
 
 ## 2. Run the graft
 
-In the graft's folder, run:
+In the graft's folder, run the following command:
 
 ```sh
 graft dev
@@ -54,7 +54,7 @@ ORCHARD_GRAFTS_DIR=/path/to/snippets/.graft-dev ORCHARD_GRAFTS_DEV=1
 
 `ORCHARD_GRAFTS_DEV` skips signature checks for local work.
 
-The graft's pages are at `http://localhost:4000/snippets`, and its API is at `/apiv1/snippets/...`. **Admin** > **Grafts** shows its status.
+The graft's pages are at `http://localhost:4000/snippets`, and its API is at `/apiv1/snippets/...`. **Instance admin** > **Grafts** shows its status.
 
 UI changes appear when you reload the page. Restart the API server to pick up server changes and new migrations.
 
@@ -86,10 +86,10 @@ Keep the private key secret. To let people trust your grafts, share the public k
 
 ## Next steps
 
-- [graft.json](/grafts/build/manifest/): Review each field of the manifest.
-- [Write server code](/grafts/build/server/): Add API routes, and reach Orchard through doors.
-- [Add UI](/grafts/build/ui/): Add pages, navigation, tabs, and cards.
-- [Use the database](/grafts/build/database/): Add migrations, and read Orchard's tables.
-- [Publish a graft](/grafts/build/publishing/): Share your graft, or list it in the Extension Marketplace.
+- [Review each field of the manifest](/grafts/build/manifest/)
+- [Add API routes and reach Orchard through doors](/grafts/build/server/)
+- [Add pages, navigation, tabs, and cards](/grafts/build/ui/)
+- [Add migrations and read Orchard's tables](/grafts/build/database/)
+- [Share your graft or list it in the Extension Marketplace](/grafts/build/publishing/)
 
 For an example, read the [announcements graft](https://github.com/hackclub/orchard/tree/main/grafts/announcements). It has a server module, UI, migrations, and settings.

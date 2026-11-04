@@ -5,7 +5,7 @@ sidebar:
   order: 3
 ---
 
-Add API routes to a graft. A graft's server code is a NestJS module, the default export of `server/src/index.ts`. Orchard mounts each controller in it under `/apiv1/<graft-id>/`, including controllers in modules it imports.
+To add API routes to a graft, write a NestJS module. The module is the default export of `server/src/index.ts`. Orchard mounts each controller in it under `/apiv1/<graft-id>/`, including controllers in modules it imports.
 
 ```ts
 import { Controller, Get, Inject, Module, Param } from '@nestjs/common';
@@ -65,7 +65,7 @@ For each door's members, version, and capability, refer to the [graft API refere
 | `events` | Live events to an organization's open pages, and Orchard's event stream. |
 | `flags` | Feature flags. |
 | `http` | WebSocket endpoints, the HTTP server once it listens, and hostnames for preview domains. |
-| `kube` | The cluster client, leader election, and Engine shards that watch resources into Postgres. |
+| `kube` | The cluster client, leader election, and Engine shards that watch resources into PostgreSQL. |
 | `apply` | Cluster changes on Orchard's retrying apply queue, and handlers for the graft's operations. |
 | `exec` | Terminals into the graft's workloads through Orchard's session engine. |
 | `projects` | Deployments and environments, and environment variable changes. Changes need the `projects.write` capability. |

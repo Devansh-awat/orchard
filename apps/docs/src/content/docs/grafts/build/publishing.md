@@ -5,7 +5,7 @@ sidebar:
   order: 6
 ---
 
-Share a graft with other Orchard instances. You can publish in three ways:
+To share a graft with other Orchard instances, publish it in one of three ways:
 
 - From any `https` address.
 - From a tap: your own catalog of grafts.
@@ -89,7 +89,7 @@ Community grafts appear in the [Extension Marketplace](https://orchard.my/extens
 
 3. Open a pull request that adds `registry/community/<id>.json` to the Orchard repository. For the file format, refer to [`registry/community/README.md`](https://github.com/hackclub/orchard/blob/main/registry/community/README.md).
 
-A maintainer reviews the first listing. After that, the marketplace checks for new releases every hour. It checks the signature, the file hashes, and that migrations do not change Orchard's tables. It then publishes the release with no further review. A release that fails a check is skipped, and the previous version stays available.
+A maintainer reviews the first listing. After that, the Extension Marketplace checks for new releases every hour. It checks the signature, the file hashes, and that migrations do not change Orchard's tables. It then publishes the release with no further review. A release that fails a check is skipped, and the previous version stays available.
 
 ## Publish an official graft
 

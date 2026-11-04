@@ -5,7 +5,7 @@ sidebar:
   order: 4
 ---
 
-Add pages, navigation, tabs, and cards to Orchard's UI. A graft's UI is an island: a bundle with its own copy of Svelte. Orchard loads the bundle and gives it an empty element to draw in. A graft can use any library.
+To add pages, navigation, tabs, and cards to the dashboard, add UI to a graft. A graft's UI is an island: a bundle with its own copy of Svelte. Orchard loads the bundle and gives it an empty element to draw in. A graft can use any library.
 
 ## Define what the graft adds
 

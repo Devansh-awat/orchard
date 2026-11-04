@@ -5,10 +5,10 @@ sidebar:
   order: 2
 ---
 
-Install a graft on your Orchard instance. The list of grafts is part of the instance's configuration: a `grafts` list in the Orchard chart values. `orchardctl graft` edits that list on hosts installed with the [installer](/start/install/). GitOps setups edit it in Git. Either way, a change rolls Orchard out like an upgrade.
+To add a graft to your instance, install it with `orchardctl` or Helm values. The list of grafts is part of the instance's configuration: a `grafts` list in the Orchard chart values. `orchardctl graft` edits that list on hosts set up by the [installer](/start/install/). GitOps setups edit it in Git. In both cases, a change rolls Orchard out like an upgrade.
 
-:::caution[Only install grafts you trust]
-A graft runs with the same access as Orchard. `orchardctl` shows what a graft asks for before it installs anything.
+:::caution
+Only install grafts you trust. A graft runs with the same access as Orchard. `orchardctl` shows what a graft asks for before it installs anything.
 :::
 
 ## Install with orchardctl
@@ -71,7 +71,7 @@ If a graft includes a cluster chart for CRDs or RBAC, `add` installs it as the H
 
 ## Install with Helm values
 
-Add an entry to your values. The graft's [Extension Marketplace](https://orchard.my/extensions) page shows it ready to copy.
+Add an entry to your values. The graft's [Extension Marketplace](https://orchard.my/extensions) page shows the entry to copy.
 
 ```yaml
 grafts:
@@ -110,7 +110,7 @@ An Orchard maintainer reviews a community graft when it is first listed. Each ne
 
 `signed` is an older name for `listed`, and it still works.
 
-To change the policy, run:
+To change the policy, run the following command:
 
 ```sh
 sudo orchardctl graft trust taps --apply
@@ -164,7 +164,7 @@ An instance has one graft per ID, whatever its source. `orchardctl` refuses `acm
 
 ## View installed grafts
 
-Go to **Admin** > **Grafts**. The page lists each graft with its status, signature, capabilities, core table reads, and routes, including routes open to anyone. A failed graft shows the phase it failed in and the reason. Settings that a graft adds appear in **Admin** > **Configuration**.
+Go to **Instance admin** > **Grafts**. The page lists each graft with its status, signature, capabilities, core table reads, and routes, including routes open to anyone. A failed graft shows the phase it failed in and the reason. Settings that a graft adds appear in **Instance admin** > **Configuration**.
 
 ## Settings
 
@@ -182,7 +182,7 @@ Go to **Admin** > **Grafts**. The page lists each graft with its status, signatu
 
 ## Database connections
 
-Each graft opens its own pool of database connections on every server and worker pod. A graft asks for a size in its `graft.json`. Greenhouse asks for 10. To change a graft's size, run:
+Each graft opens its own pool of database connections on every server and worker pod. A graft asks for a size in its `graft.json`. Greenhouse asks for 10. To change a graft's size, run the following command:
 
 ```sh
 sudo orchardctl graft pool greenhouse 15 --apply
@@ -190,9 +190,9 @@ sudo orchardctl graft pool greenhouse 15 --apply
 
 To return to the size the graft asks for, use `default` instead of a number.
 
-Connections open when needed and close after about ten seconds idle. Every pod can open its whole pool at once, and during an update the old and new server pods run side by side.
+Connections open when needed and close after about 10 seconds idle. Every pod can open its whole pool at once, and during an update the old and new server pods run side by side.
 
-Orchard compares this peak against the database's `max_connections` at boot and in **Admin** > **Grafts**:
+Orchard compares this peak against the database's `max_connections` at boot and in **Instance admin** > **Grafts**:
 
 - Past 80% of usable connections, Orchard warns.
 - Past 100%, Orchard reports that the budget is exceeded. With `graftSettings.strict`, new pods refuse to start and the rollout halts.

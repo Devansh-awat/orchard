@@ -5,11 +5,11 @@ sidebar:
   order: 3
 ---
 
-Move a graft to a new version, or return to the previous one. An upgrade or rollback changes only the graft's own schema, `ext_<graft_id>`. It does not change Orchard's data or the data of other grafts.
+You can move a graft to a new version or return to the previous one. An upgrade or rollback changes only the graft's own schema, `ext_<graft_id>`. It does not change Orchard's data or the data of other grafts.
 
 ## Upgrade a graft
 
-Run:
+Run the following command:
 
 ```sh
 sudo orchardctl graft upgrade announcements --apply
@@ -33,7 +33,7 @@ During a rollout, old and new pods run side by side for a short time.
 
 ## Roll back a graft
 
-Run:
+Run the following command:
 
 ```sh
 sudo orchardctl graft rollback announcements --apply

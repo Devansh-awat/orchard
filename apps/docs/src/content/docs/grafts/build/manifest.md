@@ -1,6 +1,6 @@
 ---
 title: graft.json
-description: Reference for graft.json, the Orchard graft manifest. It lists each field, how claims work, and which names a graft owns without a claim.
+description: Review each field of graft.json, the Orchard graft manifest, how claims work, and which names a graft owns without a claim.
 sidebar:
   order: 2
 ---
@@ -33,7 +33,7 @@ sidebar:
 | Field | Description |
 | --- | --- |
 | `id` | 2 to 48 lowercase letters, digits, and dashes, starting with a letter. It is the graft's URL prefix and namespace. Names in Orchard such as `admin` and `api` are reserved. |
-| `name`, `version`, `publisher`, `description`, `homepage`, `icon` | Shown in the Extension Marketplace and in **Admin** > **Grafts**. `version` is a semver version. |
+| `name`, `version`, `publisher`, `description`, `homepage`, `icon` | Shown in the Extension Marketplace and in **Instance admin** > **Grafts**. `version` is a semver version. |
 | `engines.platform` | The Orchard versions the graft works with, as a semver range. |
 | `engines.sdk` | The graft SDK versions it was built against. |
 | `uses` | Filled in by `graft pack`. The doors and versions the server code injects. |
@@ -45,7 +45,7 @@ sidebar:
 | `database.adopts` | Core tables the graft takes over from an older Orchard that included the feature. Its first migration moves them into its own schema and leaves a view with the old name. Shown before install. The Extension Marketplace accepts this only from official grafts. |
 | `database.pool` | Database connections per pod, from 1 to 50. The default is 3. Operators can override it. |
 | `permissions` | Permissions the graft checks, with default grants by role. For example, `{ "use": { "label": "Use it", "defaultGrants": ["org:member"] } }`. |
-| `settings` | Sections for **Admin** > **Configuration**. Refer to [Settings](#settings). |
+| `settings` | Sections for **Instance admin** > **Configuration**. Refer to [Settings](#settings). |
 | `ui.screens` | Pages the graft owns: `id`, `path` (with `:param` and a trailing `*`), `layout` (`shell` or `fullscreen`), `title`, and optional `og` metadata. |
 | `public.routes` | Every route open to anyone, as `"POST /hooks/github"`. Orchard refuses a public route that is not listed. |
 | `claims` | Names outside the graft's own ID. Refer to [Claims](#claims). |
@@ -59,16 +59,16 @@ Each section has an `id`, a `title`, and `fields`. It can also have a `descripti
 | --- | --- |
 | `key` | The field's key. |
 | `type` | `string`, `text`, `number`, `boolean`, `select`, or `secret`. |
-| `label`, `help` | The text in the admin UI. |
+| `label`, `help` | The text in **Instance admin**. |
 | `env` | An environment variable that overrides the field. |
 | `options` | The choices for a `select` field. |
 | `default` | The default value. |
 
-Only instance-scoped fields are supported. A field with another `scope` adds a warning in **Admin** > **Grafts**.
+Only instance-scoped fields are supported. A field with another `scope` adds a warning in **Instance admin** > **Grafts**.
 
 ## Claims
 
-A graft owns `/apiv1/<id>/...`, `/<id>/...`, and names that start with `<id>.`, `<id>-`, `<id>/`, `<id>:`, or `<id>_` without a claim. A name outside that is a claim. Orchard shows claims to the admin before install.
+A graft owns `/apiv1/<id>/...`, `/<id>/...`, and names that start with `<id>.`, `<id>-`, `<id>/`, `<id>:`, or `<id>_` without a claim. A name outside that is a claim. Orchard shows claims to the operator before install.
 
 | Claim | Purpose |
 | --- | --- |
@@ -88,7 +88,7 @@ A graft owns `/apiv1/<id>/...`, `/<id>/...`, and names that start with `<id>.`, 
 
 ### Conflicts
 
-Between two grafts, a name that one graft owns by its ID beats the other graft's claim. Otherwise, the first graft in the values list wins. The losing claim shows as **taken** in **Admin** > **Grafts** and is skipped. The graft keeps working under its own ID.
+Between two grafts, a name that one graft owns by its ID beats the other graft's claim. Otherwise, the first graft in the values list wins. The losing claim shows as **taken** in **Instance admin** > **Grafts** and is skipped. The graft keeps working under its own ID.
 
 For an `apiAliases` claim, a core route that handles the same path and method takes priority on each request.
 

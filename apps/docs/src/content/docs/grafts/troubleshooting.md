@@ -5,9 +5,9 @@ sidebar:
   order: 4
 ---
 
-Find out why a graft did not load, and get it running.
+Use this page to fix common failures with grafts. Each entry lists the symptom, the cause, and the fix.
 
-**Admin** > **Grafts** shows each graft's status. A failed graft shows **Failed during** a phase, and the reason. `sudo orchardctl graft list` shows the status too, with recent server messages about grafts.
+**Instance admin** > **Grafts** shows each graft's status. A failed graft shows **Failed during** a phase, and the reason. `sudo orchardctl graft list` shows the status too, with recent server messages about grafts.
 
 ## Failure phases
 
@@ -59,7 +59,7 @@ graft is unsigned and the trust policy is "listed"; add its publisher key or set
 notes 1.2.0 (sha256:1a88f45b...) was revoked by the Extension Marketplace; install another version
 ```
 
-**Cause:** The marketplace revoked this version.
+**Cause:** The Extension Marketplace revoked this version.
 
 **Fix:** Run `sudo orchardctl graft upgrade notes`, or remove the graft.
 
@@ -85,7 +85,7 @@ migration 0001_init was changed after it was applied (checksum mismatch); ship a
 
 ## A claim shows as taken
 
-**Cause:** In **Admin** > **Grafts**, `taken by` next to a claim means another graft uses the name.
+**Cause:** In **Instance admin** > **Grafts**, `taken by` next to a claim means another graft uses the name.
 
 **Fix:** No action is needed for the graft to work. It still serves its paths under `/<graft-id>/`.
 
@@ -93,7 +93,7 @@ migration 0001_init was changed after it was applied (checksum mismatch); ship a
 
 With `graftSettings.strict` off, which is the default, Orchard skips a broken graft and starts without it. With `graftSettings.strict` on, a graft that fails stops the pod.
 
-To turn off every graft at once, run:
+To turn off every graft at once, run the following command:
 
 ```sh
 sudo orchardctl config set graftSettings.safeMode true --apply
@@ -103,4 +103,4 @@ Remove the failing graft, then set `graftSettings.safeMode` back to `false`.
 
 ## Still stuck?
 
-Collect the phase and reason from **Admin** > **Grafts**, and the output of `sudo orchardctl graft list`. Then contact the graft's publisher. Its details are on its [Extension Marketplace](https://orchard.my/extensions) page.
+Collect the phase and reason from **Instance admin** > **Grafts**, and the output of `sudo orchardctl graft list`. Then contact the graft's publisher. Its details are on its [Extension Marketplace](https://orchard.my/extensions) page.

@@ -1,11 +1,11 @@
 ---
 title: Use the database
-description: Add migrations to an Orchard graft's own Postgres schema, read declared columns from Orchard's tables, and connect through the db door.
+description: Add migrations to an Orchard graft's own PostgreSQL schema, read declared columns from Orchard's tables, and connect through the db door.
 sidebar:
   order: 5
 ---
 
-Store a graft's data in its own Postgres schema. The schema is named `ext_<graft_id>`, with dashes turned into underscores. Orchard creates it, runs the graft's migrations in it, and points the graft's connections at it. A migration writes `CREATE TABLE notes` and does not name the schema.
+Store a graft's data in its own PostgreSQL schema. The schema is named `ext_<graft_id>`, with dashes turned into underscores. Orchard creates it, runs the graft's migrations in it, and points the graft's connections at it. A migration writes `CREATE TABLE notes` and does not name the schema.
 
 ## Add a migration
 
@@ -53,7 +53,7 @@ Foreign keys to core tables are allowed. Use `ON DELETE CASCADE` or `ON DELETE S
 When the database user can create roles, the graft's connections run as `orchard_ext_<graft_id>`. This role can use the graft's schema and read only the declared columns.
 
 :::note
-The role catches mistakes. It is not a security boundary, because the graft's code runs inside Orchard.
+The role catches mistakes only. The graft's code runs inside Orchard, so the role is not a security boundary.
 :::
 
 ## Connect to the database
@@ -72,7 +72,7 @@ The pool holds 3 connections per pod by default. To ask for more, up to 50, set 
 "database": { "pool": 10 }
 ```
 
-Operators can override the size with `orchardctl graft pool`. Orchard checks the pools of all pods against the database's limit. Refer to [Database connections](/grafts/install/#database-connections).
+Operators can override the size with `orchardctl graft pool`. Orchard checks the pools of all pods against the database's limit. For more information, refer to [Database connections](/grafts/install/#database-connections).
 
 ## Related resources
 
