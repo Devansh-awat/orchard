@@ -3,6 +3,7 @@ import type { IngressProtectionMode } from '@prisma/client';
 export interface AutoUrlChoice {
   servicePort?: number;
   isPublic?: boolean;
+  composePort?: boolean;
 }
 
 interface RequestedPort {

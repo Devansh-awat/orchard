@@ -515,7 +515,10 @@ export class ComposeStacksService {
       const urlPort = urlPortOf(svc.published);
       if (created?.id && urlPort) {
         await this.ingress
-          .createAutoIngressForDeployment(created.id, clerkId, userData, { servicePort: urlPort })
+          .createAutoIngressForDeployment(created.id, clerkId, userData, {
+            servicePort: urlPort,
+            composePort: true
+          })
           .catch((e: any) =>
             this.logger.warn(`no URL for compose service ${deployName}: ${e?.message ?? e}`)
           );

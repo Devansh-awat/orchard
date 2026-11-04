@@ -877,7 +877,9 @@ export class IngressService implements OnModuleInit {
     });
 
     if (!deployment) return null;
-    if (deployment.templateInstanceId || deployment.composeStackId) return null;
+    if (deployment.templateInstanceId || (deployment.composeStackId && !choice.composePort)) {
+      return null;
+    }
     if (!Array.isArray(deployment.services) || deployment.services.length === 0) return null;
     if (deployment.ingresses.length > 0) return null;
 

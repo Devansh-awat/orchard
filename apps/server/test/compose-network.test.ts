@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { ComposeStacksService } from '../src/compose-stacks/compose-stacks.service';
 import { K8sWorkloadService } from '../src/kubernetes/k8s-workload.service';
+import { IngressService } from '../src/projects/ingress.service';
 import {
   composeAliasName,
   parseComposePorts,
@@ -68,6 +69,7 @@ function composeHarness(conflicts: string[] = []) {
   service.ingress = {
     createAutoIngressForDeployment: async (id: string, _c: string, _u: unknown, choice: any) => {
       urls.push([id, choice.servicePort]);
+      assert.equal(choice.composePort, true);
       return null;
     }
   };
@@ -229,5 +231,46 @@ test('alias sync never touches a service it does not own', async () => {
     const { service, calls } = k8sHarness({ db: { metadata: { labels } } });
     assert.deepEqual(await service.syncComposeAliases('ns', 's1', [alias]), { conflicts: ['db'] });
     assert.deepEqual(calls, []);
+  }
+});
+
+test('only a published compose port gets a generated URL', async () => {
+  const previous = process.env.APP_DOMAIN;
+  process.env.APP_DOMAIN = 'apps.example.com';
+  try {
+    const ingress = Object.create(IngressService.prototype);
+    const hosts: string[] = [];
+    ingress.logger = { warn() {} };
+    ingress.usersService = { findOrCreateByClerkId: async () => ({ id: 'u', email: 'e' }) };
+    ingress.authz = { requireProjectEdit: async () => {} };
+    ingress.prisma = {
+      deployment: {
+        findUnique: async () => ({
+          id: 'd',
+          name: 'wp-wordpress',
+          composeStackId: 'stack',
+          templateInstanceId: null,
+          project: { id: 'p', slug: 'p', name: 'p', organization: {} },
+          services: [{ ports: [{ port: 80 }] }],
+          ingresses: []
+        })
+      }
+    };
+    ingress.createDeploymentIngressCore = async (_d: unknown, host: string) => {
+      hosts.push(host);
+      return {};
+    };
+
+    assert.equal(await ingress.createAutoIngressForDeployment('d', 'c'), null);
+    assert.equal(hosts.length, 0);
+
+    await ingress.createAutoIngressForDeployment('d', 'c', undefined, {
+      servicePort: 80,
+      composePort: true
+    });
+    assert.equal(hosts.length, 1);
+  } finally {
+    if (previous === undefined) delete process.env.APP_DOMAIN;
+    else process.env.APP_DOMAIN = previous;
   }
 });
