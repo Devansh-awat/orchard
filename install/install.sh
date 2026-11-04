@@ -1830,8 +1830,8 @@ summary() {
     printf '      %ssudo orchardctl claim%s\n' "$C_BRIGHT" "$C_RESET"
   fi
   printf '\n'
-  note "Add a passkey as soon as you are in — with no SMTP configured it is"
-  note "the only way to sign back in. Run 'sudo orchardctl claim' for a link."
+  note "Add a passkey or password as soon as you are in. With no SMTP configured"
+  note "there are no email codes. Locked out? Run 'sudo orchardctl login' for a link."
   printf '\n'
 
   if [ "$INGRESS_MODE" = tunnel ]; then
