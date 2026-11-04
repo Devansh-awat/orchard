@@ -344,10 +344,9 @@ export class McpOAuthService {
     });
 
     // Redirect to Orchard frontend login page with MCP state. client_name and
-    // redirect_uri are passed for the consent screen to display: the actual
-    // values used for the redirect come from the server-stored pending entry,
-    // so tampering with these params changes only what the user sees, not where
-    // the auth code is sent.
+    // redirect_uri are passed for the consent screen to display. The page echoes
+    // them back on approval and completeAuthorization refuses a mismatch, so a
+    // tampered link cannot show one destination and grant another.
     const params = new URLSearchParams({
       mcp_state: mcpState,
       mcp_server: this.baseUrl,
@@ -365,6 +364,8 @@ export class McpOAuthService {
     mcp_state: string;
     session_token: string;
     scope?: unknown;
+    redirect_uri?: unknown;
+    client_name?: unknown;
   }): Promise<{ error?: string; redirectUrl?: string }> {
     const { mcp_state, session_token } = body;
     console.error(`[MCP OAuth] Complete authorization: mcp_state=${mcp_state}`);
@@ -411,10 +412,17 @@ export class McpOAuthService {
     }
 
     const client = await this.getClient(pending.clientId);
+    if (body.redirect_uri !== pending.redirectUri || !client || body.client_name !== client.name) {
+      return {
+        error:
+          'What this page showed does not match the request, so nothing was granted. Start again from your MCP client.'
+      };
+    }
+
     const mcpSessionId = await this.sessions.createSession({
       userId: payload.sub,
       authMethod: MCP_SESSION_AUTH_METHOD,
-      deviceName: client?.name || 'MCP Client',
+      deviceName: client.name,
       ttlMs: MCP_SESSION_TTL_MS
     });
 

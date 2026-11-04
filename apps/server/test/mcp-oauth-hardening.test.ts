@@ -233,7 +233,9 @@ test('authorize records the requested scope and the consent completes with it', 
     .sign(secret());
   const done = await svc.completeAuthorization({
     mcp_state: url.searchParams.get('mcp_state')!,
-    session_token: browser
+    session_token: browser,
+    redirect_uri: url.searchParams.get('redirect_uri'),
+    client_name: url.searchParams.get('client_name')
   });
   const code = new URL(done.redirectUrl!).searchParams.get('code')!;
   const exchanged = await svc.exchangeToken({
@@ -244,6 +246,53 @@ test('authorize records the requested scope and the consent completes with it', 
     code_verifier: verifier
   });
   assert.equal(decodeJwt(exchanged.token_response.access_token).scope, 'mcp:read');
+});
+
+test('consent refuses a page that showed a different client or destination', async () => {
+  const prisma = memoryPrisma({
+    c6: {
+      id: 'c6',
+      name: 'Real name',
+      clientSecret: null,
+      redirectUris: ['https://evil.example/cb']
+    }
+  });
+  const svc = new McpOAuthService(sessions as any, prisma as any);
+  const { redirectUrl } = await svc.buildAuthorizeRedirect({
+    client_id: 'c6',
+    redirect_uri: 'https://evil.example/cb',
+    response_type: 'code',
+    code_challenge: challenge,
+    code_challenge_method: 'S256',
+    scope: 'mcp:exec'
+  });
+  const url = new URL(redirectUrl!);
+  const mcp_state = url.searchParams.get('mcp_state')!;
+  const session_token = await new SignJWT({ sessionId: 'browser' })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setSubject('user-1')
+    .setExpirationTime('1h')
+    .sign(secret());
+
+  for (const shown of [
+    {},
+    { redirect_uri: 'http://127.0.0.1:1234/cb', client_name: 'Real name' },
+    { redirect_uri: 'https://evil.example/cb', client_name: 'Claude Code' },
+    { redirect_uri: 'https://evil.example/cb' }
+  ]) {
+    const refused = await svc.completeAuthorization({ mcp_state, session_token, ...shown });
+    assert.match(refused.error ?? '', /nothing was granted/);
+    assert.equal(refused.redirectUrl, undefined);
+  }
+
+  const done = await svc.completeAuthorization({
+    mcp_state,
+    session_token,
+    redirect_uri: 'https://evil.example/cb',
+    client_name: 'Real name',
+    scope: 'mcp:deploy'
+  });
+  assert.ok(new URL(done.redirectUrl!).searchParams.get('code'));
 });
 
 test('granted scope never exceeds the requested one and exec needs an explicit grant', () => {
@@ -289,7 +338,9 @@ async function consent(scope: string | undefined, granted: unknown) {
   const done = await svc.completeAuthorization({
     mcp_state: url.searchParams.get('mcp_state')!,
     session_token: browser,
-    scope: granted
+    scope: granted,
+    redirect_uri: url.searchParams.get('redirect_uri'),
+    client_name: url.searchParams.get('client_name')
   });
   if (done.error) return { requested: url.searchParams.get('scope'), error: done.error };
   const code = new URL(done.redirectUrl!).searchParams.get('code')!;

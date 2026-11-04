@@ -90,7 +90,9 @@ export class McpOAuthController {
       const result = await this.oauthService.completeAuthorization({
         mcp_state: req.body.mcp_state,
         session_token: req.body.session_token,
-        scope: req.body.scope
+        scope: req.body.scope,
+        redirect_uri: req.body.redirect_uri,
+        client_name: req.body.client_name
       });
 
       if (result.error) {
