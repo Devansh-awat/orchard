@@ -39,7 +39,7 @@
 		!ws?.isOwner
 			? hostOnly('fork the machine')
 			: !canFork
-				? `${runnerLabel(machine?.runner)} machines cannot be forked on this server`
+				? `${runnerLabel(machine?.runner)} machines can't be forked on this server`
 				: undefined
 	);
 
@@ -128,7 +128,7 @@
 			<MenuItem
 				onclick={() => ws.lifecycle('start')}
 				disabled={!ws.canStart || !!ws.busy}
-				title={ws.canStart ? undefined : 'Read-only guests cannot start this machine'}
+				title={ws.canStart ? undefined : "Read-only guests can't start this machine"}
 			>
 				<Play size={14} /> Start machine
 			</MenuItem>

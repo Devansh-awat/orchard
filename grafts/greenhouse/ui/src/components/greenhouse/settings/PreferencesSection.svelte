@@ -106,8 +106,8 @@
 
 <Card title="Transcript">
 	<Row
-		title="Hold the applause"
-		description="Cut the flattery from agent replies"
+		title="Remove flattery"
+		description="Removes flattery from agent replies"
 		checked={prefs.notAbsolutelyRight}
 		ontoggle={(v) => greenhousePrefs.set('notAbsolutelyRight', v)}
 	/>

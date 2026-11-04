@@ -27,7 +27,7 @@
 			});
 			if (!res.ok) {
 				const data = await res.json().catch(() => ({}));
-				throw new Error(data?.message || 'Failed to update credentials');
+				throw new Error(data?.message || "Couldn't update credentials");
 			}
 			claudeInput = '';
 			openaiInput = '';
@@ -36,8 +36,8 @@
 			toasts.add({ title: 'Credentials updated', color: 'success' });
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to update credentials',
+				title: "Couldn't update credentials",
+				description: e instanceof Error ? e.message : "Couldn't update credentials",
 				color: 'error'
 			});
 		} finally {

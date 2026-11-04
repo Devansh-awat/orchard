@@ -82,7 +82,7 @@ export async function runChatCommand(run: ChatCommandRun): Promise<SlashNotice |
     }
     case 'plan':
       store.setPlan(true);
-      return { text: 'Plan mode on, the agent will not edit' };
+      return { text: "Plan mode on, the agent won't edit" };
     case 'build':
       store.setAgent(null);
       return { text: 'Plan mode off, the agent can edit' };
@@ -102,7 +102,7 @@ export async function runChatCommand(run: ChatCommandRun): Promise<SlashNotice |
       ui.mcp();
       return null;
     case 'stop':
-      if (!store.busy) return { text: 'The agent is not working' };
+      if (!store.busy) return { text: "The agent isn't working" };
       await store.abort();
       return null;
     case 'compact':
@@ -121,7 +121,7 @@ export async function runChatCommand(run: ChatCommandRun): Promise<SlashNotice |
       return null;
     case 'todos': {
       const todos = await store.todos();
-      if (todos === null) return { text: 'Could not load the todo list' };
+      if (todos === null) return { text: "Couldn't load the todo list" };
       if (todos.length === 0) return { text: 'No todos in this chat yet' };
       return { text: 'Todos', todos };
     }

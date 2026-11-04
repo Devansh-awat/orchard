@@ -376,7 +376,7 @@ export function ocFmtBytes(bytes: number): string {
 export function ocReadAttachment(file: File): Promise<OcAttachment> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(new Error('Could not read file'));
+    reader.onerror = () => reject(new Error("Couldn't read file"));
     reader.onload = () => {
       const mime = file.type || 'application/octet-stream';
       resolve({
@@ -461,7 +461,7 @@ export type OcMcpList = { servers: OcMcpServer[]; forbidden: boolean };
 export async function ocMcpList(sandboxId: string, directory: string | null): Promise<OcMcpList> {
   const res = await apiFetch(ocMcpPath(sandboxId, '', directory));
   if (res.status === 403) return { servers: [], forbidden: true };
-  if (!res.ok) throw await ocMcpError(res, 'Could not load MCP servers');
+  if (!res.ok) throw await ocMcpError(res, "Couldn't load MCP servers");
   const map = (await res.json()) as Record<string, { status: string; error?: string }>;
   return { servers: ocMcpServers(map ?? {}), forbidden: false };
 }
@@ -494,7 +494,7 @@ export async function ocMcpAdd(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, config })
   });
-  if (!res.ok) throw await ocMcpError(res, `Could not add ${name}`);
+  if (!res.ok) throw await ocMcpError(res, `Couldn't add ${name}`);
 }
 
 export async function ocMcpToggle(
@@ -507,7 +507,7 @@ export async function ocMcpToggle(
     ocMcpPath(sandboxId, `/${encodeURIComponent(name)}/${action}`, directory),
     { method: 'POST' }
   );
-  if (!res.ok) throw await ocMcpError(res, `Could not ${action} ${name}`);
+  if (!res.ok) throw await ocMcpError(res, `Couldn't ${action} ${name}`);
 }
 
 export async function ocMcpAuthStart(
@@ -518,7 +518,7 @@ export async function ocMcpAuthStart(
   const res = await apiFetch(ocMcpPath(sandboxId, `/${encodeURIComponent(name)}/auth`, directory), {
     method: 'POST'
   });
-  if (!res.ok) throw await ocMcpError(res, `${name} does not support signing in from the browser`);
+  if (!res.ok) throw await ocMcpError(res, `${name} doesn't support signing in from the browser`);
   const data = (await res.json().catch(() => null)) as { authorizationUrl?: string } | null;
   const url = data?.authorizationUrl;
   if (!url || !/^https?:\/\//i.test(url)) throw new Error(`${name} did not return a sign in page`);
@@ -539,7 +539,7 @@ export async function ocMcpAuthFinish(
       body: JSON.stringify({ code })
     }
   );
-  if (!res.ok) throw await ocMcpError(res, `Could not finish signing in to ${name}`);
+  if (!res.ok) throw await ocMcpError(res, `Couldn't finish signing in to ${name}`);
 }
 
 export async function ocMcpAuthRemove(
@@ -550,7 +550,7 @@ export async function ocMcpAuthRemove(
   const res = await apiFetch(ocMcpPath(sandboxId, `/${encodeURIComponent(name)}/auth`, directory), {
     method: 'DELETE'
   });
-  if (!res.ok) throw await ocMcpError(res, `Could not sign out of ${name}`);
+  if (!res.ok) throw await ocMcpError(res, `Couldn't sign out of ${name}`);
 }
 
 export function ocOauthCode(input: string): string | null {

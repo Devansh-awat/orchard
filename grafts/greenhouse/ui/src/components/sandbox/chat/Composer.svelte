@@ -559,7 +559,7 @@
 		{#if commenting}
 			<div class="cmp-mode" transition:slide data-align="inset">
 				<MessageCircle size={14} strokeWidth={1.75} />
-				Comment to the people in this session. The agent will not see it.
+				Comment to the people in this session. The agent won't see it.
 			</div>
 		{/if}
 		{#if store.attachments.length > 0 && !commenting}
@@ -591,7 +591,7 @@
 					type="button"
 					class="plan-chip"
 					aria-pressed="true"
-					title="Plan mode: the agent reads but does not edit. Click to leave plan mode."
+					title="Plan mode: the agent reads but doesn't edit. Click to leave plan mode."
 					onclick={() => store.setPlan(false)}
 				>
 					<ListChecks size={16} strokeWidth={1.75} /> Plan

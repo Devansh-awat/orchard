@@ -48,7 +48,7 @@
 	<div class="chat-unreachable">
 		<EmptyState
 			title="The agent isn't answering yet"
-			description="opencode usually comes up a few seconds after the sandbox boots. We'll keep checking."
+			description="opencode usually starts a few seconds after the sandbox boots. Orchard keeps checking."
 		>
 			{#snippet icon()}<Unplug class="h-5 w-5" />{/snippet}
 			<Button onclick={() => store.retry()}>Try again</Button>
@@ -59,7 +59,7 @@
 	{#if missingClaude}
 		<div class="chat-cred">
 			<span>No Claude credentials on your account.</span>
-			<a href="/user/settings?tab=sandbox">Open user settings</a>
+			<a href="/user/settings?tab=sandbox">Open Account settings</a>
 		</div>
 	{/if}
 	<Transcript {store} {empty} />

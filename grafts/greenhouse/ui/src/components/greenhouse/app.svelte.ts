@@ -202,6 +202,6 @@ export function findGreenhouseApp(): GreenhouseApp | null {
 
 export function getGreenhouseApp(): GreenhouseApp {
   const app = getContext<GreenhouseApp | undefined>(KEY);
-  if (!app) throw new Error('Greenhouse shell is not mounted');
+  if (!app) throw new Error("Greenhouse shell isn't mounted");
   return app;
 }

@@ -156,7 +156,7 @@
 			return res.name;
 		} catch (e) {
 			toasts.add({
-				title: 'Could not create the repository',
+				title: "Couldn't create the repository",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -266,7 +266,7 @@
 								type="button"
 								class="gh-btn gh-btn--primary start-btn"
 								disabled={!ws?.canStart || !!ws?.busy}
-								title={ws?.canStart ? undefined : 'Read-only guests cannot start this machine'}
+								title={ws?.canStart ? undefined : "Read-only guests can't start this machine"}
 								onclick={() => ws?.lifecycle('start')}
 							>
 								<Play size={14} strokeWidth={1.75} /> Start {machine.name}

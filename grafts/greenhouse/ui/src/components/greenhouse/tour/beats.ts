@@ -82,7 +82,7 @@ export const TOUR_BEATS: TourBeat[] = [
   {
     id: 'ssh',
     title: 'Your own editor',
-    text: 'Prefer VS Code, Cursor or Zed? Install the Orchard CLI, log in, and run this once. It makes a key, adds it to your account and sets up SSH. Then the editor buttons open the machine directly.',
+    text: 'To use VS Code, Cursor or Zed, install the Orchard CLI, sign in and run this once. It creates a key, adds it to your account and sets up SSH. Then the editor buttons open the machine.',
     pose: 'idle',
     target: '[data-tour="editor"]',
     before: CLOSE
@@ -102,7 +102,7 @@ export const TOUR_BEATS: TourBeat[] = [
   {
     id: 'done',
     title: 'That’s Greenhouse',
-    text: 'Your machine is ready when you are. Go build something good.',
+    text: 'Your machine is ready.',
     pose: 'happy',
     target: null,
     before: CLOSE

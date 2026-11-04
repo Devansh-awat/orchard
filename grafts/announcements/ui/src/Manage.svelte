@@ -86,7 +86,7 @@
 	{/if}
 
 	{#if items.length === 0}
-		<EmptyState title="Nothing announced" description="Active announcements will show up here." />
+		<EmptyState title="Nothing announced" description="Active announcements appear here." />
 	{:else}
 		<ul>
 			{#each items as item (item.id)}

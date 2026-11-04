@@ -828,7 +828,7 @@ export class ChatSessionStore {
     } catch (e) {
       thread.entries = thread.entries.filter((entry) => entry !== local);
       toasts.add({
-        title: 'Could not send',
+        title: "Couldn't send",
         description: e instanceof Error ? e.message : undefined,
         color: 'error'
       });
@@ -844,7 +844,7 @@ export class ChatSessionStore {
       return true;
     } catch (e) {
       toasts.add({
-        title: 'Could not change that setting',
+        title: "Couldn't change that setting",
         description: e instanceof Error ? e.message : undefined,
         color: 'error'
       });
@@ -1228,7 +1228,7 @@ export class ChatSessionStore {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({})
         });
-        if (!res.ok) throw new Error('Could not start a new session');
+        if (!res.ok) throw new Error("Couldn't start a new session");
         const created = toSession((await res.json()) as OcSession);
         const index = this.sessions.findIndex((s) => s.id === temp.id);
         if (index === -1) {
@@ -1256,7 +1256,7 @@ export class ChatSessionStore {
           if (next) void this.selectSession(next);
         }
         toasts.add({
-          title: 'Could not start a conversation',
+          title: "Couldn't start a conversation",
           description: e instanceof Error ? e.message : 'Try again shortly.',
           color: 'error'
         });
@@ -1308,7 +1308,7 @@ export class ChatSessionStore {
       const res = await apiFetch(`${ocBase(this.sandboxId)}/session/${id}${query}`, {
         method: 'DELETE'
       });
-      if (!res.ok) throw new Error('Failed to delete conversation');
+      if (!res.ok) throw new Error("Couldn't delete conversation");
       this.#dropThread(id);
       if (wasActive && this.sessions.length === 0) await this.createSession();
     } catch (e) {
@@ -1318,7 +1318,7 @@ export class ChatSessionStore {
         await this.selectSession(id);
       }
       toasts.add({
-        title: 'Could not delete the conversation',
+        title: "Couldn't delete the conversation",
         description: e instanceof Error ? e.message : 'Try again shortly.',
         color: 'error'
       });
@@ -1349,7 +1349,7 @@ export class ChatSessionStore {
           body: JSON.stringify({ messageID })
         }
       );
-      if (!res.ok) throw await failure(res, 'Could not fork this session');
+      if (!res.ok) throw await failure(res, "Couldn't fork this session");
       const session = (await res.json()) as OcSession;
       if (!this.sessions.some((s) => s.id === session.id))
         this.sessions.unshift(toSession(session));
@@ -1362,7 +1362,7 @@ export class ChatSessionStore {
     } catch (e) {
       toasts.add({
         title: 'Fork failed',
-        description: e instanceof Error ? e.message : 'Could not fork this session',
+        description: e instanceof Error ? e.message : "Couldn't fork this session",
         color: 'error'
       });
     } finally {
@@ -1383,7 +1383,7 @@ export class ChatSessionStore {
       } catch (e) {
         toasts.add({
           title: 'Revert failed',
-          description: e instanceof Error ? e.message : 'Could not restore the files',
+          description: e instanceof Error ? e.message : "Couldn't restore the files",
           color: 'error'
         });
         return false;
@@ -1401,7 +1401,7 @@ export class ChatSessionStore {
           body: JSON.stringify({ messageID })
         }
       );
-      if (!res.ok) throw await failure(res, 'Could not revert to this point');
+      if (!res.ok) throw await failure(res, "Couldn't revert to this point");
       const session = (await res.json()) as OcSession;
       await this.#loadHistory(thread);
       thread.revertedMessageID = session.revert?.messageID ?? messageID;
@@ -1410,7 +1410,7 @@ export class ChatSessionStore {
     } catch (e) {
       toasts.add({
         title: 'Revert failed',
-        description: e instanceof Error ? e.message : 'Could not revert to this point',
+        description: e instanceof Error ? e.message : "Couldn't revert to this point",
         color: 'error'
       });
       return false;
@@ -1428,14 +1428,14 @@ export class ChatSessionStore {
         `${ocBase(this.sandboxId)}/session/${thread.id}/unrevert${this.#dir(thread.id)}`,
         { method: 'POST' }
       );
-      if (!res.ok) throw await failure(res, 'Could not undo the revert');
+      if (!res.ok) throw await failure(res, "Couldn't undo the revert");
       await this.#loadHistory(thread);
       thread.revertedMessageID = null;
       this.onTurnDone?.();
     } catch (e) {
       toasts.add({
         title: 'Undo failed',
-        description: e instanceof Error ? e.message : 'Could not undo the revert',
+        description: e instanceof Error ? e.message : "Couldn't undo the revert",
         color: 'error'
       });
     } finally {
@@ -1453,7 +1453,7 @@ export class ChatSessionStore {
         await acp.cancel();
       } catch (e) {
         toasts.add({
-          title: 'Could not stop the agent',
+          title: "Couldn't stop the agent",
           description: e instanceof Error ? e.message : undefined,
           color: 'error'
         });
@@ -1536,7 +1536,7 @@ export class ChatSessionStore {
       thread,
       'summarize',
       { providerID: this.providerID, modelID: this.modelID },
-      'Could not compact the chat'
+      "Couldn't compact the chat"
     );
   }
 
@@ -1566,7 +1566,7 @@ export class ChatSessionStore {
         ...(choice.modelID ? { model: `${choice.providerID}/${choice.modelID}` } : {}),
         ...(choice.variant ? { variant: choice.variant } : {})
       },
-      `Could not run /${command}`
+      `Couldn't run /${command}`
     );
   }
 
@@ -1866,7 +1866,7 @@ export class ChatSessionStore {
         this.attachments.push(attachment);
         added.push(attachment.id);
       } catch {
-        toasts.add({ title: 'Could not read file', description: file.name, color: 'error' });
+        toasts.add({ title: "Couldn't read file", description: file.name, color: 'error' });
       }
     }
     return added;
@@ -2622,7 +2622,7 @@ export class ChatSessionStore {
       try {
         res = await calls[api]();
       } catch {
-        return { error: 'Could not reach the agent' };
+        return { error: "Couldn't reach the agent" };
       }
       if (res.ok) {
         this.#replyApi = api;
@@ -2635,9 +2635,9 @@ export class ChatSessionStore {
         missing = true;
         continue;
       }
-      return { error: bodyMessage(body, 'The agent did not take the answer') };
+      return { error: bodyMessage(body, "The agent didn't take the answer") };
     }
-    return missing ? { gone: true } : { error: 'The agent did not take the answer' };
+    return missing ? { gone: true } : { error: "The agent didn't take the answer" };
   }
 
   #finish(id: string, result: ReplyResult, outcome: RequestOutcome) {
@@ -2659,7 +2659,7 @@ export class ChatSessionStore {
   #replyFailed(id: string, error: string) {
     this.#answeredHere.delete(id);
     this.#setState(id, 'open');
-    toasts.add({ title: 'Could not send your answer', description: error, color: 'error' });
+    toasts.add({ title: "Couldn't send your answer", description: error, color: 'error' });
   }
 
   #queueFor(threadId: string, text: string, plan: boolean | null = null) {
@@ -2691,7 +2691,7 @@ export class ChatSessionStore {
         await acp.answer(id, reply);
         return true;
       } catch (e) {
-        this.#replyFailed(id, e instanceof Error ? e.message : 'The agent did not take the answer');
+        this.#replyFailed(id, e instanceof Error ? e.message : "The agent didn't take the answer");
         return false;
       }
     }
@@ -2726,9 +2726,9 @@ export class ChatSessionStore {
       if (res.ok) return { ok: true };
       const body = await readBody(res);
       if (replyGone({ status: res.status, body }) === true) return { gone: true };
-      return { error: bodyMessage(body, 'The agent did not take the answer') };
+      return { error: bodyMessage(body, "The agent didn't take the answer") };
     } catch {
-      return { error: 'Could not reach the agent' };
+      return { error: "Couldn't reach the agent" };
     }
   }
 

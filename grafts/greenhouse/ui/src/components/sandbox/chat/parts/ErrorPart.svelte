@@ -10,7 +10,7 @@
 		<p class="err-text"><span class="err-label">Failed</span> {detail}</p>
 		{#if auth}
 			<p class="err-hint">
-				The agent could not sign in to its model provider.
+				The agent couldn't sign in to its model provider.
 				<a href="/user/settings?tab=sandbox">Add your Claude token in Settings → Sandbox</a>
 			</p>
 		{/if}

@@ -63,7 +63,7 @@
 			page = target;
 		} catch (e) {
 			if (id !== requestId) return;
-			failed = e instanceof Error ? e.message : 'Could not load sandbox limits';
+			failed = e instanceof Error ? e.message : "Couldn't load sandbox limits";
 		} finally {
 			if (id === requestId) loading = false;
 		}
@@ -100,7 +100,7 @@
 			editing = null;
 		} catch (e) {
 			toasts.add({
-				title: 'Could not update the limit',
+				title: "Couldn't update the limit",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -140,7 +140,7 @@
 					<div class="gh-admin-row"><Skeleton height="2rem" /></div>
 				{/each}
 			{:else if failed}
-				<EmptyState title="Could not load sandbox limits" description={failed}>
+				<EmptyState title="Couldn't load sandbox limits" description={failed}>
 					<Button size="sm" onclick={() => load(page)}>Try again</Button>
 				</EmptyState>
 			{:else if rows.length === 0}

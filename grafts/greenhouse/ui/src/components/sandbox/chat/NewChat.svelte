@@ -44,7 +44,7 @@
 			links.set(id, await run());
 		} catch (error) {
 			toasts.add({
-				title: `Could not add the ${what}`,
+				title: `Couldn't add the ${what}`,
 				description: error instanceof Error ? error.message : undefined,
 				color: 'error'
 			});

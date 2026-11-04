@@ -139,7 +139,7 @@ export class GreenhouseCommands {
         window.open(FEEDBACK_URL, '_blank', 'noopener');
         return null;
       default:
-        return { text: `/${alias ?? command.name} is not available here` };
+        return { text: `/${alias ?? command.name} isn't available here` };
     }
   }
 
@@ -165,7 +165,7 @@ export class GreenhouseCommands {
     const session = ws.session;
     if (!session || isPreparing(session)) return { text: 'Open a session first' };
     const entries = await api.listDir(ws.sandboxId, session.worktreePath, '.');
-    if (entries.length === 0) return { text: 'Could not read the worktree' };
+    if (entries.length === 0) return { text: "Couldn't read the worktree" };
     for (const name of MEMORY_FILES) {
       if (entries.some((e) => e.type === 'file' && e.name === name)) {
         ws.openFile(name);
@@ -188,7 +188,7 @@ export class GreenhouseCommands {
       void ws.refreshChanges(session.id);
     } catch (e) {
       toasts.add({
-        title: `Could not create ${name}`,
+        title: `Couldn't create ${name}`,
         description: e instanceof Error ? e.message : undefined,
         color: 'error'
       });
@@ -204,7 +204,7 @@ export class GreenhouseCommands {
       return null;
     }
     if (ws.githubLinked === false) return { text: LINK_GITHUB };
-    if (!ws.canPush) return { text: 'You cannot push from this machine' };
+    if (!ws.canPush) return { text: "You can't push from this machine" };
     try {
       await ws.createPr(false);
     } catch (e) {

@@ -159,7 +159,7 @@
 	}
 
 	function expiry(iso: string | null): string {
-		if (!iso) return 'Does not expire';
+		if (!iso) return "Doesn't expire";
 		const days = Math.round((Date.parse(iso) - Date.now()) / 86_400_000);
 		if (days < 1) return 'Expires today';
 		return `Expires in ${days} ${days === 1 ? 'day' : 'days'}`;
@@ -204,8 +204,8 @@
 				/>
 			{:else}
 				<EmptyState
-					title="Could not open this link"
-					description={failure || 'Something went wrong. Try again in a moment.'}
+					title="Couldn't open this link"
+					description={failure || 'Try again in a moment.'}
 				/>
 			{/if}
 		</div>
@@ -292,7 +292,7 @@
 							{:else if transcriptState === 'error' || !transcript}
 								<div class="center">
 									<EmptyState
-										title="Could not load the transcript"
+										title="Couldn't load the transcript"
 										description="Try again in a moment."
 									/>
 								</div>
@@ -347,7 +347,7 @@
 							{:else if changesState === 'error' || !changes}
 								<div class="center">
 									<EmptyState
-										title="Could not load the changes"
+										title="Couldn't load the changes"
 										description="Try again in a moment."
 									/>
 								</div>
@@ -355,7 +355,7 @@
 								<div class="center">
 									<EmptyState
 										title="No changes"
-										description="This branch matches its base. The agent has not edited anything yet."
+										description="This branch matches its base. The agent hasn't edited anything yet."
 									/>
 								</div>
 							{:else}
@@ -396,7 +396,7 @@
 									{:else if diffState === 'error'}
 										<div class="center">
 											<EmptyState
-												title="Could not load this diff"
+												title="Couldn't load this diff"
 												description="Try again in a moment."
 											/>
 										</div>

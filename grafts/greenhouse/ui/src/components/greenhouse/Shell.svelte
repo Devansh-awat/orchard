@@ -371,7 +371,7 @@
 >
 	{#if listState === 'disabled'}
 		<div class="blank">
-			<p class="blank-title">Greenhouse is not available to you yet</p>
+			<p class="blank-title">Greenhouse isn't available to you yet</p>
 			<p class="blank-text">Ask an instance admin if you need access.</p>
 			<Button href="/">Back to Orchard</Button>
 		</div>

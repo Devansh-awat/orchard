@@ -207,7 +207,7 @@
 		await ws.refreshMembers().catch(() => undefined);
 		busy = false;
 		if (done.length === 0) {
-			error = failed.length === 1 ? failed[0] : 'Could not invite anyone';
+			error = failed.length === 1 ? failed[0] : "Couldn't invite anyone";
 			return;
 		}
 		if (failed.length > 0) {
@@ -238,13 +238,13 @@
 	function setRole(m: GhMember, role: Role) {
 		if (!ws || m.role === role) return;
 		const id = ws.sandboxId;
-		return act('Could not change access', () => api.setMemberRole(id, m.user.id, role));
+		return act("Couldn't change access", () => api.setMemberRole(id, m.user.id, role));
 	}
 
 	function remove(m: GhMember) {
 		if (!ws) return;
 		const id = ws.sandboxId;
-		return act('Could not remove', () => api.removeMember(id, m.user.id));
+		return act("Couldn't remove", () => api.removeMember(id, m.user.id));
 	}
 
 	async function createLink() {

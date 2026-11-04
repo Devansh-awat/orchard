@@ -35,12 +35,12 @@
 	});
 
 	const step = $derived(phase === 'worktree' ? 1 : 2);
-	const title = $derived(phase === 'worktree' ? 'Setting up your session' : 'Waking up the agent');
+	const title = $derived(phase === 'worktree' ? 'Setting up your session' : 'Starting the agent');
 	const detail = $derived(
 		phase === 'worktree'
 			? 'Creating its own branch and folder'
 			: prompt
-				? 'Handing it your prompt'
+				? 'Sending your prompt'
 				: 'Almost ready'
 	);
 	const meta = $derived(`Step ${step} of 2 · ${fmtElapsed(now - startedAt)}`);

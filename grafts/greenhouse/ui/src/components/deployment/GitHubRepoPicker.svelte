@@ -8,7 +8,7 @@
 	}
 
 	const REPO_CACHE_MS = 5 * 60_000;
-	const LOAD_ERROR = 'Could not load your repositories.';
+	const LOAD_ERROR = "Couldn't load your repositories.";
 	let repoCache: { at: number; listing: Promise<GitHubRepoListing> } | null = null;
 
 	export function loadGitHubRepos(): Promise<GitHubRepoListing> {

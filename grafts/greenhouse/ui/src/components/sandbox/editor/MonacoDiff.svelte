@@ -205,7 +205,7 @@
 				diff = instance;
 				onReady?.(instance, monaco);
 			} catch (err) {
-				failed = err instanceof Error ? err.message : 'The diff could not load';
+				failed = err instanceof Error ? err.message : "The diff couldn't load";
 			}
 		})();
 	});
@@ -327,7 +327,7 @@
 		<div class="diff-host" class:diff-host--hidden={loading} bind:this={host}></div>
 		{#if failed || doc?.error}
 			<div class="diff-state">
-				<p class="diff-state-title">This diff could not be opened</p>
+				<p class="diff-state-title">This diff couldn't be opened</p>
 				<p class="diff-state-detail">{failed ?? doc?.error}</p>
 			</div>
 		{:else if loading}

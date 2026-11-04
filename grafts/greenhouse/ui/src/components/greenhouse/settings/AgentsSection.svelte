@@ -130,7 +130,7 @@
 		{#if store?.acpHost === 'missing'}
 			<div class="account">
 				<span class="who">
-					<span class="name">The agent host is not running on this machine</span>
+					<span class="name">The agent host isn't running on this machine</span>
 					<span class="detail detail--wrap">
 						Restart the machine to pick up Claude Code, opencode, fx and Codex chats. Machines
 						started before the update keep using the built-in opencode chat until then.

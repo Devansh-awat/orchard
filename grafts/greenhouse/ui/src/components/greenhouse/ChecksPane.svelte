@@ -75,7 +75,7 @@
 		} else if (res.status === 404) {
 			phase = 'unavailable';
 		} else if (!data) {
-			failure = res.message || 'Could not load checks';
+			failure = res.message || "Couldn't load checks";
 			phase = 'error';
 		}
 	}

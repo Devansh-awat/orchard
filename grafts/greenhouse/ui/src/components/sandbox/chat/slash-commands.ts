@@ -130,7 +130,7 @@ export const LOCAL_COMMANDS: readonly SlashCommand[] = [
   local({
     name: 'plan',
     group: 'agent',
-    description: 'Plan mode, the agent reads but does not edit'
+    description: "Plan mode, the agent reads but doesn't edit"
   }),
   local({ name: 'build', group: 'agent', description: 'Leave plan mode so the agent can edit' }),
   local({
@@ -517,14 +517,14 @@ export function reviewPrompt(target: string): string {
     what
       ? `Review ${what}. It is a commit, a branch to diff against, or a pull request; use git or gh to read the changes.`
       : 'Review the uncommitted changes in this worktree. Run `git status --short`, `git diff` and `git diff --cached` to see them.',
-    'Read the surrounding code where you need context. Report bugs, regressions and risky edge cases first, each with the file, the line and a concrete fix. Skip style nits. Do not edit any files.'
+    "Read the surrounding code where you need context. Report bugs, regressions and risky edge cases first, each with the file, the line and a concrete fix. Skip style nits. Don't edit any files."
   ].join('\n\n');
 }
 
 export function initPrompt(): string {
   return [
     'Create or update AGENTS.md at the root of this repository so a coding agent can work here without asking.',
-    'Cover how to install, build, lint and test (including how to run a single test), the layout of the code, and conventions that are not obvious from the code itself. Keep it short and specific to this repository. If AGENTS.md, CLAUDE.md or similar files already exist, fold in what is still true.'
+    "Cover how to install, build, lint and test (including how to run a single test), the layout of the code, and conventions that aren't obvious from the code itself. Keep it short and specific to this repository. If AGENTS.md, CLAUDE.md or similar files already exist, fold in what is still true."
   ].join('\n\n');
 }
 
@@ -534,6 +534,6 @@ export function securityReviewPrompt(baseBranch: string | null): string {
   return [
     `Do a security review of the changes on this branch. Read ${range}, plus \`git diff\` and \`git status --short\` for uncommitted and new files.`,
     'Look for injection, broken authentication or authorization, secrets in code, unsafe deserialization, path traversal, SSRF, XSS and missing input validation that the changes introduce.',
-    'Only report issues you are confident are exploitable. For each give the file and line, the severity, how it could be exploited and the fix. Do not edit any files.'
+    "Only report issues you are confident are exploitable. For each give the file and line, the severity, how it could be exploited and the fix. Don't edit any files."
   ].join('\n\n');
 }

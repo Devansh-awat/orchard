@@ -572,7 +572,7 @@
 																class="detect rounded-[8px] border border-[#e8e4e4] px-3 py-1.5 font-mono text-[12px]"
 																class:detect-on={port}
 															>
-																{port ? '3000 · http' : '—'}
+																{port ? '3000 · http' : '-'}
 															</span>
 														</div>
 													</div>

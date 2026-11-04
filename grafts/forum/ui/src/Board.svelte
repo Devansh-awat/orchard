@@ -107,7 +107,7 @@
 					images: composerImages
 				})
 			});
-			if (!res.ok) throw new Error(await failure(res, 'Failed to create post'));
+			if (!res.ok) throw new Error(await failure(res, "Couldn't create post"));
 			const created = await res.json();
 			composerOpen = false;
 			composerTitle = '';
@@ -115,7 +115,7 @@
 			composerImages = [];
 			host.navigate(`/grove/${created.id}`);
 		} catch (e) {
-			toastError(host, 'Error', e instanceof Error ? e.message : 'Failed to create post');
+			toastError(host, 'Error', e instanceof Error ? e.message : "Couldn't create post");
 		} finally {
 			submitting = false;
 		}

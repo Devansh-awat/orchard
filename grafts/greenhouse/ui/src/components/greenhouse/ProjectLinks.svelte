@@ -74,7 +74,7 @@
 				this.resetPick();
 				return link;
 			} catch (e) {
-				this.error = e instanceof Error ? e.message : 'Could not attach the project';
+				this.error = e instanceof Error ? e.message : "Couldn't attach the project";
 				return null;
 			} finally {
 				this.busy = null;
@@ -89,7 +89,7 @@
 				this.links = this.links.filter((l) => l.projectId !== link.projectId);
 				return null;
 			} catch (e) {
-				return e instanceof Error ? e.message : 'Could not detach the project';
+				return e instanceof Error ? e.message : "Couldn't detach the project";
 			} finally {
 				this.busy = null;
 			}
@@ -114,7 +114,7 @@
 		if (!ws) return;
 		const failed = await store.detach(ws.sandboxId, link);
 		if (failed)
-			toasts.add({ title: 'Could not detach the project', description: failed, color: 'error' });
+			toasts.add({ title: "Couldn't detach the project", description: failed, color: 'error' });
 	}
 </script>
 

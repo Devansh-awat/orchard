@@ -76,7 +76,7 @@
 			await load();
 		} catch (e) {
 			toasts.add({
-				title: 'Could not disconnect Linear',
+				title: "Couldn't disconnect Linear",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -94,7 +94,7 @@
 			toasts.add({ title: 'Slack unlinked', color: 'success' });
 		} catch (e) {
 			toasts.add({
-				title: 'Could not unlink Slack',
+				title: "Couldn't unlink Slack",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -121,7 +121,7 @@
 			<Skeleton class="h-10 w-full" />
 		</div>
 	{:else if failed}
-		<p class="muted">Could not load your connected accounts. Greenhouse may be turned off here.</p>
+		<p class="muted">Couldn't load your connected accounts. Greenhouse may be turned off here.</p>
 	{:else}
 		<div class="rows">
 			<div class="row">

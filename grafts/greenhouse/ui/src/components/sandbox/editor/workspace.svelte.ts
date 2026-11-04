@@ -167,7 +167,7 @@ export class EditorWorkspace {
       doc.stale = false;
       return true;
     } catch (err) {
-      doc.error = err instanceof Error ? err.message : 'Could not save';
+      doc.error = err instanceof Error ? err.message : "Couldn't save";
       return false;
     } finally {
       doc.saving = false;
@@ -265,7 +265,7 @@ export class EditorWorkspace {
       if (existing) existing.setValue(content);
       doc.attach(model);
     } catch (err) {
-      doc.fail(err instanceof Error ? err.message : 'Could not open file');
+      doc.fail(err instanceof Error ? err.message : "Couldn't open file");
     }
   }
 }

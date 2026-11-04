@@ -41,7 +41,7 @@
 			toasts.add({ title: `Forking ${machine.name} into ${created.name}`, color: 'success' });
 			app.openMachine(created.id);
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Could not fork the machine';
+			error = e instanceof Error ? e.message : "Couldn't fork the machine";
 		} finally {
 			busy = false;
 		}

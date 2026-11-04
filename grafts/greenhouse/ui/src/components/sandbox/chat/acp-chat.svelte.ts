@@ -174,13 +174,13 @@ export class AcpChat {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, messageId })
     });
-    if (!res.ok) throw await failure(res, 'The agent did not take the prompt');
+    if (!res.ok) throw await failure(res, "The agent didn't take the prompt");
     if (!this.#stream) this.connect();
   }
 
   async cancel(): Promise<void> {
     const res = await apiFetch(`${this.base}/cancel`, { method: 'POST' });
-    if (!res.ok) throw await failure(res, 'Could not stop the agent');
+    if (!res.ok) throw await failure(res, "Couldn't stop the agent");
   }
 
   async answer(requestId: string, reply: PermissionReply): Promise<void> {
@@ -194,7 +194,7 @@ export class AcpChat {
         option ? { requestId, optionId: option.optionId } : { requestId, cancel: true }
       )
     });
-    if (!res.ok) throw await failure(res, 'The agent did not take the answer');
+    if (!res.ok) throw await failure(res, "The agent didn't take the answer");
   }
 
   async setConfig(configId: string, value: string | boolean): Promise<void> {
@@ -203,7 +203,7 @@ export class AcpChat {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ configId, value })
     });
-    if (!res.ok) throw await failure(res, 'Could not change that setting');
+    if (!res.ok) throw await failure(res, "Couldn't change that setting");
   }
 
   canRevert(messageId: string): boolean {
@@ -218,6 +218,6 @@ export class AcpChat {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ commit })
     });
-    if (!res.ok) throw await failure(res, 'Could not restore the files');
+    if (!res.ok) throw await failure(res, "Couldn't restore the files");
   }
 }

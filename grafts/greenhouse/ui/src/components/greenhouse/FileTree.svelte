@@ -165,7 +165,7 @@
 			await refresh(pending.parent);
 		} catch (e) {
 			toasts.add({
-				title: `Could not create ${name}`,
+				title: `Couldn't create ${name}`,
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -194,7 +194,7 @@
 	async function remove() {
 		const node = target;
 		if (!node) return;
-		if (!confirm(`Delete ${node.path}? This cannot be undone.`)) return;
+		if (!confirm(`Delete ${node.path}? This can't be undone.`)) return;
 		try {
 			await api.fsOp(ws.sandboxId, 'delete', scopeOf(session), { path: node.path });
 			await refresh(parentOf(node.path));

@@ -188,7 +188,7 @@
 				{:else if folderGit === false}
 					Not a git repository yet. Greenhouse sets one up and commits the folder's files.
 				{:else}
-					Stays where it is. A folder that is not a git repository yet gets one, with its files
+					Stays where it is. A folder that isn't a git repository yet gets one, with its files
 					in the first commit.
 				{/if}
 			</p>

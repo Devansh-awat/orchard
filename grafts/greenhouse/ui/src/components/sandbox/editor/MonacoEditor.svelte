@@ -129,7 +129,7 @@
 				editor = instance;
 				onReady?.(instance, monaco);
 			} catch (err) {
-				failed = err instanceof Error ? err.message : 'The editor could not load';
+				failed = err instanceof Error ? err.message : "The editor couldn't load";
 			}
 		})();
 	});
@@ -214,7 +214,7 @@
 	<div class="monaco-host" class:monaco-host--hidden={loading} bind:this={host}></div>
 	{#if failed || doc?.error}
 		<div class="monaco-state">
-			<p class="monaco-state-title">This file could not be opened</p>
+			<p class="monaco-state-title">This file couldn't be opened</p>
 			<p class="monaco-state-detail">{failed ?? doc?.error}</p>
 		</div>
 	{:else if loading}

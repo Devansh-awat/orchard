@@ -24,7 +24,7 @@
 		try {
 			await patchMachine(machine.id, { sshIdentityId: id });
 		} catch (e) {
-			toasts.add({ title: 'Could not change the key', description: errorText(e), color: 'error' });
+			toasts.add({ title: "Couldn't change the key", description: errorText(e), color: 'error' });
 		} finally {
 			savingKey = false;
 		}
@@ -63,7 +63,7 @@
 			timer = setTimeout(() => (saved = false), 1600);
 		} catch (e) {
 			name = machine.name;
-			toasts.add({ title: 'Could not rename', description: errorText(e), color: 'error' });
+			toasts.add({ title: "Couldn't rename", description: errorText(e), color: 'error' });
 		} finally {
 			saving = false;
 		}

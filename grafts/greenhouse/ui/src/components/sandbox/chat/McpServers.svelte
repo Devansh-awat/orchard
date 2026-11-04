@@ -110,7 +110,7 @@
 				signIn = null;
 			}
 		} catch (err) {
-			if (!quiet) loadError = err instanceof Error ? err.message : 'Could not load MCP servers';
+			if (!quiet) loadError = err instanceof Error ? err.message : "Couldn't load MCP servers";
 		} finally {
 			loaded = true;
 			loading = false;
@@ -185,7 +185,7 @@
 			signIn = null;
 			await refresh(true);
 		} catch (err) {
-			pending.error = err instanceof Error ? err.message : 'Could not finish signing in';
+			pending.error = err instanceof Error ? err.message : "Couldn't finish signing in";
 		} finally {
 			pending.busy = false;
 		}
@@ -209,7 +209,7 @@
 			const trimmed = line.trim();
 			if (!trimmed) continue;
 			const at = trimmed.indexOf(':');
-			if (at < 1) return `"${trimmed}" is not a "Name: value" header`;
+			if (at < 1) return `"${trimmed}" isn't a "Name: value" header`;
 			headers[trimmed.slice(0, at).trim()] = trimmed.slice(at + 1).trim();
 		}
 		return headers;
@@ -261,7 +261,7 @@
 			await go('list');
 			await refresh(true);
 		} catch (err) {
-			addError = err instanceof Error ? err.message : 'Could not add the server';
+			addError = err instanceof Error ? err.message : "Couldn't add the server";
 		} finally {
 			adding = false;
 		}
@@ -399,7 +399,7 @@
 										}}
 									>
 										<span class="mcp-hint">
-											Signed in? Paste the address the page sent you to.
+											After you sign in, paste the address the page sent you to.
 											<a href={signIn.url} target="_blank" rel="noopener noreferrer">Open again</a>
 										</span>
 										<div class="mcp-signin-row">

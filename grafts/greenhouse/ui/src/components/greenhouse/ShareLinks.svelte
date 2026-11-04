@@ -44,7 +44,7 @@
 				this.links = [link, ...this.links.filter((l) => l.id !== link.id)];
 				return url;
 			} catch (e) {
-				this.error = e instanceof Error ? e.message : 'Could not create the link';
+				this.error = e instanceof Error ? e.message : "Couldn't create the link";
 				return null;
 			} finally {
 				this.busy = null;
@@ -72,7 +72,7 @@
 				if (this.fresh?.id === link.id) this.fresh = null;
 				return null;
 			} catch (e) {
-				return e instanceof Error ? e.message : 'Could not revoke the link';
+				return e instanceof Error ? e.message : "Couldn't revoke the link";
 			} finally {
 				this.busy = null;
 			}
@@ -115,7 +115,7 @@
 		if (!ws) return;
 		const failed = await store.revoke(ws.sandboxId, link);
 		if (failed)
-			toasts.add({ title: 'Could not revoke the link', description: failed, color: 'error' });
+			toasts.add({ title: "Couldn't revoke the link", description: failed, color: 'error' });
 	}
 
 	function remaining(iso: string | null): string {

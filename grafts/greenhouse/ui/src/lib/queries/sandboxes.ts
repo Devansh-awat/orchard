@@ -13,7 +13,7 @@ import type {
 
 export class SandboxDisabledError extends Error {
   constructor() {
-    super('Sandbox feature is not enabled on this server');
+    super("Sandbox feature isn't enabled on this server");
     this.name = 'SandboxDisabledError';
   }
 }
@@ -36,7 +36,7 @@ export function sandboxesQueryOptions(organizationId?: string) {
           : '/apiv1/sandboxes'
       );
       if (res.status === 404) throw new SandboxDisabledError();
-      if (!res.ok) throw new Error('Failed to fetch sandboxes');
+      if (!res.ok) throw new Error("Couldn't load sandboxes");
       return res.json();
     },
     refetchInterval: (query: { state: { data?: SandboxListResponse } }) => {
@@ -54,7 +54,7 @@ export function sandboxQueryOptions(id: string) {
     queryFn: async (): Promise<Sandbox> => {
       const res = await apiFetch(`/apiv1/sandboxes/${id}`);
       if (res.status === 404) throw new Error('Sandbox not found');
-      if (!res.ok) throw new Error('Failed to fetch sandbox');
+      if (!res.ok) throw new Error("Couldn't load sandbox");
       const data = await res.json();
       return (data?.sandbox ?? data) as Sandbox;
     },
@@ -73,7 +73,7 @@ export function sandboxBootQueryOptions(id: string, enabled: boolean) {
     enabled: enabled && !!id,
     queryFn: async (): Promise<SandboxBoot> => {
       const res = await apiFetch(`/apiv1/sandboxes/${id}/boot`);
-      if (!res.ok) throw new Error('Failed to fetch boot progress');
+      if (!res.ok) throw new Error("Couldn't load boot progress");
       return res.json();
     },
     refetchInterval: (query: { state: { data?: SandboxBoot } }) =>
@@ -108,7 +108,7 @@ export function sandboxCredentialsQueryOptions() {
     queryFn: async (): Promise<SandboxCredentials> => {
       const res = await apiFetch('/apiv1/sandboxes/credentials');
       if (res.status === 404) throw new SandboxDisabledError();
-      if (!res.ok) throw new Error('Failed to fetch sandbox credentials');
+      if (!res.ok) throw new Error("Couldn't load sandbox credentials");
       return res.json();
     },
     retry: sandboxRetry,
@@ -122,7 +122,7 @@ export function sshIdentitiesQueryOptions() {
     queryFn: async (): Promise<SshIdentity[]> => {
       const res = await apiFetch('/apiv1/ssh-identities');
       if (res.status === 404) throw new SandboxDisabledError();
-      if (!res.ok) throw new Error('Failed to fetch SSH identities');
+      if (!res.ok) throw new Error("Couldn't load SSH identities");
       const data: SshIdentitiesResponse = await res.json();
       return data.identities ?? [];
     },

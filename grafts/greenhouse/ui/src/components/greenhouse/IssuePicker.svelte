@@ -104,7 +104,7 @@
 		} catch (e) {
 			if (id !== seq) return;
 			phase = 'error';
-			message = e instanceof Error ? e.message : 'Could not load issues';
+			message = e instanceof Error ? e.message : "Couldn't load issues";
 			issues = [];
 		}
 	}

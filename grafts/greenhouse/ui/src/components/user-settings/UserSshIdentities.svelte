@@ -45,7 +45,7 @@
 			});
 			if (!res.ok) {
 				const data = await res.json().catch(() => ({}));
-				throw new Error(data?.message || 'Failed to add identity');
+				throw new Error(data?.message || "Couldn't add identity");
 			}
 			newName = '';
 			newKey = '';
@@ -54,8 +54,8 @@
 			toasts.add({ title: 'Identity added', color: 'success' });
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to add identity',
+				title: "Couldn't add identity",
+				description: e instanceof Error ? e.message : "Couldn't add identity",
 				color: 'error'
 			});
 		} finally {
@@ -70,7 +70,7 @@
 			const res = await apiFetch('/apiv1/ssh-identities/import-github', { method: 'POST' });
 			if (!res.ok) {
 				const data = await res.json().catch(() => ({}));
-				throw new Error(data?.message || 'Failed to import GitHub keys');
+				throw new Error(data?.message || "Couldn't import GitHub keys");
 			}
 			const data = await res.json();
 			const count = data?.identities?.length ?? 0;
@@ -82,8 +82,8 @@
 			});
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to import GitHub keys',
+				title: "Couldn't import GitHub keys",
+				description: e instanceof Error ? e.message : "Couldn't import GitHub keys",
 				color: 'error'
 			});
 		} finally {
@@ -102,7 +102,7 @@
 					data?.message ||
 						(res.status === 409
 							? 'This identity is attached to a sandbox'
-							: 'Failed to delete identity')
+							: "Couldn't delete identity")
 				);
 			}
 			invalidate();
@@ -110,7 +110,7 @@
 		} catch (e) {
 			toasts.add({
 				title: res409Title(e),
-				description: e instanceof Error ? e.message : 'Failed to delete identity',
+				description: e instanceof Error ? e.message : "Couldn't delete identity",
 				color: 'error'
 			});
 		} finally {
@@ -128,7 +128,7 @@
 <SettingsSection
 	{index}
 	title="SSH identities"
-	description="Public keys used to log into your sandboxes"
+	description="Public keys for signing in to your sandboxes"
 >
 	{#snippet icon(_hovered)}<Terminal class="h-[18px] w-[18px]" />{/snippet}
 	{#snippet actions()}
@@ -172,7 +172,7 @@
 	{#if identitiesQuery.isPending}
 		<Skeleton height="4rem" />
 	{:else if identitiesQuery.isError}
-		<p class="usi-empty">Could not load your SSH identities. Try again shortly.</p>
+		<p class="usi-empty">Couldn't load your SSH identities. Try again shortly.</p>
 	{:else if identities.length === 0}
 		<p class="usi-empty">
 			No identities yet. Add a public key or import the ones on your GitHub profile.

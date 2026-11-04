@@ -89,7 +89,7 @@
 				color: 'success'
 			});
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'The deploy did not start';
+			error = e instanceof Error ? e.message : "The deploy didn't start";
 		} finally {
 			busy = null;
 		}
@@ -149,7 +149,7 @@
 			{#if phase === 'loading' || phase === 'idle'}
 				<p class="note">Loading projects…</p>
 			{:else if phase === 'error'}
-				<p class="note">Could not load the projects in this organization.</p>
+				<p class="note">Couldn't load the projects in this organization.</p>
 			{:else if projects.length === 0}
 				<p class="note">
 					There is no project in this organization you can deploy to. Create one in Orchard, or ask

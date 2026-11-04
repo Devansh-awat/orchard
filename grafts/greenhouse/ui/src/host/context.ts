@@ -11,7 +11,7 @@ export function bindHost(host: HostApi): void {
 }
 
 export function useHost(): HostApi {
-  if (!current) throw new Error('greenhouse: the host api is not bound yet');
+  if (!current) throw new Error("greenhouse: the host api isn't bound yet");
   return current;
 }
 

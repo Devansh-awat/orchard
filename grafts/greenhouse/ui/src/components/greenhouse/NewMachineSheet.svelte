@@ -95,14 +95,14 @@
 				body: JSON.stringify(input)
 			});
 			const body = await res.json().catch(() => null);
-			if (!res.ok) throw new Error(body?.message ?? 'Could not create the machine');
+			if (!res.ok) throw new Error(body?.message ?? "Couldn't create the machine");
 			const sandbox = (body?.sandbox ?? body) as Sandbox;
 			await queryClient.invalidateQueries({ queryKey: ['sandboxes'] });
 			open = false;
 			toasts.add({ title: `Creating ${sandbox.name}`, color: 'success' });
 			app.openMachine(sandbox.id);
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Could not create the machine';
+			error = e instanceof Error ? e.message : "Couldn't create the machine";
 		} finally {
 			creating = false;
 		}

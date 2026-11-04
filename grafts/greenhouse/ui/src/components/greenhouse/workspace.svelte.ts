@@ -598,7 +598,7 @@ export class MachineWorkspace {
     const res = await api.changes(this.sandboxId, scopeOf(session));
     if (this.#disposed) return;
     if (!res.ok) {
-      this.changesError.set(sid, res.message || 'Could not load the changes');
+      this.changesError.set(sid, res.message || "Couldn't load the changes");
       return;
     }
     this.changesError.delete(sid);
@@ -652,7 +652,7 @@ export class MachineWorkspace {
       if (untrack(() => this.sessionId) === session.id) this.host.openTab(chatTabId(chat.id));
     } catch (e) {
       toasts.add({
-        title: 'Could not open a chat for this session',
+        title: "Couldn't open a chat for this session",
         description: e instanceof Error ? e.message : undefined,
         color: 'error'
       });
@@ -729,7 +729,7 @@ export class MachineWorkspace {
       return chat.id;
     } catch (e) {
       toasts.add({
-        title: 'Could not start that agent',
+        title: "Couldn't start that agent",
         description: e instanceof Error ? e.message : undefined,
         color: 'error'
       });
@@ -880,7 +880,7 @@ export class MachineWorkspace {
     );
     if (!res.ok) {
       toasts.add({
-        title: res.status === 404 ? 'Previews are not available yet' : 'Could not open the preview',
+        title: res.status === 404 ? "Previews aren't available yet" : "Couldn't open the preview",
         description: res.status === 404 ? 'This server has no preview proxy yet.' : res.message,
         color: 'error'
       });
@@ -956,7 +956,7 @@ export class MachineWorkspace {
       this.chats.set(session.id, before);
       this.#hiddenChats.delete(chatId);
       toasts.add({
-        title: 'Could not delete the chat',
+        title: "Couldn't delete the chat",
         description: e instanceof Error ? e.message : undefined,
         color: 'error'
       });
@@ -983,7 +983,7 @@ export class MachineWorkspace {
       } catch (e) {
         if (!(e instanceof api.GhApiError) || e.status !== 404) {
           toasts.add({
-            title: 'Could not start a chat',
+            title: "Couldn't start a chat",
             description: e instanceof Error ? e.message : undefined,
             color: 'error'
           });
@@ -1078,7 +1078,7 @@ export class MachineWorkspace {
         return null;
       }
       toasts.add({
-        title: 'Could not start the session',
+        title: "Couldn't start the session",
         description: e instanceof Error ? e.message : undefined,
         color: 'error'
       });
@@ -1100,7 +1100,7 @@ export class MachineWorkspace {
       if (this.#disposed) return;
       patch(previous.icon ?? null);
       toasts.add({
-        title: 'Could not change the icon',
+        title: "Couldn't change the icon",
         description: e instanceof Error ? e.message : undefined,
         color: 'error'
       });
@@ -1130,7 +1130,7 @@ export class MachineWorkspace {
     }
     if (this.#disposed) return;
     toasts.add({
-      title: `${name} has not appeared yet`,
+      title: `${name} hasn't appeared yet`,
       description: 'The clone may have failed. Check ~/.clone.log in a terminal.',
       color: 'error'
     });
@@ -1148,7 +1148,7 @@ export class MachineWorkspace {
       return true;
     } catch (e) {
       toasts.add({
-        title: `Could not remove ${name}`,
+        title: `Couldn't remove ${name}`,
         description: e instanceof Error ? e.message : undefined,
         color: 'error'
       });
@@ -1260,7 +1260,7 @@ export class MachineWorkspace {
     } catch (e) {
       optimisticSandboxStatus(queryClient, this.sandboxId, previous);
       toasts.add({
-        title: `Could not ${action} ${machine.name}`,
+        title: `Couldn't ${action} ${machine.name}`,
         description: e instanceof Error ? e.message : undefined,
         color: 'error'
       });
@@ -1280,7 +1280,7 @@ export class MachineWorkspace {
     } catch (e) {
       const missing = e instanceof api.GhApiError && (e.status === 404 || e.status === 405);
       toasts.add({
-        title: missing ? 'Retry is not available on this server yet' : 'Retry failed',
+        title: missing ? "Retry isn't available on this server yet" : 'Retry failed',
         description: missing
           ? 'Stop and start the machine to apply it again.'
           : e instanceof Error
@@ -1336,7 +1336,7 @@ export class MachineWorkspace {
       return true;
     } catch (e) {
       toasts.add({
-        title: 'Could not remove the preview',
+        title: "Couldn't remove the preview",
         description: e instanceof Error ? e.message : undefined,
         color: 'error'
       });

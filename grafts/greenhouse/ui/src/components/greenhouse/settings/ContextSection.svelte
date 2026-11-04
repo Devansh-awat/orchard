@@ -52,7 +52,7 @@
 			const list = await json<{ items: Item[] }>('/apiv1/me/context');
 			items = list.items;
 		} catch (e) {
-			failed = errorText(e) ?? 'Could not load your context';
+			failed = errorText(e) ?? "Couldn't load your context";
 		}
 	}
 
@@ -70,7 +70,7 @@
 			instructions = saved = detail.files?.['CLAUDE.md'] ?? '';
 			shown = true;
 		} catch (e) {
-			toasts.add({ title: 'Could not open CLAUDE.md', description: errorText(e), color: 'error' });
+			toasts.add({ title: "Couldn't open CLAUDE.md", description: errorText(e), color: 'error' });
 		} finally {
 			revealing = false;
 		}
@@ -105,7 +105,7 @@
 			saved = instructions;
 			await load();
 		} catch (e) {
-			toasts.add({ title: 'Could not save CLAUDE.md', description: errorText(e), color: 'error' });
+			toasts.add({ title: "Couldn't save CLAUDE.md", description: errorText(e), color: 'error' });
 		} finally {
 			saving = false;
 		}
@@ -123,7 +123,7 @@
 		} catch (e) {
 			items = previous;
 			toasts.add({
-				title: `Could not update ${item.name}`,
+				title: `Couldn't update ${item.name}`,
 				description: errorText(e),
 				color: 'error'
 			});
@@ -137,7 +137,7 @@
 			items = items?.filter((it) => it.id !== item.id) ?? null;
 		} catch (e) {
 			toasts.add({
-				title: `Could not remove ${item.name}`,
+				title: `Couldn't remove ${item.name}`,
 				description: errorText(e),
 				color: 'error'
 			});

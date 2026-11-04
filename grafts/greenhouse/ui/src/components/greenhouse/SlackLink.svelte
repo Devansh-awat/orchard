@@ -42,7 +42,7 @@
 			preview = await previewSlackLink(current);
 			phase = 'confirm';
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Could not read this link';
+			error = e instanceof Error ? e.message : "Couldn't read this link";
 			if (e instanceof IntegrationError && e.status === 400) {
 				forgetUrlSecret('link:slack');
 				phase = 'expired';
@@ -61,7 +61,7 @@
 			forgetUrlSecret('link:slack');
 			phase = 'done';
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Could not link Slack';
+			error = e instanceof Error ? e.message : "Couldn't link Slack";
 			phase = 'confirm';
 		}
 	}
@@ -96,7 +96,7 @@
 				<span class="code">/greenhouse link</span> in Slack for a new one.
 			</p>
 		{:else if phase === 'error'}
-			<h1 class="title" id="slack-link-title">Could not read this link</h1>
+			<h1 class="title" id="slack-link-title">Couldn't read this link</h1>
 			<Alert tone="error" title="Nothing was linked">{error}</Alert>
 			<div class="actions">
 				<Button variant="secondary" href="/">Cancel</Button>

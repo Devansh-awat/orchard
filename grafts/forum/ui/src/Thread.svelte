@@ -57,7 +57,7 @@
 		if (res.ok) {
 			host.navigate('/grove');
 		} else {
-			toastError(host, 'Error', await failure(res, 'Failed to delete'));
+			toastError(host, 'Error', await failure(res, "Couldn't delete"));
 		}
 	}
 
@@ -72,7 +72,7 @@
 			thread.replies = thread.replies.filter((r) => r.id !== target.id);
 			thread.replyCount = Math.max(0, thread.replyCount - 1);
 		} else {
-			toastError(host, 'Error', await failure(res, 'Failed to delete'));
+			toastError(host, 'Error', await failure(res, "Couldn't delete"));
 		}
 	}
 
@@ -84,7 +84,7 @@
 			adminStatus = thread?.status ?? 'open';
 			adminPriority = thread?.priority ?? 'none';
 		} else {
-			error = res.status === 404 ? 'This post does not exist' : 'Failed to load post';
+			error = res.status === 404 ? "This post doesn't exist" : "Couldn't load post";
 		}
 		loading = false;
 	}
@@ -128,14 +128,14 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ body: replyBody, images: replyImages })
 			});
-			if (!res.ok) throw new Error(await failure(res, 'Failed to reply'));
+			if (!res.ok) throw new Error(await failure(res, "Couldn't reply"));
 			const reply = await res.json();
 			thread.replies.push(reply);
 			thread.replyCount += 1;
 			replyBody = '';
 			replyImages = [];
 		} catch (e) {
-			toastError(host, 'Error', e instanceof Error ? e.message : 'Failed to reply');
+			toastError(host, 'Error', e instanceof Error ? e.message : "Couldn't reply");
 		} finally {
 			replying = false;
 		}
@@ -210,7 +210,7 @@
 		{#if loading}
 			<Skeleton height="12rem" />
 		{:else if error || !thread}
-			<p class="gt-error">{error ?? 'Failed to load post'}</p>
+			<p class="gt-error">{error ?? "Couldn't load post"}</p>
 		{:else}
 			<article class="gt-thread" {@attach motionStagger({ index: 0, from: { y: 10 } })}>
 				<div class="gt-meta">
@@ -368,7 +368,7 @@
 <ConfirmModal
 	bind:open={confirmThreadDelete}
 	title="Delete this post?"
-	description="The post, its replies, and attached images are removed permanently."
+	description="This permanently removes the post, its replies and its images."
 	confirmLabel="Delete"
 	onconfirm={deleteThread}
 />
@@ -376,7 +376,7 @@
 <ConfirmModal
 	bind:open={confirmReplyDelete}
 	title="Delete this reply?"
-	description="The reply and its attached images are removed permanently."
+	description="This permanently removes the reply and its images."
 	confirmLabel="Delete"
 	onconfirm={deleteReply}
 	oncancel={() => (replyToDelete = null)}

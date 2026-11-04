@@ -27,7 +27,7 @@
 				const url = await uploadGroveImage(host, file);
 				images = [...images, url];
 			} catch (err) {
-				toastError(host, 'Upload failed', err instanceof Error ? err.message : 'Could not upload image');
+				toastError(host, 'Upload failed', err instanceof Error ? err.message : "Couldn't upload image");
 			}
 		}
 		uploading = false;

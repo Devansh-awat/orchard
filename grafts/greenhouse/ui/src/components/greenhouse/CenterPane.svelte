@@ -193,7 +193,7 @@
 	title="Delete {doomed?.title ?? 'this chat'}?"
 	size="sm"
 >
-	<p class="doomed">Its messages are gone for good. The code it changed stays.</p>
+	<p class="doomed">This deletes its messages. The code it changed stays.</p>
 	{#snippet footer()}
 		<Button variant="secondary" onclick={() => (doomed = null)}>Cancel</Button>
 		<Button variant="danger" onclick={confirmDelete}>Delete chat</Button>

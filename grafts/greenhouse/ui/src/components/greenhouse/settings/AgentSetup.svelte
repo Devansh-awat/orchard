@@ -99,7 +99,7 @@
 			await settle(next);
 			if (next.state === 'running') void poll(next.loginId, m.id);
 		} catch (e) {
-			error = errorText(e) ?? 'Could not start the sign-in';
+			error = errorText(e) ?? "Couldn't start the sign-in";
 		} finally {
 			busy = null;
 		}
@@ -114,7 +114,7 @@
 			answer = '';
 			await settle(next);
 		} catch (e) {
-			error = errorText(e) ?? 'That did not work';
+			error = errorText(e) ?? "Sign-in failed";
 		} finally {
 			busy = null;
 		}
@@ -151,7 +151,7 @@
 			toasts.add({ title: value ? 'Key saved' : 'Key removed', color: 'success' });
 			void ws.refreshAgents(true);
 		} catch (e) {
-			error = errorText(e) ?? 'Could not save the key';
+			error = errorText(e) ?? "Couldn't save the key";
 		} finally {
 			busy = null;
 		}
@@ -234,7 +234,7 @@
 							<span class="step-text">
 								{login.step === 'code'
 									? 'Paste the code the page shows you'
-									: 'Your browser lands on a page that will not load. Copy its address and paste it here'}
+									: "Your browser lands on a page that won't load. Copy its address and paste it here"}
 							</span>
 							<div class="step-controls">
 								<Input

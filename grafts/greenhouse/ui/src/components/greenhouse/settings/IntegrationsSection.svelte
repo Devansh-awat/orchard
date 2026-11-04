@@ -79,7 +79,7 @@
 			await load();
 		} catch (e) {
 			toasts.add({
-				title: 'Could not disconnect Linear',
+				title: "Couldn't disconnect Linear",
 				description: errorText(e),
 				color: 'error'
 			});
@@ -95,7 +95,7 @@
 			await unlinkSlack();
 			await load();
 		} catch (e) {
-			toasts.add({ title: 'Could not unlink Slack', description: errorText(e), color: 'error' });
+			toasts.add({ title: "Couldn't unlink Slack", description: errorText(e), color: 'error' });
 		} finally {
 			busy = null;
 		}
@@ -111,7 +111,7 @@
 		</div>
 	</Card>
 {:else if failed}
-	<FormError message="Could not load your accounts" />
+	<FormError message="Couldn't load your accounts" />
 {:else}
 	<Card title="Start sessions from">
 		<Row title="GitHub" description={github?.account ? `@${github.account}` : 'Not connected'}>

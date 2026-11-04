@@ -45,7 +45,7 @@
 			{:else if !entry.childID}
 				<p class="agent-empty">No transcript yet.</p>
 			{:else if entry.entries.length === 0}
-				<p class="agent-empty">The sub-agent has not produced output yet.</p>
+				<p class="agent-empty">The sub-agent hasn't produced output yet.</p>
 			{:else}
 				{@render children()}
 			{/if}

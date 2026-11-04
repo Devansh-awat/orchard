@@ -30,7 +30,7 @@
 			toasts.add({ title: 'Setup script saved', color: 'success' });
 		} catch (e) {
 			toasts.add({
-				title: 'Could not save the setup script',
+				title: "Couldn't save the setup script",
 				description: errorText(e),
 				color: 'error'
 			});

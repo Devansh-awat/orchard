@@ -161,7 +161,7 @@
 				</div>
 			{:else if chunks.length === 0 && thread?.failed}
 				<div class="tx-empty" data-align="content">
-					<p class="tx-empty-title">Could not load this chat</p>
+					<p class="tx-empty-title">Couldn't load this chat</p>
 					<p class="tx-empty-sub">
 						<button type="button" class="tx-retry" onclick={() => store.retryHistory()}
 							>Try again</button

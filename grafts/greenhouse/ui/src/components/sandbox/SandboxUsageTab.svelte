@@ -27,7 +27,7 @@
 	{#if sandboxesQuery.isPending}
 		<Skeleton height="8rem" />
 	{:else if disabled}
-		<p class="sut-disabled">Sandboxes are not available to you yet.</p>
+		<p class="sut-disabled">Sandboxes aren't available to you yet.</p>
 	{:else}
 		<div class="sut-meter">
 			<div class="sut-meter-head">

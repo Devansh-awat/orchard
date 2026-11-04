@@ -13,7 +13,7 @@ export function textFile(name: string, content: string): File {
 export async function chatTranscriptFile(sandboxId: string, chat: ContextChat): Promise<File> {
   const dir = chat.directory ? `&directory=${encodeURIComponent(chat.directory)}` : '';
   const res = await apiFetch(`${ocBase(sandboxId)}/session/${chat.id}/message?limit=200${dir}`);
-  if (!res.ok) throw new Error('Could not load that chat');
+  if (!res.ok) throw new Error("Couldn't load that chat");
   const messages = (await res.json()) as OcMessage[];
   return textFile(transcriptFileName(chat.title), transcriptMarkdown(chat.title, messages));
 }

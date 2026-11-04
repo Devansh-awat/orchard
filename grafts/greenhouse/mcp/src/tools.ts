@@ -171,7 +171,7 @@ export function registerSandboxTools(server: McpServer, client: OrchardClient) {
   server.registerTool(
     'create_sandbox_session_pr',
     {
-      description: `Open a GitHub pull request for a session's branch, using the caller's own linked GitHub account (host or guest). Pushes the branch first, as the caller, when it has no upstream on origin or has unpushed commits. Fails with github_not_linked if the caller has not linked GitHub. Commit the work first (the agent can when asked); uncommitted changes are not included.`,
+      description: `Open a GitHub pull request for a session's branch, using the caller's own linked GitHub account (host or guest). Pushes the branch first, as the caller, when it has no upstream on origin or has unpushed commits. Fails with github_not_linked if the caller hasn't linked GitHub. Commit the work first (the agent can when asked); uncommitted changes aren't included.`,
       annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
         sandboxId,

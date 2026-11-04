@@ -134,7 +134,7 @@
 	const notExposed = $derived(
 		previewPorts.length > 0
 			? `Not reachable from outside the machine. Previews work on ports ${previewPorts.join(', ')}.`
-			: 'Previews are not available on this machine.'
+			: "Previews aren't available on this machine."
 	);
 	const scripted = $derived(!!session && !isLegacy(session));
 	const tab = $derived<DockTab>(active.get(key) ?? (scripted ? 'setup' : 'term:1'));
@@ -278,7 +278,7 @@
 			ws.openFile(CONFIG_PATH);
 		} catch (e) {
 			toasts.add({
-				title: `Could not create ${CONFIG_PATH}`,
+				title: `Couldn't create ${CONFIG_PATH}`,
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -345,7 +345,7 @@
 			if (action === 'start') select(command === 'setup' ? 'setup' : tabOf(command?.id ?? 'run'));
 		} catch (e) {
 			toasts.add({
-				title: action === 'start' ? `Could not start ${label}` : `Could not stop ${label}`,
+				title: action === 'start' ? `Couldn't start ${label}` : `Couldn't stop ${label}`,
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -373,7 +373,7 @@
 
 {#snippet scriptsError()}
 	<p class="note">
-		Could not read the scripts for this session.
+		Couldn't read the scripts for this session.
 		<button type="button" class="retry" onclick={() => loadScripts()}>Try again</button>
 	</p>
 {/snippet}
@@ -658,7 +658,7 @@
 								{@render missing('setup')}
 							{:else if scripts.setupState === 'none'}
 								<div class="empty">
-									<p class="empty-title">Setup has not run in this session</p>
+									<p class="empty-title">Setup hasn't run in this session</p>
 									<p class="empty-line">
 										It runs on its own for new sessions. Start it now to install what this one needs.
 									</p>
