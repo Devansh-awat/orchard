@@ -1685,7 +1685,13 @@ review_value() {
       fi
       ;;
     limits)
-      if [ -n "$ORCHARD_LIMITS" ]; then printf '%s' "$ORCHARD_LIMITS"; else printf 'choose in the dashboard setup'; fi
+      if [ -n "$ORCHARD_LIMITS" ]; then
+        printf '%s' "$ORCHARD_LIMITS"
+      elif [ "$PREVIOUS_INSTALL" = true ]; then
+        printf 'no change'
+      else
+        printf 'choose in the dashboard setup'
+      fi
       ;;
   esac
 }
