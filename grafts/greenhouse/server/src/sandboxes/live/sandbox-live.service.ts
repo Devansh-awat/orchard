@@ -104,8 +104,9 @@ export class SandboxLiveService implements OnModuleInit, OnModuleDestroy {
     userId: string,
     orgScope: string | null
   ): Promise<SandboxRole | null> {
-    const resolved = await requestAuthStorage.run(orgScope ? { sessionOrgId: orgScope } : {}, () =>
-      this.access.resolveInside(sandboxId, userId)
+    const resolved = await requestAuthStorage.run(
+      { browserSession: true, ...(orgScope ? { sessionOrgId: orgScope } : {}) },
+      () => this.access.resolveInside(sandboxId, userId)
     );
     if (!resolved) return null;
     if (resolved.sandbox.desiredState === 'deleted') return null;

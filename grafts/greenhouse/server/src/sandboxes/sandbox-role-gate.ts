@@ -22,6 +22,7 @@ export async function requireSandboxAccess(
 export interface SandboxGateScope {
   sessionOrgId?: string | null;
   tokenProjectIds?: string[] | null;
+  browserSession?: boolean;
 }
 
 export async function sandboxTerminalMode(
@@ -33,7 +34,8 @@ export async function sandboxTerminalMode(
 ): Promise<{ row: SandboxGateRow; mode: 'rw' | 'ro'; access: SandboxAccess } | null> {
   const ctx = {
     ...(scope.sessionOrgId ? { sessionOrgId: scope.sessionOrgId } : {}),
-    ...(scope.tokenProjectIds?.length ? { tokenProjectIds: scope.tokenProjectIds } : {})
+    ...(scope.tokenProjectIds?.length ? { tokenProjectIds: scope.tokenProjectIds } : {}),
+    ...(scope.browserSession ? { browserSession: true } : {})
   };
   return requestAuthStorage.run(ctx, () => terminalMode(access, sandboxId, userId, requested));
 }
@@ -62,7 +64,8 @@ export async function sandboxSshAccess(
 ): Promise<SandboxAccess | null> {
   const ctx = {
     ...(scope.sessionOrgId ? { sessionOrgId: scope.sessionOrgId } : {}),
-    ...(scope.tokenProjectIds?.length ? { tokenProjectIds: scope.tokenProjectIds } : {})
+    ...(scope.tokenProjectIds?.length ? { tokenProjectIds: scope.tokenProjectIds } : {}),
+    ...(scope.browserSession ? { browserSession: true } : {})
   };
   return requestAuthStorage.run(ctx, () =>
     access.requireSandboxRole(sandboxId, userId, 'owner').catch(() => null)
