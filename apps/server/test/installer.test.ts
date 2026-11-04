@@ -619,3 +619,22 @@ test('the summary is short, honest about the certificate, and has no em dashes',
     box.cleanup();
   }
 });
+
+test(
+  'a re-run on the same domain does not repeat the DNS instructions',
+  { skip: !has('yq', '--version') },
+  () => {
+    const box = sandbox();
+    try {
+      box.run(`mkdir -p "${box.state}"; write_values`);
+      const out = box.run(`
+        ORCHARD_DOMAIN= ORCHARD_APP_DOMAIN= ORCHARD_MCP_DOMAIN= ASSUME_YES=true INGRESS_MODE=public
+        load_previous_answers
+        collect_domains
+      `);
+      assert.ok(!/Point these records/.test(out));
+    } finally {
+      box.cleanup();
+    }
+  }
+);

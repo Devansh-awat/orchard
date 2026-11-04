@@ -789,6 +789,7 @@ collect_domains() {
   done
 
   if [ "$INGRESS_MODE" = public ]; then
+    if [ "$(reuse_value '.ingress.host')" = "$ORCHARD_DOMAIN" ]; then return 0; fi
     local records=()
     for name in "${names[@]}"; do
       if ! is_sslip "$name"; then records+=("$name"); fi
