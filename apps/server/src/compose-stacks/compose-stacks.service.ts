@@ -16,6 +16,7 @@ import { UsersService } from '../users/users.service';
 import { GitHubService } from '../github/github.service';
 import { looksSecret } from '../projects/env-write-rules';
 import { composeVolumeName } from './compose-volume-name';
+import { composeBuildPaths, stackWithBuildState, type ComposeBuildPaths } from './compose-build';
 
 interface UserData {
   email?: string;
@@ -37,7 +38,7 @@ interface CreateFromGithubBody {
 interface ParsedComposeService {
   name: string;
   image?: string;
-  build?: { context?: string; dockerfile?: string };
+  build?: ComposeBuildPaths;
   ports: { containerPort: number; servicePort: number; protocol: string }[];
   env: { key: string; value: string }[];
   volumes: { name: string; type: 'pvc' | 'emptyDir'; mountPath: string; storageSize?: string }[];
@@ -172,7 +173,7 @@ export class ComposeStacksService {
     };
   }
 
-  private parseCompose(composeYaml: string): ParsedComposeService[] {
+  private parseCompose(composeYaml: string, composePath: string): ParsedComposeService[] {
     let parsed: any;
     try {
       parsed = yaml.load(composeYaml);
@@ -245,10 +246,11 @@ export class ComposeStacksService {
         name,
         image: svc?.image,
         build: svc?.build
-          ? {
-              context: typeof svc.build === 'string' ? svc.build : svc.build?.context,
-              dockerfile: typeof svc.build === 'object' ? svc.build?.dockerfile : undefined
-            }
+          ? composeBuildPaths(
+              name,
+              composePath,
+              typeof svc.build === 'string' ? { context: svc.build } : svc.build
+            )
           : undefined,
         ports,
         env,
@@ -361,7 +363,7 @@ export class ComposeStacksService {
       composePath
     );
 
-    const services = this.parseCompose(composeYaml);
+    const services = this.parseCompose(composeYaml, composePath);
     await this.deployments.assertEnvironmentVolumesUnclaimed(
       projectId,
       environment.id,
@@ -437,18 +439,15 @@ export class ComposeStacksService {
       if (svc.build) {
         // Reuse the existing GitHub-build pipeline. Each child deployment owns
         // its own buildStatus/buildLogs and webhooks fan out per child.
-        const dockerfilePath = svc.build.dockerfile || 'Dockerfile';
-        const buildFromRoot =
-          !svc.build.context || svc.build.context === '.' || svc.build.context === './';
         await this.deployments.createDeploymentFromGitHub(
           stack.projectId,
           {
             name: deployName,
             repoUrl: stack.githubRepo!,
             branch: stack.githubBranch!,
-            dockerfilePath,
+            dockerfilePath: svc.build.dockerfilePath,
             buildType: 'dockerfile',
-            buildFromRoot,
+            buildFromRoot: svc.build.buildFromRoot,
             replicas: svc.replicas,
             ports: svc.ports.length > 0 ? svc.ports : undefined,
             env,
@@ -530,7 +529,7 @@ export class ComposeStacksService {
 
     let services: ParsedComposeService[];
     try {
-      services = this.parseCompose(composeYaml);
+      services = this.parseCompose(composeYaml, stack.composePath ?? 'docker-compose.yml');
     } catch (e: any) {
       await this.prisma.composeStack.update({
         where: { id: stackId },
@@ -723,9 +722,7 @@ export class ComposeStacksService {
       buildConfig.startCommand = svc.command ?? null;
     }
     if (svc.build) {
-      const dockerfilePath = svc.build.dockerfile || 'Dockerfile';
-      const buildFromRoot =
-        !svc.build.context || svc.build.context === '.' || svc.build.context === './';
+      const { dockerfilePath, buildFromRoot } = svc.build;
       if (dockerfilePath !== child.dockerfilePath) buildConfig.dockerfilePath = dockerfilePath;
       if (buildFromRoot !== child.buildFromRoot) buildConfig.buildFromRoot = buildFromRoot;
     }
@@ -833,7 +830,8 @@ export class ComposeStacksService {
     });
     if (!stack) throw new NotFoundException('Compose stack not found');
     const access = await this.authz.requireProjectView(stack.projectId, userId);
-    return access.canEdit ? stack : scrubComposeStackForViewer(stack);
+    const current = stackWithBuildState(stack);
+    return access.canEdit ? current : scrubComposeStackForViewer(current);
   }
 
   async listForProject(projectId: string, clerkId: string, userData?: UserData) {
@@ -844,11 +842,18 @@ export class ComposeStacksService {
       orderBy: { createdAt: 'desc' },
       include: {
         deployments: {
-          select: { id: true, name: true, status: true, composeServiceName: true }
+          select: {
+            id: true,
+            name: true,
+            status: true,
+            buildStatus: true,
+            composeServiceName: true
+          }
         }
       }
     });
-    return access.canEdit ? stacks : stacks.map(scrubComposeStackForViewer);
+    const current = stacks.map((stack) => stackWithBuildState(stack));
+    return access.canEdit ? current : current.map(scrubComposeStackForViewer);
   }
 
   async deleteComposeStack(stackId: string, clerkId: string, userData?: UserData) {

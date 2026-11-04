@@ -129,6 +129,28 @@ services:
   assert.equal((created[0][2] as any).composeServiceName, 'worker');
 });
 
+test('redeploy moves a service to the build context its compose file names', async () => {
+  const yaml = `
+services:
+  backend:
+    build: backend
+`;
+  const { service, calls } = harness(yaml, [
+    child({
+      id: 'backend',
+      name: 'app-backend',
+      composeServiceName: 'backend',
+      githubRepo: 'https://github.com/acme/app',
+      dockerfilePath: 'Dockerfile',
+      buildFromRoot: false
+    })
+  ]);
+  await service.redeployFromGithub('stack', 'clerk');
+  assert.deepEqual(calls.find((c) => c[0] === 'buildConfig')![2], {
+    dockerfilePath: 'backend/Dockerfile'
+  });
+});
+
 test('a volume with an underscore keeps one valid claim across redeploys', async () => {
   const yaml = `
 services:
