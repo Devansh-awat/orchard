@@ -16,7 +16,7 @@ You do not need this guide in these cases:
 
 ## Prerequisites
 
-- cert-manager installed in the cluster. The installer includes it.
+- cert-manager installed in the cluster. The installer includes it in `public` and `lan` mode.
 - Your own domain, at a [DNS provider that cert-manager supports](https://cert-manager.io/docs/configuration/acme/dns01/).
 - Credentials for your DNS provider.
 
