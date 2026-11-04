@@ -31,6 +31,7 @@ sidebar:
 | `orchardctl logs [service]`    | Follow logs for `server`, `frontend`, or `mcp`.                                       |
 | `orchardctl status`            | Show the control-plane pods.                                                          |
 | `orchardctl k3s`               | Show the k3s version, apply a patch, or move to a newer minor version.                |
+| `orchardctl images`            | Show the bundled images, and what each can move to.                                   |
 | `orchardctl sync`              | Refresh these commands from the deployed image.                                       |
 | `orchardctl uninstall`         | Remove Orchard, k3s, and everything on them.                                          |
 | `orchardctl licenses`          | Print [third-party notices](/operate/licenses/#third-party-notices).                  |
@@ -57,6 +58,7 @@ Runs the following steps in order:
 6. Refreshes the host commands.
 7. Applies the latest k3s patch. For more information, refer to [k3s](#k3s).
 8. Upgrades Traefik, CloudNativePG, and cert-manager within their major versions, from their own charts.
+9. Installs newer versions of the images the chart runs. For more information, refer to [images](#images).
 
 The command restarts a deployment if its image tag is empty or `latest`. Otherwise, Helm sees an identical pod template and the old image keeps running.
 
@@ -397,6 +399,24 @@ ORCHARD_K3S_UPDATES=off
 The `upgrade` command does not run on its own, because a new minor version can change how a workload behaves. `orchardctl update` tells you when your version no longer gets security fixes. Take a [backup of the control-plane database](/operate/production/#5-back-up-the-control-plane-database) first.
 
 The commands do not upgrade worker nodes. They list the nodes that are behind, so you can run the k3s install script on each one with `INSTALL_K3S_VERSION`. A cluster with more than one control-plane node is not upgraded. For that setup, follow the [k3s upgrade guide](https://docs.k3s.io/upgrades).
+
+## images
+
+```bash
+sudo orchardctl images
+```
+
+Shows the images Orchard bundles, and what each can move to. `orchardctl update` installs newer versions from their own registries, so a fix does not wait on an Orchard release.
+
+| Images                                                                                                       | What installs on its own                                             |
+| ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| Redis, pgbouncer, BuildKit                                                                                   | Patch versions                                                       |
+| VictoriaMetrics, vmagent, VictoriaLogs, kube-state-metrics, node-exporter, Vector, Trivy, versitygw, aws-cli | Any version in the same major version                                |
+| zot, cloudflared                                                                                             | The `latest` tag. The workload restarts only when the image changed. |
+
+A new major version needs a person. If a new version does not come up within three minutes, the update goes back and does not try that version again. To try it again, remove its line from `/etc/orchard/images-held`.
+
+The versions go in `/etc/orchard/images.yaml`. An image that you set in `/etc/orchard/values.yaml` stays as you set it.
 
 ## sync
 

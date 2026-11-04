@@ -33,6 +33,17 @@ func LoadValues(path string) (*Values, error) {
 	return &Values{path: path, root: root}, nil
 }
 
+func ParseValues(raw []byte) (*Values, error) {
+	root := map[string]any{}
+	if err := yaml.Unmarshal(raw, &root); err != nil {
+		return nil, fmt.Errorf("couldn't parse values: %w", err)
+	}
+	if root == nil {
+		root = map[string]any{}
+	}
+	return &Values{root: root}, nil
+}
+
 func (v *Values) Save() error {
 	out, err := yaml.Marshal(v.root)
 	if err != nil {

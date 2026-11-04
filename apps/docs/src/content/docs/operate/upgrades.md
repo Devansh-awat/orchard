@@ -34,15 +34,17 @@ For what each step does, refer to [`orchardctl k3s`](/operate/host-commands/#k3s
 
 Most parts of an instance get security fixes without an Orchard release:
 
-| Part                                           | How it gets security fixes                                                                                                |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| k3s, Kubernetes, and containerd                | `orchardctl update` applies patches from the k3s release channels. `orchardctl k3s upgrade` moves to a new minor version. |
-| Postgres minor versions                        | Orchard applies them from the [CloudNativePG image catalog](/data/upgrades/).                                             |
-| The host operating system                      | Your distribution's updates. Orchard does not change them.                                                                |
-| Traefik, CloudNativePG, and cert-manager       | `orchardctl update` upgrades them from their own charts, within their major versions.                                     |
-| Orchard, Redis, and the metrics and log stores | A new Orchard chart. `orchardctl update` installs it.                                                                     |
+| Part                                                       | How it gets security fixes                                                                                                |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| k3s, Kubernetes, and containerd                            | `orchardctl update` applies patches from the k3s release channels. `orchardctl k3s upgrade` moves to a new minor version. |
+| Postgres minor versions                                    | Orchard applies them from the [CloudNativePG image catalog](/data/upgrades/).                                             |
+| The host operating system                                  | Your distribution's updates. Orchard does not change them.                                                                |
+| Traefik, CloudNativePG, and cert-manager                   | `orchardctl update` upgrades them from their own charts, within their major versions.                                     |
+| Redis, pgbouncer, BuildKit, and the metrics and log stores | `orchardctl update` installs newer versions from their own registries. To see them, run `orchardctl images`.              |
+| Railpack                                                   | A new Orchard chart, because a version mismatch breaks builds. `orchardctl images` tells you when one is out.             |
+| Orchard                                                    | A new Orchard chart. `orchardctl update` installs it.                                                                     |
 
-A new major version of an add-on needs a person, because it can change behavior. `orchardctl update` tells you when one is out. To turn off the add-on upgrades, add `ORCHARD_ADDON_UPDATES=off` to `/etc/orchard/env`.
+A new major version needs a person, because it can change behavior. `orchardctl update` tells you when one is out. To turn off these updates, add `ORCHARD_ADDON_UPDATES=off` to `/etc/orchard/env`.
 
 Upgrading CloudNativePG does not restart your databases, because the installer turns on in-place updates of the instance manager.
 

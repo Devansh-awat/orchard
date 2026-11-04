@@ -181,9 +181,10 @@ Then helm upgrade --install with your values file, waits for each deployment to
 roll out, makes sure Traefik writes the JSON access log the log store reads,
 and refreshes the host commands. Extra arguments are passed through to helm.
 
-Last, it applies the latest k3s patch from k3s's own release channel, and
-upgrades Traefik, CloudNativePG and cert-manager within their major versions from
-their own charts. See orchardctl k3s --help. To turn the add-on upgrades off, set
+It also installs newer versions of what Orchard bundles without waiting on an
+Orchard release: the latest k3s patch, Traefik, CloudNativePG and cert-manager
+within their major versions, and the images the chart runs. See orchardctl k3s
+--help and orchardctl images --help. To turn the add-on and image updates off, set
 ORCHARD_ADDON_UPDATES=off in /etc/orchard/env.
 `,
 		Run: func(c *cli.Context, args []string) error {
@@ -193,14 +194,16 @@ ORCHARD_ADDON_UPDATES=off in /etc/orchard/env.
 			if err := migrateValues(c); err != nil {
 				return err
 			}
-			helmArgs := append([]string{
-				"upgrade", "--install", "orchard", c.Env.Chart,
-				"--namespace", c.Env.Namespace,
-				"-f", c.Env.Values,
-				"--timeout", "20m",
-			}, args...)
-			helmArgs = append(helmArgs, clientSideApply(c)...)
-			if err := c.Run("helm", helmArgs...); err != nil {
+			imageChanges := refreshBundledImages(c)
+			applyChart := func() error {
+				helmArgs := []string{"upgrade", "--install", "orchard", c.Env.Chart, "--namespace", c.Env.Namespace}
+				helmArgs = append(helmArgs, chartValueArgs(c)...)
+				helmArgs = append(helmArgs, "--timeout", "20m")
+				helmArgs = append(helmArgs, args...)
+				helmArgs = append(helmArgs, clientSideApply(c)...)
+				return c.Run("helm", helmArgs...)
+			}
+			if err := applyChart(); err != nil {
 				return err
 			}
 
@@ -238,6 +241,9 @@ ORCHARD_ADDON_UPDATES=off in /etc/orchard/env.
 					return err
 				}
 			}
+
+			revertFailedImages(c, imageChanges, applyChart)
+			refreshFloatingWorkloads(c)
 
 			ensureTraefikAccessLogs(c)
 
