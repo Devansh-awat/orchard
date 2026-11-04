@@ -97,6 +97,7 @@ export function shellRoutes(r: Router, { store, hub, log }: MockContext) {
 	]);
 	r.post('/sso/discover', () => ({ organization: null }));
 	r.get('/sso/org/:slug', () => notFound('No single sign-on for this organization'));
+	r.get('/sso/subdomain/:subdomain', () => notFound('No single sign-on for this organization'));
 
 	r.get('/organizations/user', () =>
 		store.state.signedIn ? store.myOrgs().map((o) => orgRow(store, o)) : unauthorized()
