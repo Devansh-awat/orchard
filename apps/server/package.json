@@ -56,6 +56,7 @@
     "test:internal-urls": "tsx --test test/internal-urls.test.ts",
     "test:domains": "tsx --test test/domain-derivation.test.ts",
     "test:scim": "tsx --test test/scim.test.ts",
+    "test:org-isolation": "tsx --test test/org-isolation.test.ts",
     "test:security-hardening": "tsx --test test/security-hardening.test.ts",
     "test:compose": "tsx --test test/compose-build.test.ts test/compose-default-branch.test.ts test/compose-network.test.ts test/compose-redeploy.test.ts test/compose-volume-name.test.ts",
     "test:invite-link": "tsx --test test/invite-link.test.ts",

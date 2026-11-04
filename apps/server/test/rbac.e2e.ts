@@ -654,3 +654,165 @@ describe('Hardening rules', () => {
     });
   });
 });
+
+describe('Org isolation', () => {
+  const tag = `${RUN_TAG}-iso`;
+  let pepito: { id: string; email: string; token: string };
+  let enforcing: { id: string; slug: string };
+  let own: { id: string; slug: string };
+  let enforcingProject: { id: string };
+  let ownProject: { id: string };
+
+  async function orgScopedToken(userId: string, organizationId: string) {
+    const session = await prisma.session.create({
+      data: { userId, authMethod: 'sso', expiresAt: new Date(Date.now() + 3600_000) }
+    });
+    return new SignJWT({ sub: userId, sessionId: session.id, orgScope: organizationId })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setIssuedAt()
+      .setExpirationTime('1h')
+      .sign(SECRET_BYTES);
+  }
+
+  before(async () => {
+    const email = `${tag}-pepito@gmail.example`;
+    const user = await prisma.user.create({
+      data: { email, username: `${tag}-pepito`, emailVerified: true }
+    });
+    pepito = { id: user.id, email, token: await mintToken(user.id) };
+    enforcing = await prisma.organization.create({
+      data: { name: `${tag} enforcing`, slug: `${tag}-enforcing` }
+    });
+    own = await prisma.organization.create({ data: { name: `${tag} own`, slug: `${tag}-own` } });
+    await prisma.organizationMember.createMany({
+      data: [
+        { organizationId: enforcing.id, userId: user.id, role: 'member' },
+        { organizationId: own.id, userId: user.id, role: 'owner' }
+      ]
+    });
+    await prisma.orgSsoSettings.create({
+      data: { organizationId: enforcing.id, platformEnabled: true, enabled: true, enforced: true }
+    });
+    const role = await prisma.role.findUniqueOrThrow({ where: { name: 'member' } });
+    enforcingProject = await prisma.project.create({
+      data: {
+        name: `${tag}-a`,
+        slug: `${tag}-a`,
+        namespace: `${tag}-a`,
+        organizationId: enforcing.id,
+        createdBy: user.id
+      }
+    });
+    await prisma.projectMember.create({
+      data: { projectId: enforcingProject.id, userId: user.id, roleId: role.id }
+    });
+    ownProject = await prisma.project.create({
+      data: {
+        name: `${tag}-b`,
+        slug: `${tag}-b`,
+        namespace: `${tag}-b`,
+        organizationId: own.id,
+        createdBy: user.id
+      }
+    });
+  });
+
+  after(async () => {
+    await prisma.project.deleteMany({
+      where: { id: { in: [enforcingProject.id, ownProject.id] } }
+    });
+    await prisma.organization.deleteMany({ where: { id: { in: [enforcing.id, own.id] } } });
+    await prisma.user.delete({ where: { id: pepito.id } }).catch(() => {});
+  });
+
+  test('being in an enforcing org leaves other orgs open', async () => {
+    assert.equal((await req(`/organizations/${own.id}`, pepito.token)).status, 200);
+    assert.equal((await req(`/projects/${ownProject.id}`, pepito.token)).status, 200);
+  });
+
+  test('the enforcing org itself needs its SSO', async () => {
+    assert.equal((await req(`/organizations/${enforcing.id}`, pepito.token)).status, 404);
+    assert.equal((await req(`/projects/${enforcingProject.id}`, pepito.token)).status, 404);
+    const overview = await req(`/overview/orgs/${enforcing.slug}`, pepito.token);
+    assert.equal(overview.status, 403);
+    assert.equal((await overview.json()).error, 'org_sso_required');
+  });
+
+  test('org lists mark it and leak nothing inside it', async () => {
+    const orgs = await (await req('/organizations/user', pepito.token)).json();
+    const blocked = orgs.find((o: any) => o.id === enforcing.id);
+    assert.equal(blocked.ssoRequired, true);
+    assert.deepEqual(Object.keys(blocked).sort(), ['id', 'myRole', 'name', 'slug', 'ssoRequired']);
+    assert.equal(orgs.find((o: any) => o.id === own.id).ssoRequired, undefined);
+
+    const overview = await (await req('/overview', pepito.token)).json();
+    assert.deepEqual(
+      overview.organizations.map((o: any) => o.id),
+      [own.id]
+    );
+    assert.equal(
+      overview.projects.some((p: any) => p.id === enforcingProject.id),
+      false
+    );
+  });
+
+  test('its SSO session opens it and sees nothing of his other orgs', async () => {
+    const scoped = await orgScopedToken(pepito.id, enforcing.id);
+    assert.equal((await req(`/organizations/${enforcing.id}`, scoped)).status, 200);
+    assert.equal((await req(`/projects/${enforcingProject.id}`, scoped)).status, 200);
+    assert.equal((await req(`/organizations/${own.id}`, scoped)).status, 404);
+    assert.equal((await req(`/projects/${ownProject.id}`, scoped)).status, 404);
+    const overview = await (await req('/overview', scoped)).json();
+    assert.deepEqual(
+      overview.organizations.map((o: any) => o.id),
+      [enforcing.id]
+    );
+    assert.equal(
+      overview.projects.some((p: any) => p.id === ownProject.id),
+      false
+    );
+    for (const path of ['/auth/tokens', '/auth/sessions']) {
+      assert.equal((await req(path, scoped)).status, 403, path);
+    }
+    const mint = await req('/auth/mcp-token', scoped, { method: 'POST' });
+    assert.equal(mint.status, 403);
+  });
+
+  test('removal by the org keeps him signed in everywhere else', async () => {
+    const row = await prisma.organizationMember.findUniqueOrThrow({
+      where: { organizationId_userId: { organizationId: enforcing.id, userId: pepito.id } }
+    });
+    const admin = await prisma.user.create({
+      data: { email: `${tag}-admin@example.test`, username: `${tag}-admin` }
+    });
+    await prisma.organizationMember.create({
+      data: { organizationId: enforcing.id, userId: admin.id, role: 'owner' }
+    });
+    const adminToken = await mintToken(admin.id);
+    const removed = await req(`/organizations/${enforcing.id}/members/${row.id}`, adminToken, {
+      method: 'DELETE'
+    });
+    assert.equal(removed.status, 200);
+    assert.equal((await req(`/organizations/${own.id}`, pepito.token)).status, 200);
+    assert.ok(await prisma.user.findUnique({ where: { id: pepito.id } }));
+
+    await prisma.organizationMember.create({
+      data: { organizationId: enforcing.id, userId: pepito.id, role: 'member' }
+    });
+    await prisma.user.delete({ where: { id: admin.id } });
+  });
+
+  test('he can leave an enforcing org without its SSO, and owners cannot leave', async () => {
+    const left = await req(`/organizations/${enforcing.id}/leave`, pepito.token, {
+      method: 'POST'
+    });
+    assert.equal(left.status, 201);
+    const gone = await prisma.organizationMember.findUnique({
+      where: { organizationId_userId: { organizationId: enforcing.id, userId: pepito.id } }
+    });
+    assert.equal(gone, null);
+    assert.equal((await req(`/organizations/${own.id}`, pepito.token)).status, 200);
+    const owner = await req(`/organizations/${own.id}/leave`, pepito.token, { method: 'POST' });
+    assert.equal(owner.status, 400);
+  });
+});

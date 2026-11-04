@@ -267,6 +267,8 @@ jobs:
         run: pnpm --filter server exec tsx --test test/project-member-role.test.ts
       - name: MCP body limit test
         run: pnpm --filter server exec tsx --test test/mcp-body-limit.test.ts
+      - name: Org isolation tests
+        run: pnpm --filter server test:org-isolation
       - name: Security hardening tests
         run: pnpm --filter server test:security-hardening
       - name: Setup gate test
