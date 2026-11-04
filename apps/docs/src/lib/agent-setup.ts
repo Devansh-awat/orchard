@@ -31,7 +31,7 @@ export const AGENT_SETUP = {
   pickText: 'Select a client to get its setup instructions.',
   urlHeading: 'Find your MCP URL',
   urlText:
-    'Replace your-orchard-domain in the examples with your domain. Settings → MCP shows the exact URL for your instance.',
+    'Replace `your-orchard-domain` in the examples with your domain. To get the exact URL, select **Account settings** > **MCP** from the account menu.',
   limitHeading: 'Limit what an agent can do',
   limitText: 'Add parameters to the server URL. They can only lower what a connection gets.',
   promptsHeading: 'Example prompts',
@@ -51,7 +51,7 @@ export const clients: SetupClient[] = [
         text: 'Add the server:',
         code: `claude mcp add --transport http orchard ${url}`
       },
-      { text: 'Run `/mcp` in Claude Code and sign in with your Orchard account.' },
+      { text: 'Run `/mcp` in Claude Code. Sign in to Orchard and approve the connection.' },
       {
         text: 'To share the server with a project, add `.mcp.json` instead:',
         title: '.mcp.json',
@@ -77,7 +77,7 @@ export const clients: SetupClient[] = [
         code: `codex mcp add orchard --url ${url}`
       },
       {
-        text: 'Sign in with your Orchard account:',
+        text: 'Sign in to Orchard and approve the connection:',
         code: 'codex mcp login orchard'
       }
     ]
@@ -99,7 +99,7 @@ export const clients: SetupClient[] = [
   }
 }`
       },
-      { text: 'Cursor asks you to sign in on first use.' }
+      { text: 'Sign in to Orchard and approve the connection when Cursor asks.' }
     ]
   },
   {
@@ -109,7 +109,7 @@ export const clients: SetupClient[] = [
     mark: 'vscode',
     steps: [
       {
-        text: 'Run **MCP: Add Server** from the Command Palette, or add `.vscode/mcp.json` to your project:',
+        text: 'Add `.vscode/mcp.json` to your project:',
         title: '.vscode/mcp.json',
         code: `{
   "servers": {
@@ -120,7 +120,7 @@ export const clients: SetupClient[] = [
   }
 }`
       },
-      { text: 'VS Code asks you to sign in.' }
+      { text: 'Sign in to Orchard and approve the connection when VS Code asks.' }
     ]
   },
   {
@@ -129,9 +129,9 @@ export const clients: SetupClient[] = [
     vendor: 'Anthropic',
     mark: 'claude',
     steps: [
-      { text: 'In Claude, open **Settings** → **Connectors** and select **Add custom connector**.' },
+      { text: 'In Claude, open **Settings** > **Connectors** and select **Add custom connector**.' },
       { text: 'Paste the server URL:', code: url },
-      { text: 'Sign in with your Orchard account.' }
+      { text: 'Sign in to Orchard and approve the connection.' }
     ]
   },
   {
@@ -140,9 +140,16 @@ export const clients: SetupClient[] = [
     vendor: 'Any MCP client',
     icon: 'plug',
     steps: [
-      { text: 'Amp:', code: `amp mcp add orchard '${url}'` },
       {
-        text: 'For a client without OAuth, create an API token and send it as a bearer token:',
+        text: 'Amp: run this command, then sign in to Orchard and approve the connection.',
+        code: `amp mcp add orchard '${url}'`
+      },
+      {
+        text: 'For CI, headless agents or a client without OAuth, create an API token:',
+        code: 'orchard auth token create --name ci-agent --scope deploy'
+      },
+      {
+        text: 'Send the token as a bearer token:',
         title: 'mcp.json',
         code: `{
   "mcpServers": {
@@ -150,15 +157,11 @@ export const clients: SetupClient[] = [
       "type": "http",
       "url": "${url}",
       "headers": {
-        "Authorization": "Bearer orch_your_token_here"
+        "Authorization": "Bearer <API_TOKEN>"
       }
     }
   }
 }`
-      },
-      {
-        text: 'Tokens created in Settings → API Tokens are read-only. To let an agent make changes, create a token with the CLI:',
-        code: 'orchard auth token create --name "ci-agent" --scope deploy'
       }
     ]
   }

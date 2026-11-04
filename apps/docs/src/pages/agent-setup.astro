@@ -88,7 +88,9 @@ import { MCP_URL, SETUP_PROMPT } from '../lib/nav';
     <section class="section split">
       <div>
         <h2>{AGENT_SETUP.urlHeading}</h2>
-        <p class="lede">{AGENT_SETUP.urlText}</p>
+        <p class="lede url-text">
+          <InlineText text={AGENT_SETUP.urlText} />
+        </p>
         <Command code={`${MCP_URL}/`} label="Copy URL" />
       </div>
       <div>
@@ -328,7 +330,7 @@ import { MCP_URL, SETUP_PROMPT } from '../lib/nav';
     margin-bottom: 0;
   }
 
-  :is(ol, .note, dt) code {
+  :is(ol, .note, dt, .url-text) code {
     padding: 0.0625rem 0.3125rem;
     border: 1px solid var(--o-rule);
     border-radius: 0.25rem;
