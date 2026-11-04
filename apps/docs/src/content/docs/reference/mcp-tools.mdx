@@ -44,7 +44,7 @@ Re-read the compose file from the repo and redeploy every service in the stack. 
 
 **The default way to change environment variables.** Adds or overwrites the keys you pass and leaves every other var on the deployment untouched. The deployment restarts to pick them up.
 
-Fixing one typo'd value, adding a new key, flipping a var to secret — all of them are this tool. You do not need to read the current env first; the merge happens here.
+Fixing one typo'd value, adding a new key, flipping a var to secret: all of them are this tool. You do not need to read the current env first; the merge happens here.
 
 Related: `delete_env_vars` to remove keys, `get_env_vars` to read, `set_env_vars` only when you mean to replace the whole environment.
 
@@ -104,7 +104,7 @@ Modes:
 - `none`: public.
 - `password`: one shared password, no username. Requires `password`.
 - `basic`: HTTP basic auth. Requires `username` and `password`.
-- `orchard`: sign in with an Orchard account that has access to the project. No credential to share or leak, so prefer it for internal tools — but the instance can have it disabled, in which case the call fails and says so.
+- `orchard`: sign in with an Orchard account that has access to the project. No credential to share or leak, so prefer it for internal tools, but the instance can have it disabled, in which case the call fails and says so.
 
 `bypassPaths` stay reachable without auth, which is how you keep a webhook endpoint or `/health` working behind protection.
 
@@ -145,7 +145,7 @@ Change how an existing deployment is built, without recreating it.
 
 Every field is optional and only what you pass is changed, so you can set one thing without restating the rest. Pass null to clear a value.
 
-- `dockerfileTarget`: the stage a multi-stage Dockerfile stops at, as `docker build --target`. Null builds the final stage, which is what a single-stage Dockerfile produces anyway. Use this to run several images out of one repo — a web stage and a worker stage — instead of maintaining a Dockerfile per process.
+- `dockerfileTarget`: the stage a multi-stage Dockerfile stops at, as `docker build --target`. Null builds the final stage, which is what a single-stage Dockerfile produces anyway. Use this to run several images out of one repo, such as a web stage and a worker stage, instead of maintaining a Dockerfile per process.
 - `startCommand`: on a `dockerfile` build this runs instead of the image's CMD, like a command passed to `docker run`, and takes effect on save without a rebuild. On a `railpack` build it is baked in by the next build instead.
 - `dockerfilePath`, `buildType`: as at create time. Switching build type clears the settings that only make sense for the other one.
 - `rootDirectory`, `installCommand`, `buildCommand`, `outputDirectory`: Railpack-only overrides; null hands the decision back to detection.
@@ -158,11 +158,11 @@ Everything except `startCommand` applies on the next build, so follow up with `r
 
 Configure the health probes Kubernetes runs against a deployment.
 
-Every field is optional and merges into what is already stored, so turning a check on is one field — you do not have to restate the timings. Read the current values off `get_deployment` (the `healthCheck*`, `livenessEnabled`, `readinessEnabled`, `startupEnabled` fields).
+Every field is optional and merges into what is already stored, so turning a check on is one field. You do not have to restate the timings. Read the current values off `get_deployment` (the `healthCheck*`, `livenessEnabled`, `readinessEnabled`, `startupEnabled` fields).
 
 The three probes do different jobs:
 - **readiness** keeps an unhealthy pod out of the load balancer without killing it. Turn this on first; it is what makes a rolling deploy zero-downtime.
-- **liveness** restarts a pod that fails. Powerful and dangerous — a liveness probe that is stricter than the app's real startup time turns a slow boot into a crash loop.
+- **liveness** restarts a pod that fails. Powerful and dangerous: a liveness probe that is stricter than the app's real startup time turns a slow boot into a crash loop.
 - **startup** suspends liveness until the app has come up, which is how you give a slow starter room without loosening liveness forever. `startupFailureThreshold × healthCheckInterval` is the grace period.
 
 If the image's Dockerfile declares its own HEALTHCHECK, that wins unless you set `healthCheckOverride: true`.
@@ -174,7 +174,7 @@ Applies immediately and rolls the pods.
 **toolset: deployments · idempotent**
 
 Change the Docker image of an image-source deployment (one created from an image reference, not built from a GitHub repo). Pods will roll to pull the new image. If the image lives in a private registry, add the registry's credential to the project first with `set_registry_credential`; the pull secret is attached automatically whenever the image host matches.
-Only valid for non-GitHub deployments — for GitHub deployments use `rebuild_deployment` so the image is rebuilt from source. The backend rejects this on a GitHub-built deployment with a clear error.
+Only valid for non-GitHub deployments. For GitHub deployments use `rebuild_deployment` so the image is rebuilt from source. The backend rejects this on a GitHub-built deployment with a clear error.
 
 ### `update_deployment_pull_policy`
 
@@ -198,8 +198,8 @@ Changing this rolls the pods on its own; no separate restart is needed.
 **toolset: deployments · idempotent**
 
 Set the Kubernetes update strategy for a deployment.
-- `rollingUpdate`: bring up new pods before draining old ones — zero downtime.
-- `recreate`: tear down all pods first, then start new ones — brief downtime, required for ReadWriteOnce PVCs.
+- `rollingUpdate`: bring up new pods before draining old ones, with zero downtime.
+- `recreate`: tear down all pods first, then start new ones, with brief downtime. Required for ReadWriteOnce PVCs.
 - `blueGreen`: the new image runs beside the old one and takes traffic only once every pod is ready; if it never is, nothing moves.
 
 A deployment with a PVC attached only accepts `recreate`. Every strategy waits for the new pods to be ready and rolls back if they never are.
@@ -228,7 +228,7 @@ Update an existing ingress configuration
 
 Change the ports a service exposes, or the internal domain it answers on.
 
-`ports` is a full replace of that service's port list — a port you leave out is removed, so restate the ones you want to keep (read them off `list_services`). Pass `domain: null` to clear the internal domain. At least one of `ports` / `domain` is required.
+`ports` is a full replace of that service's port list. A port you leave out is removed, so restate the ones you want to keep (read them off `list_services`). Pass `domain: null` to clear the internal domain. At least one of `ports` / `domain` is required.
 
 To change whether a service is external use `set_service_exposure`, not this.
 
@@ -258,7 +258,7 @@ DANGEROUS: Delete a deployment and all associated resources.
 
 Remove specific environment variables from a deployment by key name, leaving every other var alone. The deployment restarts.
 
-Only the keys you name are touched, so this is safe to use for a targeted removal — it is filed here because deleting a var an app reads will break it. To change a value instead of removing it, use `add_env_vars`.
+Only the keys you name are touched, so this is safe to use for a targeted removal. It is filed here because deleting a var an app reads will break it. To change a value instead of removing it, use `add_env_vars`.
 
 ### `delete_environment`
 
@@ -517,7 +517,7 @@ Mint a token that lets an outside system trigger a deploy over HTTP, for CI that
 
 The holder POSTs to `/apiv1/webhooks/deploy` with `Authorization: Bearer &lt;token&gt;`. On an image-source deployment they may send `&#123; "image": "...", "tag": "..." &#125;` to roll a new image; on a GitHub-built deployment that is rejected. Without those fields the POST restarts the deployment and does not rebuild it.
 
-**The plaintext token is in this response and nowhere else** — it is stored hashed, so hand it to the user now or it is gone. It inherits the creator's project access and is revoked automatically if they lose it. [sensitive]
+**The plaintext token is in this response and nowhere else**. It is stored hashed, so hand it to the user now or it is gone. It inherits the creator's project access and is revoked automatically if they lose it. [sensitive]
 
 ### `create_deployment`
 
@@ -589,7 +589,7 @@ Use this whenever auto-deploy looks like it is on but pushes are not producing b
 
 Ask Orchard what this deployment has not been set up with yet: auto-deploy, a custom domain, explicit resource requests, notifications, a health check.
 
-Returns a `steps` array of `&#123; id, applicable, done &#125;` — act on the ones that are applicable and not done. Cheap, and the right follow-up after creating a deployment or when a user asks "what else do I need to do". `applicable: false` means the step cannot apply here (no repo linked, no public port, compose-managed), not that it passed.
+Returns a `steps` array of `&#123; id, applicable, done &#125;`. Act on the ones that are applicable and not done. Cheap, and the right follow-up after creating a deployment or when a user asks "what else do I need to do". `applicable: false` means the step cannot apply here (no repo linked, no public port, compose-managed), not that it passed.
 
 ### `list_deploy_webhook_tokens`
 
@@ -656,7 +656,7 @@ Rollback a deployment to a previous image version. Use get_image_history to see 
 
 Set how many replicas a deployment runs.
 
-`replicas: 0` is the same thing as `stop_deployment` — it marks the deployment stopped and remembers the old count, so the next rebuild will not bring it back. Scaling to any positive number un-stops it. Prefer `stop_deployment` / `start_deployment` when the intent is "turn it off / back on"; they read clearly in the audit log and do not make you guess a count to restore.
+`replicas: 0` is the same thing as `stop_deployment`. It marks the deployment stopped and remembers the old count, so the next rebuild will not bring it back. Scaling to any positive number un-stops it. Prefer `stop_deployment` / `start_deployment` when the intent is "turn it off / back on"; they read clearly in the audit log and do not make you guess a count to restore.
 
 ### `start_deployment`
 
@@ -664,15 +664,15 @@ Set how many replicas a deployment runs.
 
 Bring a stopped deployment back online at its previous replica count (at least 1). The inverse of `stop_deployment`; a no-op on one that is already running.
 
-Coming back re-checks quota, so a start can fail if the org filled up while the app was parked — scale it down first in that case.
+Coming back re-checks quota, so a start can fail if the org filled up while the app was parked. Scale it down first in that case.
 
 ### `stop_deployment`
 
 **toolset: deployments · destructive · idempotent**
 
-Take a deployment offline. Pods are drained and it stays down — a rebuild deploys it at zero replicas — until `start_deployment`.
+Take a deployment offline. Pods are drained and it stays down until `start_deployment`. A rebuild deploys it at zero replicas.
 
-The "turn it off" verb: it sets the deployment's `stopped` flag and leaves the replica count alone, so `start_deployment` brings it back at the size it was. Nothing is destroyed — build, env vars, domains, volumes and data all stay. (`scale_deployment(0)` reaches the same state; this is the clearer way to ask for it.)
+The "turn it off" verb: it sets the deployment's `stopped` flag and leaves the replica count alone, so `start_deployment` brings it back at the size it was. Nothing is destroyed: build, env vars, domains, volumes and data all stay. (`scale_deployment(0)` reaches the same state; this is the clearer way to ask for it.)
 
 ### `update_deployment_disruption_budget`
 
@@ -688,7 +688,7 @@ Only meaningful above one replica: a budget equal to the replica count blocks vo
 
 Point a deployment at a different GitHub repository or branch without recreating it.
 
-Takes effect on the next build, so follow with `rebuild_deployment` to make it live. Auto-deploy survives only if the GitHub App is installed on the new repo — otherwise it is switched off, silently, because pushes could never reach Orchard. Check `get_auto_deploy_status` afterwards.
+Takes effect on the next build, so follow with `rebuild_deployment` to make it live. Auto-deploy survives only if the GitHub App is installed on the new repo. Otherwise it is switched off, silently, because pushes could never reach Orchard. Check `get_auto_deploy_status` afterwards.
 
 ### `update_deployment_placement`
 
@@ -703,7 +703,7 @@ Pools carry taints, so an app that needs particular hardware has to be placed in
 **toolset: deployments · idempotent**
 
 Update CPU and memory requests for an existing deployment. The deployment will roll its pods to apply the new resources.
-The API enforces project, organization, and per-member resource quotas — if the new values exceed your remaining allowance the call returns an error and nothing changes.
+The API enforces project, organization, and per-member resource quotas. If the new values exceed your remaining allowance the call returns an error and nothing changes.
 Pass null for either field to clear it and fall back to the project / org default.
 
 ## environments
@@ -714,7 +714,7 @@ Pass null for either field to clear it and fall back to the project / org defaul
 
 **The default way to change shared variables.** Adds or overwrites the keys you pass and leaves the rest of the environment's shared set alone.
 
-Deployments that reference a changed key via `$&#123;&#123;shared.KEY&#125;&#125;` are restarted; the rest are left running. Defining a var here does nothing on its own — point a deployment at it with `add_env_vars` and the value `$&#123;&#123;shared.KEY&#125;&#125;`.
+Deployments that reference a changed key via `$&#123;&#123;shared.KEY&#125;&#125;` are restarted; the rest are left running. Defining a var here does nothing on its own. Point a deployment at it with `add_env_vars` and the value `$&#123;&#123;shared.KEY&#125;&#125;`.
 
 Related: `delete_shared_env_vars` to remove keys, `set_shared_env_vars` only when you mean to replace the whole set.
 
@@ -740,13 +740,13 @@ Read an environment's shared variables: a pool of values that every deployment i
 
 **They are not injected automatically.** A deployment opts in by setting one of its own env vars to `$&#123;&#123;shared.KEY&#125;&#125;` (via `add_env_vars`); the reference is expanded when the pod spec and build args are built. Referencing a secret shared var makes the referencing var secret too, so it still routes through the Kubernetes Secret.
 
-Secrets come back here with a null value — they are write-only.
+Secrets come back here with a null value. They are write-only.
 
 ### `list_environments`
 
 **toolset: core · read-only · idempotent**
 
-List a project's environments — production, staging, preview and whatever else it has.
+List a project's environments: production, staging, preview and whatever else it has.
 
 Each environment is its own Kubernetes namespace with its own deployments, databases, ingresses and shared variables, so an environment id is what you pass to `create_deployment` / `deploy_from_github` to land an app somewhere other than production. Every project has at least one, marked `isDefault`.
 
@@ -760,7 +760,7 @@ Rename an environment. The slug and namespace are frozen, so nothing that resolv
 
 **toolset: env · idempotent**
 
-Make an environment the project default — the one resources land in when a create call omits environmentId. Does not move anything that already exists.
+Make an environment the project default: the one resources land in when a create call omits environmentId. Does not move anything that already exists.
 
 ### `set_shared_env_vars`
 
@@ -778,7 +778,7 @@ Start a new agent session on a running Greenhouse machine: creates a git worktre
 
 ### `create_sandbox_session_pr`
 
-Open a GitHub pull request for a session's branch, using the caller's own linked GitHub account (host or guest). Pushes the branch first, as the caller, when it has no upstream on origin or has unpushed commits. Fails with github_not_linked if the caller has not linked GitHub. Commit the work first (the agent can when asked); uncommitted changes are not included.
+Open a GitHub pull request for a session's branch, using the caller's own linked GitHub account (host or guest). Pushes the branch first, as the caller, when it has no upstream on origin or has unpushed commits. Fails with github_not_linked if the caller hasn't linked GitHub. Commit the work first (the agent can when asked); uncommitted changes aren't included.
 
 ### `get_sandbox`
 
@@ -902,7 +902,7 @@ Update a job's name, description, schedule, concurrency policy, or enabled state
 
 Create a notification destination. This only says where messages go; create a notification rule afterwards to say what it should receive, otherwise the channel stays silent.
 For discord/slack/webhook, pass the webhook URL in "url". For email, pass "recipients" (org members for an org-wide destination, the project's own people for a scoped one).
-For webhook channels the response includes a one-time signing secret — surface it to the user, it cannot be retrieved again.
+For webhook channels the response includes a one-time signing secret. Surface it to the user. It cannot be retrieved again.
 A destination belongs to a scope: org-wide (the default) needs org admin, and a project or resource scope needs admin on the owning project, which is how one app gets its own webhook without an org admin. Only rules at or below the owning scope can route to it. [sensitive]
 
 ### `create_notification_rule`
@@ -949,7 +949,7 @@ Re-send everything a channel's rules would have matched over the last N hours. U
 
 **toolset: notifications · open-world**
 
-Send a test notification through a channel to verify it is wired up correctly. Requires admin on the scope that owns the channel: org admin for org-wide destinations, project admin for one an app owns.
+Send a test notification through a channel to check that it works. Requires admin on the scope that owns the channel: org admin for org-wide destinations, project admin for one an app owns.
 
 ### `update_notification_channel`
 
@@ -1099,9 +1099,9 @@ Use this to:
 - Check installed binaries or env (`env`, `which node`, `node -v`)
 - Tail a single file (`tail -n 50 /var/log/app.log`)
 
-The `command` arg can be a string (executed via /bin/sh -c) or a string array (exec'd directly with no shell — preferred when arguments contain special chars).
+The `command` arg can be a string (executed via /bin/sh -c) or a string array (exec'd directly with no shell, preferred when arguments contain special chars).
 Pass `deploymentId` and the newest ready pod of that deployment is picked for you, which survives pod names changing on every restart. Pass `podName` and `namespace` (from `list_pods`) to target one pod exactly. If `container` is omitted, the first container in the pod spec is used.
-Not for long-running interactive sessions — the call times out (default 60s, max 5min). stdout and stderr are capped at the last 20,000 characters each.
+Not for long-running interactive sessions. The call times out (default 60s, max 5min). stdout and stderr are capped at the last 20,000 characters each.
 
 Needs an exec-scoped session: connect with the mcp:exec scope or an orch_ token with exec scope. [sensitive]
 
@@ -1119,7 +1119,7 @@ Searches organizations, projects, deployments and databases at once and returns 
 
 Who changed what, and when. Pass a deploymentId for one app's history, or an organizationId for everything in the org (org admins only).
 
-This is how you answer "when did this break" and "who turned that off" — each entry records the actor, a timestamp, the action (`deployment.env.updated`, `deployment.scaled`, `deployment.stopped`, `environment.sharedvars.updated`, …) and a `metadata` object that usually carries the `[before, after]` of whatever moved. Paginated: feed `nextCursor` back as `cursor` for the next page.
+This is how you answer "when did this break" and "who turned that off". Each entry records the actor, a timestamp, the action (`deployment.env.updated`, `deployment.scaled`, `deployment.stopped`, `environment.sharedvars.updated`, …) and a `metadata` object that usually carries the `[before, after]` of whatever moved. Paginated: feed `nextCursor` back as `cursor` for the next page.
 
 ### `get_build_logs`
 
@@ -1127,7 +1127,7 @@ This is how you answer "when did this break" and "who turned that off" — each 
 
 BuildKit output from the deployment's most recent build, plus `buildStatus` and the `buildError` summary if it failed.
 
-Returns the **last** `tailLines` lines by default, because a build that failed failed at the end and the transcript of a large repo runs to hundreds of KB. Read `buildError` first — it is usually the whole answer. Raise `tailLines`, or pass `full: true`, only when you actually need earlier stages.
+Returns the **last** `tailLines` lines by default, because a build that failed failed at the end and the transcript of a large repo runs to hundreds of KB. Read `buildError` first. It is usually the whole answer. Raise `tailLines`, or pass `full: true`, only when you actually need earlier stages.
 
 For the running app's output use `get_deployment_logs`.
 
@@ -1149,12 +1149,12 @@ Returns host, port, user and database name plus a `liveStatus` object with real-
 - `replicas` / `readyReplicas`: instance counts
 - `restartCount`: total postgres container restarts across pods (HIGH NUMBERS = INSTABILITY)
 - `message`: current problem reason if any (e.g. "OOMKilled", "CrashLoopBackOff")
-- `lastTerminationReason`: last termination reason of the postgres container (e.g. "OOMKilled", "Error"). Present even when the container is currently running — this is how you detect intermittent crashes.
+- `lastTerminationReason`: last termination reason of the postgres container (e.g. "OOMKilled", "Error"). Present even when the container is currently running. This is how you detect intermittent crashes.
 - `lastTerminationExitCode`: exit code from the last termination (137 = OOMKill, 139 = segfault, etc.)
 - `lastTerminationAt`: timestamp of last termination
 - `size`, `connections`: only present when reachable
 
-To diagnose an unhealthy database, check `liveStatus.message`, `liveStatus.lastTerminationReason`, and `liveStatus.restartCount` together. `status: "ready"` at the top level reflects only the provisioning state — it can say "ready" while the pod is actively OOM-cycling.
+To diagnose an unhealthy database, check `liveStatus.message`, `liveStatus.lastTerminationReason`, and `liveStatus.restartCount` together. `status: "ready"` at the top level reflects only the provisioning state. It can say "ready" while the pod is actively OOM-cycling.
 
 ### `get_database_metrics`
 
@@ -1173,7 +1173,7 @@ To diagnose an OOMKill, look for memory rising to the request/limit ceiling righ
 
 Get deployment details: status, image, replicas, env vars, services, ingresses, volumes, health check, build config, placement and recent image history.
 
-The build log is omitted here because it is often megabytes — read it with `get_build_logs`. Runtime logs are `get_deployment_logs`.
+The build log is omitted here because it is often megabytes. Read it with `get_build_logs`. Runtime logs are `get_deployment_logs`.
 
 ### `get_deployment_http_metrics`
 
@@ -1181,7 +1181,7 @@ The build log is omitted here because it is often megabytes — read it with `ge
 
 Request rate, average and max latency, and 5xx rate for a deployment, as served through its ingress. Latency is the load balancer's average and max, not a percentile.
 
-Answers "is it actually serving traffic", "did latency regress after that deploy", "how many 5xx". Defaults to the last hour at 30s resolution. Returns empty series when nothing fronts the deployment — check `get_deployment.ingresses` first if that surprises you.
+Answers "is it actually serving traffic", "did latency regress after that deploy", "how many 5xx". Defaults to the last hour at 30s resolution. Returns empty series when nothing fronts the deployment. Check `get_deployment.ingresses` first if that surprises you.
 
 ### `get_deployment_logs`
 
@@ -1208,7 +1208,7 @@ Each series datapoint includes pod-level CPU (millicores) and memory (bytes). To
 
 Get all volumes attached to a deployment, plus the deploy strategy that volumes drive.
 Volumes are returned with their full record (id, name, type, mountPath, pvcName, storageSize, hostPath, readOnly).
-The response also surfaces `deployStrategy` and a `pvcCount` so callers can sanity-check that PVCs they expected are actually attached — a 0 PVC count on what should be a stateful deployment usually means the last volumes update silently dropped a row (e.g. type=pvc without pvcName).
+The response also surfaces `deployStrategy` and a `pvcCount` so callers can sanity-check that PVCs they expected are actually attached. A 0 PVC count on what should be a stateful deployment usually means the last volumes update silently dropped a row (e.g. type=pvc without pvcName).
 
 ### `get_env_vars`
 
@@ -1216,7 +1216,7 @@ The response also surfaces `deployStrategy` and a `pvcCount` so callers can sani
 
 Get the current environment variables for a deployment.
 
-Secret vars come back with `secret: true` and a null value — the value is write-only and never readable. To change one, use `add_env_vars`; you do not need to read it first.
+Secret vars come back with `secret: true` and a null value. The value is write-only and never readable. To change one, use `add_env_vars`; you do not need to read it first.
 
 ### `get_github_status`
 
@@ -1332,7 +1332,7 @@ Use `find` instead when you know the app by name and want its UUID.
 
 **toolset: deployments · read-only · idempotent · open-world**
 
-Autocomplete source for deploy_from_github. Lists repos that are BOTH (a) covered by an Orchard GitHub App installation the user has access to AND (b) accessible to the user's own GitHub account — i.e. the intersection. These are safe to suggest because the deploy will succeed for them. The user should never be shown repos they cannot access on GitHub.
+Autocomplete source for deploy_from_github. Lists repos that are BOTH (a) covered by an Orchard GitHub App installation the user has access to AND (b) accessible to the user's own GitHub account, which is the intersection. These are safe to suggest because the deploy will succeed for them. The user should never be shown repos they cannot access on GitHub.
 
 ### `list_ingresses`
 
@@ -1344,7 +1344,7 @@ List all ingresses (public domains/routes) for a deployment
 
 **toolset: logs · read-only · idempotent**
 
-List recently killed containers for a deployment (last 24h): pod, container, termination reason (e.g. OOMKilled), exit code, and when it died. Their pre-death logs are captured even if the pod no longer exists — pass an entryId to get_killed_container_logs to read them. Use this first when diagnosing crashes, OOMs, or restart loops.
+List recently killed containers for a deployment (last 24h): pod, container, termination reason (e.g. OOMKilled), exit code, and when it died. Their pre-death logs are captured even if the pod no longer exists. Pass an entryId to get_killed_container_logs to read them. Use this first when diagnosing crashes, OOMs, or restart loops.
 
 ### `list_node_pools`
 
@@ -1352,7 +1352,7 @@ List recently killed containers for a deployment (last 24h): pod, container, ter
 
 List the node pools a deployment can be pinned to, for `update_deployment_placement` or `create_deployment`'s `nodePoolId`.
 
-Only pools an administrator marked user-selectable show up. On an instance that has not enabled userspace scheduling the call 404s, which just means placement is not a knob here — schedule anywhere and move on.
+Only pools an administrator marked user-selectable show up. On an instance that has not enabled userspace scheduling the call 404s, which just means placement is not a knob here. Schedule anywhere and move on.
 
 ### `list_organizations`
 
@@ -1417,7 +1417,7 @@ Turn off automated backups for a database. This also stops WAL archiving, so poi
 Create a new PostgreSQL database in a project. Returns the database record with the password masked.
 To wire it into an app, call get_database_connection and pass its connectionString to add_env_vars as DATABASE_URL with secret: true, so the credential never sits in a readable env var.
 
-Optionally, pass restoreFromUrl to seed the new database from an existing one — the
+Optionally, pass restoreFromUrl to seed the new database from an existing one. The
 cluster will run pg_dump/pg_restore from the source URL during initdb. The URL must
 be reachable from the cluster and use the postgres:// or postgresql:// scheme.
 
@@ -1427,7 +1427,7 @@ Pass environmentId to put the database in that environment, which gives it that 
 
 **toolset: databases · open-world**
 
-Trigger a new backup of a database. Runs asynchronously — poll list_database_backups to check status. Requires the database to be on a CNPG cluster with backups configured.
+Trigger a new backup of a database. Runs asynchronously. Poll list_database_backups to check status. Requires the database to be on a CNPG cluster with backups configured.
 
 ### `create_project`
 
@@ -1470,8 +1470,8 @@ Expose a database publicly on a shared organization IP with a unique port and TL
 
 **toolset: databases · idempotent**
 
-Expand the storage volume of a CNPG database. Storage can ONLY grow, never shrink — requests smaller than the current size are rejected. Expansion happens online: the cluster spec and every data volume are resized directly, so it works even while the database is crashlooping on a full disk or stopped; the filesystem grows within a couple of minutes and CNPG boots the instance once headroom exists. Re-requesting the current size is allowed and re-syncs any volume that lags behind the cluster spec. Maximum size is 200Gi.
-IMPORTANT: if the disk filled because WAL archiving is failing, expansion only buys time — PostgreSQL cannot recycle WAL while archiving fails, so the volume WILL fill again. The response includes a "warning" field when the cluster's ContinuousArchiving condition is failing; if present, surface it to the user and treat fixing the archiving config as the real remediation.
+Expand the storage volume of a CNPG database. Storage can ONLY grow, never shrink. Requests smaller than the current size are rejected. Expansion happens online: the cluster spec and every data volume are resized directly, so it works even while the database is crashlooping on a full disk or stopped; the filesystem grows within a couple of minutes and CNPG boots the instance once headroom exists. Re-requesting the current size is allowed and re-syncs any volume that lags behind the cluster spec. Maximum size is 200Gi.
+IMPORTANT: if the disk filled because WAL archiving is failing, expansion only buys time. PostgreSQL cannot recycle WAL while archiving fails, so the volume WILL fill again. The response includes a "warning" field when the cluster's ContinuousArchiving condition is failing; if present, surface it to the user and treat fixing the archiving config as the real remediation.
 
 ### `get_database_backup_schedule`
 
@@ -1491,7 +1491,7 @@ This is the only tool that returns the password, and every call is recorded in t
 
 **toolset: databases · read-only · idempotent**
 
-Instance-wide limits for managed databases, currently just maxReplicas — the largest number of PostgreSQL instances a single cluster may run on this Orchard instance. Self-hosters can change it, so read it rather than assuming the default of 5.
+Instance-wide limits for managed databases, currently just maxReplicas: the largest number of PostgreSQL instances a single cluster may run on this Orchard instance. Self-hosters can change it, so read it rather than assuming the default of 5.
 
 ### `get_database_query_stats`
 
@@ -1499,7 +1499,7 @@ Instance-wide limits for managed databases, currently just maxReplicas — the l
 
 The slowest queries on a database, from `pg_stat_statements`: normalised query text, call count, total and mean execution time, rows.
 
-The first stop for "the database is slow" — it tells you which statement is actually spending the time. Requires the `pg_stat_statements` extension; install it with `install_database_extension` (`addToPreload: true`, which needs a restart) if the call comes back empty. Cached for 15s server-side, so polling it in a tight loop tells you nothing new.
+The first stop for "the database is slow". It tells you which statement is actually spending the time. Requires the `pg_stat_statements` extension; install it with `install_database_extension` (`addToPreload: true`, which needs a restart) if the call comes back empty. Cached for 15s server-side, so polling it in a tight loop tells you nothing new.
 
 ### `get_database_settings`
 
@@ -1531,7 +1531,7 @@ List PostgreSQL extensions available on the database and which are currently ins
 
 **toolset: databases · idempotent**
 
-Rename a database. This is the Orchard display name only — the Postgres database name, cluster name, credentials and connection endpoints are unchanged, so nothing connected to it needs updating.
+Rename a database. This is the Orchard display name only. The Postgres database name, cluster name, credentials and connection endpoints are unchanged, so nothing connected to it needs updating.
 
 ### `reset_database_query_stats`
 
@@ -1551,7 +1551,7 @@ Restart a database cluster. Drops every open connection, so apps talking to it s
 
 Change how many PostgreSQL instances a database cluster runs: 1 primary plus (replicas - 1) read replicas. The replicas are streaming hot standbys: they serve reads a few milliseconds behind the primary AND act as failover targets, so this buys read scaling and high availability at once. It does not buy write throughput, which is still one primary.
 Each instance is a full pod with its own volume, so scaling from 1 to 3 triples the cluster's CPU and memory usage; the API charges the difference against the organization cap and the project owner's member allowance and returns an error if it does not fit. Scaling down is always permitted.
-Scaling up is not instant — a new replica has to clone the primary before it reports ready. Reads that must never hit stale data should keep using the "rw" endpoint. See get_database for the rw/ro/r endpoints.
+Scaling up is not instant. A new replica has to clone the primary before it reports ready. Reads that must never hit stale data should keep using the "rw" endpoint. See get_database for the rw/ro/r endpoints.
 
 ### `set_database_backup_schedule`
 
@@ -1568,7 +1568,7 @@ Common values:
 
 **toolset: databases · idempotent**
 
-Bring a stopped database back up on its existing volume. It is not immediately connectable — Postgres has to recover and report ready, so poll `get_database` and watch `liveStatus.ready`.
+Bring a stopped database back up on its existing volume. It is not immediately connectable. Postgres has to recover and report ready, so poll `get_database` and watch `liveStatus.ready`.
 
 ### `stop_database`
 
@@ -1576,7 +1576,7 @@ Bring a stopped database back up on its existing volume. It is not immediately c
 
 Hibernate a database: the Postgres instances shut down, the volume and all its data stay. Anything connected to it starts failing immediately.
 
-Use it to park a database you are not using without losing it — `delete_database` is the one that destroys data. CNPG-backed databases only. Bring it back with `start_database`.
+Use it to park a database you are not using without losing it. `delete_database` is the one that destroys data. CNPG-backed databases only. Bring it back with `start_database`.
 
 ### `uninstall_database_extension`
 
@@ -1589,14 +1589,14 @@ DROP a PostgreSQL extension from a database. Objects that depend on it will also
 **toolset: databases · idempotent**
 
 Update CPU and memory requests for an existing database. The database pod will restart briefly to apply the new resources.
-The API enforces project, organization, and per-member resource quotas — if the new values exceed your remaining allowance the call returns an error and nothing changes.
+The API enforces project, organization, and per-member resource quotas. If the new values exceed your remaining allowance the call returns an error and nothing changes.
 Pass null for either field to clear it and fall back to the default.
 
 ### `update_database_settings`
 
 **toolset: databases · destructive · idempotent**
 
-Update PostgreSQL parameters on a database. Some parameters (max_connections, shared_buffers) require a brief database restart to take effect — the API applies them and rolls the pod automatically.
+Update PostgreSQL parameters on a database. Some parameters (max_connections, shared_buffers) require a brief database restart to take effect. The API applies them and rolls the pod automatically.
 Pass values as strings (e.g. "256MB", "200", "off"). Use get_database_settings first to see current values and supported keys.
 
 The map REPLACES the set of user-set parameters, so omitting a key hands it back to automatic sizing rather than leaving it alone. Send the full map you want.
@@ -1608,7 +1608,7 @@ Values are applied exactly as given and are never clamped, but a dangerous one c
 **toolset: core · idempotent**
 
 Update mutable fields on an existing project. Use this to rename a project, change its description, or update its repository URL / icon / background image.
-Only the fields you pass are changed — leave the rest undefined to keep them as-is. The project's slug (URL path) is not affected by a rename.
+Only the fields you pass are changed. Leave the rest undefined to keep them as-is. The project's slug (URL path) is not affected by a rename.
 
 ### `update_template`
 

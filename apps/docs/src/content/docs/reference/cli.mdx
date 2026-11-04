@@ -159,7 +159,7 @@ Aliases: `audit-log`, `audit-logs`
 
 ### `orchard audit list`
 
-List audit log entries for the org (or one deployment), newest first
+List audit log entries for the organization (or one deployment), newest first
 
 ```bash
 orchard audit list
@@ -172,7 +172,7 @@ Aliases: `ls`
 | `--action` | string |  | only entries with this exact action (e.g. deployment.create) |
 | `--all` | bool | `false` | fetch every page (capped at 100 pages) |
 | `--cursor` | string |  | resume from a previous nextCursor |
-| `--deployment` | string |  | scope to one deployment instead of the whole org |
+| `--deployment` | string |  | scope to one deployment instead of the whole organization |
 | `--limit` | int | `50` | page size |
 
 ## auth
@@ -211,7 +211,7 @@ orchard auth logout
 
 ### `orchard auth session`
 
-Manage browser login sessions
+Manage browser sign-in sessions
 
 ```bash
 orchard auth session
@@ -231,7 +231,7 @@ Aliases: `ls`
 
 ### `orchard auth session revoke`
 
-Revoke a browser session (logs that device out)
+Revoke a browser session (signs that device out)
 
 ```bash
 orchard auth session revoke <sessionId>
@@ -629,7 +629,7 @@ Aliases: `schedule`
 
 ### `orchard db backup-schedule clear`
 
-Disable automated backups and WAL archiving (backups already taken are kept)
+Turn off automated backups and WAL archiving (backups already taken are kept)
 
 ```bash
 orchard db backup-schedule clear <id>
@@ -886,7 +886,7 @@ orchard db killed logs <id> <entryId>
 
 ### `orchard db list`
 
-List databases (scoped to the current project or org when set)
+List databases (scoped to the current project or organization when set)
 
 ```bash
 orchard db list
@@ -932,7 +932,7 @@ Aliases: `op`, `operations`
 
 ### `orchard db ops cancel`
 
-Cancel an operation that has not finished
+Cancel an operation that hasn't finished
 
 ```bash
 orchard db ops cancel <opId>
@@ -1030,7 +1030,7 @@ orchard db psql <id>
 
 ### `orchard db public`
 
-Manage public (internet) exposure
+Manage public access
 
 ```bash
 orchard db public
@@ -1374,7 +1374,7 @@ orchard deploy bindings add <id> (--database <name|id> | --app <name|id>)
 | `--as` | string |  | binding name used in $&#123;&#123;resource.&lt;name&gt;.*&#125;&#125; (default: derived from the database name) |
 | `--database` | string |  | database name or id on the same project |
 | `--env` | string |  | env key to add (default DATABASE_URL for a database, &lt;NAME&gt;_URL for an app) |
-| `--no-env` | bool | `false` | bind only, do not add an env var |
+| `--no-env` | bool | `false` | bind only, don't add an env var |
 
 ### `orchard deploy bindings list`
 
@@ -1467,7 +1467,7 @@ orchard deploy create
 
 | Flag | Type | Default | Description |
 | --- | --- | --- | --- |
-| `--auto-url` | bool | `true` | generate a platform URL for the deployment (org-protected by default) |
+| `--auto-url` | bool | `true` | generate a URL for the deployment (protected by default) |
 | `--build-cmd` | string |  | override the detected build command |
 | `--build-root` | bool | `false` | use the repo root as the build context |
 | `--cpu` | int | `0` | CPU request in millicores (e.g. 500) |
@@ -1691,7 +1691,7 @@ orchard deploy pods <id>
 
 | Flag | Type | Default | Description |
 | --- | --- | --- | --- |
-| `--live` | bool | `false` | query the cluster directly (includes usage and warnings) |
+| `--live` | bool | `false` | query Kubernetes directly (includes usage and warnings) |
 
 ### `orchard deploy pull-policy`
 
@@ -1756,7 +1756,7 @@ orchard deploy resources get <id>
 
 ### `orchard deploy resources set`
 
-Update CPU/memory requests (0 clears to the org default; pods roll)
+Update CPU/memory requests (0 clears to the organization default; pods restart)
 
 ```bash
 orchard deploy resources set <id>
@@ -1854,7 +1854,7 @@ orchard deploy strategy
 
 ### `orchard deploy strategy set`
 
-Set the update strategy (PVC-backed deployments require recreate)
+Set the update strategy (deployments with volumes require recreate)
 
 ```bash
 orchard deploy strategy set <id>
@@ -1882,7 +1882,7 @@ orchard deploy volumes get <id>
 
 ### `orchard deploy volumes set`
 
-Replace all volumes with the given PVC volumes
+Replace all volumes with the given volumes
 
 ```bash
 orchard deploy volumes set <id>
@@ -1890,7 +1890,7 @@ orchard deploy volumes set <id>
 
 | Flag | Type | Default | Description |
 | --- | --- | --- | --- |
-| `--volume` | stringArray | `[]` | PVC volume as mountPath=size (repeatable); omit to remove all volumes |
+| `--volume` | stringArray | `[]` | volume as mountPath=size (repeatable); omit to remove all volumes |
 
 ### `orchard deploy webhook-token`
 
@@ -1904,7 +1904,7 @@ Aliases: `webhook-tokens`
 
 ### `orchard deploy webhook-token create`
 
-Mint a webhook token that restarts the deployment via POST
+Create a webhook token that restarts the deployment via POST
 
 ```bash
 orchard deploy webhook-token create <id>
@@ -1938,7 +1938,7 @@ Aliases: `ls`
 
 ### `orchard domain`
 
-Manage domains (ingresses)
+Manage domains
 
 ```bash
 orchard domain
@@ -1959,7 +1959,7 @@ orchard domain create
 | `--deployment` | string |  | deployment id to route traffic to |
 | `--host` | string |  | fully-qualified domain name |
 | `--path` | string | `/` | URL path prefix |
-| `--service-port` | int | `80` | service port to route to |
+| `--service-port` | int | `80` | port to route to |
 | `--tls` | bool | `true` | provision TLS for the host |
 
 ### `orchard domain delete`
@@ -1967,7 +1967,7 @@ orchard domain create
 Delete a domain
 
 ```bash
-orchard domain delete <ingress-id>
+orchard domain delete <domain-id>
 ```
 
 Aliases: `rm`
@@ -1977,7 +1977,7 @@ Aliases: `rm`
 Show a domain
 
 ```bash
-orchard domain get <ingress-id>
+orchard domain get <domain-id>
 ```
 
 ### `orchard domain list`
@@ -2007,7 +2007,7 @@ orchard domain protection
 Show a domain's protection mode and bypass secret
 
 ```bash
-orchard domain protection get <ingress-id>
+orchard domain protection get <domain-id>
 ```
 
 ### `orchard domain protection set`
@@ -2015,7 +2015,7 @@ orchard domain protection get <ingress-id>
 Set a domain's protection mode
 
 ```bash
-orchard domain protection set <ingress-id>
+orchard domain protection set <domain-id>
 ```
 
 | Flag | Type | Default | Description |
@@ -2028,7 +2028,7 @@ orchard domain protection set <ingress-id>
 Update a domain's host, path, port, or TLS
 
 ```bash
-orchard domain update <ingress-id>
+orchard domain update <domain-id>
 ```
 
 | Flag | Type | Default | Description |
@@ -2037,12 +2037,12 @@ orchard domain update <ingress-id>
 | `--path` | string | `/` | URL path prefix |
 | `--redirect-status` | int | `0` | for a redirect domain: 301, 302, 307 or 308 |
 | `--redirect-to` | string |  | for a redirect domain: where it sends visitors |
-| `--service-port` | int | `0` | service port to route to |
+| `--service-port` | int | `0` | port to route to |
 | `--tls` | bool | `true` | provision TLS for the host |
 
 ### `orchard domain validate-dns`
 
-Check that a domain's DNS points at the cluster
+Check that a domain's DNS points at your instance
 
 ```bash
 orchard domain validate-dns <host>
@@ -2112,7 +2112,7 @@ orchard env pull [env]
 | Flag | Type | Default | Description |
 | --- | --- | --- | --- |
 | `--deployment` | string |  | merge this deployment's own vars on top |
-| `--force` | bool | `false` | overwrite even if the file was not generated by orchard |
+| `--force` | bool | `false` | overwrite even if the file wasn't generated by orchard |
 | `--out` | string | `.env.orchard` | output file path |
 
 ### `orchard env set-default`
@@ -2170,7 +2170,7 @@ Aliases: `rm`, `remove`
 
 ### `orchard events`
 
-Stream live events from the org event bus
+Stream live events from the organization event bus
 
 ```bash
 orchard events
@@ -2178,7 +2178,7 @@ orchard events
 
 ### `orchard events tail`
 
-Tail org events until interrupted (NDJSON when piped)
+Tail organization events until interrupted (NDJSON when piped)
 
 ```bash
 orchard events tail
@@ -2403,7 +2403,7 @@ orchard help [command]
 
 ### `orchard import`
 
-Import a GitHub repo: project, build, deploy and URL in one shot
+Import a GitHub repo and deploy it
 
 ```bash
 orchard import <owner/repo[#branch] | url>
@@ -2512,7 +2512,7 @@ orchard job get <id>
 
 ### `orchard job list`
 
-List jobs in the org (or the current project when one is set)
+List jobs in the organization (or the current project when one is set)
 
 ```bash
 orchard job list
@@ -2780,7 +2780,7 @@ orchard member set-role <memberId> <role>
 
 ### `orchard notify`
 
-Manage org notification channels
+Manage organization notification channels
 
 ```bash
 orchard notify
@@ -2800,7 +2800,7 @@ Aliases: `channels`
 
 ### `orchard notify channel create`
 
-Create a notification channel in the org
+Create a notification channel in the organization
 
 ```bash
 orchard notify channel create
@@ -2808,7 +2808,7 @@ orchard notify channel create
 
 | Flag | Type | Default | Description |
 | --- | --- | --- | --- |
-| `--email` | stringSlice | `[]` | recipient email, must be an org member (email channels, repeatable) |
+| `--email` | stringSlice | `[]` | recipient email, must be an organization member (email channels, repeatable) |
 | `--events` | stringSlice | `[]` | events to deliver, comma-separated (required) |
 | `--name` | string |  | channel name, 1-100 characters (required) |
 | `--project` | stringSlice | `[]` | limit the channel to a project id (repeatable; default all projects) |
@@ -2827,7 +2827,7 @@ Aliases: `rm`
 
 ### `orchard notify channel list`
 
-List the org's notification channels
+List the organization's notification channels
 
 ```bash
 orchard notify channel list
@@ -3016,7 +3016,7 @@ orchard org avatar set <slug-or-id> <file>
 
 ### `orchard org backup-settings`
 
-Org-wide R2 settings for database backups
+Organization-wide R2 settings for database backups
 
 ```bash
 orchard org backup-settings
@@ -3329,7 +3329,7 @@ orchard project invitation revoke <invitationId>
 
 ### `orchard project list`
 
-List projects (all orgs, or the scoped one)
+List projects (all organizations, or the scoped one)
 
 ```bash
 orchard project list
@@ -3349,7 +3349,7 @@ Aliases: `members`
 
 ### `orchard project member add`
 
-Add an org member to the project (emails without an account get an invitation)
+Add an organization member to the project (emails without an account get an invitation)
 
 ```bash
 orchard project member add <email>
@@ -3433,7 +3433,7 @@ orchard project registry set <registry>
 
 ### `orchard project sync`
 
-Pull live cluster state for the project's namespace into Orchard
+Pull live Kubernetes state for the project into Orchard
 
 ```bash
 orchard project sync <project>
@@ -3509,7 +3509,7 @@ orchard project update <project>
 
 ### `orchard quota`
 
-Inspect resource quotas and usage for the org
+Inspect resource quotas and usage for the organization
 
 ```bash
 orchard quota
@@ -3519,7 +3519,7 @@ Aliases: `quotas`
 
 ### `orchard quota me`
 
-Show your own allowance, usage, and headroom in the org
+Show your own allowance, usage and remaining allowance in the organization
 
 ```bash
 orchard quota me
@@ -3527,7 +3527,7 @@ orchard quota me
 
 ### `orchard quota members`
 
-Show per-member allowances and usage (org admins)
+Show per-member allowances and usage (organization admins)
 
 ```bash
 orchard quota members
@@ -3535,7 +3535,7 @@ orchard quota members
 
 ### `orchard quota projects`
 
-Show per-project caps and usage (org admins)
+Show per-project caps and usage (organization admins)
 
 ```bash
 orchard quota projects
@@ -3543,7 +3543,7 @@ orchard quota projects
 
 ### `orchard quota show`
 
-Show org-wide usage against its caps
+Show organization-wide usage against its caps
 
 ```bash
 orchard quota show
@@ -3782,7 +3782,7 @@ Aliases: `ls`
 
 ### `orchard sandbox retry`
 
-Retry a sandbox's failed cluster or Vercel changes
+Retry a sandbox's failed Kubernetes or Vercel changes
 
 ```bash
 orchard sandbox retry <name>
@@ -3874,7 +3874,7 @@ orchard sandbox session transcript <sandbox> <session>
 
 ### `orchard sandbox share`
 
-Read-only share links for org teammates (transcript and diff only)
+Read-only share links for organization teammates (transcript and diff only)
 
 ```bash
 orchard sandbox share
@@ -4010,10 +4010,10 @@ orchard service create
 | `-d`, `--deployment` | string |  | deployment id |
 | `--domain` | string |  | custom domain for the service |
 | `--name` | string |  | service name (default: port-&lt;port&gt;) |
-| `--node-port` | int | `0` | explicit NodePort for public exposure |
+| `--node-port` | int | `0` | explicit public port |
 | `--port` | int | `0` | service port (required) |
 | `--protocol` | string | `TCP` | port protocol (TCP\|UDP) |
-| `--public` | bool | `false` | expose the service publicly (NodePort/LoadBalancer) |
+| `--public` | bool | `false` | expose the service publicly |
 | `--target-port` | int | `0` | container port to route to (default: --port) |
 
 ### `orchard service delete`
@@ -4040,7 +4040,7 @@ orchard service exposure
 
 ### `orchard service exposure set`
 
-Switch a service between public (NodePort/LoadBalancer) and internal (ClusterIP)
+Switch a service between public and internal
 
 ```bash
 orchard service exposure set <service-id> <public|internal>
@@ -4116,7 +4116,7 @@ orchard service update <service-id>
 | --- | --- | --- | --- |
 | `-d`, `--deployment` | string |  | deployment id |
 | `--domain` | string |  | custom domain for the service (empty clears it) |
-| `--node-port` | int | `0` | explicit NodePort for public exposure |
+| `--node-port` | int | `0` | explicit public port |
 | `--port` | int | `0` | service port |
 | `--protocol` | string | `TCP` | port protocol (TCP\|UDP) |
 | `--target-port` | int | `0` | container port to route to (default: --port) |
@@ -4177,7 +4177,7 @@ Aliases: `rm`
 
 ### `orchard status-page`
 
-Public status pages for an org
+Public status pages for an organization
 
 ```bash
 orchard status-page
@@ -4198,9 +4198,9 @@ orchard status-page create
 | `--component` | stringSlice | `[]` | deployment:&lt;id&gt; or database:&lt;id&gt;, in order (repeatable) |
 | `--description` | string |  | one line under the title |
 | `--private` | bool | `false` | create hidden; nothing renders until it is public |
-| `--slug` | string |  | path slug (default: the org slug) |
-| `--subdomain` | string |  | host under the platform domain |
-| `--title` | string |  | page title (default: '&lt;org&gt; status') |
+| `--slug` | string |  | path slug (default: the organization slug) |
+| `--subdomain` | string |  | host under the apps domain |
+| `--title` | string |  | page title (default: '&lt;organization&gt; status') |
 
 ### `orchard status-page delete`
 
@@ -4214,7 +4214,7 @@ Aliases: `rm`
 
 ### `orchard status-page list`
 
-List the org's status pages
+List the organization's status pages
 
 ```bash
 orchard status-page list
@@ -4258,7 +4258,7 @@ orchard status-page update <pageId>
 | `--private` | bool | `false` | hide the page |
 | `--public` | bool | `false` | make the page public |
 | `--slug` | string |  | new slug |
-| `--subdomain` | string |  | new host under the platform domain |
+| `--subdomain` | string |  | new host under the apps domain |
 | `--title` | string |  | new title |
 
 ## tailscale
@@ -4329,7 +4329,7 @@ orchard tailscale unlink
 
 ### `orchard template`
 
-Deploy prebuilt application stacks from templates
+Deploy prebuilt app stacks from templates
 
 ```bash
 orchard template
@@ -4361,7 +4361,7 @@ Aliases: `rm`
 
 ### `orchard template admin update`
 
-Replace a template's YAML definition (built-ins cannot be updated)
+Replace a template's YAML definition (built-ins can't be updated)
 
 ```bash
 orchard template admin update <id>
@@ -4501,7 +4501,7 @@ orchard up [dir]
 | `--root` | string |  | directory of the app inside the repo (monorepos) |
 | `--start-cmd` | string |  | override the detected start command |
 | `--timeout` | duration | `10m0s` | give up waiting after this long (exit 8) |
-| `--wait` | bool | `false` | block until the deploy is live (default: on when stdout is not a terminal) |
+| `--wait` | bool | `false` | block until the deploy is live (default: on when stdout isn't a terminal) |
 
 ## use
 
@@ -4595,7 +4595,7 @@ Aliases: `webhooks`
 
 ### `orchard webhook deploy`
 
-Trigger a deployment via a webhook token (no login required)
+Trigger a deployment via a webhook token (no sign-in required)
 
 ```bash
 orchard webhook deploy <token>

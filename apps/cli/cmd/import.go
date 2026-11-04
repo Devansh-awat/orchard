@@ -19,7 +19,7 @@ func importCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:     "import <owner/repo[#branch] | url>",
 		GroupID: groupCore,
-		Short:   "Import a GitHub repo: project, build, deploy and URL in one shot",
+		Short:   "Import a GitHub repo and deploy it",
 		Long: "Creates a project named after the repo, detects how to build it (Dockerfile\n" +
 			"or automatic), starts the first build, and attaches a protected URL.\n" +
 			"A public repo needs no GitHub App. Auto-deploy comes on when the App covers\n" +

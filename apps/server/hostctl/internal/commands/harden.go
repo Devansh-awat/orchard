@@ -196,7 +196,7 @@ func nodePortRange() (int, int) {
 func mintHex(bytes int) (string, error) {
 	raw := make([]byte, bytes)
 	if _, err := rand.Read(raw); err != nil {
-		return "", fmt.Errorf("couldn't mint a registry password: %w", err)
+		return "", fmt.Errorf("couldn't create a registry password: %w", err)
 	}
 	return hex.EncodeToString(raw), nil
 }

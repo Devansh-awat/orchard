@@ -181,7 +181,7 @@ export class SetupService implements OnModuleInit {
     const existing = await this.readClaim();
     if (existing && !SetupService.expired(existing)) {
       this.logger.warn(
-        'This instance still has no superadmin. Redeem the claim token already issued, or restart the server to mint a new one.'
+        'This instance still has no superadmin. Use the setup token already issued, or restart the server to get a new one.'
       );
       return;
     }

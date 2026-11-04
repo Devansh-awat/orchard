@@ -33,7 +33,7 @@ func Uninstall() *cli.Command {
 		Root:    true,
 		Usage: `orchardctl uninstall - remove Orchard from this machine
 
-Deletes this instance for good: k3s with every app, database and volume on it,
+Permanently deletes this instance: k3s with every app, database and volume on it,
 then what k3s-uninstall.sh leaves behind: the values file holding your secrets,
 the nightly update timer, orchardctl and its orchard-* links, helm, yq,
 /etc/rancher, and root's kubectl and helm state. There is no undo.
@@ -131,7 +131,7 @@ func runUninstall(c *cli.Context, h hostLayout, run func(string, ...string) erro
 		return fmt.Errorf("%d paths couldn't be removed, see above", failed)
 	}
 
-	c.Printf("Orchard is gone from this machine.\n")
+	c.Printf("Removed Orchard from this machine.\n")
 	c.Printf("Any rules the installer opened in ufw or firewalld are still there.\n")
 	return nil
 }

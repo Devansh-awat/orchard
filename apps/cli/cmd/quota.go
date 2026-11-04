@@ -153,7 +153,7 @@ func quotaAllowance(val, source string) string {
 }
 
 func quotaMeCmd() *cobra.Command {
-	return quotaGetKV("Show your own allowance, usage, and headroom in the organization", []string{"me"}, func(raw map[string]any) {
+	return quotaGetKV("Show your own allowance, usage and remaining allowance in the organization", []string{"me"}, func(raw map[string]any) {
 		allowance := quotaSub(raw, "allowance")
 		source := quotaSub(allowance, "source")
 		usage := quotaSub(raw, "usage")
@@ -162,10 +162,10 @@ func quotaMeCmd() *cobra.Command {
 		output.KV([][2]string{
 			{"cpu allowance", quotaAllowance(quotaCPU(allowance["cpuMilli"]), pick(source, "cpu"))},
 			{"cpu used", quotaCPU(usage["cpuMilli"])},
-			{"cpu headroom", quotaCPU(eff["cpuMilli"])},
+			{"cpu remaining", quotaCPU(eff["cpuMilli"])},
 			{"memory allowance", quotaAllowance(quotaMem(allowance["memoryBytes"]), pick(source, "memory"))},
 			{"memory used", quotaMem(usage["memoryBytes"])},
-			{"memory headroom", quotaMem(eff["memoryBytes"])},
+			{"memory remaining", quotaMem(eff["memoryBytes"])},
 			{"organization cpu cap", quotaCPU(orgCap["cpuLimitMilli"])},
 			{"organization memory cap", quotaMem(orgCap["memoryLimitBytes"])},
 		})

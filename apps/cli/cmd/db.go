@@ -920,9 +920,8 @@ func dbKilledCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "killed",
 		Short: "Inspect logs captured from killed database containers",
-		Long: `Postgres containers are replaced quickly after a crash, so by the time you
-look the pod that died is gone and its logs with it. Orchard captures the last
-lines on the way past and keeps them for 24 hours.`,
+		Long: `Kubernetes replaces a crashed Postgres container quickly, and its logs go with
+it. Orchard saves the last lines and keeps them for 24 hours.`,
 	}
 	c.AddCommand(dbKilledListCmd(), dbKilledLogsCmd())
 	return c

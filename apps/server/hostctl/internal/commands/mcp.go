@@ -128,7 +128,7 @@ one before anything can connect.
   orchardctl mcp enable [host]    turn it on, default mcp.<your app domain>
   orchardctl mcp disable          stop deploying it
 
-enable also copies JWT_SECRET across from the server and mints a shared
+enable also copies JWT_SECRET across from the server and creates a shared
 MCP_SERVICE_TOKEN if there isn't one already, because the MCP authenticates
 to the API as a service and passes the consenting user along. Without both,
 every tool call fails at authentication rather than at startup.
