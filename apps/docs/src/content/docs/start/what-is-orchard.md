@@ -1,55 +1,40 @@
 ---
 title: What is Orchard
-description: Orchard is a self-hosted platform layer for Kubernetes.
+description: Orchard is an open-source, self-hosted platform as a service (PaaS) that builds, runs, and routes apps on a Kubernetes cluster you control.
 sidebar:
   order: 1
 ---
 
-Orchard installs into a Kubernetes cluster you control and gives the people using
-that cluster a platform instead of a pile of YAML. Connect a GitHub repo, and
-Orchard builds it, runs it, routes traffic to it, gives it a database, and shows
-you the logs when it breaks.
+Orchard is an open-source platform as a service (PaaS). You install it on a Kubernetes cluster you control. Orchard builds apps from a Git repository or runs them from a container image, routes HTTPS traffic to them, and manages PostgreSQL databases for them.
 
-You run it yourself, on your own hardware. Orchard schedules onto Kubernetes, so
-it inherits replicas, rolling updates, health checks, resource quotas, and node
-scheduling rather than reimplementing them.
+Orchard is licensed under AGPL-3.0. There is no hosted version, so you run the instance yourself.
 
-## What you get
+## Get started
 
-|                |                                                                                                               |
-| -------------- | ------------------------------------------------------------------------------------------------------------- |
-| **Deploys**    | GitHub repos or container images, with builds on the cluster and streaming logs                               |
-| **Routing**    | An HTTPS URL per app, custom domains with automatic certificates, an auth wall if you want one                |
-| **Data**       | Managed PostgreSQL with backups, extensions, read replicas, and a query console                               |
-| **Jobs**       | Cron schedules and multi-step pipelines, with per-step output and exit codes                                  |
-| **Visibility** | Live logs filtered by pod and time, CPU and memory over time, crash reports from containers that already died |
-| **Teams**      | Organizations, projects, roles, SSO, SCIM provisioning, audit logs, quotas                                    |
-| **Interfaces** | A web dashboard, a CLI, and an MCP server so agents can drive it                                              |
+- [Install](/start/install/): Install Orchard on a Linux machine or a Kubernetes cluster.
+- [Deploy your first app](/start/first-deploy/): Deploy a repository and connect a database.
+- [Concepts](/start/concepts/): Learn how organizations, projects, environments, and apps relate.
 
-## What it is not
+## Features
 
-**Not a hosted service.** There is no orchard.com you sign up for. You run it.
+| Feature | Description | Refer to |
+| --- | --- | --- |
+| Deployments | Deploy from GitHub, other Git hosts, or a container image. | [Deploy from GitHub](/deploy/github/) |
+| Builds | Build images in jobs on your cluster and stream the logs. | [Builds](/deploy/builds/) |
+| Routing | Give each app an HTTPS URL, custom domains, and access protection. | [Domains and HTTPS](/deploy/domains/) |
+| Databases | Run PostgreSQL with backups, checkpoints, point-in-time restore, and read replicas. | [Databases](/data/databases/) |
+| Jobs | Run multi-step jobs on a cron schedule or on demand. | [Jobs and pipelines](/run/jobs/) |
+| Observability | Search logs, read metrics and requests, and open a shell in a running container. | [Logs and shell](/run/logs/) |
+| Teams | Manage organizations, roles, single sign-on (SSO), audit logs, and quotas. | [Organizations and roles](/teams/organizations/) |
+| Interfaces | Use the dashboard, the CLI, the [Model Context Protocol (MCP) server](/mcp/), or [Terraform](/run/terraform/). | [CLI](/cli/) |
 
-**Not a Kubernetes installer.** The one-command installer will stand up k3s for
-you on a bare box, but on an existing cluster Orchard expects you to bring the
-platform layer underneath it: a Postgres operator, an ingress controller,
-cert-manager, a storage class, a registry. See
-[Install](/start/install/#an-existing-cluster).
+## Limitations
 
-**Not hardened for untrusted code out of the box.** Deployments are
-network-isolated by default, but kernel isolation (gVisor, Kata) is opt-in and
-needs node-level runtimes. See [Security and isolation](/operate/security/).
+- The one-command installer creates a single-node k3s cluster. To use an existing cluster, you install the Helm chart and provide the operators it depends on. For the list, refer to [Install on an existing cluster](/start/install/#an-existing-cluster).
+- Apps are network-isolated by default, but they share the host kernel. Kernel isolation with gVisor or Kata is optional and needs runtimes on your nodes. For more information, refer to [Security and isolation](/operate/security/).
+- Orchard does not hide Kubernetes. Pods, replicas, and namespaces appear in the dashboard under those names.
 
-**Not an abstraction that hides Kubernetes.** Pods, replicas and namespaces are
-still there, and the UI names them. Orchard is a better front door, not a
-disguise.
+## Related resources
 
-## How it fits together
-
-Your cluster runs the Orchard control plane (an API server, a web frontend, a
-Redis, a control-plane Postgres, image builders) alongside tenant namespaces
-holding the apps people deploy. Builds run as jobs on the cluster and push to a
-registry you configure. The API mirrors cluster state into Postgres so reads are
-fast and survive an API server restart.
-
-More detail in [Architecture](/operate/architecture/).
+- [Architecture](/operate/architecture/)
+- [Going to production](/operate/production/)

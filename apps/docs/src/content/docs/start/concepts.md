@@ -1,81 +1,70 @@
 ---
 title: Concepts
-description: Organizations, projects, apps, environments and how they nest.
+description: Orchard organizes work into organizations, projects, environments, apps, and databases. Each environment maps to one Kubernetes namespace.
 sidebar:
   order: 4
 ---
 
-Orchard has a small object model. Everything else hangs off it.
+Orchard groups resources in a fixed hierarchy. Access rules, variables, and Kubernetes namespaces all follow this hierarchy.
 
-## The nesting
-
-```
+```text
 Organization
 └── Project
-    ├── App (deployment)
-    │   ├── Service and ports
-    │   ├── Ingress (domain)
-    │   └── Volumes
-    ├── Database
-    ├── Job
-    └── Compose stack / Template instance
+    └── Environment
+        ├── App
+        │   ├── Ports
+        │   ├── Domains
+        │   └── Volumes
+        ├── Database
+        ├── Job
+        ├── Compose stack
+        └── Template instance
 ```
 
-### Organization
+## Organization
 
-The billing-and-people boundary. Members, roles, quotas, SSO configuration and
-audit logs all live at this level. A person can belong to several.
+An organization holds members, quotas, SSO configuration, and audit logs. A person can belong to more than one organization.
 
-Each organization gets its own Kubernetes namespace per project, so tenants are
-separated at the cluster level rather than only in the UI.
+## Project
 
-### Project
+A project groups the apps and databases that belong together. Project membership controls access. A person who is not an organization owner or admin sees only the projects they belong to.
 
-A grouping of apps and databases that belong together, owned by an organization.
-Project membership is what gates access to the deployments inside it, so adding
-someone to a project gives them the apps in it.
+## Environment
 
-Projects carry shared variables and an icon and background of their own.
+An environment is a named part of a project. Each project has a default environment, named `Production` unless you rename it.
 
-### App
+Each environment has its own Kubernetes namespace. Apps in the same environment reach each other by their internal addresses. Environments also hold [shared variables](/run/environments/#shared-variables).
 
-One deployable unit: an image, a number of replicas, ports, environment,
-resources and storage. In Kubernetes terms it is a Deployment plus the Service,
-Ingress and PersistentVolumeClaims around it.
+## App
 
-Apps come from a GitHub repo (Orchard builds the image) or directly from a
-container image.
+An app is one deployable unit. It has an image, a replica count, ports, variables, CPU and memory sizes, and optional volumes.
 
-### Environment
+In Kubernetes terms, an app is a Deployment and its Services, Ingresses, and PersistentVolumeClaims. In the API and the CLI, an app is called a deployment.
 
-A named slice of a project, `Production` by default. Variables can be scoped to
-one environment, so staging and production differ without maintaining two
-projects.
+## Database
 
-### Database
+A database is a managed PostgreSQL instance that runs as a CloudNativePG `Cluster`. CloudNativePG is the Kubernetes operator that handles failover, storage, and backups. A database has its own lifecycle, separate from any app that connects to it.
 
-A managed PostgreSQL instance, created as a CloudNativePG `Cluster`. It has its
-own lifecycle: backups, extensions, read replicas, resource sizing, and optional
-public exposure.
+## Status
 
-## Status, and where it comes from
+Orchard reads status from the cluster. A pod that runs but fails its health check shows as failing. An app with a build in progress shows the build state.
 
-Statuses in the UI reflect what the cluster actually reports, not a timer. A pod
-that is running but failing its health check says so; an app whose build is in
-flight shows the build state, because a build in progress dominates.
-
-Orchard mirrors cluster state into Postgres through informers, so the dashboard
-stays fast and keeps working across an API restart. When the mirror and the
-cluster disagree, the cluster wins.
+Orchard keeps a copy of cluster state in PostgreSQL, so the dashboard loads quickly and stays available while the API restarts. Kubernetes remains the source of truth. A failed read does not mark a resource as gone. Only a 404 response from Kubernetes does.
 
 ## Roles
 
-| Role   | Can                                                    |
-| ------ | ------------------------------------------------------ |
-| Owner  | Everything, including deleting the organization        |
-| Admin  | Manage members, projects, quotas and settings          |
-| Member | Create and manage resources in projects they belong to |
-| Viewer | Read-only                                              |
+Organizations and projects each have their own roles.
 
-Superadmin is separate: an instance-level role for whoever operates the platform.
-See [Organizations and roles](/teams/organizations/).
+| Organization role | Access |
+| --- | --- |
+| Owner | All actions, including deleting the organization. |
+| Admin | Manage members, projects, quotas, and settings. |
+| Member | Access the projects they belong to. |
+
+| Project role | Access |
+| --- | --- |
+| Admin | Manage members and all resources in the project. |
+| Member | Create and edit project resources. |
+| Viewer | Read-only access. |
+
+Superadmin is a separate role for the people who operate the instance. For more information, refer to [Organizations and roles](/teams/organizations/).

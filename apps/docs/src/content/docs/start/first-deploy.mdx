@@ -1,99 +1,147 @@
 ---
-title: First deploy
-description: Take a GitHub repo from nothing to a running app with an HTTPS URL.
+title: Deploy your first app
+description: Deploy a GitHub repository to Orchard, get an HTTPS URL, and connect a managed PostgreSQL database.
 sidebar:
   order: 3
 ---
 
-import Diagram from '../../../components/Diagram.astro';
+import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-This walks the shortest path: a repo with a Dockerfile, deployed, reachable, with
-a database attached.
+Deploy a GitHub repository to Orchard and connect a PostgreSQL database to it. At the end, your app runs on an HTTPS URL and reads its connection string from a variable.
 
-<Diagram
-  caption="Every push after the first repeats everything from Build onward."
-  code={`flowchart LR
-  R[GitHub repo] -->|push| B[Build on cluster]
-  B --> I[Push image<br/>to registry]
-  I --> D[Roll out<br/>health checks]
-  D --> L[HTTPS URL]
-  D -.->|keeps every image| RB[Rollback]`}
-/>
+## Prerequisites
+
+- A running Orchard instance that you can sign in to. To set one up, refer to [Install](/start/install/).
+- A GitHub repository that contains a Dockerfile or an app that Orchard can detect.
+- For private repositories, a GitHub App on the instance. To create one, refer to [Connect a GitHub App](/operate/finishing-setup/#connect-a-github-app).
+- For the CLI steps, the `orchard` CLI. To install it, refer to [CLI](/cli/).
 
 ## 1. Connect GitHub
 
-Orchard talks to GitHub through a GitHub App. On a fresh instance, an admin
-creates it through the **manifest flow**: Orchard generates the app manifest,
-GitHub creates the app, and the credentials come back automatically. There is no
-step where you copy six values between two tabs.
+Connect your GitHub account so that Orchard can list your repositories. You can skip this step for a public repository.
 
-Once the app exists, each person links their own GitHub account, and Orchard
-only ever sees the repositories that account granted.
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
 
-## 2. Create an app
+1. Open your account menu and select **Account settings**.
+2. Go to **GitHub and Tailscale**.
+3. In **GitHub**, select **Connect**.
+4. Approve the request on GitHub.
+5. In **Repository access**, select **Add account** and install the GitHub App on the account that owns your repository.
 
-**New → GitHub Repository.** Pick the repo and a branch.
+</TabItem>
+<TabItem label="CLI">
 
-Orchard then reads the repository and fills in what it can:
+1. Sign in to your instance:
 
-- the **Dockerfile** and its build stages, so a multi-stage build targets the
-  right final stage
-- the **port** the container exposes
-- **environment variables** declared in the image, like `NODE_ENV` or `PORT`
+   ```sh
+   orchard auth login --api-url https://orchard.example.com
+   ```
 
-Check the build stage in particular. A multi-stage Dockerfile whose last stage is
-`runner` should build `runner`, not `base`; picking the wrong one produces an
-image with no application in it.
+2. Link your GitHub account:
 
-## 3. Deploy
+   ```sh
+   orchard github link --open
+   ```
 
-Press **Deploy**. You land on a progress page with five steps:
+3. Install the GitHub App on the account that owns your repository:
 
-1. Scheduling builder
-2. Building image
-3. Pushing image
-4. Creating app
-5. Done
+   ```sh
+   orchard github install --open
+   ```
 
-Build logs stream as they happen, so a failure shows you the line that broke
-rather than a red cross. If it fails, the app stays in a failed state and you can
-fix the Dockerfile and redeploy without recreating anything.
+</TabItem>
+</Tabs>
 
-When it finishes you get an HTTPS URL on the instance's app domain, and every
-push to that branch deploys itself from then on.
+## 2. Deploy the app
 
-## 4. Give it a database
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
 
-**New → Database** creates a managed PostgreSQL instance in the same project.
-When it is ready, the connection page shows the URI, host, port, database, user
-and password, with copy buttons and four formats (`URI`, `psql`, `.env`, `JDBC`).
+1. Open a project and select **New app**.
+2. In **Start from scratch**, select **GitHub repo**.
+3. In **Repository**, select your repository. For a public repository, paste `owner/repo` into the search field.
+4. In **Branch**, select a branch.
+5. In **Name**, enter a name for the app.
+6. In **Networking**, confirm that the port matches the port your app listens on.
+7. In **Reach**, select **Public link** for a URL that anyone can open. The default, **Private link**, requires people to sign in to Orchard.
+8. Select **Deploy**.
 
-Add the connection string to the app's variables and redeploy. Details in
-[Databases](/data/databases/).
+Orchard opens a progress page with these steps: **Starting the builder**, **Cloning the repo**, **Building the image**, **Pushing the image**, and **Rolling out**. The build logs stream on the same page.
 
-## 5. Watch it run
+</TabItem>
+<TabItem label="CLI">
 
-The app's **Overview** tab has live logs on the left and CPU, memory and replicas
-on the right. The replica slider scales it. The **Shell** button opens a terminal
-inside the running container.
+1. In your project directory, link the directory to an Orchard project:
 
-## If the build fails
+   ```sh
+   orchard link
+   ```
 
-The most common causes, in order:
+2. Create the app and wait for the first build:
 
-- **Wrong build stage.** See above.
-- **The app needs a database at build time.** Migrations in the entrypoint run at
-  _start_, not build, so this usually shows up as a crash loop instead.
-- **The repo does not build with the toolchain in its own Dockerfile.** Orchard
-  runs exactly what the Dockerfile says. If it fails in Orchard, it usually fails
-  locally too.
+   ```sh
+   orchard deploy create --github owner/repo#main --name web --port 3000 --wait
+   ```
 
-A crash loop after a successful build shows up as **Failed** with the container's
-own logs attached, including the logs of the container that already died.
+The CLI generates a URL that requires people to sign in to Orchard. To make the URL public, refer to [Deployment protection](/deploy/protection/).
 
-## Then what
+</TabItem>
+</Tabs>
 
-- [Custom domains and HTTPS](/deploy/domains/)
-- [Environments and variables](/run/environments/)
-- [Jobs and pipelines](/run/jobs/)
-- [Rollbacks](/deploy/rollbacks/)
+The app is live when its status is **Running**. Its URL appears in the header of the app page.
+
+If the build fails, refer to [Builds](/deploy/builds/#troubleshoot-a-failed-build).
+
+## 3. Create a database
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the project and select **New app**.
+2. In **Start from scratch**, select **PostgreSQL**.
+3. In **Database name**, enter a name.
+4. Select **Create database**.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard db create --name appdb --wait
+```
+
+</TabItem>
+</Tabs>
+
+## 4. Connect the database to the app
+
+Connect the database with a reference. A reference follows the database through a password rotation or a restore.
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the app and go to **Variables**.
+2. Add a variable named `DATABASE_URL`.
+3. In the value field, select **Use a resource**, then select your database.
+4. Select **Save**.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard deploy bindings add <app-id> --database appdb
+```
+
+This command adds `DATABASE_URL` to the app.
+
+</TabItem>
+</Tabs>
+
+Orchard restarts the app with the new variable.
+
+## Next steps
+
+- [Add a custom domain](/deploy/domains/)
+- [Set up auto-deploy](/deploy/github/#auto-deploy)
+- [Set variables](/run/environments/)
+- [Roll back a deploy](/deploy/rollbacks/)

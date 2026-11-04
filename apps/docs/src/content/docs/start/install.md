@@ -1,36 +1,98 @@
 ---
 title: Install
-description: One command on a fresh Linux box, or the Helm chart on a cluster you already run.
+description: Install Orchard on a Linux machine with the one-command installer, or on an existing Kubernetes cluster with the Helm chart.
 sidebar:
   order: 2
 ---
 
-There are two paths, and picking the wrong one causes most install problems.
+To install Orchard, select the method that matches your environment.
 
-- **A bare Linux box with nothing on it** → the one-command installer below. It
-  brings its own k3s.
-- **A cluster you already operate** → the Helm chart. Do _not_ run the installer
-  on an existing cluster; it will try to install k3s underneath you.
+| Environment | Method |
+| --- | --- |
+| A Linux machine with no cluster on it | [One-command installer](#a-bare-linux-box) |
+| A Kubernetes cluster you already operate | [Helm chart](#an-existing-cluster) |
+| A laptop, for a local trial | [Quickstart script](#trying-it-on-a-laptop) |
 
-You can also [hand the installer to an agent](#hand-it-to-an-agent) rather than
-driving it yourself.
+After you install Orchard, [claim the instance](#claiming-the-instance).
 
 ## A bare Linux box
 
-```bash
-sudo bash -c "$(curl -fsSL https://assets.orchard.my/install.sh)"
-```
+The installer creates a single-node k3s cluster. It then installs Traefik, CloudNativePG, cert-manager, a zot registry, and Orchard. If the machine can already reach another Kubernetes cluster, the installer warns you and leaves that cluster alone.
 
-It installs k3s, Traefik, CloudNativePG, cert-manager, a `zot` registry for the
-images it builds, and Orchard itself.
+### Prerequisites
 
-**Run it that way round, not `curl ... | sudo bash`.** The installer asks a few
-questions, and piping it into `bash` leaves the questions with nowhere to read
-your answer from: `bash` is already using its standard input to read the script,
-and on hosts where `sudo` gives the command its own pseudo-terminal your typing
-never reaches it. `bash -c "$(...)"` keeps your terminal attached. If you would
-rather not hand a script to `sudo` sight unseen, download it, read it, then run
-it:
+- A physical machine or a virtual machine (VM) with an amd64 or arm64 CPU. The installer refuses other architectures.
+- Root access.
+- At least 4 GiB of RAM and 20 GB of free disk. Orchard recommends 8 GiB of RAM and 60 GB of disk.
+- For `public` mode, ports 80 and 443 free, a domain, and an email address for Let's Encrypt.
+- For `tunnel` mode, a domain and a Cloudflare Tunnel token.
+
+Do not run the installer inside a Docker container. k3s cannot nest its overlayfs snapshotter there.
+
+### Choose an ingress mode
+
+The ingress mode sets how traffic reaches the machine.
+
+| Mode | Use for | TLS |
+| --- | --- | --- |
+| `public` | A routable IP address with DNS pointed at it | Let's Encrypt over HTTP-01 |
+| `tunnel` | A machine behind NAT or CGNAT, through Cloudflare Tunnel | Cloudflare terminates TLS and the installer skips cert-manager |
+| `lan` | A LAN or Tailscale network, reached by address | Self-signed certificates for apps. The dashboard uses plain HTTP. |
+
+The mode also decides which host ports Orchard binds.
+
+| Mode | Port 80 | Port 443 |
+| --- | --- | --- |
+| `public` | HTTP-01 challenges for the dashboard, the MCP endpoint, and every app hostname | All traffic |
+| `lan` | The dashboard and the MCP endpoint, in plain HTTP | Deployed apps |
+| `tunnel` | Not bound | Not bound |
+
+:::caution
+In `public` mode, port 80 must stay open after the install. Let's Encrypt uses it for every new app hostname and every certificate renewal. If another process owns port 80 or 443, use `tunnel` mode.
+:::
+
+### Add DNS records
+
+For `public` mode, add these `A` records before you run the installer. The example assumes the dashboard is at `orchard.example.com`.
+
+| Record | Purpose |
+| --- | --- |
+| `orchard.example.com` | The dashboard |
+| `*.apps.example.com` | Deployed apps |
+| `mcp.example.com` | The [MCP endpoint](/mcp/) for agents |
+
+The installer derives the app and MCP hostnames from your domain. To change them, use `--app-domain` and `--mcp-domain`. To leave out the MCP endpoint, use `--mcp false`.
+
+For `tunnel` mode, the installer prints the hostnames to route to your tunnel in the Cloudflare dashboard.
+
+### Run the installer
+
+1. Run the installer on the machine:
+
+   ```bash
+   sudo bash -c "$(curl -fsSL https://assets.orchard.my/install.sh)"
+   ```
+
+2. Answer the prompts. The installer asks for:
+
+   - The ingress mode.
+   - The domain for the dashboard.
+   - The wildcard domain for apps.
+   - An email address for Let's Encrypt (`public` mode only).
+   - A Cloudflare Tunnel token (`tunnel` mode only).
+   - An update policy: `manual` or `automatic`. The `automatic` policy upgrades the instance with a daily systemd timer.
+
+3. If the MCP hostname does not resolve, select an option when prompted. You can check again, use a different hostname, or skip the MCP endpoint and turn it on later with `sudo orchardctl mcp enable --apply`.
+
+4. Copy the claim link that the installer prints when it finishes.
+
+The installer writes its settings to `/etc/orchard/values.yaml`. Next, [claim the instance](#claiming-the-instance).
+
+:::note
+Use `bash -c` as shown. If you pipe the script into `sudo bash` with no flags, the installer cannot read your answers, so it stops before it installs anything.
+:::
+
+To read the script before you run it:
 
 ```bash
 curl -fsSL https://assets.orchard.my/install.sh -o orchard-install.sh
@@ -38,207 +100,18 @@ less orchard-install.sh
 sudo bash orchard-install.sh
 ```
 
-Everything it generates lands in `/etc/orchard/values.yaml`; edit that file and
-run `orchard-update` to apply changes. Environment variables are one list in
-that file, holding the instance's secrets, so change them one at a time with
-`sudo orchardctl env set <NAME> <value>` rather than by hand.
+### Run the installer without prompts
 
-**amd64 or arm64.** The installer detects the architecture and builds apps for
-it, so an arm64 box (a Graviton or Ampere VM, a Raspberry Pi 5) builds arm64
-images. Anything else is refused.
-
-**Run it on a real machine or VM,** not inside a Docker container: k3s cannot
-nest its overlayfs snapshotter there, and under CPU emulation seccomp is
-unavailable, so the kubelet never creates a pod sandbox.
-
-### On by default
-
-These are on, configured and working when the installer finishes:
-
-| Feature                 | What runs                                                | More                                       |
-| ----------------------- | -------------------------------------------------------- | ------------------------------------------ |
-| Metrics                 | VictoriaMetrics, vmagent and exporters                   | [Metrics and alerts](/run/observability/)  |
-| Log search and requests | VictoriaLogs and Vector, plus Traefik's JSON access log  | [Logs and request data](/operate/logs/)    |
-| Image scanning          | the Orchard scanner (Trivy), scanning straight from zot  | [Image scanning](/operate/image-scanning/) |
-| Database backups        | an S3 store on this box (versitygw) and the backup proxy | [Backups and restore](/data/backups/)      |
-| MCP                     | the endpoint agents connect to, at `mcp.<your domain>`   | [MCP](/mcp/)                               |
-
-Backups to the local store give you checkpoints, point-in-time restore, forks,
-the 30-day trash and restore tests from the first database. They live on the
-same disk as the databases, so they are not disaster recovery; see
-[the local store](/data/backups/#the-local-store-on-self-hosted-installs).
-
-Each one has a flag to leave it out: `--metrics false`, `--logs false`,
-`--image-scanning false`, `--object-storage false`, `--mcp false`.
-
-A host installed before metrics, logs, scanning or local backups were on by
-default gets them on its next `sudo orchardctl update`. Each change is printed,
-and it happens once, so turning something back off sticks. The MCP is the
-exception, because it needs a DNS record first: turn it on with
-`sudo orchardctl mcp enable --apply`. See
-[host commands](/operate/host-commands/#new-defaults-on-an-existing-host).
-
-### Ports 80 and 443
-
-Which ports get bound on the host, and what for:
-
-| mode     | port 80                                                                                                                  | port 443                                   |
-| -------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
-| `public` | Let's Encrypt HTTP-01 challenges: the dashboard, the MCP endpoint, and every app hostname, at issue and at every renewal | everything, the dashboard and apps alike   |
-| `lan`    | the dashboard and the MCP endpoint, in plain HTTP, since there is no TLS to terminate                                    | deployed apps, on self-signed certificates |
-| `tunnel` | nothing binds it                                                                                                         | nothing binds it                           |
-
-Port 80 in `public` mode is the one that cannot be negotiated. The ACME spec
-fixes the HTTP-01 challenge at port 80, so it is not an Orchard default you can
-change, and it is not only needed during the install: every app that gets a new
-hostname, and every renewal roughly every 60 days, needs it again.
-
-`tunnel` mode is the way out if something else on the box owns those ports.
-Cloudflare terminates TLS and `cloudflared` dials out from inside the cluster, so
-Traefik runs on a ClusterIP and nothing binds a host port at all. The installer
-checks both ports in its first step, names the process holding them, and only
-refuses if the mode you pick needs them.
-
-### Custom ports, `lan` only
-
-If the box needs to keep 80 or 443 for something else, `lan` mode can serve
-somewhere else entirely:
+Pass your answers as flags and add `--yes`:
 
 ```bash
-sudo bash -c "$(curl -fsSL https://assets.orchard.my/install.sh)" -- \
-  --mode lan --http-port 8080 --https-port 8443
+curl -fsSL https://assets.orchard.my/install.sh | sudo bash -s -- \
+  --yes --mode public --domain orchard.example.com --email you@example.com
 ```
 
-The dashboard then lives at `http://<host>:8080` and apps at
-`https://<app-host>:8443`. Traefik matches on the hostname and ignores the port,
-so routing is unaffected, and the dashboard's own links carry the port.
+With `--yes`, a `public` install still requires a domain and an email address. If the MCP hostname does not resolve, the installer leaves the MCP endpoint off and reports it.
 
-`public` and `tunnel` reject these flags rather than accepting them and
-misbehaving: `public` cannot move off 80 without giving up HTTP-01, and `tunnel`
-binds no host port for them to change.
-
-The port reaches clients through the API rather than through their own
-guesswork: every ingress the API returns carries a `url` the server computed
-from `PUBLIC_HTTP_PORT` / `PUBLIC_HTTPS_PORT`, which the installer writes into
-the server and frontend environments. The dashboard, `orchard open`, `orchard
-up` and the TUI all use it.
-
-### What it asks
-
-Two things it cannot work out on its own: your **domain**, and an **email for
-Let's Encrypt**. Architecture, memory, free disk, free ports and whether you are
-behind NAT are all detected.
-
-It derives two more hostnames from your domain rather than asking: `apps.` for
-deployed apps, and `mcp.` for the [MCP endpoint](/mcp/) agents connect to. In
-`public` mode both need a DNS record, and the installer prints them. Move the MCP
-with `--mcp-domain`, or leave it out entirely with `--mcp false`.
-
-Before it deploys anything it checks that the MCP hostname resolves, and if it
-does not, it asks:
-
-```text
-! mcp.example.com does not resolve yet.
-That is where AI agents connect over MCP. Its certificate is issued
-over HTTP-01, so it cannot be obtained until the name points here.
-
-What would you like to do?
-  1) I have added the record now, check again
-  2) use a different hostname
-  3) skip the MCP for now, I will turn it on later
-```
-
-Skipping is safe and reversible: add the record whenever you like and run
-`sudo orchardctl mcp enable --apply`. Under `--yes` there is nobody to ask, so it
-skips and says so. It never ships an endpoint for a hostname that does not
-exist, because a certificate that cannot be issued fails quietly rather than
-loudly.
-
-It also asks how traffic reaches the box:
-
-| Mode     | For                                        | TLS                                            |
-| -------- | ------------------------------------------ | ---------------------------------------------- |
-| `public` | A routable IP, DNS pointed at it           | Let's Encrypt over HTTP-01                     |
-| `tunnel` | Behind NAT or CGNAT, via Cloudflare Tunnel | Cloudflare terminates it, cert-manager skipped |
-| `lan`    | LAN or Tailscale only, reached by address  | Self-signed                                    |
-
-### What `lan` mode is reachable at
-
-The dashboard lives on the box's own address, so nothing has to resolve for it
-to work: `http://192.168.4.27`, plus every other address the machine had at
-install time (the Tailscale one included), its hostname, its `.local` name, and
-an `orchard.<ip>.sslip.io` name for good measure. Traefik matches the `Host`
-header against all of them.
-
-That matters because `sslip.io` is **public DNS** that maps a name back to the
-address inside it. Nothing is exposed by using it, since the address is a
-private one either way, but it does mean a resolver has to answer, and
-Tailscale's will not always answer for a private address. An install whose only
-name was a `sslip.io` one was unreachable exactly when you needed it.
-
-Apps are the exception: a wildcard cannot hang off an IP, so generated app
-hostnames stay on `apps.<ip>.sslip.io`. Pass `--app-domain` to use a wildcard
-you control instead.
-
-Reached it by a name nobody knew about at install time? Add it:
-
-```bash
-sudo orchardctl hostname add mango --apply
-sudo orchardctl claim --url mango
-```
-
-### Over Tailscale
-
-A `lan` install is the right mode for a box you reach over Tailscale: nothing is
-published, and WireGuard is already encrypting the hop, which is what makes
-plain HTTP on the dashboard reasonable there.
-
-Check what actually resolves before choosing a name. MagicDNS gives a machine
-both a short name and a fully qualified one, and the short one only resolves
-where the search domain is applied:
-
-```bash
-tailscale status
-tailscale ip -4
-```
-
-The installer picks up the Tailscale address by itself, because it takes every
-global IPv4 the machine has. The names are the part it cannot guess:
-
-```bash
-sudo orchardctl hostname add mango --apply
-sudo orchardctl hostname add mango.tailnet-name.ts.net --apply
-```
-
-To make one of them the name links are generated with, rather than one more
-name that works, change the primary and the URL the server hands out together.
-They are separate values and a mismatch is the confusing case: the dashboard
-answers, and every link it prints points somewhere else.
-
-```bash
-sudo orchardctl config set ingress.host mango
-sudo orchardctl env set FRONTEND_URL http://mango:8081 --apply
-sudo orchardctl claim
-```
-
-Use the port the instance serves on, which is 80 unless you moved it.
-`ingress.host` is a chart value and `FRONTEND_URL` an environment variable,
-which is why they take two different commands; see
-[host commands](/operate/host-commands/#env).
-
-To confirm what Traefik is matching on:
-
-```bash
-sudo kubectl -n orchard get ingressroute orchard \
-  -o jsonpath='{.spec.routes[*].match}'
-```
-
-And whether updates are **manual** (`orchard-update` when you want them) or
-**automatic** (a nightly systemd timer).
-
-### Unattended
-
-Every prompt has an environment variable:
+Each flag also has an environment variable:
 
 ```bash
 ORCHARD_ASSUME_YES=true \
@@ -247,252 +120,272 @@ ORCHARD_APP_DOMAIN=apps.example.com \
 ORCHARD_ACME_EMAIL=me@example.com \
 ORCHARD_INGRESS_MODE=public \
 ORCHARD_UPDATE_POLICY=manual \
-  sudo -E bash install.sh
+  sudo -E bash orchard-install.sh
 ```
 
-Others: `ORCHARD_VERSION`, `ORCHARD_CHART`, `ORCHARD_IMAGE_REGISTRY`,
-`ORCHARD_IMAGE_REPOSITORY`, `ORCHARD_STATE_DIR`, `ORCHARD_NODE_PORT_RANGE`,
-`ORCHARD_REGISTRY_HOST`, `ORCHARD_TUNNEL_TOKEN`,
-`ORCHARD_MCP`, `ORCHARD_MCP_DOMAIN`, `ORCHARD_METRICS`, `ORCHARD_LOGS`,
-`ORCHARD_IMAGE_SCANNING`, `ORCHARD_OBJECT_STORAGE`, `K3S_VERSION`,
-`GATEWAY_API_VERSION`.
+To list every flag and variable, run the script with `--help`.
 
-### Hand it to an agent
+### Components the installer turns on
 
-The installer is a single command with an environment variable for every
-prompt, which makes it something you can delegate. Give an agent SSH on the box
-and this page, and it can do the whole thing.
+| Component | What runs | Flag to leave it out | Refer to |
+| --- | --- | --- | --- |
+| Metrics | VictoriaMetrics, vmagent, and exporters | `--metrics false` | [Metrics and anomalies](/run/observability/) |
+| Log search and request data | VictoriaLogs, Vector, and the Traefik JSON access log | `--logs false` | [Logs and request data](/operate/logs/) |
+| Image scanning | The Orchard scanner (Trivy), which reads images from zot | `--image-scanning false` | [Image scanning](/operate/image-scanning/) |
+| Database backups | A local S3 store (versitygw) and the backup proxy | `--object-storage false` | [Backups and restore](/data/backups/) |
+| MCP | The endpoint agents connect to | `--mcp false` | [MCP](/mcp/) |
 
-Point it at the markdown rather than pasting instructions, so it can re-read
-what it needs:
+:::caution
+Backups in the local store sit on the same disk as your databases. They do not protect you if you lose the disk. For off-machine backups, refer to [Moving to real S3 or R2](/data/backups/#moving-to-real-s3-or-r2).
+:::
 
+A host installed before these defaults existed receives them on its next `sudo orchardctl update`. The MCP endpoint is the exception, because it needs a DNS record first. For more information, refer to [New defaults on an existing host](/operate/host-commands/#new-defaults-on-an-existing-host).
+
+### Sizing
+
+The installer sizes build concurrency and volumes from the machine.
+
+| RAM | Concurrent builds |
+| --- | --- |
+| Under 8 GiB | 1 |
+| 8 to 16 GiB | 2 |
+| Over 16 GiB | 3 |
+
+| Volume | Size |
+| --- | --- |
+| Build cache | One fifth of free disk, from 5 GB to 60 GB |
+| Registry | One fifth of free disk, from 5 GB to 50 GB |
+| Backups | One fifth of free disk, from 5 GB to 50 GB |
+| Log store | One tenth of free disk, from 5 GB to 20 GB |
+
+Under 8 GiB of RAM, metrics, logs, and the scanner use lower memory requests and limits. Logs are kept for 7 days instead of 14, and one scan runs at a time. To change any of these values, use `sudo orchardctl config set`.
+
+### Change settings after the install
+
+To change a chart value:
+
+```bash
+sudo orchardctl config set <key> <value> --apply
 ```
+
+To change a server environment variable:
+
+```bash
+sudo orchardctl env set <NAME> <value> --apply
+```
+
+For the full list of commands, refer to [Host commands](/operate/host-commands/).
+
+### What the installer does not configure
+
+| Item | What to do |
+| --- | --- |
+| Sandboxed builds and tenant isolation | Install gVisor or Kata on the node, then set `tenantSandbox` and `builderSandbox` in `/etc/orchard/values.yaml`. Without them, image builds run with host-level privileges. |
+| DNS | Add the records yourself. To check them, go to **Instance admin** > **Networking**. For more information, refer to [Point DNS at this instance](/operate/finishing-setup/#point-dns-at-this-instance). |
+| Public IP for raw ports and public databases | Run `sudo orchardctl public-ip set <ip> --apply`. For more information, refer to [Set a default public IP](/operate/finishing-setup/#set-a-default-public-ip). |
+| Off-machine backups | Refer to [Moving to real S3 or R2](/data/backups/#moving-to-real-s3-or-r2). |
+| Multiple nodes, wildcard certificates, and public TCP or UDP in `tunnel` mode | Use the [Helm chart](#an-existing-cluster). |
+
+The following values enable the sandboxes:
+
+```yaml
+tenantSandbox:
+  enabled: true
+  runtimeClassName: gvisor
+builderSandbox:
+  enabled: true
+  runtimeClassName: kata
+```
+
+:::caution
+Apps are network-isolated from each other and from the platform by default. They share the host kernel unless you install gVisor or Kata. Do not run code you do not trust without them. For more information, refer to [Security and isolation](/operate/security/).
+:::
+
+### Use `lan` mode
+
+A `lan` install serves the dashboard on the addresses the machine has at install time. These include any Tailscale address, the hostname, the `.local` name, and an `orchard.<ip>.sslip.io` name. Generated app hostnames use `apps.<ip>.sslip.io`, because a wildcard cannot use an IP address. To use a wildcard you control, pass `--app-domain`.
+
+To serve on other ports, pass `--http-port` and `--https-port`. Only `lan` mode accepts these flags.
+
+```bash
+sudo bash -c "$(curl -fsSL https://assets.orchard.my/install.sh)" -- \
+  --mode lan --http-port 8080 --https-port 8443
+```
+
+The dashboard is then at `http://<host>:8080`, and apps are at `https://<app-host>:8443`.
+
+To add a hostname after the install, and print a claim link that uses it:
+
+```bash
+sudo orchardctl hostname add mango --apply
+sudo orchardctl claim --url mango
+```
+
+### Use Tailscale
+
+Use `lan` mode for a machine you reach over Tailscale. The installer detects the Tailscale address. You must add MagicDNS names yourself.
+
+1. Find the machine's names and address:
+
+   ```bash
+   tailscale status
+   tailscale ip -4
+   ```
+
+2. Add each name:
+
+   ```bash
+   sudo orchardctl hostname add mango --apply
+   sudo orchardctl hostname add mango.tailnet-name.ts.net --apply
+   ```
+
+3. (Optional) To generate links with one of these names, change the primary hostname and the server URL together. Use the port the instance serves on, which is 80 by default.
+
+   ```bash
+   sudo orchardctl config set ingress.host mango
+   sudo orchardctl env set FRONTEND_URL http://mango --apply
+   sudo orchardctl claim
+   ```
+
+4. Confirm the hostnames that Traefik matches:
+
+   ```bash
+   sudo kubectl -n orchard get ingressroute orchard \
+     -o jsonpath='{.spec.routes[*].match}'
+   ```
+
+### Hand the install to an agent
+
+An agent with SSH access to the machine can run the installer. Point the agent at the Markdown version of this page:
+
+```text
 Install Orchard on <host> following https://docs.orchard.my/start/install.md
 My domain is example.com and my email is me@example.com.
 Ask me before anything that is not reversible.
 ```
 
-Four things it cannot work out on its own, so decide them first or expect to be
-asked:
+Decide these items before you start:
 
-| Decision                  | Why it is yours                                                                               |
-| ------------------------- | --------------------------------------------------------------------------------------------- |
-| `public`, `tunnel`, `lan` | It can detect NAT, not whether you intend to expose this box                                  |
-| The domain                | Nothing on the box knows what you own                                                         |
-| The DNS records           | It probably has no access to your DNS provider, and the records must exist **before** the run |
-| Whether to proceed        | Installs k3s system-wide, and outside `tunnel` mode takes over ports 80 and 443               |
+| Decision | Reason |
+| --- | --- |
+| The ingress mode | The agent can detect NAT. It cannot know whether you intend to expose the machine. |
+| The domain | Nothing on the machine shows which domains you own. |
+| The DNS records | The records must exist before the run, and the agent may not have access to your DNS provider. |
+| Whether to proceed | The installer installs k3s system-wide. Outside `tunnel` mode, it also takes ports 80 and 443. |
 
-Three things to make sure it gets right, because each fails in a way that is
-quiet rather than loud:
-
-- **amd64 or arm64, on a real machine.** The installer refuses other
-  architectures, and k3s cannot nest inside a Docker container. An agent that decides to "try it
-  in a container anyway" produces a cluster whose kubelet never starts a pod.
-- **DNS first.** In `public` mode the certificates are issued over HTTP-01, so
-  a record that does not exist yet means a certificate that never arrives. The
-  installer prints the records and waits.
-- **`--yes` skips the questions, not the requirements.** Unattended, a missing
-  MCP record leaves the MCP off rather than prompting, and the run reports it.
-
-The first thing setup asks for after you claim is a way back in, since the
-claim link is single use. It offers a **passkey** where the browser allows one,
-and a **password** where it does not, which is any instance served over plain
-HTTP: `lan` mode, mostly. Either satisfies the step; neither can be skipped,
-because an instance you cannot sign into again is not set up.
-
-At the end it prints a **claim link**. That link is the credential: single use,
-and it signs in as the instance superadmin. Treat it like a password, and open
-it yourself rather than letting the agent follow it. If it is lost or used,
-`sudo orchardctl claim` mints another.
-
-Once you are in, the agent can drive the instance it just built over
-[Orchard's own MCP](/mcp/), which the installer publishes at
-`mcp.<your domain>`.
-
-### Sizing
-
-Build concurrency, cache size and registry size are derived from the machine:
-
-| RAM       | Concurrent builds |
-| --------- | ----------------- |
-| under 8Gi | 1                 |
-| 8 to 16Gi | 2                 |
-| over 16Gi | 3                 |
-
-Build cache, registry and backups each take a fifth of free disk, capped at
-60G, 50G and 50G. The log store takes a tenth, between 5G and 20G. The floor is
-4Gi RAM and 20G disk; 8Gi and 60G is comfortable.
-
-Nothing is switched off to fit a small box. Under 8Gi of RAM, metrics, logs and
-the scanner run with smaller memory requests and limits, logs are kept for a
-week instead of two, and one scan runs at a time. The numbers are in the
-generated values file, and `orchardctl config set` changes any of them.
-
-### What the installer leaves off
-
-**Sandboxed builds and tenant isolation.** gVisor and Kata need node-level
-runtimes that vary by distro. Without them, image builds run with host-level
-privileges, the same posture as Docker-based platforms, which is fine when the
-person building the image owns the box. If you run other people's code, install
-the runtime yourself and flip the flag in `/etc/orchard/values.yaml`:
-
-```yaml
-tenantSandbox: # gVisor for tenant app pods
-  enabled: true
-  runtimeClassName: gvisor
-builderSandbox: # Kata VMs for build jobs
-  enabled: true
-  runtimeClassName: kata
-```
-
-**DNS.** You point the records at the box; the installer only checks them. Once
-it is up, **Instance admin → Networking** shows what resolves where, and if you
-are behind a Cloudflare Tunnel it can add the routes for you. See
-[Point DNS at this instance](/operate/finishing-setup/#point-dns-at-this-instance).
-
-**A default public IP.** Raw TCP and UDP ports and public databases are
-published on an external address, and the installer does not assume this box's
-is the right one. Set it once with
-`sudo orchardctl public-ip set <ip> --apply` and every organization inherits it;
-see [Set a default public IP](/operate/finishing-setup/#set-a-default-public-ip).
-
-**Off-box backups.** Database backups go to an S3 store on this same machine.
-That undoes a bad migration or a dropped table, but lose the disk and the
-backups go with it. Point the instance at real S3 or R2 for that:
-[Moving to real S3 or R2](/data/backups/#moving-to-real-s3-or-r2) walks through
-it, including copying what is already there.
-
-**Multi-node**, **wildcard certificates**, and **public TCP/UDP in tunnel mode**
-are also out of scope for the installer. See the chart for those.
-
-:::caution
-Deployments are network-isolated from each other and from the platform by
-default, but they share the host kernel unless you install gVisor or Kata and
-turn them on. Running code you do not trust is not safe without that. See
-[Security and isolation](/operate/security/).
-:::
+Open the claim link yourself. The link signs you in as the superadmin, so treat it as a password. If you lose it, `sudo orchardctl claim` creates another.
 
 ## An existing cluster
 
-Orchard deploys via the Helm chart. The chart installs Orchard's own components
-and **no cluster operators**: you bring the platform layer below it.
+The Helm chart installs Orchard's own components. It does not install cluster operators, so you provide them.
 
 ### Prerequisites
 
-| Component                    | Needed for                                                           |
-| ---------------------------- | -------------------------------------------------------------------- |
-| CloudNativePG operator       | The control-plane database and every database users create           |
-| Traefik                      | Control-plane ingress (`IngressRoute`)                               |
-| Gateway API CRDs             | The `Gateway` for database exposure, unless `gateway.enabled: false` |
-| cert-manager                 | TLS, plus a DNS-01 `ClusterIssuer` for wildcard certificates         |
-| A default StorageClass       | Postgres volumes, build cache, Redis, metrics, logs                  |
-| An OCI registry              | Where built images are pushed and pulled                             |
-| An ingress controller        | Every app URL, as an `Ingress` of class `tenant.ingressClass`        |
-| L4 LoadBalancer              | Only for public database exposure and TCP/UDP passthrough            |
-| gVisor / Kata RuntimeClasses | Optional, for sandboxed tenant and builder pods                      |
+| Component | Needed for |
+| --- | --- |
+| CloudNativePG operator | The control-plane database and every database users create |
+| Traefik | Control-plane ingress (`IngressRoute`) |
+| Gateway API CRDs | The `Gateway` for database exposure, unless `gateway.enabled: false` |
+| cert-manager | TLS, plus a DNS-01 `ClusterIssuer` for wildcard certificates |
+| A default StorageClass | Postgres volumes, build cache, Redis, metrics, and logs |
+| An OCI registry | Where built images are pushed and pulled |
+| An ingress controller | Every app URL, as an `Ingress` of class `tenant.ingressClass` |
+| A layer 4 (L4) load balancer | Public database exposure and TCP or UDP passthrough only |
+| gVisor or Kata RuntimeClasses | Optional sandboxing for tenant and builder pods |
 
-### DNS
+You also need these domains:
 
-You need domains you control:
-
-- **App domain** (`APP_DOMAIN`): wildcard DNS pointing at your ingress
-  controller's LoadBalancer IP. Each host gets its own certificate unless you add
-  a wildcard.
-- **Ingress CNAME target** (`INGRESS_CNAME`): what users point custom domains at.
-- **Platform domain**: where the Orchard UI lives.
-- **DB domain** (`PUBLIC_DB_DOMAIN`, optional): wildcard for publicly exposed
-  databases.
+| Domain | Setting | Purpose |
+| --- | --- | --- |
+| Platform domain | `ingress.host` | The dashboard |
+| App domain | `APP_DOMAIN` | Wildcard DNS that points at your ingress controller's load balancer IP |
+| Ingress CNAME target | `INGRESS_CNAME` | The target for users' custom domains |
+| Database domain | `PUBLIC_DB_DOMAIN` | Optional wildcard for publicly exposed databases |
 
 ### Install with Helm
 
-These steps reached a working login, an app with an HTTPS certificate and a
-database with a bound volume, on plain k3s with the published chart, Helm 4.3.1,
-Traefik, cert-manager and CloudNativePG. **Builds were not tested on this path.**
-They need a real registry, see below. The test run created the namespaces and the
-Secret after a first failed install rather than before it.
+:::note
+These steps were tested on k3s with the published chart, Helm 4.3.1, Traefik, cert-manager, and CloudNativePG. The test reached a working login, an app with an HTTPS certificate, and a database with a bound volume. Builds and MCP were not tested on this path.
+:::
 
-**1. Create the namespaces and the Secret.** The Secret holds two values the
-server needs at boot. `jwt` signs sessions and must be at least 32 characters.
-`enc` encrypts stored secrets, so keep it safe: a new key makes everything already
-encrypted unreadable.
+1. Create the namespaces and the Secret. `jwt` signs sessions and must be at least 32 characters. `enc` encrypts stored secrets. Keep `enc` safe, because a new key makes existing encrypted values unreadable.
 
-```bash
-kubectl create namespace orchard
-kubectl create namespace network
-kubectl -n orchard create secret generic orchard-secrets \
-  --from-literal=jwt="$(openssl rand -base64 48 | tr -d '\n')" \
-  --from-literal=enc="$(openssl rand -base64 32 | tr -d '\n')"
-```
+   ```bash
+   kubectl create namespace orchard
+   kubectl create namespace network
+   kubectl -n orchard create secret generic orchard-secrets \
+     --from-literal=jwt="$(openssl rand -base64 48 | tr -d '\n')" \
+     --from-literal=enc="$(openssl rand -base64 32 | tr -d '\n')"
+   ```
 
-**2. Write `my-values.yaml`.** CI renders this exact file, from
-`infra/charts/orchard/examples/minimal-values.yaml`, on every chart change:
+2. Write `my-values.yaml`. CI renders this file, from `infra/charts/orchard/examples/minimal-values.yaml`, on every chart change.
 
-```yaml
-createNamespace: false
-signupMode: invite_only
-datadog:
-  enabled: false
-ingress:
-  host: orchard.example.com
-  tls:
-    enabled: true
-    issuerRef: { name: letsencrypt, kind: ClusterIssuer }
-gateway:
-  http:
-    enabled: false
-    appDomain: apps.example.com
-certificates:
-  enabled: false
-mcp:
-  enabled: false
-tenant:
-  storageClass: local-path
-  ingressClass: traefik
-  ingressNamespaces: traefik,orchard
-  certClusterIssuer: letsencrypt
-server:
-  env:
-    - { name: FRONTEND_URL, value: https://orchard.example.com }
-    - name: JWT_SECRET
-      valueFrom: { secretKeyRef: { name: orchard-secrets, key: jwt } }
-    - name: SECRETS_ENCRYPTION_KEY
-      valueFrom: { secretKeyRef: { name: orchard-secrets, key: enc } }
-```
+   ```yaml
+   createNamespace: false
+   signupMode: invite_only
+   datadog:
+     enabled: false
+   ingress:
+     host: orchard.example.com
+     tls:
+       enabled: true
+       issuerRef: { name: letsencrypt, kind: ClusterIssuer }
+   gateway:
+     http:
+       enabled: false
+       appDomain: apps.example.com
+   certificates:
+     enabled: false
+   mcp:
+     enabled: false
+   tenant:
+     storageClass: local-path
+     ingressClass: traefik
+     ingressNamespaces: traefik,orchard
+     certClusterIssuer: letsencrypt
+   server:
+     env:
+       - { name: FRONTEND_URL, value: https://orchard.example.com }
+       - name: JWT_SECRET
+         valueFrom: { secretKeyRef: { name: orchard-secrets, key: jwt } }
+       - name: SECRETS_ENCRYPTION_KEY
+         valueFrom: { secretKeyRef: { name: orchard-secrets, key: enc } }
+   ```
 
-Replace the hostnames, then check these against your cluster:
+3. Replace the hostnames, then check these values against your cluster.
 
-| Value                      | What to set                                                                                                                                                                                                            |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tenant.storageClass`      | A class from `kubectl get storageclass`, or `''` for the cluster default                                                                                                                                               |
-| `tenant.ingressClass`      | A class from `kubectl get ingressclass`                                                                                                                                                                                |
-| `tenant.ingressNamespaces` | The namespace your ingress controller's pods run in, then `orchard`, like `ingress-nginx,orchard`. Tenant namespaces are default-deny, so with the wrong one apps are unreachable and HTTP-01 certificates never issue |
-| `tenant.certClusterIssuer` | A ClusterIssuer from `kubectl get clusterissuer`, also used in `ingress.tls.issuerRef`                                                                                                                                 |
-| `gateway.http.enabled`     | Leave `false`. App URLs use `Ingress`, and this listener wants a wildcard Secret nothing creates                                                                                                                       |
-| `certificates.enabled`     | Leave `false` unless you have a DNS-01 issuer for wildcards. The default needs one named `letsencrypt-dns01-wildcard`                                                                                                  |
-| `mcp.enabled`              | Leave `false` to start. On, it needs the extra settings below                                                                                                                                                          |
+   | Value | What to set |
+   | --- | --- |
+   | `tenant.storageClass` | A class from `kubectl get storageclass`, or `''` for the cluster default |
+   | `tenant.ingressClass` | A class from `kubectl get ingressclass` |
+   | `tenant.ingressNamespaces` | The namespace your ingress controller's pods run in, followed by `orchard`, such as `ingress-nginx,orchard`. Tenant namespaces deny traffic by default. With the wrong value, apps are unreachable and HTTP-01 certificates are not issued. |
+   | `tenant.certClusterIssuer` | A ClusterIssuer from `kubectl get clusterissuer`. Use the same issuer in `ingress.tls.issuerRef`. |
+   | `gateway.http.enabled` | Leave `false`. App URLs use `Ingress`, and this listener needs a wildcard Secret that nothing creates. |
+   | `certificates.enabled` | Leave `false` unless you have a DNS-01 issuer for wildcards. The default needs one named `letsencrypt-dns01-wildcard`. |
+   | `mcp.enabled` | Leave `false` to start. The MCP endpoint needs [extra settings](#add-optional-features). |
+   | `CNPG_OPERATOR_NAMESPACE` in `server.env` | The namespace where CloudNativePG runs. The default is `postgresql`. With the wrong value, the tenant network policy blocks the operator from database pods. |
 
-**3. Install and wait for the API.**
+4. Install the chart and wait for the API:
 
-```bash
-helm install orchard oci://ghcr.io/hackclub/orchard/charts/orchard \
-  --namespace orchard -f my-values.yaml
-kubectl -n orchard rollout status deploy/server --timeout=10m
-```
+   ```bash
+   helm install orchard oci://ghcr.io/hackclub/orchard/charts/orchard \
+     --namespace orchard -f my-values.yaml
+   kubectl -n orchard rollout status deploy/server --timeout=10m
+   ```
 
-**4. Get the claim link.** The server logs one on first boot, but only once and
-only on one replica, so mint one instead:
+5. Create a claim link. The server logs one link on first boot, on one replica only, so create one directly:
 
-```bash
-kubectl -n orchard exec deploy/server -- node dist/scripts/mint-claim-link.js
-```
+   ```bash
+   kubectl -n orchard exec deploy/server -- node dist/scripts/mint-claim-link.js
+   ```
 
-Keeping `createNamespace: true`, the default, makes the chart render `orchard`
-and any missing `network` namespace itself, so pass `--create-namespace` and
-create the Secret after the install. The server waits for it. A `network`
-namespace that already exists is left alone, and one the chart made survives
-`helm uninstall`.
+Next, [claim the instance](#claiming-the-instance).
 
-**Builds (untested on this path)** need a registry the cluster can reach:
+If you keep `createNamespace: true`, the default, the chart creates `orchard` and any missing `network` namespace. In that case, pass `--create-namespace` and create the Secret after the install. The server waits for the Secret. The chart leaves an existing `network` namespace alone. A `network` namespace that the chart creates remains after `helm uninstall`.
+
+### Add optional features
+
+To enable builds, add a registry the cluster can reach. This configuration was not tested on this path. A registry behind an ingress on the same node failed in testing, with a connection refused error during the push.
 
 ```yaml
 builders:
@@ -504,104 +397,102 @@ builders:
     - namespace: <namespace your registry runs in>
 ```
 
-and in `server.env`, `DOCKER_REGISTRY_PUSH`, `DOCKER_REGISTRY_PULL` and
-`REGISTRY_PROJECT`.
+Also set `DOCKER_REGISTRY_PUSH`, `DOCKER_REGISTRY_PULL`, and `REGISTRY_PROJECT` in `server.env`.
 
-**MCP (untested on this path)** needs `mcp.enabled: true`, `mcp.ingress.host`, and
-`JWT_SECRET` and `MCP_SERVICE_TOKEN` in `mcp.env`, with the same
-`MCP_SERVICE_TOKEN` in `server.env`.
+To enable MCP, set `mcp.enabled: true` and `mcp.ingress.host`. Set `JWT_SECRET` and `MCP_SERVICE_TOKEN` in `mcp.env`, and the same `MCP_SERVICE_TOKEN` in `server.env`. This configuration was not tested on this path.
 
-Every variable the server reads is listed in [Configuration](/reference/configuration/).
+To enable database backups, refer to [Backup storage for operators](/data/backups/#backup-storage-for-operators).
+
+For every variable the server reads, refer to [Configuration](/reference/configuration/).
 
 ## Claiming the instance
 
-A fresh install has no superadmin. On first boot the server mints a single-use
-setup token, valid for 24 hours. The installer prints the link when it finishes,
-and on the host you can mint a fresh one any time before you have a way to sign in:
+A new instance has no superadmin. The first person to redeem the claim link becomes the superadmin. The link works once. The token behind it is valid for 24 hours.
+
+To create a new link on a host set up by the installer:
 
 ```bash
 sudo orchardctl claim
 ```
 
-On a cluster with no `orchardctl`, mint one in the server pod. The first boot also
-logs one, but only once and only on one replica:
+To create a new link on a Helm install:
 
 ```bash
 kubectl -n orchard exec deploy/server -- node dist/scripts/mint-claim-link.js
 ```
 
-Open the link. It asks only for the email address the account should use, sends
-no confirmation, and makes that account the superadmin. Then a short setup runs:
+To claim the instance:
 
-1. **A way back in**, which cannot be skipped: a passkey, or a password on an
-   instance served over plain HTTP, where a browser will not offer passkeys.
-2. **An organization name.** One already exists, named after your email domain.
-3. **Connect GitHub**, which creates the app that deploying from a repository
-   needs. Skippable.
-4. **Certificates**, which reports how TLS is doing for your app domain.
-5. **Anonymous usage reports**, off unless you opt in.
+1. Open the claim link.
+2. Enter the email address for the account. Orchard does not send a confirmation email.
+3. Select **Set up your instance**.
+4. Create a passkey, or set a password of at least 12 characters. Browsers do not offer passkeys over plain HTTP, so a `lan` install defaults to a password. You cannot skip this step.
+5. Rename the organization, or keep the name Orchard created.
+6. Select **Create GitHub App** to create the App that repository deployments need, or select **Skip for now**.
+7. Review the certificate status for your app domain.
+8. Choose whether to share anonymous usage reports. Reports are off unless you opt in.
+9. Select **Go to Orchard**.
 
 :::caution
-With no SMTP and no identity provider, what you set up in that first step is the
-only way in besides the host. If you lose it, `sudo orchardctl login` prints a
-one-time sign-in link, and `sudo orchardctl password set` sets or resets the
-superadmin's password.
+Without SMTP, Orchard does not offer email codes on the sign-in page. Without SMTP or an identity provider, your passkey or password is the only way to sign in from a browser. If you lose access, run `sudo orchardctl login` to print a one-time sign-in link, or `sudo orchardctl password set` to set the superadmin password.
 :::
 
 ## Trying it on a laptop
 
-For a throwaway local cluster:
+To create a local trial cluster, run the following script from a clone of the Orchard repository. It needs Docker, k3d, kubectl, and Helm.
 
 ```bash
 ./scripts/quickstart.sh
 ```
 
-It creates a k3d cluster, installs the prerequisites, and deploys the chart with
-dev values, at `http://orchard.127.0.0.1.nip.io:8080`. Image builds are off, so
-deploy from a container image, and its secrets are public, so keep it on your
-laptop. It prints how to claim the instance when it finishes.
+The script creates a k3d cluster, installs the prerequisites, and deploys the chart at `http://orchard.127.0.0.1.nip.io:8080`. It prints the steps to claim the instance.
+
+The quickstart turns off image builds, so deploy from a container image. Its secrets are public, so do not expose this cluster.
 
 ## Checking what you install
 
-Every Orchard release is built by GitHub Actions in the Orchard repository,
-and each piece carries a signed record of the exact commit and workflow that
-built it. With the [GitHub CLI](https://cli.github.com) you can check that what
-you downloaded is what CI built, not something swapped in later:
+GitHub Actions builds every Orchard release and signs a record of the commit and workflow. To verify a download, use the [GitHub CLI](https://cli.github.com).
+
+To verify the install script:
 
 ```sh
-# the install script
 curl -fsSLO https://assets.orchard.my/install.sh
 curl -fsSLO https://assets.orchard.my/install.sh.sigstore.jsonl
 gh attestation verify install.sh --bundle install.sh.sigstore.jsonl --owner hackclub
+```
 
-# a container image (the signature and an SBOM live next to it in the registry)
+To verify a container image:
+
+```sh
 gh attestation verify oci://ghcr.io/hackclub/orchard/server:2.69.0 --owner hackclub --bundle-from-oci
 ```
 
-CLI downloads carry `attestation.sigstore.jsonl` next to them on the release
-page, and grafts in the Extension Marketplace are signed separately with
-Orchard's own key, which Orchard checks on every install.
+CLI downloads include `attestation.sigstore.jsonl` on the release page. Orchard signs grafts in the Extension Marketplace with its own key and checks the signature on every install.
 
 ## Uninstalling
 
-On a box the installer set up:
+:::danger
+Uninstalling deletes every app, database, and volume on the instance. You cannot undo this action.
+:::
+
+To uninstall from a host set up by the installer:
 
 ```bash
 sudo orchardctl uninstall
 ```
 
-It removes k3s with every app, database and volume on it, then the values file
-with your secrets, the update timer, the host commands, helm, yq and the rest of
-what `k3s-uninstall.sh` leaves behind. It asks you to type a phrase naming the
-instance first, and there is no undo. See
-[host commands](/operate/host-commands/#uninstall) for the full list.
+The command asks you to type a phrase that names the instance. It removes k3s, the values file that holds your secrets, the update timer, the host commands, Helm, and yq. For the full list, refer to [Host commands](/operate/host-commands/#uninstall).
 
-On an existing cluster, `helm uninstall orchard -n orchard` removes the release.
-The namespaces Orchard made for its apps and databases are not part of the
-release, so delete those yourself.
+To uninstall from an existing cluster:
 
-## Before you put real work on it
+```bash
+helm uninstall orchard -n orchard
+```
 
-A fresh install is not a production instance. Secrets, signup mode, TLS cookies,
-control-plane backups and isolation all need deciding. Work through
-[Going to production](/operate/production/).
+The release does not include the namespaces Orchard created for apps and databases. Delete those namespaces yourself.
+
+## Next steps
+
+- [Deploy your first app](/start/first-deploy/)
+- [Finish setting up the instance](/operate/finishing-setup/)
+- [Going to production](/operate/production/)
