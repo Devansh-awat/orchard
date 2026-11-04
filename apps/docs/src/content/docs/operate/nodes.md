@@ -21,7 +21,7 @@ To control where workloads run on a multi-node cluster, create node pools and as
 5. In **Affinity**, select **preferred (soft)** or **required (hard)**.
 6. Add tolerations for any taints on the nodes.
 7. To let people choose this pool, turn on **User-selectable**.
-8. Save the pool.
+8. Select **Create pool**.
 
 To let people pick a pool at all, turn on **Let users pick a node pool** in **Userspace scheduling**.
 
@@ -32,6 +32,7 @@ To let people pick a pool at all, turn on **Let users pick a node pool** in **Us
 3. In **Organization assignments**, select the **Organization**.
 4. In **Mode**, select `allow` or `deny`.
 5. Optional: enter **Max services**, **CPU limit** and **Memory limit**.
+6. Select **Save assignment**.
 
 An organization with at least one `allow` assignment runs only on its allowed nodes. An organization never runs on a node with a `deny` assignment.
 
@@ -72,6 +73,7 @@ The taint is optional. To limit how many builds run at once, set `MAX_CONCURRENT
 
 ## Related resources
 
+- [Node pools](/operate/node-pools/)
 - [Quotas and usage](/teams/quotas/)
 - [Scaling and resources](/deploy/scaling/)
 - [Troubleshooting](/operate/troubleshooting/)
