@@ -408,7 +408,7 @@ metrics:
   # series, so history before the change stops matching queries that select on it.
   clusterLabel: leafycluster
   victoriametrics:
-    image: victoriametrics/victoria-metrics:v1.154.1
+    image: victoriametrics/victoria-metrics:v1.155.0
     retention: 30d
     # VictoriaMetrics sizes its cache as a share of the memory *limit*, so it
     # grows to fill whatever it's given. Lower the limit to lower idle RSS.
@@ -421,7 +421,7 @@ metrics:
       # Empty uses the cluster's default StorageClass.
       storageClass: ""
   vmagent:
-    image: victoriametrics/vmagent:v1.154.1
+    image: victoriametrics/vmagent:v1.155.0
     resources:
       requests: { cpu: "50m", memory: "128Mi" }
       limits: { cpu: "500m", memory: "512Mi" }
@@ -456,7 +456,7 @@ logs:
       # Empty uses the cluster's default StorageClass.
       storageClass: ""
   vector:
-    image: timberio/vector:0.60.0-distroless-libc
+    image: timberio/vector:0.61.0-distroless-libc
     # Host directory for file checkpoints, so a restarted pod resumes where it
     # left off instead of re-shipping every file.
     dataDir: /var/lib/vector-orchard

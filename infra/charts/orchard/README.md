@@ -651,13 +651,13 @@ outside Orchard.
 | `metrics.enabled` | `true` | Install the orchard-metrics stack. |
 | `metrics.namespace` | `orchard-metrics` | Namespace for the metrics stack. Referenced inside the vmagent scrape config and remote-write URL. |
 | `metrics.clusterLabel` | `leafycluster` | `cluster` label vmagent stamps on every series. |
-| `metrics.victoriametrics.image` | `victoriametrics/victoria-metrics:v1.154.1` | VM image. Keep it on the same version as `metrics.vmagent.image`. |
+| `metrics.victoriametrics.image` | `victoriametrics/victoria-metrics:v1.155.0` | VM image. Keep it on the same version as `metrics.vmagent.image`. |
 | `metrics.victoriametrics.retention` | `30d` | `-retentionPeriod` flag. |
 | `metrics.victoriametrics.storage.size` | `5Gi` | StatefulSet PVC size. |
 | `metrics.victoriametrics.storage.storageClass` | `""` | StorageClass for the VM data PVC. Empty keeps the live StatefulSet's class, or uses the cluster default. |
 | `metrics.victoriametrics.memoryAllowedPercent` | `60` | `-memory.allowedPercent`. VM sizes its cache off the memory *limit*, so it grows to fill whatever it is given; lower this and the limit together to shrink idle RSS. |
 | `metrics.victoriametrics.resources` | requests `100m/256Mi`, limits `1/1Gi` | Resource block. |
-| `metrics.vmagent.image` | `victoriametrics/vmagent:v1.154.1` | vmagent image. |
+| `metrics.vmagent.image` | `victoriametrics/vmagent:v1.155.0` | vmagent image. |
 | `metrics.vmagent.resources` | requests `50m/128Mi`, limits `500m/512Mi` | Resource block. |
 | `metrics.kubeStateMetrics.image` | `registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.20.0` | kube-state-metrics image. Each release tracks one Kubernetes client-go minor (v2.20 is v1.36), so bump it with the cluster. |
 | `metrics.kubeStateMetrics.resources` | requests `20m/64Mi`, limits `200m/256Mi` | Resource block. |
@@ -680,7 +680,7 @@ VictoriaLogs plus a Vector DaemonSet, in `metrics.namespace` but toggled indepen
 | `logs.victorialogs.image` | `victoriametrics/victoria-logs:v1.53.0` | VictoriaLogs image. |
 | `logs.victorialogs.storage.size` / `storageClass` | `20Gi` / cluster default | StatefulSet PVC. A StatefulSet cannot change class in place: `orchardctl update` recreates one whose volume never bound, and pins the values to the live class of one that did. |
 | `logs.victorialogs.resources` | requests `100m/256Mi`, limits `1/1Gi` | Resource block. |
-| `logs.vector.image` | `timberio/vector:0.60.0-distroless-libc` | Vector image. |
+| `logs.vector.image` | `timberio/vector:0.61.0-distroless-libc` | Vector image. |
 | `logs.vector.dataDir` | `/var/lib/vector-orchard` | Host directory for file checkpoints, so a restarted pod resumes instead of re-shipping. |
 | `logs.vector.bufferEvents` | `20000` | In-memory sink buffer. When VictoriaLogs is down this fills and the newest events are dropped rather than back-pressuring the tail. |
 | `logs.vector.resources` | requests `50m/128Mi`, limits `500m/512Mi` | Resource block. |

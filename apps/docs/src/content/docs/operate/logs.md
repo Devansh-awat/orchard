@@ -63,7 +63,7 @@ To move a store that holds data to another class, set the value explicitly. The 
 | `logs.victorialogs.storage.size`         | `20Gi`                                                 | From free disk                           |
 | `logs.victorialogs.storage.storageClass` | Empty, the cluster default                             | `local-path`                             |
 | `logs.victorialogs.resources`            | Requests `100m/256Mi`, limits `1/1Gi`                  | Requests `50m/96Mi`, limits `1/384Mi`    |
-| `logs.vector.image`                      | `timberio/vector:0.60.0-distroless-libc`               |                                          |
+| `logs.vector.image`                      | `timberio/vector:0.61.0-distroless-libc`               |                                          |
 | `logs.vector.dataDir`                    | `/var/lib/vector-orchard`, a host path for checkpoints |                                          |
 | `logs.vector.bufferEvents`               | `20000`                                                | `5000`                                   |
 | `logs.vector.resources`                  | Requests `50m/128Mi`, limits `500m/512Mi`              | Requests `20m/64Mi`, limits `500m/256Mi` |
