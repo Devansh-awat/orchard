@@ -112,6 +112,7 @@
 
 <style>
 	.setup-slug {
+		font-variant-ligatures: none;
 		max-width: none;
 		margin-top: 0.65rem;
 		font-family: var(--font-mono);

@@ -1,5 +1,13 @@
 <script lang="ts">
-	import { Button, Dropdown, Field, FieldGrid, Input, SecretInput } from '$lib/components/ui';
+	import {
+		Alert,
+		Button,
+		Dropdown,
+		Field,
+		FieldGrid,
+		Input,
+		SecretInput
+	} from '$lib/components/ui';
 	import { Pending } from './pending.svelte';
 	import { apiFetch, instanceFeatures, toasts } from '$lib/stores';
 	import { STORAGE_PROVIDERS, storageConnection, storageProvider } from '$lib/storage-providers';
@@ -166,9 +174,9 @@
 	</div>
 
 	{#if failure}
-		<p class="status" role="alert">{failure}</p>
+		<div class="setup-result"><Alert tone="error">{failure}</Alert></div>
 	{:else if passed}
-		<p class="status" role="status">Connection works.</p>
+		<div class="setup-result"><Alert tone="success">Connection works.</Alert></div>
 	{/if}
 
 	<div class="setup-acts">

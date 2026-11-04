@@ -77,6 +77,11 @@
 	text-align: left;
 }
 
+.setup-result {
+	margin-top: 0.75rem;
+	text-align: left;
+}
+
 .setup-note {
 	margin-top: 0.7rem;
 	font-size: 0.8125rem;
@@ -85,6 +90,7 @@
 
 .setup-url {
 	font-family: var(--font-mono);
+	font-variant-ligatures: none;
 	font-size: 0.78125rem;
 	color: var(--setup-ink);
 	padding: 0.75rem 0.8rem;

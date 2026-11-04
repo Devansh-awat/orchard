@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Field, FieldGrid, Input, SecretInput } from '$lib/components/ui';
+	import { Alert, Button, Field, FieldGrid, Input, SecretInput } from '$lib/components/ui';
 	import { Pending } from './pending.svelte';
 	import { apiFetch, toasts, user } from '$lib/stores';
 
@@ -143,9 +143,9 @@
 	</div>
 
 	{#if failure}
-		<p class="status" role="alert">{failure}</p>
+		<div class="setup-result"><Alert tone="error">{failure}</Alert></div>
 	{:else if passed}
-		<p class="status" role="status">Test email sent to {to}.</p>
+		<div class="setup-result"><Alert tone="success">Test email sent to {to}.</Alert></div>
 	{/if}
 
 	<div class="setup-acts">
