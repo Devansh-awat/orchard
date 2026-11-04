@@ -1,0 +1,72 @@
+---
+title: Use the terminal dashboard
+description: Manage Orchard projects, apps, and databases from an interactive dashboard in your terminal with orchard ui.
+sidebar:
+  order: 13
+---
+
+The `orchard ui` command opens an interactive dashboard in your terminal. Use it to read logs, deploy, scale, and manage databases without a browser.
+
+## Prerequisites
+
+- The [Orchard CLI](/cli/) must be installed and signed in.
+
+## Open the dashboard
+
+```sh
+orchard ui
+```
+
+The aliases `orchard dash` and `orchard tui` run the same command.
+
+The bottom of each screen lists the keys for that screen.
+
+## Global keys
+
+| Key                                     | Action                     |
+| --------------------------------------- | -------------------------- |
+| <kbd>Ctrl</kbd>+<kbd>K</kbd> or <kbd>/</kbd> | Search.               |
+| <kbd>o</kbd>                            | Switch organization.       |
+
+## Projects screen
+
+| Key            | Action           |
+| -------------- | ---------------- |
+| <kbd>↑</kbd> and <kbd>↓</kbd> | Move.    |
+| <kbd>Enter</kbd> | Open a project. |
+| <kbd>n</kbd>   | Create a project. |
+| <kbd>r</kbd>   | Refresh.         |
+| <kbd>q</kbd>   | Quit.            |
+
+## App screen
+
+The app screen has the tabs **Overview**, **Env**, **Deploys**, **Network**, **Storage**, **Resources**, and **Advanced**. Press <kbd>[</kbd> and <kbd>]</kbd> to change tabs.
+
+| Tab          | Key            | Action                          |
+| ------------ | -------------- | ------------------------------- |
+| **Overview** | <kbd>f</kbd>   | Follow logs.                    |
+| **Overview** | <kbd>b</kbd>   | Switch between build and runtime logs. |
+| **Overview** | <kbd>s</kbd>   | Open a shell.                   |
+| **Overview** | <kbd>S</kbd>   | Scale.                          |
+| **Overview** | <kbd>+</kbd> and <kbd>-</kbd> | Change replicas. |
+| **Overview** | <kbd>R</kbd>   | Restart.                        |
+| **Overview** | <kbd>B</kbd>   | Rebuild.                        |
+| **Overview** | <kbd>x</kbd>   | Delete.                         |
+| **Env**      | <kbd>e</kbd>   | Edit variables.                 |
+| **Deploys**  | <kbd>R</kbd>   | Roll back.                      |
+| **Deploys**  | <kbd>a</kbd>   | Change auto-deploy.             |
+| **Network**  | <kbd>a</kbd>   | Add a domain or port.           |
+| **Storage**  | <kbd>a</kbd>   | Add a volume.                   |
+| **Storage**  | <kbd>x</kbd>   | Remove a volume.                |
+| **Resources** | <kbd>e</kbd>  | Edit requests.                  |
+| **Advanced** | <kbd>t</kbd>   | Change the update strategy.     |
+| **Advanced** | <kbd>h</kbd>   | Change the health check.        |
+
+## Database screen
+
+Press <kbd>←</kbd> and <kbd>→</kbd> to change tabs. Press <kbd>s</kbd> to open `psql`, and <kbd>Esc</kbd> to go back. The other keys depend on the tab.
+
+## Related resources
+
+- [CLI](/cli/)
+- [CLI reference](/reference/cli/#ui)

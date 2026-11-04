@@ -1,0 +1,72 @@
+---
+title: Schedule database dumps
+description: Configure the Orchard Helm chart to run pg_dump on a schedule and upload the result to S3-compatible storage.
+sidebar:
+  order: 10
+---
+
+The Helm chart can run `pg_dump` on a schedule and upload each dump to S3-compatible storage. Use this option for databases outside Orchard, such as the control-plane database. For managed databases, refer to [Backups and restore](/data/backups/).
+
+The chart creates one CronJob for each target.
+
+## Prerequisites
+
+- You need access to the chart values for the instance.
+- You need a bucket in S3-compatible storage.
+
+## Set up dumps
+
+1. Create a Secret for the storage credentials. The default name is `database-dumps-r2`. The Secret needs the keys `ACCESS_KEY_ID` and `ACCESS_SECRET_KEY`.
+
+2. Create a Secret that holds the database password for each target. The default key is `password`.
+
+3. Add the following to your chart values:
+
+   ```yaml
+   databaseDumps:
+     enabled: true
+     schedule: '15 2 * * *'
+     destination:
+       bucket: my-dumps
+       endpointURL: https://s3.example.com
+     targets:
+       - name: orchard
+         host: postgres.orchard.svc.cluster.local
+         database: orchard
+         user: orchard
+         passwordSecret:
+           name: orchard-postgres
+   ```
+
+4. Apply the chart.
+
+## Verify the job
+
+To list the CronJobs, run:
+
+```sh
+kubectl get cronjobs -A | grep dump-
+```
+
+Each CronJob is named `dump-<target name>`. Each dump uses the `pg_dump` custom format.
+
+## Values
+
+| Key                                     | Default                | Description                                                                 |
+| --------------------------------------- | ---------------------- | --------------------------------------------------------------------------- |
+| `databaseDumps.enabled`                 | `false`                | Creates the CronJobs.                                                       |
+| `databaseDumps.schedule`                | `15 2 * * *`           | The cron schedule, unless a target sets its own `schedule`.                 |
+| `databaseDumps.image`                   | `postgres:17-alpine`   | The dump image. Keep the PostgreSQL major version at or above the server's. |
+| `databaseDumps.uploaderImage`           | `amazon/aws-cli:2.27.50` | The upload image.                                                         |
+| `databaseDumps.destination.bucket`      | Empty                  | The bucket. Required when there are targets.                                |
+| `databaseDumps.destination.prefix`      | `platform-dumps`       | The key prefix.                                                             |
+| `databaseDumps.destination.endpointURL` | Empty                  | The S3 endpoint, for storage other than AWS.                                |
+| `databaseDumps.destination.secretName`  | `database-dumps-r2`    | The Secret with the storage credentials.                                    |
+| `databaseDumps.targets`                 | Empty                  | The databases to dump.                                                      |
+
+Each target needs `name`, `host`, `database`, `user`, and `passwordSecret.name`. The optional keys are `port`, `namespace`, `schedule`, and `passwordSecret.key`.
+
+## Related resources
+
+- [Going to production](/operate/production/)
+- [Backups and restore](/data/backups/)

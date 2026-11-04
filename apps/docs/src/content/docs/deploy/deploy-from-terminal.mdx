@@ -1,0 +1,94 @@
+---
+title: Deploy from your terminal
+description: Deploy a local directory with orchard up, or import a GitHub repository with orchard import.
+sidebar:
+  order: 3
+---
+
+You can create and deploy an app from a terminal with the Orchard CLI. Use `orchard up` to deploy a local directory. Use `orchard import` to deploy a GitHub repository.
+
+## Deploy a local directory
+
+The `orchard up` command packs a directory, uploads it, and builds it on the cluster. The first run creates the app in the linked project. Later runs deploy the new code to the same app.
+
+### Prerequisites
+
+- The [Orchard CLI](/cli/) must be installed and signed in.
+- A project must be linked to the directory. Run `orchard link --project <project>`.
+- A superadmin must turn on local deploys. Refer to [Turn on local deploys](#turn-on-local-deploys).
+
+### Run the deploy
+
+```sh
+orchard up
+```
+
+If the directory has a Dockerfile, Orchard builds it. If the directory has no Dockerfile, Railpack detects the language. To use Railpack when a Dockerfile exists, add `--railpack`.
+
+The CLI always excludes `.git`, `.orchard`, and `.env.orchard`. The CLI also uses `.dockerignore` if the file exists. Otherwise, it uses `.gitignore`.
+
+The compressed directory cannot be larger than 100 MB. If you exceed the limit, the CLI returns this error:
+
+```txt
+build context exceeds 100MB; add a .dockerignore to exclude build artifacts
+```
+
+### Common options
+
+| Flag           | Description                                                             |
+| -------------- | ----------------------------------------------------------------------- |
+| `--name`       | The app name. The default is the directory name.                        |
+| `--root`       | The directory of the app inside a monorepo.                             |
+| `--port`       | The port the app listens on. The default is the `EXPOSE` value or 3000. |
+| `--dockerfile` | The path to the Dockerfile, relative to the directory.                  |
+| `--output-dir` | A directory of built static files. The app serves them as a static site. |
+| `--detach`     | Start the build without following its logs.                             |
+| `--wait`       | Block until the deploy is live. This is the default in a script.        |
+
+With `--wait`, the command exits with code 9 if the build fails and code 10 if the pods crash.
+
+For all flags, refer to the [`orchard up` reference](/reference/cli/#up).
+
+### Turn on local deploys
+
+Local deploys are off by default. To turn them on, set the following values on the server:
+
+| Setting                                                                   | Value                                  |
+| ------------------------------------------------------------------------- | -------------------------------------- |
+| `LOCAL_DEPLOYS_ENABLED`                                                   | `true`                                 |
+| `R2_BUILD_CONTEXT_BUCKET`, or **Build context bucket** in **Object storage** | The bucket for uploaded directories. |
+
+**Object storage** must also have an access key and a secret key. If local deploys are off, the CLI returns this error:
+
+```txt
+Local deploys are disabled on this server (set LOCAL_DEPLOYS_ENABLED=true and configure R2_BUILD_CONTEXT_BUCKET)
+```
+
+## Import a GitHub repository
+
+The `orchard import` command creates a project named after the repository. It detects how to build the repository and starts the first build with auto-deploy on. It also attaches a protected platform URL.
+
+### Prerequisites
+
+- The [Orchard CLI](/cli/) must be installed and signed in.
+- [GitHub](/deploy/github/) must be connected.
+
+### Run the import
+
+```sh
+orchard import owner/repo --wait
+```
+
+To select a branch, use `owner/repo#branch`. You can also pass a repository URL.
+
+| Flag     | Description                                  |
+| -------- | -------------------------------------------- |
+| `--name` | The project and app name. The default is the repository name. |
+| `--port` | The port. This overrides the detected port.  |
+| `--wait` | Block until the operation finishes.          |
+
+## Related resources
+
+- [CLI](/cli/)
+- [Deploy from GitHub](/deploy/github/)
+- [Builds](/deploy/builds/)
