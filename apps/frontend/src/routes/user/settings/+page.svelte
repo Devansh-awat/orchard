@@ -934,7 +934,7 @@
 <ConfirmModal
 	bind:open={showRevokeAllModal}
 	title="Sign out all other devices?"
-	description="This will end all sessions except your current one. Other devices will need to sign in again."
+	description="This ends every session except this one and deletes all your API tokens. Other devices will need to sign in again, and anything using a token stops working until you create a new one."
 	confirmLabel="Sign out all"
 	danger
 	onconfirm={revokeAllSessions}
