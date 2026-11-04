@@ -84,11 +84,12 @@ sudo orchardctl env set IMAGE_SCANNER off --apply
 With the Orchard scanner, a scan runs as follows:
 
 1. Orchard records the scan and creates a Job in `orchard-scans`, with a Secret that holds the registry credentials and a one-time token.
-2. The Job runs Trivy in client mode. It pulls the image layers and asks the Trivy server which packages have known vulnerabilities.
-3. The Job posts the report to the API server. The server keeps the worst 500 findings and the totals.
-4. Kubernetes deletes the Job and its Secret 10 minutes after it finishes.
+2. The Job waits up to about a minute for the Trivy server to answer. On clusters that take a few seconds to apply NetworkPolicy to a new pod, such as k3s, the first connection is refused.
+3. The Job runs Trivy in client mode. It pulls the image layers and asks the Trivy server which packages have known vulnerabilities.
+4. The Job posts the report to the API server. The server keeps the worst 500 findings and the totals.
+5. Kubernetes deletes the Job and its Secret 10 minutes after it finishes.
 
-The tab shows **The last scan failed** with Trivy's error when a scan fails, times out or loses its Job. The default timeout is 15 minutes.
+The tab shows **The last scan failed** with the reason when a scan fails, times out or loses its Job. If the Job never reaches the Trivy server, the reason is **Could not reach the Trivy server**. Check that the `trivy` pod in `orchard-scans` is ready. The default timeout is 15 minutes.
 
 At most `trivy.maxConcurrentScans` scans run at once. The value is `3` in the chart and `2` from the installer, or `1` on a machine with less than 8 GB of memory. Orchard refuses more requests until a scan finishes.
 
