@@ -2,8 +2,27 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ForbiddenException } from '@nestjs/common';
 import { IngressService } from '../src/projects/ingress.service';
+import { ProtectionService, pathIsAmbiguous } from '../src/auth/protection.service';
+import { parseRepoUrl } from '../src/docker/repo-url';
+import { GitHubService } from '../src/github/github.service';
+import { GitHubController } from '../src/github/github.controller';
 import { isValidPodName } from '../src/kubernetes/pod-name';
-import { deniedToOrgScopedSession } from '../src/auth/superadmin.guard';
+import {
+  deniedToApiToken,
+  deniedToOrgScopedSession,
+  deniedToProjectToken,
+  isPublicCredentialPost
+} from '../src/auth/superadmin.guard';
+import { HttpException, UnauthorizedException } from '@nestjs/common';
+import { createHash } from 'node:crypto';
+import { firstValueFrom, timeout } from 'rxjs';
+import { SseStreamLimiter } from '../src/events/sse-stream-limiter';
+import { SsoLoginService } from '../src/sso/sso-login.service';
+import { tenantDenyPolicy } from '../src/kubernetes/security-policies';
+import { assertIngressNameFree } from '../src/projects/image-ownership';
+import { ApiThrottlerGuard } from '../src/auth/api-throttler.guard';
+import { traefikSelector } from '../src/metrics/ingress/traefik';
+import { haproxySelector } from '../src/metrics/ingress/haproxy';
 import { assertImageOwnedByProject } from '../src/projects/image-ownership';
 import { stripOperationSecrets } from '../src/projects/strip-operation-secrets.interceptor';
 
@@ -114,4 +133,311 @@ test('creating a project ingress reaches its own validation', async () => {
     () => service.createProjectIngress('p1', { host: 'new.example' }, 'clerk'),
     /At least one route/
   );
+});
+
+test('tokens cannot administer identity, and the CLI routes still work', () => {
+  for (const path of [
+    '/apiv1/organizations/o1/scim/tokens',
+    '/apiv1/organizations/o1/sso/providers',
+    '/apiv1/organizations/o1/sso/settings',
+    '/apiv1/auth/passkeys/p1'
+  ]) {
+    assert.equal(deniedToApiToken(path), true, path);
+  }
+  for (const path of [
+    '/apiv1/auth/me',
+    '/apiv1/auth/tokens',
+    '/apiv1/auth/sessions',
+    '/apiv1/auth/sessions/revoke-all',
+    '/apiv1/github/repositories',
+    '/apiv1/tailscale/status',
+    '/apiv1/users/me/git-connections',
+    '/apiv1/organizations/o1/members',
+    '/apiv1/projects/p1'
+  ]) {
+    assert.equal(deniedToApiToken(path), false, path);
+  }
+});
+
+test('project tokens stay out of account routes but can still work on their project', () => {
+  assert.equal(deniedToProjectToken('GET', '/apiv1/auth/me'), false);
+  for (const path of [
+    '/apiv1/auth/sessions',
+    '/apiv1/auth/tokens',
+    '/apiv1/github/repositories/o/r/contents',
+    '/apiv1/git/oauth/gitlab/start',
+    '/apiv1/users/me/git-connections',
+    '/apiv1/tailscale/link',
+    '/apiv1/invitations/by-id/i/accept'
+  ]) {
+    assert.equal(deniedToProjectToken('GET', path), true, path);
+  }
+  for (const path of [
+    '/apiv1/projects/p1',
+    '/apiv1/deployments/d1/rollout',
+    '/apiv1/tailscale/deployment/d1',
+    '/apiv1/tailscale/expose/d1',
+    '/apiv1/projects/p1/invitations/i1'
+  ]) {
+    assert.equal(deniedToProjectToken('POST', path), false, path);
+  }
+});
+
+test('public credential routes are named exactly', () => {
+  for (const path of [
+    '/apiv1/auth/password',
+    '/apiv1/auth/otp/verify',
+    '/apiv1/auth/passkey/authenticate/verify',
+    '/apiv1/invitations/abc/sign-up'
+  ]) {
+    assert.equal(isPublicCredentialPost('POST', path), true, path);
+  }
+  assert.equal(isPublicCredentialPost('GET', '/apiv1/auth/password'), false);
+  assert.equal(isPublicCredentialPost('POST', '/apiv1/github/app/webhook'), false);
+  assert.equal(isPublicCredentialPost('POST', '/apiv1/webhooks/deploy'), false);
+});
+
+function egressPeers(policy: any): string[] {
+  return policy.spec.egress
+    .flatMap((rule: any) => rule.to ?? [])
+    .map((peer: any) => peer.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name'])
+    .filter(Boolean);
+}
+
+test('tenants may be reached from the platform namespace but cannot reach it', () => {
+  const policy: any = tenantDenyPolicy('acme', { ingressNamespaces: ['traefik', 'orchard'] });
+  const from = policy.spec.ingress[0].from.map(
+    (peer: any) => peer.namespaceSelector.matchLabels['kubernetes.io/metadata.name']
+  );
+  assert.deepEqual(from, ['acme', 'traefik', 'orchard']);
+  const egress = egressPeers(policy);
+  assert.equal(egress.includes('orchard'), false);
+  assert.equal(egress.includes('traefik'), true);
+  assert.equal(egress.includes('acme'), true);
+});
+
+test('the platform namespace can be named, and egress can be set by hand', () => {
+  const saved = { p: process.env.PLATFORM_NAMESPACE, e: process.env.TENANT_EGRESS_NAMESPACES };
+  try {
+    process.env.PLATFORM_NAMESPACE = 'paas';
+    delete process.env.TENANT_EGRESS_NAMESPACES;
+    const named = egressPeers(tenantDenyPolicy('acme', { ingressNamespaces: ['network', 'paas'] }));
+    assert.equal(named.includes('paas'), false);
+    assert.equal(named.includes('network'), true);
+    process.env.TENANT_EGRESS_NAMESPACES = 'network,paas';
+    const manual = egressPeers(
+      tenantDenyPolicy('acme', { ingressNamespaces: ['network', 'paas'] })
+    );
+    assert.equal(manual.includes('paas'), true);
+  } finally {
+    if (saved.p === undefined) delete process.env.PLATFORM_NAMESPACE;
+    else process.env.PLATFORM_NAMESPACE = saved.p;
+    if (saved.e === undefined) delete process.env.TENANT_EGRESS_NAMESPACES;
+    else process.env.TENANT_EGRESS_NAMESPACES = saved.e;
+  }
+});
+
+test('an app name that collides with another project is refused', async () => {
+  const seen: any[] = [];
+  const prisma = (hit: boolean) =>
+    ({
+      deployment: {
+        findFirst: async ({ where }: any) => {
+          seen.push(where);
+          return hit ? { id: 'other' } : null;
+        }
+      }
+    }) as any;
+  await assert.rejects(
+    () => assertIngressNameFree(prisma(true), 'acme-a', 'b-web', 'p1'),
+    /clashes/
+  );
+  assert.deepEqual(seen[0].OR, [
+    { namespace: 'acme', name: 'a-b-web' },
+    { namespace: 'acme-a', name: 'b-web' },
+    { namespace: 'acme-a-b', name: 'web' }
+  ]);
+  await assertIngressNameFree(prisma(false), 'acme-a', 'b-web', 'p1');
+});
+
+test('traefik metrics for one service do not match a longer service name', () => {
+  const sel = traefikSelector({ namespace: 'acme-a', services: ['b'] } as any)!;
+  const pattern = new RegExp(`^${sel.match(/"(.*)"/)![1].replace(/\\\\/g, '\\')}$`);
+  assert.equal(pattern.test('acme-a-b-80@kubernetes'), true);
+  assert.equal(pattern.test('acme-a-b-web-80@kubernetes'), false);
+  assert.ok(
+    haproxySelector({ namespace: 'acme', services: ['web'] } as any)!.includes('acme_svc_')
+  );
+});
+
+test('a made-up orch_ token shares the IP bucket, and a real one keeps its own', async () => {
+  const guard = new ApiThrottlerGuard([{ ttl: 60000, limit: 200 }] as any, {} as any, {} as any);
+  const real = 'orch_real';
+  (guard as any).prisma = {
+    apiToken: {
+      findUnique: async ({ where }: any) =>
+        where.tokenHash === createHash('sha256').update(real).digest('hex') ? { id: 't' } : null
+    }
+  };
+  const req = (token: string) => ({
+    headers: { authorization: `Bearer ${token}` },
+    ip: '203.0.113.7'
+  });
+  const tracker = (r: any) => (guard as any).getTracker(r);
+  assert.equal(await tracker(req('orch_junk1')), await tracker(req('orch_junk2')));
+  assert.match(await tracker(req(real)), /^token:/);
+});
+
+function loginService() {
+  const login = Object.create(SsoLoginService.prototype) as any;
+  const secret = new TextEncoder().encode('test-secret-for-sso-start-cookie-0123456789');
+  login.oauthService = {
+    getJwtSecret: () => secret,
+    verifySessionToken: async () => ({ sub: 'pepito', sessionId: 's1' })
+  };
+  login.sessionsService = { validateSession: async () => true };
+  return login;
+}
+
+test('an SSO callback has to come back to the browser that started it', async () => {
+  const login = loginService();
+  const url = 'https://idp.example/authorize?state=abc';
+  const token = await login.issueStartToken('p1', url);
+  assert.deepEqual(await login.readStartToken('p1', token, 'abc'), { linkedUserId: undefined });
+  await assert.rejects(() => login.readStartToken('p1', undefined, 'abc'), UnauthorizedException);
+  await assert.rejects(() => login.readStartToken('p1', token, 'other'), UnauthorizedException);
+  await assert.rejects(() => login.readStartToken('p2', token, 'abc'), UnauthorizedException);
+  await assert.rejects(() => login.readStartToken('p1', 'garbage', 'abc'), UnauthorizedException);
+});
+
+test('starting SSO while signed in carries who started it', async () => {
+  const login = loginService();
+  const token = await login.issueStartToken('p1', 'https://idp.example/saml', 'session-cookie');
+  assert.equal((await login.readStartToken('p1', token)).linkedUserId, 'pepito');
+});
+
+function limiter(valid = true, tokenExists = true) {
+  return new SseStreamLimiter(
+    { validateSession: async () => valid } as any,
+    { apiToken: { findUnique: async () => (tokenExists ? { expiresAt: null } : null) } } as any
+  );
+}
+
+const lost = (stream: any) => firstValueFrom(stream.pipe(timeout(500)));
+
+test('a log stream ends when access is lost', async () => {
+  await lost(limiter(false).untilAccessLost({ sessionId: 's' }, async () => {}, 5));
+  await lost(limiter(true, false).untilAccessLost({ apiTokenId: 't' }, async () => {}, 5));
+  await lost(
+    limiter().untilAccessLost(
+      { sessionId: 's' },
+      async () => {
+        throw new HttpException('gone', 403);
+      },
+      5
+    )
+  );
+});
+
+test('a log stream survives a database hiccup', async () => {
+  const stream = limiter().untilAccessLost(
+    { sessionId: 's' },
+    async () => {
+      throw new Error('connection reset');
+    },
+    5
+  );
+  await assert.rejects(() => lost(stream), /Timeout/);
+});
+
+function protectionService() {
+  const service = Object.create(ProtectionService.prototype) as any;
+  service.prisma = {
+    ingress: {
+      findUnique: async () => ({
+        host: 'app.example.com',
+        path: '/',
+        tlsSecretName: 'tls',
+        entrypoints: null
+      })
+    }
+  };
+  return service;
+}
+
+test('a protected site only sends people back to itself over its own origin', async () => {
+  const service = protectionService();
+  assert.equal(
+    await service.validateReturnTo('i1', 'https://app.example.com/a/b?c=1#frag'),
+    'https://app.example.com/a/b?c=1'
+  );
+  for (const target of [
+    'javascript://app.example.com/%0aalert(1)',
+    'data://app.example.com/x',
+    'http://app.example.com/',
+    'https://app.example.com:8443/',
+    'https://evil.example/',
+    'https://app.example.com.evil.example/',
+    'not a url'
+  ]) {
+    await assert.rejects(() => service.validateReturnTo('i1', target), HttpException, target);
+  }
+});
+
+test('bypass paths are skipped when a path could be read two ways', () => {
+  for (const path of [
+    '/public/%2e%2e/admin',
+    '/public/..%2fadmin',
+    '/public\\..\\admin',
+    '/a%ff/b'
+  ]) {
+    assert.equal(pathIsAmbiguous(path), true, path);
+  }
+  for (const path of ['/public/file.css', '/health?x=%2f', '/caf%C3%A9']) {
+    assert.equal(pathIsAmbiguous(path), false, path);
+  }
+});
+
+test('repository URLs with dot segments never parse', () => {
+  const github = Object.create(GitHubService.prototype) as GitHubService;
+  for (const url of [
+    'https://github.com/owner/public/../private',
+    'https://github.com/owner/public/%2e%2e/private',
+    'https://github.com/owner/./repo'
+  ]) {
+    assert.equal(parseRepoUrl(url), null, url);
+    assert.equal(github.parseRepoUrl(url), null, url);
+  }
+  assert.deepEqual(github.parseRepoUrl('https://github.com/owner/repo.git'), {
+    owner: 'owner',
+    repo: 'repo'
+  });
+  assert.equal(
+    parseRepoUrl('https://github.com/owner/my.repo.git')?.pathname,
+    '/owner/my.repo.git'
+  );
+  assert.equal(github.parseRepoUrl('https://github.com/owner/my..repo')?.repo, 'my..repo');
+});
+
+test('listing GitHub installations never returns their access token', async () => {
+  const controller = Object.create(GitHubController.prototype) as any;
+  controller.usersService = { findOrCreateByClerkId: async () => ({ id: 'u1' }) };
+  controller.githubService = {
+    getUserInstallations: async () => [
+      {
+        id: 'i1',
+        installationId: BigInt(1),
+        accountId: BigInt(2),
+        accountLogin: 'acme',
+        accountType: 'Organization',
+        repositorySelection: 'all',
+        accessToken: 'ghs_secret',
+        tokenExpiresAt: new Date()
+      }
+    ]
+  };
+  const [row] = await controller.getUserInstallations({ user: { sub: 'u1' } });
+  assert.equal(JSON.stringify(row).includes('ghs_secret'), false);
+  assert.equal(row.tokenExpiresAt, undefined);
+  assert.equal(row.accountLogin, 'acme');
 });

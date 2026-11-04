@@ -21,6 +21,7 @@
  */
 import 'dotenv/config';
 import { testPrismaClient } from './support/test-database';
+import { createHash } from 'node:crypto';
 import { SignJWT } from 'jose';
 import { randomUUID } from 'node:crypto';
 import { test, describe, before, after } from 'node:test';
@@ -800,6 +801,68 @@ describe('Org isolation', () => {
       data: { organizationId: enforcing.id, userId: pepito.id, role: 'member' }
     });
     await prisma.user.delete({ where: { id: admin.id } });
+  });
+
+  test('a sign-in form on another site cannot post credentials', async () => {
+    const attempt = (origin: string) =>
+      fetch(`${SERVER_URL}/${PREFIX}/auth/password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Origin: origin },
+        body: JSON.stringify({ email: 'nobody@example.test', password: 'wrong-password-123' })
+      });
+    assert.equal((await attempt('https://evil.example')).status, 403);
+    assert.notEqual((await attempt('http://localhost:4000')).status, 403);
+  });
+
+  test('SSO callbacks need the cookie from starting in this browser', async () => {
+    const provider = await prisma.identityProvider.create({
+      data: {
+        organizationId: own.id,
+        slug: `${tag}-idp`,
+        name: 'Test',
+        protocol: 'oidc',
+        enabled: true,
+        issuerUrl: 'https://idp.example.test',
+        clientId: 'x'
+      } as any
+    });
+    try {
+      const res = await fetch(
+        `${SERVER_URL}/${PREFIX}/sso/callback/${provider.id}?code=c&state=forged`,
+        { redirect: 'manual' }
+      );
+      assert.equal(res.status, 302);
+      assert.match(res.headers.get('location') ?? '', /error=sso_failed/);
+    } finally {
+      await prisma.identityProvider.delete({ where: { id: provider.id } });
+    }
+  });
+
+  test('tokens cannot reach identity admin, and project tokens stay out of account routes', async () => {
+    const mint = async (restrictedProjectIds: string[]) => {
+      const raw = `orch_${RUN_TAG}_${restrictedProjectIds.length}_${Date.now()}`;
+      await prisma.apiToken.create({
+        data: {
+          userId: pepito.id,
+          name: `${tag}-${restrictedProjectIds.length}`,
+          tokenHash: createHash('sha256').update(raw).digest('hex'),
+          scopes: ['exec'],
+          restrictedProjectIds,
+          expiresAt: new Date(Date.now() + 3600_000)
+        } as any
+      });
+      return raw;
+    };
+    const full = await mint([]);
+    const limited = await mint([ownProject.id]);
+    assert.equal((await req(`/organizations/${own.id}/scim/tokens`, full)).status, 403);
+    assert.equal((await req(`/organizations/${own.id}/sso/providers`, full)).status, 403);
+    assert.equal((await req('/auth/sessions', full)).status, 200);
+    assert.equal((await req('/auth/me', limited)).status, 200);
+    assert.equal((await req('/auth/sessions', limited)).status, 403);
+    assert.equal((await req('/github/status', limited)).status, 403);
+    assert.equal((await req(`/projects/${ownProject.id}`, limited)).status, 200);
+    await prisma.apiToken.deleteMany({ where: { userId: pepito.id } });
   });
 
   test('he can leave an enforcing org without its SSO, and owners cannot leave', async () => {

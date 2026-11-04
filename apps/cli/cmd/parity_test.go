@@ -625,6 +625,7 @@ var routeExclusions = map[string]string{
 
 	// superadmin in disguise: guard says authenticated, service requires superadmin
 	"POST /organizations/:id/members/join": "superadmin-gated in the service layer",
+	"POST /organizations/:id/leave":        "signed-in browser only, API tokens are refused",
 
 	// honest gaps: no CLI command yet (reachable via `orchard api` meanwhile)
 	"GET /audit-logs/global": "no CLI command yet: cross-org audit feed",

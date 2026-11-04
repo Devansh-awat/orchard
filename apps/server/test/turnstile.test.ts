@@ -186,7 +186,7 @@ test('strict refuses an unreachable siteverify instead', async () => {
   await withFetch(unreachable, async () => {
     await assert.rejects(
       () => service.verifyRequest(req('tok'), 'signin', null),
-      /Could not reach the bot check/
+      /Couldn't reach the bot check/
     );
   });
 });
@@ -198,7 +198,7 @@ test('strict refuses a siteverify error status instead', async () => {
     async () => {
       await assert.rejects(
         () => service.verifyRequest(req('tok'), 'signin', null),
-        /Could not reach the bot check/
+        /Couldn't reach the bot check/
       );
     }
   );

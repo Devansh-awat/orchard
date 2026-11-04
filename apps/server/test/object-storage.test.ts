@@ -368,7 +368,7 @@ test('probe failures say what to fix and never carry the secret', async () => {
     };
     const noBucket = await probeStorage({ ...base, endpoint: `http://127.0.0.1:${missing.port}` });
     assert.equal(noBucket.ok, false);
-    assert.match((noBucket as any).message, /does not exist/);
+    assert.match((noBucket as any).message, /doesn't exist/);
     const readOnly = await probeStorage({ ...base, endpoint: `http://127.0.0.1:${denied.port}` });
     assert.equal(readOnly.ok, false);
     assert.match((readOnly as any).message, /list, read, write and delete/);
