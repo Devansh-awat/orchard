@@ -465,6 +465,20 @@ export function createRegistryNet(
   };
 }
 
+export function finalBaseImage(dockerfile: string): string | null {
+  const stages = new Map<string, string>();
+  let last: string | null = null;
+  for (const line of dockerfile.split('\n')) {
+    const match = line.match(/^\s*FROM\s+(?:--\S+\s+)*(\S+)(?:\s+AS\s+(\S+))?/i);
+    if (!match) continue;
+    const base = stages.get(match[1].toLowerCase()) ?? match[1];
+    if (match[2]) stages.set(match[2].toLowerCase(), base);
+    last = base;
+  }
+  if (!last || last.includes('$') || last.toLowerCase() === 'scratch') return null;
+  return last;
+}
+
 let sharedNet: RegistryNet | null = null;
 
 export async function inspectImagePorts(

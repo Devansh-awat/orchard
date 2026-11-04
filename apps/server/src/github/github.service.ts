@@ -41,6 +41,7 @@ import {
 
 /** What the create form and the CLI get back from a detection run. */
 import { SCORE_FILES, parseScore, summarize, type ScoreSummary } from '../score/score-parse';
+import { finalBaseImage, inspectImagePorts } from '../projects/image-ports';
 
 export interface RepoConfigDetection {
   buildType: 'dockerfile' | 'railpack';
@@ -757,6 +758,15 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     return ports;
   }
 
+  async detectPorts(dockerfileContent: string): Promise<number[]> {
+    const exposed = this.parseExposedPorts(dockerfileContent);
+    if (exposed.length > 0) return exposed;
+    const base = finalBaseImage(dockerfileContent);
+    if (!base) return [];
+    const inherited = await inspectImagePorts(base);
+    return inherited.port ? [inherited.port] : [];
+  }
+
   parseEnvVars(dockerfileContent: string): { key: string; value: string }[] {
     return parseDockerfileEnvVars(dockerfileContent);
   }
@@ -774,7 +784,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
   }> {
     const content = await this.getFileContent(accessToken, owner, repo, dockerfilePath, branch);
     return {
-      exposedPorts: this.parseExposedPorts(content),
+      exposedPorts: await this.detectPorts(content),
       envVars: this.parseEnvVars(content),
       stages: this.parseDockerfileStages(content)
     };

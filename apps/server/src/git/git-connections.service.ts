@@ -436,7 +436,7 @@ export class GitConnectionsService {
         dockerfilePath,
         dockerfiles,
         stages: this.github.parseDockerfileStages(content),
-        ports: this.github.parseExposedPorts(content),
+        ports: await this.github.detectPorts(content),
         env: this.github.parseEnvVars(content),
         framework: null,
         ...empty

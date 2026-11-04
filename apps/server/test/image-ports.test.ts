@@ -7,6 +7,7 @@ import {
   chooseDefaultPort,
   createRegistryNet,
   exposedPortsFrom,
+  finalBaseImage,
   inspectImagePorts,
   isRoutableRegistryAddress,
   parseImageRef,
@@ -799,4 +800,14 @@ test('the routes check access before touching the registry', async () => {
     ['nginx', { projectId: 'mine' }],
     ['nginx', { organizationId: 'mine' }]
   ]);
+});
+
+test('the final base image follows stages and skips what cannot be inspected', () => {
+  assert.equal(finalBaseImage('FROM nginx:1.27\nCOPY . /srv\n'), 'nginx:1.27');
+  assert.equal(finalBaseImage('FROM node:22 AS build\nRUN x\nFROM nginx AS web\n'), 'nginx');
+  assert.equal(finalBaseImage('FROM nginx AS base\nFROM node:22 AS build\nfrom base\n'), 'nginx');
+  assert.equal(finalBaseImage('FROM --platform=linux/amd64 caddy:2\n'), 'caddy:2');
+  assert.equal(finalBaseImage('ARG TAG=1\nFROM nginx:$TAG\n'), null);
+  assert.equal(finalBaseImage('FROM golang AS build\nFROM scratch\n'), null);
+  assert.equal(finalBaseImage('# nothing\n'), null);
 });
