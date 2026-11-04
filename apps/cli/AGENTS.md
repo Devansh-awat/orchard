@@ -122,7 +122,7 @@ Every deployment `--wait` (and `up`, `import`) waits on `GET /deployments/:id/ro
 - With `--wait` in JSON mode, stdout carries the rollout result (`deploymentId`, `releaseId`, `phase`, `url`, `build`, `pods`, `hint`), including on exit 9/10, so an agent can read the diagnosis without a second call. `deploy create --wait` and `import --wait` merge it into their create payload under `rollout` and set `url`.
 - Mutating deployment endpoints (rebuild, scale, start, restart, rollback, image set, build-context upload) return `rolloutSince` (and `releaseId` when the call recorded a release). Pass them back as `?since=` / `?release=` so a wait right after a restart can't read `live` off the old pods. The CLI does this for you.
 - One-off check: `orchard deploy status <id>` (add `--wait` to block). Raw: `orchard api GET '/deployments/<id>/rollout?wait=1&timeout=60'` long-polls server-side for up to 120s.
-- `orchard up` waits by default when stdout is not a TTY. In JSON mode the build log streams to stderr and stdout gets one object: `{deploymentId, releaseId, phase, url, ...}`.
+- `orchard up` waits until the deploy is live by default. `--wait=false` returns when the build finishes. In JSON mode the build log streams to stderr and stdout gets one object: `{deploymentId, releaseId, phase, url, ...}`.
 
 ## Database recovery
 
