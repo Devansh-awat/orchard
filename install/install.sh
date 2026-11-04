@@ -1307,6 +1307,9 @@ size_workloads() {
   SMALL_BOX=false
   if [ "$MEM_MB" -lt 7500 ]; then SMALL_BOX=true; fi
 
+  DB_DEFAULT_MEMORY_MB=1024
+  if [ "$MEM_MB" -lt 9000 ]; then DB_DEFAULT_MEMORY_MB=512; fi
+
   info "concurrent builds: $MAX_BUILDS, build cache: ${BUILD_CACHE_GB}G, registry: ${REGISTRY_SIZE_GB}G, backups: ${OBJECT_STORAGE_GB}G, logs: ${LOGS_SIZE_GB}G"
   if [ "$SMALL_BOX" = true ]; then
     info "under 8G of RAM: metrics, logs and scanning run trimmed, with a week of logs"
@@ -1509,6 +1512,7 @@ server:
     - { name: FRONTEND_URL, value: $scheme://$ORCHARD_DOMAIN$url_suffix }
     - { name: SESSION_COOKIE_SECURE, value: "$cookie_secure" }
     - { name: MAX_CONCURRENT_BUILDS, value: "$MAX_BUILDS" }
+    - { name: DATABASE_DEFAULT_MEMORY_MB, value: "$DB_DEFAULT_MEMORY_MB" }
     - { name: DOCKER_REGISTRY_PUSH, value: zot.orchard.svc.cluster.local:5000 }
     - { name: DOCKER_REGISTRY_PULL, value: $REGISTRY_HOST }
     - { name: REGISTRY_HTTP_HOSTS, value: zot.orchard.svc.cluster.local:5000 }
