@@ -175,7 +175,7 @@ func tailscaleGetCmd() *cobra.Command {
 func tailscaleExposeCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "expose <deploymentId>",
-		Short: "Expose a deployment on your tailnet via a sidecar",
+		Short: "Expose a deployment on your tailnet through a proxy pod",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, _, err := client()
