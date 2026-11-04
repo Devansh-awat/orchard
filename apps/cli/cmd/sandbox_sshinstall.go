@@ -48,7 +48,7 @@ func ensureOrchardSSHKey(p orchardSSHPaths, comment string) (string, bool, error
 		}
 		line, derr := sshkey.AuthorizedKeyFromPrivate(priv, comment)
 		if derr != nil {
-			return "", false, fmt.Errorf("%s exists but its public key could not be read (%v); move it aside and rerun", p.Key(), derr)
+			return "", false, fmt.Errorf("%s exists but its public key couldn't be read (%v); move it aside and rerun", p.Key(), derr)
 		}
 		if werr := os.WriteFile(p.PublicKey(), []byte(line+"\n"), 0o644); werr != nil {
 			return "", false, werr
@@ -84,7 +84,7 @@ func proxyCommandExecutable(exe string) (string, error) {
 		exe = filepath.ToSlash(exe)
 	}
 	if strings.ContainsAny(exe, "\"`$\\\n\r") {
-		return "", fmt.Errorf("orchard is installed at %q, which cannot be quoted safely in an ssh ProxyCommand; move the binary and rerun", exe)
+		return "", fmt.Errorf("orchard is installed at %q, which can't be quoted safely in an ssh ProxyCommand; move the binary and rerun", exe)
 	}
 	return strings.ReplaceAll(exe, "%", "%%"), nil
 }

@@ -148,7 +148,7 @@ func jobRunCancelCmd() *cobra.Command {
 			if err := cl.Send(cmd.Context(), http.MethodPost, jobRunPath(args[0], "cancel"), map[string]any{}, nil); err != nil {
 				return err
 			}
-			output.Successf("cancelled job run %s", args[0])
+			output.Successf("canceled job run %s", args[0])
 			return nil
 		},
 	}

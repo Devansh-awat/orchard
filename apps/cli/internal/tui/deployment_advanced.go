@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hackclub/orchard/cli/internal/api"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/hackclub/orchard/cli/internal/api"
 )
 
 // Advanced tab: update strategy, health checks, build configuration, build
@@ -35,7 +35,7 @@ func (s *deploymentScreen) advancedKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			next = "rollingUpdate"
 		}
 		if len(d.Volumes) > 0 && next == "rollingUpdate" {
-			return errFlash(errInvalid("PVC-backed deployments require the recreate strategy")), true
+			return errFlash(errInvalid("deployments with volumes require the recreate strategy")), true
 		}
 		return doAction(s.cl, "PATCH", "/deployments/"+url.PathEscape(s.id)+"/strategy",
 			map[string]any{"strategy": next}, "strategy set to "+next), true
@@ -61,7 +61,7 @@ func (s *deploymentScreen) advancedKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 		}), true
 	case "C":
 		s.confirm.Show("Cancel the in-progress build?",
-			doAction(s.cl, "POST", "/deployments/"+url.PathEscape(s.id)+"/cancel", nil, "build cancelled"))
+			doAction(s.cl, "POST", "/deployments/"+url.PathEscape(s.id)+"/cancel", nil, "build canceled"))
 		return nil, true
 	}
 	return nil, false
@@ -152,7 +152,7 @@ func (s *deploymentScreen) viewAdvanced(height int, strip string) string {
 	}
 	bs := d.BuildStatus
 	if bs == "" {
-		bs = "—"
+		bs = "-"
 	}
 	row("Build status", statusDot(bs))
 

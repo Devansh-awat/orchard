@@ -123,7 +123,7 @@ func deployEnvSetCmd() *cobra.Command {
 			if err := cl.Send(cmd.Context(), http.MethodPut, deployPath(args[0], "env"), body, nil); err != nil {
 				return err
 			}
-			output.Successf("set %d env var(s) on %s (pods will restart)", len(updates), args[0])
+			output.Successf("set %d env var(s) on %s (pods restart)", len(updates), args[0])
 			return nil
 		},
 	}
@@ -166,7 +166,7 @@ func deployEnvUnsetCmd() *cobra.Command {
 			if err := cl.Send(cmd.Context(), http.MethodPut, deployPath(args[0], "env"), body, nil); err != nil {
 				return err
 			}
-			output.Successf("removed %d env var(s) from %s (pods will restart)", removed, args[0])
+			output.Successf("removed %d env var(s) from %s (pods restart)", removed, args[0])
 			return nil
 		},
 	}
@@ -203,11 +203,11 @@ func deployResourcesGetCmd() *cobra.Command {
 			}
 			cpu := pick(dep, "cpuRequestMilli")
 			if cpu == "" {
-				cpu = "(org default)"
+				cpu = "(organization default)"
 			}
 			mem := pick(dep, "memoryRequestBytes")
 			if mem == "" {
-				mem = "(org default)"
+				mem = "(organization default)"
 			}
 			output.KV([][2]string{
 				{"cpu (millicores)", cpu},
@@ -223,7 +223,7 @@ func deployResourcesSetCmd() *cobra.Command {
 	var memory string
 	c := &cobra.Command{
 		Use:   "set <id>",
-		Short: "Update CPU/memory requests (0 clears to the org default; pods roll)",
+		Short: "Update CPU/memory requests (0 clears to the organization default; pods restart)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			f := cmd.Flags()
@@ -265,7 +265,7 @@ func deployResourcesSetCmd() *cobra.Command {
 			if err := cl.Send(cmd.Context(), http.MethodPatch, deployPath(args[0], "resources"), body, nil); err != nil {
 				return err
 			}
-			output.Successf("updated resources on %s (pods will roll)", args[0])
+			output.Successf("updated resources on %s (pods restart)", args[0])
 			return nil
 		},
 	}
@@ -333,7 +333,7 @@ func deployVolumesSetCmd() *cobra.Command {
 	var volFlags []string
 	c := &cobra.Command{
 		Use:   "set <id>",
-		Short: "Replace all volumes with the given PVC volumes",
+		Short: "Replace all volumes with the given volumes",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, _, err := client()
@@ -385,7 +385,7 @@ func deployVolumesSetCmd() *cobra.Command {
 			return nil
 		},
 	}
-	c.Flags().StringArrayVar(&volFlags, "volume", nil, "PVC volume as mountPath=size (repeatable); omit to remove all volumes")
+	c.Flags().StringArrayVar(&volFlags, "volume", nil, "volume as mountPath=size (repeatable); omit to remove all volumes")
 	return c
 }
 
@@ -430,7 +430,7 @@ func deployStrategySetCmd() *cobra.Command {
 	var typ string
 	c := &cobra.Command{
 		Use:   "set <id>",
-		Short: "Set the update strategy (PVC-backed deployments require recreate)",
+		Short: "Set the update strategy (deployments with volumes require recreate)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var strategy string
@@ -478,7 +478,7 @@ func deployPullPolicySetCmd() *cobra.Command {
 		Long: `Override the image pull policy for a deployment.
 
 By default the policy follows the image tag: a tag that can move (latest, main,
-a floating major) re-pulls on every pod start, a pinned tag or digest does not.
+a floating major) re-pulls on every pod start, a pinned tag or digest doesn't.
 Change the image and it re-derives.
 
 Use --policy always or --policy ifnotpresent to pin it, and --policy auto to go

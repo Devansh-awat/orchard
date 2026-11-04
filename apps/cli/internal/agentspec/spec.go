@@ -163,7 +163,7 @@ func (l *Loader) fetch(ctx context.Context, cached *cacheFile) (*cacheFile, erro
 	}
 	var spec Spec
 	if err := json.Unmarshal(body, &spec); err != nil {
-		return nil, fmt.Errorf("agent spec is not valid JSON: %w", err)
+		return nil, fmt.Errorf("agent spec isn't valid JSON: %w", err)
 	}
 	if len(spec.Operations) == 0 {
 		return nil, errors.New("agent spec has no operations")

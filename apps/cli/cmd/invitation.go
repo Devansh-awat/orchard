@@ -133,7 +133,7 @@ func invitationAcceptAllCmd() *cobra.Command {
 		Short: "Accept every pending invitation",
 		Long: "Accept all of your pending invitations. The API deliberately has no bulk\n" +
 			"accept (POST /invitations/accept-pending only lists, so a single request\n" +
-			"can never join you to arbitrary orgs), so this fetches the pending list\n" +
+			"can never join you to arbitrary organizations), so this fetches the pending list\n" +
 			"and accepts each invitation individually.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {

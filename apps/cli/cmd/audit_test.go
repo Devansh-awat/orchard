@@ -359,7 +359,7 @@ func TestOverviewRequiresOrg(t *testing.T) {
 	root := auditTestRoot(t, srv.URL)
 	root.SetArgs([]string{"overview"})
 	err := root.Execute()
-	if err == nil || !strings.Contains(err.Error(), "no org scope") {
+	if err == nil || !strings.Contains(err.Error(), "no organization scope") {
 		t.Fatalf("want a no-org-scope error, got %v", err)
 	}
 	if hits != 0 {

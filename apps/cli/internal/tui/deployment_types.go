@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hackclub/orchard/cli/internal/api"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/hackclub/orchard/cli/internal/api"
 )
 
 // DepDetail is the full GET /deployments/:id shape. It supersedes the slim
@@ -277,7 +277,7 @@ func ingressCNAME() string {
 	if v := os.Getenv("ORCHARD_INGRESS_CNAME"); v != "" {
 		return v
 	}
-	return "your instance's ingress hostname"
+	return "your instance's hostname"
 }
 
 // createDomain validates DNS, which the server passes for hosts under the
@@ -295,7 +295,7 @@ func createDomain(cl *api.Client, projectID, depID, host, path string, servicePo
 		if !res.Valid {
 			msg := res.Message
 			if msg == "" {
-				msg = "dns is not ready"
+				msg = "dns isn't ready"
 			}
 			return formResult{err: errInvalid(msg + ", point a CNAME at " + ingressCNAME())}
 		}

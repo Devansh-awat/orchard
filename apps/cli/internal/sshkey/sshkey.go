@@ -121,7 +121,7 @@ func AuthorizedKeyFromPrivate(privatePEM []byte, comment string) (string, error)
 	}
 	typ, keyRest, ok := readString(blob)
 	if !ok || string(typ) != keyType {
-		return "", errors.New("private key is not ed25519")
+		return "", errors.New("private key isn't ed25519")
 	}
 	pub, _, ok := readString(keyRest)
 	if !ok || len(pub) != ed25519.PublicKeySize {

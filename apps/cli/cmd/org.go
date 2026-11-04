@@ -78,7 +78,7 @@ func orgGetCmd() *cobra.Command {
 				target = args[0]
 			}
 			if target == "" {
-				return errors.New("no org scope: pass an org argument, --org, or run `orchard use org <slug>`")
+				return errors.New("no organization scope: pass an organization argument, --org, or run `orchard use org <slug>`")
 			}
 			m, err := resolveOrg(cmd.Context(), cl, target)
 			if err != nil {
@@ -233,7 +233,7 @@ func orgBackupSettingsCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:     "backup-settings",
 		Aliases: []string{"backups"},
-		Short:   "Org-wide R2 settings for database backups",
+		Short:   "Organization-wide R2 settings for database backups",
 	}
 	c.AddCommand(orgBackupSettingsGetCmd(), orgBackupSettingsSetCmd())
 	return c

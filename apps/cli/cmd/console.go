@@ -43,7 +43,7 @@ func consoleCmd() *cobra.Command {
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !output.IsTTY() {
-				return errors.New("console needs an interactive terminal (stdout is not a TTY)")
+				return errors.New("console needs an interactive terminal (stdout isn't a TTY)")
 			}
 			cl, _, err := client()
 			if err != nil {
@@ -59,7 +59,7 @@ func consoleCmd() *cobra.Command {
 				repl = replFor(lang)
 				if repl == "" {
 					if lang == "" || lang == "unknown" {
-						return errors.New("could not detect the app's language; pass --repl <command>, or use `orchard pod shell`")
+						return errors.New("couldn't detect the app's language; pass --repl <command>, or use `orchard pod shell`")
 					}
 					return fmt.Errorf("%s has no interactive REPL; use `orchard pod shell` instead, or pass --repl <command>", lang)
 				}
@@ -86,7 +86,7 @@ func consoleCmd() *cobra.Command {
 			}
 			conn, err := cl.DialExec(ctx, pod, namespace, "")
 			if err != nil {
-				return fmt.Errorf("could not open a session (needs an API token with the 'exec' scope): %w", err)
+				return fmt.Errorf("couldn't open a session (needs an API token with the 'exec' scope): %w", err)
 			}
 			// The exec gateway always spawns a shell (inside tmux when the image has
 			// it), so replace that shell with the REPL: quitting the REPL ends the

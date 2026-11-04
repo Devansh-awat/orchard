@@ -285,7 +285,7 @@ func (p *Pool) fillOne(ctx context.Context, w *poolWant) {
 	if s == nil {
 		created, err := p.create(ctx, w)
 		if err != nil {
-			p.d.logf("pool: could not prepare a spare for %s: %v", w.Repo, err)
+			p.d.logf("pool: couldn't prepare a spare for %s: %v", w.Repo, err)
 			return
 		}
 		s = created

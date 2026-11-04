@@ -96,7 +96,7 @@ func auditListCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:     "list",
 		Aliases: []string{"ls"},
-		Short:   "List audit log entries for the org (or one deployment), newest first",
+		Short:   "List audit log entries for the organization (or one deployment), newest first",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, cfg, err := client()
@@ -140,7 +140,7 @@ func auditListCmd() *cobra.Command {
 			return nil
 		},
 	}
-	c.Flags().StringVar(&deployment, "deployment", "", "scope to one deployment instead of the whole org")
+	c.Flags().StringVar(&deployment, "deployment", "", "scope to one deployment instead of the whole organization")
 	c.Flags().StringVar(&action, "action", "", "only entries with this exact action (e.g. deployment.create)")
 	limit, cursor, all = addPageFlags(c)
 	return c

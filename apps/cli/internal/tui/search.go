@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hackclub/orchard/cli/internal/api"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/hackclub/orchard/cli/internal/api"
 	"github.com/sahilm/fuzzy"
 )
 
@@ -328,7 +328,7 @@ func (s *searchScreen) View() string {
 
 	switch {
 	case s.loading:
-		b.WriteString(stMuted.Render("indexing org…"))
+		b.WriteString(stMuted.Render("indexing organization…"))
 	case s.err != nil:
 		b.WriteString(stRed.Render("✗ " + s.err.Error()))
 	case len(s.results) == 0:

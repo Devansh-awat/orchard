@@ -155,7 +155,7 @@ func ensureGitignored(start, pattern string) string {
 
 	f, err := os.OpenFile(giPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
-		return "could not update " + giPath + ": " + err.Error()
+		return "couldn't update " + giPath + ": " + err.Error()
 	}
 	defer f.Close()
 	prefix := ""
@@ -163,7 +163,7 @@ func ensureGitignored(start, pattern string) string {
 		prefix = "\n"
 	}
 	if _, err := fmt.Fprint(f, prefix+pattern+"\n"); err != nil {
-		return "could not update " + giPath + ": " + err.Error()
+		return "couldn't update " + giPath + ": " + err.Error()
 	}
 	return "added " + pattern + " to " + giPath
 }

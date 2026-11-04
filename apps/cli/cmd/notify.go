@@ -31,10 +31,10 @@ func notifyCmd() *cobra.Command {
 		Use:     "notify",
 		GroupID: groupResources,
 		Aliases: []string{"notification", "notifications"},
-		Short:   "Manage org notification channels",
-		Long: "Notification channels deliver org events (deploys, pod crashes, backups,\n" +
+		Short:   "Manage organization notification channels",
+		Long: "Notification channels deliver organization events (deploys, pod crashes, backups,\n" +
 			"job runs) to Discord, Slack, generic webhooks, or email. Channels belong\n" +
-			"to the organization and require org admin; creating, updating, and\n" +
+			"to the organization and require organization admin; creating, updating, and\n" +
 			"testing them also requires the Notifications early-access feature.",
 	}
 	c.AddCommand(notifyChannelCmd(), notifyDeliveriesCmd())
@@ -89,7 +89,7 @@ func notifyChannelListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:     "list",
 		Aliases: []string{"ls"},
-		Short:   "List the org's notification channels",
+		Short:   "List the organization's notification channels",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, cfg, err := client()
@@ -153,10 +153,10 @@ func notifyValidateCreateFlags(typ, urlStr string, emails []string) error {
 	}
 	if typ == "email" {
 		if len(emails) == 0 {
-			return errors.New("--email is required for email channels (repeatable, org members only)")
+			return errors.New("--email is required for email channels (repeatable, organization members only)")
 		}
 		if urlStr != "" {
-			return errors.New("--url does not apply to email channels")
+			return errors.New("--url doesn't apply to email channels")
 		}
 		return nil
 	}
@@ -164,7 +164,7 @@ func notifyValidateCreateFlags(typ, urlStr string, emails []string) error {
 		return fmt.Errorf("--url is required for %s channels", typ)
 	}
 	if len(emails) > 0 {
-		return fmt.Errorf("--email does not apply to %s channels", typ)
+		return fmt.Errorf("--email doesn't apply to %s channels", typ)
 	}
 	return nil
 }
@@ -174,7 +174,7 @@ func notifyChannelCreateCmd() *cobra.Command {
 	var emails, events, projects []string
 	c := &cobra.Command{
 		Use:   "create",
-		Short: "Create a notification channel in the org",
+		Short: "Create a notification channel in the organization",
 		Long: "Create a notification channel. Channels fire for every project in the\n" +
 			"org unless scoped with --project.\n\n" +
 			"Config by type:\n" +
@@ -182,7 +182,7 @@ func notifyChannelCreateCmd() *cobra.Command {
 			"  slack    --url    Slack incoming-webhook URL\n" +
 			"  webhook  --url    public http(s) endpoint; requests are HMAC-SHA256\n" +
 			"                    signed with a secret printed once on create\n" +
-			"  email    --email  1-10 recipients, each an org member (repeatable)\n\n" +
+			"  email    --email  1-10 recipients, each an organization member (repeatable)\n\n" +
 			notifyEventsHelp,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -226,7 +226,7 @@ func notifyChannelCreateCmd() *cobra.Command {
 	c.Flags().StringVar(&typ, "type", "", "channel type: discord|slack|webhook|email (required)")
 	c.Flags().StringVar(&name, "name", "", "channel name, 1-100 characters (required)")
 	c.Flags().StringVar(&urlStr, "url", "", "webhook URL (discord/slack/webhook channels)")
-	c.Flags().StringSliceVar(&emails, "email", nil, "recipient email, must be an org member (email channels, repeatable)")
+	c.Flags().StringSliceVar(&emails, "email", nil, "recipient email, must be an organization member (email channels, repeatable)")
 	c.Flags().StringSliceVar(&events, "events", nil, "events to deliver, comma-separated (required)")
 	c.Flags().StringSliceVar(&projects, "project", nil, "limit the channel to a project id (repeatable; default all projects)")
 	_ = c.MarkFlagRequired("type")

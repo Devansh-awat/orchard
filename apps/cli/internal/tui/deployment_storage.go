@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/hackclub/orchard/cli/internal/api"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/hackclub/orchard/cli/internal/api"
 )
 
 // Storage tab: PVC volumes. PUT /deployments/:id/volumes replaces the whole
@@ -60,7 +60,7 @@ func (s *deploymentScreen) viewStorage(height int) string {
 		if typ == "" {
 			typ = "pvc"
 		}
-		ro := stMuted.Render("—")
+		ro := stMuted.Render("-")
 		if v.ReadOnly {
 			ro = stYellow.Render("read-only")
 		}
@@ -69,13 +69,13 @@ func (s *deploymentScreen) viewStorage(height int) string {
 	table := renderTable(
 		[]col{{title: "NAME"}, {title: "TYPE"}, {title: "MOUNT"}, {title: "SIZE"}, {title: "PVC"}, {title: ""}},
 		rows, s.volCursor, s.w-2, height-4)
-	note := stMuted.Render("  PVC-backed deployments use the recreate strategy · a add · x remove")
+	note := stMuted.Render("  deployments with volumes use the recreate strategy · a add · x remove")
 	return table + "\n\n" + note
 }
 
 func newVolumeForm(cl *api.Client, depID string, existing []DepVolume) *formScreen {
 	return newForm("Add volume",
-		"Attaches a PVC at the mount path (pods roll).",
+		"Attaches a volume at the mount path (pods restart).",
 		[]*field{
 			fld("mountPath", "Mount path", "/data", true),
 			fld("size", "Size", "5Gi", true),

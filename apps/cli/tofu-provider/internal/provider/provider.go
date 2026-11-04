@@ -41,7 +41,7 @@ func (p *orchardProvider) Metadata(_ context.Context, _ provider.MetadataRequest
 
 func (p *orchardProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Manage Orchard projects, apps, databases, ingresses and jobs. Works with Terraform and OpenTofu.",
+		Description: "Manage Orchard projects, apps, databases, domains and jobs. Works with Terraform and OpenTofu.",
 		Attributes: map[string]schema.Attribute{
 			"api_url": schema.StringAttribute{
 				Description: "Base URL of the Orchard instance. Falls back to ORCHARD_API_URL, then the CLI config, then the built-in default.",

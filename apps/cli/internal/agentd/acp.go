@@ -99,7 +99,7 @@ func (d *Daemon) spawnAgent(ctx context.Context, spec AgentSpec, opts spawnOptio
 	env := mergeEnv(opts.Env, spec.Env)
 	bin := lookPath(env, spec.Command[0])
 	if bin == "" {
-		return nil, rpcErr(codeUnavailable, "%s is not installed on this machine", spec.Label)
+		return nil, rpcErr(codeUnavailable, "%s isn't installed on this machine", spec.Label)
 	}
 	cmd := exec.Command(bin, spec.Command[1:]...)
 	cmd.Env = env
@@ -116,7 +116,7 @@ func (d *Daemon) spawnAgent(ctx context.Context, spec AgentSpec, opts spawnOptio
 	stderr := &tailBuffer{max: 16 << 10}
 	cmd.Stderr = stderr
 	if err := cmd.Start(); err != nil {
-		return nil, rpcErr(codeUnavailable, "could not start %s: %v", spec.Label, err)
+		return nil, rpcErr(codeUnavailable, "couldn't start %s: %v", spec.Label, err)
 	}
 	p := &AgentProc{spec: spec, cmd: cmd, stdin: stdin, stderr: stderr, exited: make(chan struct{}), onUpdate: opts.OnUpdate, onRequest: opts.OnRequest}
 	p.peer = newPeer(func(msg []byte) error {
@@ -146,7 +146,7 @@ func (d *Daemon) spawnAgent(ctx context.Context, spec AgentSpec, opts spawnOptio
 		if errors.As(err, &re) {
 			return nil, rpcErr(codeUnavailable, "%s: %s", spec.Label, re.Message)
 		}
-		return nil, rpcErr(codeUnavailable, "%s did not start: %s", spec.Label, p.failureDetail(err))
+		return nil, rpcErr(codeUnavailable, "%s didn't start: %s", spec.Label, p.failureDetail(err))
 	}
 	if len(p.init.AgentCapabilities) > 0 {
 		_ = json.Unmarshal(p.init.AgentCapabilities, &p.caps)
@@ -261,7 +261,7 @@ func (p *AgentProc) Reattach(ctx context.Context, sessionID, cwd string, mcp []j
 		out.SessionID = sessionID
 		return &out, true, nil
 	}
-	return nil, false, rpcErr(codeUnavailable, "%s cannot reopen an earlier chat", p.spec.Label)
+	return nil, false, rpcErr(codeUnavailable, "%s can't reopen an earlier chat", p.spec.Label)
 }
 
 func (p *AgentProc) Prompt(ctx context.Context, sessionID string, blocks []json.RawMessage, meta map[string]any) (string, error) {

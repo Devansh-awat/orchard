@@ -34,10 +34,8 @@ func authLoginCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "login",
 		Short: "Authenticate with Orchard",
-		Long: "Log in via your browser (default): Orchard mints a personal API token\n" +
-			"using your existing session and hands it back over a local callback.\n\n" +
-			"Or paste a token manually with --token (create one under Settings → API\n" +
-			"Tokens, or set ORCHARD_API_TOKEN in the environment).",
+		Long: "Sign in through your browser (default). Orchard creates a personal API token\n" + "and sends it back over a local callback.\n\n" +
+			"Or paste a token with --token (create one in Account settings, under API\n" + "tokens), or set ORCHARD_API_TOKEN.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, _ := config.Load()
 			if apiURL != "" {
@@ -60,7 +58,7 @@ func authLoginCmd() *cobra.Command {
 					return errors.New("no token provided: pass --token, pipe one on stdin, or use --no-browser --api-url <url> to sign in through a link")
 				}
 				if !strings.HasPrefix(token, "orch_") {
-					output.Warnf("token does not start with orch_ — continuing anyway")
+					output.Warnf("token doesn't start with orch_, continuing anyway")
 				}
 				cfg.Token = token
 				cl := api.New(cfg.APIURL, cfg.Token)
@@ -71,7 +69,7 @@ func authLoginCmd() *cobra.Command {
 				if err := cfg.Save(); err != nil {
 					return err
 				}
-				output.Successf("logged in to %s as %s", cfg.APIURL, displayUser(me))
+				output.Successf("signed in to %s as %s", cfg.APIURL, displayUser(me))
 				return nil
 			}
 
@@ -118,13 +116,13 @@ func headlessLoginBaseURL(saved string) (string, error) {
 
 func chooseLoginBaseURL(in io.Reader, out io.Writer) (string, error) {
 	r := bufio.NewReader(in)
-	fmt.Fprintln(out, "Where do you want to log in?")
+	fmt.Fprintln(out, "Where do you want to sign in?")
 	fmt.Fprintln(out, "1) Hack Club Orchard")
-	fmt.Fprintln(out, "2) Self-Hosted Orchard")
+	fmt.Fprintln(out, "2) Self-hosted Orchard")
 	fmt.Fprint(out, "Choose an Orchard instance [1]: ")
 	choice, err := r.ReadString('\n')
 	if err != nil && len(choice) == 0 {
-		return "", fmt.Errorf("could not read Orchard instance choice: %w", err)
+		return "", fmt.Errorf("couldn't read Orchard instance choice: %w", err)
 	}
 	choice = strings.TrimSpace(choice)
 	if choice == "" || choice == "1" {
@@ -137,7 +135,7 @@ func chooseLoginBaseURL(in io.Reader, out io.Writer) (string, error) {
 	fmt.Fprint(out, "Base URL: ")
 	base, err := r.ReadString('\n')
 	if err != nil && len(base) == 0 {
-		return "", fmt.Errorf("could not read self-hosted base URL: %w", err)
+		return "", fmt.Errorf("couldn't read self-hosted base URL: %w", err)
 	}
 	base = strings.TrimRight(strings.TrimSpace(base), "/")
 	parsed, err := url.Parse(base)
@@ -278,7 +276,7 @@ func authTokenCreateCmd() *cobra.Command {
 		Use:   "create",
 		Short: "Create a personal API token (the secret is shown only once)",
 		Long: "Create a personal API token (orch_…) for scripts, CI, and this CLI.\n\n" +
-			"Tokens live at most 90 days — the server caps longer --expires-in values —\n" +
+			"Tokens last at most 90 days (the server caps longer --expires-in values)\n" +
 			"and default to the read scope; repeat --scope for deploy/exec. Restrict a\n" +
 			"token to specific projects with repeated --project flags (id or slug);\n" +
 			"omit --project for a token that reaches everything you can.",
@@ -301,7 +299,7 @@ func authTokenCreateCmd() *cobra.Command {
 					return err
 				}
 				if d > authMaxTokenLifetime {
-					output.Warnf("tokens live at most 90 days — the server will cap this one")
+					output.Warnf("tokens last at most 90 days, so the server caps this one")
 				}
 				body["expiresAt"] = time.Now().Add(d).UTC().Format(time.RFC3339)
 			}
@@ -325,7 +323,7 @@ func authTokenCreateCmd() *cobra.Command {
 				return err
 			}
 			output.Successf("created token %s (%s)", pick(raw, "name"), pick(raw, "id"))
-			output.Warnf("the token is shown only once — store it now")
+			output.Warnf("the token is shown only once, so store it now")
 			if fmtFlag() == output.FormatJSON {
 				return output.JSON(raw)
 			}
@@ -376,7 +374,7 @@ func authSessionCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:     "session",
 		Aliases: []string{"sessions"},
-		Short:   "Manage browser login sessions",
+		Short:   "Manage browser sign-in sessions",
 	}
 	c.AddCommand(authSessionListCmd(), authSessionRevokeCmd(), authSessionRevokeAllCmd())
 	return c
@@ -428,12 +426,12 @@ func authSessionListCmd() *cobra.Command {
 func authSessionRevokeCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "revoke <sessionId>",
-		Short: "Revoke a browser session (logs that device out)",
+		Short: "Revoke a browser session (signs that device out)",
 		Long: "Revoke one browser session. The server refuses to revoke the session\n" +
-			"making the request — from a browser, log out instead.",
+			"making the request. From a browser, sign out instead.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := output.Confirm(fmt.Sprintf("revoke session %s (that device is logged out)", args[0]), yesFlag); err != nil {
+			if err := output.Confirm(fmt.Sprintf("revoke session %s (that device is signed out)", args[0]), yesFlag); err != nil {
 				return err
 			}
 			cl, _, err := client()
@@ -455,8 +453,8 @@ func authSessionRevokeAllCmd() *cobra.Command {
 		Short: "Sign out everywhere: revoke all sessions and delete every API token",
 		Long: "Revoke every browser session (except the one making the request, which\n" +
 			"for a CLI call is none of them) and delete ALL of your personal API\n" +
-			"tokens — the server treats \"sign out everywhere\" as everywhere.\n\n" +
-			"That includes the token this CLI is logged in with: the command succeeds,\n" +
+			"tokens. The server treats \"sign out everywhere\" as everywhere.\n\n" +
+			"That includes the token this CLI is signed in with: the command succeeds,\n" +
 			"then this CLI is locked out until you run `orchard auth login` again.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -472,7 +470,7 @@ func authSessionRevokeAllCmd() *cobra.Command {
 				return err
 			}
 			output.Successf("revoked %s session(s) and all API tokens", pick(raw, "revokedCount"))
-			output.Warnf("this CLI's token was deleted too — run `orchard auth login` to reconnect")
+			output.Warnf("this CLI's token was deleted too. Run `orchard auth login` to reconnect.")
 			if fmtFlag() == output.FormatJSON {
 				return output.JSON(raw)
 			}

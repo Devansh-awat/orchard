@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hackclub/orchard/cli/internal/api"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/hackclub/orchard/cli/internal/api"
 )
 
 // Resources tab: CPU/memory request editor plus the member quota budget
@@ -41,7 +41,7 @@ func (s *deploymentScreen) viewResources(height int) string {
 
 	cpuReq, hasCPUReq := f64p(d.CPURequestMilli)
 	memReq, hasMemReq := f64p(d.MemoryRequestB)
-	cpuLbl, memLbl := stMuted.Render("(org default)"), stMuted.Render("(org default)")
+	cpuLbl, memLbl := stMuted.Render("(organization default)"), stMuted.Render("(organization default)")
 	if hasCPUReq && cpuReq > 0 {
 		cpuLbl = fmtCPU(cpuReq)
 	}
@@ -96,16 +96,16 @@ func indent(s string) string {
 // means "clear to the org default", so both fields are always sent (mirrors
 // cmd/deploy_config.go's read-modify-write).
 func newResourcesForm(cl *api.Client, depID string, d *DepDetail) *formScreen {
-	cpuF := fld("cpu", "CPU request (millicores, empty = org default)", "500", false)
+	cpuF := fld("cpu", "CPU request (millicores, empty = organization default)", "500", false)
 	if v, ok := f64p(d.CPURequestMilli); ok && v > 0 {
 		cpuF.ti.SetValue(strconv.Itoa(int(v)))
 	}
-	memF := fld("memory", "Memory request (e.g. 512Mi, empty = org default)", "512Mi", false)
+	memF := fld("memory", "Memory request (e.g. 512Mi, empty = organization default)", "512Mi", false)
 	if v, ok := f64p(d.MemoryRequestB); ok && v > 0 {
 		memF.ti.SetValue(strconv.FormatInt(int64(v), 10))
 	}
 	return newForm("Edit resource requests",
-		"Pods roll to pick up the new requests.",
+		"Pods restart with the new requests.",
 		[]*field{cpuF, memF},
 		func(v map[string]string) tea.Cmd {
 			return func() tea.Msg {
@@ -125,7 +125,7 @@ func newResourcesForm(cl *api.Client, depID string, d *DepDetail) *formScreen {
 					body["memoryRequestBytes"] = b
 				}
 				err := cl.Send(ctxBG(), "PATCH", "/deployments/"+url.PathEscape(depID)+"/resources", body, nil)
-				return formResult{ok: actionMsg{text: "resources updated — pods rolling"}, err: err}
+				return formResult{ok: actionMsg{text: "resources updated, pods restarting"}, err: err}
 			}
 		})
 }

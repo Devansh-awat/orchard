@@ -205,7 +205,7 @@ func (m *topModel) fetchQueries() tea.Cmd {
 		note := ""
 		if mm, ok := raw.(map[string]any); ok {
 			if installed, ok := mm["installed"].(bool); ok && !installed {
-				note = "pg_stat_statements is not installed on this database"
+				note = "pg_stat_statements isn't installed on this database"
 			}
 			if len(rows) == 0 {
 				for _, k := range []string{"queries", "rows", "data", "stats"} {
@@ -462,7 +462,7 @@ func (m *topModel) header() string {
 	if m.sseUp {
 		live = stGreen.Render("● live")
 	}
-	age := "—"
+	age := "-"
 	if !m.refreshed.IsZero() {
 		age = fmt.Sprintf("%ds ago", int(time.Since(m.refreshed).Seconds()))
 	}
@@ -478,7 +478,7 @@ func (m *topModel) appStrip() string {
 	cpu := seriesValues(m.metrics, "cpu")
 	mem := seriesValues(m.metrics, "mem")
 	var parts []string
-	cpuNow, memNow := "—", "—"
+	cpuNow, memNow := "-", "-"
 	if m.podsExtra != nil {
 		if v, ok := m.podsExtra["totalCpuUsage"].(float64); ok {
 			cpuNow = fmtMilli(v)
@@ -715,7 +715,7 @@ func fmtMilli(v float64) string {
 func fmtMilliAny(v any) string {
 	f, ok := v.(float64)
 	if !ok {
-		return "—"
+		return "-"
 	}
 	return fmtMilli(f)
 }
@@ -731,7 +731,7 @@ func topBytes(v float64) string {
 func fmtBytesAny(v any) string {
 	f, ok := v.(float64)
 	if !ok {
-		return "—"
+		return "-"
 	}
 	return topBytes(f)
 }
@@ -739,7 +739,7 @@ func fmtBytesAny(v any) string {
 func fmtCount(v any) string {
 	f, ok := v.(float64)
 	if !ok {
-		return "—"
+		return "-"
 	}
 	return fmt.Sprintf("%d", int(f))
 }
@@ -747,7 +747,7 @@ func fmtCount(v any) string {
 func fmtRate(v any) string {
 	f, ok := v.(float64)
 	if !ok {
-		return "—"
+		return "-"
 	}
 	return fmt.Sprintf("%.1f", f)
 }
@@ -755,7 +755,7 @@ func fmtRate(v any) string {
 func fmtPct(v any) string {
 	f, ok := v.(float64)
 	if !ok {
-		return "—"
+		return "-"
 	}
 	return fmt.Sprintf("%.2f%%", f*100)
 }
@@ -763,14 +763,14 @@ func fmtPct(v any) string {
 func fmtLatency(v any) string {
 	f, ok := v.(float64)
 	if !ok {
-		return "—"
+		return "-"
 	}
 	return fmtMs(f * 1000)
 }
 
 func fmtMs(ms float64) string {
 	if ms <= 0 {
-		return "—"
+		return "-"
 	}
 	if ms >= 1000 {
 		return fmt.Sprintf("%.2fs", ms/1000)
@@ -780,11 +780,11 @@ func fmtMs(ms float64) string {
 
 func ageOf(ts string) string {
 	if ts == "" {
-		return "—"
+		return "-"
 	}
 	t, err := time.Parse(time.RFC3339, ts)
 	if err != nil {
-		return "—"
+		return "-"
 	}
 	d := time.Since(t)
 	switch {

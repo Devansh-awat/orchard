@@ -15,7 +15,7 @@ func quotaCmd() *cobra.Command {
 		Use:     "quota",
 		GroupID: groupResources,
 		Aliases: []string{"quotas"},
-		Short:   "Inspect resource quotas and usage for the org",
+		Short:   "Inspect resource quotas and usage for the organization",
 	}
 	c.AddCommand(
 		quotaShowCmd(),
@@ -116,7 +116,7 @@ func quotaGetKV(short string, sub []string, render func(map[string]any)) *cobra.
 }
 
 func quotaShowCmd() *cobra.Command {
-	return quotaGetKV("Show org-wide usage against its caps", nil, func(raw map[string]any) {
+	return quotaGetKV("Show organization-wide usage against its caps", nil, func(raw map[string]any) {
 		org := quotaSub(raw, "org")
 		usage := quotaSub(raw, "usage")
 		pairs := [][2]string{
@@ -147,13 +147,13 @@ func quotaShowCmd() *cobra.Command {
 // explicit 0 and "nobody set one" read differently.
 func quotaAllowance(val, source string) string {
 	if source == "default" {
-		return val + " " + output.Dim("(org default)")
+		return val + " " + output.Dim("(organization default)")
 	}
 	return val
 }
 
 func quotaMeCmd() *cobra.Command {
-	return quotaGetKV("Show your own allowance, usage, and headroom in the org", []string{"me"}, func(raw map[string]any) {
+	return quotaGetKV("Show your own allowance, usage, and headroom in the organization", []string{"me"}, func(raw map[string]any) {
 		allowance := quotaSub(raw, "allowance")
 		source := quotaSub(allowance, "source")
 		usage := quotaSub(raw, "usage")
@@ -166,8 +166,8 @@ func quotaMeCmd() *cobra.Command {
 			{"memory allowance", quotaAllowance(quotaMem(allowance["memoryBytes"]), pick(source, "memory"))},
 			{"memory used", quotaMem(usage["memoryBytes"])},
 			{"memory headroom", quotaMem(eff["memoryBytes"])},
-			{"org cpu cap", quotaCPU(orgCap["cpuLimitMilli"])},
-			{"org memory cap", quotaMem(orgCap["memoryLimitBytes"])},
+			{"organization cpu cap", quotaCPU(orgCap["cpuLimitMilli"])},
+			{"organization memory cap", quotaMem(orgCap["memoryLimitBytes"])},
 		})
 		breakdown := asList(usage["breakdown"])
 		if len(breakdown) == 0 {
@@ -190,12 +190,12 @@ func quotaMeCmd() *cobra.Command {
 }
 
 func quotaMembersCmd() *cobra.Command {
-	return quotaGetKV("Show per-member allowances and usage (org admins)", []string{"members"}, func(raw map[string]any) {
+	return quotaGetKV("Show per-member allowances and usage (organization admins)", []string{"members"}, func(raw map[string]any) {
 		org := quotaSub(raw, "org")
 		commitment := quotaSub(raw, "commitment")
 		output.KV([][2]string{
-			{"org cpu cap", quotaCPU(org["cpuLimitMilli"])},
-			{"org memory cap", quotaMem(org["memoryLimitBytes"])},
+			{"organization cpu cap", quotaCPU(org["cpuLimitMilli"])},
+			{"organization memory cap", quotaMem(org["memoryLimitBytes"])},
 			{"default allowance", quotaCPU(org["defaultMemberCpuMilli"]) + " cpu, " + quotaMem(org["defaultMemberMemoryBytes"]) + " memory"},
 			{"committed", quotaCPU(commitment["cpuMilli"]) + " cpu, " + quotaMem(commitment["memoryBytes"]) + " memory"},
 		})
@@ -219,11 +219,11 @@ func quotaMembersCmd() *cobra.Command {
 }
 
 func quotaProjectsCmd() *cobra.Command {
-	return quotaGetKV("Show per-project caps and usage (org admins)", []string{"projects"}, func(raw map[string]any) {
+	return quotaGetKV("Show per-project caps and usage (organization admins)", []string{"projects"}, func(raw map[string]any) {
 		total := quotaSub(raw, "orgTotal")
 		output.KV([][2]string{
-			{"org cpu used", quotaCPU(total["cpuMilli"])},
-			{"org memory used", quotaMem(total["memoryBytes"])},
+			{"organization cpu used", quotaCPU(total["cpuMilli"])},
+			{"organization memory used", quotaMem(total["memoryBytes"])},
 			{"org pods", quotaCount(total["pods"])},
 		})
 		fmt.Println()

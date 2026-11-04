@@ -53,7 +53,7 @@ func validOrgRole(r string, allowGuest bool) error {
 		if allowGuest {
 			return nil
 		}
-		return fmt.Errorf("guests cannot be invited at the org level: invite them to a project with `orchard project member add`")
+		return fmt.Errorf("guests can't be invited at the organization level: invite them to a project with `orchard project member add`")
 	}
 	want := "owner|admin|member"
 	if allowGuest {
@@ -127,7 +127,7 @@ func memberInviteCmd() *cobra.Command {
 		Long: "Send an email invitation to join the scoped organization. The server never\n" +
 			"direct-adds: even people who already have an account receive an invitation\n" +
 			"they must accept themselves (it expires after 7 days).\n\n" +
-			"Only owners can invite new owners. Guests cannot be invited at the org\n" +
+			"Only owners can invite new owners. Guests can't be invited at the organization\n" +
 			"level; use `orchard project member add` to invite a guest to a project.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -191,7 +191,7 @@ func memberSetRoleCmd() *cobra.Command {
 		Use:   "set-role <memberId> <role>",
 		Short: "Change a member's organization role (owner|admin|member|guest)",
 		Long: "Change a member's organization role. Owner-only on the server; owners\n" +
-			"cannot be demoted (transfer ownership instead) and setting guest requires\n" +
+			"can't be demoted (transfer ownership instead) and setting guest requires\n" +
 			"the member to already belong to at least one project.",
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -293,7 +293,7 @@ func memberInvitesCancelCmd() *cobra.Command {
 			if err := cl.Send(cmd.Context(), http.MethodDelete, memberInvitationPath(orgID, args[0]), nil, nil); err != nil {
 				return err
 			}
-			output.Successf("cancelled invitation %s", args[0])
+			output.Successf("canceled invitation %s", args[0])
 			return nil
 		},
 	}

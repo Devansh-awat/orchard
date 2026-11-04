@@ -93,7 +93,7 @@ func (r *deploymentResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				PlanModifiers: []planmodifier.Bool{},
 			},
 			"auto_url": schema.BoolAttribute{
-				Description: "Generate an https address under the platform domain.",
+				Description: "Generate an https address under the apps domain.",
 				Optional:    true,
 				Computed:    true,
 				Default:     booldefault.StaticBool(true),
@@ -105,7 +105,7 @@ func (r *deploymentResource) Schema(_ context.Context, _ resource.SchemaRequest,
 			},
 			"status":       schema.StringAttribute{Computed: true},
 			"namespace":    schema.StringAttribute{Computed: true},
-			"internal_url": schema.StringAttribute{Computed: true, Description: "In-cluster address other apps on the project can use."},
+			"internal_url": schema.StringAttribute{Computed: true, Description: "Private address other apps on the project can use."},
 		},
 	}
 }
@@ -173,7 +173,7 @@ func (r *deploymentResource) Create(ctx context.Context, req resource.CreateRequ
 	}
 	var raw map[string]any
 	if err := send(ctx, r.client, http.MethodPost, "/projects/"+esc(plan.ProjectID.ValueString())+"/deployments", body, &raw); err != nil {
-		resp.Diagnostics.AddError("Could not create app", err.Error())
+		resp.Diagnostics.AddError("Couldn't create app", err.Error())
 		return
 	}
 	r.fill(&plan, raw)
@@ -192,7 +192,7 @@ func (r *deploymentResource) Read(ctx context.Context, req resource.ReadRequest,
 			resp.State.RemoveResource(ctx)
 			return
 		}
-		resp.Diagnostics.AddError("Could not read app", err.Error())
+		resp.Diagnostics.AddError("Couldn't read app", err.Error())
 		return
 	}
 	r.fill(&state, raw)
@@ -209,13 +209,13 @@ func (r *deploymentResource) Update(ctx context.Context, req resource.UpdateRequ
 	id := state.ID.ValueString()
 	if plan.Image.ValueString() != state.Image.ValueString() {
 		if err := send(ctx, r.client, http.MethodPatch, "/deployments/"+esc(id)+"/image", map[string]any{"image": plan.Image.ValueString()}, nil); err != nil {
-			resp.Diagnostics.AddError("Could not change image", err.Error())
+			resp.Diagnostics.AddError("Couldn't change image", err.Error())
 			return
 		}
 	}
 	if plan.Replicas.ValueInt64() != state.Replicas.ValueInt64() {
 		if err := send(ctx, r.client, http.MethodPost, "/deployments/"+esc(id)+"/scale", map[string]any{"replicas": plan.Replicas.ValueInt64()}, nil); err != nil {
-			resp.Diagnostics.AddError("Could not scale app", err.Error())
+			resp.Diagnostics.AddError("Couldn't scale app", err.Error())
 			return
 		}
 	}
@@ -234,7 +234,7 @@ func (r *deploymentResource) Delete(ctx context.Context, req resource.DeleteRequ
 		return
 	}
 	if err := send(ctx, r.client, http.MethodDelete, "/deployments/"+esc(state.ID.ValueString()), nil, nil); err != nil && !isNotFound(err) {
-		resp.Diagnostics.AddError("Could not delete app", err.Error())
+		resp.Diagnostics.AddError("Couldn't delete app", err.Error())
 	}
 }
 

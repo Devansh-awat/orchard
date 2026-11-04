@@ -6,10 +6,10 @@ import (
 	"io"
 	"strings"
 
-	"github.com/hackclub/orchard/cli/internal/api"
-	"github.com/hackclub/orchard/cli/internal/termsession"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/hackclub/orchard/cli/internal/api"
+	"github.com/hackclub/orchard/cli/internal/termsession"
 )
 
 // The Overview tab is one btop-style board: info + resource graphs up top, the
@@ -238,7 +238,7 @@ func (s *deploymentScreen) handleShellDone(err error) tea.Cmd {
 	}
 	if is403(err) {
 		s.execDenied = true
-		return errFlash(errInvalid("shell denied — this token lacks the 'exec' scope"))
+		return errFlash(errInvalid("shell denied: this token lacks the 'exec' scope"))
 	}
 	return errFlash(err)
 }

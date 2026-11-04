@@ -5,8 +5,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/hackclub/orchard/cli/internal/api"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/hackclub/orchard/cli/internal/api"
 )
 
 // Deploys tab: image history with rollback, webhook trigger tokens, and the
@@ -49,9 +49,9 @@ func (s *deploymentScreen) deploysKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			return nil, true
 		}
 		if d.AutoDeployEnabled {
-			s.confirm.Show("Disable auto-deploy? Pushes will no longer trigger rebuilds.",
+			s.confirm.Show("Disable auto-deploy? Pushes no longer trigger rebuilds.",
 				doAction(s.cl, "POST", "/deployments/"+url.PathEscape(s.id)+"/auto-deploy/disable",
-					nil, "auto-deploy disabled"))
+					nil, "auto-deploy off"))
 			return nil, true
 		}
 		return push(newAutoDeployForm(s.cl, s.id, d.GithubBranch)), true
@@ -151,7 +151,7 @@ func (s *deploymentScreen) viewDeploys(height int, strip string) string {
 
 func newWebhookTokenForm(cl *api.Client, depID string) *formScreen {
 	return newForm("New webhook token",
-		"Mints a token that restarts the deployment via POST. The secret is shown once.",
+		"Creates a token that restarts the deployment via POST. The secret is shown once.",
 		[]*field{fld("label", "Label", "ci-main", false)},
 		func(v map[string]string) tea.Cmd {
 			return createWebhookToken(cl, depID, v["label"])
@@ -170,7 +170,7 @@ func newAutoDeployForm(cl *api.Client, depID, branch string) *formScreen {
 			return func() tea.Msg {
 				body := map[string]any{"branch": v["branch"]}
 				err := cl.Send(ctxBG(), "POST", "/deployments/"+url.PathEscape(depID)+"/auto-deploy/enable", body, nil)
-				return formResult{ok: actionMsg{text: "auto-deploy enabled from " + v["branch"]}, err: err}
+				return formResult{ok: actionMsg{text: "auto-deploy on from " + v["branch"]}, err: err}
 			}
 		})
 }

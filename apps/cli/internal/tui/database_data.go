@@ -250,7 +250,7 @@ func dbYs(pts []dbXY) []float64 {
 // dbLastY formats the most recent sample of a series, or a dash when empty.
 func dbLastY(pts []dbXY, format string) string {
 	if len(pts) == 0 {
-		return "—"
+		return "-"
 	}
 	return fmt.Sprintf(format, pts[len(pts)-1].Y)
 }

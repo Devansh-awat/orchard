@@ -23,7 +23,7 @@ func sandboxForkCmd() *cobra.Command {
 		Short: "Fork a machine you own into a new one with the same disk and sessions",
 		Long: "Fork copies the machine's home volume (a CSI VolumeSnapshot on Kubernetes, Sandbox.fork on Vercel) " +
 			"into a new machine you own, and lists the same worktree sessions on it. " +
-			"The server answers 409 when the runner or the disk's storage class cannot be snapshotted.",
+			"The server answers 409 when the runner or the disk's storage class can't be snapshotted.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, _, err := client()
@@ -60,7 +60,7 @@ func sandboxForkCmd() *cobra.Command {
 func sandboxShareCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "share",
-		Short: "Read-only share links for org teammates (transcript and diff only)",
+		Short: "Read-only share links for organization teammates (transcript and diff only)",
 	}
 	c.AddCommand(sandboxShareCreateCmd(), sandboxShareListCmd(), sandboxShareRevokeCmd())
 	return c
@@ -103,7 +103,7 @@ func sandboxShareCreateCmd() *cobra.Command {
 			}
 			output.Successf("share link %s (expires %s)", pick(raw, "id"), pick(raw, "expiresAt"))
 			fmt.Println(str(raw["url"]))
-			fmt.Fprintln(os.Stderr, output.Dim("only members of the machine's organization can open it; the link is not shown again"))
+			fmt.Fprintln(os.Stderr, output.Dim("only members of the machine's organization can open it; the link isn't shown again"))
 			return nil
 		},
 	}

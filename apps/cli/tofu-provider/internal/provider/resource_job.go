@@ -154,7 +154,7 @@ func (r *jobResource) Create(ctx context.Context, req resource.CreateRequest, re
 	}
 	var raw map[string]any
 	if err := send(ctx, r.client, http.MethodPost, "/projects/"+esc(plan.ProjectID.ValueString())+"/jobs", body, &raw); err != nil {
-		resp.Diagnostics.AddError("Could not create job", err.Error())
+		resp.Diagnostics.AddError("Couldn't create job", err.Error())
 		return
 	}
 	r.fill(&plan, raw)
@@ -173,7 +173,7 @@ func (r *jobResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 			resp.State.RemoveResource(ctx)
 			return
 		}
-		resp.Diagnostics.AddError("Could not read job", err.Error())
+		resp.Diagnostics.AddError("Couldn't read job", err.Error())
 		return
 	}
 	r.fill(&state, raw)
@@ -201,11 +201,11 @@ func (r *jobResource) Update(ctx context.Context, req resource.UpdateRequest, re
 		patch["timeZone"] = v.ValueString()
 	}
 	if err := send(ctx, r.client, http.MethodPatch, "/jobs/"+esc(id), patch, nil); err != nil {
-		resp.Diagnostics.AddError("Could not update job", err.Error())
+		resp.Diagnostics.AddError("Couldn't update job", err.Error())
 		return
 	}
 	if err := send(ctx, r.client, http.MethodPut, "/jobs/"+esc(id)+"/steps", map[string]any{"steps": r.stepsBody(plan)}, nil); err != nil {
-		resp.Diagnostics.AddError("Could not update job steps", err.Error())
+		resp.Diagnostics.AddError("Couldn't update job steps", err.Error())
 		return
 	}
 	plan.ID = state.ID
@@ -223,7 +223,7 @@ func (r *jobResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 		return
 	}
 	if err := send(ctx, r.client, http.MethodDelete, "/jobs/"+esc(state.ID.ValueString()), nil, nil); err != nil && !isNotFound(err) {
-		resp.Diagnostics.AddError("Could not delete job", err.Error())
+		resp.Diagnostics.AddError("Couldn't delete job", err.Error())
 	}
 }
 

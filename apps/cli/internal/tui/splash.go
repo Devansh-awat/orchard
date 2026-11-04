@@ -2,9 +2,9 @@ package tui
 
 import (
 	"context"
-	"github.com/hackclub/orchard/cli/internal/api"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/hackclub/orchard/cli/internal/api"
 )
 
 // logoArt is the Orchard mark (apple + leaf).
@@ -73,7 +73,7 @@ func (s *splashScreen) View() string {
 	logo := logoStyle.Render(logoArt)
 
 	title := stTitle.Render("Welcome to ") + stAccent.Render("Orchard")
-	subtitle := stMuted.Render("deploy, configure, and monitor — from your terminal")
+	subtitle := stMuted.Render("deploy, configure and monitor from your terminal")
 
 	greet := stMuted.Render("checking session…")
 	if s.err != nil {

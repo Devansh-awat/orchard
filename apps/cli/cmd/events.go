@@ -15,7 +15,7 @@ func eventsCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:     "events",
 		GroupID: groupCore,
-		Short:   "Stream live events from the org event bus",
+		Short:   "Stream live events from the organization event bus",
 	}
 	c.AddCommand(eventsTailCmd())
 	return c
@@ -25,8 +25,8 @@ func eventsTailCmd() *cobra.Command {
 	var types, sinceID string
 	c := &cobra.Command{
 		Use:   "tail",
-		Short: "Tail org events until interrupted (NDJSON when piped)",
-		Long: "Subscribe to the org event bus (SSE) and print every event as it\n" +
+		Short: "Tail organization events until interrupted (NDJSON when piped)",
+		Long: "Subscribe to the organization event bus (SSE) and print every event as it\n" +
 			"arrives: one NDJSON line per event when piped (or with -o json), a\n" +
 			"compact line in a terminal. Reconnects automatically and resumes from\n" +
 			"the last seen event id. Runs until Ctrl-C.",

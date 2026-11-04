@@ -177,7 +177,7 @@ func TestNotifyChannelCreateValidation(t *testing.T) {
 		{
 			name: "email with url",
 			args: []string{"--type", "email", "--name", "n", "--events", "deploy.failed", "--email", "a@x.com", "--url", "https://x.com"},
-			want: "--url does not apply",
+			want: "--url doesn't apply",
 		},
 		{
 			name: "unknown event",

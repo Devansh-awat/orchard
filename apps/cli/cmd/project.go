@@ -42,8 +42,8 @@ func projectTransferCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "transfer",
 		Short: "Transfer ownership of a project to another member",
-		Long: "Ownership decides whose resource allowance a project's apps and databases are " +
-			"billed against, so it moves in two steps: the current owner (or an org admin) " +
+		Long: "Ownership decides whose resource allowance a project's apps and databases " +
+			"count against, so it moves in two steps: the current owner (or an organization admin) " +
 			"opens a request, and the recipient accepts it. The new owner must already be a " +
 			"member of the project and becomes a project admin on accept.",
 	}
@@ -86,7 +86,7 @@ func projectTransferRequestCmd() *cobra.Command {
 			if fmtFlag() == output.FormatJSON {
 				return output.JSON(raw)
 			}
-			output.Successf("transfer requested — waiting for %s to accept", args[0])
+			output.Successf("transfer requested, waiting for %s to accept", args[0])
 			return nil
 		},
 	}
@@ -161,7 +161,7 @@ func projectTransferAcceptCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := output.Confirm("everything in this project will be billed against your resource allowance. accept?", yesFlag); err != nil {
+			if err := output.Confirm("everything in this project counts against your resource allowance. accept?", yesFlag); err != nil {
 				return err
 			}
 			var raw map[string]any
@@ -174,7 +174,7 @@ func projectTransferAcceptCmd() *cobra.Command {
 			}
 			output.Successf("you now own this project")
 			if promoted, _ := raw["promotedToAdmin"].(bool); promoted {
-				output.Successf("your project role was raised to admin")
+				output.Successf("you're now a project admin")
 			}
 			return nil
 		},
@@ -205,7 +205,7 @@ func projectListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:     "list",
 		Aliases: []string{"ls"},
-		Short:   "List projects (all orgs, or the scoped one)",
+		Short:   "List projects (all organizations, or the scoped one)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, cfg, err := client()
 			if err != nil {
@@ -413,7 +413,7 @@ func projectDeleteCmd() *cobra.Command {
 func projectSyncCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "sync <project>",
-		Short: "Pull live cluster state for the project's namespace into Orchard",
+		Short: "Pull live Kubernetes state for the project into Orchard",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, _, err := client()
@@ -577,7 +577,7 @@ func projectMemberAddCmd() *cobra.Command {
 	var role string
 	c := &cobra.Command{
 		Use:   "add <email>",
-		Short: "Add an org member to the project (emails without an account get an invitation)",
+		Short: "Add an organization member to the project (emails without an account get an invitation)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := validProjectRole(role); err != nil {

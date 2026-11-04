@@ -7,9 +7,9 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/hackclub/orchard/cli/internal/api"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/hackclub/orchard/cli/internal/api"
 )
 
 var orgTabs = []string{"General", "Members", "Notifications", "Backups", "Audit"}
@@ -217,7 +217,7 @@ func inviteMemberForm(cl *api.Client, orgID string) *formScreen {
 func setRoleForm(cl *api.Client, orgID string, m orgMember) *formScreen {
 	f := fld("role", "Role", m.Role, true)
 	f.ti.SetValue(m.Role)
-	return newForm("Set role — "+m.displayName(),
+	return newForm("Set role: "+m.displayName(),
 		"Roles: owner, admin, member, guest (owner-only on the server).",
 		[]*field{f},
 		func(v map[string]string) tea.Cmd {
@@ -314,7 +314,7 @@ func newOrgSettingsScreen(cl *api.Client, orgID string) *orgSettingsScreen {
 	return &orgSettingsScreen{cl: cl, id: orgID, loading: true}
 }
 
-func (s *orgSettingsScreen) title() string { return "Org settings" }
+func (s *orgSettingsScreen) title() string { return "Organization settings" }
 
 func (s *orgSettingsScreen) orgID() string { return s.id }
 
@@ -564,7 +564,7 @@ func (s *orgSettingsScreen) viewGeneral() string {
 	var b strings.Builder
 	kv := func(k, v string) {
 		if v == "" {
-			v = stMuted.Render("—")
+			v = stMuted.Render("-")
 		}
 		b.WriteString(stKey.Render(pad(k, 12)) + " " + v + "\n")
 	}

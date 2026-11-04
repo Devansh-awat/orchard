@@ -68,7 +68,7 @@ func dbListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:     "list",
 		Aliases: []string{"ls"},
-		Short:   "List databases (scoped to the current project or org when set)",
+		Short:   "List databases (scoped to the current project or organization when set)",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, cfg, err := client()
@@ -469,7 +469,7 @@ func dbPsqlCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !output.IsTTY() {
-				return errors.New("db psql needs an interactive terminal (stdout is not a TTY)")
+				return errors.New("db psql needs an interactive terminal (stdout isn't a TTY)")
 			}
 			cl, _, err := client()
 			if err != nil {
@@ -579,7 +579,7 @@ func dbExtensionInstallCmd() *cobra.Command {
 			}
 			output.Successf("installed extension %s", args[1])
 			if preload {
-				output.Warnf("added to shared_preload_libraries — the database is restarting")
+				output.Warnf("added to shared_preload_libraries, so the database is restarting")
 			}
 			return nil
 		},
@@ -595,7 +595,7 @@ func dbExtensionUninstallCmd() *cobra.Command {
 		Short: "Drop a PostgreSQL extension (and objects depending on it)",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := output.Confirm(fmt.Sprintf("drop extension %s — dependent objects will be dropped too", args[1]), yesFlag); err != nil {
+			if err := output.Confirm(fmt.Sprintf("drop extension %s and the objects that depend on it", args[1]), yesFlag); err != nil {
 				return err
 			}
 			cl, _, err := client()
@@ -709,7 +709,7 @@ func dbSettingsSetCmd() *cobra.Command {
 func dbPublicCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "public",
-		Short: "Manage public (internet) exposure",
+		Short: "Manage public access",
 	}
 	c.AddCommand(dbPublicEnableCmd(), dbPublicDisableCmd())
 	return c
@@ -729,7 +729,7 @@ func dbPublicEnableCmd() *cobra.Command {
 			if err := cl.Send(cmd.Context(), http.MethodPost, "/databases/"+url.PathEscape(args[0])+"/public", map[string]any{}, &raw); err != nil {
 				return err
 			}
-			output.Successf("public access enabled")
+			output.Successf("public access on")
 			if fmtFlag() == output.FormatJSON {
 				return output.JSON(raw)
 			}
@@ -757,7 +757,7 @@ func dbPublicDisableCmd() *cobra.Command {
 			if err := cl.Send(cmd.Context(), http.MethodDelete, "/databases/"+url.PathEscape(args[0])+"/public", nil, nil); err != nil {
 				return err
 			}
-			output.Successf("public access disabled")
+			output.Successf("public access off")
 			return nil
 		},
 	}

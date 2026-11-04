@@ -17,7 +17,7 @@ func templateCmd() *cobra.Command {
 		Use:     "template",
 		GroupID: groupResources,
 		Aliases: []string{"templates", "tpl"},
-		Short:   "Deploy prebuilt application stacks from templates",
+		Short:   "Deploy prebuilt app stacks from templates",
 	}
 	c.AddCommand(
 		templateListCmd(),
@@ -158,8 +158,7 @@ func templateDeployCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "deploy <templateId>",
 		Short: "Deploy a template into the current project",
-		Long: "Create every resource the template defines (databases, deployments,\n" +
-			"ingresses) in the current project, wired together automatically.\n\n" +
+		Long: "Create every resource the template defines (databases, deployments,\n" + "domains) in the current project and connect them.\n\n" +
 			"Run `orchard template get <id>` to see the expected parameters. Secret\n" +
 			"parameters are generated server-side when omitted. The request returns\n" +
 			"once every resource exists, so there is nothing to poll for.",
@@ -399,7 +398,7 @@ func templateAdminUpdateCmd() *cobra.Command {
 	var file string
 	c := &cobra.Command{
 		Use:   "update <id>",
-		Short: "Replace a template's YAML definition (built-ins cannot be updated)",
+		Short: "Replace a template's YAML definition (built-ins can't be updated)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			data, err := os.ReadFile(file)

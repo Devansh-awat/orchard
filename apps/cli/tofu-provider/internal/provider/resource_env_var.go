@@ -118,7 +118,7 @@ func (r *envVarResource) Create(ctx context.Context, req resource.CreateRequest,
 		plan.Secret = types.BoolValue(false)
 	}
 	if err := r.put(ctx, plan, false); err != nil {
-		resp.Diagnostics.AddError("Could not set variable", err.Error())
+		resp.Diagnostics.AddError("Couldn't set variable", err.Error())
 		return
 	}
 	plan.ID = types.StringValue(plan.DeploymentID.ValueString() + ":" + plan.Key.ValueString())
@@ -137,7 +137,7 @@ func (r *envVarResource) Read(ctx context.Context, req resource.ReadRequest, res
 			resp.State.RemoveResource(ctx)
 			return
 		}
-		resp.Diagnostics.AddError("Could not read app", err.Error())
+		resp.Diagnostics.AddError("Couldn't read app", err.Error())
 		return
 	}
 	found := false
@@ -171,7 +171,7 @@ func (r *envVarResource) Update(ctx context.Context, req resource.UpdateRequest,
 		plan.Secret = state.Secret
 	}
 	if err := r.put(ctx, plan, false); err != nil {
-		resp.Diagnostics.AddError("Could not update variable", err.Error())
+		resp.Diagnostics.AddError("Couldn't update variable", err.Error())
 		return
 	}
 	plan.ID = state.ID
@@ -185,7 +185,7 @@ func (r *envVarResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		return
 	}
 	if err := r.put(ctx, state, true); err != nil && !isNotFound(err) {
-		resp.Diagnostics.AddError("Could not remove variable", err.Error())
+		resp.Diagnostics.AddError("Couldn't remove variable", err.Error())
 	}
 }
 

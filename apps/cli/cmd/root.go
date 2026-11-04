@@ -62,12 +62,9 @@ func Execute(ctx context.Context) int {
 func rootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "orchard",
-		Short: "Orchard — deploy and manage apps on HackClub's platform",
-		Long: "orchard is the command-line interface for the Orchard platform.\n\n" +
-			"It speaks the same REST API as the web UI and the MCP server, so every\n" +
-			"capability is available here. Output is pretty in a terminal and JSON when\n" +
-			"piped (or with --output json), which makes it equally useful for humans\n" +
-			"and for AI agents.",
+		Short: "Deploy and manage apps on Orchard",
+		Long: "orchard is the command-line interface for Orchard.\n\n" +
+			"It uses the same REST API as the dashboard and the MCP server. Output is a\n" + "table in a terminal and JSON when piped, or with --output json.",
 		Version:       Version,
 		SilenceUsage:  true,
 		SilenceErrors: true,

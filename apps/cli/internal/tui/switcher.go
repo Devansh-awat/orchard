@@ -5,9 +5,9 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/hackclub/orchard/cli/internal/api"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/hackclub/orchard/cli/internal/api"
 )
 
 // keyGrabber marks screens whose focused text inputs or active modals must
@@ -119,7 +119,7 @@ func (s *switcherScreen) Init() tea.Cmd {
 func (s *switcherScreen) help() []keyHint {
 	h := []keyHint{{"↑/↓", "move"}}
 	if s.mode == switcherOrgs {
-		h = append(h, keyHint{"enter", "switch org"}, keyHint{"s", "org settings"})
+		h = append(h, keyHint{"enter", "switch organization"}, keyHint{"s", "organization settings"})
 	} else {
 		h = append(h, keyHint{"enter", "set default"})
 	}
@@ -263,7 +263,7 @@ func (s *switcherScreen) View() string {
 
 	title := "Switch organization"
 	if s.mode == switcherEnvs && s.project != nil {
-		title = "Environments — " + s.project.Name
+		title = "Environments: " + s.project.Name
 	}
 	if s.project != nil {
 		title += stMuted.Render("  (tab to flip)")

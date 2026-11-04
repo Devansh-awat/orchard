@@ -119,7 +119,7 @@ func requireProject(ctx context.Context, cl *api.Client, cfg *config.Config) (st
 func requireOrg(ctx context.Context, cl *api.Client, cfg *config.Config) (string, error) {
 	v := scopedOrg(cfg)
 	if v == "" {
-		return "", errors.New("no org scope: pass --org or run `orchard use org <slug>`")
+		return "", errors.New("no organization scope: pass --org or run `orchard use org <slug>`")
 	}
 	m, err := resolveOrg(ctx, cl, v)
 	if err != nil {

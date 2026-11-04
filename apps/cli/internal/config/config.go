@@ -86,7 +86,7 @@ func (c *Config) Save() error {
 
 func (c *Config) RequireToken() error {
 	if c.Token == "" {
-		return errors.New("not logged in: run `orchard auth login` or set ORCHARD_API_TOKEN")
+		return errors.New("not signed in: run `orchard auth login` or set ORCHARD_API_TOKEN")
 	}
 	return nil
 }

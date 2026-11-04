@@ -27,7 +27,7 @@ import (
 func webLogin(cfg *config.Config, webBase string, openBrowserFlag bool) error {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		return fmt.Errorf("could not start local callback server: %w", err)
+		return fmt.Errorf("couldn't start local callback server: %w", err)
 	}
 	defer ln.Close()
 	port := ln.Addr().(*net.TCPAddr).Port
@@ -142,14 +142,14 @@ func webLogin(cfg *config.Config, webBase string, openBrowserFlag bool) error {
 	if err := cfg.Save(); err != nil {
 		return err
 	}
-	output.Successf("logged in to %s as %s", cfg.APIURL, displayUser(me))
+	output.Successf("signed in to %s as %s", cfg.APIURL, displayUser(me))
 	return nil
 }
 
 func printManualAuth(w io.Writer, authURL string, port int) {
 	fmt.Fprintln(w, output.Dim("open this in a browser to authorize:\n  ")+authURL)
 	fmt.Fprintln(w, output.Dim(fmt.Sprintf(
-		"it calls back to localhost:%d on the machine with the browser. On a remote box, tunnel it first:\n  ssh -L %d:127.0.0.1:%d <this-host>",
+		"it calls back to localhost:%d on the machine with the browser. On a remote server, tunnel it first:\n  ssh -L %d:127.0.0.1:%d <this-host>",
 		port, port, port,
 	)))
 }

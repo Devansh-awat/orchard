@@ -38,7 +38,7 @@ func overviewCmd() *cobra.Command {
 			}
 			scope := scopedOrg(cfg)
 			if scope == "" {
-				return errors.New("no org scope: pass --org or run `orchard use org <slug>`")
+				return errors.New("no organization scope: pass --org or run `orchard use org <slug>`")
 			}
 			org, err := resolveOrg(cmd.Context(), cl, scope)
 			if err != nil {

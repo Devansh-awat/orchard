@@ -35,7 +35,7 @@ func useCmd() *cobra.Command {
 					cfg.Context = config.Context{}
 				}
 				cfg.Context.OrgID, cfg.Context.OrgSlug = str(m["id"]), str(m["slug"])
-				output.Successf("using org %s", displayName(m))
+				output.Successf("using organization %s", displayName(m))
 			case "project", "proj":
 				m, err := resolveProject(ctx, cl, args[1])
 				if err != nil {

@@ -310,7 +310,7 @@ func dbForkCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "fork <id>",
 		Short: "Copy a database into a new one, from now, a backup, a checkpoint or a point in time",
-		Long: `Create a new database from an existing one. The original is not touched.
+		Long: `Create a new database from an existing one. The original isn't touched.
 
 By default the copy is taken from the live database (--at now). --at latest uses the
 latest recoverable point from backups, --at <ISO time> picks a point in time, and
@@ -468,7 +468,7 @@ func dbOpsGetCmd() *cobra.Command {
 func dbOpsCancelCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "cancel <opId>",
-		Short: "Cancel an operation that has not finished",
+		Short: "Cancel an operation that hasn't finished",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, _, err := client()
@@ -479,7 +479,7 @@ func dbOpsCancelCmd() *cobra.Command {
 			if err := cl.Send(cmd.Context(), http.MethodPost, dbOperationPath(args[0])+"/cancel", map[string]any{}, &op); err != nil {
 				return err
 			}
-			output.Successf("cancelled operation %s", args[0])
+			output.Successf("canceled operation %s", args[0])
 			if fmtFlag() == output.FormatJSON {
 				return output.JSON(op)
 			}

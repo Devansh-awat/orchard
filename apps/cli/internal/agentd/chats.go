@@ -255,7 +255,7 @@ func (d *Daemon) createChat(ctx context.Context, p chatCreateParams) (*ChatState
 		return nil, rpcErr(codeInvalidParams, "cwd must be absolute")
 	}
 	if st, err := os.Stat(p.Cwd); err != nil || !st.IsDir() {
-		return nil, rpcErr(codeInvalidParams, "cwd %s does not exist", p.Cwd)
+		return nil, rpcErr(codeInvalidParams, "cwd %s doesn't exist", p.Cwd)
 	}
 	id := p.ChatID
 	if id == "" {
@@ -329,7 +329,7 @@ func (d *Daemon) createChat(ctx context.Context, p chatCreateParams) (*ChatState
 		for key, value := range p.Config {
 			if err := c.setConfig(ctx, key, value); err != nil {
 				c.mu.Lock()
-				c.appendLocked("error", nil, map[string]string{"message": fmt.Sprintf("could not set %s: %v", key, err)})
+				c.appendLocked("error", nil, map[string]string{"message": fmt.Sprintf("couldn't set %s: %v", key, err)})
 				c.mu.Unlock()
 			}
 		}

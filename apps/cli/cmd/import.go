@@ -21,9 +21,9 @@ func importCmd() *cobra.Command {
 		GroupID: groupCore,
 		Short:   "Import a GitHub repo: project, build, deploy and URL in one shot",
 		Long: "Creates a project named after the repo, detects how to build it (Dockerfile\n" +
-			"or automatic), starts the first build, and attaches a protected platform URL.\n" +
+			"or automatic), starts the first build, and attaches a protected URL.\n" +
 			"A public repo needs no GitHub App. Auto-deploy comes on when the App covers\n" +
-			"the repo. The org comes from --org or the saved context.",
+			"the repo. The organization comes from --org or the saved context.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, cfg, err := client()
@@ -64,11 +64,11 @@ func importCmd() *cobra.Command {
 				output.Warnf("detected %s (%s build)", fw, str(raw["buildType"]))
 			}
 			if u := str(raw["url"]); u != "" {
-				output.Successf("will be live at %s (visible to your org until made public)", u)
+				output.Successf("will be live at %s (visible to your organization until made public)", u)
 			}
 			id := str(raw["deploymentId"])
 			if enabled, known := raw["autoDeployEnabled"].(bool); known && !enabled {
-				output.Warnf("auto-deploy is off because the GitHub App does not cover this repo; rebuild with `orchard deploy rebuild %s`", id)
+				output.Warnf("auto-deploy is off because the GitHub App doesn't cover this repo; rebuild with `orchard deploy rebuild %s`", id)
 			}
 			if !*wait || id == "" {
 				if fmtFlag() == output.FormatJSON {

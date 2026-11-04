@@ -136,7 +136,7 @@ func jobListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:     "list",
 		Aliases: []string{"ls"},
-		Short:   "List jobs in the org (or the current project when one is set)",
+		Short:   "List jobs in the organization (or the current project when one is set)",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, cfg, err := client()

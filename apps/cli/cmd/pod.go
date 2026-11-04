@@ -345,7 +345,7 @@ func podExecCmd() *cobra.Command {
 			if err := cl.Send(cmd.Context(), http.MethodPost, "/pods/"+url.PathEscape(args[0])+"/exec", body, &res); err != nil {
 				var apiErr *api.APIError
 				if errors.As(err, &apiErr) && apiErr.Status == http.StatusForbidden {
-					return fmt.Errorf("exec denied — this needs an API token with the 'exec' scope: %w", err)
+					return fmt.Errorf("exec denied: this needs an API token with the 'exec' scope: %w", err)
 				}
 				return err
 			}
@@ -386,7 +386,7 @@ func podShellCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !output.IsTTY() {
-				return errors.New("pod shell needs an interactive terminal (stdout is not a TTY); use `orchard pod exec` for one-shot commands")
+				return errors.New("pod shell needs an interactive terminal (stdout isn't a TTY); use `orchard pod exec` for one-shot commands")
 			}
 			cl, cfg, err := client()
 			if err != nil {
@@ -398,7 +398,7 @@ func podShellCmd() *cobra.Command {
 			}
 			conn, err := cl.DialExec(cmd.Context(), args[0], ns, container)
 			if err != nil {
-				return fmt.Errorf("could not open shell (needs an API token with the 'exec' scope): %w", err)
+				return fmt.Errorf("couldn't open shell (needs an API token with the 'exec' scope): %w", err)
 			}
 			return termsession.Run(cmd.Context(), conn, os.Stdin, os.Stdout)
 		},

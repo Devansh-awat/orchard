@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hackclub/orchard/cli/internal/api"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/hackclub/orchard/cli/internal/api"
 )
 
 const (
@@ -451,7 +451,7 @@ func (s *deploymentScreen) Update(msg tea.Msg) (screen, tea.Cmd) {
 	case tokenCreatedMsg:
 		s.newToken = msg.token
 		return s, tea.Batch(fetchWebhookTokens(s.cl, s.id),
-			flashf("webhook token created — the secret is shown once"))
+			flashf("webhook token created, the secret is shown once"))
 	case tailscaleMsg:
 		s.tsLoaded = true
 		s.ts, s.tsErr = msg.info, msg.err
@@ -476,7 +476,7 @@ func (s *deploymentScreen) Update(msg tea.Msg) (screen, tea.Cmd) {
 		}
 		return s, tea.Batch(s.refresh(), s.tabDataCmd(), flashf("%s", msg.text))
 	case envSavedMsg:
-		return s, tea.Batch(fetchDetail(s.cl, s.id), flashf("environment updated — redeploying"))
+		return s, tea.Batch(fetchDetail(s.cl, s.id), flashf("environment updated, redeploying"))
 	case tea.MouseMsg:
 		return s, s.handleMouse(msg)
 	case tea.KeyMsg:
@@ -774,7 +774,7 @@ func values(pts []MetricPoint) []float64 {
 
 func orDash(s string) string {
 	if s == "" {
-		return "—"
+		return "-"
 	}
 	return s
 }
@@ -812,7 +812,7 @@ func yesNo(v bool) string {
 	if v {
 		return "yes"
 	}
-	return "—"
+	return "-"
 }
 
 func fmtInt(n flexNum) string {

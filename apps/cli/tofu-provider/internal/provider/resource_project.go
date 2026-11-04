@@ -100,7 +100,7 @@ func (r *projectResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 	var raw map[string]any
 	if err := send(ctx, r.client, http.MethodPost, "/projects", body, &raw); err != nil {
-		resp.Diagnostics.AddError("Could not create project", err.Error())
+		resp.Diagnostics.AddError("Couldn't create project", err.Error())
 		return
 	}
 	r.fill(&plan, raw)
@@ -119,7 +119,7 @@ func (r *projectResource) Read(ctx context.Context, req resource.ReadRequest, re
 			resp.State.RemoveResource(ctx)
 			return
 		}
-		resp.Diagnostics.AddError("Could not read project", err.Error())
+		resp.Diagnostics.AddError("Couldn't read project", err.Error())
 		return
 	}
 	r.fill(&state, raw)
@@ -139,7 +139,7 @@ func (r *projectResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 	var raw map[string]any
 	if err := send(ctx, r.client, http.MethodPatch, "/projects/"+esc(state.ID.ValueString()), body, &raw); err != nil {
-		resp.Diagnostics.AddError("Could not update project", err.Error())
+		resp.Diagnostics.AddError("Couldn't update project", err.Error())
 		return
 	}
 	plan.ID = state.ID
@@ -154,7 +154,7 @@ func (r *projectResource) Delete(ctx context.Context, req resource.DeleteRequest
 		return
 	}
 	if err := send(ctx, r.client, http.MethodDelete, "/projects/"+esc(state.ID.ValueString()), nil, nil); err != nil && !isNotFound(err) {
-		resp.Diagnostics.AddError("Could not delete project", err.Error())
+		resp.Diagnostics.AddError("Couldn't delete project", err.Error())
 	}
 }
 

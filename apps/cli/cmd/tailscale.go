@@ -112,7 +112,7 @@ func tailscaleAuthKey(cmd *cobra.Command, flag string) (string, error) {
 		return "", errors.New("no auth key: pass --auth-key, set ORCHARD_TS_AUTHKEY, or pipe the key on stdin")
 	}
 	if !strings.HasPrefix(key, "tskey-") {
-		output.Warnf("auth key does not start with tskey- (continuing anyway)")
+		output.Warnf("auth key doesn't start with tskey- (continuing anyway)")
 	}
 	return key, nil
 }

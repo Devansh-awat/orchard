@@ -196,8 +196,8 @@ func serviceCreateCmd() *cobra.Command {
 	c.Flags().IntVar(&port, "port", 0, "service port (required)")
 	c.Flags().IntVar(&targetPort, "target-port", 0, "container port to route to (default: --port)")
 	c.Flags().StringVar(&protocol, "protocol", "TCP", "port protocol (TCP|UDP)")
-	c.Flags().IntVar(&nodePort, "node-port", 0, "explicit NodePort for public exposure")
-	c.Flags().BoolVar(&public, "public", false, "expose the service publicly (NodePort/LoadBalancer)")
+	c.Flags().IntVar(&nodePort, "node-port", 0, "explicit public port")
+	c.Flags().BoolVar(&public, "public", false, "expose the service publicly")
 	c.Flags().StringVar(&domain, "domain", "", "custom domain for the service")
 	return c
 }
@@ -266,7 +266,7 @@ func serviceUpdateCmd() *cobra.Command {
 	c.Flags().IntVar(&port, "port", 0, "service port")
 	c.Flags().IntVar(&targetPort, "target-port", 0, "container port to route to (default: --port)")
 	c.Flags().StringVar(&protocol, "protocol", "TCP", "port protocol (TCP|UDP)")
-	c.Flags().IntVar(&nodePort, "node-port", 0, "explicit NodePort for public exposure")
+	c.Flags().IntVar(&nodePort, "node-port", 0, "explicit public port")
 	c.Flags().StringVar(&domain, "domain", "", "custom domain for the service (empty clears it)")
 	return c
 }
@@ -314,7 +314,7 @@ func serviceExposureSetCmd() *cobra.Command {
 	var deployment string
 	c := &cobra.Command{
 		Use:   "set <service-id> <public|internal>",
-		Short: "Switch a service between public (NodePort/LoadBalancer) and internal (ClusterIP)",
+		Short: "Switch a service between public and internal",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var expose bool

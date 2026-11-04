@@ -447,7 +447,7 @@ func sandboxDiffCmd() *cobra.Command {
 					return output.JSON(raw)
 				}
 				if b, ok := raw["isRepo"].(bool); ok && !b {
-					return errors.New("the sandbox workspace is not a git repository")
+					return errors.New("the sandbox workspace isn't a git repository")
 				}
 				rows := [][]string{}
 				for _, f := range asList(raw["files"]) {
@@ -754,9 +754,9 @@ func sandboxStopCmd() *cobra.Command {
 func sandboxRetryCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "retry <name>",
-		Short: "Retry a sandbox's failed cluster or Vercel changes",
+		Short: "Retry a sandbox's failed Kubernetes or Vercel changes",
 		Long: "Requeue every failed apply for a sandbox (the error shown as applyError on\n" +
-			"`orchard sandbox get`) so it runs again now with fresh retries. Host or org admin.",
+			"`orchard sandbox get`) so it runs again now with fresh retries. Host or organization admin.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, _, err := client()
@@ -887,7 +887,7 @@ func sandboxSSHCmd() *cobra.Command {
 			alias := sshHostKeyAlias("orchard-" + str(sb["name"]))
 			knownHosts, kerr := refreshSandboxKnownHosts(cmd.Context(), cl, id, alias)
 			if kerr != nil && !hostKeysUnsupported(kerr) {
-				fmt.Fprintf(os.Stderr, "orchard: could not refresh host keys in %s: %v\n", knownHosts, kerr)
+				fmt.Fprintf(os.Stderr, "orchard: couldn't refresh host keys in %s: %v\n", knownHosts, kerr)
 			}
 			sshArgs := append([]string{
 				"-o", "ProxyCommand=" + exe + " sandbox proxy " + id,
@@ -1043,7 +1043,7 @@ func sandboxProxyCmd() *cobra.Command {
 			}
 			if host != "" {
 				if path, kerr := refreshSandboxKnownHosts(cmd.Context(), cl, str(sb["id"]), sshHostKeyAlias(host)); kerr != nil && !hostKeysUnsupported(kerr) {
-					fmt.Fprintf(os.Stderr, "orchard: could not refresh host keys in %s: %v\n", path, kerr)
+					fmt.Fprintf(os.Stderr, "orchard: couldn't refresh host keys in %s: %v\n", path, kerr)
 				}
 			}
 			conn, err := cl.DialSandboxSSH(cmd.Context(), str(sb["id"]))

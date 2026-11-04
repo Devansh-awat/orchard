@@ -24,8 +24,8 @@ func webhookDeployCmd() *cobra.Command {
 	var image, tag string
 	c := &cobra.Command{
 		Use:   "deploy <token>",
-		Short: "Trigger a deployment via a webhook token (no login required)",
-		Long: "Trigger a deploy webhook minted with `orchard deploy webhook-token create`.\n\n" +
+		Short: "Trigger a deployment via a webhook token (no sign-in required)",
+		Long: "Trigger a deploy webhook created with `orchard deploy webhook-token create`.\n\n" +
 			"The route is public: only the webhook token authenticates the call, so a\n" +
 			"token-less CI job can run this without `orchard auth login`. Without flags\n" +
 			"the deployment restarts; --image/--tag switch the image first (Docker-image\n" +

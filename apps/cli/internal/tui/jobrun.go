@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hackclub/orchard/cli/internal/api"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/hackclub/orchard/cli/internal/api"
 )
 
 // jobRunPoll is the fast cadence while a run is active: step logs move fast.
@@ -64,7 +64,7 @@ func fetchStepLogs(cl *api.Client, runID string, order int) tea.Cmd {
 
 func cancelJobRunCmd(cl *api.Client, runID string, number int) tea.Cmd {
 	return doAction(cl, "POST", jobRunPath(runID, "cancel"), map[string]any{},
-		fmt.Sprintf("cancelled run #%d", number))
+		fmt.Sprintf("canceled run #%d", number))
 }
 
 // jobRunScreen shows one run: the step pipeline on top, the selected step's
@@ -339,7 +339,7 @@ func (s *jobRunScreen) view() string {
 
 	title := "Logs"
 	if st := s.selStep(); st != nil {
-		title = fmt.Sprintf("Logs — step %d: %s", st.StepOrder, st.Name)
+		title = fmt.Sprintf("Step %d logs: %s", st.StepOrder, st.Name)
 	}
 	head := panel(fmt.Sprintf("Run #%d", r.Number), top.String(), s.w, topH, false)
 	logs := panelRaw(stTabSel.Render(title), s.logVP.View(), s.w, logsH, true)

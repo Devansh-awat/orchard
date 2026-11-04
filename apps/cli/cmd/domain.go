@@ -19,7 +19,7 @@ func domainCmd() *cobra.Command {
 		Use:     "domain",
 		GroupID: groupResources,
 		Aliases: []string{"ingress", "domains"},
-		Short:   "Manage domains (ingresses)",
+		Short:   "Manage domains",
 	}
 	c.AddCommand(
 		domainListCmd(),
@@ -72,7 +72,7 @@ func expectedCNAME() string {
 	if v := os.Getenv("ORCHARD_INGRESS_CNAME"); v != "" {
 		return v
 	}
-	return "your instance's ingress hostname"
+	return "your instance's hostname"
 }
 
 func domainListCmd() *cobra.Command {
@@ -141,7 +141,7 @@ func domainListCmd() *cobra.Command {
 
 func domainGetCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "get <ingress-id>",
+		Use:   "get <domain-id>",
 		Short: "Show a domain",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -180,7 +180,7 @@ func domainCreateCmd() *cobra.Command {
 		Short: "Add a domain to a deployment",
 		Long: "Add a domain to a deployment.\n\n" +
 			"A subdomain of your instance's app domain works immediately; a custom\n" +
-			"domain needs a CNAME pointed at the cluster first. Check readiness with\n" +
+			"domain needs a CNAME pointed at your instance first. Check readiness with\n" +
 			"`orchard domain validate-dns <host>`.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, _, err := client()
@@ -207,7 +207,7 @@ func domainCreateCmd() *cobra.Command {
 	c.Flags().StringVar(&deployment, "deployment", "", "deployment id to route traffic to")
 	c.Flags().StringVar(&host, "host", "", "fully-qualified domain name")
 	c.Flags().StringVar(&path, "path", "/", "URL path prefix")
-	c.Flags().IntVar(&servicePort, "service-port", 80, "service port to route to")
+	c.Flags().IntVar(&servicePort, "service-port", 80, "port to route to")
 	c.Flags().BoolVar(&tls, "tls", true, "provision TLS for the host")
 	_ = c.MarkFlagRequired("deployment")
 	_ = c.MarkFlagRequired("host")
@@ -219,7 +219,7 @@ func domainUpdateCmd() *cobra.Command {
 	var servicePort, redirectStatus int
 	var tls bool
 	c := &cobra.Command{
-		Use:   "update <ingress-id>",
+		Use:   "update <domain-id>",
 		Short: "Update a domain's host, path, port, or TLS",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -295,7 +295,7 @@ func domainUpdateCmd() *cobra.Command {
 	}
 	c.Flags().StringVar(&host, "host", "", "new domain name")
 	c.Flags().StringVar(&path, "path", "/", "URL path prefix")
-	c.Flags().IntVar(&servicePort, "service-port", 0, "service port to route to")
+	c.Flags().IntVar(&servicePort, "service-port", 0, "port to route to")
 	c.Flags().BoolVar(&tls, "tls", true, "provision TLS for the host")
 	c.Flags().StringVar(&redirectTo, "redirect-to", "", "for a redirect domain: where it sends visitors")
 	c.Flags().IntVar(&redirectStatus, "redirect-status", 0, "for a redirect domain: 301, 302, 307 or 308")
@@ -304,7 +304,7 @@ func domainUpdateCmd() *cobra.Command {
 
 func domainDeleteCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:     "delete <ingress-id>",
+		Use:     "delete <domain-id>",
 		Aliases: []string{"rm"},
 		Short:   "Delete a domain",
 		Args:    cobra.ExactArgs(1),
@@ -319,7 +319,7 @@ func domainDeleteCmd() *cobra.Command {
 			}
 			projectID := str(ing["projectId"])
 			if projectID == "" {
-				return fmt.Errorf("ingress %s has no project; cannot delete", args[0])
+				return fmt.Errorf("domain %s has no project, so it can't be deleted", args[0])
 			}
 			if err := output.Confirm(fmt.Sprintf("delete domain %s? traffic to it stops immediately", pick(ing, "host")), yesFlag); err != nil {
 				return err
@@ -344,7 +344,7 @@ func domainProtectionCmd() *cobra.Command {
 
 func domainProtectionGetCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "get <ingress-id>",
+		Use:   "get <domain-id>",
 		Short: "Show a domain's protection mode and bypass secret",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -387,7 +387,7 @@ func normalizeProtectionMode(mode string) (string, error) {
 func domainProtectionSetCmd() *cobra.Command {
 	var mode, password string
 	c := &cobra.Command{
-		Use:   "set <ingress-id>",
+		Use:   "set <domain-id>",
 		Short: "Set a domain's protection mode",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -437,7 +437,7 @@ func domainProtectionSetCmd() *cobra.Command {
 func domainValidateDNSCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "validate-dns <host>",
-		Short: "Check that a domain's DNS points at the cluster",
+		Short: "Check that a domain's DNS points at your instance",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, cfg, err := client()
@@ -467,7 +467,7 @@ func domainValidateDNSCmd() *cobra.Command {
 				})
 			}
 			if !valid {
-				return fmt.Errorf("dns for %s is not ready: point a CNAME at %s", args[0], expectedCNAME())
+				return fmt.Errorf("dns for %s isn't ready: point a CNAME at %s", args[0], expectedCNAME())
 			}
 			output.Successf("%s", pick(raw, "message"))
 			return nil

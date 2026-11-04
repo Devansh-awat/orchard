@@ -5,9 +5,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hackclub/orchard/cli/internal/api"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/hackclub/orchard/cli/internal/api"
 )
 
 // result of a form submission's async command
@@ -202,7 +202,7 @@ func newDeployFormGithub(cl *api.Client, p Project) *formScreen {
 
 func newDatabaseFormScreen(cl *api.Client, p Project) *formScreen {
 	return newForm("New database",
-		"Provisions a Postgres database in this project.",
+		"Creates a Postgres database in this project.",
 		[]*field{
 			fld("name", "Name", "main", true),
 			fld("storageSize", "Storage", "1Gi", false),

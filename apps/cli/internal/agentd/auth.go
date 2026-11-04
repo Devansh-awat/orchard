@@ -110,7 +110,7 @@ func (m *logins) Start(ctx context.Context, p loginStartParams) (loginStatus, er
 	env := mergeEnv(base, p.Env)
 	bin := lookPath(env, p.Command[0])
 	if bin == "" {
-		return loginStatus{}, rpcErr(codeUnavailable, "%s is not installed on this machine", p.Command[0])
+		return loginStatus{}, rpcErr(codeUnavailable, "%s isn't installed on this machine", p.Command[0])
 	}
 	uid, gid := -1, -1
 	if m.d.id.cred != nil {
@@ -130,7 +130,7 @@ func (m *logins) Start(ctx context.Context, p loginStartParams) (loginStatus, er
 	if err := cmd.Start(); err != nil {
 		slave.Close()
 		master.Close()
-		return loginStatus{}, rpcErr(codeUnavailable, "could not start %s: %v", p.Command[0], err)
+		return loginStatus{}, rpcErr(codeUnavailable, "couldn't start %s: %v", p.Command[0], err)
 	}
 	slave.Close()
 	l := &login{
@@ -280,7 +280,7 @@ func (m *logins) Callback(ctx context.Context, id, raw string) (map[string]int, 
 	}
 	res, err := client.Do(req)
 	if err != nil {
-		return nil, rpcErr(codeUnavailable, "the sign-in did not answer: %v", err)
+		return nil, rpcErr(codeUnavailable, "the sign-in didn't answer: %v", err)
 	}
 	res.Body.Close()
 	return map[string]int{"status": res.StatusCode}, nil

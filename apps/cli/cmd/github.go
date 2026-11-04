@@ -130,7 +130,7 @@ func githubLinkCmd() *cobra.Command {
 		Short: "Link your GitHub account (opens the OAuth flow in a browser)",
 		Long: "Print the URL that starts the GitHub OAuth link flow.\n\n" +
 			"The flow relies on your Orchard web session and browser redirects, so it\n" +
-			"cannot complete inside the CLI: open the URL in a browser where you are\n" +
+			"can't complete inside the CLI: open the URL in a browser where you are\n" +
 			"signed in to Orchard.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {

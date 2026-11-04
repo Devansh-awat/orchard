@@ -34,11 +34,10 @@ func upCmd() *cobra.Command {
 		GroupID: groupCore,
 		Short:   "Deploy the current directory",
 		Long: "Packs the directory (honoring .dockerignore, else .gitignore), uploads it,\n" +
-			"and builds/deploys it on the platform. First run creates the deployment (with\n" +
-			"a protected URL) in the linked project; later runs just ship the new code.\n" +
+			"and builds and deploys it. The first run creates the deployment (with a\n" + "protected URL) in the linked project. Later runs deploy the new code.\n" +
 			"With a Dockerfile present it builds that; otherwise Railpack detects the\n" +
 			"language automatically. Requires the server to have local deploys enabled.\n\n" +
-			"With --wait (the default when stdout is not a terminal) it blocks until the\n" +
+			"With --wait (the default when stdout isn't a terminal) it blocks until the\n" +
 			"deploy is live and exits 9 if the build fails or 10 if the pods crash. In\n" +
 			"JSON mode build logs stream to stderr and stdout carries one result object:\n" +
 			"{deploymentId, releaseId, phase, url, ...}.",
@@ -92,7 +91,7 @@ func upCmd() *cobra.Command {
 				name = slugify(filepath.Base(abs))
 			}
 			if name == "" {
-				return errors.New("could not derive a deployment name; pass --name")
+				return errors.New("couldn't derive a deployment name; pass --name")
 			}
 
 			buildType := "railpack"
@@ -169,9 +168,9 @@ func upCmd() *cobra.Command {
 				deploymentID = str(created["id"])
 				output.Successf("created deployment %s (%s build)", name, buildType)
 				if u := str(created["url"]); u != "" {
-					output.Successf("will be live at %s (visible to your org until made public)", u)
+					output.Successf("will be live at %s (visible to your organization until made public)", u)
 				} else if target := firstIngressURL(created); target != "" {
-					output.Successf("will be live at %s (visible to your org until made public)", target)
+					output.Successf("will be live at %s (visible to your organization until made public)", target)
 				}
 			}
 
@@ -253,7 +252,7 @@ func upCmd() *cobra.Command {
 	c.Flags().BoolVar(&railpack, "railpack", false, "force a Railpack build even when a Dockerfile exists")
 	c.Flags().IntVar(&port, "port", 0, "port the app listens on (default: EXPOSE or 3000)")
 	c.Flags().BoolVar(&detach, "detach", false, "start the build without following its logs")
-	c.Flags().BoolVar(&wait, "wait", false, "block until the deploy is live (default: on when stdout is not a terminal)")
+	c.Flags().BoolVar(&wait, "wait", false, "block until the deploy is live (default: on when stdout isn't a terminal)")
 	c.Flags().DurationVar(&timeout, "timeout", 10*time.Minute, "give up waiting after this long (exit 8)")
 	c.Flags().StringVar(&rootDir, "root", "", "directory of the app inside the repo (monorepos)")
 	c.Flags().StringVar(&installCmd, "install-cmd", "", "override the detected install command")

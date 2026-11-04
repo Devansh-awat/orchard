@@ -251,7 +251,7 @@ func observeHTTPCmd() *cobra.Command {
 				pairs = append(pairs, [2]string{s.label, val})
 			}
 			if empty {
-				output.Warnf("no http metrics (the deployment may have no ingress)")
+				output.Warnf("no http metrics (the deployment may have no domain)")
 			}
 			output.KV(pairs)
 			return nil

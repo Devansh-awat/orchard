@@ -7,11 +7,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hackclub/orchard/cli/internal/api"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/hackclub/orchard/cli/internal/api"
 )
 
 // dbSchedulePresets mirror the frontend SCHEDULE_PRESETS (all cron in UTC).
@@ -158,7 +158,7 @@ func (s *dbScheduleScreen) View() string {
 	if s.cursor == dbSchedCustom {
 		b.WriteString(boxedInput(s.cron.View(), true, s.w) + "\n")
 	}
-	line(dbSchedNone, "None", "disable automated backups (existing backups are kept)")
+	line(dbSchedNone, "None", "turn off automated backups (existing backups are kept)")
 	if s.errText != "" {
 		b.WriteString("\n  " + stRed.Render("✗ "+s.errText) + "\n")
 	}
@@ -223,7 +223,7 @@ func newDBResourcesScreen(cl *api.Client, id string, d *dbDetail) *formScreen {
 					body["memoryRequestBytes"] = bts
 				}
 				err := cl.Send(context.Background(), "PATCH", dbPath(id)+"/resources", body, nil)
-				return formResult{ok: dbChangedMsg{"resources updated — pod restarting"}, err: err}
+				return formResult{ok: dbChangedMsg{"resources updated, pod restarting"}, err: err}
 			}
 		})
 }

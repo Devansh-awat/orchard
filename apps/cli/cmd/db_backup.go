@@ -264,7 +264,7 @@ func dbBackupScheduleSetCmd() *cobra.Command {
 func dbBackupScheduleClearCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "clear <id>",
-		Short: "Disable automated backups and WAL archiving (backups already taken are kept)",
+		Short: "Turn off automated backups and WAL archiving (backups already taken are kept)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, _, err := client()

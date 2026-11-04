@@ -103,7 +103,7 @@ func (r *ingressResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 	var raw map[string]any
 	if err := send(ctx, r.client, http.MethodPost, "/projects/"+esc(plan.ProjectID.ValueString())+"/ingresses", body, &raw); err != nil {
-		resp.Diagnostics.AddError("Could not create ingress", err.Error())
+		resp.Diagnostics.AddError("Couldn't create domain", err.Error())
 		return
 	}
 	r.fill(&plan, raw)
@@ -122,7 +122,7 @@ func (r *ingressResource) Read(ctx context.Context, req resource.ReadRequest, re
 			resp.State.RemoveResource(ctx)
 			return
 		}
-		resp.Diagnostics.AddError("Could not read ingress", err.Error())
+		resp.Diagnostics.AddError("Couldn't read domain", err.Error())
 		return
 	}
 	r.fill(&state, raw)
@@ -139,7 +139,7 @@ func (r *ingressResource) Update(ctx context.Context, req resource.UpdateRequest
 	plan.ID = state.ID
 	var current map[string]any
 	if err := getJSON(ctx, r.client, r.ingressPath(state), &current); err != nil {
-		resp.Diagnostics.AddError("Could not read ingress before updating it", err.Error())
+		resp.Diagnostics.AddError("Couldn't read domain before updating it", err.Error())
 		return
 	}
 	routes := []map[string]any{}
@@ -157,7 +157,7 @@ func (r *ingressResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 	var raw map[string]any
 	if err := send(ctx, r.client, http.MethodPut, r.ingressPath(state), body, &raw); err != nil {
-		resp.Diagnostics.AddError("Could not update ingress", err.Error())
+		resp.Diagnostics.AddError("Couldn't update domain", err.Error())
 		return
 	}
 	r.fill(&plan, raw)
@@ -171,7 +171,7 @@ func (r *ingressResource) Delete(ctx context.Context, req resource.DeleteRequest
 		return
 	}
 	if err := send(ctx, r.client, http.MethodDelete, r.ingressPath(state), nil, nil); err != nil && !isNotFound(err) {
-		resp.Diagnostics.AddError("Could not delete ingress", err.Error())
+		resp.Diagnostics.AddError("Couldn't delete domain", err.Error())
 	}
 }
 

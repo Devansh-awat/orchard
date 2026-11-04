@@ -133,7 +133,7 @@ func (r *databaseResource) Create(ctx context.Context, req resource.CreateReques
 	}
 	var raw map[string]any
 	if err := send(ctx, r.client, http.MethodPost, "/projects/"+esc(plan.ProjectID.ValueString())+"/databases", body, &raw); err != nil {
-		resp.Diagnostics.AddError("Could not create database", err.Error())
+		resp.Diagnostics.AddError("Couldn't create database", err.Error())
 		return
 	}
 	r.fill(&plan, raw)
@@ -152,7 +152,7 @@ func (r *databaseResource) Read(ctx context.Context, req resource.ReadRequest, r
 			resp.State.RemoveResource(ctx)
 			return
 		}
-		resp.Diagnostics.AddError("Could not read database", err.Error())
+		resp.Diagnostics.AddError("Couldn't read database", err.Error())
 		return
 	}
 	r.fill(&state, raw)
@@ -168,7 +168,7 @@ func (r *databaseResource) Update(ctx context.Context, req resource.UpdateReques
 	}
 	if plan.Name.ValueString() != state.Name.ValueString() {
 		if err := send(ctx, r.client, http.MethodPatch, "/databases/"+esc(state.ID.ValueString())+"/name", map[string]any{"name": plan.Name.ValueString()}, nil); err != nil {
-			resp.Diagnostics.AddError("Could not rename database", err.Error())
+			resp.Diagnostics.AddError("Couldn't rename database", err.Error())
 			return
 		}
 	}
@@ -187,7 +187,7 @@ func (r *databaseResource) Delete(ctx context.Context, req resource.DeleteReques
 		return
 	}
 	if err := send(ctx, r.client, http.MethodDelete, "/databases/"+esc(state.ID.ValueString()), nil, nil); err != nil && !isNotFound(err) {
-		resp.Diagnostics.AddError("Could not delete database", err.Error())
+		resp.Diagnostics.AddError("Couldn't delete database", err.Error())
 	}
 }
 

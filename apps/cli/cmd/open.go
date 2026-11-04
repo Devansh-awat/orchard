@@ -73,7 +73,7 @@ listed. Pass --dash to open the deployment's dashboard page instead.`,
 			if dash {
 				slug := orgSlugOf(raw)
 				if slug == "" {
-					return errors.New("could not resolve the organization for the dashboard URL")
+					return errors.New("couldn't resolve the organization for the dashboard URL")
 				}
 				target = strings.TrimRight(cfg.APIURL, "/") + "/" + slug + "/deployments/" + str(raw["id"])
 			} else {

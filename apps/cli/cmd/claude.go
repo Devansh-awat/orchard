@@ -120,7 +120,7 @@ func scanClaude(dir string, kinds map[string]bool) (*claudeScan, error) {
 		return nil, fmt.Errorf("no Claude Code config at %s: %w", dir, err)
 	}
 	if !info.IsDir() {
-		return nil, fmt.Errorf("%s is not a directory", dir)
+		return nil, fmt.Errorf("%s isn't a directory", dir)
 	}
 	s := &claudeScan{}
 	if kinds["instructions"] {
@@ -302,7 +302,7 @@ func (s *claudeScan) scanSkill(name, skillDir string) {
 		return nil
 	})
 	if _, ok := files["SKILL.md"]; !ok {
-		s.skip("skill %s: SKILL.md is not a text file under 256 KiB", name)
+		s.skip("skill %s: SKILL.md isn't a text file under 256 KiB", name)
 		return
 	}
 	if len(left) > 0 {

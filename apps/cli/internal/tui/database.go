@@ -290,11 +290,11 @@ func (s *databaseScreen) updateKey(msg tea.KeyMsg) (screen, tea.Cmd) {
 	case "p":
 		if s.tab == 0 && s.detail != nil {
 			if s.detail.PublicEnabled {
-				s.confirm.Show(fmt.Sprintf("Stop exposing %q publicly? Clients on the public endpoint will be disconnected.", s.name),
-					doAction(s.cl, "DELETE", dbPath(s.id)+"/public", nil, "public access disabled"))
+				s.confirm.Show(fmt.Sprintf("Stop exposing %q publicly? Clients on the public endpoint are disconnected.", s.name),
+					doAction(s.cl, "DELETE", dbPath(s.id)+"/public", nil, "public access off"))
 			} else {
 				s.confirm.Show(fmt.Sprintf("Expose database %q on the organization's shared IP with TLS?", s.name),
-					doAction(s.cl, "POST", dbPath(s.id)+"/public", map[string]any{}, "public access enabled"))
+					doAction(s.cl, "POST", dbPath(s.id)+"/public", map[string]any{}, "public access on"))
 			}
 			return s, nil
 		}
@@ -320,7 +320,7 @@ func (s *databaseScreen) updateKey(msg tea.KeyMsg) (screen, tea.Cmd) {
 	case "x":
 		if s.tab == 2 && s.extCursor < len(s.exts) {
 			e := s.exts[s.extCursor]
-			s.confirm.Show(fmt.Sprintf("Drop extension %q? Objects that depend on it will be dropped too.", e.Name),
+			s.confirm.Show(fmt.Sprintf("Drop extension %q? Objects that depend on it are dropped too.", e.Name),
 				doAction(s.cl, "DELETE", dbPath(s.id)+"/extensions/"+url.PathEscape(e.Name), nil, "uninstalled "+e.Name))
 			return s, nil
 		}
@@ -507,7 +507,7 @@ func (s *databaseScreen) viewConnection() string {
 			row("Public URL", stMuted.Render(pcs))
 		}
 	} else {
-		row("Public", stMuted.Render("disabled — press p to expose on the org's shared IP"))
+		row("Public", stMuted.Render("off, press p to make it public on the organization's shared IP"))
 	}
 	return b.String()
 }
@@ -610,7 +610,7 @@ func (s *databaseScreen) viewResources() string {
 
 func (s *databaseScreen) viewSettings(height int) string {
 	if len(s.paramKeys) == 0 {
-		return stMuted.Render("  no parameters configured — press e to edit postgresql.conf overrides")
+		return stMuted.Render("  no parameters set, press e to edit postgresql.conf overrides")
 	}
 	rows := make([][]string, len(s.paramKeys))
 	for i, k := range s.paramKeys {
@@ -683,7 +683,7 @@ func dbBackupLabel(b dbBackup) string {
 
 func dbPortStr(p flexNum) string {
 	if p <= 0 {
-		return "—"
+		return "-"
 	}
 	return fmt.Sprintf("%.0f", float64(p))
 }

@@ -65,7 +65,7 @@ func userProfileUpdateCmd() *cobra.Command {
 			body := map[string]any{}
 			if cmd.Flags().Changed("username") {
 				if username == "" {
-					return errors.New("--username cannot be empty")
+					return errors.New("--username can't be empty")
 				}
 				body["username"] = username
 			}

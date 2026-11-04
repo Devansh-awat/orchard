@@ -178,7 +178,7 @@ func deployBindCmd() *cobra.Command {
 	c.Flags().StringVar(&app, "app", "", "app name or id on the same project")
 	c.Flags().StringVar(&name, "as", "", "binding name used in ${{resource.<name>.*}} (default: derived from the database name)")
 	c.Flags().StringVar(&envKey, "env", "", "env key to add (default DATABASE_URL for a database, <NAME>_URL for an app)")
-	c.Flags().BoolVar(&noEnv, "no-env", false, "bind only, do not add an env var")
+	c.Flags().BoolVar(&noEnv, "no-env", false, "bind only, don't add an env var")
 	return c
 }
 

@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hackclub/orchard/cli/internal/api"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/hackclub/orchard/cli/internal/api"
 )
 
 // Network tab: services/ports, domains (ingresses), and Tailscale exposure.
@@ -75,7 +75,7 @@ func (s *deploymentScreen) networkKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 				doAction(s.cl, "POST", "/tailscale/unexpose/"+url.PathEscape(s.id), nil, "tailscale exposure removed"))
 			return nil, true
 		}
-		return doAction(s.cl, "POST", "/tailscale/expose/"+url.PathEscape(s.id), nil, "exposing on tailscale — sidecar starting"), true
+		return doAction(s.cl, "POST", "/tailscale/expose/"+url.PathEscape(s.id), nil, "exposing on tailscale, sidecar starting"), true
 	case "x":
 		if d == nil {
 			return nil, true
@@ -179,7 +179,7 @@ func (s *deploymentScreen) viewNetwork(height int, strip string) string {
 		}
 		ts += stGreen.Render("● exposed") + stMuted.Render(" · ") + stLink.Render(orDash(addr))
 	default:
-		ts += stMuted.Render("○ not exposed — press t to expose on your tailnet")
+		ts += stMuted.Render("○ not exposed, press t to expose on your tailnet")
 	}
 
 	svcPanel := panelRaw(strip+stMuted.Render("   ")+stTitle.Render(fmt.Sprintf("Services (%d)", len(d.Services))),
@@ -212,7 +212,7 @@ func svcPortsCell(svc DepService) string {
 
 func newServiceForm(cl *api.Client, depID string) *formScreen {
 	return newForm("New service",
-		"Exposes a container port inside the cluster; toggle public exposure with e afterwards.",
+		"Exposes a container port inside the project. Press e to make it public.",
 		[]*field{
 			fld("name", "Name", "port-8080", false),
 			fld("port", "Service port", "8080", true),

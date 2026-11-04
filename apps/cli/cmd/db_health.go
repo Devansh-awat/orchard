@@ -532,7 +532,7 @@ func dbReplicationSetCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "set <dbId>",
 		Short: "Set the replication mode (preferred and required need at least 2 instances)",
-		Long: `async: the primary does not wait for standbys.
+		Long: `async: the primary doesn't wait for standbys.
 preferred: the primary waits for a standby when one is up, and carries on alone when none is.
 required: every commit waits for a standby, so writes stop when no standby is up.`,
 		Args: cobra.ExactArgs(1),

@@ -6,11 +6,11 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/hackclub/orchard/cli/internal/api"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/hackclub/orchard/cli/internal/api"
 )
 
 // step kinds: the type cycler folds the script runtime into the choice, like
@@ -661,7 +661,7 @@ func (s *jobForm) View() string {
 	b.WriteString("  " + label("Timezone", is) + "\n" + boxedInput(s.tz.View(), is, s.w) + "\n")
 
 	b.WriteString("\n  " + stTitle.Render("Steps") + " " +
-		stMuted.Render("run in order — a failure stops the pipeline") + "\n\n")
+		stMuted.Render("steps run in order, and a failure stops the rest") + "\n\n")
 
 	for i, d := range s.steps {
 		active := cur.step == i

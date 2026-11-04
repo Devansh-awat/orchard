@@ -14,7 +14,7 @@ const (
 	skipGreenhouseCheck = "orchard.skip-greenhouse-check"
 )
 
-var errGreenhouseMissing = errors.New("Greenhouse is not installed on this instance")
+var errGreenhouseMissing = errors.New("Greenhouse isn't installed on this instance")
 
 var greenhouseConfirmed bool
 

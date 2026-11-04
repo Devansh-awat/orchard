@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hackclub/orchard/cli/internal/api"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/hackclub/orchard/cli/internal/api"
 )
 
 // JobRunRef is the compact run shape embedded in job list/detail responses
@@ -223,7 +223,7 @@ func runMark(status string) string {
 
 func runStatusDot(status string) string {
 	if status == "" {
-		return stMuted.Render("○ —")
+		return stMuted.Render("○ -")
 	}
 	return lipgloss.NewStyle().Foreground(lipgloss.Color(runTone(status))).Render("● " + lc(status))
 }
@@ -268,7 +268,7 @@ func runDur(started, finished string) string {
 // relWhen renders an ISO timestamp as "5m ago" / "in 2h".
 func relWhen(iso string) string {
 	if iso == "" {
-		return "—"
+		return "-"
 	}
 	t, err := time.Parse(time.RFC3339Nano, iso)
 	if err != nil {
@@ -506,7 +506,7 @@ func (s *jobsListScreen) view() string {
 			if j.ScheduleCron != "" {
 				sched = "⏱ " + j.ScheduleCron
 			}
-			state := stMuted.Render("—")
+			state := stMuted.Render("-")
 			if j.ScheduleCron != "" {
 				if j.Enabled {
 					state = stGreen.Render("on")
@@ -514,7 +514,7 @@ func (s *jobsListScreen) view() string {
 					state = stYellow.Render("paused")
 				}
 			}
-			last := stMuted.Render("—")
+			last := stMuted.Render("-")
 			if j.LastRun != nil {
 				last = fmt.Sprintf("#%d %s %s", j.LastRun.Number, runStatusDot(j.LastRun.Status),
 					stMuted.Render(relWhen(firstNonEmpty(j.LastRun.StartedAt, j.LastRun.CreatedAt))))
@@ -761,7 +761,7 @@ func (s *jobDetailScreen) Update(msg tea.Msg) (screen, tea.Cmd) {
 				if run := jobActiveRun(*s.job); run != nil {
 					s.confirm.Show(fmt.Sprintf("Cancel run #%d? Remaining steps are skipped.", run.Number),
 						doAction(s.cl, "POST", "/job-runs/"+url.PathEscape(run.ID)+"/cancel",
-							map[string]any{}, fmt.Sprintf("cancelled run #%d", run.Number)))
+							map[string]any{}, fmt.Sprintf("canceled run #%d", run.Number)))
 				}
 			}
 		case "d":

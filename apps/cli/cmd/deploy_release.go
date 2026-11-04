@@ -419,7 +419,7 @@ func deployWebhookTokenCreateCmd() *cobra.Command {
 	var label string
 	c := &cobra.Command{
 		Use:   "create <id>",
-		Short: "Mint a webhook token that restarts the deployment via POST",
+		Short: "Create a webhook token that restarts the deployment via POST",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, cfg, err := client()
@@ -437,7 +437,7 @@ func deployWebhookTokenCreateCmd() *cobra.Command {
 			token := str(raw["token"])
 			trigger := strings.TrimRight(cfg.APIURL, "/") + "/apiv1/webhooks/deploy/" + url.PathEscape(token)
 			output.Successf("created webhook token %s", str(raw["id"]))
-			output.Warnf("the token is shown only once — store it now")
+			output.Warnf("the token is shown only once, so store it now")
 			if fmtFlag() == output.FormatJSON {
 				return output.JSON(raw)
 			}

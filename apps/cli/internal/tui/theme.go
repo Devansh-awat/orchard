@@ -87,7 +87,7 @@ func statusStyle(s string) lipgloss.Style {
 // statusDot renders a colored ● plus the lowercased state.
 func statusDot(s string) string {
 	if s == "" {
-		return stMuted.Render("○ —")
+		return stMuted.Render("○ -")
 	}
 	return statusStyle(s).Render("● " + s)
 }

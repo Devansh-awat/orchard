@@ -378,7 +378,7 @@ func deployCreateCmd() *cobra.Command {
 			id := str(raw["id"])
 			output.Successf("created deployment %s (%s)", name, id)
 			if u := str(raw["url"]); u != "" {
-				output.Successf("live at %s (visible to your org until made public)", u)
+				output.Successf("live at %s (visible to your organization until made public)", u)
 			}
 			if !*wait || id == "" {
 				if fmtFlag() == output.FormatJSON {
@@ -418,7 +418,7 @@ func deployCreateCmd() *cobra.Command {
 	c.Flags().StringVar(&buildCmd, "build-cmd", "", "override the detected build command")
 	c.Flags().StringVar(&startCmd, "start-cmd", "", "override the detected start command")
 	c.Flags().StringVar(&outputDir, "output-dir", "", "directory of built static files; serves the app as a static site")
-	c.Flags().BoolVar(&autoURL, "auto-url", true, "generate a platform URL for the deployment (org-protected by default)")
+	c.Flags().BoolVar(&autoURL, "auto-url", true, "generate a URL for the deployment (protected by default)")
 	c.Flags().IntVar(&port, "port", 0, "port the container listens on (default: the image's or Dockerfile's EXPOSE, else 80)")
 	c.Flags().IntVar(&replicas, "replicas", 0, "number of replicas (server default 1)")
 	c.Flags().StringArrayVar(&envs, "env", nil, "environment variable KEY=VAL (repeatable)")
@@ -551,7 +551,7 @@ func deployStartCmd() *cobra.Command {
 			}
 			legacy := deployWaitRunning(args[0])
 			if str(raw["started"]) == "building" {
-				output.Successf("building %s; it starts when the build lands", args[0])
+				output.Successf("building %s; it starts when the build finishes", args[0])
 				legacy = deployWaitBuild(args[0])
 			} else {
 				output.Successf("started %s", args[0])
@@ -634,7 +634,7 @@ func deployCancelCmd() *cobra.Command {
 			if err := cl.Send(cmd.Context(), http.MethodPost, deployPath(args[0], "cancel"), nil, nil); err != nil {
 				return err
 			}
-			output.Successf("cancelled build of %s", args[0])
+			output.Successf("canceled build of %s", args[0])
 			return nil
 		},
 	}
@@ -820,7 +820,7 @@ func deployPodsCmd() *cobra.Command {
 			return nil
 		},
 	}
-	c.Flags().BoolVar(&live, "live", false, "query the cluster directly (includes usage and warnings)")
+	c.Flags().BoolVar(&live, "live", false, "query Kubernetes directly (includes usage and warnings)")
 	return c
 }
 

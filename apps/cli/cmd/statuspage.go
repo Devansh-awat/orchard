@@ -15,7 +15,7 @@ func statusPageCmd() *cobra.Command {
 		Use:     "status-page",
 		GroupID: groupResources,
 		Aliases: []string{"status-pages", "statuspage"},
-		Short:   "Public status pages for an org",
+		Short:   "Public status pages for an organization",
 	}
 	c.AddCommand(
 		statusPageListCmd(),
@@ -40,7 +40,7 @@ func statusPageListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:     "list",
 		Aliases: []string{"ls"},
-		Short:   "List the org's status pages",
+		Short:   "List the organization's status pages",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, cfg, err := client()
@@ -213,10 +213,10 @@ func statusPageCreateCmd() *cobra.Command {
 			return nil
 		},
 	}
-	c.Flags().StringVar(&title, "title", "", "page title (default: '<org> status')")
-	c.Flags().StringVar(&slug, "slug", "", "path slug (default: the org slug)")
+	c.Flags().StringVar(&title, "title", "", "page title (default: '<organization> status')")
+	c.Flags().StringVar(&slug, "slug", "", "path slug (default: the organization slug)")
 	c.Flags().StringVar(&description, "description", "", "one line under the title")
-	c.Flags().StringVar(&subdomain, "subdomain", "", "host under the platform domain")
+	c.Flags().StringVar(&subdomain, "subdomain", "", "host under the apps domain")
 	c.Flags().BoolVar(&private, "private", false, "create hidden; nothing renders until it is public")
 	c.Flags().StringSliceVar(&components, "component", nil, "deployment:<id> or database:<id>, in order (repeatable)")
 	return c
@@ -283,7 +283,7 @@ func statusPageUpdateCmd() *cobra.Command {
 	c.Flags().StringVar(&title, "title", "", "new title")
 	c.Flags().StringVar(&slug, "slug", "", "new slug")
 	c.Flags().StringVar(&description, "description", "", "new description")
-	c.Flags().StringVar(&subdomain, "subdomain", "", "new host under the platform domain")
+	c.Flags().StringVar(&subdomain, "subdomain", "", "new host under the apps domain")
 	c.Flags().BoolVar(&clearHost, "no-subdomain", false, "remove the host")
 	c.Flags().BoolVar(&public, "public", false, "make the page public")
 	c.Flags().BoolVar(&private, "private", false, "hide the page")
