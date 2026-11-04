@@ -1,0 +1,29 @@
+---
+title: Size older workloads
+description: Set resource requests on Orchard apps and databases that were created before resource limits existed.
+sidebar:
+  order: 8
+---
+
+The **Backfill** page lists apps and databases that have no resource requests. These workloads were created before Orchard added resource limits. When you apply a size, Orchard restarts the pods with requests equal to limits.
+
+## Prerequisites
+
+- You need the superadmin role.
+
+## Apply sizes
+
+1. Go to **Instance admin** > **Backfill**.
+2. Read the **Observed (per pod)** column. This column shows live usage, if metrics are available.
+3. In **Apply size**, select a size for each row. To enter other values, select **Custom**. To leave a row unchanged, select **Skip**.
+4. Select **Apply** on the row, or select **Apply recommended to all**.
+
+Orchard recommends the smallest preset that fits 150% of the observed usage. A row without metrics has no recommendation and defaults to the smallest preset.
+
+When no rows remain, the page shows **Nothing to backfill**.
+
+## Related resources
+
+- [Instance admin](/operate/instance-admin/)
+- [Apply resource suggestions](/deploy/resource-suggestions/)
+- [Scaling and resources](/deploy/scaling/)

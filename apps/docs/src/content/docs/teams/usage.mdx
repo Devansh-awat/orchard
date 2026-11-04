@@ -1,0 +1,57 @@
+---
+title: Review usage
+description: Read an Orchard organization's resource usage by project, member, and workload, and find workloads that are over or under their requests.
+sidebar:
+  order: 6
+---
+
+The **Usage** page shows how an organization uses its CPU, memory, pods, and services. Use the page to find unused capacity and to set member allowances.
+
+To open the page, go to **Organization settings** > **Usage**.
+
+## Usage tabs
+
+| Tab              | Who can see it          | What it shows                                                                  |
+| ---------------- | ----------------------- | ------------------------------------------------------------------------------ |
+| **Organization** | Organization admins     | Capacity against quotas, usage by project, and a right-sizing summary.         |
+| **Yours**        | All members             | Your own usage and your largest workloads.                                     |
+| **Members**      | Organization admins     | The default allowance, and each member's usage and allowance.                  |
+| **Right-sizing** | Organization admins     | Each workload's usage compared with its requests.                              |
+
+On **Organization** and **Right-sizing**, select a range of **1h**, **24h**, or **7d**.
+
+## Set a member allowance
+
+1. Go to **Organization settings** > **Usage**.
+2. Select **Members**.
+3. On the member, select the edit icon.
+4. Update **CPU** and **Memory**.
+5. Select **Save**.
+
+For more information about how allowances work, refer to [Quotas and usage](/teams/quotas/).
+
+## Find over-provisioned workloads
+
+1. Go to **Organization settings** > **Usage**.
+2. Select **Right-sizing**.
+3. In **Most unused CPU** and **Most unused memory**, read the workloads with the most unused capacity.
+4. In **Workloads**, select **Over**, **Under**, or **Right-sized**.
+
+To apply a suggestion to one app, refer to [Apply resource suggestions](/deploy/resource-suggestions/).
+
+If the page shows `No workload has enough history yet`, wait for the metrics store to collect more data.
+
+## Read usage from the CLI
+
+| Command                 | Description                                          |
+| ----------------------- | ---------------------------------------------------- |
+| `orchard quota show`    | Show usage against the organization's caps.          |
+| `orchard quota me`      | Show your allowance, usage, and headroom.            |
+| `orchard quota members` | Show allowances and usage by member. Admins only.    |
+| `orchard quota projects`| Show caps and usage by project. Admins only.         |
+
+## Related resources
+
+- [Quotas and usage](/teams/quotas/)
+- [Apply resource suggestions](/deploy/resource-suggestions/)
+- [`orchard quota` reference](/reference/cli/#quota)

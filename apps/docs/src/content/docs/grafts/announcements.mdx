@@ -1,0 +1,40 @@
+---
+title: Post announcements
+description: Use the Orchard announcements graft to post instance-wide notices that appear on every project and app page.
+sidebar:
+  order: 6
+---
+
+The announcements graft lets superadmins post notices to every person on the instance. Active notices appear on project and app overview pages.
+
+## Prerequisites
+
+- The `announcements` graft must be installed. Refer to [Install grafts](/grafts/install/).
+- You need the superadmin role to post or remove a notice.
+
+## Post a notice
+
+1. Go to **Instance admin** > **Announcements**.
+2. In **Message**, enter the text. The limit is 500 characters.
+3. In **Tone**, select **Info**, **Good news**, or **Warning**.
+4. In **Hide after (hours, 0 keeps it up)**, enter the number of hours to show the notice.
+5. Select **Post announcement**.
+
+The notice appears on project and app overview pages.
+
+## Remove a notice
+
+1. Go to **Instance admin** > **Announcements**.
+2. On the notice, select **Take down**.
+
+## Change how many notices appear
+
+1. Go to **Instance admin** > **Configuration**.
+2. In **Announcements**, set **Shown on overview pages** to a value from 1 to 10. The default is 3.
+3. Save the section.
+
+## Related resources
+
+- [Grafts](/grafts/overview/)
+- [Install grafts](/grafts/install/)
+- [The Grove](/run/grove/)

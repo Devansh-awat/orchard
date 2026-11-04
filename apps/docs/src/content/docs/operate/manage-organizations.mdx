@@ -1,0 +1,62 @@
+---
+title: Manage organizations
+description: Create and delete organizations on an Orchard instance, and set organization resource quotas from Instance admin.
+sidebar:
+  order: 5
+---
+
+Superadmins can create organizations, set their resource quotas, and delete them.
+
+## Prerequisites
+
+- You need the superadmin role.
+
+## Create an organization
+
+1. Go to **Instance admin** > **Organizations**.
+2. Select **Create**.
+3. In **Name**, enter a name.
+4. In **Slug**, enter the slug.
+5. (Optional) Enter a **Description** and an **Image URL**.
+6. (Optional) In **Primary owner email**, enter an email address. A person with an account becomes owner immediately. Other people receive an invitation and become owner when they accept it.
+7. Select **Create**.
+
+## Set resource quotas
+
+1. Go to **Instance admin** > **Organizations**.
+2. On the organization, select the **Resource quotas** icon.
+3. Enter a value for each limit. To remove a limit, select **Unlimited**.
+4. Select **Save quotas**.
+
+Orchard applies these limits across all projects in the organization. Kubernetes enforces them when it admits a pod.
+
+| Field                            | Description                                                                         |
+| -------------------------------- | ----------------------------------------------------------------------------------- |
+| **CPU (millicores)**             | The total CPU for the organization.                                                 |
+| **Memory (MiB)**                 | The total memory for the organization.                                              |
+| **Max pods**                     | The total number of pods.                                                           |
+| **Max services**                 | The total number of services.                                                       |
+| **Default CPU / pod (millicores)** | The CPU request for containers that do not specify one. Required if CPU or memory quotas are set. |
+| **Default memory / pod (MiB)**   | The memory request for containers that do not specify one. Required if CPU or memory quotas are set. |
+
+## Share a quota between organizations
+
+Connected organizations have the same limits and share one usage pool. For example, if you connect an organization that has a limit of 10 CPU to a second organization, both show 10 CPU. The sum of their usage cannot exceed 10 CPU.
+
+To connect organizations, search for an organization under **Connected organizations** in the **Resource quotas** dialog. To end the connection, select the disconnect icon on the connection.
+
+## Delete an organization
+
+:::danger
+This action permanently deletes the organization and all its projects and deployments.
+:::
+
+1. Go to **Instance admin** > **Organizations**.
+2. On the organization, select the delete icon.
+3. Select **Delete**.
+
+## Related resources
+
+- [Instance admin](/operate/instance-admin/)
+- [Quotas and usage](/teams/quotas/)
+- [Organizations and roles](/teams/organizations/)

@@ -1,0 +1,122 @@
+---
+title: Manage a project
+description: Add members to an Orchard project, change its name and appearance, transfer its ownership, move it to another organization, or delete it.
+sidebar:
+  order: 2
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+A project groups apps, databases, and jobs in an organization. Project membership controls who can access those resources. For more information about roles, refer to [Organizations and roles](/teams/organizations/).
+
+## Create a project
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Press <kbd>Cmd</kbd>+<kbd>K</kbd> on macOS or <kbd>Ctrl</kbd>+<kbd>K</kbd> on other systems.
+2. Select **New project**.
+3. In **Project name**, enter a name.
+4. Select the create button.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard project create --name "Acme API"
+```
+
+</TabItem>
+</Tabs>
+
+## Add a member
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the project.
+2. Select **Members**.
+3. Select **Add people**.
+4. In **Find people to add**, find each person.
+5. Select **Next**.
+6. In **Role**, select a role.
+7. Select **Add**.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard project member add someone@example.com --role member
+```
+
+The `--role` flag accepts `admin`, `member`, or `viewer`. An email address without an account receives an invitation.
+
+</TabItem>
+</Tabs>
+
+Invitations that are not accepted yet appear under **Invitations**. Each invitation shows its expiry date. To cancel an invitation, select the delete icon on the invitation.
+
+To remove a member, select the delete icon on the member. The person loses access to the project.
+
+## Change the name and appearance
+
+1. Open the project.
+2. Select the **Customize** icon in the project header.
+3. Update **Name**, **Description**, **Icon**, or **Background**.
+4. Select **Save**.
+
+To turn off the animated background for your own account, refer to [Set your preferences](/account/preferences/).
+
+## Transfer ownership
+
+The project owner's resource allowance pays for everything in the project. A transfer moves that allowance to another member. The new owner must accept the transfer.
+
+For the rules and CLI commands, refer to [Quotas and usage](/teams/quotas/).
+
+1. Open the project.
+2. Go to **Settings** > **Danger zone**.
+3. In **Transfer ownership**, select **Transfer**.
+4. In **New owner**, select a member of the project.
+5. Select **Send request**.
+
+The row shows `Waiting on the new owner to accept.` until the request ends.
+
+## Move a project to another organization
+
+:::caution
+Members who are not in the destination organization lose access to the project.
+:::
+
+You need permission to delete the project or to transfer its ownership. You also need permission to create projects in the destination organization.
+
+1. Open the project.
+2. Go to **Settings** > **Danger zone**.
+3. In **Move to another organization**, select **Move**.
+4. In **Organization**, select the destination.
+5. In **Slug**, confirm the project slug. The slug must be free in the destination organization.
+6. Read the preview of what changes.
+7. Select **Move project**. If the preview shows **New database backups stop**, this button is **Move anyway**.
+
+The preview can show these messages:
+
+| Message                    | Meaning                                                                                                              |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **`<n>` members lose access** | These members are not in the destination organization.                                                            |
+| **You become the owner**   | The current owner is not in the destination organization. The project counts against your allowance.                 |
+| **Over `<organization>`'s quota** | The move goes through, but new deploys in the destination can be blocked until there is room.                |
+| **New database backups stop** | The destination has no backup storage. Databases keep running, but they take no new backups. Existing backups stay restorable. |
+| **Backups keep running**   | Databases start to archive to the destination's backup storage. Existing backups stay restorable.                    |
+
+## Delete a project
+
+1. Open the project.
+2. Go to **Settings** > **Danger zone**.
+3. In **Delete project**, select **Delete**.
+4. Select **Delete project forever**.
+
+## Related resources
+
+- [Organizations and roles](/teams/organizations/)
+- [Quotas and usage](/teams/quotas/)
+- [Environments and variables](/run/environments/)
+- [`orchard project` reference](/reference/cli/#project)

@@ -1,0 +1,61 @@
+---
+title: Turn on bot protection
+description: Add a Cloudflare Turnstile challenge to the Orchard sign-in pages and to password-protected deployments.
+sidebar:
+  order: 7
+---
+
+Bot protection adds a Cloudflare Turnstile challenge to the sign-in pages and to password-protected deployments.
+
+Bot protection stays off until you set both keys.
+
+## Prerequisites
+
+- You need the superadmin role.
+- You need a Turnstile widget in your Cloudflare account. The widget provides a site key and a secret key.
+
+## Turn on bot protection
+
+1. Go to **Instance admin** > **Configuration**.
+2. In **Bot protection**, enter the **Site key** and the **Secret key**.
+3. Keep **Challenge the sign-in pages** turned on.
+4. (Optional) Turn on **Refuse sign-in when Cloudflare is unreachable**.
+5. Select **Save**.
+
+:::caution
+After you save the keys, Orchard refuses a sign-in that cannot solve the challenge. Test the sign-in page in a private browser window before you sign out.
+:::
+
+| Setting                                         | Default | Description                                                                                          |
+| ----------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------- |
+| **Challenge the sign-in pages**                 | On      | Orchard ignores this setting until both keys are set. Turning it off keeps the keys.                 |
+| **Refuse sign-in when Cloudflare is unreachable** | Off   | When this is off, Orchard allows sign-ins without a challenge if it cannot reach Cloudflare, and logs the event. |
+
+## Set keys with environment variables
+
+Each field has an environment variable. A value in the environment overrides the dashboard, and the field shows `Set by the environment`.
+
+| Field                                           | Environment variable   |
+| ----------------------------------------------- | ---------------------- |
+| **Site key**                                    | `TURNSTILE_SITE_KEY`   |
+| **Secret key**                                  | `TURNSTILE_SECRET_KEY` |
+| **Challenge the sign-in pages**                 | `TURNSTILE_ENABLED`    |
+| **Refuse sign-in when Cloudflare is unreachable** | `TURNSTILE_STRICT`   |
+
+## Recover from wrong keys
+
+If the keys are wrong, you cannot sign in to change them. To turn off the challenge, set `TURNSTILE_ENABLED` to `false` on the server.
+
+On an installer-based instance, run:
+
+```sh
+sudo orchardctl env set TURNSTILE_ENABLED false --apply
+```
+
+On a chart-based instance, set the variable in your values file.
+
+## Related resources
+
+- [Deployment protection](/deploy/protection/)
+- [Configuration](/operate/configuration/)
+- [Host commands](/operate/host-commands/)
