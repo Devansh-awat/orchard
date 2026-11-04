@@ -47,7 +47,7 @@ export const MANAGED_DB_MIN_MEMORY_BYTES = 256 * MiB;
 // The conventional Postgres starting point. Deliberately conservative: the rest
 // of the cgroup has to hold backends, work_mem, WAL buffers and whatever
 // barman-cloud-backup needs while it streams.
-const SHARED_BUFFERS_FRACTION = 0.25;
+export const SHARED_BUFFERS_FRACTION = 0.25;
 
 const SHARED_BUFFERS_MIN_BYTES = 16 * MiB;
 

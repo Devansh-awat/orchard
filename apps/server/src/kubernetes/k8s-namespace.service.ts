@@ -5,7 +5,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from './kubernetes.service';
 import { LeaseService } from '../coordination/lease.service';
 import { tenantSecretsBinding, tenantSecretsRole } from './tenant-rbac';
-import { tenantQuotaFloor, tenantQuotaHard } from './tenant-quota';
+import {
+  tenantLimitRange,
+  tenantQuotaFloor,
+  tenantQuotaHard,
+  type PodDefaults
+} from './tenant-quota';
 import { defaultPodResourcesForImage } from './presets';
 import {
   PROJECT_DATABASES_POLICY,
@@ -90,15 +95,17 @@ export class K8sNamespaceService implements OnModuleInit {
     maxServices?: number | null;
     defaultPodCpuMilli?: number | null;
     defaultPodMemoryBytes?: number | null;
+    defaultLimit?: PodDefaults | null;
   }) {
     this.ensureKubeConfig();
     if (!this.kc) return;
     const api = this.kc.makeApiClient(k8s.CoreV1Api);
     const ns = options.namespace;
     const quotaName = 'orchard-org-quota';
-    const limitName = 'orchard-defaults';
 
     const hardQuota = tenantQuotaHard(options, tenantQuotaFloor(process.env));
+
+    await this.applyNamespaceLimitRange(api, ns, hardQuota, options);
 
     const quotaBody: k8s.V1ResourceQuota = {
       metadata: { name: quotaName, labels: { 'app.kubernetes.io/managed-by': 'orchard' } },
@@ -113,13 +120,22 @@ export class K8sNamespaceService implements OnModuleInit {
         throw error;
       }
     }
+  }
 
-    // LimitRange: required for per-container defaults so ResourceQuota admission succeeds
-    // for pods that don't specify requests. Also caps per-container to org defaults.
+  private async applyNamespaceLimitRange(
+    api: k8s.CoreV1Api,
+    ns: string,
+    hardQuota: Record<string, string>,
+    options: {
+      defaultPodCpuMilli?: number | null;
+      defaultPodMemoryBytes?: number | null;
+      defaultLimit?: PodDefaults | null;
+    }
+  ) {
+    const limitName = 'orchard-defaults';
     const hasDefaults =
       (options.defaultPodCpuMilli && options.defaultPodCpuMilli > 0) ||
       (options.defaultPodMemoryBytes && options.defaultPodMemoryBytes > 0);
-    // If we set any ResourceQuota with requests.cpu/memory, a LimitRange with defaults is required.
     const needLimitRange =
       hasDefaults ||
       hardQuota['requests.cpu'] !== undefined ||
@@ -135,20 +151,21 @@ export class K8sNamespaceService implements OnModuleInit {
       return;
     }
 
-    const defaultReq: Record<string, string> = {};
-    const defaultLim: Record<string, string> = {};
-    const cpuDefault =
-      options.defaultPodCpuMilli && options.defaultPodCpuMilli > 0
-        ? options.defaultPodCpuMilli
-        : 100; // 100m
-    const memDefault =
-      options.defaultPodMemoryBytes && options.defaultPodMemoryBytes > 0
-        ? options.defaultPodMemoryBytes
-        : defaultPodResourcesForImage(null).memoryBytes;
-    defaultReq['cpu'] = `${cpuDefault}m`;
-    defaultReq['memory'] = String(memDefault);
-    defaultLim['cpu'] = `${cpuDefault * 4}m`;
-    defaultLim['memory'] = String(memDefault * 4);
+    const request = {
+      cpuMilli:
+        options.defaultPodCpuMilli && options.defaultPodCpuMilli > 0
+          ? options.defaultPodCpuMilli
+          : 100,
+      memoryBytes:
+        options.defaultPodMemoryBytes && options.defaultPodMemoryBytes > 0
+          ? options.defaultPodMemoryBytes
+          : defaultPodResourcesForImage(null).memoryBytes
+    };
+    const { defaultRequest, defaultLimit } = tenantLimitRange(
+      hardQuota,
+      request,
+      options.defaultLimit ?? request
+    );
 
     const limitBody: k8s.V1LimitRange = {
       metadata: { name: limitName, labels: { 'app.kubernetes.io/managed-by': 'orchard' } },
@@ -156,9 +173,9 @@ export class K8sNamespaceService implements OnModuleInit {
         limits: [
           {
             type: 'Container',
-            default: defaultLim,
-            defaultRequest: defaultReq
-          } as k8s.V1LimitRangeItem
+            _default: Object.keys(defaultLimit).length > 0 ? defaultLimit : undefined,
+            defaultRequest
+          }
         ]
       }
     };

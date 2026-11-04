@@ -275,6 +275,64 @@ test('applyProjectQuota removes the objects with limits off and writes them othe
   assert.equal(unset.calls.applied.length, 2);
 });
 
+function capturingQuotas(stored: string | null, workloads: any[] | Error) {
+  const applied: any[] = [];
+  const { quotas } = quotasWith(stored, {
+    k8sObject: {
+      findMany: async () => {
+        if (workloads instanceof Error) throw workloads;
+        return workloads;
+      }
+    }
+  });
+  (quotas as any).k8sNamespace.applyNamespaceQuota = async (options: any) => {
+    applied.push(options);
+  };
+  return { quotas, applied };
+}
+
+const bareRow = (namespace: string, replicas: number) => ({
+  kind: 'Deployment',
+  namespace,
+  manifest: {
+    spec: {
+      replicas,
+      template: {
+        spec: { containers: [{ resources: { requests: { cpu: '50m', memory: '64Mi' } } }] }
+      }
+    }
+  }
+});
+
+test('apps that already run without limits still fit under a smaller cap', async () => {
+  const { quotas, applied } = capturingQuotas('on', [bareRow('p', 20)]);
+  await quotas.applyProjectQuota('p');
+  const main = applied.find((a) => a.namespace === 'p');
+  const staging = applied.find((a) => a.namespace === 'p-staging');
+  assert.equal(main.memoryLimitBytes, Math.ceil(20 * 128 * MiB * 1.25));
+  assert.equal(main.cpuLimitMilli, Math.ceil(20 * 100 * 1.25));
+  assert.equal(staging.memoryLimitBytes, Math.ceil(1024 * MiB * 1.25));
+  assert.equal(staging.cpuLimitMilli, 1250);
+  assert.deepEqual(main.defaultLimit, { cpuMilli: 100, memoryBytes: 128 * MiB });
+});
+
+test('with nothing chosen the cap is the same as it always was', async () => {
+  const { quotas, applied } = capturingQuotas(null, [bareRow('p', 20)]);
+  await quotas.applyProjectQuota('p');
+  const main = applied.find((a) => a.namespace === 'p');
+  assert.equal(main.memoryLimitBytes, Math.ceil(1024 * MiB * 1.25));
+  assert.equal(main.cpuLimitMilli, 1250);
+  assert.deepEqual(main.defaultLimit, { cpuMilli: 100, memoryBytes: 128 * MiB });
+});
+
+test('a mirror that cannot be read leaves the quota applied with a safe default', async () => {
+  const { quotas, applied } = capturingQuotas('on', new Error('database is down'));
+  await quotas.applyProjectQuota('p');
+  assert.equal(applied.length, 2);
+  assert.equal(applied[0].memoryLimitBytes, Math.ceil(1024 * MiB * 1.25));
+  assert.equal(applied[0].defaultLimit.memoryBytes, 512 * MiB);
+});
+
 function workloadService() {
   const patches: any[] = [];
   const api = {

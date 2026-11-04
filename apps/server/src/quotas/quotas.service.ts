@@ -11,7 +11,13 @@ import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { K8sNamespaceService } from '../kubernetes/k8s-namespace.service';
-import { isDatabaseImage, podDefaultsFor, podResourcesFor } from '../kubernetes/presets';
+import {
+  isDatabaseImage,
+  MANAGED_DATABASE_MIN_MEMORY_BYTES,
+  podDefaultsFor,
+  podResourcesFor
+} from '../kubernetes/presets';
+import { namespaceRoom, type MirroredWorkload, type PodDefaults } from '../kubernetes/tenant-quota';
 import {
   isUnlimitedRow,
   liveMatchesMode,
@@ -107,9 +113,48 @@ export class QuotasService implements OnModuleInit {
     if (!this.lease.canCoordinate) return;
     setTimeout(() => {
       this.limitsOff()
-        .then((off) => (off ? this.clearAllQuotas() : undefined))
+        .then((off) => (off ? this.clearAllQuotas() : this.applyCappedProjects()))
         .catch((e) => this.logger.warn(`quota sweep skipped: ${e?.message ?? e}`));
     }, QUOTA_SWEEP_BOOT_DELAY_MS);
+  }
+
+  private async applyCappedProjects(): Promise<void> {
+    const capped = { OR: [{ cpuLimitMilli: { not: null } }, { memoryLimitBytes: { not: null } }] };
+    const projects = await this.prisma.project.findMany({
+      where: { OR: [capped, { organization: capped }] },
+      select: { id: true }
+    });
+    for (let i = 0; i < projects.length; i += QUOTA_SWEEP_BATCH) {
+      await Promise.allSettled(
+        projects.slice(i, i + QUOTA_SWEEP_BATCH).map((p) =>
+          this.applyProjectQuota(p.id).catch((err) => {
+            this.logger.warn(`quota for project ${p.id} not applied: ${err?.message ?? err}`);
+          })
+        )
+      );
+    }
+  }
+
+  private async namespaceWorkloads(
+    namespaces: string[]
+  ): Promise<Map<string, MirroredWorkload[]> | null> {
+    try {
+      const rows = await this.prisma.k8sObject.findMany({
+        where: { kind: { in: ['Deployment', 'CronJob', 'Cluster'] }, namespace: { in: namespaces } },
+        select: { kind: true, namespace: true, manifest: true }
+      });
+      const out = new Map<string, MirroredWorkload[]>();
+      for (const row of rows) {
+        if (!row.namespace) continue;
+        const list = out.get(row.namespace) ?? [];
+        list.push({ kind: row.kind, manifest: row.manifest });
+        out.set(row.namespace, list);
+      }
+      return out;
+    } catch (err: any) {
+      this.logger.warn(`could not read workloads for the quota: ${err?.message ?? err}`);
+      return null;
+    }
   }
 
   async limitsOff(): Promise<boolean> {
@@ -319,7 +364,7 @@ export class QuotasService implements OnModuleInit {
     // otherwise a namespace running at its cap can never replace a pod: the
     // surge pod is rejected at admission and the rollout wedges. Steady-state
     // usage is still held to the real cap by the API-layer checks
-    // (enforceOrgCapForNewPod / member allowances).
+    // (enforceProjectCapForNewPod / enforceOrgCapForNewPod / member allowances).
     const SURGE_HEADROOM = 1.25;
     const withHeadroom = (v: number | null) => (v ? Math.ceil(v * SURGE_HEADROOM) : v);
     const podsWithHeadroom = caps.maxPods
@@ -329,23 +374,58 @@ export class QuotasService implements OnModuleInit {
     // per-namespace ceiling to every one of them (real per-org/member totals
     // are still held by the API-layer aggregation). Union the legacy project
     // namespace in case an environment row is missing (belt and suspenders).
-    const namespaces = new Set<string>([
-      project.namespace,
-      ...project.environments.map((e) => e.namespace)
+    const namespaces = Array.from(
+      new Set<string>([project.namespace, ...project.environments.map((e) => e.namespace)])
+    );
+    const defaults: PodDefaults = podResourcesFor(null, {
+      defaultPodCpuMilli,
+      defaultPodMemoryBytes
+    });
+    const [workloads, state] = await Promise.all([
+      this.namespaceWorkloads(namespaces),
+      this.settings.getResourceLimitsState()
     ]);
-    await Promise.allSettled(
-      Array.from(namespaces).map((namespace) =>
-        this.k8sNamespace.applyNamespaceQuota({
+    const modeChosen = state.dbValue !== null || state.envOverride !== null;
+    const room = (namespace: string) => {
+      if (!workloads) {
+        return {
+          hasWorkloadWithoutLimits: false,
+          needed: { cpuMilli: 0, memoryBytes: 0 },
+          defaultLimit: {
+            cpuMilli: defaults.cpuMilli,
+            memoryBytes: Math.max(defaults.memoryBytes, MANAGED_DATABASE_MIN_MEMORY_BYTES)
+          }
+        };
+      }
+      return namespaceRoom(workloads.get(namespace) ?? [], defaults);
+    };
+    const results = await Promise.allSettled(
+      namespaces.map((namespace) => {
+        const { hasWorkloadWithoutLimits, needed, defaultLimit } = room(namespace);
+        const ceiling = (cap: number | null, need: number) => {
+          const capped = withHeadroom(cap);
+          if (!capped || !modeChosen || !hasWorkloadWithoutLimits) return capped;
+          return Math.max(capped, withHeadroom(need) ?? 0);
+        };
+        return this.k8sNamespace.applyNamespaceQuota({
           namespace,
-          cpuLimitMilli: withHeadroom(caps.cpuLimitMilli),
-          memoryLimitBytes: withHeadroom(caps.memoryLimitBytes),
+          cpuLimitMilli: ceiling(caps.cpuLimitMilli, needed.cpuMilli),
+          memoryLimitBytes: ceiling(caps.memoryLimitBytes, needed.memoryBytes),
           maxPods: podsWithHeadroom,
           maxServices: caps.maxServices,
           defaultPodCpuMilli,
-          defaultPodMemoryBytes
-        })
-      )
+          defaultPodMemoryBytes,
+          defaultLimit
+        });
+      })
     );
+    for (const [index, result] of results.entries()) {
+      if (result.status === 'rejected') {
+        this.logger.warn(
+          `quota for namespace ${namespaces[index]} not applied: ${result.reason?.message ?? result.reason}`
+        );
+      }
+    }
   }
 
   // Reapply quotas to every project in an org (after org-level caps change).
