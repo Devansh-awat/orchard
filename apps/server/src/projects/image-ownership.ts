@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 function normalizeHost(host: string): string {
@@ -44,4 +44,26 @@ export async function assertImageOwnedByProject(
     repo.startsWith(`${other.namespace}-`)
   );
   if (claimed) throw refuse();
+}
+
+export async function assertIngressNameFree(
+  prisma: Pick<PrismaService, 'deployment'>,
+  namespace: string,
+  name: string,
+  projectId: string
+): Promise<void> {
+  const full = `${namespace}-${name}`;
+  const splits: { namespace: string; name: string }[] = [];
+  for (let i = full.indexOf('-'); i !== -1; i = full.indexOf('-', i + 1)) {
+    splits.push({ namespace: full.slice(0, i), name: full.slice(i + 1) });
+  }
+  const taken = await prisma.deployment.findFirst({
+    where: { projectId: { not: projectId }, OR: splits },
+    select: { id: true }
+  });
+  if (taken) {
+    throw new ConflictException(
+      'This app name clashes with an app in another project. Choose a different name.'
+    );
+  }
 }

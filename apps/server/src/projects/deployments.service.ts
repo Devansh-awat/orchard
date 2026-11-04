@@ -117,7 +117,7 @@ import {
   summarizeBlueGreen,
   summarizeRollout
 } from '../kubernetes/rollout-strategy';
-import { assertImageOwnedByProject } from './image-ownership';
+import { assertImageOwnedByProject, assertIngressNameFree } from './image-ownership';
 
 const ROLLBACK_GATE_TIMEOUT_MS = 90_000;
 
@@ -3343,10 +3343,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    const repoInstallation = await this.githubService.findInstallationForRepo(
-      parsed.owner,
-      parsed.repo
-    );
+    const repoInstallation = canAccess
+      ? await this.githubService.findInstallationForRepo(parsed.owner, parsed.repo)
+      : null;
 
     const repoChanged = repoUrl !== deployment.githubRepo;
     // Auto-deploy webhooks are matched on githubInstallationId, so it must be
@@ -3370,6 +3369,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         ...(repoChanged
           ? {
               githubRepoId: null,
+              pendingPush: Prisma.DbNull,
               queuedCommitSha: null,
               queuedCommitMessage: null,
               queuedCommitAuthorName: null,
@@ -6677,6 +6677,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException("App name can't be empty");
     }
 
+    await assertIngressNameFree(this.prisma, environment.namespace, name, project.id);
+
     const existingDeployment = await this.prisma.deployment.findFirst({
       where: { environmentId: environment.id, name }
     });
@@ -7173,10 +7175,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       // installation with a colliding repo full_name.
       // For public repos without the app installed, installationId will be null
       // (auto-deploy won't work, but manual builds can clone without auth).
-      repoInstallation = await this.githubService.findInstallationForRepo(
-        parsed.owner,
-        parsed.repo
-      );
+      repoInstallation = canAccess
+        ? await this.githubService.findInstallationForRepo(parsed.owner, parsed.repo)
+        : null;
 
       // Auto-deploy defaults ON when the installation covers the repo, because
       // push webhooks can then actually fire. Honouring a request for it without
@@ -7201,6 +7202,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     if (!name) {
       throw new BadRequestException("App name can't be empty");
     }
+
+    await assertIngressNameFree(this.prisma, environment.namespace, name, project.id);
 
     const existingDeployment = await this.prisma.deployment.findFirst({
       where: { environmentId: environment.id, name }
@@ -7553,6 +7556,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     await this.authz.requireProjectEdit(project.id, user.id, 'create deployments');
+    await this.assertResourceRequest(data, user.id);
     const environment = await this.environments.resolveEnvironment(project.id, data.environmentId);
 
     const nameInput = String(data.name || '').trim();
@@ -7581,6 +7585,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         throw new BadRequestException('Invalid Dockerfile path');
       }
     }
+
+    await assertIngressNameFree(this.prisma, environment.namespace, name, project.id);
 
     const existingDeployment = await this.prisma.deployment.findFirst({
       where: { environmentId: environment.id, name }

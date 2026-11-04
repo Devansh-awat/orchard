@@ -17,6 +17,7 @@ sources:
   ingress:
     type: kubernetes_logs
     extra_label_selector: "app.kubernetes.io/name in (kubernetes-ingress,traefik)"
+    extra_namespace_label_selector: "!orchard.my/managed,!orchard.dev/managed"
     glob_minimum_cooldown_ms: 1000
 
 transforms:

@@ -9,7 +9,7 @@ import {
 
 function traefikPattern(target: IngressTarget): string | null {
   if (!target.namespace || target.services.length === 0) return null;
-  return `${escapeRegex(target.namespace)}-(${alternation(target.services)})-[^@]+@kubernetes.*`;
+  return `${escapeRegex(target.namespace)}-(${alternation(target.services)})-[^-@]+@kubernetes.*`;
 }
 
 export function traefikSelector(target: IngressTarget): string | null {
