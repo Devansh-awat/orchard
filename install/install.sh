@@ -576,7 +576,7 @@ read_live_settings() {
   local live line
   PREV_PUBLIC_IP=$(reuse_value '.tenant.publicIp')
   PREV_CNAME=$(reuse_secret INGRESS_CNAME)
-  PREV_EMAIL=$(KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get clusterissuer letsencrypt \
+  PREV_EMAIL=$(KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl --request-timeout=10s get clusterissuer letsencrypt \
     -o jsonpath='{.spec.acme.email}' 2>/dev/null || true)
   live=$(KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl -n orchard exec deploy/server --request-timeout=20s -- \
     node dist/scripts/install-settings.js show 2>/dev/null || true)
@@ -1705,6 +1705,9 @@ describe_changes() {
   if [ "$ORCHARD_PUBLIC_IP" != "$PREV_PUBLIC_IP" ]; then
     change_line "Public IP is now ${ORCHARD_PUBLIC_IP:-not set}. Ports and databases already published stay on the"
     change_line "  old address until you turn public access off and on again."
+  fi
+  if [ "$ORCHARD_ACME_EMAIL" != "$PREV_EMAIL" ] && [ "$INGRESS_MODE" = public ]; then
+    change_line "Let's Encrypt email is now ${ORCHARD_ACME_EMAIL:-none}. Certificates are not affected."
   fi
   if [ "$ORCHARD_UPDATE_POLICY" != "$PREV_UPDATES" ] && [ -n "$PREV_UPDATES" ]; then
     change_line "Updates change to $ORCHARD_UPDATE_POLICY."
@@ -3716,7 +3719,7 @@ summary() {
     note "Storage: on this server. If the server is lost, the backups are lost."
   fi
 
-  if [ -n "$DNS_PENDING" ] || [ "$DNS_SKIPPED" = true ] || [ "$cert_pending" = true ]; then
+  if [ -n "$DNS_PENDING" ] || [ "$cert_pending" = true ]; then
     printf '\n  %sStill pending%s\n' "$C_BOLD" "$C_RESET"
     if [ -n "$DNS_PENDING" ]; then
       while IFS= read -r line; do
@@ -3770,12 +3773,12 @@ EOF
   note "https://docs.orchard.my/start/first-deploy/"
 
   printf '\n  %sChange these later%s\n' "$C_BOLD" "$C_RESET"
-  note "Public IP, custom domains target, email, storage: Instance admin > Configuration"
+  note "Public IP, custom domains target, SMTP, storage: Instance admin > Configuration"
   note "MCP hostname: sudo orchardctl mcp enable <host> --apply"
   if is_sslip "$ORCHARD_DOMAIN"; then
     note "Your own domain: run the installer again with --domain <host>"
   else
-    note "Dashboard or apps domain: run the installer again, or pass --domain and --app-domain"
+    note "Dashboard or apps domain, Let's Encrypt email: run the installer again"
   fi
   if [ "$ORCHARD_UPDATE_POLICY" = automatic ]; then
     note "Updates run nightly. To update now: sudo orchardctl update"

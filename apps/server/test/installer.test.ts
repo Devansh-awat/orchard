@@ -890,6 +890,30 @@ A orchard-dns-probe.apps.example.com 203.0.113.10
 NS example.com ns1.example.net
 `;
 
+test('--help lists every answer with its flag and variable', () => {
+  const out = spawnSync('bash', [installer, '--help'], {
+    encoding: 'utf8',
+    env: { ...process.env, KUBECONFIG: '/dev/null', ORCHARD_STATE_DIR: '/nonexistent' }
+  }).stdout;
+  for (const [flag, env] of [
+    ['--mode', 'ORCHARD_INGRESS_MODE'],
+    ['--tunnel-token', 'ORCHARD_TUNNEL_TOKEN'],
+    ['--public-ip', 'ORCHARD_PUBLIC_IP'],
+    ['--domain', 'ORCHARD_DOMAIN'],
+    ['--app-domain', 'ORCHARD_APP_DOMAIN'],
+    ['--ingress-cname', 'ORCHARD_INGRESS_CNAME'],
+    ['--mcp-domain', 'ORCHARD_MCP_DOMAIN'],
+    ['--mcp', 'ORCHARD_MCP'],
+    ['--email', 'ORCHARD_ACME_EMAIL'],
+    ['--updates', 'ORCHARD_UPDATE_POLICY'],
+    ['--limits', 'ORCHARD_LIMITS'],
+    ['--yes', 'ORCHARD_ASSUME_YES']
+  ]) {
+    assert.ok(out.includes(flag), flag);
+    assert.ok(out.includes(env), env);
+  }
+});
+
 test('records come from the answers, with a wildcard line', () => {
   const box = dnsBox('');
   try {
