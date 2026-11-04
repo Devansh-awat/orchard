@@ -186,7 +186,7 @@ For the full list of commands, refer to [Host commands](/operate/host-commands/)
 | Off-machine backups | Refer to [Move to S3 or R2](/data/backups/#move-to-s3-or-r2). |
 | Multiple nodes, wildcard certificates, and public TCP or UDP in `tunnel` mode | Use the [Helm chart](#install-on-an-existing-cluster). |
 
-The following values enable the sandboxes:
+The following values turn on the sandboxes:
 
 ```yaml
 tenantSandbox:
@@ -198,12 +198,12 @@ builderSandbox:
 ```
 
 :::caution
-Apps are network-isolated from each other and from the platform by default. They share the host kernel unless you install gVisor or Kata. Do not run code you do not trust without them. For more information, refer to [Security and isolation](/operate/security/).
+By default, apps are network-isolated from each other and from the control plane. They share the host kernel unless you install gVisor or Kata. Do not run code you do not trust without them. For more information, refer to [Security and isolation](/operate/security/).
 :::
 
 ### Use `lan` mode
 
-A `lan` install serves the dashboard on the addresses the machine has at install time. These include any Tailscale address, the hostname, the `.local` name, and an `orchard.<ip>.sslip.io` name. Generated app hostnames use `apps.<ip>.sslip.io`, because a wildcard cannot use an IP address. To use a wildcard you control, pass `--app-domain`.
+A `lan` install serves the dashboard on the addresses that the machine has at install time. These include any Tailscale address, the hostname, the `.local` name, and an `orchard.<ip>.sslip.io` name. Generated app hostnames use `apps.<ip>.sslip.io`, because a wildcard cannot use an IP address. To use a wildcard you control, pass `--app-domain`.
 
 To serve on other ports, pass `--http-port` and `--https-port`. Only `lan` mode accepts these flags.
 
@@ -223,7 +223,7 @@ sudo orchardctl claim --url mango
 
 ### Use Tailscale
 
-Use `lan` mode for a machine you reach over Tailscale. The installer detects the Tailscale address. You must add MagicDNS names yourself.
+Use `lan` mode for a machine that you reach over Tailscale. The installer detects the Tailscale address. You must add MagicDNS names yourself.
 
 1. Find the machine's names and address:
 
@@ -287,7 +287,7 @@ The Helm chart installs Orchard's own components. It does not install cluster op
 | Traefik | Control-plane ingress (`IngressRoute`) |
 | Gateway API CRDs | The `Gateway` for database exposure, unless `gateway.enabled: false` |
 | cert-manager | TLS, plus a DNS-01 `ClusterIssuer` for wildcard certificates |
-| A default StorageClass | Postgres volumes, build cache, Redis, metrics, and logs |
+| A default StorageClass | PostgreSQL volumes, build cache, Redis, metrics, and logs |
 | An OCI registry | Where built images are pushed and pulled |
 | An ingress controller | Every app URL, as an `Ingress` of class `tenant.ingressClass` |
 | A layer 4 (L4) load balancer | Public database exposure and TCP or UDP passthrough only |
@@ -297,7 +297,7 @@ You also need these domains:
 
 | Domain | Setting | Purpose |
 | --- | --- | --- |
-| Platform domain | `ingress.host` | The dashboard |
+| Dashboard domain | `ingress.host` | The dashboard |
 | App domain | `APP_DOMAIN` | Wildcard DNS that points at your ingress controller's load balancer IP |
 | Ingress CNAME target | `INGRESS_CNAME` | The target for users' custom domains |
 | Database domain | `PUBLIC_DB_DOMAIN` | Optional wildcard for publicly exposed databases |
@@ -305,7 +305,7 @@ You also need these domains:
 ### Install with Helm
 
 :::note
-These steps were tested on k3s with the published chart, Helm 4.3.1, Traefik, cert-manager, and CloudNativePG. The test reached a working login, an app with an HTTPS certificate, and a database with a bound volume. Builds and MCP were not tested on this path.
+These steps were tested on k3s with the published chart, Helm 4.3.1, Traefik, cert-manager, and CloudNativePG. The test reached a working sign-in, an app with an HTTPS certificate, and a database with a bound volume. The test did not cover builds or MCP.
 :::
 
 1. Create the namespaces and the Secret. `jwt` signs sessions and must be at least 32 characters. `enc` encrypts stored secrets. Keep `enc` safe, because a new key makes existing encrypted values unreadable.
@@ -385,7 +385,7 @@ If you keep `createNamespace: true`, the default, the chart creates `orchard` an
 
 ### Add optional features
 
-To enable builds, add a registry the cluster can reach. This configuration was not tested on this path. A registry behind an ingress on the same node failed in testing, with a connection refused error during the push.
+To turn on builds, add a registry that the cluster can reach. This configuration is untested on this path. In testing, a registry behind an ingress on the same node failed with a connection refused error during the push.
 
 ```yaml
 builders:
@@ -399,9 +399,9 @@ builders:
 
 Also set `DOCKER_REGISTRY_PUSH`, `DOCKER_REGISTRY_PULL`, and `REGISTRY_PROJECT` in `server.env`.
 
-To enable MCP, set `mcp.enabled: true` and `mcp.ingress.host`. Set `JWT_SECRET` and `MCP_SERVICE_TOKEN` in `mcp.env`, and the same `MCP_SERVICE_TOKEN` in `server.env`. This configuration was not tested on this path.
+To turn on MCP, set `mcp.enabled: true` and `mcp.ingress.host`. Set `JWT_SECRET` and `MCP_SERVICE_TOKEN` in `mcp.env`, and the same `MCP_SERVICE_TOKEN` in `server.env`. This configuration is untested on this path.
 
-To enable database backups, refer to [Backup storage for operators](/data/backups/#backup-storage-for-operators).
+To turn on database backups, refer to [Backup storage for operators](/data/backups/#backup-storage-for-operators).
 
 For every variable the server reads, refer to [Configuration](/reference/configuration/).
 
@@ -428,7 +428,7 @@ To claim the instance:
 3. Select **Set up your instance**.
 4. Create a passkey, or set a password of at least 12 characters. Browsers do not offer passkeys over plain HTTP, so a `lan` install defaults to a password. You cannot skip this step.
 5. Rename the organization, or keep the name Orchard created.
-6. Select **Create GitHub App** to create the App that repository deployments need, or select **Skip for now**.
+6. To create the GitHub App that repository deployments need, select **Create GitHub App**. To skip this step, select **Skip for now**.
 7. Review the certificate status for your app domain.
 8. Choose whether to share anonymous usage reports. Reports are off unless you opt in.
 9. Select **Go to Orchard**.
@@ -489,7 +489,7 @@ To uninstall from an existing cluster:
 helm uninstall orchard -n orchard
 ```
 
-The release does not include the namespaces Orchard created for apps and databases. Delete those namespaces yourself.
+The release does not include the namespaces that Orchard created for apps and databases. Delete those namespaces yourself.
 
 ## Next steps
 

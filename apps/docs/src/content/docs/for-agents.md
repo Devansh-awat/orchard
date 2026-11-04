@@ -39,7 +39,7 @@ Use `llms.txt` to decide what to read. Use `llms-full.txt` to load everything in
 
 ## Operate an instance
 
-This documentation has no MCP server. The Orchard MCP server operates your instance rather than serving these pages. It runs at `mcp.<your domain>`. For setup, refer to [Connect an MCP client](/mcp/).
+This documentation has no MCP server. The Orchard MCP server operates your instance and does not serve these pages. It runs at `mcp.<your domain>`. For setup, refer to [Connect an MCP client](/mcp/).
 
 An agent can also use the following entry points. For more information, refer to [Code mode for agents](/agents-code-mode/).
 
@@ -64,7 +64,7 @@ To roll back to the previous image, send `POST /apiv1/deployments/:id/rollback` 
 
 ## Retry requests safely
 
-To retry a request without doing the work twice, send an `Idempotency-Key` header. Orchard supports this header on create, deploy, rebuild, restart, rollback, database create and job run requests.
+To retry a request without doing the work twice, send an `Idempotency-Key` header. Orchard supports this header on create, deploy, rebuild, restart, rollback, database create, and job run requests.
 
 A retry with the same key and body replays the first response for 24 hours. The same key with a different body returns a `422` status. A key that is still in progress returns a `409` status.
 

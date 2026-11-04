@@ -3,20 +3,20 @@ title: Code mode for agents
 description: Call the whole Orchard API from an agent with the orchard CLI or the compact MCP server, without loading every MCP tool into context.
 ---
 
-To reach any Orchard API operation from an agent, use the CLI or the compact MCP server. Describing every operation to a model uses more context than most tasks have, and the [normal MCP server](/mcp/) does not cover every operation.
+To reach any Orchard API operation from an agent, use the CLI or the compact MCP server. Describing every operation to a model uses more context than most tasks have, and the [full MCP server](/mcp/) does not cover every operation.
 
 | Your agent has                                     | Use                                                                   |
 | -------------------------------------------------- | --------------------------------------------------------------------- |
-| A shell, such as Claude Code, Codex, Cursor or CI  | The CLI: `orchard api search`, `describe`, and calls by `operationId`. |
+| A shell, such as Claude Code, Codex, Cursor, or CI  | The CLI: `orchard api search`, `describe`, and calls by `operationId`. |
 | No shell, such as claude.ai or another chat app    | The compact MCP server at `/compact`.                                 |
 
 Neither option runs model-written code on Orchard.
 
 ## The agent spec
 
-Both options read the agent spec, a trimmed copy of the OpenAPI contract. For each operation, the spec has the `operationId`, parameters, request and response schemas, required scope and two flags:
+Both options read the agent spec, a trimmed copy of the OpenAPI contract. For each operation, the spec has the `operationId`, parameters, request and response schemas, required scope, and two flags:
 
-- `x-orchard-destructive` marks deletes, whole-list replacements and other operations that remove or overwrite state.
+- `x-orchard-destructive` marks deletes, whole-list replacements, and other operations that remove or overwrite state.
 - `x-orchard-sensitive` marks responses that contain a secret.
 
 Both spec files are public and served with an `ETag`:
@@ -26,7 +26,7 @@ GET https://orchard.example.com/apiv1/agent-spec.json
 GET https://orchard.example.com/apiv1/openapi.json
 ```
 
-`agent-spec.json` leaves out admin, setup, SCIM, SSO and sign-in routes. `openapi.json` is the complete document.
+`agent-spec.json` leaves out admin, setup, SCIM, SSO, and sign-in routes. `openapi.json` is the complete document.
 
 Operation IDs come from the route: the path words, then a verb.
 
@@ -116,22 +116,22 @@ Point the client at `/compact` on the MCP host:
 claude mcp add --transport http orchard-compact https://mcp.example.com/compact
 ```
 
-Authentication works the same as the normal server. Use OAuth with `mcp:read`, `mcp:deploy` or `mcp:exec`, or an `orch_` token. For more information, refer to [Connect an MCP client](/mcp/).
+Authentication works the same as on the full server. Use OAuth with `mcp:read`, `mcp:deploy`, or `mcp:exec`, or an `orch_` token. For more information, refer to [Connect an MCP client](/mcp/).
 
 The server has three tools:
 
 | Tool                 | Purpose                                                                     |
 | -------------------- | --------------------------------------------------------------------------- |
-| `search_api`         | Finds operations by keyword. Returns IDs, paths and flags, best match first. |
+| `search_api`         | Finds operations by keyword. Returns IDs, paths, and flags, best match first. |
 | `describe_operation` | Returns the full contract for one `operationId` or `"METHOD /path"`.        |
-| `call_api`           | Runs one operation as you, with `pathParams`, `query`, `body` and `fields`. |
+| `call_api`           | Runs one operation as you, with `pathParams`, `query`, `body`, and `fields`. |
 
 `call_api` has the following limits:
 
-- **Destructive operations.** The call fails unless `confirm` is set to the `operationId`.
-- **`fields`.** The response keeps only the dotted paths that you list, such as `["items.id","items.status"]`.
-- **Output size.** Output over 24,000 characters is cut, with a note to narrow the request.
-- **Scope.** Orchard refuses operations that need a higher scope than the connection has. The error names the required scope.
+- **Destructive operations:** The call fails unless `confirm` is set to the `operationId`.
+- **`fields`:** The response keeps only the dotted paths that you list, such as `["items.id","items.status"]`.
+- **Output size:** Orchard cuts output over 24,000 characters and adds a note to narrow the request.
+- **Scope:** Orchard refuses operations that need a higher scope than the connection has. The error names the required scope.
 
 Results from operations flagged `x-orchard-sensitive` carry `_meta: { "orchard/sensitive": true }`.
 

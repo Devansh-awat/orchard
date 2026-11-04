@@ -1,15 +1,15 @@
 ---
 title: Use the CLI
-description: Install the Orchard CLI, sign in to an instance, set a default project and script commands with JSON output.
+description: Install the Orchard CLI, sign in to an instance, set a default project, and script commands with JSON output.
 ---
 
-The `orchard` command-line interface (CLI) calls the same API as the dashboard. Use it to deploy apps, read logs and manage databases from a terminal or a script.
+The `orchard` command-line interface (CLI) calls the same API as the dashboard. Use it to deploy apps, read logs, and manage databases from a terminal or a script.
 
 For every command and flag, refer to the [CLI reference](/reference/cli/). To run commands on the machine that hosts Orchard, refer to [Host commands](/operate/host-commands/).
 
 ## Install the CLI
 
-Install with Homebrew:
+To install with Homebrew, run the following command:
 
 ```bash
 brew install --cask leafdtk/tap/orchard-cli
@@ -17,7 +17,7 @@ brew install --cask leafdtk/tap/orchard-cli
 
 The cask is named `orchard-cli`. The installed command is `orchard`.
 
-To install without Homebrew, run the install script:
+To install without Homebrew, run the following install script:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/LeafdTK/orchard-releases/main/install.sh | sh
@@ -31,7 +31,7 @@ orchard version
 
 ## Sign in
 
-To sign in to a self-hosted instance, run the following command:
+To sign in to an instance, run the following command:
 
 ```bash
 orchard auth login --api-url https://orchard.example.com
@@ -54,10 +54,10 @@ To create a token, refer to [Manage API tokens](/account/tokens/).
 
 ## Choose an organization and project
 
-Most commands act on an organization, a project or an environment. Orchard uses the first value it finds, in the following order:
+Most commands act on an organization, a project, or an environment. Orchard uses the first value it finds, in the following order:
 
-1. The `--org`, `--project` and `--env` flags.
-2. The `ORCHARD_ORG`, `ORCHARD_PROJECT` and `ORCHARD_ENV` environment variables.
+1. The `--org`, `--project`, and `--env` flags.
+2. The `ORCHARD_ORG`, `ORCHARD_PROJECT`, and `ORCHARD_ENV` environment variables.
 3. The saved context from `orchard use`.
 
 To save a context, run the following commands:
@@ -74,14 +74,14 @@ To link a directory to a project, run `orchard link --project my-app` in that di
 
 | Task                                      | Command                                 |
 | ----------------------------------------- | --------------------------------------- |
-| List deployments                          | `orchard deploy list`                   |
-| Scale a deployment                        | `orchard deploy scale <ID> 3`           |
+| List apps                          | `orchard deploy list`                   |
+| Scale an app                        | `orchard deploy scale <ID> 3`           |
 | Read or follow logs                       | `orchard logs <ID> -f`                  |
 | Build and deploy the current directory    | `orchard up`                            |
 | Write variables to `.env.orchard`         | `orchard env pull`                      |
 | List databases                            | `orchard db list`                       |
 | Run a job                                 | `orchard job run <ID>`                  |
-| Roll back a deployment                    | `orchard deploy rollback <ID> --yes`    |
+| Roll back an app                    | `orchard deploy rollback <ID> --yes`    |
 
 ## Use the CLI in scripts
 

@@ -1,6 +1,6 @@
 ---
 title: Manage SSH identities
-description: Add, import, rotate and remove the public SSH keys that give you access to your Greenhouse machines.
+description: Add, import, rotate, and remove the public SSH keys that give you access to your Greenhouse machines.
 sidebar:
   order: 4
 ---
@@ -11,7 +11,7 @@ To connect to a [Greenhouse machine](/greenhouse/) from your own terminal or a l
 
 ## Prerequisites
 
-- The Greenhouse graft is [installed on your instance](/operate/greenhouse/#install-the-graft).
+- The Greenhouse graft [installed on your instance](/operate/greenhouse/#install-the-graft).
 
 ## Generate a key with the CLI
 
@@ -25,10 +25,10 @@ For more information, refer to [Connect an editor over SSH](/greenhouse/editors/
 
 ## Add an identity
 
-<Tabs>
+<Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. From the account menu, select **Account settings** > **Greenhouse**.
+1. Go to **Account settings** > **Greenhouse**.
 2. In **SSH identities**, select **Add identity**.
 3. In **Name**, enter a name, such as `laptop`.
 4. In **Public key**, paste your public key.
@@ -48,10 +48,10 @@ orchard ssh-identity add laptop --key ~/.ssh/id_ed25519.pub
 
 Orchard reads `https://github.com/<username>.keys` for your linked GitHub account and creates one identity for each key.
 
-<Tabs>
+<Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. From the account menu, select **Account settings** > **Greenhouse**.
+1. Go to **Account settings** > **Greenhouse**.
 2. In **SSH identities**, select **Import from GitHub**.
 
 </TabItem>

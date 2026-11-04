@@ -23,11 +23,13 @@ Connect your GitHub account so that Orchard can list your repositories. You can 
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open your account menu and select **Account settings**.
-2. Go to **GitHub and Tailscale**.
-3. In **GitHub**, select **Connect**.
-4. Approve the request on GitHub.
-5. In **Repository access**, select **Add account** and install the GitHub App on the account that owns your repository.
+1. Open your account menu.
+2. Select **Account settings**.
+3. Go to **GitHub and Tailscale**.
+4. In **GitHub**, select **Connect**.
+5. Approve the request on GitHub.
+6. In **Repository access**, select **Add account**.
+7. Install the GitHub App on the account that owns your repository.
 
 </TabItem>
 <TabItem label="CLI">
@@ -58,14 +60,15 @@ Connect your GitHub account so that Orchard can list your repositories. You can 
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open a project and select **New app**.
-2. In **Start from scratch**, select **GitHub repo**.
-3. In **Repository**, select your repository. For a public repository, paste `owner/repo` into the search field.
-4. In **Branch**, select a branch.
-5. In **Name**, enter a name for the app.
-6. In **Networking**, confirm that the port matches the port your app listens on.
-7. In **Reach**, select **Public link** for a URL that anyone can open. The default, **Private link**, requires people to sign in to Orchard.
-8. Select **Deploy**.
+1. Open a project.
+2. Select **New app**.
+3. In **Start from scratch**, select **GitHub repo**.
+4. In **Repository**, select your repository. For a public repository, paste `owner/repo` into the search field.
+5. In **Branch**, select a branch.
+6. In **Name**, enter a name for the app.
+7. In **Networking**, confirm that the port matches the port your app listens on.
+8. In **Reach**, select **Public link** for a URL that anyone can open. The default, **Private link**, requires people to sign in to Orchard.
+9. Select **Deploy**.
 
 Orchard opens a progress page with these steps: **Starting the builder**, **Cloning the repo**, **Building the image**, **Pushing the image**, and **Rolling out**. The build logs stream on the same page.
 
@@ -98,10 +101,11 @@ If the build fails, refer to [Builds](/deploy/builds/#troubleshoot-a-failed-buil
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open the project and select **New app**.
-2. In **Start from scratch**, select **PostgreSQL**.
-3. In **Database name**, enter a name.
-4. Select **Create database**.
+1. Open the project.
+2. Select **New app**.
+3. In **Start from scratch**, select **PostgreSQL**.
+4. In **Database name**, enter a name.
+5. Select **Create database**.
 
 </TabItem>
 <TabItem label="CLI">
@@ -120,10 +124,12 @@ Connect the database with a reference. A reference follows the database through 
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open the app and go to **Variables**.
-2. Add a variable named `DATABASE_URL`.
-3. In the value field, select **Use a resource**, then select your database.
-4. Select **Save**.
+1. Open the app.
+2. Go to **Variables**.
+3. Add a variable named `DATABASE_URL`.
+4. In the value field, select **Use a resource**.
+5. Select your database.
+6. Select **Save**.
 
 </TabItem>
 <TabItem label="CLI">

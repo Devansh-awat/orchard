@@ -39,7 +39,7 @@ Each environment has its own Kubernetes namespace. Apps in the same environment 
 
 An app is one deployable unit. It has an image, a replica count, ports, variables, CPU and memory sizes, and optional volumes.
 
-In Kubernetes terms, an app is a Deployment and its Services, Ingresses, and PersistentVolumeClaims. In the API and the CLI, an app is called a deployment.
+In Kubernetes terms, an app is a Deployment and its Services, Ingresses, and PersistentVolumeClaims. The API and the CLI call an app a deployment.
 
 ## Database
 

@@ -1,13 +1,13 @@
 ---
 title: Manage API tokens
-description: Create, use, rename and revoke Orchard personal API tokens for scripts, CI jobs and MCP clients.
+description: Create, use, rename, and revoke Orchard personal API tokens for scripts, CI jobs, and MCP clients.
 sidebar:
   order: 3
 ---
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-To authenticate a script, CI job or MCP client without a browser, create a personal API token. A token acts as your account. It can only do what your account can do.
+To authenticate a script, CI job, or MCP client without a browser, create a personal API token. A token acts as your account. It can only do what your account can do.
 
 :::note
 Interactive use of the [CLI](/cli/) does not need a token. `orchard auth login` creates and stores one for you.
@@ -20,20 +20,20 @@ Each token has one access level. Each level includes the level before it.
 | Level    | Allows                                                                     |
 | -------- | -------------------------------------------------------------------------- |
 | `read`   | Most read requests. Some reads that return secrets require `deploy`.       |
-| `deploy` | `read`, plus requests that create, update, delete, scale or restart.       |
+| `deploy` | `read`, plus requests that create, update, delete, scale, or restart.       |
 | `exec`   | `deploy`, plus shells in pods and databases, and commands inside containers. |
 
 At any access level, a token cannot register a passkey, set a password, or call instance setup and admin routes.
 
 ## Create a token
 
-<Tabs>
+<Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. From the account menu, select **Account settings** > **API tokens**.
+1. Go to **Account settings** > **API tokens**.
 2. Select **New token**.
-3. In **Name**, enter a name that describes where you will use the token.
-4. In **Access**, select **Read**, **Deploy** or **Exec**.
+3. In **Name**, enter a name that describes where you use the token.
+4. In **Access**, select **Read**, **Deploy**, or **Exec**.
 5. Select **Create token**.
 6. Copy the token. Orchard does not show it again.
 7. Select **Done**.
@@ -52,7 +52,7 @@ The command prints the token once. Copy it before you close the terminal.
 | Flag           | Description                                                      |
 | -------------- | ---------------------------------------------------------------- |
 | `--name`       | Token name. Required.                                            |
-| `--scope`      | `read`, `deploy` or `exec`. The default is `read`.               |
+| `--scope`      | `read`, `deploy`, or `exec`. The default is `read`.               |
 | `--expires-in` | Lifetime, such as `30d` or `12h`. The default and maximum are `90d`. |
 | `--project`    | Restrict the token to a project ID or slug. You can repeat this flag. |
 
@@ -80,18 +80,19 @@ To use a token with an MCP client, refer to [Connect an MCP client](/mcp/#connec
 
 ## Rename a token
 
-1. From the account menu, select **Account settings** > **API tokens**.
+1. Go to **Account settings** > **API tokens**.
 2. On the token row, select **Rename**.
-3. Enter the new name and save.
+3. Enter the new name.
+4. Save the name.
 
 ## Revoke a token
 
 Requests that use a revoked token fail immediately.
 
-<Tabs>
+<Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. From the account menu, select **Account settings** > **API tokens**.
+1. Go to **Account settings** > **API tokens**.
 2. On the token row, select **Revoke**.
 3. Select **Revoke token**.
 
@@ -120,7 +121,7 @@ Signing out all other devices also deletes every API token on your account. For 
 ## Rotate a token
 
 1. Create a new token.
-2. Update the script, job or client to use the new token.
+2. Update the script, job, or client to use the new token.
 3. Revoke the old token.
 
 ## Related resources
