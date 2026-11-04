@@ -46,6 +46,12 @@ COPY --from=builder /app/apps/frontend/build ./apps/frontend/build
 COPY LICENSE ./LICENSE
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+           /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+           /usr/local/bin/pnpm /usr/local/bin/pnpx /usr/local/bin/yarn /usr/local/bin/yarnpkg \
+           /root/.cache/node /root/.local/share/pnpm \
+           /app/node_modules/.pnpm/esbuild@* /app/node_modules/.pnpm/@esbuild+*
+
 EXPOSE 3000
 
 WORKDIR /app/apps/frontend/build
