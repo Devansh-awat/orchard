@@ -7,12 +7,14 @@ export interface InstanceFeatures {
 	mcp: boolean;
 	sandboxes: boolean;
 	earlyAccessOpen: boolean;
+	fastBuilder: boolean;
 }
 
 const features = writable<InstanceFeatures>({
 	mcp: true,
 	sandboxes: false,
-	earlyAccessOpen: false
+	earlyAccessOpen: false,
+	fastBuilder: false
 });
 let loaded = false;
 
@@ -27,6 +29,7 @@ export const instanceFeatures = {
 			mcp: true,
 			sandboxes: false,
 			earlyAccessOpen: false,
+			fastBuilder: false,
 			...((await response.json()) as Partial<InstanceFeatures>)
 		};
 		features.set(next);

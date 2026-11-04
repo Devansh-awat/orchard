@@ -105,7 +105,12 @@ export function shellRoutes(r: Router, { store, hub, log }: MockContext) {
 	r.get('/organizations', () => store.myOrgs().map((o) => orgRow(store, o)));
 	r.get('/invitations/pending', () => []);
 	r.get('/grafts', () => []);
-	r.get('/instance/features', () => ({ mcp: true, sandboxes: false, grafts: [] }));
+	r.get('/instance/features', () => ({
+		mcp: true,
+		sandboxes: false,
+		fastBuilder: true,
+		grafts: []
+	}));
 	r.get('/engine/health', () => ({
 		shards: ['workloads', 'pods', 'network', 'storage'].map((shard) => ({
 			shard,

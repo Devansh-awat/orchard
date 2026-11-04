@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { isSuperAdmin } from '$lib/stores';
+	import { browser } from '$app/environment';
+	import { instanceFeatures, isSuperAdmin } from '$lib/stores';
 	import { SectionCard, SegmentedControl, ToggleRow } from '$lib/components/ui';
 	import SettingsList from '$lib/components/ui/SettingsList.svelte';
 	import SettingRow from '$lib/components/ui/SettingRow.svelte';
@@ -27,6 +28,8 @@
 		{ value: 'firecracker', label: 'On' },
 		{ value: 'kubernetes', label: 'Off' }
 	];
+
+	if (browser) instanceFeatures.load().catch(() => undefined);
 
 	let queue: Promise<void> = Promise.resolve();
 
@@ -61,19 +64,21 @@
 				onchange={() => commit(() => (buildWithDepot = !buildWithDepot))}
 			/>
 		{/if}
-		<SettingRow label="Fast builder" hint="Auto lets Orchard decide">
-			<SegmentedControl
-				label="Fast builder"
-				options={BUILDERS}
-				bind:value={
-					() => builderOverride,
-					(next) => {
-						const previous = builderOverride;
-						builderOverride = next as Builder;
-						commit(() => (builderOverride = previous));
+		{#if $instanceFeatures.fastBuilder}
+			<SettingRow label="Fast builder" hint="Auto lets Orchard decide">
+				<SegmentedControl
+					label="Fast builder"
+					options={BUILDERS}
+					bind:value={
+						() => builderOverride,
+						(next) => {
+							const previous = builderOverride;
+							builderOverride = next as Builder;
+							commit(() => (builderOverride = previous));
+						}
 					}
-				}
-			/>
-		</SettingRow>
+				/>
+			</SettingRow>
+		{/if}
 	</SettingsList>
 </SectionCard>
