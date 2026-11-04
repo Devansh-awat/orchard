@@ -2778,6 +2778,13 @@ lan_cidrs() {
     | sort -u
 }
 
+ufw_port_denied() {
+  ufw status 2>/dev/null | awk -v port="$1" '
+    ($1 == port || $1 == port "/tcp") && $2 ~ /^(DENY|REJECT)$/ { found = 1 }
+    END { exit !found }
+  '
+}
+
 ufw_rules() {
   local lo=$1 hi=$2 cidr
   ufw allow from 10.42.0.0/16 to any comment 'k3s pods'
@@ -2786,8 +2793,8 @@ ufw_rules() {
     ufw allow from "$cidr" to any port 6443 proto tcp comment 'kubernetes api'
   done
   if [ "$INGRESS_MODE" != tunnel ]; then
-    ufw allow "$HTTP_PORT/tcp" comment 'orchard http'
-    ufw allow "$HTTPS_PORT/tcp" comment 'orchard https'
+    ufw_port_denied "$HTTP_PORT" || ufw allow "$HTTP_PORT/tcp" comment 'orchard http'
+    ufw_port_denied "$HTTPS_PORT" || ufw allow "$HTTPS_PORT/tcp" comment 'orchard https'
     ufw allow "$lo:$hi/tcp" comment 'orchard app ports'
     ufw allow "$lo:$hi/udp" comment 'orchard app ports'
   fi
@@ -2811,9 +2818,17 @@ firewalld_rules() {
 }
 
 configure_firewall() {
-  local lo=${NODE_PORT_RANGE%-*} hi=${NODE_PORT_RANGE#*-}
+  local lo=${NODE_PORT_RANGE%-*} hi=${NODE_PORT_RANGE#*-} port
   if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q '^Status: active'; then
     run_step "opening ufw for k3s and Orchard" 10s ufw_rules "$lo" "$hi"
+    if [ "$INGRESS_MODE" != tunnel ]; then
+      for port in "$HTTP_PORT" "$HTTPS_PORT"; do
+        if ufw_port_denied "$port"; then
+          warn "ufw denies port $port, and the installer left your rule in place. The dashboard, apps"
+          note "and certificates need this port. To open it: sudo ufw allow $port/tcp"
+        fi
+      done
+    fi
   elif command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; then
     run_step "opening firewalld for k3s and Orchard" 20s firewalld_rules "$lo" "$hi"
   else
@@ -3895,7 +3910,7 @@ install_orchard() {
     if [ -n "$DNS_PENDING" ] || [ "$DNS_SKIPPED" = true ]; then
       info "not waiting for the dashboard certificate, because DNS isn't finished"
     else
-      run_step "the dashboard certificate" 1m wait_for_dashboard_cert
+      run_step "giving the dashboard certificate time to issue" 1m wait_for_dashboard_cert
     fi
   fi
 }
