@@ -266,6 +266,7 @@ sudo ./install.sh --yes \
 | `--logs <true\|false>`           | `ORCHARD_LOGS`           | `true`. Log search and per-route request stats.                             |
 | `--image-scanning <true\|false>` | `ORCHARD_IMAGE_SCANNING` | `true`. Vulnerability scans of every image Orchard builds.                  |
 | `--object-storage <true\|false>` | `ORCHARD_OBJECT_STORAGE` | `true`. The local S3 store database backups go to.                          |
+| `--limits <on\|off>`             | `ORCHARD_LIMITS`         | unset. The setup page asks. Set, it locks the choice and skips the question. |
 | `--yes`, `-y`                    | `ORCHARD_ASSUME_YES`     | `false`                                                                     |
 | `--help`, `-h`                   |                          |                                                                             |
 |                                  | `NO_COLOR`               | unset. Any value disables colour.                                           |

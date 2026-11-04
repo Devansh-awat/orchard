@@ -37,6 +37,7 @@ ORCHARD_LOGS=${ORCHARD_LOGS:-true}
 ORCHARD_IMAGE_SCANNING=${ORCHARD_IMAGE_SCANNING:-true}
 ORCHARD_OBJECT_STORAGE=${ORCHARD_OBJECT_STORAGE:-true}
 ORCHARD_MCP=${ORCHARD_MCP:-true}
+ORCHARD_LIMITS=${ORCHARD_LIMITS:-}
 ORCHARD_MCP_DOMAIN=${ORCHARD_MCP_DOMAIN:-}
 ORCHARD_S3=${ORCHARD_S3:-}
 ORCHARD_S3_ENDPOINT=${ORCHARD_S3_ENDPOINT:-}
@@ -301,6 +302,9 @@ usage() {
     --s3-secret-key <secret>                            stays in your shell history
     --no-s3                      ORCHARD_S3=false       skip the question
 
+    --limits <on|off>            ORCHARD_LIMITS         resource limits on apps and databases,
+                                                        locked to this value. Unset, the setup
+                                                        page asks and you can change it later
     --yes, -y                    ORCHARD_ASSUME_YES     never prompt: use defaults, leave optional
                                                         steps off if they are not ready
                                  ORCHARD_PROMPT_TIMEOUT seconds to wait on a question before
@@ -349,6 +353,7 @@ parse_args() {
       --app-domain) need_value "$1" "${2:-}"; ORCHARD_APP_DOMAIN=$2; shift 2 ;;
       --mcp-domain) need_value "$1" "${2:-}"; ORCHARD_MCP_DOMAIN=$2; shift 2 ;;
       --mcp) need_value "$1" "${2:-}"; ORCHARD_MCP=$2; shift 2 ;;
+      --limits) need_value "$1" "${2:-}"; ORCHARD_LIMITS=$2; shift 2 ;;
       --s3-endpoint) need_value "$1" "${2:-}"; ORCHARD_S3_ENDPOINT=$2; shift 2 ;;
       --s3-bucket) need_value "$1" "${2:-}"; ORCHARD_S3_BUCKET=$2; shift 2 ;;
       --s3-region) need_value "$1" "${2:-}"; ORCHARD_S3_REGION=$2; shift 2 ;;
@@ -762,6 +767,10 @@ extra_hosts_list() {
 collect_domains() {
   step
 
+  case "$ORCHARD_LIMITS" in
+    ''|on|off) ;;
+    *) die "--limits takes on or off, not: $ORCHARD_LIMITS" ;;
+  esac
   case "$ORCHARD_MCP" in
     true|false) ;;
     *) die "--mcp takes true or false, not: $ORCHARD_MCP" ;;
@@ -1583,6 +1592,10 @@ size_workloads() {
   DB_DEFAULT_MEMORY_MB=1024
   if [ "$MEM_MB" -lt 9000 ]; then DB_DEFAULT_MEMORY_MB=512; fi
 
+  APP_DEFAULT_MEMORY_MB=1024
+  if [ "$MEM_MB" -lt 7500 ]; then APP_DEFAULT_MEMORY_MB=256
+  elif [ "$MEM_MB" -lt 17000 ]; then APP_DEFAULT_MEMORY_MB=512; fi
+
   info "concurrent builds: $MAX_BUILDS, build cache: ${BUILD_CACHE_GB}G, registry: ${REGISTRY_SIZE_GB}G, backups: ${OBJECT_STORAGE_GB}G, logs: ${LOGS_SIZE_GB}G"
   if [ "$SMALL_BOX" = true ]; then
     info "under 8G of RAM: metrics, logs and scanning run trimmed, with a week of logs"
@@ -1765,7 +1778,16 @@ write_values() {
   local db_memory_env=
   if [ ! -f "$VALUES_FILE" ]; then
     db_memory_env="
-    - { name: DATABASE_DEFAULT_MEMORY_MB, value: \"$DB_DEFAULT_MEMORY_MB\" }"
+    - { name: DATABASE_DEFAULT_MEMORY_MB, value: \"$DB_DEFAULT_MEMORY_MB\" }
+    - { name: DEFAULT_APP_MEMORY_MB, value: \"$APP_DEFAULT_MEMORY_MB\" }
+    - { name: TENANT_QUOTA_FLOOR_PODS, value: \"5000\" }
+    - { name: TENANT_QUOTA_FLOOR_SERVICES, value: \"2000\" }
+    - { name: TENANT_QUOTA_FLOOR_PVCS, value: \"1000\" }
+    - { name: TENANT_QUOTA_FLOOR_STORAGE_BYTES, value: \"109951162777600\" }"
+  fi
+  if [ -n "$ORCHARD_LIMITS" ]; then
+    db_memory_env="$db_memory_env
+    - { name: INSTANCE_RESOURCE_LIMITS, value: \"$ORCHARD_LIMITS\" }"
   fi
 
   cat > "$VALUES_FILE" <<EOF
