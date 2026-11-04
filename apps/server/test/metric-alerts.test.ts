@@ -8,9 +8,11 @@ import {
   describeRule,
   formatValue,
   recoverSecondsFor,
+  sampleHasData,
   type AlertClock,
   type MetricTarget
 } from '../src/alerts/metric-catalogue';
+import { MetricAlertsService } from '../src/alerts/metric-alerts.service';
 import { haproxy } from '../src/metrics/ingress/haproxy';
 import { traefik } from '../src/metrics/ingress/traefik';
 
@@ -168,4 +170,67 @@ test('comparators, recovery windows and labels read the way the rule was written
     describeRule({ metric: 'request_rate', comparator: 'lt', threshold: 1, forSeconds: 600 }),
     'Requests below 1 req/s for 10 min'
   );
+});
+
+function statesHarness(opts: { value: number | null; ok?: boolean; running?: boolean }) {
+  const service = Object.create(MetricAlertsService.prototype) as any;
+  const rule = {
+    id: 'r1',
+    organizationId: 'org',
+    scopeType: 'deployment',
+    scopeId: 'd1',
+    metric: 'cpu_percent',
+    comparator: 'gt',
+    threshold: 85,
+    forSeconds: 300,
+    minRequestRate: null,
+    enabled: true,
+    description: 'CPU',
+    inherited: false
+  };
+  service.listRules = async () => [rule];
+  service.prisma = {
+    metricAlertState: { findMany: async () => [] },
+    k8sWorkload: { findMany: async () => [] },
+    deployment: {
+      findMany: async () =>
+        opts.running === false
+          ? []
+          : [
+              {
+                id: 'd1',
+                name: 'web',
+                namespace: 'ns',
+                replicas: 1,
+                cpuRequestMilli: 100,
+                memoryRequestBytes: null,
+                project: {
+                  organization: { defaultPodCpuMilli: null, defaultPodMemoryBytes: null }
+                }
+              }
+            ]
+    }
+  };
+  service.observability = { ingressFor: async () => null };
+  service.vm = {
+    queryInstantStrict: async () =>
+      opts.ok === false ? { ok: false, reason: 'down' } : { ok: true, value: opts.value }
+  };
+  return service;
+}
+
+test('a rule with no state reads OK only when the metric has a value', async () => {
+  const status = async (opts: Parameters<typeof statesHarness>[0]) =>
+    (await statesHarness(opts).statesFor('org', 'd1'))[0].status;
+  assert.equal(await status({ value: 12 }), 'ok');
+  assert.equal(await status({ value: null }), 'unknown');
+  assert.equal(await status({ value: null, ok: false }), 'unknown');
+  assert.equal(await status({ value: 12, running: false }), 'unknown');
+});
+
+test('quiet traffic below the request floor is OK, not missing data', () => {
+  assert.equal(sampleHasData({ kind: 'ok', value: null }), true);
+  assert.equal(sampleHasData({ kind: 'ok', value: null, empty: true }), false);
+  assert.equal(sampleHasData({ kind: 'unknown', reason: 'down' }), false);
+  assert.equal(sampleHasData({ kind: 'breaching', value: 90 }), true);
 });

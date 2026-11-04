@@ -29,6 +29,7 @@ import {
   metricDef,
   recoverSecondsFor,
   RATE_WINDOW,
+  sampleHasData,
   type AlertClock,
   type Comparator,
   type MetricId,
@@ -294,12 +295,26 @@ export class MetricAlertsService {
       where: { targetId: deploymentId, ruleId: { in: rules.map((r) => r.id) } }
     });
     const byRule = new Map(states.map((s) => [s.ruleId, s]));
+    const quiet = rules.filter((rule) => rule.enabled && !byRule.has(rule.id));
+    const withData = new Set(
+      (
+        await Promise.all(
+          quiet.map(async (rule) =>
+            (await this.hasData({ ...rule, organizationId }, deploymentId).catch(() => false))
+              ? rule.id
+              : null
+          )
+        )
+      ).filter(Boolean)
+    );
     return rules.map((rule) => {
       const state = byRule.get(rule.id);
       const status = !rule.enabled
         ? 'off'
         : !state
-          ? 'ok'
+          ? withData.has(rule.id)
+            ? 'ok'
+            : 'unknown'
           : state.unknownSince
             ? 'unknown'
             : state.notifiedAt
@@ -321,6 +336,40 @@ export class MetricAlertsService {
         lastEvaluatedAt: state?.lastEvaluatedAt?.toISOString() ?? null
       };
     });
+  }
+
+  private async hasData(rule: RuleRow, deploymentId: string): Promise<boolean> {
+    const def = metricDef(rule.metric);
+    if (!def) return false;
+    const [target] = await this.targetsFor({
+      ...rule,
+      scopeType: 'deployment',
+      scopeId: deploymentId
+    });
+    if (!target) return false;
+    const selector = def.needsIngress ? await this.observability.ingressFor(target.id) : null;
+    const ctx = this.metricTarget(target, selector);
+    const query = buildMetricQuery(def.id, ctx);
+    if (query.kind === 'inapplicable') return false;
+    return sampleHasData(await this.sample(rule, def.id, query.promql, ctx));
+  }
+
+  private metricTarget(target: TargetRow, ingress: IngressQueries | null): MetricTarget {
+    return {
+      namespace: target.namespace,
+      name: target.name,
+      replicas: target.replicas,
+      cpuLimitMilli:
+        target.cpuRequestMilli ??
+        target.project.organization.defaultPodCpuMilli ??
+        FALLBACK_CPU_MILLI,
+      memoryLimitBytes: Number(
+        target.memoryRequestBytes ??
+          target.project.organization.defaultPodMemoryBytes ??
+          FALLBACK_MEMORY_BYTES
+      ),
+      ingress
+    };
   }
 
   @Interval(EVALUATE_EVERY_MS)
@@ -376,21 +425,7 @@ export class MetricAlertsService {
         selector = def.needsIngress ? await this.observability.ingressFor(target.id) : null;
         selectorCache.set(target.id, selector);
       }
-      const ctx: MetricTarget = {
-        namespace: target.namespace,
-        name: target.name,
-        replicas: target.replicas,
-        cpuLimitMilli:
-          target.cpuRequestMilli ??
-          target.project.organization.defaultPodCpuMilli ??
-          FALLBACK_CPU_MILLI,
-        memoryLimitBytes: Number(
-          target.memoryRequestBytes ??
-            target.project.organization.defaultPodMemoryBytes ??
-            FALLBACK_MEMORY_BYTES
-        ),
-        ingress: selector
-      };
+      const ctx = this.metricTarget(target, selector);
       const query = buildMetricQuery(def.id, ctx);
       if (query.kind === 'inapplicable') continue;
       used += 1;
@@ -415,7 +450,7 @@ export class MetricAlertsService {
     }
     const result = await this.vm.queryInstantStrict(promql);
     if (result.ok === false) return { kind: 'unknown', reason: result.reason };
-    if (result.value === null) return { kind: 'ok', value: null };
+    if (result.value === null) return { kind: 'ok', value: null, empty: true };
     return breaches(rule.comparator as Comparator, result.value, rule.threshold)
       ? { kind: 'breaching', value: result.value }
       : { kind: 'ok', value: result.value };

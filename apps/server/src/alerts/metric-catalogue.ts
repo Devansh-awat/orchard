@@ -229,8 +229,13 @@ export interface AlertClock {
 
 export type Sample =
   | { kind: 'breaching'; value: number }
-  | { kind: 'ok'; value: number | null }
+  | { kind: 'ok'; value: number | null; empty?: boolean }
   | { kind: 'unknown'; reason: string };
+
+export function sampleHasData(sample: Sample): boolean {
+  if (sample.kind === 'unknown') return false;
+  return !(sample.kind === 'ok' && sample.empty);
+}
 
 export type AlertAction = 'fire' | 'resolve' | 'drop' | null;
 
