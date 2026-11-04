@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { Button, Dropdown, Field, FieldGrid, Input, SecretInput } from '$lib/components/ui';
+	import { Pending } from './pending.svelte';
 	import { apiFetch, instanceFeatures, toasts } from '$lib/stores';
 	import { STORAGE_PROVIDERS, storageConnection, storageProvider } from '$lib/storage-providers';
 
@@ -6,6 +8,13 @@
 		onDone,
 		onSkip
 	}: { onDone: () => Promise<void> | void; onSkip: () => Promise<void> | void } = $props();
+
+	const uid = $props.id();
+	const skipping = new Pending();
+	const providerOptions = STORAGE_PROVIDERS.map((option) => ({
+		value: option.id,
+		label: option.label
+	}));
 
 	let providerId = $state('aws');
 	let place = $state('');
@@ -89,57 +98,71 @@
 		local directory.
 	</p>
 
-	<div class="setup-body fields">
-		<select aria-label="Provider" bind:value={providerId}>
-			{#each STORAGE_PROVIDERS as option (option.id)}
-				<option value={option.id}>{option.label}</option>
-			{/each}
-		</select>
+	<div class="setup-body setup-fields">
+		<Field label="Provider" for="{uid}-provider">
+			<Dropdown id="{uid}-provider" size="lg" options={providerOptions} bind:value={providerId} />
+		</Field>
 		{#if provider.placeLabel}
-			<input
-				aria-label={provider.placeLabel}
-				placeholder={provider.placeDefault || provider.placeLabel}
-				autocomplete="off"
-				spellcheck="false"
-				bind:value={place}
-			/>
+			<Field label={provider.placeLabel} for="{uid}-place">
+				<Input
+					id="{uid}-place"
+					size="lg"
+					placeholder={provider.placeDefault}
+					autocomplete="off"
+					spellcheck="false"
+					bind:value={place}
+				/>
+			</Field>
 		{:else}
-			<input
-				aria-label="Endpoint"
-				placeholder="https://s3.example.com"
-				autocomplete="off"
-				spellcheck="false"
-				bind:value={endpoint}
-			/>
-			<input
-				aria-label="Region"
-				placeholder="us-east-1"
-				autocomplete="off"
-				spellcheck="false"
-				bind:value={region}
-			/>
+			<Field label="Endpoint" for="{uid}-endpoint">
+				<Input
+					id="{uid}-endpoint"
+					size="lg"
+					placeholder="https://s3.example.com"
+					autocomplete="off"
+					spellcheck="false"
+					bind:value={endpoint}
+				/>
+			</Field>
+			<Field label="Region" for="{uid}-region">
+				<Input
+					id="{uid}-region"
+					size="lg"
+					placeholder="us-east-1"
+					autocomplete="off"
+					spellcheck="false"
+					bind:value={region}
+				/>
+			</Field>
 		{/if}
-		<input
-			aria-label="Bucket"
-			placeholder="Bucket"
-			autocomplete="off"
-			spellcheck="false"
-			bind:value={bucket}
-		/>
-		<input
-			aria-label="Access key"
-			placeholder="Access key"
-			autocomplete="off"
-			spellcheck="false"
-			bind:value={accessKeyId}
-		/>
-		<input
-			aria-label="Secret key"
-			placeholder="Secret key"
-			type="password"
-			autocomplete="new-password"
-			bind:value={secretAccessKey}
-		/>
+		<Field label="Bucket" for="{uid}-bucket">
+			<Input
+				id="{uid}-bucket"
+				size="lg"
+				autocomplete="off"
+				spellcheck="false"
+				bind:value={bucket}
+			/>
+		</Field>
+		<FieldGrid>
+			<Field label="Access key" for="{uid}-access">
+				<Input
+					id="{uid}-access"
+					size="lg"
+					autocomplete="off"
+					spellcheck="false"
+					bind:value={accessKeyId}
+				/>
+			</Field>
+			<Field label="Secret key" for="{uid}-secret">
+				<SecretInput
+					id="{uid}-secret"
+					size="lg"
+					autocomplete="new-password"
+					bind:value={secretAccessKey}
+				/>
+			</Field>
+		</FieldGrid>
 	</div>
 
 	{#if failure}
@@ -150,38 +173,37 @@
 
 	<div class="setup-acts">
 		{#if passed}
-			<button class="setup-pill" disabled={saving} onclick={save}>
-				{saving ? 'Saving' : 'Save and continue'}
-			</button>
+			<Button
+				variant="primary"
+				size="lg"
+				shape="capsule"
+				loading={saving}
+				disabled={skipping.active}
+				onclick={save}
+			>
+				Save and continue
+			</Button>
 		{:else}
-			<button class="setup-pill" disabled={testing} onclick={test}>
-				{testing ? 'Testing' : 'Test connection'}
-			</button>
+			<Button
+				variant="primary"
+				size="lg"
+				shape="capsule"
+				loading={testing}
+				disabled={skipping.active}
+				onclick={test}
+			>
+				Test connection
+			</Button>
 		{/if}
-		<button class="setup-ghost" onclick={onSkip}>Skip for now</button>
+		<Button
+			variant="ghost"
+			size="lg"
+			shape="capsule"
+			loading={skipping.active}
+			disabled={saving || testing}
+			onclick={() => skipping.run(onSkip)}
+		>
+			Skip for now
+		</Button>
 	</div>
 </section>
-
-<style>
-	.fields {
-		display: grid;
-		gap: 0.5rem;
-	}
-
-	select {
-		width: 100%;
-		font: inherit;
-		font-size: 0.9375rem;
-		text-align: center;
-		padding: 0.72rem 0.8rem;
-		border-radius: 0.75rem;
-		border: 1px solid var(--setup-line);
-		background: rgba(255, 255, 255, 0.62);
-		color: var(--setup-ink);
-		outline: none;
-	}
-
-	select:focus {
-		border-color: color-mix(in srgb, var(--setup-crimson) 55%, transparent);
-	}
-</style>

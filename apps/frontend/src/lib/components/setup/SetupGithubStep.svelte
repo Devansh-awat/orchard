@@ -1,6 +1,9 @@
 <script lang="ts">
+	import { Button, Field, Input, Spinner } from '$lib/components/ui';
+	import { Pending } from './pending.svelte';
 	import { onMount } from 'svelte';
 	import { apiFetch, toasts } from '$lib/stores';
+	import { createGithubApp } from '$lib/queries/github';
 
 	let {
 		onDone,
@@ -13,6 +16,9 @@
 		lockedFields: string[];
 		installUrl: string | null;
 	};
+
+	const uid = $props.id();
+	const continuing = new Pending();
 
 	let status = $state<Status | null>(null);
 	let organization = $state('');
@@ -35,29 +41,7 @@
 	async function create() {
 		creating = true;
 		try {
-			const response = await apiFetch('/apiv1/setup/github-app/manifest', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					organization: organization.trim() || undefined,
-					// Creating the App leaves this page for github.com entirely, so
-					// the round trip has to carry its own way back into the flow.
-					returnTo: '/setup'
-				})
-			});
-			if (!response.ok) throw new Error("Couldn't create the GitHub App");
-
-			const { postUrl, manifest, state } = await response.json();
-			const form = document.createElement('form');
-			form.method = 'POST';
-			form.action = `${postUrl}?state=${encodeURIComponent(state)}`;
-			const field = document.createElement('input');
-			field.type = 'hidden';
-			field.name = 'manifest';
-			field.value = manifest;
-			form.appendChild(field);
-			document.body.appendChild(form);
-			form.submit();
+			await createGithubApp(organization, '/setup');
 		} catch (e) {
 			toasts.add({
 				title: e instanceof Error ? e.message : "Couldn't create the GitHub App",
@@ -71,7 +55,7 @@
 <section class="setup-step">
 	{#if loading}
 		<h2>Connect GitHub</h2>
-		<div class="setup-body setup-pulse"><i></i><i></i><i></i></div>
+		<div class="setup-body setup-spinner"><Spinner size={20} /></div>
 	{:else if status?.configured}
 		<h2>GitHub is connected</h2>
 		<p>
@@ -81,17 +65,40 @@
 
 		<div class="setup-acts">
 			{#if status.installUrl}
-				<a class="setup-pill" href={status.installUrl} target="_blank" rel="noreferrer">
+				<Button
+					variant="primary"
+					size="lg"
+					shape="capsule"
+					href={status.installUrl}
+					target="_blank"
+					rel="noreferrer"
+				>
 					Install the App
-				</a>
+				</Button>
 			{/if}
-			<button class="setup-ghost" onclick={onDone}>Continue</button>
+			<Button
+				variant="ghost"
+				size="lg"
+				shape="capsule"
+				loading={continuing.active}
+				onclick={() => continuing.run(onDone)}
+			>
+				Continue
+			</Button>
 		</div>
 	{:else if locked}
 		<h2>Connect GitHub</h2>
 		<p>Environment variables set the GitHub App on this instance, so you have nothing to create.</p>
 		<div class="setup-acts">
-			<button class="setup-pill" onclick={onDone}>Continue</button>
+			<Button
+				variant="primary"
+				size="lg"
+				shape="capsule"
+				loading={continuing.active}
+				onclick={() => continuing.run(onDone)}
+			>
+				Continue
+			</Button>
 		</div>
 	{:else}
 		<h2>Connect GitHub</h2>
@@ -100,22 +107,43 @@
 			work. Public repositories still deploy.
 		</p>
 
-		<div class="setup-body">
-			<input
-				bind:value={organization}
-				placeholder="GitHub organization (optional)"
-				aria-label="GitHub organization"
-				autocomplete="off"
-				spellcheck="false"
-			/>
-			<p class="setup-note">Leave it blank to create the App on your personal account.</p>
+		<div class="setup-body setup-fields">
+			<Field
+				label="GitHub organization"
+				for="{uid}-org"
+				hint="Leave it blank to create the App on your personal account."
+			>
+				<Input
+					id="{uid}-org"
+					size="lg"
+					bind:value={organization}
+					autocomplete="off"
+					spellcheck="false"
+				/>
+			</Field>
 		</div>
 
 		<div class="setup-acts">
-			<button class="setup-pill" disabled={creating} onclick={create}>
-				{creating ? 'Opening GitHub' : 'Create GitHub App'}
-			</button>
-			<button class="setup-ghost" onclick={onSkip}>Skip for now</button>
+			<Button
+				variant="primary"
+				size="lg"
+				shape="capsule"
+				loading={creating}
+				disabled={continuing.active}
+				onclick={create}
+			>
+				Create GitHub App
+			</Button>
+			<Button
+				variant="ghost"
+				size="lg"
+				shape="capsule"
+				loading={continuing.active}
+				disabled={creating}
+				onclick={() => continuing.run(onSkip)}
+			>
+				Skip for now
+			</Button>
 		</div>
 	{/if}
 </section>
@@ -124,11 +152,5 @@
 	.gh-slug {
 		color: var(--setup-crimson);
 		font-weight: 500;
-	}
-
-	a.setup-pill {
-		display: block;
-		text-align: center;
-		text-decoration: none;
 	}
 </style>

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { Button } from '$lib/components/ui';
+	import { Pending } from './pending.svelte';
 	import { telemetry } from '$lib/stores';
 	import { presence } from '$lib/utils/transitions';
 	import SettingCommand from './SettingCommand.svelte';
@@ -12,6 +14,8 @@
 		overview: SetupOverview | null;
 		onDone: (href?: string) => Promise<void> | void;
 	} = $props();
+
+	const leaving = new Pending();
 
 	const items = $derived(overview?.items ?? []);
 	const changes = $derived(settingChanges(overview));
@@ -83,11 +87,14 @@
 						<div class="row">
 							<span class="name">{item.title}</span>
 							<span class="state">{item.state === 'skipped' ? 'Skipped' : item.value}</span>
-							<button
-								class="change"
+							<Button
+								variant="ghost"
+								size="sm"
 								aria-expanded={changeFor(item) ? !!opened[item.id] : undefined}
-								onclick={() => change(item)}>Change</button
+								onclick={() => change(item)}
 							>
+								Change
+							</Button>
 						</div>
 						{#if item.detail}
 							<p class="detail">{item.detail}</p>
@@ -106,11 +113,14 @@
 						<div class="row">
 							<span class="name">{item.title}</span>
 							<span class="state">{item.value}</span>
-							<button
-								class="change"
+							<Button
+								variant="ghost"
+								size="sm"
 								aria-expanded={changeFor(item) ? !!opened[item.id] : undefined}
-								onclick={() => change(item)}>Change</button
+								onclick={() => change(item)}
 							>
+								Change
+							</Button>
 						</div>
 						{@render command(item)}
 					</li>
@@ -120,7 +130,15 @@
 	</div>
 
 	<div class="setup-acts">
-		<button class="setup-pill" onclick={() => onDone()}>Go to Orchard</button>
+		<Button
+			variant="primary"
+			size="lg"
+			shape="capsule"
+			loading={leaving.active}
+			onclick={() => leaving.run(() => onDone())}
+		>
+			Go to Orchard
+		</Button>
 	</div>
 </section>
 
@@ -148,6 +166,7 @@
 	}
 
 	.row {
+		margin-right: -0.625rem;
 		display: flex;
 		align-items: baseline;
 		gap: 0.5rem;
@@ -169,23 +188,6 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		color: var(--setup-ink-soft);
-	}
-
-	.change {
-		flex: none;
-		border: 0;
-		background: none;
-		padding: 0;
-		cursor: pointer;
-		font: inherit;
-		font-weight: 500;
-		color: var(--setup-crimson);
-	}
-
-	.change:focus-visible {
-		outline: 2px solid var(--setup-crimson);
-		outline-offset: 2px;
-		border-radius: 0.25rem;
 	}
 
 	.command {

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { Button, Spinner } from '$lib/components/ui';
+	import { Pending } from './pending.svelte';
 	import { onMount, onDestroy } from 'svelte';
 	import { apiFetch } from '$lib/stores';
 	import type { SetupCertificate } from './setup-overview';
@@ -7,6 +9,8 @@
 
 	const POLL_MS = 3000;
 	const DEADLINE_MS = 90_000;
+
+	const continuing = new Pending();
 
 	let cert = $state<SetupCertificate>({ state: 'issuing', host: null, message: null });
 	let waiting = $state(true);
@@ -105,17 +109,33 @@
 
 	{#if waiting}
 		<div class="setup-body">
-			<div class="setup-pulse" data-motion="progress"><i></i><i></i><i></i></div>
+			<div class="setup-spinner"><Spinner size={20} /></div>
 		</div>
 	{/if}
 
 	<div class="setup-acts">
 		{#if waiting}
-			<button class="setup-ghost" onclick={onDone}>Continue while it retries</button>
+			<Button
+				variant="ghost"
+				size="lg"
+				shape="capsule"
+				loading={continuing.active}
+				onclick={() => continuing.run(onDone)}
+			>
+				Continue while it retries
+			</Button>
 		{:else}
-			<button class="setup-pill" onclick={onDone}>Continue</button>
+			<Button
+				variant="primary"
+				size="lg"
+				shape="capsule"
+				loading={continuing.active}
+				onclick={() => continuing.run(onDone)}
+			>
+				Continue
+			</Button>
 			{#if canRetry}
-				<button class="setup-ghost" onclick={watch}>Check again</button>
+				<Button variant="ghost" size="lg" shape="capsule" onclick={watch}>Check again</Button>
 			{/if}
 		{/if}
 	</div>

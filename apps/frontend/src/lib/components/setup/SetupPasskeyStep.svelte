@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Button, Field, SecretInput } from '$lib/components/ui';
 	import { apiFetch, toasts } from '$lib/stores';
 	import {
 		registerPasskey,
@@ -9,6 +10,7 @@
 
 	let { onDone }: { onDone: () => Promise<void> | void } = $props();
 
+	const uid = $props.id();
 	const MIN_LENGTH = 12;
 
 	let working = $state(false);
@@ -82,12 +84,18 @@
 		{/if}
 
 		<div class="setup-acts">
-			<button class="setup-pill" disabled={working} onclick={add}>
+			<Button variant="primary" size="lg" shape="capsule" loading={working} onclick={add}>
 				{working ? 'Waiting for your device' : 'Create passkey'}
-			</button>
-			<button class="setup-ghost" onclick={() => ((choice = 'password'), (error = null))}>
+			</Button>
+			<Button
+				variant="ghost"
+				size="lg"
+				shape="capsule"
+				disabled={working}
+				onclick={() => ((choice = 'password'), (error = null))}
+			>
 				Set a password instead
-			</button>
+			</Button>
 		</div>
 	{:else}
 		<h2>Set a password</h2>
@@ -102,31 +110,39 @@
 			<p>Lets you sign in without this device. Use at least 12 characters.</p>
 		{/if}
 
-		<div class="setup-body">
-			<input
-				type="password"
-				bind:value={password}
-				placeholder="New password"
-				aria-label="New password"
-				autocomplete="new-password"
-			/>
-			<input
-				type="password"
-				bind:value={confirm}
-				placeholder="Confirm password"
-				aria-label="Confirm password"
-				autocomplete="new-password"
-			/>
+		<div class="setup-body setup-fields">
+			<Field label="New password" for="{uid}-password">
+				<SecretInput
+					id="{uid}-password"
+					size="lg"
+					bind:value={password}
+					autocomplete="new-password"
+				/>
+			</Field>
+			<Field label="Confirm password" for="{uid}-confirm">
+				<SecretInput
+					id="{uid}-confirm"
+					size="lg"
+					bind:value={confirm}
+					autocomplete="new-password"
+				/>
+			</Field>
 		</div>
 
 		<div class="setup-acts">
-			<button class="setup-pill" disabled={working} onclick={savePassword}>
-				{working ? 'Saving' : 'Set password'}
-			</button>
+			<Button variant="primary" size="lg" shape="capsule" loading={working} onclick={savePassword}>
+				Set password
+			</Button>
 			{#if passkeyAvailable}
-				<button class="setup-ghost" onclick={() => ((choice = 'passkey'), (error = null))}>
+				<Button
+					variant="ghost"
+					size="lg"
+					shape="capsule"
+					disabled={working}
+					onclick={() => ((choice = 'passkey'), (error = null))}
+				>
 					Use a passkey instead
-				</button>
+				</Button>
 			{/if}
 		</div>
 
@@ -138,9 +154,3 @@
 		{/if}
 	{/if}
 </section>
-
-<style>
-	.setup-body input + input {
-		margin-top: 0.5rem;
-	}
-</style>

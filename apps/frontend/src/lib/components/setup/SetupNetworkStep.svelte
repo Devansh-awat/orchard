@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { Button, Field, Input } from '$lib/components/ui';
+	import { Pending } from './pending.svelte';
 	import { apiFetch, toasts } from '$lib/stores';
 	import { dashboardHost, parentDomain, type SetupOverview } from './setup-overview';
 
@@ -12,6 +14,8 @@
 		onSkip: () => Promise<void> | void;
 	} = $props();
 
+	const uid = $props.id();
+	const skipping = new Pending();
 	const host = dashboardHost(overview);
 
 	let publicIp = $state(overview.publicIp ?? '');
@@ -58,47 +62,74 @@
 	<p>This instance wasn't installed with the script, so check these before you deploy.</p>
 
 	<div class="setup-body setup-fields">
-		<label class="setup-field">
-			<span>Public IP</span>
-			<input
+		<Field
+			label="Public IP"
+			for="{uid}-ip"
+			hint="Public ports and databases use it. Leave blank to keep them unavailable."
+		>
+			<Input
+				id="{uid}-ip"
+				size="lg"
 				bind:value={publicIp}
 				disabled={overview.locked.publicIp}
 				placeholder="203.0.113.10"
 				autocomplete="off"
 				spellcheck="false"
 			/>
-			<small>Public ports and databases use it. Leave blank to keep them unavailable.</small>
-		</label>
-		<label class="setup-field">
-			<span>Apps domain</span>
-			<input
+		</Field>
+		<Field
+			label="Apps domain"
+			for="{uid}-apps"
+			hint="Needs a wildcard DNS record, *.{appDomain ||
+				'apps.example.com'}. If blank, apps get no URL."
+		>
+			<Input
+				id="{uid}-apps"
+				size="lg"
 				bind:value={appDomain}
 				disabled={overview.locked.appDomain}
 				placeholder="apps.example.com"
 				autocomplete="off"
 				spellcheck="false"
 			/>
-			<small>
-				Needs a wildcard DNS record, *.{appDomain || 'apps.example.com'}. If blank, apps get no URL.
-			</small>
-		</label>
-		<label class="setup-field">
-			<span>Custom domains target</span>
-			<input
+		</Field>
+		<Field
+			label="Custom domains target"
+			for="{uid}-cname"
+			hint="People point a CNAME here. If blank, Orchard can't check their domains."
+		>
+			<Input
+				id="{uid}-cname"
+				size="lg"
 				bind:value={cname}
 				disabled={overview.locked.cname}
 				placeholder="orchard.example.com"
 				autocomplete="off"
 				spellcheck="false"
 			/>
-			<small>People point a CNAME here. If blank, Orchard can't check their domains.</small>
-		</label>
+		</Field>
 	</div>
 
 	<div class="setup-acts">
-		<button class="setup-pill" disabled={saving} onclick={save}>
-			{saving ? 'Saving' : 'Save and continue'}
-		</button>
-		<button class="setup-ghost" onclick={onSkip}>Skip for now</button>
+		<Button
+			variant="primary"
+			size="lg"
+			shape="capsule"
+			loading={saving}
+			disabled={skipping.active}
+			onclick={save}
+		>
+			Save and continue
+		</Button>
+		<Button
+			variant="ghost"
+			size="lg"
+			shape="capsule"
+			loading={skipping.active}
+			disabled={saving}
+			onclick={() => skipping.run(onSkip)}
+		>
+			Skip for now
+		</Button>
 	</div>
 </section>

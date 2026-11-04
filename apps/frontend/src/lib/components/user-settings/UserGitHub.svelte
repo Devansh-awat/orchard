@@ -1,8 +1,20 @@
 <script lang="ts">
-	import { Building2, ExternalLink, Plus } from 'lucide-svelte';
-	import { Button, List, ListRow, SectionCard, Skeleton, ToneTile } from '$lib/components/ui';
+	import { Building2, ExternalLink, GitBranch, Plus } from 'lucide-svelte';
+	import {
+		Button,
+		Field,
+		Input,
+		List,
+		ListRow,
+		Modal,
+		ModalIntro,
+		SectionCard,
+		Skeleton,
+		ToneTile
+	} from '$lib/components/ui';
 	import GitHostMark from '$lib/components/ui/GitHostMark.svelte';
-	import { installationSettingsUrl } from '$lib/queries/github';
+	import { createGithubApp, installationSettingsUrl } from '$lib/queries/github';
+	import { isSuperAdmin, toasts } from '$lib/stores';
 
 	interface GitHubInstallation {
 		id: string;
@@ -19,6 +31,7 @@
 		githubInstallations,
 		githubAppInstallUrl,
 		githubTokenExpired = false,
+		appConfigured = true,
 		unlinking,
 		onLink,
 		onUnlink
@@ -29,21 +42,49 @@
 		githubInstallations: GitHubInstallation[];
 		githubAppInstallUrl: string | null;
 		githubTokenExpired?: boolean;
+		appConfigured?: boolean;
 		unlinking: boolean;
 		onLink: () => void;
 		onUnlink: () => void;
 		index?: number;
 	} = $props();
 
+	const uid = $props.id();
+	let showSetup = $state(false);
+	let organization = $state('');
+	let creating = $state(false);
+
+	async function createApp() {
+		creating = true;
+		try {
+			await createGithubApp(organization, '/user/settings');
+		} catch (e) {
+			toasts.add({
+				title: e instanceof Error ? e.message : "Couldn't create the GitHub App",
+				color: 'error'
+			});
+			creating = false;
+		}
+	}
+
 	const showAccess = $derived(
 		githubLinked && !githubTokenExpired && (githubInstallations.length > 0 || !!githubAppInstallUrl)
 	);
 </script>
 
-<SectionCard title="GitHub" description="Deploy from your repositories">
+<SectionCard
+	title="GitHub"
+	description={!loading && !githubLinked && !appConfigured && !$isSuperAdmin
+		? 'An instance admin needs to set up GitHub first'
+		: 'Deploy from your repositories'}
+>
 	{#snippet actions()}
 		{#if !loading && !githubLinked}
-			<Button size="sm" variant="primary" onclick={onLink}>Connect</Button>
+			{#if appConfigured}
+				<Button size="sm" variant="primary" onclick={onLink}>Connect</Button>
+			{:else if $isSuperAdmin}
+				<Button size="sm" variant="primary" onclick={() => (showSetup = true)}>Set up</Button>
+			{/if}
 		{/if}
 	{/snippet}
 	{#if loading}
@@ -75,6 +116,40 @@
 		</List>
 	{/if}
 </SectionCard>
+
+<Modal bind:open={showSetup} size="md" closable={false} dismissable labelledby="{uid}-title">
+	<form
+		id="{uid}-form"
+		class="setup-form"
+		onsubmit={(e) => {
+			e.preventDefault();
+			createApp();
+		}}
+	>
+		<ModalIntro
+			id="{uid}-title"
+			icon={GitBranch}
+			tone="accent"
+			title="Set up GitHub"
+			description="This instance has no GitHub App yet. Create one in one click, then connect your account."
+		/>
+		<Field
+			label="GitHub organization"
+			for="{uid}-org"
+			hint="Leave it blank to create the App on your personal account."
+		>
+			<Input id="{uid}-org" bind:value={organization} autocomplete="off" spellcheck="false" />
+		</Field>
+	</form>
+	{#snippet footer()}
+		<Button variant="ghost" shape="capsule" disabled={creating} onclick={() => (showSetup = false)}>
+			Cancel
+		</Button>
+		<Button variant="primary" shape="capsule" type="submit" form="{uid}-form" loading={creating}>
+			Create GitHub App
+		</Button>
+	{/snippet}
+</Modal>
 
 {#if !loading && showAccess}
 	<SectionCard
@@ -129,6 +204,11 @@
 {/if}
 
 <style>
+	.setup-form {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
 	.placeholder {
 		display: flex;
 		flex-direction: column;

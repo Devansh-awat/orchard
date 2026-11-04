@@ -12,6 +12,15 @@ export const ENTRIES: ChangelogEntry[] = [
     date: '2026-11-04',
     type: 'Feature',
     component: 'Install',
+    text: 'Set up GitHub from your account settings',
+    detail:
+      'If an instance has no GitHub App, a superadmin can create one from the GitHub card. Other members see that an admin needs to set it up.',
+    href: '/deploy/github/'
+  },
+  {
+    date: '2026-11-04',
+    type: 'Feature',
+    component: 'Install',
     text: 'The installer now guides you through setup',
     detail:
       'The installer asks one question at a time and offers a default for each answer. It shows your answers for review, and checks your DNS records before it installs anything.',

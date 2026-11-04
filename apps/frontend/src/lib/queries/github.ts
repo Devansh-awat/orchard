@@ -107,3 +107,24 @@ export async function prefetchGitHubRepos() {
 	const account = defaultAccount(status.installations ?? []);
 	if (account) void queryClient.prefetchQuery(repoSearchQueryOptions(account, ''));
 }
+
+export async function createGithubApp(organization: string, returnTo: string): Promise<void> {
+	const response = await apiFetch('/apiv1/setup/github-app/manifest', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ organization: organization.trim() || undefined, returnTo })
+	});
+	if (!response.ok) throw new Error("Couldn't create the GitHub App");
+
+	const { postUrl, manifest, state } = await response.json();
+	const form = document.createElement('form');
+	form.method = 'POST';
+	form.action = `${postUrl}?state=${encodeURIComponent(state)}`;
+	const field = document.createElement('input');
+	field.type = 'hidden';
+	field.name = 'manifest';
+	field.value = manifest;
+	form.appendChild(field);
+	document.body.appendChild(form);
+	form.submit();
+}

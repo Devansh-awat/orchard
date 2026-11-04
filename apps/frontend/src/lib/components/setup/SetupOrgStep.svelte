@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { Button, Field, Input } from '$lib/components/ui';
+	import { Pending } from './pending.svelte';
 	import { onMount } from 'svelte';
 	import { animate } from 'motion';
 	import { apiFetch, organizations, toasts } from '$lib/stores';
@@ -10,6 +12,9 @@
 	}: { onDone: () => Promise<void> | void; onSkip: () => Promise<void> | void } = $props();
 
 	type Org = { id: string; name: string; slug: string };
+
+	const uid = $props.id();
+	const skipping = new Pending();
 
 	let org = $state<Org | null>(null);
 	let name = $state('');
@@ -72,18 +77,36 @@
 	<h2>Name your organization</h2>
 	<p>Orchard created one for you. Rename it, or keep this name.</p>
 
-	<div class="setup-body">
-		<input bind:value={name} placeholder={org?.name ?? ''} aria-label="Organization name" />
+	<div class="setup-body setup-fields">
+		<Field label="Organization name" for="{uid}-name">
+			<Input id="{uid}-name" size="lg" bind:value={name} placeholder={org?.name ?? ''} />
+		</Field>
 		<p class="setup-slug">
 			<span class="scheme">https://</span>{host}/<b bind:this={slugEl}>{slug}</b>
 		</p>
 	</div>
 
 	<div class="setup-acts">
-		<button class="setup-pill" disabled={!dirty || saving} onclick={save}>
-			{saving ? 'Saving' : 'Save'}
-		</button>
-		<button class="setup-ghost" onclick={onSkip}>Keep it</button>
+		<Button
+			variant="primary"
+			size="lg"
+			shape="capsule"
+			loading={saving}
+			disabled={!dirty || skipping.active}
+			onclick={save}
+		>
+			Save
+		</Button>
+		<Button
+			variant="ghost"
+			size="lg"
+			shape="capsule"
+			loading={skipping.active}
+			disabled={saving}
+			onclick={() => skipping.run(onSkip)}
+		>
+			Keep it
+		</Button>
 	</div>
 </section>
 

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { Button } from '$lib/components/ui';
+	import { Pending } from './pending.svelte';
 	import { apiFetch, instanceFeatures, toasts } from '$lib/stores';
 	import SettingCommand from './SettingCommand.svelte';
 	import { settingChanges } from './setting-changes';
@@ -13,6 +15,8 @@
 	} = $props();
 
 	const enable = $derived(settingChanges(overview).mcp);
+
+	const continuing = new Pending();
 
 	let saving = $state(false);
 
@@ -49,11 +53,27 @@
 		</div>
 
 		<div class="setup-acts">
-			<button class="setup-pill" disabled={saving} onclick={onDone}>Keep it on</button>
+			<Button
+				variant="primary"
+				size="lg"
+				shape="capsule"
+				loading={continuing.active}
+				disabled={saving}
+				onclick={() => continuing.run(onDone)}
+			>
+				Keep it on
+			</Button>
 			{#if !overview.mcp.locked}
-				<button class="setup-ghost" disabled={saving} onclick={turnOff}>
-					{saving ? 'Turning off' : 'Turn it off'}
-				</button>
+				<Button
+					variant="ghost"
+					size="lg"
+					shape="capsule"
+					loading={saving}
+					disabled={continuing.active}
+					onclick={turnOff}
+				>
+					Turn it off
+				</Button>
 			{/if}
 		</div>
 	{:else}
@@ -67,7 +87,15 @@
 		{/if}
 
 		<div class="setup-acts">
-			<button class="setup-pill" onclick={onDone}>Continue without it</button>
+			<Button
+				variant="primary"
+				size="lg"
+				shape="capsule"
+				loading={continuing.active}
+				onclick={() => continuing.run(onDone)}
+			>
+				Continue without it
+			</Button>
 		</div>
 	{/if}
 </section>

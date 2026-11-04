@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { Button, Field, FieldGrid, Input, SecretInput } from '$lib/components/ui';
+	import { Pending } from './pending.svelte';
 	import { apiFetch, toasts, user } from '$lib/stores';
 
 	let {
@@ -8,6 +10,9 @@
 		onDone: () => Promise<void> | void;
 		onSkip: () => Promise<void> | void;
 	} = $props();
+
+	const uid = $props.id();
+	const skipping = new Pending();
 
 	let host = $state('');
 	let port = $state('');
@@ -84,46 +89,57 @@
 	<h2>Set up email</h2>
 	<p>Optional. Without it, there are no email sign-in codes, and invitations are links you copy.</p>
 
-	<div class="setup-body setup-grid">
-		<input
-			class="wide"
-			aria-label="SMTP host"
-			placeholder="SMTP host"
-			autocomplete="off"
-			spellcheck="false"
-			bind:value={host}
-		/>
-		<input
-			aria-label="Port"
-			placeholder="Port (587)"
-			inputmode="numeric"
-			autocomplete="off"
-			bind:value={port}
-		/>
-		<input
-			aria-label="Username"
-			placeholder="Username"
-			autocomplete="off"
-			spellcheck="false"
-			bind:value={username}
-		/>
-		<input
-			class="full"
-			aria-label="Password"
-			placeholder="Password"
-			type="password"
-			autocomplete="new-password"
-			bind:value={password}
-		/>
-		<input
-			class="full"
-			aria-label="From address"
-			placeholder="From address"
-			type="email"
-			autocomplete="off"
-			spellcheck="false"
-			bind:value={from}
-		/>
+	<div class="setup-body setup-fields">
+		<Field label="SMTP host" for="{uid}-host">
+			<Input
+				id="{uid}-host"
+				size="lg"
+				placeholder="smtp.example.com"
+				autocomplete="off"
+				spellcheck="false"
+				bind:value={host}
+			/>
+		</Field>
+		<FieldGrid>
+			<Field label="Port" for="{uid}-port">
+				<Input
+					id="{uid}-port"
+					size="lg"
+					placeholder="587"
+					inputmode="numeric"
+					autocomplete="off"
+					bind:value={port}
+				/>
+			</Field>
+			<Field label="Username" for="{uid}-username">
+				<Input
+					id="{uid}-username"
+					size="lg"
+					autocomplete="off"
+					spellcheck="false"
+					bind:value={username}
+				/>
+			</Field>
+		</FieldGrid>
+		<Field label="Password" for="{uid}-password">
+			<SecretInput
+				id="{uid}-password"
+				size="lg"
+				autocomplete="new-password"
+				bind:value={password}
+			/>
+		</Field>
+		<Field label="From address" for="{uid}-from">
+			<Input
+				id="{uid}-from"
+				size="lg"
+				type="email"
+				placeholder="orchard@example.com"
+				autocomplete="off"
+				spellcheck="false"
+				bind:value={from}
+			/>
+		</Field>
 	</div>
 
 	{#if failure}
@@ -134,30 +150,49 @@
 
 	<div class="setup-acts">
 		{#if passed}
-			<button class="setup-pill" disabled={saving} onclick={save}>
-				{saving ? 'Saving' : 'Save and continue'}
-			</button>
+			<Button
+				variant="primary"
+				size="lg"
+				shape="capsule"
+				loading={saving}
+				disabled={skipping.active}
+				onclick={save}
+			>
+				Save and continue
+			</Button>
 		{:else}
-			<button class="setup-pill" disabled={testing || !host.trim()} onclick={test}>
-				{testing ? 'Sending' : 'Send a test email'}
-			</button>
+			<Button
+				variant="primary"
+				size="lg"
+				shape="capsule"
+				loading={testing}
+				disabled={!host.trim() || skipping.active}
+				onclick={test}
+			>
+				Send a test email
+			</Button>
 		{/if}
 		{#if failure}
-			<button class="setup-ghost" disabled={saving} onclick={save}>Save anyway</button>
+			<Button
+				variant="ghost"
+				size="lg"
+				shape="capsule"
+				loading={saving}
+				disabled={skipping.active}
+				onclick={save}
+			>
+				Save anyway
+			</Button>
 		{/if}
-		<button class="setup-ghost" onclick={onSkip}>Skip for now</button>
+		<Button
+			variant="ghost"
+			size="lg"
+			shape="capsule"
+			loading={skipping.active}
+			disabled={saving || testing}
+			onclick={() => skipping.run(onSkip)}
+		>
+			Skip for now
+		</Button>
 	</div>
 </section>
-
-<style>
-	.setup-grid {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 0.5rem;
-	}
-
-	.setup-grid .wide,
-	.setup-grid .full {
-		grid-column: 1 / -1;
-	}
-</style>

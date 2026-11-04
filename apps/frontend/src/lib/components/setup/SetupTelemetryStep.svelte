@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Button } from '$lib/components/ui';
 	import { telemetry, toasts } from '$lib/stores';
 	import { TELEMETRY_PITCH, TELEMETRY_SENT, TELEMETRY_NEVER } from '$lib/telemetry';
 	import TelemetryPayload from '$lib/components/telemetry/TelemetryPayload.svelte';
@@ -37,21 +38,37 @@
 		</ul>
 		<p class="tele-never">{TELEMETRY_NEVER}</p>
 
-		<button class="tele-peek" onclick={() => (showPayload = !showPayload)}>
-			{showPayload ? 'Hide the report' : 'See the exact report'}
-		</button>
+		<div class="tele-peek">
+			<Button variant="ghost" size="sm" onclick={() => (showPayload = !showPayload)}>
+				{showPayload ? 'Hide the report' : 'See the exact report'}
+			</Button>
+		</div>
 		{#if showPayload}
 			<TelemetryPayload class="tele-payload" />
 		{/if}
 	</div>
 
 	<div class="setup-acts">
-		<button class="setup-pill" disabled={saving !== null} onclick={() => answer(true)}>
-			{saving === true ? 'Saving' : 'Share anonymous reports'}
-		</button>
-		<button class="setup-ghost" disabled={saving !== null} onclick={() => answer(false)}>
+		<Button
+			variant="primary"
+			size="lg"
+			shape="capsule"
+			loading={saving === true}
+			disabled={saving === false}
+			onclick={() => answer(true)}
+		>
+			Share anonymous reports
+		</Button>
+		<Button
+			variant="ghost"
+			size="lg"
+			shape="capsule"
+			loading={saving === false}
+			disabled={saving === true}
+			onclick={() => answer(false)}
+		>
 			Don't share
-		</button>
+		</Button>
 	</div>
 </section>
 
@@ -82,23 +99,7 @@
 	}
 
 	.tele-peek {
-		margin-top: 0.8rem;
-		border: 0;
-		background: none;
-		padding: 0;
-		cursor: pointer;
-		font: inherit;
-		font-size: 0.75rem;
-		font-weight: 500;
-		color: var(--setup-crimson);
-		text-decoration: underline;
-		text-underline-offset: 2px;
-	}
-
-	.tele-peek:focus-visible {
-		outline: 2px solid var(--setup-crimson);
-		outline-offset: 2px;
-		border-radius: 0.25rem;
+		margin-top: 0.5rem;
 	}
 
 	.setup-body :global(.tele-payload) {
