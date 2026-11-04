@@ -1087,11 +1087,11 @@ default_domain() {
 
 default_app_domain() {
   [ -n "$ORCHARD_DOMAIN" ] || return 0
-  if [ "$INGRESS_MODE" = lan ]; then
-    printf 'apps.%s' "$(lan_name_base)"
-  else
-    printf 'apps.%s' "$(parent_domain "$ORCHARD_DOMAIN")"
-  fi
+  case "$INGRESS_MODE" in
+    lan) printf 'apps.%s' "$(lan_name_base)" ;;
+    tunnel) parent_domain "$ORCHARD_DOMAIN" ;;
+    *) printf 'apps.%s' "$(parent_domain "$ORCHARD_DOMAIN")" ;;
+  esac
 }
 
 default_mcp_domain() {
@@ -1387,6 +1387,7 @@ on_domain_changed() {
   if [ -n "$old" ] && ! is_ip "$old"; then base=$(parent_domain "$old"); fi
   if [ -n "$base" ]; then
     if [ "$ORCHARD_APP_DOMAIN" = "apps.$base" ]; then APP_DOMAIN_SET=false; fi
+    if [ "$INGRESS_MODE" = tunnel ] && [ "$ORCHARD_APP_DOMAIN" = "$base" ]; then APP_DOMAIN_SET=false; fi
     if [ "$ORCHARD_MCP_DOMAIN" = "mcp.$base" ] || [ "$ORCHARD_MCP_DOMAIN" = "mcp.apps.$base" ]; then MCP_DOMAIN_SET=false; fi
   fi
   if [ -n "$old" ] && [ "$ORCHARD_INGRESS_CNAME" = "$old" ]; then CNAME_SET=false; fi
@@ -1446,8 +1447,9 @@ q_app_domain() {
     note "It needs a wildcard DNS record: *.$ORCHARD_APP_DOMAIN."
   fi
   if [ "$INGRESS_MODE" = tunnel ]; then
-    note "Cloudflare's free certificate covers one level only. *.$(parent_domain "$ORCHARD_DOMAIN") is covered."
-    note "A deeper name such as *.apps.$(parent_domain "$ORCHARD_DOMAIN") needs Advanced Certificate Manager."
+    note "Cloudflare's free certificate covers your domain and one level under it, such as"
+    note "*.example.com but not *.apps.example.com. A deeper name needs Advanced Certificate"
+    note "Manager, and without it HTTPS fails at Cloudflare."
   fi
   answer=$(ask_host "      Apps domain" "$ORCHARD_APP_DOMAIN")
   if [ "$answer" != "$ORCHARD_APP_DOMAIN" ]; then APP_DOMAIN_SET=true; fi
@@ -2039,6 +2041,58 @@ dns_zone_report() {
   done
 }
 
+tunnel_tls_refused() {
+  local host=$1 attempt=0 rc
+  while [ "$attempt" -lt 3 ]; do
+    rc=0
+    curl -sS -o /dev/null --max-time 10 "https://$host/" 2>/dev/null || rc=$?
+    [ "$rc" -eq 35 ] || return 1
+    attempt=$((attempt + 1))
+    sleep 3
+  done
+  return 0
+}
+
+tunnel_tls_failures() {
+  local host out=''
+  for host in "$ORCHARD_DOMAIN" "$DNS_PROBE_LABEL.$ORCHARD_APP_DOMAIN"; do
+    if tunnel_tls_refused "$host"; then out="$out$host "; fi
+  done
+  if [ "$ORCHARD_MCP" = true ] && tunnel_tls_refused "$ORCHARD_MCP_DOMAIN"; then
+    out="$out$ORCHARD_MCP_DOMAIN "
+  fi
+  printf '%s' "${out% }"
+}
+
+tunnel_names_too_deep() {
+  local i=0 name zone label
+  while [ "$i" -lt "${#RECORD_NAMES[@]}" ]; do
+    name=${RECORD_NAMES[$i]}
+    i=$((i + 1))
+    zone=$(dns_zone_of "${name#\*.}" 2>/dev/null | head -1 || true)
+    [ -n "$zone" ] && [ "$name" != "$zone" ] || continue
+    label=${name%".$zone"}
+    case "$label" in
+      "$name") ;;
+      *.*) printf '%s %s\n' "$name" "$zone" ;;
+    esac
+  done
+}
+
+dns_tunnel_cert_report() {
+  [ "$INGRESS_MODE" = tunnel ] || return 0
+  local name zone deep
+  deep=$(tunnel_names_too_deep)
+  [ -n "$deep" ] || return 0
+  warn "Cloudflare's free certificate won't cover these names, so HTTPS fails with a handshake error:"
+  while read -r name zone; do
+    note "$name is more than one level under $zone."
+  done <<EOF
+$deep
+EOF
+  note "Use names directly under the zone, or add Advanced Certificate Manager in Cloudflare."
+}
+
 dns_caa_report() {
   [ "$INGRESS_MODE" = public ] || return 0
   local i=0 name current zone caa warned=' '
@@ -2412,6 +2466,7 @@ dns_step() {
     fi
   fi
   dns_zone_report
+  dns_tunnel_cert_report
   dns_caa_report
 
   local PROMPT_TIMEOUT=0 ASK_SOFT=true choice
@@ -3914,9 +3969,10 @@ summary() {
   build_dns_records
   dns_check_all true
 
-  local cert_pending=false headline='Orchard is ready' line problem
+  local cert_pending=false headline='Orchard is ready' line problem tunnel_tls_failed=''
   if [ "$USE_TLS" = true ] && ! dashboard_cert_ready; then cert_pending=true; fi
-  if [ -n "$DNS_PENDING" ] || [ "$cert_pending" = true ]; then headline='Orchard is installed'; fi
+  if [ "$INGRESS_MODE" = tunnel ] && [ -z "$DNS_PENDING" ]; then tunnel_tls_failed=$(tunnel_tls_failures); fi
+  if [ -n "$DNS_PENDING" ] || [ "$cert_pending" = true ] || [ -n "$tunnel_tls_failed" ]; then headline='Orchard is installed'; fi
 
   printf '\n'
   box_top
@@ -3943,8 +3999,14 @@ summary() {
     note "Storage: on this server. If you lose the server, you lose the backups."
   fi
 
-  if [ -n "$DNS_PENDING" ] || [ "$cert_pending" = true ]; then
+  if [ -n "$DNS_PENDING" ] || [ "$cert_pending" = true ] || [ -n "$tunnel_tls_failed" ]; then
     printf '\n  %sStill pending%s\n' "$C_BOLD" "$C_RESET"
+    if [ -n "$tunnel_tls_failed" ]; then
+      note "HTTPS: Cloudflare refused the connection to $tunnel_tls_failed"
+      note "The tunnel can be healthy and this still happens. The usual cause is a name more than"
+      note "one level under your zone, which the free certificate doesn't cover. Use names directly"
+      note "under the zone, or add Advanced Certificate Manager in Cloudflare."
+    fi
     if [ -n "$DNS_PENDING" ]; then
       while IFS= read -r line; do
         if [ -n "$line" ]; then note "DNS: $line"; fi
