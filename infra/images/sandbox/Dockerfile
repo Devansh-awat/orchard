@@ -30,6 +30,7 @@ RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 RUN npm install -g \
+    npm@latest \
       @anthropic-ai/claude-code \
       @openai/codex \
       opencode-ai \

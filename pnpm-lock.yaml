@@ -419,6 +419,9 @@ importers:
       posthog-node:
         specifier: ^5.34.2
         version: 5.34.2(rxjs@7.8.2)
+      prisma:
+        specifier: ^6.18.0
+        version: 6.18.0(typescript@5.9.3)
       reflect-metadata:
         specifier: ^0.2.1
         version: 0.2.2
@@ -495,9 +498,6 @@ importers:
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
-      prisma:
-        specifier: ^6.18.0
-        version: 6.18.0(typescript@5.9.3)
       ts-node:
         specifier: ^10.9.2
         version: 10.9.2(@swc/core@1.16.1(@swc/helpers@0.5.19))(@types/node@20.19.24)(typescript@5.9.3)

@@ -69,8 +69,7 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile --prod --filter server
 
 WORKDIR /app/apps/server
-RUN pnpm dlx prisma@6.18.0 generate
-RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+RUN node_modules/.bin/prisma generate && node_modules/.bin/prisma version > /dev/null
 
 # Host commands for self-hosted installs. They live in the image so that
 # `orchardctl update` can refresh them from whatever release it just deployed,
@@ -83,7 +82,11 @@ COPY --from=hostctl /out/orchardctl-linux-amd64 /out/orchardctl-linux-arm64 /app
 COPY LICENSE apps/server/THIRD_PARTY_NOTICES.txt /app/
 
 COPY apps/server/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+              /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+              /usr/local/bin/pnpm /usr/local/bin/pnpx /usr/local/bin/yarn /usr/local/bin/yarnpkg \
+              /root/.cache/node /root/.local/share/pnpm
 
 EXPOSE 3001
 
