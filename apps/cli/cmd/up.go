@@ -58,8 +58,8 @@ func upCmd() *cobra.Command {
 			"and builds and deploys it. The first run creates the deployment (with a\n" + "protected URL) in the linked project. Later runs deploy the new code.\n" +
 			"With a Dockerfile present it builds that; otherwise Railpack detects the\n" +
 			"language automatically. Requires the server to have local deploys enabled.\n\n" +
-			"With --wait (the default when stdout isn't a terminal) it blocks until the\n" +
-			"deploy is live and exits 9 if the build fails or 10 if the pods crash. In\n" +
+			"It blocks until the deploy is live and exits 9 if the build fails or 10 if\n" +
+			"the pods crash. --wait=false returns when the build finishes. In\n" +
 			"JSON mode build logs stream to stderr and stdout carries one result object:\n" +
 			"{deploymentId, releaseId, phase, url, ...}.",
 		Args: cobra.MaximumNArgs(1),
@@ -259,8 +259,11 @@ func upCmd() *cobra.Command {
 				if sseMissing {
 					return runWait(cmd.Context(), cl, deployWaitBuild(deploymentID), timeout)
 				}
-				printDeploySuccess(cmd.Context(), cl, cfg.APIURL, deploymentID)
-				return nil
+				if cmd.Flags().Changed("wait") {
+					printDeploySuccess(cmd.Context(), cl, cfg.APIURL, deploymentID)
+					return nil
+				}
+				started = time.Now()
 			}
 			remaining := timeout - time.Since(started)
 			if remaining < time.Second {
@@ -284,7 +287,7 @@ func upCmd() *cobra.Command {
 	c.Flags().BoolVar(&railpack, "railpack", false, "force a Railpack build even when a Dockerfile exists")
 	c.Flags().IntVar(&port, "port", 0, "port the app listens on (default: EXPOSE, the base image's port, or 3000)")
 	c.Flags().BoolVar(&detach, "detach", false, "start the build without following its logs")
-	c.Flags().BoolVar(&wait, "wait", false, "block until the deploy is live (default: on when stdout isn't a terminal)")
+	c.Flags().BoolVar(&wait, "wait", false, "block until the deploy is live; --wait=false returns when the build finishes")
 	c.Flags().DurationVar(&timeout, "timeout", 10*time.Minute, "give up waiting after this long (exit 8)")
 	c.Flags().StringVar(&rootDir, "root", "", "directory of the app inside the repo (monorepos)")
 	c.Flags().StringVar(&installCmd, "install-cmd", "", "override the detected install command")

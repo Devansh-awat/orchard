@@ -64,6 +64,9 @@ func waitRollout(ctx context.Context, cl *api.Client, id string, pin api.Rollout
 		} else {
 			output.Successf("live")
 		}
+		if r.Hint != "" {
+			output.Warnf("%s", r.Hint)
+		}
 	default:
 		output.Successf("reached %s", r.Phase)
 	}

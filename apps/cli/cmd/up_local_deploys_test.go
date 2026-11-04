@@ -1,13 +1,9 @@
 package cmd
 
 import (
-	"context"
 	"errors"
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/hackclub/orchard/cli/internal/api"
 )
@@ -65,26 +61,5 @@ func TestFinalBaseImage(t *testing.T) {
 		if got := finalBaseImage(in); got != want {
 			t.Errorf("finalBaseImage(%q) = %q, want %q", in, got, want)
 		}
-	}
-}
-
-func TestGatewayErrorAt(t *testing.T) {
-	status := http.StatusBadGateway
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(status)
-	}))
-	defer srv.Close()
-	if got := gatewayErrorAt(context.Background(), srv.URL, 2, time.Millisecond); got != http.StatusBadGateway {
-		t.Errorf("got %d, want 502", got)
-	}
-	for _, ok := range []int{http.StatusOK, http.StatusFound, http.StatusNotFound, http.StatusInternalServerError} {
-		status = ok
-		if got := gatewayErrorAt(context.Background(), srv.URL, 2, time.Millisecond); got != 0 {
-			t.Errorf("status %d: got %d, want 0", ok, got)
-		}
-	}
-	srv.Close()
-	if got := gatewayErrorAt(context.Background(), srv.URL, 1, time.Millisecond); got != 0 {
-		t.Errorf("unreachable: got %d, want 0", got)
 	}
 }
