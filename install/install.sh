@@ -12,7 +12,8 @@ STATE_DIR=${ORCHARD_STATE_DIR:-/etc/orchard}
 VALUES_FILE="$STATE_DIR/values.yaml"
 REGISTRIES_FILE=${ORCHARD_REGISTRIES_FILE:-/etc/rancher/k3s/registries.yaml}
 
-K3S_VERSION=${K3S_VERSION:-v1.31.5+k3s1}
+K3S_VERSION=${K3S_VERSION:-}
+K3S_CHANNEL=${K3S_CHANNEL:-v1.36}
 HELM_VERSION=${HELM_VERSION:-v4.3.0}
 GATEWAY_API_VERSION=${GATEWAY_API_VERSION:-v1.2.1}
 NODE_PORT_RANGE=${ORCHARD_NODE_PORT_RANGE:-30000-30100}
@@ -354,7 +355,8 @@ usage() {
     --image-repository <path>    ORCHARD_IMAGE_REPOSITORY
 
   Cluster
-    --k3s-version <version>      K3S_VERSION
+    --k3s-channel <channel>      K3S_CHANNEL            k3s release channel (default: v1.36)
+    --k3s-version <version>      K3S_VERSION            pin k3s, and turn off its automatic patches
                                  HELM_VERSION           helm release to install (default: v4.3.0)
     --gateway-api-version <ver>  GATEWAY_API_VERSION
     --node-port-range <lo-hi>    ORCHARD_NODE_PORT_RANGE  ports apps can claim
@@ -412,6 +414,7 @@ parse_args() {
       --image-pull-policy) need_value "$1" "${2:-}"; IMAGE_PULL_POLICY=$2; shift 2 ;;
       --image-registry) need_value "$1" "${2:-}"; IMAGE_REGISTRY=$2; shift 2 ;;
       --image-repository) need_value "$1" "${2:-}"; IMAGE_REPOSITORY=$2; shift 2 ;;
+      --k3s-channel) need_value "$1" "${2:-}"; K3S_CHANNEL=$2; shift 2 ;;
       --k3s-version) need_value "$1" "${2:-}"; K3S_VERSION=$2; shift 2 ;;
       --gateway-api-version) need_value "$1" "${2:-}"; GATEWAY_API_VERSION=$2; shift 2 ;;
       --node-port-range) need_value "$1" "${2:-}"; NODE_PORT_RANGE=$2; shift 2 ;;
@@ -2752,7 +2755,7 @@ EOF
 }
 
 k3s_download() {
-  curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="$K3S_VERSION" sh -s - server \
+  curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="$K3S_VERSION" INSTALL_K3S_CHANNEL="$K3S_CHANNEL" sh -s - server \
     --disable=traefik \
     --write-kubeconfig-mode=600 \
     --service-node-port-range="$NODE_PORT_RANGE"
@@ -3921,10 +3924,15 @@ install_updater() {
 
   # Runtime paths for the host commands, which ship as static files inside the
   # server image rather than being generated here with these baked in.
+  local k3s_updates=on
+  if [ -n "$K3S_VERSION" ] || grep -qs '^ORCHARD_K3S_UPDATES=off$' "$STATE_DIR/env"; then
+    k3s_updates=off
+  fi
   cat > "$STATE_DIR/env" <<EOF
 ORCHARD_VALUES=$VALUES_FILE
 ORCHARD_CHART=$CHART_REF
 ORCHARD_NAMESPACE=orchard
+ORCHARD_K3S_UPDATES=$k3s_updates
 EOF
   chmod 600 "$STATE_DIR/env"
 

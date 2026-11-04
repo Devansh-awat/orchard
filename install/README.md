@@ -351,7 +351,8 @@ because the server and the frontend are versioned independently and one
 
 | Flag                          | Environment variable      | Default                  |
 | ----------------------------- | ------------------------- | ------------------------ |
-| `--k3s-version <version>`     | `K3S_VERSION`             | `v1.31.5+k3s1`           |
+| `--k3s-channel <channel>`     | `K3S_CHANNEL`             | `v1.36`                  |
+| `--k3s-version <version>`     | `K3S_VERSION`             | none                     |
 | `--gateway-api-version <ver>` | `GATEWAY_API_VERSION`     | `v1.2.1`                 |
 | `--node-port-range <lo-hi>`   | `ORCHARD_NODE_PORT_RANGE` | `30000-30100`            |
 | `--registry-port <port>`      | `ORCHARD_REGISTRY_PORT`   | `5000`                   |
