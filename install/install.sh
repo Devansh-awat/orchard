@@ -252,18 +252,21 @@ usage() {
 
   How traffic gets in
     --mode <public|tunnel|lan>   ORCHARD_INGRESS_MODE   how the internet reaches this box
-    --domain <host>              ORCHARD_DOMAIN         where the Orchard UI lives
+    --domain <host>              ORCHARD_DOMAIN         where the Orchard UI lives (public mode
+                                                        default: an sslip.io name for this IP)
     --app-domain <host>          ORCHARD_APP_DOMAIN     wildcard parent for deployed apps
+                                                        (default: apps.<parent of your domain>)
     --mcp-domain <host>          ORCHARD_MCP_DOMAIN     where agents connect over MCP
-                                                        (default: mcp.<your domain>)
-    --email <address>            ORCHARD_ACME_EMAIL     Let's Encrypt contact, public mode
+                                                        (default: mcp.<app domain>)
+    --email <address>            ORCHARD_ACME_EMAIL     Let's Encrypt contact, optional
     --tunnel-token <token>       ORCHARD_TUNNEL_TOKEN   Cloudflare Tunnel token, tunnel mode
     --http-port <port>           ORCHARD_HTTP_PORT      where Traefik listens, lan mode only
                                                         (default: 80)
     --https-port <port>          ORCHARD_HTTPS_PORT     the same for TLS (default: 443)
 
   Behaviour
-    --updates <manual|automatic> ORCHARD_UPDATE_POLICY  run orchard-update yourself, or nightly
+    --updates <manual|automatic> ORCHARD_UPDATE_POLICY  update yourself, or nightly
+                                                        (default: manual)
     --metrics <true|false>       ORCHARD_METRICS        built-in metrics stack (default: on,
                                                         trimmed below 8G RAM)
     --logs <true|false>          ORCHARD_LOGS           searchable log store (default: on)
@@ -305,10 +308,7 @@ usage() {
 
     ORCHARD_ASSUME_YES=true install.sh \
       --mode public \
-      --domain orchard.example.com \
-      --app-domain apps.example.com \
-      --email me@example.com \
-      --updates manual
+      --domain orchard.example.com
 
 EOF
 }
@@ -648,7 +648,7 @@ choose_ingress_mode() {
   else
     echo
     bold "How should the internet reach this instance?"
-    echo "  1) public    - I have a routable IP and can point DNS at it"
+    echo "  1) public    - this box has a routable IP; a domain is optional"
     echo "  2) tunnel    - Cloudflare Tunnel (works behind NAT/CGNAT)"
     echo "  3) lan       - LAN only, self-signed certificates"
     if [ -n "$PORTS_BUSY" ]; then
@@ -759,7 +759,16 @@ collect_domains() {
     return
   fi
 
-  [ -n "$ORCHARD_DOMAIN" ] || ORCHARD_DOMAIN=$(ask "Domain for the Orchard UI (e.g. orchard.example.com)")
+  if [ -z "$ORCHARD_DOMAIN" ]; then
+    if [ "$INGRESS_MODE" = public ] && [ -n "$PUBLIC_IP" ]; then
+      echo
+      note "Have a domain? Enter it, such as orchard.example.com."
+      note "No domain yet? Press Enter to try Orchard on a free sslip.io name."
+      ORCHARD_DOMAIN=$(ask "Domain for the Orchard UI" "orchard.${PUBLIC_IP//./-}.sslip.io")
+    else
+      ORCHARD_DOMAIN=$(ask "Domain for the Orchard UI (e.g. orchard.example.com)")
+    fi
+  fi
   [ -n "$ORCHARD_DOMAIN" ] || die "a domain is required for $INGRESS_MODE mode"
 
   [ -n "$ORCHARD_APP_DOMAIN" ] || ORCHARD_APP_DOMAIN="apps.$(parent_domain "$ORCHARD_DOMAIN")"
@@ -780,12 +789,28 @@ collect_domains() {
   done
 
   if [ "$INGRESS_MODE" = public ]; then
-    echo
-    bold "Point these records at ${PUBLIC_IP:-this box} before continuing:"
+    local records=()
     for name in "${names[@]}"; do
-      printf '  A  %-*s -> %s\n' "$width" "$name" "${PUBLIC_IP:-<this box>}"
+      if ! is_sslip "$name"; then records+=("$name"); fi
     done
-    wait_for_dns "$ORCHARD_DOMAIN"
+    if [ "${#records[@]}" -gt 0 ]; then
+      echo
+      bold "Point these records at ${PUBLIC_IP:-this box} before continuing:"
+      for name in "${records[@]}"; do
+        printf '  A  %-*s -> %s\n' "$width" "$name" "${PUBLIC_IP:-<this box>}"
+      done
+    fi
+    if is_sslip "$ORCHARD_DOMAIN"; then
+      echo
+      note "sslip.io answers for these names, so there are no DNS records to add."
+      note "All sslip.io users share one Let's Encrypt limit, so a certificate can"
+      note "be delayed. Use your own domain for anything you keep."
+      if [ "$BEHIND_NAT" = true ]; then
+        warn "This box looks like it is behind NAT. Ports 80 and 443 on $PUBLIC_IP must reach it."
+      fi
+    else
+      wait_for_dns "$ORCHARD_DOMAIN"
+    fi
   else
     USE_TLS=false
     CERT_ISSUER=""
@@ -1754,6 +1779,20 @@ seed_public_ip() {
   fi
 }
 
+dashboard_cert_ready() {
+  [ "$(kubectl -n orchard get certificate orchard-tls \
+    -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null)" = True ]
+}
+
+wait_for_dashboard_cert() {
+  local tries=0
+  until dashboard_cert_ready; do
+    tries=$((tries + 1))
+    [ "$tries" -lt 36 ] || return 0
+    sleep 5
+  done
+}
+
 install_orchard() {
   step
 
@@ -1779,6 +1818,9 @@ install_orchard() {
     run_step "the agent endpoint" 1m kubectl -n orchard rollout status deploy/mcp --timeout=5m
   fi
   seed_public_ip
+  if [ "$USE_TLS" = true ]; then
+    run_step "the dashboard certificate" 1m wait_for_dashboard_cert
+  fi
 }
 
 install_updater() {
@@ -1858,16 +1900,11 @@ summary() {
     pad_line "  ${C_GREY}Agents${C_RESET}     $scheme://$ORCHARD_MCP_DOMAIN$suffix"
   fi
   pad_line ""
-  pad_line "  ${C_GREY}Upgrade${C_RESET}    sudo orchardctl update"
-  pad_line "  ${C_GREY}Settings${C_RESET}   sudo orchardctl config set <path> <value> --apply"
-  pad_line "  ${C_GREY}Logs${C_RESET}       orchardctl logs"
-  pad_line "  ${C_GREY}Config${C_RESET}     $VALUES_FILE"
-  pad_line ""
   box_bottom
 
-  printf '\n  %sOne more step%s\n' "$C_BOLD" "$C_RESET"
-  note "Open the claim link below to create the first account and sign in."
-  note "There is no email to wait for: the link is the credential."
+  printf '\n  %sSign in%s\n' "$C_BOLD" "$C_RESET"
+  note "Open this link to create the first account. The link is the credential,"
+  note "so there is no email to wait for."
   printf '\n'
   if claim_link=$(orchard-claim 2>/dev/null | grep -E '^\s+http'); then
     printf '      %s%s%s\n' "$C_BRIGHT" "$(echo "$claim_link" | tr -d ' ')" "$C_RESET"
@@ -1875,10 +1912,32 @@ summary() {
     printf '      %ssudo orchardctl claim%s\n' "$C_BRIGHT" "$C_RESET"
   fi
   printf '\n'
-  note "Add a passkey or password as soon as you are in. With no SMTP configured"
-  note "there are no email codes. Locked out? Run 'sudo orchardctl login' for a link."
+  note "Setup then asks for a passkey or a password. With no email configured there"
+  note "are no sign-in codes. If you get locked out, run: sudo orchardctl login"
   printf '\n'
 
+  printf '  %sNext%s\n' "$C_BOLD" "$C_RESET"
+  note "Deploy an app: https://docs.orchard.my/start/first-deploy/"
+  if [ "$ORCHARD_UPDATE_POLICY" = automatic ]; then
+    note "Updates run nightly. To update now: sudo orchardctl update"
+  else
+    note "Update when you choose: sudo orchardctl update"
+    note "For nightly updates, run the installer again with --updates automatic."
+  fi
+  if is_sslip "$ORCHARD_DOMAIN"; then
+    note "To move to your own domain, run the installer again with --domain <host>."
+  fi
+  printf '\n'
+
+  if [ "$USE_TLS" = true ] && ! dashboard_cert_ready; then
+    warn "The dashboard certificate is not ready, so your browser warns until it is."
+    note "cert-manager keeps trying. To see why it has not issued yet:"
+    note "  sudo kubectl -n orchard describe certificate orchard-tls"
+    if is_sslip "$ORCHARD_DOMAIN"; then
+      note "All sslip.io users share one Let's Encrypt limit. Your own domain avoids it."
+    fi
+    printf '\n'
+  fi
   if [ "$INGRESS_MODE" = tunnel ]; then
     warn "Tunnel mode carries HTTP only, so public databases and raw TCP ports are off."
   fi

@@ -8,6 +8,8 @@ export ORCHARD_LIB_ONLY
 # shellcheck source=install.sh
 source "$HERE/install.sh"
 
+dashboard_cert_ready() { return 0; }
+
 SPEED=${DEMO_SPEED:-1}
 FAIL_AT=${DEMO_FAIL:-}
 

@@ -48,6 +48,7 @@ function sandbox() {
       env: {
         ...process.env,
         PATH: `${dir}:${process.env.PATH}`,
+        KUBECONFIG: '/dev/null',
         ORCHARD_STATE_DIR: state,
         ORCHARD_REGISTRIES_FILE: registries
       }
@@ -266,7 +267,7 @@ test(
       );
 
       box.run(
-        `${clean}; load_previous_answers; collect_domains() { :; }; INGRESS_EXTRA_HOSTS="[\"mango\", \"mango.tail.ts.net\"]"; write_values`
+        `${clean}; load_previous_answers; collect_domains() { :; }; INGRESS_EXTRA_HOSTS='["mango", "mango.tail.ts.net"]'; write_values`
       );
       const read = (path: string) =>
         execFileSync('yq', ['-r', path, values], { encoding: 'utf8' }).trim();
@@ -520,6 +521,100 @@ test('the public IP is saved once, on a new public install with a routable addre
     );
     assert.match(failed, /admin panel/);
     assert.ok(existsSync(pending), 'a failure stays pending for the next run');
+  } finally {
+    box.cleanup();
+  }
+});
+
+test('a public install with no domain falls back to sslip.io', () => {
+  const box = sandbox();
+  try {
+    const out = box.run(`
+      ASSUME_YES=true INGRESS_MODE=public PUBLIC_IP=203.0.113.10 BEHIND_NAT=false
+      ORCHARD_DOMAIN= ORCHARD_APP_DOMAIN= ORCHARD_MCP_DOMAIN=
+      collect_domains
+      printf 'ui=%s apps=%s mcp=%s\\n' "$ORCHARD_DOMAIN" "$ORCHARD_APP_DOMAIN" "$ORCHARD_MCP_DOMAIN"
+    `);
+    assert.match(
+      out,
+      /ui=orchard\.203-0-113-10\.sslip\.io apps=apps\.203-0-113-10\.sslip\.io mcp=mcp\.apps\.203-0-113-10\.sslip\.io/
+    );
+    assert.match(out, /no DNS records to add/);
+    assert.ok(!/Point these records/.test(out));
+    assert.match(out, /share one Let's Encrypt limit/);
+
+    const refused = spawnSync(
+      'bash',
+      [
+        '-c',
+        `${preamble}\nASSUME_YES=true INGRESS_MODE=public PUBLIC_IP= ORCHARD_DOMAIN= ORCHARD_APP_DOMAIN=\ncollect_domains`
+      ],
+      { encoding: 'utf8' }
+    );
+    assert.notEqual(refused.status, 0, 'with no public IP there is nothing to derive a name from');
+  } finally {
+    box.cleanup();
+  }
+});
+
+test(
+  'moving off sslip.io re-derives the app and MCP domains',
+  { skip: !has('yq', '--version') },
+  () => {
+    const box = sandbox();
+    try {
+      box.run(`mkdir -p "${box.state}"
+      ORCHARD_DOMAIN=orchard.203-0-113-10.sslip.io
+      ORCHARD_APP_DOMAIN=apps.203-0-113-10.sslip.io
+      ORCHARD_MCP_DOMAIN=mcp.apps.203-0-113-10.sslip.io
+      write_values`);
+      const moved = box.run(`
+      ORCHARD_DOMAIN= ORCHARD_APP_DOMAIN= ORCHARD_MCP_DOMAIN= ASSUME_YES=true INGRESS_MODE=public
+      parse_args --domain orchard.example.com
+      load_previous_answers
+      collect_domains
+      write_values
+      printf 'apps=%s mcp=%s' "$ORCHARD_APP_DOMAIN" "$ORCHARD_MCP_DOMAIN"
+    `);
+      assert.match(moved, /apps=apps\.example\.com mcp=mcp\.apps\.example\.com/);
+      assert.match(moved, /Point these records/);
+      const env = (name: string) =>
+        execFileSync(
+          'yq',
+          [
+            '-r',
+            `.server.env[] | select(.name == "${name}") | .value`,
+            join(box.state, 'values.yaml')
+          ],
+          { encoding: 'utf8' }
+        ).trim();
+      assert.equal(env('FRONTEND_URL'), 'https://orchard.example.com');
+      assert.equal(env('APP_DOMAIN'), 'apps.example.com');
+      assert.equal(env('INGRESS_CNAME'), 'orchard.example.com');
+    } finally {
+      box.cleanup();
+    }
+  }
+);
+
+test('the summary is short, honest about the certificate, and has no em dashes', () => {
+  const box = sandbox();
+  try {
+    writeFileSync(join(box.dir, 'kubectl'), '#!/bin/sh\nprintf False\n');
+    const out = box.run(`
+      ORCHARD_DOMAIN=orchard.203-0-113-10.sslip.io ORCHARD_UPDATE_POLICY=manual STEP_N=0
+      orchard-claim() { return 1; }
+      summary
+    `);
+    assert.match(out, /https:\/\/orchard\.203-0-113-10\.sslip\.io/);
+    assert.match(out, /passkey or a password/);
+    assert.match(out, /--updates automatic/);
+    assert.match(out, /--domain <host>/);
+    assert.match(out, /certificate is not ready/);
+    assert.ok(
+      !/[\u2013\u2014]/.test(readFileSync(installer, 'utf8')),
+      'no em dashes in the installer'
+    );
   } finally {
     box.cleanup();
   }
