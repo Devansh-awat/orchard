@@ -53,20 +53,12 @@ flag.
   <img src=".github/assets/screenshots/project-light.png" alt="An Orchard project with its apps, databases and recent builds" width="100%">
 </picture>
 
-## Say what you want. Your agent does the rest.
+## Works with your agent
 
-Orchard ships an [MCP server](https://docs.orchard.my/mcp/), so Claude, Cursor or any MCP client can run
-your whole platform. About 160 tools cover deploying apps, adding databases, reading logs, working out
-why a rollout failed and rolling it back. A compact mode reaches the full API of about 450 operations
-without filling the model's context.
+Connect Claude, Cursor or any MCP client, and it can deploy apps, add databases, read logs and roll back
+a bad deploy. [Set up MCP](https://docs.orchard.my/mcp/).
 
-> Deploy this repo with a Postgres database, then tell me why the last build failed.
-
-Your agent acts as you, with your permissions and nothing more. Sign-in is OAuth with an explicit
-approval step, tokens are scoped to read, deploy or exec, and **Settings → MCP** gives you ready-made
-config for Claude, Claude Code, VS Code and Cursor.
-
-It can even do the install. Paste this into an agent on your server:
+It can install Orchard for you too:
 
 ```
 Install Orchard on my server following https://docs.orchard.my/start/install.md. Ask me before anything that is not reversible.
@@ -97,7 +89,7 @@ Orchard runs on Kubernetes, so replicas, rolling updates, health checks, quotas 
 
 - [Installation](#installation)
   - [Already running Kubernetes?](#already-running-kubernetes)
-- [Say what you want. Your agent does the rest.](#say-what-you-want-your-agent-does-the-rest)
+- [Works with your agent](#works-with-your-agent)
 - [Features](#features)
 - [Contributing](#contributing)
 - [Help](#help)
