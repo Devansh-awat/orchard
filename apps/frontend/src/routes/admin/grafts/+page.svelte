@@ -1,17 +1,29 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { ChevronDown, ExternalLink, ShieldAlert, ShieldCheck, ShieldX } from 'lucide-svelte';
 	import {
-		ChevronDown,
-		ExternalLink,
-		Loader2,
-		Puzzle,
-		ShieldAlert,
-		ShieldCheck,
-		ShieldX
-	} from 'lucide-svelte';
-	import { Alert, Badge, EmptyState, StatusBadge, statusMeta } from '$lib/components/ui';
+		ActionRow,
+		Alert,
+		Badge,
+		Button,
+		Chip,
+		EmptyState,
+		List,
+		ListRow,
+		SectionCard,
+		SettingRow,
+		SettingsList,
+		Skeleton,
+		Stack,
+		StatusBadge,
+		Swap,
+		Table,
+		statusMeta
+	} from '$lib/components/ui';
+	import Progress from '$lib/components/ui/Progress.svelte';
+	import Snippet from '$lib/components/ui/Snippet.svelte';
 	import { apiFetch } from '$lib/stores';
-	import { springCollapse, springRotate, motionStagger } from '$lib/utils/motion.svelte';
+	import { springCollapse, springRotate } from '$lib/utils/motion.svelte';
 
 	type Claim = {
 		kind: string;
@@ -82,9 +94,6 @@
 		default: 'the default'
 	} as const;
 
-	const budgetShare = (b: DbBudget) =>
-		b.usable > 0 ? Math.min(100, Math.round((b.rolloutPeak / b.usable) * 100)) : 100;
-
 	let overview = $state<Overview | null>(null);
 	let loadError = $state<string | null>(null);
 	let open = $state<Record<string, boolean>>({});
@@ -154,608 +163,438 @@
 
 	const publicRoutes = (g: Graft) => g.routes.filter((r) => r.classification === 'public');
 	const aliasClaims = (g: Graft) => g.claims.filter((c) => c.state !== 'own');
+
+	const ROUTE_ACCESS = {
+		public: { label: 'No sign-in', tone: 'warning' },
+		authenticated: { label: 'Signed in', tone: 'neutral' },
+		superadmin: { label: 'Admins only', tone: 'neutral' }
+	} as const;
+
+	const ROUTE_COLUMNS = [
+		{ id: 'method', label: 'Method', width: '4.5rem' },
+		{ id: 'path', label: 'Path' },
+		{ id: 'access', label: 'Access', width: '8rem' }
+	];
+
+	function databaseDetail(g: Graft) {
+		return [
+			g.dbRole ? `Runs as ${g.dbRole}` : 'Shares the main database user',
+			g.dbPoolSize
+				? `Up to ${g.dbPoolSize.size} connections per pod, ${POOL_SOURCE[g.dbPoolSize.source]}`
+				: null,
+			g.dbPool
+				? `${g.dbPool.total - g.dbPool.idle} of ${g.dbPool.max} connections busy on this pod`
+				: 'No connections open on this pod',
+			`${g.migrationsApplied.length} new ${g.migrationsApplied.length === 1 ? 'migration' : 'migrations'} this boot`
+		].filter((line): line is string => !!line);
+	}
 </script>
 
-<div class="grafts">
-	<section class="grafts-section">
-		<header class="grafts-head">
-			<div>
-				<h2 class="grafts-title">Grafts</h2>
-				<p class="grafts-desc">
-					Grafts are Orchard's extensions. They add pages, APIs and integrations to this instance,
-					and are installed with <code>orchardctl graft add</code> or your Helm values.
-				</p>
-			</div>
-			{#if overview}
-				<Badge tone={trust === 'any' ? 'warning' : trust === 'taps' ? 'info' : 'neutral'}>
-					{TRUST_BADGE[trust]}
-				</Badge>
-			{/if}
-		</header>
-
-		<Alert tone="warning" title="Only install grafts you trust">
-			A graft runs with the same access as Orchard, including your database and your users' data.
-			The details below show what each graft asks for, but they don't limit it.
-		</Alert>
-	</section>
-
-	{#if loadError}
-		<Alert tone="error">{loadError}</Alert>
-	{:else if !overview}
-		<div class="grafts-loading">
-			<Loader2 class="h-5 w-5 animate-spin" data-motion="progress" />
-		</div>
-	{:else if overview.grafts.length === 0}
-		<EmptyState
-			title="No grafts installed"
-			description="Pick one from the Extension Marketplace, then install it on your Orchard server."
-		>
-			{#snippet icon()}<Puzzle size={20} />{/snippet}
-			<pre class="grafts-snippet">orchardctl graft add &lt;id&gt; --apply</pre>
-		</EmptyState>
-	{:else}
-		<p class="grafts-meta">
-			{overview.grafts.length}
-			{overview.grafts.length === 1 ? 'graft' : 'grafts'} on Orchard {overview.platform}, graft SDK
-			{overview.sdk}. {TRUST_COPY[trust]}
-		</p>
-		{#if overview.database}
-			{@const db = overview.database}
-			{#if db.level === 'ok'}
-				<div class="grafts-budget">
-					<p class="grafts-meta">{db.summary} {db.inUse} are open right now.</p>
-					<div
-						class="grafts-budget-track"
-						role="meter"
-						aria-label="Database connections at peak"
-						aria-valuenow={db.rolloutPeak}
-						aria-valuemin={0}
-						aria-valuemax={db.usable}
-					>
-						<div class="grafts-budget-fill" style="width: {budgetShare(db)}%"></div>
-					</div>
-				</div>
+{#snippet tierBadge(g: Graft)}
+	{@const sig = tierLabel(g)}
+	<Badge tone={sig.tone}>
+		<span class="tier" title={sig.text}>
+			{#if sig.tone === 'error'}
+				<ShieldX size={12} />
+			{:else if sig.tone === 'warning'}
+				<ShieldAlert size={12} />
 			{:else}
-				<Alert
-					tone={db.level === 'over' ? 'error' : 'warning'}
-					title={db.level === 'over'
-						? 'Grafts could run the database out of connections'
-						: 'Database connections are getting tight'}
-				>
-					{db.summary} When the database runs out, new requests fail until connections free up. Lower
-					a graft's pool with <code>orchardctl graft pool &lt;id&gt; &lt;n&gt;</code>, or raise
-					<code>max_connections</code> on the database.
-				</Alert>
+				<ShieldCheck size={12} />
 			{/if}
-		{/if}
-		<ul class="grafts-list">
-			{#each overview.grafts as g, i (g.id)}
-				{@const sig = tierLabel(g)}
-				<li class="graft" {@attach motionStagger({ index: i })}>
-					<button
-						class="graft-row"
-						aria-expanded={!!open[g.id]}
-						onclick={() => (open = { ...open, [g.id]: !open[g.id] })}
-					>
-						<span class="graft-icon"><Puzzle size={16} /></span>
-						<span class="graft-main">
-							<span class="graft-name" title={g.name}>
-								{g.name}
-								{#if g.version}<span class="graft-version">{g.version}</span>{/if}
-							</span>
-							<span class="graft-sub">
-								{g.description ??
-									g.id}{#if g.publisher && tierOf(g.signature) !== 'official' && tierOf(g.signature) !== 'community'}&nbsp;·
-									says it is by {g.publisher}{/if}
-							</span>
-						</span>
-						<span class="graft-badges">
-							<Badge tone={sig.tone}>
-								<span class="graft-tier">
-									{#if sig.tone === 'error'}<ShieldX
-											size={12}
-										/>{:else if sig.tone === 'warning'}<ShieldAlert size={12} />{:else}<ShieldCheck
-											size={12}
-										/>{/if}
-									<span class="graft-tier-text" title={sig.text}>{sig.text}</span>
-								</span>
-							</Badge>
-							<StatusBadge meta={statusOf(g)} />
-						</span>
-						<span
-							class="graft-chevron"
-							{@attach springRotate(() => !!open[g.id], { rest: 0, on: 180 })}
+			<span class="tier-text">{sig.text}</span>
+		</span>
+	</Badge>
+{/snippet}
+
+{#snippet graftFacts(g: Graft)}
+	<SettingsList label="What {g.name} asks for">
+		{#if tierOf(g.signature) === 'community'}
+			<SettingRow label="Publisher" wide>
+				<p class="value">
+					{g.signature?.publisher}, not Orchard. Orchard checked it when it was listed, but doesn't
+					review its updates.
+					{#if g.signature?.repo}
+						<a
+							class="link"
+							href="https://github.com/{g.signature.repo}"
+							target="_blank"
+							rel="noreferrer"
 						>
-							<ChevronDown size={15} />
-						</span>
-					</button>
-
-					<div class="graft-detail" {@attach springCollapse(() => !open[g.id])}>
-						<div class="graft-detail-inner">
-							{#if g.status === 'failed'}
-								<Alert tone="error" title={`Failed during ${g.phase}`}>{g.reason}</Alert>
-							{/if}
-							{#each g.warnings as warning (warning)}
-								<Alert tone="warning">{warning}</Alert>
-							{/each}
-							{#if tierOf(g.signature) === 'tap'}
-								<Alert tone="warning" title="Third-party graft">
-									From the {g.signature?.tap} tap{#if tapUrl(g.signature?.tap)}&nbsp;at
-										<code>{tapUrl(g.signature?.tap)}</code>{/if}. Orchard hasn't checked anything in
-									this tap. Install it only if you trust {g.signature?.tap}.
-								</Alert>
-							{:else if tierOf(g.signature) === 'community'}
-								<p class="graft-faint">
-									Published by {g.signature?.publisher}{#if g.signature?.repo}&nbsp;(<a
-											class="graft-link"
-											href="https://github.com/{g.signature.repo}"
-											target="_blank"
-											rel="noreferrer">github.com/{g.signature.repo}<ExternalLink size={11} /></a
-										>){/if}, not by Orchard. Orchard checked it when it was listed, but doesn't
-									review its updates.
-								</p>
-							{/if}
-
-							<div class="graft-facts">
-								<div class="graft-fact">
-									<p class="graft-fact-head">Asked for</p>
-									{#if g.capabilities.length}
-										<div class="graft-chips">
-											{#each g.capabilities as cap (cap)}<span class="graft-chip">{cap}</span
-												>{/each}
-										</div>
-									{:else}
-										<p class="graft-none">Nothing beyond its own routes</p>
-									{/if}
-								</div>
-
-								<div class="graft-fact">
-									<p class="graft-fact-head">Reads from core tables</p>
-									{#if Object.keys(g.coreReads).length}
-										{#each Object.entries(g.coreReads) as [table, cols] (table)}
-											<p class="graft-mono">{table}({cols.join(', ')})</p>
-										{/each}
-									{:else}
-										<p class="graft-none">None</p>
-									{/if}
-									{#if g.adopts?.length}
-										<p class="graft-faint">
-											Replaced {g.adopts.join(', ')} from Orchard. The old names still work as views
-										</p>
-									{/if}
-								</div>
-
-								<div class="graft-fact">
-									<p class="graft-fact-head">Paths outside /{g.id}</p>
-									{#if aliasClaims(g).length}
-										{#each aliasClaims(g) as claim (claim.kind + claim.value)}
-											<p class="graft-mono" class:graft-shadowed={claim.state === 'shadowed'}>
-												{claim.value}
-												<span class="graft-faint">
-													{claim.state === 'shadowed' ? `taken by ${claim.shadowedBy}` : claim.kind}
-												</span>
-											</p>
-										{/each}
-									{:else}
-										<p class="graft-none">None</p>
-									{/if}
-								</div>
-
-								<div class="graft-fact">
-									<p class="graft-fact-head">Database</p>
-									<p class="graft-mono">schema ext_{g.id.replaceAll('-', '_')}</p>
-									<p class="graft-faint">
-										{g.dbRole ? `runs as ${g.dbRole}` : 'shares the main database user'} ·
-										{#if g.dbPoolSize}
-											up to {g.dbPoolSize.size} connections per pod, {POOL_SOURCE[
-												g.dbPoolSize.source
-											]} ·
-										{/if}
-										{g.dbPool
-											? `${g.dbPool.total - g.dbPool.idle} of ${g.dbPool.max} connections busy on this pod`
-											: 'no connections open on this pod'} ·
-										{g.migrationsApplied.length} new migrations this boot
-									</p>
-								</div>
-							</div>
-
-							{#if g.routes.length}
-								<div class="graft-routes">
-									<p class="graft-fact-head">
-										{g.routes.length} routes, {publicRoutes(g).length} open to anyone
-									</p>
-									<ul>
-										{#each g.routes as route (route.method + route.path)}
-											<li class="graft-route">
-												<span class="graft-method">{route.method}</span>
-												<span class="graft-mono">{route.path}</span>
-												<span
-													class="graft-faint graft-route-auth graft-route-auth--{route.classification}"
-												>
-													{route.classification === 'public'
-														? 'no sign-in'
-														: route.classification === 'superadmin'
-															? 'admins only'
-															: 'signed in'}
-												</span>
-											</li>
-										{/each}
-									</ul>
-								</div>
-							{/if}
-
-							{#if g.settings.length}
-								<p class="graft-faint">
-									Settings live under <a href="/admin/instance">Configuration</a>:
-									{g.settings.map((s) => s.title).join(', ')}.
-								</p>
-							{/if}
-						</div>
-					</div>
-				</li>
-			{/each}
-		</ul>
-	{/if}
-
-	{#if overview?.taps?.length}
-		<section class="grafts-section">
-			<div>
-				<h3 class="grafts-subtitle">Taps</h3>
-				<p class="grafts-meta">
-					Graft catalogues you added with <code>orchardctl graft tap add</code>. Orchard hasn't
-					checked them; grafts from a tap must be signed with its key{trust === 'taps' ||
-					trust === 'any'
-						? '.'
-						: ', and only load once the trust policy allows taps.'}
+							github.com/{g.signature.repo}<ExternalLink size={11} />
+						</a>
+					{/if}
 				</p>
-			</div>
-			<ul class="grafts-taps">
-				{#each overview.taps as tap (tap.name)}
-					<li class="grafts-tap">
-						<span class="graft-name" title={tap.name}>{tap.name}</span>
-						<span class="graft-mono">{tap.url}</span>
-						<span class="graft-faint">key {tap.keyId}</span>
-					</li>
+			</SettingRow>
+		{/if}
+		<SettingRow label="Asked for" wide>
+			{#if g.capabilities.length}
+				<span class="chips">
+					{#each g.capabilities as cap (cap)}<Chip mono>{cap}</Chip>{/each}
+				</span>
+			{:else}
+				<p class="value value--muted">Nothing beyond its own routes</p>
+			{/if}
+		</SettingRow>
+		<SettingRow label="Reads from core tables" wide>
+			<div class="lines">
+				{#each Object.entries(g.coreReads) as [table, cols] (table)}
+					<code class="mono">{table}({cols.join(', ')})</code>
+				{:else}
+					<p class="value value--muted">None</p>
 				{/each}
-			</ul>
-		</section>
-	{/if}
-</div>
+				{#if g.adopts?.length}
+					<p class="value value--muted">
+						Replaced {g.adopts.join(', ')} from Orchard. The old names still work as views.
+					</p>
+				{/if}
+			</div>
+		</SettingRow>
+		<SettingRow label="Paths outside /{g.id}" wide>
+			<div class="lines">
+				{#each aliasClaims(g) as claim (claim.kind + claim.value)}
+					<span class="claim">
+						<code class="mono" class:shadowed={claim.state === 'shadowed'}>{claim.value}</code>
+						<span class="value value--muted">
+							{claim.state === 'shadowed' ? `taken by ${claim.shadowedBy}` : claim.kind}
+						</span>
+					</span>
+				{:else}
+					<p class="value value--muted">None</p>
+				{/each}
+			</div>
+		</SettingRow>
+		<SettingRow label="Database" wide>
+			<div class="lines">
+				<code class="mono">schema ext_{g.id.replaceAll('-', '_')}</code>
+				{#each databaseDetail(g) as line (line)}
+					<p class="value value--muted">{line}</p>
+				{/each}
+			</div>
+		</SettingRow>
+		{#if g.settings.length}
+			<ActionRow label="Settings" hint={g.settings.map((s) => s.title).join(', ')}>
+				<Button size="sm" href="/admin/instance">Open Configuration</Button>
+			</ActionRow>
+		{/if}
+	</SettingsList>
+{/snippet}
+
+<Stack>
+	<Alert tone="warning" title="Only install grafts you trust">
+		A graft runs with the same access as Orchard, including your database and your users' data. The
+		details below show what each graft asks for, but they don't limit it.
+	</Alert>
+
+	<Swap key={loadError ? 'error' : overview ? 'ready' : 'loading'}>
+		{#if loadError}
+			<Alert tone="error" title="Couldn't load grafts">{loadError}</Alert>
+		{:else if !overview}
+			<Stack>
+				<Skeleton height="5rem" rounded="var(--radius-widget)" />
+				<Skeleton height="16rem" rounded="var(--radius-widget)" />
+			</Stack>
+		{:else}
+			<Stack>
+				<SectionCard title="Trust policy" description={TRUST_COPY[trust]}>
+					{#snippet actions()}
+						<Badge tone={trust === 'any' ? 'warning' : trust === 'taps' ? 'info' : 'neutral'}>
+							{TRUST_BADGE[trust]}
+						</Badge>
+					{/snippet}
+				</SectionCard>
+
+				{#if overview.database}
+					{@const db = overview.database}
+					{#if db.level === 'ok'}
+						<SectionCard
+							title="Database connections"
+							description="{db.summary} {db.inUse} are open right now."
+						>
+							<Progress
+								value={db.rolloutPeak}
+								max={db.usable > 0 ? db.usable : db.rolloutPeak}
+								tone="neutral"
+								size="lg"
+								label="Database connections at peak"
+								labelHidden
+							/>
+						</SectionCard>
+					{:else}
+						<Alert
+							tone={db.level === 'over' ? 'error' : 'warning'}
+							title={db.level === 'over'
+								? 'Grafts could run the database out of connections'
+								: 'Database connections are getting tight'}
+						>
+							{db.summary} When the database runs out, new requests fail until connections free up. Lower
+							a graft's pool with <code>orchardctl graft pool &lt;id&gt; &lt;n&gt;</code>, or raise
+							<code>max_connections</code> on the database.
+						</Alert>
+					{/if}
+				{/if}
+
+				{#if overview.grafts.length === 0}
+					<SectionCard>
+						<EmptyState
+							title="No grafts installed"
+							description="Grafts add pages, APIs and integrations. Pick one from the Extension Marketplace, then install it on your Orchard server."
+						>
+							<Snippet command="orchardctl graft add <id> --apply" />
+						</EmptyState>
+					</SectionCard>
+				{:else}
+					<SectionCard
+						title="Installed"
+						description="{overview.grafts.length} {overview.grafts.length === 1
+							? 'graft'
+							: 'grafts'} on Orchard {overview.platform}, graft SDK {overview.sdk}. Add more with orchardctl graft add or your Helm values."
+					>
+						<List inset={false} label="Installed grafts">
+							{#each overview.grafts as g (g.id)}
+								{@const isOpen = !!open[g.id]}
+								{@const toggle = () => (open = { ...open, [g.id]: !open[g.id] })}
+								<div class="graft">
+									{#snippet subtitle()}
+										<span class="line" title={g.description ?? g.id}>
+											{g.description ??
+												g.id}{#if g.publisher && tierOf(g.signature) !== 'official' && tierOf(g.signature) !== 'community'}&nbsp;·
+												says it is by {g.publisher}{/if}
+										</span>
+									{/snippet}
+									{#snippet controls()}
+										<span class="graft-end">
+											<span class="graft-badges">
+												{@render tierBadge(g)}
+												<span class="graft-status">
+													<StatusBadge meta={statusOf(g)} variant="plain" />
+												</span>
+											</span>
+											<span {@attach springRotate(() => isOpen, { rest: 0, on: 180 })}>
+												<Button
+													variant="ghost"
+													size="sm"
+													icon={ChevronDown}
+													label={isOpen ? `Hide ${g.name} details` : `Show ${g.name} details`}
+													aria-expanded={isOpen}
+													aria-controls="graft-{g.id}"
+													onclick={toggle}
+												/>
+											</span>
+										</span>
+									{/snippet}
+									<ListRow
+										flush
+										pinned
+										title={g.name}
+										{subtitle}
+										actions={controls}
+										onclick={toggle}
+									>
+										{#snippet titleSuffix()}
+											{#if g.version}<code class="version">{g.version}</code>{/if}
+										{/snippet}
+									</ListRow>
+									<div id="graft-{g.id}" inert={!isOpen} {@attach springCollapse(() => !isOpen)}>
+										<div class="graft-detail">
+											{#if g.status === 'failed'}
+												<Alert tone="error" title="Failed during {g.phase}">{g.reason}</Alert>
+											{/if}
+											{#each g.warnings as warning (warning)}
+												<Alert tone="warning">{warning}</Alert>
+											{/each}
+											{#if tierOf(g.signature) === 'tap'}
+												<Alert tone="warning" title="Third-party graft">
+													From the {g.signature?.tap} tap{#if tapUrl(g.signature?.tap)}&nbsp;at
+														<code>{tapUrl(g.signature?.tap)}</code>{/if}. Orchard hasn't checked
+													anything in this tap. Install it only if you trust {g.signature?.tap}.
+												</Alert>
+											{/if}
+											{@render graftFacts(g)}
+											{#if g.routes.length}
+												<div class="routes">
+													<p class="routes-title">
+														{g.routes.length}
+														{g.routes.length === 1 ? 'route' : 'routes'}, {publicRoutes(g).length} open
+														to anyone
+													</p>
+													<Table
+														dense
+														inset={false}
+														label="{g.name} routes"
+														columns={ROUTE_COLUMNS}
+														rows={g.routes}
+														rowKey={(route) => route.method + route.path}
+														maxHeight="16rem"
+													>
+														{#snippet cell(route, column)}
+															{#if column.id === 'method'}
+																<code class="mono mono--muted">{route.method}</code>
+															{:else if column.id === 'path'}
+																<code class="mono path" title={route.path}>{route.path}</code>
+															{:else}
+																<Badge tone={ROUTE_ACCESS[route.classification].tone}>
+																	{ROUTE_ACCESS[route.classification].label}
+																</Badge>
+															{/if}
+														{/snippet}
+													</Table>
+												</div>
+											{/if}
+										</div>
+									</div>
+								</div>
+							{/each}
+						</List>
+					</SectionCard>
+				{/if}
+
+				{#if overview.taps?.length}
+					<SectionCard
+						title="Taps"
+						description="Graft catalogues you added with orchardctl graft tap add. Orchard hasn't checked them. Grafts from a tap must be signed with its key{trust ===
+							'taps' || trust === 'any'
+							? '.'
+							: ', and only load once the trust policy allows taps.'}"
+					>
+						<List inset={false} label="Taps">
+							{#each overview.taps as tap (tap.name)}
+								<ListRow flush title={tap.name} subtitle={tap.url}>
+									{#snippet trailing()}
+										<code class="mono mono--muted">key {tap.keyId}</code>
+									{/snippet}
+								</ListRow>
+							{/each}
+						</List>
+					</SectionCard>
+				{/if}
+			</Stack>
+		{/if}
+	</Swap>
+</Stack>
 
 <style>
-	.grafts {
-		display: flex;
-		flex-direction: column;
-		gap: 1.5rem;
-	}
-
-	.grafts-section {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-	}
-
-	.grafts-head {
-		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
-		gap: 1rem;
-		flex-wrap: wrap;
-	}
-
-	.grafts-title {
-		font-size: var(--text-title-3);
-		line-height: var(--lh-title-3);
-		font-weight: 600;
-		margin: 0;
-		color: var(--text-default);
-	}
-
-	.grafts-desc,
-	.grafts-meta {
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		color: var(--text-muted);
-		margin: 0.25rem 0 0;
-		max-width: 64ch;
-	}
-
-	.grafts-desc code,
-	.grafts-snippet {
-		font-family: var(--font-mono, monospace);
-		font-size: 0.85em;
-	}
-
-	.grafts-snippet {
-		margin: 0.75rem 0 0;
-		padding: 0.5rem 0.75rem;
-		border-radius: var(--radius-sm);
-		background: var(--bg-sunken);
-		color: var(--text-default);
-	}
-
-	.grafts-loading {
-		display: flex;
-		justify-content: center;
-		padding: 3rem;
-		color: var(--text-muted);
-	}
-
-	.grafts-list {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-
 	.graft {
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-md);
-		background: var(--bg-surface);
-		overflow: hidden;
+		container-type: inline-size;
+		min-width: 0;
 	}
-
-	.graft-row {
+	.graft + .graft {
+		box-shadow: inset 0 1px 0 var(--border-default);
+	}
+	.graft-end {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
-		width: 100%;
-		padding: 0.7rem 0.85rem;
-		background: none;
-		border: 0;
-		text-align: left;
-		cursor: pointer;
-		color: inherit;
+		gap: var(--space-2);
 	}
-
-	.graft-row:hover {
-		background: var(--bg-hover);
-	}
-
-	.graft-icon {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 2rem;
-		height: 2rem;
-		border-radius: var(--radius-sm);
-		background: var(--bg-raised);
-		color: var(--text-muted);
-		flex-shrink: 0;
-	}
-
-	.graft-main {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.1rem;
-	}
-
-	.graft-name {
-		min-width: 0;
-		overflow-x: clip;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		font-weight: 500;
-		color: var(--text-default);
-	}
-
-	.graft-version {
-		margin-left: 0.35rem;
-		font-family: var(--font-mono, monospace);
-		font-size: var(--text-micro);
-		color: var(--text-faint);
-		font-weight: 400;
-	}
-
-	.graft-sub,
-	.graft-faint {
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		color: var(--text-faint);
-	}
-
-	.graft-sub {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
 	.graft-badges {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
-		flex-shrink: 0;
-		min-width: 0;
-		max-width: 50%;
+		gap: var(--space-3);
 	}
-
-	.graft-tier {
+	.graft-status {
 		display: flex;
 		align-items: center;
-		gap: 0.3rem;
-		min-width: 0;
-		white-space: nowrap;
+		width: 10rem;
 	}
-
-	.graft-tier :global(svg) {
+	.graft-detail {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+		padding-bottom: var(--space-4);
+	}
+	.tier {
+		display: flex;
+		align-items: center;
+		gap: var(--space-1);
+		min-width: 0;
+		max-width: 14rem;
+	}
+	.tier :global(svg) {
 		flex-shrink: 0;
 	}
-
-	.graft-tier-text {
+	.tier-text,
+	.line {
 		min-width: 0;
 		overflow-x: clip;
 		text-overflow: ellipsis;
 	}
-
-	.graft-link {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.2rem;
-		color: var(--text-muted);
-		text-decoration: underline;
-		text-underline-offset: 2px;
+	.version,
+	.mono {
+		font-family: var(--font-mono);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 	}
-
-	.graft-link:hover {
-		color: var(--text-default);
-	}
-
-	.grafts-subtitle {
-		margin: 0;
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		font-weight: 600;
-		color: var(--text-default);
-	}
-
-	.grafts-meta code {
-		font-family: var(--font-mono, monospace);
-		font-size: 0.85em;
-	}
-
-	.grafts-taps {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: flex;
-		flex-direction: column;
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-md);
-		background: var(--bg-surface);
-	}
-
-	.grafts-tap {
-		display: grid;
-		grid-template-columns: fit-content(14rem) minmax(0, 1fr) auto;
-		align-items: baseline;
-		gap: 0.75rem;
-		padding: 0.6rem 0.85rem;
-	}
-
-	.grafts-tap + .grafts-tap {
-		border-top: 1px solid var(--border-default);
-	}
-
-	.graft-chevron {
-		display: flex;
+	.version {
 		color: var(--text-faint);
 	}
-
-	.graft-detail {
-		overflow: hidden;
-	}
-
-	.graft-detail-inner {
-		display: flex;
-		flex-direction: column;
-		gap: 0.9rem;
-		padding: 0.25rem 0.85rem 1rem 3.6rem;
-	}
-
-	.graft-facts {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
-		gap: 1rem;
-	}
-
-	.graft-fact {
-		display: flex;
-		flex-direction: column;
-		gap: 0.3rem;
-		min-width: 0;
-	}
-
-	.graft-fact-head {
-		margin: 0;
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		font-weight: 600;
-		color: var(--text-muted);
-	}
-
-	.graft-chips {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.3rem;
-	}
-
-	.graft-chip {
-		padding: 0.1rem 0.45rem;
-		border-radius: var(--radius-sm);
-		background: var(--bg-raised);
-		border: 1px solid var(--border-default);
-		font-family: var(--font-mono, monospace);
-		font-size: var(--text-micro);
-		color: var(--text-default);
-	}
-
-	.graft-mono {
-		margin: 0;
-		font-family: var(--font-mono, monospace);
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
+	.mono {
 		color: var(--text-default);
 		overflow-wrap: anywhere;
 	}
-
-	.graft-none {
-		margin: 0;
-		font-size: var(--text-micro);
-		color: var(--text-faint);
-	}
-
-	.graft-shadowed {
-		text-decoration: line-through;
-		color: var(--text-faint);
-	}
-
-	.graft-routes ul {
-		list-style: none;
-		margin: 0.4rem 0 0;
-		padding: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.2rem;
-		max-height: 16rem;
-		overflow: auto;
-	}
-
-	.graft-route {
-		display: grid;
-		grid-template-columns: 4rem minmax(0, 1fr) auto;
-		gap: 0.6rem;
-		align-items: baseline;
-	}
-
-	.graft-method {
-		font-family: var(--font-mono, monospace);
-		font-size: var(--text-micro);
+	.mono--muted {
 		color: var(--text-muted);
 	}
-
-	.graft-route-auth--public {
-		color: var(--status-warning);
+	.shadowed {
+		color: var(--text-faint);
+		text-decoration: line-through;
 	}
-	.grafts-budget {
+	.path {
+		display: block;
+		overflow-x: clip;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-1);
+	}
+	.lines {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: var(--space-1);
+		min-width: 0;
 	}
-	.grafts-budget-track {
-		height: 0.375rem;
-		border-radius: 999px;
-		background: var(--bg-raised);
-		overflow: hidden;
+	.claim {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: var(--space-2);
 	}
-	.grafts-budget-fill {
-		height: 100%;
-		border-radius: inherit;
-		background: color-mix(in oklab, var(--text-default) 35%, transparent);
+	.value {
+		min-width: 0;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		color: var(--text-default);
+	}
+	.value--muted {
+		color: var(--text-muted);
+	}
+	.link {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-1);
+		color: var(--text-link);
+	}
+	.routes {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+	.routes-title {
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
+		font-weight: var(--weight-medium);
+		color: var(--text-default);
+	}
+	@container (max-width: 46rem) {
+		.graft-badges {
+			flex-direction: column;
+			align-items: flex-end;
+			gap: var(--space-1);
+		}
+		.graft-status {
+			justify-content: flex-end;
+			width: auto;
+		}
 	}
 </style>

@@ -1,89 +1,143 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { apiFetch, toasts } from '$lib/stores';
+	import { ChevronLeft, ChevronRight, Pencil, Trash2 } from 'lucide-svelte';
 	import {
-		Loader2,
-		Search,
-		Shield,
-		Trash2,
-		Pencil,
-		ChevronLeft,
-		ChevronRight
-	} from 'lucide-svelte';
-	import { Modal, Button, Field, Input, Badge, EmptyState } from '$lib/components/ui';
-	import { avatarUrl } from '$lib/avatar';
+		Alert,
+		Avatar,
+		Badge,
+		Button,
+		EmptyState,
+		Field,
+		FieldGrid,
+		Input,
+		ItemLabel,
+		Modal,
+		RelativeTime,
+		SearchField,
+		SectionCard,
+		Skeleton,
+		Stack,
+		Swap,
+		Table,
+		ToggleRow
+	} from '$lib/components/ui';
+	import type { TableColumn } from '$lib/components/ui/Table.svelte';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 
 	interface UserItem {
 		id: string;
 		email: string;
 		username: string;
-		firstName?: string;
-		lastName?: string;
-		imageUrl?: string;
+		firstName?: string | null;
+		lastName?: string | null;
+		imageUrl?: string | null;
 		isSuperAdmin: boolean;
 		createdAt: string;
 		_count: {
 			organizationMembers: number;
-			workspaceMembers: number;
+			projectMembers: number;
 		};
 	}
 
+	const COLUMNS: TableColumn<UserItem>[] = [
+		{ id: 'user', label: 'User', width: 'minmax(10rem, 1.6fr)' },
+		{ id: 'username', label: 'Username', width: 'minmax(7rem, 1fr)' },
+		{ id: 'role', label: 'Role', width: '5rem' },
+		{ id: 'organizations', label: 'Orgs', numeric: true },
+		{ id: 'projects', label: 'Projects', numeric: true },
+		{ id: 'created', label: 'Created', width: '5.5rem', align: 'end' },
+		{ id: 'actions', width: '5rem', align: 'end' }
+	];
+
 	let users = $state<UserItem[]>([]);
+	let loaded = $state(false);
 	let loading = $state(true);
+	let error = $state<string | null>(null);
 	let total = $state(0);
 	let currentPage = $state(1);
 	let totalPages = $state(1);
 	let searchQuery = $state('');
+
 	let searchTimeout: ReturnType<typeof setTimeout>;
+	let lastQuery = '';
+	let latestRequest = 0;
 
 	let editingUser = $state<UserItem | null>(null);
+	let editOpen = $state(false);
 	let editFirstName = $state('');
 	let editLastName = $state('');
 	let editIsSuperAdmin = $state(false);
 	let saving = $state(false);
 
 	let deletingUser = $state<UserItem | null>(null);
-	let deleting = $state(false);
+	let deleteOpen = $state(false);
+	let deletingId = $state<string | null>(null);
+
+	const trimmedQuery = $derived(searchQuery.trim());
+	const stage = $derived(error && !loaded ? 'error' : loaded ? 'ready' : 'loading');
+	const showPager = $derived(totalPages > 1 && stage === 'ready');
+	const deleteDescription = $derived.by(() => {
+		if (!deletingUser) return '';
+		const name = displayName(deletingUser);
+		const who = name ? `${name} (${deletingUser.email})` : deletingUser.email;
+		return `This permanently deletes ${who} and all their data. You can't undo this.`;
+	});
+
+	function displayName(user: UserItem) {
+		return [user.firstName, user.lastName].filter(Boolean).join(' ');
+	}
 
 	async function fetchUsers(page: number = 1) {
+		const request = ++latestRequest;
 		loading = true;
 		try {
 			const params = new URLSearchParams({ page: String(page), limit: '20' });
 			if (searchQuery) params.set('search', searchQuery);
 			const response = await apiFetch(`/apiv1/admin/users?${params}`);
-			if (!response.ok) throw new Error("Couldn't load users");
+			if (!response.ok) throw new Error(`The server answered ${response.status}.`);
 			const data = await response.json();
+			if (request !== latestRequest) return;
+			if (data.users.length === 0 && data.totalPages > 0 && page > data.totalPages) {
+				await fetchUsers(data.totalPages);
+				return;
+			}
 			users = data.users;
 			total = data.total;
 			currentPage = data.page;
 			totalPages = data.totalPages;
+			loaded = true;
+			error = null;
 		} catch (e) {
-			toasts.add({
-				title: "Couldn't load users",
-				description: e instanceof Error ? e.message : "Couldn't load users",
-				color: 'error'
-			});
+			if (request !== latestRequest) return;
+			const message = e instanceof Error ? e.message : "Couldn't load users";
+			if (loaded)
+				toasts.add({ title: "Couldn't load users", description: message, color: 'error' });
+			error = message;
 		} finally {
-			loading = false;
+			if (request === latestRequest) loading = false;
 		}
 	}
 
-	function handleSearch() {
+	$effect(() => {
+		const query = searchQuery;
+		if (query === lastQuery) return;
+		lastQuery = query;
 		clearTimeout(searchTimeout);
-		searchTimeout = setTimeout(() => {
-			fetchUsers(1);
-		}, 300);
-	}
+		searchTimeout = setTimeout(() => fetchUsers(1), 300);
+	});
 
 	function openEdit(user: UserItem) {
 		editingUser = user;
 		editFirstName = user.firstName || '';
 		editLastName = user.lastName || '';
 		editIsSuperAdmin = user.isSuperAdmin;
+		editOpen = true;
 	}
 
-	function closeEdit() {
-		editingUser = null;
+	function openDelete(user: UserItem) {
+		deletingUser = user;
+		deleteOpen = true;
 	}
 
 	async function saveUser() {
@@ -104,7 +158,7 @@
 				throw new Error(data.message || "Couldn't update user");
 			}
 			toasts.add({ title: 'User updated', color: 'success' });
-			closeEdit();
+			editOpen = false;
 			fetchUsers(currentPage);
 		} catch (e) {
 			toasts.add({
@@ -119,9 +173,10 @@
 
 	async function confirmDelete() {
 		if (!deletingUser) return;
-		deleting = true;
+		const target = deletingUser;
+		deletingId = target.id;
 		try {
-			const response = await apiFetch(`/apiv1/admin/users/${deletingUser.id}`, {
+			const response = await apiFetch(`/apiv1/admin/users/${target.id}`, {
 				method: 'DELETE'
 			});
 			if (!response.ok) {
@@ -129,8 +184,7 @@
 				throw new Error(data.message || "Couldn't delete user");
 			}
 			toasts.add({ title: 'User deleted', color: 'success' });
-			deletingUser = null;
-			fetchUsers(currentPage);
+			await fetchUsers(currentPage);
 		} catch (e) {
 			toasts.add({
 				title: "Couldn't delete user",
@@ -138,225 +192,193 @@
 				color: 'error'
 			});
 		} finally {
-			deleting = false;
+			deletingId = null;
 		}
 	}
 
 	onMount(() => {
 		fetchUsers();
+		return () => clearTimeout(searchTimeout);
 	});
 </script>
 
-<div class="mb-4 flex items-center gap-3">
-	<div class="relative flex-1">
-		<Search
-			class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2"
-			style="color: var(--surface-muted);"
-		/>
-		<Input
-			type="text"
-			bind:value={searchQuery}
-			oninput={handleSearch}
-			placeholder="Search users by name, email or username"
-			class="w-full pl-10"
-		/>
-	</div>
-	<span class="text-sm whitespace-nowrap" style="color: var(--surface-muted);">
-		{total} total users
-	</span>
-</div>
-
-<div
-	class="rounded-2xl border overflow-hidden"
-	style="border-color: var(--surface-border); background-color: var(--surface-bg);"
->
-	{#if loading}
-		<div class="flex justify-center py-12">
-			<Loader2 class="h-6 w-6 animate-spin text-primary-600" />
-		</div>
-	{:else if users.length === 0}
-		<EmptyState title="No users found" />
-	{:else}
-		<div class="overflow-x-auto">
-			<table class="w-full text-sm">
-				<thead>
-					<tr style="border-bottom: 1px solid var(--surface-border); color: var(--surface-muted);">
-						<th class="px-4 py-3 text-left font-medium">User</th>
-						<th class="px-4 py-3 text-left font-medium">Username</th>
-						<th class="px-4 py-3 text-left font-medium">Role</th>
-						<th class="px-4 py-3 text-left font-medium">Organizations</th>
-						<th class="px-4 py-3 text-left font-medium">Workspaces</th>
-						<th class="px-4 py-3 text-left font-medium">Created</th>
-						<th class="px-4 py-3 text-right font-medium">Actions</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each users as user (user.id)}
-						<tr
-							style="border-bottom: 1px solid var(--surface-border); color: var(--center-channel-color);"
-							class="transition hover:bg-[color-mix(in_srgb,var(--surface-border)_20%,transparent)]"
-						>
-							<td class="px-4 py-3">
-								<div class="flex items-center gap-3">
-									<img
-										src={avatarUrl(user)}
-										alt={user.firstName || user.email}
-										class="h-8 w-8 shrink-0 rounded-full object-cover"
-									/>
-									<div class="min-w-0">
-										<p class="font-medium truncate max-w-[240px]">
-											{user.firstName || ''}
-											{user.lastName || ''}
-											{#if !user.firstName && !user.lastName}
-												<span style="color: var(--surface-muted);">No name</span>
-											{/if}
-										</p>
-										<p
-											class="text-xs truncate max-w-[240px]"
-											style="color: var(--surface-muted);"
-											title={user.email}
-										>
-											{user.email}
-										</p>
-									</div>
-								</div>
-							</td>
-							<td class="px-4 py-3 font-mono text-xs max-w-40 truncate" title={user.username}>
-								{user.username}
-							</td>
-							<td class="px-4 py-3">
-								{#if user.isSuperAdmin}
-									<Badge tone="success"><Shield class="mr-1 h-3 w-3" />Admin</Badge>
-								{:else}
-									<Badge tone="neutral">User</Badge>
-								{/if}
-							</td>
-							<td class="px-4 py-3">{user._count.organizationMembers}</td>
-							<td class="px-4 py-3">{user._count.workspaceMembers}</td>
-							<td class="px-4 py-3 text-xs" style="color: var(--surface-muted);">
-								{new Date(user.createdAt).toLocaleDateString()}
-							</td>
-							<td class="px-4 py-3">
-								<div class="flex items-center justify-end gap-1">
-									<Button
-										variant="ghost"
-										size="sm"
-										onclick={() => openEdit(user)}
-										title="Edit user"
-									>
-										<Pencil class="h-4 w-4" />
-									</Button>
-									<Button
-										variant="ghost"
-										size="sm"
-										style="color: var(--error-text-color);"
-										onclick={() => (deletingUser = user)}
-										title="Delete user"
-									>
-										<Trash2 class="h-4 w-4" />
-									</Button>
-								</div>
-							</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</div>
-	{/if}
-</div>
-
-{#if totalPages > 1}
-	<div class="mt-4 flex items-center justify-center gap-2">
+{#snippet pager()}
+	<div class="pager">
+		<span class="page-count">Page {currentPage} of {totalPages}</span>
 		<Button
 			variant="ghost"
 			size="sm"
+			icon={ChevronLeft}
+			label="Previous page"
+			disabled={currentPage <= 1 || loading}
 			onclick={() => fetchUsers(currentPage - 1)}
-			disabled={currentPage <= 1}
-		>
-			<ChevronLeft class="h-4 w-4" />
-		</Button>
-		<span class="text-sm" style="color: var(--surface-muted);">
-			Page {currentPage} of {totalPages}
-		</span>
+		/>
 		<Button
 			variant="ghost"
 			size="sm"
+			icon={ChevronRight}
+			label="Next page"
+			disabled={currentPage >= totalPages || loading}
 			onclick={() => fetchUsers(currentPage + 1)}
-			disabled={currentPage >= totalPages}
-		>
-			<ChevronRight class="h-4 w-4" />
-		</Button>
+		/>
 	</div>
-{/if}
+{/snippet}
 
-<Modal
-	bind:open={
-		() => editingUser !== null,
-		(v) => {
-			if (!v) closeEdit();
-		}
-	}
-	title="Edit user"
+<SectionCard
+	title="Users"
+	description={loaded ? `${total.toLocaleString()} total` : undefined}
+	footer={showPager ? pager : undefined}
+	flush
 >
+	{#snippet actions()}
+		<div class="search">
+			<SearchField
+				size="sm"
+				bind:value={searchQuery}
+				placeholder="Search by name, email or username"
+			/>
+		</div>
+	{/snippet}
+
+	<Swap key={stage}>
+		{#if stage === 'loading'}
+			<div class="placeholder">
+				<Stack gap="sm">
+					{#each [0, 1, 2, 3, 4] as row (row)}
+						<Skeleton height="2.75rem" />
+					{/each}
+				</Stack>
+			</div>
+		{:else if stage === 'error'}
+			<div class="placeholder">
+				<Alert tone="error" title="Couldn't load users">
+					{error}
+					{#snippet actions()}
+						<Button variant="secondary" size="sm" {loading} onclick={() => fetchUsers(currentPage)}>
+							Try again
+						</Button>
+					{/snippet}
+				</Alert>
+			</div>
+		{:else}
+			<Table columns={COLUMNS} rows={users} rowKey={(user) => user.id} inset={false} label="Users">
+				{#snippet cell(user, col)}
+					{#if col.id === 'user'}
+						<ItemLabel title={displayName(user) || 'No name'} detail={user.email}>
+							{#snippet leading()}<Avatar {user} size={32} />{/snippet}
+						</ItemLabel>
+					{:else if col.id === 'username'}
+						<span class="username" title={user.username}>{user.username}</span>
+					{:else if col.id === 'role'}
+						{#if user.isSuperAdmin}
+							<Badge tone="accent">Admin</Badge>
+						{:else}
+							<Badge>User</Badge>
+						{/if}
+					{:else if col.id === 'organizations'}
+						{user._count.organizationMembers}
+					{:else if col.id === 'projects'}
+						{user._count.projectMembers}
+					{:else if col.id === 'created'}
+						<span class="quiet"><RelativeTime date={user.createdAt} /></span>
+					{:else}
+						<span class="row-actions">
+							<Button
+								variant="ghost"
+								size="sm"
+								icon={Pencil}
+								label="Edit {displayName(user) || user.email}"
+								onclick={() => openEdit(user)}
+							/>
+							<Button
+								variant="ghost"
+								size="sm"
+								icon={Trash2}
+								label="Delete {displayName(user) || user.email}"
+								loading={deletingId === user.id}
+								onclick={() => openDelete(user)}
+							/>
+						</span>
+					{/if}
+				{/snippet}
+				{#snippet empty()}
+					<EmptyState title={trimmedQuery ? `Nobody matches “${trimmedQuery}”` : 'No users yet'}>
+						{#if trimmedQuery}
+							<Button variant="secondary" onclick={() => (searchQuery = '')}>Clear search</Button>
+						{/if}
+					</EmptyState>
+				{/snippet}
+			</Table>
+		{/if}
+	</Swap>
+</SectionCard>
+
+<Modal bind:open={editOpen} title="Edit user">
 	{#if editingUser}
-		<div class="space-y-4">
+		<Stack gap="md">
 			<Field label="Email" for="edit-user-email">
-				<Input id="edit-user-email" value={editingUser.email} disabled class="w-full opacity-60" />
+				<Input id="edit-user-email" value={editingUser.email} disabled />
 			</Field>
-			<div class="grid grid-cols-2 gap-3">
+			<FieldGrid>
 				<Field label="First name" for="edit-user-first-name">
-					<Input id="edit-user-first-name" bind:value={editFirstName} class="w-full" />
+					<Input id="edit-user-first-name" bind:value={editFirstName} />
 				</Field>
 				<Field label="Last name" for="edit-user-last-name">
-					<Input id="edit-user-last-name" bind:value={editLastName} class="w-full" />
+					<Input id="edit-user-last-name" bind:value={editLastName} />
 				</Field>
-			</div>
-			<div class="flex items-center gap-3">
-				<button
-					type="button"
-					onclick={() => (editIsSuperAdmin = !editIsSuperAdmin)}
-					class="flex h-5 w-9 items-center rounded-full p-0.5 transition-colors"
-					style={editIsSuperAdmin
-						? 'background-color: var(--color-primary-600);'
-						: 'background-color: var(--surface-border);'}
-				>
-					<div
-						class="h-4 w-4 rounded-full bg-white shadow transition-transform"
-						style={editIsSuperAdmin ? 'transform: translateX(16px);' : ''}
-					></div>
-				</button>
-				<span class="text-sm font-medium">Superadmin</span>
-			</div>
-		</div>
+			</FieldGrid>
+			<ToggleRow label="Superadmin" bind:checked={editIsSuperAdmin} />
+		</Stack>
 	{/if}
 	{#snippet footer()}
-		<Button variant="secondary" onclick={closeEdit}>Cancel</Button>
+		<Button variant="ghost" onclick={() => (editOpen = false)}>Cancel</Button>
 		<Button variant="primary" onclick={saveUser} loading={saving}>Save changes</Button>
 	{/snippet}
 </Modal>
 
-<Modal
-	bind:open={
-		() => deletingUser !== null,
-		(v) => {
-			if (!v) deletingUser = null;
-		}
+<ConfirmModal
+	bind:open={deleteOpen}
+	title="Delete user?"
+	description={deleteDescription}
+	onconfirm={confirmDelete}
+	oncancel={() => {}}
+/>
+
+<style>
+	.search {
+		width: 19rem;
 	}
-	title="Delete user"
-	size="sm"
->
-	{#if deletingUser}
-		<p class="text-sm mb-1" style="color: var(--surface-muted);">Delete this user?</p>
-		<p class="text-sm font-medium mb-4">
-			{deletingUser.firstName || ''}
-			{deletingUser.lastName || ''} ({deletingUser.email})
-		</p>
-		<p class="text-xs" style="color: var(--error-text-color);">
-			This permanently deletes all their data. You can't undo this.
-		</p>
-	{/if}
-	{#snippet footer()}
-		<Button variant="secondary" onclick={() => (deletingUser = null)}>Cancel</Button>
-		<Button variant="danger" onclick={confirmDelete} loading={deleting}>Delete</Button>
-	{/snippet}
-</Modal>
+	.placeholder {
+		padding: 0 var(--space-4) var(--space-4);
+	}
+	.username {
+		min-width: 0;
+		overflow-x: clip;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		color: var(--text-muted);
+		font-family: var(--font-mono);
+		font-size: var(--text-footnote);
+	}
+	.quiet {
+		color: var(--text-muted);
+		font-size: var(--text-callout);
+		white-space: nowrap;
+	}
+	.row-actions {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-1);
+	}
+	.pager {
+		display: flex;
+		align-items: center;
+		gap: var(--space-1);
+	}
+	.page-count {
+		margin-right: var(--space-2);
+		color: var(--text-muted);
+		font-size: var(--text-callout);
+		font-variant-numeric: tabular-nums;
+	}
+</style>

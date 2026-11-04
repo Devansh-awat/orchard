@@ -9,7 +9,7 @@ const MIB = 1024 ** 2;
 
 const ICON_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 
-const SSO_PRESETS = [
+export const SSO_PRESETS = [
 	{
 		id: 'google',
 		name: 'Google Workspace',
@@ -88,7 +88,7 @@ const PROVIDER_FIELDS = [
 	'requireVerifiedEmail'
 ] as const;
 
-function applyProviderInput(p: MockSsoProvider, body: any) {
+export function applyProviderInput(p: MockSsoProvider, body: any) {
 	for (const key of PROVIDER_FIELDS) {
 		if (body?.[key] !== undefined) (p as any)[key] = body[key];
 	}
@@ -97,7 +97,7 @@ function applyProviderInput(p: MockSsoProvider, body: any) {
 	p.updatedAt = new Date().toISOString();
 }
 
-function iconDataUrl(file: MockUpload | undefined) {
+export function iconDataUrl(file: MockUpload | undefined) {
 	if (!file) return reply(400, { statusCode: 400, message: 'No file provided' });
 	if (!ICON_TYPES.has(file.type)) {
 		return reply(400, { statusCode: 400, message: 'Icons must be PNG, JPEG, or WebP' });

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { apiFetch, toasts } from '$lib/stores';
-	import { SectionCard, Badge } from '$lib/components/ui';
+	import { Badge, SectionCard, SettingRow, SettingsList } from '$lib/components/ui';
 	import RadioGroup from '$lib/components/ui/RadioGroup.svelte';
 
 	type Scanner = 'off' | 'harbor' | 'trivy';
@@ -88,13 +88,15 @@
 		description="Checks each app's image for known vulnerabilities and shows them on its Security tab."
 	>
 		{#if state.envOverride !== null}
-			<div class="scan-locked">
-				<Badge tone="neutral">env override</Badge>
-				<span>
-					Pinned to <span class="font-mono">{state.envOverride}</span> by the
-					<span class="font-mono">IMAGE_SCANNER</span> environment variable. Unset it to choose here.
-				</span>
-			</div>
+			<SettingsList>
+				<SettingRow label="Scanner">
+					{#snippet hint()}
+						Pinned to <code>{state?.envOverride}</code> by the <code>IMAGE_SCANNER</code> environment
+						variable. Unset it to choose here.
+					{/snippet}
+					<Badge>env override</Badge>
+				</SettingRow>
+			</SettingsList>
 		{:else}
 			<RadioGroup
 				label="Scanner"
@@ -107,13 +109,3 @@
 		{/if}
 	</SectionCard>
 {/if}
-
-<style>
-	.scan-locked {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-size: var(--text-caption);
-		color: var(--text-muted);
-	}
-</style>

@@ -12,9 +12,9 @@ import {
 
 const unauthorized = () => reply(401, { statusCode: 401, message: 'Unauthorized' });
 
-const storageFeatures = { s3: false, backups: 'local', uploads: true, localDeploys: false };
+export const storageFeatures = { s3: false, backups: 'local', uploads: true, localDeploys: false };
 
-const mockSetup: {
+export const mockSetup: {
 	installer: boolean;
 	publicIp: string | null;
 	cname: string | null;
@@ -32,7 +32,7 @@ const mockSetup: {
 
 const pinned = () => mockSetup.installer;
 
-const configSections = () => [
+export const configSections = () => [
 	{
 		id: 'ingress',
 		configured: !!mockSetup.cname,
@@ -65,7 +65,7 @@ const mockCertificate = {
 	message: 'Timeout during connect (likely firewall problem)'
 };
 
-const storageSection: Record<string, any> = {
+export const storageSection: Record<string, any> = {
 	id: 'storage',
 	configured: false,
 	values: {

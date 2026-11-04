@@ -1,7 +1,29 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Loader2, Plus, Pencil, Trash2, Activity, Search } from 'lucide-svelte';
-	import { Button, Badge, Alert, Input, ToggleRow, EmptyState } from '$lib/components/ui';
+	import { MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-svelte';
+	import {
+		Alert,
+		Badge,
+		Button,
+		EmptyState,
+		List,
+		ListRow,
+		Menu,
+		MenuItem,
+		SearchField,
+		SectionCard,
+		SettingRow,
+		SettingsList,
+		Skeleton,
+		Spinner,
+		Stack,
+		StatusBadge,
+		Swap,
+		Switch,
+		ToggleRow,
+		ToneTile,
+		statusMeta
+	} from '$lib/components/ui';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import SsoProviderModal from '$lib/components/org-settings/SsoProviderModal.svelte';
 	import { ProviderIcon } from '$lib/components/login';
@@ -39,7 +61,7 @@
 		providersAvailable: boolean;
 	}
 
-	let loading = $state(true);
+	let loaded = $state(false);
 	let providers = $state<SsoProvider[]>([]);
 	let presets = $state<SsoProviderPreset[]>([]);
 	let organizations = $state<OrgSsoStatus[]>([]);
@@ -70,7 +92,6 @@
 	onMount(load);
 
 	async function load() {
-		loading = true;
 		loadError = null;
 		try {
 			const res = await apiFetch('/apiv1/admin/sso');
@@ -84,7 +105,7 @@
 		} catch (e) {
 			loadError = e instanceof Error ? e.message : "Couldn't load SSO configuration";
 		} finally {
-			loading = false;
+			loaded = true;
 		}
 	}
 
@@ -202,6 +223,7 @@
 			if (!res.ok) throw new Error("Couldn't change this organization");
 			await load();
 		} catch (e) {
+			organizations = organizations.map((item) => ({ ...item }));
 			toasts.add({
 				title: "Couldn't change this organization",
 				description: e instanceof Error ? e.message : undefined,
@@ -214,7 +236,8 @@
 
 	async function toggleEnforcement() {
 		if (!enforcement || enforcement.envOverride !== null) return;
-		const next = !enforcement.dbValue;
+		const previous = enforcement;
+		const next = !previous.dbValue;
 		togglingEnforcement = true;
 		try {
 			const res = await apiFetch('/apiv1/admin/sso/enforcement', {
@@ -230,6 +253,7 @@
 				color: 'success'
 			});
 		} catch (e) {
+			enforcement = { ...previous };
 			toasts.add({
 				title: "Couldn't change the sign-in policy",
 				description: e instanceof Error ? e.message : undefined,
@@ -241,218 +265,248 @@
 	}
 
 	function statusOf(provider: SsoProvider) {
-		if (!provider.usable) return { label: 'Incomplete', tone: 'warning' as const };
-		if (!provider.enabled) return { label: 'Off', tone: 'neutral' as const };
-		return { label: 'Live', tone: 'success' as const };
+		if (!provider.usable) return statusMeta('warning', 'Incomplete');
+		if (!provider.enabled) return statusMeta('neutral', 'Off');
+		return statusMeta('success', 'Live');
+	}
+
+	function providerDetail(provider: SsoProvider) {
+		const protocol = provider.protocol.toUpperCase();
+		return provider.allowedDomains.length
+			? `${protocol} · ${provider.allowedDomains.join(', ')}`
+			: protocol;
+	}
+
+	function orgDetail(org: OrgSsoStatus) {
+		const parts = [
+			`/${org.slug}`,
+			`${org.providerCount} ${org.providerCount === 1 ? 'connection' : 'connections'}`
+		];
+		if (org.domainCount) {
+			parts.push(`${org.domainCount} ${org.domainCount === 1 ? 'domain' : 'domains'}`);
+		}
+		return parts.join(' · ');
+	}
+
+	function orgStatus(org: OrgSsoStatus) {
+		if (org.enforced) return statusMeta('info', 'Enforced');
+		if (org.enabled) return statusMeta('success', 'On');
+		return statusMeta('neutral', 'Off');
+	}
+
+	function addProvider() {
+		editing = null;
+		modalError = null;
+		showModal = true;
+	}
+
+	function editProvider(provider: SsoProvider) {
+		editing = provider;
+		modalError = null;
+		showModal = true;
+	}
+
+	function askDelete(provider: SsoProvider) {
+		toDelete = provider;
+		showDelete = true;
 	}
 </script>
 
-<div class="asso">
-	{#if loading}
-		<div class="asso-loading"><Loader2 class="h-5 w-5 animate-spin" /></div>
-	{:else if loadError}
-		<Alert tone="error">{loadError}</Alert>
+<Swap key={!loaded ? 'loading' : loadError && !organizations.length ? 'error' : 'ready'}>
+	{#if !loaded}
+		<Stack>
+			<Skeleton height="10rem" rounded="var(--radius-widget)" />
+			<Skeleton height="7rem" rounded="var(--radius-widget)" />
+			<Skeleton height="16rem" rounded="var(--radius-widget)" />
+		</Stack>
+	{:else if loadError && !organizations.length}
+		<Alert tone="error" title="Couldn't load sign-in settings">
+			{loadError}
+			{#snippet actions()}
+				<Button size="sm" variant="ghost" onclick={load}>Retry</Button>
+			{/snippet}
+		</Alert>
 	{:else}
-		<section class="asso-section">
-			<header class="asso-head">
-				<div>
-					<h2 class="asso-title">Platform sign-in</h2>
-					<p class="asso-desc">Identity providers on the sign-in page for this instance.</p>
-				</div>
-				<Button
-					variant="secondary"
-					size="sm"
-					onclick={() => {
-						editing = null;
-						modalError = null;
-						showModal = true;
-					}}
-				>
-					<Plus size={14} />
-					Add provider
-				</Button>
-			</header>
-
-			{#if envProvider}
-				<div class="asso-row asso-row--static">
-					<span class="asso-row-icon"><ProviderIcon preset={envProvider.preset} size={18} /></span>
-					<div class="asso-row-main">
-						<span class="asso-row-name" title={envProvider.name}>{envProvider.name}</span>
-						<span class="asso-row-meta">Configured through environment variables</span>
-					</div>
-					<Badge tone="info">Read only</Badge>
-				</div>
+		<Stack>
+			{#if loadError}
+				<Alert tone="error">{loadError}</Alert>
 			{/if}
 
-			{#if !providers.length && !envProvider}
-				<EmptyState
-					title="No platform providers"
-					description="Add Google, GitHub, Microsoft, or any OIDC or SAML provider to the sign-in page."
-				/>
-			{:else}
-				<ul class="asso-list">
-					{#each providers as provider (provider.id)}
-						{@const status = statusOf(provider)}
-						<li class="asso-row">
-							<span class="asso-row-icon"
-								><ProviderIcon
-									preset={provider.preset}
-									iconUrl={provider.iconUrl}
-									size={18}
-								/></span
+			<SectionCard
+				title="Platform sign-in"
+				description="Identity providers on this instance's sign-in page."
+			>
+				{#snippet actions()}
+					{#if providers.length || envProvider}
+						<Button size="sm" shape="capsule" icon={Plus} onclick={addProvider}>Add provider</Button
+						>
+					{/if}
+				{/snippet}
+				{#if providers.length || envProvider}
+					<List inset={false} label="Identity providers">
+						{#if envProvider}
+							<ListRow
+								flush
+								title={envProvider.name}
+								subtitle="Configured through environment variables"
 							>
-							<div class="asso-row-main">
-								<span class="asso-row-name" title={provider.name}>{provider.name}</span>
-								<span class="asso-row-meta">
-									{provider.protocol.toUpperCase()}
-									{#if provider.allowedDomains.length}
-										· {provider.allowedDomains.join(', ')}
-									{/if}
-								</span>
-								{#if testResult?.id === provider.id}
-									<span class="asso-row-test" class:asso-row-test--bad={!testResult.success}>
-										{testResult.success
-											? 'Reached the provider.'
-											: `Test failed: ${testResult.error}`}
+								{#snippet leading()}
+									<ToneTile size={32}>
+										<ProviderIcon preset={envProvider?.preset ?? 'generic'} size={16} />
+									</ToneTile>
+								{/snippet}
+								{#snippet trailing()}
+									<Badge>Read only</Badge>
+								{/snippet}
+							</ListRow>
+						{/if}
+						{#each providers as provider (provider.id)}
+							{@const result = testResult?.id === provider.id ? testResult : null}
+							{#snippet detail()}
+								{#if testing === provider.id}
+									<Spinner size={12} />Testing
+								{:else if result}
+									<span
+										class="line"
+										class:ok={result.success}
+										class:bad={!result.success}
+										title={result.success ? undefined : `Test failed: ${result.error}`}
+									>
+										{result.success ? 'Reached the provider' : `Test failed: ${result.error}`}
+									</span>
+								{:else}
+									<span class="line" title={providerDetail(provider)}>
+										{providerDetail(provider)}
 									</span>
 								{/if}
-							</div>
-							<Badge tone={status.tone}>{status.label}</Badge>
-							<div class="asso-row-actions">
-								<Button
-									variant="ghost"
-									size="sm"
-									loading={testing === provider.id}
-									onclick={() => testProvider(provider)}
-									aria-label="Test provider"
-								>
-									{#if testing !== provider.id}<Activity size={14} />{/if}
-								</Button>
-								<Button
-									variant="ghost"
-									size="sm"
-									onclick={() => {
-										editing = provider;
-										modalError = null;
-										showModal = true;
-									}}
-									aria-label="Edit provider"
-								>
-									<Pencil size={14} />
-								</Button>
-								<Button
-									variant="ghost"
-									size="sm"
-									onclick={() => {
-										toDelete = provider;
-										showDelete = true;
-									}}
-									aria-label="Remove provider"
-								>
-									<Trash2 size={14} />
-								</Button>
-							</div>
-						</li>
-					{/each}
-				</ul>
-			{/if}
-		</section>
+							{/snippet}
+							{#snippet controls()}
+								<span class="icons">
+									<Button
+										variant="ghost"
+										size="sm"
+										icon={Pencil}
+										label="Edit {provider.name}"
+										onclick={() => editProvider(provider)}
+									/>
+									<Menu>
+										{#snippet trigger(attrs)}
+											<Button
+												{...attrs}
+												variant="ghost"
+												size="sm"
+												icon={MoreHorizontal}
+												label="More for {provider.name}"
+											/>
+										{/snippet}
+										<MenuItem disabled={testing !== null} onclick={() => testProvider(provider)}>
+											Test connection
+										</MenuItem>
+										<MenuItem danger icon={Trash2} onclick={() => askDelete(provider)}>
+											Remove
+										</MenuItem>
+									</Menu>
+								</span>
+							{/snippet}
+							<ListRow flush pinned title={provider.name} subtitle={detail} actions={controls}>
+								{#snippet leading()}
+									<ToneTile size={32}>
+										<ProviderIcon preset={provider.preset} iconUrl={provider.iconUrl} size={16} />
+									</ToneTile>
+								{/snippet}
+								{#snippet titleSuffix()}
+									<StatusBadge meta={statusOf(provider)} variant="plain" />
+								{/snippet}
+							</ListRow>
+						{/each}
+					</List>
+				{:else}
+					<EmptyState
+						title="No platform providers"
+						description="Add Google, GitHub, Microsoft, or any OIDC or SAML provider to the sign-in page."
+					>
+						<Button icon={Plus} onclick={addProvider}>Add provider</Button>
+					</EmptyState>
+				{/if}
+			</SectionCard>
 
-		{#if enforcement}
-			<section class="asso-section">
-				<header class="asso-head">
-					<div>
-						<h2 class="asso-title">Sign-in policy</h2>
-						<p class="asso-desc">
-							Choose whether people can sign in without an identity provider. Superadmins always
-							can, so a broken provider can't lock you out.
-						</p>
-					</div>
-				</header>
-				<div class="asso-row">
-					{#if enforcement.envOverride !== null}
-						<div class="asso-row-main">
-							<span class="asso-row-name">Require single sign-on for everyone</span>
-							<span class="asso-row-meta">
-								Pinned {enforcement.envOverride ? 'on' : 'off'} by the SSO_ENFORCED environment variable.
-							</span>
-						</div>
-						<Badge tone="neutral">env override</Badge>
-					{:else}
-						<div class="asso-row-main">
+			{#if enforcement}
+				<SectionCard
+					title="Sign-in policy"
+					description="Superadmins can always sign in without a provider, so a broken one can't lock you out."
+				>
+					<SettingsList>
+						{#if enforcement.envOverride !== null}
+							<SettingRow label="Require single sign-on for everyone">
+								{#snippet hint()}
+									Pinned {enforcement?.envOverride ? 'on' : 'off'} by the
+									<code>SSO_ENFORCED</code> environment variable.
+								{/snippet}
+								<Badge>env override</Badge>
+							</SettingRow>
+						{:else}
 							<ToggleRow
 								checked={enforcement.dbValue}
 								disabled={togglingEnforcement ||
 									(!enforcement.dbValue && !enforcement.providersAvailable)}
 								label="Require single sign-on for everyone"
 								hint={enforcement.providersAvailable
-									? "Email codes, passkeys and the superadmin password stop working for everyone except superadmins. Turning this on signs out every session that didn't come through a provider."
+									? "Stops email codes, passkeys and the superadmin password for everyone but superadmins, and signs out sessions that didn't come through a provider."
 									: 'Add and enable a working provider first, or nobody but a superadmin could sign in.'}
 								onchange={toggleEnforcement}
 							/>
-						</div>
-					{/if}
-				</div>
-			</section>
-		{/if}
-
-		<section class="asso-section">
-			<header class="asso-head">
-				<div>
-					<h2 class="asso-title">Organization access</h2>
-					<p class="asso-desc">
-						Turn off single sign-on for one organization and keep its configuration. Its owner can't
-						turn it back on.
-					</p>
-				</div>
-				<div class="asso-search">
-					<Search size={14} />
-					<Input bind:value={orgFilter} placeholder="Filter organizations" />
-				</div>
-			</header>
-
-			{#if !filteredOrgs.length}
-				<EmptyState
-					title="No organizations match"
-					description="Single sign-on is off for every organization until you allow it here."
-				/>
-			{:else}
-				<ul class="asso-list">
-					{#each filteredOrgs as org (org.organizationId)}
-						<li class="asso-row">
-							<div class="asso-row-main">
-								<span class="asso-row-name" title={org.name}>{org.name}</span>
-								<span class="asso-row-meta">
-									/{org.slug} · {org.providerCount}
-									{org.providerCount === 1 ? 'connection' : 'connections'}
-									{#if org.domainCount}
-										· {org.domainCount}
-										{org.domainCount === 1 ? 'domain' : 'domains'}
-									{/if}
-								</span>
-							</div>
-							{#if org.enforced}
-								<Badge tone="info">Enforced</Badge>
-							{:else if org.enabled}
-								<Badge tone="success">On</Badge>
-							{:else}
-								<Badge tone="neutral">Off</Badge>
-							{/if}
-							<div class="asso-row-toggle">
-								<ToggleRow
-									checked={org.platformEnabled}
-									disabled={togglingOrg === org.organizationId}
-									label="Allowed"
-									onchange={() => toggleOrg(org)}
-								/>
-							</div>
-						</li>
-					{/each}
-				</ul>
+						{/if}
+					</SettingsList>
+				</SectionCard>
 			{/if}
-		</section>
+
+			<SectionCard
+				title="Organization access"
+				description="Single sign-on stays off for an organization until you allow it here. Turning it off keeps its setup, and its owner can't turn it back on."
+			>
+				{#snippet actions()}
+					{#if organizations.length}
+						<span class="filter">
+							<SearchField size="sm" bind:value={orgFilter} placeholder="Filter organizations" />
+						</span>
+					{/if}
+				{/snippet}
+				{#if filteredOrgs.length}
+					<List inset={false} label="Organizations">
+						{#each filteredOrgs as org (org.organizationId)}
+							{@const status = orgStatus(org)}
+							{@const switchId = `sso-allow-${org.organizationId}`}
+							{#snippet controls()}
+								<span class="org-controls">
+									<span class="org-status"><StatusBadge meta={status} variant="plain" /></span>
+									<label class="allow" for={switchId}>Allowed</label>
+									<Switch
+										id={switchId}
+										checked={org.platformEnabled}
+										disabled={togglingOrg === org.organizationId}
+										onchange={() => toggleOrg(org)}
+									/>
+								</span>
+							{/snippet}
+							<ListRow flush pinned title={org.name} subtitle={orgDetail(org)} actions={controls} />
+						{/each}
+					</List>
+				{:else if organizations.length}
+					<EmptyState title="No organizations match" description="Nothing matches “{orgFilter}”.">
+						<Button onclick={() => (orgFilter = '')}>Clear filter</Button>
+					</EmptyState>
+				{:else}
+					<EmptyState
+						title="No organizations yet"
+						description="Organizations show up here once someone creates one."
+					>
+						<Button href="/admin/organizations">View organizations</Button>
+					</EmptyState>
+				{/if}
+			</SectionCard>
+		</Stack>
 	{/if}
-</div>
+</Swap>
 
 <SsoProviderModal
 	bind:open={showModal}
@@ -481,135 +535,39 @@
 />
 
 <style>
-	.asso {
-		display: flex;
-		flex-direction: column;
-		gap: 2rem;
+	.filter {
+		display: block;
+		width: 14rem;
 	}
-
-	.asso-loading {
-		display: flex;
-		justify-content: center;
-		padding: 3rem;
-		color: var(--text-muted);
-	}
-
-	.asso-section {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-	}
-
-	.asso-head {
-		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
-		gap: 1rem;
-		flex-wrap: wrap;
-	}
-
-	.asso-title {
-		font-size: var(--text-title-3);
-		line-height: var(--lh-title-3);
-		font-weight: 600;
-		margin: 0;
-		color: var(--text-default);
-	}
-
-	.asso-desc {
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		color: var(--text-muted);
-		margin: 0.25rem 0 0;
-		max-width: 60ch;
-	}
-
-	.asso-search {
-		display: flex;
-		align-items: center;
-		gap: 0.4rem;
-		color: var(--text-faint);
-		width: 16rem;
-	}
-
-	.asso-list {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-
-	.asso-row {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		padding: 0.7rem 0.85rem;
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-md);
-		background: var(--bg-surface);
-	}
-
-	.asso-row--static {
-		background: var(--bg-raised);
-	}
-
-	.asso-row-icon {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 2rem;
-		height: 2rem;
-		border-radius: var(--radius-sm);
-		background: var(--bg-raised);
-		color: var(--text-muted);
-		flex-shrink: 0;
-	}
-
-	.asso-row-main {
-		flex: 1;
+	.line {
 		min-width: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.1rem;
-		overflow-wrap: anywhere;
-	}
-
-	.asso-row-name {
 		overflow-x: clip;
 		text-overflow: ellipsis;
-		white-space: nowrap;
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		font-weight: 500;
-		color: var(--text-default);
 	}
-
-	.asso-row-meta {
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		color: var(--text-faint);
-	}
-
-	.asso-row-test {
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
+	.ok {
 		color: var(--status-success);
 	}
-
-	.asso-row-test--bad {
+	.bad {
 		color: var(--status-error);
 	}
-
-	.asso-row-actions {
+	.icons {
 		display: flex;
 		align-items: center;
-		gap: 0.1rem;
+		gap: var(--space-1);
 	}
-
-	.asso-row-toggle {
-		width: 8rem;
-		flex-shrink: 0;
+	.org-controls {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+	}
+	.org-status {
+		display: block;
+		width: 5rem;
+	}
+	.allow {
+		color: var(--text-muted);
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		cursor: pointer;
 	}
 </style>

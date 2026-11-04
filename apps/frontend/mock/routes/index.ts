@@ -1,5 +1,8 @@
 import type { MockContext } from '../plugin.ts';
 import type { Router } from '../router.ts';
+import { adminOrgRoutes } from './admin-orgs.ts';
+import { adminPeopleRoutes } from './admin-people.ts';
+import { adminSystemRoutes } from './admin-system.ts';
 import { databaseRoutes } from './databases.ts';
 import { deploymentRoutes } from './deployments.ts';
 import { gitRoutes } from './git.ts';
@@ -12,7 +15,9 @@ import { settingsRoutes } from './settings.ts';
 import { shellRoutes } from './shell.ts';
 
 export function registerRoutes(router: Router, ctx: MockContext) {
+	adminSystemRoutes(router, ctx);
 	shellRoutes(router, ctx);
+	adminOrgRoutes(router, ctx);
 	deploymentRoutes(router, ctx);
 	projectRoutes(router, ctx);
 	databaseRoutes(router, ctx);
@@ -22,4 +27,5 @@ export function registerRoutes(router: Router, ctx: MockContext) {
 	securityRoutes(router, ctx);
 	settingsRoutes(router, ctx);
 	gitRoutes(router, ctx);
+	adminPeopleRoutes(router, ctx);
 }

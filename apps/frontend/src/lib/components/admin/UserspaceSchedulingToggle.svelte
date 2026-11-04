@@ -1,31 +1,37 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { apiFetch, toasts } from '$lib/stores';
-	import { SectionCard, ToggleRow, Badge } from '$lib/components/ui';
+	import { Alert, Button, SectionCard, Skeleton, Swap, ToggleRow } from '$lib/components/ui';
 
-	interface State {
+	interface Setting {
 		enabled: boolean;
 		dbValue: boolean;
 		envOverride: boolean | null;
 	}
 
-	let state = $state<State | null>(null);
-	let saving = $state(false);
+	const HINT = 'Users can assign workloads to any user-selectable pool. Off, only superadmins can.';
+
+	let setting = $state<Setting | null>(null);
+	let loading = $state(true);
+	let saving = false;
 
 	async function load() {
+		loading = true;
 		try {
 			const res = await apiFetch('/apiv1/admin/instance-settings/userspace-scheduling');
-			if (!res.ok) return;
-			state = await res.json();
+			if (res.ok) setting = await res.json();
 		} catch {
-			// leave null; card just won't show a value
+			setting = null;
+		} finally {
+			loading = false;
 		}
 	}
 
-	async function toggle() {
-		if (!state || state.envOverride !== null) return;
+	async function apply(next: boolean) {
+		if (!setting || setting.envOverride !== null || saving) return;
+		const previous = setting;
 		saving = true;
-		const next = !state.dbValue;
+		setting = { ...setting, dbValue: next };
 		try {
 			const res = await apiFetch('/apiv1/admin/instance-settings/userspace-scheduling', {
 				method: 'PATCH',
@@ -33,12 +39,13 @@
 				body: JSON.stringify({ enabled: next })
 			});
 			if (!res.ok) throw new Error("Couldn't save");
-			state = await res.json();
+			setting = await res.json();
 			toasts.add({
 				title: next ? 'Userspace scheduling on' : 'Userspace scheduling off',
 				color: 'success'
 			});
 		} catch (e) {
+			setting = previous;
 			toasts.add({ title: e instanceof Error ? e.message : 'Request failed', color: 'error' });
 		} finally {
 			saving = false;
@@ -48,28 +55,29 @@
 	onMount(load);
 </script>
 
-{#if state}
-	<SectionCard title="Userspace scheduling">
-		<p class="text-xs text-muted mb-3">
-			When on, users can assign their workloads to any pool marked user-selectable. When off, only
-			superadmins can. Only superadmins can change pool taints and labels.
-		</p>
-		{#if state.envOverride !== null}
-			<div class="flex items-center gap-2 text-xs text-muted">
-				<Badge tone="neutral">env override</Badge>
-				<span>
-					Pinned to <span class="font-mono">{state.envOverride ? 'on' : 'off'}</span> by the
-					<span class="font-mono">USERSPACE_NODE_SCHEDULING</span> environment variable. Unset it to control
-					this here.
-				</span>
-			</div>
+<SectionCard title="Userspace scheduling">
+	<Swap key={loading ? 'loading' : setting ? 'setting' : 'error'}>
+		{#if loading}
+			<Skeleton height="2.5rem" />
+		{:else if !setting}
+			<Alert tone="error" title="Couldn't load this setting">
+				{#snippet actions()}
+					<Button size="sm" onclick={load}>Retry</Button>
+				{/snippet}
+			</Alert>
+		{:else if setting.envOverride !== null}
+			<ToggleRow
+				checked={setting.envOverride}
+				label="Let users pick a node pool"
+				hint="Pinned by USERSPACE_NODE_SCHEDULING. Unset it to control this here."
+				disabled
+			/>
 		{:else}
 			<ToggleRow
-				checked={state.dbValue}
+				bind:checked={() => setting?.dbValue ?? false, (v) => void apply(v)}
 				label="Let users pick a node pool"
-				disabled={saving}
-				onchange={toggle}
+				hint={HINT}
 			/>
 		{/if}
-	</SectionCard>
-{/if}
+	</Swap>
+</SectionCard>

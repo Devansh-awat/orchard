@@ -1,68 +1,130 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { apiFetch, instanceFeatures, toasts } from '$lib/stores';
 	import {
-		Loader2,
-		Search,
-		Trash2,
-		Pencil,
-		Plus,
-		X,
+		Building2,
 		ChevronLeft,
 		ChevronRight,
-		Gauge
+		Gauge,
+		MoreHorizontal,
+		Pencil,
+		Plus,
+		Trash2
 	} from 'lucide-svelte';
-	import { Alert, Modal, Button, Dropdown, Field, Input, EmptyState } from '$lib/components/ui';
+	import { apiFetch, instanceFeatures, toasts } from '$lib/stores';
 	import { formatCpuMilli, formatMemoryBytes } from '$lib/quantity';
+	import {
+		Alert,
+		Avatar,
+		Button,
+		Dropdown,
+		EmptyState,
+		Field,
+		FieldGrid,
+		Input,
+		ItemLabel,
+		List,
+		ListRow,
+		Menu,
+		MenuItem,
+		Modal,
+		ModalIntro,
+		RelativeTime,
+		SearchField,
+		SearchPicker,
+		SectionCard,
+		SectionTitle,
+		SegmentedControl,
+		Skeleton,
+		Stack,
+		Swap,
+		Table,
+		Textarea
+	} from '$lib/components/ui';
+	import type { TableColumn } from '$lib/components/ui/Table.svelte';
+	import Metric from '$lib/components/ui/Metric.svelte';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 
 	interface OrgItem {
 		id: string;
 		name: string;
 		slug: string;
-		description?: string;
-		avatarUrl?: string;
-		plan?: string;
+		description?: string | null;
+		avatarUrl?: string | null;
+		plan?: string | null;
 		createdAt: string;
 		creator?: {
 			id: string;
 			email: string;
 			username: string;
-			firstName?: string;
-			lastName?: string;
-		};
+			firstName?: string | null;
+			lastName?: string | null;
+		} | null;
 		_count: {
 			members: number;
-			workspaces: number;
+			projects: number;
 		};
 	}
 
+	type CapId = 'cpu' | 'memory' | 'pods' | 'services';
+
+	const COLUMNS: TableColumn<OrgItem>[] = [
+		{ id: 'organization', label: 'Organization', width: 'minmax(14rem, 1fr)' },
+		{ id: 'members', label: 'Members', numeric: true },
+		{ id: 'projects', label: 'Projects', numeric: true },
+		{ id: 'creator', label: 'Creator', width: 'minmax(5rem, 9rem)' },
+		{ id: 'created', label: 'Created', width: '5.5rem' },
+		{ id: 'actions', width: '3.5rem', align: 'end' }
+	];
+
+	const PLAN_OPTIONS = [
+		{ value: '', label: 'None' },
+		{ value: 'free', label: 'Free' },
+		{ value: 'pro', label: 'Pro' },
+		{ value: 'enterprise', label: 'Enterprise' }
+	];
+
+	const CAPS: { id: CapId; label: string; unit: string; example: string }[] = [
+		{ id: 'cpu', label: 'CPU', unit: 'millicores', example: '4000' },
+		{ id: 'memory', label: 'Memory', unit: 'MiB', example: '8192' },
+		{ id: 'pods', label: 'Max pods', unit: 'pods', example: '100' },
+		{ id: 'services', label: 'Max services', unit: 'services', example: '20' }
+	];
+
+	const CAP_MODES = [
+		{ value: 'unlimited', label: 'Unlimited' },
+		{ value: 'custom', label: 'Set a limit' }
+	];
+
 	let organizations = $state<OrgItem[]>([]);
-	let loading = $state(true);
+	let loaded = $state(false);
+	let loading = $state(false);
+	let loadError = $state<string | null>(null);
 	let total = $state(0);
 	let currentPage = $state(1);
 	let totalPages = $state(1);
 	let searchQuery = $state('');
 	let searchTimeout: ReturnType<typeof setTimeout>;
-
-	const PLAN_OPTIONS = ['free', 'pro', 'enterprise'] as const;
+	let latestRequest = 0;
 
 	let showCreate = $state(false);
 	let createName = $state('');
 	let createSlug = $state('');
 	let createDescription = $state('');
 	let createImageUrl = $state('');
-	let createPlan = $state<string>('');
+	let createPlan = $state('');
 	let createPrimaryOwnerEmail = $state('');
 	let creating = $state(false);
 
+	let editOpen = $state(false);
 	let editingOrg = $state<OrgItem | null>(null);
 	let editName = $state('');
 	let editDescription = $state('');
 	let saving = $state(false);
 
+	let deleteOpen = $state(false);
 	let deletingOrg = $state<OrgItem | null>(null);
-	let deleting = $state(false);
 
+	let quotaOpen = $state(false);
 	let quotaOrg = $state<OrgItem | null>(null);
 	let quotaLoading = $state(false);
 	let quotaSaving = $state(false);
@@ -72,63 +134,74 @@
 		pods: number;
 		services: number;
 	} | null>(null);
-	let qCpu = $state<string>('');
-	let qMemMi = $state<string>('');
-	let qPods = $state<string>('');
-	let qServices = $state<string>('');
-	let qDefaultCpu = $state<string>('');
-	let qDefaultMemMi = $state<string>('');
+	let qCaps = $state<Record<CapId, { custom: boolean; value: string | number }>>(emptyCaps());
+	let qDefaultCpu = $state<string | number>('');
+	let qDefaultMemMi = $state<string | number>('');
 
-	// Quota connections (shared-pool linking)
 	let qConnections = $state<Array<{ id: string; name: string; slug: string }>>([]);
 	let qConnectSearch = $state('');
+	let qConnectPick = $state('');
 	let qConnectResults = $state<OrgItem[]>([]);
+	let qConnectSearching = $state(false);
 	let qConnectBusy = $state(false);
 	let qConnectSearchTimeout: ReturnType<typeof setTimeout>;
 
-	async function openQuota(org: OrgItem) {
-		quotaOrg = org;
-		quotaLoading = true;
-		quotaUsage = null;
-		qCpu = qMemMi = qPods = qServices = qDefaultCpu = qDefaultMemMi = '';
-		qConnections = [];
-		qConnectSearch = '';
-		qConnectResults = [];
-		try {
-			const res = await apiFetch(`/apiv1/admin/organizations/${org.id}/quota`);
-			if (!res.ok) throw new Error("Couldn't load quota");
-			const data = await res.json();
-			quotaUsage = data.usage;
-			qCpu = data.org.cpuLimitMilli ? String(data.org.cpuLimitMilli) : '';
-			qMemMi = data.org.memoryLimitBytes
-				? String(Math.round(data.org.memoryLimitBytes / (1024 * 1024)))
-				: '';
-			qPods = data.org.maxPods ? String(data.org.maxPods) : '';
-			qServices = data.org.maxServices ? String(data.org.maxServices) : '';
-			qDefaultCpu = data.org.defaultPodCpuMilli ? String(data.org.defaultPodCpuMilli) : '';
-			qDefaultMemMi = data.org.defaultPodMemoryBytes
-				? String(Math.round(data.org.defaultPodMemoryBytes / (1024 * 1024)))
-				: '';
-			qConnections = data.connections ?? [];
-		} catch (e) {
-			toasts.add({
-				title: "Couldn't save quotas",
-				description: e instanceof Error ? e.message : undefined,
-				color: 'error'
-			});
-			quotaOrg = null;
-		} finally {
-			quotaLoading = false;
-		}
-	}
+	const view = $derived(
+		!loaded ? 'loading' : loadError ? 'error' : organizations.length === 0 ? 'empty' : 'rows'
+	);
+	const pristine = $derived(view === 'empty' && !searchQuery.trim());
 
-	function closeQuota() {
-		quotaOrg = null;
-	}
+	const connectOptions = $derived(
+		qConnectResults.map((o) => ({ value: o.id, label: o.name, description: o.slug }))
+	);
 
-	onMount(() => {
-		instanceFeatures.load().catch(() => undefined);
+	const usageTiles = $derived.by(() => {
+		if (!quotaUsage) return [];
+		const count = (n: number) => n.toLocaleString();
+		const memoryCap = parseIntOrNull(capValue('memory'));
+		const tile = (
+			id: CapId,
+			label: string,
+			used: number,
+			cap: number | null,
+			format: (n: number) => string
+		) => ({
+			id,
+			label,
+			value: format(used),
+			detail: cap === null ? 'No limit' : `of ${format(cap)}`,
+			over: cap !== null && used > cap
+		});
+		return [
+			tile('cpu', 'CPU', quotaUsage.cpuMilli, parseIntOrNull(capValue('cpu')), formatCpuMilli),
+			tile(
+				'memory',
+				'Memory',
+				quotaUsage.memoryBytes,
+				memoryCap === null ? null : memoryCap * 1024 * 1024,
+				formatMemoryBytes
+			),
+			tile('pods', 'Pods', quotaUsage.pods, parseIntOrNull(capValue('pods')), count),
+			tile('services', 'Services', quotaUsage.services, parseIntOrNull(capValue('services')), count)
+		];
 	});
+
+	function emptyCaps(): Record<CapId, { custom: boolean; value: string | number }> {
+		return {
+			cpu: { custom: false, value: '' },
+			memory: { custom: false, value: '' },
+			pods: { custom: false, value: '' },
+			services: { custom: false, value: '' }
+		};
+	}
+
+	function capValue(id: CapId) {
+		return qCaps[id].custom ? qCaps[id].value : '';
+	}
+
+	function capFrom(value: number | null | undefined) {
+		return { custom: !!value, value: value ? String(value) : '' };
+	}
 
 	function parseIntOrNull(v: string | number | null | undefined): number | null {
 		const t = String(v ?? '').trim();
@@ -137,12 +210,79 @@
 		return Number.isFinite(n) && n > 0 ? n : null;
 	}
 
+	function creatorName(org: OrgItem) {
+		if (!org.creator) return null;
+		return org.creator.firstName || org.creator.username || org.creator.email;
+	}
+
+	function orgDetail(org: OrgItem) {
+		return org.description ? `${org.slug} · ${org.description}` : org.slug;
+	}
+
+	function applyQuota(data: {
+		usage: NonNullable<typeof quotaUsage>;
+		org: {
+			cpuLimitMilli: number | null;
+			memoryLimitBytes: number | null;
+			maxPods: number | null;
+			maxServices: number | null;
+			defaultPodCpuMilli: number | null;
+			defaultPodMemoryBytes: number | null;
+		};
+		connections?: typeof qConnections;
+	}) {
+		const toMi = (bytes: number | null) => (bytes ? Math.round(bytes / (1024 * 1024)) : null);
+		quotaUsage = data.usage;
+		qCaps = {
+			cpu: capFrom(data.org.cpuLimitMilli),
+			memory: capFrom(toMi(data.org.memoryLimitBytes)),
+			pods: capFrom(data.org.maxPods),
+			services: capFrom(data.org.maxServices)
+		};
+		qDefaultCpu = data.org.defaultPodCpuMilli ? String(data.org.defaultPodCpuMilli) : '';
+		qDefaultMemMi = toMi(data.org.defaultPodMemoryBytes)?.toString() ?? '';
+		qConnections = data.connections ?? [];
+	}
+
+	async function openQuota(org: OrgItem) {
+		quotaOrg = org;
+		quotaOpen = true;
+		quotaLoading = true;
+		quotaUsage = null;
+		qCaps = emptyCaps();
+		qDefaultCpu = qDefaultMemMi = '';
+		qConnections = [];
+		qConnectSearch = '';
+		qConnectPick = '';
+		qConnectResults = [];
+		try {
+			const res = await apiFetch(`/apiv1/admin/organizations/${org.id}/quota`);
+			if (!res.ok) throw new Error("Couldn't load quota");
+			applyQuota(await res.json());
+		} catch (e) {
+			toasts.add({
+				title: "Couldn't load quotas",
+				description: e instanceof Error ? e.message : undefined,
+				color: 'error'
+			});
+			quotaOpen = false;
+		} finally {
+			quotaLoading = false;
+		}
+	}
+
+	function closeQuota() {
+		quotaOpen = false;
+	}
+
 	function handleConnectSearch() {
 		clearTimeout(qConnectSearchTimeout);
+		qConnectSearching = !!qConnectSearch.trim();
 		qConnectSearchTimeout = setTimeout(async () => {
 			const q = qConnectSearch.trim();
 			if (!q) {
 				qConnectResults = [];
+				qConnectSearching = false;
 				return;
 			}
 			try {
@@ -156,6 +296,8 @@
 				);
 			} catch {
 				qConnectResults = [];
+			} finally {
+				qConnectSearching = false;
 			}
 		}, 250);
 	}
@@ -164,23 +306,12 @@
 		if (!quotaOrg) return;
 		const res = await apiFetch(`/apiv1/admin/organizations/${quotaOrg.id}/quota`);
 		if (!res.ok) return;
-		const data = await res.json();
-		quotaUsage = data.usage;
-		qCpu = data.org.cpuLimitMilli ? String(data.org.cpuLimitMilli) : '';
-		qMemMi = data.org.memoryLimitBytes
-			? String(Math.round(data.org.memoryLimitBytes / (1024 * 1024)))
-			: '';
-		qPods = data.org.maxPods ? String(data.org.maxPods) : '';
-		qServices = data.org.maxServices ? String(data.org.maxServices) : '';
-		qDefaultCpu = data.org.defaultPodCpuMilli ? String(data.org.defaultPodCpuMilli) : '';
-		qDefaultMemMi = data.org.defaultPodMemoryBytes
-			? String(Math.round(data.org.defaultPodMemoryBytes / (1024 * 1024)))
-			: '';
-		qConnections = data.connections ?? [];
+		applyQuota(await res.json());
 	}
 
 	async function connectOrg(other: OrgItem) {
 		if (!quotaOrg) return;
+		qConnectPick = '';
 		qConnectBusy = true;
 		try {
 			const res = await apiFetch(`/apiv1/admin/organizations/${quotaOrg.id}/quota/connect`, {
@@ -197,8 +328,6 @@
 				description: `${quotaOrg.name} and ${other.name} now share the same quota pool.`,
 				color: 'success'
 			});
-			qConnectSearch = '';
-			qConnectResults = [];
 			await refreshQuota();
 		} catch (e) {
 			toasts.add({
@@ -207,6 +336,8 @@
 				color: 'error'
 			});
 		} finally {
+			qConnectResults = [];
+			qConnectSearch = '';
 			qConnectBusy = false;
 		}
 	}
@@ -243,13 +374,13 @@
 		if (!quotaOrg) return;
 		quotaSaving = true;
 		try {
-			const memMi = parseIntOrNull(qMemMi);
+			const memMi = parseIntOrNull(capValue('memory'));
 			const defMemMi = parseIntOrNull(qDefaultMemMi);
 			const body = {
-				cpuLimitMilli: parseIntOrNull(qCpu),
+				cpuLimitMilli: parseIntOrNull(capValue('cpu')),
 				memoryLimitBytes: memMi === null ? null : memMi * 1024 * 1024,
-				maxPods: parseIntOrNull(qPods),
-				maxServices: parseIntOrNull(qServices),
+				maxPods: parseIntOrNull(capValue('pods')),
+				maxServices: parseIntOrNull(capValue('services')),
 				defaultPodCpuMilli: parseIntOrNull(qDefaultCpu),
 				defaultPodMemoryBytes: defMemMi === null ? null : defMemMi * 1024 * 1024
 			};
@@ -273,26 +404,38 @@
 	}
 
 	async function fetchOrganizations(page: number = 1) {
+		const request = ++latestRequest;
 		loading = true;
 		try {
 			const params = new URLSearchParams({ page: String(page), limit: '20' });
 			if (searchQuery) params.set('search', searchQuery);
 			const response = await apiFetch(`/apiv1/admin/organizations?${params}`);
-			if (!response.ok) throw new Error("Couldn't load organizations");
+			if (!response.ok) throw new Error(`The server answered ${response.status}.`);
 			const data = await response.json();
+			if (request !== latestRequest) return;
+			if (data.organizations.length === 0 && data.page > 1 && data.totalPages > 0) {
+				await fetchOrganizations(data.totalPages);
+				return;
+			}
 			organizations = data.organizations;
 			total = data.total;
 			currentPage = data.page;
 			totalPages = data.totalPages;
+			loadError = null;
 		} catch (e) {
-			toasts.add({
-				title: "Couldn't load organizations",
-				description: e instanceof Error ? e.message : "Couldn't load organizations",
-				color: 'error'
-			});
+			if (request !== latestRequest) return;
+			loadError = e instanceof Error ? e.message : "Couldn't load organizations";
 		} finally {
-			loading = false;
+			if (request === latestRequest) {
+				loading = false;
+				loaded = true;
+			}
 		}
+	}
+
+	function retryLoad() {
+		loaded = false;
+		fetchOrganizations(currentPage);
 	}
 
 	function handleSearch() {
@@ -302,6 +445,12 @@
 		}, 300);
 	}
 
+	function clearSearch() {
+		searchQuery = '';
+		clearTimeout(searchTimeout);
+		fetchOrganizations(1);
+	}
+
 	function generateSlug() {
 		createSlug = createName
 			.toLowerCase()
@@ -309,14 +458,18 @@
 			.replace(/^-|-$/g, '');
 	}
 
-	function openCreateModal() {
-		showCreate = true;
+	function resetCreate() {
 		createName = '';
 		createSlug = '';
 		createDescription = '';
 		createImageUrl = '';
 		createPlan = '';
 		createPrimaryOwnerEmail = '';
+	}
+
+	function openCreateModal() {
+		resetCreate();
+		showCreate = true;
 	}
 
 	async function createOrganization() {
@@ -340,7 +493,7 @@
 				throw new Error(data.message || "Couldn't create organization");
 			}
 			const data = await response.json();
-			const inviteLink = data.inviteLink;
+			const inviteLink: string | undefined = data.inviteLink;
 			toasts.add({
 				title: 'Organization created',
 				description: inviteLink
@@ -349,16 +502,19 @@
 				color: 'success'
 			});
 			if (inviteLink) {
-				await navigator.clipboard.writeText(inviteLink);
-				toasts.add({ title: 'Invite link copied to clipboard', color: 'success' });
+				try {
+					await navigator.clipboard.writeText(inviteLink);
+					toasts.add({ title: 'Invite link copied to clipboard', color: 'success' });
+				} catch {
+					toasts.add({
+						title: "Couldn't copy the invite link",
+						description: inviteLink,
+						color: 'warning'
+					});
+				}
 			}
 			showCreate = false;
-			createName = '';
-			createSlug = '';
-			createDescription = '';
-			createImageUrl = '';
-			createPlan = '';
-			createPrimaryOwnerEmail = '';
+			resetCreate();
 			fetchOrganizations(1);
 		} catch (e) {
 			toasts.add({
@@ -375,10 +531,11 @@
 		editingOrg = org;
 		editName = org.name;
 		editDescription = org.description || '';
+		editOpen = true;
 	}
 
 	function closeEdit() {
-		editingOrg = null;
+		editOpen = false;
 	}
 
 	async function saveOrg() {
@@ -408,9 +565,13 @@
 		}
 	}
 
+	function askDelete(org: OrgItem) {
+		deletingOrg = org;
+		deleteOpen = true;
+	}
+
 	async function confirmDelete() {
 		if (!deletingOrg) return;
-		deleting = true;
 		try {
 			const response = await apiFetch(`/apiv1/admin/organizations/${deletingOrg.id}`, {
 				method: 'DELETE'
@@ -420,7 +581,6 @@
 				throw new Error(data.message || "Couldn't delete organization");
 			}
 			toasts.add({ title: 'Organization deleted', color: 'success' });
-			deletingOrg = null;
 			fetchOrganizations(currentPage);
 		} catch (e) {
 			toasts.add({
@@ -428,206 +588,175 @@
 				description: e instanceof Error ? e.message : "Couldn't delete organization",
 				color: 'error'
 			});
-		} finally {
-			deleting = false;
 		}
 	}
 
 	onMount(() => {
+		instanceFeatures.load().catch(() => undefined);
 		fetchOrganizations();
 	});
 </script>
 
-<div class="mb-4 flex items-center gap-3">
-	<div class="relative flex-1">
-		<Search
-			class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2"
-			style="color: var(--surface-muted);"
-		/>
-		<Input
-			type="text"
-			bind:value={searchQuery}
-			oninput={handleSearch}
-			placeholder="Search organizations by name or slug"
-			class="w-full pl-10"
-		/>
-	</div>
-	<span class="text-sm whitespace-nowrap" style="color: var(--surface-muted);">
-		{total} total
+{#snippet pager()}
+	<span class="page-label">Page {currentPage} of {totalPages}</span>
+	<Button
+		variant="ghost"
+		size="sm"
+		icon={ChevronLeft}
+		label="Previous page"
+		disabled={currentPage <= 1 || loading}
+		onclick={() => fetchOrganizations(currentPage - 1)}
+	/>
+	<Button
+		variant="ghost"
+		size="sm"
+		icon={ChevronRight}
+		label="Next page"
+		disabled={currentPage >= totalPages || loading}
+		onclick={() => fetchOrganizations(currentPage + 1)}
+	/>
+{/snippet}
+
+{#snippet noResults(typed: string)}
+	<span class="combo-empty">
+		{#if !typed}
+			Type a name or slug
+		{:else if qConnectSearching}
+			Searching
+		{:else}
+			No organizations match “{typed}”
+		{/if}
 	</span>
-	<Button variant="primary" class="whitespace-nowrap" onclick={openCreateModal}>
-		<Plus class="h-4 w-4" />
-		Create
-	</Button>
-</div>
+{/snippet}
 
-<div
-	class="rounded-2xl border overflow-hidden"
-	style="border-color: var(--surface-border); background-color: var(--surface-bg);"
+<SectionCard
+	title="Organizations"
+	description={view === 'rows' ? `${total.toLocaleString()} total` : undefined}
+	flush
+	footer={view === 'rows' && totalPages > 1 ? pager : undefined}
 >
-	{#if loading}
-		<div class="flex justify-center py-12">
-			<Loader2 class="h-6 w-6 animate-spin text-primary-600" />
-		</div>
-	{:else if organizations.length === 0}
-		<EmptyState title="No organizations found" />
-	{:else}
-		<div class="overflow-x-auto">
-			<table class="w-full text-sm">
-				<thead>
-					<tr style="border-bottom: 1px solid var(--surface-border); color: var(--surface-muted);">
-						<th class="px-4 py-3 text-left font-medium">Organization</th>
-						<th class="px-4 py-3 text-left font-medium">Slug</th>
-						<th class="px-4 py-3 text-left font-medium">Members</th>
-						<th class="px-4 py-3 text-left font-medium">Workspaces</th>
-						<th class="px-4 py-3 text-left font-medium">Creator</th>
-						<th class="px-4 py-3 text-left font-medium">Created</th>
-						<th class="px-4 py-3 text-right font-medium">Actions</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each organizations as org (org.id)}
-						<tr
-							style="border-bottom: 1px solid var(--surface-border); color: var(--center-channel-color);"
-							class="transition hover:bg-[color-mix(in_srgb,var(--surface-border)_20%,transparent)]"
-						>
-							<td class="px-4 py-3">
-								<div class="flex items-center gap-3">
-									{#if org.avatarUrl}
-										<img
-											src={org.avatarUrl}
-											alt={org.name}
-											class="h-8 w-8 shrink-0 rounded-lg object-cover"
-										/>
-									{:else}
-										<div
-											class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-semibold"
-											style="background-color: var(--control-bg); color: var(--center-channel-color);"
-										>
-											{org.name[0].toUpperCase()}
-										</div>
-									{/if}
-									<div class="min-w-0">
-										<p class="font-medium truncate max-w-[240px]" title={org.name}>{org.name}</p>
-										{#if org.description}
-											<p
-												class="text-xs truncate max-w-[200px]"
-												style="color: var(--surface-muted);"
-											>
-												{org.description}
-											</p>
-										{/if}
-									</div>
-								</div>
-							</td>
-							<td class="px-4 py-3 font-mono text-xs">{org.slug}</td>
-							<td class="px-4 py-3">{org._count.members}</td>
-							<td class="px-4 py-3">{org._count.workspaces}</td>
-							<td
-								class="px-4 py-3 text-xs max-w-48 truncate"
-								style="color: var(--surface-muted);"
-								title={org.creator
-									? org.creator.firstName || org.creator.username || org.creator.email
-									: undefined}
-							>
-								{#if org.creator}
-									{org.creator.firstName || org.creator.username || org.creator.email}
-								{:else}
-									<span class="italic">System</span>
-								{/if}
-							</td>
-							<td class="px-4 py-3 text-xs" style="color: var(--surface-muted);">
-								{new Date(org.createdAt).toLocaleDateString()}
-							</td>
-							<td class="px-4 py-3">
-								<div class="flex items-center justify-end gap-1">
-									<Button
-										variant="ghost"
-										size="sm"
-										onclick={() => openQuota(org)}
-										title="Resource quotas"
-									>
-										<Gauge class="h-4 w-4" />
-									</Button>
-									<Button
-										variant="ghost"
-										size="sm"
-										onclick={() => openEdit(org)}
-										title="Edit organization"
-									>
-										<Pencil class="h-4 w-4" />
-									</Button>
-									<Button
-										variant="ghost"
-										size="sm"
-										style="color: var(--error-text-color);"
-										onclick={() => (deletingOrg = org)}
-										title="Delete organization"
-									>
-										<Trash2 class="h-4 w-4" />
-									</Button>
-								</div>
-							</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</div>
-	{/if}
-</div>
+	{#snippet actions()}
+		{#if !pristine}
+			<div class="search">
+				<SearchField
+					size="sm"
+					placeholder="Search name or slug"
+					bind:value={
+						() => searchQuery,
+						(v) => {
+							searchQuery = v;
+							handleSearch();
+						}
+					}
+				/>
+			</div>
+			<Button variant="primary" size="sm" icon={Plus} onclick={openCreateModal}
+				>New organization</Button
+			>
+		{/if}
+	{/snippet}
 
-{#if totalPages > 1}
-	<div class="mt-4 flex items-center justify-center gap-2">
-		<Button
-			variant="ghost"
-			size="sm"
-			onclick={() => fetchOrganizations(currentPage - 1)}
-			disabled={currentPage <= 1}
-		>
-			<ChevronLeft class="h-4 w-4" />
-		</Button>
-		<span class="text-sm" style="color: var(--surface-muted);">
-			Page {currentPage} of {totalPages}
-		</span>
-		<Button
-			variant="ghost"
-			size="sm"
-			onclick={() => fetchOrganizations(currentPage + 1)}
-			disabled={currentPage >= totalPages}
-		>
-			<ChevronRight class="h-4 w-4" />
-		</Button>
-	</div>
-{/if}
+	<Swap key={view}>
+		{#if view === 'loading'}
+			<div class="inset">
+				<Stack gap="xs">
+					<Skeleton height="2.75rem" />
+					<Skeleton height="2.75rem" />
+					<Skeleton height="2.75rem" />
+					<Skeleton height="2.75rem" />
+					<Skeleton height="2.75rem" />
+				</Stack>
+			</div>
+		{:else if view === 'error'}
+			<div class="inset">
+				<Alert tone="error" title="Couldn't load organizations">
+					{loadError}
+					{#snippet actions()}
+						<Button size="sm" onclick={retryLoad}>Retry</Button>
+					{/snippet}
+				</Alert>
+			</div>
+		{:else if view === 'empty'}
+			{#if pristine}
+				<EmptyState title="No organizations yet">
+					{#snippet icon()}<Building2 size={20} />{/snippet}
+					<Button variant="primary" icon={Plus} onclick={openCreateModal}>New organization</Button>
+				</EmptyState>
+			{:else}
+				<EmptyState title="No organizations match “{searchQuery.trim()}”">
+					<Button onclick={clearSearch}>Clear search</Button>
+				</EmptyState>
+			{/if}
+		{:else}
+			<Table
+				columns={COLUMNS}
+				rows={organizations}
+				rowKey={(org) => org.id}
+				inset={false}
+				label="Organizations"
+			>
+				{#snippet cell(org, col)}
+					{#if col.id === 'organization'}
+						<ItemLabel title={org.name} detail={orgDetail(org)}>
+							{#snippet leading()}
+								<Avatar
+									user={org.avatarUrl ? { id: org.id, imageUrl: org.avatarUrl } : undefined}
+									seed={org.id}
+									size={32}
+								/>
+							{/snippet}
+						</ItemLabel>
+					{:else if col.id === 'members'}
+						{org._count.members.toLocaleString()}
+					{:else if col.id === 'projects'}
+						{org._count.projects.toLocaleString()}
+					{:else if col.id === 'creator'}
+						{@const name = creatorName(org)}
+						<span class="cell-text" title={name ?? undefined}>{name ?? 'System'}</span>
+					{:else if col.id === 'created'}
+						<span class="cell-text"><RelativeTime date={org.createdAt} /></span>
+					{:else if col.id === 'actions'}
+						<Menu>
+							{#snippet trigger(attrs)}
+								<Button
+									{...attrs}
+									variant="ghost"
+									size="sm"
+									icon={MoreHorizontal}
+									label="More for {org.name}"
+								/>
+							{/snippet}
+							<MenuItem icon={Gauge} onclick={() => openQuota(org)}>Resource quotas</MenuItem>
+							<MenuItem icon={Pencil} onclick={() => openEdit(org)}>Edit</MenuItem>
+							<MenuItem danger icon={Trash2} onclick={() => askDelete(org)}>Delete</MenuItem>
+						</Menu>
+					{/if}
+				{/snippet}
+			</Table>
+		{/if}
+	</Swap>
+</SectionCard>
 
-<Modal bind:open={showCreate} title="Create organization">
-	<div class="space-y-4">
+<Modal bind:open={showCreate} title="New organization">
+	<div class="form">
 		<Field label="Name" for="create-org-name">
 			<Input
 				id="create-org-name"
-				type="text"
 				bind:value={createName}
 				oninput={generateSlug}
 				placeholder="My Organization"
-				class="w-full"
 			/>
 		</Field>
 		<Field label="Slug" for="create-org-slug">
-			<Input
-				id="create-org-slug"
-				type="text"
-				bind:value={createSlug}
-				placeholder="my-organization"
-				class="w-full font-mono text-sm"
-			/>
+			<Input id="create-org-slug" bind:value={createSlug} mono placeholder="my-organization" />
 		</Field>
 		<Field label="Description (optional)" for="create-org-description">
-			<textarea
+			<Textarea
 				id="create-org-description"
 				bind:value={createDescription}
-				rows="3"
+				rows={3}
 				placeholder="A brief description"
-				class="input w-full"></textarea>
+			/>
 		</Field>
 		<Field label="Image URL (optional)" for="create-org-image-url">
 			<Input
@@ -635,35 +764,26 @@
 				type="url"
 				bind:value={createImageUrl}
 				placeholder="https://..."
-				class="w-full"
 			/>
 		</Field>
 		<Field label="Plan (optional)" for="create-org-plan">
-			<Dropdown
-				id="create-org-plan"
-				bind:value={createPlan}
-				options={[
-					{ value: '', label: 'None' },
-					...PLAN_OPTIONS.map((opt) => ({ value: opt, label: opt }))
-				]}
-			/>
+			<Dropdown id="create-org-plan" bind:value={createPlan} options={PLAN_OPTIONS} />
 		</Field>
 		<Field
 			label="Primary owner email (optional)"
 			for="create-primary-owner-email"
-			hint="If they have an account, they become owner now. Otherwise they’re invited and become owner when they accept."
+			hint="An existing account becomes owner now. Anyone else is invited and becomes owner on accepting."
 		>
 			<Input
 				id="create-primary-owner-email"
 				type="email"
 				bind:value={createPrimaryOwnerEmail}
 				placeholder="client@example.com"
-				class="w-full"
 			/>
 		</Field>
 	</div>
 	{#snippet footer()}
-		<Button variant="secondary" onclick={() => (showCreate = false)}>Cancel</Button>
+		<Button variant="ghost" onclick={() => (showCreate = false)}>Cancel</Button>
 		<Button
 			variant="primary"
 			onclick={createOrganization}
@@ -675,249 +795,252 @@
 	{/snippet}
 </Modal>
 
-<Modal
-	bind:open={
-		() => editingOrg !== null,
-		(v) => {
-			if (!v) closeEdit();
-		}
-	}
-	title="Edit organization"
->
-	<div class="space-y-4">
+<Modal bind:open={editOpen} title="Edit organization">
+	<div class="form">
 		<Field label="Name" for="edit-org-name">
-			<Input id="edit-org-name" type="text" bind:value={editName} class="w-full" />
+			<Input id="edit-org-name" bind:value={editName} />
 		</Field>
 		<Field label="Description" for="edit-org-description">
-			<textarea id="edit-org-description" bind:value={editDescription} rows="3" class="input w-full"
-			></textarea>
+			<Textarea id="edit-org-description" bind:value={editDescription} rows={3} />
 		</Field>
 	</div>
 	{#snippet footer()}
-		<Button variant="secondary" onclick={closeEdit}>Cancel</Button>
+		<Button variant="ghost" onclick={closeEdit}>Cancel</Button>
 		<Button variant="primary" onclick={saveOrg} loading={saving}>Save changes</Button>
 	{/snippet}
 </Modal>
 
-<Modal
-	bind:open={
-		() => deletingOrg !== null,
-		(v) => {
-			if (!v) deletingOrg = null;
-		}
-	}
-	title="Delete organization"
-	size="sm"
->
-	{#if deletingOrg}
-		<p class="text-sm mb-1" style="color: var(--surface-muted);">Delete this organization?</p>
-		<p class="text-sm font-medium mb-4">{deletingOrg.name} ({deletingOrg.slug})</p>
-		<p class="text-xs" style="color: var(--error-text-color);">
-			This permanently deletes the organization and all its projects and apps.
-		</p>
-	{/if}
-	{#snippet footer()}
-		<Button variant="secondary" onclick={() => (deletingOrg = null)}>Cancel</Button>
-		<Button variant="danger" onclick={confirmDelete} loading={deleting}>Delete</Button>
-	{/snippet}
-</Modal>
+<ConfirmModal
+	bind:open={deleteOpen}
+	title="Delete {deletingOrg?.name ?? 'this organization'}?"
+	description="This permanently deletes {deletingOrg?.slug ??
+		'the organization'} and all its projects and apps."
+	confirmLabel="Delete"
+	onconfirm={confirmDelete}
+	oncancel={() => undefined}
+/>
 
-<Modal
-	bind:open={
-		() => quotaOrg !== null,
-		(v) => {
-			if (!v) closeQuota();
-		}
-	}
-	title="Resource quotas"
-	size="lg"
->
-	{#if quotaOrg}
-		<p class="text-xs mb-4" style="color: var(--surface-muted);">{quotaOrg.name}</p>
+<Modal bind:open={quotaOpen} size="lg" labelledby="quota-title">
+	<div class="form form--wide">
+		<ModalIntro
+			id="quota-title"
+			icon={Gauge}
+			tone="accent"
+			title="Resource quotas"
+			description={quotaOrg?.name}
+		/>
 
 		{#if $instanceFeatures.resourceLimits === 'off'}
-			<div class="mb-4">
-				<Alert tone="info" title="Resource limits are off">
-					These values apply only when limits are turned on in Configuration.
-				</Alert>
-			</div>
+			<Alert tone="info" title="Resource limits are off">
+				These values apply only when limits are turned on in Configuration.
+			</Alert>
 		{/if}
 
-		{#if quotaLoading}
-			<div class="flex justify-center py-10"><Loader2 class="h-6 w-6 animate-spin" /></div>
-		{:else}
-			{#if quotaUsage}
-				<div class="rounded-xl border p-3 mb-4" style="border-color: var(--surface-border);">
-					<p class="text-xs font-medium mb-1" style="color: var(--surface-muted);">Current usage</p>
-					<div class="grid grid-cols-2 gap-2 text-sm">
-						<div>CPU: <strong>{formatCpuMilli(quotaUsage.cpuMilli)}</strong></div>
-						<div>Memory: <strong>{formatMemoryBytes(quotaUsage.memoryBytes)}</strong></div>
-						<div>Pods: <strong>{quotaUsage.pods}</strong></div>
-						<div>Services: <strong>{quotaUsage.services}</strong></div>
-					</div>
-				</div>
-			{/if}
-
-			<p class="text-xs mb-3" style="color: var(--surface-muted);">
-				Click <strong>Unlimited</strong> or leave blank to remove a cap. Limits apply across all projects
-				in this organization.
-			</p>
-
-			<div class="grid grid-cols-2 gap-3">
-				<Field label="CPU (millicores)" for="quota-cpu">
-					<div class="flex items-center gap-2">
-						<Input
-							id="quota-cpu"
-							type="number"
-							bind:value={qCpu}
-							placeholder="unlimited"
-							class="flex-1"
-						/>
-						<Button variant="secondary" size="sm" onclick={() => (qCpu = '')}>Unlimited</Button>
-					</div>
-				</Field>
-				<Field label="Memory (MiB)" for="quota-memory">
-					<div class="flex items-center gap-2">
-						<Input
-							id="quota-memory"
-							type="number"
-							bind:value={qMemMi}
-							placeholder="unlimited"
-							class="flex-1"
-						/>
-						<Button variant="secondary" size="sm" onclick={() => (qMemMi = '')}>Unlimited</Button>
-					</div>
-				</Field>
-				<Field label="Max pods" for="quota-pods">
-					<div class="flex items-center gap-2">
-						<Input
-							id="quota-pods"
-							type="number"
-							bind:value={qPods}
-							placeholder="unlimited"
-							class="flex-1"
-						/>
-						<Button variant="secondary" size="sm" onclick={() => (qPods = '')}>Unlimited</Button>
-					</div>
-				</Field>
-				<Field label="Max services" for="quota-services">
-					<div class="flex items-center gap-2">
-						<Input
-							id="quota-services"
-							type="number"
-							bind:value={qServices}
-							placeholder="unlimited"
-							class="flex-1"
-						/>
-						<Button variant="secondary" size="sm" onclick={() => (qServices = '')}>
-							Unlimited
-						</Button>
-					</div>
-				</Field>
-			</div>
-
-			<h4 class="text-sm font-semibold mt-4 mb-2">Per-pod defaults</h4>
-			<p class="text-xs mb-2" style="color: var(--surface-muted);">
-				Applies to containers with no requests. Required if you set CPU or memory quotas.
-			</p>
-			<div class="grid grid-cols-2 gap-3">
-				<Field label="Default CPU / pod (millicores)" for="quota-default-cpu">
-					<Input
-						id="quota-default-cpu"
-						type="number"
-						bind:value={qDefaultCpu}
-						placeholder="100"
-						class="w-full"
-					/>
-				</Field>
-				<Field label="Default memory / pod (MiB)" for="quota-default-memory">
-					<Input
-						id="quota-default-memory"
-						type="number"
-						bind:value={qDefaultMemMi}
-						placeholder="128"
-						class="w-full"
-					/>
-				</Field>
-			</div>
-
-			<h4 class="text-sm font-semibold mt-4 mb-2">Connected organizations</h4>
-			<p class="text-xs mb-2" style="color: var(--surface-muted);">
-				Connected organizations share the same caps and the <strong>same usage pool</strong>. If you
-				connect organization A (10 CPU) to organization B, both show 10 CPU, but their combined
-				usage can't exceed 10.
-			</p>
-
-			{#if qConnections.length > 0}
-				<div class="space-y-1 mb-3">
-					{#each qConnections as conn (conn.id)}
-						<div
-							class="flex items-center justify-between rounded-lg border px-3 py-2 text-sm"
-							style="border-color: var(--surface-border);"
-						>
-							<div class="min-w-0">
-								<div class="font-medium truncate" title={conn.name}>{conn.name}</div>
-								<div class="font-mono text-xs truncate" style="color: var(--surface-muted);">
-									{conn.slug}
-								</div>
-							</div>
-							<Button
-								variant="ghost"
-								size="sm"
-								style="color: var(--error-text-color);"
-								onclick={disconnectQuota}
-								disabled={qConnectBusy}
-								title="Disconnect from shared pool"
-							>
-								<X class="h-4 w-4" />
-							</Button>
-						</div>
-					{/each}
-				</div>
+		<Swap key={quotaLoading ? 'loading' : 'form'}>
+			{#if quotaLoading}
+				<Stack gap="sm">
+					<Skeleton height="3.5rem" />
+					<Skeleton height="8rem" />
+					<Skeleton height="4rem" />
+				</Stack>
 			{:else}
-				<p class="text-xs mb-2 italic" style="color: var(--surface-muted);">
-					Not connected to any other organization.
-				</p>
-			{/if}
+				<div class="form form--wide">
+					{#if quotaUsage}
+						<div class="usage">
+							{#each usageTiles as tile (tile.id)}
+								<Metric
+									size="sm"
+									label={tile.label}
+									value={tile.value}
+									detail={tile.detail}
+									tone={tile.over ? 'warning' : 'neutral'}
+								/>
+							{/each}
+						</div>
+					{/if}
 
-			<div class="relative">
-				<Input
-					type="text"
-					bind:value={qConnectSearch}
-					oninput={handleConnectSearch}
-					placeholder="Search for an organization to connect"
-					class="w-full"
-				/>
-				{#if qConnectResults.length > 0}
-					<div
-						class="mt-1 rounded-lg border overflow-hidden"
-						style="border-color: var(--surface-border); background-color: var(--center-channel-bg);"
-					>
-						{#each qConnectResults as r (r.id)}
-							<button
-								type="button"
-								onclick={() => connectOrg(r)}
-								disabled={qConnectBusy}
-								class="w-full text-left px-3 py-2 text-sm hover:bg-[color-mix(in_srgb,var(--surface-border)_20%,transparent)] flex items-center justify-between"
-							>
-								<span class="min-w-0 truncate" title={r.name}>
-									<span class="font-medium">{r.name}</span>
-									<span class="font-mono text-xs ml-2" style="color: var(--surface-muted);"
-										>{r.slug}</span
-									>
-								</span>
-								<Plus class="h-4 w-4" />
-							</button>
-						{/each}
-					</div>
-				{/if}
-			</div>
-		{/if}
-	{/if}
+					<Stack gap="sm">
+						<div class="group-head">
+							<SectionTitle title="Limits" size="md" />
+							<p class="hint">Limits apply across all projects in this organization.</p>
+						</div>
+						<FieldGrid>
+							{#each CAPS as cap (cap.id)}
+								<Field label={cap.label} for="quota-{cap.id}">
+									<div class="choice">
+										<SegmentedControl
+											label="{cap.label} limit"
+											options={CAP_MODES}
+											grow
+											bind:value={
+												() => (qCaps[cap.id].custom ? 'custom' : 'unlimited'),
+												(v) => (qCaps[cap.id].custom = v === 'custom')
+											}
+										/>
+										<Input
+											id="quota-{cap.id}"
+											type="number"
+											min="1"
+											bind:value={qCaps[cap.id].value}
+											disabled={!qCaps[cap.id].custom}
+											placeholder={qCaps[cap.id].custom ? cap.example : 'Unlimited'}
+											suffix={cap.unit}
+										/>
+									</div>
+								</Field>
+							{/each}
+						</FieldGrid>
+					</Stack>
+
+					<Stack gap="sm">
+						<div class="group-head">
+							<SectionTitle title="Per-pod defaults" size="md" />
+							<p class="hint">
+								Applies to containers with no requests. Required if you set CPU or memory limits.
+							</p>
+						</div>
+						<FieldGrid>
+							<Field label="Default CPU per pod" for="quota-default-cpu">
+								<Input
+									id="quota-default-cpu"
+									type="number"
+									min="1"
+									bind:value={qDefaultCpu}
+									placeholder="100"
+									suffix="millicores"
+								/>
+							</Field>
+							<Field label="Default memory per pod" for="quota-default-memory">
+								<Input
+									id="quota-default-memory"
+									type="number"
+									min="1"
+									bind:value={qDefaultMemMi}
+									placeholder="128"
+									suffix="MiB"
+								/>
+							</Field>
+						</FieldGrid>
+					</Stack>
+
+					<Stack gap="sm">
+						<div class="group-head">
+							<SectionTitle title="Connected organizations" size="md">
+								{#snippet actions()}
+									{#if qConnections.length > 0}
+										<Button
+											variant="ghost"
+											size="sm"
+											disabled={qConnectBusy}
+											onclick={disconnectQuota}
+										>
+											Disconnect
+										</Button>
+									{/if}
+								{/snippet}
+							</SectionTitle>
+							<p class="hint">
+								They share the same limits and one usage pool, so their combined usage can't exceed
+								the limit.
+							</p>
+						</div>
+						{#if qConnections.length > 0}
+							<List inset={false} label="Connected organizations">
+								{#each qConnections as conn (conn.id)}
+									<ListRow flush pinned title={conn.name} subtitle={conn.slug}>
+										{#snippet leading()}<Avatar seed={conn.id} size={32} />{/snippet}
+									</ListRow>
+								{/each}
+							</List>
+						{/if}
+						<SearchPicker
+							bind:value={qConnectPick}
+							bind:query={
+								() => qConnectSearch,
+								(v) => {
+									qConnectSearch = v;
+									handleConnectSearch();
+								}
+							}
+							block
+							filter={false}
+							options={connectOptions}
+							placeholder="Connect an organization"
+							searchPlaceholder="Search name or slug"
+							searching={qConnectSearching}
+							loading={qConnectBusy}
+							disabled={qConnectBusy}
+							empty={noResults}
+							onchange={(id) => {
+								const other = qConnectResults.find((o) => o.id === id);
+								if (other) connectOrg(other);
+							}}
+						/>
+					</Stack>
+				</div>
+			{/if}
+		</Swap>
+	</div>
 	{#snippet footer()}
-		{#if !quotaLoading}
-			<Button variant="secondary" onclick={closeQuota}>Cancel</Button>
-			<Button variant="primary" onclick={saveQuota} loading={quotaSaving}>Save quotas</Button>
-		{/if}
+		<Button variant="ghost" onclick={closeQuota}>Cancel</Button>
+		<Button variant="primary" onclick={saveQuota} loading={quotaSaving} disabled={quotaLoading}>
+			Save quotas
+		</Button>
 	{/snippet}
 </Modal>
+
+<style>
+	.search {
+		width: 13rem;
+	}
+	.inset {
+		padding: 0 var(--space-4) var(--space-4);
+	}
+	.page-label {
+		margin-right: auto;
+		color: var(--text-muted);
+		font-size: var(--text-callout);
+		font-variant-numeric: tabular-nums;
+	}
+	.cell-text {
+		display: block;
+		min-width: 0;
+		overflow-x: clip;
+		color: var(--text-muted);
+		font-size: var(--text-callout);
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.form {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+	}
+	.form--wide {
+		gap: var(--space-6);
+	}
+	.usage {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+		gap: var(--space-4);
+	}
+	.group-head {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+	}
+	.hint {
+		color: var(--text-muted);
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+	}
+	.choice {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+	.combo-empty {
+		color: var(--text-muted);
+		font-size: var(--text-callout);
+	}
+</style>

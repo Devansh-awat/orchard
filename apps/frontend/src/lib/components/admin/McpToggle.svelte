@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { apiFetch, instanceFeatures, toasts } from '$lib/stores';
-	import { SectionCard, ToggleRow, Badge } from '$lib/components/ui';
+	import { Badge, SectionCard, SettingRow, SettingsList, ToggleRow } from '$lib/components/ui';
 	import SettingCommand from '$lib/components/setup/SettingCommand.svelte';
 	import type { SettingChange } from '$lib/components/setup/setting-changes';
 
@@ -41,6 +41,7 @@
 			await instanceFeatures.load(true);
 			toasts.add({ title: next ? 'MCP on' : 'MCP off', color: 'success' });
 		} catch (e) {
+			if (state) state = { ...state };
 			toasts.add({ title: e instanceof Error ? e.message : 'Request failed', color: 'error' });
 		} finally {
 			saving = false;
@@ -55,42 +56,30 @@
 		title="Model Context Protocol"
 		description="Lets AI assistants manage apps, databases and networking through the same API the dashboard uses."
 	>
-		{#if state.envOverride !== null}
-			<div class="mcp-locked">
-				<Badge tone="neutral">env override</Badge>
-				<span>
-					Pinned to <span class="font-mono">{state.envOverride ? 'on' : 'off'}</span> by the
-					<span class="font-mono">MCP_ENABLED</span> environment variable, which the chart sets when
-					<span class="font-mono">mcp.enabled</span> is false. MCP stays off until you turn it back on.
-				</span>
-			</div>
-			{#if change && state.envOverride === false}
-				<div class="mcp-change">
-					<SettingCommand {change} />
-				</div>
+		<SettingsList>
+			{#if state.envOverride !== null}
+				<SettingRow label="Accept MCP connections">
+					{#snippet hint()}
+						Pinned to <code>{state?.envOverride ? 'on' : 'off'}</code> by the
+						<code>MCP_ENABLED</code> environment variable, which the chart sets when
+						<code>mcp.enabled</code> is false. MCP stays off until you turn it back on.
+					{/snippet}
+					<Badge>env override</Badge>
+				</SettingRow>
+				{#if change && state.envOverride === false}
+					<div>
+						<SettingCommand {change} />
+					</div>
+				{/if}
+			{:else}
+				<ToggleRow
+					checked={state.dbValue}
+					label="Accept MCP connections"
+					hint="Off refuses every request to the MCP server and hides the setup instructions."
+					disabled={saving}
+					onchange={toggle}
+				/>
 			{/if}
-		{:else}
-			<ToggleRow
-				checked={state.dbValue}
-				label="Accept MCP connections"
-				hint="Off refuses every request to the MCP server and hides the setup instructions."
-				disabled={saving}
-				onchange={toggle}
-			/>
-		{/if}
+		</SettingsList>
 	</SectionCard>
 {/if}
-
-<style>
-	.mcp-change {
-		margin-top: 1rem;
-	}
-
-	.mcp-locked {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-size: var(--text-caption);
-		color: var(--text-muted);
-	}
-</style>

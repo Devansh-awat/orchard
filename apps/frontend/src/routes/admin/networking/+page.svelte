@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { apiFetch, instanceChecklist, toasts } from '$lib/stores';
-	import { motionStagger } from '$lib/utils/motion.svelte';
 	import DnsStatusCard from '$lib/components/admin/DnsStatusCard.svelte';
 	import TunnelCard from '$lib/components/admin/TunnelCard.svelte';
 	import AddressesCard from '$lib/components/admin/AddressesCard.svelte';
@@ -10,6 +9,7 @@
 	import type { TunnelSection, TunnelState } from '$lib/components/admin/TunnelCard.svelte';
 
 	let report = $state<DnsReport | null>(null);
+	let dnsError = $state<string | null>(null);
 	let tunnel = $state<TunnelState | null>(null);
 	let section = $state<TunnelSection | null>(null);
 	let overview = $state<SetupOverview | null>(null);
@@ -33,8 +33,16 @@
 	}
 
 	async function loadDns(refresh = false) {
-		const response = await apiFetch(`/apiv1/admin/networking/dns${refresh ? '?refresh=true' : ''}`);
-		if (response.ok) report = await response.json();
+		try {
+			const response = await apiFetch(
+				`/apiv1/admin/networking/dns${refresh ? '?refresh=true' : ''}`
+			);
+			if (!response.ok) throw new Error(`The server answered ${response.status}.`);
+			report = await response.json();
+			dnsError = null;
+		} catch (e) {
+			dnsError = e instanceof Error ? e.message : "Couldn't check DNS";
+		}
 	}
 
 	async function loadTunnel() {
@@ -108,27 +116,13 @@
 	}
 
 	onMount(async () => {
-		await Promise.all([loadDns(), loadTunnel(), loadOverview()]);
+		await Promise.allSettled([loadDns(), loadTunnel(), loadOverview()]);
 		loading = false;
 	});
 </script>
 
-<div {@attach motionStagger({ index: 0 })}>
-	<DnsStatusCard {report} {loading} {refreshing} onRefresh={refresh} />
-</div>
+<DnsStatusCard {report} error={dnsError} {loading} {refreshing} onRefresh={refresh} />
 
-<div {@attach motionStagger({ index: 1 })}>
-	<AddressesCard {overview} />
-</div>
+<AddressesCard {overview} />
 
-<div {@attach motionStagger({ index: 2 })}>
-	<TunnelCard
-		state={tunnel}
-		{section}
-		bind:draft
-		{saving}
-		{routing}
-		onSave={save}
-		onRoute={route}
-	/>
-</div>
+<TunnelCard state={tunnel} {section} bind:draft {saving} {routing} onSave={save} onRoute={route} />

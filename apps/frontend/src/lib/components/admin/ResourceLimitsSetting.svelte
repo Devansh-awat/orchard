@@ -6,9 +6,12 @@
 		Badge,
 		Button,
 		Field,
+		FieldGrid,
 		Input,
 		Modal,
 		SectionCard,
+		SettingRow,
+		SettingsList,
 		ToggleRow
 	} from '$lib/components/ui';
 	import {
@@ -207,28 +210,32 @@
 		description="Choose whether apps and databases are held to a limit on this server."
 	>
 		<div class="body">
-			{#if state.envOverride !== null}
-				<div class="locked">
-					<Badge tone="neutral">env override</Badge>
-					<span>
-						Pinned to <span class="font-mono">{state.envOverride}</span> by the
-						<span class="font-mono">INSTANCE_RESOURCE_LIMITS</span> environment variable.
-					</span>
-				</div>
-				{#if change}
-					<SettingCommand {change} />
+			<SettingsList>
+				{#if state.envOverride !== null}
+					<SettingRow label="Limit apps and databases">
+						{#snippet hint()}
+							Pinned to <code>{state?.envOverride}</code> by the
+							<code>INSTANCE_RESOURCE_LIMITS</code> environment variable.
+						{/snippet}
+						<Badge>env override</Badge>
+					</SettingRow>
+					{#if change}
+						<div>
+							<SettingCommand {change} />
+						</div>
+					{/if}
+				{:else}
+					<ToggleRow
+						bind:checked={toggled}
+						label="Limit apps and databases"
+						hint={state.value === 'on'
+							? 'Apps and databases get their own limits or the organization default.'
+							: "Apps and databases can use all of this server's resources."}
+						disabled={saving}
+						onchange={() => openDialog(state?.value === 'on' ? 'off' : 'on')}
+					/>
 				{/if}
-			{:else}
-				<ToggleRow
-					bind:checked={toggled}
-					label="Limit apps and databases"
-					hint={state.value === 'on'
-						? 'Apps and databases get their own limits or the organization default.'
-						: "Apps and databases can use all of this server's resources."}
-					disabled={saving}
-					onchange={() => openDialog(state?.value === 'on' ? 'off' : 'on')}
-				/>
-			{/if}
+			</SettingsList>
 			{#if notice}
 				<Alert tone="info" title="Restart to apply">
 					{notice}
@@ -289,7 +296,7 @@
 						{#if state.organizations.length > 1}
 							<p class="org-name">{org.name}</p>
 						{/if}
-						<div class="fields">
+						<FieldGrid>
 							<Field
 								label="Default memory limit"
 								for="limit-memory-{org.id}"
@@ -312,7 +319,7 @@
 									bind:value={drafts[org.id].cpu}
 								/>
 							</Field>
-						</div>
+						</FieldGrid>
 					</div>
 				{/each}
 			</div>
@@ -330,13 +337,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-4);
-	}
-	.locked {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-size: var(--text-caption);
-		color: var(--text-muted);
 	}
 	.copy {
 		font-size: var(--text-body);
@@ -363,11 +363,5 @@
 		font-size: var(--text-body);
 		font-weight: var(--weight-medium);
 		color: var(--text-default);
-	}
-	.fields {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: var(--space-3);
-		align-items: start;
 	}
 </style>

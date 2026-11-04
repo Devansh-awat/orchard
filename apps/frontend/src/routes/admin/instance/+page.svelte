@@ -1,18 +1,25 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { apiFetch, instanceChecklist, instanceFeatures, toasts } from '$lib/stores';
 	import { STORAGE_PROVIDERS, storageProvider } from '$lib/storage-providers';
 	import {
 		Alert,
 		Button,
+		Disclosure,
+		Dropdown,
 		Field,
+		FieldGrid,
+		FormActions,
 		Input,
+		SecretInput,
 		SectionCard,
-		Select,
+		SettingsList,
 		Skeleton,
+		Stack,
+		Swap,
 		ToggleRow
 	} from '$lib/components/ui';
-	import { motionStagger } from '$lib/utils/motion.svelte';
+	import { presence } from '$lib/utils/transitions';
 	import McpToggle from '$lib/components/admin/McpToggle.svelte';
 	import ResourceLimitsSetting from '$lib/components/admin/ResourceLimitsSetting.svelte';
 	import DatabaseSettings from '$lib/components/admin/DatabaseSettings.svelte';
@@ -41,7 +48,9 @@
 		};
 	};
 
-	function metaFor(section: Section) {
+	type Meta = { title: string; description: string; fields: Record<string, string> };
+
+	function metaFor(section: Section): Meta {
 		if (META[section.id]) return META[section.id];
 		const g = section.graft!;
 		return {
@@ -75,17 +84,11 @@
 		return section.graft ? section.graft.fields[name]?.help : HINTS[name];
 	}
 
-	// A section with no entry here is not rendered. The Cloudflare tunnel is the
-	// deliberate case: its credentials only make sense next to the routes they
-	// manage, so it lives on the Networking page instead.
-	const META: Record<
-		string,
-		{ title: string; description: string; fields: Record<string, string> }
-	> = {
+	const META: Record<string, Meta> = {
 		storage: {
 			title: 'Object storage',
 			description:
-				'Where database backups, uploads and build contexts go. Any S3-compatible provider works. The access key needs to list, read, write and delete in each bucket.',
+				'Holds database backups, uploads and build contexts. Any S3-compatible provider works. The access key needs list, read, write and delete on each bucket.',
 			fields: {
 				endpoint: 'Endpoint',
 				region: 'Region',
@@ -108,9 +111,9 @@
 				port: 'Port',
 				user: 'Username',
 				pass: 'Password',
-				secure: 'Implicit TLS',
 				from: 'From address',
-				fromName: 'From name'
+				fromName: 'From name',
+				secure: 'Implicit TLS'
 			}
 		},
 		ingress: {
@@ -138,7 +141,7 @@
 		'git-gitlab': {
 			title: 'GitLab sign-in',
 			description:
-				'Lets people connect their GitLab account. Register an OAuth application with the callback URL below. For self-hosted GitLab, set the base URL.',
+				'Lets people connect their GitLab account. Register an OAuth application with the callback URL below.',
 			fields: { baseUrl: 'GitLab URL', clientId: 'Application ID', clientSecret: 'Secret' }
 		},
 		'git-bitbucket': {
@@ -150,7 +153,7 @@
 		turnstile: {
 			title: 'Bot protection',
 			description:
-				'Adds a Cloudflare Turnstile challenge to sign-in pages and password-protected apps. Off until you set both keys. If the keys are wrong, sign-in fails. To get back in, set TURNSTILE_ENABLED=false on the server.',
+				'Adds a Cloudflare Turnstile challenge to sign-in pages and password-protected apps. Off until you set both keys. Wrong keys block sign-in: to get back in, set TURNSTILE_ENABLED=false on the server.',
 			fields: {
 				siteKey: 'Site key',
 				secretKey: 'Secret key',
@@ -162,17 +165,14 @@
 
 	const HINTS: Record<string, string> = {
 		domains: 'Suffix and secret name, for example .apps.example.com=wildcard-tls',
-		secure: 'Set to true for port 465. Otherwise, leave blank.',
-		endpoint: 'For example https://s3.eu-west-1.amazonaws.com',
-		accountId: 'Cloudflare R2 only. Fills in the endpoint when that is blank.',
-		bucketName: 'Holds uploads and cached images. It can be the same bucket.',
-		backupBucket: 'Holds database backups.',
-		buildContextBucket: 'Optional. Empty uses the bucket above. Used by orchard up.',
-		publicUrl: 'Optional. Empty serves uploads through Orchard, so the bucket stays private.',
+		secure: 'Turn on for port 465.',
+		accountId: 'Cloudflare R2 only. Fills in a blank endpoint.',
+		bucketName: 'Uploads and cached images. Can be the backup bucket.',
+		buildContextBucket: 'Used by orchard up. Empty uses the uploads bucket.',
+		publicUrl: 'Empty serves uploads through Orchard, so the bucket stays private.',
 		region: 'Empty means auto, which Cloudflare R2 expects.',
-		pathStyle: 'true sends requests to <endpoint>/<bucket>, false to <bucket>.<endpoint>.',
-		publicIp:
-			'The public address of this server, for example 203.0.113.10. Leave blank to require one per organization.',
+		pathStyle: 'On sends requests to <endpoint>/<bucket>, off to <bucket>.<endpoint>.',
+		publicIp: 'Leave blank to require one per organization.',
 		siteKey: 'From the Turnstile widget in your Cloudflare dashboard',
 		secretKey: 'Never leaves the server. Leave blank to keep the stored one.',
 		enabled: 'Ignored until you set both keys. Turning this off keeps the keys.',
@@ -182,33 +182,79 @@
 		key: 'Callback URL: <origin>/apiv1/git/oauth/bitbucket/callback'
 	};
 
+	const PLACEHOLDERS: Record<string, string> = {
+		endpoint: 'https://s3.eu-west-1.amazonaws.com',
+		region: 'auto',
+		publicIp: '203.0.113.10'
+	};
+
+	const TEXT_FLAG_DEFAULTS: Record<string, boolean> = { pathStyle: true, secure: false };
+
+	const ADVANCED: Record<string, string[]> = {
+		storage: ['accountId', 'buildContextBucket', 'publicUrl', 'pathStyle']
+	};
+
 	let sections = $state<Section[]>([]);
 	let drafts = $state<Record<string, Record<string, string>>>({});
 	let saving = $state<string | null>(null);
 	let loading = $state(true);
+	let loadError = $state<string | null>(null);
 
-	function seed(list: Section[]) {
-		const next: Record<string, Record<string, string>> = {};
-		for (const section of list) {
-			next[section.id] = {};
-			for (const [name, value] of Object.entries(section.values)) {
-				next[section.id][name] = value ?? '';
-			}
-		}
-		drafts = next;
+	function draftOf(section: Section) {
+		const next: Record<string, string> = {};
+		for (const [name, value] of Object.entries(section.values)) next[name] = value ?? '';
+		return next;
 	}
 
 	async function load() {
 		const response = await apiFetch('/apiv1/admin/instance-config');
-		if (!response.ok) return;
+		if (!response.ok) throw new Error(`Couldn't load the configuration (${response.status})`);
 		const all: Section[] = await response.json();
 		sections = all.filter((s) => s.id in META || !!s.graft);
-		seed(sections);
+		drafts = Object.fromEntries(sections.map((s) => [s.id, draftOf(s)]));
+	}
+
+	const isFlag = (section: Section, name: string) =>
+		section.boolFields.includes(name) || name in TEXT_FLAG_DEFAULTS;
+
+	function namesIn(section: Section, meta: Meta) {
+		const advanced = ADVANCED[section.id] ?? [];
+		const names = Object.keys(meta.fields).filter((name) => !advanced.includes(name));
+		return {
+			fields: names.filter((name) => !isFlag(section, name)),
+			flags: names.filter((name) => isFlag(section, name)),
+			advancedFields: advanced.filter((name) => !isFlag(section, name)),
+			advancedFlags: advanced.filter((name) => isFlag(section, name))
+		};
+	}
+
+	function flagOn(section: Section, name: string) {
+		const value = drafts[section.id][name];
+		return value ? value === 'true' : (TEXT_FLAG_DEFAULTS[name] ?? false);
 	}
 
 	function toggleFlag(section: Section, name: string) {
 		if (section.lockedFields.includes(name)) return;
-		drafts[section.id][name] = drafts[section.id][name] === 'true' ? 'false' : 'true';
+		drafts[section.id][name] = String(!flagOn(section, name));
+	}
+
+	const isDirty = (section: Section) =>
+		Object.entries(drafts[section.id] ?? {}).some(
+			([name, value]) => value !== (section.values[name] ?? '')
+		);
+
+	function advancedNote(section: Section, names: string[]) {
+		const count = names.filter((name) => drafts[section.id][name]).length;
+		return count ? `${count} set` : undefined;
+	}
+
+	function discard(section: Section) {
+		drafts[section.id] = draftOf(section);
+		if (section.id === 'storage') {
+			storagePreset = '';
+			storagePlace = '';
+			storageResult = null;
+		}
 	}
 
 	async function save(section: Section) {
@@ -225,7 +271,7 @@
 			}
 			const updated: Section = await response.json();
 			sections = sections.map((s) => (s.id === updated.id ? updated : s));
-			seed(sections);
+			drafts[updated.id] = draftOf(updated);
 			await instanceChecklist.load(true);
 			if (section.id === 'storage') await instanceFeatures.load(true);
 			toasts.add({ title: `${metaFor(section).title} saved`, color: 'success' });
@@ -244,6 +290,10 @@
 	let storageTesting = $state(false);
 	let storageResult = $state<{ ok: boolean; message?: string } | null>(null);
 	const presetProvider = $derived(storagePreset ? storageProvider(storagePreset) : null);
+	const providerOptions = STORAGE_PROVIDERS.map((provider) => ({
+		value: provider.id,
+		label: provider.label
+	}));
 
 	function applyStoragePreset() {
 		if (!presetProvider || !drafts.storage) return;
@@ -280,197 +330,218 @@
 		}
 	}
 
+	async function scrollToHash() {
+		const target = document.getElementById(window.location.hash.slice(1));
+		if (!target) return;
+		const nextFrame = () => new Promise(requestAnimationFrame);
+		await nextFrame();
+		await nextFrame();
+		let morphing = target.closest('[data-morphing]');
+		while (morphing) {
+			await Promise.allSettled(morphing.getAnimations().map((a) => a.finished));
+			await nextFrame();
+			morphing = target.closest('[data-morphing]');
+		}
+		target.scrollIntoView();
+	}
+
 	onMount(async () => {
-		await Promise.all([load(), loadOverview()]);
+		try {
+			await Promise.all([load(), loadOverview()]);
+		} catch (e) {
+			loadError = e instanceof Error ? e.message : "Couldn't load the configuration";
+		}
 		loading = false;
 		instanceFeatures.load(true).catch(() => undefined);
-		if (window.location.hash === '#storage') {
-			document.getElementById('storage')?.scrollIntoView();
-		}
+		await tick();
+		await scrollToHash();
 	});
 </script>
 
-{#if loading}
-	<Skeleton class="h-96 w-full" />
-{:else}
-	{#each sections as section, i (section.id)}
-		{@const meta = metaFor(section)}
-		{@const allLocked = section.lockedFields.length === Object.keys(meta.fields).length}
-		<div id={section.id} {@attach motionStagger({ index: i })}>
-			<SectionCard title={meta.title} description={meta.description}>
-				{#if section.id === 'storage' && !allLocked}
-					{#if $instanceFeatures.storage.backups === 'local'}
-						<p class="storage-note">
-							Backups are on this server. If you lose the server, you lose the backups.
-						</p>
-					{/if}
-					<div class="preset">
-						<Field label="Provider" for="storage-preset">
-							<Select id="storage-preset" bind:value={storagePreset} onchange={applyStoragePreset}>
-								<option value="">Fills in the fields</option>
-								{#each STORAGE_PROVIDERS as provider (provider.id)}
-									<option value={provider.id}>{provider.label}</option>
-								{/each}
-							</Select>
-						</Field>
-						{#if presetProvider?.placeLabel}
-							<Field label={presetProvider.placeLabel} for="storage-place">
-								<Input
-									id="storage-place"
-									placeholder={presetProvider.placeDefault}
-									bind:value={storagePlace}
-									oninput={applyStoragePreset}
-								/>
-							</Field>
-						{/if}
-					</div>
-				{/if}
-				{#if allLocked && lockedChanges(section).length === 0}
-					<Alert tone="info" title="Set by the environment">
-						Every field here comes from an environment variable. To change one, edit your values
-						file and restart.
-					</Alert>
-				{/if}
+{#snippet field(section: Section, meta: Meta, name: string)}
+	{@const locked = section.lockedFields.includes(name)}
+	{@const placeholder = section.secretFields.includes(name)
+		? section.configured
+			? 'Unchanged'
+			: ''
+		: (PLACEHOLDERS[name] ?? '')}
+	<Field
+		label={meta.fields[name]}
+		for="{section.id}-{name}"
+		hint={locked
+			? changes[LOCKED_CHANGES[name]]
+				? "Can't be edited here."
+				: 'Set by the environment'
+			: hintFor(section, name)}
+	>
+		{#if section.secretFields.includes(name)}
+			<SecretInput
+				id="{section.id}-{name}"
+				disabled={locked}
+				{placeholder}
+				bind:value={drafts[section.id][name]}
+			/>
+		{:else}
+			<Input
+				id="{section.id}-{name}"
+				disabled={locked}
+				{placeholder}
+				bind:value={drafts[section.id][name]}
+			/>
+		{/if}
+	</Field>
+{/snippet}
 
-				<div class="fields">
-					{#each Object.entries(meta.fields) as [name, label] (name)}
-						{#if !section.boolFields.includes(name)}
-							{@const locked = section.lockedFields.includes(name)}
-							{@const secret = section.secretFields.includes(name)}
-							<Field
-								{label}
-								for="{section.id}-{name}"
-								hint={locked
-									? changes[LOCKED_CHANGES[name]]
-										? "Can't be edited here."
-										: 'Set by the environment'
-									: hintFor(section, name)}
-							>
-								<Input
-									id="{section.id}-{name}"
-									type={secret ? 'password' : 'text'}
-									disabled={locked}
-									placeholder={secret && section.configured ? 'Unchanged' : ''}
-									bind:value={drafts[section.id][name]}
-								/>
-							</Field>
-						{/if}
-					{/each}
+{#snippet fieldGroup(section: Section, meta: Meta, names: string[])}
+	{#if names.length === 1}
+		{@render field(section, meta, names[0])}
+	{:else if names.length > 1}
+		<FieldGrid>
+			{#each names as name (name)}
+				{@render field(section, meta, name)}
+			{/each}
+		</FieldGrid>
+	{/if}
+{/snippet}
+
+{#snippet flagList(section: Section, meta: Meta, names: string[])}
+	{#if names.length}
+		<SettingsList>
+			{#each names as name (name)}
+				{@const locked = section.lockedFields.includes(name)}
+				<ToggleRow
+					label={meta.fields[name] ?? name}
+					hint={locked ? 'Set by the environment' : hintFor(section, name)}
+					disabled={locked}
+					checked={flagOn(section, name)}
+					onchange={() => toggleFlag(section, name)}
+				/>
+			{/each}
+		</SettingsList>
+	{/if}
+{/snippet}
+
+<Swap key={loading ? 'loading' : 'ready'}>
+	{#if loading}
+		<Stack>
+			<Skeleton height="28rem" rounded="var(--radius-widget)" />
+			<Skeleton height="14rem" rounded="var(--radius-widget)" />
+		</Stack>
+	{:else}
+		<Stack>
+			{#if loadError}
+				<Alert tone="error" title="Couldn't load the configuration">{loadError}</Alert>
+			{/if}
+
+			{#each sections as section (section.id)}
+				{@const meta = metaFor(section)}
+				{@const allLocked = section.lockedFields.length === Object.keys(meta.fields).length}
+				{@const names = namesIn(section, meta)}
+				<div id={section.id}>
+					<SectionCard title={meta.title} description={meta.description}>
+						<div class="form">
+							{#if section.id === 'storage' && !allLocked}
+								{#if $instanceFeatures.storage.backups === 'local'}
+									<Alert tone="warning">
+										Backups are on this server. If you lose the server, you lose the backups.
+									</Alert>
+								{/if}
+								<FieldGrid>
+									<Field label="Provider" for="storage-preset">
+										<Dropdown
+											id="storage-preset"
+											placeholder="Fills in the fields"
+											options={providerOptions}
+											bind:value={storagePreset}
+											onchange={applyStoragePreset}
+										/>
+									</Field>
+									{#if presetProvider?.placeLabel}
+										<Field label={presetProvider.placeLabel} for="storage-place">
+											<Input
+												id="storage-place"
+												placeholder={presetProvider.placeDefault}
+												bind:value={storagePlace}
+												oninput={applyStoragePreset}
+											/>
+										</Field>
+									{/if}
+								</FieldGrid>
+							{/if}
+							{#if allLocked && lockedChanges(section).length === 0}
+								<Alert tone="info" title="Set by the environment">
+									Every field here comes from an environment variable. To change one, edit your
+									values file and restart.
+								</Alert>
+							{/if}
+
+							{@render fieldGroup(section, meta, names.fields)}
+
+							{#each lockedChanges(section) as change (change.title)}
+								<SettingCommand {change} />
+							{/each}
+
+							{@render flagList(section, meta, names.flags)}
+
+							{#if names.advancedFields.length || names.advancedFlags.length}
+								<Disclosure title="Advanced" note={advancedNote(section, names.advancedFields)}>
+									{@render fieldGroup(section, meta, names.advancedFields)}
+									{@render flagList(section, meta, names.advancedFlags)}
+								</Disclosure>
+							{/if}
+
+							{#if section.id === 'storage' && storageResult}
+								<div in:presence out:presence>
+									<Alert tone={storageResult.ok ? 'success' : 'error'}>
+										{storageResult.ok ? 'Connection works.' : storageResult.message}
+									</Alert>
+								</div>
+							{/if}
+
+							{#if !allLocked}
+								<FormActions
+									hint={section.id === 'storage'
+										? 'Only new databases use this. Existing ones keep their storage and backups.'
+										: undefined}
+								>
+									{#if section.id === 'storage'}
+										<Button loading={storageTesting} onclick={testStorage}>Test connection</Button>
+									{/if}
+									<Button
+										variant="ghost"
+										disabled={!isDirty(section) || saving === section.id}
+										onclick={() => discard(section)}
+									>
+										Discard
+									</Button>
+									<Button
+										variant="primary"
+										loading={saving === section.id}
+										disabled={!isDirty(section)}
+										onclick={() => save(section)}
+									>
+										Save
+									</Button>
+								</FormActions>
+							{/if}
+						</div>
+					</SectionCard>
 				</div>
+			{/each}
 
-				{#each lockedChanges(section) as change (change.title)}
-					<div class="locked-change">
-						<SettingCommand {change} />
-					</div>
-				{/each}
-
-				{#if section.boolFields.length > 0}
-					<div class="switches">
-						{#each section.boolFields as name (name)}
-							{@const locked = section.lockedFields.includes(name)}
-							<ToggleRow
-								label={meta.fields[name] ?? name}
-								hint={locked ? 'Set by the environment' : hintFor(section, name)}
-								disabled={locked}
-								checked={drafts[section.id][name] === 'true'}
-								onchange={() => toggleFlag(section, name)}
-							/>
-						{/each}
-					</div>
-				{/if}
-
-				{#if section.id === 'storage' && !allLocked}
-					<p class="storage-note">
-						New storage applies to new databases. Existing databases keep backing up to their
-						current storage, and you can still restore their backups.
-					</p>
-					{#if storageResult}
-						<p class="storage-result" role="status">
-							{storageResult.ok ? 'Connection works.' : storageResult.message}
-						</p>
-					{/if}
-				{/if}
-
-				{#if !allLocked}
-					<div class="actions">
-						{#if section.id === 'storage'}
-							<Button loading={storageTesting} onclick={testStorage}>Test connection</Button>
-						{/if}
-						<Button variant="primary" loading={saving === section.id} onclick={() => save(section)}>
-							Save
-						</Button>
-					</div>
-				{/if}
-			</SectionCard>
-		</div>
-	{/each}
-
-	<div {@attach motionStagger({ index: sections.length })}>
-		<ResourceLimitsSetting change={changes.limits} />
-	</div>
-
-	<div {@attach motionStagger({ index: sections.length + 1 })}>
-		<McpToggle change={changes.mcp} />
-	</div>
-
-	<div {@attach motionStagger({ index: sections.length + 2 })}>
-		<ImageScanning />
-	</div>
-
-	<div {@attach motionStagger({ index: sections.length + 3 })}>
-		<DatabaseSettings />
-	</div>
-
-	<div {@attach motionStagger({ index: sections.length + 4 })}>
-		<TelemetryToggle />
-	</div>
-{/if}
+			<ResourceLimitsSetting change={changes.limits} />
+			<McpToggle change={changes.mcp} />
+			<ImageScanning />
+			<DatabaseSettings />
+			<TelemetryToggle />
+		</Stack>
+	{/if}
+</Swap>
 
 <style>
-	.fields {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
-		gap: 0.85rem;
-	}
-
-	.locked-change {
-		margin-top: 1rem;
-	}
-
-	.switches {
+	.form {
 		display: flex;
 		flex-direction: column;
-		gap: 0.85rem;
-		margin-top: 1rem;
-	}
-
-	.actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: 0.5rem;
-		margin-top: 1.25rem;
-	}
-
-	.preset {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
-		gap: 0.85rem;
-		margin-bottom: 0.85rem;
-	}
-
-	.storage-note,
-	.storage-result {
-		font-size: var(--text-callout);
-		color: var(--text-muted);
-		margin: 0 0 0.85rem;
-	}
-
-	.fields + .storage-note {
-		margin-top: 1rem;
-	}
-
-	.storage-result {
-		color: var(--text-default);
-		margin-top: 0.5rem;
+		gap: var(--space-4);
 	}
 </style>

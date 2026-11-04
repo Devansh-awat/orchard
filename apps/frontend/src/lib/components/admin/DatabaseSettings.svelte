@@ -2,7 +2,16 @@
 	import { onMount } from 'svelte';
 	import { Play } from 'lucide-svelte';
 	import { apiFetch, toasts } from '$lib/stores';
-	import { Badge, Button, SectionCard, StatusDot, ToggleRow, statusMeta } from '$lib/components/ui';
+	import {
+		Badge,
+		Button,
+		SectionCard,
+		SettingRow,
+		SettingsList,
+		StatusBadge,
+		ToggleRow,
+		statusMeta
+	} from '$lib/components/ui';
 
 	type Key = 'ddlCheckpoints' | 'restoreDrills' | 'pluginMigration' | 'poolerByDefault';
 
@@ -85,6 +94,7 @@
 			const label = ROWS.find((r) => r.key === key)?.label ?? 'Setting';
 			toasts.add({ title: `${label} ${next ? 'on' : 'off'}`, color: 'success' });
 		} catch (e) {
+			if (state) state = { ...state, [key]: { ...state[key] } };
 			toasts.add({ title: e instanceof Error ? e.message : 'Request failed', color: 'error' });
 		} finally {
 			saving = null;
@@ -121,20 +131,17 @@
 
 {#if state}
 	<SectionCard title="Databases">
-		<div class="rows">
+		<SettingsList>
 			{#each ROWS as row (row.key)}
 				{@const t = state[row.key]}
 				{#if t.envOverride !== null}
-					<div class="locked">
-						<div class="locked-text">
-							<span class="label">{row.label}</span>
-							<span class="hint">
-								Pinned {t.envOverride ? 'on' : 'off'} by <span class="mono">{row.env}</span>. Unset
-								it to control this here.
-							</span>
-						</div>
-						<Badge tone="neutral">env override</Badge>
-					</div>
+					<SettingRow label={row.label}>
+						{#snippet hint()}
+							Pinned {t.envOverride ? 'on' : 'off'} by <code>{row.env}</code>. Unset it to control
+							this here.
+						{/snippet}
+						<Badge>env override</Badge>
+					</SettingRow>
 				{:else}
 					<ToggleRow
 						checked={t.dbValue && !t.unavailable}
@@ -145,86 +152,18 @@
 					/>
 				{/if}
 				{#if row.key === 'pluginMigration' && migration && migrationMeta}
-					<div class="migration">
-						<StatusDot meta={migrationMeta} label={migrationMeta.label} />
-						<div class="migration-text">
-							<span class:bad={migrationMeta.kind === 'error'}>
-								{migrationMeta.label} · {migration.migrated} of {migration.migrated +
-									migration.remaining} moved
-							</span>
-							{#if migration.halted}
-								<span class="reason" title={migration.halted}>{migration.halted}</span>
-							{/if}
-						</div>
+					<SettingRow
+						label="{migration.migrated} of {migration.migrated +
+							migration.remaining} databases moved"
+						hint={migration.halted ?? undefined}
+					>
+						<StatusBadge meta={migrationMeta} variant="plain" />
 						{#if migration.halted}
 							<Button size="sm" icon={Play} loading={resuming} onclick={resume}>Resume</Button>
 						{/if}
-					</div>
+					</SettingRow>
 				{/if}
 			{/each}
-		</div>
+		</SettingsList>
 	</SectionCard>
 {/if}
-
-<style>
-	.rows {
-		display: flex;
-		flex-direction: column;
-		gap: 0.85rem;
-	}
-	.locked {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 1rem;
-	}
-	.locked-text,
-	.migration-text {
-		display: flex;
-		flex-direction: column;
-		gap: 0.125rem;
-		min-width: 0;
-	}
-	.label {
-		font-size: var(--text-body);
-		line-height: var(--lh-body);
-		font-weight: var(--weight-medium);
-		color: var(--text-default);
-	}
-	.hint {
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		color: var(--text-muted);
-	}
-	.mono {
-		font-family: var(--font-mono);
-	}
-	.migration {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		padding: 0.625rem 0.75rem;
-		border-radius: calc(var(--radius-control) * var(--corner-scale));
-		corner-shape: var(--corner);
-		background: var(--bg-sunken);
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		color: var(--text-default);
-		font-variant-numeric: tabular-nums;
-	}
-	.migration-text {
-		flex: 1;
-	}
-	.bad {
-		font-weight: var(--weight-semibold);
-		color: var(--status-error);
-	}
-	.reason {
-		overflow-x: clip;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		font-family: var(--font-mono);
-		font-size: var(--text-caption);
-		color: var(--text-muted);
-	}
-</style>

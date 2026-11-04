@@ -36,7 +36,7 @@
 		<SettingsList label="Addresses">
 			{#each rows as row (row.change.title)}
 				<ActionRow label={row.change.title} hint={row.value}>
-					<Button variant="secondary" onclick={() => show(row.change)}>Change</Button>
+					<Button variant="secondary" size="sm" onclick={() => show(row.change)}>Change</Button>
 				</ActionRow>
 			{/each}
 		</SettingsList>

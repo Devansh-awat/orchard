@@ -1,12 +1,16 @@
 <script lang="ts">
-	import { Cloud } from 'lucide-svelte';
 	import {
 		Alert,
-		Badge,
 		Button,
 		Field,
+		FieldGrid,
+		FormActions,
 		Input,
+		List,
+		ListRow,
+		SecretInput,
 		SectionCard,
+		Stack,
 		StatusBadge,
 		statusMeta
 	} from '$lib/components/ui';
@@ -67,155 +71,110 @@
 	const allLocked = $derived(
 		section ? section.lockedFields.length === Object.keys(FIELDS).length : false
 	);
+	const connected = $derived(!!state?.configured && !state.error);
 </script>
+
+{#snippet headerActions()}
+	<StatusBadge meta={statusMeta('success', `Connected to ${state?.tunnelName ?? 'this tunnel'}`)} />
+{/snippet}
 
 <SectionCard
 	title="Cloudflare Tunnel"
-	description="A token-managed tunnel keeps its routes in Cloudflare, so this server can't see which hostnames reach it. Add an API token to see them and add routes here."
+	description="Add an API token to see which hostnames reach this tunnel and add routes from here."
+	actions={connected ? headerActions : undefined}
 >
-	{#if state?.error}
-		<Alert tone="error" title="Cloudflare rejected the request">{state.error}</Alert>
-	{/if}
+	<Stack gap="lg">
+		{#if state?.error}
+			<Alert tone="error" title="Cloudflare rejected the request">{state.error}</Alert>
+		{/if}
 
-	{#if state?.configured && !state.error}
-		<div class="tn-summary">
-			<Cloud size={15} />
-			<span>Connected to <strong>{state.tunnelName ?? 'this tunnel'}</strong></span>
-			{#if !state.canEditDns}
-				<Badge tone="neutral">no zone ID</Badge>
+		{#if connected && state}
+			{#if state.routes.length}
+				<div class="routes">
+					<List inset={false} label="Tunnel routes">
+						{#each state.routes as route (route.record)}
+							<ListRow flush pinned title={route.record} subtitle={route.label}>
+								{#snippet actions()}
+									{#if route.routed}
+										<StatusBadge meta={statusMeta('success', 'Routed')} />
+									{:else}
+										<Button
+											variant="secondary"
+											size="sm"
+											loading={routing === route.record}
+											onclick={() => onRoute(route.record)}
+										>
+											Add route
+										</Button>
+									{/if}
+								{/snippet}
+							</ListRow>
+						{/each}
+					</List>
+				</div>
 			{/if}
-		</div>
 
-		<ul class="tn-routes">
-			{#each state.routes as route (route.record)}
-				<li class="tn-route">
-					<div class="tn-route-main">
-						<code class="tn-host">{route.record}</code>
-						<span class="tn-role">{route.label}</span>
-					</div>
-					{#if route.routed}
-						<StatusBadge meta={statusMeta('success', 'Routed')} />
-					{:else}
-						<Button
-							variant="secondary"
-							loading={routing === route.record}
-							onclick={() => onRoute(route.record)}
-						>
-							Add route
-						</Button>
-					{/if}
-				</li>
-			{/each}
-		</ul>
+			{#if state.otherHostnames.length}
+				<p class="note">Also on this tunnel: {state.otherHostnames.join(', ')}</p>
+			{/if}
 
-		{#if state.otherHostnames.length}
-			<p class="tn-other">
-				Also on this tunnel: {state.otherHostnames.join(', ')}
-			</p>
+			{#if !state.canEditDns}
+				<Alert tone="info" title="No zone ID">
+					Orchard adds the route but not the DNS record. Point each hostname at
+					<code class="code">{'<tunnel-id>'}.cfargotunnel.com</code> yourself, or add the zone ID below.
+				</Alert>
+			{/if}
 		{/if}
 
-		{#if !state.canEditDns}
-			<p class="tn-other">
-				Without a zone ID, Orchard adds the route but not the DNS record. Point each hostname at
-				<code>{'<tunnel-id>'}.cfargotunnel.com</code> yourself, or add the zone ID below.
-			</p>
+		{#if section}
+			{#if allLocked}
+				<Alert tone="info" title="Set by the environment">
+					Every field here comes from an environment variable, so you can't change it here.
+				</Alert>
+			{:else}
+				<Stack gap="sm">
+					<FieldGrid>
+						{#each Object.entries(FIELDS) as [name, field] (name)}
+							{@const locked = section.lockedFields.includes(name)}
+							{@const secret = section.secretFields.includes(name)}
+							<Field
+								label={field.label}
+								for="tunnel-{name}"
+								hint={locked ? 'Set by the environment' : field.hint}
+							>
+								{#if secret}
+									<SecretInput
+										id="tunnel-{name}"
+										disabled={locked}
+										placeholder={section.configured ? 'Unchanged' : ''}
+										bind:value={draft[name]}
+									/>
+								{:else}
+									<Input id="tunnel-{name}" disabled={locked} bind:value={draft[name]} />
+								{/if}
+							</Field>
+						{/each}
+					</FieldGrid>
+					<FormActions>
+						<Button variant="primary" loading={saving} onclick={onSave}>Save</Button>
+					</FormActions>
+				</Stack>
+			{/if}
 		{/if}
-	{/if}
-
-	{#if section}
-		{#if allLocked}
-			<Alert tone="info" title="Set by the environment">
-				Every field here comes from an environment variable, so you can't change it here.
-			</Alert>
-		{:else}
-			<div class="tn-fields">
-				{#each Object.entries(FIELDS) as [name, field] (name)}
-					{@const locked = section.lockedFields.includes(name)}
-					{@const secret = section.secretFields.includes(name)}
-					<Field
-						label={field.label}
-						for="tunnel-{name}"
-						hint={locked ? 'Set by the environment' : field.hint}
-					>
-						<Input
-							id="tunnel-{name}"
-							type={secret ? 'password' : 'text'}
-							disabled={locked}
-							placeholder={secret && section.configured ? 'Unchanged' : ''}
-							bind:value={draft[name]}
-						/>
-					</Field>
-				{/each}
-			</div>
-			<div class="tn-actions">
-				<Button variant="primary" loading={saving} onclick={onSave}>Save</Button>
-			</div>
-		{/if}
-	{/if}
+	</Stack>
 </SectionCard>
 
 <style>
-	.tn-summary {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-size: var(--text-caption);
+	.routes {
+		margin-block: -0.75rem;
+	}
+	.note {
 		color: var(--text-muted);
-		margin-bottom: 0.85rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 	}
-
-	.tn-routes {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-		margin-bottom: 0.85rem;
-	}
-
-	.tn-route {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.75rem;
-		padding: 0.6rem 0.8rem;
-		border: 1px solid var(--border-edge);
-		border-radius: var(--radius-md);
-		background-color: var(--bg-raised);
-	}
-
-	.tn-route-main {
-		display: flex;
-		flex-direction: column;
-		gap: 0.1rem;
-		min-width: 0;
-	}
-
-	.tn-host {
-		font-size: var(--text-footnote);
-		font-weight: 600;
-		color: var(--text-fg);
-		word-break: break-all;
-	}
-
-	.tn-role,
-	.tn-other {
-		font-size: var(--text-caption);
-		line-height: 1.45;
-		color: var(--text-faint);
-	}
-
-	.tn-other {
-		margin-bottom: 0.85rem;
-	}
-
-	.tn-fields {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
-		gap: 0.85rem;
-	}
-
-	.tn-actions {
-		display: flex;
-		justify-content: flex-end;
-		margin-top: 1.25rem;
+	.code {
+		font-family: var(--font-mono);
+		font-size: 0.92em;
 	}
 </style>
