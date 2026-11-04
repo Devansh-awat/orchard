@@ -67,6 +67,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 	if (CONSENT_PAGE.test(pathname)) {
 		response.headers.set('X-Frame-Options', 'DENY');
 		response.headers.set('Content-Security-Policy', "frame-ancestors 'none'");
+	} else {
+		response.headers.set('X-Frame-Options', 'SAMEORIGIN');
+		response.headers.set('Content-Security-Policy', "frame-ancestors 'self'");
 	}
 	return response;
 };
