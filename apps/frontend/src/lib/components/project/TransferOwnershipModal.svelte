@@ -57,8 +57,8 @@
 		</p>
 
 		<Alert tone="warning">
-			The owner's resource allowance pays for everything in this project. Whoever accepts takes on
-			that bill and becomes a project admin.
+			Everything in this project counts against the owner's resource allowance. The new owner takes
+			this on and becomes a project admin.
 		</Alert>
 
 		{#if candidates.length > 0}

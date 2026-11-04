@@ -208,7 +208,7 @@ class GraftHost {
 				);
 				const serverLoaded = await serverCheck;
 				if (serverLoaded && !serverLoaded.has(graft.id)) {
-					return { graft, error: 'the server did not load this graft' };
+					return { graft, error: "the server didn't load this graft" };
 				}
 				try {
 					const settled = await imported;
@@ -230,7 +230,7 @@ class GraftHost {
 			else failed[r.graft.id] = r.error ?? 'unknown error';
 		}
 		const stale = results.some(
-			(r) => !('client' in r && r.client) && r.error !== 'the server did not load this graft'
+			(r) => !('client' in r && r.client) && r.error !== "the server didn't load this graft"
 		);
 		if (stale && reloadOnce()) return;
 		this.loaded = loaded;

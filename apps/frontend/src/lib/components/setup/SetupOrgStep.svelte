@@ -52,14 +52,14 @@
 			});
 			if (!response.ok) {
 				const body = await response.json().catch(() => ({}));
-				throw new Error(body?.message || 'Could not rename the organization');
+				throw new Error(body?.message || "Couldn't rename the organization");
 			}
 			const refreshed = await apiFetch('/apiv1/organizations/user');
 			if (refreshed.ok) organizations.set(await refreshed.json());
 			await onDone();
 		} catch (e) {
 			toasts.add({
-				title: e instanceof Error ? e.message : 'Could not rename the organization',
+				title: e instanceof Error ? e.message : "Couldn't rename the organization",
 				color: 'error'
 			});
 		} finally {

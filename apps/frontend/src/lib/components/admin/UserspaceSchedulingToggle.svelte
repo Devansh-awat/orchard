@@ -32,7 +32,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ enabled: next })
 			});
-			if (!res.ok) throw new Error('Failed to save');
+			if (!res.ok) throw new Error("Couldn't save");
 			state = await res.json();
 			toasts.add({
 				title: next ? 'Userspace scheduling on' : 'Userspace scheduling off',

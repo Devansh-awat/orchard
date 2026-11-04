@@ -41,7 +41,7 @@ async function fetchPending(): Promise<PendingInvitation[]> {
 				pendingInvitationsList.set([]);
 				return [];
 			}
-			throw new Error('Failed to fetch pending invitations');
+			throw new Error("Couldn't load pending invitations");
 		}
 
 		const invitations = await response.json();
@@ -70,7 +70,7 @@ async function accept(
 
 		if (!response.ok) {
 			const data = await response.json().catch(() => ({}));
-			throw new Error(data?.message || 'Failed to accept invitation');
+			throw new Error(data?.message || "Couldn't accept invitation");
 		}
 
 		const result = await response.json();
@@ -101,7 +101,7 @@ async function decline(tokenOrId: string, useId = false): Promise<boolean> {
 
 		if (!response.ok) {
 			const data = await response.json().catch(() => ({}));
-			throw new Error(data?.message || 'Failed to decline invitation');
+			throw new Error(data?.message || "Couldn't decline invitation");
 		}
 
 		pendingInvitationsList.update((list) =>

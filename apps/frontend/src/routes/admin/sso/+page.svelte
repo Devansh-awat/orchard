@@ -74,7 +74,7 @@
 		loadError = null;
 		try {
 			const res = await apiFetch('/apiv1/admin/sso');
-			if (!res.ok) throw new Error('Could not load SSO configuration');
+			if (!res.ok) throw new Error("Couldn't load SSO configuration");
 			const data = await res.json();
 			providers = data.providers ?? [];
 			presets = data.presets ?? [];
@@ -82,7 +82,7 @@
 			envProvider = data.envProvider ?? null;
 			enforcement = data.enforcement ?? null;
 		} catch (e) {
-			loadError = e instanceof Error ? e.message : 'Could not load SSO configuration';
+			loadError = e instanceof Error ? e.message : "Couldn't load SSO configuration";
 		} finally {
 			loading = false;
 		}
@@ -104,7 +104,7 @@
 			return updated.iconUrl;
 		} catch (e) {
 			toasts.add({
-				title: 'Could not upload the icon',
+				title: "Couldn't upload the icon",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -122,7 +122,7 @@
 			replaceProvider(await removeProviderIcon(providerUrl(editing.id)));
 		} catch (e) {
 			toasts.add({
-				title: 'Could not remove the icon',
+				title: "Couldn't remove the icon",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -144,14 +144,14 @@
 				}
 			);
 			const data = await res.json().catch(() => ({}));
-			if (!res.ok) throw new Error(data?.message || 'Could not save the provider');
+			if (!res.ok) throw new Error(data?.message || "Couldn't save the provider");
 			if (pendingIcon) await sendIcon((data as SsoProvider).id, pendingIcon);
 			showModal = false;
 			editing = null;
 			toasts.add({ title: 'Provider saved', color: 'success' });
 			await load();
 		} catch (e) {
-			modalError = e instanceof Error ? e.message : 'Could not save the provider';
+			modalError = e instanceof Error ? e.message : "Couldn't save the provider";
 		} finally {
 			saving = false;
 		}
@@ -161,12 +161,12 @@
 		if (!toDelete) return;
 		try {
 			const res = await apiFetch(`/apiv1/admin/sso/providers/${toDelete.id}`, { method: 'DELETE' });
-			if (!res.ok) throw new Error('Could not remove the provider');
+			if (!res.ok) throw new Error("Couldn't remove the provider");
 			toasts.add({ title: 'Provider removed', color: 'success' });
 			await load();
 		} catch (e) {
 			toasts.add({
-				title: 'Could not remove the provider',
+				title: "Couldn't remove the provider",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -185,7 +185,7 @@
 			const data = await res.json().catch(() => ({}));
 			testResult = { id: provider.id, success: Boolean(data?.success), error: data?.error };
 		} catch {
-			testResult = { id: provider.id, success: false, error: 'Could not reach the provider' };
+			testResult = { id: provider.id, success: false, error: "Couldn't reach the provider" };
 		} finally {
 			testing = null;
 		}
@@ -199,11 +199,11 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ platformEnabled: !org.platformEnabled })
 			});
-			if (!res.ok) throw new Error('Could not change this organization');
+			if (!res.ok) throw new Error("Couldn't change this organization");
 			await load();
 		} catch (e) {
 			toasts.add({
-				title: 'Could not change this organization',
+				title: "Couldn't change this organization",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -223,7 +223,7 @@
 				body: JSON.stringify({ enabled: next })
 			});
 			const data = await res.json().catch(() => ({}));
-			if (!res.ok) throw new Error(data?.message || 'Could not change the sign-in policy');
+			if (!res.ok) throw new Error(data?.message || "Couldn't change the sign-in policy");
 			enforcement = data;
 			toasts.add({
 				title: next ? 'Single sign-on required' : 'Single sign-on optional',
@@ -231,7 +231,7 @@
 			});
 		} catch (e) {
 			toasts.add({
-				title: 'Could not change the sign-in policy',
+				title: "Couldn't change the sign-in policy",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -386,7 +386,7 @@
 									(!enforcement.dbValue && !enforcement.providersAvailable)}
 								label="Require single sign-on for everyone"
 								hint={enforcement.providersAvailable
-									? 'Email codes, passkeys and the superadmin password stop working for everyone except superadmins. Turning this on signs out every session that did not come through a provider.'
+									? "Email codes, passkeys and the superadmin password stop working for everyone except superadmins. Turning this on signs out every session that didn't come through a provider."
 									: 'Add and enable a working provider first, or nobody but a superadmin could sign in.'}
 								onchange={toggleEnforcement}
 							/>

@@ -88,7 +88,7 @@
 			if (!KEY_RE.test(v.key)) {
 				add(v.key, {
 					tone: 'error',
-					text: 'Use letters, digits and underscores, and do not start with a digit.'
+					text: "Use letters, digits and underscores, and don't start with a digit."
 				});
 			}
 			if (seen.has(v.key)) add(v.key, { tone: 'error', text: 'This name is set more than once.' });
@@ -117,7 +117,7 @@
 	function missing(ref: string): EnvVarIssue {
 		return {
 			tone: 'warning',
-			text: `\${{shared.${ref}}} is not defined in ${place}, so it resolves to an empty string.`
+			text: `\${{shared.${ref}}} isn't defined in ${place}, so it resolves to an empty string.`
 		};
 	}
 
@@ -220,7 +220,7 @@
 			});
 			if (!res.ok) {
 				const d = await res.json().catch(() => ({}));
-				throw new Error(d.message || 'Shared variables did not save');
+				throw new Error(d.message || "Shared variables didn't save");
 			}
 			const result = await res.json();
 			serverWarnings = result.warnings ?? [];
@@ -228,7 +228,7 @@
 			await load(environmentId, true);
 		} catch (e) {
 			toasts.add({
-				title: e instanceof Error ? e.message : 'Shared variables did not save',
+				title: e instanceof Error ? e.message : "Shared variables didn't save",
 				color: 'error'
 			});
 		} finally {
@@ -255,7 +255,7 @@
 		{#if loading}
 			<Skeleton height="6rem" rounded="var(--radius-control)" />
 		{:else if failed}
-			<Alert tone="error" title="Shared variables did not load">
+			<Alert tone="error" title="Shared variables didn't load">
 				{#snippet actions()}
 					<Button variant="secondary" size="sm" onclick={() => load(environmentId)}>Retry</Button>
 				{/snippet}

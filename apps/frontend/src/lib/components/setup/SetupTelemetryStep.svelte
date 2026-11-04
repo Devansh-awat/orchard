@@ -16,7 +16,7 @@
 			await onDone();
 		} catch (e) {
 			toasts.add({
-				title: e instanceof Error ? e.message : 'Could not save your choice',
+				title: e instanceof Error ? e.message : "Couldn't save your choice",
 				color: 'error'
 			});
 		} finally {

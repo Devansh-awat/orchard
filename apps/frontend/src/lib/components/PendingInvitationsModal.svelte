@@ -58,8 +58,8 @@
 			showOnboarding.show();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to accept invitation',
+				title: "Couldn't accept invitation",
+				description: e instanceof Error ? e.message : "Couldn't accept invitation",
 				color: 'error'
 			});
 		} finally {
@@ -102,8 +102,8 @@
 			}
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to decline invitation',
+				title: "Couldn't decline invitation",
+				description: e instanceof Error ? e.message : "Couldn't decline invitation",
 				color: 'error'
 			});
 		} finally {
@@ -135,8 +135,8 @@
 				No organization access
 			</h2>
 			<p class="mt-2" style="color: var(--surface-muted);">
-				You need to be part of an organization to use Orchard. Since you declined all invitations
-				and don't belong to any organization, you'll be logged out.
+				You need an organization to use Orchard. You declined all invitations, so Orchard will sign
+				you out.
 			</p>
 			<Button variant="primary" class="mt-6 w-full" onclick={handleLogout}>
 				<LogOut class="h-4 w-4" />

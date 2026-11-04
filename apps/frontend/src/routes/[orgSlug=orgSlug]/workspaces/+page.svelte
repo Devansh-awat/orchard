@@ -81,7 +81,7 @@
 			});
 			if (!wsRes.ok) {
 				const d = await wsRes.json().catch(() => ({}));
-				throw new Error(d.message || 'Failed to create');
+				throw new Error(d.message || "Couldn't create");
 			}
 			const ws = await wsRes.json();
 
@@ -97,7 +97,7 @@
 			showCreate = false;
 			fetchWorkspaces();
 		} catch (e) {
-			toasts.add({ title: e instanceof Error ? e.message : 'Failed to create', color: 'error' });
+			toasts.add({ title: e instanceof Error ? e.message : "Couldn't create", color: 'error' });
 		} finally {
 			creating = false;
 		}
@@ -112,13 +112,13 @@
 			});
 			if (!res.ok) {
 				const d = await res.json().catch(() => ({}));
-				throw new Error(d.message || 'Failed to delete');
+				throw new Error(d.message || "Couldn't delete");
 			}
 			toasts.add({ title: `Deleted "${deleteTarget.name}"`, color: 'success' });
 			deleteTarget = null;
 			fetchWorkspaces();
 		} catch (e) {
-			toasts.add({ title: e instanceof Error ? e.message : 'Failed to delete', color: 'error' });
+			toasts.add({ title: e instanceof Error ? e.message : "Couldn't delete", color: 'error' });
 		} finally {
 			deleting = false;
 		}
@@ -258,7 +258,7 @@
 			}
 		}
 		title={`Delete "${deleteTarget.name}"?`}
-		description="This will permanently delete this workspace and all its projects, deployments, databases, and ingresses. This cannot be undone."
+		description="This permanently deletes this workspace and all its projects, apps, databases and domains. You can't undo this."
 		confirmLabel="Delete workspace"
 		onconfirm={deleteWorkspace}
 		oncancel={() => (deleteTarget = null)}

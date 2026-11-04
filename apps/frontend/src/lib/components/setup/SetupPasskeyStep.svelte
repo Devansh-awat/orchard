@@ -58,14 +58,14 @@
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data?.message || 'Could not set the password.');
+				throw new Error(data?.message || "Couldn't set the password.");
 			}
 			password = '';
 			confirm = '';
 			toasts.add({ title: 'Password set', color: 'success' });
 			await onDone();
 		} catch (err) {
-			error = err instanceof Error ? err.message : 'Could not set the password.';
+			error = err instanceof Error ? err.message : "Couldn't set the password.";
 		} finally {
 			working = false;
 		}
@@ -95,7 +95,7 @@
 			<p>{error}</p>
 		{:else if !passkeyAvailable}
 			<p>
-				{warning ?? 'This browser cannot create a passkey.'}
+				{warning ?? "This browser can't create a passkey."}
 				Use a password for now. You can add a passkey later if this instance gets TLS.
 			</p>
 		{:else}

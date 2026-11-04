@@ -44,13 +44,16 @@
 			});
 			if (!res.ok) {
 				const d = await res.json().catch(() => ({}));
-				throw new Error(d.message || 'Failed to create environment');
+				throw new Error(d.message || "Couldn't create environment");
 			}
 			toasts.add({ title: `Created "${newName.trim()}"`, color: 'success' });
 			newName = '';
 			invalidate();
 		} catch (e) {
-			toasts.add({ title: e instanceof Error ? e.message : 'Failed', color: 'error' });
+			toasts.add({
+				title: e instanceof Error ? e.message : "Couldn't save the environment",
+				color: 'error'
+			});
 		} finally {
 			creating = false;
 		}
@@ -77,13 +80,16 @@
 			});
 			if (!res.ok) {
 				const d = await res.json().catch(() => ({}));
-				throw new Error(d.message || 'Failed to rename environment');
+				throw new Error(d.message || "Couldn't rename environment");
 			}
 			toasts.add({ title: `Renamed to "${trimmed}"`, color: 'success' });
 			editingId = null;
 			invalidate();
 		} catch (e) {
-			toasts.add({ title: e instanceof Error ? e.message : 'Failed', color: 'error' });
+			toasts.add({
+				title: e instanceof Error ? e.message : "Couldn't save the environment",
+				color: 'error'
+			});
 		} finally {
 			savingRename = false;
 		}
@@ -124,7 +130,7 @@
 		});
 		if (!res.ok) {
 			const d = await res.json().catch(() => ({}));
-			toasts.add({ title: d.message || 'Failed to delete', color: 'error' });
+			toasts.add({ title: d.message || "Couldn't delete", color: 'error' });
 			return;
 		}
 		toasts.add({ title: `Deleted ${env.name}`, color: 'success' });
@@ -225,7 +231,7 @@
 	<ConfirmModal
 		bind:open={showDelete}
 		title={`Delete "${toDelete.name}"?`}
-		description={`This <strong>permanently deletes the environment</strong> and its namespace <code>${toDelete.namespace}</code>: ${describeContents(toDelete)}. There is no undo and no recovery.`}
+		description={`This <strong>permanently deletes the environment</strong> <code>${toDelete.namespace}</code>: ${describeContents(toDelete)}. You can't undo this.`}
 		html
 		confirmText={toDelete.name}
 		confirmLabel="Delete environment forever"

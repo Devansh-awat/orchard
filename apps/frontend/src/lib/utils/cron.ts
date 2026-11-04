@@ -39,7 +39,7 @@ function validField(field: string, min: number, max: number): boolean {
 export function validateCron(expr: string): string | null {
 	const trimmed = expr.trim();
 	if (!trimmed) return 'Enter a cron expression';
-	if (trimmed.startsWith('@')) return 'Macros like @daily are not supported; use 5 fields';
+	if (trimmed.startsWith('@')) return "Macros like @daily aren't supported. Use 5 fields.";
 	const fields = trimmed.split(/\s+/);
 	if (fields.length !== 5) {
 		return 'Use exactly 5 fields: minute hour day-of-month month day-of-week';

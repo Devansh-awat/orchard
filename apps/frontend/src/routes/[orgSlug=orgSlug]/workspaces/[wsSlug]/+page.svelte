@@ -141,7 +141,7 @@
 		try {
 			const response = await apiFetch(`/apiv1/workspaces/slug/${wsSlug}`);
 			if (!response.ok) {
-				throw new Error('Failed to fetch workspace');
+				throw new Error("Couldn't load workspace");
 			}
 			workspace = await response.json();
 
@@ -163,7 +163,7 @@
 				return;
 			}
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to fetch workspace';
+			error = e instanceof Error ? e.message : "Couldn't load workspace";
 		} finally {
 			loading = false;
 		}
@@ -229,11 +229,11 @@
 
 			if (!response.ok) {
 				const data = await response.json();
-				throw new Error(data.message || 'Failed to add member');
+				throw new Error(data.message || "Couldn't add member");
 			}
 
 			toasts.add({
-				title: 'Member added successfully',
+				title: 'Member added',
 				color: 'success'
 			});
 
@@ -243,8 +243,8 @@
 			fetchWorkspace();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to add member',
+				title: "Couldn't add member",
+				description: e instanceof Error ? e.message : "Couldn't add member",
 				color: 'error'
 			});
 		} finally {
@@ -263,12 +263,12 @@
 
 			if (!response.ok) {
 				const data = await response.json();
-				const errorMessage = data.message || 'Failed to join workspace';
+				const errorMessage = data.message || "Couldn't join workspace";
 
 				if (errorMessage.includes('already a member')) {
 					toasts.add({
 						title: 'Already a member',
-						description: 'Refreshing workspace...',
+						description: 'Refreshing workspace…',
 						color: 'info'
 					});
 					await fetchWorkspace();
@@ -286,8 +286,8 @@
 			await fetchWorkspace();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to join workspace',
+				title: "Couldn't join workspace",
+				description: e instanceof Error ? e.message : "Couldn't join workspace",
 				color: 'error'
 			});
 		} finally {
@@ -306,7 +306,7 @@
 
 			if (!response.ok) {
 				const data = await response.json();
-				throw new Error(data.message || 'Failed to leave workspace');
+				throw new Error(data.message || "Couldn't leave workspace");
 			}
 
 			toasts.add({
@@ -317,8 +317,8 @@
 			goto(`/${orgSlug}`);
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to leave workspace',
+				title: "Couldn't leave workspace",
+				description: e instanceof Error ? e.message : "Couldn't leave workspace",
 				color: 'error'
 			});
 		} finally {
@@ -383,12 +383,12 @@
 
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to delete workspace');
+				throw new Error(data.message || "Couldn't delete workspace");
 			}
 
 			goto(`/${orgSlug}`);
 		} catch (e) {
-			deleteError = e instanceof Error ? e.message : 'Failed to delete workspace';
+			deleteError = e instanceof Error ? e.message : "Couldn't delete workspace";
 		} finally {
 			deletingWorkspace = false;
 		}
@@ -514,7 +514,7 @@
 					<div class="ws-project-search-bar" {...projectMenu.root}>
 						<input
 							type="search"
-							placeholder="Search projects..."
+							placeholder="Search projects"
 							class="ws-search-input"
 							bind:value={projectSearch}
 							{...projectMenu.input}
@@ -523,7 +523,7 @@
 				{/if}
 				<a href="/{orgSlug}/workspaces/{wsSlug}/projects/new" class="ws-btn ws-btn-primary">
 					<Plus class="h-4 w-4" />
-					New Project
+					New project
 				</a>
 			</div>
 		</div>
@@ -537,7 +537,7 @@
 					class="ws-btn ws-btn-primary ws-btn-mt"
 				>
 					<Plus class="h-4 w-4" />
-					Create Project
+					Create project
 				</a>
 			</div>
 		{:else if filteredProjects.length}
@@ -678,7 +678,7 @@
 	>
 		<div class="ws-dialog">
 			<div class="ws-dialog-header">
-				<h2>Add Member</h2>
+				<h2>Add member</h2>
 				<button
 					class="ws-btn ws-btn-ghost"
 					onclick={() => {
@@ -693,9 +693,9 @@
 
 			<div class="ws-dialog-body">
 				<div class="ws-field">
-					<label class="ws-label">Organization Member</label>
+					<label class="ws-label">Organization member</label>
 					{#if loadingOrgMembers}
-						<p class="ws-field-hint">Loading members...</p>
+						<p class="ws-field-hint">Loading members…</p>
 					{:else if orgMembers.length === 0}
 						<p class="ws-field-hint">No organization members found.</p>
 					{:else}
@@ -708,8 +708,8 @@
 							<Combobox
 								bind:value={selectedUserId}
 								disabled={inviting}
-								placeholder="Select a member..."
-								label="Organization Member"
+								placeholder="Select a member"
+								label="Organization member"
 								options={availableMembers.map((orgMember) => {
 									const name = [orgMember.user.firstName, orgMember.user.lastName]
 										.filter(Boolean)
@@ -730,7 +730,7 @@
 					<Dropdown
 						bind:value={selectedRoleId}
 						disabled={inviting}
-						placeholder="Select a role..."
+						placeholder="Select a role"
 						ariaLabel="Role"
 						options={roles.map((role) => ({ value: role.id, label: role.name }))}
 					/>
@@ -758,7 +758,7 @@
 						{:else}
 							<UserPlus class="h-4 w-4" />
 						{/if}
-						Add Member
+						Add member
 					</button>
 				</div>
 			</div>
@@ -770,7 +770,7 @@
 	<ConfirmModal
 		bind:open={showLeaveModal}
 		title="Leave this workspace?"
-		description="You will need to be <strong>invited again</strong> to rejoin this workspace."
+		description="You need a new <strong>invitation</strong> to rejoin this workspace."
 		html
 		confirmLabel="Leave"
 		danger={false}
@@ -780,9 +780,9 @@
 	<ConfirmModal
 		bind:open={showDeleteWorkspaceModal}
 		title={`Delete "${workspace.name}"?`}
-		description="This will permanently <strong>delete this workspace</strong> and all its projects, deployments, databases, and ingresses. This cannot be undone."
+		description="This permanently <strong>deletes this workspace</strong> and all its projects, apps, databases and domains. You can't undo this."
 		html
-		confirmLabel="Delete Workspace"
+		confirmLabel="Delete workspace"
 		onconfirm={deleteWorkspace}
 		oncancel={() => {}}
 	/>

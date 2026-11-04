@@ -96,7 +96,7 @@
 		qConnectResults = [];
 		try {
 			const res = await apiFetch(`/apiv1/admin/organizations/${org.id}/quota`);
-			if (!res.ok) throw new Error('Failed to load quota');
+			if (!res.ok) throw new Error("Couldn't load quota");
 			const data = await res.json();
 			quotaUsage = data.usage;
 			qCpu = data.org.cpuLimitMilli ? String(data.org.cpuLimitMilli) : '';
@@ -112,8 +112,8 @@
 			qConnections = data.connections ?? [];
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed',
+				title: "Couldn't save quotas",
+				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
 			quotaOrg = null;
@@ -190,7 +190,7 @@
 			});
 			if (!res.ok) {
 				const data = await res.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to connect');
+				throw new Error(data.message || "Couldn't connect");
 			}
 			toasts.add({
 				title: 'Connected',
@@ -202,8 +202,8 @@
 			await refreshQuota();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed',
+				title: "Couldn't connect",
+				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
 		} finally {
@@ -220,7 +220,7 @@
 			});
 			if (!res.ok) {
 				const data = await res.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to disconnect');
+				throw new Error(data.message || "Couldn't disconnect");
 			}
 			toasts.add({
 				title: 'Disconnected',
@@ -230,8 +230,8 @@
 			await refreshQuota();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed',
+				title: "Couldn't disconnect",
+				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
 		} finally {
@@ -263,8 +263,8 @@
 			closeQuota();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed',
+				title: "Couldn't save quotas",
+				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
 		} finally {
@@ -278,7 +278,7 @@
 			const params = new URLSearchParams({ page: String(page), limit: '20' });
 			if (searchQuery) params.set('search', searchQuery);
 			const response = await apiFetch(`/apiv1/admin/organizations?${params}`);
-			if (!response.ok) throw new Error('Failed to fetch organizations');
+			if (!response.ok) throw new Error("Couldn't load organizations");
 			const data = await response.json();
 			organizations = data.organizations;
 			total = data.total;
@@ -286,8 +286,8 @@
 			totalPages = data.totalPages;
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to fetch organizations',
+				title: "Couldn't load organizations",
+				description: e instanceof Error ? e.message : "Couldn't load organizations",
 				color: 'error'
 			});
 		} finally {
@@ -337,7 +337,7 @@
 			});
 			if (!response.ok) {
 				const data = await response.json();
-				throw new Error(data.message || 'Failed to create organization');
+				throw new Error(data.message || "Couldn't create organization");
 			}
 			const data = await response.json();
 			const inviteLink = data.inviteLink;
@@ -362,8 +362,8 @@
 			fetchOrganizations(1);
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to create organization',
+				title: "Couldn't create organization",
+				description: e instanceof Error ? e.message : "Couldn't create organization",
 				color: 'error'
 			});
 		} finally {
@@ -392,15 +392,15 @@
 			});
 			if (!response.ok) {
 				const data = await response.json();
-				throw new Error(data.message || 'Failed to update organization');
+				throw new Error(data.message || "Couldn't update organization");
 			}
 			toasts.add({ title: 'Organization updated', color: 'success' });
 			closeEdit();
 			fetchOrganizations(currentPage);
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to update organization',
+				title: "Couldn't update organization",
+				description: e instanceof Error ? e.message : "Couldn't update organization",
 				color: 'error'
 			});
 		} finally {
@@ -417,15 +417,15 @@
 			});
 			if (!response.ok) {
 				const data = await response.json();
-				throw new Error(data.message || 'Failed to delete organization');
+				throw new Error(data.message || "Couldn't delete organization");
 			}
 			toasts.add({ title: 'Organization deleted', color: 'success' });
 			deletingOrg = null;
 			fetchOrganizations(currentPage);
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to delete organization',
+				title: "Couldn't delete organization",
+				description: e instanceof Error ? e.message : "Couldn't delete organization",
 				color: 'error'
 			});
 		} finally {

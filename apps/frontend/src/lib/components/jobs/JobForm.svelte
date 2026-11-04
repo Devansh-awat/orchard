@@ -34,7 +34,6 @@
 	<section class="job-form-section">
 		<div class="job-form-section-head">
 			<h3 class="job-form-section-name">Details</h3>
-			<p class="job-form-section-sub">A name and optional description.</p>
 		</div>
 		<div class="grid gap-3 md:grid-cols-2">
 			<Field label="Name" for="job-name">
@@ -69,7 +68,7 @@
 	<section class="job-form-section">
 		<div class="job-form-section-head">
 			<h3 class="job-form-section-name">Steps</h3>
-			<p class="job-form-section-sub">Run in order — a failure stops the pipeline.</p>
+			<p class="job-form-section-sub">Steps run in order. A failure stops the rest.</p>
 		</div>
 		<StepList bind:steps {deployments} />
 	</section>

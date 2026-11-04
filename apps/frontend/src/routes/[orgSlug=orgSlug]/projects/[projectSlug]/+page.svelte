@@ -153,7 +153,7 @@
 			enabled: !!projectId,
 			queryFn: async () => {
 				const response = await apiFetch(`/apiv1/projects/${projectId}/compose-stacks`);
-				if (!response.ok) throw new Error('Failed to fetch compose stacks');
+				if (!response.ok) throw new Error("Couldn't load compose stacks");
 				return response.json() as Promise<ComposeStackSummary[]>;
 			},
 			staleTime: 30_000
@@ -256,7 +256,7 @@
 				)
 			});
 			const data = await res.json().catch(() => null);
-			if (!res.ok) throw new Error(data?.message || 'Could not take checkpoints');
+			if (!res.ok) throw new Error(data?.message || "Couldn't take checkpoints");
 			const n = data?.checkpoints?.length ?? 0;
 			toasts.add({
 				title:
@@ -271,7 +271,7 @@
 			});
 		} catch (e) {
 			toasts.add({
-				title: 'Could not take checkpoints',
+				title: "Couldn't take checkpoints",
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
@@ -319,21 +319,21 @@
 				body: JSON.stringify({ confirmName: project.name })
 			});
 			if (!response.ok) {
-				let errorMessage = 'Failed to delete project';
+				let errorMessage = "Couldn't delete project";
 				try {
 					const errorData = await response.json();
 					if (errorData.message) errorMessage = errorData.message;
 					else if (errorData.error) errorMessage = errorData.error;
 				} catch {
 					if (response.status === 403)
-						errorMessage = 'You do not have permission to delete this project.';
+						errorMessage = "You don't have permission to delete this project.";
 					else if (response.status === 404) errorMessage = 'Project not found';
 				}
 				throw new Error(errorMessage);
 			}
 			toasts.add({
 				title: 'Project deleted',
-				description: `${project.name} has been deleted`,
+				description: `${project.name} deleted`,
 				color: 'success'
 			});
 			queryClient.setQueryData(
@@ -348,8 +348,8 @@
 			goto(`/${orgSlug}`);
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to delete project',
+				title: "Couldn't delete project",
+				description: e instanceof Error ? e.message : "Couldn't delete project",
 				color: 'error'
 			});
 		} finally {
@@ -408,14 +408,14 @@
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to update role');
+				throw new Error(data.message || "Couldn't update role");
 			}
 			toasts.add({ title: 'Role updated', color: 'success' });
 			await fetchProject();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to update role',
+				title: "Couldn't update role",
+				description: e instanceof Error ? e.message : "Couldn't update role",
 				color: 'error'
 			});
 			await fetchProject();
@@ -433,14 +433,14 @@
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to remove member');
+				throw new Error(data.message || "Couldn't remove member");
 			}
 			toasts.add({ title: 'Member removed', color: 'success' });
 			await fetchProject();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to remove member',
+				title: "Couldn't remove member",
+				description: e instanceof Error ? e.message : "Couldn't remove member",
 				color: 'error'
 			});
 		} finally {
@@ -459,7 +459,7 @@
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to request the transfer');
+				throw new Error(data.message || "Couldn't request the transfer");
 			}
 			showTransferModal = false;
 			toasts.add({
@@ -470,8 +470,8 @@
 			await fetchProject();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to request the transfer',
+				title: "Couldn't request the transfer",
+				description: e instanceof Error ? e.message : "Couldn't request the transfer",
 				color: 'error'
 			});
 		} finally {
@@ -488,14 +488,14 @@
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to cancel the transfer');
+				throw new Error(data.message || "Couldn't cancel the transfer");
 			}
 			toasts.add({ title: 'Transfer canceled', color: 'success' });
 			await fetchProject();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to cancel the transfer',
+				title: "Couldn't cancel the transfer",
+				description: e instanceof Error ? e.message : "Couldn't cancel the transfer",
 				color: 'error'
 			});
 		} finally {
@@ -513,13 +513,13 @@
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || `Failed to ${action} the transfer`);
+				throw new Error(data.message || `Couldn't ${action} the transfer`);
 			}
 			if (action === 'accept') {
 				const result = await response.json().catch(() => ({}));
 				toasts.add({
 					title: 'You now own this project',
-					description: result.promotedToAdmin ? 'Your project role was raised to admin' : undefined,
+					description: result.promotedToAdmin ? "You're now a project admin" : undefined,
 					color: 'success'
 				});
 			} else {
@@ -528,8 +528,8 @@
 			await fetchProject();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : `Failed to ${action} the transfer`,
+				title: `Couldn't ${action} the transfer`,
+				description: e instanceof Error ? e.message : `Couldn't ${action} the transfer`,
 				color: 'error'
 			});
 		} finally {
@@ -546,14 +546,14 @@
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to revoke invitation');
+				throw new Error(data.message || "Couldn't revoke invitation");
 			}
 			toasts.add({ title: 'Invitation revoked', color: 'success' });
 			await fetchProject();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to revoke invitation',
+				title: "Couldn't revoke invitation",
+				description: e instanceof Error ? e.message : "Couldn't revoke invitation",
 				color: 'error'
 			});
 		} finally {
@@ -571,7 +571,7 @@
 			});
 			if (!res.ok) {
 				const d = await res.json().catch(() => ({}));
-				throw new Error(d.message || 'Failed to save');
+				throw new Error(d.message || "Couldn't save");
 			}
 			const updated = await res.json();
 			project = {
@@ -702,7 +702,7 @@
 		untrack(() => {
 			if (qPending && !lastQueryData) return; // initial load: keep skeleton
 			if (qError && !qData) {
-				error = qError instanceof Error ? qError.message : 'Failed to fetch project';
+				error = qError instanceof Error ? qError.message : "Couldn't load project";
 				loading = false;
 				return;
 			}
@@ -958,7 +958,7 @@
 	</Page>
 {:else if error || !project}
 	<Page title="Project" width="default">
-		<EmptyState title="This project did not load" description={error ?? 'Project not found'}>
+		<EmptyState title="This project didn't load" description={error ?? 'Project not found'}>
 			<Button variant="secondary" onclick={fetchProject}>Try again</Button>
 		</EmptyState>
 	</Page>
@@ -1185,7 +1185,7 @@
 	<ConfirmModal
 		bind:open={showDeleteModal}
 		title={`Delete "${project.name}"?`}
-		description="This <strong>permanently deletes the project</strong> and everything in every one of its environments: apps, databases with their data and backups, domains, jobs and container images. There is no undo and no recovery."
+		description="This <strong>permanently deletes the project</strong> and everything in every one of its environments: apps, databases with their data and backups, domains, jobs and container images. You can't undo this."
 		html
 		confirmText={project.name}
 		confirmLabel="Delete project forever"

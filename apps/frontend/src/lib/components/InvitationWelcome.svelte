@@ -127,7 +127,7 @@
 
 			const updatedUser = await response.json();
 
-			if (!response.ok) throw new Error('Failed to update profile');
+			if (!response.ok) throw new Error("Couldn't update profile");
 
 			user.set({ ...$user, ...updatedUser });
 
@@ -135,8 +135,8 @@
 			await checkGitHubStatus();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to update profile',
+				title: "Couldn't update profile",
+				description: e instanceof Error ? e.message : "Couldn't update profile",
 				color: 'error'
 			});
 		} finally {
@@ -180,7 +180,7 @@
 				await pendingInvitations.accept(invitation.id, true);
 			}
 		} catch {
-			toasts.add({ title: "We couldn't accept your invitation. Try again.", color: 'error' });
+			toasts.add({ title: "Couldn't accept your invitation. Try again.", color: 'error' });
 			completing = false;
 			return;
 		}
@@ -242,7 +242,7 @@
 						Welcome to <span class="setup-title-accent">Orchard</span>
 					{/if}
 				</h1>
-				<p class="setup-subtitle">Let's get you set up so you can start deploying.</p>
+				<p class="setup-subtitle">Set up your account to start deploying.</p>
 			{/if}
 		</div>
 	</header>
@@ -255,7 +255,7 @@
 					<span class="bouncing-dot"></span>
 					<span class="bouncing-dot"></span>
 				</div>
-				<p class="mt-4 text-sm" style="color: var(--surface-muted);">Setting things up...</p>
+				<p class="mt-4 text-sm" style="color: var(--surface-muted);">Setting up…</p>
 			</div>
 		{:else}
 			<div class="card setup-card">
@@ -401,7 +401,7 @@
 								<div class="setup-github-info">
 									<p class="setup-github-info-title">Not available on this instance</p>
 									<ul class="setup-github-info-list">
-										<li>No GitHub App has been created here yet</li>
+										<li>This instance has no GitHub App yet</li>
 										<li>A superadmin creates one during instance setup</li>
 										<li>Everything else works without it</li>
 									</ul>

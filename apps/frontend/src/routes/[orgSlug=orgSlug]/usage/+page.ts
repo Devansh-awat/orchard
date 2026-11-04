@@ -23,7 +23,7 @@ export const load: PageLoad = ({ params, depends, url }) => {
 		const orgRes = await step(apiFetch(`/apiv1/organizations/slug/${orgSlug}`));
 		if (!orgRes.ok) {
 			if (orgRes.status === 404) throw error(404, 'Organization not found');
-			throw error(orgRes.status, 'Failed to load organization');
+			throw error(orgRes.status, "Couldn't load organization");
 		}
 		return (await orgRes.json()).id;
 	};
@@ -46,13 +46,13 @@ export const load: PageLoad = ({ params, depends, url }) => {
 		const [me, myUsage] = await Promise.all([
 			step(
 				apiFetch(`/apiv1/organizations/${orgId}/members/me`).then((r) => {
-					if (!r.ok) throw error(r.status, 'Failed to load membership');
+					if (!r.ok) throw error(r.status, "Couldn't load membership");
 					return r.json();
 				})
 			),
 			step(
 				apiFetch(`/apiv1/organizations/${orgId}/quota/me`).then((r) => {
-					if (!r.ok) throw new Error('Failed to load personal usage');
+					if (!r.ok) throw new Error("Couldn't load personal usage");
 					return r.json();
 				})
 			)

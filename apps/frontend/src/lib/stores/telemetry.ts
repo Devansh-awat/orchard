@@ -51,7 +51,7 @@ export const telemetry = {
 		});
 		if (!response.ok) {
 			const body = await response.json().catch(() => ({}));
-			throw new Error(body?.message || 'Could not save your choice');
+			throw new Error(body?.message || "Couldn't save your choice");
 		}
 		const next = (await response.json()) as TelemetryState;
 		state.set(next);

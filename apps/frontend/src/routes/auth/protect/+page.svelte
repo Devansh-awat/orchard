@@ -49,13 +49,13 @@
 		try {
 			const res = await apiFetch(`/apiv1/auth/protect/info?ingressId=${ingressId}`);
 			if (!res.ok) {
-				error = 'This deployment is not protected or does not exist.';
+				error = "This app isn't protected or doesn't exist.";
 				loading = false;
 				return;
 			}
 			info = await res.json();
 		} catch {
-			error = 'Failed to load deployment info.';
+			error = "Couldn't load this app.";
 		}
 
 		await user.fetchUser();
@@ -79,13 +79,13 @@
 			});
 
 			if (res.status === 403) {
-				error = "You don't have access to this deployment.";
+				error = "You don't have access to this app.";
 				exchanging = false;
 				return;
 			}
 
 			if (!res.ok) {
-				error = 'Failed to verify access.';
+				error = "Couldn't check your access. Try again.";
 				exchanging = false;
 				return;
 			}
@@ -93,7 +93,7 @@
 			const data = await res.json();
 			window.location.href = data.redirectUrl;
 		} catch {
-			error = 'Something went wrong.';
+			error = "Couldn't sign you in. Try again.";
 			exchanging = false;
 		}
 	}
@@ -118,13 +118,13 @@
 
 			if (res.status === 429) {
 				const body = await res.json().catch(() => null);
-				passwordError = body?.message || 'Too many attempts. Please try again later.';
+				passwordError = body?.message || 'Too many attempts. Try again later.';
 				exchanging = false;
 				return;
 			}
 
 			if (!res.ok) {
-				passwordError = 'Something went wrong.';
+				passwordError = "Couldn't sign you in. Try again.";
 				exchanging = false;
 				return;
 			}
@@ -132,7 +132,7 @@
 			const data = await res.json();
 			window.location.href = data.redirectUrl;
 		} catch {
-			passwordError = 'Something went wrong.';
+			passwordError = "Couldn't sign you in. Try again.";
 			exchanging = false;
 		}
 	}
@@ -147,7 +147,7 @@
 </script>
 
 <svelte:head>
-	<title>Protected deployment — Orchard</title>
+	<title>Protected app · Orchard</title>
 </svelte:head>
 
 <div class="protect-page">
@@ -167,9 +167,7 @@
 			<div class="protect-icon" {@attach motionStagger({ index: 0 })}>
 				<Lock size={22} />
 			</div>
-			<h1 class="protect-title" {@attach motionStagger({ index: 1 })}>
-				This deployment is protected
-			</h1>
+			<h1 class="protect-title" {@attach motionStagger({ index: 1 })}>This app is protected</h1>
 			<p class="protect-subtitle" {@attach motionStagger({ index: 2 })}>
 				{#if mode === 'password'}
 					Enter the password to view <span class="protect-host" title={info.host}>{info.host}</span>

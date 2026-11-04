@@ -25,12 +25,12 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ enabled: false })
 			});
-			if (!response.ok) throw new Error('Could not turn it off');
+			if (!response.ok) throw new Error("Couldn't turn it off");
 			await instanceFeatures.load(true);
 			await onDone();
 		} catch (e) {
 			toasts.add({
-				title: e instanceof Error ? e.message : 'Could not turn it off',
+				title: e instanceof Error ? e.message : "Couldn't turn it off",
 				color: 'error'
 			});
 		} finally {
@@ -58,7 +58,7 @@
 		</div>
 	{:else}
 		<h2>MCP endpoint is off</h2>
-		<p>AI agents cannot connect.</p>
+		<p>AI agents can't connect.</p>
 
 		{#if enable}
 			<div class="setup-body">

@@ -192,7 +192,7 @@
 			currentHandle = sessionHandle ?? null;
 			connectWebSocket();
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load terminal';
+			error = e instanceof Error ? e.message : "Couldn't load terminal";
 			console.error('[PodTerminal] init error:', e);
 		}
 	}
@@ -275,7 +275,7 @@
 					: 'reconnected on a different server, started a new shell'
 			);
 		} else if (attached.reason === 'denied') {
-			status('could not resume that session, started a new shell');
+			status("couldn't resume that session, started a new shell");
 		} else status('reconnected, started a new shell');
 	}
 

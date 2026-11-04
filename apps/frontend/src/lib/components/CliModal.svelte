@@ -9,7 +9,7 @@
 			id: 'brew',
 			label: 'Homebrew',
 			command: 'brew install --cask leafdtk/tap/orchard-cli',
-			note: 'The cask is orchard-cli because Homebrew core owns the name orchard. The binary it installs is still called orchard.'
+			note: 'Homebrew core already uses the name orchard, so the cask is orchard-cli. The command it installs is orchard.'
 		},
 		{
 			id: 'curl',
@@ -21,10 +21,10 @@
 	];
 
 	const USAGE = [
-		{ command: 'orchard auth login', note: 'Opens a browser to link this machine' },
-		{ command: 'orchard up', note: 'Deploys the directory you are standing in' },
-		{ command: 'orchard deploy list', note: 'Everything running, with status and replicas' },
-		{ command: 'orchard logs <app>', note: 'Live logs without leaving the terminal' }
+		{ command: 'orchard auth login', note: 'Signs you in through a browser' },
+		{ command: 'orchard up', note: 'Deploys the current directory' },
+		{ command: 'orchard deploy list', note: 'Lists your apps with status and replicas' },
+		{ command: 'orchard logs <app>', note: 'Streams live logs' }
 	];
 
 	let copied = $state<string | null>(null);
@@ -43,10 +43,7 @@
 </script>
 
 <Modal bind:open title="Orchard on the command line" size="md">
-	<p class="cli-intro">
-		Everything in this dashboard is also a command. Deploy from the directory you are working in,
-		tail logs, scale, and read the same data without switching windows.
-	</p>
+	<p class="cli-intro">Deploy, read logs and scale from your terminal.</p>
 
 	<div class="cli-section">
 		<h3 class="cli-heading">Install</h3>

@@ -189,7 +189,7 @@
 				body: JSON.stringify({ email: address })
 			});
 			const data = await response.json().catch(() => ({}));
-			if (!response.ok) throw new Error(data?.message || 'Could not send the code.');
+			if (!response.ok) throw new Error(data?.message || "Couldn't send the code.");
 			code = '';
 			if (again) {
 				resent = true;
@@ -198,7 +198,7 @@
 				go('code');
 			}
 		} catch (err) {
-			fault = err instanceof Error ? err.message : 'Could not send the code.';
+			fault = err instanceof Error ? err.message : "Couldn't send the code.";
 		} finally {
 			busy = null;
 		}
@@ -236,7 +236,7 @@
 				await signInWithPasskey();
 			} else if (hasPassword) go('password');
 			else if (emailCodes) await sendCode();
-			else fault = 'This instance cannot send email, so this address has no way to sign in here.';
+			else fault = "This instance can't send email, so this address has no way to sign in here.";
 		} finally {
 			if (busy === 'check') busy = null;
 		}
@@ -290,13 +290,13 @@
 			const data = await response.json().catch(() => ({}));
 			if (!response.ok) {
 				if (blockedBy(response.status, data)) return;
-				throw new Error(data?.message || 'That password is not right.');
+				throw new Error(data?.message || 'That password is incorrect.');
 			}
 			password = '';
 			busy = null;
 			await land('Signed in', data?.user);
 		} catch (err) {
-			fault = err instanceof Error ? err.message : 'Could not sign in.';
+			fault = err instanceof Error ? err.message : "Couldn't sign in.";
 		} finally {
 			if (busy === 'verify') busy = null;
 		}
@@ -305,7 +305,7 @@
 	async function signInWithPasskey() {
 		if (busy === 'passkey') return;
 		if (!passkeySupported) {
-			fault = 'This browser does not support passkeys.';
+			fault = "This browser doesn't support passkeys.";
 			return;
 		}
 		busy = 'passkey';
@@ -318,7 +318,7 @@
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data?.message || 'Could not start passkey sign-in.');
+				throw new Error(data?.message || "Couldn't start passkey sign-in.");
 			}
 			const options = await response.json();
 			const { startAuthentication } = await import('@simplewebauthn/browser');
@@ -338,7 +338,7 @@
 		} catch (err) {
 			fault =
 				err instanceof Error && err.name === 'NotAllowedError'
-					? 'Passkey request was cancelled.'
+					? 'Passkey request canceled.'
 					: err instanceof Error
 						? err.message
 						: 'Passkey sign-in failed.';
@@ -632,7 +632,7 @@
 					</h1>
 					<p class="sub">
 						{blocked === 'signups_disabled'
-							? 'This instance is not taking new accounts. Ask an administrator to add you.'
+							? "This instance isn't taking new accounts. Ask an administrator to add you."
 							: 'Ask someone in an organization on this instance to invite you, then sign in with the email they used.'}
 					</p>
 				</header>

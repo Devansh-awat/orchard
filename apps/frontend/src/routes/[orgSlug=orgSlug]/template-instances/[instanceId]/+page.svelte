@@ -445,7 +445,7 @@
 			{/if}
 		</div>
 	{:else if loadError}
-		<EmptyState title="This template did not load" description={loadError}>
+		<EmptyState title="This template didn't load" description={loadError}>
 			<Button variant="secondary" onclick={fetchInstance}>Try again</Button>
 		</EmptyState>
 	{:else}
@@ -461,8 +461,8 @@
 		bind:open={deleteOpen}
 		title="Delete {instance.name}?"
 		description={contents
-			? `Its ${contents} ${resourceTotal === 1 ? 'is' : 'are'} deleted with it. This cannot be undone.`
-			: 'This cannot be undone.'}
+			? `Its ${contents} ${resourceTotal === 1 ? 'is' : 'are'} deleted with it. You can't undo this.`
+			: "You can't undo this."}
 		confirmLabel="Delete everything"
 		confirmText={instance.name}
 		onconfirm={remove}

@@ -11,8 +11,8 @@
 
 {#if stale}
 	<div class="engine-banner">
-		<Alert tone="warning" title="Orchard Engine is down">
-			Live cluster updates are interrupted. What you see may be stale until the engine reconnects.
+		<Alert tone="warning" title="Live updates are down">
+			What you see may be out of date until Orchard reconnects.
 		</Alert>
 	</div>
 {/if}

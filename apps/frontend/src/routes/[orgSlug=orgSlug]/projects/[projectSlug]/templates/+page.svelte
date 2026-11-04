@@ -107,10 +107,10 @@
 		loading = true;
 		try {
 			const response = await apiFetch('/apiv1/templates');
-			if (!response.ok) throw new Error('Failed to fetch templates');
+			if (!response.ok) throw new Error("Couldn't load templates");
 			templates = await response.json();
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load templates';
+			error = e instanceof Error ? e.message : "Couldn't load templates";
 		} finally {
 			loading = false;
 		}
@@ -131,7 +131,7 @@
 				method: 'DELETE'
 			});
 			if (!response.ok) {
-				let msg = 'Failed to delete template';
+				let msg = "Couldn't delete template";
 				try {
 					const data = await response.json();
 					if (data.message) msg = data.message;
@@ -140,14 +140,14 @@
 			}
 			toasts.add({
 				title: 'Template deleted',
-				description: `${templateToDelete.displayName} has been deleted`,
+				description: `${templateToDelete.displayName} deleted`,
 				color: 'success'
 			});
 			templates = templates.filter((t) => t.id !== templateToDelete!.id);
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to delete template',
+				title: "Couldn't delete template",
+				description: e instanceof Error ? e.message : "Couldn't delete template",
 				color: 'error'
 			});
 		} finally {
@@ -214,7 +214,7 @@
 		<div class="tpl-header">
 			<div class="tpl-header-info">
 				<h1 class="tpl-title">Templates</h1>
-				<p class="tpl-subtitle">Deploy pre-configured application stacks with a single click.</p>
+				<p class="tpl-subtitle">Deploy preconfigured app stacks.</p>
 			</div>
 			<div class="tpl-header-actions">
 				<Button variant="primary" href="/{orgSlug}/projects/{projectSlug}/templates/new">
@@ -315,7 +315,7 @@
 	<ConfirmModal
 		bind:open={showDeleteModal}
 		title={`Delete "${templateToDelete.displayName}"?`}
-		description="This will permanently <strong>delete this template</strong>. Any existing instances will not be affected, but no new deployments can be made from it."
+		description="This permanently <strong>deletes this template</strong>. Existing instances keep running, but you can't deploy from it again."
 		html
 		confirmLabel="Delete template"
 		onconfirm={deleteTemplate}

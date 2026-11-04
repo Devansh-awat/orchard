@@ -396,7 +396,7 @@ resources:
 
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to create template');
+				throw new Error(data.message || "Couldn't create template");
 			}
 
 			toasts.add({
@@ -407,7 +407,7 @@ resources:
 
 			goto(`${basePath}/templates`);
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to create template';
+			error = e instanceof Error ? e.message : "Couldn't create template";
 		} finally {
 			saving = false;
 		}
@@ -429,7 +429,7 @@ resources:
 		<LayoutTemplate class="h-6 w-6" style="color: var(--sidebar-text-active-border)" />
 		<div>
 			<h1 class="nt-title">New template</h1>
-			<p class="nt-subtitle">Create a reusable application stack template</p>
+			<p class="nt-subtitle">Create a reusable app template</p>
 		</div>
 	</div>
 
@@ -700,8 +700,9 @@ resources:
 					</Button>
 				</div>
 				<p class="nt-section-desc">
-					Resources are created when deploying. Use <code>{'{{ resources.name.field }}'}</code> to reference
-					other resources. Order matters: resources can only reference resources listed above them.
+					Orchard creates resources when you deploy. Use <code>{'{{ resources.name.field }}'}</code> to
+					reference other resources. Order matters: resources can only reference resources listed above
+					them.
 				</p>
 
 				{#each resources as res, ri (ri)}
@@ -732,7 +733,7 @@ resources:
 									options={[
 										{ value: 'deployment', label: 'App' },
 										{ value: 'database', label: 'Database' },
-										{ value: 'ingress', label: 'Ingress' }
+										{ value: 'ingress', label: 'Domain' }
 									]}
 								/>
 							</div>

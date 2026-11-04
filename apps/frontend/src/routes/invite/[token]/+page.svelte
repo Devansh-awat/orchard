@@ -82,7 +82,7 @@
 				} else if (response.status === 400) {
 					error = data?.message || 'This invitation has expired.';
 				} else {
-					error = data?.message || 'Failed to load invitation details.';
+					error = data?.message || "Couldn't load invitation details.";
 				}
 				return;
 			}
@@ -94,7 +94,7 @@
 				emailMismatch = $user.email?.toLowerCase() !== invitation.email.toLowerCase();
 			}
 		} catch {
-			error = 'Failed to load invitation. Try again.';
+			error = "Couldn't load invitation. Try again.";
 		} finally {
 			loading = false;
 		}
@@ -126,8 +126,8 @@
 			goto('/');
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to accept invitation',
+				title: "Couldn't accept invitation",
+				description: e instanceof Error ? e.message : "Couldn't accept invitation",
 				color: 'error'
 			});
 		} finally {
@@ -164,8 +164,8 @@
 			goto('/');
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to decline invitation',
+				title: "Couldn't decline invitation",
+				description: e instanceof Error ? e.message : "Couldn't decline invitation",
 				color: 'error'
 			});
 		} finally {
@@ -202,7 +202,7 @@
 		{#if loading}
 			<div class="text-center">
 				<Loader2 class="mx-auto h-8 w-8 animate-spin text-primary-600" />
-				<p class="mt-4" style="color: var(--surface-muted);">Loading invitation...</p>
+				<p class="mt-4" style="color: var(--surface-muted);">Loading invitation…</p>
 			</div>
 		{:else if error}
 			<div class="card p-8 text-center">
@@ -216,7 +216,7 @@
 					Invalid invitation
 				</h1>
 				<p class="mb-6" style="color: var(--surface-muted);">{error}</p>
-				<Button variant="primary" href="/">Go to home</Button>
+				<Button variant="primary" href="/">Back to dashboard</Button>
 			</div>
 		{:else if showLogoutWarning}
 			<div class="card p-8 text-center">
@@ -230,8 +230,8 @@
 					No organization access
 				</h1>
 				<p class="mb-6" style="color: var(--surface-muted);">
-					You need to be part of an organization to use Orchard. Since you declined this invitation
-					and don't belong to any other organization, you'll be logged out.
+					You need an organization to use Orchard. You declined this invitation, so Orchard will
+					sign you out.
 				</p>
 				<Button variant="primary" class="w-full" onclick={handleLogout}>
 					<LogOut class="h-4 w-4" />

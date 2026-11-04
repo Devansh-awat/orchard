@@ -71,11 +71,11 @@
 		canceling = true;
 		try {
 			const res = await apiFetch(`/apiv1/job-runs/${runId}/cancel`, { method: 'POST' });
-			if (!res.ok) throw new Error('Failed to cancel run');
+			if (!res.ok) throw new Error("Couldn't cancel run");
 			toasts.add({ title: 'Run canceled', color: 'success' });
 			queryClient.invalidateQueries({ queryKey: ['job-run', runId] });
 		} catch (e) {
-			toasts.add({ title: e instanceof Error ? e.message : 'Failed to cancel', color: 'error' });
+			toasts.add({ title: e instanceof Error ? e.message : "Couldn't cancel", color: 'error' });
 		} finally {
 			canceling = false;
 		}

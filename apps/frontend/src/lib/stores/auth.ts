@@ -36,13 +36,13 @@ function createAuthStore() {
 					set(null);
 					return;
 				}
-				throw new Error('Failed to fetch user');
+				throw new Error("Couldn't load user");
 			}
 
 			const userData = await response.json();
 			set(userData);
 		} catch (e: unknown) {
-			const message = e instanceof Error ? e.message : 'Failed to fetch user';
+			const message = e instanceof Error ? e.message : "Couldn't load user";
 			error.set(message);
 			set(null);
 		} finally {

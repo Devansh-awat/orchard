@@ -98,10 +98,10 @@ export class PodLogSource {
 			} else {
 				const body = await res.json().catch(() => null);
 				const detail = typeof body?.message === 'string' ? body.message : null;
-				this.error = detail ? `Failed to load logs: ${detail}` : 'Failed to load logs';
+				this.error = detail ? `Couldn't load logs: ${detail}` : "Couldn't load logs";
 			}
 		} catch {
-			this.error = 'Failed to load logs';
+			this.error = "Couldn't load logs";
 		} finally {
 			if (!quiet) this.loading = false;
 		}

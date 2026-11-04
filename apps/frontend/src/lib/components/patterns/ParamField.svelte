@@ -30,7 +30,7 @@
 		}
 		if (param.type === 'string' && param.validation?.pattern) {
 			if (!new RegExp(param.validation.pattern).test(String(value)))
-				return param.validation.message ?? 'This value is not valid';
+				return param.validation.message ?? "This value isn't valid";
 		}
 		return null;
 	}

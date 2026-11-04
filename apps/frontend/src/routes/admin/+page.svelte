@@ -29,7 +29,7 @@
 						href: '/admin/organizations'
 					},
 					{ label: 'Projects', value: stats.projectCount, icon: Package, href: null },
-					{ label: 'Deployments', value: stats.deploymentCount, icon: Rocket, href: null }
+					{ label: 'Apps', value: stats.deploymentCount, icon: Rocket, href: null }
 				].filter((tile) => typeof tile.value === 'number')
 			: []
 	);
@@ -37,10 +37,10 @@
 	onMount(async () => {
 		try {
 			const response = await apiFetch('/apiv1/admin/stats');
-			if (!response.ok) throw new Error('Could not load instance stats');
+			if (!response.ok) throw new Error("Couldn't load instance stats");
 			stats = await response.json();
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Could not load instance stats';
+			error = e instanceof Error ? e.message : "Couldn't load instance stats";
 		} finally {
 			loading = false;
 		}
@@ -55,7 +55,7 @@
 	{#if loading}
 		<Skeleton class="h-20 w-full" />
 	{:else if error}
-		<Alert tone="error" title="Could not load instance stats">{error}</Alert>
+		<Alert tone="error" title="Couldn't load instance stats">{error}</Alert>
 	{:else}
 		<div class="tiles">
 			{#each tiles as tile (tile.label)}

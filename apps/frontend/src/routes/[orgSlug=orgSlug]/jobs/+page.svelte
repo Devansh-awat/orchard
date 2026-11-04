@@ -81,12 +81,12 @@
 			}
 			if (!res.ok) {
 				const d = await res.json().catch(() => ({}));
-				throw new Error(d.message || 'Failed to start run');
+				throw new Error(d.message || "Couldn't start run");
 			}
 			const run = await res.json();
 			goto(`/${orgSlug}/jobs/${job.id}/runs/${run.id}`);
 		} catch (e) {
-			toasts.add({ title: e instanceof Error ? e.message : 'Failed to start run', color: 'error' });
+			toasts.add({ title: e instanceof Error ? e.message : "Couldn't start run", color: 'error' });
 		} finally {
 			runningNowId = null;
 		}
@@ -99,7 +99,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ enabled: !job.enabled })
 			});
-			if (!res.ok) throw new Error('Failed to update job');
+			if (!res.ok) throw new Error("Couldn't update job");
 			toasts.add({
 				title: job.enabled ? 'Schedule paused' : 'Schedule resumed',
 				color: 'success'
@@ -117,11 +117,11 @@
 		if (!target) return;
 		try {
 			const res = await apiFetch(`/apiv1/jobs/${target.id}`, { method: 'DELETE' });
-			if (!res.ok) throw new Error('Failed to delete job');
+			if (!res.ok) throw new Error("Couldn't delete job");
 			toasts.add({ title: `Deleted "${target.name}"`, color: 'success' });
 			queryClient.invalidateQueries({ queryKey: ['jobs', orgId] });
 		} catch (e) {
-			toasts.add({ title: e instanceof Error ? e.message : 'Failed to delete', color: 'error' });
+			toasts.add({ title: e instanceof Error ? e.message : "Couldn't delete", color: 'error' });
 		} finally {
 			deleteTarget = null;
 		}
@@ -208,7 +208,7 @@
 <ConfirmModal
 	bind:open={deleteModalOpen}
 	title="Delete job?"
-	description={`"${deleteTarget?.name ?? ''}" and its run history will be permanently deleted.`}
+	description={`This permanently deletes "${deleteTarget?.name ?? ''}" and its run history.`}
 	confirmLabel="Delete job"
 	onconfirm={deleteJob}
 	oncancel={() => (deleteTarget = null)}

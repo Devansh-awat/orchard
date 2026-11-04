@@ -83,12 +83,12 @@
 	async function disconnect() {
 		try {
 			const response = await apiFetch('/apiv1/setup/github-app', { method: 'DELETE' });
-			if (!response.ok) throw new Error('Could not disconnect');
+			if (!response.ok) throw new Error("Couldn't disconnect");
 			toasts.add({ title: 'GitHub App disconnected', color: 'success' });
 			await refresh();
 		} catch (e) {
 			toasts.add({
-				title: e instanceof Error ? e.message : 'Could not disconnect',
+				title: e instanceof Error ? e.message : "Couldn't disconnect",
 				color: 'error'
 			});
 		}

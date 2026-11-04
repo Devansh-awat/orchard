@@ -35,13 +35,13 @@
 			await telemetry.answer(enabled);
 			open = false;
 			toasts.add({
-				title: enabled ? 'Thanks for sharing' : 'Nothing will be shared',
+				title: enabled ? 'Thanks for sharing' : 'Nothing is shared',
 				description: 'Change this in Instance admin, under Configuration.',
 				color: 'success'
 			});
 		} catch (e) {
 			toasts.add({
-				title: e instanceof Error ? e.message : 'Could not save your choice',
+				title: e instanceof Error ? e.message : "Couldn't save your choice",
 				color: 'error'
 			});
 		} finally {

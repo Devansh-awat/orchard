@@ -44,14 +44,14 @@
 	}> = [
 		{
 			id: 'github',
-			label: 'GitHub Repository',
+			label: 'GitHub repository',
 			desc: 'Build from a repo',
 			icon: Github,
 			color: '#6e5494'
 		},
 		{
 			id: 'image',
-			label: 'Docker Image',
+			label: 'Docker image',
 			desc: 'Deploy a container',
 			icon: Container,
 			color: '#2496ed'
@@ -106,7 +106,7 @@
 			});
 			if (!res.ok) {
 				const d = await res.json().catch(() => ({}));
-				throw new Error(d.message || 'Failed to create project');
+				throw new Error(d.message || "Couldn't create project");
 			}
 			const proj = await res.json();
 			try {
@@ -122,7 +122,7 @@
 			else goto(base);
 		} catch (e) {
 			toasts.add({
-				title: e instanceof Error ? e.message : 'Failed to create project',
+				title: e instanceof Error ? e.message : "Couldn't create project",
 				color: 'error'
 			});
 			submitting = false;

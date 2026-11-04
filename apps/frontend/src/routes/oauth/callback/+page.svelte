@@ -37,7 +37,7 @@
 
 			goto(redirectTo);
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Authentication failed';
+			error = e instanceof Error ? e.message : 'Sign-in failed';
 		}
 	});
 </script>
@@ -56,14 +56,14 @@
 				<Lock class="h-6 w-6" style="color: var(--surface-muted);" />
 			</div>
 			<h1 class="mb-2 text-xl font-semibold" style="color: var(--center-channel-color);">
-				{signupsDisabled ? 'Signups Disabled' : 'Private Beta'}
+				{signupsDisabled ? 'Sign-ups closed' : 'Invitation required'}
 			</h1>
 			<p class="mb-4" style="color: var(--surface-muted);">
 				{signupsDisabled
-					? 'Signups are disabled on this Orchard instance. Contact your administrator for access.'
-					: 'Orchard is currently in private beta. You need an invitation from an existing organization to access the platform.'}
+					? "This Orchard instance doesn't allow new accounts. Ask your administrator for access."
+					: 'You need an invitation from an organization on this instance.'}
 			</p>
-			<a href="/" class="btn btn-primary"> Return Home </a>
+			<a href="/" class="btn btn-primary"> Back to sign in </a>
 		{:else if error}
 			<div
 				class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30"
@@ -71,13 +71,13 @@
 				<AlertCircle class="h-6 w-6 text-red-600 dark:text-red-400" />
 			</div>
 			<h1 class="mb-2 text-xl font-semibold" style="color: var(--center-channel-color);">
-				Authentication Error
+				Sign-in failed
 			</h1>
 			<p class="mb-4" style="color: var(--surface-muted);">{error}</p>
-			<a href="/" class="btn btn-primary"> Return Home </a>
+			<a href="/" class="btn btn-primary"> Back to sign in </a>
 		{:else}
 			<Loader2 class="mx-auto h-8 w-8 animate-spin text-primary-600" />
-			<p class="mt-4" style="color: var(--surface-muted);">Completing sign in...</p>
+			<p class="mt-4" style="color: var(--surface-muted);">Signing you in…</p>
 		{/if}
 	</div>
 </div>

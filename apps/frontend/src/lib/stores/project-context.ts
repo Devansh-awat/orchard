@@ -51,7 +51,7 @@ export async function fetchProjectContext(params: {
 
 	if (wsSlug) {
 		const wsResponse = await apiFetch(`/apiv1/workspaces/slug/${wsSlug}`);
-		if (!wsResponse.ok) throw new Error('Failed to fetch workspace');
+		if (!wsResponse.ok) throw new Error("Couldn't load workspace");
 		const workspace = await wsResponse.json();
 
 		const matched = workspace.projects?.find((p: { slug: string }) => p.slug === projectSlug);
@@ -63,7 +63,7 @@ export async function fetchProjectContext(params: {
 	}
 
 	const projResponse = await apiFetch(`/apiv1/projects/${projectId}`);
-	if (!projResponse.ok) throw new Error('Failed to fetch project');
+	if (!projResponse.ok) throw new Error("Couldn't load project");
 	return await projResponse.json();
 }
 

@@ -72,7 +72,7 @@
 		loading = true;
 		try {
 			const res = await apiFetch('/apiv1/admin/nodes');
-			if (!res.ok) throw new Error('Failed to load nodes');
+			if (!res.ok) throw new Error("Couldn't load nodes");
 			nodes = await res.json();
 		} catch (e) {
 			toasts.add({ title: e instanceof Error ? e.message : 'Request failed', color: 'error' });
@@ -109,7 +109,7 @@
 		selectedNode = null;
 		try {
 			const res = await apiFetch(`/apiv1/admin/nodes/${id}`);
-			if (!res.ok) throw new Error('Failed to load node');
+			if (!res.ok) throw new Error("Couldn't load node");
 			selectedNode = await res.json();
 			taintRows = (selectedNode?.taints ?? []).map((t) => ({
 				key: t.key,
@@ -160,7 +160,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(body)
 			});
-			if (!res.ok) throw new Error('Failed to save assignment');
+			if (!res.ok) throw new Error("Couldn't save assignment");
 			await openNode(selectedNode.id);
 			await loadNodes();
 			addOrgId = '';
@@ -216,7 +216,7 @@
 			});
 			if (!res.ok) {
 				const err = await res.json().catch(() => ({}));
-				throw new Error(err.message || 'Failed to save taints');
+				throw new Error(err.message || "Couldn't save taints");
 			}
 			await openNode(selectedNode.id);
 			toasts.add({ title: 'Taints updated', color: 'success' });
@@ -236,7 +236,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ labels })
 			});
-			if (!res.ok) throw new Error('Failed to update labels');
+			if (!res.ok) throw new Error("Couldn't update labels");
 			await openNode(selectedNode.id);
 		} catch (e) {
 			toasts.add({ title: e instanceof Error ? e.message : 'Request failed', color: 'error' });

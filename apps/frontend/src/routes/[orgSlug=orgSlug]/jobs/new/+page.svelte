@@ -75,13 +75,13 @@
 			});
 			if (!res.ok) {
 				const d = await res.json().catch(() => ({}));
-				throw new Error(d.message || 'Failed to create job');
+				throw new Error(d.message || "Couldn't create job");
 			}
 			const job = await res.json();
 			toasts.add({ title: `Created "${job.name}"`, color: 'success' });
 			goto(`/${orgSlug}/jobs/${job.id}`);
 		} catch (e) {
-			formError = e instanceof Error ? e.message : 'Failed to create job';
+			formError = e instanceof Error ? e.message : "Couldn't create job";
 		} finally {
 			creating = false;
 		}
@@ -115,7 +115,7 @@
 			{#snippet lead()}
 				<div class="job-form-section-head">
 					<h3 class="job-form-section-name">Project</h3>
-					<p class="job-form-section-sub">Runs in this project's namespace and quota.</p>
+					<p class="job-form-section-sub">Runs in this project and counts against its quota.</p>
 				</div>
 				<Dropdown
 					id="job-project"

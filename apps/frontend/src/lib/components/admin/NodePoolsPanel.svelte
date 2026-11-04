@@ -54,7 +54,7 @@
 		loading = true;
 		try {
 			const res = await apiFetch('/apiv1/admin/node-pools');
-			if (!res.ok) throw new Error('Failed to load node pools');
+			if (!res.ok) throw new Error("Couldn't load node pools");
 			pools = await res.json();
 		} catch (e) {
 			toasts.add({ title: e instanceof Error ? e.message : 'Request failed', color: 'error' });
@@ -163,7 +163,7 @@
 			});
 			if (!res.ok) {
 				const err = await res.json().catch(() => ({}));
-				throw new Error(err.message || 'Failed to save pool');
+				throw new Error(err.message || "Couldn't save pool");
 			}
 			modalOpen = false;
 			await load();
@@ -184,7 +184,7 @@
 		if (!confirm(`Delete pool "${pool.name}"?${note}`)) return;
 		try {
 			const res = await apiFetch(`/apiv1/admin/node-pools/${pool.id}`, { method: 'DELETE' });
-			if (!res.ok) throw new Error('Failed to delete');
+			if (!res.ok) throw new Error("Couldn't delete");
 			await load();
 			toasts.add({ title: 'Pool deleted', color: 'success' });
 		} catch (e) {

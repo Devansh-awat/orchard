@@ -70,15 +70,15 @@
 			const res = await apiFetch(`${endpoint()}?${params}`);
 			if (!res.ok) {
 				const body = await res.json().catch(() => ({}));
-				throw new Error(body.message || 'Failed to fetch audit logs');
+				throw new Error(body.message || "Couldn't load audit logs");
 			}
 			const data = await res.json();
 			entries = reset ? data.entries : [...entries, ...data.entries];
 			nextCursor = data.nextCursor;
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to load audit logs',
+				title: "Couldn't load audit logs",
+				description: e instanceof Error ? e.message : "Couldn't load audit logs",
 				color: 'error'
 			});
 		} finally {

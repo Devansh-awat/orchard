@@ -142,7 +142,7 @@
 			]);
 
 			if (!wsRes.ok) {
-				throw new Error('Failed to fetch workspaces');
+				throw new Error("Couldn't load workspaces");
 			}
 			workspaces = await wsRes.json();
 
@@ -159,7 +159,7 @@
 				ingressCount = Array.isArray(ings) ? ings.length : 0;
 			}
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to fetch workspaces';
+			error = e instanceof Error ? e.message : "Couldn't load workspaces";
 		} finally {
 			loading = false;
 		}
@@ -432,7 +432,7 @@
 					</div>
 					<div class="hp-stat-info">
 						<span class="hp-stat-value">{ingressCount}</span>
-						<span class="hp-stat-label">Ingresses</span>
+						<span class="hp-stat-label">Domains</span>
 					</div>
 				</div>
 			</div>
@@ -445,7 +445,7 @@
 							<Search size={14} class="hp-search-icon" />
 							<input
 								type="search"
-								placeholder="Filter..."
+								placeholder="Filter"
 								class="hp-search"
 								bind:value={searchQuery}
 							/>
@@ -466,7 +466,7 @@
 								New app
 							</a>
 						{:else}
-							<h3 class="hp-empty-title">You are not in an organization yet</h3>
+							<h3 class="hp-empty-title">You aren't in an organization yet</h3>
 							<p class="hp-empty-desc">Ask an administrator to invite you to one.</p>
 						{/if}
 					</div>

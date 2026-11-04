@@ -51,7 +51,7 @@
 			const params = new URLSearchParams({ page: String(page), limit: '20' });
 			if (searchQuery) params.set('search', searchQuery);
 			const response = await apiFetch(`/apiv1/admin/users?${params}`);
-			if (!response.ok) throw new Error('Failed to fetch users');
+			if (!response.ok) throw new Error("Couldn't load users");
 			const data = await response.json();
 			users = data.users;
 			total = data.total;
@@ -59,8 +59,8 @@
 			totalPages = data.totalPages;
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to fetch users',
+				title: "Couldn't load users",
+				description: e instanceof Error ? e.message : "Couldn't load users",
 				color: 'error'
 			});
 		} finally {
@@ -101,15 +101,15 @@
 			});
 			if (!response.ok) {
 				const data = await response.json();
-				throw new Error(data.message || 'Failed to update user');
+				throw new Error(data.message || "Couldn't update user");
 			}
 			toasts.add({ title: 'User updated', color: 'success' });
 			closeEdit();
 			fetchUsers(currentPage);
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to update user',
+				title: "Couldn't update user",
+				description: e instanceof Error ? e.message : "Couldn't update user",
 				color: 'error'
 			});
 		} finally {
@@ -126,15 +126,15 @@
 			});
 			if (!response.ok) {
 				const data = await response.json();
-				throw new Error(data.message || 'Failed to delete user');
+				throw new Error(data.message || "Couldn't delete user");
 			}
 			toasts.add({ title: 'User deleted', color: 'success' });
 			deletingUser = null;
 			fetchUsers(currentPage);
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to delete user',
+				title: "Couldn't delete user",
+				description: e instanceof Error ? e.message : "Couldn't delete user",
 				color: 'error'
 			});
 		} finally {

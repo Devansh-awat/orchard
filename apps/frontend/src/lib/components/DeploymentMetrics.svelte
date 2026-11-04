@@ -277,7 +277,7 @@
 			if (!res.ok) {
 				const detail = await res.json().catch(() => null);
 				throw new Error(
-					res.status === 503 ? 'metrics store unreachable' : detail?.message || `HTTP ${res.status}`
+					res.status === 503 ? 'Metrics store unreachable' : detail?.message || `HTTP ${res.status}`
 				);
 			}
 			const body = await res.json();
@@ -857,11 +857,11 @@
 		const s = customStartInput ? new Date(customStartInput).getTime() : NaN;
 		const e = customEndInput ? new Date(customEndInput).getTime() : NaN;
 		if (!isFinite(s) || !isFinite(e)) {
-			customError = 'Both start and end required';
+			customError = 'Enter a start and an end';
 			return;
 		}
 		if (s >= e) {
-			customError = 'Start must be before end';
+			customError = 'The start must be before the end';
 			return;
 		}
 		customStart = s;
@@ -1196,17 +1196,17 @@
 		<div class="mtx-empty" role="status">
 			<p>No {source === 'http' ? 'HTTP' : 'resource'} metrics in this time range</p>
 			{#if source === 'http'}
-				<span>Traffic through the configured ingress will appear here soon.</span>
+				<span>Metrics appear here once requests reach this app.</span>
 			{/if}
 		</div>
 	{:else if !hasData && fetchError && !loaded}
 		<div class="mtx-empty" role="alert">
 			<p>
-				{fetchError === 'metrics store unreachable'
+				{fetchError === 'Metrics store unreachable'
 					? 'Metrics store unreachable'
-					: 'Failed to load metrics'}
+					: "Couldn't load metrics"}
 			</p>
-			{#if fetchError !== 'metrics store unreachable'}<span>{fetchError}</span>{/if}
+			{#if fetchError !== 'Metrics store unreachable'}<span>{fetchError}</span>{/if}
 		</div>
 	{:else}
 		<div class="mtx-board">
@@ -1218,7 +1218,7 @@
 
 	<p class="metrics-foot">
 		{#if fetchError}
-			<span class="metrics-foot-err">Failed to load metrics: {fetchError}</span>
+			<span class="metrics-foot-err">Couldn't load metrics: {fetchError}</span>
 		{:else if initialLoading}
 			Loading…
 		{:else}

@@ -69,11 +69,11 @@
 			});
 			if (!response.ok) {
 				const body = await response.json().catch(() => ({}));
-				throw new Error(body?.message || 'Could not save');
+				throw new Error(body?.message || "Couldn't save");
 			}
 			await onDone();
 		} catch (e) {
-			toasts.add({ title: e instanceof Error ? e.message : 'Could not save', color: 'error' });
+			toasts.add({ title: e instanceof Error ? e.message : "Couldn't save", color: 'error' });
 		} finally {
 			saving = false;
 		}

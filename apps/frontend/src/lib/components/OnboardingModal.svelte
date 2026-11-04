@@ -66,7 +66,7 @@
 			});
 
 			if (!response.ok) {
-				throw new Error('Failed to update profile');
+				throw new Error("Couldn't update profile");
 			}
 
 			const updatedUser = await response.json();
@@ -85,8 +85,8 @@
 			await checkGitHubStatus();
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to update profile',
+				title: "Couldn't update profile",
+				description: e instanceof Error ? e.message : "Couldn't update profile",
 				color: 'error'
 			});
 		} finally {
@@ -286,9 +286,8 @@
 							>
 								<Github class="mx-auto h-10 w-10" style="color: var(--surface-muted);" />
 								<p class="mt-3 text-sm" style="color: var(--surface-muted);">
-									Sign in with GitHub to deploy from your repositories. We use it to verify which
-									repos you have access to. You can only deploy repos visible to your GitHub
-									account.
+									Sign in with GitHub to deploy from your repositories. You can deploy any
+									repository your GitHub account can see.
 								</p>
 							</div>
 
@@ -349,7 +348,7 @@
 							style="border-color: var(--surface-border); background-color: var(--control-bg);"
 						>
 							<p class="text-sm font-medium" style="color: var(--center-channel-color);">
-								Quick tips to get started:
+								To get started:
 							</p>
 							<ul class="mt-2 space-y-2 text-sm" style="color: var(--surface-muted);">
 								<li class="flex items-start gap-2">
@@ -357,14 +356,14 @@
 										class="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary-600 text-xs text-on-accent"
 										>1</span
 									>
-									Create a workspace to organize your projects
+									Create a project to organize your apps
 								</li>
 								<li class="flex items-start gap-2">
 									<span
 										class="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary-600 text-xs text-on-accent"
 										>2</span
 									>
-									Add a project and configure your app
+									Add an app and configure it
 								</li>
 								<li class="flex items-start gap-2">
 									<span

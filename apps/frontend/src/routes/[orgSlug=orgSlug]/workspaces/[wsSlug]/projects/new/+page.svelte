@@ -142,11 +142,11 @@
 		try {
 			const response = await apiFetch(`/apiv1/workspaces/slug/${workspaceSlug}`);
 			if (!response.ok) {
-				throw new Error('Failed to fetch workspace');
+				throw new Error("Couldn't load workspace");
 			}
 			workspace = await response.json();
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to fetch workspace';
+			error = e instanceof Error ? e.message : "Couldn't load workspace";
 		} finally {
 			loading = false;
 		}
@@ -159,12 +159,12 @@
 		}
 
 		if (!name.trim()) {
-			formError = 'Project name is required';
+			formError = 'Enter a project name';
 			return;
 		}
 
 		if (!slug.trim()) {
-			formError = 'Project slug is required';
+			formError = 'Enter a project slug';
 			return;
 		}
 
@@ -193,7 +193,7 @@
 
 			if (!response.ok) {
 				await fakeDelay;
-				throw new Error(data.message || 'Failed to create project');
+				throw new Error(data.message || "Couldn't create project");
 			}
 
 			await fakeDelay;
@@ -208,7 +208,7 @@
 			goto(`/${orgSlug}/workspaces/${workspaceSlug}/projects/${project.slug}`);
 		} catch (e) {
 			await fakeDelay;
-			formError = e instanceof Error ? e.message : 'Failed to create project';
+			formError = e instanceof Error ? e.message : "Couldn't create project";
 			showingProgress = false;
 		} finally {
 			submitting = false;
@@ -293,11 +293,7 @@
 									<Input id="name" bind:value={name} placeholder="My Project" />
 								</Field>
 
-								<Field
-									label="Project slug"
-									for="slug"
-									hint="Used in URLs and Kubernetes namespace generation"
-								>
+								<Field label="Project slug" for="slug" hint="Used in URLs and the namespace name">
 									<Input
 										id="slug"
 										bind:value={slug}

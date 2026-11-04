@@ -17,7 +17,7 @@
 	});
 
 	const text = $derived(
-		preview ? JSON.stringify(preview, null, 2) : failed ? 'Could not load the report.' : 'Loading…'
+		preview ? JSON.stringify(preview, null, 2) : failed ? "Couldn't load the report." : 'Loading…'
 	);
 </script>
 

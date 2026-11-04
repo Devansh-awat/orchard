@@ -66,14 +66,14 @@
 			});
 			if (!response.ok) {
 				const body = await response.json().catch(() => ({}));
-				throw new Error(body?.message || 'Could not save');
+				throw new Error(body?.message || "Couldn't save");
 			}
 			seed(await response.json());
 			await loadTunnel();
 			toasts.add({ title: 'Cloudflare credentials saved', color: 'success' });
 		} catch (e) {
 			toasts.add({
-				title: e instanceof Error ? e.message : 'Could not save',
+				title: e instanceof Error ? e.message : "Couldn't save",
 				color: 'error'
 			});
 		} finally {
@@ -91,7 +91,7 @@
 			});
 			if (!response.ok) {
 				const body = await response.json().catch(() => ({}));
-				throw new Error(body?.message || 'Could not add the route');
+				throw new Error(body?.message || "Couldn't add the route");
 			}
 			tunnel = await response.json();
 			await loadDns(true);
@@ -99,7 +99,7 @@
 			toasts.add({ title: `${hostname} routed through the tunnel`, color: 'success' });
 		} catch (e) {
 			toasts.add({
-				title: e instanceof Error ? e.message : 'Could not add the route',
+				title: e instanceof Error ? e.message : "Couldn't add the route",
 				color: 'error'
 			});
 		} finally {

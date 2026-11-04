@@ -11,7 +11,7 @@ export const TELEMETRY_SENT: string[] = [
 ];
 
 export const TELEMETRY_NEVER =
-	'Only counts and yes/no answers. No names, emails, domains, repositories, environment variables, logs or error messages. IP addresses are not stored. Every report has a random ID made for this instance. Nothing in it identifies you.';
+	"Only counts and yes/no answers. No names, emails, domains, repositories, environment variables, logs or error messages. IP addresses aren't stored. Every report has a random ID made for this instance. Nothing in it identifies you.";
 
 export const TELEMETRY_ENV_NOTE =
 	'Set ORCHARD_TELEMETRY=false to turn this off and lock the setting.';

@@ -10,7 +10,7 @@ export const REGISTRY_PRESETS = [
 export const REGISTRY_HINTS: Record<string, string> = {
 	'dhi.io': 'Your Docker username and access token for Docker Hardened Images.',
 	'ghcr.io':
-		'Your GitHub username and a personal access token (classic) with the read:packages scope. Fine-grained tokens cannot read packages.',
+		"Your GitHub username and a personal access token (classic) with the read:packages scope. Fine-grained tokens can't read packages.",
 	'docker.io': 'Your Docker Hub username and an access token from Account settings, Security.',
 	'registry.gitlab.com':
 		'A deploy token (username starts with gitlab+deploy-token) or a personal access token with the read_registry scope.',

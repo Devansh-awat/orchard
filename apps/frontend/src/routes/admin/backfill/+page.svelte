@@ -41,7 +41,7 @@
 		loading = true;
 		try {
 			const res = await apiFetch('/apiv1/admin/backfill/candidates');
-			if (!res.ok) throw new Error('Failed to load candidates');
+			if (!res.ok) throw new Error("Couldn't load candidates");
 			rows = await res.json();
 			// Default each row to its recommendation if present, else Micro.
 			const defaults: Record<string, string> = {};
@@ -52,7 +52,7 @@
 			status = {};
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
+				title: "Couldn't load candidates",
 				description: e instanceof Error ? e.message : 'Failed',
 				color: 'error'
 			});

@@ -43,7 +43,7 @@
 			};
 			script.onerror = () => {
 				loader = null;
-				reject(new Error('Could not load the bot check'));
+				reject(new Error("Couldn't load the bot check"));
 			};
 			document.head.appendChild(script);
 		});

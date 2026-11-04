@@ -85,12 +85,12 @@
 			if (token !== previewToken) return;
 			if (!res.ok) {
 				const d = await res.json().catch(() => ({}));
-				throw new Error(d.message || 'Could not preview the move');
+				throw new Error(d.message || "Couldn't preview the move");
 			}
 			preview = await res.json();
 		} catch (e) {
 			if (token === previewToken) {
-				error = e instanceof Error ? e.message : 'Could not preview the move';
+				error = e instanceof Error ? e.message : "Couldn't preview the move";
 				preview = null;
 			}
 		} finally {
@@ -127,19 +127,19 @@
 			});
 			if (!res.ok) {
 				const d = await res.json().catch(() => ({}));
-				throw new Error(d.message || 'Could not move the project');
+				throw new Error(d.message || "Couldn't move the project");
 			}
 			const result = await res.json();
 			toasts.add({
 				title: 'Project moved',
-				description: `${projectName} now lives in ${destName}`,
+				description: `${projectName} moved to ${destName}`,
 				color: 'success'
 			});
 			open = false;
 			onmoved?.(result);
 			goto(`/${result.destinationOrgSlug}/projects/${result.slug}`);
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Could not move the project';
+			error = e instanceof Error ? e.message : "Couldn't move the project";
 		} finally {
 			submitting = false;
 		}
@@ -153,8 +153,8 @@
 <Modal bind:open title="Move {projectName}">
 	{#if eligibleOrgs.length === 0}
 		<p class="text-body text-muted">
-			You are not in another organization where you can create projects. Ask one of its owners to
-			add you.
+			You aren't in another organization where you can create projects. Ask one of its owners to add
+			you.
 		</p>
 	{:else}
 		<Stack>
@@ -219,21 +219,21 @@
 
 					{#if preview.ownerReassignedToMover}
 						<Alert tone="info" title="You become the owner">
-							The current owner is not in {destName}, so everything here counts against your
+							The current owner isn't in {destName}, so everything here counts against your
 							allowance.
 						</Alert>
 					{/if}
 
 					{#if preview.quota?.willExceed}
 						<Alert tone="warning" title="Over {destName}'s quota">
-							The move goes through, but new deploys there may be blocked until there is room.
+							The project moves, but new deploys may be blocked until there is room.
 						</Alert>
 					{/if}
 
 					{#if pausing}
 						<Alert tone="error" title="New database backups stop">
 							{destName} has no backup storage. Databases keep running but take no new backups until you
-							set up R2 there. Existing backups stay restorable.
+							set up backup storage there. Existing backups stay restorable.
 						</Alert>
 					{:else if preview.backups.willContinue}
 						<Alert tone="info" title="Backups keep running">

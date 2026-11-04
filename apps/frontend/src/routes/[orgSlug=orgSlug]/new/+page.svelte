@@ -82,7 +82,7 @@
 		{
 			id: 'github',
 			label: 'GitHub repo',
-			hint: 'Deploy straight from your code',
+			hint: 'Deploy from your code',
 			icon: Github,
 			tone: 'ink',
 			badge: 'Fastest',
@@ -122,7 +122,8 @@
 		id: MANAGED_PG,
 		title: 'PostgreSQL',
 		subtitle: 'Managed by Orchard',
-		description: 'Postgres 13 to 18, run for you. Pick a version and get a connection string.',
+		description:
+			'Postgres 13 to 18, managed by Orchard. Pick a version and get a connection string.',
 		icon: IMG_ICONS.postgres,
 		href: sourceHref('database')
 	});
@@ -228,7 +229,7 @@
 		});
 		if (!res.ok) {
 			const d = await res.json().catch(() => ({}));
-			throw new Error(d.message || 'Could not create a project');
+			throw new Error(d.message || "Couldn't create a project");
 		}
 		const p = await res.json();
 		projects = [...projects, { id: p.id, name: p.name, slug: p.slug }];
@@ -243,7 +244,7 @@
 			await goto(to(slug), { replaceState });
 		} catch (e) {
 			toasts.add({
-				title: 'Could not start',
+				title: "Couldn't start",
 				description: e instanceof Error ? e.message : 'Something went wrong',
 				color: 'error'
 			});

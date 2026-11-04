@@ -39,7 +39,7 @@
 			error = null;
 			now = Date.now();
 		} catch (e) {
-			if (!page) error = e instanceof Error ? e.message : 'Could not load this page';
+			if (!page) error = e instanceof Error ? e.message : "Couldn't load this page";
 		}
 	}
 

@@ -10,7 +10,7 @@
 		format,
 		parse,
 		fallback = null,
-		fallbackLabel = 'Org default',
+		fallbackLabel = 'Organization default',
 		limit = null,
 		limitLabel = 'Your limit',
 		usage = null,

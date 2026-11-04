@@ -91,11 +91,11 @@
 	function stagePendingProject() {
 		const name = newName.trim();
 		if (!name) {
-			createError = 'Project name is required';
+			createError = 'Enter a project name';
 			return;
 		}
 		if ($selectedOrganization?.id == null) {
-			createError = 'No organization selected';
+			createError = 'Select an organization';
 			return;
 		}
 		onPendingProjectChange?.(name);

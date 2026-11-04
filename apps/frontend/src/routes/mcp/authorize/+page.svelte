@@ -128,7 +128,7 @@
 			});
 
 			if (!tokenRes.ok) {
-				throw new Error('Failed to get authorization token. Please sign in first.');
+				throw new Error("Couldn't get an authorization token. Sign in first.");
 			}
 
 			const { token } = await tokenRes.json();
@@ -182,14 +182,14 @@
 			const data = await response.json().catch(() => ({}));
 
 			if (!response.ok) {
-				throw new Error(data?.message || 'Could not send the OTP email.');
+				throw new Error(data?.message || "Couldn't send the code.");
 			}
 
 			otpStep = 'code';
 			otpMessage = data?.message || 'Check your inbox for a 6-digit code.';
 			otpCode = '';
 		} catch (err) {
-			otpError = err instanceof Error ? err.message : 'Failed to send OTP email.';
+			otpError = err instanceof Error ? err.message : "Couldn't send the code.";
 		} finally {
 			otpRequesting = false;
 		}
@@ -218,13 +218,13 @@
 
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data?.message || 'Invalid OTP code.');
+				throw new Error(data?.message || 'That code is wrong or expired.');
 			}
 
 			const data = await response.json().catch(() => null);
 			signedInHere(data?.user);
 		} catch (err) {
-			otpError = err instanceof Error ? err.message : 'Failed to verify code.';
+			otpError = err instanceof Error ? err.message : "Couldn't check the code.";
 		} finally {
 			otpVerifying = false;
 		}
@@ -244,7 +244,7 @@
 
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data?.message || 'Could not start passkey authentication.');
+				throw new Error(data?.message || "Couldn't start passkey authentication.");
 			}
 
 			const options = await response.json();
@@ -266,7 +266,7 @@
 			signedInHere(data?.user);
 		} catch (err) {
 			if (err instanceof Error && err.name === 'NotAllowedError') {
-				passkeyError = 'Passkey request was cancelled.';
+				passkeyError = 'Passkey request canceled.';
 			} else {
 				passkeyError = err instanceof Error ? err.message : 'Passkey sign-in failed.';
 			}
@@ -277,7 +277,7 @@
 </script>
 
 <svelte:head>
-	<title>Authorize MCP Access - Orchard</title>
+	<title>Authorize MCP access · Orchard</title>
 </svelte:head>
 
 <div class="consent-page">
@@ -293,7 +293,7 @@
 		{:else if authorized}
 			<h1 class="consent-title" {@attach motionStagger({ index: 1 })}>Authorized</h1>
 			<p class="consent-subtitle" {@attach motionStagger({ index: 2 })}>
-				Redirecting back to {clientName}...
+				Going back to {clientName}...
 			</p>
 		{:else}
 			<h1 class="consent-title" {@attach motionStagger({ index: 1 })}>Authorize MCP access</h1>
@@ -312,9 +312,9 @@
 			{/if}
 
 			<div class="consent-details" {@attach motionStagger({ index: 3 })}>
-				<p class="consent-label">If you approve, it will be able to:</p>
+				<p class="consent-label">If you approve, it can:</p>
 				<ul class="consent-grants">
-					<li>View your projects, deployments, and logs</li>
+					<li>View your projects, apps and logs</li>
 					{#if requestedScope !== 'read'}
 						<li>Change and deploy your projects</li>
 					{/if}
@@ -327,8 +327,8 @@
 								Also allow running commands inside containers
 							</span>
 							<span class="consent-exec-hint">
-								Lets {clientName} run shell commands in your running apps. Leave it off to keep it to
-								reading and deploying.
+								Lets {clientName} run shell commands in your apps. Leave this off to allow only reading
+								and deploying.
 							</span>
 						</span>
 					</label>
@@ -337,7 +337,7 @@
 
 			{#if redirectUri}
 				<div class="consent-details" {@attach motionStagger({ index: 4 })}>
-					<p class="consent-label">After you approve, your authorization code will be sent to:</p>
+					<p class="consent-label">After you approve, Orchard sends your authorization code to:</p>
 					<p class="consent-uri">{redirectUri}</p>
 					<p class="consent-warning">
 						Only approve if you recognize this destination. Anyone with access to that URL can use

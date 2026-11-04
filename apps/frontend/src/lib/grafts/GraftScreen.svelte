@@ -29,7 +29,7 @@
 	<div class="graft-screen-loading" aria-busy="true"></div>
 {:else if graftHost.failed[match.graft.id]}
 	<EmptyState
-		title={`${match.graft.name} could not load`}
+		title={`${match.graft.name} couldn't load`}
 		description={graftHost.failed[match.graft.id]}
 	/>
 {:else if loaded && mount}
@@ -47,7 +47,7 @@
 {:else}
 	<EmptyState
 		title="Screen missing"
-		description={`${match.graft.name} declares the "${match.screen.id}" screen but its UI does not provide it.`}
+		description={`${match.graft.name} declares the "${match.screen.id}" screen but its UI doesn't provide it.`}
 	/>
 {/if}
 

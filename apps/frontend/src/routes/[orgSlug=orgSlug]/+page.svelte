@@ -607,7 +607,7 @@
 		{
 			id: 'github',
 			label: 'GitHub repo',
-			description: 'Deploy straight from your code',
+			description: 'Deploy from your code',
 			icon: Github
 		},
 		{ id: 'deployment', label: 'App', description: 'From an image or a template', icon: Box },
@@ -647,10 +647,10 @@
 				queryClient.invalidateQueries({ queryKey: ['overview', orgSlug] });
 			} else {
 				const body = await r.json().catch(() => null);
-				toasts.add({ title: body?.message || 'Could not join', color: 'error' });
+				toasts.add({ title: body?.message || "Couldn't join", color: 'error' });
 			}
 		} catch {
-			toasts.add({ title: 'Could not join the organization', color: 'error' });
+			toasts.add({ title: "Couldn't join the organization", color: 'error' });
 		} finally {
 			joiningOrg = false;
 		}
@@ -675,7 +675,7 @@
 	}
 </script>
 
-<svelte:head><title>Your Apps</title></svelte:head>
+<svelte:head><title>Your apps</title></svelte:head>
 
 {#snippet side()}
 	<div class="side">
@@ -756,7 +756,7 @@
 	{/if}
 {/snippet}
 
-<Page title="Your Apps" width="wide" aside={loading || loadError ? undefined : side}>
+<Page title="Your apps" width="wide" aside={loading || loadError ? undefined : side}>
 	{#snippet tools()}
 		<SegmentedControl
 			label="Project density"
@@ -792,9 +792,9 @@
 		</div>
 	{:else if loadError}
 		<EmptyState
-			title="Your apps did not load"
+			title="Your apps didn't load"
 			description={loadError.status === 403
-				? 'You are not a member of this organization.'
+				? "You aren't a member of this organization."
 				: loadError.message}
 		>
 			<Button

@@ -76,7 +76,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ toggle: key, enabled: next })
 			});
-			if (!res.ok) throw new Error('Failed to save');
+			if (!res.ok) throw new Error("Couldn't save");
 			state = await res.json();
 			if (key === 'pluginMigration') {
 				const m = await apiFetch('/apiv1/admin/databases/plugin-migration');
@@ -97,7 +97,7 @@
 			const res = await apiFetch('/apiv1/admin/databases/plugin-migration/resume', {
 				method: 'POST'
 			});
-			if (!res.ok) throw new Error('Could not resume the migration');
+			if (!res.ok) throw new Error("Couldn't resume the migration");
 			migration = await res.json();
 			toasts.add({ title: 'Migration resumed', color: 'success' });
 		} catch (e) {

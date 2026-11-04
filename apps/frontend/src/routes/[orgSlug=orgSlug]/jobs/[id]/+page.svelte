@@ -148,12 +148,12 @@
 			}
 			if (!res.ok) {
 				const d = await res.json().catch(() => ({}));
-				throw new Error(d.message || 'Failed to start run');
+				throw new Error(d.message || "Couldn't start run");
 			}
 			const run = await res.json();
 			goto(`/${orgSlug}/jobs/${jobId}/runs/${run.id}`);
 		} catch (e) {
-			toasts.add({ title: e instanceof Error ? e.message : 'Failed to start run', color: 'error' });
+			toasts.add({ title: e instanceof Error ? e.message : "Couldn't start run", color: 'error' });
 		} finally {
 			runningNow = false;
 		}
@@ -165,11 +165,11 @@
 		canceling = true;
 		try {
 			const res = await apiFetch(`/apiv1/job-runs/${activeRun.id}/cancel`, { method: 'POST' });
-			if (!res.ok) throw new Error('Failed to cancel run');
+			if (!res.ok) throw new Error("Couldn't cancel run");
 			toasts.add({ title: 'Run canceled', color: 'success' });
 			invalidateJob();
 		} catch (e) {
-			toasts.add({ title: e instanceof Error ? e.message : 'Failed to cancel', color: 'error' });
+			toasts.add({ title: e instanceof Error ? e.message : "Couldn't cancel", color: 'error' });
 		} finally {
 			canceling = false;
 		}
@@ -183,7 +183,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ enabled: !job.enabled })
 			});
-			if (!res.ok) throw new Error('Failed to update');
+			if (!res.ok) throw new Error("Couldn't update");
 			invalidateJob();
 		} catch (e) {
 			toasts.add({ title: e instanceof Error ? e.message : 'Failed', color: 'error' });
@@ -243,7 +243,7 @@
 			});
 			if (!patch.ok) {
 				const d = await patch.json().catch(() => ({}));
-				throw new Error(d.message || 'Failed to save');
+				throw new Error(d.message || "Couldn't save");
 			}
 			const stepsRes = await apiFetch(`/apiv1/jobs/${jobId}/steps`, {
 				method: 'PUT',
@@ -252,13 +252,13 @@
 			});
 			if (!stepsRes.ok) {
 				const d = await stepsRes.json().catch(() => ({}));
-				throw new Error(d.message || 'Failed to save steps');
+				throw new Error(d.message || "Couldn't save steps");
 			}
 			toasts.add({ title: 'Job saved', color: 'success' });
 			formSeeded = false;
 			invalidateJob();
 		} catch (e) {
-			settingsError = e instanceof Error ? e.message : 'Failed to save';
+			settingsError = e instanceof Error ? e.message : "Couldn't save";
 		} finally {
 			saving = false;
 		}
@@ -268,11 +268,11 @@
 	async function deleteJob() {
 		try {
 			const res = await apiFetch(`/apiv1/jobs/${jobId}`, { method: 'DELETE' });
-			if (!res.ok) throw new Error('Failed to delete');
+			if (!res.ok) throw new Error("Couldn't delete");
 			toasts.add({ title: `Deleted "${job?.name}"`, color: 'success' });
 			goto(`/${orgSlug}/jobs`);
 		} catch (e) {
-			toasts.add({ title: e instanceof Error ? e.message : 'Failed to delete', color: 'error' });
+			toasts.add({ title: e instanceof Error ? e.message : "Couldn't delete", color: 'error' });
 		}
 	}
 
@@ -510,7 +510,7 @@
 <ConfirmModal
 	bind:open={deleteModalOpen}
 	title="Delete job?"
-	description={`"${job?.name ?? ''}" and its run history will be permanently deleted.`}
+	description={`This permanently deletes "${job?.name ?? ''}" and its run history.`}
 	confirmLabel="Delete job"
 	onconfirm={deleteJob}
 	oncancel={() => {}}

@@ -104,7 +104,7 @@
 		const running = state.value === 'off' ? 'with limits' : 'without limits';
 		const result = state.value === 'off' ? 'remove the limits' : 'apply the limits';
 		if (state.stale === null) {
-			return `Apps and databases that have not restarted since this change still run with the old setting. Restart them to ${result}.`;
+			return `Apps and databases that haven't restarted since this change still run with the old setting. Restart them to ${result}.`;
 		}
 		const list = workloads(state.stale);
 		if (!list) return null;
@@ -153,7 +153,7 @@
 			});
 			if (!res.ok) {
 				const body = await res.json().catch(() => ({}));
-				throw new Error(body?.message || `Could not save the defaults for ${org.name}`);
+				throw new Error(body?.message || `Couldn't save the defaults for ${org.name}`);
 			}
 		}
 	}
@@ -172,7 +172,7 @@
 				body: JSON.stringify({ value: next })
 			});
 			const body = await res.json().catch(() => ({}));
-			if (!res.ok) throw new Error(body?.message || 'Could not save');
+			if (!res.ok) throw new Error(body?.message || "Couldn't save");
 			state = body;
 			dismissed = null;
 			localStorage.removeItem(DISMISSED_KEY);

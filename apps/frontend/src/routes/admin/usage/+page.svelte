@@ -20,7 +20,7 @@
 		loading = true;
 		try {
 			const res = await apiFetch('/apiv1/admin/usage');
-			if (!res.ok) throw new Error('Failed to load usage');
+			if (!res.ok) throw new Error("Couldn't load usage");
 			rows = await res.json();
 			// Sort heaviest first
 			rows.sort((a, b) => b.cpuMilli - a.cpuMilli);

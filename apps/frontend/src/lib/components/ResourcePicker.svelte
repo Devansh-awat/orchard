@@ -66,9 +66,9 @@
 			memory != null ? formatMemory(memory) : null,
 			cpu != null ? formatCpu(cpu) : null
 		].filter(Boolean);
-		if (!parts.length) return 'Org default';
+		if (!parts.length) return 'Organization default';
 		return cpuMilli == null && memoryBytes == null
-			? `Org default · ${parts.join(', ')}`
+			? `Organization default · ${parts.join(', ')}`
 			: parts.join(' · ');
 	}
 </script>

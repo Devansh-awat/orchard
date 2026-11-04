@@ -92,7 +92,7 @@
 	onMount(async () => {
 		try {
 			const res = await apiFetch('/apiv1/admin/grafts');
-			if (!res.ok) throw new Error(`Could not load grafts (${res.status})`);
+			if (!res.ok) throw new Error(`Couldn't load grafts (${res.status})`);
 			overview = await res.json();
 		} catch (err) {
 			loadError = (err as Error).message;
@@ -402,7 +402,7 @@
 			<div>
 				<h3 class="grafts-subtitle">Taps</h3>
 				<p class="grafts-meta">
-					Graft catalogues you added with <code>orchardctl graft tap add</code>. Orchard has not
+					Graft catalogues you added with <code>orchardctl graft tap add</code>. Orchard hasn't
 					checked them; grafts from a tap must be signed with its key{trust === 'taps' ||
 					trust === 'any'
 						? '.'

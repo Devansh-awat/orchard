@@ -50,14 +50,14 @@
 	const quickActions = [
 		{
 			id: 'deployment-github',
-			label: 'GitHub Repository',
+			label: 'GitHub repository',
 			description: 'Build and deploy from a GitHub repo',
 			icon: Github,
 			color: '#6e5494'
 		},
 		{
 			id: 'deployment-image',
-			label: 'Docker Image',
+			label: 'Docker image',
 			description: 'Deploy a container image',
 			icon: Container,
 			color: '#2496ed'
@@ -65,7 +65,7 @@
 		{
 			id: 'compose-stack',
 			label: 'Compose from GitHub',
-			description: 'Deploy a docker-compose.yml from a repo (auto-builds services)',
+			description: 'Deploy a docker-compose.yml from a repository',
 			icon: FileText,
 			color: '#0db7ed'
 		},
@@ -200,7 +200,7 @@
 				<input
 					bind:this={searchInput}
 					type="search"
-					placeholder="Search resources and templates..."
+					placeholder="Search resources and templates"
 					class="nr-search"
 					bind:value={search}
 				/>

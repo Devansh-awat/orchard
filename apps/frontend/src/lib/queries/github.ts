@@ -54,7 +54,7 @@ export function githubStatusQueryOptions() {
 		queryKey: ['github-status'],
 		queryFn: async (): Promise<GitHubStatus> => {
 			const res = await apiFetch('/apiv1/github/status');
-			if (!res.ok) throw new Error('Could not check GitHub');
+			if (!res.ok) throw new Error("Couldn't check GitHub");
 			return res.json();
 		},
 		staleTime: 60_000
@@ -71,7 +71,7 @@ export function repoSearchQueryOptions(account: string, q: string) {
 			if (!res.ok) {
 				const body = await res.json().catch(() => null);
 				throw new RepoSearchError(
-					body?.message || 'Could not search your repositories.',
+					body?.message || "Couldn't search your repositories.",
 					body?.code ?? null,
 					typeof body?.retryAfter === 'number' ? body.retryAfter : null
 				);

@@ -130,7 +130,7 @@
 	async function fetchTemplate() {
 		try {
 			const tplRes = await apiFetch(`/apiv1/templates/${templateId}`);
-			if (!tplRes.ok) throw new Error('Failed to fetch template');
+			if (!tplRes.ok) throw new Error("Couldn't load template");
 			template = await tplRes.json();
 
 			for (const param of template!.parameters) {
@@ -148,7 +148,7 @@
 				}
 			}
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load template';
+			error = e instanceof Error ? e.message : "Couldn't load template";
 		}
 	}
 
@@ -156,7 +156,7 @@
 		try {
 			project = await fetchProjectContext({ orgSlug, projectSlug, wsSlug });
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load project';
+			error = e instanceof Error ? e.message : "Couldn't load project";
 		}
 	}
 
@@ -192,7 +192,7 @@
 
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to deploy template');
+				throw new Error(data.message || "Couldn't deploy template");
 			}
 
 			const instance = await response.json();
@@ -205,7 +205,7 @@
 
 			goto(`/${orgSlug}/template-instances/${instance.id}`);
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to deploy template';
+			error = e instanceof Error ? e.message : "Couldn't deploy template";
 		} finally {
 			deploying = false;
 		}
@@ -351,7 +351,7 @@
 	</Page>
 {:else}
 	<Page title="Template not found" width="narrow">
-		<Alert tone="error">{error ?? 'This template does not exist or was removed.'}</Alert>
+		<Alert tone="error">{error ?? "This template doesn't exist or was removed."}</Alert>
 	</Page>
 {/if}
 

@@ -244,8 +244,8 @@
 			.catch((e: any) => {
 				if (isInitial) loading = false;
 				toasts.add({
-					title: 'Error',
-					description: e instanceof Error ? e.message : 'Failed to load usage',
+					title: "Couldn't load usage",
+					description: e instanceof Error ? e.message : "Couldn't load usage",
 					color: 'error'
 				});
 			});
@@ -298,15 +298,15 @@
 			});
 			if (!res.ok) {
 				const body = await res.json().catch(() => ({}));
-				throw new Error(body.message || `Failed to save default (${res.status})`);
+				throw new Error(body.message || `Couldn't save default (${res.status})`);
 			}
 			editingDefault = false;
 			invalidate(`org:${orgSlug}:usage`);
 			toasts.add({ title: 'Saved', description: 'Default allowance updated', color: 'success' });
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to save',
+				title: "Couldn't save",
+				description: e instanceof Error ? e.message : "Couldn't save",
 				color: 'error'
 			});
 		} finally {
@@ -372,15 +372,15 @@
 			});
 			if (!res.ok) {
 				const body = await res.json().catch(() => ({}));
-				throw new Error(body.message || `Failed to save (${res.status})`);
+				throw new Error(body.message || `Couldn't save (${res.status})`);
 			}
 			editingMemberId = null;
 			invalidate(`org:${orgSlug}:usage`);
 			toasts.add({ title: 'Saved', description: 'Allowance updated', color: 'success' });
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to save',
+				title: "Couldn't save",
+				description: e instanceof Error ? e.message : "Couldn't save",
 				color: 'error'
 			});
 		} finally {
@@ -554,13 +554,13 @@
 		const over = (used: number, cap: number | null) =>
 			cap && used > cap ? ' · over the cap, which is allowed' : '';
 		const cpu = capTile(
-			'CPU promised to members',
+			'CPU allocated to members',
 			commitment.cpuMilli,
 			org.cpuLimitMilli,
 			formatCpuMilli
 		);
 		const mem = capTile(
-			'Memory promised to members',
+			'Memory allocated to members',
 			commitment.memoryBytes,
 			org.memoryLimitBytes,
 			formatMemoryBytes
@@ -938,7 +938,7 @@
 		<div class="tiles tiles--2">
 			{#each myTiles as t (t.label)}{@render tile(t)}{/each}
 		</div>
-		<SectionCard title="Where it is going">
+		<SectionCard title="By workload">
 			{#snippet actions()}
 				<SegmentedControl
 					label="Rank workloads by"

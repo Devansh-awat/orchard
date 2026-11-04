@@ -130,7 +130,7 @@
 		try {
 			const wsResponse = await apiFetch(`/apiv1/workspaces/slug/${workspaceSlug}`);
 			if (!wsResponse.ok) {
-				throw new Error('Failed to fetch workspace');
+				throw new Error("Couldn't load workspace");
 			}
 			const workspace = await wsResponse.json();
 			wsId = workspace.id;
@@ -143,7 +143,7 @@
 
 			const projResponse = await apiFetch(`/apiv1/projects/${matchedProject.id}`);
 			if (!projResponse.ok) {
-				throw new Error('Failed to fetch project');
+				throw new Error("Couldn't load project");
 			}
 			project = await projResponse.json();
 
@@ -162,7 +162,7 @@
 				}
 			}
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to fetch project';
+			error = e instanceof Error ? e.message : "Couldn't load project";
 		} finally {
 			loading = false;
 		}
@@ -198,7 +198,7 @@
 			});
 
 			if (!response.ok) {
-				let errorMessage = 'Failed to delete project';
+				let errorMessage = "Couldn't delete project";
 				try {
 					const errorData = await response.json();
 					if (errorData.message) {
@@ -208,7 +208,7 @@
 					}
 				} catch {
 					if (response.status === 403) {
-						errorMessage = 'You do not have permission to delete this project.';
+						errorMessage = "You don't have permission to delete this project.";
 					} else if (response.status === 404) {
 						errorMessage = 'Project not found';
 					}
@@ -218,15 +218,15 @@
 
 			toasts.add({
 				title: 'Project deleted',
-				description: `${project.name} has been deleted`,
+				description: `${project.name} deleted`,
 				color: 'success'
 			});
 
 			goto(`/${orgSlug}/workspaces/${workspaceSlug}`);
 		} catch (e) {
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to delete project',
+				title: "Couldn't delete project",
+				description: e instanceof Error ? e.message : "Couldn't delete project",
 				color: 'error'
 			});
 		} finally {
@@ -469,7 +469,7 @@
 					onclick={() => (showNewResourceModal = true)}
 				>
 					<Plus class="h-4 w-4" />
-					Create Resource
+					Create resource
 				</button>
 			</div>
 		{:else if filteredDeployments.length}
@@ -539,7 +539,7 @@
 						class="h-4 w-4"
 						style="color: var(--sidebar-text-active-border); display: inline;"
 					/>
-					Template Instances
+					Template instances
 				</h2>
 			</div>
 			<div class="pj-deployment-grid">
@@ -624,7 +624,7 @@
 	<ConfirmModal
 		bind:open={showDeleteModal}
 		title={`Delete "${project.name}"?`}
-		description="This <strong>permanently deletes the project</strong> and everything in every one of its environments: apps, databases with their data and backups, domains, jobs and container images. There is no undo and no recovery."
+		description="This <strong>permanently deletes the project</strong> and everything in every one of its environments: apps, databases with their data and backups, domains, jobs and container images. You can't undo this."
 		html
 		confirmText={project.name}
 		confirmLabel="Delete project forever"

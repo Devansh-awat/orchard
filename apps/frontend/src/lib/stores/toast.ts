@@ -55,7 +55,8 @@ function createToastStore() {
 
 	function add(toast: ToastInput) {
 		const id = `t${++seq}`;
-		store.update((list) => [...list, { ...toast, id, version: 0 }]);
+		const description = toast.description === toast.title ? undefined : toast.description;
+		store.update((list) => [...list, { ...toast, description, id, version: 0 }]);
 		const ms = lifetime(toast);
 		if (ms > 0) arm(id, ms);
 		return id;

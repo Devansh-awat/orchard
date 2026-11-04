@@ -36,9 +36,9 @@
 	});
 
 	function describeError(code: string) {
-		if (code === 'sso_failed') return 'Your identity provider did not finish signing you in.';
+		if (code === 'sso_failed') return "Your identity provider didn't finish signing you in.";
 		if (code === 'private_beta') return 'This Orchard instance is invite-only.';
-		if (code === 'signups_disabled') return 'This Orchard instance is not taking new accounts.';
+		if (code === 'signups_disabled') return "This Orchard instance isn't taking new accounts.";
 		return decodeURIComponent(code);
 	}
 

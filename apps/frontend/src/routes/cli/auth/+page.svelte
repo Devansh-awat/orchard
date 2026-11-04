@@ -54,7 +54,7 @@
 			});
 			if (!res.ok) {
 				const data = await res.json().catch(() => ({}));
-				throw new Error(data?.message || 'Failed to create token. Please sign in and try again.');
+				throw new Error(data?.message || "Couldn't create a token. Sign in and try again.");
 			}
 			const { token } = await res.json();
 			done = true;
@@ -81,7 +81,7 @@
 </script>
 
 <svelte:head>
-	<title>Authorize CLI - Orchard</title>
+	<title>Authorize CLI · Orchard</title>
 </svelte:head>
 
 <div class="consent-page">
@@ -106,7 +106,7 @@
 			</p>
 
 			<div class="cli-details" {@attach motionStagger({ index: 3 })}>
-				<p class="cli-label">A personal API token will be created and sent to:</p>
+				<p class="cli-label">Orchard creates a personal API token and sends it to:</p>
 				<p class="cli-host"><Terminal class="h-4 w-4" /> 127.0.0.1:{port}</p>
 				<p class="cli-name">{label}</p>
 				<p class="cli-warning">

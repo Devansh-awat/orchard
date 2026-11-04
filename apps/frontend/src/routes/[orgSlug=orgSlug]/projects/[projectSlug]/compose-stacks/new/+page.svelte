@@ -69,7 +69,7 @@
 		try {
 			project = await fetchProjectContext({ orgSlug, projectSlug, wsSlug });
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load project';
+			error = e instanceof Error ? e.message : "Couldn't load project";
 		} finally {
 			loading = false;
 		}
@@ -104,11 +104,11 @@
 				repositories = Array.isArray(data) ? data : (data.repositories ?? []);
 			} else {
 				const body = await response.json().catch(() => null);
-				reposError = body?.message || 'Could not load your repositories.';
+				reposError = body?.message || "Couldn't load your repositories.";
 			}
 		} catch (e) {
 			console.error('Failed to fetch repositories:', e);
-			reposError = 'Could not load your repositories.';
+			reposError = "Couldn't load your repositories.";
 		} finally {
 			loadingRepos = false;
 		}
@@ -224,11 +224,11 @@
 			return;
 		}
 		if (!name.trim()) {
-			formError = 'Stack name is required';
+			formError = 'Enter a stack name';
 			return;
 		}
 		if (!selectedRepo) {
-			formError = 'Pick a repository';
+			formError = 'Choose a repository';
 			return;
 		}
 		const branch = selectedBranch?.name || branchSearch.trim();
@@ -250,18 +250,18 @@
 
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to create compose stack');
+				throw new Error(data.message || "Couldn't create compose stack");
 			}
 
 			const stack = await response.json();
 			toasts.add({
 				title: 'Compose stack created',
-				description: 'Services are deploying; builds run in the background',
+				description: 'Services are deploying. Builds run in the background.',
 				color: 'success'
 			});
 			goto(`/${orgSlug}/compose-stacks/${stack.id}`);
 		} catch (e) {
-			formError = e instanceof Error ? e.message : 'Failed to create compose stack';
+			formError = e instanceof Error ? e.message : "Couldn't create compose stack";
 		} finally {
 			submitting = false;
 		}
@@ -273,7 +273,7 @@
 		<div class="cs-loader"><Loader2 class="h-5 w-5 animate-spin" /> Loading project…</div>
 	{:else if error}
 		<div class="cs-warning">
-			<p class="cs-warning-title">Could not load project</p>
+			<p class="cs-warning-title">Couldn't load project</p>
 			<p class="cs-warning-desc">{error}</p>
 		</div>
 	{:else if project}
@@ -282,7 +282,7 @@
 				crumbs={[
 					{ label: 'Home', href: `/${orgSlug}` },
 					{ label: project?.name || projectSlug || '', href: basePath },
-					{ label: 'New Compose stack' }
+					{ label: 'New compose stack' }
 				]}
 			/>
 		</div>
@@ -290,9 +290,9 @@
 		<div class="cs-hero">
 			<h1 class="cs-page-title">Deploy Compose from GitHub</h1>
 			<p class="cs-page-subtitle">
-				Point Orchard at a <code>docker-compose.yml</code> in a repo. Services with
-				<code>build:</code> are built into images automatically; services with <code>image:</code>
-				are pulled as-is.
+				Deploy a <code>docker-compose.yml</code> from a repository. Orchard builds services with
+				<code>build:</code>
+				and pulls services with <code>image:</code>.
 			</p>
 		</div>
 
@@ -398,7 +398,7 @@
 						<span class="cs-toggle-label">
 							<span class="cs-toggle-title">Auto-deploy on push</span>
 							<span class="cs-toggle-desc">
-								Rebuild every <code>build:</code> service when a commit lands on this branch.
+								Rebuild every <code>build:</code> service when you push to this branch.
 							</span>
 						</span>
 					</label>

@@ -221,7 +221,7 @@
 			});
 			if (!response.ok) {
 				const body = await response.json().catch(() => ({}));
-				throw new Error(body?.message || 'Could not save');
+				throw new Error(body?.message || "Couldn't save");
 			}
 			const updated: Section = await response.json();
 			sections = sections.map((s) => (s.id === updated.id ? updated : s));
@@ -231,7 +231,7 @@
 			toasts.add({ title: `${metaFor(section).title} saved`, color: 'success' });
 		} catch (e) {
 			toasts.add({
-				title: e instanceof Error ? e.message : 'Could not save',
+				title: e instanceof Error ? e.message : "Couldn't save",
 				color: 'error'
 			});
 		} finally {
@@ -301,7 +301,7 @@
 				{#if section.id === 'storage' && !allLocked}
 					{#if $instanceFeatures.storage.backups === 'local'}
 						<p class="storage-note">
-							Backups are on this server. If the server is lost, the backups are lost.
+							Backups are on this server. If you lose the server, you lose the backups.
 						</p>
 					{/if}
 					<div class="preset">
@@ -342,7 +342,7 @@
 								for="{section.id}-{name}"
 								hint={locked
 									? changes[LOCKED_CHANGES[name]]
-										? 'Cannot be edited here.'
+										? "Can't be edited here."
 										: 'Set by the environment'
 									: hintFor(section, name)}
 							>

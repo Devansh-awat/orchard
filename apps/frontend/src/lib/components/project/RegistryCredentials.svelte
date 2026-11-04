@@ -57,11 +57,11 @@
 	async function load() {
 		try {
 			const res = await apiFetch(endpoint);
-			if (!res.ok) throw new Error('Failed to load registry credentials');
+			if (!res.ok) throw new Error("Couldn't load registry credentials");
 			credentials = await res.json();
 		} catch (e) {
 			toasts.add({
-				title: e instanceof Error ? e.message : 'Failed to load credentials',
+				title: e instanceof Error ? e.message : "Couldn't load credentials",
 				color: 'error'
 			});
 		} finally {
@@ -89,7 +89,7 @@
 			});
 			if (!res.ok) {
 				const d = await res.json().catch(() => ({}));
-				throw new Error(d.message || 'Failed to save credential');
+				throw new Error(d.message || "Couldn't save credential");
 			}
 			const saved: Credential = await res.json();
 			toasts.add({
@@ -104,7 +104,7 @@
 			await load();
 		} catch (e) {
 			toasts.add({
-				title: e instanceof Error ? e.message : 'Failed to save credential',
+				title: e instanceof Error ? e.message : "Couldn't save credential",
 				color: 'error'
 			});
 		} finally {
@@ -120,13 +120,13 @@
 			});
 			if (!res.ok) {
 				const d = await res.json().catch(() => ({}));
-				throw new Error(d.message || 'Failed to remove credential');
+				throw new Error(d.message || "Couldn't remove credential");
 			}
 			credentials = credentials.filter((c) => c.id !== cred.id);
 			toasts.add({ title: `Removed ${cred.registry} credential`, color: 'success' });
 		} catch (e) {
 			toasts.add({
-				title: e instanceof Error ? e.message : 'Failed to remove credential',
+				title: e instanceof Error ? e.message : "Couldn't remove credential",
 				color: 'error'
 			});
 		} finally {

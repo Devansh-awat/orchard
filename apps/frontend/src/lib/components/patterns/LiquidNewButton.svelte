@@ -5,7 +5,7 @@
 	export type NewMenuItem = { id: string; label: string; description?: string; icon: Icon };
 
 	const DEFAULT_ITEMS: NewMenuItem[] = [
-		{ id: 'deployment', label: 'Deployment', description: 'From a repo or image', icon: Box },
+		{ id: 'deployment', label: 'App', description: 'From a repo or image', icon: Box },
 		{ id: 'database', label: 'Database', description: 'Postgres, Redis and more', icon: Database },
 		{ id: 'job', label: 'Job', description: 'Runs on a schedule', icon: Timer },
 		{

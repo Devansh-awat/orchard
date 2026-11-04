@@ -77,7 +77,7 @@
 	const nav = $derived([
 		{
 			id: 'apps',
-			label: 'Your Apps',
+			label: 'Your apps',
 			href: `/${orgSlug}`,
 			icon: Sprout,
 			active:
@@ -309,7 +309,7 @@
 >
 	<Sidebar
 		org={{
-			name: $selectedOrganization?.name ?? 'Select org',
+			name: $selectedOrganization?.name ?? 'Select an organization',
 			plan: formatPlan($selectedOrganization?.plan),
 			avatar: $selectedOrganization?.avatarUrl ?? null
 		}}

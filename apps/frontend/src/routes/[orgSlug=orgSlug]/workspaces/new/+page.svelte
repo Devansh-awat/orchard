@@ -32,17 +32,17 @@
 
 	async function submit() {
 		if (!name.trim()) {
-			error = 'Workspace name is required';
+			error = 'Enter a workspace name';
 			return;
 		}
 
 		if (!slug.trim()) {
-			error = 'Workspace slug is required';
+			error = 'Enter a workspace slug';
 			return;
 		}
 
 		if (!selectedOrgId) {
-			error = 'Please select an organization';
+			error = 'Select an organization';
 			return;
 		}
 
@@ -66,20 +66,20 @@
 			const data = await response.json().catch(() => ({}));
 
 			if (!response.ok) {
-				throw new Error(data.message || 'Failed to create workspace');
+				throw new Error(data.message || "Couldn't create workspace");
 			}
 
 			const workspace = data;
 
 			toasts.add({
 				title: 'Workspace created',
-				description: `${workspace.name} has been created successfully`,
+				description: `${workspace.name} created`,
 				color: 'success'
 			});
 
 			goto(`/${orgSlug}/workspaces/${workspace.slug}`);
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to create workspace';
+			error = e instanceof Error ? e.message : "Couldn't create workspace";
 		} finally {
 			submitting = false;
 		}
@@ -92,7 +92,7 @@
 			<FolderKanban class="h-6 w-6" />
 		</div>
 		<div>
-			<h1 class="nw-title">New Workspace</h1>
+			<h1 class="nw-title">New workspace</h1>
 			<p class="nw-subtitle">Organize your projects and deployments.</p>
 		</div>
 	</div>
@@ -132,7 +132,7 @@
 					placeholder="my-workspace"
 					class="nw-input nw-input-mono"
 				/>
-				<p class="nw-hint">Used in URLs and namespace generation</p>
+				<p class="nw-hint">Used in URLs and the namespace name</p>
 			</div>
 
 			{#if $selectedOrganization && slug}
@@ -164,7 +164,7 @@
 				{#if submitting}
 					<Loader2 class="h-4 w-4 animate-spin" />
 				{/if}
-				Create Workspace
+				Create workspace
 			</button>
 		</div>
 	</div>

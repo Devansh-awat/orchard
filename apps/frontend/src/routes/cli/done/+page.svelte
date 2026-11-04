@@ -11,17 +11,17 @@
 			case '':
 				return 'Your token was sent to the CLI. You can close this tab and return to your terminal.';
 			case 'access_denied':
-				return 'Authorization was cancelled. Nothing was sent to the CLI.';
+				return "Authorization canceled. Orchard didn't send anything to the CLI.";
 			case 'state_mismatch':
-				return 'The request could not be verified (state mismatch). For your safety, no token was sent. Please run the login command again.';
+				return "Orchard couldn't verify the request, so it didn't send a token. Run the sign-in command again.";
 			default:
-				return 'Something went wrong during login. Please run the command again.';
+				return 'Sign-in failed. Run the command again.';
 		}
 	});
 </script>
 
 <svelte:head>
-	<title>{ok ? 'Logged in' : 'Login failed'} — Orchard CLI</title>
+	<title>{ok ? 'Signed in' : 'Sign-in failed'} · Orchard CLI</title>
 </svelte:head>
 
 <div
@@ -47,7 +47,7 @@
 				<AlertCircle class="h-6 w-6 text-red-600 dark:text-red-400" />
 			</div>
 			<h1 class="mb-2 text-xl font-semibold" style="color: var(--center-channel-color);">
-				Login failed
+				Sign-in failed
 			</h1>
 		{/if}
 		<p class="mb-4" style="color: var(--surface-muted);">{message}</p>

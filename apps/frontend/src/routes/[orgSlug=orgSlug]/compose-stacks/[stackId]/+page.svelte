@@ -172,7 +172,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ enabled })
 			});
-			if (!response.ok) throw await failure(response, 'Could not change auto-deploy');
+			if (!response.ok) throw await failure(response, "Couldn't change auto-deploy");
 			take(await response.json());
 		} catch (e) {
 			autoDeploy = !enabled;
@@ -310,7 +310,7 @@
 				{:else}
 					<EmptyState
 						title="No services"
-						description="The compose file did not define any services."
+						description="The compose file didn't define any services."
 					/>
 				{/if}
 			</section>
@@ -367,7 +367,7 @@
 	/>
 {:else if loadError}
 	<Page title="Compose stack">
-		<EmptyState title="This stack did not load" description={loadError}>
+		<EmptyState title="This stack didn't load" description={loadError}>
 			<Button variant="secondary" onclick={fetchStack}>Try again</Button>
 		</EmptyState>
 	</Page>

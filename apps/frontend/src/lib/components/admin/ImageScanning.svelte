@@ -63,7 +63,7 @@
 				body: JSON.stringify({ value: next })
 			});
 			const body = await res.json().catch(() => ({}));
-			if (!res.ok) throw new Error(body?.message || 'Could not save');
+			if (!res.ok) throw new Error(body?.message || "Couldn't save");
 			state = body;
 			picked = body.value;
 			toasts.add({
