@@ -71,6 +71,9 @@ port and the tunnel to open from that machine:
 ssh -L <port>:127.0.0.1:<port> <remote-host>
 ```
 
+Without a terminal there is nobody to ask which instance you mean, so pass
+`--api-url <url>` as well.
+
 Tokens carry scopes (`read`, `deploy`, `exec`; each includes the previous) and
 live at most 90 days. Mint and manage them from the CLI:
 

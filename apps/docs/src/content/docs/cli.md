@@ -41,7 +41,7 @@ The command opens a browser. After you approve the request, the CLI stores a tok
 
 If you run `orchard auth login` without `--api-url`, the CLI asks which instance to use.
 
-To sign in on a machine with no browser, add `--no-browser`. The CLI prints a URL and the local port that it listens on. Forward that port to your own machine with `ssh -L` before you open the URL.
+To sign in on a machine with no browser, add `--no-browser`. The CLI prints a URL and the local port that it listens on. Forward that port to your own machine with `ssh -L` before you open the URL. Without a terminal, the CLI cannot ask which instance to use, so also pass `--api-url`.
 
 To authenticate a script, set a token in the environment. A token in the environment overrides a stored token.
 

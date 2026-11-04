@@ -5,10 +5,13 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/hackclub/orchard/cli/internal/config"
 )
 
 func TestChooseLoginBaseURL(t *testing.T) {
@@ -39,6 +42,55 @@ func TestChooseLoginBaseURL(t *testing.T) {
 				t.Fatalf("base URL = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestHeadlessLoginNeedsAnInstance(t *testing.T) {
+	if _, err := headlessLoginBaseURL(config.DefaultAPIURL); err == nil || !strings.Contains(err.Error(), "--api-url") {
+		t.Fatalf("default instance: err = %v, want it to name --api-url", err)
+	}
+	got, err := headlessLoginBaseURL("https://orchard.example.com")
+	if err != nil || got != "https://orchard.example.com" {
+		t.Fatalf("saved instance: got %q, err %v", got, err)
+	}
+}
+
+func runLoginWithoutTerminal(t *testing.T, args ...string) error {
+	t.Helper()
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ORCHARD_API_URL", "")
+	t.Setenv("ORCHARD_API_TOKEN", "")
+	devNull, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer devNull.Close()
+	stdin := os.Stdin
+	os.Stdin = devNull
+	defer func() { os.Stdin = stdin }()
+	c := authLoginCmd()
+	c.SilenceUsage = true
+	c.SilenceErrors = true
+	c.SetArgs(append([]string{}, args...))
+	return c.Execute()
+}
+
+func TestNoBrowserWithoutTerminalAsksForAnInstanceNotAToken(t *testing.T) {
+	err := runLoginWithoutTerminal(t, "--no-browser")
+	if err == nil || !strings.Contains(err.Error(), "--api-url") {
+		t.Fatalf("err = %v, want it to name --api-url", err)
+	}
+}
+
+func TestLoginWithoutTerminalNamesTheWaysIn(t *testing.T) {
+	err := runLoginWithoutTerminal(t)
+	if err == nil {
+		t.Fatal("expected an error with nothing on stdin")
+	}
+	for _, want := range []string{"--token", "--no-browser"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("err = %v, want it to name %s", err, want)
+		}
 	}
 }
 

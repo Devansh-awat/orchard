@@ -49,6 +49,11 @@ func IsTTY() bool {
 	return term.IsTerminal(int(os.Stdout.Fd()))
 }
 
+// StdinIsTTY reports whether a person could answer a prompt.
+func StdinIsTTY() bool {
+	return term.IsTerminal(int(os.Stdin.Fd()))
+}
+
 // JSON prints v as indented JSON to stdout.
 func JSON(v any) error {
 	enc := json.NewEncoder(os.Stdout)

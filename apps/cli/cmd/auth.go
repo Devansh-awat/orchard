@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -44,16 +45,19 @@ func authLoginCmd() *cobra.Command {
 			}
 
 			// Manual token path: explicit --token, --with-token prompt, or a
-			// non-interactive stdin (pipe).
-			if token != "" || withToken || !output.IsTTY() {
+			// non-interactive stdin (pipe). --no-browser only needs the URL
+			// printed, so it stays on the browser path without a terminal.
+			if token != "" || withToken || (!output.IsTTY() && !noBrowser) {
 				if token == "" {
-					fmt.Fprint(os.Stderr, "Paste your Orchard API token (orch_…): ")
+					if output.StdinIsTTY() {
+						fmt.Fprint(os.Stderr, "Paste your Orchard API token (orch_…): ")
+					}
 					r := bufio.NewReader(os.Stdin)
 					line, _ := r.ReadString('\n')
 					token = strings.TrimSpace(line)
 				}
 				if token == "" {
-					return fmt.Errorf("no token provided")
+					return errors.New("no token provided: pass --token, pipe one on stdin, or use --no-browser --api-url <url> to sign in through a link")
 				}
 				if !strings.HasPrefix(token, "orch_") {
 					output.Warnf("token does not start with orch_ — continuing anyway")
@@ -77,6 +81,12 @@ func authLoginCmd() *cobra.Command {
 			if base == "" {
 				if apiURL != "" {
 					base = apiURL
+				} else if noBrowser && !output.StdinIsTTY() {
+					savedBase, baseErr := headlessLoginBaseURL(cfg.APIURL)
+					if baseErr != nil {
+						return baseErr
+					}
+					base = savedBase
 				} else {
 					selectedBase, promptErr := chooseLoginBaseURL(os.Stdin, os.Stderr)
 					if promptErr != nil {
@@ -95,6 +105,15 @@ func authLoginCmd() *cobra.Command {
 	c.Flags().StringVar(&webURL, "web-url", "", "override web app base URL (defaults to the API URL)")
 	c.Flags().BoolVar(&noBrowser, "no-browser", false, "print the URL instead of opening a browser")
 	return c
+}
+
+// headlessLoginBaseURL picks the instance when there is nobody to ask. Falling
+// back to the default would send a self-hoster to the wrong Orchard.
+func headlessLoginBaseURL(saved string) (string, error) {
+	if saved == "" || saved == config.DefaultAPIURL {
+		return "", errors.New("--no-browser without a terminal needs to know which Orchard to use: pass --api-url <url>")
+	}
+	return saved, nil
 }
 
 func chooseLoginBaseURL(in io.Reader, out io.Writer) (string, error) {
