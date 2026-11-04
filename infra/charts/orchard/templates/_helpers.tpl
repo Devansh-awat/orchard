@@ -474,6 +474,14 @@ true
               onto the frontend. Same rule as APP_DOMAIN: with server.envFrom the
               operator owns these, and an env entry here would shadow their Secret.
             */}}
+            {{- if and .Values.builders.enabled (not .Values.server.envFrom) }}
+            {{- if not (include "orchard.serverEnvHas" (dict "root" . "key" "BUILDKIT_IMAGE")) }}
+            - { name: BUILDKIT_IMAGE, value: {{ .Values.builders.buildkitImage | quote }} }
+            {{- end }}
+            {{- if not (include "orchard.serverEnvHas" (dict "root" . "key" "RAILPACK_VERSION")) }}
+            - { name: RAILPACK_VERSION, value: {{ .Values.builders.railpackVersion | quote }} }
+            {{- end }}
+            {{- end }}
             {{- if and .Values.frontend.enabled (not .Values.server.envFrom) }}
             {{- if not (include "orchard.serverEnvHas" (dict "root" . "key" "PLATFORM_NAMESPACE")) }}
             - { name: PLATFORM_NAMESPACE, value: {{ .Values.namespace | quote }} }

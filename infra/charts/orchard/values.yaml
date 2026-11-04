@@ -304,6 +304,8 @@ ingress:
 builders:
   enabled: true
   namespace: orchard-builders
+  buildkitImage: moby/buildkit:v0.34.2
+  railpackVersion: v0.43.0
   # Credentials for the registry builds push to, written to every host listed
   # here. With any host listed, username and password are required.
   harbor:

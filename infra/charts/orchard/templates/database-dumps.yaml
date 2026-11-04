@@ -34,6 +34,7 @@ spec:
           initContainers:
             - name: pg-dump
               image: {{ $d.image }}
+              imagePullPolicy: Always
               env:
                 - name: PGHOST
                   value: {{ required "databaseDumps.targets[].host is required" $t.host | quote }}
