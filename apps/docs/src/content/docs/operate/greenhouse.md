@@ -39,7 +39,7 @@ grafts:
     digest: sha256:<digest>
 ```
 
-The [marketplace page](https://orchard.my/extensions/greenhouse) shows the current version and digest. The rollout works like an Orchard upgrade.
+The [Extension Marketplace page](https://orchard.my/extensions/greenhouse) shows the current version and digest. The rollout works like an Orchard upgrade.
 
 ### Control who can use Greenhouse
 
@@ -160,7 +160,7 @@ Vercel lets you delete a drive while a stopped sandbox still mounts it. Do not d
 
 If the team cannot create drives (`402` or `403` from Vercel), the runner logs the error, keeps new machines on snapshots, and tries again an hour later. A machine that already has a drive fails to start until the drive is reachable. To turn off drives for new machines, set `vercelDriveGiB` to 0.
 
-Forking a machine with a drive needs Vercel drive forks. The runner checks for them every ten minutes. Without them, Greenhouse hides the fork option. A machine without a drive forks from its snapshot.
+Forking a machine with a drive needs Vercel drive forks. The runner checks for them every 10 minutes. Without them, Greenhouse hides the fork option. A machine without a drive forks from its snapshot.
 
 ### SSH bridge
 
@@ -231,7 +231,7 @@ The Kubernetes runner then reports `previews: proxy` in its capabilities, or `no
 
 ### GitHub issues
 
-`/greenhouse` comments arrive through the GitHub App that Orchard uses for deployments, on the same webhook URL. The App needs these settings:
+`/greenhouse` comments arrive through the GitHub App that Orchard uses for deploys, on the same webhook URL. The GitHub App needs these settings:
 
 1. **Repository permissions** > **Issues**: **Read and write**.
 2. **Subscribe to events** > **Issue comment**.
@@ -392,7 +392,7 @@ A value under `sandbox.runners` left empty, or `null` for booleans, renders no v
 
 ## How machine changes apply
 
-- **Writes are queued.** Creating, starting, stopping, deleting, and syncing credentials record the desired state and add an item to the apply queue. Workers retry with backoff from 5 seconds up to 10 minutes, for ten attempts. After the last attempt, the machine keeps showing the error. To queue the change again, run `orchard sandbox retry <name>`.
+- **Writes are queued.** Creating, starting, stopping, deleting, and syncing credentials record the desired state and add an item to the apply queue. Workers retry with backoff from 5 seconds up to 10 minutes, for 10 attempts. After the last attempt, the machine keeps showing the error. To queue the change again, run `orchard sandbox retry <name>`.
 - **Reads come from the Orchard Engine.** On Kubernetes, the `sandboxes` shard watches Sandbox resources, pods, volumes, and secrets (metadata only), and writes them to PostgreSQL.
 - **Vercel is polled.** It has no watch API. The leader polls Vercel and writes what it sees to the same columns.
 
@@ -447,7 +447,7 @@ Tokens do not appear in these places:
 - **Process arguments:** File contents and tokens reach a machine on stdin.
 - **Logs, audit metadata, and live events:** Error reports and traces redact the token in older `/share/sandbox/<token>` URLs. Git output in the browser masks credentials in remote URLs.
 
-Attached project env files skip names such as `GIT_*`, `LD_*`, `NODE_OPTIONS`, `PROMPT_COMMAND`, CA bundle variables, and `ANTHROPIC_BASE_URL`. An editor of an attached project therefore cannot redirect pushes or point the agent elsewhere. A preview deploy copies only plain variables from the source deployment.
+Attached project env files skip names such as `GIT_*`, `LD_*`, `NODE_OPTIONS`, `PROMPT_COMMAND`, CA bundle variables, and `ANTHROPIC_BASE_URL`. An editor of an attached project therefore cannot redirect pushes or point the agent elsewhere. A preview deploy copies only plain variables from the source app.
 
 ### Remaining risks
 

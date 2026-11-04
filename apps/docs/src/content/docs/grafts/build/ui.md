@@ -50,7 +50,7 @@ List each screen in `graft.json` under `ui.screens`, with its path and layout:
 | `shell`      | Draws inside Orchard's sidebar and header. |
 | `fullscreen` | Takes the whole window.                   |
 
-A screen at `/admin/<graft id>`, or below it, renders in the instance admin area, and only superadmins reach it. Pair it with an `admin.nav` entry. Orchard ignores a screen under `/admin/` that uses another path.
+A screen at `/admin/<graft id>`, or below it, renders in the **Instance admin** area, and only superadmins reach it. Pair it with an `admin.nav` entry. Orchard ignores a screen under `/admin/` that uses another path.
 
 ## Use the host object
 

@@ -42,7 +42,7 @@ To orchestrate a session, follow this sequence:
 
 ### The agent on a machine
 
-If the instance publishes its MCP server over HTTPS, the opencode agent on each machine connects to it as the host. The agent can look up the host's deployments, logs, and databases. A guest who prompts the agent reaches Orchard as the host. Refer to [What sharing gives your guests](/greenhouse/sharing/#what-sharing-gives-your-guests).
+If the instance publishes its MCP server over HTTPS, the opencode agent on each machine connects to it as the host. The agent can look up the host's apps, logs, and databases. A guest who prompts the agent reaches Orchard as the host. For more information, refer to [What sharing gives your guests](/greenhouse/sharing/#what-sharing-gives-your-guests).
 
 ## Use the CLI
 

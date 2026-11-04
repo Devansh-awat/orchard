@@ -34,8 +34,8 @@ Orchard builds the URL from `FRONTEND_URL`. If your public origin is different, 
 
 | Variable                    | Purpose                               |
 | --------------------------- | ------------------------------------- |
-| `GITHUB_APP_ID`             | The numeric App ID.                   |
-| `GITHUB_APP_SLUG`           | The App's URL slug.                   |
+| `GITHUB_APP_ID`             | The numeric GitHub App ID.                 |
+| `GITHUB_APP_SLUG`           | The GitHub App's URL slug.                 |
 | `GITHUB_APP_PRIVATE_KEY`    | The PEM contents, with `\n` for newlines. |
 | `GITHUB_APP_WEBHOOK_SECRET` | The webhook signing secret.           |
 | `GITHUB_CLIENT_ID`          | The OAuth client ID.                  |

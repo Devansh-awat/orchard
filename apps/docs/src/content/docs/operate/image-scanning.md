@@ -25,7 +25,7 @@ If your registry is Harbor and it already scans on push, use Harbor. Otherwise, 
 Until a superadmin chooses a scanner, Orchard uses the first match:
 
 1. **The Orchard scanner**, if `TRIVY_SERVER_URL` and `ORCHARD_INTERNAL_URL` are set and Kubernetes is reachable.
-2. **Harbor**, if the registry is Harbor. Orchard checks `/api/v2.0/systeminfo` on the Harbor API. It caches the answer for ten minutes, or one minute after a network error.
+2. **Harbor**, if the registry is Harbor. Orchard checks `/api/v2.0/systeminfo` on the Harbor API. It caches the answer for 10 minutes, or one minute after a network error.
 3. **Off**.
 
 The one-command installer sets `trivy.enabled: true`. `orchardctl update` turns it on for a host installed before this default existed.

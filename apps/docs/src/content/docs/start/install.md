@@ -409,7 +409,7 @@ For every variable the server reads, refer to [Configuration](/reference/configu
 
 A new instance has no superadmin. The first person to redeem the claim link becomes the superadmin. The link works once. The token behind it is valid for 24 hours.
 
-To create a new link on a host set up by the installer:
+To create a new link on an installer host:
 
 ```bash
 sudo orchardctl claim
@@ -428,7 +428,7 @@ To claim the instance:
 3. Select **Set up your instance**.
 4. Create a passkey, or set a password of at least 12 characters. Browsers do not offer passkeys over plain HTTP, so a `lan` install defaults to a password. You cannot skip this step.
 5. Rename the organization, or keep the name Orchard created.
-6. To create the GitHub App that repository deployments need, select **Create GitHub App**. To skip this step, select **Skip for now**.
+6. To create the GitHub App that repository deploys need, select **Create GitHub App**. To skip this step, select **Skip for now**.
 7. Review the certificate status for your app domain.
 8. Choose whether to share anonymous usage reports. Reports are off unless you opt in.
 9. Select **Go to Orchard**.
@@ -475,7 +475,7 @@ CLI downloads include `attestation.sigstore.jsonl` on the release page. Orchard 
 Uninstalling deletes every app, database, and volume on the instance. You cannot undo this action.
 :::
 
-To uninstall from a host set up by the installer:
+To uninstall from an installer host:
 
 ```bash
 sudo orchardctl uninstall

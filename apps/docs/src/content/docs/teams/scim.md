@@ -20,7 +20,7 @@ To add and remove organization members from your identity provider, connect the 
 5. Select **Generate token**.
 6. Copy the token. Orchard does not show it again.
 7. In your identity provider's SCIM 2.0 connector, enter the endpoint and token.
-8. Run a test sync with one user before you enable the whole directory.
+8. Run a test sync with one user before you turn on the whole directory.
 
 By default, the endpoint is `/apiv1/scim/v2` on the host that serves your instance. To publish another address, set `SCIM_BASE_URL` on the server. The token decides which organization a request applies to, so all organizations share one endpoint.
 

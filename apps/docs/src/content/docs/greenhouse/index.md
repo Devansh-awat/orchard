@@ -29,7 +29,7 @@ The API, the CLI, and the Model Context Protocol (MCP) tools call a machine a **
 
 ## Coding agents
 
-A session runs one of these agents. You pick the agent in the model menu of the chat.
+A session runs one of these agents. You select the agent in the model menu of the chat.
 
 | Agent       | CLI value                | Credentials                                                       |
 | ----------- | ------------------------ | ----------------------------------------------------------------- |

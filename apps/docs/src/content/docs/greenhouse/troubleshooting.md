@@ -11,7 +11,7 @@ Use this page to fix common failures with Greenhouse. Each entry lists the sympt
 
 **Cause:** The `greenhouse` graft is not installed on this instance. `/sandboxes` shows a not found page.
 
-**Fix:** Ask an operator to install the graft. Refer to [Run Greenhouse](/operate/greenhouse/#install-the-graft). **Instance admin** > **Grafts** shows whether the graft loaded, and the reason if it failed.
+**Fix:** Ask an operator to install the graft. For more information, refer to [Run Greenhouse](/operate/greenhouse/#install-the-graft). **Instance admin** > **Grafts** shows whether the graft loaded, and the reason if it failed.
 
 ## Sandbox feature is not enabled for your account
 
@@ -21,7 +21,7 @@ Sandbox feature is not enabled for your account
 
 **Cause:** The instance has PostHog configured, and your account does not have the `greenhouse` feature flag. Greenhouse is also missing from the sidebar in this case.
 
-**Fix:** Ask an operator to enable the flag for your account.
+**Fix:** Ask an operator to turn on the flag for your account.
 
 ## The machine takes a long time to start
 
@@ -61,7 +61,7 @@ Sandbox resource never appeared in the cluster
 
 ## A machine shows Apply failed
 
-**Cause:** Orchard carries out starts, stops, deletes, and credential syncs through a queue. A worker retries a failed change up to ten times, with increasing delays. Transient errors clear without action. After the last attempt, the error stays on the machine.
+**Cause:** Orchard carries out starts, stops, deletes, and credential syncs through a queue. A worker retries a failed change up to 10 times, with increasing delays. Transient errors clear without action. After the last attempt, the error stays on the machine.
 
 **Fix:** Fix the cause, then queue the failed changes again. The host or an organization admin can select **Retry** in the machine menu, or run the following command:
 

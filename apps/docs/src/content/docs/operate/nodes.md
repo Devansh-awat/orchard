@@ -48,11 +48,11 @@ A taint repels any workload that does not tolerate it.
 
 Orchard shows the scheduling reason on the app. The usual causes are:
 
-- **Not enough resources.** No node has enough allocatable CPU or memory for the request. Allocatable capacity is smaller than the node's total, because the system reserves a share.
-- **A taint with no matching toleration.** Add a toleration to the pool, or remove the taint.
-- **A single-writer volume.** The volume is attached to another node, so the pod cannot start on a different one.
+- **Not enough resources:** No node has enough allocatable CPU or memory for the request. Allocatable capacity is smaller than the node's total, because the system reserves a share.
+- **A taint with no matching toleration:** Add a toleration to the pool, or remove the taint.
+- **A single-writer volume:** The volume is attached to another node, so the pod cannot start on a different one.
 
-On a small cluster, memory requests are the usual limit, even when real usage is low. A rolling update starts the new pod before it stops the old one, so the node needs room for both.
+On a small cluster, memory requests are the usual limit, even when actual usage is low. A rolling update starts the new pod before it stops the old one, so the node needs room for both.
 
 ## Control where builds run
 

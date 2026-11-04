@@ -160,7 +160,7 @@ controller:
      --data-urlencode 'limit=5'
    ```
 
-**Observe** > **Requests** appears on an app when it has a domain and the store has access lines for it from the last 7 days. Until then, the attack card on the **Security** tab shows **Requests aren't recorded yet**. Orchard caches this answer for about two minutes.
+**Observe** > **Requests** appears on an app when it has a domain and the store has access lines for it from the last seven days. Until then, the attack card on the **Security** tab shows **Requests aren't recorded yet**. Orchard caches this answer for about two minutes.
 
 ## Client IPs show as hidden
 

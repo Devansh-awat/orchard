@@ -73,7 +73,7 @@ Superadmins can still sign in without SSO, so that a broken provider does not lo
 
 ## Customize the sign-in page
 
-1. In **Login page**, enter a **Logo** URL, **Heading** and **Subheading**.
+1. In **Login page**, enter a **Logo** URL, **Heading**, and **Subheading**.
 2. Select the **Accent** and **Background** colors.
 3. Select **Save**.
 4. Select **Preview** to review the page.

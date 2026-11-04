@@ -67,7 +67,7 @@ orchard api deployments_rollout_get -p id=$APP -q wait=1 -q timeout=120 -q relea
   | jq '{phase, url, hint, error: .build.error}'
 ```
 
-### Find crashing deployments in a project
+### Find crashing apps in a project
 
 ```bash
 orchard api projects_deployments_list -p id=$PROJECT | jq -r '.[].id' |
@@ -78,7 +78,7 @@ while read -r id; do
 done
 ```
 
-### Set one variable on every deployment in a project
+### Set one variable on every app in a project
 
 Secret values read back as `null`. Sending `null` keeps the stored value, so this script does not need to know any secret.
 

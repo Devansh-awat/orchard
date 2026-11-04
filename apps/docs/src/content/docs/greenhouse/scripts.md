@@ -29,7 +29,7 @@ The setup script runs in the background when Greenhouse creates the worktree. It
 
 In the terminal dock, select the start control for the run script. Its output appears in the **Run** tab. Starting a script that is running restarts it.
 
-Bind your dev server to `0.0.0.0` so that you can preview it. Refer to [Preview a session](/greenhouse/previews/).
+Bind your dev server to `0.0.0.0` so that you can preview it. For more information, refer to [Preview a session](/greenhouse/previews/).
 
 The host and guests can start and stop run scripts. Everyone in the session can read the output.
 

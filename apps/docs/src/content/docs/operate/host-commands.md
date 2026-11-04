@@ -281,7 +281,7 @@ sudo orchardctl login --email me@example.com
 sudo orchardctl login --url mango
 ```
 
-Prints a link that signs you in as the superadmin, or as the account in `--email`. The link is valid for ten minutes and works once. A new link replaces any earlier one. It works with or without email configured.
+Prints a link that signs you in as the superadmin, or as the account in `--email`. The link is valid for 10 minutes and works once. A new link replaces any earlier one. It works with or without email configured.
 
 `--url` builds the link with another address. The address must be one that Traefik answers on. For more information, refer to [hostname](#hostname).
 

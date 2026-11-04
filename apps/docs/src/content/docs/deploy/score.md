@@ -70,7 +70,7 @@ If a variable references a resource the file does not provision, Orchard leaves 
 
 ## View what Orchard applied
 
-When Orchard finds a Score file, the new app form shows the databases, ports, and domain it will set up. Each later apply adds an entry to the audit log with what changed.
+When Orchard finds a Score file, the new app form shows the databases, ports, and domain that it sets up. Each later apply adds an entry to the audit log with what changed.
 
 ## Related resources
 
