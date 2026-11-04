@@ -66,12 +66,12 @@ Local deploys are disabled on this server (set LOCAL_DEPLOYS_ENABLED=true and co
 
 ## Import a GitHub repository
 
-The `orchard import` command creates a project named after the repository. It detects how to build the repository and starts the first build with auto-deploy on. It also attaches a protected generated URL.
+The `orchard import` command creates a project named after the repository. It detects how to build the repository and starts the first build. It also attaches a protected generated URL. Auto-deploy is on when the GitHub App covers the repository.
 
 ### Prerequisites
 
 - The [Orchard CLI](/cli/), installed and signed in.
-- A [GitHub account linked to Orchard](/deploy/github/).
+- For a private repository, a [GitHub account linked to Orchard](/deploy/github/). A public repository needs neither a linked account nor the GitHub App.
 
 ### Run the import
 
