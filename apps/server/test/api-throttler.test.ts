@@ -32,7 +32,13 @@ function makeRequest(authorization?: unknown, ip = '203.0.113.7'): Record<string
 }
 
 function makeGuard(): ApiThrottlerGuard {
-  return new ApiThrottlerGuard([{ ttl: 60000, limit: IP_RATE_LIMIT }] as any, {} as any, {} as any);
+  const guard = new ApiThrottlerGuard(
+    [{ ttl: 60000, limit: IP_RATE_LIMIT }] as any,
+    {} as any,
+    {} as any
+  );
+  (guard as any).prisma = { apiToken: { findUnique: async () => ({ id: 'token' }) } };
+  return guard;
 }
 
 function getTracker(guard: ApiThrottlerGuard, req: Record<string, any>): Promise<string> {

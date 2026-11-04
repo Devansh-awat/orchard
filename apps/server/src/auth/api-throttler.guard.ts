@@ -1,6 +1,10 @@
-import { ExecutionContext, Injectable } from '@nestjs/common';
+import { ExecutionContext, Inject, Injectable, Optional } from '@nestjs/common';
 import { ThrottlerGuard, type ThrottlerLimitDetail } from '@nestjs/throttler';
+import { PrismaService } from '../prisma/prisma.service';
 import { hashApiToken } from './api-tokens.service';
+
+const KNOWN_TOKEN_TTL_MS = 60_000;
+const KNOWN_TOKEN_MAX = 10_000;
 
 export const IP_RATE_LIMIT = 200;
 export const API_TOKEN_RATE_LIMIT = 600;
@@ -35,10 +39,29 @@ export function apiThrottlerLimit(context: ExecutionContext): number {
 // unchanged through the base class.
 @Injectable()
 export class ApiThrottlerGuard extends ThrottlerGuard {
+  @Optional()
+  @Inject(PrismaService)
+  private readonly prisma?: PrismaService;
+
+  private readonly knownTokens = new Map<string, number>();
+
+  private async tokenExists(hash: string): Promise<boolean> {
+    const until = this.knownTokens.get(hash);
+    if (until && until > Date.now()) return true;
+    const row = await this.prisma?.apiToken
+      .findUnique({ where: { tokenHash: hash }, select: { id: true } })
+      .catch(() => null);
+    if (!row) return false;
+    if (this.knownTokens.size >= KNOWN_TOKEN_MAX) this.knownTokens.clear();
+    this.knownTokens.set(hash, Date.now() + KNOWN_TOKEN_TTL_MS);
+    return true;
+  }
+
   protected async getTracker(req: Record<string, any>): Promise<string> {
     const token = bearerApiToken(req);
     if (token) {
-      return `token:${hashApiToken(token)}`;
+      const hash = hashApiToken(token);
+      if (await this.tokenExists(hash)) return `token:${hash}`;
     }
     return super.getTracker(req);
   }
