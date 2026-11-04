@@ -10,6 +10,8 @@ const allowedHosts = new Set(
 
 const nosniff = { 'x-content-type-options': 'nosniff' };
 
+const rasterTypes = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/avif']);
+
 const reject = (message: string, status: number) =>
 	new Response(message, { status, headers: nosniff });
 
@@ -27,13 +29,16 @@ export const GET: RequestHandler = async ({ url, fetch, setHeaders }) => {
 		return reject('forbidden host', 403);
 	}
 
-	const upstream = await fetch(parsed.toString());
+	const upstream = await fetch(parsed.toString(), { credentials: 'omit', redirect: 'error' }).catch(
+		() => null
+	);
+	if (!upstream) return reject('upstream error', 502);
 	if (!upstream.ok || !upstream.body) {
 		return reject('upstream error', 502);
 	}
 
 	const contentType = upstream.headers.get('content-type') ?? '';
-	if (!contentType.toLowerCase().startsWith('image/')) {
+	if (!rasterTypes.has(contentType.split(';')[0].trim().toLowerCase())) {
 		return reject('unsupported media type', 415);
 	}
 
@@ -41,6 +46,7 @@ export const GET: RequestHandler = async ({ url, fetch, setHeaders }) => {
 		'content-type': contentType,
 		'cache-control': 'public, max-age=86400, immutable',
 		'access-control-allow-origin': '*',
+		'content-security-policy': "default-src 'none'; sandbox",
 		...nosniff
 	});
 	return new Response(upstream.body, { status: 200 });

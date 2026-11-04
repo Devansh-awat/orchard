@@ -13,6 +13,18 @@ import { assertPublicUrl, guardedFetch } from '../notifications/webhook-guard';
 const FETCH_HEADERS = { 'User-Agent': 'Mozilla/5.0 (compatible; OrchardBot/1.0)' };
 const HOP_TIMEOUT_MS = 5000;
 
+const STORABLE_IMAGE_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/gif',
+  'image/webp',
+  'image/avif',
+  'image/svg+xml',
+  'image/x-icon',
+  'image/vnd.microsoft.icon'
+]);
+
 @Injectable()
 export class FaviconService {
   private readonly logger = new Logger(FaviconService.name);
@@ -328,11 +340,11 @@ export class FaviconService {
         .resize(1280, 720, { fit: 'inside', withoutEnlargement: true })
         .jpeg({ quality: 82 })
         .toBuffer();
-      if (resized.length < buffer.length) {
+      if (resized.length < buffer.length || contentType.includes('svg')) {
         return { buffer: resized, contentType: 'image/jpeg' };
       }
     } catch {
-      // sharp missing or unsupported input: store as-is
+      if (contentType.includes('svg')) throw new Error('Refusing to store an unconverted svg');
     }
     return { buffer, contentType };
   }
@@ -502,7 +514,7 @@ export class FaviconService {
       const contentType = res.headers.get('content-type') || 'image/png';
 
       // Only accept image content types
-      if (!contentType.startsWith('image/') && !contentType.includes('icon')) {
+      if (!STORABLE_IMAGE_TYPES.has(contentType.split(';')[0].trim().toLowerCase())) {
         return null;
       }
 
@@ -534,11 +546,15 @@ export class FaviconService {
         .toBuffer();
       const dematted = await this.trimWhiteMatte(resized);
       // Only keep the resized version when it actually shrinks the payload.
-      if (dematted.length < buffer.length || dematted.length !== resized.length) {
+      if (
+        dematted.length < buffer.length ||
+        dematted.length !== resized.length ||
+        contentType.includes('svg')
+      ) {
         return { buffer: dematted, contentType: 'image/png' };
       }
     } catch {
-      // sharp missing or unsupported input: store as-is
+      if (contentType.includes('svg')) throw new Error('Refusing to store an unconverted svg');
     }
     return { buffer, contentType };
   }
@@ -613,10 +629,12 @@ export class FaviconService {
       return null;
     }
 
-    const { buffer: finalBuffer, contentType: finalContentType } = await this.resizeIcon(
-      buffer,
-      contentType
-    );
+    const icon = await this.resizeIcon(buffer, contentType).catch(() => null);
+    if (!icon) {
+      this.memoryCache.set(domain, { url: null, ts: Date.now() });
+      return null;
+    }
+    const { buffer: finalBuffer, contentType: finalContentType } = icon;
 
     try {
       await this.s3Client.send(
