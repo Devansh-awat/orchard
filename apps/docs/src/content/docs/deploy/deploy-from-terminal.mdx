@@ -39,7 +39,7 @@ build context exceeds 100MB; add a .dockerignore to exclude build artifacts
 | -------------- | ------------------------------------------------------------------------ |
 | `--name`       | The app name. The default is the directory name.                         |
 | `--root`       | The directory of the app inside a monorepo.                              |
-| `--port`       | The port the app listens on. The default is the `EXPOSE` value or 3000.  |
+| `--port`       | The port the app listens on. The default is the `EXPOSE` value, then the port the base image exposes, or 3000. |
 | `--dockerfile` | The path to the Dockerfile, relative to the directory.                   |
 | `--output-dir` | A directory of built static files. The app serves them as a static site. |
 | `--detach`     | Start the build without following its logs.                              |

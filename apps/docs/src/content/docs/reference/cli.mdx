@@ -4496,7 +4496,7 @@ orchard up [dir]
 | `--install-cmd` | string |  | override the detected install command |
 | `--name` | string |  | deployment name (default: directory name) |
 | `--output-dir` | string |  | directory of built static files; serves the app as a static site |
-| `--port` | int | `0` | port the app listens on (default: EXPOSE or 3000) |
+| `--port` | int | `0` | port the app listens on (default: EXPOSE, the base image's port, or 3000) |
 | `--railpack` | bool | `false` | force a Railpack build even when a Dockerfile exists |
 | `--root` | string |  | directory of the app inside the repo (monorepos) |
 | `--start-cmd` | string |  | override the detected start command |

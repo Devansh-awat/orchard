@@ -85,6 +85,12 @@ Build failed: could not schedule build pod after 300s - 0/1 nodes are available:
 
 **Fix:** Raise the memory limit of the app, or fix the leak.
 
+### The app is live but its URL returns `502 Bad Gateway`
+
+**Cause:** The pod runs, but nothing listens on the port Orchard routes to. Without a health check, a running container counts as ready.
+
+**Fix:** Go to the app's **Network** tab and set the port your process listens on. To catch this in a rollout, add a health check. For more information, refer to [Scaling](/deploy/scaling/).
+
 ### Running but never ready
 
 **Cause:** The health check uses the wrong path or port, or the app starts more slowly than the check allows.
