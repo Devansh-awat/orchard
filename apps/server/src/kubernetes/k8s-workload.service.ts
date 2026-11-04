@@ -132,6 +132,80 @@ export class K8sWorkloadService {
     return this.kubernetes.kc;
   }
 
+  async syncComposeAliases(
+    namespace: string,
+    stackId: string,
+    aliases: { name: string; target: string; ports: { port: number; protocol: string }[] }[]
+  ): Promise<{ conflicts: string[] }> {
+    this.ensureKubeConfig();
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+    const owner = 'orchard.my/compose-alias-stack';
+    const body = (alias: (typeof aliases)[number]) => ({
+      metadata: { name: alias.name, labels: { [owner]: stackId } },
+      spec: {
+        selector: { 'app.kubernetes.io/name': alias.target },
+        ports: alias.ports.map((p) => ({
+          name: `${p.protocol.toLowerCase()}-${p.port}`,
+          port: p.port,
+          targetPort: p.port,
+          protocol: p.protocol
+        }))
+      }
+    });
+
+    const existing = new Map<string, k8s.V1Service | null>();
+    const conflicts: string[] = [];
+    for (const alias of aliases) {
+      const live = await coreApi
+        .readNamespacedService(alias.name, namespace)
+        .then((res) => res.body)
+        .catch((e: any) => {
+          if (e?.response?.statusCode === 404) return null;
+          throw e;
+        });
+      existing.set(alias.name, live);
+      if (live && live.metadata?.labels?.[owner] !== stackId) conflicts.push(alias.name);
+    }
+    if (conflicts.length > 0) return { conflicts };
+
+    for (const alias of aliases) {
+      if (existing.get(alias.name)) {
+        await coreApi.patchNamespacedService(
+          alias.name,
+          namespace,
+          body(alias),
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          { headers: { 'Content-Type': 'application/merge-patch+json' } }
+        );
+      } else {
+        await coreApi.createNamespacedService(namespace, body(alias));
+      }
+    }
+
+    const owned = await coreApi.listNamespacedService(
+      namespace,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      `${owner}=${stackId}`
+    );
+    const wanted = new Set(aliases.map((alias) => alias.name));
+    for (const service of owned.body.items) {
+      const name = service.metadata?.name;
+      if (name && !wanted.has(name)) {
+        await coreApi.deleteNamespacedService(name, namespace).catch((e: any) => {
+          if (e?.response?.statusCode !== 404) throw e;
+        });
+      }
+    }
+    return { conflicts: [] };
+  }
+
   private ensureKubeConfig() {
     this.kubernetes.ensureKubeConfig();
   }

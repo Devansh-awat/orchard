@@ -15,8 +15,19 @@ import { AuthorizationService } from '../auth/authorization.service';
 import { UsersService } from '../users/users.service';
 import { GitHubService } from '../github/github.service';
 import { looksSecret } from '../projects/env-write-rules';
+import { scrubIngress } from '../projects/projects.utils';
 import { composeVolumeName } from './compose-volume-name';
 import { composeBuildPaths, stackWithBuildState, type ComposeBuildPaths } from './compose-build';
+import {
+  aliasConflictMessage,
+  parseComposePorts,
+  planComposeAliases,
+  urlPortOf,
+  type ComposePort
+} from './compose-network';
+import { IngressService } from '../projects/ingress.service';
+import { RegistryCredentialsService } from '../projects/registry-credentials.service';
+import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
 
 interface UserData {
   email?: string;
@@ -39,7 +50,8 @@ interface ParsedComposeService {
   name: string;
   image?: string;
   build?: ComposeBuildPaths;
-  ports: { containerPort: number; servicePort: number; protocol: string }[];
+  ports: ComposePort[];
+  published: ComposePort[];
   env: { key: string; value: string }[];
   volumes: { name: string; type: 'pvc' | 'emptyDir'; mountPath: string; storageSize?: string }[];
   replicas: number;
@@ -119,7 +131,10 @@ export class ComposeStacksService {
     private readonly environments: EnvironmentsService,
     private readonly authz: AuthorizationService,
     private readonly usersService: UsersService,
-    private readonly github: GitHubService
+    private readonly github: GitHubService,
+    private readonly ingress: IngressService,
+    private readonly credentials: RegistryCredentialsService,
+    private readonly k8sWorkload: K8sWorkloadService
   ) {}
 
   private async resolveUserId(clerkId: string, userData?: UserData): Promise<string> {
@@ -198,20 +213,7 @@ export class ComposeStacksService {
         );
       }
 
-      const ports: ParsedComposeService['ports'] = [];
-      for (const p of svc?.ports ?? []) {
-        const portStr = typeof p === 'string' ? p : `${p?.target ?? p?.published}`;
-        const [hostPart, containerPart] = portStr.split(':');
-        const containerPort = parseInt(containerPart ?? hostPart, 10);
-        const servicePort = parseInt(hostPart, 10);
-        if (Number.isFinite(containerPort)) {
-          ports.push({
-            containerPort,
-            servicePort: Number.isFinite(servicePort) ? servicePort : containerPort,
-            protocol: 'TCP'
-          });
-        }
-      }
+      const { ports, published } = parseComposePorts(svc);
 
       const env: ParsedComposeService['env'] = [];
       const envSrc = svc?.environment;
@@ -253,6 +255,7 @@ export class ComposeStacksService {
             )
           : undefined,
         ports,
+        published,
         env,
         volumes,
         replicas: typeof svc?.deploy?.replicas === 'number' ? svc.deploy.replicas : 1,
@@ -398,6 +401,7 @@ export class ComposeStacksService {
 
     try {
       await this.deployChildren(stack.id, services, clerkId, userData);
+      await this.syncServiceAliases(stack.id, 'refuse');
       await this.prisma.composeStack.update({
         where: { id: stack.id },
         data: { status: 'active', lastError: null }
@@ -444,10 +448,11 @@ export class ComposeStacksService {
     for (const svc of services) {
       const deployName = `${stack.name}-${svc.name}`.slice(0, 63);
       const env = this.mergeComposeEnv(svc.env, preservedEnv?.get(svc.name));
+      let created: { id?: string } | null = null;
       if (svc.build) {
         // Reuse the existing GitHub-build pipeline. Each child deployment owns
         // its own buildStatus/buildLogs and webhooks fan out per child.
-        await this.deployments.createDeploymentFromGitHub(
+        created = await this.deployments.createDeploymentFromGitHub(
           stack.projectId,
           {
             name: deployName,
@@ -479,13 +484,15 @@ export class ComposeStacksService {
           userData
         );
       } else if (svc.image) {
-        await this.deployments.createDeployment(
+        const ports =
+          svc.ports.length > 0 ? svc.ports : await this.imagePorts(svc.image, stack.projectId);
+        created = await this.deployments.createDeployment(
           stack.projectId,
           {
             name: deployName,
             image: svc.image,
             replicas: svc.replicas,
-            ports: svc.ports.length > 0 ? svc.ports : undefined,
+            ports: ports.length > 0 ? ports : undefined,
             env,
             volumes: svc.volumes.map((v) => ({
               name: v.name,
@@ -505,7 +512,50 @@ export class ComposeStacksService {
           userData
         );
       }
+      const urlPort = urlPortOf(svc.published);
+      if (created?.id && urlPort) {
+        await this.ingress
+          .createAutoIngressForDeployment(created.id, clerkId, userData, { servicePort: urlPort })
+          .catch((e: any) =>
+            this.logger.warn(`no URL for compose service ${deployName}: ${e?.message ?? e}`)
+          );
+      }
     }
+  }
+
+  private async imagePorts(image: string, projectId: string): Promise<ComposePort[]> {
+    const detected = await this.credentials
+      .detectImagePorts(image, { projectId })
+      .catch(() => null);
+    return (detected?.ports ?? [])
+      .filter((p) => p.protocol !== 'sctp')
+      .map((p) => ({
+        containerPort: p.port,
+        servicePort: p.port,
+        protocol: p.protocol.toUpperCase()
+      }));
+  }
+
+  private async syncServiceAliases(stackId: string, onConflict: 'refuse' | 'warn') {
+    const children = await this.prisma.deployment.findMany({
+      where: { composeStackId: stackId },
+      select: {
+        name: true,
+        namespace: true,
+        composeServiceName: true,
+        services: { select: { ports: { select: { targetPort: true, protocol: true } } } }
+      }
+    });
+    const namespace = children[0]?.namespace;
+    if (!namespace) return;
+    const { conflicts } = await this.k8sWorkload.syncComposeAliases(
+      namespace,
+      stackId,
+      planComposeAliases(children)
+    );
+    if (conflicts.length === 0) return;
+    if (onConflict === 'refuse') throw new BadRequestException(aliasConflictMessage(conflicts));
+    this.logger.warn(`compose stack ${stackId}: ${aliasConflictMessage(conflicts)}`);
   }
 
   /**
@@ -611,6 +661,7 @@ export class ComposeStacksService {
         userData,
         preservedEnv
       );
+      await this.syncServiceAliases(stackId, 'warn');
       await this.prisma.composeStack.update({
         where: { id: stackId },
         data: { status: 'active', lastError: null }
@@ -831,14 +882,25 @@ export class ComposeStacksService {
             buildStatus: true,
             buildStep: true,
             composeServiceName: true,
-            createdAt: true
+            createdAt: true,
+            ingresses: {
+              where: { redirectTarget: null },
+              orderBy: { createdAt: 'asc' },
+              select: { host: true, path: true, tlsSecretName: true, entrypoints: true }
+            }
           }
         }
       }
     });
     if (!stack) throw new NotFoundException('Compose stack not found');
     const access = await this.authz.requireProjectView(stack.projectId, userId);
-    const current = stackWithBuildState(stack);
+    const current = stackWithBuildState({
+      ...stack,
+      deployments: stack.deployments.map(({ ingresses, ...deployment }) => ({
+        ...deployment,
+        url: ingresses.map((row) => scrubIngress(row).url).find(Boolean) ?? null
+      }))
+    });
     return access.canEdit ? current : scrubComposeStackForViewer(current);
   }
 
@@ -897,9 +959,14 @@ export class ComposeStacksService {
   ) {
     const deployments = await this.prisma.deployment.findMany({
       where: { composeStackId: stackId, ...(onlyIds && { id: { in: onlyIds } }) },
-      select: { id: true }
+      select: { id: true, namespace: true }
     });
     const errors: string[] = [];
+    if (!onlyIds && deployments[0]?.namespace) {
+      await this.k8sWorkload
+        .syncComposeAliases(deployments[0].namespace, stackId, [])
+        .catch((e: any) => errors.push(`service names: ${e?.message ?? e}`));
+    }
     for (const d of deployments) {
       try {
         await this.deployments.deleteDeployment(d.id, clerkId, userData, {

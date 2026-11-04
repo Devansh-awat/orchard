@@ -54,6 +54,9 @@ function harness(composeYaml: string, children: any[], volumeTaken?: string) {
   service.authz = { requireProjectEdit: async () => ({}) };
   service.fetchComposeFromGithub = async () => ({ composeYaml, installationId: 1 });
   service.getComposeStack = async () => stack;
+  service.k8sWorkload = { syncComposeAliases: async () => ({ conflicts: [] }) };
+  service.ingress = { createAutoIngressForDeployment: async () => null };
+  service.credentials = { detectImagePorts: async () => null };
   service.deployments = {
     assertEnvironmentVolumesUnclaimed: async (...args: unknown[]) => {
       calls.push(['preflight', ...args]);

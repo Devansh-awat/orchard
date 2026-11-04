@@ -29,6 +29,7 @@ function harness(branchFromGitHub = 'master') {
     return { composeYaml: 'services:\n  web:\n    image: nginx\n', installationId: null };
   };
   service.deployChildren = async () => undefined;
+  service.syncServiceAliases = async () => undefined;
   service.getComposeStack = async () => ({ id: 'stack' });
   return { service, created };
 }
