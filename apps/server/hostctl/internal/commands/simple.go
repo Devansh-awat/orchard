@@ -180,6 +180,9 @@ hostDefaults key records that this ran, so turning something back off sticks.
 Then helm upgrade --install with your values file, waits for each deployment to
 roll out, makes sure Traefik writes the JSON access log the log store reads,
 and refreshes the host commands. Extra arguments are passed through to helm.
+
+Last, it applies the latest k3s patch from k3s's own release channel. See
+orchardctl k3s --help.
 `,
 		Run: func(c *cli.Context, args []string) error {
 			if err := harden(c); err != nil {
@@ -241,6 +244,9 @@ and refreshes the host commands. Extra arguments are passed through to helm.
 			// the installer.
 			if err := syncCommands(c); err != nil {
 				c.Warnf("note: couldn't refresh the host commands: %s\n", err)
+			}
+			if err := patchK3s(c); err != nil {
+				c.Warnf("note: k3s wasn't updated: %s\n", err)
 			}
 			return nil
 		},

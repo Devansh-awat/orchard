@@ -35,6 +35,7 @@ var Aliases = []string{
 	"orchard-start",
 	"orchard-restart",
 	"orchard-graft",
+	"orchard-k3s",
 	"orchard-uninstall",
 }
 
@@ -63,6 +64,7 @@ func All() []*cli.Command {
 		Restart(),
 		Logs(),
 		Status(),
+		K3s(),
 		Sync(),
 		Uninstall(),
 		Licenses(),

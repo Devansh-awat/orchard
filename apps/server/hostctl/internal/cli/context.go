@@ -19,6 +19,7 @@ type Env struct {
 	Namespace  string
 	Bin        string
 	Kubeconfig string
+	K3sUpdates string
 }
 
 func LoadEnv() Env {
@@ -48,6 +49,8 @@ func LoadEnv() Env {
 			e.Bin = v
 		case "KUBECONFIG":
 			e.Kubeconfig = v
+		case "ORCHARD_K3S_UPDATES":
+			e.K3sUpdates = v
 		}
 	}
 
@@ -58,6 +61,7 @@ func LoadEnv() Env {
 	e.Namespace = envOr("ORCHARD_NAMESPACE", e.Namespace)
 	e.Bin = envOr("ORCHARD_BIN", e.Bin)
 	e.Kubeconfig = envOr("KUBECONFIG", e.Kubeconfig)
+	e.K3sUpdates = envOr("ORCHARD_K3S_UPDATES", e.K3sUpdates)
 	if e.Values == "" {
 		e.Values = filepath.Join(e.StateDir, "values.yaml")
 	}

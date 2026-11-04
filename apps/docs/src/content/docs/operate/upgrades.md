@@ -19,6 +19,30 @@ sudo orchardctl update
 
 If you chose automatic updates during installation, a nightly systemd timer runs the same command.
 
+## Upgrade k3s
+
+`orchardctl update` also applies the latest k3s patch, from the k3s release channels. To see your version, or to move to a newer minor version, use the following commands:
+
+```bash
+sudo orchardctl k3s
+sudo orchardctl k3s upgrade
+```
+
+For what each step does, refer to [`orchardctl k3s`](/operate/host-commands/#k3s).
+
+## Security updates
+
+Most parts of an instance get security fixes without an Orchard release:
+
+| Part                                           | How it gets security fixes                                                                                                |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| k3s, Kubernetes, and containerd                | `orchardctl update` applies patches from the k3s release channels. `orchardctl k3s upgrade` moves to a new minor version. |
+| Postgres minor versions                        | Orchard applies them from the [CloudNativePG image catalog](/data/upgrades/).                                             |
+| The host operating system                      | Your distribution's updates. Orchard does not change them.                                                                |
+| Orchard, Redis, and the metrics and log stores | A new Orchard chart. `orchardctl update` installs it.                                                                     |
+
+Traefik, CloudNativePG, and cert-manager install at their latest version. Re-run the installer to upgrade them.
+
 An upgrade turns on, once, features that newer releases run by default. Orchard prints each change. If you turn a feature off afterward, it stays off. For the list, refer to [New defaults on an existing host](/operate/host-commands/#new-defaults-on-an-existing-host).
 
 ## Re-run the installer

@@ -30,6 +30,7 @@ sidebar:
 | `orchardctl restart`           | Stop and start the instance.                                                          |
 | `orchardctl logs [service]`    | Follow logs for `server`, `frontend`, or `mcp`.                                       |
 | `orchardctl status`            | Show the control-plane pods.                                                          |
+| `orchardctl k3s`               | Show the k3s version, apply a patch, or move to a newer minor version.                |
 | `orchardctl sync`              | Refresh these commands from the deployed image.                                       |
 | `orchardctl uninstall`         | Remove Orchard, k3s, and everything on them.                                          |
 | `orchardctl licenses`          | Print [third-party notices](/operate/licenses/#third-party-notices).                  |
@@ -54,6 +55,7 @@ Runs the following steps in order:
 4. Runs `helm upgrade --install` with your values file, and waits for each deployment to roll out.
 5. Checks that Traefik writes the JSON access log.
 6. Refreshes the host commands.
+7. Applies the latest k3s patch. For more information, refer to [k3s](#k3s).
 
 The command restarts a deployment if its image tag is empty or `latest`. Otherwise, Helm sees an identical pod template and the old image keeps running.
 
@@ -359,6 +361,41 @@ orchardctl logs mcp
 These commands do not need root. `logs` keeps following until you press `CTRL + C`.
 
 These commands show the control plane, not your apps. For [an app's logs](/run/logs/), use the dashboard or the `orchard` CLI.
+
+## k3s
+
+```bash
+sudo orchardctl k3s
+sudo orchardctl k3s patch
+sudo orchardctl k3s upgrade
+```
+
+| Command                  | Description                                                                              |
+| ------------------------ | ---------------------------------------------------------------------------------------- |
+| `orchardctl k3s`         | Show the k3s version on this server, and what is available.                              |
+| `orchardctl k3s patch`   | Apply the latest patch of the current minor version. `orchardctl update` also does this. |
+| `orchardctl k3s upgrade` | Move to the version on the k3s `stable` channel, one minor version at a time.            |
+
+Versions come from the [k3s release channels](https://docs.k3s.io/upgrades/manual#release-channels), so a security patch does not wait for an Orchard release.
+
+Each step does the following:
+
+1. Downloads the binary and checks it against its published checksum.
+2. Stops k3s, and copies its database to `/var/lib/rancher/k3s/server/db.previous`.
+3. Replaces the binary, and keeps the old one as `/usr/local/bin/k3s.previous`.
+4. Starts k3s, and waits for the node and the Orchard server.
+
+If the node or the server does not come back, the command restores the old binary and database and stops. Apps keep running during a step, but the dashboard and API can pause.
+
+To turn off automatic patches, add the following line to `/etc/orchard/env`. The installer adds it when you install with `--k3s-version`.
+
+```txt
+ORCHARD_K3S_UPDATES=off
+```
+
+The `upgrade` command does not run on its own, because a new minor version can change how a workload behaves. `orchardctl update` tells you when your version no longer gets security fixes. Take a [backup of the control-plane database](/operate/production/#5-back-up-the-control-plane-database) first.
+
+The commands do not upgrade worker nodes. They list the nodes that are behind, so you can run the k3s install script on each one with `INSTALL_K3S_VERSION`. A cluster with more than one control-plane node is not upgraded. For that setup, follow the [k3s upgrade guide](https://docs.k3s.io/upgrades).
 
 ## sync
 
