@@ -208,7 +208,7 @@ func runBootstrap(t *testing.T, img *imageFixture, extraEnv ...string) (string, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	script := strings.Replace(string(raw), `RELEASE_KEYS=""`, `RELEASE_KEYS="`+img.public+`"`, 1)
+	script := regexp.MustCompile(`(?m)^RELEASE_KEYS="[^"]*"`).ReplaceAllString(string(raw), `RELEASE_KEYS="`+img.public+`"`)
 	dir := t.TempDir()
 	path := filepath.Join(dir, "sync")
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {

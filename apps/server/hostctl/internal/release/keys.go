@@ -5,4 +5,6 @@ package release
 // the same list, and sync_test pins the two together.
 //
 // While this is empty, signatures aren't checked.
-var PublicKeys = []string{}
+var PublicKeys = []string{
+	"MCowBQYDK2VwAyEAGZ/AMiI95EFw93YNrsui6YQg3FMqdUVZ1FQh/+k92co=",
+}

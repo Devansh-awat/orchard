@@ -48,7 +48,7 @@ fi
 # Release signature, checked here as well as in orchardctl because this is what
 # installs the first binary on a host. Needs an openssl with ed25519 -rawin;
 # without one this warns, and orchardctl checks every later update itself.
-RELEASE_KEYS=""
+RELEASE_KEYS="MCowBQYDK2VwAyEAGZ/AMiI95EFw93YNrsui6YQg3FMqdUVZ1FQh/+k92co="
 verify_release() {
   [ -n "$RELEASE_KEYS" ] || return 0
   [ "${ORCHARD_ALLOW_UNSIGNED_COMMANDS:-}" = true ] && return 0

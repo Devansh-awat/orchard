@@ -79,3 +79,14 @@ func TestManifestHasNoTrailingNewline(t *testing.T) {
 		t.Fatal("a trailing newline would not survive being read back through a shell")
 	}
 }
+
+func TestConfiguredKeysParse(t *testing.T) {
+	if len(PublicKeys) == 0 {
+		t.Fatal("no release keys are configured")
+	}
+	for _, encoded := range PublicKeys {
+		if _, err := parsePublicKey(encoded); err != nil {
+			t.Fatalf("%s: %v", encoded, err)
+		}
+	}
+}
