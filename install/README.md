@@ -1,10 +1,17 @@
 # One-command install
 
-For a single Linux box with nothing on it yet:
+For a single Linux box with an IPv4 address and nothing on it yet:
 
 ```bash
 sudo bash -c "$(curl -fsSL https://assets.orchard.my/install.sh)"
 ```
+
+IPv6-only servers are not supported yet. On a server with no IPv4 address, the
+installer stops before it asks anything or installs anything: GitHub and ghcr.io
+have no IPv6 addresses, so it cannot download k3s or the images, and Orchard
+listens on IPv4 only. Use a server with an IPv4 address. NAT64 in front of an
+IPv4 server is unsupported and untested. `--allow-ipv6-only` continues anyway,
+and `--yes` does not imply it. Dual-stack servers work, and they use `A` records.
 
 Not `curl ... | sudo bash`: the installer asks questions, and a pipe takes the
 standard input it would read the answers from. `bash -c "$(...)"` keeps your
@@ -47,7 +54,7 @@ are filled in, and it happens once, so turning something back off sticks.
 The installer asks one question at a time, and each has a default. Press Enter to accept it. It installs nothing until you confirm your answers on a review screen, where you can also change any answer or cancel.
 
 1. **Mode**: `public`, `tunnel` or `lan`, with a recommendation from what it detects. In `tunnel` mode it also asks for the tunnel token.
-2. **Public IP**: the detected address. It covers machines with several interfaces, 1:1 NAT, IPv6 only, and none detected. `none` leaves it blank, and public ports and databases stay unavailable until you set it.
+2. **Public IP**: the detected address. It covers machines with several interfaces, 1:1 NAT, and none detected. `none` leaves it blank, and public ports and databases stay unavailable until you set it.
 3. **Dashboard domain**: an `sslip.io` name by default in `public` mode, which needs no DNS records. All `sslip.io` users share one Let's Encrypt limit, so use it for trials only.
 4. **Apps domain**: `apps.<parent of your domain>`. It needs a wildcard record.
 5. **Custom domains target**: what people CNAME their own domains to. The dashboard domain by default, or `<tunnel-id>.cfargotunnel.com` in `tunnel` mode.
@@ -312,6 +319,7 @@ sudo ./install.sh --yes \
 | `--object-storage <true\|false>` | `ORCHARD_OBJECT_STORAGE` | `true`. The local S3 store database backups go to.                          |
 | `--limits <on\|off>`             | `ORCHARD_LIMITS`         | unset. The setup page asks. Set, it locks the choice and skips the question. |
 | `--yes`, `-y`                    | `ORCHARD_ASSUME_YES`     | `false`                                                                     |
+| `--allow-ipv6-only`              | `ORCHARD_ALLOW_IPV6_ONLY` | `false`. Continue on a server with no IPv4 address. Unsupported and untested. |
 | `--help`, `-h`                   |                          |                                                                             |
 |                                  | `NO_COLOR`               | unset. Any value disables colour.                                           |
 |                                  | `ORCHARD_NO_PACING`      | unset. `1` removes the brief pauses in the opening screen.                  |

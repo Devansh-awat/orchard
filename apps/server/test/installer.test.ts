@@ -1608,8 +1608,8 @@ test('NAT, several interfaces, none detected and IPv6-only each get their own wo
   );
   try {
     assert.equal(v6.status, 0, v6.out);
-    assert.match(v6.out, /No IPv4 address was found/);
-    assert.match(v6.out, /NAT64/);
+    assert.match(v6.out, /No public IPv4 address was found/);
+    assert.match(v6.out, /listens on IPv4 only/);
     assert.match(v6.out, /ip=2001:db8::10 ui=orchard\.2001-db8--10\.sslip\.io/);
   } finally {
     v6.box.cleanup();
@@ -1625,6 +1625,95 @@ test('NAT, several interfaces, none detected and IPv6-only each get their own wo
   } finally {
     dual.box.cleanup();
   }
+});
+
+const IPV6_ONLY = 'PUBLIC_IP= PUBLIC_IP6=2001:db8::10 LOCAL_IPS= LOCAL_IPS6=2001:db8::10 PRIMARY_IP=';
+
+function ipv4Check(setup: string, args = '') {
+  const box = sandbox();
+  try {
+    const result = spawnSync(
+      'bash',
+      [
+        '-c',
+        `export ORCHARD_LIB_ONLY=1 NO_COLOR=1 ORCHARD_NO_PACING=1
+        source "${installer}"
+        parse_args ${args}
+        ${setup}
+        require_ipv4
+        echo CONTINUED`
+      ],
+      {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          PATH: `${box.dir}:${process.env.PATH}`,
+          KUBECONFIG: '/dev/null',
+          ORCHARD_STATE_DIR: box.state
+        }
+      }
+    );
+    return { status: result.status, out: result.stdout + result.stderr };
+  } finally {
+    box.cleanup();
+  }
+}
+
+test('a server with no IPv4 address stops and says what does not work', () => {
+  const { status, out } = ipv4Check(IPV6_ONLY);
+  assert.equal(status, 1);
+  assert.match(out, /IPv6-only servers are not supported yet/);
+  assert.match(out, /GitHub and ghcr\.io have no IPv6 addresses/);
+  assert.match(out, /Use a server with an IPv4 address/);
+  assert.match(out, /NAT64/);
+  assert.match(out, /--allow-ipv6-only/);
+  assert.match(out, /stopped before installing anything/);
+  assert.doesNotMatch(out, /CONTINUED/);
+  assert.doesNotMatch(out, /AAAA/);
+});
+
+test('--yes does not get past the IPv4 check, and --allow-ipv6-only does', () => {
+  const yes = ipv4Check(IPV6_ONLY, '--yes');
+  assert.equal(yes.status, 1);
+  assert.doesNotMatch(yes.out, /CONTINUED/);
+
+  const flag = ipv4Check(IPV6_ONLY, '--allow-ipv6-only');
+  assert.equal(flag.status, 0, flag.out);
+  assert.match(flag.out, /IPv6-only servers are not supported yet/);
+  assert.match(flag.out, /Continuing because of --allow-ipv6-only/);
+  assert.match(flag.out, /CONTINUED/);
+
+  const env = ipv4Check(`${IPV6_ONLY} ALLOW_IPV6_ONLY=true`);
+  assert.equal(env.status, 0, env.out);
+});
+
+test('any IPv4 address passes the check, and nothing is said about it', () => {
+  for (const setup of [
+    'PUBLIC_IP=203.0.113.10 PUBLIC_IP6=2001:db8::10 LOCAL_IPS=203.0.113.10 LOCAL_IPS6=2001:db8::10 PRIMARY_IP=203.0.113.10',
+    'PUBLIC_IP= PUBLIC_IP6=2001:db8::10 LOCAL_IPS=10.0.0.5 LOCAL_IPS6=2001:db8::10 PRIMARY_IP=10.0.0.5',
+    'PUBLIC_IP=203.0.113.10 PUBLIC_IP6= LOCAL_IPS= LOCAL_IPS6= PRIMARY_IP=',
+    'PUBLIC_IP= PUBLIC_IP6= LOCAL_IPS= LOCAL_IPS6= PRIMARY_IP='
+  ]) {
+    const { status, out } = ipv4Check(setup);
+    assert.equal(status, 0, `${setup}\n${out}`);
+    assert.equal(out.trim(), 'CONTINUED', setup);
+  }
+});
+
+test('the IPv4 check runs before any question and before anything is installed', () => {
+  const source = readFileSync(installer, 'utf8');
+  const main = source.slice(source.indexOf('\nmain() {'));
+  const order = ['preflight', 'detect_network', 'require_ipv4', 'collect_answers', 'install_k3s'];
+  const places = order.map((name) => main.indexOf(`\n  ${name}\n`));
+  assert.ok(!places.includes(-1), `main calls each of ${order.join(', ')}`);
+  assert.deepEqual(places, [...places].sort((a, b) => a - b));
+});
+
+test('--help names the flag for IPv6-only servers', () => {
+  const out = spawnSync('bash', [installer, '--help'], { encoding: 'utf8' }).stdout;
+  assert.match(out, /--allow-ipv6-only/);
+  assert.match(out, /ORCHARD_ALLOW_IPV6_ONLY/);
+  assert.match(out, /--yes does not imply it/);
 });
 
 test('--yes never prompts, never waits on DNS, and required answers name their flag', () => {

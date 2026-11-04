@@ -50,6 +50,7 @@ ORCHARD_S3_SECRET_KEY_FILE=${ORCHARD_S3_SECRET_KEY_FILE:-}
 S3_READY=false
 S3_PROBE_ERROR=''
 ASSUME_YES=${ORCHARD_ASSUME_YES:-false}
+ALLOW_IPV6_ONLY=${ORCHARD_ALLOW_IPV6_ONLY:-false}
 INSTALL_URL=${ORCHARD_INSTALL_URL:-https://assets.orchard.my/install.sh}
 PROMPT_TIMEOUT=${ORCHARD_PROMPT_TIMEOUT:-900}
 PROMPT_FD_OPEN=false
@@ -339,6 +340,10 @@ usage() {
                                                         the run and names its flag
                                  ORCHARD_PROMPT_TIMEOUT seconds to wait on a question before
                                                         giving up (default: 900, 0 waits forever)
+    --allow-ipv6-only            ORCHARD_ALLOW_IPV6_ONLY=true
+                                                        continue on a server with no IPv4 address.
+                                                        IPv6-only servers are not supported yet, so
+                                                        this is untested. --yes does not imply it
     --help, -h                                         show this and exit
 
   Versions and images
@@ -417,6 +422,7 @@ parse_args() {
       --registry-host) need_value "$1" "${2:-}"; REGISTRY_HOST=$2; shift 2 ;;
       --state-dir) need_value "$1" "${2:-}"; STATE_DIR=$2; VALUES_FILE="$STATE_DIR/values.yaml"; shift 2 ;;
       -y|--yes) ASSUME_YES=true; shift ;;
+      --allow-ipv6-only) ALLOW_IPV6_ONLY=true; shift ;;
       -h|--help) usage; exit 0 ;;
       *) usage; die "unknown flag: $1" ;;
     esac
@@ -920,6 +926,29 @@ detect_network() {
   if [ -n "$CLOUD" ]; then info "provider:  $CLOUD"; fi
 }
 
+has_only_ipv6() {
+  [ -z "$PUBLIC_IP$PRIMARY_IP$LOCAL_IPS" ] && [ -n "$PUBLIC_IP6$LOCAL_IPS6" ]
+}
+
+require_ipv4() {
+  has_only_ipv6 || return 0
+
+  warn "IPv6-only servers are not supported yet. This server has no IPv4 address."
+  note "GitHub and ghcr.io have no IPv6 addresses, so this server cannot download k3s"
+  note "or the Orchard images, and Orchard cannot clone or build from GitHub."
+  note "k3s runs with IPv4 inside the cluster, and Orchard listens on IPv4 only, so"
+  note "traffic to the IPv6 address of this server does not reach it."
+  printf '\n'
+  note "Use a server with an IPv4 address. NAT64 in front of an IPv4 server also works"
+  note "in principle, but it is unsupported and untested."
+  if [ "$ALLOW_IPV6_ONLY" = true ]; then
+    warn "Continuing because of --allow-ipv6-only."
+    return 0
+  fi
+  note "To try anyway, run the installer again with --allow-ipv6-only."
+  die "stopped before installing anything"
+}
+
 recommended_mode() {
   if [ -z "$PUBLIC_IP$PUBLIC_IP6" ]; then printf lan; return; fi
   if [ "$BEHIND_NAT" = false ] || [ -n "$CLOUD" ]; then printf public; return; fi
@@ -1297,9 +1326,8 @@ q_public_ip() {
     *' '*) note "Addresses on this machine: ${addresses% }" ;;
   esac
   if [ -z "$PUBLIC_IP" ] && [ -n "$PUBLIC_IP6" ]; then
-    warn "No IPv4 address was found. DNS uses AAAA records for ${PUBLIC_IP6}."
-    note "GitHub and its container registry have no IPv6, and this installer sets up k3s"
-    note "with IPv4 inside the cluster. An IPv6-only machine needs NAT64, and it is untested."
+    warn "No public IPv4 address was found, only ${PUBLIC_IP6}. Orchard listens on IPv4 only."
+    note "Type a public IPv4 address if this machine has one."
   fi
   if [ -z "$PUBLIC_IP$PUBLIC_IP6" ] && [ "$INGRESS_MODE" = public ]; then
     note "No public address was found. Type it if you know it."
@@ -2339,7 +2367,8 @@ dns_step() {
     bold "Create these DNS records"
     print_dns_records
     if is_ipv6 "$ORCHARD_PUBLIC_IP"; then
-      note "These are AAAA records because $ORCHARD_PUBLIC_IP is an IPv6 address."
+      warn "These are AAAA records because $ORCHARD_PUBLIC_IP is an IPv6 address, and Orchard listens on IPv4 only."
+      note "They reach Orchard only through a proxy that you run in front of it. Orchard has not tested this."
     elif [ -n "$PUBLIC_IP6" ]; then
       note "This machine also has $PUBLIC_IP6. Do not add AAAA records: this install listens on IPv4 only."
     fi
@@ -3820,6 +3849,7 @@ main() {
   show_plan
   preflight
   detect_network
+  require_ipv4
   collect_answers
   dns_step
   START_TS=$(date +%s)
