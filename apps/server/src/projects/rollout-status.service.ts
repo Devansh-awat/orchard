@@ -348,7 +348,7 @@ export class RolloutStatusService {
     const port = routed.servicePort ?? routed.service.port;
     const host = `${routed.service.name}.${namespace}.svc.cluster.local`;
     if (!(await this.refused(host, port))) return null;
-    return `Nothing is listening on port ${port} yet, so the URL returns 502. If the app listens on another port, change it under Network in the dashboard, or with: orchard service update`;
+    return `Nothing is listening on port ${port} yet, so the app can't answer requests. If the app listens on another port, change it under Network in the dashboard, or with: orchard service update`;
   }
 
   private async primaryUrl(deploymentId: string): Promise<string | null> {

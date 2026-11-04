@@ -1099,7 +1099,7 @@ export class DatabasesService {
         tenantBackupTarget())
     );
 
-    const keepsLocalBackups = skipLive ? false : await this.keepsLocalBackups(database);
+    const keepsLocalBackups = await this.keepsLocalBackups(database);
 
     const resolvedPublicHostname = this.publicHostnameFor(database);
     const publicHostname = resolvedPublicHostname ?? null;
