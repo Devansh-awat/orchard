@@ -448,7 +448,16 @@ You also need these domains:
 
 k3s includes Traefik, the Gateway API CRDs, and the `local-path` StorageClass, so these steps do not install them.
 
-1. If the Gateway API CRDs are missing, install them. Do not apply an older version over the CRDs that k3s includes, because Traefik then stops with `Required CRDs are missing`.
+1. Get the Gateway API CRDs ready.
+
+   On k3s, do not install them. k3s installs them with Traefik in the first minutes after it starts, and CRDs that you apply yourself stop that install with `Required CRDs are missing`. Wait for Traefik instead:
+
+   ```bash
+   until kubectl -n kube-system get deploy traefik >/dev/null 2>&1; do sleep 5; done
+   kubectl -n kube-system rollout status deploy/traefik --timeout=5m
+   ```
+
+   On any other cluster, install them if they are missing:
 
    ```bash
    kubectl get crd gateways.gateway.networking.k8s.io || \
