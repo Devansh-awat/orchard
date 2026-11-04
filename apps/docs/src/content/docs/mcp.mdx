@@ -1,0 +1,240 @@
+---
+title: Connect an MCP client
+description: Connect Claude, Cursor, VS Code or another Model Context Protocol client to Orchard with OAuth or an API token, and limit what it can do.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+To let an agent deploy apps, manage databases and read logs, connect it to the Orchard Model Context Protocol (MCP) server. The agent acts as your account. It can only see and change what you can.
+
+The server has two endpoints on its own hostname:
+
+| Path       | Provides                                                                              |
+| ---------- | ------------------------------------------------------------------------------------- |
+| `/`        | The full tool set, grouped into toolsets. For the list, refer to [MCP tools](/reference/mcp-tools/). |
+| `/compact` | Three tools that reach the whole API. For more information, refer to [Code mode for agents](/agents-code-mode/). |
+
+## Prerequisites
+
+- Your instance has an MCP endpoint. If it does not, refer to [Turn the MCP endpoint on or off](/operate/finishing-setup/#turn-the-mcp-endpoint-on-or-off).
+
+## Find your server URL
+
+The endpoint is at the root of `mcp.<your domain>`, such as `https://mcp.example.com/`. A request to `/mcp` on that host returns a `404` status.
+
+To get the URL for your instance:
+
+1. From the account menu, select **Account settings** > **MCP**.
+2. In **Tools**, select **Everything**, or select **Choose** and pick toolsets.
+3. In **Access**, select **Everything**, **No shell** or **Read only**.
+4. Copy the server URL.
+
+The page builds the URL from your choices. It also shows the setup for each client under **Connect a client**.
+
+## Connect with OAuth
+
+Use OAuth when a person is present to approve the connection.
+
+<Tabs>
+<TabItem label="Claude">
+
+1. In Claude, open **Settings** > **Connectors**.
+2. Select **Add custom connector**.
+3. Paste the server URL.
+4. Sign in to Orchard and approve the connection.
+
+</TabItem>
+<TabItem label="Claude Code">
+
+1. Run the following command:
+
+   ```bash
+   claude mcp add --transport http orchard 'https://mcp.example.com/'
+   ```
+
+2. In Claude Code, run `/mcp`.
+3. Sign in to Orchard and approve the connection.
+
+</TabItem>
+<TabItem label="Amp">
+
+1. Run the following command:
+
+   ```bash
+   amp mcp add orchard 'https://mcp.example.com/'
+   ```
+
+2. Sign in to Orchard and approve the connection when Amp asks.
+
+</TabItem>
+<TabItem label="VS Code">
+
+1. Add `.vscode/mcp.json` to your project:
+
+   ```json
+   {
+     "servers": {
+       "orchard": {
+         "type": "http",
+         "url": "https://mcp.example.com/"
+       }
+     }
+   }
+   ```
+
+2. Sign in to Orchard and approve the connection when VS Code asks.
+
+</TabItem>
+<TabItem label="Cursor">
+
+1. Add `.cursor/mcp.json` to a project, or `~/.cursor/mcp.json` for every project:
+
+   ```json
+   {
+     "mcpServers": {
+       "orchard": {
+         "url": "https://mcp.example.com/"
+       }
+     }
+   }
+   ```
+
+2. Sign in to Orchard and approve the connection when Cursor asks.
+
+</TabItem>
+</Tabs>
+
+### Review the consent screen
+
+Signing in does not grant access. After you sign in, the **Authorize MCP access** screen waits for you to select **Approve**.
+
+Before you approve, check the following:
+
+- The client name is reported by the client, so it can be false. The screen shows the host that receives access.
+- The screen shows the full redirect address. Anyone with access to that address can use your Orchard account.
+- **Also allow running commands inside containers** is off by default. A new connection gets `mcp:deploy` unless you turn this on.
+
+### OAuth scopes
+
+| Scope        | Allows                                                         |
+| ------------ | -------------------------------------------------------------- |
+| `mcp:read`   | Read-only tools, such as list, get, logs and metrics.          |
+| `mcp:deploy` | Everything in `mcp:read`, plus every change.                   |
+| `mcp:exec`   | Everything in `mcp:deploy`, plus `exec_in_pod`.                |
+
+The API enforces the scope on every call. Access tokens last one day and the client refreshes them. A connection that is unused for 30 days must sign in again.
+
+### Limit a connection with the URL
+
+Add `scope` to the server URL to lower what a connection can get. This parameter cannot raise access.
+
+```txt
+https://mcp.example.com/?scope=read
+https://mcp.example.com/?scope=deploy
+```
+
+## API token (non-interactive)
+
+Use an API token for CI, headless agents, or a client that does not support OAuth.
+
+1. Create a token at the access level that the agent needs:
+
+   ```bash
+   orchard auth token create --name ci-agent --scope deploy
+   ```
+
+   You can also create one at **Account settings** > **API tokens**. For more options, refer to [Manage API tokens](/account/tokens/).
+
+2. Send the token as a bearer token:
+
+   ```json
+   {
+     "mcpServers": {
+       "orchard": {
+         "type": "http",
+         "url": "https://mcp.example.com/",
+         "headers": {
+           "Authorization": "Bearer <API_TOKEN>"
+         }
+       }
+     }
+   }
+   ```
+
+   In Claude Code, run the following command instead:
+
+   ```bash
+   claude mcp add --transport http orchard https://mcp.example.com/ \
+     --header "Authorization: Bearer <API_TOKEN>"
+   ```
+
+The token access level limits every tool call. Orchard leaves tools that the token cannot run out of the tool list. Tokens last at most 90 days.
+
+## Choose toolsets
+
+Every connection lists all toolsets by default. Each listed tool uses context in the model before the model has done anything, so list only the toolsets that an agent needs.
+
+```txt
+https://mcp.example.com/?toolsets=databases,domains
+https://mcp.example.com/?toolsets=deployments,logs,greenhouse
+```
+
+The `core` toolset is always included. To include the tools from a [graft](/grafts/overview/), add its ID.
+
+| Toolset         | Tools                                                                     |
+| --------------- | ------------------------------------------------------------------------- |
+| `core`          | The current user, organizations, projects, `find` and deployment summaries. |
+| `deployments`   | Create, build, scale, restart, roll back, rollout status and compose stacks. |
+| `logs`          | Runtime and build logs, pods, killed containers, errors, metrics and exec. |
+| `env`           | Environment variables and environments.                                   |
+| `databases`     | Databases, credentials, backups, extensions and settings.                 |
+| `domains`       | Domains, services, DNS checks and domain protection.                      |
+| `jobs`          | Scheduled and on-demand jobs and their runs.                              |
+| `notifications` | Notification channels, rules and deliveries.                              |
+| `templates`     | Templates and template instances.                                         |
+| `dangerous`     | Every delete, and restoring a database backup.                            |
+
+## Tool behavior
+
+- **Hints.** Every tool has a title and the `readOnlyHint`, `destructiveHint`, `idempotentHint` and `openWorldHint` annotations. Tools that replace a whole list, such as `set_env_vars` and `update_deployment_volumes`, are marked destructive.
+- **Pagination.** List tools take `limit` and `cursor`, and return `{ items, total, nextCursor }`.
+- **Structured output.** Core read tools, such as `find` and `get_deployment`, return `structuredContent` with a declared `outputSchema`, and the same JSON as text.
+- **Limits.** The server rejects request bodies over 100 KB. Array inputs on tools accept at most 1,000 items.
+- **Secrets.** Reads return secrets masked. `get_database_connection`, `create_database_user`, `create_deploy_webhook_token`, `create_notification_channel`, `get_ingress_protection` and `exec_in_pod` can return secrets. They carry `_meta: { "orchard/sensitive": true }` so that a client can keep the output out of logs. These tools state this in their description.
+
+The server also publishes two read-only resources:
+
+| URI                                  | Contents                                       |
+| ------------------------------------ | ---------------------------------------------- |
+| `orchard://docs/template-yaml-guide` | The `leaf/v1` template format, with an example. |
+| `orchard://docs/llms.txt`            | The index of this documentation.               |
+
+## Troubleshoot a connection
+
+| Response                                            | Cause                                                                         |
+| --------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `401` on connect                                    | The token is unknown, expired or revoked, or the header is not `Bearer orch_...`. |
+| `404` on connect                                    | The URL includes `/mcp`. The endpoint is at the root of the host.             |
+| `Token lacks required scope: deploy`                | The token is valid, but its access level is too low for the tool. Create a token with a higher level. |
+| `503` and `MCP is disabled on this Orchard instance` | An operator turned off MCP for the instance.                                 |
+
+## Revoke access
+
+An OAuth connection is a session on your account. To end it, sign out of the session at **Account settings** > **Passkeys and devices**. For more information, refer to [Sign out of a device](/account/security/#sign-out-of-a-device).
+
+To end a token connection, revoke the token at **Account settings** > **API tokens**, or run `orchard auth token revoke <TOKEN_ID>`.
+
+## Turning it off
+
+An operator can stop the server from accepting connections:
+
+1. Go to **Instance admin** > **Configuration**.
+2. In **Model Context Protocol**, turn off **Accept MCP connections**.
+
+Orchard then refuses every request to the MCP server and hides the setup page in account settings. The setting is on by default.
+
+## Related resources
+
+- [MCP tools](/reference/mcp-tools/)
+- [Code mode for agents](/agents-code-mode/)
+- [Turn the MCP endpoint on or off](/operate/finishing-setup/#turn-the-mcp-endpoint-on-or-off)

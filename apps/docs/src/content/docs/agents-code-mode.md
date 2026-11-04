@@ -1,40 +1,36 @@
 ---
 title: Code mode for agents
-description: Reach the whole Orchard API from an agent without loading 160 tools, with the compact MCP or a script.
+description: Call the whole Orchard API from an agent with the orchard CLI or the compact MCP server, without loading every MCP tool into context.
 ---
 
-The full Orchard API is about 450 operations. Describing all of them to a model
-up front costs more context than most tasks have, and the
-[normal MCP](/mcp/) only covers the common ones even with every toolset on.
-There are two ways around that, and neither runs model-written code on Orchard.
+To reach any Orchard API operation from an agent, use the CLI or the compact MCP server. Describing every operation to a model uses more context than most tasks have, and the [normal MCP server](/mcp/) does not cover every operation.
 
-| You have                                       | Use                                                                   |
-| ---------------------------------------------- | --------------------------------------------------------------------- |
-| A shell (Claude Code, Codex, Cursor, CI)       | The CLI: `orchard api search`, `describe`, and calls by `operationId` |
-| No shell (claude.ai, ChatGPT, other chat apps) | The compact MCP at `/compact`                                         |
+| Your agent has                                     | Use                                                                   |
+| -------------------------------------------------- | --------------------------------------------------------------------- |
+| A shell, such as Claude Code, Codex, Cursor or CI  | The CLI: `orchard api search`, `describe`, and calls by `operationId`. |
+| No shell, such as claude.ai or another chat app    | The compact MCP server at `/compact`.                                 |
 
-Both read the same **agent spec**: a trimmed copy of the OpenAPI contract with
-every operation's `operationId`, parameters, request and response schemas,
-required scope, and two flags. `x-orchard-destructive` marks deletes and
-whole-list replaces. `x-orchard-sensitive` marks responses that contain a
-secret.
+Neither option runs model-written code on Orchard.
 
-## The spec endpoints
+## The agent spec
 
-Both are public and served with an `ETag`, so a client can revalidate cheaply:
+Both options read the agent spec, a trimmed copy of the OpenAPI contract. For each operation, the spec has the `operationId`, parameters, request and response schemas, required scope and two flags:
 
-```
-GET https://your-orchard/apiv1/agent-spec.json
-GET https://your-orchard/apiv1/openapi.json
+- `x-orchard-destructive` marks deletes, whole-list replacements and other operations that remove or overwrite state.
+- `x-orchard-sensitive` marks responses that contain a secret.
+
+Both spec files are public and served with an `ETag`:
+
+```txt
+GET https://orchard.example.com/apiv1/agent-spec.json
+GET https://orchard.example.com/apiv1/openapi.json
 ```
 
-`agent-spec.json` drops admin, setup, SCIM and sign-in routes, since a token
-cannot call them anyway. `openapi.json` is the complete document for other
-tooling.
+`agent-spec.json` leaves out admin, setup, SCIM, SSO and sign-in routes. `openapi.json` is the complete document.
 
-Operation ids are derived from the route: the path words, then a verb.
+Operation IDs come from the route: the path words, then a verb.
 
-| Route                           | operationId                |
+| Route                           | `operationId`              |
 | ------------------------------- | -------------------------- |
 | `GET /deployments`              | `deployments_list`         |
 | `GET /deployments/:id`          | `deployments_get`          |
@@ -43,35 +39,37 @@ Operation ids are derived from the route: the path words, then a verb.
 | `PUT /deployments/:id/env`      | `deployments_env_set`      |
 | `GET /databases/:id/connection` | `databases_connection_get` |
 
-## From a shell: write a script
+## Call the API from a shell
 
-The CLI caches the spec in `~/.orchard/agent-spec.json` and revalidates it at
-most once an hour, so search works offline once it has been fetched.
+The CLI caches the spec in `~/.orchard/agent-spec.json` and revalidates it at most once an hour. Search works offline after the first fetch.
 
-```sh
+```bash
 orchard api search "deployment logs"
 orchard api describe deployments_rollout_get
 orchard api deployments_rollout_get -p id=$DEPLOYMENT -q wait=1 -q timeout=120
 orchard api deployments_env_set -p id=$DEPLOYMENT -d @env.json --yes
 ```
 
-`-p` fills path parameters, `-q` adds query parameters, and `-d` takes JSON, a
-`@file`, or `-` for stdin. Destructive operations ask for confirmation, and off
-a terminal they need `--yes`. The old `orchard api GET /path` form still works.
+| Flag     | Purpose                                         |
+| -------- | ----------------------------------------------- |
+| `-p`     | Fills a path parameter.                         |
+| `-q`     | Adds a query parameter.                         |
+| `-d`     | Sends a JSON body, a `@file`, or `-` for stdin. |
+| `--yes`  | Confirms a destructive operation without a terminal. |
 
-Output is JSON whenever stdout is not a terminal, so calls chain with `jq`.
+`orchard api GET /path` also works, and does not use the spec. Output is JSON when stdout is not a terminal.
 
-Deploy, then wait for it to be live:
+### Deploy and wait until the app is live
 
-```sh
+```bash
 release=$(orchard api deployments_rebuild -p id=$APP | jq -r .releaseId)
 orchard api deployments_rollout_get -p id=$APP -q wait=1 -q timeout=120 -q release=$release \
   | jq '{phase, url, hint, error: .build.error}'
 ```
 
-Find every crashing deployment in a project and say why:
+### Find crashing deployments in a project
 
-```sh
+```bash
 orchard api projects_deployments_list -p id=$PROJECT | jq -r '.[].id' |
 while read -r id; do
   orchard api deployments_rollout_get -p id=$id |
@@ -80,9 +78,11 @@ while read -r id; do
 done
 ```
 
-Set one variable on every deployment in a project, keeping the rest:
+### Set one variable on every deployment in a project
 
-```sh
+Secret values read back as `null`. Sending `null` keeps the stored value, so this script does not need to know any secret.
+
+```bash
 for id in $(orchard api projects_deployments_list -p id=$PROJECT | jq -r '.[].id'); do
   orchard api deployments_get -p id=$id |
     jq '{env: ([.envVars[] | {key, value, secret}] | map(select(.key != "LOG_LEVEL"))
@@ -91,13 +91,10 @@ for id in $(orchard api projects_deployments_list -p id=$PROJECT | jq -r '.[].id
 done
 ```
 
-Secret values read back as `null`, and sending `null` keeps the stored value,
-so this round trip never needs to know a secret.
-
-The same thing in Node, using the token the CLI already uses:
+### Call the API from Node.js
 
 ```js
-const base = process.env.ORCHARD_API_URL ?? 'https://orchard.infra.hackclub.com';
+const base = process.env.ORCHARD_API_URL;
 const headers = { Authorization: `Bearer ${process.env.ORCHARD_API_TOKEN}` };
 const api = (path) => fetch(`${base}/apiv1${path}`, { headers }).then((r) => r.json());
 
@@ -109,43 +106,39 @@ for (const d of deployments) {
 }
 ```
 
-The API allows 600 requests a minute per token. Prefer `wait=1` on the rollout
-endpoint over polling it.
+The API allows 600 requests a minute for each token. Use `wait=1` on the rollout endpoint instead of polling.
 
-## Without a shell: the compact MCP
+## Connect the compact MCP server
 
-Point the client at `/compact` on the MCP host instead of `/`:
+Point the client at `/compact` on the MCP host:
 
-```sh
-claude mcp add --transport http orchard-compact https://mcp.your-orchard-domain/compact
+```bash
+claude mcp add --transport http orchard-compact https://mcp.example.com/compact
 ```
 
-Authentication is identical to the normal MCP: OAuth with `mcp:read`,
-`mcp:deploy` or `mcp:exec`, or an `orch_` token. The whole tool list is about
-800 tokens:
+Authentication works the same as the normal server. Use OAuth with `mcp:read`, `mcp:deploy` or `mcp:exec`, or an `orch_` token. For more information, refer to [Connect an MCP client](/mcp/).
 
-| Tool                 | Does                                                                        |
+The server has three tools:
+
+| Tool                 | Purpose                                                                     |
 | -------------------- | --------------------------------------------------------------------------- |
-| `search_api`         | Ranks operations against a few keywords; returns ids, paths and flags       |
-| `describe_operation` | The full contract for one operation, by `operationId` or `"GET /path"`      |
-| `call_api`           | Runs one operation as you: `pathParams`, `query`, `body`, optional `fields` |
+| `search_api`         | Finds operations by keyword. Returns IDs, paths and flags, best match first. |
+| `describe_operation` | Returns the full contract for one `operationId` or `"METHOD /path"`.        |
+| `call_api`           | Runs one operation as you, with `pathParams`, `query`, `body` and `fields`. |
 
-`call_api` has three guard rails:
+`call_api` has the following limits:
 
-- **Destructive operations** refuse to run unless `confirm` is set to the
-  operation's own id. The model has to ask, then repeat the id back.
-- **`fields`** keeps only the dotted paths you list (`["items.id","items.status"]`),
-  through arrays and objects, so a large response does not flood the context.
-- **Output over 24,000 characters** is cut off with a note telling the model to
-  narrow the request with `fields`.
+- **Destructive operations.** The call fails unless `confirm` is set to the `operationId`.
+- **`fields`.** The response keeps only the dotted paths that you list, such as `["items.id","items.status"]`.
+- **Output size.** Output over 24,000 characters is cut, with a note to narrow the request.
+- **Scope.** Orchard refuses operations that need a higher scope than the connection has. The error names the required scope.
 
-Results from operations flagged `x-orchard-sensitive` carry
-`_meta: { "orchard/sensitive": true }`. Operations that need a wider scope than
-the connection has are refused with a message naming the scope to reconnect
-with.
+Results from operations flagged `x-orchard-sensitive` carry `_meta: { "orchard/sensitive": true }`.
 
-The tradeoff against a code-execution sandbox is round trips: each call is a
-turn for the model. In exchange the whole API is reachable for a fixed, small
-context cost, and nothing the model writes ever executes on Orchard.
+Each call is one turn for the model. Scripts in a shell need fewer turns for work that chains several calls.
 
-The local stdio server serves the compact tools with `ORCHARD_MCP_MODE=compact`.
+## Related resources
+
+- [Connect an MCP client](/mcp/)
+- [CLI](/cli/)
+- [Docs for agents](/for-agents/)

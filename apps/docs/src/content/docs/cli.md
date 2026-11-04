@@ -1,80 +1,129 @@
 ---
 title: CLI
-description: Install the orchard CLI, sign in, and drive the platform from a terminal.
+description: Install the Orchard CLI, sign in to an instance, set a default project and script commands with JSON output.
 ---
 
-The CLI speaks the same API as the dashboard. Output is human-readable in a
-terminal and JSON when piped, so scripts get the same powers you do.
+The `orchard` command-line interface (CLI) calls the same API as the dashboard. Use it to deploy apps, read logs and manage databases from a terminal or a script.
 
-The complete command tree is generated from the binary itself:
-**[CLI reference](/reference/cli/)**.
+For every command and flag, refer to the [CLI reference](/reference/cli/). To run commands on the machine that hosts Orchard, refer to [Host commands](/operate/host-commands/).
 
-## Install
+## Install the CLI
+
+Install with Homebrew:
 
 ```bash
 brew install --cask leafdtk/tap/orchard-cli
 ```
 
-The cask is `orchard-cli` because Homebrew core already owns the name `orchard`
-for an unrelated project. The installed binary is still `orchard`.
+The cask is named `orchard-cli`. The installed command is `orchard`.
 
-Or, without Homebrew:
+To install without Homebrew, run the install script:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/LeafdTK/orchard-releases/main/install.sh | sh
 ```
 
-Or from source, if you have Go:
+To confirm the installation, run the following command:
 
 ```bash
-go install github.com/hackclub/orchard/cli@latest
+orchard version
 ```
 
 ## Sign in
 
-```bash
-orchard auth login
-```
-
-This opens a browser to authorise the CLI against your instance and stores the
-token locally.
-
-## Context
-
-Most commands act on an organization and an environment. Set them once instead of
-passing them every time:
+To sign in to a self-hosted instance, run the following command:
 
 ```bash
-orchard link
+orchard auth login --api-url https://orchard.example.com
 ```
 
-Any command takes `--org` and `--env` to override the saved context for a single
-invocation.
+The command opens a browser. After you approve the request, the CLI stores a token in `~/.orchard/config.json`.
 
-## Everyday use
+If you run `orchard auth login` without `--api-url`, the CLI asks which instance to use.
+
+To sign in on a machine with no browser, add `--no-browser`. The CLI prints a URL and the local port that it listens on. Forward that port to your own machine with `ssh -L` before you open the URL.
+
+To authenticate a script, set a token in the environment. A token in the environment overrides a stored token.
 
 ```bash
-orchard deploy list                 # what is running
-orchard deploy scale <app> 3        # change replicas
-orchard logs <app>                  # stream logs
-orchard env pull                    # write an app's variables into a local .env
-orchard db list                     # databases
-orchard job run <job>               # trigger a job
+export ORCHARD_API_URL=https://orchard.example.com
+export ORCHARD_API_TOKEN=<API_TOKEN>
 ```
 
-## Scripting
+To create a token, refer to [Manage API tokens](/account/tokens/).
 
-Everything supports `-o json`:
+## Choose an organization and project
+
+Most commands act on an organization, a project or an environment. Orchard uses the first value it finds, in the following order:
+
+1. The `--org`, `--project` and `--env` flags.
+2. The `ORCHARD_ORG`, `ORCHARD_PROJECT` and `ORCHARD_ENV` environment variables.
+3. The saved context from `orchard use`.
+
+To save a context, run the following commands:
 
 ```bash
-orchard deploy list -o json | jq -r '.[] | select(.status != "running") | .name'
+orchard use org my-org
+orchard use project my-app
+orchard context show
 ```
 
-`orchard commands -o json` dumps the entire command tree, including every flag,
-which is how this documentation's reference page is generated and a reasonable
-way for an agent to discover the surface.
+To link a directory to a project, run `orchard link --project my-app` in that directory. The command writes `.orchard/project.json`. Commands that you run from that directory then use the project.
 
-## Exit codes
+## Common commands
 
-Commands exit non-zero on failure, so `set -e` scripts behave. Do not wrap a step
-in `|| true` unless you genuinely do not care whether it worked.
+| Task                                      | Command                                 |
+| ----------------------------------------- | --------------------------------------- |
+| List deployments                          | `orchard deploy list`                   |
+| Scale a deployment                        | `orchard deploy scale <ID> 3`           |
+| Read or follow logs                       | `orchard logs <ID> -f`                  |
+| Build and deploy the current directory    | `orchard up`                            |
+| Write variables to `.env.orchard`         | `orchard env pull`                      |
+| List databases                            | `orchard db list`                       |
+| Run a job                                 | `orchard job run <ID>`                  |
+| Roll back a deployment                    | `orchard deploy rollback <ID> --yes`    |
+
+## Use the CLI in scripts
+
+The CLI writes JSON to stdout when stdout is not a terminal. To request JSON in a terminal, add `-o json`. Status and warnings go to stderr.
+
+```bash
+orchard deploy list -o json | jq -r '.[].name'
+```
+
+Destructive commands ask for confirmation in a terminal. Without a terminal, they fail with exit code `2` unless you pass `--yes`.
+
+To block until a deploy finishes, add `--wait`:
+
+```bash
+orchard deploy rebuild <ID> --wait --timeout 15m
+```
+
+To list every command and flag as JSON, run the following command:
+
+```bash
+orchard commands -o json
+```
+
+### Exit codes
+
+| Code  | Meaning                                                      |
+| ----- | ------------------------------------------------------------ |
+| `0`   | Success                                                      |
+| `1`   | General or network error, or no token configured             |
+| `2`   | Usage error, or a refused confirmation                       |
+| `3`   | Authentication rejected (HTTP 401)                           |
+| `4`   | Not found (HTTP 404)                                         |
+| `5`   | Request rejected (other HTTP 4xx, including a missing scope) |
+| `6`   | Rate limited (HTTP 429)                                      |
+| `7`   | Server error (HTTP 5xx)                                      |
+| `8`   | `--wait` reached its timeout                                 |
+| `9`   | The build failed during a wait                               |
+| `10`  | Pods are crash-looping or the rollout is unhealthy           |
+| `130` | Interrupted                                                  |
+
+## Related resources
+
+- [CLI reference](/reference/cli/)
+- [Code mode for agents](/agents-code-mode/)
+- [Manage API tokens](/account/tokens/)

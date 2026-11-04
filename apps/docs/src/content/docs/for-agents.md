@@ -1,95 +1,75 @@
 ---
 title: Docs for agents
-description: Markdown sources, llms.txt, and an MCP server for reading these docs.
+description: Read Orchard documentation as Markdown with .md URLs and llms.txt, and find the entry points that agents use to call the Orchard API.
 ---
 
-These docs are built to be read by machines as well as people. Nothing here
-requires scraping rendered HTML.
+To give an agent access to this documentation, use the Markdown sources. To let an agent operate an Orchard instance, use MCP or the API.
 
-## The page menu
+## Get a page as Markdown
 
-Every page has a **Copy page** button under its title, with a menu next to it:
+Add `.md` to a documentation URL:
 
-| Action                     | Does                                                     |
-| -------------------------- | -------------------------------------------------------- |
-| **Open in ChatGPT**        | Opens ChatGPT primed to read this page                   |
-| **Open in Claude**         | Opens Claude primed to read this page                    |
-| **Copy page**              | Copies the markdown source for pasting into an assistant |
-| **View as Markdown**       | Opens the raw source                                     |
-| **Connect with MCP**       | Copies the MCP config for any compatible client          |
-| **Connect to VS Code**     | One-click install through VS Code's MCP URL handler      |
-| **Connect to Claude Code** | Copies `claude mcp add ...`                              |
-| **Connect to Codex**       | Copies `codex mcp add ...`                               |
-| **Export as PDF**          | Prints the page, so your browser can save it as a PDF    |
-
-The two "open in" actions hand the assistant this page's `.md` URL rather than
-pasting its full text, so the conversation starts with a link it can re-read
-rather than a wall of pasted markdown.
-
-## Markdown for any page
-
-Append `.md` to any documentation URL:
-
-```
-https://docs.orchard.my/start/install/     → the page
-https://docs.orchard.my/start/install.md   → its markdown source
+```txt
+https://docs.orchard.my/start/install/      the page
+https://docs.orchard.my/start/install.md    its Markdown source
 ```
 
 The home page is at `/index.md`.
 
-## llms.txt
+Each page also has a **Copy page** button under its title, with a menu next to it:
 
-Two files follow the [llms.txt](https://llmstxt.org) convention:
+| Action               | Result                                       |
+| -------------------- | -------------------------------------------- |
+| **Open in ChatGPT**  | Opens ChatGPT and asks about this page.      |
+| **Open in Claude**   | Opens Claude and asks about this page.       |
+| **Copy page**        | Copies the page as Markdown.                 |
+| **View as Markdown** | Opens the Markdown source.                   |
+| **Export as PDF**    | Prints the page, so you can save it as a PDF. |
 
-| File                                                      | Contains                                                               |
-| --------------------------------------------------------- | ---------------------------------------------------------------------- |
-| [`/llms.txt`](https://docs.orchard.my/llms.txt)           | A compact index of every page, grouped by section, linking to markdown |
-| [`/llms-full.txt`](https://docs.orchard.my/llms-full.txt) | The entire documentation set as one markdown document                  |
+## Use llms.txt
 
-Use `llms.txt` to decide what to read. Use `llms-full.txt` when you want
-everything in one request and have the context budget for it.
+Two files follow the [llms.txt](https://llmstxt.org) convention.
 
-## What about MCP?
+| File                                                      | Contents                                                       |
+| --------------------------------------------------------- | -------------------------------------------------------------- |
+| [`/llms.txt`](https://docs.orchard.my/llms.txt)           | An index of every page, grouped by section, with Markdown links. |
+| [`/llms-full.txt`](https://docs.orchard.my/llms-full.txt) | The entire documentation set as one document.                  |
 
-There is no MCP server for these docs, deliberately.
+Use `llms.txt` to decide what to read. Use `llms-full.txt` to load everything in one request.
 
-An MCP server for a documentation site is only useful if it is **remote**: a URL
-any client can point at. A local one would have to run from a checkout of this
-repository, which means the only people who could use it are the people who
-already have the markdown on disk.
+## Operate an instance
 
-`llms.txt` and the `.md` URLs cover the same ground with nothing to install, and
-they work against the published site from anywhere.
+This documentation has no MCP server. The Orchard MCP server operates your instance rather than serving these pages. It runs at `mcp.<your domain>`. For setup, refer to [Connect an MCP client](/mcp/).
 
-## Orchard's own MCP is a different thing
+An agent can also use the following entry points. For more information, refer to [Code mode for agents](/agents-code-mode/).
 
-Orchard itself **does** have an MCP server, and it is remote. It exposes the
-platform rather than the docs: deploying, databases, logs, scaling. It answers on
-its own hostname, `mcp.<your orchard domain>`, and is documented under
-[MCP for agents](/mcp/).
+| Entry point                       | Purpose                                                  |
+| --------------------------------- | -------------------------------------------------------- |
+| `GET /apiv1/agent-spec.json`      | A trimmed spec of the operations that an agent can call. |
+| `GET /apiv1/openapi.json`         | The complete OpenAPI document.                           |
+| `orchard api search` and `describe` | The same spec from a shell, with calls by `operationId`. |
+| `https://mcp.<domain>/compact`    | The whole API through three MCP tools.                   |
 
-So: point your agent at Orchard's MCP to _operate_ the platform, and at
-`llms.txt` to _read_ about it.
+## Check whether a deploy worked
 
-## Driving the API directly
+Send the following request:
 
-An agent that needs more than the MCP tools cover has more entry points,
-all described in [Code mode for agents](/agents-code-mode/):
+```txt
+GET /apiv1/deployments/:id/rollout?wait=1
+```
 
-| Entry point                       | For                                                              |
-| --------------------------------- | ---------------------------------------------------------------- |
-| `GET /apiv1/agent-spec.json`      | A trimmed, searchable spec of every operation an agent can call  |
-| `GET /apiv1/openapi.json`         | The complete OpenAPI document                                    |
-| `orchard api search` / `describe` | The same spec from a shell, cached, with calls by `operationId`  |
-| `https://mcp.<domain>/compact`    | The whole API through three MCP tools, for clients with no shell |
+The response has the phase and, when the deploy is live, the URL. When the deploy fails, it has the build error or the crashing pod with a log tail.
 
-To find out whether a deploy worked, ask
-`GET /apiv1/deployments/:id/rollout?wait=1`. It answers with the phase, the
-URL when it is live, and the build error or crashing pod with a log tail when
-it is not.
+To roll back to the previous image, send `POST /apiv1/deployments/:id/rollback` with no history ID.
 
-Agents retry. Send an `Idempotency-Key` header on create, deploy, rebuild,
-restart, rollback, database create and job run calls, and a retry with the
-same key and body replays the first response for 24 hours instead of doing the
-work twice. `POST /apiv1/deployments/:id/rollback` with no history id rolls
-back to the previous image.
+## Retry requests safely
+
+To retry a request without doing the work twice, send an `Idempotency-Key` header. Orchard supports this header on create, deploy, rebuild, restart, rollback, database create and job run requests.
+
+A retry with the same key and body replays the first response for 24 hours. The same key with a different body returns a `422` status. A key that is still in progress returns a `409` status.
+
+## Related resources
+
+- [Connect an MCP client](/mcp/)
+- [Code mode for agents](/agents-code-mode/)
+- [CLI](/cli/)
