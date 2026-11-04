@@ -1497,6 +1497,10 @@ export class IngressService implements OnModuleInit {
       return this.createProjectRedirectIngress(project, rawHost, data, user, clerkId, userData);
     }
 
+    if (rawHost !== ingress.host) {
+      await this.access.assertHostnameAvailable(rawHost, project.id);
+    }
+
     const routes = Array.isArray(data.routes) && data.routes.length > 0 ? data.routes : null;
     if (!routes || routes.length === 0) {
       throw new BadRequestException('At least one route is required');
