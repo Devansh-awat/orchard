@@ -534,6 +534,7 @@ export function shellRoutes(r: Router, { store, hub, log }: MockContext) {
 		if (!o) return notFound();
 		return store.membersOf(o.id).map((m) => memberRow(store, m));
 	});
+	r.post('/organizations/:orgId/leave', () => ({ success: true }));
 	r.get('/organizations/:orgId/members/me', ({ params }) => {
 		const o = store.org(params.orgId);
 		const role = o ? store.myRole(o.id) : null;

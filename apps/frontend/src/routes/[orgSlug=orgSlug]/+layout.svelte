@@ -3,6 +3,7 @@
 	import { organizations, selectedOrganization, isSignedIn } from '$lib/stores';
 	import ErrorPage from '$lib/components/ErrorPage.svelte';
 	import EngineBanner from '$lib/components/EngineBanner.svelte';
+	import OrgSsoRequired from '$lib/components/org-settings/OrgSsoRequired.svelte';
 
 	let { children } = $props();
 
@@ -11,6 +12,9 @@
 	// who are not signed in, so the membership gate below has to sit this out.
 	const isLoginRoute = $derived($page.url.pathname === `/${orgSlug}/login`);
 	let notFound = $state(false);
+	const ssoRequiredOrg = $derived(
+		isLoginRoute ? null : $organizations.find((o) => o.slug === orgSlug && o.ssoRequired)
+	);
 
 	$effect(() => {
 		if (isLoginRoute) {
@@ -20,7 +24,9 @@
 		const orgs = $organizations;
 		const signedIn = $isSignedIn;
 		const org = orgs.find((o: { slug: string }) => o.slug === orgSlug);
-		if (org) {
+		if (org?.ssoRequired) {
+			notFound = false;
+		} else if (org) {
 			notFound = false;
 			if ($selectedOrganization?.id !== org.id) {
 				organizations.setSelected(org);
@@ -35,6 +41,8 @@
 
 {#if notFound}
 	<ErrorPage status={404} />
+{:else if ssoRequiredOrg}
+	<OrgSsoRequired organization={ssoRequiredOrg} />
 {:else if isLoginRoute}
 	{@render children()}
 {:else}

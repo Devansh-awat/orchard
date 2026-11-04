@@ -9,6 +9,7 @@ export interface Organization {
 	avatarUrl?: string;
 	plan?: string | null;
 	myRole?: 'owner' | 'admin' | 'member' | 'guest' | null;
+	ssoRequired?: boolean;
 	workspaces?: unknown[];
 	members?: unknown[];
 }
@@ -54,7 +55,7 @@ function initializeSelected(preferredSlug?: string | null) {
 	// otherwise the sidebar mounts with the stored org and visibly flips to
 	// the URL's org a frame later when [orgSlug]/+layout corrects it.
 	if (preferredSlug) {
-		const org = orgs.find((o) => o.slug === preferredSlug);
+		const org = orgs.find((o) => o.slug === preferredSlug && !o.ssoRequired);
 		if (org) {
 			setSelected(org);
 			return;
@@ -62,15 +63,16 @@ function initializeSelected(preferredSlug?: string | null) {
 	}
 
 	if (storedId) {
-		const org = orgs.find((o) => o.id === storedId);
+		const org = orgs.find((o) => o.id === storedId && !o.ssoRequired);
 		if (org) {
 			selectedOrg.set(org);
 			return;
 		}
 	}
 
-	if (orgs.length > 0) {
-		setSelected(orgs[0]);
+	const firstOpen = orgs.find((o) => !o.ssoRequired);
+	if (firstOpen) {
+		setSelected(firstOpen);
 	}
 }
 
@@ -79,12 +81,11 @@ function getDefaultSlug(): string | null {
 	const orgs = get(organizationsList);
 
 	if (storedId) {
-		const org = orgs.find((o) => o.id === storedId);
+		const org = orgs.find((o) => o.id === storedId && !o.ssoRequired);
 		if (org) return org.slug;
 	}
 
-	if (orgs.length > 0) return orgs[0].slug;
-	return null;
+	return orgs.find((o) => !o.ssoRequired)?.slug ?? orgs[0]?.slug ?? null;
 }
 
 export const organizations = {

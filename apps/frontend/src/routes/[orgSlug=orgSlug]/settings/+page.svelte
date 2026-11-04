@@ -8,9 +8,10 @@
 	import { env } from '$env/dynamic/public';
 	import AuditLogList from '$lib/components/AuditLogList.svelte';
 	import RegistryCredentials from '$lib/components/project/RegistryCredentials.svelte';
-	import { Alert, Skeleton } from '$lib/components/ui';
+	import { Alert, SectionCard, Skeleton } from '$lib/components/ui';
 	import SettingsShell from '$lib/components/patterns/SettingsShell.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import LeaveOrganizationButton from '$lib/components/org-settings/LeaveOrganizationButton.svelte';
 	import InviteLinkModal from '$lib/components/InviteLinkModal.svelte';
 	import {
 		OrgMembersTab,
@@ -1000,6 +1001,14 @@
 				onCancelInvitation={cancelInvitation}
 			/>
 			<InviteLinkModal bind:links={inviteLinks} reissued={reissuedLink} />
+			{#if currentUserRole && currentUserRole !== 'owner' && organization}
+				<SectionCard
+					title="Leave organization"
+					description="You lose access to its projects. Your account and your other organizations stay as they are."
+				>
+					<LeaveOrganizationButton {organization} />
+				</SectionCard>
+			{/if}
 		{/if}
 		{#if activeTab === 'registries' && canEditOrg}
 			{#key organization.id}<RegistryCredentials

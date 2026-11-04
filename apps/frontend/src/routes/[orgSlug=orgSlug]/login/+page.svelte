@@ -36,6 +36,8 @@
 	});
 
 	function describeError(code: string) {
+		if (code === 'sso_link_required')
+			return "To use this organization's single sign-on with an existing account, sign in to Orchard first, then open the organization.";
 		if (code === 'sso_failed') return "Your identity provider didn't finish signing you in.";
 		if (code === 'private_beta') return 'This Orchard instance is invite-only.';
 		if (code === 'signups_disabled') return "This Orchard instance isn't taking new accounts.";
