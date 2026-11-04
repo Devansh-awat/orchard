@@ -399,6 +399,36 @@ test('new pod with no room is a stuck deploy, a warning', () => {
   assert.equal(h.problems[0].tone, 'warning');
 });
 
+test('a deploy past its deadline still says it has no room', () => {
+  const h = health({
+    pods: [
+      ready('a'),
+      pod('n', {
+        revision: 'bbb',
+        phase: 'Pending',
+        scheduled: false,
+        createdAt: ago(700),
+        unschedulableSince: ago(698),
+        schedulingMessage: '0/1 nodes are available: 1 Insufficient memory.',
+        readySince: null,
+        containers: [{ name: 'web', state: 'waiting' }]
+      })
+    ],
+    replicas: 1,
+    rollout: {
+      ...rollout('failed', [
+        ['bbb', 2, 1, 0],
+        ['aaa', 1, 1, 1]
+      ]),
+      reason: 'ProgressDeadlineExceeded'
+    }
+  });
+  assert.equal(h.deploy, 'failed');
+  assert.equal(h.problems[0].problem, 'unschedulable');
+  assert.match(h.problems[0].title, /no room to start the new version/i);
+  assert.match(h.problems[0].hint, /No node has enough memory free/);
+});
+
 test('old crashing and new ready is a fix rolling out, no app alert', () => {
   const h = health({
     pods: [crashing('a'), crashing('b'), ready('n', 'bbb')],

@@ -522,7 +522,7 @@ export function computeHealth(input: HealthInput): Health {
   }
 
   if (deploy === 'failed' || deploy === 'stuck') {
-    const group = deploy === 'failed' ? freshFatal : freshSlow;
+    const group = freshFatal.length ? freshFatal : freshSlow;
     const [leadKind, leadPods] = groupByProblem(group)[0] ?? [null, []];
     const kind: PodProblem | null = leadKind ?? (quota ? 'quota' : null);
     const copy = kind ? PROBLEM_COPY[kind] : null;
