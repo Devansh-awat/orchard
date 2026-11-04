@@ -79,7 +79,7 @@ Available context fields: id, serviceName
         mountPath: /data
         pvcName: my-pvc
         storageSize: 1Gi              # default: 1Gi
-    exposePublic: true                # optional, creates external service
+    exposePublic: true                # optional, external Service (NodePort), does not remove a domain's login
 \`\`\`
 
 **ingress** — Creates a public domain route.

@@ -530,7 +530,7 @@ The user must point their domain's DNS to the cluster before creating the ingres
 
 \`ports\` is a full replace of that service's port list — a port you leave out is removed, so restate the ones you want to keep (read them off \`list_services\`). Pass \`domain: null\` to clear the internal domain. At least one of \`ports\` / \`domain\` is required.
 
-To make a service reachable from outside the cluster use \`set_service_exposure\`, not this.`,
+To change whether a service is external use \`set_service_exposure\`, not this.`,
       inputSchema: {
         deploymentId: z.guid().describe('The deployment UUID'),
         serviceId: z.guid().describe('The service UUID (from list_services)'),
@@ -573,11 +573,15 @@ To make a service reachable from outside the cluster use \`set_service_exposure\
     'set_service_exposure',
     {
       description:
-        'Flip a service between internal (ClusterIP, reachable only inside the cluster) and external (reachable from outside). This is the "make my app reachable" switch at the service layer; a custom domain on top of it is `create_ingress`.',
+        'Flip a service between internal (ClusterIP, reachable only inside the cluster) and external (a NodePort or LoadBalancer on the service). This changes the Service type only. It does not make a domain public: a domain keeps whatever login is on it, so a protected app still answers with a redirect to sign in. To open a domain to everyone use `set_ingress_protection` with mode `none`; to add a domain use `create_ingress`.',
       inputSchema: {
         deploymentId: z.guid().describe('The deployment UUID'),
         serviceId: z.guid().describe('The service UUID (from list_services)'),
-        exposePublic: z.boolean().describe('true to expose externally, false for cluster-internal')
+        exposePublic: z
+          .boolean()
+          .describe(
+            'true for an external Service (NodePort/LoadBalancer), false for cluster-internal. Domain login is separate, see set_ingress_protection'
+          )
       }
     },
     async ({ deploymentId, serviceId, exposePublic }) => {

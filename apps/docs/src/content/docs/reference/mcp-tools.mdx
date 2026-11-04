@@ -129,7 +129,7 @@ What to pass per registry:
 
 **toolset: domains · idempotent**
 
-Flip a service between internal (ClusterIP, reachable only inside the cluster) and external (reachable from outside). This is the "make my app reachable" switch at the service layer; a custom domain on top of it is `create_ingress`.
+Flip a service between internal (ClusterIP, reachable only inside the cluster) and external (a NodePort or LoadBalancer on the service). This changes the Service type only. It does not make a domain public: a domain keeps whatever login is on it, so a protected app still answers with a redirect to sign in. To open a domain to everyone use `set_ingress_protection` with mode `none`; to add a domain use `create_ingress`.
 
 ### `set_service_port_public`
 
@@ -230,7 +230,7 @@ Change the ports a service exposes, or the internal domain it answers on.
 
 `ports` is a full replace of that service's port list — a port you leave out is removed, so restate the ones you want to keep (read them off `list_services`). Pass `domain: null` to clear the internal domain. At least one of `ports` / `domain` is required.
 
-To make a service reachable from outside the cluster use `set_service_exposure`, not this.
+To change whether a service is external use `set_service_exposure`, not this.
 
 ## dangerous
 
