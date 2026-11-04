@@ -21,7 +21,7 @@ test('the message names the repository and where to install', () => {
 test('the message calls out select-repositories installs specifically', () => {
   const message = messageFor('orchard', 'LeafdTK', 'pomona');
   assert.match(message, /only select repositories/);
-  assert.match(message, /not added to it automatically/);
+  assert.match(message, /isn't added to it automatically/);
 });
 
 test('it says what still works, so nobody thinks the deployment is dead', () => {
@@ -33,5 +33,5 @@ test('it says what still works, so nobody thinks the deployment is dead', () => 
 test('an unconfigured app still produces a usable message', () => {
   const message = messageFor(null, 'o', 'r');
   assert.match(message, /GitHub App settings/);
-  assert.match(message, /auto-deploy cannot be enabled/);
+  assert.match(message, /auto-deploy can't be enabled/);
 });

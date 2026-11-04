@@ -102,7 +102,7 @@ test('the last project admin still cannot be demoted', async () => {
   const { service } = build('admin', 1);
   await assert.rejects(
     () => service.updateProjectMemberRole('project', 'membership', 'viewer', 'actor'),
-    /Cannot demote the last admin/
+    /can't demote the last admin/
   );
 });
 

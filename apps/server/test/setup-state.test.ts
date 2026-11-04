@@ -90,12 +90,12 @@ test('neither a passkey nor a password leaves the step outstanding', async () =>
 
 test('the passkey step cannot be skipped, even by calling the API directly', async () => {
   const { svc } = serviceWith({ orgs: 1 });
-  await assert.rejects(() => svc.skipSetupStep('u1', 'passkey'), /cannot be skipped/);
+  await assert.rejects(() => svc.skipSetupStep('u1', 'passkey'), /can't be skipped/);
 });
 
 test('an unknown step is rejected rather than silently recorded', async () => {
   const { svc } = serviceWith({ orgs: 1 });
-  await assert.rejects(() => svc.skipSetupStep('u1', 'backups'), /cannot be skipped/);
+  await assert.rejects(() => svc.skipSetupStep('u1', 'backups'), /can't be skipped/);
 });
 
 test('skipping everything skippable still leaves a usable instance', async () => {

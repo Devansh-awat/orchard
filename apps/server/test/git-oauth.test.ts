@@ -27,7 +27,7 @@ test('a token is refreshed shortly before it expires, never when it has no expir
 test('only forges the admin registered are offered, and the authorize url points at them', () => {
   const none = service({});
   assert.deepEqual(none.available(), { gitlab: null, bitbucket: null });
-  assert.throws(() => none.authorizeUrl('gitlab', 's'), /not set up/);
+  assert.throws(() => none.authorizeUrl('gitlab', 's'), /isn't set up/);
 
   const selfHosted = service({
     'git-gitlab': { baseUrl: 'https://git.example.com', clientId: 'abc', clientSecret: 'x' }

@@ -60,6 +60,6 @@ test('waiting on this deployment’s own build says so', () => {
 test('every queued message tells the caller not to retry', () => {
   for (const blocked of [true, false]) {
     const build = queuedBuild('run-1', { ...full, blockedByOwnBuild: blocked });
-    assert.match(build.message, /do not retry/i);
+    assert.match(build.message, /don't retry/i);
   }
 });

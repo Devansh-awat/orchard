@@ -231,7 +231,7 @@ test('the next batch waits for the last one, and an unhealthy cluster halts the 
   const waiting = await s.rolloutTick(new Date(inWindow.getTime() + 5 * 60_000));
   assert.deepEqual(waiting.patched, []);
   const halted = await s.rolloutTick(new Date(inWindow.getTime() + 11 * 60_000));
-  assert.match(halted.halted, /ns\/a was not healthy/);
+  assert.match(halted.halted, /ns\/a wasn't healthy/);
   assert.ok(settings.get(POSTGRES_IMAGE_ROLLOUT_HALT_KEY));
   const after = await s.rolloutTick(new Date(inWindow.getTime() + 12 * 60_000));
   assert.deepEqual(after.patched, []);

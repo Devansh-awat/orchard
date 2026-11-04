@@ -214,7 +214,7 @@ export class DatabaseRecoveryService {
   }
 
   private async assertRestorable(databaseId: string, target: OperationTarget) {
-    if (target.type === 'now') return;
+    if (target.type === 'now' || target.type === 'major') return;
     const backups = await this.prisma.databaseBackup.findMany({
       where: { databaseId },
       select: { barmanId: true, status: true, endLsn: true, completedAt: true, id: true }

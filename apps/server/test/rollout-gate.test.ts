@@ -240,7 +240,7 @@ test('waitForRollout gives up at the deadline with the last known counts', async
     timeoutMs: 5
   });
   assert.equal(verdict.state, 'failed');
-  assert.match(verdict.reason, /not ready after 1 minutes \(1\/2 ready/);
+  assert.match(verdict.reason, /weren't ready after 1 minutes \(1\/2 ready/);
 });
 
 test('a green that never comes up is removed and blue is never touched', async () => {
