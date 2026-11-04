@@ -44,6 +44,12 @@ Storage class, ingress class, registry, wildcard certificate domains and runtime
 classes are all values rather than literals, because they differ per cluster.
 Never hardcode them; set them in your values file.
 
+Changing `BASE_DOMAIN` does not move hosts that already exist. Each status page
+and org subdomain keeps its Ingress and certificate on the old domain, while the
+API reports the new one. To move one, clear its subdomain and set it again, which
+deletes the old Ingress and creates one on the new domain. Point DNS for the new
+domain at the cluster first so the certificate can issue.
+
 ## Secrets
 
 Secrets belong in Kubernetes secrets, referenced by the chart, not in a values
