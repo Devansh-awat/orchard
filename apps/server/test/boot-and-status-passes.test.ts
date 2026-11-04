@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { CnpgConsumer } from '../src/engine/consumers/cnpg.consumer';
+import { databaseStatusFor, DATABASE_DOWN_PATIENCE_MS } from '../src/kubernetes/cnpg-status';
 import { K8sNetworkService } from '../src/kubernetes/k8s-network.service';
 
 test('the boot repair of protection proxies waits for leadership', () => {
@@ -61,4 +62,32 @@ test('pod events keep using the cached answer for a cluster with no row', async 
   await consumer.mapPodRefs(pod);
   await consumer.mapPodRefs(pod);
   assert.equal(lookups(), 1);
+});
+
+const NOW = Date.parse('2026-11-03T12:00:00Z');
+const notReadyFor = (ms: number) => ({
+  exists: true,
+  hibernated: false,
+  readyInstances: 0,
+  conditions: [
+    { type: 'Ready', status: 'False', lastTransitionTime: new Date(NOW - ms).toISOString() }
+  ]
+});
+
+test('a ready database with no ready instance for a minute reads as down', () => {
+  assert.equal(databaseStatusFor('ready', notReadyFor(DATABASE_DOWN_PATIENCE_MS), NOW), 'down');
+});
+
+test('a short gap, such as a restart, does not flap the status', () => {
+  assert.equal(databaseStatusFor('ready', notReadyFor(5_000), NOW), 'ready');
+});
+
+test('only a ready database can read as down', () => {
+  const longDown = notReadyFor(DATABASE_DOWN_PATIENCE_MS * 5);
+  assert.equal(databaseStatusFor('restarting', longDown, NOW), 'restarting');
+  assert.equal(databaseStatusFor('ready', { ...longDown, readyInstances: 1 }, NOW), 'ready');
+  assert.equal(databaseStatusFor('ready', { ...longDown, hibernated: true }, NOW), 'ready');
+  assert.equal(databaseStatusFor('ready', { ...longDown, exists: false }, NOW), 'ready');
+  assert.equal(databaseStatusFor('ready', { ...longDown, conditions: [] }, NOW), 'ready');
+  assert.equal(databaseStatusFor('ready', null, NOW), 'ready');
 });

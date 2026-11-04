@@ -55,6 +55,18 @@ export function volumeUsage(stats: DbStats) {
 
 const STALE_TERMINATION_MS = 10 * 60 * 1000;
 
+export const DATABASE_DOWN_PATIENCE_MS = 60_000;
+
+export function databaseStatusFor(status: string, cluster: unknown, now = Date.now()): string {
+  if (status !== 'ready') return status;
+  const snapshot = cluster as Partial<ClusterSnapshot> | null | undefined;
+  if (!snapshot?.exists || snapshot.hibernated || (snapshot.readyInstances ?? 0) > 0) return status;
+  const condition = (snapshot.conditions ?? []).find((c: any) => c?.type === 'Ready') as any;
+  if (condition?.status !== 'False') return status;
+  const since = Date.parse(condition.lastTransitionTime ?? '');
+  return Number.isFinite(since) && now - since >= DATABASE_DOWN_PATIENCE_MS ? 'down' : status;
+}
+
 export function clusterSnapshot(cluster: any): ClusterSnapshot {
   const status = cluster?.status ?? {};
   const instances: number = status.instances || cluster?.spec?.instances || 1;

@@ -73,7 +73,12 @@ import {
 import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { signalEnvironmentEnvChanged } from '../env/env-change-signal';
-import type { ClusterSnapshot, DbStats, MirroredDbPod } from '../kubernetes/cnpg-status';
+import {
+  databaseStatusFor,
+  type ClusterSnapshot,
+  type DbStats,
+  type MirroredDbPod
+} from '../kubernetes/cnpg-status';
 
 /** The org fields that locate a managed database's backups in R2. */
 export type OrgR2 = {
@@ -1101,6 +1106,7 @@ export class DatabasesService {
 
     const result: any = {
       ...database,
+      status: databaseStatusFor(database.status, database.clusterStatus),
       connectionString: `postgresql://${database.dbUser}:${MASKED_PASSWORD}@${database.host}:${database.port}/${database.dbName}`,
       internalHost: `${database.host}:${database.port}`,
       endpoints,
@@ -1210,7 +1216,7 @@ export class DatabasesService {
       liveStatus = await this.k8sCnpg.getPostgresDatabaseStatus(database.dbName);
     }
 
-    return { liveStatus, pods, status };
+    return { liveStatus, pods, status: databaseStatusFor(status, database.clusterStatus) };
   }
 
   async getDatabaseProvisioning(databaseId: string, userId?: string) {
@@ -1425,7 +1431,7 @@ export class DatabasesService {
                 .catch(() => undefined);
               return { ...d, status: 'ready', liveStatus: ls };
             }
-            return { ...d, liveStatus: ls };
+            return { ...d, status: databaseStatusFor(d.status, d.clusterStatus), liveStatus: ls };
           } catch {
             return d;
           }

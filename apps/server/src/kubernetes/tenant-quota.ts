@@ -93,9 +93,7 @@ interface ContainerResources {
   limits?: Record<string, unknown> | null;
 }
 
-function workloadPods(
-  workload: MirroredWorkload
-): {
+function workloadPods(workload: MirroredWorkload): {
   containers: ContainerResources[];
   copies: number;
   database: any | null;

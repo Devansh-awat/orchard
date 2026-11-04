@@ -60,6 +60,7 @@ export function resourceStatus(status?: string, buildStatus?: string): StatusMet
 		case 'failed':
 		case 'error':
 		case 'crashing':
+		case 'down':
 			return meta('error', capitalize(s));
 		case 'deleting':
 			return meta('error', 'Deleting', true);

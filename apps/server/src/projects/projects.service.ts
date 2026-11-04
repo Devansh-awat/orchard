@@ -13,6 +13,7 @@ import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
 import { K8sNamespaceService } from '../kubernetes/k8s-namespace.service';
 import { K8sCnpgService } from '../kubernetes/k8s-cnpg.service';
+import { databaseStatusFor } from '../kubernetes/cnpg-status';
 import { R2ProxyService } from '../kubernetes/r2-proxy.service';
 import { UsersService } from '../users/users.service';
 import { OrganizationsService } from '../organizations/organizations.service';
@@ -2222,13 +2223,14 @@ export class ProjectsService {
     const projectFilter = await this.access.buildProjectAccessFilter(userId, orgId);
     if (!projectFilter) return [];
 
-    return this.prisma.database.findMany({
+    const rows = await this.prisma.database.findMany({
       where: { project: projectFilter },
       select: {
         id: true,
         name: true,
         dbName: true,
         status: true,
+        clusterStatus: true,
         mode: true,
         createdAt: true,
         updatedAt: true,
@@ -2254,6 +2256,10 @@ export class ProjectsService {
       },
       orderBy: { updatedAt: 'desc' }
     });
+    return rows.map(({ clusterStatus, ...row }) => ({
+      ...row,
+      status: databaseStatusFor(row.status, clusterStatus)
+    }));
   }
 
   /**
