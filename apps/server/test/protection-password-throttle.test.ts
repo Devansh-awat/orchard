@@ -67,7 +67,7 @@ const offlineThrottle = {
 function buildController(correctPassword: string) {
   const rateLimit = new RateLimitService(fakePrisma() as any, offlineThrottle as any);
   const protection = {
-    validateReturnTo: async () => {},
+    validateReturnTo: async (_id: string, returnTo: string) => returnTo,
     verifyPassword: async (_id: string, pw: string) => pw === correctPassword,
     generateExchangeToken: async () => 'token'
   };

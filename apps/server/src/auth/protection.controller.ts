@@ -77,14 +77,14 @@ export class ProtectionController {
       throw new BadRequestException('ingressId and returnTo required');
     }
 
-    await this.protection.validateReturnTo(body.ingressId, body.returnTo);
+    const returnTo = await this.protection.validateReturnTo(body.ingressId, body.returnTo);
 
     const hasAccess = await this.protection.checkUserAccess(body.ingressId, req.user.sub);
     if (!hasAccess) throw new ForbiddenException("You don't have access to this app");
 
     const token = await this.protection.generateExchangeToken(body.ingressId, req.user.sub);
-    const separator = body.returnTo.includes('?') ? '&' : '?';
-    return { redirectUrl: `${body.returnTo}${separator}__orchard_token=${token}` };
+    const separator = returnTo.includes('?') ? '&' : '?';
+    return { redirectUrl: `${returnTo}${separator}__orchard_token=${token}` };
   }
 
   @Public()
@@ -97,7 +97,7 @@ export class ProtectionController {
       throw new BadRequestException('ingressId, password, and returnTo required');
     }
 
-    await this.protection.validateReturnTo(body.ingressId, body.returnTo);
+    const returnTo = await this.protection.validateReturnTo(body.ingressId, body.returnTo);
 
     // One guess costs an attacker one bcrypt compare, which is nowhere near
     // expensive enough to stand alone: the per-IP bucket throttles a single
@@ -122,7 +122,7 @@ export class ProtectionController {
     await this.rateLimit.resetRateLimit(ipKey, 'ip', 'protection_password');
 
     const token = await this.protection.generateExchangeToken(body.ingressId, 'password');
-    const separator = body.returnTo.includes('?') ? '&' : '?';
-    return { redirectUrl: `${body.returnTo}${separator}__orchard_token=${token}` };
+    const separator = returnTo.includes('?') ? '&' : '?';
+    return { redirectUrl: `${returnTo}${separator}__orchard_token=${token}` };
   }
 }

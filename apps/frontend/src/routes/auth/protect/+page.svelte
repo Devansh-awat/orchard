@@ -66,6 +66,11 @@
 		}
 	});
 
+	function followRedirect(target: string) {
+		const url = new URL(target);
+		if (url.protocol === 'https:' || url.protocol === 'http:') window.location.href = url.href;
+	}
+
 	async function attemptExchange() {
 		if (exchanging) return;
 		exchanging = true;
@@ -91,7 +96,7 @@
 			}
 
 			const data = await res.json();
-			window.location.href = data.redirectUrl;
+			followRedirect(data.redirectUrl);
 		} catch {
 			error = "Couldn't sign you in. Try again.";
 			exchanging = false;
@@ -130,7 +135,7 @@
 			}
 
 			const data = await res.json();
-			window.location.href = data.redirectUrl;
+			followRedirect(data.redirectUrl);
 		} catch {
 			passwordError = "Couldn't sign you in. Try again.";
 			exchanging = false;

@@ -11,6 +11,7 @@ import { AuthorizationService } from './authorization.service';
 import { getClientIp, getRawClientIp } from './client-ip';
 import { RedisThrottleService, type ThrottleWindow } from './redis-throttle.service';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
+import { ingressPublicUrl } from '../projects/projects.utils';
 
 export interface ProtectionDecision {
   allow: boolean;
@@ -33,6 +34,19 @@ interface CachedIngress {
   upstreamHost: string | null;
   upstreamPort: number | null;
   expiresAt: number;
+}
+
+// A path two parsers could resolve differently never gets the bypass: the
+// proxy forwards the raw URL, so what matches here has to be what the app sees.
+export function pathIsAmbiguous(originalUrl: string): boolean {
+  const raw = (originalUrl || '/').split('?')[0];
+  if (/[\\#]|%2e|%2f|%5c/i.test(raw)) return true;
+  try {
+    decodeURIComponent(raw);
+    return false;
+  } catch {
+    return true;
+  }
 }
 
 export function normalizeRequestPath(originalUrl: string): string {
@@ -223,7 +237,10 @@ export class ProtectionService {
     // row disappears between the two lookups.
     if (!ingress) return { allow: false, status: 404 };
 
-    if (pathMatchesBypass(normalizeRequestPath(originalPath), ingress.protectionBypassPaths)) {
+    if (
+      !pathIsAmbiguous(originalPath) &&
+      pathMatchesBypass(normalizeRequestPath(originalPath), ingress.protectionBypassPaths)
+    ) {
       return { allow: true };
     }
 
@@ -481,10 +498,10 @@ export class ProtectionService {
     };
   }
 
-  async validateReturnTo(ingressId: string, returnTo: string): Promise<void> {
+  async validateReturnTo(ingressId: string, returnTo: string): Promise<string> {
     const ingress = await this.prisma.ingress.findUnique({
       where: { id: ingressId },
-      select: { host: true }
+      select: { host: true, path: true, tlsSecretName: true, entrypoints: true }
     });
     if (!ingress) throw new NotFoundException('Domain not found');
 
@@ -494,9 +511,10 @@ export class ProtectionService {
     } catch {
       throw new BadRequestException('Invalid returnTo URL');
     }
-    if (url.hostname !== ingress.host) {
+    if (url.origin !== new URL(ingressPublicUrl(ingress)).origin) {
       throw new BadRequestException("returnTo doesn't match the domain");
     }
+    return `${url.origin}${url.pathname}${url.search}`;
   }
 
   async handleProxyRequest(req: Request, res: Response): Promise<boolean> {
@@ -579,10 +597,9 @@ export class ProtectionService {
       socket.destroy();
     };
 
-    let allowed = pathMatchesBypass(
-      normalizeRequestPath(req.url || '/'),
-      ingress.protectionBypassPaths
-    );
+    let allowed =
+      !pathIsAmbiguous(req.url || '/') &&
+      pathMatchesBypass(normalizeRequestPath(req.url || '/'), ingress.protectionBypassPaths);
     const bypassHeader = req.headers['x-orchard-protection-bypass']?.toString();
     if (!allowed && bypassHeader && ingress.protectionBypassSecret) {
       const a = Buffer.from(bypassHeader);
