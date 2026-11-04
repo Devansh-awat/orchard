@@ -332,3 +332,105 @@ test('the update policy defaults to manual and rejects anything else', () => {
     box.cleanup();
   }
 });
+
+test('derives the app and MCP domains without asking', () => {
+  const box = sandbox();
+  try {
+    const collect = (domain: string, extra = '') =>
+      box.run(`
+        ASSUME_YES=true INGRESS_MODE=public PUBLIC_IP=203.0.113.10
+        ORCHARD_DOMAIN=${domain} ORCHARD_APP_DOMAIN= ORCHARD_MCP_DOMAIN=
+        ${extra}
+        collect_domains
+        printf 'apps=%s mcp=%s\\n' "$ORCHARD_APP_DOMAIN" "$ORCHARD_MCP_DOMAIN"
+      `);
+    const first = collect('orchard.example.com');
+    assert.match(first, /apps=apps\.example\.com mcp=mcp\.apps\.example\.com/);
+    assert.match(first, /A {2}\*\.apps\.example\.com/);
+    assert.ok(!/A {2}mcp\./.test(first), 'the wildcard already covers the MCP');
+
+    assert.match(collect('example.com'), /apps=apps\.example\.com/);
+    assert.match(collect('example.co.uk'), /apps=apps\.example\.co\.uk/);
+    assert.match(collect('orchard.example.co.uk'), /apps=apps\.example\.co\.uk/);
+
+    const moved = collect('orchard.example.com', 'ORCHARD_MCP_DOMAIN=agents.other.dev');
+    assert.match(
+      moved,
+      /A {2}agents\.other\.dev/,
+      'a name outside the wildcard needs its own record'
+    );
+
+    const nested = collect('orchard.example.com', 'ORCHARD_MCP_DOMAIN=a.b.apps.example.com');
+    assert.match(nested, /A {2}a\.b\.apps\.example\.com/, 'a wildcard covers one label only');
+
+    const off = collect('orchard.example.com', 'ORCHARD_MCP=false');
+    assert.ok(
+      !/mcp\.apps/.test(
+        off
+          .split('\n')
+          .filter((l) => l.includes(' A '))
+          .join()
+      )
+    );
+  } finally {
+    box.cleanup();
+  }
+});
+
+test('the Lets Encrypt issuer is valid with and without an email', () => {
+  const box = sandbox();
+  try {
+    const issuer = (setup: string) => {
+      const log = join(box.dir, 'applied');
+      writeFileSync(
+        join(box.dir, 'kubectl'),
+        `#!/bin/sh\ncase "$1" in\n  apply) cat > "${log}" ;;\n  get) printf '%s' "$LIVE_EMAIL" ;;\nesac\nexit 0\n`
+      );
+      box.run(`CERT_ISSUER=letsencrypt; ${setup}; install_cluster_issuer`);
+      return readFileSync(log, 'utf8');
+    };
+    assert.ok(!issuer('ORCHARD_ACME_EMAIL=').includes('email:'));
+    assert.match(issuer('ORCHARD_ACME_EMAIL=me@example.com'), /\n {4}email: me@example\.com\n/);
+    assert.match(
+      issuer('export LIVE_EMAIL=kept@example.com; ORCHARD_ACME_EMAIL='),
+      /email: kept@example\.com/,
+      'a re-run keeps the address the account was registered with'
+    );
+  } finally {
+    box.cleanup();
+  }
+});
+
+for (const [mode, setup, mcpHost] of [
+  ['public', 'USE_TLS=true CERT_ISSUER=letsencrypt', 'mcp.apps.example.com'],
+  ['tunnel', 'USE_TLS=false CERT_ISSUER=', 'mcp.apps.example.com'],
+  ['lan', 'USE_TLS=false CERT_ISSUER=selfsigned', 'mcp.apps.example.com']
+] as const) {
+  for (const mcp of ['true', 'false']) {
+    test(
+      `the chart renders the ${mode} values with the MCP ${mcp === 'true' ? 'on' : 'off'}`,
+      { skip: !has('yq', '--version') || !has('helm', 'version') },
+      () => {
+        const box = sandbox();
+        try {
+          const values = join(box.state, 'values.yaml');
+          box.run(`mkdir -p "${box.state}"
+            ${setup} INGRESS_MODE=${mode} ORCHARD_MCP=${mcp} ORCHARD_MCP_DOMAIN=${mcpHost}
+            write_values`);
+          const out = execFileSync(
+            'helm',
+            ['template', 'orchard', chart, '--namespace', 'orchard', '-f', values],
+            { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }
+          );
+          if (mcp === 'true') {
+            assert.ok(out.includes(`Host(\`${mcpHost}\`)`), 'the MCP gets a route on its host');
+          } else {
+            assert.ok(!out.includes(`Host(\`${mcpHost}\`)`), 'no route with the MCP off');
+          }
+        } finally {
+          box.cleanup();
+        }
+      }
+    );
+  }
+}

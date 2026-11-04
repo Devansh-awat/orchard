@@ -411,9 +411,8 @@ prompt_hint() {
     printf '      %sRun it with your terminal attached:%s\n' "$C_GREY" "$C_RESET"
     # shellcheck disable=SC2016  # the $( ) is part of the command we are printing
     printf '        sudo bash -c "$(curl -fsSL %s)"\n' "$INSTALL_URL"
-    printf '      %sor pass the answers as flags. --yes takes the default for the rest,%s\n' "$C_GREY" "$C_RESET"
-    printf '      %sbut a public install still needs a domain and a contact email:%s\n' "$C_GREY" "$C_RESET"
-    printf '        curl -fsSL %s | sudo bash -s -- --yes --mode public --domain orchard.example.com --email you@example.com\n' "$INSTALL_URL"
+    printf '      %sor pass the answers as flags. --yes takes the default for the rest:%s\n' "$C_GREY" "$C_RESET"
+    printf '        curl -fsSL %s | sudo bash -s -- --yes --mode public --domain orchard.example.com\n' "$INSTALL_URL"
     printf '\n'
   } >&2
 }
@@ -747,7 +746,7 @@ collect_domains() {
     # generated hostnames stay on sslip.io.
     ORCHARD_DOMAIN=${ORCHARD_DOMAIN:-${PRIMARY_IP:-localhost}}
     ORCHARD_APP_DOMAIN=${ORCHARD_APP_DOMAIN:-apps.${PRIMARY_IP//./-}.sslip.io}
-    ORCHARD_MCP_DOMAIN=${ORCHARD_MCP_DOMAIN:-mcp.${PRIMARY_IP//./-}.sslip.io}
+    ORCHARD_MCP_DOMAIN=${ORCHARD_MCP_DOMAIN:-mcp.$ORCHARD_APP_DOMAIN}
     USE_TLS=false
     CERT_ISSUER=selfsigned
     INGRESS_EXTRA_HOSTS=$(lan_alt_hosts)
@@ -763,36 +762,30 @@ collect_domains() {
   [ -n "$ORCHARD_DOMAIN" ] || ORCHARD_DOMAIN=$(ask "Domain for the Orchard UI (e.g. orchard.example.com)")
   [ -n "$ORCHARD_DOMAIN" ] || die "a domain is required for $INGRESS_MODE mode"
 
-  local base=${ORCHARD_DOMAIN#*.}
-  [ -n "$ORCHARD_APP_DOMAIN" ] || ORCHARD_APP_DOMAIN=$(ask "Wildcard domain for deployed apps" "apps.$base")
-  # Not asked for: the MCP is on by default and one more prompt to skip past
-  # buys nothing. --mcp-domain moves it, --mcp false removes it.
-  [ -n "$ORCHARD_MCP_DOMAIN" ] || ORCHARD_MCP_DOMAIN="mcp.$base"
+  [ -n "$ORCHARD_APP_DOMAIN" ] || ORCHARD_APP_DOMAIN="apps.$(parent_domain "$ORCHARD_DOMAIN")"
+  [ -n "$ORCHARD_MCP_DOMAIN" ] || ORCHARD_MCP_DOMAIN="mcp.$ORCHARD_APP_DOMAIN"
+  info "apps:   *.$ORCHARD_APP_DOMAIN"
+  if [ "$ORCHARD_MCP" = true ]; then info "agents: $ORCHARD_MCP_DOMAIN"; fi
 
   USE_TLS=true
   CERT_ISSUER=letsencrypt
 
-  if [ "$INGRESS_MODE" = public ]; then
-    [ -n "$ORCHARD_ACME_EMAIL" ] || ORCHARD_ACME_EMAIL=$(ask "Email for Let's Encrypt notices")
-    [ -n "$ORCHARD_ACME_EMAIL" ] || die "Let's Encrypt needs a contact email"
+  local names=("$ORCHARD_DOMAIN" "*.$ORCHARD_APP_DOMAIN")
+  if [ "$ORCHARD_MCP" = true ] && ! covered_by_app_wildcard "$ORCHARD_MCP_DOMAIN"; then
+    names+=("$ORCHARD_MCP_DOMAIN")
+  fi
+  local width=0 name
+  for name in "${names[@]}"; do
+    if [ ${#name} -gt "$width" ]; then width=${#name}; fi
+  done
 
+  if [ "$INGRESS_MODE" = public ]; then
     echo
     bold "Point these records at ${PUBLIC_IP:-this box} before continuing:"
-    local records=("$ORCHARD_DOMAIN" "*.$ORCHARD_APP_DOMAIN")
-    if [ "$ORCHARD_MCP" = true ]; then records+=("$ORCHARD_MCP_DOMAIN"); fi
-    local width=0 record
-    for record in "${records[@]}"; do
-      if [ ${#record} -gt "$width" ]; then width=${#record}; fi
+    for name in "${names[@]}"; do
+      printf '  A  %-*s -> %s\n' "$width" "$name" "${PUBLIC_IP:-<this box>}"
     done
-    for record in "${records[@]}"; do
-      printf '  A  %-*s -> %s\n' "$width" "$record" "${PUBLIC_IP:-<this box>}"
-    done
-    if [ "$ORCHARD_MCP" = true ]; then
-      note "the last one is where AI agents connect. Skip it with --mcp false,"
-      note "or move it with --mcp-domain. You will be asked about it either way."
-    fi
     wait_for_dns "$ORCHARD_DOMAIN"
-    confirm_mcp_dns
   else
     USE_TLS=false
     CERT_ISSUER=""
@@ -800,115 +793,27 @@ collect_domains() {
     [ -n "$ORCHARD_TUNNEL_TOKEN" ] || die "a tunnel token is required for tunnel mode"
     echo
     bold "In the Cloudflare dashboard, route these hostnames to this tunnel:"
-    local hosts=("$ORCHARD_DOMAIN" "*.$ORCHARD_APP_DOMAIN")
-    if [ "$ORCHARD_MCP" = true ]; then hosts+=("$ORCHARD_MCP_DOMAIN"); fi
-    local width=0 host
-    for host in "${hosts[@]}"; do
-      if [ ${#host} -gt "$width" ]; then width=${#host}; fi
-    done
-    for host in "${hosts[@]}"; do
-      printf '  %-*s -> http://traefik.traefik.svc.cluster.local:80\n' "$width" "$host"
+    for name in "${names[@]}"; do
+      printf '  %-*s -> http://traefik.traefik.svc.cluster.local:80\n' "$width" "$name"
     done
   fi
 }
 
-# Not every base image ships getent, and "we could not check" must not be
-# treated as "it is broken": this answer decides whether the MCP is deployed
-# at all, so a missing tool would silently drop it.
-host_resolves() {
-  local host=$1
-  if command -v getent >/dev/null 2>&1; then
-    if getent ahostsv4 "$host" >/dev/null 2>&1; then return 0; fi
-    return 1
-  fi
-  if command -v dig >/dev/null 2>&1; then
-    if [ -n "$(dig +short A "$host" 2>/dev/null)" ]; then return 0; fi
-    return 1
-  fi
-  if command -v host >/dev/null 2>&1; then
-    if host -t A "$host" >/dev/null 2>&1; then return 0; fi
-    return 1
-  fi
+parent_domain() {
+  local host=$1 rest=${1#*.}
+  case "$rest" in *.*) ;; *) printf '%s' "$host"; return ;; esac
+  case "$host" in
+    *.*.*.*) ;;
+    *.co.??|*.com.??|*.org.??|*.net.??|*.ac.??|*.gov.??|*.edu.??) printf '%s' "$host"; return ;;
+  esac
+  printf '%s' "$rest"
+}
+
+covered_by_app_wildcard() {
+  local label=${1%".$ORCHARD_APP_DOMAIN"}
+  [ "$label" != "$1" ] || return 1
+  case "$label" in *.*) return 1 ;; esac
   return 0
-}
-
-# The MCP is the one hostname that is derived rather than asked for, so it is
-# also the one an operator is most likely to have missed. A hostname that does
-# not resolve is not a visible outage: its certificate is issued over HTTP-01,
-# so cert-manager retries against a name that is not there and the endpoint
-# stays quietly broken. Better to sort it out here, while someone is watching.
-confirm_mcp_dns() {
-  [ "$ORCHARD_MCP" = true ] || return 0
-  [ "$INGRESS_MODE" = public ] || return 0
-  if host_resolves "$ORCHARD_MCP_DOMAIN"; then
-    info "$ORCHARD_MCP_DOMAIN resolves"
-    return 0
-  fi
-
-  echo
-  warn "$ORCHARD_MCP_DOMAIN does not resolve yet."
-  note "That is where AI agents connect over MCP. Its certificate is issued"
-  note "over HTTP-01, so it cannot be obtained until the name points here."
-  echo
-
-  if [ "$ASSUME_YES" = true ]; then
-    warn "leaving the MCP off. Add the record, then run:"
-    note "  sudo orchardctl mcp enable --apply"
-    ORCHARD_MCP=false
-    return 0
-  fi
-
-  # Bounded rather than `while true`: anyone who wants more attempts has
-  # `orchardctl mcp enable` afterwards.
-  local attempt=0
-  while [ $attempt -lt 6 ]; do
-    attempt=$((attempt + 1))
-    bold "What would you like to do?"
-    echo "  1) I have added the record now, check again"
-    echo "  2) use a different hostname"
-    echo "  3) skip the MCP for now, I will turn it on later"
-    case "$(ask 'Choose' 1)" in
-      1)
-        if host_resolves "$ORCHARD_MCP_DOMAIN"; then
-          info "$ORCHARD_MCP_DOMAIN resolves"
-          return 0
-        fi
-        warn "still nothing. DNS can take a few minutes to propagate."
-        ;;
-      2)
-        local candidate
-        candidate=$(ask "Hostname for the MCP endpoint" "$ORCHARD_MCP_DOMAIN")
-        case "$candidate" in
-          ''|*' '*|*.*) ;;
-          *) warn "that does not look like a hostname"; echo; continue ;;
-        esac
-        if [ -z "$candidate" ]; then
-          warn "that is not a hostname"
-          echo
-          continue
-        fi
-        ORCHARD_MCP_DOMAIN=$candidate
-        if host_resolves "$ORCHARD_MCP_DOMAIN"; then
-          info "$ORCHARD_MCP_DOMAIN resolves"
-          return 0
-        fi
-        warn "$ORCHARD_MCP_DOMAIN does not resolve either."
-        note "Point it at ${PUBLIC_IP:-this box} with an A record."
-        ;;
-      3)
-        warn "leaving the MCP off. Add the record, then run:"
-        note "  sudo orchardctl mcp enable --apply"
-        ORCHARD_MCP=false
-        return 0
-        ;;
-      *) warn "pick 1, 2 or 3" ;;
-    esac
-    echo
-  done
-
-  warn "leaving the MCP off. Add the record, then run:"
-  note "  sudo orchardctl mcp enable --apply"
-  ORCHARD_MCP=false
 }
 
 wait_for_dns() {
@@ -1125,6 +1030,15 @@ EOF
     return
   fi
 
+  local email=$ORCHARD_ACME_EMAIL email_line=''
+  if [ -z "$email" ]; then
+    email=$(kubectl get clusterissuer letsencrypt -o jsonpath='{.spec.acme.email}' 2>/dev/null || true)
+  fi
+  if [ -n "$email" ]; then
+    email_line="
+    email: $email"
+  fi
+
   kubectl apply -f - >/dev/null <<EOF
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
@@ -1132,8 +1046,7 @@ metadata:
   name: letsencrypt
 spec:
   acme:
-    server: https://acme-v02.api.letsencrypt.org/directory
-    email: $ORCHARD_ACME_EMAIL
+    server: https://acme-v02.api.letsencrypt.org/directory$email_line
     privateKeySecretRef:
       name: letsencrypt-account-key
     solvers:
