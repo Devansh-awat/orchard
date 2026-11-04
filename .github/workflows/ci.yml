@@ -254,6 +254,8 @@ jobs:
         run: pnpm --filter server test:build-timing
       - name: Superadmin password test
         run: pnpm --filter server test:superadmin-password
+      - name: Resource limits tests
+        run: pnpm --filter server exec tsx --test test/resource-limits.test.ts test/quota-zero.test.ts
       - name: Passkey tests
         run: pnpm --filter server exec tsx --test test/passkey.test.ts
       - name: Project member role tests
