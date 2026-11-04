@@ -805,14 +805,16 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
    * are memoised briefly. The key includes the caller's token: two users with
    * different access to the same repo must never share an answer. In-flight
    * promises are cached too, which collapses the duplicate request the form
-   * fires when the branch list confirms the default branch.
+   * fires when the branch list confirms the default branch. A null token reads
+   * the repo anonymously, which is all a public repo needs.
    */
   async detectRepoConfig(
-    accessToken: string,
+    token: string | null,
     owner: string,
     repo: string,
     branch?: string
   ): Promise<RepoConfigDetection> {
+    const accessToken = token ?? '';
     const key = [
       crypto.createHash('sha256').update(accessToken).digest('hex').slice(0, 16),
       owner,

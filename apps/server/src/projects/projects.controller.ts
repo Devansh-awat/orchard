@@ -41,6 +41,7 @@ import { GitHubService } from '../github/github.service';
 import { UsersService } from '../users/users.service';
 import { RolloutPinInterceptor } from './rollout.controller';
 import { autoUrlChoice } from './auto-url';
+import { detectedBuildFor } from './detected-build';
 
 @Auth()
 @Controller('projects')
@@ -59,10 +60,11 @@ export class ProjectsController {
 
   /**
    * One-shot import: repo in, live app out. Detects the build config, creates
-   * a project named after the repo, kicks off the first build with auto-deploy
-   * on, and attaches a protected platform URL. Partial failures surface the
-   * ids that were created so the client can resume instead of retrying from
-   * scratch.
+   * a project named after the repo, kicks off the first build, and attaches a
+   * protected platform URL. Auto-deploy comes on when the GitHub App covers the
+   * repo; without it a public repo still imports and is rebuilt by hand. Partial
+   * failures surface the ids that were created so the client can resume instead
+   * of retrying from scratch.
    */
   @Post('import')
   async importFromGitHub(
@@ -107,7 +109,12 @@ export class ProjectsController {
     if (!user) {
       throw new BadRequestException('User not found');
     }
-    const token = await this.githubService.getValidUserToken(user.id);
+    const token = await this.githubService.resolveReadAccessToken(user, parsed.owner, parsed.repo);
+    if (token === null) {
+      throw new ForbiddenException(
+        'You do not have access to this repository on GitHub. Connect your GitHub account or check the repository URL.'
+      );
+    }
 
     const branch =
       String(body.branch || '').trim() ||
@@ -124,13 +131,14 @@ export class ProjectsController {
       userData
     );
 
-    const buildType = overrides.buildType ?? det.buildType;
-    const dockerfilePath = overrides.dockerfilePath ?? det.dockerfilePath ?? undefined;
+    const detected = detectedBuildFor(det, { port: overrides.port, env: overrides.env });
+    const buildType = overrides.buildType ?? detected.buildType;
+    const dockerfilePath = overrides.dockerfilePath ?? detected.dockerfilePath;
     const ports = overrides.port ? [overrides.port] : det.ports;
 
     const envByKey = new Map<string, { key: string; value: string; secret?: boolean }>();
-    for (const e of det.env) envByKey.set(e.key, e);
-    for (const e of overrides.env ?? []) envByKey.set(e.key, e);
+    for (const e of det.buildType === 'dockerfile' ? det.env : []) envByKey.set(e.key, e);
+    for (const e of detected.env) envByKey.set(e.key, e);
 
     let deployment;
     try {
@@ -152,7 +160,12 @@ export class ProjectsController {
           env: Array.from(envByKey.values()),
           cpuRequestMilli: overrides.cpuRequestMilli ?? null,
           memoryRequestBytes: overrides.memoryRequestBytes ?? null,
-          autoDeployEnabled: true,
+          rootDirectory: detected.rootDirectory,
+          framework: detected.framework,
+          installCommand: detected.installCommand,
+          buildCommand: detected.buildCommand,
+          startCommand: detected.startCommand,
+          outputDirectory: detected.outputDirectory,
           autoDeployBranch: branch
         },
         clerkId,
@@ -191,6 +204,7 @@ export class ProjectsController {
       branch,
       buildType,
       framework: det.framework,
+      autoDeployEnabled: Boolean(deployment.autoDeployEnabled),
       url: liveUrl
     };
   }
@@ -929,16 +943,20 @@ export class ProjectsController {
       lastName: req.user.lastName || req.user.name?.split(' ').slice(1).join(' '),
       imageUrl: req.user.imageUrl
     };
+    const clerkId = req.user.externalAuthId || req.user.sub;
+    const request = await this.withDetectedBuild(body, clerkId, userData);
     const result = await this.deployments.createDeploymentFromGitHub(
       id,
-      body,
-      req.user.externalAuthId || req.user.sub,
+      request,
+      clerkId,
       userData
     );
 
     // HTTP-shaped: an explicitly declared port, or a port the server detected
     // from the Dockerfile EXPOSE (anything other than the 80 fallback).
-    const declaredPort = Boolean(body.port || (Array.isArray(body.ports) && body.ports.length > 0));
+    const declaredPort = Boolean(
+      request.port || (Array.isArray(request.ports) && request.ports.length > 0)
+    );
     const exposeDetected =
       !declaredPort &&
       (result?.services ?? []).some((s: any) =>
@@ -961,6 +979,75 @@ export class ProjectsController {
       }
     }
     return result;
+  }
+
+  /**
+   * A request that names a GitHub repo and no build gets what the create form
+   * would have suggested. A request that names a build type or a Dockerfile keeps
+   * it, and a repo that can't be read falls through to the service, which owns
+   * the access check and its error.
+   */
+  private async withDetectedBuild<
+    T extends {
+      gitConnectionId?: string | null;
+      repoUrl?: string;
+      githubRepo?: string;
+      branch?: string;
+      buildType?: 'dockerfile' | 'railpack';
+      dockerfilePath?: string;
+      port?: number;
+      ports?: unknown[];
+      env?: { key: string; value: string }[];
+      rootDirectory?: string | null;
+      framework?: string | null;
+      installCommand?: string | null;
+      buildCommand?: string | null;
+      startCommand?: string | null;
+      outputDirectory?: string | null;
+    }
+  >(
+    body: T,
+    clerkId: string,
+    userData: Parameters<UsersService['findOrCreateByClerkId']>[1]
+  ): Promise<T> {
+    if (body.gitConnectionId) return body;
+    const rawRepo = String(body.repoUrl || body.githubRepo || '').trim();
+    if (!rawRepo) return body;
+    const needsBuild = !body.buildType && !String(body.dockerfilePath || '').trim();
+    if (!needsBuild && body.branch) return body;
+
+    const repoUrl = rawRepo.startsWith('http') ? rawRepo : `https://github.com/${rawRepo}`;
+    const parsed = this.githubService.parseRepoUrl(repoUrl.replace(/\.git$/, ''));
+    if (!parsed) return body;
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) return body;
+    const token = await this.githubService.resolveReadAccessToken(user, parsed.owner, parsed.repo);
+    if (token === null) return body;
+
+    const branch =
+      body.branch || (await this.githubService.getDefaultBranch(token, parsed.owner, parsed.repo));
+    if (!needsBuild) return { ...body, branch };
+
+    const det = await this.githubService.detectRepoConfig(token, parsed.owner, parsed.repo, branch);
+    const detected = detectedBuildFor(det, {
+      port: body.port,
+      declaresPorts: Array.isArray(body.ports) && body.ports.length > 0,
+      env: body.env
+    });
+    return {
+      ...body,
+      branch,
+      buildType: detected.buildType,
+      dockerfilePath: detected.dockerfilePath,
+      port: detected.port,
+      env: detected.env,
+      rootDirectory: body.rootDirectory ?? detected.rootDirectory,
+      framework: body.framework ?? detected.framework,
+      installCommand: body.installCommand ?? detected.installCommand,
+      buildCommand: body.buildCommand ?? detected.buildCommand,
+      startCommand: body.startCommand ?? detected.startCommand,
+      outputDirectory: body.outputDirectory ?? detected.outputDirectory
+    };
   }
 }
 

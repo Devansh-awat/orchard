@@ -7237,10 +7237,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     if (!hasExplicitPort && repoUrl && dockerfilePath) {
       try {
         const repoInfo = this.githubService.parseRepoUrl(repoUrl);
-        const userToken = repoInfo ? await this.githubService.getValidUserToken(user.id) : null;
-        if (repoInfo && userToken) {
+        if (repoInfo) {
+          const userToken = await this.githubService.getValidUserToken(user.id);
           const dockerfileContent = await this.githubService.getFileContent(
-            userToken,
+            userToken ?? '',
             repoInfo.owner,
             repoInfo.repo,
             dockerfilePath,
