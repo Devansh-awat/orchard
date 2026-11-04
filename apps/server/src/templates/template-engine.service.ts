@@ -200,7 +200,7 @@ export class TemplateEngineService {
                 } else {
                   throw new BadRequestException(
                     def.validation.message ||
-                      `Parameter "${def.displayName}" does not match the required format`
+                      `Parameter "${def.displayName}" doesn't match the required format`
                   );
                 }
               }

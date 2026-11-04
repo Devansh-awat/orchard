@@ -152,7 +152,7 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
     if (!base) return;
     if (!this.lease.canCoordinate) {
       this.logger.warn(
-        'TEMPLATE_REGISTRY_URL is set but this process is not a member of the cluster; skipping registry sync'
+        "TEMPLATE_REGISTRY_URL is set but this process isn't a member of the cluster; skipping registry sync"
       );
       return;
     }
@@ -410,7 +410,7 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
     const existing = await this.prisma.template.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Template not found');
     if (existing.isBuiltIn) {
-      throw new BadRequestException('Built-in templates cannot be modified');
+      throw new BadRequestException("You can't change built-in templates");
     }
 
     const parsed = this.templateEngine.parseTemplate(yamlContent);
@@ -450,7 +450,7 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
     const existing = await this.prisma.template.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Template not found');
     if (existing.isBuiltIn) {
-      throw new BadRequestException('Built-in templates cannot be deleted');
+      throw new BadRequestException("You can't delete built-in templates");
     }
 
     const instances = await this.prisma.templateInstance.count({
@@ -458,7 +458,7 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
     });
     if (instances > 0) {
       throw new BadRequestException(
-        `Cannot delete template with ${instances} active instance(s). Delete instances first.`
+        `This template has ${instances} active ${instances === 1 ? 'instance' : 'instances'}. Delete ${instances === 1 ? 'it' : 'them'} first.`
       );
     }
 

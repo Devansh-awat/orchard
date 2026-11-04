@@ -28,7 +28,7 @@ export class SecretCryptoService {
         [
           '',
           '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!',
-          '!! SECRETS_ENCRYPTION_KEY is not set.',
+          "!! SECRETS_ENCRYPTION_KEY isn't set.",
           '!! Secret env vars, shared vars, job step secrets and database passwords',
           '!! are being stored in PLAINTEXT in Postgres.',
           '!! Set SECRETS_ENCRYPTION_KEY to a long random string and restart; the',
@@ -50,7 +50,7 @@ export class SecretCryptoService {
   encrypt(plaintext: string): string {
     if (!this.key) {
       throw new Error(
-        'SECRETS_ENCRYPTION_KEY is not configured; refusing to store secret env values in plaintext'
+        "SECRETS_ENCRYPTION_KEY isn't configured; refusing to store secret env values in plaintext"
       );
     }
     const iv = randomBytes(16);
@@ -63,7 +63,7 @@ export class SecretCryptoService {
   decrypt(value: string): string {
     if (!this.isEncrypted(value)) return value;
     if (!this.key) {
-      throw new Error('SECRETS_ENCRYPTION_KEY is not configured; cannot decrypt secret env value');
+      throw new Error("SECRETS_ENCRYPTION_KEY isn't configured; can't decrypt secret env value");
     }
     const [ivHex, tagHex, ctHex] = value.slice(PREFIX.length).split(':');
     const decipher = createDecipheriv('aes-256-gcm', this.key, Buffer.from(ivHex, 'hex'));
@@ -111,7 +111,7 @@ export class SecretCryptoService {
 
   private userKey(userId: string): Buffer {
     if (!this.key) {
-      throw new Error('SECRETS_ENCRYPTION_KEY is not configured; refusing to store user context');
+      throw new Error("SECRETS_ENCRYPTION_KEY isn't configured; refusing to store user context");
     }
     return Buffer.from(
       hkdfSync('sha256', this.key, Buffer.from(userId, 'utf8'), 'orchard-user-context', 32)

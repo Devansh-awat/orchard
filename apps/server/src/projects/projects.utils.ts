@@ -312,6 +312,6 @@ export function desiredWildcardTls(
 export function assertDeleteConfirmation(expected: string, provided: unknown, noun: string): void {
   if (typeof provided === 'string' && provided.trim() === expected.trim()) return;
   throw new BadRequestException(
-    `Type the ${noun} name "${expected}" to confirm. This deletion is permanent and cannot be undone.`
+    `Type the ${noun} name "${expected}" to confirm. You can't undo this.`
   );
 }

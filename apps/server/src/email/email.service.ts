@@ -147,7 +147,7 @@ export class EmailService {
       });
       return { ok: true };
     } catch (error: any) {
-      return { ok: false, message: error?.message || 'The test email could not be sent.' };
+      return { ok: false, message: error?.message || "Couldn't send the test email." };
     } finally {
       transport.close();
     }

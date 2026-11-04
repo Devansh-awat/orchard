@@ -98,7 +98,7 @@ Build failed: could not schedule build pod after 300s - 0/1 nodes are available:
 ### No backup storage
 
 ```txt
-No backup storage: configure it for this organization, or set a backup bucket on the instance
+No backup storage. Set it up for this organization, or set a backup bucket on the instance.
 ```
 
 **Cause:** The instance has no backup bucket. This occurs on a Helm install without object storage.

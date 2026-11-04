@@ -437,7 +437,7 @@ export class K8sWorkloadService {
       if (!cleanContainerName && containers.length > 1) {
         throw new BadRequestException({
           error: 'Container name required',
-          message: `Pod "${cleanPodName}" has multiple containers. Please specify one.`,
+          message: `Pod "${cleanPodName}" has multiple containers. Specify one.`,
           availableContainers: containers
         });
       }
@@ -858,7 +858,7 @@ export class K8sWorkloadService {
           // hostPath mounts trivially escape tenant isolation by exposing the
           // node filesystem (docker.sock, kubelet creds, /etc/kubernetes). Hard
           // refuse at the lowest layer, regardless of caller role.
-          throw new Error('hostPath volumes are not permitted');
+          throw new Error("hostPath volumes aren't permitted");
         }
 
         if (vol.type === 'pvc') {
@@ -1649,7 +1649,7 @@ export class K8sWorkloadService {
       };
 
       if (vol.type === 'hostPath') {
-        throw new Error('hostPath volumes are not permitted');
+        throw new Error("hostPath volumes aren't permitted");
       }
 
       if (vol.type === 'pvc') {
@@ -1913,7 +1913,7 @@ export class K8sWorkloadService {
         const referenced = containerEnv.filter((envVar) => envVar?.name && envVar.valueFrom);
         if (referenced.length > 0) {
           this.logger.warn(
-            `[Sync] ${deploymentName}: ${referenced.length} env var(s) resolve through valueFrom and were not imported: ${referenced
+            `[Sync] ${deploymentName}: ${referenced.length} env var(s) resolve through valueFrom and weren't imported: ${referenced
               .map((envVar) => envVar.name)
               .join(', ')}`
           );
@@ -2748,7 +2748,7 @@ export class K8sWorkloadService {
       if (Date.now() >= deadline) {
         return {
           state: 'failed',
-          reason: `pods were not ready after ${Math.max(1, Math.round(timeoutMs / 60_000))} minutes (${verdict.detail})`
+          reason: `pods weren't ready after ${Math.max(1, Math.round(timeoutMs / 60_000))} minutes (${verdict.detail})`
         };
       }
       await new Promise((resolve) => setTimeout(resolve, pollMs));
@@ -2870,7 +2870,7 @@ export class K8sWorkloadService {
     });
     if (verdict.state !== 'ready') {
       const reason = verdict.state === 'failed' ? verdict.reason : 'not ready';
-      log(`Blue has not settled (${reason}); green keeps serving until it does.`);
+      log(`Blue hasn't settled (${reason}); green keeps serving until it does.`);
       return false;
     }
     await this.pointServiceAt(name, namespace, 'blue');
@@ -2912,7 +2912,7 @@ export class K8sWorkloadService {
     const service = (await coreApi.readNamespacedService(name, namespace)).body;
     if (!selectorPointsAt(service, name, slot)) {
       throw new Error(
-        `Service ${namespace}/${name} does not select the ${slot} pods after the write`
+        `Service ${namespace}/${name} doesn't select the ${slot} pods after the write`
       );
     }
   }

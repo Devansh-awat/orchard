@@ -20,7 +20,7 @@ export class TailscaleService {
   async linkAccount(userId: string, authKey: string): Promise<{ tailnet: string }> {
     if (!authKey.startsWith('tskey-auth-')) {
       throw new BadRequestException(
-        'Invalid key. Please provide a Tailscale auth key (starts with tskey-auth-).'
+        'Invalid key. Enter a Tailscale auth key (starts with tskey-auth-).'
       );
     }
 
@@ -117,7 +117,7 @@ export class TailscaleService {
 
     if (!connection) {
       throw new BadRequestException(
-        'Tailscale account not connected. Connect it in your user settings first.'
+        'Tailscale account not connected. Connect it in Account settings first.'
       );
     }
 
@@ -136,7 +136,7 @@ export class TailscaleService {
     }
 
     if (deployment.tailscaleExposed) {
-      throw new BadRequestException('Deployment is already exposed to Tailscale');
+      throw new BadRequestException('This app is already on Tailscale');
     }
 
     const hostname = `${deployment.name}-${deployment.namespace}`;
@@ -178,7 +178,7 @@ export class TailscaleService {
     }
 
     if (!deployment.tailscaleExposed) {
-      throw new BadRequestException('Deployment is not exposed to Tailscale');
+      throw new BadRequestException("This app isn't on Tailscale");
     }
 
     await this.k8sWorkload.removeTailscaleSidecar(deployment.namespace, deployment.name);

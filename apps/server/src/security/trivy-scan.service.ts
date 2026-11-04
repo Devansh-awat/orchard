@@ -76,9 +76,9 @@ export class TrivyScanService {
   }
 
   unavailableReason(): string | null {
-    if (!this.serverUrl) return 'TRIVY_SERVER_URL is not set. Turn on trivy.enabled in the chart.';
-    if (!this.internalUrl) return 'ORCHARD_INTERNAL_URL is not set, so scans cannot report back.';
-    if (!this.kubernetes.kc) return 'Orchard cannot reach Kubernetes to run scan jobs.';
+    if (!this.serverUrl) return "TRIVY_SERVER_URL isn't set. Turn on trivy.enabled in the chart.";
+    if (!this.internalUrl) return "ORCHARD_INTERNAL_URL isn't set, so scans can't report back.";
+    if (!this.kubernetes.kc) return "Orchard can't reach Kubernetes to run scan jobs.";
     return null;
   }
 
@@ -178,7 +178,7 @@ export class TrivyScanService {
       return scanFromRow(updated, this.staleMs, Date.now());
     } catch (err: any) {
       const detail = err?.body?.message || err?.message || 'unknown error';
-      this.logger.warn(`image scan ${row.id} could not start: ${detail}`);
+      this.logger.warn(`image scan ${row.id} couldn't start: ${detail}`);
       if (created) await this.abandon(jobName);
       const failed = await this.prisma.imageScan.update({
         where: { id: row.id },
@@ -186,7 +186,7 @@ export class TrivyScanService {
           status: 'failed',
           jobName,
           tokenHash: null,
-          error: `Could not start the scan job in ${this.namespace}: ${detail}`.slice(0, 1000),
+          error: `Couldn't start the scan job in ${this.namespace}: ${detail}`.slice(0, 1000),
           finishedAt: new Date()
         }
       });
@@ -209,7 +209,7 @@ export class TrivyScanService {
         );
     } catch (err: any) {
       this.logger.warn(
-        `could not remove scan job ${jobName}: ${err?.body?.message || err?.message}`
+        `couldn't remove scan job ${jobName}: ${err?.body?.message || err?.message}`
       );
     }
   }
@@ -218,10 +218,10 @@ export class TrivyScanService {
     const row = await this.prisma.imageScan.findUnique({ where: { id } });
     if (!row || row.scanner !== 'trivy') throw new NotFoundException('Scan not found');
     if (row.status !== 'running' || !row.tokenHash || !token) {
-      throw new ForbiddenException('This scan is not accepting results');
+      throw new ForbiddenException("This scan isn't accepting results");
     }
     if (!sameHash(hashToken(token), row.tokenHash)) {
-      throw new ForbiddenException('This scan is not accepting results');
+      throw new ForbiddenException("This scan isn't accepting results");
     }
     const error = (body as { error?: unknown } | null)?.error;
     if (typeof error === 'string') {

@@ -102,7 +102,7 @@ export class ProjectsController {
     repoUrl = repoUrl.replace(/\.git$/, '');
     const parsed = this.githubService.parseRepoUrl(repoUrl);
     if (!parsed) {
-      throw new BadRequestException('Could not parse repository URL');
+      throw new BadRequestException("Couldn't read the repository URL");
     }
 
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
@@ -112,7 +112,7 @@ export class ProjectsController {
     const token = await this.githubService.resolveReadAccessToken(user, parsed.owner, parsed.repo);
     if (token === null) {
       throw new ForbiddenException(
-        'You do not have access to this repository on GitHub. Connect your GitHub account or check the repository URL.'
+        "You don't have access to this repository on GitHub. Connect your GitHub account or check the repository URL."
       );
     }
 
@@ -338,10 +338,10 @@ export class ProjectsController {
     // against any user who views the project.
     const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!allowed.includes(file.mimetype)) {
-      throw new BadRequestException('Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed');
+      throw new BadRequestException('Use a JPEG, PNG, GIF or WebP image');
     }
     if (file.size > 2 * 1024 * 1024) {
-      throw new BadRequestException('File size exceeds 2MB limit');
+      throw new BadRequestException('Use a file under 2 MB');
     }
     return this.projectsService.uploadProjectAsset(
       id,
@@ -369,10 +369,10 @@ export class ProjectsController {
     if (!file) throw new BadRequestException('No file provided');
     const allowed = ['image/jpeg', 'image/png', 'image/webp'];
     if (!allowed.includes(file.mimetype)) {
-      throw new BadRequestException('Invalid file type. Only JPEG, PNG, and WebP are allowed');
+      throw new BadRequestException('Use a JPEG, PNG or WebP image');
     }
     if (file.size > 8 * 1024 * 1024) {
-      throw new BadRequestException('File size exceeds 8MB limit');
+      throw new BadRequestException('Use a file under 8 MB');
     }
     return this.projectsService.uploadProjectAsset(
       id,
@@ -1219,7 +1219,7 @@ export class DeploymentsController {
       imageUrl: req.user.imageUrl
     });
     if (!access.canEdit) {
-      throw new ForbiddenException('Your role does not allow you to change the deploy strategy');
+      throw new ForbiddenException("Your role doesn't allow you to change the deploy strategy");
     }
     return this.deployments.updateDeploymentStrategy(id, body.strategy, user.id);
   }
@@ -1238,7 +1238,7 @@ export class DeploymentsController {
       imageUrl: req.user.imageUrl
     });
     if (!access.canEdit) {
-      throw new ForbiddenException('Your role does not allow you to change the disruption budget');
+      throw new ForbiddenException("Your role doesn't allow you to change the disruption budget");
     }
     return this.deployments.updateDeploymentDisruptionBudget(id, body.minAvailable, user.id);
   }
@@ -1269,7 +1269,7 @@ export class DeploymentsController {
       imageUrl: req.user.imageUrl
     });
     if (!access.canEdit) {
-      throw new ForbiddenException('Your role does not allow you to change the image pull policy');
+      throw new ForbiddenException("Your role doesn't allow you to change the image pull policy");
     }
     return this.deployments.updateDeploymentPullPolicy(id, body.imagePullPolicy ?? null, user.id);
   }
@@ -1289,7 +1289,7 @@ export class DeploymentsController {
       imageUrl: req.user.imageUrl
     });
     if (!access.canEdit) {
-      throw new ForbiddenException('Your role does not allow you to change the deployment image');
+      throw new ForbiddenException("Your role doesn't allow you to change the app image");
     }
     return this.deployments.updateDeploymentImage(id, body.image, user.id);
   }
@@ -1308,7 +1308,7 @@ export class DeploymentsController {
       imageUrl: req.user.imageUrl
     });
     if (!access.canEdit) {
-      throw new ForbiddenException('Your role does not allow you to update deployment resources');
+      throw new ForbiddenException("Your role doesn't allow you to update app resources");
     }
     return this.deployments.updateDeploymentResources(
       id,
@@ -2296,7 +2296,7 @@ export class DatabasesController {
       imageUrl: req.user.imageUrl
     });
     if (!access.canEdit) {
-      throw new ForbiddenException('Your role does not allow you to update database resources');
+      throw new ForbiddenException("Your role doesn't allow you to update database resources");
     }
     return this.projectsService.updateDatabaseResources(
       id,
@@ -2408,7 +2408,7 @@ export class DatabasesController {
       imageUrl: req.user.imageUrl
     });
     if (!access.canEdit) {
-      throw new ForbiddenException('Your role does not allow you to expand database storage');
+      throw new ForbiddenException("Your role doesn't allow you to expand database storage");
     }
     return this.projectsService.expandDatabaseStorage(id, String(body.storageSize || ''), user.id);
   }

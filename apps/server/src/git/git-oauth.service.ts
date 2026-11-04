@@ -72,12 +72,12 @@ export class GitOauthService {
     const redirect = encodeURIComponent(this.callbackUrl(provider));
     if (provider === 'gitlab') {
       const clientId = this.instanceConfig.value(GIT_GITLAB, 'clientId');
-      if (!clientId) throw new BadRequestException('GitLab sign-in is not set up on this instance');
+      if (!clientId) throw new BadRequestException("GitLab sign-in isn't set up on this instance");
       const scope = encodeURIComponent('read_api read_repository read_user');
       return `${this.gitlabBase()}/oauth/authorize?client_id=${encodeURIComponent(clientId)}&redirect_uri=${redirect}&response_type=code&scope=${scope}&state=${encodeURIComponent(state)}`;
     }
     const key = this.instanceConfig.value(GIT_BITBUCKET, 'key');
-    if (!key) throw new BadRequestException('Bitbucket sign-in is not set up on this instance');
+    if (!key) throw new BadRequestException("Bitbucket sign-in isn't set up on this instance");
     return `https://bitbucket.org/site/oauth2/authorize?client_id=${encodeURIComponent(key)}&response_type=code&state=${encodeURIComponent(state)}`;
   }
 
@@ -133,7 +133,7 @@ export class GitOauthService {
     const data: any = await res.json().catch(() => ({}));
     if (!res.ok || !data.access_token) {
       const why = data.error_description || data.error || `${label} answered ${res.status}`;
-      throw new BadRequestException(`${label} did not issue a token: ${why}`);
+      throw new BadRequestException(`${label} didn't issue a token: ${why}`);
     }
     return {
       accessToken: String(data.access_token),
@@ -153,8 +153,7 @@ export class GitOauthService {
       throw new BadRequestException(`${provider} rejected the new token (${res.status})`);
     const data: any = await res.json();
     const username = String(data.username ?? data.nickname ?? data.display_name ?? '').trim();
-    if (!username)
-      throw new BadRequestException(`${provider} did not say who the token belongs to`);
+    if (!username) throw new BadRequestException(`${provider} didn't say who the token belongs to`);
     return { username, baseUrl };
   }
 }

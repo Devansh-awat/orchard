@@ -18,7 +18,7 @@ export type QueryInput = Record<string, QueryValue | QueryValue[]> | URLSearchPa
 export function pathSegment(value: unknown): string {
   const raw = String(value);
   if (raw === '.' || raw === '..') {
-    throw new Error(`"${raw}" is not a valid path parameter`);
+    throw new Error(`"${raw}" isn't a valid path parameter`);
   }
   return encodeURIComponent(raw);
 }

@@ -47,7 +47,7 @@ resources:                    # infrastructure to create (order matters!)
 
 ### Resource Types
 
-**database** — Creates a PostgreSQL database.
+**database**: Creates a PostgreSQL database.
 Available context fields: id, host, port, dbName, dbUser, dbPassword, connectionString
 \`\`\`yaml
 - name: db
@@ -56,7 +56,7 @@ Available context fields: id, host, port, dbName, dbUser, dbPassword, connection
     name: "{{ params.appName }}-db"
 \`\`\`
 
-**deployment** — Creates a container deployment.
+**deployment**: Creates a container deployment.
 Available context fields: id, serviceName
 \`\`\`yaml
 - name: app
@@ -82,7 +82,7 @@ Available context fields: id, serviceName
     exposePublic: true                # optional, external Service (NodePort), does not remove a domain's login
 \`\`\`
 
-**ingress** — Creates a public domain route.
+**ingress**: Creates a public domain route.
 Available context fields: id, host
 \`\`\`yaml
 - name: web
@@ -102,8 +102,8 @@ Available context fields: id, host
 
 ### Interpolation
 
-- \`{{ params.paramName }}\` — inserts a parameter value
-- \`{{ resources.resourceName.field }}\` — references a previously created resource
+- \`{{ params.paramName }}\`: inserts a parameter value
+- \`{{ resources.resourceName.field }}\`: references a previously created resource
 - Resources are created in order, so a deployment can reference a database created before it
 
 ### Example: Full-stack Node.js + PostgreSQL
@@ -368,7 +368,7 @@ Units match the resource tools: \`cpuMilli\` in millicores, \`memoryBytes\` in b
     {
       description: `Who changed what, and when. Pass a deploymentId for one app's history, or an organizationId for everything in the org (org admins only).
 
-This is how you answer "when did this break" and "who turned that off" — each entry records the actor, a timestamp, the action (\`deployment.env.updated\`, \`deployment.scaled\`, \`deployment.stopped\`, \`environment.sharedvars.updated\`, …) and a \`metadata\` object that usually carries the \`[before, after]\` of whatever moved. Paginated: feed \`nextCursor\` back as \`cursor\` for the next page.`,
+This is how you answer "when did this break" and "who turned that off". Each entry records the actor, a timestamp, the action (\`deployment.env.updated\`, \`deployment.scaled\`, \`deployment.stopped\`, \`environment.sharedvars.updated\`, …) and a \`metadata\` object that usually carries the \`[before, after]\` of whatever moved. Paginated: feed \`nextCursor\` back as \`cursor\` for the next page.`,
       inputSchema: {
         deploymentId: z.string().optional().describe("One deployment's history"),
         organizationId: z
@@ -397,7 +397,7 @@ This is how you answer "when did this break" and "who turned that off" — each 
     {
       description: `List the node pools a deployment can be pinned to, for \`update_deployment_placement\` or \`create_deployment\`'s \`nodePoolId\`.
 
-Only pools an administrator marked user-selectable show up. On an instance that has not enabled userspace scheduling the call 404s, which just means placement is not a knob here — schedule anywhere and move on.`,
+Only pools an administrator marked user-selectable show up. On an instance that has not enabled userspace scheduling the call 404s, which just means placement is not a knob here. Schedule anywhere and move on.`,
       inputSchema: {}
     },
     async () => {
@@ -473,7 +473,7 @@ Use \`find\` instead when you know the app by name and want its UUID.`,
     {
       description: `Get deployment details: status, image, replicas, env vars, services, ingresses, volumes, health check, build config, placement and recent image history.
 
-The build log is omitted here because it is often megabytes — read it with \`get_build_logs\`. Runtime logs are \`get_deployment_logs\`.`,
+The build log is omitted here because it is often megabytes. Read it with \`get_build_logs\`. Runtime logs are \`get_deployment_logs\`.`,
       inputSchema: {
         deploymentId: z.guid().describe('The deployment UUID')
       },
@@ -504,7 +504,7 @@ The build log is omitted here because it is often megabytes — read it with \`g
     {
       description: `Get the current environment variables for a deployment.
 
-Secret vars come back with \`secret: true\` and a null value — the value is write-only and never readable. To change one, use \`add_env_vars\`; you do not need to read it first.`,
+Secret vars come back with \`secret: true\` and a null value. The value is write-only and never readable. To change one, use \`add_env_vars\`; you do not need to read it first.`,
       inputSchema: {
         deploymentId: z.guid().describe('The deployment UUID')
       }
@@ -621,12 +621,12 @@ Returns host, port, user and database name plus a \`liveStatus\` object with rea
 - \`replicas\` / \`readyReplicas\`: instance counts
 - \`restartCount\`: total postgres container restarts across pods (HIGH NUMBERS = INSTABILITY)
 - \`message\`: current problem reason if any (e.g. "OOMKilled", "CrashLoopBackOff")
-- \`lastTerminationReason\`: last termination reason of the postgres container (e.g. "OOMKilled", "Error"). Present even when the container is currently running — this is how you detect intermittent crashes.
+- \`lastTerminationReason\`: last termination reason of the postgres container (e.g. "OOMKilled", "Error"). Present even when the container is currently running. This is how you detect intermittent crashes.
 - \`lastTerminationExitCode\`: exit code from the last termination (137 = OOMKill, 139 = segfault, etc.)
 - \`lastTerminationAt\`: timestamp of last termination
 - \`size\`, \`connections\`: only present when reachable
 
-To diagnose an unhealthy database, check \`liveStatus.message\`, \`liveStatus.lastTerminationReason\`, and \`liveStatus.restartCount\` together. \`status: "ready"\` at the top level reflects only the provisioning state — it can say "ready" while the pod is actively OOM-cycling.`,
+To diagnose an unhealthy database, check \`liveStatus.message\`, \`liveStatus.lastTerminationReason\`, and \`liveStatus.restartCount\` together. \`status: "ready"\` at the top level reflects only the provisioning state. It can say "ready" while the pod is actively OOM-cycling.`,
       inputSchema: {
         databaseId: z.guid().describe('The database UUID')
       }
@@ -681,7 +681,7 @@ To diagnose an unhealthy database, check \`liveStatus.message\`, \`liveStatus.la
     {
       description: `Request rate, average and max latency, and 5xx rate for a deployment, as served through its ingress. Latency is the load balancer's average and max, not a percentile.
 
-Answers "is it actually serving traffic", "did latency regress after that deploy", "how many 5xx". Defaults to the last hour at 30s resolution. Returns empty series when nothing fronts the deployment — check \`get_deployment.ingresses\` first if that surprises you.`,
+Answers "is it actually serving traffic", "did latency regress after that deploy", "how many 5xx". Defaults to the last hour at 30s resolution. Returns empty series when nothing fronts the deployment. Check \`get_deployment.ingresses\` first if that surprises you.`,
       inputSchema: {
         deploymentId: z.guid().describe('The deployment UUID'),
         start: z.number().optional().describe('Window start (unix-ms). Default: end - 1h'),
@@ -702,7 +702,7 @@ Answers "is it actually serving traffic", "did latency regress after that deploy
     {
       description: `BuildKit output from the deployment's most recent build, plus \`buildStatus\` and the \`buildError\` summary if it failed.
 
-Returns the **last** \`tailLines\` lines by default, because a build that failed failed at the end and the transcript of a large repo runs to hundreds of KB. Read \`buildError\` first — it is usually the whole answer. Raise \`tailLines\`, or pass \`full: true\`, only when you actually need earlier stages.
+Returns the **last** \`tailLines\` lines by default, because a build that failed failed at the end and the transcript of a large repo runs to hundreds of KB. Read \`buildError\` first. It is usually the whole answer. Raise \`tailLines\`, or pass \`full: true\`, only when you actually need earlier stages.
 
 For the running app's output use \`get_deployment_logs\`.`,
       inputSchema: {
@@ -716,7 +716,7 @@ For the running app's output use \`get_deployment_logs\`.`,
         full: z
           .boolean()
           .optional()
-          .describe('Return the entire log. Can be very large — prefer raising tailLines.')
+          .describe('Return the entire log. Can be very large. Prefer raising tailLines.')
       }
     },
     async ({ deploymentId, tailLines, full }) => {
@@ -797,7 +797,7 @@ For the running app's output use \`get_deployment_logs\`.`,
     'list_killed_containers',
     {
       description:
-        'List recently killed containers for a deployment (last 24h): pod, container, termination reason (e.g. OOMKilled), exit code, and when it died. Their pre-death logs are captured even if the pod no longer exists — pass an entryId to get_killed_container_logs to read them. Use this first when diagnosing crashes, OOMs, or restart loops.',
+        'List recently killed containers for a deployment (last 24h): pod, container, termination reason (e.g. OOMKilled), exit code, and when it died. Their pre-death logs are captured even if the pod no longer exists. Pass an entryId to get_killed_container_logs to read them. Use this first when diagnosing crashes, OOMs, or restart loops.',
       inputSchema: {
         deploymentId: z.guid().describe('The deployment UUID'),
         ...pageInput
@@ -906,9 +906,9 @@ Use this to:
 - Check installed binaries or env (\`env\`, \`which node\`, \`node -v\`)
 - Tail a single file (\`tail -n 50 /var/log/app.log\`)
 
-The \`command\` arg can be a string (executed via /bin/sh -c) or a string array (exec'd directly with no shell — preferred when arguments contain special chars).
+The \`command\` arg can be a string (executed via /bin/sh -c) or a string array (exec'd directly with no shell, preferred when arguments contain special chars).
 Pass \`deploymentId\` and the newest ready pod of that deployment is picked for you, which survives pod names changing on every restart. Pass \`podName\` and \`namespace\` (from \`list_pods\`) to target one pod exactly. If \`container\` is omitted, the first container in the pod spec is used.
-Not for long-running interactive sessions — the call times out (default 60s, max 5min). stdout and stderr are capped at the last 20,000 characters each.
+Not for long-running interactive sessions. The call times out (default 60s, max 5min). stdout and stderr are capped at the last 20,000 characters each.
 
 Needs an exec-scoped session: connect with the mcp:exec scope or an orch_ token with exec scope.`,
       inputSchema: {
@@ -1071,7 +1071,7 @@ Use this before suggesting scale-ups, or to confirm an unhealthy / OOM-looking d
         },
         recommendation:
           (cpuRatio != null && cpuRatio >= NEAR) || (memRatio != null && memRatio >= NEAR)
-            ? 'Usage is near limits — consider increasing CPU/memory requests, the pod may behave unexpectedly under load.'
+            ? 'Usage is near limits. Consider increasing CPU/memory requests, the pod may behave unexpectedly under load.'
             : 'Within healthy bounds.'
       };
       return json(summary);
@@ -1083,7 +1083,7 @@ Use this before suggesting scale-ups, or to confirm an unhealthy / OOM-looking d
     {
       description: `Get all volumes attached to a deployment, plus the deploy strategy that volumes drive.
 Volumes are returned with their full record (id, name, type, mountPath, pvcName, storageSize, hostPath, readOnly).
-The response also surfaces \`deployStrategy\` and a \`pvcCount\` so callers can sanity-check that PVCs they expected are actually attached — a 0 PVC count on what should be a stateful deployment usually means the last volumes update silently dropped a row (e.g. type=pvc without pvcName).`,
+The response also surfaces \`deployStrategy\` and a \`pvcCount\` so callers can sanity-check that PVCs they expected are actually attached. A 0 PVC count on what should be a stateful deployment usually means the last volumes update silently dropped a row (e.g. type=pvc without pvcName).`,
       inputSchema: {
         deploymentId: z.guid().describe('The deployment UUID')
       }
@@ -1126,7 +1126,7 @@ The response also surfaces \`deployStrategy\` and a \`pvcCount\` so callers can 
   server.registerTool(
     'list_github_repos',
     {
-      description: `Autocomplete source for deploy_from_github. Lists repos that are BOTH (a) covered by an Orchard GitHub App installation the user has access to AND (b) accessible to the user's own GitHub account — i.e. the intersection. These are safe to suggest because the deploy will succeed for them. The user should never be shown repos they cannot access on GitHub.`,
+      description: `Autocomplete source for deploy_from_github. Lists repos that are BOTH (a) covered by an Orchard GitHub App installation the user has access to AND (b) accessible to the user's own GitHub account, which is the intersection. These are safe to suggest because the deploy will succeed for them. The user should never be shown repos they cannot access on GitHub.`,
       inputSchema: { ...pageInput }
     },
     async ({ limit, cursor }) => {

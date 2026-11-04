@@ -68,7 +68,7 @@ export class LeaseService implements OnApplicationShutdown {
       const holder = !this.kubernetes.kc && process.env.NODE_ENV !== 'production';
       if (!holder) {
         this.logger.error(
-          `lease ${name} cannot be held (no ${!this.kubernetes.kc ? 'kubeconfig' : 'control namespace — set ORCHARD_CONTROL_NAMESPACE for out-of-cluster deployments'}); leader-only work is disabled on this replica`
+          `lease ${name} can't be held (no ${!this.kubernetes.kc ? 'kubeconfig' : 'control namespace: set ORCHARD_CONTROL_NAMESPACE for out-of-cluster deployments'}); leader-only work is disabled on this replica`
         );
       } else {
         this.logger.log(`lease ${name}: out-of-cluster dev mode, acting as sole holder`);

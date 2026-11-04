@@ -232,7 +232,7 @@ export function decideBuildRecovery(facts: RecoveryFacts): RecoveryDecision {
           action: 'fail',
           reason: 'image_unknown',
           jobName: job.jobName,
-          detail: 'Build succeeded but the image it pushed could not be determined'
+          detail: "Build succeeded but the image it pushed couldn't be determined"
         };
       }
       return { action: 'finish', reason: 'job_succeeded', image, jobName: job.jobName };

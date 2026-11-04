@@ -781,7 +781,7 @@ export class JobsService {
         const image = String(raw.image ?? '').trim();
         if (!image) throw new BadRequestException(`Step ${order}: image is required`);
         if (image.length > 500 || !IMAGE_REF_PATTERN.test(image)) {
-          throw new BadRequestException(`Step ${order}: "${image}" is not a valid image reference`);
+          throw new BadRequestException(`Step ${order}: "${image}" isn't a valid image reference`);
         }
         return { ...base, image, command };
       }

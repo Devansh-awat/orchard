@@ -126,7 +126,7 @@ export class NotificationTransport {
     const fallback =
       messages.length > 1
         ? digestHeadline(messages)
-        : `${slackEscape(truncate(first.title, 250))} — ${slackEscape(truncate(first.body, 2000))}`;
+        : `${slackEscape(truncate(first.title, 250))}: ${slackEscape(truncate(first.body, 2000))}`;
     return this.postJson(target.config.url, { text: fallback, blocks });
   }
 
@@ -181,7 +181,7 @@ export class NotificationTransport {
     const first = messages[0];
     const subject = digest ? digestHeadline(messages) : first.title;
     const body = digest
-      ? messages.map((m) => `• ${m.title} — ${truncate(m.body, 300)}`).join('\n')
+      ? messages.map((m) => `• ${m.title}: ${truncate(m.body, 300)}`).join('\n')
       : first.body;
     const sent = await this.email.sendNotificationEmail({
       recipients,
@@ -194,7 +194,7 @@ export class NotificationTransport {
       contextLine: digest ? '' : detailLine(first),
       ctaUrl: (digest ? undefined : first.url) || this.frontendUrl
     });
-    if (!sent) return { ok: false, error: 'Email sending failed or SMTP is not configured' };
+    if (!sent) return { ok: false, error: "Email sending failed or SMTP isn't configured" };
     return { ok: true };
   }
 

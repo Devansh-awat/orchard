@@ -1020,7 +1020,7 @@ ${registryConfigs}
     // with something actionable instead.
     if (buildType === 'railpack') {
       throw new BadRequestException(
-        'Super builds do not support automatic (Railpack) builds yet. Turn off super builds for this app, or switch it to a Dockerfile build.'
+        "Super builds don't support automatic (Railpack) builds yet. Turn off super builds for this app, or switch it to a Dockerfile build."
       );
     }
 
@@ -1178,7 +1178,7 @@ CACHE_SELF="${selfCacheDir}"
 if [ -d "$CACHE_ROOT" ]; then
   USAGE=$(df "$CACHE_ROOT" | awk 'NR==2 {sub(/%/,"",$5); print $5}')
   if [ "$USAGE" -gt 80 ] 2>/dev/null; then
-    echo "=== Cache disk usage at \${USAGE}% — pruning oldest idle entries ==="
+    echo "=== Cache disk usage at \${USAGE}%, pruning oldest idle entries ==="
     ls -1dt "$CACHE_ROOT"/*/ 2>/dev/null | tac | while read -r dir; do
       [ -d "$dir" ] || continue
       [ -n "$CACHE_SELF" ] && [ "\${dir%/}" = "\${CACHE_SELF%/}" ] && continue
@@ -1899,7 +1899,7 @@ while [ ! -f /output/.done ] && [ ! -f /output/.failed ]; do
   ELAPSED=$((ELAPSED + 1))
 done
 if [ -f /output/.failed ]; then
-  echo "[pusher] build wrote .failed marker — not pushing"
+  echo "[pusher] build wrote .failed marker, not pushing"
   exit 1
 fi
 echo "[pusher] build done, pushing..."
@@ -3150,7 +3150,7 @@ fi
       'ERROR'
     );
     throw new BadRequestException(
-      `Build failed: the build job disappeared before it reported a result (${reason}). This is an Orchard-side fault, not a problem with your code - retry the build.`
+      `Build failed: the build job disappeared before it reported a result (${reason}). Your code didn't cause this. Retry the build.`
     );
   }
 

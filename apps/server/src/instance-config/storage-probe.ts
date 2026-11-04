@@ -56,7 +56,7 @@ function describeFailure(e: any, target: ProbeTarget, bucket: string): string {
     return `No answer from ${target.endpoint} after 10 seconds.`;
   }
   if (name === 'NoSuchBucket' || status === 404) {
-    return `The bucket ${bucket} does not exist at ${target.endpoint}.`;
+    return `The bucket ${bucket} doesn't exist at ${target.endpoint}.`;
   }
   if (
     name === 'AuthorizationHeaderMalformed' ||
@@ -64,16 +64,16 @@ function describeFailure(e: any, target: ProbeTarget, bucket: string): string {
     name === 'PermanentRedirect' ||
     status === 301
   ) {
-    return `The region ${target.region} is not right for this bucket. Check the region, and the addressing style.`;
+    return `The region ${target.region} doesn't match this bucket. Check the region and the addressing style.`;
   }
   if (status === 401 || status === 403 || /AccessDenied|InvalidAccessKey|Signature/.test(name)) {
-    return `The key was refused. Check the access key and secret key, and that the key can list, read, write and delete in ${bucket}.`;
+    return `The bucket refused the key. Check the access key and secret key, and that the key can list, read, write and delete in ${bucket}.`;
   }
   if (e?.code === 'ENOTFOUND' || e?.code === 'EAI_AGAIN') {
-    return `Could not find ${target.endpoint}. Check the address.`;
+    return `Couldn't find ${target.endpoint}. Check the address.`;
   }
   if (e?.code === 'ECONNREFUSED' || e?.code === 'ECONNRESET' || e?.code === 'ETIMEDOUT') {
-    return `Could not connect to ${target.endpoint}.`;
+    return `Couldn't connect to ${target.endpoint}.`;
   }
   return `The connection test failed: ${name || 'unknown error'}.`;
 }

@@ -33,7 +33,7 @@ export class AnalyticsService implements OnModuleDestroy {
     const key = process.env.POSTHOG_API_KEY;
     if (!key) {
       this.client = null;
-      this.logger.log('POSTHOG_API_KEY not set — analytics disabled');
+      this.logger.log('POSTHOG_API_KEY not set: analytics off');
       return;
     }
     this.client = new PostHog(key, {

@@ -691,7 +691,7 @@ export class MetricAlertsService {
       throw new BadRequestException('Threshold must be a number of zero or more');
     }
     if (def.maxThreshold !== undefined && threshold > def.maxThreshold) {
-      throw new BadRequestException(`${def.label} cannot exceed ${def.maxThreshold}${def.unit}`);
+      throw new BadRequestException(`${def.label} can't exceed ${def.maxThreshold}${def.unit}`);
     }
     const forSeconds = Math.round(
       Number(input.forSeconds ?? existing?.forSeconds ?? def.defaultForSeconds)

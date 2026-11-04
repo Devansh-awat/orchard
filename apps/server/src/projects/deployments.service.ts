@@ -287,7 +287,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         result = await this.k8sNetwork.syncIngressBackends(namespace, name);
       } catch (error) {
         this.logger.warn(
-          `ingress ${namespace}/${name} did not follow the service port change: ${(error as Error)?.message}`
+          `ingress ${namespace}/${name} didn't follow the service port change: ${(error as Error)?.message}`
         );
       }
       if (result === 'failed' || result === 'threw') {
@@ -853,7 +853,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         if (outcome === 'requeued' || outcome === 'superseded') return;
         await this.markBuildFailed(
           deployment.id,
-          decision.detail ?? 'The build could not be resumed or requeued',
+          decision.detail ?? "The build couldn't be resumed or requeued",
           decision.reason
         );
         return;
@@ -1029,7 +1029,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           )) !== null;
       } catch (error) {
         this.logger.warn(
-          `[BuildRecovery] could not read ${deployment.namespace}/${deployment.name}, retrying later: ${(error as Error)?.message ?? error}`
+          `[BuildRecovery] couldn't read ${deployment.namespace}/${deployment.name}, retrying later: ${(error as Error)?.message ?? error}`
         );
         return;
       }
@@ -1057,7 +1057,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       } else {
         await this.markBuildFailed(
           deployment.id,
-          'Build succeeded but k8s deployment not found. Please redeploy.',
+          "The build succeeded, but Orchard couldn't find the app in Kubernetes. Redeploy it.",
           'k8s_missing'
         );
       }
@@ -1957,7 +1957,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'cancel deployments');
 
     if (deployment.buildStatus !== 'building') {
-      throw new BadRequestException('Deployment is not in a buildable state');
+      throw new BadRequestException("This app can't build right now");
     }
 
     try {
@@ -2036,7 +2036,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     if (deployment.composeStackId && !options?.fromComposeStack) {
       throw new BadRequestException(
-        'This deployment is managed by a Compose file. Delete it via its parent compose stack.'
+        'A compose file manages this app. Delete it from its compose stack.'
       );
     }
 
@@ -2964,7 +2964,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const nextDepot = buildWithDepot ?? deployment.buildWithDepot ?? false;
     if (nextBuildType === 'railpack' && nextDepot) {
       throw new BadRequestException(
-        'Super builds do not support automatic (Railpack) builds. Turn off super builds, or use a Dockerfile build.'
+        "Super builds don't support automatic (Railpack) builds. Turn off super builds, or use a Dockerfile build."
       );
     }
 
@@ -3157,9 +3157,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         select: { id: true }
       });
       if (conflict) {
-        throw new BadRequestException(
-          'A deployment with this name already exists in this environment'
-        );
+        throw new BadRequestException('An app with this name already exists in this environment');
       }
     }
 
@@ -3223,7 +3221,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (!deployment.githubRepo) {
-      throw new BadRequestException('This deployment was not created from GitHub');
+      throw new BadRequestException("This app wasn't created from GitHub");
     }
 
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'update deployments');
@@ -3344,7 +3342,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     const parsed = this.githubService.parseRepoUrl(repoUrl);
     if (!parsed) {
-      throw new BadRequestException('Could not parse repository URL');
+      throw new BadRequestException("Couldn't read the repository URL");
     }
     const canAccess = await this.githubService.verifyUserCanAccessRepo(
       user.id,
@@ -3355,7 +3353,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       const isPublic = await this.githubService.isRepoPublic(parsed.owner, parsed.repo);
       if (!isPublic) {
         throw new ForbiddenException(
-          'You do not have access to this repository on GitHub. Connect your GitHub account or request access to the repo.'
+          "You don't have access to this repository on GitHub. Connect your GitHub account or request access."
         );
       }
     }
@@ -3759,7 +3757,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         targetLabel: deployment.name,
         metadata: { reason: 'hostPath_volume' }
       });
-      throw new ForbiddenException('hostPath volumes are not permitted');
+      throw new ForbiddenException("hostPath volumes aren't permitted");
     }
 
     const volumesList: {
@@ -3819,7 +3817,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         }
         if (vol.storageSize && !K8S_QUANTITY.test(vol.storageSize)) {
           throw new BadRequestException(
-            `Storage size "${vol.storageSize}" is not valid, use a size like 1Gi or 500Mi`
+            `Storage size "${vol.storageSize}" isn't valid. Use a size like 1Gi or 500Mi.`
           );
         }
       }
@@ -4041,12 +4039,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     const rawName = String(data.name || '').trim();
     if (!rawName) {
-      throw new BadRequestException('Service name is required');
+      throw new BadRequestException('Port name is required');
     }
 
     const normalizedName = formatSlug(rawName);
     if (!normalizedName) {
-      throw new BadRequestException('Service name is invalid');
+      throw new BadRequestException('Port name is invalid');
     }
 
     const existingServiceWithName = await this.prisma.service.findFirst({
@@ -4059,9 +4057,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     });
 
     if (existingServiceWithName) {
-      throw new BadRequestException(
-        'A service with this name already exists in the project namespace'
-      );
+      throw new BadRequestException('A port with this name already exists in this project');
     }
 
     const portsPayload = this.normalizeServicePortInputs(data.ports, {
@@ -4205,7 +4201,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     });
 
     if (!service) {
-      throw new NotFoundException(`Service ${serviceId} not found`);
+      throw new NotFoundException(`Port ${serviceId} not found`);
     }
 
     await this.authz.requireProjectEdit(service.deployment.project.id, user.id, 'update services');
@@ -4247,7 +4243,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (!domainProvided && portsPayload === null) {
-      throw new BadRequestException('No changes provided for service update');
+      throw new BadRequestException('No changes to save');
     }
 
     let updateResult: {
@@ -4519,11 +4515,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     });
 
     if (!service) {
-      throw new NotFoundException(`Service ${serviceId} not found`);
+      throw new NotFoundException(`Port ${serviceId} not found`);
     }
 
     if (service.ingresses.length > 0) {
-      throw new BadRequestException('Delete associated ingresses before removing the service');
+      throw new BadRequestException('Remove its domains before you remove this port');
     }
 
     await this.authz.requireProjectEdit(service.deployment.project.id, user.id, 'update services');
@@ -4662,7 +4658,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     });
 
     if (!service) {
-      throw new NotFoundException(`Service ${serviceId} not found`);
+      throw new NotFoundException(`Port ${serviceId} not found`);
     }
 
     await this.authz.requireProjectEdit(service.deployment.project.id, user.id, 'update services');
@@ -4829,7 +4825,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (!deployment.githubRepo) {
-      throw new BadRequestException('This deployment was not created from GitHub');
+      throw new BadRequestException("This app wasn't created from GitHub");
     }
 
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'configure auto-deploy');
@@ -5052,7 +5048,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (!deployment.githubRepo || !deployment.githubBranch) {
-      throw new BadRequestException('This deployment was not created from GitHub');
+      throw new BadRequestException("This app wasn't created from GitHub");
     }
 
     if (!fromQueueRunId && deployment.stopped) {
@@ -5372,7 +5368,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       if (deployment.autoDeployEnabled && hookPresent === false) {
         message = `${deployment.gitConnection.name} has no webhook for this app yet. Turn auto-deploy off and on to add it, or add it by hand.`;
       } else if (deployment.autoDeployEnabled && !canRegister) {
-        message = `Add the webhook on ${hostOf(deployment.gitConnection.baseUrl)} by hand; pushes cannot reach Orchard until it exists.`;
+        message = `Add the webhook on ${hostOf(deployment.gitConnection.baseUrl)} by hand; pushes can't reach Orchard until it exists.`;
       }
       return {
         enabled: deployment.autoDeployEnabled,
@@ -5434,11 +5430,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         : null;
       message = repoInfo
         ? this.githubService.autoDeployUnavailableMessage(repoInfo.owner, repoInfo.repo)
-        : 'The GitHub App is not installed on this repository, so pushes cannot reach Orchard.';
+        : "The GitHub App isn't installed on this repository, so pushes can't reach Orchard.";
     } else if (deployment.autoDeployEnabled && !linked) {
       message =
-        'This deployment is not bound to a GitHub App installation, so pushes are dropped. ' +
-        'Re-enable auto-deploy to bind it.';
+        "This app isn't linked to a GitHub App installation, so Orchard drops pushes. " +
+        'Turn auto-deploy off and on to link it.';
     }
 
     return {
@@ -5488,7 +5484,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       const port = Math.floor(Math.random() * (MAX - MIN + 1)) + MIN;
       if (!taken.has(port)) return port;
     }
-    throw new BadRequestException('Could not find a free public port after 200 attempts');
+    throw new BadRequestException("Couldn't find a free public port after 200 attempts");
   }
 
   private async syncPublicDeploymentNetworkPolicy(
@@ -5802,7 +5798,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   ) {
     if (deployment?.composeStackId) {
       throw new BadRequestException(
-        `This deployment is managed by a Compose file. ${action} via its parent compose stack.${hint ? ` ${hint}` : ''}`
+        `A compose file manages this app. ${action} from its compose stack.${hint ? ` ${hint}` : ''}`
       );
     }
   }
@@ -6165,7 +6161,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const hasPvc = deployment.volumes.some((v) => v.type === 'pvc');
     if (hasPvc && strategy !== 'recreate') {
       throw new BadRequestException(
-        'This deployment has a PVC volume, so only recreate is supported. Remove the PVC to use rolling updates or blue/green.'
+        'This app has a volume, so it can only use Recreate. Remove the volume to use rolling updates or blue-green.'
       );
     }
 
@@ -6384,7 +6380,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   ) {
     const trimmed = (image ?? '').toString().trim();
     if (!trimmed) {
-      throw new BadRequestException('Image cannot be empty');
+      throw new BadRequestException("Image can't be empty");
     }
 
     const deployment = await this.prisma.deployment.findUnique({
@@ -6412,7 +6408,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     // overwritten by the next build.
     if (deployment.githubRepo) {
       throw new BadRequestException(
-        'This deployment is built from a GitHub repository. Use Redeploy to rebuild from source.'
+        'This app builds from a GitHub repository. Use Redeploy to rebuild it.'
       );
     }
 
@@ -6648,7 +6644,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const environment = await this.environments.resolveEnvironment(project.id, data.environmentId);
 
     if (Array.isArray(data.volumes) && data.volumes.some((v) => v && v.type === 'hostPath')) {
-      throw new ForbiddenException('hostPath volumes are not permitted');
+      throw new ForbiddenException("hostPath volumes aren't permitted");
     }
 
     const nameInput = String(data.name || '').trim();
@@ -6657,7 +6653,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       data.replicas && Number.isInteger(data.replicas) && data.replicas > 0 ? data.replicas : 1;
 
     if (!nameInput) {
-      throw new BadRequestException('Deployment name is required');
+      throw new BadRequestException('App name is required');
     }
 
     if (!image) {
@@ -6668,7 +6664,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const name = formatSlug(nameInput);
 
     if (!name) {
-      throw new BadRequestException('Deployment name cannot be empty');
+      throw new BadRequestException("App name can't be empty");
     }
 
     const existingDeployment = await this.prisma.deployment.findFirst({
@@ -6676,9 +6672,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     });
 
     if (existingDeployment) {
-      throw new BadRequestException(
-        'A deployment with this name already exists in this environment'
-      );
+      throw new BadRequestException('An app with this name already exists in this environment');
     }
 
     const envEntries = Array.isArray(data.env)
@@ -7056,7 +7050,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const environment = await this.environments.resolveEnvironment(project.id, data.environmentId);
 
     if (Array.isArray(data.volumes) && data.volumes.some((v) => v && v.type === 'hostPath')) {
-      throw new ForbiddenException('hostPath volumes are not permitted');
+      throw new ForbiddenException("hostPath volumes aren't permitted");
     }
     await this.assertVolumesUnclaimed(environment.namespace, data.volumes);
 
@@ -7118,7 +7112,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (!nameInput) {
-      throw new BadRequestException('Deployment name is required');
+      throw new BadRequestException('App name is required');
     }
 
     if (!repoUrl) {
@@ -7145,7 +7139,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     } else {
       const parsed = this.githubService.parseRepoUrl(repoUrl);
       if (!parsed) {
-        throw new BadRequestException('Could not parse repository URL');
+        throw new BadRequestException("Couldn't read the repository URL");
       }
       const canAccess = await this.githubService.verifyUserCanAccessRepo(
         user.id,
@@ -7157,7 +7151,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         const isPublic = await this.githubService.isRepoPublic(parsed.owner, parsed.repo);
         if (!isPublic) {
           throw new ForbiddenException(
-            'You do not have access to this repository on GitHub. Connect your GitHub account or request access to the repo.'
+            "You don't have access to this repository on GitHub. Connect your GitHub account or request access."
           );
         }
       }
@@ -7194,7 +7188,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const name = formatSlug(nameInput);
 
     if (!name) {
-      throw new BadRequestException('Deployment name cannot be empty');
+      throw new BadRequestException("App name can't be empty");
     }
 
     const existingDeployment = await this.prisma.deployment.findFirst({
@@ -7202,9 +7196,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     });
 
     if (existingDeployment) {
-      throw new BadRequestException(
-        'A deployment with this name already exists in this environment'
-      );
+      throw new BadRequestException('An app with this name already exists in this environment');
     }
 
     const imageName = `${project.namespace}-${name}`;
@@ -7553,11 +7545,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     const nameInput = String(data.name || '').trim();
     if (!nameInput) {
-      throw new BadRequestException('Deployment name is required');
+      throw new BadRequestException('App name is required');
     }
     const name = formatSlug(nameInput);
     if (!name) {
-      throw new BadRequestException('Deployment name cannot be empty');
+      throw new BadRequestException("App name can't be empty");
     }
 
     const buildType = data.buildType === 'railpack' ? 'railpack' : 'dockerfile';
@@ -7582,9 +7574,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       where: { environmentId: environment.id, name }
     });
     if (existingDeployment) {
-      throw new BadRequestException(
-        'A deployment with this name already exists in this environment'
-      );
+      throw new BadRequestException('An app with this name already exists in this environment');
     }
 
     const replicas =
@@ -7757,9 +7747,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     );
 
     if (deployment.githubRepo) {
-      throw new BadRequestException(
-        'This deployment builds from GitHub; push to the repository instead'
-      );
+      throw new BadRequestException('This app builds from GitHub. Push to the repository instead.');
     }
     if (!file?.buffer?.length) {
       throw new BadRequestException('Build context is empty');
@@ -7949,7 +7937,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         data: { startCommand: app.startCommand }
       });
 
-      const note = `[${Date.now()}] [WARNING] Railpack cannot detect a start command for a ${app.framework} app, so this build uses \`${app.startCommand}\`. Change it in the deployment's build settings.`;
+      const note = `[${Date.now()}] [WARNING] Railpack can't detect a start command for a ${app.framework} app, so this build uses \`${app.startCommand}\`. Change it in the app's build settings.`;
       await this.prisma.$executeRaw`
         UPDATE "deployments"
         SET "build_logs" = COALESCE("build_logs", '') || ${`${note}\n`}
@@ -8177,7 +8165,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
                 summary: `Deploying \`${data.name}\` from commit \`${data.commitSha?.substring(0, 7) || 'unknown'}\``,
                 text: data.checkLogUrl
                   ? `[View the full build log in Orchard](${data.checkLogUrl})`
-                  : 'Open the deployment in Orchard to view the full build log.'
+                  : 'Open the app in Orchard to see the full build log.'
               }
             }
           );
@@ -8844,7 +8832,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
                   : `\`${data.name}\` deployed successfully.`,
                 text: data.checkLogUrl
                   ? `[View the full build log in Orchard](${data.checkLogUrl})`
-                  : 'Open the deployment in Orchard to view the full build log.'
+                  : 'Open the app in Orchard to see the full build log.'
               }
             }
           );
@@ -9044,7 +9032,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
                 summary: `❌ Failed to deploy \`${data.name}\`: ${error.message?.substring(0, 200) || 'Unknown error'}`,
                 text: data.checkLogUrl
                   ? `[View the full build log in Orchard](${data.checkLogUrl})`
-                  : 'Open the deployment in Orchard to view the full build log.'
+                  : 'Open the app in Orchard to see the full build log.'
               }
             }
           );
@@ -9113,7 +9101,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
    */
   private static queuedBuild(runId: string, queue: QueueSnapshot) {
     const reason = queue.blockedByOwnBuild
-      ? 'This deployment is already building. The queued build starts when that one finishes.'
+      ? 'This app is already building. The queued build starts when that one finishes.'
       : `All ${queue.limit} build ${queue.limit === 1 ? 'slot is' : 'slots are'} busy on this instance.`;
     return {
       accepted: true,
@@ -9125,7 +9113,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       slots: queue.limit,
       pool: queue.pool,
       message:
-        `${reason} It will start automatically, so do not retry. ` +
+        `${reason} It starts automatically, so don't retry. ` +
         `Poll this deployment's build status, or list_deployment_errors, rather than calling rebuild again.`
     };
   }
@@ -9171,12 +9159,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (!deployment.githubRepo || !deployment.githubBranch) {
-      throw new BadRequestException('This deployment was not created from GitHub');
+      throw new BadRequestException("This app wasn't created from GitHub");
     }
 
     // For dockerfile builds, dockerfilePath is required
     if (deployment.buildType === 'dockerfile' && !deployment.dockerfilePath) {
-      throw new BadRequestException('Dockerfile path is missing for this deployment');
+      throw new BadRequestException('This app has no Dockerfile path');
     }
 
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'rebuild deployments');
@@ -9465,7 +9453,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           )
           .catch(() => {});
       }
-      throw new BadRequestException(`Rollback did not become ready: ${verdict.reason}`);
+      throw new BadRequestException(`Rollback didn't become ready: ${verdict.reason}`);
     }
 
     await this.prisma.$transaction(async (tx) => {

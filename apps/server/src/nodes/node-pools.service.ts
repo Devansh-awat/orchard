@@ -127,7 +127,7 @@ export class NodePoolsService {
     const data: Prisma.NodePoolUpdateInput = {};
     if (input.name !== undefined) {
       const name = input.name.trim();
-      if (!name) throw new BadRequestException('name cannot be empty');
+      if (!name) throw new BadRequestException("name can't be empty");
       data.name = name;
     }
     if (input.description !== undefined) data.description = input.description;

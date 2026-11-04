@@ -92,7 +92,7 @@ export class BackupUpstreamSyncService {
     try {
       await this.sync();
     } catch (e: any) {
-      this.logger.warn(`could not update the backup proxy: ${e?.name ?? 'error'}`);
+      this.logger.warn(`couldn't update the backup proxy: ${e?.name ?? 'error'}`);
     } finally {
       this.running = false;
     }

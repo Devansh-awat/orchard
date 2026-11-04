@@ -336,7 +336,7 @@ export class ResourceBindingsService {
       resourceName = db.name;
     } else {
       if (resourceId === deploymentId) {
-        throw new BadRequestException('An app cannot be connected to itself');
+        throw new BadRequestException("An app can't be connected to itself");
       }
       const dep = await this.prisma.deployment.findUnique({
         where: { id: resourceId },

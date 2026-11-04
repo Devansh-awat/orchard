@@ -71,12 +71,12 @@ export class OrganizationsController {
 
     const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!allowedMimeTypes.includes(file.mimetype)) {
-      throw new BadRequestException('Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed');
+      throw new BadRequestException('Use a JPEG, PNG, GIF or WebP image');
     }
 
     const maxSize = 5 * 1024 * 1024;
     if (file.size > maxSize) {
-      throw new BadRequestException('File size exceeds 5MB limit');
+      throw new BadRequestException('Use a file under 5 MB');
     }
 
     return this.organizationsService.uploadAvatar(

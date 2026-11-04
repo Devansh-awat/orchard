@@ -473,7 +473,7 @@ export function judgeDrill(
       tablesChecked: 0,
       missingTables: [],
       rowDrift: [],
-      reasons: ['The restored database could not be queried']
+      reasons: ["The restored database couldn't be queried"]
     };
   }
   if (restored.inRecovery) reasons.push('The restored database never left recovery');

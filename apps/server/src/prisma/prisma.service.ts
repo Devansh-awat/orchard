@@ -72,7 +72,7 @@ export class PrismaService
         $$
       `);
     } catch (error) {
-      this.logger.warn(`could not grant the backup proxy its reads: ${error.message}`);
+      this.logger.warn(`couldn't grant the backup proxy its reads: ${error.message}`);
     }
   }
 

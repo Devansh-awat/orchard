@@ -207,7 +207,7 @@ export function buildGreenDeployment(
 export function blueGreenBlocker(blue: k8s.V1Deployment): string | null {
   const volumes = blue.spec?.template?.spec?.volumes ?? [];
   if (volumes.some((v) => v.persistentVolumeClaim?.claimName)) {
-    return 'blue/green cannot run two copies of a ReadWriteOnce volume';
+    return "blue/green can't run two copies of a ReadWriteOnce volume";
   }
   return null;
 }

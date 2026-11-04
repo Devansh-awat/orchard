@@ -319,7 +319,7 @@ export class NotificationRulesService {
     if (access?.isAdmin) return;
     if (scope.scopeType === 'org' || !scope.projectId) {
       throw new ForbiddenException(
-        'Only organization admins can manage org-wide notification rules'
+        'Only organization admins can manage organization-wide notification rules'
       );
     }
     const projectAccess = await this.authz.resolveProjectAccess(

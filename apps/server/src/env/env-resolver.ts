@@ -28,7 +28,7 @@ export class UnresolvedResourceRefError extends Error {
     const [, binding, field] = ref.split('.');
     super(
       reason === 'unbound'
-        ? `${key} references ${ref}, which is not connected to this app`
+        ? `${key} references ${ref}, which isn't connected to this app`
         : `${key} references ${ref}, but ${binding} has no ${field} yet`
     );
     this.name = 'UnresolvedResourceRefError';

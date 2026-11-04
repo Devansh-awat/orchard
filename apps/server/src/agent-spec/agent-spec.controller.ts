@@ -19,7 +19,7 @@ export class AgentSpecController {
 
   private send(name: string, req: Request, res: Response) {
     const file = readContractsFile(name);
-    if (!file) throw new NotFoundException(`${name} is not bundled with this server`);
+    if (!file) throw new NotFoundException(`${name} isn't bundled with this server`);
     res.setHeader('ETag', file.etag);
     res.setHeader('Cache-Control', 'public, max-age=300, must-revalidate');
     res.setHeader('Vary', 'Accept-Encoding');

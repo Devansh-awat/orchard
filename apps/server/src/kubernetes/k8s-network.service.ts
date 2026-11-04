@@ -738,9 +738,9 @@ export class K8sNetworkService implements OnModuleInit {
   ): Promise<void> {
     if (!(await this.kubernetes.isCiliumAvailable())) {
       throw new BadRequestException({
-        error: 'Basic auth is not available on this cluster',
+        error: "Basic auth isn't available on this instance",
         message:
-          'Basic auth is enforced with a CiliumEnvoyConfig, which needs Cilium as the CNI and the cilium.io rbac granted by cilium.enabled=true. Put the host behind your own reverse proxy instead, or see docs/self-hosting.md.'
+          'Basic auth needs Cilium as the CNI and cilium.enabled=true in the chart. Otherwise, put the host behind your own reverse proxy.'
       });
     }
 
@@ -1743,7 +1743,7 @@ export class K8sNetworkService implements OnModuleInit {
         };
         await coreApi.createNamespacedService(namespace, original).catch((restoreError) => {
           this.logger.error(
-            `Service ${namespace}/${serviceName} could not be recreated with the new ports or restored as it was: ${restoreError?.message ?? restoreError}`
+            `Service ${namespace}/${serviceName} couldn't be recreated with the new ports or restored as it was: ${restoreError?.message ?? restoreError}`
           );
         });
         throw new BadRequestException({

@@ -339,14 +339,14 @@ export class WebhooksService {
 
     if (['building', 'deploying'].includes(deployment.status)) {
       writeAudit('failure', 'rejected', { reason: 'building' });
-      throw new ConflictException('Deployment is currently building, try again later');
+      throw new ConflictException('This app is building. Try again later.');
     }
 
     // Only allow image/tag updates for docker image deployments (not GitHub-based)
     if ((image || tag) && deployment.githubRepo) {
       writeAudit('failure', 'rejected', { reason: 'github_repo_image_update' });
       throw new BadRequestException(
-        'Image updates via webhook are only supported for Docker image deployments. Use the rebuild endpoint for GitHub-based deployments.'
+        'Webhook image updates only work for apps that deploy from an image. Use the rebuild endpoint for GitHub apps.'
       );
     }
 

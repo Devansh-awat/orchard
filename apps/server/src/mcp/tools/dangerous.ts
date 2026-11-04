@@ -268,7 +268,7 @@ Only checkpoints with status "durable" can be restored. Returns the operation (a
     {
       description: `Remove specific environment variables from a deployment by key name, leaving every other var alone. The deployment restarts.
 
-Only the keys you name are touched, so this is safe to use for a targeted removal — it is filed here because deleting a var an app reads will break it. To change a value instead of removing it, use \`add_env_vars\`.`,
+Only the keys you name are touched, so this is safe to use for a targeted removal. It is filed here because deleting a var an app reads will break it. To change a value instead of removing it, use \`add_env_vars\`.`,
       inputSchema: {
         deploymentId: z.guid().describe('The deployment UUID'),
         keys: z

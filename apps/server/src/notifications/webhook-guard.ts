@@ -27,7 +27,7 @@ export function parseHttpUrl(raw: string | URL, label = 'URL'): URL {
   try {
     url = raw instanceof URL ? new URL(raw.href) : new URL(raw);
   } catch {
-    throw new BadRequestException(`${label} is not a valid URL`);
+    throw new BadRequestException(`${label} isn't a valid URL`);
   }
   if (url.protocol !== 'https:' && url.protocol !== 'http:') {
     throw new BadRequestException(`${label} must use http or https`);

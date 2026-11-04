@@ -46,7 +46,7 @@ export class GithubAppSetupController {
     try {
       returnTo = await this.setup.completeManifestFlow(code, state);
     } catch (e: any) {
-      const message = encodeURIComponent(e?.message || 'Could not create the GitHub App');
+      const message = encodeURIComponent(e?.message || "Couldn't create the GitHub App");
       return res.redirect(`${base}/setup/github?error=${message}`);
     }
     const target = returnTo ?? '/setup/github';

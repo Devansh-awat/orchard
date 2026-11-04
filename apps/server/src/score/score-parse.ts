@@ -156,9 +156,9 @@ export function parseScore(contents: string | null | undefined): ScorePlan | nul
           ? 'redis'
           : 'unsupported';
     if (type === 'unsupported' && rawType !== 'environment') {
-      warnings.push(`Resource ${resName} of type ${rawType || 'unknown'} is not provisioned`);
+      warnings.push(`Resource ${resName} of type ${rawType || 'unknown'} isn't provisioned`);
     }
-    if (type === 'redis') warnings.push(`Resource ${resName}: managed Valkey is not available yet`);
+    if (type === 'redis') warnings.push(`Resource ${resName}: managed Valkey isn't available yet`);
     resources.push({ name: resName, type, rawType });
   }
 
@@ -173,7 +173,7 @@ export function parseScore(contents: string | null | undefined): ScorePlan | nul
     const value = raw == null ? '' : String(raw);
     const { value: translated, unknown } = translatePlaceholders(value, resources);
     for (const u of unknown)
-      warnings.push(`${key} references resources.${u}, which is not provisioned`);
+      warnings.push(`${key} references resources.${u}, which isn't provisioned`);
     env.push({ key, value: translated });
   }
 
@@ -205,7 +205,7 @@ export function parseScore(contents: string | null | undefined): ScorePlan | nul
         ? Number(replicasRaw)
         : null;
   if (replicasRaw != null && replicas === null) {
-    warnings.push('orchard.my/replicas is not a whole number and was ignored');
+    warnings.push("orchard.my/replicas isn't a whole number and was ignored");
   }
   const healthPath = str(ann('health-path'));
 

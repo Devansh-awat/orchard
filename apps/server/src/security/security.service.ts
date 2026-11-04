@@ -54,7 +54,7 @@ export interface ScannerOption {
 }
 
 const OFF_MESSAGE =
-  'Image scanning is off for this instance. A superadmin can turn it on in Admin, Instance.';
+  'Image scanning is off for this instance. A superadmin can turn it on in Instance admin, under Configuration.';
 
 type Loaded = NonNullable<Awaited<ReturnType<SecurityService['loadDeployment']>>>;
 
@@ -102,7 +102,7 @@ export class SecurityService {
 
   private async harborUnavailableReason(): Promise<string | null> {
     if (!this.harbor.configured) {
-      return 'Harbor is not configured. Set HARBOR_USERNAME, HARBOR_PASSWORD and DOCKER_REGISTRY_PULL (or HARBOR_API_URL).';
+      return "Harbor isn't set up. Set HARBOR_USERNAME, HARBOR_PASSWORD and DOCKER_REGISTRY_PULL (or HARBOR_API_URL).";
     }
     const detected = await this.harbor.detect();
     return detected.harbor ? null : (detected.reason ?? 'Harbor is unavailable.');
@@ -239,7 +239,7 @@ export class SecurityService {
     if (!dep.image) throw new ScanNotPossibleError('This app has no image to scan yet');
     if (provider === 'trivy') {
       if (!this.trivy.configured) {
-        throw new ScanNotPossibleError('The Orchard scanner is not set up on this instance');
+        throw new ScanNotPossibleError("The Orchard scanner isn't set up on this instance");
       }
       try {
         const scan = await this.trivy.start(dep.image, { deploymentId, userId });
@@ -253,7 +253,7 @@ export class SecurityService {
       throw new ScanNotPossibleError('Harbor can only scan images Orchard builds');
     }
     if (!this.harbor.configured) {
-      throw new ScanNotPossibleError('Harbor scanning is not configured on this instance');
+      throw new ScanNotPossibleError("Harbor scanning isn't set up on this instance");
     }
     const scan = await this.cache.rescan(ref);
     return this.build(dep, scan, provider, source, ref, true);

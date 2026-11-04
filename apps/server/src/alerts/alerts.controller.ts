@@ -43,7 +43,7 @@ export class AlertsController {
     const enabled = await this.analytics.isEarlyAccessEnabled('notifications', userId);
     if (!enabled) {
       throw new ForbiddenException(
-        'Alerts are not enabled for your account. Enable the Notifications beta in Early Access Features.'
+        "Alerts aren't on for your account. Turn on the Notifications beta in Early access."
       );
     }
   }

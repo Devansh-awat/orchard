@@ -44,7 +44,7 @@ export class ApiTokensService {
     // token. Force the caller to omit the field if they want unrestricted.
     if (input.length === 0) {
       throw new BadRequestException(
-        'restrictedProjectIds cannot be an empty array; omit the field for an unrestricted token'
+        "restrictedProjectIds can't be an empty array; omit the field for an unrestricted token"
       );
     }
     const seen = new Set<string>();
@@ -111,9 +111,7 @@ export class ApiTokensService {
       const rank = (s: string) => ['read', 'deploy', 'exec'].indexOf(s);
       const ceilingRank = Math.max(-1, ...ceiling.scopes.map(rank));
       if (resolvedScopes.some((s) => rank(s) > ceilingRank)) {
-        throw new ForbiddenException(
-          'A token cannot mint a token with broader scopes than its own'
-        );
+        throw new ForbiddenException("A token can't mint a token with broader scopes than its own");
       }
       if (ceiling.projectIds.length > 0) {
         const allowed = new Set(ceiling.projectIds);
@@ -122,7 +120,7 @@ export class ApiTokensService {
           resolvedRestrictedProjects.some((id) => !allowed.has(id))
         ) {
           throw new ForbiddenException(
-            'A project-restricted token cannot mint a token for other projects'
+            "A project-restricted token can't mint a token for other projects"
           );
         }
       }

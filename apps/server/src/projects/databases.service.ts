@@ -272,7 +272,7 @@ export class DatabasesService {
       throw new BadRequestException('Replicas must be a whole number of at least 1');
     }
     if (n > this.maxReplicas) {
-      throw new BadRequestException(`Replicas cannot exceed ${this.maxReplicas} on this instance`);
+      throw new BadRequestException(`Replicas can't exceed ${this.maxReplicas} on this instance`);
     }
     return n;
   }
@@ -409,7 +409,7 @@ export class DatabasesService {
       return bucketFromDestination(state.destinationPath) ?? fallback;
     } catch (e: any) {
       this.logger.warn(
-        `[DB/backup] could not read the archive location of ${source.namespace}/${source.clusterName}: ${e?.message ?? e}`
+        `[DB/backup] couldn't read the archive location of ${source.namespace}/${source.clusterName}: ${e?.message ?? e}`
       );
       return fallback;
     }
@@ -505,14 +505,14 @@ export class DatabasesService {
           );
         }
         if (code === '3D000') {
-          throw new BadRequestException(`Source database "${src.database}" does not exist`);
+          throw new BadRequestException(`Source database "${src.database}" doesn't exist`);
         }
         if (/self.signed|self-signed|certificate/i.test(msg)) {
           throw new BadRequestException(
             `Source database TLS error: ${msg}. Try appending ?sslmode=require to the URL.`
           );
         }
-        throw new BadRequestException(`Cannot reach source database: ${msg}`);
+        throw new BadRequestException(`Can't reach the source database: ${msg}`);
       }
 
       let versionNum: number | null = null;
@@ -525,12 +525,12 @@ export class DatabasesService {
         );
       }
       if (!versionNum || Number.isNaN(versionNum)) {
-        throw new BadRequestException('Could not determine source PostgreSQL version');
+        throw new BadRequestException("Couldn't determine the source PostgreSQL version");
       }
       const sourceMajor = Math.floor(versionNum / 10000);
       if (sourceMajor > this.MAX_PG_MAJOR) {
         throw new BadRequestException(
-          `Source PostgreSQL major version (${sourceMajor}) is newer than the newest version the platform supports (${this.MAX_PG_MAJOR}); import is not supported yet.`
+          `Source PostgreSQL ${sourceMajor} is newer than the newest version Orchard supports (${this.MAX_PG_MAJOR}), so you can't import it yet.`
         );
       }
 
@@ -749,7 +749,7 @@ export class DatabasesService {
     } catch (e: any) {
       if (importBoosted) {
         throw new BadRequestException(
-          `Importing a database temporarily provisions it with ${this.IMPORT_BOOST_CPU_MILLI}m CPU / ${formatBytes(this.IMPORT_BOOST_MEMORY_BYTES)} memory while the migration runs (it scales back down afterwards), and your quota can't fit that right now. ${e?.message || ''}`.trim()
+          `Importing a database temporarily needs ${this.IMPORT_BOOST_CPU_MILLI}m CPU and ${formatBytes(this.IMPORT_BOOST_MEMORY_BYTES)} memory, and your quota can't fit that right now. ${e?.message || ''}`.trim()
         );
       }
       throw e;
@@ -1287,7 +1287,7 @@ export class DatabasesService {
     steps.push({
       id: 'cluster',
       label: 'Cluster resource created',
-      description: 'Registering the Postgres cluster with Kubernetes.',
+      description: 'Registering the database with Kubernetes.',
       status: clusterStatus
     });
 
@@ -1298,7 +1298,7 @@ export class DatabasesService {
     steps.push({
       id: 'storage',
       label: 'Storage volume attached',
-      description: 'Provisioning and binding the PersistentVolumeClaim.',
+      description: 'Creating the volume.',
       status: storageStatus,
       detail: k.pvc.exists && !k.pvc.bound ? `PVC ${k.pvc.phase || 'Pending'}` : undefined
     });
@@ -1310,7 +1310,7 @@ export class DatabasesService {
     steps.push({
       id: 'pod-scheduled',
       label: 'Pod scheduled to a node',
-      description: 'Kubernetes is placing the Postgres pod onto a worker.',
+      description: 'Kubernetes is placing the database on a node.',
       status: podScheduledStatus,
       detail: k.instancePod?.nodeName ? `Scheduled on ${k.instancePod.nodeName}` : undefined
     });
@@ -1342,7 +1342,7 @@ export class DatabasesService {
         description:
           importStatus === 'error' && k.importError
             ? k.importError
-            : 'CloudNativePG is dumping the source DB and restoring into this cluster.',
+            : 'Copying the source database into this one.',
         status: importStatus
       });
     }
@@ -1354,7 +1354,7 @@ export class DatabasesService {
     steps.push({
       id: 'ready',
       label: 'Database accepting connections',
-      description: 'Bootstrap is complete and the cluster is healthy.',
+      description: 'The database is ready.',
       status: readyStatus
     });
 
@@ -1657,7 +1657,7 @@ export class DatabasesService {
     const password = this.generatePassword();
     if (database.mode === 'cnpg') {
       if (!database.namespace || !database.clusterName) {
-        throw new BadRequestException('Database is missing cluster metadata');
+        throw new BadRequestException('This database is missing internal metadata');
       }
       await this.k8sCnpg.setCnpgAppPassword(
         database.namespace,
@@ -1797,7 +1797,7 @@ export class DatabasesService {
     return {
       success: true,
       message: trashed
-        ? `Database "${database.name}" deleted. It can be brought back for 30 days.`
+        ? `Database "${database.name}" deleted. You can bring it back for 30 days.`
         : `Database "${database.name}" deleted`,
       recoverableUntil: trashed?.purgeAfter ?? null
     };
@@ -1901,14 +1901,14 @@ export class DatabasesService {
       userData
     );
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
-      throw new BadRequestException('Stop and start require a CNPG-backed database');
+      throw new BadRequestException('Stop and start need a dedicated database');
     }
     await this.k8sCnpg.setCnpgHibernation(database.namespace, database.clusterName, true);
     await this.k8sCnpg
       .setScheduledBackupSuspended(database.namespace, database.clusterName, true)
       .catch((e: any) => {
         console.warn(
-          `[DB/backup] could not suspend the schedule for ${database.clusterName}: ${e?.message ?? e}`
+          `[DB/backup] couldn't suspend the schedule for ${database.clusterName}: ${e?.message ?? e}`
         );
       });
     await this.prisma.database.update({
@@ -1935,14 +1935,14 @@ export class DatabasesService {
       userData
     );
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
-      throw new BadRequestException('Stop and start require a CNPG-backed database');
+      throw new BadRequestException('Stop and start need a dedicated database');
     }
     await this.k8sCnpg.setCnpgHibernation(database.namespace, database.clusterName, false);
     await this.k8sCnpg
       .setScheduledBackupSuspended(database.namespace, database.clusterName, false)
       .catch((e: any) => {
         console.warn(
-          `[DB/backup] could not resume the schedule for ${database.clusterName}: ${e?.message ?? e}`
+          `[DB/backup] couldn't resume the schedule for ${database.clusterName}: ${e?.message ?? e}`
         );
       });
     await this.prisma.database.update({
@@ -1983,11 +1983,11 @@ export class DatabasesService {
       userData
     );
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
-      throw new BadRequestException('Replicas require a CNPG-backed database');
+      throw new BadRequestException('Replicas need a dedicated database');
     }
     if (database.importBoosted) {
       throw new BadRequestException(
-        'Replicas cannot be changed while the initial import is running. Try again once provisioning completes.'
+        "You can't change replicas during the initial import. Try again when it finishes."
       );
     }
 
@@ -2058,7 +2058,7 @@ export class DatabasesService {
       userData
     );
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
-      throw new BadRequestException('Restart requires a CNPG-backed database');
+      throw new BadRequestException('Restart needs a dedicated database');
     }
     const sizing = database.importBoosted
       ? undefined
@@ -2174,7 +2174,7 @@ export class DatabasesService {
     project: { organizationId: string };
   }): Promise<boolean> {
     if (!database.namespace || !database.clusterName) {
-      throw new BadRequestException('Database is missing cluster metadata');
+      throw new BadRequestException('This database is missing internal metadata');
     }
     const org = await this.prisma.organization.findUnique({
       where: { id: database.project.organizationId },
@@ -2192,7 +2192,7 @@ export class DatabasesService {
     );
     if (!r2) {
       throw new BadRequestException(
-        'No backup storage: configure it for this organization, or set a backup bucket on the instance'
+        'No backup storage. Set it up for this organization, or set a backup bucket on the instance.'
       );
     }
 
@@ -2422,11 +2422,11 @@ export class DatabasesService {
     );
     if (database.mode !== 'cnpg') {
       throw new BadRequestException(
-        'Backups are only supported for CNPG-backed databases. Recreate this database to enable backups.'
+        'Backups need a dedicated database. Create a new one to get backups.'
       );
     }
     if (!database.namespace || !database.clusterName) {
-      throw new BadRequestException('Database is missing cluster metadata');
+      throw new BadRequestException('This database is missing internal metadata');
     }
     await this.ensureBackupsConfigured(database);
 
@@ -2514,7 +2514,7 @@ export class DatabasesService {
   ) {
     const { database } = await this.access.assertDatabaseEditor(databaseId, clerkId, userData);
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
-      throw new BadRequestException('Scheduled backups require a CNPG-backed database');
+      throw new BadRequestException('Scheduled backups need a dedicated database');
     }
     const cron = (data.cron || '').trim();
     if (!this.isValidCron(cron)) {
@@ -2574,7 +2574,7 @@ export class DatabasesService {
     const database = await this.prisma.database.findUnique({ where: { id: databaseId } });
     if (!database) throw new NotFoundException('Database not found');
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
-      throw new BadRequestException('Query statistics require a CNPG-backed database');
+      throw new BadRequestException('Query statistics need a dedicated database');
     }
     const cached = this.queryStatsCache.get(databaseId);
     if (cached && Date.now() - cached.at < this.QUERY_STATS_TTL_MS) return cached.data;
@@ -2590,7 +2590,7 @@ export class DatabasesService {
   async resetDatabaseQueryStats(databaseId: string, clerkId: string, userData?: any) {
     const { database } = await this.access.assertDatabaseEditor(databaseId, clerkId, userData);
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
-      throw new BadRequestException('Query statistics require a CNPG-backed database');
+      throw new BadRequestException('Query statistics need a dedicated database');
     }
     const result = await this.k8sCnpg.resetQueryStats(
       database.namespace,
@@ -2630,7 +2630,7 @@ export class DatabasesService {
   ) {
     const { database } = await this.access.assertDatabaseEditor(databaseId, clerkId, userData);
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
-      throw new BadRequestException('Extensions require a CNPG-backed database');
+      throw new BadRequestException('Extensions need a dedicated database');
     }
     if (!data.name) throw new BadRequestException('name is required');
 
@@ -2669,7 +2669,7 @@ export class DatabasesService {
     ]);
     if (!ALLOWED_EXTENSIONS.has(data.name)) {
       throw new BadRequestException(
-        `Extension "${data.name}" is not allowed. Allowed: ${[...ALLOWED_EXTENSIONS].sort().join(', ')}`
+        `Extension "${data.name}" isn't allowed. Allowed: ${[...ALLOWED_EXTENSIONS].sort().join(', ')}`
       );
     }
 
@@ -2712,7 +2712,7 @@ export class DatabasesService {
   ) {
     const { database } = await this.access.assertDatabaseEditor(databaseId, clerkId, userData);
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
-      throw new BadRequestException('Extensions require a CNPG-backed database');
+      throw new BadRequestException('Extensions need a dedicated database');
     }
     if (!data.name) throw new BadRequestException('name is required');
     await this.checkpointBefore(database.id, `removing ${data.name}`);
@@ -2809,7 +2809,7 @@ export class DatabasesService {
   ) {
     const { database } = await this.access.assertDatabaseEditor(databaseId, clerkId, userData);
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
-      throw new BadRequestException('Settings require a CNPG-backed database');
+      throw new BadRequestException('Settings need a dedicated database');
     }
     await this.checkpointBefore(database.id, 'a settings change');
 
@@ -2931,13 +2931,13 @@ export class DatabasesService {
       if (dbPorts.has(port) || livePorts.has(port)) continue;
       return port;
     }
-    throw new BadRequestException('Could not find a free public port after 200 attempts');
+    throw new BadRequestException("Couldn't find a free public port after 200 attempts");
   }
 
   async enableDatabasePublic(databaseId: string, clerkId: string, userData?: any) {
     const { database } = await this.access.assertDatabaseEditor(databaseId, clerkId, userData);
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
-      throw new BadRequestException('Public exposure requires a CNPG-backed database');
+      throw new BadRequestException('Public access needs a dedicated database');
     }
 
     const org = await this.prisma.organization.findUnique({

@@ -31,7 +31,7 @@ Secrets read back with a null value, so you cannot round-trip them through this 
                 .string()
                 .nullable()
                 .describe(
-                  'Environment variable value. Null keeps whatever is already stored under this key — the only way to carry an existing secret through a full replace.'
+                  'Environment variable value. Null keeps whatever is already stored under this key. This is the only way to carry an existing secret through a full replace.'
                 ),
               secret: z
                 .boolean()
@@ -56,7 +56,7 @@ Secrets read back with a null value, so you cannot round-trip them through this 
     {
       description: `**The default way to change environment variables.** Adds or overwrites the keys you pass and leaves every other var on the deployment untouched. The deployment restarts to pick them up.
 
-Fixing one typo'd value, adding a new key, flipping a var to secret — all of them are this tool. You do not need to read the current env first; the merge happens here.
+Fixing one typo'd value, adding a new key, flipping a var to secret: all of them are this tool. You do not need to read the current env first; the merge happens here.
 
 Related: \`delete_env_vars\` to remove keys, \`get_env_vars\` to read, \`set_env_vars\` only when you mean to replace the whole environment.`,
       inputSchema: {
@@ -69,7 +69,7 @@ Related: \`delete_env_vars\` to remove keys, \`get_env_vars\` to read, \`set_env
                 .string()
                 .nullable()
                 .describe(
-                  'Environment variable value. Null keeps the stored value — use it to flip an existing secret without knowing it.'
+                  'Environment variable value. Null keeps the stored value. Use it to flip an existing secret without knowing it.'
                 ),
               secret: z
                 .boolean()
@@ -108,11 +108,11 @@ Related: \`delete_env_vars\` to remove keys, \`get_env_vars\` to read, \`set_env
     {
       description: `Configure the health probes Kubernetes runs against a deployment.
 
-Every field is optional and merges into what is already stored, so turning a check on is one field — you do not have to restate the timings. Read the current values off \`get_deployment\` (the \`healthCheck*\`, \`livenessEnabled\`, \`readinessEnabled\`, \`startupEnabled\` fields).
+Every field is optional and merges into what is already stored, so turning a check on is one field. You do not have to restate the timings. Read the current values off \`get_deployment\` (the \`healthCheck*\`, \`livenessEnabled\`, \`readinessEnabled\`, \`startupEnabled\` fields).
 
 The three probes do different jobs:
 - **readiness** keeps an unhealthy pod out of the load balancer without killing it. Turn this on first; it is what makes a rolling deploy zero-downtime.
-- **liveness** restarts a pod that fails. Powerful and dangerous — a liveness probe that is stricter than the app's real startup time turns a slow boot into a crash loop.
+- **liveness** restarts a pod that fails. Powerful and dangerous: a liveness probe that is stricter than the app's real startup time turns a slow boot into a crash loop.
 - **startup** suspends liveness until the app has come up, which is how you give a slow starter room without loosening liveness forever. \`startupFailureThreshold × healthCheckInterval\` is the grace period.
 
 If the image's Dockerfile declares its own HEALTHCHECK, that wins unless you set \`healthCheckOverride: true\`.
@@ -259,7 +259,7 @@ To remove all volumes, pass an empty array.`,
     'update_deployment_image',
     {
       description: `Change the Docker image of an image-source deployment (one created from an image reference, not built from a GitHub repo). Pods will roll to pull the new image. If the image lives in a private registry, add the registry's credential to the project first with \`set_registry_credential\`; the pull secret is attached automatically whenever the image host matches.
-Only valid for non-GitHub deployments — for GitHub deployments use \`rebuild_deployment\` so the image is rebuilt from source. The backend rejects this on a GitHub-built deployment with a clear error.`,
+Only valid for non-GitHub deployments. For GitHub deployments use \`rebuild_deployment\` so the image is rebuilt from source. The backend rejects this on a GitHub-built deployment with a clear error.`,
       inputSchema: {
         deploymentId: z.guid().describe('The deployment UUID'),
         image: z
@@ -277,8 +277,8 @@ Only valid for non-GitHub deployments — for GitHub deployments use \`rebuild_d
     'update_deployment_strategy',
     {
       description: `Set the Kubernetes update strategy for a deployment.
-- \`rollingUpdate\`: bring up new pods before draining old ones — zero downtime.
-- \`recreate\`: tear down all pods first, then start new ones — brief downtime, required for ReadWriteOnce PVCs.
+- \`rollingUpdate\`: bring up new pods before draining old ones, with zero downtime.
+- \`recreate\`: tear down all pods first, then start new ones, with brief downtime. Required for ReadWriteOnce PVCs.
 - \`blueGreen\`: the new image runs beside the old one and takes traffic only once every pod is ready; if it never is, nothing moves.
 
 A deployment with a PVC attached only accepts \`recreate\`. Every strategy waits for the new pods to be ready and rolls back if they never are.`,
@@ -398,7 +398,7 @@ What to pass per registry:
 
 Every field is optional and only what you pass is changed, so you can set one thing without restating the rest. Pass null to clear a value.
 
-- \`dockerfileTarget\`: the stage a multi-stage Dockerfile stops at, as \`docker build --target\`. Null builds the final stage, which is what a single-stage Dockerfile produces anyway. Use this to run several images out of one repo — a web stage and a worker stage — instead of maintaining a Dockerfile per process.
+- \`dockerfileTarget\`: the stage a multi-stage Dockerfile stops at, as \`docker build --target\`. Null builds the final stage, which is what a single-stage Dockerfile produces anyway. Use this to run several images out of one repo, such as a web stage and a worker stage, instead of maintaining a Dockerfile per process.
 - \`startCommand\`: on a \`dockerfile\` build this runs instead of the image's CMD, like a command passed to \`docker run\`, and takes effect on save without a rebuild. On a \`railpack\` build it is baked in by the next build instead.
 - \`dockerfilePath\`, \`buildType\`: as at create time. Switching build type clears the settings that only make sense for the other one.
 - \`rootDirectory\`, \`installCommand\`, \`buildCommand\`, \`outputDirectory\`: Railpack-only overrides; null hands the decision back to detection.
@@ -528,7 +528,7 @@ The user must point their domain's DNS to the cluster before creating the ingres
     {
       description: `Change the ports a service exposes, or the internal domain it answers on.
 
-\`ports\` is a full replace of that service's port list — a port you leave out is removed, so restate the ones you want to keep (read them off \`list_services\`). Pass \`domain: null\` to clear the internal domain. At least one of \`ports\` / \`domain\` is required.
+\`ports\` is a full replace of that service's port list. A port you leave out is removed, so restate the ones you want to keep (read them off \`list_services\`). Pass \`domain: null\` to clear the internal domain. At least one of \`ports\` / \`domain\` is required.
 
 To change whether a service is external use \`set_service_exposure\`, not this.`,
       inputSchema: {
@@ -639,7 +639,7 @@ Modes:
 - \`none\`: public.
 - \`password\`: one shared password, no username. Requires \`password\`.
 - \`basic\`: HTTP basic auth. Requires \`username\` and \`password\`.
-- \`orchard\`: sign in with an Orchard account that has access to the project. No credential to share or leak, so prefer it for internal tools — but the instance can have it disabled, in which case the call fails and says so.
+- \`orchard\`: sign in with an Orchard account that has access to the project. No credential to share or leak, so prefer it for internal tools, but the instance can have it disabled, in which case the call fails and says so.
 
 \`bypassPaths\` stay reachable without auth, which is how you keep a webhook endpoint or \`/health\` working behind protection.
 

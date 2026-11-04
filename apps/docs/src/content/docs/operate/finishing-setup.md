@@ -32,15 +32,15 @@ If this value is wrong, GitHub returns `The redirect_uri is not associated with 
 
 Orchard builds the URL from `FRONTEND_URL`. If your public origin is different, set `GITHUB_REDIRECT_URI`.
 
-| Variable                    | Purpose                               |
-| --------------------------- | ------------------------------------- |
-| `GITHUB_APP_ID`             | The numeric GitHub App ID.                 |
-| `GITHUB_APP_SLUG`           | The GitHub App's URL slug.                 |
+| Variable                    | Purpose                                   |
+| --------------------------- | ----------------------------------------- |
+| `GITHUB_APP_ID`             | The numeric GitHub App ID.                |
+| `GITHUB_APP_SLUG`           | The GitHub App's URL slug.                |
 | `GITHUB_APP_PRIVATE_KEY`    | The PEM contents, with `\n` for newlines. |
-| `GITHUB_APP_WEBHOOK_SECRET` | The webhook signing secret.           |
-| `GITHUB_CLIENT_ID`          | The OAuth client ID.                  |
-| `GITHUB_CLIENT_SECRET`      | The OAuth client secret.              |
-| `GITHUB_REDIRECT_URI`       | Overrides the derived callback URL.   |
+| `GITHUB_APP_WEBHOOK_SECRET` | The webhook signing secret.               |
+| `GITHUB_CLIENT_ID`          | The OAuth client ID.                      |
+| `GITHUB_CLIENT_SECRET`      | The OAuth client secret.                  |
+| `GITHUB_REDIRECT_URI`       | Overrides the derived callback URL.       |
 
 ## Configure database backups
 
@@ -58,15 +58,15 @@ To confirm the setup, take a backup of a database, then run a restore test on it
 
 Email delivers invitations and sign-in codes. Set the values in **Instance admin** > **Configuration** > **Email**, or use the following environment variables.
 
-| Variable         | Purpose                               |
-| ---------------- | ------------------------------------- |
-| `SMTP_HOST`      | The mail server hostname.             |
-| `SMTP_PORT`      | The port, usually `587`.              |
-| `SMTP_USER`      | The username.                         |
-| `SMTP_PASS`      | The password.                         |
+| Variable         | Purpose                                |
+| ---------------- | -------------------------------------- |
+| `SMTP_HOST`      | The mail server hostname.              |
+| `SMTP_PORT`      | The port, usually `587`.               |
+| `SMTP_USER`      | The username.                          |
+| `SMTP_PASS`      | The password.                          |
 | `SMTP_SECURE`    | `true` for implicit TLS on port `465`. |
-| `SMTP_FROM`      | The address that mail is sent from.   |
-| `SMTP_FROM_NAME` | The display name on outgoing mail.    |
+| `SMTP_FROM`      | The address that mail is sent from.    |
+| `SMTP_FROM_NAME` | The display name on outgoing mail.     |
 
 Set all of the values together. The checklist counts this item as done when the host is set, and mail with incomplete settings fails when it is sent.
 
@@ -89,25 +89,25 @@ Over plain HTTP, the one-time link is safer because it cannot be reused. For mor
 
 An identity provider lets people sign in through your existing SSO. To add a provider for the whole instance, go to **Instance admin** > **Sign in** and select **Add provider**. You can also use the following environment variables. Any OpenID Connect provider works.
 
-| Variable                   | Purpose                                                            |
-| -------------------------- | ------------------------------------------------------------------ |
-| `AUTH_OAUTH_CLIENT_ID`     | The client ID from your provider.                                  |
-| `AUTH_OAUTH_CLIENT_SECRET` | The client secret.                                                 |
-| `AUTH_OAUTH_REDIRECT_URI`  | `https://orchard.example.com/apiv1/auth/oauth/callback`            |
-| `AUTH_OAUTH_ISSUER`        | The issuer URL, for discovery.                                     |
+| Variable                   | Purpose                                                                |
+| -------------------------- | ---------------------------------------------------------------------- |
+| `AUTH_OAUTH_CLIENT_ID`     | The client ID from your provider.                                      |
+| `AUTH_OAUTH_CLIENT_SECRET` | The client secret.                                                     |
+| `AUTH_OAUTH_REDIRECT_URI`  | `https://orchard.example.com/apiv1/auth/oauth/callback`                |
+| `AUTH_OAUTH_ISSUER`        | The issuer URL, for discovery.                                         |
 | `AUTH_OAUTH_AUTHORIZE_URL` | Set these three URLs instead of an issuer if discovery is unavailable. |
-| `AUTH_OAUTH_TOKEN_URL`     |                                                                    |
-| `AUTH_OAUTH_USERINFO_URL`  |                                                                    |
-| `AUTH_OAUTH_SCOPES`        | The default is `openid profile email`.                             |
-| `AUTH_OAUTH_CLAIM_ID`      | The claim for the user ID. The default is `sub`.                   |
-| `AUTH_OAUTH_CLAIM_EMAIL`   | The claim for the email address. The default is `email`.           |
-| `AUTH_OAUTH_CLAIM_NAME`    | The claim for the name. The default is `name`.                     |
+| `AUTH_OAUTH_TOKEN_URL`     |                                                                        |
+| `AUTH_OAUTH_USERINFO_URL`  |                                                                        |
+| `AUTH_OAUTH_SCOPES`        | The default is `openid profile email`.                                 |
+| `AUTH_OAUTH_CLAIM_ID`      | The claim for the user ID. The default is `sub`.                       |
+| `AUTH_OAUTH_CLAIM_EMAIL`   | The claim for the email address. The default is `email`.               |
+| `AUTH_OAUTH_CLAIM_NAME`    | The claim for the name. The default is `name`.                         |
 
 Keep a passkey or password on the superadmin account. If the provider fails and it is your only method, you can only sign in by using `orchardctl login` on the host.
 
 For per-organization providers, refer to [Set up SSO](/teams/sso/).
 
-## Set the ingress CNAME
+## Set the custom domains target
 
 The ingress CNAME is the hostname that people point their own domains at. The installer asks for it and saves it, so you can change it at **Instance admin** > **Configuration** > **Custom domains**. The default depends on the mode. In `public` mode, it uses the dashboard domain. In `tunnel` mode, it uses `<tunnel-id>.cfargotunnel.com`. In `lan` mode, it uses an `sslip.io` name for the machine's address. On other installs, set it in **Instance admin** > **Configuration** > **Custom domains**.
 
@@ -119,10 +119,10 @@ Without it, custom domains still work, but Orchard does not check DNS before it 
 
 By default, each generated app URL gets its own certificate. Let's Encrypt allows 50 certificates for each registered domain per week. A wildcard certificate covers every subdomain.
 
-| Variable                        | Purpose                                                       |
-| ------------------------------- | ------------------------------------------------------------- |
+| Variable                        | Purpose                                                        |
+| ------------------------------- | -------------------------------------------------------------- |
 | `PLATFORM_WILDCARD_DOMAINS`     | `.apps.example.com=wildcard-tls`, comma separated for several. |
-| `WILDCARD_TLS_SOURCE_NAMESPACE` | The namespace that holds the certificate Secret.              |
+| `WILDCARD_TLS_SOURCE_NAMESPACE` | The namespace that holds the certificate Secret.               |
 
 Text before the `=` is the domain. Text after it is the Kubernetes Secret. Without a Secret name, Orchard still generates URLs, and each gets its own certificate.
 
@@ -150,11 +150,11 @@ Public ports are not available in tunnel mode, because tunnels carry only HTTP.
 
 **Instance admin** > **Networking** lists each hostname that the instance serves and what it resolves to. Check this page first when something is unreachable. A missing record usually appears as a certificate that never issues, because the ACME HTTP-01 challenge cannot reach the name.
 
-| Name             | Purpose                                                  |
-| ---------------- | -------------------------------------------------------- |
+| Name             | Purpose                                                     |
+| ---------------- | ----------------------------------------------------------- |
 | The dashboard    | Where people sign in. Orchard compares other names with it. |
-| `*.<app domain>` | A wildcard, so each generated app URL resolves.          |
-| The MCP hostname | Where agents connect, if MCP is on.                      |
+| `*.<app domain>` | A wildcard, so each generated app URL resolves.             |
+| The MCP hostname | Where agents connect, if MCP is on.                         |
 
 Orchard checks the wildcard with the name `orchard-dns-probe.<app domain>`.
 
@@ -164,12 +164,12 @@ A status of **Different address** does not count as unfinished, because a proxy 
 
 To let Orchard read and change the routes of a token-managed tunnel, enter these values in the **Cloudflare Tunnel** section of **Instance admin** > **Networking**.
 
-| Variable                | Purpose                                                                                   |
-| ----------------------- | ----------------------------------------------------------------------------------------- |
+| Variable                | Purpose                                                                                    |
+| ----------------------- | ------------------------------------------------------------------------------------------ |
 | `CLOUDFLARE_API_TOKEN`  | Needs **Account / Cloudflare Tunnel / Edit**, and **Zone / DNS / Edit** to create records. |
-| `CLOUDFLARE_ACCOUNT_ID` | The Cloudflare account ID.                                                                |
-| `CLOUDFLARE_TUNNEL_ID`  | The tunnel ID, from the tunnel's page in the Cloudflare dashboard.                        |
-| `CLOUDFLARE_ZONE_ID`    | Optional. Without it, Orchard adds the route and you add the DNS record.                  |
+| `CLOUDFLARE_ACCOUNT_ID` | The Cloudflare account ID.                                                                 |
+| `CLOUDFLARE_TUNNEL_ID`  | The tunnel ID, from the tunnel's page in the Cloudflare dashboard.                         |
+| `CLOUDFLARE_ZONE_ID`    | Optional. Without it, Orchard adds the route and you add the DNS record.                   |
 
 The page then shows which hostnames are routed through the tunnel, and has a control that adds a missing route. Orchard creates the ingress rule and the CNAME record together.
 
@@ -190,10 +190,10 @@ The default hostname needs no DNS record of its own. For any other hostname, cre
 
 **Runtime:** At **Instance admin** > **Configuration** > **Model Context Protocol**, the **Accept MCP connections** toggle decides whether a deployed server answers. When it is off, Orchard refuses every request and hides the setup page. It is on by default.
 
-| Variable            | Purpose                                                          |
-| ------------------- | ---------------------------------------------------------------- |
-| `MCP_ENABLED`       | `false` refuses every MCP request and locks the toggle.          |
-| `MCP_BASE_URL`      | The public origin, used as the OAuth issuer.                     |
+| Variable            | Purpose                                                             |
+| ------------------- | ------------------------------------------------------------------- |
+| `MCP_ENABLED`       | `false` refuses every MCP request and locks the toggle.             |
+| `MCP_BASE_URL`      | The public origin, used as the OAuth issuer.                        |
 | `MCP_SERVICE_TOKEN` | Shared with the MCP process. A mismatch makes every tool call fail. |
 
 During installation, if the MCP hostname does not resolve, the installer offers to check again, to use a different hostname, or to leave MCP off. On a Helm install, set `mcp.ingress.host`.
@@ -234,12 +234,12 @@ sudo orchardctl registry zot --apply     # allow the registry that the installer
 sudo orchardctl registry allow my-registry --label app=registry --port 5000 --apply
 ```
 
-| Registry location                               | What to add                                        |
-| ----------------------------------------------- | -------------------------------------------------- |
-| In the cluster, in its own namespace            | That namespace and the port it listens on.         |
-| In the cluster, next to Orchard                 | The release namespace, narrowed with `podLabels`.  |
-| A public registry, such as ghcr.io or Docker Hub | Nothing. Port 443 to public IP addresses is allowed. |
-| Outside the cluster on a private address        | A public hostname on port 443, or your own `ipBlock` rule. |
+| Registry location                                | What to add                                                |
+| ------------------------------------------------ | ---------------------------------------------------------- |
+| In the cluster, in its own namespace             | That namespace and the port it listens on.                 |
+| In the cluster, next to Orchard                  | The release namespace, narrowed with `podLabels`.          |
+| A public registry, such as ghcr.io or Docker Hub | Nothing. Port 443 to public IP addresses is allowed.       |
+| Outside the cluster on a private address         | A public hostname on port 443, or your own `ipBlock` rule. |
 
 The rule that allows public egress excludes `10/8`, `172.16/12`, `192.168/16`, `169.254/16`, and `100.64/10`. A registry on a LAN address is therefore blocked.
 

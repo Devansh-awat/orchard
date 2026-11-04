@@ -554,12 +554,12 @@ export class StatusPagesService {
     if (!normalized) return null;
     if (!this.baseDomain) {
       throw new BadRequestException(
-        'This instance has no BASE_DOMAIN, so status page hosts are unavailable'
+        "This instance has no BASE_DOMAIN, so status page hosts aren't available"
       );
     }
     if (!/^[a-z0-9]([a-z0-9-]{1,48}[a-z0-9])?$/.test(normalized)) {
       throw new BadRequestException(
-        'Subdomain must be 3-50 characters, alphanumeric and hyphens only, cannot start or end with a hyphen'
+        "Subdomain must be 3 to 50 letters, digits or hyphens, and can't start or end with a hyphen"
       );
     }
     if (RESERVED_SUBDOMAINS.has(normalized))
@@ -620,7 +620,7 @@ export class StatusPagesService {
           .update({ where: { id: pageId }, data: { subdomain: previous } })
           .catch(() => {});
         this.logger.error(`status host ${next} failed: ${(error as Error)?.message ?? error}`);
-        throw new ConflictException('Could not attach that host to the status page');
+        throw new ConflictException("Couldn't attach that host to the status page");
       }
     }
     if (previous && previous !== next) await this.deleteIngress(previous);

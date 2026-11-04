@@ -86,7 +86,7 @@ export class GitHubController {
     const token = await this.githubService.resolveReadAccessToken(user, owner, repo);
     if (token === null) {
       throw new HttpException(
-        'You do not have access to this repository on GitHub. Connect your GitHub account or check the repository URL.',
+        "You don't have access to this repository on GitHub. Connect your GitHub account or check the repository URL.",
         HttpStatus.FORBIDDEN
       );
     }
@@ -121,7 +121,7 @@ export class GitHubController {
       // rather than anything Orchard can explain.
       const back = isSafeRedirect(redirect) ? redirect : '/user/settings';
       const message = encodeURIComponent(
-        'This instance has no GitHub App yet, so there is nothing to connect to. A superadmin creates one in setup.'
+        'This instance has no GitHub App yet. A superadmin can create one in setup.'
       );
       return res.redirect(`${frontendUrl}${back}${back.includes('?') ? '&' : '?'}error=${message}`);
     }
@@ -172,7 +172,7 @@ export class GitHubController {
       clearGithubOauthStateCookie(res);
       if (!csrfNonceMatches(nonce, cookieNonce)) {
         return res.redirect(
-          `${frontendUrl}/user/settings?error=${encodeURIComponent('This GitHub link request could not be verified. Please try connecting again.')}`
+          `${frontendUrl}/user/settings?error=${encodeURIComponent("Couldn't verify this GitHub link request. Try connecting again.")}`
         );
       }
 
@@ -236,7 +236,7 @@ export class GitHubController {
     await this.githubService.linkGitHubAccount(user.id, code);
     this.usersService.invalidateUserCache(user);
 
-    return { success: true, message: 'GitHub account linked successfully' };
+    return { success: true, message: 'GitHub account linked' };
   }
 
   @Delete('unlink')
@@ -256,7 +256,7 @@ export class GitHubController {
     await this.githubService.unlinkGitHubAccount(user.id);
     this.usersService.invalidateUserCache(user);
 
-    return { success: true, message: 'GitHub account unlinked successfully' };
+    return { success: true, message: 'GitHub account unlinked' };
   }
 
   @Get('status')
@@ -331,7 +331,7 @@ export class GitHubController {
     // We require a linked GitHub account so we can verify per-repo access.
     if (!user.githubAccessToken) {
       throw new HttpException(
-        'Connect your GitHub account to view deployable repositories. We use it to verify which repos you have access to.',
+        'Connect your GitHub account to see the repositories you can deploy.',
         HttpStatus.BAD_REQUEST
       );
     }
@@ -348,7 +348,7 @@ export class GitHubController {
     const userToken = await this.githubService.getValidUserToken(user.id);
     if (!userToken) {
       throw new HttpException(
-        'Your GitHub session expired. Please reconnect your GitHub account.',
+        'Your GitHub session expired. Reconnect your GitHub account.',
         HttpStatus.UNAUTHORIZED
       );
     }

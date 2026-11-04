@@ -15,7 +15,7 @@ export const INSTANCE_SSO_BLOCKED: ReadonlySet<AuthMethod> = new Set<AuthMethod>
 ]);
 
 export const INSTANCE_SSO_REQUIRED_MESSAGE =
-  'This Orchard instance requires single sign-on. Use one of the sign-in providers on the login page.';
+  'This Orchard instance requires single sign-on. Use one of the sign-in providers on the sign-in page.';
 
 export interface OrgAccess {
   organizationId: string;
@@ -131,7 +131,7 @@ export class AuthorizationService {
       });
       if (enforced) {
         throw new ForbiddenException(
-          'Your organization requires single sign-on. Use the SSO login link for your workspace.'
+          "Your organization requires single sign-on. Use your organization's sign-in link."
         );
       }
     }
@@ -166,7 +166,7 @@ export class AuthorizationService {
     });
     if (invitation) {
       throw new ForbiddenException(
-        'Your organization requires single sign-on. Use the SSO login link for your workspace.'
+        "Your organization requires single sign-on. Use your organization's sign-in link."
       );
     }
   }
@@ -246,11 +246,11 @@ export class AuthorizationService {
   async requireOrgCanCreateProjects(organizationId: string, userId: string): Promise<OrgAccess> {
     const access = await this.requireOrgMember(organizationId, userId);
     if (access.role === 'guest') {
-      throw new ForbiddenException('Guests cannot create projects in this organization');
+      throw new ForbiddenException("Guests can't create projects in this organization");
     }
     const tokenCtx = requestAuthStorage.getStore();
     if (tokenCtx?.tokenProjectIds && tokenCtx.tokenProjectIds.length > 0) {
-      throw new ForbiddenException('Project-scoped tokens cannot create new projects');
+      throw new ForbiddenException("Project-scoped tokens can't create new projects");
     }
     return access;
   }
@@ -266,7 +266,7 @@ export class AuthorizationService {
     const access = await this.requireOrgMember(organizationId, userId);
     if (access.source !== 'membership') {
       throw new ForbiddenException(
-        'This action requires a real organization membership; superadmin access is not sufficient.'
+        "This action needs organization membership. Superadmin access isn't enough."
       );
     }
     return access;
@@ -279,7 +279,7 @@ export class AuthorizationService {
     }
     const tokenCtx = requestAuthStorage.getStore();
     if (tokenCtx?.tokenProjectIds && tokenCtx.tokenProjectIds.length > 0) {
-      throw new ForbiddenException('Project-scoped tokens cannot perform owner-level actions');
+      throw new ForbiddenException("Project-scoped tokens can't perform owner-level actions");
     }
     return access;
   }
@@ -430,7 +430,7 @@ export class AuthorizationService {
   ): Promise<ProjectAccess> {
     const access = await this.requireProjectView(projectId, userId);
     if (!access.canEdit) {
-      throw new ForbiddenException(`Your role does not allow you to ${action}`);
+      throw new ForbiddenException(`Your role doesn't allow you to ${action}`);
     }
     return access;
   }

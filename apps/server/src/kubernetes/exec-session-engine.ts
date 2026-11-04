@@ -558,7 +558,7 @@ export class ExecSessionEngine {
 
     void this.attachSession(session, ws, ctx, reason);
 
-    const describe = ctx.hooks.describeFailure ?? ((m: string) => `Could not start a shell: ${m}`);
+    const describe = ctx.hooks.describeFailure ?? ((m: string) => `Couldn't start a shell: ${m}`);
     let opened: PtyHandle | Promise<PtyHandle>;
     try {
       opened = ctx.hooks.open(ctx.target, id, { cols: session.cols, rows: session.rows });

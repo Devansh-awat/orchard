@@ -130,7 +130,7 @@ export class DatabaseOperationsService {
     });
     if (!db) throw new NotFoundException('Database not found');
     if (db.mode !== 'cnpg' || !db.namespace || !db.clusterName) {
-      throw new BadRequestException('Only CNPG databases can be restored or forked');
+      throw new BadRequestException('Only dedicated databases can be restored or forked');
     }
     return {
       databaseId: db.id,
@@ -254,15 +254,15 @@ export class DatabaseOperationsService {
   private async advance(op: DatabaseOperation): Promise<void> {
     if (op.deadlineAt && op.deadlineAt.getTime() < Date.now()) {
       if (op.phase === 'recovering') {
-        await this.fail(op, 'Recovery did not finish in time');
+        await this.fail(op, "Recovery didn't finish in time");
         return;
       }
       if (op.phase.startsWith('rehearsal_')) {
-        await this.fail(op, 'The rehearsal upgrade did not finish in time; nothing was changed');
+        await this.fail(op, "The rehearsal upgrade didn't finish in time; nothing was changed");
         return;
       }
       if (op.phase === 'upgrade_waiting') {
-        await this.revertUpgrade(op, 'The upgrade did not finish in time');
+        await this.revertUpgrade(op, "The upgrade didn't finish in time");
         return;
       }
     }
@@ -472,8 +472,7 @@ export class DatabaseOperationsService {
         const backup = await this.prisma.databaseBackup.findUnique({
           where: { id: target.backupId }
         });
-        if (!backup?.barmanId)
-          throw new BadRequestException('That backup cannot be restored by id');
+        if (!backup?.barmanId) throw new BadRequestException("You can't restore that backup by ID");
         return { type: 'backup', backupId: backup.barmanId };
       }
       case 'checkpoint': {
@@ -481,7 +480,7 @@ export class DatabaseOperationsService {
           where: { id: target.checkpointId }
         });
         if (!cp || cp.status !== 'durable' || !cp.lsn) {
-          throw new BadRequestException('That checkpoint is not restorable yet');
+          throw new BadRequestException("You can't restore that checkpoint yet");
         }
         const backups = await this.prisma.databaseBackup.findMany({
           where: { databaseId: cp.databaseId, status: 'completed' },
@@ -819,13 +818,13 @@ export class DatabaseOperationsService {
     await this.moveSchedule(db, ns, oldCluster, name);
     await dbs.movePublicExposure(db.id, oldCluster).catch((e: any) => {
       this.logger.warn(
-        `public access did not follow the restore of ${db.name}: ${k8sErrorMessage(e)}`
+        `public access didn't follow the restore of ${db.name}: ${k8sErrorMessage(e)}`
       );
     });
     await this.k8sCnpg
       .patchCluster(ns, oldCluster, { metadata: { annotations: { 'cnpg.io/hibernation': 'on' } } })
       .catch((e: any) =>
-        this.logger.warn(`could not stop old cluster ${oldCluster}: ${k8sErrorMessage(e)}`)
+        this.logger.warn(`couldn't stop old cluster ${oldCluster}: ${k8sErrorMessage(e)}`)
       );
     await this.prisma.databaseOperation.update({
       where: { id: op.id },
@@ -888,7 +887,7 @@ export class DatabaseOperationsService {
     const name = op.targetClusterName!;
     const dbs = await this.databases();
     const sourceCluster = await this.k8sCnpg.readCluster(src.namespace, src.clusterName);
-    if (!sourceCluster) throw new NotFoundException('The database cluster is gone');
+    if (!sourceCluster) throw new NotFoundException('The database no longer exists');
     const secrets = liveCloneSecretNames(name);
     await this.k8sCnpg.copySecret(
       src.namespace,
@@ -933,7 +932,7 @@ export class DatabaseOperationsService {
     if (progress.state === 'failed') {
       await this.fail(
         op,
-        `Could not copy the database for the rehearsal: ${progress.message ?? 'unknown error'}`
+        `Couldn't copy the database for the rehearsal: ${progress.message ?? 'unknown error'}`
       );
       return;
     }
@@ -1000,7 +999,7 @@ export class DatabaseOperationsService {
       return;
     }
     const cluster = await this.k8sCnpg.readCluster(db.namespace, db.clusterName);
-    if (!cluster) throw new NotFoundException('The database cluster is gone');
+    if (!cluster) throw new NotFoundException('The database no longer exists');
     const checkpoints = this.moduleRef.get(
       (await import('./database-checkpoints.service.js')).DatabaseCheckpointsService,
       { strict: false }
@@ -1035,7 +1034,7 @@ export class DatabaseOperationsService {
     const cluster = await this.k8sCnpg.readCluster(src.namespace, src.clusterName);
     const progress = clusterProgress(cluster);
     if (progress.state === 'failed') {
-      await this.revertUpgrade(op, progress.message ?? 'CNPG could not upgrade the database');
+      await this.revertUpgrade(op, progress.message ?? "Couldn't upgrade the database");
       return;
     }
     if (!clusterSettled(cluster, image)) return;
@@ -1245,7 +1244,7 @@ export class DatabaseOperationsService {
     if (!op) throw new NotFoundException('Operation not found');
     if (!ACTIVE.includes(op.status)) return op;
     if (op.phase === 'cutting_over' || op.phase === 'finalizing') {
-      throw new BadRequestException('The operation is finishing and can no longer be cancelled');
+      throw new BadRequestException("The operation is finishing, so you can't cancel it");
     }
     await this.fail(op, 'Cancelled');
     return this.get(id);

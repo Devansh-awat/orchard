@@ -100,7 +100,7 @@ export class NotificationsService {
         event: succeeded ? 'deploy.succeeded' : 'deploy.failed',
         title: `Deploy ${status}: ${label}`,
         body: succeeded
-          ? `${label} in ${dep.project.name} deployed successfully.`
+          ? `${label} in ${dep.project.name} deployed.`
           : truncate(dep.buildError, 400) || `${label} in ${dep.project.name} failed to build.`,
         url: `${this.frontendUrl}/${dep.project.organization.slug}/deployments/${dep.id}`,
         projectId: dep.project.id,
@@ -230,7 +230,7 @@ export class NotificationsService {
         event: completed ? 'backup.completed' : 'backup.failed',
         title: `Backup ${status}: ${db.name}`,
         body: completed
-          ? `Backup "${backup.label}" of ${db.name} completed successfully.`
+          ? `Backup "${backup.label}" of ${db.name} completed.`
           : `Backup "${backup.label}" of ${db.name} failed${backup.errorMessage ? `: ${truncate(backup.errorMessage, 300)}` : '.'}`,
         url: `${this.frontendUrl}/${db.project.organization.slug}/databases/${db.id}`,
         projectId: db.project.id,
@@ -272,7 +272,7 @@ export class NotificationsService {
           ? `Backup archiving failing: ${db.name}`
           : `Backup archiving recovered: ${db.name}`,
         body: failing
-          ? `WAL archiving for ${db.name} is failing${detail ? `: ${truncate(detail, 300)}` : '.'} Restores are falling behind and disk usage will grow until it recovers.`
+          ? `WAL archiving for ${db.name} is failing${detail ? `: ${truncate(detail, 300)}` : '.'} Recent changes aren't protected, and disk use grows until this recovers.`
           : `WAL archiving for ${db.name} is healthy again.`,
         url: `${this.frontendUrl}/${db.project.organization.slug}/databases/${db.id}`,
         projectId: db.project.id,
@@ -314,7 +314,7 @@ export class NotificationsService {
         title: pressure ? `Storage running out: ${db.name}` : `Storage back to normal: ${db.name}`,
         body: pressure
           ? `${db.name} is running out of disk${detail ? `: ${truncate(detail, 300)}` : '.'} PostgreSQL refuses to start once the volume is full, so expand storage${db.storageSize ? ` (currently ${db.storageSize})` : ''} before that happens.`
-          : `${db.name} has disk headroom again.`,
+          : `${db.name} has free disk space again.`,
         url: `${this.frontendUrl}/${db.project.organization.slug}/databases/${db.id}`,
         projectId: db.project.id,
         projectName: db.project.name,
@@ -354,8 +354,8 @@ export class NotificationsService {
         event: on ? 'db.read_only' : 'db.writes_resumed',
         title: on ? `Writes paused: ${db.name}` : `Writes resumed: ${db.name}`,
         body: on
-          ? `${db.name} is ${fillPercent}% full${db.storageSize ? ` on a ${db.storageSize} volume` : ''}, so Orchard switched it to read-only to keep it alive. Reads and backups continue. Expand storage or free space and writes resume on their own.`
-          : `${db.name} has disk headroom again (${fillPercent}% full), so writes are back on.`,
+          ? `${db.name} is ${fillPercent}% full${db.storageSize ? ` on a ${db.storageSize} volume` : ''}, so Orchard made it read-only. Reads and backups continue. Expand storage or free up space, and writes resume.`
+          : `${db.name} has free disk space again (${fillPercent}% full), so writes are back on.`,
         url: `${this.frontendUrl}/${db.project.organization.slug}/databases/${db.id}`,
         projectId: db.project.id,
         projectName: db.project.name,
@@ -392,7 +392,7 @@ export class NotificationsService {
       message: {
         event: 'db.memory_raised',
         title: `Memory raised: ${db.name}`,
-        body: `${db.name} kept running out of memory while taking backups on ${from}, so Orchard raised it to ${to}. Without this its backups never finish and it restarts every few minutes.`,
+        body: `${db.name} kept running out of memory while taking backups on ${from}, so Orchard raised it to ${to}. Without this, its backups never finish and it restarts every few minutes.`,
         url: `${this.frontendUrl}/${db.project.organization.slug}/databases/${db.id}`,
         projectId: db.project.id,
         projectName: db.project.name,
@@ -429,7 +429,7 @@ export class NotificationsService {
       message: {
         event: 'db.restore_test_failed',
         title: `Restore test failed: ${db.name}`,
-        body: `Orchard restored ${db.name} from its backups into a throwaway copy and the check did not pass: ${reason}. Its backups may not bring it back as expected.`,
+        body: `Orchard restored ${db.name} from its backups into a throwaway copy and the check failed: ${reason}. Its backups may not restore as expected.`,
         url: `${this.frontendUrl}/${db.project.organization.slug}/databases/${db.id}?tab=backups`,
         projectId: db.project.id,
         projectName: db.project.name,
@@ -468,7 +468,7 @@ export class NotificationsService {
         event: crashing ? 'db.crashing' : 'db.recovered',
         title: crashing ? `Database restarting: ${db.name}` : `Database recovered: ${db.name}`,
         body: crashing
-          ? `${db.name} keeps restarting${detail ? `: ${truncate(detail, 300)}` : '.'} Until it settles, connections will fail intermittently.`
+          ? `${db.name} keeps restarting${detail ? `: ${truncate(detail, 300)}` : '.'} Until this stops, connections fail intermittently.`
           : `${db.name} is running normally again.`,
         url: `${this.frontendUrl}/${db.project.organization.slug}/databases/${db.id}`,
         projectId: db.project.id,
@@ -524,7 +524,7 @@ export class NotificationsService {
         event: succeeded ? 'job.succeeded' : 'job.failed',
         title: `Job run ${status}: ${job.name} #${run.number}`,
         body: succeeded
-          ? `Run #${run.number} of "${job.name}" completed successfully.`
+          ? `Run #${run.number} of "${job.name}" completed.`
           : `Run #${run.number} of "${job.name}" failed${failedStep ? ` at step ${failedStep.stepOrder} (${failedStep.name})` : ''}${run.errorMessage ? `: ${truncate(run.errorMessage, 300)}` : '.'}`,
         url: `${this.frontendUrl}/${job.project.organization.slug}/jobs/${job.id}/runs/${run.id}`,
         projectId: job.project.id,

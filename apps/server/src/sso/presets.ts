@@ -78,7 +78,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     scopes: 'read:user user:email',
     fields: ['clientId', 'clientSecret'],
     docsUrl: 'https://github.com/settings/developers',
-    hint: 'GitHub has no OIDC discovery, so we read the primary verified email from its API.'
+    hint: 'GitHub has no OIDC discovery, so Orchard reads the primary verified email from its API.'
   },
   {
     id: 'gitlab',
@@ -90,7 +90,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     scopes: 'openid email profile',
     fields: ['clientId', 'clientSecret', 'issuerUrl'],
     docsUrl: 'https://docs.gitlab.com/ee/integration/openid_connect_provider.html',
-    hint: 'Self-managed GitLab works too, point the issuer at your own instance.'
+    hint: 'For self-managed GitLab, point the issuer at your instance.'
   },
   {
     id: 'okta',
@@ -166,7 +166,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     buttonLabel: 'Continue with SSO',
     scopes: 'openid email profile',
     fields: ['issuerUrl', 'clientId', 'clientSecret', 'scopes'],
-    hint: 'Any spec-compliant IdP that publishes /.well-known/openid-configuration.'
+    hint: 'Any IdP that publishes /.well-known/openid-configuration.'
   },
   {
     id: 'saml',
@@ -176,7 +176,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     buttonLabel: 'Continue with SSO',
     scopes: '',
     fields: ['samlMetadataUrl', 'samlEntryPoint', 'samlIdpEntityId', 'samlCertificate'],
-    hint: 'Upload the IdP metadata URL, or paste the sign-in URL and signing certificate.'
+    hint: 'Enter the IdP metadata URL, or paste the sign-in URL and signing certificate.'
   }
 ];
 

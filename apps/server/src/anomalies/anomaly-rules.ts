@@ -130,7 +130,7 @@ export function deploymentAnomalies(d: DeploymentFacts, now = Date.now()): Anoma
       title: 'failed to build',
       detail:
         (d.errorTextVisible && d.buildError?.split('\n')[0].slice(0, 160)) ||
-        'The last build did not finish',
+        "The last build didn't finish",
       since: null,
       href: d.href,
       action: { label: 'Build logs', href: `${d.href}?tab=deploys` }
@@ -155,10 +155,10 @@ export function deploymentAnomalies(d: DeploymentFacts, now = Date.now()): Anoma
       kind: 'apply_failed',
       severity: 'error',
       resource,
-      title: 'has a change the cluster refused',
+      title: 'has a change Kubernetes refused',
       detail:
         (d.errorTextVisible && d.applyError.split('\n')[0].slice(0, 160)) ||
-        'The cluster rejected the last change',
+        'Kubernetes rejected the last change',
       since: null,
       href: d.href,
       action: { label: 'Retry', href: `${d.href}?tab=settings` }

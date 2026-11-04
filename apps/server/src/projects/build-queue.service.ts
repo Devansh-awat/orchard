@@ -600,7 +600,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
       await this.withTimeout(
         deployments.runQueuedBuild(run),
         4 * 60_000,
-        'Build did not start within 4 minutes'
+        "Build didn't start within 4 minutes"
       );
     } catch (e) {
       const detail = (e as Error)?.message ?? 'Build failed to start';

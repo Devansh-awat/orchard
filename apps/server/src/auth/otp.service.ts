@@ -31,7 +31,7 @@ export class OtpService {
   ): Promise<{ success: boolean; message: string }> {
     if (!this.canDeliverCodes()) {
       throw new ServiceUnavailableException(
-        'This instance cannot send email. Sign in with your password or a passkey, or run orchardctl login on the host.'
+        "This instance can't send email. Sign in with your password or a passkey, or run orchardctl login on the server."
       );
     }
 
@@ -76,7 +76,7 @@ export class OtpService {
 
     if (!emailSent) {
       if (process.env.NODE_ENV !== 'production' && !this.emailService.isConfigured()) {
-        console.warn(`[dev] SMTP not configured — OTP for ${normalizedEmail}: ${plainCode}`);
+        console.warn(`[dev] SMTP not configured: OTP for ${normalizedEmail}: ${plainCode}`);
       } else {
         console.warn(`Failed to send OTP email to ${normalizedEmail}`);
         // Still return success to avoid email enumeration
@@ -85,7 +85,7 @@ export class OtpService {
 
     return {
       success: true,
-      message: 'If an account exists with this email, you will receive an OTP code shortly.'
+      message: "If an account exists with this email, you'll get a code shortly."
     };
   }
 
@@ -102,7 +102,7 @@ export class OtpService {
     const normalizedCode = code.trim();
 
     if (!/^\d{6}$/.test(normalizedCode)) {
-      throw new BadRequestException('Invalid OTP format. Must be 6 digits.');
+      throw new BadRequestException('Enter the 6-digit code.');
     }
 
     await this.rateLimitService.checkRateLimit(normalizedEmail, 'email', 'otp_verify');
@@ -133,9 +133,7 @@ export class OtpService {
         where: { id: otpRecord.id },
         data: { used: true }
       });
-      throw new BadRequestException(
-        'Maximum verification attempts exceeded. Please request a new code.'
-      );
+      throw new BadRequestException('Too many attempts. Request a new code.');
     }
 
     // Use timing-safe comparison to prevent timing attacks

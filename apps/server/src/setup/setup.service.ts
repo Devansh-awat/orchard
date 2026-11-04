@@ -144,7 +144,7 @@ export class SetupService implements OnModuleInit {
     try {
       await this.ensureClaimToken();
     } catch (e) {
-      this.logger.error(`could not prepare the superadmin claim: ${e}`);
+      this.logger.error(`couldn't prepare the superadmin claim: ${e}`);
     }
   }
 
@@ -213,7 +213,7 @@ export class SetupService implements OnModuleInit {
         '',
         `    ${claimUrl(token)}`,
         '',
-        '  Lost it? Run `orchard-claim` on the host for a fresh one.',
+        '  If you lost it, run `orchard-claim` on the server to get a new one.',
         ''
       ].join('\n')
     );
@@ -301,7 +301,7 @@ export class SetupService implements OnModuleInit {
       return {
         id: 'backups',
         title: 'Add S3 storage for off-server backups',
-        detail: 'Backups are on this server. If the server is lost, the backups are lost.',
+        detail: 'Backups are on this server. If you lose the server, you lose the backups.',
         done: false,
         severity: 'normal',
         href: '/admin/instance#storage'
@@ -311,7 +311,7 @@ export class SetupService implements OnModuleInit {
       id: 'backups',
       title: 'Configure database backups',
       detail:
-        'Managed databases have no backups at all until a backup bucket is configured, so a deleted database cannot be recovered.',
+        "Databases have no backups until you add a backup bucket, so you can't recover a deleted database.",
       done: target !== null,
       severity: 'warning',
       href: '/admin/instance#storage'
@@ -376,7 +376,7 @@ export class SetupService implements OnModuleInit {
       // Enforced here rather than only in the UI: the rule is that no skip may
       // leave Orchard unusable, and a rule that only exists in the client is
       // not a rule.
-      throw new BadRequestException(`The "${step}" step cannot be skipped`);
+      throw new BadRequestException(`The "${step}" step can't be skipped`);
     }
 
     const user = await this.prisma.user.findUnique({
@@ -420,7 +420,7 @@ export class SetupService implements OnModuleInit {
     try {
       dns = await this.dns.report();
     } catch (e: any) {
-      this.logger.warn(`could not check DNS: ${e?.message}`);
+      this.logger.warn(`couldn't check DNS: ${e?.message}`);
     }
     const dnsOutstanding = DnsCheckService.outstanding(dns);
     const installMode = (process.env.INSTALL_INGRESS_MODE || '').trim();
@@ -442,7 +442,7 @@ export class SetupService implements OnModuleInit {
         id: 'smtp',
         title: 'Set up email',
         detail:
-          'Needed to email invitations and sign-in codes. Without it, invites still work as copyable links.',
+          'Sends invitations and sign-in codes. Without it, invitations still work as links you copy.',
         done: smtp,
         severity: 'normal',
         href: '/admin/instance'
@@ -457,9 +457,9 @@ export class SetupService implements OnModuleInit {
       },
       {
         id: 'ingress-cname',
-        title: 'Set the ingress CNAME',
+        title: 'Set the custom domains target',
         detail:
-          'The hostname users point custom domains at. Without it, custom-domain DNS validation is skipped.',
+          'The hostname people point custom domains at. Without it, Orchard skips DNS checks for custom domains.',
         done: this.config.isConfigured(INGRESS),
         severity: 'normal',
         href: '/admin/instance'
@@ -532,7 +532,7 @@ export class SetupService implements OnModuleInit {
         value: backup?.local ? 'On this server' : backup ? 'S3 storage' : 'Not set',
         state: backup && !backup.local ? 'configured' : skippedOr('storage', 'pending'),
         detail: backup?.local
-          ? 'If the server is lost, the backups are lost.'
+          ? 'If you lose the server, you lose the backups.'
           : backup
             ? null
             : 'Databases have no backups until this is set.',
@@ -575,7 +575,7 @@ export class SetupService implements OnModuleInit {
         title: 'Custom domains target',
         value: cname ?? 'Not set',
         state: cname ? 'configured' : skippedOr('network', 'pending'),
-        detail: cname ? null : 'Orchard cannot check custom domains until this is set.',
+        detail: cname ? null : "Orchard can't check custom domains until this is set.",
         href: '/admin/instance'
       },
       {
@@ -583,7 +583,7 @@ export class SetupService implements OnModuleInit {
         title: 'MCP endpoint',
         value: mcpDeployed && mcp.enabled ? (hostOf(mcpUrl) ?? 'On') : 'Off',
         state: mcpDeployed && mcp.enabled ? 'configured' : 'off',
-        detail: mcpDeployed && mcp.enabled ? null : 'AI agents cannot connect.',
+        detail: mcpDeployed && mcp.enabled ? null : "AI agents can't connect.",
         href: '/admin/instance'
       },
       {
@@ -663,7 +663,7 @@ export class SetupService implements OnModuleInit {
         id: 'public-ip',
         title: 'Set a public IP',
         detail:
-          'Raw TCP and UDP ports and public databases are published on this address. Without it, each organization must set its own.',
+          'Public TCP and UDP ports and public databases use this address. Without it, each organization must set its own.',
         done: false,
         severity: 'normal',
         href: '/admin/instance'
@@ -676,8 +676,8 @@ export class SetupService implements OnModuleInit {
         id: 'mcp',
         title: 'Turn on the MCP endpoint',
         detail: installMode
-          ? 'AI agents cannot connect to this instance. Run sudo orchardctl mcp enable --apply.'
-          : 'AI agents cannot connect to this instance. Set mcp.enabled and mcp.ingress.host in your Helm values.',
+          ? "AI agents can't connect to this instance. Run sudo orchardctl mcp enable --apply."
+          : "AI agents can't connect to this instance. Set mcp.enabled and mcp.ingress.host in your Helm values.",
         done: false,
         severity: 'normal',
         href: 'https://docs.orchard.my/operate/finishing-setup/#turn-the-mcp-endpoint-on-or-off'
@@ -692,7 +692,7 @@ export class SetupService implements OnModuleInit {
       items.push({
         id: 'image-scanning',
         title: 'Turn on image scanning',
-        detail: 'Without a scanner, the Security tab cannot report vulnerabilities in your images.',
+        detail: "Without a scanner, the Security tab can't report vulnerabilities in your images.",
         done: false,
         severity: 'normal',
         href: '/admin/instance'
@@ -704,7 +704,7 @@ export class SetupService implements OnModuleInit {
         id: 'tenant-isolation',
         title: "Apps share this server's kernel",
         detail:
-          'More than one person uses this instance, and a container escape reaches every app on it. Install gVisor or Kata before you run code you do not trust.',
+          "More than one person uses this instance, and a container escape reaches every app on it. Install gVisor or Kata before you run code you don't trust.",
         done: false,
         severity: 'warning',
         href: 'https://docs.orchard.my/operate/security/'
@@ -716,7 +716,7 @@ export class SetupService implements OnModuleInit {
 
   private static dnsDetail(dns: DnsReport | null, outstanding: number): string {
     if (!dns || dns.rows.length === 0) {
-      return 'Nothing to check yet: this instance has no domain configured.';
+      return 'This instance has no domain to check.';
     }
     if (outstanding === 0) {
       return 'Every hostname this instance serves resolves here.';
@@ -724,7 +724,7 @@ export class SetupService implements OnModuleInit {
     const names = DnsCheckService.outstanding(dns)
       .map((r) => r.record)
       .join(', ');
-    return `${names} does not point here yet. Certificates cannot issue for a hostname that does not resolve.`;
+    return `${names} doesn't point here yet. A hostname that doesn't resolve can't get a certificate.`;
   }
 
   /**
@@ -735,19 +735,19 @@ export class SetupService implements OnModuleInit {
    */
   private wildcardStatus(configured: boolean, cert: SetupCertificate): string {
     const base =
-      'App URLs get one certificate each today, against a limit of 50 per week per registered domain. A wildcard removes that ceiling.';
+      'Each app URL gets its own certificate, with a limit of 50 per week per domain. A wildcard removes that limit.';
     if (!configured) return base;
     switch (cert.state) {
       case 'ready':
-        return 'A wildcard certificate is issued and covering every generated app URL.';
+        return 'A wildcard certificate covers every generated app URL.';
       case 'issuing':
         return `Configured, and cert-manager is still issuing it. ${cert.message ?? ''}`.trim();
       case 'failed':
         return `Configured, but issuance failed. ${cert.message ?? ''}`.trim();
       case 'rateLimited':
-        return `Configured, but Let's Encrypt is rate limiting. It will issue on its own once the limit rolls off.`;
+        return `Configured, but Let's Encrypt is rate limiting. The certificate issues when the limit resets.`;
       default:
-        return 'Configured, but no certificate automation is available to issue it.';
+        return 'Configured, but no certificate automation can issue it.';
     }
   }
 
@@ -762,7 +762,7 @@ export class SetupService implements OnModuleInit {
 
   private async assertTokenValid(token: string): Promise<void> {
     const supplied = (token || '').trim();
-    if (!supplied) throw new BadRequestException('A claim token is required');
+    if (!supplied) throw new BadRequestException('Enter the setup token');
 
     const claim = await this.readClaim();
     if (!claim) throw new BadRequestException('This instance has already been claimed');
@@ -771,14 +771,14 @@ export class SetupService implements OnModuleInit {
     }
     if (SetupService.expired(claim)) {
       throw new BadRequestException(
-        'That claim token has expired. Run `orchard-claim` to mint a new one.'
+        'That setup token expired. Run `orchard-claim` to get a new one.'
       );
     }
 
     const a = Buffer.from(hashClaimToken(supplied), 'hex');
     const b = Buffer.from(claim.hash, 'hex');
     if (a.length !== b.length || !timingSafeEqual(a, b)) {
-      throw new BadRequestException('That claim token is not valid');
+      throw new BadRequestException("That setup token isn't valid");
     }
   }
 
@@ -830,7 +830,7 @@ export class SetupService implements OnModuleInit {
 
     const normalizedEmail = (email || '').toLowerCase().trim();
     if (!normalizedEmail || !normalizedEmail.includes('@')) {
-      throw new BadRequestException('An email address is required to claim this instance');
+      throw new BadRequestException('Enter an email address to claim this instance');
     }
 
     const existing = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
@@ -879,7 +879,7 @@ export class SetupService implements OnModuleInit {
       // A claim that half-succeeds is worse than one with no org: the token is
       // already spent by this point, so failing here would strand the operator
       // with no way to retry. The setup flow reports a missing org instead.
-      this.logger.error(`could not create the first organization: ${e?.message || e}`);
+      this.logger.error(`couldn't create the first organization: ${e?.message || e}`);
     }
   }
 

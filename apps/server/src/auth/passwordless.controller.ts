@@ -145,12 +145,12 @@ export class PasswordlessController {
     const { email } = body;
 
     if (!email || typeof email !== 'string') {
-      throw new HttpException('Email is required', HttpStatus.BAD_REQUEST);
+      throw new HttpException('Enter your email address', HttpStatus.BAD_REQUEST);
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      throw new HttpException('Invalid email format', HttpStatus.BAD_REQUEST);
+      throw new HttpException('Enter a valid email address', HttpStatus.BAD_REQUEST);
     }
 
     const ipAddress = this.getClientIp(req);
@@ -175,11 +175,11 @@ export class PasswordlessController {
     const { email, code } = body;
 
     if (!email || typeof email !== 'string') {
-      throw new HttpException('Email is required', HttpStatus.BAD_REQUEST);
+      throw new HttpException('Enter your email address', HttpStatus.BAD_REQUEST);
     }
 
     if (!code || typeof code !== 'string') {
-      throw new HttpException('OTP code is required', HttpStatus.BAD_REQUEST);
+      throw new HttpException('Enter the code', HttpStatus.BAD_REQUEST);
     }
 
     const ipAddress = this.getClientIp(req);
@@ -189,7 +189,7 @@ export class PasswordlessController {
     const result = await this.otpService.verifyOtp(email, code, ipAddress);
 
     if (!result.valid || !result.email) {
-      throw new HttpException('Invalid OTP code', HttpStatus.UNAUTHORIZED);
+      throw new HttpException('That code is wrong or expired', HttpStatus.UNAUTHORIZED);
     }
 
     // Private beta: check access BEFORE creating the user so rejected
@@ -297,10 +297,10 @@ export class PasswordlessController {
   ): Promise<void> {
     const { email, password } = body || ({} as PasswordDto);
     if (!email || typeof email !== 'string') {
-      throw new HttpException('Email is required', HttpStatus.BAD_REQUEST);
+      throw new HttpException('Enter your email address', HttpStatus.BAD_REQUEST);
     }
     if (!password || typeof password !== 'string') {
-      throw new HttpException('Password is required', HttpStatus.BAD_REQUEST);
+      throw new HttpException('Enter your password', HttpStatus.BAD_REQUEST);
     }
 
     const normalizedEmail = email.toLowerCase().trim();
@@ -607,7 +607,7 @@ export class PasswordlessController {
 
     // Prevent revoking current session via this endpoint
     if (sessionId === req.user.sessionId) {
-      throw new HttpException('Use logout to end your current session', HttpStatus.BAD_REQUEST);
+      throw new HttpException('Sign out to end your current session', HttpStatus.BAD_REQUEST);
     }
 
     const revoked = await this.sessionsService.revokeSession(user.id, sessionId);

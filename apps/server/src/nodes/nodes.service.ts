@@ -441,7 +441,7 @@ export class NodesService {
     }
     if (!nodePoolId) return;
     if (!(await this.settings.isUserspaceSchedulingEnabled())) {
-      throw new ForbiddenException('Node pool selection is not enabled on this instance');
+      throw new ForbiddenException("Node pool selection isn't enabled on this instance");
     }
     const pool = await this.prisma.nodePool.findUnique({
       where: { id: nodePoolId },
@@ -449,7 +449,7 @@ export class NodesService {
     });
     if (!pool) throw new NotFoundException('Node pool not found');
     if (!pool.userSelectable) {
-      throw new ForbiddenException('That node pool is not available for selection');
+      throw new ForbiddenException("That node pool isn't available for selection");
     }
   }
 }

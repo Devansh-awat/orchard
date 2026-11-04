@@ -25,7 +25,7 @@ import {
 
 export class StorageNotConfiguredError extends BadRequestException {
   constructor() {
-    super('File uploads need storage. An instance admin can add it under Instance admin.');
+    super('File uploads need storage. An instance admin can add it.');
   }
 }
 
@@ -74,7 +74,7 @@ export class StorageService {
       );
     } catch (e: any) {
       this.logger.warn(`upload to ${target.bucket} failed: ${e?.name ?? 'error'}`);
-      throw new ServiceUnavailableException('Storage is not reachable right now. Try again later.');
+      throw new ServiceUnavailableException("Storage isn't reachable right now. Try again later.");
     }
 
     return `${target.publicUrl}/${fileName}`;
@@ -96,9 +96,7 @@ export class StorageService {
     );
   }
 
-  async readUpload(
-    path: string
-  ): Promise<{
+  async readUpload(path: string): Promise<{
     body: Readable;
     contentType: string | undefined;
     length: number | undefined;

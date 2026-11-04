@@ -77,7 +77,7 @@ while read -r ts name; do
 done < /tmp/tenants.lru
 
 if [ "$(usage)" -gt "$HIGH" ]; then
-  echo "=== Above \${HIGH}% — evicting least-recently-used tenants ==="
+  echo "=== Above \${HIGH}%, evicting least-recently-used tenants ==="
   while read -r ts name; do
     [ -d "$CACHE_ROOT/$name" ] || continue
     [ "$ts" -gt "$IDLE_CUTOFF" ] && continue

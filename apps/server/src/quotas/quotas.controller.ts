@@ -189,7 +189,7 @@ export class OrgQuotasController {
     const membership = await this.prisma.organizationMember.findUnique({
       where: { organizationId_userId: { organizationId: orgId, userId } }
     });
-    if (!membership) throw new NotFoundException('Not a member of this org');
+    if (!membership) throw new NotFoundException('Not a member of this organization');
 
     const [allowance, usage, org] = await Promise.all([
       this.quotas.resolveMemberAllowance(orgId, userId),

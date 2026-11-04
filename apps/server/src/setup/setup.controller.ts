@@ -76,8 +76,7 @@ export class SetupController {
     @Response() res: ExpressResponse
   ): Promise<void> {
     const email = (body?.email || process.env.SETUP_ADMIN_EMAIL || '').trim();
-    if (!email)
-      throw new BadRequestException('An email address is required to claim this instance');
+    if (!email) throw new BadRequestException('Enter an email address to claim this instance');
 
     const user = await this.setup.bootstrap(body?.token ?? '', email);
 

@@ -405,7 +405,7 @@ export class McpOAuthService {
       return { error: 'Consent needs a browser session, not a derived token' };
     }
     if (payload.orgScope) {
-      return { error: 'A sign-in scoped to one organization cannot authorize an MCP client' };
+      return { error: "A sign-in scoped to one organization can't authorize an MCP client" };
     }
     if (!(await this.sessions.validateSession(payload.sessionId))) {
       return { error: 'Session expired, sign in again' };
@@ -415,7 +415,7 @@ export class McpOAuthService {
     if (body.redirect_uri !== pending.redirectUri || !client || body.client_name !== client.name) {
       return {
         error:
-          'What this page showed does not match the request, so nothing was granted. Start again from your MCP client.'
+          "What this page showed doesn't match the request, so nothing was granted. Start again from your MCP client."
       };
     }
 

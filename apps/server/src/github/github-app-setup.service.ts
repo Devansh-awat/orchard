@@ -58,7 +58,7 @@ export class GithubAppSetupService {
     const locked = this.config.lockedFields();
     if (locked.length > 0) {
       throw new ConflictException(
-        'The GitHub App is set by environment variables and cannot be replaced here'
+        "Environment variables set the GitHub App, so you can't replace it here"
       );
     }
 
@@ -121,7 +121,7 @@ export class GithubAppSetupService {
   }
 
   async completeManifestFlow(code: string, state: string): Promise<string | undefined> {
-    if (!code) throw new BadRequestException('GitHub did not return a code');
+    if (!code) throw new BadRequestException("GitHub didn't return a code");
     const returnTo = await this.consumeState(state);
 
     const response = await fetch(`https://api.github.com/app-manifests/${code}/conversions`, {

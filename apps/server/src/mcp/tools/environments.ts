@@ -13,7 +13,7 @@ export function registerEnvironmentTools(server: McpServer, client: OrchardClien
   server.registerTool(
     'list_environments',
     {
-      description: `List a project's environments — production, staging, preview and whatever else it has.
+      description: `List a project's environments: production, staging, preview and whatever else it has.
 
 Each environment is its own Kubernetes namespace with its own deployments, databases, ingresses and shared variables, so an environment id is what you pass to \`create_deployment\` / \`deploy_from_github\` to land an app somewhere other than production. Every project has at least one, marked \`isDefault\`.`,
       inputSchema: {
@@ -70,7 +70,7 @@ Provisions a fresh namespace. Nothing is copied from production: the new environ
     'set_default_environment',
     {
       description:
-        'Make an environment the project default — the one resources land in when a create call omits environmentId. Does not move anything that already exists.',
+        'Make an environment the project default: the one resources land in when a create call omits environmentId. Does not move anything that already exists.',
       inputSchema: {
         environmentId: z.guid().describe('The environment UUID (from list_environments)')
       }
@@ -88,7 +88,7 @@ Provisions a fresh namespace. Nothing is copied from production: the new environ
 
 **They are not injected automatically.** A deployment opts in by setting one of its own env vars to \`\${{shared.KEY}}\` (via \`add_env_vars\`); the reference is expanded when the pod spec and build args are built. Referencing a secret shared var makes the referencing var secret too, so it still routes through the Kubernetes Secret.
 
-Secrets come back here with a null value — they are write-only.`,
+Secrets come back here with a null value. They are write-only.`,
       inputSchema: {
         environmentId: z.guid().describe('The environment UUID (from list_environments)')
       }
@@ -104,7 +104,7 @@ Secrets come back here with a null value — they are write-only.`,
     {
       description: `**The default way to change shared variables.** Adds or overwrites the keys you pass and leaves the rest of the environment's shared set alone.
 
-Deployments that reference a changed key via \`\${{shared.KEY}}\` are restarted; the rest are left running. Defining a var here does nothing on its own — point a deployment at it with \`add_env_vars\` and the value \`\${{shared.KEY}}\`.
+Deployments that reference a changed key via \`\${{shared.KEY}}\` are restarted; the rest are left running. Defining a var here does nothing on its own. Point a deployment at it with \`add_env_vars\` and the value \`\${{shared.KEY}}\`.
 
 Related: \`delete_shared_env_vars\` to remove keys, \`set_shared_env_vars\` only when you mean to replace the whole set.`,
       inputSchema: {

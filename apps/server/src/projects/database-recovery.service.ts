@@ -142,7 +142,7 @@ export function targetFromRequest(req: RestoreRequest, defaultLatest: boolean): 
   const t = Date.parse(at);
   if (!Number.isFinite(t))
     throw new BadRequestException('at must be "now", "latest" or an ISO timestamp');
-  if (t > Date.now()) throw new BadRequestException('at cannot be in the future');
+  if (t > Date.now()) throw new BadRequestException("at can't be in the future");
   return { type: 'time', time: new Date(t).toISOString() };
 }
 
@@ -167,7 +167,7 @@ export function forkDecision(
   if (!source.canEdit) {
     return {
       reason: 'source_forbidden',
-      message: 'Your role does not allow you to copy this database'
+      message: "Your role doesn't allow you to copy this database"
     };
   }
   if (!target || target.organizationId !== source.organizationId) {
@@ -176,7 +176,7 @@ export function forkDecision(
   if (!target.canEdit) {
     return {
       reason: 'target_forbidden',
-      message: 'Your role does not allow you to add databases to that project'
+      message: "Your role doesn't allow you to add databases to that project"
     };
   }
   const crossProject = target.projectId !== source.projectId;
@@ -185,7 +185,7 @@ export function forkDecision(
     return {
       reason: 'live_cross_project',
       message:
-        'A copy into another project starts from a backup, because projects cannot reach each other. Pick the latest backup or a time.'
+        "A copy into another project starts from a backup, because projects can't reach each other. Pick the latest backup or a time."
     };
   }
   return { target: point, crossProject };
@@ -221,7 +221,7 @@ export class DatabaseRecoveryService {
     const target = targetFromRequest(req, true);
     if (target.type === 'now' && mode === 'in_place') {
       throw new BadRequestException(
-        'Restoring in place to now changes nothing; pick a time, backup or checkpoint'
+        'Restoring in place to now changes nothing. Pick a time, backup or checkpoint.'
       );
     }
     if (mode === 'in_place') await this.checkpoints.before(database.id, 'a restore', user.id);
@@ -277,7 +277,7 @@ export class DatabaseRecoveryService {
         select: { projectId: true }
       });
       if (!env || env.projectId !== targetProjectId) {
-        throw new BadRequestException('Environment does not belong to that project');
+        throw new BadRequestException("Environment doesn't belong to that project");
       }
     }
     const source = await this.operations.sourceFromDatabase(database.id);
@@ -614,7 +614,7 @@ export class DatabaseRecoveryService {
       userData
     );
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
-      throw new BadRequestException('A connection pooler needs a CNPG database');
+      throw new BadRequestException('A connection pooler needs a dedicated database');
     }
     const enabled = body.enabled ?? database.poolerEnabled;
     const config = normalizePoolerConfig({ ...((database.poolerConfig as object) ?? {}), ...body });
@@ -710,7 +710,7 @@ export class DatabaseRecoveryService {
       userData
     );
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
-      throw new BadRequestException('Upgrades need a CNPG database');
+      throw new BadRequestException('Upgrades need a dedicated database');
     }
     if ((database.replicas ?? 1) < 1 || database.status !== 'ready') {
       throw new BadRequestException('The database has to be running and healthy to upgrade');
@@ -721,7 +721,7 @@ export class DatabaseRecoveryService {
     const current = database.pgMajor ?? 17;
     if (!target) {
       throw new BadRequestException(
-        `Postgres ${body.major} is not offered; choose one of ${offered.versions.map((v) => v.major).join(', ')}`
+        `Postgres ${body.major} isn't offered; choose one of ${offered.versions.map((v) => v.major).join(', ')}`
       );
     }
     if (major <= current)
@@ -779,11 +779,11 @@ export class DatabaseRecoveryService {
     if (!REPLICATION_MODES.includes(mode))
       throw new BadRequestException('mode must be async, preferred or required');
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
-      throw new BadRequestException('Replication needs a CNPG database');
+      throw new BadRequestException('Replication needs a dedicated database');
     }
     if (mode !== 'async' && (database.replicas ?? 1) < 2) {
       throw new BadRequestException(
-        'Synchronous replication needs at least 2 instances; add a standby first'
+        'Synchronous replication needs at least 2 instances. Add a standby first.'
       );
     }
     await this.k8sCnpg.patchCluster(database.namespace, database.clusterName, {
@@ -817,7 +817,7 @@ export class DatabaseRecoveryService {
       userData
     );
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
-      throw new BadRequestException('Users need a CNPG database');
+      throw new BadRequestException('Users need a dedicated database');
     }
     const name = String(body.name ?? '')
       .trim()
@@ -870,7 +870,7 @@ export class DatabaseRecoveryService {
   async activity(databaseId: string, clerkId: string, userData?: UserData) {
     const { database } = await this.access.assertDatabaseEditor(databaseId, clerkId, userData);
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
-      throw new BadRequestException('Activity needs a CNPG database');
+      throw new BadRequestException('Activity needs a dedicated database');
     }
     const out = await this.k8sCnpg.runPsqlInCnpg(
       database.namespace,
@@ -879,7 +879,7 @@ export class DatabaseRecoveryService {
       ACTIVITY_SQL,
       { tuplesOnly: true }
     );
-    if (!out.success) throw new BadRequestException('The database did not answer');
+    if (!out.success) throw new BadRequestException("The database didn't answer");
     const line = out.stdout.split('\n').find((l) => l.trim().startsWith('{'));
     return line ? JSON.parse(line) : { sessions: [], blocked: [], maxConnections: null };
   }

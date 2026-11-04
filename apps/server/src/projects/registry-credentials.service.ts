@@ -117,7 +117,7 @@ export class RegistryCredentialsService {
 
     if (!this.crypto.enabled) {
       throw new BadRequestException(
-        'This instance has no SECRETS_ENCRYPTION_KEY, so registry tokens cannot be stored encrypted. Ask the operator to set one.'
+        "This instance has no SECRETS_ENCRYPTION_KEY, so Orchard can't store registry tokens encrypted. Ask an instance admin to set one."
       );
     }
 
@@ -377,12 +377,12 @@ export class RegistryCredentialsService {
     } catch (err: any) {
       if (err instanceof BlockedDestinationError) {
         throw new BadRequestException(
-          'That registry resolves to an internal address. Self-hosters can allow this with REGISTRY_CREDENTIALS_ALLOW_INTERNAL=true.'
+          'That registry resolves to an internal address. To allow this, set REGISTRY_CREDENTIALS_ALLOW_INTERNAL=true.'
         );
       }
       if (err instanceof BadRequestException) throw err;
       throw new BadRequestException(
-        `Could not reach the registry: ${err?.cause?.message ?? err?.message ?? 'network error'}`
+        `Couldn't reach the registry: ${err?.cause?.message ?? err?.message ?? 'network error'}`
       );
     }
   }
@@ -396,7 +396,7 @@ export class RegistryCredentialsService {
     if (probe.status === 200) return;
     if (probe.status !== 401) {
       throw new BadRequestException(
-        `The registry answered HTTP ${probe.status} to /v2/; is ${registry} a container registry?`
+        `The registry answered HTTP ${probe.status} to /v2/. Check that ${registry} is a container registry.`
       );
     }
 

@@ -140,10 +140,10 @@ export function failureHint(failing: FailingPod[], pods: any[], serving: number)
     reason === 'errimagepullbackoff' ||
     reason === 'invalidimagename'
   ) {
-    return `${prefix}The image could not be pulled. Check the image name and tag, and add registry credentials if the image is private.`;
+    return `${prefix}The image couldn't be pulled. Check the image name and tag, and add registry credentials if the image is private.`;
   }
   if (reason === 'createcontainerconfigerror' || reason === 'createcontainererror') {
-    return `${prefix}The container could not be created from its config, usually a missing secret, config map key or volume.`;
+    return `${prefix}The container couldn't be created from its config, usually a missing secret, config map key or volume.`;
   }
   const exit = first.exitCode !== null ? ` (exit code ${first.exitCode})` : '';
   return `${prefix}The app keeps exiting${exit}. Read the log tail: common causes are a missing env var, a wrong start command, or a crash on boot.`;
@@ -351,7 +351,7 @@ export function deriveRolloutPhase(s: RolloutState): RolloutVerdict {
   const hint = unscheduled
     ? 'Some pods are waiting to be scheduled onto a node.'
     : waitingOnHealth
-      ? 'Pods are running but have not passed their health check yet.'
+      ? "Pods are running but haven't passed their health check yet."
       : null;
   return verdict('deploying', desired, readyCount, [], hint);
 }

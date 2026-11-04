@@ -107,7 +107,7 @@ export class ProjectOrgTransferService {
     requestedSlug?: string
   ) {
     const desiredSlug = formatSlug((requestedSlug ?? '').trim() || project.slug);
-    if (!desiredSlug) throw new BadRequestException('Project slug cannot be empty');
+    if (!desiredSlug) throw new BadRequestException("Project slug can't be empty");
 
     const slugTaken = await this.prisma.project.findUnique({
       where: { organizationId_slug: { organizationId: destOrg.id, slug: desiredSlug } }

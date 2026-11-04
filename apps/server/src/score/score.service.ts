@@ -219,7 +219,7 @@ export class ScoreService {
     }
 
     if (plan.healthPath) {
-      warnings.push('orchard.my/health-path is noted but health checks are not set from Score yet');
+      warnings.push("orchard.my/health-path is noted but health checks aren't set from Score yet");
     }
 
     if (applied.length > 0) {

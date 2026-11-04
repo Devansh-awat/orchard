@@ -63,9 +63,7 @@ export class LogsController {
   ) {
     await this.assertLogAccess(id, req);
     if (!this.requests.available) {
-      throw new ServiceUnavailableException(
-        'No log store is configured, so requests are not recorded'
-      );
+      throw new ServiceUnavailableException("No log store is set up, so requests aren't recorded");
     }
     const { start, end } = parseRange(startStr, endStr);
     const n = Math.min(Math.max(Number(limitStr) || 0, 1), 500);
@@ -108,9 +106,7 @@ export class LogsController {
   async streamRequests(@Param('id') id: string, @Request() req): Promise<Observable<MessageEvent>> {
     await this.assertLogAccess(id, req);
     if (!this.requests.available) {
-      throw new ServiceUnavailableException(
-        'No log store is configured, so requests are not recorded'
-      );
+      throw new ServiceUnavailableException("No log store is set up, so requests aren't recorded");
     }
     const release = this.streams.acquire(req.user.sub, `requests:${id}`);
     let since = Date.now() - 60_000;

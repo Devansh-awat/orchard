@@ -325,7 +325,7 @@ export class NotificationChannelsService {
     const message: NotificationMessage = {
       event: 'deploy.succeeded',
       title: 'Test notification from Orchard',
-      body: `Channel "${channel.name}" is wired up correctly.`,
+      body: `Channel "${channel.name}" works.`,
       url: this.frontendUrl
     };
     const outcome = await this.transport.send(
@@ -350,7 +350,7 @@ export class NotificationChannelsService {
     });
     if (!channel) throw new NotFoundException('Notification channel not found');
     if (!channel.enabled) {
-      throw new BadRequestException('Re-enable this channel before replaying to it');
+      throw new BadRequestException('Turn this channel back on before replaying to it');
     }
     const hours = Math.min(Math.max(Math.floor(sinceHours) || 1, 1), MAX_REPLAY_HOURS);
     const since = new Date(Date.now() - hours * 60 * 60 * 1000);
@@ -367,7 +367,7 @@ export class NotificationChannelsService {
       return [{ event: { in: events }, ...eventScopeFilter(rule) }];
     });
     if (wanted.length === 0) {
-      return { queued: 0, message: 'This channel has no rules, so there is nothing to replay' };
+      return { queued: 0, message: "This channel has no rules, so there's nothing to replay" };
     }
 
     const events = await this.prisma.notificationEvent.findMany({
@@ -415,7 +415,7 @@ export class NotificationChannelsService {
       truncated: events.length === MAX_REPLAY_EVENTS,
       message:
         events.length === MAX_REPLAY_EVENTS
-          ? `Queued the most recent ${MAX_REPLAY_EVENTS} events; narrow the window to replay the rest`
+          ? `Queued the most recent ${MAX_REPLAY_EVENTS} events. Narrow the window to replay the rest.`
           : undefined
     };
   }

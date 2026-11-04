@@ -1353,7 +1353,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     const containers = (podBody.spec?.containers || []).map((c) => c.name);
     console.log(`[PG/backup] pod containers: ${containers.join(', ')}`);
     if (!containers.includes('pgbackrest')) {
-      const msg = `Pod ${pod} has no "pgbackrest" sidecar container (found: ${containers.join(', ')}). This database was likely created before R2 was configured — recreate it or restart it to pick up the sidecar.`;
+      const msg = `Pod ${pod} has no "pgbackrest" sidecar container (found: ${containers.join(', ')}). This database was likely created before backup storage was set up. Recreate or restart it to get the sidecar.`;
       console.error(`[PG/backup] ${msg}`);
       return { success: false, output: msg };
     }
@@ -1442,7 +1442,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       } catch {}
     }
     if (!newPod)
-      throw new ServiceUnavailableException('Postgres pod did not come back up for restore');
+      throw new ServiceUnavailableException("Postgres pod didn't come back up for restore");
 
     const args = ['pgbackrest', `--stanza=${stanza}`, '--delta'];
     if (backupLabel) args.push(`--set=${backupLabel}`);
@@ -2157,7 +2157,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
         if (oomKilled) {
           importStatus = 'failed';
           importError =
-            'The import ran out of memory while restoring data (OOMKilled). Recreate the database with more memory, or contact an admin if this keeps happening.';
+            'The import ran out of memory while restoring data. Recreate the database with more memory, or contact an admin if this keeps happening.';
         } else if (importStatus === 'failed') {
           const reason =
             crashy?.state?.waiting?.reason ??

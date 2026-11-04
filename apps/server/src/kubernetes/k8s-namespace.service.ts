@@ -71,7 +71,7 @@ export class K8sNamespaceService implements OnModuleInit {
           }
           if (failed.length) {
             this.logger.warn(
-              `could not re-apply the tenant network policy to: ${failed.join(', ')}`
+              `couldn't re-apply the tenant network policy to: ${failed.join(', ')}`
             );
           }
         })
@@ -502,7 +502,7 @@ export class K8sNamespaceService implements OnModuleInit {
         await this.createNetworkPolicy(name);
         updated.push(name);
       } catch (e: any) {
-        this.logger.warn(`could not re-apply the network policy for ${name}: ${e?.message}`);
+        this.logger.warn(`couldn't re-apply the network policy for ${name}: ${e?.message}`);
         failed.push(name);
       }
     }
@@ -514,7 +514,7 @@ export class K8sNamespaceService implements OnModuleInit {
     });
     for (const { projectId } of projects) {
       await this.applyProjectDatabaseIngress(projectId).catch((e) =>
-        this.logger.warn(`could not apply database ingress for project ${projectId}: ${e?.message}`)
+        this.logger.warn(`couldn't apply database ingress for project ${projectId}: ${e?.message}`)
       );
     }
 

@@ -107,7 +107,7 @@ export function deriveDbTuning(input: DbTuningInput): DbTuning {
         message:
           `shared_buffers is ${override}, ${pct}% of this database's memory limit. ` +
           'Postgres reserves that up front, so there may not be enough left for ' +
-          'connections and backups, and the database can be OOMKilled. ' +
+          'connections and backups, and the database can run out of memory. ' +
           `The automatic value for this limit is ${formatPgMemory(derivedSharedBuffers)}. ` +
           'Clear the setting to go back to automatic.'
       });
@@ -125,7 +125,7 @@ export function deriveDbTuning(input: DbTuningInput): DbTuning {
         key: 'backupCompression',
         message:
           'Backup compression is forced on below the memory level where it is safe. ' +
-          'Compressing the base backup can OOMKill the database while it runs. ' +
+          'Compressing the base backup can run the database out of memory. ' +
           'Clear the setting to go back to automatic.'
       });
     }

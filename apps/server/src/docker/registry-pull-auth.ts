@@ -50,7 +50,7 @@ function asAuths(value: unknown, source: string): RegistryAuths {
       const decoded = Buffer.from(rec.auth, 'base64').toString('utf8');
       const sep = decoded.indexOf(':');
       if (sep <= 0) {
-        throw new PullAuthError(`${source} auth for ${name} is not username:password`);
+        throw new PullAuthError(`${source} auth for ${name} isn't username:password`);
       }
       username = username || decoded.slice(0, sep);
       password = password || decoded.slice(sep + 1);
@@ -68,7 +68,7 @@ export function parseDockerAuthConfig(raw: string, source = 'DOCKER_AUTH_CONFIG'
   try {
     parsed = JSON.parse(raw);
   } catch {
-    throw new PullAuthError(`${source} is not valid JSON`);
+    throw new PullAuthError(`${source} isn't valid JSON`);
   }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new PullAuthError(`${source} must be a Docker config JSON object`);

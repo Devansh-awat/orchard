@@ -89,7 +89,7 @@ export function scope({ namespace, app, kind }: LogScope): string {
 
 export function toTime(value: TimeInput, name = 'time'): Date {
   const date = value instanceof Date ? new Date(value.getTime()) : new Date(value);
-  if (Number.isNaN(date.getTime())) throw new LogQueryError(`${name} is not a valid time`);
+  if (Number.isNaN(date.getTime())) throw new LogQueryError(`${name} isn't a valid time`);
   return date;
 }
 

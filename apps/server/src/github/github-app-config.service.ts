@@ -61,7 +61,7 @@ export class GithubAppConfigService implements OnModuleInit {
         webhookSecret: this.crypto.decrypt(parsed.webhookSecret)
       };
     } catch (e) {
-      this.logger.error(`could not read the stored GitHub App config: ${e}`);
+      this.logger.error(`couldn't read the stored GitHub App config: ${e}`);
       this.stored = null;
     }
   }

@@ -237,7 +237,7 @@ export class EmailAvatarService {
   ): Promise<string | null> {
     this.initS3();
     if (!this.s3Client || !this.bucketName) {
-      this.logger.warn('R2 is not configured; skipping email avatar import');
+      this.logger.warn("R2 isn't configured; skipping email avatar import");
       return null;
     }
     const ext = found.contentType.split('/')[1].replace('jpeg', 'jpg');

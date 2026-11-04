@@ -124,7 +124,7 @@ export class OAuthService {
   private async getEndpoints(): Promise<OAuthEndpoints> {
     if (this.provider === 'hackclub') return HACKCLUB_ENDPOINTS;
     if (this.provider === 'none') {
-      throw new Error('OAuth login is disabled (AUTH_PROVIDER=none)');
+      throw new Error('OAuth sign-in is off (AUTH_PROVIDER=none)');
     }
     if (this.oidcEndpoints) return this.oidcEndpoints;
 

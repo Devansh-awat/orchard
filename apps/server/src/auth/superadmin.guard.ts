@@ -181,7 +181,7 @@ export class SuperAdminGuard implements CanActivate {
         throw new UnauthorizedException('MCP gateway request missing acting-user headers');
       }
       if (deniedToMcpGateway(request.path)) {
-        throw new ForbiddenException('An MCP connection cannot reach this route; sign in instead');
+        throw new ForbiddenException("An MCP connection can't reach this route. Sign in instead.");
       }
       const gatewayScope = scopeFromHeader(request.headers['x-acting-user-scope']);
 
@@ -217,7 +217,7 @@ export class SuperAdminGuard implements CanActivate {
       }
 
       if (!actingSession || actingSession.userId !== dbUserId) {
-        throw new UnauthorizedException('Acting user does not own that session');
+        throw new UnauthorizedException("Acting user doesn't own that session");
       }
       const gatewayOrgScope = deviceOrgScope(actingSession.deviceName);
       if (gatewayOrgScope && deniedToOrgScopedSession(request.method, request.path)) {
@@ -250,14 +250,14 @@ export class SuperAdminGuard implements CanActivate {
         return true;
       }
       if (gatewayOrgScope) {
-        throw new ForbiddenException('Superadmin access required');
+        throw new ForbiddenException('You need superadmin access');
       }
       const sa = await this.prisma.user.findFirst({
         where: { id: dbUserId },
         select: { isSuperAdmin: true }
       });
       if (!sa || !sa.isSuperAdmin) {
-        throw new ForbiddenException('Superadmin access required');
+        throw new ForbiddenException('You need superadmin access');
       }
       return true;
     }
@@ -356,11 +356,11 @@ export class SuperAdminGuard implements CanActivate {
     }
 
     if (crossSiteDenied) {
-      throw new ForbiddenException('Cross-site requests cannot use the session cookie');
+      throw new ForbiddenException("Cross-site requests can't use the session cookie");
     }
     if (orgScopeDenied) {
       throw new ForbiddenException(
-        'This sign-in is scoped to a single organization and cannot manage account credentials'
+        "This sign-in is scoped to one organization and can't manage account credentials"
       );
     }
 
@@ -396,7 +396,7 @@ export class SuperAdminGuard implements CanActivate {
       }
 
       if (deniedToApiToken(request.path)) {
-        throw new ForbiddenException('An API token cannot enrol credentials; sign in instead');
+        throw new ForbiddenException("An API token can't add credentials. Sign in instead.");
       }
 
       const user = apiToken.user;
@@ -451,7 +451,7 @@ export class SuperAdminGuard implements CanActivate {
     // An org-scoped session never qualifies, whatever the underlying account
     // is, otherwise one tenant's IdP could reach the platform console.
     if (request['user']?.orgScope) {
-      throw new ForbiddenException('Superadmin access required');
+      throw new ForbiddenException('You need superadmin access');
     }
     const userId = request['user'].sub as string;
     const user = await this.prisma.user.findFirst({
@@ -469,7 +469,7 @@ export class SuperAdminGuard implements CanActivate {
     });
 
     if (!user || !user.isSuperAdmin) {
-      throw new ForbiddenException('Superadmin access required');
+      throw new ForbiddenException('You need superadmin access');
     }
 
     // Store the real DB user ID for downstream use

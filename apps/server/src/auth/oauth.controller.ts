@@ -339,7 +339,7 @@ export class OAuthController {
       if (err instanceof Error && err.message === 'Username is already taken') {
         throw new HttpException('Username is already taken', HttpStatus.CONFLICT);
       }
-      throw new HttpException('Failed to update profile', HttpStatus.INTERNAL_SERVER_ERROR);
+      throw new HttpException("Couldn't update your profile", HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 
@@ -368,14 +368,11 @@ export class OAuthController {
 
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!allowedTypes.includes(file.mimetype)) {
-      throw new HttpException(
-        'Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed',
-        HttpStatus.BAD_REQUEST
-      );
+      throw new HttpException('Use a JPEG, PNG, GIF or WebP image', HttpStatus.BAD_REQUEST);
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      throw new HttpException('File size exceeds 5MB limit', HttpStatus.BAD_REQUEST);
+      throw new HttpException('Use a file under 5 MB', HttpStatus.BAD_REQUEST);
     }
 
     const user = await this.resolveUser(req);

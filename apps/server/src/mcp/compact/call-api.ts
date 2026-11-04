@@ -134,7 +134,7 @@ export async function executeCall(
   }
   const filled = fillPath(operation.path, input.pathParams);
   if (filled.invalid.length) {
-    return errorResult(`Path parameter(s) ${filled.invalid.join(', ')} cannot be "." or "..".`);
+    return errorResult(`Path parameter(s) ${filled.invalid.join(', ')} can't be "." or "..".`);
   }
   if (!filled.path) {
     return errorResult(

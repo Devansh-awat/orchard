@@ -114,7 +114,7 @@ export function providerFailureMessage(e: unknown): string {
   if (e instanceof GitProviderError && (e.status === 401 || e.status === 403)) {
     return 'The provider rejected the token';
   }
-  return 'Could not reach the provider';
+  return "Couldn't reach the provider";
 }
 
 export function hostOf(baseUrl: string): string {

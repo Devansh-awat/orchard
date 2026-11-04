@@ -88,7 +88,7 @@ export class EnvironmentSharedVarsService {
             (await this.k8sWorkload.getKubernetesDeployment(dep.name, dep.namespace)) !== null;
         } catch (e) {
           this.logger.warn(
-            `re-inject ${dep.name} skipped, the cluster could not be read: ${(e as Error)?.message ?? e}`
+            `re-inject ${dep.name} skipped, the cluster couldn't be read: ${(e as Error)?.message ?? e}`
           );
           return;
         }

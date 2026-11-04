@@ -130,7 +130,7 @@ export class DatabaseTrashService {
     if (row.restoredAs) throw new BadRequestException('This database was already brought back');
     if (!row.recoverableUntil) {
       throw new BadRequestException(
-        'This database had no completed backup, so it cannot be brought back'
+        "This database has no completed backup, so you can't bring it back"
       );
     }
     const busy = await this.prisma.databaseOperation.findFirst({

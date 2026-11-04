@@ -34,7 +34,7 @@ export class PodLogCaptureService implements OnModuleInit, OnModuleDestroy {
   onModuleInit() {
     const url = process.env.REDIS_URL;
     if (!url) {
-      this.logger.warn('REDIS_URL not set — killed-container log capture disabled');
+      this.logger.warn('REDIS_URL not set: killed-container log capture disabled');
       return;
     }
     this.redis = new Redis(url, { maxRetriesPerRequest: null });

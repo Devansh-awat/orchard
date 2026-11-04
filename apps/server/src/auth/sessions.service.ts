@@ -134,8 +134,8 @@ export class SessionsService {
           ? `${input.deviceName || 'An app'} was given access to your account`
           : 'New sign-in to your Orchard account',
         body: app
-          ? 'It can act as you until you revoke it. If this was not you, revoke it and sign out everywhere.'
-          : 'If this was not you, sign out everywhere and change how you sign in.',
+          ? "It can act as you until you revoke it. If this wasn't you, revoke it and sign out everywhere."
+          : "If this wasn't you, sign out everywhere and change how you sign in.",
         url: `${this.frontendUrl}/user/settings?tab=security`,
         targetId: input.sessionId,
         targetName: input.deviceName ?? undefined,

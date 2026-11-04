@@ -26,7 +26,7 @@ export class McpEnabledGuard implements CanActivate {
       this.cached = { at: now, value: await this.settings.isMcpEnabled() };
     }
     if (!this.cached.value) {
-      throw new ServiceUnavailableException('MCP is disabled on this Orchard instance');
+      throw new ServiceUnavailableException('MCP is off on this Orchard instance');
     }
     return true;
   }

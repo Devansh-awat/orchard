@@ -37,7 +37,7 @@ If no port is specified, it defaults to 80. Make sure the port matches the port 
           .positive()
           .optional()
           .describe(
-            "CPU request in millicores per pod (e.g. 500 = 0.5 CPU). Subject to project / org / per-member quotas — the API will reject the request if the resulting allocation exceeds the caller's limit."
+            "CPU request in millicores per pod (e.g. 500 = 0.5 CPU). Subject to project / org / per-member quotas. The API will reject the request if the resulting allocation exceeds the caller's limit."
           ),
         memoryRequestBytes: z
           .number()
@@ -299,7 +299,7 @@ Before calling, you should still confirm with list_github_deploy_targets that th
         repoUrl: z
           .string()
           .describe(
-            'Full GitHub URL to the repo (https:// or git@). May include /tree/<branch> or /blob/<branch> segments — the branch will be parsed out.'
+            'Full GitHub URL to the repo (https:// or git@). May include /tree/<branch> or /blob/<branch> segments. The branch will be parsed out.'
           ),
         branch: z
           .string()
@@ -406,7 +406,7 @@ Before calling, you should still confirm with list_github_deploy_targets that th
     'update_deployment_resources',
     {
       description: `Update CPU and memory requests for an existing deployment. The deployment will roll its pods to apply the new resources.
-The API enforces project, organization, and per-member resource quotas — if the new values exceed your remaining allowance the call returns an error and nothing changes.
+The API enforces project, organization, and per-member resource quotas. If the new values exceed your remaining allowance the call returns an error and nothing changes.
 Pass null for either field to clear it and fall back to the project / org default.`,
       inputSchema: {
         deploymentId: z.guid().describe('The deployment UUID'),
@@ -475,7 +475,7 @@ Everything else on the response is the deployment as it stands right now, so whe
     {
       description: `Set how many replicas a deployment runs.
 
-\`replicas: 0\` is the same thing as \`stop_deployment\` — it marks the deployment stopped and remembers the old count, so the next rebuild will not bring it back. Scaling to any positive number un-stops it. Prefer \`stop_deployment\` / \`start_deployment\` when the intent is "turn it off / back on"; they read clearly in the audit log and do not make you guess a count to restore.`,
+\`replicas: 0\` is the same thing as \`stop_deployment\`. It marks the deployment stopped and remembers the old count, so the next rebuild will not bring it back. Scaling to any positive number un-stops it. Prefer \`stop_deployment\` / \`start_deployment\` when the intent is "turn it off / back on"; they read clearly in the audit log and do not make you guess a count to restore.`,
       inputSchema: {
         deploymentId: z.guid().describe('The deployment UUID'),
         replicas: z.number().min(0).max(10).describe('Number of replicas (0 to pause, max 10)')
@@ -490,9 +490,9 @@ Everything else on the response is the deployment as it stands right now, so whe
   server.registerTool(
     'stop_deployment',
     {
-      description: `Take a deployment offline. Pods are drained and it stays down — a rebuild deploys it at zero replicas — until \`start_deployment\`.
+      description: `Take a deployment offline. Pods are drained and it stays down until \`start_deployment\`. A rebuild deploys it at zero replicas.
 
-The "turn it off" verb: it sets the deployment's \`stopped\` flag and leaves the replica count alone, so \`start_deployment\` brings it back at the size it was. Nothing is destroyed — build, env vars, domains, volumes and data all stay. (\`scale_deployment(0)\` reaches the same state; this is the clearer way to ask for it.)`,
+The "turn it off" verb: it sets the deployment's \`stopped\` flag and leaves the replica count alone, so \`start_deployment\` brings it back at the size it was. Nothing is destroyed: build, env vars, domains, volumes and data all stay. (\`scale_deployment(0)\` reaches the same state; this is the clearer way to ask for it.)`,
       inputSchema: {
         deploymentId: z.guid().describe('The deployment UUID')
       }
@@ -508,7 +508,7 @@ The "turn it off" verb: it sets the deployment's \`stopped\` flag and leaves the
     {
       description: `Bring a stopped deployment back online at its previous replica count (at least 1). The inverse of \`stop_deployment\`; a no-op on one that is already running.
 
-Coming back re-checks quota, so a start can fail if the org filled up while the app was parked — scale it down first in that case.`,
+Coming back re-checks quota, so a start can fail if the org filled up while the app was parked. Scale it down first in that case.`,
       inputSchema: {
         deploymentId: z.guid().describe('The deployment UUID')
       }
@@ -541,7 +541,7 @@ Only the display name changes. The Kubernetes workload name, service DNS, genera
     {
       description: `Point a deployment at a different GitHub repository or branch without recreating it.
 
-Takes effect on the next build, so follow with \`rebuild_deployment\` to make it live. Auto-deploy survives only if the GitHub App is installed on the new repo — otherwise it is switched off, silently, because pushes could never reach Orchard. Check \`get_auto_deploy_status\` afterwards.`,
+Takes effect on the next build, so follow with \`rebuild_deployment\` to make it live. Auto-deploy survives only if the GitHub App is installed on the new repo. Otherwise it is switched off, silently, because pushes could never reach Orchard. Check \`get_auto_deploy_status\` afterwards.`,
       inputSchema: {
         deploymentId: z.guid().describe('The deployment UUID'),
         repoUrl: z
@@ -569,7 +569,7 @@ Takes effect on the next build, so follow with \`rebuild_deployment\` to make it
     {
       description: `Ask Orchard what this deployment has not been set up with yet: auto-deploy, a custom domain, explicit resource requests, notifications, a health check.
 
-Returns a \`steps\` array of \`{ id, applicable, done }\` — act on the ones that are applicable and not done. Cheap, and the right follow-up after creating a deployment or when a user asks "what else do I need to do". \`applicable: false\` means the step cannot apply here (no repo linked, no public port, compose-managed), not that it passed.`,
+Returns a \`steps\` array of \`{ id, applicable, done }\`. Act on the ones that are applicable and not done. Cheap, and the right follow-up after creating a deployment or when a user asks "what else do I need to do". \`applicable: false\` means the step cannot apply here (no repo linked, no public port, compose-managed), not that it passed.`,
       inputSchema: {
         deploymentId: z.guid().describe('The deployment UUID')
       }
@@ -695,7 +695,7 @@ Only meaningful above one replica: a budget equal to the replica count blocks vo
 
 The holder POSTs to \`/apiv1/webhooks/deploy\` with \`Authorization: Bearer <token>\`. On an image-source deployment they may send \`{ "image": "...", "tag": "..." }\` to roll a new image; on a GitHub-built deployment that is rejected. Without those fields the POST restarts the deployment and does not rebuild it.
 
-**The plaintext token is in this response and nowhere else** — it is stored hashed, so hand it to the user now or it is gone. It inherits the creator's project access and is revoked automatically if they lose it.`,
+**The plaintext token is in this response and nowhere else**. It is stored hashed, so hand it to the user now or it is gone. It inherits the creator's project access and is revoked automatically if they lose it.`,
       inputSchema: {
         deploymentId: z.guid().describe('The deployment UUID'),
         label: z

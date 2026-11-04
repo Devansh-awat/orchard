@@ -143,7 +143,7 @@ export class DatabaseCheckpointsService {
     const db = await this.prisma.database.findUnique({ where: { id: databaseId } });
     if (!db) throw new NotFoundException('Database not found');
     if (db.mode !== 'cnpg' || !db.namespace || !db.clusterName) {
-      throw new BadRequestException(`${db.name} is not a CNPG database`);
+      throw new BadRequestException(`${db.name} isn't a dedicated database`);
     }
     if (!(await this.backupRouteFor(databaseId))) {
       throw new BadRequestException(

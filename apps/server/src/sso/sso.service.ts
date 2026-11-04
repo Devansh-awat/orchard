@@ -380,7 +380,7 @@ export class SsoService {
   private safeDefaultRole(role: OrganizationRole | undefined): OrganizationRole {
     if (!role) return OrganizationRole.member;
     if (role === OrganizationRole.owner) {
-      throw new BadRequestException('SSO provisioning cannot grant the owner role');
+      throw new BadRequestException("SSO provisioning can't grant the owner role");
     }
     return role;
   }
@@ -403,7 +403,7 @@ export class SsoService {
     } catch (err) {
       if (err instanceof BlockedDestinationError) {
         throw new BadRequestException(
-          `${label} points at an internal address. If your identity provider really lives there, set SSO_ALLOW_INTERNAL_IDP=true.`
+          `${label} points at an internal address. If your identity provider is on an internal address, set SSO_ALLOW_INTERNAL_IDP=true.`
         );
       }
       throw err;
@@ -524,9 +524,7 @@ export class SsoService {
       }
 
       if (!entryPoint) {
-        throw new BadRequestException(
-          'SAML needs a sign-in URL, or a metadata URL we can read one from'
-        );
+        throw new BadRequestException('SAML needs a sign-in URL or a metadata URL');
       }
       if (!certificate && !existing?.samlCertificate) {
         throw new BadRequestException('SAML needs the IdP signing certificate');
@@ -768,9 +766,7 @@ export class SsoService {
     const current = await this.prisma.orgSsoSettings.findUnique({ where: { organizationId } });
 
     if (input.enabled && !(current?.platformEnabled ?? false)) {
-      throw new ConflictException(
-        'SSO is disabled for this organization by the platform administrator'
-      );
+      throw new ConflictException('An instance admin turned off SSO for this organization');
     }
 
     if (input.enabled) {
@@ -974,7 +970,7 @@ export class SsoService {
       this.logger.warn(
         `IdP metadata fetch failed: ${err instanceof Error ? err.message : 'request failed'}`
       );
-      throw new BadRequestException('Could not read IdP metadata from that URL');
+      throw new BadRequestException("Couldn't read IdP metadata from that URL");
     }
     return this.parseIdpMetadata(xml);
   }
@@ -1000,7 +996,7 @@ export class SsoService {
         ?.replace(/\s+/g, '') ?? null;
 
     if (!entryPoint && !certificate) {
-      throw new BadRequestException('That URL did not look like SAML IdP metadata');
+      throw new BadRequestException("That URL isn't SAML IdP metadata");
     }
     return { entityId, entryPoint, certificate };
   }

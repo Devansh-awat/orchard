@@ -39,7 +39,7 @@ With a scope it is what that project or resource may route to (its own destinati
     {
       description: `Create a notification destination. This only says where messages go; create a notification rule afterwards to say what it should receive, otherwise the channel stays silent.
 For discord/slack/webhook, pass the webhook URL in "url". For email, pass "recipients" (org members for an org-wide destination, the project's own people for a scoped one).
-For webhook channels the response includes a one-time signing secret — surface it to the user, it cannot be retrieved again.
+For webhook channels the response includes a one-time signing secret. Surface it to the user. It cannot be retrieved again.
 A destination belongs to a scope: org-wide (the default) needs org admin, and a project or resource scope needs admin on the owning project, which is how one app gets its own webhook without an org admin. Only rules at or below the owning scope can route to it.`,
       inputSchema: {
         organizationId: z.guid().describe('The organization UUID'),
@@ -209,7 +209,7 @@ Events must be possible at the scope (a database cannot emit deploy events). Org
   server.registerTool(
     'test_notification_channel',
     {
-      description: `Send a test notification through a channel to verify it is wired up correctly. Requires admin on the scope that owns the channel: org admin for org-wide destinations, project admin for one an app owns.`,
+      description: `Send a test notification through a channel to check that it works. Requires admin on the scope that owns the channel: org admin for org-wide destinations, project admin for one an app owns.`,
       inputSchema: {
         organizationId: z.guid().describe('The organization UUID'),
         channelId: z.guid().describe('The notification channel UUID')

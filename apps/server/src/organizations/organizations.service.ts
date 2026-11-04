@@ -818,7 +818,7 @@ export class OrganizationsService {
 
     if (role === 'guest') {
       throw new BadRequestException(
-        'Guests cannot be invited directly to an organization — invite them to a specific project instead'
+        "You can't invite guests directly to an organization. Invite them to a project instead."
       );
     }
 
@@ -1593,7 +1593,7 @@ export class OrganizationsService {
     }
 
     if (member.role === 'owner') {
-      throw new BadRequestException('Cannot remove organization owner');
+      throw new BadRequestException("You can't remove the organization owner");
     }
 
     // Admins are senior to plain members; only owners can remove them. Without
@@ -1741,7 +1741,9 @@ export class OrganizationsService {
     }
 
     if (member.role === 'owner' && newRole !== 'owner') {
-      throw new BadRequestException('Cannot change owner role. Transfer ownership instead.');
+      throw new BadRequestException(
+        "You can't change the owner's role. Transfer ownership instead."
+      );
     }
 
     // H-1: explicit guard so the failure mode is obvious to operators.
@@ -1750,7 +1752,7 @@ export class OrganizationsService {
     // future refactor that loosens the role check above must keep this one.
     if (member.userId === updater.id && newRole !== member.role) {
       throw new BadRequestException(
-        'You cannot change your own organization role. Have another owner make the change, or transfer ownership first.'
+        "You can't change your own organization role. Ask another owner to change it, or transfer ownership first."
       );
     }
 
@@ -1762,7 +1764,7 @@ export class OrganizationsService {
       });
       if (projectCount === 0) {
         throw new BadRequestException(
-          'Cannot set role to guest: user has no project memberships in this organization. Add them to a project first, or remove them from the org.'
+          "You can't make this user a guest because they aren't in a project in this organization. Add them to a project first, or remove them from the organization."
         );
       }
     }

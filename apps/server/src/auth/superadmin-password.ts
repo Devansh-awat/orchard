@@ -93,7 +93,7 @@ async function findSuperadmin(prisma: PasswordPrisma, email: string) {
       select: { id: true, email: true, isSuperAdmin: true, passwordHash: true }
     });
     if (!user) throw new PasswordRefused(`no account here uses ${address}`);
-    if (!user.isSuperAdmin) throw new PasswordRefused(`${address} is not a superadmin`);
+    if (!user.isSuperAdmin) throw new PasswordRefused(`${address} isn't a superadmin`);
     return user;
   }
 

@@ -23,7 +23,7 @@ interface SiteVerifyResponse {
 }
 
 const CHALLENGE_FAILED = 'Bot check failed. Reload the page and try again.';
-const CHALLENGE_UNREACHABLE = 'Could not reach the bot check. Try again in a moment.';
+const CHALLENGE_UNREACHABLE = "Couldn't reach the bot check. Try again in a moment.";
 
 @Injectable()
 export class TurnstileService {
@@ -91,7 +91,7 @@ export class TurnstileService {
     const outcome = await this.siteVerify(token, ip, action);
     if (!outcome) {
       if (this.isStrict()) throw new ServiceUnavailableException(CHALLENGE_UNREACHABLE);
-      this.logger.warn(`allowing ${action} unchallenged because the check could not be reached`);
+      this.logger.warn(`allowing ${action} unchallenged because the check couldn't be reached`);
       return;
     }
 

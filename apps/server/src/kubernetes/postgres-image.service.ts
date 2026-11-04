@@ -192,7 +192,7 @@ export class PostgresImageService implements OnApplicationBootstrap, OnModuleDes
           pending.push(p);
           continue;
         }
-        const reason = `${p.namespace}/${p.clusterName} was not healthy on ${p.target} ${Math.round((now.getTime() - p.at) / 60_000)}m after the image change`;
+        const reason = `${p.namespace}/${p.clusterName} wasn't healthy on ${p.target} ${Math.round((now.getTime() - p.at) / 60_000)}m after the image change`;
         await this.settings.set(POSTGRES_IMAGE_ROLLOUT_HALT_KEY, reason);
         gauge('orchard.cnpg.image_rollout_halted', 1);
         this.logger.error(`postgres image rollout halted: ${reason}`);
@@ -257,7 +257,7 @@ export class PostgresImageService implements OnApplicationBootstrap, OnModuleDes
         if (collation !== 'c') {
           result.held.push(key);
           this.logger.warn(
-            `postgres image update held for ${key}: ${collation === 'other' ? 'a database uses a non-C collation, which a new OS image can reorder' : 'collation could not be checked'}`
+            `postgres image update held for ${key}: ${collation === 'other' ? 'a database uses a non-C collation, which a new OS image can reorder' : "collation couldn't be checked"}`
           );
           continue;
         }

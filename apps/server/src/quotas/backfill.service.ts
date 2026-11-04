@@ -181,7 +181,7 @@ export class QuotaBackfillService {
     } else {
       const db = await this.prisma.database.findUnique({ where: { id: target.id } });
       if (!db) throw new Error('Database not found');
-      if (!db.namespace || !db.clusterName) throw new Error('Database not on CNPG');
+      if (!db.namespace || !db.clusterName) throw new Error('Not a dedicated database');
       if (!limitsOff) {
         await this.k8sCnpg.updateCnpgClusterResources(db.namespace, db.clusterName, values);
       }

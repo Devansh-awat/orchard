@@ -187,7 +187,7 @@ export class IngressService implements OnModuleInit {
         // row outlives the object during teardown.
         if (e?.response?.statusCode !== 404) {
           this.logger.warn(
-            `could not repoint TLS for ${ingress.namespace}/${ingress.name}: ${e?.message}`
+            `couldn't repoint TLS for ${ingress.namespace}/${ingress.name}: ${e?.message}`
           );
         }
         continue;
@@ -248,7 +248,7 @@ export class IngressService implements OnModuleInit {
     const records = await this.dnsRecordsFor(domainToCheck);
     const genericFailure = {
       valid: false,
-      message: 'DNS records do not point to the configured target.',
+      message: "DNS records don't point to the target.",
       records
     };
 
@@ -266,13 +266,13 @@ export class IngressService implements OnModuleInit {
       if (v4.length || v6.length) {
         return {
           valid: true,
-          message: `Covered by the platform wildcard ${wildcard}`,
+          message: `Covered by the wildcard ${wildcard}`,
           records: []
         };
       }
       return {
         valid: false,
-        message: `Nothing answers for this host. It needs the wildcard DNS record ${wildcard} pointing at this instance's ingress.`,
+        message: `Nothing answers for this host. Point the wildcard DNS record ${wildcard} at this instance.`,
         records: []
       };
     }
@@ -292,7 +292,7 @@ export class IngressService implements OnModuleInit {
       return {
         valid: true,
         message:
-          'This hostname resolves. Cloudflare hides proxied records, so Orchard cannot check the target. Route the hostname to the tunnel in the Cloudflare dashboard.',
+          "This hostname resolves. Cloudflare hides proxied records, so Orchard can't check the target. Route the hostname to the tunnel in the Cloudflare dashboard.",
         records
       };
     }
@@ -305,7 +305,7 @@ export class IngressService implements OnModuleInit {
       );
     });
     if (hasValidCname) {
-      return { valid: true, message: 'CNAME record is correctly configured', records };
+      return { valid: true, message: 'CNAME record is correct', records };
     }
 
     const expectedIps = new Set(records.filter((r) => r.type === 'A').map((r) => r.value));
@@ -315,7 +315,7 @@ export class IngressService implements OnModuleInit {
     }
     const addresses = await promisify(dns.resolve4)(domainToCheck).catch(() => [] as string[]);
     if (addresses.length > 0 && addresses.every((ip) => expectedIps.has(ip))) {
-      return { valid: true, message: 'A records are correctly configured', records };
+      return { valid: true, message: 'A records are correct', records };
     }
     return genericFailure;
   }
@@ -475,7 +475,7 @@ export class IngressService implements OnModuleInit {
     );
 
     if (duplicate) {
-      throw new BadRequestException('An ingress for this host and path already exists');
+      throw new BadRequestException('A domain with this host and path already exists');
     }
 
     const ingressClassName = TENANT_INGRESS_CLASS;
@@ -535,19 +535,19 @@ export class IngressService implements OnModuleInit {
     // stacking a second challenge on top of it helps nobody.
     if (basicAuthPlan.via === 'proxy' && protectionMode !== 'none') {
       throw new BadRequestException(
-        'This domain already uses Orchard protection; basic auth cannot be layered on top of it.'
+        "This domain already uses Orchard protection, so it can't also use basic auth."
       );
     }
 
     const services = Array.isArray(deployment.services) ? deployment.services : [];
 
     if (services.length === 0) {
-      throw new BadRequestException('Deployment has no services to attach');
+      throw new BadRequestException('This app has no ports to attach a domain to');
     }
 
     if (requestedPort !== null) {
       if (!Number.isInteger(requestedPort) || requestedPort <= 0) {
-        throw new BadRequestException('Service port must be a positive integer');
+        throw new BadRequestException('Port must be a positive integer');
       }
     }
 
@@ -557,7 +557,7 @@ export class IngressService implements OnModuleInit {
         : null;
 
     if (requestedServiceName.length > 0 && !targetService) {
-      throw new BadRequestException('Selected service was not found');
+      throw new BadRequestException('Selected port not found');
     }
 
     if (!targetService) {
@@ -628,7 +628,7 @@ export class IngressService implements OnModuleInit {
       !Number.isInteger(selectedPort.targetPort) ||
       selectedPort.targetPort <= 0
     ) {
-      throw new BadRequestException('Resolved service port is invalid');
+      throw new BadRequestException('Selected port is invalid');
     }
 
     const hostSlug = rawHost
@@ -670,7 +670,7 @@ export class IngressService implements OnModuleInit {
       ingressName = truncateK8sName(`${baseName}-${suffixCounter++}`);
 
       if (suffixCounter > 50) {
-        throw new BadRequestException('Failed to generate unique ingress name');
+        throw new BadRequestException("Couldn't generate a unique domain name");
       }
     }
 
@@ -758,7 +758,7 @@ export class IngressService implements OnModuleInit {
         if (result !== 'applied') {
           this.logger.error(
             `Protection proxy not applied to ${deployment.namespace}/${ingressName} (${result}); ` +
-              'the reconciler will retry within 10 minutes'
+              'Orchard retries within 10 minutes'
           );
         }
       } catch (error) {
@@ -962,7 +962,7 @@ export class IngressService implements OnModuleInit {
     const services = Array.isArray(deployment.services) ? deployment.services : [];
 
     if (services.length === 0) {
-      throw new BadRequestException('Deployment has no services to attach');
+      throw new BadRequestException('This app has no ports to attach a domain to');
     }
 
     const pathPattern = /^\/[A-Za-z0-9\-._/]*$/;
@@ -987,7 +987,7 @@ export class IngressService implements OnModuleInit {
 
       const existing = deployment.ingresses.find((e) => e.host === rawHost && e.path === path);
       if (existing) {
-        throw new BadRequestException(`An ingress for ${rawHost}${path} already exists`);
+        throw new BadRequestException(`A domain for ${rawHost}${path} already exists`);
       }
 
       const targetService = services.find((s) => s.name === String(route.serviceName || '').trim());
@@ -1061,7 +1061,7 @@ export class IngressService implements OnModuleInit {
       if (!existing) break;
       ingressName = truncateK8sName(`${baseName}-${suffixCounter++}`);
       if (suffixCounter > 50) {
-        throw new BadRequestException('Failed to generate unique ingress name');
+        throw new BadRequestException("Couldn't generate a unique domain name");
       }
     }
 
@@ -1198,7 +1198,7 @@ export class IngressService implements OnModuleInit {
     ) {
       ingressName = truncateK8sName(`${baseName}-${suffixCounter++}`);
       if (suffixCounter > 50) {
-        throw new BadRequestException('Failed to generate unique ingress name');
+        throw new BadRequestException("Couldn't generate a unique domain name");
       }
     }
     return { ingressName, tlsSecretName, tlsHosts, clusterIssuer, entrypoints, annotations };
@@ -1232,9 +1232,7 @@ export class IngressService implements OnModuleInit {
       try {
         await this.k8sNetwork.deleteIngress(namespace, spec.ingressName);
       } catch {}
-      throw new BadRequestException(
-        'Could not configure the domain redirect; try again in a moment'
-      );
+      throw new BadRequestException("Couldn't set up the redirect. Try again in a moment.");
     }
     return statusRecord?.ip || statusRecord?.hostname || null;
   }
@@ -1391,7 +1389,7 @@ export class IngressService implements OnModuleInit {
         await this.k8sNetwork.deleteIngress(project.namespace, ingress.name);
       } catch (error) {
         this.logger.warn(
-          `old redirect ingress ${project.namespace}/${ingress.name} was not removed after renaming to ${nextHost}: ${error?.message}`
+          `old redirect ingress ${project.namespace}/${ingress.name} wasn't removed after renaming to ${nextHost}: ${error?.message}`
         );
       }
     } else {
@@ -1498,7 +1496,7 @@ export class IngressService implements OnModuleInit {
     const allIngresses = project.deployments.flatMap((d) => d.ingresses ?? []);
 
     if (allServices.length === 0) {
-      throw new BadRequestException('Project has no services');
+      throw new BadRequestException('This project has no apps with ports');
     }
 
     const pathPattern = /^\/[A-Za-z0-9\-._/]*$/;
@@ -1581,7 +1579,7 @@ export class IngressService implements OnModuleInit {
         const inDb = dbPaths.has(pb.path);
         if (inK8s && inDb) {
           throw new BadRequestException(
-            `Domain ${rawHost} already routes ${pb.path} to another service. Use a different path.`
+            `Domain ${rawHost} already routes ${pb.path} to another app. Use a different path.`
           );
         }
       }
@@ -1707,7 +1705,7 @@ export class IngressService implements OnModuleInit {
       if (!existing) break;
       ingressName = truncateK8sName(`${baseName}-${suffixCounter++}`);
       if (suffixCounter > 50) {
-        throw new BadRequestException('Failed to generate unique ingress name');
+        throw new BadRequestException("Couldn't generate a unique domain name");
       }
     }
 
@@ -1850,7 +1848,7 @@ export class IngressService implements OnModuleInit {
     });
 
     if (!ingress) {
-      throw new NotFoundException(`Ingress ${ingressId} not found`);
+      throw new NotFoundException(`Domain ${ingressId} not found`);
     }
 
     await this.access.assertProjectAccess(
@@ -1926,7 +1924,7 @@ export class IngressService implements OnModuleInit {
     });
 
     if (!ingress || !ingress.project) {
-      throw new NotFoundException('Ingress not found');
+      throw new NotFoundException('Domain not found');
     }
 
     let access: ProjectAccess;
@@ -1938,7 +1936,7 @@ export class IngressService implements OnModuleInit {
       ));
     } catch (e) {
       if (e instanceof NotFoundException) {
-        throw new NotFoundException('Ingress not found');
+        throw new NotFoundException('Domain not found');
       }
       throw e;
     }
@@ -2039,7 +2037,7 @@ export class IngressService implements OnModuleInit {
     });
 
     if (!ingress || !ingress.project) {
-      throw new NotFoundException('Ingress not found');
+      throw new NotFoundException('Domain not found');
     }
 
     const project = ingress.project;
@@ -2076,7 +2074,7 @@ export class IngressService implements OnModuleInit {
     );
 
     if (allServices.length === 0) {
-      throw new BadRequestException('Project has no services');
+      throw new BadRequestException('This project has no apps with ports');
     }
 
     const pathPattern = /^\/[A-Za-z0-9\-._/]*$/;
@@ -2189,7 +2187,7 @@ export class IngressService implements OnModuleInit {
       if (error instanceof BadRequestException) {
         throw error;
       }
-      throw new BadRequestException(`Failed to update ingress in Kubernetes: ${error.message}`);
+      throw new BadRequestException(`Couldn't update the domain in Kubernetes: ${error.message}`);
     }
 
     const firstRoute = pathBackends[0];
@@ -2291,7 +2289,7 @@ export class IngressService implements OnModuleInit {
     });
 
     if (!ingress || !ingress.deployment) {
-      throw new NotFoundException('Ingress not found');
+      throw new NotFoundException('Domain not found');
     }
 
     await this.authz.requireProjectEdit(
@@ -2382,7 +2380,7 @@ export class IngressService implements OnModuleInit {
     });
 
     if (!ingress || !ingress.project) {
-      throw new NotFoundException('Ingress not found');
+      throw new NotFoundException('Domain not found');
     }
 
     await this.authz.requireProjectEdit(ingress.project.id, user.id, 'manage ingress resources');
@@ -2512,7 +2510,7 @@ export class IngressService implements OnModuleInit {
     });
 
     if (!ingress || !ingress.deployment) {
-      throw new NotFoundException('Ingress not found');
+      throw new NotFoundException('Domain not found');
     }
 
     const deployment = ingress.deployment;
@@ -2562,7 +2560,7 @@ export class IngressService implements OnModuleInit {
     );
 
     if (duplicate) {
-      throw new BadRequestException('An ingress for this host and path already exists');
+      throw new BadRequestException('A domain with this host and path already exists');
     }
 
     const ingressClassName = TENANT_INGRESS_CLASS;
@@ -2617,7 +2615,7 @@ export class IngressService implements OnModuleInit {
     const services = Array.isArray(deployment.services) ? deployment.services : [];
 
     if (services.length === 0) {
-      throw new BadRequestException('Deployment has no services to attach');
+      throw new BadRequestException('This app has no ports to attach a domain to');
     }
 
     const requestedServiceName = String(data.serviceName || '').trim();
@@ -2626,7 +2624,7 @@ export class IngressService implements OnModuleInit {
 
     if (requestedPort !== null) {
       if (!Number.isInteger(requestedPort) || requestedPort <= 0) {
-        throw new BadRequestException('Service port must be a positive integer');
+        throw new BadRequestException('Port must be a positive integer');
       }
     }
 
@@ -2636,7 +2634,7 @@ export class IngressService implements OnModuleInit {
         : null;
 
     if (requestedServiceName.length > 0 && !targetService) {
-      throw new BadRequestException('Selected service was not found');
+      throw new BadRequestException('Selected port not found');
     }
 
     if (!targetService) {
@@ -2709,7 +2707,7 @@ export class IngressService implements OnModuleInit {
       !Number.isInteger(selectedPort.targetPort) ||
       selectedPort.targetPort <= 0
     ) {
-      throw new BadRequestException('Resolved service port is invalid');
+      throw new BadRequestException('Selected port is invalid');
     }
 
     const tlsHosts = tlsSecretName ? [rawHost] : [];
@@ -2745,7 +2743,7 @@ export class IngressService implements OnModuleInit {
       if (error instanceof BadRequestException) {
         throw error;
       }
-      throw new BadRequestException(`Failed to update ingress in Kubernetes: ${error.message}`);
+      throw new BadRequestException(`Couldn't update the domain in Kubernetes: ${error.message}`);
     }
 
     await this.syncBasicAuthOnUpdate(ingress, basicAuthPlan, clearBasicAuth, {
@@ -2853,7 +2851,7 @@ export class IngressService implements OnModuleInit {
     // makes the split ambiguous. The Envoy filter has the same constraint but
     // never validated it.
     if (username.includes(':')) {
-      throw new BadRequestException('Basic auth username cannot contain a colon');
+      throw new BadRequestException("Basic auth username can't contain a colon");
     }
     return { via: 'proxy', username, passwordHash: await bcrypt.hash(password, 10) };
   }
@@ -2876,8 +2874,8 @@ export class IngressService implements OnModuleInit {
     const result = await this.k8sNetwork.enableProtectionProxy(namespace, ingressName);
     if (result !== 'applied') {
       throw new BadRequestException(
-        'Could not put this domain behind basic auth, so it would be served without a password. ' +
-          'Nothing was created; try again in a moment.'
+        "Couldn't put this domain behind basic auth, so it would have no password. " +
+          "Orchard didn't create anything. Try again in a moment."
       );
     }
 
@@ -2938,13 +2936,13 @@ export class IngressService implements OnModuleInit {
 
     if (ingress.protectionMode === 'basic') {
       throw new BadRequestException(
-        'The ingress was updated but could not be put back behind basic auth, so it is currently ' +
-          'served without a password. Retry the update, or the reconciler will restore it within 10 minutes.'
+        "The domain was updated but couldn't be put back behind basic auth, so it has no password. " +
+          'Retry the update, or Orchard restores it within 10 minutes.'
       );
     }
     this.logger.error(
       `Protection proxy not re-applied to ${ingress.namespace}/${ingress.name} after update (${result}); ` +
-        'the reconciler will retry within 10 minutes'
+        'Orchard retries within 10 minutes'
     );
   }
 
@@ -2961,7 +2959,7 @@ export class IngressService implements OnModuleInit {
 
     if (mode === 'orchard' && !ORCHARD_LOGIN_PROTECTION_ENABLED) {
       throw new BadRequestException(
-        '"Sign in with Orchard" protection is disabled on this instance. ' +
+        '"Sign in with Orchard" protection is off on this instance. ' +
           'Use basic auth or a shared password instead, or set protection.orchardLogin=true in the chart.'
       );
     }
@@ -2974,9 +2972,9 @@ export class IngressService implements OnModuleInit {
       }
     });
 
-    if (!ingress) throw new NotFoundException('Ingress not found');
+    if (!ingress) throw new NotFoundException('Domain not found');
     if (ingress.redirectTarget) {
-      throw new BadRequestException('Access protection is not available for redirect domains');
+      throw new BadRequestException("Redirect domains can't use protection");
     }
 
     const wasProtected = ingress.protectionMode !== 'none';
@@ -2998,7 +2996,7 @@ export class IngressService implements OnModuleInit {
       // RFC 7617 credentials are colon-delimited, so a colon in the username
       // makes the split ambiguous and the account unusable.
       if (cleanUsername.includes(':')) {
-        throw new BadRequestException('Basic auth username cannot contain a colon');
+        throw new BadRequestException("Basic auth username can't contain a colon");
       }
       protectionUsername = cleanUsername;
       protectionPasswordHash = await bcrypt.hash(password, 10);
@@ -3027,7 +3025,7 @@ export class IngressService implements OnModuleInit {
         const normalized = normalizeBypassPath(raw);
         if (!normalized) {
           throw new BadRequestException(
-            `Invalid bypass path: ${String(raw)}. Paths must start with / and cannot be / itself.`
+            `Invalid bypass path: ${String(raw)}. Paths must start with / and can't be / itself.`
           );
         }
         seen.add(normalized);
@@ -3058,8 +3056,8 @@ export class IngressService implements OnModuleInit {
         // outcome worth failing the request over. The 10-minute reconciler
         // would eventually fix it, but the user should not be told it is done.
         throw new BadRequestException(
-          'Could not put this domain behind the auth wall, so it is still served directly. ' +
-            'The protection setting was not saved; try again in a moment.'
+          "Couldn't protect this domain, so it's still public. " +
+            "Orchard didn't save the setting. Try again in a moment."
         );
       }
     }
@@ -3115,7 +3113,7 @@ export class IngressService implements OnModuleInit {
       }
     });
 
-    if (!ingress) throw new NotFoundException('Ingress not found');
+    if (!ingress) throw new NotFoundException('Domain not found');
 
     if (ingress.protectionMode !== 'none' && ingress.protectionBypassSecret) {
       void this.audit.log({

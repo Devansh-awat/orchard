@@ -236,14 +236,14 @@ export class ProjectAccessService {
       where: { id: ingressId },
       select: { id: true, projectId: true, project: { select: { organizationId: true } } }
     });
-    if (!ing) throw new NotFoundException(`Ingress ${ingressId} not found`);
+    if (!ing) throw new NotFoundException(`Domain ${ingressId} not found`);
     const access = await this.authz.resolveProjectAccess(
       ing.projectId,
       ing.project.organizationId,
       user.id
     );
     if (!access || !access.canView) {
-      throw new NotFoundException(`Ingress ${ingressId} not found`);
+      throw new NotFoundException(`Domain ${ingressId} not found`);
     }
     return { user, ingress: ing, access };
   }

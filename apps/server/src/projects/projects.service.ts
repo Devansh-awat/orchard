@@ -164,7 +164,7 @@ export class ProjectsService {
     }
 
     if (ProjectsService.RESERVED_NAMESPACES.has(namespace)) {
-      throw new ConflictException('This project name is not available');
+      throw new ConflictException("This project name isn't available");
     }
 
     return namespace;
@@ -218,7 +218,7 @@ export class ProjectsService {
     const baseSlug = formatSlug(slugSource);
 
     if (!baseSlug) {
-      throw new BadRequestException('Project slug cannot be empty');
+      throw new BadRequestException("Project slug can't be empty");
     }
 
     let slug = baseSlug;
@@ -259,7 +259,7 @@ export class ProjectsService {
 
     if (!adminRole) {
       throw new InternalServerErrorException(
-        'The "admin" project role is missing; the database has not been fully migrated'
+        'The "admin" project role is missing; the database hasn\'t been fully migrated'
       );
     }
 
@@ -352,12 +352,12 @@ export class ProjectsService {
     }
 
     if (database.mode !== 'cnpg' || !database.clusterName || !database.namespace) {
-      throw new BadRequestException('Database does not support resource updates');
+      throw new BadRequestException("Database doesn't support resource updates");
     }
 
     if (database.importBoosted) {
       throw new BadRequestException(
-        'Resources cannot be changed while the initial import is running. Try again once provisioning completes.'
+        "You can't change resources during the initial import. Try again when it finishes."
       );
     }
 
@@ -476,7 +476,7 @@ export class ProjectsService {
     }
 
     if (database.mode !== 'cnpg' || !database.clusterName || !database.namespace) {
-      throw new BadRequestException('Database does not support storage expansion');
+      throw new BadRequestException("Database doesn't support storage expansion");
     }
 
     const size = String(storageSize || '').trim();
@@ -484,7 +484,7 @@ export class ProjectsService {
       throw new BadRequestException('Storage size must be a Kubernetes quantity like "10Gi"');
     }
     if (parseMemory(size) > parseMemory('200Gi')) {
-      throw new BadRequestException('Storage size cannot exceed 200Gi');
+      throw new BadRequestException("Storage size can't exceed 200Gi");
     }
 
     const { previousSize, archivingFailure, resizedVolumes, failedVolumes } =
@@ -509,7 +509,7 @@ export class ProjectsService {
     const warnings: string[] = [];
     if (failedVolumes.length > 0) {
       warnings.push(
-        `The cluster now asks for ${size}, but ${failedVolumes.join(', ')} could not be resized directly and will only grow once the operator reconciles it.`
+        `The database now asks for ${size}, but Orchard couldn't resize ${failedVolumes.join(', ')} directly. They grow later.`
       );
     }
     const writesPaused = (database.clusterStatus as { writeGuard?: boolean } | null)?.writeGuard;
@@ -528,7 +528,7 @@ export class ProjectsService {
     }
     if (archivingFailure) {
       warnings.push(
-        `WAL archiving on this cluster is failing (${archivingFailure}). PostgreSQL cannot recycle WAL segments while archiving fails, so the volume will keep filling and eventually run out of space again regardless of size. Fix or disable the backup/archiving configuration to stop WAL accumulation.`
+        `WAL archiving is failing (${archivingFailure}). PostgreSQL can't recycle WAL while archiving fails, so the volume keeps filling at any size. Fix or turn off backups to stop this.`
       );
     }
 
@@ -937,7 +937,7 @@ export class ProjectsService {
     const updates: Prisma.ProjectUpdateInput = {};
     if (data.name !== undefined) {
       const name = String(data.name).trim();
-      if (!name) throw new BadRequestException('Project name cannot be empty');
+      if (!name) throw new BadRequestException("Project name can't be empty");
       updates.name = name;
     }
     if (data.description !== undefined) {
@@ -1205,7 +1205,7 @@ export class ProjectsService {
         where: { projectId, roleId: adminRole.id }
       });
       if (adminCount <= 1) {
-        throw new BadRequestException('Cannot remove the last admin of a project');
+        throw new BadRequestException("You can't remove the last admin of a project");
       }
     }
 
@@ -1313,7 +1313,7 @@ export class ProjectsService {
         where: { projectId, roleId: adminRole.id }
       });
       if (adminCount <= 1) {
-        throw new BadRequestException('Cannot demote the last admin of a project');
+        throw new BadRequestException("You can't demote the last admin of a project");
       }
     }
 
@@ -1432,7 +1432,7 @@ export class ProjectsService {
   private async resolveTransferRecipient(
     projectId: string,
     target: { userId?: string; email?: string },
-    notAMemberMessage = 'The new owner must be a member of this project — add them first, then request the transfer'
+    notAMemberMessage = 'The new owner must be a member of this project. Add them first, then request the transfer.'
   ) {
     const targetUserId = target.userId?.trim();
     const targetEmail = target.email?.toLowerCase().trim();
@@ -1444,7 +1444,7 @@ export class ProjectsService {
       where: targetUserId ? { id: targetUserId } : { email: targetEmail! },
       select: { id: true, email: true, username: true }
     });
-    if (!user) throw new NotFoundException('The new owner does not have an Orchard account');
+    if (!user) throw new NotFoundException("The new owner doesn't have an Orchard account");
 
     const membership = await this.prisma.projectMember.findFirst({
       where: { projectId, userId: user.id },
@@ -1669,7 +1669,7 @@ export class ProjectsService {
     const { membership } = await this.resolveTransferRecipient(
       projectId,
       { userId: user.id },
-      'You are no longer a member of this project, so ownership cannot be transferred to you'
+      "You're no longer a member of this project, so ownership can't transfer to you"
     );
 
     await this.quotasService.enforceMemberAllowanceForProjectTransfer(

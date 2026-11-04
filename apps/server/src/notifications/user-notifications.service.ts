@@ -328,7 +328,7 @@ export class UserNotificationsService {
     const message: NotificationMessage = {
       event: 'deploy.succeeded',
       title: 'Test notification from Orchard',
-      body: 'Your personal notifications are wired up correctly.',
+      body: 'Your personal notifications work.',
       url: this.frontendUrl
     };
     const outcome = await this.transport.send(

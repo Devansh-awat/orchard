@@ -180,7 +180,7 @@ export class ScimController {
   // authenticates an org, not a person, so there's no "me" to resolve.
   @All('Me')
   me(): never {
-    throw ScimError(501, null, '/Me is not supported; SCIM tokens authenticate an organization');
+    throw ScimError(501, null, "/Me isn't supported; SCIM tokens authenticate an organization");
   }
 
   // Anything else under /scim/v2 would otherwise fall through to the global

@@ -213,7 +213,7 @@ export class SsoLoginService {
 
     const claims = tokens.claims() as Record<string, unknown>;
     const email = typeof claims.email === 'string' ? claims.email : '';
-    if (!email) throw new BadRequestException('SSO provider did not return an email address');
+    if (!email) throw new BadRequestException("SSO provider didn't return an email address");
 
     return this.completeLogin(
       provider,
@@ -273,7 +273,7 @@ export class SsoLoginService {
 
     const attrs = profile as unknown as Record<string, string | undefined>;
     const email = profile.nameID || attrs.email || attrs.mail || '';
-    if (!email) throw new BadRequestException('SAML provider did not return an email address');
+    if (!email) throw new BadRequestException("SAML provider didn't return an email address");
 
     const first = attrs.firstName ?? attrs.givenName ?? '';
     const last = attrs.lastName ?? attrs.surname ?? '';
@@ -340,7 +340,7 @@ export class SsoLoginService {
       }
     }
 
-    if (!email) throw new BadRequestException('SSO provider did not return an email address');
+    if (!email) throw new BadRequestException("SSO provider didn't return an email address");
 
     const name =
       (typeof body.name === 'string' && body.name) ||
@@ -502,7 +502,7 @@ export class SsoLoginService {
         (!provider.createdBy || provider.createdBy !== user.id)
       ) {
         this.logger.warn(
-          `Refused org SSO for owner ${user.id} via provider ${provider.id} (org ${organizationId}): provider was not configured by this owner`
+          `Refused org SSO for owner ${user.id} via provider ${provider.id} (org ${organizationId}): provider wasn't configured by this owner`
         );
         throw new UnauthorizedException('SSO authentication failed');
       }
@@ -697,7 +697,7 @@ export class SsoLoginService {
       this.logger.warn(`SSO test failed for provider ${providerId}: ${(err as Error).message}`);
       return {
         success: false,
-        error: err instanceof Error ? err.message : 'Could not reach the identity provider'
+        error: err instanceof Error ? err.message : "Couldn't reach the identity provider"
       };
     }
   }

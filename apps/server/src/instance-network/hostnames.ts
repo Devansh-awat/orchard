@@ -69,7 +69,7 @@ export function expectedHostnames(input: {
       record: mcp,
       probe: mcp,
       label: 'MCP endpoint',
-      detail: 'Where AI agents connect. Its certificate cannot issue until this resolves.'
+      detail: "Where AI agents connect. Its certificate can't issue until this resolves."
     });
   }
 

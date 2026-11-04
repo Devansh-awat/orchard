@@ -57,7 +57,7 @@ export function secretBuildArgNotice(
   if (sealed.length === 0) return null;
   const example = sealed[0];
   return (
-    `Secret variables are not declared as ARG automatically: ${sealed.join(', ')}. ` +
+    `Secret variables aren't declared as ARG automatically: ${sealed.join(', ')}. ` +
     `If a build step needs one, add \`ARG ${example}\` to your Dockerfile, ` +
     `or read it without baking it into the image with \`RUN --mount=type=secret,id=${example},env=${example} ...\`.`
   );

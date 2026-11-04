@@ -207,7 +207,7 @@ export class OrgDomainsService {
     if (row.verifiedAt) return this.toRecord(row);
 
     if (row.lastCheckedAt && Date.now() - row.lastCheckedAt.getTime() < VERIFY_COOLDOWN_MS) {
-      throw new BadRequestException('Give DNS a moment, then check again');
+      throw new BadRequestException('DNS may take a few minutes. Check again later.');
     }
 
     let found: string[] = [];
@@ -219,12 +219,12 @@ export class OrgDomainsService {
       failure =
         code === 'ENOTFOUND' || code === 'ENODATA'
           ? 'No TXT record found yet. DNS changes can take a few minutes to appear.'
-          : `Could not read DNS for that domain (${code || 'lookup failed'})`;
+          : `Couldn't read DNS for that domain (${code || 'lookup failed'})`;
     }
 
     if (!failure && !found.includes(row.verificationToken)) {
       failure = found.length
-        ? 'Found a TXT record, but the value did not match. Check for a stale record.'
+        ? "Found a TXT record, but the value doesn't match. Check for an old record."
         : 'No TXT record found yet. DNS changes can take a few minutes to appear.';
     }
 

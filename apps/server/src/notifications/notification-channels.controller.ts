@@ -69,7 +69,7 @@ export class NotificationChannelsController {
     const enabled = await this.analytics.isEarlyAccessEnabled('notifications', userId);
     if (!enabled) {
       throw new ForbiddenException(
-        'Notifications are not enabled for your account. Enable the Notifications beta in Early Access Features.'
+        "Notifications aren't on for your account. Turn on the Notifications beta in Early access."
       );
     }
   }

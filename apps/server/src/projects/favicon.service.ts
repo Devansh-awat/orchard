@@ -608,7 +608,7 @@ export class FaviconService {
   ): Promise<string | null> {
     if (!this.s3Client || !this.bucketName) {
       // R2 not configured: return the original URL from memory
-      this.logger.warn('R2 not configured, cannot cache favicon');
+      this.logger.warn("R2 not configured, can't cache favicon");
       this.memoryCache.set(domain, { url: null, ts: Date.now() });
       return null;
     }

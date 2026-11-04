@@ -9,9 +9,9 @@ To let an agent deploy apps, manage databases, and read logs, connect it to the 
 
 The server has two endpoints on its own hostname:
 
-| Path       | Provides                                                                              |
-| ---------- | ------------------------------------------------------------------------------------- |
-| `/`        | The full tool set, grouped into toolsets. For the list, refer to [MCP tools](/reference/mcp-tools/). |
+| Path       | Provides                                                                                                         |
+| ---------- | ---------------------------------------------------------------------------------------------------------------- |
+| `/`        | The full tool set, grouped into toolsets. For the list, refer to [MCP tools](/reference/mcp-tools/).             |
 | `/compact` | Three tools that reach the whole API. For more information, refer to [Code mode for agents](/agents-code-mode/). |
 
 ## Prerequisites
@@ -116,11 +116,11 @@ Before you approve, check the following:
 
 ### OAuth scopes
 
-| Scope        | Allows                                                         |
-| ------------ | -------------------------------------------------------------- |
-| `mcp:read`   | Read-only tools, such as list, get, logs, and metrics.          |
-| `mcp:deploy` | Everything in `mcp:read`, plus every change.                   |
-| `mcp:exec`   | Everything in `mcp:deploy`, plus `exec_in_pod`.                |
+| Scope        | Allows                                                 |
+| ------------ | ------------------------------------------------------ |
+| `mcp:read`   | Read-only tools, such as list, get, logs, and metrics. |
+| `mcp:deploy` | Everything in `mcp:read`, plus every change.           |
+| `mcp:exec`   | Everything in `mcp:deploy`, plus `exec_in_pod`.        |
 
 The API enforces the scope on every call. Access tokens last one day and the client refreshes them. A connection that is unused for 30 days must sign in again.
 
@@ -181,18 +181,18 @@ https://mcp.example.com/?toolsets=deployments,logs,greenhouse
 
 The `core` toolset is always included. To include the tools from a [graft](/grafts/overview/), add its ID.
 
-| Toolset         | Tools                                                                     |
-| --------------- | ------------------------------------------------------------------------- |
-| `core`          | The current user, organizations, projects, `find`, and app summaries. |
+| Toolset         | Tools                                                                         |
+| --------------- | ----------------------------------------------------------------------------- |
+| `core`          | The current user, organizations, projects, `find`, and app summaries.         |
 | `deployments`   | Create, build, scale, restart, roll back, rollout status, and compose stacks. |
-| `logs`          | Runtime and build logs, pods, killed containers, errors, metrics, and exec. |
-| `env`           | Environment variables and environments.                                   |
-| `databases`     | Databases, credentials, backups, extensions, and settings.                 |
-| `domains`       | Domains, services, DNS checks, and domain protection.                      |
-| `jobs`          | Scheduled and on-demand jobs and their runs.                              |
-| `notifications` | Notification channels, rules, and deliveries.                              |
-| `templates`     | Templates and template instances.                                         |
-| `dangerous`     | Every delete, and restoring a database backup.                            |
+| `logs`          | Runtime and build logs, pods, killed containers, errors, metrics, and exec.   |
+| `env`           | Environment variables and environments.                                       |
+| `databases`     | Databases, credentials, backups, extensions, and settings.                    |
+| `domains`       | Domains, services, DNS checks, and domain protection.                         |
+| `jobs`          | Scheduled and on-demand jobs and their runs.                                  |
+| `notifications` | Notification channels, rules, and deliveries.                                 |
+| `templates`     | Templates and template instances.                                             |
+| `dangerous`     | Every delete, and restoring a database backup.                                |
 
 ## Tool behavior
 
@@ -204,19 +204,19 @@ The `core` toolset is always included. To include the tools from a [graft](/graf
 
 The server also publishes two read-only resources:
 
-| URI                                  | Contents                                       |
-| ------------------------------------ | ---------------------------------------------- |
+| URI                                  | Contents                                        |
+| ------------------------------------ | ----------------------------------------------- |
 | `orchard://docs/template-yaml-guide` | The `leaf/v1` template format, with an example. |
-| `orchard://docs/llms.txt`            | The index of this documentation.               |
+| `orchard://docs/llms.txt`            | The index of this documentation.                |
 
 ## Troubleshoot a connection
 
-| Response                                            | Cause                                                                         |
-| --------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `401` on connect                                    | The token is unknown, expired, or revoked, or the header is not `Bearer orch_...`. |
-| `404` on connect                                    | The URL includes `/mcp`. The endpoint is at the root of the host.             |
-| `Token lacks required scope: deploy`                | The token is valid, but its access level is too low for the tool. Create a token with a higher level. |
-| `503` and `MCP is disabled on this Orchard instance` | An operator turned off MCP for the instance.                                 |
+| Response                                        | Cause                                                                                                 |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `401` on connect                                | The token is unknown, expired, or revoked, or the header is not `Bearer orch_...`.                    |
+| `404` on connect                                | The URL includes `/mcp`. The endpoint is at the root of the host.                                     |
+| `Token lacks required scope: deploy`            | The token is valid, but its access level is too low for the tool. Create a token with a higher level. |
+| `503` and `MCP is off on this Orchard instance` | An operator turned off MCP for the instance.                                                          |
 
 ## Revoke access
 

@@ -6,7 +6,7 @@
  *
  * Every tool returns through here so that stays true as tools are added.
  */
-const BUILD_LOGS_OMITTED = '<omitted — call get_build_logs>';
+const BUILD_LOGS_OMITTED = '<omitted, call get_build_logs>';
 
 function omitBuildLogs(key: string, value: unknown) {
   return key === 'buildLogs' && value ? BUILD_LOGS_OMITTED : value;

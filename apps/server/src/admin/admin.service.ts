@@ -113,7 +113,7 @@ export class AdminService {
     }
   ) {
     if (data.isSuperAdmin === false && userId === requesterId) {
-      throw new ForbiddenException('Cannot remove your own superadmin status');
+      throw new ForbiddenException("You can't remove your own superadmin status");
     }
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
@@ -153,7 +153,7 @@ export class AdminService {
 
   async deleteUser(userId: string, requesterId: string) {
     if (userId === requesterId) {
-      throw new ForbiddenException('Cannot delete your own account');
+      throw new ForbiddenException("You can't delete your own account");
     }
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });

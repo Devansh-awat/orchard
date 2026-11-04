@@ -95,13 +95,13 @@ export class DnsCheckService {
         message =
           error === 'ENOTFOUND' || error === 'ENODATA'
             ? 'No record found. Add it at your DNS provider.'
-            : `Could not be resolved (${error}).`;
+            : `Couldn't resolve it (${error}).`;
         if (host.role === 'apps') {
-          message = 'No wildcard record found, so generated app URLs will not resolve.';
+          message = "No wildcard record found, so generated app URLs won't resolve.";
         }
       } else if (host.role !== 'platform' && !reference.length) {
         verdict = 'unknown';
-        message = 'Resolves, but the dashboard does not, so there is nothing to compare against.';
+        message = "Resolves, but the dashboard doesn't, so Orchard can't compare them.";
       } else if (host.role !== 'platform' && !addresses.some((a) => reference.includes(a))) {
         // Advisory, not a failure. A CDN or proxy in front of the zone hands
         // out different anycast addresses per hostname quite legitimately, and
@@ -109,7 +109,7 @@ export class DnsCheckService {
         // that are working perfectly well.
         verdict = 'different';
         message =
-          'Resolves to a different address than the dashboard. Expected behind a proxy or CDN, worth a look otherwise.';
+          'Resolves to a different address than the dashboard. This is normal behind a proxy or CDN. Otherwise, check the record.';
       }
 
       return {

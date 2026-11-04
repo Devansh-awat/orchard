@@ -467,10 +467,10 @@ export class NotificationDeliveryService implements OnModuleInit, OnModuleDestro
       });
       await this.prisma.notificationDelivery.updateMany({
         where: { channelId: channel.id, status: 'pending' },
-        data: { status: 'dropped', error: 'Channel auto-disabled after 24h of failures' }
+        data: { status: 'dropped', error: 'Channel turned off after 24 hours of failures' }
       });
       await this.notifyAdminsOfDeadChannel(channel).catch((e) =>
-        this.logger.warn(`could not warn admins about channel ${channel.id}: ${e?.message ?? e}`)
+        this.logger.warn(`couldn't warn admins about channel ${channel.id}: ${e?.message ?? e}`)
       );
       this.logger.warn(`auto-disabled notification channel ${channel.id} (${channel.name})`);
     }
@@ -495,9 +495,9 @@ export class NotificationDeliveryService implements OnModuleInit, OnModuleDestro
     });
     await this.email.sendNotificationEmail({
       recipients,
-      subject: `Notifications to "${channel.name}" have been turned off`,
-      title: `Notifications to "${channel.name}" have been turned off`,
-      body: `Orchard could not reach this channel for 24 hours, so it has been disabled to stop the retries piling up. Last error: ${channel.lastError ?? 'unknown'}. Fix the webhook and re-enable the channel, then use Replay to send anything you missed.`,
+      subject: `Notifications to "${channel.name}" are off`,
+      title: `Notifications to "${channel.name}" are off`,
+      body: `Orchard couldn't reach this channel for 24 hours, so it turned the channel off. Last error: ${channel.lastError ?? 'unknown'}. Fix the webhook and turn the channel back on, then use Replay to send anything you missed.`,
       contextLine: channel.lastErrorAt ? `Failing since ${channel.lastErrorAt.toISOString()}` : '',
       ctaUrl: org ? `${this.frontendUrl}/${org.slug}/settings` : this.frontendUrl
     });

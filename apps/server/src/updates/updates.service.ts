@@ -42,7 +42,7 @@ export class UpdatesService {
       this.cached = { value, until: Date.now() + FRESH_MS };
       return value;
     } catch (e: any) {
-      this.logger.warn(`could not load the latest release notes from ${base}: ${e?.message ?? e}`);
+      this.logger.warn(`couldn't load the latest release notes from ${base}: ${e?.message ?? e}`);
       const value = this.cached?.value ?? null;
       this.cached = { value, until: Date.now() + RETRY_MS };
       return value;

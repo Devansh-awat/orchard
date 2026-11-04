@@ -3,7 +3,7 @@ export const BACKUP_TIMEOUT_MS = 6 * 60 * 60 * 1000;
 export const WAL_ARCHIVING_GRACE_MS = 15 * 60 * 1000;
 
 export const WAL_ARCHIVING_FAILING_MESSAGE =
-  'WAL archiving is failing, so this database cannot be backed up';
+  "WAL archiving is failing, so this database can't be backed up";
 
 export interface LiveBackupLike {
   status?: { phase?: string; error?: string; stoppedAt?: string } | null;

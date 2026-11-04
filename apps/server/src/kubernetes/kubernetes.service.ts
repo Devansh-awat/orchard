@@ -316,7 +316,7 @@ export class KubernetesService {
               );
               this.kc.loadFromString(decoded);
             } else {
-              throw new Error('Decoded string does not appear to be a valid kubeconfig');
+              throw new Error("Decoded string doesn't appear to be a valid kubeconfig");
             }
           } catch (decodeError) {
             console.warn(
@@ -349,7 +349,7 @@ export class KubernetesService {
     if (!this.kc) {
       throw new ServiceUnavailableException({
         error: 'Kubernetes API not available',
-        message: 'Kubeconfig could not be loaded. Check server logs for details.'
+        message: "Kubeconfig couldn't be loaded. Check server logs for details."
       });
     }
   }

@@ -91,7 +91,7 @@ export class GitOauthController {
     if (!nonceMatches(parsed.n, cookieNonce)) {
       return back(
         res,
-        `error=${encodeURIComponent('This link request could not be verified. Try connecting again.')}`
+        `error=${encodeURIComponent("Couldn't verify this link request. Try connecting again.")}`
       );
     }
     const token = req.cookies?.session_token || parsed.t;

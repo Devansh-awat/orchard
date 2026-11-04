@@ -98,7 +98,7 @@ export class RateLimitService {
     return new HttpException(
       {
         statusCode: HttpStatus.TOO_MANY_REQUESTS,
-        message: `Too many attempts. Please try again in ${Math.max(1, Math.ceil(retryAfterSeconds / 60))} minutes.`,
+        message: `Too many attempts. Try again in ${Math.max(1, Math.ceil(retryAfterSeconds / 60))} minutes.`,
         retryAfter: retryAfterSeconds
       },
       HttpStatus.TOO_MANY_REQUESTS

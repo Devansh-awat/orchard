@@ -31,7 +31,7 @@ export class TailscaleController {
     const enabled = await this.analytics.isEarlyAccessEnabled('tailscale-integration', userId);
     if (!enabled) {
       throw new ForbiddenException(
-        'Tailscale integration is not enabled for your account. Enable it in Early Access Features.'
+        "Tailscale isn't on for your account. Turn it on in Early access."
       );
     }
   }

@@ -238,7 +238,7 @@ export class PasskeyService {
     }
 
     if (challengeRecord.email && challengeRecord.email !== passkey.user.email.toLowerCase()) {
-      throw new BadRequestException('This passkey does not belong to the requested account');
+      throw new BadRequestException("This passkey doesn't belong to the requested account");
     }
 
     const userHandle = response.response.userHandle;
@@ -247,7 +247,7 @@ export class PasskeyService {
       (typeof userHandle !== 'string' ||
         !Buffer.from(userHandle, 'base64url').equals(Buffer.from(passkey.userId)))
     ) {
-      throw new BadRequestException('This passkey does not belong to the requested account');
+      throw new BadRequestException("This passkey doesn't belong to the requested account");
     }
 
     let verification: VerifiedAuthenticationResponse;
@@ -292,7 +292,7 @@ export class PasskeyService {
         }
       });
       if (updated.count !== 1) {
-        throw new BadRequestException('Passkey changed during sign-in. Please try again.');
+        throw new BadRequestException('Passkey changed during sign-in. Try again.');
       }
     });
 

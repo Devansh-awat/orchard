@@ -283,14 +283,14 @@ export class ComposeStacksService {
     composePath: string
   ): Promise<{ composeYaml: string; installationId: bigint | null }> {
     const parsed = this.github.parseRepoUrl(repoUrl);
-    if (!parsed) throw new BadRequestException('Could not parse repository URL');
+    if (!parsed) throw new BadRequestException("Couldn't read the repository URL");
 
     const canAccess = await this.github.verifyUserCanAccessRepo(userId, parsed.owner, parsed.repo);
     if (!canAccess) {
       const isPublic = await this.github.isRepoPublic(parsed.owner, parsed.repo);
       if (!isPublic) {
         throw new ForbiddenException(
-          'You do not have access to this repository on GitHub. Connect your GitHub account or request access to the repo.'
+          "You don't have access to this repository on GitHub. Connect your GitHub account or request access."
         );
       }
     }
@@ -325,7 +325,7 @@ export class ComposeStacksService {
 
   private async defaultBranchOf(userId: string, repoUrl: string): Promise<string> {
     const parsed = this.github.parseRepoUrl(repoUrl);
-    if (!parsed) throw new BadRequestException('Could not parse repository URL');
+    if (!parsed) throw new BadRequestException("Couldn't read the repository URL");
     const token = await this.github.resolveRepoToken(userId, parsed.owner, parsed.repo);
     return this.github.getDefaultBranch(token, parsed.owner, parsed.repo);
   }
@@ -518,7 +518,7 @@ export class ComposeStacksService {
     const stack = await this.prisma.composeStack.findUnique({ where: { id: stackId } });
     if (!stack) throw new NotFoundException('Compose stack not found');
     if (!stack.githubRepo) {
-      throw new BadRequestException('This stack is not linked to a GitHub source');
+      throw new BadRequestException("This stack isn't linked to a GitHub source");
     }
     const userId = await this.resolveUserId(clerkId, userData);
     await this.authz.requireProjectEdit(stack.projectId, userId, 'redeploy a compose stack');

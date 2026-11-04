@@ -17,12 +17,12 @@ import { execSessionEngine, type ExecRouteHooks } from './exec-session-engine';
 
 function describeExecFailure(message: string): string {
   if (/failed to load \/bin\/sh|no such file or directory/i.test(message)) {
-    return 'This image has no shell, so an interactive session is not possible.';
+    return "This image has no shell, so you can't open a session.";
   }
   if (/not found|NotFound/i.test(message)) {
     return 'That container is no longer running.';
   }
-  return `Could not start a shell: ${message}`;
+  return `Couldn't start a shell: ${message}`;
 }
 
 function shellCommand(sessionId: string): string[] {
@@ -117,7 +117,7 @@ function loadKubeConfig(): k8s.KubeConfig {
     }
   } catch (err) {
     console.warn(
-      '[Terminal] kubeconfig unavailable — pod exec terminal disabled:',
+      '[Terminal] kubeconfig unavailable: pod exec terminal disabled:',
       (err as Error).message
     );
   }

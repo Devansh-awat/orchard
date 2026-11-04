@@ -26,7 +26,7 @@ export function registerResourceTools(server: McpServer, client: OrchardClient) 
     'update_project',
     {
       description: `Update mutable fields on an existing project. Use this to rename a project, change its description, or update its repository URL / icon / background image.
-Only the fields you pass are changed — leave the rest undefined to keep them as-is. The project's slug (URL path) is not affected by a rename.`,
+Only the fields you pass are changed. Leave the rest undefined to keep them as-is. The project's slug (URL path) is not affected by a rename.`,
       inputSchema: {
         projectId: z.guid().describe('The project UUID'),
         name: z.string().optional().describe('New project name'),
@@ -44,7 +44,7 @@ Only the fields you pass are changed — leave the rest undefined to keep them a
           .string()
           .nullable()
           .optional()
-          .describe('New icon (emoji or image URL — pass null to clear)'),
+          .describe('New icon (emoji or image URL, or null to clear)'),
         backgroundImage: z
           .string()
           .nullable()
@@ -75,7 +75,7 @@ Only the fields you pass are changed — leave the rest undefined to keep them a
       description: `Create a new PostgreSQL database in a project. Returns the database record with the password masked.
 To wire it into an app, call get_database_connection and pass its connectionString to add_env_vars as DATABASE_URL with secret: true, so the credential never sits in a readable env var.
 
-Optionally, pass restoreFromUrl to seed the new database from an existing one — the
+Optionally, pass restoreFromUrl to seed the new database from an existing one. The
 cluster will run pg_dump/pg_restore from the source URL during initdb. The URL must
 be reachable from the cluster and use the postgres:// or postgresql:// scheme.
 
@@ -195,7 +195,7 @@ This is the only tool that returns the password, and every call is recorded in t
     'create_database_backup',
     {
       description:
-        'Trigger a new backup of a database. Runs asynchronously — poll list_database_backups to check status. Requires the database to be on a CNPG cluster with backups configured.',
+        'Trigger a new backup of a database. Runs asynchronously. Poll list_database_backups to check status. Requires the database to be on a CNPG cluster with backups configured.',
       inputSchema: {
         databaseId: z.guid().describe('The database UUID'),
         label: z.string().optional().describe('Optional human-readable label for the backup'),
@@ -232,7 +232,7 @@ This is the only tool that returns the password, and every call is recorded in t
     'update_database_resources',
     {
       description: `Update CPU and memory requests for an existing database. The database pod will restart briefly to apply the new resources.
-The API enforces project, organization, and per-member resource quotas — if the new values exceed your remaining allowance the call returns an error and nothing changes.
+The API enforces project, organization, and per-member resource quotas. If the new values exceed your remaining allowance the call returns an error and nothing changes.
 Pass null for either field to clear it and fall back to the default.`,
       inputSchema: {
         databaseId: z.guid().describe('The database UUID'),
@@ -265,7 +265,7 @@ Pass null for either field to clear it and fall back to the default.`,
     'get_database_limits',
     {
       description:
-        'Instance-wide limits for managed databases, currently just maxReplicas — the largest number of PostgreSQL instances a single cluster may run on this Orchard instance. Self-hosters can change it, so read it rather than assuming the default of 5.',
+        'Instance-wide limits for managed databases, currently just maxReplicas: the largest number of PostgreSQL instances a single cluster may run on this Orchard instance. Self-hosters can change it, so read it rather than assuming the default of 5.',
       inputSchema: {}
     },
     async () => {
@@ -279,7 +279,7 @@ Pass null for either field to clear it and fall back to the default.`,
     {
       description: `Change how many PostgreSQL instances a database cluster runs: 1 primary plus (replicas - 1) read replicas. The replicas are streaming hot standbys: they serve reads a few milliseconds behind the primary AND act as failover targets, so this buys read scaling and high availability at once. It does not buy write throughput, which is still one primary.
 Each instance is a full pod with its own volume, so scaling from 1 to 3 triples the cluster's CPU and memory usage; the API charges the difference against the organization cap and the project owner's member allowance and returns an error if it does not fit. Scaling down is always permitted.
-Scaling up is not instant — a new replica has to clone the primary before it reports ready. Reads that must never hit stale data should keep using the "rw" endpoint. See get_database for the rw/ro/r endpoints.`,
+Scaling up is not instant. A new replica has to clone the primary before it reports ready. Reads that must never hit stale data should keep using the "rw" endpoint. See get_database for the rw/ro/r endpoints.`,
       inputSchema: {
         databaseId: z.guid().describe('The database UUID'),
         replicas: z
@@ -300,7 +300,7 @@ Scaling up is not instant — a new replica has to clone the primary before it r
     {
       description: `Hibernate a database: the Postgres instances shut down, the volume and all its data stay. Anything connected to it starts failing immediately.
 
-Use it to park a database you are not using without losing it — \`delete_database\` is the one that destroys data. CNPG-backed databases only. Bring it back with \`start_database\`.`,
+Use it to park a database you are not using without losing it. \`delete_database\` is the one that destroys data. CNPG-backed databases only. Bring it back with \`start_database\`.`,
       inputSchema: {
         databaseId: z.guid().describe('The database UUID')
       }
@@ -315,7 +315,7 @@ Use it to park a database you are not using without losing it — \`delete_datab
     'start_database',
     {
       description:
-        'Bring a stopped database back up on its existing volume. It is not immediately connectable — Postgres has to recover and report ready, so poll `get_database` and watch `liveStatus.ready`.',
+        'Bring a stopped database back up on its existing volume. It is not immediately connectable. Postgres has to recover and report ready, so poll `get_database` and watch `liveStatus.ready`.',
       inputSchema: {
         databaseId: z.guid().describe('The database UUID')
       }
@@ -345,7 +345,7 @@ Use it to park a database you are not using without losing it — \`delete_datab
     'rename_database',
     {
       description:
-        'Rename a database. This is the Orchard display name only — the Postgres database name, cluster name, credentials and connection endpoints are unchanged, so nothing connected to it needs updating.',
+        'Rename a database. This is the Orchard display name only. The Postgres database name, cluster name, credentials and connection endpoints are unchanged, so nothing connected to it needs updating.',
       inputSchema: {
         databaseId: z.guid().describe('The database UUID'),
         name: z.string().describe('The new name')
@@ -362,7 +362,7 @@ Use it to park a database you are not using without losing it — \`delete_datab
     {
       description: `The slowest queries on a database, from \`pg_stat_statements\`: normalised query text, call count, total and mean execution time, rows.
 
-The first stop for "the database is slow" — it tells you which statement is actually spending the time. Requires the \`pg_stat_statements\` extension; install it with \`install_database_extension\` (\`addToPreload: true\`, which needs a restart) if the call comes back empty. Cached for 15s server-side, so polling it in a tight loop tells you nothing new.`,
+The first stop for "the database is slow". It tells you which statement is actually spending the time. Requires the \`pg_stat_statements\` extension; install it with \`install_database_extension\` (\`addToPreload: true\`, which needs a restart) if the call comes back empty. Cached for 15s server-side, so polling it in a tight loop tells you nothing new.`,
       inputSchema: {
         databaseId: z.guid().describe('The database UUID')
       }
@@ -391,8 +391,8 @@ The first stop for "the database is slow" — it tells you which statement is ac
   server.registerTool(
     'expand_database_storage',
     {
-      description: `Expand the storage volume of a CNPG database. Storage can ONLY grow, never shrink — requests smaller than the current size are rejected. Expansion happens online: the cluster spec and every data volume are resized directly, so it works even while the database is crashlooping on a full disk or stopped; the filesystem grows within a couple of minutes and CNPG boots the instance once headroom exists. Re-requesting the current size is allowed and re-syncs any volume that lags behind the cluster spec. Maximum size is 200Gi.
-IMPORTANT: if the disk filled because WAL archiving is failing, expansion only buys time — PostgreSQL cannot recycle WAL while archiving fails, so the volume WILL fill again. The response includes a "warning" field when the cluster's ContinuousArchiving condition is failing; if present, surface it to the user and treat fixing the archiving config as the real remediation.`,
+      description: `Expand the storage volume of a CNPG database. Storage can ONLY grow, never shrink. Requests smaller than the current size are rejected. Expansion happens online: the cluster spec and every data volume are resized directly, so it works even while the database is crashlooping on a full disk or stopped; the filesystem grows within a couple of minutes and CNPG boots the instance once headroom exists. Re-requesting the current size is allowed and re-syncs any volume that lags behind the cluster spec. Maximum size is 200Gi.
+IMPORTANT: if the disk filled because WAL archiving is failing, expansion only buys time. PostgreSQL cannot recycle WAL while archiving fails, so the volume WILL fill again. The response includes a "warning" field when the cluster's ContinuousArchiving condition is failing; if present, surface it to the user and treat fixing the archiving config as the real remediation.`,
       inputSchema: {
         databaseId: z.guid().describe('The database UUID'),
         storageSize: z
@@ -491,7 +491,7 @@ IMPORTANT: if the disk filled because WAL archiving is failing, expansion only b
   server.registerTool(
     'update_database_settings',
     {
-      description: `Update PostgreSQL parameters on a database. Some parameters (max_connections, shared_buffers) require a brief database restart to take effect — the API applies them and rolls the pod automatically.
+      description: `Update PostgreSQL parameters on a database. Some parameters (max_connections, shared_buffers) require a brief database restart to take effect. The API applies them and rolls the pod automatically.
 Pass values as strings (e.g. "256MB", "200", "off"). Use get_database_settings first to see current values and supported keys.
 
 The map REPLACES the set of user-set parameters, so omitting a key hands it back to automatic sizing rather than leaving it alone. Send the full map you want.

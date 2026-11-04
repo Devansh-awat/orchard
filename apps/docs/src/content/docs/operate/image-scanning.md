@@ -9,14 +9,14 @@ To show known vulnerabilities in an app's container image on its **Security** ta
 
 ## Choose a scanner
 
-|                                                  | Harbor                                                  | Orchard scanner                                                           |
-| ------------------------------------------------ | ------------------------------------------------------- | ------------------------------------------------------------------------- |
-| What it is                                       | Harbor's own scanner (Trivy, run by Harbor)             | A Trivy server that Orchard deploys, plus one short-lived scan job for each request |
-| Needs                                            | Harbor as your registry, with API credentials           | `trivy.enabled: true` in the chart                                        |
-| Images built by Orchard                          | Yes                                                     | Yes                                                                       |
-| Images from Docker Hub, GHCR, or another registry | No                                                      | Yes, including private images with registry credentials                   |
-| Installer hosts (zot registry)                   | No                                                      | Yes                                                                       |
-| When a scan runs                                 | When Harbor scans on push, or when someone selects **Scan now** or **Scan again** | When someone selects **Scan now** or **Scan again** |
+|                                                   | Harbor                                                                            | Orchard scanner                                                                     |
+| ------------------------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| What it is                                        | Harbor's own scanner (Trivy, run by Harbor)                                       | A Trivy server that Orchard deploys, plus one short-lived scan job for each request |
+| Needs                                             | Harbor as your registry, with API credentials                                     | `trivy.enabled: true` in the chart                                                  |
+| Images built by Orchard                           | Yes                                                                               | Yes                                                                                 |
+| Images from Docker Hub, GHCR, or another registry | No                                                                                | Yes, including private images with registry credentials                             |
+| Installer hosts (zot registry)                    | No                                                                                | Yes                                                                                 |
+| When a scan runs                                  | When Harbor scans on push, or when someone selects **Scan now** or **Scan again** | When someone selects **Scan now** or **Scan again**                                 |
 
 If your registry is Harbor and it already scans on push, use Harbor. Otherwise, use the Orchard scanner.
 
@@ -90,7 +90,7 @@ With the Orchard scanner, a scan runs as follows:
 4. The Job posts the report to the API server. The server keeps the worst 500 findings and the totals.
 5. Kubernetes deletes the Job and its Secret 10 minutes after it finishes.
 
-The tab shows **The last scan failed** with the reason when a scan fails, times out, or loses its Job. If the Job never reaches the Trivy server, the reason is **Could not reach the Trivy server**. Check that the `trivy` pod in `orchard-scans` is ready. The default timeout is 15 minutes.
+The tab shows **The last scan failed** with the reason when a scan fails, times out, or loses its Job. If the Job never reaches the Trivy server, the reason is **Couldn't reach the Trivy server**. Check that the `trivy` pod in `orchard-scans` is ready. The default timeout is 15 minutes.
 
 At most `trivy.maxConcurrentScans` scans run at once. The value is `3` in the chart and `2` from the installer, or `1` on a machine with less than 8 GB of memory. Orchard refuses more requests until a scan finishes.
 

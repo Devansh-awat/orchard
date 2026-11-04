@@ -67,7 +67,7 @@ export class EnvironmentsService {
     if (environmentId) {
       const env = await this.prisma.environment.findUnique({ where: { id: environmentId } });
       if (!env || env.projectId !== projectId) {
-        throw new BadRequestException('Environment does not belong to this project');
+        throw new BadRequestException("Environment doesn't belong to this project");
       }
       return env;
     }
@@ -113,7 +113,7 @@ export class EnvironmentsService {
     const namespace = sanitized.join('-').substring(0, 63);
     if (!namespace) throw new BadRequestException('Failed to build namespace');
     if (RESERVED_NAMESPACES.has(namespace)) {
-      throw new ConflictException('This environment name is not available');
+      throw new ConflictException("This environment name isn't available");
     }
     return namespace;
   }
@@ -152,7 +152,7 @@ export class EnvironmentsService {
     const name = String(input.name ?? '').trim();
     if (!name) throw new BadRequestException('Environment name is required');
     const slug = formatSlug(input.slug || name);
-    if (!slug) throw new BadRequestException('Environment slug cannot be empty');
+    if (!slug) throw new BadRequestException("Environment slug can't be empty");
 
     const slugClash = await this.prisma.environment.findUnique({
       where: { projectId_slug: { projectId, slug } },
@@ -257,7 +257,7 @@ export class EnvironmentsService {
   ) {
     const env = await this.getEnvOrThrow(environmentId);
     if (env.isDefault || env.isProduction) {
-      throw new BadRequestException('The default production environment cannot be deleted');
+      throw new BadRequestException("The default production environment can't be deleted");
     }
     const count = await this.prisma.environment.count({ where: { projectId: env.projectId } });
     if (count <= 1) {

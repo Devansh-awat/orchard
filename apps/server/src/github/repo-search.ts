@@ -214,7 +214,7 @@ export function repoSearchErrorResponse(e: RepoSearchError): {
       return reply(
         404,
         'github_account_not_installed',
-        'The GitHub App is not installed on that account.'
+        "The GitHub App isn't installed on that account."
       );
     case 'reauth':
       return reply(
@@ -226,7 +226,7 @@ export function repoSearchErrorResponse(e: RepoSearchError): {
       return reply(
         429,
         'github_rate_limited',
-        'GitHub is rate limiting searches, try again in a moment',
+        'GitHub is rate limiting searches. Try again in a moment.',
         e.retryAfter ?? 10
       );
     case 'denied':
@@ -235,7 +235,7 @@ export function repoSearchErrorResponse(e: RepoSearchError): {
       return reply(
         502,
         'github_unavailable',
-        'GitHub search is not responding, try again in a moment'
+        "GitHub search isn't responding. Try again in a moment."
       );
   }
 }

@@ -24,7 +24,7 @@ export class SsoCryptoService {
   encrypt(plaintext: string): string {
     if (!this.key) {
       throw new Error(
-        'SSO_ENCRYPTION_KEY is not configured; refusing to store SSO secrets in plaintext'
+        "SSO_ENCRYPTION_KEY isn't configured; refusing to store SSO secrets in plaintext"
       );
     }
     const iv = randomBytes(16);
@@ -36,7 +36,7 @@ export class SsoCryptoService {
 
   decrypt(ciphertext: string): string {
     if (!this.key) {
-      throw new Error('SSO_ENCRYPTION_KEY is not configured; cannot decrypt SSO secret');
+      throw new Error("SSO_ENCRYPTION_KEY isn't configured; can't decrypt SSO secret");
     }
     const parts = ciphertext.split(':');
     if (parts.length !== 3) {

@@ -37,9 +37,7 @@ export class SecurityController {
   ) {
     const { access } = await this.access.assertDeploymentView(id, req.user.sub, this.userData(req));
     if (!this.attacks.available) {
-      throw new ServiceUnavailableException(
-        'No log store is configured, so requests are not recorded'
-      );
+      throw new ServiceUnavailableException("No log store is set up, so requests aren't recorded");
     }
     const range = parseRange(start, end, 24 * 60 * 60 * 1000);
     try {
@@ -71,7 +69,7 @@ export class SecurityController {
   async scan(@Param('id') id: string, @Request() req) {
     const { access } = await this.access.assertDeploymentView(id, req.user.sub, this.userData(req));
     if (!access.canEdit) {
-      throw new ForbiddenException('Your role does not allow you to scan this app');
+      throw new ForbiddenException("Your role doesn't allow you to scan this app");
     }
     try {
       return await this.security.rescan(id, req.user.sub ?? null);
@@ -79,9 +77,9 @@ export class SecurityController {
       if (err instanceof ScanNotPossibleError) throw new BadRequestException(err.message);
       if (err instanceof HarborScanError) {
         if (err.kind === 'not_found')
-          throw new NotFoundException('The image is not in the registry');
+          throw new NotFoundException("The image isn't in the registry");
         if (err.kind === 'not_scannable')
-          throw new BadRequestException('This image cannot be scanned');
+          throw new BadRequestException("This image can't be scanned");
         throw new ServiceUnavailableException('The image scanner is unavailable');
       }
       throw err;

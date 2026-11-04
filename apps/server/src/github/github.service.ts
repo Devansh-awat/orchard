@@ -198,7 +198,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     body: unknown
   ): Promise<Record<string, unknown>> {
     if (!this.issueCommentHandler) {
-      return { received: true, action: 'ignored', reason: 'issue comments are not handled' };
+      return { received: true, action: 'ignored', reason: "issue comments aren't handled" };
     }
     return this.issueCommentHandler(deliveryId, body);
   }
@@ -1258,7 +1258,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
 
     if (!appId || !privateKey) {
       throw new BadRequestException(
-        'GitHub App not configured. Create one from Admin, or set GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY.'
+        'GitHub App not configured. Create one in Instance admin, or set GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY.'
       );
     }
 
@@ -1369,7 +1369,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
 
       if (!user) {
         console.warn(
-          `[GitHub App] No Orchard user for GitHub ID ${sender.id} (${sender.login}) — creating installation without user link`
+          `[GitHub App] No Orchard user for GitHub ID ${sender.id} (${sender.login}): creating installation without user link`
         );
       }
 
@@ -1749,7 +1749,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       return new Set([first, ...rest].flatMap((r) => r.ids));
     } catch (e: any) {
       console.warn(
-        `[GitHub] could not resolve user-accessible repos for installation ${installationId}:`,
+        `[GitHub] couldn't resolve user-accessible repos for installation ${installationId}:`,
         e?.message ?? e
       );
       return null;
@@ -2672,10 +2672,10 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       where = 'Install it from the GitHub App settings';
     }
     return (
-      `The GitHub App is not installed on ${owner}/${repo}, so pushes cannot reach Orchard ` +
-      'and auto-deploy cannot be enabled. ' +
+      `The GitHub App isn't installed on ${owner}/${repo}, so pushes can't reach Orchard ` +
+      "and auto-deploy can't be enabled. " +
       `${where}, and if it is installed with "only select repositories", add ${repo} to the ` +
-      'selection: a repository created after the install is not added to it automatically. ' +
+      "selection: a repository created after the install isn't added to it automatically. " +
       'Manual builds and rebuilds work without this.'
     );
   }

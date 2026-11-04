@@ -51,7 +51,7 @@ export function deploymentStatus(f: DeploymentFacts): {
   }
   if (!f.workload) {
     return f.status === 'running'
-      ? { status: 'unknown', detail: 'No cluster data yet' }
+      ? { status: 'unknown', detail: 'No data yet' }
       : { status: 'unknown', detail: null };
   }
   if (wanted > 0 && ready === 0) return { status: 'down', detail: 'No replicas ready' };

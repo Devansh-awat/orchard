@@ -168,7 +168,7 @@ export class JobsOrchestratorService {
     const { resolved, errors } = resolveEnvVars(raw, shared, resources);
     for (const e of errors) {
       this.logger.warn(
-        `Step ${step.stepOrder} (${step.name}): ${e.key} references shared.${e.missingRef}, which is not defined`
+        `Step ${step.stepOrder} (${step.name}): ${e.key} references shared.${e.missingRef}, which isn't defined`
       );
     }
     return resolved;

@@ -40,7 +40,7 @@ export function readSystemInfo(status: number, body: unknown, base: string): Har
   }
   return {
     harbor: false,
-    reason: `The registry at ${base} is not Harbor, so it cannot scan images. Use the Orchard scanner instead.`,
+    reason: `The registry at ${base} isn't Harbor, so it can't scan images. Use the Orchard scanner instead.`,
     transient: false
   };
 }
@@ -77,7 +77,7 @@ export class HarborScanClient {
     if (!this.configured) {
       return Promise.resolve({
         harbor: false,
-        reason: 'Harbor is not configured.',
+        reason: "Harbor isn't set up.",
         transient: false
       });
     }

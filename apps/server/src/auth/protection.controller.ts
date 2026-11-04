@@ -80,7 +80,7 @@ export class ProtectionController {
     await this.protection.validateReturnTo(body.ingressId, body.returnTo);
 
     const hasAccess = await this.protection.checkUserAccess(body.ingressId, req.user.sub);
-    if (!hasAccess) throw new ForbiddenException('No access to this deployment');
+    if (!hasAccess) throw new ForbiddenException("You don't have access to this app");
 
     const token = await this.protection.generateExchangeToken(body.ingressId, req.user.sub);
     const separator = body.returnTo.includes('?') ? '&' : '?';

@@ -486,7 +486,7 @@ export class ProtectionService {
       where: { id: ingressId },
       select: { host: true }
     });
-    if (!ingress) throw new NotFoundException('Ingress not found');
+    if (!ingress) throw new NotFoundException('Domain not found');
 
     let url: URL;
     try {
@@ -495,7 +495,7 @@ export class ProtectionService {
       throw new BadRequestException('Invalid returnTo URL');
     }
     if (url.hostname !== ingress.host) {
-      throw new BadRequestException('returnTo does not match ingress host');
+      throw new BadRequestException("returnTo doesn't match the domain");
     }
   }
 

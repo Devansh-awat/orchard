@@ -75,7 +75,7 @@ export class CloudflareTunnelService {
         signal: AbortSignal.timeout(15_000)
       });
     } catch (e: any) {
-      throw new BadRequestException(`Could not reach Cloudflare: ${e?.message || e}`);
+      throw new BadRequestException(`Couldn't reach Cloudflare: ${e?.message || e}`);
     }
 
     const payload = (await response.json().catch(() => null)) as any;
@@ -129,8 +129,7 @@ export class CloudflareTunnelService {
         routes: hostnames.map((h) => {
           // A wildcard is routed as the wildcard, not as the probe label.
           const parent = h.record.slice(h.record.indexOf('.') + 1);
-          const match =
-            byHost.get(h.record) || byHost.get(h.probe) || byHost.get(`*.${parent}`);
+          const match = byHost.get(h.record) || byHost.get(h.probe) || byHost.get(`*.${parent}`);
           return { ...h, routed: Boolean(match), service: match?.service ?? null };
         }),
         otherHostnames: rules
@@ -152,11 +151,11 @@ export class CloudflareTunnelService {
    */
   async route(record: string): Promise<TunnelState> {
     if (!this.isConfigured()) {
-      throw new BadRequestException('Cloudflare credentials are not configured');
+      throw new BadRequestException("Cloudflare credentials aren't set up");
     }
     const known = this.dns.hostnames().find((h) => h.record === record);
     if (!known) {
-      throw new BadRequestException('That hostname is not one this instance serves');
+      throw new BadRequestException("This instance doesn't serve that hostname");
     }
 
     const { apiToken, accountId, tunnelId, zoneId } = this.creds();

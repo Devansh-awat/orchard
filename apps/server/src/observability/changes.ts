@@ -183,7 +183,7 @@ const EVENT_LABELS: Record<string, string> = {
   TaintManagerEviction: 'Pod evicted from its node',
   Preempted: 'Pod preempted',
   Preempting: 'Pod preempted',
-  FailedScheduling: 'Pod could not be scheduled',
+  FailedScheduling: "Pod couldn't be scheduled",
   NodeNotReady: 'Node not ready',
   FailedMount: 'Volume failed to mount',
   FailedAttachVolume: 'Volume failed to attach',
@@ -209,7 +209,7 @@ const NODE_CAUSES: Record<string, string> = {
 const EVENT_CAUSES: Record<string, string> = {
   eviction: 'a pod was evicted',
   preemption: 'a pod was preempted',
-  scheduling: 'a pod could not be scheduled',
+  scheduling: "a pod couldn't be scheduled",
   killing: 'a failing probe killed a pod',
   volume: 'a volume failed to mount'
 };

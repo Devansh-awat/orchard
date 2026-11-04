@@ -508,7 +508,7 @@ export class GitConnectionsService {
     const row = await this.prisma.gitConnection.findUnique({ where: { id: connectionId } });
     if (!row) return { status: 'failed', error: 'connection is gone' };
     const repoPath = this.repoPathFor(row.baseUrl, repoUrl);
-    if (!repoPath) return { status: 'failed', error: 'repository is not on this provider' };
+    if (!repoPath) return { status: 'failed', error: "repository isn't on this provider" };
     try {
       const provider = await this.providerForRow(row);
       const status = await provider.ensureWebhook(

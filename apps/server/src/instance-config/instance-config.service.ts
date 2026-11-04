@@ -116,7 +116,7 @@ export class InstanceConfigService implements OnModuleInit, OnModuleDestroy {
         }
         next.set(section.id, values);
       } catch (e) {
-        this.logger.error(`could not read stored config for ${section.id}: ${e}`);
+        this.logger.error(`couldn't read stored config for ${section.id}: ${e}`);
       }
     }
     const snapshot = JSON.stringify([...next.entries()]);
@@ -248,7 +248,7 @@ export class InstanceConfigService implements OnModuleInit, OnModuleDestroy {
         const changes = proposed !== null && !same && !(field.secret && proposed === '');
         if (changes) {
           throw new ConflictException(
-            `${field.name} is set by the ${field.env} environment variable and cannot be changed here`
+            `${field.name} is set by the ${field.env} environment variable, so you can't change it here`
           );
         }
         if (current[field.name]) next[field.name] = current[field.name];
@@ -271,7 +271,7 @@ export class InstanceConfigService implements OnModuleInit, OnModuleDestroy {
     try {
       section.validate?.(next);
     } catch (e: any) {
-      throw new BadRequestException(e?.message ?? 'That value is not valid');
+      throw new BadRequestException(e?.message ?? "That value isn't valid");
     }
 
     const payload: ConfigValues = {};

@@ -25,7 +25,7 @@ export class R2ProxyService {
     const endpoint = (process.env.BACKUP_PROXY_ENDPOINT || '').trim();
     if (this.isEnabled() && !endpoint) {
       throw new InternalServerErrorException(
-        'BACKUP_PROXY_ENABLED=true but BACKUP_PROXY_ENDPOINT is not set'
+        "BACKUP_PROXY_ENABLED=true but BACKUP_PROXY_ENDPOINT isn't set"
       );
     }
     return endpoint;

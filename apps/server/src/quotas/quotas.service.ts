@@ -161,7 +161,7 @@ export class QuotasService implements OnModuleInit {
       }
       return out;
     } catch (err: any) {
-      this.logger.warn(`could not read workloads for the quota: ${err?.message ?? err}`);
+      this.logger.warn(`couldn't read workloads for the quota: ${err?.message ?? err}`);
       return null;
     }
   }
@@ -610,7 +610,7 @@ export class QuotasService implements OnModuleInit {
         quotaGroupId: true
       }
     });
-    if (!org) throw new NotFoundException('Org not found');
+    if (!org) throw new NotFoundException('Organization not found');
     const [usage, connections] = await Promise.all([
       this.getQuotaGroupNamespaces(organizationId).then((namespaces) =>
         this.k8sNamespace.getOrgUsage(namespaces, VIEW_SNAPSHOT)
@@ -655,7 +655,7 @@ export class QuotasService implements OnModuleInit {
   // onto the other org. If either is already in a group, the groups merge.
   async linkOrganizations(primaryOrgId: string, otherOrgId: string) {
     if (primaryOrgId === otherOrgId) {
-      throw new ForbiddenException('Cannot connect an organization to itself');
+      throw new ForbiddenException("You can't connect an organization to itself");
     }
     const [primary, other] = await Promise.all([
       this.prisma.organization.findUnique({
@@ -676,8 +676,8 @@ export class QuotasService implements OnModuleInit {
         select: { id: true, quotaGroupId: true }
       })
     ]);
-    if (!primary) throw new NotFoundException('Primary org not found');
-    if (!other) throw new NotFoundException('Other org not found');
+    if (!primary) throw new NotFoundException('Primary organization not found');
+    if (!other) throw new NotFoundException('Other organization not found');
 
     // Pick the group id: reuse an existing one if present, otherwise mint a new one.
     const groupId = primary.quotaGroupId ?? other.quotaGroupId ?? randomUUID();
@@ -763,7 +763,7 @@ export class QuotasService implements OnModuleInit {
       where: { id: organizationId },
       select: { quotaGroupId: true }
     });
-    if (!self) throw new NotFoundException('Org not found');
+    if (!self) throw new NotFoundException('Organization not found');
 
     const update = {
       ...(data.cpuLimitMilli !== undefined && { cpuLimitMilli: data.cpuLimitMilli }),
@@ -980,7 +980,7 @@ export class QuotasService implements OnModuleInit {
         }),
         chosen
           ? this.runningOnOtherMode(state.value).catch((err) => {
-              this.logger.warn(`could not count workloads: ${err?.message ?? err}`);
+              this.logger.warn(`couldn't count workloads: ${err?.message ?? err}`);
               return null;
             })
           : Promise.resolve({ apps: 0, databases: 0 })
@@ -1099,7 +1099,7 @@ export class QuotasService implements OnModuleInit {
         }
       }
     });
-    if (!org) throw new NotFoundException('Org not found');
+    if (!org) throw new NotFoundException('Organization not found');
     return allowanceCommitment(org, overrides);
   }
 
@@ -1199,7 +1199,7 @@ export class QuotasService implements OnModuleInit {
         select: { ownerId: true, ...OWNED_PROJECT_SELECT }
       })
     ]);
-    if (!org) throw new NotFoundException('Org not found');
+    if (!org) throw new NotFoundException('Organization not found');
     const byOwner = groupByOwner(owned);
     const rows = org.members.map((m) => {
       const allowance = memberAllowance(m, org);

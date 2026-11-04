@@ -37,7 +37,7 @@ export function resolveSecretFlag(
   if (!existing) return defaultSecretFlag(key, requested);
   if (existing.secret && requested === false) {
     throw new BadRequestException(
-      `${key} is sealed and cannot be made visible again. Delete it and add it back to change that.`
+      `${key} is sealed and can't be made visible again. Delete it and add it back to change that.`
     );
   }
   return typeof requested === 'boolean' ? requested : existing.secret;

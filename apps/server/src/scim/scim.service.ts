@@ -92,7 +92,7 @@ function roleFromInstance(instance: any, currentRole?: string | null): string | 
     throw ScimError(
       400,
       'invalidValue',
-      `An identity provider cannot grant owner; expected one of ${PROVISIONABLE_ROLES.join(', ')}`
+      `An identity provider can't grant owner; expected one of ${PROVISIONABLE_ROLES.join(', ')}`
     );
   }
   return chosen;
@@ -166,7 +166,7 @@ export class ScimService implements OnModuleInit {
         {
           type: 'oauthbearertoken',
           name: 'OAuth Bearer Token',
-          description: 'Authentication via the SCIM bearer token minted in org settings.'
+          description: 'Authentication via the SCIM bearer token from Organization settings.'
         }
       ]
     });

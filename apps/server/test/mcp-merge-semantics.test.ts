@@ -208,7 +208,7 @@ test('get_deployment omits the build log so it cannot flood the caller', async (
   const res = await tools.get('get_deployment')!.handler({ deploymentId: 'd1' });
   const payload = JSON.parse(res.content[0].text);
   assert.equal(payload.name, 'web');
-  assert.equal(payload.buildLogs, '<omitted — call get_build_logs>');
+  assert.equal(payload.buildLogs, '<omitted, call get_build_logs>');
 });
 
 test('list_deployments goes cross-project when no projectId is given', async () => {

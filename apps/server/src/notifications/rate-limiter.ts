@@ -59,7 +59,7 @@ export class NotificationRateLimiter implements OnModuleInit, OnModuleDestroy {
   onModuleInit() {
     const url = process.env.REDIS_URL;
     if (!url) {
-      this.logger.warn('REDIS_URL not set — notification rate limiting is per-process only');
+      this.logger.warn('REDIS_URL not set: notification rate limiting is per-process only');
       return;
     }
     this.redis = new Redis(url, { maxRetriesPerRequest: null, lazyConnect: false });

@@ -52,7 +52,7 @@ export class ApplyQueueService implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit() {
     if (process.env.APPLY_WORKER_DISABLED === 'true') {
-      this.logger.log('APPLY_WORKER_DISABLED=true — enqueue-only on this replica');
+      this.logger.log('APPLY_WORKER_DISABLED=true: enqueue-only on this replica');
       return;
     }
     // This queue applies real changes to the cluster, and it is drained by every
