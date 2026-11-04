@@ -10,7 +10,7 @@ import {
 import { ModuleRef } from '@nestjs/core';
 import { Interval } from '@nestjs/schedule';
 import { randomUUID } from 'crypto';
-import type { DatabaseOperation, Prisma } from '@prisma/client';
+import { Prisma, type DatabaseOperation } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { K8sCnpgService } from '../kubernetes/k8s-cnpg.service';
 import { K8sNamespaceService } from '../kubernetes/k8s-namespace.service';
@@ -40,6 +40,7 @@ import {
 import { WAL_ARCHIVE_MAX_PARALLEL } from '../kubernetes/cnpg-defaults';
 import { normalizeBackupEndpointURL } from '../kubernetes/k8s-cnpg.service';
 import { clusterSettled } from '../kubernetes/postgres-images';
+import { clusterSnapshot } from '../kubernetes/cnpg-status';
 import { k8sErrorMessage } from '../kubernetes/k8s-error';
 import { defaultBackupCronFor, formatSlug, toQuartzCron, truncateK8sName } from './projects.utils';
 import type { DatabasesService } from './databases.service';
@@ -797,6 +798,7 @@ export class DatabaseOperationsService {
         host: `${name}-rw.${ns}.svc.cluster.local`,
         port: 5432,
         status: 'ready',
+        ...(await this.clusterMirrorFields(ns, name)),
         backupServerName: name,
         backupMethod: usesPlugin ? 'plugin' : 'barman',
         ...(key ? { r2ProxyAccessKey: key.accessKey, r2ProxySecret: key.secret } : {}),
@@ -842,6 +844,13 @@ export class DatabaseOperationsService {
         } as Prisma.InputJsonValue
       }
     });
+  }
+
+  private async clusterMirrorFields(ns: string, name: string) {
+    const live = await this.k8sCnpg.readCluster(ns, name).catch(() => null);
+    return live
+      ? { clusterStatus: clusterSnapshot(live) as object, clusterSyncedAt: new Date() }
+      : { clusterStatus: Prisma.DbNull, clusterSyncedAt: null };
   }
 
   private async finalize(op: DatabaseOperation) {
@@ -1305,6 +1314,8 @@ export class DatabaseOperationsService {
       data: {
         clusterName: retired.clusterName,
         host: `${retired.clusterName}-rw.${retired.namespace}.svc.cluster.local`,
+        status: 'restarting',
+        ...(await this.clusterMirrorFields(retired.namespace, retired.clusterName)),
         backupServerName: src.serverName,
         r2ProxyAccessKey: null,
         r2ProxySecret: null

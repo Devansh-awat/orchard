@@ -26,7 +26,7 @@ import {
   specColumnUpdate
 } from '../../kubernetes/cnpg-spec-sync';
 
-const POSITIVE_TTL_MS = 10 * 60 * 1000;
+const POSITIVE_TTL_MS = 30 * 1000;
 const SETTINGS_LEAVES_ALONE = new Set(['deleting', 'provisioning', 'restoring']);
 const NEGATIVE_TTL_MS = 60 * 1000;
 const EMIT_COALESCE_MS = 250;
@@ -969,7 +969,7 @@ export class CnpgConsumer implements OnModuleDestroy {
   ): Promise<Ctx | null> {
     const key = `${ns}/${clusterName}`;
     const cached = this.ctxCache.get(key);
-    if (cached && cached.exp > Date.now() && (cached.ctx || !opts.fresh)) return cached.ctx;
+    if (cached && cached.exp > Date.now() && !opts.fresh) return cached.ctx;
 
     // A lookup that throws is left to propagate: `null` means "no such
     // database", which callers store as an answer, and a database blip must not

@@ -81,3 +81,76 @@ test('waking resumes backups unless the user turned them off', async () => {
   assert.equal(off.state.status, 'restarting');
   assert.deepEqual(off.suspended, []);
 });
+
+test('a retired cluster hibernating after a restore does not touch the database', async () => {
+  const row: any = {
+    id: 'd1',
+    status: 'ready',
+    namespace: 'ns',
+    clusterName: 'pg-db',
+    clusterStatus: null,
+    backupScheduleDisabled: false,
+    name: 'db',
+    projectId: 'p1',
+    pgParameters: {},
+    project: { organizationId: 'o1' }
+  };
+  const prisma = {
+    database: {
+      findFirst: async ({ where }: any) => (where.clusterName === row.clusterName ? row : null),
+      findUnique: async () => row,
+      update: async ({ data }: any) => Object.assign(row, data),
+      updateMany: async ({ data }: any) => {
+        Object.assign(row, data);
+        return { count: 1 };
+      }
+    }
+  };
+  const suspended: string[] = [];
+  const consumer: any = new CnpgConsumer(
+    prisma as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    {
+      setScheduledBackupSuspended: async (_ns: string, name: string) => suspended.push(name)
+    } as any,
+    { get: () => null } as any,
+    { log: async () => undefined } as any
+  );
+  consumer.scheduleEmit = () => undefined;
+  consumer.syncSpecColumns = async () => undefined;
+  consumer.adoptSettings = async () => undefined;
+
+  const event = (name: string, hibernation?: string, readyInstances = 1) => ({
+    metadata: {
+      namespace: 'ns',
+      name,
+      annotations: hibernation ? { 'cnpg.io/hibernation': hibernation } : {}
+    },
+    spec: { instances: 1 },
+    status: { readyInstances, instances: 1, phase: 'Cluster in healthy state' }
+  });
+
+  await consumer.onClusterEvent('update', event('pg-db'));
+  assert.equal(row.clusterStatus.hibernated, false);
+
+  row.clusterName = 'pg-db-restored';
+  await consumer.onClusterEvent('update', event('pg-db', 'on', 0));
+  assert.equal(row.status, 'ready');
+  assert.equal(row.clusterStatus.hibernated, false);
+  assert.deepEqual(suspended, []);
+
+  await consumer.onClusterEvent('delete', event('pg-db', 'on', 0));
+  assert.equal(row.status, 'ready');
+
+  await consumer.onClusterEvent('update', event('pg-db-restored'));
+  assert.equal(row.status, 'ready');
+  assert.equal(row.clusterStatus.readyInstances, 1);
+});
+
+test('a database wrongly stopped by a retired cluster heals on the next event', async () => {
+  const h = harness({ status: 'stopped' });
+  await h.adopt(cluster());
+  assert.equal(h.state.status, 'restarting');
+});
