@@ -1,13 +1,27 @@
-import { Body, Controller, Delete, Get, NotFoundException, Param, Post, Put } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  NotFoundException,
+  Param,
+  Post,
+  Put,
+  Request
+} from '@nestjs/common';
+import { EmailService } from '../email/email.service';
 import { InstanceConfigService, ConfigValues } from './instance-config.service';
-import { SECTIONS, STORAGE, sectionById } from './instance-config.sections';
+import { EMAIL, SECTIONS, STORAGE, sectionById } from './instance-config.sections';
 import { probeStorage, storageProbeTarget } from './storage-probe';
 
 // Superadmin-only (default-deny: no @Auth()/@Public() decorator, so the global
 // SuperAdminGuard requires a superadmin).
 @Controller('admin/instance-config')
 export class InstanceConfigController {
-  constructor(private readonly config: InstanceConfigService) {}
+  constructor(
+    private readonly config: InstanceConfigService,
+    private readonly email: EmailService
+  ) {}
 
   @Get()
   list() {
@@ -24,6 +38,15 @@ export class InstanceConfigController {
   @Post('storage/test')
   async testStorage(@Body() body: ConfigValues) {
     return probeStorage(storageProbeTarget(body ?? {}, this.config.all(STORAGE)));
+  }
+
+  @Post('email/test')
+  async testEmail(@Request() req, @Body() body: ConfigValues & { to?: string }) {
+    const { to, ...values } = body ?? {};
+    return this.email.sendTestEmail(
+      { ...this.config.all(EMAIL), ...EmailService.filled(values) },
+      (to || req.user?.email || '').trim()
+    );
   }
 
   @Put(':id')

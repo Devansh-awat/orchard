@@ -111,6 +111,48 @@ export class EmailService {
     return this.transporter !== null;
   }
 
+  static filled(values: Record<string, string | null | undefined>): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const [key, value] of Object.entries(values)) {
+      const trimmed = String(value ?? '').trim();
+      if (trimmed) out[key] = trimmed;
+    }
+    return out;
+  }
+
+  async sendTestEmail(
+    values: Record<string, string | null | undefined>,
+    to: string
+  ): Promise<{ ok: boolean; message?: string }> {
+    const host = (values.host || '').trim();
+    if (!host) return { ok: false, message: 'Enter the SMTP host first.' };
+    if (!to.includes('@')) return { ok: false, message: 'Enter an address to send the test to.' };
+
+    const port = parseInt(values.port || '587', 10);
+    const transport = nodemailer.createTransport({
+      host,
+      port,
+      secure: values.secure === 'true' || port === 465,
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 15_000,
+      auth: values.user ? { user: values.user, pass: values.pass ?? undefined } : undefined
+    });
+    try {
+      await transport.sendMail({
+        from: `"${values.fromName || 'Orchard'}" <${values.from || 'noreply@example.com'}>`,
+        to,
+        subject: 'Orchard test email',
+        text: 'Your Orchard instance can send email.'
+      });
+      return { ok: true };
+    } catch (error: any) {
+      return { ok: false, message: error?.message || 'The test email could not be sent.' };
+    } finally {
+      transport.close();
+    }
+  }
+
   private escapeHtml(value: string): string {
     return String(value ?? '')
       .replaceAll('&', '&amp;')

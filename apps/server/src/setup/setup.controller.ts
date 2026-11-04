@@ -46,6 +46,11 @@ export class SetupController {
     return this.setup.getChecklist();
   }
 
+  @Get('overview')
+  overview(@Request() req) {
+    return this.setup.getOverview(req.user.sub);
+  }
+
   @Auth()
   @Get('certificate')
   certificate() {

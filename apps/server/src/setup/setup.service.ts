@@ -3,13 +3,14 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { K8sNetworkService } from '../kubernetes/k8s-network.service';
 import { InstanceConfigService } from '../instance-config/instance-config.service';
-import { EMAIL, INGRESS, WILDCARD } from '../instance-config/instance-config.sections';
+import { EMAIL, INGRESS, NETWORK, WILDCARD } from '../instance-config/instance-config.sections';
 import { platformBackupTarget } from '../instance-config/object-storage';
 import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import { DnsCheckService, DnsReport } from '../instance-network/dns-check.service';
 import { sanitizeUsername } from '../users/users.service';
 import { AdminService } from '../admin/admin.service';
 import { GithubAppConfigService } from '../github/github-app-config.service';
+import { hostOf } from '../instance-network/hostnames';
 import { formatSlug, platformWildcardDomains } from '../projects/projects.utils';
 import {
   SUPERADMIN_CLAIM_KEY,
@@ -23,7 +24,15 @@ import {
 export { SUPERADMIN_CLAIM_KEY };
 
 // Everything except the passkey. See skipSetupStep for why that one is absent.
-const SKIPPABLE_STEPS = new Set(['organization']);
+const SKIPPABLE_STEPS = new Set([
+  'organization',
+  'github',
+  'storage',
+  'limits',
+  'network',
+  'mcp',
+  'email'
+]);
 
 export interface SetupStep {
   id: 'passkey' | 'organization';
@@ -43,8 +52,18 @@ export interface SetupState {
 // own polling still sees the certificate land promptly.
 const CERT_TTL_MS = 10_000;
 
+const DASHBOARD_TLS_SECRET = 'orchard-tls';
+
 export interface SetupCertificate {
-  state: 'ready' | 'issuing' | 'failed' | 'rateLimited' | 'unknown' | 'unconfigured' | 'perHost';
+  state:
+    | 'ready'
+    | 'issuing'
+    | 'failed'
+    | 'rateLimited'
+    | 'unknown'
+    | 'unconfigured'
+    | 'perHost'
+    | 'external';
   host: string | null;
   message: string | null;
 }
@@ -56,6 +75,30 @@ export interface ChecklistItem {
   done: boolean;
   severity: 'normal' | 'warning';
   href?: string;
+}
+
+export interface SetupOverviewItem {
+  id: string;
+  title: string;
+  value: string;
+  state: 'configured' | 'skipped' | 'pending' | 'off';
+  detail: string | null;
+  href: string;
+}
+
+export interface SetupOverview {
+  installer: boolean;
+  mode: string | null;
+  dashboardUrl: string | null;
+  appDomain: string | null;
+  publicIp: string | null;
+  cname: string | null;
+  locked: { publicIp: boolean; cname: boolean; appDomain: boolean; email: boolean };
+  mcp: { deployed: boolean; enabled: boolean; url: string | null; locked: boolean };
+  emailConfigured: boolean;
+  certificate: SetupCertificate;
+  skipped: string[];
+  items: SetupOverviewItem[];
 }
 
 // The name an untouched organization carries, derived from the email domain.
@@ -278,27 +321,46 @@ export class SetupService implements OnModuleInit {
     // which needs no DNS-01 and no way to copy a Secret between namespaces.
     // Reporting it as "unconfigured" told operators their app domain was
     // missing when they had just set it.
-    if (!wildcard.secret) return { state: 'perHost', host, message: null };
+    if (!wildcard.secret) {
+      const installMode = (process.env.INSTALL_INGRESS_MODE || '').trim();
+      if (installMode === 'tunnel' || installMode === 'lan') {
+        return { state: 'external', host: null, message: null };
+      }
+      if (installMode === 'public') {
+        const namespace = (process.env.PLATFORM_NAMESPACE || 'orchard').trim();
+        return this.certificateStatus(
+          namespace,
+          DASHBOARD_TLS_SECRET,
+          hostOf(process.env.FRONTEND_URL)
+        );
+      }
+      return { state: 'perHost', host, message: null };
+    }
 
     const namespace = this.config.value(WILDCARD, 'sourceNamespace')?.trim();
-    if (!namespace || !this.network) return { state: 'unknown', host, message: null };
+    if (!namespace) return { state: 'unknown', host, message: null };
+    return this.certificateStatus(namespace, wildcard.secret, host);
+  }
 
+  private async certificateStatus(
+    namespace: string,
+    secret: string,
+    host: string | null
+  ): Promise<SetupCertificate> {
+    if (!this.network) return { state: 'unknown', host, message: null };
+    const key = `${namespace}/${secret}`;
     const cached = this.certCache;
-    if (
-      cached &&
-      cached.key === `${namespace}/${wildcard.secret}` &&
-      cached.at > Date.now() - CERT_TTL_MS
-    ) {
+    if (cached && cached.key === key && cached.at > Date.now() - CERT_TTL_MS) {
       return cached.value;
     }
 
-    const status = await this.network.getCertificateStatus(namespace, wildcard.secret);
+    const status = await this.network.getCertificateStatus(namespace, secret);
     const value: SetupCertificate = {
       state: status.state,
       message: status.message ?? null,
       host
     };
-    this.certCache = { key: `${namespace}/${wildcard.secret}`, at: Date.now(), value };
+    this.certCache = { key, at: Date.now(), value };
     return value;
   }
 
@@ -416,6 +478,164 @@ export class SetupService implements OnModuleInit {
       },
       ...(await this.conditionalChecklist(installMode))
     ];
+  }
+
+  async getOverview(userId: string): Promise<SetupOverview> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { setupSkipped: true }
+    });
+    const skipped = new Set(user?.setupSkipped ?? []);
+    const installMode = (process.env.INSTALL_INGRESS_MODE || '').trim();
+    const dashboardUrl = (process.env.FRONTEND_URL || '').trim() || null;
+    const appDomain =
+      this.config.value(WILDCARD, 'appDomain')?.trim() ||
+      (process.env.APP_DOMAIN || '').trim() ||
+      null;
+    const publicIp = this.config.defaultPublicIp() || null;
+    const cname = this.config.value(INGRESS, 'cname')?.trim() || null;
+    const emailConfigured = this.config.isConfigured(EMAIL);
+    const [mcp, limits, certificate] = await Promise.all([
+      this.settings.getMcpState(),
+      this.settings.getResourceLimitsState(),
+      this.getCertificate()
+    ]);
+    const mcpUrl = (process.env.MCP_BASE_URL || '').trim() || null;
+    const mcpDeployed = mcp.envOverride !== false && !!mcpUrl;
+    const github = this.githubApp.isConfigured();
+    const backup = platformBackupTarget();
+
+    const skippedOr = (id: string, fallback: SetupOverviewItem['state']) =>
+      skipped.has(id) ? 'skipped' : fallback;
+
+    const items: SetupOverviewItem[] = [
+      {
+        id: 'github',
+        title: 'GitHub App',
+        value: github ? 'Connected' : 'Not connected',
+        state: github ? 'configured' : skippedOr('github', 'pending'),
+        detail: github
+          ? null
+          : 'Private repositories and rebuilds on push need it. Public repositories still deploy.',
+        href: '/setup/github'
+      },
+      {
+        id: 'storage',
+        title: 'Storage',
+        value: backup?.local ? 'On this server' : backup ? 'S3 storage' : 'Not set',
+        state: backup && !backup.local ? 'configured' : skippedOr('storage', 'pending'),
+        detail: backup?.local
+          ? 'If the server is lost, the backups are lost.'
+          : backup
+            ? null
+            : 'Databases have no backups until this is set.',
+        href: '/admin/instance'
+      },
+      {
+        id: 'limits',
+        title: 'Resource limits',
+        value: limits.value === 'off' ? 'Off' : 'On',
+        state: 'configured',
+        detail: null,
+        href: '/admin/instance'
+      },
+      {
+        id: 'domains',
+        title: 'Domains',
+        value: hostOf(dashboardUrl) ?? 'Not set',
+        state: dashboardUrl ? 'configured' : 'pending',
+        detail: appDomain ? `Apps at *.${appDomain}` : 'No apps domain, so apps get no URL.',
+        href: '/admin/networking'
+      },
+      {
+        id: 'public-ip',
+        title: 'Public IP',
+        value: publicIp ?? 'Not set',
+        state: publicIp ? 'configured' : skippedOr('network', 'pending'),
+        detail: publicIp ? null : 'Public ports and databases are unavailable until this is set.',
+        href: '/admin/instance'
+      },
+      {
+        id: 'custom-domains',
+        title: 'Custom domains target',
+        value: cname ?? 'Not set',
+        state: cname ? 'configured' : skippedOr('network', 'pending'),
+        detail: cname ? null : 'Orchard cannot check custom domains until this is set.',
+        href: '/admin/instance'
+      },
+      {
+        id: 'mcp',
+        title: 'MCP endpoint',
+        value: mcpDeployed && mcp.enabled ? (hostOf(mcpUrl) ?? 'On') : 'Off',
+        state: mcpDeployed && mcp.enabled ? 'configured' : 'off',
+        detail: mcpDeployed && mcp.enabled ? null : 'AI agents cannot connect.',
+        href: '/admin/instance'
+      },
+      {
+        id: 'email',
+        title: 'Email',
+        value: emailConfigured ? 'Configured' : 'Not set',
+        state: emailConfigured ? 'configured' : skippedOr('email', 'pending'),
+        detail: emailConfigured
+          ? null
+          : 'No sign-in codes by email. Invitations still work as links.',
+        href: '/admin/instance'
+      }
+    ];
+
+    if (certificate.state !== 'external' && certificate.state !== 'unconfigured') {
+      const ready = certificate.state === 'ready' || certificate.state === 'perHost';
+      items.push({
+        id: 'certificate',
+        title: 'Certificate',
+        value: SetupService.certificateLabel(certificate.state),
+        state: ready ? 'configured' : 'pending',
+        detail: ready ? null : certificate.message,
+        href: '/admin/networking'
+      });
+    }
+
+    return {
+      installer: !!installMode,
+      mode: installMode || null,
+      dashboardUrl,
+      appDomain,
+      publicIp,
+      cname,
+      locked: {
+        publicIp: this.config.lockedFields(NETWORK).includes('publicIp'),
+        cname: this.config.lockedFields(INGRESS).includes('cname'),
+        appDomain: this.config.lockedFields(WILDCARD).includes('appDomain'),
+        email: this.config.lockedFields(EMAIL).length > 0
+      },
+      mcp: {
+        deployed: mcpDeployed,
+        enabled: mcp.enabled,
+        url: mcpUrl,
+        locked: mcp.envOverride !== null
+      },
+      emailConfigured,
+      certificate,
+      skipped: [...skipped],
+      items
+    };
+  }
+
+  private static certificateLabel(state: SetupCertificate['state']): string {
+    switch (state) {
+      case 'ready':
+        return 'Issued';
+      case 'perHost':
+        return 'One per app';
+      case 'issuing':
+        return 'Issuing';
+      case 'failed':
+        return 'Failed';
+      case 'rateLimited':
+        return 'Rate limited';
+      default:
+        return 'Unknown';
+    }
   }
 
   private async conditionalChecklist(installMode: string): Promise<ChecklistItem[]> {

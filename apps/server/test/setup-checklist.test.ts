@@ -1,6 +1,7 @@
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { SetupService } from '../src/setup/setup.service';
+import { setWildcardOverride } from '../src/projects/projects.utils';
 
 const NAMES = [
   'INSTALL_INGRESS_MODE',
@@ -8,7 +9,10 @@ const NAMES = [
   'TRIVY_SERVER_URL',
   'HARBOR_API_URL',
   'MCP_ENABLED',
-  'IMAGE_SCANNER'
+  'IMAGE_SCANNER',
+  'MCP_BASE_URL',
+  'FRONTEND_URL',
+  'APP_DOMAIN'
 ];
 let saved: Record<string, string | undefined> = {};
 
@@ -124,4 +128,107 @@ test('the GitHub App item warns about webhooks on a private network', async () =
   assert.ok(!/webhooks may not reach/.test((await github()) ?? ''));
   process.env.INSTALL_INGRESS_MODE = 'lan';
   assert.match((await github()) ?? '', /webhooks may not reach it/);
+});
+
+function overview(
+  opts: {
+    installMode?: string;
+    publicIp?: string;
+    cname?: string;
+    email?: boolean;
+    skipped?: string[];
+    mcpEnv?: boolean | null;
+    mcpUrl?: string;
+    cert?: { state: string; message?: string };
+    github?: boolean;
+  } = {}
+) {
+  if (opts.installMode) process.env.INSTALL_INGRESS_MODE = opts.installMode;
+  if (opts.mcpUrl) process.env.MCP_BASE_URL = opts.mcpUrl;
+  process.env.FRONTEND_URL = 'https://orchard.example.com';
+  process.env.APP_DOMAIN = 'apps.example.com';
+  setWildcardOverride(null, null);
+  const svc = Object.create(SetupService.prototype) as any;
+  svc.logger = { warn() {}, error() {} };
+  svc.githubApp = { isConfigured: () => opts.github ?? false };
+  svc.config = {
+    isConfigured: () => opts.email ?? false,
+    defaultPublicIp: () => opts.publicIp ?? '',
+    value: (_section: unknown, name: string) => (name === 'cname' ? (opts.cname ?? null) : null),
+    lockedFields: () => []
+  };
+  svc.settings = {
+    getMcpState: async () => ({
+      enabled: opts.mcpEnv !== false,
+      dbValue: true,
+      envOverride: opts.mcpEnv ?? null
+    }),
+    getResourceLimitsState: async () => ({ value: 'on', dbValue: null, envOverride: null })
+  };
+  svc.network = {
+    getCertificateStatus: async (namespace: string, secret: string) => {
+      svc.asked = `${namespace}/${secret}`;
+      return opts.cert ?? { state: 'ready' };
+    }
+  };
+  svc.prisma = {
+    user: { findUnique: async () => ({ setupSkipped: opts.skipped ?? [] }) }
+  };
+  return { svc, result: (svc as SetupService).getOverview('me') };
+}
+
+const item = (o: { items: { id: string; state: string; value: string }[] }, id: string) =>
+  o.items.find((i) => i.id === id);
+
+test('the overview says what is configured and what was skipped', async () => {
+  const { result } = overview({
+    installMode: 'public',
+    publicIp: '203.0.113.10',
+    cname: 'orchard.example.com',
+    skipped: ['email', 'github'],
+    mcpUrl: 'https://mcp.example.com'
+  });
+  const o = await result;
+  assert.equal(o.installer, true);
+  assert.equal(item(o, 'public-ip')?.state, 'configured');
+  assert.equal(item(o, 'custom-domains')?.value, 'orchard.example.com');
+  assert.equal(item(o, 'email')?.state, 'skipped');
+  assert.equal(item(o, 'github')?.state, 'skipped');
+  assert.equal(item(o, 'mcp')?.value, 'mcp.example.com');
+  assert.equal(item(o, 'domains')?.value, 'orchard.example.com');
+  assert.ok(o.mcp.deployed);
+});
+
+test('a public install reports the dashboard certificate, not per-host', async () => {
+  const { svc, result } = overview({
+    installMode: 'public',
+    cert: { state: 'failed', message: 'Timeout during connect' }
+  });
+  const o = await result;
+  assert.equal(svc.asked.endsWith('/orchard-tls'), true);
+  assert.equal(o.certificate.state, 'failed');
+  assert.equal(o.certificate.host, 'orchard.example.com');
+  assert.equal(item(o, 'certificate')?.state, 'pending');
+  assert.equal(item(o, 'certificate')?.value, 'Failed');
+});
+
+test('tunnel and lan installs have no certificate of their own to report', async () => {
+  for (const installMode of ['tunnel', 'lan']) {
+    const o = await overview({ installMode }).result;
+    assert.equal(o.certificate.state, 'external');
+    assert.equal(item(o, 'certificate'), undefined);
+  }
+});
+
+test('a Helm install keeps per-host certificates and says the script did not run', async () => {
+  const o = await overview({}).result;
+  assert.equal(o.installer, false);
+  assert.equal(o.certificate.state, 'perHost');
+  assert.equal(item(o, 'public-ip')?.state, 'pending');
+});
+
+test('an MCP the chart did not deploy reads as off', async () => {
+  const o = await overview({ mcpEnv: false }).result;
+  assert.equal(o.mcp.deployed, false);
+  assert.equal(item(o, 'mcp')?.state, 'off');
 });
