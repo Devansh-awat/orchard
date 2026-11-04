@@ -519,6 +519,47 @@
         ]
       }
     },
+    "/admin/instance-config/storage/test": {
+      "post": {
+        "description": "Auth: superadmin",
+        "operationId": "admin_instance_config_storage_test",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /admin/instance-config/storage/test",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/admin/instance-settings/databases": {
       "get": {
         "description": "Auth: superadmin",
@@ -64140,6 +64181,29 @@
         "summary": "GET /updates/latest",
         "tags": [
           "updates"
+        ]
+      }
+    },
+    "/uploads/*path": {
+      "get": {
+        "description": "Auth: public",
+        "operationId": "uploads_path_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "GET /uploads/*path",
+        "tags": [
+          "uploads"
         ]
       }
     },
