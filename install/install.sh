@@ -3309,6 +3309,17 @@ render_values() {
   publicIp: \"$public_ip_pin\""
   fi
 
+  local builder_ingress_egress=''
+  if [ "$INGRESS_MODE" != tunnel ]; then
+    builder_ingress_egress="
+    - namespace: traefik
+      podLabels:
+        app.kubernetes.io/name: traefik
+      ports:
+        - port: 8000
+        - port: 8443"
+  fi
+
   local db_memory_env=
   if [ ! -f "$VALUES_FILE" ]; then
     db_memory_env="
@@ -3433,7 +3444,7 @@ builders:
       podLabels:
         app: zot
       ports:
-        - port: 5000
+        - port: 5000$builder_ingress_egress
   localCache:
     enabled: true
     size: ${BUILD_CACHE_GB}Gi
