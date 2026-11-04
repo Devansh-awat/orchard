@@ -90,7 +90,7 @@ It also asks how traffic should reach the box:
   terminates TLS, so cert-manager is skipped entirely, Traefik stays on a
   ClusterIP, and nothing binds a port on the host. This is also the answer when
   something else on the box already owns 80 or 443
-- **lan**: LAN or Tailscale only, self-signed certificates. The dashboard
+- **lan**: LAN or Tailscale only, over plain HTTP. The dashboard
   answers on the box's own addresses (the Tailscale one included), its hostname
   and its `.local` name, so no DNS has to resolve for it. Generated app
   hostnames still use `sslip.io`, because a wildcard cannot hang off an IP.
