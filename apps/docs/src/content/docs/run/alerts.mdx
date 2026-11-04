@@ -1,0 +1,156 @@
+---
+title: Create alert rules
+description: Create an Orchard alert rule that fires when an app metric crosses a threshold for a set period of time.
+sidebar:
+  order: 7
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+An alert rule watches one metric on an app. The rule fires when the metric stays past a threshold for the period you set. Orchard then sends an `alert.firing` notification.
+
+## Prerequisites
+
+- You need the **Owner** or **Admin** role in the organization, or admin access to the project. Only organization owners and admins can create organization rules.
+- The metrics store must be running on your instance. It is on by default (`metrics.enabled` in the Helm chart).
+
+## Create a rule
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the app.
+2. Go to **Settings** > **Notifications**.
+3. In **Alerts**, select **Add alert**.
+4. In **Metric**, select the metric to watch.
+5. In **Is**, select **above** or **below**.
+6. In **Threshold**, enter the value.
+7. In **For**, select how long the metric must stay past the threshold.
+8. (Optional) In **Min req/s**, enter a minimum request rate. This field appears only for metrics that use a request rate guard.
+9. Select **Add alert**.
+
+The rule appears in the **Alerts** list with the status **OK**.
+
+</TabItem>
+<TabItem label="CLI">
+
+Run `orchard alert create`:
+
+```sh
+orchard alert create --deployment <deploymentId> --metric cpu_percent --threshold 85 --for 300
+```
+
+To list the available metric IDs, run `orchard alert metrics`.
+
+</TabItem>
+</Tabs>
+
+## Available metrics
+
+| Metric                      | ID                      | Unit  | Comparison     | Default threshold | Default period |
+| --------------------------- | ----------------------- | ----- | -------------- | ----------------- | -------------- |
+| CPU                         | `cpu_percent`           | %     | Above          | 85                | 5 minutes      |
+| Memory                      | `memory_percent`        | %     | Above          | 85                | 5 minutes      |
+| Requests                    | `request_rate`          | req/s | Above or below | 100               | 5 minutes      |
+| 5xx rate                    | `error_rate`            | %     | Above          | 5                 | 5 minutes      |
+| Average latency             | `latency_avg_ms`        | ms    | Above          | 500               | 5 minutes      |
+| Max latency                 | `latency_max_ms`        | ms    | Above          | 2000              | 5 minutes      |
+| CPU throttling              | `cpu_throttled_percent` | %     | Above          | 25                | 10 minutes     |
+| Hours until out of memory   | `memory_forecast_hours` | h     | Below          | 6                 | 30 minutes     |
+
+CPU and memory percentages compare usage across all replicas with the total limit of those replicas. If an app has no limit of its own, Orchard uses the organization default.
+
+**Requests**, **5xx rate**, **Average latency**, and **Max latency** need a domain on the app. Orchard skips apps without a domain.
+
+**5xx rate**, **Average latency**, and **Max latency** use a request rate guard. Below the minimum request rate, Orchard does not compare the metric with the threshold. The default minimum is 0.2 requests per second.
+
+## Rule status
+
+| Status           | Meaning                                                                    |
+| ---------------- | -------------------------------------------------------------------------- |
+| **OK**           | The metric is within the threshold.                                        |
+| **Over threshold** | The metric is past the threshold, but the period has not ended.          |
+| **Firing**       | The metric stayed past the threshold for the full period.                  |
+| **Recovering**   | The metric is back within the threshold, but the recovery period has not ended. |
+| **No data**      | The metric store did not answer while the rule was active.                 |
+| **Off**          | The rule is paused.                                                        |
+
+Orchard evaluates rules every 30 seconds.
+
+The recovery period equals the rule's period, with a minimum of 2 minutes and a maximum of 10 minutes. When the recovery period ends, Orchard sends an `alert.resolved` notification.
+
+A firing rule also appears above the app's tabs and on the project's **Overview** tab. If the app is a component of a [status page](/run/status-pages/), the component shows **Degraded**.
+
+## Send alerts to a channel
+
+A rule does not contact a team channel by itself. To send alerts to a channel:
+
+1. Open the app.
+2. Go to **Settings** > **Notifications**.
+3. In **Team channels**, select **Add channel**.
+4. In **Channel**, select a channel or select **New destination**.
+5. Under **App and database health**, select **Alert firing** and **Alert resolved**.
+6. Select **Add rule**. If you are adding a new destination, select **Add destination**.
+
+Orchard also sends alert events to personal notifications, in the **App and database health** category. For more information, refer to [Notifications](/run/notifications/).
+
+## Pause or delete a rule
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the app.
+2. Go to **Settings** > **Notifications**.
+3. In **Alerts**, find the rule.
+4. Select **Pause** to stop the rule, or select the delete icon to remove it.
+
+To start a paused rule, select **Resume**.
+
+</TabItem>
+<TabItem label="CLI">
+
+To pause a rule:
+
+```sh
+orchard alert update <ruleId> --disabled
+```
+
+To delete a rule:
+
+```sh
+orchard alert delete <ruleId>
+```
+
+</TabItem>
+</Tabs>
+
+Pausing a rule clears its current state. The app page does not show these actions for project or organization rules. Use the CLI to change those rules.
+
+## Create a rule for a project or organization
+
+A project rule applies to every app in the project. An organization rule applies to every app in the organization. The dashboard shows these rules on each app, marked **From the project** or **From the organization**, but you create them with the CLI.
+
+To create a project rule:
+
+```sh
+orchard alert create --project <projectId> --metric memory_percent --threshold 90 --for 600
+```
+
+To create an organization rule, omit `--project` and `--deployment`:
+
+```sh
+orchard alert create --metric error_rate --threshold 5 --for 300
+```
+
+## Limits
+
+- Each app, project, or organization can have 25 rules.
+- The period must be between 60 seconds and 24 hours. The dashboard offers periods from 1 minute to 1 hour.
+- Orchard evaluates a rule only for apps that are not stopped and that have a ready replica or a running status.
+
+## Related resources
+
+- [Notifications](/run/notifications/)
+- [Create a status page](/run/status-pages/)
+- [Scaling and resources](/deploy/scaling/)
+- [`orchard alert` reference](/reference/cli/#alert)
