@@ -140,7 +140,7 @@ PLAN_TITLES=(
   "Install the updater"
   "Finish"
 )
-PLAN_COSTS=(6 6 0 0 120 20 240 105 45 4 300 4 0)
+PLAN_COSTS=(6 6 0 0 40 5 60 45 15 1 180 1 0)
 
 STEP_N=0
 STEP_TOTAL=${#PLAN_TITLES[@]}
