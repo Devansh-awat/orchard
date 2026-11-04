@@ -1,0 +1,79 @@
+---
+title: Change PostgreSQL parameters
+description: Change connection, memory, timeout, logging, and durability parameters on an Orchard managed PostgreSQL database.
+sidebar:
+  order: 10
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+You can change a set of PostgreSQL parameters on a managed database. Some parameters restart the database when you save them.
+
+## Prerequisites
+
+- You need edit access to the project.
+- The database must be a dedicated database.
+
+## Change a parameter
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the database.
+2. Go to **Settings** > **Parameters**.
+3. Update the values.
+4. Select **Save**. If the change requires a restart, the page shows `Saving restarts the database` next to the button.
+
+</TabItem>
+<TabItem label="CLI">
+
+To read the current values, run:
+
+```sh
+orchard db settings get <id>
+```
+
+To set a value, run:
+
+```sh
+orchard db settings set <id> statement_timeout=30000
+```
+
+To remove a value, leave it empty:
+
+```sh
+orchard db settings set <id> statement_timeout=
+```
+
+</TabItem>
+</Tabs>
+
+## Available parameters
+
+| Dashboard label                    | Parameter                             | Default | Range or values                                           | Restart |
+| ---------------------------------- | ------------------------------------- | ------- | --------------------------------------------------------- | ------- |
+| **Max Connections**                | `max_connections`                     | 100     | 10 to 500                                                 | Yes     |
+| **Shared Buffers**                 | `shared_buffers`                      | Automatic | Memory value                                            | Yes     |
+| **Work Memory**                    | `work_mem`                            | 4MB     | Memory value                                              | No      |
+| **Maintenance Work Memory**        | `maintenance_work_mem`                | 64MB    | Memory value                                              | No      |
+| **Effective Cache Size**           | `effective_cache_size`                | 4GB     | Memory value                                              | No      |
+| **Slow Query Log (ms)**            | `log_min_duration_statement`          | -1      | -1 to 600000. -1 turns this off.                          | No      |
+| **Statement Timeout (ms)**         | `statement_timeout`                   | 0       | 0 to 3600000. 0 turns this off.                           | No      |
+| **Idle-in-Transaction Timeout (ms)** | `idle_in_transaction_session_timeout` | 0     | 0 to 3600000. 0 turns this off.                           | No      |
+| **Synchronous Commit**             | `synchronous_commit`                  | on      | `on`, `off`, `local`, `remote_write`, `remote_apply`      | No      |
+
+## Shared buffers
+
+By default, Orchard sizes `shared_buffers` from the database's memory limit. When you change the memory limit, Orchard recalculates the value.
+
+If you enter a value, Orchard uses that value exactly. If the value is large for the current memory limit, the page shows a warning. To return to automatic sizing, clear the field.
+
+## Values changed outside Orchard
+
+If a running value differs from the saved value, the parameter row shows the running value and the text `changed outside Orchard`.
+
+## Related resources
+
+- [Databases](/data/databases/)
+- [Monitor a database](/data/monitoring/)
+- [`orchard db settings` reference](/reference/cli/#db)

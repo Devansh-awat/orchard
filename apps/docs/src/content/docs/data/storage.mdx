@@ -1,0 +1,59 @@
+---
+title: Grow database storage
+description: Increase the volume size of an Orchard managed database, and resolve paused writes when the volume is full.
+sidebar:
+  order: 11
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+You can increase the storage volume of a managed database without a restart. The maximum size is 200 GiB. You cannot decrease the size later.
+
+## Prerequisites
+
+- You need edit access to the project.
+- The database must be a dedicated database.
+
+## Grow the volume
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the database.
+2. Go to **Settings** > **Resources**.
+3. In **Storage**, increase **Size**.
+4. Select **Grow to `<size>`**.
+5. Select **Grow storage**.
+
+The volume of every instance grows to the new size.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard db storage expand <id> --size 20Gi
+```
+
+</TabItem>
+</Tabs>
+
+## Paused writes
+
+Orchard pauses writes when the volume reaches 92% full. Reads continue. The **Storage** card shows `Writes are paused because the volume is full`.
+
+To resume writes:
+
+1. Grow the volume. The **Storage** card shows the minimum size.
+2. Wait for the volume to drop under 85% full. Writes resume automatically.
+
+The events **Writes paused (disk full)** and **Writes resumed** are available as [notifications](/run/notifications/).
+
+## WAL archiving failures
+
+If write-ahead log (WAL) archiving fails, WAL files continue to fill the volume. The **Storage** card shows `WAL archiving is failing`. Growing the volume adds time, but it does not fix the cause. To resolve the failure, check the backup storage configuration. For more information, refer to [Backups and restore](/data/backups/).
+
+## Related resources
+
+- [Databases](/data/databases/)
+- [Backups and restore](/data/backups/)
+- [`orchard db storage` reference](/reference/cli/#db)

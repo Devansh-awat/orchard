@@ -1,0 +1,97 @@
+---
+title: Upgrade PostgreSQL
+description: Upgrade an Orchard managed database to a newer PostgreSQL major version, and review known vulnerabilities in the running version.
+sidebar:
+  order: 7
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+You can upgrade a managed database to a newer PostgreSQL major version from the dashboard or the CLI. The database is offline during the upgrade step.
+
+Minor updates are different. Orchard applies them automatically and restarts instances one at a time.
+
+## Prerequisites
+
+- You need edit access to the project.
+- The database must be a dedicated database.
+- The database must be running and healthy.
+- No other restore or upgrade can be running on the database.
+
+## Check the running version
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the database.
+2. Go to **Settings** > **Version and security**.
+
+The page shows the running version and its support date. It also lists known vulnerabilities from postgresql.org.
+
+</TabItem>
+<TabItem label="CLI">
+
+To read the running version and known vulnerabilities, run:
+
+```sh
+orchard db security <dbId>
+```
+
+To list the versions that this instance offers, run:
+
+```sh
+orchard db versions
+```
+
+</TabItem>
+</Tabs>
+
+## Upgrade to a new major version
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the database.
+2. Go to **Settings** > **Version and security**.
+3. Select **Upgrade to Postgres `<version>`**. The button shows the newest version.
+4. In **To**, select the target version.
+5. Keep **Rehearse on a copy first** turned on. This adds a few minutes before the real upgrade.
+6. Select **Upgrade to Postgres `<version>`**.
+
+To follow the upgrade, go to the **Backups** tab.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard db upgrade <dbId> --to 18 --wait
+```
+
+To skip the rehearsal, add `--no-rehearse`. To change how long `--wait` blocks, use `--timeout`. The default is 10 minutes.
+
+</TabItem>
+</Tabs>
+
+## How an upgrade runs
+
+1. If rehearsal is on, Orchard upgrades a copy of the database to check that the upgrade works.
+2. Orchard takes a [checkpoint](/data/backups/).
+3. Orchard upgrades the database. The database is offline during this step.
+4. Orchard runs `ANALYZE`.
+5. If the organization has backup storage, Orchard starts a new backup.
+
+If the upgrade fails, Orchard returns the database to the previous version.
+
+If a previous rehearsal measured the upgrade time, the upgrade dialog shows that time as the expected offline period.
+
+## Respond to a support warning
+
+**Version and security** shows a warning when support for the running major version ends soon. The page shows an error after support ends. After that date, the major version no longer receives security fixes.
+
+To resolve the warning or the error, upgrade to a newer major version.
+
+## Related resources
+
+- [Backups and restore](/data/backups/)
+- [Databases](/data/databases/)
+- [`orchard db upgrade` reference](/reference/cli/#db)

@@ -1,0 +1,78 @@
+---
+title: Configure high availability
+description: Add standby instances to an Orchard managed database and choose when a write counts as saved.
+sidebar:
+  order: 8
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+A database with standby instances can continue to serve traffic when the primary fails. A database with one instance has no failover. To configure high availability, add a standby, and then choose a replication mode.
+
+## Prerequisites
+
+- You need edit access to the project.
+- The database must be a dedicated database.
+- Each new instance counts against your [quota](/teams/quotas/).
+
+## Add a standby
+
+1. Open the database.
+2. Go to **Settings** > **Resources**.
+3. In **Instances**, increase the number of instances.
+4. Select **Scale to `<number>`**.
+
+The **Instances** list shows each instance as **Primary** or **Standby**, with its status. A new standby copies the primary before it serves traffic.
+
+## Choose a replication mode
+
+The replication mode controls when PostgreSQL treats a write as saved.
+
+| Mode        | Behavior                                                                  | Needs a standby |
+| ----------- | ------------------------------------------------------------------------- | --------------- |
+| **Async**   | A failover can lose the last moments of writes.                           | No              |
+| **Preferred** | Each commit waits for a standby while one is healthy.                   | Yes             |
+| **Required** | No acknowledged write is lost, but writes stop if no standby is reachable. | Yes             |
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the database.
+2. Go to **Settings** > **High availability**.
+3. Select a mode. Orchard saves the mode immediately.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard db replication set <dbId> --mode preferred
+```
+
+To read the current mode, run:
+
+```sh
+orchard db replication get <dbId>
+```
+
+</TabItem>
+</Tabs>
+
+## Remove a standby
+
+:::caution
+Removing a standby deletes the standby and its volume.
+:::
+
+1. Open the database.
+2. Go to **Settings** > **Resources**.
+3. In **Instances**, decrease the number of instances.
+4. Select **Scale to `<number>`**.
+5. In the confirmation dialog, select **Scale to `<number>`**.
+
+The primary keeps running.
+
+## Related resources
+
+- [Read replicas](/data/replicas/)
+- [Use a connection pooler](/data/connection-pooler/)
+- [`orchard db replication` reference](/reference/cli/#db)

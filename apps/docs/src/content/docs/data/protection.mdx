@@ -1,0 +1,59 @@
+---
+title: Protect a database
+description: Turn on deletion protection, automatic checkpoints before drops, and weekly restore tests for an Orchard managed database.
+sidebar:
+  order: 9
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+Use the protection settings to prevent accidental deletion and to confirm that your backups work.
+
+| Setting                     | CLI flag            | What it does                                                                                  | Needs backup storage |
+| --------------------------- | ------------------- | --------------------------------------------------------------------------------------------- | -------------------- |
+| **Deletion protection**     | `--deletion`        | Orchard refuses to delete the database until you turn this off.                               | No                   |
+| **Checkpoint before drops** | `--ddl-checkpoints` | Orchard takes a restore point before any `DROP TABLE`, `DROP SCHEMA`, or `DROP COLUMN` runs.  | Yes                  |
+| **Weekly restore tests**    | `--restore-tests`   | Orchard restores the latest backup into a temporary copy each week and checks the result.     | Yes                  |
+
+## Prerequisites
+
+- You need edit access to the project.
+- The database must be a dedicated database.
+- For **Checkpoint before drops** and **Weekly restore tests**, your organization needs [backup storage](/data/backups/).
+
+## Change the protection settings
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the database.
+2. Go to **Settings** > **Protection**.
+3. Turn each setting on or off. Orchard saves each change immediately.
+
+</TabItem>
+<TabItem label="CLI">
+
+Each flag accepts `on` or `off`:
+
+```sh
+orchard db protect <dbId> --deletion on --ddl-checkpoints on --restore-tests on
+```
+
+</TabItem>
+</Tabs>
+
+## Delete a protected database
+
+If you try to delete a protected database, Orchard returns this error:
+
+```txt
+<name> has deletion protection on. Turn it off in its settings first.
+```
+
+To delete the database, turn off **Deletion protection** first.
+
+## Related resources
+
+- [Backups and restore](/data/backups/)
+- [Databases](/data/databases/)
+- [`orchard db protect` reference](/reference/cli/#db)

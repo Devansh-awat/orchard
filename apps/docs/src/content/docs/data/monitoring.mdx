@@ -1,0 +1,87 @@
+---
+title: Monitor a database
+description: Read metrics and query performance for an Orchard managed database on the Observe tab.
+sidebar:
+  order: 12
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+The **Observe** tab of a database shows metrics and query statistics. Use the tab to find slow queries and to check whether the database needs more resources.
+
+Metrics and query statistics are available only for dedicated databases.
+
+## View metrics
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the database.
+2. Go to **Observe** > **Metrics**.
+3. Select a time range.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard db metrics <id>
+```
+
+</TabItem>
+</Tabs>
+
+The **Metrics** view has the following panels:
+
+| Section                 | Panels                                                                              |
+| ----------------------- | ----------------------------------------------------------------------------------- |
+| **Activity**            | **Connections**, **Transactions**, **Cache hit**                                    |
+| **Replication & storage** | **Replication lag**, **Database size**, **Disk used**                             |
+| **Resources**           | **CPU**, **Memory**, **Network in**, **Network out**                                |
+| **Health**              | **Deadlocks**. This panel appears only when the range contains a deadlock.          |
+
+The **Disk used** panel marks 80% full and 92% full. Writes pause at 92%. For more information, refer to [Grow database storage](/data/storage/).
+
+## Turn on query statistics
+
+Query statistics use the `pg_stat_statements` extension. Turning on the extension restarts the database once.
+
+1. Open the database.
+2. Go to **Observe** > **Queries**.
+3. Select **Enable**.
+
+## Find slow queries
+
+1. Open the database.
+2. Go to **Observe** > **Queries**.
+3. In **Rank queries by**, select one of these options:
+   - **Most time**: Total time across all calls.
+   - **Most frequent**: Number of calls.
+   - **Slowest**: Mean time for each call.
+4. (Optional) In **Filter queries**, enter text to search for.
+5. Select a row to read the full query.
+
+To clear the collected statistics, select **Reset**.
+
+## Read logs and restart history
+
+The **Overview** tab of a database includes a console. In the console, **Logs** shows PostgreSQL logs and **Killed** shows the output of containers that were killed.
+
+To read this data from the CLI, run these commands:
+
+```sh
+orchard db logs <id>
+orchard db killed list <id>
+```
+
+To print a summary of database health, run:
+
+```sh
+orchard db diagnose <dbId>
+```
+
+## Related resources
+
+- [Change PostgreSQL parameters](/data/parameters/)
+- [Grow database storage](/data/storage/)
+- [Logs and shell](/run/logs/)
+- [`orchard db` reference](/reference/cli/#db)

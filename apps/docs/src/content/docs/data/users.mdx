@@ -1,0 +1,103 @@
+---
+title: Add database users
+description: Create read-only or read-write PostgreSQL users on an Orchard managed database for reporting tools and other clients.
+sidebar:
+  order: 6
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+Add a database user to give a tool or a person a separate login. For example, create a read-only user for a reporting tool.
+
+Every database has an owner user. Apps in the project use the owner user. You cannot remove the owner user.
+
+## Prerequisites
+
+- You need edit access to the project.
+- The database must be a dedicated database.
+
+## Add a user
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the database.
+2. Go to **Settings** > **Users**.
+3. Select **Add user**.
+4. In **Name**, enter a name for the user.
+5. In **Access**, select **Read only** or **Read and write**.
+6. Select **Add user**.
+7. Copy the **Password** and **Connection string**.
+8. Select **Done**.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard db user create <dbId> reporting --access read
+```
+
+The command prints the password once. The `--access` flag accepts `read` or `write`. The default is `read`. This command needs a token with the deploy scope.
+
+</TabItem>
+</Tabs>
+
+:::caution
+Orchard shows the password one time. If you lose the password, remove the user and add it again.
+:::
+
+## User names
+
+A user name must follow these rules:
+
+- It has 2 to 41 characters.
+- It starts with a lowercase letter.
+- It contains only lowercase letters, digits, and underscores.
+- It does not start with `pg_` or `cnpg_`.
+- It is not the owner user or another reserved name.
+
+## List users
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the database.
+2. Go to **Settings** > **Users**.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard db user list <dbId>
+```
+
+</TabItem>
+</Tabs>
+
+## Remove a user
+
+Removing a user disconnects all sessions that use the login. The user cannot log in again.
+
+<Tabs syncKey="dashPlusCli">
+<TabItem label="Dashboard">
+
+1. Open the database.
+2. Go to **Settings** > **Users**.
+3. On the user, select the delete icon.
+4. Select **Remove user**.
+
+</TabItem>
+<TabItem label="CLI">
+
+```sh
+orchard db user rm <dbId> <name>
+```
+
+</TabItem>
+</Tabs>
+
+## Related resources
+
+- [Databases](/data/databases/)
+- [API tokens](/account/tokens/)
+- [`orchard db user` reference](/reference/cli/#db)
