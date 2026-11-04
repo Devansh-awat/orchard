@@ -129,6 +129,33 @@ services:
   assert.equal((created[0][2] as any).composeServiceName, 'worker');
 });
 
+test('a volume with an underscore keeps one valid claim across redeploys', async () => {
+  const yaml = `
+services:
+  db:
+    image: mysql:8
+    volumes: ["db_data:/var/lib/mysql"]
+`;
+  const first = harness(yaml, []);
+  await first.service.redeployFromGithub('stack', 'clerk');
+  const created = first.calls.find((c) => c[0] === 'create')![2] as any;
+  const claim = created.volumes[0].name;
+  assert.match(claim, /^db-data-[0-9a-f]{8}$/);
+  assert.equal(created.volumes[0].pvcName, claim);
+
+  const second = harness(yaml, [
+    child({
+      id: 'db',
+      name: 'app-db',
+      composeServiceName: 'db',
+      image: 'mysql:8',
+      volumes: [{ name: claim, type: 'pvc', mountPath: '/var/lib/mysql', pvcName: claim }]
+    })
+  ]);
+  await second.service.redeployFromGithub('stack', 'clerk');
+  assert.ok(!second.names().includes('volumes'));
+});
+
 test('compose changes are applied to the existing deployment', async () => {
   const yaml = `
 services:

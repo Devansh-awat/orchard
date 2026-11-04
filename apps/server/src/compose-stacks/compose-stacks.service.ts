@@ -15,6 +15,7 @@ import { AuthorizationService } from '../auth/authorization.service';
 import { UsersService } from '../users/users.service';
 import { GitHubService } from '../github/github.service';
 import { looksSecret } from '../projects/env-write-rules';
+import { composeVolumeName } from './compose-volume-name';
 
 interface UserData {
   email?: string;
@@ -233,7 +234,7 @@ export class ComposeStacksService {
         if (src.startsWith('/') || src.startsWith('.')) continue; // bind mount: skip
         const top = volumesTop[src];
         volumes.push({
-          name: src,
+          name: composeVolumeName(src),
           type: 'pvc',
           mountPath: dst,
           storageSize: top?.driver_opts?.size ?? '1Gi'
