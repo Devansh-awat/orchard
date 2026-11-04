@@ -800,15 +800,16 @@ export class CnpgConsumer implements OnModuleDestroy {
         status: true,
         name: true,
         projectId: true,
+        clusterName: true,
         backupScheduleDisabled: true,
         project: { select: { organizationId: true } }
       }
     });
-    if (!db) return;
+    if (!db || db.clusterName !== name) return;
     const next = hibernationTransition(cluster, db.status);
     if (!next) return;
     const updated = await this.prisma.database.updateMany({
-      where: { id: ctx.databaseId, status: db.status },
+      where: { id: ctx.databaseId, status: db.status, clusterName: name },
       data: { status: next }
     });
     if (updated.count === 0) return;

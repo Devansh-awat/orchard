@@ -32,6 +32,7 @@ function harness(row: { status: string; backupScheduleDisabled?: boolean }) {
         status: state.status,
         name: 'db',
         projectId: 'p1',
+        clusterName: 'pg-db',
         backupScheduleDisabled: state.backupScheduleDisabled ?? false,
         project: { organizationId: 'o1' }
       }),
@@ -58,7 +59,7 @@ function harness(row: { status: string; backupScheduleDisabled?: boolean }) {
   );
   const adopt = (c: any) =>
     (consumer as any).adoptHibernation({ databaseId: 'd1' }, 'ns', 'pg-db', c) as Promise<void>;
-  return { adopt, state, suspended, audits };
+  return { adopt, consumer, state, suspended, audits };
 }
 
 test('a kubectl hibernation stops the row, suspends backups and audits', async () => {
@@ -147,6 +148,14 @@ test('a retired cluster hibernating after a restore does not touch the database'
   await consumer.onClusterEvent('update', event('pg-db-restored'));
   assert.equal(row.status, 'ready');
   assert.equal(row.clusterStatus.readyInstances, 1);
+});
+
+test('only the current cluster can stop the row or touch a backup schedule', async () => {
+  const h = harness({ status: 'ready' });
+  await (h as any).consumer.adoptHibernation({ databaseId: 'd1' }, 'ns', 'pg-old', cluster('on'));
+  assert.equal(h.state.status, 'ready');
+  assert.deepEqual(h.suspended, []);
+  assert.deepEqual(h.audits, []);
 });
 
 test('a database wrongly stopped by a retired cluster heals on the next event', async () => {
