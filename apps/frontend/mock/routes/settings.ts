@@ -380,6 +380,38 @@ export function settingsRoutes(r: Router, { store }: MockContext) {
 		return { entries, nextCursor: null };
 	});
 
+	const limitsView = () => {
+		const value = store.state.resourceLimits ?? 'on';
+		const orgs = store.myOrgs();
+		return {
+			value,
+			dbValue: store.state.resourceLimits ?? null,
+			envOverride: null,
+			newInstance: !store.state.resourceLimits,
+			affected: { apps: 4, databases: 1 },
+			stale: store.state.resourceLimits ? { apps: 3, databases: 1 } : { apps: 0, databases: 0 },
+			fallback: {
+				app: { cpuMilli: 100, memoryBytes: 128 * MIB },
+				database: { cpuMilli: 500, memoryBytes: 1024 * MIB }
+			},
+			organizations: orgs.map((o) => ({
+				id: o.id,
+				name: o.name,
+				slug: o.slug,
+				defaultPodCpuMilli: null,
+				defaultPodMemoryBytes: null
+			}))
+		};
+	};
+	r.get('/admin/instance-settings/resource-limits', () => limitsView());
+	r.patch('/admin/instance-settings/resource-limits', ({ body }) => {
+		if (body?.value !== 'on' && body?.value !== 'off')
+			return reply(400, { message: 'value must be on or off', statusCode: 400 });
+		store.state.resourceLimits = body.value;
+		return limitsView();
+	});
+	r.patch('/admin/organizations/:id/quota', () => ({ ok: true }));
+
 	r.get('/organizations/:orgId/quota/me', ({ params }) => {
 		const o = org(params.orgId);
 		if (!o) return notFound();

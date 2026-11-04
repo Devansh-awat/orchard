@@ -3,7 +3,7 @@
 	import ResourcePicker, { formatCpu, formatMemory } from '$lib/components/ResourcePicker.svelte';
 	import { Button, FormActions, SectionCard, SettingRow } from '$lib/components/ui';
 	import { isDatabaseImage } from '$lib/presets';
-	import { apiFetch, isSuperAdmin } from '$lib/stores';
+	import { apiFetch, instanceFeatures, isSuperAdmin } from '$lib/stores';
 	import NodePoolPicker from './NodePoolPicker.svelte';
 
 	let {
@@ -103,22 +103,24 @@
 			recommendedMemoryBytes={suggestion?.memoryBytes ?? null}
 			onchange={() => (resourcesDirty = true)}
 		/>
-		{#if suggestion}
+		{#if suggestion && $instanceFeatures.resourceLimits !== 'off'}
 			<SettingRow label={suggestion.label} hint={suggestion.hint}>
 				<Button size="sm" disabled={suggestion.applied} onclick={apply}>Apply</Button>
 			</SettingRow>
 		{/if}
-		<FormActions hint="Saving restarts your app.">
-			<Button variant="ghost" disabled={!resourcesDirty || savingResources} onclick={discard}
-				>Discard</Button
-			>
-			<Button
-				variant="primary"
-				disabled={!resourcesDirty}
-				loading={savingResources}
-				onclick={onSaveResources}>Save</Button
-			>
-		</FormActions>
+		{#if $instanceFeatures.resourceLimits !== 'off'}
+			<FormActions hint="Saving restarts your app.">
+				<Button variant="ghost" disabled={!resourcesDirty || savingResources} onclick={discard}
+					>Discard</Button
+				>
+				<Button
+					variant="primary"
+					disabled={!resourcesDirty}
+					loading={savingResources}
+					onclick={onSaveResources}>Save</Button
+				>
+			</FormActions>
+		{/if}
 	</div>
 </SectionCard>
 

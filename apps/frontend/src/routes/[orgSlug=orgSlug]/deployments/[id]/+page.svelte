@@ -7,6 +7,7 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { queryClient } from '$lib/query';
 	import { loadTerminalTabs, saveTerminalTabs, terminalTabsKey } from '$lib/terminal/tabs-store';
+	import { browser } from '$app/environment';
 	import { deploymentQueryOptions } from '$lib/queries/deployment';
 	import { mergeInto, syncListBy, shallowEq } from '$lib/utils/sync';
 	import { toEnvWrite, type EditableEnvVar } from '$lib/utils/env-secrets';
@@ -28,7 +29,8 @@
 		selectedOrganization,
 		subscribeOrgEvents,
 		sseStatusFor,
-		earlyAccessFlag
+		earlyAccessFlag,
+		instanceFeatures
 	} from '$lib/stores';
 	import { env } from '$env/dynamic/public';
 	import { invalidate } from '$app/navigation';
@@ -636,14 +638,18 @@
 	// here). Skip when unlimited (request === 0) or when no live metrics have
 	// arrived yet. The user sees this in the resources tab.
 	const NEAR_LIMIT_RATIO = 0.85;
+	if (browser) instanceFeatures.load().catch(() => undefined);
 	// Above this the CPU reading is not believable rather than alarming; see
 	// resourcePressure below. Generous, because the honest ceiling is 1.0 and
 	// rate smoothing can legitimately overshoot it a little.
 	const CPU_RATIO_IMPLAUSIBLE = 1.5;
 	const resourcePressure = $derived.by(() => {
-		const cpuReq = deployment?.cpuRequestMilli ?? null;
+		const noLimit = $instanceFeatures.resourceLimits === 'off' && !deployment?.limitsRestartPending;
+		const cpuReq = noLimit ? null : (deployment?.cpuRequestMilli ?? null);
 		const memReq =
-			deployment?.memoryRequestBytes != null ? Number(deployment.memoryRequestBytes) : null;
+			!noLimit && deployment?.memoryRequestBytes != null
+				? Number(deployment.memoryRequestBytes)
+				: null;
 		const cpuUsage = deployment?.totalCpuUsage ?? null;
 		const memUsage = deployment?.totalMemoryUsage ?? null;
 
@@ -3078,6 +3084,10 @@
 				{/snippet}
 			</DeploymentHeader>
 
+			{#if deployment?.limitsRestartPending}
+				<p class="limits-hint">Restart to apply the resource limits setting.</p>
+			{/if}
+
 			<div class="dep-tabs-bar">
 				<PageTabs
 					label="App sections"
@@ -3474,6 +3484,10 @@
 </Modal>
 
 <style>
+	.limits-hint {
+		font-size: var(--text-caption);
+		color: var(--text-muted);
+	}
 	.dep-skeleton {
 		display: flex;
 		flex-direction: column;

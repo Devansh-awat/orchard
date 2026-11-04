@@ -75,7 +75,8 @@
 
 <script lang="ts">
 	import { createQuery } from '@tanstack/svelte-query';
-	import { selectedOrganization } from '$lib/stores';
+	import { browser } from '$app/environment';
+	import { instanceFeatures, selectedOrganization } from '$lib/stores';
 	import AmountSlider from '$lib/components/ui/AmountSlider.svelte';
 
 	interface Props {
@@ -131,43 +132,57 @@
 	const cpuLimit = $derived(maxCpuMilli ?? quota.data?.effectiveLimit?.cpuMilli ?? null);
 	const memLimit = $derived(maxMemoryBytes ?? quota.data?.effectiveLimit?.memoryBytes ?? null);
 
+	if (browser) instanceFeatures.load().catch(() => undefined);
+
 	function emit() {
 		onchange?.({ cpuMilli, memoryBytes });
 	}
 </script>
 
-<div class="rp">
-	<AmountSlider
-		label="Memory"
-		bind:value={() => memoryBytes, (v) => (memoryBytes = v)}
-		stops={MEMORY_STOPS}
-		format={formatMemory}
-		parse={parseMemory}
-		fallback={memDefault}
-		fallbackLabel={defaultLabel}
-		limit={memLimit}
-		usage={currentMemUsage}
-		recommended={recommendedMemoryBytes}
-		{disabled}
-		onchange={emit}
-	/>
-	<AmountSlider
-		label="CPU"
-		bind:value={() => cpuMilli, (v) => (cpuMilli = v)}
-		stops={CPU_STOPS}
-		format={formatCpu}
-		parse={parseCpu}
-		fallback={cpuDefault}
-		fallbackLabel={defaultLabel}
-		limit={cpuLimit}
-		usage={currentCpuUsage}
-		recommended={recommendedCpuMilli}
-		{disabled}
-		onchange={emit}
-	/>
-</div>
+{#if $instanceFeatures.resourceLimits === 'off'}
+	<p class="rp-off">
+		Resource limits are off on this server, so this {kind === 'database' ? 'database' : 'app'} can use
+		as much CPU and memory as it needs.
+	</p>
+{:else}
+	<div class="rp">
+		<AmountSlider
+			label="Memory"
+			bind:value={() => memoryBytes, (v) => (memoryBytes = v)}
+			stops={MEMORY_STOPS}
+			format={formatMemory}
+			parse={parseMemory}
+			fallback={memDefault}
+			fallbackLabel={defaultLabel}
+			limit={memLimit}
+			usage={currentMemUsage}
+			recommended={recommendedMemoryBytes}
+			{disabled}
+			onchange={emit}
+		/>
+		<AmountSlider
+			label="CPU"
+			bind:value={() => cpuMilli, (v) => (cpuMilli = v)}
+			stops={CPU_STOPS}
+			format={formatCpu}
+			parse={parseCpu}
+			fallback={cpuDefault}
+			fallbackLabel={defaultLabel}
+			limit={cpuLimit}
+			usage={currentCpuUsage}
+			recommended={recommendedCpuMilli}
+			{disabled}
+			onchange={emit}
+		/>
+	</div>
+{/if}
 
 <style>
+	.rp-off {
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		color: var(--text-muted);
+	}
 	.rp {
 		display: flex;
 		flex-direction: column;

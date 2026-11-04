@@ -3,12 +3,14 @@
 	import { fromStore } from 'svelte/store';
 	import { goto, invalidate } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { apiFetch, toasts, subscribeOrgEvents } from '$lib/stores';
+	import { browser } from '$app/environment';
+	import { apiFetch, instanceFeatures, toasts, subscribeOrgEvents } from '$lib/stores';
 	import { formatCpuMilli, formatMemoryBytes } from '$lib/quantity';
 	import { Activity, BarChart3, Gauge, Pencil, Puzzle, Users } from 'lucide-svelte';
 	import GraftMount from '$lib/grafts/GraftMount.svelte';
 	import { graftHost } from '$lib/grafts/host.svelte';
 	import {
+		Alert,
 		ActionRow,
 		Avatar,
 		Breadcrumbs,
@@ -38,6 +40,8 @@
 	import { statusMeta } from '$lib/components/ui/status';
 
 	const formatPods = (n: number) => `${n}`;
+
+	if (browser) instanceFeatures.load().catch(() => undefined);
 	import type { PageData } from './$types';
 
 	type Role = 'owner' | 'admin' | 'member' | 'guest';
@@ -467,6 +471,15 @@
 		cap: number | null,
 		fmt: (n: number) => string
 	): Tile {
+		if ($instanceFeatures.resourceLimits === 'off') {
+			return {
+				label,
+				...splitAmount(fmt(used)),
+				detail: 'Limits are off',
+				tone: 'neutral',
+				ratio: null
+			};
+		}
 		const ratio = cap && cap > 0 ? used / cap : null;
 		return {
 			label,
@@ -845,6 +858,14 @@
 		{/snippet}
 	</ResourceHeader>
 
+	{#if $instanceFeatures.resourceLimits === 'off'}
+		<div class="limits-off">
+			<Alert tone="info" title="Resource limits are off">
+				Apps and databases can use all of this server's resources. Caps and allowances apply only
+				when a superadmin turns limits on.
+			</Alert>
+		</div>
+	{/if}
 	{#if availableTabs.length > 1 || showRange}
 		<div class="usage-bar">
 			{#if availableTabs.length > 1}
@@ -1223,6 +1244,9 @@
 </Modal>
 
 <style>
+	.limits-off {
+		margin-bottom: var(--space-4);
+	}
 	.waiting {
 		display: grid;
 		place-items: center;

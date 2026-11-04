@@ -2,7 +2,7 @@
 	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
 	import { Button, FormActions, SectionCard } from '$lib/components/ui';
 	import { presence } from '$lib/utils/transitions';
-	import { isSuperAdmin } from '$lib/stores';
+	import { instanceFeatures, isSuperAdmin } from '$lib/stores';
 	import { formatCpu as fmtCpuPreset, formatMemory as fmtMemoryPreset } from '$lib/presets';
 
 	let {
@@ -34,6 +34,7 @@
 	} = $props();
 
 	const currentLabel = $derived.by(() => {
+		if ($instanceFeatures.resourceLimits === 'off') return 'No limits';
 		if (resourceCpuMilli === 0 && resourceMemoryBytes === 0) return 'Unlimited';
 		if (resourceCpuMilli != null && resourceMemoryBytes != null)
 			return `${fmtCpuPreset(resourceCpuMilli)} · ${fmtMemoryPreset(resourceMemoryBytes)}`;
@@ -60,7 +61,7 @@
 			resourcesDirty = true;
 		}}
 	/>
-	{#if resourcesDirty || savingResources}
+	{#if $instanceFeatures.resourceLimits !== 'off' && (resourcesDirty || savingResources)}
 		<div class="save" in:presence out:presence>
 			<FormActions hint="Instances restart one at a time">
 				<Button

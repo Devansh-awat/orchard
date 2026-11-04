@@ -10,6 +10,7 @@
 		fetchProjectContext,
 		buildBasePath,
 		selectedOrganization,
+		instanceFeatures,
 		type ProjectContext
 	} from '$lib/stores';
 	import {
@@ -1170,7 +1171,13 @@
 		deploymentSource === 'image' && isDatabaseImage(image) ? 'database' : 'app'
 	);
 	const resourcesNote = $derived(
-		describeResources(resourceCpuMilli, resourceMemoryBytes, quotaMe.data?.podDefaults?.[podKind])
+		$instanceFeatures.resourceLimits === 'off'
+			? 'No limits'
+			: describeResources(
+					resourceCpuMilli,
+					resourceMemoryBytes,
+					quotaMe.data?.podDefaults?.[podKind]
+				)
 	);
 	const created = $derived([
 		{

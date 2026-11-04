@@ -12,10 +12,18 @@
 	import SetupGithubStep from './SetupGithubStep.svelte';
 	import SetupCertificateStep from './SetupCertificateStep.svelte';
 	import SetupTelemetryStep from './SetupTelemetryStep.svelte';
+	import SetupLimitsStep from './SetupLimitsStep.svelte';
 	import SetupDoneStep from './SetupDoneStep.svelte';
 
 	type ServerStep = { id: string; done: boolean; skipped: boolean; required: boolean };
-	type Phase = 'passkey' | 'organization' | 'github' | 'certificate' | 'telemetry' | 'done';
+	type Phase =
+		| 'passkey'
+		| 'organization'
+		| 'github'
+		| 'certificate'
+		| 'limits'
+		| 'telemetry'
+		| 'done';
 
 	// 'github' and 'certificate' are client-side phases, not server steps: the
 	// server only tracks what it can verify about the user (passkey, org).
@@ -23,7 +31,8 @@
 		passkey: 0.2,
 		organization: 0.34,
 		github: 0.48,
-		certificate: 0.62,
+		certificate: 0.58,
+		limits: 0.68,
 		telemetry: 0.8,
 		done: 1
 	};
@@ -32,6 +41,7 @@
 	let phase = $state<Phase>('passkey');
 	let askTelemetry = $state(false);
 	let certificateFailed = $state(false);
+	let askLimits = $state(false);
 	let ready = $state(false);
 	let finishing = $state(false);
 	let stage = $state<HTMLElement | null>(null);
@@ -44,6 +54,7 @@
 		'organization',
 		'github',
 		...(certificateFailed ? (['certificate'] as const) : []),
+		...(askLimits ? (['limits'] as const) : []),
 		...(askTelemetry ? (['telemetry'] as const) : []),
 		'done'
 	]);
@@ -63,6 +74,14 @@
 				(cert) => (certificateFailed = cert?.state === 'failed' || cert?.state === 'rateLimited')
 			)
 			.catch(() => (certificateFailed = false));
+		void apiFetch('/apiv1/admin/instance-settings/resource-limits')
+			.then((response) => (response.ok ? response.json() : null))
+			.then(
+				(limits) =>
+					(askLimits =
+						!!limits?.newInstance && limits.dbValue === null && limits.envOverride === null)
+			)
+			.catch(() => (askLimits = false));
 		try {
 			const response = await apiFetch('/apiv1/setup/state');
 			if (!response.ok) throw new Error('unavailable');
@@ -123,8 +142,16 @@
 		await move(firstUnsettled(steps) ?? 'github');
 	}
 
+	function afterLimits() {
+		return move(askTelemetry ? 'telemetry' : 'done');
+	}
+
+	function afterCertificate() {
+		return askLimits ? move('limits') : afterLimits();
+	}
+
 	function afterGithub() {
-		return move(certificateFailed ? 'certificate' : askTelemetry ? 'telemetry' : 'done');
+		return certificateFailed ? move('certificate') : afterCertificate();
 	}
 
 	async function finish() {
@@ -162,7 +189,9 @@
 			{:else if phase === 'github'}
 				<SetupGithubStep onDone={afterGithub} onSkip={afterGithub} />
 			{:else if phase === 'certificate'}
-				<SetupCertificateStep onDone={() => move(askTelemetry ? 'telemetry' : 'done')} />
+				<SetupCertificateStep onDone={afterCertificate} />
+			{:else if phase === 'limits'}
+				<SetupLimitsStep onDone={afterLimits} />
 			{:else if phase === 'telemetry'}
 				<SetupTelemetryStep onDone={() => move('done')} />
 			{:else}

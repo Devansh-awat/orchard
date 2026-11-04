@@ -306,6 +306,7 @@ export interface MockSsoProvider {
 }
 
 export interface MockState {
+	resourceLimits?: 'on' | 'off';
 	signedIn: boolean;
 	meId: string;
 	users: MockUser[];

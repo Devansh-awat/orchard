@@ -418,6 +418,7 @@ export function deploymentDetail(store: Store, d: MockDeployment) {
 		warnings: warnings(store, d),
 		rollout: rolloutOf(store, d),
 		latestVerdict: mockVerdict(store, d),
+		limitsRestartPending: store.state.resourceLimits === 'off',
 		services: [svc],
 		ingresses: ingress(d).map((i) => ({
 			...i,

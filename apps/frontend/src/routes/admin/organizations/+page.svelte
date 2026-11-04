@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { apiFetch, toasts } from '$lib/stores';
+	import { apiFetch, instanceFeatures, toasts } from '$lib/stores';
 	import {
 		Loader2,
 		Search,
@@ -12,7 +12,7 @@
 		ChevronRight,
 		Gauge
 	} from 'lucide-svelte';
-	import { Modal, Button, Dropdown, Field, Input, EmptyState } from '$lib/components/ui';
+	import { Alert, Modal, Button, Dropdown, Field, Input, EmptyState } from '$lib/components/ui';
 	import { formatCpuMilli, formatMemoryBytes } from '$lib/quantity';
 
 	interface OrgItem {
@@ -125,6 +125,10 @@
 	function closeQuota() {
 		quotaOrg = null;
 	}
+
+	onMount(() => {
+		instanceFeatures.load().catch(() => undefined);
+	});
 
 	function parseIntOrNull(v: string | number | null | undefined): number | null {
 		const t = String(v ?? '').trim();
@@ -733,6 +737,14 @@
 >
 	{#if quotaOrg}
 		<p class="text-xs mb-4" style="color: var(--surface-muted);">{quotaOrg.name}</p>
+
+		{#if $instanceFeatures.resourceLimits === 'off'}
+			<div class="mb-4">
+				<Alert tone="info" title="Resource limits are off">
+					These values apply only when limits are turned on in Configuration.
+				</Alert>
+			</div>
+		{/if}
 
 		{#if quotaLoading}
 			<div class="flex justify-center py-10"><Loader2 class="h-6 w-6 animate-spin" /></div>

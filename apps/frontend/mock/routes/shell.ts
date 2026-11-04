@@ -109,6 +109,7 @@ export function shellRoutes(r: Router, { store, hub, log }: MockContext) {
 		mcp: true,
 		sandboxes: false,
 		fastBuilder: true,
+		resourceLimits: store.state.resourceLimits ?? 'on',
 		grafts: []
 	}));
 	r.get('/engine/health', () => ({
@@ -124,6 +125,9 @@ export function shellRoutes(r: Router, { store, hub, log }: MockContext) {
 		replicas: ['mock-0'],
 		undelivered: 0
 	}));
+	r.get('/setup/state', () => ({ steps: [], complete: false }));
+	r.get('/setup/github-app/status', () => ({ configured: false, lockedFields: [] }));
+	r.get('/setup/certificate', () => ({ state: 'ready', host: null, message: null }));
 	r.get('/setup/checklist', () => [
 		{
 			id: 'mock',
