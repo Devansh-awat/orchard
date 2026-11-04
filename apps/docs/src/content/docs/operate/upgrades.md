@@ -25,8 +25,12 @@ An upgrade turns on, once, features that newer releases run by default. Orchard 
 
 You can also re-run the installer on an existing host. A re-run:
 
-- Keeps your secrets, custom environment variables, and volume sizes.
+- Keeps your secrets, chart values, environment variables, and volume sizes.
+- Changes a value only when you change an answer that it depends on, and prints each change.
+- Saves a copy of the values file before it changes the file.
 - Does not restart k3s unless the registry mirror configuration changed.
+
+For more information, refer to [Run the installer again](/start/install/#run-the-installer-again).
 
 ## Upgrade a Helm install
 

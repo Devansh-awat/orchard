@@ -197,6 +197,8 @@ Apps that you already deployed keep their `sslip.io` URLs. To give an app a new 
 
 To pick up new host commands or change a setting, run the installer again. It reads your current settings first and goes straight to the review screen, with each setting as the current answer. Anything that you leave alone does not change. With `--yes`, it keeps every setting that no flag names. It does not rotate secrets.
 
+This includes everything in `/etc/orchard/values.yaml`, such as values that you set with `orchardctl config set` or `orchardctl env set`, or edited by hand. A value changes only when you change an answer that it depends on. For example, a new dashboard domain updates `ingress.host` and `FRONTEND_URL`, and `signupMode` stays as it is.
+
 When you change an answer, the installer states what the change affects:
 
 | Change | What it affects |
@@ -206,6 +208,19 @@ When you change an answer, the installer states what the change affects:
 | MCP hostname | Agents must reconnect at the new URL. |
 | Custom domains target | Domains already added keep working while their CNAME still reaches the machine. Orchard checks new domains against the new target. |
 | Public IP | Ports and databases that are already public stay on the old address until you turn public access off and on again. |
+
+Before the installer changes the values file, it does the following:
+
+- It prints each setting that changes. It hides the values of secrets.
+- It saves a copy of the file as `/etc/orchard/values.yaml.<date>-<time>.bak`. Only root can read the copy. The copy contains your secrets, so delete it when you no longer need it.
+
+The new file can lose comments and formatting. If no setting changes, the installer does not touch the file.
+
+A newer release can add settings. The installer adds them to your file. It also adds back a setting that it writes and that you removed, and it prints that change. To turn off a feature, set it to `false` instead of removing it.
+
+A newer release can also change a default. If you changed that setting, your value stays. The installer lists these settings so that you can compare them with the new default.
+
+If the installer cannot read or update the values file, it stops and does not change the file. It saves a copy and states the problem. Fix the problem, then run the installer again. Do not delete the file. A new file means new secrets, and Orchard cannot read data encrypted with the old ones.
 
 ### Run the installer without prompts
 

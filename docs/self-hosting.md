@@ -741,15 +741,37 @@ Re-running the installer also works and is the only way to change answers you
 gave at install time (domains, ingress mode, update policy). It skips k3s, helm
 and the operators when they're already present, and carries `JWT_SECRET`,
 `SECRETS_ENCRYPTION_KEY` and `SSO_ENCRYPTION_KEY` over from the existing values
-file rather than minting new ones — a fresh encryption key would make every
-secret already in the database permanently undecryptable. k3s only restarts if
-the registry mirror changed, so a re-run leaves your apps serving.
+file rather than minting new ones. A new encryption key would make every secret
+already in the database permanently undecryptable. k3s only restarts if the
+registry mirror changed, so a re-run leaves your apps serving.
 
-Environment variables you set with `orchardctl env` are kept, for `server`,
-`frontend` and `mcp` alike. The installer's own entries win over a value of the
-same name, so use the install flags to change those. Everything else you changed
-with `orchardctl config` is **not** preserved, so note it with
-`orchardctl config list` first.
+A re-run keeps everything else in the values file too: chart values you set with
+`orchardctl config`, environment variables you set with `orchardctl env` for
+`server`, `frontend` and `mcp`, and anything you edited by hand. A value changes
+only when you change an answer that it depends on, on the review screen or with
+a flag. For example, a new dashboard domain updates `ingress.host` and
+`FRONTEND_URL`, and `signupMode` stays as it is.
+
+The installer compares two versions of the file it would write: one from your
+previous answers and one from this run's answers. Only the values that differ
+replace yours. Lists other than `env` stay whole, as they do in Helm. `env` lists
+merge by `name`. Settings that your file does not have yet are added, which is
+how the defaults of a newer `hostDefaults` round arrive, and it also means a
+setting the installer writes comes back if you removed it. If a newer release
+changes a default and you set that key yourself, your value stays, and the
+installer names the key.
+
+Before it changes the file, the installer prints each setting that changes, with
+the values of secrets hidden, and saves a copy as
+`/etc/orchard/values.yaml.<date>-<time>.bak` with mode 600. The copy contains
+your secrets, so delete it when you no longer need it. The new file can lose
+comments and formatting. If no setting changes, the installer does not touch the
+file.
+
+If `yq` is missing, the file does not parse, or the merge fails, the installer
+stops and does not change the file. It saves a copy first. Do not delete the
+file to get past this: a new file means new secrets, and Orchard cannot read data
+encrypted with the old ones.
 
 ### When an upgrade says a Certificate can't be imported
 

@@ -33,7 +33,7 @@ sudo orchardctl config set logs.retention 30d --apply
 
 On a Helm install, change your values file and run `helm upgrade`.
 
-Re-running the installer keeps your secrets, custom environment variables, and volume sizes. It writes the other chart values again, so a value such as `signupMode` goes back to what the installer sets. To change one setting, use the commands in [Change settings that Instance admin cannot edit](#change-settings-that-instance-admin-cannot-edit).
+Re-running the installer keeps the values in this file, including a value such as `signupMode`. A value changes only when you change an answer that it depends on. For more information, refer to [Run the installer again](/start/install/#run-the-installer-again). To change one setting, use the commands in [Change settings that Instance admin cannot edit](#change-settings-that-instance-admin-cannot-edit).
 
 Set cluster-specific values, such as storage class, ingress class, and registry, in the values file. These values differ for each cluster.
 

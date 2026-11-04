@@ -115,7 +115,7 @@ sudo orchardctl config edit
 
 Reads and writes the chart values at `/etc/orchard/values.yaml`. Paths are dotted. Values are parsed as YAML, so `true` and `3` keep their types.
 
-Changes are not deployed until you add `--apply` or run `update`.
+Changes are not deployed until you add `--apply` or run `update`. These values stay when you re-run the installer.
 
 `config set` and `config unset` refuse to change a list. `server.env` is a list that holds `JWT_SECRET` and `SECRETS_ENCRYPTION_KEY`. Use [`orchardctl env`](#env) for environment variables, and `config edit` for other lists.
 

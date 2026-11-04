@@ -75,6 +75,10 @@ Every answer has a flag and an environment variable. `--yes` never prompts and n
 
 Running the installer again reads your current settings and goes straight to the review screen. Anything you leave alone does not change, and `--yes` keeps it too. A changed answer shows what it affects: for example, a new apps domain applies to new apps only, and deployed apps keep their URLs, including after a redeploy.
 
+This includes everything in `/etc/orchard/values.yaml`, such as values that you set with `orchardctl config set` or `orchardctl env set`, or edited by hand. A value changes only when you change an answer that it depends on: a new dashboard domain updates `ingress.host` and `FRONTEND_URL`, and `signupMode` stays as it is. The installer also adds settings that a newer release needs and that your file does not have yet.
+
+Before the installer changes the file, it prints each setting that changes, with the values of secrets hidden, and saves a copy as `/etc/orchard/values.yaml.<date>-<time>.bak`. Only root can read the copy. It contains your secrets, so delete it when you no longer need it. The new file can lose comments and formatting. If the installer cannot read or update the file, it stops and does not change the file.
+
 `public` and `lan` mode need ports 80 and 443 free; `tunnel` mode binds neither.
 In `public` mode, 80 carries the Let's Encrypt HTTP-01 challenge for every
 hostname including each new app, at issue and at every renewal, and the ACME
