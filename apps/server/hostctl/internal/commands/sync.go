@@ -1,12 +1,15 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 
 	"github.com/hackclub/orchard/orchardctl/internal/cli"
+	"github.com/hackclub/orchard/orchardctl/internal/release"
 )
 
 // Aliases are the hyphenated names linked next to orchardctl. Each is the same
@@ -86,7 +89,12 @@ added or fixed in a later release without re-running the installer.
 
 The download is validated before it replaces the live binary: a truncated
 copy would leave the host with no way to upgrade itself, which is the worst
-thing this command could do.
+thing this command could do. Its signature is checked too, because this binary
+runs as root and the pod it comes from is not trusted. A copy that fails, or an
+older release, leaves the current commands in place.
+
+Images you build yourself are unsigned. To use them, set
+ORCHARD_ALLOW_UNSIGNED_COMMANDS=true in /etc/orchard/env.
 
 orchardctl update runs this for you at the end.
 `,
@@ -94,10 +102,37 @@ orchardctl update runs this for you at the end.
 	}
 }
 
+var errOlderRelease = errors.New("older release")
+
+var releaseVersion = regexp.MustCompile(`^\d+\.\d+\.\d+`)
+
+func verifyHostCommand(c *cli.Context, name string, data []byte) error {
+	if len(release.PublicKeys) == 0 || c.Env.AllowUnsignedCommands {
+		return nil
+	}
+	manifest, err := c.KubectlOut("exec", "deploy/server", "--", "cat", "/app/hostbin/"+release.ManifestFile)
+	if err != nil {
+		return fmt.Errorf("the server image has no release manifest: %w", err)
+	}
+	signature, err := c.KubectlOut("exec", "deploy/server", "--", "cat", "/app/hostbin/"+release.SignatureFile)
+	if err != nil {
+		return fmt.Errorf("the server image has no release signature: %w", err)
+	}
+	m, err := release.Verify(release.PublicKeys, []byte(manifest), signature, name, data)
+	if err != nil {
+		return err
+	}
+	if releaseVersion.MatchString(release.Version) && versionLess(m.Version, release.Version) {
+		return fmt.Errorf("%w: the image has %s, this host has %s", errOlderRelease, m.Version, release.Version)
+	}
+	return nil
+}
+
 func syncCommands(c *cli.Context) error {
 	// The server image carries one binary per architecture; take the one that
 	// matches this host rather than assuming amd64.
-	remote := fmt.Sprintf("/app/hostbin/orchardctl-linux-%s", runtime.GOARCH)
+	name := fmt.Sprintf("orchardctl-linux-%s", runtime.GOARCH)
+	remote := "/app/hostbin/" + name
 	target := filepath.Join(c.Env.Bin, "orchardctl")
 
 	out, err := c.KubectlOut("exec", "deploy/server", "--", "cat", remote)
@@ -113,6 +148,13 @@ func syncCommands(c *cli.Context) error {
 	}
 	if !(data[0] == 0x7f && data[1] == 'E' && data[2] == 'L' && data[3] == 'F') {
 		return fmt.Errorf("refusing to install orchardctl: not an ELF binary")
+	}
+	if err := verifyHostCommand(c, name, data); err != nil {
+		if errors.Is(err, errOlderRelease) {
+			c.Printf("keeping the current host commands: %s\n", err)
+			return nil
+		}
+		return fmt.Errorf("refusing to install orchardctl: %w", err)
 	}
 
 	if current, err := os.ReadFile(target); err == nil && string(current) == string(data) {

@@ -16,8 +16,16 @@ WORKDIR /src
 COPY apps/server/hostctl/go.mod apps/server/hostctl/go.sum ./
 RUN go mod download
 COPY apps/server/hostctl ./
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /out/orchardctl-linux-amd64 . \
- && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o /out/orchardctl-linux-arm64 .
+ARG VERSION=""
+ARG REQUIRE_SIGNED=false
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w -X github.com/hackclub/orchard/orchardctl/internal/release.Version=${VERSION}" -o /out/orchardctl-linux-amd64 . \
+ && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w -X github.com/hackclub/orchard/orchardctl/internal/release.Version=${VERSION}" -o /out/orchardctl-linux-arm64 .
+
+# The only step that sees the signing key, and it runs nothing but the signer.
+COPY apps/server/hostbin/orchard-sync-commands /out/
+RUN go build -o /usr/local/bin/signhostbin ./cmd/signhostbin
+RUN --mount=type=secret,id=hostctl_signing_key,required=false \
+    signhostbin -dir /out -version "${VERSION}" -key /run/secrets/hostctl_signing_key -require="${REQUIRE_SIGNED}"
 
 FROM node:22.23.4-alpine AS base
 
@@ -78,7 +86,7 @@ RUN node_modules/.bin/prisma generate && node_modules/.bin/prisma version > /dev
 # only cuts releases per package, and images only publish on a release, so
 # anywhere else they would never reach a published image.
 COPY apps/server/hostbin /app/hostbin
-COPY --from=hostctl /out/orchardctl-linux-amd64 /out/orchardctl-linux-arm64 /app/hostbin/
+COPY --from=hostctl /out/orchardctl-linux-amd64 /out/orchardctl-linux-arm64 /out/hostbin.* /app/hostbin/
 COPY LICENSE apps/server/THIRD_PARTY_NOTICES.txt /app/
 
 COPY apps/server/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh

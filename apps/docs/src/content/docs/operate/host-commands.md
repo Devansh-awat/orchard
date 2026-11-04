@@ -471,6 +471,16 @@ sudo orchardctl sync    # installs the binary and links the aliases
 
 `sudo orchardctl update` also runs the bootstrap at the end, so an upgrade followed by one `sync` has the same result.
 
+## Use an image you built yourself
+
+Orchard releases sign the host commands, and `orchardctl` runs as root, so it refuses to replace itself with commands from an image that has no valid signature. It also keeps its current commands when the image is an older release. The update carries on either way and prints a note.
+
+Images you build yourself are unsigned. The installer allows them when you pass a custom image registry, repository, or tag. To allow them on an existing host, add this line to `/etc/orchard/env`:
+
+```sh
+ORCHARD_ALLOW_UNSIGNED_COMMANDS=true
+```
+
 ## Related resources
 
 - [Configuration](/operate/configuration/)

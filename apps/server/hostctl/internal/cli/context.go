@@ -21,6 +21,8 @@ type Env struct {
 	Kubeconfig   string
 	K3sUpdates   string
 	AddonUpdates string
+
+	AllowUnsignedCommands bool
 }
 
 func LoadEnv() Env {
@@ -52,6 +54,8 @@ func LoadEnv() Env {
 			e.Kubeconfig = v
 		case "ORCHARD_K3S_UPDATES":
 			e.K3sUpdates = v
+		case "ORCHARD_ALLOW_UNSIGNED_COMMANDS":
+			e.AllowUnsignedCommands = v == "true"
 		case "ORCHARD_ADDON_UPDATES":
 			e.AddonUpdates = v
 		}
@@ -66,6 +70,9 @@ func LoadEnv() Env {
 	e.Kubeconfig = envOr("KUBECONFIG", e.Kubeconfig)
 	e.K3sUpdates = envOr("ORCHARD_K3S_UPDATES", e.K3sUpdates)
 	e.AddonUpdates = envOr("ORCHARD_ADDON_UPDATES", e.AddonUpdates)
+	if v, ok := os.LookupEnv("ORCHARD_ALLOW_UNSIGNED_COMMANDS"); ok {
+		e.AllowUnsignedCommands = v == "true"
+	}
 	if e.Values == "" {
 		e.Values = filepath.Join(e.StateDir, "values.yaml")
 	}

@@ -45,6 +45,44 @@ if [ "$(head -c 4 "$tmp" | od -An -tx1 | tr -d ' \n')" != "7f454c46" ]; then
   exit 1
 fi
 
+# Release signature, checked here as well as in orchardctl because this is what
+# installs the first binary on a host. Needs an openssl with ed25519 -rawin;
+# without one this warns, and orchardctl checks every later update itself.
+RELEASE_KEYS=""
+verify_release() {
+  [ -n "$RELEASE_KEYS" ] || return 0
+  [ "${ORCHARD_ALLOW_UNSIGNED_COMMANDS:-}" = true ] && return 0
+  if ! openssl pkeyutl -help 2>&1 | grep -q rawin; then
+    echo "warning: this openssl can't check release signatures" >&2
+    return 0
+  fi
+  local dir key sum verified=false
+  dir=$(mktemp -d)
+  kubectl -n "$ORCHARD_NAMESPACE" exec deploy/server -- cat /app/hostbin/hostbin.manifest > "$dir/manifest" 2>/dev/null || true
+  kubectl -n "$ORCHARD_NAMESPACE" exec deploy/server -- cat /app/hostbin/hostbin.sig 2>/dev/null | base64 -d > "$dir/sig" 2>/dev/null || true
+  for key in $RELEASE_KEYS; do
+    printf -- '-----BEGIN PUBLIC KEY-----\n%s\n-----END PUBLIC KEY-----\n' "$key" > "$dir/key.pem"
+    if openssl pkeyutl -verify -pubin -inkey "$dir/key.pem" -rawin -in "$dir/manifest" -sigfile "$dir/sig" >/dev/null 2>&1; then
+      verified=true
+      break
+    fi
+  done
+  if [ "$verified" != true ]; then
+    rm -rf "$dir"
+    echo "refusing to install orchardctl: the server image has no valid release signature" >&2
+    echo "for an image you built yourself, set ORCHARD_ALLOW_UNSIGNED_COMMANDS=true in $ORCHARD_STATE_DIR/env" >&2
+    return 1
+  fi
+  sum=$(sha256sum "$tmp" | cut -d' ' -f1)
+  if ! grep -qx "sha256 $sum orchardctl-linux-$ARCH" "$dir/manifest"; then
+    rm -rf "$dir"
+    echo "refusing to install orchardctl: it does not match the signed release" >&2
+    return 1
+  fi
+  rm -rf "$dir"
+}
+verify_release
+
 if [ -f "$TARGET" ] && cmp -s "$tmp" "$TARGET"; then
   echo "host commands already current"
 else

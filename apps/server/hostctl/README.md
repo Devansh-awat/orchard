@@ -78,3 +78,13 @@ not overridden on the next upgrade. To turn on something new by default, add a
 round: bump `hostDefaultsVersion` here and `HOST_DEFAULTS_VERSION` in
 `install/install.sh` together, gate the new steps on the previous round, and
 print every change.
+
+## Signed releases
+
+Release images sign the host commands. The server image build writes `hostbin.manifest` and
+`hostbin.sig` in one step that sees the `HOSTCTL_SIGNING_KEY` secret. `orchardctl sync` checks them
+against `internal/release/keys.go` before it replaces itself, and refuses an older release.
+`apps/server/hostbin/orchard-sync-commands` and `install/install.sh` hold the same keys.
+
+Checks stay off while `keys.go` is empty. A release build fails if keys are set and the secret is
+missing or doesn't match, because hosts would refuse that release.
