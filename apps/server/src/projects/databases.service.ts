@@ -2952,11 +2952,13 @@ export class DatabasesService {
     }
 
     if (database.publicEnabled && database.publicIp === ip && database.publicPort) {
+      const existing = this.publicHostnameFor(database) || null;
       return {
         enabled: true,
-        host: database.publicIp,
+        host: existing ?? database.publicIp,
+        ip: database.publicIp,
         port: database.publicPort,
-        connectionString: `postgresql://${database.dbUser}:${MASKED_PASSWORD}@${database.publicIp}:${database.publicPort}/${database.dbName}`
+        connectionString: this.publicConnectionStringFor(database, MASKED_PASSWORD, existing)
       };
     }
 
@@ -2987,6 +2989,7 @@ export class DatabasesService {
     // so Postgres serves the Let's Encrypt cert instead of its self-signed default.
     const hostname = this.k8sCnpg.publicTlsHostname(database.namespace, database.clusterName);
     const legacyHostname = this.k8sCnpg.legacyPublicTlsHostname(database.clusterName);
+    let verifiedHostname: string | null = null;
     if (hostname) {
       try {
         await this.k8sCnpg.syncPublicTlsSecret(database.namespace);
@@ -2995,6 +2998,7 @@ export class DatabasesService {
           database.clusterName,
           [hostname, legacyHostname].filter(Boolean)
         );
+        verifiedHostname = hostname;
       } catch (e: any) {
         console.error(`[DB/public] Failed to configure TLS: ${e?.message}`);
       }
@@ -3011,10 +3015,14 @@ export class DatabasesService {
 
     return {
       enabled: true,
-      host: hostname,
+      host: verifiedHostname ?? ip,
       ip,
       port,
-      connectionString: `postgresql://${database.dbUser}:${MASKED_PASSWORD}@${hostname}:${port}/${database.dbName}?sslmode=verify-full&sslrootcert=system`
+      connectionString: this.publicConnectionStringFor(
+        { ...database, publicIp: ip, publicPort: port },
+        MASKED_PASSWORD,
+        verifiedHostname
+      )
     };
   }
 
