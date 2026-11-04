@@ -41,6 +41,7 @@ export interface DatabaseDetail {
 	endpoints?: { rw: string; ro: string; r: string } | null;
 	createdAt: string;
 	backupsEnabled?: boolean;
+	keepsLocalBackups?: boolean;
 	backupScheduleCron?: string | null;
 	environmentId?: string | null;
 	deletionProtection?: boolean;
