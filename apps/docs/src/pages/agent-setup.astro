@@ -290,6 +290,7 @@ import { MCP_URL, SETUP_PROMPT } from '../lib/nav';
 
   ol {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 1.25rem;
     max-width: 46rem;
     margin: 0;
@@ -300,6 +301,7 @@ import { MCP_URL, SETUP_PROMPT } from '../lib/nav';
 
   ol li {
     position: relative;
+    min-width: 0;
     padding-inline-start: 2.25rem;
     counter-increment: step;
   }
@@ -347,11 +349,13 @@ import { MCP_URL, SETUP_PROMPT } from '../lib/nav';
 
   .split {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 2.5rem;
   }
 
   dl {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 0.875rem;
     margin: 0;
   }

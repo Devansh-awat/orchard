@@ -37,7 +37,11 @@ export function sortEntries(entries: Doc[]): Doc[] {
 }
 
 export function sectionOf(entry: Doc): string {
-  return entry.id.includes('/') ? entry.id.split('/')[0] : entry.id === 'greenhouse' ? 'greenhouse' : 'overview';
+  return entry.id.includes('/')
+    ? entry.id.split('/')[0]
+    : entry.id === 'greenhouse'
+      ? 'greenhouse'
+      : 'overview';
 }
 
 export function entryLine(entry: Doc): string {

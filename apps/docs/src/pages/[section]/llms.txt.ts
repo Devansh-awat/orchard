@@ -15,7 +15,9 @@ export const getStaticPaths: GetStaticPaths = async () => {
 
 export const GET: APIRoute = ({ props }) => {
   const { title, lines } = props as { title: string; lines: string[] };
-  const body = [`# Orchard: ${title}`, '', `Full index: ${SITE}/llms.txt`, '', ...lines, ''].join('\n');
+  const body = [`# Orchard: ${title}`, '', `Full index: ${SITE}/llms.txt`, '', ...lines, ''].join(
+    '\n'
+  );
   return new Response(body, {
     headers: { 'Content-Type': 'text/plain; charset=utf-8' }
   });

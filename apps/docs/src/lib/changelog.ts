@@ -63,7 +63,10 @@ function repoRoot(): string {
 }
 
 export function slugify(label: string): string {
-  return label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  return label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
 }
 
 function clean(text: string): string {
@@ -162,7 +165,8 @@ function readUiNotes(): Change[] {
     if (!name.endsWith('.md')) continue;
     const raw = readFileSync(join(dir, name), 'utf8');
     const frontmatter = raw.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? '';
-    const field = (key: string) => frontmatter.match(new RegExp(`^${key}: (.+)$`, 'm'))?.[1]?.trim();
+    const field = (key: string) =>
+      frontmatter.match(new RegExp(`^${key}: (.+)$`, 'm'))?.[1]?.trim();
     const title = field('title');
     const date = field('date');
     if (!title || !date) continue;
@@ -186,7 +190,8 @@ let memo: Change[] | undefined;
 
 export function getChanges(): Change[] {
   memo ??= [...readReleaseChanges(), ...readUiNotes()].sort(
-    (a, b) => b.date.localeCompare(a.date) || (a.type === b.type ? 0 : a.type === 'Feature' ? -1 : 1)
+    (a, b) =>
+      b.date.localeCompare(a.date) || (a.type === b.type ? 0 : a.type === 'Feature' ? -1 : 1)
   );
   return memo;
 }
@@ -198,7 +203,12 @@ export function getComponents(): Array<{ label: string; slug: string; count: num
   for (const change of getChanges()) {
     const found = counts.get(change.componentSlug);
     if (found) found.count += 1;
-    else counts.set(change.componentSlug, { label: change.component, slug: change.componentSlug, count: 1 });
+    else
+      counts.set(change.componentSlug, {
+        label: change.component,
+        slug: change.componentSlug,
+        count: 1
+      });
   }
   return [...counts.values()].sort((a, b) => b.count - a.count);
 }
@@ -214,9 +224,11 @@ export function getFeatured(count: number): Change[] {
     .filter(
       (change) =>
         change.type === 'Feature' &&
+        change.component !== 'Install' &&
         change.text.length >= 24 &&
         change.text.length <= 110 &&
-        !/^(restyle|redesign)/i.test(change.text)
+        !/^(restyle|redesign)/i.test(change.text) &&
+        !/\b[A-Z][A-Z0-9]*_[A-Z0-9_]+\b/.test(change.text)
     )
     .slice(0, count);
 }

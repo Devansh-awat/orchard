@@ -12,7 +12,8 @@ export interface HomeTab {
   related: Array<{ label: string; href: string }>;
 }
 
-export const HERO_TEXT = 'Install Orchard on a Linux server or a Kubernetes cluster, then deploy your apps.';
+export const HERO_TEXT =
+  'Install Orchard on a Linux server or a Kubernetes cluster, then deploy your apps.';
 
 export const TABS_HEADING = 'Run apps and databases on your cluster';
 

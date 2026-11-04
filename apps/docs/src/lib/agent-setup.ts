@@ -25,7 +25,8 @@ export interface ExamplePrompt {
 
 export const AGENT_SETUP = {
   title: 'Agent setup',
-  description: 'Connect your coding agent to Orchard, then deploy and debug from your editor or terminal.',
+  description:
+    'Connect your coding agent to Orchard, then deploy and debug from your editor or terminal.',
   browse: 'Browse clients',
   pickHeading: 'Pick your client',
   pickText: 'Select a client to get its setup instructions.',
@@ -129,7 +130,9 @@ export const clients: SetupClient[] = [
     vendor: 'Anthropic',
     mark: 'claude',
     steps: [
-      { text: 'In Claude, open **Settings** > **Connectors** and select **Add custom connector**.' },
+      {
+        text: 'In Claude, open **Settings** > **Connectors** and select **Add custom connector**.'
+      },
       { text: 'Paste the server URL:', code: url },
       { text: 'Sign in to Orchard and approve the connection.' }
     ]

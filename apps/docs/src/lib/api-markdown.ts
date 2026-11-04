@@ -34,7 +34,9 @@ let cached: { doc: ApiDocument; operations: Operation[] } | undefined;
 
 function load() {
   if (cached) return cached;
-  const doc = JSON.parse(readFileSync(resolve(process.cwd(), 'openapi.generated.json'), 'utf8')) as ApiDocument;
+  const doc = JSON.parse(
+    readFileSync(resolve(process.cwd(), 'openapi.generated.json'), 'utf8')
+  ) as ApiDocument;
   const operations: Operation[] = [];
   for (const [path, item] of Object.entries(doc.paths ?? {})) {
     const methods = METHODS.filter((method) => item[method]);
@@ -43,11 +45,13 @@ function load() {
       const operation = item[method];
       const id = ids[index];
       const duplicate = ids.filter((other) => other === id).length > 1;
-      const parameters = [...(item.parameters ?? []), ...(operation.parameters ?? [])].map((parameter: any) => {
-        if (!parameter.$ref) return parameter;
-        const name = String(parameter.$ref).split('/').pop() as string;
-        return doc.components?.parameters?.[name] ?? parameter;
-      });
+      const parameters = [...(item.parameters ?? []), ...(operation.parameters ?? [])].map(
+        (parameter: any) => {
+          if (!parameter.$ref) return parameter;
+          const name = String(parameter.$ref).split('/').pop() as string;
+          return doc.components?.parameters?.[name] ?? parameter;
+        }
+      );
       operations.push({
         method,
         path,
@@ -79,7 +83,10 @@ export function tagSlug(tag: string): string {
 }
 
 function hasShape(schema: any): boolean {
-  return Boolean(schema) && !(schema.type === 'object' && Object.keys(schema.properties ?? {}).length === 0);
+  return (
+    Boolean(schema) &&
+    !(schema.type === 'object' && Object.keys(schema.properties ?? {}).length === 0)
+  );
 }
 
 export function apiOperationMarkdown(operation: Operation): string {
@@ -95,9 +102,16 @@ export function apiOperationMarkdown(operation: Operation): string {
   ];
   if (operation.description) parts.push(operation.description, '');
   if (operation.parameters.length) {
-    parts.push('## Parameters', '', '| Name | In | Required | Description |', '| --- | --- | --- | --- |');
+    parts.push(
+      '## Parameters',
+      '',
+      '| Name | In | Required | Description |',
+      '| --- | --- | --- | --- |'
+    );
     for (const parameter of operation.parameters) {
-      const description = String(parameter.description ?? '').replace(/\|/g, '\\|').replace(/\n/g, ' ');
+      const description = String(parameter.description ?? '')
+        .replace(/\|/g, '\\|')
+        .replace(/\n/g, ' ');
       parts.push(
         `| \`${parameter.name}\` | ${parameter.in} | ${parameter.required ? 'Yes' : 'No'} | ${description} |`
       );

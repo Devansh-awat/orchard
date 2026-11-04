@@ -9,11 +9,11 @@ const landing = isLanding(Astro.url.pathname);
 
 {
   landing ? (
-    <footer class="landing-foot">
+    <footer class="landing-foot" data-pagefind-ignore>
       <SiteFooter />
     </footer>
   ) : (
-    <footer class="article-foot">
+    <footer class="article-foot" data-pagefind-ignore>
       <div class="mobile-links lg:sl-hidden">
         <PageLinks />
       </div>

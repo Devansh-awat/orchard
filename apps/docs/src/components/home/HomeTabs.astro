@@ -103,8 +103,6 @@ import { homeTabs } from '../../lib/home';
     padding: 0.8125rem 1.25rem;
     border: 0;
     border-inline-end: 1px solid var(--o-rule);
-    border-bottom: 2px solid transparent;
-    margin-bottom: -1px;
     background: none;
     color: var(--sl-color-gray-2);
     font: inherit;
@@ -118,7 +116,7 @@ import { homeTabs } from '../../lib/home';
   }
 
   [role='tab'][aria-selected='true'] {
-    border-bottom-color: var(--o-accent);
+    box-shadow: inset 0 -2px 0 var(--o-accent);
     background: var(--o-canvas);
     color: var(--sl-color-white);
   }

@@ -12,7 +12,9 @@ function xml(text: string): string {
 
 export const GET: APIRoute = () => {
   const changes = getChanges().slice(0, 50);
-  const updated = changes[0] ? new Date(`${changes[0].date}T00:00:00Z`).toUTCString() : new Date(0).toUTCString();
+  const updated = changes[0]
+    ? new Date(`${changes[0].date}T00:00:00Z`).toUTCString()
+    : new Date(0).toUTCString();
   const items = changes.map((change) => {
     const link = `${SITE_URL}${changeHref(change)}`;
     const summary = [change.detail, `${change.type} in ${change.version ?? change.component}.`]

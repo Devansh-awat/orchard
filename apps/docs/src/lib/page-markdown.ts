@@ -43,7 +43,14 @@ export function homeMarkdown(): string {
     for (const link of tab.related) parts.push(`- [${link.label}](${link.href})`);
     parts.push('');
   }
-  parts.push(`## ${AGENT_PANEL.heading}`, '', AGENT_PANEL.text, '', fence(INSTALL_PROMPT, 'text'), '');
+  parts.push(
+    `## ${AGENT_PANEL.heading}`,
+    '',
+    AGENT_PANEL.text,
+    '',
+    fence(INSTALL_PROMPT, 'text'),
+    ''
+  );
   parts.push(`[${AGENT_PANEL.sideLink}](/agent-setup/)`, '');
   parts.push(`## ${WHATS_NEW.heading}`, '', WHATS_NEW.text, '');
   for (const change of getFeatured(8)) {
@@ -103,7 +110,14 @@ export function agentSetupMarkdown(): string {
 }
 
 export function directoryMarkdown(): string {
-  const parts = ['# Directory', '', `> ${DIRECTORY_TEXT}`, '', `Source: ${SITE_URL}/directory/`, ''];
+  const parts = [
+    '# Directory',
+    '',
+    `> ${DIRECTORY_TEXT}`,
+    '',
+    `Source: ${SITE_URL}/directory/`,
+    ''
+  ];
   for (const group of directoryGroups) {
     parts.push(`## ${group}`, '');
     for (const item of directory.filter((entry) => entry.group === group)) {

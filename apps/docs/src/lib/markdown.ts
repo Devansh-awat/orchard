@@ -6,7 +6,10 @@ const ASIDE_LABELS: Record<string, string> = {
 };
 
 function attribute(attrs: string, name: string): string | undefined {
-  return attrs.match(new RegExp(`\\b${name}=(?:"([^"]*)"|'([^']*)'|\\{\`([^\`]*)\`\\})`))?.slice(1).find(Boolean);
+  return attrs
+    .match(new RegExp(`\\b${name}=(?:"([^"]*)"|'([^']*)'|\\{\`([^\`]*)\`\\})`))
+    ?.slice(1)
+    .find(Boolean);
 }
 
 function quote(body: string, label: string): string {
@@ -62,9 +65,15 @@ function convertBlocks(text: string): string {
     .replace(/<Aside\b([^>]*)>([\s\S]*?)<\/Aside>/g, (_, attrs: string, body: string) => {
       const type = attribute(attrs, 'type') ?? 'note';
       const title = attribute(attrs, 'title');
-      return quote(body, title ? `${ASIDE_LABELS[type] ?? 'Note'}: ${title}` : (ASIDE_LABELS[type] ?? 'Note'));
+      return quote(
+        body,
+        title ? `${ASIDE_LABELS[type] ?? 'Note'}: ${title}` : (ASIDE_LABELS[type] ?? 'Note')
+      );
     })
-    .replace(/<TabItem\b([^>]*)>/g, (_, attrs: string) => `\n**${attribute(attrs, 'label') ?? 'Tab'}**\n`)
+    .replace(
+      /<TabItem\b([^>]*)>/g,
+      (_, attrs: string) => `\n**${attribute(attrs, 'label') ?? 'Tab'}**\n`
+    )
     .replace(/<\/?Tabs\b[^>]*>|<\/TabItem>/g, '')
     .replace(/<LinkCard\b([^>]*)\/>/g, (_, attrs: string) => {
       const description = attribute(attrs, 'description');
