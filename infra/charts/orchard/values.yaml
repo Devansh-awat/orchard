@@ -328,6 +328,10 @@ builders:
   # that a build running untrusted repo code cannot reach the Orchard API or
   # database, which live there.
   #
+  # Object storage served through an ingress in this cluster needs the ingress
+  # controller's pods here too: a build fetches its context from it, and a
+  # public hostname that resolves to a node loops back to those pods.
+  #
   #   registryEgress:
   #     - namespace: orchard
   #       podLabels:

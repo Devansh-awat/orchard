@@ -142,7 +142,8 @@ upgrade after the first build fails with a conflict. Helm 3 does not have this f
   and `REGISTRY_PROJECT` in `server.env`.
 - An entry in `builders.registryEgress` for the registry's namespace. A registry
   behind an ingress in the same cluster also needs one for the ingress controller,
-  or the push fails with `connection refused`.
+  or the push fails with `connection refused`. So does S3 storage behind an ingress
+  in the same cluster, or `orchard up` builds fail at `context-fetch`.
 - Registry credentials on every node. On k3s, that is
   `/etc/rancher/k3s/registries.yaml`. Orchard does not add a pull secret to app pods
   for this registry, so without them the pod fails with `no basic auth credentials`.
