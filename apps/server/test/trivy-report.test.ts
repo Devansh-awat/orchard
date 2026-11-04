@@ -123,4 +123,16 @@ test('trivy failures keep only the fatal line', async () => {
     'unable to find the image: UNAUTHORIZED'
   );
   assert.equal(trivyErrorMessage('   '), 'The scanner exited with an error');
+  assert.equal(
+    trivyErrorMessage(
+      'FATAL Fatal error run error: scan failed: Post "http://trivy.orchard-scans.svc.cluster.local:4954/twirp/trivy.scanner.v1.Scanner/Scan": dial tcp 10.43.0.9:4954: connect: connection refused'
+    ),
+    'Could not reach the Trivy server'
+  );
+  assert.equal(
+    trivyErrorMessage(
+      'FATAL Fatal error unable to find the image: Get https://ghcr.io/v2/: dial tcp: connection refused'
+    ),
+    'unable to find the image: Get https://ghcr.io/v2/: dial tcp: connection refused'
+  );
 });

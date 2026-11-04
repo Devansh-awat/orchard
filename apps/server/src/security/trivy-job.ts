@@ -4,6 +4,7 @@ import { dockerConfigJson, type RegistryAuths } from '../docker/registry-pull-au
 export const SCAN_LABEL = 'orchard.my/image-scan';
 export const SCAN_TOKEN_HEADER = 'x-orchard-scan-token';
 export const MAX_SCAN_ERROR = 900;
+const SERVER_WAIT_TRIES = 30;
 
 export interface RegistryTopology {
   pullRegistry: string;
@@ -61,10 +62,15 @@ export interface ScanJobInput {
 }
 
 const SCRIPT = [
+  'tries=0',
+  `until wget -q -T 5 -O /dev/null "$TRIVY_SERVER/healthz" || [ "$tries" -ge ${SERVER_WAIT_TRIES} ]; do`,
+  '  tries=$((tries + 1))',
+  '  sleep 2',
+  'done',
   'trivy image --no-progress --format json --scanners vuln --output /tmp/report.json "$SCAN_IMAGE" 2>/tmp/trivy.err',
   'status=$?',
   'if [ "$status" -ne 0 ]; then',
-  `  msg=$(tail -c ${MAX_SCAN_ERROR} /tmp/trivy.err | tr '\\n\\t' '  ' | tr -cd '[:print:]' | tr -d '"\\\\')`,
+  `  msg=$(tail -c ${MAX_SCAN_ERROR} /tmp/trivy.err | tr '\\n\\t' '  ' | tr -cd ' -~' | tr -d '"\\\\')`,
   '  printf \'{"error":"%s"}\' "$msg" > /tmp/report.json',
   'fi',
   'wget -q -O /dev/null --header "X-Orchard-Scan-Token: $SCAN_TOKEN" --header "Content-Type: application/json" --post-file /tmp/report.json "$RESULT_URL"',

@@ -1,5 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   SCAN_LABEL,
   scanJobFailure,
@@ -8,6 +12,7 @@ import {
   scanSecretManifest,
   scanTarget
 } from '../src/security/trivy-job';
+import { trivyErrorMessage } from '../src/security/trivy-report';
 import { registryAuth } from '../src/docker/registry-pull-auth';
 
 const selfHosted = {
@@ -99,4 +104,91 @@ test('job conditions become plain failure reasons', () => {
     'The scanner exited with an error'
   );
   assert.equal(scanJobFailure(cond('Complete')), 'The scan finished without reporting a result');
+});
+
+function scanScript(): string {
+  const job = scanJobManifest({
+    scanId: '0f6e1c2a-1111-4222-8333-944455556666',
+    namespace: 'orchard-scans',
+    trivyImage: 'ghcr.io/aquasecurity/trivy:0.76.1',
+    serverUrl: 'http://trivy:4954',
+    resultUrl: 'http://server/result',
+    target: scanTarget('nginx:1.27', selfHosted),
+    timeoutSeconds: 900,
+    withServerToken: false
+  });
+  return job.spec!.template.spec!.containers[0].command![2];
+}
+
+function runScanScript(refusals: number, trivyBody: string) {
+  const dir = mkdtempSync(join(tmpdir(), 'scan-script-'));
+  const stub = (name: string, body: string) => {
+    writeFileSync(join(dir, name), `#!/bin/sh\n${body}\n`);
+    chmodSync(join(dir, name), 0o755);
+  };
+  stub('sleep', 'exit 0');
+  stub('trivy', `echo trivy >> "${dir}/calls"\n${trivyBody}`);
+  stub(
+    'wget',
+    [
+      'case "$*" in',
+      '  *healthz*)',
+      `    echo healthz >> "${dir}/calls"`,
+      `    [ "$(grep -c healthz "${dir}/calls")" -gt ${refusals} ] && exit 0`,
+      '    exit 1 ;;',
+      '  *)',
+      `    echo post >> "${dir}/calls"`,
+      '    while [ $# -gt 0 ]; do',
+      `      [ "$1" = "--post-file" ] && cp "$2" "${dir}/posted"`,
+      '      shift',
+      '    done ;;',
+      'esac'
+    ].join('\n')
+  );
+  const run = spawnSync('/bin/sh', ['-c', scanScript().replaceAll('/tmp/', `${dir}/`)], {
+    env: {
+      PATH: `${dir}:${process.env.PATH}`,
+      TRIVY_SERVER: 'http://trivy:4954',
+      RESULT_URL: 'http://server/result',
+      SCAN_IMAGE: 'nginx:1.27',
+      SCAN_TOKEN: 'tok',
+      REPORT: join(dir, 'report.json')
+    }
+  });
+  const posted = existsSync(join(dir, 'posted')) ? readFileSync(join(dir, 'posted'), 'utf8') : '';
+  const calls = readFileSync(join(dir, 'calls'), 'utf8').trim().split('\n');
+  rmSync(dir, { recursive: true, force: true });
+  return { status: run.status, posted, calls };
+}
+
+test('the scan waits for the Trivy server before it starts', () => {
+  const { status, posted, calls } = runScanScript(2, `echo '{"Results":[]}' > "$REPORT"`);
+  assert.equal(status, 0);
+  assert.deepEqual(calls, ['healthz', 'healthz', 'healthz', 'trivy', 'post']);
+  assert.deepEqual(JSON.parse(posted), { Results: [] });
+});
+
+test('the scan still runs and reports when the Trivy server never answers', () => {
+  const { status, posted, calls } = runScanScript(
+    1000,
+    `echo 'FATAL Fatal error run error: boom' >&2\nexit 1`
+  );
+  assert.equal(status, 1);
+  assert.equal(calls.filter((c) => c === 'healthz').length, 31);
+  assert.deepEqual(calls.slice(-2), ['trivy', 'post']);
+  assert.equal(trivyErrorMessage(JSON.parse(posted).error), 'run error: boom');
+});
+
+test('a failed scan reports readable text', () => {
+  const { status, posted } = runScanScript(
+    0,
+    String.raw`printf 'INFO starting\nFATAL\tFatal error\tunable to "find" the \\ image: \303\251 denied\n' >&2
+exit 1`
+  );
+  assert.equal(status, 1);
+  assert.equal(trivyErrorMessage(JSON.parse(posted).error), 'unable to find the image: denied');
+});
+
+test('the script avoids tr character classes, which busybox treats as literal text', () => {
+  assert.ok(!scanScript().includes('[:'));
 });

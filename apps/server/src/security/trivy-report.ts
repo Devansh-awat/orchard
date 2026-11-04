@@ -200,5 +200,8 @@ export function trivyErrorMessage(raw: string): string {
     .replace(/^\s*Fatal error\s*/i, '')
     .replace(/\s+/g, ' ')
     .trim();
+  if (/twirp\/.*(connection refused|i\/o timeout|no such host)/i.test(text)) {
+    return 'Could not reach the Trivy server';
+  }
   return text || 'The scanner exited with an error';
 }
