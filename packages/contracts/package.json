@@ -19,8 +19,8 @@
     "sync-agent-search": "tsx scripts/sync-agent-search.ts"
   },
   "dependencies": {
-    "@asteasolutions/zod-to-openapi": "^7.3.4",
-    "zod": "^3.25.76"
+    "@asteasolutions/zod-to-openapi": "^9.1.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

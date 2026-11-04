@@ -5,7 +5,7 @@ import { ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
-import { z } from 'zod4';
+import { z } from 'zod';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { applyMcpBodyLimits, MCP_MAX_BODY_BYTES } from '../src/mcp/body-limit';
 import { registerCompactTools } from '../src/mcp/compact/compact-server';

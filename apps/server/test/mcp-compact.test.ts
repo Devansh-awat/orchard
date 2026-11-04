@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { z } from 'zod4';
+import { z } from 'zod';
 import type { AgentOperation } from '../src/agent-spec/agent-search';
 import { OrchardApiError } from '../src/mcp/client';
 import { SENSITIVE_META_KEY } from '../src/mcp/catalog';

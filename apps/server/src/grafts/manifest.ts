@@ -145,9 +145,9 @@ export const graftManifestSchema = z
         grafts: z.record(graftId, z.string()).default({}),
         kubernetes: z
           .object({ crds: z.array(z.string()).default([]), verbs: z.array(kubeVerb).default([]) })
-          .default({})
+          .prefault({})
       })
-      .default({}),
+      .prefault({}),
     runtime: z.literal('native').default('native'),
     entries: z
       .object({
@@ -155,7 +155,7 @@ export const graftManifestSchema = z
         mcp: pathSegment.optional(),
         ui: pathSegment.optional()
       })
-      .default({}),
+      .prefault({}),
     capabilities: z.array(z.enum(GRAFT_CAPABILITIES)).default([]),
     claims: z
       .object({
@@ -176,7 +176,7 @@ export const graftManifestSchema = z
         engineShards: z.array(z.string()).default([]),
         mirrorShards: z.array(z.string()).default([])
       })
-      .default({})
+      .prefault({})
       .transform(({ mirrorShards, ...claims }) => ({
         ...claims,
         engineShards: [...new Set([...claims.engineShards, ...mirrorShards])]
@@ -187,11 +187,11 @@ export const graftManifestSchema = z
         adopts: z.array(z.string().regex(/^[a-z_][a-z0-9_]*$/)).default([]),
         pool: z.number().int().min(1).max(50).optional()
       })
-      .default({}),
+      .prefault({}),
     permissions: z.record(z.string().regex(/^[a-z][a-z0-9-]*$/), permission).default({}),
     settings: z.array(settingsSection).default([]),
-    ui: z.object({ screens: z.array(screen).default([]) }).default({}),
-    public: z.object({ routes: z.array(z.string()).default([]) }).default({})
+    ui: z.object({ screens: z.array(screen).default([]) }).prefault({}),
+    public: z.object({ routes: z.array(z.string()).default([]) }).prefault({})
   })
   .strict();
 

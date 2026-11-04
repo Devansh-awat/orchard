@@ -1,4 +1,4 @@
-import { z } from 'zod4';
+import { z } from 'zod';
 
 const record = z.looseObject({});
 

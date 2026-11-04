@@ -57,7 +57,7 @@ const databaseSchema = z
     containerName: z.string().nullish(),
     storageSize: z.string().nullish(),
     clusterName: z.string().nullish(),
-    pgParameters: z.record(z.string()).nullish(),
+    pgParameters: z.record(z.string(), z.string()).nullish(),
     sharedPreloadLibs: z.array(z.string()).nullish(),
     installedExtensions: z.unknown().nullish(),
     backupScheduleCron: z.string().nullish(),
@@ -335,7 +335,7 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     response: z
       .object({
         parameters: z
-          .record(z.string())
+          .record(z.string(), z.string())
           .describe(
             'Only parameters the user has explicitly set. A parameter absent here is sized automatically from the memory limit.'
           ),
@@ -354,7 +354,7 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     scope: 'deploy',
     request: z.object({
       parameters: z
-        .record(z.string())
+        .record(z.string(), z.string())
         .describe(
           'Values are applied as given and never clamped. Omit a key (or send it empty) to hand it back to automatic sizing.'
         ),
@@ -367,7 +367,7 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     response: z
       .object({
         success: z.boolean(),
-        parameters: z.record(z.string()),
+        parameters: z.record(z.string(), z.string()),
         backupCompression: z.string().nullable().optional(),
         advisories: z
           .array(tuningAdvisory)

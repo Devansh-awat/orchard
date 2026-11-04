@@ -54,7 +54,10 @@ export const deploymentMetricsPayload = z
   .object({
     totalCpuUsage: z.number().describe('Total CPU usage across pods, millicores'),
     totalMemoryUsage: z.number().describe('Total memory usage across pods, bytes'),
-    pods: z.record(z.object({ cpuUsage: z.number(), memoryUsage: z.number() }).passthrough())
+    pods: z.record(
+      z.string(),
+      z.object({ cpuUsage: z.number(), memoryUsage: z.number() }).passthrough()
+    )
   })
   .passthrough()
   .describe('Payload for deployment.metrics events, keyed by pod name');

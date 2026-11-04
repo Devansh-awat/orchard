@@ -10,7 +10,6 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { zodToJsonSchema } from 'zod-to-json-schema';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '../../..');
@@ -71,7 +70,10 @@ async function generateMcp() {
       if (config?.inputSchema) {
         try {
           const { z } = require('zod');
-          input = zodToJsonSchema(z.object(config.inputSchema)) as Record<string, unknown>;
+          input = z.toJSONSchema(z.object(config.inputSchema), {
+            unrepresentable: 'any',
+            target: 'draft-7'
+          }) as Record<string, unknown>;
         } catch {
           input = null;
         }

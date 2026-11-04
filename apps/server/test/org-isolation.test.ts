@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { UnauthorizedException } from '@nestjs/common';
+import { parseManifest } from '../src/grafts/manifest';
 import { AuthorizationService } from '../src/auth/authorization.service';
 import { requestAuthStorage } from '../src/auth/request-context';
 import { OrganizationsService } from '../src/organizations/organizations.service';
@@ -165,4 +166,22 @@ test('a confined session cannot leave a different org', async () => {
       ),
     /not found/i
   );
+});
+
+test('a minimal graft manifest still gets every nested default', () => {
+  const manifest = parseManifest({
+    id: 'demo',
+    name: 'Demo',
+    version: '1.0.0',
+    publisher: 'someone',
+    engines: { platform: '*', sdk: '*' }
+  });
+  assert.deepEqual(manifest.requires, { grafts: {}, kubernetes: { crds: [], verbs: [] } });
+  assert.deepEqual(manifest.claims.engineShards, []);
+  assert.deepEqual(manifest.claims.apiAliases, []);
+  assert.deepEqual(manifest.database, { coreReads: {}, adopts: [] });
+  assert.deepEqual(manifest.ui, { screens: [] });
+  assert.deepEqual(manifest.public, { routes: [] });
+  assert.deepEqual(manifest.entries, {});
+  assert.throws(() => parseManifest({ id: 'demo', extra: true }), /invalid graft\.json/);
 });

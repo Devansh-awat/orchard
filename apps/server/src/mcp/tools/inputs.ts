@@ -1,4 +1,4 @@
-import { z } from 'zod4';
+import { z } from 'zod';
 
 export const pageInput = {
   limit: z

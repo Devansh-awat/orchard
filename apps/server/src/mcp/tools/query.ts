@@ -1,5 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/server';
-import { z } from 'zod4';
+import { z } from 'zod';
 import { OrchardClient, path, query as toQuery } from '../client';
 import { capLines, capText, failure, json, paginate, structured, text } from './reply';
 import { pageInput } from './inputs';
