@@ -22,7 +22,7 @@ import { happy, sleepy, thinking, wink } from 'blobatar/expression';
  * not fill its own viewBox, so without a backdrop the avatar frame shows
  * through around it and reads as a hole rather than a picture.
  */
-export const AVATAR_OPTIONS = { background: 'circle' } as const;
+export const AVATAR_OPTIONS = { background: 'square' } as const;
 
 /**
  * The stable handle a blobatar is drawn from. Id first so it survives a rename,

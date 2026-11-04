@@ -72,7 +72,8 @@
 		width: var(--size);
 		height: var(--size);
 		margin-left: var(--overlap);
-		border-radius: 50%;
+		border-radius: calc(26% * var(--corner-scale));
+		corner-shape: var(--corner);
 		background: var(--bg-surface);
 		box-shadow: 0 0 0 var(--gap) var(--bg-surface);
 		transition: transform var(--spring-glide-duration) var(--spring-glide);

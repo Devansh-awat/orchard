@@ -85,7 +85,8 @@
 <style>
 	:global(:where(.ui-avatar)) {
 		flex-shrink: 0;
-		border-radius: 50%;
+		border-radius: calc(26% * var(--corner-scale));
+		corner-shape: var(--corner);
 		object-fit: cover;
 		outline: 0.5px solid color-mix(in oklab, var(--neutral-10) 12%, transparent);
 		outline-offset: -0.5px;
