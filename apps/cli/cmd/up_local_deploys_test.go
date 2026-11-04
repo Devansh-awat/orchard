@@ -22,6 +22,20 @@ func TestLocalDeploysHintExplainsDisabledServer(t *testing.T) {
 	}
 }
 
+func TestLocalDeploysHintPointsAtImportWhenS3IsMissing(t *testing.T) {
+	err := localDeploysHint(&api.APIError{
+		Status:  400,
+		Message: "Local deploys need S3 storage. Add it under Instance admin, or run: sudo orchardctl backups s3 set",
+	})
+	if !strings.Contains(err.Error(), "orchard import owner/repo") {
+		t.Errorf("error = %q, want the import hint", err)
+	}
+	var apiErr *api.APIError
+	if !errors.As(err, &apiErr) || apiErr.Status != 400 {
+		t.Errorf("error %v lost the API error, so the exit code would change", err)
+	}
+}
+
 func TestLocalDeploysHintLeavesOtherErrorsAlone(t *testing.T) {
 	want := &api.APIError{Status: 403, Message: "forbidden"}
 	if got := localDeploysHint(want); got != error(want) {

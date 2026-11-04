@@ -688,6 +688,7 @@ var routeExclusions = map[string]string{
 	// first-run installer flow: a browser ceremony against an instance that has
 	// no user, and therefore no token for the CLI to authenticate with
 	"GET /setup/status":              "first-run setup, before any account exists",
+	"GET /uploads/*path":             "serves uploaded images to browsers",
 	"GET /setup/github-app/callback": "first-run setup (GitHub App callback redirect)",
 	"POST /setup/claim":              "first-run setup, claims the instance from a browser",
 	"GET /setup/state":               "first-run setup wizard state, read by the browser",

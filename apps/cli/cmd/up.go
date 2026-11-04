@@ -265,7 +265,13 @@ func upCmd() *cobra.Command {
 
 func localDeploysHint(err error) error {
 	var apiErr *api.APIError
-	if !errors.As(err, &apiErr) || !strings.Contains(apiErr.Message, "Local deploys are disabled") {
+	if !errors.As(err, &apiErr) {
+		return err
+	}
+	if strings.Contains(apiErr.Message, "Local deploys need S3") {
+		return fmt.Errorf("%w\nOr deploy from a repository: orchard import owner/repo", err)
+	}
+	if !strings.Contains(apiErr.Message, "Local deploys are disabled") {
 		return err
 	}
 	return fmt.Errorf("%w\norchard up is off on this server. An instance admin can turn it on: https://docs.orchard.my/deploy/deploy-from-terminal/#turn-on-local-deploys\nOr deploy from a repository: orchard import owner/repo", err)
