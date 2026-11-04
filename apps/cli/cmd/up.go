@@ -208,15 +208,20 @@ func upCmd() *cobra.Command {
 				return nil
 			}
 
-			ferr := followBuildLogsSSE(cmd.Context(), cl, deploymentID, logW)
+			started := time.Now()
+			var followLimit time.Duration
+			if wait || cmd.Flags().Changed("timeout") {
+				followLimit = timeout
+			}
+			ferr := followBuildLogsSSE(cmd.Context(), cl, deploymentID, logW, buildFollow{Timeout: followLimit, Pin: pin})
 			sseMissing := errors.Is(ferr, errSSEUnsupported)
 			if sseMissing {
 				ferr = nil
 			}
 			if ferr != nil {
-				if errors.Is(ferr, api.ErrDeployFailed) {
+				if errors.Is(ferr, api.ErrDeployFailed) || errors.Is(ferr, api.ErrWaitTimeout) {
 					if r, gerr := cl.GetRollout(cmd.Context(), deploymentID, pin, 0); gerr == nil {
-						if r.Build.Error != "" {
+						if errors.Is(ferr, api.ErrDeployFailed) && r.Build.Error != "" {
 							output.Errorf("build failed")
 							fmt.Fprintln(os.Stderr, indent(r.Build.Error))
 						}
@@ -234,7 +239,11 @@ func upCmd() *cobra.Command {
 				printDeploySuccess(cmd.Context(), cl, cfg.APIURL, deploymentID)
 				return nil
 			}
-			r, werr := waitRollout(cmd.Context(), cl, deploymentID, pin, timeout, deployWaitBuild(deploymentID))
+			remaining := timeout - time.Since(started)
+			if remaining < time.Second {
+				remaining = time.Second
+			}
+			r, werr := waitRollout(cmd.Context(), cl, deploymentID, pin, remaining, deployWaitBuild(deploymentID))
 			if jsonMode && r != nil {
 				if err := output.JSON(rolloutJSON(deploymentID, r)); err != nil && werr == nil {
 					werr = err

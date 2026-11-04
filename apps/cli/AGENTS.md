@@ -54,7 +54,7 @@ Format resolution, in order: explicit `-o json|table` flag, then `ORCHARD_JSON=1
 
 - Data goes to stdout. Status, progress, and warnings go to stderr. Parse stdout only.
 - `orchard events tail` emits NDJSON when piped: one JSON object per line, shaped `{"eventId","type","organizationId","id","projectId","ts","payload"}`.
-- `--follow` log commands (`deploy logs -f`, `pod logs -f`, `job-run logs -f`) stream plain log lines to stdout, one per line, until interrupted (or, for job runs, until the run finishes). `observe logs --follow` does the same on a TTY; piped, it emits one JSON log entry per line.
+- `--follow` log commands (`deploy logs -f`, `pod logs -f`, `job-run logs -f`) stream plain log lines to stdout, one per line, until interrupted (or, for job runs, until the run finishes). `observe logs --follow` does the same on a TTY; piped, it emits one JSON log entry per line. `deploy logs --build -f` ends when the build ends, and exits 9 if it failed.
 - One-shot log fetches in JSON mode return structured arrays (e.g. `deploy logs` returns `[{"pod","container","logs"}]`).
 - On failure in JSON mode, a single error line is printed to stderr:
 

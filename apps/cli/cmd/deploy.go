@@ -654,7 +654,11 @@ func deployLogsCmd() *cobra.Command {
 			}
 			if build {
 				if follow {
-					if err := followBuildLogsSSE(cmd.Context(), cl, args[0], os.Stdout); !errors.Is(err, errSSEUnsupported) {
+					err := followBuildLogsSSE(cmd.Context(), cl, args[0], os.Stdout, buildFollow{})
+					if errors.Is(err, context.Canceled) {
+						return nil
+					}
+					if !errors.Is(err, errSSEUnsupported) {
 						return err
 					}
 					fetch := func(ctx context.Context) (string, error) {
