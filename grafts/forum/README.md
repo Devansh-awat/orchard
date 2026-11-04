@@ -1,10 +1,10 @@
 # The Grove
 
-A forum for the people on an instance: bug reports and feature requests with votes,
-replies, image attachments, and superadmin triage (status, priority, pin, lock).
+Add a forum to an Orchard instance. The Grove has bug reports and feature requests with votes, replies, and image attachments. Superadmins set each thread's status and priority, and can pin and lock threads.
 
-It adopts the `forum_*` tables that used to live in core, so an existing Grove keeps its
-threads. Image uploads go through the `storage` door and need object storage configured.
+The graft adopts the `forum_*` tables that older Orchard releases keep in core, so an existing Grove keeps its threads. Image uploads use the `storage` door, and need object storage configured.
+
+To pack the graft, run:
 
 ```
 pnpm --filter @grafts/forum pack

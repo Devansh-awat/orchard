@@ -1,18 +1,14 @@
 # Community grafts
 
-Grafts are Orchard's extensions. Official grafts live in this repo and are
-signed by Orchard. Community grafts live in their author's own GitHub repo and
-are signed with the author's own key. This folder is how a community graft gets
-into the Extension Marketplace at `https://assets.orchard.my/registry`.
+List a graft in the Extension Marketplace at `https://assets.orchard.my/registry`.
 
-Every Orchard instance shows a community graft as "Community · by" followed by
-your publisher name, and tells the admin, before they install it, that you
-published it and not Orchard. Instances whose trust policy is `listed` (the
-default), `taps` or `any` can install it; instances set to `official` cannot.
+Grafts are Orchard's extensions. Official grafts live in this repository, and Orchard signs them. Community grafts live in their author's GitHub repository, and the author signs them.
 
-## Getting listed
+Orchard shows a community graft as "Community · by" followed by your publisher name. Before an admin installs it, Orchard states that you published it, not Orchard. Instances with the trust policy `listed` (the default), `taps`, or `any` can install it. Instances with `official` cannot.
 
-Add one file, `registry/community/<id>.json`, in a pull request:
+## Add a listing
+
+Open a pull request that adds one file, `registry/community/<id>.json`:
 
 ```json
 {
@@ -24,92 +20,84 @@ Add one file, `registry/community/<id>.json`, in a pull request:
 }
 ```
 
-- `id` is your graft's id from `graft.json`, and the file must be named after
-  it. Ids are 2 to 48 lowercase letters, digits and hyphens, starting with a
-  letter. Every instance has a single namespace, so an id that an official
-  graft or another listing already uses is refused.
-- `repo` is `owner/name` of the public GitHub repo you release from.
-- `publisher` is the name shown next to your graft: 1 to 39 lowercase letters,
-  digits and hyphens. Your GitHub login is a good choice.
-- `publicKey` is your signing key's public half (see below).
-- `homepage` is optional and must be an https address.
+| Field       | Description                                                                                                                                                       |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`        | Your graft's ID from `graft.json`. The file name must match it. 2 to 48 lowercase letters, digits, and hyphens, starting with a letter. An ID that an official graft or another listing uses is refused. |
+| `repo`      | The `owner/name` of the public GitHub repository you release from.                                                                                                |
+| `publisher` | The name shown next to your graft. 1 to 39 lowercase letters, digits, and hyphens. Your GitHub login is a good choice.                                            |
+| `publicKey` | The public half of your signing key.                                                                                                                              |
+| `homepage`  | Optional. An `https` address.                                                                                                                                     |
 
-Nothing else goes in the file; unknown fields fail the check.
+The check rejects unknown fields.
 
-## Signing and releasing
-
-Make a signing key once and keep the private half secret:
+To run the same check as CI, run this command from the repository root:
 
 ```sh
-npx @orchardlabs/graft-sdk keygen graft-signing-key.pem
+go run -C apps/registry . validate-community -listings ../../registry/community -official ../../grafts
 ```
 
-It prints the public key for your listing. Store the private key in your repo
-as an Actions secret, base64 encoded (`base64 < graft-signing-key.pem`), for
-example as `GRAFT_SIGNING_KEY`. Then let the graft-release action pack, sign
-and attach your graft whenever you publish a GitHub Release:
+## Sign and release
 
-```yaml
-name: release
-on:
-  release:
-    types: [published]
-permissions:
-  contents: write
-jobs:
-  graft:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hackclub/orchard/.github/actions/graft-release@main
-        with:
-          key: ${{ secrets.GRAFT_SIGNING_KEY }}
-          path: .
-```
+1. Create a signing key:
 
-The release must carry an asset named exactly `<id>-<version>.graft`, for
-example `notes-1.2.0.graft`, where the version matches `graft.json`. Drafts and
-prereleases are ignored, and so are any other assets.
+   ```sh
+   npx -p @orchardlabs/graft-sdk graft keygen graft-signing-key.pem
+   ```
 
-## What happens next
+   The command prints the public key for your listing. Keep the private key secret.
 
-The first listing of a graft is reviewed by an Orchard maintainer before it is
-merged. We look at who you are, what the graft does and whether the id makes
-sense. After that, updates are automatic: about once an hour the marketplace
-reads your newest 20 releases and publishes every version it has not seen yet.
-We do not review updates, and instances say so when they install your graft.
+2. Store the private key in your repository as an Actions secret named `GRAFT_SIGNING_KEY`, base64 encoded:
 
-Each new version is checked before it is published, and skipped if it fails:
+   ```sh
+   base64 < graft-signing-key.pem
+   ```
 
-- the graft id matches your listing and the version matches the asset name,
-- `engines.platform` and `engines.sdk` are set,
-- every file matches its hash in `MANIFEST.json`, with nothing missing, nothing
-  extra and no symlinks,
-- `MANIFEST.sig` verifies against the `publicKey` in your listing,
-- `database.adopts` is empty (only official grafts may take over Orchard's
-  tables),
-- no migration changes the `public` schema (run `graft doctor` to check),
-- the file is at most 64 MiB.
+3. Add a workflow that packs, signs, and attaches your graft when you publish a GitHub Release:
 
-A published version never changes. To ship a fix, release a new version.
+   ```yaml
+   name: release
+   on:
+     release:
+       types: [published]
+   permissions:
+     contents: write
+   jobs:
+     graft:
+       runs-on: ubuntu-latest
+       steps:
+         - uses: actions/checkout@v4
+         - uses: hackclub/orchard/.github/actions/graft-release@main
+           with:
+             key: ${{ secrets.GRAFT_SIGNING_KEY }}
+             path: .
+   ```
 
-Run `go run ./apps/registry validate-community -listings registry/community`
-before you open the pull request; CI runs the same check.
+The release must have an asset named `<id>-<version>.graft`, for example `notes-1.2.0.graft`. The version must match `graft.json`. The marketplace ignores drafts, prereleases, and other assets.
 
-## Changing a listing
+## Review and updates
 
-Edit your file in a pull request. Changing `publicKey` replaces the key
-instances check against, so versions signed with the old key stop verifying
-once the change is merged. Release a new version signed with the new key right
-after, so instances have something to upgrade to.
+An Orchard maintainer reviews the first listing before merging it. The review covers who you are, what the graft does, and whether the ID is suitable.
 
-## Getting delisted
+About once an hour, the marketplace reads your newest 20 releases and publishes each version it has not seen. No one reviews updates, and instances state this when they install your graft.
 
-Delete your file in a pull request, or ask a maintainer to. Once it is merged,
-the marketplace marks the listing as delisted and every version of it as
-revoked. Instances stop trusting the graft, it disappears from search, and
-nothing new is published for it. Already published files stay where they are so
-instances can show what was there, but they no longer pass verification.
+The marketplace checks each new version, and skips a version that fails:
 
-If a key leaks or a release turns out to be harmful, tell us and we will delist
-the graft straight away.
+- The graft ID matches your listing, and the version matches the asset name.
+- `engines.platform` and `engines.sdk` are set.
+- Each file matches its hash in `MANIFEST.json`, with no missing files, extra files, or symlinks.
+- `MANIFEST.sig` verifies against the `publicKey` in your listing.
+- `database.adopts` is empty. Only official grafts can take over Orchard's tables.
+- No migration changes the `public` schema. Run `graft doctor` to check.
+- The file is at most 64 MiB.
+
+A published version does not change. To ship a fix, release a new version.
+
+## Change a listing
+
+Edit your file in a pull request. Changing `publicKey` replaces the key that instances check against. Versions signed with the old key stop verifying once the change is merged. Release a new version signed with the new key immediately after, so that instances can upgrade to it.
+
+## Remove a listing
+
+Delete your file in a pull request, or ask a maintainer to delete it. After the merge, the marketplace marks the listing as delisted and each of its versions as revoked. Instances stop trusting the graft, it leaves search results, and nothing new is published for it. Published files stay in place, but they no longer pass verification.
+
+If a key leaks or a release is harmful, contact a maintainer to delist the graft.

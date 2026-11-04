@@ -1,11 +1,16 @@
 # Announcements
 
-The hello-world graft. Superadmins post notices from Admin → Announcements; everyone sees
-them on project and app overviews.
+Post instance-wide notices that appear on project and app overview pages. Superadmins manage notices in **Admin** > **Announcements**.
 
-It shows every part of a graft: its own database schema and migration, the `db` and
-`audit` doors, a superadmin-only route through default-deny, an admin nav entry, a full
-screen, and cards in two slots.
+This graft is a small example of a graft's parts:
+
+- A database schema and migrations.
+- The `db`, `audit`, and `settings` doors.
+- A superadmin-only route, through the default access rule.
+- An admin navigation entry and a screen.
+- Cards in two slots.
+
+To pack the graft, run:
 
 ```
 pnpm --filter @grafts/announcements pack
