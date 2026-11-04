@@ -35,6 +35,7 @@ recognised. Anything without a default is optional unless the description says o
 | `CPU_REQUEST_MIN_MILLI` |  |  |
 | `APP_DOMAIN` |  | ── Domains ────────────────────────────────────────────────────────────────── Wildcard parent for generated app URLs (main-forge-abc123.&lt;APP_DOMAIN&gt;). Unset means Orchard generates no URLs at all and every deployment needs a custom domain; it never falls back to a built-in default. |
 | `INGRESS_CNAME` |  | CNAME target users point their own domains at. Unset disables DNS validation for custom domains. |
+| `INSTALL_INGRESS_MODE` |  | Set by the one-command installer to public, tunnel or lan, so the setup checklist lists only what applies to this instance. Leave unset otherwise. |
 | `PUBLIC_HTTP_PORT` |  | The ports this instance is reached on from outside, which are not always the ports Traefik listens on inside the cluster: a single-box install can be told to serve somewhere other than 80 and 443 (install.sh --http-port/--https-port, lan mode only). They appear in the URL the API returns for every ingress, so a client never has to guess. Leave unset unless you moved them. |
 | `PUBLIC_HTTPS_PORT` |  | The TLS half of the same. Both default to the standard ports. |
 | `BASE_DOMAIN` |  | The three below are independent facts, off unless set, and NOT derived from APP_DOMAIN or from each other: each needs its own DNS and wildcard cert, and in practice they diverge (the platform UI, deployed apps and org vanity hosts can all live on different domains). Parent for org vanity subdomains (acme.&lt;BASE_DOMAIN&gt;). |

@@ -331,12 +331,16 @@ export class SetupService implements OnModuleInit {
       this.logger.warn(`could not check DNS: ${e?.message}`);
     }
     const dnsOutstanding = DnsCheckService.outstanding(dns);
+    const installMode = (process.env.INSTALL_INGRESS_MODE || '').trim();
 
     return [
       {
         id: 'github-app',
         title: 'Connect a GitHub App',
-        detail: 'Deploy private repos and rebuild automatically when you push.',
+        detail:
+          installMode === 'lan'
+            ? 'Deploy private repos and rebuild when you push. This instance is on a private network, so GitHub webhooks may not reach it.'
+            : 'Deploy private repos and rebuild automatically when you push.',
         done: this.githubApp.isConfigured(),
         severity: 'normal',
         href: '/setup/github'
@@ -394,8 +398,67 @@ export class SetupService implements OnModuleInit {
         done: wildcardConfigured && cert.state === 'ready',
         severity: cert.state === 'failed' || cert.state === 'rateLimited' ? 'warning' : 'normal',
         href: '/admin/instance'
-      }
+      },
+      ...(await this.conditionalChecklist(installMode))
     ];
+  }
+
+  private async conditionalChecklist(installMode: string): Promise<ChecklistItem[]> {
+    const items: ChecklistItem[] = [];
+
+    if ((installMode === 'public' || installMode === 'lan') && !this.config.defaultPublicIp()) {
+      items.push({
+        id: 'public-ip',
+        title: 'Set a public IP',
+        detail:
+          'Raw TCP and UDP ports and public databases are published on this address. Without it, each organization must set its own.',
+        done: false,
+        severity: 'normal',
+        href: '/admin/instance'
+      });
+    }
+
+    const mcp = await this.settings.getMcpState();
+    if (mcp.envOverride === false) {
+      items.push({
+        id: 'mcp',
+        title: 'Turn on the MCP endpoint',
+        detail:
+          'AI agents cannot connect to this instance. Run sudo orchardctl mcp enable --apply.',
+        done: false,
+        severity: 'normal',
+        href: 'https://docs.orchard.my/operate/finishing-setup/#turn-the-mcp-endpoint-on-or-off'
+      });
+    }
+
+    const scanner = await this.settings.getImageScannerState(async () => {
+      if (envSet('TRIVY_SERVER_URL')) return 'trivy';
+      return envSet('HARBOR_API_URL') ? 'harbor' : 'off';
+    });
+    if (scanner.value === 'off' && scanner.dbValue === null) {
+      items.push({
+        id: 'image-scanning',
+        title: 'Turn on image scanning',
+        detail: 'Without a scanner, the Security tab cannot report vulnerabilities in your images.',
+        done: false,
+        severity: 'normal',
+        href: '/admin/instance'
+      });
+    }
+
+    if (!envSet('TENANT_RUNTIME_CLASS') && (await this.prisma.user.count()) >= 2) {
+      items.push({
+        id: 'tenant-isolation',
+        title: "Apps share this server's kernel",
+        detail:
+          'More than one person uses this instance, and a container escape reaches every app on it. Install gVisor or Kata before you run code you do not trust.',
+        done: false,
+        severity: 'warning',
+        href: 'https://docs.orchard.my/operate/security/'
+      });
+    }
+
+    return items;
   }
 
   private static dnsDetail(dns: DnsReport | null, outstanding: number): string {

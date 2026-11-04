@@ -1548,6 +1548,7 @@ server:
     - { name: SSO_ENCRYPTION_KEY, value: "$SSO_KEY" }
     - { name: MCP_SERVICE_TOKEN, value: "$MCP_TOKEN" }
     - { name: APP_DOMAIN, value: $ORCHARD_APP_DOMAIN }$cname_env
+    - { name: INSTALL_INGRESS_MODE, value: $INGRESS_MODE }
     - { name: CNPG_OPERATOR_NAMESPACE, value: cnpg-system }
     - { name: PUBLIC_HTTP_PORT, value: "$HTTP_PORT" }
     - { name: PUBLIC_HTTPS_PORT, value: "$HTTPS_PORT" }
