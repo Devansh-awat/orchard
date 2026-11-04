@@ -158,7 +158,7 @@
 		<Plus size={14} /> New machine…
 	</MenuItem>
 	<div class="gh-menu-sep"></div>
-	<MenuItem href="https://orchard.my/docs/greenhouse" target="_blank" rel="noopener">
+	<MenuItem href="https://docs.orchard.my/greenhouse/" target="_blank" rel="noopener">
 		<CircleHelp size={14} /> Help
 	</MenuItem>
 	<MenuItem href="/"><ArrowLeft size={14} /> Back to Orchard</MenuItem>

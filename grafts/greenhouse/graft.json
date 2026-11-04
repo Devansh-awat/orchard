@@ -4,7 +4,7 @@
   "version": "1.5.2",
   "publisher": "orchard",
   "description": "Cloud dev sandboxes with coding agents, live editing, previews and share links.",
-  "homepage": "https://orchard.my/docs/greenhouse",
+  "homepage": "https://docs.orchard.my/greenhouse/",
   "engines": {
     "platform": ">=2.67.0 <3",
     "sdk": "^1.0.0"
@@ -208,13 +208,6 @@
       "slack_thread_links",
       "user_context_items"
     ]
-  },
-  "permissions": {
-    "use": {
-      "label": "Use Greenhouse",
-      "description": "Create and open sandboxes.",
-      "defaultGrants": ["org:owner", "org:admin", "org:member"]
-    }
   },
   "settings": [
     {
