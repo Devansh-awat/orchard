@@ -195,7 +195,7 @@ export class ObservabilityService {
           build_step: string | null;
         }[]
       >`
-        SELECT substring(build_logs from ${offset + 1}) AS chunk,
+        SELECT substring(build_logs from ${offset + 1}::int) AS chunk,
                length(build_logs) AS total,
                build_status,
                build_step

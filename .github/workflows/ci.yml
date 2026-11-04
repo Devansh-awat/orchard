@@ -410,6 +410,8 @@ jobs:
       # ready, nor touch blue when green fails.
       - name: Rollout gate and blue/green tests
         run: pnpm --filter server test:rollout-gate
+      - name: Build log stream tests
+        run: pnpm --filter server test:build-log-stream
       # A threshold alert is a state machine over timestamps in Postgres, not
       # a timer: it must survive restarts, fire once per episode, resolve only
       # after the condition has cleared for the whole window, and treat "the
