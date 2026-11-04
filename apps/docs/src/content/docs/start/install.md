@@ -24,7 +24,7 @@ The installer creates a single-node k3s cluster. It then installs Traefik, Cloud
 - A physical machine or a virtual machine (VM) with an amd64 or arm64 CPU. The installer refuses other architectures.
 - Root access.
 - At least 4 GiB of RAM and 20 GB of free disk. Orchard recommends 8 GiB of RAM and 60 GB of disk.
-- For `public` mode, ports 80 and 443 free, a domain, and an email address for Let's Encrypt.
+- For `public` mode, ports 80 and 443 free. A domain is optional. To try Orchard without one, refer to [Try Orchard without a domain](#try-orchard-without-a-domain).
 - For `tunnel` mode, a domain and a Cloudflare Tunnel token.
 
 Do not run the installer inside a Docker container. k3s cannot nest its overlayfs snapshotter there.
@@ -53,15 +53,14 @@ In `public` mode, port 80 must stay open after the install. Let's Encrypt uses i
 
 ### Add DNS records
 
-For `public` mode, add these `A` records before you run the installer. The example assumes the dashboard is at `orchard.example.com`.
+For `public` mode with your own domain, add these `A` records before you run the installer. The example assumes the dashboard is at `orchard.example.com`.
 
 | Record | Purpose |
 | --- | --- |
 | `orchard.example.com` | The dashboard |
-| `*.apps.example.com` | Deployed apps |
-| `mcp.example.com` | The [MCP endpoint](/mcp/) for agents |
+| `*.apps.example.com` | Deployed apps and the [MCP endpoint](/mcp/) for agents |
 
-The installer derives the app and MCP hostnames from your domain. To change them, use `--app-domain` and `--mcp-domain`. To leave out the MCP endpoint, use `--mcp false`.
+The installer derives the other hostnames from your domain. Apps use `apps.example.com`, and the MCP endpoint uses `mcp.apps.example.com`, which the wildcard record covers. To change them, use `--app-domain` and `--mcp-domain`. A hostname that the wildcard record does not cover needs its own `A` record. To leave out the MCP endpoint, use `--mcp false`.
 
 For `tunnel` mode, the installer prints the hostnames to route to your tunnel in the Cloudflare dashboard.
 
@@ -76,17 +75,23 @@ For `tunnel` mode, the installer prints the hostnames to route to your tunnel in
 2. Answer the prompts. The installer asks for:
 
    - The ingress mode.
-   - The domain for the dashboard.
-   - The wildcard domain for apps.
-   - An email address for Let's Encrypt (`public` mode only).
+   - The domain for the dashboard. In `public` mode, you can press Enter to use an `sslip.io` name. In `lan` mode, the installer does not ask.
    - A Cloudflare Tunnel token (`tunnel` mode only).
-   - An update policy: `manual` or `automatic`. The `automatic` policy upgrades the instance with a daily systemd timer.
 
-3. If the MCP hostname does not resolve, select an option when prompted. You can check again, use a different hostname, or skip the MCP endpoint and turn it on later with `sudo orchardctl mcp enable --apply`.
-
-4. Copy the claim link that the installer prints when it finishes.
+3. Copy the claim link that the installer prints when it finishes.
 
 The installer writes its settings to `/etc/orchard/values.yaml`. Next, [claim the instance](#claim-the-instance).
+
+The installer sets the following values for you. To change one, use the flag in the table.
+
+| Value | Default | Flag |
+| --- | --- | --- |
+| App domain | `apps.<parent of your domain>` | `--app-domain` |
+| MCP hostname | `mcp.<app domain>` | `--mcp-domain` |
+| Update policy | `manual` | `--updates automatic` |
+| Let's Encrypt contact | None | `--email` |
+
+Let's Encrypt and cert-manager do not need an email address. Let's Encrypt stopped sending expiry emails in June 2025, and cert-manager renews certificates without one.
 
 :::note
 Use `bash -c` as shown. If you pipe the script into `sudo bash` with no flags, the installer cannot read your answers, so it stops before it installs anything.
@@ -100,26 +105,53 @@ less orchard-install.sh
 sudo bash orchard-install.sh
 ```
 
+### Try Orchard without a domain
+
+In `public` mode, you can try Orchard before you point a domain at the machine. The installer uses [sslip.io](https://sslip.io), a public DNS service that answers with the IP address in the name.
+
+1. Run the installer and select `public` mode.
+2. When the installer asks for a domain, press Enter.
+
+The dashboard is then at `https://orchard.<ip>.sslip.io`, with dashes in the IP address. You do not need to add DNS records. Let's Encrypt issues the certificates over HTTP-01, so ports 80 and 443 must be reachable from the internet.
+
+:::caution
+Use `sslip.io` for trials only. Let's Encrypt limits the certificates issued for each registered domain, and `sslip.io` is not on the Public Suffix List, so all its users share one limit. Its operators report a raised limit of 250,000 certificates, and they also say that requests can be rate limited. If the limit applies, the dashboard shows a browser warning until cert-manager succeeds on a later retry. The installer reports this when it finishes.
+:::
+
+### Move to your own domain
+
+To move an instance from `sslip.io` to a domain you own:
+
+1. Add the `A` records in [Add DNS records](#add-dns-records).
+2. Run the installer again with your domain:
+
+   ```bash
+   sudo bash -c "$(curl -fsSL https://assets.orchard.my/install.sh)" -- --domain orchard.example.com
+   ```
+
+The installer updates the dashboard URL, the app domain, and the MCP hostname. Apps that you already deployed keep their `sslip.io` URLs. To give an app a new URL, add a domain to the app.
+
+### Run the installer again
+
+To pick up new host commands or change a setting, run the installer again. It reads `/etc/orchard/values.yaml` first, so it keeps your ingress mode, domains, MCP hostname, secrets, and update policy, and does not ask for them. A flag changes only the setting it names. It does not rotate secrets.
+
 ### Run the installer without prompts
 
 Pass your answers as flags and add `--yes`:
 
 ```bash
 curl -fsSL https://assets.orchard.my/install.sh | sudo bash -s -- \
-  --yes --mode public --domain orchard.example.com --email you@example.com
+  --yes --mode public --domain orchard.example.com
 ```
 
-With `--yes`, a `public` install still requires a domain and an email address. If the MCP hostname does not resolve, the installer leaves the MCP endpoint off and reports it.
+With `--yes`, every question takes its default. A `public` install with no `--domain` uses an `sslip.io` name. A `tunnel` install requires `--domain` and `--tunnel-token`.
 
 Each flag also has an environment variable:
 
 ```bash
 ORCHARD_ASSUME_YES=true \
 ORCHARD_DOMAIN=orchard.example.com \
-ORCHARD_APP_DOMAIN=apps.example.com \
-ORCHARD_ACME_EMAIL=me@example.com \
 ORCHARD_INGRESS_MODE=public \
-ORCHARD_UPDATE_POLICY=manual \
   sudo -E bash orchard-install.sh
 ```
 
@@ -139,7 +171,7 @@ To list every flag and variable, run the script with `--help`.
 Backups in the local store sit on the same disk as your databases. They do not protect you if you lose the disk. For off-machine backups, refer to [Move to S3 or R2](/data/backups/#move-to-s3-or-r2).
 :::
 
-A host installed before these defaults existed receives them on its next `sudo orchardctl update`. The MCP endpoint is the exception, because it needs a DNS record first. For more information, refer to [New defaults on an existing host](/operate/host-commands/#new-defaults-on-an-existing-host).
+A host installed before these defaults existed receives them on its next `sudo orchardctl update`. The MCP endpoint is the exception. To turn it on, run `sudo orchardctl mcp enable --apply`. For more information, refer to [New defaults on an existing host](/operate/host-commands/#new-defaults-on-an-existing-host).
 
 ### Sizing
 
@@ -181,8 +213,8 @@ For the full list of commands, refer to [Host commands](/operate/host-commands/)
 | Item | What to do |
 | --- | --- |
 | Sandboxed builds and tenant isolation | Install gVisor or Kata on the node, then set `tenantSandbox` and `builderSandbox` in `/etc/orchard/values.yaml`. Without them, image builds run with host-level privileges. |
-| DNS | Add the records yourself. To check them, go to **Instance admin** > **Networking**. For more information, refer to [Point DNS at this instance](/operate/finishing-setup/#point-dns-at-this-instance). |
-| Public IP for raw ports and public databases | Run `sudo orchardctl public-ip set <ip> --apply`. For more information, refer to [Set a default public IP](/operate/finishing-setup/#set-a-default-public-ip). |
+| DNS for your own domain | Add the records yourself. To check them, go to **Instance admin** > **Networking**. For more information, refer to [Point DNS at this instance](/operate/finishing-setup/#point-dns-at-this-instance). |
+| Public IP for raw ports and public databases, on a machine behind NAT | The installer saves the address when the machine has a routable IP in `public` mode. Otherwise, set it at **Instance admin** > **Configuration** > **Public exposure**. For more information, refer to [Set a default public IP](/operate/finishing-setup/#set-a-default-public-ip). |
 | Off-machine backups | Refer to [Move to S3 or R2](/data/backups/#move-to-s3-or-r2). |
 | Multiple nodes, wildcard certificates, and public TCP or UDP in `tunnel` mode | Use the [Helm chart](#install-on-an-existing-cluster). |
 
@@ -260,7 +292,7 @@ An agent with SSH access to the machine can run the installer. Point the agent a
 
 ```text
 Install Orchard on <host> following https://docs.orchard.my/start/install.md
-My domain is example.com and my email is me@example.com.
+My domain is example.com.
 Ask me before anything that is not reversible.
 ```
 
@@ -429,7 +461,7 @@ To claim the instance:
 4. Create a passkey, or set a password of at least 12 characters. Browsers do not offer passkeys over plain HTTP, so a `lan` install defaults to a password. You cannot skip this step.
 5. Rename the organization, or keep the name Orchard created.
 6. To create the GitHub App that repository deploys need, select **Create GitHub App**. To skip this step, select **Skip for now**.
-7. Review the certificate status for your app domain.
+7. If a wildcard certificate failed to issue, review its status. Otherwise, Orchard skips this step.
 8. Choose whether to share anonymous usage reports. Reports are off unless you opt in.
 9. Select **Go to Orchard**.
 

@@ -44,20 +44,28 @@ are filled in, and it happens once, so turning something back off sticks.
 
 ## What it asks
 
-Two things it cannot work out on its own: your **domain**, and an **email for
-Let's Encrypt**. Everything else is detected: architecture, memory, free disk,
-free ports, whether you are behind NAT.
+The installer asks how traffic reaches the machine and, outside `lan` mode, which domain to use. In `tunnel` mode it also asks for the tunnel token. It works out everything else: architecture, memory, free disk, free ports, and whether the machine is behind NAT.
 
-Two more hostnames are derived rather than asked for: `apps.<your domain>` for
-deployed apps, and `mcp.<your domain>` for the MCP endpoint AI agents connect
-to. In `public` mode both need a DNS record, and the installer prints them
-before it waits. `--mcp-domain` moves the MCP, `--mcp false` leaves it out.
+To try Orchard before you point a domain at the machine, select `public` mode and press Enter at the domain question. The installer then uses an `sslip.io` name for this IP address, and you do not need to add DNS records. Use this for trials only. Let's Encrypt limits the certificates issued for each registered domain, and `sslip.io` is not on the Public Suffix List, so all its users share one limit. Its operators report a raised limit of 250,000 certificates, and they also say that requests can be rate limited. If the limit applies, the dashboard shows a browser warning until cert-manager succeeds on a later retry, and the installer reports this when it finishes. A self-signed certificate is not the default, because browsers refuse passkeys on one and MCP clients refuse to connect.
 
-It then checks the MCP hostname actually resolves, and if it does not, offers to
-re-check, take a different hostname, or leave the MCP off. Under `--yes` it skips
-it and says so. Turning it on later is one command, and shipping an endpoint for
-a name that does not exist is not: the certificate is issued over HTTP-01, so it
-would retry against nothing and stay quietly broken.
+To move to your own domain later, run the installer again with `--domain orchard.example.com`. It updates the dashboard URL, the app domain, and the MCP hostname. Apps that you already deployed keep their `sslip.io` URLs.
+
+The installer sets these values for you:
+
+| Value                 | Default                                                                                           | To change it          |
+| --------------------- | ------------------------------------------------------------------------------------------------- | --------------------- |
+| App domain            | `apps.<parent of your domain>`                                                                    | `--app-domain`        |
+| MCP hostname          | `mcp.<app domain>`, which the wildcard record for your apps covers, so it needs no record         | `--mcp-domain`        |
+| Update policy         | `manual`                                                                                          | `--updates automatic` |
+| Let's Encrypt contact | None. Let's Encrypt stopped sending expiry emails in June 2025, and cert-manager does not need it | `--email`             |
+| Public IP             | This IP address, in `public` mode on a machine with a routable address                            | The admin panel       |
+| Custom domain target  | The dashboard domain in `public` mode. Refer to the note on `tunnel` mode below                   | `INGRESS_CNAME`       |
+
+In `tunnel` mode, the custom domain target is `<tunnel-id>.cfargotunnel.com`, read from the tunnel token. Each custom domain also needs a route in the tunnel, and Cloudflare hides proxied records, so Orchard can confirm only that the hostname resolves.
+
+To change the public IP, go to **Instance admin** > **Configuration** > **Public exposure**. The field stays editable. `sudo orchardctl public-ip set <ip> --apply` pins the value and locks the field.
+
+Running the installer again reads `/etc/orchard/values.yaml` first, so it keeps your ingress mode, domains, MCP hostname, secrets, and update policy, and does not ask for them. A flag changes only the setting it names.
 
 `public` and `lan` mode need ports 80 and 443 free; `tunnel` mode binds neither.
 In `public` mode, 80 carries the Let's Encrypt HTTP-01 challenge for every
@@ -76,8 +84,8 @@ kubelet never creates a pod sandbox.
 
 It also asks how traffic should reach the box:
 
-- **public**: you have a routable IP; point DNS at it and Let's Encrypt issues
-  certificates over HTTP-01
+- **public**: you have a routable IP. Let's Encrypt issues certificates over
+  HTTP-01. A domain is optional
 - **tunnel**: Cloudflare Tunnel, for boxes behind NAT or CGNAT. Cloudflare
   terminates TLS, so cert-manager is skipped entirely, Traefik stays on a
   ClusterIP, and nothing binds a port on the host. This is also the answer when
@@ -90,8 +98,9 @@ It also asks how traffic should reach the box:
   about at install time, and `orchardctl claim --url <name>` mints a claim link
   on one
 
-And whether updates are **manual** (`orchard-update` when you want them) or
-**automatic** (a nightly systemd timer).
+Updates are manual by default: run `sudo orchardctl update` when you want a new
+version. To update nightly with a systemd timer, run the installer with
+`--updates automatic`.
 
 ## Claiming the instance
 
@@ -117,7 +126,7 @@ no confirmation, and makes that account the superadmin. Then a short setup runs:
 2. **An organization name.** One already exists, named after your email domain.
 3. **Connect GitHub**, which creates the app that deploying from a repository
    needs. Skippable.
-4. **Certificates**, which reports how TLS is doing for your app domain.
+4. **Certificates**, only if a wildcard certificate failed to issue.
 5. **Anonymous usage reports**, off unless you opt in.
 
 With no SMTP and no TLS there is neither an emailed code nor a passkey to sign
@@ -217,18 +226,9 @@ DNS-01 issuer; see [Wildcard certificates](https://docs.orchard.my/operate/wildc
 **Public TCP/UDP in tunnel mode.** Cloudflare Tunnels carry HTTP only, so
 publicly exposed databases and raw ports are unavailable there.
 
-**A default public IP.** Raw ports and public databases are published on an
-external address, and the installer does not assume this box's is the right one.
-Set it once and every organization inherits it, rather than each being asked for
-an address they have no way to know:
-
-```bash
-sudo orchardctl public-ip set 203.0.113.10 --apply
-```
-
 ## Running it non-interactively
 
-Nothing prompts when every answer is supplied. Each flag has an environment
+Nothing prompts when `--yes` is set. Each flag has an environment
 variable equivalent, and **flags win over environment variables**. Run
 `./install.sh --help` for the same list at the terminal.
 
@@ -242,28 +242,25 @@ just pre-fills what you gave it.
 ```bash
 sudo ./install.sh --yes \
   --mode public \
-  --domain orchard.example.com \
-  --app-domain apps.example.com \
-  --email me@example.com \
-  --updates manual
+  --domain orchard.example.com
 ```
 
 ### How traffic gets in
 
-| Flag                           | Environment variable   | Meaning                                                                  |
-| ------------------------------ | ---------------------- | ------------------------------------------------------------------------ |
-| `--mode <public\|tunnel\|lan>` | `ORCHARD_INGRESS_MODE` | How the internet reaches this box. Detected if omitted.                  |
-| `--domain <host>`              | `ORCHARD_DOMAIN`       | Where the Orchard UI lives. Defaults to this box's own IP in `lan` mode. |
-| `--app-domain <host>`          | `ORCHARD_APP_DOMAIN`   | Wildcard parent for deployed apps. Defaults to `apps.<your domain>`.     |
-| `--mcp-domain <host>`          | `ORCHARD_MCP_DOMAIN`   | Where agents connect over MCP. Defaults to `mcp.<your domain>`.          |
-| `--email <address>`            | `ORCHARD_ACME_EMAIL`   | Let's Encrypt contact. Required in `public` mode.                        |
-| `--tunnel-token <token>`       | `ORCHARD_TUNNEL_TOKEN` | Cloudflare Tunnel token. Required in `tunnel` mode.                      |
+| Flag                           | Environment variable   | Meaning                                                                                                              |
+| ------------------------------ | ---------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `--mode <public\|tunnel\|lan>` | `ORCHARD_INGRESS_MODE` | How the internet reaches this box. Detected if omitted.                                                              |
+| `--domain <host>`              | `ORCHARD_DOMAIN`       | Where the Orchard UI lives. Defaults to this box's own IP in `lan` mode, and to an `sslip.io` name in `public` mode. |
+| `--app-domain <host>`          | `ORCHARD_APP_DOMAIN`   | Wildcard parent for deployed apps. Defaults to `apps.<parent of your domain>`.                                       |
+| `--mcp-domain <host>`          | `ORCHARD_MCP_DOMAIN`   | Where agents connect over MCP. Defaults to `mcp.<app domain>`.                                                       |
+| `--email <address>`            | `ORCHARD_ACME_EMAIL`   | Let's Encrypt contact. Optional.                                                                                     |
+| `--tunnel-token <token>`       | `ORCHARD_TUNNEL_TOKEN` | Cloudflare Tunnel token. Required in `tunnel` mode.                                                                  |
 
 ### Behaviour
 
 | Flag                             | Environment variable     | Default                                                                     |
 | -------------------------------- | ------------------------ | --------------------------------------------------------------------------- |
-| `--updates <manual\|automatic>`  | `ORCHARD_UPDATE_POLICY`  | asks; `manual` under `--yes`                                                |
+| `--updates <manual\|automatic>`  | `ORCHARD_UPDATE_POLICY`  | `manual`                                                                    |
 | `--mcp <true\|false>`            | `ORCHARD_MCP`            | `true`. Off, no MCP is deployed and the admin panel's toggle is pinned off. |
 | `--metrics <true\|false>`        | `ORCHARD_METRICS`        | `true`. The metrics graphs and usage pages.                                 |
 | `--logs <true\|false>`           | `ORCHARD_LOGS`           | `true`. Log search and per-route request stats.                             |

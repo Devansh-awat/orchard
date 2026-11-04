@@ -189,9 +189,9 @@ sudo orchardctl mcp enable mcp.example.com --apply
 sudo orchardctl mcp disable --apply
 ```
 
-Turns the MCP endpoint on or off and sets its hostname. A new install already has one at `mcp.<your domain>`.
+Turns the MCP endpoint on or off and sets its hostname. A new install already has one at `mcp.<app domain>`.
 
-`enable` with no hostname uses the one in values. Otherwise, it uses a sibling of the dashboard host, so `orchard.example.com` becomes `mcp.example.com`. Create an A record first.
+`enable` with no hostname uses the one in values. Otherwise, it uses `mcp.<app domain>`, which the wildcard record for your apps covers. For any other hostname, create an A record first.
 
 `enable` also copies `JWT_SECRET` from the server and creates `MCP_SERVICE_TOKEN` if there is none. Without both, every tool call fails at authentication. It also sets the `issuerRef` so that cert-manager issues a certificate. Without a certificate, Traefik serves its self-signed default and MCP clients refuse to connect.
 
@@ -216,7 +216,7 @@ sudo orchardctl public-ip set 203.0.113.10 --apply
 sudo orchardctl public-ip unset --apply
 ```
 
-Sets the default address for raw TCP and UDP ports and public databases. An organization that sets its own address overrides it. Setting it here locks the field at **Instance admin** > **Configuration** > **Public exposure**.
+Pins the default address for raw TCP and UDP ports and public databases. An organization that sets its own address overrides it. Setting it here locks the field at **Instance admin** > **Configuration** > **Public exposure**. To keep the field editable, set the address there instead.
 
 ## hostname
 
