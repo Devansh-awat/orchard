@@ -1547,6 +1547,7 @@ if [ "$LFS_READY" = "1" ] && [ -n "$(git -C /workspace lfs ls-files 2>/dev/null)
     echo "git-lfs: could not fetch LFS content, those files stay as pointers"
   fi
 fi
+git -C /workspace remote set-url origin "$(printf '%s' "$CLONE_URL" | sed -E 's#://[^@/]+@#://#')"
 echo "Checked out commit: $(git -C /workspace rev-parse HEAD 2>/dev/null || echo unknown)"
 ls -la /workspace
 `
