@@ -262,3 +262,45 @@ func TestPodShellRefusesNonTTY(t *testing.T) {
 		t.Fatalf("want a non-TTY refusal, got %v", err)
 	}
 }
+
+func TestPodListResolvesProjectSlugFromList(t *testing.T) {
+	var podsNS string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/apiv1/projects":
+			io.WriteString(w, `[{"id":"p1","slug":"myproj","namespace":"ns-from-list"},{"id":"p2","slug":"other","namespace":"ns-other"}]`)
+		case "/apiv1/pods":
+			podsNS = r.URL.Query().Get("namespace")
+			io.WriteString(w, `{"namespace":"ns-from-list","podCount":0,"pods":[]}`)
+		default:
+			w.WriteHeader(404)
+		}
+	}))
+	defer srv.Close()
+
+	root := podTestRoot(t, srv.URL)
+	root.SetArgs([]string{"pod", "list", "--project", "myproj"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("pod list: %v", err)
+	}
+	if podsNS != "ns-from-list" {
+		t.Errorf("namespace = %q, want ns-from-list", podsNS)
+	}
+}
+
+func TestProjectSlugInTwoOrgsAsksForID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/apiv1/projects" {
+			io.WriteString(w, `[{"id":"p1","slug":"myproj"},{"id":"p2","slug":"myproj"}]`)
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+
+	root := podTestRoot(t, srv.URL)
+	root.SetArgs([]string{"pod", "list", "--project", "myproj"})
+	if err := root.Execute(); err == nil || !strings.Contains(err.Error(), "use the project id") {
+		t.Fatalf("err = %v, want a request for the project id", err)
+	}
+}

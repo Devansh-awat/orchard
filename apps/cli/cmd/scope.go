@@ -144,10 +144,28 @@ func resolveProject(ctx context.Context, cl *api.Client, v string) (map[string]a
 	if err := cl.GetJSON(ctx, "/projects/slug/"+url.PathEscape(v), &m); err == nil && str(m["id"]) != "" {
 		return m, nil
 	}
-	if err := cl.GetJSON(ctx, "/projects/"+url.PathEscape(v), &m); err != nil {
-		return nil, fmt.Errorf("project %q not found by slug or id: %w", v, err)
+	idErr := cl.GetJSON(ctx, "/projects/"+url.PathEscape(v), &m)
+	if idErr == nil {
+		return m, nil
 	}
-	return m, nil
+	var raw any
+	if err := cl.GetJSON(ctx, "/projects", &raw); err != nil {
+		return nil, fmt.Errorf("project %q not found by slug or id: %w", v, idErr)
+	}
+	var matches []map[string]any
+	for _, p := range asList(raw) {
+		if str(p["slug"]) == v || strings.EqualFold(str(p["name"]), v) {
+			matches = append(matches, p)
+		}
+	}
+	switch len(matches) {
+	case 0:
+		return nil, fmt.Errorf("project %q not found by slug or id: %w", v, idErr)
+	case 1:
+		return matches[0], nil
+	default:
+		return nil, fmt.Errorf("%d projects are named %q, use the project id", len(matches), v)
+	}
 }
 
 // resolveEnv matches an environment by id or name within a project.
