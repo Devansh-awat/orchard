@@ -66,7 +66,7 @@ orchard project registry list
 
 Orchard attaches the credential to every app and job in the project whose image is on that registry. Those pods restart to pick it up. `ghcr.io/org/app` uses the `ghcr.io` credential. `user/app` and `docker.io/user/app` use the Docker Hub credential.
 
-You can also add credentials for a whole organization under **Organization settings** > **Registry credentials**. Every project uses them unless it sets its own.
+You can also add [credentials for a whole organization](/teams/organizations/#add-registry-credentials) under **Organization settings** > **Registry credentials**. Every project uses them unless it sets its own.
 
 | Registry              | Username                                                       | Token                                                             |
 | --------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------- |
@@ -104,7 +104,7 @@ To update the image from CI, you can also use a [webhook token](/run/webhooks/).
 </TabItem>
 </Tabs>
 
-Orchard rolls the app onto the new image. Health checks and rollback history apply as they do for any deploy.
+Orchard rolls the app onto the new image. [Health checks](/deploy/scaling/#set-health-checks) and [rollback history](/deploy/rollbacks/) apply as they do for any deploy.
 
 ## Set the pull policy
 
@@ -129,3 +129,4 @@ Where you control the build, tag images by commit or version. Rollbacks then poi
 - [Configure app networking](/deploy/networking/)
 - [Update an app with a webhook](/run/webhooks/)
 - [Roll back an app](/deploy/rollbacks/)
+- [Review app security](/deploy/security-tab/)

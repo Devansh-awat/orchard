@@ -5,7 +5,7 @@ sidebar:
   order: 4
 ---
 
-To upgrade Orchard, use the command that matches how you installed it. Take a backup of the control-plane database before a major upgrade. This database holds every organization, project, and app definition on the instance.
+To upgrade Orchard, use the command that matches how you installed it. Take a [backup of the control-plane database](/operate/production/#5-back-up-the-control-plane-database) before a major upgrade. This database holds every organization, project, and app definition on the instance.
 
 ## Upgrade an installer host
 
@@ -59,3 +59,5 @@ You can roll back the release with `helm rollback`. If the new version migrated 
 
 - [Host commands](/operate/host-commands/)
 - [Go to production](/operate/production/)
+- [Install](/start/install/)
+- [Upgrade and roll back grafts](/grafts/upgrades/)

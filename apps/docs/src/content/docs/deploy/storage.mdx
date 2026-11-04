@@ -44,7 +44,7 @@ From a [shell](/run/logs/#open-a-shell) in the container, list the mount path. A
 ## Limitations
 
 - Most storage classes allow one writer at a time. If you scale past one replica on one of these classes, the extra pods do not start.
-- With a volume, updates stop the app first.
+- With a volume, [updates stop the app first](/deploy/update-strategies/).
 - Volumes can grow, but they cannot shrink. Growth needs a storage class that allows expansion.
 - Orchard does not back up app volumes. To keep data safe, write it to object storage or a [managed database](/data/databases/). Managed databases have their own storage and do not need a volume.
 
@@ -56,3 +56,4 @@ Orchard records a volume as soon as you add it. A volume you add during a build 
 
 - [Scale an app and set resources](/deploy/scaling/)
 - [Create and manage a database](/data/databases/)
+- [Choose an update strategy](/deploy/update-strategies/)

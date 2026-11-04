@@ -47,17 +47,17 @@ Orchard names each app `<stack>-<service>`. Services reach each other by their c
 
 ## How Orchard reads the file
 
-| Compose key                   | Orchard result                                                                                                                              |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `image`                       | An app that runs the image.                                                                                                                 |
-| `build`                       | An app that Orchard builds from the repository, with `context` and `dockerfile`.                                                            |
-| `ports`                       | The app's ports. The first one that isn't a known database port gets a URL, which only your organization can open until you make it public. |
-| `expose`                      | More ports on the app, for other services. No URL.                                                                                          |
-| `environment`                 | The app's variables.                                                                                                                        |
-| `volumes` with a named volume | A persistent volume, 1 GiB unless `driver_opts.size` sets another size. Orchard reads only the short string form.                           |
-| `deploy.replicas`             | The replica count.                                                                                                                          |
-| `deploy.resources`            | The CPU and memory sizes.                                                                                                                   |
-| `command`                     | The start command.                                                                                                                          |
+| Compose key                   | Orchard result                                                                                                                                                     |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `image`                       | An app that runs the image.                                                                                                                                        |
+| `build`                       | An app that Orchard builds from the repository, with `context` and `dockerfile`.                                                                                   |
+| `ports`                       | The app's ports. The first one that isn't a known database port gets a URL, which only your organization can open until you [make it public](/deploy/protection/). |
+| `expose`                      | More ports on the app, for other services. No URL.                                                                                                                 |
+| `environment`                 | The app's [variables](/run/environments/).                                                                                                                         |
+| `volumes` with a named volume | A persistent volume, 1 GiB unless `driver_opts.size` sets another size. Orchard reads only the short string form.                                                  |
+| `deploy.replicas`             | The [replica count](/deploy/scaling/#change-replicas).                                                                                                             |
+| `deploy.resources`            | The CPU and memory sizes.                                                                                                                                          |
+| `command`                     | The start command.                                                                                                                                                 |
 
 Each service must have `image` or `build`.
 
@@ -123,9 +123,11 @@ No GitHub access for this repo. Connect your GitHub account or install the GitHu
 
 **Cause:** Orchard has no token that can read the repository. A compose stack needs one, even for a public repository.
 
-**Fix:** Connect your GitHub account, and install the GitHub App on the repository's account.
+**Fix:** Connect your GitHub account, and install the [GitHub App](/deploy/github/#prerequisites) on the repository's account.
 
 ## Related resources
 
 - [Deploy from GitHub](/deploy/github/)
 - [Configure app networking](/deploy/networking/)
+- [Deploy and write templates](/run/templates/)
+- [`orchard compose` reference](/reference/cli/#compose)

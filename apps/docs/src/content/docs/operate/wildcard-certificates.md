@@ -156,7 +156,7 @@ tenant:
 
 ### Public databases
 
-To use a wildcard for public database connections, name the domain and point the server at the same Secret. The domain must match `PUBLIC_DB_DOMAIN` on the server.
+To use a wildcard for [public database connections](/data/databases/#public-access), name the domain and point the server at the same Secret. The domain must match `PUBLIC_DB_DOMAIN` on the server.
 
 ```yaml
 certificates:
@@ -220,3 +220,4 @@ Check that `copyToTenants` is on, or that your replicator covers that namespace.
 
 - [Use a wildcard certificate](/operate/finishing-setup/#use-a-wildcard-certificate)
 - [Manage domains and HTTPS](/deploy/domains/)
+- [Go to production](/operate/production/)

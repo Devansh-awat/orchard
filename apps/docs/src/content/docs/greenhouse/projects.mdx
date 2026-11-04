@@ -7,12 +7,12 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-To give a machine the configuration that your deployed app uses, attach a project. Orchard writes one of its environments into the machine as an env file that shells load.
+To give a machine the configuration that your deployed app uses, attach a project. Orchard writes one of its [environments](/run/environments/) into the machine as an env file that shells load.
 
 ## Prerequisites
 
 - Host access to the machine.
-- Edit access to the project.
+- [Edit access to the project](/teams/organizations/#project-roles).
 - A project that belongs to the machine's organization.
 
 ## Attach a project
@@ -38,7 +38,7 @@ If you omit `--env`, Greenhouse uses the project's default environment. To list 
 </TabItem>
 </Tabs>
 
-A machine can have one environment per project. Attaching another environment of the same project replaces the first. The audit log records each attach and detach.
+A machine can have one environment per project. Attaching another environment of the same project replaces the first. The [audit log](/teams/audit-logs/) records each attach and detach.
 
 ## Use the variables
 
@@ -64,7 +64,7 @@ When you change a variable on the environment, Orchard updates the file. Open sh
 The file contains:
 
 - **Shared variables:** The environment's shared variables, as `KEY='value'` lines.
-- **`DATABASE_URL`:** The connection string of the environment's first managed database, if public access is on for that database. The connection uses TLS and the public address. If public access is off, the file has a comment instead.
+- **`DATABASE_URL`:** The connection string of the environment's first managed database, if [public access](/data/databases/#public-access) is on for that database. The connection uses TLS and the public address. If public access is off, the file has a comment instead.
 
 The file leaves out these values and adds a comment for each:
 
@@ -104,3 +104,4 @@ Orchard removes the env file on the next sync.
 
 - [Configure setup and run scripts](/greenhouse/scripts/)
 - [Share a machine](/greenhouse/sharing/)
+- [Manage variables and environments](/run/environments/)

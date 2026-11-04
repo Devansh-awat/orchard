@@ -18,7 +18,7 @@ To control who can access your Orchard resources, add people to an organization 
 
 ## Project roles
 
-Owners and admins can open every project. Members and guests need a project role for each project.
+Owners and admins can open every project. Members and guests need a [project role](/teams/projects/#add-a-member) for each project.
 
 | Role       | Permissions                                                         |
 | ---------- | ------------------------------------------------------------------- |
@@ -50,7 +50,7 @@ If the instance has no email configured, Orchard shows a link instead of sending
 
 The link opens a page where the person sets a password or creates a passkey and joins the organization. Their account uses the invited email address. Nothing checks that they own that address, so send the link only to the person you mean to invite. If the address already has an account, they sign in and accept. If single sign-on is enforced, they sign in with that instead.
 
-If they forget the password, someone with root on the server can set a new one with `orchardctl password set --email <address>`. After you add email to the instance, passwords stop working for everyone except the superadmin, and people sign in with an email code. If the address isn't a real mailbox, add a passkey first.
+If they forget the password, someone with root on the server can set a new one with [`orchardctl password set --email <address>`](/operate/host-commands/#password). After you add email to the instance, passwords stop working for everyone except the superadmin, and people sign in with an email code. If the address isn't a real mailbox, add a [passkey](/account/security/#add-a-passkey) first.
 
 With email configured, Orchard never shows a link. The person signs in with a code sent to the invited address and accepts the invitation there.
 
@@ -65,7 +65,7 @@ Use the role filter above the table to list **Owners**, **Admins**, **Members**,
 
 ## Add registry credentials
 
-Use organization registry credentials to let every project in the organization pull private images and build from them. Owners and admins can manage these credentials. The instance must have `SECRETS_ENCRYPTION_KEY` set.
+Use organization registry credentials to let every project in the organization pull private images and build from them. Owners and admins can manage these credentials. The instance must have [`SECRETS_ENCRYPTION_KEY`](/operate/production/#1-check-your-secrets) set.
 
 1. Go to **Organization settings** > **Registry credentials**.
 2. Select **Add**.
@@ -87,7 +87,7 @@ Removing a project credential restores the organization credential. Removing an 
 
 ## Superadmins
 
-A superadmin operates the instance. This role is separate from organization roles. A superadmin can administer every organization and manage instance settings, nodes, and node pools at **Instance admin**.
+A superadmin operates the instance. This role is separate from organization roles. A superadmin can administer every organization and manage [instance settings](/operate/instance-admin/), nodes, and [node pools](/operate/nodes/) at **Instance admin**.
 
 A new instance has no superadmin. The first superadmin claims the instance with a single-use setup token. For more information, refer to [Install](/start/install/#claim-the-instance).
 
@@ -96,3 +96,5 @@ A new instance has no superadmin. The first superadmin claims the instance with 
 - [Set up SSO](/teams/sso/)
 - [Set up SCIM provisioning](/teams/scim/)
 - [Set quotas](/teams/quotas/)
+- [Manage a project](/teams/projects/)
+- [Read audit logs](/teams/audit-logs/)

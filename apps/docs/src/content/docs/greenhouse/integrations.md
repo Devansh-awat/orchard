@@ -45,7 +45,7 @@ Issues on public repositories can be written by anyone. If the issue's author is
 
 ## Start a session from a GitHub issue
 
-Comment on an issue in a repository where your instance's GitHub App is installed:
+Comment on an issue in a repository where your instance's [GitHub App](/operate/finishing-setup/#connect-a-github-app) is installed:
 
 ```text
 /greenhouse fix this and add a regression test
@@ -112,3 +112,4 @@ You can start up to five sessions per minute from these integrations. Greenhouse
 
 - [Automate Greenhouse](/greenhouse/automation/)
 - [Share a machine](/greenhouse/sharing/)
+- [Machines](/greenhouse/machines/)

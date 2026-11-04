@@ -11,17 +11,17 @@ Use this page to fix common failures with grafts. Each entry lists the symptom, 
 
 ## Failure phases
 
-| Phase          | Meaning                                                                                              | Fix                                                                            |
-| -------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `sync`         | The download failed, the digest did not match, or the signature did not pass your trust policy.      | Check `digest` in your values and your [trust policy](/grafts/install/#trust). |
-| `manifest`     | `graft.json` is invalid.                                                                             | Ask the publisher for a fixed version.                                         |
-| `integrity`    | A file does not match the signed file list, or the signature does not pass your trust policy.        | Reinstall. Do not edit files in an installed graft.                            |
-| `compat`       | The graft needs a different Orchard version, graft SDK, or door.                                     | Upgrade Orchard, or install a matching version of the graft.                   |
-| `dependencies` | A graft it needs is missing, failed, or the wrong version.                                           | Install or fix the other graft first.                                          |
-| `migrations`   | Its database changes failed and were rolled back.                                                    | Read the error. It is usually a bug in the graft.                              |
-| `load`         | Its server code threw an error while loading.                                                        | Contact the publisher.                                                         |
-| `routes`       | Its routes do not match what it was packed with, or it opens a route to anyone without declaring it. | Contact the publisher, or reinstall if a file changed.                         |
-| `boot`         | Orchard could not start with the graft, and started without it.                                      | Read the reason. A common cause is a capability missing from `graft.json`.     |
+| Phase          | Meaning                                                                                              | Fix                                                                                |
+| -------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `sync`         | The download failed, the digest did not match, or the signature did not pass your trust policy.      | Check `digest` in your values and your [trust policy](/grafts/install/#trust).     |
+| `manifest`     | `graft.json` is invalid.                                                                             | Ask the publisher for a fixed version.                                             |
+| `integrity`    | A file does not match the signed file list, or the signature does not pass your trust policy.        | Reinstall. Do not edit files in an installed graft.                                |
+| `compat`       | The graft needs a different Orchard version, graft SDK, or door.                                     | [Upgrade Orchard](/operate/upgrades/), or install a matching version of the graft. |
+| `dependencies` | A graft it needs is missing, failed, or the wrong version.                                           | Install or fix the other graft first.                                              |
+| `migrations`   | Its database changes failed and were rolled back.                                                    | Read the error. It is usually a bug in the graft.                                  |
+| `load`         | Its server code threw an error while loading.                                                        | Contact the publisher.                                                             |
+| `routes`       | Its routes do not match what it was packed with, or it opens a route to anyone without declaring it. | Contact the publisher, or reinstall if a file changed.                             |
+| `boot`         | Orchard could not start with the graft, and started without it.                                      | Read the reason. A common cause is a capability missing from `graft.json`.         |
 
 ## digest mismatch
 
@@ -41,7 +41,7 @@ MANIFEST.sig does not verify against any trusted key
 
 **Cause:** The graft is signed with a key that your instance does not trust.
 
-**Fix:** Add the publisher's key to `graftSettings.keys`, or install the graft from its listing or tap.
+**Fix:** Add the publisher's key to `graftSettings.keys`, or install the graft from its listing or [tap](/grafts/install/#add-a-tap).
 
 ## graft is unsigned
 
@@ -85,7 +85,7 @@ migration 0001_init was changed after it was applied (checksum mismatch); ship a
 
 ## A claim shows as taken
 
-**Cause:** In **Instance admin** > **Grafts**, `taken by` next to a claim means another graft uses the name.
+**Cause:** In **Instance admin** > **Grafts**, `taken by` next to a [claim](/grafts/build/manifest/#claims) means another graft uses the name.
 
 **Fix:** No action is needed for the graft to work. It still serves its paths under `/<graft-id>/`.
 
@@ -104,3 +104,10 @@ Remove the failing graft, then set `graftSettings.safeMode` back to `false`.
 ## Still stuck?
 
 Collect the phase and reason from **Instance admin** > **Grafts**, and the output of `sudo orchardctl graft list`. Then contact the graft's publisher. Its details are on its [Extension Marketplace](https://orchard.my/extensions) page.
+
+## Related resources
+
+- [Install grafts](/grafts/install/)
+- [Upgrade and roll back grafts](/grafts/upgrades/)
+- [Grafts](/grafts/overview/)
+- [Troubleshooting Orchard](/operate/troubleshooting/)

@@ -11,14 +11,14 @@ Create a Greenhouse machine and start a coding agent on one of your repositories
 
 ## Prerequisites
 
-- An Orchard instance with the `greenhouse` graft installed. If **Greenhouse** is not in the dashboard sidebar, refer to [Troubleshooting Greenhouse](/greenhouse/troubleshooting/#greenhouse-is-not-in-the-sidebar).
-- Membership in an organization. Organization guests cannot create machines.
+- An Orchard instance with the [`greenhouse` graft installed](/operate/greenhouse/#install-the-graft). If **Greenhouse** is not in the dashboard sidebar, refer to [Troubleshooting Greenhouse](/greenhouse/troubleshooting/#greenhouse-is-not-in-the-sidebar).
+- Membership in an [organization](/teams/organizations/). Organization guests cannot create machines.
 - A GitHub account linked to Orchard, to clone private repositories and open pull requests. Link it in **Account settings** > **GitHub and Tailscale**.
 - The [Orchard CLI](/cli/), if you use the CLI steps.
 
 ## 1. Add an SSH key
 
-Orchard requires an SSH key to create a machine. Editors and `ssh` use the key to connect.
+Orchard requires [an SSH key](/account/ssh-identities/) to create a machine. Editors and `ssh` use the key to connect.
 
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
@@ -106,7 +106,7 @@ orchard sandbox create my-machine --repo https://github.com/acme/app --wait
 
 The first boot on an image without the required tools takes a few minutes. Orchard installs the tools during that boot.
 
-If Orchard reports `Sandbox limit reached`, ask a superadmin to raise your limit. The default limit is one machine.
+If Orchard reports `Sandbox limit reached`, ask a superadmin to [raise your limit](/operate/greenhouse/#control-who-can-use-greenhouse). The default limit is one machine.
 
 ## 4. Start a session
 
@@ -140,3 +140,10 @@ To run another agent at the same time, start another session. Each session has i
 - [Review the agent's work and leave comments on its diff](/greenhouse/workspace/)
 - [Install dependencies in each new worktree](/greenhouse/scripts/)
 - [Open a pull request from the session](/greenhouse/pull-requests/)
+
+## Related resources
+
+- [Greenhouse](/greenhouse/)
+- [Machines](/greenhouse/machines/)
+- [Connect an editor over SSH](/greenhouse/editors/)
+- [Share a machine](/greenhouse/sharing/)

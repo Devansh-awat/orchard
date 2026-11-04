@@ -7,7 +7,7 @@ sidebar:
 
 Scaffold a graft, run it against your local Orchard, and pack it into a signed file.
 
-A graft is a folder with a `graft.json`. It can also have a NestJS module for the API, a Svelte island for the UI, SQL migrations, and MCP tools. The `graft` command in `@orchardlabs/graft-sdk` builds, packs, and signs it.
+A graft is a folder with a [`graft.json`](/grafts/build/manifest/). It can also have a NestJS module for the API, a Svelte island for the UI, SQL migrations, and MCP tools. The `graft` command in `@orchardlabs/graft-sdk` builds, packs, and signs it.
 
 ## Prerequisites
 
@@ -93,3 +93,10 @@ Keep the private key secret. To let people trust your grafts, share the public k
 - [Share your graft or list it in the Extension Marketplace](/grafts/build/publishing/)
 
 For an example, read the [announcements graft](https://github.com/hackclub/orchard/tree/main/grafts/announcements). It has a server module, UI, migrations, and settings.
+
+## Related resources
+
+- [Grafts](/grafts/overview/)
+- [Install grafts](/grafts/install/)
+- [Graft UI slots](/reference/graft-slots/)
+- [Troubleshooting grafts](/grafts/troubleshooting/)

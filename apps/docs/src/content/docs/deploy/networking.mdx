@@ -34,7 +34,7 @@ Inside the same namespace, the short form `<service>:<port>` also resolves.
 
 Use the internal address for traffic between apps. A request to a public URL leaves the cluster, depends on public DNS, and passes through the ingress.
 
-Tenant namespaces deny incoming traffic by default. Apps in the same namespace can reach each other. Each [environment](/start/concepts/#environment) has its own namespace, so apps in different environments cannot use internal addresses to reach each other.
+[Tenant namespaces deny incoming traffic by default](/operate/security/#network-isolation). Apps in the same namespace can reach each other. Each [environment](/start/concepts/#environment) has its own namespace, so apps in different environments cannot use internal addresses to reach each other.
 
 ## Add a port
 

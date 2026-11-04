@@ -60,7 +60,7 @@ GET /apiv1/deployments/:id/rollout?wait=1
 
 The response has the phase and, when the deploy is live, the URL. When the deploy fails, it has the build error or the crashing pod with a log tail.
 
-To roll back to the previous image, send `POST /apiv1/deployments/:id/rollback` with no history ID.
+To [roll back](/deploy/rollbacks/) to the previous image, send `POST /apiv1/deployments/:id/rollback` with no history ID.
 
 ## Retry requests safely
 
@@ -73,3 +73,4 @@ A retry with the same key and body replays the first response for 24 hours. The 
 - [Connect an MCP client](/mcp/)
 - [Code mode for agents](/agents-code-mode/)
 - [Use the CLI](/cli/)
+- [MCP tools](/reference/mcp-tools/)

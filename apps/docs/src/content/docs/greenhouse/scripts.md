@@ -23,7 +23,7 @@ Greenhouse reads the file from the session's worktree first, so a branch can cha
 
 ## 2. Start a session
 
-The setup script runs in the background when Greenhouse creates the worktree. Its output appears in the **Setup** tab of the terminal dock. If a session has not run its setup, the tab offers **Run setup**.
+The setup script runs in the background when Greenhouse creates the worktree. Its output appears in the **Setup** tab of the [terminal dock](/greenhouse/workspace/#terminal-dock). If a session has not run its setup, the tab offers **Run setup**.
 
 ## 3. Start the run script
 
@@ -132,3 +132,4 @@ A Python API:
 
 - [Machines](/greenhouse/machines/#setup-script)
 - [Preview a session](/greenhouse/previews/)
+- [Workspace](/greenhouse/workspace/)

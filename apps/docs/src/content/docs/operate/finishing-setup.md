@@ -13,7 +13,7 @@ An environment variable always takes precedence over a value stored in the datab
 
 ## Connect a GitHub App
 
-A GitHub App lets Orchard deploy private repositories and rebuild when you push.
+A GitHub App lets Orchard [deploy private repositories](/deploy/github/) and rebuild when you push.
 
 1. Go to **Instance admin** > **Overview**.
 2. Select **Connect a GitHub App**.
@@ -72,9 +72,9 @@ Set all of the values together. The checklist counts this item as done when the 
 
 Without email:
 
-- Invitations are links that you copy and send yourself.
+- Invitations are [links that you copy and send yourself](/teams/organizations/#invite-someone-when-the-instance-has-no-email).
 - Orchard hides email codes on the sign-in pages.
-- People sign in with a passkey, an identity provider, or a password.
+- People sign in with a [passkey](/account/security/#add-a-passkey), an identity provider, or a password.
 
 Passkeys need HTTPS. A LAN install usually has plain HTTP. On that install, use one of the following commands on the host:
 
@@ -109,7 +109,7 @@ For per-organization providers, refer to [Set up SSO](/teams/sso/).
 
 ## Set the custom domains target
 
-The ingress CNAME is the hostname that people point their own domains at. The installer asks for it and saves it, so you can change it at **Instance admin** > **Configuration** > **Custom domains**. The default depends on the mode. In `public` mode, it uses the dashboard domain. In `tunnel` mode, it uses `<tunnel-id>.cfargotunnel.com`. In `lan` mode, it uses an `sslip.io` name for the machine's address. On other installs, set it in **Instance admin** > **Configuration** > **Custom domains**.
+The ingress CNAME is the hostname that people point [their own domains](/deploy/domains/#add-a-custom-domain) at. The installer asks for it and saves it, so you can change it at **Instance admin** > **Configuration** > **Custom domains**. The default depends on the [mode](/start/install/#choose-an-ingress-mode). In `public` mode, it uses the dashboard domain. In `tunnel` mode, it uses `<tunnel-id>.cfargotunnel.com`. In `lan` mode, it uses an `sslip.io` name for the machine's address. On other installs, set it in **Instance admin** > **Configuration** > **Custom domains**.
 
 In `tunnel` mode, each custom domain also needs a route in the tunnel. Cloudflare hides proxied records, so Orchard can confirm only that the hostname resolves.
 
@@ -130,7 +130,7 @@ Wildcards require a DNS-01 challenge. For the issuer and verification steps, ref
 
 ## Set a default public IP
 
-Raw TCP and UDP ports, and public databases, are published on an external address. Without a default, each organization must set its own, or it receives the following error:
+[Raw TCP and UDP ports](/deploy/networking/#publish-a-tcp-or-udp-port), and [public databases](/data/databases/#public-access), are published on an external address. Without a default, each organization must set its own, or it receives the following error:
 
 ```txt
 This organization does not have a public IP configured
@@ -296,3 +296,5 @@ Do not patch the policy with `kubectl`. It has the label `orchard.my/managed=tru
 - [Go to production](/operate/production/)
 - [Configuration](/operate/configuration/)
 - [Host commands](/operate/host-commands/)
+- [Instance admin](/operate/instance-admin/)
+- [Install](/start/install/)

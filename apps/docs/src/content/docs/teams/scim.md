@@ -9,7 +9,7 @@ To add and remove organization members from your identity provider, connect the 
 
 ## Prerequisites
 
-- The **Owner** role in the organization. Only owners can open the SCIM tab or manage SCIM tokens.
+- The **Owner** [role](/teams/organizations/#organization-roles) in the organization. Only owners can open the SCIM tab or manage SCIM tokens.
 
 ## Connect your identity provider
 

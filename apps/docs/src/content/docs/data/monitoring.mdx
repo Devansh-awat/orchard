@@ -43,7 +43,7 @@ The **Disk used** panel marks 80% full and 92% full. Writes pause at 92%. For mo
 
 ## Turn on query statistics
 
-Query statistics use the `pg_stat_statements` extension. Turning on the extension restarts the database once.
+Query statistics use the `pg_stat_statements` [extension](/data/extensions/). Turning on the extension restarts the database once.
 
 1. Open the database.
 2. Go to **Observe** > **Queries**.
@@ -64,7 +64,7 @@ To clear the collected statistics, select **Reset**.
 
 ## Read logs and restart history
 
-The **Overview** tab of a database includes a console. In the console, **Logs** shows Postgres logs and **Killed** shows the output of containers that were killed.
+The **Overview** tab of a database includes a [console](/run/logs/#database-logs). In the console, **Logs** shows Postgres logs and **Killed** shows the output of containers that were killed.
 
 To read this data from the CLI, run the following commands:
 

@@ -58,7 +58,7 @@ The role catches mistakes only. The graft's code runs inside Orchard, so the rol
 
 ## Connect to the database
 
-`Doors.db` gives you a `pg` pool that points at the schema:
+[`Doors.db`](/grafts/build/server/#use-doors) gives you a `pg` pool that points at the schema:
 
 ```ts
 const { rows } = await this.db.query('SELECT * FROM notes WHERE id = $1', [id]);
@@ -78,3 +78,4 @@ Operators can override the size with `orchardctl graft pool`. Orchard checks the
 
 - [graft.json](/grafts/build/manifest/)
 - [Upgrade and roll back grafts](/grafts/upgrades/)
+- [Write server code](/grafts/build/server/)

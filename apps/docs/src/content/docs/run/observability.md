@@ -17,16 +17,16 @@ When you size an app, read the range. `kubectl top` reports one instant, which c
 
 A project's **Overview** tab, and the top of each app and database page, show a list of what is wrong now, with the worst problem first. The list is hidden when nothing is wrong.
 
-| Problem                             | Applies to         |
-| ----------------------------------- | ------------------ |
-| Killed for using too much memory    | Apps and databases |
-| Crash loop                          | Apps and databases |
-| Failed build                        | Apps               |
-| Rolled-back release                 | Apps               |
-| A change the cluster refused        | Apps               |
-| Firing alert                        | Apps               |
-| Error spike in the logs             | Apps               |
-| Fewer replicas ready than requested | Apps               |
+| Problem                                                     | Applies to         |
+| ----------------------------------------------------------- | ------------------ |
+| Killed for using too much memory                            | Apps and databases |
+| [Crash loop](/run/logs/#diagnose-a-crash-loop)              | Apps and databases |
+| [Failed build](/deploy/builds/#troubleshoot-a-failed-build) | Apps               |
+| [Rolled-back release](/deploy/rollbacks/)                   | Apps               |
+| A change the cluster refused                                | Apps               |
+| [Firing alert](/run/alerts/#rule-status)                    | Apps               |
+| Error spike in the logs                                     | Apps               |
+| Fewer replicas ready than requested                         | Apps               |
 
 Each row names the resource, shows how long the problem has existed, and links to the action that helps.
 
@@ -45,3 +45,10 @@ To receive notifications when you are not viewing the dashboard, use these featu
 ## Usage
 
 Organization-wide usage, by project and by person, is on the [Usage page](/teams/usage/).
+
+## Related resources
+
+- [Monitor an app](/run/monitor-an-app/)
+- [Monitor a database](/data/monitoring/)
+- [Configure logs and request data](/operate/logs/)
+- [Read logs and open a shell](/run/logs/)

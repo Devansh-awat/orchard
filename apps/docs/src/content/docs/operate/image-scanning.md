@@ -5,18 +5,18 @@ sidebar:
   order: 7
 ---
 
-To show known vulnerabilities in an app's container image on its **Security** tab, set up a scanner. The tab also has configuration checks, such as secrets stored as plain variables, moving image tags, and domains without TLS. Those checks always run.
+To show known vulnerabilities in an app's container image on its [**Security** tab](/deploy/security-tab/), set up a scanner. The tab also has configuration checks, such as secrets stored as plain variables, moving image tags, and domains without TLS. Those checks always run.
 
 ## Choose a scanner
 
-|                                                   | Harbor                                                                            | Orchard scanner                                                                     |
-| ------------------------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| What it is                                        | Harbor's own scanner (Trivy, run by Harbor)                                       | A Trivy server that Orchard deploys, plus one short-lived scan job for each request |
-| Needs                                             | Harbor as your registry, with API credentials                                     | `trivy.enabled: true` in the chart                                                  |
-| Images built by Orchard                           | Yes                                                                               | Yes                                                                                 |
-| Images from Docker Hub, GHCR, or another registry | No                                                                                | Yes, including private images with registry credentials                             |
-| Installer hosts (zot registry)                    | No                                                                                | Yes                                                                                 |
-| When a scan runs                                  | When Harbor scans on push, or when someone selects **Scan now** or **Scan again** | When someone selects **Scan now** or **Scan again**                                 |
+|                                                   | Harbor                                                                            | Orchard scanner                                                                                            |
+| ------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| What it is                                        | Harbor's own scanner (Trivy, run by Harbor)                                       | A Trivy server that Orchard deploys, plus one short-lived scan job for each request                        |
+| Needs                                             | Harbor as your registry, with API credentials                                     | `trivy.enabled: true` in the chart                                                                         |
+| Images built by Orchard                           | Yes                                                                               | Yes                                                                                                        |
+| Images from Docker Hub, GHCR, or another registry | No                                                                                | Yes, including private images with [registry credentials](/deploy/image/#add-private-registry-credentials) |
+| Installer hosts (zot registry)                    | No                                                                                | Yes                                                                                                        |
+| When a scan runs                                  | When Harbor scans on push, or when someone selects **Scan now** or **Scan again** | When someone selects **Scan now** or **Scan again**                                                        |
 
 If your registry is Harbor and it already scans on push, use Harbor. Otherwise, use the Orchard scanner.
 
@@ -112,3 +112,5 @@ Anyone who can view an app can see its scan result. Members who can edit the app
 
 - [Configure logs and request data](/operate/logs/)
 - [Configuration](/reference/configuration/)
+- [Review app security](/deploy/security-tab/)
+- [Host commands](/operate/host-commands/)

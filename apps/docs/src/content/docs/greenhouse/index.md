@@ -8,7 +8,7 @@ sidebar:
 
 Greenhouse runs coding agents on cloud machines that your Orchard instance manages. It is a first-party [graft](/grafts/overview/) that gives you an isolated Linux machine with your repositories on it. Each agent session works on its own branch in its own git worktree, so several sessions can run on one machine at the same time. You review the changes in a browser workspace, or in a desktop editor over SSH.
 
-Greenhouse is for writing code. To serve traffic, deploy the code to Orchard as an app.
+Greenhouse is for writing code. To serve traffic, [deploy the code to Orchard as an app](/start/first-deploy/).
 
 Greenhouse is available when an operator installs the `greenhouse` graft on your instance. If the instance has PostHog configured, your account also needs the `greenhouse` feature flag. For more information, refer to [Run Greenhouse](/operate/greenhouse/).
 
@@ -25,7 +25,7 @@ Greenhouse is available when an operator installs the `greenhouse` graft on your
 | Chat    | One conversation with the agent in a session. A session can have several chats. All of them share the session's worktree.                           |
 | Runner  | The system a machine runs on: Kubernetes or Vercel. You choose the runner when you create the machine.                                              |
 
-The API, the CLI, and the Model Context Protocol (MCP) tools call a machine a **sandbox**. For example, `orchard sandbox list` lists your machines.
+The API, the [CLI](/reference/cli/#sandbox), and the [Model Context Protocol (MCP) tools](/reference/mcp-tools/#greenhouse-graft) call a machine a **sandbox**. For example, `orchard sandbox list` lists your machines.
 
 ## Coding agents
 
@@ -69,3 +69,10 @@ On the Kubernetes runner, a machine has internet egress only. It cannot reach cl
 - [Start sessions from GitHub, Linear, and Slack](/greenhouse/integrations/): Start a session from an issue or a message.
 - [Automate Greenhouse](/greenhouse/automation/): Use MCP tools, the CLI, and the API.
 - [Troubleshooting Greenhouse](/greenhouse/troubleshooting/): Fix common failures by symptom.
+
+## Related resources
+
+- [Run Greenhouse](/operate/greenhouse/)
+- [Grafts](/grafts/overview/)
+- [Manage SSH identities](/account/ssh-identities/)
+- [Connect an MCP client](/mcp/)

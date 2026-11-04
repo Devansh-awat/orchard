@@ -56,18 +56,18 @@ A repository icon is stored in the repository's git config as `orchard.icon`. Ev
 
 Select the gear icon in the sidebar, or press `CMD + ,`.
 
-| Group   | Section      | Contents                                                                                                                                                 |
-| ------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Machine | Machine      | Name, SSH key, people, setup script, attached projects, and machine deletion.                                                                            |
-| Machine | Usage        | CPU, memory, disk, and time limits.                                                                                                                      |
-| You     | Preferences  | **Send messages with**, **Follow-up behavior**, **Auto-accept permissions**, **Agent notifications**, and transcript options such as **Show reasoning**. |
-| You     | Sounds       | The sound for each agent event.                                                                                                                          |
-| You     | Appearance   | Theme, zoom, text sizes, and fonts.                                                                                                                      |
-| You     | Git          | **Branch name prefix** and **Delete branch on archive**.                                                                                                 |
-| You     | Agents       | The coding agents on this machine, their sign-in state, and Claude usage limits. Requires a running machine.                                             |
-| You     | Context      | Your `CLAUDE.md`, subagents, slash commands, skills, and MCP servers. To import them from Claude Code, run `orchard claude import`.                      |
-| You     | Integrations | Your GitHub, Linear, and Slack accounts.                                                                                                                 |
-| You     | Shortcuts    | Every keyboard shortcut and command.                                                                                                                     |
+| Group   | Section      | Contents                                                                                                                                                      |
+| ------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Machine | Machine      | Name, SSH key, people, [setup script](/greenhouse/machines/#setup-script), [attached projects](/greenhouse/projects/), and machine deletion.                  |
+| Machine | Usage        | CPU, memory, disk, and time limits.                                                                                                                           |
+| You     | Preferences  | **Send messages with**, **Follow-up behavior**, **Auto-accept permissions**, **Agent notifications**, and transcript options such as **Show reasoning**.      |
+| You     | Sounds       | The sound for each agent event.                                                                                                                               |
+| You     | Appearance   | Theme, zoom, text sizes, and fonts.                                                                                                                           |
+| You     | Git          | **Branch name prefix** and **Delete branch on archive**.                                                                                                      |
+| You     | Agents       | The coding agents on this machine, their sign-in state, and Claude usage limits. Requires a running machine.                                                  |
+| You     | Context      | Your `CLAUDE.md`, subagents, slash commands, skills, and MCP servers. To import them from Claude Code, run [`orchard claude import`](/reference/cli/#claude). |
+| You     | Integrations | Your [GitHub, Linear, and Slack accounts](/greenhouse/integrations/#link-your-accounts).                                                                      |
+| You     | Shortcuts    | Every keyboard shortcut and command.                                                                                                                          |
 
 Greenhouse saves **Preferences**, **Appearance**, and **Git** on the current device.
 
@@ -219,3 +219,10 @@ On a focused permission or question card:
 In the **Changes** tab and in diff comments, `CMD + ENTER` commits or posts.
 
 The **Send messages with** preference changes the send and new-line keys. **Settings** > **Shortcuts** shows the current keys.
+
+## Related resources
+
+- [Get started](/greenhouse/getting-started/)
+- [Machines](/greenhouse/machines/)
+- [Share a machine](/greenhouse/sharing/)
+- [Keyboard shortcuts and search](/account/command-palette/)

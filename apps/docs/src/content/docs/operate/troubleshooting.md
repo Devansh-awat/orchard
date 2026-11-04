@@ -37,13 +37,13 @@ wget: can't connect to remote host (203.0.113.10): Connection refused
 
 **Cause:** Your S3 storage runs on the same server or cluster, behind its own ingress. A build fetches its files from that address, and a hostname that resolves to a node loops back to the ingress controller, which a network policy blocks. Backups still work because they don't run in the builder.
 
-**Fix:** Re-run the installer, which allows Traefik on a current version. With Helm, add the ingress controller's pods to `builders.registryEgress`. Don't add the storage pods themselves, because a build should only reach storage the way the internet does.
+**Fix:** [Re-run the installer](/start/install/#run-the-installer-again), which allows Traefik on a current version. With Helm, add the ingress controller's pods to `builders.registryEgress`. Don't add the storage pods themselves, because a build should only reach storage the way the internet does.
 
 ### Build fails with a missing module or command
 
 **Cause:** The build targets the wrong stage. A multi-stage Dockerfile built at its first stage produces an image without the application.
 
-**Fix:** Set the build stage to the final stage.
+**Fix:** Set the [build stage](/deploy/builds/#the-image-has-no-application-in-it) to the final stage.
 
 ### Build fails in a layer with an I/O error
 
@@ -77,13 +77,13 @@ Build failed: could not schedule build pod after 300s - 0/1 nodes are available:
 
 **Cause:** The app exits soon after it starts.
 
-**Fix:** Read the crash report on the app. It includes the logs of the container that stopped.
+**Fix:** Read the [crash report](/run/logs/#read-crash-output) on the app. It includes the logs of the container that stopped.
 
 ### Exit code 137
 
 **Cause:** The container ran out of memory.
 
-**Fix:** Raise the memory limit of the app, or fix the leak.
+**Fix:** Raise the [memory limit](/deploy/scaling/#set-cpu-and-memory) of the app, or fix the leak.
 
 ### The app is live but its URL returns `502 Bad Gateway`
 
@@ -95,13 +95,13 @@ Build failed: could not schedule build pod after 300s - 0/1 nodes are available:
 
 **Cause:** The health check uses the wrong path or port, or the app starts more slowly than the check allows.
 
-**Fix:** Correct the health check, or give it a longer start time.
+**Fix:** Correct the [health check](/deploy/scaling/#set-health-checks), or give it a longer start time.
 
 ### One app cannot reach another
 
 **Cause:** The request uses the public URL.
 
-**Fix:** Use the internal cluster address shown under the port.
+**Fix:** Use the [internal cluster address](/deploy/networking/#connect-apps-inside-the-cluster) shown under the port.
 
 ## Databases
 
@@ -125,11 +125,11 @@ No backup storage. Set it up for this organization, or set a backup bucket on th
 
 **Cause:** The connection uses the wrong host or endpoint.
 
-**Fix:** Use the internal host and the `-rw` endpoint. The `-ro` endpoint only accepts reads.
+**Fix:** Use the internal host and the [`-rw` endpoint](/data/replicas/#endpoints). The `-ro` endpoint only accepts reads.
 
 ### Reads return old data
 
-**Cause:** Replicas are asynchronous.
+**Cause:** [Replicas are asynchronous](/data/replicas/#replication-lag).
 
 **Fix:** Send reads that must see the latest writes to `-rw`.
 
@@ -147,7 +147,7 @@ orchard db recovery <DATABASE_ID>
 
 **Cause:** The container is out of memory. If the restarts line up with the backup window, the base backup uses memory from the same container.
 
-**Fix:** Read the last termination reason. Raise the memory of the database. Do not set `shared_buffers` close to the memory limit. If you leave `shared_buffers` empty, Orchard sizes it.
+**Fix:** Read the last termination reason. Raise the [memory of the database](/data/databases/#set-cpu-and-memory). Do not set [`shared_buffers`](/data/parameters/#shared-buffers) close to the memory limit. If you leave `shared_buffers` empty, Orchard sizes it.
 
 ### The database page shows one replica and no pods
 
@@ -186,7 +186,7 @@ kubectl get challenges -A
 
 **Cause:** The instance has no email configured, so Orchard hides email codes.
 
-**Fix:** On the host, run `sudo orchardctl login` or `sudo orchardctl password set`. To add email, refer to [Set up email](/operate/finishing-setup/#set-up-email).
+**Fix:** On the host, run [`sudo orchardctl login`](/operate/host-commands/#login) or [`sudo orchardctl password set`](/operate/host-commands/#password). To add email, refer to [Set up email](/operate/finishing-setup/#set-up-email).
 
 ## Control plane
 
@@ -236,7 +236,7 @@ sudo orchardctl claim --url mango
 
 ### A deploy is queued and does not move
 
-**Cause:** The cluster rejects the write, and the apply queue retries it.
+**Cause:** The cluster rejects the write, and the [apply queue](/operate/architecture/#writes) retries it.
 
 **Fix:** Read the events in the tenant namespace:
 
@@ -254,3 +254,11 @@ kubectl -n <TENANT_NAMESPACE> get events --sort-by=.lastTimestamp
 ```
 
 On an installer host, also include the output of `orchardctl status`. To report a problem, open an issue in the [Orchard repository](https://github.com/hackclub/orchard/issues).
+
+## Related resources
+
+- [Finish instance setup](/operate/finishing-setup/)
+- [Builds](/deploy/builds/)
+- [Host commands](/operate/host-commands/)
+- [Troubleshooting Greenhouse](/greenhouse/troubleshooting/)
+- [Troubleshooting grafts](/grafts/troubleshooting/)

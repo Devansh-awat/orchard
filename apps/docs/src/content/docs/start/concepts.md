@@ -23,11 +23,11 @@ Organization
 
 ## Organization
 
-An organization holds members, quotas, SSO configuration, and audit logs. A person can belong to more than one organization.
+An organization holds members, [quotas](/teams/quotas/), [SSO configuration](/teams/sso/), and [audit logs](/teams/audit-logs/). A person can belong to more than one organization.
 
 ## Project
 
-A project groups the apps and databases that belong together. Project membership controls access. A person who is not an organization owner or admin sees only the projects they belong to.
+A project groups the apps and databases that belong together. [Project membership](/teams/projects/#add-a-member) controls access. A person who is not an organization owner or admin sees only the projects they belong to.
 
 ## Environment
 
@@ -37,13 +37,13 @@ Each environment has its own Kubernetes namespace. Apps in the same environment 
 
 ## App
 
-An app is one deployable unit. It has an image, a replica count, ports, variables, CPU and memory sizes, and optional volumes.
+An app is one deployable unit. It has [an image](/deploy/image/), a replica count, [ports](/deploy/networking/), [variables](/run/environments/), [CPU and memory sizes](/deploy/scaling/#set-cpu-and-memory), and optional [volumes](/deploy/storage/).
 
 In Kubernetes terms, an app is a Deployment and its Services, Ingresses, and PersistentVolumeClaims. The API and the CLI call an app a deployment.
 
 ## Database
 
-A database is a managed Postgres instance that runs as a CloudNativePG `Cluster`. CloudNativePG is the Kubernetes operator that handles failover, storage, and backups. A database has its own lifecycle, separate from any app that connects to it.
+A database is a [managed Postgres instance](/data/databases/) that runs as a CloudNativePG `Cluster`. CloudNativePG is the Kubernetes operator that handles failover, storage, and [backups](/data/backups/). A database has its own lifecycle, separate from any app that connects to it.
 
 ## Status
 
@@ -69,3 +69,10 @@ Organizations and projects each have their own roles.
 | Viewer       | Read-only access.                                |
 
 Superadmin is a separate role for the people who operate the instance. For more information, refer to [Manage organizations and roles](/teams/organizations/).
+
+## Related resources
+
+- [What is Orchard](/start/what-is-orchard/)
+- [Deploy your first app](/start/first-deploy/)
+- [Manage a project](/teams/projects/)
+- [Architecture](/operate/architecture/)

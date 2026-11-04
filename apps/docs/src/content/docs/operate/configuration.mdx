@@ -41,20 +41,20 @@ Set cluster-specific values, such as storage class, ingress class, and registry,
 
 To change settings without a restart, go to **Instance admin** > **Configuration**. This page has the following sections:
 
-- **Object storage**
-- **Email**
-- **Custom domains**
-- **Wildcard certificate**
-- **Public exposure**
-- **Resource limits**
-- **GitLab sign-in** and **Bitbucket sign-in**
-- **Bot protection**
-- **Image scanning**
-- **Model Context Protocol**
+- [**Object storage**](/operate/storage/)
+- [**Email**](/operate/finishing-setup/#set-up-email)
+- [**Custom domains**](/operate/finishing-setup/#set-the-custom-domains-target)
+- [**Wildcard certificate**](/operate/wildcard-certificates/)
+- [**Public exposure**](/operate/finishing-setup/#set-a-default-public-ip)
+- [**Resource limits**](/operate/resource-limits/)
+- [**GitLab sign-in** and **Bitbucket sign-in**](/deploy/git-providers/)
+- [**Bot protection**](/operate/bot-protection/)
+- [**Image scanning**](/operate/image-scanning/)
+- [**Model Context Protocol**](/mcp/)
 - **Databases**
-- **Anonymous usage reports**
+- [**Anonymous usage reports**](/operate/telemetry/)
 
-Grafts can add sections to this page. A saved setting reaches every server replica within 30 seconds.
+[Grafts](/grafts/overview/) can add sections to this page. A saved setting reaches every server replica within 30 seconds.
 
 When an environment variable sets a field, the field is read-only and shows `Set by the environment`. Secret fields show `Unchanged` when a value is stored. Leave them blank to keep the value.
 
@@ -103,7 +103,7 @@ server:
 The change has these effects:
 
 - Everyone signs in again.
-- Passkeys stop working, because they belong to the old name. Use a password or a one-time sign-in link.
+- [Passkeys](/account/security/#add-a-passkey) stop working, because they belong to the old name. Use a password or a one-time sign-in link.
 - The GitHub App and any SSO provider keep the old URL until you update them.
 - The old name stops answering. On an installer host, to keep it, run `sudo orchardctl hostname add <old-name> --apply`.
 - The custom domains target does not change.
@@ -137,7 +137,7 @@ gateway:
 </TabItem>
 </Tabs>
 
-Only new apps use the new domain. Deployed apps keep their addresses, including after a redeploy, while DNS for the old name points at this instance. To move an app, add a domain to it.
+Only new apps use the new domain. Deployed apps keep their addresses, including after a redeploy, while DNS for the old name points at this instance. To move an app, [add a domain](/deploy/domains/#add-a-custom-domain) to it.
 
 ### MCP hostname
 
@@ -262,7 +262,7 @@ Store secrets in Kubernetes Secrets. Do not commit them to a values file in a re
 
 ## Base domain
 
-`BASE_DOMAIN` is the parent domain for organization vanity addresses and status pages, such as `acme.example.com`. It is independent of the dashboard host and the app domain. Each needs its own DNS records.
+`BASE_DOMAIN` is the parent domain for [organization vanity addresses](/teams/sso/#set-a-vanity-address) and [status pages](/run/status-pages/#add-a-host), such as `acme.example.com`. It is independent of the dashboard host and the app domain. Each needs its own DNS records.
 
 When `BASE_DOMAIN` is set, Orchard creates an Ingress and a certificate for each vanity address and status page. The following settings apply to these hosts:
 
@@ -324,3 +324,4 @@ To publish your own notes, point the setting at your own folder. `latest.json` n
 - [Turn resource limits on or off](/operate/resource-limits/)
 - [Host commands](/operate/host-commands/)
 - [Configuration](/reference/configuration/)
+- [Instance admin](/operate/instance-admin/)

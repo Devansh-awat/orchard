@@ -5,7 +5,7 @@ sidebar:
   order: 2
 ---
 
-To add a graft to your instance, install it with `orchardctl` or Helm values. The list of grafts is part of the instance's configuration: a `grafts` list in the Orchard chart values. `orchardctl graft` edits that list on hosts set up by the [installer](/start/install/). GitOps setups edit it in Git. In both cases, a change rolls Orchard out like an upgrade.
+To add a graft to your instance, install it with `orchardctl` or Helm values. The list of grafts is part of the instance's configuration: a `grafts` list in the Orchard chart values. `orchardctl graft` edits that list on hosts set up by the [installer](/start/install/). GitOps setups edit it in Git. In both cases, a change rolls Orchard out like [an upgrade](/operate/upgrades/).
 
 :::caution
 Only install grafts you trust. A graft runs with the same access as Orchard. `orchardctl` shows what a graft asks for before it installs anything.
@@ -116,7 +116,7 @@ To change the policy, run the following command:
 sudo orchardctl graft trust taps --apply
 ```
 
-A publisher can also give you a public key, a short base64 string from `graft keygen`. To trust grafts signed with it, run `sudo orchardctl config edit` and add the key to `graftSettings.keys`.
+A publisher can also give you a public key, a short base64 string from [`graft keygen`](/grafts/build/publishing/#sign-a-graft). To trust grafts signed with it, run `sudo orchardctl config edit` and add the key to `graftSettings.keys`.
 
 The Extension Marketplace can revoke a version or delist a community graft. `orchardctl` does not offer or install a revoked version. An instance that has it refuses to load it on its next start.
 
@@ -182,7 +182,7 @@ Go to **Instance admin** > **Grafts**. The page lists each graft with its status
 
 ## Database connections
 
-Each graft opens its own pool of database connections on every server and worker pod. A graft asks for a size in its `graft.json`. Greenhouse asks for 10. To change a graft's size, run the following command:
+Each graft opens its own pool of database connections on every server and worker pod. A graft asks for a size in its [`graft.json`](/grafts/build/manifest/). Greenhouse asks for 10. To change a graft's size, run the following command:
 
 ```sh
 sudo orchardctl graft pool greenhouse 15 --apply
@@ -204,3 +204,5 @@ When the database runs out of connections, new requests fail until connections f
 - [Upgrade and roll back grafts](/grafts/upgrades/)
 - [Graft API versions](/reference/graft-api/)
 - [Run Greenhouse](/operate/greenhouse/)
+- [Grafts](/grafts/overview/)
+- [Troubleshooting grafts](/grafts/troubleshooting/)

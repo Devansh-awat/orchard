@@ -33,3 +33,4 @@ Audit logs do not record actions taken outside Orchard. A person who uses `kubec
 
 - [Manage organizations and roles](/teams/organizations/)
 - [Security and isolation](/operate/security/)
+- [`orchard audit` reference](/reference/cli/#audit)

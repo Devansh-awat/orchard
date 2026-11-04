@@ -13,14 +13,14 @@ By default, Orchard separates tenants at the network layer. It does not separate
 
 Network isolation is on by default. Every tenant namespace has a `default-deny-all` NetworkPolicy for ingress and egress. A tenant pod has the following allowed paths:
 
-| Direction | Allowed                                                                       |
-| --------- | ----------------------------------------------------------------------------- |
-| Ingress   | Pods in the same namespace, and the namespaces in `TENANT_INGRESS_NAMESPACES` |
-| Egress    | Pods in the same namespace, and the namespaces in `TENANT_INGRESS_NAMESPACES` |
-| Egress    | `kube-dns` on UDP and TCP port 53                                             |
-| Egress    | The public internet, except private and link-local ranges                     |
-| Egress    | Other tenant namespaces, which are default-deny on ingress                    |
-| Egress    | The backup proxy on TCP port 9000                                             |
+| Direction | Allowed                                                                                                                                          |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Ingress   | Pods in the same namespace, and the namespaces in [`TENANT_INGRESS_NAMESPACES`](/operate/finishing-setup/#let-the-ingress-controller-reach-apps) |
+| Egress    | Pods in the same namespace, and the namespaces in `TENANT_INGRESS_NAMESPACES`                                                                    |
+| Egress    | `kube-dns` on UDP and TCP port 53                                                                                                                |
+| Egress    | The public internet, except private and link-local ranges                                                                                        |
+| Egress    | Other tenant namespaces, which are default-deny on ingress                                                                                       |
+| Egress    | The backup proxy on TCP port 9000                                                                                                                |
 
 A pod that reaches another tenant namespace can only reach what that tenant has published.
 
@@ -122,3 +122,4 @@ Orchard has no per-tenant kernel and no hardware isolation by default. Orchard d
 - [Go to production](/operate/production/)
 - [Set up image scanning](/operate/image-scanning/)
 - [Run Greenhouse](/operate/greenhouse/)
+- [Architecture](/operate/architecture/)

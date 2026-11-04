@@ -5,7 +5,7 @@ sidebar:
   order: 2
 ---
 
-`graft.json` is the manifest that Orchard reads before it runs a graft's code. Orchard refuses unknown fields when it checks or loads a graft. `graft pack` checks only the required fields, so use `orchardctl graft add --dry-run` to validate the whole file.
+`graft.json` is the manifest that Orchard reads before it runs a graft's code. Orchard refuses unknown fields when it checks or loads a graft. [`graft pack`](/grafts/build/quickstart/#3-check-pack-and-sign) checks only the required fields, so use [`orchardctl graft add --dry-run`](/grafts/install/#install-with-orchardctl) to validate the whole file.
 
 ```json
 {
@@ -36,17 +36,17 @@ sidebar:
 | `name`, `version`, `publisher`, `description`, `homepage`, `icon` | Shown in the Extension Marketplace and in **Instance admin** > **Grafts**. `version` is a semver version. |
 | `engines.platform` | The Orchard versions the graft works with, as a semver range. |
 | `engines.sdk` | The graft SDK versions it was built against. |
-| `uses` | Filled in by `graft pack`. The doors and versions the server code injects. |
+| `uses` | Filled in by `graft pack`. The [doors](/grafts/build/server/#use-doors) and versions the server code injects. |
 | `requires.grafts` | Other grafts it needs, with version ranges. |
 | `requires.kubernetes.crds` | CRDs that must exist. `orchardctl` checks them before it installs the graft. |
 | `requires.kubernetes.verbs` | Kubernetes API verbs the graft uses, each with `group`, `resource`, `verb`, and an optional `namespace`. |
 | `capabilities` | What the graft asks for. Each door needs its capability. Refer to the [graft API reference](/reference/graft-api/). |
 | `database.coreReads` | Core tables and columns the graft can read, for joins. Shown before install. |
 | `database.adopts` | Core tables the graft takes over from an older Orchard that included the feature. Its first migration moves them into its own schema and leaves a view with the old name. Shown before install. The Extension Marketplace accepts this only from official grafts. |
-| `database.pool` | Database connections per pod, from 1 to 50. The default is 3. Operators can override it. |
+| `database.pool` | [Database connections per pod](/grafts/install/#database-connections), from 1 to 50. The default is 3. Operators can override it. |
 | `permissions` | Permissions the graft checks, with default grants by role. For example, `{ "use": { "label": "Use it", "defaultGrants": ["org:member"] } }`. |
 | `settings` | Sections for **Instance admin** > **Configuration**. Refer to [Settings](#settings). |
-| `ui.screens` | Pages the graft owns: `id`, `path` (with `:param` and a trailing `*`), `layout` (`shell` or `fullscreen`), `title`, and optional `og` metadata. |
+| `ui.screens` | [Pages](/grafts/build/ui/#add-a-screen) the graft owns: `id`, `path` (with `:param` and a trailing `*`), `layout` (`shell` or `fullscreen`), `title`, and optional `og` metadata. |
 | `public.routes` | Every route open to anyone, as `"POST /hooks/github"`. Orchard refuses a public route that is not listed. |
 | `claims` | Names outside the graft's own ID. Refer to [Claims](#claims). |
 | `entries` | Filled in by `graft pack`. |
@@ -93,3 +93,11 @@ Between two grafts, a name that one graft owns by its ID beats the other graft's
 For an `apiAliases` claim, a core route that handles the same path and method takes priority on each request.
 
 `graft doctor` notes each alias claim, because core Orchard can start using that path later.
+
+## Related resources
+
+- [Get started](/grafts/build/quickstart/)
+- [Write server code](/grafts/build/server/)
+- [Add UI](/grafts/build/ui/)
+- [Use the database](/grafts/build/database/)
+- [Publish a graft](/grafts/build/publishing/)

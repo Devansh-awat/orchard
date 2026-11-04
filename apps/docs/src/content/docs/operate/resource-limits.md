@@ -11,13 +11,13 @@ This setting applies to the whole instance. Only a superadmin can change it. Lim
 
 ## Compare the settings
 
-|                               | Limits on                                             | Limits off                          |
-| ----------------------------- | ----------------------------------------------------- | ----------------------------------- |
-| CPU and memory for an app     | Its own limits, or the organization default           | All of the server's resources       |
-| Risk                          | An app that uses more memory than its limit is killed | One app can use up the whole server |
-| Organization and project caps | Checked when you create, scale, or resize             | Not checked                         |
-| Member allowances             | Checked when you create, scale, or resize             | Not checked                         |
-| The resource picker           | Shows the size controls                               | Shows that limits are off           |
+|                                                                  | Limits on                                             | Limits off                          |
+| ---------------------------------------------------------------- | ----------------------------------------------------- | ----------------------------------- |
+| CPU and memory for an app                                        | Its own limits, or the organization default           | All of the server's resources       |
+| Risk                                                             | An app that uses more memory than its limit is killed | One app can use up the whole server |
+| [Organization and project caps](/teams/quotas/#how-limits-apply) | Checked when you create, scale, or resize             | Not checked                         |
+| Member allowances                                                | Checked when you create, scale, or resize             | Not checked                         |
+| The resource picker                                              | Shows the size controls                               | Shows that limits are off           |
 
 With limits off, Orchard still reserves a small amount for each app so that it can place the app on a node: 50 millicores of CPU and 64 MB of memory. A database reserves at least 100 millicores and 256 MB.
 
@@ -38,7 +38,7 @@ The cluster can replace a pod at any time, for example when it drains a node or 
 - If its organization or project has a CPU or memory cap, the new pod gets the default limit at that point. The pod starts and keeps that limit.
 - If there is no cap, the new pod has no limit until the next restart.
 
-A new pod gets more than the default if it already reserves more. A database gets at least 512 MB, and enough for its `shared_buffers` setting.
+A new pod gets more than the default if it already reserves more. A database gets at least 512 MB, and enough for its [`shared_buffers`](/data/parameters/#shared-buffers) setting.
 
 While apps and databases run without limits, Orchard raises the quota in the cluster so that their new pods fit, even if they need more than the cap. New apps and databases still count against the cap.
 
@@ -128,3 +128,4 @@ The installer sets `DEFAULT_APP_MEMORY_MB` on a new install, based on the memory
 - [Scale an app and set resources](/deploy/scaling/)
 - [Manage organizations](/operate/manage-organizations/)
 - [Host commands](/operate/host-commands/)
+- [Size older workloads](/operate/backfill/)

@@ -7,7 +7,7 @@ sidebar:
 
 Orchard is an open-source platform as a service (PaaS). You install it on a Kubernetes cluster you control. Orchard builds apps from a Git repository or runs them from a container image, routes HTTPS traffic to them, and manages Postgres databases for them.
 
-Orchard is licensed under AGPL-3.0. There is no hosted version, so you run the instance yourself.
+Orchard is licensed under [AGPL-3.0](/operate/licenses/). There is no hosted version, so you run the instance yourself.
 
 ## Get started
 
@@ -38,3 +38,5 @@ Orchard is licensed under AGPL-3.0. There is no hosted version, so you run the i
 
 - [Architecture](/operate/architecture/)
 - [Go to production](/operate/production/)
+- [Grafts](/grafts/overview/)
+- [Greenhouse](/greenhouse/)

@@ -14,7 +14,7 @@ Your SSH client runs `orchard sandbox proxy` as its `ProxyCommand`. That command
 - Host access to the machine. The server refuses this connection for guests, because the machine holds the host's credentials. Superadmins can also connect.
 - A running machine.
 - The [Orchard CLI](/cli/), installed and signed in.
-- If the CLI authenticates with an API token, the `exec` scope on that token. To create one, run `orchard auth token create --scope exec`.
+- If the CLI authenticates with an [API token](/account/tokens/), the `exec` scope on that token. To create one, run `orchard auth token create --scope exec`.
 
 ## 1. Configure SSH
 
@@ -89,3 +89,5 @@ When the proxy connects, the CLI fetches the machine's current host keys from Or
 
 - [Manage SSH identities](/account/ssh-identities/)
 - [Troubleshooting Greenhouse](/greenhouse/troubleshooting/#ssh-reports-that-the-host-key-changed)
+- [Workspace](/greenhouse/workspace/)
+- [Machines](/greenhouse/machines/)

@@ -9,7 +9,7 @@ sidebar:
 
 To open **Instance admin**, open your account menu in the sidebar, then select **Instance admin**.
 
-The **Overview** page shows a setup checklist and the number of users, organizations, projects, and deployments.
+The **Overview** page shows a [setup checklist](/operate/finishing-setup/) and the number of users, organizations, projects, and deployments.
 
 ## Instance
 
@@ -17,7 +17,7 @@ The **Overview** page shows a setup checklist and the number of users, organizat
 | ----------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------- |
 | **Configuration** | Set object storage, email, custom domains, wildcard certificates, and other instance settings. | [Finish instance setup](/operate/finishing-setup/) |
 | **Networking**    | Check DNS for instance hostnames and manage Cloudflare Tunnel routes.                          | [Finish instance setup](/operate/finishing-setup/) |
-| **Nodes**         | Sync nodes from the cluster, and manage taints, assignments, and node pools.                   | [Manage node pools](/operate/node-pools/)          |
+| **Nodes**         | Sync nodes from the cluster, and manage taints, assignments, and node pools.                   | [Manage nodes and pools](/operate/nodes/)          |
 | **Usage**         | Read CPU, memory, pods, and nodes for each organization.                                       | [Review usage](/teams/usage/)                      |
 | **Grafts**        | Read which grafts and taps are installed, and what each graft asked for.                       | [Install grafts](/grafts/install/)                 |
 
@@ -40,20 +40,20 @@ The **Overview** page shows a setup checklist and the number of users, organizat
 
 The **Configuration** page has these sections:
 
-| Section                     | Purpose                                                                                                         |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| **Object storage**          | Sets where Orchard writes database backups, uploads, and cached favicons.                                       |
-| **Email**                   | Sends invitations and sign-in codes.                                                                            |
-| **Custom domains**          | Sets the hostname that people point their own domains at with a CNAME record.                                   |
-| **Wildcard certificate**    | Uses one certificate for every generated app URL.                                                               |
-| **Public exposure**         | Sets the default address for raw TCP and UDP ports and public databases.                                        |
-| **GitLab sign-in**          | Lets people connect a GitLab account. Refer to [Deploy from GitLab, Gitea, and others](/deploy/git-providers/). |
-| **Bitbucket sign-in**       | Lets people connect a Bitbucket Cloud account.                                                                  |
-| **Bot protection**          | Adds a Cloudflare Turnstile challenge. Refer to [Turn on bot protection](/operate/bot-protection/).             |
-| **Model Context Protocol**  | Turns the MCP endpoint on or off. Refer to [Connect an MCP client](/mcp/).                                      |
-| **Image scanning**          | Selects the vulnerability scanner. Refer to [Set up image scanning](/operate/image-scanning/).                  |
-| **Databases**               | Sets defaults for managed databases, such as weekly restore tests and the connection pooler.                    |
-| **Anonymous usage reports** | Turns usage reports on or off. Refer to [Manage anonymous usage reports](/operate/telemetry/).                  |
+| Section                     | Purpose                                                                                                                                       |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Object storage**          | Sets where Orchard writes [database backups, uploads, and cached favicons](/operate/storage/).                                                |
+| **Email**                   | [Sends invitations and sign-in codes](/operate/finishing-setup/#set-up-email).                                                                |
+| **Custom domains**          | Sets the hostname that people point [their own domains](/deploy/domains/#add-a-custom-domain) at with a CNAME record.                         |
+| **Wildcard certificate**    | Uses [one certificate](/operate/wildcard-certificates/) for every generated app URL.                                                          |
+| **Public exposure**         | Sets the [default address](/operate/finishing-setup/#set-a-default-public-ip) for raw TCP and UDP ports and public databases.                 |
+| **GitLab sign-in**          | Lets people connect a GitLab account. Refer to [Deploy from GitLab, Gitea, and others](/deploy/git-providers/).                               |
+| **Bitbucket sign-in**       | Lets people connect a Bitbucket Cloud account.                                                                                                |
+| **Bot protection**          | Adds a Cloudflare Turnstile challenge. Refer to [Turn on bot protection](/operate/bot-protection/).                                           |
+| **Model Context Protocol**  | Turns the MCP endpoint on or off. Refer to [Connect an MCP client](/mcp/).                                                                    |
+| **Image scanning**          | Selects the vulnerability scanner. Refer to [Set up image scanning](/operate/image-scanning/).                                                |
+| **Databases**               | Sets defaults for managed databases, such as [weekly restore tests](/data/protection/) and the [connection pooler](/data/connection-pooler/). |
+| **Anonymous usage reports** | Turns usage reports on or off. Refer to [Manage anonymous usage reports](/operate/telemetry/).                                                |
 
 A field that shows `Set by the environment` has a value from a server environment variable. Change the variable to change the value.
 
@@ -62,3 +62,4 @@ A field that shows `Set by the environment` has a value from a server environmen
 - [Configuration](/operate/configuration/)
 - [Manage organizations and roles](/teams/organizations/)
 - [Host commands](/operate/host-commands/)
+- [Go to production](/operate/production/)

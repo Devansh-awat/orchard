@@ -27,7 +27,7 @@ The command does the following:
 `orchardctl` cannot take a snapshot when Orchard uses an external database. Back up the database yourself and pass `--no-snapshot`.
 :::
 
-An author can mark a migration that cannot run in a transaction, such as `CREATE INDEX CONCURRENTLY`. These migrations run on their own, and `--dry-run` cannot rehearse them. `graft doctor` warns about them.
+An author can mark a migration that cannot run in a transaction, such as `CREATE INDEX CONCURRENTLY`. These migrations run on their own, and `--dry-run` cannot rehearse them. [`graft doctor`](/grafts/build/quickstart/#3-check-pack-and-sign) warns about them.
 
 During a rollout, old and new pods run side by side for a short time.
 
@@ -92,3 +92,5 @@ Run the command when a graft is published and when your Orchard version changes,
 
 - [Install grafts](/grafts/install/)
 - [Troubleshooting grafts](/grafts/troubleshooting/)
+- [Grafts](/grafts/overview/)
+- [Upgrade Orchard](/operate/upgrades/)

@@ -39,11 +39,11 @@ grafts:
     digest: sha256:<digest>
 ```
 
-The [Extension Marketplace page](https://orchard.my/extensions/greenhouse) shows the current version and digest. The rollout works like an Orchard upgrade.
+The [Extension Marketplace page](https://orchard.my/extensions/greenhouse) shows the current version and digest. The rollout works like an [Orchard upgrade](/operate/upgrades/).
 
 ### Control who can use Greenhouse
 
-If the instance has PostHog configured with `POSTHOG_API_KEY`, each person needs the `greenhouse` feature flag. Accounts without the flag get a `404` from the API, and do not see Greenhouse in the sidebar or its MCP tools. The integrations do not start sessions for them.
+If the instance has PostHog configured with `POSTHOG_API_KEY`, each person needs the `greenhouse` feature flag. Accounts without the flag get a `404` from the API, and do not see Greenhouse in the sidebar or its MCP tools. The [integrations](/greenhouse/integrations/) do not start sessions for them.
 
 Without PostHog, there is no flag check. Everyone on the instance can use Greenhouse.
 
@@ -77,7 +77,7 @@ The runner is on by default.
 
 ### Runtime
 
-With a Kata RuntimeClass, each machine is a lightweight VM. Its home volume is a raw block device, formatted inside the VM, and it needs a privileged container inside the VM. The chart default for `sandbox.runtimeClassName` is `kata`.
+With a [Kata RuntimeClass](/operate/security/#kernel-isolation), each machine is a lightweight VM. Its home volume is a raw block device, formatted inside the VM, and it needs a privileged container inside the VM. The chart default for `sandbox.runtimeClassName` is `kata`.
 
 Without Kata, set `sandbox.runtimeClassName` to empty. Machines then run on `runc` with a filesystem volume and no privileges. A machine whose home volume is already a block device does not start on `runc`. Restore the RuntimeClass, or delete the machine.
 
@@ -116,7 +116,7 @@ The `sandbox-isolation` policy in the machine namespace allows the following:
 
 The chart renders this policy, and the server applies the same object when it becomes leader. Machine pods run without a service account token.
 
-When a repository declares extra ports in `.orchard/greenhouse.json`, the server adds a `sbx-<id>-previews` policy. It selects only that machine's pod and allows only Orchard server pods.
+When a repository declares extra ports in [`.orchard/greenhouse.json`](/greenhouse/scripts/#file-reference), the server adds a `sbx-<id>-previews` policy. It selects only that machine's pod and allows only Orchard server pods.
 
 ### Servers outside the cluster
 
@@ -192,7 +192,7 @@ A snapshot and a drive contain the host's Claude token, the agent server passwor
 
 ## Configure previews
 
-Vercel previews use Vercel's public URLs and need no configuration. Kubernetes previews need a domain of their own. Users open `https://<port>-<machine>.<previewDomain>/`.
+Vercel previews use Vercel's public URLs and need no configuration. Kubernetes [previews](/greenhouse/previews/#open-a-preview) need a domain of their own. Users open `https://<port>-<machine>.<previewDomain>/`.
 
 1. **Choose a preview domain.** It must not be, contain, or sit under Orchard's cookie domain, Orchard's hostname, or a hostname in `PLATFORM_ORIGINS`. Previews run code that users wrote, and a same-site page could set cookies for Orchard. Orchard checks this when you save the setting, and turns previews off with a log line if the environment later makes the domain unsafe.
 2. **Add wildcard DNS.** Point `*.<previewDomain>` at your ingress.
@@ -392,8 +392,8 @@ A value under `sandbox.runners` left empty, or `null` for booleans, renders no v
 
 ## How machine changes apply
 
-- **Writes are queued.** Creating, starting, stopping, deleting, and syncing credentials record the desired state and add an item to the apply queue. Workers retry with backoff from 5 seconds up to 10 minutes, for 10 attempts. After the last attempt, the machine keeps showing the error. To queue the change again, run `orchard sandbox retry <name>`.
-- **Reads come from the Orchard Engine.** On Kubernetes, the `sandboxes` shard watches Sandbox resources, pods, volumes, and secrets (metadata only), and writes them to Postgres.
+- **Writes are queued.** Creating, starting, stopping, deleting, and syncing credentials record the desired state and add an item to the [apply queue](/operate/architecture/#writes). Workers retry with backoff from 5 seconds up to 10 minutes, for 10 attempts. After the last attempt, the machine keeps showing the error. To queue the change again, run `orchard sandbox retry <name>`.
+- **Reads come from the [Orchard Engine](/operate/architecture/#reads).** On Kubernetes, the `sandboxes` shard watches Sandbox resources, pods, volumes, and secrets (metadata only), and writes them to Postgres.
 - **Vercel is polled.** It has no watch API. The leader polls Vercel and writes what it sees to the same columns.
 
 The queue drains only on a server that is a member of the cluster: in-cluster, or outside the cluster with `ORCHARD_CONTROL_NAMESPACE` and a kubeconfig. `APPLY_WORKER_DISABLED=true` makes a replica enqueue only.
@@ -474,3 +474,5 @@ Greenhouse records these actions under `sandbox.`: `create`, `start`, `stop`, `d
 - [Greenhouse](/greenhouse/)
 - [Install grafts](/grafts/install/)
 - [Troubleshooting Greenhouse](/greenhouse/troubleshooting/)
+- [Security and isolation](/operate/security/)
+- [Machines](/greenhouse/machines/)

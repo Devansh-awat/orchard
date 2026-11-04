@@ -12,7 +12,7 @@ Sessions created through an organization's SSO connection can only reach that or
 ## Prerequisites
 
 - SSO allowed for your organization. SSO is off for every organization until a superadmin allows it at **Instance admin** > **Sign in**.
-- The **Owner** role in the organization. Admins can view SSO settings but cannot change them.
+- The **Owner** [role](/teams/organizations/#organization-roles) in the organization. Admins can view SSO settings but cannot change them.
 
 ## Add a connection
 
@@ -98,3 +98,4 @@ To set a provider through environment variables, refer to [Add an identity provi
 - [Set up SCIM provisioning](/teams/scim/)
 - [Manage organizations and roles](/teams/organizations/)
 - [Configuration](/operate/configuration/#base-domain)
+- [Manage sign-in and sessions](/account/security/)

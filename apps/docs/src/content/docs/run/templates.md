@@ -22,7 +22,7 @@ From the CLI, run `orchard template list` to find the template ID, then run the 
 orchard template deploy <template-id> --param appName=ghost --param domain=blog.example.com
 ```
 
-The result is a template instance, which groups the resources it created. Each resource is a normal app or database that you can scale, configure, and roll back.
+The result is a template instance, which groups the resources it created. Each resource is a normal app or database that you can [scale](/deploy/scaling/), configure, and [roll back](/deploy/rollbacks/).
 
 To find the instance, open the project and go to **Templates**. To remove the instance and its resources, open it and select **Delete everything**.
 
@@ -146,7 +146,7 @@ Orchard creates resources from top to bottom. Each resource can reference the on
 
 #### `database`
 
-Creates a Postgres database.
+Creates a [Postgres database](/data/databases/).
 
 | Config      | Notes                                       |
 | ----------- | ------------------------------------------- |
@@ -158,7 +158,7 @@ A database exposes `host`, `port`, `dbName`, `dbUser`, `dbPassword`, and `connec
 
 #### `deployment`
 
-Creates an app from an image or from a repository.
+Creates an app from [an image](/deploy/image/) or from [a repository](/deploy/github/).
 
 | Config                                                                               | Notes                                                                                                                                                        |
 | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -179,15 +179,15 @@ A deployment exposes `serviceName`, which an ingress route points at. A deployme
 
 #### `ingress`
 
-Puts a domain in front of a deployment.
+Puts [a domain](/deploy/domains/) in front of a deployment.
 
-| Config                               | Notes                                                |
-| ------------------------------------ | ---------------------------------------------------- |
-| `host`                               | Required. The domain.                                |
-| `tlsEnabled`                         | The default is `true`.                               |
-| `routes`                             | A list of `{ path, serviceName, servicePort }`.      |
-| `path`, `serviceName`, `servicePort` | Shorthand for a single route when you omit `routes`. |
-| `basicAuth`                          | Protects the domain with a username and password.    |
+| Config                               | Notes                                                                    |
+| ------------------------------------ | ------------------------------------------------------------------------ |
+| `host`                               | Required. The domain.                                                    |
+| `tlsEnabled`                         | The default is `true`.                                                   |
+| `routes`                             | A list of `{ path, serviceName, servicePort }`.                          |
+| `path`, `serviceName`, `servicePort` | Shorthand for a single route when you omit `routes`.                     |
+| `basicAuth`                          | [Protects the domain](/deploy/protection/) with a username and password. |
 
 An ingress exposes `host`.
 
@@ -238,3 +238,5 @@ https://assets.orchard.my/registry/templates/<name>/latest/template.yaml
 
 - [Deploy a compose stack](/run/compose/)
 - [Create and manage a database](/data/databases/)
+- [`orchard template` reference](/reference/cli/#template)
+- [Configure app networking](/deploy/networking/)

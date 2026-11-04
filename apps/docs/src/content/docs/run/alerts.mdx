@@ -60,7 +60,7 @@ To list the available metric IDs, run `orchard alert metrics`.
 
 CPU and memory percentages compare usage across all replicas with the total limit of those replicas. If an app has no limit of its own, Orchard uses the organization default.
 
-**Requests**, **5xx rate**, **Average latency**, and **Max latency** need a domain on the app. Orchard skips apps without a domain.
+**Requests**, **5xx rate**, **Average latency**, and **Max latency** need [a domain](/deploy/domains/) on the app. Orchard skips apps without a domain.
 
 **5xx rate**, **Average latency**, and **Max latency** use a request rate guard. Below the minimum request rate, Orchard does not compare the metric with the threshold. The default minimum is 0.2 requests per second.
 

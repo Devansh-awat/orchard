@@ -13,7 +13,7 @@ Quotas apply only when resource limits are on. If a superadmin turns limits off,
 
 Orchard checks three limits when you create, scale, or resize an app or database:
 
-1. The organization cap, set by a superadmin.
+1. The organization cap, [set by a superadmin](/operate/manage-organizations/#set-resource-quotas).
 2. The project cap, if the project has its own. It covers the whole project, including its environments.
 3. The member allowance of the project owner.
 
@@ -57,7 +57,7 @@ Go to **Usage** in your organization. Owners and admins see all of the following
 | **Members**      | The default allowance, and each member's usage against their allowance. |
 | **Right-sizing** | How workloads compare with their allocated resources.                   |
 
-Size apps from metrics over a time range instead of a single reading, so that the size covers the peak.
+Size apps from [metrics](/run/monitor-an-app/#read-metrics) over a time range instead of a single reading, so that the size covers the peak.
 
 ## Transfer project ownership
 
@@ -93,3 +93,6 @@ When the recipient accepts, they become a project admin. The previous owner keep
 
 - [Scale an app and set resources](/deploy/scaling/)
 - [Manage nodes and pools](/operate/nodes/)
+- [Review usage](/teams/usage/)
+- [Manage a project](/teams/projects/)
+- [Manage organizations](/operate/manage-organizations/)

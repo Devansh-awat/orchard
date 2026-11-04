@@ -155,7 +155,7 @@ Set organization caps and member allowances before people start to deploy. For m
 
 Set `SMTP_*` so that sign-in codes, invitations, and notifications arrive. For more information, refer to [Set up email](/operate/finishing-setup/#set-up-email).
 
-Without email, Orchard hides email codes and a new member can only sign in through an identity provider. For an existing account, an operator can run `sudo orchardctl login --email <ADDRESS>` to print a one-time link.
+Without email, Orchard hides email codes and a new member can only sign in through an identity provider. For an existing account, an operator can run [`sudo orchardctl login --email <ADDRESS>`](/operate/host-commands/#login) to print a one-time link.
 
 ## 10. Use a wildcard certificate
 
@@ -167,7 +167,7 @@ The one-command installer uses one machine, so that machine is a single point of
 
 ## 12. Pin your version
 
-Automatic nightly updates can change a production instance when you do not expect it. Pin the chart version and upgrade when you decide to.
+[Automatic nightly updates](/operate/upgrades/#upgrade-an-installer-host) can change a production instance when you do not expect it. Pin the chart version and upgrade when you decide to.
 
 ```bash
 helm upgrade orchard oci://ghcr.io/hackclub/orchard/charts/orchard \
@@ -190,3 +190,4 @@ The first command should print `invite_only` or `closed`. If the second command 
 - [Finish instance setup](/operate/finishing-setup/)
 - [Upgrade Orchard](/operate/upgrades/)
 - [Back up and restore a database](/data/backups/)
+- [Schedule database dumps](/operate/database-dumps/)

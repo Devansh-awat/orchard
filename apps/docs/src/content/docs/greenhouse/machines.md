@@ -78,7 +78,7 @@ To run commands for each session of a repository, use [`.orchard/greenhouse.json
 
 ## Agent credentials
 
-Your Claude token, OpenAI key, and AI Gateway key are stored on your account. Every machine you host uses them. When you change one, Orchard syncs it to those machines. Guests do not need their own credentials, because they run the host's agent.
+[Your Claude token](/greenhouse/getting-started/#2-add-an-agent-credential), OpenAI key, and AI Gateway key are stored on your account. Every machine you host uses them. When you change one, Orchard syncs it to those machines. Guests do not need their own credentials, because they run the host's agent.
 
 Some sign-ins stay on one machine instead of your account. These are the ChatGPT sign-in for Codex, and the fx sign-ins.
 
@@ -118,7 +118,7 @@ The default name is `<name>-fork`.
 
 ## Limits
 
-The operator sets these limits. The following values are the defaults.
+The [operator sets these limits](/operate/greenhouse/#settings-reference). The following values are the defaults.
 
 | Limit               | Default    | Behavior                                                                                                             |
 | ------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------- |
@@ -128,4 +128,11 @@ The operator sets these limits. The following values are the defaults.
 | People per machine  | 50         | Fixed.                                                                                                               |
 | Active share links  | 50         | Fixed, per machine.                                                                                                  |
 
-The audit log records each stop caused by a limit.
+The [audit log](/teams/audit-logs/) records each stop caused by a limit.
+
+## Related resources
+
+- [Get started](/greenhouse/getting-started/)
+- [Connect an editor over SSH](/greenhouse/editors/)
+- [Preview a session](/greenhouse/previews/)
+- [Run Greenhouse](/operate/greenhouse/)

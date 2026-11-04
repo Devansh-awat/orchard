@@ -11,17 +11,17 @@ An Orchard instance is a control plane that runs in a Kubernetes cluster and man
 
 ## Components
 
-| Component                 | Purpose                                                          |
-| ------------------------- | ---------------------------------------------------------------- |
-| Frontend                  | The SvelteKit dashboard.                                         |
-| Server                    | The NestJS API and control plane.                                |
-| MCP server                | The [Model Context Protocol](/mcp/) endpoint for agents.         |
-| Builders                  | BuildKit jobs that build images for tenant apps.                 |
-| Control-plane Postgres    | Orchard's own database, run by CloudNativePG.                    |
-| Redis                     | The event bus between server replicas, and a cache.              |
-| Registry                  | Stores the images that builders push. The installer deploys zot. |
-| Backup proxy (`r2-proxy`) | Gives each database credentials for its own backups only.        |
-| Metrics and logs          | VictoriaMetrics, VictoriaLogs, and Vector.                       |
+| Component                 | Purpose                                                                     |
+| ------------------------- | --------------------------------------------------------------------------- |
+| Frontend                  | The SvelteKit dashboard.                                                    |
+| Server                    | The NestJS API and control plane.                                           |
+| MCP server                | The [Model Context Protocol](/mcp/) endpoint for agents.                    |
+| Builders                  | [BuildKit jobs](/deploy/builds/) that build images for tenant apps.         |
+| Control-plane Postgres    | Orchard's own database, run by CloudNativePG.                               |
+| Redis                     | The event bus between server replicas, and a cache.                         |
+| Registry                  | Stores the images that builders push. The installer deploys zot.            |
+| Backup proxy (`r2-proxy`) | Gives each database credentials for [its own backups](/data/backups/) only. |
+| Metrics and logs          | VictoriaMetrics, [VictoriaLogs, and Vector](/operate/logs/#components).     |
 
 Tenant apps and databases run in their own namespaces, separate from the control plane.
 
@@ -46,7 +46,7 @@ The Engine follows these rules:
 
 - If the copy and the cluster disagree, the cluster is correct.
 - A failed read does not mean that a resource is gone. Only a live `404` response removes it.
-- A change made with `kubectl` is adopted into Orchard. Security objects are the exception. Orchard restores its own version of default-deny network policies and records the change in the audit log.
+- A change made with `kubectl` is adopted into Orchard. Security objects are the exception. Orchard restores its own version of [default-deny network policies](/operate/security/#network-isolation) and records the change in the [audit log](/teams/audit-logs/).
 
 ## Writes
 
@@ -67,3 +67,5 @@ By default, each server pod serves the API and runs the queues. To run builds, n
 - [Security and isolation](/operate/security/)
 - [Configuration](/operate/configuration/)
 - [Configure logs and request data](/operate/logs/)
+- [Concepts](/start/concepts/)
+- [What is Orchard](/start/what-is-orchard/)

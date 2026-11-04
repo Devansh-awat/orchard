@@ -181,18 +181,18 @@ https://mcp.example.com/?toolsets=deployments,logs,greenhouse
 
 The `core` toolset is always included. To include the tools from a [graft](/grafts/overview/), add its ID.
 
-| Toolset         | Tools                                                                         |
-| --------------- | ----------------------------------------------------------------------------- |
-| `core`          | The current user, organizations, projects, `find`, and app summaries.         |
-| `deployments`   | Create, build, scale, restart, roll back, rollout status, and compose stacks. |
-| `logs`          | Runtime and build logs, pods, killed containers, errors, metrics, and exec.   |
-| `env`           | Environment variables and environments.                                       |
-| `databases`     | Databases, credentials, backups, extensions, and settings.                    |
-| `domains`       | Domains, services, DNS checks, and domain protection.                         |
-| `jobs`          | Scheduled and on-demand jobs and their runs.                                  |
-| `notifications` | Notification channels, rules, and deliveries.                                 |
-| `templates`     | Templates and template instances.                                             |
-| `dangerous`     | Every delete, and restoring a database backup.                                |
+| Toolset         | Tools                                                                                          |
+| --------------- | ---------------------------------------------------------------------------------------------- |
+| `core`          | The current user, organizations, projects, `find`, and app summaries.                          |
+| `deployments`   | Create, build, scale, restart, roll back, rollout status, and [compose stacks](/run/compose/). |
+| `logs`          | Runtime and build logs, pods, killed containers, errors, metrics, and exec.                    |
+| `env`           | [Environment variables](/run/environments/) and environments.                                  |
+| `databases`     | Databases, credentials, backups, extensions, and settings.                                     |
+| `domains`       | Domains, services, DNS checks, and domain protection.                                          |
+| `jobs`          | Scheduled and on-demand [jobs](/run/jobs/) and their runs.                                     |
+| `notifications` | [Notification channels](/run/notifications/), rules, and deliveries.                           |
+| `templates`     | [Templates](/run/templates/) and template instances.                                           |
+| `dangerous`     | Every delete, and restoring a database backup.                                                 |
 
 ## Tool behavior
 
@@ -238,3 +238,4 @@ Orchard then refuses every request to the MCP server and hides the setup page in
 - [MCP tools](/reference/mcp-tools/)
 - [Code mode for agents](/agents-code-mode/)
 - [Turn the MCP endpoint on or off](/operate/finishing-setup/#turn-the-mcp-endpoint-on-or-off)
+- [Docs for agents](/for-agents/)

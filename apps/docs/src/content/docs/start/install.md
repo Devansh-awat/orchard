@@ -101,7 +101,7 @@ The installer asks these questions in order. A flag or an environment variable a
 | Updates                                   | `manual`                                                                                                   | `--updates`             | `ORCHARD_UPDATE_POLICY`             |
 | S3 storage                                | None                                                                                                       | `--s3-*`, `--no-s3`     | `ORCHARD_S3_*`                      |
 
-The review screen also has one answer that the installer does not ask for: resource limits. By default, you choose them during setup in the dashboard. To set them from the installer, change this answer on the review screen or use `--limits`. You can still change the value in the dashboard.
+The review screen also has one answer that the installer does not ask for: [resource limits](/operate/resource-limits/#choose-at-install). By default, you choose them during setup in the dashboard. To set them from the installer, change this answer on the review screen or use `--limits`. You can still change the value in the dashboard.
 
 To leave the public IP, the custom domains target, or the email blank, type `none`. The result of each blank answer is:
 
@@ -197,7 +197,7 @@ Apps that you already deployed keep their `sslip.io` URLs. To give an app a new 
 
 To pick up new host commands or change a setting, run the installer again. It reads your current settings first and goes straight to the review screen, with each setting as the current answer. Anything that you leave alone does not change. With `--yes`, it keeps every setting that no flag names. It does not rotate secrets.
 
-This includes everything in `/etc/orchard/values.yaml`, such as values that you set with `orchardctl config set` or `orchardctl env set`, or edited by hand. A value changes only when you change an answer that it depends on. For example, a new dashboard domain updates `ingress.host` and `FRONTEND_URL`, and `signupMode` stays as it is.
+This includes everything in `/etc/orchard/values.yaml`, such as values that you set with [`orchardctl config set`](/operate/host-commands/#config) or [`orchardctl env set`](/operate/host-commands/#env), or edited by hand. A value changes only when you change an answer that it depends on. For example, a new dashboard domain updates `ingress.host` and `FRONTEND_URL`, and `signupMode` stays as it is.
 
 When you change an answer, the installer states what the change affects:
 
@@ -391,7 +391,7 @@ Use `lan` mode for a machine that you reach over Tailscale. The installer detect
 
 ### Hand the install to an agent
 
-An agent with SSH access to the machine can run the installer. Point the agent at the Markdown version of this page:
+An agent with SSH access to the machine can run the installer. Point the agent at the [Markdown version of this page](/for-agents/#get-a-page-as-markdown):
 
 ```text
 Install Orchard on <host> following https://docs.orchard.my/start/install.md
@@ -424,17 +424,17 @@ These were not tested on this path: MCP, public database exposure, more than one
 
 ### Prerequisites
 
-| Component                     | Needed for                                                           |
-| ----------------------------- | -------------------------------------------------------------------- |
-| CloudNativePG operator        | The control-plane database and every database users create           |
-| Traefik                       | Control-plane ingress (`IngressRoute`)                               |
-| Gateway API CRDs              | The `Gateway` for database exposure, unless `gateway.enabled: false` |
-| cert-manager                  | TLS, plus a DNS-01 `ClusterIssuer` for wildcard certificates         |
-| A default StorageClass        | Postgres volumes, build cache, Redis, metrics, and logs              |
-| An OCI registry               | Where built images are pushed and pulled                             |
-| An ingress controller         | Every app URL, as an `Ingress` of class `tenant.ingressClass`        |
-| A layer 4 (L4) load balancer  | Public database exposure and TCP or UDP passthrough only             |
-| gVisor or Kata RuntimeClasses | Optional sandboxing for tenant and builder pods                      |
+| Component                     | Needed for                                                                                      |
+| ----------------------------- | ----------------------------------------------------------------------------------------------- |
+| CloudNativePG operator        | The control-plane database and every database users create                                      |
+| Traefik                       | Control-plane ingress (`IngressRoute`)                                                          |
+| Gateway API CRDs              | The `Gateway` for database exposure, unless `gateway.enabled: false`                            |
+| cert-manager                  | TLS, plus a DNS-01 `ClusterIssuer` for [wildcard certificates](/operate/wildcard-certificates/) |
+| A default StorageClass        | Postgres volumes, build cache, Redis, metrics, and logs                                         |
+| An OCI registry               | Where built images are pushed and pulled                                                        |
+| An ingress controller         | Every app URL, as an `Ingress` of class `tenant.ingressClass`                                   |
+| A layer 4 (L4) load balancer  | [Public database exposure](/data/databases/#public-access) and TCP or UDP passthrough only      |
+| gVisor or Kata RuntimeClasses | [Optional sandboxing](/operate/security/#kernel-isolation) for tenant and builder pods          |
 
 You also need these domains:
 
@@ -706,16 +706,16 @@ To claim the instance:
 5. Rename the organization, or keep the name Orchard created.
 6. Complete the remaining steps. Orchard leaves out a step when the installer or your configuration already answered it. Each step that you can skip states what happens if you skip it.
 
-   | Step                  | Shown when                                          | If you skip it                                                                           |
-   | --------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-   | GitHub App            | No GitHub App exists                                | Private repositories and rebuilds on push do not work. Public repositories still deploy. |
-   | S3 storage            | No storage is set                                   | Backups stay on this server and are lost with it.                                        |
-   | Resource limits       | You did not set them in the installer               | You must choose. You can change them later.                                              |
-   | Public IP and domains | You installed with the Helm chart                   | Public ports and databases are unavailable, and Orchard does not check custom domains.   |
-   | MCP endpoint          | You installed with the Helm chart                   | Orchard keeps the current state.                                                         |
-   | Email                 | SMTP is not set                                     | Orchard has no email sign-in codes, and invitations are links that you copy.             |
-   | Certificate           | The instance has a certificate of its own to report | This step only shows the status and what to do if it failed.                             |
-   | Usage reports         | You have not answered                               | You must choose. Reports are off unless you opt in.                                      |
+   | Step                                                         | Shown when                                          | If you skip it                                                                           |
+   | ------------------------------------------------------------ | --------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+   | [GitHub App](/operate/finishing-setup/#connect-a-github-app) | No GitHub App exists                                | Private repositories and rebuilds on push do not work. Public repositories still deploy. |
+   | [S3 storage](/operate/storage/)                              | No storage is set                                   | Backups stay on this server and are lost with it.                                        |
+   | Resource limits                                              | You did not set them in the installer               | You must choose. You can change them later.                                              |
+   | Public IP and domains                                        | You installed with the Helm chart                   | Public ports and databases are unavailable, and Orchard does not check custom domains.   |
+   | [MCP endpoint](/mcp/)                                        | You installed with the Helm chart                   | Orchard keeps the current state.                                                         |
+   | [Email](/operate/finishing-setup/#set-up-email)              | SMTP is not set                                     | Orchard has no email sign-in codes, and invitations are links that you copy.             |
+   | Certificate                                                  | The instance has a certificate of its own to report | This step only shows the status and what to do if it failed.                             |
+   | [Usage reports](/operate/telemetry/)                         | You have not answered                               | You must choose. Reports are off unless you opt in.                                      |
 
 7. Review the list of what is configured and what you skipped. To change an item, select **Change**.
 8. Select **Go to Orchard**.
@@ -754,7 +754,7 @@ To verify a container image:
 gh attestation verify oci://ghcr.io/hackclub/orchard/server:2.69.0 --owner hackclub --bundle-from-oci
 ```
 
-CLI downloads include `attestation.sigstore.jsonl` on the release page. Orchard signs grafts in the Extension Marketplace with its own key and checks the signature on every install.
+CLI downloads include `attestation.sigstore.jsonl` on the release page. Orchard signs [grafts](/grafts/overview/) in the Extension Marketplace with its own key and checks the signature on every install.
 
 ## Uninstall Orchard
 
@@ -783,3 +783,11 @@ The release does not include the namespaces that Orchard created for apps and da
 - [Deploy your first app](/start/first-deploy/)
 - [Finish instance setup](/operate/finishing-setup/)
 - [Go to production](/operate/production/)
+
+## Related resources
+
+- [What is Orchard](/start/what-is-orchard/)
+- [Upgrade Orchard](/operate/upgrades/)
+- [Host commands](/operate/host-commands/)
+- [Configuration](/operate/configuration/)
+- [Troubleshooting Orchard](/operate/troubleshooting/)

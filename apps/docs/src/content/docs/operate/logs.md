@@ -7,12 +7,12 @@ sidebar:
 
 Orchard keeps a copy of each app's logs, and of the ingress controller's access log, in a log store inside the cluster. Live logs do not use the store, because they stream from the pods. Features that look back in time need it.
 
-| Feature                                        | Location                                      | Needs                         |
-| ---------------------------------------------- | --------------------------------------------- | ----------------------------- |
-| Search over past logs, levels, context, export | **Observe** > **Logs**                        | The log store                 |
-| Per-route traffic, error rates, and latency    | **Observe** > **Requests**                    | The log store and access logs |
-| Attack attempts and top sources                | **Security** tab                              | The log store and access logs |
-| Error grouping across replaced replicas        | **Observe** > **Errors**, and deploy verdicts | The log store                 |
+| Feature                                        | Location                                                                            | Needs                         |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------- |
+| Search over past logs, levels, context, export | [**Observe** > **Logs**](/run/monitor-an-app/#search-logs)                          | The log store                 |
+| Per-route traffic, error rates, and latency    | [**Observe** > **Requests**](/run/monitor-an-app/#inspect-requests)                 | The log store and access logs |
+| Attack attempts and top sources                | [**Security** tab](/deploy/security-tab/)                                           | The log store and access logs |
+| Error grouping across replaced replicas        | [**Observe** > **Errors**](/run/monitor-an-app/#triage-errors), and deploy verdicts | The log store                 |
 
 Without the store, error grouping uses the logs of the pods that are running now. A deploy verdict can then miss errors from replaced replicas.
 
@@ -189,3 +189,4 @@ Behind a proxy or CDN, the client address is in a header. HAProxy can read one w
 - [Read logs and open a shell](/run/logs/)
 - [Metrics and alerts](/run/observability/)
 - [Host commands](/operate/host-commands/)
+- [Monitor an app](/run/monitor-an-app/)

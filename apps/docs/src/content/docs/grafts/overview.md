@@ -5,7 +5,7 @@ sidebar:
   order: 1
 ---
 
-A graft is an extension that adds features to an Orchard instance without a fork. It can add pages, API endpoints, its own database tables, Model Context Protocol (MCP) tools, instance settings, and cards or tabs on existing pages. You find grafts in the [Extension Marketplace](https://orchard.my/extensions). You install them with [`orchardctl graft add`](/grafts/install/) or with Helm values, and Orchard rolls out the change like an upgrade.
+A graft is an extension that adds features to an Orchard instance without a fork. It can add pages, API endpoints, its own database tables, [Model Context Protocol (MCP) tools](/mcp/#choose-toolsets), instance settings, and cards or tabs on existing pages. You find grafts in the [Extension Marketplace](https://orchard.my/extensions). You install them with [`orchardctl graft add`](/grafts/install/) or with Helm values, and Orchard rolls out the change like an upgrade.
 
 :::caution
 Only install grafts you trust. A graft runs inside Orchard with the same access as Orchard: your database, your users' data, and your cluster. Orchard checks signatures, versions, and declared requirements, and shows them to you before you install. These checks are not a sandbox.
@@ -32,7 +32,7 @@ Orchard publishes these first-party grafts:
 
 - [Greenhouse](/greenhouse/) (`greenhouse`): Cloud machines with coding agents.
 - [The Grove](/run/grove/) (`forum`): A forum for the people on an instance.
-- Announcements (`announcements`): Notices on project and app pages.
+- [Announcements](/grafts/announcements/) (`announcements`): Notices on project and app pages.
 
 ## Parts of a graft
 
@@ -52,3 +52,10 @@ Orchard publishes these first-party grafts:
 - **Claims:** A graft's names live under its ID, such as `/apiv1/<id>`, `/<id>`, and `<id>.` events. A graft can ask for a name outside its ID with a claim. For more information, refer to [Claims](/grafts/build/manifest/#claims).
 - **Data:** Each graft has its own Postgres schema. When the database user can create roles, the graft also has a role that can read only the core columns it declared. Removing a graft keeps its data until you purge it.
 - **Failure handling:** Orchard skips a graft that fails to load, migrate, or boot, and shows it as failed in **Instance admin** > **Grafts**. Orchard itself still starts.
+
+## Related resources
+
+- [Graft API versions](/reference/graft-api/)
+- [Run Greenhouse](/operate/greenhouse/)
+- [Host commands](/operate/host-commands/#graft)
+- [Security and isolation](/operate/security/)

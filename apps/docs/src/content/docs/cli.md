@@ -72,16 +72,16 @@ To link a directory to a project, run `orchard link --project my-app` in that di
 
 ## Common commands
 
-| Task                                   | Command                              |
-| -------------------------------------- | ------------------------------------ |
-| List apps                              | `orchard deploy list`                |
-| Scale an app                           | `orchard deploy scale <ID> 3`        |
-| Read or follow logs                    | `orchard logs <ID> -f`               |
-| Build and deploy the current directory | `orchard up`                         |
-| Write variables to `.env.orchard`      | `orchard env pull`                   |
-| List databases                         | `orchard db list`                    |
-| Run a job                              | `orchard job run <ID>`               |
-| Roll back an app                       | `orchard deploy rollback <ID> --yes` |
+| Task                                                                                   | Command                              |
+| -------------------------------------------------------------------------------------- | ------------------------------------ |
+| List apps                                                                              | `orchard deploy list`                |
+| [Scale an app](/deploy/scaling/#change-replicas)                                       | `orchard deploy scale <ID> 3`        |
+| [Read or follow logs](/run/logs/)                                                      | `orchard logs <ID> -f`               |
+| [Build and deploy the current directory](/deploy/deploy-from-terminal/)                | `orchard up`                         |
+| [Write variables to `.env.orchard`](/run/environments/#pull-variables-to-a-local-file) | `orchard env pull`                   |
+| List databases                                                                         | `orchard db list`                    |
+| [Run a job](/run/jobs/)                                                                | `orchard job run <ID>`               |
+| [Roll back an app](/deploy/rollbacks/)                                                 | `orchard deploy rollback <ID> --yes` |
 
 ## Use the CLI in scripts
 
@@ -127,3 +127,5 @@ orchard commands -o json
 - [CLI reference](/reference/cli/)
 - [Code mode for agents](/agents-code-mode/)
 - [Manage API tokens](/account/tokens/)
+- [Use the terminal dashboard](/run/terminal-dashboard/)
+- [Deploy from your terminal](/deploy/deploy-from-terminal/)

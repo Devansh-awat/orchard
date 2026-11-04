@@ -8,7 +8,7 @@ sidebar:
 To share a graft with other Orchard instances, publish it in one of three ways:
 
 - From any `https` address.
-- From a tap: your own catalog of grafts.
+- From a [tap](/grafts/install/#add-a-tap): your own catalog of grafts.
 - From the Extension Marketplace, as a community graft.
 
 ## Sign a graft
@@ -20,7 +20,7 @@ graft keygen ~/.config/graft/key.pem
 graft pack --key ~/.config/graft/key.pem
 ```
 
-The command prints the public key. Operators add it to `graftSettings.keys` to trust your grafts.
+The command prints the public key. Operators add it to [`graftSettings.keys`](/grafts/install/#trust) to trust your grafts.
 
 In CI, set `GRAFT_SIGNING_KEY` to the base64 of the private key, instead of passing `--key`.
 
@@ -107,3 +107,5 @@ Each version lists the Orchard versions it works with in `engines.platform`. `or
 
 - [Install grafts](/grafts/install/)
 - [Get started](/grafts/build/quickstart/)
+- [graft.json](/grafts/build/manifest/)
+- [Upgrade and roll back grafts](/grafts/upgrades/)

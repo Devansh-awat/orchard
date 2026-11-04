@@ -7,7 +7,7 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-A database in Orchard is a managed Postgres instance in a project. Orchard runs it as a CloudNativePG cluster. CloudNativePG is the Kubernetes operator that handles failover, storage, and backups.
+A database in Orchard is a managed Postgres instance in a [project](/teams/projects/). Orchard runs it as a CloudNativePG cluster. CloudNativePG is the Kubernetes operator that handles failover, storage, and backups.
 
 ## Create a database
 
@@ -38,7 +38,7 @@ To seed the database from another Postgres server, add `--restore-from postgres:
 
 ## Connect an app
 
-To connect an app in the same project, use a reference. A reference follows the database through a password rotation or a restore.
+To connect an app in the same project, use [a reference](/deploy/connect-resources/). A reference follows the database through a password rotation or a restore.
 
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
@@ -106,7 +106,7 @@ By default, only apps in the project can connect. Public access assigns a port o
 ### Prerequisites
 
 - A layer 4 (L4) load balancer in the cluster.
-- A public IP address. To set one for your organization, go to **Organization settings** > **Database defaults** > **Public database IP**. Otherwise, the organization inherits the instance default.
+- A public IP address. To set one for your organization, go to **Organization settings** > **Database defaults** > **Public database IP**. Otherwise, the organization inherits the [instance default](/operate/finishing-setup/#set-a-default-public-ip).
 
 Public access is not available in Cloudflare Tunnel mode, because tunnels carry HTTP only.
 
@@ -163,3 +163,6 @@ Orchard cannot delete a database while an app still references it. Remove the re
 
 - [Back up and restore a database](/data/backups/)
 - [Read replicas](/data/replicas/)
+- [Connect an app to a database or app](/deploy/connect-resources/)
+- [Configure high availability](/data/high-availability/)
+- [`orchard db` reference](/reference/cli/#db)

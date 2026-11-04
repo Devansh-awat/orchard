@@ -64,7 +64,7 @@ orchard db settings set <id> statement_timeout=
 
 ## Shared buffers
 
-By default, Orchard sizes `shared_buffers` from the database's memory limit. When you change the memory limit, Orchard recalculates the value.
+By default, Orchard sizes `shared_buffers` from the database's [memory limit](/data/databases/#set-cpu-and-memory). When you change the memory limit, Orchard recalculates the value.
 
 If you enter a value, Orchard uses that value exactly. If the value is large for the current memory limit, the page shows a warning. To return to automatic sizing, clear the field.
 
@@ -77,3 +77,4 @@ If a running value differs from the saved value, the parameter row shows the run
 - [Create and manage a database](/data/databases/)
 - [Monitor a database](/data/monitoring/)
 - [`orchard db settings` reference](/reference/cli/#db)
+- [Use a connection pooler](/data/connection-pooler/)

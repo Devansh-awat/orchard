@@ -93,7 +93,7 @@ Grafts bundle their own dependencies. `@nestjs/*`, `rxjs`, and `reflect-metadata
    });
    ```
 
-Tools run in Orchard's MCP server and call the graft's API as the signed-in user.
+Tools run in Orchard's [MCP server](/mcp/) and call the graft's API as the signed-in user.
 
 A tool's name must start with the graft's ID, with dashes turned into underscores, or be listed under `claims.mcpTools`.
 

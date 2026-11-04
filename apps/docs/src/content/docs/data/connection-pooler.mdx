@@ -57,7 +57,7 @@ Turning on the pooler does not change the database connection string. Apps keep 
 
 2. Open the app.
 3. Go to **Variables**.
-4. Set the connection string variable to a value that uses the pooler address as the host. Keep the same user, password, and database name.
+4. Set the connection string [variable](/run/environments/) to a value that uses the pooler address as the host. Keep the same user, password, and database name.
 5. Select **Save**.
 
 The pooler address works only inside the cluster.
@@ -109,3 +109,4 @@ Orchard deletes the pooler. Connections that use its address fail, so point all 
 - [Create and manage a database](/data/databases/)
 - [Configure high availability](/data/high-availability/)
 - [`orchard db pooler` reference](/reference/cli/#db)
+- [Change Postgres parameters](/data/parameters/)

@@ -26,11 +26,11 @@ grafts:
 
 `GROVE_ENABLED` and `PUBLIC_GROVE_ENABLED` no longer exist. Orchard ignores them if they are set.
 
-Image attachments need object storage. To set it up, go to **Instance admin** > **Configuration** > **Object storage**.
+Image attachments need [object storage](/operate/storage/). To set it up, go to **Instance admin** > **Configuration** > **Object storage**.
 
 ## Upgrade from a built-in Grove
 
-If an earlier Orchard release had the Grove built in, install the graft in the same change that upgrades Orchard. Until you install it, the Grove is unavailable. No data is lost in that period.
+If an earlier Orchard release had the Grove built in, install the graft in the same change that [upgrades Orchard](/operate/upgrades/). Until you install it, the Grove is unavailable. No data is lost in that period.
 
 When the graft first starts, it moves the `forum_*` tables from the `public` schema to the `ext_forum` schema in one transaction. It does not copy or delete anything. It leaves views with the old names in `public`, so pods on the previous release keep working during the rollout. Thread links, numbers, and uploaded images stay the same.
 
@@ -49,3 +49,5 @@ Superadmins can manage threads with these actions:
 ## Related resources
 
 - [Install grafts](/grafts/install/)
+- [Grafts](/grafts/overview/)
+- [Post announcements](/grafts/announcements/)

@@ -41,12 +41,12 @@ Sandbox feature is not enabled for your account
 
 These logs are on the machine. Read them from a terminal or over SSH.
 
-| File                          | Contents                           |
-| ----------------------------- | ---------------------------------- |
-| `~/.setup.log`                | The machine setup script           |
-| `~/.clone.log`                | The repository named at creation   |
-| `~/.opencode-serve.log`       | The agent server                   |
-| `/var/log/orchard-bridge.log` | The SSH bridge, on Vercel machines |
+| File                          | Contents                                                       |
+| ----------------------------- | -------------------------------------------------------------- |
+| `~/.setup.log`                | The [machine setup script](/greenhouse/machines/#setup-script) |
+| `~/.clone.log`                | The repository named at creation                               |
+| `~/.opencode-serve.log`       | The agent server                                               |
+| `/var/log/orchard-bridge.log` | The SSH bridge, on Vercel machines                             |
 
 ## Sandbox did not become ready in time
 
@@ -90,11 +90,11 @@ The **New machine** sheet offers only available runners.
 
 ## The machine stopped without a request
 
-| Message                               | Cause                                                                                          |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| None                                  | Idle stop. There was no terminal or SSH activity for the idle limit, and no agent was working. |
-| `Stopped after reaching max lifetime` | The machine reached the maximum time since its last start.                                     |
-| `Stopped by provider timeout`         | Vercel's timeout stopped the machine.                                                          |
+| Message                               | Cause                                                                                                                          |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| None                                  | [Idle stop](/greenhouse/machines/#limits). There was no terminal or SSH activity for the idle limit, and no agent was working. |
+| `Stopped after reaching max lifetime` | The machine reached the maximum time since its last start.                                                                     |
+| `Stopped by provider timeout`         | Vercel's timeout stopped the machine.                                                                                          |
 
 **Fix:** Start the machine again. Files on disk remain. Running processes, including dev servers and agent turns in progress, do not.
 
@@ -124,7 +124,7 @@ ssh-keygen -R orchard-<name>
 Permission denied (publickey)
 ```
 
-**Cause:** None of your SSH identities matches the key your client offered.
+**Cause:** None of your [SSH identities](/account/ssh-identities/) matches the key your client offered.
 
 **Fix:** Run `orchard sandbox ssh-config --install`, or add your key in **Account settings** > **Greenhouse** > **SSH identities**.
 
@@ -132,7 +132,7 @@ Permission denied (publickey)
 
 The pull request button reads **Link GitHub to push**, or an action fails with `github_not_linked`.
 
-**Cause:** Your account has no linked GitHub account. Pushes, pull requests, and merges use your own account.
+**Cause:** Your account has no linked GitHub account. [Pushes, pull requests, and merges](/greenhouse/pull-requests/) use your own account.
 
 **Fix:** Link it in **Account settings** > **GitHub and Tailscale**. You can commit without it.
 
@@ -164,14 +164,14 @@ No GitHub account is linked to read checks
 
 ## Previews do not open
 
-| Message                                             | Cause and fix                                                                                       |
-| --------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `Previews need a preview domain; ...`               | Your operator has not set a preview domain, so Kubernetes previews are off.                         |
-| `That port cannot be previewed`                     | Use 3000, 3001, 4173, 5173, 8000, 8080, or 8787, or declare the port in `.orchard/greenhouse.json`. |
-| `This preview link has expired or was already used` | Links are single use and last 60 seconds. Open the preview again from Greenhouse.                   |
-| `Nothing is answering on this port in the sandbox`  | Nothing listens on the port, or it listens on `localhost` only. Bind to `0.0.0.0`.                  |
-| `Cross-site requests to previews are not allowed`   | Another site called your preview. Open the preview directly.                                        |
-| `You no longer have access to this sandbox`         | You were removed from the machine.                                                                  |
+| Message                                             | Cause and fix                                                                                                                              |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Previews need a preview domain; ...`               | Your operator has not set a preview domain, so Kubernetes previews are off.                                                                |
+| `That port cannot be previewed`                     | Use 3000, 3001, 4173, 5173, 8000, 8080, or 8787, or declare the port in [`.orchard/greenhouse.json`](/greenhouse/scripts/#file-reference). |
+| `This preview link has expired or was already used` | Links are single use and last 60 seconds. Open the preview again from Greenhouse.                                                          |
+| `Nothing is answering on this port in the sandbox`  | Nothing listens on the port, or it listens on `localhost` only. Bind to `0.0.0.0`.                                                         |
+| `Cross-site requests to previews are not allowed`   | Another site called your preview. Open the preview directly.                                                                               |
+| `You no longer have access to this sandbox`         | You were removed from the machine.                                                                                                         |
 
 ## A fork fails
 
@@ -186,3 +186,11 @@ No GitHub account is linked to read checks
 ## Still stuck?
 
 Collect the machine's name, runner, status message, and the relevant log above. Then contact your instance operator.
+
+## Related resources
+
+- [Get started](/greenhouse/getting-started/)
+- [Machines](/greenhouse/machines/)
+- [Connect an editor over SSH](/greenhouse/editors/)
+- [Run Greenhouse](/operate/greenhouse/)
+- [Troubleshooting grafts](/grafts/troubleshooting/)

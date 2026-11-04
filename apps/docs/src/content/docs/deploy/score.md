@@ -5,7 +5,7 @@ sidebar:
   order: 10
 ---
 
-A [Score](https://score.dev) file describes a workload in your repository. Name the file `score.yaml` or `score.yml`. Orchard reads it when you create the app, and again on each push that auto-deploys.
+A [Score](https://score.dev) file describes a workload in your repository. Name the file `score.yaml` or `score.yml`. Orchard reads it when you create the app, and again on each push that [auto-deploys](/deploy/github/#auto-deploy).
 
 The Score file describes the workload. `orchard.json` describes the build.
 
@@ -36,20 +36,20 @@ resources:
 
 ## Field reference
 
-| Score field                              | Orchard result                                                                                                    |
-| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `containers.<first>.variables`           | The app's variables. Keys that are not in the file stay as they are.                                              |
-| `service.ports`                          | The app's ports.                                                                                                  |
-| `resources.<name>` with `type: postgres` | A managed database named `<name>` in the project. Orchard creates it if it is missing and connects it to the app. |
-| `${resources.<name>.<field>}`            | A reference to that database, resolved when the pod starts.                                                       |
-| `orchard.my/domain`                      | A custom domain routed to the app.                                                                                |
-| `orchard.my/replicas`                    | The replica count.                                                                                                |
+| Score field                              | Orchard result                                                                                                                        |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `containers.<first>.variables`           | The app's variables. Keys that are not in the file stay as they are.                                                                  |
+| `service.ports`                          | The app's ports.                                                                                                                      |
+| `resources.<name>` with `type: postgres` | [A managed database](/data/databases/) named `<name>` in the project. Orchard creates it if it is missing and connects it to the app. |
+| `${resources.<name>.<field>}`            | A reference to that database, resolved when the pod starts.                                                                           |
+| `orchard.my/domain`                      | [A custom domain](/deploy/domains/#add-a-custom-domain) routed to the app.                                                            |
+| `orchard.my/replicas`                    | The replica count.                                                                                                                    |
 
 Orchard deploys only the first container. `image: .` means the image Orchard builds. If you name another image, Orchard still builds from the repository.
 
 ## Database references
 
-Orchard writes `${resources.db.connection_string}` as `${{resource.db.connection_string}}`. This is the same reference you get from **Use a resource** on the app's **Variables** tab. The reference follows the database through a password rotation or a restore.
+Orchard writes `${resources.db.connection_string}` as `${{resource.db.connection_string}}`. This is the same [reference](/deploy/connect-resources/) you get from **Use a resource** on the app's **Variables** tab. The reference follows the database through a password rotation or a restore.
 
 These fields are available:
 
@@ -66,13 +66,15 @@ If a variable references a resource the file does not provision, Orchard leaves 
 
 - `type: redis` and `type: valkey` are recognized, but managed Valkey is not available. Orchard reports the resource and skips it.
 - Orchard ignores other resource types and adds a note.
-- Orchard reads `orchard.my/health-path`, but it does not set health checks from Score.
+- Orchard reads `orchard.my/health-path`, but it does not set [health checks](/deploy/scaling/#set-health-checks) from Score.
 
 ## View what Orchard applied
 
-When Orchard finds a Score file, the new app form shows the databases, ports, and domain that it sets up. Each later apply adds an entry to the audit log with what changed.
+When Orchard finds a Score file, the new app form shows the databases, ports, and domain that it sets up. Each later apply adds an entry to the [audit log](/teams/audit-logs/) with what changed.
 
 ## Related resources
 
 - [Deploy from GitHub](/deploy/github/)
 - [Create and manage a database](/data/databases/)
+- [Connect an app to a database or app](/deploy/connect-resources/)
+- [Manage domains and HTTPS](/deploy/domains/)

@@ -149,7 +149,7 @@ orchard deploy auto-deploy status <id>
 
 ## Build arguments
 
-Orchard passes the app's variables to the build as Dockerfile build arguments.
+Orchard passes the app's [variables](/run/environments/) to the build as Dockerfile build arguments.
 
 - Orchard adds the `ARG` declarations above your own `ENV` lines. An `ENV` line in the repository takes priority over a build argument of the same name.
 - The arguments also reach stages that build `FROM` the stage where they are declared.
@@ -165,3 +165,5 @@ To start a deploy from a CI pipeline or another system, use a [webhook token](/r
 - [Builds](/deploy/builds/)
 - [Deploy from GitLab, Gitea, and others](/deploy/git-providers/)
 - [Roll back an app](/deploy/rollbacks/)
+- [Deploy from your terminal](/deploy/deploy-from-terminal/)
+- [`orchard github` reference](/reference/cli/#github)

@@ -10,7 +10,7 @@ To get a session's changes into your repository, commit them, open a pull reques
 ## Prerequisites
 
 - A GitHub account linked to Orchard. Link it in **Account settings** > **GitHub and Tailscale**. Until you link it, the pull request button reads **Link GitHub to push**. You can still commit.
-- Host or guest access to the machine. Read-only guests cannot commit or push.
+- [Host or guest access](/greenhouse/sharing/#roles) to the machine. Read-only guests cannot commit or push.
 
 Pushes, pull requests, and merges use your own GitHub account, on any machine you can edit.
 
@@ -76,3 +76,4 @@ The commit endpoint, `POST /apiv1/sandboxes/:id/git/commit`, can also commit onl
 
 - [Share a machine](/greenhouse/sharing/#git-identity)
 - [Automate Greenhouse](/greenhouse/automation/)
+- [Workspace](/greenhouse/workspace/)

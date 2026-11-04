@@ -7,32 +7,32 @@ sidebar:
 
 `orchardctl` operates an Orchard instance from the machine that runs it. The installer adds it to the host. The [`orchard` CLI](/cli/) is a different tool, which deploys apps to any instance over its API.
 
-| Command                        | Purpose                                                                   |
-| ------------------------------ | ------------------------------------------------------------------------- |
-| `orchardctl update`            | Upgrade to the latest chart and images.                                   |
-| `orchardctl harden`            | Close the registry to outside traffic and open the firewall for k3s.      |
-| `orchardctl config`            | Read and change chart values.                                             |
-| `orchardctl env`               | Read and change control-plane environment variables.                      |
-| `orchardctl registry`          | Set where builds can push.                                                |
-| `orchardctl policies`          | Set which namespaces can reach tenant apps.                               |
-| `orchardctl mcp`               | Manage the MCP endpoint.                                                  |
-| `orchardctl graft`             | Install and manage [grafts](/grafts/install/).                            |
-| `orchardctl public-ip`         | Set the default address for public ports.                                 |
-| `orchardctl hostname`          | Change the dashboard domain, and add names that the dashboard answers on. |
-| `orchardctl apps-domain`       | Change the domain that app addresses end in.                              |
-| `orchardctl letsencrypt-email` | Change where Let's Encrypt sends notices.                                 |
-| `orchardctl claim`             | Print a link that claims the instance.                                    |
-| `orchardctl login`             | Print a one-time sign-in link.                                            |
-| `orchardctl password`          | Set a password on the superadmin account.                                 |
-| `orchardctl backups s3`        | Show or change the S3 storage for backups and uploads.                    |
-| `orchardctl stop`              | Stop the instance.                                                        |
-| `orchardctl start`             | Start the instance.                                                       |
-| `orchardctl restart`           | Stop and start the instance.                                              |
-| `orchardctl logs [service]`    | Follow logs for `server`, `frontend`, or `mcp`.                           |
-| `orchardctl status`            | Show the control-plane pods.                                              |
-| `orchardctl sync`              | Refresh these commands from the deployed image.                           |
-| `orchardctl uninstall`         | Remove Orchard, k3s, and everything on them.                              |
-| `orchardctl licenses`          | Print third-party notices.                                                |
+| Command                        | Purpose                                                                               |
+| ------------------------------ | ------------------------------------------------------------------------------------- |
+| `orchardctl update`            | Upgrade to the latest chart and images.                                               |
+| `orchardctl harden`            | Close the registry to outside traffic and open the firewall for k3s.                  |
+| `orchardctl config`            | Read and change chart values.                                                         |
+| `orchardctl env`               | Read and change control-plane environment variables.                                  |
+| `orchardctl registry`          | Set where builds can push.                                                            |
+| `orchardctl policies`          | Set which namespaces can reach tenant apps.                                           |
+| `orchardctl mcp`               | Manage [the MCP endpoint](/operate/finishing-setup/#turn-the-mcp-endpoint-on-or-off). |
+| `orchardctl graft`             | Install and manage [grafts](/grafts/install/).                                        |
+| `orchardctl public-ip`         | Set the default address for public ports.                                             |
+| `orchardctl hostname`          | Change the dashboard domain, and add names that the dashboard answers on.             |
+| `orchardctl apps-domain`       | Change the domain that app addresses end in.                                          |
+| `orchardctl letsencrypt-email` | Change where Let's Encrypt sends notices.                                             |
+| `orchardctl claim`             | Print a link that claims the instance.                                                |
+| `orchardctl login`             | Print a one-time sign-in link.                                                        |
+| `orchardctl password`          | Set a password on the superadmin account.                                             |
+| `orchardctl backups s3`        | Show or change the [S3 storage](/operate/storage/) for backups and uploads.           |
+| `orchardctl stop`              | Stop the instance.                                                                    |
+| `orchardctl start`             | Start the instance.                                                                   |
+| `orchardctl restart`           | Stop and start the instance.                                                          |
+| `orchardctl logs [service]`    | Follow logs for `server`, `frontend`, or `mcp`.                                       |
+| `orchardctl status`            | Show the control-plane pods.                                                          |
+| `orchardctl sync`              | Refresh these commands from the deployed image.                                       |
+| `orchardctl uninstall`         | Remove Orchard, k3s, and everything on them.                                          |
+| `orchardctl licenses`          | Print [third-party notices](/operate/licenses/#third-party-notices).                  |
 
 Most commands also exist with a hyphen, such as `orchard-config` and `orchard-update`. All commands except `logs`, `status`, and `licenses` need root.
 
@@ -272,7 +272,7 @@ sudo orchardctl claim
 sudo orchardctl claim --url mango
 ```
 
-Prints a single-use link that claims the instance and signs you in as the superadmin. It works without email.
+Prints a single-use link that [claims the instance](/start/install/#claim-the-instance) and signs you in as the superadmin. It works without email.
 
 `--url` overrides the address in the link. A bare name uses the scheme and port that the instance serves on. For example, `--url mango` becomes `http://mango:8081` on a `lan` install that moved off port 80. Add the name with `orchardctl hostname add` first.
 
@@ -358,7 +358,7 @@ orchardctl logs mcp
 
 These commands do not need root. `logs` keeps following until you press `CTRL + C`.
 
-These commands show the control plane, not your apps. For an app's logs, use the dashboard or the `orchard` CLI.
+These commands show the control plane, not your apps. For [an app's logs](/run/logs/), use the dashboard or the `orchard` CLI.
 
 ## sync
 
@@ -418,3 +418,5 @@ sudo orchardctl sync    # installs the binary and links the aliases
 - [Configuration](/operate/configuration/)
 - [Upgrade Orchard](/operate/upgrades/)
 - [Use the CLI](/cli/)
+- [Install](/start/install/)
+- [Finish instance setup](/operate/finishing-setup/)

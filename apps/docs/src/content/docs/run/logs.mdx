@@ -27,7 +27,7 @@ To read what an app is doing, use the console on its **Overview** tab. To search
 orchard logs <id> --follow
 ```
 
-To read build logs, add `--build`.
+To read [build logs](/deploy/builds/#troubleshoot-a-failed-build), add `--build`.
 
 </TabItem>
 </Tabs>
@@ -67,12 +67,12 @@ orchard deploy killed logs <id> <entry-id>
 
 In a crash loop, a container starts and exits, and Kubernetes restarts it. Read the exit reason and the last logs.
 
-| Symptom                                           | Likely cause                                                         | What to do                                                                    |
-| ------------------------------------------------- | -------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| Exits immediately with a module or import error   | The image is missing a dependency, or the build used the wrong stage | Check the [build stage](/deploy/builds/#the-image-has-no-application-in-it)   |
-| Exits after a few seconds with connection refused | The app cannot reach its database                                    | Check the internal host and the credentials                                   |
-| Killed with exit code 137                         | The container ran out of memory                                      | Raise the [memory limit](/deploy/scaling/#set-cpu-and-memory) or fix the leak |
-| Runs but never becomes ready                      | The health check path or port is wrong                               | Check [health checks](/deploy/scaling/#set-health-checks)                     |
+| Symptom                                           | Likely cause                                                         | What to do                                                                              |
+| ------------------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Exits immediately with a module or import error   | The image is missing a dependency, or the build used the wrong stage | Check the [build stage](/deploy/builds/#the-image-has-no-application-in-it)             |
+| Exits after a few seconds with connection refused | The app cannot reach its database                                    | Check the [internal host](/data/databases/#get-a-connection-string) and the credentials |
+| Killed with exit code 137                         | The container ran out of memory                                      | Raise the [memory limit](/deploy/scaling/#set-cpu-and-memory) or fix the leak           |
+| Runs but never becomes ready                      | The health check path or port is wrong                               | Check [health checks](/deploy/scaling/#set-health-checks)                               |
 
 ## Open a shell
 
@@ -122,3 +122,6 @@ The alert banner above an app's tabs shows only problems that exist now. Kuberne
 
 - [Monitor an app](/run/monitor-an-app/)
 - [Metrics and alerts](/run/observability/)
+- [Configure logs and request data](/operate/logs/)
+- [Builds](/deploy/builds/)
+- [`orchard logs` reference](/reference/cli/#logs)

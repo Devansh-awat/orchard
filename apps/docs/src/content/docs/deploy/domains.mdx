@@ -19,7 +19,7 @@ When you create an app and set a port's reach to **Private link** or **Public li
 
 - An app with a TCP port.
 - Access to the DNS settings of the domain.
-- A CNAME target. A superadmin sets it under **Instance admin** > **Configuration** > **Custom domains**.
+- A CNAME target. [A superadmin sets it](/operate/finishing-setup/#set-the-custom-domains-target) under **Instance admin** > **Configuration** > **Custom domains**.
 
 ### Steps
 
@@ -104,3 +104,6 @@ orchard domain update <domain-id> --host new.example.com
 
 - [Protect an app](/deploy/protection/)
 - [Configure app networking](/deploy/networking/)
+- [Reach apps over Tailscale](/deploy/tailscale/)
+- [Troubleshooting Orchard](/operate/troubleshooting/#a-certificate-never-issues)
+- [`orchard domain` reference](/reference/cli/#domain)

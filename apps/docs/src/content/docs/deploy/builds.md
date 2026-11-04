@@ -5,7 +5,7 @@ sidebar:
   order: 3
 ---
 
-Orchard runs each build as a Kubernetes job on your cluster. The job clones the repository, builds the image with BuildKit, and pushes it to the registry configured on the instance.
+Orchard runs each build as a Kubernetes job on your cluster. The job clones the repository, builds the image with BuildKit, and pushes it to the [registry configured on the instance](/operate/finishing-setup/#use-your-own-registry).
 
 Orchard reads build status from the job. If a builder stops unexpectedly, the build shows as failed.
 
@@ -73,7 +73,7 @@ A failed build leaves the previous version running. To read the logs, open the a
 
 **Cause:** The registry rejects anonymous pulls. `dhi.io` is one example.
 
-**Fix:** Add these keys to the app as secret variables:
+**Fix:** Add these keys to the app as [secret variables](/run/environments/#secrets):
 
 - `DHI_USERNAME` and `DHI_TOKEN` for Docker Hardened Images (`dhi.io`).
 - `DOCKER_AUTH_CONFIG` for other registries. The value is a Docker config JSON whose `auths` map lists each registry.
@@ -96,7 +96,7 @@ Orchard uses these keys only for `FROM` and `COPY --from` pulls. It does not pas
 
 **Cause:** Memory requests on the node leave no room for the builder pod. Kubernetes counts requests, not actual usage.
 
-**Fix:** Remove or shrink other workloads, or add a node.
+**Fix:** Remove or shrink other workloads, or [add a node](/operate/nodes/).
 
 ### The build also fails on your machine
 
@@ -108,3 +108,5 @@ Orchard uses these keys only for `FROM` and `COPY --from` pulls. It does not pas
 
 - [Roll back an app](/deploy/rollbacks/)
 - [Deploy from GitHub](/deploy/github/)
+- [Troubleshooting Orchard](/operate/troubleshooting/)
+- [Deploy from an image](/deploy/image/)

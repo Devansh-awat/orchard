@@ -13,13 +13,13 @@ To control access to your Orchard account, add sign-in methods and review the de
 
 The methods available to you depend on how your instance is configured.
 
-| Method            | Availability                                                                               |
-| ----------------- | ------------------------------------------------------------------------------------------ |
-| Email code        | The instance has email configured. Without email, Orchard hides this option.               |
-| Passkey           | The instance is served over HTTPS. Browsers do not offer passkeys over plain HTTP.         |
-| Identity provider | A superadmin or your organization has added a provider.                                    |
-| Password          | Superadmin accounts only. An operator sets the password on the host.                       |
-| One-time link     | An operator prints the link on the host. The link works once and expires after 10 minutes. |
+| Method            | Availability                                                                                                                 |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Email code        | The instance has [email configured](/operate/finishing-setup/#set-up-email). Without email, Orchard hides this option.       |
+| Passkey           | The instance is served over HTTPS. Browsers do not offer passkeys over plain HTTP.                                           |
+| Identity provider | [A superadmin](/operate/finishing-setup/#add-an-identity-provider) or [your organization](/teams/sso/) has added a provider. |
+| Password          | Superadmin accounts only. An operator sets the password on the host.                                                         |
+| One-time link     | An operator prints the link on the host. The link works once and expires after 10 minutes.                                   |
 
 If your organization [requires single sign-on](/teams/sso/#require-single-sign-on), other methods stop working for your account.
 
@@ -51,7 +51,7 @@ For more information, refer to [`orchardctl login`](/operate/host-commands/#logi
 
 The **Devices** list shows each session on your account, with its device name, location, IP address, and last activity. A browser session expires after seven days.
 
-MCP connections also appear in this list, because each connection is a session on your account.
+[MCP connections](/mcp/#revoke-access) also appear in this list, because each connection is a session on your account.
 
 1. Go to **Account settings** > **Passkeys and devices**.
 2. Review the **Devices** list.
@@ -95,3 +95,5 @@ Use this option if you lose a device or think that someone else has access to yo
 - [Manage API tokens](/account/tokens/)
 - [Set up SSO](/teams/sso/)
 - [Connect an MCP client](/mcp/)
+- [Update your profile](/account/profile/)
+- [Manage SSH identities](/account/ssh-identities/)

@@ -97,7 +97,7 @@ Orchard also takes checkpoints automatically:
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Before a drop**   | Before any `DROP TABLE`, `DROP SCHEMA`, or `DROP COLUMN` runs, when **Checkpoint before drops** is on. The checkpoint records what was dropped and by whom. This check does not cover `TRUNCATE`. |
 | **Before a deploy** | Before a deploy, so that a [rollback](/deploy/rollbacks/) can also restore the app's databases.                                                                                                   |
-| **Before a change** | Before an operation that changes the database, such as an in-place restore or a major upgrade.                                                                                                    |
+| **Before a change** | Before an operation that changes the database, such as an in-place restore or a [major upgrade](/data/upgrades/).                                                                                 |
 
 ## Restore a database
 
@@ -199,7 +199,7 @@ To block deletion, turn on **Deletion protection**. For more information, refer 
 
 ## Test a backup
 
-A restore test restores the latest backup into a temporary copy, compares tables and row counts, and deletes the copy. A failed test sends a notification.
+A restore test restores the latest backup into a temporary copy, compares tables and row counts, and deletes the copy. A failed test sends a [notification](/run/notifications/).
 
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
@@ -237,7 +237,7 @@ In the API, an empty `liveStatus.firstRecoverabilityPoint` means no base backup 
 
 ## How backups use memory
 
-The base backup runs inside the database container and shares its memory limit with Postgres. Compressing a backup on a small database can use enough memory for the kernel to kill Postgres. For this reason, Orchard chooses base backup compression from the memory limit.
+The base backup runs inside the database container and shares its [memory limit](/data/databases/#set-cpu-and-memory) with Postgres. Compressing a backup on a small database can use enough memory for the kernel to kill Postgres. For this reason, Orchard chooses base backup compression from the memory limit.
 
 To override the choice, set `backupCompression` through the database settings API. Orchard always compresses WAL, one segment at a time.
 
@@ -282,3 +282,5 @@ When you add S3 storage, new databases back up to it. Databases you already have
 - [Create and manage a database](/data/databases/)
 - [Protect a database](/data/protection/)
 - [Roll back an app](/deploy/rollbacks/)
+- [Add S3 storage](/operate/storage/)
+- [`orchard db` reference](/reference/cli/#db)

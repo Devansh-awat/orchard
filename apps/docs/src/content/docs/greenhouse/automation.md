@@ -72,7 +72,7 @@ If the instance publishes its MCP server over HTTPS, the opencode agent on each 
 
 Add `-o json` for machine-readable output.
 
-If the CLI uses an API token, commands that connect into a machine require the `exec` scope. These include sessions, prompts, SSH, and file operations.
+If the CLI uses an API token, commands that connect into a machine require the [`exec` scope](/account/tokens/#token-access-levels). These include sessions, prompts, SSH, and file operations.
 
 ## Use the API
 
@@ -90,3 +90,6 @@ Live features use three WebSocket endpoints on the same host. They authenticate 
 
 - [Connect an MCP client](/mcp/)
 - [Manage API tokens](/account/tokens/)
+- [Code mode for agents](/agents-code-mode/)
+- [Run Greenhouse](/operate/greenhouse/)
+- [Start sessions from GitHub, Linear, and Slack](/greenhouse/integrations/)

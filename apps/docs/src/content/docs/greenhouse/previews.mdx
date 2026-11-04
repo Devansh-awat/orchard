@@ -18,7 +18,7 @@ You can view a session's work in two ways:
 
 - A running machine.
 - A process that is bound to `0.0.0.0` and listens on a port that Greenhouse can preview.
-- On the Kubernetes runner, a preview domain set by the operator.
+- On the Kubernetes runner, a [preview domain set by the operator](/operate/greenhouse/#configure-previews).
 
 These ports can always be previewed:
 
@@ -59,7 +59,7 @@ Do not serve anything on a preview port of a Vercel machine that you would not p
 
 - Host access to the machine.
 - Edit access to the target project, which must belong to the machine's organization.
-- An app in the project that builds the same GitHub repository.
+- An [app](/deploy/github/) in the project that builds the same GitHub repository.
 
 ### Steps
 
@@ -87,7 +87,7 @@ To select the app to copy, add `--deployment <deployment-id>`.
 Greenhouse then does the following:
 
 1. It pushes the session's branch to GitHub.
-2. It creates an environment named `gh-<slug>` in the project, or reuses the one that this session already has.
+2. It creates an [environment](/run/environments/#create-an-environment) named `gh-<slug>` in the project, or reuses the one that this session already has.
 3. It copies the settings of the source app. Without a selection, it prefers an app in the project's default environment, then in its production environment.
 4. It deploys the branch with one replica.
 
@@ -122,3 +122,4 @@ Archiving or deleting the session also removes its preview environment. Greenhou
 
 - [Configure setup and run scripts](/greenhouse/scripts/)
 - [Troubleshooting Greenhouse](/greenhouse/troubleshooting/#previews-do-not-open)
+- [Commit, push, and merge](/greenhouse/pull-requests/)

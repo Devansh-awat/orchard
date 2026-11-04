@@ -14,7 +14,7 @@ Neither option runs model-written code on Orchard.
 
 ## The agent spec
 
-Both options read the agent spec, a trimmed copy of the OpenAPI contract. For each operation, the spec has the `operationId`, parameters, request and response schemas, required scope, and two flags:
+Both options read the agent spec, a trimmed copy of the OpenAPI contract. For each operation, the spec has the `operationId`, parameters, request and response schemas, [required scope](/account/tokens/#token-access-levels), and two flags:
 
 - `x-orchard-destructive` marks deletes, whole-list replacements, and other operations that remove or overwrite state.
 - `x-orchard-sensitive` marks responses that contain a secret.
@@ -80,7 +80,7 @@ done
 
 ### Set one variable on every app in a project
 
-Secret values read back as `null`. Sending `null` keeps the stored value, so this script does not need to know any secret.
+[Secret values](/run/environments/#secrets) read back as `null`. Sending `null` keeps the stored value, so this script does not need to know any secret.
 
 ```bash
 for id in $(orchard api projects_deployments_list -p id=$PROJECT | jq -r '.[].id'); do
@@ -142,3 +142,5 @@ Each call is one turn for the model. Scripts in a shell need fewer turns for wor
 - [Connect an MCP client](/mcp/)
 - [Use the CLI](/cli/)
 - [Docs for agents](/for-agents/)
+- [MCP tools](/reference/mcp-tools/)
+- [`orchard api` reference](/reference/cli/#api)
