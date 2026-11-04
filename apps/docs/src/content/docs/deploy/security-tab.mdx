@@ -15,9 +15,9 @@ The **Configuration** card checks the app's settings. These checks do not need a
 
 | Finding                      | Meaning                                                 | How to resolve                                                                       |
 | ---------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| **Secrets in plain variables** | A variable name looks like a secret, and the value is stored as plain text. | Select **Variables**, and then store the value as a secret.      |
-| **Served over plain HTTP**   | A domain on the app has no TLS and is not a redirect.   | Select **Network**, edit the domain, and then turn on **HTTPS**.                     |
-| **Image tag can change**     | The image uses a tag that can point to a different image, such as `latest`. | Select **Source**, and then set a fixed tag.                    |
+| **Secrets in plain variables** | A variable name looks like a secret, and the value is stored as plain text. | Select **Variables**, then store the value as a secret.      |
+| **Served over plain HTTP**   | A domain on the app has no TLS and is not a redirect.   | Select **Network**, edit the domain, then turn on **HTTPS**.                     |
+| **Image tag can change**     | The image uses a tag that can point to a different image, such as `latest`. | Select **Source**, then set a fixed tag.                    |
 
 When there are no findings, the card shows **Nothing to flag**.
 

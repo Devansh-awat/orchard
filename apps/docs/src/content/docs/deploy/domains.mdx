@@ -19,21 +19,23 @@ When you create an app and set a port's reach to **Private link** or **Public li
 
 - An app with a TCP port.
 - Access to the DNS settings of the domain.
-- On a self-hosted instance, a CNAME target. An instance admin sets it under **Instance admin** > **Configuration** > **Custom domains**.
+- A CNAME target. A superadmin sets it under **Instance admin** > **Configuration** > **Custom domains**.
 
 ### Steps
 
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open the app and go to **Network**.
-2. In **Domains**, select **Add domain**.
-3. Enter the domain, such as `app.example.com`.
-4. Keep **Point to this app** selected.
-5. If the app has more than one port, select the **Port**.
-6. Select **Add domain**.
-7. In the **Set up DNS** dialog, add the record it shows at your DNS provider.
-8. Wait for the status to change from **Waiting for DNS** to **Connected**, then select **Done**.
+1. Open the app.
+2. Go to **Network**.
+3. In **Domains**, select **Add domain**.
+4. Enter the domain, such as `app.example.com`.
+5. Keep **Point to this app** selected.
+6. If the app has more than one port, select the **Port**.
+7. Select **Add domain**.
+8. In the **Set up DNS** dialog, add the record it shows at your DNS provider.
+9. Wait for the status to change from **Waiting for DNS** to **Connected**.
+10. Select **Done**.
 
 To open this dialog later, open the domain's menu and select **DNS setup…**.
 
@@ -66,12 +68,13 @@ A redirect sends visitors from a domain to another address. It keeps the path an
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Go to **Network** > **Domains** and select **Add domain**.
-2. Enter the domain.
-3. Select **Redirect**.
-4. In **Redirect to**, enter the destination.
-5. In **Status**, select **307 Temporary**, **302 Found**, **308 Permanent**, or **301 Moved Permanently**.
-6. Select **Add domain**.
+1. Go to **Network** > **Domains**.
+2. Select **Add domain**.
+3. Enter the domain.
+4. Select **Redirect**.
+5. In **Redirect to**, enter the destination.
+6. In **Status**, select **307 Temporary**, **302 Found**, **308 Permanent**, or **301 Moved Permanently**.
+7. Select **Add domain**.
 
 To change a redirect, open its menu and select **Edit redirect…**. If you change the domain, Orchard provisions the new domain before it removes the old one.
 

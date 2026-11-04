@@ -14,12 +14,14 @@ To run an image that already exists, create an app with an image source. Orchard
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open a project and select **New app**.
-2. In **Start from scratch**, select **Docker image**.
-3. In **Image**, enter the image reference, such as `ghcr.io/org/app:latest`.
-4. In **Name**, enter a name for the app.
-5. Under **Networking**, confirm the port and select a reach. For the options, refer to [Networking](/deploy/networking/#reach).
-6. Select **Deploy**.
+1. Open a project.
+2. Select **New app**.
+3. In **Start from scratch**, select **Docker image**.
+4. In **Image**, enter the image reference, such as `ghcr.io/org/app:latest`.
+5. In **Name**, enter a name for the app.
+6. Under **Networking**, confirm the port.
+7. Select a reach. For the options, refer to [Reach](/deploy/networking/#reach).
+8. Select **Deploy**.
 
 When the image exposes a port, Orchard sets the first port for you and shows the value below **Image**. If the image exposes no port, the form uses port 80. Set the port your process listens on.
 
@@ -44,10 +46,12 @@ To pull a private image, add a credential for its registry. Orchard stores one c
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open the project and go to **Settings**.
-2. In **Registry credentials**, select **Add**.
-3. Select the **Registry**, then enter the **Username** and the token.
-4. Save the credential.
+1. Open the project.
+2. Go to **Settings**.
+3. In **Registry credentials**, select **Add**.
+4. Select the **Registry**.
+5. Enter the **Username** and the token.
+6. Save the credential.
 
 </TabItem>
 <TabItem label="CLI">
@@ -83,9 +87,10 @@ Removing a credential restarts the apps that used it. If their images are privat
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open the app and go to **Settings** > **Source & build**.
-2. In **Image**, enter the new reference.
-3. Select **Save**.
+1. Open the app.
+2. Go to **Settings** > **Source & build**.
+3. In **Image**, enter the new reference.
+4. Select **Save**.
 
 </TabItem>
 <TabItem label="CLI">

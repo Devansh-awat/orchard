@@ -14,8 +14,9 @@ To change how much of an app runs, set its replica count, its CPU and memory, or
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open the app and go to **Overview**.
-2. In **Pods**, use the **Replicas** control to set the count.
+1. Open the app.
+2. Go to **Overview**.
+3. In **Pods**, use the **Replicas** control to set the count.
 
 </TabItem>
 <TabItem label="CLI">
@@ -65,9 +66,10 @@ orchard deploy start <id> --build
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open the app and go to **Settings** > **Resources**.
-2. In **CPU and memory**, select the sizes.
-3. Select **Save**. Saving restarts the app.
+1. Open the app.
+2. Go to **Settings** > **Resources**.
+3. In **CPU and memory**, select the sizes.
+4. Select **Save**. Saving restarts the app.
 
 </TabItem>
 <TabItem label="CLI">
@@ -83,8 +85,8 @@ orchard deploy resources set <id> --cpu 500 --memory 512Mi
 
 The value you select is the container's limit.
 
-- Memory: the request equals the limit. The app gets that amount, and Kubernetes kills it if it uses more.
-- CPU: the request is 10% of the limit, with a minimum of 50 millicores. The app can use CPU up to the limit when the node has capacity. To change this, set `CPU_REQUEST_RATIO` and `CPU_REQUEST_MIN_MILLI` on the server.
+- **Memory:** The request equals the limit. The app gets that amount, and Kubernetes kills it if it uses more.
+- **CPU:** The request is 10% of the limit, with a minimum of 50 millicores. The app can use CPU up to the limit when the node has capacity. To change this, set `CPU_REQUEST_RATIO` and `CPU_REQUEST_MIN_MILLI` on the server.
 
 :::caution
 When you change resources through the API, send every field you want to keep. An omitted value falls back to the organization default, which may be smaller than the current size.
@@ -97,11 +99,13 @@ Health checks decide whether a pod counts as ready. An app that runs but fails i
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open the app and go to **Settings** > **Health checks**.
-2. Turn on **Check this app**.
-3. In **Check with**, select the method, then enter the path or command and the port.
-4. Select what the check controls: **Restart the container when it fails**, **Stop sending traffic until it passes**, or **Allow extra time on startup**.
-5. Select **Save**. Saving restarts the app.
+1. Open the app.
+2. Go to **Settings** > **Health checks**.
+3. Turn on **Check this app**.
+4. In **Check with**, select the method.
+5. Enter the path or command, and the port.
+6. Select what the check controls: **Restart the container when it fails**, **Stop sending traffic until it passes**, or **Allow extra time on startup**.
+7. Select **Save**. Saving restarts the app.
 
 </TabItem>
 <TabItem label="CLI">

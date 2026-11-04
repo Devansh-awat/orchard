@@ -13,9 +13,9 @@ The `orchard up` command packs a directory, uploads it, and builds it on the clu
 
 ### Prerequisites
 
-- The [Orchard CLI](/cli/) must be installed and signed in.
-- A project must be linked to the directory. Run `orchard link --project <project>`.
-- A superadmin must turn on local deploys. Refer to [Turn on local deploys](#turn-on-local-deploys).
+- The [Orchard CLI](/cli/), installed and signed in.
+- A project linked to the directory. To link one, run `orchard link --project <project>`.
+- Local deploys turned on by a superadmin. For more information, refer to [Turn on local deploys](#turn-on-local-deploys).
 
 ### Run the deploy
 
@@ -66,12 +66,12 @@ Local deploys are disabled on this server (set LOCAL_DEPLOYS_ENABLED=true and co
 
 ## Import a GitHub repository
 
-The `orchard import` command creates a project named after the repository. It detects how to build the repository and starts the first build with auto-deploy on. It also attaches a protected platform URL.
+The `orchard import` command creates a project named after the repository. It detects how to build the repository and starts the first build with auto-deploy on. It also attaches a protected generated URL.
 
 ### Prerequisites
 
-- The [Orchard CLI](/cli/) must be installed and signed in.
-- [GitHub](/deploy/github/) must be connected.
+- The [Orchard CLI](/cli/), installed and signed in.
+- A [GitHub account linked to Orchard](/deploy/github/).
 
 ### Run the import
 

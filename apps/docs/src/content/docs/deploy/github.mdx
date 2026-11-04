@@ -11,29 +11,31 @@ To build and run an app from a GitHub repository, create an app with a GitHub so
 
 ## Prerequisites
 
-- A GitHub App on the instance. An instance admin creates it during setup, or by following [Connect a GitHub App](/operate/finishing-setup/#connect-a-github-app).
+- A GitHub App on the instance. A superadmin creates it during setup, or by following [Connect a GitHub App](/operate/finishing-setup/#connect-a-github-app).
 - A GitHub account linked to Orchard. Go to **Account settings** > **GitHub and Tailscale**, and in **GitHub**, select **Connect**.
 - The GitHub App installed on the account that owns the repository. Go to **Account settings** > **GitHub and Tailscale**, and in **Repository access**, select **Add account**.
 
 You can deploy a public repository without these items. In the repository search field, paste `owner/repo`. Auto-deploy still needs the GitHub App.
 
-Orchard lists only the repositories your own GitHub account granted to the App. Two people in the same project can see different lists.
+Orchard lists only the repositories your own GitHub account granted to the GitHub App. Two people in the same project can see different lists.
 
 ## Create the app
 
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open a project and select **New app**.
-2. In **Start from scratch**, select **GitHub repo**.
-3. In **Repository**, select the repository.
-4. In **Branch**, select the branch.
-5. In **Name**, enter a name for the app.
-6. In **Build with**, confirm the build method. Orchard selects **Dockerfile** if the repository has one. Otherwise, it selects the framework it detects.
-7. (Optional) Expand **Build and output settings** to change the Dockerfile path or build stage.
-8. Under **Environment variables**, review the variables that Orchard detected.
-9. Under **Networking**, confirm the port and select a reach. For the options, refer to [Networking](/deploy/networking/#reach).
-10. Select **Deploy**.
+1. Open a project.
+2. Select **New app**.
+3. In **Start from scratch**, select **GitHub repo**.
+4. In **Repository**, select the repository.
+5. In **Branch**, select the branch.
+6. In **Name**, enter a name for the app.
+7. In **Build with**, confirm the build method. Orchard selects **Dockerfile** if the repository has one. Otherwise, it selects the framework it detects.
+8. (Optional) Expand **Build and output settings** to change the Dockerfile path or build stage.
+9. Under **Environment variables**, review the variables that Orchard detected.
+10. Under **Networking**, confirm the port.
+11. Select a reach. For the options, refer to [Reach](/deploy/networking/#reach).
+12. Select **Deploy**.
 
 Orchard opens the build progress page.
 
@@ -74,11 +76,12 @@ Auto-deploy builds and rolls out the app when you push to the selected branch.
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open the app and go to **Settings** > **Deploy behavior**.
-2. In **Auto-deploy**, enter the branch in **Branch**.
-3. Turn on **Deploy on push**.
+1. Open the app.
+2. Go to **Settings** > **Deploy behavior**.
+3. In **Auto-deploy**, enter the branch in **Branch**.
+4. Turn on **Deploy on push**.
 
-If the App is not installed on the repository, the page shows **Install GitHub App** instead of the switch. Select it and add the repository.
+If the GitHub App is not installed on the repository, the page shows **Install GitHub App** instead of the switch. Select it and add the repository.
 
 </TabItem>
 <TabItem label="CLI">
@@ -132,9 +135,9 @@ To clear the list, pass `--path ""`.
 
 **Symptom:** Auto-deploy is on, but pushes do not build.
 
-**Cause:** The GitHub App cannot see the repository, or the app is not bound to the App installation. An App installed with **Only select repositories** does not include repositories created after the install.
+**Cause:** The GitHub App cannot see the repository, or the app is not bound to the GitHub App installation. A GitHub App installed with **Only select repositories** does not include repositories created after the install.
 
-**Fix:** Add the repository in the App settings on GitHub. Then open **Settings** > **Deploy behavior**. If the page shows **Auto-deploy is on but not connected**, select **Reconnect**.
+**Fix:** Add the repository in the GitHub App settings on GitHub. Then open **Settings** > **Deploy behavior**. If the page shows **Auto-deploy is on but not connected**, select **Reconnect**.
 
 **Verify:**
 
@@ -151,7 +154,7 @@ Orchard passes the app's variables to the build as Dockerfile build arguments.
 - Orchard adds the `ARG` declarations above your own `ENV` lines. An `ENV` line in the repository takes priority over a build argument of the same name.
 - The arguments also reach stages that build `FROM` the stage where they are declared.
 
-`DHI_USERNAME`, `DHI_TOKEN`, and `DOCKER_AUTH_CONFIG` are different. They authenticate base image pulls. For more information, refer to [Builds](/deploy/builds/#error-401-unauthorized-when-pulling-a-base-image).
+`DHI_USERNAME`, `DHI_TOKEN`, and `DOCKER_AUTH_CONFIG` are not build arguments. They authenticate base image pulls. For more information, refer to [Builds](/deploy/builds/#error-401-unauthorized-when-pulling-a-base-image).
 
 ## Trigger a deploy from outside GitHub
 

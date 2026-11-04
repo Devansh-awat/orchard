@@ -7,7 +7,7 @@ sidebar:
 
 Orchard runs each build as a Kubernetes job on your cluster. The job clones the repository, builds the image with BuildKit, and pushes it to the registry configured on the instance.
 
-Orchard reads build status from the job. If a builder dies, the build shows as failed.
+Orchard reads build status from the job. If a builder stops unexpectedly, the build shows as failed.
 
 ## Build steps
 
@@ -94,7 +94,7 @@ Orchard uses these keys only for `FROM` and `COPY --from` pulls. It does not pas
 
 ### Could not schedule build pod: Insufficient memory
 
-**Cause:** Memory requests on the node leave no room for the builder pod. Kubernetes counts requests, not real use.
+**Cause:** Memory requests on the node leave no room for the builder pod. Kubernetes counts requests, not actual usage.
 
 **Fix:** Remove or shrink other workloads, or add a node.
 

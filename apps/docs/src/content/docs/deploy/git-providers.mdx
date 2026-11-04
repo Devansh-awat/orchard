@@ -13,18 +13,17 @@ A provider belongs to you. Orchard lists only the repositories your token can se
 
 ## Link a provider
 
-To link a provider, sign in with OAuth or add a token. OAuth is available for GitLab and Bitbucket when an instance admin registers an OAuth app under **Instance admin** > **Configuration**. Orchard refreshes OAuth tokens for you.
+To link a provider, sign in with OAuth or add a token. OAuth is available for GitLab and Bitbucket when a superadmin registers an OAuth app under **Instance admin** > **Configuration**. Orchard refreshes OAuth tokens for you.
 
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open your account menu and select **Account settings**.
-2. Go to **GitHub and Tailscale**.
-3. In **Git providers**, take one of these steps:
+1. Go to **Account settings** > **GitHub and Tailscale**.
+2. In **Git providers**, take one of these steps:
    - If your instance has OAuth configured, select **Add provider**, then **Sign in with GitLab** or **Sign in with Bitbucket**.
    - Otherwise, select **Add with a token**.
-4. If you add a token, enter the **Provider**, **Name**, **Host**, and **Token**.
-5. Select **Connect**.
+3. If you add a token, enter the **Provider**, **Name**, **Host**, and **Token**.
+4. Select **Connect**.
 
 </TabItem>
 <TabItem label="CLI">
@@ -33,7 +32,7 @@ To link a provider, sign in with OAuth or add a token. OAuth is available for Gi
 orchard git add --provider gitlab --name work --token glpat-...
 ```
 
-The `--provider` flag accepts `github`, `gitlab`, `gitea`, `bitbucket`, or `generic`. For a self-hosted instance, add `--url`.
+The `--provider` flag accepts `github`, `gitlab`, `gitea`, `bitbucket`, or `generic`. For a self-hosted provider, add `--url`.
 
 </TabItem>
 </Tabs>
@@ -53,12 +52,15 @@ Orchard stores the token encrypted and checks it once before it saves.
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open a project and select **New app**.
-2. In **Start from scratch**, select **GitHub repo**.
-3. In **Source**, select **Git**.
-4. In **Repository**, select the provider, then select a repository or enter its URL.
-5. In **Branch**, select a branch.
-6. Complete the rest of the form and select **Deploy**.
+1. Open a project.
+2. Select **New app**.
+3. In **Start from scratch**, select **GitHub repo**.
+4. In **Source**, select **Git**.
+5. In **Repository**, select the provider.
+6. Select a repository or enter its URL.
+7. In **Branch**, select a branch.
+8. Complete the rest of the form.
+9. Select **Deploy**.
 
 Orchard detects Dockerfiles, frameworks, ports, and a [`score.yaml`](/deploy/score/) file the same way it does for GitHub.
 
@@ -76,8 +78,10 @@ orchard deploy create --git work --repo https://gitlab.com/group/app#main --name
 
 When you turn on auto-deploy, Orchard registers a push webhook on the repository through the provider's API. Orchard signs the webhook with a secret that belongs to that provider. A push then builds the app and applies its [watch paths](/deploy/github/#limit-builds-to-certain-paths).
 
-1. Open the app and go to **Settings** > **Deploy behavior**.
-2. In **Auto-deploy**, enter the branch and turn on **Deploy on push**.
+1. Open the app.
+2. Go to **Settings** > **Deploy behavior**.
+3. In **Auto-deploy**, enter the branch.
+4. Turn on **Deploy on push**.
 
 **Webhook** shows **Registered** when the webhook is in place.
 

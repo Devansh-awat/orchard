@@ -41,11 +41,12 @@ Tenant namespaces deny incoming traffic by default. Apps in the same namespace c
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open the app and go to **Network**.
-2. In **Ports**, select **Add port**.
-3. In **Port**, enter the port your process listens on inside the container.
-4. Select **TCP** or **UDP**.
-5. Select **Add port**.
+1. Open the app.
+2. Go to **Network**.
+3. In **Ports**, select **Add port**.
+4. In **Port**, enter the port your process listens on inside the container.
+5. Select **TCP** or **UDP**.
+6. Select **Add port**.
 
 </TabItem>
 <TabItem label="CLI">
@@ -75,9 +76,10 @@ This feature is not available in Cloudflare Tunnel mode, because tunnels carry H
 <Tabs syncKey="dashPlusCli">
 <TabItem label="Dashboard">
 
-1. Open the app and go to **Network**.
-2. In **Ports**, turn on **Public** for the port.
-3. Select **Make public**.
+1. Open the app.
+2. Go to **Network**.
+3. In **Ports**, turn on **Public** for the port.
+4. Select **Make public**.
 
 The public address replaces the internal address on the row.
 
@@ -92,12 +94,12 @@ orchard service port public enable <service-id> <port-id> --deployment <id>
 </Tabs>
 
 :::caution
-Public TCP and UDP traffic skips the HTTP layer, so [Protect an app](/deploy/protection/) does not apply. The service must handle its own authentication.
+Public TCP and UDP traffic skips the HTTP layer, so [app protection](/deploy/protection/) does not apply. The service must handle its own authentication.
 :::
 
 ## Outbound traffic
 
-Apps can reach the public internet. The tenant network policy blocks traffic to private address ranges and to the link-local range that holds cloud metadata services. It also blocks the Kubernetes API, the platform database, and unpublished services in other namespaces.
+Apps can reach the public internet. The tenant network policy blocks traffic to private address ranges and to the link-local range that holds cloud metadata services. It also blocks the Kubernetes API, the control-plane database, and unpublished services in other namespaces.
 
 ## Request headers
 
