@@ -1,6 +1,6 @@
 ---
 title: Finish instance setup
-description: Complete the Orchard setup checklist, including the GitHub App, database backups, email, identity providers, DNS, certificates, the MCP endpoint and registry access.
+description: Complete the Orchard setup checklist, including the GitHub App, database backups, email, identity providers, DNS, certificates, the MCP endpoint, and registry access.
 sidebar:
   order: 3
 ---
@@ -18,10 +18,11 @@ A GitHub App lets Orchard deploy private repositories and rebuild when you push.
 1. Go to **Instance admin** > **Overview**.
 2. Select **Connect a GitHub App**.
 3. Select **Create GitHub App**.
-4. Confirm the creation on GitHub. Orchard registers the callback URL, webhook URL and permissions.
-5. Select **Install the App**, and choose the accounts whose repositories you want to deploy.
+4. Confirm the creation on GitHub. Orchard registers the callback URL, webhook URL, and permissions.
+5. Select **Install the App**.
+6. Select the accounts whose repositories you want to deploy.
 
-To register the App yourself, set its **Callback URL** to the following value. Orchard shows the expected value on the same page.
+To register the GitHub App yourself, set its **Callback URL** to the following value. Orchard shows the expected value on the same page.
 
 ```txt
 https://orchard.example.com/apiv1/github/callback
@@ -43,9 +44,9 @@ Orchard builds the URL from `FRONTEND_URL`. If your public origin is different, 
 
 ## Configure database backups
 
-Until a backup bucket is configured, managed databases have no base backup. Write-ahead log (WAL) archiving alone cannot restore a deleted database. Checkpoints, the drop guard and restore tests are also unavailable.
+Until a backup bucket is configured, managed databases have no base backup. Write-ahead log (WAL) archiving alone cannot restore a deleted database. Checkpoints, the drop guard, and restore tests are also unavailable.
 
-An installer host has this item done. The installer runs an S3-compatible store inside the cluster. The store is on the same machine as the databases, so it does not protect you if the machine is lost. For more information, refer to [The local store on installer hosts](/data/backups/#the-local-store-on-installer-hosts).
+On an installer host, this item is already done. The installer runs an S3-compatible store inside the cluster. The store is on the same machine as the databases, so it does not protect you if the machine is lost. For more information, refer to [The local store on installer hosts](/data/backups/#the-local-store-on-installer-hosts).
 
 To use S3 or R2, set the values in **Instance admin** > **Configuration** > **Object storage**, or use the following environment variables. Any S3-compatible store works.
 
@@ -69,11 +70,11 @@ sudo orchardctl env set R2_BACKUP_BUCKET my-backups --apply
 
 On a Helm install, you can also set `objectStorage.local.enabled` to `true` to deploy the local store. For more information, refer to the chart README.
 
-The checklist item is done when `R2_BACKUP_BUCKET`, an endpoint (`R2_ENDPOINT` or `R2_ACCOUNT_ID`), `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` are set.
+The checklist item is done when `R2_BACKUP_BUCKET`, an endpoint (`R2_ENDPOINT` or `R2_ACCOUNT_ID`), `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY` are set.
 
 `R2_BUCKET_NAME` is not a backup setting. It is the general bucket for uploads and assets. It can be public, and Orchard does not use it for backups.
 
-An organization can use its own bucket at **Settings** > **Backups**. That bucket takes precedence over the instance's.
+An organization can use its own bucket at **Organization settings** > **Backups**. That bucket takes precedence over the instance's.
 
 To confirm the setup, take a backup of a database, then run a restore test on it. For more information, refer to [Back up and restore a database](/data/backups/).
 
@@ -97,7 +98,7 @@ Without email:
 
 - Invitations are links that you copy and send yourself.
 - Orchard hides email codes on the sign-in pages.
-- People sign in with a passkey, an identity provider or a password.
+- People sign in with a passkey, an identity provider, or a password.
 
 Passkeys need HTTPS. A LAN install usually has plain HTTP. On that install, use one of the following commands on the host:
 
@@ -157,7 +158,7 @@ Raw TCP and UDP ports, and public databases, are published on an external addres
 This organization does not have a public IP configured
 ```
 
-This setting is not on the checklist. An organization that sets its own address at **Settings** > **Database defaults** overrides the default.
+This setting is not on the checklist. An organization that sets its own address at **Organization settings** > **Database defaults** overrides the default.
 
 Set the default in **Instance admin** > **Configuration** > **Public exposure**, or with `PUBLIC_EXPOSURE_IP`. On an installer host, run the following command:
 
@@ -196,11 +197,11 @@ The page then shows which hostnames are routed through the tunnel, and has a con
 
 ## Turn the MCP endpoint on or off
 
-Orchard includes a [Model Context Protocol (MCP) server](/mcp/) for agents. The endpoint is at the root of `mcp.<your domain>`. The installer publishes it, and sets the OAuth issuer, the URL in the dashboard and the credential that the MCP server uses to call the API.
+Orchard includes a [Model Context Protocol (MCP) server](/mcp/) for agents. The endpoint is at the root of `mcp.<your domain>`. The installer publishes it, and sets the OAuth issuer, the URL in the dashboard, and the credential that the MCP server uses to call the API.
 
 Two settings control MCP.
 
-**Deployment.** The chart value `mcp.enabled` decides whether an MCP server is deployed. To change it on an installer host, run one of the following commands:
+**Deployment:** The chart value `mcp.enabled` decides whether an MCP server is deployed. To change it on an installer host, run one of the following commands:
 
 ```bash
 sudo orchardctl mcp enable --apply
@@ -209,7 +210,7 @@ sudo orchardctl mcp disable --apply
 
 Create an A record for the hostname before you run `enable`. When the value is off, Orchard pins the toggle below to off.
 
-**Runtime.** At **Instance admin** > **Configuration** > **Model Context Protocol**, the **Accept MCP connections** toggle decides whether a deployed server answers. When it is off, Orchard refuses every request and hides the setup page. It is on by default.
+**Runtime:** At **Instance admin** > **Configuration** > **Model Context Protocol**, the **Accept MCP connections** toggle decides whether a deployed server answers. When it is off, Orchard refuses every request and hides the setup page. It is on by default.
 
 | Variable            | Purpose                                                          |
 | ------------------- | ---------------------------------------------------------------- |
@@ -227,7 +228,7 @@ Orchard does not require cert-manager. If the CRDs are absent, or the service ac
 
 To change the registry that Orchard pushes to, or to install Orchard in a cluster that has a registry, tell the builders where it is. Otherwise, builds finish and then fail at the push.
 
-A network policy limits builders to DNS and public IP addresses on ports 80 and 443. A build runs code from a repository, so it must not reach the Orchard API or database. A registry inside the cluster or on a private address must be added explicitly.
+A network policy limits builders to DNS and public IP addresses on ports 80 and 443. A build runs code from a repository, so it must not reach the Orchard API or database. Add a registry inside the cluster or on a private address explicitly.
 
 The chart defaults describe the Hack Club cluster: Harbor in a `harbor` namespace and an HAProxy load balancer. Replace them with your own values.
 
@@ -262,7 +263,7 @@ sudo orchardctl registry allow my-registry --label app=registry --port 5000 --ap
 | A public registry, such as ghcr.io or Docker Hub | Nothing. Port 443 to public IP addresses is allowed. |
 | Outside the cluster on a private address        | A public hostname on port 443, or your own `ipBlock` rule. |
 
-The rule that allows public egress excludes `10/8`, `172.16/12`, `192.168/16`, `169.254/16` and `100.64/10`. A registry on a LAN address is therefore blocked.
+The rule that allows public egress excludes `10/8`, `172.16/12`, `192.168/16`, `169.254/16`, and `100.64/10`. A registry on a LAN address is therefore blocked.
 
 Set these values in your values file. Do not patch the NetworkPolicy with `kubectl`, because the next `helm upgrade` reverts the change.
 

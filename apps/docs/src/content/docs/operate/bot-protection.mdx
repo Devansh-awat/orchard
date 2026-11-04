@@ -1,18 +1,18 @@
 ---
 title: Turn on bot protection
-description: Add a Cloudflare Turnstile challenge to the Orchard sign-in pages and to password-protected deployments.
+description: Add a Cloudflare Turnstile challenge to the Orchard sign-in pages and to password-protected apps.
 sidebar:
   order: 7
 ---
 
-Bot protection adds a Cloudflare Turnstile challenge to the sign-in pages and to password-protected deployments.
+Bot protection adds a Cloudflare Turnstile challenge to the sign-in pages and to password-protected apps.
 
 Bot protection stays off until you set both keys.
 
 ## Prerequisites
 
-- You need the superadmin role.
-- You need a Turnstile widget in your Cloudflare account. The widget provides a site key and a secret key.
+- The superadmin role.
+- A Turnstile widget in your Cloudflare account. The widget provides a site key and a secret key.
 
 ## Turn on bot protection
 
@@ -46,13 +46,13 @@ Each field has an environment variable. A value in the environment overrides the
 
 If the keys are wrong, you cannot sign in to change them. To turn off the challenge, set `TURNSTILE_ENABLED` to `false` on the server.
 
-On an installer-based instance, run:
+On an installer host, run the following command:
 
 ```sh
 sudo orchardctl env set TURNSTILE_ENABLED false --apply
 ```
 
-On a chart-based instance, set the variable in your values file.
+On a Helm install, set the variable in your values file.
 
 ## Related resources
 

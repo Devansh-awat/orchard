@@ -9,7 +9,7 @@ A node pool routes workloads to specific nodes. A pool uses Kubernetes node sele
 
 ## Prerequisites
 
-- You need the superadmin role.
+- The superadmin role.
 
 ## Sync nodes from the cluster
 
@@ -26,9 +26,11 @@ The table lists each node with its usage and assignments.
 4. (Optional) In **Description**, enter a description.
 5. In **Affinity**, select **preferred (soft)** or **required (hard)**.
 6. (Optional) Turn on **User-selectable** to let users select this pool.
-7. In **Node selector**, select **Add** and enter the label keys and values of the nodes.
-8. In **Tolerations**, select **Add** and enter a toleration for each taint on the nodes.
-9. Select **Create pool**.
+7. In **Node selector**, select **Add**.
+8. Enter the label keys and values of the nodes.
+9. In **Tolerations**, select **Add**.
+10. Enter a toleration for each taint on the nodes.
+11. Select **Create pool**.
 
 To change a pool later, select the edit icon on the pool. To remove a pool, select the delete icon.
 
@@ -39,8 +41,9 @@ A tainted node repels workloads that do not tolerate the taint. Create a node po
 1. Go to **Instance admin** > **Nodes**.
 2. Select the node.
 3. Select **Add taint**.
-4. Enter the key and value, and select the effect: `NoSchedule`, `PreferNoSchedule`, or `NoExecute`.
-5. Select **Save taints**.
+4. Enter the key and value.
+5. Select the effect: `NoSchedule`, `PreferNoSchedule`, or `NoExecute`.
+6. Select **Save taints**.
 
 ## Assign a node to an organization
 

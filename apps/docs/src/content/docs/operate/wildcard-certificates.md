@@ -11,8 +11,8 @@ Let's Encrypt only issues wildcards over a DNS-01 challenge. This guide uses `ap
 
 ## Prerequisites
 
-- cert-manager is installed in the cluster.
-- You have credentials for your DNS provider.
+- cert-manager installed in the cluster.
+- Credentials for your DNS provider.
 
 ## What the chart renders
 
@@ -37,7 +37,7 @@ Create a wildcard record for the app domain that points at your ingress controll
 
 ## 2. Create a DNS-01 issuer
 
-cert-manager supports Cloudflare, Route53, AzureDNS, Google CloudDNS, DigitalOcean, Akamai, ACME-DNS and RFC2136. The following example uses Cloudflare, with an API token that can edit DNS in the zone.
+cert-manager supports Cloudflare, Route53, AzureDNS, Google CloudDNS, DigitalOcean, Akamai, ACME-DNS, and RFC2136. The following example uses Cloudflare, with an API token that can edit DNS in the zone.
 
 1. Create a Secret that holds the token:
 
@@ -168,7 +168,7 @@ publicTls:
 
 ### The certificate stays `False`
 
-Follow the chain down. The challenge status shows what the DNS provider or Let's Encrypt returned.
+Check each resource in order. The challenge status shows what the DNS provider or Let's Encrypt returned.
 
 ```bash
 kubectl -n network describe certificate wildcard-apps-example-com-tls

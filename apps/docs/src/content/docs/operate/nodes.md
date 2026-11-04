@@ -5,7 +5,7 @@ sidebar:
   order: 3
 ---
 
-To control where workloads run on a multi-node cluster, create node pools and assign nodes to organizations. You must be a superadmin. Pools use Kubernetes node selectors, affinity and tolerations, so `kubectl describe node` and `kubectl get events` explain placement.
+To control where workloads run on a multi-node cluster, create node pools and assign nodes to organizations. You must be a superadmin. Pools use Kubernetes node selectors, affinity, and tolerations, so `kubectl describe node` and `kubectl get events` explain placement.
 
 ## Sync nodes
 
@@ -23,7 +23,7 @@ To control where workloads run on a multi-node cluster, create node pools and as
 7. To let people choose this pool, turn on **User-selectable**.
 8. Select **Create pool**.
 
-To let people pick a pool at all, turn on **Let users pick a node pool** in **Userspace scheduling**.
+To let people select a pool, turn on **Let users pick a node pool** in **Userspace scheduling**.
 
 ## Assign a node to an organization
 
@@ -31,7 +31,7 @@ To let people pick a pool at all, turn on **Let users pick a node pool** in **Us
 2. Select the node.
 3. In **Organization assignments**, select the **Organization**.
 4. In **Mode**, select `allow` or `deny`.
-5. Optional: enter **Max services**, **CPU limit** and **Memory limit**.
+5. (Optional) Enter **Max services**, **CPU limit**, and **Memory limit**.
 6. Select **Save assignment**.
 
 An organization with at least one `allow` assignment runs only on its allowed nodes. An organization never runs on a node with a `deny` assignment.

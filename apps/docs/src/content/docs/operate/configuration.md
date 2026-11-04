@@ -1,15 +1,15 @@
 ---
 title: Configuration
-description: Where Orchard instance settings are stored, which value takes precedence, and how to change them on an installer host or a Helm install.
+description: Find where Orchard instance settings are stored, which value takes precedence, and how to change them on an installer host or a Helm install.
 sidebar:
   order: 2
 ---
 
-Orchard reads instance settings from environment variables, chart values and the database. An environment variable always takes precedence over a value stored in the database.
+Orchard reads instance settings from environment variables, chart values, and the database. An environment variable always takes precedence over a value stored in the database.
 
 ## Environment variables
 
-The server reads environment variables at boot. These cover the database URL, registry, app domain, cluster access, object storage and email. For the full list, refer to the [configuration reference](/reference/configuration/).
+The server reads environment variables at boot. These cover the database URL, registry, app domain, cluster access, object storage, and email. For the full list, refer to the [configuration reference](/reference/configuration/).
 
 To change a variable on an installer host, use [`orchardctl env`](/operate/host-commands/#env):
 
@@ -21,7 +21,7 @@ On a Helm install, set the variable in `server.env` in your values file.
 
 ## Chart values
 
-Chart values control what the chart deploys, such as metrics, logs and the MCP server.
+Chart values control what the chart deploys, such as metrics, logs, and the MCP server.
 
 On an installer host, the values file is `/etc/orchard/values.yaml`. To change a value, use [`orchardctl config`](/operate/host-commands/#config):
 
@@ -31,9 +31,9 @@ sudo orchardctl config set logs.retention 30d --apply
 
 On a Helm install, change your values file and run `helm upgrade`.
 
-Re-running the installer keeps your secrets, custom environment variables and volume sizes.
+Re-running the installer keeps your secrets, custom environment variables, and volume sizes.
 
-Set cluster-specific values, such as storage class, ingress class and registry, in the values file. These values differ for each cluster.
+Set cluster-specific values, such as storage class, ingress class, and registry, in the values file. These values differ for each cluster.
 
 ## Settings stored in the database
 
@@ -55,7 +55,7 @@ Grafts can add sections to this page. A saved setting reaches every server repli
 
 When an environment variable sets a field, the field is read-only and shows `Set by the environment`. Secret fields show `Unchanged` when a value is stored. Leave them blank to keep the value.
 
-`SIGNUP_MODE` is not on this page. To change it, set the `signupMode` chart value to `open`, `invite_only` or `closed`.
+`SIGNUP_MODE` is not on this page. To change it, set the `signupMode` chart value to `open`, `invite_only`, or `closed`.
 
 ## Secrets
 
@@ -76,7 +76,7 @@ When `BASE_DOMAIN` is set, Orchard creates an Ingress and a certificate for each
 
 The chart does not set these values if you use `server.envFrom`. In that case, add them to your Secret. Without them, the server uses `default/leaf-frontend:3000`.
 
-A vanity address sends visitors to the organization's SSO sign-in page. If the organization has no working SSO connection, visitors go to the normal login page. The dashboard host keeps working if it is a subdomain of `BASE_DOMAIN`.
+A vanity address sends visitors to the organization's SSO sign-in page. If the organization has no working SSO connection, visitors go to the default sign-in page. The dashboard host keeps working if it is a subdomain of `BASE_DOMAIN`.
 
 Changing `BASE_DOMAIN` does not move existing hosts. Each host keeps its Ingress and certificate on the old domain, while the API reports the new one. To move a host:
 
@@ -105,7 +105,7 @@ To hide the sheet, run the following command:
 sudo orchardctl config set updates.url off --apply
 ```
 
-To publish your own notes, point the setting at your own folder. `latest.json` needs a `version`, such as `2.70.0`. It can also have `file`, `url` and `publishedAt`. The default `file` is `<version>.md`. A note shows only when its version is at or below the running version of the dashboard.
+To publish your own notes, point the setting at your own folder. `latest.json` needs a `version`, such as `2.70.0`. It can also have `file`, `url`, and `publishedAt`. The default `file` is `<version>.md`. A note shows only when its version is at or below the running version of the dashboard.
 
 ## Related resources
 

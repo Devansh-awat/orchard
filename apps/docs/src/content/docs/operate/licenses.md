@@ -17,7 +17,7 @@ Each part of Orchard includes the copyright notices and license texts of the ope
 
 | Part                      | Location                                                                                     |
 | ------------------------- | -------------------------------------------------------------------------------------------- |
-| Web app                   | `/third-party-notices.txt` on your instance, and **Open source licenses** in the account menu |
+| Dashboard                 | `/third-party-notices.txt` on your instance, and **Open source licenses** in the account menu |
 | API server and MCP images | `/app/THIRD_PARTY_NOTICES.txt`                                                               |
 | R2 proxy image            | `/THIRD_PARTY_NOTICES.txt`                                                                   |
 | CLI                       | `orchard licenses`, and `THIRD_PARTY_NOTICES.txt` in each release archive                    |

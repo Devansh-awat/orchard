@@ -11,8 +11,8 @@ The chart creates one CronJob for each target.
 
 ## Prerequisites
 
-- You need access to the chart values for the instance.
-- You need a bucket in S3-compatible storage.
+- Access to the chart values for the instance.
+- A bucket in S3-compatible storage.
 
 ## Set up dumps
 
@@ -42,7 +42,7 @@ The chart creates one CronJob for each target.
 
 ## Verify the job
 
-To list the CronJobs, run:
+To list the CronJobs, run the following command:
 
 ```sh
 kubectl get cronjobs -A | grep dump-

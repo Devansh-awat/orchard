@@ -1,6 +1,6 @@
 ---
 title: Host commands
-description: Reference for orchardctl, the commands that the Orchard installer adds to a host to upgrade, configure and sign in to an instance.
+description: Review orchardctl, the commands that the Orchard installer adds to a host to upgrade, configure, and sign in to an instance.
 sidebar:
   order: 4
 ---
@@ -25,13 +25,13 @@ sidebar:
 | `orchardctl stop`           | Stop the instance.                                      |
 | `orchardctl start`          | Start the instance.                                     |
 | `orchardctl restart`        | Stop and start the instance.                            |
-| `orchardctl logs [service]` | Follow logs for `server`, `frontend` or `mcp`.          |
+| `orchardctl logs [service]` | Follow logs for `server`, `frontend`, or `mcp`.          |
 | `orchardctl status`         | Show the control-plane pods.                            |
 | `orchardctl sync`           | Refresh these commands from the deployed image.         |
-| `orchardctl uninstall`      | Remove Orchard, k3s and everything on them.             |
+| `orchardctl uninstall`      | Remove Orchard, k3s, and everything on them.             |
 | `orchardctl licenses`       | Print third-party notices.                              |
 
-Most commands also exist with a hyphen, such as `orchard-config` and `orchard-update`. All commands except `logs`, `status` and `licenses` need root.
+Most commands also exist with a hyphen, such as `orchard-config` and `orchard-update`. All commands except `logs`, `status`, and `licenses` need root.
 
 Every command has help. Add `--help` to a command to read it.
 
@@ -64,17 +64,17 @@ On its next `update`, a host installed earlier gets the same defaults as a new i
 | ----------------- | ------------------------------------------------------------------------------------------------------ |
 | Metrics           | Sets `metrics.enabled: true`, including when an older installer wrote `false`.                         |
 | Image scanning    | Sets `trivy.enabled: true`.                                                                            |
-| Storage classes   | Gives the log store, metrics and scanner volumes the class that Postgres uses.                         |
+| Storage classes   | Gives the log store, metrics, and scanner volumes the class that PostgreSQL uses.                         |
 | Log disk limit    | Sets `logs.maxDiskSpaceUsage` from free disk.                                                          |
-| Small machines    | Under 8 GB of memory, reduces requests and limits for metrics, logs and the scanner, keeps 7 days of logs and runs one scan at a time. |
+| Small machines    | Under 8 GB of memory, reduces requests and limits for metrics, logs, and the scanner, keeps 7 days of logs, and runs one scan at a time. |
 | Backups           | Sets `objectStorage.local.enabled: true` and `r2Proxy.enabled: true`, sized from free disk.            |
 | Database operator | Sets `CNPG_OPERATOR_NAMESPACE` to `cnpg-system`, if it is not set.                                     |
 
-Orchard turns on the local backup store only when no object storage is configured. It checks for `R2_ENDPOINT`, `R2_ACCOUNT_ID` or `R2_BACKUP_BUCKET` in `server.env`, `server.envFrom`, `r2Proxy.upstream.endpoint`, and values at **Instance admin** > **Configuration** > **Object storage**. If it cannot read the database, it leaves the store off and prints the commands that turn it on.
+Orchard turns on the local backup store only when no object storage is configured. It checks for `R2_ENDPOINT`, `R2_ACCOUNT_ID`, or `R2_BACKUP_BUCKET` in `server.env`, `server.envFrom`, `r2Proxy.upstream.endpoint`, and values at **Instance admin** > **Configuration** > **Object storage**. If it cannot read the database, it leaves the store off and prints the commands that turn it on.
 
 Except for `metrics.enabled` and `r2Proxy.enabled`, which older installers wrote as `false`, Orchard only fills in keys that are missing. It does not change a value you set.
 
-These changes happen once. The top-level `hostDefaults` key records which defaults a values file has. If you turn something off afterwards, it stays off:
+These changes happen once. The top-level `hostDefaults` key records which defaults a values file has. If you turn something off afterward, it stays off:
 
 ```bash
 sudo orchardctl config set trivy.enabled false --apply
@@ -117,7 +117,7 @@ Changes are not deployed until you add `--apply` or run `update`.
 
 | Path                                     | Purpose                                                  |
 | ---------------------------------------- | -------------------------------------------------------- |
-| `signupMode`                             | `open`, `invite_only` or `closed`.                       |
+| `signupMode`                             | `open`, `invite_only`, or `closed`.                       |
 | `tenant.certClusterIssuer`               | The ClusterIssuer for app certificates.                  |
 | `ingress.tls.issuerRef.name`             | The ClusterIssuer for the Orchard dashboard.             |
 | `server.replicas`                        | The number of API pods.                                  |
@@ -157,7 +157,7 @@ Reads and changes the control plane's environment variables. These are `server.e
 | `unset`            | Removes the variable.                                      |
 | `--for`            | With `frontend` or `mcp`, edits `frontend.env` or `mcp.env`. |
 
-Changes are not deployed until you add `--apply` or run `update`. A variable set here locks the matching field in the admin interface. These settings stay when you re-run the installer.
+Changes are not deployed until you add `--apply` or run `update`. A variable set here locks the matching field in **Instance admin**. These settings stay when you re-run the installer.
 
 ## registry
 
@@ -226,7 +226,7 @@ sudo orchardctl hostname add mango --apply
 sudo orchardctl hostname remove mango --apply
 ```
 
-Lists, adds and removes names that the dashboard answers on. Traefik routes by `Host` header, so a name that is not listed returns a `404` status. Use this for a Tailscale name, an mDNS name, a DNS record added later or a renamed machine. A `lan` install starts with the addresses, hostname, `.local` name and `sslip.io` name that the machine had during installation.
+Lists, adds, and removes names that the dashboard answers on. Traefik routes by `Host` header, so a name that is not listed returns a `404` status. Use this for a Tailscale name, an mDNS name, a DNS record added later, or a renamed machine. A `lan` install starts with the addresses, hostname, `.local` name, and `sslip.io` name that the machine had during installation.
 
 The list reads the values file. A name shows in the list as soon as you add it, and returns a `404` status until `helm upgrade` runs.
 
@@ -267,7 +267,7 @@ This instance already has a superadmin, and a way to sign in as them.
 Use your passkey. This only mints a link when there is no other way in.
 ```
 
-A passkey on a superadmin, a superadmin password, configured email or a configured identity provider each count as a way in.
+A passkey on a superadmin, a superadmin password, configured email, or a configured identity provider each count as a way in.
 
 Enter the same email address as before when you use a recovery link. A different address creates a second superadmin.
 
@@ -308,7 +308,7 @@ sudo orchardctl start
 sudo orchardctl restart
 ```
 
-Stops and starts the k3s service. This affects the dashboard, the API, your databases and every app. Disks stay in place and nothing is deleted. Apps come back when the node does.
+Stops and starts the k3s service. This affects the dashboard, the API, your databases, and every app. Disks stay in place and nothing is deleted. Apps come back when the node does.
 
 `start` waits for the node to report `Ready`. A reboot has the same effect as `start`.
 
@@ -323,7 +323,7 @@ orchardctl logs frontend
 orchardctl logs mcp
 ```
 
-These commands do not need root. `logs` keeps following until you press Ctrl-C.
+These commands do not need root. `logs` keeps following until you press `CTRL + C`.
 
 These commands show the control plane, not your apps. For an app's logs, use the dashboard or the `orchard` CLI.
 
@@ -343,12 +343,12 @@ The command checks the download before it replaces the binary. The file must be 
 sudo orchardctl uninstall
 ```
 
-Removes the instance permanently. The command lists what it will delete, then asks you to type a phrase that names the instance, such as `delete orchard.example.com`. Any other input stops the command with nothing changed. No flag skips the question. A script can pipe the phrase in.
+Removes the instance permanently. The command lists what it deletes, then asks you to type a phrase that names the instance, such as `delete orchard.example.com`. Any other input stops the command with nothing changed. No flag skips the question. A script can pipe the phrase in.
 
 The command runs the following steps:
 
 1. Disables `orchard-update.timer` and removes its units.
-2. Runs `k3s-uninstall.sh`, which deletes every app, database and volume.
+2. Runs `k3s-uninstall.sh`, which deletes every app, database, and volume.
 3. Removes the following paths:
 
 | Path                                                                           | Contents                                  |

@@ -1,6 +1,6 @@
 ---
 title: Configure logs and request data
-description: Configure the Orchard log store and ingress access logs that power log search, the Requests view and attack signals.
+description: Configure the Orchard log store and ingress access logs that log search, the Requests view, and attack signals use.
 sidebar:
   order: 8
 ---
@@ -10,7 +10,7 @@ Orchard keeps a copy of each app's logs, and of the ingress controller's access 
 | Feature                                        | Location                                         | Needs                         |
 | ---------------------------------------------- | ------------------------------------------------ | ----------------------------- |
 | Search over past logs, levels, context, export | **Observe** > **Logs**                           | The log store                 |
-| Per-route traffic, error rates and latency     | **Observe** > **Requests**                       | The log store and access logs |
+| Per-route traffic, error rates, and latency     | **Observe** > **Requests**                       | The log store and access logs |
 | Attack attempts and top sources                | **Security** tab                                 | The log store and access logs |
 | Error grouping across replaced replicas        | **Observe** > **Errors**, and deploy verdicts    | The log store                 |
 
@@ -21,7 +21,7 @@ Without the store, error grouping uses the logs of the pods that are running now
 Both components run in the `orchard-metrics` namespace (`metrics.namespace`):
 
 - **VictoriaLogs** is one StatefulSet named `victorialogs`, with one volume.
-- **Vector** is a DaemonSet. It reads logs from pods in namespaces labelled `orchard.my/managed=true`, and from ingress controller pods with the label `app.kubernetes.io/name` set to `traefik` or `kubernetes-ingress`.
+- **Vector** is a DaemonSet. It reads logs from pods in namespaces labeled `orchard.my/managed=true`, and from ingress controller pods with the label `app.kubernetes.io/name` set to `traefik` or `kubernetes-ingress`.
 
 `logs.enabled` is on by default in the chart and the installer. It is separate from `metrics.enabled`. The chart sets `VICTORIALOGS_URL` on the server when `logs.enabled` is on.
 
@@ -80,7 +80,7 @@ sudo orchardctl config set logs.enabled false --apply
 
 On a Helm install, set `logs.enabled` to `false`.
 
-Live logs keep working. Log search, the Requests view and the attack card are removed.
+Live logs keep working. Log search, the Requests view, and the attack card are removed.
 
 ## Access logs
 
@@ -124,7 +124,7 @@ helm upgrade traefik traefik/traefik -n traefik \
 
 ### HAProxy
 
-HAProxy has no built-in JSON access log, so you must set a format with the field names that Vector reads: `ts_ms`, `host`, `method`, `path`, `status`, `duration_ms`, `bytes`, `client_ip`, `user_agent`, `backend` and `server`.
+HAProxy has no built-in JSON access log, so you must set a format with the field names that Vector reads: `ts_ms`, `host`, `method`, `path`, `status`, `duration_ms`, `bytes`, `client_ip`, `user_agent`, `backend`, and `server`.
 
 Add the following to the `kubernetes-ingress` chart values:
 
@@ -164,13 +164,13 @@ controller:
 
 ## Client IPs show as hidden
 
-The attack card groups private and cluster addresses (`10/8`, `172.16/12`, `192.168/16`, `100.64/10`, loopback and link-local) into one row, **Hidden by the load balancer**. It does not report them as a flood.
+The attack card groups private and cluster addresses (`10/8`, `172.16/12`, `192.168/16`, `100.64/10`, loopback, and link-local) into one row, **Hidden by the load balancer**. It does not report them as a flood.
 
 This row appears when the client address is lost before the ingress controller sees it:
 
-- **The load balancer uses source NAT.** With `externalTrafficPolicy: Cluster`, the default, a node can forward a packet to an ingress pod on another node, and it rewrites the source address.
-- **A Cloudflare Tunnel.** Every request arrives from `cloudflared` inside the cluster.
-- **A LAN install.** Clients on the same network have private addresses.
+- **The load balancer uses source NAT:** With `externalTrafficPolicy: Cluster`, the default, a node can forward a packet to an ingress pod on another node, and it rewrites the source address.
+- **A Cloudflare Tunnel:** Every request arrives from `cloudflared` inside the cluster.
+- **A LAN install:** Clients on the same network have private addresses.
 
 To keep the client address, set `externalTrafficPolicy: Local` on the controller's Service. On Traefik, run the following command:
 

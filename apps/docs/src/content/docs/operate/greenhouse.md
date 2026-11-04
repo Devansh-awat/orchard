@@ -5,7 +5,7 @@ sidebar:
   order: 8
 ---
 
-Install [Greenhouse](/greenhouse/) on your Orchard instance and configure where its machines run. This page is for instance operators.
+To run [Greenhouse](/greenhouse/) on your Orchard instance, install the graft and configure where its machines run. This page is for operators.
 
 For the internal design, refer to `docs/ai-sandbox.md` in the repository.
 
@@ -21,7 +21,7 @@ Greenhouse is a [graft](/grafts/overview/), published to the Extension Marketpla
 
 The graft needs cluster resources for the Kubernetes runner: a namespace, a ResourceQuota, a LimitRange, a NetworkPolicy, RBAC, and `SANDBOX_*` settings. The chart renders them when `sandbox.install` or `sandbox.enabled` is true. Both default to off.
 
-On a host installed with the installer, run:
+On an installer host, run the following commands:
 
 ```sh
 sudo orchardctl config set sandbox.enabled true
@@ -51,13 +51,13 @@ To change how many machines each person can keep, go to **Instance admin** > **G
 
 ### Remove the graft
 
-To remove the graft and keep its data, run:
+To remove the graft and keep its data, run the following command:
 
 ```sh
 sudo orchardctl graft remove greenhouse --apply
 ```
 
-To also delete its data, run:
+To also delete its data, run the following command:
 
 ```sh
 sudo orchardctl graft remove greenhouse --purge --apply
@@ -147,7 +147,7 @@ sandbox:
 
 ### Persistence
 
-Orchard creates each machine as a persistent sandbox. A stop snapshots the whole root filesystem. Running processes are not kept, so each start reruns the bootstrap.
+Orchard creates each machine as a persistent sandbox. A stop snapshots the whole root filesystem. Running processes are not kept, so each start re-runs the bootstrap.
 
 - **Snapshots:** Orchard sets `snapshotExpiration: 0` and keeps the last three snapshots.
 - **Drive:** Each machine has a [Vercel drive](https://vercel.com/docs/sandbox/concepts/drives) named `orchard-<machine id>`, mounted at `/mnt/orchard-drive`. `/persist` points to it. A new sandbox can mount the same drive if Vercel loses the original.
@@ -158,7 +158,7 @@ Orchard creates each machine as a persistent sandbox. A stop snapshots the whole
 Vercel lets you delete a drive while a stopped sandbox still mounts it. Do not delete `orchard-*` drives unless the machine is gone.
 :::
 
-If the team cannot create drives (`402` or `403` from Vercel), the runner logs the error, keeps new machines on snapshots, and tries again an hour later. A machine that already has a drive fails to start until the drive is reachable. Set `vercelDriveGiB` to 0 to turn drives off for new machines.
+If the team cannot create drives (`402` or `403` from Vercel), the runner logs the error, keeps new machines on snapshots, and tries again an hour later. A machine that already has a drive fails to start until the drive is reachable. To turn off drives for new machines, set `vercelDriveGiB` to 0.
 
 Forking a machine with a drive needs Vercel drive forks. The runner checks for them every ten minutes. Without them, Greenhouse hides the fork option. A machine without a drive forks from its snapshot.
 
@@ -180,7 +180,7 @@ Each exposed port has a public Vercel URL.
 
 | Port          | Protection                                                                  |
 | ------------- | --------------------------------------------------------------------------- |
-| 4096          | HTTP Basic auth with a per-machine password.                                |
+| 4096          | HTTP basic authentication with a per-machine password.                                |
 | 2222          | A per-machine bearer token. Behind it, `sshd` requires the host's SSH key.   |
 | Preview ports | None. The **Ports** tab labels them **Public**.                             |
 
@@ -388,12 +388,12 @@ For all server variables, refer to the [configuration reference](/reference/conf
 | `sandbox.runners.previewDomain`                                                             | `SANDBOX_PREVIEW_DOMAIN`, and the preview route and certificate    |
 | `sandbox.previews.*`                                                                        | The preview route and certificate                                  |
 
-A value under `sandbox.runners` left empty, or `null` for booleans, renders no variable. The field then stays editable in the admin UI.
+A value under `sandbox.runners` left empty, or `null` for booleans, renders no variable. The field then stays editable in **Instance admin**.
 
 ## How machine changes apply
 
 - **Writes are queued.** Creating, starting, stopping, deleting, and syncing credentials record the desired state and add an item to the apply queue. Workers retry with backoff from 5 seconds up to 10 minutes, for ten attempts. After the last attempt, the machine keeps showing the error. To queue the change again, run `orchard sandbox retry <name>`.
-- **Reads come from the Orchard Engine.** On Kubernetes, the `sandboxes` shard watches Sandbox resources, pods, volumes, and secrets (metadata only), and writes them to Postgres.
+- **Reads come from the Orchard Engine.** On Kubernetes, the `sandboxes` shard watches Sandbox resources, pods, volumes, and secrets (metadata only), and writes them to PostgreSQL.
 - **Vercel is polled.** It has no watch API. The leader polls Vercel and writes what it sees to the same columns.
 
 The queue drains only on a server that is a member of the cluster: in-cluster, or outside the cluster with `ORCHARD_CONTROL_NAMESPACE` and a kubeconfig. `APPLY_WORKER_DISABLED=true` makes a replica enqueue only.
@@ -412,7 +412,7 @@ For the three repositories used most recently on a machine, the daemon keeps a s
 
 ### Roles
 
-The host owns a machine. The host invites guests and read-only guests from the same organization. Org admins of the machine's organization get lifecycle actions only. They can see the machine in lists, start, stop, or delete it, and retry failed changes. They cannot read its sessions, transcripts, comments, files, diffs, ports, previews, members, terminals, or agent server. Superadmins have host access. For the full table, refer to [What each role can do](/greenhouse/sharing/#what-each-role-can-do).
+The host owns a machine. The host invites guests and read-only guests from the same organization. Organization admins of the machine's organization get lifecycle actions only. They can see the machine in lists, start, stop, or delete it, and retry failed changes. They cannot read its sessions, transcripts, comments, files, diffs, ports, previews, members, terminals, or agent server. Superadmins have host access. For the full table, refer to [What each role can do](/greenhouse/sharing/#what-each-role-can-do).
 
 Each REST route checks the minimum role on the server. The live connection checks the role for each message type and drops writes from read-only guests. Terminal, SSH, and live connections recheck access every 15 seconds and when membership changes.
 
@@ -430,22 +430,22 @@ A guest runs the host's agent on the host's Claude subscription, with access to 
 
 | Token                                     | Stored                                                                                                 | Reaches a machine as                                                                           |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| Claude and OpenAI tokens                  | Encrypted in Postgres (AES-256-GCM)                                                                    | The machine's Secret (Kubernetes) or bootstrap environment (Vercel)                             |
-| The host's GitHub token, for the agent    | Encrypted in Postgres                                                                                  | The machine's Secret (Kubernetes), or an egress header (Vercel)                                 |
-| A person's GitHub token, for their pushes | Encrypted in Postgres                                                                                  | The environment of the one git command they run, or of their own terminal while it is open      |
+| Claude and OpenAI tokens                  | Encrypted in PostgreSQL (AES-256-GCM)                                                                    | The machine's Secret (Kubernetes) or bootstrap environment (Vercel)                             |
+| The host's GitHub token, for the agent    | Encrypted in PostgreSQL                                                                                  | The machine's Secret (Kubernetes), or an egress header (Vercel)                                 |
+| A person's GitHub token, for their pushes | Encrypted in PostgreSQL                                                                                  | The environment of the one git command they run, or of their own terminal while it is open      |
 | Agent server password, SSH bridge token   | Not stored. Derived with HMAC from `SECRETS_ENCRYPTION_KEY` and the machine's epoch                    | Files in `/orchard-init`, mode 600                                                              |
 | Share link tokens                         | SHA-256 hash only                                                                                      | Never                                                                                           |
 | Slack link tokens                         | SHA-256 hash only, single use, 10 minutes                                                              | Never                                                                                           |
-| Linear API keys                           | Encrypted in Postgres                                                                                  | Never                                                                                           |
+| Linear API keys                           | Encrypted in PostgreSQL                                                                                  | Never                                                                                           |
 | The agent's Orchard MCP token             | A 60-day token on a per-machine session of the host, confined to the machine's organization, and refused on superadmin routes | The agent's MCP configuration                                                 |
 
 Tokens do not appear in these places:
 
-- **The apply queue.** Items carry machine IDs only.
-- **The Engine tables.** Secrets in the machine namespace are stored without their `data`.
-- **Vercel's sandbox configuration.** Tokens are not passed to `Sandbox.create`.
-- **Process arguments.** File contents and tokens reach a machine on stdin.
-- **Logs, audit metadata, and live events.** Error reports and traces redact the token in older `/share/sandbox/<token>` URLs. Git output in the browser masks credentials in remote URLs.
+- **The apply queue:** Items carry machine IDs only.
+- **The Engine tables:** Secrets in the machine namespace are stored without their `data`.
+- **Vercel's sandbox configuration:** Tokens are not passed to `Sandbox.create`.
+- **Process arguments:** File contents and tokens reach a machine on stdin.
+- **Logs, audit metadata, and live events:** Error reports and traces redact the token in older `/share/sandbox/<token>` URLs. Git output in the browser masks credentials in remote URLs.
 
 Attached project env files skip names such as `GIT_*`, `LD_*`, `NODE_OPTIONS`, `PROMPT_COMMAND`, CA bundle variables, and `ANTHROPIC_BASE_URL`. An editor of an attached project therefore cannot redirect pushes or point the agent elsewhere. A preview deploy copies only plain variables from the source deployment.
 

@@ -1,6 +1,6 @@
 ---
 title: Architecture
-description: The components of an Orchard instance, and how Orchard reads from and writes to Kubernetes.
+description: Review the components of an Orchard instance, and how Orchard reads from and writes to Kubernetes.
 sidebar:
   order: 1
 ---
@@ -17,19 +17,19 @@ An Orchard instance is a control plane that runs in a Kubernetes cluster and man
 | Server                     | The NestJS API and control plane.                                       |
 | MCP server                 | The [Model Context Protocol](/mcp/) endpoint for agents.                |
 | Builders                   | BuildKit jobs that build images for tenant apps.                        |
-| Control-plane Postgres     | Orchard's own database, run by CloudNativePG.                           |
+| Control-plane PostgreSQL     | Orchard's own database, run by CloudNativePG.                           |
 | Redis                      | The event bus between server replicas, and a cache.                     |
 | Registry                   | Stores the images that builders push. The installer deploys zot.        |
 | Backup proxy (`r2-proxy`)  | Gives each database credentials for its own backups only.               |
-| Metrics and logs           | VictoriaMetrics, VictoriaLogs and Vector.                               |
+| Metrics and logs           | VictoriaMetrics, VictoriaLogs, and Vector.                               |
 
 Tenant apps and databases run in their own namespaces, separate from the control plane.
 
 <Diagram
-  caption="The server reads from Postgres and writes through a queue. The engine copies cluster state into Postgres."
+  caption="The server reads from PostgreSQL and writes through a queue. The Orchard Engine copies cluster state into PostgreSQL."
   code={`flowchart LR
   U[Browser / CLI / MCP] --> API[API server]
-  API -->|reads| PG[(Control-plane<br/>Postgres)]
+  API -->|reads| PG[(Control-plane<br/>PostgreSQL)]
   API -->|writes| Q[Apply queue]
   Q -->|retry| K8S[Kubernetes API]
   INF[Engine informers] -->|watch| K8S
@@ -40,9 +40,9 @@ Tenant apps and databases run in their own namespaces, separate from the control
 
 ## Reads
 
-The Orchard engine lists and watches the Kubernetes objects that Orchard manages, and keeps a copy in Postgres. Most reads come from this copy, so a page load does not call the Kubernetes API.
+The Orchard Engine lists and watches the Kubernetes objects that Orchard manages, and keeps a copy in PostgreSQL. Most reads come from this copy, so a page load does not call the Kubernetes API.
 
-The engine follows these rules:
+The Engine follows these rules:
 
 - If the copy and the cluster disagree, the cluster is correct.
 - A failed read does not mean that a resource is gone. Only a live `404` response removes it.
@@ -60,7 +60,7 @@ Orchard sends state changes to the dashboard as server-sent events over Redis St
 
 Background work that must not run twice, such as watching the cluster, uses a Kubernetes lease. This lets the server run more than one replica.
 
-By default, each server pod serves the API and runs the queues. To run builds, notifications and the apply queue in separate pods, set `server.workers.enabled` to `true` in the chart.
+By default, each server pod serves the API and runs the queues. To run builds, notifications, and the apply queue in separate pods, set `server.workers.enabled` to `true` in the chart.
 
 ## Related resources
 

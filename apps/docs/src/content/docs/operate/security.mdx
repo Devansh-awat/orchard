@@ -1,6 +1,6 @@
 ---
 title: Security and isolation
-description: What Orchard isolates by default at the network and kernel layers, and what to enable before you run untrusted code.
+description: Review what Orchard isolates by default at the network and kernel layers, and what to turn on before you run untrusted code.
 sidebar:
   order: 6
 ---
@@ -34,7 +34,7 @@ A pod that reaches another tenant namespace can only reach what that tenant has 
   POD -->|allowed| NET[Public internet]
   POD -.->|blocked| API[Kube API server]
   POD -.->|blocked| IMDS[Cloud metadata<br/>169.254.0.0/16]
-  POD -.->|blocked| PLAT[Platform Postgres<br/>registry]
+  POD -.->|blocked| PLAT[Control-plane PostgreSQL<br/>registry]
   POD -.->|blocked| OTHER[Other tenants'<br/>unpublished services]`}
 />
 
@@ -42,7 +42,7 @@ The policy blocks the following:
 
 - The Kubernetes API server.
 - Cloud metadata services at `169.254.0.0/16`.
-- The ranges `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16` and `100.64.0.0/10`, where platform services run.
+- The ranges `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, and `100.64.0.0/10`, where control-plane services run.
 - Unpublished services of other tenants.
 
 Orchard restores this policy if someone changes it with `kubectl`.
@@ -64,7 +64,7 @@ BuildKit needs `privileged: true`, which gVisor does not allow. Builds therefore
 Without `builderSandbox`, image builds run with host-level privileges.
 :::
 
-Greenhouse machines run as Kata virtual machines on the Kubernetes runner when the cluster has Kata. For more information, refer to [Running Greenhouse](/operate/greenhouse/#security-model).
+Greenhouse machines run as Kata virtual machines on the Kubernetes runner when the cluster has Kata. For more information, refer to [Run Greenhouse](/operate/greenhouse/#security-model).
 
 ## Turn on kernel isolation
 
@@ -101,11 +101,11 @@ no runtime for "runsc" is configured
 
 Code is untrusted if someone can run a process that you did not write. This includes letting other people deploy from their own repositories. In that case, set up all of the following:
 
-- **`builderSandbox` with Kata.** Without it, builds run arbitrary Dockerfiles with host-level privileges. This is the most important item.
-- **`tenantSandbox` with gVisor.** Without it, a compromised app shares a kernel with everything else on the node.
-- **Quotas.** Refer to [Set quotas](/teams/quotas/).
-- **Node pools.** Refer to [Manage nodes and pools](/operate/nodes/).
-- **`invite_only` or `closed` signups.** Refer to [Going to production](/operate/production/#2-close-signups).
+- **`builderSandbox` with Kata:** Without it, builds run arbitrary Dockerfiles with host-level privileges. This is the most important item.
+- **`tenantSandbox` with gVisor:** Without it, a compromised app shares a kernel with everything else on the node.
+- **Quotas:** Refer to [Set quotas](/teams/quotas/).
+- **Node pools:** Refer to [Manage nodes and pools](/operate/nodes/).
+- **`invite_only` or `closed` signups:** Refer to [Close signups](/operate/production/#2-close-signups).
 
 Without these settings, a single-machine Orchard that runs other people's code has about the same exposure as giving them Docker on that machine.
 

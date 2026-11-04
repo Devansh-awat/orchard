@@ -5,7 +5,7 @@ sidebar:
   order: 4
 ---
 
-To upgrade Orchard, use the command that matches how you installed it. Take a backup of the control-plane database before a major upgrade. This database holds every organization, project and app definition on the instance.
+To upgrade Orchard, use the command that matches how you installed it. Take a backup of the control-plane database before a major upgrade. This database holds every organization, project, and app definition on the instance.
 
 ## Upgrade an installer host
 
@@ -19,13 +19,13 @@ sudo orchardctl update
 
 If you chose automatic updates during installation, a nightly systemd timer runs the same command.
 
-An upgrade turns on, once, features that newer releases run by default. Orchard prints each change. If you turn a feature off afterwards, it stays off. For the list, refer to [New defaults on an existing host](/operate/host-commands/#new-defaults-on-an-existing-host).
+An upgrade turns on, once, features that newer releases run by default. Orchard prints each change. If you turn a feature off afterward, it stays off. For the list, refer to [New defaults on an existing host](/operate/host-commands/#new-defaults-on-an-existing-host).
 
 ## Re-run the installer
 
 You can also re-run the installer on an existing host. A re-run:
 
-- Keeps your secrets, custom environment variables and volume sizes.
+- Keeps your secrets, custom environment variables, and volume sizes.
 - Does not restart k3s unless the registry mirror configuration changed.
 
 ## Upgrade a Helm install
@@ -45,7 +45,7 @@ Schema migrations run when the server starts. Upgrade forward. An older server w
 
 ## Effect on running apps
 
-Upgrading the control plane does not restart tenant apps. The server, frontend and MCP pods roll out, and apps keep serving during the rollout.
+Upgrading the control plane does not restart tenant apps. The server, frontend, and MCP pods roll out, and apps keep serving during the rollout.
 
 ## Roll back an upgrade
 

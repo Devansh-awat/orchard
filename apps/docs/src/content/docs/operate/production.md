@@ -1,11 +1,11 @@
 ---
 title: Go to production
-description: Prepare an Orchard instance for production by checking secrets, signups, TLS, backups, isolation, quotas, email and version pinning.
+description: Prepare an Orchard instance for production by checking secrets, signups, TLS, backups, isolation, quotas, email, and version pinning.
 sidebar:
   order: 5
 ---
 
-To prepare a trial Orchard instance for real work, complete the following steps in order. The one-command installer leaves some of these settings for you to decide.
+To prepare a trial Orchard instance for production use, complete the following steps in order. The one-command installer leaves some of these settings for you to decide.
 
 ## Prerequisites
 
@@ -57,7 +57,7 @@ TRUST_PROXY=1
 
 ## 5. Back up the control-plane database
 
-The control-plane database holds every organization, project, app definition, environment variable and audit record. Backups are off by default. Tenant [database backups](/data/backups/) do not include it.
+The control-plane database holds every organization, project, app definition, environment variable, and audit record. Backups are off by default. Tenant [database backups](/data/backups/) do not include it.
 
 :::caution
 Archiving write-ahead logs (WAL) is not a backup. A restore replays WAL onto a base backup. Without a base backup, archived WAL restores nothing.
@@ -65,7 +65,7 @@ Archiving write-ahead logs (WAL) is not a backup. A restore replays WAL onto a b
 
 Use S3-compatible storage on another machine. The installer's local object store is on the same disk as the database, so it does not protect you if the machine is lost.
 
-1. Create a bucket, and a key that can read, write and delete in it.
+1. Create a bucket, and a key that can read, write, and delete in it.
 2. Add the key to the namespace that Orchard runs in. The chart reads the names `ACCESS_KEY_ID` and `ACCESS_SECRET_KEY`.
 
    ```bash
@@ -103,7 +103,9 @@ Use S3-compatible storage on another machine. The installer's local object store
      -o jsonpath='{.status.firstRecoverabilityPoint}{"\n"}{.status.conditions[?(@.type=="ContinuousArchiving")].status}{"\n"}'
    ```
 
-5. Test a restore. Create a scratch namespace, copy the Secret into it, then apply the following cluster and check the data:
+5. To test a restore, create a scratch namespace and copy the Secret into it.
+
+6. Apply the following cluster, then check the data:
 
    ```yaml
    apiVersion: postgresql.cnpg.io/v1
@@ -139,7 +141,7 @@ If the barman cloud plugin is already installed in the cluster, you can set `pos
 
 Managed databases need a backup bucket. An installer host uses a local object store by default. The store is on the same disk as the databases, so it does not protect you if the machine is lost.
 
-To use S3 or R2, go to **Instance admin** > **Configuration** > **Object storage**. An organization can also set its own bucket at **Settings** > **Backups**. For more information, refer to [Configure database backups](/operate/finishing-setup/#configure-database-backups).
+To use S3 or R2, go to **Instance admin** > **Configuration** > **Object storage**. An organization can also set its own bucket at **Organization settings** > **Backups**. For more information, refer to [Configure database backups](/operate/finishing-setup/#configure-database-backups).
 
 ## 7. Choose your isolation settings
 
@@ -151,7 +153,7 @@ Set organization caps and member allowances before people start to deploy. For m
 
 ## 9. Set up email
 
-Set `SMTP_*` so that sign-in codes, invitations and notifications arrive. For more information, refer to [Set up email](/operate/finishing-setup/#set-up-email).
+Set `SMTP_*` so that sign-in codes, invitations, and notifications arrive. For more information, refer to [Set up email](/operate/finishing-setup/#set-up-email).
 
 Without email, Orchard hides email codes and a new member can only sign in through an identity provider. For an existing account, an operator can run `sudo orchardctl login --email <ADDRESS>` to print a one-time link.
 

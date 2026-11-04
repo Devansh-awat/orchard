@@ -1,11 +1,11 @@
 ---
 title: Troubleshooting Orchard
-description: Fix common Orchard failures with builds, apps, databases, domains, sign-in and the platform, listed by symptom.
+description: Fix common Orchard failures with builds, apps, databases, domains, sign-in, and the control plane, listed by symptom.
 sidebar:
   order: 5
 ---
 
-Use this page to fix common failures on an Orchard instance. Each entry lists the symptom, the cause and the fix.
+Use this page to fix common failures on an Orchard instance. Each entry lists the symptom, the cause, and the fix.
 
 ## Builds
 
@@ -45,7 +45,7 @@ dial tcp 203.0.113.10:443: connect: connection refused
 
 **Cause:** The BuildKit daemon stopped, and the pusher reports the result.
 
-**Fix:** Read the logs of the `buildkit` container rather than the pusher:
+**Fix:** Read the logs of the `buildkit` container instead of the pusher:
 
 ```bash
 kubectl -n orchard-builders logs job/<BUILD_JOB_NAME> -c buildkit --tail=30
@@ -57,7 +57,7 @@ kubectl -n orchard-builders logs job/<BUILD_JOB_NAME> -c buildkit --tail=30
 Build failed: could not schedule build pod after 300s - 0/1 nodes are available: 1 Insufficient memory.
 ```
 
-**Cause:** No node has enough unreserved memory. The scheduler uses memory requests, not real usage.
+**Cause:** No node has enough unreserved memory. The scheduler uses memory requests, not actual usage.
 
 **Fix:** Reduce the memory that apps and databases request, or add a node. For more information, refer to [Manage nodes and pools](/operate/nodes/).
 
@@ -137,7 +137,7 @@ orchard db recovery <DATABASE_ID>
 
 **Cause:** The instance is not running. If the page lists the storage volume as dangling, Kubernetes does not recreate the pod.
 
-**Fix:** An administrator must inspect the cluster:
+**Fix:** An operator must inspect the cluster:
 
 ```bash
 kubectl -n <NAMESPACE> get pods,pvc
@@ -158,7 +158,7 @@ kubectl -n <NAMESPACE> get pods,pvc
 kubectl get challenges -A
 ```
 
-### A webhook receives a login page
+### A webhook receives a sign-in page
 
 **Cause:** The app is protected and the webhook path is not a public path.
 
